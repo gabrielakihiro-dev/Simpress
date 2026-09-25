@@ -1,0 +1,2886 @@
+<!DOCTYPE html>
+<html lang="pt-BR" class="h-full bg-slate-900 text-slate-100">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Simpress | Automação de Transferência de Equipamentos - SEBRAE/PR</title>
+  
+  <!-- Google Fonts: Inter & JetBrains Mono -->
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&family=JetBrains+Mono:wght@400;500;600;700&display=swap" rel="stylesheet">
+  
+  <!-- Tailwind CSS CDN -->
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script>
+    tailwind.config = {
+      darkMode: 'class',
+      theme: {
+        extend: {
+          fontFamily: {
+            sans: ['Inter', 'sans-serif'],
+            mono: ['JetBrains Mono', 'monospace'],
+          },
+          colors: {
+            brand: {
+              50: '#f0f7ff',
+              100: '#e0effe',
+              200: '#bae0fd',
+              300: '#7cc7fb',
+              400: '#38a9f7',
+              500: '#0e8ce9',
+              600: '#026fc7',
+              700: '#0358a1',
+              800: '#074b85',
+              900: '#0c3f6e',
+              950: '#082849',
+            },
+            simpress: {
+              blue: '#004B87',
+              cyan: '#00A3E0',
+              accent: '#FF6B00'
+            },
+            sebrae: {
+              blue: '#005CA9',
+              yellow: '#FFCC00'
+            }
+          },
+          boxShadow: {
+            'glow-blue': '0 0 25px -5px rgba(14, 140, 233, 0.4)',
+            'glow-emerald': '0 0 25px -5px rgba(16, 185, 129, 0.4)',
+          }
+        }
+      }
+    }
+  </script>
+
+  <!-- Lucide Icons -->
+  <script src="https://unpkg.com/lucide@latest"></script>
+
+  <style>
+    /* Custom Scrollbar */
+    ::-webkit-scrollbar {
+      width: 8px;
+      height: 8px;
+    }
+    ::-webkit-scrollbar-track {
+      background: #0f172a;
+    }
+    ::-webkit-scrollbar-thumb {
+      background: #334155;
+      border-radius: 4px;
+    }
+    ::-webkit-scrollbar-thumb:hover {
+      background: #475569;
+    }
+
+    /* Subtle Glassmorphism */
+    .glass-card {
+      background: rgba(30, 41, 59, 0.7);
+      backdrop-filter: blur(12px);
+      border: 1px solid rgba(255, 255, 255, 0.08);
+    }
+    .glass-card-header {
+      background: rgba(15, 23, 42, 0.6);
+      border-bottom: 1px solid rgba(255, 255, 255, 0.06);
+    }
+    .glass-input {
+      background: rgba(15, 23, 42, 0.8);
+      border: 1px solid rgba(255, 255, 255, 0.12);
+      transition: all 0.2s ease;
+    }
+    .glass-input:focus {
+      border-color: #38a9f7;
+      box-shadow: 0 0 0 2px rgba(56, 169, 247, 0.2);
+    }
+
+    /* Pulse animation for scanner hint */
+    @keyframes scannerBeam {
+      0% { transform: translateY(0); opacity: 0.8; }
+      50% { opacity: 0.3; }
+      100% { transform: translateY(38px); opacity: 0.8; }
+    }
+
+    /* Autocomplete High-End UI Styles */
+    #autocomplete-box {
+      background-color: #080e1c !important;
+      border: 1px solid rgba(56, 169, 247, 0.45) !important;
+      box-shadow: 0 25px 60px -10px rgba(0, 0, 0, 0.98), 0 0 0 1px rgba(255, 255, 255, 0.08), 0 0 35px rgba(14, 140, 233, 0.28) !important;
+      opacity: 1 !important;
+      isolation: isolate;
+    }
+    #autocomplete-list::-webkit-scrollbar {
+      width: 6px;
+    }
+    #autocomplete-list::-webkit-scrollbar-track {
+      background: #060b17;
+    }
+    #autocomplete-list::-webkit-scrollbar-thumb {
+      background: #1e3a5f;
+      border-radius: 4px;
+    }
+    #autocomplete-list::-webkit-scrollbar-thumb:hover {
+      background: #38a9f7;
+    }
+    .autocomplete-row {
+      transition: all 0.15s ease-in-out;
+      background-color: #080e1c;
+      border-left: 4px solid transparent;
+    }
+    .autocomplete-row:hover,
+    .autocomplete-row.active {
+      background: linear-gradient(90deg, rgba(14, 140, 233, 0.22) 0%, rgba(15, 23, 42, 0.95) 100%) !important;
+      border-left-color: #38a9f7 !important;
+    }
+    .autocomplete-row.active .serial-badge,
+    .autocomplete-row:hover .serial-badge {
+      border-color: #38a9f7 !important;
+      box-shadow: 0 0 14px rgba(56, 169, 247, 0.45) !important;
+      background-color: #020617 !important;
+    }
+    .serial-badge {
+      background-color: #040814;
+      border: 1px solid rgba(56, 169, 247, 0.35);
+      box-shadow: inset 0 1px 3px rgba(0, 0, 0, 0.7);
+      transition: all 0.2s ease;
+    }
+    .serial-match {
+      background: rgba(14, 140, 233, 0.38);
+      color: #7cc7fb;
+      font-weight: 800;
+      padding: 0.05rem 0.25rem;
+      border-radius: 0.25rem;
+      border: 1px solid rgba(56, 169, 247, 0.5);
+      box-shadow: 0 0 8px rgba(14, 140, 233, 0.3);
+    }
+  </style>
+</head>
+<body class="min-h-full bg-gradient-to-br from-slate-950 via-slate-900 to-slate-950 text-slate-100 flex flex-col font-sans selection:bg-brand-500 selection:text-white pb-28">
+
+  <!-- TOP HEADER -->
+  <header class="border-b border-slate-800/80 bg-slate-950/80 backdrop-blur-md sticky top-0 z-40">
+    <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 h-20 flex items-center justify-between">
+      <div class="flex items-center space-x-4">
+        <!-- Logo Badge -->
+        <div class="flex items-center space-x-3">
+          <div class="w-11 h-11 rounded-xl bg-gradient-to-tr from-brand-600 to-cyan-400 p-[2px] shadow-glow-blue flex items-center justify-center">
+            <div class="w-full h-full bg-slate-950 rounded-[10px] flex items-center justify-center font-bold text-white text-lg tracking-wider">
+              SP
+            </div>
+          </div>
+          <div>
+            <div class="flex items-center space-x-2">
+              <span class="font-bold text-lg text-white tracking-tight">SIMPRESS</span>
+              <span class="text-xs px-2 py-0.5 rounded-full bg-blue-500/20 text-blue-300 font-semibold border border-blue-500/30">SEBRAE/PR</span>
+            </div>
+            <p class="text-xs text-slate-400">Emissão Automatizada de Transferência de Equipamentos</p>
+          </div>
+        </div>
+      </div>
+
+      <!-- Quick Metrics & Status -->
+      <div class="flex items-center space-x-3">
+        <div class="hidden md:flex items-center space-x-4 text-xs text-slate-400 bg-slate-900/80 px-3.5 py-2 rounded-lg border border-slate-800">
+          <div class="flex items-center space-x-2">
+            <span class="w-2 h-2 rounded-full bg-emerald-400 animate-pulse"></span>
+            <span>Base: <strong class="text-slate-200" id="stat-equipamentos">1.364</strong> Equipamentos</span>
+          </div>
+          <span class="text-slate-700">|</span>
+          <div>
+            <span>Regionais: <strong class="text-slate-200" id="stat-unidades">30</strong> Unidades</span>
+          </div>
+          <span class="text-slate-700">|</span>
+          <div>
+            <span>Contrato: <strong class="text-slate-200">16467</strong></span>
+          </div>
+        </div>
+
+        <!-- Sync & Manage Buttons -->
+        <button onclick="abrirModalHistoricoApelidos()" id="btn-historico-apelidos" class="flex items-center space-x-1.5 px-3 py-2 text-xs font-medium text-violet-300 bg-violet-950/40 hover:bg-violet-900/60 border border-violet-500/30 rounded-lg transition-all shadow-sm" title="Consultar alterações e desfazer a mais recente por equipamento">
+          <i data-lucide="history" class="w-3.5 h-3.5 text-violet-400"></i>
+          <span class="hidden sm:inline">Histórico</span>
+          <span id="badge-total-historico-apelidos" class="hidden sm:inline text-[10px] text-violet-200">0</span>
+        </button>
+
+        <button onclick="abrirModalHistoricoComparacoes()" id="btn-historico-comparacoes" class="flex items-center space-x-1.5 px-3 py-2 text-xs font-medium text-cyan-300 bg-cyan-950/40 hover:bg-cyan-900/60 border border-cyan-500/30 rounded-lg transition-all shadow-sm" title="Consultar resultados anteriores de Atualizar Planilhas">
+          <i data-lucide="history" class="w-3.5 h-3.5 text-cyan-400"></i>
+          <span class="hidden lg:inline">Histórico planilhas</span>
+          <span id="badge-total-historico-comparacoes" class="text-[10px] text-cyan-200">0</span>
+        </button>
+
+        <button onclick="abrirModalAtualizarPlanilhas()" id="btn-atualizar-planilhas" class="flex items-center space-x-1.5 px-3 py-2 text-xs font-medium text-sky-300 bg-sky-950/40 hover:bg-sky-900/60 border border-sky-500/30 rounded-lg transition-all shadow-sm" title="Enviar Endpoint e EquipamentosDetalhes para atualizar o site">
+          <i data-lucide="upload" class="w-3.5 h-3.5 text-sky-400"></i>
+          <span class="hidden lg:inline">Atualizar Planilhas</span>
+        </button>
+
+        <button onclick="exportarEquipamentosAtualizados()" id="btn-exportar-equipamentos" class="hidden flex items-center space-x-1.5 px-3 py-2 text-xs font-medium text-emerald-300 bg-emerald-950/40 hover:bg-emerald-900/60 border border-emerald-500/30 rounded-lg transition-all shadow-sm" title="Baixar o modelo de equipamentos com os apelidos atualizados">
+          <i data-lucide="file-spreadsheet" class="w-3.5 h-3.5 text-emerald-400"></i>
+          <span class="hidden sm:inline">Exportar Excel</span>
+        </button>
+
+        <button onclick="abrirModalGerenciarUnidades()" class="flex items-center space-x-1.5 px-3 py-2 text-xs font-medium text-amber-300 bg-amber-950/40 hover:bg-amber-900/60 border border-amber-500/30 rounded-lg transition-all shadow-sm" title="Ver e gerenciar catálogo de endereços das Regionais SEBRAE">
+          <i data-lucide="map-pin" class="w-3.5 h-3.5 text-amber-400"></i>
+          <span class="hidden sm:inline">Regionais SEBRAE</span>
+        </button>
+
+        <button onclick="resetarFormulario()" class="flex items-center space-x-1.5 px-3 py-2 text-xs font-medium text-slate-300 bg-slate-800/80 hover:bg-slate-700 border border-slate-700 rounded-lg transition-all shadow-sm hover:text-white" title="Limpar formulário e iniciar nova transferência">
+          <i data-lucide="rotate-ccw" class="w-3.5 h-3.5"></i>
+          <span class="hidden lg:inline">Nova Transferência</span>
+        </button>
+      </div>
+    </div>
+  </header>
+
+  <!-- MAIN CONTAINER -->
+  <main class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 pt-8 pb-12 flex-1 w-full space-y-8">
+
+    <!-- 1. BARRA DE ENTRADA RÁPIDA (BIPAGEM / SERIAL) -->
+    <section class="glass-card rounded-2xl p-6 shadow-2xl relative z-50">
+      <div class="absolute inset-0 rounded-2xl overflow-hidden pointer-events-none">
+        <div class="absolute -right-16 -top-16 w-64 h-64 bg-brand-500/10 rounded-full blur-3xl"></div>
+      </div>
+
+      <div class="flex flex-col lg:flex-row lg:items-center justify-between gap-4 mb-4">
+        <div>
+          <h2 class="text-lg font-bold text-white flex items-center space-x-2">
+            <i data-lucide="scan-barcode" class="w-5 h-5 text-brand-400"></i>
+            <span>Entrada Rápida de Equipamento</span>
+          </h2>
+          <p class="text-xs text-slate-400 mt-0.5">
+            Biper com leitor de código de barras ou digite o serial do equipamento (busca imediata no <kbd class="px-1.5 py-0.5 text-[10px] font-mono bg-slate-800 border border-slate-700 rounded text-slate-300">Enter</kbd>).
+          </p>
+        </div>
+
+        <!-- Serial Demo Pill Button -->
+        <div class="flex items-center space-x-2 text-xs">
+          <span class="text-slate-400">Exemplo rápido:</span>
+          <button type="button" onclick="carregarExemploSerial('5CG6051BVN')" class="px-2.5 py-1 rounded-md bg-brand-500/10 hover:bg-brand-500/20 text-brand-300 border border-brand-500/30 font-mono transition-colors flex items-center space-x-1.5">
+            <span>5CG6051BVN</span>
+            <i data-lucide="sparkles" class="w-3 h-3 text-brand-400"></i>
+          </button>
+        </div>
+      </div>
+
+      <div class="relative">
+        <form onsubmit="event.preventDefault(); buscarSerial();" class="flex flex-col sm:flex-row gap-3">
+          <div class="relative flex-1">
+            <div class="absolute inset-y-0 left-0 pl-4 flex items-center pointer-events-none text-slate-400">
+              <i data-lucide="barcode" class="w-6 h-6 text-brand-400"></i>
+            </div>
+            <input
+              type="text"
+              id="input-serial"
+              autofocus
+              autocomplete="off"
+              placeholder="Digite ou bipe o Número de Série (ex: 5CG6051BVN)..."
+              class="w-full pl-12 pr-12 py-3.5 rounded-xl glass-input text-white font-mono text-base tracking-wider placeholder:text-slate-500 placeholder:font-sans focus:outline-none uppercase"
+              oninput="handleSerialInput(this.value)"
+              onkeydown="handleSerialKeydown(event)"
+            />
+            <button
+              type="button"
+              id="btn-clear-serial"
+              onclick="limparSerial()"
+              class="hidden absolute inset-y-0 right-0 pr-3.5 flex items-center text-slate-400 hover:text-white transition-colors"
+            >
+              <i data-lucide="x" class="w-5 h-5"></i>
+            </button>
+          </div>
+
+          <button
+            type="submit"
+            id="btn-buscar-serial"
+            class="px-6 py-3.5 bg-brand-600 hover:bg-brand-500 text-white font-semibold rounded-xl transition-all duration-200 flex items-center justify-center space-x-2 shadow-lg shadow-brand-600/30 shrink-0"
+          >
+            <i data-lucide="search" class="w-4 h-4"></i>
+            <span>Buscar Equipamento</span>
+          </button>
+        </form>
+
+        <!-- Autocomplete Suggestions Dropdown -->
+        <div
+          id="autocomplete-box"
+          class="hidden absolute top-full left-0 right-0 mt-2.5 rounded-2xl z-[100] overflow-hidden"
+          style="background-color: #080e1c !important; border: 1px solid rgba(56, 169, 247, 0.45) !important; box-shadow: 0 25px 60px -10px rgba(0, 0, 0, 0.98), 0 0 0 1px rgba(255, 255, 255, 0.08), 0 0 35px rgba(14, 140, 233, 0.28) !important;"
+        >
+          <!-- Header -->
+          <div
+            class="sticky top-0 px-4 py-3 border-b border-slate-800 text-xs font-semibold flex justify-between items-center z-10 select-none"
+            style="background-color: #060b17 !important;"
+          >
+            <div class="flex items-center space-x-2">
+              <span class="w-2 h-2 rounded-full bg-cyan-400 animate-pulse"></span>
+              <span class="font-bold tracking-wider uppercase text-[11px] text-cyan-300 flex items-center gap-1.5">
+                <i data-lucide="layers" class="w-3.5 h-3.5 text-cyan-400"></i>
+                Resultados Encontrados no Parque
+              </span>
+            </div>
+            <div class="flex items-center space-x-3">
+              <span id="autocomplete-count" class="px-2.5 py-0.5 rounded-full bg-cyan-500/20 text-cyan-300 border border-cyan-500/30 font-mono text-[11px] font-bold">
+                0 itens
+              </span>
+              <span class="hidden sm:inline-flex items-center text-[10px] text-slate-400 space-x-1">
+                <span>Navegar:</span>
+                <kbd class="px-1 py-0.5 bg-slate-800 border border-slate-700 rounded text-slate-300 font-mono text-[9px]">↑</kbd>
+                <kbd class="px-1 py-0.5 bg-slate-800 border border-slate-700 rounded text-slate-300 font-mono text-[9px]">↓</kbd>
+                <span class="ml-1">Selecionar:</span>
+                <kbd class="px-1 py-0.5 bg-slate-800 border border-slate-700 rounded text-slate-300 font-mono text-[9px]">Enter</kbd>
+              </span>
+            </div>
+          </div>
+
+          <!-- Items List Container -->
+          <div id="autocomplete-list" class="divide-y divide-slate-800/80 max-h-96 overflow-y-auto" style="background-color: #080e1c !important;"></div>
+
+          <!-- Footer Tips -->
+          <div
+            class="px-4 py-2 border-t border-slate-800 text-[11px] text-slate-400 flex items-center justify-between select-none"
+            style="background-color: #060b17 !important;"
+          >
+            <span class="flex items-center gap-1.5">
+              <i data-lucide="sparkles" class="w-3.5 h-3.5 text-cyan-400"></i>
+              <span>Clique no equipamento ou use <kbd class="px-1.5 py-0.5 bg-slate-800 border border-slate-700 rounded text-slate-300 font-mono text-[9px]">Enter</kbd> para preenchimento imediato</span>
+            </span>
+            <span class="text-[10px] text-slate-500 font-mono hidden sm:inline"><kbd class="px-1 py-0.5 bg-slate-800 border border-slate-700 rounded text-slate-400 text-[9px]">ESC</kbd> para fechar</span>
+          </div>
+        </div>
+      </div>
+
+      <!-- CARD: EQUIPAMENTO ENCONTRADO -->
+      <div id="card-equipamento" class="hidden mt-6 bg-slate-800/40 rounded-xl border border-slate-700/70 p-5 transition-all">
+        <div class="flex flex-col lg:flex-row lg:items-center justify-between gap-4 pb-4 border-b border-slate-700/50">
+          <div class="flex items-start sm:items-center space-x-4">
+            <div id="equip-icon-box" class="w-14 h-14 rounded-xl bg-emerald-500/10 border border-emerald-500/30 flex items-center justify-center shrink-0 text-emerald-400">
+              <i id="equip-icon" data-lucide="laptop" class="w-7 h-7"></i>
+            </div>
+            <div>
+              <div class="flex flex-wrap items-center gap-2">
+                <span id="badge-tipo" class="px-2.5 py-0.5 rounded-full text-xs font-semibold bg-emerald-500/20 text-emerald-300 border border-emerald-500/30">
+                  Notebook
+                </span>
+                <span class="text-xs px-2 py-0.5 rounded-full bg-slate-700 text-slate-300 font-mono">
+                  Série: <strong id="card-serial" class="text-white font-bold tracking-wider">5CG6051BVN</strong>
+                </span>
+                <span id="badge-apelido" class="text-xs px-2 py-0.5 rounded-full bg-slate-800 text-cyan-300 font-mono border border-cyan-500/20">
+                  PRNOTEDIREX007
+                </span>
+                <button
+                  type="button"
+                  onclick="abrirModalEditarApelido()"
+                  class="inline-flex items-center gap-1 px-2 py-1 rounded-lg bg-cyan-500/10 hover:bg-cyan-500/20 text-cyan-300 border border-cyan-500/30 text-[11px] font-semibold transition"
+                  title="Alterar somente o apelido deste equipamento"
+                >
+                  <i data-lucide="pencil" class="w-3 h-3"></i>
+                  <span>Editar Apelido</span>
+                </button>
+              </div>
+              <h3 id="card-modelo" class="text-lg font-bold text-white mt-1">HP EB 6 G1I</h3>
+              <p id="card-id-cliente" class="text-xs text-slate-400">Id Cliente: Note diretoria Tipo 2</p>
+            </div>
+          </div>
+
+          <!-- Local Atual do Equipamento -->
+          <div class="flex flex-col sm:items-end justify-center bg-slate-900/60 px-4 py-3 rounded-lg border border-slate-800 text-xs">
+            <span class="text-slate-400 flex items-center gap-1.5">
+              <i data-lucide="map-pin" class="w-3.5 h-3.5 text-amber-400"></i>
+              Local Atual no Parque:
+            </span>
+            <span id="card-localizacao" class="text-slate-200 font-medium mt-0.5">Curitiba - R Caeté, 150 - SEDE - Prado Velho</span>
+            <span id="card-cnpj-atual" class="text-slate-400 font-mono text-[11px] mt-0.5">CNPJ: 75.110.585/0001-00</span>
+            <button
+              type="button"
+              onclick="abrirModalEditarEquipamento()"
+              class="mt-2 inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-brand-500/20 hover:bg-brand-500/30 text-brand-300 hover:text-white border border-brand-500/40 text-xs font-semibold transition-all shadow-sm"
+              title="Editar dados cadastrais, endereço ou regional deste equipamento"
+            >
+              <i data-lucide="edit-3" class="w-3.5 h-3.5 text-brand-400"></i>
+              <span>Editar Dados / Endereço</span>
+            </button>
+          </div>
+        </div>
+
+        <!-- Descrição / Conteúdo do Pacote -->
+        <div class="mt-4 grid grid-cols-1 md:grid-cols-2 gap-4 items-center">
+          <div>
+            <label class="block text-xs font-semibold text-slate-300 mb-1 flex items-center gap-1.5">
+              <i data-lucide="package" class="w-3.5 h-3.5 text-brand-400"></i>
+              Descrição Sugerida do Equipamento / Pacote:
+            </label>
+            <input
+              type="text"
+              id="input-descricao-equipamento"
+              class="w-full px-3.5 py-2.5 rounded-lg glass-input text-sm text-slate-100 placeholder:text-slate-500 focus:outline-none"
+              placeholder="Ex: Notebook + kit na mochila"
+            />
+          </div>
+          <div class="text-xs text-slate-400 bg-slate-900/40 p-3 rounded-lg border border-slate-800/80">
+            <strong class="text-slate-200">Preenchimento Automático Concluído:</strong> A coluna de <strong>Retirada (Origem)</strong> abaixo foi alimentada com a unidade atual onde o equipamento se encontra.
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- FORMULÁRIO DE TRANSFERÊNCIA (2 COLUNAS: RETIRADA & ENTREGA) -->
+    <div class="grid grid-cols-1 lg:grid-cols-2 gap-8">
+
+      <!-- ========================================== -->
+      <!-- COLUNA ESQUERDA: RETIRADA (ORIGEM)        -->
+      <!-- ========================================== -->
+      <section class="glass-card rounded-2xl overflow-hidden shadow-xl flex flex-col border border-slate-800">
+        <!-- Header Origem -->
+        <div class="glass-card-header p-5 flex items-center justify-between">
+          <div class="flex items-center space-x-3">
+            <div class="w-9 h-9 rounded-lg bg-amber-500/10 border border-amber-500/30 flex items-center justify-center text-amber-400">
+              <i data-lucide="box" class="w-5 h-5"></i>
+            </div>
+            <div>
+              <h2 class="text-base font-bold text-white flex items-center gap-2">
+                <span>1. Dados de Retirada</span>
+                <span class="text-[11px] px-2 py-0.5 rounded-full bg-amber-500/20 text-amber-300 border border-amber-500/30 font-semibold uppercase">Origem</span>
+              </h2>
+              <p class="text-xs text-slate-400">Local onde a transportadora fará a coleta</p>
+            </div>
+          </div>
+
+          <!-- BOTÃO RÁPIDO: FORÇAR SEDE PRADO VELHO -->
+          <button
+            type="button"
+            onclick="forcarSedePradoVelho()"
+            class="flex items-center space-x-1.5 px-3 py-1.5 text-xs font-semibold rounded-lg bg-amber-500/10 hover:bg-amber-500/20 text-amber-300 border border-amber-500/30 transition-all hover:scale-105 active:scale-95"
+            title="Caso o equipamento já esteja em Curitiba na Sede"
+          >
+            <i data-lucide="building-2" class="w-3.5 h-3.5"></i>
+            <span>Forçar SEDE Prado Velho</span>
+          </button>
+        </div>
+
+        <div class="p-6 space-y-4 flex-1">
+          <!-- CNPJ Retirada -->
+          <div>
+            <label class="block text-xs font-semibold text-slate-300 mb-1">
+              CNPJ de Retirada (Instalação / Filial):
+            </label>
+            <input
+              type="text"
+              id="retirada-cnpj"
+              class="w-full px-3.5 py-2.5 rounded-lg glass-input text-sm text-slate-100 font-mono focus:outline-none"
+              placeholder="75.110.585/0001-00"
+            />
+          </div>
+
+          <!-- Endereço Completo Retirada -->
+          <div>
+            <label class="block text-xs font-semibold text-slate-300 mb-1">
+              Endereço Completo de Retirada:
+            </label>
+            <textarea
+              id="retirada-endereco"
+              rows="2"
+              class="w-full px-3.5 py-2 rounded-lg glass-input text-sm text-slate-100 focus:outline-none"
+              placeholder="R Caeté, 150 - SEDE - Prado Velho - Curitiba/PR - CEP 80220-300"
+            ></textarea>
+          </div>
+
+          <!-- Grade de Horários e Almoço -->
+          <div class="grid grid-cols-1 sm:grid-cols-3 gap-3">
+            <div>
+              <label class="block text-[11px] font-semibold text-slate-300 mb-1">Expediente:</label>
+              <input
+                type="text"
+                id="retirada-horario"
+                value="09:00:00 às 18:00:00"
+                class="w-full px-3 py-2 rounded-lg glass-input text-xs text-slate-200 focus:outline-none"
+              />
+            </div>
+            <div>
+              <label class="block text-[11px] font-semibold text-slate-300 mb-1">Almoço:</label>
+              <input
+                type="text"
+                id="retirada-almoco"
+                value="12:00:00"
+                class="w-full px-3 py-2 rounded-lg glass-input text-xs text-slate-200 focus:outline-none"
+              />
+            </div>
+            <div>
+              <label class="block text-[11px] font-semibold text-slate-300 mb-1">Duração Pausa:</label>
+              <input
+                type="text"
+                id="retirada-pausa-duracao"
+                value="1h12"
+                class="w-full px-3 py-2 rounded-lg glass-input text-xs text-slate-200 focus:outline-none"
+              />
+            </div>
+          </div>
+
+          <!-- Acesso & Voltagem -->
+          <div class="grid grid-cols-1 sm:grid-cols-3 gap-3">
+            <div class="sm:col-span-2">
+              <label class="block text-[11px] font-semibold text-slate-300 mb-1">Tipo de Acesso:</label>
+              <input
+                type="text"
+                id="retirada-tipo-acesso"
+                value="Elevador / Rampa / Térreo"
+                class="w-full px-3 py-2 rounded-lg glass-input text-xs text-slate-200 focus:outline-none"
+              />
+            </div>
+            <div>
+              <label class="block text-[11px] font-semibold text-slate-300 mb-1">Voltagem:</label>
+              <input
+                type="text"
+                id="retirada-voltagem"
+                value="Bivolt"
+                class="w-full px-3 py-2 rounded-lg glass-input text-xs text-slate-200 focus:outline-none"
+              />
+            </div>
+          </div>
+
+          <!-- Contato Suporte Retirada -->
+          <div class="pt-2 border-t border-slate-800">
+            <h4 class="text-xs font-semibold text-slate-400 uppercase tracking-wider mb-2 flex items-center gap-1.5">
+              <i data-lucide="user-check" class="w-3.5 h-3.5 text-amber-400"></i>
+              Contato no Ponto de Retirada (Padrão Simpress)
+            </h4>
+            <div class="grid grid-cols-1 sm:grid-cols-3 gap-3">
+              <div>
+                <label class="block text-[11px] text-slate-400 mb-1">Nome:</label>
+                <input
+                  type="text"
+                  id="retirada-contato"
+                  value="Gabriel Akihiro Noda Souza (Simpress)"
+                  class="w-full px-3 py-2 rounded-lg glass-input text-xs text-slate-200 focus:outline-none"
+                />
+              </div>
+              <div>
+                <label class="block text-[11px] text-slate-400 mb-1">E-mail:</label>
+                <input
+                  type="email"
+                  id="retirada-email"
+                  value="gansouza@simpress.com.br"
+                  class="w-full px-3 py-2 rounded-lg glass-input text-xs text-slate-200 focus:outline-none"
+                />
+              </div>
+              <div>
+                <label class="block text-[11px] text-slate-400 mb-1">Telefone:</label>
+                <input
+                  type="text"
+                  id="retirada-telefone"
+                  value="(41) 9 98751-2389"
+                  class="w-full px-3 py-2 rounded-lg glass-input text-xs text-slate-200 focus:outline-none font-mono"
+                />
+              </div>
+            </div>
+          </div>
+
+          <!-- Observações Retirada -->
+          <div>
+            <label class="block text-[11px] font-semibold text-slate-400 mb-1">Observações Adicionais Retirada:</label>
+            <input
+              type="text"
+              id="retirada-obs"
+              class="w-full px-3 py-2 rounded-lg glass-input text-xs text-slate-200 focus:outline-none"
+              placeholder="Ex: Notebook + kit na mochila (retirada no suporte de TI)"
+            />
+          </div>
+        </div>
+      </section>
+
+      <!-- ========================================== -->
+      <!-- COLUNA DIREITA: ENTREGA (DESTINO)         -->
+      <!-- ========================================== -->
+      <section class="glass-card rounded-2xl overflow-hidden shadow-xl flex flex-col border border-slate-800">
+        <!-- Header Destino -->
+        <div class="glass-card-header p-5 flex items-center justify-between">
+          <div class="flex items-center space-x-3">
+            <div class="w-9 h-9 rounded-lg bg-emerald-500/10 border border-emerald-500/30 flex items-center justify-center text-emerald-400">
+              <i data-lucide="truck" class="w-5 h-5"></i>
+            </div>
+            <div>
+              <h2 class="text-base font-bold text-white flex items-center gap-2">
+                <span>2. Dados de Entrega</span>
+                <span class="text-[11px] px-2 py-0.5 rounded-full bg-emerald-500/20 text-emerald-300 border border-emerald-500/30 font-semibold uppercase">Destino</span>
+              </h2>
+              <p class="text-xs text-slate-400">Unidade SEBRAE e destinatário final</p>
+            </div>
+          </div>
+          <span class="text-xs text-emerald-400 font-medium">Preenchimento Inteligente</span>
+        </div>
+
+        <div class="p-6 space-y-4 flex-1">
+          <!-- BUSCA RÁPIDA DE UNIDADE SEBRAE (DROPDOWN / AUTOCOMPLETE) -->
+          <div>
+            <label class="block text-xs font-semibold text-slate-300 mb-1 flex items-center justify-between">
+              <span class="flex items-center gap-1.5">
+                <i data-lucide="map-pin" class="w-3.5 h-3.5 text-emerald-400"></i>
+                Selecione a Unidade SEBRAE de Destino:
+              </span>
+              <span id="filiais-count" class="text-[10px] text-slate-400">30 filiais catalogadas</span>
+            </label>
+            <div class="relative">
+              <select
+                id="select-unidade-destino"
+                onchange="handleUnidadeDestinoChange(this.value)"
+                class="w-full px-3.5 py-2.5 rounded-lg glass-input text-sm text-slate-100 focus:outline-none cursor-pointer appearance-none bg-no-repeat pr-10"
+                style="background-image: url('data:image/svg+xml;charset=US-ASCII,%3Csvg%20xmlns%3D%22http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%22%20width%3D%2220%22%20height%3D%2220%22%20viewBox%3D%220%200%2024%2024%22%20fill%3D%22none%22%20stroke%3D%22%2394a3b8%22%20stroke-width%3D%222%22%20stroke-linecap%3D%22round%22%20stroke-linejoin%3D%22round%22%3E%3Cpath%20d%3D%22m6%209%206%206%206-6%22%2F%3E%3C%2Fsvg%3E'); background-position: right 0.75rem center; background-size: 1.25rem;"
+              >
+                <option value="">-- Escolha a Cidade ou Regional de Destino --</option>
+              </select>
+            </div>
+
+            <!-- Quick Pill Buttons for Top Regional Units -->
+            <div class="flex flex-wrap gap-1.5 mt-2">
+              <span class="text-[10px] text-slate-400 self-center mr-1">Rápidas:</span>
+              <button type="button" onclick="selecionarUnidadePorCidade('Curitiba')" class="px-2 py-0.5 rounded text-[11px] bg-slate-800 hover:bg-slate-700 text-slate-300 border border-slate-700 transition">Curitiba Sede</button>
+              <button type="button" onclick="selecionarUnidadePorCidade('Londrina')" class="px-2 py-0.5 rounded text-[11px] bg-slate-800 hover:bg-slate-700 text-slate-300 border border-slate-700 transition">Londrina</button>
+              <button type="button" onclick="selecionarUnidadePorCidade('Maringá')" class="px-2 py-0.5 rounded text-[11px] bg-slate-800 hover:bg-slate-700 text-slate-300 border border-slate-700 transition">Maringá</button>
+              <button type="button" onclick="selecionarUnidadePorCidade('Cascavel')" class="px-2 py-0.5 rounded text-[11px] bg-slate-800 hover:bg-slate-700 text-slate-300 border border-slate-700 transition">Cascavel</button>
+              <button type="button" onclick="selecionarUnidadePorCidade('Ponta Grossa')" class="px-2 py-0.5 rounded text-[11px] bg-slate-800 hover:bg-slate-700 text-slate-300 border border-slate-700 transition">Ponta Grossa</button>
+              <button type="button" onclick="selecionarUnidadePorCidade('Foz do Iguaçu')" class="px-2 py-0.5 rounded text-[11px] bg-slate-800 hover:bg-slate-700 text-slate-300 border border-slate-700 transition">Foz do Iguaçu</button>
+            </div>
+          </div>
+
+          <!-- CNPJ Entrega -->
+          <div>
+            <label class="block text-xs font-semibold text-slate-300 mb-1">
+              CNPJ de Entrega (Preenchido automaticamente):
+            </label>
+            <input
+              type="text"
+              id="entrega-cnpj"
+              class="w-full px-3.5 py-2.5 rounded-lg glass-input text-sm text-slate-100 font-mono focus:outline-none"
+              placeholder="75.110.585/xxxx-xx"
+            />
+          </div>
+
+          <!-- Endereço Completo Entrega -->
+          <div>
+            <label class="block text-xs font-semibold text-slate-300 mb-1">
+              Endereço Completo de Entrega:
+            </label>
+            <textarea
+              id="entrega-endereco"
+              rows="2"
+              class="w-full px-3.5 py-2 rounded-lg glass-input text-sm text-slate-100 focus:outline-none"
+              placeholder="Selecione uma unidade acima para carregar o endereço completo..."
+            ></textarea>
+          </div>
+
+          <!-- Dados do Destinatário (Colaborador / Contato) -->
+          <div class="pt-2 border-t border-slate-800">
+            <h4 class="text-xs font-semibold text-slate-300 uppercase tracking-wider mb-2 flex items-center justify-between">
+              <span class="flex items-center gap-1.5">
+                <i data-lucide="user" class="w-3.5 h-3.5 text-emerald-400"></i>
+                Dados do Destinatário no SEBRAE
+              </span>
+              <span class="text-[10px] text-amber-400 font-normal">* Obrigatório para entrega</span>
+            </h4>
+            <div class="space-y-3">
+              <div>
+                <label class="block text-[11px] font-semibold text-slate-300 mb-1">
+                  Nome Completo do Destinatário: <span class="text-amber-400">*</span>
+                </label>
+                <input
+                  type="text"
+                  id="entrega-contato"
+                  class="w-full px-3 py-2 rounded-lg glass-input text-xs text-slate-100 focus:outline-none"
+                  placeholder="Ex: João da Silva / Cibele Santana"
+                />
+              </div>
+
+              <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                <div>
+                  <label class="block text-[11px] text-slate-300 mb-1">E-mail do Destinatário:</label>
+                  <input
+                    type="email"
+                    id="entrega-email"
+                    class="w-full px-3 py-2 rounded-lg glass-input text-xs text-slate-100 focus:outline-none"
+                    placeholder="nome@pr.sebrae.com.br"
+                  />
+                </div>
+                <div>
+                  <label class="block text-[11px] text-slate-300 mb-1">Telefone / Ramal:</label>
+                  <input
+                    type="text"
+                    id="entrega-telefone"
+                    class="w-full px-3 py-2 rounded-lg glass-input text-xs text-slate-100 focus:outline-none font-mono"
+                    placeholder="(41) 9 xxxx-xxxx"
+                  />
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <!-- Grade de Horários e Almoço Entrega -->
+          <div class="grid grid-cols-1 sm:grid-cols-3 gap-3">
+            <div>
+              <label class="block text-[11px] font-semibold text-slate-300 mb-1">Expediente:</label>
+              <input
+                type="text"
+                id="entrega-horario"
+                value="09:00:00 às 18:00:00"
+                class="w-full px-3 py-2 rounded-lg glass-input text-xs text-slate-200 focus:outline-none"
+              />
+            </div>
+            <div>
+              <label class="block text-[11px] font-semibold text-slate-300 mb-1">Almoço:</label>
+              <input
+                type="text"
+                id="entrega-almoco"
+                value="12:00:00"
+                class="w-full px-3 py-2 rounded-lg glass-input text-xs text-slate-200 focus:outline-none"
+              />
+            </div>
+            <div>
+              <label class="block text-[11px] font-semibold text-slate-300 mb-1">Duração Pausa:</label>
+              <input
+                type="text"
+                id="entrega-pausa-duracao"
+                value="1h"
+                class="w-full px-3 py-2 rounded-lg glass-input text-xs text-slate-200 focus:outline-none"
+              />
+            </div>
+          </div>
+
+          <!-- Observação do Chamado / Entrega -->
+          <div>
+            <div class="flex items-center justify-between mb-1">
+              <label class="block text-xs font-semibold text-slate-300">
+                Observações Adicionais do Chamado:
+              </label>
+              <span class="text-[10px] text-slate-400">Cel. B37 na planilha</span>
+            </div>
+            <textarea
+              id="entrega-obs"
+              rows="2"
+              class="w-full px-3.5 py-2 rounded-lg glass-input text-xs text-slate-100 focus:outline-none"
+              placeholder="Ex: Equipamento para nova contratação / Substituição preventiva..."
+            ></textarea>
+            <!-- Chips de observação rápida -->
+            <div class="flex flex-wrap gap-1.5 mt-1.5">
+              <button type="button" onclick="adicionarObsChamado('Equipamento para colaborador(a) substituição preventiva.')" class="px-2 py-0.5 rounded text-[10px] bg-slate-800 hover:bg-slate-700 text-slate-400 hover:text-slate-200 border border-slate-700/60">+ Substituição</button>
+              <button type="button" onclick="adicionarObsChamado('Equipamento destinado ao onboarding de novo colaborador(a).')" class="px-2 py-0.5 rounded text-[10px] bg-slate-800 hover:bg-slate-700 text-slate-400 hover:text-slate-200 border border-slate-700/60">+ Novo Colaborador</button>
+              <button type="button" onclick="adicionarObsChamado('Equipamento para substituição por lentidão/defeito físico.')" class="px-2 py-0.5 rounded text-[10px] bg-slate-800 hover:bg-slate-700 text-slate-400 hover:text-slate-200 border border-slate-700/60">+ Defeito/Troca</button>
+            </div>
+          </div>
+        </div>
+      </section>
+
+    </div>
+
+  </main>
+
+  <!-- ========================================== -->
+  <!-- BARRA INFERIOR FIXA DE AÇÕES RÁPIDAS      -->
+  <!-- ========================================== -->
+  <aside aria-label="Painel de Ações Rápidas" class="fixed bottom-0 inset-x-0 bg-slate-950/90 backdrop-blur-xl border-t border-slate-800/90 py-4 px-4 sm:px-8 z-30 shadow-2xl">
+    <div class="max-w-7xl mx-auto flex flex-col sm:flex-row items-center justify-between gap-4">
+      <!-- Quick Status Text -->
+      <div class="flex items-center space-x-3 text-xs text-slate-400">
+        <div class="w-2.5 h-2.5 rounded-full bg-brand-400" id="status-indicator"></div>
+        <div id="status-summary">
+          <span class="text-slate-300 font-medium">Pronto para emissão.</span>
+          <span class="hidden md:inline text-slate-500">Verifique os dados antes de gerar a planilha oficial Simpress.</span>
+        </div>
+      </div>
+
+      <!-- Action Buttons -->
+      <div class="flex items-center space-x-3 w-full sm:w-auto justify-end">
+        <!-- Preview Modal Button -->
+        <button
+          type="button"
+          onclick="abrirModalPreview()"
+          class="px-4 py-2.5 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-300 hover:text-white border border-slate-700 text-xs font-semibold flex items-center space-x-1.5 transition shadow-sm"
+          title="Pré-visualizar resumo do chamado"
+        >
+          <i data-lucide="eye" class="w-4 h-4"></i>
+          <span>Visualizar</span>
+        </button>
+
+        <!-- PRIMARY: Download Excel Sheet -->
+        <button
+          type="button"
+          id="btn-gerar-planilha"
+          onclick="gerarPlanilhaExcel()"
+          class="px-6 py-2.5 rounded-xl bg-gradient-to-r from-emerald-600 to-teal-500 hover:from-emerald-500 hover:to-teal-400 text-white font-bold text-xs sm:text-sm flex items-center space-x-2.5 shadow-glow-emerald transition-all transform hover:scale-[1.02] active:scale-[0.98]"
+        >
+          <i data-lucide="file-spreadsheet" class="w-4 h-4"></i>
+          <span>Gerar e Baixar Planilha Oficial (.xlsx)</span>
+        </button>
+      </div>
+    </div>
+  </aside>
+
+  <!-- ========================================== -->
+  <!-- MODAL DE PRÉ-VISUALIZAÇÃO DO RESUMO       -->
+  <!-- ========================================== -->
+  <div id="modal-preview" class="fixed inset-0 bg-slate-950/80 backdrop-blur-sm z-50 hidden flex items-center justify-center p-4">
+    <div class="bg-slate-900 border border-slate-700 rounded-2xl max-w-2xl w-full p-6 shadow-2xl relative flex flex-col max-h-[90vh]">
+      <div class="flex items-center justify-between pb-4 border-b border-slate-800">
+        <div class="flex items-center space-x-2.5">
+          <i data-lucide="file-text" class="w-5 h-5 text-brand-400"></i>
+          <h3 class="text-base font-bold text-white">Resumo Estruturado da Transferência</h3>
+        </div>
+        <button onclick="fecharModalPreview()" class="text-slate-400 hover:text-white transition">
+          <i data-lucide="x" class="w-5 h-5"></i>
+        </button>
+      </div>
+
+      <div class="py-4 overflow-y-auto flex-1 font-mono text-xs">
+        <textarea
+          id="textarea-resumo-preview"
+          rows="15"
+          readonly
+          class="w-full bg-slate-950/80 border border-slate-800 rounded-xl p-4 text-slate-300 font-mono text-xs leading-relaxed focus:outline-none"
+        ></textarea>
+      </div>
+
+      <div class="pt-4 border-t border-slate-800 flex justify-between items-center">
+        <span class="text-[11px] text-slate-400">Pronto para colar em chamados Jira, GLPI ou Teams.</span>
+        <div class="flex space-x-2">
+          <button
+            onclick="copiarTextoDoModal()"
+            class="px-4 py-2 rounded-lg bg-brand-600 hover:bg-brand-500 text-white font-semibold text-xs flex items-center space-x-1.5 transition"
+          >
+            <i data-lucide="copy" class="w-3.5 h-3.5"></i>
+            <span>Copiar Texto</span>
+          </button>
+          <button
+            onclick="fecharModalPreview()"
+            class="px-4 py-2 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-300 text-xs transition"
+          >
+            Fechar
+          </button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ==================================================== -->
+  <!-- MODAL DE ATUALIZAÇÃO / CADASTRO DE EQUIPAMENTO       -->
+  <!-- ==================================================== -->
+  <div id="modal-editar-equipamento" class="fixed inset-0 bg-slate-950/85 backdrop-blur-md z-50 hidden flex items-center justify-center p-4">
+    <div class="bg-slate-900 border border-slate-700/80 rounded-2xl max-w-2xl w-full p-6 shadow-2xl relative flex flex-col max-h-[92vh] overflow-hidden">
+      <!-- Modal Header -->
+      <div class="flex items-center justify-between pb-4 border-b border-slate-800 shrink-0">
+        <div class="flex items-center space-x-3">
+          <div class="w-10 h-10 rounded-xl bg-brand-500/10 border border-brand-500/30 flex items-center justify-center text-brand-400">
+            <i data-lucide="edit" class="w-5 h-5"></i>
+          </div>
+          <div>
+            <h3 class="text-base font-bold text-white flex items-center gap-2">
+              <span id="modal-edit-titulo">Atualizar Dados do Equipamento</span>
+              <span id="modal-edit-serial-badge" class="px-2 py-0.5 rounded-full text-xs font-mono font-bold bg-brand-500/20 text-brand-300 border border-brand-500/30"></span>
+            </h3>
+            <p class="text-xs text-slate-400">As alterações serão salvas no site e gravadas diretamente na planilha oficial Excel.</p>
+          </div>
+        </div>
+        <button onclick="fecharModalEditarEquipamento()" class="text-slate-400 hover:text-white p-1 rounded-lg hover:bg-slate-800 transition">
+          <i data-lucide="x" class="w-5 h-5"></i>
+        </button>
+      </div>
+
+      <!-- Modal Body (Form) -->
+      <div class="py-4 overflow-y-auto flex-1 space-y-4 pr-1">
+        
+        <!-- Bloco 1: Identificação do Hardware -->
+        <div class="bg-slate-950/60 p-4 rounded-xl border border-slate-800/80 space-y-3">
+          <h4 class="text-xs font-bold text-brand-400 uppercase tracking-wider flex items-center gap-1.5">
+            <i data-lucide="cpu" class="w-3.5 h-3.5"></i>
+            <span>Identificação do Equipamento</span>
+          </h4>
+          <div class="grid grid-cols-1 sm:grid-cols-2 gap-3 text-xs">
+            <div>
+              <label class="block text-slate-300 font-semibold mb-1">Número de Série:</label>
+              <input type="text" id="edit-serial" class="w-full px-3 py-2 rounded-lg glass-input text-white font-mono uppercase font-bold focus:outline-none" />
+            </div>
+            <div>
+              <label class="block text-slate-300 font-semibold mb-1">Tipo de Equipamento:</label>
+              <select id="edit-tipo" class="w-full px-3 py-2 rounded-lg glass-input text-white focus:outline-none">
+                <option value="Notebook">Notebook</option>
+                <option value="Micro Computador">Micro Computador</option>
+                <option value="Headsets">Headsets</option>
+                <option value="Monitor">Monitor</option>
+                <option value="Impressora">Impressora</option>
+                <option value="Outro">Outro</option>
+              </select>
+            </div>
+            <div>
+              <label class="block text-slate-300 font-semibold mb-1">Modelo do Hardware:</label>
+              <input type="text" id="edit-modelo" placeholder="Ex: HP EB 6 G1I" class="w-full px-3 py-2 rounded-lg glass-input text-slate-200 focus:outline-none" />
+            </div>
+            <div id="edit-apelido-field">
+              <label class="block text-slate-300 font-semibold mb-1">Apelido / Hostname:</label>
+              <input type="text" id="edit-apelido" placeholder="Ex: PRNOTEDIREX007" class="w-full px-3 py-2 rounded-lg glass-input text-slate-200 font-mono focus:outline-none" />
+              <p class="text-[10px] text-slate-500 mt-1">Para equipamentos existentes, altere o apelido pelo botão próprio no cartão.</p>
+            </div>
+            <div class="sm:col-span-2">
+              <label class="block text-slate-300 font-semibold mb-1">Id Cliente / Observação de Uso:</label>
+              <input type="text" id="edit-id-cliente" placeholder="Ex: Note diretoria Tipo 2" class="w-full px-3 py-2 rounded-lg glass-input text-slate-200 focus:outline-none" />
+            </div>
+          </div>
+        </div>
+
+        <!-- Bloco 2: Localização & Endereço -->
+        <div class="bg-slate-950/60 p-4 rounded-xl border border-slate-800/80 space-y-3">
+          <div class="flex items-center justify-between">
+            <h4 class="text-xs font-bold text-amber-400 uppercase tracking-wider flex items-center gap-1.5">
+              <i data-lucide="map-pin" class="w-3.5 h-3.5"></i>
+              <span>Localização e Endereço de Instalação</span>
+            </h4>
+          </div>
+
+          <!-- Atalho: Preencher com Regional SEBRAE -->
+          <div class="bg-amber-500/10 border border-amber-500/25 p-3 rounded-lg text-xs">
+            <label class="block text-amber-300 font-semibold mb-1 flex items-center gap-1.5">
+              <i data-lucide="sparkles" class="w-3.5 h-3.5 text-amber-400"></i>
+              <span>Atalho: Copiar Endereço de uma Regional / Unidade SEBRAE:</span>
+            </label>
+            <select id="select-copiar-regional" onchange="aplicarEnderecoRegionalNoModal(this.value)" class="w-full px-3 py-2 rounded-lg bg-slate-900 border border-amber-500/40 text-slate-200 focus:outline-none">
+              <option value="">-- Selecione uma regional para preenchimento automático --</option>
+            </select>
+          </div>
+
+          <div class="grid grid-cols-1 sm:grid-cols-3 gap-3 text-xs">
+            <div class="sm:col-span-2">
+              <label class="block text-slate-300 font-semibold mb-1">Endereço Completo:</label>
+              <input type="text" id="edit-endereco" placeholder="Ex: R Caeté, 150 - SEDE - Prado Velho" class="w-full px-3 py-2 rounded-lg glass-input text-slate-200 focus:outline-none" />
+            </div>
+            <div>
+              <label class="block text-slate-300 font-semibold mb-1">Cidade:</label>
+              <input type="text" id="edit-cidade" placeholder="Ex: Curitiba" class="w-full px-3 py-2 rounded-lg glass-input text-slate-200 focus:outline-none" />
+            </div>
+            <div>
+              <label class="block text-slate-300 font-semibold mb-1">UF:</label>
+              <input type="text" id="edit-uf" value="PR" class="w-full px-3 py-2 rounded-lg glass-input text-slate-200 focus:outline-none uppercase" />
+            </div>
+            <div>
+              <label class="block text-slate-300 font-semibold mb-1">CEP:</label>
+              <input type="text" id="edit-cep" placeholder="80220-300" class="w-full px-3 py-2 rounded-lg glass-input text-slate-200 font-mono focus:outline-none" />
+            </div>
+            <div>
+              <label class="block text-slate-300 font-semibold mb-1">CNPJ de Instalação:</label>
+              <input type="text" id="edit-cnpj" placeholder="75.110.585/0001-00" class="w-full px-3 py-2 rounded-lg glass-input text-slate-200 font-mono focus:outline-none" />
+            </div>
+          </div>
+        </div>
+
+      </div>
+
+      <!-- Modal Footer -->
+      <div class="pt-4 border-t border-slate-800 flex justify-between items-center shrink-0">
+        <span class="text-[11px] text-slate-400">Grava no arquivo Excel físico e atualiza a tela na hora.</span>
+        <div class="flex space-x-2">
+          <button
+            type="button"
+            onclick="fecharModalEditarEquipamento()"
+            class="px-4 py-2 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-300 text-xs transition"
+          >
+            Cancelar
+          </button>
+          <button
+            type="button"
+            id="btn-salvar-equipamento"
+            onclick="salvarDadosEquipamento()"
+            class="px-5 py-2 rounded-lg bg-emerald-600 hover:bg-emerald-500 text-white font-bold text-xs flex items-center space-x-1.5 shadow-glow-emerald transition"
+          >
+            <i data-lucide="check" class="w-4 h-4"></i>
+            <span>Salvar no Site e na Planilha</span>
+          </button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- MODAL PARA ALTERAR SOMENTE O APELIDO -->
+  <div id="modal-editar-apelido" class="fixed inset-0 bg-slate-950/85 backdrop-blur-md z-[60] hidden flex items-center justify-center p-4">
+    <div class="bg-slate-900 border border-cyan-500/30 rounded-2xl max-w-md w-full p-6 shadow-2xl">
+      <div class="flex items-start justify-between gap-4 mb-5">
+        <div>
+          <h3 class="text-base font-bold text-white">Editar apelido</h3>
+          <p class="text-xs text-slate-400 mt-1">O número de série e os demais dados permanecerão iguais.</p>
+        </div>
+        <button type="button" onclick="fecharModalEditarApelido()" class="text-slate-400 hover:text-white p-1 rounded-lg hover:bg-slate-800 transition" aria-label="Fechar">
+          <i data-lucide="x" class="w-5 h-5"></i>
+        </button>
+      </div>
+      <label for="edit-apelido-isolado" class="block text-xs text-slate-300 font-semibold mb-1">Novo apelido / hostname</label>
+      <input type="text" id="edit-apelido-isolado" class="w-full px-3 py-2.5 rounded-lg glass-input text-white font-mono focus:outline-none" autocomplete="off" />
+      <p id="apelido-serial-contexto" class="text-[11px] text-slate-500 font-mono mt-2"></p>
+      <div class="flex justify-end gap-2 mt-6 pt-4 border-t border-slate-800">
+        <button type="button" onclick="fecharModalEditarApelido()" class="px-4 py-2 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-300 text-xs transition">Cancelar</button>
+        <button type="button" id="btn-salvar-apelido" onclick="salvarApelido()" class="px-4 py-2 rounded-lg bg-cyan-600 hover:bg-cyan-500 text-white font-bold text-xs transition">Salvar apelido</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- MODAL DO HISTÓRICO DE ALTERAÇÕES DE APELIDO -->
+  <div id="modal-historico-apelidos" class="fixed inset-0 bg-slate-950/85 backdrop-blur-md z-[55] hidden flex items-center justify-center p-4">
+    <div class="bg-slate-900 border border-violet-500/30 rounded-2xl max-w-6xl w-full p-6 shadow-2xl flex flex-col max-h-[90vh]">
+      <div class="flex items-start justify-between gap-4 pb-4 border-b border-slate-800 shrink-0">
+        <div>
+          <h3 class="text-base font-bold text-white flex items-center gap-2">
+            <i data-lucide="history" class="w-4 h-4 text-violet-400"></i>
+            Histórico de alterações
+            <span id="total-historico-apelidos" class="px-2 py-0.5 rounded-full text-[10px] font-semibold bg-violet-500/15 text-violet-300 border border-violet-500/25">0 registros</span>
+          </h3>
+          <p class="text-xs text-slate-400 mt-1">Excluir o registro mais recente de um campo restaura e salva o valor anterior no equipamento e remove esse evento do histórico.</p>
+        </div>
+        <button type="button" onclick="fecharModalHistoricoApelidos()" class="text-slate-400 hover:text-white p-1 rounded-lg hover:bg-slate-800 transition" aria-label="Fechar histórico">
+          <i data-lucide="x" class="w-5 h-5"></i>
+        </button>
+      </div>
+      <div id="lista-historico-apelidos" class="overflow-auto flex-1 py-4">
+        <p class="text-sm text-slate-400 text-center py-8">Carregando histórico...</p>
+      </div>
+      <div class="pt-3 border-t border-slate-800 flex justify-end shrink-0">
+        <button type="button" onclick="fecharModalHistoricoApelidos()" class="px-4 py-2 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-300 text-xs transition">Fechar</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- ==================================================== -->
+  <!-- MODAL DE GERENCIAMENTO DE REGIONAIS & ENDEREÇOS     -->
+  <!-- ==================================================== -->
+  <div id="modal-gerenciar-unidades" class="fixed inset-0 bg-slate-950/85 backdrop-blur-md z-50 hidden flex items-center justify-center p-4">
+    <div class="bg-slate-900 border border-slate-700/80 rounded-2xl max-w-3xl w-full p-6 shadow-2xl relative flex flex-col max-h-[92vh] overflow-hidden">
+      <!-- Header -->
+      <div class="flex items-center justify-between pb-4 border-b border-slate-800 shrink-0">
+        <div class="flex items-center space-x-3">
+          <div class="w-10 h-10 rounded-xl bg-amber-500/10 border border-amber-500/30 flex items-center justify-center text-amber-400">
+            <i data-lucide="building-2" class="w-5 h-5"></i>
+          </div>
+          <div>
+            <h3 class="text-base font-bold text-white flex items-center gap-2">
+              <span>Catálogo de Unidades & Regionais SEBRAE/PR</span>
+              <span id="badge-total-unidades-modal" class="px-2 py-0.5 rounded-full text-xs font-semibold bg-amber-500/20 text-amber-300 border border-amber-500/30">30 unidades</span>
+            </h3>
+            <p class="text-xs text-slate-400">Consulte ou cadastre endereços e CNPJs oficiais das filiais.</p>
+          </div>
+        </div>
+        <button onclick="fecharModalGerenciarUnidades()" class="text-slate-400 hover:text-white p-1 rounded-lg hover:bg-slate-800 transition">
+          <i data-lucide="x" class="w-5 h-5"></i>
+        </button>
+      </div>
+
+      <!-- Search & Add Bar -->
+      <div class="py-3 flex flex-col sm:flex-row gap-3 border-b border-slate-800 shrink-0">
+        <div class="relative flex-1">
+          <i data-lucide="search" class="w-4 h-4 text-slate-400 absolute left-3 top-3"></i>
+          <input
+            type="text"
+            id="input-filtro-unidades"
+            oninput="filtrarUnidadesModal(this.value)"
+            placeholder="Filtrar por cidade, endereço ou CNPJ..."
+            class="w-full pl-9 pr-3 py-2 rounded-lg glass-input text-xs text-slate-200 placeholder:text-slate-500 focus:outline-none"
+          />
+        </div>
+        <button
+          onclick="toggleFormNovaUnidade()"
+          class="px-3.5 py-2 rounded-lg bg-brand-600 hover:bg-brand-500 text-white text-xs font-bold flex items-center justify-center gap-1.5 transition"
+        >
+          <i data-lucide="plus" class="w-3.5 h-3.5"></i>
+          <span>Nova Filial</span>
+        </button>
+      </div>
+
+      <!-- Formulário de Nova Unidade (Expandível) -->
+      <div id="form-nova-unidade" class="hidden py-3 bg-slate-950/80 p-4 rounded-xl border border-slate-800/80 mt-2 shrink-0 space-y-3">
+        <h4 class="text-xs font-bold text-cyan-400 flex items-center gap-1.5">
+          <i data-lucide="plus-circle" class="w-3.5 h-3.5"></i>
+          <span id="form-unidade-titulo">Cadastrar Nova Unidade / Filial</span>
+        </h4>
+        <input type="hidden" id="form-unidade-id" />
+        <div class="grid grid-cols-1 sm:grid-cols-3 gap-2.5 text-xs">
+          <div>
+            <label class="block text-slate-300 font-semibold mb-1">Cidade:</label>
+            <input type="text" id="form-unidade-cidade" placeholder="Ex: Paranaguá" class="w-full px-2.5 py-1.5 rounded-lg glass-input text-slate-200 focus:outline-none" />
+          </div>
+          <div class="sm:col-span-2">
+            <label class="block text-slate-300 font-semibold mb-1">Endereço:</label>
+            <input type="text" id="form-unidade-endereco" placeholder="Ex: Rua Princesa Isabel, 100" class="w-full px-2.5 py-1.5 rounded-lg glass-input text-slate-200 focus:outline-none" />
+          </div>
+          <div>
+            <label class="block text-slate-300 font-semibold mb-1">CEP:</label>
+            <input type="text" id="form-unidade-cep" placeholder="83203-000" class="w-full px-2.5 py-1.5 rounded-lg glass-input text-slate-200 font-mono focus:outline-none" />
+          </div>
+          <div>
+            <label class="block text-slate-300 font-semibold mb-1">CNPJ:</label>
+            <input type="text" id="form-unidade-cnpj" placeholder="75.110.585/0000-00" class="w-full px-2.5 py-1.5 rounded-lg glass-input text-slate-200 font-mono focus:outline-none" />
+          </div>
+          <div class="flex items-end gap-2">
+            <button onclick="salvarUnidadeForm()" class="flex-1 py-1.5 px-3 rounded-lg bg-emerald-600 hover:bg-emerald-500 text-white font-bold text-xs flex items-center justify-center gap-1 transition">
+              <i data-lucide="check" class="w-3.5 h-3.5"></i>
+              <span>Salvar</span>
+            </button>
+            <button onclick="toggleFormNovaUnidade(false)" class="py-1.5 px-3 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-300 text-xs transition">
+              Cancelar
+            </button>
+          </div>
+        </div>
+      </div>
+
+      <!-- Lista de Unidades -->
+      <div id="lista-unidades-container" class="py-3 overflow-y-auto flex-1 space-y-2 pr-1">
+        <!-- Linhas geradas dinamicamente via JS -->
+      </div>
+
+      <!-- Footer -->
+      <div class="pt-3 border-t border-slate-800 flex justify-end shrink-0">
+        <button onclick="fecharModalGerenciarUnidades()" class="px-4 py-2 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-300 text-xs transition">
+          Fechar
+        </button>
+      </div>
+    </div>
+  </div>
+
+  <!-- MODAL PARA ATUALIZAR AS DUAS PLANILHAS -->
+  <div id="modal-atualizar-planilhas" class="fixed inset-0 bg-slate-950/85 backdrop-blur-md z-[70] hidden flex items-center justify-center p-4">
+    <div class="bg-slate-900 border border-sky-500/30 rounded-2xl max-w-2xl w-full p-6 shadow-2xl flex flex-col max-h-[92vh] overflow-hidden">
+      <div class="flex items-start justify-between gap-4 pb-4 border-b border-slate-800 shrink-0">
+        <div>
+          <h3 class="text-base font-bold text-white flex items-center gap-2">
+            <i data-lucide="upload" class="w-5 h-5 text-sky-400"></i>
+            Atualizar planilhas
+          </h3>
+          <p class="text-xs text-slate-400 mt-1">Envie Endpoint e EquipamentosDetalhes. O nome pode ser diferente; o site identifica cada planilha pelos cabeçalhos.</p>
+        </div>
+        <button type="button" onclick="fecharModalAtualizarPlanilhas()" class="text-slate-400 hover:text-white p-1 rounded-lg hover:bg-slate-800 transition" aria-label="Fechar">
+          <i data-lucide="x" class="w-5 h-5"></i>
+        </button>
+      </div>
+
+      <div class="overflow-y-auto py-4 space-y-4">
+        <label class="block bg-slate-950/60 border border-slate-800 rounded-xl p-4">
+          <span class="block text-sm text-white font-semibold">1. Endpoint — InvAllComputersSummary</span>
+          <span class="block text-[11px] text-slate-400 mt-1">Precisa ter nome do computador e rótulo de serviço/número de série.</span>
+          <input id="upload-endpoint-file" type="file" accept=".xlsx,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" class="block w-full mt-3 text-xs text-slate-300 file:mr-3 file:rounded-lg file:border-0 file:bg-sky-500/15 file:px-3 file:py-2 file:text-xs file:font-semibold file:text-sky-300 hover:file:bg-sky-500/25" />
+          <span id="upload-endpoint-name" class="block text-[11px] text-slate-500 mt-2">Nenhum arquivo selecionado</span>
+        </label>
+
+        <label class="block bg-slate-950/60 border border-slate-800 rounded-xl p-4">
+          <span class="block text-sm text-white font-semibold">2. EquipamentosDetalhes</span>
+          <span class="block text-[11px] text-slate-400 mt-1">Precisa ter número de série, modelo, apelido e cidade.</span>
+          <input id="upload-details-file" type="file" accept=".xlsx,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" class="block w-full mt-3 text-xs text-slate-300 file:mr-3 file:rounded-lg file:border-0 file:bg-sky-500/15 file:px-3 file:py-2 file:text-xs file:font-semibold file:text-sky-300 hover:file:bg-sky-500/25" />
+          <span id="upload-details-name" class="block text-[11px] text-slate-500 mt-2">Nenhum arquivo selecionado</span>
+        </label>
+
+        <p class="text-[11px] text-slate-500">Cada arquivo pode ter até 30 MB. O site valida os dois antes de substituir as versões atuais e guarda as anteriores em uma pasta de backup.</p>
+        <p id="upload-planilhas-status" class="hidden text-xs rounded-lg px-3 py-2"></p>
+      </div>
+
+      <div class="pt-4 border-t border-slate-800 flex justify-end gap-2 shrink-0">
+        <button type="button" onclick="fecharModalAtualizarPlanilhas()" class="px-4 py-2 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-300 text-xs transition">Cancelar</button>
+        <button type="button" id="btn-confirmar-planilhas" onclick="enviarPlanilhas()" class="px-5 py-2 rounded-lg bg-sky-600 hover:bg-sky-500 text-white font-bold text-xs flex items-center gap-1.5 transition">
+          <i data-lucide="refresh-cw" class="w-3.5 h-3.5"></i>
+          Atualizar site
+        </button>
+      </div>
+    </div>
+  </div>
+
+  <!-- RESULTADO DA COMPARAÇÃO DAS PLANILHAS -->
+  <div id="modal-comparacao-planilhas" class="fixed inset-0 bg-slate-950/85 backdrop-blur-md z-[75] hidden flex items-center justify-center p-4">
+    <div class="bg-slate-900 border border-emerald-500/30 rounded-2xl max-w-6xl w-full p-6 shadow-2xl flex flex-col max-h-[92vh] overflow-hidden">
+      <div class="flex items-start justify-between gap-4 pb-4 border-b border-slate-800 shrink-0">
+        <div>
+          <h3 class="text-base font-bold text-white flex items-center gap-2">
+            <i data-lucide="list-checks" class="w-5 h-5 text-emerald-400"></i>
+            Planilhas atualizadas e comparadas
+          </h3>
+          <p id="comparacao-planilhas-fontes" class="text-xs text-slate-400 mt-1"></p>
+        </div>
+        <button type="button" onclick="fecharModalComparacaoPlanilhas()" class="text-slate-400 hover:text-white p-1 rounded-lg hover:bg-slate-800 transition" aria-label="Fechar resultado">
+          <i data-lucide="x" class="w-5 h-5"></i>
+        </button>
+      </div>
+      <div id="comparacao-planilhas-conteudo" class="overflow-y-auto flex-1 py-4 space-y-5"></div>
+      <div class="pt-3 border-t border-slate-800 flex justify-end shrink-0">
+        <button type="button" onclick="fecharModalComparacaoPlanilhas()" class="px-4 py-2 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-300 text-xs transition">Concluir</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- HISTÓRICO DAS COMPARAÇÕES DE PLANILHAS -->
+  <div id="modal-historico-comparacoes" class="fixed inset-0 bg-slate-950/85 backdrop-blur-md z-[76] hidden flex items-center justify-center p-4">
+    <div class="bg-slate-900 border border-cyan-500/30 rounded-2xl max-w-5xl w-full p-6 shadow-2xl flex flex-col max-h-[92vh] overflow-hidden">
+      <div class="flex items-start justify-between gap-4 pb-4 border-b border-slate-800 shrink-0">
+        <div>
+          <h3 class="text-base font-bold text-white flex items-center gap-2">
+            <i data-lucide="history" class="w-4 h-4 text-cyan-400"></i>
+            Histórico de atualizações de planilhas
+          </h3>
+          <p id="total-historico-comparacoes" class="text-xs text-slate-400 mt-1">0 registros</p>
+        </div>
+        <button type="button" onclick="fecharModalHistoricoComparacoes()" class="text-slate-400 hover:text-white p-1 rounded-lg hover:bg-slate-800 transition" aria-label="Fechar histórico de planilhas">
+          <i data-lucide="x" class="w-5 h-5"></i>
+        </button>
+      </div>
+      <div id="lista-historico-comparacoes" class="overflow-auto flex-1 py-4 space-y-3"></div>
+      <div class="pt-3 border-t border-slate-800 flex justify-end shrink-0">
+        <button type="button" onclick="fecharModalHistoricoComparacoes()" class="px-4 py-2 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-300 text-xs transition">Fechar</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- TOAST NOTIFICATION CONTAINER -->
+  <div id="toast-container" class="fixed top-24 right-6 z-50 space-y-2 pointer-events-none"></div>
+
+  <!-- JAVASCRIPT APPLICATION LOGIC -->
+  <script>
+    // State
+    let currentEquipamento = null;
+    let unidadesList = [];
+    let debounceTimer = null;
+
+    // Initialize Lucide icons
+    document.addEventListener("DOMContentLoaded", () => {
+      lucide.createIcons();
+      carregarEstatisticas();
+      carregarUnidades();
+      carregarContagemHistoricoApelidos();
+      carregarContagemHistoricoComparacoes();
+
+      [
+        ["upload-endpoint-file", "upload-endpoint-name"],
+        ["upload-details-file", "upload-details-name"]
+      ].forEach(([inputId, nameId]) => {
+        const input = document.getElementById(inputId);
+        input?.addEventListener("change", () => {
+          document.getElementById(nameId).textContent = input.files?.[0]?.name || "Nenhum arquivo selecionado";
+        });
+      });
+
+      // Focus serial input immediately
+      const inputSerial = document.getElementById("input-serial");
+      if (inputSerial) inputSerial.focus();
+    });
+
+    // Toast system
+    function showToast(message, type = "success") {
+      const container = document.getElementById("toast-container");
+      const toast = document.createElement("div");
+
+      const bgColors = {
+        success: "bg-emerald-950/90 border-emerald-500/50 text-emerald-200",
+        error: "bg-rose-950/90 border-rose-500/50 text-rose-200",
+        warning: "bg-amber-950/90 border-amber-500/50 text-amber-200",
+        info: "bg-brand-950/90 border-brand-500/50 text-brand-200",
+      };
+
+      const iconNames = {
+        success: "check-circle",
+        error: "alert-circle",
+        warning: "alert-triangle",
+        info: "info",
+      };
+
+      toast.className = `flex items-center space-x-3 px-4 py-3 rounded-xl border shadow-xl backdrop-blur-md text-xs font-medium pointer-events-auto transform transition-all duration-300 opacity-0 translate-y-2 ${bgColors[type] || bgColors.info}`;
+      toast.innerHTML = `
+        <i data-lucide="${iconNames[type] || 'info'}" class="w-4 h-4 shrink-0"></i>
+        <span>${message}</span>
+      `;
+
+      container.appendChild(toast);
+      lucide.createIcons({ root: toast });
+
+      requestAnimationFrame(() => {
+        toast.classList.remove("opacity-0", "translate-y-2");
+      });
+
+      setTimeout(() => {
+        toast.classList.add("opacity-0", "translate-y-2");
+        setTimeout(() => toast.remove(), 300);
+      }, 4000);
+    }
+
+    // Load statistics from API
+    async function carregarEstatisticas() {
+      try {
+        const res = await fetch("/api/stats");
+        if (res.ok) {
+          const stats = await res.json();
+          document.getElementById("stat-equipamentos").textContent = Number(stats.total_equipamentos).toLocaleString("pt-BR");
+          document.getElementById("stat-unidades").textContent = stats.total_unidades;
+          const exportButton = document.getElementById("btn-exportar-equipamentos");
+          if (exportButton) {
+            exportButton.classList.toggle("hidden", Number(stats.total_apelidos_modificados || 0) === 0);
+          }
+        }
+      } catch (err) {
+        console.warn("Não foi possível carregar estatísticas:", err);
+      }
+    }
+
+    function atualizarIndicadoresPosSalvamento(totalModificados) {
+      const exportButton = document.getElementById("btn-exportar-equipamentos");
+      if (exportButton && totalModificados !== undefined && totalModificados !== null) {
+        exportButton.classList.toggle("hidden", Number(totalModificados) === 0);
+      }
+
+      // Atualiza os indicadores sem atrasar o fechamento do formulário após salvar.
+      void Promise.allSettled([
+        carregarEstatisticas(),
+        carregarContagemHistoricoApelidos()
+      ]);
+    }
+
+    // Load SEBRAE units catalog from API
+    async function carregarUnidades() {
+      try {
+        const res = await fetch("/api/unidades");
+        if (res.ok) {
+          unidadesList = await res.json();
+          const select = document.getElementById("select-unidade-destino");
+          select.innerHTML = '<option value="">-- Escolha a Cidade ou Regional de Destino --</option>';
+
+          unidadesList.forEach(u => {
+            const opt = document.createElement("option");
+            opt.value = u.id;
+            opt.textContent = u.label || `${u.cidade} - ${u.endereco} (${u.cnpj})`;
+            select.appendChild(opt);
+          });
+
+          const countEl = document.getElementById("filiais-count");
+          if (countEl) countEl.textContent = `${unidadesList.length} filiais catalogadas`;
+        }
+      } catch (err) {
+        console.error("Falha ao carregar unidades:", err);
+        showToast("Erro ao carregar catálogo de unidades SEBRAE", "error");
+      }
+    }
+
+    // Autocomplete & Debounce for Serial Input
+    let autocompleteItemsList = [];
+    let highlightedAutocompleteIndex = -1;
+
+    function handleSerialInput(val) {
+      const clearBtn = document.getElementById("btn-clear-serial");
+      if (val && val.length > 0) {
+        clearBtn.classList.remove("hidden");
+      } else {
+        clearBtn.classList.add("hidden");
+      }
+
+      clearTimeout(debounceTimer);
+      const term = val.trim();
+      if (term.length < 2) {
+        fecharAutocomplete();
+        return;
+      }
+
+      debounceTimer = setTimeout(async () => {
+        try {
+          const res = await fetch(`/api/buscar?q=${encodeURIComponent(term)}`);
+          if (res.ok) {
+            const results = await res.json();
+            // Check if input value hasn't been wiped in the meantime
+            if (document.getElementById("input-serial").value.trim().length >= 2) {
+              renderAutocomplete(results);
+            }
+          }
+        } catch (err) {
+          console.warn("Erro no autocomplete:", err);
+        }
+      }, 200);
+    }
+
+    function handleSerialKeydown(e) {
+      const box = document.getElementById("autocomplete-box");
+      const isBoxOpen = box && !box.classList.contains("hidden") && autocompleteItemsList.length > 0;
+
+      if (e.key === "ArrowDown") {
+        if (isBoxOpen) {
+          e.preventDefault();
+          highlightedAutocompleteIndex = (highlightedAutocompleteIndex + 1) % autocompleteItemsList.length;
+          updateAutocompleteHighlight();
+        }
+      } else if (e.key === "ArrowUp") {
+        if (isBoxOpen) {
+          e.preventDefault();
+          highlightedAutocompleteIndex = (highlightedAutocompleteIndex - 1 + autocompleteItemsList.length) % autocompleteItemsList.length;
+          updateAutocompleteHighlight();
+        }
+      } else if (e.key === "Enter") {
+        e.preventDefault();
+        if (isBoxOpen && highlightedAutocompleteIndex >= 0 && autocompleteItemsList[highlightedAutocompleteIndex]) {
+          selecionarItemAutocomplete(autocompleteItemsList[highlightedAutocompleteIndex]);
+        } else {
+          fecharAutocomplete();
+          buscarSerial();
+        }
+      } else if (e.key === "Escape") {
+        fecharAutocomplete();
+      }
+    }
+
+    function escapeHtml(str) {
+      if (str === null || str === undefined) return "";
+      return String(str)
+        .replace(/&/g, "&amp;")
+        .replace(/</g, "&lt;")
+        .replace(/>/g, "&gt;")
+        .replace(/"/g, "&quot;")
+        .replace(/'/g, "&#039;");
+    }
+
+    function highlightMatch(text, query) {
+      if (!text) return "";
+      if (!query) return escapeHtml(text);
+      const q = query.trim();
+      if (!q) return escapeHtml(text);
+      const safeText = escapeHtml(text);
+      const safeQuery = escapeHtml(q);
+      const regex = new RegExp(`(${safeQuery.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')})`, "gi");
+      return safeText.replace(regex, `<span class="serial-match">$1</span>`);
+    }
+
+    function updateAutocompleteHighlight() {
+      const list = document.getElementById("autocomplete-list");
+      if (!list) return;
+      const rows = list.querySelectorAll(".autocomplete-row");
+      rows.forEach((row, idx) => {
+        if (idx === highlightedAutocompleteIndex) {
+          row.classList.add("active");
+          row.scrollIntoView({ block: "nearest", behavior: "smooth" });
+        } else {
+          row.classList.remove("active");
+        }
+      });
+    }
+
+    function selecionarItemAutocomplete(item) {
+      document.getElementById("input-serial").value = item.serial;
+      document.getElementById("btn-clear-serial").classList.remove("hidden");
+      fecharAutocomplete();
+      buscarSerial();
+    }
+
+    function renderAutocomplete(items) {
+      const box = document.getElementById("autocomplete-box");
+      const list = document.getElementById("autocomplete-list");
+      const countEl = document.getElementById("autocomplete-count");
+      const currentQuery = (document.getElementById("input-serial").value || "").trim();
+
+      if (!items || items.length === 0) {
+        list.innerHTML = `
+          <div class="px-6 py-8 text-center flex flex-col items-center justify-center space-y-2 select-none">
+            <div class="w-10 h-10 rounded-xl bg-slate-900 border border-slate-800 flex items-center justify-center text-slate-500 mb-1">
+              <i data-lucide="search-x" class="w-5 h-5"></i>
+            </div>
+            <p class="text-sm font-semibold text-slate-300">Nenhum equipamento localizado</p>
+            <p class="text-xs text-slate-500 max-w-sm">Nenhum registro com o termo <span class="font-mono text-cyan-400 font-bold">"${escapeHtml(currentQuery)}"</span> foi encontrado no inventário do SEBRAE/PR.</p>
+            <button type="button" onclick="cadastrarNovoSerial(document.getElementById('input-serial').value)" class="mt-2 inline-flex items-center gap-1.5 px-3.5 py-2 rounded-lg bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-bold transition shadow-lg">
+              <i data-lucide="plus-circle" class="w-3.5 h-3.5"></i>
+              <span>Cadastrar "${escapeHtml(currentQuery)}" como Novo Equipamento</span>
+            </button>
+          </div>
+        `;
+        countEl.textContent = "0 encontrados";
+        autocompleteItemsList = [];
+        highlightedAutocompleteIndex = -1;
+        box.classList.remove("hidden");
+        lucide.createIcons({ root: box });
+        return;
+      }
+
+      autocompleteItemsList = items;
+      highlightedAutocompleteIndex = -1;
+      list.innerHTML = "";
+      countEl.textContent = `${items.length} ${items.length === 1 ? 'item' : 'itens'}`;
+
+      items.forEach((item, index) => {
+        const row = document.createElement("div");
+        row.className = "autocomplete-row group px-4 py-2.5 cursor-pointer flex items-center justify-between gap-3";
+        row.onclick = () => selecionarItemAutocomplete(item);
+        row.onmouseenter = () => {
+          highlightedAutocompleteIndex = index;
+          updateAutocompleteHighlight();
+        };
+
+        // Determine icon & badge styles per equipment type
+        let tipoIcon = "laptop";
+        let tipoBadgeClass = "bg-emerald-500/15 text-emerald-300 border border-emerald-500/30";
+
+        if (item.tipo === "Micro Computador") {
+          tipoIcon = "monitor";
+          tipoBadgeClass = "bg-blue-500/15 text-blue-300 border border-blue-500/30";
+        } else if (item.tipo === "Monitor") {
+          tipoIcon = "tv";
+          tipoBadgeClass = "bg-indigo-500/15 text-indigo-300 border border-indigo-500/30";
+        } else if (item.tipo !== "Notebook") {
+          tipoIcon = "box";
+          tipoBadgeClass = "bg-purple-500/15 text-purple-300 border border-purple-500/30";
+        }
+
+        row.innerHTML = `
+          <div class="flex items-center gap-3 min-w-0 flex-1">
+            <!-- 1. Serial Number Badge (Highlighted as the STAR element) -->
+            <div class="serial-badge flex items-center gap-2 px-3 py-1.5 rounded-lg shrink-0">
+              <i data-lucide="barcode" class="w-4 h-4 text-cyan-400 shrink-0"></i>
+              <span class="font-mono font-bold text-white text-sm sm:text-base tracking-widest">${highlightMatch(item.serial, currentQuery)}</span>
+            </div>
+
+            <!-- 2. Type Badge -->
+            <span class="inline-flex items-center gap-1.5 text-xs font-semibold px-2.5 py-1 rounded-full ${tipoBadgeClass} shrink-0">
+              <i data-lucide="${tipoIcon}" class="w-3.5 h-3.5 shrink-0"></i>
+              <span>${item.tipo || 'Equipamento'}</span>
+            </span>
+
+            <!-- 3. Hardware Model & Hostname -->
+            <div class="min-w-0 flex items-center gap-2 flex-1">
+              <span class="text-xs sm:text-sm font-medium text-slate-200 truncate" title="${escapeHtml(item.modelo || '')}">
+                ${item.modelo || 'Sem modelo especificado'}
+              </span>
+              ${item.apelido ? `
+                <span class="hidden md:inline-flex items-center gap-1 text-[11px] font-mono px-2 py-0.5 rounded-md bg-slate-900/90 text-cyan-300 border border-cyan-500/30 shrink-0" title="Apelido / Hostname">
+                  <i data-lucide="terminal" class="w-2.5 h-2.5 text-cyan-400"></i>
+                  <span>${escapeHtml(item.apelido)}</span>
+                </span>
+              ` : ''}
+            </div>
+          </div>
+
+          <!-- 4. Location & Selection Hint -->
+          <div class="flex items-center gap-2 shrink-0 ml-2">
+            <div class="flex items-center gap-1 text-xs text-amber-300 bg-amber-500/10 border border-amber-500/25 px-2.5 py-1 rounded-lg font-medium" title="Cidade / Unidade Atual">
+              <i data-lucide="map-pin" class="w-3.5 h-3.5 text-amber-400 shrink-0"></i>
+              <span>${escapeHtml(item.retirada_cidade || 'PR')}</span>
+            </div>
+            <div class="hidden sm:flex items-center text-xs text-slate-400 group-hover:text-cyan-300 transition-colors ml-1 font-mono">
+              <span class="text-[11px] mr-1 hidden lg:inline opacity-70">Selecionar</span>
+              <kbd class="px-1.5 py-0.5 text-[10px] bg-slate-900 border border-slate-700 rounded text-slate-300 shadow-sm">↵</kbd>
+            </div>
+          </div>
+        `;
+        list.appendChild(row);
+      });
+
+      box.classList.remove("hidden");
+      lucide.createIcons({ root: box });
+    }
+
+    function fecharAutocomplete() {
+      const box = document.getElementById("autocomplete-box");
+      if (box) box.classList.add("hidden");
+      autocompleteItemsList = [];
+      highlightedAutocompleteIndex = -1;
+    }
+
+    // Close autocomplete on click outside
+    document.addEventListener("click", (e) => {
+      const box = document.getElementById("autocomplete-box");
+      const input = document.getElementById("input-serial");
+      if (box && !box.contains(e.target) && e.target !== input) {
+        fecharAutocomplete();
+      }
+    });
+
+    function limparSerial() {
+      const input = document.getElementById("input-serial");
+      input.value = "";
+      document.getElementById("btn-clear-serial").classList.add("hidden");
+      fecharAutocomplete();
+      input.focus();
+    }
+
+    function carregarExemploSerial(serial) {
+      document.getElementById("input-serial").value = serial;
+      document.getElementById("btn-clear-serial").classList.remove("hidden");
+      buscarSerial();
+    }
+
+    // Search Equipment by Serial
+    async function buscarSerial() {
+      const serialInput = document.getElementById("input-serial");
+      const serial = serialInput.value.trim().toUpperCase();
+
+      if (!serial) {
+        showToast("Digite ou bipe o serial do equipamento", "warning");
+        serialInput.focus();
+        return;
+      }
+
+      const btn = document.getElementById("btn-buscar-serial");
+      const originalText = btn.innerHTML;
+      btn.disabled = true;
+      btn.innerHTML = `<i data-lucide="loader-2" class="w-4 h-4 animate-spin"></i><span>Localizando...</span>`;
+      lucide.createIcons({ root: btn });
+
+      try {
+        const res = await fetch(`/api/equipamento/${encodeURIComponent(serial)}`);
+        if (!res.ok) {
+          const errData = await res.json().catch(() => ({}));
+          throw new Error(errData.detail || "Equipamento não encontrado na base de dados.");
+        }
+
+        const data = await res.json();
+        currentEquipamento = data;
+        exibirEquipamento(data);
+        showToast(`Equipamento ${data.serial} localizado com sucesso!`, "success");
+
+      } catch (err) {
+        console.error(err);
+        showToast(err.message, "error");
+        document.getElementById("card-equipamento").classList.add("hidden");
+      } finally {
+        btn.disabled = false;
+        btn.innerHTML = originalText;
+        lucide.createIcons({ root: btn });
+      }
+    }
+
+    // Render Equipment Card & Populate Retirada Section
+    function exibirEquipamento(eq) {
+      const card = document.getElementById("card-equipamento");
+      card.classList.remove("hidden");
+
+      document.getElementById("card-serial").textContent = eq.serial;
+      document.getElementById("card-modelo").textContent = eq.modelo || "Equipamento";
+      document.getElementById("badge-tipo").textContent = eq.tipo || "Geral";
+      document.getElementById("badge-apelido").textContent = eq.apelido || "Sem Apelido";
+      document.getElementById("card-id-cliente").textContent = eq.idCliente ? `Id Cliente: ${eq.idCliente}` : "";
+      document.getElementById("card-localizacao").textContent = `${eq.retirada_cidade || ''} - ${eq.retirada_endereco ? eq.retirada_endereco.split('-')[0].trim() : ''}`;
+      document.getElementById("card-cnpj-atual").textContent = `CNPJ: ${eq.retirada_cnpj || 'Não especificado'}`;
+
+      // Suggested Description
+      document.getElementById("input-descricao-equipamento").value = eq.descricao_sugerida || "";
+
+      // Icon & Badge styling by Type
+      const iconBox = document.getElementById("equip-icon-box");
+      const icon = document.getElementById("equip-icon");
+      const badgeTipo = document.getElementById("badge-tipo");
+
+      if (eq.tipo === "Notebook") {
+        icon.setAttribute("data-lucide", "laptop");
+        iconBox.className = "w-14 h-14 rounded-xl bg-emerald-500/10 border border-emerald-500/30 flex items-center justify-center shrink-0 text-emerald-400";
+        badgeTipo.className = "px-2.5 py-0.5 rounded-full text-xs font-semibold bg-emerald-500/20 text-emerald-300 border border-emerald-500/30";
+      } else if (eq.tipo === "Micro Computador") {
+        icon.setAttribute("data-lucide", "monitor");
+        iconBox.className = "w-14 h-14 rounded-xl bg-blue-500/10 border border-blue-500/30 flex items-center justify-center shrink-0 text-blue-400";
+        badgeTipo.className = "px-2.5 py-0.5 rounded-full text-xs font-semibold bg-blue-500/20 text-blue-300 border border-blue-500/30";
+      } else {
+        icon.setAttribute("data-lucide", "headphones");
+        iconBox.className = "w-14 h-14 rounded-xl bg-purple-500/10 border border-purple-500/30 flex items-center justify-center shrink-0 text-purple-400";
+        badgeTipo.className = "px-2.5 py-0.5 rounded-full text-xs font-semibold bg-purple-500/20 text-purple-300 border border-purple-500/30";
+      }
+      lucide.createIcons({ root: iconBox });
+
+      // Automatically fill RETIRADA (Origem) section!
+      document.getElementById("retirada-cnpj").value = eq.retirada_cnpj || "";
+      document.getElementById("retirada-endereco").value = eq.retirada_endereco || "";
+      document.getElementById("retirada-obs").value = eq.descricao_sugerida || "";
+
+      // Update status footer
+      document.getElementById("status-indicator").className = "w-2.5 h-2.5 rounded-full bg-emerald-400";
+      document.getElementById("status-summary").innerHTML = `
+        <span class="text-emerald-300 font-medium">Equipamento ${eq.serial} (${eq.modelo}) carregado.</span>
+        <span class="text-slate-400"> Selecione a Unidade de Destino e preencha o destinatário.</span>
+      `;
+    }
+
+    // "Forçar SEDE Prado Velho" button action
+    function forcarSedePradoVelho() {
+      document.getElementById("retirada-cnpj").value = "75.110.585/0001-00";
+      document.getElementById("retirada-endereco").value = "R Caeté, 150 - SEDE - Prado Velho - Curitiba/PR - CEP 80220-300";
+      showToast("Origem alterada para SEDE Prado Velho (Curitiba)!", "info");
+    }
+
+    // Handle Unidade de Destino Selection
+    function handleUnidadeDestinoChange(unitId) {
+      if (!unitId) return;
+      const unit = unidadesList.find(u => String(u.id) === String(unitId));
+      if (unit) {
+        document.getElementById("entrega-cnpj").value = unit.cnpj || "";
+        document.getElementById("entrega-endereco").value = unit.endereco_completo || "";
+        showToast(`Destino definido: ${unit.cidade}`, "info");
+      }
+    }
+
+    function selecionarUnidadePorCidade(cidadeNome) {
+      const unit = unidadesList.find(u => u.cidade.toLowerCase().includes(cidadeNome.toLowerCase()));
+      if (unit) {
+        document.getElementById("select-unidade-destino").value = unit.id;
+        handleUnidadeDestinoChange(unit.id);
+      }
+    }
+
+    function adicionarObsChamado(texto) {
+      const textarea = document.getElementById("entrega-obs");
+      if (textarea.value.trim().length > 0) {
+        textarea.value += " " + texto;
+      } else {
+        textarea.value = texto;
+      }
+    }
+
+    // Build Payload Object from Form
+    function construirPayload() {
+      const serialVal = document.getElementById("input-serial").value.trim().toUpperCase();
+      if (!serialVal) {
+        showToast("Por favor, informe o número de série do equipamento.", "warning");
+        document.getElementById("input-serial").focus();
+        return null;
+      }
+
+      const entregaContato = document.getElementById("entrega-contato").value.trim();
+      if (!entregaContato) {
+        showToast("Por favor, informe o Nome do Destinatário no SEBRAE.", "warning");
+        document.getElementById("entrega-contato").focus();
+        return null;
+      }
+
+      const entregaCnpj = document.getElementById("entrega-cnpj").value.trim();
+      const entregaEndereco = document.getElementById("entrega-endereco").value.trim();
+      if (!entregaCnpj || !entregaEndereco) {
+        showToast("Por favor, selecione a unidade de Destino ou preencha o CNPJ e Endereço de entrega.", "warning");
+        document.getElementById("select-unidade-destino").focus();
+        return null;
+      }
+
+      return {
+        serial: serialVal,
+        descricao_equipamento: document.getElementById("input-descricao-equipamento").value.trim() || (currentEquipamento ? currentEquipamento.descricao_sugerida : `Equipamento ${serialVal}`),
+        razao_social: "SERVICO DE APOIO AS MICRO E PEQUENAS EMPRESAS DO PARANA - SEBRAE/PR",
+        contrato: 16467,
+        retirada_cnpj: document.getElementById("retirada-cnpj").value.trim(),
+        retirada_endereco: document.getElementById("retirada-endereco").value.trim(),
+        retirada_horario: document.getElementById("retirada-horario").value.trim(),
+        retirada_almoco: document.getElementById("retirada-almoco").value.trim(),
+        retirada_pausa_duracao: document.getElementById("retirada-pausa-duracao").value.trim(),
+        retirada_tipo_acesso: document.getElementById("retirada-tipo-acesso").value.trim(),
+        retirada_acesso_obs: "",
+        retirada_contato: document.getElementById("retirada-contato").value.trim(),
+        retirada_email: document.getElementById("retirada-email").value.trim(),
+        retirada_telefone: document.getElementById("retirada-telefone").value.trim(),
+        retirada_obs: document.getElementById("retirada-obs").value.trim(),
+        retirada_voltagem: document.getElementById("retirada-voltagem").value.trim(),
+        entrega_cnpj: entregaCnpj,
+        entrega_endereco: entregaEndereco,
+        entrega_horario: document.getElementById("entrega-horario").value.trim(),
+        entrega_almoco: document.getElementById("entrega-almoco").value.trim(),
+        entrega_pausa_duracao: document.getElementById("entrega-pausa-duracao").value.trim(),
+        entrega_tipo_acesso: "Elevador / Rampa / Térreo",
+        entrega_acesso_obs: "",
+        entrega_contato: entregaContato,
+        entrega_email: document.getElementById("entrega-email").value.trim(),
+        entrega_telefone: document.getElementById("entrega-telefone").value.trim(),
+        entrega_obs: document.getElementById("entrega-obs").value.trim(),
+        entrega_voltagem: "Bivolt"
+      };
+    }
+
+    // Format Structured Text for Helpdesk Ticket
+    function gerarTextoResumo(payload) {
+      const modelo = currentEquipamento ? currentEquipamento.modelo : "Equipamento";
+      const tipo = currentEquipamento ? currentEquipamento.tipo : "Geral";
+      const apelido = currentEquipamento ? currentEquipamento.apelido : "-";
+      const idCliente = currentEquipamento ? currentEquipamento.idCliente : "-";
+
+      return `📋 RESUMO DE TRANSFERÊNCIA DE EQUIPAMENTO - SIMPRESS / SEBRAE-PR
+======================================================================
+• Equipamento: ${modelo} (${tipo})
+• Número de Série: ${payload.serial}
+• Apelido / Id Cliente: ${apelido} / ${idCliente}
+• Descrição / Conteúdo: ${payload.descricao_equipamento}
+
+📍 DADOS DE RETIRADA (ORIGEM):
+• Endereço: ${payload.retirada_endereco}
+• CNPJ: ${payload.retirada_cnpj}
+• Contato Suporte: ${payload.retirada_contato}
+• E-mail / Telefone: ${payload.retirada_email} | ${payload.retirada_telefone}
+• Expediente / Almoço: ${payload.retirada_horario} (Pausa: ${payload.retirada_almoco}, ${payload.retirada_pausa_duracao})
+• Observações Retirada: ${payload.retirada_obs || 'Sem observações adicionais'}
+
+🎯 DADOS DE ENTREGA (DESTINO):
+• Endereço: ${payload.entrega_endereco}
+• CNPJ: ${payload.entrega_cnpj}
+• Destinatário: ${payload.entrega_contato}
+• E-mail Destinatário: ${payload.entrega_email || 'Não informado'}
+• Telefone Destinatário: ${payload.entrega_telefone || 'Não informado'}
+• Expediente / Almoço: ${payload.entrega_horario} (Pausa: ${payload.entrega_almoco}, ${payload.entrega_pausa_duracao})
+• Observações do Chamado: ${payload.entrega_obs || 'Sem observações adicionais'}
+
+🚚 INFORMAÇÕES LOGÍSTICAS & CONTRATO:
+• Contrato: 16467 - Simpress / SEBRAE-PR
+• Voltagem: Bivolt
+• Tipo de Acesso: Elevador / Rampa / Térreo
+======================================================================`;
+    }
+
+    // Modal Preview Handlers
+    function abrirModalPreview() {
+      const payload = construirPayload();
+      if (!payload) return;
+
+      const texto = gerarTextoResumo(payload);
+      document.getElementById("textarea-resumo-preview").value = texto;
+      document.getElementById("modal-preview").classList.remove("hidden");
+    }
+
+    function fecharModalPreview() {
+      document.getElementById("modal-preview").classList.add("hidden");
+    }
+
+    function copiarTextoDoModal() {
+      const texto = document.getElementById("textarea-resumo-preview").value;
+      navigator.clipboard.writeText(texto).then(() => {
+        showToast("Resumo copiado para a área de transferência!", "success");
+      }).catch(err => {
+        showToast("Erro ao copiar texto: " + err, "error");
+      });
+    }
+
+    // Generate & Download Official Excel Sheet
+    async function gerarPlanilhaExcel() {
+      const payload = construirPayload();
+      if (!payload) return;
+
+      const btn = document.getElementById("btn-gerar-planilha");
+      const originalText = btn.innerHTML;
+      btn.disabled = true;
+      btn.innerHTML = `<i data-lucide="loader-2" class="w-4 h-4 animate-spin"></i><span>Gerando Planilha...</span>`;
+      lucide.createIcons({ root: btn });
+
+      try {
+        const res = await fetch("/api/gerar-planilha", {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json"
+          },
+          body: JSON.stringify(payload)
+        });
+
+        if (!res.ok) {
+          const errData = await res.json().catch(() => ({}));
+          throw new Error(errData.detail || "Falha ao gerar o arquivo Excel no servidor.");
+        }
+
+        // Get Filename from Header
+        let filename = `Transferencia_${payload.serial}.xlsx`;
+        const disposition = res.headers.get("Content-Disposition");
+        if (disposition && disposition.indexOf("filename=") !== -1) {
+          const matches = /filename[^;=\n]*=((['"]).*?\2|[^;\n]*)/.exec(disposition);
+          if (matches != null && matches[1]) {
+            filename = matches[1].replace(/['"]/g, '');
+          }
+        }
+
+        // Download Blob
+        const blob = await res.blob();
+        const url = window.URL.createObjectURL(blob);
+        const a = document.createElement("a");
+        a.style.display = "none";
+        a.href = url;
+        a.download = filename;
+        document.body.appendChild(a);
+        a.click();
+        window.URL.revokeObjectURL(url);
+        a.remove();
+
+        showToast(`Planilha oficial ${filename} baixada com sucesso!`, "success");
+
+      } catch (err) {
+        console.error("Erro ao gerar planilha:", err);
+        showToast(err.message, "error");
+      } finally {
+        btn.disabled = false;
+        btn.innerHTML = originalText;
+        lucide.createIcons({ root: btn });
+      }
+    }
+
+    // Reset Form for New Transfer
+    function resetarFormulario() {
+      currentEquipamento = null;
+      document.getElementById("input-serial").value = "";
+      document.getElementById("input-descricao-equipamento").value = "";
+      document.getElementById("btn-clear-serial").classList.add("hidden");
+      document.getElementById("card-equipamento").classList.add("hidden");
+      
+      // Reset Retirada
+      document.getElementById("retirada-cnpj").value = "";
+      document.getElementById("retirada-endereco").value = "";
+      document.getElementById("retirada-obs").value = "";
+
+      // Reset Entrega
+      document.getElementById("select-unidade-destino").value = "";
+      document.getElementById("entrega-cnpj").value = "";
+      document.getElementById("entrega-endereco").value = "";
+      document.getElementById("entrega-contato").value = "";
+      document.getElementById("entrega-email").value = "";
+      document.getElementById("entrega-telefone").value = "";
+      document.getElementById("entrega-obs").value = "";
+
+      // Reset status indicator
+      document.getElementById("status-indicator").className = "w-2.5 h-2.5 rounded-full bg-brand-400";
+      document.getElementById("status-summary").innerHTML = `
+        <span class="text-slate-300 font-medium">Pronto para emissão.</span>
+        <span class="hidden md:inline text-slate-500">Verifique os dados antes de gerar a planilha oficial Simpress.</span>
+      `;
+
+      showToast("Formulário limpo. Pronto para nova leitura de serial.", "info");
+      document.getElementById("input-serial").focus();
+    }
+
+    // ==========================================
+    // RECARREGAR / SINCRONIZAR PLANILHA BASE
+    // ==========================================
+    function abrirModalAtualizarPlanilhas() {
+      const status = document.getElementById("upload-planilhas-status");
+      status.classList.add("hidden");
+      document.getElementById("modal-atualizar-planilhas").classList.remove("hidden");
+      lucide.createIcons({ root: document.getElementById("modal-atualizar-planilhas") });
+    }
+
+    function fecharModalAtualizarPlanilhas() {
+      document.getElementById("modal-atualizar-planilhas").classList.add("hidden");
+    }
+
+    function mostrarStatusUpload(mensagem, erro = false) {
+      const status = document.getElementById("upload-planilhas-status");
+      status.textContent = mensagem;
+      status.className = erro
+        ? "text-xs rounded-lg px-3 py-2 bg-rose-500/10 border border-rose-500/25 text-rose-300"
+        : "text-xs rounded-lg px-3 py-2 bg-sky-500/10 border border-sky-500/25 text-sky-300";
+    }
+
+    async function enviarPlanilhas() {
+      const endpointFile = document.getElementById("upload-endpoint-file").files?.[0];
+      const detailsFile = document.getElementById("upload-details-file").files?.[0];
+      if (!endpointFile || !detailsFile) {
+        mostrarStatusUpload("Selecione os dois arquivos antes de atualizar.", true);
+        return;
+      }
+
+      const button = document.getElementById("btn-confirmar-planilhas");
+      const originalHtml = button.innerHTML;
+      button.disabled = true;
+      button.innerHTML = '<i data-lucide="loader-2" class="w-3.5 h-3.5 animate-spin"></i><span>Validando e atualizando...</span>';
+      lucide.createIcons({ root: button });
+
+      const formData = new FormData();
+      formData.append("endpoint_file", endpointFile);
+      formData.append("details_file", detailsFile);
+
+      try {
+        const response = await fetch("/api/planilhas/atualizar", { method: "POST", body: formData });
+        const result = await response.json().catch(() => ({}));
+        if (!response.ok) {
+          if (response.status === 404) {
+            throw new Error("A API ativa está desatualizada. Feche a instância anterior e reinicie com iniciar_servidor.bat desta pasta.");
+          }
+          const detail = result.detail;
+          throw new Error(Array.isArray(detail) ? detail.map(item => item.msg || item).join("; ") : (detail || "Falha ao atualizar as planilhas."));
+        }
+
+        fecharModalAtualizarPlanilhas();
+        [
+          ["upload-endpoint-file", "upload-endpoint-name"],
+          ["upload-details-file", "upload-details-name"]
+        ].forEach(([inputId, nameId]) => {
+          document.getElementById(inputId).value = "";
+          document.getElementById(nameId).textContent = "Nenhum arquivo selecionado";
+        });
+        await Promise.all([
+          carregarEstatisticas(),
+          carregarUnidades(),
+          carregarContagemHistoricoComparacoes()
+        ]);
+        abrirModalComparacaoPlanilhas(result.comparacao || {});
+      } catch (error) {
+        console.error("Erro ao atualizar planilhas:", error);
+        mostrarStatusUpload(error.message || "Não foi possível atualizar as planilhas.", true);
+      } finally {
+        button.disabled = false;
+        button.innerHTML = originalHtml;
+        lucide.createIcons({ root: button });
+      }
+    }
+
+    function renderizarTabelaComparacao(headers, rows, emptyMessage) {
+      if (!rows.length) {
+        return `<p class="text-xs text-slate-500 text-center py-5">${escapeHtml(emptyMessage)}</p>`;
+      }
+      return `
+        <div class="overflow-x-auto rounded-lg border border-slate-800">
+          <table class="min-w-full text-left text-xs">
+            <thead class="bg-slate-950 text-slate-400"><tr>${headers.map(header => `<th class="px-3 py-2 font-semibold whitespace-nowrap">${escapeHtml(header)}</th>`).join("")}</tr></thead>
+            <tbody class="divide-y divide-slate-800">${rows.join("")}</tbody>
+          </table>
+        </div>`;
+    }
+
+    function abrirModalComparacaoPlanilhas(comparison) {
+      const seriesSebrae = new Set([
+        "BRJ135P5XS",
+        "BRJ142QKBQ",
+        "BRJ9435VMR",
+        "BRJ9435VMF",
+        "BRJ149SCJG",
+      ]);
+      const ausentesDetalhes = (comparison.ausentes_em_detalhes || []).filter(item => {
+        const serie = String(item.serie || "").replace(/[^A-Z0-9]/gi, "").toUpperCase();
+        return !seriesSebrae.has(serie);
+      });
+      const divergenciasLocal = comparison.divergencias_local || [];
+      const seriesSemMapa = comparison.series_sem_mapeamento || [];
+      const arquivo = comparison.arquivos_enviados || {};
+      const totalNotebooksAusentes = ausentesDetalhes.length;
+
+      document.getElementById("comparacao-planilhas-fontes").textContent =
+        `Endpoint: ${arquivo.endpoint || "—"} · EquipamentosDetalhes: ${arquivo.detalhes || "—"}${comparison.horario_comparacao ? ` · ${formatarHorarioHistorico(comparison.horario_comparacao)}` : ""}`;
+
+      const notebooksAusentes = ausentesDetalhes.map(item => `
+        <tr class="text-slate-300">
+          <td class="px-3 py-2 font-mono text-white whitespace-nowrap">${escapeHtml(item.computador)}</td>
+          <td class="px-3 py-2 font-mono whitespace-nowrap">${escapeHtml(item.serie || "—")}</td>
+          <td class="px-3 py-2">${escapeHtml(item.local_previsto || "—")}</td>
+          <td class="px-3 py-2 text-amber-300">Ausente em EquipamentosDetalhes</td>
+        </tr>`);
+
+      const locationRows = divergenciasLocal.map(item => `
+        <tr class="text-slate-300">
+          <td class="px-3 py-2 font-mono text-white whitespace-nowrap">${escapeHtml(item.computador)}</td>
+          <td class="px-3 py-2 font-mono whitespace-nowrap">${escapeHtml(item.serie || "—")}</td>
+          <td class="px-3 py-2">${escapeHtml(item.local_previsto)}</td>
+          <td class="px-3 py-2">${escapeHtml(item.local_detalhes || "—")}</td>
+        </tr>`);
+
+      const unmappedRows = seriesSemMapa.map(item => `
+        <tr class="text-slate-300">
+          <td class="px-3 py-2 font-mono text-white">${escapeHtml(item.serie)}</td>
+          <td class="px-3 py-2">${Number(item.quantidade || 0)}</td>
+          <td class="px-3 py-2 font-mono">${escapeHtml((item.exemplos || []).join(", "))}</td>
+        </tr>`);
+
+      document.getElementById("comparacao-planilhas-conteudo").innerHTML = `
+        ${comparison.historico_salvo === false
+          ? `<p class="text-xs text-amber-200 bg-amber-500/10 border border-amber-500/25 rounded-lg px-3 py-2">${escapeHtml(comparison.aviso_historico || "Não foi possível salvar este resultado no histórico de comparações.")}</p>`
+          : comparison.historico_salvo === true
+            ? '<p class="text-xs text-cyan-200 bg-cyan-500/10 border border-cyan-500/25 rounded-lg px-3 py-2">Resultado registrado no Histórico de planilhas.</p>'
+            : ""}
+        <div class="grid grid-cols-2 md:grid-cols-3 xl:grid-cols-4 gap-3">
+          <div class="rounded-xl bg-slate-950 border border-slate-800 p-3"><p class="text-[10px] uppercase tracking-wide text-slate-500">Notebooks comparados</p><p class="text-xl font-bold text-white mt-1">${Number(comparison.total_endpoint || 0).toLocaleString("pt-BR")}</p></div>
+          <div class="rounded-xl bg-rose-500/5 border border-rose-500/20 p-3"><p class="text-[10px] uppercase tracking-wide text-rose-300">Notebooks para conferir</p><p class="text-xl font-bold text-rose-200 mt-1">${totalNotebooksAusentes}</p></div>
+          <div class="rounded-xl bg-amber-500/5 border border-amber-500/20 p-3"><p class="text-[10px] uppercase tracking-wide text-amber-300">Divergências de local</p><p class="text-xl font-bold text-amber-200 mt-1">${divergenciasLocal.length}</p></div>
+          <div class="rounded-xl bg-sky-500/5 border border-sky-500/20 p-3"><p class="text-[10px] uppercase tracking-wide text-sky-300">Séries sem mapeamento</p><p class="text-xl font-bold text-sky-200 mt-1">${seriesSemMapa.length}</p></div>
+        </div>
+        <div class="flex flex-wrap gap-2">
+          <button type="button" onclick="irParaSecaoComparacao('comparacao-notebooks-ausentes')" class="px-3 py-2 rounded-lg bg-rose-500/10 border border-rose-500/25 text-rose-200 hover:bg-rose-500/20 text-xs font-semibold transition">
+            <i data-lucide="search-check" class="w-3.5 h-3.5 inline-block mr-1 align-[-2px]"></i>Ver notebooks sem correspondência (${totalNotebooksAusentes})
+          </button>
+        </div>
+        <section class="space-y-2">
+          <div id="comparacao-notebooks-ausentes"><h4 class="text-sm font-bold text-rose-300">Notebooks sem correspondência</h4><p class="text-[11px] text-slate-500">Lista os notebooks do Endpoint que não aparecem em EquipamentosDetalhes, para conferência manual.</p></div>
+          ${renderizarTabelaComparacao(["Hostname", "Série", "Local previsto", "Situação"], notebooksAusentes, "Todos os notebooks do Endpoint foram encontrados em EquipamentosDetalhes.")}
+        </section>
+        <section class="space-y-2">
+          <div><h4 class="text-sm font-bold text-amber-300">Série e localidade divergentes</h4><p class="text-[11px] text-slate-500">A cidade informada na planilha não corresponde ao local previsto pelo prefixo da série.</p></div>
+          ${renderizarTabelaComparacao(["Computador", "Série", "Local previsto", "Cidade em EquipamentosDetalhes"], locationRows, "Nenhuma divergência de localidade encontrada.")}
+        </section>
+        <section class="space-y-2">
+          <div><h4 class="text-sm font-bold text-sky-300">Séries sem local definido</h4><p class="text-[11px] text-slate-500">Não há regra de localidade cadastrada para estes prefixos.</p></div>
+          ${renderizarTabelaComparacao(["Série", "Quantidade", "Exemplos"], unmappedRows, "Todas as séries têm mapeamento de localidade.")}
+        </section>
+        <p class="text-[11px] text-emerald-300">EquipamentosDetalhes carregado: ${Number(comparison.total_equipamentos_carregados || 0).toLocaleString("pt-BR")} equipamentos. Backup das versões anteriores: <span class="font-mono">planilhas_entrada/${escapeHtml(comparison.backup_diretorio || "_backups")}</span>.</p>
+      `;
+      document.getElementById("modal-comparacao-planilhas").classList.remove("hidden");
+      lucide.createIcons({ root: document.getElementById("modal-comparacao-planilhas") });
+    }
+
+    function irParaSecaoComparacao(sectionId) {
+      document.getElementById(sectionId)?.scrollIntoView({ behavior: "smooth", block: "start" });
+    }
+
+    function fecharModalComparacaoPlanilhas() {
+      document.getElementById("modal-comparacao-planilhas").classList.add("hidden");
+    }
+
+    function definirTotalHistoricoComparacoes(total) {
+      const valor = Number(total || 0);
+      document.getElementById("badge-total-historico-comparacoes").textContent = valor;
+      document.getElementById("total-historico-comparacoes").textContent = `${valor} ${valor === 1 ? "registro" : "registros"}`;
+    }
+
+    async function carregarContagemHistoricoComparacoes() {
+      try {
+        const res = await fetch("/api/historico-comparacoes");
+        if (!res.ok) return;
+        const data = await res.json();
+        definirTotalHistoricoComparacoes(data.total);
+      } catch (err) {
+        console.warn("Não foi possível carregar a contagem do histórico de planilhas:", err);
+      }
+    }
+
+    async function abrirModalHistoricoComparacoes() {
+      document.getElementById("modal-historico-comparacoes").classList.remove("hidden");
+      lucide.createIcons({ root: document.getElementById("modal-historico-comparacoes") });
+      await carregarHistoricoComparacoes();
+    }
+
+    function fecharModalHistoricoComparacoes() {
+      document.getElementById("modal-historico-comparacoes").classList.add("hidden");
+    }
+
+    async function carregarHistoricoComparacoes() {
+      const lista = document.getElementById("lista-historico-comparacoes");
+      lista.innerHTML = '<p class="text-sm text-slate-400 text-center py-8">Carregando histórico...</p>';
+
+      try {
+        const res = await fetch("/api/historico-comparacoes");
+        const data = await res.json().catch(() => ({}));
+        if (!res.ok) throw new Error(data.detail || "Não foi possível carregar o histórico de planilhas.");
+
+        const eventos = Array.isArray(data.eventos) ? data.eventos : [];
+        definirTotalHistoricoComparacoes(data.total ?? eventos.length);
+        lista.replaceChildren();
+        if (eventos.length === 0) {
+          const vazio = document.createElement("p");
+          vazio.className = "text-sm text-slate-400 text-center py-8";
+          vazio.textContent = "Nenhuma atualização registrada ainda. As próximas comparações concluídas aparecerão aqui.";
+          lista.appendChild(vazio);
+          return;
+        }
+
+        eventos.forEach(evento => {
+          const resumo = evento.resumo || {};
+          const arquivos = evento.arquivos_enviados || {};
+          const card = document.createElement("article");
+          card.className = "flex flex-col md:flex-row md:items-center justify-between gap-3 rounded-xl border border-slate-800 bg-slate-950/70 p-4";
+
+          const info = document.createElement("div");
+          info.className = "min-w-0 space-y-1";
+          const dataHora = document.createElement("p");
+          dataHora.className = "text-sm font-semibold text-white";
+          dataHora.textContent = formatarHorarioHistorico(evento.horario);
+          info.appendChild(dataHora);
+
+          const fontes = document.createElement("p");
+          fontes.className = "text-xs text-slate-400 break-words";
+          fontes.textContent = `Endpoint: ${arquivos.endpoint || "—"} · EquipamentosDetalhes: ${arquivos.detalhes || "—"}`;
+          info.appendChild(fontes);
+
+          const contagens = document.createElement("p");
+          contagens.className = "text-[11px] text-slate-500";
+          contagens.textContent = `Sem correspondência: ${Number(resumo.ausentes_em_detalhes || 0)} · Divergências de local: ${Number(resumo.divergencias_local || 0)} · Séries sem mapeamento: ${Number(resumo.series_sem_mapeamento || 0)}`;
+          info.appendChild(contagens);
+          card.appendChild(info);
+
+          const consultar = document.createElement("button");
+          consultar.type = "button";
+          consultar.className = "shrink-0 px-3 py-2 rounded-lg bg-cyan-500/10 hover:bg-cyan-500/20 text-cyan-200 border border-cyan-500/25 text-xs font-semibold transition";
+          consultar.textContent = "Consultar resultado";
+          consultar.addEventListener("click", () => consultarHistoricoComparacao(evento.id, consultar));
+          card.appendChild(consultar);
+          lista.appendChild(card);
+        });
+      } catch (err) {
+        console.error("Erro ao carregar histórico de planilhas:", err);
+        lista.replaceChildren();
+        const erro = document.createElement("p");
+        erro.className = "text-sm text-rose-300 text-center py-8";
+        erro.textContent = err.message || "Não foi possível carregar o histórico de planilhas.";
+        lista.appendChild(erro);
+      }
+    }
+
+    async function consultarHistoricoComparacao(eventoId, botao) {
+      const textoOriginal = botao.textContent;
+      botao.disabled = true;
+      botao.textContent = "Carregando...";
+      try {
+        const res = await fetch(`/api/historico-comparacoes/${encodeURIComponent(eventoId)}`);
+        const data = await res.json().catch(() => ({}));
+        if (!res.ok) throw new Error(data.detail || "Não foi possível abrir este resultado.");
+
+        const evento = data.evento || {};
+        fecharModalHistoricoComparacoes();
+        abrirModalComparacaoPlanilhas({
+          ...(evento.comparacao || {}),
+          horario_comparacao: evento.horario || evento.comparacao?.horario_comparacao,
+          historico_salvo: true,
+        });
+      } catch (err) {
+        console.error("Erro ao abrir comparação salva:", err);
+        showToast(err.message || "Não foi possível abrir este resultado.", "error");
+        botao.disabled = false;
+        botao.textContent = textoOriginal;
+      }
+    }
+
+    async function exportarEquipamentosAtualizados() {
+      const btn = document.getElementById("btn-exportar-equipamentos");
+      const originalText = btn.innerHTML;
+      btn.disabled = true;
+      btn.innerHTML = `<i data-lucide="loader-2" class="w-3.5 h-3.5 animate-spin"></i><span class="hidden sm:inline">Gerando Excel...</span>`;
+      lucide.createIcons({ root: btn });
+
+      try {
+        const res = await fetch("/api/exportar-equipamentos");
+        if (!res.ok) {
+          const errData = await res.json().catch(() => ({}));
+          throw new Error(errData.detail || "Falha ao exportar a planilha de equipamentos.");
+        }
+
+        const disposition = res.headers.get("Content-Disposition") || "";
+        const match = /filename[^;=\n]*=((['"]).*?\2|[^;\n]*)/.exec(disposition);
+        const filename = match && match[1]
+          ? match[1].replace(/['"]/g, "")
+          : "EquipamentosDetalhes-atualizados.xlsx";
+        const total = Number(res.headers.get("X-Total-Alterados") || 0);
+        const blob = await res.blob();
+        const url = window.URL.createObjectURL(blob);
+        const link = document.createElement("a");
+        link.href = url;
+        link.download = filename;
+        document.body.appendChild(link);
+        link.click();
+        link.remove();
+        window.setTimeout(() => window.URL.revokeObjectURL(url), 1000);
+
+        showToast(`Planilha ${filename} exportada com ${total} apelido(s) atualizado(s).`, "success");
+      } catch (err) {
+        console.error("Erro ao exportar planilha de equipamentos:", err);
+        showToast(err.message, "error");
+      } finally {
+        btn.disabled = false;
+        btn.innerHTML = originalText;
+        lucide.createIcons({ root: btn });
+      }
+    }
+
+    // ==========================================
+    // MODAL DE EDIÇÃO / CADASTRO DE EQUIPAMENTO
+    // ==========================================
+    function popularSelectRegionaisModal() {
+      const sel = document.getElementById("select-copiar-regional");
+      if (!sel) return;
+      sel.innerHTML = '<option value="">-- Selecione uma regional para preenchimento automático --</option>';
+      unidadesList.forEach(u => {
+        const opt = document.createElement("option");
+        opt.value = u.id;
+        opt.textContent = `${u.cidade} - ${u.endereco} (${u.cnpj})`;
+        sel.appendChild(opt);
+      });
+    }
+
+    function aplicarEnderecoRegionalNoModal(unitId) {
+      if (!unitId) return;
+      const unit = unidadesList.find(u => String(u.id) === String(unitId));
+      if (!unit) return;
+      document.getElementById("edit-cidade").value = unit.cidade || "";
+      document.getElementById("edit-endereco").value = unit.endereco || "";
+      document.getElementById("edit-uf").value = unit.uf || "PR";
+      document.getElementById("edit-cep").value = unit.cep || "";
+      document.getElementById("edit-cnpj").value = unit.cnpj || "";
+      showToast(`Endereço de ${unit.cidade} aplicado no formulário!`, "info");
+    }
+
+    function abrirModalEditarEquipamento() {
+      if (!currentEquipamento) {
+        showToast("Localize um equipamento antes de editar.", "warning");
+        return;
+      }
+
+      popularSelectRegionaisModal();
+      document.getElementById("modal-edit-titulo").textContent = "Atualizar Cadastro do Equipamento";
+      document.getElementById("modal-edit-serial-badge").textContent = currentEquipamento.serial;
+      
+      document.getElementById("edit-serial").value = currentEquipamento.serial || "";
+      document.getElementById("edit-serial").readOnly = true;
+      document.getElementById("edit-modelo").value = currentEquipamento.modelo || "";
+      document.getElementById("edit-tipo").value = currentEquipamento.tipo || "Notebook";
+      document.getElementById("edit-apelido").value = currentEquipamento.apelido || "";
+      document.getElementById("edit-apelido-field").classList.add("hidden");
+      document.getElementById("edit-id-cliente").value = currentEquipamento.idCliente || "";
+
+      // Endereço
+      const endLimpo = currentEquipamento.endereco_instalacao || (currentEquipamento.retirada_endereco ? currentEquipamento.retirada_endereco.split(' - ')[0].trim() : "");
+      document.getElementById("edit-endereco").value = endLimpo;
+      document.getElementById("edit-cidade").value = currentEquipamento.retirada_cidade || "";
+      document.getElementById("edit-uf").value = currentEquipamento.retirada_uf || "PR";
+      document.getElementById("edit-cep").value = currentEquipamento.retirada_cep || "";
+      document.getElementById("edit-cnpj").value = currentEquipamento.retirada_cnpj || "";
+
+      document.getElementById("modal-editar-equipamento").classList.remove("hidden");
+    }
+
+    function cadastrarNovoSerial(serial) {
+      fecharAutocomplete();
+      popularSelectRegionaisModal();
+
+      document.getElementById("modal-edit-titulo").textContent = "Cadastrar Novo Equipamento";
+      document.getElementById("modal-edit-serial-badge").textContent = serial ? serial.toUpperCase() : "NOVO";
+
+      document.getElementById("edit-serial").value = (serial || "").toUpperCase();
+      document.getElementById("edit-serial").readOnly = false;
+      document.getElementById("edit-modelo").value = "";
+      document.getElementById("edit-tipo").value = "Notebook";
+      document.getElementById("edit-apelido").value = "";
+      document.getElementById("edit-apelido-field").classList.remove("hidden");
+      document.getElementById("edit-id-cliente").value = "";
+      document.getElementById("edit-endereco").value = "";
+      document.getElementById("edit-cidade").value = "Curitiba";
+      document.getElementById("edit-uf").value = "PR";
+      document.getElementById("edit-cep").value = "80220-300";
+      document.getElementById("edit-cnpj").value = "75.110.585/0001-00";
+
+      document.getElementById("modal-editar-equipamento").classList.remove("hidden");
+      document.getElementById("edit-modelo").focus();
+    }
+
+    function fecharModalEditarEquipamento() {
+      document.getElementById("modal-editar-equipamento").classList.add("hidden");
+    }
+
+    function abrirModalEditarApelido() {
+      if (!currentEquipamento) {
+        showToast("Localize um equipamento antes de editar o apelido.", "warning");
+        return;
+      }
+
+      document.getElementById("edit-apelido-isolado").value = currentEquipamento.apelido || "";
+      document.getElementById("apelido-serial-contexto").textContent = `Série: ${currentEquipamento.serial}`;
+      document.getElementById("modal-editar-apelido").classList.remove("hidden");
+      lucide.createIcons({ root: document.getElementById("modal-editar-apelido") });
+      document.getElementById("edit-apelido-isolado").focus();
+      document.getElementById("edit-apelido-isolado").select();
+    }
+
+    function fecharModalEditarApelido() {
+      document.getElementById("modal-editar-apelido").classList.add("hidden");
+    }
+
+    async function salvarApelido() {
+      if (!currentEquipamento) {
+        showToast("Localize um equipamento antes de editar o apelido.", "warning");
+        fecharModalEditarApelido();
+        return;
+      }
+
+      const serial = currentEquipamento.serial;
+      const apelido = document.getElementById("edit-apelido-isolado").value.trim();
+      const btn = document.getElementById("btn-salvar-apelido");
+      const originalText = btn.textContent;
+      btn.disabled = true;
+      btn.textContent = "Salvando...";
+
+      try {
+        const res = await fetch("/api/equipamento/atualizar-apelido", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ serial, apelido })
+        });
+
+        const data = await res.json().catch(() => ({}));
+        if (!res.ok) throw new Error(data.detail || "Falha ao salvar o apelido.");
+
+        currentEquipamento = data.equipamento;
+        document.getElementById("badge-apelido").textContent = currentEquipamento.apelido || "Sem Apelido";
+        atualizarIndicadoresPosSalvamento(data.total_modificados);
+        fecharModalEditarApelido();
+        showToast("Apelido salvo com sucesso.", "success");
+      } catch (err) {
+        console.error("Erro ao salvar apelido:", err);
+        showToast(err.message || "Falha ao salvar o apelido.", "error");
+      } finally {
+        btn.disabled = false;
+        btn.textContent = originalText;
+      }
+    }
+
+    function formatarHorarioHistorico(horario) {
+      const data = new Date(horario);
+      if (Number.isNaN(data.getTime())) return horario || "Horário indisponível";
+      return new Intl.DateTimeFormat("pt-BR", {
+        dateStyle: "short",
+        timeStyle: "medium"
+      }).format(data);
+    }
+
+    function formatarValorHistorico(evento, anterior) {
+      if (evento.tipo !== "endereco") {
+        const apelido = anterior ? evento.apelido_anterior : evento.apelido_novo;
+        return apelido || "(vazio)";
+      }
+
+      const endereco = anterior ? evento.endereco_anterior : evento.endereco_novo;
+      if (!endereco || typeof endereco !== "object") return "(vazio)";
+      return [
+        endereco.endereco ? `Endereço: ${endereco.endereco}` : "",
+        endereco.cidade || endereco.uf ? `Cidade/UF: ${[endereco.cidade, endereco.uf].filter(Boolean).join("/")}` : "",
+        endereco.cep ? `CEP: ${endereco.cep}` : "",
+        endereco.cnpj ? `CNPJ: ${endereco.cnpj}` : ""
+      ].filter(Boolean).join("\n") || "(vazio)";
+    }
+
+    async function abrirModalHistoricoApelidos() {
+      document.getElementById("modal-historico-apelidos").classList.remove("hidden");
+      lucide.createIcons({ root: document.getElementById("modal-historico-apelidos") });
+      await carregarHistoricoApelidos();
+    }
+
+    function fecharModalHistoricoApelidos() {
+      document.getElementById("modal-historico-apelidos").classList.add("hidden");
+    }
+
+    function definirTotalHistoricoApelidos(total) {
+      const valor = Number(total || 0);
+      document.getElementById("badge-total-historico-apelidos").textContent = valor;
+      document.getElementById("total-historico-apelidos").textContent = `${valor} ${valor === 1 ? "registro" : "registros"}`;
+    }
+
+    async function carregarContagemHistoricoApelidos() {
+      try {
+        const res = await fetch("/api/historico-alteracoes");
+        if (!res.ok) return;
+        const data = await res.json();
+        definirTotalHistoricoApelidos(data.total);
+      } catch (err) {
+        console.warn("Não foi possível carregar a contagem do histórico:", err);
+      }
+    }
+
+    async function carregarHistoricoApelidos() {
+      const lista = document.getElementById("lista-historico-apelidos");
+      lista.innerHTML = '<p class="text-sm text-slate-400 text-center py-8">Carregando histórico...</p>';
+
+      try {
+        const res = await fetch("/api/historico-alteracoes");
+        const data = await res.json().catch(() => ({}));
+        if (!res.ok) throw new Error(data.detail || "Não foi possível carregar o histórico.");
+
+        const eventos = Array.isArray(data.eventos) ? data.eventos : [];
+        definirTotalHistoricoApelidos(eventos.length);
+
+        lista.replaceChildren();
+        if (eventos.length === 0) {
+          const vazio = document.createElement("p");
+          vazio.className = "text-sm text-slate-400 text-center py-8";
+          vazio.textContent = "Nenhuma alteração registrada ainda. O histórico começa a partir desta atualização; alterações anteriores não têm horário recuperável.";
+          lista.appendChild(vazio);
+          return;
+        }
+
+        const ultimaPorCampo = new Map();
+        eventos.forEach(evento => {
+          const serial = String(evento.serial || "").toUpperCase();
+          const tipoCampo = evento.tipo === "endereco" ? "endereco" : "apelido";
+          const chaveCampo = `${serial}:${tipoCampo}`;
+          if (serial && !ultimaPorCampo.has(chaveCampo)) {
+            ultimaPorCampo.set(chaveCampo, evento.id);
+          }
+        });
+
+        const scroller = document.createElement("div");
+        scroller.className = "overflow-x-auto";
+        const tabela = document.createElement("table");
+        tabela.className = "w-full min-w-[1100px] text-left text-xs";
+        tabela.innerHTML = `
+          <thead class="sticky top-0 bg-slate-950 text-slate-400 uppercase tracking-wide">
+            <tr>
+              <th class="px-3 py-2.5 font-semibold">Data e hora</th>
+              <th class="px-3 py-2.5 font-semibold">Equipamento</th>
+              <th class="px-3 py-2.5 font-semibold">Campo</th>
+              <th class="px-3 py-2.5 font-semibold">Valor anterior</th>
+              <th class="px-3 py-2.5 font-semibold">Valor novo</th>
+              <th class="px-3 py-2.5 font-semibold">Ação</th>
+              <th class="px-3 py-2.5 font-semibold">Desfazer</th>
+              <th class="px-3 py-2.5 font-semibold">Excluir registro</th>
+            </tr>
+          </thead>
+          <tbody class="divide-y divide-slate-800"></tbody>
+        `;
+        const corpo = tabela.querySelector("tbody");
+
+        eventos.forEach(evento => {
+          const serial = String(evento.serial || "").toUpperCase();
+          const ehEndereco = evento.tipo === "endereco";
+          const chaveCampo = `${serial}:${ehEndereco ? "endereco" : "apelido"}`;
+          const ehUltimoCampo = ultimaPorCampo.get(chaveCampo) === evento.id;
+          const ehUltima = !ehEndereco && ehUltimoCampo;
+          const linha = document.createElement("tr");
+          linha.className = "hover:bg-slate-800/40";
+
+          const equipamento = document.createElement("td");
+          equipamento.className = "px-3 py-3 text-slate-200";
+          equipamento.textContent = `${evento.equipamento || "Equipamento"} · Série ${serial || "não informada"}`;
+          linha.appendChild(equipamento);
+
+          const celulaHorario = document.createElement("td");
+          celulaHorario.className = "px-3 py-3 text-slate-400 whitespace-nowrap";
+          celulaHorario.textContent = formatarHorarioHistorico(evento.horario);
+          linha.insertBefore(celulaHorario, equipamento);
+
+          const campo = document.createElement("td");
+          campo.className = "px-3 py-3 text-slate-300";
+          campo.textContent = ehEndereco ? "Endereço de instalação" : "Apelido / hostname";
+          linha.appendChild(campo);
+
+          const anterior = document.createElement("td");
+          anterior.className = "px-3 py-3 text-slate-300 font-mono whitespace-pre-line";
+          anterior.textContent = formatarValorHistorico(evento, true);
+          linha.appendChild(anterior);
+
+          const novo = document.createElement("td");
+          novo.className = "px-3 py-3 text-cyan-300 font-mono whitespace-pre-line";
+          novo.textContent = formatarValorHistorico(evento, false);
+          linha.appendChild(novo);
+
+          const acao = document.createElement("td");
+          acao.className = "px-3 py-3 text-slate-400";
+          acao.textContent = evento.acao === "desfazer" ? "Reversão de apelido" : "Alteração";
+          linha.appendChild(acao);
+
+          const celulaDesfazer = document.createElement("td");
+          celulaDesfazer.className = "px-3 py-3";
+          if (!ehEndereco) {
+            const botao = document.createElement("button");
+            botao.type = "button";
+            botao.textContent = ehUltima ? "Desfazer" : "Anterior";
+            botao.disabled = !ehUltima;
+            botao.title = ehUltima ? "Restaurar o apelido anterior" : "Só a alteração mais recente deste equipamento pode ser desfeita";
+            botao.className = ehUltima
+              ? "px-2.5 py-1 rounded-md bg-rose-500/10 hover:bg-rose-500/20 text-rose-300 border border-rose-500/30 transition"
+              : "px-2.5 py-1 rounded-md bg-slate-800 text-slate-500 border border-slate-700 cursor-not-allowed";
+            botao.addEventListener("click", () => desfazerAlteracaoApelido(evento, botao));
+            celulaDesfazer.appendChild(botao);
+          } else {
+            celulaDesfazer.textContent = "—";
+            celulaDesfazer.className += " text-slate-600";
+          }
+          linha.appendChild(celulaDesfazer);
+
+          const celulaExcluir = document.createElement("td");
+          celulaExcluir.className = "px-3 py-3";
+          const botaoExcluir = document.createElement("button");
+          botaoExcluir.type = "button";
+          botaoExcluir.textContent = ehUltimoCampo ? "Restaurar e excluir" : "Anterior";
+          botaoExcluir.disabled = !ehUltimoCampo;
+          botaoExcluir.title = ehUltimoCampo
+            ? "Salvar o valor anterior no equipamento e remover este registro"
+            : "Só o registro mais recente deste campo pode ser restaurado e excluído";
+          botaoExcluir.className = ehUltimoCampo
+            ? "px-2.5 py-1 rounded-md bg-rose-500/10 hover:bg-rose-500/20 text-rose-300 border border-rose-500/30 transition"
+            : "px-2.5 py-1 rounded-md bg-slate-800 text-slate-500 border border-slate-700 cursor-not-allowed";
+          botaoExcluir.addEventListener("click", () => excluirRegistroHistorico(evento, botaoExcluir));
+          celulaExcluir.appendChild(botaoExcluir);
+          linha.appendChild(celulaExcluir);
+          corpo.appendChild(linha);
+        });
+
+        scroller.appendChild(tabela);
+        lista.appendChild(scroller);
+      } catch (err) {
+        console.error("Erro ao carregar histórico de apelidos:", err);
+        lista.replaceChildren();
+        const erro = document.createElement("p");
+        erro.className = "text-sm text-rose-300 text-center py-8";
+        erro.textContent = err.message || "Não foi possível carregar o histórico.";
+        lista.appendChild(erro);
+      }
+    }
+
+    async function desfazerAlteracaoApelido(evento, botao) {
+      const apelidoAnterior = evento.apelido_anterior || "(vazio)";
+      if (!window.confirm(`Desfazer a alteração da série ${evento.serial} e restaurar o apelido ${apelidoAnterior}?`)) return;
+
+      const textoOriginal = botao.textContent;
+      botao.disabled = true;
+      botao.textContent = "Desfazendo...";
+      try {
+        const res = await fetch("/api/equipamento/apelido/desfazer", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ evento_id: evento.id })
+        });
+        const data = await res.json().catch(() => ({}));
+        if (!res.ok) throw new Error(data.detail || "Não foi possível desfazer a alteração.");
+
+        if (currentEquipamento && currentEquipamento.serial === data.equipamento.serial) {
+          currentEquipamento = data.equipamento;
+          document.getElementById("badge-apelido").textContent = currentEquipamento.apelido || "Sem Apelido";
+        }
+        await carregarEstatisticas();
+        await carregarHistoricoApelidos();
+        showToast("Apelido restaurado. A reversão foi registrada no histórico.", "success");
+      } catch (err) {
+        console.error("Erro ao desfazer alteração de apelido:", err);
+        showToast(err.message || "Não foi possível desfazer a alteração.", "error");
+        botao.disabled = false;
+        botao.textContent = textoOriginal;
+      }
+    }
+
+    async function excluirRegistroHistorico(evento, botao) {
+      if (!window.confirm("Tem certeza de que deseja excluir esse registro? Essa ação não poderá ser desfeita")) return;
+
+      const textoOriginal = botao.textContent;
+      botao.disabled = true;
+      botao.textContent = "Excluindo...";
+      try {
+        const res = await fetch(`/api/historico-alteracoes/${encodeURIComponent(evento.id)}`, { method: "DELETE" });
+        const data = await res.json().catch(() => ({}));
+        if (!res.ok) throw new Error(data.detail || "Não foi possível excluir o registro.");
+        if (currentEquipamento && currentEquipamento.serial === data.equipamento.serial) {
+          currentEquipamento = data.equipamento;
+          document.getElementById("badge-apelido").textContent = currentEquipamento.apelido || "Sem Apelido";
+          document.getElementById("card-localizacao").textContent = `${currentEquipamento.retirada_cidade || ""} - ${currentEquipamento.retirada_endereco ? currentEquipamento.retirada_endereco.split("-")[0].trim() : ""}`;
+          document.getElementById("card-cnpj-atual").textContent = `CNPJ: ${currentEquipamento.retirada_cnpj || "Não especificado"}`;
+        }
+        await carregarHistoricoApelidos();
+        showToast(data.tipo === "endereco"
+          ? "Endereço anterior restaurado e salvo; registro removido do histórico."
+          : "Apelido anterior restaurado e salvo; registro removido do histórico.", "success");
+      } catch (err) {
+        console.error("Erro ao excluir registro do histórico:", err);
+        showToast(err.message || "Não foi possível excluir o registro.", "error");
+        botao.disabled = false;
+        botao.textContent = textoOriginal;
+      }
+    }
+
+    const CAMPOS_ENTREGA_PRESERVADOS_AO_EDITAR_EQUIPAMENTO = [
+      "select-unidade-destino",
+      "entrega-cnpj",
+      "entrega-endereco",
+      "entrega-contato",
+      "entrega-email",
+      "entrega-telefone",
+      "entrega-horario",
+      "entrega-almoco",
+      "entrega-pausa-duracao",
+      "entrega-obs"
+    ];
+
+    function capturarDadosEntrega() {
+      return CAMPOS_ENTREGA_PRESERVADOS_AO_EDITAR_EQUIPAMENTO.reduce((valores, id) => {
+        const campo = document.getElementById(id);
+        if (campo) valores[id] = campo.value;
+        return valores;
+      }, {});
+    }
+
+    function restaurarDadosEntrega(valores) {
+      Object.entries(valores).forEach(([id, valor]) => {
+        const campo = document.getElementById(id);
+        if (campo) campo.value = valor;
+      });
+    }
+
+    async function salvarDadosEquipamento() {
+      const serial = document.getElementById("edit-serial").value.trim().toUpperCase();
+      if (!serial) {
+        showToast("O número de série é obrigatório.", "warning");
+        document.getElementById("edit-serial").focus();
+        return;
+      }
+
+      const payload = {
+        serial: serial,
+        modelo: document.getElementById("edit-modelo").value.trim(),
+        tipo: document.getElementById("edit-tipo").value,
+        apelido: currentEquipamento && currentEquipamento.serial === serial
+          ? (currentEquipamento.apelido || "")
+          : document.getElementById("edit-apelido").value.trim(),
+        idCliente: document.getElementById("edit-id-cliente").value.trim(),
+        endereco: document.getElementById("edit-endereco").value.trim(),
+        cidade: document.getElementById("edit-cidade").value.trim(),
+        uf: document.getElementById("edit-uf").value.trim().toUpperCase() || "PR",
+        cep: document.getElementById("edit-cep").value.trim(),
+        cnpj_instalacao: document.getElementById("edit-cnpj").value.trim()
+      };
+
+      const btn = document.getElementById("btn-salvar-equipamento");
+      const originalText = btn.innerHTML;
+      btn.disabled = true;
+      btn.innerHTML = `<i data-lucide="loader-2" class="w-4 h-4 animate-spin"></i><span>Salvando no Excel...</span>`;
+      lucide.createIcons({ root: btn });
+
+      try {
+        const res = await fetch("/api/equipamento/salvar", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(payload)
+        });
+
+        if (!res.ok) {
+          const errData = await res.json().catch(() => ({}));
+          throw new Error(errData.detail || "Falha ao salvar equipamento.");
+        }
+
+        const data = await res.json();
+        const dadosEntrega = capturarDadosEntrega();
+        currentEquipamento = data.equipamento;
+        exibirEquipamento(data.equipamento);
+        restaurarDadosEntrega(dadosEntrega);
+        document.getElementById("input-serial").value = data.equipamento.serial;
+        document.getElementById("btn-clear-serial").classList.remove("hidden");
+
+        atualizarIndicadoresPosSalvamento(data.total_modificados);
+        showToast(data.mensagem || `Equipamento ${serial} salvo com sucesso!`, "success");
+        fecharModalEditarEquipamento();
+
+      } catch (err) {
+        console.error("Erro ao salvar:", err);
+        showToast(err.message, "error");
+      } finally {
+        btn.disabled = false;
+        btn.innerHTML = originalText;
+        lucide.createIcons({ root: btn });
+      }
+    }
+
+    // ==========================================
+    // MODAL DE GERENCIAMENTO DE REGIONAIS
+    // ==========================================
+    function abrirModalGerenciarUnidades() {
+      document.getElementById("input-filtro-unidades").value = "";
+      toggleFormNovaUnidade(false);
+      renderListaUnidades(unidadesList);
+      document.getElementById("badge-total-unidades-modal").textContent = `${unidadesList.length} unidades`;
+      document.getElementById("modal-gerenciar-unidades").classList.remove("hidden");
+    }
+
+    function fecharModalGerenciarUnidades() {
+      document.getElementById("modal-gerenciar-unidades").classList.add("hidden");
+    }
+
+    function renderListaUnidades(lista) {
+      const container = document.getElementById("lista-unidades-container");
+      container.innerHTML = "";
+
+      if (!lista || lista.length === 0) {
+        container.innerHTML = `
+          <div class="text-center py-8 text-slate-500 text-xs">
+            Nenhuma unidade encontrada com o termo filtrado.
+          </div>
+        `;
+        return;
+      }
+
+      lista.forEach(u => {
+        const item = document.createElement("div");
+        item.className = "flex items-center justify-between p-3 rounded-xl bg-slate-950/60 border border-slate-800/80 hover:border-amber-500/30 transition text-xs";
+        item.innerHTML = `
+          <div class="min-w-0 flex-1">
+            <div class="flex items-center gap-2">
+              <span class="font-bold text-white text-sm">${escapeHtml(u.cidade)}</span>
+              ${u.is_sede ? '<span class="px-2 py-0.5 rounded-full text-[10px] font-bold bg-amber-500/20 text-amber-300 border border-amber-500/30">SEDE</span>' : ''}
+              <span class="text-slate-400 font-mono text-[11px]">${escapeHtml(u.cnpj)}</span>
+            </div>
+            <p class="text-slate-300 mt-0.5 truncate">${escapeHtml(u.endereco)}</p>
+            <p class="text-slate-500 font-mono text-[11px]">CEP: ${escapeHtml(u.cep)} | UF: ${escapeHtml(u.uf || 'PR')}</p>
+          </div>
+          <div class="flex items-center gap-2 ml-3 shrink-0">
+            <button
+              onclick="editarUnidade(${u.id})"
+              class="px-2.5 py-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 text-amber-300 border border-amber-500/30 text-xs font-medium flex items-center gap-1 transition"
+              title="Editar dados desta unidade"
+            >
+              <i data-lucide="edit-2" class="w-3.5 h-3.5"></i>
+              <span>Editar</span>
+            </button>
+          </div>
+        `;
+        container.appendChild(item);
+      });
+      lucide.createIcons({ root: container });
+    }
+
+    function filtrarUnidadesModal(query) {
+      const q = (query || "").toLowerCase().trim();
+      if (!q) {
+        renderListaUnidades(unidadesList);
+        return;
+      }
+      const filtradas = unidadesList.filter(u => 
+        (u.cidade && u.cidade.toLowerCase().includes(q)) ||
+        (u.endereco && u.endereco.toLowerCase().includes(q)) ||
+        (u.cnpj && u.cnpj.toLowerCase().includes(q)) ||
+        (u.cep && u.cep.toLowerCase().includes(q))
+      );
+      renderListaUnidades(filtradas);
+    }
+
+    function toggleFormNovaUnidade(show = null) {
+      const form = document.getElementById("form-nova-unidade");
+      const isHidden = form.classList.contains("hidden");
+      const shouldShow = show !== null ? show : isHidden;
+
+      if (shouldShow) {
+        document.getElementById("form-unidade-id").value = "";
+        document.getElementById("form-unidade-cidade").value = "";
+        document.getElementById("form-unidade-endereco").value = "";
+        document.getElementById("form-unidade-cep").value = "";
+        document.getElementById("form-unidade-cnpj").value = "75.110.585/";
+        document.getElementById("form-unidade-titulo").textContent = "Cadastrar Nova Unidade / Filial";
+        form.classList.remove("hidden");
+        document.getElementById("form-unidade-cidade").focus();
+      } else {
+        form.classList.add("hidden");
+      }
+    }
+
+    function editarUnidade(id) {
+      const unit = unidadesList.find(u => u.id === id);
+      if (!unit) return;
+
+      document.getElementById("form-unidade-id").value = unit.id;
+      document.getElementById("form-unidade-cidade").value = unit.cidade || "";
+      document.getElementById("form-unidade-endereco").value = unit.endereco || "";
+      document.getElementById("form-unidade-cep").value = unit.cep || "";
+      document.getElementById("form-unidade-cnpj").value = unit.cnpj || "";
+      document.getElementById("form-unidade-titulo").textContent = `Editar Unidade: ${unit.cidade}`;
+
+      document.getElementById("form-nova-unidade").classList.remove("hidden");
+      document.getElementById("form-unidade-endereco").focus();
+    }
+
+    async function salvarUnidadeForm() {
+      const cidade = document.getElementById("form-unidade-cidade").value.trim();
+      const endereco = document.getElementById("form-unidade-endereco").value.trim();
+      const cep = document.getElementById("form-unidade-cep").value.trim();
+      const cnpj = document.getElementById("form-unidade-cnpj").value.trim();
+      const idVal = document.getElementById("form-unidade-id").value;
+
+      if (!cidade || !endereco || !cnpj) {
+        showToast("Cidade, endereço e CNPJ são campos obrigatórios.", "warning");
+        return;
+      }
+
+      const payload = {
+        id: idVal ? parseInt(idVal) : null,
+        cidade: cidade,
+        endereco: endereco,
+        uf: "PR",
+        cep: cep,
+        cnpj: cnpj
+      };
+
+      try {
+        const res = await fetch("/api/unidade/salvar", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(payload)
+        });
+
+        if (!res.ok) {
+          const errData = await res.json().catch(() => ({}));
+          throw new Error(errData.detail || "Erro ao salvar unidade.");
+        }
+
+        const data = await res.json();
+        await carregarUnidades();
+        renderListaUnidades(unidadesList);
+        toggleFormNovaUnidade(false);
+        showToast(data.mensagem || "Unidade salva com sucesso!", "success");
+
+      } catch (err) {
+        console.error("Erro ao salvar unidade:", err);
+        showToast(err.message, "error");
+      }
+    }
+  </script>
+</body>
+</html>
