@@ -562,6 +562,16 @@ def _conditional_formatting_signature(conditional_formatting: Any) -> tuple:
     )
 
 
+def _properties_signature(properties: Any) -> tuple:
+    """Exclude the modified timestamp that openpyxl refreshes on every save."""
+    names = getattr(type(properties), "__elements__", ())
+    return tuple(
+        (name, repr(getattr(properties, name, None)))
+        for name in names
+        if name != "modified"
+    )
+
+
 def workbook_snapshot(workbook: Any) -> Dict[str, Any]:
     """Capture cell contents and workbook layout for round-trip comparisons."""
     worksheets = {}
@@ -610,7 +620,7 @@ def workbook_snapshot(workbook: Any) -> Dict[str, Any]:
         "epoch": str(workbook.epoch),
         "defined_names": defined_names,
         "calculation": repr(workbook.calculation),
-        "properties": repr(workbook.properties),
+        "properties": _properties_signature(workbook.properties),
         "style_catalog": tuple(repr(style) for style in workbook._cell_styles),
         "named_styles": tuple(repr(style) for style in workbook._named_styles),
         "worksheets": worksheets,
@@ -819,4 +829,3 @@ def _preserved_package_parts(source: Path) -> Dict[str, str]:
     except (OSError, zipfile.BadZipFile) as error:
         raise WorkbookSafetyError("Não foi possível conferir desenhos, gráficos e imagens da planilha.") from error
     return result
-

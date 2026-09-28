@@ -3,6 +3,7 @@ import copy
 import io
 import json
 import tempfile
+import time
 import unittest
 from contextlib import ExitStack
 from pathlib import Path
@@ -313,6 +314,9 @@ class WorkflowIntegrityTests(unittest.TestCase):
         self.assertEqual(latest_event["apelido_anterior"], "ALIAS-ORIGINAL")
         self.assertEqual(latest_event["apelido_novo"], "ALIAS-MANUAL")
 
+        # Excel metadata carries second-resolution timestamps; the second save
+        # must remain valid even after openpyxl refreshes the modified field.
+        time.sleep(1.1)
         undone = main.desfazer_alteracao_apelido(main.ApelidoUndoPayload(evento_id=latest_event["id"]))
         self.assertEqual(undone["equipamento"]["apelido"], "HOST-INVALL")
         self.assertEqual(len(json.loads(self.manual_history.read_text(encoding="utf-8"))), 3)
