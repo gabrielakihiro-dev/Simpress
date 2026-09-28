@@ -51,7 +51,7 @@ Na pasta `planilhas_entrada`, confirme que existem:
 - `(MODELO) - TRANSFERENCIA SIMPRESS.xlsx`, usado para gerar a planilha final.
 - Pelo menos uma planilha `EquipamentosDetalhes*.xlsx` válida. No início, o sistema carrega a planilha válida mais recente dessa pasta.
 
-A planilha EquipamentosDetalhes precisa ter, na primeira linha, colunas equivalentes a número de série, apelido ou hostname, modelo e cidade. O arquivo `EquipamentosDetalhes_atual.xlsx` incluído no projeto atende a esse papel.
+A planilha EquipamentosDetalhes precisa ter, na primeira linha, colunas equivalentes a número de série, apelido ou hostname, modelo e cidade. As bases operacionais não são distribuídas pelo Git: coloque a cópia local necessária em `planilhas_entrada`.
 
 ### 5. Inicie o servidor
 
@@ -82,11 +82,22 @@ Para encerrar o servidor, volte à janela em que ele está rodando e pressione `
 ## Atualizar e comparar inventários
 
 1. Na aplicação, abra **Atualizar Planilhas**.
-2. Selecione o arquivo `.xlsx` do Endpoint e o arquivo `.xlsx` do EquipamentosDetalhes.
-3. Confira o resultado da comparação apresentado pelo sistema.
+2. Selecione os arquivos `.xlsx` do Endpoint e do EquipamentosDetalhes.
+3. Confira as listas de ausências por fonte, as divergências de local e os registros ambíguos apresentados pelo sistema. A comparação usa somente essas duas fontes; a base principal de equipamentos continua disponível para gerar as planilhas pelo botão de exportação.
 4. Consulte **Histórico planilhas** para rever comparações anteriores.
 
 O limite de envio é de 30 MB por arquivo. Antes de substituir os relatórios, confirme que são as versões corretas. O sistema guarda cópias anteriores em `planilhas_entrada/_backups`.
+
+O hostname vigente da InvAll é associado pelo número de série normalizado e prevalece sobre o apelido de EquipamentosDetalhes no site, na entrada rápida e na exportação. A exportação altera somente a coluna `Apelido`; abas, linhas, colunas, dimensões, demais valores e formatação do modelo são preservados. O Histórico planilhas registra, por série, o apelido anterior e o novo, separado do histórico de alterações manuais.
+
+## Interface e acessibilidade
+
+- **Atualizar planilhas** e **Nova transferência** ficam entre as ações principais. Histórico de alterações, Histórico planilhas, Exportar Excel e Catálogo de unidades ficam agrupados no menu secundário.
+- Use **Pular para o conteúdo principal** para ignorar o cabeçalho. A entrada de série recebe o foco inicial; na lista de resultados, use `↑` e `↓` para navegar, `Enter` para preencher e `Esc` para fechar.
+- Os diálogos recebem o foco ao abrir, mantêm a navegação por `Tab` dentro do conteúdo, fecham com `Esc` e devolvem o foco ao controle que os abriu. Mensagens de carregamento, sucesso, vazio e erro são anunciadas às tecnologias assistivas.
+- Tabelas largas podem ser percorridas horizontalmente sem ocultar colunas. O cabeçalho, os botões e as ações rápidas se reorganizam em telas menores; animações respeitam `prefers-reduced-motion`.
+
+Esta etapa não adiciona dependências, endpoints ou serviços remotos.
 
 ## Apelidos, unidades e histórico
 
@@ -95,7 +106,7 @@ O limite de envio é de 30 MB por arquivo. Antes de substituir os relatórios, c
 - Use **Histórico** para consultar alterações de apelido e, quando disponível, desfazer a alteração mais recente.
 - Use **Exportar Excel** para baixar a planilha com os apelidos atualizados.
 
-Esses arquivos ficam na pasta do projeto. Inclua-os no backup se precisar preservar alterações feitas durante o uso.
+Esses arquivos ficam na pasta do projeto e são ignorados pelo Git. Inclua-os no backup local se precisar preservar alterações feitas durante o uso.
 
 ## Estrutura principal
 
@@ -109,4 +120,6 @@ iniciar_servidor.bat    inicializador para Windows
 
 ## Dados e privacidade
 
-Este repositório contém planilhas de inventário operacional. Mantenha-o privado e confira os arquivos antes de compartilhar ou publicar uma cópia. O servidor atual atende somente `127.0.0.1` e não possui autenticação de usuário.
+As bases, backups, exportações e históricos operacionais ficam locais e são ignorados pelo Git; o modelo vazio de transferência permanece versionado. Não force a inclusão desses arquivos em commits nem compartilhe cópias com dados operacionais. O servidor atende somente `127.0.0.1`, aceita chamadas da própria origem da aplicação e não possui autenticação de usuário.
+
+Arquivos operacionais que já foram versionados permanecem recuperáveis no histórico Git local. Esta configuração impede novos rastreamentos, mas não reescreve esse histórico.

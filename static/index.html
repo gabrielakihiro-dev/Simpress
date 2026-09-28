@@ -94,13 +94,6 @@
       box-shadow: 0 0 0 2px rgba(56, 169, 247, 0.2);
     }
 
-    /* Pulse animation for scanner hint */
-    @keyframes scannerBeam {
-      0% { transform: translateY(0); opacity: 0.8; }
-      50% { opacity: 0.3; }
-      100% { transform: translateY(38px); opacity: 0.8; }
-    }
-
     /* Autocomplete High-End UI Styles */
     #autocomplete-box {
       background-color: #080e1c !important;
@@ -153,14 +146,113 @@
       border: 1px solid rgba(56, 169, 247, 0.5);
       box-shadow: 0 0 8px rgba(14, 140, 233, 0.3);
     }
+    :root { color-scheme: dark; }
+    html { scroll-behavior: smooth; }
+    button, input, select, textarea { font: inherit; }
+    button:not(:disabled), summary { cursor: pointer; }
+    button { min-height: 2.5rem; }
+    button:disabled { cursor: wait; opacity: 0.72; }
+    :focus-visible {
+      outline: 3px solid #7dd3fc !important;
+      outline-offset: 3px !important;
+      box-shadow: 0 0 0 2px #020617 !important;
+    }
+    .text-slate-500 { color: #a9b7c8 !important; }
+    .glass-input { border-color: rgba(148, 163, 184, 0.42); min-height: 2.625rem; font-size: 0.875rem !important; }
+    .glass-input::placeholder { color: #a9b7c8; opacity: 1; }
+    .glass-input:focus-visible { outline-offset: 2px !important; }
+    .skip-link {
+      position: fixed; top: 0.75rem; left: 0.75rem; z-index: 100;
+      transform: translateY(-180%); padding: 0.7rem 1rem; border-radius: 0.75rem;
+      background: #e0f2fe; color: #082f49; font-weight: 700;
+    }
+    .skip-link:focus { transform: translateY(0); }
+    .header-inner { height: auto !important; min-height: 5rem; padding-top: 0.75rem; padding-bottom: 0.75rem; gap: 1rem; }
+    .site-header { z-index: 60 !important; }
+    .header-brand { min-width: 0; }
+    .header-brand-copy { min-width: 0; }
+    .header-brand-subtitle { max-width: 26rem; }
+    .header-actions { min-width: 0; display: flex; align-items: center; justify-content: flex-end; gap: 0.625rem; }
+    .header-primary-actions { display: flex; align-items: center; gap: 0.5rem; }
+    .header-secondary-actions { position: relative; }
+    .header-secondary-actions > summary {
+      list-style: none; display: inline-flex; align-items: center; justify-content: center; gap: 0.45rem;
+      min-height: 2.75rem; padding: 0.55rem 0.8rem; border: 1px solid #475569; border-radius: 0.75rem;
+      background: #172033; color: #e2e8f0; font-size: 0.75rem; font-weight: 600;
+    }
+    .header-secondary-actions > summary::-webkit-details-marker { display: none; }
+    .header-secondary-actions:not([open]) > .header-secondary-panel { display: none; }
+    .header-secondary-panel {
+      position: absolute; z-index: 80; top: calc(100% + 0.5rem); right: 0; width: min(24rem, calc(100vw - 2rem));
+      display: grid; grid-template-columns: 1fr; gap: 0.5rem; padding: 0.625rem;
+      border: 1px solid #334155; border-radius: 1rem; background: #0b1220;
+      box-shadow: 0 24px 48px rgba(0, 0, 0, 0.55);
+    }
+    .header-secondary-panel > button { width: 100%; min-height: 2.75rem; justify-content: flex-start; text-align: left; }
+    .quick-actions { padding-bottom: max(1rem, env(safe-area-inset-bottom)); }
+    .quick-actions-status, #status-summary, .quick-actions-buttons { min-width: 0; }
+    [role="dialog"] { overscroll-behavior: contain; }
+    body.dialog-open { overflow: hidden; }
+    .accessible-table-wrap { max-width: 100%; overflow-x: auto; overscroll-behavior-inline: contain; }
+    .accessible-table-wrap th, .accessible-table-wrap td { vertical-align: top; }
+    .accessible-table-wrap th { color: #cbd5e1; font-size: 0.8rem; }
+    .accessible-table-wrap td { font-size: 0.8rem; line-height: 1.45; }
+
+    @media (max-width: 900px) {
+      .header-inner { height: auto !important; flex-wrap: wrap; gap: 0.75rem; }
+      .header-inner > [aria-label="Resumo da base"] { display: none !important; }
+      .header-brand { flex: 1 1 100%; }
+      .header-actions { width: 100%; display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); }
+      .header-primary-actions { display: contents; }
+      .header-secondary-actions { grid-column: 1 / -1; }
+      .header-primary-actions > button, .header-secondary-actions > summary { width: 100%; min-width: 0; justify-content: center; }
+    }
+
+    @media (max-width: 640px) {
+      .header-inner { align-items: stretch !important; flex-direction: column; padding-left: 1rem !important; padding-right: 1rem !important; }
+      .header-brand { align-self: flex-start; }
+      .header-brand-subtitle { display: none; }
+      .header-actions { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 0.5rem; }
+      .header-primary-actions { display: contents; }
+      .header-primary-actions > button, .header-secondary-actions > summary { width: 100%; min-width: 0; min-height: 2.75rem; justify-content: center; text-align: center; }
+      .header-primary-actions > button { padding-left: 0.5rem; padding-right: 0.5rem; white-space: normal; }
+      .header-secondary-actions { grid-column: 1 / -1; }
+      .header-secondary-panel { left: 0; right: 0; width: auto; grid-template-columns: repeat(2, minmax(0, 1fr)); }
+      .quick-actions { padding: 0.65rem 0.75rem max(0.65rem, env(safe-area-inset-bottom)) !important; }
+      .quick-actions-inner { align-items: stretch !important; gap: 0.55rem !important; }
+      .quick-actions-status { gap: 0.55rem !important; font-size: 0.75rem; }
+      .quick-actions-buttons { display: grid !important; grid-template-columns: minmax(0, 0.85fr) minmax(0, 1.7fr); gap: 0.5rem !important; width: 100% !important; }
+      .quick-actions-buttons > button { min-width: 0; min-height: 2.85rem; justify-content: center; padding: 0.55rem 0.65rem; text-align: center; white-space: normal; }
+      .autocomplete-row { flex-wrap: wrap; align-items: flex-start; }
+      .autocomplete-row > div:first-child { flex-wrap: wrap; }
+      .autocomplete-row .ml-2 { margin-left: 0; }
+      .autocomplete-alias { display: inline-flex !important; white-space: normal; overflow-wrap: anywhere; }
+      .modal-panel { width: 100% !important; max-height: calc(100dvh - 1rem) !important; padding: 1rem !important; }
+      #lista-historico-apelidos, #lista-historico-comparacoes { min-width: 0; }
+    }
+    @media (max-width: 380px) {
+      .header-brand .brand-name { font-size: 1rem; }
+      .header-secondary-panel { grid-template-columns: 1fr; }
+      .quick-actions-buttons > button { font-size: 0.75rem; }
+    }
+    @media (prefers-reduced-motion: reduce) {
+      *, *::before, *::after {
+        scroll-behavior: auto !important;
+        animation-duration: 0.01ms !important;
+        animation-iteration-count: 1 !important;
+        transition-duration: 0.01ms !important;
+      }
+    }
   </style>
 </head>
 <body class="min-h-full bg-gradient-to-br from-slate-950 via-slate-900 to-slate-950 text-slate-100 flex flex-col font-sans selection:bg-brand-500 selection:text-white pb-28">
 
+  <a class="skip-link" href="#main-content">Pular para o conteúdo principal</a>
+
   <!-- TOP HEADER -->
-  <header class="border-b border-slate-800/80 bg-slate-950/80 backdrop-blur-md sticky top-0 z-40">
-    <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 h-20 flex items-center justify-between">
-      <div class="flex items-center space-x-4">
+  <header class="site-header border-b border-slate-800/80 bg-slate-950/80 backdrop-blur-md sticky top-0 z-40">
+    <div class="header-inner max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 h-20 flex items-center justify-between">
+      <div class="header-brand flex items-center space-x-4">
         <!-- Logo Badge -->
         <div class="flex items-center space-x-3">
           <div class="w-11 h-11 rounded-xl bg-gradient-to-tr from-brand-600 to-cyan-400 p-[2px] shadow-glow-blue flex items-center justify-center">
@@ -170,116 +262,108 @@
           </div>
           <div>
             <div class="flex items-center space-x-2">
-              <span class="font-bold text-lg text-white tracking-tight">SIMPRESS</span>
+              <span class="brand-name font-bold text-lg text-white tracking-tight">SIMPRESS</span>
               <span class="text-xs px-2 py-0.5 rounded-full bg-blue-500/20 text-blue-300 font-semibold border border-blue-500/30">SEBRAE/PR</span>
             </div>
-            <p class="text-xs text-slate-400">Emissão Automatizada de Transferência de Equipamentos</p>
+            <p class="header-brand-subtitle text-xs text-slate-400">Emissão Automatizada de Transferência de Equipamentos</p>
           </div>
         </div>
       </div>
 
-      <!-- Quick Metrics & Status -->
-      <div class="flex items-center space-x-3">
-        <div class="hidden md:flex items-center space-x-4 text-xs text-slate-400 bg-slate-900/80 px-3.5 py-2 rounded-lg border border-slate-800">
-          <div class="flex items-center space-x-2">
-            <span class="w-2 h-2 rounded-full bg-emerald-400 animate-pulse"></span>
-            <span>Base: <strong class="text-slate-200" id="stat-equipamentos">1.364</strong> Equipamentos</span>
-          </div>
-          <span class="text-slate-700">|</span>
-          <div>
-            <span>Regionais: <strong class="text-slate-200" id="stat-unidades">30</strong> Unidades</span>
-          </div>
-          <span class="text-slate-700">|</span>
-          <div>
-            <span>Contrato: <strong class="text-slate-200">16467</strong></span>
-          </div>
-        </div>
-
-        <!-- Sync & Manage Buttons -->
-        <button onclick="abrirModalHistoricoApelidos()" id="btn-historico-apelidos" class="flex items-center space-x-1.5 px-3 py-2 text-xs font-medium text-violet-300 bg-violet-950/40 hover:bg-violet-900/60 border border-violet-500/30 rounded-lg transition-all shadow-sm" title="Consultar alterações e desfazer a mais recente por equipamento">
-          <i data-lucide="history" class="w-3.5 h-3.5 text-violet-400"></i>
-          <span class="hidden sm:inline">Histórico</span>
-          <span id="badge-total-historico-apelidos" class="hidden sm:inline text-[10px] text-violet-200">0</span>
-        </button>
-
-        <button onclick="abrirModalHistoricoComparacoes()" id="btn-historico-comparacoes" class="flex items-center space-x-1.5 px-3 py-2 text-xs font-medium text-cyan-300 bg-cyan-950/40 hover:bg-cyan-900/60 border border-cyan-500/30 rounded-lg transition-all shadow-sm" title="Consultar resultados anteriores de Atualizar Planilhas">
-          <i data-lucide="history" class="w-3.5 h-3.5 text-cyan-400"></i>
-          <span class="hidden lg:inline">Histórico planilhas</span>
-          <span id="badge-total-historico-comparacoes" class="text-[10px] text-cyan-200">0</span>
-        </button>
-
-        <button onclick="abrirModalAtualizarPlanilhas()" id="btn-atualizar-planilhas" class="flex items-center space-x-1.5 px-3 py-2 text-xs font-medium text-sky-300 bg-sky-950/40 hover:bg-sky-900/60 border border-sky-500/30 rounded-lg transition-all shadow-sm" title="Enviar Endpoint e EquipamentosDetalhes para atualizar o site">
-          <i data-lucide="upload" class="w-3.5 h-3.5 text-sky-400"></i>
-          <span class="hidden lg:inline">Atualizar Planilhas</span>
-        </button>
-
-        <button onclick="exportarEquipamentosAtualizados()" id="btn-exportar-equipamentos" class="hidden flex items-center space-x-1.5 px-3 py-2 text-xs font-medium text-emerald-300 bg-emerald-950/40 hover:bg-emerald-900/60 border border-emerald-500/30 rounded-lg transition-all shadow-sm" title="Baixar o modelo de equipamentos com os apelidos atualizados">
-          <i data-lucide="file-spreadsheet" class="w-3.5 h-3.5 text-emerald-400"></i>
-          <span class="hidden sm:inline">Exportar Excel</span>
-        </button>
-
-        <button onclick="abrirModalGerenciarUnidades()" class="flex items-center space-x-1.5 px-3 py-2 text-xs font-medium text-amber-300 bg-amber-950/40 hover:bg-amber-900/60 border border-amber-500/30 rounded-lg transition-all shadow-sm" title="Ver e gerenciar catálogo de endereços das Regionais SEBRAE">
-          <i data-lucide="map-pin" class="w-3.5 h-3.5 text-amber-400"></i>
-          <span class="hidden sm:inline">Regionais SEBRAE</span>
-        </button>
-
-        <button onclick="resetarFormulario()" class="flex items-center space-x-1.5 px-3 py-2 text-xs font-medium text-slate-300 bg-slate-800/80 hover:bg-slate-700 border border-slate-700 rounded-lg transition-all shadow-sm hover:text-white" title="Limpar formulário e iniciar nova transferência">
-          <i data-lucide="rotate-ccw" class="w-3.5 h-3.5"></i>
-          <span class="hidden lg:inline">Nova Transferência</span>
-        </button>
+      <div class="hidden md:flex items-center gap-3 text-xs text-slate-400 bg-slate-900/80 px-3.5 py-2 rounded-lg border border-slate-800" aria-label="Resumo da base">
+        <span>Base: <strong class="text-slate-200" id="stat-equipamentos">1.364</strong> equipamentos</span>
+        <span aria-hidden="true" class="text-slate-700">|</span>
+        <span>Regionais: <strong class="text-slate-200" id="stat-unidades">30</strong></span>
+        <span aria-hidden="true" class="text-slate-700">|</span>
+        <span>Contrato: <strong class="text-slate-200">16467</strong></span>
       </div>
+
+      <nav class="header-actions" aria-label="Ações do sistema">
+        <div class="header-primary-actions">
+          <button type="button" onclick="abrirModalAtualizarPlanilhas()" id="btn-atualizar-planilhas" class="flex items-center gap-1.5 px-3 py-2 text-xs font-semibold text-sky-100 bg-sky-700 hover:bg-sky-600 border border-sky-500/70 rounded-lg transition-all shadow-sm" title="Comparar os arquivos e atualizar as bases do site">
+            <i data-lucide="upload" class="w-3.5 h-3.5" aria-hidden="true"></i>
+            <span>Atualizar planilhas</span>
+          </button>
+          <button type="button" onclick="resetarFormulario()" id="btn-nova-transferencia" class="flex items-center gap-1.5 px-3 py-2 text-xs font-medium text-slate-200 bg-slate-800 hover:bg-slate-700 border border-slate-600 rounded-lg transition-all shadow-sm" title="Limpar o formulário e iniciar uma nova transferência">
+            <i data-lucide="rotate-ccw" class="w-3.5 h-3.5" aria-hidden="true"></i>
+            <span>Nova transferência</span>
+          </button>
+        </div>
+        <details class="header-secondary-actions">
+          <summary aria-label="Abrir histórico, exportação e catálogo de unidades">
+            <i data-lucide="ellipsis" class="w-4 h-4" aria-hidden="true"></i>
+            <span>Histórico, exportação e unidades</span>
+            <i data-lucide="chevron-down" class="w-3.5 h-3.5" aria-hidden="true"></i>
+          </summary>
+          <div class="header-secondary-panel">
+            <button type="button" onclick="abrirModalHistoricoApelidos()" id="btn-historico-apelidos" aria-label="Histórico de alterações manuais de apelido e endereço" aria-labelledby="label-historico-apelidos" class="flex items-center gap-1.5 px-3 py-2 text-xs font-medium text-violet-200 bg-violet-950/60 hover:bg-violet-900/70 border border-violet-500/40 rounded-lg transition-all shadow-sm" title="Consultar alterações manuais de apelido e endereço">
+              <i data-lucide="history" class="w-3.5 h-3.5 text-violet-300" aria-hidden="true"></i>
+              <span id="label-historico-apelidos">Histórico de alterações</span>
+              <span id="badge-total-historico-apelidos" class="text-[10px] text-violet-100">0</span>
+            </button>
+            <button type="button" onclick="abrirModalHistoricoComparacoes()" id="btn-historico-comparacoes" aria-label="Histórico de atualizações e comparação de planilhas" aria-labelledby="label-historico-comparacoes" class="flex items-center gap-1.5 px-3 py-2 text-xs font-medium text-cyan-100 bg-cyan-950/60 hover:bg-cyan-900/70 border border-cyan-500/40 rounded-lg transition-all shadow-sm" title="Consultar comparações e alterações de apelido feitas pela atualização das planilhas">
+              <i data-lucide="history" class="w-3.5 h-3.5 text-cyan-300" aria-hidden="true"></i>
+              <span id="label-historico-comparacoes">Histórico planilhas</span>
+              <span id="badge-total-historico-comparacoes" class="text-[10px] text-cyan-100">0</span>
+            </button>
+            <button type="button" onclick="exportarEquipamentosAtualizados()" id="btn-exportar-equipamentos" aria-label="Exportar planilha Excel com apelidos atualizados" aria-labelledby="label-exportar-equipamentos" class="hidden flex items-center gap-1.5 px-3 py-2 text-xs font-medium text-emerald-100 bg-emerald-950/60 hover:bg-emerald-900/70 border border-emerald-500/40 rounded-lg transition-all shadow-sm" title="Baixar a planilha com os apelidos atualizados">
+              <i data-lucide="file-spreadsheet" class="w-3.5 h-3.5 text-emerald-300" aria-hidden="true"></i>
+              <span id="label-exportar-equipamentos">Exportar Excel</span>
+            </button>
+            <button type="button" onclick="abrirModalGerenciarUnidades()" aria-label="Catálogo de unidades SEBRAE" aria-labelledby="label-catalogo-unidades" class="flex items-center gap-1.5 px-3 py-2 text-xs font-medium text-amber-100 bg-amber-950/60 hover:bg-amber-900/70 border border-amber-500/40 rounded-lg transition-all shadow-sm" title="Consultar e gerenciar o catálogo de unidades SEBRAE">
+              <i data-lucide="map-pin" class="w-3.5 h-3.5 text-amber-300" aria-hidden="true"></i>
+              <span id="label-catalogo-unidades">Catálogo de unidades</span>
+            </button>
+          </div>
+        </details>
+      </nav>
     </div>
   </header>
 
   <!-- MAIN CONTAINER -->
-  <main class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 pt-8 pb-12 flex-1 w-full space-y-8">
+  <main id="main-content" class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 pt-8 pb-12 flex-1 w-full space-y-8">
 
-    <!-- 1. BARRA DE ENTRADA RÁPIDA (BIPAGEM / SERIAL) -->
+    <!-- 1. BUSCA DE EQUIPAMENTO POR NÚMERO DE SÉRIE -->
     <section class="glass-card rounded-2xl p-6 shadow-2xl relative z-50">
       <div class="absolute inset-0 rounded-2xl overflow-hidden pointer-events-none">
         <div class="absolute -right-16 -top-16 w-64 h-64 bg-brand-500/10 rounded-full blur-3xl"></div>
       </div>
 
-      <div class="flex flex-col lg:flex-row lg:items-center justify-between gap-4 mb-4">
-        <div>
-          <h2 class="text-lg font-bold text-white flex items-center space-x-2">
-            <i data-lucide="scan-barcode" class="w-5 h-5 text-brand-400"></i>
-            <span>Entrada Rápida de Equipamento</span>
-          </h2>
-          <p class="text-xs text-slate-400 mt-0.5">
-            Biper com leitor de código de barras ou digite o serial do equipamento (busca imediata no <kbd class="px-1.5 py-0.5 text-[10px] font-mono bg-slate-800 border border-slate-700 rounded text-slate-300">Enter</kbd>).
-          </p>
-        </div>
-
-        <!-- Serial Demo Pill Button -->
-        <div class="flex items-center space-x-2 text-xs">
-          <span class="text-slate-400">Exemplo rápido:</span>
-          <button type="button" onclick="carregarExemploSerial('5CG6051BVN')" class="px-2.5 py-1 rounded-md bg-brand-500/10 hover:bg-brand-500/20 text-brand-300 border border-brand-500/30 font-mono transition-colors flex items-center space-x-1.5">
-            <span>5CG6051BVN</span>
-            <i data-lucide="sparkles" class="w-3 h-3 text-brand-400"></i>
-          </button>
-        </div>
+      <div class="mb-4">
+        <h2 class="text-lg font-bold text-white flex items-center space-x-2">
+          <i data-lucide="search" class="w-5 h-5 text-brand-400"></i>
+          <span>Buscar equipamento</span>
+        </h2>
+        <p id="serial-help" class="text-xs text-slate-400 mt-0.5">
+          Digite o número de série e clique em Buscar equipamento.
+        </p>
       </div>
 
       <div class="relative">
         <form onsubmit="event.preventDefault(); buscarSerial();" class="flex flex-col sm:flex-row gap-3">
           <div class="relative flex-1">
-            <div class="absolute inset-y-0 left-0 pl-4 flex items-center pointer-events-none text-slate-400">
-              <i data-lucide="barcode" class="w-6 h-6 text-brand-400"></i>
-            </div>
             <input
               type="text"
               id="input-serial"
+              role="combobox"
+              aria-label="Número de série do equipamento"
+              aria-describedby="serial-help"
+              aria-autocomplete="list"
+              aria-controls="autocomplete-list"
+              aria-expanded="false"
+              aria-haspopup="listbox"
               autofocus
               autocomplete="off"
-              placeholder="Digite ou bipe o Número de Série (ex: 5CG6051BVN)..."
-              class="w-full pl-12 pr-12 py-3.5 rounded-xl glass-input text-white font-mono text-base tracking-wider placeholder:text-slate-500 placeholder:font-sans focus:outline-none uppercase"
+              placeholder="Digite o número de série do equipamento..."
+              class="w-full pl-4 pr-12 py-3.5 rounded-xl glass-input text-white font-mono text-base tracking-wider placeholder:text-slate-500 placeholder:font-sans focus:outline-none uppercase"
               oninput="handleSerialInput(this.value)"
               onkeydown="handleSerialKeydown(event)"
             />
             <button
               type="button"
               id="btn-clear-serial"
+              aria-label="Limpar número de série"
+              title="Limpar número de série"
               onclick="limparSerial()"
               class="hidden absolute inset-y-0 right-0 pr-3.5 flex items-center text-slate-400 hover:text-white transition-colors"
             >
@@ -316,7 +400,7 @@
               </span>
             </div>
             <div class="flex items-center space-x-3">
-              <span id="autocomplete-count" class="px-2.5 py-0.5 rounded-full bg-cyan-500/20 text-cyan-300 border border-cyan-500/30 font-mono text-[11px] font-bold">
+              <span id="autocomplete-count" role="status" aria-live="polite" aria-atomic="true" class="px-2.5 py-0.5 rounded-full bg-cyan-500/20 text-cyan-300 border border-cyan-500/30 font-mono text-[11px] font-bold">
                 0 itens
               </span>
               <span class="hidden sm:inline-flex items-center text-[10px] text-slate-400 space-x-1">
@@ -330,7 +414,8 @@
           </div>
 
           <!-- Items List Container -->
-          <div id="autocomplete-list" class="divide-y divide-slate-800/80 max-h-96 overflow-y-auto" style="background-color: #080e1c !important;"></div>
+          <div id="autocomplete-list" role="listbox" aria-label="Equipamentos encontrados" class="divide-y divide-slate-800/80 max-h-96 overflow-y-auto" style="background-color: #080e1c !important;"></div>
+          <div id="autocomplete-empty-state" class="hidden" role="region" aria-label="Resultado da busca" aria-live="polite"></div>
 
           <!-- Footer Tips -->
           <div
@@ -347,7 +432,7 @@
       </div>
 
       <!-- CARD: EQUIPAMENTO ENCONTRADO -->
-      <div id="card-equipamento" class="hidden mt-6 bg-slate-800/40 rounded-xl border border-slate-700/70 p-5 transition-all">
+      <div id="card-equipamento" role="region" aria-label="Dados do equipamento localizado" class="hidden mt-6 bg-slate-800/40 rounded-xl border border-slate-700/70 p-5 transition-all">
         <div class="flex flex-col lg:flex-row lg:items-center justify-between gap-4 pb-4 border-b border-slate-700/50">
           <div class="flex items-start sm:items-center space-x-4">
             <div id="equip-icon-box" class="w-14 h-14 rounded-xl bg-emerald-500/10 border border-emerald-500/30 flex items-center justify-center shrink-0 text-emerald-400">
@@ -374,6 +459,7 @@
                   <span>Editar Apelido</span>
                 </button>
               </div>
+              <p id="badge-apelido-status" class="hidden text-[11px] text-amber-200 mt-1" role="status" aria-live="polite"></p>
               <h3 id="card-modelo" class="text-lg font-bold text-white mt-1">HP EB 6 G1I</h3>
               <p id="card-id-cliente" class="text-xs text-slate-400">Id Cliente: Note diretoria Tipo 2</p>
             </div>
@@ -442,16 +528,6 @@
             </div>
           </div>
 
-          <!-- BOTÃO RÁPIDO: FORÇAR SEDE PRADO VELHO -->
-          <button
-            type="button"
-            onclick="forcarSedePradoVelho()"
-            class="flex items-center space-x-1.5 px-3 py-1.5 text-xs font-semibold rounded-lg bg-amber-500/10 hover:bg-amber-500/20 text-amber-300 border border-amber-500/30 transition-all hover:scale-105 active:scale-95"
-            title="Caso o equipamento já esteja em Curitiba na Sede"
-          >
-            <i data-lucide="building-2" class="w-3.5 h-3.5"></i>
-            <span>Forçar SEDE Prado Velho</span>
-          </button>
         </div>
 
         <div class="p-6 space-y-4 flex-1">
@@ -560,12 +636,15 @@
                 />
               </div>
               <div>
-                <label class="block text-[11px] text-slate-400 mb-1">Telefone:</label>
+                <label class="block text-[11px] text-slate-400 mb-1">Telefone / Ramal:</label>
                 <input
                   type="text"
                   id="retirada-telefone"
-                  value="(41) 9 98751-2389"
+                  value="(41) 98751-2389"
                   class="w-full px-3 py-2 rounded-lg glass-input text-xs text-slate-200 focus:outline-none font-mono"
+                  inputmode="tel"
+                  autocomplete="tel"
+                  placeholder="(00) 9xxxx-xxxx"
                 />
               </div>
             </div>
@@ -702,7 +781,9 @@
                     type="text"
                     id="entrega-telefone"
                     class="w-full px-3 py-2 rounded-lg glass-input text-xs text-slate-100 focus:outline-none font-mono"
-                    placeholder="(41) 9 xxxx-xxxx"
+                    inputmode="tel"
+                    autocomplete="tel"
+                    placeholder="(00) 9xxxx-xxxx"
                   />
                 </div>
               </div>
@@ -771,19 +852,19 @@
   <!-- ========================================== -->
   <!-- BARRA INFERIOR FIXA DE AÇÕES RÁPIDAS      -->
   <!-- ========================================== -->
-  <aside aria-label="Painel de Ações Rápidas" class="fixed bottom-0 inset-x-0 bg-slate-950/90 backdrop-blur-xl border-t border-slate-800/90 py-4 px-4 sm:px-8 z-30 shadow-2xl">
-    <div class="max-w-7xl mx-auto flex flex-col sm:flex-row items-center justify-between gap-4">
+  <aside aria-label="Painel de Ações Rápidas" class="quick-actions fixed bottom-0 inset-x-0 bg-slate-950/90 backdrop-blur-xl border-t border-slate-800/90 py-4 px-4 sm:px-8 z-30 shadow-2xl">
+    <div class="quick-actions-inner max-w-7xl mx-auto flex flex-col sm:flex-row items-center justify-between gap-4">
       <!-- Quick Status Text -->
-      <div class="flex items-center space-x-3 text-xs text-slate-400">
-        <div class="w-2.5 h-2.5 rounded-full bg-brand-400" id="status-indicator"></div>
-        <div id="status-summary">
+      <div class="quick-actions-status flex items-center space-x-3 text-xs text-slate-400">
+        <div class="w-2.5 h-2.5 rounded-full bg-brand-400" id="status-indicator" aria-hidden="true"></div>
+        <div id="status-summary" role="status" aria-live="polite" aria-atomic="true">
           <span class="text-slate-300 font-medium">Pronto para emissão.</span>
           <span class="hidden md:inline text-slate-500">Verifique os dados antes de gerar a planilha oficial Simpress.</span>
         </div>
       </div>
 
       <!-- Action Buttons -->
-      <div class="flex items-center space-x-3 w-full sm:w-auto justify-end">
+      <div class="quick-actions-buttons flex items-center space-x-3 w-full sm:w-auto justify-end">
         <!-- Preview Modal Button -->
         <button
           type="button"
@@ -819,8 +900,8 @@
           <i data-lucide="file-text" class="w-5 h-5 text-brand-400"></i>
           <h3 class="text-base font-bold text-white">Resumo Estruturado da Transferência</h3>
         </div>
-        <button onclick="fecharModalPreview()" class="text-slate-400 hover:text-white transition">
-          <i data-lucide="x" class="w-5 h-5"></i>
+        <button type="button" onclick="fecharModalPreview()" class="text-slate-400 hover:text-white transition" aria-label="Fechar resumo">
+          <i data-lucide="x" class="w-5 h-5" aria-hidden="true"></i>
         </button>
       </div>
 
@@ -873,8 +954,8 @@
             <p class="text-xs text-slate-400">As alterações serão salvas no site e gravadas diretamente na planilha oficial Excel.</p>
           </div>
         </div>
-        <button onclick="fecharModalEditarEquipamento()" class="text-slate-400 hover:text-white p-1 rounded-lg hover:bg-slate-800 transition">
-          <i data-lucide="x" class="w-5 h-5"></i>
+        <button type="button" onclick="fecharModalEditarEquipamento()" class="text-slate-400 hover:text-white p-1 rounded-lg hover:bg-slate-800 transition" aria-label="Fechar edição do equipamento">
+          <i data-lucide="x" class="w-5 h-5" aria-hidden="true"></i>
         </button>
       </div>
 
@@ -1028,8 +1109,8 @@
           <i data-lucide="x" class="w-5 h-5"></i>
         </button>
       </div>
-      <div id="lista-historico-apelidos" class="overflow-auto flex-1 py-4">
-        <p class="text-sm text-slate-400 text-center py-8">Carregando histórico...</p>
+      <div id="lista-historico-apelidos" aria-label="Eventos de alterações manuais" class="overflow-auto flex-1 py-4">
+        <p class="text-sm text-slate-400 text-center py-8" role="status" aria-live="polite">Carregando histórico...</p>
       </div>
       <div class="pt-3 border-t border-slate-800 flex justify-end shrink-0">
         <button type="button" onclick="fecharModalHistoricoApelidos()" class="px-4 py-2 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-300 text-xs transition">Fechar</button>
@@ -1056,8 +1137,8 @@
             <p class="text-xs text-slate-400">Consulte ou cadastre endereços e CNPJs oficiais das filiais.</p>
           </div>
         </div>
-        <button onclick="fecharModalGerenciarUnidades()" class="text-slate-400 hover:text-white p-1 rounded-lg hover:bg-slate-800 transition">
-          <i data-lucide="x" class="w-5 h-5"></i>
+        <button type="button" onclick="fecharModalGerenciarUnidades()" class="text-slate-400 hover:text-white p-1 rounded-lg hover:bg-slate-800 transition" aria-label="Fechar catálogo de unidades">
+          <i data-lucide="x" class="w-5 h-5" aria-hidden="true"></i>
         </button>
       </div>
 
@@ -1132,7 +1213,7 @@
     </div>
   </div>
 
-  <!-- MODAL PARA ATUALIZAR AS DUAS PLANILHAS -->
+  <!-- MODAL PARA COMPARAR ENDPOINT E EQUIPAMENTOSDETALHES -->
   <div id="modal-atualizar-planilhas" class="fixed inset-0 bg-slate-950/85 backdrop-blur-md z-[70] hidden flex items-center justify-center p-4">
     <div class="bg-slate-900 border border-sky-500/30 rounded-2xl max-w-2xl w-full p-6 shadow-2xl flex flex-col max-h-[92vh] overflow-hidden">
       <div class="flex items-start justify-between gap-4 pb-4 border-b border-slate-800 shrink-0">
@@ -1141,7 +1222,7 @@
             <i data-lucide="upload" class="w-5 h-5 text-sky-400"></i>
             Atualizar planilhas
           </h3>
-          <p class="text-xs text-slate-400 mt-1">Envie Endpoint e EquipamentosDetalhes. O nome pode ser diferente; o site identifica cada planilha pelos cabeçalhos.</p>
+          <p class="text-xs text-slate-400 mt-1">Selecione os dois arquivos da comparação. O nome pode variar; o site valida os cabeçalhos antes de atualizar.</p>
         </div>
         <button type="button" onclick="fecharModalAtualizarPlanilhas()" class="text-slate-400 hover:text-white p-1 rounded-lg hover:bg-slate-800 transition" aria-label="Fechar">
           <i data-lucide="x" class="w-5 h-5"></i>
@@ -1163,8 +1244,8 @@
           <span id="upload-details-name" class="block text-[11px] text-slate-500 mt-2">Nenhum arquivo selecionado</span>
         </label>
 
-        <p class="text-[11px] text-slate-500">Cada arquivo pode ter até 30 MB. O site valida os dois antes de substituir as versões atuais e guarda as anteriores em uma pasta de backup.</p>
-        <p id="upload-planilhas-status" class="hidden text-xs rounded-lg px-3 py-2"></p>
+        <p class="text-[11px] text-slate-500">Cada arquivo pode ter até 30 MB. Endpoint e EquipamentosDetalhes entram na comparação; as versões anteriores são guardadas em backup.</p>
+      <p id="upload-planilhas-status" class="hidden text-xs rounded-lg px-3 py-2" role="status" aria-live="polite" aria-atomic="true"></p>
       </div>
 
       <div class="pt-4 border-t border-slate-800 flex justify-end gap-2 shrink-0">
@@ -1214,7 +1295,7 @@
           <i data-lucide="x" class="w-5 h-5"></i>
         </button>
       </div>
-      <div id="lista-historico-comparacoes" class="overflow-auto flex-1 py-4 space-y-3"></div>
+      <div id="lista-historico-comparacoes" aria-label="Atualizações registradas" class="overflow-auto flex-1 py-4 space-y-3"></div>
       <div class="pt-3 border-t border-slate-800 flex justify-end shrink-0">
         <button type="button" onclick="fecharModalHistoricoComparacoes()" class="px-4 py-2 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-300 text-xs transition">Fechar</button>
       </div>
@@ -1222,7 +1303,7 @@
   </div>
 
   <!-- TOAST NOTIFICATION CONTAINER -->
-  <div id="toast-container" class="fixed top-24 right-6 z-50 space-y-2 pointer-events-none"></div>
+  <div id="toast-container" role="region" aria-label="Notificações" aria-live="polite" aria-relevant="additions text" aria-atomic="false" class="fixed top-24 right-6 z-50 space-y-2 pointer-events-none"></div>
 
   <!-- JAVASCRIPT APPLICATION LOGIC -->
   <script>
@@ -1230,10 +1311,216 @@
     let currentEquipamento = null;
     let unidadesList = [];
     let debounceTimer = null;
+    const modalReturnFocus = new Map();
 
-    // Initialize Lucide icons
+    function abrirModalAcessivel(modalId, initialFocusSelector, closeFunction) {
+      const modal = document.getElementById(modalId);
+      if (!modal) return;
+
+      const openModals = [...document.querySelectorAll('[data-accessible-modal="true"]')]
+        .filter(item => !item.classList.contains("hidden"));
+      const previousModal = openModals[openModals.length - 1];
+      if (previousModal && previousModal !== modal) {
+        previousModal.inert = true;
+        previousModal.setAttribute("aria-hidden", "true");
+      }
+
+      if (!modalReturnFocus.has(modal)) modalReturnFocus.set(modal, document.activeElement);
+      modal.classList.remove("hidden");
+      modal.dataset.accessibleModal = "true";
+      modal.dataset.closeFunction = closeFunction;
+
+      const dialog = modal.firstElementChild;
+      if (!dialog) return;
+      dialog.setAttribute("role", "dialog");
+      dialog.setAttribute("aria-modal", "true");
+      dialog.setAttribute("tabindex", "-1");
+      dialog.classList.add("modal-panel");
+      const heading = dialog.querySelector("h1, h2, h3");
+      if (heading) {
+        if (!heading.id) heading.id = `${modalId}-titulo`;
+        dialog.setAttribute("aria-labelledby", heading.id);
+      }
+
+      document.body.classList.add("dialog-open");
+      lucide.createIcons({ root: modal });
+      requestAnimationFrame(() => {
+        const preferred = initialFocusSelector ? dialog.querySelector(initialFocusSelector) : null;
+        const target = preferred && !preferred.disabled ? preferred : dialog;
+        target.focus({ preventScroll: true });
+      });
+    }
+
+    function fecharModalAcessivel(modalId) {
+      const modal = document.getElementById(modalId);
+      if (!modal || modal.classList.contains("hidden")) return;
+      modal.classList.add("hidden");
+      const returnFocus = modalReturnFocus.get(modal);
+      modalReturnFocus.delete(modal);
+
+      const openModals = [...document.querySelectorAll('[data-accessible-modal="true"]')]
+        .filter(item => !item.classList.contains("hidden"));
+      const activeModal = openModals[openModals.length - 1];
+      if (activeModal) {
+        activeModal.inert = false;
+        activeModal.removeAttribute("aria-hidden");
+        const target = returnFocus && activeModal.contains(returnFocus)
+          ? returnFocus
+          : activeModal.firstElementChild;
+        target?.focus({ preventScroll: true });
+        return;
+      }
+
+      document.body.classList.remove("dialog-open");
+      if (returnFocus instanceof HTMLElement && returnFocus.isConnected && !returnFocus.closest(".hidden") && returnFocus.getClientRects().length) {
+        returnFocus.focus({ preventScroll: true });
+      } else {
+        const fallback = document.querySelector(".header-secondary-actions > summary") || document.getElementById("input-serial");
+        fallback?.focus({ preventScroll: true });
+      }
+    }
+
+    document.addEventListener("keydown", event => {
+      const openModals = [...document.querySelectorAll('[data-accessible-modal="true"]')]
+        .filter(item => !item.classList.contains("hidden"));
+      const modal = openModals[openModals.length - 1];
+      if (!modal) {
+        if (event.key === "Escape") {
+          const disclosure = [...document.querySelectorAll("details[open]")].pop();
+          if (disclosure) {
+            disclosure.open = false;
+            disclosure.querySelector("summary")?.focus();
+          }
+        }
+        return;
+      }
+
+      if (event.key === "Escape") {
+        event.preventDefault();
+        const close = window[modal.dataset.closeFunction];
+        if (typeof close === "function") close();
+        return;
+      }
+
+      if (event.key !== "Tab") return;
+      const dialog = modal.firstElementChild;
+      const focusable = [...dialog.querySelectorAll(
+        'a[href], button:not([disabled]), input:not([disabled]):not([type="hidden"]), select:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex="-1"])'
+      )].filter(element => element.getClientRects().length && !element.closest("[inert]"));
+      if (!focusable.length) {
+        event.preventDefault();
+        dialog.focus();
+        return;
+      }
+      const first = focusable[0];
+      const last = focusable[focusable.length - 1];
+      if (event.shiftKey && (document.activeElement === first || !modal.contains(document.activeElement))) {
+        event.preventDefault();
+        last.focus();
+      } else if (!event.shiftKey && (document.activeElement === last || !modal.contains(document.activeElement))) {
+        event.preventDefault();
+        first.focus();
+      }
+    });
+
+    function associarRotulosAcessiveis() {
+      const fallbackLabels = new Map([
+        ["input-serial", "Número de série do equipamento"],
+        ["textarea-resumo-preview", "Resumo da transferência"],
+      ]);
+      document.querySelectorAll('input:not([type="hidden"]), select, textarea').forEach(control => {
+        if (control.labels?.length || control.hasAttribute("aria-label") || control.hasAttribute("aria-labelledby")) return;
+        if (!control.id) control.id = `campo-${Math.random().toString(36).slice(2, 9)}`;
+
+        let label = null;
+        let node = control;
+        while (node.parentElement && node.parentElement !== document.body && !label) {
+          const siblings = [...node.parentElement.children];
+          const priorSiblings = siblings.slice(0, siblings.indexOf(node)).reverse();
+          for (const sibling of priorSiblings) {
+            const candidates = [
+              ...(sibling.matches("label") ? [sibling] : []),
+              ...sibling.querySelectorAll("label"),
+            ];
+            label = candidates.find(candidate => !candidate.control && !candidate.htmlFor);
+            if (label) break;
+          }
+          node = node.parentElement;
+        }
+
+        if (label) {
+          label.htmlFor = control.id;
+          return;
+        }
+        const fallback = fallbackLabels.get(control.id)
+          || control.getAttribute("placeholder")
+          || control.id.replace(/[-_]+/g, " ");
+        control.setAttribute("aria-label", fallback.replace(/\s+/g, " ").trim());
+      });
+    }
+
+    // Phone field formatting
+    function formatarTelefoneBrasileiro(valor) {
+      const original = String(valor || "").trim();
+      if (!original) return "";
+
+      const ramalExplicito = original.match(/(?:ramal|ram\.?|ext\.?|x)\s*[:.]?\s*(\d+)\s*$/i);
+      if (/[A-Za-zÀ-ÿ]/.test(original) && !ramalExplicito) return original;
+
+      const telefoneOriginal = ramalExplicito ? original.slice(0, ramalExplicito.index) : original;
+      let digitos = telefoneOriginal.replace(/\D/g, "");
+
+      if (/^\s*\+55\b/.test(telefoneOriginal) && digitos.length >= 13) {
+        digitos = digitos.slice(2);
+      } else if (/^\s*0055\b/.test(telefoneOriginal) && digitos.length >= 15) {
+        digitos = digitos.slice(4);
+      }
+
+      if (digitos.length < 3) return original;
+
+      const ddd = digitos.slice(0, 2);
+      const numero = digitos.slice(2, 11);
+      const numeroFormatado = numero.length > 5
+        ? `${numero.slice(0, 5)}-${numero.slice(5)}`
+        : numero;
+      let telefoneFormatado = `(${ddd}) ${numeroFormatado}`;
+      const ramal = ramalExplicito ? ramalExplicito[1] : digitos.slice(11);
+      if (ramal) telefoneFormatado += ` Ramal: ${ramal}`;
+      return telefoneFormatado;
+    }
+
+    function aplicarMascaraTelefone(input) {
+      const cursor = input.selectionStart ?? input.value.length;
+      const digitosAntesDoCursor = (input.value.slice(0, cursor).match(/\d/g) || []).length;
+      const valorFormatado = formatarTelefoneBrasileiro(input.value);
+      if (valorFormatado === input.value) return;
+      input.value = valorFormatado;
+
+      let novaPosicao = 0;
+      let digitosPercorridos = 0;
+      while (novaPosicao < input.value.length && digitosPercorridos < digitosAntesDoCursor) {
+        if (/\d/.test(input.value[novaPosicao])) digitosPercorridos += 1;
+        novaPosicao += 1;
+      }
+      input.setSelectionRange(novaPosicao, novaPosicao);
+    }
+
+    function inicializarMascarasTelefone() {
+      ["retirada-telefone", "entrega-telefone"].forEach((id) => {
+        const input = document.getElementById(id);
+        if (!input) return;
+        input.value = formatarTelefoneBrasileiro(input.value);
+        input.addEventListener("input", () => aplicarMascaraTelefone(input));
+        input.addEventListener("change", () => aplicarMascaraTelefone(input));
+        input.addEventListener("blur", () => aplicarMascaraTelefone(input));
+      });
+    }
+
+    // Initialize page behaviors
     document.addEventListener("DOMContentLoaded", () => {
       lucide.createIcons();
+      associarRotulosAcessiveis();
+      inicializarMascarasTelefone();
       carregarEstatisticas();
       carregarUnidades();
       carregarContagemHistoricoApelidos();
@@ -1258,6 +1545,9 @@
     function showToast(message, type = "success") {
       const container = document.getElementById("toast-container");
       const toast = document.createElement("div");
+      toast.setAttribute("role", type === "error" ? "alert" : "status");
+      toast.setAttribute("aria-live", type === "error" ? "assertive" : "polite");
+      toast.setAttribute("aria-atomic", "true");
 
       const bgColors = {
         success: "bg-emerald-950/90 border-emerald-500/50 text-emerald-200",
@@ -1274,10 +1564,10 @@
       };
 
       toast.className = `flex items-center space-x-3 px-4 py-3 rounded-xl border shadow-xl backdrop-blur-md text-xs font-medium pointer-events-auto transform transition-all duration-300 opacity-0 translate-y-2 ${bgColors[type] || bgColors.info}`;
-      toast.innerHTML = `
-        <i data-lucide="${iconNames[type] || 'info'}" class="w-4 h-4 shrink-0"></i>
-        <span>${message}</span>
-      `;
+      const icon = createIcon(iconNames[type] || "info", "w-4 h-4 shrink-0");
+      const messageElement = document.createElement("span");
+      messageElement.textContent = String(message ?? "");
+      toast.replaceChildren(icon, messageElement);
 
       container.appendChild(toast);
       lucide.createIcons({ root: toast });
@@ -1367,18 +1657,26 @@
         return;
       }
 
+      document.getElementById("autocomplete-box").setAttribute("aria-busy", "true");
       debounceTimer = setTimeout(async () => {
         try {
           const res = await fetch(`/api/buscar?q=${encodeURIComponent(term)}`);
           if (res.ok) {
             const results = await res.json();
             // Check if input value hasn't been wiped in the meantime
-            if (document.getElementById("input-serial").value.trim().length >= 2) {
+            if (document.getElementById("input-serial").value.trim().toUpperCase() === term.toUpperCase()) {
               renderAutocomplete(results);
             }
+          } else {
+            showToast("Não foi possível consultar os equipamentos. Tente novamente.", "error");
           }
         } catch (err) {
           console.warn("Erro no autocomplete:", err);
+          showToast("Falha de conexão ao consultar os equipamentos.", "error");
+        } finally {
+          if (document.getElementById("input-serial").value.trim().toUpperCase() === term.toUpperCase()) {
+            document.getElementById("autocomplete-box").setAttribute("aria-busy", "false");
+          }
         }
       }, 200);
     }
@@ -1405,7 +1703,6 @@
           selecionarItemAutocomplete(autocompleteItemsList[highlightedAutocompleteIndex]);
         } else {
           fecharAutocomplete();
-          buscarSerial();
         }
       } else if (e.key === "Escape") {
         fecharAutocomplete();
@@ -1420,6 +1717,20 @@
         .replace(/>/g, "&gt;")
         .replace(/"/g, "&quot;")
         .replace(/'/g, "&#039;");
+    }
+
+    function createTextElement(tagName, className, value) {
+      const element = document.createElement(tagName);
+      if (className) element.className = className;
+      element.textContent = String(value ?? "");
+      return element;
+    }
+
+    function createIcon(name, className) {
+      const icon = document.createElement("i");
+      icon.setAttribute("data-lucide", name);
+      icon.className = className;
+      return icon;
     }
 
     function highlightMatch(text, query) {
@@ -1438,13 +1749,17 @@
       if (!list) return;
       const rows = list.querySelectorAll(".autocomplete-row");
       rows.forEach((row, idx) => {
-        if (idx === highlightedAutocompleteIndex) {
+        const selected = idx === highlightedAutocompleteIndex;
+        row.setAttribute("aria-selected", String(selected));
+        if (selected) {
           row.classList.add("active");
-          row.scrollIntoView({ block: "nearest", behavior: "smooth" });
+          document.getElementById("input-serial").setAttribute("aria-activedescendant", row.id);
+          row.scrollIntoView({ block: "nearest", behavior: "auto" });
         } else {
           row.classList.remove("active");
         }
       });
+      if (highlightedAutocompleteIndex < 0) document.getElementById("input-serial").removeAttribute("aria-activedescendant");
     }
 
     function selecionarItemAutocomplete(item) {
@@ -1457,19 +1772,23 @@
     function renderAutocomplete(items) {
       const box = document.getElementById("autocomplete-box");
       const list = document.getElementById("autocomplete-list");
+      const emptyState = document.getElementById("autocomplete-empty-state");
       const countEl = document.getElementById("autocomplete-count");
       const currentQuery = (document.getElementById("input-serial").value || "").trim();
 
       if (!items || items.length === 0) {
-        list.innerHTML = `
+        list.replaceChildren();
+        list.classList.add("hidden");
+        emptyState.classList.remove("hidden");
+        emptyState.innerHTML = `
           <div class="px-6 py-8 text-center flex flex-col items-center justify-center space-y-2 select-none">
             <div class="w-10 h-10 rounded-xl bg-slate-900 border border-slate-800 flex items-center justify-center text-slate-500 mb-1">
-              <i data-lucide="search-x" class="w-5 h-5"></i>
+              <i data-lucide="search-x" class="w-5 h-5" aria-hidden="true"></i>
             </div>
-            <p class="text-sm font-semibold text-slate-300">Nenhum equipamento localizado</p>
+            <p class="text-sm font-semibold text-slate-200" role="status" aria-live="polite">Nenhum equipamento localizado</p>
             <p class="text-xs text-slate-500 max-w-sm">Nenhum registro com o termo <span class="font-mono text-cyan-400 font-bold">"${escapeHtml(currentQuery)}"</span> foi encontrado no inventário do SEBRAE/PR.</p>
             <button type="button" onclick="cadastrarNovoSerial(document.getElementById('input-serial').value)" class="mt-2 inline-flex items-center gap-1.5 px-3.5 py-2 rounded-lg bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-bold transition shadow-lg">
-              <i data-lucide="plus-circle" class="w-3.5 h-3.5"></i>
+              <i data-lucide="plus-circle" class="w-3.5 h-3.5" aria-hidden="true"></i>
               <span>Cadastrar "${escapeHtml(currentQuery)}" como Novo Equipamento</span>
             </button>
           </div>
@@ -1477,6 +1796,8 @@
         countEl.textContent = "0 encontrados";
         autocompleteItemsList = [];
         highlightedAutocompleteIndex = -1;
+        document.getElementById("input-serial").setAttribute("aria-expanded", "true");
+        document.getElementById("input-serial").removeAttribute("aria-activedescendant");
         box.classList.remove("hidden");
         lucide.createIcons({ root: box });
         return;
@@ -1485,10 +1806,17 @@
       autocompleteItemsList = items;
       highlightedAutocompleteIndex = -1;
       list.innerHTML = "";
+      list.classList.remove("hidden");
+      emptyState.classList.add("hidden");
       countEl.textContent = `${items.length} ${items.length === 1 ? 'item' : 'itens'}`;
+      document.getElementById("input-serial").setAttribute("aria-expanded", "true");
+      document.getElementById("input-serial").removeAttribute("aria-activedescendant");
 
       items.forEach((item, index) => {
         const row = document.createElement("div");
+        row.id = `autocomplete-option-${index}`;
+        row.setAttribute("role", "option");
+        row.setAttribute("aria-selected", "false");
         row.className = "autocomplete-row group px-4 py-2.5 cursor-pointer flex items-center justify-between gap-3";
         row.onclick = () => selecionarItemAutocomplete(item);
         row.onmouseenter = () => {
@@ -1515,26 +1843,29 @@
           <div class="flex items-center gap-3 min-w-0 flex-1">
             <!-- 1. Serial Number Badge (Highlighted as the STAR element) -->
             <div class="serial-badge flex items-center gap-2 px-3 py-1.5 rounded-lg shrink-0">
-              <i data-lucide="barcode" class="w-4 h-4 text-cyan-400 shrink-0"></i>
+              <i data-lucide="hash" class="w-4 h-4 text-cyan-400 shrink-0"></i>
               <span class="font-mono font-bold text-white text-sm sm:text-base tracking-widest">${highlightMatch(item.serial, currentQuery)}</span>
             </div>
 
             <!-- 2. Type Badge -->
             <span class="inline-flex items-center gap-1.5 text-xs font-semibold px-2.5 py-1 rounded-full ${tipoBadgeClass} shrink-0">
               <i data-lucide="${tipoIcon}" class="w-3.5 h-3.5 shrink-0"></i>
-              <span>${item.tipo || 'Equipamento'}</span>
+              <span>${escapeHtml(item.tipo || 'Equipamento')}</span>
             </span>
 
             <!-- 3. Hardware Model & Hostname -->
             <div class="min-w-0 flex items-center gap-2 flex-1">
               <span class="text-xs sm:text-sm font-medium text-slate-200 truncate" title="${escapeHtml(item.modelo || '')}">
-                ${item.modelo || 'Sem modelo especificado'}
+                ${escapeHtml(item.modelo || 'Sem modelo especificado')}
               </span>
               ${item.apelido ? `
-                <span class="hidden md:inline-flex items-center gap-1 text-[11px] font-mono px-2 py-0.5 rounded-md bg-slate-900/90 text-cyan-300 border border-cyan-500/30 shrink-0" title="Apelido / Hostname">
-                  <i data-lucide="terminal" class="w-2.5 h-2.5 text-cyan-400"></i>
+                <span class="autocomplete-alias inline-flex items-center gap-1 text-[11px] font-mono px-2 py-0.5 rounded-md bg-slate-900/90 text-cyan-300 border border-cyan-500/30 shrink-0" title="Apelido / Hostname">
+                  <i data-lucide="terminal" class="w-2.5 h-2.5 text-cyan-400" aria-hidden="true"></i>
                   <span>${escapeHtml(item.apelido)}</span>
                 </span>
+              ` : ''}
+              ${item.invall_alias_status && item.invall_alias_status !== "aplicado" ? `
+                <span class="text-[10px] text-amber-200 shrink-0" title="${escapeHtml(item.invall_alias_detail || "Conferir associação com a InvAll")}">Conferir InvAll</span>
               ` : ''}
             </div>
           </div>
@@ -1561,6 +1892,12 @@
     function fecharAutocomplete() {
       const box = document.getElementById("autocomplete-box");
       if (box) box.classList.add("hidden");
+      if (box) box.setAttribute("aria-busy", "false");
+      const input = document.getElementById("input-serial");
+      if (input) {
+        input.setAttribute("aria-expanded", "false");
+        input.removeAttribute("aria-activedescendant");
+      }
       autocompleteItemsList = [];
       highlightedAutocompleteIndex = -1;
     }
@@ -1574,6 +1911,15 @@
       }
     });
 
+    function fecharMenuSecundarioAoClicarFora(event) {
+      const menu = document.querySelector(".header-secondary-actions");
+      if (menu?.open && !menu.contains(event.target)) {
+        menu.open = false;
+      }
+    }
+
+    document.addEventListener("click", fecharMenuSecundarioAoClicarFora);
+
     function limparSerial() {
       const input = document.getElementById("input-serial");
       input.value = "";
@@ -1582,19 +1928,13 @@
       input.focus();
     }
 
-    function carregarExemploSerial(serial) {
-      document.getElementById("input-serial").value = serial;
-      document.getElementById("btn-clear-serial").classList.remove("hidden");
-      buscarSerial();
-    }
-
     // Search Equipment by Serial
     async function buscarSerial() {
       const serialInput = document.getElementById("input-serial");
       const serial = serialInput.value.trim().toUpperCase();
 
       if (!serial) {
-        showToast("Digite ou bipe o serial do equipamento", "warning");
+        showToast("Digite o número de série do equipamento", "warning");
         serialInput.focus();
         return;
       }
@@ -1602,6 +1942,8 @@
       const btn = document.getElementById("btn-buscar-serial");
       const originalText = btn.innerHTML;
       btn.disabled = true;
+      btn.setAttribute("aria-busy", "true");
+      serialInput.setAttribute("aria-busy", "true");
       btn.innerHTML = `<i data-lucide="loader-2" class="w-4 h-4 animate-spin"></i><span>Localizando...</span>`;
       lucide.createIcons({ root: btn });
 
@@ -1623,6 +1965,8 @@
         document.getElementById("card-equipamento").classList.add("hidden");
       } finally {
         btn.disabled = false;
+        btn.removeAttribute("aria-busy");
+        serialInput.removeAttribute("aria-busy");
         btn.innerHTML = originalText;
         lucide.createIcons({ root: btn });
       }
@@ -1637,6 +1981,11 @@
       document.getElementById("card-modelo").textContent = eq.modelo || "Equipamento";
       document.getElementById("badge-tipo").textContent = eq.tipo || "Geral";
       document.getElementById("badge-apelido").textContent = eq.apelido || "Sem Apelido";
+      const aliasStatus = document.getElementById("badge-apelido-status");
+      aliasStatus.textContent = eq.invall_alias_status && eq.invall_alias_status !== "aplicado"
+        ? (eq.invall_alias_detail || "Conferir associação com a InvAll.")
+        : "";
+      aliasStatus.classList.toggle("hidden", !aliasStatus.textContent);
       document.getElementById("card-id-cliente").textContent = eq.idCliente ? `Id Cliente: ${eq.idCliente}` : "";
       document.getElementById("card-localizacao").textContent = `${eq.retirada_cidade || ''} - ${eq.retirada_endereco ? eq.retirada_endereco.split('-')[0].trim() : ''}`;
       document.getElementById("card-cnpj-atual").textContent = `CNPJ: ${eq.retirada_cnpj || 'Não especificado'}`;
@@ -1671,10 +2020,11 @@
 
       // Update status footer
       document.getElementById("status-indicator").className = "w-2.5 h-2.5 rounded-full bg-emerald-400";
-      document.getElementById("status-summary").innerHTML = `
-        <span class="text-emerald-300 font-medium">Equipamento ${eq.serial} (${eq.modelo}) carregado.</span>
-        <span class="text-slate-400"> Selecione a Unidade de Destino e preencha o destinatário.</span>
-      `;
+      const statusSummary = document.getElementById("status-summary");
+      statusSummary.replaceChildren(
+        createTextElement("span", "text-emerald-300 font-medium", "Equipamento " + String(eq.serial ?? "") + " (" + String(eq.modelo ?? "") + ") carregado."),
+        createTextElement("span", "text-slate-400", " Selecione a Unidade de Destino e preencha o destinatário.")
+      );
     }
 
     // "Forçar SEDE Prado Velho" button action
@@ -1736,6 +2086,11 @@
         return null;
       }
 
+      const retiradaTelefone = document.getElementById("retirada-telefone");
+      const entregaTelefone = document.getElementById("entrega-telefone");
+      retiradaTelefone.value = formatarTelefoneBrasileiro(retiradaTelefone.value);
+      entregaTelefone.value = formatarTelefoneBrasileiro(entregaTelefone.value);
+
       return {
         serial: serialVal,
         descricao_equipamento: document.getElementById("input-descricao-equipamento").value.trim() || (currentEquipamento ? currentEquipamento.descricao_sugerida : `Equipamento ${serialVal}`),
@@ -1750,7 +2105,7 @@
         retirada_acesso_obs: "",
         retirada_contato: document.getElementById("retirada-contato").value.trim(),
         retirada_email: document.getElementById("retirada-email").value.trim(),
-        retirada_telefone: document.getElementById("retirada-telefone").value.trim(),
+        retirada_telefone: retiradaTelefone.value.trim(),
         retirada_obs: document.getElementById("retirada-obs").value.trim(),
         retirada_voltagem: document.getElementById("retirada-voltagem").value.trim(),
         entrega_cnpj: entregaCnpj,
@@ -1762,7 +2117,7 @@
         entrega_acesso_obs: "",
         entrega_contato: entregaContato,
         entrega_email: document.getElementById("entrega-email").value.trim(),
-        entrega_telefone: document.getElementById("entrega-telefone").value.trim(),
+        entrega_telefone: entregaTelefone.value.trim(),
         entrega_obs: document.getElementById("entrega-obs").value.trim(),
         entrega_voltagem: "Bivolt"
       };
@@ -1813,11 +2168,11 @@
 
       const texto = gerarTextoResumo(payload);
       document.getElementById("textarea-resumo-preview").value = texto;
-      document.getElementById("modal-preview").classList.remove("hidden");
+      abrirModalAcessivel("modal-preview", "#textarea-resumo-preview", "fecharModalPreview");
     }
 
     function fecharModalPreview() {
-      document.getElementById("modal-preview").classList.add("hidden");
+      fecharModalAcessivel("modal-preview");
     }
 
     function copiarTextoDoModal() {
@@ -1837,6 +2192,7 @@
       const btn = document.getElementById("btn-gerar-planilha");
       const originalText = btn.innerHTML;
       btn.disabled = true;
+      btn.setAttribute("aria-busy", "true");
       btn.innerHTML = `<i data-lucide="loader-2" class="w-4 h-4 animate-spin"></i><span>Gerando Planilha...</span>`;
       lucide.createIcons({ root: btn });
 
@@ -1883,6 +2239,7 @@
         showToast(err.message, "error");
       } finally {
         btn.disabled = false;
+        btn.removeAttribute("aria-busy");
         btn.innerHTML = originalText;
         lucide.createIcons({ root: btn });
       }
@@ -1917,7 +2274,7 @@
         <span class="hidden md:inline text-slate-500">Verifique os dados antes de gerar a planilha oficial Simpress.</span>
       `;
 
-      showToast("Formulário limpo. Pronto para nova leitura de serial.", "info");
+      showToast("Formulário limpo. Pronto para uma nova busca.", "info");
       document.getElementById("input-serial").focus();
     }
 
@@ -1927,17 +2284,19 @@
     function abrirModalAtualizarPlanilhas() {
       const status = document.getElementById("upload-planilhas-status");
       status.classList.add("hidden");
-      document.getElementById("modal-atualizar-planilhas").classList.remove("hidden");
-      lucide.createIcons({ root: document.getElementById("modal-atualizar-planilhas") });
+      abrirModalAcessivel("modal-atualizar-planilhas", "#upload-endpoint-file", "fecharModalAtualizarPlanilhas");
     }
 
     function fecharModalAtualizarPlanilhas() {
-      document.getElementById("modal-atualizar-planilhas").classList.add("hidden");
+      fecharModalAcessivel("modal-atualizar-planilhas");
     }
 
     function mostrarStatusUpload(mensagem, erro = false) {
       const status = document.getElementById("upload-planilhas-status");
       status.textContent = mensagem;
+      status.setAttribute("role", erro ? "alert" : "status");
+      status.setAttribute("aria-live", erro ? "assertive" : "polite");
+      status.setAttribute("aria-atomic", "true");
       status.className = erro
         ? "text-xs rounded-lg px-3 py-2 bg-rose-500/10 border border-rose-500/25 text-rose-300"
         : "text-xs rounded-lg px-3 py-2 bg-sky-500/10 border border-sky-500/25 text-sky-300";
@@ -1947,13 +2306,15 @@
       const endpointFile = document.getElementById("upload-endpoint-file").files?.[0];
       const detailsFile = document.getElementById("upload-details-file").files?.[0];
       if (!endpointFile || !detailsFile) {
-        mostrarStatusUpload("Selecione os dois arquivos antes de atualizar.", true);
+        mostrarStatusUpload("Selecione Endpoint e EquipamentosDetalhes antes de atualizar.", true);
         return;
       }
 
       const button = document.getElementById("btn-confirmar-planilhas");
       const originalHtml = button.innerHTML;
       button.disabled = true;
+      button.setAttribute("aria-busy", "true");
+      document.getElementById("modal-atualizar-planilhas").setAttribute("aria-busy", "true");
       button.innerHTML = '<i data-lucide="loader-2" class="w-3.5 h-3.5 animate-spin"></i><span>Validando e atualizando...</span>';
       lucide.createIcons({ root: button });
 
@@ -1991,6 +2352,8 @@
         mostrarStatusUpload(error.message || "Não foi possível atualizar as planilhas.", true);
       } finally {
         button.disabled = false;
+        button.removeAttribute("aria-busy");
+        document.getElementById("modal-atualizar-planilhas").removeAttribute("aria-busy");
         button.innerHTML = originalHtml;
         lucide.createIcons({ root: button });
       }
@@ -1998,12 +2361,13 @@
 
     function renderizarTabelaComparacao(headers, rows, emptyMessage) {
       if (!rows.length) {
-        return `<p class="text-xs text-slate-500 text-center py-5">${escapeHtml(emptyMessage)}</p>`;
+        return `<p class="text-sm text-slate-400 text-center py-5" role="status" aria-live="polite">${escapeHtml(emptyMessage)}</p>`;
       }
+      const tableLabel = `Tabela de ${headers.join(", ")}`;
       return `
-        <div class="overflow-x-auto rounded-lg border border-slate-800">
-          <table class="min-w-full text-left text-xs">
-            <thead class="bg-slate-950 text-slate-400"><tr>${headers.map(header => `<th class="px-3 py-2 font-semibold whitespace-nowrap">${escapeHtml(header)}</th>`).join("")}</tr></thead>
+        <div class="accessible-table-wrap rounded-lg border border-slate-800" role="region" aria-label="${escapeHtml(tableLabel)}" tabindex="0">
+          <table class="min-w-full text-left text-sm" aria-label="${escapeHtml(tableLabel)}">
+            <thead class="bg-slate-950 text-slate-300"><tr>${headers.map(header => `<th scope="col" class="px-3 py-2.5 font-semibold whitespace-nowrap">${escapeHtml(header)}</th>`).join("")}</tr></thead>
             <tbody class="divide-y divide-slate-800">${rows.join("")}</tbody>
           </table>
         </div>`;
@@ -2017,24 +2381,29 @@
         "BRJ9435VMF",
         "BRJ149SCJG",
       ]);
-      const ausentesDetalhes = (comparison.ausentes_em_detalhes || []).filter(item => {
+      const filtrarSeriesSebrae = items => (items || []).filter(item => {
         const serie = String(item.serie || "").replace(/[^A-Z0-9]/gi, "").toUpperCase();
         return !seriesSebrae.has(serie);
       });
+      const ausentesEndpoint = filtrarSeriesSebrae(comparison.ausentes_no_endpoint);
+      const ausentesDetalhes = filtrarSeriesSebrae(comparison.ausentes_em_detalhes);
       const divergenciasLocal = comparison.divergencias_local || [];
       const seriesSemMapa = comparison.series_sem_mapeamento || [];
+      const ambiguidades = comparison.correspondencias_ambiguas || [];
+      const registrosAmbiguos = comparison.registros_ambiguos || [];
       const arquivo = comparison.arquivos_enviados || {};
-      const totalNotebooksAusentes = ausentesDetalhes.length;
+      const apelidosAtualizados = comparison.apelidos_atualizados || [];
+      const apelidosSemAtualizacao = comparison.apelidos_sem_atualizacao || [];
 
       document.getElementById("comparacao-planilhas-fontes").textContent =
         `Endpoint: ${arquivo.endpoint || "—"} · EquipamentosDetalhes: ${arquivo.detalhes || "—"}${comparison.horario_comparacao ? ` · ${formatarHorarioHistorico(comparison.horario_comparacao)}` : ""}`;
 
-      const notebooksAusentes = ausentesDetalhes.map(item => `
+      const renderizarAusentes = items => items.map(item => `
         <tr class="text-slate-300">
           <td class="px-3 py-2 font-mono text-white whitespace-nowrap">${escapeHtml(item.computador)}</td>
           <td class="px-3 py-2 font-mono whitespace-nowrap">${escapeHtml(item.serie || "—")}</td>
           <td class="px-3 py-2">${escapeHtml(item.local_previsto || "—")}</td>
-          <td class="px-3 py-2 text-amber-300">Ausente em EquipamentosDetalhes</td>
+          <td class="px-3 py-2 text-amber-300">${escapeHtml((item.ausente_em || [item.fonte_ausente]).filter(Boolean).join(", "))}</td>
         </tr>`);
 
       const locationRows = divergenciasLocal.map(item => `
@@ -2045,11 +2414,50 @@
           <td class="px-3 py-2">${escapeHtml(item.local_detalhes || "—")}</td>
         </tr>`);
 
+      const aliasUpdateRows = apelidosAtualizados.map(item => `
+        <tr class="text-slate-300">
+          <td class="px-3 py-2 font-mono text-white whitespace-nowrap">${escapeHtml(item.serie || "—")}</td>
+          <td class="px-3 py-2 font-mono">${escapeHtml(item.apelido_anterior || "(vazio)")}</td>
+          <td class="px-3 py-2 font-mono text-emerald-200">${escapeHtml(item.apelido_novo || "(vazio)")}</td>
+          <td class="px-3 py-2 whitespace-nowrap">${escapeHtml(item.horario ? formatarHorarioHistorico(item.horario) : "—")}</td>
+          <td class="px-3 py-2 text-[10px]">${escapeHtml(Object.values(item.arquivos_origem || {}).join(" · ") || "—")}</td>
+        </tr>`);
+
+      const aliasReviewRows = apelidosSemAtualizacao.map(item => `
+        <tr class="text-slate-300">
+          <td class="px-3 py-2 font-mono text-white whitespace-nowrap">${escapeHtml(item.serie || "(vazia)")}</td>
+          <td class="px-3 py-2 font-mono">${escapeHtml(item.computador || "—")}</td>
+          <td class="px-3 py-2 text-amber-200">${escapeHtml(item.motivo || "Conferir associação.")}</td>
+        </tr>`);
+
       const unmappedRows = seriesSemMapa.map(item => `
         <tr class="text-slate-300">
           <td class="px-3 py-2 font-mono text-white">${escapeHtml(item.serie)}</td>
           <td class="px-3 py-2">${Number(item.quantidade || 0)}</td>
           <td class="px-3 py-2 font-mono">${escapeHtml((item.exemplos || []).join(", "))}</td>
+        </tr>`);
+
+      const ambiguityRows = [
+        ...ambiguidades.map(item => ({
+          tipo: item.tipo,
+          chave: item.chave,
+          fontes: (item.fontes || []).map(source =>
+            `${source.fonte}${source.quantidade ? ` (${source.quantidade} registros)` : source.serie ? ` — série ${source.serie}` : ""}`
+          ).join(" · "),
+          mensagem: item.mensagem,
+        })),
+        ...registrosAmbiguos.map(item => ({
+          tipo: "Presença ambígua",
+          chave: `${item.computador || "Sem hostname"} · ${item.serie || "Sem série"}`,
+          fontes: Object.entries(item.fontes || {}).filter(([, status]) => status === "ambíguo").map(([source]) => source).join(" · "),
+          mensagem: item.motivo,
+        })),
+      ].map(item => `
+        <tr class="text-slate-300">
+          <td class="px-3 py-2 text-amber-200">${escapeHtml(item.tipo || "Ambiguidade")}</td>
+          <td class="px-3 py-2 font-mono">${escapeHtml(item.chave || "—")}</td>
+          <td class="px-3 py-2">${escapeHtml(item.fontes || "—")}</td>
+          <td class="px-3 py-2">${escapeHtml(item.mensagem || "")}</td>
         </tr>`);
 
       document.getElementById("comparacao-planilhas-conteudo").innerHTML = `
@@ -2060,22 +2468,36 @@
             : ""}
         <div class="grid grid-cols-2 md:grid-cols-3 xl:grid-cols-4 gap-3">
           <div class="rounded-xl bg-slate-950 border border-slate-800 p-3"><p class="text-[10px] uppercase tracking-wide text-slate-500">Notebooks comparados</p><p class="text-xl font-bold text-white mt-1">${Number(comparison.total_endpoint || 0).toLocaleString("pt-BR")}</p></div>
-          <div class="rounded-xl bg-rose-500/5 border border-rose-500/20 p-3"><p class="text-[10px] uppercase tracking-wide text-rose-300">Notebooks para conferir</p><p class="text-xl font-bold text-rose-200 mt-1">${totalNotebooksAusentes}</p></div>
+          <div class="rounded-xl bg-rose-500/5 border border-rose-500/20 p-3"><p class="text-[10px] uppercase tracking-wide text-rose-300">Ausentes no Endpoint</p><p class="text-xl font-bold text-rose-200 mt-1">${ausentesEndpoint.length}</p></div>
+          <div class="rounded-xl bg-amber-500/5 border border-amber-500/20 p-3"><p class="text-[10px] uppercase tracking-wide text-amber-300">Ausentes em EquipamentosDetalhes</p><p class="text-xl font-bold text-amber-200 mt-1">${ausentesDetalhes.length}</p></div>
           <div class="rounded-xl bg-amber-500/5 border border-amber-500/20 p-3"><p class="text-[10px] uppercase tracking-wide text-amber-300">Divergências de local</p><p class="text-xl font-bold text-amber-200 mt-1">${divergenciasLocal.length}</p></div>
+          <div class="rounded-xl bg-yellow-500/5 border border-yellow-500/20 p-3"><p class="text-[10px] uppercase tracking-wide text-yellow-300">Duplicidades e ambiguidades</p><p class="text-xl font-bold text-yellow-200 mt-1">${ambiguityRows.length}</p></div>
           <div class="rounded-xl bg-sky-500/5 border border-sky-500/20 p-3"><p class="text-[10px] uppercase tracking-wide text-sky-300">Séries sem mapeamento</p><p class="text-xl font-bold text-sky-200 mt-1">${seriesSemMapa.length}</p></div>
-        </div>
-        <div class="flex flex-wrap gap-2">
-          <button type="button" onclick="irParaSecaoComparacao('comparacao-notebooks-ausentes')" class="px-3 py-2 rounded-lg bg-rose-500/10 border border-rose-500/25 text-rose-200 hover:bg-rose-500/20 text-xs font-semibold transition">
-            <i data-lucide="search-check" class="w-3.5 h-3.5 inline-block mr-1 align-[-2px]"></i>Ver notebooks sem correspondência (${totalNotebooksAusentes})
-          </button>
+          <div class="rounded-xl bg-emerald-500/5 border border-emerald-500/20 p-3"><p class="text-[10px] uppercase tracking-wide text-emerald-300">Apelidos/hostnames atualizados</p><p class="text-xl font-bold text-emerald-200 mt-1">${apelidosAtualizados.length}</p></div>
+          <div class="rounded-xl bg-amber-500/5 border border-amber-500/20 p-3"><p class="text-[10px] uppercase tracking-wide text-amber-300">Apelidos para conferência</p><p class="text-xl font-bold text-amber-200 mt-1">${apelidosSemAtualizacao.length}</p></div>
         </div>
         <section class="space-y-2">
-          <div id="comparacao-notebooks-ausentes"><h4 class="text-sm font-bold text-rose-300">Notebooks sem correspondência</h4><p class="text-[11px] text-slate-500">Lista os notebooks do Endpoint que não aparecem em EquipamentosDetalhes, para conferência manual.</p></div>
-          ${renderizarTabelaComparacao(["Hostname", "Série", "Local previsto", "Situação"], notebooksAusentes, "Todos os notebooks do Endpoint foram encontrados em EquipamentosDetalhes.")}
+          <div><h4 class="text-sm font-bold text-emerald-300">Apelidos/hostnames atualizados pela InvAll</h4><p class="text-[11px] text-slate-500">A lista compara os valores antes e depois pelo número de série.</p></div>
+          ${renderizarTabelaComparacao(["Série", "Apelido anterior", "Novo apelido / hostname", "Horário", "Arquivos de origem"], aliasUpdateRows, "Nenhum apelido ou hostname mudou nesta atualização.")}
         </section>
         <section class="space-y-2">
-          <div><h4 class="text-sm font-bold text-amber-300">Série e localidade divergentes</h4><p class="text-[11px] text-slate-500">A cidade informada na planilha não corresponde ao local previsto pelo prefixo da série.</p></div>
-          ${renderizarTabelaComparacao(["Computador", "Série", "Local previsto", "Cidade em EquipamentosDetalhes"], locationRows, "Nenhuma divergência de localidade encontrada.")}
+          <div><h4 class="text-sm font-bold text-amber-300">Linhas mantidas para conferência</h4><p class="text-[11px] text-slate-500">Série vazia, ausente ou duplicada não é escolhida automaticamente; o apelido atual fica preservado.</p></div>
+          ${renderizarTabelaComparacao(["Série", "Hostname na InvAll", "Motivo"], aliasReviewRows, "Nenhuma linha de apelido precisa de conferência.")}
+        </section>
+        <section class="space-y-2">
+          <div><h4 class="text-sm font-bold text-rose-300">Equipamentos ausentes por fonte</h4><p class="text-[11px] text-slate-500">Cada lista mostra equipamentos que não têm correspondência segura naquela fonte. Divergências de local aparecem em seção própria.</p></div>
+          <h5 class="text-xs font-semibold text-slate-300">Ausentes no Endpoint (${ausentesEndpoint.length})</h5>
+          ${renderizarTabelaComparacao(["Hostname/Apelido", "Série", "Local previsto", "Ausente em"], renderizarAusentes(ausentesEndpoint), "Nenhum equipamento ausente no Endpoint.")}
+          <h5 class="text-xs font-semibold text-slate-300">Ausentes em EquipamentosDetalhes (${ausentesDetalhes.length})</h5>
+          ${renderizarTabelaComparacao(["Hostname/Apelido", "Série", "Local previsto", "Ausente em"], renderizarAusentes(ausentesDetalhes), "Nenhum equipamento ausente em EquipamentosDetalhes.")}
+        </section>
+        <section class="space-y-2">
+          <div><h4 class="text-sm font-bold text-amber-300">Localidade divergente</h4><p class="text-[11px] text-slate-500">A localidade em EquipamentosDetalhes é comparada com a classificação do hostname.</p></div>
+          ${renderizarTabelaComparacao(["Computador", "Série", "Local previsto", "Local em EquipamentosDetalhes"], locationRows, "Nenhuma divergência de localidade encontrada.")}
+        </section>
+        <section class="space-y-2">
+          <div><h4 class="text-sm font-bold text-yellow-300">Duplicidades e correspondências ambíguas</h4><p class="text-[11px] text-slate-500">Nenhuma linha é escolhida automaticamente quando a série se repete ou o hostname/Apelido não identifica uma correspondência única.</p></div>
+          ${renderizarTabelaComparacao(["Ocorrência", "Série ou hostname/Apelido", "Fontes", "Tratamento"], ambiguityRows, "Nenhuma duplicidade ou correspondência ambígua encontrada.")}
         </section>
         <section class="space-y-2">
           <div><h4 class="text-sm font-bold text-sky-300">Séries sem local definido</h4><p class="text-[11px] text-slate-500">Não há regra de localidade cadastrada para estes prefixos.</p></div>
@@ -2083,8 +2505,7 @@
         </section>
         <p class="text-[11px] text-emerald-300">EquipamentosDetalhes carregado: ${Number(comparison.total_equipamentos_carregados || 0).toLocaleString("pt-BR")} equipamentos. Backup das versões anteriores: <span class="font-mono">planilhas_entrada/${escapeHtml(comparison.backup_diretorio || "_backups")}</span>.</p>
       `;
-      document.getElementById("modal-comparacao-planilhas").classList.remove("hidden");
-      lucide.createIcons({ root: document.getElementById("modal-comparacao-planilhas") });
+      abrirModalAcessivel("modal-comparacao-planilhas", '[aria-label="Fechar resultado"]', "fecharModalComparacaoPlanilhas");
     }
 
     function irParaSecaoComparacao(sectionId) {
@@ -2092,7 +2513,7 @@
     }
 
     function fecharModalComparacaoPlanilhas() {
-      document.getElementById("modal-comparacao-planilhas").classList.add("hidden");
+      fecharModalAcessivel("modal-comparacao-planilhas");
     }
 
     function definirTotalHistoricoComparacoes(total) {
@@ -2113,18 +2534,18 @@
     }
 
     async function abrirModalHistoricoComparacoes() {
-      document.getElementById("modal-historico-comparacoes").classList.remove("hidden");
-      lucide.createIcons({ root: document.getElementById("modal-historico-comparacoes") });
+      abrirModalAcessivel("modal-historico-comparacoes", '[aria-label="Fechar histórico de planilhas"]', "fecharModalHistoricoComparacoes");
       await carregarHistoricoComparacoes();
     }
 
     function fecharModalHistoricoComparacoes() {
-      document.getElementById("modal-historico-comparacoes").classList.add("hidden");
+      fecharModalAcessivel("modal-historico-comparacoes");
     }
 
     async function carregarHistoricoComparacoes() {
       const lista = document.getElementById("lista-historico-comparacoes");
-      lista.innerHTML = '<p class="text-sm text-slate-400 text-center py-8">Carregando histórico...</p>';
+      lista.setAttribute("aria-busy", "true");
+      lista.innerHTML = '<p class="text-sm text-slate-400 text-center py-8" role="status" aria-live="polite">Carregando histórico...</p>';
 
       try {
         const res = await fetch("/api/historico-comparacoes");
@@ -2137,6 +2558,8 @@
         if (eventos.length === 0) {
           const vazio = document.createElement("p");
           vazio.className = "text-sm text-slate-400 text-center py-8";
+          vazio.setAttribute("role", "status");
+          vazio.setAttribute("aria-live", "polite");
           vazio.textContent = "Nenhuma atualização registrada ainda. As próximas comparações concluídas aparecerão aqui.";
           lista.appendChild(vazio);
           return;
@@ -2162,16 +2585,29 @@
 
           const contagens = document.createElement("p");
           contagens.className = "text-[11px] text-slate-500";
-          contagens.textContent = `Sem correspondência: ${Number(resumo.ausentes_em_detalhes || 0)} · Divergências de local: ${Number(resumo.divergencias_local || 0)} · Séries sem mapeamento: ${Number(resumo.series_sem_mapeamento || 0)}`;
+          contagens.textContent = `Apelidos/hostnames atualizados: ${Number(resumo.apelidos_atualizados || 0)} · ausentes no Endpoint: ${Number(resumo.ausentes_no_endpoint || 0)} · em EquipamentosDetalhes: ${Number(resumo.ausentes_em_detalhes || 0)} · divergências de local: ${Number(resumo.divergencias_local || 0)} · ambiguidades: ${Number(resumo.correspondencias_ambiguas || 0)}`;
           info.appendChild(contagens);
           card.appendChild(info);
+
+          const acoes = document.createElement("div");
+          acoes.className = "flex shrink-0 items-center gap-2";
 
           const consultar = document.createElement("button");
           consultar.type = "button";
           consultar.className = "shrink-0 px-3 py-2 rounded-lg bg-cyan-500/10 hover:bg-cyan-500/20 text-cyan-200 border border-cyan-500/25 text-xs font-semibold transition";
           consultar.textContent = "Consultar resultado";
           consultar.addEventListener("click", () => consultarHistoricoComparacao(evento.id, consultar));
-          card.appendChild(consultar);
+          acoes.appendChild(consultar);
+
+          const excluir = document.createElement("button");
+          excluir.type = "button";
+          excluir.className = "shrink-0 px-3 py-2 rounded-lg bg-rose-500/10 hover:bg-rose-500/20 text-rose-300 border border-rose-500/25 text-xs font-semibold transition";
+          excluir.textContent = "Excluir";
+          excluir.title = "Excluir esta atualização do histórico";
+          excluir.addEventListener("click", () => excluirHistoricoComparacao(evento, excluir));
+          acoes.appendChild(excluir);
+
+          card.appendChild(acoes);
           lista.appendChild(card);
         });
       } catch (err) {
@@ -2179,14 +2615,19 @@
         lista.replaceChildren();
         const erro = document.createElement("p");
         erro.className = "text-sm text-rose-300 text-center py-8";
+        erro.setAttribute("role", "alert");
+        erro.setAttribute("aria-live", "assertive");
         erro.textContent = err.message || "Não foi possível carregar o histórico de planilhas.";
         lista.appendChild(erro);
+      } finally {
+        lista.removeAttribute("aria-busy");
       }
     }
 
     async function consultarHistoricoComparacao(eventoId, botao) {
       const textoOriginal = botao.textContent;
       botao.disabled = true;
+      botao.setAttribute("aria-busy", "true");
       botao.textContent = "Carregando...";
       try {
         const res = await fetch(`/api/historico-comparacoes/${encodeURIComponent(eventoId)}`);
@@ -2204,6 +2645,33 @@
         console.error("Erro ao abrir comparação salva:", err);
         showToast(err.message || "Não foi possível abrir este resultado.", "error");
         botao.disabled = false;
+        botao.removeAttribute("aria-busy");
+        botao.textContent = textoOriginal;
+      }
+    }
+
+    async function excluirHistoricoComparacao(evento, botao) {
+      const dataHora = formatarHorarioHistorico(evento.horario);
+      if (!window.confirm(`Tem certeza de que deseja excluir esta atualização de ${dataHora}? Essa ação não poderá ser desfeita.`)) return;
+
+      const textoOriginal = botao.textContent;
+      botao.disabled = true;
+      botao.setAttribute("aria-busy", "true");
+      botao.textContent = "Excluindo...";
+      try {
+        const res = await fetch(`/api/historico-comparacoes/${encodeURIComponent(evento.id)}`, {
+          method: "DELETE",
+        });
+        const data = await res.json().catch(() => ({}));
+        if (!res.ok) throw new Error(data.detail || "Não foi possível excluir esta atualização.");
+
+        await carregarHistoricoComparacoes();
+        showToast("Atualização excluída do histórico.", "success");
+      } catch (err) {
+        console.error("Erro ao excluir atualização do histórico:", err);
+        showToast(err.message || "Não foi possível excluir esta atualização.", "error");
+        botao.disabled = false;
+        botao.removeAttribute("aria-busy");
         botao.textContent = textoOriginal;
       }
     }
@@ -2212,6 +2680,7 @@
       const btn = document.getElementById("btn-exportar-equipamentos");
       const originalText = btn.innerHTML;
       btn.disabled = true;
+      btn.setAttribute("aria-busy", "true");
       btn.innerHTML = `<i data-lucide="loader-2" class="w-3.5 h-3.5 animate-spin"></i><span class="hidden sm:inline">Gerando Excel...</span>`;
       lucide.createIcons({ root: btn });
 
@@ -2228,6 +2697,7 @@
           ? match[1].replace(/['"]/g, "")
           : "EquipamentosDetalhes-atualizados.xlsx";
         const total = Number(res.headers.get("X-Total-Alterados") || 0);
+        const pendingReview = Number(res.headers.get("X-Total-Conferencia") || 0);
         const blob = await res.blob();
         const url = window.URL.createObjectURL(blob);
         const link = document.createElement("a");
@@ -2238,12 +2708,13 @@
         link.remove();
         window.setTimeout(() => window.URL.revokeObjectURL(url), 1000);
 
-        showToast(`Planilha ${filename} exportada com ${total} apelido(s) atualizado(s).`, "success");
+        showToast(`Planilha ${filename} exportada com ${total} apelido(s) atualizado(s).${pendingReview ? ` ${pendingReview} linha(s) ficaram para conferência.` : ""}`, pendingReview ? "warning" : "success");
       } catch (err) {
         console.error("Erro ao exportar planilha de equipamentos:", err);
         showToast(err.message, "error");
       } finally {
         btn.disabled = false;
+        btn.removeAttribute("aria-busy");
         btn.innerHTML = originalText;
         lucide.createIcons({ root: btn });
       }
@@ -2302,7 +2773,7 @@
       document.getElementById("edit-cep").value = currentEquipamento.retirada_cep || "";
       document.getElementById("edit-cnpj").value = currentEquipamento.retirada_cnpj || "";
 
-      document.getElementById("modal-editar-equipamento").classList.remove("hidden");
+      abrirModalAcessivel("modal-editar-equipamento", "#edit-modelo", "fecharModalEditarEquipamento");
     }
 
     function cadastrarNovoSerial(serial) {
@@ -2325,12 +2796,11 @@
       document.getElementById("edit-cep").value = "80220-300";
       document.getElementById("edit-cnpj").value = "75.110.585/0001-00";
 
-      document.getElementById("modal-editar-equipamento").classList.remove("hidden");
-      document.getElementById("edit-modelo").focus();
+      abrirModalAcessivel("modal-editar-equipamento", "#edit-modelo", "fecharModalEditarEquipamento");
     }
 
     function fecharModalEditarEquipamento() {
-      document.getElementById("modal-editar-equipamento").classList.add("hidden");
+      fecharModalAcessivel("modal-editar-equipamento");
     }
 
     function abrirModalEditarApelido() {
@@ -2341,14 +2811,12 @@
 
       document.getElementById("edit-apelido-isolado").value = currentEquipamento.apelido || "";
       document.getElementById("apelido-serial-contexto").textContent = `Série: ${currentEquipamento.serial}`;
-      document.getElementById("modal-editar-apelido").classList.remove("hidden");
-      lucide.createIcons({ root: document.getElementById("modal-editar-apelido") });
-      document.getElementById("edit-apelido-isolado").focus();
+      abrirModalAcessivel("modal-editar-apelido", "#edit-apelido-isolado", "fecharModalEditarApelido");
       document.getElementById("edit-apelido-isolado").select();
     }
 
     function fecharModalEditarApelido() {
-      document.getElementById("modal-editar-apelido").classList.add("hidden");
+      fecharModalAcessivel("modal-editar-apelido");
     }
 
     async function salvarApelido() {
@@ -2363,6 +2831,7 @@
       const btn = document.getElementById("btn-salvar-apelido");
       const originalText = btn.textContent;
       btn.disabled = true;
+      btn.setAttribute("aria-busy", "true");
       btn.textContent = "Salvando...";
 
       try {
@@ -2385,6 +2854,7 @@
         showToast(err.message || "Falha ao salvar o apelido.", "error");
       } finally {
         btn.disabled = false;
+        btn.removeAttribute("aria-busy");
         btn.textContent = originalText;
       }
     }
@@ -2415,13 +2885,12 @@
     }
 
     async function abrirModalHistoricoApelidos() {
-      document.getElementById("modal-historico-apelidos").classList.remove("hidden");
-      lucide.createIcons({ root: document.getElementById("modal-historico-apelidos") });
+      abrirModalAcessivel("modal-historico-apelidos", '[aria-label="Fechar histórico"]', "fecharModalHistoricoApelidos");
       await carregarHistoricoApelidos();
     }
 
     function fecharModalHistoricoApelidos() {
-      document.getElementById("modal-historico-apelidos").classList.add("hidden");
+      fecharModalAcessivel("modal-historico-apelidos");
     }
 
     function definirTotalHistoricoApelidos(total) {
@@ -2443,7 +2912,8 @@
 
     async function carregarHistoricoApelidos() {
       const lista = document.getElementById("lista-historico-apelidos");
-      lista.innerHTML = '<p class="text-sm text-slate-400 text-center py-8">Carregando histórico...</p>';
+      lista.setAttribute("aria-busy", "true");
+      lista.innerHTML = '<p class="text-sm text-slate-400 text-center py-8" role="status" aria-live="polite">Carregando histórico...</p>';
 
       try {
         const res = await fetch("/api/historico-alteracoes");
@@ -2457,6 +2927,8 @@
         if (eventos.length === 0) {
           const vazio = document.createElement("p");
           vazio.className = "text-sm text-slate-400 text-center py-8";
+          vazio.setAttribute("role", "status");
+          vazio.setAttribute("aria-live", "polite");
           vazio.textContent = "Nenhuma alteração registrada ainda. O histórico começa a partir desta atualização; alterações anteriores não têm horário recuperável.";
           lista.appendChild(vazio);
           return;
@@ -2473,20 +2945,24 @@
         });
 
         const scroller = document.createElement("div");
-        scroller.className = "overflow-x-auto";
+        scroller.className = "accessible-table-wrap";
+        scroller.setAttribute("role", "region");
+        scroller.setAttribute("aria-label", "Tabela do histórico de alterações");
+        scroller.tabIndex = 0;
         const tabela = document.createElement("table");
         tabela.className = "w-full min-w-[1100px] text-left text-xs";
+        tabela.setAttribute("aria-label", "Histórico de alterações manuais de apelidos e endereços");
         tabela.innerHTML = `
           <thead class="sticky top-0 bg-slate-950 text-slate-400 uppercase tracking-wide">
             <tr>
-              <th class="px-3 py-2.5 font-semibold">Data e hora</th>
-              <th class="px-3 py-2.5 font-semibold">Equipamento</th>
-              <th class="px-3 py-2.5 font-semibold">Campo</th>
-              <th class="px-3 py-2.5 font-semibold">Valor anterior</th>
-              <th class="px-3 py-2.5 font-semibold">Valor novo</th>
-              <th class="px-3 py-2.5 font-semibold">Ação</th>
-              <th class="px-3 py-2.5 font-semibold">Desfazer</th>
-              <th class="px-3 py-2.5 font-semibold">Excluir registro</th>
+              <th scope="col" class="px-3 py-2.5 font-semibold">Data e hora</th>
+              <th scope="col" class="px-3 py-2.5 font-semibold">Equipamento</th>
+              <th scope="col" class="px-3 py-2.5 font-semibold">Campo</th>
+              <th scope="col" class="px-3 py-2.5 font-semibold">Valor anterior</th>
+              <th scope="col" class="px-3 py-2.5 font-semibold">Valor novo</th>
+              <th scope="col" class="px-3 py-2.5 font-semibold">Ação</th>
+              <th scope="col" class="px-3 py-2.5 font-semibold">Desfazer</th>
+              <th scope="col" class="px-3 py-2.5 font-semibold">Excluir registro</th>
             </tr>
           </thead>
           <tbody class="divide-y divide-slate-800"></tbody>
@@ -2576,8 +3052,12 @@
         lista.replaceChildren();
         const erro = document.createElement("p");
         erro.className = "text-sm text-rose-300 text-center py-8";
+        erro.setAttribute("role", "alert");
+        erro.setAttribute("aria-live", "assertive");
         erro.textContent = err.message || "Não foi possível carregar o histórico.";
         lista.appendChild(erro);
+      } finally {
+        lista.removeAttribute("aria-busy");
       }
     }
 
@@ -2694,6 +3174,7 @@
       const btn = document.getElementById("btn-salvar-equipamento");
       const originalText = btn.innerHTML;
       btn.disabled = true;
+      btn.setAttribute("aria-busy", "true");
       btn.innerHTML = `<i data-lucide="loader-2" class="w-4 h-4 animate-spin"></i><span>Salvando no Excel...</span>`;
       lucide.createIcons({ root: btn });
 
@@ -2726,6 +3207,7 @@
         showToast(err.message, "error");
       } finally {
         btn.disabled = false;
+        btn.removeAttribute("aria-busy");
         btn.innerHTML = originalText;
         lucide.createIcons({ root: btn });
       }
@@ -2739,11 +3221,11 @@
       toggleFormNovaUnidade(false);
       renderListaUnidades(unidadesList);
       document.getElementById("badge-total-unidades-modal").textContent = `${unidadesList.length} unidades`;
-      document.getElementById("modal-gerenciar-unidades").classList.remove("hidden");
+      abrirModalAcessivel("modal-gerenciar-unidades", "#input-filtro-unidades", "fecharModalGerenciarUnidades");
     }
 
     function fecharModalGerenciarUnidades() {
-      document.getElementById("modal-gerenciar-unidades").classList.add("hidden");
+      fecharModalAcessivel("modal-gerenciar-unidades");
     }
 
     function renderListaUnidades(lista) {
@@ -2774,7 +3256,6 @@
           </div>
           <div class="flex items-center gap-2 ml-3 shrink-0">
             <button
-              onclick="editarUnidade(${u.id})"
               class="px-2.5 py-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 text-amber-300 border border-amber-500/30 text-xs font-medium flex items-center gap-1 transition"
               title="Editar dados desta unidade"
             >
@@ -2783,6 +3264,7 @@
             </button>
           </div>
         `;
+        item.querySelector("button").addEventListener("click", () => editarUnidade(Number(u.id)));
         container.appendChild(item);
       });
       lucide.createIcons({ root: container });

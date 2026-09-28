@@ -18,3 +18,28 @@ __pycache__/
 # Temporary Excel/Office files
 ~$*.xlsx
 ~$*.xls
+
+# Operational workbooks and local comparison backups; retain the blank transfer template.
+/planilhas_entrada/*.xlsx
+/planilhas_entrada/**/*.xlsx
+!/planilhas_entrada/(MODELO) - TRANSFERENCIA SIMPRESS.xlsx
+/planilhas_entrada/*.xls
+/planilhas_entrada/**/*.xls
+/planilhas_entrada/*.xlsm
+/planilhas_entrada/**/*.xlsm
+/planilhas_entrada/*.csv
+/planilhas_entrada/**/*.csv
+/planilhas_entrada/*.tsv
+/planilhas_entrada/**/*.tsv
+/planilhas_entrada/_backups/
+/outputs/
+
+# Local operational state and histories
+/apelidos_modificados.json
+/unidades_custom.json
+/historico_alteracoes.json
+/historico_apelidos.json
+/historico_comparacoes.json
+/.transactions/
+**/.*.lock
+/planilhas_entrada/.upload-staging-*/
