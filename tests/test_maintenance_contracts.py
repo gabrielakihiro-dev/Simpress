@@ -1,6 +1,8 @@
 import io
 import re
+import tempfile
 import unittest
+import zipfile
 from contextlib import redirect_stdout
 from pathlib import Path
 from unittest.mock import patch
@@ -81,10 +83,17 @@ class MaintenanceContractTests(unittest.TestCase):
     def test_frontend_references_assets_served_from_the_existing_static_mount(self):
         index_file = app_config.STATIC_DIR / "index.html"
         html = index_file.read_text(encoding="utf-8")
+        self.assertIn('<link rel="stylesheet" href="/static/vendor/fonts.css">', html)
+        self.assertIn('<link rel="stylesheet" href="/static/vendor/tailwind-3.4.17.css">', html)
+        self.assertIn('<script src="/static/vendor/lucide-1.48.0.min.js"></script>', html)
         self.assertIn('<link rel="stylesheet" href="/static/app.css">', html)
         self.assertIn('<script src="/static/app.js"></script>', html)
+        self.assertNotRegex(html, r"https://(?:fonts\.googleapis\.com|fonts\.gstatic\.com|cdn\.tailwindcss\.com|unpkg\.com)")
         self.assertTrue((app_config.STATIC_DIR / "app.css").is_file())
         self.assertTrue((app_config.STATIC_DIR / "app.js").is_file())
+        self.assertTrue((app_config.STATIC_DIR / "vendor" / "fonts.css").is_file())
+        self.assertTrue((app_config.STATIC_DIR / "vendor" / "tailwind-3.4.17.css").is_file())
+        self.assertTrue((app_config.STATIC_DIR / "vendor" / "lucide-1.48.0.min.js").is_file())
 
         mounts = [
             route for route in main.app.routes
@@ -92,6 +101,60 @@ class MaintenanceContractTests(unittest.TestCase):
         ]
         self.assertEqual(len(mounts), 1)
         self.assertEqual(mounts[0].path, "/static")
+
+    def test_startup_readiness_maps_missing_files_to_unavailable_functions(self):
+        with tempfile.TemporaryDirectory() as temp_dir:
+            root = Path(temp_dir)
+            details = root / "EquipamentosDetalhes_atual.xlsx"
+
+            with zipfile.ZipFile(details, "w") as archive:
+                archive.writestr("[Content_Types].xml", "<Types/>")
+                archive.writestr("xl/workbook.xml", "<workbook/>")
+
+            with (
+                patch.object(main, "get_primary_equipment_file", return_value=details),
+                patch.object(main, "get_details_files", return_value=[details]),
+                patch.object(main, "TEMPLATE_FILE", root / "template.xlsx"),
+                patch.object(main, "DETAILS_UPLOAD_FILE", details),
+                patch.object(main, "ENDPOINT_UPLOAD_FILE", root / "endpoint.xlsx"),
+                patch.object(main, "EXPORT_MODEL_FILE", root / "export.xlsx"),
+            ):
+                report = main.get_startup_readiness()
+
+            self.assertTrue(report["files"]["inventario_equipamentos"]["available"])
+            self.assertFalse(report["functions"]["geracao_transferencia"]["available"])
+            self.assertEqual(
+                report["functions"]["geracao_transferencia"]["missing_files"],
+                ["template.xlsx"],
+            )
+            self.assertFalse(report["functions"]["comparacao_atualizacao_inventarios"]["available"])
+            self.assertEqual(
+                report["functions"]["comparacao_atualizacao_inventarios"]["missing_files"],
+                ["endpoint.xlsx"],
+            )
+            self.assertFalse(report["functions"]["exportacao_equipamentos"]["available"])
+
+    def test_startup_readiness_marks_corrupt_xlsx_package_unavailable(self):
+        with tempfile.TemporaryDirectory() as temp_dir:
+            path = Path(temp_dir) / "bad.xlsx"
+            path.write_bytes(b"not an xlsx archive")
+
+            status = main._check_startup_xlsx(path)
+
+        self.assertFalse(status["available"])
+        self.assertEqual(status["reason"], "arquivo inacessível ou XLSX inválido")
+
+    def test_application_startup_reports_readiness_without_workbook_values(self):
+        output = io.StringIO()
+        with redirect_stdout(output):
+            main.log_local_file_readiness()
+
+        self.assertIn(main.log_local_file_readiness, main.app.router.on_startup)
+        self.assertIn("[PRONTIDÃO] Verificação dos arquivos locais:", output.getvalue())
+        self.assertIn(
+            "[PRONTIDÃO] Geração de planilha de transferência: arquivos necessários presentes (checagem estrutural).",
+            output.getvalue(),
+        )
 
 
 if __name__ == "__main__":

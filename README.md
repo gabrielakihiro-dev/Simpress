@@ -14,8 +14,9 @@ Aplicação web local para consultar equipamentos por número de série, prepara
 
 - Windows 10 ou superior.
 - Python 3.12 ou superior. O ambiente local verificado nesta fase usa Python 3.14.7; a versão fixada de NumPy requer Python 3.12 ou superior.
-- Acesso à internet para carregar fontes, estilos e ícones usados pela interface.
+- Fontes, estilos utilitários e ícones da interface são servidos por arquivos locais; não é necessária conexão externa para carregá-los.
 - As versões diretas e transitivas do ambiente validado estão fixadas em `requirements.txt`.
+- As dependências usadas para reconstruir os arquivos da interface estão fixadas em `package-lock.json`; Node.js/npm só são necessários para reconstruí-los.
 
 ## Instalação e inicialização
 
@@ -63,6 +64,8 @@ A planilha EquipamentosDetalhes precisa ter, na primeira linha, colunas equivale
 
 Os caminhos e limites locais ficam em `app_config.py` e são calculados a partir da pasta do projeto. Não há arquivo `.env`: mantenha os nomes de arquivo e diretórios configurados nesse módulo ou ajuste ali a constante correspondente quando substituir um modelo local.
 
+Para reconstruir os estilos, ícones e fontes locais depois de alterar a interface, execute `npm ci` e `npm run build:ui`. O servidor Python usa os arquivos já gerados em `static/vendor` e não precisa iniciar um processo Node.js.
+
 ### 5. Inicie o servidor
 
 ```powershell
@@ -70,6 +73,8 @@ Os caminhos e limites locais ficam em `app_config.py` e são calculados a partir
 ```
 
 O arquivo inicializador usa o ambiente `.venv` criado nos passos anteriores. Mantenha a janela aberta enquanto usar o sistema.
+
+Na inicialização, o terminal informa quais arquivos locais foram encontrados e quais funções ficam indisponíveis quando uma dependência está ausente ou inválida.
 
 ### 6. Abra a aplicação
 

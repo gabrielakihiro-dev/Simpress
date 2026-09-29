@@ -5,58 +5,9 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Simpress | Automação de Transferência de Equipamentos - SEBRAE/PR</title>
   
-  <!-- Google Fonts: Inter & JetBrains Mono -->
-  <link rel="preconnect" href="https://fonts.googleapis.com">
-  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&family=JetBrains+Mono:wght@400;500;600;700&display=swap" rel="stylesheet">
-  
-  <!-- Tailwind CSS CDN -->
-  <script src="https://cdn.tailwindcss.com"></script>
-  <script>
-    tailwind.config = {
-      darkMode: 'class',
-      theme: {
-        extend: {
-          fontFamily: {
-            sans: ['Inter', 'sans-serif'],
-            mono: ['JetBrains Mono', 'monospace'],
-          },
-          colors: {
-            brand: {
-              50: '#f0f7ff',
-              100: '#e0effe',
-              200: '#bae0fd',
-              300: '#7cc7fb',
-              400: '#38a9f7',
-              500: '#0e8ce9',
-              600: '#026fc7',
-              700: '#0358a1',
-              800: '#074b85',
-              900: '#0c3f6e',
-              950: '#082849',
-            },
-            simpress: {
-              blue: '#004B87',
-              cyan: '#00A3E0',
-              accent: '#FF6B00'
-            },
-            sebrae: {
-              blue: '#005CA9',
-              yellow: '#FFCC00'
-            }
-          },
-          boxShadow: {
-            'glow-blue': '0 0 25px -5px rgba(14, 140, 233, 0.4)',
-            'glow-emerald': '0 0 25px -5px rgba(16, 185, 129, 0.4)',
-          }
-        }
-      }
-    }
-  </script>
-
-  <!-- Lucide Icons -->
-  <script src="https://unpkg.com/lucide@latest"></script>
-
+  <link rel="stylesheet" href="/static/vendor/fonts.css">
+  <link rel="stylesheet" href="/static/vendor/tailwind-3.4.17.css">
+  <script src="/static/vendor/lucide-1.48.0.min.js"></script>
   <link rel="stylesheet" href="/static/app.css">
 </head>
 <body class="min-h-full bg-gradient-to-br from-slate-950 via-slate-900 to-slate-950 text-slate-100 flex flex-col font-sans selection:bg-brand-500 selection:text-white pb-28">
@@ -504,7 +455,7 @@
                 id="select-unidade-destino"
                 onchange="handleUnidadeDestinoChange(this.value)"
                 class="w-full px-3.5 py-2.5 rounded-lg glass-input text-sm text-slate-100 focus:outline-none cursor-pointer appearance-none bg-no-repeat pr-10"
-                style="background-image: url('data:image/svg+xml;charset=US-ASCII,%3Csvg%20xmlns%3D%22http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%22%20width%3D%2220%22%20height%3D%2220%22%20viewBox%3D%220%200%2024%2024%22%20fill%3D%22none%22%20stroke%3D%22%2394a3b8%22%20stroke-width%3D%222%22%20stroke-linecap%3D%22round%22%20stroke-linejoin%3D%22round%22%3E%3Cpath%20d%3D%22m6%209%206%206%206-6%22%2F%3E%3C%2Fsvg%3E'); background-position: right 0.75rem center; background-size: 1.25rem;"
+                style="background-image: url('data:image/svg+xml;charset=US-ASCII,%3Csvg%20xmlns%3D%22http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%22%20width%3D%2220%22%20height%3D%2220%22%20viewBox%3D%220%200%2024%2024%22%20fill%3D%22none%22%20stroke%3D%22%2394a3b8%22%20stroke-width%3D%222%22%20stroke-linecap%3D%22round%22%20stroke-linejoin%3D%22round%22%3E%3Cpath%20d%3D%22m6%209%206%206%206-6%22%2F%3E%3C%2Fsvg%3E'); background-position: right 0.75rem center; background-size: 1.25rem; background-repeat: no-repeat;"
               >
                 <option value="">-- Escolha a Cidade ou Regional de Destino --</option>
               </select>
