@@ -8,7 +8,7 @@ import threading
 import unicodedata
 import uuid
 import zipfile
-from copy import copy, deepcopy
+from copy import deepcopy
 from datetime import datetime
 from pathlib import Path
 from typing import Dict, List, Optional, Any, Set
@@ -652,171 +652,6 @@ def _manual_alias_divergences(
     ]
 
 
-def _workbook_columns(worksheet: Any) -> tuple[List[str], Dict[str, List[int]]]:
-    headers = next(worksheet.iter_rows(min_row=1, max_row=1, values_only=True), ())
-    normalized_headers = [normalize_reference_value(value) for value in headers]
-    columns: Dict[str, List[int]] = {}
-    for column, key in enumerate(normalized_headers, start=1):
-        if key:
-            columns.setdefault(key, []).append(column)
-    return normalized_headers, columns
-
-
-def _choose_workbook_column(columns: Dict[str, List[int]], candidates: tuple[str, ...]) -> Optional[int]:
-    for key in candidates:
-        positions = columns.get(key, [])
-        if len(positions) > 1:
-            raise WorkbookSafetyError(f"A planilha contém mais de uma coluna '{key}'.")
-        if positions:
-            return positions[0]
-    return None
-
-
-def _select_merge_worksheet(workbook: Any, role: str) -> tuple[Any, List[str], int, int]:
-    if role == "detalhes":
-        serial_headers = ("NUMEROSERIE", "NUMERODESERIE", "SERIAL")
-        alias_headers = ("APELIDO", "HOSTNAME", "NOMEDOCOMPUTADOR", "COMPUTERNAME")
-    else:
-        serial_headers = (
-            "ROTULODESERVICONUMERODESERIE", "NUMEROSERIE", "NUMERODESERIE", "SERIAL", "SERVICETAG"
-        )
-        alias_headers = ("NOMEDOCOMPUTADOR", "COMPUTERNAME", "HOSTNAME", "APELIDO")
-
-    candidates = []
-    for worksheet in workbook.worksheets:
-        headers, columns = _workbook_columns(worksheet)
-        serial_column = _choose_workbook_column(columns, serial_headers)
-        alias_column = _choose_workbook_column(columns, alias_headers)
-        if not serial_column or not alias_column:
-            continue
-        if role == "detalhes" and not {"MODELO", "CIDADE"}.issubset(set(headers)):
-            continue
-        priority = int(role == "detalhes" and ("parque" in worksheet.title.lower() or "equipamento" in worksheet.title.lower()))
-        candidates.append((priority, worksheet, headers, serial_column, alias_column))
-
-    if not candidates:
-        label = "EquipamentosDetalhes" if role == "detalhes" else "Endpoint"
-        raise WorkbookSafetyError(f"Nenhuma aba válida de {label} foi encontrada na planilha ativa.")
-    highest_priority = max(item[0] for item in candidates)
-    matching = [item for item in candidates if item[0] == highest_priority]
-    if len(matching) != 1:
-        label = "EquipamentosDetalhes" if role == "detalhes" else "Endpoint"
-        raise WorkbookSafetyError(f"A planilha ativa de {label} tem mais de uma aba compatível.")
-    _, worksheet, headers, serial_column, alias_column = matching[0]
-    return worksheet, headers, serial_column, alias_column
-
-
-def _uploaded_value_for_column(record: Dict[str, Any], header: str, role: str) -> Any:
-    if role == "endpoint":
-        serial_headers = {"ROTULODESERVICONUMERODESERIE", "NUMEROSERIE", "NUMERODESERIE", "SERIAL", "SERVICETAG"}
-        alias_headers = {"NOMEDOCOMPUTADOR", "COMPUTERNAME", "HOSTNAME", "APELIDO"}
-    else:
-        serial_headers = {"NUMEROSERIE", "NUMERODESERIE", "SERIAL"}
-        alias_headers = {"APELIDO", "HOSTNAME", "NOMEDOCOMPUTADOR", "COMPUTERNAME"}
-    if header in serial_headers:
-        return _upload_serial_value(record, role)
-    if header in alias_headers:
-        return _upload_alias_value(record, role) or None
-    if role == "detalhes" and header in {"CNPJINSTALACAO", "CNPJDEINSTALACAO"}:
-        return _record_value(record, "CNPJINSTALACAO", "CNPJDEINSTALACAO") or None
-    return record.get(header)
-
-
-def _merge_uploaded_workbook(
-    workbook: Any,
-    role: str,
-    table: Dict[str, Any],
-    aliases_by_serial: Dict[str, str],
-) -> Optional[Dict[tuple, Any]]:
-    worksheet, headers, serial_column, alias_column = _select_merge_worksheet(workbook, role)
-    incoming = _unique_upload_records(table, role)
-    expected: Dict[tuple, Any] = {}
-    if role == "detalhes":
-        installation_cnpj_headers = ("CNPJINSTALACAO", "CNPJDEINSTALACAO")
-        has_target_installation_cnpj = any(header in installation_cnpj_headers for header in headers)
-        has_uploaded_installation_cnpj = any(
-            any(header in record for header in installation_cnpj_headers)
-            for record in incoming.values()
-        )
-        if has_uploaded_installation_cnpj and not has_target_installation_cnpj:
-            cnpj_column = worksheet.max_column + 1
-            while len(headers) < cnpj_column:
-                headers.append("")
-            header_cell = worksheet.cell(row=1, column=cnpj_column)
-            header_cell.value = "CNPJ Instalacao"
-            headers[cnpj_column - 1] = "CNPJINSTALACAO"
-            expected[(worksheet.title, header_cell.coordinate)] = header_cell.value
-
-    rows_by_serial: Dict[str, List[int]] = {}
-    for row in range(2, worksheet.max_row + 1):
-        serial_key = normalize_reference_value(worksheet.cell(row=row, column=serial_column).value)
-        if serial_key:
-            rows_by_serial.setdefault(serial_key, []).append(row)
-
-    detail_location_groups = (
-        ("ENDERECOINSTALACAO", "ENDERECODEINSTALACAO", "ENDERECOCOMPLETO", "ENDERECO"),
-        ("CIDADE",),
-        ("UF",),
-        ("CEP",),
-        ("CNPJINSTALACAO", "CNPJDEINSTALACAO"),
-    )
-    for serial_key, rows in rows_by_serial.items():
-        if len(rows) != 1:
-            continue
-        incoming_record = incoming.get(serial_key)
-        if role == "detalhes":
-            new_alias = aliases_by_serial.get(serial_key, "")
-            if incoming_record is not None:
-                for column, header in enumerate(headers, start=1):
-                    group = next((items for items in detail_location_groups if header in items), None)
-                    if group is None:
-                        continue
-                    source_header = next((item for item in group if item in incoming_record), None)
-                    if source_header is None:
-                        continue
-                    cell = worksheet.cell(row=rows[0], column=column)
-                    value = incoming_record[source_header]
-                    if cell.data_type != "f" and cell.value != value:
-                        cell.value = value
-                        expected[(worksheet.title, cell.coordinate)] = value
-        else:
-            new_alias = _upload_alias_value(incoming_record, role) if incoming_record is not None else ""
-        apply_alias = serial_key in aliases_by_serial if role == "detalhes" else bool(new_alias)
-        if not apply_alias:
-            continue
-        cell = worksheet.cell(row=rows[0], column=alias_column)
-        if cell.data_type != "f" and str(cell.value or "").strip() != str(new_alias or "").strip():
-            cell.value = new_alias
-            expected[(worksheet.title, cell.coordinate)] = new_alias
-
-    new_records = [
-        (serial_key, record)
-        for serial_key, record in incoming.items()
-        if serial_key not in rows_by_serial
-    ]
-    if new_records:
-        style_source_row = max((max(rows) for rows in rows_by_serial.values()), default=1)
-        next_row = worksheet.max_row + 1
-        for serial_key, record in new_records:
-            row = next_row
-            next_row += 1
-            for column, header in enumerate(headers, start=1):
-                cell = worksheet.cell(row=row, column=column)
-                if style_source_row > 0:
-                    source_cell = worksheet.cell(row=style_source_row, column=column)
-                    if source_cell.has_style:
-                        cell._style = copy(source_cell._style)
-                value = _uploaded_value_for_column(record, header, role) if header else None
-                if role == "detalhes" and header == headers[alias_column - 1] and serial_key in aliases_by_serial:
-                    value = aliases_by_serial[serial_key]
-                if value == "":
-                    value = None
-                cell.value = value
-                expected[(worksheet.title, cell.coordinate)] = value
-
-    return expected or None
-
-
 def validate_uploaded_workbook(file_bytes: bytes, role: str) -> Dict[str, Any]:
     return select_upload_table(read_workbook_tables(file_bytes), role)
 
@@ -1355,6 +1190,10 @@ def comparison_history_for_display(evento: Dict[str, Any]) -> Dict[str, Any]:
             comparison.get("apelidos_sem_atualizacao")
         )
         comparison_view["filtros_atualizacao_aplicados"] = True
+    missing_lists = {
+        key: filter_sebrae_owned_unmatched_items(items)
+        for key, items in missing_lists.items()
+    }
     missing_lists = {
         key: [without_legacy_source(item) for item in items]
         for key, items in missing_lists.items()
@@ -3278,7 +3117,7 @@ async def atualizar_planilhas(
     endpoint_file: UploadFile = File(...),
     details_file: UploadFile = File(...),
 ):
-    """Mescla as planilhas, aplica overrides manuais e registra a comparação."""
+    """Substitui o inventário ativo pelos arquivos validados e registra a comparação."""
     global equipamentos_cache, unidades_cache, stats_cache
     uploads = [endpoint_file, details_file]
     state_before = None
@@ -3309,12 +3148,6 @@ async def atualizar_planilhas(
         )
         previous_aliases = snapshot_equipment_aliases(state_before[0])
         manual_overrides = load_modified_apelidos()
-        manual_aliases = _manual_aliases_by_serial(manual_overrides)
-        aliases_by_serial = _uploaded_aliases_by_serial(
-            staged["endpoint"]["table"],
-            staged["detalhes"]["table"],
-            manual_aliases,
-        )
         uploaded_names = {
             "endpoint": staged["endpoint"]["name"],
             "detalhes": staged["detalhes"]["name"],
@@ -3347,21 +3180,19 @@ async def atualizar_planilhas(
                     raise RuntimeError(f"A cópia de segurança de '{target_path.name}' não passou na validação.")
 
             for role, target_path in target_files.items():
-                stage_workbook_update(
-                    transaction,
-                    target_path,
-                    lambda workbook, current_role=role: _merge_uploaded_workbook(
-                        workbook,
-                        current_role,
-                        staged[current_role]["table"],
-                        aliases_by_serial,
-                    ),
-                    allow_dimension_growth=True,
-                )
+                upload_bytes = staged[role]["bytes"]
+
+                def validate_staged_upload(path: Path, current_role=role, expected_bytes=upload_bytes):
+                    candidate_bytes = path.read_bytes()
+                    if candidate_bytes != expected_bytes:
+                        raise WorkbookSafetyError("O arquivo preparado difere do inventário validado.")
+                    validate_uploaded_workbook(candidate_bytes, current_role)
+
+                transaction.stage_bytes(target_path, upload_bytes, validate_staged_upload)
 
             transaction.apply()
             if not load_database(transaction_locked=True):
-                raise RuntimeError("As planilhas mescladas não puderam ser carregadas pelo site.")
+                raise RuntimeError("As planilhas enviadas não puderam ser carregadas pelo site.")
 
             endpoint_index = read_endpoint_alias_index()
             detail_serial_counts: Dict[str, int] = {}
@@ -3373,10 +3204,14 @@ async def atualizar_planilhas(
             detail_duplicates = {
                 serial_key for serial_key, count in detail_serial_counts.items() if count > 1
             }
+            comparison["horario_comparacao"] = datetime.now().astimezone().isoformat(timespec="seconds")
             comparison["apelidos_atualizados"] = compare_equipment_aliases(
                 previous_aliases,
                 snapshot_equipment_aliases(equipamentos_cache),
             )
+            for change in comparison["apelidos_atualizados"]:
+                change["arquivos_origem"] = dict(uploaded_names)
+                change["horario"] = comparison["horario_comparacao"]
             comparison["apelidos_sem_atualizacao"] = endpoint_alias_review_items(
                 endpoint_index, detail_serials, detail_duplicates
             )
@@ -3395,7 +3230,6 @@ async def atualizar_planilhas(
             comparison["backup_diretorio"] = str(backup_dir.relative_to(INPUT_DIR))
             comparison["total_equipamentos_carregados"] = stats_cache.get("total_equipamentos", 0)
             comparison["ultima_atualizacao"] = stats_cache.get("ultima_atualizacao", "")
-            comparison["horario_comparacao"] = datetime.now().astimezone().isoformat(timespec="seconds")
             comparison["arquivos_enviados"] = uploaded_names
             comparison["historico_salvo"] = True
             event_id = uuid.uuid4().hex

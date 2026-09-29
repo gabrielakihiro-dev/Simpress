@@ -84,8 +84,14 @@ class InventoryComparisonTests(unittest.TestCase):
         self.assertEqual(result["ausentes_em_detalhes"], [])
         self.assertTrue(any(item["fontes"]["EquipamentosDetalhes"] == "ambíguo" for item in result["registros_ambiguos"]))
 
-    def test_sebrae_owned_serials_remain_excluded_from_missing_lists_and_old_history_is_not_rewritten(self):
-        owned_item = {"computador": "PRNOTEAPU01", "serie": "BRJ135P5XS"}
+    def test_sebrae_owned_serials_are_filtered_from_old_and_new_history_without_rewriting_events(self):
+        owned_serials = [
+            "BRJ135P5XS",
+            "BRJ142QKBQ",
+            "BRJ9435VMR",
+            "BRJ9435VMF",
+            "BRJ149SCJG",
+        ]
         result = main.compare_uploaded_workbooks(
             source_table([{"NOMEDOCOMPUTADOR": "PRNOTEAPU01", "ROTULODESERVICONUMERODESERIE": "BRJ135P5XS"}]),
             source_table([]),
@@ -94,13 +100,28 @@ class InventoryComparisonTests(unittest.TestCase):
         self.assertEqual(result["ausentes_no_endpoint"], [])
         self.assertEqual(result["ausentes_em_detalhes"], [])
 
-        event = {
+        owned_endpoint_items = [
+            {"computador": f"PRNOTESEBRAE{index}", "serie": serial}
+            for index, serial in enumerate(owned_serials, start=1)
+        ]
+        owned_detail_items = [
+            {"computador": f"PRMAC-SEBRAE{index}", "serie": serial}
+            for index, serial in enumerate(owned_serials, start=1)
+        ]
+        common_endpoint_item = {"computador": "PRNOTECOMUM01", "serie": "BRJ00000001"}
+        common_detail_item = {"computador": "PRMAC-COMUM01", "serie": "BRJ00000002"}
+        expected_endpoint_items = owned_endpoint_items + [common_endpoint_item]
+        expected_detail_items = owned_detail_items + [common_detail_item]
+
+        new_event = {
+            "id": "evento-novo-ficticio",
+            "horario": "2026-09-29T10:00:00-03:00",
             "arquivos_enviados": {"endpoint": "endpoint.xlsx", "detalhes": "detalhes.xlsx", "base_principal": "base.xlsx"},
-            "resumo": {"ausentes_no_endpoint": 1, "ausentes_em_detalhes": 1, "ausentes_na_base_principal": 1, "divergencias_endereco": 1},
+            "resumo": {"ausentes_no_endpoint": 6, "ausentes_em_detalhes": 6, "ausentes_na_base_principal": 1, "divergencias_endereco": 1},
             "comparacao": {
-                "ausentes_no_endpoint": [owned_item],
-                "ausentes_em_detalhes": [owned_item],
-                "ausentes_na_base_principal": [owned_item],
+                "ausentes_no_endpoint": expected_endpoint_items,
+                "ausentes_em_detalhes": expected_detail_items,
+                "ausentes_na_base_principal": [owned_endpoint_items[0]],
                 "divergencias_endereco": [{"ip_endpoint": "10.0.0.1"}],
                 "divergencias_local": [{"local_base_principal": "Apucarana", "local_detalhes": "Araucária"}],
                 "arquivos_enviados": {"endpoint": "endpoint.xlsx", "detalhes": "detalhes.xlsx", "base_principal": "base.xlsx"},
@@ -108,17 +129,37 @@ class InventoryComparisonTests(unittest.TestCase):
                 "registros_ambiguos": [{"fontes": {"Endpoint": "presente", "Base principal": "ambíguo"}}],
             },
         }
-        displayed = main.comparison_history_for_display(event)
-        self.assertEqual(displayed["comparacao"]["ausentes_no_endpoint"], [])
-        self.assertEqual(displayed["comparacao"]["ausentes_em_detalhes"], [])
-        self.assertNotIn("ausentes_na_base_principal", displayed["comparacao"])
-        self.assertNotIn("divergencias_endereco", displayed["comparacao"])
-        self.assertNotIn("local_base_principal", displayed["comparacao"]["divergencias_local"][0])
-        self.assertEqual(displayed["comparacao"]["arquivos_enviados"], {"endpoint": "endpoint.xlsx", "detalhes": "detalhes.xlsx"})
-        self.assertEqual(displayed["comparacao"]["correspondencias_ambiguas"][0]["fontes"], [{"fonte": "Endpoint"}])
-        self.assertEqual(displayed["comparacao"]["registros_ambiguos"][0]["fontes"], {"Endpoint": "presente"})
-        self.assertEqual(displayed["arquivos_enviados"], {"endpoint": "endpoint.xlsx", "detalhes": "detalhes.xlsx"})
-        self.assertEqual(len(event["comparacao"]["ausentes_em_detalhes"]), 1)
+        displayed_new = main.comparison_history_for_display(new_event)
+        self.assertEqual(displayed_new["comparacao"]["ausentes_no_endpoint"], [common_endpoint_item])
+        self.assertEqual(displayed_new["comparacao"]["ausentes_em_detalhes"], [common_detail_item])
+        self.assertEqual(displayed_new["resumo"]["ausentes_no_endpoint"], 1)
+        self.assertEqual(displayed_new["resumo"]["ausentes_em_detalhes"], 1)
+        self.assertNotIn("ausentes_na_base_principal", displayed_new["comparacao"])
+        self.assertNotIn("divergencias_endereco", displayed_new["comparacao"])
+        self.assertNotIn("local_base_principal", displayed_new["comparacao"]["divergencias_local"][0])
+        self.assertEqual(displayed_new["comparacao"]["arquivos_enviados"], {"endpoint": "endpoint.xlsx", "detalhes": "detalhes.xlsx"})
+        self.assertEqual(displayed_new["comparacao"]["correspondencias_ambiguas"][0]["fontes"], [{"fonte": "Endpoint"}])
+        self.assertEqual(displayed_new["comparacao"]["registros_ambiguos"][0]["fontes"], {"Endpoint": "presente"})
+        self.assertEqual(displayed_new["arquivos_enviados"], {"endpoint": "endpoint.xlsx", "detalhes": "detalhes.xlsx"})
+        self.assertEqual(new_event["comparacao"]["ausentes_no_endpoint"], expected_endpoint_items)
+        self.assertEqual(new_event["comparacao"]["ausentes_em_detalhes"], expected_detail_items)
+
+        old_event = {
+            "id": main.PINNED_COMPARISON_EVENT_ID,
+            "horario": main.PINNED_COMPARISON_EVENT_TIME,
+            "resumo": {"ausentes_no_endpoint": 6, "ausentes_em_detalhes": 6},
+            "comparacao": {
+                "ausentes_no_endpoint": expected_endpoint_items,
+                "ausentes_em_detalhes": expected_detail_items,
+            },
+        }
+        displayed_old = main.comparison_history_for_display(old_event)
+        self.assertEqual(displayed_old["comparacao"]["ausentes_no_endpoint"], [common_endpoint_item])
+        self.assertEqual(displayed_old["comparacao"]["ausentes_em_detalhes"], [common_detail_item])
+        self.assertEqual(displayed_old["resumo"]["ausentes_no_endpoint"], 1)
+        self.assertEqual(displayed_old["resumo"]["ausentes_em_detalhes"], 1)
+        self.assertEqual(old_event["comparacao"]["ausentes_no_endpoint"], expected_endpoint_items)
+        self.assertEqual(old_event["comparacao"]["ausentes_em_detalhes"], expected_detail_items)
 
     def test_existing_hostname_classification_and_specific_prefix_order_are_preserved(self):
         self.assertEqual(main.location_for_computer_name("PRNOTEBACKUP123"), "Curitiba")
