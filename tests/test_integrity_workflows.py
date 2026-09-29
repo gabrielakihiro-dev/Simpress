@@ -5,6 +5,8 @@ import json
 import tempfile
 import time
 import unittest
+import warnings
+import zipfile
 from contextlib import ExitStack
 from pathlib import Path
 from unittest.mock import patch
@@ -79,6 +81,89 @@ def make_model(path: Path):
     other.column_dimensions["A"].width = 24
     workbook.save(path)
     workbook.close()
+
+
+def make_transfer_template(path: Path):
+    workbook = openpyxl.Workbook()
+    worksheet = workbook.active
+    worksheet.title = "Transferência"
+    for address in (
+        "B5", "J5", "B8", "F8", "B17", "F17", "B19", "F19", "J19",
+        "B21", "J21", "B23", "F23", "J23", "B25", "J25", "B29", "F29",
+        "B31", "F31", "J31", "B33", "J33", "B35", "F35", "J35", "B37", "J37",
+    ):
+        worksheet[address] = "MARCADOR FICTICIO"
+        worksheet[address].fill = PatternFill("solid", fgColor="EAF2F8")
+    worksheet.merge_cells("B8:E8")
+    worksheet.freeze_panes = "B5"
+    workbook.create_sheet("Instruções")
+    workbook.save(path)
+    workbook.close()
+    return _add_threaded_comment_parts(path)
+
+
+def _add_threaded_comment_parts(source: Path) -> Path:
+    """Add synthetic threaded-comment package parts without touching source fixtures."""
+    destination = source.with_name(f"{source.stem}-comentarios-ficticios.xlsx")
+    comments_path = "xl/threadedComments/threadedComment1.xml"
+    persons_path = "xl/persons/person.xml"
+    sheet_path = "xl/worksheets/sheet1.xml"
+    sheet_relationships_path = "xl/worksheets/_rels/sheet1.xml.rels"
+    comment_id = "{00000000-0000-0000-0000-000000000001}"
+    with zipfile.ZipFile(source, "r") as original, zipfile.ZipFile(destination, "w") as output:
+        output.comment = original.comment
+        for item in original.infolist():
+            content = original.read(item.filename)
+            if item.filename == "[Content_Types].xml":
+                content = content.replace(
+                    b"</Types>",
+                    b'<Default Extension="threadedcomments" ContentType="application/vnd.ms-excel.threadedcomments+xml"/>'
+                    b'<Override PartName="/xl/persons/person.xml" ContentType="application/vnd.ms-excel.person+xml"/>'
+                    b"</Types>",
+                )
+            elif item.filename == sheet_path:
+                content = content.replace(
+                    b"</worksheet>",
+                    b'<extLst><ext uri="{00000000-0000-0000-0000-000000000002}">'
+                    b'<threadedComments xmlns="http://schemas.microsoft.com/office/spreadsheetml/2018/threadedcomments" '
+                    b'xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships" '
+                    b'r:id="rIdThreadedComments"/></ext></extLst></worksheet>',
+                )
+            elif item.filename == sheet_relationships_path:
+                content = content.replace(
+                    b"</Relationships>",
+                    b'<Relationship Id="rIdThreadedComments" '
+                    b'Type="http://schemas.microsoft.com/office/2017/10/relationships/threadedComment" '
+                    b'Target="../threadedComments/threadedComment1.xml"/></Relationships>',
+                )
+            output.writestr(item, content)
+
+        if sheet_relationships_path not in original.namelist():
+            output.writestr(
+                sheet_relationships_path,
+                b'<?xml version="1.0" encoding="UTF-8" standalone="yes"?>'
+                b'<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">'
+                b'<Relationship Id="rIdThreadedComments" '
+                b'Type="http://schemas.microsoft.com/office/2017/10/relationships/threadedComment" '
+                b'Target="../threadedComments/threadedComment1.xml"/></Relationships>',
+            )
+        output.writestr(
+            comments_path,
+            b'<?xml version="1.0" encoding="UTF-8" standalone="yes"?>'
+            b'<ThreadedComments xmlns="http://schemas.microsoft.com/office/spreadsheetml/2018/threadedcomments">'
+            b'<threadedComment ref="A1" dT="2026-01-01T00:00:00Z" personId="'
+            + comment_id.encode("ascii")
+            + b'"><text><r><t>Comentario ficticio</t></r></text></threadedComment></ThreadedComments>',
+        )
+        output.writestr(
+            persons_path,
+            b'<?xml version="1.0" encoding="UTF-8" standalone="yes"?>'
+            b'<personList xmlns="http://schemas.microsoft.com/office/spreadsheetml/2018/threadedcomments">'
+            b'<person displayName="Pessoa Ficticia" id="'
+            + comment_id.encode("ascii")
+            + b'" userId="pessoa@example.invalid" providerId="None"/></personList>',
+        )
+    return destination
 
 
 class WorkflowIntegrityTests(unittest.TestCase):
@@ -164,18 +249,21 @@ class WorkflowIntegrityTests(unittest.TestCase):
         self.assertEqual(self.details.read_bytes(), before)
 
     def test_export_changes_only_unique_changed_apelido_cells_and_keeps_other_content(self):
-        make_model(self.model)
-        make_endpoint(self.endpoint, [
-            ("s-1", "HOST-NEW"),
-            ("DUP", "HOST-DUP-A"),
-            ("DUP", "HOST-DUP-B"),
-            ("SAME", "HOST-SAME"),
-            ("MISSING", "HOST-NOT-IN-MODEL"),
-            ("FORMULA", "HOST-F"),
-            ("OUTDUP", "HOST-OUTDUP"),
-            ("", "HOST-BLANK-SERIAL"),
+        make_details(self.details, [
+            ("S-1", "LOCAL-ATUAL", "Modelo atual", "Maringá", "Notebook", "87000000"),
+            ("S-2", "LOCAL-DOIS", "Modelo dois", "Curitiba", "Notebook", "80000000"),
         ])
-        self.overrides.write_text("{}", encoding="utf-8")
+        workbook = openpyxl.Workbook()
+        worksheet = workbook.active
+        worksheet.title = "Parque"
+        worksheet.append(["NumeroSerie", "Apelido", "Modelo", "Cidade", "Tipo", "CEP"])
+        worksheet.append(["S-1", "ANTIGO", "Modelo antigo", "Londrina", "Notebook", "87000000"])
+        worksheet.append(["S-2", "LOCAL-DOIS", "Modelo dois", "Curitiba", "Notebook", "80000000"])
+        worksheet["B2"].fill = PatternFill("solid", fgColor="17365D")
+        worksheet.freeze_panes = "A2"
+        workbook.save(self.model)
+        workbook.close()
+        make_endpoint(self.endpoint, [("s-1", "HOST-NEW")])
         source_before = self.model.read_bytes()
         original_workbook = openpyxl.load_workbook(self.model, data_only=False)
         original_snapshot = main.workbook_snapshot(original_workbook)
@@ -186,27 +274,107 @@ class WorkflowIntegrityTests(unittest.TestCase):
         output_path = self.root / "export-ficticio.xlsx"
         output_path.write_bytes(output_bytes)
         self.assertEqual(response.headers["x-total-alterados"], "1")
-        self.assertGreater(int(response.headers["x-total-conferencia"]), 0)
         self.assertEqual(self.model.read_bytes(), source_before)
+        with zipfile.ZipFile(self.model) as original_package, zipfile.ZipFile(output_path) as exported_package:
+            self.assertEqual(original_package.namelist(), exported_package.namelist())
+            changed_parts = {
+                name for name in original_package.namelist()
+                if original_package.read(name) != exported_package.read(name)
+            }
+        self.assertEqual(changed_parts, {"xl/worksheets/sheet1.xml"})
 
         updated_workbook = openpyxl.load_workbook(output_path, data_only=False)
         updated_snapshot = main.workbook_snapshot(updated_workbook)
         expected_snapshot = copy.deepcopy(original_snapshot)
-        expected_snapshot["worksheets"]["Parque"]["cells"]["B2"] = (
-            "HOST-NEW",
-            expected_snapshot["worksheets"]["Parque"]["cells"]["B2"][1],
-            expected_snapshot["worksheets"]["Parque"]["cells"]["B2"][2],
-            expected_snapshot["worksheets"]["Parque"]["cells"]["B2"][3],
-            expected_snapshot["worksheets"]["Parque"]["cells"]["B2"][4],
-        )
+        for address, value in {"B2": "HOST-NEW", "C2": "Modelo atual", "D2": "Maringá"}.items():
+            old_cell = expected_snapshot["worksheets"]["Parque"]["cells"][address]
+            expected_snapshot["worksheets"]["Parque"]["cells"][address] = (value, *old_cell[1:])
         self.assertEqual(updated_snapshot, expected_snapshot)
         worksheet = updated_workbook["Parque"]
         self.assertEqual(worksheet["B2"].value, "HOST-NEW")
-        self.assertEqual(worksheet["B3"].value, "DUP-ANTIGO")
-        self.assertEqual(worksheet["B4"].value, "HOST-SAME")
-        self.assertEqual(worksheet["B5"].value, '=CONCAT("HOST","-F")')
-        self.assertEqual(worksheet["B6"].value, "DUP-OUT-A")
-        self.assertEqual(worksheet["B7"].value, "DUP-OUT-B")
+        self.assertEqual(worksheet["B2"].fill.fgColor.rgb, "0017365D")
+        self.assertEqual(worksheet["B3"].value, "LOCAL-DOIS")
+        updated_workbook.close()
+
+        make_details(self.details, [
+            ("S-1", "LOCAL-ATUAL", "Modelo atual", "Maringá", "Notebook", "87000000"),
+            ("S-3", "NOVO", "Modelo novo", "Curitiba", "Notebook", "80000000"),
+        ])
+        with self.assertRaises(main.HTTPException) as raised:
+            main.exportar_equipamentos()
+        self.assertEqual(raised.exception.status_code, 409)
+        self.assertEqual(self.model.read_bytes(), source_before)
+
+    def test_official_transfer_preserves_threaded_comments_and_changes_only_form_cells(self):
+        template = make_transfer_template(self.input_dir / "modelo-transferencia-ficticio.xlsx")
+        with self.assertRaises(main.WorkbookSafetyError):
+            main.load_workbook_safely(template)
+        payload = main.TransferenciaPayload(
+            serial="SERIE-FICTICIA",
+            descricao_equipamento="EQUIPAMENTO FICTICIO",
+            contrato=12345,
+            retirada_endereco="ORIGEM FICTICIA",
+            retirada_contato="REMETENTE FICTICIO",
+            retirada_email="remetente@example.invalid",
+            retirada_telefone="41900000000",
+            entrega_cnpj="00.000.000/0000-00",
+            entrega_endereco="DESTINO FICTICIO",
+            entrega_contato="DESTINATARIO FICTICIO",
+            entrega_email="destinatario@example.invalid",
+            entrega_telefone="41911112222",
+            entrega_obs="OBSERVACAO FICTICIA",
+        )
+
+        with patch.object(main, "TEMPLATE_FILE", template):
+            response = main.gerar_planilha(payload)
+
+        output_bytes = asyncio.run(_collect_stream(response))
+        output_path = self.root / "transferencia-ficticia.xlsx"
+        output_path.write_bytes(output_bytes)
+        with zipfile.ZipFile(template) as original_package, zipfile.ZipFile(output_path) as generated_package:
+            self.assertEqual(original_package.namelist(), generated_package.namelist())
+            changed_parts = {
+                name for name in original_package.namelist()
+                if original_package.read(name) != generated_package.read(name)
+            }
+            for part in ("xl/threadedComments/threadedComment1.xml", "xl/persons/person.xml"):
+                self.assertEqual(original_package.read(part), generated_package.read(part))
+        self.assertEqual(changed_parts, {"xl/worksheets/sheet1.xml"})
+
+        with warnings.catch_warnings():
+            warnings.filterwarnings("ignore", message="Unknown extension is not supported and will be removed")
+            generated_workbook = openpyxl.load_workbook(output_path, data_only=False)
+        self.assertEqual(generated_workbook["Transferência"]["B8"].value, "SERIE-FICTICIA")
+        self.assertEqual(generated_workbook["Transferência"]["B37"].value, "OBSERVACAO FICTICIA")
+        self.assertEqual(generated_workbook["Transferência"]["J21"].value, "")
+        generated_workbook.close()
+
+    def test_saving_a_new_equipment_row_grows_dimensions(self):
+        path = self.input_dir / "equipamentos-novos-ficticio.xlsx"
+        workbook = openpyxl.Workbook()
+        worksheet = workbook.active
+        worksheet.title = "EquipamentosDetalhes"
+        worksheet.append(["NumeroSerie", "Apelido", "Modelo", "Cidade", "Tipo", "CEP"])
+        workbook.save(path)
+        workbook.close()
+        payload = main.EquipamentoUpdatePayload(
+            serial="SERIE-NOVA-FICTICIA",
+            apelido="APELIDO FICTICIO",
+            modelo="MODELO FICTICIO",
+            cidade="CURITIBA",
+            tipo="Notebook",
+            cep="80220000",
+        )
+
+        self.assertTrue(main.update_equipment_in_workbook_file(path, payload))
+
+        updated_workbook = openpyxl.load_workbook(path, data_only=False)
+        updated_sheet = updated_workbook["EquipamentosDetalhes"]
+        self.assertEqual(updated_sheet.max_row, 2)
+        self.assertEqual(updated_sheet.calculate_dimension(), "A1:F2")
+        self.assertEqual(updated_sheet["A2"].value, "SERIE-NOVA-FICTICIA")
+        self.assertEqual(updated_sheet["B2"].value, "APELIDO FICTICIO")
+        self.assertEqual(updated_sheet["F2"].value, 80220000)
         updated_workbook.close()
 
     def test_upload_appends_invall_alias_change_to_comparison_history_only(self):

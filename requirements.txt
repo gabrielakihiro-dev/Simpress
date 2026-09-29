@@ -1,5 +1,25 @@
-fastapi>=0.100.0
-uvicorn>=0.20.0
-pandas>=2.0.0
-openpyxl>=3.1.0
-python-multipart>=0.0.9
+# Runtime dependency set resolved in the local Python 3.14.7 environment.
+# Direct application dependencies
+fastapi==0.141.1
+uvicorn==0.54.0
+pandas==3.0.6
+openpyxl==3.1.5
+python-multipart==0.0.32
+
+# Resolved runtime dependencies, pinned for repeatable installs
+annotated-doc==0.0.5
+annotated-types==0.8.0
+anyio==4.15.1
+click==8.5.0
+et_xmlfile==2.0.0
+h11==0.16.0
+idna==3.20
+numpy==2.5.3
+pydantic==2.13.5
+pydantic_core==2.46.5
+python-dateutil==2.9.0.post0
+six==1.17.0
+starlette==1.7.0
+typing-inspection==0.4.4
+typing_extensions==4.16.0
+tzdata==2026.4
