@@ -286,13 +286,14 @@ class WorkflowIntegrityTests(unittest.TestCase):
         updated_workbook = openpyxl.load_workbook(output_path, data_only=False)
         updated_snapshot = main.workbook_snapshot(updated_workbook)
         expected_snapshot = copy.deepcopy(original_snapshot)
-        for address, value in {"B2": "HOST-NEW", "C2": "Modelo atual", "D2": "Maringá"}.items():
-            old_cell = expected_snapshot["worksheets"]["Parque"]["cells"][address]
-            expected_snapshot["worksheets"]["Parque"]["cells"][address] = (value, *old_cell[1:])
+        old_alias_cell = expected_snapshot["worksheets"]["Parque"]["cells"]["B2"]
+        expected_snapshot["worksheets"]["Parque"]["cells"]["B2"] = ("HOST-NEW", *old_alias_cell[1:])
         self.assertEqual(updated_snapshot, expected_snapshot)
         worksheet = updated_workbook["Parque"]
         self.assertEqual(worksheet["B2"].value, "HOST-NEW")
         self.assertEqual(worksheet["B2"].fill.fgColor.rgb, "0017365D")
+        self.assertEqual(worksheet["C2"].value, "Modelo antigo")
+        self.assertEqual(worksheet["D2"].value, "Londrina")
         self.assertEqual(worksheet["B3"].value, "LOCAL-DOIS")
         updated_workbook.close()
 
@@ -349,7 +350,7 @@ class WorkflowIntegrityTests(unittest.TestCase):
         self.assertEqual(generated_workbook["Transferência"]["J21"].value, "")
         generated_workbook.close()
 
-    def test_saving_a_new_equipment_row_grows_dimensions(self):
+    def test_saving_a_new_equipment_row_grows_dimensions_and_ignores_legacy_location_fields(self):
         path = self.input_dir / "equipamentos-novos-ficticio.xlsx"
         workbook = openpyxl.Workbook()
         worksheet = workbook.active
@@ -374,7 +375,8 @@ class WorkflowIntegrityTests(unittest.TestCase):
         self.assertEqual(updated_sheet.calculate_dimension(), "A1:F2")
         self.assertEqual(updated_sheet["A2"].value, "SERIE-NOVA-FICTICIA")
         self.assertEqual(updated_sheet["B2"].value, "APELIDO FICTICIO")
-        self.assertEqual(updated_sheet["F2"].value, 80220000)
+        self.assertIsNone(updated_sheet["D2"].value)
+        self.assertIsNone(updated_sheet["F2"].value)
         updated_workbook.close()
 
     def test_upload_appends_invall_alias_change_to_comparison_history_only(self):
@@ -432,6 +434,59 @@ class WorkflowIntegrityTests(unittest.TestCase):
         self.assertEqual(len(comparison_after_repeat), len(comparison_before) + 2)
         self.assertEqual(json.loads(self.manual_history.read_text(encoding="utf-8")), manual_before)
 
+    def test_upload_replaces_inventory_snapshot_and_keeps_duplicate_source_rows(self):
+        make_details(self.details, [
+            ("SN-REMOVER", "ALIAS-ANTIGO", "Modelo antigo", "Maringá", "Notebook", "87000000"),
+            ("SN-MANTER", "ALIAS-ANTIGO", "Modelo A", "Maringá", "Notebook", "87000000"),
+        ])
+        make_endpoint(self.endpoint, [
+            ("SN-REMOVER", "HOST-ANTIGO"),
+            ("SN-MANTER", "HOST-ANTIGO"),
+        ])
+        make_model(self.model)
+        self.comparison_history.write_text("[]", encoding="utf-8")
+        self.assertTrue(main.load_database())
+
+        endpoint_bytes = _endpoint_bytes([
+            ("SN-MANTER", "HOST-NOVO"),
+            ("SN-DUP", "HOST-DUPLICADO"),
+        ])
+        details_bytes = _details_bytes([
+            ("SN-MANTER", "ALIAS-DA-FONTE", "Modelo A", "Maringá", "Notebook", "87000000"),
+            ("SN-DUP", "ALIAS-DUP-A", "Modelo B", "Londrina", "Notebook", "86000000"),
+            ("SN-DUP", "ALIAS-DUP-B", "Modelo C", "Londrina", "Notebook", "86000000"),
+        ])
+        result = asyncio.run(main.atualizar_planilhas(
+            UploadFile(filename="InvAll_retrato.xlsx", file=io.BytesIO(endpoint_bytes)),
+            UploadFile(filename="Detalhes_retrato.xlsx", file=io.BytesIO(details_bytes)),
+        ))
+
+        self.assertTrue(result["sucesso"])
+        saved_details = openpyxl.load_workbook(self.details, data_only=False)
+        details_sheet = saved_details["EquipamentosDetalhes"]
+        details_rows = [
+            (row[0], row[1])
+            for row in details_sheet.iter_rows(min_row=2, values_only=True)
+            if any(value is not None for value in row)
+        ]
+        self.assertEqual(details_rows, [
+            ("SN-MANTER", "ALIAS-DA-FONTE"),
+            ("SN-DUP", "ALIAS-DUP-A"),
+            ("SN-DUP", "ALIAS-DUP-B"),
+        ])
+        self.assertEqual(saved_details["Metadados"]["B1"].value, "=1+1")
+        saved_details.close()
+
+        saved_endpoint = openpyxl.load_workbook(self.endpoint, data_only=True)
+        endpoint_rows = list(saved_endpoint["InvAllComputersSummary"].iter_rows(min_row=2, values_only=True))
+        self.assertEqual(endpoint_rows, [("SN-MANTER", "HOST-NOVO"), ("SN-DUP", "HOST-DUPLICADO")])
+        saved_endpoint.close()
+
+        self.assertNotIn("SN-REMOVER", main.equipamentos_cache)
+        self.assertEqual(main.equipamentos_cache["SN-MANTER"]["apelido"], "HOST-NOVO")
+        self.assertEqual(main.equipamentos_cache["SN-DUP"]["invall_alias_status"], "serie_detalhes_duplicada")
+        self.assertNotEqual(main.equipamentos_cache["SN-DUP"]["apelido"], "HOST-DUPLICADO")
+
     def test_upload_history_failure_rolls_back_workbooks_history_and_memory(self):
         make_details(self.details, [("SN-1", "ALIAS-DETALHES", "Modelo A", "Maringá", "Notebook", "87000000")])
         make_endpoint(self.endpoint, [("SN-1", "PRNOTE-OLD")])
@@ -461,7 +516,7 @@ class WorkflowIntegrityTests(unittest.TestCase):
         self.assertEqual(self.comparison_history.read_text(encoding="utf-8"), "[]")
         self.assertEqual(main.equipamentos_cache, before_cache)
 
-    def test_manual_undo_reverses_only_latest_manual_event_and_keeps_invall_display(self):
+    def test_manual_undo_reverses_latest_event_and_preserves_manual_override_priority(self):
         make_details(self.details, [("SN-1", "ALIAS-ORIGINAL", "Modelo A", "Maringá", "Notebook", "87000000")])
         make_endpoint(self.endpoint, [("SN-1", "HOST-INVALL")])
         make_model(self.model)
@@ -476,7 +531,7 @@ class WorkflowIntegrityTests(unittest.TestCase):
         self.assertTrue(main.load_database())
 
         saved = main.atualizar_apelido(main.ApelidoUpdatePayload(serial="SN-1", apelido="ALIAS-MANUAL"))
-        self.assertEqual(saved["equipamento"]["apelido"], "HOST-INVALL")
+        self.assertEqual(saved["equipamento"]["apelido"], "ALIAS-MANUAL")
         history_after_save = json.loads(self.manual_history.read_text(encoding="utf-8"))
         latest_event = history_after_save[-1]
         self.assertEqual(latest_event["apelido_anterior"], "ALIAS-ORIGINAL")
@@ -486,7 +541,7 @@ class WorkflowIntegrityTests(unittest.TestCase):
         # must remain valid even after openpyxl refreshes the modified field.
         time.sleep(1.1)
         undone = main.desfazer_alteracao_apelido(main.ApelidoUndoPayload(evento_id=latest_event["id"]))
-        self.assertEqual(undone["equipamento"]["apelido"], "HOST-INVALL")
+        self.assertEqual(undone["equipamento"]["apelido"], "ALIAS-ORIGINAL")
         self.assertEqual(len(json.loads(self.manual_history.read_text(encoding="utf-8"))), 3)
         self.assertEqual(json.loads(self.comparison_history.read_text(encoding="utf-8")), [{"id": "planilha-antiga"}])
         saved_details = openpyxl.load_workbook(self.details, data_only=True)

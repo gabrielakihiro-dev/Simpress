@@ -96,7 +96,7 @@ Para encerrar o servidor, volte à janela em que ele está rodando e pressione `
 3. Confira as listas de ausências por fonte, as divergências de local e os registros ambíguos apresentados pelo sistema. A comparação usa somente essas duas fontes; a base principal de equipamentos continua disponível para gerar as planilhas pelo botão de exportação.
 4. Consulte **Histórico planilhas** para rever comparações anteriores.
 
-O limite de envio é de 30 MB por arquivo. Antes de substituir os relatórios, confirme que são as versões corretas. O sistema guarda cópias anteriores em `planilhas_entrada/_backups`.
+O limite de envio é de 30 MB por arquivo. Cada atualização substitui integralmente os dois inventários ativos pelos arquivos validados enviados; séries ausentes no novo relatório deixam de compor a base carregada. Antes de enviar, confirme que são as versões corretas. O sistema guarda cópias anteriores em `planilhas_entrada/_backups` para recuperação manual.
 
 O apelido alterado manualmente fica associado à série e prevalece nas pesquisas, na entrada rápida e na exportação, mesmo após recarregar ou atualizar as planilhas. Sem override manual, o hostname único da InvAll prevalece sobre o valor de EquipamentosDetalhes. Ao atualizar os arquivos, endereço e localidade são sincronizados a partir de EquipamentosDetalhes. O Histórico planilhas registra divergências entre apelidos manuais e as duas fontes, permitindo manter o override ou removê-lo para uma série. A exportação altera somente a coluna `Apelido`; abas, linhas, colunas, dimensões, demais valores e formatação do modelo são preservados.
 
@@ -121,7 +121,7 @@ Esta etapa não adiciona dependências, endpoints ou serviços remotos.
 
 ## Arquivos, backups e recuperação
 
-- Os uploads ativos são gravados em `planilhas_entrada` com os nomes definidos em `app_config.py`.
+- Os uploads validados substituem os inventários ativos em `planilhas_entrada`, com os nomes definidos em `app_config.py`.
 - Antes de substituir inventários, a aplicação copia os arquivos atuais para `planilhas_entrada/_backups/<data-hora>-<identificador>/`, separados em `endpoint` e `detalhes`. Os backups são mantidos para recuperação manual.
 - Gravações relacionadas usam temporários validados, bloqueios por arquivo e transações. Se uma operação falhar, a transação restaura os destinos afetados e o cache anterior.
 - Uma transação interrompida deixa estado em `.transactions`. Na próxima inicialização, `integrity.py` tenta recuperar esse estado antes de carregar os arquivos. Não apague essa pasta enquanto houver uma recuperação pendente.
