@@ -421,6 +421,123 @@ def validate_xlsx_package(file_bytes: bytes) -> None:
         ) from None
 
 
+def _check_startup_xlsx(path: Optional[Path]) -> Dict[str, Any]:
+    """Check the local XLSX container without loading or logging workbook data."""
+    if path is None:
+        return {"available": False, "file": None, "reason": "ausente"}
+    if not path.is_file():
+        return {"available": False, "file": path.name, "reason": "ausente"}
+
+    try:
+        with zipfile.ZipFile(path) as archive:
+            entries = archive.infolist()
+            if not entries or len(entries) > MAX_XLSX_ARCHIVE_ENTRIES:
+                return {"available": False, "file": path.name, "reason": "pacote XLSX inválido"}
+            if sum(entry.file_size for entry in entries) > MAX_XLSX_UNCOMPRESSED_BYTES:
+                return {"available": False, "file": path.name, "reason": "pacote excede o limite de tamanho"}
+            required_parts = {"[Content_Types].xml", "xl/workbook.xml"}
+            if not required_parts.issubset({entry.filename for entry in entries}):
+                return {"available": False, "file": path.name, "reason": "pacote XLSX inválido"}
+    except (OSError, ValueError, zipfile.BadZipFile, zipfile.LargeZipFile):
+        return {"available": False, "file": path.name, "reason": "arquivo inacessível ou XLSX inválido"}
+
+    return {"available": True, "file": path.name, "reason": "OK"}
+
+
+def get_startup_readiness() -> Dict[str, Any]:
+    """Map essential local files to the application functions that need them."""
+    try:
+        details_candidates = get_details_files()
+        details_directory_readable = True
+    except Exception:
+        details_candidates = []
+        details_directory_readable = False
+    try:
+        active_details = get_primary_equipment_file()
+    except Exception:
+        active_details = None
+
+    if active_details is not None:
+        details_status = _check_startup_xlsx(active_details)
+    elif details_candidates:
+        details_status = {
+            "available": False,
+            "file": details_candidates[0].name,
+            "reason": "nenhum inventário contém aba e cabeçalhos válidos",
+        }
+    elif not details_directory_readable:
+        details_status = {
+            "available": False,
+            "file": DETAILS_UPLOAD_FILE.name,
+            "reason": "não foi possível ler a pasta de inventários",
+        }
+    else:
+        details_status = {
+            "available": False,
+            "file": DETAILS_UPLOAD_FILE.name,
+            "reason": "ausente",
+        }
+
+    files = {
+        "template_transferencia": _check_startup_xlsx(TEMPLATE_FILE),
+        "inventario_equipamentos": details_status,
+        "inventario_detalhes_atualizacao": _check_startup_xlsx(DETAILS_UPLOAD_FILE),
+        "inventario_endpoint": _check_startup_xlsx(ENDPOINT_UPLOAD_FILE),
+        "modelo_exportacao": _check_startup_xlsx(EXPORT_MODEL_FILE),
+    }
+    requirements = {
+        "consulta_equipamentos": ["inventario_equipamentos"],
+        "geracao_transferencia": ["template_transferencia"],
+        "comparacao_atualizacao_inventarios": [
+            "inventario_detalhes_atualizacao",
+            "inventario_endpoint",
+        ],
+        "exportacao_equipamentos": ["inventario_equipamentos", "modelo_exportacao"],
+    }
+    functions = {
+        name: {
+            "available": all(files[key]["available"] for key in required_files),
+            "missing_files": [
+                files[key]["file"] or key
+                for key in required_files
+                if not files[key]["available"]
+            ],
+        }
+        for name, required_files in requirements.items()
+    }
+    return {"files": files, "functions": functions}
+
+
+def report_startup_readiness() -> None:
+    """Log a clear feature impact summary without exposing workbook contents."""
+    report = get_startup_readiness()
+    labels = {
+        "template_transferencia": "Modelo de transferência",
+        "inventario_equipamentos": "Inventário ativo EquipamentosDetalhes",
+        "inventario_detalhes_atualizacao": "EquipamentosDetalhes para atualização",
+        "inventario_endpoint": "Inventário InvAllComputersSummary",
+        "modelo_exportacao": "Modelo de exportação",
+    }
+    print("[PRONTIDÃO] Verificação dos arquivos locais:")
+    for key, status in report["files"].items():
+        state = "PACOTE XLSX válido" if status["available"] else f"INDISPONÍVEL ({status['reason']})"
+        filename = status["file"] or "arquivo não localizado"
+        print(f"[PRONTIDÃO] {labels[key]} — {filename}: {state}")
+
+    function_labels = {
+        "consulta_equipamentos": "Consulta de equipamentos",
+        "geracao_transferencia": "Geração de planilha de transferência",
+        "comparacao_atualizacao_inventarios": "Comparação e atualização de inventários",
+        "exportacao_equipamentos": "Exportação de equipamentos",
+    }
+    for key, status in report["functions"].items():
+        if status["available"]:
+            print(f"[PRONTIDÃO] {function_labels[key]}: arquivos necessários presentes (checagem estrutural).")
+        else:
+            missing = ", ".join(status["missing_files"])
+            print(f"[PRONTIDÃO] {function_labels[key]}: INDISPONÍVEL; dependência ausente ou inválida: {missing}.")
+
+
 def read_workbook_tables(file_bytes: bytes) -> List[Dict[str, Any]]:
     """Lê abas não vazias de um XLSX e retorna cabeçalhos normalizados e linhas."""
     workbook = None
@@ -1620,6 +1737,12 @@ app = FastAPI(
     description="Sistema inteligente para emissão automatizada de planilhas oficiais de transferência de equipamentos.",
     version="1.3.0"
 )
+
+
+@app.on_event("startup")
+def log_local_file_readiness() -> None:
+    report_startup_readiness()
+
 
 class LocalRequestSafetyMiddleware:
     """Limits upload request size and prevents raw internal exceptions reaching clients or logs."""

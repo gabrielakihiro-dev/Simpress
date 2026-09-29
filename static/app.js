@@ -1997,6 +1997,38 @@
       fecharModalAcessivel("modal-gerenciar-unidades");
     }
 
+    async function copiarTextoParaAreaTransferencia(texto) {
+      if (navigator.clipboard && typeof navigator.clipboard.writeText === "function") {
+        try {
+          await navigator.clipboard.writeText(texto);
+          return;
+        } catch (err) {
+          // Tenta o fallback legado quando a permissão da API moderna é negada.
+        }
+      }
+
+      const campoTemporario = document.createElement("textarea");
+      campoTemporario.value = texto;
+      campoTemporario.setAttribute("readonly", "");
+      campoTemporario.setAttribute("aria-hidden", "true");
+      campoTemporario.style.position = "fixed";
+      campoTemporario.style.opacity = "0";
+      campoTemporario.style.pointerEvents = "none";
+      document.body.appendChild(campoTemporario);
+      campoTemporario.select();
+
+      let copiado = false;
+      try {
+        copiado = typeof document.execCommand === "function" && document.execCommand("copy");
+      } finally {
+        campoTemporario.remove();
+      }
+
+      if (!copiado) {
+        throw new Error("A cópia não foi permitida pelo navegador.");
+      }
+    }
+
     async function copiarDadoUnidade(valor, campo) {
       const texto = String(valor || "").trim();
       if (!texto) {
@@ -2005,7 +2037,7 @@
       }
 
       try {
-        await navigator.clipboard.writeText(texto);
+        await copiarTextoParaAreaTransferencia(texto);
         showToast(`${campo} copiado para a área de transferência.`, "success");
       } catch (err) {
         showToast(`Não foi possível copiar o ${campo}.`, "error");
