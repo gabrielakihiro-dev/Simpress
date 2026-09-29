@@ -1997,6 +1997,21 @@
       fecharModalAcessivel("modal-gerenciar-unidades");
     }
 
+    async function copiarDadoUnidade(valor, campo) {
+      const texto = String(valor || "").trim();
+      if (!texto) {
+        showToast(`${campo} não informado para esta unidade.`, "warning");
+        return;
+      }
+
+      try {
+        await navigator.clipboard.writeText(texto);
+        showToast(`${campo} copiado para a área de transferência.`, "success");
+      } catch (err) {
+        showToast(`Não foi possível copiar o ${campo}.`, "error");
+      }
+    }
+
     function renderListaUnidades(lista) {
       const container = document.getElementById("lista-unidades-container");
       container.innerHTML = "";
@@ -2019,12 +2034,21 @@
               <span class="font-bold text-white text-sm">${escapeHtml(u.cidade)}</span>
               ${u.is_sede ? '<span class="px-2 py-0.5 rounded-full text-[10px] font-bold bg-amber-500/20 text-amber-300 border border-amber-500/30">SEDE</span>' : ''}
               <span class="text-slate-400 font-mono text-[11px]">${escapeHtml(u.cnpj)}</span>
+              <button type="button" data-copy-field="CNPJ" class="p-1 rounded-md text-slate-400 hover:text-amber-200 hover:bg-slate-800 transition" title="Copiar CNPJ" aria-label="Copiar CNPJ">
+                <i data-lucide="copy" class="w-3.5 h-3.5" aria-hidden="true"></i>
+              </button>
             </div>
             <p class="text-slate-300 mt-0.5 truncate">${escapeHtml(u.endereco)}</p>
-            <p class="text-slate-500 font-mono text-[11px]">CEP: ${escapeHtml(u.cep)} | UF: ${escapeHtml(u.uf || 'PR')}</p>
+            <div class="text-slate-500 font-mono text-[11px] flex items-center gap-1.5">
+              <span>CEP: ${escapeHtml(u.cep)} | UF: ${escapeHtml(u.uf || 'PR')}</span>
+              <button type="button" data-copy-field="CEP" class="p-1 rounded-md text-slate-400 hover:text-amber-200 hover:bg-slate-800 transition" title="Copiar CEP" aria-label="Copiar CEP">
+                <i data-lucide="copy" class="w-3.5 h-3.5" aria-hidden="true"></i>
+              </button>
+            </div>
           </div>
           <div class="flex items-center gap-2 ml-3 shrink-0">
             <button
+              data-action="edit"
               class="px-2.5 py-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 text-amber-300 border border-amber-500/30 text-xs font-medium flex items-center gap-1 transition"
               title="Editar dados desta unidade"
             >
@@ -2033,7 +2057,9 @@
             </button>
           </div>
         `;
-        item.querySelector("button").addEventListener("click", () => editarUnidade(Number(u.id)));
+        item.querySelector('[data-copy-field="CNPJ"]').addEventListener("click", () => copiarDadoUnidade(u.cnpj, "CNPJ"));
+        item.querySelector('[data-copy-field="CEP"]').addEventListener("click", () => copiarDadoUnidade(u.cep, "CEP"));
+        item.querySelector('[data-action="edit"]').addEventListener("click", () => editarUnidade(Number(u.id)));
         container.appendChild(item);
       });
       lucide.createIcons({ root: container });
