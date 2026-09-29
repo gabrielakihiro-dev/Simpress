@@ -883,6 +883,19 @@ def is_curitiba_hostname_exception(computer_name: str) -> bool:
     return suffix.startswith(CURITIBA_HOSTNAME_PREFIXES)
 
 
+def is_prnoteti_curitiba_location_match(
+    computer_name: Any,
+    expected_location: Any,
+    details_location: Any,
+) -> bool:
+    name = str(computer_name or "").strip().upper()
+    return (
+        name.startswith("PRNOTETI")
+        and normalize_reference_value(expected_location) == normalize_reference_value("Curitiba UTIC")
+        and normalize_reference_value(details_location) == normalize_reference_value("Curitiba")
+    )
+
+
 def filter_sebrae_owned_unmatched_items(items: Any) -> List[Dict[str, Any]]:
     if not isinstance(items, list):
         return []
@@ -897,7 +910,15 @@ def filter_curitiba_hostname_location_mismatches(items: Any) -> List[Dict[str, A
         return []
     return [
         item for item in items
-        if not isinstance(item, dict) or not is_curitiba_hostname_exception(item.get("computador"))
+        if not isinstance(item, dict)
+        or (
+            not is_curitiba_hostname_exception(item.get("computador"))
+            and not is_prnoteti_curitiba_location_match(
+                item.get("computador"),
+                item.get("local_previsto"),
+                item.get("local_detalhes"),
+            )
+        )
     ]
 
 
@@ -1276,6 +1297,11 @@ def compare_uploaded_workbooks(
                 details_location
                 and normalize_reference_value(details_location) != normalize_reference_value(expected_location)
                 and not is_curitiba_hostname_exception(computer_name)
+                and not is_prnoteti_curitiba_location_match(
+                    computer_name,
+                    expected_location,
+                    details_location,
+                )
             ):
                 any_location_mismatch = True
             if any_location_mismatch:
