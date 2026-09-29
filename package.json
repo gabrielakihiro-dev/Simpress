@@ -1,0 +1,13 @@
+{
+  "name": "simpress-local-ui-assets",
+  "private": true,
+  "scripts": {
+    "build:ui": "node scripts/copy_ui_assets.cjs && tailwindcss --config tailwind.config.cjs --input static/tailwind.input.css --output static/vendor/tailwind-3.4.17.css --minify"
+  },
+  "devDependencies": {
+    "@fontsource-variable/inter": "5.3.0",
+    "@fontsource-variable/jetbrains-mono": "5.3.0",
+    "lucide": "1.48.0",
+    "tailwindcss": "3.4.17"
+  }
+}
