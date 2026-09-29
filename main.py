@@ -8,7 +8,7 @@ import threading
 import unicodedata
 import uuid
 import zipfile
-from copy import deepcopy
+from copy import copy, deepcopy
 from datetime import datetime
 from pathlib import Path
 from typing import Dict, List, Optional, Any, Set
@@ -34,30 +34,35 @@ from integrity import (
     stage_workbook_update,
     workbook_snapshot,
 )
+from app_config import (
+    ALIAS_HISTORY_FILE,
+    BASE_DIR,
+    COMPARISON_HISTORY_FILE,
+    CUSTOM_UNIDADES_FILE,
+    DETAILS_EXPORT_BASELINE_FILE,
+    DETAILS_UPLOAD_FILE,
+    ENDPOINT_UPLOAD_FILE,
+    EXPORT_MODEL_FILE,
+    INPUT_DIR,
+    MAX_UPLOAD_BYTES,
+    MAX_UPLOAD_REQUEST_BYTES,
+    MAX_XLSX_ARCHIVE_ENTRIES,
+    MAX_XLSX_UNCOMPRESSED_BYTES,
+    MODIFIED_APELIDOS_FILE,
+    STATIC_DIR,
+    TEMPLATE_FILE,
+    TRANSACTION_ROOT,
+    UPLOAD_BACKUPS_DIR,
+)
 
-# Base directories and files
-BASE_DIR = Path(__file__).parent.resolve()
-STATIC_DIR = BASE_DIR / "static"
-INPUT_DIR = BASE_DIR / "planilhas_entrada"
-TEMPLATE_FILE = INPUT_DIR / "(MODELO) - TRANSFERENCIA SIMPRESS.xlsx"
-DETAILS_UPLOAD_FILE = INPUT_DIR / "EquipamentosDetalhes_atual.xlsx"
-ENDPOINT_UPLOAD_FILE = INPUT_DIR / "InvAllComputersSummary_atual.xlsx"
-DETAILS_EXPORT_BASELINE_FILE = INPUT_DIR / ".EquipamentosDetalhes_atual.export-baseline.xlsx"
-EXPORT_MODEL_FILE = INPUT_DIR / "equipamentos-25-09-2026_160107.xlsx"
-UPLOAD_BACKUPS_DIR = INPUT_DIR / "_backups"
-MAX_UPLOAD_BYTES = 30 * 1024 * 1024
-MAX_UPLOAD_REQUEST_BYTES = 2 * MAX_UPLOAD_BYTES + 1024 * 1024
-MAX_XLSX_ARCHIVE_ENTRIES = 10000
-MAX_XLSX_UNCOMPRESSED_BYTES = 256 * 1024 * 1024
-CUSTOM_UNIDADES_FILE = BASE_DIR / "unidades_custom.json"
-MODIFIED_APELIDOS_FILE = BASE_DIR / "apelidos_modificados.json"
+# Runtime synchronization and in-memory state remain in the application entry point.
 MODIFIED_APELIDOS_LOCK = threading.RLock()
-ALIAS_HISTORY_FILE = BASE_DIR / "historico_alteracoes.json"
 ALIAS_HISTORY_LOCK = threading.RLock()
-COMPARISON_HISTORY_FILE = BASE_DIR / "historico_comparacoes.json"
 COMPARISON_HISTORY_LOCK = threading.RLock()
-TRANSACTION_ROOT = BASE_DIR
 STATE_LOCK = threading.RLock()
+
+PINNED_COMPARISON_EVENT_ID = "e1f66787b2aa49a0bdbc848521ca1fc4"
+PINNED_COMPARISON_EVENT_TIME = "2026-09-28T14:47:46-03:00"
 
 
 def _json_bytes(value: Any) -> bytes:
@@ -198,6 +203,41 @@ def load_comparison_history() -> List[Dict[str, Any]]:
                 status_code=500,
                 detail="Não foi possível ler o histórico de comparações."
             )
+
+
+def pinned_comparison_history_entry(history: Optional[List[Dict[str, Any]]] = None) -> Optional[Dict[str, Any]]:
+    entries = load_comparison_history() if history is None else history
+    if not isinstance(entries, list):
+        return None
+    return next(
+        (
+            entry for entry in entries
+            if isinstance(entry, dict)
+            and entry.get("id") == PINNED_COMPARISON_EVENT_ID
+            and entry.get("horario") == PINNED_COMPARISON_EVENT_TIME
+        ),
+        None,
+    )
+
+
+def latest_comparison_update_entry(history: Optional[List[Dict[str, Any]]] = None) -> Optional[Dict[str, Any]]:
+    """Returns the newest comparison update while leaving the pinned baseline available."""
+    entries = load_comparison_history() if history is None else history
+    candidates = [
+        entry for entry in entries
+        if isinstance(entry, dict) and entry.get("id") != PINNED_COMPARISON_EVENT_ID
+    ] if isinstance(entries, list) else []
+    if not candidates:
+        return None
+
+    def event_timestamp(entry: Dict[str, Any]) -> float:
+        try:
+            return datetime.fromisoformat(str(entry.get("horario") or "").replace("Z", "+00:00")).timestamp()
+        except (TypeError, ValueError, OverflowError):
+            return float("-inf")
+
+    return max(candidates, key=event_timestamp)
+
 
 def save_comparison_history(history: List[Dict[str, Any]]) -> None:
     try:
@@ -503,6 +543,280 @@ def _record_value(record: Dict[str, Any], *keys: str) -> Any:
     return ""
 
 
+def _upload_serial_value(record: Dict[str, Any], role: str) -> Any:
+    if role == "endpoint":
+        return _record_value(
+            record,
+            "ROTULODESERVICONUMERODESERIE",
+            "NUMEROSERIE",
+            "NUMERODESERIE",
+            "SERIAL",
+            "SERVICETAG",
+        )
+    return _record_value(record, "NUMEROSERIE", "NUMERODESERIE", "SERIAL")
+
+
+def _upload_alias_value(record: Dict[str, Any], role: str) -> str:
+    if role == "endpoint":
+        value = _record_value(record, "NOMEDOCOMPUTADOR", "COMPUTERNAME", "HOSTNAME", "APELIDO")
+    else:
+        value = _record_value(record, "APELIDO", "HOSTNAME", "NOMEDOCOMPUTADOR", "COMPUTERNAME")
+    return str(value or "").strip()
+
+
+def _unique_upload_records(table: Dict[str, Any], role: str) -> Dict[str, Dict[str, Any]]:
+    grouped: Dict[str, List[Dict[str, Any]]] = {}
+    for record in table.get("records", []):
+        serial_key = normalize_reference_value(_upload_serial_value(record, role))
+        if serial_key:
+            grouped.setdefault(serial_key, []).append(record)
+    return {
+        serial_key: rows[0]
+        for serial_key, rows in grouped.items()
+        if len(rows) == 1
+    }
+
+
+def _uploaded_aliases_by_serial(
+    endpoint_table: Dict[str, Any],
+    details_table: Dict[str, Any],
+    manual_aliases: Optional[Dict[str, str]] = None,
+) -> Dict[str, str]:
+    aliases = {
+        serial_key: alias
+        for serial_key, record in _unique_upload_records(details_table, "detalhes").items()
+        if (alias := _upload_alias_value(record, "detalhes"))
+    }
+    for serial_key, record in _unique_upload_records(endpoint_table, "endpoint").items():
+        alias = _upload_alias_value(record, "endpoint")
+        if alias:
+            aliases[serial_key] = alias
+    aliases.update(manual_aliases or {})
+    return aliases
+
+
+def _manual_alias_source_snapshots(
+    overrides: Dict[str, str],
+    endpoint_table: Dict[str, Any],
+    details_table: Dict[str, Any],
+) -> List[Dict[str, Any]]:
+    manual_aliases = _manual_aliases_by_serial(overrides)
+    endpoint_rows = _unique_upload_records(endpoint_table, "endpoint")
+    details_rows = _unique_upload_records(details_table, "detalhes")
+    divergences = []
+
+    for serial_key, manual_alias in manual_aliases.items():
+        endpoint_record = endpoint_rows.get(serial_key)
+        details_record = details_rows.get(serial_key)
+        if endpoint_record is None and details_record is None:
+            continue
+
+        invall_alias = _upload_alias_value(endpoint_record, "endpoint") if endpoint_record else ""
+        details_alias = _upload_alias_value(details_record, "detalhes") if details_record else ""
+        details_differs = (
+            details_record is not None
+            and normalize_reference_value(details_alias) != normalize_reference_value(manual_alias)
+        )
+        invall_differs = (
+            endpoint_record is not None
+            and normalize_reference_value(invall_alias) != normalize_reference_value(manual_alias)
+        )
+        source_serial = (
+            _upload_serial_value(details_record, "detalhes") if details_record else ""
+        ) or (
+            _upload_serial_value(endpoint_record, "endpoint") if endpoint_record else ""
+        ) or serial_key
+        divergences.append({
+            "serie": str(source_serial).strip(),
+            "apelido_manual": manual_alias,
+            "apelido_equipamentos_detalhes": details_alias,
+            "apelido_invall": invall_alias,
+            "detalhes_encontrado": details_record is not None,
+            "invall_encontrado": endpoint_record is not None,
+            "diverge_detalhes": details_differs,
+            "diverge_invall": invall_differs,
+            "resolucao": "pendente",
+        })
+
+    return sorted(divergences, key=lambda item: normalize_reference_value(item["serie"]))
+
+
+def _manual_alias_divergences(
+    overrides: Dict[str, str],
+    endpoint_table: Dict[str, Any],
+    details_table: Dict[str, Any],
+) -> List[Dict[str, Any]]:
+    return [
+        item for item in _manual_alias_source_snapshots(overrides, endpoint_table, details_table)
+        if item["diverge_detalhes"] or item["diverge_invall"]
+    ]
+
+
+def _workbook_columns(worksheet: Any) -> tuple[List[str], Dict[str, List[int]]]:
+    headers = next(worksheet.iter_rows(min_row=1, max_row=1, values_only=True), ())
+    normalized_headers = [normalize_reference_value(value) for value in headers]
+    columns: Dict[str, List[int]] = {}
+    for column, key in enumerate(normalized_headers, start=1):
+        if key:
+            columns.setdefault(key, []).append(column)
+    return normalized_headers, columns
+
+
+def _choose_workbook_column(columns: Dict[str, List[int]], candidates: tuple[str, ...]) -> Optional[int]:
+    for key in candidates:
+        positions = columns.get(key, [])
+        if len(positions) > 1:
+            raise WorkbookSafetyError(f"A planilha contém mais de uma coluna '{key}'.")
+        if positions:
+            return positions[0]
+    return None
+
+
+def _select_merge_worksheet(workbook: Any, role: str) -> tuple[Any, List[str], int, int]:
+    if role == "detalhes":
+        serial_headers = ("NUMEROSERIE", "NUMERODESERIE", "SERIAL")
+        alias_headers = ("APELIDO", "HOSTNAME", "NOMEDOCOMPUTADOR", "COMPUTERNAME")
+    else:
+        serial_headers = (
+            "ROTULODESERVICONUMERODESERIE", "NUMEROSERIE", "NUMERODESERIE", "SERIAL", "SERVICETAG"
+        )
+        alias_headers = ("NOMEDOCOMPUTADOR", "COMPUTERNAME", "HOSTNAME", "APELIDO")
+
+    candidates = []
+    for worksheet in workbook.worksheets:
+        headers, columns = _workbook_columns(worksheet)
+        serial_column = _choose_workbook_column(columns, serial_headers)
+        alias_column = _choose_workbook_column(columns, alias_headers)
+        if not serial_column or not alias_column:
+            continue
+        if role == "detalhes" and not {"MODELO", "CIDADE"}.issubset(set(headers)):
+            continue
+        priority = int(role == "detalhes" and ("parque" in worksheet.title.lower() or "equipamento" in worksheet.title.lower()))
+        candidates.append((priority, worksheet, headers, serial_column, alias_column))
+
+    if not candidates:
+        label = "EquipamentosDetalhes" if role == "detalhes" else "Endpoint"
+        raise WorkbookSafetyError(f"Nenhuma aba válida de {label} foi encontrada na planilha ativa.")
+    highest_priority = max(item[0] for item in candidates)
+    matching = [item for item in candidates if item[0] == highest_priority]
+    if len(matching) != 1:
+        label = "EquipamentosDetalhes" if role == "detalhes" else "Endpoint"
+        raise WorkbookSafetyError(f"A planilha ativa de {label} tem mais de uma aba compatível.")
+    _, worksheet, headers, serial_column, alias_column = matching[0]
+    return worksheet, headers, serial_column, alias_column
+
+
+def _uploaded_value_for_column(record: Dict[str, Any], header: str, role: str) -> Any:
+    if role == "endpoint":
+        serial_headers = {"ROTULODESERVICONUMERODESERIE", "NUMEROSERIE", "NUMERODESERIE", "SERIAL", "SERVICETAG"}
+        alias_headers = {"NOMEDOCOMPUTADOR", "COMPUTERNAME", "HOSTNAME", "APELIDO"}
+    else:
+        serial_headers = {"NUMEROSERIE", "NUMERODESERIE", "SERIAL"}
+        alias_headers = {"APELIDO", "HOSTNAME", "NOMEDOCOMPUTADOR", "COMPUTERNAME"}
+    if header in serial_headers:
+        return _upload_serial_value(record, role)
+    if header in alias_headers:
+        return _upload_alias_value(record, role) or None
+    if role == "detalhes" and header in {"CNPJINSTALACAO", "CNPJDEINSTALACAO"}:
+        return _record_value(record, "CNPJINSTALACAO", "CNPJDEINSTALACAO") or None
+    return record.get(header)
+
+
+def _merge_uploaded_workbook(
+    workbook: Any,
+    role: str,
+    table: Dict[str, Any],
+    aliases_by_serial: Dict[str, str],
+) -> Optional[Dict[tuple, Any]]:
+    worksheet, headers, serial_column, alias_column = _select_merge_worksheet(workbook, role)
+    incoming = _unique_upload_records(table, role)
+    expected: Dict[tuple, Any] = {}
+    if role == "detalhes":
+        installation_cnpj_headers = ("CNPJINSTALACAO", "CNPJDEINSTALACAO")
+        has_target_installation_cnpj = any(header in installation_cnpj_headers for header in headers)
+        has_uploaded_installation_cnpj = any(
+            any(header in record for header in installation_cnpj_headers)
+            for record in incoming.values()
+        )
+        if has_uploaded_installation_cnpj and not has_target_installation_cnpj:
+            cnpj_column = worksheet.max_column + 1
+            while len(headers) < cnpj_column:
+                headers.append("")
+            header_cell = worksheet.cell(row=1, column=cnpj_column)
+            header_cell.value = "CNPJ Instalacao"
+            headers[cnpj_column - 1] = "CNPJINSTALACAO"
+            expected[(worksheet.title, header_cell.coordinate)] = header_cell.value
+
+    rows_by_serial: Dict[str, List[int]] = {}
+    for row in range(2, worksheet.max_row + 1):
+        serial_key = normalize_reference_value(worksheet.cell(row=row, column=serial_column).value)
+        if serial_key:
+            rows_by_serial.setdefault(serial_key, []).append(row)
+
+    detail_location_groups = (
+        ("ENDERECOINSTALACAO", "ENDERECODEINSTALACAO", "ENDERECOCOMPLETO", "ENDERECO"),
+        ("CIDADE",),
+        ("UF",),
+        ("CEP",),
+        ("CNPJINSTALACAO", "CNPJDEINSTALACAO"),
+    )
+    for serial_key, rows in rows_by_serial.items():
+        if len(rows) != 1:
+            continue
+        incoming_record = incoming.get(serial_key)
+        if role == "detalhes":
+            new_alias = aliases_by_serial.get(serial_key, "")
+            if incoming_record is not None:
+                for column, header in enumerate(headers, start=1):
+                    group = next((items for items in detail_location_groups if header in items), None)
+                    if group is None:
+                        continue
+                    source_header = next((item for item in group if item in incoming_record), None)
+                    if source_header is None:
+                        continue
+                    cell = worksheet.cell(row=rows[0], column=column)
+                    value = incoming_record[source_header]
+                    if cell.data_type != "f" and cell.value != value:
+                        cell.value = value
+                        expected[(worksheet.title, cell.coordinate)] = value
+        else:
+            new_alias = _upload_alias_value(incoming_record, role) if incoming_record is not None else ""
+        apply_alias = serial_key in aliases_by_serial if role == "detalhes" else bool(new_alias)
+        if not apply_alias:
+            continue
+        cell = worksheet.cell(row=rows[0], column=alias_column)
+        if cell.data_type != "f" and str(cell.value or "").strip() != str(new_alias or "").strip():
+            cell.value = new_alias
+            expected[(worksheet.title, cell.coordinate)] = new_alias
+
+    new_records = [
+        (serial_key, record)
+        for serial_key, record in incoming.items()
+        if serial_key not in rows_by_serial
+    ]
+    if new_records:
+        style_source_row = max((max(rows) for rows in rows_by_serial.values()), default=1)
+        next_row = worksheet.max_row + 1
+        for serial_key, record in new_records:
+            row = next_row
+            next_row += 1
+            for column, header in enumerate(headers, start=1):
+                cell = worksheet.cell(row=row, column=column)
+                if style_source_row > 0:
+                    source_cell = worksheet.cell(row=style_source_row, column=column)
+                    if source_cell.has_style:
+                        cell._style = copy(source_cell._style)
+                value = _uploaded_value_for_column(record, header, role) if header else None
+                if role == "detalhes" and header == headers[alias_column - 1] and serial_key in aliases_by_serial:
+                    value = aliases_by_serial[serial_key]
+                if value == "":
+                    value = None
+                cell.value = value
+                expected[(worksheet.title, cell.coordinate)] = value
+
+    return expected or None
+
+
 def validate_uploaded_workbook(file_bytes: bytes, role: str) -> Dict[str, Any]:
     return select_upload_table(read_workbook_tables(file_bytes), role)
 
@@ -732,6 +1046,19 @@ def _manual_alias_for_serial(overrides: Dict[str, str], serial: Any, fallback: s
     return matches[0] if serial_key and len(matches) == 1 else fallback
 
 
+def _manual_aliases_by_serial(overrides: Dict[str, str]) -> Dict[str, str]:
+    aliases_by_serial: Dict[str, List[str]] = {}
+    for serial, alias in overrides.items():
+        serial_key = normalize_reference_value(serial)
+        if serial_key:
+            aliases_by_serial.setdefault(serial_key, []).append(str(alias or "").strip())
+    return {
+        serial_key: aliases[0]
+        for serial_key, aliases in aliases_by_serial.items()
+        if len(aliases) == 1
+    }
+
+
 def _apply_effective_alias(
     equipment: Dict[str, Any],
     endpoint_index: Optional[Dict[str, Any]] = None,
@@ -744,6 +1071,7 @@ def _apply_effective_alias(
                 endpoint_index = read_endpoint_alias_index()
     serial_key = normalize_reference_value(equipment.get("serial"))
     local_alias = str(equipment.get("_apelido_local", equipment.get("_apelido_base", "")) or "").strip()
+    manual_override = bool(equipment.get("_apelido_manual_override"))
     equipment["apelido"] = local_alias
 
     if not endpoint_index.get("available"):
@@ -756,9 +1084,14 @@ def _apply_effective_alias(
         equipment["invall_alias_status"] = "serie_invall_duplicada"
         equipment["invall_alias_detail"] = "A série aparece mais de uma vez na InvAll; o apelido atual foi mantido."
     elif serial_key in endpoint_index.get("unique", {}):
-        equipment["apelido"] = endpoint_index["unique"][serial_key]
+        if not manual_override:
+            equipment["apelido"] = endpoint_index["unique"][serial_key]
         equipment["invall_alias_status"] = "aplicado"
-        equipment["invall_alias_detail"] = "Hostname da InvAll associado pela série normalizada."
+        equipment["invall_alias_detail"] = (
+            "Série associada à InvAll; o apelido manual prevalece."
+            if manual_override
+            else "Hostname da InvAll associado pela série normalizada."
+        )
     elif serial_key in endpoint_index.get("blank_hostnames", {}):
         equipment["invall_alias_status"] = "hostname_vazio"
         equipment["invall_alias_detail"] = "A InvAll tem a série, mas o hostname está vazio; o apelido atual foi mantido."
@@ -767,21 +1100,24 @@ def _apply_effective_alias(
         equipment["invall_alias_detail"] = "Série não encontrada na InvAll; o apelido atual foi mantido."
 
 
-def get_export_aliases() -> Dict[str, str]:
-    """Combina apelidos locais e hostnames da InvAll; a InvAll tem prioridade."""
-    aliases = {
-        normalize_reference_value(serial): str(alias or "").strip()
-        for serial, alias in load_modified_apelidos().items()
-        if normalize_reference_value(serial)
-    }
-    aliases.update(load_endpoint_aliases())
+def get_export_aliases(endpoint_index: Optional[Dict[str, Any]] = None) -> Dict[str, str]:
+    """Combina hostnames da InvAll com apelidos manuais, que têm prioridade."""
+    aliases = dict(
+        endpoint_index.get("unique", {})
+        if endpoint_index is not None
+        else load_endpoint_aliases()
+    )
+    aliases.update(_manual_aliases_by_serial(load_modified_apelidos()))
     return aliases
 
 
-def count_export_alias_changes(locked: bool = False) -> int:
+def count_export_alias_changes(
+    locked: bool = False,
+    endpoint_index: Optional[Dict[str, Any]] = None,
+) -> int:
     """Conta quantos apelidos do modelo de exportação serão realmente alterados."""
     def count() -> int:
-        aliases = get_export_aliases()
+        aliases = get_export_aliases(endpoint_index)
         try:
             model_aliases = load_export_model_aliases()
         except HTTPException:
@@ -905,6 +1241,45 @@ def filter_sebrae_owned_unmatched_items(items: Any) -> List[Dict[str, Any]]:
     ]
 
 
+def filter_update_review_items(items: Any) -> List[Dict[str, Any]]:
+    """Keep only duplicate/blank series and the requested source exceptions."""
+    if not isinstance(items, list):
+        return []
+
+    filtered = []
+    for item in items:
+        if not isinstance(item, dict):
+            continue
+        serial = normalize_reference_value(item.get("serie"))
+        reason = normalize_reference_value(item.get("motivo"))
+        hostname = normalize_reference_value(item.get("computador"))
+        if "SERIEDUPLICADA" in reason or not serial:
+            filtered.append(item)
+        elif "SERIENAOENCONTRADANAINVALL" in reason and serial.startswith(("BRJ", "BRM")):
+            filtered.append(item)
+        elif "SERIENAOENCONTRADAEMEQUIPAMENTOSDETALHES" in reason and hostname.startswith("PRMAC"):
+            filtered.append(item)
+    return filtered
+
+
+def filter_update_unmatched_series(items: Any) -> List[Dict[str, Any]]:
+    if not isinstance(items, list):
+        return []
+    return [
+        item for item in items
+        if isinstance(item, dict) and normalize_reference_value(item.get("serie")).startswith(("BRJ", "BRM"))
+    ]
+
+
+def filter_update_unmatched_details(items: Any) -> List[Dict[str, Any]]:
+    if not isinstance(items, list):
+        return []
+    return [
+        item for item in items
+        if isinstance(item, dict) and normalize_reference_value(item.get("computador")).startswith("PRMAC")
+    ]
+
+
 def filter_curitiba_hostname_location_mismatches(items: Any) -> List[Dict[str, Any]]:
     if not isinstance(items, list):
         return []
@@ -930,6 +1305,10 @@ def comparison_history_for_display(evento: Dict[str, Any]) -> Dict[str, Any]:
         return event_view
 
     comparison_view = dict(comparison)
+    is_pinned_baseline = (
+        evento.get("id") == PINNED_COMPARISON_EVENT_ID
+        and evento.get("horario") == PINNED_COMPARISON_EVENT_TIME
+    )
     for obsolete_key in ("total_base_principal", "ausentes_na_base_principal", "divergencias_endereco"):
         comparison_view.pop(obsolete_key, None)
 
@@ -954,14 +1333,28 @@ def comparison_history_for_display(evento: Dict[str, Any]) -> Dict[str, Any]:
             ]
         return cleaned
 
-    missing_lists = {
-        "ausentes_no_endpoint": filter_sebrae_owned_unmatched_items(
-            comparison.get("ausentes_no_endpoint")
-        ),
-        "ausentes_em_detalhes": filter_sebrae_owned_unmatched_items(
-            comparison.get("ausentes_em_detalhes")
-        ),
-    }
+    if is_pinned_baseline:
+        missing_lists = {
+            "ausentes_no_endpoint": filter_sebrae_owned_unmatched_items(
+                comparison.get("ausentes_no_endpoint")
+            ),
+            "ausentes_em_detalhes": filter_sebrae_owned_unmatched_items(
+                comparison.get("ausentes_em_detalhes")
+            ),
+        }
+    else:
+        missing_lists = {
+            "ausentes_no_endpoint": filter_update_unmatched_series(
+                comparison.get("ausentes_no_endpoint")
+            ),
+            "ausentes_em_detalhes": filter_update_unmatched_details(
+                comparison.get("ausentes_em_detalhes")
+            ),
+        }
+        comparison_view["apelidos_sem_atualizacao"] = filter_update_review_items(
+            comparison.get("apelidos_sem_atualizacao")
+        )
+        comparison_view["filtros_atualizacao_aplicados"] = True
     missing_lists = {
         key: [without_legacy_source(item) for item in items]
         for key, items in missing_lists.items()
@@ -992,9 +1385,15 @@ def comparison_history_for_display(evento: Dict[str, Any]) -> Dict[str, Any]:
     alias_changes = comparison.get("apelidos_atualizados")
     if isinstance(alias_changes, list):
         summary["apelidos_atualizados"] = len(alias_changes)
-    alias_review = comparison.get("apelidos_sem_atualizacao")
+    alias_review = comparison_view.get("apelidos_sem_atualizacao")
     if isinstance(alias_review, list):
         summary["apelidos_sem_atualizacao"] = len(alias_review)
+    manual_alias_divergences = comparison_view.get("divergencias_apelidos_manuais")
+    if isinstance(manual_alias_divergences, list):
+        summary["divergencias_apelidos_manuais"] = sum(
+            1 for item in manual_alias_divergences
+            if isinstance(item, dict) and item.get("resolucao", "pendente") == "pendente"
+        )
     event_view["resumo"] = summary
     uploaded_files = evento.get("arquivos_enviados")
     if isinstance(uploaded_files, dict):
@@ -1069,14 +1468,19 @@ def compare_uploaded_workbooks(
             parent[node] = find(parent[node])
         return parent[node]
 
-    def union(left: tuple, right: tuple) -> bool:
+    def union(left: tuple, right: tuple, allow_conflicting_serials: bool = False) -> bool:
         root_left = find(left)
         root_right = find(right)
         if root_left == root_right:
             return True
         serials_left = component_serials[root_left]
         serials_right = component_serials[root_right]
-        if serials_left and serials_right and serials_left != serials_right:
+        if (
+            not allow_conflicting_serials
+            and serials_left
+            and serials_right
+            and serials_left != serials_right
+        ):
             return False
         if rank[root_left] < rank[root_right]:
             root_left, root_right = root_right, root_left
@@ -1178,6 +1582,9 @@ def compare_uploaded_workbooks(
                 right_node = right_nodes[0]
                 left_serial = nodes[left_node]["serial_key"]
                 right_serial = nodes[right_node]["serial_key"]
+                if alias_key.startswith("PRMAC"):
+                    union(left_node, right_node, allow_conflicting_serials=True)
+                    continue
                 if left_serial and right_serial and left_serial != right_serial:
                     add_issue({
                         "tipo": "Série divergente para o mesmo hostname/Apelido",
@@ -1569,6 +1976,7 @@ def _load_database_unlocked() -> bool:
         return default
 
     unidades_dict: Dict[str, Dict[str, Any]] = {}
+    sede_cnpjs = set()
 
     for _, row in df.iterrows():
         raw_serial = get_row_val(row, "NumeroSerie", "Numero Serie", "Serial")
@@ -1588,7 +1996,14 @@ def _load_database_unlocked() -> bool:
         raw_cep = get_row_val(row, "CEP")
         cep_formatado = format_cep(raw_cep)
         
-        cnpj_instalacao = get_row_val(row, "CNPJ Instalacao", "CnpjInstalacao", "CNPJ")
+        cnpj_instalacao = get_row_val(
+            row,
+            "CNPJ Instalacao",
+            "CNPJ de Instalacao",
+            "CNPJ de Instalação",
+            "CnpjInstalacao",
+            "CnpjDeInstalacao",
+        )
 
         contrato = get_row_val(row, "CodigoContrato", "Codigo Contrato", default="16467")
         razao_social = get_row_val(row, "RazaoSocial", "Razao Social", default="SERV DE APOIO AS MICRO E PEQ EMP DO PARANA SEBRAE PR")
@@ -1596,15 +2011,14 @@ def _load_database_unlocked() -> bool:
         # Check if Sede Curitiba
         is_sede = ("caeté" in endereco.lower() or "caete" in endereco.lower() or "sede" in endereco.lower() or "sede" in cidade.lower()) and ("curitiba" in cidade.lower() or "sede" in cidade.lower())
         if is_sede:
+            if cnpj_instalacao:
+                sede_cnpjs.add(cnpj_instalacao)
             endereco = "R Caeté, 150 - SEDE - Prado Velho"
             cidade = "Curitiba"
             uf = "PR"
             cep_formatado = "80220-300"
-            cnpj_instalacao = "75.110.585/0001-00"
             retirada_endereco = "R Caeté, 150 - SEDE - Prado Velho - Curitiba/PR - CEP 80220-300"
         else:
-            if not cnpj_instalacao:
-                cnpj_instalacao = "75.110.585/0001-00"
             retirada_endereco = f"{endereco} - {cidade}/{uf} - CEP {cep_formatado}" if endereco else f"{cidade}/{uf}"
 
         # Suggested description
@@ -1684,15 +2098,21 @@ def _load_database_unlocked() -> bool:
         filtered_units.append(u)
 
     # Inserir o Curitiba oficial com o padrão exato solicitado
+    sede_cnpj = next(iter(sede_cnpjs)) if len(sede_cnpjs) == 1 else ""
+    if len(sede_cnpjs) > 1:
+        print("[AVISO] A base contém mais de um CNPJ de instalação para a Sede Curitiba; o CNPJ da unidade ficou vazio.")
+    curitiba_label = "Curitiba - R Caeté, 150 - SEDE - Prado Velho"
+    if sede_cnpj:
+        curitiba_label += f" ({sede_cnpj})"
     curitiba_oficial = {
         "cidade": "Curitiba",
         "endereco": "R Caeté, 150 - SEDE - Prado Velho",
         "uf": "PR",
         "cep": "80220-300",
-        "cnpj": "75.110.585/0001-00",
+        "cnpj": sede_cnpj,
         "is_sede": True,
         "endereco_completo": "R Caeté, 150 - SEDE - Prado Velho - Curitiba/PR - CEP 80220-300",
-        "label": "Curitiba - R Caeté, 150 - SEDE - Prado Velho (75.110.585/0001-00)"
+        "label": curitiba_label,
     }
 
     final_units = [curitiba_oficial]
@@ -1705,7 +2125,7 @@ def _load_database_unlocked() -> bool:
             "cnpj": u["cnpj"],
             "is_sede": False,
             "endereco_completo": u["retirada_endereco"],
-            "label": f"{u['cidade']} - {u['endereco']} ({u['cnpj']})"
+            "label": f"{u['cidade']} - {u['endereco']}" + (f" ({u['cnpj']})" if u["cnpj"] else "")
         })
 
     # Mesclar unidades customizadas/editadas pelo usuário
@@ -1722,13 +2142,15 @@ def _load_database_unlocked() -> bool:
     for idx, u in enumerate(new_unidades_cache, start=1):
         u["id"] = idx
 
-    # Apelidos manuais ficam como camada local; a InvAll única define o valor efetivo do site.
+    # Apelidos manuais persistem por série e prevalecem sobre o hostname da InvAll.
     mod_apelidos = load_modified_apelidos()
+    manual_aliases = _manual_aliases_by_serial(mod_apelidos)
     endpoint_index = read_endpoint_alias_index()
     for serial_key, equipment in new_equipamentos_cache.items():
         normalized_serial = normalize_reference_value(equipment.get("serial"))
-        equipment["_apelido_local"] = _manual_alias_for_serial(
-            mod_apelidos, equipment.get("serial"), equipment.get("_apelido_base", "")
+        equipment["_apelido_manual_override"] = normalized_serial in manual_aliases
+        equipment["_apelido_local"] = manual_aliases.get(
+            normalized_serial, equipment.get("_apelido_base", "")
         )
         _apply_effective_alias(
             equipment,
@@ -1742,7 +2164,10 @@ def _load_database_unlocked() -> bool:
     new_stats_cache = {
         "total_equipamentos": len(new_equipamentos_cache),
         "total_unidades": len(new_unidades_cache),
-        "total_apelidos_modificados": count_export_alias_changes(locked=True),
+        "total_apelidos_modificados": count_export_alias_changes(
+            locked=True,
+            endpoint_index=endpoint_index,
+        ),
         "tipos": type_counts,
         "arquivo_origem": active_details_file.name,
         "ultima_atualizacao": datetime.now().strftime("%d/%m/%Y %H:%M")
@@ -1772,11 +2197,12 @@ class EquipamentoUpdatePayload(BaseModel):
     tipo: Optional[str] = Field("", description="Tipo (Notebook, Micro Computador, Headsets...)")
     apelido: Optional[str] = Field("", description="Apelido / Hostname")
     idCliente: Optional[str] = Field("", description="ID do Cliente")
-    endereco: Optional[str] = Field("", description="Endereço de instalação")
-    cidade: Optional[str] = Field("", description="Cidade")
-    uf: Optional[str] = Field("PR", description="UF")
-    cep: Optional[str] = Field("", description="CEP")
-    cnpj_instalacao: Optional[str] = Field("", description="CNPJ de Instalação")
+    # Mantidos para compatibilidade com clientes antigos; a rota ignora esses campos.
+    endereco: Optional[str] = Field("", description="Endereço carregado de EquipamentosDetalhes")
+    cidade: Optional[str] = Field("", description="Cidade carregada de EquipamentosDetalhes")
+    uf: Optional[str] = Field("PR", description="UF carregada de EquipamentosDetalhes")
+    cep: Optional[str] = Field("", description="CEP carregado de EquipamentosDetalhes")
+    cnpj_instalacao: Optional[str] = Field("", description="CNPJ carregado de EquipamentosDetalhes")
 
 
 class UnidadePayload(BaseModel):
@@ -1795,7 +2221,7 @@ class TransferenciaPayload(BaseModel):
     contrato: Any = Field(16467, description="Número do Contrato")
     
     # Retirada (Origem)
-    retirada_cnpj: str = Field("75.110.585/0001-00")
+    retirada_cnpj: str = Field("")
     retirada_endereco: str = Field("")
     retirada_horario: str = Field("09:00:00 às 18:00:00")
     retirada_almoco: str = Field("12:00:00")
@@ -1830,6 +2256,10 @@ class ApelidoUpdatePayload(BaseModel):
 
 class ApelidoUndoPayload(BaseModel):
     evento_id: str = Field(..., description="ID do evento de apelido que deve ser desfeito")
+
+
+class ManualAliasConflictResolutionPayload(BaseModel):
+    acao: str = Field(..., description="Manter o apelido manual ou remover esse override")
 
 
 def _edit_equipment_workbook(wb, payload: EquipamentoUpdatePayload):
@@ -1876,14 +2306,6 @@ def _edit_equipment_workbook(wb, payload: EquipamentoUpdatePayload):
     set_value(col_map.get("modelo"), payload.modelo.strip() if payload.modelo is not None else None)
     set_value(col_map.get("tipo") or col_map.get("classeequipamento"), payload.tipo.strip() if payload.tipo is not None else None)
     set_value(col_map.get("idcliente"), payload.idCliente.strip() if payload.idCliente is not None else None)
-    set_value(col_map.get("endereco"), payload.endereco.strip() if payload.endereco is not None else None)
-    set_value(col_map.get("cidade"), payload.cidade.strip() if payload.cidade is not None else None)
-    set_value(col_map.get("uf"), payload.uf.strip() if payload.uf is not None else None)
-    cep_col = col_map.get("cep")
-    if cep_col and payload.cep is not None:
-        raw_cep = re.sub(r"\D", "", str(payload.cep))
-        set_value(cep_col, int(raw_cep) if raw_cep.isdigit() else payload.cep.strip())
-    set_value(col_map.get("cnpjinstalacao") or col_map.get("cnpj"), payload.cnpj_instalacao.strip() if payload.cnpj_instalacao is not None else None)
     return expected
 
 
@@ -1938,9 +2360,6 @@ def normalizar_endereco_instalacao(payload: EquipamentoUpdatePayload) -> Dict[st
         cidade = "Curitiba"
         uf = "PR"
         cep = "80220-300"
-        cnpj = "75.110.585/0001-00"
-    elif not cnpj:
-        cnpj = "75.110.585/0001-00"
 
     return {
         "endereco": endereco,
@@ -2003,7 +2422,12 @@ def save_equipment_to_excel(
         raise HTTPException(status_code=500, detail=f"Não foi possível concluir a gravação: {error}") from error
 
     # Atualiza o cache em memória imediatamente
-    endereco_info = normalizar_endereco_instalacao(payload)
+    existing = equipamentos_cache.get(target_serial_upper, {})
+    endereco_info = (
+        snapshot_endereco_instalacao(existing)
+        if existing
+        else normalizar_endereco_instalacao(EquipamentoUpdatePayload(serial=target_serial_upper))
+    )
     endereco = endereco_info["endereco"]
     cidade = endereco_info["cidade"]
     uf = endereco_info["uf"]
@@ -2013,9 +2437,10 @@ def save_equipment_to_excel(
 
     desc_sugerida = get_suggested_description(payload.tipo, payload.modelo)
 
-    existing = equipamentos_cache.get(target_serial_upper, {})
     modified_aliases = load_modified_apelidos()
-    local_alias = _manual_alias_for_serial(modified_aliases, target_serial_upper, payload.apelido or "")
+    manual_aliases = _manual_aliases_by_serial(modified_aliases)
+    normalized_serial = normalize_reference_value(target_serial_upper)
+    local_alias = manual_aliases.get(normalized_serial, payload.apelido or "")
     updated_equipment = {
         "serial": target_serial_upper,
         "modelo": payload.modelo.strip() if payload.modelo else "",
@@ -2023,6 +2448,7 @@ def save_equipment_to_excel(
         "apelido": local_alias,
         "_apelido_base": payload.apelido.strip() if payload.apelido else "",
         "_apelido_local": local_alias,
+        "_apelido_manual_override": normalized_serial in manual_aliases,
         "idCliente": payload.idCliente.strip() if payload.idCliente else "",
         "descricao_sugerida": desc_sugerida,
         "endereco_instalacao": endereco,
@@ -2072,8 +2498,6 @@ def salvar_equipamento(payload: EquipamentoUpdatePayload):
     
     target_serial = payload.serial.strip().upper()
     equipamento_existente = equipamentos_cache.get(target_serial)
-    endereco_anterior = snapshot_endereco_instalacao(equipamento_existente) if equipamento_existente else None
-    endereco_novo = normalizar_endereco_instalacao(payload) if equipamento_existente else None
     if equipamento_existente is not None:
         # Para equipamentos já cadastrados, o apelido só pode ser alterado pela rota dedicada.
         # Isso impede que o formulário de dados/endereço sobrescreva apelidos acidentalmente.
@@ -2091,15 +2515,6 @@ def salvar_equipamento(payload: EquipamentoUpdatePayload):
             aliases[target_serial] = new_alias
             return aliases
         json_mutations[MODIFIED_APELIDOS_FILE] = save_new_alias
-
-    evento_endereco = None
-    if endereco_anterior is not None and endereco_novo is not None and endereco_anterior != endereco_novo:
-        evento_endereco = build_address_change_entry(target_serial, endereco_anterior, endereco_novo)
-        def append_address(history):
-            if not isinstance(history, list):
-                raise RuntimeError("O conteúdo do histórico manual não é uma lista.")
-            return [*history, evento_endereco]
-        json_mutations[ALIAS_HISTORY_FILE] = append_address
 
     save_equipment_to_excel(payload, json_mutations=json_mutations)
     total_mod = len(load_modified_apelidos())
@@ -2298,6 +2713,7 @@ def aplicar_alteracao_apelido(
     equipment = equipamentos_cache[target_serial]
     equipment["_apelido_local"] = novo_apelido
     equipment["_apelido_base"] = novo_apelido
+    equipment["_apelido_manual_override"] = True
     _apply_effective_alias(
         equipment,
         None,
@@ -2320,11 +2736,7 @@ def atualizar_apelido(payload: ApelidoUpdatePayload):
 
     return {
         "sucesso": True,
-        "mensagem": (
-            "Apelido manual salvo; o hostname único da InvAll continua sendo exibido."
-            if resultado["equipamento"].get("invall_alias_status") == "aplicado"
-            else "Apelido salvo com sucesso."
-        ),
+        "mensagem": "Apelido salvo e aplicado nas próximas pesquisas.",
         **{**resultado, "equipamento": {key: value for key, value in resultado["equipamento"].items() if not key.startswith("_")}},
         "total_modificados": len(load_modified_apelidos()),
     }
@@ -2339,9 +2751,10 @@ def get_historico_apelidos():
 
 @app.get("/api/historico-comparacoes")
 def get_historico_comparacoes():
-    historico = load_comparison_history()
     eventos = []
-    for evento in reversed(historico):
+    for evento in load_comparison_history():
+        if not isinstance(evento, dict):
+            continue
         event_view = comparison_history_for_display(evento)
         eventos.append({
             "id": event_view.get("id"),
@@ -2349,16 +2762,172 @@ def get_historico_comparacoes():
             "arquivos_enviados": event_view.get("arquivos_enviados", {}),
             "resumo": event_view.get("resumo", {}),
         })
+    def event_timestamp(item: Dict[str, Any]) -> float:
+        try:
+            return datetime.fromisoformat(str(item.get("horario") or "").replace("Z", "+00:00")).timestamp()
+        except (TypeError, ValueError, OverflowError):
+            return float("-inf")
+    eventos.sort(key=event_timestamp, reverse=True)
     return {"total": len(eventos), "eventos": eventos}
 
 
 @app.get("/api/historico-comparacoes/{evento_id}")
 def get_comparacao_historica(evento_id: str):
-    historico = load_comparison_history()
-    evento = next((item for item in historico if item.get("id") == evento_id), None)
+    evento = next(
+        (item for item in load_comparison_history() if isinstance(item, dict) and item.get("id") == evento_id),
+        None,
+    )
     if evento is None:
         raise HTTPException(status_code=404, detail="O resultado selecionado não existe no histórico de planilhas.")
     return {"evento": comparison_history_for_display(evento)}
+
+
+@app.post("/api/historico-comparacoes/{evento_id}/apelido-manual/{serial}")
+def resolver_divergencia_apelido_manual(
+    evento_id: str,
+    serial: str,
+    payload: ManualAliasConflictResolutionPayload,
+):
+    global equipamentos_cache, unidades_cache, stats_cache
+    acao = str(payload.acao or "").strip().lower()
+    if acao not in {"manter", "excluir"}:
+        raise HTTPException(status_code=400, detail="Escolha manter ou excluir a alteração manual.")
+
+    serial_key = normalize_reference_value(serial)
+    if not serial_key:
+        raise HTTPException(status_code=400, detail="A série informada é inválida.")
+
+    event = next(
+        (item for item in load_comparison_history() if isinstance(item, dict) and item.get("id") == evento_id),
+        None,
+    )
+    if event is None:
+        raise HTTPException(status_code=404, detail="A atualização selecionada não existe no histórico.")
+    comparison = event.get("comparacao")
+    divergences = comparison.get("divergencias_apelidos_manuais") if isinstance(comparison, dict) else None
+    divergence = next(
+        (
+            item for item in divergences or []
+            if isinstance(item, dict) and normalize_reference_value(item.get("serie")) == serial_key
+        ),
+        None,
+    )
+    if divergence is None:
+        raise HTTPException(status_code=404, detail="A divergência de apelido não existe neste registro.")
+    if divergence.get("resolucao") != "pendente":
+        raise HTTPException(status_code=409, detail="Esta divergência já foi resolvida no histórico.")
+
+    expected_manual_alias = str(divergence.get("apelido_manual") or "").strip()
+    state_before = (
+        deepcopy(equipamentos_cache),
+        deepcopy(unidades_cache),
+        deepcopy(stats_cache),
+    ) if acao == "excluir" else None
+    target_serial = next(
+        (
+            str(item.get("serial") or key).strip().upper()
+            for key, item in equipamentos_cache.items()
+            if normalize_reference_value(item.get("serial") or key) == serial_key
+        ),
+        str(serial).strip().upper(),
+    )
+    targets = [COMPARISON_HISTORY_FILE, MODIFIED_APELIDOS_FILE]
+    if acao == "excluir":
+        details_file = get_equipamentos_template_file()
+        if details_file is None or not details_file.is_file():
+            raise HTTPException(status_code=404, detail="A planilha EquipamentosDetalhes atual não foi encontrada.")
+        targets.append(details_file)
+
+    try:
+        with AtomicFileTransaction(TRANSACTION_ROOT, targets) as transaction:
+            current_aliases = _manual_aliases_by_serial(load_modified_apelidos())
+            if serial_key not in current_aliases or current_aliases[serial_key] != expected_manual_alias:
+                raise HTTPException(
+                    status_code=409,
+                    detail="O apelido manual mudou desde esta comparação. Atualize o histórico antes de decidir.",
+                )
+
+            if acao == "excluir":
+                source_alias = (
+                    str(divergence.get("apelido_invall") or "").strip()
+                    if divergence.get("invall_encontrado") and divergence.get("apelido_invall")
+                    else str(divergence.get("apelido_equipamentos_detalhes") or "").strip()
+                )
+                if not atualizar_apelido_na_planilha(
+                    target_serial,
+                    source_alias,
+                    obrigatorio=True,
+                    transaction=transaction,
+                    expected_current_alias=expected_manual_alias,
+                ):
+                    raise HTTPException(status_code=409, detail="A série não pôde ser atualizada na planilha EquipamentosDetalhes.")
+
+                def remove_manual_override(data):
+                    if not isinstance(data, dict):
+                        raise RuntimeError("O arquivo de apelidos manuais não contém um objeto válido.")
+                    keys = [key for key in data if normalize_reference_value(key) == serial_key]
+                    if len(keys) != 1 or str(data.get(keys[0]) or "").strip() != expected_manual_alias:
+                        raise HTTPException(status_code=409, detail="O override manual mudou desde esta comparação.")
+                    updated = dict(data)
+                    for key in keys:
+                        updated.pop(key, None)
+                    return updated
+
+                transaction.update_json(MODIFIED_APELIDOS_FILE, remove_manual_override, {})
+
+            def mark_divergence_resolved(history):
+                if not isinstance(history, list):
+                    raise RuntimeError("O histórico de planilhas não contém uma lista válida.")
+                updated = list(history)
+                stored_event = next((item for item in updated if item.get("id") == evento_id), None)
+                if stored_event is None:
+                    raise HTTPException(status_code=409, detail="A atualização foi removida do histórico.")
+                stored_comparison = stored_event.get("comparacao")
+                stored_divergences = stored_comparison.get("divergencias_apelidos_manuais") if isinstance(stored_comparison, dict) else None
+                stored_divergence = next(
+                    (
+                        item for item in stored_divergences or []
+                        if isinstance(item, dict) and normalize_reference_value(item.get("serie")) == serial_key
+                    ),
+                    None,
+                )
+                if stored_divergence is None or stored_divergence.get("resolucao") != "pendente":
+                    raise HTTPException(status_code=409, detail="A divergência já foi alterada no histórico.")
+                stored_divergence["resolucao"] = acao
+                stored_divergence["horario_resolucao"] = datetime.now().astimezone().isoformat(timespec="seconds")
+                return updated
+
+            transaction.update_json(COMPARISON_HISTORY_FILE, mark_divergence_resolved, [])
+            transaction.apply()
+            if acao == "excluir" and not load_database(transaction_locked=True):
+                raise RuntimeError("A base não pôde ser recarregada após excluir o override manual.")
+            transaction.commit()
+    except Exception:
+        if state_before is not None:
+            with STATE_LOCK:
+                equipamentos_cache, unidades_cache, stats_cache = state_before
+        raise
+
+    equipment = next(
+        (
+            item for key, item in equipamentos_cache.items()
+            if normalize_reference_value(item.get("serial") or key) == serial_key
+        ),
+        None,
+    )
+    return {
+        "sucesso": True,
+        "resolucao": acao,
+        "mensagem": (
+            "Apelido manual mantido para esta série."
+            if acao == "manter"
+            else "Alteração manual removida; o apelido voltou a seguir as planilhas de origem."
+        ),
+        "equipamento": {
+            key: value for key, value in equipment.items() if not key.startswith("_")
+        } if equipment else None,
+        "total_modificados": len(load_modified_apelidos()),
+    }
 
 
 @app.delete("/api/historico-comparacoes/{evento_id}")
@@ -2383,6 +2952,11 @@ def excluir_evento_historico_apelido(evento_id: str):
         raise HTTPException(status_code=404, detail=f"Equipamento com serial '{target_serial}' não encontrado na base de dados.")
 
     tipo_evento = "endereco" if evento.get("tipo") == "endereco" else "apelido"
+    if tipo_evento == "endereco":
+        raise HTTPException(
+            status_code=409,
+            detail="Endereços são atualizados pela planilha EquipamentosDetalhes e não podem mais ser restaurados manualmente.",
+        )
     evento_mais_recente = next(
         (
             item for item in reversed(historico)
@@ -2497,11 +3071,7 @@ def desfazer_alteracao_apelido(payload: ApelidoUndoPayload):
     )
     return {
         "sucesso": True,
-        "mensagem": (
-            "Apelido manual restaurado; o hostname único da InvAll continua sendo exibido."
-            if resultado["equipamento"].get("invall_alias_status") == "aplicado"
-            else "Apelido restaurado; a reversão foi registrada no histórico."
-        ),
+        "mensagem": "Apelido restaurado; a reversão foi registrada no histórico.",
         **{**resultado, "equipamento": {key: value for key, value in resultado["equipamento"].items() if not key.startswith("_")}},
         "total_modificados": len(load_modified_apelidos()),
     }
@@ -2519,18 +3089,22 @@ def get_apelidos_modificados():
 
 @app.get("/api/exportar-equipamentos")
 def exportar_equipamentos():
-    """Exporta o modelo escolhido, alterando somente Apelido por número de série."""
+    """Exporta a apresentação de referência com os registros da base ativa."""
     source_file = EXPORT_MODEL_FILE
+    current_file = get_parque_file()
     if not source_file.is_file():
         raise HTTPException(
             status_code=404,
             detail=f"O modelo de exportação '{source_file.name}' não foi encontrado."
         )
+    if current_file is None or not current_file.is_file():
+        raise HTTPException(status_code=404, detail="A base EquipamentosDetalhes atual não foi encontrada.")
 
     wb = None
+    current_wb = None
     try:
-        with lock_paths([source_file, ENDPOINT_UPLOAD_FILE, MODIFIED_APELIDOS_FILE]):
-            wb = load_workbook_safely(source_file)
+        with lock_paths([source_file, current_file, ENDPOINT_UPLOAD_FILE, MODIFIED_APELIDOS_FILE]):
+            wb = load_workbook_safely(source_file, allow_threaded_comments=True)
             original = workbook_snapshot(wb)
             sheet_target = next(
                 (name for name in wb.sheetnames if "parque" in name.lower() or "equipamento" in name.lower()),
@@ -2552,20 +3126,53 @@ def exportar_equipamentos():
                     detail=f"A planilha '{source_file.name}' não contém as colunas NumeroSerie e Apelido esperadas."
                 )
 
+            current_sheet_name = find_details_sheet(current_file)
+            if current_sheet_name is None:
+                raise HTTPException(status_code=409, detail="A base EquipamentosDetalhes atual não tem os cabeçalhos esperados.")
+            current_wb = openpyxl.load_workbook(current_file, read_only=True, data_only=False)
+            current_ws = current_wb[current_sheet_name]
+            current_headers = [cell.value for cell in next(current_ws.iter_rows(max_row=1), ())]
+            current_columns = {
+                re.sub(r"[\s_\-]+", "", str(value)).lower(): index + 1
+                for index, value in enumerate(current_headers)
+                if value is not None
+            }
+            current_serial_col = current_columns.get("numeroserie") or current_columns.get("serial")
+            if not current_serial_col:
+                raise HTTPException(status_code=409, detail="A base atual não contém NumeroSerie.")
+            current_alias_col = current_columns.get("apelido") or current_columns.get("hostname")
+            if not current_alias_col:
+                raise HTTPException(status_code=409, detail="A base atual não contém Apelido ou Hostname.")
+            current_rows = {}
+            for cells in current_ws.iter_rows(min_row=2, values_only=True):
+                serial_key = normalize_reference_value(cells[current_serial_col - 1])
+                if not serial_key:
+                    continue
+                if serial_key in current_rows:
+                    raise HTTPException(status_code=409, detail="A base atual contém séries duplicadas; confira antes de exportar.")
+                current_rows[serial_key] = cells[current_alias_col - 1]
+
             endpoint_index = read_endpoint_alias_index()
-            aliases = get_export_aliases()
+            aliases = get_export_aliases(endpoint_index)
             serial_counts: Dict[str, int] = {}
             for row in range(2, ws.max_row + 1):
                 serial_key = normalize_reference_value(ws.cell(row=row, column=serial_col).value)
                 if serial_key:
                     serial_counts[serial_key] = serial_counts.get(serial_key, 0) + 1
 
+            if set(serial_counts) != set(current_rows):
+                raise HTTPException(
+                    status_code=409,
+                    detail="As séries da base atual diferem das linhas do modelo de exportação. Atualize o modelo antes de exportar."
+                )
+
             expected_values = {}
+            alias_update_count = 0
             skipped_duplicate_rows = set()
             skipped_formula_rows = 0
             for row in range(2, ws.max_row + 1):
                 serial_key = normalize_reference_value(ws.cell(row=row, column=serial_col).value)
-                if not serial_key or serial_key not in aliases:
+                if not serial_key:
                     continue
                 if serial_counts.get(serial_key) != 1:
                     skipped_duplicate_rows.add(serial_key)
@@ -2575,14 +3182,22 @@ def exportar_equipamentos():
                 if alias_cell.data_type == "f":
                     skipped_formula_rows += 1
                     continue
-                updated_alias = aliases[serial_key]
+                updated_alias = aliases.get(
+                    serial_key,
+                    current_rows[serial_key],
+                )
+                if updated_alias is None:
+                    updated_alias = ""
                 if alias_cell.value != updated_alias:
                     alias_cell.value = updated_alias
                     expected_values[(ws.title, alias_cell.coordinate)] = updated_alias
+                    alias_update_count += 1
 
             review_items = endpoint_alias_review_items(endpoint_index, set(serial_counts))
             pending_review_count = len(review_items) + len(skipped_duplicate_rows) + skipped_formula_rows
-            output_bytes = serialize_workbook_validated(source_file, wb, original, expected_values)
+            output_bytes = serialize_workbook_validated(
+                source_file, wb, original, expected_values, allow_threaded_comments=True
+            )
 
         now_str = datetime.now().strftime("%d-%m-%Y_%H%M%S")
         export_filename = f"EquipamentosDetalhes-{now_str}.xlsx"
@@ -2591,7 +3206,7 @@ def exportar_equipamentos():
         headers = {
             "Content-Disposition": f'attachment; filename="{export_filename}"',
             "Access-Control-Expose-Headers": "Content-Disposition, X-Total-Alterados, X-Total-Conferencia",
-            "X-Total-Alterados": str(len(expected_values)),
+                "X-Total-Alterados": str(alias_update_count),
             "X-Total-Conferencia": str(pending_review_count),
         }
 
@@ -2614,6 +3229,8 @@ def exportar_equipamentos():
     finally:
         if wb is not None:
             wb.close()
+        if current_wb is not None:
+            current_wb.close()
 
 
 @app.post("/api/recarregar-base")
@@ -2661,11 +3278,9 @@ async def atualizar_planilhas(
     endpoint_file: UploadFile = File(...),
     details_file: UploadFile = File(...),
 ):
-    """Compara e atualiza Endpoint e EquipamentosDetalhes."""
+    """Mescla as planilhas, aplica overrides manuais e registra a comparação."""
     global equipamentos_cache, unidades_cache, stats_cache
     uploads = [endpoint_file, details_file]
-    staging_dir = INPUT_DIR / f".upload-staging-{uuid.uuid4().hex}"
-    backup_dir = UPLOAD_BACKUPS_DIR / f"{datetime.now().strftime('%Y%m%d-%H%M%S')}-{uuid.uuid4().hex[:8]}"
     state_before = None
 
     try:
@@ -2674,162 +3289,174 @@ async def atualizar_planilhas(
             "endpoint": await read_uploaded_xlsx(endpoint_file, "endpoint"),
             "detalhes": await read_uploaded_xlsx(details_file, "detalhes"),
         }
-        comparison = compare_uploaded_workbooks(
-            staged["endpoint"]["table"],
-            staged["detalhes"]["table"],
-            {
-                "endpoint": staged["endpoint"]["name"],
-                "detalhes": staged["detalhes"]["name"],
-            },
-        )
-        previous_aliases = snapshot_equipment_aliases(equipamentos_cache)
-        state_before = (
-            deepcopy(equipamentos_cache),
-            deepcopy(unidades_cache),
-            deepcopy(stats_cache),
-        )
 
         target_files = {
             "endpoint": ENDPOINT_UPLOAD_FILE,
             "detalhes": DETAILS_UPLOAD_FILE,
         }
-        stage_paths = {}
-        staging_dir.mkdir(parents=True, exist_ok=False)
         for role, target_path in target_files.items():
-            stage_path = staging_dir / target_path.name
-            stage_path.write_bytes(staged[role]["bytes"])
-            stage_paths[role] = stage_path
+            if not target_path.is_file():
+                display_role = "Endpoint" if role == "endpoint" else "EquipamentosDetalhes"
+                raise HTTPException(
+                    status_code=409,
+                    detail=f"A base ativa de {display_role} não foi encontrada; a atualização foi cancelada.",
+                )
 
-        baseline_path = DETAILS_EXPORT_BASELINE_FILE
-        fixed_targets = {path.resolve(strict=False) for path in [*target_files.values(), baseline_path, COMPARISON_HISTORY_FILE]}
+        state_before = (
+            deepcopy(equipamentos_cache),
+            deepcopy(unidades_cache),
+            deepcopy(stats_cache),
+        )
+        previous_aliases = snapshot_equipment_aliases(state_before[0])
+        manual_overrides = load_modified_apelidos()
+        manual_aliases = _manual_aliases_by_serial(manual_overrides)
+        aliases_by_serial = _uploaded_aliases_by_serial(
+            staged["endpoint"]["table"],
+            staged["detalhes"]["table"],
+            manual_aliases,
+        )
+        uploaded_names = {
+            "endpoint": staged["endpoint"]["name"],
+            "detalhes": staged["detalhes"]["name"],
+        }
+        comparison = compare_uploaded_workbooks(
+            staged["endpoint"]["table"],
+            staged["detalhes"]["table"],
+            uploaded_names,
+        )
+        manual_alias_sources = _manual_alias_source_snapshots(
+            manual_overrides,
+            staged["endpoint"]["table"],
+            staged["detalhes"]["table"],
+        )
+        manual_divergences = [
+            item for item in manual_alias_sources
+            if item["diverge_detalhes"] or item["diverge_invall"]
+        ]
+        backup_dir = UPLOAD_BACKUPS_DIR / f"{datetime.now().strftime('%Y%m%d-%H%M%S')}-{uuid.uuid4().hex[:8]}"
         backup_dir.mkdir(parents=True, exist_ok=False)
 
-        with AtomicFileTransaction(TRANSACTION_ROOT, fixed_targets) as transaction:
-            old_sources = []
-            old_sources.extend((path, "detalhes") for path in get_details_files())
-            old_sources.extend((path, "endpoint") for path in INPUT_DIR.glob("InvAllComputersSummary*.xlsx"))
-            old_sources.extend(
-                (path, "baseline")
-                for path in INPUT_DIR.glob(".EquipamentosDetalhes*.export-baseline.xlsx")
-            )
+        transaction_targets = [*target_files.values(), COMPARISON_HISTORY_FILE]
+        with AtomicFileTransaction(TRANSACTION_ROOT, transaction_targets) as transaction:
             for role, target_path in target_files.items():
-                if target_path.exists():
-                    old_sources.append((target_path, role))
-
-            unique_sources = []
-            seen_source_paths = set()
-            for source_path, role in old_sources:
-                resolved_source = source_path.resolve(strict=False)
-                if source_path.is_file() and resolved_source not in seen_source_paths:
-                    transaction.add_target(source_path)
-                    unique_sources.append((source_path, role))
-                    seen_source_paths.add(resolved_source)
-
-            for source_path, role in unique_sources:
                 role_dir = backup_dir / role
                 role_dir.mkdir(parents=True, exist_ok=True)
-                backup_path = role_dir / source_path.name
-                shutil.copy2(source_path, backup_path)
-                if not filecmp.cmp(source_path, backup_path, shallow=False):
-                    raise RuntimeError(f"A cópia de segurança de '{source_path.name}' não passou na validação.")
+                backup_path = role_dir / target_path.name
+                shutil.copy2(target_path, backup_path)
+                if not filecmp.cmp(target_path, backup_path, shallow=False):
+                    raise RuntimeError(f"A cópia de segurança de '{target_path.name}' não passou na validação.")
 
             for role, target_path in target_files.items():
-                def validate_staged(path: Path, current_role=role) -> None:
-                    validate_uploaded_workbook(path.read_bytes(), current_role)
-                transaction.stage_file(
+                stage_workbook_update(
+                    transaction,
                     target_path,
-                    lambda temp, stage=stage_paths[role]: shutil.copyfile(stage, temp),
-                    validate_staged,
+                    lambda workbook, current_role=role: _merge_uploaded_workbook(
+                        workbook,
+                        current_role,
+                        staged[current_role]["table"],
+                        aliases_by_serial,
+                    ),
+                    allow_dimension_growth=True,
                 )
-            transaction.stage_file(
-                baseline_path,
-                lambda temp: shutil.copyfile(stage_paths["detalhes"], temp),
-                lambda path: validate_uploaded_workbook(path.read_bytes(), "detalhes"),
-            )
-            for source_path, _ in unique_sources:
-                if source_path.resolve(strict=False) not in fixed_targets:
-                    transaction.stage_delete(source_path)
 
-            # Apply the workbook set provisionally; load_database publishes new caches only after full validation.
             transaction.apply()
             if not load_database(transaction_locked=True):
-                raise RuntimeError("O EquipamentosDetalhes enviado não pôde ser carregado pelo site.")
+                raise RuntimeError("As planilhas mescladas não puderam ser carregadas pelo site.")
 
             endpoint_index = read_endpoint_alias_index()
-            details_serial_counts: Dict[str, int] = {}
-            blank_details_aliases = []
+            detail_serial_counts: Dict[str, int] = {}
             for record in staged["detalhes"]["table"].get("records", []):
-                raw_serial = _record_value(record, "NUMEROSERIE", "NUMERODESERIE", "SERIAL")
-                serial_key = normalize_reference_value(raw_serial)
+                serial_key = normalize_reference_value(_upload_serial_value(record, "detalhes"))
                 if serial_key:
-                    details_serial_counts[serial_key] = details_serial_counts.get(serial_key, 0) + 1
-                else:
-                    alias = str(_record_value(record, "APELIDO", "HOSTNAME") or "").strip()
-                    if alias:
-                        blank_details_aliases.append(alias)
-            details_serials = set(details_serial_counts)
-            details_duplicate_serials = {
-                serial for serial, count in details_serial_counts.items() if count > 1
+                    detail_serial_counts[serial_key] = detail_serial_counts.get(serial_key, 0) + 1
+            detail_serials = set(detail_serial_counts)
+            detail_duplicates = {
+                serial_key for serial_key, count in detail_serial_counts.items() if count > 1
             }
             comparison["apelidos_atualizados"] = compare_equipment_aliases(
                 previous_aliases,
                 snapshot_equipment_aliases(equipamentos_cache),
             )
             comparison["apelidos_sem_atualizacao"] = endpoint_alias_review_items(
-                endpoint_index, details_serials, details_duplicate_serials
+                endpoint_index, detail_serials, detail_duplicates
             )
-            comparison["apelidos_sem_atualizacao"].extend({
-                "serie": "",
-                "computador": alias,
-                "motivo": "Número de série vazio em EquipamentosDetalhes; nenhum hostname foi associado.",
-            } for alias in blank_details_aliases)
-            comparison["backup_criado"] = True
+            for record in staged["detalhes"]["table"].get("records", []):
+                alias_without_serial = _upload_alias_value(record, "detalhes")
+                if alias_without_serial and not normalize_reference_value(
+                    _upload_serial_value(record, "detalhes")
+                ):
+                    comparison["apelidos_sem_atualizacao"].append({
+                        "serie": "",
+                        "computador": alias_without_serial,
+                        "motivo": "Número de série vazio em EquipamentosDetalhes; nenhum hostname foi associado.",
+                    })
+            comparison["divergencias_apelidos_manuais"] = manual_divergences
+            comparison["fontes_apelidos_manuais"] = manual_alias_sources
             comparison["backup_diretorio"] = str(backup_dir.relative_to(INPUT_DIR))
-            comparison["arquivo_detalhes_ativo"] = DETAILS_UPLOAD_FILE.name
             comparison["total_equipamentos_carregados"] = stats_cache.get("total_equipamentos", 0)
             comparison["ultima_atualizacao"] = stats_cache.get("ultima_atualizacao", "")
             comparison["horario_comparacao"] = datetime.now().astimezone().isoformat(timespec="seconds")
-            source_names = {
-                "endpoint": staged["endpoint"]["name"],
-                "detalhes": staged["detalhes"]["name"],
-            }
-            comparison["apelidos_atualizados"] = [
-                {
-                    **item,
-                    "horario": comparison["horario_comparacao"],
-                    "arquivos_origem": source_names,
-                }
-                for item in comparison["apelidos_atualizados"]
-                if item["apelido_anterior"] != item["apelido_novo"]
-            ]
+            comparison["arquivos_enviados"] = uploaded_names
             comparison["historico_salvo"] = True
-            evento_historico = {
-                "id": uuid.uuid4().hex,
+            event_id = uuid.uuid4().hex
+            comparison["evento_id"] = event_id
+            summary = {
+                "total_endpoint": comparison.get("total_endpoint", 0),
+                "ausentes_no_endpoint": len(comparison.get("ausentes_no_endpoint", [])),
+                "ausentes_em_detalhes": len(comparison.get("ausentes_em_detalhes", [])),
+                "divergencias_local": len(comparison.get("divergencias_local", [])),
+                "correspondencias_ambiguas": len(comparison.get("correspondencias_ambiguas", [])),
+                "series_sem_mapeamento": len(comparison.get("series_sem_mapeamento", [])),
+                "apelidos_atualizados": len(comparison.get("apelidos_atualizados", [])),
+                "apelidos_sem_atualizacao": len(comparison.get("apelidos_sem_atualizacao", [])),
+                "divergencias_apelidos_manuais": len(manual_divergences),
+            }
+            history_entry = {
+                "id": event_id,
                 "horario": comparison["horario_comparacao"],
-                "arquivos_enviados": source_names,
-                "resumo": {
-                    "total_endpoint": comparison.get("total_endpoint", 0),
-                    "ausentes_no_endpoint": len(comparison.get("ausentes_no_endpoint", [])),
-                    "ausentes_em_detalhes": len(comparison.get("ausentes_em_detalhes", [])),
-                    "divergencias_local": len(comparison.get("divergencias_local", [])),
-                    "correspondencias_ambiguas": len(comparison.get("correspondencias_ambiguas", [])),
-                    "series_sem_mapeamento": len(comparison.get("series_sem_mapeamento", [])),
-                    "apelidos_atualizados": len(comparison["apelidos_atualizados"]),
-                    "apelidos_sem_atualizacao": len(comparison["apelidos_sem_atualizacao"]),
-                },
+                "arquivos_enviados": uploaded_names,
+                "resumo": summary,
                 "comparacao": comparison,
             }
 
             def append_update(history):
                 if not isinstance(history, list):
-                    raise RuntimeError("O Histórico planilhas não contém uma lista válida.")
-                return [*history, evento_historico]
+                    raise RuntimeError("O histórico de planilhas não contém uma lista válida.")
+                updated = deepcopy(history)
+                refreshed_serials = {
+                    normalize_reference_value(item.get("serie"))
+                    for item in manual_alias_sources
+                    if item.get("detalhes_encontrado") or item.get("invall_encontrado")
+                }
+                for previous_event in updated:
+                    if not isinstance(previous_event, dict):
+                        continue
+                    previous_comparison = previous_event.get("comparacao")
+                    previous_divergences = (
+                        previous_comparison.get("divergencias_apelidos_manuais")
+                        if isinstance(previous_comparison, dict) else None
+                    )
+                    for previous_divergence in previous_divergences or []:
+                        if (
+                            isinstance(previous_divergence, dict)
+                            and previous_divergence.get("resolucao", "pendente") == "pendente"
+                            and normalize_reference_value(previous_divergence.get("serie")) in refreshed_serials
+                        ):
+                            previous_divergence["resolucao"] = "substituida"
+                            previous_divergence["horario_resolucao"] = comparison["horario_comparacao"]
+                updated.append(history_entry)
+                return updated
+
             transaction.update_json(COMPARISON_HISTORY_FILE, append_update, [])
             transaction.commit()
 
+        historical_view = comparison_history_for_display(history_entry)
+        historical_comparison = dict(historical_view.get("comparacao") or {})
+        historical_comparison["evento_id"] = event_id
+        historical_comparison["historico_salvo"] = True
         return {
             "sucesso": True,
-            "comparacao": comparison,
+            "comparacao": historical_comparison,
             "stats": stats_cache,
             "historico_salvo": True,
         }
@@ -2862,7 +3489,6 @@ async def atualizar_planilhas(
     finally:
         for upload in uploads:
             await upload.close()
-        shutil.rmtree(staging_dir, ignore_errors=True)
 
 
 @app.post("/api/unidade/salvar")
@@ -2963,7 +3589,12 @@ def gerar_planilha(payload: TransferenciaPayload):
     wb = None
     try:
         with lock_paths([TEMPLATE_FILE]):
-            wb = load_workbook_safely(TEMPLATE_FILE)
+            wb = load_workbook_safely(
+                TEMPLATE_FILE,
+                allow_threaded_comments=True,
+                allow_legacy_comments=True,
+                allow_custom_xml_passthrough=True,
+            )
             original_snapshot = workbook_snapshot(wb)
             # Localiza a aba de 'Transferência'.
             sheet_target = next(
@@ -3026,7 +3657,12 @@ def gerar_planilha(payload: TransferenciaPayload):
             set_template_cell("J37", payload.entrega_voltagem)
 
             # Salva e valida um temporário junto ao template antes de preparar o download.
-            output_bytes = serialize_workbook_validated(TEMPLATE_FILE, wb, original_snapshot, expected_values)
+            output_bytes = serialize_workbook_validated(
+                TEMPLATE_FILE, wb, original_snapshot, expected_values,
+                allow_threaded_comments=True,
+                allow_legacy_comments=True,
+                allow_custom_xml_passthrough=True,
+            )
             wb.close()
 
         buffer = io.BytesIO(output_bytes)

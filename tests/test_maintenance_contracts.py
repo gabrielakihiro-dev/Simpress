@@ -1,0 +1,98 @@
+import io
+import re
+import unittest
+from contextlib import redirect_stdout
+from pathlib import Path
+from unittest.mock import patch
+
+import app_config
+
+
+with patch(
+    "openpyxl.load_workbook",
+    side_effect=RuntimeError("testes não acessam planilhas locais"),
+):
+    with redirect_stdout(io.StringIO()):
+        import main
+
+
+PROJECT_ROOT = Path(__file__).resolve().parents[1]
+
+
+class MaintenanceContractTests(unittest.TestCase):
+    def test_application_paths_remain_project_relative_and_reexported(self):
+        self.assertEqual(app_config.BASE_DIR, PROJECT_ROOT.resolve())
+        self.assertEqual(main.BASE_DIR, app_config.BASE_DIR)
+
+        for name in (
+            "STATIC_DIR",
+            "INPUT_DIR",
+            "TEMPLATE_FILE",
+            "DETAILS_UPLOAD_FILE",
+            "ENDPOINT_UPLOAD_FILE",
+            "DETAILS_EXPORT_BASELINE_FILE",
+            "EXPORT_MODEL_FILE",
+            "UPLOAD_BACKUPS_DIR",
+            "CUSTOM_UNIDADES_FILE",
+            "MODIFIED_APELIDOS_FILE",
+            "ALIAS_HISTORY_FILE",
+            "COMPARISON_HISTORY_FILE",
+            "TRANSACTION_ROOT",
+        ):
+            with self.subTest(path=name):
+                self.assertEqual(getattr(main, name), getattr(app_config, name))
+
+    def test_openapi_keeps_existing_route_and_method_contracts(self):
+        expected = {
+            "/": {"get"},
+            "/api/equipamento/{serial}": {"get"},
+            "/api/equipamento/salvar": {"post"},
+            "/api/equipamento/atualizar-apelido": {"post"},
+            "/api/historico-alteracoes": {"get"},
+            "/api/historico-apelidos": {"get"},
+            "/api/historico-comparacoes": {"get"},
+            "/api/historico-comparacoes/{evento_id}": {"get", "delete"},
+            "/api/historico-alteracoes/{evento_id}": {"delete"},
+            "/api/historico-apelidos/{evento_id}": {"delete"},
+            "/api/equipamento/apelido/desfazer": {"post"},
+            "/api/equipamento/apelidos-modificados": {"get"},
+            "/api/exportar-equipamentos": {"get"},
+            "/api/recarregar-base": {"post"},
+            "/api/planilhas/atualizar": {"post"},
+            "/api/unidade/salvar": {"post"},
+            "/api/unidades": {"get"},
+            "/api/buscar": {"get"},
+            "/api/stats": {"get"},
+            "/api/gerar-planilha": {"post"},
+        }
+
+        paths = main.app.openapi()["paths"]
+        for path, methods in expected.items():
+            with self.subTest(path=path):
+                self.assertIn(path, paths)
+                self.assertTrue(methods.issubset(paths[path]))
+
+    def test_non_xlsx_upload_is_rejected_before_workbook_processing(self):
+        with self.assertRaises(main.HTTPException) as raised:
+            main.validate_uploaded_workbook(b"fictional invalid upload", "endpoint")
+
+        self.assertEqual(raised.exception.status_code, 400)
+
+    def test_frontend_references_assets_served_from_the_existing_static_mount(self):
+        index_file = app_config.STATIC_DIR / "index.html"
+        html = index_file.read_text(encoding="utf-8")
+        self.assertIn('<link rel="stylesheet" href="/static/app.css">', html)
+        self.assertIn('<script src="/static/app.js"></script>', html)
+        self.assertTrue((app_config.STATIC_DIR / "app.css").is_file())
+        self.assertTrue((app_config.STATIC_DIR / "app.js").is_file())
+
+        mounts = [
+            route for route in main.app.routes
+            if getattr(route, "name", None) == "static"
+        ]
+        self.assertEqual(len(mounts), 1)
+        self.assertEqual(mounts[0].path, "/static")
+
+
+if __name__ == "__main__":
+    unittest.main()

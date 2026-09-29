@@ -1,10 +1,12 @@
-"""Atomic file operations and conservative XLSX round-trip validation."""
+"""Atomic file operations and cell-scoped XLSX package validation."""
 
 from __future__ import annotations
 
 import hashlib
 import json
+import math
 import os
+import posixpath
 import re
 import shutil
 import tempfile
@@ -15,6 +17,8 @@ import zipfile
 from contextlib import ExitStack, contextmanager
 from pathlib import Path
 from typing import Any, Callable, Dict, Iterable, Iterator, Optional
+from xml.etree import ElementTree as ET
+from xml.sax.saxutils import escape
 
 import openpyxl
 
@@ -563,12 +567,12 @@ def _conditional_formatting_signature(conditional_formatting: Any) -> tuple:
 
 
 def _properties_signature(properties: Any) -> tuple:
-    """Exclude the modified timestamp that openpyxl refreshes on every save."""
+    """Exclude timestamps synthesized by openpyxl when absent from the package."""
     names = getattr(type(properties), "__elements__", ())
     return tuple(
         (name, repr(getattr(properties, name, None)))
         for name in names
-        if name != "modified"
+        if name not in {"created", "modified"}
     )
 
 
@@ -627,7 +631,309 @@ def workbook_snapshot(workbook: Any) -> Dict[str, Any]:
     }
 
 
-def _package_features(source: Path) -> None:
+_XLSX_MAIN_NS = "{http://schemas.openxmlformats.org/spreadsheetml/2006/main}"
+_XLSX_DOCUMENT_REL_NS = "{http://schemas.openxmlformats.org/officeDocument/2006/relationships}"
+_XLSX_PACKAGE_REL_NS = "{http://schemas.openxmlformats.org/package/2006/relationships}"
+_CELL_TAG_RE = re.compile(rb"<(?P<name>(?:[A-Za-z_][A-Za-z0-9_.-]*:)?c)(?=[\s/>])")
+_CELL_REFERENCE_RE = re.compile(rb"(?<![A-Za-z0-9_.:-])r\s*=\s*([\"'])(.*?)\1")
+_CELL_ATTRIBUTE_RE = re.compile(rb"\s+t\s*=\s*(?:\"[^\"]*\"|'[^']*')")
+_ILLEGAL_XML_TEXT_RE = re.compile(r"[\x00-\x08\x0B\x0C\x0E-\x1F]")
+
+
+def _worksheet_part_paths(archive: zipfile.ZipFile) -> Dict[str, str]:
+    """Map worksheet titles to their package paths without rewriting workbook XML."""
+    try:
+        workbook_root = ET.fromstring(archive.read("xl/workbook.xml"))
+        relationships_root = ET.fromstring(archive.read("xl/_rels/workbook.xml.rels"))
+        relationships = {
+            item.attrib["Id"]: item
+            for item in relationships_root.findall(f"{_XLSX_PACKAGE_REL_NS}Relationship")
+        }
+        package_names = {item.filename for item in archive.infolist()}
+        result = {}
+        sheets = workbook_root.find(f"{_XLSX_MAIN_NS}sheets")
+        if sheets is None:
+            raise ValueError("A pasta de trabalho não contém abas.")
+        for sheet in sheets.findall(f"{_XLSX_MAIN_NS}sheet"):
+            title = sheet.attrib["name"]
+            relationship_id = sheet.attrib[f"{_XLSX_DOCUMENT_REL_NS}id"]
+            relationship = relationships[relationship_id]
+            if relationship.attrib.get("TargetMode", "Internal").lower() == "external":
+                raise ValueError("Uma aba aponta para um recurso externo.")
+            target = relationship.attrib["Target"].replace("\\", "/")
+            part_path = (
+                posixpath.normpath(target.lstrip("/"))
+                if target.startswith("/")
+                else posixpath.normpath(posixpath.join("xl", target))
+            )
+            if part_path.startswith("../") or part_path not in package_names:
+                raise ValueError("O pacote não contém a parte de uma aba declarada.")
+            result[title] = part_path
+        return result
+    except (KeyError, OSError, zipfile.BadZipFile, ET.ParseError, ValueError) as error:
+        raise WorkbookSafetyError("Não foi possível localizar as abas dentro do arquivo Excel.") from error
+
+
+def _xml_tag_end(xml: bytes, start: int) -> int:
+    """Return the byte after an XML start tag, accounting for quoted attributes."""
+    quote = None
+    for position in range(start, len(xml)):
+        byte = xml[position]
+        if quote is not None:
+            if byte == quote:
+                quote = None
+        elif byte in (ord('"'), ord("'")):
+            quote = byte
+        elif byte == ord(">"):
+            return position + 1
+    raise WorkbookSafetyError("Uma aba contém XML incompleto e não pôde ser preservada.")
+
+
+def _cell_ranges(xml: bytes) -> Dict[str, tuple]:
+    """Find worksheet cell elements while leaving all other XML bytes untouched."""
+    ranges = {}
+    cursor = 0
+    while True:
+        match = _CELL_TAG_RE.search(xml, cursor)
+        if match is None:
+            break
+        opening_end = _xml_tag_end(xml, match.start())
+        opening = xml[match.start():opening_end]
+        reference = _CELL_REFERENCE_RE.search(opening)
+        if reference is None:
+            raise WorkbookSafetyError("Uma célula da aba não tem referência válida.")
+        address = reference.group(2).decode("ascii", errors="strict").upper()
+        if opening[:-1].rstrip().endswith(b"/"):
+            element_end = opening_end
+        else:
+            closing_tag = b"</" + match.group("name") + b">"
+            close_start = xml.find(closing_tag, opening_end)
+            if close_start < 0:
+                raise WorkbookSafetyError("Uma célula da aba contém XML incompleto.")
+            element_end = close_start + len(closing_tag)
+        if address in ranges:
+            raise WorkbookSafetyError(f"A aba contém a célula '{address}' mais de uma vez.")
+        ranges[address] = (match.start(), element_end, opening_end, match.group("name"))
+        cursor = element_end
+    return ranges
+
+
+def _replacement_cell_xml(opening: bytes, tag_name: bytes, value: Any, existing_content: bytes) -> bytes:
+    """Encode one authorized cell value without changing its other attributes."""
+    if re.search(rb"<(?:[A-Za-z_][A-Za-z0-9_.-]*:)?extLst(?=[\s/>])", existing_content):
+        raise WorkbookSafetyError("A célula autorizada contém metadados avançados que não podem ser substituídos.")
+    attributes = opening[1 + len(tag_name):-1]
+    self_closing = attributes.rstrip().endswith(b"/")
+    if self_closing:
+        attributes = attributes.rstrip()[:-1]
+    attributes = _CELL_ATTRIBUTE_RE.sub(b"", attributes).rstrip()
+
+    if isinstance(value, str):
+        if _ILLEGAL_XML_TEXT_RE.search(value):
+            raise WorkbookSafetyError("O valor autorizado contém caracteres que o Excel não aceita.")
+        encoded = escape(value).replace("\r", "&#13;").encode("utf-8")
+        preserve_space = value != value.strip()
+        space_attribute = b' xml:space="preserve"' if preserve_space else b""
+        cell_type = b' t="inlineStr"'
+        content = b"<is><t" + space_attribute + b">" + encoded + b"</t></is>"
+    elif isinstance(value, bool):
+        cell_type = b' t="b"'
+        content = b"<v>" + (b"1" if value else b"0") + b"</v>"
+    elif isinstance(value, int):
+        cell_type = b""
+        content = b"<v>" + str(value).encode("ascii") + b"</v>"
+    elif isinstance(value, float):
+        if not math.isfinite(value):
+            raise WorkbookSafetyError("O valor numérico autorizado não é finito.")
+        cell_type = b""
+        content = b"<v>" + repr(value).encode("ascii") + b"</v>"
+    elif value is None:
+        cell_type = b""
+        content = b""
+    else:
+        raise WorkbookSafetyError("O tipo de valor autorizado não pode ser gravado com segurança.")
+
+    return b"<" + tag_name + attributes + cell_type + b">" + content + b"</" + tag_name + b">"
+
+
+def _patch_worksheet_cells(xml: bytes, updates: Dict[str, Any]) -> bytes:
+    """Replace selected existing cell values and retain all other sheet XML bytes."""
+    ranges = _cell_ranges(xml)
+    patches = []
+    for address, value in updates.items():
+        normalized_address = str(address).upper()
+        cell_range = ranges.get(normalized_address)
+        if cell_range is None:
+            raise WorkbookSafetyError(f"A célula autorizada '{normalized_address}' não existe no modelo.")
+        start, end, opening_end, tag_name = cell_range
+        opening = xml[start:opening_end]
+        self_closing = opening[:-1].rstrip().endswith(b"/")
+        content_end = end if self_closing else end - len(b"</" + tag_name + b">")
+        existing_content = b"" if self_closing else xml[opening_end:content_end]
+        replacement = _replacement_cell_xml(opening, tag_name, value, existing_content)
+        patches.append((start, end, replacement))
+
+    patched = xml
+    for start, end, replacement in sorted(patches, reverse=True):
+        patched = patched[:start] + replacement + patched[end:]
+    return patched
+
+
+def _write_package_with_cell_updates(
+    source: Path,
+    destination: Path,
+    expected_values: Dict[tuple, Any],
+) -> set:
+    """Copy the original XLSX package and patch only authorized existing cells."""
+    updates_by_sheet: Dict[str, Dict[str, Any]] = {}
+    for key, value in expected_values.items():
+        if not isinstance(key, tuple) or len(key) != 2:
+            raise WorkbookSafetyError("A lista de alterações autorizadas da planilha é inválida.")
+        sheet_name, address = key
+        updates_by_sheet.setdefault(str(sheet_name), {})[str(address)] = value
+
+    try:
+        with zipfile.ZipFile(source, "r") as original:
+            infos = original.infolist()
+            names = [info.filename for info in infos]
+            if len(names) != len(set(names)):
+                raise WorkbookSafetyError("O arquivo Excel contém partes duplicadas no pacote.")
+            worksheet_paths = _worksheet_part_paths(original)
+            updated_paths = {}
+            for sheet_name, updates in updates_by_sheet.items():
+                part_path = worksheet_paths.get(sheet_name)
+                if part_path is None:
+                    raise WorkbookSafetyError(f"A aba '{sheet_name}' não existe no modelo original.")
+                updated_paths[part_path] = _patch_worksheet_cells(original.read(part_path), updates)
+
+            with zipfile.ZipFile(destination, "w") as output:
+                output.comment = original.comment
+                for info in infos:
+                    content = updated_paths.get(info.filename)
+                    if content is None:
+                        content = original.read(info.filename)
+                    output.writestr(info, content)
+            return set(updated_paths)
+    except WorkbookSafetyError:
+        raise
+    except (OSError, zipfile.BadZipFile, KeyError, RuntimeError) as error:
+        raise WorkbookSafetyError("Não foi possível preservar a estrutura original do arquivo Excel.") from error
+
+
+def _changed_expected_values(original_snapshot: Dict[str, Any], expected_values: Dict[tuple, Any]) -> Dict[tuple, Any]:
+    """Skip authorized assignments that already match the original cell value."""
+    changed = {}
+    for (sheet_name, coordinate), value in expected_values.items():
+        sheet = original_snapshot.get("worksheets", {}).get(sheet_name, {})
+        original_cell = sheet.get("cells", {}).get(str(coordinate).upper())
+        original_value = original_cell[0] if original_cell is not None else None
+        if type(original_value) is not type(value) or original_value != value:
+            changed[(sheet_name, coordinate)] = value
+    return changed
+
+
+def _updated_worksheet_parts(source: Path, expected_values: Dict[tuple, Any]) -> set:
+    """Return package entries that may differ because a cell was explicitly updated."""
+    if not expected_values:
+        return set()
+    try:
+        with zipfile.ZipFile(source) as archive:
+            paths = _worksheet_part_paths(archive)
+    except (OSError, zipfile.BadZipFile) as error:
+        raise WorkbookSafetyError("Não foi possível validar as abas da planilha temporária.") from error
+    result = set()
+    for sheet_name, _ in expected_values:
+        part_path = paths.get(sheet_name)
+        if part_path is None:
+            raise WorkbookSafetyError(f"A aba '{sheet_name}' não existe na planilha temporária.")
+        result.add(part_path)
+    return result
+
+
+def _expected_cell_data_type(value: Any) -> str:
+    if isinstance(value, str):
+        return "s"
+    if isinstance(value, bool):
+        return "b"
+    if isinstance(value, (int, float)) or value is None:
+        return "n"
+    raise WorkbookSafetyError("O tipo de valor autorizado não pode ser validado com segurança.")
+
+
+_EMPTY_CELL_DATA_TYPES = {"n", "s", "inlineStr"}
+
+
+def _cell_values_match(actual: Any, expected: Any) -> bool:
+    """Treat an empty string and a blank cell as the same Excel value."""
+    return actual == expected or (
+        actual in (None, "") and expected in (None, "")
+    )
+
+
+def _cell_data_type_matches(actual: tuple, expected_value: Any) -> bool:
+    """Allow Excel's equivalent blank representations without accepting other types."""
+    if actual[1] == _expected_cell_data_type(expected_value):
+        return True
+    return (
+        actual[0] in (None, "")
+        and expected_value in (None, "")
+        and actual[1] in _EMPTY_CELL_DATA_TYPES
+    )
+
+
+def _cell_metadata_matches(actual: tuple, prior: tuple) -> bool:
+    """Compare cell metadata, normalizing only empty-string storage differences."""
+    if actual[2:] != prior[2:]:
+        return False
+    if actual[1] == prior[1]:
+        return True
+    return (
+        actual[0] in (None, "")
+        and prior[0] in (None, "")
+        and actual[1] in _EMPTY_CELL_DATA_TYPES
+        and prior[1] in _EMPTY_CELL_DATA_TYPES
+    )
+
+
+_VML_SHAPE_TAG = "{urn:schemas-microsoft-com:vml}shape"
+_EXCEL_VML_CLIENT_DATA_TAG = "{urn:schemas-microsoft-com:office:excel}ClientData"
+
+
+def _vml_part_contains_only_comment_notes(content: bytes) -> bool:
+    """Return true only for legacy VML parts made exclusively of comment notes."""
+    try:
+        root = ET.fromstring(content)
+    except (ET.ParseError, ValueError):
+        return False
+
+    def local_name(element: ET.Element) -> str:
+        return element.tag.rsplit("}", 1)[-1] if isinstance(element.tag, str) else ""
+
+    shapes = [element for element in root.iter() if local_name(element) == "shape"]
+    client_data = [element for element in root.iter() if local_name(element) == "ClientData"]
+    if not shapes or len(shapes) != len(client_data):
+        return False
+
+    for shape in shapes:
+        if shape.tag != _VML_SHAPE_TAG:
+            return False
+        shape_data = [element for element in shape.iter() if local_name(element) == "ClientData"]
+        if (
+            len(shape_data) != 1
+            or shape_data[0].tag != _EXCEL_VML_CLIENT_DATA_TAG
+            or shape_data[0].attrib.get("ObjectType") != "Note"
+        ):
+            return False
+    return True
+
+
+def _package_features(
+    source: Path,
+    *,
+    allow_threaded_comments: bool = False,
+    allow_legacy_comments: bool = False,
+    allow_custom_xml_passthrough: bool = False,
+) -> None:
     try:
         with zipfile.ZipFile(source) as archive:
             entries = archive.infolist()
@@ -637,10 +943,23 @@ def _package_features(source: Path) -> None:
                 raise WorkbookSafetyError("O conteúdo descompactado da planilha excede o limite de validação.")
             names = {item.filename for item in entries}
             lowered = {name.lower() for name in names}
+            original_names = {name.lower(): name for name in names}
             for name in lowered:
+                if allow_threaded_comments and (
+                    name.startswith("xl/threadedcomments/") or name == "xl/persons/person.xml"
+                ):
+                    continue
+                if allow_custom_xml_passthrough and name.startswith("customxml/"):
+                    continue
                 if name in _UNSUPPORTED_PART_NAMES or name.startswith(_UNSUPPORTED_PART_PREFIXES):
                     raise WorkbookSafetyError(f"A planilha contém o recurso '{name}' que esta gravação não preserva com segurança.")
                 if name.startswith("xl/drawings/") and "vml" in name:
+                    if (
+                        allow_legacy_comments
+                        and name.endswith(".vml")
+                        and _vml_part_contains_only_comment_notes(archive.read(original_names[name]))
+                    ):
+                        continue
                     raise WorkbookSafetyError("A planilha contém comentários ou desenhos VML que esta gravação não preserva com segurança.")
             for name in names:
                 if name.lower().startswith("xl/drawings/") and name.lower().endswith(".xml"):
@@ -653,12 +972,23 @@ def _package_features(source: Path) -> None:
         raise WorkbookSafetyError("A planilha não pôde ser lida para validar seus recursos.") from error
 
 
-def load_workbook_safely(source: Any) -> Any:
+def load_workbook_safely(
+    source: Any,
+    *,
+    allow_threaded_comments: bool = False,
+    allow_legacy_comments: bool = False,
+    allow_custom_xml_passthrough: bool = False,
+) -> Any:
     """Load formulas/rich text and reject unsupported package features or warnings."""
     temporary_handle = None
     if isinstance(source, (str, os.PathLike, Path)):
         source_path = Path(source)
-        _package_features(source_path)
+        _package_features(
+            source_path,
+            allow_threaded_comments=allow_threaded_comments,
+            allow_legacy_comments=allow_legacy_comments,
+            allow_custom_xml_passthrough=allow_custom_xml_passthrough,
+        )
         if source_path.suffix.lower() not in {".xlsx", ".xlsm", ".xltx", ".xltm"}:
             # openpyxl checks filename extensions even for a valid XLSX archive;
             # staged files use a neutral .tmp suffix until commit.
@@ -671,7 +1001,14 @@ def load_workbook_safely(source: Any) -> Any:
         finally:
             if temporary_handle is not None:
                 temporary_handle.close()
-    unsupported = [item for item in caught if re.search(r"unsupported|not supported|will be removed|extension|drawing", str(item.message), re.I)]
+    unsupported = [
+        item for item in caught
+        if re.search(r"unsupported|not supported|will be removed|extension|drawing", str(item.message), re.I)
+        and not (
+            allow_threaded_comments
+            and str(item.message).strip() == "Unknown extension is not supported and will be removed"
+        )
+    ]
     if unsupported:
         workbook.close()
         raise WorkbookSafetyError(f"A biblioteca Excel avisou que um recurso não seria preservado: {unsupported[0].message}")
@@ -684,13 +1021,39 @@ def validate_workbook_roundtrip(
     expected_values: Dict[tuple, Any],
     *,
     original_package_parts: Optional[Dict[str, str]] = None,
+    original_package_entries: Optional[Dict[str, str]] = None,
     allow_dimension_growth: bool = False,
+    allow_threaded_comments: bool = False,
+    allow_legacy_comments: bool = False,
+    allow_custom_xml_passthrough: bool = False,
 ) -> None:
     """Reopen the temporary workbook and ensure only explicitly allowed values changed."""
-    _package_features(candidate_path)
-    if original_package_parts is not None and _preserved_package_parts(candidate_path) != original_package_parts:
-        raise WorkbookSafetyError("A planilha temporária alterou um desenho, gráfico ou mídia fora das células autorizadas.")
-    workbook = load_workbook_safely(candidate_path)
+    _package_features(
+        candidate_path,
+        allow_threaded_comments=allow_threaded_comments,
+        allow_legacy_comments=allow_legacy_comments,
+        allow_custom_xml_passthrough=allow_custom_xml_passthrough,
+    )
+    if original_package_entries is not None:
+        candidate_entries = _package_hashes(candidate_path)
+        if set(candidate_entries) != set(original_package_entries):
+            raise WorkbookSafetyError("A planilha temporária alterou as partes do arquivo fora das células autorizadas.")
+        allowed_parts = _updated_worksheet_parts(candidate_path, expected_values)
+        changed_parts = {
+            name for name, digest in original_package_entries.items()
+            if candidate_entries[name] != digest
+        }
+        if changed_parts - allowed_parts:
+            raise WorkbookSafetyError("A planilha temporária alterou recursos fora das células autorizadas.")
+    if original_package_parts is not None:
+        if _preserved_package_parts(candidate_path) != original_package_parts:
+            raise WorkbookSafetyError("A planilha temporária alterou um desenho, gráfico ou mídia fora das células autorizadas.")
+    workbook = load_workbook_safely(
+        candidate_path,
+        allow_threaded_comments=allow_threaded_comments,
+        allow_legacy_comments=allow_legacy_comments,
+        allow_custom_xml_passthrough=allow_custom_xml_passthrough,
+    )
     try:
         candidate = workbook_snapshot(workbook)
     finally:
@@ -733,13 +1096,23 @@ def validate_workbook_roundtrip(
             expected = allowed.get(coordinate, prior[0] if prior else None)
             if actual is None:
                 raise WorkbookSafetyError(f"A célula '{sheet_name}!{coordinate}' desapareceu na planilha temporária.")
-            if actual[0] != expected:
+            value_matches = _cell_values_match(actual[0], expected)
+            if not value_matches:
                 raise WorkbookSafetyError(f"O valor da célula '{sheet_name}!{coordinate}' não corresponde ao esperado.")
             if prior is not None:
-                if actual[1:] != prior[1:]:
+                if coordinate in allowed:
+                    metadata_matches = (
+                        _cell_data_type_matches(actual, allowed[coordinate])
+                        and actual[2:] == prior[2:]
+                    )
+                else:
+                    metadata_matches = _cell_metadata_matches(actual, prior)
+                if not metadata_matches:
                     raise WorkbookSafetyError(f"A célula '{sheet_name}!{coordinate}' alterou fórmula, estilo ou recurso associado.")
             elif coordinate not in allowed:
                 raise WorkbookSafetyError(f"A planilha temporária criou a célula não autorizada '{sheet_name}!{coordinate}'.")
+            elif not _cell_data_type_matches(actual, allowed[coordinate]):
+                raise WorkbookSafetyError(f"A célula nova '{sheet_name}!{coordinate}' tem um tipo inesperado.")
 
 
 def serialize_workbook_validated(
@@ -749,26 +1122,33 @@ def serialize_workbook_validated(
     expected_values: Dict[tuple, Any],
     *,
     allow_dimension_growth: bool = False,
+    allow_threaded_comments: bool = False,
+    allow_legacy_comments: bool = False,
+    allow_custom_xml_passthrough: bool = False,
 ) -> bytes:
     """Save to a same-volume temporary, reopen, validate, and return its bytes."""
     source = Path(source).resolve(strict=False)
-    original_parts = _preserved_package_parts(source)
+    original_entries = _package_hashes(source)
 
     def write(temp: Path) -> None:
-        with warnings.catch_warnings(record=True) as caught:
-            warnings.simplefilter("always")
-            workbook.save(temp)
-        unsupported = [item for item in caught if re.search(r"unsupported|not supported|will be removed|extension|drawing", str(item.message), re.I)]
-        if unsupported:
-            raise WorkbookSafetyError(f"A planilha contém um recurso que não pode ser preservado: {unsupported[0].message}")
+        changed_values = _changed_expected_values(original_snapshot, expected_values)
+        if changed_values:
+            _write_package_with_cell_updates(
+                source, temp, changed_values,
+            )
+        else:
+            shutil.copyfile(source, temp)
 
     temp = _write_temp(
         source,
         write,
         lambda path: validate_workbook_roundtrip(
             original_snapshot, path, expected_values,
-            original_package_parts=original_parts,
+            original_package_entries=original_entries,
             allow_dimension_growth=allow_dimension_growth,
+            allow_threaded_comments=allow_threaded_comments,
+            allow_legacy_comments=allow_legacy_comments,
+            allow_custom_xml_passthrough=allow_custom_xml_passthrough,
         ),
     )
     try:
@@ -800,9 +1180,14 @@ def stage_workbook_update(
             with warnings.catch_warnings(record=True) as caught:
                 warnings.simplefilter("always")
                 workbook.save(temp)
-            unsupported = [item for item in caught if re.search(r"unsupported|not supported|will be removed|extension|drawing", str(item.message), re.I)]
+            unsupported = [
+                item for item in caught
+                if re.search(r"unsupported|not supported|will be removed|extension|drawing", str(item.message), re.I)
+            ]
             if unsupported:
-                raise WorkbookSafetyError(f"A planilha contém um recurso que não pode ser preservado: {unsupported[0].message}")
+                raise WorkbookSafetyError(
+                    f"A planilha contém um recurso que não pode ser preservado: {unsupported[0].message}"
+                )
 
         transaction.stage_file(
             source,
@@ -818,7 +1203,7 @@ def stage_workbook_update(
 
 
 def _preserved_package_parts(source: Path) -> Dict[str, str]:
-    """Fingerprint drawing/chart/media package parts that should pass through unchanged."""
+    """Fingerprint drawing, chart, and media parts for ordinary workbook saves."""
     prefixes = ("xl/drawings/", "xl/charts/", "xl/media/")
     result = {}
     try:
@@ -828,4 +1213,20 @@ def _preserved_package_parts(source: Path) -> Dict[str, str]:
                     result[name] = hashlib.sha256(archive.read(name)).hexdigest()
     except (OSError, zipfile.BadZipFile) as error:
         raise WorkbookSafetyError("Não foi possível conferir desenhos, gráficos e imagens da planilha.") from error
+    return result
+
+
+def _package_hashes(source: Path) -> Dict[str, str]:
+    """Fingerprint every XLSX package entry for the download-only cell patch."""
+    result = {}
+    try:
+        with zipfile.ZipFile(source) as archive:
+            for info in archive.infolist():
+                if info.filename in result:
+                    raise WorkbookSafetyError("O arquivo Excel contém partes duplicadas no pacote.")
+                result[info.filename] = hashlib.sha256(archive.read(info.filename)).hexdigest()
+    except WorkbookSafetyError:
+        raise
+    except (OSError, zipfile.BadZipFile) as error:
+        raise WorkbookSafetyError("Não foi possível conferir a estrutura interna da planilha.") from error
     return result

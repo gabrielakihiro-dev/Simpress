@@ -1,0 +1,2134 @@
+    // State
+    let currentEquipamento = null;
+    let unidadesList = [];
+    let debounceTimer = null;
+    const modalReturnFocus = new Map();
+
+    function abrirModalAcessivel(modalId, initialFocusSelector, closeFunction) {
+      const modal = document.getElementById(modalId);
+      if (!modal) return;
+
+      const openModals = [...document.querySelectorAll('[data-accessible-modal="true"]')]
+        .filter(item => !item.classList.contains("hidden"));
+      const previousModal = openModals[openModals.length - 1];
+      if (previousModal && previousModal !== modal) {
+        previousModal.inert = true;
+        previousModal.setAttribute("aria-hidden", "true");
+      }
+
+      if (!modalReturnFocus.has(modal)) modalReturnFocus.set(modal, document.activeElement);
+      modal.classList.remove("hidden");
+      modal.dataset.accessibleModal = "true";
+      modal.dataset.closeFunction = closeFunction;
+
+      const dialog = modal.firstElementChild;
+      if (!dialog) return;
+      dialog.setAttribute("role", "dialog");
+      dialog.setAttribute("aria-modal", "true");
+      dialog.setAttribute("tabindex", "-1");
+      dialog.classList.add("modal-panel");
+      const heading = dialog.querySelector("h1, h2, h3");
+      if (heading) {
+        if (!heading.id) heading.id = `${modalId}-titulo`;
+        dialog.setAttribute("aria-labelledby", heading.id);
+      }
+
+      document.body.classList.add("dialog-open");
+      lucide.createIcons({ root: modal });
+      requestAnimationFrame(() => {
+        const preferred = initialFocusSelector ? dialog.querySelector(initialFocusSelector) : null;
+        const target = preferred && !preferred.disabled ? preferred : dialog;
+        target.focus({ preventScroll: true });
+      });
+    }
+
+    function fecharModalAcessivel(modalId) {
+      const modal = document.getElementById(modalId);
+      if (!modal || modal.classList.contains("hidden")) return;
+      modal.classList.add("hidden");
+      const returnFocus = modalReturnFocus.get(modal);
+      modalReturnFocus.delete(modal);
+
+      const openModals = [...document.querySelectorAll('[data-accessible-modal="true"]')]
+        .filter(item => !item.classList.contains("hidden"));
+      const activeModal = openModals[openModals.length - 1];
+      if (activeModal) {
+        activeModal.inert = false;
+        activeModal.removeAttribute("aria-hidden");
+        const target = returnFocus && activeModal.contains(returnFocus)
+          ? returnFocus
+          : activeModal.firstElementChild;
+        target?.focus({ preventScroll: true });
+        return;
+      }
+
+      document.body.classList.remove("dialog-open");
+      if (returnFocus instanceof HTMLElement && returnFocus.isConnected && !returnFocus.closest(".hidden") && returnFocus.getClientRects().length) {
+        returnFocus.focus({ preventScroll: true });
+      } else {
+        const fallback = document.querySelector(".header-secondary-actions > summary") || document.getElementById("input-serial");
+        fallback?.focus({ preventScroll: true });
+      }
+    }
+
+    document.addEventListener("keydown", event => {
+      const openModals = [...document.querySelectorAll('[data-accessible-modal="true"]')]
+        .filter(item => !item.classList.contains("hidden"));
+      const modal = openModals[openModals.length - 1];
+      if (!modal) {
+        if (event.key === "Escape") {
+          const disclosure = [...document.querySelectorAll("details[open]")].pop();
+          if (disclosure) {
+            disclosure.open = false;
+            disclosure.querySelector("summary")?.focus();
+          }
+        }
+        return;
+      }
+
+      if (event.key === "Escape") {
+        event.preventDefault();
+        const close = window[modal.dataset.closeFunction];
+        if (typeof close === "function") close();
+        return;
+      }
+
+      if (event.key !== "Tab") return;
+      const dialog = modal.firstElementChild;
+      const focusable = [...dialog.querySelectorAll(
+        'a[href], button:not([disabled]), input:not([disabled]):not([type="hidden"]), select:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex="-1"])'
+      )].filter(element => element.getClientRects().length && !element.closest("[inert]"));
+      if (!focusable.length) {
+        event.preventDefault();
+        dialog.focus();
+        return;
+      }
+      const first = focusable[0];
+      const last = focusable[focusable.length - 1];
+      if (event.shiftKey && (document.activeElement === first || !modal.contains(document.activeElement))) {
+        event.preventDefault();
+        last.focus();
+      } else if (!event.shiftKey && (document.activeElement === last || !modal.contains(document.activeElement))) {
+        event.preventDefault();
+        first.focus();
+      }
+    });
+
+    function associarRotulosAcessiveis() {
+      const fallbackLabels = new Map([
+        ["input-serial", "Número de série do equipamento"],
+        ["textarea-resumo-preview", "Resumo da transferência"],
+      ]);
+      document.querySelectorAll('input:not([type="hidden"]), select, textarea').forEach(control => {
+        if (control.labels?.length || control.hasAttribute("aria-label") || control.hasAttribute("aria-labelledby")) return;
+        if (!control.id) control.id = `campo-${Math.random().toString(36).slice(2, 9)}`;
+
+        let label = null;
+        let node = control;
+        while (node.parentElement && node.parentElement !== document.body && !label) {
+          const siblings = [...node.parentElement.children];
+          const priorSiblings = siblings.slice(0, siblings.indexOf(node)).reverse();
+          for (const sibling of priorSiblings) {
+            const candidates = [
+              ...(sibling.matches("label") ? [sibling] : []),
+              ...sibling.querySelectorAll("label"),
+            ];
+            label = candidates.find(candidate => !candidate.control && !candidate.htmlFor);
+            if (label) break;
+          }
+          node = node.parentElement;
+        }
+
+        if (label) {
+          label.htmlFor = control.id;
+          return;
+        }
+        const fallback = fallbackLabels.get(control.id)
+          || control.getAttribute("placeholder")
+          || control.id.replace(/[-_]+/g, " ");
+        control.setAttribute("aria-label", fallback.replace(/\s+/g, " ").trim());
+      });
+    }
+
+    // Phone field formatting
+    function formatarTelefoneBrasileiro(valor) {
+      const original = String(valor || "").trim();
+      if (!original) return "";
+
+      const ramalExplicito = original.match(/(?:ramal|ram\.?|ext\.?|x)\s*[:.]?\s*(\d+)\s*$/i);
+      if (/[A-Za-zÀ-ÿ]/.test(original) && !ramalExplicito) return original;
+
+      const telefoneOriginal = ramalExplicito ? original.slice(0, ramalExplicito.index) : original;
+      let digitos = telefoneOriginal.replace(/\D/g, "");
+
+      if (/^\s*\+55\b/.test(telefoneOriginal) && digitos.length >= 13) {
+        digitos = digitos.slice(2);
+      } else if (/^\s*0055\b/.test(telefoneOriginal) && digitos.length >= 15) {
+        digitos = digitos.slice(4);
+      }
+
+      if (digitos.length < 3) return original;
+
+      const ddd = digitos.slice(0, 2);
+      const numero = digitos.slice(2, 11);
+      const numeroFormatado = numero.length > 5
+        ? `${numero.slice(0, 5)}-${numero.slice(5)}`
+        : numero;
+      let telefoneFormatado = `(${ddd}) ${numeroFormatado}`;
+      const ramal = ramalExplicito ? ramalExplicito[1] : digitos.slice(11);
+      if (ramal) telefoneFormatado += ` Ramal: ${ramal}`;
+      return telefoneFormatado;
+    }
+
+    function aplicarMascaraTelefone(input) {
+      const cursor = input.selectionStart ?? input.value.length;
+      const digitosAntesDoCursor = (input.value.slice(0, cursor).match(/\d/g) || []).length;
+      const valorFormatado = formatarTelefoneBrasileiro(input.value);
+      if (valorFormatado === input.value) return;
+      input.value = valorFormatado;
+
+      let novaPosicao = 0;
+      let digitosPercorridos = 0;
+      while (novaPosicao < input.value.length && digitosPercorridos < digitosAntesDoCursor) {
+        if (/\d/.test(input.value[novaPosicao])) digitosPercorridos += 1;
+        novaPosicao += 1;
+      }
+      input.setSelectionRange(novaPosicao, novaPosicao);
+    }
+
+    function inicializarMascarasTelefone() {
+      ["retirada-telefone", "entrega-telefone"].forEach((id) => {
+        const input = document.getElementById(id);
+        if (!input) return;
+        input.value = formatarTelefoneBrasileiro(input.value);
+        input.addEventListener("input", () => aplicarMascaraTelefone(input));
+        input.addEventListener("change", () => aplicarMascaraTelefone(input));
+        input.addEventListener("blur", () => aplicarMascaraTelefone(input));
+      });
+    }
+
+    // Initialize page behaviors
+    document.addEventListener("DOMContentLoaded", () => {
+      lucide.createIcons();
+      associarRotulosAcessiveis();
+      inicializarMascarasTelefone();
+      carregarEstatisticas();
+      carregarUnidades();
+      carregarContagemHistoricoApelidos();
+      carregarContagemHistoricoComparacoes();
+
+      [
+        ["upload-endpoint-file", "upload-endpoint-name"],
+        ["upload-details-file", "upload-details-name"]
+      ].forEach(([inputId, nameId]) => {
+        const input = document.getElementById(inputId);
+        input?.addEventListener("change", () => {
+          document.getElementById(nameId).textContent = input.files?.[0]?.name || "Nenhum arquivo selecionado";
+        });
+      });
+
+      // Focus serial input immediately
+      const inputSerial = document.getElementById("input-serial");
+      if (inputSerial) inputSerial.focus();
+    });
+
+    // Toast system
+    function showToast(message, type = "success") {
+      const container = document.getElementById("toast-container");
+      const toast = document.createElement("div");
+      toast.setAttribute("role", type === "error" ? "alert" : "status");
+      toast.setAttribute("aria-live", type === "error" ? "assertive" : "polite");
+      toast.setAttribute("aria-atomic", "true");
+
+      const bgColors = {
+        success: "bg-emerald-950/90 border-emerald-500/50 text-emerald-200",
+        error: "bg-rose-950/90 border-rose-500/50 text-rose-200",
+        warning: "bg-amber-950/90 border-amber-500/50 text-amber-200",
+        info: "bg-brand-950/90 border-brand-500/50 text-brand-200",
+      };
+
+      const iconNames = {
+        success: "check-circle",
+        error: "alert-circle",
+        warning: "alert-triangle",
+        info: "info",
+      };
+
+      toast.className = `flex items-center space-x-3 px-4 py-3 rounded-xl border shadow-xl backdrop-blur-md text-xs font-medium pointer-events-auto transform transition-all duration-300 opacity-0 translate-y-2 ${bgColors[type] || bgColors.info}`;
+      const icon = createIcon(iconNames[type] || "info", "w-4 h-4 shrink-0");
+      const messageElement = document.createElement("span");
+      messageElement.textContent = String(message ?? "");
+      toast.replaceChildren(icon, messageElement);
+
+      container.appendChild(toast);
+      lucide.createIcons({ root: toast });
+
+      requestAnimationFrame(() => {
+        toast.classList.remove("opacity-0", "translate-y-2");
+      });
+
+      setTimeout(() => {
+        toast.classList.add("opacity-0", "translate-y-2");
+        setTimeout(() => toast.remove(), 300);
+      }, 4000);
+    }
+
+    // Load statistics from API
+    async function carregarEstatisticas() {
+      try {
+        const res = await fetch("/api/stats");
+        if (res.ok) {
+          const stats = await res.json();
+          document.getElementById("stat-equipamentos").textContent = Number(stats.total_equipamentos).toLocaleString("pt-BR");
+          document.getElementById("stat-unidades").textContent = stats.total_unidades;
+          const exportButton = document.getElementById("btn-exportar-equipamentos");
+          if (exportButton) {
+            exportButton.classList.toggle("hidden", Number(stats.total_apelidos_modificados || 0) === 0);
+          }
+        }
+      } catch (err) {
+        console.warn("Não foi possível carregar estatísticas:", err);
+      }
+    }
+
+    function atualizarIndicadoresPosSalvamento(totalModificados) {
+      const exportButton = document.getElementById("btn-exportar-equipamentos");
+      if (exportButton && totalModificados !== undefined && totalModificados !== null) {
+        exportButton.classList.toggle("hidden", Number(totalModificados) === 0);
+      }
+
+      // Atualiza os indicadores sem atrasar o fechamento do formulário após salvar.
+      void Promise.allSettled([
+        carregarEstatisticas(),
+        carregarContagemHistoricoApelidos()
+      ]);
+    }
+
+    // Load SEBRAE units catalog from API
+    async function carregarUnidades() {
+      try {
+        const res = await fetch("/api/unidades");
+        if (res.ok) {
+          unidadesList = await res.json();
+          const select = document.getElementById("select-unidade-destino");
+          select.innerHTML = '<option value="">-- Escolha a Cidade ou Regional de Destino --</option>';
+
+          unidadesList.forEach(u => {
+            const opt = document.createElement("option");
+            opt.value = u.id;
+            opt.textContent = u.label || `${u.cidade} - ${u.endereco} (${u.cnpj})`;
+            select.appendChild(opt);
+          });
+
+          const countEl = document.getElementById("filiais-count");
+          if (countEl) countEl.textContent = `${unidadesList.length} filiais catalogadas`;
+        }
+      } catch (err) {
+        console.error("Falha ao carregar unidades:", err);
+        showToast("Erro ao carregar catálogo de unidades SEBRAE", "error");
+      }
+    }
+
+    // Autocomplete & Debounce for Serial Input
+    let autocompleteItemsList = [];
+    let highlightedAutocompleteIndex = -1;
+
+    function handleSerialInput(val) {
+      const clearBtn = document.getElementById("btn-clear-serial");
+      if (val && val.length > 0) {
+        clearBtn.classList.remove("hidden");
+      } else {
+        clearBtn.classList.add("hidden");
+      }
+
+      clearTimeout(debounceTimer);
+      const term = val.trim();
+      if (term.length < 2) {
+        fecharAutocomplete();
+        return;
+      }
+
+      document.getElementById("autocomplete-box").setAttribute("aria-busy", "true");
+      debounceTimer = setTimeout(async () => {
+        try {
+          const res = await fetch(`/api/buscar?q=${encodeURIComponent(term)}`);
+          if (res.ok) {
+            const results = await res.json();
+            // Check if input value hasn't been wiped in the meantime
+            if (document.getElementById("input-serial").value.trim().toUpperCase() === term.toUpperCase()) {
+              renderAutocomplete(results);
+            }
+          } else {
+            showToast("Não foi possível consultar os equipamentos. Tente novamente.", "error");
+          }
+        } catch (err) {
+          console.warn("Erro no autocomplete:", err);
+          showToast("Falha de conexão ao consultar os equipamentos.", "error");
+        } finally {
+          if (document.getElementById("input-serial").value.trim().toUpperCase() === term.toUpperCase()) {
+            document.getElementById("autocomplete-box").setAttribute("aria-busy", "false");
+          }
+        }
+      }, 200);
+    }
+
+    function handleSerialKeydown(e) {
+      const box = document.getElementById("autocomplete-box");
+      const isBoxOpen = box && !box.classList.contains("hidden") && autocompleteItemsList.length > 0;
+
+      if (e.key === "ArrowDown") {
+        if (isBoxOpen) {
+          e.preventDefault();
+          highlightedAutocompleteIndex = (highlightedAutocompleteIndex + 1) % autocompleteItemsList.length;
+          updateAutocompleteHighlight();
+        }
+      } else if (e.key === "ArrowUp") {
+        if (isBoxOpen) {
+          e.preventDefault();
+          highlightedAutocompleteIndex = (highlightedAutocompleteIndex - 1 + autocompleteItemsList.length) % autocompleteItemsList.length;
+          updateAutocompleteHighlight();
+        }
+      } else if (e.key === "Enter") {
+        e.preventDefault();
+        if (isBoxOpen && highlightedAutocompleteIndex >= 0 && autocompleteItemsList[highlightedAutocompleteIndex]) {
+          selecionarItemAutocomplete(autocompleteItemsList[highlightedAutocompleteIndex]);
+        } else {
+          fecharAutocomplete();
+        }
+      } else if (e.key === "Escape") {
+        fecharAutocomplete();
+      }
+    }
+
+    function escapeHtml(str) {
+      if (str === null || str === undefined) return "";
+      return String(str)
+        .replace(/&/g, "&amp;")
+        .replace(/</g, "&lt;")
+        .replace(/>/g, "&gt;")
+        .replace(/"/g, "&quot;")
+        .replace(/'/g, "&#039;");
+    }
+
+    function createTextElement(tagName, className, value) {
+      const element = document.createElement(tagName);
+      if (className) element.className = className;
+      element.textContent = String(value ?? "");
+      return element;
+    }
+
+    function createIcon(name, className) {
+      const icon = document.createElement("i");
+      icon.setAttribute("data-lucide", name);
+      icon.className = className;
+      return icon;
+    }
+
+    function highlightMatch(text, query) {
+      if (!text) return "";
+      if (!query) return escapeHtml(text);
+      const q = query.trim();
+      if (!q) return escapeHtml(text);
+      const safeText = escapeHtml(text);
+      const safeQuery = escapeHtml(q);
+      const regex = new RegExp(`(${safeQuery.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')})`, "gi");
+      return safeText.replace(regex, `<span class="serial-match">$1</span>`);
+    }
+
+    function updateAutocompleteHighlight() {
+      const list = document.getElementById("autocomplete-list");
+      if (!list) return;
+      const rows = list.querySelectorAll(".autocomplete-row");
+      rows.forEach((row, idx) => {
+        const selected = idx === highlightedAutocompleteIndex;
+        row.setAttribute("aria-selected", String(selected));
+        if (selected) {
+          row.classList.add("active");
+          document.getElementById("input-serial").setAttribute("aria-activedescendant", row.id);
+          row.scrollIntoView({ block: "nearest", behavior: "auto" });
+        } else {
+          row.classList.remove("active");
+        }
+      });
+      if (highlightedAutocompleteIndex < 0) document.getElementById("input-serial").removeAttribute("aria-activedescendant");
+    }
+
+    function selecionarItemAutocomplete(item) {
+      document.getElementById("input-serial").value = item.serial;
+      document.getElementById("btn-clear-serial").classList.remove("hidden");
+      fecharAutocomplete();
+      buscarSerial();
+    }
+
+    function renderAutocomplete(items) {
+      const box = document.getElementById("autocomplete-box");
+      const list = document.getElementById("autocomplete-list");
+      const emptyState = document.getElementById("autocomplete-empty-state");
+      const countEl = document.getElementById("autocomplete-count");
+      const currentQuery = (document.getElementById("input-serial").value || "").trim();
+
+      if (!items || items.length === 0) {
+        list.replaceChildren();
+        list.classList.add("hidden");
+        emptyState.classList.remove("hidden");
+        emptyState.innerHTML = `
+          <div class="px-6 py-8 text-center flex flex-col items-center justify-center space-y-2 select-none">
+            <div class="w-10 h-10 rounded-xl bg-slate-900 border border-slate-800 flex items-center justify-center text-slate-500 mb-1">
+              <i data-lucide="search-x" class="w-5 h-5" aria-hidden="true"></i>
+            </div>
+            <p class="text-sm font-semibold text-slate-200" role="status" aria-live="polite">Nenhum equipamento localizado</p>
+            <p class="text-xs text-slate-500 max-w-sm">Nenhum registro com o termo <span class="font-mono text-cyan-400 font-bold">"${escapeHtml(currentQuery)}"</span> foi encontrado no inventário do SEBRAE/PR.</p>
+            <button type="button" onclick="cadastrarNovoSerial(document.getElementById('input-serial').value)" class="mt-2 inline-flex items-center gap-1.5 px-3.5 py-2 rounded-lg bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-bold transition shadow-lg">
+              <i data-lucide="plus-circle" class="w-3.5 h-3.5" aria-hidden="true"></i>
+              <span>Cadastrar "${escapeHtml(currentQuery)}" como Novo Equipamento</span>
+            </button>
+          </div>
+        `;
+        countEl.textContent = "0 encontrados";
+        autocompleteItemsList = [];
+        highlightedAutocompleteIndex = -1;
+        document.getElementById("input-serial").setAttribute("aria-expanded", "true");
+        document.getElementById("input-serial").removeAttribute("aria-activedescendant");
+        box.classList.remove("hidden");
+        lucide.createIcons({ root: box });
+        return;
+      }
+
+      autocompleteItemsList = items;
+      highlightedAutocompleteIndex = -1;
+      list.innerHTML = "";
+      list.classList.remove("hidden");
+      emptyState.classList.add("hidden");
+      countEl.textContent = `${items.length} ${items.length === 1 ? 'item' : 'itens'}`;
+      document.getElementById("input-serial").setAttribute("aria-expanded", "true");
+      document.getElementById("input-serial").removeAttribute("aria-activedescendant");
+
+      items.forEach((item, index) => {
+        const row = document.createElement("div");
+        row.id = `autocomplete-option-${index}`;
+        row.setAttribute("role", "option");
+        row.setAttribute("aria-selected", "false");
+        row.className = "autocomplete-row group px-4 py-2.5 cursor-pointer flex items-center justify-between gap-3";
+        row.onclick = () => selecionarItemAutocomplete(item);
+        row.onmouseenter = () => {
+          highlightedAutocompleteIndex = index;
+          updateAutocompleteHighlight();
+        };
+
+        // Determine icon & badge styles per equipment type
+        let tipoIcon = "laptop";
+        let tipoBadgeClass = "bg-emerald-500/15 text-emerald-300 border border-emerald-500/30";
+
+        if (item.tipo === "Micro Computador") {
+          tipoIcon = "monitor";
+          tipoBadgeClass = "bg-blue-500/15 text-blue-300 border border-blue-500/30";
+        } else if (item.tipo === "Monitor") {
+          tipoIcon = "tv";
+          tipoBadgeClass = "bg-indigo-500/15 text-indigo-300 border border-indigo-500/30";
+        } else if (item.tipo !== "Notebook") {
+          tipoIcon = "box";
+          tipoBadgeClass = "bg-purple-500/15 text-purple-300 border border-purple-500/30";
+        }
+
+        row.innerHTML = `
+          <div class="flex items-center gap-3 min-w-0 flex-1">
+            <!-- 1. Serial Number Badge (Highlighted as the STAR element) -->
+            <div class="serial-badge flex items-center gap-2 px-3 py-1.5 rounded-lg shrink-0">
+              <i data-lucide="hash" class="w-4 h-4 text-cyan-400 shrink-0"></i>
+              <span class="font-mono font-bold text-white text-sm sm:text-base tracking-widest">${highlightMatch(item.serial, currentQuery)}</span>
+            </div>
+
+            <!-- 2. Type Badge -->
+            <span class="inline-flex items-center gap-1.5 text-xs font-semibold px-2.5 py-1 rounded-full ${tipoBadgeClass} shrink-0">
+              <i data-lucide="${tipoIcon}" class="w-3.5 h-3.5 shrink-0"></i>
+              <span>${escapeHtml(item.tipo || 'Equipamento')}</span>
+            </span>
+
+            <!-- 3. Hardware Model & Hostname -->
+            <div class="min-w-0 flex items-center gap-2 flex-1">
+              <span class="text-xs sm:text-sm font-medium text-slate-200 truncate" title="${escapeHtml(item.modelo || '')}">
+                ${escapeHtml(item.modelo || 'Sem modelo especificado')}
+              </span>
+              ${item.apelido ? `
+                <span class="autocomplete-alias inline-flex items-center gap-1 text-[11px] font-mono px-2 py-0.5 rounded-md bg-slate-900/90 text-cyan-300 border border-cyan-500/30 shrink-0" title="Apelido / Hostname">
+                  <i data-lucide="terminal" class="w-2.5 h-2.5 text-cyan-400" aria-hidden="true"></i>
+                  <span>${escapeHtml(item.apelido)}</span>
+                </span>
+              ` : ''}
+              ${item.invall_alias_status && item.invall_alias_status !== "aplicado" ? `
+                <span class="text-[10px] text-amber-200 shrink-0" title="${escapeHtml(item.invall_alias_detail || "Conferir associação com a InvAll")}">Conferir InvAll</span>
+              ` : ''}
+            </div>
+          </div>
+
+          <!-- 4. Location & Selection Hint -->
+          <div class="flex items-center gap-2 shrink-0 ml-2">
+            <div class="flex items-center gap-1 text-xs text-amber-300 bg-amber-500/10 border border-amber-500/25 px-2.5 py-1 rounded-lg font-medium" title="Cidade / Unidade Atual">
+              <i data-lucide="map-pin" class="w-3.5 h-3.5 text-amber-400 shrink-0"></i>
+              <span>${escapeHtml(item.retirada_cidade || 'PR')}</span>
+            </div>
+            <div class="hidden sm:flex items-center text-xs text-slate-400 group-hover:text-cyan-300 transition-colors ml-1 font-mono">
+              <span class="text-[11px] mr-1 hidden lg:inline opacity-70">Selecionar</span>
+              <kbd class="px-1.5 py-0.5 text-[10px] bg-slate-900 border border-slate-700 rounded text-slate-300 shadow-sm">↵</kbd>
+            </div>
+          </div>
+        `;
+        list.appendChild(row);
+      });
+
+      box.classList.remove("hidden");
+      lucide.createIcons({ root: box });
+    }
+
+    function fecharAutocomplete() {
+      const box = document.getElementById("autocomplete-box");
+      if (box) box.classList.add("hidden");
+      if (box) box.setAttribute("aria-busy", "false");
+      const input = document.getElementById("input-serial");
+      if (input) {
+        input.setAttribute("aria-expanded", "false");
+        input.removeAttribute("aria-activedescendant");
+      }
+      autocompleteItemsList = [];
+      highlightedAutocompleteIndex = -1;
+    }
+
+    // Close autocomplete on click outside
+    document.addEventListener("click", (e) => {
+      const box = document.getElementById("autocomplete-box");
+      const input = document.getElementById("input-serial");
+      if (box && !box.contains(e.target) && e.target !== input) {
+        fecharAutocomplete();
+      }
+    });
+
+    function fecharMenuSecundarioAoClicarFora(event) {
+      const menu = document.querySelector(".header-secondary-actions");
+      if (menu?.open && !menu.contains(event.target)) {
+        menu.open = false;
+      }
+    }
+
+    document.addEventListener("click", fecharMenuSecundarioAoClicarFora);
+
+    function limparSerial() {
+      const input = document.getElementById("input-serial");
+      input.value = "";
+      document.getElementById("btn-clear-serial").classList.add("hidden");
+      fecharAutocomplete();
+      input.focus();
+    }
+
+    // Search Equipment by Serial
+    async function buscarSerial() {
+      const serialInput = document.getElementById("input-serial");
+      const serial = serialInput.value.trim().toUpperCase();
+
+      if (!serial) {
+        showToast("Digite o número de série do equipamento", "warning");
+        serialInput.focus();
+        return;
+      }
+
+      const btn = document.getElementById("btn-buscar-serial");
+      const originalText = btn.innerHTML;
+      btn.disabled = true;
+      btn.setAttribute("aria-busy", "true");
+      serialInput.setAttribute("aria-busy", "true");
+      btn.innerHTML = `<i data-lucide="loader-2" class="w-4 h-4 animate-spin"></i><span>Localizando...</span>`;
+      lucide.createIcons({ root: btn });
+
+      try {
+        const res = await fetch(`/api/equipamento/${encodeURIComponent(serial)}`);
+        if (!res.ok) {
+          const errData = await res.json().catch(() => ({}));
+          throw new Error(errData.detail || "Equipamento não encontrado na base de dados.");
+        }
+
+        const data = await res.json();
+        currentEquipamento = data;
+        exibirEquipamento(data);
+        showToast(`Equipamento ${data.serial} localizado com sucesso!`, "success");
+
+      } catch (err) {
+        console.error(err);
+        showToast(err.message, "error");
+        document.getElementById("card-equipamento").classList.add("hidden");
+      } finally {
+        btn.disabled = false;
+        btn.removeAttribute("aria-busy");
+        serialInput.removeAttribute("aria-busy");
+        btn.innerHTML = originalText;
+        lucide.createIcons({ root: btn });
+      }
+    }
+
+    // Render Equipment Card & Populate Retirada Section
+    function exibirEquipamento(eq) {
+      const card = document.getElementById("card-equipamento");
+      card.classList.remove("hidden");
+
+      document.getElementById("card-serial").textContent = eq.serial;
+      document.getElementById("card-modelo").textContent = eq.modelo || "Equipamento";
+      document.getElementById("badge-tipo").textContent = eq.tipo || "Geral";
+      document.getElementById("badge-apelido").textContent = eq.apelido || "Sem Apelido";
+      const aliasStatus = document.getElementById("badge-apelido-status");
+      aliasStatus.textContent = eq.invall_alias_status && eq.invall_alias_status !== "aplicado"
+        ? (eq.invall_alias_detail || "Conferir associação com a InvAll.")
+        : "";
+      aliasStatus.classList.toggle("hidden", !aliasStatus.textContent);
+      document.getElementById("card-id-cliente").textContent = eq.idCliente ? `Id Cliente: ${eq.idCliente}` : "";
+      document.getElementById("card-localizacao").textContent = `${eq.retirada_cidade || ''} - ${eq.retirada_endereco ? eq.retirada_endereco.split('-')[0].trim() : ''}`;
+      document.getElementById("card-cnpj-atual").textContent = `CNPJ: ${eq.retirada_cnpj || 'Não especificado'}`;
+
+      // Suggested Description
+      document.getElementById("input-descricao-equipamento").value = eq.descricao_sugerida || "";
+
+      // Icon & Badge styling by Type
+      const iconBox = document.getElementById("equip-icon-box");
+      const icon = document.getElementById("equip-icon");
+      const badgeTipo = document.getElementById("badge-tipo");
+
+      if (eq.tipo === "Notebook") {
+        icon.setAttribute("data-lucide", "laptop");
+        iconBox.className = "w-14 h-14 rounded-xl bg-emerald-500/10 border border-emerald-500/30 flex items-center justify-center shrink-0 text-emerald-400";
+        badgeTipo.className = "px-2.5 py-0.5 rounded-full text-xs font-semibold bg-emerald-500/20 text-emerald-300 border border-emerald-500/30";
+      } else if (eq.tipo === "Micro Computador") {
+        icon.setAttribute("data-lucide", "monitor");
+        iconBox.className = "w-14 h-14 rounded-xl bg-blue-500/10 border border-blue-500/30 flex items-center justify-center shrink-0 text-blue-400";
+        badgeTipo.className = "px-2.5 py-0.5 rounded-full text-xs font-semibold bg-blue-500/20 text-blue-300 border border-blue-500/30";
+      } else {
+        icon.setAttribute("data-lucide", "headphones");
+        iconBox.className = "w-14 h-14 rounded-xl bg-purple-500/10 border border-purple-500/30 flex items-center justify-center shrink-0 text-purple-400";
+        badgeTipo.className = "px-2.5 py-0.5 rounded-full text-xs font-semibold bg-purple-500/20 text-purple-300 border border-purple-500/30";
+      }
+      lucide.createIcons({ root: iconBox });
+
+      // Automatically fill RETIRADA (Origem) section!
+      document.getElementById("retirada-cnpj").value = eq.retirada_cnpj || "";
+      document.getElementById("retirada-endereco").value = eq.retirada_endereco || "";
+      document.getElementById("retirada-obs").value = eq.descricao_sugerida || "";
+
+      // Update status footer
+      document.getElementById("status-indicator").className = "w-2.5 h-2.5 rounded-full bg-emerald-400";
+      const statusSummary = document.getElementById("status-summary");
+      statusSummary.replaceChildren(
+        createTextElement("span", "text-emerald-300 font-medium", "Equipamento " + String(eq.serial ?? "") + " (" + String(eq.modelo ?? "") + ") carregado."),
+        createTextElement("span", "text-slate-400", " Selecione a Unidade de Destino e preencha o destinatário.")
+      );
+    }
+
+    // "Forçar SEDE Prado Velho" button action
+    function forcarSedePradoVelho() {
+      const sede = unidadesList.find(unit => unit.is_sede);
+      document.getElementById("retirada-cnpj").value = sede?.cnpj || "";
+      document.getElementById("retirada-endereco").value = "R Caeté, 150 - SEDE - Prado Velho - Curitiba/PR - CEP 80220-300";
+      showToast("Origem alterada para SEDE Prado Velho (Curitiba)!", "info");
+    }
+
+    // Handle Unidade de Destino Selection
+    function handleUnidadeDestinoChange(unitId) {
+      if (!unitId) return;
+      const unit = unidadesList.find(u => String(u.id) === String(unitId));
+      if (unit) {
+        document.getElementById("entrega-cnpj").value = unit.cnpj || "";
+        document.getElementById("entrega-endereco").value = unit.endereco_completo || "";
+        showToast(`Destino definido: ${unit.cidade}`, "info");
+      }
+    }
+
+    function selecionarUnidadePorCidade(cidadeNome) {
+      const unit = unidadesList.find(u => u.cidade.toLowerCase().includes(cidadeNome.toLowerCase()));
+      if (unit) {
+        document.getElementById("select-unidade-destino").value = unit.id;
+        handleUnidadeDestinoChange(unit.id);
+      }
+    }
+
+    function adicionarObsChamado(texto) {
+      const textarea = document.getElementById("entrega-obs");
+      if (textarea.value.trim().length > 0) {
+        textarea.value += " " + texto;
+      } else {
+        textarea.value = texto;
+      }
+    }
+
+    // Build Payload Object from Form
+    function construirPayload() {
+      const serialVal = document.getElementById("input-serial").value.trim().toUpperCase();
+      if (!serialVal) {
+        showToast("Por favor, informe o número de série do equipamento.", "warning");
+        document.getElementById("input-serial").focus();
+        return null;
+      }
+
+      const entregaContato = document.getElementById("entrega-contato").value.trim();
+      if (!entregaContato) {
+        showToast("Por favor, informe o Nome do Destinatário no SEBRAE.", "warning");
+        document.getElementById("entrega-contato").focus();
+        return null;
+      }
+
+      const entregaCnpj = document.getElementById("entrega-cnpj").value.trim();
+      const entregaEndereco = document.getElementById("entrega-endereco").value.trim();
+      if (!entregaCnpj || !entregaEndereco) {
+        showToast("Selecione uma unidade de destino para preencher automaticamente o CNPJ e o endereço de entrega.", "warning");
+        document.getElementById("select-unidade-destino").focus();
+        return null;
+      }
+
+      const retiradaTelefone = document.getElementById("retirada-telefone");
+      const entregaTelefone = document.getElementById("entrega-telefone");
+      retiradaTelefone.value = formatarTelefoneBrasileiro(retiradaTelefone.value);
+      entregaTelefone.value = formatarTelefoneBrasileiro(entregaTelefone.value);
+
+      return {
+        serial: serialVal,
+        descricao_equipamento: document.getElementById("input-descricao-equipamento").value.trim() || (currentEquipamento ? currentEquipamento.descricao_sugerida : `Equipamento ${serialVal}`),
+        razao_social: "SERVICO DE APOIO AS MICRO E PEQUENAS EMPRESAS DO PARANA - SEBRAE/PR",
+        contrato: 16467,
+        retirada_cnpj: document.getElementById("retirada-cnpj").value.trim(),
+        retirada_endereco: document.getElementById("retirada-endereco").value.trim(),
+        retirada_horario: document.getElementById("retirada-horario").value.trim(),
+        retirada_almoco: document.getElementById("retirada-almoco").value.trim(),
+        retirada_pausa_duracao: document.getElementById("retirada-pausa-duracao").value.trim(),
+        retirada_tipo_acesso: document.getElementById("retirada-tipo-acesso").value.trim(),
+        retirada_acesso_obs: "",
+        retirada_contato: document.getElementById("retirada-contato").value.trim(),
+        retirada_email: document.getElementById("retirada-email").value.trim(),
+        retirada_telefone: retiradaTelefone.value.trim(),
+        retirada_obs: document.getElementById("retirada-obs").value.trim(),
+        retirada_voltagem: document.getElementById("retirada-voltagem").value.trim(),
+        entrega_cnpj: entregaCnpj,
+        entrega_endereco: entregaEndereco,
+        entrega_horario: document.getElementById("entrega-horario").value.trim(),
+        entrega_almoco: document.getElementById("entrega-almoco").value.trim(),
+        entrega_pausa_duracao: document.getElementById("entrega-pausa-duracao").value.trim(),
+        entrega_tipo_acesso: "Elevador / Rampa / Térreo",
+        entrega_acesso_obs: "",
+        entrega_contato: entregaContato,
+        entrega_email: document.getElementById("entrega-email").value.trim(),
+        entrega_telefone: entregaTelefone.value.trim(),
+        entrega_obs: document.getElementById("entrega-obs").value.trim(),
+        entrega_voltagem: "Bivolt"
+      };
+    }
+
+    // Format Structured Text for Helpdesk Ticket
+    function gerarTextoResumo(payload) {
+      const modelo = currentEquipamento ? currentEquipamento.modelo : "Equipamento";
+      const tipo = currentEquipamento ? currentEquipamento.tipo : "Geral";
+      const apelido = currentEquipamento ? currentEquipamento.apelido : "-";
+      const idCliente = currentEquipamento ? currentEquipamento.idCliente : "-";
+
+      return `📋 RESUMO DE TRANSFERÊNCIA DE EQUIPAMENTO - SIMPRESS / SEBRAE-PR
+======================================================================
+• Equipamento: ${modelo} (${tipo})
+• Número de Série: ${payload.serial}
+• Apelido / Id Cliente: ${apelido} / ${idCliente}
+• Descrição / Conteúdo: ${payload.descricao_equipamento}
+
+📍 DADOS DE RETIRADA (ORIGEM):
+• Endereço: ${payload.retirada_endereco}
+• CNPJ: ${payload.retirada_cnpj}
+• Contato Suporte: ${payload.retirada_contato}
+• E-mail / Telefone: ${payload.retirada_email} | ${payload.retirada_telefone}
+• Expediente / Almoço: ${payload.retirada_horario} (Pausa: ${payload.retirada_almoco}, ${payload.retirada_pausa_duracao})
+• Observações Retirada: ${payload.retirada_obs || 'Sem observações adicionais'}
+
+🎯 DADOS DE ENTREGA (DESTINO):
+• Endereço: ${payload.entrega_endereco}
+• CNPJ: ${payload.entrega_cnpj}
+• Destinatário: ${payload.entrega_contato}
+• E-mail Destinatário: ${payload.entrega_email || 'Não informado'}
+• Telefone Destinatário: ${payload.entrega_telefone || 'Não informado'}
+• Expediente / Almoço: ${payload.entrega_horario} (Pausa: ${payload.entrega_almoco}, ${payload.entrega_pausa_duracao})
+• Observações do Chamado: ${payload.entrega_obs || 'Sem observações adicionais'}
+
+🚚 INFORMAÇÕES LOGÍSTICAS & CONTRATO:
+• Contrato: 16467 - Simpress / SEBRAE-PR
+• Voltagem: Bivolt
+• Tipo de Acesso: Elevador / Rampa / Térreo
+======================================================================`;
+    }
+
+    // Modal Preview Handlers
+    function abrirModalPreview() {
+      const payload = construirPayload();
+      if (!payload) return;
+
+      const texto = gerarTextoResumo(payload);
+      document.getElementById("textarea-resumo-preview").value = texto;
+      abrirModalAcessivel("modal-preview", "#textarea-resumo-preview", "fecharModalPreview");
+    }
+
+    function fecharModalPreview() {
+      fecharModalAcessivel("modal-preview");
+    }
+
+    function copiarTextoDoModal() {
+      const texto = document.getElementById("textarea-resumo-preview").value;
+      navigator.clipboard.writeText(texto).then(() => {
+        showToast("Resumo copiado para a área de transferência!", "success");
+      }).catch(err => {
+        showToast("Erro ao copiar texto: " + err, "error");
+      });
+    }
+
+    // Generate & Download Official Excel Sheet
+    async function gerarPlanilhaExcel() {
+      const payload = construirPayload();
+      if (!payload) return;
+
+      const btn = document.getElementById("btn-gerar-planilha");
+      const originalText = btn.innerHTML;
+      btn.disabled = true;
+      btn.setAttribute("aria-busy", "true");
+      btn.innerHTML = `<i data-lucide="loader-2" class="w-4 h-4 animate-spin"></i><span>Gerando Planilha...</span>`;
+      lucide.createIcons({ root: btn });
+
+      try {
+        const res = await fetch("/api/gerar-planilha", {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json"
+          },
+          body: JSON.stringify(payload)
+        });
+
+        if (!res.ok) {
+          const errData = await res.json().catch(() => ({}));
+          throw new Error(errData.detail || "Falha ao gerar o arquivo Excel no servidor.");
+        }
+
+        // Get Filename from Header
+        let filename = `Transferencia_${payload.serial}.xlsx`;
+        const disposition = res.headers.get("Content-Disposition");
+        if (disposition && disposition.indexOf("filename=") !== -1) {
+          const matches = /filename[^;=\n]*=((['"]).*?\2|[^;\n]*)/.exec(disposition);
+          if (matches != null && matches[1]) {
+            filename = matches[1].replace(/['"]/g, '');
+          }
+        }
+
+        // Download Blob
+        const blob = await res.blob();
+        const url = window.URL.createObjectURL(blob);
+        const a = document.createElement("a");
+        a.style.display = "none";
+        a.href = url;
+        a.download = filename;
+        document.body.appendChild(a);
+        a.click();
+        window.URL.revokeObjectURL(url);
+        a.remove();
+
+        showToast(`Planilha oficial ${filename} baixada com sucesso!`, "success");
+
+      } catch (err) {
+        console.error("Erro ao gerar planilha:", err);
+        showToast(err.message, "error");
+      } finally {
+        btn.disabled = false;
+        btn.removeAttribute("aria-busy");
+        btn.innerHTML = originalText;
+        lucide.createIcons({ root: btn });
+      }
+    }
+
+    // Reset Form for New Transfer
+    function resetarFormulario() {
+      currentEquipamento = null;
+      document.getElementById("input-serial").value = "";
+      document.getElementById("input-descricao-equipamento").value = "";
+      document.getElementById("btn-clear-serial").classList.add("hidden");
+      document.getElementById("card-equipamento").classList.add("hidden");
+
+      // Reset Retirada
+      document.getElementById("retirada-cnpj").value = "";
+      document.getElementById("retirada-endereco").value = "";
+      document.getElementById("retirada-obs").value = "";
+
+      // Reset Entrega
+      document.getElementById("select-unidade-destino").value = "";
+      document.getElementById("entrega-cnpj").value = "";
+      document.getElementById("entrega-endereco").value = "";
+      document.getElementById("entrega-contato").value = "";
+      document.getElementById("entrega-email").value = "";
+      document.getElementById("entrega-telefone").value = "";
+      document.getElementById("entrega-obs").value = "";
+
+      // Reset status indicator
+      document.getElementById("status-indicator").className = "w-2.5 h-2.5 rounded-full bg-brand-400";
+      document.getElementById("status-summary").innerHTML = `
+        <span class="text-slate-300 font-medium">Pronto para emissão.</span>
+        <span class="hidden md:inline text-slate-500">Verifique os dados antes de gerar a planilha oficial Simpress.</span>
+      `;
+
+      showToast("Formulário limpo. Pronto para uma nova busca.", "info");
+      document.getElementById("input-serial").focus();
+    }
+
+    // ==========================================
+    // RECARREGAR / SINCRONIZAR PLANILHA BASE
+    // ==========================================
+    function abrirModalAtualizarPlanilhas() {
+      const status = document.getElementById("upload-planilhas-status");
+      status.classList.add("hidden");
+      abrirModalAcessivel("modal-atualizar-planilhas", "#upload-endpoint-file", "fecharModalAtualizarPlanilhas");
+    }
+
+    function fecharModalAtualizarPlanilhas() {
+      fecharModalAcessivel("modal-atualizar-planilhas");
+    }
+
+    function mostrarStatusUpload(mensagem, erro = false) {
+      const status = document.getElementById("upload-planilhas-status");
+      status.textContent = mensagem;
+      status.setAttribute("role", erro ? "alert" : "status");
+      status.setAttribute("aria-live", erro ? "assertive" : "polite");
+      status.setAttribute("aria-atomic", "true");
+      status.className = erro
+        ? "text-xs rounded-lg px-3 py-2 bg-rose-500/10 border border-rose-500/25 text-rose-300"
+        : "text-xs rounded-lg px-3 py-2 bg-sky-500/10 border border-sky-500/25 text-sky-300";
+    }
+
+    async function enviarPlanilhas() {
+      const endpointFile = document.getElementById("upload-endpoint-file").files?.[0];
+      const detailsFile = document.getElementById("upload-details-file").files?.[0];
+      if (!endpointFile || !detailsFile) {
+        mostrarStatusUpload("Selecione Endpoint e EquipamentosDetalhes antes de atualizar.", true);
+        return;
+      }
+
+      const button = document.getElementById("btn-confirmar-planilhas");
+      const originalHtml = button.innerHTML;
+      button.disabled = true;
+      button.setAttribute("aria-busy", "true");
+      document.getElementById("modal-atualizar-planilhas").setAttribute("aria-busy", "true");
+      button.innerHTML = '<i data-lucide="loader-2" class="w-3.5 h-3.5 animate-spin"></i><span>Validando e atualizando...</span>';
+      lucide.createIcons({ root: button });
+
+      const formData = new FormData();
+      formData.append("endpoint_file", endpointFile);
+      formData.append("details_file", detailsFile);
+
+      try {
+        const response = await fetch("/api/planilhas/atualizar", { method: "POST", body: formData });
+        const result = await response.json().catch(() => ({}));
+        if (!response.ok) {
+          if (response.status === 404) {
+            throw new Error("A API ativa está desatualizada. Feche a instância anterior e reinicie com iniciar_servidor.bat desta pasta.");
+          }
+          const detail = result.detail;
+          throw new Error(Array.isArray(detail) ? detail.map(item => item.msg || item).join("; ") : (detail || "Falha ao atualizar as planilhas."));
+        }
+
+        fecharModalAtualizarPlanilhas();
+        [
+          ["upload-endpoint-file", "upload-endpoint-name"],
+          ["upload-details-file", "upload-details-name"]
+        ].forEach(([inputId, nameId]) => {
+          document.getElementById(inputId).value = "";
+          document.getElementById(nameId).textContent = "Nenhum arquivo selecionado";
+        });
+        await Promise.all([
+          carregarEstatisticas(),
+          carregarUnidades(),
+          carregarContagemHistoricoComparacoes()
+        ]);
+        if (currentEquipamento?.serial) {
+          try {
+            const refresh = await fetch(`/api/equipamento/${encodeURIComponent(currentEquipamento.serial)}`);
+            if (refresh.ok) {
+              currentEquipamento = await refresh.json();
+              exibirEquipamento(currentEquipamento);
+            }
+          } catch (refreshError) {
+            console.warn("Não foi possível atualizar o equipamento exibido após o envio das planilhas:", refreshError);
+          }
+        }
+        abrirModalComparacaoPlanilhas(result.comparacao || {});
+      } catch (error) {
+        console.error("Erro ao atualizar planilhas:", error);
+        mostrarStatusUpload(error.message || "Não foi possível atualizar as planilhas.", true);
+      } finally {
+        button.disabled = false;
+        button.removeAttribute("aria-busy");
+        document.getElementById("modal-atualizar-planilhas").removeAttribute("aria-busy");
+        button.innerHTML = originalHtml;
+        lucide.createIcons({ root: button });
+      }
+    }
+
+    function renderizarTabelaComparacao(headers, rows, emptyMessage) {
+      if (!rows.length) {
+        return `<p class="text-sm text-slate-400 text-center py-5" role="status" aria-live="polite">${escapeHtml(emptyMessage)}</p>`;
+      }
+      const tableLabel = `Tabela de ${headers.join(", ")}`;
+      return `
+        <div class="accessible-table-wrap rounded-lg border border-slate-800" role="region" aria-label="${escapeHtml(tableLabel)}" tabindex="0">
+          <table class="min-w-full text-left text-sm" aria-label="${escapeHtml(tableLabel)}">
+            <thead class="bg-slate-950 text-slate-300"><tr>${headers.map(header => `<th scope="col" class="px-3 py-2.5 font-semibold whitespace-nowrap">${escapeHtml(header)}</th>`).join("")}</tr></thead>
+            <tbody class="divide-y divide-slate-800">${rows.join("")}</tbody>
+          </table>
+        </div>`;
+    }
+
+    function abrirModalComparacaoPlanilhas(comparison) {
+      const seriesSebrae = new Set([
+        "BRJ135P5XS",
+        "BRJ142QKBQ",
+        "BRJ9435VMR",
+        "BRJ9435VMF",
+        "BRJ149SCJG",
+      ]);
+      const filtrarSeriesSebrae = items => (items || []).filter(item => {
+        const serie = String(item.serie || "").replace(/[^A-Z0-9]/gi, "").toUpperCase();
+        return !seriesSebrae.has(serie);
+      });
+      const filtrosAtualizacaoAplicados = comparison.filtros_atualizacao_aplicados === true;
+      const ausentesEndpoint = filtrosAtualizacaoAplicados
+        ? (comparison.ausentes_no_endpoint || [])
+        : filtrarSeriesSebrae(comparison.ausentes_no_endpoint);
+      const ausentesDetalhes = filtrosAtualizacaoAplicados
+        ? (comparison.ausentes_em_detalhes || [])
+        : filtrarSeriesSebrae(comparison.ausentes_em_detalhes);
+      const divergenciasLocal = comparison.divergencias_local || [];
+      const seriesSemMapa = comparison.series_sem_mapeamento || [];
+      const ambiguidades = comparison.correspondencias_ambiguas || [];
+      const registrosAmbiguos = comparison.registros_ambiguos || [];
+      const arquivo = comparison.arquivos_enviados || {};
+      const apelidosAtualizados = comparison.apelidos_atualizados || [];
+      const apelidosSemAtualizacao = comparison.apelidos_sem_atualizacao || [];
+      const divergenciasApelidosManuais = comparison.divergencias_apelidos_manuais || [];
+
+      document.getElementById("comparacao-planilhas-fontes").textContent =
+        `Endpoint: ${arquivo.endpoint || "—"} · EquipamentosDetalhes: ${arquivo.detalhes || "—"}${comparison.horario_comparacao ? ` · ${formatarHorarioHistorico(comparison.horario_comparacao)}` : ""}`;
+
+      const renderizarAusentes = items => items.map(item => `
+        <tr class="text-slate-300">
+          <td class="px-3 py-2 font-mono text-white whitespace-nowrap">${escapeHtml(item.computador)}</td>
+          <td class="px-3 py-2 font-mono whitespace-nowrap">${escapeHtml(item.serie || "—")}</td>
+          <td class="px-3 py-2">${escapeHtml(item.local_previsto || "—")}</td>
+          <td class="px-3 py-2 text-amber-300">${escapeHtml((item.ausente_em || [item.fonte_ausente]).filter(Boolean).join(", "))}</td>
+        </tr>`);
+
+      const locationRows = divergenciasLocal.map(item => `
+        <tr class="text-slate-300">
+          <td class="px-3 py-2 font-mono text-white whitespace-nowrap">${escapeHtml(item.computador)}</td>
+          <td class="px-3 py-2 font-mono whitespace-nowrap">${escapeHtml(item.serie || "—")}</td>
+          <td class="px-3 py-2">${escapeHtml(item.local_previsto)}</td>
+          <td class="px-3 py-2">${escapeHtml(item.local_detalhes || "—")}</td>
+        </tr>`);
+
+      const aliasUpdateRows = apelidosAtualizados.map(item => `
+        <tr class="text-slate-300">
+          <td class="px-3 py-2 font-mono text-white whitespace-nowrap">${escapeHtml(item.serie || "—")}</td>
+          <td class="px-3 py-2 font-mono">${escapeHtml(item.apelido_anterior || "(vazio)")}</td>
+          <td class="px-3 py-2 font-mono text-emerald-200">${escapeHtml(item.apelido_novo || "(vazio)")}</td>
+          <td class="px-3 py-2 whitespace-nowrap">${escapeHtml(item.horario ? formatarHorarioHistorico(item.horario) : "—")}</td>
+          <td class="px-3 py-2 text-[10px]">${escapeHtml(Object.values(item.arquivos_origem || {}).join(" · ") || "—")}</td>
+        </tr>`);
+
+      const aliasReviewRows = apelidosSemAtualizacao.map(item => `
+        <tr class="text-slate-300">
+          <td class="px-3 py-2 font-mono text-white whitespace-nowrap">${escapeHtml(item.serie || "(vazia)")}</td>
+          <td class="px-3 py-2 font-mono">${escapeHtml(item.computador || "—")}</td>
+          <td class="px-3 py-2 text-amber-200">${escapeHtml(item.motivo || "Conferir associação.")}</td>
+        </tr>`);
+
+      const manualAliasRows = divergenciasApelidosManuais.map((item, index) => {
+        const resolvida = item.resolucao && item.resolucao !== "pendente";
+        const status = item.resolucao === "manter"
+          ? "Alteração manual mantida"
+          : item.resolucao === "excluir"
+            ? "Alteração manual removida"
+            : item.resolucao === "substituida"
+              ? "Atualizada por nova planilha"
+              : "Pendente";
+        const actions = !resolvida && comparison.evento_id
+          ? `<div class="flex flex-wrap gap-1.5" data-manual-alias-actions>
+              <button type="button" data-manual-alias-action="manter" data-manual-alias-index="${index}" class="px-2 py-1 rounded-md bg-emerald-500/10 hover:bg-emerald-500/20 border border-emerald-500/25 text-emerald-200 text-[10px] font-semibold">Manter manual</button>
+              <button type="button" data-manual-alias-action="excluir" data-manual-alias-index="${index}" class="px-2 py-1 rounded-md bg-rose-500/10 hover:bg-rose-500/20 border border-rose-500/25 text-rose-200 text-[10px] font-semibold">Excluir manual</button>
+            </div>`
+          : `<span class="text-[10px] text-slate-500">${resolvida ? "Concluído" : "Histórico indisponível"}</span>`;
+        return `
+          <tr class="text-slate-300" data-manual-alias-row="${index}">
+            <td class="px-3 py-2 font-mono text-white whitespace-nowrap">${escapeHtml(item.serie || "—")}</td>
+            <td class="px-3 py-2 font-mono text-cyan-200">${escapeHtml(item.apelido_manual || "(vazio)")}</td>
+            <td class="px-3 py-2 font-mono">${escapeHtml(item.apelido_equipamentos_detalhes || (item.detalhes_encontrado ? "(vazio)" : "Série ausente"))}</td>
+            <td class="px-3 py-2 font-mono">${escapeHtml(item.apelido_invall || (item.invall_encontrado ? "(vazio)" : "Série ausente"))}</td>
+            <td class="px-3 py-2 text-[10px]" data-manual-alias-status>${escapeHtml(status)}</td>
+            <td class="px-3 py-2">${actions}</td>
+          </tr>`;
+      });
+
+      const unmappedRows = seriesSemMapa.map(item => `
+        <tr class="text-slate-300">
+          <td class="px-3 py-2 font-mono text-white">${escapeHtml(item.serie)}</td>
+          <td class="px-3 py-2">${Number(item.quantidade || 0)}</td>
+          <td class="px-3 py-2 font-mono">${escapeHtml((item.exemplos || []).join(", "))}</td>
+        </tr>`);
+
+      const ambiguityRows = [
+        ...ambiguidades.map(item => ({
+          tipo: item.tipo,
+          chave: item.chave,
+          fontes: (item.fontes || []).map(source =>
+            `${source.fonte}${source.quantidade ? ` (${source.quantidade} registros)` : source.serie ? ` — série ${source.serie}` : ""}`
+          ).join(" · "),
+          mensagem: item.mensagem,
+        })),
+        ...registrosAmbiguos.map(item => ({
+          tipo: "Presença ambígua",
+          chave: `${item.computador || "Sem hostname"} · ${item.serie || "Sem série"}`,
+          fontes: Object.entries(item.fontes || {}).filter(([, status]) => status === "ambíguo").map(([source]) => source).join(" · "),
+          mensagem: item.motivo,
+        })),
+      ].map(item => `
+        <tr class="text-slate-300">
+          <td class="px-3 py-2 text-amber-200">${escapeHtml(item.tipo || "Ambiguidade")}</td>
+          <td class="px-3 py-2 font-mono">${escapeHtml(item.chave || "—")}</td>
+          <td class="px-3 py-2">${escapeHtml(item.fontes || "—")}</td>
+          <td class="px-3 py-2">${escapeHtml(item.mensagem || "")}</td>
+        </tr>`);
+
+      document.getElementById("comparacao-planilhas-conteudo").innerHTML = `
+        ${comparison.historico_salvo === false
+          ? `<p class="text-xs text-amber-200 bg-amber-500/10 border border-amber-500/25 rounded-lg px-3 py-2">${escapeHtml(comparison.aviso_historico || "Não foi possível salvar este resultado no histórico de comparações.")}</p>`
+          : comparison.historico_salvo === true
+            ? '<p class="text-xs text-cyan-200 bg-cyan-500/10 border border-cyan-500/25 rounded-lg px-3 py-2">Resultado registrado no Histórico de planilhas.</p>'
+            : ""}
+        <div class="grid grid-cols-2 md:grid-cols-3 xl:grid-cols-4 gap-3">
+          <div class="rounded-xl bg-slate-950 border border-slate-800 p-3"><p class="text-[10px] uppercase tracking-wide text-slate-500">Notebooks comparados</p><p class="text-xl font-bold text-white mt-1">${Number(comparison.total_endpoint || 0).toLocaleString("pt-BR")}</p></div>
+          <div class="rounded-xl bg-rose-500/5 border border-rose-500/20 p-3"><p class="text-[10px] uppercase tracking-wide text-rose-300">Ausentes no Endpoint</p><p class="text-xl font-bold text-rose-200 mt-1">${ausentesEndpoint.length}</p></div>
+          <div class="rounded-xl bg-amber-500/5 border border-amber-500/20 p-3"><p class="text-[10px] uppercase tracking-wide text-amber-300">Ausentes em EquipamentosDetalhes</p><p class="text-xl font-bold text-amber-200 mt-1">${ausentesDetalhes.length}</p></div>
+          <div class="rounded-xl bg-amber-500/5 border border-amber-500/20 p-3"><p class="text-[10px] uppercase tracking-wide text-amber-300">Divergências de local</p><p class="text-xl font-bold text-amber-200 mt-1">${divergenciasLocal.length}</p></div>
+          <div class="rounded-xl bg-yellow-500/5 border border-yellow-500/20 p-3"><p class="text-[10px] uppercase tracking-wide text-yellow-300">Duplicidades e ambiguidades</p><p class="text-xl font-bold text-yellow-200 mt-1">${ambiguityRows.length}</p></div>
+          <div class="rounded-xl bg-sky-500/5 border border-sky-500/20 p-3"><p class="text-[10px] uppercase tracking-wide text-sky-300">Séries sem mapeamento</p><p class="text-xl font-bold text-sky-200 mt-1">${seriesSemMapa.length}</p></div>
+          <div class="rounded-xl bg-emerald-500/5 border border-emerald-500/20 p-3"><p class="text-[10px] uppercase tracking-wide text-emerald-300">Apelidos/hostnames atualizados</p><p class="text-xl font-bold text-emerald-200 mt-1">${apelidosAtualizados.length}</p></div>
+          <div class="rounded-xl bg-amber-500/5 border border-amber-500/20 p-3"><p class="text-[10px] uppercase tracking-wide text-amber-300">Apelidos para conferência</p><p class="text-xl font-bold text-amber-200 mt-1">${apelidosSemAtualizacao.length}</p></div>
+          <div class="rounded-xl bg-violet-500/5 border border-violet-500/20 p-3"><p class="text-[10px] uppercase tracking-wide text-violet-300">Divergências manuais pendentes</p><p id="comparacao-divergencias-manuais-pendentes" class="text-xl font-bold text-violet-200 mt-1">${divergenciasApelidosManuais.filter(item => !item.resolucao || item.resolucao === "pendente").length}</p></div>
+        </div>
+        <section class="space-y-2">
+          <div><h4 class="text-sm font-bold text-emerald-300">Apelidos/hostnames atualizados pela InvAll</h4><p class="text-[11px] text-slate-500">A lista compara os valores antes e depois pelo número de série.</p></div>
+          ${renderizarTabelaComparacao(["Série", "Apelido anterior", "Novo apelido / hostname", "Horário", "Arquivos de origem"], aliasUpdateRows, "Nenhum apelido ou hostname mudou nesta atualização.")}
+        </section>
+        <section class="space-y-2">
+          <div><h4 class="text-sm font-bold text-amber-300">Linhas mantidas para conferência</h4><p class="text-[11px] text-slate-500">Série vazia, ausente ou duplicada não é escolhida automaticamente; o apelido atual fica preservado.</p></div>
+          ${renderizarTabelaComparacao(["Série", "Hostname na InvAll", "Motivo"], aliasReviewRows, "Nenhuma linha de apelido precisa de conferência.")}
+        </section>
+        <section class="space-y-2">
+          <div><h4 class="text-sm font-bold text-violet-300">Divergências com apelidos alterados manualmente</h4><p class="text-[11px] text-slate-500">O apelido manual prevalece nas pesquisas e exportações. “Manter manual” registra a decisão; “Excluir manual” remove apenas o override desta série e volta a usar o valor das planilhas.</p></div>
+          ${renderizarTabelaComparacao(["Série", "Apelido manual", "EquipamentosDetalhes", "InvAll", "Situação", "Ação"], manualAliasRows, "Nenhuma divergência entre apelidos manuais e as planilhas enviadas.")}
+        </section>
+        <section class="space-y-2">
+          <div><h4 class="text-sm font-bold text-rose-300">Equipamentos ausentes por fonte</h4><p class="text-[11px] text-slate-500">Cada lista mostra equipamentos que não têm correspondência segura naquela fonte. Divergências de local aparecem em seção própria.</p></div>
+          <h5 class="text-xs font-semibold text-slate-300">Ausentes no Endpoint (${ausentesEndpoint.length})</h5>
+          ${renderizarTabelaComparacao(["Hostname/Apelido", "Série", "Local previsto", "Ausente em"], renderizarAusentes(ausentesEndpoint), "Nenhum equipamento ausente no Endpoint.")}
+          <h5 class="text-xs font-semibold text-slate-300">Ausentes em EquipamentosDetalhes (${ausentesDetalhes.length})</h5>
+          ${renderizarTabelaComparacao(["Hostname/Apelido", "Série", "Local previsto", "Ausente em"], renderizarAusentes(ausentesDetalhes), "Nenhum equipamento ausente em EquipamentosDetalhes.")}
+        </section>
+        <section class="space-y-2">
+          <div><h4 class="text-sm font-bold text-amber-300">Localidade divergente</h4><p class="text-[11px] text-slate-500">A localidade em EquipamentosDetalhes é comparada com a classificação do hostname.</p></div>
+          ${renderizarTabelaComparacao(["Computador", "Série", "Local previsto", "Local em EquipamentosDetalhes"], locationRows, "Nenhuma divergência de localidade encontrada.")}
+        </section>
+        <section class="space-y-2">
+          <div><h4 class="text-sm font-bold text-yellow-300">Duplicidades e correspondências ambíguas</h4><p class="text-[11px] text-slate-500">Nenhuma linha é escolhida automaticamente quando a série se repete ou o hostname/Apelido não identifica uma correspondência única.</p></div>
+          ${renderizarTabelaComparacao(["Ocorrência", "Série ou hostname/Apelido", "Fontes", "Tratamento"], ambiguityRows, "Nenhuma duplicidade ou correspondência ambígua encontrada.")}
+        </section>
+        <section class="space-y-2">
+          <div><h4 class="text-sm font-bold text-sky-300">Séries sem local definido</h4><p class="text-[11px] text-slate-500">Não há regra de localidade cadastrada para estes prefixos.</p></div>
+          ${renderizarTabelaComparacao(["Série", "Quantidade", "Exemplos"], unmappedRows, "Todas as séries têm mapeamento de localidade.")}
+        </section>
+        <p class="text-[11px] text-emerald-300">EquipamentosDetalhes carregado: ${Number(comparison.total_equipamentos_carregados || 0).toLocaleString("pt-BR")} equipamentos. Backup das versões anteriores: <span class="font-mono">planilhas_entrada/${escapeHtml(comparison.backup_diretorio || "_backups")}</span>.</p>
+      `;
+      document.querySelectorAll("[data-manual-alias-action]").forEach(button => {
+        button.addEventListener("click", () => {
+          const item = divergenciasApelidosManuais[Number(button.dataset.manualAliasIndex)];
+          if (item) resolverDivergenciaApelidoManual(comparison, item, button.dataset.manualAliasAction, button);
+        });
+      });
+      abrirModalAcessivel("modal-comparacao-planilhas", '[aria-label="Fechar resultado"]', "fecharModalComparacaoPlanilhas");
+    }
+
+    async function resolverDivergenciaApelidoManual(comparison, item, acao, botao) {
+      if (!comparison.evento_id || !item.serie) {
+        showToast("Este registro não permite resolver a divergência.", "error");
+        return;
+      }
+      if (acao === "excluir" && !window.confirm(
+        `Remover a alteração manual da série ${item.serie}? O apelido voltará ao valor da InvAll, quando preenchido, ou de EquipamentosDetalhes.`
+      )) return;
+
+      const row = botao.closest("tr");
+      const actionArea = row?.querySelector("[data-manual-alias-actions]");
+      const buttons = actionArea ? [...actionArea.querySelectorAll("button")] : [botao];
+      buttons.forEach(button => {
+        button.disabled = true;
+        button.setAttribute("aria-busy", "true");
+      });
+      try {
+        const response = await fetch(
+          `/api/historico-comparacoes/${encodeURIComponent(comparison.evento_id)}/apelido-manual/${encodeURIComponent(item.serie)}`,
+          {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ acao }),
+          }
+        );
+        const data = await response.json().catch(() => ({}));
+        if (!response.ok) throw new Error(data.detail || "Não foi possível resolver a divergência.");
+
+        item.resolucao = data.resolucao;
+        const pendingCounter = document.getElementById("comparacao-divergencias-manuais-pendentes");
+        if (pendingCounter) {
+          pendingCounter.textContent = (comparison.divergencias_apelidos_manuais || []).filter(
+            divergence => !divergence.resolucao || divergence.resolucao === "pendente"
+          ).length;
+        }
+        const status = row?.querySelector("[data-manual-alias-status]");
+        if (status) status.textContent = acao === "manter" ? "Alteração manual mantida" : "Alteração manual removida";
+        if (actionArea) {
+          const concluido = document.createElement("span");
+          concluido.className = "text-[10px] text-slate-500";
+          concluido.textContent = "Concluído";
+          actionArea.replaceWith(concluido);
+        }
+
+        const equipment = data.equipamento;
+        const currentSerial = String(currentEquipamento?.serial || "").replace(/[^A-Z0-9]/gi, "").toUpperCase();
+        const changedSerial = String(equipment?.serial || "").replace(/[^A-Z0-9]/gi, "").toUpperCase();
+        if (equipment && currentSerial && currentSerial === changedSerial) {
+          currentEquipamento = equipment;
+          exibirEquipamento(equipment);
+        }
+        atualizarIndicadoresPosSalvamento(data.total_modificados);
+        showToast(data.mensagem || "Divergência registrada no histórico.", "success");
+      } catch (error) {
+        console.error("Erro ao resolver divergência de apelido manual:", error);
+        showToast(error.message || "Não foi possível resolver a divergência.", "error");
+        buttons.forEach(button => {
+          button.disabled = false;
+          button.removeAttribute("aria-busy");
+        });
+      }
+    }
+
+    function irParaSecaoComparacao(sectionId) {
+      document.getElementById(sectionId)?.scrollIntoView({ behavior: "smooth", block: "start" });
+    }
+
+    function fecharModalComparacaoPlanilhas() {
+      fecharModalAcessivel("modal-comparacao-planilhas");
+    }
+
+    function definirTotalHistoricoComparacoes(total) {
+      const valor = Number(total || 0);
+      document.getElementById("badge-total-historico-comparacoes").textContent = valor;
+      document.getElementById("total-historico-comparacoes").textContent = `${valor} ${valor === 1 ? "registro" : "registros"}`;
+    }
+
+    async function carregarContagemHistoricoComparacoes() {
+      try {
+        const res = await fetch("/api/historico-comparacoes");
+        if (!res.ok) return;
+        const data = await res.json();
+        definirTotalHistoricoComparacoes(data.total);
+      } catch (err) {
+        console.warn("Não foi possível carregar a contagem do histórico de planilhas:", err);
+      }
+    }
+
+    async function abrirModalHistoricoComparacoes() {
+      abrirModalAcessivel("modal-historico-comparacoes", '[aria-label="Fechar histórico de planilhas"]', "fecharModalHistoricoComparacoes");
+      await carregarHistoricoComparacoes();
+    }
+
+    function fecharModalHistoricoComparacoes() {
+      fecharModalAcessivel("modal-historico-comparacoes");
+    }
+
+    async function carregarHistoricoComparacoes() {
+      const lista = document.getElementById("lista-historico-comparacoes");
+      lista.setAttribute("aria-busy", "true");
+      lista.innerHTML = '<p class="text-sm text-slate-400 text-center py-8" role="status" aria-live="polite">Carregando histórico...</p>';
+
+      try {
+        const res = await fetch("/api/historico-comparacoes");
+        const data = await res.json().catch(() => ({}));
+        if (!res.ok) throw new Error(data.detail || "Não foi possível carregar o histórico de planilhas.");
+
+        const eventos = Array.isArray(data.eventos) ? data.eventos : [];
+        definirTotalHistoricoComparacoes(data.total ?? eventos.length);
+        lista.replaceChildren();
+        if (eventos.length === 0) {
+          const vazio = document.createElement("p");
+          vazio.className = "text-sm text-slate-400 text-center py-8";
+          vazio.setAttribute("role", "status");
+          vazio.setAttribute("aria-live", "polite");
+          vazio.textContent = "Nenhuma atualização de planilhas registrada no histórico.";
+          lista.appendChild(vazio);
+          return;
+        }
+
+        eventos.forEach(evento => {
+          const resumo = evento.resumo || {};
+          const arquivos = evento.arquivos_enviados || {};
+          const card = document.createElement("article");
+          card.className = "flex flex-col md:flex-row md:items-center justify-between gap-3 rounded-xl border border-slate-800 bg-slate-950/70 p-4";
+
+          const info = document.createElement("div");
+          info.className = "min-w-0 space-y-1";
+          const dataHora = document.createElement("p");
+          dataHora.className = "text-sm font-semibold text-white";
+          dataHora.textContent = formatarHorarioHistorico(evento.horario);
+          info.appendChild(dataHora);
+
+          const fontes = document.createElement("p");
+          fontes.className = "text-xs text-slate-400 break-words";
+          fontes.textContent = `Endpoint: ${arquivos.endpoint || "—"} · EquipamentosDetalhes: ${arquivos.detalhes || "—"}`;
+          info.appendChild(fontes);
+
+          const contagens = document.createElement("p");
+          contagens.className = "text-[11px] text-slate-500";
+          contagens.textContent = `Apelidos/hostnames atualizados: ${Number(resumo.apelidos_atualizados || 0)} · divergências manuais pendentes: ${Number(resumo.divergencias_apelidos_manuais || 0)} · ausentes no Endpoint: ${Number(resumo.ausentes_no_endpoint || 0)} · em EquipamentosDetalhes: ${Number(resumo.ausentes_em_detalhes || 0)} · divergências de local: ${Number(resumo.divergencias_local || 0)} · ambiguidades: ${Number(resumo.correspondencias_ambiguas || 0)}`;
+          info.appendChild(contagens);
+          card.appendChild(info);
+
+          const acoes = document.createElement("div");
+          acoes.className = "flex shrink-0 items-center gap-2";
+
+          const consultar = document.createElement("button");
+          consultar.type = "button";
+          consultar.className = "shrink-0 px-3 py-2 rounded-lg bg-cyan-500/10 hover:bg-cyan-500/20 text-cyan-200 border border-cyan-500/25 text-xs font-semibold transition";
+          consultar.textContent = "Consultar resultado";
+          consultar.addEventListener("click", () => consultarHistoricoComparacao(evento.id, consultar));
+          acoes.appendChild(consultar);
+
+          const excluir = document.createElement("button");
+          excluir.type = "button";
+          excluir.className = "shrink-0 px-3 py-2 rounded-lg bg-rose-500/10 hover:bg-rose-500/20 text-rose-200 border border-rose-500/25 text-xs font-semibold transition";
+          excluir.textContent = "Excluir";
+          excluir.setAttribute("aria-label", `Excluir atualização de ${formatarHorarioHistorico(evento.horario)}`);
+          excluir.addEventListener("click", () => excluirHistoricoComparacao(evento, excluir));
+          acoes.appendChild(excluir);
+
+          card.appendChild(acoes);
+          lista.appendChild(card);
+        });
+      } catch (err) {
+        console.error("Erro ao carregar histórico de planilhas:", err);
+        lista.replaceChildren();
+        const erro = document.createElement("p");
+        erro.className = "text-sm text-rose-300 text-center py-8";
+        erro.setAttribute("role", "alert");
+        erro.setAttribute("aria-live", "assertive");
+        erro.textContent = err.message || "Não foi possível carregar o histórico de planilhas.";
+        lista.appendChild(erro);
+      } finally {
+        lista.removeAttribute("aria-busy");
+      }
+    }
+
+    async function consultarHistoricoComparacao(eventoId, botao) {
+      const textoOriginal = botao.textContent;
+      botao.disabled = true;
+      botao.setAttribute("aria-busy", "true");
+      botao.textContent = "Carregando...";
+      try {
+        const res = await fetch(`/api/historico-comparacoes/${encodeURIComponent(eventoId)}`);
+        const data = await res.json().catch(() => ({}));
+        if (!res.ok) throw new Error(data.detail || "Não foi possível abrir este resultado.");
+
+        const evento = data.evento || {};
+        fecharModalHistoricoComparacoes();
+        abrirModalComparacaoPlanilhas({
+          ...(evento.comparacao || {}),
+          evento_id: evento.id,
+          horario_comparacao: evento.horario || evento.comparacao?.horario_comparacao,
+          historico_salvo: true,
+        });
+      } catch (err) {
+        console.error("Erro ao abrir comparação salva:", err);
+        showToast(err.message || "Não foi possível abrir este resultado.", "error");
+        botao.disabled = false;
+        botao.removeAttribute("aria-busy");
+        botao.textContent = textoOriginal;
+      }
+    }
+
+    async function excluirHistoricoComparacao(evento, botao) {
+      const dataHora = formatarHorarioHistorico(evento.horario);
+      if (!window.confirm(`Tem certeza de que deseja excluir esta atualização de ${dataHora}? Essa ação não poderá ser desfeita.`)) return;
+
+      const textoOriginal = botao.textContent;
+      botao.disabled = true;
+      botao.setAttribute("aria-busy", "true");
+      botao.textContent = "Excluindo...";
+      try {
+        const res = await fetch(`/api/historico-comparacoes/${encodeURIComponent(evento.id)}`, {
+          method: "DELETE",
+        });
+        const data = await res.json().catch(() => ({}));
+        if (!res.ok) throw new Error(data.detail || "Não foi possível excluir esta atualização.");
+
+        await carregarHistoricoComparacoes();
+        showToast("Atualização excluída do histórico.", "success");
+      } catch (err) {
+        console.error("Erro ao excluir atualização do histórico:", err);
+        showToast(err.message || "Não foi possível excluir esta atualização.", "error");
+        botao.disabled = false;
+        botao.removeAttribute("aria-busy");
+        botao.textContent = textoOriginal;
+      }
+    }
+
+    async function exportarEquipamentosAtualizados() {
+      const btn = document.getElementById("btn-exportar-equipamentos");
+      const originalText = btn.innerHTML;
+      btn.disabled = true;
+      btn.setAttribute("aria-busy", "true");
+      btn.innerHTML = `<i data-lucide="loader-2" class="w-3.5 h-3.5 animate-spin"></i><span class="hidden sm:inline">Gerando Excel...</span>`;
+      lucide.createIcons({ root: btn });
+
+      try {
+        const res = await fetch("/api/exportar-equipamentos");
+        if (!res.ok) {
+          const errData = await res.json().catch(() => ({}));
+          throw new Error(errData.detail || "Falha ao exportar a planilha de equipamentos.");
+        }
+
+        const disposition = res.headers.get("Content-Disposition") || "";
+        const match = /filename[^;=\n]*=((['"]).*?\2|[^;\n]*)/.exec(disposition);
+        const filename = match && match[1]
+          ? match[1].replace(/['"]/g, "")
+          : "EquipamentosDetalhes-atualizados.xlsx";
+        const total = Number(res.headers.get("X-Total-Alterados") || 0);
+        const pendingReview = Number(res.headers.get("X-Total-Conferencia") || 0);
+        const blob = await res.blob();
+        const url = window.URL.createObjectURL(blob);
+        const link = document.createElement("a");
+        link.href = url;
+        link.download = filename;
+        document.body.appendChild(link);
+        link.click();
+        link.remove();
+        window.setTimeout(() => window.URL.revokeObjectURL(url), 1000);
+
+        showToast(`Planilha ${filename} exportada com ${total} apelido(s) atualizado(s).${pendingReview ? ` ${pendingReview} linha(s) ficaram para conferência.` : ""}`, pendingReview ? "warning" : "success");
+      } catch (err) {
+        console.error("Erro ao exportar planilha de equipamentos:", err);
+        showToast(err.message, "error");
+      } finally {
+        btn.disabled = false;
+        btn.removeAttribute("aria-busy");
+        btn.innerHTML = originalText;
+        lucide.createIcons({ root: btn });
+      }
+    }
+
+    // ==========================================
+    // MODAL DE EDIÇÃO / CADASTRO DE EQUIPAMENTO
+    // ==========================================
+    function abrirModalEditarEquipamento() {
+      if (!currentEquipamento) {
+        showToast("Localize um equipamento antes de editar.", "warning");
+        return;
+      }
+
+      document.getElementById("modal-edit-titulo").textContent = "Atualizar Cadastro do Equipamento";
+      document.getElementById("modal-edit-serial-badge").textContent = currentEquipamento.serial;
+
+      document.getElementById("edit-serial").value = currentEquipamento.serial || "";
+      document.getElementById("edit-serial").readOnly = true;
+      document.getElementById("edit-modelo").value = currentEquipamento.modelo || "";
+      document.getElementById("edit-tipo").value = currentEquipamento.tipo || "Notebook";
+      document.getElementById("edit-apelido").value = currentEquipamento.apelido || "";
+      document.getElementById("edit-apelido-field").classList.add("hidden");
+      document.getElementById("edit-id-cliente").value = currentEquipamento.idCliente || "";
+
+      abrirModalAcessivel("modal-editar-equipamento", "#edit-modelo", "fecharModalEditarEquipamento");
+    }
+
+    function cadastrarNovoSerial(serial) {
+      fecharAutocomplete();
+      document.getElementById("modal-edit-titulo").textContent = "Cadastrar Novo Equipamento";
+      document.getElementById("modal-edit-serial-badge").textContent = serial ? serial.toUpperCase() : "NOVO";
+
+      document.getElementById("edit-serial").value = (serial || "").toUpperCase();
+      document.getElementById("edit-serial").readOnly = false;
+      document.getElementById("edit-modelo").value = "";
+      document.getElementById("edit-tipo").value = "Notebook";
+      document.getElementById("edit-apelido").value = "";
+      document.getElementById("edit-apelido-field").classList.remove("hidden");
+      document.getElementById("edit-id-cliente").value = "";
+      abrirModalAcessivel("modal-editar-equipamento", "#edit-modelo", "fecharModalEditarEquipamento");
+    }
+
+    function fecharModalEditarEquipamento() {
+      fecharModalAcessivel("modal-editar-equipamento");
+    }
+
+    function abrirModalEditarApelido() {
+      if (!currentEquipamento) {
+        showToast("Localize um equipamento antes de editar o apelido.", "warning");
+        return;
+      }
+
+      document.getElementById("edit-apelido-isolado").value = currentEquipamento.apelido || "";
+      document.getElementById("apelido-serial-contexto").textContent = `Série: ${currentEquipamento.serial}`;
+      abrirModalAcessivel("modal-editar-apelido", "#edit-apelido-isolado", "fecharModalEditarApelido");
+      document.getElementById("edit-apelido-isolado").select();
+    }
+
+    function fecharModalEditarApelido() {
+      fecharModalAcessivel("modal-editar-apelido");
+    }
+
+    async function salvarApelido() {
+      if (!currentEquipamento) {
+        showToast("Localize um equipamento antes de editar o apelido.", "warning");
+        fecharModalEditarApelido();
+        return;
+      }
+
+      const serial = currentEquipamento.serial;
+      const apelido = document.getElementById("edit-apelido-isolado").value.trim();
+      const btn = document.getElementById("btn-salvar-apelido");
+      const originalText = btn.textContent;
+      btn.disabled = true;
+      btn.setAttribute("aria-busy", "true");
+      btn.textContent = "Salvando...";
+
+      try {
+        const res = await fetch("/api/equipamento/atualizar-apelido", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ serial, apelido })
+        });
+
+        const data = await res.json().catch(() => ({}));
+        if (!res.ok) throw new Error(data.detail || "Falha ao salvar o apelido.");
+
+        currentEquipamento = data.equipamento;
+        document.getElementById("badge-apelido").textContent = currentEquipamento.apelido || "Sem Apelido";
+        atualizarIndicadoresPosSalvamento(data.total_modificados);
+        fecharModalEditarApelido();
+        showToast("Apelido salvo com sucesso.", "success");
+      } catch (err) {
+        console.error("Erro ao salvar apelido:", err);
+        showToast(err.message || "Falha ao salvar o apelido.", "error");
+      } finally {
+        btn.disabled = false;
+        btn.removeAttribute("aria-busy");
+        btn.textContent = originalText;
+      }
+    }
+
+    function formatarHorarioHistorico(horario) {
+      const data = new Date(horario);
+      if (Number.isNaN(data.getTime())) return horario || "Horário indisponível";
+      return new Intl.DateTimeFormat("pt-BR", {
+        dateStyle: "short",
+        timeStyle: "medium"
+      }).format(data);
+    }
+
+    function formatarValorHistorico(evento, anterior) {
+      if (evento.tipo !== "endereco") {
+        const apelido = anterior ? evento.apelido_anterior : evento.apelido_novo;
+        return apelido || "(vazio)";
+      }
+
+      const endereco = anterior ? evento.endereco_anterior : evento.endereco_novo;
+      if (!endereco || typeof endereco !== "object") return "(vazio)";
+      return [
+        endereco.endereco ? `Endereço: ${endereco.endereco}` : "",
+        endereco.cidade || endereco.uf ? `Cidade/UF: ${[endereco.cidade, endereco.uf].filter(Boolean).join("/")}` : "",
+        endereco.cep ? `CEP: ${endereco.cep}` : "",
+        endereco.cnpj ? `CNPJ: ${endereco.cnpj}` : ""
+      ].filter(Boolean).join("\n") || "(vazio)";
+    }
+
+    async function abrirModalHistoricoApelidos() {
+      abrirModalAcessivel("modal-historico-apelidos", '[aria-label="Fechar histórico"]', "fecharModalHistoricoApelidos");
+      await carregarHistoricoApelidos();
+    }
+
+    function fecharModalHistoricoApelidos() {
+      fecharModalAcessivel("modal-historico-apelidos");
+    }
+
+    function definirTotalHistoricoApelidos(total) {
+      const valor = Number(total || 0);
+      document.getElementById("badge-total-historico-apelidos").textContent = valor;
+      document.getElementById("total-historico-apelidos").textContent = `${valor} ${valor === 1 ? "registro" : "registros"}`;
+    }
+
+    async function carregarContagemHistoricoApelidos() {
+      try {
+        const res = await fetch("/api/historico-alteracoes");
+        if (!res.ok) return;
+        const data = await res.json();
+        definirTotalHistoricoApelidos(data.total);
+      } catch (err) {
+        console.warn("Não foi possível carregar a contagem do histórico:", err);
+      }
+    }
+
+    async function carregarHistoricoApelidos() {
+      const lista = document.getElementById("lista-historico-apelidos");
+      lista.setAttribute("aria-busy", "true");
+      lista.innerHTML = '<p class="text-sm text-slate-400 text-center py-8" role="status" aria-live="polite">Carregando histórico...</p>';
+
+      try {
+        const res = await fetch("/api/historico-alteracoes");
+        const data = await res.json().catch(() => ({}));
+        if (!res.ok) throw new Error(data.detail || "Não foi possível carregar o histórico.");
+
+        const eventos = Array.isArray(data.eventos) ? data.eventos : [];
+        definirTotalHistoricoApelidos(eventos.length);
+
+        lista.replaceChildren();
+        if (eventos.length === 0) {
+          const vazio = document.createElement("p");
+          vazio.className = "text-sm text-slate-400 text-center py-8";
+          vazio.setAttribute("role", "status");
+          vazio.setAttribute("aria-live", "polite");
+          vazio.textContent = "Nenhuma alteração registrada ainda. O histórico começa a partir desta atualização; alterações anteriores não têm horário recuperável.";
+          lista.appendChild(vazio);
+          return;
+        }
+
+        const ultimaPorCampo = new Map();
+        eventos.forEach(evento => {
+          const serial = String(evento.serial || "").toUpperCase();
+          const tipoCampo = evento.tipo === "endereco" ? "endereco" : "apelido";
+          const chaveCampo = `${serial}:${tipoCampo}`;
+          if (serial && !ultimaPorCampo.has(chaveCampo)) {
+            ultimaPorCampo.set(chaveCampo, evento.id);
+          }
+        });
+
+        const scroller = document.createElement("div");
+        scroller.className = "accessible-table-wrap";
+        scroller.setAttribute("role", "region");
+        scroller.setAttribute("aria-label", "Tabela do histórico de alterações");
+        scroller.tabIndex = 0;
+        const tabela = document.createElement("table");
+        tabela.className = "w-full min-w-[1100px] text-left text-xs";
+        tabela.setAttribute("aria-label", "Histórico de alterações manuais de apelidos e registros antigos de endereço");
+        tabela.innerHTML = `
+          <thead class="sticky top-0 bg-slate-950 text-slate-400 uppercase tracking-wide">
+            <tr>
+              <th scope="col" class="px-3 py-2.5 font-semibold">Data e hora</th>
+              <th scope="col" class="px-3 py-2.5 font-semibold">Equipamento</th>
+              <th scope="col" class="px-3 py-2.5 font-semibold">Campo</th>
+              <th scope="col" class="px-3 py-2.5 font-semibold">Valor anterior</th>
+              <th scope="col" class="px-3 py-2.5 font-semibold">Valor novo</th>
+              <th scope="col" class="px-3 py-2.5 font-semibold">Ação</th>
+              <th scope="col" class="px-3 py-2.5 font-semibold">Desfazer</th>
+              <th scope="col" class="px-3 py-2.5 font-semibold">Excluir registro</th>
+            </tr>
+          </thead>
+          <tbody class="divide-y divide-slate-800"></tbody>
+        `;
+        const corpo = tabela.querySelector("tbody");
+
+        eventos.forEach(evento => {
+          const serial = String(evento.serial || "").toUpperCase();
+          const ehEndereco = evento.tipo === "endereco";
+          const chaveCampo = `${serial}:${ehEndereco ? "endereco" : "apelido"}`;
+          const ehUltimoCampo = ultimaPorCampo.get(chaveCampo) === evento.id;
+          const ehUltima = !ehEndereco && ehUltimoCampo;
+          const linha = document.createElement("tr");
+          linha.className = "hover:bg-slate-800/40";
+
+          const equipamento = document.createElement("td");
+          equipamento.className = "px-3 py-3 text-slate-200";
+          equipamento.textContent = `${evento.equipamento || "Equipamento"} · Série ${serial || "não informada"}`;
+          linha.appendChild(equipamento);
+
+          const celulaHorario = document.createElement("td");
+          celulaHorario.className = "px-3 py-3 text-slate-400 whitespace-nowrap";
+          celulaHorario.textContent = formatarHorarioHistorico(evento.horario);
+          linha.insertBefore(celulaHorario, equipamento);
+
+          const campo = document.createElement("td");
+          campo.className = "px-3 py-3 text-slate-300";
+          campo.textContent = ehEndereco ? "Endereço de instalação" : "Apelido / hostname";
+          linha.appendChild(campo);
+
+          const anterior = document.createElement("td");
+          anterior.className = "px-3 py-3 text-slate-300 font-mono whitespace-pre-line";
+          anterior.textContent = formatarValorHistorico(evento, true);
+          linha.appendChild(anterior);
+
+          const novo = document.createElement("td");
+          novo.className = "px-3 py-3 text-cyan-300 font-mono whitespace-pre-line";
+          novo.textContent = formatarValorHistorico(evento, false);
+          linha.appendChild(novo);
+
+          const acao = document.createElement("td");
+          acao.className = "px-3 py-3 text-slate-400";
+          acao.textContent = evento.acao === "desfazer" ? "Reversão de apelido" : "Alteração";
+          linha.appendChild(acao);
+
+          const celulaDesfazer = document.createElement("td");
+          celulaDesfazer.className = "px-3 py-3";
+          if (!ehEndereco) {
+            const botao = document.createElement("button");
+            botao.type = "button";
+            botao.textContent = ehUltima ? "Desfazer" : "Anterior";
+            botao.disabled = !ehUltima;
+            botao.title = ehUltima ? "Restaurar o apelido anterior" : "Só a alteração mais recente deste equipamento pode ser desfeita";
+            botao.className = ehUltima
+              ? "px-2.5 py-1 rounded-md bg-rose-500/10 hover:bg-rose-500/20 text-rose-300 border border-rose-500/30 transition"
+              : "px-2.5 py-1 rounded-md bg-slate-800 text-slate-500 border border-slate-700 cursor-not-allowed";
+            botao.addEventListener("click", () => desfazerAlteracaoApelido(evento, botao));
+            celulaDesfazer.appendChild(botao);
+          } else {
+            celulaDesfazer.textContent = "—";
+            celulaDesfazer.className += " text-slate-600";
+          }
+          linha.appendChild(celulaDesfazer);
+
+          const celulaExcluir = document.createElement("td");
+          celulaExcluir.className = "px-3 py-3";
+          if (ehEndereco) {
+            celulaExcluir.textContent = "—";
+            celulaExcluir.className += " text-slate-600";
+          } else {
+            const botaoExcluir = document.createElement("button");
+            botaoExcluir.type = "button";
+            botaoExcluir.textContent = ehUltimoCampo ? "Restaurar e excluir" : "Anterior";
+            botaoExcluir.disabled = !ehUltimoCampo;
+            botaoExcluir.title = ehUltimoCampo
+              ? "Salvar o valor anterior no equipamento e remover este registro"
+              : "Só o registro mais recente deste campo pode ser restaurado e excluído";
+            botaoExcluir.className = ehUltimoCampo
+              ? "px-2.5 py-1 rounded-md bg-rose-500/10 hover:bg-rose-500/20 text-rose-300 border border-rose-500/30 transition"
+              : "px-2.5 py-1 rounded-md bg-slate-800 text-slate-500 border border-slate-700 cursor-not-allowed";
+            botaoExcluir.addEventListener("click", () => excluirRegistroHistorico(evento, botaoExcluir));
+            celulaExcluir.appendChild(botaoExcluir);
+          }
+          linha.appendChild(celulaExcluir);
+          corpo.appendChild(linha);
+        });
+
+        scroller.appendChild(tabela);
+        lista.appendChild(scroller);
+      } catch (err) {
+        console.error("Erro ao carregar histórico de apelidos:", err);
+        lista.replaceChildren();
+        const erro = document.createElement("p");
+        erro.className = "text-sm text-rose-300 text-center py-8";
+        erro.setAttribute("role", "alert");
+        erro.setAttribute("aria-live", "assertive");
+        erro.textContent = err.message || "Não foi possível carregar o histórico.";
+        lista.appendChild(erro);
+      } finally {
+        lista.removeAttribute("aria-busy");
+      }
+    }
+
+    async function desfazerAlteracaoApelido(evento, botao) {
+      const apelidoAnterior = evento.apelido_anterior || "(vazio)";
+      if (!window.confirm(`Desfazer a alteração da série ${evento.serial} e restaurar o apelido ${apelidoAnterior}?`)) return;
+
+      const textoOriginal = botao.textContent;
+      botao.disabled = true;
+      botao.textContent = "Desfazendo...";
+      try {
+        const res = await fetch("/api/equipamento/apelido/desfazer", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ evento_id: evento.id })
+        });
+        const data = await res.json().catch(() => ({}));
+        if (!res.ok) throw new Error(data.detail || "Não foi possível desfazer a alteração.");
+
+        if (currentEquipamento && currentEquipamento.serial === data.equipamento.serial) {
+          currentEquipamento = data.equipamento;
+          document.getElementById("badge-apelido").textContent = currentEquipamento.apelido || "Sem Apelido";
+        }
+        await carregarEstatisticas();
+        await carregarHistoricoApelidos();
+        showToast("Apelido restaurado. A reversão foi registrada no histórico.", "success");
+      } catch (err) {
+        console.error("Erro ao desfazer alteração de apelido:", err);
+        showToast(err.message || "Não foi possível desfazer a alteração.", "error");
+        botao.disabled = false;
+        botao.textContent = textoOriginal;
+      }
+    }
+
+    async function excluirRegistroHistorico(evento, botao) {
+      if (!window.confirm("Tem certeza de que deseja excluir esse registro? Essa ação não poderá ser desfeita")) return;
+
+      const textoOriginal = botao.textContent;
+      botao.disabled = true;
+      botao.textContent = "Excluindo...";
+      try {
+        const res = await fetch(`/api/historico-alteracoes/${encodeURIComponent(evento.id)}`, { method: "DELETE" });
+        const data = await res.json().catch(() => ({}));
+        if (!res.ok) throw new Error(data.detail || "Não foi possível excluir o registro.");
+        if (currentEquipamento && currentEquipamento.serial === data.equipamento.serial) {
+          currentEquipamento = data.equipamento;
+          document.getElementById("badge-apelido").textContent = currentEquipamento.apelido || "Sem Apelido";
+          document.getElementById("card-localizacao").textContent = `${currentEquipamento.retirada_cidade || ""} - ${currentEquipamento.retirada_endereco ? currentEquipamento.retirada_endereco.split("-")[0].trim() : ""}`;
+          document.getElementById("card-cnpj-atual").textContent = `CNPJ: ${currentEquipamento.retirada_cnpj || "Não especificado"}`;
+        }
+        await carregarHistoricoApelidos();
+        showToast(data.tipo === "endereco"
+          ? "Endereço anterior restaurado e salvo; registro removido do histórico."
+          : "Apelido anterior restaurado e salvo; registro removido do histórico.", "success");
+      } catch (err) {
+        console.error("Erro ao excluir registro do histórico:", err);
+        showToast(err.message || "Não foi possível excluir o registro.", "error");
+        botao.disabled = false;
+        botao.textContent = textoOriginal;
+      }
+    }
+
+    const CAMPOS_ENTREGA_PRESERVADOS_AO_EDITAR_EQUIPAMENTO = [
+      "select-unidade-destino",
+      "entrega-cnpj",
+      "entrega-endereco",
+      "entrega-contato",
+      "entrega-email",
+      "entrega-telefone",
+      "entrega-horario",
+      "entrega-almoco",
+      "entrega-pausa-duracao",
+      "entrega-obs"
+    ];
+
+    function capturarDadosEntrega() {
+      return CAMPOS_ENTREGA_PRESERVADOS_AO_EDITAR_EQUIPAMENTO.reduce((valores, id) => {
+        const campo = document.getElementById(id);
+        if (campo) valores[id] = campo.value;
+        return valores;
+      }, {});
+    }
+
+    function restaurarDadosEntrega(valores) {
+      Object.entries(valores).forEach(([id, valor]) => {
+        const campo = document.getElementById(id);
+        if (campo) campo.value = valor;
+      });
+    }
+
+    async function salvarDadosEquipamento() {
+      const serial = document.getElementById("edit-serial").value.trim().toUpperCase();
+      if (!serial) {
+        showToast("O número de série é obrigatório.", "warning");
+        document.getElementById("edit-serial").focus();
+        return;
+      }
+
+      const payload = {
+        serial: serial,
+        modelo: document.getElementById("edit-modelo").value.trim(),
+        tipo: document.getElementById("edit-tipo").value,
+        apelido: currentEquipamento && currentEquipamento.serial === serial
+          ? (currentEquipamento.apelido || "")
+          : document.getElementById("edit-apelido").value.trim(),
+        idCliente: document.getElementById("edit-id-cliente").value.trim(),
+      };
+
+      const btn = document.getElementById("btn-salvar-equipamento");
+      const originalText = btn.innerHTML;
+      btn.disabled = true;
+      btn.setAttribute("aria-busy", "true");
+      btn.innerHTML = `<i data-lucide="loader-2" class="w-4 h-4 animate-spin"></i><span>Salvando no Excel...</span>`;
+      lucide.createIcons({ root: btn });
+
+      try {
+        const res = await fetch("/api/equipamento/salvar", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(payload)
+        });
+
+        if (!res.ok) {
+          const errData = await res.json().catch(() => ({}));
+          throw new Error(errData.detail || "Falha ao salvar equipamento.");
+        }
+
+        const data = await res.json();
+        const dadosEntrega = capturarDadosEntrega();
+        currentEquipamento = data.equipamento;
+        exibirEquipamento(data.equipamento);
+        restaurarDadosEntrega(dadosEntrega);
+        document.getElementById("input-serial").value = data.equipamento.serial;
+        document.getElementById("btn-clear-serial").classList.remove("hidden");
+
+        atualizarIndicadoresPosSalvamento(data.total_modificados);
+        showToast(data.mensagem || `Equipamento ${serial} salvo com sucesso!`, "success");
+        fecharModalEditarEquipamento();
+
+      } catch (err) {
+        console.error("Erro ao salvar:", err);
+        showToast(err.message, "error");
+      } finally {
+        btn.disabled = false;
+        btn.removeAttribute("aria-busy");
+        btn.innerHTML = originalText;
+        lucide.createIcons({ root: btn });
+      }
+    }
+
+    // ==========================================
+    // MODAL DE GERENCIAMENTO DE REGIONAIS
+    // ==========================================
+    function abrirModalGerenciarUnidades() {
+      document.getElementById("input-filtro-unidades").value = "";
+      toggleFormNovaUnidade(false);
+      renderListaUnidades(unidadesList);
+      document.getElementById("badge-total-unidades-modal").textContent = `${unidadesList.length} unidades`;
+      abrirModalAcessivel("modal-gerenciar-unidades", "#input-filtro-unidades", "fecharModalGerenciarUnidades");
+    }
+
+    function fecharModalGerenciarUnidades() {
+      fecharModalAcessivel("modal-gerenciar-unidades");
+    }
+
+    function renderListaUnidades(lista) {
+      const container = document.getElementById("lista-unidades-container");
+      container.innerHTML = "";
+
+      if (!lista || lista.length === 0) {
+        container.innerHTML = `
+          <div class="text-center py-8 text-slate-500 text-xs">
+            Nenhuma unidade encontrada com o termo filtrado.
+          </div>
+        `;
+        return;
+      }
+
+      lista.forEach(u => {
+        const item = document.createElement("div");
+        item.className = "flex items-center justify-between p-3 rounded-xl bg-slate-950/60 border border-slate-800/80 hover:border-amber-500/30 transition text-xs";
+        item.innerHTML = `
+          <div class="min-w-0 flex-1">
+            <div class="flex items-center gap-2">
+              <span class="font-bold text-white text-sm">${escapeHtml(u.cidade)}</span>
+              ${u.is_sede ? '<span class="px-2 py-0.5 rounded-full text-[10px] font-bold bg-amber-500/20 text-amber-300 border border-amber-500/30">SEDE</span>' : ''}
+              <span class="text-slate-400 font-mono text-[11px]">${escapeHtml(u.cnpj)}</span>
+            </div>
+            <p class="text-slate-300 mt-0.5 truncate">${escapeHtml(u.endereco)}</p>
+            <p class="text-slate-500 font-mono text-[11px]">CEP: ${escapeHtml(u.cep)} | UF: ${escapeHtml(u.uf || 'PR')}</p>
+          </div>
+          <div class="flex items-center gap-2 ml-3 shrink-0">
+            <button
+              class="px-2.5 py-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 text-amber-300 border border-amber-500/30 text-xs font-medium flex items-center gap-1 transition"
+              title="Editar dados desta unidade"
+            >
+              <i data-lucide="edit-2" class="w-3.5 h-3.5"></i>
+              <span>Editar</span>
+            </button>
+          </div>
+        `;
+        item.querySelector("button").addEventListener("click", () => editarUnidade(Number(u.id)));
+        container.appendChild(item);
+      });
+      lucide.createIcons({ root: container });
+    }
+
+    function filtrarUnidadesModal(query) {
+      const q = (query || "").toLowerCase().trim();
+      if (!q) {
+        renderListaUnidades(unidadesList);
+        return;
+      }
+      const filtradas = unidadesList.filter(u =>
+        (u.cidade && u.cidade.toLowerCase().includes(q)) ||
+        (u.endereco && u.endereco.toLowerCase().includes(q)) ||
+        (u.cnpj && u.cnpj.toLowerCase().includes(q)) ||
+        (u.cep && u.cep.toLowerCase().includes(q))
+      );
+      renderListaUnidades(filtradas);
+    }
+
+    function toggleFormNovaUnidade(show = null) {
+      const form = document.getElementById("form-nova-unidade");
+      const isHidden = form.classList.contains("hidden");
+      const shouldShow = show !== null ? show : isHidden;
+
+      if (shouldShow) {
+        document.getElementById("form-unidade-id").value = "";
+        document.getElementById("form-unidade-cidade").value = "";
+        document.getElementById("form-unidade-endereco").value = "";
+        document.getElementById("form-unidade-cep").value = "";
+        document.getElementById("form-unidade-cnpj").value = "";
+        document.getElementById("form-unidade-titulo").textContent = "Cadastrar Nova Unidade / Filial";
+        form.classList.remove("hidden");
+        document.getElementById("form-unidade-cidade").focus();
+      } else {
+        form.classList.add("hidden");
+      }
+    }
+
+    function editarUnidade(id) {
+      const unit = unidadesList.find(u => u.id === id);
+      if (!unit) return;
+
+      document.getElementById("form-unidade-id").value = unit.id;
+      document.getElementById("form-unidade-cidade").value = unit.cidade || "";
+      document.getElementById("form-unidade-endereco").value = unit.endereco || "";
+      document.getElementById("form-unidade-cep").value = unit.cep || "";
+      document.getElementById("form-unidade-cnpj").value = unit.cnpj || "";
+      document.getElementById("form-unidade-titulo").textContent = `Editar Unidade: ${unit.cidade}`;
+
+      document.getElementById("form-nova-unidade").classList.remove("hidden");
+      document.getElementById("form-unidade-endereco").focus();
+    }
+
+    async function salvarUnidadeForm() {
+      const cidade = document.getElementById("form-unidade-cidade").value.trim();
+      const endereco = document.getElementById("form-unidade-endereco").value.trim();
+      const cep = document.getElementById("form-unidade-cep").value.trim();
+      const cnpj = document.getElementById("form-unidade-cnpj").value.trim();
+      const idVal = document.getElementById("form-unidade-id").value;
+
+      if (!cidade || !endereco || !cnpj) {
+        showToast("Cidade, endereço e CNPJ são campos obrigatórios.", "warning");
+        return;
+      }
+
+      const payload = {
+        id: idVal ? parseInt(idVal) : null,
+        cidade: cidade,
+        endereco: endereco,
+        uf: "PR",
+        cep: cep,
+        cnpj: cnpj
+      };
+
+      try {
+        const res = await fetch("/api/unidade/salvar", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(payload)
+        });
+
+        if (!res.ok) {
+          const errData = await res.json().catch(() => ({}));
+          throw new Error(errData.detail || "Erro ao salvar unidade.");
+        }
+
+        const data = await res.json();
+        await carregarUnidades();
+        renderListaUnidades(unidadesList);
+        toggleFormNovaUnidade(false);
+        showToast(data.mensagem || "Unidade salva com sucesso!", "success");
+
+      } catch (err) {
+        console.error("Erro ao salvar unidade:", err);
+        showToast(err.message, "error");
+      }
+    }

@@ -33,6 +33,7 @@ __pycache__/
 /planilhas_entrada/**/*.tsv
 /planilhas_entrada/_backups/
 /outputs/
+/modelos/EquipamentosDetalhes-exportacao.xlsx
 
 # Local operational state and histories
 /apelidos_modificados.json
