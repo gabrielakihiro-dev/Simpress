@@ -3540,6 +3540,30 @@ def get_stats():
 @app.post("/api/gerar-planilha")
 def gerar_planilha(payload: TransferenciaPayload):
     """Gera a planilha oficial de transferência Simpress a partir do template com os dados preenchidos."""
+    campos_obrigatorios = (
+        ("retirada_contato", "Nome do contato na retirada"),
+        ("retirada_email", "E-mail do contato na retirada"),
+        ("retirada_telefone", "Telefone / Ramal do contato na retirada"),
+        ("retirada_obs", "Observações Adicionais da Retirada"),
+        ("entrega_contato", "Nome do Destinatário ou Representante"),
+        ("entrega_email", "E-mail do Destinatário"),
+        ("entrega_telefone", "Telefone / Ramal do Destinatário"),
+        ("entrega_horario", "Expediente da unidade de entrega"),
+        ("entrega_almoco", "Horário de almoço da unidade de entrega"),
+        ("entrega_pausa_duracao", "Duração da pausa da unidade de entrega"),
+        ("entrega_obs", "Observações Adicionais do Chamado"),
+    )
+    campo_vazio = next(
+        ((nome, rotulo) for nome, rotulo in campos_obrigatorios if not getattr(payload, nome).strip()),
+        None,
+    )
+    if campo_vazio:
+        _, rotulo = campo_vazio
+        raise HTTPException(
+            status_code=422,
+            detail=f'Preencha o campo obrigatório "{rotulo}" para gerar a planilha oficial.',
+        )
+
     if not TEMPLATE_FILE.exists():
         raise HTTPException(status_code=500, detail=f"Arquivo de template '{TEMPLATE_FILE.name}' não encontrado no servidor.")
 

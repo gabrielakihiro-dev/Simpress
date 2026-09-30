@@ -45,38 +45,36 @@
 
       <nav class="header-actions" aria-label="Ações do sistema">
         <div class="header-primary-actions">
-          <button type="button" onclick="abrirModalAtualizarPlanilhas()" id="btn-atualizar-planilhas" class="flex items-center gap-1.5 px-3 py-2 text-xs font-semibold text-sky-100 bg-sky-700 hover:bg-sky-600 border border-sky-500/70 rounded-lg transition-all shadow-sm" title="Comparar os arquivos e atualizar as bases do site">
-            <i data-lucide="upload" class="w-3.5 h-3.5" aria-hidden="true"></i>
-            <span>Atualizar planilhas</span>
-          </button>
-          <button type="button" onclick="resetarFormulario()" id="btn-nova-transferencia" class="flex items-center gap-1.5 px-3 py-2 text-xs font-medium text-slate-200 bg-slate-800 hover:bg-slate-700 border border-slate-600 rounded-lg transition-all shadow-sm" title="Limpar o formulário e iniciar uma nova transferência">
-            <i data-lucide="rotate-ccw" class="w-3.5 h-3.5" aria-hidden="true"></i>
-            <span>Nova transferência</span>
+          <button type="button" onclick="resetarFormulario()" id="btn-nova-transferencia" aria-label="Nova transferência" class="header-primary-icon-button flex items-center justify-center text-sky-100 bg-sky-700 hover:bg-sky-600 border border-sky-500/70 rounded-lg transition-all shadow-sm" title="Nova transferência">
+            <i data-lucide="rotate-ccw" class="w-3 h-3" aria-hidden="true"></i>
           </button>
         </div>
         <details class="header-secondary-actions">
-          <summary aria-label="Abrir histórico, exportação e catálogo de unidades">
-            <i data-lucide="ellipsis" class="w-4 h-4" aria-hidden="true"></i>
-            <span>Histórico, exportação e unidades</span>
-            <i data-lucide="chevron-down" class="w-3.5 h-3.5" aria-hidden="true"></i>
+          <summary aria-label="Abrir menu de ações do sistema">
+            <span>Ações</span>
+            <i data-lucide="chevron-down" class="w-3 h-3" aria-hidden="true"></i>
           </summary>
           <div class="header-secondary-panel">
-            <button type="button" onclick="abrirModalHistoricoApelidos()" id="btn-historico-apelidos" aria-label="Histórico de alterações manuais" aria-labelledby="label-historico-apelidos" class="flex items-center gap-1.5 px-3 py-2 text-xs font-medium text-violet-200 bg-violet-950/60 hover:bg-violet-900/70 border border-violet-500/40 rounded-lg transition-all shadow-sm" title="Consultar histórico de alterações manuais">
-              <i data-lucide="history" class="w-3.5 h-3.5 text-violet-300" aria-hidden="true"></i>
-              <span id="label-historico-apelidos">Histórico de alterações</span>
-              <span id="badge-total-historico-apelidos" class="text-[10px] text-violet-100">0</span>
+            <button type="button" onclick="abrirModalAtualizarPlanilhas()" id="btn-atualizar-planilhas" class="header-action-item header-action-item--blue flex items-center gap-1.5" title="Comparar os arquivos e atualizar as bases do site">
+              <i data-lucide="upload" class="header-action-icon header-action-icon--blue w-3 h-3" aria-hidden="true"></i>
+              <span>Atualizar planilhas</span>
             </button>
-            <button type="button" onclick="abrirModalHistoricoComparacoes()" id="btn-historico-comparacoes" aria-label="Histórico de atualizações e comparação de planilhas" aria-labelledby="label-historico-comparacoes" class="flex items-center gap-1.5 px-3 py-2 text-xs font-medium text-cyan-100 bg-cyan-950/60 hover:bg-cyan-900/70 border border-cyan-500/40 rounded-lg transition-all shadow-sm" title="Consultar comparações e alterações de apelido feitas pela atualização das planilhas">
-              <i data-lucide="history" class="w-3.5 h-3.5 text-cyan-300" aria-hidden="true"></i>
-              <span id="label-historico-comparacoes">Histórico planilhas</span>
-              <span id="badge-total-historico-comparacoes" class="text-[10px] text-cyan-100">0</span>
-            </button>
-            <button type="button" onclick="exportarEquipamentosAtualizados()" id="btn-exportar-equipamentos" aria-label="Exportar planilha Excel com apelidos atualizados" aria-labelledby="label-exportar-equipamentos" class="hidden flex items-center gap-1.5 px-3 py-2 text-xs font-medium text-emerald-100 bg-emerald-950/60 hover:bg-emerald-900/70 border border-emerald-500/40 rounded-lg transition-all shadow-sm" title="Baixar a planilha com os apelidos atualizados">
-              <i data-lucide="file-spreadsheet" class="w-3.5 h-3.5 text-emerald-300" aria-hidden="true"></i>
+            <button type="button" onclick="exportarEquipamentosAtualizados()" id="btn-exportar-equipamentos" aria-label="Exportar planilha Excel com apelidos atualizados" aria-labelledby="label-exportar-equipamentos" class="header-action-item header-action-item--emerald hidden flex items-center gap-1.5" title="Baixar a planilha com os apelidos atualizados">
+              <i data-lucide="file-spreadsheet" class="header-action-icon header-action-icon--emerald w-3 h-3" aria-hidden="true"></i>
               <span id="label-exportar-equipamentos">Exportar Excel</span>
             </button>
-            <button type="button" onclick="abrirModalGerenciarUnidades()" aria-label="Catálogo de unidades SEBRAE" aria-labelledby="label-catalogo-unidades" class="flex items-center gap-1.5 px-3 py-2 text-xs font-medium text-amber-100 bg-amber-950/60 hover:bg-amber-900/70 border border-amber-500/40 rounded-lg transition-all shadow-sm" title="Consultar e gerenciar o catálogo de unidades SEBRAE">
-              <i data-lucide="map-pin" class="w-3.5 h-3.5 text-amber-300" aria-hidden="true"></i>
+            <button type="button" onclick="abrirModalHistoricoComparacoes()" id="btn-historico-comparacoes" aria-label="Histórico de atualizações e comparação de planilhas" aria-labelledby="label-historico-comparacoes" class="header-action-item header-action-item--cyan flex items-center gap-1.5" title="Consultar comparações e alterações de apelido feitas pela atualização das planilhas">
+              <i data-lucide="history" class="header-action-icon header-action-icon--cyan w-3 h-3" aria-hidden="true"></i>
+              <span id="label-historico-comparacoes">Histórico planilhas</span>
+              <span id="badge-total-historico-comparacoes" class="header-action-count">0</span>
+            </button>
+            <button type="button" onclick="abrirModalHistoricoApelidos()" id="btn-historico-apelidos" aria-label="Histórico de alterações manuais" aria-labelledby="label-historico-apelidos" class="header-action-item header-action-item--violet flex items-center gap-1.5" title="Consultar histórico de alterações manuais">
+              <i data-lucide="history" class="header-action-icon header-action-icon--violet w-3 h-3" aria-hidden="true"></i>
+              <span id="label-historico-apelidos">Histórico de alterações</span>
+              <span id="badge-total-historico-apelidos" class="header-action-count">0</span>
+            </button>
+            <button type="button" onclick="abrirModalGerenciarUnidades()" aria-label="Catálogo de unidades SEBRAE" aria-labelledby="label-catalogo-unidades" class="header-action-item header-action-item--amber flex items-center gap-1.5" title="Consultar e gerenciar o catálogo de unidades SEBRAE">
+              <i data-lucide="map-pin" class="header-action-icon header-action-icon--amber w-3 h-3" aria-hidden="true"></i>
               <span id="label-catalogo-unidades">Catálogo de unidades</span>
             </button>
           </div>
@@ -383,28 +381,31 @@
             </div>
             <div class="grid grid-cols-1 sm:grid-cols-3 gap-3">
               <div>
-                <label class="block text-[11px] text-slate-400 mb-1">Nome:</label>
+                <label class="block text-[11px] text-slate-400 mb-1">Nome: <span class="text-amber-400">*</span></label>
                 <input
                   type="text"
                   id="retirada-contato"
+                  required
                   value="Gabriel Akihiro Noda Souza (Simpress)"
                   class="w-full px-3 py-2 rounded-lg glass-input text-xs text-slate-200 focus:outline-none"
                 />
               </div>
               <div>
-                <label class="block text-[11px] text-slate-400 mb-1">E-mail:</label>
+                <label class="block text-[11px] text-slate-400 mb-1">E-mail: <span class="text-amber-400">*</span></label>
                 <input
                   type="email"
                   id="retirada-email"
+                  required
                   value="gansouza@simpress.com.br"
                   class="w-full px-3 py-2 rounded-lg glass-input text-xs text-slate-200 focus:outline-none"
                 />
               </div>
               <div>
-                <label class="block text-[11px] text-slate-400 mb-1">Telefone / Ramal:</label>
+                <label class="block text-[11px] text-slate-400 mb-1">Telefone / Ramal: <span class="text-amber-400">*</span></label>
                 <input
                   type="text"
                   id="retirada-telefone"
+                  required
                   value="(41) 98751-2389"
                   class="w-full px-3 py-2 rounded-lg glass-input text-xs text-slate-200 focus:outline-none font-mono"
                   inputmode="tel"
@@ -417,10 +418,11 @@
 
           <!-- Observações Retirada -->
           <div>
-            <label class="block text-[11px] font-semibold text-slate-400 mb-1">Observações Adicionais Retirada:</label>
+            <label class="block text-[11px] font-semibold text-slate-400 mb-1">Observações Adicionais Retirada: <span class="text-amber-400">*</span></label>
             <input
               type="text"
               id="retirada-obs"
+              required
               class="w-full px-3 py-2 rounded-lg glass-input text-xs text-slate-200 focus:outline-none"
               placeholder="Ex: Notebook + kit na mochila (retirada no suporte de TI)"
             />
@@ -538,6 +540,7 @@
                 <input
                   type="text"
                   id="entrega-contato"
+                  required
                   class="w-full px-3 py-2 rounded-lg glass-input text-xs text-slate-100 focus:outline-none"
                   placeholder="Preenchido automaticamente pela cidade ou informe o contato"
                 />
@@ -545,19 +548,21 @@
 
               <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
                 <div>
-                  <label class="block text-[11px] text-slate-300 mb-1">E-mail do Destinatário:</label>
+                  <label class="block text-[11px] text-slate-300 mb-1">E-mail do Destinatário: <span class="text-amber-400">*</span></label>
                   <input
                     type="email"
                     id="entrega-email"
+                    required
                     class="w-full px-3 py-2 rounded-lg glass-input text-xs text-slate-100 focus:outline-none"
                     placeholder="nome@pr.sebrae.com.br"
                   />
                 </div>
                 <div>
-                  <label class="block text-[11px] text-slate-300 mb-1">Telefone / Ramal:</label>
+                  <label class="block text-[11px] text-slate-300 mb-1">Telefone / Ramal: <span class="text-amber-400">*</span></label>
                   <input
                     type="text"
                     id="entrega-telefone"
+                    required
                     class="w-full px-3 py-2 rounded-lg glass-input text-xs text-slate-100 focus:outline-none font-mono"
                     inputmode="tel"
                     autocomplete="tel"
@@ -571,28 +576,31 @@
           <!-- Grade de Horários e Almoço Entrega -->
           <div class="grid grid-cols-1 sm:grid-cols-3 gap-3">
             <div>
-              <label class="block text-[11px] font-semibold text-slate-300 mb-1">Expediente:</label>
+              <label class="block text-[11px] font-semibold text-slate-300 mb-1">Expediente: <span class="text-amber-400">*</span></label>
               <input
                 type="text"
                 id="entrega-horario"
+                required
                 value="09:00:00 às 18:00:00"
                 class="w-full px-3 py-2 rounded-lg glass-input text-xs text-slate-200 focus:outline-none"
               />
             </div>
             <div>
-              <label class="block text-[11px] font-semibold text-slate-300 mb-1">Almoço:</label>
+              <label class="block text-[11px] font-semibold text-slate-300 mb-1">Almoço: <span class="text-amber-400">*</span></label>
               <input
                 type="text"
                 id="entrega-almoco"
+                required
                 value="12:00:00"
                 class="w-full px-3 py-2 rounded-lg glass-input text-xs text-slate-200 focus:outline-none"
               />
             </div>
             <div>
-              <label class="block text-[11px] font-semibold text-slate-300 mb-1">Duração Pausa:</label>
+              <label class="block text-[11px] font-semibold text-slate-300 mb-1">Duração Pausa: <span class="text-amber-400">*</span></label>
               <input
                 type="text"
                 id="entrega-pausa-duracao"
+                required
                 value="1h"
                 class="w-full px-3 py-2 rounded-lg glass-input text-xs text-slate-200 focus:outline-none"
               />
@@ -603,12 +611,13 @@
           <div>
             <div class="flex items-center justify-between mb-1">
               <label class="block text-xs font-semibold text-slate-300">
-                Observações Adicionais do Chamado:
+                Observações Adicionais do Chamado: <span class="text-amber-400">*</span>
               </label>
               <span class="text-[10px] text-slate-400">Cel. B37 na planilha</span>
             </div>
             <textarea
               id="entrega-obs"
+              required
               rows="2"
               class="w-full px-3.5 py-2 rounded-lg glass-input text-xs text-slate-100 focus:outline-none"
               placeholder="Ex: Equipamento para nova contratação / Substituição preventiva..."
