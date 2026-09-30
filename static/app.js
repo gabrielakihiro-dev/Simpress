@@ -1619,7 +1619,8 @@
 
         eventos.forEach(evento => {
           const resumo = evento.resumo || {};
-          const arquivos = evento.arquivos_enviados || {};
+          const restauracao = evento.tipo === "restauracao";
+          const arquivos = restauracao ? (evento.arquivos_restaurados || {}) : (evento.arquivos_enviados || {});
           const card = document.createElement("article");
           card.className = "flex flex-col md:flex-row md:items-center justify-between gap-3 rounded-xl border border-slate-800 bg-slate-950/70 p-4";
 
@@ -1632,24 +1633,43 @@
 
           const fontes = document.createElement("p");
           fontes.className = "text-xs text-slate-400 break-words";
-          fontes.textContent = `Endpoint: ${arquivos.endpoint || "—"} · EquipamentosDetalhes: ${arquivos.detalhes || "—"}`;
+          fontes.textContent = restauracao
+            ? `Inventários restaurados — Endpoint: ${arquivos.endpoint || "—"} · EquipamentosDetalhes: ${arquivos.detalhes || "—"}`
+            : `Endpoint: ${arquivos.endpoint || "—"} · EquipamentosDetalhes: ${arquivos.detalhes || "—"}`;
           info.appendChild(fontes);
 
           const contagens = document.createElement("p");
           contagens.className = "text-[11px] text-slate-500";
-          contagens.textContent = `Apelidos/hostnames atualizados: ${Number(resumo.apelidos_atualizados || 0)} · divergências manuais pendentes: ${Number(resumo.divergencias_apelidos_manuais || 0)} · ausentes no Endpoint: ${Number(resumo.ausentes_no_endpoint || 0)} · em EquipamentosDetalhes: ${Number(resumo.ausentes_em_detalhes || 0)} · divergências de local: ${Number(resumo.divergencias_local || 0)} · ambiguidades: ${Number(resumo.correspondencias_ambiguas || 0)}`;
+          if (restauracao) {
+            const restauracaoDe = evento.restauracao_de || {};
+            contagens.textContent = `Restauração do conjunto anterior a ${formatarHorarioHistorico(restauracaoDe.horario)} · registros restaurados: Endpoint ${Number(resumo.total_endpoint_restaurado || 0).toLocaleString("pt-BR")}, EquipamentosDetalhes ${Number(resumo.total_detalhes_restaurado || 0).toLocaleString("pt-BR")}`;
+          } else {
+            contagens.textContent = `Apelidos/hostnames atualizados: ${Number(resumo.apelidos_atualizados || 0)} · divergências manuais pendentes: ${Number(resumo.divergencias_apelidos_manuais || 0)} · ausentes no Endpoint: ${Number(resumo.ausentes_no_endpoint || 0)} · em EquipamentosDetalhes: ${Number(resumo.ausentes_em_detalhes || 0)} · divergências de local: ${Number(resumo.divergencias_local || 0)} · ambiguidades: ${Number(resumo.correspondencias_ambiguas || 0)}`;
+          }
           info.appendChild(contagens);
           card.appendChild(info);
 
           const acoes = document.createElement("div");
-          acoes.className = "flex shrink-0 items-center gap-2";
+          acoes.className = "flex flex-wrap items-center gap-2";
 
-          const consultar = document.createElement("button");
-          consultar.type = "button";
-          consultar.className = "shrink-0 px-3 py-2 rounded-lg bg-cyan-500/10 hover:bg-cyan-500/20 text-cyan-200 border border-cyan-500/25 text-xs font-semibold transition";
-          consultar.textContent = "Consultar resultado";
-          consultar.addEventListener("click", () => consultarHistoricoComparacao(evento.id, consultar));
-          acoes.appendChild(consultar);
+          if (!restauracao) {
+            const consultar = document.createElement("button");
+            consultar.type = "button";
+            consultar.className = "shrink-0 px-3 py-2 rounded-lg bg-cyan-500/10 hover:bg-cyan-500/20 text-cyan-200 border border-cyan-500/25 text-xs font-semibold transition";
+            consultar.textContent = "Consultar resultado";
+            consultar.addEventListener("click", () => consultarHistoricoComparacao(evento.id, consultar));
+            acoes.appendChild(consultar);
+          }
+
+          if (evento.restauravel) {
+            const restaurar = document.createElement("button");
+            restaurar.type = "button";
+            restaurar.className = "shrink-0 px-3 py-2 rounded-lg bg-amber-500/10 hover:bg-amber-500/20 text-amber-200 border border-amber-500/25 text-xs font-semibold transition";
+            restaurar.textContent = restauracao ? "Desfazer restauração" : "Restaurar versão anterior";
+            restaurar.setAttribute("aria-label", `${restauracao ? "Desfazer restauração de" : "Restaurar versões anteriores à atualização de"} ${formatarHorarioHistorico(evento.horario)}`);
+            restaurar.addEventListener("click", () => restaurarHistoricoComparacao(evento, restaurar));
+            acoes.appendChild(restaurar);
+          }
 
           const excluir = document.createElement("button");
           excluir.type = "button";
@@ -1673,6 +1693,70 @@
         lista.appendChild(erro);
       } finally {
         lista.removeAttribute("aria-busy");
+      }
+    }
+
+    async function restaurarHistoricoComparacao(evento, botao) {
+      const textoOriginal = botao.textContent;
+      botao.disabled = true;
+      botao.setAttribute("aria-busy", "true");
+      botao.textContent = "Preparando...";
+
+      try {
+        const previewResponse = await fetch(`/api/historico-comparacoes/${encodeURIComponent(evento.id)}/restauracao`);
+        const preview = await previewResponse.json().catch(() => ({}));
+        if (!previewResponse.ok) throw new Error(preview.detail || "Não foi possível validar o backup selecionado.");
+
+        const describeBackup = (label, item) => {
+          const modified = item.modificado_em ? `; arquivo datado ${formatarHorarioHistorico(item.modificado_em)}` : "";
+          return `${label}: ${item.nome} (${Number(item.registros || 0).toLocaleString("pt-BR")} registros${modified})`;
+        };
+        const describeCurrent = (label, item) => {
+          if (!item?.presente) return `${label}: arquivo ausente`;
+          const modified = item.modificado_em ? ` · modificado ${formatarHorarioHistorico(item.modificado_em)}` : "";
+          return `${label}: ${item.nome}${modified}`;
+        };
+        const restauracao = preview.tipo_evento === "restauracao";
+        const acao = restauracao ? "Desfazer a restauração" : "Reverter a atualização";
+        const confirmText = [
+          `${acao} registrada em ${formatarHorarioHistorico(preview.evento_horario)}?`,
+          "",
+          "Conjunto que será restaurado:",
+          describeBackup("Endpoint", preview.arquivos_backup.endpoint),
+          describeBackup("EquipamentosDetalhes", preview.arquivos_backup.detalhes),
+          "",
+          "Conjunto ativo, que será guardado como backup:",
+          describeCurrent("Endpoint", preview.arquivos_atuais.endpoint),
+          describeCurrent("EquipamentosDetalhes", preview.arquivos_atuais.detalhes),
+          "",
+          "Os dois inventários serão substituídos juntos e a ação ficará registrada no histórico. Continuar?",
+        ].join("\n");
+        if (!window.confirm(confirmText)) return;
+
+        botao.textContent = "Restaurando...";
+        const response = await fetch(`/api/historico-comparacoes/${encodeURIComponent(evento.id)}/restaurar`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ preview_token: preview.preview_token }),
+        });
+        const data = await response.json().catch(() => ({}));
+        if (!response.ok) throw new Error(data.detail || "Não foi possível restaurar o conjunto selecionado.");
+
+        await Promise.allSettled([carregarEstatisticas(), carregarHistoricoComparacoes()]);
+        const total = Number(data.evento?.total_equipamentos_carregados || 0).toLocaleString("pt-BR");
+        const reversao = data.evento?.desfazer_disponivel
+          ? "A restauração pode ser desfeita pelo histórico."
+          : "O backup do conjunto substituído está incompleto ou inválido; não é possível desfazer pelo histórico.";
+        showToast(`Inventários restaurados. ${total} equipamentos carregados. ${reversao}`, "success");
+      } catch (err) {
+        console.error("Erro ao restaurar o conjunto de planilhas:", err);
+        showToast(err.message || "Não foi possível restaurar o conjunto selecionado.", "error");
+      } finally {
+        if (botao.isConnected) {
+          botao.disabled = false;
+          botao.removeAttribute("aria-busy");
+          botao.textContent = textoOriginal;
+        }
       }
     }
 
