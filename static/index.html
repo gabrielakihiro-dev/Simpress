@@ -651,16 +651,16 @@
       </div>
 
       <!-- Action Buttons -->
-      <div class="quick-actions-buttons flex flex-wrap items-center gap-3 w-full sm:w-auto justify-end">
-        <!-- Preview Modal Button -->
+      <div class="quick-actions-buttons flex flex-wrap sm:flex-nowrap items-center gap-3 w-full sm:w-auto justify-end">
+        <!-- PRIMARY: Download Excel Sheet -->
         <button
           type="button"
-          onclick="abrirModalPreview()"
-          class="px-4 py-2.5 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-300 hover:text-white border border-slate-700 text-xs font-semibold flex items-center space-x-1.5 transition shadow-sm"
-          title="Pré-visualizar resumo do chamado"
+          id="btn-gerar-planilha"
+          onclick="gerarPlanilhaExcel()"
+          class="px-6 py-2.5 rounded-xl bg-gradient-to-r from-emerald-600 to-teal-500 hover:from-emerald-500 hover:to-teal-400 text-white font-bold text-xs sm:text-sm flex items-center space-x-2.5 shadow-glow-emerald transition-all transform hover:scale-[1.02] active:scale-[0.98]"
         >
-          <i data-lucide="eye" class="w-4 h-4"></i>
-          <span>Visualizar</span>
+          <i data-lucide="file-spreadsheet" class="w-4 h-4"></i>
+          <span>Gerar e Baixar Planilha Oficial (.xlsx)</span>
         </button>
 
         <button
@@ -671,17 +671,6 @@
         >
           <i data-lucide="file-text" class="w-4 h-4"></i>
           <span>Texto para Transporte</span>
-        </button>
-
-        <!-- PRIMARY: Download Excel Sheet -->
-        <button
-          type="button"
-          id="btn-gerar-planilha"
-          onclick="gerarPlanilhaExcel()"
-          class="px-6 py-2.5 rounded-xl bg-gradient-to-r from-emerald-600 to-teal-500 hover:from-emerald-500 hover:to-teal-400 text-white font-bold text-xs sm:text-sm flex items-center space-x-2.5 shadow-glow-emerald transition-all transform hover:scale-[1.02] active:scale-[0.98]"
-        >
-          <i data-lucide="file-spreadsheet" class="w-4 h-4"></i>
-          <span>Gerar e Baixar Planilha Oficial (.xlsx)</span>
         </button>
       </div>
     </div>
