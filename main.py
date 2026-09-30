@@ -1,5 +1,7 @@
 import io
 import filecmp
+import hashlib
+import hmac
 import json
 import os
 import re
@@ -2224,6 +2226,10 @@ class ManualAliasConflictResolutionPayload(BaseModel):
     acao: str = Field(..., description="Manter o apelido manual ou remover esse override")
 
 
+class ComparisonRestorePayload(BaseModel):
+    preview_token: str = Field(..., min_length=64, max_length=64)
+
+
 def _edit_equipment_workbook(wb, payload: EquipamentoUpdatePayload):
     target_sheet_name = next(
         (name for name in wb.sheetnames if "equipamento" in name.lower() or "parque" in name.lower()),
@@ -2711,6 +2717,176 @@ def get_historico_apelidos():
     return {"total": len(historico), "eventos": list(reversed(historico))}
 
 
+def _comparison_event_type(evento: Dict[str, Any]) -> str:
+    comparison = evento.get("comparacao")
+    if (
+        evento.get("tipo") == "restauracao"
+        or isinstance(comparison, dict) and comparison.get("tipo_operacao") == "restauracao"
+    ):
+        return "restauracao"
+    return "atualizacao"
+
+
+def _comparison_restore_backup_paths(evento: Dict[str, Any]) -> Dict[str, Path]:
+    comparison = evento.get("comparacao")
+    relative_value = comparison.get("backup_diretorio") if isinstance(comparison, dict) else None
+    if not isinstance(relative_value, str) or not relative_value.strip():
+        raise HTTPException(status_code=409, detail="Esta atualização não possui um backup disponível para restauração.")
+
+    relative_path = Path(relative_value)
+    if relative_path.is_absolute() or not relative_path.parts or any(part in {".", ".."} for part in relative_path.parts):
+        raise HTTPException(status_code=409, detail="O caminho do backup desta atualização não é válido.")
+
+    try:
+        backup_root = UPLOAD_BACKUPS_DIR.resolve(strict=False)
+        backup_directory = (INPUT_DIR / relative_path).resolve(strict=True)
+    except (OSError, RuntimeError, ValueError):
+        raise HTTPException(status_code=409, detail="O backup desta atualização não está disponível.") from None
+    if backup_directory.parent != backup_root or not backup_directory.is_dir():
+        raise HTTPException(status_code=409, detail="O backup desta atualização não está disponível.")
+
+    missing_roles = comparison.get("backup_arquivos_ausentes")
+    invalid_roles = comparison.get("backup_arquivos_invalidos")
+    target_files = {
+        "endpoint": ENDPOINT_UPLOAD_FILE,
+        "detalhes": DETAILS_UPLOAD_FILE,
+    }
+    paths: Dict[str, Path] = {}
+    for role, target_path in target_files.items():
+        if (
+            isinstance(missing_roles, dict) and missing_roles.get(role) is True
+            or isinstance(invalid_roles, dict) and invalid_roles.get(role) is True
+        ):
+            raise HTTPException(status_code=409, detail="O backup desta atualização não contém dois inventários válidos.")
+        try:
+            role_directory = (backup_directory / role).resolve(strict=True)
+            if role_directory.parent != backup_directory or not role_directory.is_dir():
+                raise ValueError("invalid backup role directory")
+            backup_path = (role_directory / target_path.name).resolve(strict=True)
+            if backup_path.parent != role_directory or not backup_path.is_file():
+                raise ValueError("invalid backup file")
+        except (OSError, RuntimeError, ValueError):
+            raise HTTPException(status_code=409, detail="O backup desta atualização não contém os dois inventários.") from None
+        paths[role] = backup_path
+    return paths
+
+
+def _comparison_event_has_restorable_backup(evento: Dict[str, Any]) -> bool:
+    try:
+        _comparison_restore_backup_paths(evento)
+        return True
+    except HTTPException:
+        return False
+
+
+def _sha256_file(path: Path) -> str:
+    digest = hashlib.sha256()
+    with path.open("rb") as stream:
+        for block in iter(lambda: stream.read(1024 * 1024), b""):
+            digest.update(block)
+    return digest.hexdigest()
+
+
+def _validated_comparison_backup_files(paths: Dict[str, Path]) -> Dict[str, Dict[str, Any]]:
+    labels = {"endpoint": "Endpoint", "detalhes": "EquipamentosDetalhes"}
+    files: Dict[str, Dict[str, Any]] = {}
+    for role, backup_path in paths.items():
+        label = labels[role]
+        try:
+            size = backup_path.stat().st_size
+            if size <= 0 or size > MAX_UPLOAD_BYTES:
+                raise HTTPException(status_code=409, detail="O arquivo excede o limite de tamanho ou está vazio.")
+            file_bytes = backup_path.read_bytes()
+            table = validate_uploaded_workbook(file_bytes, role)
+        except HTTPException as error:
+            raise HTTPException(
+                status_code=409,
+                detail=f"O backup de {label} não passou na validação: {error.detail}",
+            ) from error
+        except WorkbookSafetyError as error:
+            raise HTTPException(
+                status_code=409,
+                detail=f"O backup de {label} não passou na validação: {error}",
+            ) from error
+        except OSError:
+            raise HTTPException(status_code=409, detail=f"Não foi possível ler o backup de {label}.") from None
+        files[role] = {
+            "path": backup_path,
+            "name": backup_path.name,
+            "bytes": file_bytes,
+            "sha256": hashlib.sha256(file_bytes).hexdigest(),
+            "records": len(table.get("records", [])),
+            "size": size,
+            "modified": datetime.fromtimestamp(backup_path.stat().st_mtime).astimezone().isoformat(timespec="seconds"),
+        }
+    return files
+
+
+def _current_inventory_snapshot() -> tuple[Dict[str, Dict[str, Any]], Dict[str, Optional[str]]]:
+    target_files = {
+        "endpoint": ENDPOINT_UPLOAD_FILE,
+        "detalhes": DETAILS_UPLOAD_FILE,
+    }
+    metadata: Dict[str, Dict[str, Any]] = {}
+    hashes: Dict[str, Optional[str]] = {}
+    for role, target_path in target_files.items():
+        if target_path.is_symlink():
+            raise HTTPException(status_code=409, detail="Um arquivo ativo foi substituído por um atalho; a restauração foi cancelada.")
+        if target_path.exists() and not target_path.is_file():
+            raise HTTPException(status_code=409, detail=f"O caminho ativo {target_path.name} não é um arquivo regular.")
+        if not target_path.is_file():
+            metadata[role] = {"nome": target_path.name, "presente": False}
+            hashes[role] = None
+            continue
+        try:
+            stat = target_path.stat()
+            if stat.st_size > MAX_UPLOAD_BYTES:
+                raise HTTPException(status_code=409, detail=f"O arquivo ativo {target_path.name} excede o limite permitido para backup.")
+            file_hash = _sha256_file(target_path)
+        except HTTPException:
+            raise
+        except OSError:
+            raise HTTPException(status_code=409, detail=f"Não foi possível conferir o arquivo ativo {target_path.name}.") from None
+        metadata[role] = {
+            "nome": target_path.name,
+            "presente": True,
+            "tamanho_bytes": stat.st_size,
+            "modificado_em": datetime.fromtimestamp(stat.st_mtime).astimezone().isoformat(timespec="seconds"),
+        }
+        hashes[role] = file_hash
+    return metadata, hashes
+
+
+def _build_comparison_restore_context(evento_id: str) -> Dict[str, Any]:
+    evento = next(
+        (item for item in load_comparison_history() if isinstance(item, dict) and item.get("id") == evento_id),
+        None,
+    )
+    if evento is None:
+        raise HTTPException(status_code=404, detail="A atualização selecionada não existe no histórico de planilhas.")
+
+    backup_paths = _comparison_restore_backup_paths(evento)
+    backup_files = _validated_comparison_backup_files(backup_paths)
+    current_files, current_hashes = _current_inventory_snapshot()
+    token_material = {
+        "evento_id": evento_id,
+        "horario": evento.get("horario"),
+        "backup_diretorio": evento.get("comparacao", {}).get("backup_diretorio"),
+        "backup_hashes": {role: backup_files[role]["sha256"] for role in sorted(backup_files)},
+        "ativos_hashes": current_hashes,
+    }
+    preview_token = hashlib.sha256(
+        json.dumps(token_material, ensure_ascii=False, sort_keys=True, separators=(",", ":")).encode("utf-8")
+    ).hexdigest()
+    return {
+        "evento": evento,
+        "backup_files": backup_files,
+        "current_files": current_files,
+        "current_hashes": current_hashes,
+        "preview_token": preview_token,
+    }
+
+
 @app.get("/api/historico-comparacoes")
 def get_historico_comparacoes():
     eventos = []
@@ -2718,10 +2894,16 @@ def get_historico_comparacoes():
         if not isinstance(evento, dict):
             continue
         event_view = comparison_history_for_display(evento)
+        comparison = event_view.get("comparacao")
+        comparison = comparison if isinstance(comparison, dict) else {}
         eventos.append({
             "id": event_view.get("id"),
             "horario": event_view.get("horario"),
+            "tipo": _comparison_event_type(event_view),
             "arquivos_enviados": event_view.get("arquivos_enviados", {}),
+            "arquivos_restaurados": comparison.get("arquivos_restaurados", {}),
+            "restauracao_de": comparison.get("restauracao_de", {}),
+            "restauravel": _comparison_event_has_restorable_backup(evento),
             "resumo": event_view.get("resumo", {}),
         })
     def event_timestamp(item: Dict[str, Any]) -> float:
@@ -2742,6 +2924,223 @@ def get_comparacao_historica(evento_id: str):
     if evento is None:
         raise HTTPException(status_code=404, detail="O resultado selecionado não existe no histórico de planilhas.")
     return {"evento": comparison_history_for_display(evento)}
+
+
+@app.get("/api/historico-comparacoes/{evento_id}/restauracao")
+def visualizar_restauracao_comparacao(evento_id: str):
+    context = _build_comparison_restore_context(evento_id)
+    return {
+        "evento_id": evento_id,
+        "evento_horario": context["evento"].get("horario"),
+        "tipo_evento": _comparison_event_type(context["evento"]),
+        "arquivos_backup": {
+            role: {
+                "nome": item["name"],
+                "registros": item["records"],
+                "tamanho_bytes": item["size"],
+                "modificado_em": item["modified"],
+            }
+            for role, item in context["backup_files"].items()
+        },
+        "arquivos_atuais": context["current_files"],
+        "preview_token": context["preview_token"],
+    }
+
+
+@app.post("/api/historico-comparacoes/{evento_id}/restaurar")
+def restaurar_comparacao_historica(evento_id: str, payload: ComparisonRestorePayload):
+    global equipamentos_cache, unidades_cache, stats_cache
+    state_before = None
+    persistent_backup_dir = None
+
+    try:
+        context = _build_comparison_restore_context(evento_id)
+        if not hmac.compare_digest(payload.preview_token, context["preview_token"]):
+            raise HTTPException(
+                status_code=409,
+                detail="Os arquivos ativos ou o backup mudaram desde a prévia. Atualize a prévia antes de restaurar.",
+            )
+        if all(
+            context["backup_files"][role]["sha256"] == context["current_hashes"][role]
+            for role in context["backup_files"]
+        ):
+            raise HTTPException(status_code=409, detail="Os dois inventários ativos já correspondem ao backup selecionado.")
+
+        state_before = (
+            deepcopy(equipamentos_cache),
+            deepcopy(unidades_cache),
+            deepcopy(stats_cache),
+        )
+        restoration_time = datetime.now().astimezone().isoformat(timespec="seconds")
+        restoration_id = uuid.uuid4().hex
+        persistent_backup_dir = UPLOAD_BACKUPS_DIR / f"{datetime.now().strftime('%Y%m%d-%H%M%S')}-{uuid.uuid4().hex[:8]}"
+        target_files = {
+            "endpoint": ENDPOINT_UPLOAD_FILE,
+            "detalhes": DETAILS_UPLOAD_FILE,
+        }
+        source_event = context["evento"]
+        source_comparison = source_event.get("comparacao") or {}
+        source_backup_relative = source_comparison.get("backup_diretorio")
+        transaction_targets = [*target_files.values(), COMPARISON_HISTORY_FILE]
+
+        with AtomicFileTransaction(TRANSACTION_ROOT, transaction_targets) as transaction:
+            _, locked_current_hashes = _current_inventory_snapshot()
+            if locked_current_hashes != context["current_hashes"]:
+                raise HTTPException(
+                    status_code=409,
+                    detail="Os inventários ativos mudaram desde a prévia. Atualize a prévia antes de restaurar.",
+                )
+            persistent_backup_dir.mkdir(parents=True, exist_ok=False)
+            missing_current_files: Dict[str, bool] = {}
+            invalid_current_files: Dict[str, bool] = {}
+            for role, target_path in target_files.items():
+                role_backup_dir = persistent_backup_dir / role
+                role_backup_dir.mkdir(parents=True, exist_ok=True)
+                expected_current_hash = context["current_hashes"][role]
+                if not target_path.is_file():
+                    if expected_current_hash is not None:
+                        raise TransactionConflictError(f"'{target_path.name}' mudou durante a restauração.")
+                    missing_current_files[role] = True
+                    invalid_current_files[role] = False
+                    continue
+                if expected_current_hash is None:
+                    raise TransactionConflictError(f"'{target_path.name}' mudou durante a restauração.")
+                backup_path = role_backup_dir / target_path.name
+                shutil.copy2(target_path, backup_path)
+                with backup_path.open("r+b") as backup_file:
+                    backup_file.flush()
+                    os.fsync(backup_file.fileno())
+                if (
+                    not filecmp.cmp(target_path, backup_path, shallow=False)
+                    or _sha256_file(backup_path) != expected_current_hash
+                ):
+                    raise TransactionConflictError(f"A cópia de segurança de '{target_path.name}' não passou na validação.")
+                missing_current_files[role] = False
+                try:
+                    validate_uploaded_workbook(backup_path.read_bytes(), role)
+                    invalid_current_files[role] = False
+                except Exception:
+                    invalid_current_files[role] = True
+
+            _, backed_up_current_hashes = _current_inventory_snapshot()
+            if backed_up_current_hashes != context["current_hashes"]:
+                raise TransactionConflictError("Um inventário ativo mudou durante a cópia de segurança.")
+
+            for role, target_path in target_files.items():
+                backup_bytes = context["backup_files"][role]["bytes"]
+
+                def validate_staged_backup(path: Path, current_role=role, expected_bytes=backup_bytes):
+                    candidate_bytes = path.read_bytes()
+                    if candidate_bytes != expected_bytes:
+                        raise WorkbookSafetyError("O arquivo preparado difere do backup validado.")
+                    validate_uploaded_workbook(candidate_bytes, current_role)
+
+                transaction.stage_bytes(target_path, backup_bytes, validate_staged_backup)
+
+            transaction.apply()
+            if not load_database(transaction_locked=True):
+                raise RuntimeError("O conjunto restaurado não pôde ser carregado pelo site.")
+
+            restored_files = {role: path.name for role, path in target_files.items()}
+            restoration_comparison = {
+                "evento_id": restoration_id,
+                "tipo_operacao": "restauracao",
+                "horario_comparacao": restoration_time,
+                "restauracao_de": {
+                    "evento_id": evento_id,
+                    "horario": source_event.get("horario"),
+                    "tipo": _comparison_event_type(source_event),
+                },
+                "arquivos_restaurados": restored_files,
+                "total_endpoint_restaurado": context["backup_files"]["endpoint"]["records"],
+                "total_detalhes_restaurado": context["backup_files"]["detalhes"]["records"],
+                "total_equipamentos_carregados": stats_cache.get("total_equipamentos", 0),
+                "backup_diretorio": str(persistent_backup_dir.relative_to(INPUT_DIR)),
+                "backup_arquivos_ausentes": missing_current_files,
+                "backup_arquivos_invalidos": invalid_current_files,
+                "historico_salvo": True,
+            }
+            restoration_event = {
+                "id": restoration_id,
+                "tipo": "restauracao",
+                "horario": restoration_time,
+                "arquivos_restaurados": restored_files,
+                "restauracao_de": restoration_comparison["restauracao_de"],
+                "resumo": {
+                    "restauracao": True,
+                    "total_endpoint_restaurado": restoration_comparison["total_endpoint_restaurado"],
+                    "total_detalhes_restaurado": restoration_comparison["total_detalhes_restaurado"],
+                },
+                "comparacao": restoration_comparison,
+            }
+
+            def append_restoration(history):
+                if not isinstance(history, list):
+                    raise RuntimeError("O histórico de planilhas não contém uma lista válida.")
+                current_source_event = next(
+                    (item for item in history if isinstance(item, dict) and item.get("id") == evento_id),
+                    None,
+                )
+                current_source_comparison = (
+                    current_source_event.get("comparacao")
+                    if isinstance(current_source_event, dict) else None
+                )
+                if (
+                    not isinstance(current_source_comparison, dict)
+                    or current_source_comparison.get("backup_diretorio") != source_backup_relative
+                    or current_source_event.get("horario") != source_event.get("horario")
+                ):
+                    raise HTTPException(
+                        status_code=409,
+                        detail="A atualização selecionada mudou ou foi removida do histórico. A restauração foi cancelada.",
+                    )
+                updated = deepcopy(history)
+                updated.append(restoration_event)
+                return updated
+
+            transaction.update_json(COMPARISON_HISTORY_FILE, append_restoration, [])
+            transaction.commit()
+
+        return {
+            "sucesso": True,
+            "evento": {
+                "id": restoration_id,
+                "tipo": "restauracao",
+                "horario": restoration_time,
+                "restauracao_de": restoration_comparison["restauracao_de"],
+                "arquivos_restaurados": restored_files,
+                "desfazer_disponivel": not any(missing_current_files.values()) and not any(invalid_current_files.values()),
+                "total_endpoint_restaurado": restoration_comparison["total_endpoint_restaurado"],
+                "total_detalhes_restaurado": restoration_comparison["total_detalhes_restaurado"],
+                "total_equipamentos_carregados": restoration_comparison["total_equipamentos_carregados"],
+            },
+        }
+    except HTTPException:
+        if state_before:
+            with STATE_LOCK:
+                equipamentos_cache, unidades_cache, stats_cache = state_before
+        raise
+    except FileBusyError as error:
+        if state_before:
+            with STATE_LOCK:
+                equipamentos_cache, unidades_cache, stats_cache = state_before
+        raise HTTPException(status_code=409, detail=str(error)) from error
+    except TransactionConflictError as error:
+        if state_before:
+            with STATE_LOCK:
+                equipamentos_cache, unidades_cache, stats_cache = state_before
+        raise HTTPException(status_code=409, detail=f"Um arquivo mudou durante a restauração e nada foi sobrescrito: {error}") from error
+    except (FileTransactionError, WorkbookSafetyError) as error:
+        if state_before:
+            with STATE_LOCK:
+                equipamentos_cache, unidades_cache, stats_cache = state_before
+        raise HTTPException(status_code=500, detail=f"Não foi possível concluir a restauração; os arquivos anteriores foram recuperados. {error}") from error
+    except Exception:
+        if state_before:
+            with STATE_LOCK:
+                equipamentos_cache, unidades_cache, stats_cache = state_before
+        print("[ERRO] Falha ao restaurar o conjunto de planilhas.")
+        raise HTTPException(status_code=500, detail="Falha ao restaurar o conjunto; os arquivos anteriores foram recuperados.") from None
 
 
 @app.post("/api/historico-comparacoes/{evento_id}/apelido-manual/{serial}")

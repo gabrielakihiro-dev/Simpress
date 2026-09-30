@@ -110,9 +110,9 @@ Para encerrar o servidor, volte à janela em que ele está rodando e pressione `
 1. Na aplicação, abra **Atualizar Planilhas**.
 2. Selecione os arquivos `.xlsx` do Endpoint e do EquipamentosDetalhes.
 3. Confira as listas de ausências por fonte, as divergências de local e os registros ambíguos apresentados pelo sistema. A comparação usa somente essas duas fontes; a base principal de equipamentos continua disponível para gerar as planilhas pelo botão de exportação.
-4. Consulte **Histórico planilhas** para rever comparações anteriores.
+4. Consulte **Histórico planilhas** para rever comparações anteriores. Em uma atualização com backup válido, use **Restaurar versão anterior** para conferir os arquivos e as datas antes de substituir os inventários; a restauração pode ser desfeita pelo próprio histórico quando o conjunto substituído também está completo e válido.
 
-O limite de envio é de 30 MB por arquivo. Cada atualização substitui integralmente os dois inventários ativos pelos arquivos validados enviados; séries ausentes no novo relatório deixam de compor a base carregada. Antes de enviar, confirme que são as versões corretas. O sistema guarda cópias anteriores em `planilhas_entrada/_backups` para recuperação manual.
+O limite de envio é de 30 MB por arquivo. Cada atualização substitui integralmente os dois inventários ativos pelos arquivos validados enviados; séries ausentes no novo relatório deixam de compor a base carregada. Antes de enviar, confirme que são as versões corretas. O sistema guarda cópias anteriores em `planilhas_entrada/_backups`; pelo histórico, é possível pré-visualizar e restaurar um par válido de inventários.
 
 O apelido alterado manualmente fica associado à série e prevalece nas pesquisas, na entrada rápida e na exportação, mesmo após recarregar ou atualizar as planilhas. Sem override manual, o hostname único da InvAll prevalece sobre o valor de EquipamentosDetalhes. Ao atualizar os arquivos, endereço e localidade são sincronizados a partir de EquipamentosDetalhes. O Histórico planilhas registra divergências entre apelidos manuais e as duas fontes, permitindo manter o override ou removê-lo para uma série. A exportação altera somente a coluna `Apelido`; abas, linhas, colunas, dimensões, demais valores e formatação do modelo são preservados.
 
@@ -139,13 +139,13 @@ A interface carrega estilos, fontes e ícones do servidor local; os botões de c
 ## Arquivos, backups e recuperação
 
 - Os uploads validados substituem os inventários ativos em `planilhas_entrada`, com os nomes definidos em `app_config.py`.
-- Antes de substituir inventários, a aplicação copia os arquivos atuais para `planilhas_entrada/_backups/<data-hora>-<identificador>/`, separados em `endpoint` e `detalhes`. Os backups são mantidos para recuperação manual.
+- Antes de substituir inventários, a aplicação copia os arquivos atuais para `planilhas_entrada/_backups/<data-hora>-<identificador>/`, separados em `endpoint` e `detalhes`. Pelo Histórico planilhas, um backup completo pode ser validado e restaurado; o conjunto substituído é salvo em outro backup e a restauração entra no histórico, permitindo desfazê-la quando esse backup também está completo e válido.
 - Gravações relacionadas usam temporários validados, bloqueios por arquivo e transações. Se uma operação falhar, a transação restaura os destinos afetados e o cache anterior.
 - Uma transação interrompida deixa estado em `.transactions`. Na próxima inicialização, `integrity.py` tenta recuperar esse estado antes de carregar os arquivos. Não apague essa pasta enquanto houver uma recuperação pendente.
 - A planilha de transferência é preparada para download; não é mantida como arquivo permanente pelo servidor.
 - Históricos, apelidos, unidades, planilhas locais e `_backups` são ignorados pelo Git. Inclua esses dados no backup local se precisar preservar o uso da aplicação; não os adicione ao Git.
 
-Se for necessário recuperar um inventário de um backup antigo, confira a pasta de backup e os arquivos ativos antes de qualquer substituição. A recuperação automática cobre transações interrompidas; a restauração de um backup antigo é manual.
+Se um backup antigo estiver ausente ou inválido, a recuperação continua manual: confira a pasta de backup e os arquivos ativos antes de qualquer substituição. A restauração pelo histórico exige os dois inventários válidos e mostra os arquivos, as datas e as contagens antes de confirmar.
 
 ## Testes automatizados
 
