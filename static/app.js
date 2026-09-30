@@ -199,7 +199,7 @@
       { cidade: "Cianorte", nome: "Valtemar Sartorelli", email: "", telefone: "", horario: "08:00:00 às 17:00:00", almoco: "12:00:00", pausaDuracao: "2h" },
       { cidade: "Francisco Beltrão", nome: "Claudineia Cabral", email: "", telefone: "", horario: "08:00:00 às 18:00:00", almoco: "12:00:00", pausaDuracao: "1h30" },
       { cidade: "Ivaiporã", nome: "Joelma Barbosa", email: "", telefone: "", horario: "08:00:00 às 18:00:00", almoco: "12:00:00", pausaDuracao: "2h" },
-      { cidade: "Jacarezinho", nome: "Erika Cristina de Faria Possiette", email: "", telefone: "", horario: "", almoco: "", pausaDuracao: "" },
+      { cidade: "Jacarezinho", nome: "Erika Cristina de Faria Possette", email: "", telefone: "", horario: "08:00:00 às 18:00:00", almoco: "12:00:00", pausaDuracao: "2h" },
       { cidade: "Laranjeiras do Sul", nome: "Thaís Cristina da Costa", email: "", telefone: "", horario: "08:00:00 às 18:00:00", almoco: "12:00:00", pausaDuracao: "2h" },
       { cidade: "Paranavaí", nome: "Claudia Roberta Molocny Ferro", email: "", telefone: "", horario: "08:00:00 às 18:00:00", almoco: "12:00:00", pausaDuracao: "2h" },
       { cidade: "Campo Mourão", nome: "Sandro Nasser Santi", email: "", telefone: "", horario: "08:00:00 às 18:00:00", almoco: "12:00:00", pausaDuracao: "2h" }
@@ -1091,10 +1091,35 @@
       });
     }
 
+    function validarCamposObrigatoriosPlanilha() {
+      const campos = [
+        { id: "retirada-contato", nome: "Nome do contato na retirada" },
+        { id: "retirada-email", nome: "E-mail do contato na retirada" },
+        { id: "retirada-telefone", nome: "Telefone / Ramal do contato na retirada" },
+        { id: "retirada-obs", nome: "Observações Adicionais da Retirada" },
+        { id: "entrega-email", nome: "E-mail do Destinatário" },
+        { id: "entrega-telefone", nome: "Telefone / Ramal do Destinatário" },
+        { id: "entrega-horario", nome: "Expediente da unidade de entrega" },
+        { id: "entrega-almoco", nome: "Horário de almoço da unidade de entrega" },
+        { id: "entrega-pausa-duracao", nome: "Duração da pausa da unidade de entrega" },
+        { id: "entrega-obs", nome: "Observações Adicionais do Chamado" }
+      ];
+
+      const campoVazio = campos.find(({ id }) => !document.getElementById(id).value.trim());
+      if (!campoVazio) return true;
+
+      const input = document.getElementById(campoVazio.id);
+      showToast(`Preencha o campo obrigatório “${campoVazio.nome}” para gerar a planilha oficial.`, "warning");
+      input.focus();
+      input.scrollIntoView({ behavior: "smooth", block: "center" });
+      return false;
+    }
+
     // Generate & Download Official Excel Sheet
     async function gerarPlanilhaExcel() {
       const payload = construirPayload();
       if (!payload) return;
+      if (!validarCamposObrigatoriosPlanilha()) return;
 
       const btn = document.getElementById("btn-gerar-planilha");
       const originalText = btn.innerHTML;
