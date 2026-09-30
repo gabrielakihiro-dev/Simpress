@@ -192,7 +192,17 @@
       { cidade: "Guarapuava", nome: "Chrislaine Caroline de Souza", email: "chsouza@pr.sebrae.com.br", telefone: "", horario: "08:00:00 às 18:00:00", almoco: "12:00:00", pausaDuracao: "2h" },
       { cidade: "Porecatu", nome: "Sandra de Souza Alves", email: "ssalves@pr.sebrae.com.br", telefone: "(43) 99818-0708", horario: "08:00:00 às 17:00:00", almoco: "", pausaDuracao: "" },
       { cidade: "Irati", nome: "Melany Evelyn Fernandes Ovando", email: "movando@pr.sebrae.com.br", telefone: "", horario: "08:00:00 às 18:00:00", almoco: "12:00:00", pausaDuracao: "2h" },
-      { cidade: "Cornélio Procópio", nome: "Eloah Bueno Rocha", email: "erocha@pr.sebrae.com.br", telefone: "", horario: "08:00:00 às 17:30:00", almoco: "12:00:00", pausaDuracao: "1h30" }
+      { cidade: "Cornélio Procópio", nome: "Eloah Bueno Rocha", email: "erocha@pr.sebrae.com.br", telefone: "", horario: "08:00:00 às 17:30:00", almoco: "12:00:00", pausaDuracao: "1h30" },
+      { cidade: "Apucarana", nome: "Tiago Correia da Cunha", email: "", telefone: "", horario: "08:00:00 às 18:00:00", almoco: "12:00:00", pausaDuracao: "2h" },
+      { cidade: "Arapongas", nome: "", nomeOpcao: "Não definido ainda", email: "", telefone: "", horario: "08:00:00 às 18:00:00", almoco: "12:00:00", pausaDuracao: "2h" },
+      { cidade: "Cerro Azul", nome: "Ivan Silva Evangelista", email: "", telefone: "", horario: "08:00:00 às 17:00:00", almoco: "12:00:00", pausaDuracao: "1h" },
+      { cidade: "Cianorte", nome: "Valtemar Sartorelli", email: "", telefone: "", horario: "08:00:00 às 17:00:00", almoco: "12:00:00", pausaDuracao: "2h" },
+      { cidade: "Francisco Beltrão", nome: "Claudineia Cabral", email: "", telefone: "", horario: "08:00:00 às 18:00:00", almoco: "12:00:00", pausaDuracao: "1h30" },
+      { cidade: "Ivaiporã", nome: "Joelma Barbosa", email: "", telefone: "", horario: "08:00:00 às 18:00:00", almoco: "12:00:00", pausaDuracao: "2h" },
+      { cidade: "Jacarezinho", nome: "Erika Cristina de Faria Possiette", email: "", telefone: "", horario: "", almoco: "", pausaDuracao: "" },
+      { cidade: "Laranjeiras do Sul", nome: "Thaís Cristina da Costa", email: "", telefone: "", horario: "08:00:00 às 18:00:00", almoco: "12:00:00", pausaDuracao: "2h" },
+      { cidade: "Paranavaí", nome: "Claudia Roberta Molocny Ferro", email: "", telefone: "", horario: "08:00:00 às 18:00:00", almoco: "12:00:00", pausaDuracao: "2h" },
+      { cidade: "Campo Mourão", nome: "Sandro Nasser Santi", email: "", telefone: "", horario: "08:00:00 às 18:00:00", almoco: "12:00:00", pausaDuracao: "2h" }
     ];
 
     const CAMPOS_CONTATO_REGIONAL = {
@@ -263,7 +273,8 @@
         REPRESENTANTES_REGIONAIS_PR.forEach((representante) => {
           const opcao = document.createElement("option");
           opcao.value = representante.cidade;
-          opcao.textContent = `${representante.nome} — ${representante.cidade}`;
+          const nomeExibicao = representante.nome || representante.nomeOpcao || "Representante não informado";
+          opcao.textContent = `${nomeExibicao} — ${representante.cidade}`;
           select.appendChild(opcao);
         });
       });
@@ -304,22 +315,30 @@
         );
       }
       if (email) {
+        const limparEmail = Boolean(representante?.nome)
+          && Object.prototype.hasOwnProperty.call(representante, "email")
+          && !representante.email;
         atualizarCampoContatoRegional(
           email,
           representante?.email || "",
           campos.emailPadrao,
-          forcar && Boolean(representante)
+          forcar && Boolean(representante),
+          limparEmail
         );
       }
       if (telefone) {
         const telefoneRepresentante = representante?.telefone
           ? formatarTelefoneBrasileiro(representante.telefone)
           : "";
+        const limparTelefone = Boolean(representante?.nome)
+          && Object.prototype.hasOwnProperty.call(representante, "telefone")
+          && !telefoneRepresentante;
         atualizarCampoContatoRegional(
           telefone,
           telefoneRepresentante,
           campos.telefonePadrao,
-          forcar && Boolean(representante)
+          forcar && Boolean(representante),
+          limparTelefone
         );
       }
       if (horario) {
@@ -344,7 +363,7 @@
           almoco,
           almocoRepresentante,
           campos.almocoPadrao,
-          forcar && Object.prototype.hasOwnProperty.call(representante || {}, "almoco"),
+          forcar && Boolean(almocoRepresentante),
           limparAlmoco
         );
       }
@@ -357,7 +376,7 @@
           pausaDuracao,
           pausaRepresentante,
           campos.pausaDuracaoPadrao,
-          forcar && Object.prototype.hasOwnProperty.call(representante || {}, "pausaDuracao"),
+          forcar && Boolean(pausaRepresentante),
           limparPausa
         );
       }
