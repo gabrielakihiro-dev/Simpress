@@ -180,6 +180,195 @@
       return telefoneFormatado;
     }
 
+    const REPRESENTANTES_REGIONAIS_PR = [
+      { cidade: "Cascavel", nome: "Fernanda Colla Borretto", email: "fcolla@pr.sebrae.com.br", telefone: "", horario: "08:00:00 às 18:00:00", almoco: "Escritório não fecha", pausaDuracao: "" },
+      { cidade: "Londrina", nome: "Renata Custodio de Oliveira Varasquim", email: "rvarasquim@pr.sebrae.com.br", telefone: "(43) 99643-8754", horario: "08:00:00 às 18:00:00", almoco: "Escritório não fecha", pausaDuracao: "" },
+      { cidade: "Maringá", nome: "Tatiane Matsuguma Sanches", email: "tmatsuguma@pr.sebrae.com.br", telefone: "(44) 99810-1371", horario: "08:00:00 às 18:00:00", almoco: "Escritório não fecha", pausaDuracao: "" },
+      { cidade: "Pato Branco", nome: "Kelen Simone Moreira", email: "kmoreira@pr.sebrae.com.br", telefone: "(46) 99102-7523", horario: "08:00:00 às 17:00:00", almoco: "12:00:00", pausaDuracao: "1h30" },
+      { cidade: "Ponta Grossa", nome: "Gislaine Pratka dos Santos", email: "gpratka@pr.sebrae.com.br", telefone: "", horario: "08:00:00 às 18:00:00", almoco: "Escritório não fecha", pausaDuracao: "" },
+      { cidade: "Foz do Iguaçu", nome: "Marinez Martins", email: "moliveira@pr.sebrae.com.br", telefone: "", horario: "08:00:00 às 17:00:00", almoco: "12:00:00", pausaDuracao: "1h30" },
+      { cidade: "Paranaguá", nome: "Carolina Nunes Pereira Voi", email: "cnunes@pr.sebrae.com.br", telefone: "", horario: "08:30:00 às 17:30:00", almoco: "12:00:00", pausaDuracao: "1h" },
+      { cidade: "Toledo", nome: "Fernanda da Costa Goldacker", email: "fgoldacker@pr.sebrae.com.br", telefone: "", horario: "08:00:00 às 18:00:00", almoco: "12:00:00", pausaDuracao: "1h30" },
+      { cidade: "Guarapuava", nome: "Chrislaine Caroline de Souza", email: "chsouza@pr.sebrae.com.br", telefone: "", horario: "08:00:00 às 18:00:00", almoco: "12:00:00", pausaDuracao: "2h" },
+      { cidade: "Porecatu", nome: "Sandra de Souza Alves", email: "ssalves@pr.sebrae.com.br", telefone: "(43) 99818-0708", horario: "08:00:00 às 17:00:00", almoco: "", pausaDuracao: "" },
+      { cidade: "Irati", nome: "Melany Evelyn Fernandes Ovando", email: "movando@pr.sebrae.com.br", telefone: "", horario: "08:00:00 às 18:00:00", almoco: "12:00:00", pausaDuracao: "2h" },
+      { cidade: "Cornélio Procópio", nome: "Eloah Bueno Rocha", email: "erocha@pr.sebrae.com.br", telefone: "", horario: "08:00:00 às 17:30:00", almoco: "12:00:00", pausaDuracao: "1h30" }
+    ];
+
+    const CAMPOS_CONTATO_REGIONAL = {
+      retirada: {
+        selectId: "retirada-representante",
+        contatoId: "retirada-contato",
+        emailId: "retirada-email",
+        telefoneId: "retirada-telefone",
+        horarioId: "retirada-horario",
+        almocoId: "retirada-almoco",
+        pausaDuracaoId: "retirada-pausa-duracao",
+        contatoPadrao: "Gabriel Akihiro Noda Souza (Simpress)",
+        emailPadrao: "gansouza@simpress.com.br",
+        telefonePadrao: "(41) 98751-2389",
+        horarioPadrao: "09:00:00 às 18:00:00",
+        almocoPadrao: "12:00:00",
+        pausaDuracaoPadrao: "1h12"
+      },
+      entrega: {
+        selectId: "entrega-representante",
+        contatoId: "entrega-contato",
+        emailId: "entrega-email",
+        telefoneId: "entrega-telefone",
+        horarioId: "entrega-horario",
+        almocoId: "entrega-almoco",
+        pausaDuracaoId: "entrega-pausa-duracao",
+        contatoPadrao: "",
+        emailPadrao: "",
+        telefonePadrao: "",
+        horarioPadrao: "09:00:00 às 18:00:00",
+        almocoPadrao: "12:00:00",
+        pausaDuracaoPadrao: "1h"
+      }
+    };
+
+    function normalizarCidadeRegional(cidade) {
+      return String(cidade || "")
+        .normalize("NFD")
+        .replace(/[\u0300-\u036f]/g, "")
+        .trim()
+        .toLocaleLowerCase("pt-BR")
+        .replace(/\s+/g, " ");
+    }
+
+    function obterRepresentanteRegional(cidade) {
+      const cidadeNormalizada = normalizarCidadeRegional(cidade);
+      if (!cidadeNormalizada) return null;
+
+      return REPRESENTANTES_REGIONAIS_PR.find((representante) => {
+        const nomeCidade = normalizarCidadeRegional(representante.cidade);
+        return cidadeNormalizada === nomeCidade
+          || cidadeNormalizada.startsWith(`${nomeCidade} `)
+          || cidadeNormalizada.startsWith(`${nomeCidade}/`)
+          || cidadeNormalizada.startsWith(`${nomeCidade}-`);
+      }) || null;
+    }
+
+    function popularSeletoresRepresentantesRegionais() {
+      Object.values(CAMPOS_CONTATO_REGIONAL).forEach(({ selectId }) => {
+        const select = document.getElementById(selectId);
+        if (!select) return;
+
+        const opcaoVazia = document.createElement("option");
+        opcaoVazia.value = "";
+        opcaoVazia.textContent = "-- Sem representante correspondente --";
+        select.replaceChildren(opcaoVazia);
+
+        REPRESENTANTES_REGIONAIS_PR.forEach((representante) => {
+          const opcao = document.createElement("option");
+          opcao.value = representante.cidade;
+          opcao.textContent = `${representante.nome} — ${representante.cidade}`;
+          select.appendChild(opcao);
+        });
+      });
+    }
+
+    function atualizarCampoContatoRegional(campo, valorNovo, valorPadrao, forcar, limparQuandoVazio = false) {
+      const valorAtual = campo.value.trim();
+      const valorAutoAnterior = campo.dataset.representanteAutoValue || "";
+      const podeAtualizar = forcar
+        || !valorAtual
+        || valorAtual === valorAutoAnterior
+        || (valorPadrao && valorAtual === valorPadrao);
+
+      if (!podeAtualizar) return;
+      campo.value = valorNovo || (limparQuandoVazio ? "" : valorPadrao);
+      campo.dataset.representanteAutoValue = valorNovo || "";
+    }
+
+    function preencherRepresentanteRegional(tipo, cidade, forcar = false) {
+      const campos = CAMPOS_CONTATO_REGIONAL[tipo];
+      if (!campos) return null;
+
+      const representante = obterRepresentanteRegional(cidade);
+      const seletor = document.getElementById(campos.selectId);
+      const contato = document.getElementById(campos.contatoId);
+      const email = document.getElementById(campos.emailId);
+      const telefone = document.getElementById(campos.telefoneId);
+      const horario = document.getElementById(campos.horarioId);
+      const almoco = document.getElementById(campos.almocoId);
+      const pausaDuracao = document.getElementById(campos.pausaDuracaoId);
+      if (seletor) seletor.value = representante?.cidade || "";
+      if (contato) {
+        atualizarCampoContatoRegional(
+          contato,
+          representante?.nome || "",
+          campos.contatoPadrao,
+          forcar && Boolean(representante)
+        );
+      }
+      if (email) {
+        atualizarCampoContatoRegional(
+          email,
+          representante?.email || "",
+          campos.emailPadrao,
+          forcar && Boolean(representante)
+        );
+      }
+      if (telefone) {
+        const telefoneRepresentante = representante?.telefone
+          ? formatarTelefoneBrasileiro(representante.telefone)
+          : "";
+        atualizarCampoContatoRegional(
+          telefone,
+          telefoneRepresentante,
+          campos.telefonePadrao,
+          forcar && Boolean(representante)
+        );
+      }
+      if (horario) {
+        const horarioRepresentante = representante?.horario || "";
+        const limparHorario = Boolean(representante)
+          && Object.prototype.hasOwnProperty.call(representante, "horario")
+          && !horarioRepresentante;
+        atualizarCampoContatoRegional(
+          horario,
+          horarioRepresentante,
+          campos.horarioPadrao,
+          forcar && Boolean(horarioRepresentante),
+          limparHorario
+        );
+      }
+      if (almoco) {
+        const almocoRepresentante = representante?.almoco || "";
+        const limparAlmoco = Boolean(representante)
+          && Object.prototype.hasOwnProperty.call(representante, "almoco")
+          && !almocoRepresentante;
+        atualizarCampoContatoRegional(
+          almoco,
+          almocoRepresentante,
+          campos.almocoPadrao,
+          forcar && Object.prototype.hasOwnProperty.call(representante || {}, "almoco"),
+          limparAlmoco
+        );
+      }
+      if (pausaDuracao) {
+        const pausaRepresentante = representante?.pausaDuracao || "";
+        const limparPausa = Boolean(representante)
+          && Object.prototype.hasOwnProperty.call(representante, "pausaDuracao")
+          && !pausaRepresentante;
+        atualizarCampoContatoRegional(
+          pausaDuracao,
+          pausaRepresentante,
+          campos.pausaDuracaoPadrao,
+          forcar && Object.prototype.hasOwnProperty.call(representante || {}, "pausaDuracao"),
+          limparPausa
+        );
+      }
+      return representante;
+    }
+
+    function handleRepresentanteRegionalChange(tipo, cidade) {
+      const representante = obterRepresentanteRegional(cidade);
+      preencherRepresentanteRegional(tipo, representante?.cidade || "", Boolean(representante));
+    }
+
     function aplicarMascaraTelefone(input) {
       const cursor = input.selectionStart ?? input.value.length;
       const digitosAntesDoCursor = (input.value.slice(0, cursor).match(/\d/g) || []).length;
@@ -210,6 +399,7 @@
     // Initialize page behaviors
     document.addEventListener("DOMContentLoaded", () => {
       lucide.createIcons();
+      popularSeletoresRepresentantesRegionais();
       associarRotulosAcessiveis();
       inicializarMascarasTelefone();
       carregarEstatisticas();
@@ -708,6 +898,7 @@
       document.getElementById("retirada-cnpj").value = eq.retirada_cnpj || "";
       document.getElementById("retirada-endereco").value = eq.retirada_endereco || "";
       document.getElementById("retirada-obs").value = eq.descricao_sugerida || "";
+      preencherRepresentanteRegional("retirada", eq.retirada_cidade || "");
 
       // Update status footer
       document.getElementById("status-indicator").className = "w-2.5 h-2.5 rounded-full bg-emerald-400";
@@ -723,16 +914,21 @@
       const sede = unidadesList.find(unit => unit.is_sede);
       document.getElementById("retirada-cnpj").value = sede?.cnpj || "";
       document.getElementById("retirada-endereco").value = "R Caeté, 150 - SEDE - Prado Velho - Curitiba/PR - CEP 80220-300";
+      preencherRepresentanteRegional("retirada", "Curitiba");
       showToast("Origem alterada para SEDE Prado Velho (Curitiba)!", "info");
     }
 
     // Handle Unidade de Destino Selection
     function handleUnidadeDestinoChange(unitId) {
-      if (!unitId) return;
+      if (!unitId) {
+        preencherRepresentanteRegional("entrega", "");
+        return;
+      }
       const unit = unidadesList.find(u => String(u.id) === String(unitId));
       if (unit) {
         document.getElementById("entrega-cnpj").value = unit.cnpj || "";
         document.getElementById("entrega-endereco").value = unit.endereco_completo || "";
+        preencherRepresentanteRegional("entrega", unit.cidade || "");
         showToast(`Destino definido: ${unit.cidade}`, "info");
       }
     }
@@ -954,10 +1150,13 @@
       document.getElementById("select-unidade-destino").value = "";
       document.getElementById("entrega-cnpj").value = "";
       document.getElementById("entrega-endereco").value = "";
+      document.getElementById("entrega-representante").value = "";
       document.getElementById("entrega-contato").value = "";
       document.getElementById("entrega-email").value = "";
       document.getElementById("entrega-telefone").value = "";
       document.getElementById("entrega-obs").value = "";
+      preencherRepresentanteRegional("entrega", "");
+      preencherRepresentanteRegional("retirada", "");
 
       // Reset status indicator
       document.getElementById("status-indicator").className = "w-2.5 h-2.5 rounded-full bg-brand-400";
@@ -1898,6 +2097,7 @@
       "select-unidade-destino",
       "entrega-cnpj",
       "entrega-endereco",
+      "entrega-representante",
       "entrega-contato",
       "entrega-email",
       "entrega-telefone",
