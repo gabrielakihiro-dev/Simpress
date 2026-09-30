@@ -74,7 +74,18 @@ Para reconstruir os estilos, ícones e fontes locais depois de alterar a interfa
 
 O arquivo inicializador usa o ambiente `.venv` criado nos passos anteriores. Mantenha a janela aberta enquanto usar o sistema.
 
-Na inicialização, o terminal informa quais arquivos locais foram encontrados e quais funções ficam indisponíveis quando uma dependência está ausente ou inválida.
+Na inicialização, o terminal informa se os arquivos locais necessários estão disponíveis e quais funções são afetadas quando um arquivo está ausente ou o pacote XLSX é inválido. Essa verificação estrutural não substitui a validação de abas, cabeçalhos e registros feita durante o uso; ela também não grava dados das planilhas no relatório.
+
+As dependências verificadas por função são:
+
+| Função | Arquivos necessários |
+| --- | --- |
+| Consulta de equipamentos | Inventário EquipamentosDetalhes ativo e válido. |
+| Geração de transferência | `(MODELO) - TRANSFERENCIA SIMPRESS.xlsx`. |
+| Comparação e atualização de inventários | Inventários ativos de Endpoint e EquipamentosDetalhes usados pelo fluxo de atualização. |
+| Exportação de equipamentos | Inventário EquipamentosDetalhes ativo e `modelos/EquipamentosDetalhes-exportacao.xlsx`. |
+
+Se uma dependência estiver ausente ou inválida, confira o nome do arquivo indicado no terminal, restaure a planilha local correspondente e reinicie o servidor para repetir a verificação.
 
 ### 6. Abra a aplicação
 
@@ -112,7 +123,7 @@ O apelido alterado manualmente fica associado à série e prevalece nas pesquisa
 - Os diálogos recebem o foco ao abrir, mantêm a navegação por `Tab` dentro do conteúdo, fecham com `Esc` e devolvem o foco ao controle que os abriu. Mensagens de carregamento, sucesso, vazio e erro são anunciadas às tecnologias assistivas.
 - Tabelas largas podem ser percorridas horizontalmente sem ocultar colunas. O cabeçalho, os botões e as ações rápidas se reorganizam em telas menores; animações respeitam `prefers-reduced-motion`.
 
-Esta etapa não adiciona dependências, endpoints ou serviços remotos.
+A interface carrega estilos, fontes e ícones do servidor local; os botões de cópia usam as APIs do navegador e não dependem de endpoints externos.
 
 ## Apelidos, unidades e histórico
 
@@ -121,6 +132,7 @@ Esta etapa não adiciona dependências, endpoints ou serviços remotos.
 - Divergências com apelidos manuais também ficam no Histórico planilhas, com ações para manter o override ou removê-lo por série.
 - Endereço e localidade do cadastro são atualizados pelas planilhas EquipamentosDetalhes; o formulário de edição do equipamento não altera esses campos.
 - O cadastro de unidades personalizadas é salvo em `unidades_custom.json` quando houver alterações.
+- No catálogo de unidades, use os botões ao lado do CNPJ e do CEP para copiar esses dados. A interface informa sucesso, ausência do dado ou falha de cópia; se a API de área de transferência do navegador não estiver disponível, tenta um método de compatibilidade.
 - Use **Histórico** para consultar alterações de apelido e, quando disponível, desfazer a alteração mais recente.
 - Use **Exportar Excel** para baixar a planilha com os apelidos atualizados.
 
