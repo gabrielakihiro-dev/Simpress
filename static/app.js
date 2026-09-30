@@ -1,5 +1,6 @@
     // State
     let currentEquipamento = null;
+    let retiradaCidadeSelecionada = "";
     let unidadesList = [];
     let debounceTimer = null;
     const modalReturnFocus = new Map();
@@ -874,6 +875,7 @@
 
     // Render Equipment Card & Populate Retirada Section
     function exibirEquipamento(eq) {
+      retiradaCidadeSelecionada = String(eq.retirada_cidade || "").trim();
       const card = document.getElementById("card-equipamento");
       card.classList.remove("hidden");
 
@@ -931,6 +933,7 @@
     // "Forçar SEDE Prado Velho" button action
     function forcarSedePradoVelho() {
       const sede = unidadesList.find(unit => unit.is_sede);
+      retiradaCidadeSelecionada = "Curitiba";
       document.getElementById("retirada-cnpj").value = sede?.cnpj || "";
       document.getElementById("retirada-endereco").value = "R Caeté, 150 - SEDE - Prado Velho - Curitiba/PR - CEP 80220-300";
       preencherRepresentanteRegional("retirada", "Curitiba");
@@ -1091,6 +1094,55 @@
       });
     }
 
+    function cidadeComUf(cidade) {
+      const valor = String(cidade || "").trim();
+      if (!valor) return "";
+      if (/\/\s*PR$/i.test(valor)) return valor.replace(/\s*\/\s*PR$/i, "/PR");
+      return `${valor}/PR`;
+    }
+
+    function gerarTextoSolicitacaoTransporte() {
+      const retiradaEndereco = document.getElementById("retirada-endereco").value.trim();
+      const entregaEndereco = document.getElementById("entrega-endereco").value.trim();
+      const unidadeDestino = unidadesList.find(
+        unit => String(unit.id) === String(document.getElementById("select-unidade-destino").value)
+      );
+      const retiradaCidade = cidadeComUf(retiradaCidadeSelecionada);
+      const entregaCidade = cidadeComUf(unidadeDestino?.cidade);
+
+      if (!retiradaEndereco || !entregaEndereco) {
+        showToast("Selecione o equipamento de origem e a unidade de destino para carregar os endereços.", "warning");
+        return;
+      }
+      if (!retiradaCidade || !entregaCidade) {
+        showToast("Não foi possível identificar as cidades de origem e destino.", "warning");
+        return;
+      }
+
+      const texto = `Prezados,\n\nSolicito o transporte do equipamento da unidade do Sebrae de ${retiradaCidade} para a unidade do Sebrae de ${entregaCidade}\n\nO transporte dos equipamentos é previsto em edital e de responsabilidade da Simpress.\n\nEndereço para Retirada: ${retiradaEndereco}\nEndereço para Entrega: ${entregaEndereco}`;
+      document.getElementById("textarea-texto-transporte").value = texto;
+      abrirModalAcessivel("modal-texto-transporte", "#textarea-texto-transporte", "fecharModalTextoTransporte");
+    }
+
+    function fecharModalTextoTransporte() {
+      fecharModalAcessivel("modal-texto-transporte");
+    }
+
+    async function copiarTextoSolicitacaoTransporte() {
+      const texto = document.getElementById("textarea-texto-transporte").value;
+      if (!texto.trim()) {
+        showToast("Gere o texto da solicitação antes de copiar.", "warning");
+        return;
+      }
+
+      try {
+        await copiarTextoParaAreaTransferencia(texto);
+        showToast("Texto da solicitação copiado para a área de transferência.", "success");
+      } catch (err) {
+        showToast("Não foi possível copiar o texto. Tente novamente pelo navegador.", "error");
+      }
+    }
+
     function validarCamposObrigatoriosPlanilha() {
       const campos = [
         { id: "retirada-contato", nome: "Nome do contato na retirada" },
@@ -1180,6 +1232,7 @@
     // Reset Form for New Transfer
     function resetarFormulario() {
       currentEquipamento = null;
+      retiradaCidadeSelecionada = "";
       document.getElementById("input-serial").value = "";
       document.getElementById("input-descricao-equipamento").value = "";
       document.getElementById("btn-clear-serial").classList.add("hidden");
