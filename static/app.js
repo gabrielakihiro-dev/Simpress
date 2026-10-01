@@ -1919,8 +1919,9 @@
         const filename = match && match[1]
           ? match[1].replace(/['"]/g, "")
           : "EquipamentosDetalhes-atualizados.xlsx";
-        const total = Number(res.headers.get("X-Total-Alterados") || 0);
         const pendingReview = Number(res.headers.get("X-Total-Conferencia") || 0);
+        const historyAliasCount = Number(res.headers.get("X-Historico-Apelidos-Atualizados") || 0);
+        const historyTimestamp = res.headers.get("X-Historico-Horario") || "";
         const blob = await res.blob();
         const url = window.URL.createObjectURL(blob);
         const link = document.createElement("a");
@@ -1931,7 +1932,16 @@
         link.remove();
         window.setTimeout(() => window.URL.revokeObjectURL(url), 1000);
 
-        showToast(`Planilha ${filename} exportada com ${total} apelido(s) atualizado(s).${pendingReview ? ` ${pendingReview} linha(s) ficaram para conferência.` : ""}`, pendingReview ? "warning" : "success");
+        const historyMessage = historyTimestamp
+          ? `Último histórico: ${historyAliasCount.toLocaleString("pt-BR")} ${historyAliasCount === 1 ? "apelido atualizado" : "apelidos atualizados"} em ${formatarHorarioHistorico(historyTimestamp)}.`
+          : "Não há atualização registrada no histórico.";
+        const reviewMessage = pendingReview
+          ? ` ${pendingReview} linha(s) ficaram para conferência.`
+          : "";
+        showToast(
+          `Planilha ${filename} exportada. ${historyMessage}${reviewMessage}`,
+          pendingReview ? "warning" : "success"
+        );
       } catch (err) {
         console.error("Erro ao exportar planilha de equipamentos:", err);
         showToast(err.message, "error");
