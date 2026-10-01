@@ -291,12 +291,44 @@ class WorkflowIntegrityTests(unittest.TestCase):
         original_workbook = openpyxl.load_workbook(self.model, data_only=False)
         original_snapshot = main.workbook_snapshot(original_workbook)
         original_workbook.close()
+        self.comparison_history.write_text(
+            json.dumps([
+                {
+                    "id": "older-update",
+                    "horario": "2026-10-01T14:00:00-03:00",
+                    "comparacao": {"apelidos_atualizados": [{}, {}]},
+                },
+                {
+                    "id": "restoration-with-type",
+                    "tipo": "restauracao",
+                    "horario": "2026-10-01T18:00:00-03:00",
+                    "comparacao": {"tipo_operacao": "restauracao"},
+                },
+                {
+                    "id": "restoration-legacy",
+                    "horario": "2026-10-01T17:30:00-03:00",
+                    "comparacao": {"tipo_operacao": "restauracao"},
+                },
+                {
+                    "id": "latest-update",
+                    "horario": "2026-10-01T16:30:00-03:00",
+                    "comparacao": {"apelidos_atualizados": [{}, {}, {}]},
+                },
+            ]),
+            encoding="utf-8",
+        )
 
         response = main.exportar_equipamentos()
         output_bytes = asyncio.run(_collect_stream(response))
         output_path = self.root / "export-ficticio.xlsx"
         output_path.write_bytes(output_bytes)
         self.assertEqual(response.headers["x-total-alterados"], "1")
+        self.assertEqual(response.headers["x-historico-apelidos-atualizados"], "3")
+        self.assertEqual(response.headers["x-historico-horario"], "2026-10-01T16:30:00-03:00")
+        self.assertIn(
+            "x-historico-apelidos-atualizados",
+            response.headers["access-control-expose-headers"].lower(),
+        )
         self.assertEqual(self.model.read_bytes(), source_before)
         with zipfile.ZipFile(self.model) as original_package, zipfile.ZipFile(output_path) as exported_package:
             self.assertEqual(original_package.namelist(), exported_package.namelist())

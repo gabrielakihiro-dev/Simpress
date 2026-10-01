@@ -228,7 +228,13 @@ def latest_comparison_update_entry(history: Optional[List[Dict[str, Any]]] = Non
     entries = load_comparison_history() if history is None else history
     candidates = [
         entry for entry in entries
-        if isinstance(entry, dict) and entry.get("id") != PINNED_COMPARISON_EVENT_ID
+        if isinstance(entry, dict)
+        and entry.get("id") != PINNED_COMPARISON_EVENT_ID
+        and entry.get("tipo") != "restauracao"
+        and not (
+            isinstance(entry.get("comparacao"), dict)
+            and entry["comparacao"].get("tipo_operacao") == "restauracao"
+        )
     ] if isinstance(entries, list) else []
     if not candidates:
         return None
@@ -2258,11 +2264,43 @@ def exportar_equipamentos():
         export_filename = f"EquipamentosDetalhes-{now_str}.xlsx"
         buffer = io.BytesIO(output_bytes)
         buffer.seek(0)
+
+        latest_history = None
+        try:
+            latest_history = latest_comparison_update_entry()
+        except HTTPException:
+            pass
+        history_alias_count = 0
+        history_timestamp = ""
+        if isinstance(latest_history, dict):
+            history_comparison = latest_history.get("comparacao")
+            history_comparison = history_comparison if isinstance(history_comparison, dict) else {}
+            history_alias_changes = history_comparison.get("apelidos_atualizados")
+            if isinstance(history_alias_changes, list):
+                history_alias_count = len(history_alias_changes)
+            else:
+                history_summary = latest_history.get("resumo")
+                if isinstance(history_summary, dict):
+                    try:
+                        history_alias_count = max(0, int(history_summary.get("apelidos_atualizados", 0)))
+                    except (TypeError, ValueError):
+                        history_alias_count = 0
+            history_timestamp = str(
+                latest_history.get("horario")
+                or history_comparison.get("horario_comparacao")
+                or ""
+            )
+
         headers = {
             "Content-Disposition": f'attachment; filename="{export_filename}"',
-            "Access-Control-Expose-Headers": "Content-Disposition, X-Total-Alterados, X-Total-Conferencia",
-                "X-Total-Alterados": str(alias_update_count),
+            "Access-Control-Expose-Headers": (
+                "Content-Disposition, X-Total-Alterados, X-Total-Conferencia, "
+                "X-Historico-Apelidos-Atualizados, X-Historico-Horario"
+            ),
+            "X-Total-Alterados": str(alias_update_count),
             "X-Total-Conferencia": str(pending_review_count),
+            "X-Historico-Apelidos-Atualizados": str(history_alias_count),
+            "X-Historico-Horario": history_timestamp,
         }
 
         return StreamingResponse(
