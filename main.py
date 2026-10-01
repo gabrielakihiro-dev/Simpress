@@ -12,6 +12,7 @@ import unicodedata
 import uuid
 import zipfile
 from copy import deepcopy
+from contextlib import asynccontextmanager
 from datetime import datetime
 from pathlib import Path
 from typing import Dict, List, Optional, Any, Set
@@ -1040,16 +1041,18 @@ def get_parque_file() -> Optional[Path]:
     """Retorna a fonte EquipamentosDetalhes carregada pelo site."""
     return get_equipamentos_template_file()
 
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    report_startup_readiness()
+    yield
+
+
 app = FastAPI(
     title="Simpress Transferência de Equipamentos - SEBRAE/PR",
     description="Sistema inteligente para emissão automatizada de planilhas oficiais de transferência de equipamentos.",
-    version="1.3.0"
+    version="1.3.0",
+    lifespan=lifespan,
 )
-
-
-@app.on_event("startup")
-def log_local_file_readiness() -> None:
-    report_startup_readiness()
 
 
 class LocalRequestSafetyMiddleware:
