@@ -163,6 +163,8 @@ O executor bloqueia a leitura de planilhas locais e a recuperação de transaç�
 main.py                 ponto de entrada, rotas restantes e inicialização da aplicação
 app_config.py           caminhos relativos ao projeto e limites de upload
 integrity.py            bloqueios, transações, validação e gravação segura
+domains/inventory_comparison.py normalização, comparação e apresentação do histórico de inventários
+domains/inventory_update.py transação de substituição dos inventários e gravação do histórico
 routers/transfers.py    contrato e geração da planilha de transferência
 static/index.html       estrutura da interface
 static/app.css          estilos locais

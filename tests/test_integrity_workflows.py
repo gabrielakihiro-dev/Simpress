@@ -102,6 +102,29 @@ def make_transfer_template(path: Path):
     return _add_threaded_comment_parts(path)
 
 
+def make_transfer_payload(**overrides):
+    values = {
+        "serial": "SERIE-FICTICIA",
+        "descricao_equipamento": "EQUIPAMENTO FICTICIO",
+        "contrato": 12345,
+        "retirada_endereco": "ORIGEM FICTICIA",
+        "retirada_contato": "REMETENTE FICTICIO",
+        "retirada_email": "remetente@example.invalid",
+        "retirada_telefone": "41900000000",
+        "retirada_obs": "OBSERVACAO FICTICIA",
+        "entrega_cnpj": "00.000.000/0000-00",
+        "entrega_endereco": "DESTINO FICTICIO",
+        "entrega_contato": "DESTINATARIO FICTICIO",
+        "entrega_email": "destinatario@example.invalid",
+        "entrega_telefone": "41911112222",
+        "entrega_obs": "OBSERVACAO FICTICIA",
+        "entrega_almoco": "12:00:00",
+        "entrega_pausa_duracao": "1h",
+    }
+    values.update(overrides)
+    return main.TransferenciaPayload(**values)
+
+
 def _add_threaded_comment_parts(source: Path) -> Path:
     """Add synthetic threaded-comment package parts without touching source fixtures."""
     destination = source.with_name(f"{source.stem}-comentarios-ficticios.xlsx")
@@ -318,12 +341,15 @@ class WorkflowIntegrityTests(unittest.TestCase):
             retirada_contato="REMETENTE FICTICIO",
             retirada_email="remetente@example.invalid",
             retirada_telefone="41900000000",
+            retirada_obs="OBSERVACAO FICTICIA",
             entrega_cnpj="00.000.000/0000-00",
             entrega_endereco="DESTINO FICTICIO",
             entrega_contato="DESTINATARIO FICTICIO",
             entrega_email="destinatario@example.invalid",
             entrega_telefone="41911112222",
             entrega_obs="OBSERVACAO FICTICIA",
+            entrega_almoco="12:00:00",
+            entrega_pausa_duracao="1h",
         )
 
         with patch.object(main, "TEMPLATE_FILE", template):
@@ -348,6 +374,32 @@ class WorkflowIntegrityTests(unittest.TestCase):
         self.assertEqual(generated_workbook["Transferência"]["B8"].value, "SERIE-FICTICIA")
         self.assertEqual(generated_workbook["Transferência"]["B37"].value, "OBSERVACAO FICTICIA")
         self.assertEqual(generated_workbook["Transferência"]["J21"].value, "")
+        self.assertEqual(generated_workbook["Transferência"]["J31"].value, "1h")
+        generated_workbook.close()
+
+    def test_delivery_pause_duration_is_required_except_when_office_stays_open(self):
+        template = make_transfer_template(self.input_dir / "modelo-pausa-ficticio.xlsx")
+        missing_pause = make_transfer_payload(entrega_pausa_duracao="")
+        with patch.object(main, "TEMPLATE_FILE", template):
+            with self.assertRaises(main.HTTPException) as raised:
+                main.gerar_planilha(missing_pause)
+        self.assertEqual(raised.exception.status_code, 422)
+        self.assertIn("Duração da pausa da unidade de entrega", raised.exception.detail)
+
+        office_stays_open = make_transfer_payload(
+            entrega_almoco="Escritório não fecha",
+            entrega_pausa_duracao="",
+        )
+        with patch.object(main, "TEMPLATE_FILE", template):
+            response = main.gerar_planilha(office_stays_open)
+
+        output_path = self.root / "pausa-opcional-ficticia.xlsx"
+        output_path.write_bytes(asyncio.run(_collect_stream(response)))
+        with warnings.catch_warnings():
+            warnings.filterwarnings("ignore", message="Unknown extension is not supported and will be removed")
+            generated_workbook = openpyxl.load_workbook(output_path, data_only=False)
+        self.assertEqual(generated_workbook["Transferência"]["F31"].value, "Escritório não fecha")
+        self.assertEqual(generated_workbook["Transferência"]["J31"].value, "")
         generated_workbook.close()
 
     def test_saving_a_new_equipment_row_grows_dimensions_and_ignores_legacy_location_fields(self):
