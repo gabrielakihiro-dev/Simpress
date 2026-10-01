@@ -191,19 +191,19 @@
       { cidade: "Paranaguá", nome: "Carolina Nunes Pereira Voi", email: "cnunes@pr.sebrae.com.br", telefone: "", horario: "08:30:00 às 17:30:00", almoco: "12:00:00", pausaDuracao: "1h" },
       { cidade: "Toledo", nome: "Fernanda da Costa Goldacker", email: "fgoldacker@pr.sebrae.com.br", telefone: "", horario: "08:00:00 às 18:00:00", almoco: "12:00:00", pausaDuracao: "1h30" },
       { cidade: "Guarapuava", nome: "Chrislaine Caroline de Souza", email: "chsouza@pr.sebrae.com.br", telefone: "", horario: "08:00:00 às 18:00:00", almoco: "12:00:00", pausaDuracao: "2h" },
-      { cidade: "Porecatu", nome: "Sandra de Souza Alves", email: "ssalves@pr.sebrae.com.br", telefone: "(43) 99818-0708", horario: "08:00:00 às 17:00:00", almoco: "", pausaDuracao: "" },
+      { cidade: "Porecatu", nome: "Sandra de Souza Alves", email: "ssalves@pr.sebrae.com.br", telefone: "(43) 99818-0708", horario: "08:00:00 às 17:00:00", almoco: "12:00:00", pausaDuracao: "2h" },
       { cidade: "Irati", nome: "Melany Evelyn Fernandes Ovando", email: "movando@pr.sebrae.com.br", telefone: "", horario: "08:00:00 às 18:00:00", almoco: "12:00:00", pausaDuracao: "2h" },
       { cidade: "Cornélio Procópio", nome: "Eloah Bueno Rocha", email: "erocha@pr.sebrae.com.br", telefone: "", horario: "08:00:00 às 17:30:00", almoco: "12:00:00", pausaDuracao: "1h30" },
-      { cidade: "Apucarana", nome: "Tiago Correia da Cunha", email: "", telefone: "", horario: "08:00:00 às 18:00:00", almoco: "12:00:00", pausaDuracao: "2h" },
+      { cidade: "Apucarana", nome: "Tiago Correia da Cunha", email: "tcorreia@pr.sebrae.com.br", telefone: "", horario: "08:00:00 às 18:00:00", almoco: "12:00:00", pausaDuracao: "2h" },
       { cidade: "Arapongas", nome: "", nomeOpcao: "Não definido ainda", email: "", telefone: "", horario: "08:00:00 às 18:00:00", almoco: "12:00:00", pausaDuracao: "2h" },
-      { cidade: "Cerro Azul", nome: "Ivan Silva Evangelista", email: "", telefone: "", horario: "08:00:00 às 17:00:00", almoco: "12:00:00", pausaDuracao: "1h" },
-      { cidade: "Cianorte", nome: "Valtemar Sartorelli", email: "", telefone: "", horario: "08:00:00 às 17:00:00", almoco: "12:00:00", pausaDuracao: "2h" },
-      { cidade: "Francisco Beltrão", nome: "Claudineia Cabral", email: "", telefone: "", horario: "08:00:00 às 18:00:00", almoco: "12:00:00", pausaDuracao: "1h30" },
-      { cidade: "Ivaiporã", nome: "Joelma Barbosa", email: "", telefone: "", horario: "08:00:00 às 18:00:00", almoco: "12:00:00", pausaDuracao: "2h" },
-      { cidade: "Jacarezinho", nome: "Erika Cristina de Faria Possette", email: "", telefone: "", horario: "08:00:00 às 18:00:00", almoco: "12:00:00", pausaDuracao: "2h" },
-      { cidade: "Laranjeiras do Sul", nome: "Thaís Cristina da Costa", email: "", telefone: "", horario: "08:00:00 às 18:00:00", almoco: "12:00:00", pausaDuracao: "2h" },
-      { cidade: "Paranavaí", nome: "Claudia Roberta Molocny Ferro", email: "", telefone: "", horario: "08:00:00 às 18:00:00", almoco: "12:00:00", pausaDuracao: "2h" },
-      { cidade: "Campo Mourão", nome: "Sandro Nasser Santi", email: "", telefone: "", horario: "08:00:00 às 18:00:00", almoco: "12:00:00", pausaDuracao: "2h" }
+      { cidade: "Cerro Azul", nome: "Ivan Silva Evangelista", email: "ievangelista@pr.sebrae.com.br", telefone: "", horario: "08:00:00 às 17:00:00", almoco: "12:00:00", pausaDuracao: "1h" },
+      { cidade: "Cianorte", nome: "Valtemar Sartorelli", email: "vSartorelli@pr.sebrae.com.br", telefone: "", horario: "08:00:00 às 17:00:00", almoco: "12:00:00", pausaDuracao: "2h" },
+      { cidade: "Francisco Beltrão", nome: "Claudineia Cabral", email: "cprzysiesny@pr.sebrae.com.br", telefone: "", horario: "08:00:00 às 18:00:00", almoco: "12:00:00", pausaDuracao: "1h30" },
+      { cidade: "Ivaiporã", nome: "Joelma Barbosa", email: "jbarbosa@pr.sebrae.com.br", telefone: "", horario: "08:00:00 às 18:00:00", almoco: "12:00:00", pausaDuracao: "2h" },
+      { cidade: "Jacarezinho", nome: "Erika Cristina de Faria Possette", email: "epossette@pr.sebrae.com.br", telefone: "", horario: "08:00:00 às 18:00:00", almoco: "12:00:00", pausaDuracao: "2h" },
+      { cidade: "Laranjeiras do Sul", nome: "Thaís Cristina da Costa", email: "tcosta@pr.sebrae.com.br", telefone: "", horario: "08:00:00 às 18:00:00", almoco: "12:00:00", pausaDuracao: "2h" },
+      { cidade: "Paranavaí", nome: "Claudia Roberta Molocny Ferro", email: "cmolocny@pr.sebrae.com.br", telefone: "", horario: "08:00:00 às 18:00:00", almoco: "12:00:00", pausaDuracao: "2h" },
+      { cidade: "Campo Mourão", nome: "Sandro Nasser Santi", email: "ssanti@pr.sebrae.com.br", telefone: "", horario: "08:00:00 às 18:00:00", almoco: "12:00:00", pausaDuracao: "2h" }
     ];
 
     const CAMPOS_CONTATO_REGIONAL = {
@@ -246,6 +246,21 @@
         .trim()
         .toLocaleLowerCase("pt-BR")
         .replace(/\s+/g, " ");
+    }
+
+    function entregaAlmocoNaoFecha() {
+      const almoco = document.getElementById("entrega-almoco");
+      return normalizarCidadeRegional(almoco?.value) === normalizarCidadeRegional("Escritório não fecha");
+    }
+
+    function atualizarObrigatoriedadeDuracaoPausaEntrega() {
+      const pausaDuracao = document.getElementById("entrega-pausa-duracao");
+      if (!pausaDuracao) return;
+
+      const obrigatorio = !entregaAlmocoNaoFecha();
+      pausaDuracao.required = obrigatorio;
+      pausaDuracao.setAttribute("aria-required", String(obrigatorio));
+      document.getElementById("entrega-pausa-obrigatorio")?.classList.toggle("hidden", !obrigatorio);
     }
 
     function obterRepresentanteRegional(cidade) {
@@ -381,6 +396,7 @@
           limparPausa
         );
       }
+      if (tipo === "entrega") atualizarObrigatoriedadeDuracaoPausaEntrega();
       return representante;
     }
 
@@ -422,6 +438,10 @@
       popularSeletoresRepresentantesRegionais();
       associarRotulosAcessiveis();
       inicializarMascarasTelefone();
+      const almocoEntrega = document.getElementById("entrega-almoco");
+      almocoEntrega?.addEventListener("input", atualizarObrigatoriedadeDuracaoPausaEntrega);
+      almocoEntrega?.addEventListener("change", atualizarObrigatoriedadeDuracaoPausaEntrega);
+      atualizarObrigatoriedadeDuracaoPausaEntrega();
       carregarEstatisticas();
       carregarUnidades();
       carregarContagemHistoricoApelidos();
@@ -990,6 +1010,9 @@
 
       const entregaCnpj = document.getElementById("entrega-cnpj").value.trim();
       const entregaEndereco = document.getElementById("entrega-endereco").value.trim();
+      const unidadeDestino = unidadesList.find(
+        unit => String(unit.id) === String(document.getElementById("select-unidade-destino").value)
+      );
       if (!entregaCnpj || !entregaEndereco) {
         showToast("Selecione uma unidade de destino para preencher automaticamente o CNPJ e o endereço de entrega.", "warning");
         document.getElementById("select-unidade-destino").focus();
@@ -1006,6 +1029,7 @@
         descricao_equipamento: document.getElementById("input-descricao-equipamento").value.trim() || (currentEquipamento ? currentEquipamento.descricao_sugerida : `Equipamento ${serialVal}`),
         razao_social: "SERVICO DE APOIO AS MICRO E PEQUENAS EMPRESAS DO PARANA - SEBRAE/PR",
         contrato: 16467,
+        retirada_cidade: retiradaCidadeSelecionada,
         retirada_cnpj: document.getElementById("retirada-cnpj").value.trim(),
         retirada_endereco: document.getElementById("retirada-endereco").value.trim(),
         retirada_horario: document.getElementById("retirada-horario").value.trim(),
@@ -1018,6 +1042,7 @@
         retirada_telefone: retiradaTelefone.value.trim(),
         retirada_obs: document.getElementById("retirada-obs").value.trim(),
         retirada_voltagem: document.getElementById("retirada-voltagem").value.trim(),
+        entrega_cidade: unidadeDestino?.cidade || "",
         entrega_cnpj: entregaCnpj,
         entrega_endereco: entregaEndereco,
         entrega_horario: document.getElementById("entrega-horario").value.trim(),
@@ -1144,6 +1169,7 @@
     }
 
     function validarCamposObrigatoriosPlanilha() {
+      atualizarObrigatoriedadeDuracaoPausaEntrega();
       const campos = [
         { id: "retirada-contato", nome: "Nome do contato na retirada" },
         { id: "retirada-email", nome: "E-mail do contato na retirada" },
@@ -1153,9 +1179,11 @@
         { id: "entrega-telefone", nome: "Telefone / Ramal do Destinatário" },
         { id: "entrega-horario", nome: "Expediente da unidade de entrega" },
         { id: "entrega-almoco", nome: "Horário de almoço da unidade de entrega" },
-        { id: "entrega-pausa-duracao", nome: "Duração da pausa da unidade de entrega" },
         { id: "entrega-obs", nome: "Observações Adicionais do Chamado" }
       ];
+      if (!entregaAlmocoNaoFecha()) {
+        campos.push({ id: "entrega-pausa-duracao", nome: "Duração da pausa da unidade de entrega" });
+      }
 
       const campoVazio = campos.find(({ id }) => !document.getElementById(id).value.trim());
       if (!campoVazio) return true;
@@ -1195,7 +1223,12 @@
         }
 
         // Get Filename from Header
-        let filename = `Transferencia_${payload.serial}.xlsx`;
+        const filenameSerial = String(payload.serial || "").replace(/[^\w-]/g, "_");
+        const filenameCity = (value) => String(value || "CidadeNaoInformada")
+          .normalize("NFKD")
+          .replace(/[\u0300-\u036f]/g, "")
+          .replace(/[^A-Za-z0-9]/g, "") || "CidadeNaoInformada";
+        let filename = `Transferencia_${filenameSerial}_${filenameCity(payload.retirada_cidade)}-${filenameCity(payload.entrega_cidade)}.xlsx`;
         const disposition = res.headers.get("Content-Disposition");
         if (disposition && disposition.indexOf("filename=") !== -1) {
           const matches = /filename[^;=\n]*=((['"]).*?\2|[^;\n]*)/.exec(disposition);
@@ -2301,6 +2334,7 @@
         const campo = document.getElementById(id);
         if (campo) campo.value = valor;
       });
+      atualizarObrigatoriedadeDuracaoPausaEntrega();
     }
 
     async function salvarDadosEquipamento() {

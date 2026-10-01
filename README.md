@@ -160,9 +160,10 @@ O executor bloqueia a leitura de planilhas locais e a recuperação de transaç�
 ## Estrutura principal
 
 ```text
-main.py                 ponto de entrada compatível, rotas e fluxo da aplicação
+main.py                 ponto de entrada, rotas restantes e inicialização da aplicação
 app_config.py           caminhos relativos ao projeto e limites de upload
 integrity.py            bloqueios, transações, validação e gravação segura
+routers/transfers.py    contrato e geração da planilha de transferência
 static/index.html       estrutura da interface
 static/app.css          estilos locais
 static/app.js           comportamento da interface
