@@ -5,6 +5,11 @@
     let debounceTimer = null;
     const modalReturnFocus = new Map();
 
+    const inputSerialInicial = document.getElementById("input-serial");
+    if (inputSerialInicial && window.matchMedia("(hover: hover) and (pointer: fine)").matches) {
+      inputSerialInicial.focus({ preventScroll: true });
+    }
+
     function abrirModalAcessivel(modalId, initialFocusSelector, closeFunction) {
       const modal = document.getElementById(modalId);
       if (!modal) return;
@@ -849,6 +854,44 @@
       input.focus();
     }
 
+    function ativarAbaTransferencia(aba) {
+      const homeAtiva = aba === "home";
+      const tabHome = document.getElementById("tab-home");
+      const tabTransferencia = document.getElementById("tab-retirada-entrega");
+      const painelHome = document.getElementById("tab-panel-home");
+      const painelTransferencia = document.getElementById("tab-panel-retirada-entrega");
+
+      if (!tabHome || !tabTransferencia || !painelHome || !painelTransferencia) return;
+
+      painelHome.hidden = !homeAtiva;
+      painelTransferencia.hidden = homeAtiva;
+      tabHome.setAttribute("aria-selected", String(homeAtiva));
+      tabTransferencia.setAttribute("aria-selected", String(!homeAtiva));
+      tabHome.tabIndex = homeAtiva ? 0 : -1;
+      tabTransferencia.tabIndex = homeAtiva ? -1 : 0;
+      tabHome.classList.toggle("is-active", homeAtiva);
+      tabTransferencia.classList.toggle("is-active", !homeAtiva);
+      document.body.classList.toggle("has-quick-actions", !homeAtiva);
+    }
+
+    function controlarAbasTransferencia(event) {
+      const tabs = Array.from(event.currentTarget.querySelectorAll('[role="tab"]'));
+      const currentIndex = tabs.indexOf(event.target.closest('[role="tab"]'));
+      if (currentIndex < 0 || !tabs.length) return;
+
+      let nextIndex = currentIndex;
+      if (event.key === "ArrowRight" || event.key === "ArrowDown") nextIndex = (currentIndex + 1) % tabs.length;
+      else if (event.key === "ArrowLeft" || event.key === "ArrowUp") nextIndex = (currentIndex - 1 + tabs.length) % tabs.length;
+      else if (event.key === "Home") nextIndex = 0;
+      else if (event.key === "End") nextIndex = tabs.length - 1;
+      else return;
+
+      event.preventDefault();
+      const nextTab = tabs[nextIndex];
+      nextTab.focus();
+      nextTab.click();
+    }
+
     // Search Equipment by Serial
     async function buscarSerial() {
       const serialInput = document.getElementById("input-serial");
@@ -913,9 +956,6 @@
       document.getElementById("card-id-cliente").textContent = eq.idCliente ? `Id Cliente: ${eq.idCliente}` : "";
       document.getElementById("card-localizacao").textContent = `${eq.retirada_cidade || ''} - ${eq.retirada_endereco ? eq.retirada_endereco.split('-')[0].trim() : ''}`;
       document.getElementById("card-cnpj-atual").textContent = `CNPJ: ${eq.retirada_cnpj || 'Não especificado'}`;
-
-      // Suggested Description
-      document.getElementById("input-descricao-equipamento").value = eq.descricao_sugerida || "";
 
       // Icon & Badge styling by Type
       const iconBox = document.getElementById("equip-icon-box");
@@ -1023,6 +1063,13 @@
     }
 
     function recolherVisualizacoesModelosChamado() {
+      const conteudoChamados = document.getElementById("ticket-templates-content");
+      const botaoChamados = document.getElementById("btn-toggle-ticket-templates");
+      const rotuloBotaoChamados = botaoChamados?.querySelector("span");
+      if (conteudoChamados) conteudoChamados.hidden = true;
+      if (botaoChamados) botaoChamados.setAttribute("aria-expanded", "false");
+      if (rotuloBotaoChamados) rotuloBotaoChamados.textContent = "Mostrar textos para chamados";
+
       document.querySelectorAll(".ticket-template-preview").forEach(preview => {
         preview.hidden = true;
       });
@@ -1031,6 +1078,18 @@
         const label = botao.querySelector("span");
         if (label) label.textContent = "Visualizar";
       });
+    }
+
+    function alternarChamadosManuais() {
+      const conteudo = document.getElementById("ticket-templates-content");
+      const botao = document.getElementById("btn-toggle-ticket-templates");
+      const rotulo = botao?.querySelector("span");
+      if (!conteudo || !botao || !rotulo) return;
+
+      const mostrar = conteudo.hidden;
+      conteudo.hidden = !mostrar;
+      botao.setAttribute("aria-expanded", String(mostrar));
+      rotulo.textContent = mostrar ? "Ocultar textos para chamados" : "Mostrar textos para chamados";
     }
 
     // Build Payload Object from Form
@@ -1067,7 +1126,7 @@
 
       return {
         serial: serialVal,
-        descricao_equipamento: document.getElementById("input-descricao-equipamento").value.trim() || (currentEquipamento ? currentEquipamento.descricao_sugerida : `Equipamento ${serialVal}`),
+        descricao_equipamento: "",
         razao_social: "SERVICO DE APOIO AS MICRO E PEQUENAS EMPRESAS DO PARANA - SEBRAE/PR",
         contrato: 16467,
         retirada_cidade: retiradaCidadeSelecionada,
@@ -1111,8 +1170,6 @@
 • Equipamento: ${modelo} (${tipo})
 • Número de Série: ${payload.serial}
 • Apelido / Id Cliente: ${apelido} / ${idCliente}
-• Descrição / Conteúdo: ${payload.descricao_equipamento}
-
 📍 DADOS DE RETIRADA (ORIGEM):
 • Endereço: ${payload.retirada_endereco}
 • CNPJ: ${payload.retirada_cnpj}
@@ -1308,7 +1365,6 @@
       currentEquipamento = null;
       retiradaCidadeSelecionada = "";
       document.getElementById("input-serial").value = "";
-      document.getElementById("input-descricao-equipamento").value = "";
       document.getElementById("btn-clear-serial").classList.add("hidden");
       document.getElementById("card-equipamento").classList.add("hidden");
 
@@ -1337,6 +1393,7 @@
       `;
 
       showToast("Formulário limpo. Pronto para uma nova busca.", "info");
+      ativarAbaTransferencia("home");
       document.getElementById("input-serial").focus();
     }
 
@@ -2504,7 +2561,7 @@
 
       try {
         await copiarTextoParaAreaTransferencia(texto);
-        showToast(`${campo} copiado para a área de transferência.`, "success");
+        showToast(campo === "CNPJ" ? "CNPJ copiado" : "CEP Copiado", "success");
       } catch (err) {
         showToast(`Não foi possível copiar o ${campo}.`, "error");
       }
@@ -2537,11 +2594,14 @@
               </button>
             </div>
             <p class="text-slate-300 mt-0.5 truncate">${escapeHtml(u.endereco)}</p>
-            <div class="text-slate-500 font-mono text-[11px] flex items-center gap-1.5">
-              <span>CEP: ${escapeHtml(u.cep)} | UF: ${escapeHtml(u.uf || 'PR')}</span>
-              <button type="button" data-copy-field="CEP" class="p-1 rounded-md text-slate-400 hover:text-amber-200 hover:bg-slate-800 transition" title="Copiar CEP" aria-label="Copiar CEP">
-                <i data-lucide="copy" class="w-3.5 h-3.5" aria-hidden="true"></i>
-              </button>
+            <div class="text-slate-500 font-mono text-[11px]">
+              <div class="flex items-center gap-1.5">
+                <span>CEP: ${escapeHtml(u.cep)}</span>
+                <button type="button" data-copy-field="CEP" class="p-1 rounded-md text-slate-400 hover:text-amber-200 hover:bg-slate-800 transition" title="Copiar CEP" aria-label="Copiar CEP">
+                  <i data-lucide="copy" class="w-3.5 h-3.5" aria-hidden="true"></i>
+                </button>
+              </div>
+              <div>UF: ${escapeHtml(u.uf || 'PR')}</div>
             </div>
           </div>
           <div class="flex items-center gap-2 ml-3 shrink-0">

@@ -1,3 +1,4 @@
+import asyncio
 import io
 import re
 import tempfile
@@ -146,10 +147,14 @@ class MaintenanceContractTests(unittest.TestCase):
 
     def test_application_startup_reports_readiness_without_workbook_values(self):
         output = io.StringIO()
-        with redirect_stdout(output):
-            main.log_local_file_readiness()
 
-        self.assertIn(main.log_local_file_readiness, main.app.router.on_startup)
+        async def run_application_lifespan():
+            async with main.app.router.lifespan_context(main.app):
+                pass
+
+        with redirect_stdout(output):
+            asyncio.run(run_application_lifespan())
+
         self.assertIn("[PRONTIDÃO] Verificação dos arquivos locais:", output.getvalue())
         self.assertIn(
             "[PRONTIDÃO] Geração de planilha de transferência: arquivos necessários presentes (checagem estrutural).",
