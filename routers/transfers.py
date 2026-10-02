@@ -147,7 +147,7 @@ def _gerar_planilha_transferencia(payload: TransferenciaPayload, template_file: 
                 expected_values[(ws.title, address)] = value
 
             serial_val = payload.serial.strip().upper()
-            descricao_val = payload.descricao_equipamento.strip() or f"Equipamento {serial_val}"
+            descricao_val = payload.descricao_equipamento.strip()
             retirada_obs_val = payload.retirada_obs.strip() or descricao_val
             retirada_telefone = formatar_telefone_brasileiro(payload.retirada_telefone)
             entrega_telefone = formatar_telefone_brasileiro(payload.entrega_telefone)

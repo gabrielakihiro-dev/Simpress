@@ -2181,6 +2181,7 @@ def exportar_equipamentos():
 
             serial_col = col_map.get("numeroserie") or col_map.get("serial")
             apelido_col = col_map.get("apelido")
+            id_cliente_col = col_map.get("idcliente")
             if not serial_col or not apelido_col:
                 raise HTTPException(
                     status_code=500,
@@ -2204,6 +2205,7 @@ def exportar_equipamentos():
             current_alias_col = current_columns.get("apelido") or current_columns.get("hostname")
             if not current_alias_col:
                 raise HTTPException(status_code=409, detail="A base atual não contém Apelido ou Hostname.")
+            current_id_cliente_col = current_columns.get("idcliente")
             current_rows = {}
             for cells in current_ws.iter_rows(min_row=2, values_only=True):
                 serial_key = normalize_reference_value(cells[current_serial_col - 1])
@@ -2211,7 +2213,10 @@ def exportar_equipamentos():
                     continue
                 if serial_key in current_rows:
                     raise HTTPException(status_code=409, detail="A base atual contém séries duplicadas; confira antes de exportar.")
-                current_rows[serial_key] = cells[current_alias_col - 1]
+                current_rows[serial_key] = {
+                    "apelido": cells[current_alias_col - 1],
+                    "id_cliente": cells[current_id_cliente_col - 1] if current_id_cliente_col else None,
+                }
 
             endpoint_index = read_endpoint_alias_index()
             aliases = get_export_aliases(endpoint_index)
@@ -2239,20 +2244,36 @@ def exportar_equipamentos():
                     skipped_duplicate_rows.add(serial_key)
                     continue
 
+                formula_skipped = False
                 alias_cell = ws.cell(row=row, column=apelido_col)
                 if alias_cell.data_type == "f":
+                    formula_skipped = True
+                else:
+                    updated_alias = aliases.get(
+                        serial_key,
+                        current_rows[serial_key]["apelido"],
+                    )
+                    if updated_alias is None:
+                        updated_alias = ""
+                    if alias_cell.value != updated_alias:
+                        alias_cell.value = updated_alias
+                        expected_values[(ws.title, alias_cell.coordinate)] = updated_alias
+                        alias_update_count += 1
+
+                if id_cliente_col and current_id_cliente_col:
+                    id_cliente_cell = ws.cell(row=row, column=id_cliente_col)
+                    if id_cliente_cell.data_type == "f":
+                        formula_skipped = True
+                    else:
+                        updated_id_cliente = current_rows[serial_key]["id_cliente"]
+                        if updated_id_cliente is None:
+                            updated_id_cliente = ""
+                        if id_cliente_cell.value != updated_id_cliente:
+                            id_cliente_cell.value = updated_id_cliente
+                            expected_values[(ws.title, id_cliente_cell.coordinate)] = updated_id_cliente
+
+                if formula_skipped:
                     skipped_formula_rows += 1
-                    continue
-                updated_alias = aliases.get(
-                    serial_key,
-                    current_rows[serial_key],
-                )
-                if updated_alias is None:
-                    updated_alias = ""
-                if alias_cell.value != updated_alias:
-                    alias_cell.value = updated_alias
-                    expected_values[(ws.title, alias_cell.coordinate)] = updated_alias
-                    alias_update_count += 1
 
             review_items = endpoint_alias_review_items(endpoint_index, set(serial_counts))
             pending_review_count = len(review_items) + len(skipped_duplicate_rows) + skipped_formula_rows

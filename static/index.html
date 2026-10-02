@@ -10,7 +10,7 @@
   <script src="/static/vendor/lucide-1.48.0.min.js"></script>
   <link rel="stylesheet" href="/static/app.css">
 </head>
-<body class="min-h-full bg-gradient-to-br from-slate-950 via-slate-900 to-slate-950 text-slate-100 flex flex-col font-sans selection:bg-brand-500 selection:text-white pb-28">
+<body class="min-h-full bg-gradient-to-br from-slate-950 via-slate-900 to-slate-950 text-slate-100 flex flex-col font-sans selection:bg-brand-500 selection:text-white">
 
   <a class="skip-link" href="#main-content">Pular para o conteúdo principal</a>
 
@@ -84,16 +84,30 @@
   </header>
 
   <!-- MAIN CONTAINER -->
-  <main id="main-content" class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 pt-8 pb-12 flex-1 w-full space-y-8">
+  <main id="main-content" class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 pt-8 pb-12 flex-1 w-full space-y-6">
+
+    <nav class="app-tabs" role="tablist" aria-label="Etapas da transferência" onkeydown="controlarAbasTransferencia(event)">
+      <button type="button" id="tab-home" class="app-tab is-active" role="tab" aria-selected="true" aria-controls="tab-panel-home" tabindex="0" onclick="ativarAbaTransferencia('home')">
+        <i data-lucide="home" class="w-4 h-4" aria-hidden="true"></i>
+        <span>Home</span>
+      </button>
+      <button type="button" id="tab-retirada-entrega" class="app-tab" role="tab" aria-selected="false" aria-controls="tab-panel-retirada-entrega" tabindex="-1" onclick="ativarAbaTransferencia('transferencia')">
+        <i data-lucide="truck" class="w-4 h-4" aria-hidden="true"></i>
+        <span>Retirada e Entrega</span>
+      </button>
+    </nav>
+
+    <section id="tab-panel-home" class="app-tab-panel" role="tabpanel" aria-labelledby="tab-home" tabindex="0">
 
     <!-- 1. BUSCA DE EQUIPAMENTO POR NÚMERO DE SÉRIE -->
-    <section class="glass-card rounded-2xl p-6 shadow-2xl relative z-50">
+    <section class="glass-card home-search-card rounded-2xl p-6 sm:p-8 shadow-2xl relative z-50">
       <div class="absolute inset-0 rounded-2xl overflow-hidden pointer-events-none">
         <div class="absolute -right-16 -top-16 w-64 h-64 bg-brand-500/10 rounded-full blur-3xl"></div>
       </div>
 
       <div class="relative">
-        <form onsubmit="event.preventDefault(); buscarSerial();" class="flex flex-col sm:flex-row gap-3">
+        <label for="input-serial" class="home-search-label font-bold text-white">Digite o número de série do equipamento</label>
+        <form onsubmit="event.preventDefault(); buscarSerial();" class="flex flex-col sm:flex-row gap-4">
           <div class="relative flex-1">
             <input
               type="text"
@@ -104,10 +118,9 @@
               aria-controls="autocomplete-list"
               aria-expanded="false"
               aria-haspopup="listbox"
-              autofocus
               autocomplete="off"
-              placeholder="Digite o número de série do equipamento..."
-              class="w-full pl-4 pr-12 py-3.5 rounded-xl glass-input text-white font-mono text-base tracking-wider placeholder:text-slate-500 placeholder:font-sans focus:outline-none uppercase"
+              placeholder="Número de série..."
+              class="home-search-input w-full rounded-xl glass-input text-white font-mono tracking-wider placeholder:text-slate-500 placeholder:font-sans focus:outline-none uppercase"
               oninput="handleSerialInput(this.value)"
               onkeydown="handleSerialKeydown(event)"
             />
@@ -126,9 +139,9 @@
           <button
             type="submit"
             id="btn-buscar-serial"
-            class="px-6 py-3.5 bg-brand-600 hover:bg-brand-500 text-white font-semibold rounded-xl transition-all duration-200 flex items-center justify-center space-x-2 shadow-lg shadow-brand-600/30 shrink-0"
+            class="home-search-button bg-brand-600 hover:bg-brand-500 text-white font-bold rounded-xl transition-all duration-200 flex items-center justify-center shadow-lg shadow-brand-600/30 shrink-0"
           >
-            <i data-lucide="search" class="w-4 h-4"></i>
+            <i data-lucide="search" class="w-5 h-5"></i>
             <span>Buscar Equipamento</span>
           </button>
         </form>
@@ -237,42 +250,30 @@
           </div>
         </div>
 
-        <!-- Descrição / Conteúdo do Pacote -->
-        <div class="mt-4 grid grid-cols-1 md:grid-cols-2 gap-4 items-center">
-          <div>
-            <label class="block text-xs font-semibold text-slate-300 mb-1 flex items-center gap-1.5">
-              <i data-lucide="package" class="w-3.5 h-3.5 text-brand-400"></i>
-              Descrição Sugerida do Equipamento / Pacote:
-            </label>
-            <input
-              type="text"
-              id="input-descricao-equipamento"
-              class="w-full px-3.5 py-2.5 rounded-lg glass-input text-sm text-slate-100 placeholder:text-slate-500 focus:outline-none"
-              placeholder="Ex: Notebook + kit na mochila"
-            />
-          </div>
-          <div class="text-xs text-slate-400 bg-slate-900/40 p-3 rounded-lg border border-slate-800/80">
-            <strong class="text-slate-200">Preenchimento Automático Concluído:</strong> A coluna de <strong>Retirada (Origem)</strong> abaixo foi alimentada com a unidade atual onde o equipamento se encontra.
-          </div>
-        </div>
-
         <section class="ticket-templates" aria-labelledby="ticket-templates-title">
-          <div class="ticket-templates-heading">
-            <div>
-              <h4 id="ticket-templates-title" class="text-sm font-bold text-white">Textos prontos para chamados manuais</h4>
-              <p class="text-xs text-slate-400 mt-1">Série pesquisada: <strong id="ticket-templates-serial" class="font-mono text-cyan-200">—</strong></p>
-            </div>
-            <p class="text-xs text-slate-400">Revise os campos e copie o texto para o chamado.</p>
+          <div class="ticket-templates-toggle-row">
+            <button type="button" id="btn-toggle-ticket-templates" class="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-brand-500/20 hover:bg-brand-500/30 text-brand-300 hover:text-white border border-brand-500/40 text-xs font-semibold transition-all shadow-sm" aria-expanded="false" aria-controls="ticket-templates-content" onclick="alternarChamadosManuais()">
+              <span>Mostrar textos para chamados</span>
+            </button>
           </div>
+          <div id="ticket-templates-content" hidden>
+            <div class="ticket-templates-heading">
+              <div>
+                <h4 id="ticket-templates-title" class="text-sm font-bold text-white">Textos prontos para chamados manuais</h4>
+                <p class="text-xs text-slate-400 mt-1">Série pesquisada: <strong id="ticket-templates-serial" class="font-mono text-cyan-200">—</strong></p>
+              </div>
+              <p class="text-xs text-slate-400">Revise os campos e copie o texto para o chamado.</p>
+            </div>
 
-          <div class="ticket-template-grid">
+            <div class="ticket-template-grid">
             <article class="ticket-template-card">
               <div class="ticket-template-card-header">
-                <h5 class="ticket-template-title">Deslocamento de Notebook</h5>
+                <h5 class="ticket-template-title">
+                  Deslocamento de Notebook
+                  <span class="ticket-template-title-detail">(Transporte)</span>
+                </h5>
                 <div class="ticket-template-actions">
-                  <button type="button" class="ticket-template-view" aria-expanded="false" aria-controls="visualizacao-chamado-deslocamento" onclick="alternarVisualizacaoModelo(this)">
-                    <span>Visualizar</span>
-                  </button>
+                  <a class="ticket-template-view ticket-template-link" href="https://ux.simpress.com.br/ng/gerar-ticket/consulta" target="_blank" rel="noopener noreferrer"><span>Link</span><i data-lucide="arrow-up-right" class="w-3.5 h-3.5" aria-hidden="true"></i></a>
                   <button type="button" class="ticket-template-copy" onclick="copiarModeloChamado('texto-chamado-deslocamento')">
                     <i data-lucide="copy" class="w-3.5 h-3.5" aria-hidden="true"></i>
                     <span>Copiar</span>
@@ -301,11 +302,12 @@ Lembrando que é necessário o correto preenchimento do termo e anexá-lo ao cha
 
             <article class="ticket-template-card">
               <div class="ticket-template-card-header">
-                <h5 class="ticket-template-title">Solicitação de kit</h5>
+                <h5 class="ticket-template-title">
+                  Solicitação de kit
+                  <span class="ticket-template-title-detail">(Teclado + Mouse)</span>
+                </h5>
                 <div class="ticket-template-actions">
-                  <button type="button" class="ticket-template-view" aria-expanded="false" aria-controls="visualizacao-chamado-teclado-mouse" onclick="alternarVisualizacaoModelo(this)">
-                    <span>Visualizar</span>
-                  </button>
+                  <a class="ticket-template-view ticket-template-link" href="https://ux.simpress.com.br/ng/solicitar-atendimento/equipamentos/1" target="_blank" rel="noopener noreferrer"><span>Link</span><i data-lucide="arrow-up-right" class="w-3.5 h-3.5" aria-hidden="true"></i></a>
                   <button type="button" class="ticket-template-copy" onclick="copiarModeloChamado('texto-chamado-teclado-mouse')">
                     <i data-lucide="copy" class="w-3.5 h-3.5" aria-hidden="true"></i>
                     <span>Copiar</span>
@@ -324,13 +326,66 @@ Modelo: 230 Wireless Mouse and Keyboard Combo</textarea>
                 <p class="ticket-template-help">Você pode preencher os dados em aberto antes de copiar.</p>
               </div>
             </article>
+
+            <article class="ticket-template-card">
+              <div class="ticket-template-card-header">
+                <h5 class="ticket-template-title">Mau funcionamento</h5>
+                <div class="ticket-template-actions">
+                  <a class="ticket-template-view ticket-template-link" href="https://ux.simpress.com.br/ng/solicitar-atendimento/equipamentos/1" target="_blank" rel="noopener noreferrer"><span>Link</span><i data-lucide="arrow-up-right" class="w-3.5 h-3.5" aria-hidden="true"></i></a>
+                  <button type="button" class="ticket-template-copy" onclick="copiarModeloChamado('texto-chamado-mau-funcionamento')">
+                    <i data-lucide="copy" class="w-3.5 h-3.5" aria-hidden="true"></i>
+                    <span>Copiar</span>
+                  </button>
+                </div>
+              </div>
+              <div id="visualizacao-chamado-mau-funcionamento" class="ticket-template-preview" hidden>
+                <label class="ticket-template-label" for="texto-chamado-mau-funcionamento">Texto para avaliação de mau funcionamento</label>
+                <textarea id="texto-chamado-mau-funcionamento" class="ticket-template-textarea" spellcheck="true">Prezados,
+Solicito o envio de um técnico para avaliar o mau funcionamento do equipamento [identificação]. Peço que verifique a causa do problema, realize o diagnóstico e informe as providências necessárias.
+
+Descrição do Problema:
+
+Nome do(a) colaborador(a):
+Horário disponível para atendimento:</textarea>
+                <p class="ticket-template-help">Você pode preencher os dados em aberto antes de copiar.</p>
+              </div>
+            </article>
+
+            <article class="ticket-template-card">
+              <div class="ticket-template-card-header">
+                <h5 class="ticket-template-title">Uso inadequado</h5>
+                <div class="ticket-template-actions">
+                  <a class="ticket-template-view ticket-template-link" href="https://ux.simpress.com.br/ng/solicitar-atendimento/equipamentos/1" target="_blank" rel="noopener noreferrer"><span>Link</span><i data-lucide="arrow-up-right" class="w-3.5 h-3.5" aria-hidden="true"></i></a>
+                  <button type="button" class="ticket-template-copy" onclick="copiarModeloChamado('texto-chamado-uso-inadequado')">
+                    <i data-lucide="copy" class="w-3.5 h-3.5" aria-hidden="true"></i>
+                    <span>Copiar</span>
+                  </button>
+                </div>
+              </div>
+              <div id="visualizacao-chamado-uso-inadequado" class="ticket-template-preview" hidden>
+                <label class="ticket-template-label" for="texto-chamado-uso-inadequado">Texto para avaliação de possível uso inadequado</label>
+                <textarea id="texto-chamado-uso-inadequado" class="ticket-template-textarea" spellcheck="true">Prezados,
+Solicito o envio de um técnico para avaliar o equipamento após relato de possível uso inadequado pelo(a) colaborador(a). Peço que registre as condições encontradas, avalie a causa do problema e informe as providências recomendadas.
+
+Descrição:
+
+Nome do(a) colaborador(a):
+Horário disponível para atendimento:</textarea>
+                <p class="ticket-template-help">Você pode preencher os dados em aberto antes de copiar.</p>
+              </div>
+            </article>
+            </div>
           </div>
         </section>
       </div>
     </section>
 
+    </section>
+
+    <section id="tab-panel-retirada-entrega" class="app-tab-panel" role="tabpanel" aria-labelledby="tab-retirada-entrega" tabindex="0" hidden>
+
     <!-- FORMULÁRIO DE TRANSFERÊNCIA (2 COLUNAS: RETIRADA & ENTREGA) -->
-    <div class="grid grid-cols-1 lg:grid-cols-2 gap-8">
+    <div class="transfer-form-grid grid grid-cols-1 lg:grid-cols-2 gap-8">
 
       <!-- ========================================== -->
       <!-- COLUNA ESQUERDA: RETIRADA (ORIGEM)        -->
@@ -543,16 +598,6 @@ Modelo: 230 Wireless Mouse and Keyboard Combo</textarea>
               </select>
             </div>
 
-            <!-- Quick Pill Buttons for Top Regional Units -->
-            <div class="flex flex-wrap gap-1.5 mt-2">
-              <span class="text-[10px] text-slate-400 self-center mr-1">Rápidas:</span>
-              <button type="button" onclick="selecionarUnidadePorCidade('Curitiba')" class="px-2 py-0.5 rounded text-[11px] bg-slate-800 hover:bg-slate-700 text-slate-300 border border-slate-700 transition">Curitiba Sede</button>
-              <button type="button" onclick="selecionarUnidadePorCidade('Londrina')" class="px-2 py-0.5 rounded text-[11px] bg-slate-800 hover:bg-slate-700 text-slate-300 border border-slate-700 transition">Londrina</button>
-              <button type="button" onclick="selecionarUnidadePorCidade('Maringá')" class="px-2 py-0.5 rounded text-[11px] bg-slate-800 hover:bg-slate-700 text-slate-300 border border-slate-700 transition">Maringá</button>
-              <button type="button" onclick="selecionarUnidadePorCidade('Cascavel')" class="px-2 py-0.5 rounded text-[11px] bg-slate-800 hover:bg-slate-700 text-slate-300 border border-slate-700 transition">Cascavel</button>
-              <button type="button" onclick="selecionarUnidadePorCidade('Ponta Grossa')" class="px-2 py-0.5 rounded text-[11px] bg-slate-800 hover:bg-slate-700 text-slate-300 border border-slate-700 transition">Ponta Grossa</button>
-              <button type="button" onclick="selecionarUnidadePorCidade('Foz do Iguaçu')" class="px-2 py-0.5 rounded text-[11px] bg-slate-800 hover:bg-slate-700 text-slate-300 border border-slate-700 transition">Foz do Iguaçu</button>
-            </div>
           </div>
 
           <!-- CNPJ Entrega -->
@@ -705,47 +750,46 @@ Modelo: 230 Wireless Mouse and Keyboard Combo</textarea>
 
     </div>
 
-  </main>
+    <!-- ========================================== -->
+    <!-- BARRA INFERIOR FIXA DE AÇÕES RÁPIDAS      -->
+    <!-- ========================================== -->
+    <aside aria-label="Painel de Ações Rápidas" class="quick-actions fixed bottom-0 inset-x-0 bg-slate-950/90 backdrop-blur-xl border-t border-slate-800/90 py-4 px-4 sm:px-8 z-30 shadow-2xl">
+      <div class="quick-actions-inner max-w-7xl mx-auto flex flex-col sm:flex-row items-center justify-between gap-4">
+        <div class="quick-actions-status flex items-center space-x-3 text-xs text-slate-400">
+          <div class="w-2.5 h-2.5 rounded-full bg-brand-400" id="status-indicator" aria-hidden="true"></div>
+          <div id="status-summary" role="status" aria-live="polite" aria-atomic="true">
+            <span class="text-slate-300 font-medium">Pronto para emissão.</span>
+            <span class="hidden md:inline text-slate-500">Verifique os dados antes de gerar a planilha oficial Simpress.</span>
+          </div>
+        </div>
 
-  <!-- ========================================== -->
-  <!-- BARRA INFERIOR FIXA DE AÇÕES RÁPIDAS      -->
-  <!-- ========================================== -->
-  <aside aria-label="Painel de Ações Rápidas" class="quick-actions fixed bottom-0 inset-x-0 bg-slate-950/90 backdrop-blur-xl border-t border-slate-800/90 py-4 px-4 sm:px-8 z-30 shadow-2xl">
-    <div class="quick-actions-inner max-w-7xl mx-auto flex flex-col sm:flex-row items-center justify-between gap-4">
-      <!-- Quick Status Text -->
-      <div class="quick-actions-status flex items-center space-x-3 text-xs text-slate-400">
-        <div class="w-2.5 h-2.5 rounded-full bg-brand-400" id="status-indicator" aria-hidden="true"></div>
-        <div id="status-summary" role="status" aria-live="polite" aria-atomic="true">
-          <span class="text-slate-300 font-medium">Pronto para emissão.</span>
-          <span class="hidden md:inline text-slate-500">Verifique os dados antes de gerar a planilha oficial Simpress.</span>
+        <div class="quick-actions-buttons flex flex-wrap sm:flex-nowrap items-center gap-3 w-full sm:w-auto justify-end">
+          <button
+            type="button"
+            id="btn-gerar-planilha"
+            onclick="gerarPlanilhaExcel()"
+            class="px-6 py-2.5 rounded-xl bg-gradient-to-r from-emerald-600 to-teal-500 hover:from-emerald-500 hover:to-teal-400 text-white font-bold text-xs sm:text-sm flex items-center space-x-2.5 shadow-glow-emerald transition-all transform hover:scale-[1.02] active:scale-[0.98]"
+          >
+            <i data-lucide="file-spreadsheet" class="w-4 h-4"></i>
+            <span>Gerar e Baixar Planilha Oficial (.xlsx)</span>
+          </button>
+
+          <button
+            type="button"
+            onclick="gerarTextoSolicitacaoTransporte()"
+            class="px-4 py-2.5 rounded-xl bg-brand-500/10 hover:bg-brand-500/20 text-brand-200 border border-brand-500/30 text-xs font-semibold flex items-center space-x-1.5 transition shadow-sm"
+            title="Gerar texto de solicitação de transporte"
+          >
+            <i data-lucide="file-text" class="w-4 h-4"></i>
+            <span>Texto para Transporte</span>
+          </button>
         </div>
       </div>
+    </aside>
 
-      <!-- Action Buttons -->
-      <div class="quick-actions-buttons flex flex-wrap sm:flex-nowrap items-center gap-3 w-full sm:w-auto justify-end">
-        <!-- PRIMARY: Download Excel Sheet -->
-        <button
-          type="button"
-          id="btn-gerar-planilha"
-          onclick="gerarPlanilhaExcel()"
-          class="px-6 py-2.5 rounded-xl bg-gradient-to-r from-emerald-600 to-teal-500 hover:from-emerald-500 hover:to-teal-400 text-white font-bold text-xs sm:text-sm flex items-center space-x-2.5 shadow-glow-emerald transition-all transform hover:scale-[1.02] active:scale-[0.98]"
-        >
-          <i data-lucide="file-spreadsheet" class="w-4 h-4"></i>
-          <span>Gerar e Baixar Planilha Oficial (.xlsx)</span>
-        </button>
+    </section>
 
-        <button
-          type="button"
-          onclick="gerarTextoSolicitacaoTransporte()"
-          class="px-4 py-2.5 rounded-xl bg-brand-500/10 hover:bg-brand-500/20 text-brand-200 border border-brand-500/30 text-xs font-semibold flex items-center space-x-1.5 transition shadow-sm"
-          title="Gerar texto de solicitação de transporte"
-        >
-          <i data-lucide="file-text" class="w-4 h-4"></i>
-          <span>Texto para Transporte</span>
-        </button>
-      </div>
-    </div>
-  </aside>
+  </main>
 
   <!-- ========================================== -->
   <!-- MODAL DE PRÉ-VISUALIZAÇÃO DO RESUMO       -->
