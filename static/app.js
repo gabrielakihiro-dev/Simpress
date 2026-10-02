@@ -567,6 +567,8 @@
     // Autocomplete & Debounce for Serial Input
     let autocompleteItemsList = [];
     let highlightedAutocompleteIndex = -1;
+    const PESQUISA_COMPLETA_PAGINA = 50;
+    let pesquisaCompletaState = { query: "", categoria: "", cidade: "", offset: 0, total: 0, loading: false, requestId: 0 };
 
     function handleSerialInput(val) {
       const clearBtn = document.getElementById("btn-clear-serial");
@@ -586,12 +588,12 @@
       document.getElementById("autocomplete-box").setAttribute("aria-busy", "true");
       debounceTimer = setTimeout(async () => {
         try {
-          const res = await fetch(`/api/buscar?q=${encodeURIComponent(term)}`);
+          const res = await fetch(`/api/buscar-expandida?q=${encodeURIComponent(term)}&limit=15`);
           if (res.ok) {
             const results = await res.json();
             // Check if input value hasn't been wiped in the meantime
             if (document.getElementById("input-serial").value.trim().toUpperCase() === term.toUpperCase()) {
-              renderAutocomplete(results);
+              renderAutocomplete(results.items, results.total, results.has_more);
             }
           } else {
             showToast("Não foi possível consultar os equipamentos. Tente novamente.", "error");
@@ -627,8 +629,12 @@
         e.preventDefault();
         if (isBoxOpen && highlightedAutocompleteIndex >= 0 && autocompleteItemsList[highlightedAutocompleteIndex]) {
           selecionarItemAutocomplete(autocompleteItemsList[highlightedAutocompleteIndex]);
+        } else if (isBoxOpen && autocompleteItemsList.length === 1) {
+          selecionarItemAutocomplete(autocompleteItemsList[0]);
+        } else if (isBoxOpen) {
+          abrirPesquisaCompleta();
         } else {
-          fecharAutocomplete();
+          buscarSerial();
         }
       } else if (e.key === "Escape") {
         fecharAutocomplete();
@@ -695,17 +701,108 @@
       buscarSerial();
     }
 
-    function renderAutocomplete(items) {
+    function conteudoLinhaResultado(item, currentQuery) {
+      let tipoIcon = "laptop";
+      let tipoBadgeClass = "bg-emerald-500/15 text-emerald-300 border border-emerald-500/30";
+
+      if (item.tipo === "Micro Computador") {
+        tipoIcon = "monitor";
+        tipoBadgeClass = "bg-blue-500/15 text-blue-300 border border-blue-500/30";
+      } else if (item.tipo === "Monitor") {
+        tipoIcon = "tv";
+        tipoBadgeClass = "bg-indigo-500/15 text-indigo-300 border border-indigo-500/30";
+      } else if (item.tipo !== "Notebook") {
+        tipoIcon = "box";
+        tipoBadgeClass = "bg-purple-500/15 text-purple-300 border border-purple-500/30";
+      }
+
+      return `
+        <div class="flex items-center gap-3 min-w-0 flex-1">
+          <div class="serial-badge flex items-center gap-2 px-3 py-1.5 rounded-lg shrink-0">
+            <i data-lucide="hash" class="w-4 h-4 text-cyan-400 shrink-0" aria-hidden="true"></i>
+            <span class="font-mono font-bold text-white text-sm sm:text-base tracking-widest">${highlightMatch(item.serial, currentQuery)}</span>
+          </div>
+          <span class="inline-flex items-center gap-1.5 text-xs font-semibold px-2.5 py-1 rounded-full ${tipoBadgeClass} shrink-0">
+            <i data-lucide="${tipoIcon}" class="w-3.5 h-3.5 shrink-0" aria-hidden="true"></i>
+            <span>${escapeHtml(item.tipo || "Equipamento")}</span>
+          </span>
+          <div class="min-w-0 flex items-center gap-2 flex-1">
+            <span class="text-xs sm:text-sm font-medium text-slate-200 truncate" title="${escapeHtml(item.modelo || "")}">
+              ${escapeHtml(item.modelo || "Sem modelo especificado")}
+            </span>
+            ${item.apelido ? `
+              <span class="autocomplete-alias inline-flex items-center gap-1 text-[11px] font-mono px-2 py-0.5 rounded-md bg-slate-900/90 text-cyan-300 border border-cyan-500/30 shrink-0" title="Apelido / Hostname">
+                <i data-lucide="terminal" class="w-2.5 h-2.5 text-cyan-400" aria-hidden="true"></i>
+                <span>${escapeHtml(item.apelido)}</span>
+              </span>
+            ` : ""}
+            ${item.invall_alias_status && item.invall_alias_status !== "aplicado" ? `
+              <span class="text-[10px] text-amber-200 shrink-0" title="${escapeHtml(item.invall_alias_detail || "Conferir associação com a InvAll")}">Conferir InvAll</span>
+            ` : ""}
+          </div>
+        </div>
+        <div class="flex items-center gap-2 shrink-0 ml-2">
+          <div class="flex items-center gap-1 text-xs text-amber-300 bg-amber-500/10 border border-amber-500/25 px-2.5 py-1 rounded-lg font-medium" title="Cidade / Unidade Atual">
+            <i data-lucide="map-pin" class="w-3.5 h-3.5 text-amber-400 shrink-0" aria-hidden="true"></i>
+            <span>${escapeHtml(item.retirada_cidade || "PR")}</span>
+          </div>
+          <div class="hidden sm:flex items-center text-xs text-slate-400 group-hover:text-cyan-300 transition-colors ml-1 font-mono">
+            <span class="text-[11px] mr-1 hidden lg:inline opacity-70">Selecionar</span>
+            <kbd class="px-1.5 py-0.5 text-[10px] bg-slate-900 border border-slate-700 rounded text-slate-300 shadow-sm">↵</kbd>
+          </div>
+        </div>
+      `;
+    }
+
+    function criarLinhaAutocomplete(item, index, currentQuery) {
+      const row = document.createElement("div");
+      row.id = `autocomplete-option-${index}`;
+      row.setAttribute("role", "option");
+      row.setAttribute("aria-selected", "false");
+      row.className = "autocomplete-row group px-4 py-2.5 cursor-pointer flex items-center justify-between gap-3";
+      row.onclick = () => selecionarItemAutocomplete(item);
+      row.onmouseenter = () => {
+        highlightedAutocompleteIndex = index;
+        updateAutocompleteHighlight();
+      };
+      row.innerHTML = conteudoLinhaResultado(item, currentQuery);
+      return row;
+    }
+
+    function criarLinhaPesquisaCompleta(item, index, currentQuery) {
+      const row = document.createElement("button");
+      row.type = "button";
+      row.className = "autocomplete-row group w-full text-left px-4 py-2.5 cursor-pointer flex items-center justify-between gap-3 rounded-lg";
+      row.setAttribute("aria-label", [
+        "Selecionar equipamento",
+        item.serial,
+        item.tipo,
+        item.modelo,
+        item.apelido,
+        item.retirada_cidade,
+      ].filter(Boolean).join(", "));
+      row.dataset.resultIndex = String(index);
+      row.innerHTML = conteudoLinhaResultado(item, currentQuery);
+      row.addEventListener("click", () => {
+        fecharModalPesquisaCompleta();
+        selecionarItemAutocomplete(item);
+      });
+      return row;
+    }
+
+    function renderAutocomplete(items, total = items?.length || 0, hasMore = false) {
       const box = document.getElementById("autocomplete-box");
       const list = document.getElementById("autocomplete-list");
       const emptyState = document.getElementById("autocomplete-empty-state");
       const countEl = document.getElementById("autocomplete-count");
+      const moreResults = document.getElementById("autocomplete-more-results");
       const currentQuery = (document.getElementById("input-serial").value || "").trim();
 
       if (!items || items.length === 0) {
         list.replaceChildren();
         list.classList.add("hidden");
         emptyState.classList.remove("hidden");
+        moreResults.classList.add("hidden");
         emptyState.innerHTML = `
           <div class="px-6 py-8 text-center flex flex-col items-center justify-center space-y-2 select-none">
             <div class="w-10 h-10 rounded-xl bg-slate-900 border border-slate-800 flex items-center justify-center text-slate-500 mb-1">
@@ -734,85 +831,180 @@
       list.innerHTML = "";
       list.classList.remove("hidden");
       emptyState.classList.add("hidden");
-      countEl.textContent = `${items.length} ${items.length === 1 ? 'item' : 'itens'}`;
+      countEl.textContent = hasMore
+        ? `${items.length} de ${total}`
+        : `${total} ${total === 1 ? "item" : "itens"}`;
+      moreResults.classList.toggle("hidden", !hasMore);
       document.getElementById("input-serial").setAttribute("aria-expanded", "true");
       document.getElementById("input-serial").removeAttribute("aria-activedescendant");
 
-      items.forEach((item, index) => {
-        const row = document.createElement("div");
-        row.id = `autocomplete-option-${index}`;
-        row.setAttribute("role", "option");
-        row.setAttribute("aria-selected", "false");
-        row.className = "autocomplete-row group px-4 py-2.5 cursor-pointer flex items-center justify-between gap-3";
-        row.onclick = () => selecionarItemAutocomplete(item);
-        row.onmouseenter = () => {
-          highlightedAutocompleteIndex = index;
-          updateAutocompleteHighlight();
-        };
-
-        // Determine icon & badge styles per equipment type
-        let tipoIcon = "laptop";
-        let tipoBadgeClass = "bg-emerald-500/15 text-emerald-300 border border-emerald-500/30";
-
-        if (item.tipo === "Micro Computador") {
-          tipoIcon = "monitor";
-          tipoBadgeClass = "bg-blue-500/15 text-blue-300 border border-blue-500/30";
-        } else if (item.tipo === "Monitor") {
-          tipoIcon = "tv";
-          tipoBadgeClass = "bg-indigo-500/15 text-indigo-300 border border-indigo-500/30";
-        } else if (item.tipo !== "Notebook") {
-          tipoIcon = "box";
-          tipoBadgeClass = "bg-purple-500/15 text-purple-300 border border-purple-500/30";
-        }
-
-        row.innerHTML = `
-          <div class="flex items-center gap-3 min-w-0 flex-1">
-            <!-- 1. Serial Number Badge (Highlighted as the STAR element) -->
-            <div class="serial-badge flex items-center gap-2 px-3 py-1.5 rounded-lg shrink-0">
-              <i data-lucide="hash" class="w-4 h-4 text-cyan-400 shrink-0"></i>
-              <span class="font-mono font-bold text-white text-sm sm:text-base tracking-widest">${highlightMatch(item.serial, currentQuery)}</span>
-            </div>
-
-            <!-- 2. Type Badge -->
-            <span class="inline-flex items-center gap-1.5 text-xs font-semibold px-2.5 py-1 rounded-full ${tipoBadgeClass} shrink-0">
-              <i data-lucide="${tipoIcon}" class="w-3.5 h-3.5 shrink-0"></i>
-              <span>${escapeHtml(item.tipo || 'Equipamento')}</span>
-            </span>
-
-            <!-- 3. Hardware Model & Hostname -->
-            <div class="min-w-0 flex items-center gap-2 flex-1">
-              <span class="text-xs sm:text-sm font-medium text-slate-200 truncate" title="${escapeHtml(item.modelo || '')}">
-                ${escapeHtml(item.modelo || 'Sem modelo especificado')}
-              </span>
-              ${item.apelido ? `
-                <span class="autocomplete-alias inline-flex items-center gap-1 text-[11px] font-mono px-2 py-0.5 rounded-md bg-slate-900/90 text-cyan-300 border border-cyan-500/30 shrink-0" title="Apelido / Hostname">
-                  <i data-lucide="terminal" class="w-2.5 h-2.5 text-cyan-400" aria-hidden="true"></i>
-                  <span>${escapeHtml(item.apelido)}</span>
-                </span>
-              ` : ''}
-              ${item.invall_alias_status && item.invall_alias_status !== "aplicado" ? `
-                <span class="text-[10px] text-amber-200 shrink-0" title="${escapeHtml(item.invall_alias_detail || "Conferir associação com a InvAll")}">Conferir InvAll</span>
-              ` : ''}
-            </div>
-          </div>
-
-          <!-- 4. Location & Selection Hint -->
-          <div class="flex items-center gap-2 shrink-0 ml-2">
-            <div class="flex items-center gap-1 text-xs text-amber-300 bg-amber-500/10 border border-amber-500/25 px-2.5 py-1 rounded-lg font-medium" title="Cidade / Unidade Atual">
-              <i data-lucide="map-pin" class="w-3.5 h-3.5 text-amber-400 shrink-0"></i>
-              <span>${escapeHtml(item.retirada_cidade || 'PR')}</span>
-            </div>
-            <div class="hidden sm:flex items-center text-xs text-slate-400 group-hover:text-cyan-300 transition-colors ml-1 font-mono">
-              <span class="text-[11px] mr-1 hidden lg:inline opacity-70">Selecionar</span>
-              <kbd class="px-1.5 py-0.5 text-[10px] bg-slate-900 border border-slate-700 rounded text-slate-300 shadow-sm">↵</kbd>
-            </div>
-          </div>
-        `;
-        list.appendChild(row);
-      });
+      items.forEach((item, index) => list.appendChild(criarLinhaAutocomplete(item, index, currentQuery)));
 
       box.classList.remove("hidden");
       lucide.createIcons({ root: box });
+    }
+
+    function abrirPesquisaCompleta() {
+      const query = (document.getElementById("input-serial").value || "").trim();
+      if (query.length < 2) {
+        showToast("Digite ao menos 2 caracteres para pesquisar", "warning");
+        return;
+      }
+
+      const requestId = pesquisaCompletaState.requestId + 1;
+      pesquisaCompletaState = { query, categoria: "", cidade: "", offset: 0, total: 0, loading: false, requestId };
+      document.getElementById("pesquisa-completa-termo").textContent = query;
+      document.getElementById("pesquisa-completa-contagem").textContent = "Buscando...";
+      document.getElementById("pesquisa-completa-status").textContent = "Carregando resultados...";
+      const resultList = document.getElementById("pesquisa-completa-lista");
+      resultList.replaceChildren();
+      resultList.scrollTop = 0;
+      document.getElementById("btn-carregar-mais-pesquisa").classList.add("hidden");
+      document.getElementById("filtro-pesquisa-categoria").value = "";
+      document.getElementById("filtro-pesquisa-cidade").value = "";
+      document.getElementById("btn-limpar-filtros-pesquisa").classList.add("hidden");
+
+      abrirModalAcessivel("modal-pesquisa-completa", "#btn-fechar-pesquisa-completa", "fecharModalPesquisaCompleta");
+      fecharAutocomplete();
+      carregarResultadosPesquisaCompleta(false, requestId);
+    }
+
+    function preencherOpcoesFiltroPesquisa(selectId, values, defaultLabel, selectedValue) {
+      const select = document.getElementById(selectId);
+      select.replaceChildren(new Option(defaultLabel, ""));
+      values.forEach(value => select.add(new Option(value, value)));
+      select.value = values.includes(selectedValue) ? selectedValue : "";
+      return select.value;
+    }
+
+    function atualizarOpcoesFiltrosPesquisa(filters = {}) {
+      const categorySelect = document.getElementById("filtro-pesquisa-categoria");
+      const selectedCategory = pesquisaCompletaState.categoria;
+      const categories = filters.categories || [
+        { value: "notebook", label: "Notebooks" },
+        { value: "macbook", label: "MacBooks" },
+        { value: "monitor", label: "Monitores" },
+        { value: "fone", label: "Fones" },
+      ];
+      categorySelect.replaceChildren(new Option("Todas as categorias", ""));
+      categories.forEach(({ value, label, count }) => {
+        const suffix = Number.isFinite(count) ? ` (${count})` : "";
+        categorySelect.add(new Option(`${label}${suffix}`, value));
+      });
+      categorySelect.value = categories.some(({ value }) => value === selectedCategory) ? selectedCategory : "";
+      pesquisaCompletaState.categoria = categorySelect.value;
+      pesquisaCompletaState.cidade = preencherOpcoesFiltroPesquisa(
+        "filtro-pesquisa-cidade",
+        filters.cities || [],
+        "Todas as cidades",
+        pesquisaCompletaState.cidade,
+      );
+      document.getElementById("btn-limpar-filtros-pesquisa").classList.toggle(
+        "hidden",
+        !pesquisaCompletaState.categoria && !pesquisaCompletaState.cidade,
+      );
+    }
+
+    function alterarFiltrosPesquisaCompleta() {
+      if (pesquisaCompletaState.loading) return;
+      const categoria = document.getElementById("filtro-pesquisa-categoria").value;
+      const cidade = document.getElementById("filtro-pesquisa-cidade").value;
+      if (categoria === pesquisaCompletaState.categoria && cidade === pesquisaCompletaState.cidade) return;
+
+      pesquisaCompletaState.categoria = categoria;
+      pesquisaCompletaState.cidade = cidade;
+      pesquisaCompletaState.offset = 0;
+      pesquisaCompletaState.total = 0;
+      pesquisaCompletaState.requestId += 1;
+      const resultList = document.getElementById("pesquisa-completa-lista");
+      resultList.replaceChildren();
+      resultList.scrollTop = 0;
+      document.getElementById("pesquisa-completa-contagem").textContent = "Buscando...";
+      document.getElementById("btn-carregar-mais-pesquisa").classList.add("hidden");
+      document.getElementById("btn-limpar-filtros-pesquisa").classList.toggle("hidden", !categoria && !cidade);
+      carregarResultadosPesquisaCompleta(false, pesquisaCompletaState.requestId);
+    }
+
+    function limparFiltrosPesquisaCompleta() {
+      document.getElementById("filtro-pesquisa-categoria").value = "";
+      document.getElementById("filtro-pesquisa-cidade").value = "";
+      alterarFiltrosPesquisaCompleta();
+    }
+
+    async function carregarResultadosPesquisaCompleta(carregarMais = false, requestId = pesquisaCompletaState.requestId) {
+      if (pesquisaCompletaState.loading || requestId !== pesquisaCompletaState.requestId) return;
+
+      const modal = document.getElementById("modal-pesquisa-completa");
+      const list = document.getElementById("pesquisa-completa-lista");
+      const status = document.getElementById("pesquisa-completa-status");
+      const count = document.getElementById("pesquisa-completa-contagem");
+      const moreButton = document.getElementById("btn-carregar-mais-pesquisa");
+      const categoryFilter = document.getElementById("filtro-pesquisa-categoria");
+      const cityFilter = document.getElementById("filtro-pesquisa-cidade");
+      const offset = carregarMais ? pesquisaCompletaState.offset : 0;
+
+      pesquisaCompletaState.loading = true;
+      moreButton.disabled = true;
+      moreButton.setAttribute("aria-busy", "true");
+      categoryFilter.disabled = true;
+      cityFilter.disabled = true;
+      status.textContent = carregarMais ? "Carregando mais resultados..." : "Carregando resultados...";
+      if (!carregarMais) list.replaceChildren();
+
+      try {
+        const params = new URLSearchParams({
+          q: pesquisaCompletaState.query,
+          offset: String(offset),
+          limit: String(PESQUISA_COMPLETA_PAGINA),
+          include_filters: "true",
+        });
+        if (pesquisaCompletaState.categoria) params.set("categoria", pesquisaCompletaState.categoria);
+        if (pesquisaCompletaState.cidade) params.set("cidade", pesquisaCompletaState.cidade);
+        const response = await fetch(`/api/buscar-expandida?${params.toString()}`);
+        if (!response.ok) throw new Error("Não foi possível carregar os resultados da pesquisa.");
+
+        const page = await response.json();
+        if (requestId !== pesquisaCompletaState.requestId) return;
+
+        atualizarOpcoesFiltrosPesquisa(page.filters);
+        page.items.forEach((item, index) => {
+          list.appendChild(criarLinhaPesquisaCompleta(item, offset + index, pesquisaCompletaState.query));
+        });
+        pesquisaCompletaState.offset = offset + page.items.length;
+        pesquisaCompletaState.total = page.total;
+        count.textContent = page.total === 1 ? "1 resultado" : `${page.total} resultados`;
+
+        if (page.total === 0) {
+          status.textContent = "Nenhum equipamento encontrado para esse termo.";
+        } else if (page.has_more) {
+          status.textContent = `Exibindo ${pesquisaCompletaState.offset} de ${page.total} resultados.`;
+        } else {
+          status.textContent = `Todos os ${page.total} resultados foram exibidos.`;
+        }
+        moreButton.classList.toggle("hidden", !page.has_more);
+        lucide.createIcons({ root: list });
+      } catch (error) {
+        if (requestId === pesquisaCompletaState.requestId) {
+          status.textContent = "Não foi possível carregar a pesquisa. Feche a janela e tente novamente.";
+          showToast(error.message || "Falha ao carregar resultados", "error");
+        }
+      } finally {
+        if (requestId === pesquisaCompletaState.requestId) {
+          pesquisaCompletaState.loading = false;
+          moreButton.disabled = false;
+          moreButton.removeAttribute("aria-busy");
+          categoryFilter.disabled = false;
+          cityFilter.disabled = false;
+        }
+      }
+    }
+
+    function carregarMaisResultadosPesquisa() {
+      carregarResultadosPesquisaCompleta(true);
+    }
+
+    function fecharModalPesquisaCompleta() {
+      fecharModalAcessivel("modal-pesquisa-completa");
     }
 
     function fecharAutocomplete() {
@@ -898,7 +1090,7 @@
       const serial = serialInput.value.trim().toUpperCase();
 
       if (!serial) {
-        showToast("Digite o número de série do equipamento", "warning");
+        showToast("Digite uma série, apelido, modelo ou cidade", "warning");
         serialInput.focus();
         return;
       }
@@ -915,6 +1107,16 @@
         const res = await fetch(`/api/equipamento/${encodeURIComponent(serial)}`);
         if (!res.ok) {
           const errData = await res.json().catch(() => ({}));
+          if (res.status === 404 && serial.length >= 2) {
+            const searchRes = await fetch(`/api/buscar-expandida?q=${encodeURIComponent(serial)}&limit=15`);
+            if (searchRes.ok) {
+              const searchResults = await searchRes.json();
+              if (searchResults.total > 0) {
+                renderAutocomplete(searchResults.items, searchResults.total, searchResults.has_more);
+                return;
+              }
+            }
+          }
           throw new Error(errData.detail || "Equipamento não encontrado na base de dados.");
         }
 
@@ -1059,7 +1261,7 @@
       const mostrar = preview.hidden;
       preview.hidden = !mostrar;
       botao.setAttribute("aria-expanded", String(mostrar));
-      label.textContent = mostrar ? "Ocultar" : "Visualizar";
+      label.textContent = mostrar ? "Ocultar Texto" : "Mostrar Texto";
     }
 
     function recolherVisualizacoesModelosChamado() {
@@ -1073,10 +1275,10 @@
       document.querySelectorAll(".ticket-template-preview").forEach(preview => {
         preview.hidden = true;
       });
-      document.querySelectorAll(".ticket-template-view").forEach(botao => {
+      document.querySelectorAll(".ticket-template-toggle").forEach(botao => {
         botao.setAttribute("aria-expanded", "false");
         const label = botao.querySelector("span");
-        if (label) label.textContent = "Visualizar";
+        if (label) label.textContent = "Mostrar Texto";
       });
     }
 

@@ -102,7 +102,7 @@ Para encerrar o servidor, volte à janela em que ele está rodando e pressione `
 2. Na aba **Home**, leia o código de barras ou digite o número de série e pressione `Enter` ou clique em **Buscar Equipamento**.
 3. Confira os dados do equipamento encontrados na base. A busca permanece na aba **Home**.
 4. Clique manualmente na aba **Retirada e Entrega** e preencha ou revise os dados de origem e destino.
-5. Use o rodapé da aba **Retirada e Entrega** para clicar em **Gerar e Baixar Planilha Oficial (.xlsx)**.
+5. Use o rodapé da aba **Retirada e Entrega** para clicar em **Gerar Planilha**.
 6. Abra o arquivo baixado e confira os dados antes de encaminhá-lo.
 
 ## Atualizar e comparar inventários
