@@ -2441,27 +2441,157 @@ def get_unidades():
     return unidades_cache
 
 
+def _normalizar_termo_busca(valor: Any) -> str:
+    texto = unicodedata.normalize("NFKD", str(valor or ""))
+    return "".join(caractere for caractere in texto if not unicodedata.combining(caractere)).strip().upper()
+
+
+_CATEGORIAS_EQUIPAMENTO = (
+    {"value": "notebook", "label": "Notebooks"},
+    {"value": "macbook", "label": "MacBooks"},
+    {"value": "monitor", "label": "Monitores"},
+    {"value": "fone", "label": "Fones"},
+)
+
+
+def _categoria_equipamento(tipo: Any, modelo: Any) -> str:
+    """Agrupa os rótulos do inventário nas categorias usadas pela pesquisa."""
+    texto = f"{_normalizar_termo_busca(tipo)} {_normalizar_termo_busca(modelo)}"
+    if "MACBOOK" in texto:
+        return "macbook"
+    if "MONITOR" in texto:
+        return "monitor"
+    if any(termo in texto for termo in ("HEADSET", "HEADPHONE", "FONE", "EARPHONE", "EARBUD")):
+        return "fone"
+    if "NOTEBOOK" in texto or "LAPTOP" in texto:
+        return "notebook"
+    return ""
+
+
+def _buscar_equipamentos_por_termo(q: str) -> List[Dict[str, Any]]:
+    """Busca por série, modelo, apelido, cidade ou categoria e prioriza série."""
+    term = _normalizar_termo_busca(q)
+    if not term:
+        return []
+
+    ranked_results = []
+    for index, (serial_key, item) in enumerate(equipamentos_cache.items()):
+        serial = str(item.get("serial") or serial_key)
+        modelo = str(item.get("modelo") or "")
+        tipo = str(item.get("tipo") or "")
+        apelido = str(item.get("apelido") or "")
+        cidade = str(item.get("retirada_cidade") or "")
+        categoria = _categoria_equipamento(tipo, modelo)
+        categoria_label = next(
+            (entry["label"] for entry in _CATEGORIAS_EQUIPAMENTO if entry["value"] == categoria),
+            "",
+        )
+        serial_search = _normalizar_termo_busca(serial_key or serial)
+        modelo_search = _normalizar_termo_busca(modelo)
+        tipo_search = _normalizar_termo_busca(tipo)
+        apelido_search = _normalizar_termo_busca(apelido)
+        cidade_search = _normalizar_termo_busca(cidade)
+        categoria_search = _normalizar_termo_busca(categoria_label)
+
+        if not any(term in valor for valor in (
+            serial_search, modelo_search, tipo_search, apelido_search, cidade_search, categoria_search
+        )):
+            continue
+
+        if term == serial_search:
+            rank = 0
+        elif serial_search.startswith(term):
+            rank = 1
+        elif term in serial_search:
+            rank = 2
+        elif term in modelo_search:
+            rank = 3
+        elif term in apelido_search:
+            rank = 4
+        elif term in tipo_search:
+            rank = 5
+        elif term in categoria_search:
+            rank = 6
+        else:
+            rank = 7
+
+        ranked_results.append((rank, index, {
+            "serial": serial,
+            "modelo": modelo,
+            "tipo": tipo,
+            "categoria": categoria,
+            "apelido": apelido,
+            "retirada_cidade": cidade,
+            "invall_alias_status": item.get("invall_alias_status"),
+            "invall_alias_detail": item.get("invall_alias_detail"),
+        }))
+
+    ranked_results.sort(key=lambda resultado: (resultado[0], resultado[1]))
+    return [resultado[2] for resultado in ranked_results]
+
+
 @app.get("/api/buscar")
 def buscar_seriais(q: str = Query(..., min_length=2)):
-    """Busca rápida de seriais/modelos/apelidos para autocomplete."""
-    term = q.strip().upper()
-    results = []
-    count = 0
-    for k, item in equipamentos_cache.items():
-        if term in k or term in item["modelo"].upper() or term in item["apelido"].upper():
-            results.append({
-                "serial": item["serial"],
-                "modelo": item["modelo"],
-                "tipo": item["tipo"],
-                "apelido": item["apelido"],
-                "retirada_cidade": item["retirada_cidade"],
-                "invall_alias_status": item.get("invall_alias_status"),
-                "invall_alias_detail": item.get("invall_alias_detail"),
-            })
-            count += 1
-            if count >= 15:
-                break
-    return results
+    """Busca rápida de seriais/modelos/apelidos/cidades para autocomplete."""
+    return _buscar_equipamentos_por_termo(q)[:15]
+
+
+@app.get("/api/buscar-expandida")
+def buscar_seriais_expandida(
+    q: str = Query(..., min_length=2),
+    offset: int = Query(0, ge=0),
+    limit: int = Query(50, ge=1, le=100),
+    categoria: Optional[str] = Query(None, max_length=40),
+    tipo: Optional[str] = Query(None, max_length=80),
+    cidade: Optional[str] = Query(None, max_length=120),
+    include_filters: bool = False,
+):
+    """Retorna resultados paginados, filtros e total de correspondências para a janela de pesquisa."""
+    all_results = _buscar_equipamentos_por_termo(q)
+
+    def filter_options(key: str) -> List[str]:
+        options = {}
+        for item in all_results:
+            value = str(item.get(key) or "").strip()
+            normalized = _normalizar_termo_busca(value)
+            if normalized:
+                options.setdefault(normalized, value)
+        return sorted(options.values(), key=_normalizar_termo_busca)
+
+    normalized_category = _normalizar_termo_busca(categoria)
+    valid_categories = {entry["value"] for entry in _CATEGORIAS_EQUIPAMENTO}
+    if normalized_category and normalized_category.lower() not in valid_categories:
+        normalized_category = ""
+    normalized_type = _normalizar_termo_busca(tipo)
+    normalized_city = _normalizar_termo_busca(cidade)
+    results = [
+        item for item in all_results
+        if (not normalized_category or item.get("categoria") == normalized_category.lower())
+        and (not normalized_type or _normalizar_termo_busca(item.get("tipo")) == normalized_type)
+        and (not normalized_city or _normalizar_termo_busca(item.get("retirada_cidade")) == normalized_city)
+    ]
+    page = results[offset:offset + limit]
+    response = {
+        "items": page,
+        "total": len(results),
+        "offset": offset,
+        "limit": limit,
+        "has_more": offset + len(page) < len(results),
+    }
+    if include_filters:
+        category_counts = {entry["value"]: 0 for entry in _CATEGORIAS_EQUIPAMENTO}
+        for item in all_results:
+            if item.get("categoria") in category_counts:
+                category_counts[item["categoria"]] += 1
+        response["filters"] = {
+            "categories": [
+                {**entry, "count": category_counts[entry["value"]]}
+                for entry in _CATEGORIAS_EQUIPAMENTO
+            ],
+            "types": filter_options("tipo"),
+            "cities": filter_options("retirada_cidade"),
+        }
+    return response
 
 
 @app.get("/api/stats")
