@@ -255,6 +255,77 @@
             <strong class="text-slate-200">Preenchimento Automático Concluído:</strong> A coluna de <strong>Retirada (Origem)</strong> abaixo foi alimentada com a unidade atual onde o equipamento se encontra.
           </div>
         </div>
+
+        <section class="ticket-templates" aria-labelledby="ticket-templates-title">
+          <div class="ticket-templates-heading">
+            <div>
+              <h4 id="ticket-templates-title" class="text-sm font-bold text-white">Textos prontos para chamados manuais</h4>
+              <p class="text-xs text-slate-400 mt-1">Série pesquisada: <strong id="ticket-templates-serial" class="font-mono text-cyan-200">—</strong></p>
+            </div>
+            <p class="text-xs text-slate-400">Revise os campos e copie o texto para o chamado.</p>
+          </div>
+
+          <div class="ticket-template-grid">
+            <article class="ticket-template-card">
+              <div class="ticket-template-card-header">
+                <h5 class="ticket-template-title">Deslocamento para configuração de notebook</h5>
+                <div class="ticket-template-actions">
+                  <button type="button" class="ticket-template-view" aria-expanded="false" aria-controls="visualizacao-chamado-deslocamento" onclick="alternarVisualizacaoModelo(this)">
+                    <span>Visualizar texto</span>
+                  </button>
+                  <button type="button" class="ticket-template-copy" onclick="copiarModeloChamado('texto-chamado-deslocamento')">
+                    <i data-lucide="copy" class="w-3.5 h-3.5" aria-hidden="true"></i>
+                    <span>Copiar texto</span>
+                  </button>
+                </div>
+              </div>
+              <div id="visualizacao-chamado-deslocamento" class="ticket-template-preview" hidden>
+                <label class="ticket-template-label" for="texto-chamado-deslocamento">Texto para solicitação de deslocamento técnico</label>
+                <textarea id="texto-chamado-deslocamento" class="ticket-template-textarea" spellcheck="true">Prezados,
+
+Solicito o deslocamento de um técnico à unidade do Sebrae para realizar a sanitização e configuração de um notebook para novo usuário.
+
+Ressalto que o procedimento deve ser realizado exclusivamente através do pendrive com a ISO padrão disponível no local, seguindo as etapas descritas na folha de configuração já compartilhada. Este é o procedimento padrão estipulado pelo cliente e devidamente previsto em edital.
+
+Em caso de dúvidas durante o processo, favor entrar em contato com Gabriel Akihiro pelo telefone (41) 98751-2389.
+
+Contato no local:
+Colaborador(a) Novo(a):
+Data de Instalação:
+Horário da Instalação:
+
+Lembrando que é necessário o correto preenchimento do termo e anexá-lo ao chamado no fechamento.</textarea>
+                <p class="ticket-template-help">Você pode preencher os dados em aberto antes de copiar.</p>
+              </div>
+            </article>
+
+            <article class="ticket-template-card">
+              <div class="ticket-template-card-header">
+                <h5 class="ticket-template-title">Solicitação de kit de teclado e mouse</h5>
+                <div class="ticket-template-actions">
+                  <button type="button" class="ticket-template-view" aria-expanded="false" aria-controls="visualizacao-chamado-teclado-mouse" onclick="alternarVisualizacaoModelo(this)">
+                    <span>Visualizar texto</span>
+                  </button>
+                  <button type="button" class="ticket-template-copy" onclick="copiarModeloChamado('texto-chamado-teclado-mouse')">
+                    <i data-lucide="copy" class="w-3.5 h-3.5" aria-hidden="true"></i>
+                    <span>Copiar texto</span>
+                  </button>
+                </div>
+              </div>
+              <div id="visualizacao-chamado-teclado-mouse" class="ticket-template-preview" hidden>
+                <label class="ticket-template-label" for="texto-chamado-teclado-mouse">Texto para solicitação de kit de teclado e mouse</label>
+                <textarea id="texto-chamado-teclado-mouse" class="ticket-template-textarea" spellcheck="true">Olá, solicito um novo kit de teclado + mouse, pois [descrever o motivo da solicitação].
+
+Nome do(a) Colaborador(a):
+Horário de funcionamento:
+
+Produto HP: 18H24AA_AC4_2 (Recebimento Santana) ou 18H24AA#AC4
+Modelo: 230 Wireless Mouse and Keyboard Combo</textarea>
+                <p class="ticket-template-help">Você pode preencher os dados em aberto antes de copiar.</p>
+              </div>
+            </article>
+          </div>
+        </section>
       </div>
     </section>
 
