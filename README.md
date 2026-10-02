@@ -4,7 +4,7 @@ Aplicação web local para consultar equipamentos por número de série, prepara
 
 ## O que o sistema faz
 
-- Busca equipamentos pelo número de série ou por leitor de código de barras.
+- Pesquisa equipamentos por série, código de barras, apelido/hostname, modelo ou cidade e permite refinar os resultados por categoria e cidade.
 - Preenche os dados de retirada e entrega e gera a planilha oficial de transferência.
 - Permite ajustar apelidos, consultar o histórico e exportar a base com os apelidos atualizados.
 - Compara arquivos de inventário do Endpoint e do EquipamentosDetalhes.
@@ -99,11 +99,19 @@ Para encerrar o servidor, volte à janela em que ele está rodando e pressione `
 ## Passo a passo: gerar uma transferência
 
 1. Inicie o servidor e abra a aplicação.
-2. Na aba **Home**, leia o código de barras ou digite o número de série e pressione `Enter` ou clique em **Buscar Equipamento**.
+2. Na aba **Home**, leia o código de barras ou pesquise por série, apelido/hostname, modelo ou cidade. Pressione `Enter` ou clique em **Buscar Equipamento**.
 3. Confira os dados do equipamento encontrados na base. A busca permanece na aba **Home**.
 4. Clique manualmente na aba **Retirada e Entrega** e preencha ou revise os dados de origem e destino.
 5. Use o rodapé da aba **Retirada e Entrega** para clicar em **Gerar Planilha**.
 6. Abra o arquivo baixado e confira os dados antes de encaminhá-lo.
+
+## Pesquisa de equipamentos
+
+A busca da aba **Home** aceita série, código de barras, apelido/hostname, modelo e cidade. A lista rápida mostra até 15 resultados. Quando houver mais correspondências, use **Mostrar mais** para abrir a janela de resultados; ela informa o total e carrega os itens em páginas de até 50 pelo botão **Carregar mais**.
+
+Na janela de resultados, combine o filtro de categoria com o de cidade. As categorias são **Notebooks**, **MacBooks**, **Monitores** e **Fones**. A classificação considera o tipo e o modelo da planilha ativa: MacBooks ficam separados dos demais notebooks; monitores também são reconhecidos pelo modelo, mesmo quando o tipo está registrado como `Micro Computador`; e Fones inclui registros identificados como Headset, Headphone, Fone, Earphone ou Earbud. A contagem ao lado de cada categoria considera as correspondências da busca atual.
+
+Códigos como `3CK38` não são associados manualmente a uma categoria. Para aparecer em **Fones**, o código precisa existir na planilha ativa e o tipo ou modelo do registro precisa indicar um fone/headset.
 
 ## Atualizar e comparar inventários
 
@@ -119,8 +127,8 @@ O apelido alterado manualmente fica associado à série e prevalece nas pesquisa
 ## Interface e acessibilidade
 
 - **Atualizar planilhas** e **Nova transferência** ficam entre as ações principais. Histórico de alterações, Histórico planilhas, Exportar Excel e Catálogo de unidades ficam agrupados no menu secundário.
-- A aba **Home** concentra a busca pelo número de série. Após localizar um equipamento, a tela permanece nela; abra **Retirada e Entrega** manualmente para preencher a transferência e acessar as ações do rodapé.
-- Use **Pular para o conteúdo principal** para ignorar o cabeçalho. A entrada de série recebe o foco inicial; na lista de resultados, use `↑` e `↓` para navegar, `Enter` para preencher e `Esc` para fechar.
+- A aba **Home** concentra a busca por série, apelido/hostname, modelo ou cidade. Após selecionar um equipamento, a tela permanece nela; abra **Retirada e Entrega** manualmente para preencher a transferência e acessar as ações do rodapé.
+- Use **Pular para o conteúdo principal** para ignorar o cabeçalho. Na lista rápida, use `↑` e `↓` para navegar, `Enter` para selecionar ou abrir os resultados completos e `Esc` para fechar. Na pesquisa completa, refine por categoria e cidade ou carregue mais resultados.
 - Os diálogos recebem o foco ao abrir, mantêm a navegação por `Tab` dentro do conteúdo, fecham com `Esc` e devolvem o foco ao controle que os abriu. Mensagens de carregamento, sucesso, vazio e erro são anunciadas às tecnologias assistivas.
 - Tabelas largas podem ser percorridas horizontalmente sem ocultar colunas. O cabeçalho, os botões e as ações rápidas se reorganizam em telas menores; animações respeitam `prefers-reduced-motion`.
 
