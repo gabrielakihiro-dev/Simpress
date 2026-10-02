@@ -900,6 +900,8 @@
       card.classList.remove("hidden");
 
       document.getElementById("card-serial").textContent = eq.serial;
+      document.getElementById("ticket-templates-serial").textContent = eq.serial || "—";
+      recolherVisualizacoesModelosChamado();
       document.getElementById("card-modelo").textContent = eq.modelo || "Equipamento";
       document.getElementById("badge-tipo").textContent = eq.tipo || "Geral";
       document.getElementById("badge-apelido").textContent = eq.apelido || "Sem Apelido";
@@ -990,6 +992,45 @@
       } else {
         textarea.value = texto;
       }
+    }
+
+    async function copiarModeloChamado(textareaId) {
+      const textarea = document.getElementById(textareaId);
+      const texto = String(textarea?.value || "").trim();
+      if (!texto) {
+        showToast("O texto do modelo está vazio.", "warning");
+        return;
+      }
+
+      try {
+        await copiarTextoParaAreaTransferencia(texto);
+        showToast("Texto copiado. Você pode colá-lo no chamado manualmente.", "success");
+      } catch (err) {
+        showToast("Não foi possível copiar o texto. Selecione e copie o conteúdo manualmente.", "error");
+      }
+    }
+
+    function alternarVisualizacaoModelo(botao) {
+      const previewId = botao.getAttribute("aria-controls");
+      const preview = document.getElementById(previewId);
+      const label = botao.querySelector("span");
+      if (!preview || !label) return;
+
+      const mostrar = preview.hidden;
+      preview.hidden = !mostrar;
+      botao.setAttribute("aria-expanded", String(mostrar));
+      label.textContent = mostrar ? "Ocultar texto" : "Visualizar texto";
+    }
+
+    function recolherVisualizacoesModelosChamado() {
+      document.querySelectorAll(".ticket-template-preview").forEach(preview => {
+        preview.hidden = true;
+      });
+      document.querySelectorAll(".ticket-template-view").forEach(botao => {
+        botao.setAttribute("aria-expanded", "false");
+        const label = botao.querySelector("span");
+        if (label) label.textContent = "Visualizar texto";
+      });
     }
 
     // Build Payload Object from Form
