@@ -1019,7 +1019,7 @@
       const mostrar = preview.hidden;
       preview.hidden = !mostrar;
       botao.setAttribute("aria-expanded", String(mostrar));
-      label.textContent = mostrar ? "Ocultar texto" : "Visualizar texto";
+      label.textContent = mostrar ? "Ocultar" : "Visualizar";
     }
 
     function recolherVisualizacoesModelosChamado() {
@@ -1029,7 +1029,7 @@
       document.querySelectorAll(".ticket-template-view").forEach(botao => {
         botao.setAttribute("aria-expanded", "false");
         const label = botao.querySelector("span");
-        if (label) label.textContent = "Visualizar texto";
+        if (label) label.textContent = "Visualizar";
       });
     }
 
