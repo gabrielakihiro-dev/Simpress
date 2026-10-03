@@ -109,6 +109,7 @@
     .skip-link:focus { transform: translateY(0); }
     .header-inner { height: auto !important; min-height: 5rem; padding-top: 0.75rem; padding-bottom: 0.75rem; gap: 1rem; }
     .site-header { z-index: 60 !important; }
+    .modal-overlay { z-index: 120 !important; }
     .header-brand { min-width: 0; }
     .header-brand-copy { min-width: 0; }
     .header-brand-subtitle { max-width: 26rem; }

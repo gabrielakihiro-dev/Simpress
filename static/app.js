@@ -42,6 +42,15 @@
       }
     }
 
+    function invalidarDadosEquipamentoAposRestauracao() {
+      const serialInput = document.getElementById("input-serial");
+      if (serialInput) serialInput.value = "";
+      document.getElementById("btn-clear-serial")?.classList.add("hidden");
+      invalidarBuscasEquipamento();
+      limparSelecaoEquipamento();
+      fecharAutocomplete();
+    }
+
     const inputSerialInicial = document.getElementById("input-serial");
     if (inputSerialInicial && window.matchMedia("(hover: hover) and (pointer: fine)").matches) {
       inputSerialInicial.focus({ preventScroll: true });
@@ -553,6 +562,7 @@
         if (res.ok) {
           unidadesList = await res.json();
           const select = document.getElementById("select-unidade-destino");
+          const selectedUnitId = select.value;
           select.innerHTML = '<option value="">-- Escolha a Cidade ou Regional de Destino --</option>';
 
           unidadesList.forEach(u => {
@@ -561,6 +571,17 @@
             opt.textContent = u.label || `${u.cidade} - ${u.endereco} (${u.cnpj})`;
             select.appendChild(opt);
           });
+
+          const selectedUnit = unidadesList.find(unit => String(unit.id) === String(selectedUnitId));
+          if (selectedUnit) {
+            select.value = selectedUnit.id;
+            handleUnidadeDestinoChange(selectedUnit.id, false);
+          } else if (selectedUnitId) {
+            select.value = "";
+            document.getElementById("entrega-cnpj").value = "";
+            document.getElementById("entrega-endereco").value = "";
+            preencherRepresentanteRegional("entrega", "");
+          }
 
           const countEl = document.getElementById("filiais-count");
           if (countEl) countEl.textContent = `${unidadesList.length} filiais catalogadas`;
@@ -1247,7 +1268,7 @@
     }
 
     // Handle Unidade de Destino Selection
-    function handleUnidadeDestinoChange(unitId) {
+    function handleUnidadeDestinoChange(unitId, notificar = true) {
       if (!unitId) {
         preencherRepresentanteRegional("entrega", "");
         return;
@@ -1257,7 +1278,7 @@
         document.getElementById("entrega-cnpj").value = unit.cnpj || "";
         document.getElementById("entrega-endereco").value = unit.endereco_completo || "";
         preencherRepresentanteRegional("entrega", unit.cidade || "");
-        showToast(`Destino definido: ${unit.cidade}`, "info");
+        if (notificar) showToast(`Destino definido: ${unit.cidade}`, "info");
       }
     }
 
@@ -2171,7 +2192,15 @@
         const data = await response.json().catch(() => ({}));
         if (!response.ok) throw new Error(data.detail || "Não foi possível restaurar o conjunto selecionado.");
 
-        await Promise.allSettled([carregarEstatisticas(), carregarHistoricoComparacoes()]);
+        invalidarDadosEquipamentoAposRestauracao();
+        await Promise.allSettled([
+          carregarEstatisticas(),
+          carregarUnidades(),
+          carregarHistoricoComparacoes(),
+          carregarContagemHistoricoComparacoes(),
+        ]);
+        document.querySelector('#modal-historico-comparacoes [aria-label="Fechar histórico de planilhas"]')
+          ?.focus({ preventScroll: true });
         const total = Number(data.evento?.total_equipamentos_carregados || 0).toLocaleString("pt-BR");
         const reversao = data.evento?.desfazer_disponivel
           ? "A restauração pode ser desfeita pelo histórico."
