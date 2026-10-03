@@ -924,6 +924,142 @@ class WorkflowIntegrityTests(unittest.TestCase):
         self.assertEqual(len(comparison_after_repeat), len(comparison_before) + 2)
         self.assertEqual(json.loads(self.manual_history.read_text(encoding="utf-8")), manual_before)
 
+    def test_upload_validation_and_transaction_do_not_block_the_event_loop(self):
+        make_details(self.details, [
+            ("SN-1", "ALIAS-OLD", "Modelo A", "Maringá", "Notebook", "87000000"),
+        ])
+        make_endpoint(self.endpoint, [("SN-1", "PRNOTE-OLD")])
+        make_model(self.model)
+        self.comparison_history.write_text("[]", encoding="utf-8")
+        self.assertTrue(main.load_database())
+
+        validation_started = threading.Event()
+        allow_validation = threading.Event()
+        transaction_started = threading.Event()
+        allow_transaction = threading.Event()
+        original_validator = main.validate_uploaded_workbook
+        original_loader = main.load_database
+        worker_threads = {}
+
+        def pause_validation(file_bytes, role):
+            if role == "endpoint":
+                worker_threads["validation"] = threading.get_ident()
+                validation_started.set()
+                if not allow_validation.wait(3):
+                    raise TimeoutError("o teste não liberou a validação pausada")
+            return original_validator(file_bytes, role)
+
+        def pause_transaction_reload(*args, **kwargs):
+            worker_threads["transaction"] = threading.get_ident()
+            transaction_started.set()
+            if not allow_transaction.wait(3):
+                raise TimeoutError("o teste não liberou a transação pausada")
+            return original_loader(*args, **kwargs)
+
+        upload_endpoint = UploadFile(
+            filename="InvAll_nova.xlsx",
+            file=io.BytesIO(_endpoint_bytes([("SN-1", "PRNOTE-NEW")])),
+        )
+        upload_details = UploadFile(
+            filename="Detalhes_novos.xlsx",
+            file=io.BytesIO(_details_bytes([
+                ("SN-1", "ALIAS-NEW", "Modelo A", "Maringá", "Notebook", "87000000"),
+            ])),
+        )
+
+        async def run_upload_with_heartbeats():
+            loop = asyncio.get_running_loop()
+            loop_thread = threading.get_ident()
+            task = asyncio.create_task(main.atualizar_planilhas(upload_endpoint, upload_details))
+
+            async def wait_for_event(event, description):
+                deadline = loop.time() + 2
+                while not event.is_set() and loop.time() < deadline:
+                    await asyncio.sleep(0.005)
+                self.assertTrue(event.is_set(), f"não iniciou {description}")
+
+            try:
+                await wait_for_event(validation_started, "a validação")
+                await asyncio.wait_for(asyncio.sleep(0.025), timeout=0.25)
+                self.assertFalse(task.done(), "a validação pausada bloqueou ou encerrou a atualização")
+                allow_validation.set()
+
+                await wait_for_event(transaction_started, "a recarga transacional")
+                await asyncio.wait_for(asyncio.sleep(0.025), timeout=0.25)
+                self.assertFalse(task.done(), "a recarga pausada bloqueou ou encerrou a atualização")
+            finally:
+                allow_validation.set()
+                allow_transaction.set()
+
+            result = await task
+            return loop_thread, result
+
+        with (
+            patch.object(main, "validate_uploaded_workbook", pause_validation),
+            patch.object(main, "load_database", pause_transaction_reload),
+        ):
+            loop_thread, result = asyncio.run(run_upload_with_heartbeats())
+
+        self.assertTrue(result["sucesso"])
+        self.assertNotEqual(worker_threads["validation"], loop_thread)
+        self.assertNotEqual(worker_threads["transaction"], loop_thread)
+        self.assertEqual(main.equipamentos_cache["SN-1"]["apelido"], "PRNOTE-NEW")
+
+    def test_interrupted_upload_finishes_atomic_transaction_before_closing_request(self):
+        make_details(self.details, [
+            ("SN-1", "ALIAS-OLD", "Modelo A", "Maringá", "Notebook", "87000000"),
+        ])
+        make_endpoint(self.endpoint, [("SN-1", "PRNOTE-OLD")])
+        make_model(self.model)
+        self.comparison_history.write_text("[]", encoding="utf-8")
+        self.assertTrue(main.load_database())
+
+        transaction_started = threading.Event()
+        allow_transaction = threading.Event()
+        original_loader = main.load_database
+
+        def pause_transaction_reload(*args, **kwargs):
+            transaction_started.set()
+            if not allow_transaction.wait(3):
+                raise TimeoutError("o teste não liberou a transação pausada")
+            return original_loader(*args, **kwargs)
+
+        endpoint_bytes = _endpoint_bytes([("SN-1", "PRNOTE-NEW")])
+        details_bytes = _details_bytes([
+            ("SN-1", "ALIAS-NEW", "Modelo A", "Maringá", "Notebook", "87000000"),
+        ])
+        upload_endpoint = UploadFile(filename="InvAll_cancelada.xlsx", file=io.BytesIO(endpoint_bytes))
+        upload_details = UploadFile(filename="Detalhes_cancelados.xlsx", file=io.BytesIO(details_bytes))
+
+        async def cancel_and_release_upload():
+            task = asyncio.create_task(main.atualizar_planilhas(upload_endpoint, upload_details))
+            loop = asyncio.get_running_loop()
+            deadline = loop.time() + 2
+            try:
+                while not transaction_started.is_set() and loop.time() < deadline:
+                    await asyncio.sleep(0.005)
+                self.assertTrue(transaction_started.is_set(), "a atualização não entrou na transação")
+
+                task.cancel()
+                await asyncio.sleep(0.025)
+                self.assertFalse(task.done(), "o cancelamento liberou recursos antes da transação")
+            finally:
+                allow_transaction.set()
+
+            with self.assertRaises(asyncio.CancelledError):
+                await task
+
+        with patch.object(main, "load_database", pause_transaction_reload):
+            asyncio.run(cancel_and_release_upload())
+
+        self.assertTrue(upload_endpoint.file.closed)
+        self.assertTrue(upload_details.file.closed)
+        self.assertEqual(self.endpoint.read_bytes(), endpoint_bytes)
+        self.assertEqual(self.details.read_bytes(), details_bytes)
+        history = json.loads(self.comparison_history.read_text(encoding="utf-8"))
+        self.assertEqual(len(history), 1)
+        self.assertEqual(main.equipamentos_cache["SN-1"]["apelido"], "PRNOTE-NEW")
+
     def test_upload_replaces_inventory_snapshot_and_keeps_duplicate_source_rows(self):
         make_details(self.details, [
             ("SN-REMOVER", "ALIAS-ANTIGO", "Modelo antigo", "Maringá", "Notebook", "87000000"),
