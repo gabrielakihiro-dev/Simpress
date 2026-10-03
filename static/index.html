@@ -85,6 +85,20 @@
   <!-- MAIN CONTAINER -->
   <main id="main-content" class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 pt-8 pb-12 flex-1 w-full space-y-6">
 
+    <section id="readiness-panel" class="readiness-panel glass-card rounded-xl px-4 py-3 sm:px-5" data-state="loading" aria-labelledby="readiness-title" aria-busy="true">
+      <div class="readiness-header">
+        <div>
+          <h2 id="readiness-title" class="text-sm font-semibold text-slate-100">Disponibilidade das funções</h2>
+          <p id="readiness-summary" class="text-xs text-slate-300 mt-1" role="status" aria-live="polite" aria-atomic="true">Verificando os arquivos locais…</p>
+        </div>
+        <button type="button" id="readiness-refresh" class="readiness-refresh" aria-label="Atualizar status dos arquivos e funções" disabled>Atualizar status</button>
+      </div>
+      <details class="readiness-details">
+        <summary>Ver detalhes de arquivos e funções</summary>
+        <div id="readiness-details-content" class="readiness-details-content"></div>
+      </details>
+    </section>
+
     <nav class="app-tabs" role="tablist" aria-label="Etapas da transferência" onkeydown="controlarAbasTransferencia(event)">
       <button type="button" id="tab-home" class="app-tab is-active" role="tab" aria-selected="true" aria-controls="tab-panel-home" tabindex="0" onclick="ativarAbaTransferencia('home')">
         <i data-lucide="home" class="w-4 h-4" aria-hidden="true"></i>

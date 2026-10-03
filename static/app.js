@@ -468,6 +468,8 @@
       almocoEntrega?.addEventListener("input", atualizarObrigatoriedadeDuracaoPausaEntrega);
       almocoEntrega?.addEventListener("change", atualizarObrigatoriedadeDuracaoPausaEntrega);
       atualizarObrigatoriedadeDuracaoPausaEntrega();
+      document.getElementById("readiness-refresh")?.addEventListener("click", carregarProntidao);
+      carregarProntidao();
       carregarEstatisticas();
       carregarUnidades();
       carregarContagemHistoricoApelidos();
@@ -545,6 +547,90 @@
       } catch (err) {
         console.warn("Não foi possível carregar estatísticas:", err);
       }
+    }
+
+    async function carregarProntidao() {
+      const panel = document.getElementById("readiness-panel");
+      const summary = document.getElementById("readiness-summary");
+      const details = document.getElementById("readiness-details-content");
+      const refreshButton = document.getElementById("readiness-refresh");
+      if (!panel || !summary || !details || !refreshButton) return;
+
+      panel.setAttribute("aria-busy", "true");
+      refreshButton.disabled = true;
+      try {
+        const response = await fetch("/api/prontidao", { cache: "no-store" });
+        if (!response.ok) throw new Error("Falha ao consultar a disponibilidade local.");
+        const report = await response.json();
+        if (!report?.functions || !report?.files) throw new Error("Resposta de disponibilidade inválida.");
+
+        const functions = Object.entries(report.functions);
+        const availableCount = functions.filter(([, status]) => status.available === true).length;
+        const totalCount = functions.length;
+        const allAvailable = totalCount > 0 && availableCount === totalCount;
+        panel.dataset.state = allAvailable ? "ready" : "warning";
+        summary.textContent = allAvailable
+          ? `Todas as ${totalCount} funções estão disponíveis.`
+          : `${availableCount} de ${totalCount} funções disponíveis. Confira os detalhes.`;
+
+        const functionLabels = {
+          consulta_equipamentos: "Consulta de equipamentos",
+          geracao_transferencia: "Geração de transferência",
+          comparacao_atualizacao_inventarios: "Comparação e atualização de inventários",
+          exportacao_equipamentos: "Exportação de equipamentos",
+        };
+        const fileLabels = {
+          template_transferencia: "Modelo de transferência",
+          inventario_equipamentos: "Inventário ativo de equipamentos",
+          inventario_detalhes_atualizacao: "Inventário EquipamentosDetalhes para atualização",
+          inventario_endpoint: "Inventário Endpoint",
+          modelo_exportacao: "Modelo de exportação",
+        };
+
+        const content = document.createDocumentFragment();
+        adicionarGrupoProntidao(content, "Funções", functions, functionLabels, "function");
+        adicionarGrupoProntidao(content, "Arquivos locais", Object.entries(report.files), fileLabels, "file");
+        details.replaceChildren(content);
+      } catch (error) {
+        panel.dataset.state = "error";
+        summary.textContent = "Não foi possível consultar a disponibilidade das funções.";
+        details.textContent = "Confira se o servidor está em execução e tente atualizar o status.";
+      } finally {
+        panel.setAttribute("aria-busy", "false");
+        refreshButton.disabled = false;
+      }
+    }
+
+    function adicionarGrupoProntidao(parent, title, entries, labels, type) {
+      const group = document.createElement("section");
+      group.className = "readiness-group";
+      const heading = document.createElement("h3");
+      heading.className = "readiness-group-title";
+      heading.textContent = title;
+      const list = document.createElement("ul");
+      list.className = "readiness-list";
+
+      entries.forEach(([key, status]) => {
+        const available = status?.available === true;
+        const item = document.createElement("li");
+        item.className = "readiness-item";
+        item.dataset.available = String(available);
+        const label = document.createElement("span");
+        label.className = "readiness-item-label";
+        label.textContent = labels[key] || key;
+        const state = document.createElement("span");
+        state.className = "readiness-item-state";
+        state.textContent = available
+          ? (type === "file" && status.file ? `Disponível — ${status.file}` : "Disponível")
+          : type === "file"
+            ? [status.file, status.reason].filter(Boolean).join(" — ") || "Indisponível"
+            : `Indisponível — ${(status.missing_files || []).join(", ") || "dependência ausente"}`;
+        item.append(label, state);
+        list.appendChild(item);
+      });
+
+      group.append(heading, list);
+      parent.appendChild(group);
     }
 
     function atualizarIndicadoresPosSalvamento() {

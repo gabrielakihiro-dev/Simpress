@@ -473,6 +473,32 @@
       #main-content { padding-top: 1.25rem !important; }
       #main-content > * + * { margin-top: 1.25rem; }
     }
+    .readiness-panel { border-color: rgba(56, 189, 248, 0.28); }
+    .readiness-panel[data-state="ready"] { border-color: rgba(52, 211, 153, 0.35); }
+    .readiness-panel[data-state="warning"],
+    .readiness-panel[data-state="error"] { border-color: rgba(251, 191, 36, 0.42); }
+    .readiness-header { display: flex; align-items: center; justify-content: space-between; gap: 1rem; }
+    .readiness-refresh {
+      min-height: 2.25rem; padding: 0.45rem 0.75rem; border: 1px solid rgba(125, 211, 252, 0.32);
+      border-radius: 0.65rem; background: rgba(14, 165, 233, 0.12); color: #bae6fd;
+      font-size: 0.75rem; font-weight: 600; white-space: nowrap;
+    }
+    .readiness-refresh:hover:not(:disabled) { background: rgba(14, 165, 233, 0.22); }
+    .readiness-details { margin-top: 0.5rem; }
+    .readiness-details > summary { width: fit-content; color: #a5dffc; font-size: 0.75rem; cursor: pointer; }
+    .readiness-details-content { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 1rem; padding-top: 0.8rem; }
+    .readiness-group-title { margin-bottom: 0.35rem; color: #cbd5e1; font-size: 0.75rem; font-weight: 700; }
+    .readiness-list { display: grid; gap: 0.3rem; }
+    .readiness-item { display: flex; flex-wrap: wrap; justify-content: space-between; gap: 0.2rem 0.8rem; font-size: 0.7rem; }
+    .readiness-item-label { color: #cbd5e1; }
+    .readiness-item-state { color: #86efac; text-align: right; overflow-wrap: anywhere; }
+    .readiness-item[data-available="false"] .readiness-item-state { color: #fcd34d; }
+    @media (max-width: 640px) {
+      .readiness-header { align-items: flex-start; flex-direction: column; }
+      .readiness-refresh { align-self: flex-end; }
+      .readiness-details-content { grid-template-columns: minmax(0, 1fr); }
+      .readiness-item-state { text-align: left; }
+    }
     @media (prefers-reduced-motion: reduce) {
       *, *::before, *::after {
         scroll-behavior: auto !important;

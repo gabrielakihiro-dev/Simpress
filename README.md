@@ -45,6 +45,8 @@ Confira se a versão exibida é 3.12 ou superior:
 .\.venv\Scripts\python.exe --version
 ```
 
+O workspace do VS Code aponta para o ambiente `.venv` desta pasta por um caminho relativo. Se o editor ainda não selecionar esse ambiente depois da criação, escolha `.venv\Scripts\python.exe` como interpretador do workspace.
+
 ### 3. Instale as dependências
 
 ```powershell
@@ -74,7 +76,7 @@ Para reconstruir os estilos, ícones e fontes locais depois de alterar a interfa
 
 O arquivo inicializador usa o ambiente `.venv` criado nos passos anteriores. Mantenha a janela aberta enquanto usar o sistema.
 
-Na inicialização, o terminal informa se os arquivos locais necessários estão disponíveis e quais funções são afetadas quando um arquivo está ausente ou o pacote XLSX é inválido. Essa verificação estrutural não substitui a validação de abas, cabeçalhos e registros feita durante o uso; ela também não grava dados das planilhas no relatório.
+Na inicialização, o terminal informa se os arquivos locais necessários estão disponíveis e quais funções são afetadas quando um arquivo está ausente ou o pacote XLSX é inválido. A página também mostra um resumo da disponibilidade; abra **Ver detalhes de arquivos e funções** para conferir os itens ou use **Atualizar status** depois de substituir um arquivo. Essa verificação estrutural não substitui a validação de abas, cabeçalhos e registros feita durante o uso; ela também não grava dados das planilhas no relatório.
 
 As dependências verificadas por função são:
 
