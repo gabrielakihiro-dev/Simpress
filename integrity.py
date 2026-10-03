@@ -21,6 +21,7 @@ from xml.etree import ElementTree as ET
 from xml.sax.saxutils import escape
 
 import openpyxl
+from app_config import MAX_XLSX_ARCHIVE_ENTRIES, MAX_XLSX_UNCOMPRESSED_BYTES
 
 
 class FileBusyError(RuntimeError):
@@ -43,8 +44,8 @@ _PROCESS_LOCKS: Dict[str, threading.RLock] = {}
 _PROCESS_LOCKS_GUARD = threading.Lock()
 _REPLACE_ATTEMPTS = 4
 _RETRY_DELAYS = (0.1, 0.25, 0.5)
-_MAX_XLSX_ENTRIES = 10000
-_MAX_XLSX_UNCOMPRESSED_BYTES = 256 * 1024 * 1024
+_MAX_XLSX_ENTRIES = MAX_XLSX_ARCHIVE_ENTRIES
+_MAX_XLSX_UNCOMPRESSED_BYTES = MAX_XLSX_UNCOMPRESSED_BYTES
 
 _UNSUPPORTED_PART_PREFIXES = (
     "xl/activex/",
