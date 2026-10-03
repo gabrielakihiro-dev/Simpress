@@ -599,7 +599,10 @@ def workbook_snapshot(workbook: Any) -> Dict[str, Any]:
             cell.coordinate: _cell_signature(cell)
             for cell in ws._cells.values()
         }
-        tables = tuple(sorted((name, table.ref, table.displayName) for name, table in ws.tables.items()))
+        tables = tuple(sorted(
+            (name, ws.tables[name].ref, ws.tables[name].displayName)
+            for name in ws.tables.keys()
+        ))
         validations = tuple(sorted((item.type, item.formula1, item.formula2, item.sqref.__str__()) for item in ws.data_validations.dataValidation))
         worksheets[ws.title] = {
             "cells": cells,

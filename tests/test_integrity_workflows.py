@@ -15,6 +15,7 @@ from unittest.mock import patch
 
 import openpyxl
 from openpyxl.styles import Font, PatternFill
+from openpyxl.worksheet.table import Table, TableStyleInfo
 from starlette.datastructures import UploadFile
 
 with patch("openpyxl.load_workbook", side_effect=RuntimeError("testes não acessam planilhas locais")):
@@ -40,6 +41,19 @@ def make_details(path: Path, rows, headers=None):
     metadata["B1"] = "=1+1"
     metadata["B1"].number_format = "0.00"
     metadata.row_dimensions[1].height = 29
+    workbook.save(path)
+    workbook.close()
+
+
+def add_structured_table(path: Path, reference="A1:F2", name="EquipmentInventory"):
+    workbook = openpyxl.load_workbook(path)
+    worksheet = workbook["EquipamentosDetalhes"]
+    table = Table(displayName=name, ref=reference)
+    table.tableStyleInfo = TableStyleInfo(
+        name="TableStyleMedium2", showFirstColumn=False, showLastColumn=False,
+        showRowStripes=True, showColumnStripes=False,
+    )
+    worksheet.add_table(table)
     workbook.save(path)
     workbook.close()
 
@@ -938,6 +952,121 @@ class WorkflowIntegrityTests(unittest.TestCase):
         self.assertEqual(restore_outcome["error"].status_code, 409)
         self.assertEqual({path: path.read_bytes() for path in committed_workbooks}, committed_workbooks)
         self.assertEqual(main.equipamentos_cache["SN-1"]["apelido"], "MANUAL-COMMITTED")
+
+    def test_manual_alias_writer_uses_supported_columns_at_different_positions(self):
+        layouts = (
+            {
+                "serial": "SN-1",
+                "headers": ["NumeroSerie", "Hostname", "Modelo", "Cidade", "Tipo", "CEP"],
+                "row": ["SN-1", "HOST-ORIGINAL", "Modelo A", "Maringá", "Notebook", "87000000"],
+                "alias_cell": "B2",
+                "type_cell": "E2",
+            },
+            {
+                "serial": "SN-2",
+                "headers": ["Hostname", "Tipo", "Modelo", "Cidade", "CEP", "Serial"],
+                "row": ["HOST-ORIGINAL", "Notebook", "Modelo B", "Londrina", "86000000", "SN-2"],
+                "alias_cell": "A2",
+                "type_cell": "B2",
+            },
+        )
+        make_endpoint(self.endpoint, [("SN-1", "HOST-INVALL-1"), ("SN-2", "HOST-INVALL-2")])
+
+        for layout in layouts:
+            with self.subTest(serial=layout["serial"]):
+                self.overrides.write_text("{}", encoding="utf-8")
+                self.manual_history.write_text("[]", encoding="utf-8")
+                make_details(self.details, [layout["row"]], headers=layout["headers"])
+                self.assertTrue(main.load_database())
+
+                result = main.atualizar_apelido(main.ApelidoUpdatePayload(
+                    serial=layout["serial"], apelido="HOST-MANUAL"
+                ))
+
+                self.assertTrue(result["salvo_no_disco"])
+                workbook = openpyxl.load_workbook(self.details, data_only=True)
+                worksheet = workbook["EquipamentosDetalhes"]
+                self.assertEqual(worksheet[layout["alias_cell"]].value, "HOST-MANUAL")
+                self.assertEqual(worksheet[layout["type_cell"]].value, "Notebook")
+                workbook.close()
+
+    def test_manual_alias_writer_rejects_workbooks_without_supported_alias_column(self):
+        workbook = openpyxl.Workbook()
+        worksheet = workbook.active
+        worksheet.title = "EquipamentosDetalhes"
+        worksheet.append(["NumeroSerie", "Modelo", "Cidade", "Tipo", "CEP"])
+        worksheet.append(["SN-1", "Modelo A", "Maringá", "Notebook", "87000000"])
+        with self.assertRaises(main.HTTPException) as raised:
+            main._edit_alias_workbook(workbook, "SN-1", "HOST-MANUAL")
+
+        self.assertEqual(raised.exception.status_code, 409)
+        self.assertIn("Apelido ou Hostname", raised.exception.detail)
+        self.assertEqual(worksheet["D2"].value, "Notebook")
+        workbook.close()
+
+    def test_manual_alias_can_be_removed_after_inventory_refresh_with_hostname_table(self):
+        details_headers = ["NumeroSerie", "Hostname", "Modelo", "Cidade", "Tipo", "CEP"]
+        make_details(
+            self.details,
+            [("SN-1", "HOST-DETAILS-OLD", "Modelo A", "Maringá", "Notebook", "87000000")],
+            headers=details_headers,
+        )
+        add_structured_table(self.details)
+        make_endpoint(self.endpoint, [("SN-1", "HOST-INVALL-OLD")])
+        make_model(self.model)
+        self.comparison_history.write_text("[]", encoding="utf-8")
+        self.assertTrue(main.load_database())
+
+        manual_result = main.atualizar_apelido(main.ApelidoUpdatePayload(
+            serial="SN-1", apelido="HOST-MANUAL"
+        ))
+        self.assertTrue(manual_result["salvo_no_disco"])
+        workbook = openpyxl.load_workbook(self.details, data_only=True)
+        self.assertEqual(workbook["EquipamentosDetalhes"]["B2"].value, "HOST-MANUAL")
+        self.assertEqual(workbook["EquipamentosDetalhes"]["E2"].value, "Notebook")
+        self.assertEqual(workbook["EquipamentosDetalhes"].tables["EquipmentInventory"].ref, "A1:F2")
+        workbook.close()
+
+        incoming_details = self.root / "detalhes-atualizados-ficticios.xlsx"
+        make_details(
+            incoming_details,
+            [("SN-1", "HOST-DETAILS-NEW", "Modelo A", "Maringá", "Notebook", "87000000")],
+            headers=details_headers,
+        )
+        add_structured_table(incoming_details)
+        upload_result = asyncio.run(main.atualizar_planilhas(
+            UploadFile(
+                filename="InvAll_atualizada.xlsx",
+                file=io.BytesIO(_endpoint_bytes([("SN-1", "HOST-INVALL-NEW")])),
+            ),
+            UploadFile(filename="Detalhes_atualizados.xlsx", file=io.BytesIO(incoming_details.read_bytes())),
+        ))
+        event_id = upload_result["comparacao"]["evento_id"]
+        divergence = upload_result["comparacao"]["divergencias_apelidos_manuais"][0]
+        self.assertEqual(divergence["apelido_manual"], "HOST-MANUAL")
+        self.assertEqual(divergence["apelido_equipamentos_detalhes"], "HOST-DETAILS-NEW")
+        self.assertEqual(divergence["apelido_invall"], "HOST-INVALL-NEW")
+
+        resolution = main.resolver_divergencia_apelido_manual(
+            event_id,
+            "SN-1",
+            main.ManualAliasConflictResolutionPayload(acao="excluir"),
+        )
+
+        self.assertEqual(resolution["resolucao"], "excluir")
+        self.assertEqual(resolution["equipamento"]["apelido"], "HOST-INVALL-NEW")
+        self.assertEqual(main.load_modified_apelidos(), {})
+        saved_workbook = openpyxl.load_workbook(self.details, data_only=True)
+        saved_sheet = saved_workbook["EquipamentosDetalhes"]
+        self.assertEqual(saved_sheet["B2"].value, "HOST-INVALL-NEW")
+        self.assertEqual(saved_sheet["E2"].value, "Notebook")
+        self.assertEqual(saved_sheet.tables["EquipmentInventory"].ref, "A1:F2")
+        saved_workbook.close()
+
+        history = json.loads(self.comparison_history.read_text(encoding="utf-8"))
+        stored_event = next(item for item in history if item["id"] == event_id)
+        stored_divergence = stored_event["comparacao"]["divergencias_apelidos_manuais"][0]
+        self.assertEqual(stored_divergence["resolucao"], "excluir")
 
     def test_manual_undo_reverses_latest_event_and_preserves_manual_override_priority(self):
         make_details(self.details, [("SN-1", "ALIAS-ORIGINAL", "Modelo A", "Maringá", "Notebook", "87000000")])

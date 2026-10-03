@@ -1,6 +1,6 @@
 # Revisão e progresso de correções — Simpress
 
-Atualizado em 2026-10-02. Este documento registra a linha de base e o andamento das correções autorizadas.
+Atualizado em 2026-10-03. Este documento registra a linha de base e o andamento das correções autorizadas.
 
 ## Escopo e entendimento inicial
 
@@ -115,4 +115,14 @@ Não foi executado `npm run build:ui`, pois ele reconstrói arquivos estáticos 
 - **Verificações:** `.venv/Scripts/python.exe -B tests/run_tests.py` passou com 46 testes; `node --check static/app.js` e `git diff --check` passaram. Os testes usaram arquivos temporários e dados fictícios, sem ler ou alterar planilhas operacionais.
 - **Dados operacionais e mudanças preexistentes:** o modelo de transferência alterado e os dois temporários preexistentes foram preservados; nenhuma gravação foi feita em inventário operacional.
 
-Os achados 2, 4, 5, 6, 7 e 10 estão concluídos. Os demais achados continuam abertos até serem corrigidos, refutados com evidência ou explicitamente aceitos como pendência. Antes de cada etapa, confirme o estado do repositório e preserve as alterações preexistentes listadas acima.
+### Prompt 5 — corrigir edição e remoção de apelidos e preservar tabelas Excel
+
+- **Arquivos alterados:** `main.py`, `routers/inventory_history.py`, `integrity.py`, `tests/test_integrity_workflows.py` e este registro.
+- **Achado 3:** a gravação de apelidos agora usa os cabeçalhos suportados para número de série e alias, incluindo `Hostname`, sem presumir números de coluna. Se faltar um cabeçalho válido, a operação retorna erro 409 antes de salvar.
+- **Achado 8:** ao remover um override depois de atualizar o inventário, a conferência compara a célula com o alias de EquipamentosDetalhes registrado na atualização, em vez de compará-la com o override manual antigo. A remoção aplica o alias efetivo da fonte respeitando a prioridade do hostname único da InvAll sobre EquipamentosDetalhes.
+- **Achado 9:** a captura das referências de tabelas estruturadas agora consulta objetos Table da API do openpyxl; edições não falham ao inspecionar `ws.tables.items()` e mantêm a referência da tabela.
+- **Testes adicionados:** gravação de `Hostname` em diferentes posições sem alterar `Tipo` ou outros campos; rejeição clara de planilha sem coluna de alias reconhecida; fluxo completo de definir alias manual, atualizar as fontes e remover o override com prioridade da InvAll, preservando a tabela estruturada e sua referência.
+- **Verificações:** `.venv/Scripts/python.exe -B tests/run_tests.py` passou com 49 testes. Os testes usaram apenas planilhas fictícias temporárias; não alteraram inventários, históricos ou backups operacionais.
+- **Dados operacionais e mudanças preexistentes:** o modelo de transferência modificado e os dois temporários listados no início foram preservados.
+
+Os achados 2, 3, 4, 5, 6, 7, 8, 9 e 10 estão concluídos. Os demais achados continuam abertos até serem corrigidos, refutados com evidência ou explicitamente aceitos como pendência. Antes de cada etapa, confirme o estado do repositório e preserve as alterações preexistentes listadas acima.
