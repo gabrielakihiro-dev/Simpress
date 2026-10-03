@@ -1009,27 +1009,132 @@ def get_export_aliases(endpoint_index: Optional[Dict[str, Any]] = None) -> Dict[
     return aliases
 
 
-def count_export_alias_changes(
+def count_export_changes(
     locked: bool = False,
     endpoint_index: Optional[Dict[str, Any]] = None,
-) -> int:
-    """Conta quantos apelidos do modelo de exportação serão realmente alterados."""
-    def count() -> int:
-        aliases = get_export_aliases(endpoint_index)
+) -> Dict[str, int]:
+    """Count writable alias and IdCliente cells that export would change."""
+    empty_counts = {"apelidos": 0, "id_clientes": 0, "total": 0}
+
+    def count() -> Dict[str, int]:
+        source_file = get_parque_file()
+        if source_file is None or not source_file.is_file() or not EXPORT_MODEL_FILE.is_file():
+            return empty_counts.copy()
+
+        model_wb = None
+        current_wb = None
         try:
-            model_aliases = load_export_model_aliases()
-        except HTTPException:
-            return len(aliases)
-        return sum(
-            1
-            for serial, alias in aliases.items()
-            if serial in model_aliases and model_aliases[serial] != alias
-        )
+            model_wb = openpyxl.load_workbook(EXPORT_MODEL_FILE, read_only=True, data_only=False)
+            model_sheet_name = next(
+                (name for name in model_wb.sheetnames if "parque" in name.lower() or "equipamento" in name.lower()),
+                model_wb.sheetnames[0],
+            )
+            model_ws = model_wb[model_sheet_name]
+            model_headers = [cell.value for cell in next(model_ws.iter_rows(max_row=1), ())]
+            model_columns = {
+                normalize_workbook_header(value): index
+                for index, value in enumerate(model_headers)
+                if value is not None
+            }
+            model_serial_col = model_columns.get("NUMEROSERIE", model_columns.get("SERIAL"))
+            model_alias_col = model_columns.get("APELIDO")
+            model_id_col = model_columns.get("IDCLIENTE")
+            if model_serial_col is None or model_alias_col is None:
+                return empty_counts.copy()
+
+            current_sheet_name = find_details_sheet(source_file)
+            if current_sheet_name is None:
+                return empty_counts.copy()
+            current_wb = openpyxl.load_workbook(source_file, read_only=True, data_only=False)
+            current_ws = current_wb[current_sheet_name]
+            current_headers = [cell.value for cell in next(current_ws.iter_rows(max_row=1), ())]
+            current_columns = {
+                normalize_workbook_header(value): index
+                for index, value in enumerate(current_headers)
+                if value is not None
+            }
+            current_serial_col = current_columns.get("NUMEROSERIE", current_columns.get("SERIAL"))
+            current_alias_col = current_columns.get("APELIDO", current_columns.get("HOSTNAME"))
+            current_id_col = current_columns.get("IDCLIENTE")
+            if current_serial_col is None or current_alias_col is None:
+                return empty_counts.copy()
+
+            current_rows: Dict[str, Dict[str, Any]] = {}
+            for cells in current_ws.iter_rows(min_row=2, values_only=True):
+                serial_key = normalize_reference_value(
+                    cells[current_serial_col] if current_serial_col < len(cells) else None
+                )
+                if not serial_key:
+                    continue
+                if serial_key in current_rows:
+                    return empty_counts.copy()
+                current_rows[serial_key] = {
+                    "apelido": cells[current_alias_col] if current_alias_col < len(cells) else None,
+                    "id_cliente": cells[current_id_col] if current_id_col is not None and current_id_col < len(cells) else None,
+                }
+
+            model_rows = []
+            model_serial_counts: Dict[str, int] = {}
+            for cells in model_ws.iter_rows(min_row=2):
+                serial_key = normalize_reference_value(
+                    cells[model_serial_col].value if model_serial_col < len(cells) else None
+                )
+                if not serial_key:
+                    continue
+                model_serial_counts[serial_key] = model_serial_counts.get(serial_key, 0) + 1
+                model_rows.append((serial_key, cells))
+            if set(model_serial_counts) != set(current_rows):
+                return empty_counts.copy()
+
+            effective_endpoint_index = endpoint_index if endpoint_index is not None else read_endpoint_alias_index()
+            aliases = get_export_aliases(effective_endpoint_index)
+            alias_count = 0
+            id_cliente_count = 0
+            for serial_key, cells in model_rows:
+                if model_serial_counts.get(serial_key) != 1:
+                    continue
+                current = current_rows[serial_key]
+                alias_cell = cells[model_alias_col] if model_alias_col < len(cells) else None
+                if alias_cell is not None and alias_cell.data_type != "f":
+                    updated_alias = aliases.get(serial_key, current["apelido"])
+                    if updated_alias is None:
+                        updated_alias = ""
+                    if alias_cell.value != updated_alias:
+                        alias_count += 1
+
+                if model_id_col is not None and current_id_col is not None:
+                    id_cell = cells[model_id_col] if model_id_col < len(cells) else None
+                    if id_cell is not None and id_cell.data_type != "f":
+                        updated_id = current["id_cliente"]
+                        if updated_id is None:
+                            updated_id = ""
+                        if id_cell.value != updated_id:
+                            id_cliente_count += 1
+
+            return {
+                "apelidos": alias_count,
+                "id_clientes": id_cliente_count,
+                "total": alias_count + id_cliente_count,
+            }
+        except Exception:
+            return empty_counts.copy()
+        finally:
+            if model_wb is not None:
+                model_wb.close()
+            if current_wb is not None:
+                current_wb.close()
 
     if locked:
         return count()
-    with lock_paths([ENDPOINT_UPLOAD_FILE, MODIFIED_APELIDOS_FILE, EXPORT_MODEL_FILE]):
-        return count()
+    with lock_paths([TRANSACTION_ROOT / ".atomic-transactions"]):
+        detail_files = get_details_files()
+        with lock_paths([
+            *detail_files,
+            ENDPOINT_UPLOAD_FILE,
+            MODIFIED_APELIDOS_FILE,
+            EXPORT_MODEL_FILE,
+        ]):
+            return count()
 
 
 def snapshot_equipment_aliases(
@@ -1535,13 +1640,16 @@ def _load_database_unlocked() -> bool:
     # Calculate stats
     tipo_col_real = norm_cols.get("tipo") or "Tipo"
     type_counts = df[tipo_col_real].value_counts().to_dict() if tipo_col_real in df.columns else {}
+    export_counts = count_export_changes(
+        locked=True,
+        endpoint_index=endpoint_index,
+    )
     new_stats_cache = {
         "total_equipamentos": len(new_equipamentos_cache),
         "total_unidades": len(new_unidades_cache),
-        "total_apelidos_modificados": count_export_alias_changes(
-            locked=True,
-            endpoint_index=endpoint_index,
-        ),
+        "total_apelidos_modificados": export_counts["apelidos"],
+        "total_id_clientes_modificados": export_counts["id_clientes"],
+        "total_alteracoes_exportaveis": export_counts["total"],
         "tipos": type_counts,
         "arquivo_origem": active_details_file.name,
         "ultima_atualizacao": datetime.now().strftime("%d/%m/%Y %H:%M")
@@ -2438,6 +2546,7 @@ def exportar_equipamentos():
 
             expected_values = {}
             alias_update_count = 0
+            id_cliente_update_count = 0
             skipped_duplicate_rows = set()
             skipped_formula_rows = 0
             for row in range(2, ws.max_row + 1):
@@ -2475,6 +2584,7 @@ def exportar_equipamentos():
                         if id_cliente_cell.value != updated_id_cliente:
                             id_cliente_cell.value = updated_id_cliente
                             expected_values[(ws.title, id_cliente_cell.coordinate)] = updated_id_cliente
+                            id_cliente_update_count += 1
 
                 if formula_skipped:
                     skipped_formula_rows += 1
@@ -2519,10 +2629,13 @@ def exportar_equipamentos():
         headers = {
             "Content-Disposition": f'attachment; filename="{export_filename}"',
             "Access-Control-Expose-Headers": (
-                "Content-Disposition, X-Total-Alterados, X-Total-Conferencia, "
+                "Content-Disposition, X-Total-Alterados, X-Total-IdCliente-Alterados, "
+                "X-Total-Alteracoes-Exportadas, X-Total-Conferencia, "
                 "X-Historico-Apelidos-Atualizados, X-Historico-Horario"
             ),
             "X-Total-Alterados": str(alias_update_count),
+            "X-Total-IdCliente-Alterados": str(id_cliente_update_count),
+            "X-Total-Alteracoes-Exportadas": str(alias_update_count + id_cliente_update_count),
             "X-Total-Conferencia": str(pending_review_count),
             "X-Historico-Apelidos-Atualizados": str(history_alias_count),
             "X-Historico-Horario": history_timestamp,
@@ -2808,9 +2921,12 @@ def buscar_seriais_expandida(
 @app.get("/api/stats")
 def get_stats():
     """Retorna métricas da base de dados."""
+    export_counts = count_export_changes()
     return {
         **stats_cache,
-        "total_apelidos_modificados": count_export_alias_changes()
+        "total_apelidos_modificados": export_counts["apelidos"],
+        "total_id_clientes_modificados": export_counts["id_clientes"],
+        "total_alteracoes_exportaveis": export_counts["total"],
     }
 
 

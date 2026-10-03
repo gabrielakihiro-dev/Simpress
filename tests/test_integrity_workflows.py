@@ -637,6 +637,8 @@ class WorkflowIntegrityTests(unittest.TestCase):
         output_path = self.root / "export-ficticio.xlsx"
         output_path.write_bytes(output_bytes)
         self.assertEqual(response.headers["x-total-alterados"], "1")
+        self.assertEqual(response.headers["x-total-idcliente-alterados"], "0")
+        self.assertEqual(response.headers["x-total-alteracoes-exportadas"], "1")
         self.assertEqual(response.headers["x-historico-apelidos-atualizados"], "3")
         self.assertEqual(response.headers["x-historico-horario"], "2026-10-01T16:30:00-03:00")
         self.assertIn(
@@ -674,6 +676,62 @@ class WorkflowIntegrityTests(unittest.TestCase):
             main.exportar_equipamentos()
         self.assertEqual(raised.exception.status_code, 409)
         self.assertEqual(self.model.read_bytes(), source_before)
+
+    def test_export_availability_and_output_track_alias_and_idcliente_changes(self):
+        cases = [
+            ("nenhuma", "HOST-SAME", "HOST-SAME", "ID-SAME", "ID-SAME", 0, 0),
+            ("somente-apelido", "HOST-NEW", "HOST-OLD", "ID-SAME", "ID-SAME", 1, 0),
+            ("somente-idcliente", "HOST-SAME", "HOST-SAME", "ID-NEW", "ID-OLD", 0, 1),
+            ("ambas", "HOST-NEW", "HOST-OLD", "ID-NEW", "ID-OLD", 1, 1),
+        ]
+        detail_headers = [
+            "NumeroSerie", "Apelido", "Modelo", "Cidade", "Tipo", "CEP", "IdCliente", "Observacao"
+        ]
+        model_headers = ["NumeroSerie", "Apelido", "IdCliente", "Observacao"]
+
+        for name, current_alias, model_alias, current_id, model_id, expected_aliases, expected_ids in cases:
+            with self.subTest(case=name):
+                make_details(self.details, [
+                    ("S-1", current_alias, "Modelo A", "Maringá", "Notebook", "87000000", current_id, "KEEP-UNRELATED")
+                ], headers=detail_headers)
+                make_endpoint(self.endpoint, [("S-1", current_alias)])
+                workbook = openpyxl.Workbook()
+                worksheet = workbook.active
+                worksheet.title = "Parque"
+                worksheet.append(model_headers)
+                worksheet.append(["S-1", model_alias, model_id, "KEEP-UNRELATED"])
+                workbook.save(self.model)
+                workbook.close()
+                source_before = self.model.read_bytes()
+
+                expected_counts = {
+                    "apelidos": expected_aliases,
+                    "id_clientes": expected_ids,
+                    "total": expected_aliases + expected_ids,
+                }
+                self.assertEqual(main.count_export_changes(), expected_counts)
+                self.assertEqual(main.get_stats()["total_alteracoes_exportaveis"], expected_counts["total"])
+
+                response = main.exportar_equipamentos()
+                output_bytes = asyncio.run(_collect_stream(response))
+                self.assertEqual(int(response.headers["x-total-alterados"]), expected_aliases)
+                self.assertEqual(int(response.headers["x-total-idcliente-alterados"]), expected_ids)
+                self.assertEqual(
+                    int(response.headers["x-total-alteracoes-exportadas"]),
+                    expected_aliases + expected_ids,
+                )
+                self.assertIn(
+                    "x-total-idcliente-alterados",
+                    response.headers["access-control-expose-headers"].lower(),
+                )
+
+                output_workbook = openpyxl.load_workbook(io.BytesIO(output_bytes), data_only=False)
+                output_sheet = output_workbook["Parque"]
+                self.assertEqual(output_sheet["B2"].value, current_alias)
+                self.assertEqual(output_sheet["C2"].value, current_id)
+                self.assertEqual(output_sheet["D2"].value, "KEEP-UNRELATED")
+                output_workbook.close()
+                self.assertEqual(self.model.read_bytes(), source_before)
 
     def test_official_transfer_preserves_threaded_comments_and_changes_only_form_cells(self):
         template = make_transfer_template(self.input_dir / "modelo-transferencia-ficticio.xlsx")
