@@ -23,6 +23,9 @@ with patch("openpyxl.load_workbook", side_effect=RuntimeError("testes não acess
 
 
 PROJECT_ROOT = Path(__file__).resolve().parents[1]
+PHONE_FORMAT_CASES = json.loads(
+    (Path(__file__).parent / "fixtures" / "phone_format_cases.json").read_text(encoding="utf-8")
+)
 
 
 def make_details(path: Path, rows, headers=None):
@@ -826,17 +829,7 @@ class WorkflowIntegrityTests(unittest.TestCase):
                     self.assertIn(label, raised.exception.detail)
 
     def test_transfer_phone_formatting_handles_fixed_mobile_and_country_prefixes(self):
-        cases = (
-            ("4133334444", "(41) 3333-4444"),
-            ("+55 41 3333-4444", "(41) 3333-4444"),
-            ("00554133334444", "(41) 3333-4444"),
-            ("554133334444", "(41) 3333-4444"),
-            ("41999998888", "(41) 99999-8888"),
-            ("+55 41 99999-8888", "(41) 99999-8888"),
-            ("005541999998888", "(41) 99999-8888"),
-            ("(41) 3333-4444 ramal 27", "(41) 3333-4444 Ramal: 27"),
-        )
-        for original, expected in cases:
+        for original, expected in PHONE_FORMAT_CASES:
             with self.subTest(original=original):
                 self.assertEqual(main.formatar_telefone_brasileiro(original), expected)
 

@@ -64,16 +64,16 @@ Não foi executado `npm run build:ui`, pois ele reconstrói arquivos estáticos 
 
 ## Sugestões de melhoria — não são falhas confirmadas
 
-| Gravidade | Sugestão e evidência | Estado inicial |
+| Gravidade | Sugestão e evidência | Situação após os Prompts 1–15 |
 | --- | --- | --- |
-| Média | Exibir na interface a prontidão das funções e dos arquivos locais. A verificação já existe no início do servidor e tem testes em `main.py` e `tests/test_maintenance_contracts.py`; a sugestão é torná-la visível na interface. | Melhoria opcional, depende do fluxo de produto desejado. |
-| Média | Ampliar os testes de regressão para concorrência, restauração, casos de erro e estado da interface. | Recomendado para reduzir regressões; não é um defeito por si só. |
-| Baixa | Consolidar normalizações repetidas de cabeçalhos, identificadores e telefones, somente quando as regras forem realmente equivalentes. | Melhor avaliar após corrigir e testar os fluxos atuais. |
-| Baixa | Tornar portável o caminho do interpretador Python configurado no editor. Evidência: `.vscode/settings.json`. | Melhoria de manutenção; não impede a aplicação de funcionar. |
+| Média | Exibir na interface a prontidão das funções e dos arquivos locais. A verificação já existe no início do servidor e tem testes em `main.py` e `tests/test_maintenance_contracts.py`; a sugestão é torná-la visível na interface. | Implementada no Prompt 14 com endpoint e painel de prontidão. |
+| Média | Ampliar os testes de regressão para concorrência, restauração, casos de erro e estado da interface. | Ampliada nos Prompts 1–15: a suíte tem 69 testes Python e há 5 testes JavaScript; testes de carga e leitor de tela continuam fora do escopo validado. |
+| Baixa | Consolidar normalizações repetidas de cabeçalhos, identificadores e telefones, somente quando as regras forem realmente equivalentes. | Atendida parcialmente no Prompt 15: os dois formatadores de telefone compartilham oito casos de teste; regras de busca, cabeçalho e identificador foram mantidas separadas por diferença de comportamento. |
+| Baixa | Tornar portável o caminho do interpretador Python configurado no editor. Evidência: `.vscode/settings.json`. | Implementada no Prompt 14 com caminho relativo ao workspace e orientação no README. |
 
 ## Limitações da revisão
 
-- Não foi feita validação em navegador real de acessibilidade, foco, interação modal ou seleção assíncrona.
+- No navegador local, validei foco e interação dos diálogos e atualização do painel de prontidão. Não fiz revisão visual completa em diferentes tamanhos de tela nem teste com leitor de tela.
 - Não foram feitos testes de carga, varredura integral de exploração de segurança nem auditoria completa de vulnerabilidades das dependências. `pip check` verifica consistência instalada, não vulnerabilidades.
 - Dimensões XLSX extremas foram bloqueadas antes da leitura por openpyxl. Não foi feito teste de carga com arquivos no limite dos 5.000.000 de posições permitido.
 - Parte dos comportamentos de segurança tem condições de exploração que permanecem por validar em ambiente representativo.
@@ -202,3 +202,12 @@ Os achados 1 a 19 estão concluídos. Antes de cada etapa, confirme o estado do 
 - **Testes:** adicionei contratos do endpoint, dos controles acessíveis do painel e do caminho relativo do interpretador. A suíte cobre os estados de prontidão ausente/corrompida do backend; não removi arquivos locais para simular indisponibilidade no navegador.
 - **Verificações:** suíte completa passou com 69 testes; `node --check static/app.js` e `node --check static/transfer-utils.js` passaram; `git diff --check` passou. Reiniciei o servidor local e confirmei no navegador HTTP 200 em `/api/prontidao`, resumo de 4/4 funções disponíveis, cinco arquivos listados e atualização manual do painel. Não alterei dados de inventário.
 - **Limitações:** não foi feito teste mobile em múltiplos tamanhos, leitor de tela ou com dependências ausentes no navegador; o painel usa marcação nativa de divulgação e o backend de prontidão já tem testes com dependências ausentes e XLSX corrompido.
+
+### Prompt 15 — consolidar o contrato de formatação de telefone
+
+- **Revisão das normalizações:** `normalize_workbook_header` já delega à normalização comum de referências, então não mantém uma segunda implementação. A normalização de termos de busca preserva pontuação e espaços para filtros e busca parcial; a de referências remove esses caracteres para comparar identificadores. A identidade estável de unidades usa NFKC e `casefold` com os campos de localização. Essas regras têm comportamentos distintos e foram mantidas.
+- **Conferência do registro:** os 19 achados iniciais estão marcados como corrigidos; atualizei o estado das quatro sugestões para refletir os Prompts 14 e 15, e ajustei a limitação de navegador para reconhecer os fluxos já conferidos sem afirmar uma auditoria visual ou de acessibilidade completa.
+- **Melhoria aplicada:** os testes do formatador de telefone do navegador e do servidor agora consomem `tests/fixtures/phone_format_cases.json`. Os mesmos oito casos verificam números fixos, celulares, prefixos brasileiros e ramal nas duas implementações, ajudando a detectar divergências sem alterar a regra executada em produção.
+- **Arquivos alterados:** `tests/fixtures/phone_format_cases.json`, `tests/test_transfer_workflows.cjs`, `tests/test_integrity_workflows.py` e este registro.
+- **Verificações:** `.venv/Scripts/python.exe -B tests/run_tests.py` passou com 69 testes; `node --test tests/test_transfer_workflows.cjs` passou com 5; `node --check` passou para `static/app.js`, `static/transfer-utils.js`, `scripts/copy_ui_assets.cjs` e `tailwind.config.cjs`; `pip check` não encontrou dependências quebradas; `git diff --check` passou. O Git avisou apenas que normalizará finais de linha LF para CRLF em dois arquivos de texto.
+- **Dados preexistentes:** esta alteração só compartilha dados fictícios de teste; planilha de modelo e arquivos temporários locais permanecem fora da etapa.

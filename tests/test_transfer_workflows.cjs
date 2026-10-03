@@ -1,5 +1,6 @@
 const assert = require("node:assert/strict");
 const test = require("node:test");
+const phoneFormatCases = require("./fixtures/phone_format_cases.json");
 const {
   createRequestGate,
   formatBrazilPhone,
@@ -8,18 +9,9 @@ const {
 } = require("../static/transfer-utils.js");
 
 test("formats fixed and mobile Brazilian phone numbers with country prefixes", () => {
-  const cases = [
-    ["4133334444", "(41) 3333-4444"],
-    ["+55 41 3333-4444", "(41) 3333-4444"],
-    ["00554133334444", "(41) 3333-4444"],
-    ["554133334444", "(41) 3333-4444"],
-    ["41999998888", "(41) 99999-8888"],
-    ["+55 41 99999-8888", "(41) 99999-8888"],
-    ["005541999998888", "(41) 99999-8888"],
-    ["(41) 3333-4444 ramal 27", "(41) 3333-4444 Ramal: 27"],
-  ];
-
-  for (const [phone, expected] of cases) assert.equal(formatBrazilPhone(phone), expected);
+  for (const [phone, expected] of phoneFormatCases) {
+    assert.equal(formatBrazilPhone(phone), expected);
+  }
 });
 
 test("a partial typed query cannot become a transfer serial", () => {
