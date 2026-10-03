@@ -27,7 +27,6 @@ async def update_inventory_files(endpoint_file: Any, details_file: Any, context:
     """Replace both uploaded inventory files and append their comparison atomically."""
     ctx = context
     uploads = [endpoint_file, details_file]
-    state_before = None
 
     try:
         ctx.INPUT_DIR.mkdir(parents=True, exist_ok=True)
@@ -48,13 +47,6 @@ async def update_inventory_files(endpoint_file: Any, details_file: Any, context:
                     detail=f"A base ativa de {display_role} não foi encontrada; a atualização foi cancelada.",
                 )
 
-        state_before = (
-            ctx.deepcopy(ctx.equipamentos_cache),
-            ctx.deepcopy(ctx.unidades_cache),
-            ctx.deepcopy(ctx.stats_cache),
-        )
-        previous_aliases = ctx.snapshot_equipment_aliases(state_before[0])
-        manual_overrides = ctx.load_modified_apelidos()
         uploaded_names = {
             "endpoint": staged["endpoint"]["name"],
             "detalhes": staged["detalhes"]["name"],
@@ -64,20 +56,24 @@ async def update_inventory_files(endpoint_file: Any, details_file: Any, context:
             staged["detalhes"]["table"],
             uploaded_names,
         )
-        manual_alias_sources = ctx._manual_alias_source_snapshots(
-            manual_overrides,
-            staged["endpoint"]["table"],
-            staged["detalhes"]["table"],
-        )
-        manual_divergences = [
-            item for item in manual_alias_sources
-            if item["diverge_detalhes"] or item["diverge_invall"]
-        ]
-        backup_dir = ctx.UPLOAD_BACKUPS_DIR / f"{ctx.datetime.now().strftime('%Y%m%d-%H%M%S')}-{ctx.uuid.uuid4().hex[:8]}"
-        backup_dir.mkdir(parents=True, exist_ok=False)
 
         transaction_targets = [*target_files.values(), ctx.COMPARISON_HISTORY_FILE]
-        with ctx.AtomicFileTransaction(ctx.TRANSACTION_ROOT, transaction_targets) as transaction:
+        with ctx.inventory_state_transaction(transaction_targets) as transaction:
+            with ctx.STATE_LOCK:
+                previous_aliases = ctx.snapshot_equipment_aliases(ctx.deepcopy(ctx.equipamentos_cache))
+            manual_overrides = ctx.load_modified_apelidos()
+            manual_alias_sources = ctx._manual_alias_source_snapshots(
+                manual_overrides,
+                staged["endpoint"]["table"],
+                staged["detalhes"]["table"],
+            )
+            manual_divergences = [
+                item for item in manual_alias_sources
+                if item["diverge_detalhes"] or item["diverge_invall"]
+            ]
+            backup_dir = ctx.UPLOAD_BACKUPS_DIR / f"{ctx.datetime.now().strftime('%Y%m%d-%H%M%S')}-{ctx.uuid.uuid4().hex[:8]}"
+            backup_dir.mkdir(parents=True, exist_ok=False)
+
             for role, target_path in target_files.items():
                 role_dir = backup_dir / role
                 role_dir.mkdir(parents=True, exist_ok=True)
@@ -202,29 +198,14 @@ async def update_inventory_files(endpoint_file: Any, details_file: Any, context:
             "historico_salvo": True,
         }
     except ctx.HTTPException:
-        if state_before:
-            with ctx.STATE_LOCK:
-                ctx.equipamentos_cache, ctx.unidades_cache, ctx.stats_cache = state_before
         raise
     except ctx.FileBusyError as error:
-        if state_before:
-            with ctx.STATE_LOCK:
-                ctx.equipamentos_cache, ctx.unidades_cache, ctx.stats_cache = state_before
         raise ctx.HTTPException(status_code=409, detail=str(error)) from error
     except ctx.TransactionConflictError as error:
-        if state_before:
-            with ctx.STATE_LOCK:
-                ctx.equipamentos_cache, ctx.unidades_cache, ctx.stats_cache = state_before
         raise ctx.HTTPException(status_code=500, detail=f"A recuperação detectou uma alteração externa em um arquivo e parou sem sobrescrevê-lo: {error}") from error
     except (ctx.FileTransactionError, ctx.WorkbookSafetyError) as error:
-        if state_before:
-            with ctx.STATE_LOCK:
-                ctx.equipamentos_cache, ctx.unidades_cache, ctx.stats_cache = state_before
         raise ctx.HTTPException(status_code=500, detail=f"Não foi possível concluir a atualização; a transação restaurou os arquivos anteriores. {error}") from error
     except Exception:
-        if state_before:
-            with ctx.STATE_LOCK:
-                ctx.equipamentos_cache, ctx.unidades_cache, ctx.stats_cache = state_before
         print("[ERRO] Falha ao atualizar o conjunto de planilhas.")
         raise ctx.HTTPException(status_code=500, detail="Falha ao atualizar as planilhas; os arquivos anteriores foram restaurados.") from None
     finally:

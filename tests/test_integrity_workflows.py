@@ -3,6 +3,7 @@ import copy
 import io
 import json
 import tempfile
+import threading
 import time
 import unittest
 import warnings
@@ -599,6 +600,133 @@ class WorkflowIntegrityTests(unittest.TestCase):
         self.assertEqual({path: path.read_bytes() for path in before_bytes}, before_bytes)
         self.assertEqual(self.comparison_history.read_text(encoding="utf-8"), "[]")
         self.assertEqual(main.equipamentos_cache, before_cache)
+
+    def test_upload_failure_preserves_alias_committed_while_upload_waited_for_lock(self):
+        make_details(self.details, [("SN-1", "ALIAS-DETALHES", "Modelo A", "Maringá", "Notebook", "87000000")])
+        make_endpoint(self.endpoint, [("SN-1", "PRNOTE-OLD")])
+        self.comparison_history.write_text("[]", encoding="utf-8")
+        self.assertTrue(main.load_database())
+
+        original_transaction = main.AtomicFileTransaction
+        upload_waiting = threading.Event()
+        allow_upload = threading.Event()
+
+        class PausingTransaction(original_transaction):
+            def __enter__(self):
+                required = {self.details_path, self.endpoint_path}
+                if required.issubset(set(self.targets)):
+                    upload_waiting.set()
+                    if not allow_upload.wait(10):
+                        raise TimeoutError("o teste não liberou a transação pausada")
+                return super().__enter__()
+
+        PausingTransaction.details_path = self.details.resolve()
+        PausingTransaction.endpoint_path = self.endpoint.resolve()
+        original_update = original_transaction.update_json
+
+        def fail_comparison_history(transaction, path, updater, default):
+            if Path(path).resolve() == self.comparison_history.resolve():
+                raise OSError("falha fictícia no histórico")
+            return original_update(transaction, path, updater, default)
+
+        upload_outcome = {}
+
+        def run_upload():
+            try:
+                upload_outcome["result"] = asyncio.run(main.atualizar_planilhas(
+                    UploadFile(filename="InvAll_nova.xlsx", file=io.BytesIO(_endpoint_bytes([("SN-1", "PRNOTE-NEW")]))),
+                    UploadFile(filename="Detalhes_novos.xlsx", file=io.BytesIO(_details_bytes([
+                        ("SN-1", "ALIAS-DETALHES", "Modelo A", "Maringá", "Notebook", "87000000"),
+                    ]))),
+                ))
+            except BaseException as error:
+                upload_outcome["error"] = error
+
+        with (
+            patch.object(main, "AtomicFileTransaction", PausingTransaction),
+            patch.object(original_transaction, "update_json", fail_comparison_history),
+        ):
+            worker = threading.Thread(target=run_upload)
+            worker.start()
+            try:
+                self.assertTrue(upload_waiting.wait(10), "o upload não chegou ao bloqueio esperado")
+                main.aplicar_alteracao_apelido("SN-1", "MANUAL-COMMITTED")
+                committed_workbooks = {path: path.read_bytes() for path in (self.details, self.endpoint)}
+                committed_overrides = self.overrides.read_text(encoding="utf-8")
+                self.assertEqual(main.equipamentos_cache["SN-1"]["apelido"], "MANUAL-COMMITTED")
+            finally:
+                allow_upload.set()
+                worker.join(10)
+
+        self.assertFalse(worker.is_alive(), "a transação de upload não terminou")
+        self.assertIsInstance(upload_outcome.get("error"), main.HTTPException)
+        self.assertEqual(upload_outcome["error"].status_code, 500)
+        self.assertEqual({path: path.read_bytes() for path in committed_workbooks}, committed_workbooks)
+        self.assertEqual(self.overrides.read_text(encoding="utf-8"), committed_overrides)
+        self.assertEqual(self.comparison_history.read_text(encoding="utf-8"), "[]")
+        self.assertEqual(main.equipamentos_cache["SN-1"]["apelido"], "MANUAL-COMMITTED")
+
+    def test_stale_restore_preview_does_not_revert_concurrent_alias_commit_in_cache(self):
+        make_details(self.details, [("SN-1", "ALIAS-ATUAL", "Modelo A", "Maringá", "Notebook", "87000000")])
+        make_endpoint(self.endpoint, [("SN-1", "PRNOTE-ATUAL")])
+        backup_dir = self.backups / "restore-source"
+        (backup_dir / "endpoint").mkdir(parents=True)
+        (backup_dir / "detalhes").mkdir()
+        make_endpoint(backup_dir / "endpoint" / self.endpoint.name, [("SN-1", "PRNOTE-ANTIGO")])
+        make_details(backup_dir / "detalhes" / self.details.name, [
+            ("SN-1", "ALIAS-ANTIGO", "Modelo A", "Maringá", "Notebook", "87000000"),
+        ])
+        self.comparison_history.write_text(json.dumps([{
+            "id": "restore-source-event",
+            "horario": "2026-10-01T12:00:00-03:00",
+            "comparacao": {"backup_diretorio": str(backup_dir.relative_to(self.input_dir))},
+        }]), encoding="utf-8")
+        self.assertTrue(main.load_database())
+        preview = main.visualizar_restauracao_comparacao("restore-source-event")
+
+        original_transaction = main.AtomicFileTransaction
+        restore_waiting = threading.Event()
+        allow_restore = threading.Event()
+
+        class PausingTransaction(original_transaction):
+            def __enter__(self):
+                required = {self.details_path, self.endpoint_path}
+                if required.issubset(set(self.targets)):
+                    restore_waiting.set()
+                    if not allow_restore.wait(10):
+                        raise TimeoutError("o teste não liberou a transação pausada")
+                return super().__enter__()
+
+        PausingTransaction.details_path = self.details.resolve()
+        PausingTransaction.endpoint_path = self.endpoint.resolve()
+        restore_outcome = {}
+
+        def run_restore():
+            try:
+                restore_outcome["result"] = main.restaurar_comparacao_historica(
+                    "restore-source-event",
+                    main.ComparisonRestorePayload(preview_token=preview["preview_token"]),
+                )
+            except BaseException as error:
+                restore_outcome["error"] = error
+
+        with patch.object(main, "AtomicFileTransaction", PausingTransaction):
+            worker = threading.Thread(target=run_restore)
+            worker.start()
+            try:
+                self.assertTrue(restore_waiting.wait(10), "a restauração não chegou ao bloqueio esperado")
+                main.aplicar_alteracao_apelido("SN-1", "MANUAL-COMMITTED")
+                committed_workbooks = {path: path.read_bytes() for path in (self.details, self.endpoint)}
+                self.assertEqual(main.equipamentos_cache["SN-1"]["apelido"], "MANUAL-COMMITTED")
+            finally:
+                allow_restore.set()
+                worker.join(10)
+
+        self.assertFalse(worker.is_alive(), "a restauração não terminou")
+        self.assertIsInstance(restore_outcome.get("error"), main.HTTPException)
+        self.assertEqual(restore_outcome["error"].status_code, 409)
+        self.assertEqual({path: path.read_bytes() for path in committed_workbooks}, committed_workbooks)
+        self.assertEqual(main.equipamentos_cache["SN-1"]["apelido"], "MANUAL-COMMITTED")
 
     def test_manual_undo_reverses_latest_event_and_preserves_manual_override_priority(self):
         make_details(self.details, [("SN-1", "ALIAS-ORIGINAL", "Modelo A", "Maringá", "Notebook", "87000000")])
