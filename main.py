@@ -1868,12 +1868,6 @@ def get_equipamento(serial: str):
     clean_serial = serial.strip().upper()
     if clean_serial in equipamentos_cache:
         return {key: value for key, value in equipamentos_cache[clean_serial].items() if not key.startswith("_")}
-    
-    # Busca parcial se termo tiver 4 ou mais caracteres
-    if len(clean_serial) >= 4:
-        for k, v in equipamentos_cache.items():
-            if clean_serial in k:
-                return {key: value for key, value in v.items() if not key.startswith("_")}
 
     raise HTTPException(status_code=404, detail=f"Equipamento com serial '{serial}' não encontrado na base de dados.")
 

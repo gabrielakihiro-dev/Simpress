@@ -3,7 +3,44 @@
     let retiradaCidadeSelecionada = "";
     let unidadesList = [];
     let debounceTimer = null;
+    const transferUtils = window.SimpressTransferUtils;
+    const autocompleteRequestGate = transferUtils.createRequestGate();
+    const equipmentLookupRequestGate = transferUtils.createRequestGate();
+    const searchButtonInitialHtml = document.getElementById("btn-buscar-serial")?.innerHTML || "";
     const modalReturnFocus = new Map();
+
+    function limparSelecaoEquipamento() {
+      currentEquipamento = null;
+      retiradaCidadeSelecionada = "";
+      document.getElementById("card-equipamento")?.classList.add("hidden");
+      document.getElementById("retirada-cnpj").value = "";
+      document.getElementById("retirada-endereco").value = "";
+      document.getElementById("retirada-obs").value = "";
+      preencherRepresentanteRegional("retirada", "");
+      const indicator = document.getElementById("status-indicator");
+      if (indicator) indicator.className = "w-2.5 h-2.5 rounded-full bg-brand-400";
+      const summary = document.getElementById("status-summary");
+      if (summary) summary.replaceChildren(
+        createTextElement("span", "text-slate-300 font-medium", "Pronto para emissão."),
+        createTextElement("span", "text-slate-500", " Verifique os dados antes de gerar a planilha oficial Simpress.")
+      );
+    }
+
+    function invalidarBuscasEquipamento() {
+      clearTimeout(debounceTimer);
+      autocompleteRequestGate.invalidate();
+      equipmentLookupRequestGate.invalidate();
+      const autocomplete = document.getElementById("autocomplete-box");
+      autocomplete?.setAttribute("aria-busy", "false");
+      document.getElementById("input-serial")?.removeAttribute("aria-busy");
+      const button = document.getElementById("btn-buscar-serial");
+      if (button) {
+        button.disabled = false;
+        button.removeAttribute("aria-busy");
+        button.innerHTML = searchButtonInitialHtml;
+        lucide.createIcons({ root: button });
+      }
+    }
 
     const inputSerialInicial = document.getElementById("input-serial");
     if (inputSerialInicial && window.matchMedia("(hover: hover) and (pointer: fine)").matches) {
@@ -158,32 +195,7 @@
 
     // Phone field formatting
     function formatarTelefoneBrasileiro(valor) {
-      const original = String(valor || "").trim();
-      if (!original) return "";
-
-      const ramalExplicito = original.match(/(?:ramal|ram\.?|ext\.?|x)\s*[:.]?\s*(\d+)\s*$/i);
-      if (/[A-Za-zÀ-ÿ]/.test(original) && !ramalExplicito) return original;
-
-      const telefoneOriginal = ramalExplicito ? original.slice(0, ramalExplicito.index) : original;
-      let digitos = telefoneOriginal.replace(/\D/g, "");
-
-      if (/^\s*\+55\b/.test(telefoneOriginal) && digitos.length >= 13) {
-        digitos = digitos.slice(2);
-      } else if (/^\s*0055\b/.test(telefoneOriginal) && digitos.length >= 15) {
-        digitos = digitos.slice(4);
-      }
-
-      if (digitos.length < 3) return original;
-
-      const ddd = digitos.slice(0, 2);
-      const numero = digitos.slice(2, 11);
-      const numeroFormatado = numero.length > 5
-        ? `${numero.slice(0, 5)}-${numero.slice(5)}`
-        : numero;
-      let telefoneFormatado = `(${ddd}) ${numeroFormatado}`;
-      const ramal = ramalExplicito ? ramalExplicito[1] : digitos.slice(11);
-      if (ramal) telefoneFormatado += ` Ramal: ${ramal}`;
-      return telefoneFormatado;
+      return transferUtils.formatBrazilPhone(valor);
     }
 
     const REPRESENTANTES_REGIONAIS_PR = [
@@ -571,6 +583,9 @@
     let pesquisaCompletaState = { query: "", categoria: "", cidade: "", offset: 0, total: 0, loading: false, requestId: 0 };
 
     function handleSerialInput(val) {
+      invalidarBuscasEquipamento();
+      limparSelecaoEquipamento();
+      fecharAutocomplete();
       const clearBtn = document.getElementById("btn-clear-serial");
       if (val && val.length > 0) {
         clearBtn.classList.remove("hidden");
@@ -587,22 +602,29 @@
 
       document.getElementById("autocomplete-box").setAttribute("aria-busy", "true");
       debounceTimer = setTimeout(async () => {
+        const request = autocompleteRequestGate.begin();
         try {
-          const res = await fetch(`/api/buscar-expandida?q=${encodeURIComponent(term)}&limit=15`);
+          const res = await fetch(`/api/buscar-expandida?q=${encodeURIComponent(term)}&limit=15`, { signal: request.signal });
+          if (!autocompleteRequestGate.isCurrent(request.id)) return;
           if (res.ok) {
             const results = await res.json();
-            // Check if input value hasn't been wiped in the meantime
-            if (document.getElementById("input-serial").value.trim().toUpperCase() === term.toUpperCase()) {
+            if (transferUtils.isCurrentQuery(
+              autocompleteRequestGate, request.id, document.getElementById("input-serial").value, term
+            )) {
               renderAutocomplete(results.items, results.total, results.has_more);
             }
-          } else {
+          } else if (autocompleteRequestGate.isCurrent(request.id)) {
             showToast("Não foi possível consultar os equipamentos. Tente novamente.", "error");
           }
         } catch (err) {
-          console.warn("Erro no autocomplete:", err);
-          showToast("Falha de conexão ao consultar os equipamentos.", "error");
+          if (err.name !== "AbortError" && autocompleteRequestGate.isCurrent(request.id)) {
+            console.warn("Erro no autocomplete:", err);
+            showToast("Falha de conexão ao consultar os equipamentos.", "error");
+          }
         } finally {
-          if (document.getElementById("input-serial").value.trim().toUpperCase() === term.toUpperCase()) {
+          if (transferUtils.isCurrentQuery(
+            autocompleteRequestGate, request.id, document.getElementById("input-serial").value, term
+          )) {
             document.getElementById("autocomplete-box").setAttribute("aria-busy", "false");
           }
         }
@@ -695,6 +717,8 @@
     }
 
     function selecionarItemAutocomplete(item) {
+      invalidarBuscasEquipamento();
+      limparSelecaoEquipamento();
       document.getElementById("input-serial").value = item.serial;
       document.getElementById("btn-clear-serial").classList.remove("hidden");
       fecharAutocomplete();
@@ -1041,6 +1065,8 @@
     function limparSerial() {
       const input = document.getElementById("input-serial");
       input.value = "";
+      invalidarBuscasEquipamento();
+      limparSelecaoEquipamento();
       document.getElementById("btn-clear-serial").classList.add("hidden");
       fecharAutocomplete();
       input.focus();
@@ -1090,10 +1116,19 @@
       const serial = serialInput.value.trim().toUpperCase();
 
       if (!serial) {
+        invalidarBuscasEquipamento();
+        limparSelecaoEquipamento();
         showToast("Digite uma série, apelido, modelo ou cidade", "warning");
         serialInput.focus();
         return;
       }
+
+      clearTimeout(debounceTimer);
+      autocompleteRequestGate.invalidate();
+      document.getElementById("autocomplete-box").setAttribute("aria-busy", "false");
+      fecharAutocomplete();
+      limparSelecaoEquipamento();
+      const request = equipmentLookupRequestGate.begin();
 
       const btn = document.getElementById("btn-buscar-serial");
       const originalText = btn.innerHTML;
@@ -1104,37 +1139,49 @@
       lucide.createIcons({ root: btn });
 
       try {
-        const res = await fetch(`/api/equipamento/${encodeURIComponent(serial)}`);
+        const res = await fetch(`/api/equipamento/${encodeURIComponent(serial)}`, { signal: request.signal });
+        if (!equipmentLookupRequestGate.isCurrent(request.id)) return;
         if (!res.ok) {
           const errData = await res.json().catch(() => ({}));
+          if (!equipmentLookupRequestGate.isCurrent(request.id)) return;
           if (res.status === 404 && serial.length >= 2) {
-            const searchRes = await fetch(`/api/buscar-expandida?q=${encodeURIComponent(serial)}&limit=15`);
+            const searchRes = await fetch(`/api/buscar-expandida?q=${encodeURIComponent(serial)}&limit=15`, { signal: request.signal });
+            if (!equipmentLookupRequestGate.isCurrent(request.id)) return;
             if (searchRes.ok) {
               const searchResults = await searchRes.json();
-              if (searchResults.total > 0) {
+              if (equipmentLookupRequestGate.isCurrent(request.id) && searchResults.total > 0) {
                 renderAutocomplete(searchResults.items, searchResults.total, searchResults.has_more);
                 return;
               }
             }
+            if (!equipmentLookupRequestGate.isCurrent(request.id)) return;
           }
           throw new Error(errData.detail || "Equipamento não encontrado na base de dados.");
         }
 
         const data = await res.json();
+        if (!transferUtils.isCurrentQuery(equipmentLookupRequestGate, request.id, serialInput.value, serial)) return;
+        if (transferUtils.serialForTransfer(data, serial) !== serial) {
+          throw new Error("A busca não retornou uma correspondência exata. Escolha um equipamento na lista.");
+        }
         currentEquipamento = data;
         exibirEquipamento(data);
         showToast(`Equipamento ${data.serial} localizado com sucesso!`, "success");
 
       } catch (err) {
-        console.error(err);
-        showToast(err.message, "error");
-        document.getElementById("card-equipamento").classList.add("hidden");
+        if (err.name !== "AbortError" && equipmentLookupRequestGate.isCurrent(request.id)) {
+          console.error(err);
+          limparSelecaoEquipamento();
+          showToast(err.message, "error");
+        }
       } finally {
-        btn.disabled = false;
-        btn.removeAttribute("aria-busy");
-        serialInput.removeAttribute("aria-busy");
-        btn.innerHTML = originalText;
-        lucide.createIcons({ root: btn });
+        if (equipmentLookupRequestGate.isCurrent(request.id)) {
+          btn.disabled = false;
+          btn.removeAttribute("aria-busy");
+          serialInput.removeAttribute("aria-busy");
+          btn.innerHTML = originalText;
+          lucide.createIcons({ root: btn });
+        }
       }
     }
 
@@ -1296,10 +1343,11 @@
 
     // Build Payload Object from Form
     function construirPayload() {
-      const serialVal = document.getElementById("input-serial").value.trim().toUpperCase();
+      const serialInput = document.getElementById("input-serial");
+      const serialVal = transferUtils.serialForTransfer(currentEquipamento, serialInput.value);
       if (!serialVal) {
-        showToast("Por favor, informe o número de série do equipamento.", "warning");
-        document.getElementById("input-serial").focus();
+        showToast("Busque e selecione o equipamento correto antes de gerar a transferência.", "warning");
+        serialInput.focus();
         return null;
       }
 
@@ -1564,8 +1612,8 @@
 
     // Reset Form for New Transfer
     function resetarFormulario() {
-      currentEquipamento = null;
-      retiradaCidadeSelecionada = "";
+      invalidarBuscasEquipamento();
+      limparSelecaoEquipamento();
       document.getElementById("input-serial").value = "";
       document.getElementById("btn-clear-serial").classList.add("hidden");
       document.getElementById("card-equipamento").classList.add("hidden");
