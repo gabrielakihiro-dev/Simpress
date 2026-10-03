@@ -1,5 +1,6 @@
 import asyncio
 import io
+import json
 import re
 import tempfile
 import unittest
@@ -103,6 +104,12 @@ class MaintenanceContractTests(unittest.TestCase):
             with self.subTest(path=name):
                 self.assertEqual(getattr(main, name), getattr(app_config, name))
 
+        vscode_settings = json.loads((PROJECT_ROOT / ".vscode" / "settings.json").read_text(encoding="utf-8"))
+        self.assertEqual(
+            vscode_settings["python.defaultInterpreterPath"],
+            "${workspaceFolder}/.venv/Scripts/python.exe",
+        )
+
     def test_openapi_keeps_existing_route_and_method_contracts(self):
         expected = {
             "/": {"get"},
@@ -124,6 +131,7 @@ class MaintenanceContractTests(unittest.TestCase):
             "/api/unidades": {"get"},
             "/api/buscar": {"get"},
             "/api/stats": {"get"},
+            "/api/prontidao": {"get"},
             "/api/gerar-planilha": {"post"},
         }
 
@@ -132,6 +140,34 @@ class MaintenanceContractTests(unittest.TestCase):
             with self.subTest(path=path):
                 self.assertIn(path, paths)
                 self.assertTrue(methods.issubset(paths[path]))
+
+    def test_readiness_endpoint_returns_the_existing_file_and_function_report(self):
+        report = {
+            "files": {"template_transferencia": {"available": True, "file": "modelo.xlsx", "reason": "OK"}},
+            "functions": {"geracao_transferencia": {"available": True, "missing_files": []}},
+        }
+        with patch.object(main, "get_startup_readiness", return_value=report):
+            self.assertEqual(main.get_readiness_status(), report)
+
+    def test_readiness_panel_is_accessible_refreshable_and_renders_text_safely(self):
+        html = (app_config.STATIC_DIR / "index.html").read_text(encoding="utf-8")
+        script = (app_config.STATIC_DIR / "app.js").read_text(encoding="utf-8")
+        panel_start = script.index("async function carregarProntidao()")
+        panel_end = script.index("function adicionarGrupoProntidao", panel_start)
+        panel_script = script[panel_start:panel_end]
+
+        self.assertIn('id="readiness-panel"', html)
+        self.assertIn('id="readiness-summary"', html)
+        self.assertIn('role="status" aria-live="polite"', html)
+        self.assertIn('id="readiness-refresh"', html)
+        self.assertIn("Ver detalhes de arquivos e funções", html)
+        self.assertIn('fetch("/api/prontidao"', panel_script)
+        self.assertIn('addEventListener("click", carregarProntidao)', script)
+        self.assertIn("details.replaceChildren(content)", panel_script)
+        self.assertIn("panel.setAttribute(\"aria-busy\", \"false\")", panel_script)
+        self.assertIn("status.missing_files", script)
+        self.assertIn("status.reason", script)
+        self.assertNotIn("innerHTML", panel_script)
 
     def test_non_xlsx_upload_is_rejected_before_workbook_processing(self):
         with self.assertRaises(main.HTTPException) as raised:

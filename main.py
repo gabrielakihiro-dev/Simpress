@@ -2985,6 +2985,12 @@ def get_stats():
     }
 
 
+@app.get("/api/prontidao")
+def get_readiness_status():
+    """Expose local file and feature availability for the status panel."""
+    return get_startup_readiness()
+
+
 transfer_router, gerar_planilha = create_transfer_router(lambda: TEMPLATE_FILE)
 app.include_router(transfer_router)
 
