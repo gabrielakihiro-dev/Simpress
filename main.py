@@ -1939,12 +1939,28 @@ def _edit_alias_workbook(
     ws = wb[sheet_name]
     header_row = [cell.value for cell in next(ws.iter_rows(max_row=1), ())]
     col_map = {
-        re.sub(r"[\s_\-]+", "", str(value)).lower(): index + 1
+        normalize_workbook_header(value): index + 1
         for index, value in enumerate(header_row)
         if value is not None
     }
-    serial_col = col_map.get("numeroserie") or col_map.get("serial") or 4
-    alias_col = col_map.get("apelido") or 5
+    serial_col = next(
+        (col_map.get(alias) for alias in DETAILS_SERIAL_HEADER_ALIASES if col_map.get(alias)),
+        None,
+    )
+    alias_col = next(
+        (col_map.get(alias) for alias in DETAILS_ALIAS_HEADER_ALIASES if col_map.get(alias)),
+        None,
+    )
+    if serial_col is None:
+        raise HTTPException(
+            status_code=409,
+            detail="A planilha EquipamentosDetalhes não contém uma coluna reconhecida para número de série.",
+        )
+    if alias_col is None:
+        raise HTTPException(
+            status_code=409,
+            detail="A planilha EquipamentosDetalhes não contém uma coluna reconhecida de Apelido ou Hostname.",
+        )
     serial_key = normalize_reference_value(target_serial)
     matching_rows = [
         row for row in range(2, ws.max_row + 1)
