@@ -105,6 +105,51 @@ class MaintenanceContractTests(unittest.TestCase):
         self.assertEqual(len(mounts), 1)
         self.assertEqual(mounts[0].path, "/static")
 
+    def test_restore_invalidates_stale_equipment_and_refreshes_inventory_views(self):
+        script = (app_config.STATIC_DIR / "app.js").read_text(encoding="utf-8")
+        invalidation_start = script.index("function invalidarDadosEquipamentoAposRestauracao()")
+        invalidation_end = script.index("const inputSerialInicial", invalidation_start)
+        invalidation = script[invalidation_start:invalidation_end]
+        self.assertIn('serialInput.value = ""', invalidation)
+        self.assertIn("invalidarBuscasEquipamento()", invalidation)
+        self.assertIn("limparSelecaoEquipamento()", invalidation)
+        self.assertIn("fecharAutocomplete()", invalidation)
+
+        restore_start = script.index("async function restaurarHistoricoComparacao")
+        restore_end = script.index("async function consultarHistoricoComparacao", restore_start)
+        restore = script[restore_start:restore_end]
+        for refresh in (
+            "invalidarDadosEquipamentoAposRestauracao()",
+            "carregarEstatisticas()",
+            "carregarUnidades()",
+            "carregarHistoricoComparacoes()",
+            "carregarContagemHistoricoComparacoes()",
+        ):
+            with self.subTest(refresh=refresh):
+                self.assertIn(refresh, restore)
+
+    def test_dialog_overlays_stack_above_the_header_and_keep_keyboard_trapping(self):
+        html = (app_config.STATIC_DIR / "index.html").read_text(encoding="utf-8")
+        css = (app_config.STATIC_DIR / "app.css").read_text(encoding="utf-8")
+        script = (app_config.STATIC_DIR / "app.js").read_text(encoding="utf-8")
+
+        dialogs = re.findall(r'<div id="(modal-[^"]+)" class="([^"]+)"', html)
+        self.assertGreater(len(dialogs), 0)
+        for dialog_id, class_names in dialogs:
+            with self.subTest(dialog=dialog_id):
+                self.assertIn("modal-overlay", class_names)
+
+        overlay = re.search(r"\.modal-overlay\s*\{\s*z-index:\s*(\d+)\s*!important;\s*\}", css)
+        header = re.search(r"\.site-header\s*\{\s*z-index:\s*(\d+)\s*!important;\s*\}", css)
+        self.assertIsNotNone(overlay)
+        self.assertIsNotNone(header)
+        self.assertGreater(int(overlay.group(1)), int(header.group(1)))
+        self.assertIn('dialog.setAttribute("aria-modal", "true")', script)
+        self.assertIn('if (event.key === "Escape")', script)
+        self.assertIn('if (event.key !== "Tab") return;', script)
+        self.assertIn("event.shiftKey", script)
+        self.assertIn("target.focus({ preventScroll: true })", script)
+
     def test_startup_readiness_maps_missing_files_to_unavailable_functions(self):
         with tempfile.TemporaryDirectory() as temp_dir:
             root = Path(temp_dir)
