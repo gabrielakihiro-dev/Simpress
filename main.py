@@ -10,7 +10,6 @@ import sys
 import threading
 import unicodedata
 import uuid
-import zipfile
 from copy import deepcopy
 from contextlib import asynccontextmanager, contextmanager
 from datetime import datetime
@@ -50,8 +49,6 @@ from app_config import (
     INPUT_DIR,
     MAX_UPLOAD_BYTES,
     MAX_UPLOAD_REQUEST_BYTES,
-    MAX_XLSX_ARCHIVE_ENTRIES,
-    MAX_XLSX_UNCOMPRESSED_BYTES,
     MODIFIED_APELIDOS_FILE,
     STATIC_DIR,
     TEMPLATE_FILE,
@@ -64,6 +61,7 @@ from routers.transfers import (
     create_transfer_router,
     formatar_telefone_brasileiro,
 )
+from xlsx_safety import XlsxLimitExceeded, XlsxPackageError, validate_xlsx
 
 from domains.inventory_comparison import (
     COMPARISON_SOURCE_LABELS,
@@ -370,6 +368,7 @@ def _read_details_sheet_dataframe(file_path: Path, sheet_name: str):
     """Lê a série sem inferência numérica e deixa as outras colunas tipadas normalmente."""
     workbook = None
     try:
+        validate_xlsx(file_path)
         workbook = openpyxl.load_workbook(
             file_path, read_only=True, data_only=True, keep_links=False
         )
@@ -393,6 +392,7 @@ def find_details_sheet(file_path: Path) -> Optional[str]:
     """Retorna uma aba EquipamentosDetalhes com os campos usados pelo site."""
     workbook = None
     try:
+        validate_xlsx(file_path)
         workbook = openpyxl.load_workbook(file_path, read_only=True, data_only=True)
         matching_sheets = []
         for worksheet in workbook.worksheets:
@@ -445,30 +445,17 @@ def get_primary_equipment_file() -> Optional[Path]:
 def validate_xlsx_package(file_bytes: bytes) -> None:
     """Rejects non-XLSX, malformed, or excessively large ZIP packages before parsing."""
     try:
-        with zipfile.ZipFile(io.BytesIO(file_bytes)) as archive:
-            entries = archive.infolist()
-            if not entries or len(entries) > MAX_XLSX_ARCHIVE_ENTRIES:
-                raise HTTPException(
-                    status_code=400,
-                    detail="O arquivo enviado não é uma planilha .xlsx válida.",
-                )
-
-            uncompressed_size = sum(entry.file_size for entry in entries)
-            if uncompressed_size > MAX_XLSX_UNCOMPRESSED_BYTES:
-                raise HTTPException(
-                    status_code=413,
-                    detail="O conteúdo descompactado da planilha excede o limite permitido.",
-                )
-
-            required_parts = {"[Content_Types].xml", "xl/workbook.xml"}
-            if not required_parts.issubset({entry.filename for entry in entries}):
-                raise HTTPException(
-                    status_code=400,
-                    detail="O arquivo enviado não é uma planilha .xlsx válida.",
-                )
+        validate_xlsx(file_bytes)
+    except XlsxLimitExceeded as error:
+        raise HTTPException(status_code=413, detail=str(error)) from None
+    except XlsxPackageError:
+        raise HTTPException(
+            status_code=400,
+            detail="O arquivo enviado não é uma planilha .xlsx válida.",
+        ) from None
     except HTTPException:
         raise
-    except (OSError, ValueError, zipfile.BadZipFile, zipfile.LargeZipFile):
+    except (OSError, ValueError):
         raise HTTPException(
             status_code=400,
             detail="O arquivo enviado não é uma planilha .xlsx válida.",
@@ -483,16 +470,12 @@ def _check_startup_xlsx(path: Optional[Path]) -> Dict[str, Any]:
         return {"available": False, "file": path.name, "reason": "ausente"}
 
     try:
-        with zipfile.ZipFile(path) as archive:
-            entries = archive.infolist()
-            if not entries or len(entries) > MAX_XLSX_ARCHIVE_ENTRIES:
-                return {"available": False, "file": path.name, "reason": "pacote XLSX inválido"}
-            if sum(entry.file_size for entry in entries) > MAX_XLSX_UNCOMPRESSED_BYTES:
-                return {"available": False, "file": path.name, "reason": "pacote excede o limite de tamanho"}
-            required_parts = {"[Content_Types].xml", "xl/workbook.xml"}
-            if not required_parts.issubset({entry.filename for entry in entries}):
-                return {"available": False, "file": path.name, "reason": "pacote XLSX inválido"}
-    except (OSError, ValueError, zipfile.BadZipFile, zipfile.LargeZipFile):
+        validate_xlsx(path)
+    except XlsxLimitExceeded:
+        return {"available": False, "file": path.name, "reason": "planilha excede os limites de processamento"}
+    except XlsxPackageError:
+        return {"available": False, "file": path.name, "reason": "arquivo inacessível ou XLSX inválido"}
+    except (OSError, ValueError):
         return {"available": False, "file": path.name, "reason": "arquivo inacessível ou XLSX inválido"}
 
     return {"available": True, "file": path.name, "reason": "OK"}
@@ -775,6 +758,7 @@ def load_export_model_aliases() -> Dict[str, str]:
 
     workbook = None
     try:
+        validate_xlsx(EXPORT_MODEL_FILE)
         workbook = openpyxl.load_workbook(EXPORT_MODEL_FILE, read_only=True, data_only=True)
         for worksheet in workbook.worksheets:
             header_row = [cell.value for cell in next(worksheet.iter_rows(max_row=1), ())]
@@ -1024,6 +1008,7 @@ def count_export_changes(
         model_wb = None
         current_wb = None
         try:
+            validate_xlsx(EXPORT_MODEL_FILE)
             model_wb = openpyxl.load_workbook(EXPORT_MODEL_FILE, read_only=True, data_only=False)
             model_sheet_name = next(
                 (name for name in model_wb.sheetnames if "parque" in name.lower() or "equipamento" in name.lower()),
@@ -2477,6 +2462,7 @@ def exportar_equipamentos():
     current_wb = None
     try:
         with lock_paths([source_file, current_file, ENDPOINT_UPLOAD_FILE, MODIFIED_APELIDOS_FILE]):
+            validate_xlsx(source_file)
             wb = load_workbook_safely(source_file, allow_threaded_comments=True)
             original = workbook_snapshot(wb)
             sheet_target = next(

@@ -22,6 +22,36 @@ with patch(
 PROJECT_ROOT = Path(__file__).resolve().parents[1]
 
 
+def _xlsx_with_worksheet_xml(*worksheet_xml: str) -> bytes:
+    content = io.BytesIO()
+    with zipfile.ZipFile(content, "w") as archive:
+        archive.writestr("[Content_Types].xml", "<Types/>")
+        archive.writestr(
+            "xl/workbook.xml",
+            '<workbook xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main" '
+            'xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships"><sheets>'
+            + "".join(
+                f'<sheet name="Sheet{index}" sheetId="{index}" r:id="rId{index}"/>'
+                for index in range(1, len(worksheet_xml) + 1)
+            )
+            + "</sheets></workbook>",
+        )
+        archive.writestr(
+            "xl/_rels/workbook.xml.rels",
+            '<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">'
+            + "".join(
+                f'<Relationship Id="rId{index}" '
+                'Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/worksheet" '
+                f'Target="worksheets/sheet{index}.xml"/>'
+                for index in range(1, len(worksheet_xml) + 1)
+            )
+            + "</Relationships>",
+        )
+        for index, xml in enumerate(worksheet_xml, start=1):
+            archive.writestr(f"xl/worksheets/sheet{index}.xml", xml)
+    return content.getvalue()
+
+
 class MaintenanceContractTests(unittest.TestCase):
     def test_application_paths_remain_project_relative_and_reexported(self):
         self.assertEqual(app_config.BASE_DIR, PROJECT_ROOT.resolve())
@@ -80,6 +110,62 @@ class MaintenanceContractTests(unittest.TestCase):
             main.validate_uploaded_workbook(b"fictional invalid upload", "endpoint")
 
         self.assertEqual(raised.exception.status_code, 400)
+
+    def test_xlsx_extreme_declared_dimensions_are_rejected_before_openpyxl(self):
+        package = _xlsx_with_worksheet_xml(
+            '<worksheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main">'
+            '<dimension ref="A1:XFD1048576"/><sheetData/></worksheet>'
+        )
+
+        with patch("openpyxl.load_workbook", side_effect=AssertionError("openpyxl must not run")):
+            with self.assertRaises(main.HTTPException) as raised:
+                main.read_workbook_tables(package)
+
+        self.assertEqual(raised.exception.status_code, 413)
+        self.assertIn("limite", raised.exception.detail)
+
+    def test_xlsx_dimension_check_uses_actual_cells_not_only_declared_range(self):
+        package = _xlsx_with_worksheet_xml(
+            '<worksheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main">'
+            '<dimension ref="A1:B2"/><sheetData><row r="250001">'
+            '<c r="A250001" t="inlineStr"><is><t>fixture</t></is></c>'
+            '</row></sheetData></worksheet>'
+        )
+
+        with self.assertRaises(main.HTTPException) as raised:
+            main.validate_uploaded_workbook(package, "endpoint")
+
+        self.assertEqual(raised.exception.status_code, 413)
+
+    def test_xlsx_total_dimension_budget_applies_across_worksheets(self):
+        sheet_xml = (
+            '<worksheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main">'
+            '<dimension ref="A1:Z100000"/><sheetData/></worksheet>'
+        )
+        package = _xlsx_with_worksheet_xml(sheet_xml, sheet_xml)
+
+        with self.assertRaises(main.HTTPException) as raised:
+            main.validate_xlsx_package(package)
+
+        self.assertEqual(raised.exception.status_code, 413)
+
+    def test_xlsx_wide_but_bounded_template_dimension_remains_accepted(self):
+        package = _xlsx_with_worksheet_xml(
+            '<worksheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main">'
+            '<dimension ref="A1:XFD13"/><sheetData/></worksheet>'
+        )
+
+        self.assertIsNone(main.validate_xlsx_package(package))
+
+    def test_xlsx_without_dimension_uses_referenced_cells_and_accepts_small_sheet(self):
+        package = _xlsx_with_worksheet_xml(
+            '<worksheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main">'
+            '<sheetData><row r="1"><c r="A1" t="inlineStr"><is><t>header</t></is></c>'
+            '</row><row r="2"><c r="A2" t="inlineStr"><is><t>value</t></is></c>'
+            '</row></sheetData></worksheet>'
+        )
+
+        self.assertIsNone(main.validate_xlsx_package(package))
 
     def test_frontend_references_assets_served_from_the_existing_static_mount(self):
         index_file = app_config.STATIC_DIR / "index.html"
@@ -154,10 +240,10 @@ class MaintenanceContractTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as temp_dir:
             root = Path(temp_dir)
             details = root / "EquipamentosDetalhes_atual.xlsx"
-
-            with zipfile.ZipFile(details, "w") as archive:
-                archive.writestr("[Content_Types].xml", "<Types/>")
-                archive.writestr("xl/workbook.xml", "<workbook/>")
+            details.write_bytes(_xlsx_with_worksheet_xml(
+                '<worksheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main">'
+                '<dimension ref="A1"/><sheetData/></worksheet>'
+            ))
 
             with (
                 patch.object(main, "get_primary_equipment_file", return_value=details),
