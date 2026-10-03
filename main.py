@@ -1358,6 +1358,8 @@ def _load_database_unlocked() -> bool:
 
         new_equipamentos_cache[serial_key] = {
             "serial": raw_serial,
+            "_source_file": str(active_details_file.resolve()),
+            "_source_sheet": sheet_target,
             "modelo": modelo,
             "tipo": tipo,
             "apelido": apelido,
@@ -1525,6 +1527,7 @@ load_database()
 # Models for API
 class EquipamentoUpdatePayload(BaseModel):
     serial: str = Field(..., description="Número de Série do Equipamento")
+    novo: bool = Field(False, description="Indica que o formulário está cadastrando um equipamento novo")
     modelo: Optional[str] = Field("", description="Modelo do Equipamento")
     tipo: Optional[str] = Field("", description="Tipo (Notebook, Micro Computador, Headsets...)")
     apelido: Optional[str] = Field("", description="Apelido / Hostname")
@@ -1563,21 +1566,32 @@ class ComparisonRestorePayload(BaseModel):
     preview_token: str = Field(..., min_length=64, max_length=64)
 
 
-def _edit_equipment_workbook(wb, payload: EquipamentoUpdatePayload):
-    target_sheet_name = next(
-        (name for name in wb.sheetnames if "equipamento" in name.lower() or "parque" in name.lower()),
-        wb.sheetnames[0] if wb.sheetnames else None,
-    )
+def _edit_equipment_workbook(
+    wb,
+    payload: EquipamentoUpdatePayload,
+    target_sheet_name: Optional[str] = None,
+    record_must_exist: Optional[bool] = None,
+):
+    if target_sheet_name is None:
+        target_sheet_name = next(
+            (name for name in wb.sheetnames if "equipamento" in name.lower() or "parque" in name.lower()),
+            wb.sheetnames[0] if wb.sheetnames else None,
+        )
+    elif target_sheet_name not in wb.sheetnames:
+        return None
     if target_sheet_name is None:
         return None
     ws = wb[target_sheet_name]
     header_row = [cell.value for cell in next(ws.iter_rows(max_row=1), ())]
     col_map = {
-        re.sub(r"[\s_\-]+", "", str(value)).lower(): index + 1
+        normalize_workbook_header(value): index + 1
         for index, value in enumerate(header_row)
         if value is not None
     }
-    serial_col = col_map.get("numeroserie") or col_map.get("serial")
+    serial_col = next(
+        (col_map.get(alias) for alias in DETAILS_SERIAL_HEADER_ALIASES if col_map.get(alias)),
+        None,
+    )
     if not serial_col:
         return None
 
@@ -1587,6 +1601,21 @@ def _edit_equipment_workbook(wb, payload: EquipamentoUpdatePayload):
         if normalize_reference_value(ws.cell(row=row, column=serial_col).value) == target_serial
         and target_serial
     ]
+    if len(matching_rows) > 1:
+        raise HTTPException(
+            status_code=409,
+            detail=f"A série {payload.serial.strip()} aparece mais de uma vez na aba '{ws.title}'; nenhum registro foi alterado.",
+        )
+    if record_must_exist is True and not matching_rows:
+        raise HTTPException(
+            status_code=409,
+            detail=f"A série {payload.serial.strip()} não está mais na planilha ativa; recarregue o inventário antes de editar.",
+        )
+    if record_must_exist is False and matching_rows:
+        raise HTTPException(
+            status_code=409,
+            detail=f"A série {payload.serial.strip()} já existe na planilha ativa; recarregue o inventário antes de cadastrar.",
+        )
     target_row = matching_rows[0] if matching_rows else ws.max_row + 1
     expected: Dict[tuple, Any] = {}
 
@@ -1599,14 +1628,14 @@ def _edit_equipment_workbook(wb, payload: EquipamentoUpdatePayload):
 
     if not matching_rows:
         set_value(serial_col, payload.serial.strip().upper())
-        set_value(col_map.get("codigocontrato"), 16467)
-        set_value(col_map.get("itemdecontrato"), target_row - 1)
-        set_value(col_map.get("razaosocial"), "SERV DE APOIO AS MICRO E PEQ EMP DO PARANA SEBRAE PR")
+        set_value(col_map.get("CODIGOCONTRATO"), 16467)
+        set_value(col_map.get("ITEMDECONTRATO"), target_row - 1)
+        set_value(col_map.get("RAZAOSOCIAL"), "SERV DE APOIO AS MICRO E PEQ EMP DO PARANA SEBRAE PR")
 
-    set_value(col_map.get("apelido"), payload.apelido.strip() if payload.apelido is not None else None)
-    set_value(col_map.get("modelo"), payload.modelo.strip() if payload.modelo is not None else None)
-    set_value(col_map.get("tipo") or col_map.get("classeequipamento"), payload.tipo.strip() if payload.tipo is not None else None)
-    set_value(col_map.get("idcliente"), payload.idCliente.strip() if payload.idCliente is not None else None)
+    set_value(col_map.get("APELIDO"), payload.apelido.strip() if payload.apelido is not None else None)
+    set_value(col_map.get("MODELO"), payload.modelo.strip() if payload.modelo is not None else None)
+    set_value(col_map.get("TIPO") or col_map.get("CLASSEEQUIPAMENTO"), payload.tipo.strip() if payload.tipo is not None else None)
+    set_value(col_map.get("IDCLIENTE"), payload.idCliente.strip() if payload.idCliente is not None else None)
     return expected
 
 
@@ -1614,6 +1643,8 @@ def update_equipment_in_workbook_file(
     file_path: Path,
     payload: EquipamentoUpdatePayload,
     transaction: Optional[AtomicFileTransaction] = None,
+    target_sheet_name: Optional[str] = None,
+    record_must_exist: Optional[bool] = None,
 ) -> bool:
     """Prepare and validate a workbook update before its atomic replacement."""
     file_path = Path(file_path)
@@ -1624,14 +1655,18 @@ def update_equipment_in_workbook_file(
             return stage_workbook_update(
                 transaction,
                 file_path,
-                lambda wb: _edit_equipment_workbook(wb, payload),
+                lambda wb: _edit_equipment_workbook(
+                    wb, payload, target_sheet_name, record_must_exist
+                ),
                 allow_dimension_growth=True,
             )
         with AtomicFileTransaction(TRANSACTION_ROOT, [file_path]) as own_transaction:
             saved = stage_workbook_update(
                 own_transaction,
                 file_path,
-                lambda wb: _edit_equipment_workbook(wb, payload),
+                lambda wb: _edit_equipment_workbook(
+                    wb, payload, target_sheet_name, record_must_exist
+                ),
                 allow_dimension_growth=True,
             )
             if saved:
@@ -1685,30 +1720,36 @@ def save_equipment_to_excel(
     payload: EquipamentoUpdatePayload,
     json_mutations: Optional[Dict[Path, Any]] = None,
 ):
-    """Salva as alterações do equipamento diretamente em EquipamentosDetalhes."""
+    """Salva um equipamento somente na fonte e na aba associadas ao cache atual."""
     target_serial_upper = payload.serial.strip().upper()
-
-    # Coletar as versões EquipamentosDetalhes existentes
-    target_files: List[Path] = []
-    
-    equip_model = get_equipamentos_template_file()
-    if equip_model is not None and equip_model.exists():
-        target_files.append(equip_model)
-
-    for f in get_details_files():
-        if f not in target_files and f.exists():
-            target_files.append(f)
-
-    if not target_files:
+    detail_files = [path for path in get_details_files() if path.is_file()]
+    if not detail_files:
         raise HTTPException(status_code=404, detail="Nenhuma planilha EquipamentosDetalhes encontrada no servidor.")
 
-    json_mutations = json_mutations or {}
+    json_mutations = dict(json_mutations or {})
     try:
-        transaction_targets = [*target_files, *json_mutations.keys()]
+        # Lock every candidate while resolving the current primary source. Only
+        # that source is staged below; legacy copies remain untouched.
+        transaction_targets = [*detail_files, *json_mutations.keys()]
         with AtomicFileTransaction(TRANSACTION_ROOT, transaction_targets) as transaction:
             with STATE_LOCK:
                 cached_equipment = deepcopy(equipamentos_cache.get(target_serial_upper))
+            if cached_equipment is None and not payload.novo:
+                raise HTTPException(
+                    status_code=409,
+                    detail="Este equipamento não está mais na base carregada; recarregue o inventário antes de editar.",
+                )
+            if cached_equipment is not None and payload.novo:
+                raise HTTPException(
+                    status_code=409,
+                    detail="A série já pertence a um equipamento carregado; atualize o inventário antes de cadastrar outra vez.",
+                )
             if cached_equipment is not None:
+                if cached_equipment.get("invall_alias_status") == "serie_detalhes_duplicada":
+                    raise HTTPException(
+                        status_code=409,
+                        detail=f"A série {target_serial_upper} está duplicada na base ativa; nenhum registro foi alterado.",
+                    )
                 # Preserve the latest local alias when this save waited behind
                 # a concurrent alias edit, and discard a now-stale new-record override.
                 payload.apelido = cached_equipment.get(
@@ -1716,11 +1757,45 @@ def save_equipment_to_excel(
                 )
                 json_mutations.pop(MODIFIED_APELIDOS_FILE, None)
 
-            salvo_em_algum = False
-            for tf in target_files:
-                if update_equipment_in_workbook_file(tf, payload, transaction):
-                    salvo_em_algum = True
-            if not salvo_em_algum:
+            active_file = get_primary_equipment_file()
+            if active_file is None or not active_file.is_file():
+                raise HTTPException(status_code=404, detail="Nenhuma planilha EquipamentosDetalhes válida está ativa.")
+
+            target_file = active_file.resolve()
+            locked_files = {path.resolve() for path in detail_files}
+            if target_file not in locked_files:
+                raise HTTPException(
+                    status_code=409,
+                    detail="A lista de inventários mudou durante a edição; recarregue a base e tente novamente.",
+                )
+
+            cached_source = cached_equipment.get("_source_file") if cached_equipment else None
+            if cached_source:
+                if Path(cached_source).resolve() != target_file:
+                    raise HTTPException(
+                        status_code=409,
+                        detail="A base ativa mudou depois que este equipamento foi carregado; recarregue-o antes de editar.",
+                    )
+
+            current_sheet = find_details_sheet(target_file)
+            if current_sheet is None:
+                raise HTTPException(status_code=409, detail="A base ativa não contém uma aba de equipamentos válida.")
+            cached_sheet = cached_equipment.get("_source_sheet") if cached_equipment else None
+            if cached_sheet and cached_sheet != current_sheet:
+                raise HTTPException(
+                    status_code=409,
+                    detail="A aba de origem mudou depois que este equipamento foi carregado; recarregue-o antes de editar.",
+                )
+            target_sheet = cached_sheet or current_sheet
+
+            saved = update_equipment_in_workbook_file(
+                target_file,
+                payload,
+                transaction,
+                target_sheet_name=target_sheet,
+                record_must_exist=not payload.novo,
+            )
+            if not saved:
                 raise HTTPException(status_code=500, detail="Não foi possível atualizar o equipamento na planilha.")
             for path, updater in json_mutations.items():
                 transaction.update_json(path, updater, [] if path == ALIAS_HISTORY_FILE else {})
@@ -1746,6 +1821,8 @@ def save_equipment_to_excel(
             local_alias = manual_aliases.get(normalized_serial, payload.apelido or "")
             updated_equipment = {
                 "serial": target_serial_upper,
+                "_source_file": str(target_file),
+                "_source_sheet": target_sheet,
                 "modelo": payload.modelo.strip() if payload.modelo else "",
                 "tipo": payload.tipo.strip() if payload.tipo else "",
                 "apelido": local_alias,
@@ -1809,6 +1886,16 @@ def salvar_equipamento(payload: EquipamentoUpdatePayload):
     
     target_serial = payload.serial.strip().upper()
     equipamento_existente = equipamentos_cache.get(target_serial)
+    if payload.novo and equipamento_existente is not None:
+        raise HTTPException(
+            status_code=409,
+            detail="A série já está cadastrada; atualize a base antes de criar um novo equipamento.",
+        )
+    if not payload.novo and equipamento_existente is None:
+        raise HTTPException(
+            status_code=409,
+            detail="Este equipamento não está mais na base carregada; recarregue o inventário antes de editar.",
+        )
     if equipamento_existente is not None:
         # Para equipamentos já cadastrados, o apelido só pode ser alterado pela rota dedicada.
         # Isso impede que o formulário de dados/endereço sobrescreva apelidos acidentalmente.

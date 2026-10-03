@@ -2657,6 +2657,7 @@
 
       const payload = {
         serial: serial,
+        novo: !document.getElementById("edit-serial").readOnly,
         modelo: document.getElementById("edit-modelo").value.trim(),
         tipo: document.getElementById("edit-tipo").value,
         apelido: currentEquipamento && currentEquipamento.serial === serial

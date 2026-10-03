@@ -2,6 +2,7 @@ import asyncio
 import copy
 import io
 import json
+import os
 import tempfile
 import threading
 import time
@@ -276,6 +277,173 @@ class WorkflowIntegrityTests(unittest.TestCase):
         self.assertNotIn("HOST-SEM-SERIE", main.equipamentos_cache)
         self.assertEqual(main.equipamentos_cache["001234"]["apelido"], "HOST-TEXTO")
         self.assertEqual(main.equipamentos_cache["1234"]["apelido"], "HOST-NUMERICO")
+
+    def test_equipment_edit_changes_only_loaded_source_and_keeps_other_active_records(self):
+        archived = self.input_dir / "EquipamentosDetalhes_arquivo_antigo.xlsx"
+        make_details(self.details, [
+            ("SN-EDITAR", "ALIAS-EDITAR", "Modelo antes", "Maringá", "Notebook", "87000000"),
+            ("SN-MANTER", "ALIAS-MANTER", "Modelo manter", "Londrina", "Notebook", "86000000"),
+        ])
+        make_details(archived, [
+            ("SN-ARQUIVO", "ALIAS-ARQUIVO", "Modelo arquivo", "Ponta Grossa", "Notebook", "84000000"),
+        ])
+        make_endpoint(self.endpoint, [("OUTRA-SERIE", "HOST-OUTRO")])
+        make_model(self.model)
+        timestamp = time.time()
+        os.utime(archived, (timestamp - 60, timestamp - 60))
+        os.utime(self.details, (timestamp, timestamp))
+        archived_before = archived.read_bytes()
+
+        self.assertTrue(main.load_database())
+        self.assertEqual(main.get_primary_equipment_file().resolve(), self.details.resolve())
+        selected = main.get_equipamento("SN-EDITAR")
+        self.assertEqual(selected["modelo"], "Modelo antes")
+
+        result = main.salvar_equipamento(main.EquipamentoUpdatePayload(
+            serial=selected["serial"],
+            modelo="Modelo atualizado",
+            tipo="Notebook",
+            idCliente="CLIENTE-ATUALIZADO",
+        ))
+
+        self.assertTrue(result["sucesso"])
+        self.assertEqual(archived.read_bytes(), archived_before)
+        self.assertEqual(main.get_primary_equipment_file().resolve(), self.details.resolve())
+        self.assertTrue(main.load_database())
+        self.assertIn("SN-EDITAR", main.equipamentos_cache)
+        self.assertIn("SN-MANTER", main.equipamentos_cache)
+        self.assertEqual(main.equipamentos_cache["SN-EDITAR"]["modelo"], "Modelo atualizado")
+        self.assertEqual(main.equipamentos_cache["SN-MANTER"]["modelo"], "Modelo manter")
+
+    def test_equipment_edit_refuses_duplicate_serial_without_writing(self):
+        make_details(self.details, [
+            ("SN-DUP", "ALIAS-PRIMEIRO", "Modelo A", "Maringá", "Notebook", "87000000"),
+        ])
+        make_endpoint(self.endpoint, [("OUTRA-SERIE", "HOST-OUTRO")])
+        make_model(self.model)
+        self.assertTrue(main.load_database())
+
+        workbook = openpyxl.load_workbook(self.details)
+        workbook["EquipamentosDetalhes"].append(
+            ["SN-DUP", "ALIAS-SEGUNDO", "Modelo B", "Londrina", "Notebook", "86000000"]
+        )
+        workbook.save(self.details)
+        workbook.close()
+        before = self.details.read_bytes()
+        cache_before = copy.deepcopy(main.equipamentos_cache)
+
+        with self.assertRaises(main.HTTPException) as raised:
+            main.salvar_equipamento(main.EquipamentoUpdatePayload(
+                serial="SN-DUP", modelo="Modelo incorreto", tipo="Notebook"
+            ))
+
+        self.assertEqual(raised.exception.status_code, 409)
+        self.assertIn("mais de uma vez", raised.exception.detail)
+        self.assertEqual(self.details.read_bytes(), before)
+        self.assertEqual(main.equipamentos_cache, cache_before)
+
+        self.assertTrue(main.load_database())
+        cache_before = copy.deepcopy(main.equipamentos_cache)
+        with self.assertRaises(main.HTTPException) as raised:
+            main.salvar_equipamento(main.EquipamentoUpdatePayload(
+                serial="SN-DUP", modelo="Modelo incorreto", tipo="Notebook"
+            ))
+        self.assertEqual(raised.exception.status_code, 409)
+        self.assertIn("duplicada", raised.exception.detail)
+        self.assertEqual(self.details.read_bytes(), before)
+        self.assertEqual(main.equipamentos_cache, cache_before)
+
+    def test_equipment_edit_refuses_a_new_active_source_after_cache_load(self):
+        make_details(self.details, [
+            ("SN-CACHE", "ALIAS-CACHE", "Modelo A", "Maringá", "Notebook", "87000000"),
+        ])
+        make_endpoint(self.endpoint, [("OUTRA-SERIE", "HOST-OUTRO")])
+        make_model(self.model)
+        self.assertTrue(main.load_database())
+        cache_before = copy.deepcopy(main.equipamentos_cache)
+        source_before = self.details.read_bytes()
+
+        newer_source = self.input_dir / "EquipamentosDetalhes_mais_novo.xlsx"
+        make_details(newer_source, [
+            ("SN-NOVO", "ALIAS-NOVO", "Modelo B", "Londrina", "Notebook", "86000000"),
+        ])
+        timestamp = time.time() + 60
+        os.utime(newer_source, (timestamp, timestamp))
+        newer_before = newer_source.read_bytes()
+
+        with self.assertRaises(main.HTTPException) as raised:
+            main.salvar_equipamento(main.EquipamentoUpdatePayload(
+                serial="SN-CACHE", modelo="Modelo alterado", tipo="Notebook"
+            ))
+
+        self.assertEqual(raised.exception.status_code, 409)
+        self.assertIn("base ativa mudou", raised.exception.detail)
+        self.assertEqual(self.details.read_bytes(), source_before)
+        self.assertEqual(newer_source.read_bytes(), newer_before)
+        self.assertEqual(main.equipamentos_cache, cache_before)
+
+    def test_equipment_edit_failure_preserves_workbook_and_cache(self):
+        make_details(self.details, [
+            ("SN-FALHA", "ALIAS-ORIGINAL", "Modelo original", "Maringá", "Notebook", "87000000"),
+        ])
+        make_endpoint(self.endpoint, [("OUTRA-SERIE", "HOST-OUTRO")])
+        make_model(self.model)
+        self.assertTrue(main.load_database())
+        before = self.details.read_bytes()
+        cache_before = copy.deepcopy(main.equipamentos_cache)
+
+        with patch.object(main, "stage_workbook_update", side_effect=main.FileTransactionError("falha fictícia")):
+            with self.assertRaises(main.HTTPException) as raised:
+                main.salvar_equipamento(main.EquipamentoUpdatePayload(
+                    serial="SN-FALHA", modelo="Modelo alterado", tipo="Notebook"
+                ))
+
+        self.assertEqual(raised.exception.status_code, 500)
+        self.assertEqual(self.details.read_bytes(), before)
+        self.assertEqual(main.equipamentos_cache, cache_before)
+
+    def test_equipment_edit_refuses_to_recreate_a_record_removed_after_load(self):
+        make_details(self.details, [
+            ("SN-REMOVIDO", "ALIAS-ORIGINAL", "Modelo original", "Maringá", "Notebook", "87000000"),
+        ])
+        make_endpoint(self.endpoint, [("OUTRA-SERIE", "HOST-OUTRO")])
+        make_model(self.model)
+        self.assertTrue(main.load_database())
+        cache_before = copy.deepcopy(main.equipamentos_cache)
+
+        make_details(self.details, [
+            ("SN-ATUAL", "ALIAS-ATUAL", "Modelo atual", "Londrina", "Notebook", "86000000"),
+        ])
+        source_before = self.details.read_bytes()
+
+        with self.assertRaises(main.HTTPException) as raised:
+            main.salvar_equipamento(main.EquipamentoUpdatePayload(
+                serial="SN-REMOVIDO", modelo="Modelo alterado", tipo="Notebook"
+            ))
+
+        self.assertEqual(raised.exception.status_code, 409)
+        self.assertIn("não está mais", raised.exception.detail)
+        self.assertEqual(self.details.read_bytes(), source_before)
+        self.assertEqual(main.equipamentos_cache, cache_before)
+
+    def test_new_equipment_is_appended_only_when_marked_as_new(self):
+        make_details(self.details, [
+            ("SN-BASE", "ALIAS-BASE", "Modelo base", "Maringá", "Notebook", "87000000"),
+        ])
+        make_endpoint(self.endpoint, [("OUTRA-SERIE", "HOST-OUTRO")])
+        make_model(self.model)
+        self.assertTrue(main.load_database())
+
+        result = main.salvar_equipamento(main.EquipamentoUpdatePayload(
+            serial="SN-NOVO", novo=True, modelo="Modelo novo", tipo="Notebook",
+            apelido="ALIAS-NOVO", idCliente="CLIENTE-NOVO",
+        ))
+
+        self.assertTrue(result["sucesso"])
+        self.assertIn("SN-NOVO", main.equipamentos_cache)
+        self.assertTrue(main.load_database())
+        self.assertIn("SN-BASE", main.equipamentos_cache)
+        self.assertIn("SN-NOVO", main.equipamentos_cache)
 
     def test_invall_is_joined_by_normalized_serial_for_site_and_search_without_rewriting_details(self):
         make_details(self.details, [
