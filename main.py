@@ -15,6 +15,7 @@ from contextlib import asynccontextmanager, contextmanager
 from datetime import datetime
 from pathlib import Path
 from typing import Dict, List, Optional, Any, Set
+from urllib.parse import urlsplit
 
 import openpyxl
 import pandas as pd
@@ -1205,7 +1206,7 @@ app = FastAPI(
 
 
 class LocalRequestSafetyMiddleware:
-    """Limits upload request size and prevents raw internal exceptions reaching clients or logs."""
+    """Restrict local request authorities, cap uploads, and hide internal exceptions."""
 
     def __init__(self, app):
         self.app = app
@@ -1216,16 +1217,37 @@ class LocalRequestSafetyMiddleware:
             return
 
         path = scope.get("path", "")
-        headers = {key.lower(): value for key, value in scope.get("headers", [])}
-        origin = headers.get(b"origin")
-        allowed_local_origins = {
-            b"http://127.0.0.1:8000",
-            b"http://localhost:8000",
-        }
-        if (
-            path.startswith("/api/")
-            and origin is not None
-            and origin.lower() not in allowed_local_origins
+        raw_headers = scope.get("headers", [])
+        headers = {key.lower(): value for key, value in raw_headers}
+        host_values = [value for key, value in raw_headers if key.lower() == b"host"]
+        if len(host_values) != 1:
+            response = JSONResponse(
+                status_code=400,
+                content={"detail": "O cabeçalho Host da solicitação é inválido."},
+            )
+            await response(scope, receive, send)
+            return
+
+        host_authority = _parse_request_authority(host_values[0])
+        if host_authority is None:
+            response = JSONResponse(
+                status_code=400,
+                content={"detail": "O cabeçalho Host da solicitação é inválido."},
+            )
+            await response(scope, receive, send)
+            return
+        if host_authority not in _ALLOWED_LOCAL_AUTHORITIES:
+            response = JSONResponse(
+                status_code=403,
+                content={"detail": "O Host não está autorizado para a aplicação local."},
+            )
+            await response(scope, receive, send)
+            return
+
+        origin_values = [value for key, value in raw_headers if key.lower() == b"origin"]
+        if path.startswith("/api/") and origin_values and (
+            len(origin_values) != 1
+            or _parse_request_authority(origin_values[0], is_origin=True) != host_authority
         ):
             response = JSONResponse(
                 status_code=403,
@@ -1294,6 +1316,53 @@ class LocalRequestSafetyMiddleware:
                 content={"detail": "Falha interna do servidor. Consulte os logs locais."},
             )
             await response(scope, receive, send)
+
+
+_ALLOWED_LOCAL_AUTHORITIES = frozenset({
+    ("127.0.0.1", 8000),
+    ("localhost", 8000),
+    ("::1", 8000),
+})
+
+
+def _parse_request_authority(
+    value: bytes,
+    *,
+    is_origin: bool = False,
+) -> Optional[tuple[str, int]]:
+    """Normalize a local Host or HTTP Origin without accepting suffix tricks."""
+    try:
+        text = value.decode("ascii")
+    except UnicodeDecodeError:
+        return None
+    if not text or text != text.strip() or any(ord(character) < 0x20 for character in text):
+        return None
+
+    try:
+        if is_origin:
+            parsed = urlsplit(text)
+            if (
+                parsed.scheme.lower() != "http"
+                or not parsed.netloc
+                or parsed.path
+                or parsed.query
+                or parsed.fragment
+            ):
+                return None
+        else:
+            parsed = urlsplit(f"//{text}")
+            if parsed.path or parsed.query or parsed.fragment:
+                return None
+        if parsed.username is not None or parsed.password is not None:
+            return None
+        hostname = parsed.hostname
+        port = parsed.port
+    except ValueError:
+        return None
+
+    if hostname is None or port is None:
+        return None
+    return hostname.rstrip(".").lower(), port
 
 
 class UploadBodyTooLarge(Exception):
