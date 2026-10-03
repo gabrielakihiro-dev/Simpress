@@ -61,7 +61,7 @@ class TransferenciaPayload(BaseModel):
 
 
 def formatar_telefone_brasileiro(value: Any) -> str:
-    """Padroniza telefones brasileiros no formato (DD) 9xxxx-xxxx e preserva ramais."""
+    """Formata telefones brasileiros fixos e móveis e preserva ramais explícitos."""
     original = str(value or "").strip()
     if not original:
         return ""
@@ -77,24 +77,43 @@ def formatar_telefone_brasileiro(value: Any) -> str:
     telefone_original = original[:ramal_explicito.start()] if ramal_explicito else original
     digitos = re.sub(r"\D", "", telefone_original)
 
-    if re.match(r"^\s*\+55\b", telefone_original) and len(digitos) >= 13:
+    prefixo_mais = bool(re.match(r"^\s*\+55", telefone_original))
+    prefixo_zero = bool(re.match(r"^\s*0055", telefone_original))
+    prefixo_sem_sinal = not prefixo_mais and not prefixo_zero and digitos.startswith("55")
+    if prefixo_mais:
+        if len(digitos) not in (12, 13):
+            return original
         digitos = digitos[2:]
-    elif re.match(r"^\s*0055\b", telefone_original) and len(digitos) >= 15:
+    elif prefixo_zero:
+        if len(digitos) not in (14, 15):
+            return original
         digitos = digitos[4:]
+    elif prefixo_sem_sinal and len(digitos) in (12, 13):
+        digitos = digitos[2:]
 
-    if len(digitos) < 3:
+    if len(digitos) < 3 or len(digitos) > 11:
         return original
 
     ddd = digitos[:2]
-    numero = digitos[2:11]
-    numero_formatado = f"{numero[:5]}-{numero[5:]}" if len(numero) > 5 else numero
+    numero = digitos[2:]
+    if len(numero) == 8:
+        numero_formatado = f"{numero[:4]}-{numero[4:]}"
+    elif len(numero) == 9:
+        numero_formatado = f"{numero[:5]}-{numero[5:]}"
+    else:
+        numero_formatado = f"{numero[:5]}-{numero[5:]}" if len(numero) > 5 else numero
     telefone_formatado = f"({ddd}) {numero_formatado}"
-    ramal = ramal_explicito.group(1) if ramal_explicito else digitos[11:]
+    ramal = ramal_explicito.group(1) if ramal_explicito else ""
     return f"{telefone_formatado} Ramal: {ramal}" if ramal else telefone_formatado
 
 
 def _gerar_planilha_transferencia(payload: TransferenciaPayload, template_file: Path):
     campos_obrigatorios = (
+        ("serial", "Número de série do equipamento"),
+        ("retirada_cnpj", "CNPJ da unidade de retirada"),
+        ("retirada_endereco", "Endereço da unidade de retirada"),
+        ("entrega_cnpj", "CNPJ da unidade de entrega"),
+        ("entrega_endereco", "Endereço da unidade de entrega"),
         ("retirada_contato", "Nome do contato na retirada"),
         ("retirada_email", "E-mail do contato na retirada"),
         ("retirada_telefone", "Telefone / Ramal do contato na retirada"),

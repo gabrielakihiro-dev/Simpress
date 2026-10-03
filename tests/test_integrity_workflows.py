@@ -123,6 +123,7 @@ def make_transfer_payload(**overrides):
         "serial": "SERIE-FICTICIA",
         "descricao_equipamento": "EQUIPAMENTO FICTICIO",
         "contrato": 12345,
+        "retirada_cnpj": "00.000.000/0000-00",
         "retirada_endereco": "ORIGEM FICTICIA",
         "retirada_contato": "REMETENTE FICTICIO",
         "retirada_email": "remetente@example.invalid",
@@ -248,6 +249,22 @@ class WorkflowIntegrityTests(unittest.TestCase):
         main.equipamentos_cache, main.unidades_cache, main.stats_cache = self.old_state
         self.stack.close()
         self.temp_context.cleanup()
+
+    def test_partial_equipment_search_does_not_return_an_arbitrary_exact_lookup(self):
+        main.equipamentos_cache = {
+            "SERIE-ABC-001": {"serial": "SERIE-ABC-001", "modelo": "MODELO A"},
+            "SERIE-ABC-002": {"serial": "SERIE-ABC-002", "modelo": "MODELO B"},
+        }
+
+        with self.assertRaises(main.HTTPException) as raised:
+            main.get_equipamento("ABC")
+
+        self.assertEqual(raised.exception.status_code, 404)
+        self.assertEqual(
+            [item["serial"] for item in main._buscar_equipamentos_por_termo("ABC")],
+            ["SERIE-ABC-001", "SERIE-ABC-002"],
+        )
+        self.assertEqual(main.get_equipamento("serie-abc-002")["serial"], "SERIE-ABC-002")
 
     def test_detail_upload_headers_and_active_reader_share_normalization(self):
         variants = ("NumeroSerie", "numero_serie", "NÚMERO-SERIE", "Número de Série")
@@ -595,6 +612,7 @@ class WorkflowIntegrityTests(unittest.TestCase):
             serial="SERIE-FICTICIA",
             descricao_equipamento="EQUIPAMENTO FICTICIO",
             contrato=12345,
+            retirada_cnpj="00.000.000/0000-00",
             retirada_endereco="ORIGEM FICTICIA",
             retirada_contato="REMETENTE FICTICIO",
             retirada_email="remetente@example.invalid",
@@ -659,6 +677,39 @@ class WorkflowIntegrityTests(unittest.TestCase):
         self.assertEqual(generated_workbook["Transferência"]["F31"].value, "Escritório não fecha")
         self.assertEqual(generated_workbook["Transferência"]["J31"].value, "")
         generated_workbook.close()
+
+    def test_transfer_rejects_empty_essential_fields_before_opening_the_template(self):
+        template = make_transfer_template(self.input_dir / "modelo-validacao-ficticio.xlsx")
+        invalid_fields = (
+            ("serial", " ", "Número de série do equipamento"),
+            ("retirada_cnpj", "  ", "CNPJ da unidade de retirada"),
+            ("retirada_endereco", "", "Endereço da unidade de retirada"),
+            ("entrega_cnpj", " ", "CNPJ da unidade de entrega"),
+            ("entrega_endereco", "  ", "Endereço da unidade de entrega"),
+        )
+
+        with patch.object(main, "TEMPLATE_FILE", template):
+            for field, empty_value, label in invalid_fields:
+                with self.subTest(field=field):
+                    with self.assertRaises(main.HTTPException) as raised:
+                        main.gerar_planilha(make_transfer_payload(**{field: empty_value}))
+                    self.assertEqual(raised.exception.status_code, 422)
+                    self.assertIn(label, raised.exception.detail)
+
+    def test_transfer_phone_formatting_handles_fixed_mobile_and_country_prefixes(self):
+        cases = (
+            ("4133334444", "(41) 3333-4444"),
+            ("+55 41 3333-4444", "(41) 3333-4444"),
+            ("00554133334444", "(41) 3333-4444"),
+            ("554133334444", "(41) 3333-4444"),
+            ("41999998888", "(41) 99999-8888"),
+            ("+55 41 99999-8888", "(41) 99999-8888"),
+            ("005541999998888", "(41) 99999-8888"),
+            ("(41) 3333-4444 ramal 27", "(41) 3333-4444 Ramal: 27"),
+        )
+        for original, expected in cases:
+            with self.subTest(original=original):
+                self.assertEqual(main.formatar_telefone_brasileiro(original), expected)
 
     def test_saving_a_new_equipment_row_grows_dimensions_and_ignores_legacy_location_fields(self):
         path = self.input_dir / "equipamentos-novos-ficticio.xlsx"
