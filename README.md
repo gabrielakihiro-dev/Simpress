@@ -94,6 +94,8 @@ No navegador, acesse:
 - Aplicação: <http://127.0.0.1:8000>
 - Documentação da API: <http://127.0.0.1:8000/docs>
 
+O servidor aceita apenas `localhost`, `127.0.0.1` ou `[::1]` na porta 8000. Para chamadas de API feitas pelo navegador, a origem deve corresponder ao mesmo host local.
+
 Para encerrar o servidor, volte à janela em que ele está rodando e pressione `Ctrl+C`.
 
 ## Passo a passo: gerar uma transferência

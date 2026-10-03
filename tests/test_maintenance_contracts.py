@@ -52,6 +52,34 @@ def _xlsx_with_worksheet_xml(*worksheet_xml: str) -> bytes:
     return content.getvalue()
 
 
+def _run_local_safety_middleware(host_values, origin=None, path="/api/stats"):
+    state = {"passed": False, "messages": []}
+
+    async def app(scope, receive, send):
+        state["passed"] = True
+        await send({"type": "http.response.start", "status": 200, "headers": []})
+        await send({"type": "http.response.body", "body": b"ok"})
+
+    async def receive():
+        return {"type": "http.request", "body": b"", "more_body": False}
+
+    async def send(message):
+        state["messages"].append(message)
+
+    headers = [(b"host", host.encode("ascii")) for host in host_values]
+    if origin is not None:
+        headers.append((b"origin", origin.encode("ascii")))
+    scope = {"type": "http", "path": path, "headers": headers}
+    middleware = main.LocalRequestSafetyMiddleware(app)
+    asyncio.run(middleware(scope, receive, send))
+    status = next(
+        message["status"]
+        for message in state["messages"]
+        if message["type"] == "http.response.start"
+    )
+    return status, state["passed"]
+
+
 class MaintenanceContractTests(unittest.TestCase):
     def test_application_paths_remain_project_relative_and_reexported(self):
         self.assertEqual(app_config.BASE_DIR, PROJECT_ROOT.resolve())
@@ -110,6 +138,53 @@ class MaintenanceContractTests(unittest.TestCase):
             main.validate_uploaded_workbook(b"fictional invalid upload", "endpoint")
 
         self.assertEqual(raised.exception.status_code, 400)
+
+    def test_local_request_middleware_rejects_untrusted_hosts_without_origin(self):
+        for host in ("attacker.example:8000", "localhost.attacker.example:8000", "192.168.1.12:8000"):
+            with self.subTest(host=host):
+                status, reached_app = _run_local_safety_middleware([host])
+                self.assertEqual(status, 403)
+                self.assertFalse(reached_app)
+
+    def test_local_request_middleware_accepts_loopback_hosts_and_originless_clients(self):
+        for host in ("localhost:8000", "127.0.0.1:8000", "[::1]:8000"):
+            with self.subTest(host=host):
+                status, reached_app = _run_local_safety_middleware([host])
+                self.assertEqual(status, 200)
+                self.assertTrue(reached_app)
+
+    def test_local_request_middleware_requires_api_origin_to_match_host(self):
+        allowed = (
+            ("localhost:8000", "http://localhost:8000"),
+            ("127.0.0.1:8000", "http://127.0.0.1:8000"),
+            ("[::1]:8000", "http://[::1]:8000"),
+        )
+        for host, origin in allowed:
+            with self.subTest(host=host, origin=origin):
+                status, reached_app = _run_local_safety_middleware([host], origin)
+                self.assertEqual(status, 200)
+                self.assertTrue(reached_app)
+
+        for host, origin in (
+            ("127.0.0.1:8000", "http://localhost:8000"),
+            ("localhost:8000", "https://localhost:8000"),
+            ("localhost:8000", "http://localhost.attacker.example:8000"),
+        ):
+            with self.subTest(host=host, origin=origin):
+                status, reached_app = _run_local_safety_middleware([host], origin)
+                self.assertEqual(status, 403)
+                self.assertFalse(reached_app)
+
+    def test_local_request_middleware_rejects_missing_or_duplicate_host_headers(self):
+        missing_status, missing_reached_app = _run_local_safety_middleware([])
+        duplicate_status, duplicate_reached_app = _run_local_safety_middleware(
+            ["localhost:8000", "127.0.0.1:8000"]
+        )
+
+        self.assertEqual(missing_status, 400)
+        self.assertFalse(missing_reached_app)
+        self.assertEqual(duplicate_status, 400)
+        self.assertFalse(duplicate_reached_app)
 
     def test_xlsx_extreme_declared_dimensions_are_rejected_before_openpyxl(self):
         package = _xlsx_with_worksheet_xml(
