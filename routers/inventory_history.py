@@ -241,7 +241,6 @@ def create_inventory_history_router(ctx):
 
     @router.post("/api/historico-comparacoes/{evento_id}/restaurar")
     def restaurar_comparacao_historica(evento_id: str, payload: ctx.ComparisonRestorePayload):
-        state_before = None
         persistent_backup_dir = None
 
         try:
@@ -257,11 +256,6 @@ def create_inventory_history_router(ctx):
             ):
                 raise ctx.HTTPException(status_code=409, detail="Os dois inventários ativos já correspondem ao backup selecionado.")
 
-            state_before = (
-                ctx.deepcopy(ctx.equipamentos_cache),
-                ctx.deepcopy(ctx.unidades_cache),
-                ctx.deepcopy(ctx.stats_cache),
-            )
             restoration_time = ctx.datetime.now().astimezone().isoformat(timespec="seconds")
             restoration_id = ctx.uuid.uuid4().hex
             persistent_backup_dir = ctx.UPLOAD_BACKUPS_DIR / f"{ctx.datetime.now().strftime('%Y%m%d-%H%M%S')}-{ctx.uuid.uuid4().hex[:8]}"
@@ -274,7 +268,7 @@ def create_inventory_history_router(ctx):
             source_backup_relative = source_comparison.get("backup_diretorio")
             transaction_targets = [*target_files.values(), ctx.COMPARISON_HISTORY_FILE]
 
-            with ctx.AtomicFileTransaction(ctx.TRANSACTION_ROOT, transaction_targets) as transaction:
+            with ctx.inventory_state_transaction(transaction_targets) as transaction:
                 _, locked_current_hashes = _current_inventory_snapshot()
                 if locked_current_hashes != context["current_hashes"]:
                     raise ctx.HTTPException(
@@ -407,29 +401,14 @@ def create_inventory_history_router(ctx):
                 },
             }
         except ctx.HTTPException:
-            if state_before:
-                with ctx.STATE_LOCK:
-                    ctx.equipamentos_cache, ctx.unidades_cache, ctx.stats_cache = state_before
             raise
         except ctx.FileBusyError as error:
-            if state_before:
-                with ctx.STATE_LOCK:
-                    ctx.equipamentos_cache, ctx.unidades_cache, ctx.stats_cache = state_before
             raise ctx.HTTPException(status_code=409, detail=str(error)) from error
         except ctx.TransactionConflictError as error:
-            if state_before:
-                with ctx.STATE_LOCK:
-                    ctx.equipamentos_cache, ctx.unidades_cache, ctx.stats_cache = state_before
             raise ctx.HTTPException(status_code=409, detail=f"Um arquivo mudou durante a restauração e nada foi sobrescrito: {error}") from error
         except (ctx.FileTransactionError, ctx.WorkbookSafetyError) as error:
-            if state_before:
-                with ctx.STATE_LOCK:
-                    ctx.equipamentos_cache, ctx.unidades_cache, ctx.stats_cache = state_before
             raise ctx.HTTPException(status_code=500, detail=f"Não foi possível concluir a restauração; os arquivos anteriores foram recuperados. {error}") from error
         except Exception:
-            if state_before:
-                with ctx.STATE_LOCK:
-                    ctx.equipamentos_cache, ctx.unidades_cache, ctx.stats_cache = state_before
             print("[ERRO] Falha ao restaurar o conjunto de planilhas.")
             raise ctx.HTTPException(status_code=500, detail="Falha ao restaurar o conjunto; os arquivos anteriores foram recuperados.") from None
 
@@ -469,11 +448,6 @@ def create_inventory_history_router(ctx):
             raise ctx.HTTPException(status_code=409, detail="Esta divergência já foi resolvida no histórico.")
 
         expected_manual_alias = str(divergence.get("apelido_manual") or "").strip()
-        state_before = (
-            ctx.deepcopy(ctx.equipamentos_cache),
-            ctx.deepcopy(ctx.unidades_cache),
-            ctx.deepcopy(ctx.stats_cache),
-        ) if acao == "excluir" else None
         target_serial = next(
             (
                 str(item.get("serial") or key).strip().upper()
@@ -489,75 +463,69 @@ def create_inventory_history_router(ctx):
                 raise ctx.HTTPException(status_code=404, detail="A planilha EquipamentosDetalhes atual não foi encontrada.")
             targets.append(details_file)
 
-        try:
-            with ctx.AtomicFileTransaction(ctx.TRANSACTION_ROOT, targets) as transaction:
-                current_aliases = ctx._manual_aliases_by_serial(ctx.load_modified_apelidos())
-                if serial_key not in current_aliases or current_aliases[serial_key] != expected_manual_alias:
-                    raise ctx.HTTPException(
-                        status_code=409,
-                        detail="O apelido manual mudou desde esta comparação. Atualize o histórico antes de decidir.",
-                    )
+        with ctx.inventory_state_transaction(targets) as transaction:
+            current_aliases = ctx._manual_aliases_by_serial(ctx.load_modified_apelidos())
+            if serial_key not in current_aliases or current_aliases[serial_key] != expected_manual_alias:
+                raise ctx.HTTPException(
+                    status_code=409,
+                    detail="O apelido manual mudou desde esta comparação. Atualize o histórico antes de decidir.",
+                )
 
-                if acao == "excluir":
-                    source_alias = (
-                        str(divergence.get("apelido_invall") or "").strip()
-                        if divergence.get("invall_encontrado") and divergence.get("apelido_invall")
-                        else str(divergence.get("apelido_equipamentos_detalhes") or "").strip()
-                    )
-                    if not ctx.atualizar_apelido_na_planilha(
-                        target_serial,
-                        source_alias,
-                        obrigatorio=True,
-                        transaction=transaction,
-                        expected_current_alias=expected_manual_alias,
-                    ):
-                        raise ctx.HTTPException(status_code=409, detail="A série não pôde ser atualizada na planilha EquipamentosDetalhes.")
+            if acao == "excluir":
+                source_alias = (
+                    str(divergence.get("apelido_invall") or "").strip()
+                    if divergence.get("invall_encontrado") and divergence.get("apelido_invall")
+                    else str(divergence.get("apelido_equipamentos_detalhes") or "").strip()
+                )
+                if not ctx.atualizar_apelido_na_planilha(
+                    target_serial,
+                    source_alias,
+                    obrigatorio=True,
+                    transaction=transaction,
+                    expected_current_alias=expected_manual_alias,
+                ):
+                    raise ctx.HTTPException(status_code=409, detail="A série não pôde ser atualizada na planilha EquipamentosDetalhes.")
 
-                    def remove_manual_override(data):
-                        if not isinstance(data, dict):
-                            raise RuntimeError("O arquivo de apelidos manuais não contém um objeto válido.")
-                        keys = [key for key in data if ctx.normalize_reference_value(key) == serial_key]
-                        if len(keys) != 1 or str(data.get(keys[0]) or "").strip() != expected_manual_alias:
-                            raise ctx.HTTPException(status_code=409, detail="O override manual mudou desde esta comparação.")
-                        updated = dict(data)
-                        for key in keys:
-                            updated.pop(key, None)
-                        return updated
-
-                    transaction.update_json(ctx.MODIFIED_APELIDOS_FILE, remove_manual_override, {})
-
-                def mark_divergence_resolved(history):
-                    if not isinstance(history, list):
-                        raise RuntimeError("O histórico de planilhas não contém uma lista válida.")
-                    updated = list(history)
-                    stored_event = next((item for item in updated if item.get("id") == evento_id), None)
-                    if stored_event is None:
-                        raise ctx.HTTPException(status_code=409, detail="A atualização foi removida do histórico.")
-                    stored_comparison = stored_event.get("comparacao")
-                    stored_divergences = stored_comparison.get("divergencias_apelidos_manuais") if isinstance(stored_comparison, dict) else None
-                    stored_divergence = next(
-                        (
-                            item for item in stored_divergences or []
-                            if isinstance(item, dict) and ctx.normalize_reference_value(item.get("serie")) == serial_key
-                        ),
-                        None,
-                    )
-                    if stored_divergence is None or stored_divergence.get("resolucao") != "pendente":
-                        raise ctx.HTTPException(status_code=409, detail="A divergência já foi alterada no histórico.")
-                    stored_divergence["resolucao"] = acao
-                    stored_divergence["horario_resolucao"] = ctx.datetime.now().astimezone().isoformat(timespec="seconds")
+                def remove_manual_override(data):
+                    if not isinstance(data, dict):
+                        raise RuntimeError("O arquivo de apelidos manuais não contém um objeto válido.")
+                    keys = [key for key in data if ctx.normalize_reference_value(key) == serial_key]
+                    if len(keys) != 1 or str(data.get(keys[0]) or "").strip() != expected_manual_alias:
+                        raise ctx.HTTPException(status_code=409, detail="O override manual mudou desde esta comparação.")
+                    updated = dict(data)
+                    for key in keys:
+                        updated.pop(key, None)
                     return updated
 
-                transaction.update_json(ctx.COMPARISON_HISTORY_FILE, mark_divergence_resolved, [])
-                transaction.apply()
-                if acao == "excluir" and not ctx.load_database(transaction_locked=True):
-                    raise RuntimeError("A base não pôde ser recarregada após excluir o override manual.")
-                transaction.commit()
-        except Exception:
-            if state_before is not None:
-                with ctx.STATE_LOCK:
-                    ctx.equipamentos_cache, ctx.unidades_cache, ctx.stats_cache = state_before
-            raise
+                transaction.update_json(ctx.MODIFIED_APELIDOS_FILE, remove_manual_override, {})
+
+            def mark_divergence_resolved(history):
+                if not isinstance(history, list):
+                    raise RuntimeError("O histórico de planilhas não contém uma lista válida.")
+                updated = list(history)
+                stored_event = next((item for item in updated if item.get("id") == evento_id), None)
+                if stored_event is None:
+                    raise ctx.HTTPException(status_code=409, detail="A atualização foi removida do histórico.")
+                stored_comparison = stored_event.get("comparacao")
+                stored_divergences = stored_comparison.get("divergencias_apelidos_manuais") if isinstance(stored_comparison, dict) else None
+                stored_divergence = next(
+                    (
+                        item for item in stored_divergences or []
+                        if isinstance(item, dict) and ctx.normalize_reference_value(item.get("serie")) == serial_key
+                    ),
+                    None,
+                )
+                if stored_divergence is None or stored_divergence.get("resolucao") != "pendente":
+                    raise ctx.HTTPException(status_code=409, detail="A divergência já foi alterada no histórico.")
+                stored_divergence["resolucao"] = acao
+                stored_divergence["horario_resolucao"] = ctx.datetime.now().astimezone().isoformat(timespec="seconds")
+                return updated
+
+            transaction.update_json(ctx.COMPARISON_HISTORY_FILE, mark_divergence_resolved, [])
+            transaction.apply()
+            if acao == "excluir" and not ctx.load_database(transaction_locked=True):
+                raise RuntimeError("A base não pôde ser recarregada após excluir o override manual.")
+            transaction.commit()
 
         equipment = next(
             (

@@ -353,15 +353,30 @@ class AtomicFileTransaction:
         self._closed = False
 
     def __enter__(self) -> "AtomicFileTransaction":
-        self.root.mkdir(parents=True, exist_ok=True)
-        self._stack.enter_context(lock_paths([self.root / ".atomic-transactions"]))
-        _recover_pending_locked(self.root)
-        if self.targets:
-            self._stack.enter_context(lock_paths(self.targets))
-        self.transaction_dir.mkdir(parents=True, exist_ok=False)
-        (self.transaction_dir / "backups").mkdir()
-        self._entered = True
-        return self
+        transaction_dir_created = False
+        try:
+            self.root.mkdir(parents=True, exist_ok=True)
+            self._stack.enter_context(lock_paths([self.root / ".atomic-transactions"]))
+            _recover_pending_locked(self.root)
+            if self.targets:
+                self._stack.enter_context(lock_paths(self.targets))
+            self.transaction_dir.mkdir(parents=True, exist_ok=False)
+            transaction_dir_created = True
+            (self.transaction_dir / "backups").mkdir()
+            self._entered = True
+            return self
+        except BaseException as error:
+            self._closed = True
+            if transaction_dir_created:
+                try:
+                    shutil.rmtree(self.transaction_dir)
+                except BaseException as cleanup_error:
+                    error.add_note(f"A limpeza do diretório parcial da transação também falhou: {cleanup_error!r}")
+            try:
+                self._stack.close()
+            except BaseException as cleanup_error:
+                error.add_note(f"A liberação dos recursos da transação também falhou: {cleanup_error!r}")
+            raise
 
     def add_target(self, target: Path) -> None:
         """Add and lock a destination discovered while the transaction-wide lock is held."""

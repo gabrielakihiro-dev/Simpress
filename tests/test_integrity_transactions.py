@@ -25,6 +25,70 @@ class AtomicTransactionTests(unittest.TestCase):
     def tearDown(self):
         self.temp_context.cleanup()
 
+    def test_transaction_entry_and_exit_commit_normally(self):
+        target = self.root / "entry.json"
+        target.write_bytes(b"before")
+        transaction = integrity.AtomicFileTransaction(self.root, [target])
+
+        with transaction as entered_transaction:
+            self.assertIs(entered_transaction, transaction)
+            self.assertTrue(transaction._entered)
+            transaction.stage_bytes(target, b"after")
+            transaction.commit()
+
+        self.assertEqual(target.read_bytes(), b"after")
+        self.assertFalse(transaction.transaction_dir.exists())
+        self.assertTrue(transaction._closed)
+
+    def test_failed_entry_releases_prior_locks_and_preserves_original_error(self):
+        target = self.root / "later-lock.json"
+        lock_error = integrity.FileBusyError("simulated failure acquiring the target lock")
+        cleanup_error = RuntimeError("simulated cleanup callback failure")
+        transaction = integrity.AtomicFileTransaction(self.root, [target])
+        original_lock_paths = integrity.lock_paths
+
+        def fail_target_lock(paths, timeout=15.0):
+            requested_paths = [Path(path).resolve(strict=False) for path in paths]
+            if target.resolve(strict=False) in requested_paths:
+                raise lock_error
+            return original_lock_paths(requested_paths, timeout)
+
+        def fail_cleanup():
+            raise cleanup_error
+
+        transaction._stack.callback(fail_cleanup)
+        with patch("integrity.lock_paths", side_effect=fail_target_lock):
+            with self.assertRaises(integrity.FileBusyError) as raised:
+                transaction.__enter__()
+
+        self.assertIs(raised.exception, lock_error)
+        self.assertTrue(any("simulated cleanup callback failure" in note for note in raised.exception.__notes__))
+        self.assertFalse(transaction._entered)
+        self.assertTrue(transaction._closed)
+        self.assertFalse(transaction.transaction_dir.exists())
+
+        acquired = threading.Event()
+        errors = []
+
+        def acquire_transaction_after_failure():
+            def bounded_lock_paths(paths, timeout=15.0):
+                return original_lock_paths(paths, timeout=0.5)
+
+            try:
+                with patch("integrity.lock_paths", side_effect=bounded_lock_paths):
+                    with integrity.AtomicFileTransaction(self.root, [target]):
+                        acquired.set()
+            except BaseException as error:
+                errors.append(error)
+
+        thread = threading.Thread(target=acquire_transaction_after_failure)
+        thread.start()
+        thread.join(2)
+
+        self.assertFalse(thread.is_alive(), "the next transaction stayed blocked after failed entry")
+        self.assertTrue(acquired.is_set(), f"the next transaction could not acquire the locks: {errors}")
+        self.assertEqual(errors, [])
+
     def test_json_write_is_atomic_and_keeps_utf8_json_shape(self):
         target = self.root / "settings.json"
         integrity.atomic_write_json(target, {"cidade": "Maringá", "ativa": True})

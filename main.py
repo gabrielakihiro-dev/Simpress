@@ -12,7 +12,7 @@ import unicodedata
 import uuid
 import zipfile
 from copy import deepcopy
-from contextlib import asynccontextmanager
+from contextlib import asynccontextmanager, contextmanager
 from datetime import datetime
 from pathlib import Path
 from typing import Dict, List, Optional, Any, Set
@@ -99,6 +99,25 @@ MODIFIED_APELIDOS_LOCK = threading.RLock()
 ALIAS_HISTORY_LOCK = threading.RLock()
 COMPARISON_HISTORY_LOCK = threading.RLock()
 STATE_LOCK = threading.RLock()
+
+
+@contextmanager
+def inventory_state_transaction(targets):
+    """Keep an in-memory inventory snapshot aligned with a file transaction."""
+    global equipamentos_cache, unidades_cache, stats_cache
+    with AtomicFileTransaction(TRANSACTION_ROOT, targets) as transaction:
+        with STATE_LOCK:
+            state_before = (
+                deepcopy(equipamentos_cache),
+                deepcopy(unidades_cache),
+                deepcopy(stats_cache),
+            )
+        try:
+            yield transaction
+        except BaseException:
+            with STATE_LOCK:
+                equipamentos_cache, unidades_cache, stats_cache = state_before
+            raise
 
 
 def _json_bytes(value: Any) -> bytes:
@@ -1653,6 +1672,16 @@ def save_equipment_to_excel(
     try:
         transaction_targets = [*target_files, *json_mutations.keys()]
         with AtomicFileTransaction(TRANSACTION_ROOT, transaction_targets) as transaction:
+            with STATE_LOCK:
+                cached_equipment = deepcopy(equipamentos_cache.get(target_serial_upper))
+            if cached_equipment is not None:
+                # Preserve the latest local alias when this save waited behind
+                # a concurrent alias edit, and discard a now-stale new-record override.
+                payload.apelido = cached_equipment.get(
+                    "_apelido_local", cached_equipment.get("_apelido_base", "")
+                )
+                json_mutations.pop(MODIFIED_APELIDOS_FILE, None)
+
             salvo_em_algum = False
             for tf in target_files:
                 if update_equipment_in_workbook_file(tf, payload, transaction):
@@ -1662,63 +1691,63 @@ def save_equipment_to_excel(
             for path, updater in json_mutations.items():
                 transaction.update_json(path, updater, [] if path == ALIAS_HISTORY_FILE else {})
             transaction.commit()
+
+            endereco_info = (
+                snapshot_endereco_instalacao(cached_equipment)
+                if cached_equipment
+                else normalizar_endereco_instalacao(EquipamentoUpdatePayload(serial=target_serial_upper))
+            )
+            endereco = endereco_info["endereco"]
+            cidade = endereco_info["cidade"]
+            uf = endereco_info["uf"]
+            cep_formatado = endereco_info["cep"]
+            cnpj_instalacao = endereco_info["cnpj"]
+            retirada_endereco = f"{endereco} - {cidade}/{uf} - CEP {cep_formatado}" if endereco else f"{cidade}/{uf}"
+
+            desc_sugerida = get_suggested_description(payload.tipo, payload.modelo)
+
+            modified_aliases = load_modified_apelidos()
+            manual_aliases = _manual_aliases_by_serial(modified_aliases)
+            normalized_serial = normalize_reference_value(target_serial_upper)
+            local_alias = manual_aliases.get(normalized_serial, payload.apelido or "")
+            updated_equipment = {
+                "serial": target_serial_upper,
+                "modelo": payload.modelo.strip() if payload.modelo else "",
+                "tipo": payload.tipo.strip() if payload.tipo else "",
+                "apelido": local_alias,
+                "_apelido_base": payload.apelido.strip() if payload.apelido else "",
+                "_apelido_local": local_alias,
+                "_apelido_manual_override": normalized_serial in manual_aliases,
+                "idCliente": payload.idCliente.strip() if payload.idCliente else "",
+                "descricao_sugerida": desc_sugerida,
+                "endereco_instalacao": endereco,
+                "retirada_cnpj": cnpj_instalacao,
+                "retirada_endereco": retirada_endereco,
+                "retirada_cidade": cidade,
+                "retirada_uf": uf,
+                "retirada_cep": cep_formatado,
+                "contrato": "16467",
+                "razao_social": "SERV DE APOIO AS MICRO E PEQ EMP DO PARANA SEBRAE PR"
+            }
+
+            _apply_effective_alias(
+                updated_equipment,
+                read_endpoint_alias_index(),
+                details_duplicate=bool(
+                    cached_equipment
+                    and cached_equipment.get("invall_alias_status") == "serie_detalhes_duplicada"
+                ),
+            )
+            with STATE_LOCK:
+                equipamentos_cache[target_serial_upper] = updated_equipment
+                stats_cache["total_equipamentos"] = len(equipamentos_cache)
+                stats_cache["ultima_atualizacao"] = datetime.now().strftime("%d/%m/%Y %H:%M")
     except FileBusyError as error:
         raise HTTPException(status_code=409, detail=str(error)) from error
     except WorkbookSafetyError as error:
         raise HTTPException(status_code=409, detail=f"Gravação cancelada: {error}") from error
     except FileTransactionError as error:
         raise HTTPException(status_code=500, detail=f"Não foi possível concluir a gravação: {error}") from error
-
-    # Atualiza o cache em memória imediatamente
-    existing = equipamentos_cache.get(target_serial_upper, {})
-    endereco_info = (
-        snapshot_endereco_instalacao(existing)
-        if existing
-        else normalizar_endereco_instalacao(EquipamentoUpdatePayload(serial=target_serial_upper))
-    )
-    endereco = endereco_info["endereco"]
-    cidade = endereco_info["cidade"]
-    uf = endereco_info["uf"]
-    cep_formatado = endereco_info["cep"]
-    cnpj_instalacao = endereco_info["cnpj"]
-    retirada_endereco = f"{endereco} - {cidade}/{uf} - CEP {cep_formatado}" if endereco else f"{cidade}/{uf}"
-
-    desc_sugerida = get_suggested_description(payload.tipo, payload.modelo)
-
-    modified_aliases = load_modified_apelidos()
-    manual_aliases = _manual_aliases_by_serial(modified_aliases)
-    normalized_serial = normalize_reference_value(target_serial_upper)
-    local_alias = manual_aliases.get(normalized_serial, payload.apelido or "")
-    updated_equipment = {
-        "serial": target_serial_upper,
-        "modelo": payload.modelo.strip() if payload.modelo else "",
-        "tipo": payload.tipo.strip() if payload.tipo else "",
-        "apelido": local_alias,
-        "_apelido_base": payload.apelido.strip() if payload.apelido else "",
-        "_apelido_local": local_alias,
-        "_apelido_manual_override": normalized_serial in manual_aliases,
-        "idCliente": payload.idCliente.strip() if payload.idCliente else "",
-        "descricao_sugerida": desc_sugerida,
-        "endereco_instalacao": endereco,
-        "retirada_cnpj": cnpj_instalacao,
-        "retirada_endereco": retirada_endereco,
-        "retirada_cidade": cidade,
-        "retirada_uf": uf,
-        "retirada_cep": cep_formatado,
-        "contrato": "16467",
-        "razao_social": "SERV DE APOIO AS MICRO E PEQ EMP DO PARANA SEBRAE PR"
-    }
-
-    _apply_effective_alias(
-        updated_equipment,
-        None,
-        details_duplicate=existing.get("invall_alias_status") == "serie_detalhes_duplicada",
-    )
-    with STATE_LOCK:
-        equipamentos_cache[target_serial_upper] = updated_equipment
-
-    stats_cache["total_equipamentos"] = len(equipamentos_cache)
-    stats_cache["ultima_atualizacao"] = datetime.now().strftime("%d/%m/%Y %H:%M")
 
 
 # Endpoints
@@ -1881,25 +1910,27 @@ def aplicar_alteracao_apelido(
     expected_latest_event_id: Optional[str] = None,
     remove_history_event_id: Optional[str] = None,
 ) -> Dict[str, Any]:
-    equipamento = equipamentos_cache.get(target_serial)
-    if equipamento is None:
-        raise HTTPException(status_code=404, detail=f"Equipamento com serial '{target_serial}' não encontrado na base de dados.")
-
-    apelido_anterior = str(equipamento.get("_apelido_local", equipamento.get("_apelido_base", "")) or "").strip()
     target_file = get_equipamentos_template_file()
     workbook_exists = bool(target_file and target_file.exists())
     if exigir_salvamento_planilha and not workbook_exists:
         raise HTTPException(status_code=404, detail="A planilha de equipamentos não foi encontrada para salvar a restauração.")
 
-    history_will_change = (apelido_anterior != novo_apelido and registrar_historico) or bool(remove_history_event_id)
-    targets = [MODIFIED_APELIDOS_FILE]
-    if history_will_change:
-        targets.append(ALIAS_HISTORY_FILE)
+    # Include the history file in the same lock set even when this call may not
+    # append to it; the previous alias and history decision are made under lock.
+    targets = [MODIFIED_APELIDOS_FILE, ALIAS_HISTORY_FILE]
     if workbook_exists:
         targets.append(target_file)
 
     try:
         with AtomicFileTransaction(TRANSACTION_ROOT, targets) as transaction:
+            with STATE_LOCK:
+                current_equipment = equipamentos_cache.get(target_serial)
+                equipamento = dict(current_equipment) if current_equipment is not None else None
+            if equipamento is None:
+                raise HTTPException(status_code=404, detail=f"Equipamento com serial '{target_serial}' não encontrado na base de dados.")
+
+            apelido_anterior = str(equipamento.get("_apelido_local", equipamento.get("_apelido_base", "")) or "").strip()
+            history_will_change = (apelido_anterior != novo_apelido and registrar_historico) or bool(remove_history_event_id)
             if expected_latest_event_id:
                 current_history = load_alias_history()
                 latest = next((
@@ -1948,7 +1979,18 @@ def aplicar_alteracao_apelido(
                     return updated
                 transaction.update_json(ALIAS_HISTORY_FILE, update_history, [])
 
+            updated_equipment = dict(equipamento)
+            updated_equipment["_apelido_local"] = novo_apelido
+            updated_equipment["_apelido_base"] = novo_apelido
+            updated_equipment["_apelido_manual_override"] = True
+            _apply_effective_alias(
+                updated_equipment,
+                read_endpoint_alias_index(),
+                details_duplicate=updated_equipment.get("invall_alias_status") == "serie_detalhes_duplicada",
+            )
             transaction.commit()
+            with STATE_LOCK:
+                equipamentos_cache[target_serial] = updated_equipment
     except HTTPException:
         raise
     except FileBusyError as error:
@@ -1958,17 +2000,8 @@ def aplicar_alteracao_apelido(
     except FileTransactionError as error:
         raise HTTPException(status_code=500, detail=f"Não foi possível concluir a alteração de apelido: {error}") from error
 
-    equipment = equipamentos_cache[target_serial]
-    equipment["_apelido_local"] = novo_apelido
-    equipment["_apelido_base"] = novo_apelido
-    equipment["_apelido_manual_override"] = True
-    _apply_effective_alias(
-        equipment,
-        None,
-        details_duplicate=equipment.get("invall_alias_status") == "serie_detalhes_duplicada",
-    )
     return {
-        "equipamento": equipamento,
+        "equipamento": updated_equipment,
         "apelido_anterior": apelido_anterior,
         "apelido_novo": novo_apelido,
         "salvo_no_disco": excel_salvo,
