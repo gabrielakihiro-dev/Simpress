@@ -266,6 +266,77 @@ class WorkflowIntegrityTests(unittest.TestCase):
         )
         self.assertEqual(main.get_equipamento("serie-abc-002")["serial"], "SERIE-ABC-002")
 
+    def test_unit_ids_survive_sorting_edits_additions_and_database_reload(self):
+        make_details(self.details, [
+            ("SERIE-LONDRINA", "HOST-LONDRINA", "MODELO A", "Londrina", "Notebook", "86000000"),
+            ("SERIE-MARINGA", "HOST-MARINGA", "MODELO B", "Maringá", "Notebook", "87000000"),
+        ])
+        make_endpoint(self.endpoint, [
+            ("SERIE-LONDRINA", "HOST-LONDRINA"),
+            ("SERIE-MARINGA", "HOST-MARINGA"),
+        ])
+        saved_zeta = {
+            "id": 47,
+            "cidade": "Zeta",
+            "endereco": "Rua Fictícia, 47",
+            "uf": "PR",
+            "cep": "85000-000",
+            "cnpj": "47.000.000/0000-47",
+            "is_sede": False,
+            "endereco_completo": "Rua Fictícia, 47 - Zeta/PR - CEP 85000-000",
+            "label": "Zeta - Rua Fictícia, 47 (47.000.000/0000-47)",
+        }
+        self.custom_units.write_text(json.dumps([saved_zeta]), encoding="utf-8")
+
+        self.assertTrue(main.load_database())
+        zeta = next(unit for unit in main.unidades_cache if unit["cidade"] == "Zeta")
+        self.assertEqual(zeta["id"], 47)
+        ids_before = {unit["cidade"]: unit["id"] for unit in main.unidades_cache}
+        self.assertEqual(len(set(ids_before.values())), len(ids_before))
+
+        main.salvar_unidade(main.UnidadePayload(
+            cidade="Arapongas",
+            endereco="Rua Nova, 8",
+            uf="PR",
+            cep="86700-000",
+            cnpj="08.000.000/0000-08",
+        ))
+        ids_after_add = {unit["cidade"]: unit["id"] for unit in main.unidades_cache}
+        for city, unit_id in ids_before.items():
+            self.assertEqual(ids_after_add[city], unit_id)
+        self.assertIn("Arapongas", ids_after_add)
+        self.assertEqual(len(set(ids_after_add.values())), len(ids_after_add))
+
+        main.salvar_unidade(main.UnidadePayload(
+            id=47,
+            cidade="Zeta",
+            endereco="Rua Fictícia, 48",
+            uf="PR",
+            cep="85000-001",
+            cnpj="47.000.000/0000-47",
+        ))
+        saved_units = json.loads(self.custom_units.read_text(encoding="utf-8"))
+        self.assertEqual(len(saved_units), 2)
+        edited_zeta = next(unit for unit in saved_units if unit["id"] == 47)
+        self.assertEqual(edited_zeta["endereco"], "Rua Fictícia, 48")
+        self.assertEqual(
+            next(unit for unit in main.unidades_cache if unit["cidade"] == "Zeta")["id"],
+            47,
+        )
+
+        before_stale_edit = self.custom_units.read_bytes()
+        with self.assertRaises(main.HTTPException) as raised:
+            main.salvar_unidade(main.UnidadePayload(
+                id=999,
+                cidade="Duplicata",
+                endereco="Rua que não deve ser incluída",
+                uf="PR",
+                cep="80000-000",
+                cnpj="99.000.000/0000-99",
+            ))
+        self.assertEqual(raised.exception.status_code, 409)
+        self.assertEqual(self.custom_units.read_bytes(), before_stale_edit)
+
     def test_detail_upload_headers_and_active_reader_share_normalization(self):
         variants = ("NumeroSerie", "numero_serie", "NÚMERO-SERIE", "Número de Série")
         for index, serial_header in enumerate(variants):

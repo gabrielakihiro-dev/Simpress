@@ -1250,6 +1250,32 @@ def load_custom_units() -> List[Dict[str, Any]]:
             print("[ERRO] Falha ao carregar o catálogo local de unidades.")
     return []
 
+
+def _coerce_unit_id(value: Any) -> Optional[int]:
+    if isinstance(value, bool) or value is None:
+        return None
+    try:
+        unit_id = int(value)
+    except (TypeError, ValueError):
+        return None
+    return unit_id if unit_id > 0 else None
+
+
+def _stable_unit_id(unit: Dict[str, Any], reserved_ids: Set[int]) -> int:
+    """Return a deterministic numeric ID for inventory-derived units."""
+    identity = "\x1f".join(
+        unicodedata.normalize("NFKC", str(unit.get(field) or "")).strip().casefold()
+        for field in ("cidade", "endereco", "cnpj", "uf")
+    )
+    collision_index = 0
+    while True:
+        seed = identity if collision_index == 0 else f"{identity}\x1f{collision_index}"
+        candidate = int.from_bytes(hashlib.sha256(seed.encode("utf-8")).digest()[:6], "big") or 1
+        if candidate not in reserved_ids:
+            return candidate
+        collision_index += 1
+
+
 def save_custom_units(units: List[Dict[str, Any]]) -> None:
     try:
         atomic_write_json(CUSTOM_UNIDADES_FILE, units)
@@ -1471,10 +1497,24 @@ def _load_database_unlocked() -> bool:
         else:
             final_units.append(cu)
 
-    # Sort units: Sede first, then Cidade, Endereço
+    # Sort for display, but retain persisted IDs and give inventory-derived
+    # units a deterministic ID that does not depend on their position.
     new_unidades_cache = sorted(final_units, key=lambda u: (not u.get("is_sede", False), u.get("cidade", ""), u.get("endereco", "")))
-    for idx, u in enumerate(new_unidades_cache, start=1):
-        u["id"] = idx
+    reserved_unit_ids = {
+        unit_id
+        for unit in custom_units
+        if (unit_id := _coerce_unit_id(unit.get("id"))) is not None
+    }
+    reserved_unit_ids.update(
+        unit_id
+        for unit in new_unidades_cache
+        if (unit_id := _coerce_unit_id(unit.get("id"))) is not None
+    )
+    for unit in new_unidades_cache:
+        if _coerce_unit_id(unit.get("id")) is not None:
+            continue
+        unit["id"] = _stable_unit_id(unit, reserved_unit_ids)
+        reserved_unit_ids.add(unit["id"])
 
     # Apelidos manuais persistem por série e prevalecem sobre o hostname da InvAll.
     mod_apelidos = load_modified_apelidos()
@@ -2563,7 +2603,7 @@ def salvar_unidade(payload: UnidadePayload):
 
     if payload.id:
         for u in custom_units:
-            if u.get("id") == payload.id:
+            if _coerce_unit_id(u.get("id")) == payload.id:
                 u.update({
                     "cidade": cidade,
                     "endereco": endereco,
@@ -2577,7 +2617,14 @@ def salvar_unidade(payload: UnidadePayload):
                 break
 
     if not matched:
-        new_id = (max([u.get("id", 0) for u in unidades_cache] + [0]) + 1) if not payload.id else payload.id
+        if payload.id and not any(_coerce_unit_id(unit.get("id")) == payload.id for unit in unidades_cache):
+            raise HTTPException(
+                status_code=409,
+                detail="A unidade selecionada não está mais no catálogo. Atualize a lista antes de editar.",
+            )
+        current_ids = [_coerce_unit_id(unit.get("id")) for unit in unidades_cache]
+        current_ids = [unit_id for unit_id in current_ids if unit_id is not None]
+        new_id = (max(current_ids + [0]) + 1) if not payload.id else payload.id
         custom_units.append({
             "id": new_id,
             "cidade": cidade,
