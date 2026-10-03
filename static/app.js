@@ -530,7 +530,7 @@
           document.getElementById("stat-unidades").textContent = stats.total_unidades;
           const exportButton = document.getElementById("btn-exportar-equipamentos");
           if (exportButton) {
-            exportButton.classList.toggle("hidden", Number(stats.total_apelidos_modificados || 0) === 0);
+            exportButton.classList.toggle("hidden", Number(stats.total_alteracoes_exportaveis || 0) === 0);
           }
         }
       } catch (err) {
@@ -538,12 +538,7 @@
       }
     }
 
-    function atualizarIndicadoresPosSalvamento(totalModificados) {
-      const exportButton = document.getElementById("btn-exportar-equipamentos");
-      if (exportButton && totalModificados !== undefined && totalModificados !== null) {
-        exportButton.classList.toggle("hidden", Number(totalModificados) === 0);
-      }
-
+    function atualizarIndicadoresPosSalvamento() {
       // Atualiza os indicadores sem atrasar o fechamento do formulário após salvar.
       void Promise.allSettled([
         carregarEstatisticas(),
@@ -1982,7 +1977,7 @@
           currentEquipamento = equipment;
           exibirEquipamento(equipment);
         }
-        atualizarIndicadoresPosSalvamento(data.total_modificados);
+        atualizarIndicadoresPosSalvamento();
         showToast(data.mensagem || "Divergência registrada no histórico.", "success");
       } catch (error) {
         console.error("Erro ao resolver divergência de apelido manual:", error);
@@ -2268,6 +2263,8 @@
           ? match[1].replace(/['"]/g, "")
           : "EquipamentosDetalhes-atualizados.xlsx";
         const pendingReview = Number(res.headers.get("X-Total-Conferencia") || 0);
+        const aliasUpdateCount = Number(res.headers.get("X-Total-Alterados") || 0);
+        const idClienteUpdateCount = Number(res.headers.get("X-Total-IdCliente-Alterados") || 0);
         const historyAliasCount = Number(res.headers.get("X-Historico-Apelidos-Atualizados") || 0);
         const historyTimestamp = res.headers.get("X-Historico-Horario") || "";
         const blob = await res.blob();
@@ -2286,8 +2283,10 @@
         const reviewMessage = pendingReview
           ? ` ${pendingReview} linha(s) ficaram para conferência.`
           : "";
+        const aliasLabel = aliasUpdateCount === 1 ? "apelido" : "apelidos";
+        const idClienteLabel = idClienteUpdateCount === 1 ? "IdCliente" : "IdClientes";
         showToast(
-          `Planilha ${filename} exportada. ${historyMessage}${reviewMessage}`,
+          `Planilha ${filename} exportada. ${aliasUpdateCount} ${aliasLabel} e ${idClienteUpdateCount} ${idClienteLabel} atualizados na exportação. ${historyMessage}${reviewMessage}`,
           pendingReview ? "warning" : "success"
         );
       } catch (err) {
@@ -2386,7 +2385,7 @@
 
         currentEquipamento = data.equipamento;
         document.getElementById("badge-apelido").textContent = currentEquipamento.apelido || "Sem Apelido";
-        atualizarIndicadoresPosSalvamento(data.total_modificados);
+        atualizarIndicadoresPosSalvamento();
         fecharModalEditarApelido();
         showToast("Apelido salvo com sucesso.", "success");
       } catch (err) {
@@ -2741,7 +2740,7 @@
         document.getElementById("input-serial").value = data.equipamento.serial;
         document.getElementById("btn-clear-serial").classList.remove("hidden");
 
-        atualizarIndicadoresPosSalvamento(data.total_modificados);
+        atualizarIndicadoresPosSalvamento();
         showToast(data.mensagem || `Equipamento ${serial} salvo com sucesso!`, "success");
         fecharModalEditarEquipamento();
 
