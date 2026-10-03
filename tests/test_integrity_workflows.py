@@ -23,11 +23,11 @@ with patch("openpyxl.load_workbook", side_effect=RuntimeError("testes não acess
 PROJECT_ROOT = Path(__file__).resolve().parents[1]
 
 
-def make_details(path: Path, rows):
+def make_details(path: Path, rows, headers=None):
     workbook = openpyxl.Workbook()
     worksheet = workbook.active
     worksheet.title = "EquipamentosDetalhes"
-    worksheet.append(["NumeroSerie", "Apelido", "Modelo", "Cidade", "Tipo", "CEP"])
+    worksheet.append(headers or ["NumeroSerie", "Apelido", "Modelo", "Cidade", "Tipo", "CEP"])
     for row in rows:
         worksheet.append(list(row))
     worksheet.freeze_panes = "A2"
@@ -233,6 +233,49 @@ class WorkflowIntegrityTests(unittest.TestCase):
         main.equipamentos_cache, main.unidades_cache, main.stats_cache = self.old_state
         self.stack.close()
         self.temp_context.cleanup()
+
+    def test_detail_upload_headers_and_active_reader_share_normalization(self):
+        variants = ("NumeroSerie", "numero_serie", "NÚMERO-SERIE", "Número de Série")
+        for index, serial_header in enumerate(variants):
+            with self.subTest(serial_header=serial_header):
+                path = self.input_dir / f"EquipamentosDetalhes_variante_{index}.xlsx"
+                make_details(
+                    path,
+                    [("SERIE-FICTICIA", "ALIAS-FICTICIO", "Modelo A", "Maringá", "Notebook", "87000000")],
+                    headers=[serial_header, "HOSTNAME", "Modelo", "Cidade", "Tipo", "CEP"],
+                )
+
+                uploaded = main.validate_uploaded_workbook(path.read_bytes(), "detalhes")
+
+                self.assertEqual(uploaded["populated_rows"], 1)
+                self.assertEqual(main.find_details_sheet(path), "EquipamentosDetalhes")
+
+    def test_uploaded_details_loads_text_serial_without_coercing_other_columns(self):
+        headers = ["nÚmero_de_Série", "hOsT-name", "mÓde-lo", "Cidade", "Tipo", "CEP", "IdCliente"]
+        make_details(
+            self.details,
+            [
+                ("001234", "HOST-TEXTO", "Modelo A", "Maringá", "Notebook", "87000000", 101),
+                (None, "HOST-SEM-SERIE", "Modelo B", "Londrina", "Notebook", "86000000", 102),
+                (1234, "HOST-NUMERICO", "Modelo C", "Ponta Grossa", "Notebook", "84000000", 103),
+            ],
+            headers=headers,
+        )
+        make_endpoint(self.endpoint, [("OUTRA-SERIE", "HOST-OUTRO")])
+
+        uploaded = main.validate_uploaded_workbook(self.details.read_bytes(), "detalhes")
+        self.assertEqual(uploaded["populated_rows"], 2)
+        dataframe = main._read_details_sheet_dataframe(self.details, "EquipamentosDetalhes")
+        self.assertEqual(dataframe.iloc[0][headers[0]], "001234")
+        self.assertEqual(dataframe.iloc[2][headers[0]], 1234)
+        self.assertTrue(main.pd.api.types.is_integer_dtype(dataframe["IdCliente"].dtype))
+
+        self.assertTrue(main.load_database())
+        self.assertIn("001234", main.equipamentos_cache)
+        self.assertIn("1234", main.equipamentos_cache)
+        self.assertNotIn("HOST-SEM-SERIE", main.equipamentos_cache)
+        self.assertEqual(main.equipamentos_cache["001234"]["apelido"], "HOST-TEXTO")
+        self.assertEqual(main.equipamentos_cache["1234"]["apelido"], "HOST-NUMERICO")
 
     def test_invall_is_joined_by_normalized_serial_for_site_and_search_without_rewriting_details(self):
         make_details(self.details, [

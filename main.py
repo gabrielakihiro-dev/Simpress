@@ -354,6 +354,41 @@ def build_address_change_entry(
         "referencia_id": None,
     }
 
+DETAILS_SERIAL_HEADER_ALIASES = ("NUMEROSERIE", "NUMERODESERIE", "SERIAL")
+DETAILS_ALIAS_HEADER_ALIASES = (
+    "APELIDO", "HOSTNAME", "NOMEDOCOMPUTADOR", "COMPUTERNAME"
+)
+DETAILS_REQUIRED_HEADERS = frozenset({"MODELO", "CIDADE"})
+
+
+def normalize_workbook_header(value: Any) -> str:
+    """Normaliza cabeçalhos com a mesma regra usada pelas tabelas enviadas."""
+    return normalize_reference_value(value)
+
+
+def _read_details_sheet_dataframe(file_path: Path, sheet_name: str):
+    """Lê a série sem inferência numérica e deixa as outras colunas tipadas normalmente."""
+    workbook = None
+    try:
+        workbook = openpyxl.load_workbook(
+            file_path, read_only=True, data_only=True, keep_links=False
+        )
+        raw_headers = next(
+            workbook[sheet_name].iter_rows(min_row=1, max_row=1, values_only=True), ()
+        )
+    finally:
+        if workbook is not None:
+            workbook.close()
+
+    serial_columns = {
+        header
+        for header in raw_headers
+        if normalize_workbook_header(header) in DETAILS_SERIAL_HEADER_ALIASES
+    }
+    serial_dtypes = {header: object for header in serial_columns}
+    return pd.read_excel(file_path, sheet_name=sheet_name, dtype=serial_dtypes)
+
+
 def find_details_sheet(file_path: Path) -> Optional[str]:
     """Retorna uma aba EquipamentosDetalhes com os campos usados pelo site."""
     workbook = None
@@ -363,14 +398,14 @@ def find_details_sheet(file_path: Path) -> Optional[str]:
         for worksheet in workbook.worksheets:
             headers = next(worksheet.iter_rows(min_row=1, max_row=1, values_only=True), ())
             normalized_headers = {
-                re.sub(r"[\s_\-]+", "", str(value)).lower()
+                normalize_workbook_header(value)
                 for value in headers
                 if value is not None
             }
 
-            has_serial = bool({"numeroserie", "serial"} & normalized_headers)
-            has_alias = bool({"apelido", "hostname"} & normalized_headers)
-            if has_serial and has_alias and "modelo" in normalized_headers and "cidade" in normalized_headers:
+            has_serial = bool(set(DETAILS_SERIAL_HEADER_ALIASES) & normalized_headers)
+            has_alias = bool(set(DETAILS_ALIAS_HEADER_ALIASES) & normalized_headers)
+            if has_serial and has_alias and DETAILS_REQUIRED_HEADERS.issubset(normalized_headers):
                 priority = int("parque" in worksheet.title.lower() or "equipamento" in worksheet.title.lower())
                 matching_sheets.append((priority, worksheet.title))
 
@@ -572,7 +607,7 @@ def read_workbook_tables(file_bytes: bytes) -> List[Dict[str, Any]]:
         for worksheet in workbook.worksheets:
             iterator = worksheet.iter_rows(values_only=True)
             raw_headers = next(iterator, ())
-            headers = [normalize_reference_value(value) for value in raw_headers]
+            headers = [normalize_workbook_header(value) for value in raw_headers]
             if not any(headers):
                 continue
 
@@ -602,12 +637,11 @@ def read_workbook_tables(file_bytes: bytes) -> List[Dict[str, Any]]:
 
 def select_upload_table(tables: List[Dict[str, Any]], role: str) -> Dict[str, Any]:
     """Validates the required columns and refuses to guess between matching sheets."""
-    serial_headers = {"NUMEROSERIE", "NUMERODESERIE", "SERIAL"}
-    alias_headers = {"APELIDO", "HOSTNAME", "NOMEDOCOMPUTADOR", "COMPUTERNAME"}
-    city_headers = {"CIDADE"}
+    serial_headers = set(DETAILS_SERIAL_HEADER_ALIASES)
+    alias_headers = set(DETAILS_ALIAS_HEADER_ALIASES)
 
     if role == "detalhes":
-        required = {"MODELO"} | city_headers
+        required = set(DETAILS_REQUIRED_HEADERS)
         candidates = [
             table for table in tables
             if required.issubset(table["headers"])
@@ -1253,20 +1287,20 @@ def _load_database_unlocked() -> bool:
         if sheet_target is None:
             print(f"[ERRO] {active_details_file.name} não contém cabeçalhos EquipamentosDetalhes válidos.")
             return False
-        df = pd.read_excel(active_details_file, sheet_name=sheet_target)
+        df = _read_details_sheet_dataframe(active_details_file, sheet_target)
     except Exception:
         print("[ERRO] Falha ao ler a planilha local de equipamentos.")
         return False
 
     # Strip column names e criar mapa normalizado de colunas
     df.columns = [str(col).strip() for col in df.columns]
-    norm_cols = {re.sub(r'[\s_\-]+', '', str(c)).lower(): c for c in df.columns}
+    norm_cols = {normalize_workbook_header(c): c for c in df.columns}
     new_equipamentos_cache: Dict[str, Dict[str, Any]] = {}
     details_serial_counts: Dict[str, int] = {}
 
     def get_row_val(row, *aliases, default=""):
         for a in aliases:
-            key = re.sub(r'[\s_\-]+', '', a).lower()
+            key = normalize_workbook_header(a)
             if key in norm_cols:
                 val = row.get(norm_cols[key])
                 if pd.notna(val) and val is not None:
@@ -1277,7 +1311,7 @@ def _load_database_unlocked() -> bool:
     sede_cnpjs = set()
 
     for _, row in df.iterrows():
-        raw_serial = get_row_val(row, "NumeroSerie", "Numero Serie", "Serial")
+        raw_serial = get_row_val(row, *DETAILS_SERIAL_HEADER_ALIASES)
         if not raw_serial:
             continue
         
@@ -1286,7 +1320,7 @@ def _load_database_unlocked() -> bool:
         details_serial_counts[normalized_serial] = details_serial_counts.get(normalized_serial, 0) + 1
         modelo = get_row_val(row, "Modelo")
         tipo = get_row_val(row, "Tipo", "ClasseEquipamento")
-        apelido = get_row_val(row, "Apelido", "Hostname")
+        apelido = get_row_val(row, *DETAILS_ALIAS_HEADER_ALIASES)
         id_cliente = get_row_val(row, "IdCliente", "Id Cliente")
         endereco = get_row_val(row, "Endereco", "Endereço")
         cidade = get_row_val(row, "Cidade")
