@@ -224,6 +224,47 @@ def filter_update_review_items(items: Any) -> List[Dict[str, Any]]:
             filtered.append(item)
     return filtered
 
+def mac_simpress_prefix_matches(items: Any) -> set:
+    """Return Endpoint MAC serials whose Simpress review row has a leading S."""
+    if not isinstance(items, list):
+        return set()
+
+    endpoint_serials = set()
+    simpress_serials = set()
+    for item in items:
+        if not isinstance(item, dict):
+            continue
+        serial = normalize_reference_value(item.get("serie"))
+        if not serial:
+            continue
+        reason = normalize_reference_value(
+            _comparison_source_text_for_display(str(item.get("motivo") or ""))
+        )
+        hostname = normalize_reference_value(item.get("computador"))
+        if "SERIENAOENCONTRADANASIMPRESS" in reason and hostname.startswith("PRMAC"):
+            endpoint_serials.add(serial)
+        elif "SERIENAOENCONTRADANOENDPOINT" in reason and serial.startswith("S"):
+            simpress_serials.add(serial)
+
+    return {
+        serial for serial in endpoint_serials
+        if f"S{serial}" in simpress_serials
+    }
+
+def _is_mac_optional_prefix_review_item(item: Any, endpoint_serials: set) -> bool:
+    if not isinstance(item, dict) or not endpoint_serials:
+        return False
+    serial = normalize_reference_value(item.get("serie"))
+    reason = normalize_reference_value(
+        _comparison_source_text_for_display(str(item.get("motivo") or ""))
+    )
+    hostname = normalize_reference_value(item.get("computador"))
+    if "SERIENAOENCONTRADANASIMPRESS" in reason:
+        return hostname.startswith("PRMAC") and serial in endpoint_serials
+    if "SERIENAOENCONTRADANOENDPOINT" in reason:
+        return serial.startswith("S") and serial[1:] in endpoint_serials
+    return False
+
 def filter_update_unmatched_series(items: Any) -> List[Dict[str, Any]]:
     if not isinstance(items, list):
         return []
@@ -321,9 +362,20 @@ def comparison_history_for_display(evento: Dict[str, Any]) -> Dict[str, Any]:
                 comparison.get("ausentes_em_detalhes")
             ),
         }
-        comparison_view["apelidos_sem_atualizacao"] = filter_update_review_items(
-            comparison.get("apelidos_sem_atualizacao")
-        )
+        raw_alias_review = comparison.get("apelidos_sem_atualizacao")
+        mac_prefix_matches = mac_simpress_prefix_matches(raw_alias_review)
+        comparison_view["apelidos_sem_atualizacao"] = [
+            item for item in filter_update_review_items(raw_alias_review)
+            if not _is_mac_optional_prefix_review_item(item, mac_prefix_matches)
+        ]
+        if mac_prefix_matches:
+            missing_lists["ausentes_em_detalhes"] = [
+                item for item in missing_lists["ausentes_em_detalhes"]
+                if not (
+                    normalize_reference_value(item.get("computador")).startswith("PRMAC")
+                    and normalize_reference_value(item.get("serie")) in mac_prefix_matches
+                )
+            ]
         comparison_view["filtros_atualizacao_aplicados"] = True
     alias_review = comparison_view.get("apelidos_sem_atualizacao")
     if isinstance(alias_review, list):
@@ -424,6 +476,19 @@ def compare_uploaded_workbooks(
         role: _comparison_source_records(table, role)
         for role, table in source_tables.items()
     }
+
+    # Simpress adds a leading S to some Mac serials. Match that variant only
+    # when the Endpoint identifies the corresponding serial as a PRMAC device.
+    endpoint_mac_serials = {
+        record["serial_key"]
+        for record in source_records["endpoint"]
+        if record["serial_key"]
+        and normalize_reference_value(record["computador"]).startswith("PRMAC")
+    }
+    for record in source_records["detalhes"]:
+        serial_key = record["serial_key"]
+        if serial_key.startswith("S") and serial_key[1:] in endpoint_mac_serials:
+            record["serial_key"] = serial_key[1:]
 
     nodes: Dict[tuple, Dict[str, Any]] = {}
     parent: Dict[tuple, tuple] = {}

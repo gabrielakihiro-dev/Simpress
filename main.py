@@ -927,7 +927,36 @@ def endpoint_alias_review_items(
             "motivo": "Hostname vazio no Endpoint; apelido atual preservado.",
         })
     if details_serials is not None:
-        details_duplicates = details_duplicate_serials or set()
+        raw_details_duplicates = {
+            normalize_reference_value(serial)
+            for serial in (details_duplicate_serials or set())
+        }
+        mac_endpoint_serials = {
+            normalize_reference_value(serial_key)
+            for serial_key, hostname in index.get("unique", {}).items()
+            if normalize_reference_value(hostname).startswith("PRMAC")
+        }
+        normalized_details_serials = set()
+        normalized_details_duplicates = set()
+        canonical_sources: Dict[str, Set[str]] = {}
+        for serial_value in details_serials:
+            serial_key = normalize_reference_value(serial_value)
+            if not serial_key:
+                continue
+            comparison_key = (
+                serial_key[1:]
+                if serial_key.startswith("S") and serial_key[1:] in mac_endpoint_serials
+                else serial_key
+            )
+            normalized_details_serials.add(comparison_key)
+            canonical_sources.setdefault(comparison_key, set()).add(serial_key)
+            if serial_key in raw_details_duplicates:
+                normalized_details_duplicates.add(comparison_key)
+        for comparison_key, source_keys in canonical_sources.items():
+            if len(source_keys) > 1:
+                normalized_details_duplicates.add(comparison_key)
+        details_serials = normalized_details_serials
+        details_duplicates = normalized_details_duplicates
         for serial_key in sorted(details_duplicates):
             items.append({
                 "serie": serial_key,
