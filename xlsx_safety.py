@@ -156,6 +156,7 @@ def _scan_worksheet(archive: zipfile.ZipFile, name: str) -> tuple[int, int]:
     max_row = 0
     max_column = 0
     current_row = 0
+    current_column = 0
 
     def add_bounds(row: int, column: int = 1) -> None:
         nonlocal max_row, max_column
@@ -178,7 +179,7 @@ def _scan_worksheet(archive: zipfile.ZipFile, name: str) -> tuple[int, int]:
     parser.EntityDeclHandler = reject_doctype
 
     def start_element(tag: str, attributes: dict[str, str]) -> None:
-        nonlocal current_row
+        nonlocal current_row, current_column
         local_tag = _local_name(tag)
         if local_tag == "dimension":
             reference = attributes.get("ref")
@@ -194,6 +195,7 @@ def _scan_worksheet(archive: zipfile.ZipFile, name: str) -> tuple[int, int]:
                     raise XlsxPackageError("A planilha contém uma linha inválida.") from error
             else:
                 current_row += 1
+            current_column = 0
             if current_row < 1 or current_row > 1_048_576:
                 raise XlsxPackageError("A planilha contém uma linha fora dos limites do Excel.")
             add_bounds(current_row)
@@ -201,7 +203,13 @@ def _scan_worksheet(archive: zipfile.ZipFile, name: str) -> tuple[int, int]:
             reference = attributes.get("r")
             if reference:
                 row, column = _parse_cell_reference(reference)
-                add_bounds(row, column)
+                current_column = column
+            else:
+                if current_row < 1:
+                    raise XlsxPackageError("A planilha contém uma célula fora de uma linha válida.")
+                current_column += 1
+                row, column = current_row, current_column
+            add_bounds(row, column)
 
     parser.StartElementHandler = start_element
     try:

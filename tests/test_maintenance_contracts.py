@@ -278,6 +278,41 @@ class MaintenanceContractTests(unittest.TestCase):
 
         self.assertIsNone(main.validate_xlsx_package(package))
 
+    def test_xlsx_implicit_cell_coordinate_cannot_exceed_column_limit(self):
+        package = _xlsx_with_worksheet_xml(
+            '<worksheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main">'
+            '<sheetData><row r="1"><c r="XFD1"><v>1</v></c><c><v>2</v></c></row></sheetData>'
+            '</worksheet>'
+        )
+
+        with self.assertRaises(main.HTTPException) as raised:
+            main.validate_xlsx_package(package)
+
+        self.assertEqual(raised.exception.status_code, 413)
+        self.assertIn("colunas", raised.exception.detail)
+
+    def test_xlsx_implicit_cells_count_toward_rectangular_dimension_limit(self):
+        implicit_cells = "<c><v>1</v></c>" * 26
+        package = _xlsx_with_worksheet_xml(
+            '<worksheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main">'
+            '<sheetData><row r="200000">' + implicit_cells + '</row></sheetData></worksheet>'
+        )
+
+        with self.assertRaises(main.HTTPException) as raised:
+            main.validate_xlsx_package(package)
+
+        self.assertEqual(raised.exception.status_code, 413)
+        self.assertIn("área", raised.exception.detail)
+
+    def test_xlsx_implicit_row_and_cell_coordinates_remain_accepted(self):
+        package = _xlsx_with_worksheet_xml(
+            '<worksheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main">'
+            '<sheetData><row r="1"><c r="B1"><v>1</v></c><c><v>2</v></c></row>'
+            '<row><c><v>3</v></c></row></sheetData></worksheet>'
+        )
+
+        self.assertIsNone(main.validate_xlsx_package(package))
+
     def test_frontend_references_assets_served_from_the_existing_static_mount(self):
         index_file = app_config.STATIC_DIR / "index.html"
         html = index_file.read_text(encoding="utf-8")
