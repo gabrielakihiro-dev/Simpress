@@ -541,6 +541,7 @@ class WorkflowIntegrityTests(unittest.TestCase):
             modelo="Modelo atualizado",
             tipo="Notebook",
             idCliente="CLIENTE-ATUALIZADO",
+            revisao=selected["revisao"],
         ))
 
         self.assertTrue(result["sucesso"])
@@ -571,7 +572,8 @@ class WorkflowIntegrityTests(unittest.TestCase):
 
         with self.assertRaises(main.HTTPException) as raised:
             main.salvar_equipamento(main.EquipamentoUpdatePayload(
-                serial="SN-DUP", modelo="Modelo incorreto", tipo="Notebook"
+                serial="SN-DUP", modelo="Modelo incorreto", tipo="Notebook",
+                revisao=main.get_equipamento("SN-DUP")["revisao"],
             ))
 
         self.assertEqual(raised.exception.status_code, 409)
@@ -583,7 +585,8 @@ class WorkflowIntegrityTests(unittest.TestCase):
         cache_before = copy.deepcopy(main.equipamentos_cache)
         with self.assertRaises(main.HTTPException) as raised:
             main.salvar_equipamento(main.EquipamentoUpdatePayload(
-                serial="SN-DUP", modelo="Modelo incorreto", tipo="Notebook"
+                serial="SN-DUP", modelo="Modelo incorreto", tipo="Notebook",
+                revisao=main.get_equipamento("SN-DUP")["revisao"],
             ))
         self.assertEqual(raised.exception.status_code, 409)
         self.assertIn("duplicada", raised.exception.detail)
@@ -610,7 +613,8 @@ class WorkflowIntegrityTests(unittest.TestCase):
 
         with self.assertRaises(main.HTTPException) as raised:
             main.salvar_equipamento(main.EquipamentoUpdatePayload(
-                serial="SN-CACHE", modelo="Modelo alterado", tipo="Notebook"
+                serial="SN-CACHE", modelo="Modelo alterado", tipo="Notebook",
+                revisao=main.get_equipamento("SN-CACHE")["revisao"],
             ))
 
         self.assertEqual(raised.exception.status_code, 409)
@@ -632,7 +636,8 @@ class WorkflowIntegrityTests(unittest.TestCase):
         with patch.object(main, "stage_workbook_update", side_effect=main.FileTransactionError("falha fictícia")):
             with self.assertRaises(main.HTTPException) as raised:
                 main.salvar_equipamento(main.EquipamentoUpdatePayload(
-                    serial="SN-FALHA", modelo="Modelo alterado", tipo="Notebook"
+                    serial="SN-FALHA", modelo="Modelo alterado", tipo="Notebook",
+                    revisao=main.get_equipamento("SN-FALHA")["revisao"],
                 ))
 
         self.assertEqual(raised.exception.status_code, 500)
@@ -647,6 +652,7 @@ class WorkflowIntegrityTests(unittest.TestCase):
         make_model(self.model)
         self.assertTrue(main.load_database())
         cache_before = copy.deepcopy(main.equipamentos_cache)
+        equipment_revision = main.get_equipamento("SN-REMOVIDO")["revisao"]
 
         make_details(self.details, [
             ("SN-ATUAL", "ALIAS-ATUAL", "Modelo atual", "Londrina", "Notebook", "86000000"),
@@ -655,7 +661,8 @@ class WorkflowIntegrityTests(unittest.TestCase):
 
         with self.assertRaises(main.HTTPException) as raised:
             main.salvar_equipamento(main.EquipamentoUpdatePayload(
-                serial="SN-REMOVIDO", modelo="Modelo alterado", tipo="Notebook"
+                serial="SN-REMOVIDO", modelo="Modelo alterado", tipo="Notebook",
+                revisao=equipment_revision,
             ))
 
         self.assertEqual(raised.exception.status_code, 409)
