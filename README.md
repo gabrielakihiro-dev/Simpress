@@ -126,7 +126,7 @@ Códigos como `3CK38` não são associados manualmente a uma categoria. Para apa
 
 O limite de envio é de 30 MB por arquivo. Para manter a leitura previsível, cada XLSX também pode ter até 128 abas, 250.000 linhas por aba e 5.000.000 de posições no total, considerando o retângulo usado de cada aba. Cada atualização substitui integralmente os dois inventários ativos pelos arquivos validados enviados; séries ausentes no novo relatório deixam de compor a base carregada. Antes de enviar, confirme que são as versões corretas. O sistema guarda cópias anteriores em `planilhas_entrada/_backups`; pelo histórico, é possível pré-visualizar e restaurar um par válido de inventários.
 
-O apelido alterado manualmente fica associado à série e prevalece nas pesquisas, na entrada rápida e na exportação, mesmo após recarregar ou atualizar as planilhas. Sem override manual, o hostname único da InvAll prevalece sobre o valor de EquipamentosDetalhes. Ao atualizar os arquivos, endereço e localidade são sincronizados a partir de EquipamentosDetalhes. O Histórico planilhas registra divergências entre apelidos manuais e as duas fontes, permitindo manter o override ou removê-lo para uma série. A exportação altera somente a coluna `Apelido`; abas, linhas, colunas, dimensões, demais valores e formatação do modelo são preservados.
+O apelido alterado manualmente fica associado à série e prevalece nas pesquisas, na entrada rápida e na exportação, mesmo após recarregar ou atualizar as planilhas. Sem override manual, o hostname único da InvAll prevalece sobre o valor de EquipamentosDetalhes. Ao atualizar os arquivos, endereço e localidade são sincronizados a partir de EquipamentosDetalhes. O Histórico planilhas registra divergências entre apelidos manuais e as duas fontes, permitindo manter o override ou removê-lo para uma série. A exportação atualiza células graváveis de `Apelido` no modelo com o valor do inventário ativo (`Apelido` ou `Hostname`) e de `IdCliente` quando essa coluna existe nos dois arquivos. Somente séries com correspondência única são processadas; células com fórmulas não são sobrescritas. As demais abas, linhas, colunas, dimensões, valores e formatação do modelo são preservados.
 
 ## Interface e acessibilidade
 
@@ -147,7 +147,7 @@ A interface carrega estilos, fontes e ícones do servidor local; os botões de c
 - O cadastro de unidades personalizadas é salvo em `unidades_custom.json` quando houver alterações.
 - No catálogo de unidades, use os botões ao lado do CNPJ e do CEP para copiar esses dados. A interface informa sucesso, ausência do dado ou falha de cópia; se a API de área de transferência do navegador não estiver disponível, tenta um método de compatibilidade.
 - Use **Histórico** para consultar alterações de apelido e, quando disponível, desfazer a alteração mais recente.
-- Use **Exportar Excel** para baixar a planilha com os apelidos atualizados.
+- Use **Exportar Excel** para baixar a planilha com `Apelido` e `IdCliente` atualizados. A notificação informa quantas células mudaram em cada coluna, o total exportado e as linhas que ficaram para conferência.
 
 ## Arquivos, backups e recuperação
 
