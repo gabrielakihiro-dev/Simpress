@@ -2821,52 +2821,85 @@ def salvar_unidade(payload: UnidadePayload):
     cep = format_cep(payload.cep)
     cnpj = payload.cnpj.strip()
     retirada_endereco = f"{endereco} - {cidade}/{uf} - CEP {cep}"
+    detail_files = get_details_files()
+    transaction_targets = [
+        *detail_files,
+        ENDPOINT_UPLOAD_FILE,
+        MODIFIED_APELIDOS_FILE,
+        CUSTOM_UNIDADES_FILE,
+        EXPORT_MODEL_FILE,
+    ]
 
-    custom_units = load_custom_units()
-    matched = False
+    try:
+        with AtomicFileTransaction(TRANSACTION_ROOT, transaction_targets) as transaction:
+            with STATE_LOCK:
+                current_units = list(unidades_cache)
 
-    if payload.id:
-        for u in custom_units:
-            if _coerce_unit_id(u.get("id")) == payload.id:
-                u.update({
-                    "cidade": cidade,
-                    "endereco": endereco,
-                    "uf": uf,
-                    "cep": cep,
-                    "cnpj": cnpj,
-                    "endereco_completo": retirada_endereco,
-                    "label": f"{cidade} - {endereco} ({cnpj})"
-                })
-                matched = True
-                break
+            def update_custom_units(saved_units):
+                if not isinstance(saved_units, list):
+                    raise FileTransactionError("O catálogo local de unidades não contém uma lista válida.")
+                updated_units = [dict(unit) for unit in saved_units]
+                matched = False
 
-    if not matched:
-        if payload.id and not any(_coerce_unit_id(unit.get("id")) == payload.id for unit in unidades_cache):
-            raise HTTPException(
-                status_code=409,
-                detail="A unidade selecionada não está mais no catálogo. Atualize a lista antes de editar.",
-            )
-        current_ids = [_coerce_unit_id(unit.get("id")) for unit in unidades_cache]
-        current_ids = [unit_id for unit_id in current_ids if unit_id is not None]
-        new_id = (max(current_ids + [0]) + 1) if not payload.id else payload.id
-        custom_units.append({
-            "id": new_id,
-            "cidade": cidade,
-            "endereco": endereco,
-            "uf": uf,
-            "cep": cep,
-            "cnpj": cnpj,
-            "is_sede": "sede" in cidade.lower() or "sede" in endereco.lower(),
-            "endereco_completo": retirada_endereco,
-            "label": f"{cidade} - {endereco} ({cnpj})"
-        })
+                if payload.id:
+                    for unit in updated_units:
+                        if _coerce_unit_id(unit.get("id")) == payload.id:
+                            unit.update({
+                                "cidade": cidade,
+                                "endereco": endereco,
+                                "uf": uf,
+                                "cep": cep,
+                                "cnpj": cnpj,
+                                "endereco_completo": retirada_endereco,
+                                "label": f"{cidade} - {endereco} ({cnpj})",
+                            })
+                            matched = True
+                            break
 
-    save_custom_units(custom_units)
-    load_database()
+                if not matched:
+                    if payload.id and not any(
+                        _coerce_unit_id(unit.get("id")) == payload.id
+                        for unit in current_units
+                    ):
+                        raise HTTPException(
+                            status_code=409,
+                            detail="A unidade selecionada não está mais no catálogo. Atualize a lista antes de editar.",
+                        )
+                    current_ids = [
+                        _coerce_unit_id(unit.get("id"))
+                        for unit in current_units
+                    ]
+                    current_ids = [unit_id for unit_id in current_ids if unit_id is not None]
+                    new_id = (max(current_ids + [0]) + 1) if not payload.id else payload.id
+                    updated_units.append({
+                        "id": new_id,
+                        "cidade": cidade,
+                        "endereco": endereco,
+                        "uf": uf,
+                        "cep": cep,
+                        "cnpj": cnpj,
+                        "is_sede": "sede" in cidade.lower() or "sede" in endereco.lower(),
+                        "endereco_completo": retirada_endereco,
+                        "label": f"{cidade} - {endereco} ({cnpj})",
+                    })
+                return updated_units
+
+            transaction.update_json(CUSTOM_UNIDADES_FILE, update_custom_units, [])
+            transaction.commit()
+            load_database(transaction_locked=True)
+            with STATE_LOCK:
+                published_units = list(unidades_cache)
+    except HTTPException:
+        raise
+    except FileBusyError as error:
+        raise HTTPException(status_code=409, detail=str(error)) from error
+    except FileTransactionError as error:
+        raise HTTPException(status_code=500, detail=f"Falha ao salvar o catálogo de unidades: {error}") from error
+
     return {
         "sucesso": True,
         "mensagem": f"Unidade '{cidade}' cadastrada/atualizada com sucesso!",
-        "unidades": unidades_cache
+        "unidades": published_units,
     }
 
 

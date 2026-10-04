@@ -340,6 +340,89 @@ class WorkflowIntegrityTests(unittest.TestCase):
         self.assertEqual(raised.exception.status_code, 409)
         self.assertEqual(self.custom_units.read_bytes(), before_stale_edit)
 
+    def test_concurrent_unit_saves_preserve_both_catalog_updates(self):
+        make_details(
+            self.details,
+            [("SN-1", "HOST-1", "Modelo A", "Maringá", "Notebook", "87000000")],
+        )
+        make_endpoint(self.endpoint, [("SN-1", "HOST-1")])
+        self.custom_units.write_text("[]", encoding="utf-8")
+        self.assertTrue(main.load_database())
+
+        start_together = threading.Barrier(3)
+        legacy_saves_together = threading.Barrier(2)
+        results = []
+        original_save = main.save_custom_units
+
+        def force_legacy_writers_to_share_one_snapshot(units):
+            legacy_saves_together.wait(timeout=5)
+            original_save(units)
+
+        def save_unit(city, cep):
+            start_together.wait(timeout=5)
+            try:
+                results.append(main.salvar_unidade(main.UnidadePayload(
+                    cidade=city,
+                    endereco="Rua Fictícia, 10",
+                    uf="PR",
+                    cep=cep,
+                    cnpj=f"{city[-1]}0.000.000/0000-00",
+                )))
+            except Exception as error:
+                results.append(error)
+
+        with patch.object(main, "save_custom_units", side_effect=force_legacy_writers_to_share_one_snapshot):
+            workers = [
+                threading.Thread(target=save_unit, args=("Unidade Concorrente A", "80000-001")),
+                threading.Thread(target=save_unit, args=("Unidade Concorrente B", "80000-002")),
+            ]
+            for worker in workers:
+                worker.start()
+            start_together.wait(timeout=5)
+            for worker in workers:
+                worker.join(timeout=10)
+
+        self.assertTrue(all(not worker.is_alive() for worker in workers))
+        self.assertEqual(len(results), 2)
+        self.assertFalse([result for result in results if isinstance(result, Exception)])
+        persisted = json.loads(self.custom_units.read_text(encoding="utf-8"))
+        saved_cities = {unit["cidade"] for unit in persisted}
+        self.assertEqual(saved_cities, {"Unidade Concorrente A", "Unidade Concorrente B"})
+        saved_ids = [unit["id"] for unit in persisted]
+        self.assertEqual(len(saved_ids), len(set(saved_ids)))
+        self.assertTrue({"Unidade Concorrente A", "Unidade Concorrente B"}.issubset(
+            {unit["cidade"] for unit in main.unidades_cache}
+        ))
+
+    def test_unit_save_transaction_failure_preserves_catalog_and_cache(self):
+        make_details(
+            self.details,
+            [("SN-1", "HOST-1", "Modelo A", "Maringá", "Notebook", "87000000")],
+        )
+        make_endpoint(self.endpoint, [("SN-1", "HOST-1")])
+        self.custom_units.write_text("[]", encoding="utf-8")
+        self.assertTrue(main.load_database())
+        catalog_before = self.custom_units.read_bytes()
+        units_before = copy.deepcopy(main.unidades_cache)
+
+        with patch.object(
+            main.AtomicFileTransaction,
+            "update_json",
+            side_effect=main.FileTransactionError("falha fictícia de gravação"),
+        ):
+            with self.assertRaises(main.HTTPException) as raised:
+                main.salvar_unidade(main.UnidadePayload(
+                    cidade="Unidade Não Persistida",
+                    endereco="Rua Fictícia, 11",
+                    uf="PR",
+                    cep="80000-003",
+                    cnpj="110.000.000/0000-00",
+                ))
+
+        self.assertEqual(raised.exception.status_code, 500)
+        self.assertEqual(self.custom_units.read_bytes(), catalog_before)
+        self.assertEqual(main.unidades_cache, units_before)
+
     def test_detail_upload_headers_and_active_reader_share_normalization(self):
         variants = ("NumeroSerie", "numero_serie", "NÚMERO-SERIE", "Número de Série")
         for index, serial_header in enumerate(variants):
