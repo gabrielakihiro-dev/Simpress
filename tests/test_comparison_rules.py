@@ -84,6 +84,53 @@ class InventoryComparisonTests(unittest.TestCase):
         self.assertEqual(result["ausentes_em_detalhes"], [])
         self.assertTrue(any(item["fontes"]["EquipamentosDetalhes"] == "ambíguo" for item in result["registros_ambiguos"]))
 
+    def test_duplicate_hostname_warnings_are_bounded_and_deterministic(self):
+        endpoint = source_table([
+            {
+                "NOMEDOCOMPUTADOR": "PRNOTEAPU-HOST-DUPLICADO",
+                "ROTULODESERVICONUMERODESERIE": f"END-{index:03d}",
+            }
+            for index in range(100)
+        ])
+        details = source_table([
+            {
+                "NUMEROSERIE": f"DET-{index:03d}",
+                "APELIDO": "PRNOTEAPU-HOST-DUPLICADO",
+                "CIDADE": "Apucarana",
+            }
+            for index in range(100)
+        ])
+
+        first_result = main.compare_uploaded_workbooks(endpoint, details, {})
+        second_result = main.compare_uploaded_workbooks(endpoint, details, {})
+        issues = first_result["correspondencias_ambiguas"]
+        hostname_issues = [item for item in issues if item["tipo"] == "Hostname/Apelido duplicado"]
+        divergent_issues = [
+            item for item in issues
+            if item["tipo"] == "Série divergente para o mesmo hostname/Apelido"
+        ]
+
+        self.assertEqual(issues, second_result["correspondencias_ambiguas"])
+        self.assertEqual(len(issues), 2)
+        self.assertEqual(len(hostname_issues), 1)
+        self.assertEqual(
+            hostname_issues[0]["fontes"],
+            [
+                {"fonte": "Endpoint", "quantidade": 100},
+                {"fonte": "EquipamentosDetalhes", "quantidade": 100},
+            ],
+        )
+        self.assertEqual(len(divergent_issues), 1)
+        divergent_issue = divergent_issues[0]
+        self.assertEqual(divergent_issue["fontes"], [
+            {"fonte": "Endpoint", "quantidade": 100},
+            {"fonte": "EquipamentosDetalhes", "quantidade": 100},
+        ])
+        self.assertIn("10000 combinações", divergent_issue["mensagem"])
+        self.assertIn("END-000, END-001, END-002", divergent_issue["mensagem"])
+        self.assertIn("DET-000, DET-001, DET-002", divergent_issue["mensagem"])
+        self.assertLess(len(divergent_issue["mensagem"]), 400)
+
     def test_sebrae_owned_serials_are_filtered_from_old_and_new_history_without_rewriting_events(self):
         owned_serials = [
             "BRJ135P5XS",
