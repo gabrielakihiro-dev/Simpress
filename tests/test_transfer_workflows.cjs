@@ -5,6 +5,7 @@ const {
   createRequestGate,
   formatBrazilPhone,
   isCurrentQuery,
+  refreshSelectionAfterInventoryReplacement,
   serialForTransfer,
 } = require("../static/transfer-utils.js");
 
@@ -60,4 +61,119 @@ test("clearing a field invalidates and aborts an in-flight search", () => {
 
   assert.equal(pending.signal.aborted, true);
   assert.equal(gate.isCurrent(pending.id), false);
+});
+
+test("replacing inventories clears a removed selection and blocks transfer validation", async () => {
+  const equipmentGate = createRequestGate();
+  const autocompleteGate = createRequestGate();
+  const oldSearch = equipmentGate.begin();
+  const oldAutocomplete = autocompleteGate.begin();
+  let resolveOldSearch;
+  const oldSearchResult = new Promise(resolve => { resolveOldSearch = resolve; });
+  const appliedSearchResults = [];
+  const oldSearchApply = oldSearchResult.then(equipment => {
+    if (equipmentGate.isCurrent(oldSearch.id)) appliedSearchResults.push(equipment);
+  });
+  const state = {
+    equipment: { serial: "SERIE-REMOVIDA", modelo: "Modelo antigo" },
+    serialInput: "SERIE-REMOVIDA",
+    originCity: "Maringá",
+    originAddress: "Rua antiga",
+    preview: "Resumo antigo",
+  };
+
+  const result = await refreshSelectionAfterInventoryReplacement({
+    requestGate: equipmentGate,
+    serial: state.equipment.serial,
+    invalidateSearches: () => {
+      equipmentGate.invalidate();
+      autocompleteGate.invalidate();
+    },
+    clearSelection: clearSerial => {
+      state.equipment = null;
+      state.originCity = "";
+      state.originAddress = "";
+      state.preview = "";
+      if (clearSerial) state.serialInput = "";
+    },
+    fetchEquipment: async (serial, options) => {
+      assert.equal(serial, "SERIE-REMOVIDA");
+      assert.equal(options.signal.aborted, false);
+      return { ok: false, status: 404 };
+    },
+    applyEquipment: equipment => { state.equipment = equipment; },
+  });
+
+  resolveOldSearch({ serial: "SERIE-REMOVIDA", modelo: "Resultado antigo" });
+  await oldSearchApply;
+  assert.equal(result, "missing");
+  assert.equal(oldSearch.signal.aborted, true);
+  assert.equal(oldAutocomplete.signal.aborted, true);
+  assert.deepEqual(appliedSearchResults, []);
+  assert.equal(state.equipment, null);
+  assert.equal(state.serialInput, "");
+  assert.equal(state.originCity, "");
+  assert.equal(state.originAddress, "");
+  assert.equal(state.preview, "");
+  assert.equal(serialForTransfer(state.equipment, state.serialInput), "");
+});
+
+test("inventory replacement refreshes a still-existing selection with current equipment", async () => {
+  const requestGate = createRequestGate();
+  const state = { equipment: { serial: "SERIE-ATUALIZADA", modelo: "Modelo antigo" }, origin: "Origem antiga" };
+  const refreshedEquipment = { serial: "SERIE-ATUALIZADA", modelo: "Modelo novo", retirada_cidade: "Curitiba" };
+  let clears = 0;
+
+  const result = await refreshSelectionAfterInventoryReplacement({
+    requestGate,
+    serial: state.equipment.serial,
+    invalidateSearches: () => requestGate.invalidate(),
+    clearSelection: () => {
+      clears += 1;
+      state.equipment = null;
+      state.origin = "";
+    },
+    fetchEquipment: async () => ({ ok: true, status: 200, json: async () => refreshedEquipment }),
+    applyEquipment: equipment => {
+      state.equipment = equipment;
+      state.origin = equipment.retirada_cidade;
+    },
+  });
+
+  assert.equal(result, "updated");
+  assert.equal(clears, 1);
+  assert.equal(state.equipment, refreshedEquipment);
+  assert.equal(state.origin, "Curitiba");
+  assert.equal(serialForTransfer(state.equipment, "SERIE-ATUALIZADA"), "SERIE-ATUALIZADA");
+});
+
+test("a late inventory refresh cannot overwrite a newer equipment search", async () => {
+  const requestGate = createRequestGate();
+  const state = { equipment: { serial: "SERIE-ANTIGA" } };
+  let resolveRefresh;
+  let applied = 0;
+  const refresh = refreshSelectionAfterInventoryReplacement({
+    requestGate,
+    serial: state.equipment.serial,
+    invalidateSearches: () => requestGate.invalidate(),
+    clearSelection: () => { state.equipment = null; },
+    fetchEquipment: () => new Promise(resolve => { resolveRefresh = resolve; }),
+    applyEquipment: equipment => {
+      applied += 1;
+      state.equipment = equipment;
+    },
+  });
+
+  const newerSearch = requestGate.begin();
+  state.equipment = { serial: "SERIE-NOVA", modelo: "Resultado novo" };
+  resolveRefresh({
+    ok: true,
+    status: 200,
+    json: async () => ({ serial: "SERIE-ANTIGA", modelo: "Resposta atrasada" }),
+  });
+
+  assert.equal(await refresh, "stale");
+  assert.equal(newerSearch.signal.aborted, false);
+  assert.equal(applied, 0);
+  assert.equal(state.equipment.serial, "SERIE-NOVA");
 });

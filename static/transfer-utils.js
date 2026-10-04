@@ -37,6 +37,49 @@
       && String(currentValue || "").trim().toUpperCase() === String(requestedValue || "").trim().toUpperCase();
   }
 
+  async function refreshSelectionAfterInventoryReplacement({
+    requestGate,
+    serial,
+    invalidateSearches,
+    clearSelection,
+    fetchEquipment,
+    applyEquipment,
+  }) {
+    const selectedSerial = String(serial || "").trim().toUpperCase();
+    invalidateSearches?.();
+    clearSelection?.(false);
+    if (!selectedSerial) return "cleared";
+
+    const request = requestGate.begin();
+    const clearUnverifiedSelection = () => clearSelection?.(true);
+    try {
+      const response = await fetchEquipment(selectedSerial, { signal: request.signal });
+      if (!requestGate.isCurrent(request.id)) return "stale";
+      if (response.status === 404) {
+        clearUnverifiedSelection();
+        return "missing";
+      }
+      if (!response.ok) {
+        clearUnverifiedSelection();
+        return "unavailable";
+      }
+
+      const equipment = await response.json();
+      if (!requestGate.isCurrent(request.id)) return "stale";
+      if (serialForTransfer(equipment, selectedSerial) !== selectedSerial) {
+        clearUnverifiedSelection();
+        return "missing";
+      }
+
+      applyEquipment?.(equipment);
+      return "updated";
+    } catch (error) {
+      if (!requestGate.isCurrent(request.id)) return "stale";
+      clearUnverifiedSelection();
+      return error?.name === "AbortError" ? "stale" : "unavailable";
+    }
+  }
+
   function formatBrazilPhone(value) {
     const original = String(value || "").trim();
     if (!original) return "";
@@ -80,5 +123,11 @@
     return formatted;
   }
 
-  return { createRequestGate, formatBrazilPhone, isCurrentQuery, serialForTransfer };
+  return {
+    createRequestGate,
+    formatBrazilPhone,
+    isCurrentQuery,
+    refreshSelectionAfterInventoryReplacement,
+    serialForTransfer,
+  };
 });
