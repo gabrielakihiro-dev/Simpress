@@ -660,7 +660,7 @@
         const fileLabels = {
           template_transferencia: "Modelo de transferência",
           inventario_equipamentos: "Inventário ativo de equipamentos",
-          inventario_detalhes_atualizacao: "Inventário EquipamentosDetalhes para atualização",
+          inventario_detalhes_atualizacao: "Inventário Simpress para atualização",
           inventario_endpoint: "Inventário Endpoint",
           modelo_exportacao: "Modelo de exportação",
         };
@@ -941,7 +941,7 @@
               </span>
             ` : ""}
             ${item.invall_alias_status && item.invall_alias_status !== "aplicado" ? `
-              <span class="text-[10px] text-amber-200 shrink-0" title="${escapeHtml(item.invall_alias_detail || "Conferir associação com a InvAll")}">Conferir InvAll</span>
+              <span class="text-[10px] text-amber-200 shrink-0" title="${escapeHtml(item.invall_alias_detail || "Conferir associação com o Endpoint")}">Conferir Endpoint</span>
             ` : ""}
           </div>
         </div>
@@ -1379,7 +1379,7 @@
       document.getElementById("badge-apelido").textContent = eq.apelido || "Sem Apelido";
       const aliasStatus = document.getElementById("badge-apelido-status");
       aliasStatus.textContent = eq.invall_alias_status && eq.invall_alias_status !== "aplicado"
-        ? (eq.invall_alias_detail || "Conferir associação com a InvAll.")
+        ? (eq.invall_alias_detail || "Conferir associação com o Endpoint.")
         : "";
       aliasStatus.classList.toggle("hidden", !aliasStatus.textContent);
       document.getElementById("card-id-cliente").textContent = eq.idCliente ? `Id Cliente: ${eq.idCliente}` : "";
@@ -1777,7 +1777,7 @@
         window.URL.revokeObjectURL(url);
         a.remove();
 
-        showToast("Planilha Exportada com Sucesso", "success");
+        showToast("Planilha Exportada com Sucesso!", "success");
 
       } catch (err) {
         console.error("Erro ao gerar planilha:", err);
@@ -1855,7 +1855,7 @@
       const endpointFile = document.getElementById("upload-endpoint-file").files?.[0];
       const detailsFile = document.getElementById("upload-details-file").files?.[0];
       if (!endpointFile || !detailsFile) {
-        mostrarStatusUpload("Selecione Endpoint e EquipamentosDetalhes antes de atualizar.", true);
+        mostrarStatusUpload("Selecione Endpoint e Simpress antes de atualizar.", true);
         return;
       }
 
@@ -1959,7 +1959,7 @@
       const divergenciasApelidosManuais = comparison.divergencias_apelidos_manuais || [];
 
       document.getElementById("comparacao-planilhas-fontes").textContent =
-        `Endpoint: ${arquivo.endpoint || "—"} · EquipamentosDetalhes: ${arquivo.detalhes || "—"}${comparison.horario_comparacao ? ` · ${formatarHorarioHistorico(comparison.horario_comparacao)}` : ""}`;
+        `Endpoint: ${arquivo.endpoint || "—"} · Simpress: ${arquivo.detalhes || "—"}${comparison.horario_comparacao ? ` · ${formatarHorarioHistorico(comparison.horario_comparacao)}` : ""}`;
 
       const renderizarAusentes = items => items.map(item => `
         <tr class="text-slate-300">
@@ -2058,7 +2058,7 @@
         <div class="grid grid-cols-2 md:grid-cols-3 xl:grid-cols-4 gap-3">
           <div class="rounded-xl bg-slate-950 border border-slate-800 p-3"><p class="text-[10px] uppercase tracking-wide text-slate-500">Notebooks comparados</p><p class="text-xl font-bold text-white mt-1">${Number(comparison.total_endpoint || 0).toLocaleString("pt-BR")}</p></div>
           <div class="rounded-xl bg-rose-500/5 border border-rose-500/20 p-3"><p class="text-[10px] uppercase tracking-wide text-rose-300">Ausentes no Endpoint</p><p class="text-xl font-bold text-rose-200 mt-1">${ausentesEndpoint.length}</p></div>
-          <div class="rounded-xl bg-amber-500/5 border border-amber-500/20 p-3"><p class="text-[10px] uppercase tracking-wide text-amber-300">Ausentes em EquipamentosDetalhes</p><p class="text-xl font-bold text-amber-200 mt-1">${ausentesDetalhes.length}</p></div>
+          <div class="rounded-xl bg-amber-500/5 border border-amber-500/20 p-3"><p class="text-[10px] uppercase tracking-wide text-amber-300">Ausentes na Simpress</p><p class="text-xl font-bold text-amber-200 mt-1">${ausentesDetalhes.length}</p></div>
           <div class="rounded-xl bg-amber-500/5 border border-amber-500/20 p-3"><p class="text-[10px] uppercase tracking-wide text-amber-300">Divergências de local</p><p class="text-xl font-bold text-amber-200 mt-1">${divergenciasLocal.length}</p></div>
           <div class="rounded-xl bg-yellow-500/5 border border-yellow-500/20 p-3"><p class="text-[10px] uppercase tracking-wide text-yellow-300">Duplicidades e ambiguidades</p><p class="text-xl font-bold text-yellow-200 mt-1">${ambiguityRows.length}</p></div>
           <div class="rounded-xl bg-sky-500/5 border border-sky-500/20 p-3"><p class="text-[10px] uppercase tracking-wide text-sky-300">Séries sem mapeamento</p><p class="text-xl font-bold text-sky-200 mt-1">${seriesSemMapa.length}</p></div>
@@ -2067,27 +2067,27 @@
           <div class="rounded-xl bg-violet-500/5 border border-violet-500/20 p-3"><p class="text-[10px] uppercase tracking-wide text-violet-300">Divergências manuais pendentes</p><p id="comparacao-divergencias-manuais-pendentes" class="text-xl font-bold text-violet-200 mt-1">${divergenciasApelidosManuais.filter(item => !item.resolucao || item.resolucao === "pendente").length}</p></div>
         </div>
         <section class="space-y-2">
-          <div><h4 class="text-sm font-bold text-emerald-300">Apelidos/hostnames atualizados pela InvAll</h4><p class="text-[11px] text-slate-500">A lista compara os valores antes e depois pelo número de série.</p></div>
+          <div><h4 class="text-sm font-bold text-emerald-300">Apelidos/hostnames atualizados pelo Endpoint</h4><p class="text-[11px] text-slate-500">A lista compara os valores antes e depois pelo número de série.</p></div>
           ${renderizarTabelaComparacao(["Série", "Apelido anterior", "Novo apelido / hostname", "Horário", "Arquivos de origem"], aliasUpdateRows, "Nenhum apelido ou hostname mudou nesta atualização.")}
         </section>
         <section class="space-y-2">
           <div><h4 class="text-sm font-bold text-amber-300">Linhas mantidas para conferência</h4><p class="text-[11px] text-slate-500">Série vazia, ausente ou duplicada não é escolhida automaticamente; o apelido atual fica preservado.</p></div>
-          ${renderizarTabelaComparacao(["Série", "Hostname na InvAll", "Motivo"], aliasReviewRows, "Nenhuma linha de apelido precisa de conferência.")}
+          ${renderizarTabelaComparacao(["Série", "Hostname no Endpoint", "Motivo"], aliasReviewRows, "Nenhuma linha de apelido precisa de conferência.")}
         </section>
         <section class="space-y-2">
           <div><h4 class="text-sm font-bold text-violet-300">Divergências com apelidos alterados manualmente</h4><p class="text-[11px] text-slate-500">O apelido manual prevalece nas pesquisas e exportações. “Manter manual” registra a decisão; “Excluir manual” remove apenas o override desta série e volta a usar o valor das planilhas.</p></div>
-          ${renderizarTabelaComparacao(["Série", "Apelido manual", "EquipamentosDetalhes", "InvAll", "Situação", "Ação"], manualAliasRows, "Nenhuma divergência entre apelidos manuais e as planilhas enviadas.")}
+          ${renderizarTabelaComparacao(["Série", "Apelido manual", "Simpress", "Endpoint", "Situação", "Ação"], manualAliasRows, "Nenhuma divergência entre apelidos manuais e as planilhas enviadas.")}
         </section>
         <section class="space-y-2">
           <div><h4 class="text-sm font-bold text-rose-300">Equipamentos ausentes por fonte</h4><p class="text-[11px] text-slate-500">Cada lista mostra equipamentos que não têm correspondência segura naquela fonte. Divergências de local aparecem em seção própria.</p></div>
           <h5 class="text-xs font-semibold text-slate-300">Ausentes no Endpoint (${ausentesEndpoint.length})</h5>
           ${renderizarTabelaComparacao(["Hostname/Apelido", "Série", "Local previsto", "Ausente em"], renderizarAusentes(ausentesEndpoint), "Nenhum equipamento ausente no Endpoint.")}
-          <h5 class="text-xs font-semibold text-slate-300">Ausentes em EquipamentosDetalhes (${ausentesDetalhes.length})</h5>
-          ${renderizarTabelaComparacao(["Hostname/Apelido", "Série", "Local previsto", "Ausente em"], renderizarAusentes(ausentesDetalhes), "Nenhum equipamento ausente em EquipamentosDetalhes.")}
+          <h5 class="text-xs font-semibold text-slate-300">Ausentes na Simpress (${ausentesDetalhes.length})</h5>
+          ${renderizarTabelaComparacao(["Hostname/Apelido", "Série", "Local previsto", "Ausente em"], renderizarAusentes(ausentesDetalhes), "Nenhum equipamento ausente na Simpress.")}
         </section>
         <section class="space-y-2">
-          <div><h4 class="text-sm font-bold text-amber-300">Localidade divergente</h4><p class="text-[11px] text-slate-500">A localidade em EquipamentosDetalhes é comparada com a classificação do hostname.</p></div>
-          ${renderizarTabelaComparacao(["Computador", "Série", "Local previsto", "Local em EquipamentosDetalhes"], locationRows, "Nenhuma divergência de localidade encontrada.")}
+          <div><h4 class="text-sm font-bold text-amber-300">Localidade divergente</h4><p class="text-[11px] text-slate-500">A localidade na Simpress é comparada com a classificação do hostname.</p></div>
+          ${renderizarTabelaComparacao(["Computador", "Série", "Local previsto", "Local na Simpress"], locationRows, "Nenhuma divergência de localidade encontrada.")}
         </section>
         <section class="space-y-2">
           <div><h4 class="text-sm font-bold text-yellow-300">Duplicidades e correspondências ambíguas</h4><p class="text-[11px] text-slate-500">Nenhuma linha é escolhida automaticamente quando a série se repete ou o hostname/Apelido não identifica uma correspondência única.</p></div>
@@ -2097,7 +2097,7 @@
           <div><h4 class="text-sm font-bold text-sky-300">Séries sem local definido</h4><p class="text-[11px] text-slate-500">Não há regra de localidade cadastrada para estes prefixos.</p></div>
           ${renderizarTabelaComparacao(["Série", "Quantidade", "Exemplos"], unmappedRows, "Todas as séries têm mapeamento de localidade.")}
         </section>
-        <p class="text-[11px] text-emerald-300">EquipamentosDetalhes carregado: ${Number(comparison.total_equipamentos_carregados || 0).toLocaleString("pt-BR")} equipamentos. Backup das versões anteriores: <span class="font-mono">planilhas_entrada/${escapeHtml(comparison.backup_diretorio || "_backups")}</span>.</p>
+        <p class="text-[11px] text-emerald-300">Simpress carregada: ${Number(comparison.total_equipamentos_carregados || 0).toLocaleString("pt-BR")} equipamentos. Backup das versões anteriores: <span class="font-mono">planilhas_entrada/${escapeHtml(comparison.backup_diretorio || "_backups")}</span>.</p>
       `;
       document.querySelectorAll("[data-manual-alias-action]").forEach(button => {
         button.addEventListener("click", () => {
@@ -2114,7 +2114,7 @@
         return;
       }
       if (acao === "excluir" && !window.confirm(
-        `Remover a alteração manual da série ${item.serie}? O apelido voltará ao valor da InvAll, quando preenchido, ou de EquipamentosDetalhes.`
+        `Remover a alteração manual da série ${item.serie}? O apelido voltará ao valor do Endpoint, quando preenchido, ou da Simpress.`
       )) return;
 
       const row = botao.closest("tr");
@@ -2245,17 +2245,17 @@
           const fontes = document.createElement("p");
           fontes.className = "text-xs text-slate-400 break-words";
           fontes.textContent = restauracao
-            ? `Inventários restaurados — Endpoint: ${arquivos.endpoint || "—"} · EquipamentosDetalhes: ${arquivos.detalhes || "—"}`
-            : `Endpoint: ${arquivos.endpoint || "—"} · EquipamentosDetalhes: ${arquivos.detalhes || "—"}`;
+            ? `Inventários restaurados — Endpoint: ${arquivos.endpoint || "—"} · Simpress: ${arquivos.detalhes || "—"}`
+            : `Endpoint: ${arquivos.endpoint || "—"} · Simpress: ${arquivos.detalhes || "—"}`;
           info.appendChild(fontes);
 
           const contagens = document.createElement("p");
           contagens.className = "text-[11px] text-slate-500";
           if (restauracao) {
             const restauracaoDe = evento.restauracao_de || {};
-            contagens.textContent = `Restauração do conjunto anterior a ${formatarHorarioHistorico(restauracaoDe.horario)} · registros restaurados: Endpoint ${Number(resumo.total_endpoint_restaurado || 0).toLocaleString("pt-BR")}, EquipamentosDetalhes ${Number(resumo.total_detalhes_restaurado || 0).toLocaleString("pt-BR")}`;
+            contagens.textContent = `Restauração do conjunto anterior a ${formatarHorarioHistorico(restauracaoDe.horario)} · registros restaurados: Endpoint ${Number(resumo.total_endpoint_restaurado || 0).toLocaleString("pt-BR")}, Simpress ${Number(resumo.total_detalhes_restaurado || 0).toLocaleString("pt-BR")}`;
           } else {
-            contagens.textContent = `Apelidos/hostnames atualizados: ${Number(resumo.apelidos_atualizados || 0)} · divergências manuais pendentes: ${Number(resumo.divergencias_apelidos_manuais || 0)} · ausentes no Endpoint: ${Number(resumo.ausentes_no_endpoint || 0)} · em EquipamentosDetalhes: ${Number(resumo.ausentes_em_detalhes || 0)} · divergências de local: ${Number(resumo.divergencias_local || 0)} · ambiguidades: ${Number(resumo.correspondencias_ambiguas || 0)}`;
+            contagens.textContent = `Apelidos/hostnames atualizados: ${Number(resumo.apelidos_atualizados || 0)} · divergências manuais pendentes: ${Number(resumo.divergencias_apelidos_manuais || 0)} · ausentes no Endpoint: ${Number(resumo.ausentes_no_endpoint || 0)} · na Simpress: ${Number(resumo.ausentes_em_detalhes || 0)} · divergências de local: ${Number(resumo.divergencias_local || 0)} · ambiguidades: ${Number(resumo.correspondencias_ambiguas || 0)}`;
           }
           info.appendChild(contagens);
           card.appendChild(info);
@@ -2334,11 +2334,11 @@
           "",
           "Conjunto que será restaurado:",
           describeBackup("Endpoint", preview.arquivos_backup.endpoint),
-          describeBackup("EquipamentosDetalhes", preview.arquivos_backup.detalhes),
+          describeBackup("Simpress", preview.arquivos_backup.detalhes),
           "",
           "Conjunto ativo, que será guardado como backup:",
           describeCurrent("Endpoint", preview.arquivos_atuais.endpoint),
-          describeCurrent("EquipamentosDetalhes", preview.arquivos_atuais.detalhes),
+          describeCurrent("Simpress", preview.arquivos_atuais.detalhes),
           "",
           "Os dois inventários serão substituídos juntos e a ação ficará registrada no histórico. Continuar?",
         ].join("\n");
@@ -2462,7 +2462,7 @@
         link.remove();
         window.setTimeout(() => window.URL.revokeObjectURL(url), 1000);
 
-        showToast("Planilha Exportada com Sucesso", "success");
+        showToast("Planilha Exportada com Sucesso!", "success");
       } catch (err) {
         console.error("Erro ao exportar planilha de equipamentos:", err);
         showToast(err.message, "error");

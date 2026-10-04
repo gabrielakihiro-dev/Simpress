@@ -76,8 +76,28 @@ def _uploaded_aliases_by_serial(
 
 COMPARISON_SOURCE_LABELS = {
     "endpoint": "Endpoint",
-    "detalhes": "EquipamentosDetalhes",
+    "detalhes": "Simpress",
 }
+
+def _comparison_source_text_for_display(value: str) -> str:
+    """Atualiza apenas textos de apresentação, preservando arquivos e dados de origem."""
+    replacements = (
+        ("na InvAll", "no Endpoint"),
+        ("da InvAll", "do Endpoint"),
+        ("à InvAll", "ao Endpoint"),
+        ("pela InvAll", "pelo Endpoint"),
+        ("a InvAll", "o Endpoint"),
+        ("A InvAll", "O Endpoint"),
+        ("em EquipamentosDetalhes", "na Simpress"),
+        ("de EquipamentosDetalhes", "da Simpress"),
+    )
+    for previous, current in replacements:
+        value = value.replace(previous, current)
+    return re.sub(
+        r"\b(InvAll|EquipamentosDetalhes)\b",
+        lambda match: "Endpoint" if match[0] == "InvAll" else "Simpress",
+        value,
+    )
 
 def _comparison_source_records(table: Dict[str, Any], role: str) -> List[Dict[str, Any]]:
     """Converts source-specific columns to a shared, comparison-only record shape."""
@@ -194,13 +214,13 @@ def filter_update_review_items(items: Any) -> List[Dict[str, Any]]:
         if not isinstance(item, dict):
             continue
         serial = normalize_reference_value(item.get("serie"))
-        reason = normalize_reference_value(item.get("motivo"))
+        reason = normalize_reference_value(_comparison_source_text_for_display(str(item.get("motivo") or "")))
         hostname = normalize_reference_value(item.get("computador"))
         if "SERIEDUPLICADA" in reason or not serial:
             filtered.append(item)
-        elif "SERIENAOENCONTRADANAINVALL" in reason and serial.startswith(("BRJ", "BRM")):
+        elif "SERIENAOENCONTRADANOENDPOINT" in reason and serial.startswith(("BRJ", "BRM")):
             filtered.append(item)
-        elif "SERIENAOENCONTRADAEMEQUIPAMENTOSDETALHES" in reason and hostname.startswith("PRMAC"):
+        elif "SERIENAOENCONTRADANASIMPRESS" in reason and hostname.startswith("PRMAC"):
             filtered.append(item)
     return filtered
 
@@ -255,19 +275,30 @@ def comparison_history_for_display(evento: Dict[str, Any]) -> Dict[str, Any]:
         if not isinstance(item, dict):
             return item
         cleaned = dict(item)
+        for key in ("motivo", "mensagem", "fonte_ausente"):
+            if isinstance(cleaned.get(key), str):
+                cleaned[key] = _comparison_source_text_for_display(cleaned[key])
         for key in ("local_base_principal", "ip_endpoint", "ip_detalhes", "ip_base_principal"):
             cleaned.pop(key, None)
         absent_in = cleaned.get("ausente_em")
         if isinstance(absent_in, list):
-            cleaned["ausente_em"] = [source for source in absent_in if source != "Base principal"]
+            cleaned["ausente_em"] = [
+                _comparison_source_text_for_display(source) if isinstance(source, str) else source
+                for source in absent_in if source != "Base principal"
+            ]
         if cleaned.get("fonte_ausente") == "Base principal":
             cleaned.pop("fonte_ausente", None)
         sources = cleaned.get("fontes")
         if isinstance(sources, dict):
-            cleaned["fontes"] = {key: value for key, value in sources.items() if key != "Base principal"}
+            cleaned["fontes"] = {
+                _comparison_source_text_for_display(key): value
+                for key, value in sources.items() if key != "Base principal"
+            }
         elif isinstance(sources, list):
             cleaned["fontes"] = [
-                source for source in sources
+                {**source, "fonte": _comparison_source_text_for_display(source["fonte"])}
+                if isinstance(source, dict) and isinstance(source.get("fonte"), str) else source
+                for source in sources
                 if not isinstance(source, dict) or source.get("fonte") != "Base principal"
             ]
         return cleaned
@@ -294,6 +325,9 @@ def comparison_history_for_display(evento: Dict[str, Any]) -> Dict[str, Any]:
             comparison.get("apelidos_sem_atualizacao")
         )
         comparison_view["filtros_atualizacao_aplicados"] = True
+    alias_review = comparison_view.get("apelidos_sem_atualizacao")
+    if isinstance(alias_review, list):
+        comparison_view["apelidos_sem_atualizacao"] = [without_legacy_source(item) for item in alias_review]
     missing_lists = {
         key: filter_sebrae_owned_unmatched_items(items)
         for key, items in missing_lists.items()

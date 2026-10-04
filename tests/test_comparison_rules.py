@@ -1,5 +1,6 @@
 import unittest
 import io
+import copy
 from contextlib import redirect_stdout
 from unittest.mock import patch
 
@@ -15,6 +16,47 @@ def source_table(records, sheet="Inventario"):
 
 
 class InventoryComparisonTests(unittest.TestCase):
+    def test_history_updates_source_labels_without_changing_saved_data_or_filter_results(self):
+        legacy_items = [
+            {"serie": "DUP", "computador": "InvAll-HOST", "motivo": "Série duplicada na InvAll; nenhum hostname foi escolhido."},
+            {"serie": "", "computador": "EquipamentosDetalhes-HOST", "motivo": "Número de série vazio na InvAll; hostname mantido sem associação."},
+            {"serie": "BRJ00000001", "computador": "", "motivo": "Série não encontrada na InvAll; apelido atual preservado."},
+            {"serie": "S1", "computador": "PRMAC01", "motivo": "Série não encontrada em EquipamentosDetalhes; nenhum dado foi alterado."},
+            {"serie": "", "computador": "PRNOTE01", "motivo": "Número de série vazio em EquipamentosDetalhes; nenhum hostname foi associado."},
+        ]
+        expected_reasons = [
+            "Série duplicada no Endpoint; nenhum hostname foi escolhido.",
+            "Número de série vazio no Endpoint; hostname mantido sem associação.",
+            "Série não encontrada no Endpoint; apelido atual preservado.",
+            "Série não encontrada na Simpress; nenhum dado foi alterado.",
+            "Número de série vazio na Simpress; nenhum hostname foi associado.",
+        ]
+        for pinned in (False, True):
+            for current_labels in (False, True):
+                with self.subTest(pinned=pinned, current_labels=current_labels):
+                    items = copy.deepcopy(legacy_items)
+                    if current_labels:
+                        for item, reason in zip(items, expected_reasons):
+                            item["motivo"] = reason
+                    event = {
+                        "id": main.PINNED_COMPARISON_EVENT_ID if pinned else "evento-teste",
+                        "horario": main.PINNED_COMPARISON_EVENT_TIME if pinned else "2026-10-04T10:00:00-03:00",
+                        "comparacao": {
+                            "apelidos_sem_atualizacao": items,
+                            "arquivos_enviados": {"endpoint": "InvAll.xlsx", "detalhes": "EquipamentosDetalhes.xlsx"},
+                            "correspondencias_ambiguas": [{"fontes": [{"fonte": "EquipamentosDetalhes"}]}],
+                            "registros_ambiguos": [{"fontes": {"InvAll": "presente", "EquipamentosDetalhes": "ambíguo"}}],
+                        },
+                    }
+                    saved_event = copy.deepcopy(event)
+                    displayed = main.comparison_history_for_display(event)["comparacao"]
+                    self.assertEqual([item["motivo"] for item in displayed["apelidos_sem_atualizacao"]], expected_reasons)
+                    self.assertEqual([item["computador"] for item in displayed["apelidos_sem_atualizacao"]], [item["computador"] for item in items])
+                    self.assertEqual(displayed["arquivos_enviados"], event["comparacao"]["arquivos_enviados"])
+                    self.assertEqual(displayed["correspondencias_ambiguas"][0]["fontes"], [{"fonte": "Simpress"}])
+                    self.assertEqual(displayed["registros_ambiguos"][0]["fontes"], {"Endpoint": "presente", "Simpress": "ambíguo"})
+                    self.assertEqual(event, saved_event)
+
     def test_two_sources_report_absence_and_location_without_comparing_ip(self):
         endpoint = source_table([
             {"NOMEDOCOMPUTADOR": "PRNOTEAPU01", "ROTULODESERVICONUMERODESERIE": "S-001", "IP": "10.0.0.1"},
@@ -67,7 +109,7 @@ class InventoryComparisonTests(unittest.TestCase):
         result = main.compare_uploaded_workbooks(endpoint, details, {})
 
         self.assertTrue(any(issue["tipo"] == "Número de série duplicado" for issue in result["correspondencias_ambiguas"]))
-        self.assertTrue(any(item["fontes"]["EquipamentosDetalhes"] == "ambíguo" for item in result["registros_ambiguos"]))
+        self.assertTrue(any(item["fontes"]["Simpress"] == "ambíguo" for item in result["registros_ambiguos"]))
         self.assertEqual(result["ausentes_em_detalhes"], [])
 
     def test_duplicate_alias_is_ambiguous_when_it_is_the_only_match(self):
@@ -82,7 +124,7 @@ class InventoryComparisonTests(unittest.TestCase):
 
         self.assertTrue(any(issue["tipo"] == "Hostname/Apelido duplicado" for issue in result["correspondencias_ambiguas"]))
         self.assertEqual(result["ausentes_em_detalhes"], [])
-        self.assertTrue(any(item["fontes"]["EquipamentosDetalhes"] == "ambíguo" for item in result["registros_ambiguos"]))
+        self.assertTrue(any(item["fontes"]["Simpress"] == "ambíguo" for item in result["registros_ambiguos"]))
 
     def test_duplicate_hostname_warnings_are_bounded_and_deterministic(self):
         endpoint = source_table([
@@ -117,14 +159,14 @@ class InventoryComparisonTests(unittest.TestCase):
             hostname_issues[0]["fontes"],
             [
                 {"fonte": "Endpoint", "quantidade": 100},
-                {"fonte": "EquipamentosDetalhes", "quantidade": 100},
+                {"fonte": "Simpress", "quantidade": 100},
             ],
         )
         self.assertEqual(len(divergent_issues), 1)
         divergent_issue = divergent_issues[0]
         self.assertEqual(divergent_issue["fontes"], [
             {"fonte": "Endpoint", "quantidade": 100},
-            {"fonte": "EquipamentosDetalhes", "quantidade": 100},
+            {"fonte": "Simpress", "quantidade": 100},
         ])
         self.assertIn("10000 combinações", divergent_issue["mensagem"])
         self.assertIn("END-000, END-001, END-002", divergent_issue["mensagem"])

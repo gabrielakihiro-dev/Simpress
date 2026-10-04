@@ -187,7 +187,7 @@ class MaintenanceContractTests(unittest.TestCase):
     def test_excel_exports_show_only_success_confirmation(self):
         script = (app_config.STATIC_DIR / "app.js").read_text(encoding="utf-8")
         self.assertEqual(
-            script.count('showToast("Planilha Exportada com Sucesso", "success");'),
+            script.count('showToast("Planilha Exportada com Sucesso!", "success");'),
             2,
         )
 

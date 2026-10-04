@@ -695,7 +695,7 @@ def select_upload_table(tables: List[Dict[str, Any]], role: str) -> Dict[str, An
     if not candidates:
         display_role = {
             "endpoint": "Endpoint",
-            "detalhes": "EquipamentosDetalhes",
+            "detalhes": "Simpress",
         }[role]
         raise HTTPException(
             status_code=400,
@@ -706,7 +706,7 @@ def select_upload_table(tables: List[Dict[str, Any]], role: str) -> Dict[str, An
         sheet_names = ", ".join(f"'{table['sheet']}'" for table in candidates)
         display_role = {
             "endpoint": "Endpoint",
-            "detalhes": "EquipamentosDetalhes",
+            "detalhes": "Simpress",
         }[role]
         raise HTTPException(
             status_code=400,
@@ -912,19 +912,19 @@ def endpoint_alias_review_items(
         items.append({
             "serie": rows[0].get("serie") or serial_key,
             "computador": ", ".join(row.get("hostname", "") for row in rows if row.get("hostname")),
-            "motivo": "Série duplicada na InvAll; nenhum hostname foi escolhido.",
+            "motivo": "Série duplicada no Endpoint; nenhum hostname foi escolhido.",
         })
     for row in index.get("blank_serials", []):
         items.append({
             "serie": "",
             "computador": row.get("hostname", ""),
-            "motivo": "Número de série vazio na InvAll; hostname mantido sem associação.",
+            "motivo": "Número de série vazio no Endpoint; hostname mantido sem associação.",
         })
     for serial_key, row in sorted(index.get("blank_hostnames", {}).items()):
         items.append({
             "serie": row.get("serie") or serial_key,
             "computador": "",
-            "motivo": "Hostname vazio na InvAll; apelido atual preservado.",
+            "motivo": "Hostname vazio no Endpoint; apelido atual preservado.",
         })
     if details_serials is not None:
         details_duplicates = details_duplicate_serials or set()
@@ -932,7 +932,7 @@ def endpoint_alias_review_items(
             items.append({
                 "serie": serial_key,
                 "computador": index.get("unique", {}).get(serial_key, ""),
-                "motivo": "Série duplicada em EquipamentosDetalhes; nenhum registro foi escolhido.",
+                "motivo": "Série duplicada na Simpress; nenhum registro foi escolhido.",
             })
         known_invall_serials = (
             set(index.get("unique", {}))
@@ -944,9 +944,9 @@ def endpoint_alias_review_items(
                 "serie": serial_key,
                 "computador": "",
                 "motivo": (
-                    "InvAll indisponível; apelido atual preservado para conferência."
+                    "Endpoint indisponível; apelido atual preservado para conferência."
                     if not index.get("available")
-                    else "Série não encontrada na InvAll; apelido atual preservado."
+                    else "Série não encontrada no Endpoint; apelido atual preservado."
                 ),
             })
         for serial_key, hostname in sorted(index.get("unique", {}).items()):
@@ -954,7 +954,7 @@ def endpoint_alias_review_items(
                 items.append({
                     "serie": serial_key,
                     "computador": hostname,
-                    "motivo": "Série não encontrada em EquipamentosDetalhes; nenhum dado foi alterado.",
+                    "motivo": "Série não encontrada na Simpress; nenhum dado foi alterado.",
                 })
     return items
 
@@ -999,28 +999,28 @@ def _apply_effective_alias(
 
     if not endpoint_index.get("available"):
         equipment["invall_alias_status"] = "indisponivel"
-        equipment["invall_alias_detail"] = "A InvAll ativa não pôde ser lida; o apelido atual foi mantido."
+        equipment["invall_alias_detail"] = "O Endpoint ativo não pôde ser lido; o apelido atual foi mantido."
     elif details_duplicate:
         equipment["invall_alias_status"] = "serie_detalhes_duplicada"
-        equipment["invall_alias_detail"] = "A série aparece mais de uma vez em EquipamentosDetalhes; confira antes de aplicar um hostname."
+        equipment["invall_alias_detail"] = "A série aparece mais de uma vez na Simpress; confira antes de aplicar um hostname."
     elif serial_key in endpoint_index.get("duplicates", {}):
         equipment["invall_alias_status"] = "serie_invall_duplicada"
-        equipment["invall_alias_detail"] = "A série aparece mais de uma vez na InvAll; o apelido atual foi mantido."
+        equipment["invall_alias_detail"] = "A série aparece mais de uma vez no Endpoint; o apelido atual foi mantido."
     elif serial_key in endpoint_index.get("unique", {}):
         if not manual_override:
             equipment["apelido"] = endpoint_index["unique"][serial_key]
         equipment["invall_alias_status"] = "aplicado"
         equipment["invall_alias_detail"] = (
-            "Série associada à InvAll; o apelido manual prevalece."
+            "Série associada ao Endpoint; o apelido manual prevalece."
             if manual_override
-            else "Hostname da InvAll associado pela série normalizada."
+            else "Hostname do Endpoint associado pela série normalizada."
         )
     elif serial_key in endpoint_index.get("blank_hostnames", {}):
         equipment["invall_alias_status"] = "hostname_vazio"
-        equipment["invall_alias_detail"] = "A InvAll tem a série, mas o hostname está vazio; o apelido atual foi mantido."
+        equipment["invall_alias_detail"] = "O Endpoint tem a série, mas o hostname está vazio; o apelido atual foi mantido."
     else:
         equipment["invall_alias_status"] = "serie_nao_encontrada"
-        equipment["invall_alias_detail"] = "Série não encontrada na InvAll; o apelido atual foi mantido."
+        equipment["invall_alias_detail"] = "Série não encontrada no Endpoint; o apelido atual foi mantido."
 
 
 def get_export_aliases(endpoint_index: Optional[Dict[str, Any]] = None) -> Dict[str, str]:
@@ -2009,11 +2009,11 @@ class EquipamentoUpdatePayload(BaseModel):
     idCliente: Optional[str] = Field("", max_length=128, description="ID do Cliente")
     revisao: Optional[str] = Field(None, min_length=64, max_length=64)
     # Mantidos para compatibilidade com clientes antigos; a rota ignora esses campos.
-    endereco: Optional[str] = Field("", max_length=500, description="Endereço carregado de EquipamentosDetalhes")
-    cidade: Optional[str] = Field("", max_length=160, description="Cidade carregada de EquipamentosDetalhes")
-    uf: Optional[str] = Field("PR", max_length=2, description="UF carregada de EquipamentosDetalhes")
-    cep: Optional[str] = Field("", max_length=12, description="CEP carregado de EquipamentosDetalhes")
-    cnpj_instalacao: Optional[str] = Field("", max_length=24, description="CNPJ carregado de EquipamentosDetalhes")
+    endereco: Optional[str] = Field("", max_length=500, description="Endereço carregado da Simpress")
+    cidade: Optional[str] = Field("", max_length=160, description="Cidade carregada da Simpress")
+    uf: Optional[str] = Field("PR", max_length=2, description="UF carregada da Simpress")
+    cep: Optional[str] = Field("", max_length=12, description="CEP carregado da Simpress")
+    cnpj_instalacao: Optional[str] = Field("", max_length=24, description="CNPJ carregado da Simpress")
 
     @field_validator("serial")
     @classmethod
@@ -2319,7 +2319,7 @@ def save_equipment_to_excel(
     target_serial_upper = payload.serial.strip().upper()
     detail_files = [path for path in get_details_files() if path.is_file()]
     if not detail_files:
-        raise HTTPException(status_code=404, detail="Nenhuma planilha EquipamentosDetalhes encontrada no servidor.")
+        raise HTTPException(status_code=404, detail="Nenhuma planilha da Simpress encontrada no servidor.")
 
     requested_fields = set(fields_to_update if fields_to_update is not None else payload.model_fields_set)
     json_mutations = dict(json_mutations or {})
@@ -2368,7 +2368,7 @@ def save_equipment_to_excel(
 
             active_file = get_primary_equipment_file()
             if active_file is None or not active_file.is_file():
-                raise HTTPException(status_code=404, detail="Nenhuma planilha EquipamentosDetalhes válida está ativa.")
+                raise HTTPException(status_code=404, detail="Nenhuma planilha válida da Simpress está ativa.")
 
             target_file = active_file.resolve()
             locked_files = {path.resolve() for path in detail_files}
@@ -2625,12 +2625,12 @@ def _edit_alias_workbook(
     if serial_col is None:
         raise HTTPException(
             status_code=409,
-            detail="A planilha EquipamentosDetalhes não contém uma coluna reconhecida para número de série.",
+            detail="A planilha da Simpress não contém uma coluna reconhecida para número de série.",
         )
     if alias_col is None:
         raise HTTPException(
             status_code=409,
-            detail="A planilha EquipamentosDetalhes não contém uma coluna reconhecida de Apelido ou Hostname.",
+            detail="A planilha da Simpress não contém uma coluna reconhecida de Apelido ou Hostname.",
         )
     serial_key = normalize_reference_value(target_serial)
     matching_rows = [
@@ -2640,7 +2640,7 @@ def _edit_alias_workbook(
     if len(matching_rows) > 1:
         raise HTTPException(
             status_code=409,
-            detail=f"A série {target_serial} aparece mais de uma vez em EquipamentosDetalhes; nenhum apelido foi escolhido.",
+            detail=f"A série {target_serial} aparece mais de uma vez na Simpress; nenhum apelido foi escolhido.",
         )
     if not matching_rows:
         return None
@@ -2920,7 +2920,7 @@ def excluir_evento_historico_apelido(evento_id: str):
     if evento.get("tipo") == "endereco":
         raise HTTPException(
             status_code=409,
-            detail="Endereços são atualizados pela planilha EquipamentosDetalhes e não podem mais ser restaurados manualmente.",
+            detail="Endereços são atualizados pela planilha da Simpress e não podem mais ser restaurados manualmente.",
         )
     tipo_evento = "apelido"
     evento_mais_recente = next(
@@ -3016,7 +3016,7 @@ def exportar_equipamentos():
             detail=f"O modelo de exportação '{source_file.name}' não foi encontrado."
         )
     if current_file is None or not current_file.is_file():
-        raise HTTPException(status_code=404, detail="A base EquipamentosDetalhes atual não foi encontrada.")
+        raise HTTPException(status_code=404, detail="A base atual da Simpress não foi encontrada.")
 
     wb = None
     current_wb = None
@@ -3045,7 +3045,7 @@ def exportar_equipamentos():
 
             current_sheet_name = find_details_sheet(current_file)
             if current_sheet_name is None:
-                raise HTTPException(status_code=409, detail="A base EquipamentosDetalhes atual não tem os cabeçalhos esperados.")
+                raise HTTPException(status_code=409, detail="A base atual da Simpress não tem os cabeçalhos esperados.")
             current_wb = openpyxl.load_workbook(current_file, read_only=True, data_only=False)
             current_ws = current_wb[current_sheet_name]
             current_headers = [cell.value for cell in next(current_ws.iter_rows(max_row=1), ())]
@@ -3136,7 +3136,7 @@ def exportar_equipamentos():
             pending_review_count = len(review_items) + len(skipped_duplicate_rows) + skipped_formula_rows
             review_summary = [
                 {
-                    "motivo": "Registros da InvAll que exigem conferência",
+                    "motivo": "Registros do Endpoint que exigem conferência",
                     "total": len(review_items),
                     "series": [
                         str(item.get("serie") or "")[:64]

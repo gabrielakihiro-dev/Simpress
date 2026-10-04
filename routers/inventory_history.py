@@ -91,7 +91,7 @@ def create_inventory_history_router(ctx):
 
 
     def _validated_comparison_backup_files(paths: Dict[str, Path]) -> Dict[str, Dict[str, Any]]:
-        labels = {"endpoint": "Endpoint", "detalhes": "EquipamentosDetalhes"}
+        labels = {"endpoint": "Endpoint", "detalhes": "Simpress"}
         files: Dict[str, Dict[str, Any]] = {}
         for role, backup_path in paths.items():
             label = labels[role]
@@ -476,7 +476,7 @@ def create_inventory_history_router(ctx):
         if acao == "excluir":
             details_file = ctx.get_equipamentos_template_file()
             if details_file is None or not details_file.is_file():
-                raise ctx.HTTPException(status_code=404, detail="A planilha EquipamentosDetalhes atual não foi encontrada.")
+                raise ctx.HTTPException(status_code=404, detail="A planilha atual da Simpress não foi encontrada.")
             targets.append(details_file)
 
         with ctx.inventory_state_transaction(targets) as transaction:
@@ -506,7 +506,7 @@ def create_inventory_history_router(ctx):
                         divergence.get("apelido_equipamentos_detalhes") or ""
                     ).strip(),
                 ):
-                    raise ctx.HTTPException(status_code=409, detail="A série não pôde ser atualizada na planilha EquipamentosDetalhes.")
+                    raise ctx.HTTPException(status_code=409, detail="A série não pôde ser atualizada na planilha da Simpress.")
 
                 def remove_manual_override(data):
                     data = ctx._validate_json_object(data, "apelidos")
