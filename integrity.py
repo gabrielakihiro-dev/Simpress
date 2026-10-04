@@ -657,6 +657,15 @@ _XLSX_PACKAGE_REL_NS = "{http://schemas.openxmlformats.org/package/2006/relation
 _CELL_TAG_RE = re.compile(rb"<(?P<name>(?:[A-Za-z_][A-Za-z0-9_.-]*:)?c)(?=[\s/>])")
 _CELL_REFERENCE_RE = re.compile(rb"(?<![A-Za-z0-9_.:-])r\s*=\s*([\"'])(.*?)\1")
 _CELL_ATTRIBUTE_RE = re.compile(rb"\s+t\s*=\s*(?:\"[^\"]*\"|'[^']*')")
+_CELL_TYPE_RE = re.compile(rb"\s+t\s*=\s*(?:\"(?P<double>[^\"]*)\"|'(?P<single>[^']*)')")
+_FORMULA_ELEMENT_RE = re.compile(
+    rb"<(?P<name>(?:[A-Za-z_][A-Za-z0-9_.-]*:)?f)(?=[\s/>])[^>]*?(?:/>|>(?P<content>.*?)</(?P=name)\s*>)",
+    re.DOTALL,
+)
+_VALUE_ELEMENT_RE = re.compile(
+    rb"<(?P<name>(?:[A-Za-z_][A-Za-z0-9_.-]*:)?v)(?=[\s/>])[^>]*?(?:/>|>(?P<content>.*?)</(?P=name)\s*>)",
+    re.DOTALL,
+)
 _ILLEGAL_XML_TEXT_RE = re.compile(r"[\x00-\x08\x0B\x0C\x0E-\x1F]")
 
 
@@ -838,6 +847,134 @@ def _write_package_with_cell_updates(
         raise
     except (OSError, zipfile.BadZipFile, KeyError, RuntimeError) as error:
         raise WorkbookSafetyError("Não foi possível preservar a estrutura original do arquivo Excel.") from error
+
+
+def _formula_cell_info(cell_xml: bytes) -> Optional[tuple]:
+    formula_match = _FORMULA_ELEMENT_RE.search(cell_xml)
+    if formula_match is None:
+        return None
+    type_match = _CELL_TYPE_RE.search(cell_xml[:_xml_tag_end(cell_xml, 0)])
+    if type_match is None:
+        cell_type = None
+    else:
+        raw_type = type_match.group("double") or type_match.group("single") or b""
+        try:
+            cell_type = raw_type.decode("ascii")
+        except UnicodeDecodeError as error:
+            raise WorkbookSafetyError("Uma fórmula contém um tipo de resultado inválido.") from error
+    value_match = _VALUE_ELEMENT_RE.search(cell_xml)
+    cached_value = (
+        value_match.group(0)
+        if value_match is not None and (value_match.group("content") or b"").strip()
+        else None
+    )
+    return formula_match.group(0), cell_type, cached_value
+
+
+def _replace_cell_type(opening: bytes, cell_type: Optional[str]) -> bytes:
+    match = _CELL_TYPE_RE.search(opening)
+    if cell_type is None:
+        return _CELL_TYPE_RE.sub(b"", opening)
+    if not re.fullmatch(r"[A-Za-z][A-Za-z0-9]*", cell_type):
+        raise WorkbookSafetyError("Uma fórmula contém um tipo de resultado não suportado.")
+    attribute = b' t="' + cell_type.encode("ascii") + b'"'
+    if match is not None:
+        return opening[:match.start()] + attribute + opening[match.end():]
+    return opening[:-1] + attribute + b">"
+
+
+def _restore_formula_cached_values(source: Path, destination: Path, expected_values: Dict[tuple, Any]) -> None:
+    """Restore cached formula results that openpyxl drops while saving a workbook."""
+    updated_cells = {(sheet, str(address).upper()) for sheet, address in expected_values}
+    rewrite_path: Optional[Path] = None
+    try:
+        with zipfile.ZipFile(source, "r") as original, zipfile.ZipFile(destination, "r") as saved:
+            original_paths = _worksheet_part_paths(original)
+            saved_paths = _worksheet_part_paths(saved)
+            patched_parts: Dict[str, bytes] = {}
+            for sheet_name, original_part in original_paths.items():
+                saved_part = saved_paths.get(sheet_name)
+                if saved_part is None:
+                    raise WorkbookSafetyError(f"A aba '{sheet_name}' desapareceu ao salvar a planilha.")
+                original_xml = original.read(original_part)
+                saved_xml = saved.read(saved_part)
+                original_ranges = _cell_ranges(original_xml)
+                saved_ranges = _cell_ranges(saved_xml)
+                patches = []
+                for address, original_range in original_ranges.items():
+                    original_start, original_end, _, _ = original_range
+                    original_info = _formula_cell_info(original_xml[original_start:original_end])
+                    if original_info is None or (sheet_name, address) in updated_cells:
+                        continue
+
+                    saved_range = saved_ranges.get(address)
+                    if saved_range is None:
+                        raise WorkbookSafetyError(
+                            f"A fórmula em {sheet_name}!{address} desapareceu ao salvar a planilha."
+                        )
+                    saved_start, saved_end, saved_opening_end, saved_tag = saved_range
+                    saved_cell_xml = saved_xml[saved_start:saved_end]
+                    saved_info = _formula_cell_info(saved_cell_xml)
+                    if saved_info is None or saved_info[0] != original_info[0]:
+                        raise WorkbookSafetyError(
+                            f"A fórmula em {sheet_name}!{address} mudou durante a gravação."
+                        )
+
+                    original_value = original_info[2]
+                    original_type = original_info[1]
+                    if original_value == saved_info[2] and original_type == saved_info[1]:
+                        continue
+                    if original_value is None:
+                        raise WorkbookSafetyError(
+                            f"A fórmula em {sheet_name}!{address} não tem resultado armazenado para preservar."
+                        )
+
+                    cell_opening = saved_xml[saved_start:saved_opening_end]
+                    cell_closing_start = saved_end - len(b"</" + saved_tag + b">")
+                    cell_content = saved_xml[saved_opening_end:cell_closing_start]
+                    value_match = _VALUE_ELEMENT_RE.search(cell_content)
+                    if value_match is None:
+                        raise WorkbookSafetyError(
+                            f"O resultado armazenado da fórmula em {sheet_name}!{address} não pôde ser restaurado."
+                        )
+                    cell_opening = _replace_cell_type(cell_opening, original_type)
+                    cell_content = (
+                        cell_content[:value_match.start()]
+                        + original_value
+                        + cell_content[value_match.end():]
+                    )
+                    replacement = cell_opening + cell_content + b"</" + saved_tag + b">"
+                    patches.append((saved_start, saved_end, replacement))
+
+                patched_xml = saved_xml
+                for start, end, replacement in sorted(patches, reverse=True):
+                    patched_xml = patched_xml[:start] + replacement + patched_xml[end:]
+                if patched_xml != saved_xml:
+                    patched_parts[saved_part] = patched_xml
+
+            if not patched_parts:
+                return
+
+            with tempfile.NamedTemporaryFile(
+                prefix=f".{destination.name}.formula-cache-",
+                suffix=".tmp",
+                dir=destination.parent,
+                delete=False,
+            ) as temporary:
+                rewrite_path = Path(temporary.name)
+            with zipfile.ZipFile(rewrite_path, "w") as rewritten:
+                rewritten.comment = saved.comment
+                for info in saved.infolist():
+                    rewritten.writestr(info, patched_parts.get(info.filename, saved.read(info.filename)))
+        os.replace(rewrite_path, destination)
+        rewrite_path = None
+    except WorkbookSafetyError:
+        raise
+    except (OSError, ET.ParseError, zipfile.BadZipFile, KeyError, RuntimeError) as error:
+        raise WorkbookSafetyError("Os resultados armazenados das fórmulas não puderam ser preservados.") from error
+    finally:
+        if rewrite_path is not None:
+            rewrite_path.unlink(missing_ok=True)
 
 
 def _changed_expected_values(original_snapshot: Dict[str, Any], expected_values: Dict[tuple, Any]) -> Dict[tuple, Any]:
@@ -1209,6 +1346,7 @@ def stage_workbook_update(
                 raise WorkbookSafetyError(
                     f"A planilha contém um recurso que não pode ser preservado: {unsupported[0].message}"
                 )
+            _restore_formula_cached_values(source, temp, expected_values)
 
         transaction.stage_file(
             source,
