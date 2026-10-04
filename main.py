@@ -12,25 +12,23 @@ import unicodedata
 import uuid
 from copy import deepcopy
 from contextlib import asynccontextmanager, contextmanager
-from datetime import datetime
+from datetime import datetime, timedelta
 from pathlib import Path
-from typing import Dict, Iterable, List, Optional, Any, Set
-from urllib.parse import urlsplit
+from typing import Dict, Iterable, List, Optional, Any, Set, Tuple
+from urllib.parse import quote, urlsplit
 
 import openpyxl
 import pandas as pd
 from fastapi import FastAPI, File, HTTPException, Query, UploadFile
 from fastapi.responses import FileResponse, JSONResponse, StreamingResponse
 from fastapi.staticfiles import StaticFiles
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, field_validator
 from integrity import (
     AtomicFileTransaction,
     FileBusyError,
     FileTransactionError,
     TransactionConflictError,
     WorkbookSafetyError,
-    atomic_copy_file,
-    atomic_write_json,
     lock_paths,
     load_workbook_safely,
     recover_pending_transactions,
@@ -43,20 +41,32 @@ from app_config import (
     BASE_DIR,
     COMPARISON_HISTORY_FILE,
     CUSTOM_UNIDADES_FILE,
-    DETAILS_EXPORT_BASELINE_FILE,
     DETAILS_UPLOAD_FILE,
     ENDPOINT_UPLOAD_FILE,
     EXPORT_MODEL_FILE,
     INPUT_DIR,
+    MAX_API_REQUEST_BYTES,
     MAX_UPLOAD_BYTES,
     MAX_UPLOAD_REQUEST_BYTES,
+    MAX_CONCURRENT_UPLOAD_REQUESTS,
+    MAX_CONCURRENT_WORKBOOK_PARSERS,
+    HISTORY_RETENTION_DAYS,
     MODIFIED_APELIDOS_FILE,
     STATIC_DIR,
     TEMPLATE_FILE,
     TRANSACTION_ROOT,
     UPLOAD_BACKUPS_DIR,
+    SUPPORTED_CONTRACT,
+    SUPPORTED_CONTRACT_LEGAL_NAME,
+    TRANSFER_ORIGIN_CONTACT,
+    TRANSFER_ORIGIN_EMAIL,
+    TRANSFER_ORIGIN_PHONE,
 )
-from routers.inventory_history import create_inventory_history_router
+from routers.inventory_history import (
+    ComparisonRestorePayload,
+    ManualAliasConflictResolutionPayload,
+    create_inventory_history_router,
+)
 from routers.transfers import (
     TransferenciaPayload,
     create_transfer_router,
@@ -98,6 +108,42 @@ MODIFIED_APELIDOS_LOCK = threading.RLock()
 ALIAS_HISTORY_LOCK = threading.RLock()
 COMPARISON_HISTORY_LOCK = threading.RLock()
 STATE_LOCK = threading.RLock()
+UPLOAD_ADMISSION = threading.BoundedSemaphore(MAX_CONCURRENT_UPLOAD_REQUESTS)
+WORKBOOK_PARSE_ADMISSION = threading.BoundedSemaphore(MAX_CONCURRENT_WORKBOOK_PARSERS)
+
+
+class LocalJsonCorruptionError(ValueError):
+    """A persisted JSON file is present but cannot be trusted or updated safely."""
+
+
+class RequestBodyTooLarge(Exception):
+    pass
+
+
+def _read_json_object(path: Path, label: str) -> Dict[str, Any]:
+    try:
+        value = json.loads(path.read_text(encoding="utf-8"))
+    except (OSError, UnicodeError, json.JSONDecodeError) as error:
+        raise LocalJsonCorruptionError(f"O arquivo local de {label} está ilegível; os dados foram preservados.") from error
+    if not isinstance(value, dict) or any(not isinstance(key, str) or not isinstance(item, str) for key, item in value.items()):
+        raise LocalJsonCorruptionError(f"O arquivo local de {label} precisa conter um objeto com chaves e valores textuais.")
+    return value
+
+
+def _validate_json_object(value: Any, label: str) -> Dict[str, Any]:
+    if not isinstance(value, dict) or any(not isinstance(key, str) or not isinstance(item, str) for key, item in value.items()):
+        raise LocalJsonCorruptionError(f"O arquivo local de {label} precisa conter um objeto com chaves e valores textuais.")
+    return value
+
+
+def _read_json_history(path: Path, label: str) -> List[Dict[str, Any]]:
+    try:
+        value = json.loads(path.read_text(encoding="utf-8"))
+    except (OSError, UnicodeError, json.JSONDecodeError) as error:
+        raise LocalJsonCorruptionError(f"O histórico local de {label} está ilegível; os dados foram preservados.") from error
+    if not isinstance(value, list) or any(not isinstance(item, dict) for item in value):
+        raise LocalJsonCorruptionError(f"O histórico local de {label} precisa conter uma lista de registros.")
+    return value
 
 
 @contextmanager
@@ -129,28 +175,11 @@ def _atomic_json_update(path: Path, updater, default):
         transaction.commit()
         return updated
 
-def load_modified_apelidos(strict: bool = False) -> Dict[str, str]:
+def load_modified_apelidos() -> Dict[str, str]:
     with MODIFIED_APELIDOS_LOCK:
         if not MODIFIED_APELIDOS_FILE.exists():
             return {}
-        try:
-            with open(MODIFIED_APELIDOS_FILE, "r", encoding="utf-8") as f:
-                data = json.load(f)
-            if not isinstance(data, dict):
-                raise ValueError("O conteúdo não é um objeto JSON.")
-            return data
-        except Exception as e:
-            if strict:
-                raise RuntimeError("Não foi possível ler o arquivo local de apelidos.") from e
-            print("[AVISO] Erro ao carregar o arquivo local de apelidos.")
-            return {}
-
-def save_modified_apelidos(apelidos: Dict[str, str]) -> None:
-    with MODIFIED_APELIDOS_LOCK:
-        try:
-            atomic_write_json(MODIFIED_APELIDOS_FILE, apelidos)
-        except Exception:
-            raise
+        return _read_json_object(MODIFIED_APELIDOS_FILE, "apelidos")
 
 def save_modified_apelido_record(serial: str, apelido: str) -> None:
     s_key = serial.strip().upper()
@@ -159,7 +188,7 @@ def save_modified_apelido_record(serial: str, apelido: str) -> None:
         try:
             _atomic_json_update(
                 MODIFIED_APELIDOS_FILE,
-                lambda data: {**(data if isinstance(data, dict) else {}), s_key: ap_val},
+                lambda data: {**_validate_json_object(data, "apelidos"), s_key: ap_val},
                 {},
             )
         except Exception:
@@ -171,30 +200,14 @@ def load_alias_history() -> List[Dict[str, Any]]:
         if not ALIAS_HISTORY_FILE.exists():
             return []
         try:
-            data = json.loads(ALIAS_HISTORY_FILE.read_text(encoding="utf-8"))
-            if not isinstance(data, list):
-                raise ValueError("O conteúdo do histórico não é uma lista.")
-            return data
-        except Exception:
-            raise HTTPException(
-                status_code=500,
-                detail="Não foi possível ler o histórico de apelidos."
-            )
-
-def save_alias_history(history: List[Dict[str, Any]]) -> None:
-    try:
-        atomic_write_json(ALIAS_HISTORY_FILE, history)
-    except Exception:
-        raise HTTPException(
-            status_code=500,
-            detail="Não foi possível salvar o histórico de alterações."
-        )
+            return _read_json_history(ALIAS_HISTORY_FILE, "apelidos")
+        except LocalJsonCorruptionError as error:
+            raise HTTPException(status_code=503, detail=str(error)) from error
 
 def append_alias_history_entry(entry: Dict[str, Any]) -> None:
     with ALIAS_HISTORY_LOCK:
         def append(history):
-            if not isinstance(history, list):
-                raise RuntimeError("O conteúdo do histórico de alterações não é uma lista.")
+            history = _validate_json_history(history, "apelidos")
             return [*history, entry]
         _atomic_json_update(ALIAS_HISTORY_FILE, append, [])
 
@@ -202,8 +215,7 @@ def delete_alias_history_entry(event_id: str) -> bool:
     with ALIAS_HISTORY_LOCK:
         removed = {"value": False}
         def remove(history):
-            if not isinstance(history, list):
-                raise RuntimeError("O conteúdo do histórico de alterações não é uma lista.")
+            history = _validate_json_history(history, "apelidos")
             filtered = [entry for entry in history if entry.get("id") != event_id]
             removed["value"] = len(filtered) != len(history)
             return filtered
@@ -215,15 +227,9 @@ def load_comparison_history() -> List[Dict[str, Any]]:
         if not COMPARISON_HISTORY_FILE.exists():
             return []
         try:
-            data = json.loads(COMPARISON_HISTORY_FILE.read_text(encoding="utf-8"))
-            if not isinstance(data, list):
-                raise ValueError("O conteúdo do histórico não é uma lista.")
-            return data
-        except Exception:
-            raise HTTPException(
-                status_code=500,
-                detail="Não foi possível ler o histórico de comparações."
-            )
+            return _read_json_history(COMPARISON_HISTORY_FILE, "comparações")
+        except LocalJsonCorruptionError as error:
+            raise HTTPException(status_code=503, detail=str(error)) from error
 
 
 def pinned_comparison_history_entry(history: Optional[List[Dict[str, Any]]] = None) -> Optional[Dict[str, Any]]:
@@ -266,44 +272,24 @@ def latest_comparison_update_entry(history: Optional[List[Dict[str, Any]]] = Non
     return max(candidates, key=event_timestamp)
 
 
-def save_comparison_history(history: List[Dict[str, Any]]) -> None:
-    try:
-        atomic_write_json(COMPARISON_HISTORY_FILE, history)
-    except Exception:
-        raise RuntimeError("Não foi possível salvar o histórico de comparações.")
-
 def append_comparison_history_entry(entry: Dict[str, Any]) -> None:
     with COMPARISON_HISTORY_LOCK:
         def append(history):
-            if not isinstance(history, list):
-                raise RuntimeError("O conteúdo do histórico de planilhas não é uma lista.")
+            history = _validate_json_history(history, "comparações")
             return [*history, entry]
         _atomic_json_update(COMPARISON_HISTORY_FILE, append, [])
 
 def delete_comparison_history_entry(event_id: str) -> Optional[int]:
     with COMPARISON_HISTORY_LOCK:
-        result = {"total": None}
+        result: Dict[str, Optional[int]] = {"total": None}
         def remove(history):
-            if not isinstance(history, list):
-                raise RuntimeError("O conteúdo do histórico de planilhas não é uma lista.")
+            history = _validate_json_history(history, "comparações")
             filtered = [entry for entry in history if entry.get("id") != event_id]
             if len(filtered) != len(history):
                 result["total"] = len(filtered)
             return filtered
         _atomic_json_update(COMPARISON_HISTORY_FILE, remove, [])
         return result["total"]
-
-def record_alias_change(
-    serial: str,
-    previous_alias: str,
-    new_alias: str,
-    action: str = "alteracao",
-    reference_id: Optional[str] = None,
-) -> Dict[str, Any]:
-    entry = build_alias_change_entry(serial, previous_alias, new_alias, action, reference_id)
-    append_alias_history_entry(entry)
-    return entry
-
 
 def build_alias_change_entry(
     serial: str,
@@ -312,7 +298,8 @@ def build_alias_change_entry(
     action: str = "alteracao",
     reference_id: Optional[str] = None,
 ) -> Dict[str, Any]:
-    equipment = equipamentos_cache.get(serial, {})
+    with STATE_LOCK:
+        equipment = dict(equipamentos_cache.get(serial, {}))
     return {
         "id": uuid.uuid4().hex,
         "tipo": "apelido",
@@ -323,34 +310,6 @@ def build_alias_change_entry(
         "horario": datetime.now().astimezone().isoformat(timespec="seconds"),
         "acao": action,
         "referencia_id": reference_id,
-    }
-
-def record_address_change(
-    serial: str,
-    previous_address: Dict[str, str],
-    new_address: Dict[str, str],
-) -> Dict[str, Any]:
-    entry = build_address_change_entry(serial, previous_address, new_address)
-    append_alias_history_entry(entry)
-    return entry
-
-
-def build_address_change_entry(
-    serial: str,
-    previous_address: Dict[str, str],
-    new_address: Dict[str, str],
-) -> Dict[str, Any]:
-    equipment = equipamentos_cache.get(serial, {})
-    return {
-        "id": uuid.uuid4().hex,
-        "tipo": "endereco",
-        "serial": serial,
-        "equipamento": equipment.get("modelo") or equipment.get("tipo") or "Equipamento",
-        "endereco_anterior": previous_address,
-        "endereco_novo": new_address,
-        "horario": datetime.now().astimezone().isoformat(timespec="seconds"),
-        "acao": "alteracao",
-        "referencia_id": None,
     }
 
 DETAILS_SERIAL_HEADER_ALIASES = ("NUMEROSERIE", "NUMERODESERIE", "SERIAL")
@@ -379,21 +338,63 @@ def normalize_workbook_header(value: Any) -> str:
     return normalize_reference_value(value)
 
 
+class WorkbookHeaderError(ValueError):
+    """An uploaded workbook has duplicate or semantically ambiguous columns."""
+
+
+def normalize_contract_value(value: Any) -> str:
+    """Normalize Excel integer cells without accepting a different contract."""
+    normalized = sanitize_value(value).strip()
+    if re.fullmatch(r"\d+\.0+", normalized):
+        normalized = normalized.split(".", 1)[0]
+    return normalized
+
+
 def find_workbook_header_column(headers: Iterable[Any], aliases: Iterable[str]) -> Optional[int]:
-    """Return the first column whose normalized header matches an accepted alias."""
+    """Return one unambiguous column whose normalized header matches an accepted alias."""
     normalized_aliases = {normalize_workbook_header(alias) for alias in aliases}
-    return next(
-        (
-            index
-            for index, value in enumerate(headers)
-            if normalize_workbook_header(value) in normalized_aliases
-        ),
-        None,
+    matches = [
+        index
+        for index, value in enumerate(headers)
+        if normalize_workbook_header(value) in normalized_aliases
+    ]
+    if len(matches) > 1:
+        columns = ", ".join(str(index + 1) for index in matches)
+        raise ValueError(f"Mais de uma coluna corresponde ao mesmo campo (colunas {columns}).")
+    return matches[0] if matches else None
+
+
+def validate_unambiguous_workbook_headers(headers: Iterable[Any]) -> None:
+    """Reject duplicate normalized headers before mapping rows into dictionaries."""
+    normalized_headers = [normalize_workbook_header(header) for header in headers]
+    positions: Dict[str, List[int]] = {}
+    for index, normalized in enumerate(normalized_headers):
+        if normalized:
+            positions.setdefault(normalized, []).append(index)
+    duplicates = [indexes for indexes in positions.values() if len(indexes) > 1]
+    if duplicates:
+        columns = ", ".join(
+            "/".join(str(index + 1) for index in indexes)
+            for indexes in duplicates
+        )
+        raise WorkbookHeaderError(f"A planilha contém cabeçalhos repetidos nas colunas {columns}.")
+
+    alias_groups = (
+        DETAILS_SERIAL_HEADER_ALIASES,
+        DETAILS_ALIAS_HEADER_ALIASES,
+        ("NOMEDOCOMPUTADOR", "COMPUTERNAME", "HOSTNAME"),
+        ("ROTULODESERVICONUMERODESERIE", "NUMEROSERIE", "NUMERODESERIE", "SERIAL", "SERVICETAG"),
     )
+    for aliases in alias_groups:
+        accepted = {normalize_workbook_header(alias) for alias in aliases}
+        matches = [index for index, value in enumerate(normalized_headers) if value in accepted]
+        if len(matches) > 1:
+            columns = ", ".join(str(index + 1) for index in matches)
+            raise WorkbookHeaderError(f"A planilha contém colunas candidatas conflitantes nas posições {columns}.")
 
 
 def _read_details_sheet_dataframe(file_path: Path, sheet_name: str):
-    """Lê a série sem inferência numérica e deixa as outras colunas tipadas normalmente."""
+    """Read inventory cells without pandas converting text identifiers to missing/numeric values."""
     workbook = None
     try:
         validate_xlsx(file_path)
@@ -403,17 +404,12 @@ def _read_details_sheet_dataframe(file_path: Path, sheet_name: str):
         raw_headers = next(
             workbook[sheet_name].iter_rows(min_row=1, max_row=1, values_only=True), ()
         )
+        validate_unambiguous_workbook_headers(raw_headers)
     finally:
         if workbook is not None:
             workbook.close()
 
-    serial_columns = {
-        header
-        for header in raw_headers
-        if normalize_workbook_header(header) in DETAILS_SERIAL_HEADER_ALIASES
-    }
-    serial_dtypes = {header: object for header in serial_columns}
-    return pd.read_excel(file_path, sheet_name=sheet_name, dtype=serial_dtypes)
+    return pd.read_excel(file_path, sheet_name=sheet_name, dtype=object, keep_default_na=False)
 
 
 def find_details_sheet(file_path: Path) -> Optional[str]:
@@ -425,6 +421,7 @@ def find_details_sheet(file_path: Path) -> Optional[str]:
         matching_sheets = []
         for worksheet in workbook.worksheets:
             headers = next(worksheet.iter_rows(min_row=1, max_row=1, values_only=True), ())
+            validate_unambiguous_workbook_headers(headers)
             normalized_headers = {
                 normalize_workbook_header(value)
                 for value in headers
@@ -543,15 +540,31 @@ def get_startup_readiness() -> Dict[str, Any]:
             "reason": "ausente",
         }
 
+    try:
+        load_modified_apelidos()
+        load_custom_units()
+        if ALIAS_HISTORY_FILE.exists():
+            load_alias_history()
+        if COMPARISON_HISTORY_FILE.exists():
+            load_comparison_history()
+        local_state_status = {"available": True, "file": "catálogos e históricos JSON", "reason": "OK"}
+    except (LocalJsonCorruptionError, HTTPException) as error:
+        local_state_status = {
+            "available": False,
+            "file": "catálogos e históricos JSON",
+            "reason": str(getattr(error, "detail", error)),
+        }
+
     files = {
         "template_transferencia": _check_startup_xlsx(TEMPLATE_FILE),
         "inventario_equipamentos": details_status,
         "inventario_detalhes_atualizacao": _check_startup_xlsx(DETAILS_UPLOAD_FILE),
         "inventario_endpoint": _check_startup_xlsx(ENDPOINT_UPLOAD_FILE),
         "modelo_exportacao": _check_startup_xlsx(EXPORT_MODEL_FILE),
+        "catalogos_locais": local_state_status,
     }
     requirements = {
-        "consulta_equipamentos": ["inventario_equipamentos"],
+        "consulta_equipamentos": ["inventario_equipamentos", "catalogos_locais"],
         "geracao_transferencia": ["template_transferencia"],
         "comparacao_atualizacao_inventarios": [
             "inventario_detalhes_atualizacao",
@@ -582,6 +595,7 @@ def report_startup_readiness() -> None:
         "inventario_detalhes_atualizacao": "EquipamentosDetalhes para atualização",
         "inventario_endpoint": "Inventário InvAllComputersSummary",
         "modelo_exportacao": "Modelo de exportação",
+        "catalogos_locais": "Catálogos e históricos locais",
     }
     print("[PRONTIDÃO] Verificação dos arquivos locais:")
     for key, status in report["files"].items():
@@ -621,9 +635,10 @@ def read_workbook_tables(file_bytes: bytes) -> List[Dict[str, Any]]:
             headers = [normalize_workbook_header(value) for value in raw_headers]
             if not any(headers):
                 continue
+            validate_unambiguous_workbook_headers(raw_headers)
 
             records = []
-            for values in iterator:
+            for excel_row_number, values in enumerate(iterator, start=2):
                 if not any(value is not None and str(value).strip() for value in values):
                     continue
                 record = {
@@ -631,11 +646,14 @@ def read_workbook_tables(file_bytes: bytes) -> List[Dict[str, Any]]:
                     for index in range(min(len(headers), len(values)))
                     if headers[index]
                 }
+                record["__excel_row_number__"] = excel_row_number
                 records.append(record)
             tables.append({"sheet": worksheet.title, "headers": set(headers), "records": records})
         return tables
     except HTTPException:
         raise
+    except WorkbookHeaderError as error:
+        raise HTTPException(status_code=400, detail=f"Cabeçalhos inválidos: {error}") from None
     except Exception:
         raise HTTPException(
             status_code=400,
@@ -1016,6 +1034,36 @@ def get_export_aliases(endpoint_index: Optional[Dict[str, Any]] = None) -> Dict[
     return aliases
 
 
+_EXPORT_STATUS_LOCK = threading.Lock()
+_EXPORT_COUNTS_LOCK = threading.Lock()
+_EXPORT_STATUS = {"available": False, "reason": "A exportação ainda não foi conferida."}
+_EXPORT_COUNTS_CACHE: Dict[Any, Dict[str, Any]] = {}
+
+
+def _set_export_status(available: bool, reason: str) -> None:
+    with _EXPORT_STATUS_LOCK:
+        _EXPORT_STATUS.update({"available": available, "reason": reason})
+
+
+def get_export_status() -> Dict[str, Any]:
+    with _EXPORT_STATUS_LOCK:
+        return dict(_EXPORT_STATUS)
+
+
+def _export_files_signature() -> tuple:
+    signature: List[Any] = []
+    for path in (get_parque_file(), EXPORT_MODEL_FILE, ENDPOINT_UPLOAD_FILE, MODIFIED_APELIDOS_FILE):
+        if path is None:
+            signature.append(None)
+            continue
+        try:
+            stat = path.stat()
+            signature.append((str(path.resolve(strict=False)), stat.st_size, stat.st_mtime_ns, stat.st_ctime_ns))
+        except OSError:
+            signature.append((str(path.resolve(strict=False)), None))
+    return tuple(signature)
+
+
 def count_export_changes(
     locked: bool = False,
     endpoint_index: Optional[Dict[str, Any]] = None,
@@ -1026,6 +1074,7 @@ def count_export_changes(
     def count() -> Dict[str, int]:
         source_file = get_parque_file()
         if source_file is None or not source_file.is_file() or not EXPORT_MODEL_FILE.is_file():
+            _set_export_status(False, "A base ativa ou o modelo de exportação está ausente.")
             return empty_counts.copy()
 
         model_wb = None
@@ -1043,18 +1092,21 @@ def count_export_changes(
             model_alias_col = find_workbook_header_column(model_headers, ("APELIDO",))
             model_id_col = find_workbook_header_column(model_headers, ("IDCLIENTE",))
             if model_serial_col is None or model_alias_col is None:
+                _set_export_status(False, "O modelo de exportação não contém as colunas obrigatórias.")
                 return empty_counts.copy()
 
             current_sheet_name = find_details_sheet(source_file)
             if current_sheet_name is None:
+                _set_export_status(False, "A base ativa não contém uma aba de inventário compatível.")
                 return empty_counts.copy()
             current_wb = openpyxl.load_workbook(source_file, read_only=True, data_only=False)
             current_ws = current_wb[current_sheet_name]
             current_headers = [cell.value for cell in next(current_ws.iter_rows(max_row=1), ())]
             current_serial_col = find_workbook_header_column(current_headers, DETAILS_SERIAL_HEADER_ALIASES)
-            current_alias_col = find_workbook_header_column(current_headers, ("APELIDO", "HOSTNAME"))
+            current_alias_col = find_workbook_header_column(current_headers, DETAILS_ALIAS_HEADER_ALIASES)
             current_id_col = find_workbook_header_column(current_headers, ("IDCLIENTE",))
             if current_serial_col is None or current_alias_col is None:
+                _set_export_status(False, "A base ativa não contém as colunas de série e apelido.")
                 return empty_counts.copy()
 
             current_rows: Dict[str, Dict[str, Any]] = {}
@@ -1065,6 +1117,7 @@ def count_export_changes(
                 if not serial_key:
                     continue
                 if serial_key in current_rows:
+                    _set_export_status(False, "A base ativa contém séries duplicadas; a exportação exige revisão.")
                     return empty_counts.copy()
                 current_rows[serial_key] = {
                     "apelido": cells[current_alias_col] if current_alias_col < len(cells) else None,
@@ -1082,6 +1135,7 @@ def count_export_changes(
                 model_serial_counts[serial_key] = model_serial_counts.get(serial_key, 0) + 1
                 model_rows.append((serial_key, cells))
             if set(model_serial_counts) != set(current_rows):
+                _set_export_status(False, "O modelo e a base ativa não contêm o mesmo conjunto de séries.")
                 return empty_counts.copy()
 
             effective_endpoint_index = endpoint_index if endpoint_index is not None else read_endpoint_alias_index()
@@ -1109,12 +1163,15 @@ def count_export_changes(
                         if id_cell.value != updated_id:
                             id_cliente_count += 1
 
+            _set_export_status(True, "OK")
             return {
                 "apelidos": alias_count,
                 "id_clientes": id_cliente_count,
                 "total": alias_count + id_cliente_count,
             }
-        except Exception:
+        except Exception as error:
+            print(f"[AVISO] Contagem de exportação indisponível ({type(error).__name__}).")
+            _set_export_status(False, "Não foi possível conferir o modelo e a base de exportação.")
             return empty_counts.copy()
         finally:
             if model_wb is not None:
@@ -1122,8 +1179,28 @@ def count_export_changes(
             if current_wb is not None:
                 current_wb.close()
 
+    def count_with_cache() -> Dict[str, int]:
+        if endpoint_index is not None:
+            return count()
+        key = _export_files_signature()
+        with _EXPORT_COUNTS_LOCK:
+            cached = _EXPORT_COUNTS_CACHE.get(key)
+            if cached is not None:
+                _set_export_status(cached["available"], cached["reason"])
+                return {name: cached[name] for name in empty_counts}
+        values = count()
+        status = get_export_status()
+        with _EXPORT_COUNTS_LOCK:
+            _EXPORT_COUNTS_CACHE.clear()
+            _EXPORT_COUNTS_CACHE[key] = {
+                **values,
+                "available": status["available"],
+                "reason": status["reason"],
+            }
+        return values
+
     if locked:
-        return count()
+        return count_with_cache()
     with lock_paths([TRANSACTION_ROOT / ".atomic-transactions"]):
         detail_files = get_details_files()
         with lock_paths([
@@ -1132,7 +1209,7 @@ def count_export_changes(
             MODIFIED_APELIDOS_FILE,
             EXPORT_MODEL_FILE,
         ]):
-            return count()
+            return count_with_cache()
 
 
 def snapshot_equipment_aliases(
@@ -1182,29 +1259,23 @@ def get_equipamentos_template_file() -> Optional[Path]:
     """Retorna a planilha EquipamentosDetalhes usada pelo site."""
     return get_primary_equipment_file()
 
-def prepare_export_baseline() -> Optional[Path]:
-    """Mantém uma cópia imutável de EquipamentosDetalhes para exportar apelidos."""
-    source_file = get_equipamentos_template_file()
-    if source_file is None or not source_file.exists():
-        return None
-
-    baseline_file = source_file.with_name(f".{source_file.stem}.export-baseline.xlsx")
-    if baseline_file.exists():
-        return baseline_file
-
-    try:
-        atomic_copy_file(source_file, baseline_file)
-        return baseline_file
-    except Exception:
-        print("[AVISO] Não foi possível preservar a base local para exportação.")
-        return None
-
 def get_parque_file() -> Optional[Path]:
     """Retorna a fonte EquipamentosDetalhes carregada pelo site."""
     return get_equipamentos_template_file()
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
+    recover_pending_transactions(TRANSACTION_ROOT)
+    try:
+        prune_result = prune_expired_histories()
+        if any(prune_result.values()):
+            print(f"[RETENÇÃO] Registros e backups removidos conforme política de {HISTORY_RETENTION_DAYS} dias: {prune_result}.")
+    except Exception as error:
+        print(f"[AVISO] A retenção automática não pôde ser concluída ({type(error).__name__}); os arquivos foram preservados.")
+    try:
+        load_database()
+    except LocalJsonCorruptionError as error:
+        print(f"[INDISPONÍVEL] Estado local preservado: {error}")
     report_startup_readiness()
     yield
 
@@ -1268,7 +1339,13 @@ class LocalRequestSafetyMiddleware:
             await response(scope, receive, send)
             return
 
-        if path == "/api/planilhas/atualizar":
+        is_inventory_upload = path == "/api/planilhas/atualizar"
+        body_limit = (
+            MAX_UPLOAD_REQUEST_BYTES if is_inventory_upload
+            else MAX_API_REQUEST_BYTES if path.startswith("/api/") and scope.get("method") in {"POST", "PUT", "PATCH"}
+            else None
+        )
+        if body_limit is not None:
             content_length = headers.get(b"content-length")
             if content_length is not None:
                 try:
@@ -1280,13 +1357,23 @@ class LocalRequestSafetyMiddleware:
                     )
                     await response(scope, receive, send)
                     return
-                if request_size > MAX_UPLOAD_REQUEST_BYTES:
+                if request_size > body_limit:
                     response = JSONResponse(
                         status_code=413,
-                        content={"detail": "O envio excede o limite total permitido para os arquivos."},
+                        content={"detail": "O corpo da solicitação excede o limite permitido."},
                     )
                     await response(scope, receive, send)
                     return
+
+        uses_upload_admission = is_inventory_upload or path == "/api/recarregar-base"
+        if uses_upload_admission and not UPLOAD_ADMISSION.acquire(blocking=False):
+            response = JSONResponse(
+                status_code=503,
+                content={"detail": "A operação de inventário está ocupada. Tente novamente em instantes."},
+                headers={"Retry-After": "2"},
+            )
+            await response(scope, receive, send)
+            return
 
         response_started = False
         request_size = 0
@@ -1300,21 +1387,26 @@ class LocalRequestSafetyMiddleware:
         async def limited_receive():
             nonlocal request_size
             message = await receive()
-            if path == "/api/planilhas/atualizar" and message["type"] == "http.request":
+            if body_limit is not None and message["type"] == "http.request":
                 request_size += len(message.get("body", b""))
-                if request_size > MAX_UPLOAD_REQUEST_BYTES:
-                    raise UploadBodyTooLarge()
+                if request_size > body_limit:
+                    raise RequestBodyTooLarge()
             return message
 
         try:
             await self.app(scope, limited_receive, safe_send)
-        except UploadBodyTooLarge:
+        except RequestBodyTooLarge:
             if response_started:
                 return
             response = JSONResponse(
                 status_code=413,
-                content={"detail": "O envio excede o limite total permitido para os arquivos."},
+                content={"detail": "O corpo da solicitação excede o limite permitido."},
             )
+            await response(scope, receive, send)
+        except LocalJsonCorruptionError as error:
+            if response_started:
+                return
+            response = JSONResponse(status_code=503, content={"detail": str(error)})
             await response(scope, receive, send)
         except Exception as error:
             print(
@@ -1328,6 +1420,9 @@ class LocalRequestSafetyMiddleware:
                 content={"detail": "Falha interna do servidor. Consulte os logs locais."},
             )
             await response(scope, receive, send)
+        finally:
+            if uses_upload_admission:
+                UPLOAD_ADMISSION.release()
 
 
 _ALLOWED_LOCAL_AUTHORITIES = frozenset({
@@ -1377,24 +1472,35 @@ def _parse_request_authority(
     return hostname.rstrip(".").lower(), port
 
 
-class UploadBodyTooLarge(Exception):
-    pass
-
-
 app.add_middleware(LocalRequestSafetyMiddleware)
 
 # In-memory storage
 equipamentos_cache: Dict[str, Dict[str, Any]] = {}
 unidades_cache: List[Dict[str, Any]] = []
 stats_cache: Dict[str, Any] = {}
+EquipmentSearchIndexEntry = Tuple[
+    int,
+    Tuple[str, str, str, str, str, str],
+    Dict[str, Any],
+]
+_EQUIPMENT_SEARCH_INDEX: Tuple[EquipmentSearchIndexEntry, ...] = ()
+_EQUIPMENT_SEARCH_INDEX_SOURCE = None
 
 def format_cep(val: Any) -> str:
-    if pd.isna(val) or val is None:
+    if val is None:
         return ""
-    val_clean = re.sub(r"\D", "", str(val).split(".")[0]).zfill(8)
-    if len(val_clean) == 8:
-        return f"{val_clean[:5]}-{val_clean[5:]}"
-    return str(val).strip()
+    try:
+        if pd.isna(val):
+            return ""
+    except (TypeError, ValueError):
+        pass
+    original = str(val).strip()
+    if not original:
+        return ""
+    digits = re.sub(r"\D", "", original)
+    if len(digits) != 8:
+        return original
+    return f"{digits[:5]}-{digits[5:]}"
 
 def get_suggested_description(tipo: Optional[str], modelo: Optional[str]) -> str:
     t = (tipo or "").strip().lower()
@@ -1413,13 +1519,126 @@ def sanitize_value(val: Any, default: str = "") -> str:
     return str(val).strip()
 
 def load_custom_units() -> List[Dict[str, Any]]:
-    if CUSTOM_UNIDADES_FILE.exists():
+    if not CUSTOM_UNIDADES_FILE.exists():
+        return []
+    try:
+        value = json.loads(CUSTOM_UNIDADES_FILE.read_text(encoding="utf-8"))
+    except (OSError, UnicodeError, json.JSONDecodeError) as error:
+        raise LocalJsonCorruptionError("O catálogo local de unidades está ilegível; os dados foram preservados.") from error
+    if not isinstance(value, list) or any(not isinstance(item, dict) for item in value):
+        raise LocalJsonCorruptionError("O catálogo local de unidades precisa conter uma lista de registros.")
+    for item in value:
+        if any(field in item and not isinstance(item[field], (str, int, float, bool, type(None))) for field in ("id", "cidade", "endereco", "uf", "cep", "cnpj")):
+            raise LocalJsonCorruptionError("O catálogo local de unidades contém campos com tipos inválidos.")
+    return value
+
+
+def _history_event_datetime(event: Dict[str, Any]) -> Optional[datetime]:
+    try:
+        value = datetime.fromisoformat(str(event.get("horario") or "").replace("Z", "+00:00"))
+    except (TypeError, ValueError, OverflowError):
+        return None
+    return value.astimezone()
+
+
+def _backup_directory_from_history(event: Dict[str, Any]) -> Optional[Path]:
+    comparison = event.get("comparacao")
+    relative_value = comparison.get("backup_diretorio") if isinstance(comparison, dict) else None
+    if not isinstance(relative_value, str) or not relative_value.strip():
+        return None
+    relative = Path(relative_value)
+    if relative.is_absolute() or any(part in {"", ".", ".."} for part in relative.parts):
+        return None
+    candidate = (INPUT_DIR / relative).resolve(strict=False)
+    backup_root = UPLOAD_BACKUPS_DIR.resolve(strict=False)
+    if candidate.parent != backup_root:
+        return None
+    return candidate
+
+
+def prune_expired_histories(now: Optional[datetime] = None) -> Dict[str, int]:
+    """Apply the approved 90-day policy and remove only verified, unreferenced backups."""
+    current_time = (now or datetime.now().astimezone()).astimezone()
+    cutoff = current_time - timedelta(days=HISTORY_RETENTION_DAYS)
+    results = {"apelidos_removidos": 0, "comparacoes_removidas": 0, "backups_removidos": 0}
+    expired_backup_paths: Set[Path] = set()
+    active_backup_paths: Set[Path] = set()
+    targets = [path for path in (ALIAS_HISTORY_FILE, COMPARISON_HISTORY_FILE) if path.exists()]
+
+    with ALIAS_HISTORY_LOCK, COMPARISON_HISTORY_LOCK:
+        if targets:
+            with AtomicFileTransaction(TRANSACTION_ROOT, targets) as transaction:
+                if ALIAS_HISTORY_FILE in targets:
+                    def keep_alias_events(value):
+                        events = _validate_json_history(value, "apelidos")
+                        kept = []
+                        for event in events:
+                            timestamp = _history_event_datetime(event)
+                            if timestamp is not None and timestamp < cutoff:
+                                results["apelidos_removidos"] += 1
+                            else:
+                                kept.append(event)
+                        return kept
+                    transaction.update_json(ALIAS_HISTORY_FILE, keep_alias_events, [])
+
+                if COMPARISON_HISTORY_FILE in targets:
+                    def keep_comparison_events(value):
+                        events = _validate_json_history(value, "comparações")
+                        kept = []
+                        for event in events:
+                            timestamp = _history_event_datetime(event)
+                            is_pinned = event.get("id") == PINNED_COMPARISON_EVENT_ID
+                            if not is_pinned and timestamp is not None and timestamp < cutoff:
+                                backup_path = _backup_directory_from_history(event)
+                                if backup_path is not None:
+                                    expired_backup_paths.add(backup_path)
+                                results["comparacoes_removidas"] += 1
+                                continue
+                            kept.append(event)
+                            backup_path = _backup_directory_from_history(event)
+                            if backup_path is not None:
+                                active_backup_paths.add(backup_path)
+                        return kept
+                    transaction.update_json(COMPARISON_HISTORY_FILE, keep_comparison_events, [])
+                transaction.commit()
+
+    if UPLOAD_BACKUPS_DIR.is_symlink() or not UPLOAD_BACKUPS_DIR.is_dir():
+        return results
+    backup_root = UPLOAD_BACKUPS_DIR.resolve(strict=False)
+    if backup_root.parent != INPUT_DIR.resolve(strict=False):
+        return results
+    expired_directories: List[Path] = []
+    for path in backup_root.iterdir():
+        if path.is_symlink() or not path.is_dir():
+            continue
+        resolved = path.resolve(strict=False)
+        if resolved.parent != UPLOAD_BACKUPS_DIR.resolve(strict=False) or resolved in active_backup_paths:
+            continue
+        expired = resolved in expired_backup_paths
+        if not expired:
+            try:
+                modified = datetime.fromtimestamp(path.stat().st_mtime).astimezone()
+                expired = modified < cutoff
+            except OSError:
+                continue
+        if expired:
+            expired_directories.append(path)
+
+    # Remove after enumeration; deleting while iterating a Windows directory can
+    # cause the iterator to stop before other expired directories are visited.
+    for path in expired_directories:
         try:
-            with open(CUSTOM_UNIDADES_FILE, "r", encoding="utf-8") as f:
-                return json.load(f)
-        except Exception:
-            print("[ERRO] Falha ao carregar o catálogo local de unidades.")
-    return []
+            shutil.rmtree(path)
+            results["backups_removidos"] += 1
+        except OSError as error:
+            print(f"[AVISO] Não foi possível remover backup vencido '{path.name}': {type(error).__name__}.")
+    return results
+
+
+def _validate_json_history(value: Any, label: str) -> List[Dict[str, Any]]:
+    if not isinstance(value, list) or any(not isinstance(item, dict) for item in value):
+        raise LocalJsonCorruptionError(f"O histórico local de {label} precisa conter uma lista de registros.")
+    return value
 
 
 def _coerce_unit_id(value: Any) -> Optional[int]:
@@ -1456,13 +1675,6 @@ def _stable_unit_id(unit: Dict[str, Any], reserved_ids: Set[int]) -> int:
         collision_index += 1
 
 
-def save_custom_units(units: List[Dict[str, Any]]) -> None:
-    try:
-        atomic_write_json(CUSTOM_UNIDADES_FILE, units)
-    except Exception:
-        print("[ERRO] Falha ao gravar o catálogo local de unidades.")
-        raise
-
 def load_database(transaction_locked: bool = False, publish: bool = True) -> Any:
     if transaction_locked:
         return _load_database_unlocked(publish=publish)
@@ -1486,6 +1698,7 @@ def publish_database_state(state: Dict[str, Any]) -> None:
         equipamentos_cache = state["equipamentos_cache"]
         unidades_cache = state["unidades_cache"]
         stats_cache = state["stats_cache"]
+        _refresh_equipment_search_index_locked()
 
 
 def _load_database_unlocked(publish: bool = True) -> Any:
@@ -1523,7 +1736,7 @@ def _load_database_unlocked(publish: bool = True) -> Any:
                     return sanitize_value(val, default)
         return default
 
-    unidades_dict: Dict[str, Dict[str, Any]] = {}
+    unidades_dict: Dict[Tuple[str, str, str], Dict[str, Any]] = {}
     sede_cnpjs = set()
 
     for _, row in df.iterrows():
@@ -1553,8 +1766,19 @@ def _load_database_unlocked(publish: bool = True) -> Any:
             "CnpjDeInstalacao",
         )
 
-        contrato = get_row_val(row, "CodigoContrato", "Codigo Contrato", default="16467")
-        razao_social = get_row_val(row, "RazaoSocial", "Razao Social", default="SERV DE APOIO AS MICRO E PEQ EMP DO PARANA SEBRAE PR")
+        contrato_value = get_row_val(
+            row, "CodigoContrato", "Codigo Contrato", default=str(SUPPORTED_CONTRACT)
+        )
+        contrato = normalize_contract_value(contrato_value) or str(SUPPORTED_CONTRACT)
+        if contrato != str(SUPPORTED_CONTRACT):
+            print(
+                f"[ERRO] A base contém contrato {contrato}; somente o contrato "
+                f"{SUPPORTED_CONTRACT} é suportado. O cache anterior foi mantido."
+            )
+            return False
+        razao_social = get_row_val(
+            row, "RazaoSocial", "Razao Social", default=SUPPORTED_CONTRACT_LEGAL_NAME
+        ) or SUPPORTED_CONTRACT_LEGAL_NAME
 
         # Check if Sede Curitiba
         is_sede = ("caeté" in endereco.lower() or "caete" in endereco.lower() or "sede" in endereco.lower() or "sede" in cidade.lower()) and ("curitiba" in cidade.lower() or "sede" in cidade.lower())
@@ -1611,7 +1835,7 @@ def _load_database_unlocked(publish: bool = True) -> Any:
         return False
 
     # Filter units according to user specifications:
-    filtered_units = []
+    filtered_units: List[Dict[str, Any]] = []
     for u in unidades_dict.values():
         cid_lower = u["cidade"].lower()
         end_lower = u["endereco"].lower()
@@ -1689,7 +1913,7 @@ def _load_database_unlocked(publish: bool = True) -> Any:
         else:
             match = next((
                 x for x in final_units
-                if x.get("cidade", "").lower() == cu.get("cidade", "").lower()
+                if str(x.get("cidade") or "").lower() == str(cu.get("cidade") or "").lower()
                 and x.get("cnpj") == cu.get("cnpj")
             ), None)
         if match:
@@ -1713,8 +1937,9 @@ def _load_database_unlocked(publish: bool = True) -> Any:
     for unit in new_unidades_cache:
         if _coerce_unit_id(unit.get("id")) is not None:
             continue
-        unit["id"] = _stable_unit_id(unit, reserved_unit_ids)
-        reserved_unit_ids.add(unit["id"])
+        generated_id = _stable_unit_id(unit, reserved_unit_ids)
+        unit["id"] = generated_id
+        reserved_unit_ids.add(generated_id)
 
     # Apelidos manuais persistem por série e prevalecem sobre o hostname da InvAll.
     mod_apelidos = load_modified_apelidos()
@@ -1746,12 +1971,15 @@ def _load_database_unlocked(publish: bool = True) -> Any:
         locked=True,
         endpoint_index=endpoint_index,
     )
+    export_status = get_export_status()
     new_stats_cache = {
         "total_equipamentos": len(new_equipamentos_cache),
         "total_unidades": len(new_unidades_cache),
         "total_apelidos_modificados": export_counts["apelidos"],
         "total_id_clientes_modificados": export_counts["id_clientes"],
         "total_alteracoes_exportaveis": export_counts["total"],
+        "exportacao_disponivel": export_status["available"],
+        "exportacao_motivo": export_status["reason"],
         "tipos": type_counts,
         "arquivo_origem": active_details_file.name,
         "ultima_atualizacao": datetime.now().strftime("%d/%m/%Y %H:%M")
@@ -1771,38 +1999,75 @@ def _load_database_unlocked(publish: bool = True) -> Any:
         return state
     return True
 
-# Recover incomplete local transactions before reading or creating operational files.
-recover_pending_transactions(TRANSACTION_ROOT)
-
-# Load database on startup
-prepare_export_baseline()
-load_database()
-
-
 # Models for API
 class EquipamentoUpdatePayload(BaseModel):
-    serial: str = Field(..., description="Número de Série do Equipamento")
+    serial: str = Field(..., min_length=1, max_length=128, description="Número de Série do Equipamento")
     novo: bool = Field(False, description="Indica que o formulário está cadastrando um equipamento novo")
-    modelo: Optional[str] = Field("", description="Modelo do Equipamento")
-    tipo: Optional[str] = Field("", description="Tipo (Notebook, Micro Computador, Headsets...)")
-    apelido: Optional[str] = Field("", description="Apelido / Hostname")
-    idCliente: Optional[str] = Field("", description="ID do Cliente")
+    modelo: Optional[str] = Field("", max_length=300, description="Modelo do Equipamento")
+    tipo: Optional[str] = Field("", max_length=120, description="Tipo (Notebook, Micro Computador, Headsets...)")
+    apelido: Optional[str] = Field("", max_length=160, description="Apelido / Hostname")
+    idCliente: Optional[str] = Field("", max_length=128, description="ID do Cliente")
     revisao: Optional[str] = Field(None, min_length=64, max_length=64)
     # Mantidos para compatibilidade com clientes antigos; a rota ignora esses campos.
-    endereco: Optional[str] = Field("", description="Endereço carregado de EquipamentosDetalhes")
-    cidade: Optional[str] = Field("", description="Cidade carregada de EquipamentosDetalhes")
-    uf: Optional[str] = Field("PR", description="UF carregada de EquipamentosDetalhes")
-    cep: Optional[str] = Field("", description="CEP carregado de EquipamentosDetalhes")
-    cnpj_instalacao: Optional[str] = Field("", description="CNPJ carregado de EquipamentosDetalhes")
+    endereco: Optional[str] = Field("", max_length=500, description="Endereço carregado de EquipamentosDetalhes")
+    cidade: Optional[str] = Field("", max_length=160, description="Cidade carregada de EquipamentosDetalhes")
+    uf: Optional[str] = Field("PR", max_length=2, description="UF carregada de EquipamentosDetalhes")
+    cep: Optional[str] = Field("", max_length=12, description="CEP carregado de EquipamentosDetalhes")
+    cnpj_instalacao: Optional[str] = Field("", max_length=24, description="CNPJ carregado de EquipamentosDetalhes")
+
+    @field_validator("serial")
+    @classmethod
+    def validate_serial(cls, value: str) -> str:
+        if not normalize_reference_value(value):
+            raise ValueError("O número de série precisa conter letras ou números.")
+        return value.strip()
 
 
 class UnidadePayload(BaseModel):
     id: Optional[int] = None
-    cidade: str
-    endereco: str
-    uf: Optional[str] = "PR"
-    cep: str
-    cnpj: str
+    cidade: str = Field(..., min_length=1, max_length=160)
+    endereco: str = Field(..., min_length=1, max_length=300)
+    uf: Optional[str] = Field("PR", max_length=2)
+    cep: str = Field("", max_length=12)
+    cnpj: str = Field(..., min_length=1, max_length=24)
+
+    @field_validator("uf")
+    @classmethod
+    def validate_uf(cls, value: Optional[str]) -> str:
+        if value is None or not value.strip():
+            return "PR"
+        normalized = value.strip().upper()
+        if normalized not in {
+            "AC", "AL", "AP", "AM", "BA", "CE", "DF", "ES", "GO", "MA", "MT", "MS",
+            "MG", "PA", "PB", "PR", "PE", "PI", "RJ", "RN", "RS", "RO", "RR", "SC",
+            "SP", "SE", "TO",
+        }:
+            raise ValueError("Informe uma sigla de UF válida.")
+        return normalized
+
+    @field_validator("cep")
+    @classmethod
+    def validate_cep(cls, value: str) -> str:
+        normalized = re.sub(r"\D", "", value.strip())
+        if value.strip() and len(normalized) != 8:
+            raise ValueError("CEP deve conter exatamente oito dígitos.")
+        return f"{normalized[:5]}-{normalized[5:]}" if normalized else ""
+
+    @field_validator("cnpj")
+    @classmethod
+    def validate_cnpj(cls, value: str) -> str:
+        digits = re.sub(r"\D", "", value.strip())
+        if len(digits) != 14:
+            raise ValueError("CNPJ deve conter exatamente 14 dígitos.")
+        return value.strip()
+
+    @field_validator("cidade", "endereco")
+    @classmethod
+    def require_nonblank_unit_text(cls, value: str) -> str:
+        normalized = value.strip()
+        if not normalized:
+            raise ValueError("Este campo não pode ficar vazio.")
+        return normalized
 
 
 class ApelidoUpdatePayload(BaseModel):
@@ -1812,14 +2077,6 @@ class ApelidoUpdatePayload(BaseModel):
 
 class ApelidoUndoPayload(BaseModel):
     evento_id: str = Field(..., description="ID do evento de apelido que deve ser desfeito")
-
-
-class ManualAliasConflictResolutionPayload(BaseModel):
-    acao: str = Field(..., description="Manter o apelido manual ou remover esse override")
-
-
-class ComparisonRestorePayload(BaseModel):
-    preview_token: str = Field(..., min_length=64, max_length=64)
 
 
 def _public_equipment(equipment: Dict[str, Any]) -> Dict[str, Any]:
@@ -1872,6 +2129,19 @@ def _edit_equipment_workbook(
             status_code=409,
             detail=f"A série {payload.serial.strip()} aparece mais de uma vez na aba '{ws.title}'; nenhum registro foi alterado.",
         )
+    if matching_rows:
+        contract_col = col_map.get("CODIGOCONTRATO") or col_map.get("CODIGODOCONTRATO")
+        if contract_col:
+            raw_contract = ws.cell(row=matching_rows[0], column=contract_col).value
+            normalized_contract = normalize_contract_value(raw_contract)
+            if normalized_contract and normalized_contract != str(SUPPORTED_CONTRACT):
+                raise HTTPException(
+                    status_code=409,
+                    detail=(
+                        f"O equipamento pertence ao contrato {normalized_contract}; "
+                        f"este sistema só edita o contrato {SUPPORTED_CONTRACT}."
+                    ),
+                )
     if matching_rows and expected_revision:
         target_row_for_revision = matching_rows[0]
 
@@ -1910,17 +2180,18 @@ def _edit_equipment_workbook(
     requested_fields = set(fields_to_update if fields_to_update is not None else payload.model_fields_set)
 
     def set_value(column: Optional[int], value: Any) -> None:
-        if column is None or value is None:
+        if column is None:
             return
         cell = ws.cell(row=target_row, column=column)
-        cell.value = value
-        expected[(ws.title, cell.coordinate)] = value
+        persisted_value = "" if value is None else value
+        cell.value = persisted_value
+        expected[(ws.title, cell.coordinate)] = persisted_value
 
     if not matching_rows:
         set_value(serial_col, payload.serial.strip().upper())
-        set_value(col_map.get("CODIGOCONTRATO"), 16467)
+        set_value(col_map.get("CODIGOCONTRATO"), SUPPORTED_CONTRACT)
         set_value(col_map.get("ITEMDECONTRATO"), target_row - 1)
-        set_value(col_map.get("RAZAOSOCIAL"), "SERV DE APOIO AS MICRO E PEQ EMP DO PARANA SEBRAE PR")
+        set_value(col_map.get("RAZAOSOCIAL"), SUPPORTED_CONTRACT_LEGAL_NAME)
 
     fields = (
         ("apelido", col_map.get("APELIDO")),
@@ -1933,6 +2204,28 @@ def _edit_equipment_workbook(
             continue
         value = getattr(payload, field_name)
         set_value(column, value.strip() if value is not None else "")
+
+    if not matching_rows:
+        from openpyxl.utils.cell import get_column_letter, range_boundaries
+
+        for table in ws.tables.values():
+            min_col, min_row, max_col, max_row = range_boundaries(table.ref)
+            if min_row == 1 and max_row == target_row - 1 and min_col <= serial_col <= max_col:
+                expanded_ref = (
+                    f"{get_column_letter(min_col)}{min_row}:"
+                    f"{get_column_letter(max_col)}{target_row}"
+                )
+                table.ref = expanded_ref
+                if table.autoFilter is not None:
+                    table.autoFilter.ref = expanded_ref
+
+        if ws.auto_filter.ref:
+            min_col, min_row, max_col, max_row = range_boundaries(ws.auto_filter.ref)
+            if min_row == 1 and max_row == target_row - 1 and min_col <= serial_col <= max_col:
+                ws.auto_filter.ref = (
+                    f"{get_column_letter(min_col)}{min_row}:"
+                    f"{get_column_letter(max_col)}{target_row}"
+                )
     return expected
 
 
@@ -1958,6 +2251,7 @@ def update_equipment_in_workbook_file(
                     wb, payload, target_sheet_name, record_must_exist, fields_to_update, expected_revision
                 ),
                 allow_dimension_growth=True,
+                allow_table_growth=True,
             )
         with AtomicFileTransaction(TRANSACTION_ROOT, [file_path]) as own_transaction:
             saved = stage_workbook_update(
@@ -1967,6 +2261,7 @@ def update_equipment_in_workbook_file(
                     wb, payload, target_sheet_name, record_must_exist, fields_to_update, expected_revision
                 ),
                 allow_dimension_growth=True,
+                allow_table_growth=True,
             )
             if saved:
                 own_transaction.commit()
@@ -2120,7 +2415,20 @@ def save_equipment_to_excel(
             endereco_info = (
                 snapshot_endereco_instalacao(cached_equipment)
                 if cached_equipment
-                else normalizar_endereco_instalacao(EquipamentoUpdatePayload(serial=target_serial_upper))
+                else normalizar_endereco_instalacao(EquipamentoUpdatePayload(
+                    serial=target_serial_upper,
+                    novo=False,
+                    modelo="",
+                    tipo="",
+                    apelido="",
+                    idCliente="",
+                    revisao=None,
+                    endereco="",
+                    cidade="",
+                    uf="PR",
+                    cep="",
+                    cnpj_instalacao="",
+                ))
             )
             endereco = endereco_info["endereco"]
             cidade = endereco_info["cidade"]
@@ -2166,8 +2474,14 @@ def save_equipment_to_excel(
                 "retirada_cidade": cidade,
                 "retirada_uf": uf,
                 "retirada_cep": cep_formatado,
-                "contrato": "16467",
-                "razao_social": "SERV DE APOIO AS MICRO E PEQ EMP DO PARANA SEBRAE PR"
+                "contrato": (
+                    cached_equipment.get("contrato", str(SUPPORTED_CONTRACT))
+                    if cached_equipment else str(SUPPORTED_CONTRACT)
+                ),
+                "razao_social": (
+                    cached_equipment.get("razao_social", SUPPORTED_CONTRACT_LEGAL_NAME)
+                    if cached_equipment else SUPPORTED_CONTRACT_LEGAL_NAME
+                ),
             }
 
             _apply_effective_alias(
@@ -2182,12 +2496,20 @@ def save_equipment_to_excel(
                 equipamentos_cache[target_serial_upper] = updated_equipment
                 stats_cache["total_equipamentos"] = len(equipamentos_cache)
                 stats_cache["ultima_atualizacao"] = datetime.now().strftime("%d/%m/%Y %H:%M")
+                _refresh_equipment_search_index_locked()
     except FileBusyError as error:
         raise HTTPException(status_code=409, detail=str(error)) from error
     except WorkbookSafetyError as error:
         raise HTTPException(status_code=409, detail=f"Gravação cancelada: {error}") from error
     except FileTransactionError as error:
         raise HTTPException(status_code=500, detail=f"Não foi possível concluir a gravação: {error}") from error
+
+
+@app.get("/api/equipamento/apelidos-modificados")
+def get_apelidos_modificados():
+    """Retorna o registro de todos os apelidos que foram modificados pelo usuário."""
+    apelidos = load_modified_apelidos()
+    return {"total": len(apelidos), "apelidos": apelidos}
 
 
 # Endpoints
@@ -2208,10 +2530,13 @@ def salvar_equipamento(payload: EquipamentoUpdatePayload):
     """Atualiza ou cadastra um equipamento tanto na memória do site quanto diretamente na planilha Excel."""
     if not payload.serial or not payload.serial.strip():
         raise HTTPException(status_code=400, detail="Número de série é obrigatório.")
+    if not normalize_reference_value(payload.serial):
+        raise HTTPException(status_code=422, detail="O número de série precisa conter letras ou números.")
     
     target_serial = payload.serial.strip().upper()
     requested_fields = set(payload.model_fields_set)
-    equipamento_existente = equipamentos_cache.get(target_serial)
+    with STATE_LOCK:
+        equipamento_existente = deepcopy(equipamentos_cache.get(target_serial))
     if payload.novo and equipamento_existente is not None:
         raise HTTPException(
             status_code=409,
@@ -2237,7 +2562,7 @@ def salvar_equipamento(payload: EquipamentoUpdatePayload):
     if equipamento_existente is None and payload.apelido is not None and payload.apelido.strip():
         new_alias = payload.apelido.strip()
         def save_new_alias(data):
-            aliases = data if isinstance(data, dict) else {}
+            aliases = dict(_validate_json_object(data, "apelidos"))
             for key in list(aliases):
                 if normalize_reference_value(key) == normalize_reference_value(target_serial):
                     aliases.pop(key, None)
@@ -2251,11 +2576,16 @@ def salvar_equipamento(payload: EquipamentoUpdatePayload):
         fields_to_update=requested_fields,
     )
     total_mod = len(load_modified_apelidos())
+    with STATE_LOCK:
+        saved_equipment = deepcopy(equipamentos_cache.get(target_serial))
+        saved_stats_count = len(load_modified_apelidos())
+    if saved_equipment is None:
+        raise HTTPException(status_code=500, detail="O estado salvo do equipamento não foi publicado corretamente.")
     return {
         "sucesso": True,
         "mensagem": f"Equipamento {target_serial} atualizado com sucesso no site e na planilha Excel!",
-        "equipamento": _public_equipment(equipamentos_cache[target_serial]),
-        "total_modificados": total_mod
+        "equipamento": _public_equipment(saved_equipment),
+        "total_modificados": saved_stats_count
     }
 
 
@@ -2363,6 +2693,7 @@ def atualizar_apelido_na_planilha(
                 own_transaction.commit()
                 return True
 
+        assert transaction is not None
         saved = stage_workbook_update(
             transaction,
             target_file,
@@ -2484,7 +2815,7 @@ def aplicar_alteracao_apelido(
             )
 
             def update_overrides(data):
-                aliases = data if isinstance(data, dict) else {}
+                aliases = dict(_validate_json_object(data, "apelidos"))
                 for key in list(aliases):
                     if normalize_reference_value(key) == normalize_reference_value(target_serial):
                         aliases.pop(key, None)
@@ -2495,8 +2826,7 @@ def aplicar_alteracao_apelido(
 
             if history_will_change:
                 def update_history(history):
-                    if not isinstance(history, list):
-                        raise RuntimeError("O conteúdo do histórico manual não é uma lista.")
+                    history = _validate_json_history(history, "apelidos")
                     updated = list(history)
                     if remove_history_event_id:
                         updated = [item for item in updated if item.get("id") != remove_history_event_id]
@@ -2527,6 +2857,7 @@ def aplicar_alteracao_apelido(
             transaction.commit()
             with STATE_LOCK:
                 equipamentos_cache[target_serial] = updated_equipment
+                _refresh_equipment_search_index_locked()
     except HTTPException:
         raise
     except FileBusyError as error:
@@ -2535,6 +2866,11 @@ def aplicar_alteracao_apelido(
         raise HTTPException(status_code=409, detail=f"Gravação cancelada: {error}") from error
     except FileTransactionError as error:
         raise HTTPException(status_code=500, detail=f"Não foi possível concluir a alteração de apelido: {error}") from error
+
+    try:
+        prune_expired_histories()
+    except Exception as error:
+        print(f"[AVISO] O apelido foi salvo, mas a retenção automática falhou ({type(error).__name__}).")
 
     return {
         "equipamento": updated_equipment,
@@ -2669,16 +3005,6 @@ def desfazer_alteracao_apelido(payload: ApelidoUndoPayload):
     }
 
 
-@app.get("/api/equipamento/apelidos-modificados")
-def get_apelidos_modificados():
-    """Retorna o registro de todos os apelidos que foram modificados pelo usuário."""
-    apelidos = load_modified_apelidos()
-    return {
-        "total": len(apelidos),
-        "apelidos": apelidos
-    }
-
-
 @app.get("/api/exportar-equipamentos")
 def exportar_equipamentos():
     """Exporta a apresentação de referência com os registros da base ativa."""
@@ -2726,7 +3052,7 @@ def exportar_equipamentos():
             current_serial_col_index = find_workbook_header_column(current_headers, DETAILS_SERIAL_HEADER_ALIASES)
             if current_serial_col_index is None:
                 raise HTTPException(status_code=409, detail="A base atual não contém NumeroSerie.")
-            current_alias_col_index = find_workbook_header_column(current_headers, ("APELIDO", "HOSTNAME"))
+            current_alias_col_index = find_workbook_header_column(current_headers, DETAILS_ALIAS_HEADER_ALIASES)
             if current_alias_col_index is None:
                 raise HTTPException(status_code=409, detail="A base atual não contém Apelido ou Hostname.")
             current_serial_col = current_serial_col_index + 1
@@ -2764,6 +3090,7 @@ def exportar_equipamentos():
             id_cliente_update_count = 0
             skipped_duplicate_rows = set()
             skipped_formula_rows = 0
+            skipped_formula_serials = set()
             for row in range(2, ws.max_row + 1):
                 serial_key = normalize_reference_value(ws.cell(row=row, column=serial_col).value)
                 if not serial_key:
@@ -2803,9 +3130,31 @@ def exportar_equipamentos():
 
                 if formula_skipped:
                     skipped_formula_rows += 1
+                    skipped_formula_serials.add(serial_key)
 
             review_items = endpoint_alias_review_items(endpoint_index, set(serial_counts))
             pending_review_count = len(review_items) + len(skipped_duplicate_rows) + skipped_formula_rows
+            review_summary = [
+                {
+                    "motivo": "Registros da InvAll que exigem conferência",
+                    "total": len(review_items),
+                    "series": [
+                        str(item.get("serie") or "")[:64]
+                        for item in review_items if item.get("serie")
+                    ][:10],
+                },
+                {
+                    "motivo": "Séries duplicadas no modelo de exportação",
+                    "total": len(skipped_duplicate_rows),
+                    "series": sorted(skipped_duplicate_rows)[:10],
+                },
+                {
+                    "motivo": "Linhas protegidas por fórmulas",
+                    "total": skipped_formula_rows,
+                    "series": sorted(skipped_formula_serials)[:10],
+                },
+            ]
+            review_summary = [item for item in review_summary if item["total"]]
             output_bytes = serialize_workbook_validated(
                 source_file, wb, original, expected_values, allow_threaded_comments=True
             )
@@ -2845,13 +3194,14 @@ def exportar_equipamentos():
             "Content-Disposition": f'attachment; filename="{export_filename}"',
             "Access-Control-Expose-Headers": (
                 "Content-Disposition, X-Total-Alterados, X-Total-IdCliente-Alterados, "
-                "X-Total-Alteracoes-Exportadas, X-Total-Conferencia, "
+                "X-Total-Alteracoes-Exportadas, X-Total-Conferencia, X-Conferencia-Resumo, "
                 "X-Historico-Apelidos-Atualizados, X-Historico-Horario"
             ),
             "X-Total-Alterados": str(alias_update_count),
             "X-Total-IdCliente-Alterados": str(id_cliente_update_count),
             "X-Total-Alteracoes-Exportadas": str(alias_update_count + id_cliente_update_count),
             "X-Total-Conferencia": str(pending_review_count),
+            "X-Conferencia-Resumo": quote(json.dumps(review_summary, ensure_ascii=False, separators=(",", ":"))),
             "X-Historico-Apelidos-Atualizados": str(history_alias_count),
             "X-Historico-Horario": history_timestamp,
         }
@@ -2909,11 +3259,16 @@ async def atualizar_planilhas(
     endpoint_file: UploadFile = File(...),
     details_file: UploadFile = File(...),
 ):
-    return await update_inventory_files(
+    result = await update_inventory_files(
         endpoint_file,
         details_file,
         context=sys.modules[__name__],
     )
+    try:
+        prune_expired_histories()
+    except Exception as error:
+        print(f"[AVISO] A atualização foi concluída, mas a retenção automática falhou ({type(error).__name__}).")
+    return result
 
 
 def _public_unit_list(units: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
@@ -2947,8 +3302,8 @@ def salvar_unidade(payload: UnidadePayload):
                 current_units = list(unidades_cache)
 
             def update_custom_units(saved_units):
-                if not isinstance(saved_units, list):
-                    raise FileTransactionError("O catálogo local de unidades não contém uma lista válida.")
+                if not isinstance(saved_units, list) or any(not isinstance(unit, dict) for unit in saved_units):
+                    raise LocalJsonCorruptionError("O catálogo local de unidades não contém registros válidos.")
                 updated_units = [dict(unit) for unit in saved_units]
                 selected_unit = next((
                     unit for unit in current_units
@@ -2985,12 +3340,28 @@ def salvar_unidade(payload: UnidadePayload):
                             status_code=409,
                             detail="A unidade selecionada não está mais no catálogo. Atualize a lista antes de editar.",
                         )
+                    if not payload.id:
+                        requested_identity = _unit_identity_key({
+                            "cidade": cidade,
+                            "endereco": endereco,
+                            "cnpj": cnpj,
+                            "uf": uf,
+                        })
+                        existing_unit = next(
+                            (
+                                unit for unit in updated_units
+                                if _unit_identity_key(unit) == requested_identity
+                            ),
+                            None,
+                        )
+                        if existing_unit is not None:
+                            return updated_units
                     current_ids = [
-                        _coerce_unit_id(unit.get("id"))
+                        unit_id
                         for unit in current_units
+                        if (unit_id := _coerce_unit_id(unit.get("id"))) is not None
                     ]
-                    current_ids = [unit_id for unit_id in current_ids if unit_id is not None]
-                    new_id = (max(current_ids + [0]) + 1) if not payload.id else payload.id
+                    new_id = (max(current_ids, default=0) + 1) if not payload.id else payload.id
                     new_unit = {
                         "id": new_id,
                         "cidade": cidade,
@@ -3008,10 +3379,15 @@ def salvar_unidade(payload: UnidadePayload):
                 return updated_units
 
             transaction.update_json(CUSTOM_UNIDADES_FILE, update_custom_units, [])
+            transaction.apply()
+            prepared_state = load_database(transaction_locked=True, publish=False)
+            if not isinstance(prepared_state, dict):
+                raise FileTransactionError(
+                    "A unidade não foi confirmada porque o estado resultante não pôde ser carregado."
+                )
             transaction.commit()
-            load_database(transaction_locked=True)
-            with STATE_LOCK:
-                published_units = list(unidades_cache)
+            publish_database_state(prepared_state)
+            published_units = list(prepared_state["unidades_cache"])
     except HTTPException:
         raise
     except FileBusyError as error:
@@ -3061,13 +3437,10 @@ def _categoria_equipamento(tipo: Any, modelo: Any) -> str:
     return ""
 
 
-def _buscar_equipamentos_por_termo(q: str) -> List[Dict[str, Any]]:
-    """Busca por série, modelo, apelido, cidade ou categoria e prioriza série."""
-    term = _normalizar_termo_busca(q)
-    if not term:
-        return []
-
-    ranked_results = []
+def _refresh_equipment_search_index_locked() -> None:
+    """Precompute normalized searchable values once per published cache generation."""
+    global _EQUIPMENT_SEARCH_INDEX, _EQUIPMENT_SEARCH_INDEX_SOURCE
+    indexed: List[EquipmentSearchIndexEntry] = []
     for index, (serial_key, item) in enumerate(equipamentos_cache.items()):
         serial = str(item.get("serial") or serial_key)
         modelo = str(item.get("modelo") or "")
@@ -3075,20 +3448,49 @@ def _buscar_equipamentos_por_termo(q: str) -> List[Dict[str, Any]]:
         apelido = str(item.get("apelido") or "")
         cidade = str(item.get("retirada_cidade") or "")
         categoria = _categoria_equipamento(tipo, modelo)
-        categoria_label = next(
+        category_label = next(
             (entry["label"] for entry in _CATEGORIAS_EQUIPAMENTO if entry["value"] == categoria),
             "",
         )
-        serial_search = _normalizar_termo_busca(serial_key or serial)
-        modelo_search = _normalizar_termo_busca(modelo)
-        tipo_search = _normalizar_termo_busca(tipo)
-        apelido_search = _normalizar_termo_busca(apelido)
-        cidade_search = _normalizar_termo_busca(cidade)
-        categoria_search = _normalizar_termo_busca(categoria_label)
+        searchable_values: Tuple[str, str, str, str, str, str] = (
+            _normalizar_termo_busca(serial_key or serial),
+            _normalizar_termo_busca(modelo),
+            _normalizar_termo_busca(tipo),
+            _normalizar_termo_busca(apelido),
+            _normalizar_termo_busca(cidade),
+            _normalizar_termo_busca(category_label),
+        )
+        result = {
+            "serial": serial,
+            "modelo": modelo,
+            "tipo": tipo,
+            "categoria": categoria,
+            "apelido": apelido,
+            "retirada_cidade": cidade,
+            "invall_alias_status": item.get("invall_alias_status"),
+            "invall_alias_detail": item.get("invall_alias_detail"),
+        }
+        indexed.append((index, searchable_values, result))
+    _EQUIPMENT_SEARCH_INDEX = tuple(indexed)
+    _EQUIPMENT_SEARCH_INDEX_SOURCE = equipamentos_cache
 
-        if not any(term in valor for valor in (
-            serial_search, modelo_search, tipo_search, apelido_search, cidade_search, categoria_search
-        )):
+
+def _buscar_equipamentos_por_termo(q: str) -> List[Dict[str, Any]]:
+    """Busca por série, modelo, apelido, cidade ou categoria e prioriza série."""
+    term = _normalizar_termo_busca(q)
+    if not term:
+        return []
+
+    with STATE_LOCK:
+        if _EQUIPMENT_SEARCH_INDEX_SOURCE is not equipamentos_cache:
+            _refresh_equipment_search_index_locked()
+        search_index = _EQUIPMENT_SEARCH_INDEX
+
+    ranked_results: List[Tuple[int, int, Dict[str, Any]]] = []
+    for index, searchable_values, result in search_index:
+        serial_search, modelo_search, tipo_search, apelido_search, cidade_search, categoria_search = searchable_values
+
+        if not any(term in value for value in searchable_values):
             continue
 
         if term == serial_search:
@@ -3108,16 +3510,7 @@ def _buscar_equipamentos_por_termo(q: str) -> List[Dict[str, Any]]:
         else:
             rank = 7
 
-        ranked_results.append((rank, index, {
-            "serial": serial,
-            "modelo": modelo,
-            "tipo": tipo,
-            "categoria": categoria,
-            "apelido": apelido,
-            "retirada_cidade": cidade,
-            "invall_alias_status": item.get("invall_alias_status"),
-            "invall_alias_detail": item.get("invall_alias_detail"),
-        }))
+        ranked_results.append((rank, index, result))
 
     ranked_results.sort(key=lambda resultado: (resultado[0], resultado[1]))
     return [resultado[2] for resultado in ranked_results]
@@ -3143,7 +3536,7 @@ def buscar_seriais_expandida(
     all_results = _buscar_equipamentos_por_termo(q)
 
     def filter_options(key: str) -> List[str]:
-        options = {}
+        options: Dict[str, str] = {}
         for item in all_results:
             value = str(item.get(key) or "").strip()
             normalized = _normalizar_termo_busca(value)
@@ -3191,11 +3584,18 @@ def buscar_seriais_expandida(
 def get_stats():
     """Retorna métricas da base de dados."""
     export_counts = count_export_changes()
+    export_status = get_export_status()
+    with STATE_LOCK:
+        stats_snapshot = deepcopy(stats_cache)
+        unit_count = len(unidades_cache)
     return {
-        **stats_cache,
+        **stats_snapshot,
+        "exportacao_disponivel": export_status["available"],
+        "exportacao_motivo": export_status["reason"],
         "total_apelidos_modificados": export_counts["apelidos"],
         "total_id_clientes_modificados": export_counts["id_clientes"],
         "total_alteracoes_exportaveis": export_counts["total"],
+        "total_unidades": unit_count,
     }
 
 
@@ -3205,11 +3605,33 @@ def get_readiness_status():
     return get_startup_readiness()
 
 
+@app.get("/api/config/transferencia")
+def get_transfer_form_defaults():
+    """Return editable origin contact defaults configured for this installation."""
+    return {
+        "retirada_contato": TRANSFER_ORIGIN_CONTACT,
+        "retirada_email": TRANSFER_ORIGIN_EMAIL,
+        "retirada_telefone": TRANSFER_ORIGIN_PHONE,
+    }
+
+
 transfer_router, gerar_planilha = create_transfer_router(lambda: TEMPLATE_FILE)
 app.include_router(transfer_router)
 
-inventory_history_router, inventory_history_exports = create_inventory_history_router(sys.modules[__name__])
-globals().update(inventory_history_exports)
+inventory_history_router, _inventory_history_exports = create_inventory_history_router(sys.modules[__name__])
+_build_comparison_restore_context = _inventory_history_exports["_build_comparison_restore_context"]
+_comparison_event_has_restorable_backup = _inventory_history_exports["_comparison_event_has_restorable_backup"]
+_comparison_event_type = _inventory_history_exports["_comparison_event_type"]
+_comparison_restore_backup_paths = _inventory_history_exports["_comparison_restore_backup_paths"]
+_current_inventory_snapshot = _inventory_history_exports["_current_inventory_snapshot"]
+_sha256_file = _inventory_history_exports["_sha256_file"]
+_validated_comparison_backup_files = _inventory_history_exports["_validated_comparison_backup_files"]
+excluir_comparacao_historica = _inventory_history_exports["excluir_comparacao_historica"]
+get_comparacao_historica = _inventory_history_exports["get_comparacao_historica"]
+get_historico_comparacoes = _inventory_history_exports["get_historico_comparacoes"]
+resolver_divergencia_apelido_manual = _inventory_history_exports["resolver_divergencia_apelido_manual"]
+restaurar_comparacao_historica = _inventory_history_exports["restaurar_comparacao_historica"]
+visualizar_restauracao_comparacao = _inventory_history_exports["visualizar_restauracao_comparacao"]
 app.include_router(inventory_history_router)
 
 # Serve static files and frontend

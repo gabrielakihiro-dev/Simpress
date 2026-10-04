@@ -4,11 +4,12 @@ import io
 import re
 import unicodedata
 from pathlib import Path
-from typing import Any, Callable
+from typing import Any, Callable, Literal
 
 from fastapi import APIRouter, HTTPException
 from fastapi.responses import StreamingResponse
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, field_validator
+from app_config import TRANSFER_ORIGIN_CONTACT, TRANSFER_ORIGIN_EMAIL, TRANSFER_ORIGIN_PHONE
 
 from integrity import (
     FileBusyError,
@@ -22,42 +23,76 @@ from integrity import (
 
 
 class TransferenciaPayload(BaseModel):
-    serial: str = Field(..., description="Número de Série do Equipamento")
-    descricao_equipamento: str = Field("", description="Descrição e Acessórios do Equipamento")
-    razao_social: str = Field("SERVICO DE APOIO AS MICRO E PEQUENAS EMPRESAS DO PARANA - SEBRAE/PR")
-    contrato: Any = Field(16467, description="Número do Contrato")
+    serial: str = Field(..., min_length=1, max_length=128, description="Número de Série do Equipamento")
+    descricao_equipamento: str = Field("", max_length=2000, description="Descrição e Acessórios do Equipamento")
+    razao_social: str = Field("SERVICO DE APOIO AS MICRO E PEQUENAS EMPRESAS DO PARANA - SEBRAE/PR", max_length=300)
+    contrato: Literal[16467] = Field(16467, description="Número do Contrato")
 
     # Retirada (Origem)
-    retirada_cidade: str = Field("")
-    retirada_cnpj: str = Field("")
-    retirada_endereco: str = Field("")
-    retirada_horario: str = Field("09:00:00 às 18:00:00")
-    retirada_almoco: str = Field("12:00:00")
-    retirada_pausa_duracao: str = Field("1h12")
-    retirada_tipo_acesso: str = Field("Elevador / Rampa / Térreo")
-    retirada_acesso_obs: str = Field("")
-    retirada_contato: str = Field("Gabriel Akihiro Noda Souza (Simpress)")
-    retirada_email: str = Field("gansouza@simpress.com.br")
-    retirada_telefone: str = Field("(41) 98751-2389")
-    retirada_obs: str = Field("")
-    retirada_voltagem: str = Field("Bivolt")
+    retirada_cidade: str = Field("", max_length=160)
+    retirada_cnpj: str = Field("", max_length=24)
+    retirada_endereco: str = Field("", max_length=500)
+    retirada_horario: str = Field("09:00:00 às 18:00:00", max_length=120)
+    retirada_almoco: str = Field("12:00:00", max_length=64)
+    retirada_pausa_duracao: str = Field("1h12", max_length=64)
+    retirada_tipo_acesso: str = Field("Elevador / Rampa / Térreo", max_length=160)
+    retirada_acesso_obs: str = Field("", max_length=1000)
+    retirada_contato: str = Field(TRANSFER_ORIGIN_CONTACT, max_length=160)
+    retirada_email: str = Field(TRANSFER_ORIGIN_EMAIL, max_length=254)
+    retirada_telefone: str = Field(TRANSFER_ORIGIN_PHONE, max_length=64)
+    retirada_obs: str = Field("", max_length=2000)
+    retirada_voltagem: str = Field("Bivolt", max_length=64)
 
     # Entrega (Destino)
-    entrega_cidade: str = Field("")
-    entrega_cnpj: str = Field(...)
-    entrega_endereco: str = Field(...)
-    entrega_horario: str = Field("09:00:00 às 18:00:00")
-    entrega_almoco: str = Field("12:00:00")
+    entrega_cidade: str = Field("", max_length=160)
+    entrega_cnpj: str = Field(..., min_length=1, max_length=24)
+    entrega_endereco: str = Field(..., min_length=1, max_length=500)
+    entrega_horario: str = Field("09:00:00 às 18:00:00", max_length=120)
+    entrega_almoco: str = Field("12:00:00", max_length=64)
     # Keep omission distinct from an explicitly supplied one-hour break. The
     # route validates this field when a break duration is required.
-    entrega_pausa_duracao: str = Field("")
-    entrega_tipo_acesso: str = Field("Elevador / Rampa / Térreo")
-    entrega_acesso_obs: str = Field("")
-    entrega_contato: str = Field(..., description="Nome do Destinatário")
-    entrega_email: str = Field("", description="E-mail do Destinatário")
-    entrega_telefone: str = Field("", description="Telefone do Destinatário")
-    entrega_obs: str = Field("", description="Observações do Chamado")
-    entrega_voltagem: str = Field("Bivolt")
+    entrega_pausa_duracao: str = Field("", max_length=64)
+    entrega_tipo_acesso: str = Field("Elevador / Rampa / Térreo", max_length=160)
+    entrega_acesso_obs: str = Field("", max_length=1000)
+    entrega_contato: str = Field(..., min_length=1, max_length=160, description="Nome do Destinatário")
+    entrega_email: str = Field("", max_length=254, description="E-mail do Destinatário")
+    entrega_telefone: str = Field("", max_length=64, description="Telefone do Destinatário")
+    entrega_obs: str = Field("", max_length=2000, description="Observações do Chamado")
+    entrega_voltagem: str = Field("Bivolt", max_length=64)
+
+    @field_validator("retirada_cnpj", "entrega_cnpj")
+    @classmethod
+    def validate_cnpj(cls, value: str) -> str:
+        digits = re.sub(r"\D", "", value)
+        if value.strip() and len(digits) != 14:
+            raise ValueError("CNPJ deve conter exatamente 14 dígitos.")
+        return value.strip()
+
+    @field_validator("retirada_email", "entrega_email")
+    @classmethod
+    def validate_email(cls, value: str) -> str:
+        value = value.strip()
+        if value and not re.fullmatch(r"[^@\s]+@[^@\s]+\.[^@\s]+", value):
+            raise ValueError("Informe um endereço de e-mail válido.")
+        return value
+
+    @field_validator("retirada_telefone", "entrega_telefone")
+    @classmethod
+    def validate_phone(cls, value: str) -> str:
+        value = value.strip()
+        if not value:
+            return value
+        main_part = re.sub(r"\s*(?:ramal|ram\.?|ext\.?|x)\s*[:.]?\s*\d+\s*$", "", value, flags=re.IGNORECASE)
+        digits = re.sub(r"\D", "", main_part)
+        if main_part.lstrip().startswith("+") and digits.startswith("55"):
+            digits = digits[2:]
+        elif digits.startswith("0055") and len(digits) in (14, 15):
+            digits = digits[4:]
+        elif digits.startswith("55") and len(digits) in (12, 13):
+            digits = digits[2:]
+        if len(digits) not in (10, 11):
+            raise ValueError("Telefone deve conter DDD e 8 ou 9 dígitos, com ramal opcional.")
+        return value
 
 
 def formatar_telefone_brasileiro(value: Any) -> str:
@@ -108,7 +143,18 @@ def formatar_telefone_brasileiro(value: Any) -> str:
 
 
 def _gerar_planilha_transferencia(payload: TransferenciaPayload, template_file: Path):
-    campos_obrigatorios = (
+    if not payload.serial.strip():
+        raise HTTPException(
+            status_code=422,
+            detail='Preencha o campo obrigatório "Número de série do equipamento" para gerar a planilha oficial.',
+        )
+    if not re.sub(r"[^A-Za-z0-9]", "", payload.serial):
+        raise HTTPException(
+            status_code=422,
+            detail="Número de série do equipamento precisa conter letras ou números.",
+        )
+
+    campos_obrigatorios: tuple[tuple[str, str], ...] = (
         ("serial", "Número de série do equipamento"),
         ("retirada_cnpj", "CNPJ da unidade de retirada"),
         ("retirada_endereco", "Endereço da unidade de retirada"),

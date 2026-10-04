@@ -9,8 +9,10 @@ import time
 import unittest
 import warnings
 import zipfile
+from datetime import datetime, timezone
 from contextlib import ExitStack
 from pathlib import Path
+from urllib.parse import unquote
 from unittest.mock import patch
 
 import openpyxl
@@ -125,7 +127,7 @@ def make_transfer_payload(**overrides):
     values = {
         "serial": "SERIE-FICTICIA",
         "descricao_equipamento": "EQUIPAMENTO FICTICIO",
-        "contrato": 12345,
+        "contrato": 16467,
         "retirada_cnpj": "00.000.000/0000-00",
         "retirada_endereco": "ORIGEM FICTICIA",
         "retirada_contato": "REMETENTE FICTICIO",
@@ -217,7 +219,6 @@ class WorkflowIntegrityTests(unittest.TestCase):
         self.input_dir.mkdir()
         self.details = self.input_dir / "EquipamentosDetalhes_atual.xlsx"
         self.endpoint = self.input_dir / "InvAllComputersSummary_atual.xlsx"
-        self.baseline = self.input_dir / ".EquipamentosDetalhes_atual.export-baseline.xlsx"
         self.model = self.input_dir / "modelo-ficticio.xlsx"
         self.backups = self.input_dir / "_backups"
         self.overrides = self.root / "apelidos_modificados.json"
@@ -229,7 +230,6 @@ class WorkflowIntegrityTests(unittest.TestCase):
         self.stack.enter_context(patch.object(main, "INPUT_DIR", self.input_dir))
         self.stack.enter_context(patch.object(main, "DETAILS_UPLOAD_FILE", self.details))
         self.stack.enter_context(patch.object(main, "ENDPOINT_UPLOAD_FILE", self.endpoint))
-        self.stack.enter_context(patch.object(main, "DETAILS_EXPORT_BASELINE_FILE", self.baseline))
         self.stack.enter_context(patch.object(main, "EXPORT_MODEL_FILE", self.model))
         self.stack.enter_context(patch.object(main, "UPLOAD_BACKUPS_DIR", self.backups))
         self.stack.enter_context(patch.object(main, "MODIFIED_APELIDOS_FILE", self.overrides))
@@ -399,13 +399,7 @@ class WorkflowIntegrityTests(unittest.TestCase):
         self.assertTrue(main.load_database())
 
         start_together = threading.Barrier(3)
-        legacy_saves_together = threading.Barrier(2)
         results = []
-        original_save = main.save_custom_units
-
-        def force_legacy_writers_to_share_one_snapshot(units):
-            legacy_saves_together.wait(timeout=5)
-            original_save(units)
 
         def save_unit(city, cep):
             start_together.wait(timeout=5)
@@ -415,21 +409,20 @@ class WorkflowIntegrityTests(unittest.TestCase):
                     endereco="Rua Fictícia, 10",
                     uf="PR",
                     cep=cep,
-                    cnpj=f"{city[-1]}0.000.000/0000-00",
+                    cnpj="10.000.000/0000-00",
                 )))
             except Exception as error:
                 results.append(error)
 
-        with patch.object(main, "save_custom_units", side_effect=force_legacy_writers_to_share_one_snapshot):
-            workers = [
-                threading.Thread(target=save_unit, args=("Unidade Concorrente A", "80000-001")),
-                threading.Thread(target=save_unit, args=("Unidade Concorrente B", "80000-002")),
-            ]
-            for worker in workers:
-                worker.start()
-            start_together.wait(timeout=5)
-            for worker in workers:
-                worker.join(timeout=10)
+        workers = [
+            threading.Thread(target=save_unit, args=("Unidade Concorrente A", "80000-001")),
+            threading.Thread(target=save_unit, args=("Unidade Concorrente B", "80000-002")),
+        ]
+        for worker in workers:
+            worker.start()
+        start_together.wait(timeout=5)
+        for worker in workers:
+            worker.join(timeout=10)
 
         self.assertTrue(all(not worker.is_alive() for worker in workers))
         self.assertEqual(len(results), 2)
@@ -465,12 +458,65 @@ class WorkflowIntegrityTests(unittest.TestCase):
                     endereco="Rua Fictícia, 11",
                     uf="PR",
                     cep="80000-003",
-                    cnpj="110.000.000/0000-00",
+                    cnpj="11.000.000/0000-00",
                 ))
 
         self.assertEqual(raised.exception.status_code, 500)
         self.assertEqual(self.custom_units.read_bytes(), catalog_before)
         self.assertEqual(main.unidades_cache, units_before)
+
+    def test_unit_save_rolls_back_when_resulting_inventory_cannot_be_reloaded(self):
+        make_details(self.details, [
+            ("SN-1", "HOST-1", "Modelo A", "Maringá", "Notebook", "87000000"),
+        ])
+        make_endpoint(self.endpoint, [("SN-1", "HOST-1")])
+        make_model(self.model)
+        self.assertTrue(main.load_database())
+        self.custom_units.write_text("[]", encoding="utf-8")
+        units_before = copy.deepcopy(main.unidades_cache)
+        payload = main.UnidadePayload(
+            cidade="Unidade Não Persistida",
+            endereco="Rua Fictícia, 12",
+            uf="PR",
+            cep="80000-004",
+            cnpj="12.000.000/0000-00",
+        )
+
+        with patch.object(main, "load_database", return_value=False):
+            with self.assertRaises(main.HTTPException) as raised:
+                main.salvar_unidade(payload)
+
+        self.assertEqual(raised.exception.status_code, 500)
+        self.assertEqual(self.custom_units.read_text(encoding="utf-8"), "[]")
+        self.assertEqual(main.unidades_cache, units_before)
+
+    def test_repeating_unit_creation_is_idempotent(self):
+        make_details(self.details, [
+            ("SN-1", "HOST-1", "Modelo A", "Maringá", "Notebook", "87000000"),
+        ])
+        make_endpoint(self.endpoint, [("SN-1", "HOST-1")])
+        make_model(self.model)
+        self.assertTrue(main.load_database())
+        self.custom_units.write_text("[]", encoding="utf-8")
+        payload = main.UnidadePayload(
+            cidade="Unidade Repetida",
+            endereco="Rua Fictícia, 13",
+            uf="PR",
+            cep="80000-005",
+            cnpj="13.000.000/0000-00",
+        )
+
+        first = main.salvar_unidade(payload)
+        second = main.salvar_unidade(payload)
+
+        saved = json.loads(self.custom_units.read_text(encoding="utf-8"))
+        matches = [unit for unit in saved if unit["cidade"] == "Unidade Repetida"]
+        self.assertEqual(len(matches), 1)
+        returned_ids = [
+            next(unit["id"] for unit in result["unidades"] if unit["cidade"] == "Unidade Repetida")
+            for result in (first, second)
+        ]
+        self.assertEqual(returned_ids[0], returned_ids[1])
 
     def test_detail_upload_headers_and_active_reader_share_normalization(self):
         variants = ("NumeroSerie", "numero_serie", "NÚMERO-SERIE", "Número de Série")
@@ -488,32 +534,54 @@ class WorkflowIntegrityTests(unittest.TestCase):
                 self.assertEqual(uploaded["populated_rows"], 1)
                 self.assertEqual(main.find_details_sheet(path), "EquipamentosDetalhes")
 
-    def test_uploaded_details_loads_text_serial_without_coercing_other_columns(self):
-        headers = ["nÚmero_de_Série", "hOsT-name", "mÓde-lo", "Cidade", "Tipo", "CEP", "IdCliente"]
+    def test_uploaded_details_preserves_text_identifiers_and_na_values(self):
+        headers = [
+            "nÚmero_de_Série", "hOsT-name", "mÓde-lo", "Cidade", "Tipo", "CEP",
+            "IdCliente", "CNPJInstalacao",
+        ]
         make_details(
             self.details,
             [
-                ("001234", "HOST-TEXTO", "Modelo A", "Maringá", "Notebook", "87000000", 101),
-                (None, "HOST-SEM-SERIE", "Modelo B", "Londrina", "Notebook", "86000000", 102),
-                (1234, "HOST-NUMERICO", "Modelo C", "Ponta Grossa", "Notebook", "84000000", 103),
+                ("001234", "HOST-TEXTO", "Modelo A", "Maringá", "Notebook", "87000000", "101", "00123456000199"),
+                (None, "HOST-SEM-SERIE", "Modelo B", "Londrina", "Notebook", "86000000", "102", "00123456000199"),
+                (1234, "HOST-NUMERICO", "Modelo C", "Ponta Grossa", "Notebook", "84000000", "103", "00123456000199"),
+                ("NA", "HOST-NA", "Modelo D", "Cascavel", "Notebook", "85800000", "NA", "00987654000188"),
             ],
             headers=headers,
         )
         make_endpoint(self.endpoint, [("OUTRA-SERIE", "HOST-OUTRO")])
 
         uploaded = main.validate_uploaded_workbook(self.details.read_bytes(), "detalhes")
-        self.assertEqual(uploaded["populated_rows"], 2)
+        self.assertEqual(uploaded["populated_rows"], 3)
         dataframe = main._read_details_sheet_dataframe(self.details, "EquipamentosDetalhes")
         self.assertEqual(dataframe.iloc[0][headers[0]], "001234")
         self.assertEqual(dataframe.iloc[2][headers[0]], 1234)
-        self.assertTrue(main.pd.api.types.is_integer_dtype(dataframe["IdCliente"].dtype))
+        self.assertEqual(dataframe.iloc[3][headers[0]], "NA")
+        self.assertEqual(dataframe.iloc[3]["IdCliente"], "NA")
+        self.assertEqual(dataframe.iloc[0]["CNPJInstalacao"], "00123456000199")
+        self.assertEqual(dataframe.iloc[3]["CNPJInstalacao"], "00987654000188")
 
         self.assertTrue(main.load_database())
         self.assertIn("001234", main.equipamentos_cache)
         self.assertIn("1234", main.equipamentos_cache)
+        self.assertIn("NA", main.equipamentos_cache)
         self.assertNotIn("HOST-SEM-SERIE", main.equipamentos_cache)
         self.assertEqual(main.equipamentos_cache["001234"]["apelido"], "HOST-TEXTO")
         self.assertEqual(main.equipamentos_cache["1234"]["apelido"], "HOST-NUMERICO")
+        self.assertEqual(main.equipamentos_cache["NA"]["retirada_cnpj"], "00987654000188")
+
+    def test_upload_rejects_duplicate_normalized_or_semantic_headers(self):
+        make_details(
+            self.details,
+            [("SN-1", "ALIAS-A", "ALIAS-B", "Modelo", "Maringá", "Notebook")],
+            headers=["NumeroSerie", "Apelido", "apelido", "Modelo", "Cidade", "Tipo"],
+        )
+
+        with self.assertRaises(main.HTTPException) as raised:
+            main.validate_uploaded_workbook(self.details.read_bytes(), "detalhes")
+
+        self.assertEqual(raised.exception.status_code, 400)
+        self.assertIn("cabeçalhos", raised.exception.detail.lower())
 
     def test_equipment_edit_changes_only_loaded_source_and_keeps_other_active_records(self):
         archived = self.input_dir / "EquipamentosDetalhes_arquivo_antigo.xlsx"
@@ -552,6 +620,86 @@ class WorkflowIntegrityTests(unittest.TestCase):
         self.assertIn("SN-MANTER", main.equipamentos_cache)
         self.assertEqual(main.equipamentos_cache["SN-EDITAR"]["modelo"], "Modelo atualizado")
         self.assertEqual(main.equipamentos_cache["SN-MANTER"]["modelo"], "Modelo manter")
+
+    def test_explicit_null_clears_the_same_field_in_excel_and_cache(self):
+        make_details(self.details, [
+            ("SN-CLEAR", "ALIAS-CLEAR", "Modelo original", "Maringá", "Notebook", "87000000"),
+        ])
+        make_endpoint(self.endpoint, [("SN-OUTRO", "HOST-OUTRO")])
+        make_model(self.model)
+        self.assertTrue(main.load_database())
+        selected = main.get_equipamento("SN-CLEAR")
+
+        main.salvar_equipamento(main.EquipamentoUpdatePayload(
+            serial="SN-CLEAR",
+            revisao=selected["revisao"],
+            modelo=None,
+        ))
+
+        workbook = openpyxl.load_workbook(self.details, data_only=False)
+        self.assertIsNone(workbook["EquipamentosDetalhes"]["C2"].value)
+        workbook.close()
+        self.assertEqual(main.get_equipamento("SN-CLEAR")["modelo"], "")
+
+    def test_equipment_edit_preserves_the_supported_16467_contract_metadata(self):
+        headers = [
+            "NumeroSerie", "Apelido", "Modelo", "Cidade", "Tipo", "CEP",
+            "CodigoContrato", "RazaoSocial",
+        ]
+        make_details(
+            self.details,
+            [("SN-16467", "HOST-16467", "Modelo original", "Maringá", "Notebook", "87000000", 16467, "RAZAO SOCIAL FICTICIA")],
+            headers=headers,
+        )
+        make_endpoint(self.endpoint, [("SN-16467", "HOST-16467")])
+        make_model(self.model)
+        self.assertTrue(main.load_database())
+        selected = main.get_equipamento("SN-16467")
+        self.assertEqual(selected["contrato"], "16467")
+        self.assertEqual(selected["razao_social"], "RAZAO SOCIAL FICTICIA")
+
+        main.salvar_equipamento(main.EquipamentoUpdatePayload(
+            serial="SN-16467",
+            revisao=selected["revisao"],
+            modelo="Modelo atualizado",
+        ))
+        updated = main.get_equipamento("SN-16467")
+        self.assertEqual(updated["contrato"], "16467")
+        self.assertEqual(updated["razao_social"], "RAZAO SOCIAL FICTICIA")
+
+        previous_cache = copy.deepcopy(main.equipamentos_cache)
+        make_details(
+            self.details,
+            [("SN-OUTRO-CONTRATO", "HOST-OUTRO", "Modelo", "Maringá", "Notebook", "87000000", 777, "RAZAO OUTRA")],
+            headers=headers,
+        )
+        self.assertFalse(main.load_database())
+        self.assertEqual(main.equipamentos_cache, previous_cache)
+
+    def test_equipment_serial_that_normalizes_to_empty_is_rejected(self):
+        make_details(self.details, [("SN-BASE", "HOST-BASE", "Modelo", "Maringá", "Notebook", "87000000")])
+        make_endpoint(self.endpoint, [("SN-BASE", "HOST-BASE")])
+        make_model(self.model)
+        self.assertTrue(main.load_database())
+
+        with self.assertRaises(ValueError):
+            main.EquipamentoUpdatePayload(serial="---", novo=True)
+        self.assertNotIn("---", main.equipamentos_cache)
+
+    def test_unit_payload_rejects_invalid_cep_uf_and_cnpj(self):
+        base = {"cidade": "Maringá", "endereco": "Rua Fictícia", "cnpj": "11.000.000/0000-00"}
+        for invalid in (
+            {"cep": "abc"},
+            {"cep": "123"},
+            {"uf": "XX"},
+            {"cnpj": "123"},
+        ):
+            with self.subTest(invalid=invalid), self.assertRaises(ValueError):
+                main.UnidadePayload(**{**base, **invalid})
+
+        formatted = main.UnidadePayload(**base, cep="87000-000", uf="pr")
+        self.assertEqual(formatted.cep, "87000-000")
+        self.assertEqual(formatted.uf, "PR")
 
     def test_equipment_edit_refuses_duplicate_serial_without_writing(self):
         make_details(self.details, [
@@ -875,15 +1023,60 @@ class WorkflowIntegrityTests(unittest.TestCase):
                 output_workbook.close()
                 self.assertEqual(self.model.read_bytes(), source_before)
 
-    def test_serial_header_aliases_match_load_count_and_export(self):
-        detail_headers = [
-            "Apelido", "Modelo", "Cidade", "Tipo", "CEP", "IdCliente", "Observacao"
-        ]
+    def test_partial_export_reports_review_reasons_and_sample_serials(self):
+        details_headers = ["NumeroSerie", "Apelido", "Modelo", "Cidade", "Tipo", "CEP", "IdCliente"]
+        make_details(self.details, [
+            ("S1", "LOCAL-1", "Modelo 1", "Maringá", "Notebook", "87000000", "ID-1"),
+            ("S2", "LOCAL-2", "Modelo 2", "Curitiba", "Notebook", "80000000", "ID-2"),
+        ], headers=details_headers)
+        make_endpoint(self.endpoint, [("S1", "HOST-1")])
+        workbook = openpyxl.Workbook()
+        worksheet = workbook.active
+        worksheet.title = "Parque"
+        worksheet.append(["NumeroSerie", "Apelido", "IdCliente"])
+        worksheet.append(["S1", "OLD-1", "OLD-ID-1"])
+        worksheet.append(["S1", "OLD-1-DUP", "OLD-ID-DUP"])
+        worksheet.append(["S2", "=CONCAT(\"HOST\",\"2\")", "OLD-ID-2"])
+        workbook.save(self.model)
+        workbook.close()
+
+        response = main.exportar_equipamentos()
+        asyncio.run(_collect_stream(response))
+
+        self.assertEqual(response.headers["x-total-alterados"], "0")
+        self.assertEqual(response.headers["x-total-idcliente-alterados"], "1")
+        self.assertEqual(response.headers["x-total-conferencia"], "3")
+        summary = json.loads(unquote(response.headers["x-conferencia-resumo"]))
+        self.assertEqual(summary, [
+            {
+                "motivo": "Registros da InvAll que exigem conferência",
+                "total": 1,
+                "series": ["S2"],
+            },
+            {
+                "motivo": "Séries duplicadas no modelo de exportação",
+                "total": 1,
+                "series": ["S1"],
+            },
+            {
+                "motivo": "Linhas protegidas por fórmulas",
+                "total": 1,
+                "series": ["S2"],
+            },
+        ])
+
+    def test_serial_and_alias_header_variants_match_load_count_and_export(self):
         model_headers = ["NumeroSerie", "Apelido", "IdCliente", "Observacao"]
 
-        for index, serial_header in enumerate(("NÚMERO-SERIE", "Número de Série")):
-            with self.subTest(serial_header=serial_header):
-                headers = [serial_header, *detail_headers]
+        for index, (serial_header, alias_header) in enumerate((
+            ("NÚMERO-SERIE", "Nome do Computador"),
+            ("Número de Série", "ComputerName"),
+        )):
+            with self.subTest(serial_header=serial_header, alias_header=alias_header):
+                headers = [
+                    serial_header, alias_header, "Modelo", "Cidade", "Tipo", "CEP",
+                    "IdCliente", "Observacao",
+                ]
                 make_details(
                     self.details,
                     [[
@@ -939,7 +1132,7 @@ class WorkflowIntegrityTests(unittest.TestCase):
         payload = main.TransferenciaPayload(
             serial="SERIE-FICTICIA",
             descricao_equipamento="EQUIPAMENTO FICTICIO",
-            contrato=12345,
+            contrato=16467,
             retirada_cnpj="00.000.000/0000-00",
             retirada_endereco="ORIGEM FICTICIA",
             retirada_contato="REMETENTE FICTICIO",
@@ -1010,6 +1203,7 @@ class WorkflowIntegrityTests(unittest.TestCase):
         template = make_transfer_template(self.input_dir / "modelo-validacao-ficticio.xlsx")
         invalid_fields = (
             ("serial", " ", "Número de série do equipamento"),
+            ("serial", "---", "Número de série do equipamento precisa conter letras ou números"),
             ("retirada_cnpj", "  ", "CNPJ da unidade de retirada"),
             ("retirada_endereco", "", "Endereço da unidade de retirada"),
             ("entrega_cnpj", " ", "CNPJ da unidade de entrega"),
@@ -1024,6 +1218,18 @@ class WorkflowIntegrityTests(unittest.TestCase):
                     self.assertEqual(raised.exception.status_code, 422)
                     self.assertIn(label, raised.exception.detail)
 
+    def test_transfer_payload_restricts_contract_and_validates_contacts(self):
+        with self.assertRaises(ValueError):
+            make_transfer_payload(contrato=777)
+        for invalid in (
+            {"entrega_email": "sem-email"},
+            {"retirada_telefone": "123"},
+            {"entrega_cnpj": "123"},
+            {"descricao_equipamento": "x" * 32768},
+        ):
+            with self.subTest(invalid=invalid), self.assertRaises(ValueError):
+                make_transfer_payload(**invalid)
+
     def test_transfer_phone_formatting_handles_fixed_mobile_and_country_prefixes(self):
         for original, expected in PHONE_FORMAT_CASES:
             with self.subTest(original=original):
@@ -1035,6 +1241,11 @@ class WorkflowIntegrityTests(unittest.TestCase):
         worksheet = workbook.active
         worksheet.title = "EquipamentosDetalhes"
         worksheet.append(["NumeroSerie", "Apelido", "Modelo", "Cidade", "Tipo", "CEP"])
+        workbook.save(path)
+        workbook.close()
+        add_structured_table(path, reference="A1:F1")
+        workbook = openpyxl.load_workbook(path)
+        workbook["EquipamentosDetalhes"].auto_filter.ref = "A1:F1"
         workbook.save(path)
         workbook.close()
         payload = main.EquipamentoUpdatePayload(
@@ -1054,6 +1265,8 @@ class WorkflowIntegrityTests(unittest.TestCase):
         self.assertEqual(updated_sheet.calculate_dimension(), "A1:F2")
         self.assertEqual(updated_sheet["A2"].value, "SERIE-NOVA-FICTICIA")
         self.assertEqual(updated_sheet["B2"].value, "APELIDO FICTICIO")
+        self.assertEqual(updated_sheet.tables["EquipmentInventory"].ref, "A1:F2")
+        self.assertEqual(updated_sheet.auto_filter.ref, "A1:F2")
         self.assertIsNone(updated_sheet["D2"].value)
         self.assertIsNone(updated_sheet["F2"].value)
         updated_workbook.close()
@@ -1103,9 +1316,43 @@ class WorkflowIntegrityTests(unittest.TestCase):
             for item in comparison_after[-1]["comparacao"]["apelidos_sem_atualizacao"]
         ))
 
+    def test_inventory_update_migrates_a_recognized_alternate_details_filename(self):
+        alternate = self.input_dir / "EquipamentosDetalhes-exportado.xlsx"
+        make_details(alternate, [
+            ("SN-ALT", "HOST-ANTIGO", "Modelo antigo", "Maringá", "Notebook", "87000000"),
+        ])
+        self.comparison_history.write_text("[]", encoding="utf-8")
+        self.manual_history.write_text("[]", encoding="utf-8")
+        comparison_before = json.loads(self.comparison_history.read_text(encoding="utf-8"))
+        manual_before = json.loads(self.manual_history.read_text(encoding="utf-8"))
+        alternate_before = alternate.read_bytes()
+        make_endpoint(self.endpoint, [("SN-ALT", "HOST-ANTIGO")])
+        make_model(self.model)
+        self.assertTrue(main.load_database())
+        self.assertEqual(main.get_primary_equipment_file(), alternate)
+
+        result = asyncio.run(main.atualizar_planilhas(
+            UploadFile(filename="InvAll_nova.xlsx", file=io.BytesIO(_endpoint_bytes([("SN-ALT", "HOST-NOVO")]))),
+            UploadFile(filename="Detalhes_novos.xlsx", file=io.BytesIO(_details_bytes([
+                ("SN-ALT", "HOST-NOVO", "Modelo novo", "Londrina", "Notebook", "86000000"),
+            ]))),
+        ))
+
+        self.assertTrue(result["sucesso"])
+        self.assertEqual(alternate.read_bytes(), alternate_before)
+        self.assertTrue(self.details.is_file())
+        self.assertEqual(main.get_primary_equipment_file(), self.details)
+        self.assertEqual(main.get_equipamento("SN-ALT")["modelo"], "Modelo novo")
+        history = json.loads(self.comparison_history.read_text(encoding="utf-8"))
+        backup_dir = self.input_dir / history[-1]["comparacao"]["backup_diretorio"]
+        restored_name = backup_dir / "detalhes" / self.details.name
+        self.assertEqual(restored_name.read_bytes(), alternate_before)
+
         repeated = asyncio.run(main.atualizar_planilhas(
-            UploadFile(filename="InvAll_repetida.xlsx", file=io.BytesIO(endpoint_bytes)),
-            UploadFile(filename="Detalhes_repetidos.xlsx", file=io.BytesIO(details_bytes)),
+            UploadFile(filename="InvAll_repetida.xlsx", file=io.BytesIO(_endpoint_bytes([("SN-ALT", "HOST-NOVO")]))),
+            UploadFile(filename="Detalhes_repetidos.xlsx", file=io.BytesIO(_details_bytes([
+                ("SN-ALT", "HOST-NOVO", "Modelo novo", "Londrina", "Notebook", "86000000"),
+            ]))),
         ))
         self.assertTrue(repeated["sucesso"])
         comparison_after_repeat = json.loads(self.comparison_history.read_text(encoding="utf-8"))
@@ -1678,6 +1925,102 @@ class WorkflowIntegrityTests(unittest.TestCase):
         self.assertEqual(self.manual_history.read_bytes(), history_before)
         self.assertEqual(main.equipamentos_cache["SN-ENDERECO"], equipment_before)
 
+    def test_90_day_retention_preserves_recent_invalid_and_pinned_history(self):
+        now = datetime(2026, 10, 4, 12, tzinfo=timezone.utc)
+        old_timestamp = "2026-01-01T12:00:00+00:00"
+        recent_timestamp = "2026-10-01T12:00:00+00:00"
+        self.manual_history.write_text(json.dumps([
+            {"id": "alias-old", "horario": old_timestamp},
+            {"id": "alias-new", "horario": recent_timestamp},
+            {"id": "alias-unknown-date", "horario": "invalid"},
+        ]), encoding="utf-8")
+        self.backups.mkdir()
+        expired_backup = self.backups / "expired"
+        recent_backup = self.backups / "recent"
+        orphan_backup = self.backups / "orphan"
+        for folder in (expired_backup, recent_backup, orphan_backup):
+            folder.mkdir()
+            (folder / "marker.txt").write_text(folder.name, encoding="utf-8")
+        os.utime(orphan_backup, (946684800, 946684800))
+        self.comparison_history.write_text(json.dumps([
+            {"id": "comparison-old", "horario": old_timestamp, "comparacao": {"backup_diretorio": "_backups/expired"}},
+            {"id": "comparison-new", "horario": recent_timestamp, "comparacao": {"backup_diretorio": "_backups/recent"}},
+            {"id": main.PINNED_COMPARISON_EVENT_ID, "horario": main.PINNED_COMPARISON_EVENT_TIME, "comparacao": {}},
+            {"id": "comparison-unknown-date", "horario": "invalid", "comparacao": {}},
+        ]), encoding="utf-8")
+
+        result = main.prune_expired_histories(now=now)
+
+        aliases = json.loads(self.manual_history.read_text(encoding="utf-8"))
+        comparisons = json.loads(self.comparison_history.read_text(encoding="utf-8"))
+        self.assertEqual(result, {
+            "apelidos_removidos": 1,
+            "comparacoes_removidas": 1,
+            "backups_removidos": 2,
+        })
+        self.assertEqual({item["id"] for item in aliases}, {"alias-new", "alias-unknown-date"})
+        self.assertEqual(
+            {item["id"] for item in comparisons},
+            {"comparison-new", main.PINNED_COMPARISON_EVENT_ID, "comparison-unknown-date"},
+        )
+        self.assertFalse(expired_backup.exists())
+        self.assertTrue(recent_backup.exists())
+        self.assertFalse(orphan_backup.exists())
+
+    def test_corrupt_local_json_is_reported_and_never_replaced_as_empty(self):
+        self.overrides.write_text("{malformed", encoding="utf-8")
+        original_overrides = self.overrides.read_bytes()
+        with self.assertRaises(main.LocalJsonCorruptionError):
+            main.load_modified_apelidos()
+        with self.assertRaises(main.FileTransactionError):
+            main.save_modified_apelido_record("SN-1", "HOST-1")
+        self.assertEqual(self.overrides.read_bytes(), original_overrides)
+
+        self.custom_units.write_text('{"wrong":"shape"}', encoding="utf-8")
+        original_units = self.custom_units.read_bytes()
+        with self.assertRaises(main.LocalJsonCorruptionError):
+            main.load_custom_units()
+        self.assertEqual(self.custom_units.read_bytes(), original_units)
+
+        self.manual_history.write_text("[null]", encoding="utf-8")
+        original_history = self.manual_history.read_bytes()
+        with self.assertRaises(main.HTTPException) as raised:
+            main.load_alias_history()
+        self.assertEqual(raised.exception.status_code, 503)
+        self.assertEqual(self.manual_history.read_bytes(), original_history)
+
+    def test_search_reuses_pre_normalized_inventory_values(self):
+        main.equipamentos_cache = {
+            "SN-1": {"serial": "SN-1", "modelo": "Notebook One", "tipo": "Notebook", "apelido": "HOST-ONE"},
+            "SN-2": {"serial": "SN-2", "modelo": "Monitor Two", "tipo": "Monitor", "apelido": "HOST-TWO"},
+        }
+        with main.STATE_LOCK:
+            main._refresh_equipment_search_index_locked()
+        with patch.object(main, "_normalizar_termo_busca", wraps=main._normalizar_termo_busca) as normalize:
+            result = main._buscar_equipamentos_por_termo("HOST-ONE")
+
+        self.assertEqual([item["serial"] for item in result], ["SN-1"])
+        self.assertEqual(normalize.call_count, 1)
+
+    def test_export_statistics_keep_unavailable_distinct_from_zero_changes(self):
+        with (
+            patch.object(main, "stats_cache", {"total_equipamentos": 12}),
+            patch.object(main, "count_export_changes", return_value={"apelidos": 0, "id_clientes": 0, "total": 0}),
+            patch.object(main, "get_export_status", return_value={"available": False, "reason": "modelo ausente"}),
+        ):
+            unavailable = main.get_stats()
+        self.assertFalse(unavailable["exportacao_disponivel"])
+        self.assertEqual(unavailable["exportacao_motivo"], "modelo ausente")
+        self.assertEqual(unavailable["total_alteracoes_exportaveis"], 0)
+
+        with (
+            patch.object(main, "stats_cache", {"total_equipamentos": 12}),
+            patch.object(main, "count_export_changes", return_value={"apelidos": 0, "id_clientes": 0, "total": 0}),
+            patch.object(main, "get_export_status", return_value={"available": True, "reason": "OK"}),
+        ):
+            available = main.get_stats()
+        self.assertTrue(available["exportacao_disponivel"])
+        self.assertEqual(available["total_alteracoes_exportaveis"], 0)
 
 async def _collect_stream(response):
     return b"".join([chunk async for chunk in response.body_iterator])

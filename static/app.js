@@ -1,5 +1,6 @@
     // State
     let currentEquipamento = null;
+    let equipamentoSelectionRevision = 0;
     let retiradaCidadeSelecionada = "";
     let unidadesList = [];
     let debounceTimer = null;
@@ -9,8 +10,13 @@
     const searchButtonInitialHtml = document.getElementById("btn-buscar-serial")?.innerHTML || "";
     const modalReturnFocus = new Map();
 
+    function definirEquipamentoAtual(equipment) {
+      currentEquipamento = equipment;
+      equipamentoSelectionRevision += 1;
+    }
+
     function limparSelecaoEquipamento() {
-      currentEquipamento = null;
+      definirEquipamentoAtual(null);
       retiradaCidadeSelecionada = "";
       document.getElementById("card-equipamento")?.classList.add("hidden");
       document.getElementById("retirada-cnpj").value = "";
@@ -74,7 +80,7 @@
           options,
         ),
         applyEquipment: equipment => {
-          currentEquipamento = equipment;
+          definirEquipamentoAtual(equipment);
           exibirEquipamento(equipment);
         },
       });
@@ -270,9 +276,9 @@
         horarioId: "retirada-horario",
         almocoId: "retirada-almoco",
         pausaDuracaoId: "retirada-pausa-duracao",
-        contatoPadrao: "Gabriel Akihiro Noda Souza (Simpress)",
-        emailPadrao: "gansouza@simpress.com.br",
-        telefonePadrao: "(41) 98751-2389",
+        contatoPadrao: "",
+        emailPadrao: "",
+        telefonePadrao: "",
         horarioPadrao: "09:00:00 às 18:00:00",
         almocoPadrao: "12:00:00",
         pausaDuracaoPadrao: "1h12"
@@ -293,6 +299,28 @@
         pausaDuracaoPadrao: "1h"
       }
     };
+
+    async function carregarConfiguracaoTransferencia() {
+      try {
+        const response = await fetch("/api/config/transferencia", { cache: "no-store" });
+        if (!response.ok) throw new Error("Falha ao carregar os contatos padrão da instalação.");
+        const config = await response.json();
+        const origin = CAMPOS_CONTATO_REGIONAL.retirada;
+        const fields = [
+          ["contatoPadrao", "contatoId", config.retirada_contato],
+          ["emailPadrao", "emailId", config.retirada_email],
+          ["telefonePadrao", "telefoneId", config.retirada_telefone],
+        ];
+        fields.forEach(([defaultKey, inputKey, value]) => {
+          const normalized = typeof value === "string" ? value.trim() : "";
+          origin[defaultKey] = normalized;
+          const input = document.getElementById(origin[inputKey]);
+          if (input && !input.value.trim()) input.value = normalized;
+        });
+      } catch (error) {
+        console.warn("Não foi possível carregar os contatos de retirada configurados:", error);
+      }
+    }
 
     function normalizarCidadeRegional(cidade) {
       return String(cidade || "")
@@ -489,7 +517,11 @@
 
     // Initialize page behaviors
     document.addEventListener("DOMContentLoaded", () => {
+      document.getElementById("input-serial")?.addEventListener("input", () => {
+        equipamentoSelectionRevision += 1;
+      });
       lucide.createIcons();
+      carregarConfiguracaoTransferencia();
       popularSeletoresRepresentantesRegionais();
       associarRotulosAcessiveis();
       inicializarMascarasTelefone();
@@ -560,21 +592,41 @@
       }, 4000);
     }
 
+    function formatarContagemEstatistica(value) {
+      const count = typeof value === "number" ? value : Number(value);
+      if (!Number.isSafeInteger(count) || count < 0) return "Indisponível";
+      return count.toLocaleString("pt-BR");
+    }
+
+    function definirEstatistica(elementId, value) {
+      const element = document.getElementById(elementId);
+      if (element) element.textContent = formatarContagemEstatistica(value);
+    }
+
     // Load statistics from API
     async function carregarEstatisticas() {
       try {
         const res = await fetch("/api/stats");
-        if (res.ok) {
-          const stats = await res.json();
-          document.getElementById("stat-equipamentos").textContent = Number(stats.total_equipamentos).toLocaleString("pt-BR");
-          document.getElementById("stat-unidades").textContent = stats.total_unidades;
-          const exportButton = document.getElementById("btn-exportar-equipamentos");
-          if (exportButton) {
-            exportButton.classList.toggle("hidden", Number(stats.total_alteracoes_exportaveis || 0) === 0);
-          }
+        if (!res.ok) throw new Error("Falha ao consultar as estatísticas locais.");
+        const stats = await res.json();
+        definirEstatistica("stat-equipamentos", stats.total_equipamentos);
+        definirEstatistica("stat-unidades", stats.total_unidades);
+        const exportButton = document.getElementById("btn-exportar-equipamentos");
+        if (exportButton) {
+          const exportAvailable = stats.exportacao_disponivel === true;
+          const exportCount = Number(stats.total_alteracoes_exportaveis);
+          exportButton.classList.toggle(
+            "hidden",
+            exportAvailable && Number.isSafeInteger(exportCount) && exportCount === 0
+          );
+          exportButton.title = exportAvailable
+            ? "Baixar a planilha com apelidos e IdCliente atualizados"
+            : `Contagem indisponível: ${stats.exportacao_motivo || "clique para verificar a exportação"}`;
         }
       } catch (err) {
         console.warn("Não foi possível carregar estatísticas:", err);
+        definirEstatistica("stat-equipamentos", null);
+        definirEstatistica("stat-unidades", null);
       }
     }
 
@@ -1295,7 +1347,7 @@
         if (transferUtils.serialForTransfer(data, serial) !== serial) {
           throw new Error("A busca não retornou uma correspondência exata. Escolha um equipamento na lista.");
         }
-        currentEquipamento = data;
+        definirEquipamentoAtual(data);
         exibirEquipamento(data);
         showToast(`Equipamento ${data.serial} localizado com sucesso!`, "success");
 
@@ -2107,7 +2159,7 @@
         const currentSerial = String(currentEquipamento?.serial || "").replace(/[^A-Z0-9]/gi, "").toUpperCase();
         const changedSerial = String(equipment?.serial || "").replace(/[^A-Z0-9]/gi, "").toUpperCase();
         if (equipment && currentSerial && currentSerial === changedSerial) {
-          currentEquipamento = equipment;
+          definirEquipamentoAtual(equipment);
           exibirEquipamento(equipment);
         }
         atualizarIndicadoresPosSalvamento();
@@ -2404,6 +2456,16 @@
           ? match[1].replace(/['"]/g, "")
           : "EquipamentosDetalhes-atualizados.xlsx";
         const pendingReview = Number(res.headers.get("X-Total-Conferencia") || 0);
+        let reviewSummary = [];
+        const encodedReviewSummary = res.headers.get("X-Conferencia-Resumo");
+        if (encodedReviewSummary) {
+          try {
+            const parsedSummary = JSON.parse(decodeURIComponent(encodedReviewSummary));
+            if (Array.isArray(parsedSummary)) reviewSummary = parsedSummary;
+          } catch (error) {
+            console.warn("Não foi possível ler os detalhes de conferência da exportação:", error);
+          }
+        }
         const aliasUpdateCount = Number(res.headers.get("X-Total-Alterados") || 0);
         const idClienteUpdateCount = Number(res.headers.get("X-Total-IdCliente-Alterados") || 0);
         const historyAliasCount = Number(res.headers.get("X-Historico-Apelidos-Atualizados") || 0);
@@ -2422,7 +2484,11 @@
           ? `Último histórico: ${historyAliasCount.toLocaleString("pt-BR")} ${historyAliasCount === 1 ? "apelido atualizado" : "apelidos atualizados"} em ${formatarHorarioHistorico(historyTimestamp)}.`
           : "Não há atualização registrada no histórico.";
         const reviewMessage = pendingReview
-          ? ` ${pendingReview} linha(s) ficaram para conferência.`
+          ? ` ${pendingReview} item(ns) ficaram para conferência. ${reviewSummary.map((item) => {
+              const series = Array.isArray(item.series) ? item.series.filter(Boolean) : [];
+              const listed = series.length ? ` Séries: ${series.join(", ")}${Number(item.total) > series.length ? ", entre outras" : ""}.` : "";
+              return `${item.motivo}: ${Number(item.total) || 0}.${listed}`;
+            }).join(" ")}`
           : "";
         const aliasLabel = aliasUpdateCount === 1 ? "apelido" : "apelidos";
         const idClienteLabel = idClienteUpdateCount === 1 ? "IdCliente" : "IdClientes";
@@ -2507,6 +2573,7 @@
       }
 
       const serial = currentEquipamento.serial;
+      const selectionRevisionAtSave = equipamentoSelectionRevision;
       const apelido = document.getElementById("edit-apelido-isolado").value.trim();
       const btn = document.getElementById("btn-salvar-apelido");
       const originalText = btn.textContent;
@@ -2524,10 +2591,14 @@
         const data = await res.json().catch(() => ({}));
         if (!res.ok) throw new Error(data.detail || "Falha ao salvar o apelido.");
 
-        currentEquipamento = data.equipamento;
-        document.getElementById("badge-apelido").textContent = currentEquipamento.apelido || "Sem Apelido";
-        atualizarIndicadoresPosSalvamento();
-        fecharModalEditarApelido();
+        const stillSelected = equipamentoSelectionRevision === selectionRevisionAtSave
+          && String(currentEquipamento?.serial || "").toUpperCase() === String(serial).toUpperCase();
+        if (stillSelected) {
+          definirEquipamentoAtual(data.equipamento);
+          document.getElementById("badge-apelido").textContent = currentEquipamento.apelido || "Sem Apelido";
+          atualizarIndicadoresPosSalvamento();
+          fecharModalEditarApelido();
+        }
         showToast("Apelido salvo com sucesso.", "success");
       } catch (err) {
         console.error("Erro ao salvar apelido:", err);
@@ -2763,7 +2834,7 @@
         if (!res.ok) throw new Error(data.detail || "Não foi possível desfazer a alteração.");
 
         if (currentEquipamento && currentEquipamento.serial === data.equipamento.serial) {
-          currentEquipamento = data.equipamento;
+          definirEquipamentoAtual(data.equipamento);
           document.getElementById("badge-apelido").textContent = currentEquipamento.apelido || "Sem Apelido";
         }
         await carregarEstatisticas();
@@ -2788,7 +2859,7 @@
         const data = await res.json().catch(() => ({}));
         if (!res.ok) throw new Error(data.detail || "Não foi possível excluir o registro.");
         if (currentEquipamento && currentEquipamento.serial === data.equipamento.serial) {
-          currentEquipamento = data.equipamento;
+          definirEquipamentoAtual(data.equipamento);
           document.getElementById("badge-apelido").textContent = currentEquipamento.apelido || "Sem Apelido";
           document.getElementById("card-localizacao").textContent = `${currentEquipamento.retirada_cidade || ""} - ${currentEquipamento.retirada_endereco ? currentEquipamento.retirada_endereco.split("-")[0].trim() : ""}`;
           document.getElementById("card-cnpj-atual").textContent = `CNPJ: ${currentEquipamento.retirada_cnpj || "Não especificado"}`;
@@ -2856,6 +2927,7 @@
           : document.getElementById("edit-apelido").value.trim(),
         idCliente: document.getElementById("edit-id-cliente").value.trim(),
       };
+      const selectionRevisionAtSave = equipamentoSelectionRevision;
 
       const btn = document.getElementById("btn-salvar-equipamento");
       const originalText = btn.innerHTML;
@@ -2877,16 +2949,18 @@
         }
 
         const data = await res.json();
-        const dadosEntrega = capturarDadosEntrega();
-        currentEquipamento = data.equipamento;
-        exibirEquipamento(data.equipamento);
-        restaurarDadosEntrega(dadosEntrega);
-        document.getElementById("input-serial").value = data.equipamento.serial;
-        document.getElementById("btn-clear-serial").classList.remove("hidden");
-
-        atualizarIndicadoresPosSalvamento();
+        const stillSelected = equipamentoSelectionRevision === selectionRevisionAtSave;
+        if (stillSelected) {
+          const dadosEntrega = capturarDadosEntrega();
+          definirEquipamentoAtual(data.equipamento);
+          exibirEquipamento(data.equipamento);
+          restaurarDadosEntrega(dadosEntrega);
+          document.getElementById("input-serial").value = data.equipamento.serial;
+          document.getElementById("btn-clear-serial").classList.remove("hidden");
+          atualizarIndicadoresPosSalvamento();
+          fecharModalEditarEquipamento();
+        }
         showToast(data.mensagem || `Equipamento ${serial} salvo com sucesso!`, "success");
-        fecharModalEditarEquipamento();
 
       } catch (err) {
         console.error("Erro ao salvar:", err);
@@ -3067,11 +3141,14 @@
     }
 
     async function salvarUnidadeForm() {
+      const form = document.getElementById("form-nova-unidade");
+      if (!form || form.dataset.saving === "true") return;
       const cidade = document.getElementById("form-unidade-cidade").value.trim();
       const endereco = document.getElementById("form-unidade-endereco").value.trim();
       const cep = document.getElementById("form-unidade-cep").value.trim();
       const cnpj = document.getElementById("form-unidade-cnpj").value.trim();
       const idVal = document.getElementById("form-unidade-id").value;
+      const saveButton = document.getElementById("btn-salvar-unidade");
 
       if (!cidade || !endereco || !cnpj) {
         showToast("Cidade, endereço e CNPJ são campos obrigatórios.", "warning");
@@ -3087,6 +3164,11 @@
         cnpj: cnpj
       };
 
+      form.dataset.saving = "true";
+      if (saveButton) {
+        saveButton.disabled = true;
+        saveButton.setAttribute("aria-busy", "true");
+      }
       try {
         const res = await fetch("/api/unidade/salvar", {
           method: "POST",
@@ -3108,5 +3190,11 @@
       } catch (err) {
         console.error("Erro ao salvar unidade:", err);
         showToast(err.message, "error");
+      } finally {
+        delete form.dataset.saving;
+        if (saveButton) {
+          saveButton.disabled = false;
+          saveButton.removeAttribute("aria-busy");
+        }
       }
     }

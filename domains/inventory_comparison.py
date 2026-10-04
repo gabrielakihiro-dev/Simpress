@@ -90,7 +90,13 @@ def _comparison_source_records(table: Dict[str, Any], role: str) -> List[Dict[st
     user_headers = ("USUARIOSLOGADOS", "LOGGEDINUSERS", "USUARIO")
 
     records = []
-    for row_number, row in enumerate(table.get("records", []), start=2):
+    for fallback_row_number, row in enumerate(table.get("records", []), start=2):
+        source_row_number = row.get("__excel_row_number__")
+        row_number = (
+            source_row_number
+            if isinstance(source_row_number, int) and not isinstance(source_row_number, bool)
+            else fallback_row_number
+        )
         serial_value = _record_value(row, *serial_headers)
         if role == "endpoint":
             computer_name = str(_record_value(row, *endpoint_name_headers) or "").strip()
@@ -221,7 +227,7 @@ def filter_curitiba_hostname_location_mismatches(items: Any) -> List[Dict[str, A
         item for item in items
         if not isinstance(item, dict)
         or (
-            not is_curitiba_hostname_exception(item.get("computador"))
+            not is_curitiba_hostname_exception(str(item.get("computador") or ""))
             and not is_prnoteti_curitiba_location_match(
                 item.get("computador"),
                 item.get("local_previsto"),
@@ -607,17 +613,23 @@ def compare_uploaded_workbooks(
 
     def distinct_values(records: List[Dict[str, Any]], field: str) -> List[str]:
         values = []
+        seen = set()
         for record in records:
             value = str(record.get(field) or "").strip()
-            if value and value not in values:
+            if value and value not in seen:
+                seen.add(value)
                 values.append(value)
         return values
 
-    entities = []
-    missing_by_source = {role: [] for role in COMPARISON_SOURCE_LABELS}
-    ambiguous_records = []
+    entities: List[tuple[Any, Any, Any, Any]] = []
+    missing_by_source: Dict[str, List[Dict[str, Any]]] = {
+        role: [] for role in COMPARISON_SOURCE_LABELS
+    }
+    ambiguous_records: List[Dict[str, Any]] = []
     for component_nodes in components.values():
-        records_by_source = {role: [] for role in COMPARISON_SOURCE_LABELS}
+        records_by_source: Dict[str, List[Dict[str, Any]]] = {
+            role: [] for role in COMPARISON_SOURCE_LABELS
+        }
         for node in component_nodes:
             records_by_source[node[0]].append(nodes[node])
 

@@ -1,6 +1,7 @@
 """Project-relative paths and limits used by the local application."""
 
 from pathlib import Path
+import os
 
 
 BASE_DIR = Path(__file__).resolve().parent
@@ -9,12 +10,15 @@ INPUT_DIR = BASE_DIR / "planilhas_entrada"
 TEMPLATE_FILE = INPUT_DIR / "(MODELO) - TRANSFERENCIA SIMPRESS.xlsx"
 DETAILS_UPLOAD_FILE = INPUT_DIR / "EquipamentosDetalhes_atual.xlsx"
 ENDPOINT_UPLOAD_FILE = INPUT_DIR / "InvAllComputersSummary_atual.xlsx"
-DETAILS_EXPORT_BASELINE_FILE = INPUT_DIR / ".EquipamentosDetalhes_atual.export-baseline.xlsx"
 EXPORT_MODEL_FILE = BASE_DIR / "modelos" / "EquipamentosDetalhes-exportacao.xlsx"
 UPLOAD_BACKUPS_DIR = INPUT_DIR / "_backups"
 
 MAX_UPLOAD_BYTES = 30 * 1024 * 1024
 MAX_UPLOAD_REQUEST_BYTES = 2 * MAX_UPLOAD_BYTES + 1024 * 1024
+MAX_API_REQUEST_BYTES = 1024 * 1024
+MAX_CONCURRENT_UPLOAD_REQUESTS = 1
+MAX_CONCURRENT_WORKBOOK_PARSERS = 1
+HISTORY_RETENTION_DAYS = 90
 MAX_XLSX_ARCHIVE_ENTRIES = 10000
 MAX_XLSX_UNCOMPRESSED_BYTES = 256 * 1024 * 1024
 # Technical safeguards for the read-only inventory parser, not business row limits.
@@ -30,3 +34,13 @@ MODIFIED_APELIDOS_FILE = BASE_DIR / "apelidos_modificados.json"
 ALIAS_HISTORY_FILE = BASE_DIR / "historico_alteracoes.json"
 COMPARISON_HISTORY_FILE = BASE_DIR / "historico_comparacoes.json"
 TRANSACTION_ROOT = BASE_DIR
+
+SUPPORTED_CONTRACT = 16467
+SUPPORTED_CONTRACT_LEGAL_NAME = "SERV DE APOIO AS MICRO E PEQ EMP DO PARANA SEBRAE PR"
+
+# Update these process environment values when the operation's origin contact changes.
+TRANSFER_ORIGIN_CONTACT = os.environ.get(
+    "SIMPRESS_TRANSFER_ORIGIN_CONTACT", "Gabriel Akihiro Noda Souza (Simpress)"
+)
+TRANSFER_ORIGIN_EMAIL = os.environ.get("SIMPRESS_TRANSFER_ORIGIN_EMAIL", "gansouza@simpress.com.br")
+TRANSFER_ORIGIN_PHONE = os.environ.get("SIMPRESS_TRANSFER_ORIGIN_PHONE", "(41) 98751-2389")

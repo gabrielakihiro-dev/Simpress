@@ -27,8 +27,7 @@ def run() -> bool:
         import openpyxl
         import pandas
 
-        # main.py initializes itself on import. Prevent the test discovery phase
-        # from reading operational workbooks or recovering project transactions.
+        # Keep fixture discovery independent from real operational workbooks.
         with (
             patch.object(integrity, "recover_pending_transactions", return_value=None),
             patch.object(

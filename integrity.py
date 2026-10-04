@@ -16,11 +16,19 @@ import warnings
 import zipfile
 from contextlib import ExitStack, contextmanager
 from pathlib import Path
-from typing import Any, Callable, Dict, Iterable, Iterator, Optional
+from typing import Any, Callable, Dict, Iterable, Iterator, Literal, Optional
 from xml.etree import ElementTree as ET
 from xml.sax.saxutils import escape
 
 import openpyxl
+from openpyxl_compat import (
+    chart_count,
+    conditional_formatting_rules,
+    image_count,
+    named_style_catalog,
+    stored_cells,
+    style_catalog,
+)
 from app_config import MAX_XLSX_ARCHIVE_ENTRIES, MAX_XLSX_UNCOMPRESSED_BYTES
 from xlsx_safety import validate_xlsx
 
@@ -92,11 +100,11 @@ def _acquire_os_lock(handle: Any, deadline: float, label: str) -> None:
                     raise FileBusyError(f"O arquivo {label} está sendo usado por outra operação local.") from error
                 time.sleep(0.05)
     else:
-        import fcntl
+        import fcntl  # type: ignore[import-not-found]
 
         while True:
             try:
-                fcntl.flock(handle.fileno(), fcntl.LOCK_EX | fcntl.LOCK_NB)
+                fcntl.flock(handle.fileno(), fcntl.LOCK_EX | fcntl.LOCK_NB)  # type: ignore[attr-defined]
                 return
             except OSError as error:
                 if time.monotonic() >= deadline:
@@ -111,9 +119,9 @@ def _release_os_lock(handle: Any) -> None:
         handle.seek(0)
         msvcrt.locking(handle.fileno(), msvcrt.LK_UNLCK, 1)
     else:
-        import fcntl
+        import fcntl  # type: ignore[import-not-found]
 
-        fcntl.flock(handle.fileno(), fcntl.LOCK_UN)
+        fcntl.flock(handle.fileno(), fcntl.LOCK_UN)  # type: ignore[attr-defined]
 
 
 @contextmanager
@@ -225,7 +233,10 @@ def atomic_write_bytes(path: Path, data: bytes, validator: Optional[Callable[[Pa
     """Atomically replace one file from a validated same-directory temporary."""
     target = Path(path).resolve(strict=False)
     with lock_paths([target]):
-        temp_path = _write_temp(target, lambda temp: temp.write_bytes(data), validator)
+        def write_temp(temp: Path) -> None:
+            temp.write_bytes(data)
+
+        temp_path = _write_temp(target, write_temp, validator)
         try:
             _replace_with_retries(temp_path, target)
         finally:
@@ -262,7 +273,11 @@ def _safe_target(root: Path, relative_path: str) -> Path:
 
 def _persist_manifest(manifest_path: Path, manifest: Dict[str, Any]) -> None:
     payload = json.dumps(manifest, ensure_ascii=False, indent=2).encode("utf-8")
-    temp = _write_temp(manifest_path, lambda path: path.write_bytes(payload), None)
+
+    def write_manifest(path: Path) -> None:
+        path.write_bytes(payload)
+
+    temp = _write_temp(manifest_path, write_manifest, None)
     try:
         _replace_with_retries(temp, manifest_path)
     finally:
@@ -289,7 +304,10 @@ def _restore_entry(root: Path, transaction_dir: Path, entry: Dict[str, Any]) -> 
     backup = _safe_target(transaction_dir, entry["backup"])
     if _hash_file(backup) != original_hash:
         raise TransactionConflictError(f"A cópia de recuperação de '{target.name}' falhou na validação.")
-    temp = _write_temp(target, lambda path: shutil.copyfile(backup, path), None)
+    def copy_backup(path: Path) -> None:
+        shutil.copyfile(backup, path)
+
+    temp = _write_temp(target, copy_backup, None)
     try:
         if _hash_file(temp) != original_hash:
             raise TransactionConflictError(f"A restauração temporária de '{target.name}' falhou na validação.")
@@ -311,13 +329,31 @@ def _recover_transaction(root: Path, transaction_dir: Path) -> None:
         raise TransactionConflictError(f"O registro de recuperação '{manifest_path.name}' está inválido: {error}.") from error
 
     if manifest.get("phase") == "committed":
+        _cleanup_staged_files(root, manifest["entries"])
         shutil.rmtree(transaction_dir, ignore_errors=True)
         return
 
     entries = manifest["entries"]
     for entry in reversed(entries):
         _restore_entry(root, transaction_dir, entry)
+    _cleanup_staged_files(root, entries)
     shutil.rmtree(transaction_dir, ignore_errors=True)
+
+
+def _cleanup_staged_files(root: Path, entries: Iterable[Dict[str, Any]]) -> None:
+    """Remove only transaction-owned staged files that still match their recorded hash."""
+    for entry in entries:
+        relative = entry.get("stage")
+        expected_hash = entry.get("new_hash")
+        if not relative or not expected_hash:
+            continue
+        try:
+            stage_path = _safe_target(root, relative)
+            if stage_path.is_file() and _hash_file(stage_path) == expected_hash:
+                stage_path.unlink()
+        except (OSError, FileTransactionError):
+            # Keep ambiguous artifacts for manual recovery instead of deleting user data.
+            continue
 
 
 def _recover_pending_locked(root: Path) -> None:
@@ -443,7 +479,10 @@ class AtomicFileTransaction:
             raise
 
     def stage_bytes(self, target: Path, data: bytes, validator: Optional[Callable[[Path], None]] = None) -> None:
-        self._stage(target, lambda temp: temp.write_bytes(data), validator, delete=False)
+        def write_bytes(temp: Path) -> None:
+            temp.write_bytes(data)
+
+        self._stage(target, write_bytes, validator, delete=False)
 
     def stage_file(
         self,
@@ -526,6 +565,7 @@ class AtomicFileTransaction:
         if self.manifest_path.exists():
             for entry in reversed(self.manifest["entries"]):
                 _restore_entry(self.root, self.transaction_dir, entry)
+            _cleanup_staged_files(self.root, self.manifest["entries"])
         shutil.rmtree(self.transaction_dir, ignore_errors=True)
 
     def close_after_interruption(self) -> None:
@@ -533,7 +573,7 @@ class AtomicFileTransaction:
         self._closed = True
         self._stack.close()
 
-    def __exit__(self, exc_type: Any, exc: Any, traceback: Any) -> bool:
+    def __exit__(self, exc_type: Any, exc: Any, traceback: Any) -> Literal[False]:
         rollback_error = None
         try:
             if not self._committed and not self._closed:
@@ -579,7 +619,7 @@ def _dimension_signature(dimensions: Any) -> tuple:
 def _conditional_formatting_signature(conditional_formatting: Any) -> tuple:
     return tuple(
         (repr(condition), tuple(repr(rule) for rule in rules))
-        for condition, rules in conditional_formatting._cf_rules.items()
+        for condition, rules in conditional_formatting_rules(conditional_formatting).items()
     )
 
 
@@ -599,7 +639,7 @@ def workbook_snapshot(workbook: Any) -> Dict[str, Any]:
     for ws in workbook.worksheets:
         cells = {
             cell.coordinate: _cell_signature(cell)
-            for cell in ws._cells.values()
+            for cell in stored_cells(ws)
         }
         tables = tuple(sorted(
             (name, ws.tables[name].ref, ws.tables[name].displayName)
@@ -621,8 +661,8 @@ def workbook_snapshot(workbook: Any) -> Dict[str, Any]:
             "tables": tables,
             "validations": validations,
             "conditional_formatting": _conditional_formatting_signature(ws.conditional_formatting),
-            "chart_count": len(ws._charts),
-            "image_count": len(ws._images),
+            "chart_count": chart_count(ws),
+            "image_count": image_count(ws),
             "protection": repr(ws.protection),
             "sheet_format": (
                 ws.sheet_format.defaultRowHeight, ws.sheet_format.defaultColWidth,
@@ -645,10 +685,44 @@ def workbook_snapshot(workbook: Any) -> Dict[str, Any]:
         "defined_names": defined_names,
         "calculation": repr(workbook.calculation),
         "properties": _properties_signature(workbook.properties),
-        "style_catalog": tuple(repr(style) for style in workbook._cell_styles),
-        "named_styles": tuple(repr(style) for style in workbook._named_styles),
+        "style_catalog": style_catalog(workbook),
+        "named_styles": named_style_catalog(workbook),
         "worksheets": worksheets,
     }
+
+
+def _is_single_row_range_growth(before: Optional[str], after: Optional[str]) -> bool:
+    """Accept only a one-row downward extension with unchanged columns and header row."""
+    if not before or not after:
+        return False
+    try:
+        from openpyxl.utils.cell import range_boundaries
+
+        before_min_col, before_min_row, before_max_col, before_max_row = range_boundaries(before)
+        after_min_col, after_min_row, after_max_col, after_max_row = range_boundaries(after)
+    except (TypeError, ValueError):
+        return False
+    return (
+        before_min_col == after_min_col
+        and before_max_col == after_max_col
+        and before_min_row == after_min_row
+        and after_max_row == before_max_row + 1
+    )
+
+
+def _tables_grew_by_one_row(before: tuple, after: tuple) -> bool:
+    if len(before) != len(after):
+        return False
+    expanded = False
+    for old, new in zip(before, after):
+        if old[0] != new[0] or old[2] != new[2]:
+            return False
+        if old[1] == new[1]:
+            continue
+        if not _is_single_row_range_growth(old[1], new[1]):
+            return False
+        expanded = True
+    return expanded
 
 
 _XLSX_MAIN_NS = "{http://schemas.openxmlformats.org/spreadsheetml/2006/main}"
@@ -785,6 +859,21 @@ def _replacement_cell_xml(opening: bytes, tag_name: bytes, value: Any, existing_
     return b"<" + tag_name + attributes + cell_type + b">" + content + b"</" + tag_name + b">"
 
 
+def _apply_xml_patches(xml: bytes, patches: Iterable[tuple[int, int, bytes]]) -> bytes:
+    """Apply non-overlapping XML byte replacements with one linear reconstruction."""
+    ordered = sorted(patches, key=lambda patch: patch[0])
+    parts = []
+    cursor = 0
+    for start, end, replacement in ordered:
+        if start < cursor or end < start or end > len(xml):
+            raise WorkbookSafetyError("As alterações da planilha Excel se sobrepõem ou estão fora do XML.")
+        parts.append(xml[cursor:start])
+        parts.append(replacement)
+        cursor = end
+    parts.append(xml[cursor:])
+    return b"".join(parts)
+
+
 def _patch_worksheet_cells(xml: bytes, updates: Dict[str, Any]) -> bytes:
     """Replace selected existing cell values and retain all other sheet XML bytes."""
     ranges = _cell_ranges(xml)
@@ -802,10 +891,7 @@ def _patch_worksheet_cells(xml: bytes, updates: Dict[str, Any]) -> bytes:
         replacement = _replacement_cell_xml(opening, tag_name, value, existing_content)
         patches.append((start, end, replacement))
 
-    patched = xml
-    for start, end, replacement in sorted(patches, reverse=True):
-        patched = patched[:start] + replacement + patched[end:]
-    return patched
+    return _apply_xml_patches(xml, patches)
 
 
 def _write_package_with_cell_updates(
@@ -946,9 +1032,7 @@ def _restore_formula_cached_values(source: Path, destination: Path, expected_val
                     replacement = cell_opening + cell_content + b"</" + saved_tag + b">"
                     patches.append((saved_start, saved_end, replacement))
 
-                patched_xml = saved_xml
-                for start, end, replacement in sorted(patches, reverse=True):
-                    patched_xml = patched_xml[:start] + replacement + patched_xml[end:]
+                patched_xml = _apply_xml_patches(saved_xml, patches)
                 if patched_xml != saved_xml:
                     patched_parts[saved_part] = patched_xml
 
@@ -1137,6 +1221,10 @@ def load_workbook_safely(
     allow_custom_xml_passthrough: bool = False,
 ) -> Any:
     """Load formulas/rich text and reject unsupported package features or warnings."""
+    if not getattr(openpyxl, "DEFUSEDXML", False):
+        raise WorkbookSafetyError(
+            "A leitura segura de XML do Excel requer defusedxml ativo no openpyxl."
+        )
     temporary_handle = None
     if isinstance(source, (str, os.PathLike, Path)):
         source_path = Path(source)
@@ -1181,6 +1269,7 @@ def validate_workbook_roundtrip(
     original_package_parts: Optional[Dict[str, str]] = None,
     original_package_entries: Optional[Dict[str, str]] = None,
     allow_dimension_growth: bool = False,
+    allow_table_growth: bool = False,
     allow_threaded_comments: bool = False,
     allow_legacy_comments: bool = False,
     allow_custom_xml_passthrough: bool = False,
@@ -1242,7 +1331,19 @@ def validate_workbook_roundtrip(
         )
         for key in structural_keys:
             if before[key] != after[key]:
-                raise WorkbookSafetyError(f"A planilha temporária alterou a estrutura '{key}' da aba '{sheet_name}'.")
+                allowed_growth = False
+                if allow_table_growth and key == "tables":
+                    allowed_growth = _tables_grew_by_one_row(before[key], after[key])
+                elif allow_table_growth and key == "auto_filter":
+                    allowed_growth = _is_single_row_range_growth(before[key], after[key])
+                elif allow_table_growth and key == "auto_filter_details":
+                    allowed_growth = (
+                        before["auto_filter"] is not None
+                        and _is_single_row_range_growth(before["auto_filter"], after["auto_filter"])
+                        and before[key].replace(before["auto_filter"], after["auto_filter"]) == after[key]
+                    )
+                if not allowed_growth:
+                    raise WorkbookSafetyError(f"A planilha temporária alterou a estrutura '{key}' da aba '{sheet_name}'.")
         if not allow_dimension_growth and any(before[key] != after[key] for key in ("max_row", "max_column", "dimension")):
             raise WorkbookSafetyError(f"A planilha temporária alterou as dimensões da aba '{sheet_name}'.")
 
@@ -1321,6 +1422,7 @@ def stage_workbook_update(
     update: Callable[[Any], Dict[tuple, Any]],
     *,
     allow_dimension_growth: bool = False,
+    allow_table_growth: bool = False,
 ) -> bool:
     """Edit a workbook into a same-volume transaction temp and verify before replacement."""
     source = Path(source).resolve(strict=False)
@@ -1353,7 +1455,8 @@ def stage_workbook_update(
             write,
             lambda temp: validate_workbook_roundtrip(
                 before, temp, expected_values, original_package_parts=original_parts,
-                allow_dimension_growth=allow_dimension_growth
+                allow_dimension_growth=allow_dimension_growth,
+                allow_table_growth=allow_table_growth,
             ),
         )
     finally:

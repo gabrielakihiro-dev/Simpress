@@ -66,6 +66,8 @@ A planilha EquipamentosDetalhes precisa ter, na primeira linha, colunas equivale
 
 Os caminhos e limites locais ficam em `app_config.py` e são calculados a partir da pasta do projeto. Não há arquivo `.env`: mantenha os nomes de arquivo e diretórios configurados nesse módulo ou ajuste ali a constante correspondente quando substituir um modelo local.
 
+O contato padrão do ponto de retirada pode ser atualizado por instalação usando as variáveis de ambiente `SIMPRESS_TRANSFER_ORIGIN_CONTACT`, `SIMPRESS_TRANSFER_ORIGIN_EMAIL` e `SIMPRESS_TRANSFER_ORIGIN_PHONE`. O formulário busca esses valores em `/api/config/transferencia`; reinicie o servidor depois de alterar o ambiente.
+
 Para reconstruir os estilos, ícones e fontes locais depois de alterar a interface, execute `npm ci` e `npm run build:ui`. O servidor Python usa os arquivos já gerados em `static/vendor` e não precisa iniciar um processo Node.js.
 
 ### 5. Inicie o servidor
@@ -147,12 +149,13 @@ A interface carrega estilos, fontes e ícones do servidor local; os botões de c
 - O cadastro de unidades personalizadas é salvo em `unidades_custom.json` quando houver alterações.
 - No catálogo de unidades, use os botões ao lado do CNPJ e do CEP para copiar esses dados. A interface informa sucesso, ausência do dado ou falha de cópia; se a API de área de transferência do navegador não estiver disponível, tenta um método de compatibilidade.
 - Use **Histórico** para consultar alterações de apelido e, quando disponível, desfazer a alteração mais recente.
-- Use **Exportar Excel** para baixar a planilha com `Apelido` e `IdCliente` atualizados. A notificação informa quantas células mudaram em cada coluna, o total exportado e as linhas que ficaram para conferência.
+- Use **Exportar Excel** para baixar a planilha com `Apelido` e `IdCliente` atualizados. A notificação informa quantas células mudaram em cada coluna e, quando a exportação for parcial, mostra os motivos e até dez séries de exemplo por motivo para orientar a conferência.
 
 ## Arquivos, backups e recuperação
 
 - Os uploads validados substituem os inventários ativos em `planilhas_entrada`, com os nomes definidos em `app_config.py`.
 - Antes de substituir inventários, a aplicação copia os arquivos atuais para `planilhas_entrada/_backups/<data-hora>-<identificador>/`, separados em `endpoint` e `detalhes`. Pelo Histórico planilhas, um backup completo pode ser validado e restaurado; o conjunto substituído é salvo em outro backup e a restauração entra no histórico, permitindo desfazê-la quando esse backup também está completo e válido.
+- Históricos de apelidos/comparações e backups vencem após 90 dias. A comparação fixada é preservada; registros com data inválida também ficam guardados para evitar remoção sem prazo confiável.
 - Gravações relacionadas usam temporários validados, bloqueios por arquivo e transações. Se uma operação falhar, a transação restaura os destinos afetados e o cache anterior.
 - Uma transação interrompida deixa estado em `.transactions`. Na próxima inicialização, `integrity.py` tenta recuperar esse estado antes de carregar os arquivos. Não apague essa pasta enquanto houver uma recuperação pendente.
 - A planilha de transferência é preparada para download; não é mantida como arquivo permanente pelo servidor.
@@ -183,7 +186,7 @@ routers/inventory_history.py rotas de histórico e restauração de inventários
 static/index.html       estrutura da interface
 static/app.css          estilos locais
 static/app.js           comportamento da interface
-planilhas_entrada/      modelos, bases locais, baseline e cópias de segurança
+planilhas_entrada/      modelos, bases locais e cópias de segurança
 tests/run_tests.py      executor seguro da suíte de testes com arquivos fictícios
 requirements.txt        dependências Python fixadas
 iniciar_servidor.bat    inicializador local para Windows

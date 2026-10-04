@@ -1,4 +1,5 @@
 import asyncio
+import ast
 import io
 import json
 import re
@@ -10,6 +11,9 @@ from pathlib import Path
 from unittest.mock import patch
 
 import app_config
+import openpyxl
+import openpyxl_compat
+from starlette.routing import Match
 
 
 with patch(
@@ -53,7 +57,15 @@ def _xlsx_with_worksheet_xml(*worksheet_xml: str) -> bytes:
     return content.getvalue()
 
 
-def _run_local_safety_middleware(host_values, origin=None, path="/api/stats"):
+def _run_local_safety_middleware(
+    host_values,
+    origin=None,
+    path="/api/stats",
+    *,
+    method="GET",
+    body=b"",
+    include_content_length=True,
+):
     state = {"passed": False, "messages": []}
 
     async def app(scope, receive, send):
@@ -62,15 +74,17 @@ def _run_local_safety_middleware(host_values, origin=None, path="/api/stats"):
         await send({"type": "http.response.body", "body": b"ok"})
 
     async def receive():
-        return {"type": "http.request", "body": b"", "more_body": False}
+        return {"type": "http.request", "body": body, "more_body": False}
 
     async def send(message):
         state["messages"].append(message)
 
     headers = [(b"host", host.encode("ascii")) for host in host_values]
+    if include_content_length:
+        headers.append((b"content-length", str(len(body)).encode("ascii")))
     if origin is not None:
         headers.append((b"origin", origin.encode("ascii")))
-    scope = {"type": "http", "path": path, "headers": headers}
+    scope = {"type": "http", "path": path, "method": method, "headers": headers}
     middleware = main.LocalRequestSafetyMiddleware(app)
     asyncio.run(middleware(scope, receive, send))
     status = next(
@@ -92,7 +106,6 @@ class MaintenanceContractTests(unittest.TestCase):
             "TEMPLATE_FILE",
             "DETAILS_UPLOAD_FILE",
             "ENDPOINT_UPLOAD_FILE",
-            "DETAILS_EXPORT_BASELINE_FILE",
             "EXPORT_MODEL_FILE",
             "UPLOAD_BACKUPS_DIR",
             "CUSTOM_UNIDADES_FILE",
@@ -140,6 +153,186 @@ class MaintenanceContractTests(unittest.TestCase):
             with self.subTest(path=path):
                 self.assertIn(path, paths)
                 self.assertTrue(methods.issubset(paths[path]))
+
+    def test_fixed_modified_alias_route_is_dispatched_before_serial_parameter(self):
+        scope = {
+            "type": "http",
+            "method": "GET",
+            "path": "/api/equipamento/apelidos-modificados",
+            "root_path": "",
+            "headers": [],
+        }
+        first_match = None
+        for route in main.app.router.routes:
+            match, _ = route.matches(scope)
+            if match is Match.FULL:
+                first_match = route
+                break
+
+        self.assertIsNotNone(first_match)
+        self.assertIs(first_match.endpoint, main.get_apelidos_modificados)
+        with patch.object(main, "load_modified_apelidos", return_value={"SN-FICTICIO": "HOST-FICTICIO"}):
+            self.assertEqual(first_match.endpoint(), {
+                "total": 1,
+                "apelidos": {"SN-FICTICIO": "HOST-FICTICIO"},
+            })
+
+    def test_toasts_render_above_modal_overlays(self):
+        html = (app_config.STATIC_DIR / "index.html").read_text(encoding="utf-8")
+        css = (app_config.STATIC_DIR / "app.css").read_text(encoding="utf-8")
+
+        self.assertRegex(html, r'id="toast-container"[^>]*z-\[130\]')
+        self.assertIn(".modal-overlay { z-index: 120 !important; }", css)
+
+    def test_partial_export_ui_shows_reason_and_record_samples(self):
+        script = (app_config.STATIC_DIR / "app.js").read_text(encoding="utf-8")
+        self.assertIn('res.headers.get("X-Conferencia-Resumo")', script)
+        self.assertIn("reviewSummary.map", script)
+        self.assertIn('` Séries: ${series.join(", ")}', script)
+        self.assertIn('pendingReview ? "warning" : "success"', script)
+
+    def test_tailwind_build_only_scans_fixed_local_assets(self):
+        configuration = (PROJECT_ROOT / "tailwind.config.cjs").read_text(encoding="utf-8")
+        self.assertIn('content: ["./static/index.html", "./static/app.js"]', configuration)
+        self.assertNotIn("process.env", configuration)
+        self.assertNotIn("userInput", configuration)
+
+    def test_private_openpyxl_access_is_version_isolated(self):
+        workbook = openpyxl.Workbook()
+        worksheet = workbook.active
+        worksheet["A1"] = "fixture"
+        self.assertEqual([cell.value for cell in openpyxl_compat.stored_cells(worksheet)], ["fixture"])
+        self.assertGreaterEqual(len(openpyxl_compat.style_catalog(workbook)), 1)
+        self.assertGreaterEqual(len(openpyxl_compat.named_style_catalog(workbook)), 1)
+        self.assertEqual(openpyxl_compat.chart_count(worksheet), 0)
+        self.assertEqual(openpyxl_compat.image_count(worksheet), 0)
+        workbook.close()
+
+        integrity_source = (PROJECT_ROOT / "integrity.py").read_text(encoding="utf-8")
+        for internal_name in ("_cells", "_charts", "_images", "_cell_styles", "_named_styles", "_cf_rules"):
+            self.assertNotRegex(integrity_source, rf"(?<!\w){re.escape(internal_name)}\b")
+        with patch.object(openpyxl_compat.openpyxl, "__version__", "99.0"):
+            with self.assertRaises(RuntimeError):
+                openpyxl_compat.stored_cells(worksheet)
+
+    def test_importing_main_has_no_operational_startup_calls(self):
+        module_ast = ast.parse((PROJECT_ROOT / "main.py").read_text(encoding="utf-8"))
+        startup_calls = {"recover_pending_transactions", "load_database"}
+        module_level_calls = {
+            node.value.func.id
+            for node in module_ast.body
+            if isinstance(node, ast.Expr)
+            and isinstance(node.value, ast.Call)
+            and isinstance(node.value.func, ast.Name)
+        }
+        self.assertTrue(startup_calls.isdisjoint(module_level_calls))
+        lifespan = next(node for node in module_ast.body if isinstance(node, ast.AsyncFunctionDef) and node.name == "lifespan")
+        lifespan_calls = {
+            node.func.id
+            for node in ast.walk(lifespan)
+            if isinstance(node, ast.Call) and isinstance(node.func, ast.Name)
+        }
+        self.assertTrue(startup_calls.issubset(lifespan_calls))
+
+    def test_history_router_exports_are_explicit_and_ci_covers_all_test_suites(self):
+        main_source = (PROJECT_ROOT / "main.py").read_text(encoding="utf-8")
+        self.assertNotIn("globals().update", main_source)
+        workflow = (PROJECT_ROOT / ".github" / "workflows" / "ci.yml").read_text(encoding="utf-8")
+        self.assertIn("tests/run_tests.py", workflow)
+        self.assertIn("tests/test_transfer_workflows.cjs tests/test_inventory_ui_flows.cjs", workflow)
+        self.assertIn("scripts/check_secrets.py", workflow)
+
+    def test_transfer_contact_is_configured_and_workbook_metadata_is_anonymized(self):
+        defaults = main.get_transfer_form_defaults()
+        self.assertEqual(defaults["retirada_contato"], app_config.TRANSFER_ORIGIN_CONTACT)
+        self.assertEqual(defaults["retirada_email"], app_config.TRANSFER_ORIGIN_EMAIL)
+        self.assertEqual(defaults["retirada_telefone"], app_config.TRANSFER_ORIGIN_PHONE)
+        html = (app_config.STATIC_DIR / "index.html").read_text(encoding="utf-8")
+        script = (app_config.STATIC_DIR / "app.js").read_text(encoding="utf-8")
+        self.assertIn("/api/config/transferencia", script)
+        self.assertNotIn("gansouza@simpress.com.br", html + script)
+
+        template = app_config.TEMPLATE_FILE
+        with zipfile.ZipFile(template) as archive:
+            package_xml = "\n".join(
+                archive.read(name).decode("utf-8", "replace")
+                for name in archive.namelist()
+                if name.endswith((".xml", ".vml"))
+            ).lower()
+        for personal_value in (
+            "gabriel akihiro noda souza",
+            "gansouza@simpress.com.br",
+            "paula caroline evangelista",
+            "pcevangelista@simpress.com.br",
+            "rayra ibere vieira bicas",
+        ):
+            self.assertNotIn(personal_value, package_xml)
+        self.assertIn("instruções do formulário", package_xml)
+
+    def test_real_asgi_request_dispatches_the_fixed_modified_alias_route(self):
+        messages = []
+        sent_request = False
+
+        async def receive():
+            nonlocal sent_request
+            if sent_request:
+                return {"type": "http.disconnect"}
+            sent_request = True
+            return {"type": "http.request", "body": b"", "more_body": False}
+
+        async def send(message):
+            messages.append(message)
+
+        scope = {
+            "type": "http",
+            "asgi": {"version": "3.0"},
+            "http_version": "1.1",
+            "method": "GET",
+            "scheme": "http",
+            "path": "/api/equipamento/apelidos-modificados",
+            "raw_path": b"/api/equipamento/apelidos-modificados",
+            "query_string": b"",
+            "root_path": "",
+            "headers": [(b"host", b"localhost:8000")],
+            "server": ("localhost", 8000),
+            "client": ("127.0.0.1", 12345),
+        }
+        with patch.object(main, "load_modified_apelidos", return_value={"SN-ASGI": "HOST-ASGI"}):
+            asyncio.run(main.app(scope, receive, send))
+
+        response_start = next(item for item in messages if item["type"] == "http.response.start")
+        response_body = b"".join(item.get("body", b"") for item in messages if item["type"] == "http.response.body")
+        self.assertEqual(response_start["status"], 200)
+        self.assertEqual(json.loads(response_body), {"total": 1, "apelidos": {"SN-ASGI": "HOST-ASGI"}})
+
+    def test_api_body_limit_and_inventory_admission_reject_overload(self):
+        oversized = b"x" * (app_config.MAX_API_REQUEST_BYTES + 1)
+        status, reached_app = _run_local_safety_middleware(
+            ["localhost:8000"], path="/api/unidade/salvar", method="POST", body=oversized,
+        )
+        self.assertEqual(status, 413)
+        self.assertFalse(reached_app)
+
+        class BusyAdmission:
+            def acquire(self, blocking=False):
+                return False
+
+            def release(self):
+                raise AssertionError("A admissão recusada não deve ser liberada")
+
+        with patch.object(main, "UPLOAD_ADMISSION", BusyAdmission()):
+            status, reached_app = _run_local_safety_middleware(
+                ["localhost:8000"], path="/api/recarregar-base", method="POST",
+            )
+        self.assertEqual(status, 503)
+        self.assertFalse(reached_app)
+
+    def test_gitignore_covers_environment_variants_and_private_key_files(self):
+        ignore_rules = (PROJECT_ROOT / ".gitignore").read_text(encoding="utf-8")
+        self.assertIn(".env.*", ignore_rules)
+        self.assertIn("!.env.example", ignore_rules)
+        for extension in ("*.pem", "*.key", "*.p12", "*.pfx", "*.keystore"):
+            self.assertIn(extension, ignore_rules)
 
     def test_readiness_endpoint_returns_the_existing_file_and_function_report(self):
         report = {
@@ -234,6 +427,28 @@ class MaintenanceContractTests(unittest.TestCase):
 
         self.assertEqual(raised.exception.status_code, 413)
         self.assertIn("limite", raised.exception.detail)
+
+    def test_xlsx_auxiliary_xml_rejects_entity_declarations_before_openpyxl(self):
+        original = _xlsx_with_worksheet_xml(
+            '<worksheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main">'
+            '<sheetData/></worksheet>'
+        )
+        package = io.BytesIO()
+        with zipfile.ZipFile(io.BytesIO(original), "r") as source, zipfile.ZipFile(package, "w") as target:
+            for item in source.infolist():
+                target.writestr(item, source.read(item.filename))
+            target.writestr(
+                "xl/styles.xml",
+                '<!DOCTYPE styleSheet [<!ENTITY display "Fictional">]>'
+                '<styleSheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main">'
+                '<fonts count="1"><font><name val="&display;"/></font></fonts></styleSheet>',
+            )
+
+        with patch("openpyxl.load_workbook", side_effect=AssertionError("openpyxl must not run")):
+            with self.assertRaises(main.XlsxPackageError) as raised:
+                main.validate_xlsx(package.getvalue())
+
+        self.assertIn("declarações XML", str(raised.exception))
 
     def test_xlsx_dimension_check_uses_actual_cells_not_only_declared_range(self):
         package = _xlsx_with_worksheet_xml(
