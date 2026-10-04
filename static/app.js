@@ -1800,6 +1800,7 @@
       status.className = erro
         ? "text-xs rounded-lg px-3 py-2 bg-rose-500/10 border border-rose-500/25 text-rose-300"
         : "text-xs rounded-lg px-3 py-2 bg-sky-500/10 border border-sky-500/25 text-sky-300";
+      if (erro) status.scrollIntoView?.({ block: "nearest" });
     }
 
     async function enviarPlanilhas() {

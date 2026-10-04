@@ -21,6 +21,7 @@ class FakeElement {
     this.attributes = new Map();
     this.children = [];
     this.focused = false;
+    this.scrollIntoViewOptions = null;
     const classes = new Set();
     this.classList = {
       add: (...names) => names.forEach(name => classes.add(name)),
@@ -41,6 +42,7 @@ class FakeElement {
   replaceChildren(...children) { this.children = children; }
   appendChild(child) { this.children.push(child); return child; }
   focus() { this.focused = true; }
+  scrollIntoView(options) { this.scrollIntoViewOptions = options; }
   closest() { return null; }
   getClientRects() { return [1]; }
 }
@@ -198,8 +200,26 @@ test("failed inventory upload keeps the selected equipment and shows its error",
   assert.equal(harness.element("retirada-endereco").value, "Rua antiga, 10");
   assert.equal(harness.element("card-equipamento").classList.contains("hidden"), false);
   assert.equal(harness.element("upload-planilhas-status").textContent, "Arquivo fictício inválido");
+  assert.equal(harness.element("upload-planilhas-status").scrollIntoViewOptions?.block, "nearest");
+  assert.equal(harness.element("upload-planilhas-status").attributes.get("role"), "alert");
+  assert.equal(harness.element("upload-planilhas-status").attributes.get("aria-live"), "assertive");
   assert.equal(harness.effects.comparisons.length, 0);
   assert.equal(harness.element("btn-confirmar-planilhas").disabled, false);
+});
+
+test("missing upload files reveal and announce the error immediately", async () => {
+  const harness = createAppHarness(async () => {
+    throw new Error("A API não deve ser chamada sem os arquivos.");
+  });
+  harness.element("modal-atualizar-planilhas").classList.remove("hidden");
+
+  await harness.run("enviarPlanilhas()");
+
+  const status = harness.element("upload-planilhas-status");
+  assert.match(status.textContent, /Selecione Endpoint e EquipamentosDetalhes/);
+  assert.equal(status.scrollIntoViewOptions?.block, "nearest");
+  assert.equal(status.attributes.get("role"), "alert");
+  assert.equal(status.attributes.get("aria-live"), "assertive");
 });
 
 test("successful upload clears a selection removed from the replacement inventory", async () => {
