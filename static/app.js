@@ -1894,9 +1894,6 @@
         return !seriesSebrae.has(serie);
       });
       const filtrosAtualizacaoAplicados = comparison.filtros_atualizacao_aplicados === true;
-      const ausentesEndpoint = filtrosAtualizacaoAplicados
-        ? (comparison.ausentes_no_endpoint || [])
-        : filtrarSeriesSebrae(comparison.ausentes_no_endpoint);
       const ausentesDetalhes = filtrosAtualizacaoAplicados
         ? (comparison.ausentes_em_detalhes || [])
         : filtrarSeriesSebrae(comparison.ausentes_em_detalhes);
@@ -2008,7 +2005,6 @@
             : ""}
         <div class="grid grid-cols-2 md:grid-cols-3 xl:grid-cols-4 gap-3">
           <div class="rounded-xl bg-slate-950 border border-slate-800 p-3"><p class="text-[10px] uppercase tracking-wide text-slate-500">Notebooks comparados</p><p class="text-xl font-bold text-white mt-1">${Number(comparison.total_endpoint || 0).toLocaleString("pt-BR")}</p></div>
-          <div class="rounded-xl bg-rose-500/5 border border-rose-500/20 p-3"><p class="text-[10px] uppercase tracking-wide text-rose-300">Ausentes no Endpoint</p><p class="text-xl font-bold text-rose-200 mt-1">${ausentesEndpoint.length}</p></div>
           <div class="rounded-xl bg-amber-500/5 border border-amber-500/20 p-3"><p class="text-[10px] uppercase tracking-wide text-amber-300">Ausentes em EquipamentosDetalhes</p><p class="text-xl font-bold text-amber-200 mt-1">${ausentesDetalhes.length}</p></div>
           <div class="rounded-xl bg-amber-500/5 border border-amber-500/20 p-3"><p class="text-[10px] uppercase tracking-wide text-amber-300">Divergências de local</p><p class="text-xl font-bold text-amber-200 mt-1">${divergenciasLocal.length}</p></div>
           <div class="rounded-xl bg-yellow-500/5 border border-yellow-500/20 p-3"><p class="text-[10px] uppercase tracking-wide text-yellow-300">Duplicidades e ambiguidades</p><p class="text-xl font-bold text-yellow-200 mt-1">${ambiguityRows.length}</p></div>
@@ -2030,9 +2026,7 @@
           ${renderizarTabelaComparacao(["Série", "Apelido manual", "EquipamentosDetalhes", "InvAll", "Situação", "Ação"], manualAliasRows, "Nenhuma divergência entre apelidos manuais e as planilhas enviadas.")}
         </section>
         <section class="space-y-2">
-          <div><h4 class="text-sm font-bold text-rose-300">Equipamentos ausentes por fonte</h4><p class="text-[11px] text-slate-500">Cada lista mostra equipamentos que não têm correspondência segura naquela fonte. Divergências de local aparecem em seção própria.</p></div>
-          <h5 class="text-xs font-semibold text-slate-300">Ausentes no Endpoint (${ausentesEndpoint.length})</h5>
-          ${renderizarTabelaComparacao(["Hostname/Apelido", "Série", "Local previsto", "Ausente em"], renderizarAusentes(ausentesEndpoint), "Nenhum equipamento ausente no Endpoint.")}
+          <div><h4 class="text-sm font-bold text-rose-300">Ausentes em EquipamentosDetalhes</h4><p class="text-[11px] text-slate-500">Registros do Endpoint sem correspondência segura em EquipamentosDetalhes. Divergências de local aparecem em seção própria.</p></div>
           <h5 class="text-xs font-semibold text-slate-300">Ausentes em EquipamentosDetalhes (${ausentesDetalhes.length})</h5>
           ${renderizarTabelaComparacao(["Hostname/Apelido", "Série", "Local previsto", "Ausente em"], renderizarAusentes(ausentesDetalhes), "Nenhum equipamento ausente em EquipamentosDetalhes.")}
         </section>
@@ -2206,7 +2200,7 @@
             const restauracaoDe = evento.restauracao_de || {};
             contagens.textContent = `Restauração do conjunto anterior a ${formatarHorarioHistorico(restauracaoDe.horario)} · registros restaurados: Endpoint ${Number(resumo.total_endpoint_restaurado || 0).toLocaleString("pt-BR")}, EquipamentosDetalhes ${Number(resumo.total_detalhes_restaurado || 0).toLocaleString("pt-BR")}`;
           } else {
-            contagens.textContent = `Apelidos/hostnames atualizados: ${Number(resumo.apelidos_atualizados || 0)} · divergências manuais pendentes: ${Number(resumo.divergencias_apelidos_manuais || 0)} · ausentes no Endpoint: ${Number(resumo.ausentes_no_endpoint || 0)} · em EquipamentosDetalhes: ${Number(resumo.ausentes_em_detalhes || 0)} · divergências de local: ${Number(resumo.divergencias_local || 0)} · ambiguidades: ${Number(resumo.correspondencias_ambiguas || 0)}`;
+            contagens.textContent = `Apelidos/hostnames atualizados: ${Number(resumo.apelidos_atualizados || 0)} · divergências manuais pendentes: ${Number(resumo.divergencias_apelidos_manuais || 0)} · ausentes em EquipamentosDetalhes: ${Number(resumo.ausentes_em_detalhes || 0)} · divergências de local: ${Number(resumo.divergencias_local || 0)} · ambiguidades: ${Number(resumo.correspondencias_ambiguas || 0)}`;
           }
           info.appendChild(contagens);
           card.appendChild(info);
@@ -2403,11 +2397,6 @@
         const filename = match && match[1]
           ? match[1].replace(/['"]/g, "")
           : "EquipamentosDetalhes-atualizados.xlsx";
-        const pendingReview = Number(res.headers.get("X-Total-Conferencia") || 0);
-        const aliasUpdateCount = Number(res.headers.get("X-Total-Alterados") || 0);
-        const idClienteUpdateCount = Number(res.headers.get("X-Total-IdCliente-Alterados") || 0);
-        const historyAliasCount = Number(res.headers.get("X-Historico-Apelidos-Atualizados") || 0);
-        const historyTimestamp = res.headers.get("X-Historico-Horario") || "";
         const blob = await res.blob();
         const url = window.URL.createObjectURL(blob);
         const link = document.createElement("a");
@@ -2418,17 +2407,9 @@
         link.remove();
         window.setTimeout(() => window.URL.revokeObjectURL(url), 1000);
 
-        const historyMessage = historyTimestamp
-          ? `Último histórico: ${historyAliasCount.toLocaleString("pt-BR")} ${historyAliasCount === 1 ? "apelido atualizado" : "apelidos atualizados"} em ${formatarHorarioHistorico(historyTimestamp)}.`
-          : "Não há atualização registrada no histórico.";
-        const reviewMessage = pendingReview
-          ? ` ${pendingReview} linha(s) ficaram para conferência.`
-          : "";
-        const aliasLabel = aliasUpdateCount === 1 ? "apelido" : "apelidos";
-        const idClienteLabel = idClienteUpdateCount === 1 ? "IdCliente" : "IdClientes";
         showToast(
-          `Planilha ${filename} exportada. ${aliasUpdateCount} ${aliasLabel} e ${idClienteUpdateCount} ${idClienteLabel} atualizados na exportação. ${historyMessage}${reviewMessage}`,
-          pendingReview ? "warning" : "success"
+          "Planilha exportada com sucesso!",
+          "success"
         );
       } catch (err) {
         console.error("Erro ao exportar planilha de equipamentos:", err);
