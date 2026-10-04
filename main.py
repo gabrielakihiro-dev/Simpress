@@ -360,6 +360,20 @@ DETAILS_ALIAS_HEADER_ALIASES = (
 DETAILS_REQUIRED_HEADERS = frozenset({"MODELO", "CIDADE"})
 
 
+def _equipment_revision(serial: Any, modelo: Any, tipo: Any, apelido: Any, id_cliente: Any) -> str:
+    values = []
+    for index, value in enumerate((serial, modelo, tipo, apelido, id_cliente)):
+        if value is None:
+            values.append("")
+            continue
+        text = str(value).strip()
+        if index == 4 and re.fullmatch(r"\d+\.0+", text):
+            text = text.split(".", 1)[0]
+        values.append(text)
+    payload = json.dumps(values, ensure_ascii=False, separators=(",", ":")).encode("utf-8")
+    return hashlib.sha256(payload).hexdigest()
+
+
 def normalize_workbook_header(value: Any) -> str:
     """Normaliza cabeçalhos com a mesma regra usada pelas tabelas enviadas."""
     return normalize_reference_value(value)
@@ -1697,6 +1711,13 @@ def _load_database_unlocked() -> bool:
     manual_aliases = _manual_aliases_by_serial(mod_apelidos)
     endpoint_index = read_endpoint_alias_index()
     for serial_key, equipment in new_equipamentos_cache.items():
+        equipment["_revisao"] = _equipment_revision(
+            equipment.get("serial"),
+            equipment.get("modelo"),
+            equipment.get("tipo"),
+            equipment.get("_apelido_base"),
+            equipment.get("idCliente"),
+        )
         normalized_serial = normalize_reference_value(equipment.get("serial"))
         equipment["_apelido_manual_override"] = normalized_serial in manual_aliases
         equipment["_apelido_local"] = manual_aliases.get(
@@ -1751,6 +1772,7 @@ class EquipamentoUpdatePayload(BaseModel):
     tipo: Optional[str] = Field("", description="Tipo (Notebook, Micro Computador, Headsets...)")
     apelido: Optional[str] = Field("", description="Apelido / Hostname")
     idCliente: Optional[str] = Field("", description="ID do Cliente")
+    revisao: Optional[str] = Field(None, min_length=64, max_length=64)
     # Mantidos para compatibilidade com clientes antigos; a rota ignora esses campos.
     endereco: Optional[str] = Field("", description="Endereço carregado de EquipamentosDetalhes")
     cidade: Optional[str] = Field("", description="Cidade carregada de EquipamentosDetalhes")
@@ -1785,12 +1807,21 @@ class ComparisonRestorePayload(BaseModel):
     preview_token: str = Field(..., min_length=64, max_length=64)
 
 
+def _public_equipment(equipment: Dict[str, Any]) -> Dict[str, Any]:
+    public = {key: value for key, value in equipment.items() if not key.startswith("_")}
+    revision = equipment.get("_revisao")
+    if revision:
+        public["revisao"] = revision
+    return public
+
+
 def _edit_equipment_workbook(
     wb,
     payload: EquipamentoUpdatePayload,
     target_sheet_name: Optional[str] = None,
     record_must_exist: Optional[bool] = None,
     fields_to_update: Optional[Set[str]] = None,
+    expected_revision: Optional[str] = None,
 ):
     if target_sheet_name is None:
         target_sheet_name = next(
@@ -1826,6 +1857,29 @@ def _edit_equipment_workbook(
             status_code=409,
             detail=f"A série {payload.serial.strip()} aparece mais de uma vez na aba '{ws.title}'; nenhum registro foi alterado.",
         )
+    if matching_rows and expected_revision:
+        target_row_for_revision = matching_rows[0]
+
+        def row_value(*aliases: str) -> Any:
+            column = next(
+                (col_map.get(normalize_workbook_header(alias)) for alias in aliases
+                 if col_map.get(normalize_workbook_header(alias))),
+                None,
+            )
+            return ws.cell(row=target_row_for_revision, column=column).value if column else ""
+
+        current_revision = _equipment_revision(
+            ws.cell(row=target_row_for_revision, column=serial_col).value,
+            row_value("MODELO"),
+            row_value("TIPO", "CLASSEEQUIPAMENTO"),
+            row_value(*DETAILS_ALIAS_HEADER_ALIASES),
+            row_value("IDCLIENTE", "ID CLIENTE"),
+        )
+        if not hmac.compare_digest(expected_revision, current_revision):
+            raise HTTPException(
+                status_code=409,
+                detail="O equipamento foi alterado desde a leitura; recarregue os dados antes de salvar.",
+            )
     if record_must_exist is True and not matching_rows:
         raise HTTPException(
             status_code=409,
@@ -1874,6 +1928,7 @@ def update_equipment_in_workbook_file(
     target_sheet_name: Optional[str] = None,
     record_must_exist: Optional[bool] = None,
     fields_to_update: Optional[Set[str]] = None,
+    expected_revision: Optional[str] = None,
 ) -> bool:
     """Prepare and validate a workbook update before its atomic replacement."""
     file_path = Path(file_path)
@@ -1885,7 +1940,7 @@ def update_equipment_in_workbook_file(
                 transaction,
                 file_path,
                 lambda wb: _edit_equipment_workbook(
-                    wb, payload, target_sheet_name, record_must_exist, fields_to_update
+                    wb, payload, target_sheet_name, record_must_exist, fields_to_update, expected_revision
                 ),
                 allow_dimension_growth=True,
             )
@@ -1894,7 +1949,7 @@ def update_equipment_in_workbook_file(
                 own_transaction,
                 file_path,
                 lambda wb: _edit_equipment_workbook(
-                    wb, payload, target_sheet_name, record_must_exist, fields_to_update
+                    wb, payload, target_sheet_name, record_must_exist, fields_to_update, expected_revision
                 ),
                 allow_dimension_growth=True,
             )
@@ -1970,6 +2025,19 @@ def save_equipment_to_excel(
                     status_code=409,
                     detail="Este equipamento não está mais na base carregada; recarregue o inventário antes de editar.",
                 )
+            expected_revision = payload.revisao
+            if cached_equipment is not None:
+                current_revision = str(cached_equipment.get("_revisao") or "")
+                if not expected_revision:
+                    raise HTTPException(
+                        status_code=409,
+                        detail="A revisão deste equipamento não foi informada; recarregue-o antes de salvar.",
+                    )
+                if not hmac.compare_digest(expected_revision, current_revision):
+                    raise HTTPException(
+                        status_code=409,
+                        detail="O equipamento foi alterado desde a leitura; recarregue os dados antes de salvar.",
+                    )
             if cached_equipment is not None and payload.novo:
                 raise HTTPException(
                     status_code=409,
@@ -2026,6 +2094,7 @@ def save_equipment_to_excel(
                 target_sheet_name=target_sheet,
                 record_must_exist=not payload.novo,
                 fields_to_update=requested_fields,
+                expected_revision=expected_revision,
             )
             if not saved:
                 raise HTTPException(status_code=500, detail="Não foi possível atualizar o equipamento na planilha.")
@@ -2071,6 +2140,9 @@ def save_equipment_to_excel(
                 "_apelido_base": base_alias,
                 "_apelido_local": local_alias,
                 "_apelido_manual_override": normalized_serial in manual_aliases,
+                "_revisao": _equipment_revision(
+                    target_serial_upper, modelo, tipo, base_alias, id_cliente
+                ),
                 "idCliente": id_cliente,
                 "descricao_sugerida": desc_sugerida,
                 "endereco_instalacao": endereco,
@@ -2108,8 +2180,10 @@ def save_equipment_to_excel(
 def get_equipamento(serial: str):
     """Busca um equipamento pelo número de série (sem distinção de maiúsculas/minúsculas)."""
     clean_serial = serial.strip().upper()
-    if clean_serial in equipamentos_cache:
-        return {key: value for key, value in equipamentos_cache[clean_serial].items() if not key.startswith("_")}
+    with STATE_LOCK:
+        equipment = deepcopy(equipamentos_cache.get(clean_serial))
+    if equipment is not None:
+        return _public_equipment(equipment)
 
     raise HTTPException(status_code=404, detail=f"Equipamento com serial '{serial}' não encontrado na base de dados.")
 
@@ -2132,6 +2206,11 @@ def salvar_equipamento(payload: EquipamentoUpdatePayload):
         raise HTTPException(
             status_code=409,
             detail="Este equipamento não está mais na base carregada; recarregue o inventário antes de editar.",
+        )
+    if equipamento_existente is not None and not payload.revisao:
+        raise HTTPException(
+            status_code=409,
+            detail="A revisão deste equipamento não foi informada; recarregue-o antes de salvar.",
         )
     if equipamento_existente is not None:
         # Para equipamentos já cadastrados, o apelido só pode ser alterado pela rota dedicada.
@@ -2160,7 +2239,7 @@ def salvar_equipamento(payload: EquipamentoUpdatePayload):
     return {
         "sucesso": True,
         "mensagem": f"Equipamento {target_serial} atualizado com sucesso no site e na planilha Excel!",
-        "equipamento": {key: value for key, value in equipamentos_cache[target_serial].items() if not key.startswith("_")},
+        "equipamento": _public_equipment(equipamentos_cache[target_serial]),
         "total_modificados": total_mod
     }
 
@@ -2415,7 +2494,15 @@ def aplicar_alteracao_apelido(
 
             updated_equipment = dict(equipamento)
             updated_equipment["_apelido_local"] = novo_apelido
-            updated_equipment["_apelido_base"] = novo_apelido
+            if excel_salvo:
+                updated_equipment["_apelido_base"] = novo_apelido
+                updated_equipment["_revisao"] = _equipment_revision(
+                    updated_equipment.get("serial"),
+                    updated_equipment.get("modelo"),
+                    updated_equipment.get("tipo"),
+                    updated_equipment.get("_apelido_base"),
+                    updated_equipment.get("idCliente"),
+                )
             updated_equipment["_apelido_manual_override"] = True
             _apply_effective_alias(
                 updated_equipment,
@@ -2452,7 +2539,7 @@ def atualizar_apelido(payload: ApelidoUpdatePayload):
     return {
         "sucesso": True,
         "mensagem": "Apelido salvo e aplicado nas próximas pesquisas.",
-        **{**resultado, "equipamento": {key: value for key, value in resultado["equipamento"].items() if not key.startswith("_")}},
+        **{**resultado, "equipamento": _public_equipment(resultado["equipamento"])},
         "total_modificados": len(load_modified_apelidos()),
     }
 
@@ -2517,7 +2604,7 @@ def excluir_evento_historico_apelido(evento_id: str):
         "sucesso": True,
         "evento_id": evento_id,
         "tipo": tipo_evento,
-        "equipamento": {key: value for key, value in equipamento_restaurado.items() if not key.startswith("_")},
+        "equipamento": _public_equipment(equipamento_restaurado),
         "mensagem": "Valor anterior restaurado e salvo; registro removido do histórico.",
     }
 
@@ -2562,7 +2649,7 @@ def desfazer_alteracao_apelido(payload: ApelidoUndoPayload):
     return {
         "sucesso": True,
         "mensagem": "Apelido restaurado; a reversão foi registrada no histórico.",
-        **{**resultado, "equipamento": {key: value for key, value in resultado["equipamento"].items() if not key.startswith("_")}},
+        **{**resultado, "equipamento": _public_equipment(resultado["equipamento"])},
         "total_modificados": len(load_modified_apelidos()),
     }
 
