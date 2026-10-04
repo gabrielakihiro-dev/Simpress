@@ -323,7 +323,8 @@ def create_inventory_history_router(ctx):
                     transaction.stage_bytes(target_path, backup_bytes, validate_staged_backup)
 
                 transaction.apply()
-                if not ctx.load_database(transaction_locked=True):
+                prepared_state = ctx.load_database(transaction_locked=True, publish=False)
+                if not isinstance(prepared_state, dict):
                     raise RuntimeError("O conjunto restaurado não pôde ser carregado pelo site.")
 
                 restored_files = {role: path.name for role, path in target_files.items()}
@@ -339,7 +340,7 @@ def create_inventory_history_router(ctx):
                     "arquivos_restaurados": restored_files,
                     "total_endpoint_restaurado": context["backup_files"]["endpoint"]["records"],
                     "total_detalhes_restaurado": context["backup_files"]["detalhes"]["records"],
-                    "total_equipamentos_carregados": ctx.stats_cache.get("total_equipamentos", 0),
+                    "total_equipamentos_carregados": prepared_state["stats_cache"].get("total_equipamentos", 0),
                     "backup_diretorio": str(persistent_backup_dir.relative_to(ctx.INPUT_DIR)),
                     "backup_arquivos_ausentes": missing_current_files,
                     "backup_arquivos_invalidos": invalid_current_files,
@@ -385,6 +386,7 @@ def create_inventory_history_router(ctx):
 
                 transaction.update_json(ctx.COMPARISON_HISTORY_FILE, append_restoration, [])
                 transaction.commit()
+                ctx.publish_database_state(prepared_state)
 
             return {
                 "sucesso": True,
@@ -529,9 +531,14 @@ def create_inventory_history_router(ctx):
 
             transaction.update_json(ctx.COMPARISON_HISTORY_FILE, mark_divergence_resolved, [])
             transaction.apply()
-            if acao == "excluir" and not ctx.load_database(transaction_locked=True):
-                raise RuntimeError("A base não pôde ser recarregada após excluir o override manual.")
+            prepared_state = None
+            if acao == "excluir":
+                prepared_state = ctx.load_database(transaction_locked=True, publish=False)
+                if not isinstance(prepared_state, dict):
+                    raise RuntimeError("A base não pôde ser recarregada após excluir o override manual.")
             transaction.commit()
+            if prepared_state is not None:
+                ctx.publish_database_state(prepared_state)
 
         equipment = next(
             (

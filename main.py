@@ -1463,9 +1463,9 @@ def save_custom_units(units: List[Dict[str, Any]]) -> None:
         print("[ERRO] Falha ao gravar o catálogo local de unidades.")
         raise
 
-def load_database(transaction_locked: bool = False) -> bool:
+def load_database(transaction_locked: bool = False, publish: bool = True) -> Any:
     if transaction_locked:
-        return _load_database_unlocked()
+        return _load_database_unlocked(publish=publish)
     with lock_paths([TRANSACTION_ROOT / ".atomic-transactions"]):
         detail_files = get_details_files()
         with lock_paths([
@@ -1475,10 +1475,20 @@ def load_database(transaction_locked: bool = False) -> bool:
             CUSTOM_UNIDADES_FILE,
             EXPORT_MODEL_FILE,
         ]):
-            return _load_database_unlocked()
+            return _load_database_unlocked(publish=publish)
 
 
-def _load_database_unlocked() -> bool:
+def publish_database_state(state: Dict[str, Any]) -> None:
+    global equipamentos_cache, unidades_cache, stats_cache
+    if not all(key in state for key in ("equipamentos_cache", "unidades_cache", "stats_cache")):
+        raise ValueError("O estado de inventário preparado está incompleto.")
+    with STATE_LOCK:
+        equipamentos_cache = state["equipamentos_cache"]
+        unidades_cache = state["unidades_cache"]
+        stats_cache = state["stats_cache"]
+
+
+def _load_database_unlocked(publish: bool = True) -> Any:
     global equipamentos_cache, unidades_cache, stats_cache
     active_details_file = get_parque_file()
     if active_details_file is None or not active_details_file.exists():
@@ -1748,12 +1758,17 @@ def _load_database_unlocked() -> bool:
     }
 
     # Só publica os novos caches depois de ler, converter e validar toda a planilha.
-    with STATE_LOCK:
-        equipamentos_cache = new_equipamentos_cache
-        unidades_cache = new_unidades_cache
-        stats_cache = new_stats_cache
+    state = {
+        "equipamentos_cache": new_equipamentos_cache,
+        "unidades_cache": new_unidades_cache,
+        "stats_cache": new_stats_cache,
+    }
+    if publish:
+        publish_database_state(state)
 
-    print(f"[SUCESSO] Base carregada: {len(equipamentos_cache)} equipamentos ({len(mod_apelidos)} com apelido modificado) e {len(unidades_cache)} unidades catalogadas.")
+    print(f"[SUCESSO] Base carregada: {len(new_equipamentos_cache)} equipamentos ({len(mod_apelidos)} com apelido modificado) e {len(new_unidades_cache)} unidades catalogadas.")
+    if not publish:
+        return state
     return True
 
 # Recover incomplete local transactions before reading or creating operational files.
