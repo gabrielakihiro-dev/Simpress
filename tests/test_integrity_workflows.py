@@ -872,7 +872,7 @@ class WorkflowIntegrityTests(unittest.TestCase):
         )
         self.assertTrue(any(item["motivo"].startswith("Série duplicada") for item in review))
         self.assertTrue(any(item["serie"] == "" for item in review))
-        self.assertTrue(any(item["serie"] == "NOSOURCE" and "não encontrada na InvAll" in item["motivo"] for item in review))
+        self.assertTrue(any(item["serie"] == "NOSOURCE" and "não encontrada no Endpoint" in item["motivo"] for item in review))
         self.assertEqual(self.details.read_bytes(), before)
 
     def test_export_changes_only_unique_changed_apelido_cells_and_keeps_other_content(self):
@@ -1049,7 +1049,7 @@ class WorkflowIntegrityTests(unittest.TestCase):
         summary = json.loads(unquote(response.headers["x-conferencia-resumo"]))
         self.assertEqual(summary, [
             {
-                "motivo": "Registros da InvAll que exigem conferência",
+                "motivo": "Registros do Endpoint que exigem conferência",
                 "total": 1,
                 "series": ["S2"],
             },
@@ -1312,7 +1312,7 @@ class WorkflowIntegrityTests(unittest.TestCase):
         })
         self.assertTrue(recorded[0]["horario"])
         self.assertTrue(any(
-            item["serie"] == "" and "EquipamentosDetalhes" in item["motivo"]
+            item["serie"] == "" and "na Simpress" in item["motivo"]
             for item in comparison_after[-1]["comparacao"]["apelidos_sem_atualizacao"]
         ))
 

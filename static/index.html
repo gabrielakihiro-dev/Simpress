@@ -983,7 +983,7 @@ Horário disponível para atendimento:</textarea>
         </div>
 
         <p class="rounded-lg border border-slate-800 bg-slate-950/50 px-3 py-2 text-[11px] text-slate-400" role="note">
-          Endereço, cidade, UF, CEP e CNPJ são carregados automaticamente da planilha EquipamentosDetalhes ao atualizar as planilhas.
+          Endereço, cidade, UF, CEP e CNPJ são carregados automaticamente da planilha da Simpress ao atualizar as planilhas.
         </p>
 
       </div>
@@ -1164,7 +1164,7 @@ Horário disponível para atendimento:</textarea>
             <i data-lucide="upload" class="w-5 h-5 text-sky-400"></i>
             Atualizar planilhas
           </h3>
-          <p class="text-xs text-slate-400 mt-1">Envie os dois arquivos para atualizar o cadastro. Endereço e localidade acompanham EquipamentosDetalhes; apelidos alterados manualmente continuam prioritários e divergências aparecem no histórico.</p>
+          <p class="text-xs text-slate-400 mt-1">Envie os dois arquivos para atualizar o cadastro. Endereço e localidade acompanham a Simpress; apelidos alterados manualmente continuam prioritários e divergências aparecem no histórico.</p>
         </div>
         <button type="button" onclick="fecharModalAtualizarPlanilhas()" class="text-slate-400 hover:text-white p-1 rounded-lg hover:bg-slate-800 transition" aria-label="Fechar">
           <i data-lucide="x" class="w-5 h-5"></i>
@@ -1173,20 +1173,20 @@ Horário disponível para atendimento:</textarea>
 
       <div class="overflow-y-auto py-4 space-y-4">
         <label class="block bg-slate-950/60 border border-slate-800 rounded-xl p-4">
-          <span class="block text-sm text-white font-semibold">1. Endpoint — InvAllComputersSummary</span>
+          <span class="block text-sm text-white font-semibold">1. Endpoint</span>
           <span class="block text-[11px] text-slate-400 mt-1">Precisa ter nome do computador e rótulo de serviço/número de série.</span>
           <input id="upload-endpoint-file" type="file" accept=".xlsx,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" class="block w-full mt-3 text-xs text-slate-300 file:mr-3 file:rounded-lg file:border-0 file:bg-sky-500/15 file:px-3 file:py-2 file:text-xs file:font-semibold file:text-sky-300 hover:file:bg-sky-500/25" />
           <span id="upload-endpoint-name" class="block text-[11px] text-slate-500 mt-2">Nenhum arquivo selecionado</span>
         </label>
 
         <label class="block bg-slate-950/60 border border-slate-800 rounded-xl p-4">
-          <span class="block text-sm text-white font-semibold">2. EquipamentosDetalhes</span>
+          <span class="block text-sm text-white font-semibold">2. Simpress</span>
           <span class="block text-[11px] text-slate-400 mt-1">Precisa ter número de série, modelo, apelido e cidade.</span>
           <input id="upload-details-file" type="file" accept=".xlsx,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" class="block w-full mt-3 text-xs text-slate-300 file:mr-3 file:rounded-lg file:border-0 file:bg-sky-500/15 file:px-3 file:py-2 file:text-xs file:font-semibold file:text-sky-300 hover:file:bg-sky-500/25" />
           <span id="upload-details-name" class="block text-[11px] text-slate-500 mt-2">Nenhum arquivo selecionado</span>
         </label>
 
-        <p class="text-[11px] text-slate-500">Cada arquivo pode ter até 30 MB. Séries existentes mantêm os demais campos; endereço e localidade são sincronizados com EquipamentosDetalhes. Apelidos manuais prevalecem, e cada divergência permite manter ou remover o override. Séries novas são acrescentadas.</p>
+        <p class="text-[11px] text-slate-500">Cada arquivo pode ter até 30 MB. Séries existentes mantêm os demais campos; endereço e localidade são sincronizados com a Simpress. Apelidos manuais prevalecem, e cada divergência permite manter ou remover o override. Séries novas são acrescentadas.</p>
       <p id="upload-planilhas-status" class="hidden text-xs rounded-lg px-3 py-2" role="status" aria-live="polite" aria-atomic="true"></p>
       </div>
 

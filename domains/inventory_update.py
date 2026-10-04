@@ -10,7 +10,7 @@ async def read_uploaded_xlsx(upload: Any, role: str, context: Any) -> Dict[str, 
     ctx = context
     display_role = {
         "endpoint": "Endpoint",
-        "detalhes": "EquipamentosDetalhes",
+        "detalhes": "Simpress",
     }.get(role, role)
     original_name = ctx.re.split(r"[/\\]", str(upload.filename or ""))[-1]
     if not original_name or Path(original_name).suffix.lower() != ".xlsx":
@@ -174,7 +174,7 @@ def _commit_inventory_files(staged: Dict[str, Any], context: Any):
                 comparison["apelidos_sem_atualizacao"].append({
                     "serie": "",
                     "computador": alias_without_serial,
-                    "motivo": "Número de série vazio em EquipamentosDetalhes; nenhum hostname foi associado.",
+                    "motivo": "Número de série vazio na Simpress; nenhum hostname foi associado.",
                 })
         comparison["divergencias_apelidos_manuais"] = manual_divergences
         comparison["fontes_apelidos_manuais"] = manual_alias_sources
