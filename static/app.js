@@ -1777,7 +1777,7 @@
         window.URL.revokeObjectURL(url);
         a.remove();
 
-        showToast(`Planilha oficial ${filename} baixada com sucesso!`, "success");
+        showToast("Planilha Exportada com Sucesso", "success");
 
       } catch (err) {
         console.error("Erro ao gerar planilha:", err);
@@ -2452,21 +2452,6 @@
         const filename = match && match[1]
           ? match[1].replace(/['"]/g, "")
           : "EquipamentosDetalhes-atualizados.xlsx";
-        const pendingReview = Number(res.headers.get("X-Total-Conferencia") || 0);
-        let reviewSummary = [];
-        const encodedReviewSummary = res.headers.get("X-Conferencia-Resumo");
-        if (encodedReviewSummary) {
-          try {
-            const parsedSummary = JSON.parse(decodeURIComponent(encodedReviewSummary));
-            if (Array.isArray(parsedSummary)) reviewSummary = parsedSummary;
-          } catch (error) {
-            console.warn("Não foi possível ler os detalhes de conferência da exportação:", error);
-          }
-        }
-        const aliasUpdateCount = Number(res.headers.get("X-Total-Alterados") || 0);
-        const idClienteUpdateCount = Number(res.headers.get("X-Total-IdCliente-Alterados") || 0);
-        const historyAliasCount = Number(res.headers.get("X-Historico-Apelidos-Atualizados") || 0);
-        const historyTimestamp = res.headers.get("X-Historico-Horario") || "";
         const blob = await res.blob();
         const url = window.URL.createObjectURL(blob);
         const link = document.createElement("a");
@@ -2477,22 +2462,7 @@
         link.remove();
         window.setTimeout(() => window.URL.revokeObjectURL(url), 1000);
 
-        const historyMessage = historyTimestamp
-          ? `Último histórico: ${historyAliasCount.toLocaleString("pt-BR")} ${historyAliasCount === 1 ? "apelido atualizado" : "apelidos atualizados"} em ${formatarHorarioHistorico(historyTimestamp)}.`
-          : "Não há atualização registrada no histórico.";
-        const reviewMessage = pendingReview
-          ? ` ${pendingReview} item(ns) ficaram para conferência. ${reviewSummary.map((item) => {
-              const series = Array.isArray(item.series) ? item.series.filter(Boolean) : [];
-              const listed = series.length ? ` Séries: ${series.join(", ")}${Number(item.total) > series.length ? ", entre outras" : ""}.` : "";
-              return `${item.motivo}: ${Number(item.total) || 0}.${listed}`;
-            }).join(" ")}`
-          : "";
-        const aliasLabel = aliasUpdateCount === 1 ? "apelido" : "apelidos";
-        const idClienteLabel = idClienteUpdateCount === 1 ? "IdCliente" : "IdClientes";
-        showToast(
-          `Planilha ${filename} exportada. ${aliasUpdateCount} ${aliasLabel} e ${idClienteUpdateCount} ${idClienteLabel} atualizados na exportação. ${historyMessage}${reviewMessage}`,
-          pendingReview ? "warning" : "success"
-        );
+        showToast("Planilha Exportada com Sucesso", "success");
       } catch (err) {
         console.error("Erro ao exportar planilha de equipamentos:", err);
         showToast(err.message, "error");

@@ -184,12 +184,12 @@ class MaintenanceContractTests(unittest.TestCase):
         self.assertRegex(html, r'id="toast-container"[^>]*z-\[130\]')
         self.assertIn(".modal-overlay { z-index: 120 !important; }", css)
 
-    def test_partial_export_ui_shows_reason_and_record_samples(self):
+    def test_excel_exports_show_only_success_confirmation(self):
         script = (app_config.STATIC_DIR / "app.js").read_text(encoding="utf-8")
-        self.assertIn('res.headers.get("X-Conferencia-Resumo")', script)
-        self.assertIn("reviewSummary.map", script)
-        self.assertIn('` Séries: ${series.join(", ")}', script)
-        self.assertIn('pendingReview ? "warning" : "success"', script)
+        self.assertEqual(
+            script.count('showToast("Planilha Exportada com Sucesso", "success");'),
+            2,
+        )
 
     def test_tailwind_build_only_scans_fixed_local_assets(self):
         configuration = (PROJECT_ROOT / "tailwind.config.cjs").read_text(encoding="utf-8")
