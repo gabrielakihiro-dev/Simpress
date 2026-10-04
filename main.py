@@ -8,6 +8,7 @@ import re
 import shutil
 import sys
 import threading
+import time
 import unicodedata
 import uuid
 from copy import deepcopy
@@ -19,7 +20,7 @@ from urllib.parse import urlsplit
 
 import openpyxl
 import pandas as pd
-from fastapi import FastAPI, File, HTTPException, Query, UploadFile
+from fastapi import FastAPI, File, Form, HTTPException, Query, UploadFile
 from fastapi.responses import FileResponse, JSONResponse, StreamingResponse
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel, Field
@@ -91,6 +92,7 @@ from domains.inventory_comparison import (
     normalize_reference_value,
 )
 from domains.inventory_update import read_uploaded_xlsx as _read_uploaded_xlsx
+from domains.inventory_update import preview_inventory_files
 from domains.inventory_update import update_inventory_files
 
 # Runtime synchronization and in-memory state remain in the application entry point.
@@ -98,6 +100,12 @@ MODIFIED_APELIDOS_LOCK = threading.RLock()
 ALIAS_HISTORY_LOCK = threading.RLock()
 COMPARISON_HISTORY_LOCK = threading.RLock()
 STATE_LOCK = threading.RLock()
+UPLOAD_PREVIEW_TOKEN_SECRET = os.urandom(32)
+UPLOAD_PREVIEW_TOKEN_TTL_SECONDS = 10 * 60
+INVENTORY_UPLOAD_PATHS = frozenset({
+    "/api/planilhas/previsualizar",
+    "/api/planilhas/atualizar",
+})
 
 
 @contextmanager
@@ -701,6 +709,76 @@ def select_upload_table(tables: List[Dict[str, Any]], role: str) -> Dict[str, An
     return table
 
 
+def inventory_update_preview_summary(
+    current_tables: Dict[str, Dict[str, Any]],
+    incoming_tables: Dict[str, Dict[str, Any]],
+) -> Dict[str, Dict[str, int]]:
+    """Return counts only; never include row values or serials in an upload preview."""
+    summary = {}
+    for role in ("endpoint", "detalhes"):
+        def count_serials(table):
+            counts: Dict[str, int] = {}
+            for record in table.get("records", []):
+                serial_key = normalize_reference_value(_upload_serial_value(record, role))
+                if serial_key:
+                    counts[serial_key] = counts.get(serial_key, 0) + 1
+            return counts
+
+        current_counts = count_serials(current_tables[role])
+        incoming_counts = count_serials(incoming_tables[role])
+        current_serials = set(current_counts)
+        incoming_serials = set(incoming_counts)
+        summary[role] = {
+            "linhas_atuais": len(current_tables[role].get("records", [])),
+            "linhas_novas": len(incoming_tables[role].get("records", [])),
+            "series_novas": len(incoming_serials - current_serials),
+            "series_removidas": len(current_serials - incoming_serials),
+            "series_duplicadas_no_arquivo_novo": sum(
+                1 for count in incoming_counts.values() if count > 1
+            ),
+        }
+    return summary
+
+
+def _inventory_preview_token_payload(issued_at: int, staged, current_bytes) -> bytes:
+    payload = {
+        "versao": 1,
+        "emitido_em": issued_at,
+        "uploads": {
+            role: hashlib.sha256(staged[role]["bytes"]).hexdigest()
+            for role in ("endpoint", "detalhes")
+        },
+        "bases_atuais": {
+            role: hashlib.sha256(current_bytes[role]).hexdigest()
+            for role in ("endpoint", "detalhes")
+        },
+    }
+    return json.dumps(payload, sort_keys=True, separators=(",", ":")).encode("utf-8")
+
+
+def create_inventory_preview_token(staged, current_bytes) -> str:
+    issued_at = int(time.time())
+    payload = _inventory_preview_token_payload(issued_at, staged, current_bytes)
+    signature = hmac.new(UPLOAD_PREVIEW_TOKEN_SECRET, payload, hashlib.sha256).hexdigest()
+    return f"{issued_at}.{signature}"
+
+
+def verify_inventory_preview_token(token, staged, current_bytes) -> bool:
+    try:
+        issued_at_text, supplied_signature = str(token).split(".", 1)
+        issued_at = int(issued_at_text)
+        age = int(time.time()) - issued_at
+        if age < 0 or age > UPLOAD_PREVIEW_TOKEN_TTL_SECONDS:
+            return False
+        payload = _inventory_preview_token_payload(issued_at, staged, current_bytes)
+        expected_signature = hmac.new(
+            UPLOAD_PREVIEW_TOKEN_SECRET, payload, hashlib.sha256
+        ).hexdigest()
+        return hmac.compare_digest(supplied_signature, expected_signature)
+    except (AttributeError, TypeError, ValueError):
+        return False
+
+
 def _manual_alias_source_snapshots(
     overrides: Dict[str, str],
     endpoint_table: Dict[str, Any],
@@ -1254,7 +1332,7 @@ class LocalRequestSafetyMiddleware:
             await response(scope, receive, send)
             return
 
-        if path == "/api/planilhas/atualizar":
+        if path in INVENTORY_UPLOAD_PATHS:
             content_length = headers.get(b"content-length")
             if content_length is not None:
                 try:
@@ -1286,7 +1364,7 @@ class LocalRequestSafetyMiddleware:
         async def limited_receive():
             nonlocal request_size
             message = await receive()
-            if path == "/api/planilhas/atualizar" and message["type"] == "http.request":
+            if path in INVENTORY_UPLOAD_PATHS and message["type"] == "http.request":
                 request_size += len(message.get("body", b""))
                 if request_size > MAX_UPLOAD_REQUEST_BYTES:
                     raise UploadBodyTooLarge()
@@ -2774,15 +2852,45 @@ async def read_uploaded_xlsx(upload: UploadFile, role: str) -> Dict[str, Any]:
     return await _read_uploaded_xlsx(upload, role, sys.modules[__name__])
 
 
-@app.post("/api/planilhas/atualizar")
-async def atualizar_planilhas(
+async def previsualizar_planilhas(endpoint_file: UploadFile, details_file: UploadFile):
+    return await preview_inventory_files(
+        endpoint_file,
+        details_file,
+        context=sys.modules[__name__],
+    )
+
+
+@app.post("/api/planilhas/previsualizar")
+async def previsualizar_planilhas_endpoint(
     endpoint_file: UploadFile = File(...),
     details_file: UploadFile = File(...),
+):
+    return await previsualizar_planilhas(endpoint_file, details_file)
+
+
+async def atualizar_planilhas(
+    endpoint_file: UploadFile,
+    details_file: UploadFile,
+    preview_token: Optional[str] = None,
 ):
     return await update_inventory_files(
         endpoint_file,
         details_file,
         context=sys.modules[__name__],
+        preview_token=preview_token,
+    )
+
+
+@app.post("/api/planilhas/atualizar")
+async def atualizar_planilhas_endpoint(
+    endpoint_file: UploadFile = File(...),
+    details_file: UploadFile = File(...),
+    preview_token: str = Form(..., min_length=66, max_length=90),
+):
+    return await atualizar_planilhas(
+        endpoint_file,
+        details_file,
+        preview_token=preview_token,
     )
 
 

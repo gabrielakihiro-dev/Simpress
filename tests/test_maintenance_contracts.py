@@ -53,7 +53,7 @@ def _xlsx_with_worksheet_xml(*worksheet_xml: str) -> bytes:
     return content.getvalue()
 
 
-def _run_local_safety_middleware(host_values, origin=None, path="/api/stats"):
+def _run_local_safety_middleware(host_values, origin=None, path="/api/stats", content_length=None):
     state = {"passed": False, "messages": []}
 
     async def app(scope, receive, send):
@@ -70,6 +70,8 @@ def _run_local_safety_middleware(host_values, origin=None, path="/api/stats"):
     headers = [(b"host", host.encode("ascii")) for host in host_values]
     if origin is not None:
         headers.append((b"origin", origin.encode("ascii")))
+    if content_length is not None:
+        headers.append((b"content-length", str(content_length).encode("ascii")))
     scope = {"type": "http", "path": path, "headers": headers}
     middleware = main.LocalRequestSafetyMiddleware(app)
     asyncio.run(middleware(scope, receive, send))
@@ -82,6 +84,17 @@ def _run_local_safety_middleware(host_values, origin=None, path="/api/stats"):
 
 
 class MaintenanceContractTests(unittest.TestCase):
+    def test_both_inventory_upload_routes_share_the_request_size_limit(self):
+        for path in main.INVENTORY_UPLOAD_PATHS:
+            with self.subTest(path=path):
+                status, passed = _run_local_safety_middleware(
+                    ["127.0.0.1:8000"],
+                    path=path,
+                    content_length=main.MAX_UPLOAD_REQUEST_BYTES + 1,
+                )
+                self.assertEqual(status, 413)
+                self.assertFalse(passed)
+
     def test_application_paths_remain_project_relative_and_reexported(self):
         self.assertEqual(app_config.BASE_DIR, PROJECT_ROOT.resolve())
         self.assertEqual(main.BASE_DIR, app_config.BASE_DIR)
@@ -126,6 +139,7 @@ class MaintenanceContractTests(unittest.TestCase):
             "/api/equipamento/apelidos-modificados": {"get"},
             "/api/exportar-equipamentos": {"get"},
             "/api/recarregar-base": {"post"},
+            "/api/planilhas/previsualizar": {"post"},
             "/api/planilhas/atualizar": {"post"},
             "/api/unidade/salvar": {"post"},
             "/api/unidades": {"get"},
@@ -140,6 +154,10 @@ class MaintenanceContractTests(unittest.TestCase):
             with self.subTest(path=path):
                 self.assertIn(path, paths)
                 self.assertTrue(methods.issubset(paths[path]))
+        upload = paths["/api/planilhas/atualizar"]["post"]
+        body_ref = upload["requestBody"]["content"]["multipart/form-data"]["schema"]["$ref"]
+        schema_name = body_ref.rsplit("/", 1)[-1]
+        self.assertIn("preview_token", main.app.openapi()["components"]["schemas"][schema_name]["required"])
 
     def test_readiness_endpoint_returns_the_existing_file_and_function_report(self):
         report = {

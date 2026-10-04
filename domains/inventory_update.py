@@ -1,7 +1,7 @@
 """Transactional workflow for replacing and comparing inventory snapshots."""
 
 import asyncio
-from typing import Any, Dict
+from typing import Any, Dict, Optional
 
 
 async def read_uploaded_xlsx(upload: Any, role: str, context: Any) -> Dict[str, Any]:
@@ -24,7 +24,88 @@ async def read_uploaded_xlsx(upload: Any, role: str, context: Any) -> Dict[str, 
     table = await asyncio.to_thread(ctx.validate_uploaded_workbook, file_bytes, role)
     return {"name": original_name, "bytes": file_bytes, "table": table}
 
-async def update_inventory_files(endpoint_file: Any, details_file: Any, context: Any):
+async def preview_inventory_files(endpoint_file: Any, details_file: Any, context: Any):
+    """Validate incoming files and compare them with a locked read-only snapshot."""
+    ctx = context
+    uploads = [endpoint_file, details_file]
+    try:
+        staged = {
+            "endpoint": await read_uploaded_xlsx(endpoint_file, "endpoint", ctx),
+            "detalhes": await read_uploaded_xlsx(details_file, "detalhes", ctx),
+        }
+        target_files = {
+            "endpoint": ctx.ENDPOINT_UPLOAD_FILE,
+            "detalhes": ctx.DETAILS_UPLOAD_FILE,
+        }
+        if any(not path.is_file() for path in target_files.values()):
+            raise ctx.HTTPException(
+                status_code=409,
+                detail="A base ativa está incompleta; não foi possível gerar a prévia.",
+            )
+        with ctx.lock_paths(target_files.values()):
+            if any(not path.is_file() for path in target_files.values()):
+                raise ctx.HTTPException(
+                    status_code=409,
+                    detail="A base ativa está incompleta; não foi possível gerar a prévia.",
+                )
+            current_bytes = {
+                role: target_files[role].read_bytes()
+                for role in ("endpoint", "detalhes")
+            }
+
+        try:
+            current_tables = {
+                "endpoint": await asyncio.to_thread(
+                    ctx.validate_uploaded_workbook, current_bytes["endpoint"], "endpoint"
+                ),
+                "detalhes": await asyncio.to_thread(
+                    ctx.validate_uploaded_workbook, current_bytes["detalhes"], "detalhes"
+                ),
+            }
+        except Exception as error:
+            if isinstance(error, ctx.HTTPException):
+                raise ctx.HTTPException(
+                    status_code=409,
+                    detail="A base ativa não pôde ser validada; a prévia foi cancelada.",
+                ) from error
+            raise
+
+        changes = await asyncio.to_thread(
+            ctx.inventory_update_preview_summary,
+            {role: current_tables[role] for role in ("endpoint", "detalhes")},
+            {role: staged[role]["table"] for role in ("endpoint", "detalhes")},
+        )
+        return {
+            "arquivos": {
+                role: {
+                    "nome": staged[role]["name"],
+                    "linhas": len(staged[role]["table"].get("records", [])),
+                }
+                for role in ("endpoint", "detalhes")
+            },
+            "alteracoes": changes,
+            "preview_token": ctx.create_inventory_preview_token(staged, current_bytes),
+        }
+    except ctx.HTTPException:
+        raise
+    except ctx.FileBusyError as error:
+        raise ctx.HTTPException(status_code=409, detail=str(error)) from error
+    except (ctx.WorkbookSafetyError, ctx.FileTransactionError) as error:
+        raise ctx.HTTPException(
+            status_code=400,
+            detail=f"Não foi possível gerar a prévia com segurança. {error}",
+        ) from error
+    finally:
+        for upload in uploads:
+            await upload.close()
+
+
+async def update_inventory_files(
+    endpoint_file: Any,
+    details_file: Any,
+    context: Any,
+    preview_token: Optional[str] = None,
+):
     """Read uploads asynchronously and run workbook and transaction work off-loop."""
     ctx = context
     uploads = [endpoint_file, details_file]
@@ -35,7 +116,9 @@ async def update_inventory_files(endpoint_file: Any, details_file: Any, context:
             "detalhes": await read_uploaded_xlsx(details_file, "detalhes", ctx),
         }
 
-        worker = asyncio.create_task(asyncio.to_thread(_commit_inventory_files, staged, ctx))
+        worker = asyncio.create_task(
+            asyncio.to_thread(_commit_inventory_files, staged, ctx, preview_token)
+        )
         try:
             return await asyncio.shield(worker)
         except asyncio.CancelledError:
@@ -61,7 +144,9 @@ async def update_inventory_files(endpoint_file: Any, details_file: Any, context:
             await upload.close()
 
 
-def _commit_inventory_files(staged: Dict[str, Any], context: Any):
+def _commit_inventory_files(
+    staged: Dict[str, Any], context: Any, preview_token: Optional[str] = None
+):
     """Validate, compare, replace, reload, and journal inventories in a worker thread."""
     ctx = context
     ctx.INPUT_DIR.mkdir(parents=True, exist_ok=True)
@@ -89,6 +174,16 @@ def _commit_inventory_files(staged: Dict[str, Any], context: Any):
 
     transaction_targets = [*target_files.values(), ctx.COMPARISON_HISTORY_FILE]
     with ctx.inventory_state_transaction(transaction_targets) as transaction:
+        if preview_token is not None:
+            current_bytes = {
+                role: target_files[role].read_bytes()
+                for role in ("endpoint", "detalhes")
+            }
+            if not ctx.verify_inventory_preview_token(preview_token, staged, current_bytes):
+                raise ctx.HTTPException(
+                    status_code=409,
+                    detail="A prévia expirou ou os arquivos/base mudaram. Gere uma nova prévia antes de confirmar.",
+                )
         with ctx.STATE_LOCK:
             previous_aliases = ctx.snapshot_equipment_aliases(ctx.deepcopy(ctx.equipamentos_cache))
         manual_overrides = ctx.load_modified_apelidos()
