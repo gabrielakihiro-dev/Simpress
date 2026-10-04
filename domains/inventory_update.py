@@ -124,7 +124,8 @@ def _commit_inventory_files(staged: Dict[str, Any], context: Any):
             transaction.stage_bytes(target_path, upload_bytes, validate_staged_upload)
 
         transaction.apply()
-        if not ctx.load_database(transaction_locked=True):
+        prepared_state = ctx.load_database(transaction_locked=True, publish=False)
+        if not isinstance(prepared_state, dict):
             raise RuntimeError("As planilhas enviadas não puderam ser carregadas pelo site.")
 
         endpoint_index = ctx.read_endpoint_alias_index()
@@ -140,7 +141,7 @@ def _commit_inventory_files(staged: Dict[str, Any], context: Any):
         comparison["horario_comparacao"] = ctx.datetime.now().astimezone().isoformat(timespec="seconds")
         comparison["apelidos_atualizados"] = ctx.compare_equipment_aliases(
             previous_aliases,
-            ctx.snapshot_equipment_aliases(ctx.equipamentos_cache),
+            ctx.snapshot_equipment_aliases(prepared_state["equipamentos_cache"]),
         )
         for change in comparison["apelidos_atualizados"]:
             change["arquivos_origem"] = dict(uploaded_names)
@@ -161,8 +162,8 @@ def _commit_inventory_files(staged: Dict[str, Any], context: Any):
         comparison["divergencias_apelidos_manuais"] = manual_divergences
         comparison["fontes_apelidos_manuais"] = manual_alias_sources
         comparison["backup_diretorio"] = str(backup_dir.relative_to(ctx.INPUT_DIR))
-        comparison["total_equipamentos_carregados"] = ctx.stats_cache.get("total_equipamentos", 0)
-        comparison["ultima_atualizacao"] = ctx.stats_cache.get("ultima_atualizacao", "")
+        comparison["total_equipamentos_carregados"] = prepared_state["stats_cache"].get("total_equipamentos", 0)
+        comparison["ultima_atualizacao"] = prepared_state["stats_cache"].get("ultima_atualizacao", "")
         comparison["arquivos_enviados"] = uploaded_names
         comparison["historico_salvo"] = True
         event_id = ctx.uuid.uuid4().hex
@@ -216,6 +217,7 @@ def _commit_inventory_files(staged: Dict[str, Any], context: Any):
 
         transaction.update_json(ctx.COMPARISON_HISTORY_FILE, append_update, [])
         transaction.commit()
+        ctx.publish_database_state(prepared_state)
 
     historical_view = ctx.comparison_history_for_display(history_entry)
     historical_comparison = dict(historical_view.get("comparacao") or {})
@@ -224,6 +226,6 @@ def _commit_inventory_files(staged: Dict[str, Any], context: Any):
     return {
         "sucesso": True,
         "comparacao": historical_comparison,
-        "stats": ctx.stats_cache,
+        "stats": prepared_state["stats_cache"],
         "historico_salvo": True,
     }
