@@ -2451,12 +2451,12 @@ def excluir_evento_historico_apelido(evento_id: str):
     if equipamento is None:
         raise HTTPException(status_code=404, detail=f"Equipamento com serial '{target_serial}' não encontrado na base de dados.")
 
-    tipo_evento = "endereco" if evento.get("tipo") == "endereco" else "apelido"
-    if tipo_evento == "endereco":
+    if evento.get("tipo") == "endereco":
         raise HTTPException(
             status_code=409,
             detail="Endereços são atualizados pela planilha EquipamentosDetalhes e não podem mais ser restaurados manualmente.",
         )
+    tipo_evento = "apelido"
     evento_mais_recente = next(
         (
             item for item in reversed(historico)
@@ -2468,60 +2468,22 @@ def excluir_evento_historico_apelido(evento_id: str):
     if not evento_mais_recente or evento_mais_recente.get("id") != evento_id:
         raise HTTPException(status_code=409, detail="Só é possível excluir e restaurar o registro mais recente daquele campo.")
 
-    if tipo_evento == "apelido":
-        apelido_atual = str(equipamento.get("_apelido_local", equipamento.get("_apelido_base", "")) or "").strip()
-        apelido_novo = str(evento.get("apelido_novo") or "").strip()
-        if apelido_atual != apelido_novo:
-            raise HTTPException(status_code=409, detail="O apelido salvo não corresponde mais a este registro. Recarregue a base antes de restaurar.")
+    apelido_atual = str(equipamento.get("_apelido_local", equipamento.get("_apelido_base", "")) or "").strip()
+    apelido_novo = str(evento.get("apelido_novo") or "").strip()
+    if apelido_atual != apelido_novo:
+        raise HTTPException(status_code=409, detail="O apelido salvo não corresponde mais a este registro. Recarregue a base antes de restaurar.")
 
-        apelido_anterior = str(evento.get("apelido_anterior") or "").strip()
-        resultado = aplicar_alteracao_apelido(
-            target_serial,
-            apelido_anterior,
-            registrar_historico=False,
-            exigir_salvamento_planilha=True,
-            expected_current_local=apelido_novo,
-            expected_latest_event_id=evento_id,
-            remove_history_event_id=evento_id,
-        )
-        equipamento_restaurado = resultado["equipamento"]
-    else:
-        endereco_atual = snapshot_endereco_instalacao(equipamento)
-        endereco_novo = evento.get("endereco_novo")
-        endereco_anterior = evento.get("endereco_anterior")
-        if not isinstance(endereco_novo, dict) or not isinstance(endereco_anterior, dict):
-            raise HTTPException(status_code=500, detail="O registro de endereço está incompleto e não pode ser restaurado.")
-        if endereco_atual != endereco_novo:
-            raise HTTPException(status_code=409, detail="O endereço atual não corresponde mais a este registro. Recarregue a base antes de restaurar.")
-
-        payload_restauracao = EquipamentoUpdatePayload(
-            serial=target_serial,
-            modelo=str(equipamento.get("modelo") or ""),
-            tipo=str(equipamento.get("tipo") or ""),
-            apelido=str(equipamento.get("_apelido_local", equipamento.get("_apelido_base", "")) or ""),
-            idCliente=str(equipamento.get("idCliente") or ""),
-            endereco=str(endereco_anterior.get("endereco") or ""),
-            cidade=str(endereco_anterior.get("cidade") or ""),
-            uf=str(endereco_anterior.get("uf") or "PR"),
-            cep=str(endereco_anterior.get("cep") or ""),
-            cnpj_instalacao=str(endereco_anterior.get("cnpj") or ""),
-        )
-        def remove_address_event(history):
-            if not isinstance(history, list):
-                raise RuntimeError("O conteúdo do histórico manual não é uma lista.")
-            latest = next((
-                item for item in reversed(history)
-                if str(item.get("serial") or "").strip().upper() == target_serial
-                and ("endereco" if item.get("tipo") == "endereco" else "apelido") == "endereco"
-            ), None)
-            if not latest or latest.get("id") != evento_id:
-                raise HTTPException(status_code=409, detail="Só é possível excluir e restaurar o evento manual mais recente daquele campo.")
-            filtered = [item for item in history if item.get("id") != evento_id]
-            if len(filtered) == len(history):
-                raise HTTPException(status_code=409, detail="O registro foi alterado por outra ação; atualize o histórico e tente novamente.")
-            return filtered
-        save_equipment_to_excel(payload_restauracao, {ALIAS_HISTORY_FILE: remove_address_event})
-        equipamento_restaurado = equipamentos_cache[target_serial]
+    apelido_anterior = str(evento.get("apelido_anterior") or "").strip()
+    resultado = aplicar_alteracao_apelido(
+        target_serial,
+        apelido_anterior,
+        registrar_historico=False,
+        exigir_salvamento_planilha=True,
+        expected_current_local=apelido_novo,
+        expected_latest_event_id=evento_id,
+        remove_history_event_id=evento_id,
+    )
+    equipamento_restaurado = resultado["equipamento"]
 
     return {
         "sucesso": True,
