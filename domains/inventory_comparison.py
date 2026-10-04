@@ -493,24 +493,79 @@ def compare_uploaded_workbooks(
                 left_nodes = by_source[left_role]
                 right_nodes = by_source[right_role]
                 if len(left_nodes) != 1 or len(right_nodes) != 1:
-                    for left_node in left_nodes:
-                        for right_node in right_nodes:
-                            left_serial = nodes[left_node]["serial_key"]
-                            right_serial = nodes[right_node]["serial_key"]
-                            if left_serial and right_serial:
-                                if left_serial != right_serial:
-                                    add_issue({
-                                        "tipo": "Série divergente para o mesmo hostname/Apelido",
-                                        "chave": nodes[left_node]["computador"] or alias_key,
-                                        "fontes": [
-                                            {"fonte": COMPARISON_SOURCE_LABELS[left_role], "serie": nodes[left_node]["serie"]},
-                                            {"fonte": COMPARISON_SOURCE_LABELS[right_role], "serie": nodes[right_node]["serie"]},
-                                        ],
-                                        "mensagem": "As séries prevalecem sobre o hostname/Apelido; os registros não foram unidos.",
-                                    })
+                    serial_counts_by_role: Dict[str, Dict[str, int]] = {}
+                    serial_examples_by_role: Dict[str, Dict[str, str]] = {}
+                    blank_counts_by_role: Dict[str, int] = {}
+                    for role, role_nodes in ((left_role, left_nodes), (right_role, right_nodes)):
+                        serial_counts: Dict[str, int] = {}
+                        serial_examples: Dict[str, str] = {}
+                        blank_count = 0
+                        for node in role_nodes:
+                            record = nodes[node]
+                            serial_key = record["serial_key"]
+                            if not serial_key:
+                                blank_count += 1
                                 continue
-                            ambiguous_roles_by_node[left_node].add(right_role)
+                            serial_counts[serial_key] = serial_counts.get(serial_key, 0) + 1
+                            serial_display = str(record["serie"] or "").strip()
+                            previous_example = serial_examples.get(serial_key)
+                            if previous_example is None or (serial_display.casefold(), serial_display) < (
+                                previous_example.casefold(), previous_example
+                            ):
+                                serial_examples[serial_key] = serial_display
+                        serial_counts_by_role[role] = serial_counts
+                        serial_examples_by_role[role] = serial_examples
+                        blank_counts_by_role[role] = blank_count
+
+                    left_serial_counts = serial_counts_by_role[left_role]
+                    right_serial_counts = serial_counts_by_role[right_role]
+                    divergent_pair_count = (
+                        sum(left_serial_counts.values()) * sum(right_serial_counts.values())
+                        - sum(
+                            left_count * right_serial_counts.get(serial_key, 0)
+                            for serial_key, left_count in left_serial_counts.items()
+                        )
+                    )
+                    if divergent_pair_count:
+                        sources = []
+                        example_labels = []
+                        for role in (left_role, right_role):
+                            examples = [
+                                serial_examples_by_role[role][serial_key]
+                                for serial_key in sorted(serial_examples_by_role[role])[:3]
+                            ]
+                            sources.append({
+                                "fonte": COMPARISON_SOURCE_LABELS[role],
+                                "quantidade": len(by_source[role]),
+                            })
+                            if examples:
+                                example_labels.append(
+                                    f"{COMPARISON_SOURCE_LABELS[role]} [{', '.join(examples)}]"
+                                )
+                        examples_text = "; exemplos: " + "; ".join(example_labels) if example_labels else ""
+                        add_issue({
+                            "tipo": "Série divergente para o mesmo hostname/Apelido",
+                            "chave": nodes[left_nodes[0]]["computador"] or alias_key,
+                            "fontes": sources,
+                            "mensagem": (
+                                "As séries prevalecem sobre o hostname/Apelido; "
+                                f"{divergent_pair_count} combinações têm séries divergentes. "
+                                f"Nenhum registro foi unido{examples_text}."
+                            ),
+                        })
+
+                    if blank_counts_by_role[left_role]:
+                        for left_node in left_nodes:
+                            if not nodes[left_node]["serial_key"]:
+                                ambiguous_roles_by_node[left_node].add(right_role)
+                        for right_node in right_nodes:
                             ambiguous_roles_by_node[right_node].add(left_role)
+                    if blank_counts_by_role[right_role]:
+                        for right_node in right_nodes:
+                            if not nodes[right_node]["serial_key"]:
+                                ambiguous_roles_by_node[right_node].add(left_role)
+                        for left_node in left_nodes:
+                            ambiguous_roles_by_node[left_node].add(right_role)
                     continue
 
                 left_node = left_nodes[0]
