@@ -546,9 +546,6 @@
         });
       });
 
-      // Focus serial input immediately
-      const inputSerial = document.getElementById("input-serial");
-      if (inputSerial) inputSerial.focus();
     });
 
     // Toast system
