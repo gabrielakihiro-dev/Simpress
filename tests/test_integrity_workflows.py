@@ -1644,6 +1644,33 @@ class WorkflowIntegrityTests(unittest.TestCase):
             main.desfazer_alteracao_apelido(main.ApelidoUndoPayload(evento_id=latest_undo["id"]))
         self.assertEqual(raised.exception.status_code, 409)
 
+    def test_address_history_restoration_remains_rejected_without_mutation(self):
+        make_details(self.details, [
+            ("SN-ENDERECO", "HOST-ENDERECO", "Modelo A", "Maringá", "Notebook", "87000000"),
+        ])
+        make_endpoint(self.endpoint, [("SN-ENDERECO", "HOST-ENDERECO")])
+        address_event = {
+            "id": "historico-endereco-ficticio",
+            "tipo": "endereco",
+            "serial": "SN-ENDERECO",
+            "endereco_anterior": {"cidade": "Londrina"},
+            "endereco_novo": {"cidade": "Maringá"},
+        }
+        self.manual_history.write_text(json.dumps([address_event]), encoding="utf-8")
+        self.assertTrue(main.load_database())
+        details_before = self.details.read_bytes()
+        history_before = self.manual_history.read_bytes()
+        equipment_before = copy.deepcopy(main.equipamentos_cache["SN-ENDERECO"])
+
+        with self.assertRaises(main.HTTPException) as raised:
+            main.excluir_evento_historico_apelido("historico-endereco-ficticio")
+
+        self.assertEqual(raised.exception.status_code, 409)
+        self.assertIn("atualizados pela planilha", raised.exception.detail)
+        self.assertEqual(self.details.read_bytes(), details_before)
+        self.assertEqual(self.manual_history.read_bytes(), history_before)
+        self.assertEqual(main.equipamentos_cache["SN-ENDERECO"], equipment_before)
+
 
 async def _collect_stream(response):
     return b"".join([chunk async for chunk in response.body_iterator])
