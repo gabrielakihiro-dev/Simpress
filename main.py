@@ -1790,6 +1790,7 @@ def _edit_equipment_workbook(
     payload: EquipamentoUpdatePayload,
     target_sheet_name: Optional[str] = None,
     record_must_exist: Optional[bool] = None,
+    fields_to_update: Optional[Set[str]] = None,
 ):
     if target_sheet_name is None:
         target_sheet_name = next(
@@ -1837,6 +1838,7 @@ def _edit_equipment_workbook(
         )
     target_row = matching_rows[0] if matching_rows else ws.max_row + 1
     expected: Dict[tuple, Any] = {}
+    requested_fields = set(fields_to_update if fields_to_update is not None else payload.model_fields_set)
 
     def set_value(column: Optional[int], value: Any) -> None:
         if column is None or value is None:
@@ -1851,10 +1853,17 @@ def _edit_equipment_workbook(
         set_value(col_map.get("ITEMDECONTRATO"), target_row - 1)
         set_value(col_map.get("RAZAOSOCIAL"), "SERV DE APOIO AS MICRO E PEQ EMP DO PARANA SEBRAE PR")
 
-    set_value(col_map.get("APELIDO"), payload.apelido.strip() if payload.apelido is not None else None)
-    set_value(col_map.get("MODELO"), payload.modelo.strip() if payload.modelo is not None else None)
-    set_value(col_map.get("TIPO") or col_map.get("CLASSEEQUIPAMENTO"), payload.tipo.strip() if payload.tipo is not None else None)
-    set_value(col_map.get("IDCLIENTE"), payload.idCliente.strip() if payload.idCliente is not None else None)
+    fields = (
+        ("apelido", col_map.get("APELIDO")),
+        ("modelo", col_map.get("MODELO")),
+        ("tipo", col_map.get("TIPO") or col_map.get("CLASSEEQUIPAMENTO")),
+        ("idCliente", col_map.get("IDCLIENTE")),
+    )
+    for field_name, column in fields:
+        if matching_rows and field_name not in requested_fields:
+            continue
+        value = getattr(payload, field_name)
+        set_value(column, value.strip() if value is not None else "")
     return expected
 
 
@@ -1864,6 +1873,7 @@ def update_equipment_in_workbook_file(
     transaction: Optional[AtomicFileTransaction] = None,
     target_sheet_name: Optional[str] = None,
     record_must_exist: Optional[bool] = None,
+    fields_to_update: Optional[Set[str]] = None,
 ) -> bool:
     """Prepare and validate a workbook update before its atomic replacement."""
     file_path = Path(file_path)
@@ -1875,7 +1885,7 @@ def update_equipment_in_workbook_file(
                 transaction,
                 file_path,
                 lambda wb: _edit_equipment_workbook(
-                    wb, payload, target_sheet_name, record_must_exist
+                    wb, payload, target_sheet_name, record_must_exist, fields_to_update
                 ),
                 allow_dimension_growth=True,
             )
@@ -1884,7 +1894,7 @@ def update_equipment_in_workbook_file(
                 own_transaction,
                 file_path,
                 lambda wb: _edit_equipment_workbook(
-                    wb, payload, target_sheet_name, record_must_exist
+                    wb, payload, target_sheet_name, record_must_exist, fields_to_update
                 ),
                 allow_dimension_growth=True,
             )
@@ -1938,6 +1948,7 @@ def snapshot_endereco_instalacao(equipamento: Dict[str, Any]) -> Dict[str, str]:
 def save_equipment_to_excel(
     payload: EquipamentoUpdatePayload,
     json_mutations: Optional[Dict[Path, Any]] = None,
+    fields_to_update: Optional[Set[str]] = None,
 ):
     """Salva um equipamento somente na fonte e na aba associadas ao cache atual."""
     target_serial_upper = payload.serial.strip().upper()
@@ -1945,6 +1956,7 @@ def save_equipment_to_excel(
     if not detail_files:
         raise HTTPException(status_code=404, detail="Nenhuma planilha EquipamentosDetalhes encontrada no servidor.")
 
+    requested_fields = set(fields_to_update if fields_to_update is not None else payload.model_fields_set)
     json_mutations = dict(json_mutations or {})
     try:
         # Lock every candidate while resolving the current primary source. Only
@@ -2013,6 +2025,7 @@ def save_equipment_to_excel(
                 transaction,
                 target_sheet_name=target_sheet,
                 record_must_exist=not payload.novo,
+                fields_to_update=requested_fields,
             )
             if not saved:
                 raise HTTPException(status_code=500, detail="Não foi possível atualizar o equipamento na planilha.")
@@ -2032,23 +2045,33 @@ def save_equipment_to_excel(
             cnpj_instalacao = endereco_info["cnpj"]
             retirada_endereco = f"{endereco} - {cidade}/{uf} - CEP {cep_formatado}" if endereco else f"{cidade}/{uf}"
 
-            desc_sugerida = get_suggested_description(payload.tipo, payload.modelo)
+            def updated_value(field_name: str, cache_key: str) -> str:
+                if cached_equipment is not None and field_name not in requested_fields:
+                    return str(cached_equipment.get(cache_key) or "").strip()
+                value = getattr(payload, field_name)
+                return value.strip() if value is not None else ""
+
+            base_alias = updated_value("apelido", "_apelido_base")
+            modelo = updated_value("modelo", "modelo")
+            tipo = updated_value("tipo", "tipo")
+            id_cliente = updated_value("idCliente", "idCliente")
+            desc_sugerida = get_suggested_description(tipo, modelo)
 
             modified_aliases = load_modified_apelidos()
             manual_aliases = _manual_aliases_by_serial(modified_aliases)
             normalized_serial = normalize_reference_value(target_serial_upper)
-            local_alias = manual_aliases.get(normalized_serial, payload.apelido or "")
+            local_alias = manual_aliases.get(normalized_serial, base_alias)
             updated_equipment = {
                 "serial": target_serial_upper,
                 "_source_file": str(target_file),
                 "_source_sheet": target_sheet,
-                "modelo": payload.modelo.strip() if payload.modelo else "",
-                "tipo": payload.tipo.strip() if payload.tipo else "",
+                "modelo": modelo,
+                "tipo": tipo,
                 "apelido": local_alias,
-                "_apelido_base": payload.apelido.strip() if payload.apelido else "",
+                "_apelido_base": base_alias,
                 "_apelido_local": local_alias,
                 "_apelido_manual_override": normalized_serial in manual_aliases,
-                "idCliente": payload.idCliente.strip() if payload.idCliente else "",
+                "idCliente": id_cliente,
                 "descricao_sugerida": desc_sugerida,
                 "endereco_instalacao": endereco,
                 "retirada_cnpj": cnpj_instalacao,
@@ -2098,6 +2121,7 @@ def salvar_equipamento(payload: EquipamentoUpdatePayload):
         raise HTTPException(status_code=400, detail="Número de série é obrigatório.")
     
     target_serial = payload.serial.strip().upper()
+    requested_fields = set(payload.model_fields_set)
     equipamento_existente = equipamentos_cache.get(target_serial)
     if payload.novo and equipamento_existente is not None:
         raise HTTPException(
@@ -2127,7 +2151,11 @@ def salvar_equipamento(payload: EquipamentoUpdatePayload):
             return aliases
         json_mutations[MODIFIED_APELIDOS_FILE] = save_new_alias
 
-    save_equipment_to_excel(payload, json_mutations=json_mutations)
+    save_equipment_to_excel(
+        payload,
+        json_mutations=json_mutations,
+        fields_to_update=requested_fields,
+    )
     total_mod = len(load_modified_apelidos())
     return {
         "sucesso": True,
