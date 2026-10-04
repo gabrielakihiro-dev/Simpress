@@ -868,6 +868,63 @@ class WorkflowIntegrityTests(unittest.TestCase):
                 output_workbook.close()
                 self.assertEqual(self.model.read_bytes(), source_before)
 
+    def test_serial_header_aliases_match_load_count_and_export(self):
+        detail_headers = [
+            "Apelido", "Modelo", "Cidade", "Tipo", "CEP", "IdCliente", "Observacao"
+        ]
+        model_headers = ["NumeroSerie", "Apelido", "IdCliente", "Observacao"]
+
+        for index, serial_header in enumerate(("NÚMERO-SERIE", "Número de Série")):
+            with self.subTest(serial_header=serial_header):
+                headers = [serial_header, *detail_headers]
+                make_details(
+                    self.details,
+                    [[
+                        "SERIE-FICTICIA", "ALIAS-ATUAL", "Modelo A", "Maringá", "Notebook",
+                        "87000000", "CLIENTE-ATUAL", "MANTER-DETALHES",
+                    ]],
+                    headers=headers,
+                )
+                make_endpoint(self.endpoint, [("SERIE-FICTICIA", "HOST-EXPORTADO")])
+
+                model_workbook = openpyxl.Workbook()
+                model_sheet = model_workbook.active
+                model_sheet.title = "Parque"
+                model_sheet.append(model_headers)
+                model_sheet.append(["SERIE-FICTICIA", "ALIAS-ANTERIOR", "CLIENTE-ANTERIOR", "MANTER-MODELO"])
+                model_sheet["E2"] = "OUTRA-CELULA"
+                model_workbook.create_sheet("Metadados")["A1"] = "ABA-PRESERVADA"
+                model_workbook.save(self.model)
+                model_workbook.close()
+                model_before = self.model.read_bytes()
+
+                uploaded = main.validate_uploaded_workbook(self.details.read_bytes(), "detalhes")
+                self.assertEqual(uploaded["populated_rows"], 1)
+                self.assertEqual(main.find_details_sheet(self.details), "EquipamentosDetalhes")
+                self.assertTrue(main.load_database())
+                self.assertEqual(main.get_equipamento("SERIE-FICTICIA")["serial"], "SERIE-FICTICIA")
+
+                self.assertEqual(
+                    main.count_export_changes(),
+                    {"apelidos": 1, "id_clientes": 1, "total": 2},
+                )
+
+                response = main.exportar_equipamentos()
+                output_bytes = asyncio.run(_collect_stream(response))
+                self.assertEqual(response.headers["x-total-alterados"], "1")
+                self.assertEqual(response.headers["x-total-idcliente-alterados"], "1")
+                output_path = self.root / f"export-{index}.xlsx"
+                output_path.write_bytes(output_bytes)
+                output_workbook = openpyxl.load_workbook(output_path, data_only=False)
+                output_sheet = output_workbook["Parque"]
+                self.assertEqual(output_sheet["B2"].value, "HOST-EXPORTADO")
+                self.assertEqual(output_sheet["C2"].value, "CLIENTE-ATUAL")
+                self.assertEqual(output_sheet["D2"].value, "MANTER-MODELO")
+                self.assertEqual(output_sheet["E2"].value, "OUTRA-CELULA")
+                self.assertEqual(output_workbook["Metadados"]["A1"].value, "ABA-PRESERVADA")
+                output_workbook.close()
+                self.assertEqual(self.model.read_bytes(), model_before)
+
     def test_official_transfer_preserves_threaded_comments_and_changes_only_form_cells(self):
         template = make_transfer_template(self.input_dir / "modelo-transferencia-ficticio.xlsx")
         with self.assertRaises(main.WorkbookSafetyError):

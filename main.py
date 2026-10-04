@@ -14,7 +14,7 @@ from copy import deepcopy
 from contextlib import asynccontextmanager, contextmanager
 from datetime import datetime
 from pathlib import Path
-from typing import Dict, List, Optional, Any, Set
+from typing import Dict, Iterable, List, Optional, Any, Set
 from urllib.parse import urlsplit
 
 import openpyxl
@@ -363,6 +363,19 @@ DETAILS_REQUIRED_HEADERS = frozenset({"MODELO", "CIDADE"})
 def normalize_workbook_header(value: Any) -> str:
     """Normaliza cabeçalhos com a mesma regra usada pelas tabelas enviadas."""
     return normalize_reference_value(value)
+
+
+def find_workbook_header_column(headers: Iterable[Any], aliases: Iterable[str]) -> Optional[int]:
+    """Return the first column whose normalized header matches an accepted alias."""
+    normalized_aliases = {normalize_workbook_header(alias) for alias in aliases}
+    return next(
+        (
+            index
+            for index, value in enumerate(headers)
+            if normalize_workbook_header(value) in normalized_aliases
+        ),
+        None,
+    )
 
 
 def _read_details_sheet_dataframe(file_path: Path, sheet_name: str):
@@ -763,13 +776,8 @@ def load_export_model_aliases() -> Dict[str, str]:
         workbook = openpyxl.load_workbook(EXPORT_MODEL_FILE, read_only=True, data_only=True)
         for worksheet in workbook.worksheets:
             header_row = [cell.value for cell in next(worksheet.iter_rows(max_row=1), ())]
-            col_map = {
-                re.sub(r"[\s_\-]+", "", str(value)).lower(): index
-                for index, value in enumerate(header_row)
-                if value is not None
-            }
-            serial_col = col_map.get("numeroserie", col_map.get("serial"))
-            alias_col = col_map.get("apelido")
+            serial_col = find_workbook_header_column(header_row, DETAILS_SERIAL_HEADER_ALIASES)
+            alias_col = find_workbook_header_column(header_row, ("APELIDO",))
             if serial_col is None or alias_col is None:
                 continue
 
@@ -1017,14 +1025,9 @@ def count_export_changes(
             )
             model_ws = model_wb[model_sheet_name]
             model_headers = [cell.value for cell in next(model_ws.iter_rows(max_row=1), ())]
-            model_columns = {
-                normalize_workbook_header(value): index
-                for index, value in enumerate(model_headers)
-                if value is not None
-            }
-            model_serial_col = model_columns.get("NUMEROSERIE", model_columns.get("SERIAL"))
-            model_alias_col = model_columns.get("APELIDO")
-            model_id_col = model_columns.get("IDCLIENTE")
+            model_serial_col = find_workbook_header_column(model_headers, DETAILS_SERIAL_HEADER_ALIASES)
+            model_alias_col = find_workbook_header_column(model_headers, ("APELIDO",))
+            model_id_col = find_workbook_header_column(model_headers, ("IDCLIENTE",))
             if model_serial_col is None or model_alias_col is None:
                 return empty_counts.copy()
 
@@ -1034,14 +1037,9 @@ def count_export_changes(
             current_wb = openpyxl.load_workbook(source_file, read_only=True, data_only=False)
             current_ws = current_wb[current_sheet_name]
             current_headers = [cell.value for cell in next(current_ws.iter_rows(max_row=1), ())]
-            current_columns = {
-                normalize_workbook_header(value): index
-                for index, value in enumerate(current_headers)
-                if value is not None
-            }
-            current_serial_col = current_columns.get("NUMEROSERIE", current_columns.get("SERIAL"))
-            current_alias_col = current_columns.get("APELIDO", current_columns.get("HOSTNAME"))
-            current_id_col = current_columns.get("IDCLIENTE")
+            current_serial_col = find_workbook_header_column(current_headers, DETAILS_SERIAL_HEADER_ALIASES)
+            current_alias_col = find_workbook_header_column(current_headers, ("APELIDO", "HOSTNAME"))
+            current_id_col = find_workbook_header_column(current_headers, ("IDCLIENTE",))
             if current_serial_col is None or current_alias_col is None:
                 return empty_counts.copy()
 
@@ -2615,20 +2613,17 @@ def exportar_equipamentos():
             )
             ws = wb[sheet_target]
             header_row = [cell.value for cell in next(ws.iter_rows(max_row=1), ())]
-            col_map = {
-                re.sub(r"[\s_\-]+", "", str(value)).lower(): index + 1
-                for index, value in enumerate(header_row)
-                if value is not None
-            }
-
-            serial_col = col_map.get("numeroserie") or col_map.get("serial")
-            apelido_col = col_map.get("apelido")
-            id_cliente_col = col_map.get("idcliente")
-            if not serial_col or not apelido_col:
+            serial_col_index = find_workbook_header_column(header_row, DETAILS_SERIAL_HEADER_ALIASES)
+            apelido_col_index = find_workbook_header_column(header_row, ("APELIDO",))
+            id_cliente_col_index = find_workbook_header_column(header_row, ("IDCLIENTE",))
+            if serial_col_index is None or apelido_col_index is None:
                 raise HTTPException(
                     status_code=500,
                     detail=f"A planilha '{source_file.name}' não contém as colunas NumeroSerie e Apelido esperadas."
                 )
+            serial_col = serial_col_index + 1
+            apelido_col = apelido_col_index + 1
+            id_cliente_col = id_cliente_col_index + 1 if id_cliente_col_index is not None else None
 
             current_sheet_name = find_details_sheet(current_file)
             if current_sheet_name is None:
@@ -2636,18 +2631,16 @@ def exportar_equipamentos():
             current_wb = openpyxl.load_workbook(current_file, read_only=True, data_only=False)
             current_ws = current_wb[current_sheet_name]
             current_headers = [cell.value for cell in next(current_ws.iter_rows(max_row=1), ())]
-            current_columns = {
-                re.sub(r"[\s_\-]+", "", str(value)).lower(): index + 1
-                for index, value in enumerate(current_headers)
-                if value is not None
-            }
-            current_serial_col = current_columns.get("numeroserie") or current_columns.get("serial")
-            if not current_serial_col:
+            current_serial_col_index = find_workbook_header_column(current_headers, DETAILS_SERIAL_HEADER_ALIASES)
+            if current_serial_col_index is None:
                 raise HTTPException(status_code=409, detail="A base atual não contém NumeroSerie.")
-            current_alias_col = current_columns.get("apelido") or current_columns.get("hostname")
-            if not current_alias_col:
+            current_alias_col_index = find_workbook_header_column(current_headers, ("APELIDO", "HOSTNAME"))
+            if current_alias_col_index is None:
                 raise HTTPException(status_code=409, detail="A base atual não contém Apelido ou Hostname.")
-            current_id_cliente_col = current_columns.get("idcliente")
+            current_serial_col = current_serial_col_index + 1
+            current_alias_col = current_alias_col_index + 1
+            current_id_cliente_col_index = find_workbook_header_column(current_headers, ("IDCLIENTE",))
+            current_id_cliente_col = current_id_cliente_col_index + 1 if current_id_cliente_col_index is not None else None
             current_rows = {}
             for cells in current_ws.iter_rows(min_row=2, values_only=True):
                 serial_key = normalize_reference_value(cells[current_serial_col - 1])
