@@ -7,7 +7,7 @@ import re
 import threading
 import zipfile
 from pathlib import Path
-from typing import BinaryIO, Union
+from typing import Any, BinaryIO, Dict, List, Optional, Tuple, Union
 from xml.parsers import expat
 
 from app_config import (
@@ -80,6 +80,27 @@ def _parse_control_xml(archive: zipfile.ZipFile, name: str, on_start) -> None:
         raise XlsxPackageError("O arquivo contém metadados XLSX inválidos.") from error
 
 
+def _validate_auxiliary_xml(archive: zipfile.ZipFile, name: str) -> None:
+    """Reject DTD/entity declarations in XML parts not otherwise scanned structurally."""
+    parser = expat.ParserCreate()
+    parser.SetParamEntityParsing(expat.XML_PARAM_ENTITY_PARSING_NEVER)
+
+    def reject_declaration(*_args: Any) -> int:
+        raise XlsxPackageError("A planilha contém declarações XML não permitidas.")
+
+    parser.StartDoctypeDeclHandler = reject_declaration
+    parser.EntityDeclHandler = reject_declaration
+    parser.UnparsedEntityDeclHandler = reject_declaration
+    parser.ExternalEntityRefHandler = reject_declaration
+    try:
+        with archive.open(name) as stream:
+            parser.ParseFile(stream)
+    except XlsxPackageError:
+        raise
+    except (expat.ExpatError, OSError, EOFError, zipfile.BadZipFile) as error:
+        raise XlsxPackageError("A planilha contém uma parte XML inválida.") from error
+
+
 def _worksheet_parts(archive: zipfile.ZipFile, names: set[str]) -> list[str]:
     workbook_name = "xl/workbook.xml"
     relationships_name = "xl/_rels/workbook.xml.rels"
@@ -91,7 +112,7 @@ def _worksheet_parts(archive: zipfile.ZipFile, names: set[str]) -> list[str]:
         if info.file_size > MAX_XLSX_CONTROL_XML_BYTES:
             raise XlsxLimitExceeded("A descrição das abas da planilha excede o limite permitido.")
 
-    relationships = {}
+    relationships: Dict[str, Tuple[str, Optional[str]]] = {}
 
     def collect_relationship(tag: str, attributes: dict[str, str]) -> None:
         if tag != "Relationship":
@@ -119,15 +140,18 @@ def _worksheet_parts(archive: zipfile.ZipFile, names: set[str]) -> list[str]:
         relationships[relationship_id] = (relation_type, normalized_target)
 
     _parse_control_xml(archive, relationships_name, collect_relationship)
-    sheet_ids = []
+    sheet_ids: List[str] = []
 
     def collect_sheet(tag: str, attributes: dict[str, str]) -> None:
         if tag != "sheet":
             return
-        sheet_ids.append(next(
+        relation_id = next(
             (value for key, value in attributes.items() if _local_name(key) == "id"),
             None,
-        ))
+        )
+        if relation_id is None:
+            raise XlsxPackageError("Uma aba não tem uma relação XLSX válida.")
+        sheet_ids.append(relation_id)
         if len(sheet_ids) > MAX_XLSX_WORKSHEETS:
             raise XlsxLimitExceeded("A quantidade de abas excede o limite permitido.")
 
@@ -135,7 +159,7 @@ def _worksheet_parts(archive: zipfile.ZipFile, names: set[str]) -> list[str]:
     if not sheet_ids:
         raise XlsxPackageError("O arquivo não contém uma aba de planilha legível.")
 
-    worksheet_names = []
+    worksheet_names: List[str] = []
     for relation_id in sheet_ids:
         relation = relationships.get(relation_id)
         if relation is None:
@@ -255,6 +279,16 @@ def validate_xlsx_archive(archive: zipfile.ZipFile) -> None:
         raise XlsxPackageError("O arquivo enviado não é uma planilha .xlsx válida.")
 
     worksheet_names = _worksheet_parts(archive, names)
+    structurally_scanned = {
+        "xl/workbook.xml",
+        "xl/_rels/workbook.xml.rels",
+        *worksheet_names,
+    }
+    for entry in entries:
+        lower_name = entry.filename.lower()
+        if lower_name.endswith((".xml", ".rels")) and entry.filename not in structurally_scanned:
+            _validate_auxiliary_xml(archive, entry.filename)
+
     total_cells = 0
     for worksheet_name in worksheet_names:
         max_row, max_column = _scan_worksheet(archive, worksheet_name)

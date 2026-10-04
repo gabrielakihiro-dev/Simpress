@@ -4,6 +4,15 @@ from pathlib import Path
 from typing import Any, Dict, Optional
 
 from fastapi import APIRouter
+from pydantic import BaseModel, Field
+
+
+class ManualAliasConflictResolutionPayload(BaseModel):
+    acao: str = Field(..., description="Manter o apelido manual ou remover esse override")
+
+
+class ComparisonRestorePayload(BaseModel):
+    preview_token: str = Field(..., min_length=64, max_length=64)
 
 
 def create_inventory_history_router(ctx):
@@ -21,7 +30,9 @@ def create_inventory_history_router(ctx):
 
     def _comparison_restore_backup_paths(evento: Dict[str, Any]) -> Dict[str, Path]:
         comparison = evento.get("comparacao")
-        relative_value = comparison.get("backup_diretorio") if isinstance(comparison, dict) else None
+        if not isinstance(comparison, dict):
+            raise ctx.HTTPException(status_code=409, detail="Esta atualização não possui um backup disponível para restauração.")
+        relative_value = comparison.get("backup_diretorio")
         if not isinstance(relative_value, str) or not relative_value.strip():
             raise ctx.HTTPException(status_code=409, detail="Esta atualização não possui um backup disponível para restauração.")
 
@@ -163,7 +174,10 @@ def create_inventory_history_router(ctx):
         token_material = {
             "evento_id": evento_id,
             "horario": evento.get("horario"),
-            "backup_diretorio": evento.get("comparacao", {}).get("backup_diretorio"),
+            "backup_diretorio": (
+                evento.get("comparacao", {}).get("backup_diretorio")
+                if isinstance(evento.get("comparacao"), dict) else None
+            ),
             "backup_hashes": {role: backup_files[role]["sha256"] for role in sorted(backup_files)},
             "ativos_hashes": current_hashes,
         }
@@ -240,7 +254,7 @@ def create_inventory_history_router(ctx):
 
 
     @router.post("/api/historico-comparacoes/{evento_id}/restaurar")
-    def restaurar_comparacao_historica(evento_id: str, payload: ctx.ComparisonRestorePayload):
+    def restaurar_comparacao_historica(evento_id: str, payload: ComparisonRestorePayload):
         persistent_backup_dir = None
 
         try:
@@ -361,8 +375,7 @@ def create_inventory_history_router(ctx):
                 }
 
                 def append_restoration(history):
-                    if not isinstance(history, list):
-                        raise RuntimeError("O histórico de planilhas não contém uma lista válida.")
+                    history = ctx._validate_json_history(history, "comparações")
                     current_source_event = next(
                         (item for item in history if isinstance(item, dict) and item.get("id") == evento_id),
                         None,
@@ -372,7 +385,8 @@ def create_inventory_history_router(ctx):
                         if isinstance(current_source_event, dict) else None
                     )
                     if (
-                        not isinstance(current_source_comparison, dict)
+                        not isinstance(current_source_event, dict)
+                        or not isinstance(current_source_comparison, dict)
                         or current_source_comparison.get("backup_diretorio") != source_backup_relative
                         or current_source_event.get("horario") != source_event.get("horario")
                     ):
@@ -419,7 +433,7 @@ def create_inventory_history_router(ctx):
     def resolver_divergencia_apelido_manual(
         evento_id: str,
         serial: str,
-        payload: ctx.ManualAliasConflictResolutionPayload,
+        payload: ManualAliasConflictResolutionPayload,
     ):
         acao = str(payload.acao or "").strip().lower()
         if acao not in {"manter", "excluir"}:
@@ -495,8 +509,7 @@ def create_inventory_history_router(ctx):
                     raise ctx.HTTPException(status_code=409, detail="A série não pôde ser atualizada na planilha EquipamentosDetalhes.")
 
                 def remove_manual_override(data):
-                    if not isinstance(data, dict):
-                        raise RuntimeError("O arquivo de apelidos manuais não contém um objeto válido.")
+                    data = ctx._validate_json_object(data, "apelidos")
                     keys = [key for key in data if ctx.normalize_reference_value(key) == serial_key]
                     if len(keys) != 1 or str(data.get(keys[0]) or "").strip() != expected_manual_alias:
                         raise ctx.HTTPException(status_code=409, detail="O override manual mudou desde esta comparação.")
@@ -508,8 +521,7 @@ def create_inventory_history_router(ctx):
                 transaction.update_json(ctx.MODIFIED_APELIDOS_FILE, remove_manual_override, {})
 
             def mark_divergence_resolved(history):
-                if not isinstance(history, list):
-                    raise RuntimeError("O histórico de planilhas não contém uma lista válida.")
+                history = ctx._validate_json_history(history, "comparações")
                 updated = list(history)
                 stored_event = next((item for item in updated if item.get("id") == evento_id), None)
                 if stored_event is None:

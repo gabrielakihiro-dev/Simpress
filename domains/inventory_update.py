@@ -1,6 +1,7 @@
 """Transactional workflow for replacing and comparing inventory snapshots."""
 
 import asyncio
+from pathlib import Path
 from typing import Any, Dict
 
 
@@ -12,7 +13,7 @@ async def read_uploaded_xlsx(upload: Any, role: str, context: Any) -> Dict[str, 
         "detalhes": "EquipamentosDetalhes",
     }.get(role, role)
     original_name = ctx.re.split(r"[/\\]", str(upload.filename or ""))[-1]
-    if not original_name or ctx.Path(original_name).suffix.lower() != ".xlsx":
+    if not original_name or Path(original_name).suffix.lower() != ".xlsx":
         raise ctx.HTTPException(status_code=400, detail=f"Selecione um arquivo .xlsx válido para {display_role}.")
 
     file_bytes = await upload.read(ctx.MAX_UPLOAD_BYTES + 1)
@@ -21,7 +22,14 @@ async def read_uploaded_xlsx(upload: Any, role: str, context: Any) -> Dict[str, 
     if len(file_bytes) > ctx.MAX_UPLOAD_BYTES:
         raise ctx.HTTPException(status_code=413, detail=f"O arquivo de {display_role} excede o limite de 30 MB.")
 
-    table = await asyncio.to_thread(ctx.validate_uploaded_workbook, file_bytes, role)
+    parse_admission = getattr(ctx, "WORKBOOK_PARSE_ADMISSION", None)
+    if parse_admission is not None and not parse_admission.acquire(blocking=False):
+        raise ctx.HTTPException(status_code=503, detail="A análise de planilhas está ocupada. Tente novamente em instantes.")
+    try:
+        table = await asyncio.to_thread(ctx.validate_uploaded_workbook, file_bytes, role)
+    finally:
+        if parse_admission is not None:
+            parse_admission.release()
     return {"name": original_name, "bytes": file_bytes, "table": table}
 
 async def update_inventory_files(endpoint_file: Any, details_file: Any, context: Any):
@@ -65,17 +73,15 @@ def _commit_inventory_files(staged: Dict[str, Any], context: Any):
     """Validate, compare, replace, reload, and journal inventories in a worker thread."""
     ctx = context
     ctx.INPUT_DIR.mkdir(parents=True, exist_ok=True)
+    active_details_file = ctx.get_primary_equipment_file()
     target_files = {
         "endpoint": ctx.ENDPOINT_UPLOAD_FILE,
         "detalhes": ctx.DETAILS_UPLOAD_FILE,
     }
-    for role, target_path in target_files.items():
-        if not target_path.is_file():
-            display_role = "Endpoint" if role == "endpoint" else "EquipamentosDetalhes"
-            raise ctx.HTTPException(
-                status_code=409,
-                detail=f"A base ativa de {display_role} não foi encontrada; a atualização foi cancelada.",
-            )
+    backup_sources = {
+        "endpoint": target_files["endpoint"] if target_files["endpoint"].is_file() else None,
+        "detalhes": active_details_file,
+    }
 
     uploaded_names = {
         "endpoint": staged["endpoint"]["name"],
@@ -87,7 +93,11 @@ def _commit_inventory_files(staged: Dict[str, Any], context: Any):
         uploaded_names,
     )
 
-    transaction_targets = [*target_files.values(), ctx.COMPARISON_HISTORY_FILE]
+    transaction_targets = [
+        *target_files.values(),
+        *(path for path in backup_sources.values() if path is not None),
+        ctx.COMPARISON_HISTORY_FILE,
+    ]
     with ctx.inventory_state_transaction(transaction_targets) as transaction:
         with ctx.STATE_LOCK:
             previous_aliases = ctx.snapshot_equipment_aliases(ctx.deepcopy(ctx.equipamentos_cache))
@@ -104,18 +114,25 @@ def _commit_inventory_files(staged: Dict[str, Any], context: Any):
         backup_dir = ctx.UPLOAD_BACKUPS_DIR / f"{ctx.datetime.now().strftime('%Y%m%d-%H%M%S')}-{ctx.uuid.uuid4().hex[:8]}"
         backup_dir.mkdir(parents=True, exist_ok=False)
 
+        missing_backup_files = {}
+        invalid_backup_files = {"endpoint": False, "detalhes": False}
         for role, target_path in target_files.items():
             role_dir = backup_dir / role
             role_dir.mkdir(parents=True, exist_ok=True)
+            source_path = backup_sources[role]
+            if source_path is None or not source_path.is_file():
+                missing_backup_files[role] = True
+                continue
+            missing_backup_files[role] = False
             backup_path = role_dir / target_path.name
-            ctx.shutil.copy2(target_path, backup_path)
-            if not ctx.filecmp.cmp(target_path, backup_path, shallow=False):
+            ctx.shutil.copy2(source_path, backup_path)
+            if not ctx.filecmp.cmp(source_path, backup_path, shallow=False):
                 raise RuntimeError(f"A cópia de segurança de '{target_path.name}' não passou na validação.")
 
         for role, target_path in target_files.items():
             upload_bytes = staged[role]["bytes"]
 
-            def validate_staged_upload(path: ctx.Path, current_role=role, expected_bytes=upload_bytes):
+            def validate_staged_upload(path: Path, current_role=role, expected_bytes=upload_bytes) -> None:
                 candidate_bytes = path.read_bytes()
                 if candidate_bytes != expected_bytes:
                     raise ctx.WorkbookSafetyError("O arquivo preparado difere do inventário validado.")
@@ -129,7 +146,7 @@ def _commit_inventory_files(staged: Dict[str, Any], context: Any):
             raise RuntimeError("As planilhas enviadas não puderam ser carregadas pelo site.")
 
         endpoint_index = ctx.read_endpoint_alias_index()
-        detail_serial_counts: ctx.Dict[str, int] = {}
+        detail_serial_counts: Dict[str, int] = {}
         for record in staged["detalhes"]["table"].get("records", []):
             serial_key = ctx.normalize_reference_value(ctx._upload_serial_value(record, "detalhes"))
             if serial_key:
@@ -162,6 +179,8 @@ def _commit_inventory_files(staged: Dict[str, Any], context: Any):
         comparison["divergencias_apelidos_manuais"] = manual_divergences
         comparison["fontes_apelidos_manuais"] = manual_alias_sources
         comparison["backup_diretorio"] = str(backup_dir.relative_to(ctx.INPUT_DIR))
+        comparison["backup_arquivos_ausentes"] = missing_backup_files
+        comparison["backup_arquivos_invalidos"] = invalid_backup_files
         comparison["total_equipamentos_carregados"] = prepared_state["stats_cache"].get("total_equipamentos", 0)
         comparison["ultima_atualizacao"] = prepared_state["stats_cache"].get("ultima_atualizacao", "")
         comparison["arquivos_enviados"] = uploaded_names

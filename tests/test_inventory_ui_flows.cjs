@@ -117,7 +117,7 @@ function createAppHarness(fetchApi) {
     selectEquipment(equipment) {
       context.workflowEquipment = equipment;
       vm.runInContext(`
-        currentEquipamento = workflowEquipment;
+        definirEquipamentoAtual(workflowEquipment);
         retiradaCidadeSelecionada = workflowEquipment.retirada_cidade || "";
       `, context);
       document.getElementById("input-serial").value = equipment.serial;
@@ -260,6 +260,62 @@ test("late post-upload equipment response cannot replace a newer search", async 
   assert.equal(harness.element("card-equipamento").classList.contains("hidden"), false);
   assert.equal(harness.effects.comparisons.length, 1);
   assert.equal(harness.effects.toasts.some(item => item.message.includes("Não foi possível confirmar")), false);
+});
+
+test("late alias save confirms success without taking over a newer selection", async () => {
+  let resolveSave;
+  const harness = createAppHarness(async url => {
+    assert.equal(url, "/api/equipamento/atualizar-apelido");
+    return new Promise(resolve => { resolveSave = resolve; });
+  });
+  const original = { ...priorEquipment, serial: "SERIE-ANTIGA", apelido: "HOST-ANTIGO" };
+  const newer = { serial: "SERIE-NOVA", modelo: "Seleção nova", apelido: "HOST-NOVO" };
+  harness.selectEquipment(original);
+  harness.element("edit-apelido-isolado").value = "HOST-ATUALIZADO";
+
+  const saving = harness.run("salvarApelido()");
+  for (let attempt = 0; attempt < 20 && !resolveSave; attempt += 1) {
+    await new Promise(resolve => setImmediate(resolve));
+  }
+  assert.equal(typeof resolveSave, "function");
+  harness.selectEquipment(newer);
+  resolveSave(apiResponse({ equipamento: { ...original, apelido: "HOST-ATUALIZADO" } }));
+  await saving;
+
+  assert.equal(harness.run("currentEquipamento.serial"), "SERIE-NOVA");
+  assert.equal(harness.element("input-serial").value, "SERIE-NOVA");
+  assert.equal(harness.effects.toasts.at(-1).type, "success");
+  assert.equal(harness.element("modal-editar-apelido").classList.contains("hidden"), false);
+});
+
+test("late equipment save leaves a newer selection and search intact", async () => {
+  let resolveSave;
+  const harness = createAppHarness(async url => {
+    assert.equal(url, "/api/equipamento/salvar");
+    return new Promise(resolve => { resolveSave = resolve; });
+  });
+  const original = { ...priorEquipment, serial: "SERIE-ANTIGA", revisao: "a".repeat(64) };
+  const newer = { serial: "SERIE-NOVA", modelo: "Seleção nova", retirada_endereco: "Rua nova, 20" };
+  harness.selectEquipment(original);
+  harness.element("edit-serial").value = original.serial;
+  harness.element("edit-serial").readOnly = true;
+  harness.element("edit-modelo").value = "Modelo atualizado";
+  harness.element("edit-tipo").value = "Notebook";
+  harness.element("edit-id-cliente").value = "CLIENTE-2";
+
+  const saving = harness.run("salvarDadosEquipamento()");
+  for (let attempt = 0; attempt < 20 && !resolveSave; attempt += 1) {
+    await new Promise(resolve => setImmediate(resolve));
+  }
+  assert.equal(typeof resolveSave, "function");
+  harness.selectEquipment(newer);
+  resolveSave(apiResponse({ equipamento: { ...original, modelo: "Modelo atualizado" }, mensagem: "Salvo" }));
+  await saving;
+
+  assert.equal(harness.run("currentEquipamento.serial"), "SERIE-NOVA");
+  assert.equal(harness.element("input-serial").value, "SERIE-NOVA");
+  assert.equal(harness.element("retirada-endereco").value, "Rua nova, 20");
+  assert.equal(harness.effects.toasts.at(-1).type, "success");
 });
 
 const restorePreview = {

@@ -10,6 +10,14 @@ __pycache__/
 # Environments
 .env
 .env.local
+.env.*
+!.env.example
+!.env.*.example
+*.pem
+*.key
+*.p12
+*.pfx
+*.keystore
 
 # IDE
 .vscode/*
@@ -45,3 +53,7 @@ __pycache__/
 /.transactions/
 **/.*.lock
 /planilhas_entrada/.upload-staging-*/
+# Transactional temporary files are created beside their destination.
+**/.*.xlsx.*.tmp
+**/.*.xlsm.*.tmp
+**/.*.json.*.tmp

@@ -108,6 +108,22 @@ class AtomicTransactionTests(unittest.TestCase):
         self.assertEqual(target.read_bytes(), b"old-content")
         self.assertFalse((self.root / ".transactions").exists() and list((self.root / ".transactions").iterdir()))
 
+    def test_rollback_removes_only_the_unchanged_staged_temporary(self):
+        target = self.root / "inventory.xlsx"
+        target.write_bytes(b"original")
+        staged_path = None
+
+        with self.assertRaisesRegex(RuntimeError, "cancel before apply"):
+            with integrity.AtomicFileTransaction(self.root, [target]) as transaction:
+                transaction.stage_bytes(target, b"replacement")
+                staged_path = self.root / transaction.manifest["entries"][0]["stage"]
+                self.assertTrue(staged_path.exists())
+                raise RuntimeError("cancel before apply")
+
+        self.assertEqual(target.read_bytes(), b"original")
+        self.assertIsNotNone(staged_path)
+        self.assertFalse(staged_path.exists())
+
     def test_failure_during_second_replace_rolls_back_first_file(self):
         first = self.root / "first.xlsx"
         second = self.root / "second.xlsx"
