@@ -2125,11 +2125,17 @@ def _edit_alias_workbook(
     target_serial: str,
     novo_apelido: str,
     expected_current_alias: Optional[str] = None,
+    target_sheet_name: Optional[str] = None,
 ):
-    sheet_name = next(
+    sheet_name = target_sheet_name or next(
         (name for name in wb.sheetnames if "equipamento" in name.lower() or "parque" in name.lower()),
         wb.sheetnames[0] if wb.sheetnames else None,
     )
+    if target_sheet_name is not None and target_sheet_name not in wb.sheetnames:
+        raise HTTPException(
+            status_code=409,
+            detail="A aba de origem do equipamento mudou depois que ele foi carregado; recarregue a base antes de editar.",
+        )
     if sheet_name is None:
         return None
     ws = wb[sheet_name]
@@ -2187,9 +2193,11 @@ def atualizar_apelido_na_planilha(
     obrigatorio: bool = False,
     transaction: Optional[AtomicFileTransaction] = None,
     expected_current_alias: Optional[str] = None,
+    target_file: Optional[Path] = None,
+    target_sheet_name: Optional[str] = None,
 ) -> bool:
     """Prepare a manual alias cell change and validate its temporary workbook."""
-    target_file = get_equipamentos_template_file()
+    target_file = Path(target_file) if target_file is not None else get_equipamentos_template_file()
     if target_file is None or not target_file.exists():
         if obrigatorio:
             raise HTTPException(status_code=404, detail="A planilha de equipamentos não foi encontrada para salvar a restauração.")
@@ -2202,7 +2210,11 @@ def atualizar_apelido_na_planilha(
                     own_transaction,
                     target_file,
                     lambda wb: _edit_alias_workbook(
-                        wb, target_serial, novo_apelido, expected_current_alias
+                        wb,
+                        target_serial,
+                        novo_apelido,
+                        expected_current_alias,
+                        target_sheet_name,
                     ),
                 )
                 if not saved:
@@ -2216,7 +2228,11 @@ def atualizar_apelido_na_planilha(
             transaction,
             target_file,
             lambda wb: _edit_alias_workbook(
-                wb, target_serial, novo_apelido, expected_current_alias
+                wb,
+                target_serial,
+                novo_apelido,
+                expected_current_alias,
+                target_sheet_name,
             ),
         )
         if not saved and obrigatorio:
@@ -2243,16 +2259,31 @@ def aplicar_alteracao_apelido(
     expected_latest_event_id: Optional[str] = None,
     remove_history_event_id: Optional[str] = None,
 ) -> Dict[str, Any]:
-    target_file = get_equipamentos_template_file()
-    workbook_exists = bool(target_file and target_file.exists())
-    if exigir_salvamento_planilha and not workbook_exists:
-        raise HTTPException(status_code=404, detail="A planilha de equipamentos não foi encontrada para salvar a restauração.")
+    with STATE_LOCK:
+        initial_equipment = equipamentos_cache.get(target_serial)
+        initial_equipment = dict(initial_equipment) if initial_equipment is not None else None
+    if initial_equipment is None:
+        raise HTTPException(status_code=404, detail=f"Equipamento com serial '{target_serial}' não encontrado na base de dados.")
+
+    cached_source = initial_equipment.get("_source_file")
+    cached_sheet = initial_equipment.get("_source_sheet")
+    if not cached_source or not cached_sheet:
+        raise HTTPException(
+            status_code=409,
+            detail="A origem deste equipamento não está mais disponível no cache; recarregue a base antes de editar.",
+        )
+    source_file = Path(cached_source).resolve(strict=False)
+    detail_files = get_details_files()
+    locked_detail_files = {Path(path).resolve(strict=False) for path in detail_files}
+    if source_file not in locked_detail_files:
+        raise HTTPException(
+            status_code=409,
+            detail="A planilha de origem mudou depois que este equipamento foi carregado; recarregue a base antes de editar.",
+        )
 
     # Include the history file in the same lock set even when this call may not
     # append to it; the previous alias and history decision are made under lock.
-    targets = [MODIFIED_APELIDOS_FILE, ALIAS_HISTORY_FILE]
-    if workbook_exists:
-        targets.append(target_file)
+    targets = [MODIFIED_APELIDOS_FILE, ALIAS_HISTORY_FILE, *detail_files]
 
     try:
         with AtomicFileTransaction(TRANSACTION_ROOT, targets) as transaction:
@@ -2261,6 +2292,32 @@ def aplicar_alteracao_apelido(
                 equipamento = dict(current_equipment) if current_equipment is not None else None
             if equipamento is None:
                 raise HTTPException(status_code=404, detail=f"Equipamento com serial '{target_serial}' não encontrado na base de dados.")
+
+            current_source = equipamento.get("_source_file")
+            current_sheet = equipamento.get("_source_sheet")
+            active_file = get_primary_equipment_file()
+            locked_files = {Path(path).resolve(strict=False) for path in detail_files}
+            if (
+                not current_source
+                or Path(current_source).resolve(strict=False) != source_file
+                or active_file is None
+                or not active_file.is_file()
+                or active_file.resolve(strict=False) != source_file
+                or active_file.resolve(strict=False) not in locked_files
+            ):
+                raise HTTPException(
+                    status_code=409,
+                    detail="A planilha de origem mudou depois que este equipamento foi carregado; recarregue a base antes de editar.",
+                )
+
+            active_sheet = find_details_sheet(active_file)
+            if not current_sheet or current_sheet != cached_sheet or active_sheet != cached_sheet:
+                raise HTTPException(
+                    status_code=409,
+                    detail="A aba de origem mudou depois que este equipamento foi carregado; recarregue a base antes de editar.",
+                )
+
+            target_file = active_file
 
             apelido_anterior = str(equipamento.get("_apelido_local", equipamento.get("_apelido_base", "")) or "").strip()
             history_will_change = (apelido_anterior != novo_apelido and registrar_historico) or bool(remove_history_event_id)
@@ -2277,16 +2334,15 @@ def aplicar_alteracao_apelido(
                 if local_now != str(expected_current_local or "").strip():
                     raise HTTPException(status_code=409, detail="O apelido salvo mudou depois deste registro; nenhuma alteração foi aplicada.")
 
-            if workbook_exists:
-                excel_salvo = atualizar_apelido_na_planilha(
-                    target_serial,
-                    novo_apelido,
-                    obrigatorio=exigir_salvamento_planilha,
-                    transaction=transaction,
-                    expected_current_alias=expected_current_local,
-                )
-            else:
-                excel_salvo = False
+            excel_salvo = atualizar_apelido_na_planilha(
+                target_serial,
+                novo_apelido,
+                obrigatorio=exigir_salvamento_planilha,
+                transaction=transaction,
+                expected_current_alias=expected_current_local,
+                target_file=target_file,
+                target_sheet_name=cached_sheet,
+            )
 
             def update_overrides(data):
                 aliases = data if isinstance(data, dict) else {}
