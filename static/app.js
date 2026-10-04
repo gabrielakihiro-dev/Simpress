@@ -16,6 +16,10 @@
       document.getElementById("retirada-cnpj").value = "";
       document.getElementById("retirada-endereco").value = "";
       document.getElementById("retirada-obs").value = "";
+      ["textarea-resumo-preview", "textarea-texto-transporte"].forEach(id => {
+        const field = document.getElementById(id);
+        if (field) field.value = "";
+      });
       preencherRepresentanteRegional("retirada", "");
       const indicator = document.getElementById("status-indicator");
       if (indicator) indicator.className = "w-2.5 h-2.5 rounded-full bg-brand-400";
@@ -49,6 +53,31 @@
       invalidarBuscasEquipamento();
       limparSelecaoEquipamento();
       fecharAutocomplete();
+    }
+
+    async function atualizarSelecaoAposSubstituirInventarios(serialSelecionada) {
+      fecharAutocomplete();
+      return transferUtils.refreshSelectionAfterInventoryReplacement({
+        requestGate: equipmentLookupRequestGate,
+        serial: serialSelecionada,
+        invalidateSearches: invalidarBuscasEquipamento,
+        clearSelection: clearSerial => {
+          limparSelecaoEquipamento();
+          if (!serialSelecionada || clearSerial) {
+            const serialInput = document.getElementById("input-serial");
+            if (serialInput) serialInput.value = "";
+            document.getElementById("btn-clear-serial")?.classList.add("hidden");
+          }
+        },
+        fetchEquipment: (serial, options) => fetch(
+          `/api/equipamento/${encodeURIComponent(serial)}`,
+          options,
+        ),
+        applyEquipment: equipment => {
+          currentEquipamento = equipment;
+          exibirEquipamento(equipment);
+        },
+      });
     }
 
     const inputSerialInicial = document.getElementById("input-serial");
@@ -1804,6 +1833,8 @@
           throw new Error(Array.isArray(detail) ? detail.map(item => item.msg || item).join("; ") : (detail || "Falha ao atualizar as planilhas."));
         }
 
+        const selectedSerial = currentEquipamento?.serial || "";
+        const selectionRefresh = atualizarSelecaoAposSubstituirInventarios(selectedSerial);
         fecharModalAtualizarPlanilhas();
         [
           ["upload-endpoint-file", "upload-endpoint-name"],
@@ -1817,16 +1848,11 @@
           carregarUnidades(),
           carregarContagemHistoricoComparacoes()
         ]);
-        if (currentEquipamento?.serial) {
-          try {
-            const refresh = await fetch(`/api/equipamento/${encodeURIComponent(currentEquipamento.serial)}`);
-            if (refresh.ok) {
-              currentEquipamento = await refresh.json();
-              exibirEquipamento(currentEquipamento);
-            }
-          } catch (refreshError) {
-            console.warn("Não foi possível atualizar o equipamento exibido após o envio das planilhas:", refreshError);
-          }
+        const selectionRefreshStatus = await selectionRefresh;
+        if (selectionRefreshStatus === "missing") {
+          showToast("A série selecionada não está no inventário atualizado. Selecione outro equipamento.", "warning");
+        } else if (selectionRefreshStatus === "unavailable") {
+          showToast("Não foi possível confirmar a série no inventário atualizado. Faça uma nova busca.", "warning");
         }
         abrirModalComparacaoPlanilhas(result.comparacao || {});
       } catch (error) {
