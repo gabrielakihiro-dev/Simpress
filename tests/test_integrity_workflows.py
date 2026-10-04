@@ -1299,6 +1299,42 @@ class WorkflowIntegrityTests(unittest.TestCase):
                 self.assertEqual(worksheet[layout["type_cell"]].value, "Notebook")
                 workbook.close()
 
+    def test_manual_alias_rejects_changed_active_source_without_mutating_state(self):
+        make_details(
+            self.details,
+            [("SN-1", "HOST-ORIGINAL", "Modelo A", "Maringá", "Notebook", "87000000")],
+        )
+        make_endpoint(self.endpoint, [("SN-1", "HOST-ENDPOINT")])
+        self.overrides.write_text("{}", encoding="utf-8")
+        self.manual_history.write_text("[]", encoding="utf-8")
+        self.assertTrue(main.load_database())
+        cached_before = copy.deepcopy(main.equipamentos_cache)
+        original_source = Path(cached_before["SN-1"]["_source_file"]).resolve()
+
+        older_mtime = time.time_ns() - 10_000_000_000
+        os.utime(self.details, ns=(older_mtime, older_mtime))
+        replacement_source = self.input_dir / "EquipamentosDetalhes_replacement.xlsx"
+        make_details(
+            replacement_source,
+            [("SN-1", "HOST-REPLACEMENT", "Modelo A", "Maringá", "Notebook", "87000000")],
+        )
+        replacement_before = replacement_source.read_bytes()
+        original_before = self.details.read_bytes()
+        overrides_before = self.overrides.read_bytes()
+        history_before = self.manual_history.read_bytes()
+
+        self.assertEqual(main.get_primary_equipment_file().resolve(), replacement_source.resolve())
+        self.assertEqual(original_source, self.details.resolve())
+        with self.assertRaises(main.HTTPException) as raised:
+            main.atualizar_apelido(main.ApelidoUpdatePayload(serial="SN-1", apelido="HOST-MANUAL"))
+
+        self.assertEqual(raised.exception.status_code, 409)
+        self.assertEqual(replacement_source.read_bytes(), replacement_before)
+        self.assertEqual(self.details.read_bytes(), original_before)
+        self.assertEqual(self.overrides.read_bytes(), overrides_before)
+        self.assertEqual(self.manual_history.read_bytes(), history_before)
+        self.assertEqual(main.equipamentos_cache, cached_before)
+
     def test_manual_alias_writer_rejects_workbooks_without_supported_alias_column(self):
         workbook = openpyxl.Workbook()
         worksheet = workbook.active
