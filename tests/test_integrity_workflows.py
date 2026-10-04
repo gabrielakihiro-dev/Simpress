@@ -340,6 +340,55 @@ class WorkflowIntegrityTests(unittest.TestCase):
         self.assertEqual(raised.exception.status_code, 409)
         self.assertEqual(self.custom_units.read_bytes(), before_stale_edit)
 
+    def test_inventory_unit_edits_keep_source_identity_when_city_or_cnpj_changes(self):
+        headers = ["NumeroSerie", "Apelido", "Modelo", "Cidade", "Tipo", "CEP", "CNPJ Instalacao"]
+        make_details(
+            self.details,
+            [
+                ("SN-A", "HOST-A", "Modelo A", "Cidade A", "Notebook", "80000000", "11.111.111/0001-11"),
+                ("SN-B", "HOST-B", "Modelo B", "Cidade B", "Notebook", "80000001", "22.222.222/0001-22"),
+                ("SN-C", "HOST-C", "Modelo C", "Cidade C", "Notebook", "80000002", "33.333.333/0001-33"),
+            ],
+            headers=headers,
+        )
+        make_endpoint(self.endpoint, [("SN-A", "HOST-A"), ("SN-B", "HOST-B"), ("SN-C", "HOST-C")])
+        self.custom_units.write_text("[]", encoding="utf-8")
+        self.assertTrue(main.load_database())
+
+        edits = (
+            ("Cidade A", "Cidade A Editada", "11.111.111/0001-11"),
+            ("Cidade B", "Cidade B", "22.222.222/0001-99"),
+            ("Cidade C", "Cidade C Editada", "33.333.333/0001-99"),
+        )
+        for index, (original_city, updated_city, updated_cnpj) in enumerate(edits, start=1):
+            with self.subTest(city=original_city):
+                source_unit = next(unit for unit in main.unidades_cache if unit["cidade"] == original_city)
+                source_key = source_unit["_source_key"]
+                source_id = source_unit["id"]
+                saved = main.salvar_unidade(main.UnidadePayload(
+                    id=source_id,
+                    cidade=updated_city,
+                    endereco=f"Rua Fictícia, {index}",
+                    uf="PR",
+                    cep=f"80000-00{index}",
+                    cnpj=updated_cnpj,
+                ))
+
+                linked_units = [
+                    unit for unit in main.unidades_cache
+                    if unit.get("_source_key") == source_key
+                ]
+                self.assertEqual(len(linked_units), 1)
+                self.assertEqual(linked_units[0]["id"], source_id)
+                self.assertEqual(linked_units[0]["cidade"], updated_city)
+                self.assertEqual(linked_units[0]["cnpj"], updated_cnpj)
+                self.assertTrue(all("_source_key" not in unit for unit in saved["unidades"]))
+
+        stored = json.loads(self.custom_units.read_text(encoding="utf-8"))
+        self.assertEqual(len(stored), 3)
+        self.assertEqual(len({unit["_source_key"] for unit in stored}), 3)
+        self.assertTrue(all("_source_key" not in unit for unit in main.get_unidades()))
+
     def test_concurrent_unit_saves_preserve_both_catalog_updates(self):
         make_details(
             self.details,

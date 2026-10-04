@@ -1420,12 +1420,21 @@ def _coerce_unit_id(value: Any) -> Optional[int]:
     return unit_id if unit_id > 0 else None
 
 
-def _stable_unit_id(unit: Dict[str, Any], reserved_ids: Set[int]) -> int:
-    """Return a deterministic numeric ID for inventory-derived units."""
-    identity = "\x1f".join(
+def _unit_identity_key(unit: Dict[str, Any]) -> str:
+    return "\x1f".join(
         unicodedata.normalize("NFKC", str(unit.get(field) or "")).strip().casefold()
         for field in ("cidade", "endereco", "cnpj", "uf")
     )
+
+
+def _stable_unit_source_key(unit: Dict[str, Any]) -> str:
+    """Keep inventory identity stable while editable location fields change."""
+    return hashlib.sha256(_unit_identity_key(unit).encode("utf-8")).hexdigest()
+
+
+def _stable_unit_id(unit: Dict[str, Any], reserved_ids: Set[int]) -> int:
+    """Return a deterministic numeric ID for inventory-derived units."""
+    identity = _unit_identity_key(unit)
     collision_index = 0
     while True:
         seed = identity if collision_index == 0 else f"{identity}\x1f{collision_index}"
@@ -1633,6 +1642,7 @@ def _load_database_unlocked() -> bool:
         "endereco_completo": "R Caeté, 150 - SEDE - Prado Velho - Curitiba/PR - CEP 80220-300",
         "label": curitiba_label,
     }
+    curitiba_oficial["_source_key"] = _stable_unit_source_key(curitiba_oficial)
 
     final_units = [curitiba_oficial]
     for u in filtered_units:
@@ -1644,13 +1654,22 @@ def _load_database_unlocked() -> bool:
             "cnpj": u["cnpj"],
             "is_sede": False,
             "endereco_completo": u["retirada_endereco"],
-            "label": f"{u['cidade']} - {u['endereco']}" + (f" ({u['cnpj']})" if u["cnpj"] else "")
+            "label": f"{u['cidade']} - {u['endereco']}" + (f" ({u['cnpj']})" if u["cnpj"] else ""),
+            "_source_key": _stable_unit_source_key(u),
         })
 
     # Mesclar unidades customizadas/editadas pelo usuário
     custom_units = load_custom_units()
     for cu in custom_units:
-        match = next((x for x in final_units if x.get("cidade", "").lower() == cu.get("cidade", "").lower() and x.get("cnpj") == cu.get("cnpj")), None)
+        source_key = cu.get("_source_key")
+        if source_key:
+            match = next((x for x in final_units if x.get("_source_key") == source_key), None)
+        else:
+            match = next((
+                x for x in final_units
+                if x.get("cidade", "").lower() == cu.get("cidade", "").lower()
+                and x.get("cnpj") == cu.get("cnpj")
+            ), None)
         if match:
             match.update(cu)
         else:
@@ -2812,6 +2831,13 @@ async def atualizar_planilhas(
     )
 
 
+def _public_unit_list(units: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
+    return [
+        {key: value for key, value in unit.items() if key != "_source_key"}
+        for unit in units
+    ]
+
+
 @app.post("/api/unidade/salvar")
 def salvar_unidade(payload: UnidadePayload):
     """Salva ou edita uma regional/filial SEBRAE e persiste no catálogo do sistema."""
@@ -2839,11 +2865,18 @@ def salvar_unidade(payload: UnidadePayload):
                 if not isinstance(saved_units, list):
                     raise FileTransactionError("O catálogo local de unidades não contém uma lista válida.")
                 updated_units = [dict(unit) for unit in saved_units]
+                selected_unit = next((
+                    unit for unit in current_units
+                    if payload.id and _coerce_unit_id(unit.get("id")) == payload.id
+                ), None)
                 matched = False
 
                 if payload.id:
                     for unit in updated_units:
                         if _coerce_unit_id(unit.get("id")) == payload.id:
+                            source_key = unit.get("_source_key") or (
+                                selected_unit.get("_source_key") if selected_unit else None
+                            )
                             unit.update({
                                 "cidade": cidade,
                                 "endereco": endereco,
@@ -2853,6 +2886,8 @@ def salvar_unidade(payload: UnidadePayload):
                                 "endereco_completo": retirada_endereco,
                                 "label": f"{cidade} - {endereco} ({cnpj})",
                             })
+                            if source_key:
+                                unit["_source_key"] = source_key
                             matched = True
                             break
 
@@ -2871,7 +2906,7 @@ def salvar_unidade(payload: UnidadePayload):
                     ]
                     current_ids = [unit_id for unit_id in current_ids if unit_id is not None]
                     new_id = (max(current_ids + [0]) + 1) if not payload.id else payload.id
-                    updated_units.append({
+                    new_unit = {
                         "id": new_id,
                         "cidade": cidade,
                         "endereco": endereco,
@@ -2881,7 +2916,10 @@ def salvar_unidade(payload: UnidadePayload):
                         "is_sede": "sede" in cidade.lower() or "sede" in endereco.lower(),
                         "endereco_completo": retirada_endereco,
                         "label": f"{cidade} - {endereco} ({cnpj})",
-                    })
+                    }
+                    if selected_unit and selected_unit.get("_source_key"):
+                        new_unit["_source_key"] = selected_unit["_source_key"]
+                    updated_units.append(new_unit)
                 return updated_units
 
             transaction.update_json(CUSTOM_UNIDADES_FILE, update_custom_units, [])
@@ -2899,14 +2937,16 @@ def salvar_unidade(payload: UnidadePayload):
     return {
         "sucesso": True,
         "mensagem": f"Unidade '{cidade}' cadastrada/atualizada com sucesso!",
-        "unidades": published_units,
+        "unidades": _public_unit_list(published_units),
     }
 
 
 @app.get("/api/unidades")
 def get_unidades():
     """Retorna o catálogo completo de unidades SEBRAE catalogadas."""
-    return unidades_cache
+    with STATE_LOCK:
+        units = list(unidades_cache)
+    return _public_unit_list(units)
 
 
 def _normalizar_termo_busca(valor: Any) -> str:
