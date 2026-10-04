@@ -22,6 +22,7 @@ from xml.sax.saxutils import escape
 
 import openpyxl
 from app_config import MAX_XLSX_ARCHIVE_ENTRIES, MAX_XLSX_UNCOMPRESSED_BYTES
+from xlsx_safety import validate_xlsx
 
 
 class FileBusyError(RuntimeError):
@@ -1002,6 +1003,7 @@ def load_workbook_safely(
     temporary_handle = None
     if isinstance(source, (str, os.PathLike, Path)):
         source_path = Path(source)
+        validate_xlsx(source_path)
         _package_features(
             source_path,
             allow_threaded_comments=allow_threaded_comments,

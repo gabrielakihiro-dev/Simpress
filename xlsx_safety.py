@@ -14,6 +14,7 @@ from app_config import (
     MAX_XLSX_ARCHIVE_ENTRIES,
     MAX_XLSX_CONTROL_XML_BYTES,
     MAX_XLSX_TOTAL_CELLS,
+    MAX_XLSX_TOTAL_MERGED_CELLS,
     MAX_XLSX_UNCOMPRESSED_BYTES,
     MAX_XLSX_WORKSHEETS,
     MAX_XLSX_WORKSHEET_COLUMNS,
@@ -157,6 +158,7 @@ def _scan_worksheet(archive: zipfile.ZipFile, name: str) -> tuple[int, int]:
     max_column = 0
     current_row = 0
     current_column = 0
+    merged_area = 0
 
     def add_bounds(row: int, column: int = 1) -> None:
         nonlocal max_row, max_column
@@ -179,7 +181,7 @@ def _scan_worksheet(archive: zipfile.ZipFile, name: str) -> tuple[int, int]:
     parser.EntityDeclHandler = reject_doctype
 
     def start_element(tag: str, attributes: dict[str, str]) -> None:
-        nonlocal current_row, current_column
+        nonlocal current_row, current_column, merged_area
         local_tag = _local_name(tag)
         if local_tag == "dimension":
             reference = attributes.get("ref")
@@ -210,6 +212,22 @@ def _scan_worksheet(archive: zipfile.ZipFile, name: str) -> tuple[int, int]:
                 current_column += 1
                 row, column = current_row, current_column
             add_bounds(row, column)
+        elif local_tag == "mergeCell":
+            reference = attributes.get("ref")
+            if not reference:
+                raise XlsxPackageError("A planilha contém uma mesclagem sem intervalo válido.")
+            pieces = reference.split(":")
+            if len(pieces) not in (1, 2):
+                raise XlsxPackageError("A planilha contém um intervalo de mesclagem inválido.")
+            coordinates = [_parse_cell_reference(piece) for piece in pieces]
+            first_row = min(row for row, _ in coordinates)
+            last_row = max(row for row, _ in coordinates)
+            first_column = min(column for _, column in coordinates)
+            last_column = max(column for _, column in coordinates)
+            merged_area += (last_row - first_row + 1) * (last_column - first_column + 1)
+            if merged_area > MAX_XLSX_TOTAL_MERGED_CELLS:
+                raise XlsxLimitExceeded("As áreas mescladas da planilha excedem o limite permitido.")
+            add_bounds(last_row, last_column)
 
     parser.StartElementHandler = start_element
     try:
