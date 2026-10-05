@@ -1,199 +1,258 @@
-# Simpress — Transferência de Equipamentos
+# Simpress — Transferência e Inventário de Equipamentos
 
-Aplicação web local para consultar equipamentos por número de série, preparar transferências Simpress e gerar a planilha oficial em Excel. O projeto usa FastAPI no servidor, uma interface em `static/index.html` e arquivos `.xlsx` na pasta `planilhas_entrada`.
+Aplicação web local para consultar equipamentos, preparar transferências Simpress, comparar inventários e exportar uma planilha de equipamentos atualizada. O servidor usa FastAPI; a interface e os dados operacionais ficam no computador em que o projeto está instalado.
 
-## O que o sistema faz
+## Recursos
 
-- Pesquisa equipamentos por série, código de barras, apelido/hostname, modelo ou cidade e permite refinar os resultados por categoria e cidade.
-- Preenche os dados de retirada e entrega e gera a planilha oficial de transferência.
-- Permite ajustar apelidos, consultar o histórico e exportar a base com os apelidos atualizados.
-- Compara arquivos de inventário do Endpoint e do EquipamentosDetalhes.
-- Mantém o catálogo de unidades e endereços usado no formulário.
+- Busca por número de série, código de barras, apelido/hostname, modelo ou cidade. A busca completa pode ser filtrada por categoria e cidade.
+- Geração e download da planilha oficial de transferência a partir do modelo local.
+- Textos prontos para solicitações de transporte, kit de teclado e mouse e defeitos, com opções para copiar o texto e abrir os links correspondentes.
+- Edição de apelidos e de outros campos permitidos do equipamento, com histórico e opção de desfazer alterações de apelido.
+- Comparação e atualização conjunta dos inventários Endpoint e Simpress, com histórico, backups locais e prévia de restauração.
+- Exportação de `Apelido` e, quando disponível, `IdCliente` para um modelo Excel local.
+- Catálogo de unidades, endereços, CNPJ e CEP, incluindo unidades personalizadas.
 
 ## Requisitos
 
 - Windows 10 ou superior.
-- Python 3.12 ou superior. O ambiente local verificado nesta fase usa Python 3.14.7; a versão fixada de NumPy requer Python 3.12 ou superior.
-- Fontes, estilos utilitários e ícones da interface são servidos por arquivos locais; não é necessária conexão externa para carregá-los.
-- As versões diretas e transitivas do ambiente validado estão fixadas em `requirements.txt`.
-- As dependências usadas para reconstruir os arquivos da interface estão fixadas em `package-lock.json`; Node.js/npm só são necessários para reconstruí-los.
+- Python 3.12 ou superior.
+- O servidor usa os arquivos locais já compilados da interface. Node.js e npm são necessários apenas para reconstruir esses arquivos ou executar os testes JavaScript.
+- Não é necessário ter acesso à internet para abrir a aplicação e carregar a interface. Os links para os sistemas de chamados da Simpress abrem páginas externas.
 
-## Instalação e inicialização
+O repositório é privado; a conta usada para cloná-lo precisa ter acesso.
 
-### 1. Baixe o projeto
+## Instalação
 
-O repositório é privado; sua conta precisa ter acesso.
+Clone o projeto ou abra o PowerShell na pasta existente:
 
 ```powershell
 git clone https://github.com/gabrielakihiro-dev/Simpress.git
 cd Simpress
 ```
 
-Se a pasta já está no computador, abra o PowerShell nela e comece pelo passo 2.
-
-### 2. Crie o ambiente Python
-
-Execute uma vez, na pasta do projeto:
+Crie o ambiente virtual com Python 3.12 ou superior. No Windows, use o Python Launcher:
 
 ```powershell
 py -3 -m venv .venv
 ```
 
-Confira se a versão exibida é 3.12 ou superior:
+Se o comando `py` não estiver instalado, use `python` — confirme que aponta para Python 3.12 ou superior:
+
+```powershell
+python -m venv .venv
+```
+
+Confira a versão do ambiente:
 
 ```powershell
 .\.venv\Scripts\python.exe --version
 ```
 
-O workspace do VS Code aponta para o ambiente `.venv` desta pasta por um caminho relativo. Se o editor ainda não selecionar esse ambiente depois da criação, escolha `.venv\Scripts\python.exe` como interpretador do workspace.
-
-### 3. Instale as dependências
+Instale as dependências fixadas pelo projeto:
 
 ```powershell
 .\.venv\Scripts\python.exe -m pip install -r requirements.txt
 ```
 
-### 4. Confira as planilhas necessárias
+No VS Code, o interpretador configurado para este workspace é `.venv\Scripts\python.exe`. Se necessário, selecione esse caminho manualmente.
 
-Na pasta `planilhas_entrada`, confirme que existem:
+## Planilhas e arquivos locais
 
-- `(MODELO) - TRANSFERENCIA SIMPRESS.xlsx`, usado para gerar a planilha final.
-- Pelo menos uma planilha `EquipamentosDetalhes*.xlsx` válida. No início, o sistema carrega a planilha válida mais recente dessa pasta.
-- `InvAllComputersSummary_atual.xlsx`, usada como fonte de hostname por série quando não há apelido manual.
-- `modelos/EquipamentosDetalhes-exportacao.xlsx`, modelo local usado pela exportação da base com apelidos. Esse arquivo pode conter dados operacionais e não é distribuído pelo Git.
+Os caminhos são relativos à pasta do projeto e estão definidos em [app_config.py](app_config.py). Não é necessário criar um arquivo `.env`; o programa não o carrega.
 
-A planilha EquipamentosDetalhes precisa ter, na primeira linha, colunas equivalentes a número de série, apelido ou hostname, modelo e cidade. Para preencher CNPJs de retirada e entrega, a coluna `CNPJ Instalacao` (ou `CNPJ de Instalacao`) fornece o CNPJ da unidade; o CNPJ de faturamento não é usado como substituto. As bases operacionais não são distribuídas pelo Git: coloque a cópia local necessária em `planilhas_entrada` e o modelo de exportação em `modelos`.
+| Arquivo | Local | Uso |
+| --- | --- | --- |
+| `(MODELO) - TRANSFERENCIA SIMPRESS.xlsx` | `planilhas_entrada` | Modelo da planilha oficial. É versionado no Git e exigido pelo inicializador `.bat`. |
+| `EquipamentosDetalhes*.xlsx` | `planilhas_entrada` | Inventário principal da busca. Na inicialização, o sistema usa o arquivo válido mais recente. |
+| `EquipamentosDetalhes_atual.xlsx` | `planilhas_entrada` | Destino do inventário Simpress no fluxo de atualização. |
+| `InvAllComputersSummary_atual.xlsx` | `planilhas_entrada` | Inventário Endpoint usado no fluxo de atualização e como fonte de hostname. |
+| `EquipamentosDetalhes-exportacao.xlsx` | `modelos` | Modelo local de exportação. Não é distribuído pelo Git. |
 
-Os caminhos e limites locais ficam em `app_config.py` e são calculados a partir da pasta do projeto. Não há arquivo `.env`: mantenha os nomes de arquivo e diretórios configurados nesse módulo ou ajuste ali a constante correspondente quando substituir um modelo local.
+As planilhas operacionais e o modelo de exportação precisam ser fornecidos localmente. Não coloque dados reais no repositório.
 
-O contato padrão do ponto de retirada pode ser atualizado por instalação usando as variáveis de ambiente `SIMPRESS_TRANSFER_ORIGIN_CONTACT`, `SIMPRESS_TRANSFER_ORIGIN_EMAIL` e `SIMPRESS_TRANSFER_ORIGIN_PHONE`. O formulário busca esses valores em `/api/config/transferencia`; reinicie o servidor depois de alterar o ambiente.
+### Cabeçalhos dos inventários
 
-Para reconstruir os estilos, ícones e fontes locais depois de alterar a interface, execute `npm ci` e `npm run build:ui`. O servidor Python usa os arquivos já gerados em `static/vendor` e não precisa iniciar um processo Node.js.
+Os cabeçalhos devem estar na primeira linha de uma aba com dados. O sistema normaliza espaços, acentos e pontuação e recusa cabeçalhos repetidos ou ambíguos.
 
-### 5. Inicie o servidor
+- **EquipamentosDetalhes:** número de série (`NumeroSerie`, `Numero de Serie` ou `Serial`), apelido/hostname (`Apelido`, `Hostname`, `Nome do Computador` ou `ComputerName`), `Modelo` e `Cidade`.
+- **Endpoint:** nome do computador (`Nome do Computador`, `ComputerName` ou `Hostname`) e número de série/rótulo de serviço (`Rotulo de Servico Numero de Serie`, `NumeroSerie`, `Numero de Serie`, `Serial` ou `ServiceTag`).
+- **Modelo de exportação:** precisa ter colunas de número de série e `Apelido`. A coluna `IdCliente` é atualizada quando existe nos dois arquivos.
+
+Para escolher a aba automaticamente, o arquivo enviado deve conter somente uma aba que corresponda aos cabeçalhos exigidos para aquele inventário. Se mais de uma aba for compatível, a atualização é recusada para evitar comparar a tabela errada.
+
+Quando o CNPJ da unidade de instalação estiver disponível em `CNPJ Instalacao` ou `CNPJ de Instalacao`, esse valor pode ser usado. O CNPJ de faturamento não é usado como substituto.
+
+### Contato padrão da retirada
+
+Os dados padrão do contato de retirada podem ser definidos nas variáveis de ambiente abaixo. Defina-as no PowerShell antes de iniciar o servidor; reinicie o processo depois de alterá-las.
+
+```powershell
+$env:SIMPRESS_TRANSFER_ORIGIN_CONTACT = "Nome do contato"
+$env:SIMPRESS_TRANSFER_ORIGIN_EMAIL = "contato@empresa.com"
+$env:SIMPRESS_TRANSFER_ORIGIN_PHONE = "(41) 00000-0000"
+```
+
+## Iniciar e abrir a aplicação
+
+Execute:
 
 ```powershell
 .\iniciar_servidor.bat
 ```
 
-O arquivo inicializador usa o ambiente `.venv` criado nos passos anteriores. Mantenha a janela aberta enquanto usar o sistema.
+O inicializador confere se existem o ambiente `.venv` e o modelo de transferência, abre o servidor e mantém a janela aberta. Para iniciar sem o arquivo `.bat`, use:
 
-Na inicialização, o terminal informa se os arquivos locais necessários estão disponíveis e quais funções são afetadas quando um arquivo está ausente ou o pacote XLSX é inválido. A página também mostra um resumo da disponibilidade; abra **Ver detalhes de arquivos e funções** para conferir os itens ou use **Atualizar status** depois de substituir um arquivo. Essa verificação estrutural não substitui a validação de abas, cabeçalhos e registros feita durante o uso; ela também não grava dados das planilhas no relatório.
+```powershell
+.\.venv\Scripts\python.exe main.py
+```
 
-As dependências verificadas por função são:
-
-| Função | Arquivos necessários |
-| --- | --- |
-| Consulta de equipamentos | Inventário EquipamentosDetalhes ativo e válido. |
-| Geração de transferência | `(MODELO) - TRANSFERENCIA SIMPRESS.xlsx`. |
-| Comparação e atualização de inventários | Inventários ativos de Endpoint e EquipamentosDetalhes usados pelo fluxo de atualização. |
-| Exportação de equipamentos | Inventário EquipamentosDetalhes ativo e `modelos/EquipamentosDetalhes-exportacao.xlsx`. |
-
-Se uma dependência estiver ausente ou inválida, confira o nome do arquivo indicado no terminal, restaure a planilha local correspondente e reinicie o servidor para repetir a verificação.
-
-### 6. Abra a aplicação
-
-No navegador, acesse:
+Abra no navegador:
 
 - Aplicação: <http://127.0.0.1:8000>
-- Documentação da API: <http://127.0.0.1:8000/docs>
+- Documentação interativa da API: <http://127.0.0.1:8000/docs>
 
-O servidor aceita apenas `localhost`, `127.0.0.1` ou `[::1]` na porta 8000. Para chamadas de API feitas pelo navegador, a origem deve corresponder ao mesmo host local.
+O servidor é iniciado em `127.0.0.1`, na porta `8000`. Para encerrar, volte à janela do servidor e pressione `Ctrl+C`.
 
-Para encerrar o servidor, volte à janela em que ele está rodando e pressione `Ctrl+C`.
+Na inicialização, o terminal e a aplicação mostram quais arquivos locais estão disponíveis e quais funções dependem deles. O painel **Ver detalhes de arquivos e funções** informa o impacto de cada ausência; **Atualizar status** repete a verificação. Esse botão verifica disponibilidade e formato do arquivo, mas não recarrega os equipamentos na memória. Para carregar arquivos alterados manualmente, reinicie o servidor; no uso normal, atualize os inventários pela própria aplicação.
 
-## Passo a passo: gerar uma transferência
+| Função | Dependências principais |
+| --- | --- |
+| Busca de equipamentos | Um `EquipamentosDetalhes*.xlsx` válido e os catálogos locais. |
+| Geração de transferência | Modelo `(MODELO) - TRANSFERENCIA SIMPRESS.xlsx`. |
+| Comparação/atualização | Inventários Endpoint e Simpress enviados no fluxo. |
+| Exportação Excel | Inventário principal válido e `modelos/EquipamentosDetalhes-exportacao.xlsx`. |
 
-1. Inicie o servidor e abra a aplicação.
-2. Na aba **Home**, leia o código de barras ou pesquise por série, apelido/hostname, modelo ou cidade. Pressione `Enter` ou clique em **Buscar Equipamento**.
-3. Confira os dados do equipamento encontrados na base. A busca permanece na aba **Home**.
-4. Clique manualmente na aba **Retirada e Entrega** e preencha ou revise os dados de origem e destino.
-5. Use o rodapé da aba **Retirada e Entrega** para clicar em **Gerar Planilha**.
-6. Abra o arquivo baixado e confira os dados antes de encaminhá-lo.
+## Como usar
 
-## Pesquisa de equipamentos
+### Pesquisar equipamento
 
-A busca da aba **Home** aceita série, código de barras, apelido/hostname, modelo e cidade. A lista rápida mostra até 15 resultados. Quando houver mais correspondências, use **Mostrar mais** para abrir a janela de resultados; ela informa o total e carrega os itens em páginas de até 50 pelo botão **Carregar mais**.
+Na aba **Home**, pesquise por série, código de barras, apelido/hostname, modelo ou cidade. Pressione `Enter` ou clique em **Buscar Equipamento**. A lista rápida mostra até 15 resultados; **Mostrar mais** abre a pesquisa completa, que apresenta o total e carrega até 50 resultados por vez com **Carregar mais**.
 
-Na janela de resultados, combine o filtro de categoria com o de cidade. As categorias são **Notebooks**, **MacBooks**, **Monitores** e **Fones**. A classificação considera o tipo e o modelo da planilha ativa: MacBooks ficam separados dos demais notebooks; monitores também são reconhecidos pelo modelo, mesmo quando o tipo está registrado como `Micro Computador`; e Fones inclui registros identificados como Headset, Headphone, Fone, Earphone ou Earbud. A contagem ao lado de cada categoria considera as correspondências da busca atual.
+Na pesquisa completa, combine os filtros de categoria e cidade. As categorias são **Notebooks**, **MacBooks**, **Monitores** e **Fones**. A classificação considera o tipo e o modelo da planilha; por exemplo, monitores também são identificados pelo modelo e MacBooks aparecem separados dos outros notebooks.
 
-Códigos como `3CK38` não são associados manualmente a uma categoria. Para aparecer em **Fones**, o código precisa existir na planilha ativa e o tipo ou modelo do registro precisa indicar um fone/headset.
+### Gerar transferência
 
-## Atualizar e comparar inventários
+1. Pesquise o equipamento na aba **Home** e confira os dados encontrados.
+2. Abra manualmente a aba **Retirada e Entrega**.
+3. Revise a origem e o destino, incluindo CNPJ, endereço e contatos. O catálogo de unidades pode ajudar a preencher os dados.
+4. Preencha os campos obrigatórios e clique em **Gerar Planilha** no rodapé.
+5. Abra o arquivo baixado e confira os dados antes de encaminhá-lo.
 
-1. Na aplicação, abra **Atualizar Planilhas**.
-2. Selecione os arquivos `.xlsx` do Endpoint e do EquipamentosDetalhes.
-3. Confira as listas de ausências por fonte, as divergências de local e os registros ambíguos apresentados pelo sistema. A comparação usa somente essas duas fontes; a base principal de equipamentos continua disponível para gerar as planilhas pelo botão de exportação.
-4. Consulte **Histórico planilhas** para rever comparações anteriores. Em uma atualização com backup válido, use **Restaurar versão anterior** para conferir os arquivos e as datas antes de substituir os inventários; a restauração pode ser desfeita pelo próprio histórico quando o conjunto substituído também está completo e válido.
+Para gerar a planilha, são obrigatórios: série do equipamento; CNPJ e endereço de retirada e entrega; nome, e-mail e telefone do contato de retirada; observações da retirada; nome, e-mail e telefone do destinatário; horário, almoço e observações da entrega. A duração da pausa da unidade de entrega também é obrigatória, exceto quando o horário de almoço indica que o escritório não fecha. O arquivo é preparado para download e não fica guardado como arquivo permanente pelo servidor.
 
-O limite de envio é de 30 MB por arquivo. Para manter a leitura previsível, cada XLSX também pode ter até 128 abas, 250.000 linhas por aba e 5.000.000 de posições no total, considerando o retângulo usado de cada aba. Cada atualização substitui integralmente os dois inventários ativos pelos arquivos validados enviados; séries ausentes no novo relatório deixam de compor a base carregada. Antes de enviar, confirme que são as versões corretas. O sistema guarda cópias anteriores em `planilhas_entrada/_backups`; pelo histórico, é possível pré-visualizar e restaurar um par válido de inventários.
+Na aba **Home**, **Mostrar textos para chamados** apresenta textos editáveis relacionados ao equipamento. Use **Copiar** para levar o texto ao chamado; os botões **Link** abrem os sistemas externos correspondentes.
 
-O apelido alterado manualmente fica associado à série e prevalece nas pesquisas, na entrada rápida e na exportação, mesmo após recarregar ou atualizar as planilhas. Sem override manual, o hostname único da InvAll prevalece sobre o valor de EquipamentosDetalhes. Ao atualizar os arquivos, endereço e localidade são sincronizados a partir de EquipamentosDetalhes. O Histórico planilhas registra divergências entre apelidos manuais e as duas fontes, permitindo manter o override ou removê-lo para uma série. A exportação atualiza células graváveis de `Apelido` no modelo com o valor do inventário ativo (`Apelido` ou `Hostname`) e de `IdCliente` quando essa coluna existe nos dois arquivos. Somente séries com correspondência única são processadas; células com fórmulas não são sobrescritas. As demais abas, linhas, colunas, dimensões, valores e formatação do modelo são preservados.
+### Comparar e atualizar inventários
 
-## Interface e acessibilidade
+1. Abra **Atualizar Planilhas**.
+2. Envie um arquivo `.xlsx` do **Endpoint** e um do **Simpress**.
+3. Confira ausências em cada fonte, divergências de local, correspondências ambíguas, mudanças de hostname e casos que precisam de revisão.
+4. Leia o resultado antes de continuar. Cada atualização substitui integralmente os dois inventários ativos pelos arquivos validados; séries ausentes no novo relatório deixam de compor a base carregada.
+5. Consulte **Histórico planilhas** para rever comparações e, se houver um backup completo válido, pré-visualize os arquivos e datas antes de restaurar.
 
-- **Atualizar planilhas** e **Nova transferência** ficam entre as ações principais. Histórico de alterações, Histórico planilhas, Exportar Excel e Catálogo de unidades ficam agrupados no menu secundário.
-- A aba **Home** concentra a busca por série, apelido/hostname, modelo ou cidade. Após selecionar um equipamento, a tela permanece nela; abra **Retirada e Entrega** manualmente para preencher a transferência e acessar as ações do rodapé.
-- Use **Pular para o conteúdo principal** para ignorar o cabeçalho. Na lista rápida, use `↑` e `↓` para navegar, `Enter` para selecionar ou abrir os resultados completos e `Esc` para fechar. Na pesquisa completa, refine por categoria e cidade ou carregue mais resultados.
-- Os diálogos recebem o foco ao abrir, mantêm a navegação por `Tab` dentro do conteúdo, fecham com `Esc` e devolvem o foco ao controle que os abriu. Mensagens de carregamento, sucesso, vazio e erro são anunciadas às tecnologias assistivas.
-- Tabelas largas podem ser percorridas horizontalmente sem ocultar colunas. O cabeçalho, os botões e as ações rápidas se reorganizam em telas menores; animações respeitam `prefers-reduced-motion`.
+O sistema cria cópias dos inventários anteriores antes de substituí-los. A restauração também salva o conjunto que está ativo naquele momento e registra a operação no histórico, permitindo desfazê-la se esse backup também for completo e válido.
 
-A interface carrega estilos, fontes e ícones do servidor local; os botões de cópia usam as APIs do navegador e não dependem de endpoints externos.
+### Apelidos, edição e precedência das fontes
 
-## Apelidos, unidades e histórico
+Um apelido alterado manualmente fica associado ao número de série e prevalece nas pesquisas, no formulário e na exportação. Sem alteração manual, um hostname único do Endpoint prevalece sobre o apelido de EquipamentosDetalhes. Quando uma associação do Endpoint não é única, o sistema a apresenta para revisão em vez de escolher uma linha arbitrariamente.
 
-- Edições manuais de apelido ficam em `apelidos_modificados.json` e no histórico `historico_alteracoes.json`.
-- Mudanças de hostname identificadas ao atualizar planilhas ficam no `historico_comparacoes.json`, separado do histórico manual.
-- Divergências com apelidos manuais também ficam no Histórico planilhas, com ações para manter o override ou removê-lo por série.
-- Endereço e localidade do cadastro são atualizados pelas planilhas EquipamentosDetalhes; o formulário de edição do equipamento não altera esses campos.
-- O cadastro de unidades personalizadas é salvo em `unidades_custom.json` quando houver alterações.
-- No catálogo de unidades, use os botões ao lado do CNPJ e do CEP para copiar esses dados. A interface informa sucesso, ausência do dado ou falha de cópia; se a API de área de transferência do navegador não estiver disponível, tenta um método de compatibilidade.
-- Use **Histórico** para consultar alterações de apelido e, quando disponível, desfazer a alteração mais recente.
-- Use **Exportar Excel** para baixar a planilha com `Apelido` e `IdCliente` atualizados. A notificação informa quantas células mudaram em cada coluna e, quando a exportação for parcial, mostra os motivos e até dez séries de exemplo por motivo para orientar a conferência.
+O **Histórico** registra alterações manuais de apelido e permite desfazer a alteração mais recente quando os dados ainda correspondem ao evento. O **Histórico planilhas** também mostra diferenças entre apelidos manuais e os valores das duas fontes; para cada série, é possível manter o apelido manual ou remover o override. Endereço e localidade vêm de EquipamentosDetalhes e não são alterados manualmente pelo formulário de edição.
 
-## Arquivos, backups e recuperação
+### Exportar equipamentos
 
-- Os uploads validados substituem os inventários ativos em `planilhas_entrada`, com os nomes definidos em `app_config.py`.
-- Antes de substituir inventários, a aplicação copia os arquivos atuais para `planilhas_entrada/_backups/<data-hora>-<identificador>/`, separados em `endpoint` e `detalhes`. Pelo Histórico planilhas, um backup completo pode ser validado e restaurado; o conjunto substituído é salvo em outro backup e a restauração entra no histórico, permitindo desfazê-la quando esse backup também está completo e válido.
-- Históricos de apelidos/comparações e backups vencem após 60 dias. A comparação fixada é preservada; registros com data inválida também ficam guardados para evitar remoção sem prazo confiável.
-- Gravações relacionadas usam temporários validados, bloqueios por arquivo e transações. Se uma operação falhar, a transação restaura os destinos afetados e o cache anterior.
-- Uma transação interrompida deixa estado em `.transactions`. Na próxima inicialização, `integrity.py` tenta recuperar esse estado antes de carregar os arquivos. Não apague essa pasta enquanto houver uma recuperação pendente.
-- A planilha de transferência é preparada para download; não é mantida como arquivo permanente pelo servidor.
-- Históricos, apelidos, unidades, planilhas locais e `_backups` são ignorados pelo Git. Inclua esses dados no backup local se precisar preservar o uso da aplicação; não os adicione ao Git.
+**Exportar Excel** baixa uma cópia do modelo local atualizada com os dados do inventário principal. O sistema processa somente séries com correspondência única, atualiza células graváveis de `Apelido` e, quando a coluna existe nos dois arquivos, `IdCliente`. Fórmulas não são sobrescritas; as demais abas e formatações do modelo são preservadas. Se a exportação for parcial, a notificação informa os motivos e exemplos para conferência.
 
-Se um backup antigo estiver ausente ou inválido, a recuperação continua manual: confira a pasta de backup e os arquivos ativos antes de qualquer substituição. A restauração pelo histórico exige os dois inventários válidos e mostra os arquivos, as datas e as contagens antes de confirmar.
+### Catálogo de unidades e acessibilidade
 
-## Testes automatizados
+O **Catálogo de Unidades** permite consultar unidades e manter unidades personalizadas. Os botões ao lado do CNPJ e do CEP copiam os valores; a interface informa sucesso ou falha.
 
-Execute a suíte com o Python do ambiente local:
+Use **Pular para o conteúdo principal** para ignorar o cabeçalho. Na lista rápida, `↑` e `↓` navegam, `Enter` seleciona e `Esc` fecha. Diálogos mantêm o foco dentro do conteúdo enquanto estão abertos, fecham com `Esc` e devolvem o foco ao controle que os abriu. Mensagens de carregamento, sucesso, vazio e erro são anunciadas às tecnologias assistivas. Tabelas largas podem ser percorridas horizontalmente e a interface se adapta a telas menores e à preferência por movimento reduzido.
+
+## Limites de planilhas
+
+Cada arquivo enviado pode ter até **30 MB**. Para manter a leitura previsível, cada arquivo também pode ter até **128 abas**, **250.000 linhas por aba** e **5.000.000 de posições usadas no total**. O pacote XLSX descompactado é limitado a 256 MB. Os limites se aplicam aos arquivos enviados e às planilhas locais processadas.
+
+Arquivos precisam ser `.xlsx` válidos. Planilhas vazias, corrompidas, com cabeçalhos ausentes/ambíguos ou sem linhas utilizáveis podem ser recusadas. Se duas abas de um arquivo forem compatíveis com o mesmo tipo de inventário, selecione ou prepare um arquivo que contenha apenas a aba correta.
+
+## Histórico, backups e recuperação
+
+- Os backups de atualizações ficam em `planilhas_entrada/_backups/<data-hora>-<identificador>/`, separados em Endpoint e Simpress. Um backup incompleto ou inválido não pode ser restaurado pelo histórico.
+- Históricos de apelidos, comparações e backups vencem após **60 dias**. A limpeza automática ocorre na inicialização e após atualizações de planilhas ou gravações de apelido. Backups antigos sem referência no histórico também podem ser removidos.
+- A comparação fixada é preservada. Registros com data inválida são mantidos porque não há um prazo confiável para removê-los.
+- Backups e históricos são locais; eles não são enviados à nuvem. Faça uma cópia externa das pastas e arquivos locais se precisar mantê-los além do prazo de retenção ou recuperá-los após perda do computador.
+- Gravações relacionadas usam arquivos temporários validados, bloqueios e transações. Se uma operação for interrompida, o sistema tenta recuperar o estado na próxima inicialização.
+- `.transactions` contém informações de recuperação pendente. Não apague essa pasta enquanto houver uma recuperação pendente.
+
+Se uma cópia antiga estiver ausente ou inválida, confira manualmente os arquivos ativos e a pasta de backup antes de qualquer substituição. A restauração pelo histórico exige os dois inventários válidos e mostra os nomes, as datas e as contagens antes da confirmação.
+
+## Solução de problemas
+
+| Situação | O que conferir |
+| --- | --- |
+| O inicializador informa que não encontrou Python | Crie o ambiente `.venv` e confira se usa Python 3.12 ou superior. |
+| O inicializador informa que falta o modelo de transferência | Restaure `(MODELO) - TRANSFERENCIA SIMPRESS.xlsx` em `planilhas_entrada`. |
+| A busca não encontra equipamentos ou escolheu dados antigos | Confira os cabeçalhos e a data de modificação dos arquivos `EquipamentosDetalhes*.xlsx`. O sistema seleciona o mais recente que contém uma aba válida. Reinicie após substituir um arquivo manualmente. |
+| Atualização ou comparação está indisponível | Envie os dois inventários `.xlsx` pelo fluxo **Atualizar Planilhas** e confira se cada um tem uma única aba com os cabeçalhos exigidos. |
+| A exportação está indisponível | Confira `modelos/EquipamentosDetalhes-exportacao.xlsx` e se ele contém as colunas de série e `Apelido`. |
+| Não é possível restaurar uma atualização | O histórico precisa ter o backup dos dois inventários, e ambos devem passar novamente pela validação. |
+| O painel de status continua desatualizado | Clique em **Atualizar status** para repetir a verificação; para carregar dados de inventário substituídos manualmente, reinicie o servidor. |
+
+## Desenvolvimento
+
+### Reconstruir os arquivos da interface
+
+Os arquivos distribuídos em `static/vendor` são servidos localmente. Depois de alterar fontes, ícones ou estilos utilitários, reconstrua-os com Node.js e npm:
+
+```powershell
+npm ci
+npm run build:ui
+```
+
+O servidor Python usa os arquivos gerados e não precisa de um processo Node.js em execução.
+
+### Executar testes
+
+Suíte Python:
 
 ```powershell
 .\.venv\Scripts\python.exe -B tests\run_tests.py
 ```
 
-O executor bloqueia a leitura de planilhas locais e a recuperação de transações durante a importação de main.py; em seguida, direciona os testes de integridade a um diretório temporário exclusivo dentro do projeto e o remove ao terminar. Os testes usam dados fictícios. Não use planilhas operacionais como origem ou destino de testes.
+Testes da interface JavaScript:
 
-## Estrutura principal
+```powershell
+node --test tests/test_inventory_ui_flows.cjs tests/test_transfer_workflows.cjs
+```
+
+O executor Python usa dados fictícios em uma pasta temporária, bloqueia a leitura das planilhas operacionais durante a descoberta dos testes e isola os testes de transação. Não use planilhas de produção como fixtures ou destinos.
+
+## Estrutura do projeto
 
 ```text
-main.py                 ponto de entrada, rotas restantes e inicialização da aplicação
-app_config.py           caminhos relativos ao projeto e limites de upload
-integrity.py            bloqueios, transações, validação e gravação segura
-domains/inventory_comparison.py normalização, comparação e apresentação do histórico de inventários
-domains/inventory_update.py transação de substituição dos inventários e gravação do histórico
-routers/transfers.py    contrato e geração da planilha de transferência
-routers/inventory_history.py rotas de histórico e restauração de inventários
-static/index.html       estrutura da interface
-static/app.css          estilos locais
-static/app.js           comportamento da interface
-planilhas_entrada/      modelos, bases locais e cópias de segurança
-tests/run_tests.py      executor seguro da suíte de testes com arquivos fictícios
-requirements.txt        dependências Python fixadas
-iniciar_servidor.bat    inicializador local para Windows
+main.py                              Aplicação FastAPI, inicialização e rotas principais
+app_config.py                       Caminhos locais, limites e padrões de configuração
+integrity.py                        Bloqueios, transações e recuperação de arquivos
+xlsx_safety.py                      Validação estrutural e limites de pacotes XLSX
+openpyxl_compat.py                  Compatibilidade com arquivos lidos/escritos por openpyxl
+domains/inventory_comparison.py     Normalização e regras de comparação de inventários
+domains/inventory_update.py         Validação, atualização e histórico de inventários
+routers/transfers.py                Validação e geração da planilha de transferência
+routers/inventory_history.py        Histórico, resolução e restauração de inventários
+static/                              Interface web, scripts e arquivos locais de estilo/fonte/ícone
+scripts/copy_ui_assets.cjs           Cópia dos recursos locais para a interface
+planilhas_entrada/                   Modelo de transferência e planilhas locais
+planilhas_entrada/_backups/          Cópias locais anteriores dos inventários
+modelos/                              Modelo local de exportação de equipamentos
+tests/                                Testes Python e JavaScript
+requirements.txt                     Dependências Python fixadas
+package.json / package-lock.json     Dependências e compilação de recursos da interface
+iniciar_servidor.bat                  Inicializador local para Windows
 ```
 
 ## Dados e privacidade
 
-As bases, backups, exportações e históricos operacionais ficam locais e são ignorados pelo Git; o modelo vazio de transferência permanece versionado. Não force a inclusão desses arquivos em commits nem compartilhe cópias com dados operacionais. O servidor atende somente `127.0.0.1`, aceita chamadas da própria origem da aplicação e não possui autenticação de usuário.
+O servidor atende somente `127.0.0.1:8000` e não possui autenticação de usuário; não o exponha diretamente à rede. A documentação `/docs` também fica disponível apenas enquanto o servidor local está em execução.
 
-Arquivos operacionais que já foram versionados permanecem recuperáveis no histórico Git local. Esta configuração impede novos rastreamentos, mas não reescreve esse histórico.
+Planilhas operacionais, backups, exportações, históricos, apelidos e unidades personalizadas ficam no computador local e são ignorados pelo Git. O modelo vazio de transferência permanece versionado. Inclua os dados locais em uma rotina de backup apropriada se precisar preservá-los; não force a inclusão deles em commits nem compartilhe cópias com dados operacionais.
+
+Arquivos operacionais que já foram versionados continuam recuperáveis no histórico Git local. As regras atuais de `.gitignore` impedem novos rastreamentos, mas não reescrevem o histórico existente.
