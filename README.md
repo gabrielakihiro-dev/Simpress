@@ -155,7 +155,7 @@ A interface carrega estilos, fontes e ícones do servidor local; os botões de c
 
 - Os uploads validados substituem os inventários ativos em `planilhas_entrada`, com os nomes definidos em `app_config.py`.
 - Antes de substituir inventários, a aplicação copia os arquivos atuais para `planilhas_entrada/_backups/<data-hora>-<identificador>/`, separados em `endpoint` e `detalhes`. Pelo Histórico planilhas, um backup completo pode ser validado e restaurado; o conjunto substituído é salvo em outro backup e a restauração entra no histórico, permitindo desfazê-la quando esse backup também está completo e válido.
-- Históricos de apelidos/comparações e backups vencem após 90 dias. A comparação fixada é preservada; registros com data inválida também ficam guardados para evitar remoção sem prazo confiável.
+- Históricos de apelidos/comparações e backups vencem após 60 dias. A comparação fixada é preservada; registros com data inválida também ficam guardados para evitar remoção sem prazo confiável.
 - Gravações relacionadas usam temporários validados, bloqueios por arquivo e transações. Se uma operação falhar, a transação restaura os destinos afetados e o cache anterior.
 - Uma transação interrompida deixa estado em `.transactions`. Na próxima inicialização, `integrity.py` tenta recuperar esse estado antes de carregar os arquivos. Não apague essa pasta enquanto houver uma recuperação pendente.
 - A planilha de transferência é preparada para download; não é mantida como arquivo permanente pelo servidor.
