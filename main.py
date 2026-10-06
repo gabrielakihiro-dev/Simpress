@@ -334,6 +334,18 @@ DETAILS_SERIAL_HEADER_ALIASES = ("NUMEROSERIE", "NUMERODESERIE", "SERIAL")
 DETAILS_ALIAS_HEADER_ALIASES = (
     "APELIDO", "HOSTNAME", "NOMEDOCOMPUTADOR", "COMPUTERNAME"
 )
+DETAILS_INSTALLATION_CNPJ_HEADER_ALIASES = (
+    "CNPJ Instalacao",
+    "CNPJ de Instalacao",
+    "CNPJ de Instalação",
+    "CnpjInstalacao",
+    "CnpjDeInstalacao",
+    "CNPJ Instalacao Filial",
+    "CNPJ de Instalacao Filial",
+    "CNPJ da Instalacao Filial",
+    "CNPJ da Instalacao",
+    "CNPJ da Filial",
+)
 DETAILS_REQUIRED_HEADERS = frozenset({"MODELO", "CIDADE"})
 
 
@@ -1778,6 +1790,21 @@ def _load_database_unlocked(publish: bool = True) -> Any:
                     return sanitize_value(val, default)
         return default
 
+    def get_installation_cnpj(row):
+        value = get_row_val(row, *DETAILS_INSTALLATION_CNPJ_HEADER_ALIASES)
+        if value:
+            return value
+        for normalized_header, source_header in norm_cols.items():
+            if (
+                "CNPJ" in normalized_header
+                and ("INSTALACAO" in normalized_header or "FILIAL" in normalized_header)
+                and "FATURAMENTO" not in normalized_header
+            ):
+                raw_value = row.get(source_header)
+                if pd.notna(raw_value) and raw_value is not None:
+                    return sanitize_value(raw_value)
+        return ""
+
     unidades_dict: Dict[Tuple[str, str, str], Dict[str, Any]] = {}
     sede_cnpjs = set()
 
@@ -1799,14 +1826,7 @@ def _load_database_unlocked(publish: bool = True) -> Any:
         raw_cep = get_row_val(row, "CEP")
         cep_formatado = format_cep(raw_cep)
         
-        cnpj_instalacao = get_row_val(
-            row,
-            "CNPJ Instalacao",
-            "CNPJ de Instalacao",
-            "CNPJ de Instalação",
-            "CnpjInstalacao",
-            "CnpjDeInstalacao",
-        )
+        cnpj_instalacao = get_installation_cnpj(row)
 
         contrato_value = get_row_val(
             row, "CodigoContrato", "Codigo Contrato", default=str(SUPPORTED_CONTRACT)
@@ -3346,6 +3366,7 @@ exportar_historico_comparacoes_excel = _inventory_history_exports["exportar_hist
 get_comparacao_historica = _inventory_history_exports["get_comparacao_historica"]
 get_historico_comparacoes = _inventory_history_exports["get_historico_comparacoes"]
 salvar_anotacao_comparacao = _inventory_history_exports["salvar_anotacao_comparacao"]
+salvar_anotacao_comparacao_historica = _inventory_history_exports["salvar_anotacao_comparacao_historica"]
 resolver_divergencia_apelido_manual = _inventory_history_exports["resolver_divergencia_apelido_manual"]
 restaurar_comparacao_historica = _inventory_history_exports["restaurar_comparacao_historica"]
 visualizar_restauracao_comparacao = _inventory_history_exports["visualizar_restauracao_comparacao"]

@@ -41,6 +41,7 @@ class FakeElement {
   addEventListener() {}
   replaceChildren(...children) { this.children = children; }
   appendChild(child) { this.children.push(child); return child; }
+  querySelector() { return null; }
   focus() { this.focused = true; }
   closest() { return null; }
   getClientRects() { return [1]; }
@@ -51,7 +52,7 @@ class FakeFormData {
   append(...args) { this.fields.push(args); }
 }
 
-function createAppHarness(fetchApi) {
+function createAppHarness(fetchApi, { stubDisplay = true } = {}) {
   const elements = new Map();
   const effects = {
     comparisons: [],
@@ -100,11 +101,6 @@ function createAppHarness(fetchApi) {
   vm.runInContext(appScript, context, { filename: "static/app.js" });
   vm.runInContext(`
     preencherRepresentanteRegional = () => {};
-    exibirEquipamento = equipment => {
-      workflowEffects.displays.push(equipment);
-      document.getElementById("card-equipamento").classList.remove("hidden");
-      document.getElementById("retirada-endereco").value = equipment.retirada_endereco || "";
-    };
     showToast = (message, type) => workflowEffects.toasts.push({ message, type });
     abrirModalComparacaoPlanilhas = comparison => workflowEffects.comparisons.push(comparison);
     carregarEstatisticas = async () => workflowEffects.refreshes.push("estatisticas");
@@ -112,6 +108,15 @@ function createAppHarness(fetchApi) {
     carregarContagemHistoricoComparacoes = async () => workflowEffects.refreshes.push("contagem-historico");
     carregarHistoricoComparacoes = async () => workflowEffects.refreshes.push("historico");
   `, context);
+  if (stubDisplay) {
+    vm.runInContext(`
+      exibirEquipamento = equipment => {
+        workflowEffects.displays.push(equipment);
+        document.getElementById("card-equipamento").classList.remove("hidden");
+        document.getElementById("retirada-endereco").value = equipment.retirada_endereco || "";
+      };
+    `, context);
+  }
 
   return {
     context,
@@ -134,6 +139,42 @@ function createAppHarness(fetchApi) {
 function apiResponse(body, { status = 200, ok = status >= 200 && status < 300 } = {}) {
   return { ok, status, json: async () => body };
 }
+
+test("equipment search fills pickup CNPJ and selected delivery unit fills its installation CNPJ", async () => {
+  const equipment = {
+    serial: "SERIE-CNPJ-FICTICIA",
+    modelo: "Modelo A",
+    tipo: "Notebook",
+    retirada_cidade: "Maringá",
+    retirada_cnpj: "12.345.678/0001-90",
+    retirada_endereco: "Rua Fictícia, 10 - Maringá/PR - CEP 87000-000",
+    retirada_cep: "87000-000",
+    descricao_sugerida: "Notebook + kit na mochila",
+  };
+  const deliveryCnpj = "98.765.432/0001-10";
+  const calls = [];
+  const harness = createAppHarness(async url => {
+    calls.push(url);
+    return apiResponse(equipment);
+  }, { stubDisplay: false });
+  harness.context.workflowUnits = [
+    { id: 17, cidade: "Foz do Iguaçu", cnpj: deliveryCnpj, endereco_completo: "R das Guianas, 151" },
+  ];
+  harness.run("unidadesList = workflowUnits");
+  harness.element("input-serial").value = equipment.serial;
+
+  await harness.run("buscarSerial()");
+  assert.deepEqual(calls, [`/api/equipamento/${equipment.serial}`]);
+  assert.equal(
+    harness.element("retirada-cnpj").value,
+    equipment.retirada_cnpj,
+    JSON.stringify(harness.effects.toasts),
+  );
+
+  harness.element("select-unidade-destino").value = "17";
+  harness.run('handleUnidadeDestinoChange("17", false)');
+  assert.equal(harness.element("entrega-cnpj").value, deliveryCnpj);
+});
 
 test("copy serial action uses the currently selected equipment serial", async () => {
   const harness = createAppHarness(async () => {
