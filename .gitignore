@@ -46,10 +46,14 @@ __pycache__/
 
 # Local operational state and histories
 /apelidos_modificados.json
+/apelidos_modificados/*
+!/apelidos_modificados/.gitkeep
 /unidades_custom.json
 /historico_alteracoes.json
 /historico_apelidos.json
 /historico_comparacoes.json
+/historico_comparacoes/*
+!/historico_comparacoes/.gitkeep
 /.transactions/
 **/.*.lock
 /planilhas_entrada/.upload-staging-*/

@@ -30,9 +30,9 @@ MAX_XLSX_TOTAL_MERGED_CELLS = MAX_XLSX_TOTAL_CELLS
 MAX_XLSX_CONTROL_XML_BYTES = 8 * 1024 * 1024
 
 CUSTOM_UNIDADES_FILE = BASE_DIR / "unidades_custom.json"
-MODIFIED_APELIDOS_FILE = BASE_DIR / "apelidos_modificados.json"
+MODIFIED_APELIDOS_FILE = BASE_DIR / "apelidos_modificados" / "apelidos_modificados.json"
 ALIAS_HISTORY_FILE = BASE_DIR / "historico_alteracoes.json"
-COMPARISON_HISTORY_FILE = BASE_DIR / "historico_comparacoes.json"
+COMPARISON_HISTORY_FILE = BASE_DIR / "historico_comparacoes" / "historico_comparacoes.json"
 TRANSACTION_ROOT = BASE_DIR
 
 SUPPORTED_CONTRACT = 16467

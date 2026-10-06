@@ -67,6 +67,8 @@ Os caminhos são relativos à pasta do projeto e estão definidos em [app_config
 | `EquipamentosDetalhes_atual.xlsx` | `planilhas_entrada` | Destino do inventário Simpress no fluxo de atualização. |
 | `InvAllComputersSummary_atual.xlsx` | `planilhas_entrada` | Inventário Endpoint usado no fluxo de atualização e como fonte de hostname. |
 | `EquipamentosDetalhes-exportacao.xlsx` | `modelos` | Modelo local de exportação. Não é distribuído pelo Git. |
+| `apelidos_modificados.json` | `apelidos_modificados` | Apelidos personalizados locais. O arquivo, temporários e bloqueios não são versionados. |
+| `historico_comparacoes.json` | `historico_comparacoes` | Histórico local de comparações. O arquivo, temporários e bloqueios não são versionados. |
 
 As planilhas operacionais e o modelo de exportação precisam ser fornecidos localmente. Não coloque dados reais no repositório.
 
@@ -179,6 +181,7 @@ Arquivos precisam ser `.xlsx` válidos. Planilhas vazias, corrompidas, com cabe�
 ## Histórico, backups e recuperação
 
 - Os backups de atualizações ficam em `planilhas_entrada/_backups/<data-hora>-<identificador>/`, separados em Endpoint e Simpress. Um backup incompleto ou inválido não pode ser restaurado pelo histórico.
+- O histórico de comparações fica em `historico_comparacoes/historico_comparacoes.json`; os arquivos temporários e de bloqueio usados nas gravações ficam nessa mesma pasta.
 - Históricos de apelidos, comparações e backups vencem após **60 dias**. A limpeza automática ocorre na inicialização e após atualizações de planilhas ou gravações de apelido. Backups antigos sem referência no histórico também podem ser removidos.
 - A comparação fixada é preservada. Registros com data inválida são mantidos porque não há um prazo confiável para removê-los.
 - Backups e históricos são locais; eles não são enviados à nuvem. Faça uma cópia externa das pastas e arquivos locais se precisar mantê-los além do prazo de retenção ou recuperá-los após perda do computador.
@@ -245,6 +248,8 @@ scripts/copy_ui_assets.cjs           Cópia dos recursos locais para a interface
 planilhas_entrada/                   Modelo de transferência e planilhas locais
 planilhas_entrada/_backups/          Cópias locais anteriores dos inventários
 modelos/                              Modelo local de exportação de equipamentos
+apelidos_modificados/                 Apelidos personalizados locais
+historico_comparacoes/                Histórico de comparações local
 tests/                                Testes Python e JavaScript
 requirements.txt                     Dependências Python fixadas
 package.json / package-lock.json     Dependências e compilação de recursos da interface
