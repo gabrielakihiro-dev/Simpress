@@ -120,6 +120,7 @@ class MaintenanceContractTests(unittest.TestCase):
             "/api/historico-apelidos": {"get"},
             "/api/historico-comparacoes": {"get"},
             "/api/historico-comparacoes/{evento_id}": {"get", "delete"},
+            "/api/historico-comparacoes/{evento_id}/anotacoes/{item_id}": {"put"},
             "/api/historico-alteracoes/{evento_id}": {"delete"},
             "/api/historico-apelidos/{evento_id}": {"delete"},
             "/api/equipamento/apelido/desfazer": {"post"},

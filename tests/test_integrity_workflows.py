@@ -11,6 +11,7 @@ import warnings
 import zipfile
 from contextlib import ExitStack
 from pathlib import Path
+from types import SimpleNamespace
 from unittest.mock import patch
 
 import openpyxl
@@ -1105,6 +1106,46 @@ class WorkflowIntegrityTests(unittest.TestCase):
         self.assertEqual(len(comparison_after_repeat[-1]["comparacao"]["apelidos_atualizados"]), 0)
         self.assertEqual(len(comparison_after_repeat), len(comparison_before) + 2)
         self.assertEqual(json.loads(self.manual_history.read_text(encoding="utf-8")), manual_before)
+
+    def test_annotation_uses_stable_review_id_after_display_filter_and_stays_event_scoped(self):
+        filtered_out = {
+            "serie": "SERIE-LOCAL-1",
+            "computador": "PRNOTE-LOCAL-1",
+            "motivo": "Série não encontrada na InvAll; apelido atual preservado.",
+        }
+        visible_item = {
+            "serie": "SERIE-DUP-1",
+            "computador": "PRNOTE-DUP-1, PRNOTE-DUP-2",
+            "motivo": "Série duplicada na InvAll; nenhum hostname foi escolhido.",
+        }
+        history = [
+            {"id": "evento-anotacao-1", "comparacao": {"apelidos_sem_atualizacao": [filtered_out.copy(), visible_item.copy()]}},
+            {"id": "evento-anotacao-2", "comparacao": {"apelidos_sem_atualizacao": [filtered_out.copy(), visible_item.copy()]}},
+        ]
+        self.comparison_history.write_text(json.dumps(history), encoding="utf-8")
+
+        displayed = main.comparison_history_for_display(history[0])
+        displayed_item = displayed["comparacao"]["apelidos_sem_atualizacao"][0]
+        self.assertEqual(displayed_item["serie"], "SERIE-DUP-1")
+        self.assertNotEqual(
+            displayed_item["anotacao_id"],
+            main.comparison_history_for_display(history[1])["comparacao"]["apelidos_sem_atualizacao"][0]["anotacao_id"],
+        )
+
+        result = main.salvar_anotacao_comparacao_historica(
+            "evento-anotacao-1",
+            displayed_item["anotacao_id"],
+            SimpleNamespace(anotacao="Conferir com suporte."),
+        )
+
+        stored_history = json.loads(self.comparison_history.read_text(encoding="utf-8"))
+        first_items = stored_history[0]["comparacao"]["apelidos_sem_atualizacao"]
+        second_items = stored_history[1]["comparacao"]["apelidos_sem_atualizacao"]
+        self.assertTrue(result["sucesso"])
+        self.assertNotIn("anotacao", first_items[0])
+        self.assertEqual(first_items[1]["anotacao"], "Conferir com suporte.")
+        self.assertEqual(first_items[1]["anotacao_id"], displayed_item["anotacao_id"])
+        self.assertNotIn("anotacao", second_items[1])
 
     def test_upload_validation_and_transaction_do_not_block_the_event_loop(self):
         make_details(self.details, [

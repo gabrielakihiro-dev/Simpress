@@ -1,5 +1,6 @@
 """Inventory comparison and source normalization rules."""
 
+import hashlib
 import re
 import unicodedata
 from typing import Any, Dict, List, Optional
@@ -198,6 +199,21 @@ def filter_update_review_items(items: Any) -> List[Dict[str, Any]]:
             filtered.append(item)
     return filtered
 
+
+def comparison_review_item_id(event_id: Any, index: int, item: Dict[str, Any]) -> str:
+    """Return a stable ID for a review row, including legacy rows without one."""
+    stored_id = item.get("anotacao_id")
+    if isinstance(stored_id, str) and stored_id.strip():
+        return stored_id.strip()
+    identity = "\0".join((
+        str(event_id or ""),
+        str(index),
+        str(item.get("serie") or ""),
+        str(item.get("computador") or ""),
+        str(item.get("motivo") or ""),
+    ))
+    return hashlib.sha256(identity.encode("utf-8")).hexdigest()
+
 def filter_update_unmatched_series(items: Any) -> List[Dict[str, Any]]:
     if not isinstance(items, list):
         return []
@@ -284,9 +300,16 @@ def comparison_history_for_display(evento: Dict[str, Any]) -> Dict[str, Any]:
                 comparison.get("ausentes_em_detalhes")
             ),
         }
-        comparison_view["apelidos_sem_atualizacao"] = filter_update_review_items(
-            comparison.get("apelidos_sem_atualizacao")
-        )
+        review_items = comparison.get("apelidos_sem_atualizacao")
+        if isinstance(review_items, list):
+            review_items_with_ids = []
+            for index, item in enumerate(review_items):
+                if not isinstance(item, dict):
+                    continue
+                displayed_item = dict(item)
+                displayed_item["anotacao_id"] = comparison_review_item_id(evento.get("id"), index, item)
+                review_items_with_ids.append(displayed_item)
+            comparison_view["apelidos_sem_atualizacao"] = filter_update_review_items(review_items_with_ids)
         comparison_view["filtros_atualizacao_aplicados"] = True
     missing_lists = {
         key: filter_sebrae_owned_unmatched_items(items)

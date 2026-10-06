@@ -79,6 +79,7 @@ from domains.inventory_comparison import (
     _uploaded_aliases_by_serial,
     compare_uploaded_workbooks,
     comparison_history_for_display,
+    comparison_review_item_id,
     filter_curitiba_hostname_location_mismatches,
     filter_sebrae_owned_unmatched_items,
     filter_update_review_items,

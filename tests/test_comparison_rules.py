@@ -15,6 +15,32 @@ def source_table(records, sheet="Inventario"):
 
 
 class InventoryComparisonTests(unittest.TestCase):
+    def test_legacy_review_item_id_survives_display_filtering(self):
+        hidden_review = {
+            "serie": "SERIE-LOCAL-1",
+            "computador": "PRNOTE-LOCAL-1",
+            "motivo": "Série não encontrada na InvAll; apelido atual preservado.",
+        }
+        visible_review = {
+            "serie": "SERIE-DUP-1",
+            "computador": "PRNOTE-DUP-1, PRNOTE-DUP-2",
+            "motivo": "Série duplicada na InvAll; nenhum hostname foi escolhido.",
+        }
+        event = {
+            "id": "evento-anotacao-filtro",
+            "comparacao": {"apelidos_sem_atualizacao": [hidden_review, visible_review]},
+        }
+
+        displayed = main.comparison_history_for_display(event)
+        displayed_reviews = displayed["comparacao"]["apelidos_sem_atualizacao"]
+
+        self.assertEqual(len(displayed_reviews), 1)
+        self.assertEqual(
+            displayed_reviews[0]["anotacao_id"],
+            main.comparison_review_item_id(event["id"], 1, visible_review),
+        )
+        self.assertNotIn("anotacao_id", visible_review)
+
     def test_two_sources_report_absence_and_location_without_comparing_ip(self):
         endpoint = source_table([
             {"NOMEDOCOMPUTADOR": "PRNOTEAPU01", "ROTULODESERVICONUMERODESERIE": "S-001", "IP": "10.0.0.1"},

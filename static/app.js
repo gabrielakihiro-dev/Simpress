@@ -698,6 +698,7 @@
             document.getElementById("entrega-endereco").value = "";
             preencherRepresentanteRegional("entrega", "");
           }
+          atualizarEstadoCopiaCnpjEntrega();
 
           const countEl = document.getElementById("filiais-count");
           if (countEl) countEl.textContent = `${unidadesList.length} filiais catalogadas`;
@@ -1384,7 +1385,15 @@
     }
 
     // Handle Unidade de Destino Selection
+    function atualizarEstadoCopiaCnpjEntrega() {
+      const unidadeId = document.getElementById("select-unidade-destino")?.value;
+      const unidadeDestino = unidadesList.find(unit => String(unit.id) === String(unidadeId));
+      const botao = document.getElementById("btn-copiar-cnpj-instalacao-entrega");
+      if (botao) botao.disabled = !String(unidadeDestino?.cnpj || "").trim();
+    }
+
     function handleUnidadeDestinoChange(unitId, notificar = true) {
+      atualizarEstadoCopiaCnpjEntrega();
       if (!unitId) {
         preencherRepresentanteRegional("entrega", "");
         return;
@@ -1698,7 +1707,10 @@
 
       try {
         await copiarTextoParaAreaTransferencia(valor);
-        showToast(`${dado.nome} da entrega copiado para a área de transferência.`, "success");
+        const unidade = tipo === "instalacao"
+          ? ` de ${unidadeDestino.cidade || "unidade selecionada"}`
+          : " da entrega";
+        showToast(`${dado.nome}${unidade} copiado para a área de transferência.`, "success");
       } catch (err) {
         showToast(`Não foi possível copiar o ${dado.nome.toLowerCase()} da entrega.`, "error");
       }
@@ -1835,6 +1847,7 @@
       document.getElementById("entrega-email").value = "";
       document.getElementById("entrega-telefone").value = "";
       document.getElementById("entrega-obs").value = "";
+      atualizarEstadoCopiaCnpjEntrega();
       preencherRepresentanteRegional("entrega", "");
       preencherRepresentanteRegional("retirada", "");
 
@@ -2021,7 +2034,7 @@
           <td class="px-3 py-2 font-mono">${escapeHtml(item.computador || "—")}</td>
           <td class="px-3 py-2 text-amber-200">${escapeHtml(formatarMotivoRevisao(item.motivo))}</td>
           ${permitirAnotacoes ? `<td class="px-3 py-2 min-w-[240px] align-top">
-            <textarea data-comparison-annotation data-annotation-index="${index}" rows="2" maxlength="2000" class="w-full min-w-[220px] rounded-lg border border-slate-700 bg-slate-900 px-2.5 py-2 text-xs text-white placeholder:text-slate-500 focus:border-cyan-400 focus:outline-none focus:ring-1 focus:ring-cyan-400" aria-label="Anotações para a série ${escapeHtml(item.serie || "vazia")}" placeholder="Escreva uma anotação...">${escapeHtml(item.anotacao || "")}</textarea>
+            <textarea data-comparison-annotation data-annotation-id="${escapeHtml(item.anotacao_id || "")}" rows="2" maxlength="2000" class="w-full min-w-[220px] rounded-lg border border-slate-700 bg-slate-900 px-2.5 py-2 text-xs text-white placeholder:text-slate-500 focus:border-cyan-400 focus:outline-none focus:ring-1 focus:ring-cyan-400" aria-label="Anotações para a série ${escapeHtml(item.serie || "vazia")}" placeholder="Escreva uma anotação...">${escapeHtml(item.anotacao || "")}</textarea>
             <p class="mt-1 text-[10px] ${item.anotacao ? "text-emerald-300" : "text-slate-500"}" data-annotation-status aria-live="polite">${item.anotacao ? "Salvo automaticamente" : ""}</p>
           </td>` : ""}
         </tr>`);
@@ -2139,7 +2152,7 @@
         });
       });
       document.querySelectorAll("[data-comparison-annotation]").forEach(textarea => {
-        const itemIndex = Number(textarea.dataset.annotationIndex);
+        const itemId = textarea.dataset.annotationId;
         const status = textarea.parentElement.querySelector("[data-annotation-status]");
         let savedValue = textarea.value;
         let dirty = false;
@@ -2164,7 +2177,7 @@
           setStatus("Salvando...", "text-cyan-300");
           try {
             const response = await fetch(
-              `/api/historico-comparacoes/${encodeURIComponent(comparison.evento_id)}/anotacoes/${itemIndex}`,
+              `/api/historico-comparacoes/${encodeURIComponent(comparison.evento_id)}/anotacoes/${encodeURIComponent(itemId)}`,
               {
                 method: "PUT",
                 headers: { "Content-Type": "application/json" },
