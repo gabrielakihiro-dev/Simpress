@@ -58,17 +58,22 @@ No VS Code, o interpretador configurado para este workspace é `.venv\Scripts\py
 
 ## Planilhas e arquivos locais
 
-Os caminhos são relativos à pasta do projeto e estão definidos em [app_config.py](app_config.py). Não é necessário criar um arquivo `.env`; o programa não o carrega.
+Os caminhos são relativos à pasta do projeto e estão definidos em [app_config.py](app_config.py). Dados operacionais ficam em `data/`, e o modelo de exportação continua em `modelos/`. Não é necessário criar um arquivo `.env`; o programa não o carrega.
+
+Na primeira inicialização após atualizar uma instalação existente, o inicializador move os arquivos das pastas antigas para `data/`. A migração primeiro tenta concluir recuperações registradas em `.transactions`; se a recuperação falhar ou houver um upload temporário, ela interrompe sem mover os arquivos. Ela preserva os caminhos relativos dos backups e não sobrescreve destinos diferentes. Feche qualquer outro servidor antes de executar `scripts/migrate_local_data.py` manualmente.
+
+Antes de iniciar o servidor, a limpeza recupera transações e considera temporários com pelo menos 24 horas. Ela remove apenas cópias com o mesmo conteúdo do arquivo de destino, enquanto mantém versões diferentes para revisão. Para visualizar o relatório sem remover nada, execute `scripts/cleanup_local_temps.py` sem `--apply`.
 
 | Arquivo | Local | Uso |
 | --- | --- | --- |
-| `(MODELO) - TRANSFERENCIA SIMPRESS.xlsx` | `planilhas_entrada` | Modelo da planilha oficial. É versionado no Git e exigido pelo inicializador `.bat`. |
-| `EquipamentosDetalhes*.xlsx` | `planilhas_entrada` | Inventário principal da busca. Na inicialização, o sistema usa o arquivo válido mais recente. |
-| `EquipamentosDetalhes_atual.xlsx` | `planilhas_entrada` | Destino do inventário Simpress no fluxo de atualização. |
-| `InvAllComputersSummary_atual.xlsx` | `planilhas_entrada` | Inventário Endpoint usado no fluxo de atualização e como fonte de hostname. |
+| `(MODELO) - TRANSFERENCIA SIMPRESS.xlsx` | `data/planilhas_entrada` | Modelo da planilha oficial. É versionado no Git e exigido pelo inicializador `.bat`. |
+| `EquipamentosDetalhes*.xlsx` | `data/planilhas_entrada` | Inventário principal da busca. Na inicialização, o sistema usa o arquivo válido mais recente. |
+| `EquipamentosDetalhes_atual.xlsx` | `data/planilhas_entrada` | Destino do inventário Simpress no fluxo de atualização. |
+| `InvAllComputersSummary_atual.xlsx` | `data/planilhas_entrada` | Inventário Endpoint usado no fluxo de atualização e como fonte de hostname. |
 | `EquipamentosDetalhes-exportacao.xlsx` | `modelos` | Modelo local de exportação. Não é distribuído pelo Git. |
-| `apelidos_modificados.json` | `apelidos_modificados` | Apelidos personalizados locais. O arquivo, temporários e bloqueios não são versionados. |
-| `historico_comparacoes.json` | `historico_comparacoes` | Histórico local de comparações. O arquivo, temporários e bloqueios não são versionados. |
+| `apelidos_modificados.json` | `data/state/apelidos_modificados` | Apelidos personalizados locais. O arquivo, temporários e bloqueios não são versionados. |
+| `historico_comparacoes.json` | `data/state/historico_comparacoes` | Histórico local de comparações. O arquivo, temporários e bloqueios não são versionados. |
+| Catálogo de unidades e histórico de apelidos | `data/state` | Estado local da aplicação; não é distribuído pelo Git. |
 
 As planilhas operacionais e o modelo de exportação precisam ser fornecidos localmente. Não coloque dados reais no repositório.
 
@@ -105,6 +110,8 @@ Execute:
 O inicializador confere se existem o ambiente `.venv` e o modelo de transferência, abre o servidor e mantém a janela aberta. Para iniciar sem o arquivo `.bat`, use:
 
 ```powershell
+.\.venv\Scripts\python.exe scripts\migrate_local_data.py
+.\.venv\Scripts\python.exe scripts\cleanup_local_temps.py --apply
 .\.venv\Scripts\python.exe main.py
 ```
 
@@ -180,8 +187,8 @@ Arquivos precisam ser `.xlsx` válidos. Planilhas vazias, corrompidas, com cabe�
 
 ## Histórico, backups e recuperação
 
-- Os backups de atualizações ficam em `planilhas_entrada/_backups/<data-hora>-<identificador>/`, separados em Endpoint e Simpress. Um backup incompleto ou inválido não pode ser restaurado pelo histórico.
-- O histórico de comparações fica em `historico_comparacoes/historico_comparacoes.json`; os arquivos temporários e de bloqueio usados nas gravações ficam nessa mesma pasta.
+- Os backups de atualizações ficam em `data/planilhas_entrada/_backups/<data-hora>-<identificador>/`, separados em Endpoint e Simpress. Um backup incompleto ou inválido não pode ser restaurado pelo histórico.
+- O histórico de comparações fica em `data/state/historico_comparacoes/historico_comparacoes.json`; os arquivos temporários e de bloqueio usados nas gravações ficam nessa mesma pasta.
 - Históricos de apelidos, comparações e backups vencem após **60 dias**. A limpeza automática ocorre na inicialização e após atualizações de planilhas ou gravações de apelido. Backups antigos sem referência no histórico também podem ser removidos.
 - A comparação fixada é preservada. Registros com data inválida são mantidos porque não há um prazo confiável para removê-los.
 - Backups e históricos são locais; eles não são enviados à nuvem. Faça uma cópia externa das pastas e arquivos locais se precisar mantê-los além do prazo de retenção ou recuperá-los após perda do computador.
@@ -195,8 +202,10 @@ Se uma cópia antiga estiver ausente ou inválida, confira manualmente os arquiv
 | Situação | O que conferir |
 | --- | --- |
 | O inicializador informa que não encontrou Python | Crie o ambiente `.venv` e confira se usa Python 3.12 ou superior. |
-| O inicializador informa que falta o modelo de transferência | Restaure `(MODELO) - TRANSFERENCIA SIMPRESS.xlsx` em `planilhas_entrada`. |
-| A busca não encontra equipamentos ou escolheu dados antigos | Confira os cabeçalhos e a data de modificação dos arquivos `EquipamentosDetalhes*.xlsx`. O sistema seleciona o mais recente que contém uma aba válida. Reinicie após substituir um arquivo manualmente. |
+| O inicializador informa que falta o modelo de transferência | Restaure `(MODELO) - TRANSFERENCIA SIMPRESS.xlsx` em `data/planilhas_entrada`. |
+| A migração não consegue concluir uma recuperação ou encontra upload em andamento | Preserve os arquivos indicados. Confira `.transactions`; aguarde o upload terminar e execute a migração novamente quando a operação estiver resolvida. |
+| A migração informa que já existe um arquivo diferente no destino | Compare os dois arquivos e resolva o conflito manualmente antes de repetir `scripts/migrate_local_data.py`. A migração não substitui nenhum deles. |
+| A busca não encontra equipamentos ou escolheu dados antigos | Confira os cabeçalhos e a data de modificação dos arquivos `EquipamentosDetalhes*.xlsx` em `data/planilhas_entrada`. O sistema seleciona o mais recente que contém uma aba válida. Reinicie após substituir um arquivo manualmente. |
 | Atualização ou comparação está indisponível | Envie os dois inventários `.xlsx` pelo fluxo **Atualizar Planilhas** e confira se cada um tem uma única aba com os cabeçalhos exigidos. |
 | A exportação está indisponível | Confira `modelos/EquipamentosDetalhes-exportacao.xlsx` e se ele contém as colunas de série e `Apelido`. |
 | Não é possível restaurar uma atualização | O histórico precisa ter o backup dos dois inventários, e ambos devem passar novamente pela validação. |
@@ -241,15 +250,22 @@ xlsx_safety.py                      Validação estrutural e limites de pacotes 
 openpyxl_compat.py                  Compatibilidade com arquivos lidos/escritos por openpyxl
 domains/inventory_comparison.py     Normalização e regras de comparação de inventários
 domains/inventory_update.py         Validação, atualização e histórico de inventários
+domains/equipment_search.py         Normalização, categorização e indexação de equipamentos
 routers/transfers.py                Validação e geração da planilha de transferência
 routers/inventory_history.py        Histórico, resolução e restauração de inventários
+routers/equipment_search.py         Rotas de busca e estatísticas de equipamentos
+routers/system.py                    Rotas de status e configuração do sistema
+routers/units.py                     Rotas e esquema do catálogo de unidades
 static/                              Interface web, scripts e arquivos locais de estilo/fonte/ícone
 scripts/copy_ui_assets.cjs           Cópia dos recursos locais para a interface
-planilhas_entrada/                   Modelo de transferência e planilhas locais
-planilhas_entrada/_backups/          Cópias locais anteriores dos inventários
+scripts/migrate_local_data.py        Migração segura dos dados locais para data/
+scripts/cleanup_local_temps.py       Limpeza conservadora de arquivos temporários locais
+data/planilhas_entrada/               Modelo de transferência e planilhas locais
+data/planilhas_entrada/_backups/      Cópias locais anteriores dos inventários
+data/state/                           Estado e históricos locais, ignorados pelo Git
 modelos/                              Modelo local de exportação de equipamentos
-apelidos_modificados/                 Apelidos personalizados locais
-historico_comparacoes/                Histórico de comparações local
+logs/                                 Registros locais do servidor, ignorados pelo Git
+docs/                                 Relatórios de revisão e desempenho
 tests/                                Testes Python e JavaScript
 requirements.txt                     Dependências Python fixadas
 package.json / package-lock.json     Dependências e compilação de recursos da interface

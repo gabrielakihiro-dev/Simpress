@@ -57,6 +57,7 @@ def _upload_verification_value(record: Dict[str, Any]) -> Any:
     )
 
 def _parse_verification_datetime(value: Any, reference_timezone: Any) -> Optional[datetime]:
+    parsed: Optional[datetime]
     if isinstance(value, datetime):
         parsed = value
     elif isinstance(value, date):

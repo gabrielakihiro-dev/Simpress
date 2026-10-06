@@ -5,8 +5,10 @@ import os
 
 
 BASE_DIR = Path(__file__).resolve().parent
+DATA_DIR = BASE_DIR / "data"
+STATE_DIR = DATA_DIR / "state"
 STATIC_DIR = BASE_DIR / "static"
-INPUT_DIR = BASE_DIR / "planilhas_entrada"
+INPUT_DIR = DATA_DIR / "planilhas_entrada"
 TEMPLATE_FILE = INPUT_DIR / "(MODELO) - TRANSFERENCIA SIMPRESS.xlsx"
 DETAILS_UPLOAD_FILE = INPUT_DIR / "EquipamentosDetalhes_atual.xlsx"
 ENDPOINT_UPLOAD_FILE = INPUT_DIR / "InvAllComputersSummary_atual.xlsx"
@@ -29,10 +31,10 @@ MAX_XLSX_TOTAL_CELLS = 5_000_000
 MAX_XLSX_TOTAL_MERGED_CELLS = MAX_XLSX_TOTAL_CELLS
 MAX_XLSX_CONTROL_XML_BYTES = 8 * 1024 * 1024
 
-CUSTOM_UNIDADES_FILE = BASE_DIR / "unidades_custom.json"
-MODIFIED_APELIDOS_FILE = BASE_DIR / "apelidos_modificados" / "apelidos_modificados.json"
-ALIAS_HISTORY_FILE = BASE_DIR / "historico_alteracoes.json"
-COMPARISON_HISTORY_FILE = BASE_DIR / "historico_comparacoes" / "historico_comparacoes.json"
+CUSTOM_UNIDADES_FILE = STATE_DIR / "unidades_custom.json"
+MODIFIED_APELIDOS_FILE = STATE_DIR / "apelidos_modificados" / "apelidos_modificados.json"
+ALIAS_HISTORY_FILE = STATE_DIR / "historico_alteracoes.json"
+COMPARISON_HISTORY_FILE = STATE_DIR / "historico_comparacoes" / "historico_comparacoes.json"
 TRANSACTION_ROOT = BASE_DIR
 
 SUPPORTED_CONTRACT = 16467

@@ -645,14 +645,14 @@ def create_inventory_history_router(ctx):
                 ))
             for index, item in enumerate(ambiguous_records, start=len(ambiguities)):
                 ambiguous_sources = item.get("fontes") or {}
-                sources = "; ".join(
+                source_summary = "; ".join(
                     str(source) for source, status in ambiguous_sources.items()
                     if status == "ambíguo"
                 ) if isinstance(ambiguous_sources, dict) else ""
                 record_key = f"{item.get('computador') or 'Sem hostname'} · {item.get('serie') or 'Sem série'}"
                 ambiguity_rows.append((
                     timestamp, "Presença ambígua", record_key,
-                    sources, item.get("motivo"), _export_note(comparison, "ambiguidades", index),
+                    source_summary, item.get("motivo"), _export_note(comparison, "ambiguidades", index),
                 ))
 
         detail_total = sum(category_counts.values())

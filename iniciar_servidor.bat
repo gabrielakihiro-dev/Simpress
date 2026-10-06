@@ -4,7 +4,9 @@ setlocal
 set "PROJECT_DIR=%~dp0"
 set "PYTHON=%PROJECT_DIR%.venv\Scripts\python.exe"
 set "MAIN=%PROJECT_DIR%main.py"
-set "TEMPLATE=%PROJECT_DIR%planilhas_entrada\(MODELO) - TRANSFERENCIA SIMPRESS.xlsx"
+set "MIGRATOR=%PROJECT_DIR%scripts\migrate_local_data.py"
+set "CLEANER=%PROJECT_DIR%scripts\cleanup_local_temps.py"
+set "TEMPLATE=%PROJECT_DIR%data\planilhas_entrada\(MODELO) - TRANSFERENCIA SIMPRESS.xlsx"
 
 title Simpress - Servidor FastAPI
 chcp 65001 > nul
@@ -18,9 +20,16 @@ echo ========================================================
 
 if not exist "%PYTHON%" goto missing_python
 if not exist "%MAIN%" goto missing_main
-if not exist "%TEMPLATE%" goto missing_template
+if not exist "%MIGRATOR%" goto missing_migrator
+if not exist "%CLEANER%" goto missing_cleaner
 
 cd /d "%PROJECT_DIR%"
+"%PYTHON%" "%MIGRATOR%"
+if errorlevel 1 goto migration_failed
+"%PYTHON%" "%CLEANER%" --apply
+if errorlevel 1 goto cleanup_failed
+if not exist "%TEMPLATE%" goto missing_template
+
 "%PYTHON%" "%MAIN%"
 set "SERVER_EXIT=%ERRORLEVEL%"
 
@@ -47,5 +56,29 @@ exit /b 1
 :missing_template
 echo ERRO: modelo de transferencia nao encontrado:
 echo %TEMPLATE%
+pause
+exit /b 1
+
+:missing_migrator
+echo ERRO: ferramenta de organizacao dos dados nao encontrada:
+echo %MIGRATOR%
+pause
+exit /b 1
+
+:missing_cleaner
+echo ERRO: ferramenta de limpeza segura nao encontrada:
+echo %CLEANER%
+pause
+exit /b 1
+
+:migration_failed
+echo ERRO: dados locais nao foram alterados com seguranca.
+echo Resolva o aviso acima e execute novamente.
+pause
+exit /b 1
+
+:cleanup_failed
+echo ERRO: a recuperacao ou limpeza dos temporarios nao foi concluida.
+echo Arquivos divergentes permanecem preservados para revisao.
 pause
 exit /b 1

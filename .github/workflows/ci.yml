@@ -38,7 +38,7 @@ jobs:
       - name: Check Python syntax
         run: python -m compileall -q app_config.py main.py integrity.py openpyxl_compat.py xlsx_safety.py domains routers scripts
       - name: Run gradual static type checks
-        run: python -m mypy --platform win32 --ignore-missing-imports --check-untyped-defs app_config.py main.py integrity.py openpyxl_compat.py xlsx_safety.py domains/inventory_comparison.py domains/inventory_update.py routers/inventory_history.py routers/transfers.py
+        run: python -m mypy --platform win32 --ignore-missing-imports --check-untyped-defs app_config.py main.py integrity.py openpyxl_compat.py xlsx_safety.py domains/inventory_comparison.py domains/inventory_update.py domains/equipment_search.py routers/inventory_history.py routers/transfers.py routers/equipment_search.py routers/system.py routers/units.py scripts/migrate_local_data.py scripts/cleanup_local_temps.py
       - name: Check tracked files for common credentials
         run: python -B scripts/check_secrets.py
       - name: Rebuild local interface assets

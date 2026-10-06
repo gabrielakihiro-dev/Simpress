@@ -57,6 +57,34 @@ __pycache__/
 /.transactions/
 **/.*.lock
 /planilhas_entrada/.upload-staging-*/
+# Migrated operational workbook directory.
+/data/planilhas_entrada/*.xlsx
+/data/planilhas_entrada/**/*.xlsx
+!/data/planilhas_entrada/(MODELO) - TRANSFERENCIA SIMPRESS.xlsx
+/data/planilhas_entrada/*.xls
+/data/planilhas_entrada/**/*.xls
+/data/planilhas_entrada/*.xlsm
+/data/planilhas_entrada/**/*.xlsm
+/data/planilhas_entrada/*.csv
+/data/planilhas_entrada/**/*.csv
+/data/planilhas_entrada/*.tsv
+/data/planilhas_entrada/**/*.tsv
+/data/planilhas_entrada/_backups/
+/data/planilhas_entrada/.upload-staging-*/
+
+# Migrated operational state and histories.
+/data/state/unidades_custom.json
+/data/state/historico_alteracoes.json
+/data/state/historico_apelidos.json
+/data/state/apelidos_modificados.json
+/data/state/historico_comparacoes.json
+/data/state/apelidos_modificados/*
+!/data/state/apelidos_modificados/.gitkeep
+/data/state/historico_comparacoes/*
+!/data/state/historico_comparacoes/.gitkeep
+
+# Local server logs.
+/logs/
 # Transactional temporary files are created beside their destination.
 **/.*.xlsx.*.tmp
 **/.*.xlsm.*.tmp
