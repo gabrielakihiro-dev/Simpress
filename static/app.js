@@ -13,6 +13,12 @@
     function definirEquipamentoAtual(equipment) {
       currentEquipamento = equipment;
       equipamentoSelectionRevision += 1;
+      const copyHostnameButton = document.getElementById("btn-copiar-hostname");
+      const hasHostname = Boolean(String(equipment?.apelido || "").trim());
+      if (copyHostnameButton) {
+        copyHostnameButton.disabled = !hasHostname;
+        copyHostnameButton.setAttribute("aria-disabled", String(!hasHostname));
+      }
     }
 
     function limparSelecaoEquipamento() {
@@ -1419,6 +1425,21 @@
         createTextElement("span", "text-emerald-300 font-medium", "Equipamento " + String(eq.serial ?? "") + " (" + String(eq.modelo ?? "") + ") carregado."),
         createTextElement("span", "text-slate-400", " Selecione a Unidade de Destino e preencha o destinatário.")
       );
+    }
+
+    async function copiarHostnameAtual() {
+      const hostname = String(currentEquipamento?.apelido || "").trim();
+      if (!hostname) {
+        showToast("Nenhum hostname disponível para o equipamento pesquisado.", "warning");
+        return;
+      }
+
+      try {
+        await copiarTextoParaAreaTransferencia(hostname);
+        showToast("Hostname copiado.", "success");
+      } catch (err) {
+        showToast("Não foi possível copiar o hostname.", "error");
+      }
     }
 
     // "Forçar SEDE Prado Velho" button action

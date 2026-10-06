@@ -54,6 +54,7 @@ function createAppHarness(fetchApi) {
   const elements = new Map();
   const effects = {
     comparisons: [],
+    clipboardWrites: [],
     toasts: [],
     refreshes: [],
     displays: [],
@@ -83,6 +84,7 @@ function createAppHarness(fetchApi) {
   const context = vm.createContext({
     document,
     window,
+    navigator: { clipboard: { writeText: async text => effects.clipboardWrites.push(text) } },
     fetch: (...args) => fetchApi(...args),
     FormData: FakeFormData,
     HTMLElement: FakeElement,
@@ -130,6 +132,34 @@ function createAppHarness(fetchApi) {
 function apiResponse(body, { status = 200, ok = status >= 200 && status < 300 } = {}) {
   return { ok, status, json: async () => body };
 }
+
+test("copy hostname action uses the currently selected equipment hostname", async () => {
+  const harness = createAppHarness(async () => {
+    throw new Error("A ação de copiar não deve consultar a API");
+  });
+  const button = harness.element("btn-copiar-hostname");
+
+  harness.run("limparSelecaoEquipamento()");
+  assert.equal(button.disabled, true);
+  harness.selectEquipment({ serial: "SERIE-UM", apelido: "HOST-UM" });
+  assert.equal(button.disabled, false);
+  await harness.run("copiarHostnameAtual()");
+  assert.deepEqual(harness.effects.clipboardWrites, ["HOST-UM"]);
+  assert.equal(harness.effects.toasts.at(-1).type, "success");
+
+  harness.selectEquipment({ serial: "SERIE-DOIS", apelido: "HOST-DOIS" });
+  await harness.run("copiarHostnameAtual()");
+  assert.deepEqual(harness.effects.clipboardWrites, ["HOST-UM", "HOST-DOIS"]);
+
+  harness.selectEquipment({ serial: "SEM-HOSTNAME" });
+  assert.equal(button.disabled, true);
+  await harness.run("copiarHostnameAtual()");
+  assert.deepEqual(harness.effects.clipboardWrites, ["HOST-UM", "HOST-DOIS"]);
+  assert.equal(harness.effects.toasts.at(-1).type, "warning");
+
+  harness.run("limparSelecaoEquipamento()");
+  assert.equal(button.disabled, true);
+});
 
 function chooseUploadFiles(harness) {
   harness.element("upload-endpoint-file").files = [{ name: "endpoint-ficticio.xlsx" }];
