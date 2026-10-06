@@ -52,15 +52,6 @@
       }
     }
 
-    function invalidarDadosEquipamentoAposRestauracao() {
-      const serialInput = document.getElementById("input-serial");
-      if (serialInput) serialInput.value = "";
-      document.getElementById("btn-clear-serial")?.classList.add("hidden");
-      invalidarBuscasEquipamento();
-      limparSelecaoEquipamento();
-      fecharAutocomplete();
-    }
-
     async function atualizarSelecaoAposSubstituirInventarios(serialSelecionada) {
       fecharAutocomplete();
       return transferUtils.refreshSelectionAfterInventoryReplacement({
@@ -1957,24 +1948,55 @@
       const apelidosAtualizados = comparison.apelidos_atualizados || [];
       const apelidosSemAtualizacao = comparison.apelidos_sem_atualizacao || [];
       const divergenciasApelidosManuais = comparison.divergencias_apelidos_manuais || [];
+      const annotationStorageKey = `simpress:comparacao-anotacoes:${comparison.evento_id || [comparison.horario_comparacao, arquivo.endpoint, arquivo.detalhes].join("|")}`;
+      const anotacoes = comparison.anotacoes && typeof comparison.anotacoes === "object"
+        ? { ...comparison.anotacoes }
+        : {};
+      if (!comparison.evento_id) {
+        try {
+          Object.assign(anotacoes, JSON.parse(localStorage.getItem(annotationStorageKey) || "{}"));
+        } catch (error) {
+          console.warn("Não foi possível carregar as anotações locais da comparação:", error);
+        }
+      }
 
       document.getElementById("comparacao-planilhas-fontes").textContent =
         `Endpoint: ${arquivo.endpoint || "—"} · Simpress: ${arquivo.detalhes || "—"}${comparison.horario_comparacao ? ` · ${formatarHorarioHistorico(comparison.horario_comparacao)}` : ""}`;
 
-      const renderizarAusentes = items => items.map(item => `
+      const renderizarCampoAnotacao = (categoria, indice) => {
+        const chave = `${categoria}:${indice}`;
+        const anotacao = anotacoes[chave] || "";
+        const statusInicial = anotacao
+          ? (comparison.evento_id ? "Salvo" : "Salvo neste navegador")
+          : "Salvamento automático";
+        return `
+          <td class="px-3 py-2 min-w-[260px]">
+            <div class="space-y-1.5">
+              <textarea data-comparison-annotation data-annotation-key="${escapeHtml(chave)}" rows="2" maxlength="2000"
+                aria-label="Anotação do registro ${indice + 1}"
+                placeholder="O que precisa ser feito ou já foi feito?"
+                class="w-64 min-w-[240px] resize-y rounded-md bg-slate-950/80 border border-slate-700 px-2.5 py-2 text-xs text-slate-200 placeholder:text-slate-500 focus:border-cyan-400 focus:outline-none focus:ring-1 focus:ring-cyan-400/40">${escapeHtml(anotacao)}</textarea>
+              <p class="text-[10px] text-slate-500" data-annotation-status role="status" aria-live="polite">${statusInicial}</p>
+            </div>
+          </td>`;
+      };
+
+      const renderizarAusentes = (items, categoria) => items.map((item, index) => `
         <tr class="text-slate-300">
           <td class="px-3 py-2 font-mono text-white whitespace-nowrap">${escapeHtml(item.computador)}</td>
           <td class="px-3 py-2 font-mono whitespace-nowrap">${escapeHtml(item.serie || "—")}</td>
           <td class="px-3 py-2">${escapeHtml(item.local_previsto || "—")}</td>
           <td class="px-3 py-2 text-amber-300">${escapeHtml((item.ausente_em || [item.fonte_ausente]).filter(Boolean).join(", "))}</td>
+          ${renderizarCampoAnotacao(categoria, index)}
         </tr>`);
 
-      const locationRows = divergenciasLocal.map(item => `
+      const locationRows = divergenciasLocal.map((item, index) => `
         <tr class="text-slate-300">
           <td class="px-3 py-2 font-mono text-white whitespace-nowrap">${escapeHtml(item.computador)}</td>
           <td class="px-3 py-2 font-mono whitespace-nowrap">${escapeHtml(item.serie || "—")}</td>
           <td class="px-3 py-2">${escapeHtml(item.local_previsto)}</td>
           <td class="px-3 py-2">${escapeHtml(item.local_detalhes || "—")}</td>
+          ${renderizarCampoAnotacao("divergencias_local", index)}
         </tr>`);
 
       const aliasUpdateRows = apelidosAtualizados.map(item => `
@@ -1986,11 +2008,12 @@
           <td class="px-3 py-2 text-[10px]">${escapeHtml(Object.values(item.arquivos_origem || {}).join(" · ") || "—")}</td>
         </tr>`);
 
-      const aliasReviewRows = apelidosSemAtualizacao.map(item => `
+      const aliasReviewRows = apelidosSemAtualizacao.map((item, index) => `
         <tr class="text-slate-300">
           <td class="px-3 py-2 font-mono text-white whitespace-nowrap">${escapeHtml(item.serie || "(vazia)")}</td>
           <td class="px-3 py-2 font-mono">${escapeHtml(item.computador || "—")}</td>
           <td class="px-3 py-2 text-amber-200">${escapeHtml(item.motivo || "Conferir associação.")}</td>
+          ${renderizarCampoAnotacao("apelidos_sem_atualizacao", index)}
         </tr>`);
 
       const manualAliasRows = divergenciasApelidosManuais.map((item, index) => {
@@ -2019,11 +2042,12 @@
           </tr>`;
       });
 
-      const unmappedRows = seriesSemMapa.map(item => `
+      const unmappedRows = seriesSemMapa.map((item, index) => `
         <tr class="text-slate-300">
           <td class="px-3 py-2 font-mono text-white">${escapeHtml(item.serie)}</td>
           <td class="px-3 py-2">${Number(item.quantidade || 0)}</td>
           <td class="px-3 py-2 font-mono">${escapeHtml((item.exemplos || []).join(", "))}</td>
+          ${renderizarCampoAnotacao("series_sem_mapeamento", index)}
         </tr>`);
 
       const ambiguityRows = [
@@ -2041,12 +2065,13 @@
           fontes: Object.entries(item.fontes || {}).filter(([, status]) => status === "ambíguo").map(([source]) => source).join(" · "),
           mensagem: item.motivo,
         })),
-      ].map(item => `
+      ].map((item, index) => `
         <tr class="text-slate-300">
           <td class="px-3 py-2 text-amber-200">${escapeHtml(item.tipo || "Ambiguidade")}</td>
           <td class="px-3 py-2 font-mono">${escapeHtml(item.chave || "—")}</td>
           <td class="px-3 py-2">${escapeHtml(item.fontes || "—")}</td>
           <td class="px-3 py-2">${escapeHtml(item.mensagem || "")}</td>
+          ${renderizarCampoAnotacao("ambiguidades", index)}
         </tr>`);
 
       document.getElementById("comparacao-planilhas-conteudo").innerHTML = `
@@ -2072,7 +2097,7 @@
         </section>
         <section class="space-y-2">
           <div><h4 class="text-sm font-bold text-amber-300">Linhas mantidas para conferência</h4><p class="text-[11px] text-slate-500">Série vazia, ausente ou duplicada não é escolhida automaticamente; o apelido atual fica preservado.</p></div>
-          ${renderizarTabelaComparacao(["Série", "Hostname no Endpoint", "Motivo"], aliasReviewRows, "Nenhuma linha de apelido precisa de conferência.")}
+          ${renderizarTabelaComparacao(["Série", "Hostname no Endpoint", "Motivo", "Anotação"], aliasReviewRows, "Nenhuma linha de apelido precisa de conferência.")}
         </section>
         <section class="space-y-2">
           <div><h4 class="text-sm font-bold text-violet-300">Divergências com apelidos alterados manualmente</h4><p class="text-[11px] text-slate-500">O apelido manual prevalece nas pesquisas e exportações. “Manter manual” registra a decisão; “Excluir manual” remove apenas o override desta série e volta a usar o valor das planilhas.</p></div>
@@ -2081,24 +2106,78 @@
         <section class="space-y-2">
           <div><h4 class="text-sm font-bold text-rose-300">Equipamentos ausentes por fonte</h4><p class="text-[11px] text-slate-500">Cada lista mostra equipamentos que não têm correspondência segura naquela fonte. Divergências de local aparecem em seção própria.</p></div>
           <h5 class="text-xs font-semibold text-slate-300">Ausentes no Endpoint (${ausentesEndpoint.length})</h5>
-          ${renderizarTabelaComparacao(["Hostname/Apelido", "Série", "Local previsto", "Ausente em"], renderizarAusentes(ausentesEndpoint), "Nenhum equipamento ausente no Endpoint.")}
+          ${renderizarTabelaComparacao(["Hostname/Apelido", "Série", "Local previsto", "Ausente em", "Anotação"], renderizarAusentes(ausentesEndpoint, "ausentes_no_endpoint"), "Nenhum equipamento ausente no Endpoint.")}
           <h5 class="text-xs font-semibold text-slate-300">Ausentes na Simpress (${ausentesDetalhes.length})</h5>
-          ${renderizarTabelaComparacao(["Hostname/Apelido", "Série", "Local previsto", "Ausente em"], renderizarAusentes(ausentesDetalhes), "Nenhum equipamento ausente na Simpress.")}
+          ${renderizarTabelaComparacao(["Hostname/Apelido", "Série", "Local previsto", "Ausente em", "Anotação"], renderizarAusentes(ausentesDetalhes, "ausentes_em_detalhes"), "Nenhum equipamento ausente na Simpress.")}
         </section>
         <section class="space-y-2">
           <div><h4 class="text-sm font-bold text-amber-300">Localidade divergente</h4><p class="text-[11px] text-slate-500">A localidade na Simpress é comparada com a classificação do hostname.</p></div>
-          ${renderizarTabelaComparacao(["Computador", "Série", "Local previsto", "Local na Simpress"], locationRows, "Nenhuma divergência de localidade encontrada.")}
+          ${renderizarTabelaComparacao(["Computador", "Série", "Local previsto", "Local na Simpress", "Anotação"], locationRows, "Nenhuma divergência de localidade encontrada.")}
         </section>
         <section class="space-y-2">
           <div><h4 class="text-sm font-bold text-yellow-300">Duplicidades e correspondências ambíguas</h4><p class="text-[11px] text-slate-500">Nenhuma linha é escolhida automaticamente quando a série se repete ou o hostname/Apelido não identifica uma correspondência única.</p></div>
-          ${renderizarTabelaComparacao(["Ocorrência", "Série ou hostname/Apelido", "Fontes", "Tratamento"], ambiguityRows, "Nenhuma duplicidade ou correspondência ambígua encontrada.")}
+          ${renderizarTabelaComparacao(["Ocorrência", "Série ou hostname/Apelido", "Fontes", "Tratamento", "Anotação"], ambiguityRows, "Nenhuma duplicidade ou correspondência ambígua encontrada.")}
         </section>
         <section class="space-y-2">
           <div><h4 class="text-sm font-bold text-sky-300">Séries sem local definido</h4><p class="text-[11px] text-slate-500">Não há regra de localidade cadastrada para estes prefixos.</p></div>
-          ${renderizarTabelaComparacao(["Série", "Quantidade", "Exemplos"], unmappedRows, "Todas as séries têm mapeamento de localidade.")}
+          ${renderizarTabelaComparacao(["Série", "Quantidade", "Exemplos", "Anotação"], unmappedRows, "Todas as séries têm mapeamento de localidade.")}
         </section>
         <p class="text-[11px] text-emerald-300">Simpress carregada: ${Number(comparison.total_equipamentos_carregados || 0).toLocaleString("pt-BR")} equipamentos. Backup das versões anteriores: <span class="font-mono">planilhas_entrada/${escapeHtml(comparison.backup_diretorio || "_backups")}</span>.</p>
       `;
+      document.querySelectorAll("#comparacao-planilhas-conteudo [data-comparison-annotation]").forEach(textarea => {
+        const chave = textarea.dataset.annotationKey;
+        const status = textarea.closest("td")?.querySelector("[data-annotation-status]");
+        const state = { savedValue: textarea.value, saving: false, pending: false, timer: null };
+
+        const salvarAnotacao = async () => {
+          window.clearTimeout(state.timer);
+          if (state.saving) {
+            state.pending = true;
+            return;
+          }
+          const anotacao = textarea.value;
+          if (anotacao === state.savedValue) return;
+          state.saving = true;
+          if (status) status.textContent = "Salvando…";
+          try {
+            if (comparison.evento_id) {
+              const response = await fetch(`/api/historico-comparacoes/${encodeURIComponent(comparison.evento_id)}/anotacoes`, {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({ chave, anotacao }),
+              });
+              const data = await response.json().catch(() => ({}));
+              if (!response.ok) throw new Error(data.detail || "Não foi possível salvar a anotação.");
+            } else {
+              if (anotacao.trim()) anotacoes[chave] = anotacao;
+              else delete anotacoes[chave];
+              localStorage.setItem(annotationStorageKey, JSON.stringify(anotacoes));
+            }
+            state.savedValue = anotacao;
+            if (comparison.evento_id) {
+              if (anotacao.trim()) anotacoes[chave] = anotacao;
+              else delete anotacoes[chave];
+            }
+            if (status) status.textContent = comparison.evento_id ? "Salvo" : "Salvo neste navegador";
+          } catch (error) {
+            console.error("Erro ao salvar anotação da comparação:", error);
+            if (status) status.textContent = "Falha ao salvar; tente novamente.";
+          } finally {
+            state.saving = false;
+            if (state.pending) {
+              state.pending = false;
+              if (textarea.value !== state.savedValue) salvarAnotacao();
+            }
+          }
+        };
+
+        textarea.addEventListener("input", () => {
+          if (status) status.textContent = textarea.value === state.savedValue ? "Salvo" : "Não salvo";
+          window.clearTimeout(state.timer);
+          state.timer = window.setTimeout(salvarAnotacao, 700);
+        });
+        textarea.addEventListener("change", salvarAnotacao);
+      });
       document.querySelectorAll("[data-manual-alias-action]").forEach(button => {
         button.addEventListener("click", () => {
           const item = divergenciasApelidosManuais[Number(button.dataset.manualAliasIndex)];
@@ -2185,6 +2264,40 @@
       document.getElementById("total-historico-comparacoes").textContent = `${valor} ${valor === 1 ? "registro" : "registros"}`;
     }
 
+    function atualizarDatasExportacaoHistorico(eventos) {
+      const select = document.getElementById("data-exportar-historico-comparacoes");
+      const button = document.getElementById("btn-exportar-historico-comparacoes");
+      if (!select) return;
+
+      const selectedBeforeRefresh = select.value;
+      const dates = [...new Set((eventos || [])
+        .map(evento => String(evento.horario || "").slice(0, 10))
+        .filter(data => /^\d{4}-\d{2}-\d{2}$/.test(data)))].sort((a, b) => b.localeCompare(a));
+      select.replaceChildren();
+      select.disabled = dates.length === 0;
+      if (button) button.disabled = true;
+      const placeholder = document.createElement("option");
+      placeholder.value = "";
+      placeholder.textContent = dates.length ? "Selecione uma data" : "Nenhuma data disponível";
+      select.appendChild(placeholder);
+      if (!dates.length) {
+        return;
+      }
+
+      dates.forEach(data => {
+        const option = document.createElement("option");
+        const [year, month, day] = data.split("-");
+        option.value = data;
+        option.textContent = `${day}/${month}/${year}`;
+        select.appendChild(option);
+      });
+      select.value = dates.includes(selectedBeforeRefresh) ? selectedBeforeRefresh : "";
+      if (button) button.disabled = !select.value;
+      select.onchange = () => {
+        if (button) button.disabled = !select.value;
+      };
+    }
+
     async function carregarContagemHistoricoComparacoes() {
       try {
         const res = await fetch("/api/historico-comparacoes");
@@ -2205,6 +2318,55 @@
       fecharModalAcessivel("modal-historico-comparacoes");
     }
 
+    async function exportarHistoricoComparacoesExcel() {
+      const button = document.getElementById("btn-exportar-historico-comparacoes");
+      if (!button) return;
+      const originalHtml = button.innerHTML;
+      button.disabled = true;
+      button.setAttribute("aria-busy", "true");
+      button.innerHTML = '<i data-lucide="loader-2" class="w-4 h-4 animate-spin" aria-hidden="true"></i><span>Gerando Excel...</span>';
+      lucide.createIcons({ root: button });
+      const dateSelect = document.getElementById("data-exportar-historico-comparacoes");
+
+      try {
+        const selectedDate = dateSelect?.value;
+        if (!selectedDate) {
+          showToast("Selecione uma data para exportar.", "warning");
+          return;
+        }
+        dateSelect.disabled = true;
+        const response = await fetch(`/api/historico-comparacoes/exportar/excel?data=${encodeURIComponent(selectedDate)}`);
+        if (!response.ok) {
+          const errorData = await response.json().catch(() => ({}));
+          throw new Error(errorData.detail || "Não foi possível exportar o histórico de planilhas.");
+        }
+        const disposition = response.headers.get("Content-Disposition") || "";
+        const match = /filename[^;=\n]*=((['"]).*?\2|[^;\n]*)/.exec(disposition);
+        const filename = match && match[1]
+          ? match[1].replace(/[\'"]/g, "")
+          : "Historico_Planilhas.xlsx";
+        const blob = await response.blob();
+        const url = window.URL.createObjectURL(blob);
+        const link = document.createElement("a");
+        link.href = url;
+        link.download = filename;
+        document.body.appendChild(link);
+        link.click();
+        link.remove();
+        window.setTimeout(() => window.URL.revokeObjectURL(url), 1000);
+        showToast("Histórico de planilhas exportado para Excel.", "success");
+      } catch (error) {
+        console.error("Erro ao exportar o histórico de planilhas:", error);
+        showToast(error.message || "Não foi possível exportar o histórico de planilhas.", "error");
+      } finally {
+        if (dateSelect) dateSelect.disabled = dateSelect.options.length <= 1;
+        button.disabled = !dateSelect?.value;
+        button.removeAttribute("aria-busy");
+        button.innerHTML = originalHtml;
+        lucide.createIcons({ root: button });
+      }
+    }
+
     async function carregarHistoricoComparacoes() {
       const lista = document.getElementById("lista-historico-comparacoes");
       lista.setAttribute("aria-busy", "true");
@@ -2217,6 +2379,7 @@
 
         const eventos = Array.isArray(data.eventos) ? data.eventos : [];
         definirTotalHistoricoComparacoes(data.total ?? eventos.length);
+        atualizarDatasExportacaoHistorico(eventos);
         lista.replaceChildren();
         if (eventos.length === 0) {
           const vazio = document.createElement("p");
@@ -2272,16 +2435,6 @@
             acoes.appendChild(consultar);
           }
 
-          if (evento.restauravel) {
-            const restaurar = document.createElement("button");
-            restaurar.type = "button";
-            restaurar.className = "shrink-0 px-3 py-2 rounded-lg bg-amber-500/10 hover:bg-amber-500/20 text-amber-200 border border-amber-500/25 text-xs font-semibold transition";
-            restaurar.textContent = restauracao ? "Desfazer restauração" : "Restaurar versão anterior";
-            restaurar.setAttribute("aria-label", `${restauracao ? "Desfazer restauração de" : "Restaurar versões anteriores à atualização de"} ${formatarHorarioHistorico(evento.horario)}`);
-            restaurar.addEventListener("click", () => restaurarHistoricoComparacao(evento, restaurar));
-            acoes.appendChild(restaurar);
-          }
-
           const excluir = document.createElement("button");
           excluir.type = "button";
           excluir.className = "shrink-0 px-3 py-2 rounded-lg bg-rose-500/10 hover:bg-rose-500/20 text-rose-200 border border-rose-500/25 text-xs font-semibold transition";
@@ -2304,78 +2457,6 @@
         lista.appendChild(erro);
       } finally {
         lista.removeAttribute("aria-busy");
-      }
-    }
-
-    async function restaurarHistoricoComparacao(evento, botao) {
-      const textoOriginal = botao.textContent;
-      botao.disabled = true;
-      botao.setAttribute("aria-busy", "true");
-      botao.textContent = "Preparando...";
-
-      try {
-        const previewResponse = await fetch(`/api/historico-comparacoes/${encodeURIComponent(evento.id)}/restauracao`);
-        const preview = await previewResponse.json().catch(() => ({}));
-        if (!previewResponse.ok) throw new Error(preview.detail || "Não foi possível validar o backup selecionado.");
-
-        const describeBackup = (label, item) => {
-          const modified = item.modificado_em ? `; arquivo datado ${formatarHorarioHistorico(item.modificado_em)}` : "";
-          return `${label}: ${item.nome} (${Number(item.registros || 0).toLocaleString("pt-BR")} registros${modified})`;
-        };
-        const describeCurrent = (label, item) => {
-          if (!item?.presente) return `${label}: arquivo ausente`;
-          const modified = item.modificado_em ? ` · modificado ${formatarHorarioHistorico(item.modificado_em)}` : "";
-          return `${label}: ${item.nome}${modified}`;
-        };
-        const restauracao = preview.tipo_evento === "restauracao";
-        const acao = restauracao ? "Desfazer a restauração" : "Reverter a atualização";
-        const confirmText = [
-          `${acao} registrada em ${formatarHorarioHistorico(preview.evento_horario)}?`,
-          "",
-          "Conjunto que será restaurado:",
-          describeBackup("Endpoint", preview.arquivos_backup.endpoint),
-          describeBackup("Simpress", preview.arquivos_backup.detalhes),
-          "",
-          "Conjunto ativo, que será guardado como backup:",
-          describeCurrent("Endpoint", preview.arquivos_atuais.endpoint),
-          describeCurrent("Simpress", preview.arquivos_atuais.detalhes),
-          "",
-          "Os dois inventários serão substituídos juntos e a ação ficará registrada no histórico. Continuar?",
-        ].join("\n");
-        if (!window.confirm(confirmText)) return;
-
-        botao.textContent = "Restaurando...";
-        const response = await fetch(`/api/historico-comparacoes/${encodeURIComponent(evento.id)}/restaurar`, {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ preview_token: preview.preview_token }),
-        });
-        const data = await response.json().catch(() => ({}));
-        if (!response.ok) throw new Error(data.detail || "Não foi possível restaurar o conjunto selecionado.");
-
-        invalidarDadosEquipamentoAposRestauracao();
-        await Promise.allSettled([
-          carregarEstatisticas(),
-          carregarUnidades(),
-          carregarHistoricoComparacoes(),
-          carregarContagemHistoricoComparacoes(),
-        ]);
-        document.querySelector('#modal-historico-comparacoes [aria-label="Fechar histórico de planilhas"]')
-          ?.focus({ preventScroll: true });
-        const total = Number(data.evento?.total_equipamentos_carregados || 0).toLocaleString("pt-BR");
-        const reversao = data.evento?.desfazer_disponivel
-          ? "A restauração pode ser desfeita pelo histórico."
-          : "O backup do conjunto substituído está incompleto ou inválido; não é possível desfazer pelo histórico.";
-        showToast(`Inventários restaurados. ${total} equipamentos carregados. ${reversao}`, "success");
-      } catch (err) {
-        console.error("Erro ao restaurar o conjunto de planilhas:", err);
-        showToast(err.message || "Não foi possível restaurar o conjunto selecionado.", "error");
-      } finally {
-        if (botao.isConnected) {
-          botao.disabled = false;
-          botao.removeAttribute("aria-busy");
-          botao.textContent = textoOriginal;
-        }
       }
     }
 
