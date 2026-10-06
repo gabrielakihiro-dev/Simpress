@@ -2034,7 +2034,7 @@
           <td class="px-3 py-2 font-mono">${escapeHtml(item.computador || "—")}</td>
           <td class="px-3 py-2 text-amber-200">${escapeHtml(formatarMotivoRevisao(item.motivo))}</td>
           ${permitirAnotacoes ? `<td class="px-3 py-2 min-w-[240px] align-top">
-            <textarea data-comparison-annotation data-annotation-id="${escapeHtml(item.anotacao_id || "")}" rows="2" maxlength="2000" class="w-full min-w-[220px] rounded-lg border border-slate-700 bg-slate-900 px-2.5 py-2 text-xs text-white placeholder:text-slate-500 focus:border-cyan-400 focus:outline-none focus:ring-1 focus:ring-cyan-400" aria-label="Anotações para a série ${escapeHtml(item.serie || "vazia")}" placeholder="Escreva uma anotação...">${escapeHtml(item.anotacao || "")}</textarea>
+            <textarea data-comparison-annotation data-annotation-id="${escapeHtml(item.anotacao_id || "")}" rows="2" maxlength="2000" class="w-full min-w-[220px] rounded-lg border border-slate-700 bg-slate-900 px-2.5 py-2 text-xs text-white placeholder:text-slate-500 focus:border-cyan-400 focus:outline-none focus:ring-1 focus:ring-cyan-400" aria-label="Anotações para a série ${escapeHtml(item.serie || "vazia")}, neste resultado" placeholder="Escreva uma anotação...">${escapeHtml(item.anotacao || "")}</textarea>
             <p class="mt-1 text-[10px] ${item.anotacao ? "text-emerald-300" : "text-slate-500"}" data-annotation-status aria-live="polite">${item.anotacao ? "Salvo automaticamente" : ""}</p>
           </td>` : ""}
         </tr>`);
@@ -2117,7 +2117,7 @@
           ${renderizarTabelaComparacao(["Série", "Apelido anterior", "Novo apelido / hostname", "Horário", "Arquivos de origem"], aliasUpdateRows, "Nenhum apelido ou hostname mudou nesta atualização.")}
         </section>
         <section class="space-y-2">
-          <div><h4 class="text-sm font-bold text-amber-300">Linhas mantidas para conferência</h4><p class="text-[11px] text-slate-500">Série vazia, ausente ou duplicada não é escolhida automaticamente; o apelido atual fica preservado.${permitirAnotacoes ? " As anotações são salvas automaticamente." : ""}</p></div>
+          <div><h4 class="text-sm font-bold text-amber-300">Linhas mantidas para conferência</h4><p class="text-[11px] text-slate-500">Série vazia, ausente ou duplicada não é escolhida automaticamente; o apelido atual fica preservado.${permitirAnotacoes ? " As anotações pertencem a esta linha desta atualização, não são reaproveitadas em novas atualizações e são salvas automaticamente." : ""}</p></div>
           ${renderizarTabelaComparacao(["Série", "Hostname na InvAll", "Motivo", ...(permitirAnotacoes ? ["Anotações"] : [])], aliasReviewRows, "Nenhuma linha de apelido precisa de conferência.")}
         </section>
         <section class="space-y-2">
