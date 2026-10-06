@@ -92,6 +92,16 @@
     button:not(:disabled), summary { cursor: pointer; }
     button { min-height: 2.5rem; }
     button:disabled { cursor: wait; opacity: 0.72; }
+    #btn-copiar-cnpj-instalacao-entrega:disabled {
+      cursor: not-allowed;
+      opacity: 0.42;
+      background-color: rgba(30, 41, 59, 0.8);
+      color: #cbd5e1;
+    }
+    #btn-copiar-cnpj-instalacao-entrega:disabled:hover {
+      background-color: rgba(30, 41, 59, 0.8);
+      color: #cbd5e1;
+    }
     :focus-visible {
       outline: 3px solid #7dd3fc !important;
       outline-offset: 3px !important;

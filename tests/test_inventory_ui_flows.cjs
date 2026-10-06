@@ -6,6 +6,7 @@ const vm = require("node:vm");
 const transferUtils = require("../static/transfer-utils.js");
 
 const appScript = fs.readFileSync(path.join(__dirname, "..", "static", "app.js"), "utf8");
+const appHtml = fs.readFileSync(path.join(__dirname, "..", "static", "index.html"), "utf8");
 
 class FakeElement {
   constructor(id = "") {
@@ -382,15 +383,19 @@ test("copies the currently selected pickup locality after forcing the headquarte
 
 test("copies the fixed billing CNPJ and installation CNPJ for the selected delivery unit", async () => {
   const units = [
-    { id: 11, cidade: "Unidade Alfa", cnpj: "11.111.111/0001-11", endereco_completo: "Rua Alfa, 1" },
-    { id: 22, cidade: "Unidade Beta", cnpj: "22.222.222/0001-22", endereco_completo: "Rua Beta, 2" },
+    { id: 11, cidade: "Londrina", cnpj: "11.111.111/0001-11", endereco_completo: "Rua Alfa, 1" },
+    { id: 22, cidade: "Maringá", cnpj: "22.222.222/0001-22", endereco_completo: "Rua Beta, 2" },
   ];
   const harness = createAppHarness(async () => { throw new Error("Nenhuma chamada de API esperada"); });
   harness.context.workflowUnits = units;
   harness.run("unidadesList = workflowUnits");
+  const installCopyButton = harness.element("btn-copiar-cnpj-instalacao-entrega");
+  installCopyButton.disabled = true;
+  assert.equal(installCopyButton.disabled, true);
 
   harness.element("select-unidade-destino").value = "11";
   harness.run('handleUnidadeDestinoChange("11", false)');
+  assert.equal(installCopyButton.disabled, false);
   await harness.run('copiarDadoEntrega("faturamento")');
   await harness.run('copiarDadoEntrega("instalacao")');
 
@@ -404,6 +409,19 @@ test("copies the fixed billing CNPJ and installation CNPJ for the selected deliv
     "22.222.222/0001-22",
   ]);
   assert.deepEqual(harness.effects.toasts.map(({ type }) => type), ["success", "success", "success"]);
+  assert.match(harness.effects.toasts[1].message, /CNPJ de instalação de Londrina copiado/);
+  assert.match(harness.effects.toasts[2].message, /CNPJ de instalação de Maringá copiado/);
+
+  harness.element("select-unidade-destino").value = "";
+  harness.run('handleUnidadeDestinoChange("")');
+  assert.equal(installCopyButton.disabled, true);
+});
+
+test("starts with the delivery installation CNPJ copy button disabled", () => {
+  assert.match(
+    appHtml,
+    /<button\s+type="button"\s+id="btn-copiar-cnpj-instalacao-entrega"\s+disabled\s+onclick="copiarDadoEntrega\('instalacao'\)"/
+  );
 });
 
 test("requires a selected delivery unit before copying its installation CNPJ", async () => {
