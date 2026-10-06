@@ -1908,6 +1908,11 @@
       const apelidosAtualizados = comparison.apelidos_atualizados || [];
       const apelidosSemAtualizacao = comparison.apelidos_sem_atualizacao || [];
       const divergenciasApelidosManuais = comparison.divergencias_apelidos_manuais || [];
+      const formatarMotivoRevisao = motivo => comparison.contexto_historico === true
+        ? String(motivo || "Conferir associação.")
+          .replace(/na InvAll/g, "no Endpoint")
+          .replace(/em EquipamentosDetalhes/g, "na Simpress")
+        : (motivo || "Conferir associação.");
 
       document.getElementById("comparacao-planilhas-fontes").textContent =
         `Endpoint: ${arquivo.endpoint || "—"} · EquipamentosDetalhes: ${arquivo.detalhes || "—"}${comparison.horario_comparacao ? ` · ${formatarHorarioHistorico(comparison.horario_comparacao)}` : ""}`;
@@ -1941,7 +1946,7 @@
         <tr class="text-slate-300">
           <td class="px-3 py-2 font-mono text-white whitespace-nowrap">${escapeHtml(item.serie || "(vazia)")}</td>
           <td class="px-3 py-2 font-mono">${escapeHtml(item.computador || "—")}</td>
-          <td class="px-3 py-2 text-amber-200">${escapeHtml(item.motivo || "Conferir associação.")}</td>
+          <td class="px-3 py-2 text-amber-200">${escapeHtml(formatarMotivoRevisao(item.motivo))}</td>
         </tr>`);
 
       const manualAliasRows = divergenciasApelidosManuais.map((item, index) => {
@@ -2347,6 +2352,7 @@
           evento_id: evento.id,
           horario_comparacao: evento.horario || evento.comparacao?.horario_comparacao,
           historico_salvo: true,
+          contexto_historico: true,
         });
       } catch (err) {
         console.error("Erro ao abrir comparação salva:", err);

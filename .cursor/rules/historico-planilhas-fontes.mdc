@@ -1,0 +1,9 @@
+---
+description: Padroniza os nomes das fontes nos motivos exibidos pelo Histórico de Planilhas.
+alwaysApply: true
+---
+
+# Nomes das fontes no Histórico de Planilhas
+
+- Ao exibir motivos de revisão no resultado aberto pelo Histórico de Planilhas, substitua `na InvAll` por `no Endpoint` e `em EquipamentosDetalhes` por `na Simpress`.
+- Aplique a padronização somente à apresentação desses motivos no Histórico de Planilhas. Preserve os nomes canônicos nas APIs, dados persistidos, regras de negócio, nomes de arquivos e demais telas.
