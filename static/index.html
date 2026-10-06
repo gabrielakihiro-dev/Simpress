@@ -788,6 +788,16 @@ Horário disponível para atendimento:</textarea>
         <div class="quick-actions-buttons flex flex-wrap sm:flex-nowrap items-center gap-3 w-full sm:w-auto justify-end">
           <button
             type="button"
+            id="btn-gerar-planilha"
+            onclick="gerarPlanilhaExcel()"
+            class="px-6 py-2.5 rounded-xl bg-gradient-to-r from-emerald-600 to-teal-500 hover:from-emerald-500 hover:to-teal-400 text-white font-bold text-xs sm:text-sm flex items-center space-x-2.5 shadow-glow-emerald transition-all transform hover:scale-[1.02] active:scale-[0.98]"
+          >
+            <i data-lucide="file-spreadsheet" class="w-4 h-4"></i>
+            <span>Gerar Planilha</span>
+          </button>
+
+          <button
+            type="button"
             id="btn-copiar-hostname"
             onclick="copiarHostnameAtual()"
             disabled
@@ -797,16 +807,6 @@ Horário disponível para atendimento:</textarea>
           >
             <i data-lucide="copy" class="w-4 h-4" aria-hidden="true"></i>
             <span>Copiar Hostname</span>
-          </button>
-
-          <button
-            type="button"
-            id="btn-gerar-planilha"
-            onclick="gerarPlanilhaExcel()"
-            class="px-6 py-2.5 rounded-xl bg-gradient-to-r from-emerald-600 to-teal-500 hover:from-emerald-500 hover:to-teal-400 text-white font-bold text-xs sm:text-sm flex items-center space-x-2.5 shadow-glow-emerald transition-all transform hover:scale-[1.02] active:scale-[0.98]"
-          >
-            <i data-lucide="file-spreadsheet" class="w-4 h-4"></i>
-            <span>Gerar Planilha</span>
           </button>
 
           <button
