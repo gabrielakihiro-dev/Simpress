@@ -574,6 +574,33 @@ class WorkflowIntegrityTests(unittest.TestCase):
         self.assertEqual(main.equipamentos_cache["1234"]["apelido"], "HOST-NUMERICO")
         self.assertEqual(main.equipamentos_cache["NA"]["retirada_cnpj"], "00987654000188")
 
+    def test_installation_cnpj_header_with_branch_suffix_populates_equipment_and_unit(self):
+        cnpj = "12.345.678/0001-90"
+        make_details(
+            self.details,
+            [(
+                "SERIE-CNPJ-FICTICIA",
+                "HOST-CNPJ-FICTICIO",
+                "Modelo A",
+                "Foz do Iguaçu",
+                "Notebook",
+                "85852-010",
+                cnpj,
+            )],
+            headers=[
+                "NumeroSerie", "Apelido", "Modelo", "Cidade", "Tipo", "CEP",
+                "CNPJ de Instalação da Unidade / Filial SEBRAE",
+            ],
+        )
+        make_endpoint(self.endpoint, [("SERIE-CNPJ-FICTICIA", "HOST-CNPJ-FICTICIO")])
+
+        self.assertTrue(main.load_database())
+        equipment = main.get_equipamento("SERIE-CNPJ-FICTICIA")
+        delivery_unit = next(unit for unit in main.unidades_cache if unit["cidade"] == "Foz do Iguaçu")
+
+        self.assertEqual(equipment["retirada_cnpj"], cnpj)
+        self.assertEqual(delivery_unit["cnpj"], cnpj)
+
     def test_upload_rejects_duplicate_normalized_or_semantic_headers(self):
         make_details(
             self.details,

@@ -51,7 +51,12 @@ def _history_display_text(value: Any) -> str:
     text = _export_text(value)
     text = re.sub(r"\b(?:na|no|da|do|à|ao|pela|pelo|a|o)\s*InvAll", "No Endpoint", text, flags=re.IGNORECASE)
     text = re.sub(r"InvAll", "No Endpoint", text, flags=re.IGNORECASE)
-    text = re.sub(r"\b(?:no\s+)?Endpoint\b", "No Endpoint", text, flags=re.IGNORECASE)
+    text = re.sub(
+        r"(?<![\w.-])(?:no\s+)?Endpoint(?![\w.-])",
+        "No Endpoint",
+        text,
+        flags=re.IGNORECASE,
+    )
     text = re.sub(r"\b(?:em|de|da|do|na|no|a|à|pela|pelo)\s*EquipamentosDetalhes", "na Simpress", text, flags=re.IGNORECASE)
     text = re.sub(r"EquipamentosDetalhes", "na Simpress", text, flags=re.IGNORECASE)
     return re.sub(r"\b(?:na\s+)?Simpress\b", "na Simpress", text, flags=re.IGNORECASE)
@@ -284,7 +289,9 @@ def create_inventory_history_router(ctx):
 
     def _comparison_restore_backup_paths(evento: Dict[str, Any]) -> Dict[str, Path]:
         comparison = evento.get("comparacao")
-        relative_value = comparison.get("backup_diretorio") if isinstance(comparison, dict) else None
+        if not isinstance(comparison, dict):
+            raise ctx.HTTPException(status_code=409, detail="Esta atualização não possui um backup disponível para restauração.")
+        relative_value = comparison.get("backup_diretorio")
         if not isinstance(relative_value, str) or not relative_value.strip():
             raise ctx.HTTPException(status_code=409, detail="Esta atualização não possui um backup disponível para restauração.")
 
@@ -443,13 +450,15 @@ def create_inventory_history_router(ctx):
 
 
     def _latest_annotation_records(history=None):
-        latest = {}
+        latest: Dict[tuple[str, str], tuple[str, Dict[str, Any]]] = {}
         for record in ctx.load_history_annotations(ctx.HISTORY_ANNOTATIONS_DIR):
             key = (record["evento_id"], record["item_id"])
             candidate = (str(record.get("atualizado_em") or ""), record)
             if key not in latest or candidate[0] >= latest[key][0]:
                 latest[key] = candidate
-        records = {key: value[1] for key, value in latest.items()}
+        records: Dict[tuple[str, str], Dict[str, Any]] = {
+            key: value[1] for key, value in latest.items()
+        }
 
         # Move notes made by older versions into the shared store on first view.
         local_history = ctx.load_comparison_history() if history is None else history
@@ -485,7 +494,10 @@ def create_inventory_history_router(ctx):
         return records
 
 
-    def _merge_shared_annotations(event_view: Dict[str, Any], annotations: Dict[str, Dict[str, Any]]) -> Dict[str, Any]:
+    def _merge_shared_annotations(
+        event_view: Dict[str, Any],
+        annotations: Dict[tuple[str, str], Dict[str, Any]],
+    ) -> Dict[str, Any]:
         comparison = event_view.get("comparacao")
         if not isinstance(comparison, dict):
             return event_view
@@ -984,7 +996,7 @@ def create_inventory_history_router(ctx):
 
 
     @router.post("/api/historico-comparacoes/{evento_id}/restaurar")
-    def restaurar_comparacao_historica(evento_id: str, payload: ctx.ComparisonRestorePayload):
+    def restaurar_comparacao_historica(evento_id: str, payload: ComparisonRestorePayload):
         persistent_backup_dir = None
 
         try:
@@ -1115,7 +1127,8 @@ def create_inventory_history_router(ctx):
                         if isinstance(current_source_event, dict) else None
                     )
                     if (
-                        not isinstance(current_source_comparison, dict)
+                        not isinstance(current_source_event, dict)
+                        or not isinstance(current_source_comparison, dict)
                         or current_source_comparison.get("backup_diretorio") != source_backup_relative
                         or current_source_event.get("horario") != source_event.get("horario")
                     ):
@@ -1161,7 +1174,7 @@ def create_inventory_history_router(ctx):
     def resolver_divergencia_apelido_manual(
         evento_id: str,
         serial: str,
-        payload: ctx.ManualAliasConflictResolutionPayload,
+        payload: ManualAliasConflictResolutionPayload,
     ):
         acao = str(payload.acao or "").strip().lower()
         if acao not in {"manter", "excluir"}:
@@ -1334,8 +1347,10 @@ def create_inventory_history_router(ctx):
         '_sha256_file': _sha256_file,
         '_validated_comparison_backup_files': _validated_comparison_backup_files,
         'excluir_comparacao_historica': excluir_comparacao_historica,
+        'exportar_historico_comparacoes_excel': exportar_historico_comparacoes_excel,
         'get_comparacao_historica': get_comparacao_historica,
         'get_historico_comparacoes': get_historico_comparacoes,
+        'salvar_anotacao_comparacao': salvar_anotacao_comparacao_historica,
         'salvar_anotacao_comparacao_historica': salvar_anotacao_comparacao_historica,
         'resolver_divergencia_apelido_manual': resolver_divergencia_apelido_manual,
         'restaurar_comparacao_historica': restaurar_comparacao_historica,
