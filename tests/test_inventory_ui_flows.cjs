@@ -379,3 +379,39 @@ test("copies the currently selected pickup locality after forcing the headquarte
   assert.deepEqual(harness.effects.clipboardWrites, ["80220-300", "01.234.567/0001-89"]);
   assert.deepEqual(harness.effects.toasts.map(({ type }) => type), ["info", "success", "success"]);
 });
+
+test("copies the fixed billing CNPJ and installation CNPJ for the selected delivery unit", async () => {
+  const units = [
+    { id: 11, cidade: "Unidade Alfa", cnpj: "11.111.111/0001-11", endereco_completo: "Rua Alfa, 1" },
+    { id: 22, cidade: "Unidade Beta", cnpj: "22.222.222/0001-22", endereco_completo: "Rua Beta, 2" },
+  ];
+  const harness = createAppHarness(async () => { throw new Error("Nenhuma chamada de API esperada"); });
+  harness.context.workflowUnits = units;
+  harness.run("unidadesList = workflowUnits");
+
+  harness.element("select-unidade-destino").value = "11";
+  harness.run('handleUnidadeDestinoChange("11", false)');
+  await harness.run('copiarDadoEntrega("faturamento")');
+  await harness.run('copiarDadoEntrega("instalacao")');
+
+  harness.element("select-unidade-destino").value = "22";
+  harness.run('handleUnidadeDestinoChange("22", false)');
+  await harness.run('copiarDadoEntrega("instalacao")');
+
+  assert.deepEqual(harness.effects.clipboardWrites, [
+    "75.110.585/0001-00",
+    "11.111.111/0001-11",
+    "22.222.222/0001-22",
+  ]);
+  assert.deepEqual(harness.effects.toasts.map(({ type }) => type), ["success", "success", "success"]);
+});
+
+test("requires a selected delivery unit before copying its installation CNPJ", async () => {
+  const harness = createAppHarness(async () => { throw new Error("Nenhuma chamada de API esperada"); });
+
+  await harness.run('copiarDadoEntrega("instalacao")');
+
+  assert.deepEqual(harness.effects.clipboardWrites, []);
+  assert.equal(harness.effects.toasts.at(-1).type, "warning");
+  assert.match(harness.effects.toasts.at(-1).message, /Selecione uma unidade de destino/);
+});
