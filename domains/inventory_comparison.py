@@ -2,6 +2,7 @@
 
 import re
 import unicodedata
+from datetime import date, datetime, time, timedelta
 from typing import Any, Dict, List, Optional
 
 import pandas as pd
@@ -44,6 +45,63 @@ def _upload_alias_value(record: Dict[str, Any], role: str) -> str:
     else:
         value = _record_value(record, "APELIDO", "HOSTNAME", "NOMEDOCOMPUTADOR", "COMPUTERNAME")
     return str(value or "").strip()
+
+def _upload_verification_value(record: Dict[str, Any]) -> Any:
+    return _record_value(
+        record,
+        "ULTIMAVERIFICACAOCOMEXITO",
+        "LASTSUCCESSFULVERIFICATION",
+        "LASTSUCCESSFULVERIFICATIONDATE",
+        "LASTSUCCESSFULCHECKIN",
+        "LASTSUCCESSFULCHECKINDATE",
+    )
+
+def _parse_verification_datetime(value: Any, reference_timezone: Any) -> Optional[datetime]:
+    if isinstance(value, datetime):
+        parsed = value
+    elif isinstance(value, date):
+        parsed = datetime.combine(value, time.min)
+    elif isinstance(value, str):
+        text = value.strip()
+        if not text:
+            return None
+        try:
+            parsed = datetime.fromisoformat(text.replace("Z", "+00:00"))
+        except ValueError:
+            month_names = {
+                "jan": "Jan", "fev": "Feb", "feb": "Feb", "mar": "Mar",
+                "abr": "Apr", "apr": "Apr", "mai": "May", "jun": "Jun",
+                "jul": "Jul", "ago": "Aug", "aug": "Aug", "set": "Sep",
+                "sep": "Sep", "out": "Oct", "oct": "Oct", "nov": "Nov",
+                "dez": "Dec", "dec": "Dec",
+            }
+            normalized_text = unicodedata.normalize("NFKD", text).encode("ascii", "ignore").decode("ascii")
+            normalized_text = re.sub(
+                r"\b(" + "|".join(month_names) + r")\b",
+                lambda match: month_names[match[0].lower()],
+                normalized_text,
+                flags=re.IGNORECASE,
+            )
+            parsed = None
+            for pattern in (
+                "%b %d, %Y %I:%M %p", "%B %d, %Y %I:%M %p",
+                "%d/%m/%Y %H:%M:%S", "%d/%m/%Y %H:%M",
+                "%Y-%m-%d %H:%M:%S", "%Y-%m-%d %H:%M",
+                "%d/%m/%Y", "%Y-%m-%d",
+            ):
+                try:
+                    parsed = datetime.strptime(normalized_text, pattern)
+                    break
+                except ValueError:
+                    continue
+            if parsed is None:
+                return None
+    else:
+        return None
+
+    if parsed.tzinfo is None:
+        return parsed.replace(tzinfo=reference_timezone)
+    return parsed.astimezone(reference_timezone)
 
 def _unique_upload_records(table: Dict[str, Any], role: str) -> Dict[str, Dict[str, Any]]:
     grouped: Dict[str, List[Dict[str, Any]]] = {}
@@ -140,6 +198,7 @@ def _comparison_source_records(table: Dict[str, Any], role: str) -> List[Dict[st
             "alias_key": normalize_reference_value(alias_value),
             "local": location_value,
             "usuario": str(_record_value(row, *user_headers) or "").strip(),
+            "ultima_verificacao": _upload_verification_value(row) if role == "endpoint" else None,
             "row": row,
         })
     return records
@@ -380,6 +439,9 @@ def comparison_history_for_display(evento: Dict[str, Any]) -> Dict[str, Any]:
     alias_review = comparison_view.get("apelidos_sem_atualizacao")
     if isinstance(alias_review, list):
         comparison_view["apelidos_sem_atualizacao"] = [without_legacy_source(item) for item in alias_review]
+    no_recent_verification = comparison_view.get("sem_acesso_14_dias")
+    if isinstance(no_recent_verification, list):
+        comparison_view["sem_acesso_14_dias"] = [without_legacy_source(item) for item in no_recent_verification]
     missing_lists = {
         key: filter_sebrae_owned_unmatched_items(items)
         for key, items in missing_lists.items()
@@ -417,6 +479,9 @@ def comparison_history_for_display(evento: Dict[str, Any]) -> Dict[str, Any]:
     alias_review = comparison_view.get("apelidos_sem_atualizacao")
     if isinstance(alias_review, list):
         summary["apelidos_sem_atualizacao"] = len(alias_review)
+    no_recent_verification = comparison_view.get("sem_acesso_14_dias")
+    if isinstance(no_recent_verification, list):
+        summary["sem_acesso_14_dias"] = len(no_recent_verification)
     manual_alias_divergences = comparison_view.get("divergencias_apelidos_manuais")
     if isinstance(manual_alias_divergences, list):
         summary["divergencias_apelidos_manuais"] = sum(
@@ -466,6 +531,7 @@ def compare_uploaded_workbooks(
     endpoint_table: Dict[str, Any],
     details_table: Dict[str, Any],
     uploaded_names: Dict[str, str],
+    as_of: Optional[datetime] = None,
 ) -> Dict[str, Any]:
     """Compares Endpoint and EquipamentosDetalhes without silently selecting duplicate matches."""
     source_tables = {
@@ -476,6 +542,10 @@ def compare_uploaded_workbooks(
         role: _comparison_source_records(table, role)
         for role, table in source_tables.items()
     }
+    as_of = as_of or datetime.now().astimezone()
+    if as_of.tzinfo is None:
+        as_of = as_of.astimezone()
+    stale_threshold = as_of - timedelta(days=14)
 
     # Simpress adds a leading S to some Mac serials. Match that variant only
     # when the Endpoint identifies the corresponding serial as a PRMAC device.
@@ -821,8 +891,18 @@ def compare_uploaded_workbooks(
                 })
 
     unmapped_series: Dict[str, List[str]] = {}
+    no_recent_verification = []
     for record in source_records["endpoint"]:
         computer_name = record["computador"]
+        verified_at = _parse_verification_datetime(record.get("ultima_verificacao"), as_of.tzinfo)
+        if verified_at is not None and verified_at <= stale_threshold:
+            no_recent_verification.append({
+                "computador": computer_name,
+                "serie": record["serie"],
+                "ultima_verificacao": verified_at.isoformat(timespec="minutes"),
+                "dias_sem_verificacao": max(14, (as_of - verified_at).days),
+                "linha_endpoint": record["row_number"],
+            })
         if not computer_name.upper().startswith("PRNOTE") or location_for_computer_name(computer_name):
             continue
         suffix = computer_name.upper()[len("PRNOTE"):]
@@ -841,6 +921,7 @@ def compare_uploaded_workbooks(
         "total_detalhes": len(details_table["records"]),
         "ausentes_no_endpoint": missing_by_source["endpoint"],
         "ausentes_em_detalhes": missing_by_source["detalhes"],
+        "sem_acesso_14_dias": no_recent_verification,
         "correspondencias_ambiguas": issues,
         "registros_ambiguos": ambiguous_records,
         "divergencias_local": location_mismatches,

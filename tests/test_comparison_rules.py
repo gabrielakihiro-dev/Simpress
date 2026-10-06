@@ -2,6 +2,7 @@ import unittest
 import io
 import copy
 from contextlib import redirect_stdout
+from datetime import datetime, timedelta, timezone
 from unittest.mock import patch
 
 from fastapi import HTTPException
@@ -16,6 +17,50 @@ def source_table(records, sheet="Inventario"):
 
 
 class InventoryComparisonTests(unittest.TestCase):
+    def test_endpoint_notebooks_without_successful_verification_for_14_days_are_reported(self):
+        reference_time = datetime(2026, 10, 5, 12, 0, tzinfo=timezone(timedelta(hours=-3)))
+        endpoint = source_table([
+            {
+                "NOMEDOCOMPUTADOR": "PRNOTEAPU01",
+                "ROTULODESERVICONUMERODESERIE": "SN-14-DIAS",
+                "ULTIMAVERIFICACAOCOMEXITO": reference_time - timedelta(days=14),
+            },
+            {
+                "NOMEDOCOMPUTADOR": "PRNOTELON02",
+                "ROTULODESERVICONUMERODESERIE": "SN-QUASE-14",
+                "ULTIMAVERIFICACAOCOMEXITO": reference_time - timedelta(days=14) + timedelta(minutes=1),
+            },
+            {
+                "NOMEDOCOMPUTADOR": "PRNOTEFOZ03",
+                "ROTULODESERVICONUMERODESERIE": "SN-DATA-PT",
+                "ULTIMAVERIFICACAOCOMEXITO": "set 20, 2026 11:59 AM",
+            },
+            {
+                "NOMEDOCOMPUTADOR": "PRNOTEMAR04",
+                "ROTULODESERVICONUMERODESERIE": "SN-SEM-DATA",
+                "ULTIMAVERIFICACAOCOMEXITO": "",
+            },
+            {
+                "NOMEDOCOMPUTADOR": "PRNOTESJP05",
+                "ROTULODESERVICONUMERODESERIE": "SN-DATA-INVALIDA",
+                "ULTIMAVERIFICACAOCOMEXITO": "data desconhecida",
+            },
+            {
+                "NOMEDOCOMPUTADOR": "DESKTOP06",
+                "ROTULODESERVICONUMERODESERIE": "SN-NAO-NOTEBOOK",
+                "ULTIMAVERIFICACAOCOMEXITO": reference_time - timedelta(days=30),
+            },
+        ])
+
+        result = main.compare_uploaded_workbooks(endpoint, source_table([]), {}, as_of=reference_time)
+
+        self.assertEqual(
+            [item["serie"] for item in result["sem_acesso_14_dias"]],
+            ["SN-14-DIAS", "SN-DATA-PT"],
+        )
+        self.assertEqual(result["sem_acesso_14_dias"][0]["dias_sem_verificacao"], 14)
+        self.assertEqual(result["sem_acesso_14_dias"][0]["linha_endpoint"], 2)
+
     def test_history_updates_source_labels_without_changing_saved_data_or_filter_results(self):
         legacy_items = [
             {"serie": "DUP", "computador": "InvAll-HOST", "motivo": "Série duplicada na InvAll; nenhum hostname foi escolhido."},
