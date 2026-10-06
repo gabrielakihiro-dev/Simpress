@@ -1680,6 +1680,30 @@
       }
     }
 
+    async function copiarDadoEntrega(tipo) {
+      const unidadeId = document.getElementById("select-unidade-destino")?.value;
+      const unidadeDestino = unidadesList.find(unit => String(unit.id) === String(unidadeId));
+      const dados = {
+        faturamento: { valor: CNPJ_FATURAMENTO_PADRAO, nome: "CNPJ de faturamento" },
+        instalacao: { valor: unidadeDestino?.cnpj || "", nome: "CNPJ de instalação" }
+      };
+      const dado = dados[tipo];
+      if (!dado) return;
+
+      const valor = String(dado.valor || "").trim();
+      if (!valor) {
+        showToast("Selecione uma unidade de destino antes de copiar o CNPJ de instalação.", "warning");
+        return;
+      }
+
+      try {
+        await copiarTextoParaAreaTransferencia(valor);
+        showToast(`${dado.nome} da entrega copiado para a área de transferência.`, "success");
+      } catch (err) {
+        showToast(`Não foi possível copiar o ${dado.nome.toLowerCase()} da entrega.`, "error");
+      }
+    }
+
     async function copiarTextoSolicitacaoTransporte() {
       const texto = document.getElementById("textarea-texto-transporte").value;
       if (!texto.trim()) {
