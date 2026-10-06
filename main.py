@@ -63,6 +63,7 @@ from app_config import (
     TRANSFER_ORIGIN_PHONE,
 )
 from routers.inventory_history import (
+    ComparisonAnnotationPayload,
     ComparisonRestorePayload,
     ManualAliasConflictResolutionPayload,
     create_inventory_history_router,
@@ -3656,8 +3657,10 @@ _current_inventory_snapshot = _inventory_history_exports["_current_inventory_sna
 _sha256_file = _inventory_history_exports["_sha256_file"]
 _validated_comparison_backup_files = _inventory_history_exports["_validated_comparison_backup_files"]
 excluir_comparacao_historica = _inventory_history_exports["excluir_comparacao_historica"]
+exportar_historico_comparacoes_excel = _inventory_history_exports["exportar_historico_comparacoes_excel"]
 get_comparacao_historica = _inventory_history_exports["get_comparacao_historica"]
 get_historico_comparacoes = _inventory_history_exports["get_historico_comparacoes"]
+salvar_anotacao_comparacao = _inventory_history_exports["salvar_anotacao_comparacao"]
 resolver_divergencia_apelido_manual = _inventory_history_exports["resolver_divergencia_apelido_manual"]
 restaurar_comparacao_historica = _inventory_history_exports["restaurar_comparacao_historica"]
 visualizar_restauracao_comparacao = _inventory_history_exports["visualizar_restauracao_comparacao"]
