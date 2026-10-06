@@ -257,6 +257,38 @@
             </span>
             <span id="card-localizacao" class="text-slate-200 font-medium mt-0.5">Curitiba - R Caeté, 150 - SEDE - Prado Velho</span>
             <span id="card-cnpj-atual" class="text-slate-400 font-mono text-[11px] mt-0.5">CNPJ: Não especificado</span>
+            <div class="mt-2 flex flex-wrap items-center gap-1.5" role="group" aria-label="Copiar dados da localidade de retirada">
+              <button
+                type="button"
+                onclick="copiarDadoLocalAtual('cep')"
+                class="inline-flex items-center gap-1 px-2 py-1 rounded-md bg-slate-800/80 hover:bg-cyan-500/10 text-slate-300 hover:text-cyan-200 border border-slate-700/70 text-[10px] font-semibold transition"
+                title="Copiar o CEP da localidade de retirada"
+                aria-label="Copiar CEP da localidade de retirada"
+              >
+                <i data-lucide="copy" class="w-3 h-3" aria-hidden="true"></i>
+                <span>CEP</span>
+              </button>
+              <button
+                type="button"
+                onclick="copiarDadoLocalAtual('faturamento')"
+                class="inline-flex items-center gap-1 px-2 py-1 rounded-md bg-slate-800/80 hover:bg-cyan-500/10 text-slate-300 hover:text-cyan-200 border border-slate-700/70 text-[10px] font-semibold transition"
+                title="Copiar o CNPJ de faturamento padrão"
+                aria-label="Copiar CNPJ de faturamento"
+              >
+                <i data-lucide="copy" class="w-3 h-3" aria-hidden="true"></i>
+                <span>CNPJ Fat.</span>
+              </button>
+              <button
+                type="button"
+                onclick="copiarDadoLocalAtual('instalacao')"
+                class="inline-flex items-center gap-1 px-2 py-1 rounded-md bg-slate-800/80 hover:bg-cyan-500/10 text-slate-300 hover:text-cyan-200 border border-slate-700/70 text-[10px] font-semibold transition"
+                title="Copiar o CNPJ de instalação da localidade de retirada"
+                aria-label="Copiar CNPJ de instalação da localidade de retirada"
+              >
+                <i data-lucide="copy" class="w-3 h-3" aria-hidden="true"></i>
+                <span>CNPJ Inst.</span>
+              </button>
+            </div>
             <button
               type="button"
               onclick="abrirModalEditarEquipamento()"
@@ -634,6 +666,30 @@ Horário disponível para atendimento:</textarea>
               class="w-full px-3.5 py-2.5 rounded-lg glass-input text-sm text-slate-100 focus:outline-none"
               placeholder="CNPJ da instalação / filial"
             />
+            <div class="mt-2 flex flex-wrap items-center gap-1.5" role="group" aria-label="Copiar dados de faturamento e instalação da entrega">
+              <button
+                type="button"
+                onclick="copiarDadoEntrega('faturamento')"
+                class="inline-flex items-center gap-1 px-2 py-1 rounded-md bg-slate-800/80 hover:bg-emerald-500/10 text-slate-300 hover:text-emerald-200 border border-slate-700/70 text-[10px] font-semibold transition"
+                title="Copiar o CNPJ de faturamento padrão"
+                aria-label="Copiar CNPJ de faturamento da entrega"
+              >
+                <i data-lucide="copy" class="w-3 h-3" aria-hidden="true"></i>
+                <span>CNPJ Fat.</span>
+              </button>
+              <button
+                type="button"
+                id="btn-copiar-cnpj-instalacao-entrega"
+                disabled
+                onclick="copiarDadoEntrega('instalacao')"
+                class="inline-flex items-center gap-1 px-2 py-1 rounded-md bg-slate-800/80 hover:bg-emerald-500/10 text-slate-300 hover:text-emerald-200 border border-slate-700/70 text-[10px] font-semibold transition"
+                title="Copiar o CNPJ de instalação da unidade de destino selecionada"
+                aria-label="Copiar CNPJ de instalação da unidade de destino"
+              >
+                <i data-lucide="copy" class="w-3 h-3" aria-hidden="true"></i>
+                <span>CNPJ Inst.</span>
+              </button>
+            </div>
           </div>
 
           <!-- Endereço Completo Entrega -->
@@ -1329,6 +1385,7 @@ Horário disponível para atendimento:</textarea>
 
   <!-- JAVASCRIPT APPLICATION LOGIC -->
   <script src="/static/transfer-utils.js"></script>
+  <script src="/static/history-annotation-autosave.js"></script>
   <script src="/static/app.js"></script>
 </body>
 </html>

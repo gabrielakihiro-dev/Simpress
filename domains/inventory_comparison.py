@@ -1,8 +1,8 @@
 """Inventory comparison and source normalization rules."""
 
+import hashlib
 import re
 import unicodedata
-from datetime import date, datetime, time, timedelta
 from typing import Any, Dict, List, Optional
 
 import pandas as pd
@@ -46,64 +46,6 @@ def _upload_alias_value(record: Dict[str, Any], role: str) -> str:
         value = _record_value(record, "APELIDO", "HOSTNAME", "NOMEDOCOMPUTADOR", "COMPUTERNAME")
     return str(value or "").strip()
 
-def _upload_verification_value(record: Dict[str, Any]) -> Any:
-    return _record_value(
-        record,
-        "ULTIMAVERIFICACAOCOMEXITO",
-        "LASTSUCCESSFULVERIFICATION",
-        "LASTSUCCESSFULVERIFICATIONDATE",
-        "LASTSUCCESSFULCHECKIN",
-        "LASTSUCCESSFULCHECKINDATE",
-    )
-
-def _parse_verification_datetime(value: Any, reference_timezone: Any) -> Optional[datetime]:
-    parsed: Optional[datetime]
-    if isinstance(value, datetime):
-        parsed = value
-    elif isinstance(value, date):
-        parsed = datetime.combine(value, time.min)
-    elif isinstance(value, str):
-        text = value.strip()
-        if not text:
-            return None
-        try:
-            parsed = datetime.fromisoformat(text.replace("Z", "+00:00"))
-        except ValueError:
-            month_names = {
-                "jan": "Jan", "fev": "Feb", "feb": "Feb", "mar": "Mar",
-                "abr": "Apr", "apr": "Apr", "mai": "May", "jun": "Jun",
-                "jul": "Jul", "ago": "Aug", "aug": "Aug", "set": "Sep",
-                "sep": "Sep", "out": "Oct", "oct": "Oct", "nov": "Nov",
-                "dez": "Dec", "dec": "Dec",
-            }
-            normalized_text = unicodedata.normalize("NFKD", text).encode("ascii", "ignore").decode("ascii")
-            normalized_text = re.sub(
-                r"\b(" + "|".join(month_names) + r")\b",
-                lambda match: month_names[match[0].lower()],
-                normalized_text,
-                flags=re.IGNORECASE,
-            )
-            parsed = None
-            for pattern in (
-                "%b %d, %Y %I:%M %p", "%B %d, %Y %I:%M %p",
-                "%d/%m/%Y %H:%M:%S", "%d/%m/%Y %H:%M",
-                "%Y-%m-%d %H:%M:%S", "%Y-%m-%d %H:%M",
-                "%d/%m/%Y", "%Y-%m-%d",
-            ):
-                try:
-                    parsed = datetime.strptime(normalized_text, pattern)
-                    break
-                except ValueError:
-                    continue
-            if parsed is None:
-                return None
-    else:
-        return None
-
-    if parsed.tzinfo is None:
-        return parsed.replace(tzinfo=reference_timezone)
-    return parsed.astimezone(reference_timezone)
-
 def _unique_upload_records(table: Dict[str, Any], role: str) -> Dict[str, Dict[str, Any]]:
     grouped: Dict[str, List[Dict[str, Any]]] = {}
     for record in table.get("records", []):
@@ -140,23 +82,22 @@ COMPARISON_SOURCE_LABELS = {
 
 def _comparison_source_text_for_display(value: str) -> str:
     """Atualiza apenas textos de apresentação, preservando arquivos e dados de origem."""
-    replacements = (
-        ("na InvAll", "no Endpoint"),
-        ("da InvAll", "do Endpoint"),
-        ("à InvAll", "ao Endpoint"),
-        ("pela InvAll", "pelo Endpoint"),
-        ("a InvAll", "o Endpoint"),
-        ("A InvAll", "O Endpoint"),
-        ("em EquipamentosDetalhes", "na Simpress"),
-        ("de EquipamentosDetalhes", "da Simpress"),
-    )
-    for previous, current in replacements:
-        value = value.replace(previous, current)
-    return re.sub(
-        r"\b(InvAll|EquipamentosDetalhes)\b",
-        lambda match: "Endpoint" if match[0] == "InvAll" else "Simpress",
+    value = re.sub(
+        r"\b(?:na|no|da|do|à|ao|pela|pelo|a|o)\s*InvAll",
+        "No Endpoint",
         value,
+        flags=re.IGNORECASE,
     )
+    value = re.sub(r"InvAll", "No Endpoint", value, flags=re.IGNORECASE)
+    value = re.sub(r"\bno\s+Endpoint\b|(?<!No )\bEndpoint\b", "No Endpoint", value, flags=re.IGNORECASE)
+    value = re.sub(
+        r"\b(?:em|de|da|do|na|no|a|à|pela|pelo)\s*EquipamentosDetalhes",
+        "na Simpress",
+        value,
+        flags=re.IGNORECASE,
+    )
+    value = re.sub(r"EquipamentosDetalhes", "na Simpress", value, flags=re.IGNORECASE)
+    return re.sub(r"\b(?:na\s+)?Simpress\b", "na Simpress", value, flags=re.IGNORECASE)
 
 def _comparison_source_records(table: Dict[str, Any], role: str) -> List[Dict[str, Any]]:
     """Converts source-specific columns to a shared, comparison-only record shape."""
@@ -169,13 +110,7 @@ def _comparison_source_records(table: Dict[str, Any], role: str) -> List[Dict[st
     user_headers = ("USUARIOSLOGADOS", "LOGGEDINUSERS", "USUARIO")
 
     records = []
-    for fallback_row_number, row in enumerate(table.get("records", []), start=2):
-        source_row_number = row.get("__excel_row_number__")
-        row_number = (
-            source_row_number
-            if isinstance(source_row_number, int) and not isinstance(source_row_number, bool)
-            else fallback_row_number
-        )
+    for row_number, row in enumerate(table.get("records", []), start=2):
         serial_value = _record_value(row, *serial_headers)
         if role == "endpoint":
             computer_name = str(_record_value(row, *endpoint_name_headers) or "").strip()
@@ -199,7 +134,6 @@ def _comparison_source_records(table: Dict[str, Any], role: str) -> List[Dict[st
             "alias_key": normalize_reference_value(alias_value),
             "local": location_value,
             "usuario": str(_record_value(row, *user_headers) or "").strip(),
-            "ultima_verificacao": _upload_verification_value(row) if role == "endpoint" else None,
             "row": row,
         })
     return records
@@ -274,56 +208,30 @@ def filter_update_review_items(items: Any) -> List[Dict[str, Any]]:
         if not isinstance(item, dict):
             continue
         serial = normalize_reference_value(item.get("serie"))
-        reason = normalize_reference_value(_comparison_source_text_for_display(str(item.get("motivo") or "")))
+        reason = normalize_reference_value(item.get("motivo"))
         hostname = normalize_reference_value(item.get("computador"))
         if "SERIEDUPLICADA" in reason or not serial:
             filtered.append(item)
-        elif "SERIENAOENCONTRADANOENDPOINT" in reason and serial.startswith(("BRJ", "BRM")):
+        elif "SERIENAOENCONTRADANAINVALL" in reason and serial.startswith(("BRJ", "BRM")):
             filtered.append(item)
-        elif "SERIENAOENCONTRADANASIMPRESS" in reason and hostname.startswith("PRMAC"):
+        elif "SERIENAOENCONTRADAEMEQUIPAMENTOSDETALHES" in reason and hostname.startswith("PRMAC"):
             filtered.append(item)
     return filtered
 
-def mac_simpress_prefix_matches(items: Any) -> set:
-    """Return Endpoint MAC serials whose Simpress review row has a leading S."""
-    if not isinstance(items, list):
-        return set()
 
-    endpoint_serials = set()
-    simpress_serials = set()
-    for item in items:
-        if not isinstance(item, dict):
-            continue
-        serial = normalize_reference_value(item.get("serie"))
-        if not serial:
-            continue
-        reason = normalize_reference_value(
-            _comparison_source_text_for_display(str(item.get("motivo") or ""))
-        )
-        hostname = normalize_reference_value(item.get("computador"))
-        if "SERIENAOENCONTRADANASIMPRESS" in reason and hostname.startswith("PRMAC"):
-            endpoint_serials.add(serial)
-        elif "SERIENAOENCONTRADANOENDPOINT" in reason and serial.startswith("S"):
-            simpress_serials.add(serial)
-
-    return {
-        serial for serial in endpoint_serials
-        if f"S{serial}" in simpress_serials
-    }
-
-def _is_mac_optional_prefix_review_item(item: Any, endpoint_serials: set) -> bool:
-    if not isinstance(item, dict) or not endpoint_serials:
-        return False
-    serial = normalize_reference_value(item.get("serie"))
-    reason = normalize_reference_value(
-        _comparison_source_text_for_display(str(item.get("motivo") or ""))
-    )
-    hostname = normalize_reference_value(item.get("computador"))
-    if "SERIENAOENCONTRADANASIMPRESS" in reason:
-        return hostname.startswith("PRMAC") and serial in endpoint_serials
-    if "SERIENAOENCONTRADANOENDPOINT" in reason:
-        return serial.startswith("S") and serial[1:] in endpoint_serials
-    return False
+def comparison_review_item_id(event_id: Any, index: int, item: Dict[str, Any]) -> str:
+    """Return a stable ID for a review row, including legacy rows without one."""
+    stored_id = item.get("anotacao_id")
+    if isinstance(stored_id, str) and stored_id.strip():
+        return stored_id.strip()
+    identity = "\0".join((
+        str(event_id or ""),
+        str(index),
+        str(item.get("serie") or ""),
+        str(item.get("computador") or ""),
+        str(item.get("motivo") or ""),
+    ))
+    return hashlib.sha256(identity.encode("utf-8")).hexdigest()
 
 def filter_update_unmatched_series(items: Any) -> List[Dict[str, Any]]:
     if not isinstance(items, list):
@@ -348,7 +256,7 @@ def filter_curitiba_hostname_location_mismatches(items: Any) -> List[Dict[str, A
         item for item in items
         if not isinstance(item, dict)
         or (
-            not is_curitiba_hostname_exception(str(item.get("computador") or ""))
+            not is_curitiba_hostname_exception(item.get("computador"))
             and not is_prnoteti_curitiba_location_match(
                 item.get("computador"),
                 item.get("local_previsto"),
@@ -376,33 +284,66 @@ def comparison_history_for_display(evento: Dict[str, Any]) -> Dict[str, Any]:
         if not isinstance(item, dict):
             return item
         cleaned = dict(item)
-        for key in ("motivo", "mensagem", "fonte_ausente"):
-            if isinstance(cleaned.get(key), str):
-                cleaned[key] = _comparison_source_text_for_display(cleaned[key])
         for key in ("local_base_principal", "ip_endpoint", "ip_detalhes", "ip_base_principal"):
             cleaned.pop(key, None)
         absent_in = cleaned.get("ausente_em")
         if isinstance(absent_in, list):
-            cleaned["ausente_em"] = [
-                _comparison_source_text_for_display(source) if isinstance(source, str) else source
-                for source in absent_in if source != "Base principal"
-            ]
+            cleaned["ausente_em"] = [source for source in absent_in if source != "Base principal"]
         if cleaned.get("fonte_ausente") == "Base principal":
             cleaned.pop("fonte_ausente", None)
         sources = cleaned.get("fontes")
         if isinstance(sources, dict):
-            cleaned["fontes"] = {
-                _comparison_source_text_for_display(key): value
-                for key, value in sources.items() if key != "Base principal"
-            }
+            cleaned["fontes"] = {key: value for key, value in sources.items() if key != "Base principal"}
         elif isinstance(sources, list):
             cleaned["fontes"] = [
-                {**source, "fonte": _comparison_source_text_for_display(source["fonte"])}
-                if isinstance(source, dict) and isinstance(source.get("fonte"), str) else source
-                for source in sources
+                source for source in sources
                 if not isinstance(source, dict) or source.get("fonte") != "Base principal"
             ]
         return cleaned
+
+    def display_source_values(value: Any) -> Any:
+        if isinstance(value, str):
+            return _comparison_source_text_for_display(value)
+        if isinstance(value, list):
+            return [display_source_values(item) for item in value]
+        if isinstance(value, dict):
+            return {
+                _comparison_source_text_for_display(str(key)): display_source_values(item)
+                for key, item in value.items()
+            }
+        return value
+
+    def display_history_item(item: Any) -> Any:
+        cleaned = without_legacy_source(item)
+        if not isinstance(cleaned, dict):
+            return cleaned
+        for key in ("motivo", "mensagem", "fonte", "fonte_ausente", "ausente_em", "fontes", "arquivos_origem"):
+            if key in cleaned:
+                cleaned[key] = display_source_values(cleaned[key])
+        return cleaned
+
+    def display_history_files(files: Any) -> Any:
+        if not isinstance(files, dict):
+            return files
+        return {
+            key: display_source_values(value)
+            for key, value in files.items()
+        }
+
+    review_items = comparison.get("apelidos_sem_atualizacao")
+    if isinstance(review_items, list):
+        review_items_with_ids = []
+        for index, item in enumerate(review_items):
+            if not isinstance(item, dict):
+                continue
+            displayed_item = display_history_item(item)
+            displayed_item["anotacao_id"] = comparison_review_item_id(evento.get("id"), index, item)
+            review_items_with_ids.append(displayed_item)
+        comparison_view["apelidos_sem_atualizacao"] = (
+            review_items_with_ids
+            if is_pinned_baseline
+            else filter_update_review_items(review_items_with_ids)
+        )
 
     if is_pinned_baseline:
         missing_lists = {
@@ -422,49 +363,36 @@ def comparison_history_for_display(evento: Dict[str, Any]) -> Dict[str, Any]:
                 comparison.get("ausentes_em_detalhes")
             ),
         }
-        raw_alias_review = comparison.get("apelidos_sem_atualizacao")
-        mac_prefix_matches = mac_simpress_prefix_matches(raw_alias_review)
-        comparison_view["apelidos_sem_atualizacao"] = [
-            item for item in filter_update_review_items(raw_alias_review)
-            if not _is_mac_optional_prefix_review_item(item, mac_prefix_matches)
-        ]
-        if mac_prefix_matches:
-            missing_lists["ausentes_em_detalhes"] = [
-                item for item in missing_lists["ausentes_em_detalhes"]
-                if not (
-                    normalize_reference_value(item.get("computador")).startswith("PRMAC")
-                    and normalize_reference_value(item.get("serie")) in mac_prefix_matches
-                )
-            ]
         comparison_view["filtros_atualizacao_aplicados"] = True
-    alias_review = comparison_view.get("apelidos_sem_atualizacao")
-    if isinstance(alias_review, list):
-        comparison_view["apelidos_sem_atualizacao"] = [without_legacy_source(item) for item in alias_review]
-    no_recent_verification = comparison_view.get("sem_acesso_14_dias")
-    if isinstance(no_recent_verification, list):
-        comparison_view["sem_acesso_14_dias"] = [without_legacy_source(item) for item in no_recent_verification]
     missing_lists = {
         key: filter_sebrae_owned_unmatched_items(items)
         for key, items in missing_lists.items()
     }
     missing_lists = {
-        key: [without_legacy_source(item) for item in items]
+        key: [display_history_item(item) for item in items]
         for key, items in missing_lists.items()
     }
     comparison_view.update(missing_lists)
     location_mismatches = filter_curitiba_hostname_location_mismatches(comparison.get("divergencias_local"))
-    comparison_view["divergencias_local"] = [without_legacy_source(item) for item in location_mismatches]
+    comparison_view["divergencias_local"] = [display_history_item(item) for item in location_mismatches]
     for field in ("correspondencias_ambiguas", "registros_ambiguos"):
         items = comparison.get(field)
         if isinstance(items, list):
-            comparison_view[field] = [without_legacy_source(item) for item in items]
+            comparison_view[field] = [display_history_item(item) for item in items]
+    for field in ("apelidos_atualizados", "divergencias_apelidos_manuais"):
+        items = comparison.get(field)
+        if isinstance(items, list):
+            comparison_view[field] = [display_history_item(item) for item in items]
     comparison_files = comparison.get("arquivos_enviados")
     if isinstance(comparison_files, dict):
-        comparison_view["arquivos_enviados"] = {
+        comparison_view["arquivos_enviados"] = display_history_files({
             key: comparison_files[key]
             for key in ("endpoint", "detalhes")
             if key in comparison_files
-        }
+        })
+    restored_files = comparison.get("arquivos_restaurados")
+    if isinstance(restored_files, dict):
+        comparison_view["arquivos_restaurados"] = display_history_files(restored_files)
     event_view["comparacao"] = comparison_view
 
     summary = dict(evento.get("resumo") or {})
@@ -480,9 +408,6 @@ def comparison_history_for_display(evento: Dict[str, Any]) -> Dict[str, Any]:
     alias_review = comparison_view.get("apelidos_sem_atualizacao")
     if isinstance(alias_review, list):
         summary["apelidos_sem_atualizacao"] = len(alias_review)
-    no_recent_verification = comparison_view.get("sem_acesso_14_dias")
-    if isinstance(no_recent_verification, list):
-        summary["sem_acesso_14_dias"] = len(no_recent_verification)
     manual_alias_divergences = comparison_view.get("divergencias_apelidos_manuais")
     if isinstance(manual_alias_divergences, list):
         summary["divergencias_apelidos_manuais"] = sum(
@@ -492,11 +417,14 @@ def comparison_history_for_display(evento: Dict[str, Any]) -> Dict[str, Any]:
     event_view["resumo"] = summary
     uploaded_files = evento.get("arquivos_enviados")
     if isinstance(uploaded_files, dict):
-        event_view["arquivos_enviados"] = {
+        event_view["arquivos_enviados"] = display_history_files({
             key: uploaded_files[key]
             for key in ("endpoint", "detalhes")
             if key in uploaded_files
-        }
+        })
+    restored_files = evento.get("arquivos_restaurados")
+    if isinstance(restored_files, dict):
+        event_view["arquivos_restaurados"] = display_history_files(restored_files)
     return event_view
 
 def location_for_computer_name(computer_name: str) -> Optional[str]:
@@ -532,7 +460,6 @@ def compare_uploaded_workbooks(
     endpoint_table: Dict[str, Any],
     details_table: Dict[str, Any],
     uploaded_names: Dict[str, str],
-    as_of: Optional[datetime] = None,
 ) -> Dict[str, Any]:
     """Compares Endpoint and EquipamentosDetalhes without silently selecting duplicate matches."""
     source_tables = {
@@ -543,23 +470,6 @@ def compare_uploaded_workbooks(
         role: _comparison_source_records(table, role)
         for role, table in source_tables.items()
     }
-    as_of = as_of or datetime.now().astimezone()
-    if as_of.tzinfo is None:
-        as_of = as_of.astimezone()
-    stale_threshold = as_of - timedelta(days=14)
-
-    # Simpress adds a leading S to some Mac serials. Match that variant only
-    # when the Endpoint identifies the corresponding serial as a PRMAC device.
-    endpoint_mac_serials = {
-        record["serial_key"]
-        for record in source_records["endpoint"]
-        if record["serial_key"]
-        and normalize_reference_value(record["computador"]).startswith("PRMAC")
-    }
-    for record in source_records["detalhes"]:
-        serial_key = record["serial_key"]
-        if serial_key.startswith("S") and serial_key[1:] in endpoint_mac_serials:
-            record["serial_key"] = serial_key[1:]
 
     nodes: Dict[tuple, Dict[str, Any]] = {}
     parent: Dict[tuple, tuple] = {}
@@ -783,23 +693,17 @@ def compare_uploaded_workbooks(
 
     def distinct_values(records: List[Dict[str, Any]], field: str) -> List[str]:
         values = []
-        seen = set()
         for record in records:
             value = str(record.get(field) or "").strip()
-            if value and value not in seen:
-                seen.add(value)
+            if value and value not in values:
                 values.append(value)
         return values
 
-    entities: List[tuple[Any, Any, Any, Any]] = []
-    missing_by_source: Dict[str, List[Dict[str, Any]]] = {
-        role: [] for role in COMPARISON_SOURCE_LABELS
-    }
-    ambiguous_records: List[Dict[str, Any]] = []
+    entities = []
+    missing_by_source = {role: [] for role in COMPARISON_SOURCE_LABELS}
+    ambiguous_records = []
     for component_nodes in components.values():
-        records_by_source: Dict[str, List[Dict[str, Any]]] = {
-            role: [] for role in COMPARISON_SOURCE_LABELS
-        }
+        records_by_source = {role: [] for role in COMPARISON_SOURCE_LABELS}
         for node in component_nodes:
             records_by_source[node[0]].append(nodes[node])
 
@@ -892,18 +796,8 @@ def compare_uploaded_workbooks(
                 })
 
     unmapped_series: Dict[str, List[str]] = {}
-    no_recent_verification = []
     for record in source_records["endpoint"]:
         computer_name = record["computador"]
-        verified_at = _parse_verification_datetime(record.get("ultima_verificacao"), as_of.tzinfo)
-        if verified_at is not None and verified_at <= stale_threshold:
-            no_recent_verification.append({
-                "computador": computer_name,
-                "serie": record["serie"],
-                "ultima_verificacao": verified_at.isoformat(timespec="minutes"),
-                "dias_sem_verificacao": max(14, (as_of - verified_at).days),
-                "linha_endpoint": record["row_number"],
-            })
         if not computer_name.upper().startswith("PRNOTE") or location_for_computer_name(computer_name):
             continue
         suffix = computer_name.upper()[len("PRNOTE"):]
@@ -922,7 +816,6 @@ def compare_uploaded_workbooks(
         "total_detalhes": len(details_table["records"]),
         "ausentes_no_endpoint": missing_by_source["endpoint"],
         "ausentes_em_detalhes": missing_by_source["detalhes"],
-        "sem_acesso_14_dias": no_recent_verification,
         "correspondencias_ambiguas": issues,
         "registros_ambiguos": ambiguous_records,
         "divergencias_local": location_mismatches,
