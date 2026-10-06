@@ -133,28 +133,28 @@ function apiResponse(body, { status = 200, ok = status >= 200 && status < 300 } 
   return { ok, status, json: async () => body };
 }
 
-test("copy hostname action uses the currently selected equipment hostname", async () => {
+test("copy serial action uses the currently selected equipment serial", async () => {
   const harness = createAppHarness(async () => {
     throw new Error("A ação de copiar não deve consultar a API");
   });
-  const button = harness.element("btn-copiar-hostname");
+  const button = harness.element("btn-copiar-serie");
 
   harness.run("limparSelecaoEquipamento()");
   assert.equal(button.disabled, true);
   harness.selectEquipment({ serial: "SERIE-UM", apelido: "HOST-UM" });
   assert.equal(button.disabled, false);
-  await harness.run("copiarHostnameAtual()");
-  assert.deepEqual(harness.effects.clipboardWrites, ["HOST-UM"]);
+  await harness.run("copiarSerieAtual()");
+  assert.deepEqual(harness.effects.clipboardWrites, ["SERIE-UM"]);
   assert.equal(harness.effects.toasts.at(-1).type, "success");
 
   harness.selectEquipment({ serial: "SERIE-DOIS", apelido: "HOST-DOIS" });
-  await harness.run("copiarHostnameAtual()");
-  assert.deepEqual(harness.effects.clipboardWrites, ["HOST-UM", "HOST-DOIS"]);
+  await harness.run("copiarSerieAtual()");
+  assert.deepEqual(harness.effects.clipboardWrites, ["SERIE-UM", "SERIE-DOIS"]);
 
-  harness.selectEquipment({ serial: "SEM-HOSTNAME" });
+  harness.selectEquipment({ apelido: "HOST-SEM-SERIE" });
   assert.equal(button.disabled, true);
-  await harness.run("copiarHostnameAtual()");
-  assert.deepEqual(harness.effects.clipboardWrites, ["HOST-UM", "HOST-DOIS"]);
+  await harness.run("copiarSerieAtual()");
+  assert.deepEqual(harness.effects.clipboardWrites, ["SERIE-UM", "SERIE-DOIS"]);
   assert.equal(harness.effects.toasts.at(-1).type, "warning");
 
   harness.run("limparSelecaoEquipamento()");
