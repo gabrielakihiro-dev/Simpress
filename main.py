@@ -19,7 +19,7 @@ from urllib.parse import quote, urlsplit
 
 import openpyxl
 import pandas as pd
-from fastapi import FastAPI, File, HTTPException, Query, UploadFile
+from fastapi import FastAPI, File, HTTPException, UploadFile
 from fastapi.responses import FileResponse, JSONResponse, StreamingResponse
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel, Field, field_validator
@@ -41,6 +41,7 @@ from app_config import (
     BASE_DIR,
     COMPARISON_HISTORY_FILE,
     CUSTOM_UNIDADES_FILE,
+    DATA_DIR,
     DETAILS_UPLOAD_FILE,
     ENDPOINT_UPLOAD_FILE,
     EXPORT_MODEL_FILE,
@@ -53,6 +54,7 @@ from app_config import (
     HISTORY_RETENTION_DAYS,
     MODIFIED_APELIDOS_FILE,
     STATIC_DIR,
+    STATE_DIR,
     TEMPLATE_FILE,
     TRANSACTION_ROOT,
     UPLOAD_BACKUPS_DIR,
@@ -103,6 +105,17 @@ from domains.inventory_comparison import (
 )
 from domains.inventory_update import read_uploaded_xlsx as _read_uploaded_xlsx
 from domains.inventory_update import update_inventory_files
+from domains.equipment_search import (
+    CATEGORIES as _CATEGORIAS_EQUIPAMENTO,
+    EquipmentSearchIndexEntry,
+    build_search_index,
+    categorize_equipment,
+    normalize_search_term,
+    search_normalized_index as search_normalized_equipment_index,
+)
+from routers.equipment_search import create_equipment_search_router
+from routers.system import create_system_router
+from routers.units import UnidadePayload, create_units_router
 
 # Runtime synchronization and in-memory state remain in the application entry point.
 MODIFIED_APELIDOS_LOCK = threading.RLock()
@@ -1508,11 +1521,6 @@ app.add_middleware(LocalRequestSafetyMiddleware)
 equipamentos_cache: Dict[str, Dict[str, Any]] = {}
 unidades_cache: List[Dict[str, Any]] = []
 stats_cache: Dict[str, Any] = {}
-EquipmentSearchIndexEntry = Tuple[
-    int,
-    Tuple[str, str, str, str, str, str],
-    Dict[str, Any],
-]
 _EQUIPMENT_SEARCH_INDEX: Tuple[EquipmentSearchIndexEntry, ...] = ()
 _EQUIPMENT_SEARCH_INDEX_SOURCE = None
 
@@ -2053,51 +2061,6 @@ class EquipamentoUpdatePayload(BaseModel):
         return value.strip()
 
 
-class UnidadePayload(BaseModel):
-    id: Optional[int] = None
-    cidade: str = Field(..., min_length=1, max_length=160)
-    endereco: str = Field(..., min_length=1, max_length=300)
-    uf: Optional[str] = Field("PR", max_length=2)
-    cep: str = Field("", max_length=12)
-    cnpj: str = Field(..., min_length=1, max_length=24)
-
-    @field_validator("uf")
-    @classmethod
-    def validate_uf(cls, value: Optional[str]) -> str:
-        if value is None or not value.strip():
-            return "PR"
-        normalized = value.strip().upper()
-        if normalized not in {
-            "AC", "AL", "AP", "AM", "BA", "CE", "DF", "ES", "GO", "MA", "MT", "MS",
-            "MG", "PA", "PB", "PR", "PE", "PI", "RJ", "RN", "RS", "RO", "RR", "SC",
-            "SP", "SE", "TO",
-        }:
-            raise ValueError("Informe uma sigla de UF válida.")
-        return normalized
-
-    @field_validator("cep")
-    @classmethod
-    def validate_cep(cls, value: str) -> str:
-        normalized = re.sub(r"\D", "", value.strip())
-        if value.strip() and len(normalized) != 8:
-            raise ValueError("CEP deve conter exatamente oito dígitos.")
-        return f"{normalized[:5]}-{normalized[5:]}" if normalized else ""
-
-    @field_validator("cnpj")
-    @classmethod
-    def validate_cnpj(cls, value: str) -> str:
-        digits = re.sub(r"\D", "", value.strip())
-        if len(digits) != 14:
-            raise ValueError("CNPJ deve conter exatamente 14 dígitos.")
-        return value.strip()
-
-    @field_validator("cidade", "endereco")
-    @classmethod
-    def require_nonblank_unit_text(cls, value: str) -> str:
-        normalized = value.strip()
-        if not normalized:
-            raise ValueError("Este campo não pode ficar vazio.")
-        return normalized
 
 
 class ApelidoUpdatePayload(BaseModel):
@@ -3301,207 +3264,25 @@ async def atualizar_planilhas(
     return result
 
 
-def _public_unit_list(units: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
-    return [
-        {key: value for key, value in unit.items() if key != "_source_key"}
-        for unit in units
-    ]
 
 
-@app.post("/api/unidade/salvar")
-def salvar_unidade(payload: UnidadePayload):
-    """Salva ou edita uma regional/filial SEBRAE e persiste no catálogo do sistema."""
-    cidade = payload.cidade.strip()
-    endereco = payload.endereco.strip()
-    uf = (payload.uf.strip() if payload.uf else "PR").upper()
-    cep = format_cep(payload.cep)
-    cnpj = payload.cnpj.strip()
-    retirada_endereco = f"{endereco} - {cidade}/{uf} - CEP {cep}"
-    detail_files = get_details_files()
-    transaction_targets = [
-        *detail_files,
-        ENDPOINT_UPLOAD_FILE,
-        MODIFIED_APELIDOS_FILE,
-        CUSTOM_UNIDADES_FILE,
-        EXPORT_MODEL_FILE,
-    ]
-
-    try:
-        with AtomicFileTransaction(TRANSACTION_ROOT, transaction_targets) as transaction:
-            with STATE_LOCK:
-                current_units = list(unidades_cache)
-
-            def update_custom_units(saved_units):
-                if not isinstance(saved_units, list) or any(not isinstance(unit, dict) for unit in saved_units):
-                    raise LocalJsonCorruptionError("O catálogo local de unidades não contém registros válidos.")
-                updated_units = [dict(unit) for unit in saved_units]
-                selected_unit = next((
-                    unit for unit in current_units
-                    if payload.id and _coerce_unit_id(unit.get("id")) == payload.id
-                ), None)
-                matched = False
-
-                if payload.id:
-                    for unit in updated_units:
-                        if _coerce_unit_id(unit.get("id")) == payload.id:
-                            source_key = unit.get("_source_key") or (
-                                selected_unit.get("_source_key") if selected_unit else None
-                            )
-                            unit.update({
-                                "cidade": cidade,
-                                "endereco": endereco,
-                                "uf": uf,
-                                "cep": cep,
-                                "cnpj": cnpj,
-                                "endereco_completo": retirada_endereco,
-                                "label": f"{cidade} - {endereco} ({cnpj})",
-                            })
-                            if source_key:
-                                unit["_source_key"] = source_key
-                            matched = True
-                            break
-
-                if not matched:
-                    if payload.id and not any(
-                        _coerce_unit_id(unit.get("id")) == payload.id
-                        for unit in current_units
-                    ):
-                        raise HTTPException(
-                            status_code=409,
-                            detail="A unidade selecionada não está mais no catálogo. Atualize a lista antes de editar.",
-                        )
-                    if not payload.id:
-                        requested_identity = _unit_identity_key({
-                            "cidade": cidade,
-                            "endereco": endereco,
-                            "cnpj": cnpj,
-                            "uf": uf,
-                        })
-                        existing_unit = next(
-                            (
-                                unit for unit in updated_units
-                                if _unit_identity_key(unit) == requested_identity
-                            ),
-                            None,
-                        )
-                        if existing_unit is not None:
-                            return updated_units
-                    current_ids = [
-                        unit_id
-                        for unit in current_units
-                        if (unit_id := _coerce_unit_id(unit.get("id"))) is not None
-                    ]
-                    new_id = (max(current_ids, default=0) + 1) if not payload.id else payload.id
-                    new_unit = {
-                        "id": new_id,
-                        "cidade": cidade,
-                        "endereco": endereco,
-                        "uf": uf,
-                        "cep": cep,
-                        "cnpj": cnpj,
-                        "is_sede": "sede" in cidade.lower() or "sede" in endereco.lower(),
-                        "endereco_completo": retirada_endereco,
-                        "label": f"{cidade} - {endereco} ({cnpj})",
-                    }
-                    if selected_unit and selected_unit.get("_source_key"):
-                        new_unit["_source_key"] = selected_unit["_source_key"]
-                    updated_units.append(new_unit)
-                return updated_units
-
-            transaction.update_json(CUSTOM_UNIDADES_FILE, update_custom_units, [])
-            transaction.apply()
-            prepared_state = load_database(transaction_locked=True, publish=False)
-            if not isinstance(prepared_state, dict):
-                raise FileTransactionError(
-                    "A unidade não foi confirmada porque o estado resultante não pôde ser carregado."
-                )
-            transaction.commit()
-            publish_database_state(prepared_state)
-            published_units = list(prepared_state["unidades_cache"])
-    except HTTPException:
-        raise
-    except FileBusyError as error:
-        raise HTTPException(status_code=409, detail=str(error)) from error
-    except FileTransactionError as error:
-        raise HTTPException(status_code=500, detail=f"Falha ao salvar o catálogo de unidades: {error}") from error
-
-    return {
-        "sucesso": True,
-        "mensagem": f"Unidade '{cidade}' cadastrada/atualizada com sucesso!",
-        "unidades": _public_unit_list(published_units),
-    }
 
 
-@app.get("/api/unidades")
-def get_unidades():
-    """Retorna o catálogo completo de unidades SEBRAE catalogadas."""
-    with STATE_LOCK:
-        units = list(unidades_cache)
-    return _public_unit_list(units)
 
 
 def _normalizar_termo_busca(valor: Any) -> str:
-    texto = unicodedata.normalize("NFKD", str(valor or ""))
-    return "".join(caractere for caractere in texto if not unicodedata.combining(caractere)).strip().upper()
-
-
-_CATEGORIAS_EQUIPAMENTO = (
-    {"value": "notebook", "label": "Notebooks"},
-    {"value": "macbook", "label": "MacBooks"},
-    {"value": "monitor", "label": "Monitores"},
-    {"value": "fone", "label": "Fones"},
-)
+    return normalize_search_term(valor)
 
 
 def _categoria_equipamento(tipo: Any, modelo: Any) -> str:
     """Agrupa os rótulos do inventário nas categorias usadas pela pesquisa."""
-    texto = f"{_normalizar_termo_busca(tipo)} {_normalizar_termo_busca(modelo)}"
-    if "MACBOOK" in texto:
-        return "macbook"
-    if "MONITOR" in texto:
-        return "monitor"
-    if any(termo in texto for termo in ("HEADSET", "HEADPHONE", "FONE", "EARPHONE", "EARBUD")):
-        return "fone"
-    if "NOTEBOOK" in texto or "LAPTOP" in texto:
-        return "notebook"
-    return ""
+    return categorize_equipment(tipo, modelo, _normalizar_termo_busca)
 
 
 def _refresh_equipment_search_index_locked() -> None:
     """Precompute normalized searchable values once per published cache generation."""
     global _EQUIPMENT_SEARCH_INDEX, _EQUIPMENT_SEARCH_INDEX_SOURCE
-    indexed: List[EquipmentSearchIndexEntry] = []
-    for index, (serial_key, item) in enumerate(equipamentos_cache.items()):
-        serial = str(item.get("serial") or serial_key)
-        modelo = str(item.get("modelo") or "")
-        tipo = str(item.get("tipo") or "")
-        apelido = str(item.get("apelido") or "")
-        cidade = str(item.get("retirada_cidade") or "")
-        categoria = _categoria_equipamento(tipo, modelo)
-        category_label = next(
-            (entry["label"] for entry in _CATEGORIAS_EQUIPAMENTO if entry["value"] == categoria),
-            "",
-        )
-        searchable_values: Tuple[str, str, str, str, str, str] = (
-            _normalizar_termo_busca(serial_key or serial),
-            _normalizar_termo_busca(modelo),
-            _normalizar_termo_busca(tipo),
-            _normalizar_termo_busca(apelido),
-            _normalizar_termo_busca(cidade),
-            _normalizar_termo_busca(category_label),
-        )
-        result = {
-            "serial": serial,
-            "modelo": modelo,
-            "tipo": tipo,
-            "categoria": categoria,
-            "apelido": apelido,
-            "retirada_cidade": cidade,
-            "invall_alias_status": item.get("invall_alias_status"),
-            "invall_alias_detail": item.get("invall_alias_detail"),
-        }
-        indexed.append((index, searchable_values, result))
-    _EQUIPMENT_SEARCH_INDEX = tuple(indexed)
+    _EQUIPMENT_SEARCH_INDEX = build_search_index(equipamentos_cache, _normalizar_termo_busca)
     _EQUIPMENT_SEARCH_INDEX_SOURCE = equipamentos_cache
 
 
@@ -3514,136 +3295,36 @@ def _buscar_equipamentos_por_termo(q: str) -> List[Dict[str, Any]]:
     with STATE_LOCK:
         if _EQUIPMENT_SEARCH_INDEX_SOURCE is not equipamentos_cache:
             _refresh_equipment_search_index_locked()
-        search_index = _EQUIPMENT_SEARCH_INDEX
-
-    ranked_results: List[Tuple[int, int, Dict[str, Any]]] = []
-    for index, searchable_values, result in search_index:
-        serial_search, modelo_search, tipo_search, apelido_search, cidade_search, categoria_search = searchable_values
-
-        if not any(term in value for value in searchable_values):
-            continue
-
-        if term == serial_search:
-            rank = 0
-        elif serial_search.startswith(term):
-            rank = 1
-        elif term in serial_search:
-            rank = 2
-        elif term in modelo_search:
-            rank = 3
-        elif term in apelido_search:
-            rank = 4
-        elif term in tipo_search:
-            rank = 5
-        elif term in categoria_search:
-            rank = 6
-        else:
-            rank = 7
-
-        ranked_results.append((rank, index, result))
-
-    ranked_results.sort(key=lambda resultado: (resultado[0], resultado[1]))
-    return [resultado[2] for resultado in ranked_results]
+        current_index = _EQUIPMENT_SEARCH_INDEX
+    return search_normalized_equipment_index(current_index, term)
 
 
-@app.get("/api/buscar")
-def buscar_seriais(q: str = Query(..., min_length=2)):
-    """Busca rápida de seriais/modelos/apelidos/cidades para autocomplete."""
-    return _buscar_equipamentos_por_termo(q)[:15]
 
 
-@app.get("/api/buscar-expandida")
-def buscar_seriais_expandida(
-    q: str = Query(..., min_length=2),
-    offset: int = Query(0, ge=0),
-    limit: int = Query(50, ge=1, le=100),
-    categoria: Optional[str] = Query(None, max_length=40),
-    tipo: Optional[str] = Query(None, max_length=80),
-    cidade: Optional[str] = Query(None, max_length=120),
-    include_filters: bool = False,
-):
-    """Retorna resultados paginados, filtros e total de correspondências para a janela de pesquisa."""
-    all_results = _buscar_equipamentos_por_termo(q)
-
-    def filter_options(key: str) -> List[str]:
-        options: Dict[str, str] = {}
-        for item in all_results:
-            value = str(item.get(key) or "").strip()
-            normalized = _normalizar_termo_busca(value)
-            if normalized:
-                options.setdefault(normalized, value)
-        return sorted(options.values(), key=_normalizar_termo_busca)
-
-    normalized_category = _normalizar_termo_busca(categoria)
-    valid_categories = {entry["value"] for entry in _CATEGORIAS_EQUIPAMENTO}
-    if normalized_category and normalized_category.lower() not in valid_categories:
-        normalized_category = ""
-    normalized_type = _normalizar_termo_busca(tipo)
-    normalized_city = _normalizar_termo_busca(cidade)
-    results = [
-        item for item in all_results
-        if (not normalized_category or item.get("categoria") == normalized_category.lower())
-        and (not normalized_type or _normalizar_termo_busca(item.get("tipo")) == normalized_type)
-        and (not normalized_city or _normalizar_termo_busca(item.get("retirada_cidade")) == normalized_city)
-    ]
-    page = results[offset:offset + limit]
-    response = {
-        "items": page,
-        "total": len(results),
-        "offset": offset,
-        "limit": limit,
-        "has_more": offset + len(page) < len(results),
-    }
-    if include_filters:
-        category_counts = {entry["value"]: 0 for entry in _CATEGORIAS_EQUIPAMENTO}
-        for item in all_results:
-            if item.get("categoria") in category_counts:
-                category_counts[item["categoria"]] += 1
-        response["filters"] = {
-            "categories": [
-                {**entry, "count": category_counts[entry["value"]]}
-                for entry in _CATEGORIAS_EQUIPAMENTO
-            ],
-            "types": filter_options("tipo"),
-            "cities": filter_options("retirada_cidade"),
-        }
-    return response
 
 
-@app.get("/api/stats")
-def get_stats():
-    """Retorna métricas da base de dados."""
-    export_counts = count_export_changes()
-    export_status = get_export_status()
-    with STATE_LOCK:
-        stats_snapshot = deepcopy(stats_cache)
-        unit_count = len(unidades_cache)
-    return {
-        **stats_snapshot,
-        "exportacao_disponivel": export_status["available"],
-        "exportacao_motivo": export_status["reason"],
-        "total_apelidos_modificados": export_counts["apelidos"],
-        "total_id_clientes_modificados": export_counts["id_clientes"],
-        "total_alteracoes_exportaveis": export_counts["total"],
-        "total_unidades": unit_count,
-    }
 
 
-@app.get("/api/prontidao")
-def get_readiness_status():
-    """Expose local file and feature availability for the status panel."""
-    return get_startup_readiness()
 
 
-@app.get("/api/config/transferencia")
-def get_transfer_form_defaults():
-    """Return editable origin contact defaults configured for this installation."""
-    return {
-        "retirada_contato": TRANSFER_ORIGIN_CONTACT,
-        "retirada_email": TRANSFER_ORIGIN_EMAIL,
-        "retirada_telefone": TRANSFER_ORIGIN_PHONE,
-    }
 
+
+system_router, _system_exports = create_system_router(sys.modules[__name__])
+get_readiness_status = _system_exports["get_readiness_status"]
+get_transfer_form_defaults = _system_exports["get_transfer_form_defaults"]
+app.include_router(system_router)
+
+units_router, _units_exports = create_units_router(sys.modules[__name__])
+_public_unit_list = _units_exports["_public_unit_list"]
+salvar_unidade = _units_exports["salvar_unidade"]
+get_unidades = _units_exports["get_unidades"]
+app.include_router(units_router)
+
+equipment_search_router, _equipment_search_exports = create_equipment_search_router(sys.modules[__name__])
+buscar_seriais = _equipment_search_exports["buscar_seriais"]
+buscar_seriais_expandida = _equipment_search_exports["buscar_seriais_expandida"]
+get_stats = _equipment_search_exports["get_stats"]
+app.include_router(equipment_search_router)
 
 transfer_router, gerar_planilha = create_transfer_router(lambda: TEMPLATE_FILE)
 app.include_router(transfer_router)

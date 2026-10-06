@@ -102,6 +102,8 @@ class MaintenanceContractTests(unittest.TestCase):
 
         for name in (
             "STATIC_DIR",
+            "DATA_DIR",
+            "STATE_DIR",
             "INPUT_DIR",
             "TEMPLATE_FILE",
             "DETAILS_UPLOAD_FILE",
@@ -642,12 +644,39 @@ class MaintenanceContractTests(unittest.TestCase):
     def test_application_startup_reports_readiness_without_workbook_values(self):
         output = io.StringIO()
 
-        async def run_application_lifespan():
-            async with main.app.router.lifespan_context(main.app):
-                pass
+        with tempfile.TemporaryDirectory(prefix=".startup-test-", dir=PROJECT_ROOT) as temp_dir:
+            root = Path(temp_dir)
+            input_dir = root / "data" / "planilhas_entrada"
+            state_dir = root / "data" / "state"
+            input_dir.mkdir(parents=True)
+            (state_dir / "apelidos_modificados").mkdir(parents=True)
+            (state_dir / "historico_comparacoes").mkdir(parents=True)
+            template = input_dir / "(MODELO) - TRANSFERENCIA SIMPRESS.xlsx"
+            template.write_bytes(_xlsx_with_worksheet_xml(
+                '<worksheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main">'
+                '<dimension ref="A1"/><sheetData/></worksheet>'
+            ))
 
-        with redirect_stdout(output):
-            asyncio.run(run_application_lifespan())
+            with (
+                patch.object(main, "BASE_DIR", root),
+                patch.object(main, "INPUT_DIR", input_dir),
+                patch.object(main, "TEMPLATE_FILE", template),
+                patch.object(main, "DETAILS_UPLOAD_FILE", input_dir / "EquipamentosDetalhes_atual.xlsx"),
+                patch.object(main, "ENDPOINT_UPLOAD_FILE", input_dir / "InvAllComputersSummary_atual.xlsx"),
+                patch.object(main, "EXPORT_MODEL_FILE", root / "modelos" / "EquipamentosDetalhes-exportacao.xlsx"),
+                patch.object(main, "UPLOAD_BACKUPS_DIR", input_dir / "_backups"),
+                patch.object(main, "CUSTOM_UNIDADES_FILE", state_dir / "unidades_custom.json"),
+                patch.object(main, "MODIFIED_APELIDOS_FILE", state_dir / "apelidos_modificados" / "apelidos_modificados.json"),
+                patch.object(main, "ALIAS_HISTORY_FILE", state_dir / "historico_alteracoes.json"),
+                patch.object(main, "COMPARISON_HISTORY_FILE", state_dir / "historico_comparacoes" / "historico_comparacoes.json"),
+                patch.object(main, "TRANSACTION_ROOT", root),
+                redirect_stdout(output),
+            ):
+                async def run_application_lifespan():
+                    async with main.app.router.lifespan_context(main.app):
+                        pass
+
+                asyncio.run(run_application_lifespan())
 
         self.assertIn("[PRONTIDÃO] Verificação dos arquivos locais:", output.getvalue())
         self.assertIn(
