@@ -2183,25 +2183,41 @@
           saving = true;
           setStatus("Salvando...", "text-cyan-300");
           try {
-            const response = await fetch(
-              `/api/historico-comparacoes/${encodeURIComponent(comparison.evento_id)}/anotacoes/${encodeURIComponent(itemId)}`,
+            const { response, stale } = await window.HistoryAnnotationAutosave.requestWithRetries(
+              () => fetch(
+                `/api/historico-comparacoes/${encodeURIComponent(comparison.evento_id)}/anotacoes/${encodeURIComponent(itemId)}`,
+                {
+                  method: "PUT",
+                  headers: { "Content-Type": "application/json" },
+                  body: JSON.stringify({ anotacao }),
+                }
+              ),
               {
-                method: "PUT",
-                headers: { "Content-Type": "application/json" },
-                body: JSON.stringify({ anotacao }),
+                isCurrent: () => textarea.value === anotacao,
+                onRetry: attempt => setStatus(
+                  `Falha temporária. Tentando salvar novamente (${attempt}/3)...`,
+                  "text-amber-300"
+                ),
               }
             );
-            const data = await response.json().catch(() => ({}));
-            if (!response.ok) throw new Error(data.detail || "Não foi possível salvar a anotação.");
+            if (stale) {
+              savedValue = anotacao;
+              dirty = textarea.value !== anotacao;
+              setStatus(dirty ? "Salvando alteração mais recente..." : "Salvo automaticamente", dirty ? "text-cyan-300" : "text-emerald-300");
+              return;
+            }
             savedValue = anotacao;
             dirty = textarea.value !== anotacao;
             setStatus(dirty ? "Salvando..." : "Salvo automaticamente", dirty ? "text-cyan-300" : "text-emerald-300");
           } catch (error) {
             dirty = true;
-            setStatus("Falha ao salvar. Tente novamente.", "text-rose-300");
+            setStatus(
+              error.status ? error.message : "Falha de conexão após três tentativas. Tente novamente.",
+              "text-rose-300"
+            );
           } finally {
             saving = false;
-            if (dirty && textarea.value !== anotacao) scheduleSave(300);
+            if (dirty && textarea.value !== anotacao) scheduleSave(0);
           }
         };
 
