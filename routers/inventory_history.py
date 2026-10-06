@@ -4,6 +4,11 @@ from pathlib import Path
 from typing import Any, Dict, Optional
 
 from fastapi import APIRouter
+from pydantic import BaseModel, Field
+
+
+class ComparisonAnnotationPayload(BaseModel):
+    anotacao: str = Field(..., max_length=2000)
 
 
 def create_inventory_history_router(ctx):
@@ -216,6 +221,44 @@ def create_inventory_history_router(ctx):
         if evento is None:
             raise ctx.HTTPException(status_code=404, detail="O resultado selecionado não existe no histórico de planilhas.")
         return {"evento": ctx.comparison_history_for_display(evento)}
+
+
+    @router.put("/api/historico-comparacoes/{evento_id}/anotacoes/{item_index}")
+    def salvar_anotacao_comparacao_historica(
+        evento_id: str,
+        item_index: int,
+        payload: ComparisonAnnotationPayload,
+    ):
+        if item_index < 0:
+            raise ctx.HTTPException(status_code=404, detail="A linha selecionada não existe neste resultado.")
+
+        def update_annotation(history):
+            if not isinstance(history, list):
+                raise ctx.HTTPException(status_code=500, detail="O histórico de planilhas não contém uma lista válida.")
+            event = next(
+                (item for item in history if isinstance(item, dict) and item.get("id") == evento_id),
+                None,
+            )
+            if event is None:
+                raise ctx.HTTPException(status_code=404, detail="A atualização selecionada não existe mais no histórico.")
+            comparison = event.get("comparacao")
+            review_items = comparison.get("apelidos_sem_atualizacao") if isinstance(comparison, dict) else None
+            if not isinstance(review_items, list) or item_index >= len(review_items):
+                raise ctx.HTTPException(status_code=404, detail="A linha selecionada não existe neste resultado.")
+            review_item = review_items[item_index]
+            if not isinstance(review_item, dict):
+                raise ctx.HTTPException(status_code=409, detail="A linha selecionada não pode receber uma anotação.")
+            review_item["anotacao"] = payload.anotacao
+            return history
+
+        try:
+            with ctx.COMPARISON_HISTORY_LOCK:
+                ctx._atomic_json_update(ctx.COMPARISON_HISTORY_FILE, update_annotation, [])
+        except ctx.HTTPException:
+            raise
+        except Exception:
+            raise ctx.HTTPException(status_code=500, detail="Não foi possível salvar a anotação no histórico.") from None
+        return {"sucesso": True, "anotacao": payload.anotacao}
 
 
     @router.get("/api/historico-comparacoes/{evento_id}/restauracao")
@@ -573,6 +616,7 @@ def create_inventory_history_router(ctx):
         'excluir_comparacao_historica': excluir_comparacao_historica,
         'get_comparacao_historica': get_comparacao_historica,
         'get_historico_comparacoes': get_historico_comparacoes,
+        'salvar_anotacao_comparacao_historica': salvar_anotacao_comparacao_historica,
         'resolver_divergencia_apelido_manual': resolver_divergencia_apelido_manual,
         'restaurar_comparacao_historica': restaurar_comparacao_historica,
         'visualizar_restauracao_comparacao': visualizar_restauracao_comparacao,

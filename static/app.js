@@ -1923,6 +1923,7 @@
       const apelidosAtualizados = comparison.apelidos_atualizados || [];
       const apelidosSemAtualizacao = comparison.apelidos_sem_atualizacao || [];
       const divergenciasApelidosManuais = comparison.divergencias_apelidos_manuais || [];
+      const permitirAnotacoes = comparison.contexto_historico === true && Boolean(comparison.evento_id);
       const formatarMotivoRevisao = motivo => comparison.contexto_historico === true
         ? String(motivo || "Conferir associação.")
           .replace(/na InvAll/g, "no Endpoint")
@@ -1957,11 +1958,15 @@
           <td class="px-3 py-2 text-[10px]">${escapeHtml(Object.values(item.arquivos_origem || {}).join(" · ") || "—")}</td>
         </tr>`);
 
-      const aliasReviewRows = apelidosSemAtualizacao.map(item => `
+      const aliasReviewRows = apelidosSemAtualizacao.map((item, index) => `
         <tr class="text-slate-300">
           <td class="px-3 py-2 font-mono text-white whitespace-nowrap">${escapeHtml(item.serie || "(vazia)")}</td>
           <td class="px-3 py-2 font-mono">${escapeHtml(item.computador || "—")}</td>
           <td class="px-3 py-2 text-amber-200">${escapeHtml(formatarMotivoRevisao(item.motivo))}</td>
+          ${permitirAnotacoes ? `<td class="px-3 py-2 min-w-[240px] align-top">
+            <textarea data-comparison-annotation data-annotation-index="${index}" rows="2" maxlength="2000" class="w-full min-w-[220px] rounded-lg border border-slate-700 bg-slate-900 px-2.5 py-2 text-xs text-white placeholder:text-slate-500 focus:border-cyan-400 focus:outline-none focus:ring-1 focus:ring-cyan-400" aria-label="Anotações para a série ${escapeHtml(item.serie || "vazia")}" placeholder="Escreva uma anotação...">${escapeHtml(item.anotacao || "")}</textarea>
+            <p class="mt-1 text-[10px] ${item.anotacao ? "text-emerald-300" : "text-slate-500"}" data-annotation-status aria-live="polite">${item.anotacao ? "Salvo automaticamente" : ""}</p>
+          </td>` : ""}
         </tr>`);
 
       const manualAliasRows = divergenciasApelidosManuais.map((item, index) => {
@@ -2042,8 +2047,8 @@
           ${renderizarTabelaComparacao(["Série", "Apelido anterior", "Novo apelido / hostname", "Horário", "Arquivos de origem"], aliasUpdateRows, "Nenhum apelido ou hostname mudou nesta atualização.")}
         </section>
         <section class="space-y-2">
-          <div><h4 class="text-sm font-bold text-amber-300">Linhas mantidas para conferência</h4><p class="text-[11px] text-slate-500">Série vazia, ausente ou duplicada não é escolhida automaticamente; o apelido atual fica preservado.</p></div>
-          ${renderizarTabelaComparacao(["Série", "Hostname na InvAll", "Motivo"], aliasReviewRows, "Nenhuma linha de apelido precisa de conferência.")}
+          <div><h4 class="text-sm font-bold text-amber-300">Linhas mantidas para conferência</h4><p class="text-[11px] text-slate-500">Série vazia, ausente ou duplicada não é escolhida automaticamente; o apelido atual fica preservado.${permitirAnotacoes ? " As anotações são salvas automaticamente." : ""}</p></div>
+          ${renderizarTabelaComparacao(["Série", "Hostname na InvAll", "Motivo", ...(permitirAnotacoes ? ["Anotações"] : [])], aliasReviewRows, "Nenhuma linha de apelido precisa de conferência.")}
         </section>
         <section class="space-y-2">
           <div><h4 class="text-sm font-bold text-violet-300">Divergências com apelidos alterados manualmente</h4><p class="text-[11px] text-slate-500">O apelido manual prevalece nas pesquisas e exportações. “Manter manual” registra a decisão; “Excluir manual” remove apenas o override desta série e volta a usar o valor das planilhas.</p></div>
@@ -2075,6 +2080,60 @@
           const item = divergenciasApelidosManuais[Number(button.dataset.manualAliasIndex)];
           if (item) resolverDivergenciaApelidoManual(comparison, item, button.dataset.manualAliasAction, button);
         });
+      });
+      document.querySelectorAll("[data-comparison-annotation]").forEach(textarea => {
+        const itemIndex = Number(textarea.dataset.annotationIndex);
+        const status = textarea.parentElement.querySelector("[data-annotation-status]");
+        let savedValue = textarea.value;
+        let dirty = false;
+        let saving = false;
+        let saveTimer = null;
+
+        const setStatus = (message, colorClass) => {
+          status.textContent = message;
+          status.className = `mt-1 text-[10px] ${colorClass}`;
+        };
+        const scheduleSave = delay => {
+          window.clearTimeout(saveTimer);
+          saveTimer = window.setTimeout(() => {
+            saveTimer = null;
+            void saveAnnotation();
+          }, delay);
+        };
+        const saveAnnotation = async () => {
+          if (saving || !dirty) return;
+          const anotacao = textarea.value;
+          saving = true;
+          setStatus("Salvando...", "text-cyan-300");
+          try {
+            const response = await fetch(
+              `/api/historico-comparacoes/${encodeURIComponent(comparison.evento_id)}/anotacoes/${itemIndex}`,
+              {
+                method: "PUT",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({ anotacao }),
+              }
+            );
+            const data = await response.json().catch(() => ({}));
+            if (!response.ok) throw new Error(data.detail || "Não foi possível salvar a anotação.");
+            savedValue = anotacao;
+            dirty = textarea.value !== anotacao;
+            setStatus(dirty ? "Salvando..." : "Salvo automaticamente", dirty ? "text-cyan-300" : "text-emerald-300");
+          } catch (error) {
+            dirty = true;
+            setStatus("Falha ao salvar. Tente novamente.", "text-rose-300");
+          } finally {
+            saving = false;
+            if (dirty && textarea.value !== anotacao) scheduleSave(300);
+          }
+        };
+
+        textarea.addEventListener("input", () => {
+          dirty = true;
+          setStatus("Pendente de salvamento...", "text-slate-400");
+          scheduleSave(500);
+        });
+        textarea.addEventListener("blur", () => scheduleSave(0));
       });
       abrirModalAcessivel("modal-comparacao-planilhas", '[aria-label="Fechar resultado"]', "fecharModalComparacaoPlanilhas");
     }
