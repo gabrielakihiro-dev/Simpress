@@ -1632,6 +1632,21 @@
       fecharModalAcessivel("modal-texto-transporte");
     }
 
+    async function copiarSeriePesquisada() {
+      const serial = String(currentEquipamento?.serial || "").trim();
+      if (!serial) {
+        showToast("Pesquise um equipamento antes de copiar a série.", "warning");
+        return;
+      }
+
+      try {
+        await copiarTextoParaAreaTransferencia(serial);
+        showToast(`Série ${serial} copiada para a área de transferência.`, "success");
+      } catch (err) {
+        showToast("Não foi possível copiar a série. Tente novamente pelo navegador.", "error");
+      }
+    }
+
     async function copiarTextoSolicitacaoTransporte() {
       const texto = document.getElementById("textarea-texto-transporte").value;
       if (!texto.trim()) {

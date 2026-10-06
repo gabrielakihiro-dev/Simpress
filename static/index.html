@@ -799,6 +799,17 @@ Horário disponível para atendimento:</textarea>
 
           <button
             type="button"
+            id="btn-copiar-serie"
+            onclick="copiarSeriePesquisada()"
+            class="px-4 py-2.5 rounded-xl bg-cyan-500/10 hover:bg-cyan-500/20 text-cyan-200 border border-cyan-500/30 text-xs font-semibold flex items-center space-x-1.5 transition shadow-sm"
+            title="Copiar a série do equipamento pesquisado"
+          >
+            <i data-lucide="copy" class="w-4 h-4"></i>
+            <span>Copiar Série</span>
+          </button>
+
+          <button
+            type="button"
             onclick="gerarTextoSolicitacaoTransporte()"
             class="px-4 py-2.5 rounded-xl bg-brand-500/10 hover:bg-brand-500/20 text-brand-200 border border-brand-500/30 text-xs font-semibold flex items-center space-x-1.5 transition shadow-sm"
             title="Gerar texto de solicitação de transporte"
