@@ -52,6 +52,15 @@
       }
     }
 
+    function invalidarDadosEquipamentoAposRestauracao() {
+      invalidarBuscasEquipamento();
+      fecharAutocomplete();
+      limparSelecaoEquipamento();
+      const serialInput = document.getElementById("input-serial");
+      if (serialInput) serialInput.value = "";
+      document.getElementById("btn-clear-serial")?.classList.add("hidden");
+    }
+
     async function atualizarSelecaoAposSubstituirInventarios(serialSelecionada) {
       fecharAutocomplete();
       return transferUtils.refreshSelectionAfterInventoryReplacement({
@@ -1948,6 +1957,7 @@
       const apelidosAtualizados = comparison.apelidos_atualizados || [];
       const apelidosSemAtualizacao = comparison.apelidos_sem_atualizacao || [];
       const divergenciasApelidosManuais = comparison.divergencias_apelidos_manuais || [];
+      const semAcesso14Dias = comparison.sem_acesso_14_dias || [];
       const annotationStorageKey = `simpress:comparacao-anotacoes:${comparison.evento_id || [comparison.horario_comparacao, arquivo.endpoint, arquivo.detalhes].join("|")}`;
       const anotacoes = comparison.anotacoes && typeof comparison.anotacoes === "object"
         ? { ...comparison.anotacoes }
@@ -2014,6 +2024,16 @@
           <td class="px-3 py-2 font-mono">${escapeHtml(item.computador || "—")}</td>
           <td class="px-3 py-2 text-amber-200">${escapeHtml(item.motivo || "Conferir associação.")}</td>
           ${renderizarCampoAnotacao("apelidos_sem_atualizacao", index)}
+        </tr>`);
+
+      const semAcessoRows = semAcesso14Dias.map((item, index) => `
+        <tr class="text-slate-300">
+          <td class="px-3 py-2 font-mono text-white whitespace-nowrap">${escapeHtml(item.computador || "—")}</td>
+          <td class="px-3 py-2 font-mono whitespace-nowrap">${escapeHtml(item.serie || "—")}</td>
+          <td class="px-3 py-2 whitespace-nowrap">${escapeHtml(item.ultima_verificacao ? formatarHorarioHistorico(item.ultima_verificacao) : "—")}</td>
+          <td class="px-3 py-2 text-rose-200">${Number(item.dias_sem_verificacao || 0).toLocaleString("pt-BR")}</td>
+          <td class="px-3 py-2">${Number(item.linha_endpoint || 0).toLocaleString("pt-BR")}</td>
+          ${renderizarCampoAnotacao("sem_acesso_14_dias", index)}
         </tr>`);
 
       const manualAliasRows = divergenciasApelidosManuais.map((item, index) => {
@@ -2089,6 +2109,7 @@
           <div class="rounded-xl bg-sky-500/5 border border-sky-500/20 p-3"><p class="text-[10px] uppercase tracking-wide text-sky-300">Séries sem mapeamento</p><p class="text-xl font-bold text-sky-200 mt-1">${seriesSemMapa.length}</p></div>
           <div class="rounded-xl bg-emerald-500/5 border border-emerald-500/20 p-3"><p class="text-[10px] uppercase tracking-wide text-emerald-300">Apelidos/hostnames atualizados</p><p class="text-xl font-bold text-emerald-200 mt-1">${apelidosAtualizados.length}</p></div>
           <div class="rounded-xl bg-amber-500/5 border border-amber-500/20 p-3"><p class="text-[10px] uppercase tracking-wide text-amber-300">Apelidos para conferência</p><p class="text-xl font-bold text-amber-200 mt-1">${apelidosSemAtualizacao.length}</p></div>
+          <div class="rounded-xl bg-rose-500/5 border border-rose-500/20 p-3"><p class="text-[10px] uppercase tracking-wide text-rose-300">Sem acesso há 14+ dias</p><p class="text-xl font-bold text-rose-200 mt-1">${semAcesso14Dias.length}</p></div>
           <div class="rounded-xl bg-violet-500/5 border border-violet-500/20 p-3"><p class="text-[10px] uppercase tracking-wide text-violet-300">Divergências manuais pendentes</p><p id="comparacao-divergencias-manuais-pendentes" class="text-xl font-bold text-violet-200 mt-1">${divergenciasApelidosManuais.filter(item => !item.resolucao || item.resolucao === "pendente").length}</p></div>
         </div>
         <section class="space-y-2">
@@ -2102,6 +2123,10 @@
         <section class="space-y-2">
           <div><h4 class="text-sm font-bold text-violet-300">Divergências com apelidos alterados manualmente</h4><p class="text-[11px] text-slate-500">O apelido manual prevalece nas pesquisas e exportações. “Manter manual” registra a decisão; “Excluir manual” remove apenas o override desta série e volta a usar o valor das planilhas.</p></div>
           ${renderizarTabelaComparacao(["Série", "Apelido manual", "Simpress", "Endpoint", "Situação", "Ação"], manualAliasRows, "Nenhuma divergência entre apelidos manuais e as planilhas enviadas.")}
+        </section>
+        <section class="space-y-2">
+          <div><h4 class="text-sm font-bold text-rose-300">Sem acesso há 14 dias ou mais</h4><p class="text-[11px] text-slate-500">Notebook com última verificação com êxito igual ou anterior a 14 dias antes desta atualização.</p></div>
+          ${renderizarTabelaComparacao(["Hostname/Apelido", "Série", "Última verificação com êxito", "Dias sem verificação", "Linha Endpoint", "Anotação"], semAcessoRows, "Nenhum notebook está há 14 dias ou mais sem verificação com êxito.")}
         </section>
         <section class="space-y-2">
           <div><h4 class="text-sm font-bold text-rose-300">Equipamentos ausentes por fonte</h4><p class="text-[11px] text-slate-500">Cada lista mostra equipamentos que não têm correspondência segura naquela fonte. Divergências de local aparecem em seção própria.</p></div>
@@ -2418,7 +2443,7 @@
             const restauracaoDe = evento.restauracao_de || {};
             contagens.textContent = `Restauração do conjunto anterior a ${formatarHorarioHistorico(restauracaoDe.horario)} · registros restaurados: Endpoint ${Number(resumo.total_endpoint_restaurado || 0).toLocaleString("pt-BR")}, Simpress ${Number(resumo.total_detalhes_restaurado || 0).toLocaleString("pt-BR")}`;
           } else {
-            contagens.textContent = `Apelidos/hostnames atualizados: ${Number(resumo.apelidos_atualizados || 0)} · divergências manuais pendentes: ${Number(resumo.divergencias_apelidos_manuais || 0)} · ausentes no Endpoint: ${Number(resumo.ausentes_no_endpoint || 0)} · na Simpress: ${Number(resumo.ausentes_em_detalhes || 0)} · divergências de local: ${Number(resumo.divergencias_local || 0)} · ambiguidades: ${Number(resumo.correspondencias_ambiguas || 0)}`;
+            contagens.textContent = `Apelidos/hostnames atualizados: ${Number(resumo.apelidos_atualizados || 0)} · sem acesso há 14+ dias: ${Number(resumo.sem_acesso_14_dias || 0)} · divergências manuais pendentes: ${Number(resumo.divergencias_apelidos_manuais || 0)} · ausentes no Endpoint: ${Number(resumo.ausentes_no_endpoint || 0)} · na Simpress: ${Number(resumo.ausentes_em_detalhes || 0)} · divergências de local: ${Number(resumo.divergencias_local || 0)} · ambiguidades: ${Number(resumo.correspondencias_ambiguas || 0)}`;
           }
           info.appendChild(contagens);
           card.appendChild(info);
@@ -2433,6 +2458,15 @@
             consultar.textContent = "Consultar resultado";
             consultar.addEventListener("click", () => consultarHistoricoComparacao(evento.id, consultar));
             acoes.appendChild(consultar);
+          }
+
+          if (!restauracao && evento.restauravel === true) {
+            const restaurar = document.createElement("button");
+            restaurar.type = "button";
+            restaurar.className = "shrink-0 px-3 py-2 rounded-lg bg-amber-500/10 hover:bg-amber-500/20 text-amber-200 border border-amber-500/25 text-xs font-semibold transition";
+            restaurar.textContent = "Restaurar versão anterior";
+            restaurar.addEventListener("click", () => restaurarHistoricoComparacao(evento, restaurar));
+            acoes.appendChild(restaurar);
           }
 
           const excluir = document.createElement("button");
@@ -2457,6 +2491,56 @@
         lista.appendChild(erro);
       } finally {
         lista.removeAttribute("aria-busy");
+      }
+    }
+
+    async function restaurarHistoricoComparacao(evento, botao) {
+      const textoOriginal = botao.textContent;
+      botao.disabled = true;
+      botao.setAttribute("aria-busy", "true");
+      botao.textContent = "Preparando prévia...";
+      try {
+        const eventoId = encodeURIComponent(evento.id);
+        const previewResponse = await fetch(`/api/historico-comparacoes/${eventoId}/restauracao`);
+        const preview = await previewResponse.json().catch(() => ({}));
+        if (!previewResponse.ok) {
+          throw new Error(preview.detail || "Não foi possível validar o backup para restauração.");
+        }
+
+        const backup = preview.arquivos_backup || {};
+        const endpointBackup = backup.endpoint || {};
+        const simpressBackup = backup.detalhes || {};
+        const confirmation = [
+          `Restaurar o conjunto anterior a ${formatarHorarioHistorico(preview.evento_horario || evento.horario)}?`,
+          `Endpoint: ${endpointBackup.nome || "—"} (${Number(endpointBackup.registros || 0).toLocaleString("pt-BR")} registros)`,
+          `Simpress: ${simpressBackup.nome || "—"} (${Number(simpressBackup.registros || 0).toLocaleString("pt-BR")} registros)`,
+          "Os inventários ativos serão salvos em backup antes da restauração.",
+        ].join("\n");
+        if (!window.confirm(confirmation)) return;
+
+        botao.textContent = "Restaurando...";
+        const response = await fetch(`/api/historico-comparacoes/${eventoId}/restaurar`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ preview_token: preview.preview_token }),
+        });
+        const result = await response.json().catch(() => ({}));
+        if (!response.ok) throw new Error(result.detail || "Não foi possível restaurar os inventários.");
+
+        invalidarDadosEquipamentoAposRestauracao();
+        await carregarEstatisticas();
+        await carregarUnidades();
+        await carregarHistoricoComparacoes();
+        await carregarContagemHistoricoComparacoes();
+        const total = Number(result.evento?.total_equipamentos_carregados || 0).toLocaleString("pt-BR");
+        showToast(`Inventários restaurados. ${total} equipamentos carregados.`, "success");
+      } catch (err) {
+        console.error("Erro ao restaurar inventários do histórico:", err);
+        showToast(err.message || "Não foi possível restaurar os inventários.", "error");
+      } finally {
+        botao.disabled = false;
+        botao.removeAttribute("aria-busy");
+        botao.textContent = textoOriginal;
       }
     }
 

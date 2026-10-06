@@ -87,10 +87,12 @@ def _commit_inventory_files(staged: Dict[str, Any], context: Any):
         "endpoint": staged["endpoint"]["name"],
         "detalhes": staged["detalhes"]["name"],
     }
+    comparison_time = ctx.datetime.now().astimezone()
     comparison = ctx.compare_uploaded_workbooks(
         staged["endpoint"]["table"],
         staged["detalhes"]["table"],
         uploaded_names,
+        as_of=comparison_time,
     )
 
     transaction_targets = [
@@ -155,7 +157,7 @@ def _commit_inventory_files(staged: Dict[str, Any], context: Any):
         detail_duplicates = {
             serial_key for serial_key, count in detail_serial_counts.items() if count > 1
         }
-        comparison["horario_comparacao"] = ctx.datetime.now().astimezone().isoformat(timespec="seconds")
+        comparison["horario_comparacao"] = comparison_time.isoformat(timespec="seconds")
         comparison["apelidos_atualizados"] = ctx.compare_equipment_aliases(
             previous_aliases,
             ctx.snapshot_equipment_aliases(prepared_state["equipamentos_cache"]),
@@ -191,6 +193,7 @@ def _commit_inventory_files(staged: Dict[str, Any], context: Any):
             "total_endpoint": comparison.get("total_endpoint", 0),
             "ausentes_no_endpoint": len(comparison.get("ausentes_no_endpoint", [])),
             "ausentes_em_detalhes": len(comparison.get("ausentes_em_detalhes", [])),
+            "sem_acesso_14_dias": len(comparison.get("sem_acesso_14_dias", [])),
             "divergencias_local": len(comparison.get("divergencias_local", [])),
             "correspondencias_ambiguas": len(comparison.get("correspondencias_ambiguas", [])),
             "series_sem_mapeamento": len(comparison.get("series_sem_mapeamento", [])),

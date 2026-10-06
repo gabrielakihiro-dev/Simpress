@@ -146,11 +146,13 @@ Na aba **Home**, **Mostrar textos para chamados** apresenta textos editáveis re
 
 1. Abra **Atualizar Planilhas**.
 2. Envie um arquivo `.xlsx` do **Endpoint** e um do **Simpress**.
-3. Confira ausências em cada fonte, divergências de local, correspondências ambíguas, mudanças de hostname e casos que precisam de revisão.
+3. Confira ausências em cada fonte, notebooks sem verificação com êxito há 14 dias ou mais, divergências de local, correspondências ambíguas, mudanças de hostname e casos que precisam de revisão.
 4. Leia o resultado antes de continuar. Cada atualização substitui integralmente os dois inventários ativos pelos arquivos validados; séries ausentes no novo relatório deixam de compor a base carregada.
 5. Consulte **Histórico planilhas** para rever comparações e, se houver um backup completo válido, pré-visualize os arquivos e datas antes de restaurar.
 
 O sistema cria cópias dos inventários anteriores antes de substituí-los. A restauração também salva o conjunto que está ativo naquele momento e registra a operação no histórico, permitindo desfazê-la se esse backup também for completo e válido.
+
+A cada atualização, o histórico identifica notebooks do Endpoint cuja coluna **Última verificação com êxito** indica 14 dias ou mais sem verificação. O resultado inclui hostname/apelido, série, data, dias decorridos e linha de origem; valores vazios ou inválidos nessa coluna não são contados como inatividade confirmada.
 
 ### Apelidos, edição e precedência das fontes
 

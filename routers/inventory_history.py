@@ -479,6 +479,7 @@ def create_inventory_history_router(ctx):
             "Apelidos atualizados": 0,
             "Apelidos para conferência": 0,
             "Divergências manuais": 0,
+            "Sem verificação há 14+ dias": 0,
             "Ausentes no Endpoint": 0,
             "Ausentes na Simpress": 0,
             "Divergências de localidade": 0,
@@ -488,6 +489,7 @@ def create_inventory_history_router(ctx):
         history_rows = []
         alias_rows = []
         absence_rows = []
+        no_access_rows = []
         location_rows = []
         ambiguity_rows = []
 
@@ -506,6 +508,7 @@ def create_inventory_history_router(ctx):
             manual_alias_conflicts = _export_rows(comparison, "divergencias_apelidos_manuais")
             absent_endpoint = _export_rows(comparison, "ausentes_no_endpoint")
             absent_simpress = _export_rows(comparison, "ausentes_em_detalhes")
+            no_recent_verification = _export_rows(comparison, "sem_acesso_14_dias")
             local_divergences = _export_rows(comparison, "divergencias_local")
             unmapped_series = _export_rows(comparison, "series_sem_mapeamento")
             ambiguities = _export_rows(comparison, "correspondencias_ambiguas")
@@ -519,6 +522,7 @@ def create_inventory_history_router(ctx):
             category_counts["Apelidos atualizados"] += len(alias_updates)
             category_counts["Apelidos para conferência"] += len(alias_reviews)
             category_counts["Divergências manuais"] += len(manual_alias_conflicts)
+            category_counts["Sem verificação há 14+ dias"] += len(no_recent_verification)
             category_counts["Ausentes no Endpoint"] += len(absent_endpoint)
             category_counts["Ausentes na Simpress"] += len(absent_simpress)
             category_counts["Divergências de localidade"] += len(local_divergences)
@@ -548,6 +552,7 @@ def create_inventory_history_router(ctx):
                 manual_pending_count,
                 len(absent_endpoint),
                 len(absent_simpress),
+                len(no_recent_verification),
                 len(local_divergences),
                 ambiguity_count,
                 len(unmapped_series),
@@ -601,6 +606,13 @@ def create_inventory_history_router(ctx):
                         item.get("computador"), item.get("serie"), item.get("local_previsto"),
                         _export_note(comparison, note_category, index),
                     ))
+
+            for index, item in enumerate(no_recent_verification):
+                no_access_rows.append((
+                    timestamp, event_type_label, item.get("computador"), item.get("serie"),
+                    _export_datetime(item.get("ultima_verificacao")), item.get("dias_sem_verificacao"),
+                    item.get("linha_endpoint"), _export_note(comparison, "sem_acesso_14_dias", index),
+                ))
 
             for index, item in enumerate(local_divergences):
                 location_rows.append((
@@ -657,10 +669,10 @@ def create_inventory_history_router(ctx):
             ["Ordem", "Data e hora", "Operação", "ID do evento", "Arquivo Endpoint", "Arquivo Simpress",
              "Equipamentos Endpoint", "Equipamentos Simpress", "Equipamentos carregados", "Apelidos atualizados",
              "Apelidos para conferência", "Divergências manuais pendentes", "Ausentes no Endpoint",
-             "Ausentes na Simpress", "Divergências de local", "Duplicidades e ambiguidades",
+             "Ausentes na Simpress", "Sem verificação há 14+ dias", "Divergências de local", "Duplicidades e ambiguidades",
              "Séries sem local", "Restauração de", "Diretório de backup"],
             history_rows, "tblHistoricoPlanilhas",
-            [10, 20, 16, 34, 32, 42, 18, 18, 20, 17, 20, 22, 18, 18, 18, 22, 17, 20, 36],
+            [10, 20, 16, 34, 32, 42, 18, 18, 20, 17, 20, 22, 18, 18, 23, 18, 22, 17, 20, 36],
         )
         _write_export_table_sheet(
             workbook, "Apelidos", "Apelidos e hostnames",
@@ -678,6 +690,14 @@ def create_inventory_history_router(ctx):
              "Local previsto", "Anotação"],
             absence_rows, "tblHistoricoAusencias",
             [20, 24, 22, 32, 18, 28, 42],
+        )
+        _write_export_table_sheet(
+            workbook, "Sem acesso", "Notebooks sem verificação recente",
+            "Notebooks cuja última verificação com êxito ocorreu há pelo menos 14 dias.",
+            ["Data e hora", "Operação", "Hostname/Apelido", "Série", "Última verificação com êxito",
+             "Dias sem verificação", "Linha Endpoint", "Anotação"],
+            no_access_rows, "tblHistoricoSemAcesso",
+            [20, 16, 32, 20, 26, 20, 16, 42],
         )
         _write_export_table_sheet(
             workbook, "Localidades", "Divergências e séries sem local",
@@ -721,7 +741,7 @@ def create_inventory_history_router(ctx):
     @router.post("/api/historico-comparacoes/{evento_id}/anotacoes")
     def salvar_anotacao_comparacao(evento_id: str, payload: ComparisonAnnotationPayload):
         match = re.fullmatch(
-            r"(apelidos_sem_atualizacao|ausentes_no_endpoint|ausentes_em_detalhes|divergencias_local|ambiguidades|series_sem_mapeamento):(\d+)",
+            r"(apelidos_sem_atualizacao|ausentes_no_endpoint|ausentes_em_detalhes|sem_acesso_14_dias|divergencias_local|ambiguidades|series_sem_mapeamento):(\d+)",
             payload.chave,
         )
         if match is None:
