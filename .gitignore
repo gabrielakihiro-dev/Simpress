@@ -42,6 +42,7 @@ __pycache__/
 /historico_alteracoes.json
 /historico_apelidos.json
 /historico_comparacoes.json
+/anotacoes_historico/
 /.transactions/
 **/.*.lock
 /planilhas_entrada/.upload-staging-*/

@@ -2095,7 +2095,14 @@
           <td class="px-3 py-2">${escapeHtml(item.mensagem || "")}</td>
         </tr>`);
 
-      document.getElementById("comparacao-planilhas-conteudo").innerHTML = `
+      document.getElementById("comparacao-planilhas-conteudo").innerHTML = comparison.somente_anotacoes_sincronizadas
+        ? `
+          <p class="text-xs text-cyan-200 bg-cyan-500/10 border border-cyan-500/25 rounded-lg px-3 py-2">Este clone contém as anotações sincronizadas. O resultado original e os arquivos da comparação não estão armazenados neste dispositivo.</p>
+          <section class="space-y-2">
+            <div><h4 class="text-sm font-bold text-amber-300">Anotações sincronizadas</h4><p class="text-[11px] text-slate-500">As anotações continuam vinculadas às linhas da atualização original.</p></div>
+            ${renderizarTabelaComparacao(["Série", "Hostname na InvAll", "Motivo", "Anotações"], aliasReviewRows, "Nenhuma anotação sincronizada neste resultado.")}
+          </section>`
+        : `
         ${comparison.historico_salvo === false
           ? `<p class="text-xs text-amber-200 bg-amber-500/10 border border-amber-500/25 rounded-lg px-3 py-2">${escapeHtml(comparison.aviso_historico || "Não foi possível salvar este resultado no histórico de comparações.")}</p>`
           : comparison.historico_salvo === true
@@ -2117,7 +2124,7 @@
           ${renderizarTabelaComparacao(["Série", "Apelido anterior", "Novo apelido / hostname", "Horário", "Arquivos de origem"], aliasUpdateRows, "Nenhum apelido ou hostname mudou nesta atualização.")}
         </section>
         <section class="space-y-2">
-          <div><h4 class="text-sm font-bold text-amber-300">Linhas mantidas para conferência</h4><p class="text-[11px] text-slate-500">Série vazia, ausente ou duplicada não é escolhida automaticamente; o apelido atual fica preservado.${permitirAnotacoes ? " As anotações pertencem a esta linha desta atualização, não são reaproveitadas em novas atualizações e são salvas automaticamente." : ""}</p></div>
+          <div><h4 class="text-sm font-bold text-amber-300">Linhas mantidas para conferência</h4><p class="text-[11px] text-slate-500">Série vazia, ausente ou duplicada não é escolhida automaticamente; o apelido atual fica preservado.${permitirAnotacoes ? ` As anotações pertencem a esta linha desta atualização, não são reaproveitadas em novas atualizações e são salvas automaticamente${comparison.anotacoes_sync_ativa ? " e sincronizadas pela pasta OneDrive." : " neste dispositivo."}` : ""}</p></div>
           ${renderizarTabelaComparacao(["Série", "Hostname na InvAll", "Motivo", ...(permitirAnotacoes ? ["Anotações"] : [])], aliasReviewRows, "Nenhuma linha de apelido precisa de conferência.")}
         </section>
         <section class="space-y-2">
@@ -2344,14 +2351,18 @@
 
           const fontes = document.createElement("p");
           fontes.className = "text-xs text-slate-400 break-words";
-          fontes.textContent = restauracao
+          fontes.textContent = evento.somente_anotacoes_sincronizadas
+            ? "Anotações sincronizadas; resultado original indisponível neste clone."
+            : restauracao
             ? `Inventários restaurados — Endpoint: ${arquivos.endpoint || "—"} · EquipamentosDetalhes: ${arquivos.detalhes || "—"}`
             : `Endpoint: ${arquivos.endpoint || "—"} · EquipamentosDetalhes: ${arquivos.detalhes || "—"}`;
           info.appendChild(fontes);
 
           const contagens = document.createElement("p");
           contagens.className = "text-[11px] text-slate-500";
-          if (restauracao) {
+          if (evento.somente_anotacoes_sincronizadas) {
+            contagens.textContent = "As anotações podem ser consultadas e editadas neste notebook.";
+          } else if (restauracao) {
             const restauracaoDe = evento.restauracao_de || {};
             contagens.textContent = `Restauração do conjunto anterior a ${formatarHorarioHistorico(restauracaoDe.horario)} · registros restaurados: Endpoint ${Number(resumo.total_endpoint_restaurado || 0).toLocaleString("pt-BR")}, EquipamentosDetalhes ${Number(resumo.total_detalhes_restaurado || 0).toLocaleString("pt-BR")}`;
           } else {
@@ -2367,7 +2378,7 @@
             const consultar = document.createElement("button");
             consultar.type = "button";
             consultar.className = "shrink-0 px-3 py-2 rounded-lg bg-cyan-500/10 hover:bg-cyan-500/20 text-cyan-200 border border-cyan-500/25 text-xs font-semibold transition";
-            consultar.textContent = "Consultar resultado";
+            consultar.textContent = evento.somente_anotacoes_sincronizadas ? "Consultar anotações" : "Consultar resultado";
             consultar.addEventListener("click", () => consultarHistoricoComparacao(evento.id, consultar));
             acoes.appendChild(consultar);
           }
@@ -2382,13 +2393,15 @@
             acoes.appendChild(restaurar);
           }
 
-          const excluir = document.createElement("button");
-          excluir.type = "button";
-          excluir.className = "shrink-0 px-3 py-2 rounded-lg bg-rose-500/10 hover:bg-rose-500/20 text-rose-200 border border-rose-500/25 text-xs font-semibold transition";
-          excluir.textContent = "Excluir";
-          excluir.setAttribute("aria-label", `Excluir atualização de ${formatarHorarioHistorico(evento.horario)}`);
-          excluir.addEventListener("click", () => excluirHistoricoComparacao(evento, excluir));
-          acoes.appendChild(excluir);
+          if (!evento.somente_anotacoes_sincronizadas) {
+            const excluir = document.createElement("button");
+            excluir.type = "button";
+            excluir.className = "shrink-0 px-3 py-2 rounded-lg bg-rose-500/10 hover:bg-rose-500/20 text-rose-200 border border-rose-500/25 text-xs font-semibold transition";
+            excluir.textContent = "Excluir";
+            excluir.setAttribute("aria-label", `Excluir atualização de ${formatarHorarioHistorico(evento.horario)}`);
+            excluir.addEventListener("click", () => excluirHistoricoComparacao(evento, excluir));
+            acoes.appendChild(excluir);
+          }
 
           card.appendChild(acoes);
           lista.appendChild(card);

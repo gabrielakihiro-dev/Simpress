@@ -1,5 +1,6 @@
 """Project-relative paths and limits used by the local application."""
 
+import os
 from pathlib import Path
 
 
@@ -29,3 +30,24 @@ MODIFIED_APELIDOS_FILE = BASE_DIR / "apelidos_modificados.json"
 ALIAS_HISTORY_FILE = BASE_DIR / "historico_alteracoes.json"
 COMPARISON_HISTORY_FILE = BASE_DIR / "historico_comparacoes.json"
 TRANSACTION_ROOT = BASE_DIR
+
+
+def resolve_history_annotations_dir(base_dir: Path, environment=None):
+    """Choose a shared annotation folder when OneDrive or an override is available."""
+    env = os.environ if environment is None else environment
+    override = str(env.get("SIMPRESS_ANNOTATIONS_DIR") or "").strip()
+    if override:
+        path = Path(override).expanduser()
+        if not path.is_absolute():
+            path = Path(base_dir) / path
+        return path.resolve(strict=False), True
+
+    for variable in ("OneDriveCommercial", "OneDrive"):
+        root = str(env.get(variable) or "").strip()
+        if root and Path(root).expanduser().is_dir():
+            return Path(root).expanduser() / "Aplicativos" / "Simpress" / "AnotacoesHistorico", True
+
+    return Path(base_dir) / "anotacoes_historico", False
+
+
+HISTORY_ANNOTATIONS_DIR, HISTORY_ANNOTATIONS_SYNC_ENABLED = resolve_history_annotations_dir(BASE_DIR)

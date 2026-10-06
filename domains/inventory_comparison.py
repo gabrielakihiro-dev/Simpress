@@ -282,6 +282,21 @@ def comparison_history_for_display(evento: Dict[str, Any]) -> Dict[str, Any]:
             ]
         return cleaned
 
+    review_items = comparison.get("apelidos_sem_atualizacao")
+    if isinstance(review_items, list):
+        review_items_with_ids = []
+        for index, item in enumerate(review_items):
+            if not isinstance(item, dict):
+                continue
+            displayed_item = dict(item)
+            displayed_item["anotacao_id"] = comparison_review_item_id(evento.get("id"), index, item)
+            review_items_with_ids.append(displayed_item)
+        comparison_view["apelidos_sem_atualizacao"] = (
+            review_items_with_ids
+            if is_pinned_baseline
+            else filter_update_review_items(review_items_with_ids)
+        )
+
     if is_pinned_baseline:
         missing_lists = {
             "ausentes_no_endpoint": filter_sebrae_owned_unmatched_items(
@@ -300,16 +315,6 @@ def comparison_history_for_display(evento: Dict[str, Any]) -> Dict[str, Any]:
                 comparison.get("ausentes_em_detalhes")
             ),
         }
-        review_items = comparison.get("apelidos_sem_atualizacao")
-        if isinstance(review_items, list):
-            review_items_with_ids = []
-            for index, item in enumerate(review_items):
-                if not isinstance(item, dict):
-                    continue
-                displayed_item = dict(item)
-                displayed_item["anotacao_id"] = comparison_review_item_id(evento.get("id"), index, item)
-                review_items_with_ids.append(displayed_item)
-            comparison_view["apelidos_sem_atualizacao"] = filter_update_review_items(review_items_with_ids)
         comparison_view["filtros_atualizacao_aplicados"] = True
     missing_lists = {
         key: filter_sebrae_owned_unmatched_items(items)

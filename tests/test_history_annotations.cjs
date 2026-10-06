@@ -10,3 +10,9 @@ test("explains that history annotations belong to one row in one update", () => 
   assert.match(appScript, /não são reaproveitadas em novas atualizações/);
   assert.match(appScript, /são salvas automaticamente/);
 });
+
+test("shows synchronized annotations on a clone without local comparison history", () => {
+  assert.match(appScript, /somente_anotacoes_sincronizadas/);
+  assert.match(appScript, /Consultar anotações/);
+  assert.match(appScript, /Este clone contém as anotações sincronizadas/);
+});
