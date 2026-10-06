@@ -13,11 +13,11 @@
     function definirEquipamentoAtual(equipment) {
       currentEquipamento = equipment;
       equipamentoSelectionRevision += 1;
-      const copyHostnameButton = document.getElementById("btn-copiar-hostname");
-      const hasHostname = Boolean(String(equipment?.apelido || "").trim());
-      if (copyHostnameButton) {
-        copyHostnameButton.disabled = !hasHostname;
-        copyHostnameButton.setAttribute("aria-disabled", String(!hasHostname));
+      const copySerialButton = document.getElementById("btn-copiar-serie");
+      const hasSerial = Boolean(String(equipment?.serial || "").trim());
+      if (copySerialButton) {
+        copySerialButton.disabled = !hasSerial;
+        copySerialButton.setAttribute("aria-disabled", String(!hasSerial));
       }
     }
 
@@ -1427,18 +1427,18 @@
       );
     }
 
-    async function copiarHostnameAtual() {
-      const hostname = String(currentEquipamento?.apelido || "").trim();
-      if (!hostname) {
-        showToast("Nenhum hostname disponível para o equipamento pesquisado.", "warning");
+    async function copiarSerieAtual() {
+      const serial = String(currentEquipamento?.serial || "").trim();
+      if (!serial) {
+        showToast("Nenhuma série disponível para o equipamento pesquisado.", "warning");
         return;
       }
 
       try {
-        await copiarTextoParaAreaTransferencia(hostname);
-        showToast("Hostname copiado.", "success");
+        await copiarTextoParaAreaTransferencia(serial);
+        showToast("Série copiada.", "success");
       } catch (err) {
-        showToast("Não foi possível copiar o hostname.", "error");
+        showToast("Não foi possível copiar a série.", "error");
       }
     }
 
