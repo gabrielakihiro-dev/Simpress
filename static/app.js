@@ -1,5 +1,6 @@
     // State
     let currentEquipamento = null;
+    const CNPJ_FATURAMENTO_PADRAO = "75.110.585/0001-00";
     let retiradaCidadeSelecionada = "";
     let unidadesList = [];
     let debounceTimer = null;
@@ -1644,6 +1645,38 @@
         showToast(`Série ${serial} copiada para a área de transferência.`, "success");
       } catch (err) {
         showToast("Não foi possível copiar a série. Tente novamente pelo navegador.", "error");
+      }
+    }
+
+    function obterCepRetiradaSelecionada() {
+      const endereco = document.getElementById("retirada-endereco")?.value || "";
+      const cepNoEndereco = endereco.match(/\bCEP\b\s*:?\s*(\d{5}-?\d{3})/i);
+      return cepNoEndereco?.[1] || currentEquipamento?.retirada_cep || "";
+    }
+
+    async function copiarDadoLocalAtual(tipo) {
+      const dados = {
+        cep: { valor: obterCepRetiradaSelecionada(), nome: "CEP" },
+        faturamento: { valor: CNPJ_FATURAMENTO_PADRAO, nome: "CNPJ de faturamento" },
+        instalacao: {
+          valor: document.getElementById("retirada-cnpj")?.value || "",
+          nome: "CNPJ de instalação"
+        }
+      };
+      const dado = dados[tipo];
+      if (!dado) return;
+
+      const valor = String(dado.valor || "").trim();
+      if (!valor) {
+        showToast(`Pesquise um equipamento com ${dado.nome.toLowerCase()} informado antes de copiar.`, "warning");
+        return;
+      }
+
+      try {
+        await copiarTextoParaAreaTransferencia(valor);
+        showToast(`${dado.nome} copiado para a área de transferência.`, "success");
+      } catch (err) {
+        showToast(`Não foi possível copiar o ${dado.nome.toLowerCase()}.`, "error");
       }
     }
 

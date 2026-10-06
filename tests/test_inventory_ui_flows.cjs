@@ -54,6 +54,7 @@ function createAppHarness(fetchApi) {
   const elements = new Map();
   const effects = {
     comparisons: [],
+    clipboardWrites: [],
     toasts: [],
     refreshes: [],
     displays: [],
@@ -84,6 +85,7 @@ function createAppHarness(fetchApi) {
     document,
     window,
     fetch: (...args) => fetchApi(...args),
+    navigator: { clipboard: { writeText: async text => effects.clipboardWrites.push(text) } },
     FormData: FakeFormData,
     HTMLElement: FakeElement,
     setTimeout,
@@ -331,4 +333,49 @@ test("failed restoration leaves the current selection intact and presents the er
   assert.equal(harness.effects.toasts.at(-1).type, "error");
   assert.equal(button.disabled, false);
   assert.equal(button.textContent, "Restaurar versão anterior");
+});
+
+test("copies the selected location postal code and installation CNPJ with the fixed billing CNPJ", async () => {
+  const equipment = {
+    ...priorEquipment,
+    retirada_cep: "80000-123",
+    retirada_cnpj: "12.345.678/0001-90",
+  };
+  const harness = createAppHarness(async () => { throw new Error("Nenhuma chamada de API esperada"); });
+  harness.selectEquipment(equipment);
+  harness.element("retirada-cnpj").value = equipment.retirada_cnpj;
+  harness.element("retirada-endereco").value = `Rua da unidade, 10 - CEP ${equipment.retirada_cep}`;
+
+  await harness.run('copiarDadoLocalAtual("cep")');
+  await harness.run('copiarDadoLocalAtual("faturamento")');
+  await harness.run('copiarDadoLocalAtual("instalacao")');
+
+  assert.deepEqual(harness.effects.clipboardWrites, [
+    "80000-123",
+    "75.110.585/0001-00",
+    "12.345.678/0001-90",
+  ]);
+  assert.deepEqual(harness.effects.toasts.map(({ type }) => type), ["success", "success", "success"]);
+});
+
+test("copies the currently selected pickup locality after forcing the headquarters", async () => {
+  const equipment = {
+    ...priorEquipment,
+    retirada_cep: "87000-000",
+    retirada_cnpj: "12.345.678/0001-90",
+  };
+  const harness = createAppHarness(async () => { throw new Error("Nenhuma chamada de API esperada"); });
+  harness.selectEquipment(equipment);
+  harness.context.workflowSede = {
+    is_sede: true,
+    cep: "80220-300",
+    cnpj: "01.234.567/0001-89",
+  };
+  harness.run("unidadesList = [workflowSede]; forcarSedePradoVelho()");
+
+  await harness.run('copiarDadoLocalAtual("cep")');
+  await harness.run('copiarDadoLocalAtual("instalacao")');
+
+  assert.deepEqual(harness.effects.clipboardWrites, ["80220-300", "01.234.567/0001-89"]);
+  assert.deepEqual(harness.effects.toasts.map(({ type }) => type), ["info", "success", "success"]);
 });
