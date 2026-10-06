@@ -41,6 +41,26 @@ class InventoryComparisonTests(unittest.TestCase):
         )
         self.assertNotIn("anotacao_id", visible_review)
 
+    def test_pinned_comparison_review_rows_receive_annotation_ids(self):
+        review = {
+            "serie": "BRJ-PINNED-1",
+            "computador": "PRNOTE-PINNED-1",
+            "motivo": "Série não encontrada na InvAll; apelido atual preservado.",
+        }
+        event = {
+            "id": main.PINNED_COMPARISON_EVENT_ID,
+            "horario": main.PINNED_COMPARISON_EVENT_TIME,
+            "comparacao": {"apelidos_sem_atualizacao": [review]},
+        }
+
+        displayed = main.comparison_history_for_display(event)
+        displayed_review = displayed["comparacao"]["apelidos_sem_atualizacao"][0]
+
+        self.assertEqual(
+            displayed_review["anotacao_id"],
+            main.comparison_review_item_id(event["id"], 0, review),
+        )
+
     def test_two_sources_report_absence_and_location_without_comparing_ip(self):
         endpoint = source_table([
             {"NOMEDOCOMPUTADOR": "PRNOTEAPU01", "ROTULODESERVICONUMERODESERIE": "S-001", "IP": "10.0.0.1"},

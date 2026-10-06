@@ -184,13 +184,125 @@ def create_inventory_history_router(ctx):
         }
 
 
+    def _latest_annotation_records(history=None):
+        latest = {}
+        for record in ctx.load_history_annotations(ctx.HISTORY_ANNOTATIONS_DIR):
+            key = (record["evento_id"], record["item_id"])
+            candidate = (str(record.get("atualizado_em") or ""), record)
+            if key not in latest or candidate[0] >= latest[key][0]:
+                latest[key] = candidate
+        records = {key: value[1] for key, value in latest.items()}
+
+        # Move notes made by older versions into the shared store on first view.
+        local_history = ctx.load_comparison_history() if history is None else history
+        for event in local_history:
+            if not isinstance(event, dict):
+                continue
+            event_id = str(event.get("id") or "")
+            comparison = event.get("comparacao")
+            review_items = comparison.get("apelidos_sem_atualizacao") if isinstance(comparison, dict) else None
+            if not event_id or not isinstance(review_items, list):
+                continue
+            for index, item in enumerate(review_items):
+                if not isinstance(item, dict) or not isinstance(item.get("anotacao"), str):
+                    continue
+                item_id = ctx.comparison_review_item_id(event_id, index, item)
+                key = (event_id, item_id)
+                if key in records:
+                    continue
+                try:
+                    records[key] = ctx.save_history_annotation(
+                        ctx.HISTORY_ANNOTATIONS_DIR,
+                        event_id=event_id,
+                        event_time=str(event.get("horario") or ""),
+                        item_id=item_id,
+                        serie=str(item.get("serie") or ""),
+                        computador=str(item.get("computador") or ""),
+                        motivo=str(item.get("motivo") or ""),
+                        anotacao=item["anotacao"],
+                    )
+                except Exception:
+                    # Keep local history readable when OneDrive is temporarily unavailable.
+                    continue
+        return records
+
+
+    def _merge_shared_annotations(event_view: Dict[str, Any], annotations: Dict[str, Dict[str, Any]]) -> Dict[str, Any]:
+        comparison = event_view.get("comparacao")
+        if not isinstance(comparison, dict):
+            return event_view
+        comparison["anotacoes_sync_ativa"] = bool(ctx.HISTORY_ANNOTATIONS_SYNC_ENABLED)
+        event_id = str(event_view.get("id") or "")
+        review_items = comparison.get("apelidos_sem_atualizacao")
+        if not isinstance(review_items, list):
+            return event_view
+        for item in review_items:
+            if not isinstance(item, dict):
+                continue
+            record = annotations.get((event_id, str(item.get("anotacao_id") or "")))
+            if record is not None:
+                item["anotacao"] = record["anotacao"]
+        return event_view
+
+
+    def _synthetic_annotation_event(event_id: str, records: Dict[tuple, Dict[str, Any]]) -> Optional[Dict[str, Any]]:
+        event_records = [
+            record for (record_event_id, _), record in records.items()
+            if record_event_id == event_id and record.get("anotacao")
+        ]
+        if not event_records:
+            return None
+        event_records.sort(key=lambda record: record["item_id"])
+        event_time = next((record.get("horario") for record in event_records if record.get("horario")), "")
+        review_items = [
+            {
+                "serie": record.get("serie", ""),
+                "computador": record.get("computador", ""),
+                "motivo": record.get("motivo", ""),
+                "anotacao_id": record["item_id"],
+                "anotacao": record["anotacao"],
+            }
+            for record in event_records
+        ]
+        return {
+            "id": event_id,
+            "horario": event_time,
+            "somente_anotacoes_sincronizadas": True,
+            "arquivos_enviados": {},
+            "resumo": {"apelidos_sem_atualizacao": len(review_items)},
+            "comparacao": {
+                "evento_id": event_id,
+                "horario_comparacao": event_time,
+                "tipo_operacao": "atualizacao",
+                "arquivos_enviados": {},
+                "apelidos_sem_atualizacao": review_items,
+                "apelidos_atualizados": [],
+                "divergencias_apelidos_manuais": [],
+                "ausentes_no_endpoint": [],
+                "ausentes_em_detalhes": [],
+                "divergencias_local": [],
+                "correspondencias_ambiguas": [],
+                "registros_ambiguos": [],
+                "anotacoes_sync_ativa": bool(ctx.HISTORY_ANNOTATIONS_SYNC_ENABLED),
+                "somente_anotacoes_sincronizadas": True,
+            },
+        }
+
+
     @router.get("/api/historico-comparacoes")
     def get_historico_comparacoes():
         eventos = []
-        for evento in ctx.load_comparison_history():
+        history = ctx.load_comparison_history()
+        annotations = _latest_annotation_records(history)
+        local_event_ids = set()
+        for evento in history:
             if not isinstance(evento, dict):
                 continue
+            event_id = str(evento.get("id") or "")
+            if event_id:
+                local_event_ids.add(event_id)
             event_view = ctx.comparison_history_for_display(evento)
+            _merge_shared_annotations(event_view, annotations)
             comparison = event_view.get("comparacao")
             comparison = comparison if isinstance(comparison, dict) else {}
             eventos.append({
@@ -202,6 +314,22 @@ def create_inventory_history_router(ctx):
                 "restauracao_de": comparison.get("restauracao_de", {}),
                 "restauravel": _comparison_event_has_restorable_backup(evento),
                 "resumo": event_view.get("resumo", {}),
+            })
+        shared_event_ids = {event_id for event_id, _ in annotations}
+        for event_id in shared_event_ids - local_event_ids:
+            event_view = _synthetic_annotation_event(event_id, annotations)
+            if event_view is None:
+                continue
+            eventos.append({
+                "id": event_view["id"],
+                "horario": event_view["horario"],
+                "tipo": "atualizacao",
+                "arquivos_enviados": {},
+                "arquivos_restaurados": {},
+                "restauracao_de": {},
+                "restauravel": False,
+                "somente_anotacoes_sincronizadas": True,
+                "resumo": event_view["resumo"],
             })
         def event_timestamp(item: Dict[str, Any]) -> float:
             try:
@@ -218,9 +346,15 @@ def create_inventory_history_router(ctx):
             (item for item in ctx.load_comparison_history() if isinstance(item, dict) and item.get("id") == evento_id),
             None,
         )
+        annotations = _latest_annotation_records()
         if evento is None:
-            raise ctx.HTTPException(status_code=404, detail="O resultado selecionado não existe no histórico de planilhas.")
-        return {"evento": ctx.comparison_history_for_display(evento)}
+            event_view = _synthetic_annotation_event(evento_id, annotations)
+            if event_view is None:
+                raise ctx.HTTPException(status_code=404, detail="O resultado selecionado não existe no histórico de planilhas.")
+            return {"evento": event_view}
+        event_view = ctx.comparison_history_for_display(evento)
+        _merge_shared_annotations(event_view, annotations)
+        return {"evento": event_view}
 
 
     @router.put("/api/historico-comparacoes/{evento_id}/anotacoes/{item_id}")
@@ -229,6 +363,34 @@ def create_inventory_history_router(ctx):
         item_id: str,
         payload: ComparisonAnnotationPayload,
     ):
+        event = next(
+            (item for item in ctx.load_comparison_history() if isinstance(item, dict) and item.get("id") == evento_id),
+            None,
+        )
+        annotation_row = None
+        if event is not None:
+            comparison = event.get("comparacao")
+            review_items = comparison.get("apelidos_sem_atualizacao") if isinstance(comparison, dict) else None
+            if isinstance(review_items, list):
+                for index, review_item in enumerate(review_items):
+                    if not isinstance(review_item, dict):
+                        continue
+                    stable_id = ctx.comparison_review_item_id(evento_id, index, review_item)
+                    if stable_id == item_id:
+                        annotation_row = dict(review_item)
+                        annotation_row["anotacao_id"] = stable_id
+                        break
+        else:
+            annotation_row = next(
+                (
+                    record for (record_event_id, record_item_id), record in _latest_annotation_records().items()
+                    if record_event_id == evento_id and record_item_id == item_id
+                ),
+                None,
+            )
+        if annotation_row is None:
+            raise ctx.HTTPException(status_code=404, detail="A linha selecionada não existe neste resultado.")
+
         def update_annotation(history):
             if not isinstance(history, list):
                 raise ctx.HTTPException(status_code=500, detail="O histórico de planilhas não contém uma lista válida.")
@@ -253,12 +415,24 @@ def create_inventory_history_router(ctx):
             raise ctx.HTTPException(status_code=404, detail="A linha selecionada não existe neste resultado.")
 
         try:
-            with ctx.COMPARISON_HISTORY_LOCK:
-                ctx._atomic_json_update(ctx.COMPARISON_HISTORY_FILE, update_annotation, [])
+            if event is not None:
+                with ctx.COMPARISON_HISTORY_LOCK:
+                    ctx._atomic_json_update(ctx.COMPARISON_HISTORY_FILE, update_annotation, [])
+            ctx.save_history_annotation(
+                ctx.HISTORY_ANNOTATIONS_DIR,
+                event_id=evento_id,
+                event_time=str(event.get("horario") or "") if event is not None else str(annotation_row.get("horario") or ""),
+                item_id=item_id,
+                serie=str(annotation_row.get("serie") or ""),
+                computador=str(annotation_row.get("computador") or ""),
+                motivo=str(annotation_row.get("motivo") or ""),
+                anotacao=payload.anotacao,
+            )
         except ctx.HTTPException:
             raise
         except Exception:
-            raise ctx.HTTPException(status_code=500, detail="Não foi possível salvar a anotação no histórico.") from None
+            status = 503 if ctx.HISTORY_ANNOTATIONS_SYNC_ENABLED else 500
+            raise ctx.HTTPException(status_code=status, detail="Não foi possível salvar e sincronizar a anotação.") from None
         return {"sucesso": True, "anotacao": payload.anotacao}
 
 
@@ -601,6 +775,25 @@ def create_inventory_history_router(ctx):
 
     @router.delete("/api/historico-comparacoes/{evento_id}")
     def excluir_comparacao_historica(evento_id: str):
+        history = ctx.load_comparison_history()
+        if not any(isinstance(item, dict) and item.get("id") == evento_id for item in history):
+            raise ctx.HTTPException(status_code=404, detail="A atualização selecionada não existe mais no histórico.")
+        try:
+            for (record_event_id, _), record in _latest_annotation_records(history).items():
+                if record_event_id == evento_id:
+                    ctx.save_history_annotation(
+                        ctx.HISTORY_ANNOTATIONS_DIR,
+                        event_id=evento_id,
+                        event_time=str(record.get("horario") or ""),
+                        item_id=record["item_id"],
+                        serie=str(record.get("serie") or ""),
+                        computador=str(record.get("computador") or ""),
+                        motivo=str(record.get("motivo") or ""),
+                        anotacao="",
+                    )
+        except Exception:
+            status = 503 if ctx.HISTORY_ANNOTATIONS_SYNC_ENABLED else 500
+            raise ctx.HTTPException(status_code=status, detail="Não foi possível limpar as anotações sincronizadas.") from None
         total = ctx.delete_comparison_history_entry(evento_id)
         if total is None:
             raise ctx.HTTPException(status_code=404, detail="A atualização selecionada não existe mais no histórico.")
