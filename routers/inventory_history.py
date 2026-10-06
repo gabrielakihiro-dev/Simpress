@@ -223,15 +223,12 @@ def create_inventory_history_router(ctx):
         return {"evento": ctx.comparison_history_for_display(evento)}
 
 
-    @router.put("/api/historico-comparacoes/{evento_id}/anotacoes/{item_index}")
+    @router.put("/api/historico-comparacoes/{evento_id}/anotacoes/{item_id}")
     def salvar_anotacao_comparacao_historica(
         evento_id: str,
-        item_index: int,
+        item_id: str,
         payload: ComparisonAnnotationPayload,
     ):
-        if item_index < 0:
-            raise ctx.HTTPException(status_code=404, detail="A linha selecionada não existe neste resultado.")
-
         def update_annotation(history):
             if not isinstance(history, list):
                 raise ctx.HTTPException(status_code=500, detail="O histórico de planilhas não contém uma lista válida.")
@@ -243,13 +240,17 @@ def create_inventory_history_router(ctx):
                 raise ctx.HTTPException(status_code=404, detail="A atualização selecionada não existe mais no histórico.")
             comparison = event.get("comparacao")
             review_items = comparison.get("apelidos_sem_atualizacao") if isinstance(comparison, dict) else None
-            if not isinstance(review_items, list) or item_index >= len(review_items):
+            if not isinstance(review_items, list):
                 raise ctx.HTTPException(status_code=404, detail="A linha selecionada não existe neste resultado.")
-            review_item = review_items[item_index]
-            if not isinstance(review_item, dict):
-                raise ctx.HTTPException(status_code=409, detail="A linha selecionada não pode receber uma anotação.")
-            review_item["anotacao"] = payload.anotacao
-            return history
+            for index, review_item in enumerate(review_items):
+                if not isinstance(review_item, dict):
+                    continue
+                stable_id = ctx.comparison_review_item_id(evento_id, index, review_item)
+                if stable_id == item_id:
+                    review_item["anotacao_id"] = stable_id
+                    review_item["anotacao"] = payload.anotacao
+                    return history
+            raise ctx.HTTPException(status_code=404, detail="A linha selecionada não existe neste resultado.")
 
         try:
             with ctx.COMPARISON_HISTORY_LOCK:
