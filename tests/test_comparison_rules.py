@@ -1,8 +1,6 @@
 import unittest
 import io
-import copy
 from contextlib import redirect_stdout
-from datetime import datetime, timedelta, timezone
 from unittest.mock import patch
 
 from fastapi import HTTPException
@@ -17,91 +15,51 @@ def source_table(records, sheet="Inventario"):
 
 
 class InventoryComparisonTests(unittest.TestCase):
-    def test_endpoint_notebooks_without_successful_verification_for_14_days_are_reported(self):
-        reference_time = datetime(2026, 10, 5, 12, 0, tzinfo=timezone(timedelta(hours=-3)))
-        endpoint = source_table([
-            {
-                "NOMEDOCOMPUTADOR": "PRNOTEAPU01",
-                "ROTULODESERVICONUMERODESERIE": "SN-14-DIAS",
-                "ULTIMAVERIFICACAOCOMEXITO": reference_time - timedelta(days=14),
-            },
-            {
-                "NOMEDOCOMPUTADOR": "PRNOTELON02",
-                "ROTULODESERVICONUMERODESERIE": "SN-QUASE-14",
-                "ULTIMAVERIFICACAOCOMEXITO": reference_time - timedelta(days=14) + timedelta(minutes=1),
-            },
-            {
-                "NOMEDOCOMPUTADOR": "PRNOTEFOZ03",
-                "ROTULODESERVICONUMERODESERIE": "SN-DATA-PT",
-                "ULTIMAVERIFICACAOCOMEXITO": "set 20, 2026 11:59 AM",
-            },
-            {
-                "NOMEDOCOMPUTADOR": "PRNOTEMAR04",
-                "ROTULODESERVICONUMERODESERIE": "SN-SEM-DATA",
-                "ULTIMAVERIFICACAOCOMEXITO": "",
-            },
-            {
-                "NOMEDOCOMPUTADOR": "PRNOTESJP05",
-                "ROTULODESERVICONUMERODESERIE": "SN-DATA-INVALIDA",
-                "ULTIMAVERIFICACAOCOMEXITO": "data desconhecida",
-            },
-            {
-                "NOMEDOCOMPUTADOR": "DESKTOP06",
-                "ROTULODESERVICONUMERODESERIE": "SN-NAO-NOTEBOOK",
-                "ULTIMAVERIFICACAOCOMEXITO": reference_time - timedelta(days=30),
-            },
-        ])
+    def test_legacy_review_item_id_survives_display_filtering(self):
+        hidden_review = {
+            "serie": "SERIE-LOCAL-1",
+            "computador": "PRNOTE-LOCAL-1",
+            "motivo": "Série não encontrada na InvAll; apelido atual preservado.",
+        }
+        visible_review = {
+            "serie": "SERIE-DUP-1",
+            "computador": "PRNOTE-DUP-1, PRNOTE-DUP-2",
+            "motivo": "Série duplicada na InvAll; nenhum hostname foi escolhido.",
+        }
+        event = {
+            "id": "evento-anotacao-filtro",
+            "comparacao": {"apelidos_sem_atualizacao": [hidden_review, visible_review]},
+        }
 
-        result = main.compare_uploaded_workbooks(endpoint, source_table([]), {}, as_of=reference_time)
+        displayed = main.comparison_history_for_display(event)
+        displayed_reviews = displayed["comparacao"]["apelidos_sem_atualizacao"]
+
+        self.assertEqual(len(displayed_reviews), 1)
+        self.assertEqual(
+            displayed_reviews[0]["anotacao_id"],
+            main.comparison_review_item_id(event["id"], 1, visible_review),
+        )
+        self.assertNotIn("anotacao_id", visible_review)
+
+    def test_pinned_comparison_review_rows_receive_annotation_ids(self):
+        review = {
+            "serie": "BRJ-PINNED-1",
+            "computador": "PRNOTE-PINNED-1",
+            "motivo": "Série não encontrada na InvAll; apelido atual preservado.",
+        }
+        event = {
+            "id": main.PINNED_COMPARISON_EVENT_ID,
+            "horario": main.PINNED_COMPARISON_EVENT_TIME,
+            "comparacao": {"apelidos_sem_atualizacao": [review]},
+        }
+
+        displayed = main.comparison_history_for_display(event)
+        displayed_review = displayed["comparacao"]["apelidos_sem_atualizacao"][0]
 
         self.assertEqual(
-            [item["serie"] for item in result["sem_acesso_14_dias"]],
-            ["SN-14-DIAS", "SN-DATA-PT"],
+            displayed_review["anotacao_id"],
+            main.comparison_review_item_id(event["id"], 0, review),
         )
-        self.assertEqual(result["sem_acesso_14_dias"][0]["dias_sem_verificacao"], 14)
-        self.assertEqual(result["sem_acesso_14_dias"][0]["linha_endpoint"], 2)
-
-    def test_history_updates_source_labels_without_changing_saved_data_or_filter_results(self):
-        legacy_items = [
-            {"serie": "DUP", "computador": "InvAll-HOST", "motivo": "Série duplicada na InvAll; nenhum hostname foi escolhido."},
-            {"serie": "", "computador": "EquipamentosDetalhes-HOST", "motivo": "Número de série vazio na InvAll; hostname mantido sem associação."},
-            {"serie": "BRJ00000001", "computador": "", "motivo": "Série não encontrada na InvAll; apelido atual preservado."},
-            {"serie": "S1", "computador": "PRMAC01", "motivo": "Série não encontrada em EquipamentosDetalhes; nenhum dado foi alterado."},
-            {"serie": "", "computador": "PRNOTE01", "motivo": "Número de série vazio em EquipamentosDetalhes; nenhum hostname foi associado."},
-        ]
-        expected_reasons = [
-            "Série duplicada no Endpoint; nenhum hostname foi escolhido.",
-            "Número de série vazio no Endpoint; hostname mantido sem associação.",
-            "Série não encontrada no Endpoint; apelido atual preservado.",
-            "Série não encontrada na Simpress; nenhum dado foi alterado.",
-            "Número de série vazio na Simpress; nenhum hostname foi associado.",
-        ]
-        for pinned in (False, True):
-            for current_labels in (False, True):
-                with self.subTest(pinned=pinned, current_labels=current_labels):
-                    items = copy.deepcopy(legacy_items)
-                    if current_labels:
-                        for item, reason in zip(items, expected_reasons):
-                            item["motivo"] = reason
-                    event = {
-                        "id": main.PINNED_COMPARISON_EVENT_ID if pinned else "evento-teste",
-                        "horario": main.PINNED_COMPARISON_EVENT_TIME if pinned else "2026-10-04T10:00:00-03:00",
-                        "comparacao": {
-                            "apelidos_sem_atualizacao": items,
-                            "arquivos_enviados": {"endpoint": "InvAll.xlsx", "detalhes": "EquipamentosDetalhes.xlsx"},
-                            "correspondencias_ambiguas": [{"fontes": [{"fonte": "EquipamentosDetalhes"}]}],
-                            "registros_ambiguos": [{"fontes": {"InvAll": "presente", "EquipamentosDetalhes": "ambíguo"}}],
-                        },
-                    }
-                    saved_event = copy.deepcopy(event)
-                    displayed = main.comparison_history_for_display(event)["comparacao"]
-                    self.assertEqual([item["motivo"] for item in displayed["apelidos_sem_atualizacao"]], expected_reasons)
-                    self.assertEqual([item["computador"] for item in displayed["apelidos_sem_atualizacao"]], [item["computador"] for item in items])
-                    self.assertEqual(displayed["arquivos_enviados"], event["comparacao"]["arquivos_enviados"])
-                    self.assertEqual(displayed["correspondencias_ambiguas"][0]["fontes"], [{"fonte": "Simpress"}])
-                    self.assertEqual(displayed["registros_ambiguos"][0]["fontes"], {"Endpoint": "presente", "Simpress": "ambíguo"})
-                    self.assertEqual(event, saved_event)
-
     def test_two_sources_report_absence_and_location_without_comparing_ip(self):
         endpoint = source_table([
             {"NOMEDOCOMPUTADOR": "PRNOTEAPU01", "ROTULODESERVICONUMERODESERIE": "S-001", "IP": "10.0.0.1"},
@@ -154,7 +112,7 @@ class InventoryComparisonTests(unittest.TestCase):
         result = main.compare_uploaded_workbooks(endpoint, details, {})
 
         self.assertTrue(any(issue["tipo"] == "Número de série duplicado" for issue in result["correspondencias_ambiguas"]))
-        self.assertTrue(any(item["fontes"]["Simpress"] == "ambíguo" for item in result["registros_ambiguos"]))
+        self.assertTrue(any(item["fontes"]["EquipamentosDetalhes"] == "ambíguo" for item in result["registros_ambiguos"]))
         self.assertEqual(result["ausentes_em_detalhes"], [])
 
     def test_duplicate_alias_is_ambiguous_when_it_is_the_only_match(self):
@@ -169,7 +127,7 @@ class InventoryComparisonTests(unittest.TestCase):
 
         self.assertTrue(any(issue["tipo"] == "Hostname/Apelido duplicado" for issue in result["correspondencias_ambiguas"]))
         self.assertEqual(result["ausentes_em_detalhes"], [])
-        self.assertTrue(any(item["fontes"]["Simpress"] == "ambíguo" for item in result["registros_ambiguos"]))
+        self.assertTrue(any(item["fontes"]["EquipamentosDetalhes"] == "ambíguo" for item in result["registros_ambiguos"]))
 
     def test_duplicate_hostname_warnings_are_bounded_and_deterministic(self):
         endpoint = source_table([
@@ -204,14 +162,14 @@ class InventoryComparisonTests(unittest.TestCase):
             hostname_issues[0]["fontes"],
             [
                 {"fonte": "Endpoint", "quantidade": 100},
-                {"fonte": "Simpress", "quantidade": 100},
+                {"fonte": "EquipamentosDetalhes", "quantidade": 100},
             ],
         )
         self.assertEqual(len(divergent_issues), 1)
         divergent_issue = divergent_issues[0]
         self.assertEqual(divergent_issue["fontes"], [
             {"fonte": "Endpoint", "quantidade": 100},
-            {"fonte": "Simpress", "quantidade": 100},
+            {"fonte": "EquipamentosDetalhes", "quantidade": 100},
         ])
         self.assertIn("10000 combinações", divergent_issue["mensagem"])
         self.assertIn("END-000, END-001, END-002", divergent_issue["mensagem"])
@@ -272,8 +230,8 @@ class InventoryComparisonTests(unittest.TestCase):
         self.assertNotIn("divergencias_endereco", displayed_new["comparacao"])
         self.assertNotIn("local_base_principal", displayed_new["comparacao"]["divergencias_local"][0])
         self.assertEqual(displayed_new["comparacao"]["arquivos_enviados"], {"endpoint": "endpoint.xlsx", "detalhes": "detalhes.xlsx"})
-        self.assertEqual(displayed_new["comparacao"]["correspondencias_ambiguas"][0]["fontes"], [{"fonte": "Endpoint"}])
-        self.assertEqual(displayed_new["comparacao"]["registros_ambiguos"][0]["fontes"], {"Endpoint": "presente"})
+        self.assertEqual(displayed_new["comparacao"]["correspondencias_ambiguas"][0]["fontes"], [{"fonte": "No Endpoint"}])
+        self.assertEqual(displayed_new["comparacao"]["registros_ambiguos"][0]["fontes"], {"No Endpoint": "presente"})
         self.assertEqual(displayed_new["arquivos_enviados"], {"endpoint": "endpoint.xlsx", "detalhes": "detalhes.xlsx"})
         self.assertEqual(new_event["comparacao"]["ausentes_no_endpoint"], expected_endpoint_items)
         self.assertEqual(new_event["comparacao"]["ausentes_em_detalhes"], expected_detail_items)

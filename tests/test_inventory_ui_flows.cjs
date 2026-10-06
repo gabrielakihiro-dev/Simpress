@@ -6,6 +6,7 @@ const vm = require("node:vm");
 const transferUtils = require("../static/transfer-utils.js");
 
 const appScript = fs.readFileSync(path.join(__dirname, "..", "static", "app.js"), "utf8");
+const appHtml = fs.readFileSync(path.join(__dirname, "..", "static", "index.html"), "utf8");
 
 class FakeElement {
   constructor(id = "") {
@@ -86,6 +87,7 @@ function createAppHarness(fetchApi) {
     window,
     navigator: { clipboard: { writeText: async text => effects.clipboardWrites.push(text) } },
     fetch: (...args) => fetchApi(...args),
+    navigator: { clipboard: { writeText: async text => effects.clipboardWrites.push(text) } },
     FormData: FakeFormData,
     HTMLElement: FakeElement,
     setTimeout,
@@ -417,4 +419,102 @@ test("failed restoration leaves the current selection intact and presents the er
   assert.equal(harness.effects.toasts.at(-1).type, "error");
   assert.equal(button.disabled, false);
   assert.equal(button.textContent, "Restaurar versão anterior");
+});
+
+test("copies the selected location postal code and installation CNPJ with the fixed billing CNPJ", async () => {
+  const equipment = {
+    ...priorEquipment,
+    retirada_cep: "80000-123",
+    retirada_cnpj: "12.345.678/0001-90",
+  };
+  const harness = createAppHarness(async () => { throw new Error("Nenhuma chamada de API esperada"); });
+  harness.selectEquipment(equipment);
+  harness.element("retirada-cnpj").value = equipment.retirada_cnpj;
+  harness.element("retirada-endereco").value = `Rua da unidade, 10 - CEP ${equipment.retirada_cep}`;
+
+  await harness.run('copiarDadoLocalAtual("cep")');
+  await harness.run('copiarDadoLocalAtual("faturamento")');
+  await harness.run('copiarDadoLocalAtual("instalacao")');
+
+  assert.deepEqual(harness.effects.clipboardWrites, [
+    "80000-123",
+    "75.110.585/0001-00",
+    "12.345.678/0001-90",
+  ]);
+  assert.deepEqual(harness.effects.toasts.map(({ type }) => type), ["success", "success", "success"]);
+});
+
+test("copies the currently selected pickup locality after forcing the headquarters", async () => {
+  const equipment = {
+    ...priorEquipment,
+    retirada_cep: "87000-000",
+    retirada_cnpj: "12.345.678/0001-90",
+  };
+  const harness = createAppHarness(async () => { throw new Error("Nenhuma chamada de API esperada"); });
+  harness.selectEquipment(equipment);
+  harness.context.workflowSede = {
+    is_sede: true,
+    cep: "80220-300",
+    cnpj: "01.234.567/0001-89",
+  };
+  harness.run("unidadesList = [workflowSede]; forcarSedePradoVelho()");
+
+  await harness.run('copiarDadoLocalAtual("cep")');
+  await harness.run('copiarDadoLocalAtual("instalacao")');
+
+  assert.deepEqual(harness.effects.clipboardWrites, ["80220-300", "01.234.567/0001-89"]);
+  assert.deepEqual(harness.effects.toasts.map(({ type }) => type), ["info", "success", "success"]);
+});
+
+test("copies the fixed billing CNPJ and installation CNPJ for the selected delivery unit", async () => {
+  const units = [
+    { id: 11, cidade: "Londrina", cnpj: "11.111.111/0001-11", endereco_completo: "Rua Alfa, 1" },
+    { id: 22, cidade: "Maringá", cnpj: "22.222.222/0001-22", endereco_completo: "Rua Beta, 2" },
+  ];
+  const harness = createAppHarness(async () => { throw new Error("Nenhuma chamada de API esperada"); });
+  harness.context.workflowUnits = units;
+  harness.run("unidadesList = workflowUnits");
+  const installCopyButton = harness.element("btn-copiar-cnpj-instalacao-entrega");
+  installCopyButton.disabled = true;
+  assert.equal(installCopyButton.disabled, true);
+
+  harness.element("select-unidade-destino").value = "11";
+  harness.run('handleUnidadeDestinoChange("11", false)');
+  assert.equal(installCopyButton.disabled, false);
+  await harness.run('copiarDadoEntrega("faturamento")');
+  await harness.run('copiarDadoEntrega("instalacao")');
+
+  harness.element("select-unidade-destino").value = "22";
+  harness.run('handleUnidadeDestinoChange("22", false)');
+  await harness.run('copiarDadoEntrega("instalacao")');
+
+  assert.deepEqual(harness.effects.clipboardWrites, [
+    "75.110.585/0001-00",
+    "11.111.111/0001-11",
+    "22.222.222/0001-22",
+  ]);
+  assert.deepEqual(harness.effects.toasts.map(({ type }) => type), ["success", "success", "success"]);
+  assert.match(harness.effects.toasts[1].message, /CNPJ de instalação de Londrina copiado/);
+  assert.match(harness.effects.toasts[2].message, /CNPJ de instalação de Maringá copiado/);
+
+  harness.element("select-unidade-destino").value = "";
+  harness.run('handleUnidadeDestinoChange("")');
+  assert.equal(installCopyButton.disabled, true);
+});
+
+test("starts with the delivery installation CNPJ copy button disabled", () => {
+  assert.match(
+    appHtml,
+    /<button\s+type="button"\s+id="btn-copiar-cnpj-instalacao-entrega"\s+disabled\s+onclick="copiarDadoEntrega\('instalacao'\)"/
+  );
+});
+
+test("requires a selected delivery unit before copying its installation CNPJ", async () => {
+  const harness = createAppHarness(async () => { throw new Error("Nenhuma chamada de API esperada"); });
+
+  await harness.run('copiarDadoEntrega("instalacao")');
+
+  assert.deepEqual(harness.effects.clipboardWrites, []);
+  assert.equal(harness.effects.toasts.at(-1).type, "warning");
+  assert.match(harness.effects.toasts.at(-1).message, /Selecione uma unidade de destino/);
 });

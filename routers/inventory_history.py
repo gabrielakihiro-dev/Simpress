@@ -20,7 +20,6 @@ class ManualAliasConflictResolutionPayload(BaseModel):
 
 
 class ComparisonAnnotationPayload(BaseModel):
-    chave: str = Field(..., min_length=1, max_length=100)
     anotacao: str = Field(..., max_length=2000)
 
 
@@ -45,6 +44,23 @@ def _export_text(value: Any) -> str:
     elif isinstance(value, (list, tuple, set)):
         value = "; ".join(str(item) for item in value if item is not None)
     return str(value)[:32767]
+
+
+def _history_display_text(value: Any) -> str:
+    """Mask legacy source names in history exports while keeping stored filenames intact."""
+    text = _export_text(value)
+    text = re.sub(r"\b(?:na|no|da|do|à|ao|pela|pelo|a|o)\s*InvAll", "No Endpoint", text, flags=re.IGNORECASE)
+    text = re.sub(r"InvAll", "No Endpoint", text, flags=re.IGNORECASE)
+    text = re.sub(r"\b(?:no\s+)?Endpoint\b", "No Endpoint", text, flags=re.IGNORECASE)
+    text = re.sub(r"\b(?:em|de|da|do|na|no|a|à|pela|pelo)\s*EquipamentosDetalhes", "na Simpress", text, flags=re.IGNORECASE)
+    text = re.sub(r"EquipamentosDetalhes", "na Simpress", text, flags=re.IGNORECASE)
+    return re.sub(r"\b(?:na\s+)?Simpress\b", "na Simpress", text, flags=re.IGNORECASE)
+
+
+def _history_display_files(value: Any) -> Dict[str, str]:
+    if not isinstance(value, dict):
+        return {}
+    return {key: _history_display_text(name) for key, name in value.items() if isinstance(key, str)}
 
 
 def _export_datetime(value: Any) -> Optional[datetime]:
@@ -268,9 +284,7 @@ def create_inventory_history_router(ctx):
 
     def _comparison_restore_backup_paths(evento: Dict[str, Any]) -> Dict[str, Path]:
         comparison = evento.get("comparacao")
-        if not isinstance(comparison, dict):
-            raise ctx.HTTPException(status_code=409, detail="Esta atualização não possui um backup disponível para restauração.")
-        relative_value = comparison.get("backup_diretorio")
+        relative_value = comparison.get("backup_diretorio") if isinstance(comparison, dict) else None
         if not isinstance(relative_value, str) or not relative_value.strip():
             raise ctx.HTTPException(status_code=409, detail="Esta atualização não possui um backup disponível para restauração.")
 
@@ -329,7 +343,7 @@ def create_inventory_history_router(ctx):
 
 
     def _validated_comparison_backup_files(paths: Dict[str, Path]) -> Dict[str, Dict[str, Any]]:
-        labels = {"endpoint": "Endpoint", "detalhes": "Simpress"}
+        labels = {"endpoint": "No Endpoint", "detalhes": "na Simpress"}
         files: Dict[str, Dict[str, Any]] = {}
         for role, backup_path in paths.items():
             label = labels[role]
@@ -412,10 +426,7 @@ def create_inventory_history_router(ctx):
         token_material = {
             "evento_id": evento_id,
             "horario": evento.get("horario"),
-            "backup_diretorio": (
-                evento.get("comparacao", {}).get("backup_diretorio")
-                if isinstance(evento.get("comparacao"), dict) else None
-            ),
+            "backup_diretorio": evento.get("comparacao", {}).get("backup_diretorio"),
             "backup_hashes": {role: backup_files[role]["sha256"] for role in sorted(backup_files)},
             "ativos_hashes": current_hashes,
         }
@@ -431,24 +442,152 @@ def create_inventory_history_router(ctx):
         }
 
 
+    def _latest_annotation_records(history=None):
+        latest = {}
+        for record in ctx.load_history_annotations(ctx.HISTORY_ANNOTATIONS_DIR):
+            key = (record["evento_id"], record["item_id"])
+            candidate = (str(record.get("atualizado_em") or ""), record)
+            if key not in latest or candidate[0] >= latest[key][0]:
+                latest[key] = candidate
+        records = {key: value[1] for key, value in latest.items()}
+
+        # Move notes made by older versions into the shared store on first view.
+        local_history = ctx.load_comparison_history() if history is None else history
+        for event in local_history:
+            if not isinstance(event, dict):
+                continue
+            event_id = str(event.get("id") or "")
+            comparison = event.get("comparacao")
+            review_items = comparison.get("apelidos_sem_atualizacao") if isinstance(comparison, dict) else None
+            if not event_id or not isinstance(review_items, list):
+                continue
+            for index, item in enumerate(review_items):
+                if not isinstance(item, dict) or not isinstance(item.get("anotacao"), str):
+                    continue
+                item_id = ctx.comparison_review_item_id(event_id, index, item)
+                key = (event_id, item_id)
+                if key in records:
+                    continue
+                try:
+                    records[key] = ctx.save_history_annotation(
+                        ctx.HISTORY_ANNOTATIONS_DIR,
+                        event_id=event_id,
+                        event_time=str(event.get("horario") or ""),
+                        item_id=item_id,
+                        serie=str(item.get("serie") or ""),
+                        computador=str(item.get("computador") or ""),
+                        motivo=str(item.get("motivo") or ""),
+                        anotacao=item["anotacao"],
+                    )
+                except Exception:
+                    # Keep local history readable when OneDrive is temporarily unavailable.
+                    continue
+        return records
+
+
+    def _merge_shared_annotations(event_view: Dict[str, Any], annotations: Dict[str, Dict[str, Any]]) -> Dict[str, Any]:
+        comparison = event_view.get("comparacao")
+        if not isinstance(comparison, dict):
+            return event_view
+        comparison["anotacoes_sync_ativa"] = bool(ctx.HISTORY_ANNOTATIONS_SYNC_ENABLED)
+        event_id = str(event_view.get("id") or "")
+        review_items = comparison.get("apelidos_sem_atualizacao")
+        if not isinstance(review_items, list):
+            return event_view
+        for item in review_items:
+            if not isinstance(item, dict):
+                continue
+            record = annotations.get((event_id, str(item.get("anotacao_id") or "")))
+            if record is not None:
+                item["anotacao"] = record["anotacao"]
+        return event_view
+
+
+    def _synthetic_annotation_event(event_id: str, records: Dict[tuple, Dict[str, Any]]) -> Optional[Dict[str, Any]]:
+        event_records = [
+            record for (record_event_id, _), record in records.items()
+            if record_event_id == event_id and record.get("anotacao")
+        ]
+        if not event_records:
+            return None
+        event_records.sort(key=lambda record: record["item_id"])
+        event_time = next((record.get("horario") for record in event_records if record.get("horario")), "")
+        review_items = [
+            {
+                "serie": record.get("serie", ""),
+                "computador": record.get("computador", ""),
+                "motivo": record.get("motivo", ""),
+                "anotacao_id": record["item_id"],
+                "anotacao": record["anotacao"],
+            }
+            for record in event_records
+        ]
+        return {
+            "id": event_id,
+            "horario": event_time,
+            "somente_anotacoes_sincronizadas": True,
+            "arquivos_enviados": {},
+            "resumo": {"apelidos_sem_atualizacao": len(review_items)},
+            "comparacao": {
+                "evento_id": event_id,
+                "horario_comparacao": event_time,
+                "tipo_operacao": "atualizacao",
+                "arquivos_enviados": {},
+                "apelidos_sem_atualizacao": review_items,
+                "apelidos_atualizados": [],
+                "divergencias_apelidos_manuais": [],
+                "ausentes_no_endpoint": [],
+                "ausentes_em_detalhes": [],
+                "divergencias_local": [],
+                "correspondencias_ambiguas": [],
+                "registros_ambiguos": [],
+                "anotacoes_sync_ativa": bool(ctx.HISTORY_ANNOTATIONS_SYNC_ENABLED),
+                "somente_anotacoes_sincronizadas": True,
+            },
+        }
+
+
     @router.get("/api/historico-comparacoes")
     def get_historico_comparacoes():
         eventos = []
-        for evento in ctx.load_comparison_history():
+        history = ctx.load_comparison_history()
+        annotations = _latest_annotation_records(history)
+        local_event_ids = set()
+        for evento in history:
             if not isinstance(evento, dict):
                 continue
+            event_id = str(evento.get("id") or "")
+            if event_id:
+                local_event_ids.add(event_id)
             event_view = ctx.comparison_history_for_display(evento)
+            _merge_shared_annotations(event_view, annotations)
             comparison = event_view.get("comparacao")
             comparison = comparison if isinstance(comparison, dict) else {}
             eventos.append({
                 "id": event_view.get("id"),
                 "horario": event_view.get("horario"),
                 "tipo": _comparison_event_type(event_view),
-                "arquivos_enviados": event_view.get("arquivos_enviados", {}),
-                "arquivos_restaurados": comparison.get("arquivos_restaurados", {}),
+                "arquivos_enviados": _history_display_files(event_view.get("arquivos_enviados")),
+                "arquivos_restaurados": _history_display_files(comparison.get("arquivos_restaurados")),
                 "restauracao_de": comparison.get("restauracao_de", {}),
                 "restauravel": _comparison_event_has_restorable_backup(evento),
                 "resumo": event_view.get("resumo", {}),
+            })
+        shared_event_ids = {event_id for event_id, _ in annotations}
+        for event_id in shared_event_ids - local_event_ids:
+            event_view = _synthetic_annotation_event(event_id, annotations)
+            if event_view is None:
+                continue
+            eventos.append({
+                "id": event_view["id"],
+                "horario": event_view["horario"],
+                "tipo": "atualizacao",
+                "arquivos_enviados": {},
+                "arquivos_restaurados": {},
+                "restauracao_de": {},
+                "restauravel": False,
+                "somente_anotacoes_sincronizadas": True,
+                "resumo": event_view["resumo"],
             })
         def event_timestamp(item: Dict[str, Any]) -> float:
             try:
@@ -480,7 +619,7 @@ def create_inventory_history_router(ctx):
             "Apelidos para conferência": 0,
             "Divergências manuais": 0,
             "Sem verificação há 14+ dias": 0,
-            "Ausentes no Endpoint": 0,
+            "Ausentes No Endpoint": 0,
             "Ausentes na Simpress": 0,
             "Divergências de localidade": 0,
             "Duplicidades e ambiguidades": 0,
@@ -523,7 +662,7 @@ def create_inventory_history_router(ctx):
             category_counts["Apelidos para conferência"] += len(alias_reviews)
             category_counts["Divergências manuais"] += len(manual_alias_conflicts)
             category_counts["Sem verificação há 14+ dias"] += len(no_recent_verification)
-            category_counts["Ausentes no Endpoint"] += len(absent_endpoint)
+            category_counts["Ausentes No Endpoint"] += len(absent_endpoint)
             category_counts["Ausentes na Simpress"] += len(absent_simpress)
             category_counts["Divergências de localidade"] += len(local_divergences)
             category_counts["Duplicidades e ambiguidades"] += ambiguity_count
@@ -542,8 +681,8 @@ def create_inventory_history_router(ctx):
                 timestamp,
                 event_type_label,
                 event_id,
-                _export_text(endpoint_file),
-                _export_text(simpress_file),
+                _history_display_text(endpoint_file),
+                _history_display_text(simpress_file),
                 comparison.get("total_endpoint", summary.get("total_endpoint")),
                 comparison.get("total_detalhes", summary.get("total_detalhes")),
                 comparison.get("total_equipamentos_carregados", summary.get("total_equipamentos_carregados")),
@@ -568,7 +707,7 @@ def create_inventory_history_router(ctx):
                     item.get("apelido_equipamentos_detalhes"),
                     item.get("apelido_novo") or item.get("apelido_invall"),
                     _export_datetime(item.get("horario")), "Concluído", "",
-                    _export_text(item.get("arquivos_origem")), "",
+                    _history_display_text(item.get("arquivos_origem")), "",
                 ))
             for index, item in enumerate(alias_reviews):
                 alias_rows.append((
@@ -595,10 +734,10 @@ def create_inventory_history_router(ctx):
                 ))
 
             for category, items, note_category in (
-                ("Ausente no Endpoint", absent_endpoint, "ausentes_no_endpoint"),
+                ("Ausente No Endpoint", absent_endpoint, "ausentes_no_endpoint"),
                 ("Ausente na Simpress", absent_simpress, "ausentes_em_detalhes"),
             ):
-                missing_source = "Endpoint" if category == "Ausente no Endpoint" else "Simpress"
+                missing_source = "No Endpoint" if category == "Ausente No Endpoint" else "na Simpress"
                 for index, item in enumerate(items):
                     absence_rows.append((
                         timestamp, category,
@@ -666,9 +805,9 @@ def create_inventory_history_router(ctx):
         _write_export_table_sheet(
             workbook, "Histórico", "Eventos de planilhas",
             "Uma linha por atualização ou restauração, em ordem cronológica.",
-            ["Ordem", "Data e hora", "Operação", "ID do evento", "Arquivo Endpoint", "Arquivo Simpress",
-             "Equipamentos Endpoint", "Equipamentos Simpress", "Equipamentos carregados", "Apelidos atualizados",
-             "Apelidos para conferência", "Divergências manuais pendentes", "Ausentes no Endpoint",
+            ["Ordem", "Data e hora", "Operação", "ID do evento", "Arquivo No Endpoint", "Arquivo na Simpress",
+             "Equipamentos No Endpoint", "Equipamentos na Simpress", "Equipamentos carregados", "Apelidos atualizados",
+             "Apelidos para conferência", "Divergências manuais pendentes", "Ausentes No Endpoint",
              "Ausentes na Simpress", "Sem verificação há 14+ dias", "Divergências de local", "Duplicidades e ambiguidades",
              "Séries sem local", "Restauração de", "Diretório de backup"],
             history_rows, "tblHistoricoPlanilhas",
@@ -678,14 +817,14 @@ def create_inventory_history_router(ctx):
             workbook, "Apelidos", "Apelidos e hostnames",
             "Atualizações, linhas que precisam de conferência e divergências manuais registradas.",
             ["Data e hora", "Operação", "Categoria", "Série", "Hostname/Apelido",
-             "Apelido anterior/manual", "Apelido Simpress", "Apelido Endpoint/novo", "Horário da alteração",
+             "Apelido anterior/manual", "Apelido na Simpress", "Apelido No Endpoint/novo", "Horário da alteração",
              "Situação", "Motivo", "Arquivos de origem", "Anotação"],
             alias_rows, "tblHistoricoApelidos",
             [20, 16, 24, 18, 28, 30, 30, 32, 20, 29, 56, 36, 42],
         )
         _write_export_table_sheet(
             workbook, "Ausências", "Equipamentos ausentes por fonte",
-            "Registros sem correspondência segura no Endpoint ou na Simpress.",
+            "Registros sem correspondência segura No Endpoint ou na Simpress.",
             ["Data e hora", "Categoria", "Ausente em", "Hostname/Apelido", "Série",
              "Local previsto", "Anotação"],
             absence_rows, "tblHistoricoAusencias",
@@ -695,7 +834,7 @@ def create_inventory_history_router(ctx):
             workbook, "Sem acesso", "Notebooks sem verificação recente",
             "Notebooks cuja última verificação com êxito ocorreu há pelo menos 14 dias.",
             ["Data e hora", "Operação", "Hostname/Apelido", "Série", "Última verificação com êxito",
-             "Dias sem verificação", "Linha Endpoint", "Anotação"],
+             "Dias sem verificação", "Linha No Endpoint", "Anotação"],
             no_access_rows, "tblHistoricoSemAcesso",
             [20, 16, 32, 20, 26, 20, 16, 42],
         )
@@ -733,63 +872,94 @@ def create_inventory_history_router(ctx):
             (item for item in ctx.load_comparison_history() if isinstance(item, dict) and item.get("id") == evento_id),
             None,
         )
+        annotations = _latest_annotation_records()
         if evento is None:
-            raise ctx.HTTPException(status_code=404, detail="O resultado selecionado não existe no histórico de planilhas.")
-        return {"evento": ctx.comparison_history_for_display(evento)}
-
-
-    @router.post("/api/historico-comparacoes/{evento_id}/anotacoes")
-    def salvar_anotacao_comparacao(evento_id: str, payload: ComparisonAnnotationPayload):
-        match = re.fullmatch(
-            r"(apelidos_sem_atualizacao|ausentes_no_endpoint|ausentes_em_detalhes|sem_acesso_14_dias|divergencias_local|ambiguidades|series_sem_mapeamento):(\d+)",
-            payload.chave,
-        )
-        if match is None:
-            raise ctx.HTTPException(status_code=400, detail="A linha selecionada para anotação é inválida.")
-        categoria, indice_texto = match.groups()
-        indice = int(indice_texto)
-
-        def _evento_e_anotacoes(history):
-            history = ctx._validate_json_history(history, "comparações")
-            updated = ctx.deepcopy(history)
-            event = next((item for item in updated if item.get("id") == evento_id), None)
-            if event is None:
+            event_view = _synthetic_annotation_event(evento_id, annotations)
+            if event_view is None:
                 raise ctx.HTTPException(status_code=404, detail="O resultado selecionado não existe no histórico de planilhas.")
+            return {"evento": event_view}
+        event_view = ctx.comparison_history_for_display(evento)
+        _merge_shared_annotations(event_view, annotations)
+        return {"evento": event_view}
+
+
+    @router.put("/api/historico-comparacoes/{evento_id}/anotacoes/{item_id}")
+    def salvar_anotacao_comparacao_historica(
+        evento_id: str,
+        item_id: str,
+        payload: ComparisonAnnotationPayload,
+    ):
+        event = next(
+            (item for item in ctx.load_comparison_history() if isinstance(item, dict) and item.get("id") == evento_id),
+            None,
+        )
+        annotation_row = None
+        if event is not None:
             comparison = event.get("comparacao")
-            if not isinstance(comparison, dict):
-                raise ctx.HTTPException(status_code=404, detail="Este resultado não possui registros para anotar.")
-            displayed = ctx.comparison_history_for_display(event).get("comparacao") or {}
-            if categoria == "ambiguidades":
-                row_count = sum(
-                    len(displayed.get(field) or [])
-                    for field in ("correspondencias_ambiguas", "registros_ambiguos")
-                )
-            else:
-                rows = displayed.get(categoria)
-                row_count = len(rows) if isinstance(rows, list) else 0
-            if indice >= row_count:
-                raise ctx.HTTPException(status_code=404, detail="O registro selecionado não existe nesta comparação.")
+            review_items = comparison.get("apelidos_sem_atualizacao") if isinstance(comparison, dict) else None
+            if isinstance(review_items, list):
+                for index, review_item in enumerate(review_items):
+                    if not isinstance(review_item, dict):
+                        continue
+                    stable_id = ctx.comparison_review_item_id(evento_id, index, review_item)
+                    if stable_id == item_id:
+                        annotation_row = dict(review_item)
+                        annotation_row["anotacao_id"] = stable_id
+                        break
+        else:
+            annotation_row = next(
+                (
+                    record for (record_event_id, record_item_id), record in _latest_annotation_records().items()
+                    if record_event_id == evento_id and record_item_id == item_id
+                ),
+                None,
+            )
+        if annotation_row is None:
+            raise ctx.HTTPException(status_code=404, detail="A linha selecionada não existe neste resultado.")
 
-            annotations = comparison.get("anotacoes", {})
-            if not isinstance(annotations, dict) or any(
-                not isinstance(key, str) or not isinstance(value, str)
-                for key, value in annotations.items()
-            ):
-                raise ctx.HTTPException(status_code=503, detail="As anotações salvas neste resultado estão ilegíveis.")
-            annotations = dict(annotations)
-            note = payload.anotacao
-            if note.strip():
-                annotations[payload.chave] = note
-            else:
-                annotations.pop(payload.chave, None)
-            comparison["anotacoes"] = annotations
-            return updated
+        def update_annotation(history):
+            if not isinstance(history, list):
+                raise ctx.HTTPException(status_code=500, detail="O histórico de planilhas não contém uma lista válida.")
+            event = next(
+                (item for item in history if isinstance(item, dict) and item.get("id") == evento_id),
+                None,
+            )
+            if event is None:
+                raise ctx.HTTPException(status_code=404, detail="A atualização selecionada não existe mais no histórico.")
+            comparison = event.get("comparacao")
+            review_items = comparison.get("apelidos_sem_atualizacao") if isinstance(comparison, dict) else None
+            if not isinstance(review_items, list):
+                raise ctx.HTTPException(status_code=404, detail="A linha selecionada não existe neste resultado.")
+            for index, review_item in enumerate(review_items):
+                if not isinstance(review_item, dict):
+                    continue
+                stable_id = ctx.comparison_review_item_id(evento_id, index, review_item)
+                if stable_id == item_id:
+                    review_item["anotacao_id"] = stable_id
+                    review_item["anotacao"] = payload.anotacao
+                    return history
+            raise ctx.HTTPException(status_code=404, detail="A linha selecionada não existe neste resultado.")
 
-        with ctx.inventory_state_transaction([ctx.COMPARISON_HISTORY_FILE]) as transaction:
-            transaction.update_json(ctx.COMPARISON_HISTORY_FILE, _evento_e_anotacoes, [])
-            transaction.commit()
-
-        return {"sucesso": True, "chave": payload.chave, "anotacao": payload.anotacao}
+        try:
+            if event is not None:
+                with ctx.COMPARISON_HISTORY_LOCK:
+                    ctx._atomic_json_update(ctx.COMPARISON_HISTORY_FILE, update_annotation, [])
+            ctx.save_history_annotation(
+                ctx.HISTORY_ANNOTATIONS_DIR,
+                event_id=evento_id,
+                event_time=str(event.get("horario") or "") if event is not None else str(annotation_row.get("horario") or ""),
+                item_id=item_id,
+                serie=str(annotation_row.get("serie") or ""),
+                computador=str(annotation_row.get("computador") or ""),
+                motivo=str(annotation_row.get("motivo") or ""),
+                anotacao=payload.anotacao,
+            )
+        except ctx.HTTPException:
+            raise
+        except Exception:
+            status = 503 if ctx.HISTORY_ANNOTATIONS_SYNC_ENABLED else 500
+            raise ctx.HTTPException(status_code=status, detail="Não foi possível salvar e sincronizar a anotação.") from None
+        return {"sucesso": True, "anotacao": payload.anotacao}
 
 
     @router.get("/api/historico-comparacoes/{evento_id}/restauracao")
@@ -814,7 +984,7 @@ def create_inventory_history_router(ctx):
 
 
     @router.post("/api/historico-comparacoes/{evento_id}/restaurar")
-    def restaurar_comparacao_historica(evento_id: str, payload: ComparisonRestorePayload):
+    def restaurar_comparacao_historica(evento_id: str, payload: ctx.ComparisonRestorePayload):
         persistent_backup_dir = None
 
         try:
@@ -897,8 +1067,7 @@ def create_inventory_history_router(ctx):
                     transaction.stage_bytes(target_path, backup_bytes, validate_staged_backup)
 
                 transaction.apply()
-                prepared_state = ctx.load_database(transaction_locked=True, publish=False)
-                if not isinstance(prepared_state, dict):
+                if not ctx.load_database(transaction_locked=True):
                     raise RuntimeError("O conjunto restaurado não pôde ser carregado pelo site.")
 
                 restored_files = {role: path.name for role, path in target_files.items()}
@@ -914,7 +1083,7 @@ def create_inventory_history_router(ctx):
                     "arquivos_restaurados": restored_files,
                     "total_endpoint_restaurado": context["backup_files"]["endpoint"]["records"],
                     "total_detalhes_restaurado": context["backup_files"]["detalhes"]["records"],
-                    "total_equipamentos_carregados": prepared_state["stats_cache"].get("total_equipamentos", 0),
+                    "total_equipamentos_carregados": ctx.stats_cache.get("total_equipamentos", 0),
                     "backup_diretorio": str(persistent_backup_dir.relative_to(ctx.INPUT_DIR)),
                     "backup_arquivos_ausentes": missing_current_files,
                     "backup_arquivos_invalidos": invalid_current_files,
@@ -935,7 +1104,8 @@ def create_inventory_history_router(ctx):
                 }
 
                 def append_restoration(history):
-                    history = ctx._validate_json_history(history, "comparações")
+                    if not isinstance(history, list):
+                        raise RuntimeError("O histórico de planilhas não contém uma lista válida.")
                     current_source_event = next(
                         (item for item in history if isinstance(item, dict) and item.get("id") == evento_id),
                         None,
@@ -945,8 +1115,7 @@ def create_inventory_history_router(ctx):
                         if isinstance(current_source_event, dict) else None
                     )
                     if (
-                        not isinstance(current_source_event, dict)
-                        or not isinstance(current_source_comparison, dict)
+                        not isinstance(current_source_comparison, dict)
                         or current_source_comparison.get("backup_diretorio") != source_backup_relative
                         or current_source_event.get("horario") != source_event.get("horario")
                     ):
@@ -960,7 +1129,6 @@ def create_inventory_history_router(ctx):
 
                 transaction.update_json(ctx.COMPARISON_HISTORY_FILE, append_restoration, [])
                 transaction.commit()
-                ctx.publish_database_state(prepared_state)
 
             return {
                 "sucesso": True,
@@ -993,7 +1161,7 @@ def create_inventory_history_router(ctx):
     def resolver_divergencia_apelido_manual(
         evento_id: str,
         serial: str,
-        payload: ManualAliasConflictResolutionPayload,
+        payload: ctx.ManualAliasConflictResolutionPayload,
     ):
         acao = str(payload.acao or "").strip().lower()
         if acao not in {"manter", "excluir"}:
@@ -1036,7 +1204,7 @@ def create_inventory_history_router(ctx):
         if acao == "excluir":
             details_file = ctx.get_equipamentos_template_file()
             if details_file is None or not details_file.is_file():
-                raise ctx.HTTPException(status_code=404, detail="A planilha atual da Simpress não foi encontrada.")
+                raise ctx.HTTPException(status_code=404, detail="A planilha atual na Simpress não foi encontrada.")
             targets.append(details_file)
 
         with ctx.inventory_state_transaction(targets) as transaction:
@@ -1069,7 +1237,8 @@ def create_inventory_history_router(ctx):
                     raise ctx.HTTPException(status_code=409, detail="A série não pôde ser atualizada na planilha da Simpress.")
 
                 def remove_manual_override(data):
-                    data = ctx._validate_json_object(data, "apelidos")
+                    if not isinstance(data, dict):
+                        raise RuntimeError("O arquivo de apelidos manuais não contém um objeto válido.")
                     keys = [key for key in data if ctx.normalize_reference_value(key) == serial_key]
                     if len(keys) != 1 or str(data.get(keys[0]) or "").strip() != expected_manual_alias:
                         raise ctx.HTTPException(status_code=409, detail="O override manual mudou desde esta comparação.")
@@ -1081,7 +1250,8 @@ def create_inventory_history_router(ctx):
                 transaction.update_json(ctx.MODIFIED_APELIDOS_FILE, remove_manual_override, {})
 
             def mark_divergence_resolved(history):
-                history = ctx._validate_json_history(history, "comparações")
+                if not isinstance(history, list):
+                    raise RuntimeError("O histórico de planilhas não contém uma lista válida.")
                 updated = list(history)
                 stored_event = next((item for item in updated if item.get("id") == evento_id), None)
                 if stored_event is None:
@@ -1103,14 +1273,9 @@ def create_inventory_history_router(ctx):
 
             transaction.update_json(ctx.COMPARISON_HISTORY_FILE, mark_divergence_resolved, [])
             transaction.apply()
-            prepared_state = None
-            if acao == "excluir":
-                prepared_state = ctx.load_database(transaction_locked=True, publish=False)
-                if not isinstance(prepared_state, dict):
-                    raise RuntimeError("A base não pôde ser recarregada após excluir o override manual.")
+            if acao == "excluir" and not ctx.load_database(transaction_locked=True):
+                raise RuntimeError("A base não pôde ser recarregada após excluir o override manual.")
             transaction.commit()
-            if prepared_state is not None:
-                ctx.publish_database_state(prepared_state)
 
         equipment = next(
             (
@@ -1136,6 +1301,25 @@ def create_inventory_history_router(ctx):
 
     @router.delete("/api/historico-comparacoes/{evento_id}")
     def excluir_comparacao_historica(evento_id: str):
+        history = ctx.load_comparison_history()
+        if not any(isinstance(item, dict) and item.get("id") == evento_id for item in history):
+            raise ctx.HTTPException(status_code=404, detail="A atualização selecionada não existe mais no histórico.")
+        try:
+            for (record_event_id, _), record in _latest_annotation_records(history).items():
+                if record_event_id == evento_id:
+                    ctx.save_history_annotation(
+                        ctx.HISTORY_ANNOTATIONS_DIR,
+                        event_id=evento_id,
+                        event_time=str(record.get("horario") or ""),
+                        item_id=record["item_id"],
+                        serie=str(record.get("serie") or ""),
+                        computador=str(record.get("computador") or ""),
+                        motivo=str(record.get("motivo") or ""),
+                        anotacao="",
+                    )
+        except Exception:
+            status = 503 if ctx.HISTORY_ANNOTATIONS_SYNC_ENABLED else 500
+            raise ctx.HTTPException(status_code=status, detail="Não foi possível limpar as anotações sincronizadas.") from None
         total = ctx.delete_comparison_history_entry(evento_id)
         if total is None:
             raise ctx.HTTPException(status_code=404, detail="A atualização selecionada não existe mais no histórico.")
@@ -1150,11 +1334,10 @@ def create_inventory_history_router(ctx):
         '_sha256_file': _sha256_file,
         '_validated_comparison_backup_files': _validated_comparison_backup_files,
         'excluir_comparacao_historica': excluir_comparacao_historica,
-        'exportar_historico_comparacoes_excel': exportar_historico_comparacoes_excel,
         'get_comparacao_historica': get_comparacao_historica,
         'get_historico_comparacoes': get_historico_comparacoes,
+        'salvar_anotacao_comparacao_historica': salvar_anotacao_comparacao_historica,
         'resolver_divergencia_apelido_manual': resolver_divergencia_apelido_manual,
         'restaurar_comparacao_historica': restaurar_comparacao_historica,
-        'salvar_anotacao_comparacao': salvar_anotacao_comparacao,
         'visualizar_restauracao_comparacao': visualizar_restauracao_comparacao,
     }

@@ -114,10 +114,37 @@ class MaintenanceContractTests(unittest.TestCase):
             "MODIFIED_APELIDOS_FILE",
             "ALIAS_HISTORY_FILE",
             "COMPARISON_HISTORY_FILE",
+            "HISTORY_ANNOTATIONS_DIR",
+            "HISTORY_ANNOTATIONS_SYNC_ENABLED",
             "TRANSACTION_ROOT",
         ):
             with self.subTest(path=name):
                 self.assertEqual(getattr(main, name), getattr(app_config, name))
+
+    def test_history_annotation_directory_prefers_override_then_authenticated_onedrive(self):
+        with tempfile.TemporaryDirectory() as temp_dir:
+            root = Path(temp_dir)
+            override = root / "custom-shared-folder"
+            onedrive = root / "OneDrive"
+            onedrive.mkdir()
+
+            resolved, sync_enabled = app_config.resolve_history_annotations_dir(
+                root, {"SIMPRESS_ANNOTATIONS_DIR": str(override), "OneDriveCommercial": str(onedrive)}
+            )
+            self.assertEqual(resolved, override)
+            self.assertTrue(sync_enabled)
+
+            resolved, sync_enabled = app_config.resolve_history_annotations_dir(
+                root, {"OneDriveCommercial": str(onedrive)}
+            )
+            self.assertEqual(resolved, onedrive / "Aplicativos" / "Simpress" / "AnotacoesHistorico")
+            self.assertTrue(sync_enabled)
+
+            resolved, sync_enabled = app_config.resolve_history_annotations_dir(
+                root, {"OneDriveCommercial": str(root / "nao-existe")}
+            )
+            self.assertEqual(resolved, root / "anotacoes_historico")
+            self.assertFalse(sync_enabled)
 
         vscode_settings = json.loads((PROJECT_ROOT / ".vscode" / "settings.json").read_text(encoding="utf-8"))
         self.assertEqual(
@@ -135,6 +162,7 @@ class MaintenanceContractTests(unittest.TestCase):
             "/api/historico-apelidos": {"get"},
             "/api/historico-comparacoes": {"get"},
             "/api/historico-comparacoes/{evento_id}": {"get", "delete"},
+            "/api/historico-comparacoes/{evento_id}/anotacoes/{item_id}": {"put"},
             "/api/historico-alteracoes/{evento_id}": {"delete"},
             "/api/historico-apelidos/{evento_id}": {"delete"},
             "/api/equipamento/apelido/desfazer": {"post"},

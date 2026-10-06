@@ -1,0 +1,11 @@
+---
+description: Padroniza os nomes das fontes em todo o Histórico de Planilhas.
+alwaysApply: true
+---
+
+# Nomes das fontes no Histórico de Planilhas
+
+- Em todo conteúdo apresentado pelo Histórico de Planilhas, normalize menções antigas e novas às fontes: `EquipamentosDetalhes` deve aparecer como `na Simpress`, e `InvAll` deve aparecer como `No Endpoint`.
+- A regra vale para motivos, fontes, mensagens, títulos, nomes de arquivos exibidos e exportações do histórico, inclusive registros antigos já salvos.
+- Aplique a regra independentemente do nome do arquivo enviado ou do nome da aba da planilha; esses nomes não podem desativar a padronização.
+- Faça a substituição na apresentação do histórico, sem regravar os dados de origem nem alterar os identificadores brutos usados para auditoria e restauração.

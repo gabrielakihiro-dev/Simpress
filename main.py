@@ -45,6 +45,8 @@ from app_config import (
     DETAILS_UPLOAD_FILE,
     ENDPOINT_UPLOAD_FILE,
     EXPORT_MODEL_FILE,
+    HISTORY_ANNOTATIONS_DIR,
+    HISTORY_ANNOTATIONS_SYNC_ENABLED,
     INPUT_DIR,
     MAX_API_REQUEST_BYTES,
     MAX_UPLOAD_BYTES,
@@ -92,6 +94,7 @@ from domains.inventory_comparison import (
     _uploaded_aliases_by_serial,
     compare_uploaded_workbooks,
     comparison_history_for_display,
+    comparison_review_item_id,
     filter_curitiba_hostname_location_mismatches,
     filter_sebrae_owned_unmatched_items,
     filter_update_review_items,
@@ -103,6 +106,7 @@ from domains.inventory_comparison import (
     location_for_computer_name,
     normalize_reference_value,
 )
+from domains.history_annotations import load_history_annotations, save_history_annotation
 from domains.inventory_update import read_uploaded_xlsx as _read_uploaded_xlsx
 from domains.inventory_update import update_inventory_files
 from domains.equipment_search import (

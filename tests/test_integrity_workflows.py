@@ -13,6 +13,7 @@ from datetime import datetime, timezone
 from contextlib import ExitStack
 from pathlib import Path
 from urllib.parse import unquote
+from types import SimpleNamespace
 from unittest.mock import patch
 
 import openpyxl
@@ -224,6 +225,7 @@ class WorkflowIntegrityTests(unittest.TestCase):
         self.overrides = self.root / "apelidos_modificados.json"
         self.manual_history = self.root / "historico_alteracoes.json"
         self.comparison_history = self.root / "historico_comparacoes.json"
+        self.shared_annotations = self.root / "shared_annotations"
         self.custom_units = self.root / "unidades_custom.json"
         self.stack = ExitStack()
         self.stack.enter_context(patch.object(main, "BASE_DIR", self.root))
@@ -235,6 +237,8 @@ class WorkflowIntegrityTests(unittest.TestCase):
         self.stack.enter_context(patch.object(main, "MODIFIED_APELIDOS_FILE", self.overrides))
         self.stack.enter_context(patch.object(main, "ALIAS_HISTORY_FILE", self.manual_history))
         self.stack.enter_context(patch.object(main, "COMPARISON_HISTORY_FILE", self.comparison_history))
+        self.stack.enter_context(patch.object(main, "HISTORY_ANNOTATIONS_DIR", self.shared_annotations))
+        self.stack.enter_context(patch.object(main, "HISTORY_ANNOTATIONS_SYNC_ENABLED", True))
         self.stack.enter_context(patch.object(main, "CUSTOM_UNIDADES_FILE", self.custom_units))
         self.stack.enter_context(patch.object(main, "TRANSACTION_ROOT", self.root))
         self.old_state = (
@@ -1359,6 +1363,120 @@ class WorkflowIntegrityTests(unittest.TestCase):
         self.assertEqual(len(comparison_after_repeat[-1]["comparacao"]["apelidos_atualizados"]), 0)
         self.assertEqual(len(comparison_after_repeat), len(comparison_before) + 2)
         self.assertEqual(json.loads(self.manual_history.read_text(encoding="utf-8")), manual_before)
+
+    def test_annotation_uses_stable_review_id_after_display_filter_and_stays_event_scoped(self):
+        filtered_out = {
+            "serie": "SERIE-LOCAL-1",
+            "computador": "PRNOTE-LOCAL-1",
+            "motivo": "Série não encontrada na InvAll; apelido atual preservado.",
+        }
+        visible_item = {
+            "serie": "SERIE-DUP-1",
+            "computador": "PRNOTE-DUP-1, PRNOTE-DUP-2",
+            "motivo": "Série duplicada na InvAll; nenhum hostname foi escolhido.",
+        }
+        history = [
+            {"id": "evento-anotacao-1", "comparacao": {"apelidos_sem_atualizacao": [filtered_out.copy(), visible_item.copy()]}},
+            {"id": "evento-anotacao-2", "comparacao": {"apelidos_sem_atualizacao": [filtered_out.copy(), visible_item.copy()]}},
+        ]
+        self.comparison_history.write_text(json.dumps(history), encoding="utf-8")
+
+        displayed = main.comparison_history_for_display(history[0])
+        displayed_item = displayed["comparacao"]["apelidos_sem_atualizacao"][0]
+        self.assertEqual(displayed_item["serie"], "SERIE-DUP-1")
+        self.assertNotEqual(
+            displayed_item["anotacao_id"],
+            main.comparison_history_for_display(history[1])["comparacao"]["apelidos_sem_atualizacao"][0]["anotacao_id"],
+        )
+
+        result = main.salvar_anotacao_comparacao_historica(
+            "evento-anotacao-1",
+            displayed_item["anotacao_id"],
+            SimpleNamespace(anotacao="Conferir com suporte."),
+        )
+
+        stored_history = json.loads(self.comparison_history.read_text(encoding="utf-8"))
+        first_items = stored_history[0]["comparacao"]["apelidos_sem_atualizacao"]
+        second_items = stored_history[1]["comparacao"]["apelidos_sem_atualizacao"]
+        self.assertTrue(result["sucesso"])
+        self.assertNotIn("anotacao", first_items[0])
+        self.assertEqual(first_items[1]["anotacao"], "Conferir com suporte.")
+        self.assertEqual(first_items[1]["anotacao_id"], displayed_item["anotacao_id"])
+        self.assertNotIn("anotacao", second_items[1])
+
+    def test_history_annotations_sync_to_a_fresh_clone_and_can_be_edited_there(self):
+        row = {
+            "serie": "SERIE-SYNC-1",
+            "computador": "PRNOTE-SYNC-1",
+            "motivo": "Série duplicada na InvAll; nenhum hostname foi escolhido.",
+        }
+        event = {
+            "id": "evento-sync-anotacoes",
+            "horario": "2026-10-06T10:00:00-03:00",
+            "comparacao": {"apelidos_sem_atualizacao": [row]},
+        }
+        self.comparison_history.write_text(json.dumps([event]), encoding="utf-8")
+        item_id = main.comparison_history_for_display(event)["comparacao"]["apelidos_sem_atualizacao"][0]["anotacao_id"]
+
+        main.salvar_anotacao_comparacao_historica(
+            event["id"], item_id, SimpleNamespace(anotacao="Conferir no próximo inventário.")
+        )
+        shared_files = list(self.shared_annotations.glob("*.json"))
+        self.assertEqual(len(shared_files), 1)
+        shared_record = json.loads(shared_files[0].read_text(encoding="utf-8"))
+        self.assertEqual(shared_record["anotacao"], "Conferir no próximo inventário.")
+        self.assertEqual(set(shared_record), {
+            "versao", "evento_id", "horario", "item_id", "serie", "computador",
+            "motivo", "anotacao", "atualizado_em",
+        })
+
+        fresh_clone_history = self.root / "clone_novo" / "historico_comparacoes.json"
+        fresh_clone_history.parent.mkdir()
+        fresh_clone_history.write_text("[]", encoding="utf-8")
+        with patch.object(main, "COMPARISON_HISTORY_FILE", fresh_clone_history):
+            listing = main.get_historico_comparacoes()
+            self.assertEqual(listing["total"], 1)
+            self.assertTrue(listing["eventos"][0]["somente_anotacoes_sincronizadas"])
+            detail = main.get_comparacao_historica(event["id"])["evento"]
+            displayed_row = detail["comparacao"]["apelidos_sem_atualizacao"][0]
+            self.assertEqual(displayed_row["anotacao"], "Conferir no próximo inventário.")
+            self.assertEqual(displayed_row["anotacao_id"], item_id)
+
+            main.salvar_anotacao_comparacao_historica(
+                event["id"], item_id, SimpleNamespace(anotacao="Atualizado no notebook novo.")
+            )
+
+        refreshed_record = json.loads(shared_files[0].read_text(encoding="utf-8"))
+        self.assertEqual(refreshed_record["anotacao"], "Atualizado no notebook novo.")
+
+        with patch.object(main, "COMPARISON_HISTORY_FILE", fresh_clone_history):
+            main.salvar_anotacao_comparacao_historica(
+                event["id"], item_id, SimpleNamespace(anotacao="")
+            )
+            self.assertFalse(any(
+                item.get("somente_anotacoes_sincronizadas")
+                for item in main.get_historico_comparacoes()["eventos"]
+            ))
+
+    def test_legacy_local_annotation_is_copied_to_shared_storage_when_opened(self):
+        event = {
+            "id": "evento-legado-com-anotacao",
+            "horario": "2026-10-05T10:00:00-03:00",
+            "comparacao": {
+                "apelidos_sem_atualizacao": [{
+                    "serie": "BRJ-LEGADA-1",
+                    "computador": "PRNOTE-LEGADO-1",
+                    "motivo": "Série não encontrada na InvAll; apelido atual preservado.",
+                    "anotacao": "Anotação salva pela versão anterior.",
+                }],
+            },
+        }
+        self.comparison_history.write_text(json.dumps([event]), encoding="utf-8")
+
+        detail = main.get_comparacao_historica(event["id"])["evento"]
+        displayed_row = detail["comparacao"]["apelidos_sem_atualizacao"][0]
+        self.assertEqual(displayed_row["anotacao"], "Anotação salva pela versão anterior.")
+        self.assertEqual(len(list(self.shared_annotations.glob("*.json"))), 1)
 
     def test_upload_validation_and_transaction_do_not_block_the_event_loop(self):
         make_details(self.details, [

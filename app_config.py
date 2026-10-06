@@ -1,7 +1,7 @@
 """Project-relative paths and limits used by the local application."""
 
-from pathlib import Path
 import os
+from pathlib import Path
 
 
 BASE_DIR = Path(__file__).resolve().parent
@@ -46,3 +46,24 @@ TRANSFER_ORIGIN_CONTACT = os.environ.get(
 )
 TRANSFER_ORIGIN_EMAIL = os.environ.get("SIMPRESS_TRANSFER_ORIGIN_EMAIL", "gansouza@simpress.com.br")
 TRANSFER_ORIGIN_PHONE = os.environ.get("SIMPRESS_TRANSFER_ORIGIN_PHONE", "(41) 98751-2389")
+
+
+def resolve_history_annotations_dir(base_dir: Path, environment=None):
+    """Choose a shared annotation folder when OneDrive or an override is available."""
+    env = os.environ if environment is None else environment
+    override = str(env.get("SIMPRESS_ANNOTATIONS_DIR") or "").strip()
+    if override:
+        path = Path(override).expanduser()
+        if not path.is_absolute():
+            path = Path(base_dir) / path
+        return path.resolve(strict=False), True
+
+    for variable in ("OneDriveCommercial", "OneDrive"):
+        root = str(env.get(variable) or "").strip()
+        if root and Path(root).expanduser().is_dir():
+            return Path(root).expanduser() / "Aplicativos" / "Simpress" / "AnotacoesHistorico", True
+
+    return Path(base_dir) / "anotacoes_historico", False
+
+
+HISTORY_ANNOTATIONS_DIR, HISTORY_ANNOTATIONS_SYNC_ENABLED = resolve_history_annotations_dir(BASE_DIR)

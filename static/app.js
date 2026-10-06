@@ -1,6 +1,6 @@
     // State
     let currentEquipamento = null;
-    let equipamentoSelectionRevision = 0;
+    const CNPJ_FATURAMENTO_PADRAO = "75.110.585/0001-00";
     let retiradaCidadeSelecionada = "";
     let unidadesList = [];
     let debounceTimer = null;
@@ -10,19 +10,8 @@
     const searchButtonInitialHtml = document.getElementById("btn-buscar-serial")?.innerHTML || "";
     const modalReturnFocus = new Map();
 
-    function definirEquipamentoAtual(equipment) {
-      currentEquipamento = equipment;
-      equipamentoSelectionRevision += 1;
-      const copySerialButton = document.getElementById("btn-copiar-serie");
-      const hasSerial = Boolean(String(equipment?.serial || "").trim());
-      if (copySerialButton) {
-        copySerialButton.disabled = !hasSerial;
-        copySerialButton.setAttribute("aria-disabled", String(!hasSerial));
-      }
-    }
-
     function limparSelecaoEquipamento() {
-      definirEquipamentoAtual(null);
+      currentEquipamento = null;
       retiradaCidadeSelecionada = "";
       document.getElementById("card-equipamento")?.classList.add("hidden");
       document.getElementById("retirada-cnpj").value = "";
@@ -59,12 +48,12 @@
     }
 
     function invalidarDadosEquipamentoAposRestauracao() {
-      invalidarBuscasEquipamento();
-      fecharAutocomplete();
-      limparSelecaoEquipamento();
       const serialInput = document.getElementById("input-serial");
       if (serialInput) serialInput.value = "";
       document.getElementById("btn-clear-serial")?.classList.add("hidden");
+      invalidarBuscasEquipamento();
+      limparSelecaoEquipamento();
+      fecharAutocomplete();
     }
 
     async function atualizarSelecaoAposSubstituirInventarios(serialSelecionada) {
@@ -86,7 +75,7 @@
           options,
         ),
         applyEquipment: equipment => {
-          definirEquipamentoAtual(equipment);
+          currentEquipamento = equipment;
           exibirEquipamento(equipment);
         },
       });
@@ -282,9 +271,9 @@
         horarioId: "retirada-horario",
         almocoId: "retirada-almoco",
         pausaDuracaoId: "retirada-pausa-duracao",
-        contatoPadrao: "",
-        emailPadrao: "",
-        telefonePadrao: "",
+        contatoPadrao: "Gabriel Akihiro Noda Souza (Simpress)",
+        emailPadrao: "gansouza@simpress.com.br",
+        telefonePadrao: "(41) 98751-2389",
         horarioPadrao: "09:00:00 às 18:00:00",
         almocoPadrao: "12:00:00",
         pausaDuracaoPadrao: "1h12"
@@ -305,28 +294,6 @@
         pausaDuracaoPadrao: "1h"
       }
     };
-
-    async function carregarConfiguracaoTransferencia() {
-      try {
-        const response = await fetch("/api/config/transferencia", { cache: "no-store" });
-        if (!response.ok) throw new Error("Falha ao carregar os contatos padrão da instalação.");
-        const config = await response.json();
-        const origin = CAMPOS_CONTATO_REGIONAL.retirada;
-        const fields = [
-          ["contatoPadrao", "contatoId", config.retirada_contato],
-          ["emailPadrao", "emailId", config.retirada_email],
-          ["telefonePadrao", "telefoneId", config.retirada_telefone],
-        ];
-        fields.forEach(([defaultKey, inputKey, value]) => {
-          const normalized = typeof value === "string" ? value.trim() : "";
-          origin[defaultKey] = normalized;
-          const input = document.getElementById(origin[inputKey]);
-          if (input && !input.value.trim()) input.value = normalized;
-        });
-      } catch (error) {
-        console.warn("Não foi possível carregar os contatos de retirada configurados:", error);
-      }
-    }
 
     function normalizarCidadeRegional(cidade) {
       return String(cidade || "")
@@ -523,11 +490,7 @@
 
     // Initialize page behaviors
     document.addEventListener("DOMContentLoaded", () => {
-      document.getElementById("input-serial")?.addEventListener("input", () => {
-        equipamentoSelectionRevision += 1;
-      });
       lucide.createIcons();
-      carregarConfiguracaoTransferencia();
       popularSeletoresRepresentantesRegionais();
       associarRotulosAcessiveis();
       inicializarMascarasTelefone();
@@ -552,6 +515,9 @@
         });
       });
 
+      // Focus serial input immediately
+      const inputSerial = document.getElementById("input-serial");
+      if (inputSerial) inputSerial.focus();
     });
 
     // Toast system
@@ -595,41 +561,21 @@
       }, 4000);
     }
 
-    function formatarContagemEstatistica(value) {
-      const count = typeof value === "number" ? value : Number(value);
-      if (!Number.isSafeInteger(count) || count < 0) return "Indisponível";
-      return count.toLocaleString("pt-BR");
-    }
-
-    function definirEstatistica(elementId, value) {
-      const element = document.getElementById(elementId);
-      if (element) element.textContent = formatarContagemEstatistica(value);
-    }
-
     // Load statistics from API
     async function carregarEstatisticas() {
       try {
         const res = await fetch("/api/stats");
-        if (!res.ok) throw new Error("Falha ao consultar as estatísticas locais.");
-        const stats = await res.json();
-        definirEstatistica("stat-equipamentos", stats.total_equipamentos);
-        definirEstatistica("stat-unidades", stats.total_unidades);
-        const exportButton = document.getElementById("btn-exportar-equipamentos");
-        if (exportButton) {
-          const exportAvailable = stats.exportacao_disponivel === true;
-          const exportCount = Number(stats.total_alteracoes_exportaveis);
-          exportButton.classList.toggle(
-            "hidden",
-            exportAvailable && Number.isSafeInteger(exportCount) && exportCount === 0
-          );
-          exportButton.title = exportAvailable
-            ? "Baixar a planilha com apelidos e IdCliente atualizados"
-            : `Contagem indisponível: ${stats.exportacao_motivo || "clique para verificar a exportação"}`;
+        if (res.ok) {
+          const stats = await res.json();
+          document.getElementById("stat-equipamentos").textContent = Number(stats.total_equipamentos).toLocaleString("pt-BR");
+          document.getElementById("stat-unidades").textContent = stats.total_unidades;
+          const exportButton = document.getElementById("btn-exportar-equipamentos");
+          if (exportButton) {
+            exportButton.classList.toggle("hidden", Number(stats.total_alteracoes_exportaveis || 0) === 0);
+          }
         }
       } catch (err) {
         console.warn("Não foi possível carregar estatísticas:", err);
-        definirEstatistica("stat-equipamentos", null);
-        definirEstatistica("stat-unidades", null);
       }
     }
 
@@ -666,7 +612,7 @@
         const fileLabels = {
           template_transferencia: "Modelo de transferência",
           inventario_equipamentos: "Inventário ativo de equipamentos",
-          inventario_detalhes_atualizacao: "Inventário Simpress para atualização",
+          inventario_detalhes_atualizacao: "Inventário EquipamentosDetalhes para atualização",
           inventario_endpoint: "Inventário Endpoint",
           modelo_exportacao: "Modelo de exportação",
         };
@@ -752,6 +698,7 @@
             document.getElementById("entrega-endereco").value = "";
             preencherRepresentanteRegional("entrega", "");
           }
+          atualizarEstadoCopiaCnpjEntrega();
 
           const countEl = document.getElementById("filiais-count");
           if (countEl) countEl.textContent = `${unidadesList.length} filiais catalogadas`;
@@ -947,7 +894,7 @@
               </span>
             ` : ""}
             ${item.invall_alias_status && item.invall_alias_status !== "aplicado" ? `
-              <span class="text-[10px] text-amber-200 shrink-0" title="${escapeHtml(item.invall_alias_detail || "Conferir associação com o Endpoint")}">Conferir Endpoint</span>
+              <span class="text-[10px] text-amber-200 shrink-0" title="${escapeHtml(item.invall_alias_detail || "Conferir associação com a InvAll")}">Conferir InvAll</span>
             ` : ""}
           </div>
         </div>
@@ -1350,7 +1297,7 @@
         if (transferUtils.serialForTransfer(data, serial) !== serial) {
           throw new Error("A busca não retornou uma correspondência exata. Escolha um equipamento na lista.");
         }
-        definirEquipamentoAtual(data);
+        currentEquipamento = data;
         exibirEquipamento(data);
         showToast(`Equipamento ${data.serial} localizado com sucesso!`, "success");
 
@@ -1385,7 +1332,7 @@
       document.getElementById("badge-apelido").textContent = eq.apelido || "Sem Apelido";
       const aliasStatus = document.getElementById("badge-apelido-status");
       aliasStatus.textContent = eq.invall_alias_status && eq.invall_alias_status !== "aplicado"
-        ? (eq.invall_alias_detail || "Conferir associação com o Endpoint.")
+        ? (eq.invall_alias_detail || "Conferir associação com a InvAll.")
         : "";
       aliasStatus.classList.toggle("hidden", !aliasStatus.textContent);
       document.getElementById("card-id-cliente").textContent = eq.idCliente ? `Id Cliente: ${eq.idCliente}` : "";
@@ -1427,21 +1374,6 @@
       );
     }
 
-    async function copiarSerieAtual() {
-      const serial = String(currentEquipamento?.serial || "").trim();
-      if (!serial) {
-        showToast("Nenhuma série disponível para o equipamento pesquisado.", "warning");
-        return;
-      }
-
-      try {
-        await copiarTextoParaAreaTransferencia(serial);
-        showToast("Série copiada.", "success");
-      } catch (err) {
-        showToast("Não foi possível copiar a série.", "error");
-      }
-    }
-
     // "Forçar SEDE Prado Velho" button action
     function forcarSedePradoVelho() {
       const sede = unidadesList.find(unit => unit.is_sede);
@@ -1453,7 +1385,15 @@
     }
 
     // Handle Unidade de Destino Selection
+    function atualizarEstadoCopiaCnpjEntrega() {
+      const unidadeId = document.getElementById("select-unidade-destino")?.value;
+      const unidadeDestino = unidadesList.find(unit => String(unit.id) === String(unidadeId));
+      const botao = document.getElementById("btn-copiar-cnpj-instalacao-entrega");
+      if (botao) botao.disabled = !String(unidadeDestino?.cnpj || "").trim();
+    }
+
     function handleUnidadeDestinoChange(unitId, notificar = true) {
+      atualizarEstadoCopiaCnpjEntrega();
       if (!unitId) {
         preencherRepresentanteRegional("entrega", "");
         return;
@@ -1702,6 +1642,80 @@
       fecharModalAcessivel("modal-texto-transporte");
     }
 
+    async function copiarSeriePesquisada() {
+      const serial = String(currentEquipamento?.serial || "").trim();
+      if (!serial) {
+        showToast("Pesquise um equipamento antes de copiar a série.", "warning");
+        return;
+      }
+
+      try {
+        await copiarTextoParaAreaTransferencia(serial);
+        showToast(`Série ${serial} copiada para a área de transferência.`, "success");
+      } catch (err) {
+        showToast("Não foi possível copiar a série. Tente novamente pelo navegador.", "error");
+      }
+    }
+
+    function obterCepRetiradaSelecionada() {
+      const endereco = document.getElementById("retirada-endereco")?.value || "";
+      const cepNoEndereco = endereco.match(/\bCEP\b\s*:?\s*(\d{5}-?\d{3})/i);
+      return cepNoEndereco?.[1] || currentEquipamento?.retirada_cep || "";
+    }
+
+    async function copiarDadoLocalAtual(tipo) {
+      const dados = {
+        cep: { valor: obterCepRetiradaSelecionada(), nome: "CEP" },
+        faturamento: { valor: CNPJ_FATURAMENTO_PADRAO, nome: "CNPJ de faturamento" },
+        instalacao: {
+          valor: document.getElementById("retirada-cnpj")?.value || "",
+          nome: "CNPJ de instalação"
+        }
+      };
+      const dado = dados[tipo];
+      if (!dado) return;
+
+      const valor = String(dado.valor || "").trim();
+      if (!valor) {
+        showToast(`Pesquise um equipamento com ${dado.nome.toLowerCase()} informado antes de copiar.`, "warning");
+        return;
+      }
+
+      try {
+        await copiarTextoParaAreaTransferencia(valor);
+        showToast(`${dado.nome} copiado para a área de transferência.`, "success");
+      } catch (err) {
+        showToast(`Não foi possível copiar o ${dado.nome.toLowerCase()}.`, "error");
+      }
+    }
+
+    async function copiarDadoEntrega(tipo) {
+      const unidadeId = document.getElementById("select-unidade-destino")?.value;
+      const unidadeDestino = unidadesList.find(unit => String(unit.id) === String(unidadeId));
+      const dados = {
+        faturamento: { valor: CNPJ_FATURAMENTO_PADRAO, nome: "CNPJ de faturamento" },
+        instalacao: { valor: unidadeDestino?.cnpj || "", nome: "CNPJ de instalação" }
+      };
+      const dado = dados[tipo];
+      if (!dado) return;
+
+      const valor = String(dado.valor || "").trim();
+      if (!valor) {
+        showToast("Selecione uma unidade de destino antes de copiar o CNPJ de instalação.", "warning");
+        return;
+      }
+
+      try {
+        await copiarTextoParaAreaTransferencia(valor);
+        const unidade = tipo === "instalacao"
+          ? ` de ${unidadeDestino.cidade || "unidade selecionada"}`
+          : " da entrega";
+        showToast(`${dado.nome}${unidade} copiado para a área de transferência.`, "success");
+      } catch (err) {
+        showToast(`Não foi possível copiar o ${dado.nome.toLowerCase()} da entrega.`, "error");
+      }
+    }
+
     async function copiarTextoSolicitacaoTransporte() {
       const texto = document.getElementById("textarea-texto-transporte").value;
       if (!texto.trim()) {
@@ -1798,7 +1812,7 @@
         window.URL.revokeObjectURL(url);
         a.remove();
 
-        showToast("Planilha Exportada com Sucesso!", "success");
+        showToast(`Planilha oficial ${filename} baixada com sucesso!`, "success");
 
       } catch (err) {
         console.error("Erro ao gerar planilha:", err);
@@ -1833,6 +1847,7 @@
       document.getElementById("entrega-email").value = "";
       document.getElementById("entrega-telefone").value = "";
       document.getElementById("entrega-obs").value = "";
+      atualizarEstadoCopiaCnpjEntrega();
       preencherRepresentanteRegional("entrega", "");
       preencherRepresentanteRegional("retirada", "");
 
@@ -1876,7 +1891,7 @@
       const endpointFile = document.getElementById("upload-endpoint-file").files?.[0];
       const detailsFile = document.getElementById("upload-details-file").files?.[0];
       if (!endpointFile || !detailsFile) {
-        mostrarStatusUpload("Selecione Endpoint e Simpress antes de atualizar.", true);
+        mostrarStatusUpload("Selecione Endpoint e EquipamentosDetalhes antes de atualizar.", true);
         return;
       }
 
@@ -1972,62 +1987,43 @@
         : filtrarSeriesSebrae(comparison.ausentes_em_detalhes);
       const divergenciasLocal = comparison.divergencias_local || [];
       const seriesSemMapa = comparison.series_sem_mapeamento || [];
+      const semAcesso14Dias = comparison.sem_acesso_14_dias || [];
       const ambiguidades = comparison.correspondencias_ambiguas || [];
       const registrosAmbiguos = comparison.registros_ambiguos || [];
       const arquivo = comparison.arquivos_enviados || {};
       const apelidosAtualizados = comparison.apelidos_atualizados || [];
       const apelidosSemAtualizacao = comparison.apelidos_sem_atualizacao || [];
       const divergenciasApelidosManuais = comparison.divergencias_apelidos_manuais || [];
-      const semAcesso14Dias = comparison.sem_acesso_14_dias || [];
-      const annotationStorageKey = `simpress:comparacao-anotacoes:${comparison.evento_id || [comparison.horario_comparacao, arquivo.endpoint, arquivo.detalhes].join("|")}`;
-      const anotacoes = comparison.anotacoes && typeof comparison.anotacoes === "object"
-        ? { ...comparison.anotacoes }
-        : {};
-      if (!comparison.evento_id) {
-        try {
-          Object.assign(anotacoes, JSON.parse(localStorage.getItem(annotationStorageKey) || "{}"));
-        } catch (error) {
-          console.warn("Não foi possível carregar as anotações locais da comparação:", error);
-        }
-      }
+      const permitirAnotacoes = comparison.contexto_historico === true && Boolean(comparison.evento_id);
+      const formatarMotivoRevisao = motivo => formatarNomeFonteHistorico(motivo || "Conferir associação.");
+      const aliasReviewHeaders = ["Série", "Hostname No Endpoint", "Motivo", ...(permitirAnotacoes ? ["Anotações"] : [])];
 
       document.getElementById("comparacao-planilhas-fontes").textContent =
-        `Endpoint: ${arquivo.endpoint || "—"} · Simpress: ${arquivo.detalhes || "—"}${comparison.horario_comparacao ? ` · ${formatarHorarioHistorico(comparison.horario_comparacao)}` : ""}`;
+        `No Endpoint: ${formatarNomeFonteHistorico(arquivo.endpoint || "—")} · na Simpress: ${formatarNomeFonteHistorico(arquivo.detalhes || "—")}${comparison.horario_comparacao ? ` · ${formatarHorarioHistorico(comparison.horario_comparacao)}` : ""}`;
 
-      const renderizarCampoAnotacao = (categoria, indice) => {
-        const chave = `${categoria}:${indice}`;
-        const anotacao = anotacoes[chave] || "";
-        const statusInicial = anotacao
-          ? (comparison.evento_id ? "Salvo" : "Salvo neste navegador")
-          : "Salvamento automático";
-        return `
-          <td class="px-3 py-2 min-w-[260px]">
-            <div class="space-y-1.5">
-              <textarea data-comparison-annotation data-annotation-key="${escapeHtml(chave)}" rows="2" maxlength="2000"
-                aria-label="Anotação do registro ${indice + 1}"
-                placeholder="O que precisa ser feito ou já foi feito?"
-                class="w-64 min-w-[240px] resize-y rounded-md bg-slate-950/80 border border-slate-700 px-2.5 py-2 text-xs text-slate-200 placeholder:text-slate-500 focus:border-cyan-400 focus:outline-none focus:ring-1 focus:ring-cyan-400/40">${escapeHtml(anotacao)}</textarea>
-              <p class="text-[10px] text-slate-500" data-annotation-status role="status" aria-live="polite">${statusInicial}</p>
-            </div>
-          </td>`;
-      };
-
-      const renderizarAusentes = (items, categoria) => items.map((item, index) => `
+      const renderizarAusentes = items => items.map(item => `
         <tr class="text-slate-300">
           <td class="px-3 py-2 font-mono text-white whitespace-nowrap">${escapeHtml(item.computador)}</td>
           <td class="px-3 py-2 font-mono whitespace-nowrap">${escapeHtml(item.serie || "—")}</td>
           <td class="px-3 py-2">${escapeHtml(item.local_previsto || "—")}</td>
-          <td class="px-3 py-2 text-amber-300">${escapeHtml((item.ausente_em || [item.fonte_ausente]).filter(Boolean).join(", "))}</td>
-          ${renderizarCampoAnotacao(categoria, index)}
+          <td class="px-3 py-2 text-amber-300">${escapeHtml(formatarNomeFonteHistorico((Array.isArray(item.ausente_em) ? item.ausente_em : [item.ausente_em || item.fonte_ausente]).filter(Boolean).join(", ")))}</td>
         </tr>`);
 
-      const locationRows = divergenciasLocal.map((item, index) => `
+      const locationRows = divergenciasLocal.map(item => `
         <tr class="text-slate-300">
           <td class="px-3 py-2 font-mono text-white whitespace-nowrap">${escapeHtml(item.computador)}</td>
           <td class="px-3 py-2 font-mono whitespace-nowrap">${escapeHtml(item.serie || "—")}</td>
           <td class="px-3 py-2">${escapeHtml(item.local_previsto)}</td>
           <td class="px-3 py-2">${escapeHtml(item.local_detalhes || "—")}</td>
-          ${renderizarCampoAnotacao("divergencias_local", index)}
+        </tr>`);
+
+      const semAcessoRows = semAcesso14Dias.map(item => `
+        <tr class="text-slate-300">
+          <td class="px-3 py-2 font-mono text-white whitespace-nowrap">${escapeHtml(item.computador || "—")}</td>
+          <td class="px-3 py-2 font-mono whitespace-nowrap">${escapeHtml(item.serie || "—")}</td>
+          <td class="px-3 py-2 whitespace-nowrap">${escapeHtml(item.ultima_verificacao ? formatarHorarioHistorico(item.ultima_verificacao) : "—")}</td>
+          <td class="px-3 py-2">${Number(item.dias_sem_verificacao || 0).toLocaleString("pt-BR")}</td>
+          <td class="px-3 py-2">${escapeHtml(String(item.linha_endpoint || "—"))}</td>
         </tr>`);
 
       const aliasUpdateRows = apelidosAtualizados.map(item => `
@@ -2036,25 +2032,18 @@
           <td class="px-3 py-2 font-mono">${escapeHtml(item.apelido_anterior || "(vazio)")}</td>
           <td class="px-3 py-2 font-mono text-emerald-200">${escapeHtml(item.apelido_novo || "(vazio)")}</td>
           <td class="px-3 py-2 whitespace-nowrap">${escapeHtml(item.horario ? formatarHorarioHistorico(item.horario) : "—")}</td>
-          <td class="px-3 py-2 text-[10px]">${escapeHtml(Object.values(item.arquivos_origem || {}).join(" · ") || "—")}</td>
+          <td class="px-3 py-2 text-[10px]">${escapeHtml(formatarNomeFonteHistorico(Object.values(item.arquivos_origem || {}).join(" · ") || "—"))}</td>
         </tr>`);
 
       const aliasReviewRows = apelidosSemAtualizacao.map((item, index) => `
         <tr class="text-slate-300">
           <td class="px-3 py-2 font-mono text-white whitespace-nowrap">${escapeHtml(item.serie || "(vazia)")}</td>
           <td class="px-3 py-2 font-mono">${escapeHtml(item.computador || "—")}</td>
-          <td class="px-3 py-2 text-amber-200">${escapeHtml(item.motivo || "Conferir associação.")}</td>
-          ${renderizarCampoAnotacao("apelidos_sem_atualizacao", index)}
-        </tr>`);
-
-      const semAcessoRows = semAcesso14Dias.map((item, index) => `
-        <tr class="text-slate-300">
-          <td class="px-3 py-2 font-mono text-white whitespace-nowrap">${escapeHtml(item.computador || "—")}</td>
-          <td class="px-3 py-2 font-mono whitespace-nowrap">${escapeHtml(item.serie || "—")}</td>
-          <td class="px-3 py-2 whitespace-nowrap">${escapeHtml(item.ultima_verificacao ? formatarHorarioHistorico(item.ultima_verificacao) : "—")}</td>
-          <td class="px-3 py-2 text-rose-200">${Number(item.dias_sem_verificacao || 0).toLocaleString("pt-BR")}</td>
-          <td class="px-3 py-2">${Number(item.linha_endpoint || 0).toLocaleString("pt-BR")}</td>
-          ${renderizarCampoAnotacao("sem_acesso_14_dias", index)}
+          <td class="px-3 py-2 text-amber-200">${escapeHtml(formatarMotivoRevisao(item.motivo))}</td>
+          ${permitirAnotacoes ? `<td class="px-3 py-2 min-w-[240px] align-top">
+            <textarea data-comparison-annotation data-annotation-id="${escapeHtml(item.anotacao_id || "")}" rows="2" maxlength="2000" class="w-full min-w-[220px] rounded-lg border border-slate-700 bg-slate-900 px-2.5 py-2 text-xs text-white placeholder:text-slate-500 focus:border-cyan-400 focus:outline-none focus:ring-1 focus:ring-cyan-400" aria-label="Anotações para a série ${escapeHtml(item.serie || "vazia")}, neste resultado" placeholder="Escreva uma anotação...">${escapeHtml(item.anotacao || "")}</textarea>
+            <p class="mt-1 text-[10px] ${item.anotacao ? "text-emerald-300" : "text-slate-500"}" data-annotation-status aria-live="polite">${item.anotacao ? "Salvo automaticamente" : ""}</p>
+          </td>` : ""}
         </tr>`);
 
       const manualAliasRows = divergenciasApelidosManuais.map((item, index) => {
@@ -2083,12 +2072,11 @@
           </tr>`;
       });
 
-      const unmappedRows = seriesSemMapa.map((item, index) => `
+      const unmappedRows = seriesSemMapa.map(item => `
         <tr class="text-slate-300">
           <td class="px-3 py-2 font-mono text-white">${escapeHtml(item.serie)}</td>
           <td class="px-3 py-2">${Number(item.quantidade || 0)}</td>
           <td class="px-3 py-2 font-mono">${escapeHtml((item.exemplos || []).join(", "))}</td>
-          ${renderizarCampoAnotacao("series_sem_mapeamento", index)}
         </tr>`);
 
       const ambiguityRows = [
@@ -2096,26 +2084,32 @@
           tipo: item.tipo,
           chave: item.chave,
           fontes: (item.fontes || []).map(source =>
-            `${source.fonte}${source.quantidade ? ` (${source.quantidade} registros)` : source.serie ? ` — série ${source.serie}` : ""}`
+            `${formatarNomeFonteHistorico(source.fonte)}${source.quantidade ? ` (${source.quantidade} registros)` : source.serie ? ` — série ${source.serie}` : ""}`
           ).join(" · "),
-          mensagem: item.mensagem,
+          mensagem: formatarNomeFonteHistorico(item.mensagem || ""),
         })),
         ...registrosAmbiguos.map(item => ({
           tipo: "Presença ambígua",
           chave: `${item.computador || "Sem hostname"} · ${item.serie || "Sem série"}`,
-          fontes: Object.entries(item.fontes || {}).filter(([, status]) => status === "ambíguo").map(([source]) => source).join(" · "),
-          mensagem: item.motivo,
+          fontes: Object.entries(item.fontes || {}).filter(([, status]) => status === "ambíguo").map(([source]) => formatarNomeFonteHistorico(source)).join(" · "),
+          mensagem: formatarNomeFonteHistorico(item.motivo || ""),
         })),
-      ].map((item, index) => `
+      ].map(item => `
         <tr class="text-slate-300">
           <td class="px-3 py-2 text-amber-200">${escapeHtml(item.tipo || "Ambiguidade")}</td>
           <td class="px-3 py-2 font-mono">${escapeHtml(item.chave || "—")}</td>
           <td class="px-3 py-2">${escapeHtml(item.fontes || "—")}</td>
           <td class="px-3 py-2">${escapeHtml(item.mensagem || "")}</td>
-          ${renderizarCampoAnotacao("ambiguidades", index)}
         </tr>`);
 
-      document.getElementById("comparacao-planilhas-conteudo").innerHTML = `
+      document.getElementById("comparacao-planilhas-conteudo").innerHTML = comparison.somente_anotacoes_sincronizadas
+        ? `
+          <p class="text-xs text-cyan-200 bg-cyan-500/10 border border-cyan-500/25 rounded-lg px-3 py-2">Este clone contém as anotações sincronizadas. O resultado original e os arquivos da comparação não estão armazenados neste dispositivo.</p>
+          <section class="space-y-2">
+            <div><h4 class="text-sm font-bold text-amber-300">Anotações sincronizadas</h4><p class="text-[11px] text-slate-500">As anotações continuam vinculadas às linhas da atualização original.</p></div>
+            ${renderizarTabelaComparacao(aliasReviewHeaders, aliasReviewRows, "Nenhuma anotação sincronizada neste resultado.")}
+          </section>`
+        : `
         ${comparison.historico_salvo === false
           ? `<p class="text-xs text-amber-200 bg-amber-500/10 border border-amber-500/25 rounded-lg px-3 py-2">${escapeHtml(comparison.aviso_historico || "Não foi possível salvar este resultado no histórico de comparações.")}</p>`
           : comparison.historico_salvo === true
@@ -2123,112 +2117,127 @@
             : ""}
         <div class="grid grid-cols-2 md:grid-cols-3 xl:grid-cols-4 gap-3">
           <div class="rounded-xl bg-slate-950 border border-slate-800 p-3"><p class="text-[10px] uppercase tracking-wide text-slate-500">Notebooks comparados</p><p class="text-xl font-bold text-white mt-1">${Number(comparison.total_endpoint || 0).toLocaleString("pt-BR")}</p></div>
-          <div class="rounded-xl bg-rose-500/5 border border-rose-500/20 p-3"><p class="text-[10px] uppercase tracking-wide text-rose-300">Ausentes no Endpoint</p><p class="text-xl font-bold text-rose-200 mt-1">${ausentesEndpoint.length}</p></div>
+          <div class="rounded-xl bg-rose-500/5 border border-rose-500/20 p-3"><p class="text-[10px] uppercase tracking-wide text-rose-300">Ausentes No Endpoint</p><p class="text-xl font-bold text-rose-200 mt-1">${ausentesEndpoint.length}</p></div>
           <div class="rounded-xl bg-amber-500/5 border border-amber-500/20 p-3"><p class="text-[10px] uppercase tracking-wide text-amber-300">Ausentes na Simpress</p><p class="text-xl font-bold text-amber-200 mt-1">${ausentesDetalhes.length}</p></div>
           <div class="rounded-xl bg-amber-500/5 border border-amber-500/20 p-3"><p class="text-[10px] uppercase tracking-wide text-amber-300">Divergências de local</p><p class="text-xl font-bold text-amber-200 mt-1">${divergenciasLocal.length}</p></div>
           <div class="rounded-xl bg-yellow-500/5 border border-yellow-500/20 p-3"><p class="text-[10px] uppercase tracking-wide text-yellow-300">Duplicidades e ambiguidades</p><p class="text-xl font-bold text-yellow-200 mt-1">${ambiguityRows.length}</p></div>
           <div class="rounded-xl bg-sky-500/5 border border-sky-500/20 p-3"><p class="text-[10px] uppercase tracking-wide text-sky-300">Séries sem mapeamento</p><p class="text-xl font-bold text-sky-200 mt-1">${seriesSemMapa.length}</p></div>
           <div class="rounded-xl bg-emerald-500/5 border border-emerald-500/20 p-3"><p class="text-[10px] uppercase tracking-wide text-emerald-300">Apelidos/hostnames atualizados</p><p class="text-xl font-bold text-emerald-200 mt-1">${apelidosAtualizados.length}</p></div>
           <div class="rounded-xl bg-amber-500/5 border border-amber-500/20 p-3"><p class="text-[10px] uppercase tracking-wide text-amber-300">Apelidos para conferência</p><p class="text-xl font-bold text-amber-200 mt-1">${apelidosSemAtualizacao.length}</p></div>
-          <div class="rounded-xl bg-rose-500/5 border border-rose-500/20 p-3"><p class="text-[10px] uppercase tracking-wide text-rose-300">Sem acesso há 14+ dias</p><p class="text-xl font-bold text-rose-200 mt-1">${semAcesso14Dias.length}</p></div>
           <div class="rounded-xl bg-violet-500/5 border border-violet-500/20 p-3"><p class="text-[10px] uppercase tracking-wide text-violet-300">Divergências manuais pendentes</p><p id="comparacao-divergencias-manuais-pendentes" class="text-xl font-bold text-violet-200 mt-1">${divergenciasApelidosManuais.filter(item => !item.resolucao || item.resolucao === "pendente").length}</p></div>
         </div>
         <section class="space-y-2">
-          <div><h4 class="text-sm font-bold text-emerald-300">Apelidos/hostnames atualizados pelo Endpoint</h4><p class="text-[11px] text-slate-500">A lista compara os valores antes e depois pelo número de série.</p></div>
+          <div><h4 class="text-sm font-bold text-emerald-300">Apelidos/hostnames atualizados — No Endpoint</h4><p class="text-[11px] text-slate-500">A lista compara os valores antes e depois pelo número de série.</p></div>
           ${renderizarTabelaComparacao(["Série", "Apelido anterior", "Novo apelido / hostname", "Horário", "Arquivos de origem"], aliasUpdateRows, "Nenhum apelido ou hostname mudou nesta atualização.")}
         </section>
         <section class="space-y-2">
           <div><h4 class="text-sm font-bold text-amber-300">Linhas mantidas para conferência</h4><p class="text-[11px] text-slate-500">Série vazia, ausente ou duplicada não é escolhida automaticamente; o apelido atual fica preservado.</p></div>
-          ${renderizarTabelaComparacao(["Série", "Hostname no Endpoint", "Motivo", "Anotação"], aliasReviewRows, "Nenhuma linha de apelido precisa de conferência.")}
+          ${renderizarTabelaComparacao(aliasReviewHeaders, aliasReviewRows, "Nenhuma linha de apelido precisa de conferência.")}
         </section>
         <section class="space-y-2">
           <div><h4 class="text-sm font-bold text-violet-300">Divergências com apelidos alterados manualmente</h4><p class="text-[11px] text-slate-500">O apelido manual prevalece nas pesquisas e exportações. “Manter manual” registra a decisão; “Excluir manual” remove apenas o override desta série e volta a usar o valor das planilhas.</p></div>
-          ${renderizarTabelaComparacao(["Série", "Apelido manual", "Simpress", "Endpoint", "Situação", "Ação"], manualAliasRows, "Nenhuma divergência entre apelidos manuais e as planilhas enviadas.")}
+          ${renderizarTabelaComparacao(["Série", "Apelido manual", "na Simpress", "No Endpoint", "Situação", "Ação"], manualAliasRows, "Nenhuma divergência entre apelidos manuais e as planilhas enviadas.")}
         </section>
         <section class="space-y-2">
           <div><h4 class="text-sm font-bold text-rose-300">Sem acesso há 14 dias ou mais</h4><p class="text-[11px] text-slate-500">Notebook com última verificação com êxito igual ou anterior a 14 dias antes desta atualização.</p></div>
-          ${renderizarTabelaComparacao(["Hostname/Apelido", "Série", "Última verificação com êxito", "Dias sem verificação", "Linha Endpoint", "Anotação"], semAcessoRows, "Nenhum notebook está há 14 dias ou mais sem verificação com êxito.")}
+          ${renderizarTabelaComparacao(["Hostname/Apelido", "Série", "Última verificação com êxito", "Dias sem verificação", "Linha No Endpoint"], semAcessoRows, "Nenhum notebook está há 14 dias ou mais sem verificação com êxito.")}
         </section>
         <section class="space-y-2">
           <div><h4 class="text-sm font-bold text-rose-300">Equipamentos ausentes por fonte</h4><p class="text-[11px] text-slate-500">Cada lista mostra equipamentos que não têm correspondência segura naquela fonte. Divergências de local aparecem em seção própria.</p></div>
-          <h5 class="text-xs font-semibold text-slate-300">Ausentes no Endpoint (${ausentesEndpoint.length})</h5>
-          ${renderizarTabelaComparacao(["Hostname/Apelido", "Série", "Local previsto", "Ausente em", "Anotação"], renderizarAusentes(ausentesEndpoint, "ausentes_no_endpoint"), "Nenhum equipamento ausente no Endpoint.")}
+          <h5 class="text-xs font-semibold text-slate-300">Ausentes No Endpoint (${ausentesEndpoint.length})</h5>
+          ${renderizarTabelaComparacao(["Hostname/Apelido", "Série", "Local previsto", "Ausente em"], renderizarAusentes(ausentesEndpoint), "Nenhum equipamento ausente No Endpoint.")}
           <h5 class="text-xs font-semibold text-slate-300">Ausentes na Simpress (${ausentesDetalhes.length})</h5>
-          ${renderizarTabelaComparacao(["Hostname/Apelido", "Série", "Local previsto", "Ausente em", "Anotação"], renderizarAusentes(ausentesDetalhes, "ausentes_em_detalhes"), "Nenhum equipamento ausente na Simpress.")}
+          ${renderizarTabelaComparacao(["Hostname/Apelido", "Série", "Local previsto", "Ausente em"], renderizarAusentes(ausentesDetalhes), "Nenhum equipamento ausente na Simpress.")}
         </section>
         <section class="space-y-2">
           <div><h4 class="text-sm font-bold text-amber-300">Localidade divergente</h4><p class="text-[11px] text-slate-500">A localidade na Simpress é comparada com a classificação do hostname.</p></div>
-          ${renderizarTabelaComparacao(["Computador", "Série", "Local previsto", "Local na Simpress", "Anotação"], locationRows, "Nenhuma divergência de localidade encontrada.")}
+          ${renderizarTabelaComparacao(["Computador", "Série", "Local previsto", "Local na Simpress"], locationRows, "Nenhuma divergência de localidade encontrada.")}
         </section>
         <section class="space-y-2">
           <div><h4 class="text-sm font-bold text-yellow-300">Duplicidades e correspondências ambíguas</h4><p class="text-[11px] text-slate-500">Nenhuma linha é escolhida automaticamente quando a série se repete ou o hostname/Apelido não identifica uma correspondência única.</p></div>
-          ${renderizarTabelaComparacao(["Ocorrência", "Série ou hostname/Apelido", "Fontes", "Tratamento", "Anotação"], ambiguityRows, "Nenhuma duplicidade ou correspondência ambígua encontrada.")}
+          ${renderizarTabelaComparacao(["Ocorrência", "Série ou hostname/Apelido", "Fontes", "Tratamento"], ambiguityRows, "Nenhuma duplicidade ou correspondência ambígua encontrada.")}
         </section>
         <section class="space-y-2">
           <div><h4 class="text-sm font-bold text-sky-300">Séries sem local definido</h4><p class="text-[11px] text-slate-500">Não há regra de localidade cadastrada para estes prefixos.</p></div>
-          ${renderizarTabelaComparacao(["Série", "Quantidade", "Exemplos", "Anotação"], unmappedRows, "Todas as séries têm mapeamento de localidade.")}
+          ${renderizarTabelaComparacao(["Série", "Quantidade", "Exemplos"], unmappedRows, "Todas as séries têm mapeamento de localidade.")}
         </section>
-        <p class="text-[11px] text-emerald-300">Simpress carregada: ${Number(comparison.total_equipamentos_carregados || 0).toLocaleString("pt-BR")} equipamentos. Backup das versões anteriores: <span class="font-mono">planilhas_entrada/${escapeHtml(comparison.backup_diretorio || "_backups")}</span>.</p>
+        <p class="text-[11px] text-emerald-300">Equipamentos carregados na Simpress: ${Number(comparison.total_equipamentos_carregados || 0).toLocaleString("pt-BR")}. Backup das versões anteriores: <span class="font-mono">planilhas_entrada/${escapeHtml(comparison.backup_diretorio || "_backups")}</span>.</p>
       `;
-      document.querySelectorAll("#comparacao-planilhas-conteudo [data-comparison-annotation]").forEach(textarea => {
-        const chave = textarea.dataset.annotationKey;
-        const status = textarea.closest("td")?.querySelector("[data-annotation-status]");
-        const state = { savedValue: textarea.value, saving: false, pending: false, timer: null };
-
-        const salvarAnotacao = async () => {
-          window.clearTimeout(state.timer);
-          if (state.saving) {
-            state.pending = true;
-            return;
-          }
-          const anotacao = textarea.value;
-          if (anotacao === state.savedValue) return;
-          state.saving = true;
-          if (status) status.textContent = "Salvando…";
-          try {
-            if (comparison.evento_id) {
-              const response = await fetch(`/api/historico-comparacoes/${encodeURIComponent(comparison.evento_id)}/anotacoes`, {
-                method: "POST",
-                headers: { "Content-Type": "application/json" },
-                body: JSON.stringify({ chave, anotacao }),
-              });
-              const data = await response.json().catch(() => ({}));
-              if (!response.ok) throw new Error(data.detail || "Não foi possível salvar a anotação.");
-            } else {
-              if (anotacao.trim()) anotacoes[chave] = anotacao;
-              else delete anotacoes[chave];
-              localStorage.setItem(annotationStorageKey, JSON.stringify(anotacoes));
-            }
-            state.savedValue = anotacao;
-            if (comparison.evento_id) {
-              if (anotacao.trim()) anotacoes[chave] = anotacao;
-              else delete anotacoes[chave];
-            }
-            if (status) status.textContent = comparison.evento_id ? "Salvo" : "Salvo neste navegador";
-          } catch (error) {
-            console.error("Erro ao salvar anotação da comparação:", error);
-            if (status) status.textContent = "Falha ao salvar; tente novamente.";
-          } finally {
-            state.saving = false;
-            if (state.pending) {
-              state.pending = false;
-              if (textarea.value !== state.savedValue) salvarAnotacao();
-            }
-          }
-        };
-
-        textarea.addEventListener("input", () => {
-          if (status) status.textContent = textarea.value === state.savedValue ? "Salvo" : "Não salvo";
-          window.clearTimeout(state.timer);
-          state.timer = window.setTimeout(salvarAnotacao, 700);
-        });
-        textarea.addEventListener("change", salvarAnotacao);
-      });
       document.querySelectorAll("[data-manual-alias-action]").forEach(button => {
         button.addEventListener("click", () => {
           const item = divergenciasApelidosManuais[Number(button.dataset.manualAliasIndex)];
           if (item) resolverDivergenciaApelidoManual(comparison, item, button.dataset.manualAliasAction, button);
         });
+      });
+      document.querySelectorAll("[data-comparison-annotation]").forEach(textarea => {
+        const itemId = textarea.dataset.annotationId;
+        const status = textarea.parentElement.querySelector("[data-annotation-status]");
+        let savedValue = textarea.value;
+        let dirty = false;
+        let saving = false;
+        let saveTimer = null;
+
+        const setStatus = (message, colorClass) => {
+          status.textContent = message;
+          status.className = `mt-1 text-[10px] ${colorClass}`;
+        };
+        const scheduleSave = delay => {
+          window.clearTimeout(saveTimer);
+          saveTimer = window.setTimeout(() => {
+            saveTimer = null;
+            void saveAnnotation();
+          }, delay);
+        };
+        const saveAnnotation = async () => {
+          if (saving || !dirty) return;
+          const anotacao = textarea.value;
+          saving = true;
+          setStatus("Salvando...", "text-cyan-300");
+          try {
+            const { response, stale } = await window.HistoryAnnotationAutosave.requestWithRetries(
+              () => fetch(
+                `/api/historico-comparacoes/${encodeURIComponent(comparison.evento_id)}/anotacoes/${encodeURIComponent(itemId)}`,
+                {
+                  method: "PUT",
+                  headers: { "Content-Type": "application/json" },
+                  body: JSON.stringify({ anotacao }),
+                }
+              ),
+              {
+                isCurrent: () => textarea.value === anotacao,
+                onRetry: attempt => setStatus(
+                  `Falha temporária. Tentando salvar novamente (${attempt}/3)...`,
+                  "text-amber-300"
+                ),
+              }
+            );
+            if (stale) {
+              savedValue = anotacao;
+              dirty = textarea.value !== anotacao;
+              setStatus(dirty ? "Salvando alteração mais recente..." : "Salvo automaticamente", dirty ? "text-cyan-300" : "text-emerald-300");
+              return;
+            }
+            savedValue = anotacao;
+            dirty = textarea.value !== anotacao;
+            setStatus(dirty ? "Salvando..." : "Salvo automaticamente", dirty ? "text-cyan-300" : "text-emerald-300");
+          } catch (error) {
+            dirty = true;
+            setStatus(
+              error.status ? error.message : "Falha de conexão após três tentativas. Tente novamente.",
+              "text-rose-300"
+            );
+          } finally {
+            saving = false;
+            if (dirty && textarea.value !== anotacao) scheduleSave(0);
+          }
+        };
+
+        textarea.addEventListener("input", () => {
+          dirty = true;
+          setStatus("Pendente de salvamento...", "text-slate-400");
+          scheduleSave(500);
+        });
+        textarea.addEventListener("blur", () => scheduleSave(0));
       });
       abrirModalAcessivel("modal-comparacao-planilhas", '[aria-label="Fechar resultado"]', "fecharModalComparacaoPlanilhas");
     }
@@ -2239,7 +2248,7 @@
         return;
       }
       if (acao === "excluir" && !window.confirm(
-        `Remover a alteração manual da série ${item.serie}? O apelido voltará ao valor do Endpoint, quando preenchido, ou da Simpress.`
+        `Remover a alteração manual da série ${item.serie}? O apelido voltará ao hostname da fonte No Endpoint, se preenchido, ou ao valor cadastrado na Simpress.`
       )) return;
 
       const row = botao.closest("tr");
@@ -2281,7 +2290,7 @@
         const currentSerial = String(currentEquipamento?.serial || "").replace(/[^A-Z0-9]/gi, "").toUpperCase();
         const changedSerial = String(equipment?.serial || "").replace(/[^A-Z0-9]/gi, "").toUpperCase();
         if (equipment && currentSerial && currentSerial === changedSerial) {
-          definirEquipamentoAtual(equipment);
+          currentEquipamento = equipment;
           exibirEquipamento(equipment);
         }
         atualizarIndicadoresPosSalvamento();
@@ -2310,40 +2319,6 @@
       document.getElementById("total-historico-comparacoes").textContent = `${valor} ${valor === 1 ? "registro" : "registros"}`;
     }
 
-    function atualizarDatasExportacaoHistorico(eventos) {
-      const select = document.getElementById("data-exportar-historico-comparacoes");
-      const button = document.getElementById("btn-exportar-historico-comparacoes");
-      if (!select) return;
-
-      const selectedBeforeRefresh = select.value;
-      const dates = [...new Set((eventos || [])
-        .map(evento => String(evento.horario || "").slice(0, 10))
-        .filter(data => /^\d{4}-\d{2}-\d{2}$/.test(data)))].sort((a, b) => b.localeCompare(a));
-      select.replaceChildren();
-      select.disabled = dates.length === 0;
-      if (button) button.disabled = true;
-      const placeholder = document.createElement("option");
-      placeholder.value = "";
-      placeholder.textContent = dates.length ? "Selecione uma data" : "Nenhuma data disponível";
-      select.appendChild(placeholder);
-      if (!dates.length) {
-        return;
-      }
-
-      dates.forEach(data => {
-        const option = document.createElement("option");
-        const [year, month, day] = data.split("-");
-        option.value = data;
-        option.textContent = `${day}/${month}/${year}`;
-        select.appendChild(option);
-      });
-      select.value = dates.includes(selectedBeforeRefresh) ? selectedBeforeRefresh : "";
-      if (button) button.disabled = !select.value;
-      select.onchange = () => {
-        if (button) button.disabled = !select.value;
-      };
-    }
-
     async function carregarContagemHistoricoComparacoes() {
       try {
         const res = await fetch("/api/historico-comparacoes");
@@ -2364,55 +2339,6 @@
       fecharModalAcessivel("modal-historico-comparacoes");
     }
 
-    async function exportarHistoricoComparacoesExcel() {
-      const button = document.getElementById("btn-exportar-historico-comparacoes");
-      if (!button) return;
-      const originalHtml = button.innerHTML;
-      button.disabled = true;
-      button.setAttribute("aria-busy", "true");
-      button.innerHTML = '<i data-lucide="loader-2" class="w-4 h-4 animate-spin" aria-hidden="true"></i><span>Gerando Excel...</span>';
-      lucide.createIcons({ root: button });
-      const dateSelect = document.getElementById("data-exportar-historico-comparacoes");
-
-      try {
-        const selectedDate = dateSelect?.value;
-        if (!selectedDate) {
-          showToast("Selecione uma data para exportar.", "warning");
-          return;
-        }
-        dateSelect.disabled = true;
-        const response = await fetch(`/api/historico-comparacoes/exportar/excel?data=${encodeURIComponent(selectedDate)}`);
-        if (!response.ok) {
-          const errorData = await response.json().catch(() => ({}));
-          throw new Error(errorData.detail || "Não foi possível exportar o histórico de planilhas.");
-        }
-        const disposition = response.headers.get("Content-Disposition") || "";
-        const match = /filename[^;=\n]*=((['"]).*?\2|[^;\n]*)/.exec(disposition);
-        const filename = match && match[1]
-          ? match[1].replace(/[\'"]/g, "")
-          : "Historico_Planilhas.xlsx";
-        const blob = await response.blob();
-        const url = window.URL.createObjectURL(blob);
-        const link = document.createElement("a");
-        link.href = url;
-        link.download = filename;
-        document.body.appendChild(link);
-        link.click();
-        link.remove();
-        window.setTimeout(() => window.URL.revokeObjectURL(url), 1000);
-        showToast("Histórico de planilhas exportado para Excel.", "success");
-      } catch (error) {
-        console.error("Erro ao exportar o histórico de planilhas:", error);
-        showToast(error.message || "Não foi possível exportar o histórico de planilhas.", "error");
-      } finally {
-        if (dateSelect) dateSelect.disabled = dateSelect.options.length <= 1;
-        button.disabled = !dateSelect?.value;
-        button.removeAttribute("aria-busy");
-        button.innerHTML = originalHtml;
-        lucide.createIcons({ root: button });
-      }
-    }
-
     async function carregarHistoricoComparacoes() {
       const lista = document.getElementById("lista-historico-comparacoes");
       lista.setAttribute("aria-busy", "true");
@@ -2425,7 +2351,6 @@
 
         const eventos = Array.isArray(data.eventos) ? data.eventos : [];
         definirTotalHistoricoComparacoes(data.total ?? eventos.length);
-        atualizarDatasExportacaoHistorico(eventos);
         lista.replaceChildren();
         if (eventos.length === 0) {
           const vazio = document.createElement("p");
@@ -2454,17 +2379,19 @@
           const fontes = document.createElement("p");
           fontes.className = "text-xs text-slate-400 break-words";
           fontes.textContent = restauracao
-            ? `Inventários restaurados — Endpoint: ${arquivos.endpoint || "—"} · Simpress: ${arquivos.detalhes || "—"}`
-            : `Endpoint: ${arquivos.endpoint || "—"} · Simpress: ${arquivos.detalhes || "—"}`;
+            ? `Inventários restaurados — No Endpoint: ${formatarNomeFonteHistorico(arquivos.endpoint || "—")} · na Simpress: ${formatarNomeFonteHistorico(arquivos.detalhes || "—")}`
+            : `No Endpoint: ${formatarNomeFonteHistorico(arquivos.endpoint || "—")} · na Simpress: ${formatarNomeFonteHistorico(arquivos.detalhes || "—")}`;
           info.appendChild(fontes);
 
           const contagens = document.createElement("p");
           contagens.className = "text-[11px] text-slate-500";
-          if (restauracao) {
+          if (evento.somente_anotacoes_sincronizadas) {
+            contagens.textContent = "As anotações podem ser consultadas e editadas neste notebook.";
+          } else if (restauracao) {
             const restauracaoDe = evento.restauracao_de || {};
-            contagens.textContent = `Restauração do conjunto anterior a ${formatarHorarioHistorico(restauracaoDe.horario)} · registros restaurados: Endpoint ${Number(resumo.total_endpoint_restaurado || 0).toLocaleString("pt-BR")}, Simpress ${Number(resumo.total_detalhes_restaurado || 0).toLocaleString("pt-BR")}`;
+            contagens.textContent = `Restauração do conjunto anterior a ${formatarHorarioHistorico(restauracaoDe.horario)} · registros restaurados: No Endpoint ${Number(resumo.total_endpoint_restaurado || 0).toLocaleString("pt-BR")}, na Simpress ${Number(resumo.total_detalhes_restaurado || 0).toLocaleString("pt-BR")}`;
           } else {
-            contagens.textContent = `Apelidos/hostnames atualizados: ${Number(resumo.apelidos_atualizados || 0)} · sem acesso há 14+ dias: ${Number(resumo.sem_acesso_14_dias || 0)} · divergências manuais pendentes: ${Number(resumo.divergencias_apelidos_manuais || 0)} · ausentes no Endpoint: ${Number(resumo.ausentes_no_endpoint || 0)} · na Simpress: ${Number(resumo.ausentes_em_detalhes || 0)} · divergências de local: ${Number(resumo.divergencias_local || 0)} · ambiguidades: ${Number(resumo.correspondencias_ambiguas || 0)}`;
+            contagens.textContent = `Apelidos/hostnames atualizados: ${Number(resumo.apelidos_atualizados || 0)} · sem acesso há 14+ dias: ${Number(resumo.sem_acesso_14_dias || 0)} · divergências manuais pendentes: ${Number(resumo.divergencias_apelidos_manuais || 0)} · ausentes No Endpoint: ${Number(resumo.ausentes_no_endpoint || 0)} · na Simpress: ${Number(resumo.ausentes_em_detalhes || 0)} · divergências de local: ${Number(resumo.divergencias_local || 0)} · ambiguidades: ${Number(resumo.correspondencias_ambiguas || 0)}`;
           }
           info.appendChild(contagens);
           card.appendChild(info);
@@ -2476,27 +2403,30 @@
             const consultar = document.createElement("button");
             consultar.type = "button";
             consultar.className = "shrink-0 px-3 py-2 rounded-lg bg-cyan-500/10 hover:bg-cyan-500/20 text-cyan-200 border border-cyan-500/25 text-xs font-semibold transition";
-            consultar.textContent = "Consultar resultado";
+            consultar.textContent = evento.somente_anotacoes_sincronizadas ? "Consultar anotações" : "Consultar resultado";
             consultar.addEventListener("click", () => consultarHistoricoComparacao(evento.id, consultar));
             acoes.appendChild(consultar);
           }
 
-          if (!restauracao && evento.restauravel === true) {
+          if (evento.restauravel) {
             const restaurar = document.createElement("button");
             restaurar.type = "button";
             restaurar.className = "shrink-0 px-3 py-2 rounded-lg bg-amber-500/10 hover:bg-amber-500/20 text-amber-200 border border-amber-500/25 text-xs font-semibold transition";
-            restaurar.textContent = "Restaurar versão anterior";
+            restaurar.textContent = restauracao ? "Desfazer restauração" : "Restaurar versão anterior";
+            restaurar.setAttribute("aria-label", `${restauracao ? "Desfazer restauração de" : "Restaurar versões anteriores à atualização de"} ${formatarHorarioHistorico(evento.horario)}`);
             restaurar.addEventListener("click", () => restaurarHistoricoComparacao(evento, restaurar));
             acoes.appendChild(restaurar);
           }
 
-          const excluir = document.createElement("button");
-          excluir.type = "button";
-          excluir.className = "shrink-0 px-3 py-2 rounded-lg bg-rose-500/10 hover:bg-rose-500/20 text-rose-200 border border-rose-500/25 text-xs font-semibold transition";
-          excluir.textContent = "Excluir";
-          excluir.setAttribute("aria-label", `Excluir atualização de ${formatarHorarioHistorico(evento.horario)}`);
-          excluir.addEventListener("click", () => excluirHistoricoComparacao(evento, excluir));
-          acoes.appendChild(excluir);
+          if (!evento.somente_anotacoes_sincronizadas) {
+            const excluir = document.createElement("button");
+            excluir.type = "button";
+            excluir.className = "shrink-0 px-3 py-2 rounded-lg bg-rose-500/10 hover:bg-rose-500/20 text-rose-200 border border-rose-500/25 text-xs font-semibold transition";
+            excluir.textContent = "Excluir";
+            excluir.setAttribute("aria-label", `Excluir atualização de ${formatarHorarioHistorico(evento.horario)}`);
+            excluir.addEventListener("click", () => excluirHistoricoComparacao(evento, excluir));
+            acoes.appendChild(excluir);
+          }
 
           card.appendChild(acoes);
           lista.appendChild(card);
@@ -2519,49 +2449,75 @@
       const textoOriginal = botao.textContent;
       botao.disabled = true;
       botao.setAttribute("aria-busy", "true");
-      botao.textContent = "Preparando prévia...";
+      botao.textContent = "Preparando...";
+
       try {
-        const eventoId = encodeURIComponent(evento.id);
-        const previewResponse = await fetch(`/api/historico-comparacoes/${eventoId}/restauracao`);
+        const previewResponse = await fetch(`/api/historico-comparacoes/${encodeURIComponent(evento.id)}/restauracao`);
         const preview = await previewResponse.json().catch(() => ({}));
-        if (!previewResponse.ok) {
-          throw new Error(preview.detail || "Não foi possível validar o backup para restauração.");
-        }
+        if (!previewResponse.ok) throw new Error(preview.detail || "Não foi possível validar o backup selecionado.");
 
         const backup = preview.arquivos_backup || {};
         const endpointBackup = backup.endpoint || {};
         const simpressBackup = backup.detalhes || {};
+        const arquivosAtuais = preview.arquivos_atuais || {};
+        const describeBackup = (label, item) => {
+          const modified = item.modificado_em ? `; arquivo datado ${formatarHorarioHistorico(item.modificado_em)}` : "";
+          return `${label}: ${formatarNomeFonteHistorico(item.nome || "—")} (${Number(item.registros || 0).toLocaleString("pt-BR")} registros${modified})`;
+        };
+        const describeCurrent = (label, item) => {
+          if (!item?.presente) return `${label}: arquivo ausente`;
+          const modified = item.modificado_em ? ` · modificado ${formatarHorarioHistorico(item.modificado_em)}` : "";
+          return `${label}: ${formatarNomeFonteHistorico(item.nome || "—")}${modified}`;
+        };
+        const restauracao = preview.tipo_evento === "restauracao";
+        const acao = restauracao ? "Desfazer a restauração" : "Reverter a atualização";
         const confirmation = [
-          `Restaurar o conjunto anterior a ${formatarHorarioHistorico(preview.evento_horario || evento.horario)}?`,
-          `Endpoint: ${endpointBackup.nome || "—"} (${Number(endpointBackup.registros || 0).toLocaleString("pt-BR")} registros)`,
-          `Simpress: ${simpressBackup.nome || "—"} (${Number(simpressBackup.registros || 0).toLocaleString("pt-BR")} registros)`,
-          "Os inventários ativos serão salvos em backup antes da restauração.",
+          `${acao} registrada em ${formatarHorarioHistorico(preview.evento_horario || evento.horario)}?`,
+          "",
+          "Conjunto que será restaurado:",
+          describeBackup("No Endpoint", endpointBackup),
+          describeBackup("na Simpress", simpressBackup),
+          "",
+          "Conjunto ativo, que será guardado como backup:",
+          describeCurrent("No Endpoint", arquivosAtuais.endpoint),
+          describeCurrent("na Simpress", arquivosAtuais.detalhes),
+          "",
+          "Os dois inventários serão substituídos juntos e a ação ficará registrada no histórico. Continuar?",
         ].join("\n");
         if (!window.confirm(confirmation)) return;
 
         botao.textContent = "Restaurando...";
-        const response = await fetch(`/api/historico-comparacoes/${eventoId}/restaurar`, {
+        const response = await fetch(`/api/historico-comparacoes/${encodeURIComponent(evento.id)}/restaurar`, {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({ preview_token: preview.preview_token }),
         });
-        const result = await response.json().catch(() => ({}));
-        if (!response.ok) throw new Error(result.detail || "Não foi possível restaurar os inventários.");
+        const data = await response.json().catch(() => ({}));
+        if (!response.ok) throw new Error(data.detail || "Não foi possível restaurar o conjunto selecionado.");
 
         invalidarDadosEquipamentoAposRestauracao();
-        await carregarEstatisticas();
-        await carregarUnidades();
-        await carregarHistoricoComparacoes();
-        await carregarContagemHistoricoComparacoes();
-        const total = Number(result.evento?.total_equipamentos_carregados || 0).toLocaleString("pt-BR");
-        showToast(`Inventários restaurados. ${total} equipamentos carregados.`, "success");
+        await Promise.allSettled([
+          carregarEstatisticas(),
+          carregarUnidades(),
+          carregarHistoricoComparacoes(),
+          carregarContagemHistoricoComparacoes(),
+        ]);
+        document.querySelector('#modal-historico-comparacoes [aria-label="Fechar histórico de planilhas"]')
+          ?.focus({ preventScroll: true });
+        const total = Number(data.evento?.total_equipamentos_carregados || 0).toLocaleString("pt-BR");
+        const reversao = data.evento?.desfazer_disponivel
+          ? "A restauração pode ser desfeita pelo histórico."
+          : "O backup do conjunto substituído está incompleto ou inválido; não é possível desfazer pelo histórico.";
+        showToast(`Inventários restaurados. ${total} equipamentos carregados. ${reversao}`, "success");
       } catch (err) {
-        console.error("Erro ao restaurar inventários do histórico:", err);
-        showToast(err.message || "Não foi possível restaurar os inventários.", "error");
+        console.error("Erro ao restaurar o conjunto de planilhas:", err);
+        showToast(err.message || "Não foi possível restaurar o conjunto selecionado.", "error");
       } finally {
-        botao.disabled = false;
-        botao.removeAttribute("aria-busy");
-        botao.textContent = textoOriginal;
+        if (botao.isConnected) {
+          botao.disabled = false;
+          botao.removeAttribute("aria-busy");
+          botao.textContent = textoOriginal;
+        }
       }
     }
 
@@ -2582,6 +2538,7 @@
           evento_id: evento.id,
           horario_comparacao: evento.horario || evento.comparacao?.horario_comparacao,
           historico_salvo: true,
+          contexto_historico: true,
         });
       } catch (err) {
         console.error("Erro ao abrir comparação salva:", err);
@@ -2638,6 +2595,11 @@
         const filename = match && match[1]
           ? match[1].replace(/['"]/g, "")
           : "EquipamentosDetalhes-atualizados.xlsx";
+        const pendingReview = Number(res.headers.get("X-Total-Conferencia") || 0);
+        const aliasUpdateCount = Number(res.headers.get("X-Total-Alterados") || 0);
+        const idClienteUpdateCount = Number(res.headers.get("X-Total-IdCliente-Alterados") || 0);
+        const historyAliasCount = Number(res.headers.get("X-Historico-Apelidos-Atualizados") || 0);
+        const historyTimestamp = res.headers.get("X-Historico-Horario") || "";
         const blob = await res.blob();
         const url = window.URL.createObjectURL(blob);
         const link = document.createElement("a");
@@ -2648,7 +2610,18 @@
         link.remove();
         window.setTimeout(() => window.URL.revokeObjectURL(url), 1000);
 
-        showToast("Planilha Exportada com Sucesso!", "success");
+        const historyMessage = historyTimestamp
+          ? `Último histórico: ${historyAliasCount.toLocaleString("pt-BR")} ${historyAliasCount === 1 ? "apelido atualizado" : "apelidos atualizados"} em ${formatarHorarioHistorico(historyTimestamp)}.`
+          : "Não há atualização registrada no histórico.";
+        const reviewMessage = pendingReview
+          ? ` ${pendingReview} linha(s) ficaram para conferência.`
+          : "";
+        const aliasLabel = aliasUpdateCount === 1 ? "apelido" : "apelidos";
+        const idClienteLabel = idClienteUpdateCount === 1 ? "IdCliente" : "IdClientes";
+        showToast(
+          `Planilha ${filename} exportada. ${aliasUpdateCount} ${aliasLabel} e ${idClienteUpdateCount} ${idClienteLabel} atualizados na exportação. ${historyMessage}${reviewMessage}`,
+          pendingReview ? "warning" : "success"
+        );
       } catch (err) {
         console.error("Erro ao exportar planilha de equipamentos:", err);
         showToast(err.message, "error");
@@ -2726,7 +2699,6 @@
       }
 
       const serial = currentEquipamento.serial;
-      const selectionRevisionAtSave = equipamentoSelectionRevision;
       const apelido = document.getElementById("edit-apelido-isolado").value.trim();
       const btn = document.getElementById("btn-salvar-apelido");
       const originalText = btn.textContent;
@@ -2744,14 +2716,10 @@
         const data = await res.json().catch(() => ({}));
         if (!res.ok) throw new Error(data.detail || "Falha ao salvar o apelido.");
 
-        const stillSelected = equipamentoSelectionRevision === selectionRevisionAtSave
-          && String(currentEquipamento?.serial || "").toUpperCase() === String(serial).toUpperCase();
-        if (stillSelected) {
-          definirEquipamentoAtual(data.equipamento);
-          document.getElementById("badge-apelido").textContent = currentEquipamento.apelido || "Sem Apelido";
-          atualizarIndicadoresPosSalvamento();
-          fecharModalEditarApelido();
-        }
+        currentEquipamento = data.equipamento;
+        document.getElementById("badge-apelido").textContent = currentEquipamento.apelido || "Sem Apelido";
+        atualizarIndicadoresPosSalvamento();
+        fecharModalEditarApelido();
         showToast("Apelido salvo com sucesso.", "success");
       } catch (err) {
         console.error("Erro ao salvar apelido:", err);
@@ -2761,6 +2729,16 @@
         btn.removeAttribute("aria-busy");
         btn.textContent = originalText;
       }
+    }
+
+    function formatarNomeFonteHistorico(valor) {
+      return String(valor || "")
+        .replace(/\b(?:na|no|da|do|à|ao|pela|pelo|a|o)\s*InvAll/gi, "No Endpoint")
+        .replace(/InvAll/gi, "No Endpoint")
+        .replace(/\b(?:em|de|da|do|na|no|a|à|pela|pelo)\s*EquipamentosDetalhes/gi, "na Simpress")
+        .replace(/EquipamentosDetalhes/gi, "na Simpress")
+        .replace(/\b(?:no\s+)?Endpoint\b/gi, "No Endpoint")
+        .replace(/\b(?:na\s+)?Simpress\b/gi, "na Simpress");
     }
 
     function formatarHorarioHistorico(horario) {
@@ -2987,7 +2965,7 @@
         if (!res.ok) throw new Error(data.detail || "Não foi possível desfazer a alteração.");
 
         if (currentEquipamento && currentEquipamento.serial === data.equipamento.serial) {
-          definirEquipamentoAtual(data.equipamento);
+          currentEquipamento = data.equipamento;
           document.getElementById("badge-apelido").textContent = currentEquipamento.apelido || "Sem Apelido";
         }
         await carregarEstatisticas();
@@ -3012,7 +2990,7 @@
         const data = await res.json().catch(() => ({}));
         if (!res.ok) throw new Error(data.detail || "Não foi possível excluir o registro.");
         if (currentEquipamento && currentEquipamento.serial === data.equipamento.serial) {
-          definirEquipamentoAtual(data.equipamento);
+          currentEquipamento = data.equipamento;
           document.getElementById("badge-apelido").textContent = currentEquipamento.apelido || "Sem Apelido";
           document.getElementById("card-localizacao").textContent = `${currentEquipamento.retirada_cidade || ""} - ${currentEquipamento.retirada_endereco ? currentEquipamento.retirada_endereco.split("-")[0].trim() : ""}`;
           document.getElementById("card-cnpj-atual").textContent = `CNPJ: ${currentEquipamento.retirada_cnpj || "Não especificado"}`;
@@ -3070,9 +3048,6 @@
       const payload = {
         serial: serial,
         novo: !document.getElementById("edit-serial").readOnly,
-        revisao: currentEquipamento && currentEquipamento.serial === serial
-          ? (currentEquipamento.revisao || null)
-          : null,
         modelo: document.getElementById("edit-modelo").value.trim(),
         tipo: document.getElementById("edit-tipo").value,
         apelido: currentEquipamento && currentEquipamento.serial === serial
@@ -3080,7 +3055,6 @@
           : document.getElementById("edit-apelido").value.trim(),
         idCliente: document.getElementById("edit-id-cliente").value.trim(),
       };
-      const selectionRevisionAtSave = equipamentoSelectionRevision;
 
       const btn = document.getElementById("btn-salvar-equipamento");
       const originalText = btn.innerHTML;
@@ -3102,18 +3076,16 @@
         }
 
         const data = await res.json();
-        const stillSelected = equipamentoSelectionRevision === selectionRevisionAtSave;
-        if (stillSelected) {
-          const dadosEntrega = capturarDadosEntrega();
-          definirEquipamentoAtual(data.equipamento);
-          exibirEquipamento(data.equipamento);
-          restaurarDadosEntrega(dadosEntrega);
-          document.getElementById("input-serial").value = data.equipamento.serial;
-          document.getElementById("btn-clear-serial").classList.remove("hidden");
-          atualizarIndicadoresPosSalvamento();
-          fecharModalEditarEquipamento();
-        }
+        const dadosEntrega = capturarDadosEntrega();
+        currentEquipamento = data.equipamento;
+        exibirEquipamento(data.equipamento);
+        restaurarDadosEntrega(dadosEntrega);
+        document.getElementById("input-serial").value = data.equipamento.serial;
+        document.getElementById("btn-clear-serial").classList.remove("hidden");
+
+        atualizarIndicadoresPosSalvamento();
         showToast(data.mensagem || `Equipamento ${serial} salvo com sucesso!`, "success");
+        fecharModalEditarEquipamento();
 
       } catch (err) {
         console.error("Erro ao salvar:", err);
@@ -3294,14 +3266,11 @@
     }
 
     async function salvarUnidadeForm() {
-      const form = document.getElementById("form-nova-unidade");
-      if (!form || form.dataset.saving === "true") return;
       const cidade = document.getElementById("form-unidade-cidade").value.trim();
       const endereco = document.getElementById("form-unidade-endereco").value.trim();
       const cep = document.getElementById("form-unidade-cep").value.trim();
       const cnpj = document.getElementById("form-unidade-cnpj").value.trim();
       const idVal = document.getElementById("form-unidade-id").value;
-      const saveButton = document.getElementById("btn-salvar-unidade");
 
       if (!cidade || !endereco || !cnpj) {
         showToast("Cidade, endereço e CNPJ são campos obrigatórios.", "warning");
@@ -3317,11 +3286,6 @@
         cnpj: cnpj
       };
 
-      form.dataset.saving = "true";
-      if (saveButton) {
-        saveButton.disabled = true;
-        saveButton.setAttribute("aria-busy", "true");
-      }
       try {
         const res = await fetch("/api/unidade/salvar", {
           method: "POST",
@@ -3343,11 +3307,5 @@
       } catch (err) {
         console.error("Erro ao salvar unidade:", err);
         showToast(err.message, "error");
-      } finally {
-        delete form.dataset.saving;
-        if (saveButton) {
-          saveButton.disabled = false;
-          saveButton.removeAttribute("aria-busy");
-        }
       }
     }

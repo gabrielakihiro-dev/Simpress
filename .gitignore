@@ -54,6 +54,7 @@ __pycache__/
 /historico_comparacoes.json
 /historico_comparacoes/*
 !/historico_comparacoes/.gitkeep
+/anotacoes_historico/
 /.transactions/
 **/.*.lock
 /planilhas_entrada/.upload-staging-*/
