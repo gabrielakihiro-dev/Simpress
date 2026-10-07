@@ -347,6 +347,7 @@ DETAILS_INSTALLATION_CNPJ_HEADER_ALIASES = (
     "CNPJ da Filial",
 )
 DETAILS_REQUIRED_HEADERS = frozenset({"MODELO", "CIDADE"})
+DETAILS_COMPLETE_SOURCE_COLUMN_COUNT = 50
 
 
 def _equipment_revision(serial: Any, modelo: Any, tipo: Any, apelido: Any, id_cliente: Any) -> str:
@@ -678,7 +679,12 @@ def read_workbook_tables(file_bytes: bytes) -> List[Dict[str, Any]]:
                 }
                 record["__excel_row_number__"] = excel_row_number
                 records.append(record)
-            tables.append({"sheet": worksheet.title, "headers": set(headers), "records": records})
+            tables.append({
+                "sheet": worksheet.title,
+                "headers": set(headers),
+                "column_count": sum(bool(header) for header in headers),
+                "records": records,
+            })
         return tables
     except HTTPException:
         raise
@@ -701,13 +707,26 @@ def select_upload_table(tables: List[Dict[str, Any]], role: str) -> Dict[str, An
 
     if role == "detalhes":
         required = set(DETAILS_REQUIRED_HEADERS)
-        candidates = [
+        basic_candidates = [
             table for table in tables
             if required.issubset(table["headers"])
             and table["headers"] & serial_headers
             and table["headers"] & alias_headers
         ]
-        description = "número de série, modelo, apelido/hostname e cidade"
+        installation_cnpj_headers = {
+            normalize_workbook_header(alias)
+            for alias in DETAILS_INSTALLATION_CNPJ_HEADER_ALIASES
+        }
+        candidates = [
+            table for table in basic_candidates
+            if table.get("column_count", len(table["headers"] - {""})) == DETAILS_COMPLETE_SOURCE_COLUMN_COUNT
+            and table["headers"] & installation_cnpj_headers
+        ]
+        description = (
+            "a base completa de EquipamentosDetalhes com exatamente "
+            f"{DETAILS_COMPLETE_SOURCE_COLUMN_COUNT} colunas, incluindo número de série, "
+            "apelido/hostname, modelo, cidade e CNPJ de instalação"
+        )
     elif role == "endpoint":
         name_headers = {"NOMEDOCOMPUTADOR", "COMPUTERNAME", "HOSTNAME"}
         service_tag_headers = {
@@ -727,6 +746,16 @@ def select_upload_table(tables: List[Dict[str, Any]], role: str) -> Dict[str, An
             "endpoint": "Endpoint",
             "detalhes": "Simpress",
         }[role]
+        if role == "detalhes" and any(table["records"] for table in basic_candidates):
+            raise HTTPException(
+                status_code=400,
+                detail=(
+                    "A planilha enviada como Simpress precisa ser a base completa de "
+                    f"EquipamentosDetalhes, com exatamente {DETAILS_COMPLETE_SOURCE_COLUMN_COUNT} "
+                    "colunas e CNPJ de instalação. A planilha reduzida do Exportar Excel "
+                    "não pode ser usada em Atualizar Planilhas."
+                ),
+            )
         raise HTTPException(
             status_code=400,
             detail=f"A planilha enviada como {display_role} não contém uma aba com os cabeçalhos obrigatórios: {description}.",
@@ -759,6 +788,27 @@ def select_upload_table(tables: List[Dict[str, Any]], role: str) -> Dict[str, An
 
     if populated_rows == 0:
         raise HTTPException(status_code=400, detail=f"A aba '{table['sheet']}' não tem linhas de dados utilizáveis.")
+
+    if role == "detalhes":
+        installation_cnpj_column = next(
+            header for header in table["headers"] if header in installation_cnpj_headers
+        )
+        missing_installation_cnpj_rows = sum(
+            1
+            for row in table["records"]
+            if _record_value(row, "NumeroSerie", "Número de série", "Serial", "ServiceTag")
+            and not str(row.get(installation_cnpj_column) or "").strip()
+        )
+        if missing_installation_cnpj_rows:
+            raise HTTPException(
+                status_code=400,
+                detail=(
+                    "A base completa da Simpress contém "
+                    f"{missing_installation_cnpj_rows} série(s) sem CNPJ de instalação. "
+                    "Preencha esse campo para todas as séries antes de atualizar as planilhas."
+                ),
+            )
+
     table["populated_rows"] = populated_rows
     return table
 

@@ -70,6 +70,7 @@ def build_search_index(
             "categoria": category,
             "apelido": alias,
             "retirada_cidade": city,
+            "retirada_cnpj": str(item.get("retirada_cnpj") or ""),
             "invall_alias_status": item.get("invall_alias_status"),
             "invall_alias_detail": item.get("invall_alias_detail"),
         }

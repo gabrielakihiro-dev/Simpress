@@ -910,7 +910,7 @@
       document.getElementById("input-serial").value = item.serial;
       document.getElementById("btn-clear-serial").classList.remove("hidden");
       fecharAutocomplete();
-      buscarSerial();
+      return buscarSerial(item);
     }
 
     function conteudoLinhaResultado(item, currentQuery) {
@@ -1299,7 +1299,7 @@
     }
 
     // Search Equipment by Serial
-    async function buscarSerial() {
+    async function buscarSerial(equipmentHint = null) {
       const serialInput = document.getElementById("input-serial");
       const serial = serialInput.value.trim().toUpperCase();
 
@@ -1351,6 +1351,15 @@
         if (!transferUtils.isCurrentQuery(equipmentLookupRequestGate, request.id, serialInput.value, serial)) return;
         if (transferUtils.serialForTransfer(data, serial) !== serial) {
           throw new Error("A busca não retornou uma correspondência exata. Escolha um equipamento na lista.");
+        }
+        const hintedSerial = String(equipmentHint?.serial || "").trim().toUpperCase();
+        const hintedCnpj = String(equipmentHint?.retirada_cnpj || "").trim();
+        if (
+          hintedSerial === serial
+          && hintedCnpj
+          && !String(data.retirada_cnpj || "").trim()
+        ) {
+          data.retirada_cnpj = hintedCnpj;
         }
         definirEquipamentoAtual(data);
         exibirEquipamento(data);
