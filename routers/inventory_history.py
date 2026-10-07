@@ -1022,7 +1022,11 @@ def create_inventory_history_router(ctx):
             source_event = context["evento"]
             source_comparison = source_event.get("comparacao") or {}
             source_backup_relative = source_comparison.get("backup_diretorio")
-            transaction_targets = [*target_files.values(), ctx.COMPARISON_HISTORY_FILE]
+            transaction_targets = [
+                *target_files.values(),
+                ctx.COMPARISON_HISTORY_FILE,
+                ctx.MODIFIED_APELIDOS_FILE,
+            ]
 
             with ctx.inventory_state_transaction(transaction_targets) as transaction:
                 _, locked_current_hashes = _current_inventory_snapshot()
