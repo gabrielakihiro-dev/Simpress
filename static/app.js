@@ -2043,6 +2043,9 @@
         return !seriesSebrae.has(serie);
       });
       const filtrosAtualizacaoAplicados = comparison.filtros_atualizacao_aplicados === true;
+      const ausentesEndpoint = filtrosAtualizacaoAplicados
+        ? (comparison.ausentes_no_endpoint || [])
+        : filtrarSeriesSebrae(comparison.ausentes_no_endpoint);
       const ausentesDetalhes = filtrosAtualizacaoAplicados
         ? (comparison.ausentes_em_detalhes || [])
         : filtrarSeriesSebrae(comparison.ausentes_em_detalhes);
@@ -2178,8 +2181,8 @@
             : ""}
         <div class="grid grid-cols-2 md:grid-cols-3 xl:grid-cols-4 gap-3">
           <div class="rounded-xl bg-slate-950 border border-slate-800 p-3"><p class="text-[10px] uppercase tracking-wide text-slate-500">Notebooks comparados</p><p class="text-xl font-bold text-white mt-1">${Number(comparison.total_endpoint || 0).toLocaleString("pt-BR")}</p></div>
-          <div class="rounded-xl bg-rose-500/5 border border-rose-500/20 p-3"><p class="text-[10px] uppercase tracking-wide text-rose-300">Ausentes No Endpoint</p><p class="text-xl font-bold text-rose-200 mt-1">${ausentesEndpoint.length}</p></div>
-          <div class="rounded-xl bg-amber-500/5 border border-amber-500/20 p-3"><p class="text-[10px] uppercase tracking-wide text-amber-300">Ausentes na Simpress</p><p class="text-xl font-bold text-amber-200 mt-1">${ausentesDetalhes.length}</p></div>
+          <div class="rounded-xl bg-rose-500/5 border border-rose-500/20 p-3"><p class="text-[10px] uppercase tracking-wide text-rose-300">Sem correspondência — No Endpoint</p><p class="text-xl font-bold text-rose-200 mt-1">${ausentesEndpoint.length}</p></div>
+          <div class="rounded-xl bg-amber-500/5 border border-amber-500/20 p-3"><p class="text-[10px] uppercase tracking-wide text-amber-300">Sem correspondência — na Simpress</p><p class="text-xl font-bold text-amber-200 mt-1">${ausentesDetalhes.length}</p></div>
           <div class="rounded-xl bg-amber-500/5 border border-amber-500/20 p-3"><p class="text-[10px] uppercase tracking-wide text-amber-300">Divergências de local</p><p class="text-xl font-bold text-amber-200 mt-1">${divergenciasLocal.length}</p></div>
           <div class="rounded-xl bg-yellow-500/5 border border-yellow-500/20 p-3"><p class="text-[10px] uppercase tracking-wide text-yellow-300">Duplicidades e ambiguidades</p><p class="text-xl font-bold text-yellow-200 mt-1">${ambiguityRows.length}</p></div>
           <div class="rounded-xl bg-sky-500/5 border border-sky-500/20 p-3"><p class="text-[10px] uppercase tracking-wide text-sky-300">Séries sem mapeamento</p><p class="text-xl font-bold text-sky-200 mt-1">${seriesSemMapa.length}</p></div>
@@ -2204,11 +2207,11 @@
           ${renderizarTabelaComparacao(["Hostname/Apelido", "Série", "Última verificação com êxito", "Dias sem verificação", "Linha No Endpoint"], semAcessoRows, "Nenhum notebook está há 14 dias ou mais sem verificação com êxito.")}
         </section>
         <section class="space-y-2">
-          <div><h4 class="text-sm font-bold text-rose-300">Equipamentos ausentes por fonte</h4><p class="text-[11px] text-slate-500">Cada lista mostra equipamentos que não têm correspondência segura naquela fonte. Divergências de local aparecem em seção própria.</p></div>
-          <h5 class="text-xs font-semibold text-slate-300">Ausentes No Endpoint (${ausentesEndpoint.length})</h5>
-          ${renderizarTabelaComparacao(["Hostname/Apelido", "Série", "Local previsto", "Ausente em"], renderizarAusentes(ausentesEndpoint), "Nenhum equipamento ausente No Endpoint.")}
-          <h5 class="text-xs font-semibold text-slate-300">Ausentes na Simpress (${ausentesDetalhes.length})</h5>
-          ${renderizarTabelaComparacao(["Hostname/Apelido", "Série", "Local previsto", "Ausente em"], renderizarAusentes(ausentesDetalhes), "Nenhum equipamento ausente na Simpress.")}
+          <div><h4 class="text-sm font-bold text-rose-300">Equipamentos sem correspondência por fonte</h4><p class="text-[11px] text-slate-500">Cada lista mostra equipamentos que não têm correspondência segura naquela fonte. Divergências de local aparecem em seção própria.</p></div>
+          <h5 class="text-xs font-semibold text-slate-300">Sem correspondência — No Endpoint (${ausentesEndpoint.length})</h5>
+          ${renderizarTabelaComparacao(["Hostname/Apelido", "Série", "Local previsto", "Sem correspondência em"], renderizarAusentes(ausentesEndpoint), "Todos os equipamentos têm correspondência segura com No Endpoint.")}
+          <h5 class="text-xs font-semibold text-slate-300">Sem correspondência — na Simpress (${ausentesDetalhes.length})</h5>
+          ${renderizarTabelaComparacao(["Hostname/Apelido", "Série", "Local previsto", "Sem correspondência em"], renderizarAusentes(ausentesDetalhes), "Todos os equipamentos têm correspondência segura na Simpress.")}
         </section>
         <section class="space-y-2">
           <div><h4 class="text-sm font-bold text-amber-300">Localidade divergente</h4><p class="text-[11px] text-slate-500">A localidade na Simpress é comparada com a classificação do hostname.</p></div>
@@ -2380,14 +2383,63 @@
       document.getElementById("total-historico-comparacoes").textContent = `${valor} ${valor === 1 ? "registro" : "registros"}`;
     }
 
+    function definirEstadoDatasExportacaoHistorico(mensagem) {
+      const select = document.getElementById("data-exportar-historico-comparacoes");
+      const button = document.getElementById("btn-exportar-historico-comparacoes");
+      if (select) {
+        const option = document.createElement("option");
+        option.value = "";
+        option.textContent = mensagem;
+        select.replaceChildren(option);
+        select.value = "";
+        select.disabled = true;
+        select.removeAttribute("aria-busy");
+      }
+      if (button) button.disabled = true;
+    }
+
+    function atualizarDatasExportacaoHistorico(eventos) {
+      const select = document.getElementById("data-exportar-historico-comparacoes");
+      const button = document.getElementById("btn-exportar-historico-comparacoes");
+      if (!select) return;
+
+      const datas = [...new Set((Array.isArray(eventos) ? eventos : [])
+        .filter(evento => evento && !evento.somente_anotacoes_sincronizadas)
+        .map(evento => String(evento.horario || "").slice(0, 10))
+        .filter(data => /^\d{4}-\d{2}-\d{2}$/.test(data)))];
+      const dataSelecionada = select.value;
+      select.replaceChildren();
+
+      if (datas.length === 0) {
+        definirEstadoDatasExportacaoHistorico("Sem datas disponíveis");
+        return;
+      }
+
+      datas.forEach(data => {
+        const [ano, mes, dia] = data.split("-");
+        const option = document.createElement("option");
+        option.value = data;
+        option.textContent = `${dia}/${mes}/${ano}`;
+        select.appendChild(option);
+      });
+
+      select.value = datas.includes(dataSelecionada) ? dataSelecionada : datas[0];
+      select.disabled = false;
+      select.removeAttribute("aria-busy");
+      if (button) button.disabled = false;
+    }
+
     async function carregarContagemHistoricoComparacoes() {
       try {
         const res = await fetch("/api/historico-comparacoes");
-        if (!res.ok) return;
+        if (!res.ok) throw new Error("Não foi possível carregar as datas do histórico.");
         const data = await res.json();
         definirTotalHistoricoComparacoes(data.total);
+        atualizarDatasExportacaoHistorico(data.eventos);
       } catch (err) {
         console.warn("Não foi possível carregar a contagem do histórico de planilhas:", err);
+        const select = document.getElementById("data-exportar-historico-comparacoes");
+        if (!select?.value) definirEstadoDatasExportacaoHistorico("Datas indisponíveis");
       }
     }
 
@@ -2412,6 +2464,7 @@
 
         const eventos = Array.isArray(data.eventos) ? data.eventos : [];
         definirTotalHistoricoComparacoes(data.total ?? eventos.length);
+        atualizarDatasExportacaoHistorico(eventos);
         lista.replaceChildren();
         if (eventos.length === 0) {
           const vazio = document.createElement("p");
@@ -2452,7 +2505,7 @@
             const restauracaoDe = evento.restauracao_de || {};
             contagens.textContent = `Restauração do conjunto anterior a ${formatarHorarioHistorico(restauracaoDe.horario)} · registros restaurados: No Endpoint ${Number(resumo.total_endpoint_restaurado || 0).toLocaleString("pt-BR")}, na Simpress ${Number(resumo.total_detalhes_restaurado || 0).toLocaleString("pt-BR")}`;
           } else {
-            contagens.textContent = `Apelidos/hostnames atualizados: ${Number(resumo.apelidos_atualizados || 0)} · sem acesso há 14+ dias: ${Number(resumo.sem_acesso_14_dias || 0)} · divergências manuais pendentes: ${Number(resumo.divergencias_apelidos_manuais || 0)} · ausentes No Endpoint: ${Number(resumo.ausentes_no_endpoint || 0)} · na Simpress: ${Number(resumo.ausentes_em_detalhes || 0)} · divergências de local: ${Number(resumo.divergencias_local || 0)} · ambiguidades: ${Number(resumo.correspondencias_ambiguas || 0)}`;
+            contagens.textContent = `Apelidos/hostnames atualizados: ${Number(resumo.apelidos_atualizados || 0)} · sem acesso há 14+ dias: ${Number(resumo.sem_acesso_14_dias || 0)} · divergências manuais pendentes: ${Number(resumo.divergencias_apelidos_manuais || 0)} · equipamentos sem correspondência — No Endpoint: ${Number(resumo.ausentes_no_endpoint || 0)} · na Simpress: ${Number(resumo.ausentes_em_detalhes || 0)} · divergências de local: ${Number(resumo.divergencias_local || 0)} · ambiguidades: ${Number(resumo.correspondencias_ambiguas || 0)}`;
           }
           info.appendChild(contagens);
           card.appendChild(info);
@@ -2494,6 +2547,8 @@
         });
       } catch (err) {
         console.error("Erro ao carregar histórico de planilhas:", err);
+        const select = document.getElementById("data-exportar-historico-comparacoes");
+        if (!select?.value) definirEstadoDatasExportacaoHistorico("Datas indisponíveis");
         lista.replaceChildren();
         const erro = document.createElement("p");
         erro.className = "text-sm text-rose-300 text-center py-8";
@@ -2503,6 +2558,58 @@
         lista.appendChild(erro);
       } finally {
         lista.removeAttribute("aria-busy");
+      }
+    }
+
+    async function exportarHistoricoComparacoesExcel() {
+      const select = document.getElementById("data-exportar-historico-comparacoes");
+      const button = document.getElementById("btn-exportar-historico-comparacoes");
+      const data = select?.value || "";
+      if (!data) {
+        showToast("Não há uma data do histórico disponível para exportar.", "warning");
+        return;
+      }
+
+      const htmlOriginal = button?.innerHTML || "";
+      if (button) {
+        button.disabled = true;
+        button.setAttribute("aria-busy", "true");
+        button.innerHTML = '<i data-lucide="loader-2" class="w-4 h-4 animate-spin" aria-hidden="true"></i><span class="hidden sm:inline">Exportando...</span>';
+        lucide.createIcons({ root: button });
+      }
+
+      try {
+        const res = await fetch(`/api/historico-comparacoes/exportar/excel?data=${encodeURIComponent(data)}`);
+        if (!res.ok) {
+          const errorData = await res.json().catch(() => ({}));
+          throw new Error(errorData.detail || "Não foi possível exportar o histórico selecionado.");
+        }
+
+        const disposition = res.headers.get("Content-Disposition") || "";
+        const match = /filename[^;=\n]*=((['"]).*?\2|[^;\n]*)/.exec(disposition);
+        const filename = match && match[1]
+          ? match[1].replace(/['"]/g, "")
+          : `Historico_Planilhas_${data.replace(/-/g, "")}.xlsx`;
+        const blob = await res.blob();
+        const url = window.URL.createObjectURL(blob);
+        const link = document.createElement("a");
+        link.href = url;
+        link.download = filename;
+        document.body.appendChild(link);
+        link.click();
+        link.remove();
+        window.setTimeout(() => window.URL.revokeObjectURL(url), 1000);
+        showToast("Histórico exportado com sucesso!", "success");
+      } catch (err) {
+        console.error("Erro ao exportar histórico de planilhas:", err);
+        showToast(err.message || "Não foi possível exportar o histórico selecionado.", "error");
+      } finally {
+        if (button) {
+          button.disabled = !select || !select.value;
+          button.removeAttribute("aria-busy");
+          button.innerHTML = htmlOriginal;
+          lucide.createIcons({ root: button });
+        }
       }
     }
 

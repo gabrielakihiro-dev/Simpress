@@ -1306,13 +1306,13 @@ Horário disponível para atendimento:</textarea>
           <div class="flex flex-col gap-1 shrink-0">
             <label for="data-exportar-historico-comparacoes" class="text-xs text-slate-300">
               Data para exportar
-              <select id="data-exportar-historico-comparacoes" aria-label="Selecionar a data do histórico para exportar" class="mt-1 block min-w-36 rounded-lg border border-slate-700 bg-slate-950 px-3 py-2 text-sm text-white focus:border-cyan-400 focus:outline-none">
+              <select id="data-exportar-historico-comparacoes" aria-label="Selecionar a data do histórico para exportar" class="mt-1 block min-w-36 rounded-lg border border-slate-700 bg-slate-950 px-3 py-2 text-sm text-white focus:border-cyan-400 focus:outline-none disabled:cursor-not-allowed disabled:opacity-60" disabled>
                 <option value="">Carregando datas...</option>
               </select>
             </label>
           </div>
           <div class="flex items-center gap-2">
-            <button type="button" id="btn-exportar-historico-comparacoes" onclick="exportarHistoricoComparacoesExcel()" class="inline-flex items-center gap-2 px-3 py-2 rounded-lg bg-cyan-500/10 hover:bg-cyan-500/20 text-cyan-200 border border-cyan-500/25 text-xs font-semibold transition" aria-label="Exportar o histórico da data selecionada para Excel" title="Baixar os registros e as anotações da data selecionada">
+            <button type="button" id="btn-exportar-historico-comparacoes" onclick="exportarHistoricoComparacoesExcel()" class="inline-flex items-center gap-2 rounded-lg bg-cyan-500/10 px-3 py-2 text-xs font-semibold text-cyan-200 border border-cyan-500/25 transition hover:bg-cyan-500/20 disabled:cursor-not-allowed disabled:opacity-50" aria-label="Exportar o histórico da data selecionada para Excel" title="Baixar os registros e as anotações da data selecionada" disabled>
               <i data-lucide="download" class="w-4 h-4" aria-hidden="true"></i>
               <span class="hidden sm:inline">Exportar Excel</span>
             </button>
