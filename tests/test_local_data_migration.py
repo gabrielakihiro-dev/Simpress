@@ -79,6 +79,39 @@ class LocalDataMigrationTests(unittest.TestCase):
         self.assertFalse((self.root / "data" / "planilhas_entrada" / legacy_input.name).exists())
         self.assertEqual(current_alias.read_text(encoding="utf-8"), '{"fixture":"different"}')
 
+    def test_different_legacy_transfer_template_is_archived_without_replacing_active_template(self):
+        legacy_template = self.root / "planilhas_entrada" / "(MODELO) - TRANSFERENCIA SIMPRESS.xlsx"
+        legacy_template.parent.mkdir(parents=True)
+        legacy_template.write_bytes(b"newer legacy template")
+
+        active_template = self.root / "data" / "planilhas_entrada" / legacy_template.name
+        active_template.parent.mkdir(parents=True)
+        active_template.write_bytes(b"current active template")
+
+        result = migrate_local_data(self.root)
+
+        import hashlib
+
+        digest = hashlib.sha256(b"newer legacy template").hexdigest()
+        archived_template = (
+            self.root
+            / "data"
+            / "migration_conflicts"
+            / "planilhas_entrada"
+            / f"(MODELO) - TRANSFERENCIA SIMPRESS__sha256-{digest}.xlsx"
+        )
+        self.assertEqual(active_template.read_bytes(), b"current active template")
+        self.assertEqual(archived_template.read_bytes(), b"newer legacy template")
+        self.assertEqual(legacy_template.read_bytes(), b"newer legacy template")
+        self.assertTrue(legacy_template.parent.is_dir())
+        self.assertEqual(result["conflitos_preservados"], 1)
+
+        repeated_result = migrate_local_data(self.root)
+        self.assertEqual(legacy_template.read_bytes(), b"newer legacy template")
+        self.assertEqual(archived_template.read_bytes(), b"newer legacy template")
+        self.assertEqual(repeated_result["movidos"], 0)
+        self.assertEqual(repeated_result["conflitos_preservados"], 1)
+
     def test_pending_transaction_is_recovered_before_migration(self):
         legacy_input = self.root / "planilhas_entrada" / "inventory.xlsx"
         legacy_input.parent.mkdir(parents=True)

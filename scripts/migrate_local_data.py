@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import hashlib
 import os
+import shutil
 import sys
 from pathlib import Path
 from typing import Dict, List, Tuple
@@ -19,12 +20,29 @@ class MigrationConflictError(RuntimeError):
     """A migration would overwrite data or run during an unfinished operation."""
 
 
+_LEGACY_TRANSFER_TEMPLATE = Path("planilhas_entrada") / "(MODELO) - TRANSFERENCIA SIMPRESS.xlsx"
+
+
 def _digest(path: Path) -> str:
     digest = hashlib.sha256()
     with path.open("rb") as stream:
         for block in iter(lambda: stream.read(1024 * 1024), b""):
             digest.update(block)
     return digest.hexdigest()
+
+
+def _template_conflict_archive(root: Path, source: Path, digest: str) -> Path | None:
+    """Keep a differing legacy transfer template outside the active input folder."""
+    try:
+        relative_source = source.relative_to(root)
+    except ValueError:
+        return None
+    if relative_source != _LEGACY_TRANSFER_TEMPLATE:
+        return None
+
+    archive_directory = root / "data" / "migration_conflicts" / "planilhas_entrada"
+    archive_name = f"{source.stem}__sha256-{digest}{source.suffix}"
+    return archive_directory / archive_name
 
 
 def _legacy_mappings(project_root: Path) -> Tuple[List[Tuple[Path, Path]], List[Tuple[Path, Path]]]:
@@ -89,9 +107,30 @@ def migrate_local_data(project_root: Path) -> Dict[str, int]:
             mappings.append((source, destination))
 
     pending: List[Tuple[Path, Path]] = []
+    pending_archives: List[Tuple[Path, Path]] = []
     duplicates: List[Tuple[Path, Path]] = []
     planned_destinations: Dict[Path, Path] = {}
+    preserved_template_conflicts = 0
     for source, destination in mappings:
+        if destination.exists() and (not destination.is_file() or _digest(source) != _digest(destination)):
+            archive = _template_conflict_archive(root, source, _digest(source))
+            if archive is not None:
+                preserved_template_conflicts += 1
+                if archive.exists():
+                    if not archive.is_file() or _digest(source) != _digest(archive):
+                        raise MigrationConflictError(
+                            f"O arquivo de preservação já existe com conteúdo diferente: {archive.relative_to(root)}"
+                        )
+                else:
+                    previous_source = planned_destinations.get(archive)
+                    if previous_source is not None and _digest(previous_source) != _digest(source):
+                        raise MigrationConflictError(
+                            f"Duas fontes locais diferentes apontam para o mesmo arquivo de preservação: {archive.relative_to(root)}"
+                        )
+                    planned_destinations[archive] = source
+                    pending_archives.append((source, archive))
+                continue
+
         previous_source = planned_destinations.get(destination)
         if previous_source is not None:
             if _digest(previous_source) != _digest(source):
@@ -111,8 +150,24 @@ def migrate_local_data(project_root: Path) -> Dict[str, int]:
             pending.append((source, destination))
 
     moved: List[Tuple[Path, Path]] = []
+    archived: List[Path] = []
     created_directories: List[Path] = []
     try:
+        for source, destination in pending_archives:
+            missing_parents = []
+            parent = destination.parent
+            while not parent.exists():
+                missing_parents.append(parent)
+                parent = parent.parent
+            destination.parent.mkdir(parents=True, exist_ok=True)
+            created_directories.extend(reversed(missing_parents))
+            with source.open("rb") as source_stream, destination.open("xb") as destination_stream:
+                archived.append(destination)
+                shutil.copyfileobj(source_stream, destination_stream, 1024 * 1024)
+                destination_stream.flush()
+                os.fsync(destination_stream.fileno())
+            shutil.copystat(source, destination)
+
         for source, destination in pending:
             missing_parents = []
             parent = destination.parent
@@ -128,6 +183,11 @@ def migrate_local_data(project_root: Path) -> Dict[str, int]:
             if destination.exists() and not source.exists():
                 source.parent.mkdir(parents=True, exist_ok=True)
                 destination.replace(source)
+        for destination in reversed(archived):
+            try:
+                destination.unlink()
+            except OSError:
+                pass
         for directory in reversed(created_directories):
             try:
                 directory.rmdir()
@@ -148,7 +208,11 @@ def migrate_local_data(project_root: Path) -> Dict[str, int]:
         if legacy_root.is_dir() and not any(legacy_root.iterdir()):
             legacy_root.rmdir()
 
-    return {"movidos": len(moved), "duplicatas_iguais_removidas": removed_duplicates}
+    return {
+        "movidos": len(moved),
+        "duplicatas_iguais_removidas": removed_duplicates,
+        "conflitos_preservados": preserved_template_conflicts,
+    }
 
 
 if __name__ == "__main__":
@@ -162,5 +226,6 @@ if __name__ == "__main__":
     print(
         "Dados locais organizados: "
         f"{result['movidos']} arquivo(s) movido(s), "
-        f"{result['duplicatas_iguais_removidas']} cópia(s) idêntica(s) removida(s)."
+        f"{result['duplicatas_iguais_removidas']} cópia(s) idêntica(s) removida(s), "
+        f"{result['conflitos_preservados']} versão(ões) do modelo preservada(s) em data\\migration_conflicts."
     )

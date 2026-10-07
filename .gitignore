@@ -59,6 +59,7 @@ __pycache__/
 **/.*.lock
 /planilhas_entrada/.upload-staging-*/
 # Migrated operational workbook directory.
+/data/migration_conflicts/
 /data/planilhas_entrada/*.xlsx
 /data/planilhas_entrada/**/*.xlsx
 !/data/planilhas_entrada/(MODELO) - TRANSFERENCIA SIMPRESS.xlsx

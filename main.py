@@ -747,13 +747,25 @@ def select_upload_table(tables: List[Dict[str, Any]], role: str) -> Dict[str, An
             "detalhes": "Simpress",
         }[role]
         if role == "detalhes" and any(table["records"] for table in basic_candidates):
+            actual_column_counts = sorted({
+                table.get("column_count", len(table["headers"] - {""}))
+                for table in basic_candidates
+            })
+            schema_problems = []
+            if any(count != DETAILS_COMPLETE_SOURCE_COLUMN_COUNT for count in actual_column_counts):
+                schema_problems.append(
+                    "possui " + ", ".join(str(count) for count in actual_column_counts) + " colunas"
+                )
+            if any(not (table["headers"] & installation_cnpj_headers) for table in basic_candidates):
+                schema_problems.append("não contém o cabeçalho CNPJ de instalação")
+            problem_summary = " e ".join(schema_problems) or "não corresponde ao formato completo"
             raise HTTPException(
                 status_code=400,
                 detail=(
-                    "A planilha enviada como Simpress precisa ser a base completa de "
-                    f"EquipamentosDetalhes, com exatamente {DETAILS_COMPLETE_SOURCE_COLUMN_COUNT} "
-                    "colunas e CNPJ de instalação. A planilha reduzida do Exportar Excel "
-                    "não pode ser usada em Atualizar Planilhas."
+                    f"A planilha enviada como Simpress foi recusada: {problem_summary}. "
+                    "A base de entrada precisa ter exatamente "
+                    f"{DETAILS_COMPLETE_SOURCE_COLUMN_COUNT} colunas e o cabeçalho CNPJ de instalação. "
+                    "A planilha reduzida do Exportar Excel não pode ser usada em Atualizar Planilhas."
                 ),
             )
         raise HTTPException(

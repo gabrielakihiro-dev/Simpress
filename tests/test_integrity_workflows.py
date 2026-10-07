@@ -580,6 +580,25 @@ class WorkflowIntegrityTests(unittest.TestCase):
         self.assertEqual(reduced_error.exception.status_code, 400)
         self.assertIn("50 colunas", reduced_error.exception.detail)
 
+        export_headers = [
+            "CodigoContrato", "ItemDeContrato", "RazaoSocial", "NumeroSerie", "Apelido",
+            "IdCliente", "Modelo", "Endereco", "Cidade", "UF", "CEP", "Ip", "Tipo",
+            "MaquinaBackup", "Monitoramento", "DataPrimeiraInstalacao", "DataUltimaInstalacao",
+        ]
+        export_row = [
+            "CONTRATO-FICTICIO", "1", "EMPRESA FICTICIA", "SERIE-FICTICIA", "ALIAS-FICTICIO",
+            "CLIENTE-FICTICIO", "Modelo A", "Rua Ficticia", "Maringa", "PR", "87000000",
+            "192.0.2.1", "Notebook", "Nao", "Nao", "2020-01-01", "2020-01-01",
+        ]
+        make_details(reduced_export, [export_row], headers=export_headers)
+        with self.assertRaises(main.HTTPException) as seventeen_column_error:
+            main.validate_uploaded_workbook(reduced_export.read_bytes(), "detalhes")
+
+        self.assertEqual(seventeen_column_error.exception.status_code, 400)
+        self.assertIn("17 colunas", seventeen_column_error.exception.detail)
+        self.assertIn("não contém o cabeçalho CNPJ de instalação", seventeen_column_error.exception.detail)
+        self.assertIn("50 colunas", seventeen_column_error.exception.detail)
+
         headers_without_cnpj = complete_details_headers(
             ["NumeroSerie", "Apelido", "Modelo", "Cidade", "Tipo", "CEP"],
             include_installation_cnpj=False,
