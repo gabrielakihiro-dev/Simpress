@@ -6,10 +6,34 @@
     let unidadesList = [];
     let debounceTimer = null;
     const transferUtils = window.SimpressTransferUtils;
+    const catalogSearch = window.SimpressCatalogSearch;
+    const transferDraftTracker = window.SimpressFormDraftGuard.createDraftTracker();
     const autocompleteRequestGate = transferUtils.createRequestGate();
     const equipmentLookupRequestGate = transferUtils.createRequestGate();
     const searchButtonInitialHtml = document.getElementById("btn-buscar-serial")?.innerHTML || "";
     const modalReturnFocus = new Map();
+    window.HistoryAnnotationAutosave.installPendingNavigationGuard(window);
+
+    function campoRastreavelTransferencia(target) {
+      if (!target || target.id === "input-serial" || !target.matches?.("input, select, textarea")) return null;
+      const panel = document.getElementById("tab-panel-retirada-entrega");
+      return panel?.contains(target) ? target : null;
+    }
+
+    document.addEventListener("focusin", event => {
+      const field = campoRastreavelTransferencia(event.target);
+      if (field) transferDraftTracker.capture(field.id, field.value);
+    });
+    document.addEventListener("beforeinput", event => {
+      const field = campoRastreavelTransferencia(event.target);
+      if (field) transferDraftTracker.capture(field.id, field.value);
+    }, true);
+    ["input", "change"].forEach(eventName => {
+      document.addEventListener(eventName, event => {
+        const field = campoRastreavelTransferencia(event.target);
+        if (field) transferDraftTracker.update(field.id, field.value);
+      }, true);
+    });
 
     function definirEquipamentoAtual(equipment) {
       currentEquipamento = equipment;
@@ -1813,13 +1837,27 @@
       }
 
       const campoVazio = campos.find(({ id }) => !document.getElementById(id).value.trim());
-      if (!campoVazio) return true;
+      if (campoVazio) {
+        const input = document.getElementById(campoVazio.id);
+        showToast(`Preencha o campo obrigatório “${campoVazio.nome}” para gerar a planilha oficial.`, "warning");
+        input.focus();
+        input.scrollIntoView({ behavior: "smooth", block: "center" });
+        return false;
+      }
 
-      const input = document.getElementById(campoVazio.id);
-      showToast(`Preencha o campo obrigatório “${campoVazio.nome}” para gerar a planilha oficial.`, "warning");
-      input.focus();
-      input.scrollIntoView({ behavior: "smooth", block: "center" });
-      return false;
+      for (const id of ["retirada-email", "entrega-email"]) {
+        const email = document.getElementById(id);
+        if (email.checkValidity()) {
+          email.removeAttribute("aria-invalid");
+          continue;
+        }
+        email.setAttribute("aria-invalid", "true");
+        showToast("Corrija o formato do endereço de e-mail antes de gerar a planilha.", "warning");
+        email.focus();
+        email.scrollIntoView({ behavior: "smooth", block: "center" });
+        return false;
+      }
+      return true;
     }
 
     // Generate & Download Official Excel Sheet
@@ -1846,7 +1884,10 @@
 
         if (!res.ok) {
           const errData = await res.json().catch(() => ({}));
-          throw new Error(errData.detail || "Falha ao gerar o arquivo Excel no servidor.");
+          throw new Error(window.HistoryAnnotationAutosave.getErrorMessage(
+            errData.detail,
+            "Falha ao gerar o arquivo Excel no servidor."
+          ));
         }
 
         // Get Filename from Header
@@ -1891,6 +1932,12 @@
 
     // Reset Form for New Transfer
     function resetarFormulario() {
+      const query = document.getElementById("input-serial").value.trim();
+      if ((transferDraftTracker.isDirty() || currentEquipamento || query)
+          && !window.confirm("Há dados preenchidos nesta transferência. Deseja descartar o rascunho e começar outra?")) {
+        return;
+      }
+      transferDraftTracker.reset();
       invalidarBuscasEquipamento();
       limparSelecaoEquipamento();
       document.getElementById("input-serial").value = "";
@@ -2111,8 +2158,11 @@
           <td class="px-3 py-2 font-mono">${escapeHtml(item.computador || "—")}</td>
           <td class="px-3 py-2 text-amber-200">${escapeHtml(formatarMotivoRevisao(item.motivo))}</td>
           ${permitirAnotacoes ? `<td class="px-3 py-2 min-w-[240px] align-top">
-            <textarea data-comparison-annotation data-annotation-id="${escapeHtml(item.anotacao_id || "")}" rows="2" maxlength="2000" class="w-full min-w-[220px] rounded-lg border border-slate-700 bg-slate-900 px-2.5 py-2 text-xs text-white placeholder:text-slate-500 focus:border-cyan-400 focus:outline-none focus:ring-1 focus:ring-cyan-400" aria-label="Anotações para a série ${escapeHtml(item.serie || "vazia")}, neste resultado" placeholder="Escreva uma anotação...">${escapeHtml(item.anotacao || "")}</textarea>
-            <p class="mt-1 text-[10px] ${item.anotacao ? "text-emerald-300" : "text-slate-500"}" data-annotation-status aria-live="polite">${item.anotacao ? "Salvo automaticamente" : ""}</p>
+            <textarea data-comparison-annotation data-annotation-id="${escapeHtml(item.anotacao_id || "")}" rows="2" maxlength="2000" class="w-full min-w-[220px] rounded-lg border border-slate-700 bg-slate-900 px-2.5 py-2 text-xs text-white placeholder:text-slate-500 focus:border-cyan-400 focus:outline-none focus:ring-1 focus:ring-cyan-400" aria-label="Anotações para ${escapeHtml((item.computador ? "o hostname " + item.computador + ", série " : "a série ") + (item.serie || "vazia"))}, neste resultado" placeholder="Escreva uma anotação...">${escapeHtml(item.anotacao || "")}</textarea>
+            <div class="mt-1">
+              <p class="text-[10px] ${item.anotacao ? "text-emerald-300" : "text-slate-500"}" data-annotation-status aria-live="polite">${item.anotacao ? "Salvo automaticamente" : ""}</p>
+              <button type="button" class="mt-1 rounded-md border border-rose-400/40 px-2 py-1 text-[10px] text-rose-200 hover:bg-rose-500/10" data-annotation-retry hidden aria-label="Tentar novamente o salvamento desta anotação">Tentar salvar novamente</button>
+            </div>
           </td>` : ""}
         </tr>`);
 
@@ -2242,72 +2292,25 @@
       document.querySelectorAll("[data-comparison-annotation]").forEach(textarea => {
         const itemId = textarea.dataset.annotationId;
         const status = textarea.parentElement.querySelector("[data-annotation-status]");
-        let savedValue = textarea.value;
-        let dirty = false;
-        let saving = false;
-        let saveTimer = null;
-
-        const setStatus = (message, colorClass) => {
-          status.textContent = message;
-          status.className = `mt-1 text-[10px] ${colorClass}`;
-        };
-        const scheduleSave = delay => {
-          window.clearTimeout(saveTimer);
-          saveTimer = window.setTimeout(() => {
-            saveTimer = null;
-            void saveAnnotation();
-          }, delay);
-        };
-        const saveAnnotation = async () => {
-          if (saving || !dirty) return;
-          const anotacao = textarea.value;
-          saving = true;
-          setStatus("Salvando...", "text-cyan-300");
-          try {
-            const { response, stale } = await window.HistoryAnnotationAutosave.requestWithRetries(
-              () => fetch(
-                `/api/historico-comparacoes/${encodeURIComponent(comparison.evento_id)}/anotacoes/${encodeURIComponent(itemId)}`,
-                {
-                  method: "PUT",
-                  headers: { "Content-Type": "application/json" },
-                  body: JSON.stringify({ anotacao }),
-                }
-              ),
-              {
-                isCurrent: () => textarea.value === anotacao,
-                onRetry: attempt => setStatus(
-                  `Falha temporária. Tentando salvar novamente (${attempt}/3)...`,
-                  "text-amber-300"
-                ),
-              }
-            );
-            if (stale) {
-              savedValue = anotacao;
-              dirty = textarea.value !== anotacao;
-              setStatus(dirty ? "Salvando alteração mais recente..." : "Salvo automaticamente", dirty ? "text-cyan-300" : "text-emerald-300");
-              return;
+        const retryButton = textarea.parentElement.querySelector("[data-annotation-retry]");
+        window.HistoryAnnotationAutosave.attachAnnotationAutosave({
+          textarea,
+          status,
+          retryButton,
+          eventId: comparison.evento_id,
+          itemId,
+          send: ({ eventId, itemId: reviewItemId, annotation }) => fetch(
+            "/api/historico-comparacoes/"
+              + encodeURIComponent(eventId)
+              + "/anotacoes/"
+              + encodeURIComponent(reviewItemId),
+            {
+              method: "PUT",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify({ anotacao: annotation }),
             }
-            savedValue = anotacao;
-            dirty = textarea.value !== anotacao;
-            setStatus(dirty ? "Salvando..." : "Salvo automaticamente", dirty ? "text-cyan-300" : "text-emerald-300");
-          } catch (error) {
-            dirty = true;
-            setStatus(
-              error.status ? error.message : "Falha de conexão após três tentativas. Tente novamente.",
-              "text-rose-300"
-            );
-          } finally {
-            saving = false;
-            if (dirty && textarea.value !== anotacao) scheduleSave(0);
-          }
-        };
-
-        textarea.addEventListener("input", () => {
-          dirty = true;
-          setStatus("Pendente de salvamento...", "text-slate-400");
-          scheduleSave(500);
+          ),
         });
-        textarea.addEventListener("blur", () => scheduleSave(0));
       });
       abrirModalAcessivel("modal-comparacao-planilhas", '[aria-label="Fechar resultado"]', "fecharModalComparacaoPlanilhas");
     }
@@ -3384,17 +3387,7 @@
     }
 
     function filtrarUnidadesModal(query) {
-      const q = (query || "").toLowerCase().trim();
-      if (!q) {
-        renderListaUnidades(unidadesList);
-        return;
-      }
-      const filtradas = unidadesList.filter(u =>
-        (u.cidade && u.cidade.toLowerCase().includes(q)) ||
-        (u.endereco && u.endereco.toLowerCase().includes(q)) ||
-        (u.cnpj && u.cnpj.toLowerCase().includes(q)) ||
-        (u.cep && u.cep.toLowerCase().includes(q))
-      );
+      const filtradas = unidadesList.filter(unit => catalogSearch.matchesCatalogSearch(unit, query));
       renderListaUnidades(filtradas);
     }
 

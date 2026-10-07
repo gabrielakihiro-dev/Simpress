@@ -4,6 +4,9 @@ const path = require("node:path");
 const test = require("node:test");
 const vm = require("node:vm");
 const transferUtils = require("../static/transfer-utils.js");
+const catalogSearch = require("../static/catalog-search-utils.js");
+const formDraftGuard = require("../static/form-draft-guard.js");
+const annotationAutosave = require("../static/history-annotation-autosave.js");
 
 const appScript = fs.readFileSync(path.join(__dirname, "..", "static", "app.js"), "utf8");
 const appHtml = fs.readFileSync(path.join(__dirname, "..", "static", "index.html"), "utf8");
@@ -22,6 +25,7 @@ class FakeElement {
     this.attributes = new Map();
     this.children = [];
     this.focused = false;
+    this.isValid = true;
     const classes = new Set();
     this.classList = {
       add: (...names) => names.forEach(name => classes.add(name)),
@@ -43,6 +47,8 @@ class FakeElement {
   appendChild(child) { this.children.push(child); return child; }
   querySelector() { return null; }
   focus() { this.focused = true; }
+  scrollIntoView() {}
+  checkValidity() { return this.isValid; }
   closest() { return null; }
   getClientRects() { return [1]; }
 }
@@ -52,7 +58,7 @@ class FakeFormData {
   append(...args) { this.fields.push(args); }
 }
 
-function createAppHarness(fetchApi, { stubDisplay = true } = {}) {
+function createAppHarness(fetchApi, { stubDisplay = true, confirmResult = true } = {}) {
   const elements = new Map();
   const effects = {
     comparisons: [],
@@ -79,9 +85,12 @@ function createAppHarness(fetchApi, { stubDisplay = true } = {}) {
   };
   const window = {
     SimpressTransferUtils: transferUtils,
+    SimpressCatalogSearch: catalogSearch,
+    SimpressFormDraftGuard: formDraftGuard,
+    HistoryAnnotationAutosave: annotationAutosave,
     URL: { createObjectURL: () => "blob:ficticio", revokeObjectURL() {} },
     matchMedia: () => ({ matches: false }),
-    confirm: message => { effects.confirmations.push(message); return true; },
+    confirm: message => { effects.confirmations.push(message); return confirmResult; },
   };
   const context = vm.createContext({
     document,
@@ -558,4 +567,40 @@ test("requires a selected delivery unit before copying its installation CNPJ", a
   assert.deepEqual(harness.effects.clipboardWrites, []);
   assert.equal(harness.effects.toasts.at(-1).type, "warning");
   assert.match(harness.effects.toasts.at(-1).message, /Selecione uma unidade de destino/);
+});
+
+test("rejects malformed transfer emails and clears invalid state after correction", () => {
+  const harness = createAppHarness(async () => { throw new Error("Nenhuma chamada de API esperada"); });
+  for (const id of [
+    "retirada-contato", "retirada-email", "retirada-telefone", "retirada-obs",
+    "entrega-email", "entrega-telefone", "entrega-horario", "entrega-almoco",
+    "entrega-pausa-duracao", "entrega-obs",
+  ]) {
+    harness.element(id).value = id.includes("email") ? "email-invalido" : "valor de teste";
+  }
+  const email = harness.element("retirada-email");
+  email.isValid = false;
+
+  assert.equal(harness.run("validarCamposObrigatoriosPlanilha()"), false);
+  assert.equal(email.attributes.get("aria-invalid"), "true");
+  assert.equal(email.focused, true);
+  assert.equal(harness.effects.toasts.at(-1).type, "warning");
+
+  email.isValid = true;
+  assert.equal(harness.run("validarCamposObrigatoriosPlanilha()"), true);
+  assert.equal(email.attributes.has("aria-invalid"), false);
+});
+
+test("keeps a transfer search when the user cancels the discard confirmation", () => {
+  const harness = createAppHarness(
+    async () => { throw new Error("Nenhuma chamada de API esperada"); },
+    { confirmResult: false },
+  );
+  harness.element("input-serial").value = "SERIE-EM-PESQUISA";
+
+  harness.run("resetarFormulario()");
+
+  assert.equal(harness.element("input-serial").value, "SERIE-EM-PESQUISA");
+  assert.equal(harness.effects.confirmations.length, 1);
+  assert.equal(harness.effects.toasts.length, 0);
 });

@@ -421,6 +421,7 @@
     }
 
     @media (max-width: 640px) {
+      .header-inner > .header-base-summary { display: none !important; }
       .app-tabs { display: flex; width: 100%; }
       .app-tab { flex: 1 1 auto; padding-right: 0.65rem; padding-left: 0.65rem; font-size: 0.8125rem; }
       .home-search-card .home-search-label { margin-bottom: 1rem; font-size: 1.0625rem; }
@@ -479,9 +480,17 @@
       .quick-actions-buttons > button { font-size: 0.75rem; }
     }
     @media (max-width: 900px) and (max-height: 500px) {
+      .site-header { position: static !important; }
+      .header-inner > .header-base-summary { display: none !important; }
       .header-inner { gap: 0.4rem; padding-top: 0.5rem; padding-bottom: 0.5rem; }
       #main-content { padding-top: 1.25rem !important; }
       #main-content > * + * { margin-top: 1.25rem; }
+      body.has-quick-actions { padding-bottom: 4rem !important; }
+      .quick-actions { padding: 0.4rem 0.65rem !important; }
+      .quick-actions-inner { gap: 0 !important; }
+      .quick-actions-status { display: none; }
+      .quick-actions-buttons { display: grid !important; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 0.4rem !important; width: 100% !important; }
+      .quick-actions-buttons > button { min-height: 44px; min-width: 0; padding: 0.4rem; font-size: 0.6875rem; line-height: 1.15; }
     }
     .readiness-panel { border-color: rgba(56, 189, 248, 0.28); }
     .readiness-panel[data-state="ready"] { border-color: rgba(52, 211, 153, 0.35); }
