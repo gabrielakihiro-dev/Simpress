@@ -2773,7 +2773,7 @@
         link.remove();
         window.setTimeout(() => window.URL.revokeObjectURL(url), 1000);
 
-        showToast("Planilha exportada com sucesso!", "success");
+        showToast("Planilha Exportada com Sucesso!", "success");
       } catch (err) {
         console.error("Erro ao exportar planilha de equipamentos:", err);
         showToast(err.message, "error");

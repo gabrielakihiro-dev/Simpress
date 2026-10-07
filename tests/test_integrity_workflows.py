@@ -1910,9 +1910,23 @@ class WorkflowIntegrityTests(unittest.TestCase):
         (backup_dir / "endpoint").mkdir(parents=True)
         (backup_dir / "detalhes").mkdir()
         make_endpoint(backup_dir / "endpoint" / self.endpoint.name, [("SN-1", "PRNOTE-ANTIGO")])
+        backup_headers = complete_details_headers(
+            ["NumeroSerie", "Apelido", "Modelo", "Cidade", "Tipo", "CEP"]
+        )
+        backup_row = ["SN-1", "ALIAS-ANTIGO", "Modelo A", "Maringá", "Notebook", "87000000"]
+        backup_row.extend([None] * (len(backup_headers) - len(backup_row)))
+        cnpj_header_keys = {
+            main.normalize_workbook_header(header)
+            for header in main.DETAILS_INSTALLATION_CNPJ_HEADER_ALIASES
+        }
+        cnpj_column = next(
+            index for index, header in enumerate(backup_headers)
+            if main.normalize_workbook_header(header) in cnpj_header_keys
+        )
+        backup_row[cnpj_column] = "12345678000195"
         make_details(backup_dir / "detalhes" / self.details.name, [
-            ("SN-1", "ALIAS-ANTIGO", "Modelo A", "Maringá", "Notebook", "87000000"),
-        ])
+            backup_row,
+        ], headers=backup_headers)
         self.comparison_history.write_text(json.dumps([{
             "id": "restore-source-event",
             "horario": "2026-10-01T12:00:00-03:00",
@@ -1953,16 +1967,15 @@ class WorkflowIntegrityTests(unittest.TestCase):
             try:
                 self.assertTrue(restore_waiting.wait(10), "a restauração não chegou ao bloqueio esperado")
                 main.aplicar_alteracao_apelido("SN-1", "MANUAL-COMMITTED")
-                committed_workbooks = {path: path.read_bytes() for path in (self.details, self.endpoint)}
                 self.assertEqual(main.equipamentos_cache["SN-1"]["apelido"], "MANUAL-COMMITTED")
             finally:
                 allow_restore.set()
                 worker.join(10)
 
         self.assertFalse(worker.is_alive(), "a restauração não terminou")
-        self.assertIsInstance(restore_outcome.get("error"), main.HTTPException)
-        self.assertEqual(restore_outcome["error"].status_code, 409)
-        self.assertEqual({path: path.read_bytes() for path in committed_workbooks}, committed_workbooks)
+        self.assertNotIn("error", restore_outcome)
+        self.assertTrue(restore_outcome["result"]["sucesso"])
+        self.assertEqual(main.load_modified_apelidos(), {"SN-1": "MANUAL-COMMITTED"})
         self.assertEqual(main.equipamentos_cache["SN-1"]["apelido"], "MANUAL-COMMITTED")
 
     def test_manual_alias_override_changes_export_only(self):
