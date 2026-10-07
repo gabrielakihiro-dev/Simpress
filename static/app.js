@@ -2060,6 +2060,11 @@
       const divergenciasApelidosManuais = comparison.divergencias_apelidos_manuais || [];
       const permitirAnotacoes = comparison.contexto_historico === true && Boolean(comparison.evento_id);
       const formatarMotivoRevisao = motivo => formatarNomeFonteHistorico(motivo || "Conferir associação.");
+      const formatarFonteAusencia = fonte => formatarNomeFonteHistorico(fonte)
+        .replace(/\bno endpoint\b/gi, "Endpoint")
+        .replace(/\bna Simpress\b/gi, "Simpress");
+      const formatarFonteAmbigua = fonte => formatarNomeFonteHistorico(fonte)
+        .replace(/\bno endpoint\b/gi, "Endpoint");
       const aliasReviewHeaders = ["Série", "Hostname no endpoint", "Motivo", ...(permitirAnotacoes ? ["Anotações"] : [])];
 
       document.getElementById("comparacao-planilhas-fontes").textContent =
@@ -2070,7 +2075,7 @@
           <td class="px-3 py-2 font-mono text-white whitespace-nowrap">${escapeHtml(item.computador)}</td>
           <td class="px-3 py-2 font-mono whitespace-nowrap">${escapeHtml(item.serie || "—")}</td>
           <td class="px-3 py-2">${escapeHtml(item.local_previsto || "—")}</td>
-          <td class="px-3 py-2 text-amber-300">${escapeHtml(formatarNomeFonteHistorico((Array.isArray(item.ausente_em) ? item.ausente_em : [item.ausente_em || item.fonte_ausente]).filter(Boolean).join(", ")))}</td>
+          <td class="px-3 py-2 text-amber-300">${escapeHtml((Array.isArray(item.ausente_em) ? item.ausente_em : [item.ausente_em || item.fonte_ausente]).filter(Boolean).map(formatarFonteAusencia).join(", "))}</td>
         </tr>`);
 
       const locationRows = divergenciasLocal.map(item => `
@@ -2148,15 +2153,15 @@
           tipo: item.tipo,
           chave: item.chave,
           fontes: (item.fontes || []).map(source =>
-            `${formatarNomeFonteHistorico(source.fonte)}${source.quantidade ? ` (${source.quantidade} registros)` : source.serie ? ` — série ${source.serie}` : ""}`
+            `${formatarFonteAmbigua(source.fonte)}${source.quantidade ? ` (${source.quantidade} registros)` : source.serie ? ` — série ${source.serie}` : ""}`
           ).join(" · "),
-          mensagem: formatarNomeFonteHistorico(item.mensagem || ""),
+          mensagem: formatarFonteAmbigua(item.mensagem || ""),
         })),
         ...registrosAmbiguos.map(item => ({
           tipo: "Presença ambígua",
           chave: `${item.computador || "Sem hostname"} · ${item.serie || "Sem série"}`,
-          fontes: Object.entries(item.fontes || {}).filter(([, status]) => status === "ambíguo").map(([source]) => formatarNomeFonteHistorico(source)).join(" · "),
-          mensagem: formatarNomeFonteHistorico(item.motivo || ""),
+          fontes: Object.entries(item.fontes || {}).filter(([, status]) => status === "ambíguo").map(([source]) => formatarFonteAmbigua(source)).join(" · "),
+          mensagem: formatarFonteAmbigua(item.motivo || ""),
         })),
       ].map(item => `
         <tr class="text-slate-300">
@@ -2208,10 +2213,10 @@
         </section>
         <section class="space-y-2">
           <div><h4 class="text-sm font-bold text-rose-300">Equipamentos sem correspondência por fonte</h4><p class="text-[11px] text-slate-500">Cada lista mostra equipamentos que não têm correspondência segura naquela fonte. Divergências de local aparecem em seção própria.</p></div>
-          <h5 class="text-xs font-semibold text-slate-300">Sem correspondência — no endpoint (${ausentesEndpoint.length})</h5>
-          ${renderizarTabelaComparacao(["Hostname/Apelido", "Série", "Local previsto", "Sem correspondência em"], renderizarAusentes(ausentesEndpoint), "Todos os equipamentos têm correspondência segura com no endpoint.")}
-          <h5 class="text-xs font-semibold text-slate-300">Sem correspondência — na Simpress (${ausentesDetalhes.length})</h5>
-          ${renderizarTabelaComparacao(["Hostname/Apelido", "Série", "Local previsto", "Sem correspondência em"], renderizarAusentes(ausentesDetalhes), "Todos os equipamentos têm correspondência segura na Simpress.")}
+          <h5 class="text-xs font-semibold text-slate-300">Sem correspondência — Endpoint (${ausentesEndpoint.length})</h5>
+          ${renderizarTabelaComparacao(["Hostname/Apelido", "Série", "Local previsto", "Sem correspondência em"], renderizarAusentes(ausentesEndpoint), "Todos os equipamentos têm correspondência segura com Endpoint.")}
+          <h5 class="text-xs font-semibold text-slate-300">Sem correspondência — Simpress (${ausentesDetalhes.length})</h5>
+          ${renderizarTabelaComparacao(["Hostname/Apelido", "Série", "Local previsto", "Sem correspondência em"], renderizarAusentes(ausentesDetalhes), "Todos os equipamentos têm correspondência segura com Simpress.")}
         </section>
         <section class="space-y-2">
           <div><h4 class="text-sm font-bold text-amber-300">Localidade divergente</h4><p class="text-[11px] text-slate-500">A localidade na Simpress é comparada com a classificação do hostname.</p></div>
