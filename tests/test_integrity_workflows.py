@@ -1017,7 +1017,7 @@ class WorkflowIntegrityTests(unittest.TestCase):
         )
         self.assertTrue(any(item["motivo"].startswith("Série duplicada") for item in review))
         self.assertTrue(any(item["serie"] == "" for item in review))
-        self.assertTrue(any(item["serie"] == "NOSOURCE" and "não encontrada no Endpoint" in item["motivo"] for item in review))
+        self.assertTrue(any(item["serie"] == "NOSOURCE" and "não encontrada no endpoint" in item["motivo"] for item in review))
         self.assertEqual(self.details.read_bytes(), before)
 
     def test_export_changes_only_unique_changed_apelido_cells_and_keeps_other_content(self):

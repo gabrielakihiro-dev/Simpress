@@ -2060,10 +2060,10 @@
       const divergenciasApelidosManuais = comparison.divergencias_apelidos_manuais || [];
       const permitirAnotacoes = comparison.contexto_historico === true && Boolean(comparison.evento_id);
       const formatarMotivoRevisao = motivo => formatarNomeFonteHistorico(motivo || "Conferir associação.");
-      const aliasReviewHeaders = ["Série", "Hostname No Endpoint", "Motivo", ...(permitirAnotacoes ? ["Anotações"] : [])];
+      const aliasReviewHeaders = ["Série", "Hostname no endpoint", "Motivo", ...(permitirAnotacoes ? ["Anotações"] : [])];
 
       document.getElementById("comparacao-planilhas-fontes").textContent =
-        `No Endpoint: ${formatarNomeFonteHistorico(arquivo.endpoint || "—")} · na Simpress: ${formatarNomeFonteHistorico(arquivo.detalhes || "—")}${comparison.horario_comparacao ? ` · ${formatarHorarioHistorico(comparison.horario_comparacao)}` : ""}`;
+        `no endpoint: ${formatarNomeFonteHistorico(arquivo.endpoint || "—")} · na Simpress: ${formatarNomeFonteHistorico(arquivo.detalhes || "—")}${comparison.horario_comparacao ? ` · ${formatarHorarioHistorico(comparison.horario_comparacao)}` : ""}`;
 
       const renderizarAusentes = items => items.map(item => `
         <tr class="text-slate-300">
@@ -2181,7 +2181,7 @@
             : ""}
         <div class="grid grid-cols-2 md:grid-cols-3 xl:grid-cols-4 gap-3">
           <div class="rounded-xl bg-slate-950 border border-slate-800 p-3"><p class="text-[10px] uppercase tracking-wide text-slate-500">Notebooks comparados</p><p class="text-xl font-bold text-white mt-1">${Number(comparison.total_endpoint || 0).toLocaleString("pt-BR")}</p></div>
-          <div class="rounded-xl bg-rose-500/5 border border-rose-500/20 p-3"><p class="text-[10px] uppercase tracking-wide text-rose-300">Sem correspondência — No Endpoint</p><p class="text-xl font-bold text-rose-200 mt-1">${ausentesEndpoint.length}</p></div>
+          <div class="rounded-xl bg-rose-500/5 border border-rose-500/20 p-3"><p class="text-[10px] uppercase tracking-wide text-rose-300">Sem correspondência — no endpoint</p><p class="text-xl font-bold text-rose-200 mt-1">${ausentesEndpoint.length}</p></div>
           <div class="rounded-xl bg-amber-500/5 border border-amber-500/20 p-3"><p class="text-[10px] uppercase tracking-wide text-amber-300">Sem correspondência — na Simpress</p><p class="text-xl font-bold text-amber-200 mt-1">${ausentesDetalhes.length}</p></div>
           <div class="rounded-xl bg-amber-500/5 border border-amber-500/20 p-3"><p class="text-[10px] uppercase tracking-wide text-amber-300">Divergências de local</p><p class="text-xl font-bold text-amber-200 mt-1">${divergenciasLocal.length}</p></div>
           <div class="rounded-xl bg-yellow-500/5 border border-yellow-500/20 p-3"><p class="text-[10px] uppercase tracking-wide text-yellow-300">Duplicidades e ambiguidades</p><p class="text-xl font-bold text-yellow-200 mt-1">${ambiguityRows.length}</p></div>
@@ -2191,7 +2191,7 @@
           <div class="rounded-xl bg-violet-500/5 border border-violet-500/20 p-3"><p class="text-[10px] uppercase tracking-wide text-violet-300">Divergências manuais pendentes</p><p id="comparacao-divergencias-manuais-pendentes" class="text-xl font-bold text-violet-200 mt-1">${divergenciasApelidosManuais.filter(item => !item.resolucao || item.resolucao === "pendente").length}</p></div>
         </div>
         <section class="space-y-2">
-          <div><h4 class="text-sm font-bold text-emerald-300">Apelidos/hostnames atualizados — No Endpoint</h4><p class="text-[11px] text-slate-500">A lista compara os valores antes e depois pelo número de série.</p></div>
+          <div><h4 class="text-sm font-bold text-emerald-300">Apelidos/hostnames atualizados — no endpoint</h4><p class="text-[11px] text-slate-500">A lista compara os valores antes e depois pelo número de série.</p></div>
           ${renderizarTabelaComparacao(["Série", "Apelido anterior", "Novo apelido / hostname", "Horário", "Arquivos de origem"], aliasUpdateRows, "Nenhum apelido ou hostname mudou nesta atualização.")}
         </section>
         <section class="space-y-2">
@@ -2200,16 +2200,16 @@
         </section>
         <section class="space-y-2">
           <div><h4 class="text-sm font-bold text-violet-300">Divergências com apelidos alterados manualmente</h4><p class="text-[11px] text-slate-500">O apelido manual prevalece nas pesquisas e exportações. “Manter manual” registra a decisão; “Excluir manual” remove apenas o override desta série e volta a usar o valor das planilhas.</p></div>
-          ${renderizarTabelaComparacao(["Série", "Apelido manual", "na Simpress", "No Endpoint", "Situação", "Ação"], manualAliasRows, "Nenhuma divergência entre apelidos manuais e as planilhas enviadas.")}
+          ${renderizarTabelaComparacao(["Série", "Apelido manual", "na Simpress", "no endpoint", "Situação", "Ação"], manualAliasRows, "Nenhuma divergência entre apelidos manuais e as planilhas enviadas.")}
         </section>
         <section class="space-y-2">
           <div><h4 class="text-sm font-bold text-rose-300">Sem acesso há 14 dias ou mais</h4><p class="text-[11px] text-slate-500">Notebook com última verificação com êxito igual ou anterior a 14 dias antes desta atualização.</p></div>
-          ${renderizarTabelaComparacao(["Hostname/Apelido", "Série", "Última verificação com êxito", "Dias sem verificação", "Linha No Endpoint"], semAcessoRows, "Nenhum notebook está há 14 dias ou mais sem verificação com êxito.")}
+          ${renderizarTabelaComparacao(["Hostname/Apelido", "Série", "Última verificação com êxito", "Dias sem verificação", "Linha no endpoint"], semAcessoRows, "Nenhum notebook está há 14 dias ou mais sem verificação com êxito.")}
         </section>
         <section class="space-y-2">
           <div><h4 class="text-sm font-bold text-rose-300">Equipamentos sem correspondência por fonte</h4><p class="text-[11px] text-slate-500">Cada lista mostra equipamentos que não têm correspondência segura naquela fonte. Divergências de local aparecem em seção própria.</p></div>
-          <h5 class="text-xs font-semibold text-slate-300">Sem correspondência — No Endpoint (${ausentesEndpoint.length})</h5>
-          ${renderizarTabelaComparacao(["Hostname/Apelido", "Série", "Local previsto", "Sem correspondência em"], renderizarAusentes(ausentesEndpoint), "Todos os equipamentos têm correspondência segura com No Endpoint.")}
+          <h5 class="text-xs font-semibold text-slate-300">Sem correspondência — no endpoint (${ausentesEndpoint.length})</h5>
+          ${renderizarTabelaComparacao(["Hostname/Apelido", "Série", "Local previsto", "Sem correspondência em"], renderizarAusentes(ausentesEndpoint), "Todos os equipamentos têm correspondência segura com no endpoint.")}
           <h5 class="text-xs font-semibold text-slate-300">Sem correspondência — na Simpress (${ausentesDetalhes.length})</h5>
           ${renderizarTabelaComparacao(["Hostname/Apelido", "Série", "Local previsto", "Sem correspondência em"], renderizarAusentes(ausentesDetalhes), "Todos os equipamentos têm correspondência segura na Simpress.")}
         </section>
@@ -2312,7 +2312,7 @@
         return;
       }
       if (acao === "excluir" && !window.confirm(
-        `Remover a alteração manual da série ${item.serie}? O apelido voltará ao hostname da fonte No Endpoint, se preenchido, ou ao valor cadastrado na Simpress.`
+        `Remover a alteração manual da série ${item.serie}? O apelido voltará ao hostname da fonte no endpoint, se preenchido, ou ao valor cadastrado na Simpress.`
       )) return;
 
       const row = botao.closest("tr");
@@ -2493,8 +2493,8 @@
           const fontes = document.createElement("p");
           fontes.className = "text-xs text-slate-400 break-words";
           fontes.textContent = restauracao
-            ? `Inventários restaurados — No Endpoint: ${formatarNomeFonteHistorico(arquivos.endpoint || "—")} · na Simpress: ${formatarNomeFonteHistorico(arquivos.detalhes || "—")}`
-            : `No Endpoint: ${formatarNomeFonteHistorico(arquivos.endpoint || "—")} · na Simpress: ${formatarNomeFonteHistorico(arquivos.detalhes || "—")}`;
+            ? `Inventários restaurados — no endpoint: ${formatarNomeFonteHistorico(arquivos.endpoint || "—")} · na Simpress: ${formatarNomeFonteHistorico(arquivos.detalhes || "—")}`
+            : `no endpoint: ${formatarNomeFonteHistorico(arquivos.endpoint || "—")} · na Simpress: ${formatarNomeFonteHistorico(arquivos.detalhes || "—")}`;
           info.appendChild(fontes);
 
           const contagens = document.createElement("p");
@@ -2503,9 +2503,9 @@
             contagens.textContent = "As anotações podem ser consultadas e editadas neste notebook.";
           } else if (restauracao) {
             const restauracaoDe = evento.restauracao_de || {};
-            contagens.textContent = `Restauração do conjunto anterior a ${formatarHorarioHistorico(restauracaoDe.horario)} · registros restaurados: No Endpoint ${Number(resumo.total_endpoint_restaurado || 0).toLocaleString("pt-BR")}, na Simpress ${Number(resumo.total_detalhes_restaurado || 0).toLocaleString("pt-BR")}`;
+            contagens.textContent = `Restauração do conjunto anterior a ${formatarHorarioHistorico(restauracaoDe.horario)} · registros restaurados: no endpoint ${Number(resumo.total_endpoint_restaurado || 0).toLocaleString("pt-BR")}, na Simpress ${Number(resumo.total_detalhes_restaurado || 0).toLocaleString("pt-BR")}`;
           } else {
-            contagens.textContent = `Apelidos/hostnames atualizados: ${Number(resumo.apelidos_atualizados || 0)} · sem acesso há 14+ dias: ${Number(resumo.sem_acesso_14_dias || 0)} · divergências manuais pendentes: ${Number(resumo.divergencias_apelidos_manuais || 0)} · equipamentos sem correspondência — No Endpoint: ${Number(resumo.ausentes_no_endpoint || 0)} · na Simpress: ${Number(resumo.ausentes_em_detalhes || 0)} · divergências de local: ${Number(resumo.divergencias_local || 0)} · ambiguidades: ${Number(resumo.correspondencias_ambiguas || 0)}`;
+            contagens.textContent = `Apelidos/hostnames atualizados: ${Number(resumo.apelidos_atualizados || 0)} · sem acesso há 14+ dias: ${Number(resumo.sem_acesso_14_dias || 0)} · divergências manuais pendentes: ${Number(resumo.divergencias_apelidos_manuais || 0)} · equipamentos sem correspondência — no endpoint: ${Number(resumo.ausentes_no_endpoint || 0)} · na Simpress: ${Number(resumo.ausentes_em_detalhes || 0)} · divergências de local: ${Number(resumo.divergencias_local || 0)} · ambiguidades: ${Number(resumo.correspondencias_ambiguas || 0)}`;
           }
           info.appendChild(contagens);
           card.appendChild(info);
@@ -2643,11 +2643,11 @@
           `${acao} registrada em ${formatarHorarioHistorico(preview.evento_horario || evento.horario)}?`,
           "",
           "Conjunto que será restaurado:",
-          describeBackup("No Endpoint", endpointBackup),
+          describeBackup("no endpoint", endpointBackup),
           describeBackup("na Simpress", simpressBackup),
           "",
           "Conjunto ativo, que será guardado como backup:",
-          describeCurrent("No Endpoint", arquivosAtuais.endpoint),
+          describeCurrent("no endpoint", arquivosAtuais.endpoint),
           describeCurrent("na Simpress", arquivosAtuais.detalhes),
           "",
           "Os dois inventários serão substituídos juntos e a ação ficará registrada no histórico. Continuar?",
@@ -2890,11 +2890,11 @@
 
     function formatarNomeFonteHistorico(valor) {
       return String(valor || "")
-        .replace(/\b(?:na|no|da|do|à|ao|pela|pelo|a|o)\s*InvAll/gi, "No Endpoint")
-        .replace(/InvAll/gi, "No Endpoint")
+        .replace(/\b(?:na|no|da|do|à|ao|pela|pelo|a|o)\s*InvAll/gi, "no endpoint")
+        .replace(/InvAll/gi, "no endpoint")
         .replace(/\b(?:em|de|da|do|na|no|a|à|pela|pelo)\s*EquipamentosDetalhes/gi, "na Simpress")
         .replace(/EquipamentosDetalhes/gi, "na Simpress")
-        .replace(/(?<![\w.-])(?:no\s+)?Endpoint(?![\w.-])/gi, "No Endpoint")
+        .replace(/(?<![\w.-])(?:no\s+)?Endpoint(?![\w.-])/gi, "no endpoint")
         .replace(/\b(?:na\s+)?Simpress\b/gi, "na Simpress");
     }
 

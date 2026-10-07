@@ -49,11 +49,11 @@ def _export_text(value: Any) -> str:
 def _history_display_text(value: Any) -> str:
     """Mask legacy source names in history exports while keeping stored filenames intact."""
     text = _export_text(value)
-    text = re.sub(r"\b(?:na|no|da|do|à|ao|pela|pelo|a|o)\s*InvAll", "No Endpoint", text, flags=re.IGNORECASE)
-    text = re.sub(r"InvAll", "No Endpoint", text, flags=re.IGNORECASE)
+    text = re.sub(r"\b(?:na|no|da|do|à|ao|pela|pelo|a|o)\s*InvAll", "no endpoint", text, flags=re.IGNORECASE)
+    text = re.sub(r"InvAll", "no endpoint", text, flags=re.IGNORECASE)
     text = re.sub(
         r"(?<![\w.-])(?:no\s+)?Endpoint(?![\w.-])",
-        "No Endpoint",
+        "no endpoint",
         text,
         flags=re.IGNORECASE,
     )
@@ -350,7 +350,7 @@ def create_inventory_history_router(ctx):
 
 
     def _validated_comparison_backup_files(paths: Dict[str, Path]) -> Dict[str, Dict[str, Any]]:
-        labels = {"endpoint": "No Endpoint", "detalhes": "na Simpress"}
+        labels = {"endpoint": "no endpoint", "detalhes": "na Simpress"}
         files: Dict[str, Dict[str, Any]] = {}
         for role, backup_path in paths.items():
             label = labels[role]
@@ -631,7 +631,7 @@ def create_inventory_history_router(ctx):
             "Apelidos para conferência": 0,
             "Divergências manuais": 0,
             "Sem verificação há 14+ dias": 0,
-            "Ausentes No Endpoint": 0,
+            "Ausentes no endpoint": 0,
             "Ausentes na Simpress": 0,
             "Divergências de localidade": 0,
             "Duplicidades e ambiguidades": 0,
@@ -674,7 +674,7 @@ def create_inventory_history_router(ctx):
             category_counts["Apelidos para conferência"] += len(alias_reviews)
             category_counts["Divergências manuais"] += len(manual_alias_conflicts)
             category_counts["Sem verificação há 14+ dias"] += len(no_recent_verification)
-            category_counts["Ausentes No Endpoint"] += len(absent_endpoint)
+            category_counts["Ausentes no endpoint"] += len(absent_endpoint)
             category_counts["Ausentes na Simpress"] += len(absent_simpress)
             category_counts["Divergências de localidade"] += len(local_divergences)
             category_counts["Duplicidades e ambiguidades"] += ambiguity_count
@@ -746,10 +746,10 @@ def create_inventory_history_router(ctx):
                 ))
 
             for category, items, note_category in (
-                ("Ausente No Endpoint", absent_endpoint, "ausentes_no_endpoint"),
+                ("Ausente no endpoint", absent_endpoint, "ausentes_no_endpoint"),
                 ("Ausente na Simpress", absent_simpress, "ausentes_em_detalhes"),
             ):
-                missing_source = "No Endpoint" if category == "Ausente No Endpoint" else "na Simpress"
+                missing_source = "no endpoint" if category == "Ausente no endpoint" else "na Simpress"
                 for index, item in enumerate(items):
                     absence_rows.append((
                         timestamp, category,
@@ -817,9 +817,9 @@ def create_inventory_history_router(ctx):
         _write_export_table_sheet(
             workbook, "Histórico", "Eventos de planilhas",
             "Uma linha por atualização ou restauração, em ordem cronológica.",
-            ["Ordem", "Data e hora", "Operação", "ID do evento", "Arquivo No Endpoint", "Arquivo na Simpress",
-             "Equipamentos No Endpoint", "Equipamentos na Simpress", "Equipamentos carregados", "Apelidos atualizados",
-             "Apelidos para conferência", "Divergências manuais pendentes", "Ausentes No Endpoint",
+            ["Ordem", "Data e hora", "Operação", "ID do evento", "Arquivo no endpoint", "Arquivo na Simpress",
+             "Equipamentos no endpoint", "Equipamentos na Simpress", "Equipamentos carregados", "Apelidos atualizados",
+             "Apelidos para conferência", "Divergências manuais pendentes", "Ausentes no endpoint",
              "Ausentes na Simpress", "Sem verificação há 14+ dias", "Divergências de local", "Duplicidades e ambiguidades",
              "Séries sem local", "Restauração de", "Diretório de backup"],
             history_rows, "tblHistoricoPlanilhas",
@@ -829,14 +829,14 @@ def create_inventory_history_router(ctx):
             workbook, "Apelidos", "Apelidos e hostnames",
             "Atualizações, linhas que precisam de conferência e divergências manuais registradas.",
             ["Data e hora", "Operação", "Categoria", "Série", "Hostname/Apelido",
-             "Apelido anterior/manual", "Apelido na Simpress", "Apelido No Endpoint/novo", "Horário da alteração",
+             "Apelido anterior/manual", "Apelido na Simpress", "Apelido no endpoint/novo", "Horário da alteração",
              "Situação", "Motivo", "Arquivos de origem", "Anotação"],
             alias_rows, "tblHistoricoApelidos",
             [20, 16, 24, 18, 28, 30, 30, 32, 20, 29, 56, 36, 42],
         )
         _write_export_table_sheet(
             workbook, "Ausências", "Equipamentos ausentes por fonte",
-            "Registros sem correspondência segura No Endpoint ou na Simpress.",
+            "Registros sem correspondência segura no endpoint ou na Simpress.",
             ["Data e hora", "Categoria", "Ausente em", "Hostname/Apelido", "Série",
              "Local previsto", "Anotação"],
             absence_rows, "tblHistoricoAusencias",
@@ -846,7 +846,7 @@ def create_inventory_history_router(ctx):
             workbook, "Sem acesso", "Notebooks sem verificação recente",
             "Notebooks cuja última verificação com êxito ocorreu há pelo menos 14 dias.",
             ["Data e hora", "Operação", "Hostname/Apelido", "Série", "Última verificação com êxito",
-             "Dias sem verificação", "Linha No Endpoint", "Anotação"],
+             "Dias sem verificação", "Linha no endpoint", "Anotação"],
             no_access_rows, "tblHistoricoSemAcesso",
             [20, 16, 32, 20, 26, 20, 16, 42],
         )
