@@ -1004,19 +1004,19 @@ def endpoint_alias_review_items(
         items.append({
             "serie": rows[0].get("serie") or serial_key,
             "computador": ", ".join(row.get("hostname", "") for row in rows if row.get("hostname")),
-            "motivo": "Série duplicada no Endpoint; nenhum hostname foi escolhido.",
+            "motivo": "Série duplicada no endpoint; nenhum hostname foi escolhido.",
         })
     for row in index.get("blank_serials", []):
         items.append({
             "serie": "",
             "computador": row.get("hostname", ""),
-            "motivo": "Número de série vazio no Endpoint; hostname mantido sem associação.",
+            "motivo": "Número de série vazio no endpoint; hostname mantido sem associação.",
         })
     for serial_key, row in sorted(index.get("blank_hostnames", {}).items()):
         items.append({
             "serie": row.get("serie") or serial_key,
             "computador": "",
-            "motivo": "Hostname vazio no Endpoint; apelido atual preservado.",
+            "motivo": "Hostname vazio no endpoint; apelido atual preservado.",
         })
     if details_serials is not None:
         raw_details_duplicates = {
@@ -1067,7 +1067,7 @@ def endpoint_alias_review_items(
                 "motivo": (
                     "Endpoint indisponível; apelido atual preservado para conferência."
                     if not index.get("available")
-                    else "Série não encontrada no Endpoint; apelido atual preservado."
+                    else "Série não encontrada no endpoint; apelido atual preservado."
                 ),
             })
         for serial_key, hostname in sorted(index.get("unique", {}).items()):
@@ -1126,7 +1126,7 @@ def _apply_effective_alias(
         equipment["invall_alias_detail"] = "A série aparece mais de uma vez na Simpress; confira antes de aplicar um hostname."
     elif serial_key in endpoint_index.get("duplicates", {}):
         equipment["invall_alias_status"] = "serie_invall_duplicada"
-        equipment["invall_alias_detail"] = "A série aparece mais de uma vez no Endpoint; o apelido atual foi mantido."
+        equipment["invall_alias_detail"] = "A série aparece mais de uma vez no endpoint; o apelido atual foi mantido."
     elif serial_key in endpoint_index.get("unique", {}):
         if not manual_override:
             equipment["apelido"] = endpoint_index["unique"][serial_key]
@@ -1141,7 +1141,7 @@ def _apply_effective_alias(
         equipment["invall_alias_detail"] = "O Endpoint tem a série, mas o hostname está vazio; o apelido atual foi mantido."
     else:
         equipment["invall_alias_status"] = "serie_nao_encontrada"
-        equipment["invall_alias_detail"] = "Série não encontrada no Endpoint; o apelido atual foi mantido."
+        equipment["invall_alias_detail"] = "Série não encontrada no endpoint; o apelido atual foi mantido."
 
 
 def get_export_aliases(endpoint_index: Optional[Dict[str, Any]] = None) -> Dict[str, str]:

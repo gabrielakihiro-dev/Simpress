@@ -135,7 +135,7 @@ def _uploaded_aliases_by_serial(
     return aliases
 
 COMPARISON_SOURCE_LABELS = {
-    "endpoint": "Endpoint",
+    "endpoint": "no endpoint",
     "detalhes": "EquipamentosDetalhes",
 }
 
@@ -143,14 +143,14 @@ def _comparison_source_text_for_display(value: str) -> str:
     """Atualiza apenas textos de apresentação, preservando arquivos e dados de origem."""
     value = re.sub(
         r"\b(?:na|no|da|do|à|ao|pela|pelo|a|o)\s*InvAll",
-        "No Endpoint",
+        "no endpoint",
         value,
         flags=re.IGNORECASE,
     )
-    value = re.sub(r"InvAll", "No Endpoint", value, flags=re.IGNORECASE)
+    value = re.sub(r"InvAll", "no endpoint", value, flags=re.IGNORECASE)
     value = re.sub(
         r"(?<![\w.-])(?:no\s+)?Endpoint(?![\w.-])",
-        "No Endpoint",
+        "no endpoint",
         value,
         flags=re.IGNORECASE,
     )
