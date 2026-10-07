@@ -2877,7 +2877,7 @@
           atualizarIndicadoresPosSalvamento();
           fecharModalEditarApelido();
         }
-        showToast("Apelido salvo com sucesso.", "success");
+        showToast("Apelido salvo para pesquisas e exportações do Excel.", "success");
       } catch (err) {
         console.error("Erro ao salvar apelido:", err);
         showToast(err.message || "Falha ao salvar o apelido.", "error");

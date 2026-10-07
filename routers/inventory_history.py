@@ -1229,26 +1229,6 @@ def create_inventory_history_router(ctx):
                 )
 
             if acao == "excluir":
-                source_alias = (
-                    str(divergence.get("apelido_invall") or "").strip()
-                    if divergence.get("invall_encontrado") and divergence.get("apelido_invall")
-                    else str(divergence.get("apelido_equipamentos_detalhes") or "").strip()
-                )
-                if not ctx.atualizar_apelido_na_planilha(
-                    target_serial,
-                    source_alias,
-                    obrigatorio=True,
-                    transaction=transaction,
-                    # The upload has already replaced the source cell with the
-                    # EquipamentosDetalhes value captured by this comparison.
-                    # Compare against that source snapshot, not the manual
-                    # override that now lives only in the overrides file.
-                    expected_current_alias=str(
-                        divergence.get("apelido_equipamentos_detalhes") or ""
-                    ).strip(),
-                ):
-                    raise ctx.HTTPException(status_code=409, detail="A série não pôde ser atualizada na planilha da Simpress.")
-
                 def remove_manual_override(data):
                     if not isinstance(data, dict):
                         raise RuntimeError("O arquivo de apelidos manuais não contém um objeto válido.")

@@ -601,15 +601,20 @@ def _cell_signature(cell: Any) -> tuple:
     return (cell.value, cell.data_type, cell.style_id, hyperlink, comment)
 
 
+def _stable_dimension_number(value: Any) -> Any:
+    """Normalize sub-micro float noise from Excel width/height round trips."""
+    return round(value, 6) if isinstance(value, float) else value
+
+
 def _dimension_signature(dimensions: Any) -> tuple:
     result = []
     for key, item in sorted(dimensions.items(), key=lambda pair: str(pair[0])):
         result.append((
-            str(key), getattr(item, "min", None), getattr(item, "max", None),
-            getattr(item, "width", None), getattr(item, "height", None),
+            str(key), _stable_dimension_number(getattr(item, "min", None)), _stable_dimension_number(getattr(item, "max", None)),
+            _stable_dimension_number(getattr(item, "width", None)), _stable_dimension_number(getattr(item, "height", None)),
             getattr(item, "hidden", None), getattr(item, "bestFit", None),
             getattr(item, "outlineLevel", None), getattr(item, "collapsed", None),
-            getattr(item, "style", None), getattr(item, "style_id", None),
+            _stable_dimension_number(getattr(item, "style", None)), getattr(item, "style_id", None),
             getattr(item, "thickTop", None), getattr(item, "thickBottom", None),
             getattr(item, "customHeight", None),
         ))
