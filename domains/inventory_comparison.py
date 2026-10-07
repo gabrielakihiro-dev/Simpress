@@ -139,6 +139,11 @@ COMPARISON_SOURCE_LABELS = {
     "detalhes": "EquipamentosDetalhes",
 }
 
+COMPARISON_AMBIGUITY_SOURCE_LABELS = {
+    "endpoint": "Endpoint",
+    "detalhes": "EquipamentosDetalhes",
+}
+
 def _comparison_source_text_for_display(value: str) -> str:
     """Atualiza apenas textos de apresentação, preservando arquivos e dados de origem."""
     value = re.sub(
@@ -642,7 +647,7 @@ def compare_uploaded_workbooks(
         for node in bucket:
             by_source.setdefault(node[0], []).append(node)
         duplicate_sources = [
-            {"fonte": COMPARISON_SOURCE_LABELS[role], "quantidade": len(source_nodes)}
+            {"fonte": COMPARISON_AMBIGUITY_SOURCE_LABELS[role], "quantidade": len(source_nodes)}
             for role, source_nodes in by_source.items()
             if len(source_nodes) > 1
         ]
@@ -662,7 +667,7 @@ def compare_uploaded_workbooks(
         for node in bucket:
             by_source.setdefault(node[0], []).append(node)
         duplicate_sources = [
-            {"fonte": COMPARISON_SOURCE_LABELS[role], "quantidade": len(source_nodes)}
+            {"fonte": COMPARISON_AMBIGUITY_SOURCE_LABELS[role], "quantidade": len(source_nodes)}
             for role, source_nodes in by_source.items()
             if len(source_nodes) > 1
         ]
@@ -722,12 +727,12 @@ def compare_uploaded_workbooks(
                                 for serial_key in sorted(serial_examples_by_role[role])[:3]
                             ]
                             sources.append({
-                                "fonte": COMPARISON_SOURCE_LABELS[role],
+                                "fonte": COMPARISON_AMBIGUITY_SOURCE_LABELS[role],
                                 "quantidade": len(by_source[role]),
                             })
                             if examples:
                                 example_labels.append(
-                                    f"{COMPARISON_SOURCE_LABELS[role]} [{', '.join(examples)}]"
+                                    f"{COMPARISON_AMBIGUITY_SOURCE_LABELS[role]} [{', '.join(examples)}]"
                                 )
                         examples_text = "; exemplos: " + "; ".join(example_labels) if example_labels else ""
                         add_issue({
@@ -767,8 +772,8 @@ def compare_uploaded_workbooks(
                         "tipo": "Série divergente para o mesmo hostname/Apelido",
                         "chave": nodes[left_node]["computador"] or alias_key,
                         "fontes": [
-                            {"fonte": COMPARISON_SOURCE_LABELS[left_role], "serie": nodes[left_node]["serie"]},
-                            {"fonte": COMPARISON_SOURCE_LABELS[right_role], "serie": nodes[right_node]["serie"]},
+                            {"fonte": COMPARISON_AMBIGUITY_SOURCE_LABELS[left_role], "serie": nodes[left_node]["serie"]},
+                            {"fonte": COMPARISON_AMBIGUITY_SOURCE_LABELS[right_role], "serie": nodes[right_node]["serie"]},
                         ],
                         "mensagem": "As séries prevalecem sobre o hostname/Apelido; os registros não foram unidos.",
                     })
@@ -778,8 +783,8 @@ def compare_uploaded_workbooks(
                         "tipo": "Correspondência ambígua por hostname/Apelido",
                         "chave": nodes[left_node]["computador"] or alias_key,
                         "fontes": [
-                            {"fonte": COMPARISON_SOURCE_LABELS[left_role], "serie": nodes[left_node]["serie"]},
-                            {"fonte": COMPARISON_SOURCE_LABELS[right_role], "serie": nodes[right_node]["serie"]},
+                            {"fonte": COMPARISON_AMBIGUITY_SOURCE_LABELS[left_role], "serie": nodes[left_node]["serie"]},
+                            {"fonte": COMPARISON_AMBIGUITY_SOURCE_LABELS[right_role], "serie": nodes[right_node]["serie"]},
                         ],
                         "mensagem": "O hostname/Apelido levaria a séries incompatíveis; nenhum registro foi escolhido.",
                     })

@@ -6,6 +6,7 @@ alwaysApply: true
 # Nomes das fontes no Histórico de Planilhas
 
 - Em todo conteúdo apresentado pelo Histórico de Planilhas, normalize menções antigas e novas às fontes: `EquipamentosDetalhes` deve aparecer como `na Simpress`, e `InvAll` deve aparecer como `no endpoint`.
+- Na tabela `Linhas mantidas para conferência`, escreva `Hostname no Endpoint` no cabeçalho e use `no Endpoint` nos motivos que mencionam essa fonte, inclusive em registros antigos. Essa capitalização é específica dessa tabela.
 - Na visualização de comparação, mantenha o texto de `Linhas mantidas para conferência`; em `Equipamentos sem correspondência por fonte`, rotule as fontes como `Endpoint` e `Simpress`; em `Duplicidades e correspondências ambíguas`, use `Endpoint`.
 - A regra vale para motivos, fontes, mensagens, títulos, nomes de arquivos exibidos e exportações do histórico, inclusive registros antigos já salvos.
 - Aplique a regra independentemente do nome do arquivo enviado ou do nome da aba da planilha; esses nomes não podem desativar a padronização.
