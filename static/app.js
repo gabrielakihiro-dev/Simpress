@@ -2059,13 +2059,14 @@
       const apelidosSemAtualizacao = comparison.apelidos_sem_atualizacao || [];
       const divergenciasApelidosManuais = comparison.divergencias_apelidos_manuais || [];
       const permitirAnotacoes = comparison.contexto_historico === true && Boolean(comparison.evento_id);
-      const formatarMotivoRevisao = motivo => formatarNomeFonteHistorico(motivo || "Conferir associação.");
+      const formatarMotivoRevisao = motivo => formatarNomeFonteHistorico(motivo || "Conferir associação.")
+        .replace(/\bno endpoint\b/gi, "no Endpoint");
       const formatarFonteAusencia = fonte => formatarNomeFonteHistorico(fonte)
         .replace(/\bno endpoint\b/gi, "Endpoint")
         .replace(/\bna Simpress\b/gi, "Simpress");
       const formatarFonteAmbigua = fonte => formatarNomeFonteHistorico(fonte)
         .replace(/\bno endpoint\b/gi, "Endpoint");
-      const aliasReviewHeaders = ["Série", "Hostname no endpoint", "Motivo", ...(permitirAnotacoes ? ["Anotações"] : [])];
+      const aliasReviewHeaders = ["Série", "Hostname no Endpoint", "Motivo", ...(permitirAnotacoes ? ["Anotações"] : [])];
 
       document.getElementById("comparacao-planilhas-fontes").textContent =
         `no endpoint: ${formatarNomeFonteHistorico(arquivo.endpoint || "—")} · na Simpress: ${formatarNomeFonteHistorico(arquivo.detalhes || "—")}${comparison.horario_comparacao ? ` · ${formatarHorarioHistorico(comparison.horario_comparacao)}` : ""}`;
