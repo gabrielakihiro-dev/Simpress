@@ -51,6 +51,29 @@ def make_details(path: Path, rows, headers=None):
     workbook.close()
 
 
+def complete_details_headers(headers, include_installation_cnpj=True):
+    """Build a 50-column Simpress upload header while preserving the test columns."""
+    complete = list(headers)
+    normalized = {main.normalize_workbook_header(header) for header in complete}
+    installation_cnpj_headers = {
+        main.normalize_workbook_header(header)
+        for header in main.DETAILS_INSTALLATION_CNPJ_HEADER_ALIASES
+    }
+    if include_installation_cnpj and not (normalized & installation_cnpj_headers):
+        complete.append("CNPJ Instalacao")
+        normalized.add(main.normalize_workbook_header("CNPJ Instalacao"))
+
+    index = 1
+    while len(complete) < main.DETAILS_COMPLETE_SOURCE_COLUMN_COUNT:
+        header = f"Detalhe Complementar {index:02d}"
+        index += 1
+        if main.normalize_workbook_header(header) in normalized:
+            continue
+        complete.append(header)
+        normalized.add(main.normalize_workbook_header(header))
+    return complete
+
+
 def add_structured_table(path: Path, reference="A1:F2", name="EquipmentInventory"):
     workbook = openpyxl.load_workbook(path)
     worksheet = workbook["EquipamentosDetalhes"]
@@ -529,8 +552,13 @@ class WorkflowIntegrityTests(unittest.TestCase):
                 path = self.input_dir / f"EquipamentosDetalhes_variante_{index}.xlsx"
                 make_details(
                     path,
-                    [("SERIE-FICTICIA", "ALIAS-FICTICIO", "Modelo A", "Maringá", "Notebook", "87000000")],
-                    headers=[serial_header, "HOSTNAME", "Modelo", "Cidade", "Tipo", "CEP"],
+                    [(
+                        "SERIE-FICTICIA", "ALIAS-FICTICIO", "Modelo A", "Maringá",
+                        "Notebook", "87000000", "00.000.000/0000-00",
+                    )],
+                    headers=complete_details_headers([
+                        serial_header, "HOSTNAME", "Modelo", "Cidade", "Tipo", "CEP",
+                    ]),
                 )
 
                 uploaded = main.validate_uploaded_workbook(path.read_bytes(), "detalhes")
@@ -538,11 +566,77 @@ class WorkflowIntegrityTests(unittest.TestCase):
                 self.assertEqual(uploaded["populated_rows"], 1)
                 self.assertEqual(main.find_details_sheet(path), "EquipamentosDetalhes")
 
+    def test_inventory_update_rejects_reduced_export_and_50_columns_without_installation_cnpj(self):
+        reduced_export = self.root / "EquipamentosDetalhes-exportado.xlsx"
+        make_details(
+            reduced_export,
+            [("SERIE-FICTICIA", "ALIAS-FICTICIO", "Modelo A", "Maringá", "Notebook", "87000000")],
+        )
+        reduced_bytes = reduced_export.read_bytes()
+
+        with self.assertRaises(main.HTTPException) as reduced_error:
+            main.validate_uploaded_workbook(reduced_bytes, "detalhes")
+
+        self.assertEqual(reduced_error.exception.status_code, 400)
+        self.assertIn("50 colunas", reduced_error.exception.detail)
+
+        headers_without_cnpj = complete_details_headers(
+            ["NumeroSerie", "Apelido", "Modelo", "Cidade", "Tipo", "CEP"],
+            include_installation_cnpj=False,
+        )
+        make_details(
+            reduced_export,
+            [("SERIE-FICTICIA", "ALIAS-FICTICIO", "Modelo A", "Maringá", "Notebook", "87000000")],
+            headers=headers_without_cnpj,
+        )
+        with self.assertRaises(main.HTTPException) as missing_cnpj_error:
+            main.validate_uploaded_workbook(reduced_export.read_bytes(), "detalhes")
+
+        self.assertEqual(missing_cnpj_error.exception.status_code, 400)
+        self.assertIn("CNPJ de instalação", missing_cnpj_error.exception.detail)
+
+        headers_with_empty_cnpj = complete_details_headers(
+            ["NumeroSerie", "Apelido", "Modelo", "Cidade", "Tipo", "CEP"]
+        )
+        make_details(
+            reduced_export,
+            [("SERIE-FICTICIA", "ALIAS-FICTICIO", "Modelo A", "Maringá", "Notebook", "87000000")],
+            headers=headers_with_empty_cnpj,
+        )
+        with self.assertRaises(main.HTTPException) as empty_cnpj_error:
+            main.validate_uploaded_workbook(reduced_export.read_bytes(), "detalhes")
+
+        self.assertEqual(empty_cnpj_error.exception.status_code, 400)
+        self.assertIn("série(s) sem CNPJ de instalação", empty_cnpj_error.exception.detail)
+
+    def test_update_route_rejects_export_format_before_changing_active_files(self):
+        make_details(self.details, [("SERIE-ATUAL", "ALIAS-ATUAL", "Modelo A", "Maringá", "Notebook", "87000000")])
+        make_endpoint(self.endpoint, [("SERIE-ATUAL", "ALIAS-ATUAL")])
+        before = {path: path.read_bytes() for path in (self.details, self.endpoint)}
+        with tempfile.TemporaryDirectory(prefix=".reduced-export-test-", dir=PROJECT_ROOT) as directory:
+            reduced_path = Path(directory) / "exportacao-reduzida.xlsx"
+            make_details(
+                reduced_path,
+                [("SERIE-NOVA", "ALIAS-NOVO", "Modelo B", "Londrina", "Notebook", "86000000")],
+            )
+            reduced_bytes = reduced_path.read_bytes()
+
+        with self.assertRaises(main.HTTPException) as raised:
+            asyncio.run(main.atualizar_planilhas(
+                UploadFile(filename="InvAll_nova.xlsx", file=io.BytesIO(_endpoint_bytes([("SERIE-NOVA", "ALIAS-NOVO")]))),
+                UploadFile(filename="EquipamentosDetalhes-exportado.xlsx", file=io.BytesIO(reduced_bytes)),
+            ))
+
+        self.assertEqual(raised.exception.status_code, 400)
+        self.assertIn("Atualizar Planilhas", raised.exception.detail)
+        self.assertEqual({path: path.read_bytes() for path in before}, before)
+
     def test_uploaded_details_preserves_text_identifiers_and_na_values(self):
         headers = [
             "nÚmero_de_Série", "hOsT-name", "mÓde-lo", "Cidade", "Tipo", "CEP",
             "IdCliente", "CNPJInstalacao",
         ]
+        complete_headers = complete_details_headers(headers)
         make_details(
             self.details,
             [
@@ -551,7 +645,7 @@ class WorkflowIntegrityTests(unittest.TestCase):
                 (1234, "HOST-NUMERICO", "Modelo C", "Ponta Grossa", "Notebook", "84000000", "103", "00123456000199"),
                 ("NA", "HOST-NA", "Modelo D", "Cascavel", "Notebook", "85800000", "NA", "00987654000188"),
             ],
-            headers=headers,
+            headers=complete_headers,
         )
         make_endpoint(self.endpoint, [("OUTRA-SERIE", "HOST-OUTRO")])
 
@@ -1108,13 +1202,14 @@ class WorkflowIntegrityTests(unittest.TestCase):
                     serial_header, alias_header, "Modelo", "Cidade", "Tipo", "CEP",
                     "IdCliente", "Observacao",
                 ]
+                complete_headers = complete_details_headers(headers)
                 make_details(
                     self.details,
                     [[
                         "SERIE-FICTICIA", "ALIAS-ATUAL", "Modelo A", "Maringá", "Notebook",
-                        "87000000", "CLIENTE-ATUAL", "MANTER-DETALHES",
+                        "87000000", "CLIENTE-ATUAL", "MANTER-DETALHES", "00.000.000/0000-00",
                     ]],
-                    headers=headers,
+                    headers=complete_headers,
                 )
                 make_endpoint(self.endpoint, [("SERIE-FICTICIA", "HOST-EXPORTADO")])
 
@@ -2136,7 +2231,10 @@ class WorkflowIntegrityTests(unittest.TestCase):
 
     def test_search_reuses_pre_normalized_inventory_values(self):
         main.equipamentos_cache = {
-            "SN-1": {"serial": "SN-1", "modelo": "Notebook One", "tipo": "Notebook", "apelido": "HOST-ONE"},
+            "SN-1": {
+                "serial": "SN-1", "modelo": "Notebook One", "tipo": "Notebook",
+                "apelido": "HOST-ONE", "retirada_cnpj": "12.345.678/0001-90",
+            },
             "SN-2": {"serial": "SN-2", "modelo": "Monitor Two", "tipo": "Monitor", "apelido": "HOST-TWO"},
         }
         with main.STATE_LOCK:
@@ -2145,7 +2243,41 @@ class WorkflowIntegrityTests(unittest.TestCase):
             result = main._buscar_equipamentos_por_termo("HOST-ONE")
 
         self.assertEqual([item["serial"] for item in result], ["SN-1"])
+        self.assertEqual(result[0]["retirada_cnpj"], "12.345.678/0001-90")
         self.assertEqual(normalize.call_count, 1)
+
+    def test_notebook_search_returns_installation_cnpj_for_every_synchronized_series(self):
+        source_rows = [
+            (
+                "SN-1", "HOST-1", "Notebook Modelo 1", "Maringá", "Notebook",
+                "87000000", "12.345.678/0001-90",
+            ),
+            (
+                "SN-2", "HOST-2", "Notebook Modelo 2", "Londrina", "Notebook",
+                "86000000", "98.765.432/0001-10",
+            ),
+            (
+                "SN-3", "HOST-3", "Notebook Modelo 3", "Foz do Iguaçu", "Notebook",
+                "85852010", "45.678.901/0001-23",
+            ),
+        ]
+        make_details(
+            self.details,
+            source_rows,
+            headers=[
+                "NumeroSerie", "Apelido", "Modelo", "Cidade", "Tipo", "CEP",
+                "CNPJ Instalacao",
+            ],
+        )
+        make_endpoint(self.endpoint, [(row[0], row[1]) for row in source_rows])
+        self.assertTrue(main.load_database())
+
+        results = main._buscar_equipamentos_por_termo("Notebook")
+
+        self.assertEqual(
+            {item["serial"]: item["retirada_cnpj"] for item in results},
+            {row[0]: row[6] for row in source_rows},
+        )
 
     def test_export_statistics_keep_unavailable_distinct_from_zero_changes(self):
         with (
@@ -2181,7 +2313,30 @@ def _endpoint_bytes(rows):
 def _details_bytes(rows):
     with tempfile.TemporaryDirectory(prefix=".upload-bytes-test-", dir=PROJECT_ROOT) as directory:
         path = Path(directory) / "detalhes-ficticio.xlsx"
-        make_details(path, rows)
+        headers = complete_details_headers(
+            ["NumeroSerie", "Apelido", "Modelo", "Cidade", "Tipo", "CEP"]
+        )
+        installation_cnpj_headers = {
+            main.normalize_workbook_header(header)
+            for header in main.DETAILS_INSTALLATION_CNPJ_HEADER_ALIASES
+        }
+        cnpj_column = next(
+            index for index, header in enumerate(headers)
+            if main.normalize_workbook_header(header) in installation_cnpj_headers
+        )
+        complete_rows = []
+        for row in rows:
+            values = list(row)
+            while len(values) <= cnpj_column:
+                values.append(None)
+            if not str(values[cnpj_column] or "").strip():
+                values[cnpj_column] = "00.000.000/0000-00"
+            complete_rows.append(values)
+        make_details(
+            path,
+            complete_rows,
+            headers=headers,
+        )
         return path.read_bytes()
 
 

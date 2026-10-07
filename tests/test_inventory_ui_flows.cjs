@@ -155,15 +155,15 @@ test("equipment search fills pickup CNPJ and selected delivery unit fills its in
   const calls = [];
   const harness = createAppHarness(async url => {
     calls.push(url);
-    return apiResponse(equipment);
+    return apiResponse({ ...equipment, retirada_cnpj: "" });
   }, { stubDisplay: false });
   harness.context.workflowUnits = [
     { id: 17, cidade: "Foz do Iguaçu", cnpj: deliveryCnpj, endereco_completo: "R das Guianas, 151" },
   ];
   harness.run("unidadesList = workflowUnits");
-  harness.element("input-serial").value = equipment.serial;
+  harness.context.workflowSearchItem = equipment;
 
-  await harness.run("buscarSerial()");
+  await harness.run("selecionarItemAutocomplete(workflowSearchItem)");
   assert.deepEqual(calls, [`/api/equipamento/${equipment.serial}`]);
   assert.equal(
     harness.element("retirada-cnpj").value,
