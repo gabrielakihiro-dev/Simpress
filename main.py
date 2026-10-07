@@ -2668,142 +2668,12 @@ def salvar_equipamento(payload: EquipamentoUpdatePayload):
     }
 
 
-def _edit_alias_workbook(
-    wb,
-    target_serial: str,
-    novo_apelido: str,
-    expected_current_alias: Optional[str] = None,
-    target_sheet_name: Optional[str] = None,
-):
-    sheet_name = target_sheet_name or next(
-        (name for name in wb.sheetnames if "equipamento" in name.lower() or "parque" in name.lower()),
-        wb.sheetnames[0] if wb.sheetnames else None,
-    )
-    if target_sheet_name is not None and target_sheet_name not in wb.sheetnames:
-        raise HTTPException(
-            status_code=409,
-            detail="A aba de origem do equipamento mudou depois que ele foi carregado; recarregue a base antes de editar.",
-        )
-    if sheet_name is None:
-        return None
-    ws = wb[sheet_name]
-    header_row = [cell.value for cell in next(ws.iter_rows(max_row=1), ())]
-    col_map = {
-        normalize_workbook_header(value): index + 1
-        for index, value in enumerate(header_row)
-        if value is not None
-    }
-    serial_col = next(
-        (col_map.get(alias) for alias in DETAILS_SERIAL_HEADER_ALIASES if col_map.get(alias)),
-        None,
-    )
-    alias_col = next(
-        (col_map.get(alias) for alias in DETAILS_ALIAS_HEADER_ALIASES if col_map.get(alias)),
-        None,
-    )
-    if serial_col is None:
-        raise HTTPException(
-            status_code=409,
-            detail="A planilha da Simpress não contém uma coluna reconhecida para número de série.",
-        )
-    if alias_col is None:
-        raise HTTPException(
-            status_code=409,
-            detail="A planilha da Simpress não contém uma coluna reconhecida de Apelido ou Hostname.",
-        )
-    serial_key = normalize_reference_value(target_serial)
-    matching_rows = [
-        row for row in range(2, ws.max_row + 1)
-        if normalize_reference_value(ws.cell(row=row, column=serial_col).value) == serial_key and serial_key
-    ]
-    if len(matching_rows) > 1:
-        raise HTTPException(
-            status_code=409,
-            detail=f"A série {target_serial} aparece mais de uma vez na Simpress; nenhum apelido foi escolhido.",
-        )
-    if not matching_rows:
-        return None
-    cell = ws.cell(row=matching_rows[0], column=alias_col)
-    if expected_current_alias is not None:
-        current_alias = "" if cell.value is None else str(cell.value).strip()
-        if current_alias != str(expected_current_alias or "").strip():
-            raise HTTPException(
-                status_code=409,
-                detail="O apelido salvo na planilha mudou depois deste registro; nenhuma alteração foi aplicada.",
-            )
-    cell.value = novo_apelido
-    return {(ws.title, cell.coordinate): novo_apelido}
-
-
-def atualizar_apelido_na_planilha(
-    target_serial: str,
-    novo_apelido: str,
-    obrigatorio: bool = False,
-    transaction: Optional[AtomicFileTransaction] = None,
-    expected_current_alias: Optional[str] = None,
-    target_file: Optional[Path] = None,
-    target_sheet_name: Optional[str] = None,
-) -> bool:
-    """Prepare a manual alias cell change and validate its temporary workbook."""
-    target_file = Path(target_file) if target_file is not None else get_equipamentos_template_file()
-    if target_file is None or not target_file.exists():
-        if obrigatorio:
-            raise HTTPException(status_code=404, detail="A planilha de equipamentos não foi encontrada para salvar a restauração.")
-        return False
-
-    try:
-        if transaction is None:
-            with AtomicFileTransaction(TRANSACTION_ROOT, [target_file]) as own_transaction:
-                saved = stage_workbook_update(
-                    own_transaction,
-                    target_file,
-                    lambda wb: _edit_alias_workbook(
-                        wb,
-                        target_serial,
-                        novo_apelido,
-                        expected_current_alias,
-                        target_sheet_name,
-                    ),
-                )
-                if not saved:
-                    if obrigatorio:
-                        raise HTTPException(status_code=404, detail=f"A série {target_serial} não foi encontrada na planilha para restaurar o apelido.")
-                    return False
-                own_transaction.commit()
-                return True
-
-        assert transaction is not None
-        saved = stage_workbook_update(
-            transaction,
-            target_file,
-            lambda wb: _edit_alias_workbook(
-                wb,
-                target_serial,
-                novo_apelido,
-                expected_current_alias,
-                target_sheet_name,
-            ),
-        )
-        if not saved and obrigatorio:
-            raise HTTPException(status_code=404, detail=f"A série {target_serial} não foi encontrada na planilha para restaurar o apelido.")
-        return saved
-    except HTTPException:
-        raise
-    except FileBusyError as error:
-        raise HTTPException(status_code=409, detail=str(error)) from error
-    except WorkbookSafetyError as error:
-        raise HTTPException(status_code=409, detail=f"Gravação cancelada: {error}") from error
-    except FileTransactionError as error:
-        raise HTTPException(status_code=500, detail=f"Não foi possível salvar o apelido em '{target_file.name}': {error}") from error
-
-
 def aplicar_alteracao_apelido(
     target_serial: str,
     novo_apelido: str,
     action: str = "alteracao",
     reference_id: Optional[str] = None,
     registrar_historico: bool = True,
-    exigir_salvamento_planilha: bool = False,
     expected_current_local: Optional[str] = None,
     expected_latest_event_id: Optional[str] = None,
     remove_history_event_id: Optional[str] = None,
@@ -2830,8 +2700,8 @@ def aplicar_alteracao_apelido(
             detail="A planilha de origem mudou depois que este equipamento foi carregado; recarregue a base antes de editar.",
         )
 
-    # Include the history file in the same lock set even when this call may not
-    # append to it; the previous alias and history decision are made under lock.
+    # Lock source files alongside the alias/history JSON so uploads cannot race
+    # with a manual override decision. Manual overrides never edit that source.
     targets = [MODIFIED_APELIDOS_FILE, ALIAS_HISTORY_FILE, *detail_files]
 
     try:
@@ -2866,8 +2736,6 @@ def aplicar_alteracao_apelido(
                     detail="A aba de origem mudou depois que este equipamento foi carregado; recarregue a base antes de editar.",
                 )
 
-            target_file = active_file
-
             apelido_anterior = str(equipamento.get("_apelido_local", equipamento.get("_apelido_base", "")) or "").strip()
             history_will_change = (apelido_anterior != novo_apelido and registrar_historico) or bool(remove_history_event_id)
             if expected_latest_event_id:
@@ -2883,21 +2751,23 @@ def aplicar_alteracao_apelido(
                 if local_now != str(expected_current_local or "").strip():
                     raise HTTPException(status_code=409, detail="O apelido salvo mudou depois deste registro; nenhuma alteração foi aplicada.")
 
-            excel_salvo = atualizar_apelido_na_planilha(
-                target_serial,
-                novo_apelido,
-                obrigatorio=exigir_salvamento_planilha,
-                transaction=transaction,
-                expected_current_alias=expected_current_local,
-                target_file=target_file,
-                target_sheet_name=cached_sheet,
-            )
-
             def update_overrides(data):
                 aliases = dict(_validate_json_object(data, "apelidos"))
-                for key in list(aliases):
-                    if normalize_reference_value(key) == normalize_reference_value(target_serial):
-                        aliases.pop(key, None)
+                matching_keys = [
+                    key for key in aliases
+                    if normalize_reference_value(key) == normalize_reference_value(target_serial)
+                ]
+                if expected_current_local is not None and (
+                    len(matching_keys) != 1
+                    or str(aliases.get(matching_keys[0]) or "").strip()
+                    != str(expected_current_local or "").strip()
+                ):
+                    raise HTTPException(
+                        status_code=409,
+                        detail="O apelido manual salvo mudou depois deste registro; nenhuma alteração foi aplicada.",
+                    )
+                for key in matching_keys:
+                    aliases.pop(key, None)
                 aliases[target_serial] = novo_apelido
                 return aliases
 
@@ -2918,15 +2788,6 @@ def aplicar_alteracao_apelido(
 
             updated_equipment = dict(equipamento)
             updated_equipment["_apelido_local"] = novo_apelido
-            if excel_salvo:
-                updated_equipment["_apelido_base"] = novo_apelido
-                updated_equipment["_revisao"] = _equipment_revision(
-                    updated_equipment.get("serial"),
-                    updated_equipment.get("modelo"),
-                    updated_equipment.get("tipo"),
-                    updated_equipment.get("_apelido_base"),
-                    updated_equipment.get("idCliente"),
-                )
             updated_equipment["_apelido_manual_override"] = True
             _apply_effective_alias(
                 updated_equipment,
@@ -2955,7 +2816,7 @@ def aplicar_alteracao_apelido(
         "equipamento": updated_equipment,
         "apelido_anterior": apelido_anterior,
         "apelido_novo": novo_apelido,
-        "salvo_no_disco": excel_salvo,
+        "salvo_no_disco": True,
     }
 
 
@@ -2968,7 +2829,7 @@ def atualizar_apelido(payload: ApelidoUpdatePayload):
 
     return {
         "sucesso": True,
-        "mensagem": "Apelido salvo e aplicado nas próximas pesquisas.",
+        "mensagem": "Apelido salvo para as próximas pesquisas e exportações do Excel.",
         **{**resultado, "equipamento": _public_equipment(resultado["equipamento"])},
         "total_modificados": len(load_modified_apelidos()),
     }
@@ -3023,7 +2884,6 @@ def excluir_evento_historico_apelido(evento_id: str):
         target_serial,
         apelido_anterior,
         registrar_historico=False,
-        exigir_salvamento_planilha=True,
         expected_current_local=apelido_novo,
         expected_latest_event_id=evento_id,
         remove_history_event_id=evento_id,
@@ -3035,7 +2895,7 @@ def excluir_evento_historico_apelido(evento_id: str):
         "evento_id": evento_id,
         "tipo": tipo_evento,
         "equipamento": _public_equipment(equipamento_restaurado),
-        "mensagem": "Valor anterior restaurado e salvo; registro removido do histórico.",
+        "mensagem": "Valor anterior restaurado para pesquisas e exportações; registro removido do histórico.",
     }
 
 
