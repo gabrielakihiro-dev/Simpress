@@ -2034,9 +2034,6 @@
         return !seriesSebrae.has(serie);
       });
       const filtrosAtualizacaoAplicados = comparison.filtros_atualizacao_aplicados === true;
-      const ausentesEndpoint = filtrosAtualizacaoAplicados
-        ? (comparison.ausentes_no_endpoint || [])
-        : filtrarSeriesSebrae(comparison.ausentes_no_endpoint);
       const ausentesDetalhes = filtrosAtualizacaoAplicados
         ? (comparison.ausentes_em_detalhes || [])
         : filtrarSeriesSebrae(comparison.ausentes_em_detalhes);
@@ -2660,7 +2657,7 @@
         link.remove();
         window.setTimeout(() => window.URL.revokeObjectURL(url), 1000);
 
-        showToast("Planilha Exportada com Sucesso!", "success");
+        showToast("Planilha exportada com sucesso!", "success");
       } catch (err) {
         console.error("Erro ao exportar planilha de equipamentos:", err);
         showToast(err.message, "error");
