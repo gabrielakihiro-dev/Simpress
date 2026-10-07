@@ -68,8 +68,8 @@ Antes de iniciar o servidor, a limpeza recupera transações e considera tempor�
 | --- | --- | --- |
 | `(MODELO) - TRANSFERENCIA SIMPRESS.xlsx` | `data/planilhas_entrada` | Modelo da planilha oficial. É versionado no Git e exigido pelo inicializador `.bat`. |
 | `EquipamentosDetalhes*.xlsx` | `data/planilhas_entrada` | Inventário principal da busca. Na inicialização, o sistema usa o arquivo válido mais recente. |
-| `EquipamentosDetalhes_atual.xlsx` | `data/planilhas_entrada` | Destino do inventário Simpress no fluxo de atualização. |
-| `InvAllComputersSummary_atual.xlsx` | `data/planilhas_entrada` | Inventário Endpoint usado no fluxo de atualização e como fonte de hostname. |
+| `EquipamentosDetalhes_atual.xlsx` | `data/planilhas_entrada` | Destino da atualização Simpress, extraído do workbook contido no ZIP `EquipamentosDetalhes` enviado para a atualização. É a fonte oficial da composição e contagem do cadastro; não some registros da InvAll nem de snapshots anteriores. |
+| `InvAllComputersSummary_atual.xlsx` | `data/planilhas_entrada` | Fonte auxiliar de hostname por série e comparação. Não adiciona equipamentos à base oficial. |
 | `EquipamentosDetalhes-exportacao.xlsx` | `modelos` | Modelo local de exportação. Não é distribuído pelo Git. |
 | `apelidos_modificados.json` | `data/state/apelidos_modificados` | Apelidos personalizados locais. O arquivo, temporários e bloqueios não são versionados. |
 | `historico_comparacoes.json` | `data/state/historico_comparacoes` | Histórico local de comparações. O arquivo, temporários e bloqueios não são versionados. |
