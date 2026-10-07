@@ -34,7 +34,7 @@
         </div>
       </div>
 
-      <div class="hidden md:flex items-center gap-3 text-xs text-slate-400 bg-slate-900/80 px-3.5 py-2 rounded-lg border border-slate-800" aria-label="Resumo da base">
+      <div class="header-base-summary hidden md:flex items-center gap-3 text-xs text-slate-400 bg-slate-900/80 px-3.5 py-2 rounded-lg border border-slate-800" aria-label="Resumo da base">
         <span class="inline-flex items-center gap-1.5"><span class="h-1.5 w-1.5 rounded-full bg-emerald-400" aria-hidden="true"></span>Base: <strong class="text-slate-200" id="stat-equipamentos">Carregando…</strong> equipamentos</span>
         <span aria-hidden="true" class="text-slate-700">|</span>
         <span>Regionais: <strong class="text-slate-200" id="stat-unidades">Carregando…</strong></span>
@@ -1384,6 +1384,8 @@ Horário disponível para atendimento:</textarea>
   <div id="toast-container" role="region" aria-label="Notificações" aria-live="polite" aria-relevant="additions text" aria-atomic="false" class="fixed top-24 right-6 z-[130] space-y-2 pointer-events-none"></div>
 
   <!-- JAVASCRIPT APPLICATION LOGIC -->
+  <script src="/static/catalog-search-utils.js"></script>
+  <script src="/static/form-draft-guard.js"></script>
   <script src="/static/transfer-utils.js"></script>
   <script src="/static/history-annotation-autosave.js"></script>
   <script src="/static/app.js"></script>
