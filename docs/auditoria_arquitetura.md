@@ -2,7 +2,7 @@
 
 **Projeto:** Simpress
 **Data da análise:** 8 de outubro de 2026
-**Escopo:** leitura do código atual, sem refatorar a aplicação.
+**Escopo:** fotografia do código na análise original; nenhuma refatoração foi feita durante aquele levantamento.
 
 ## Diagnóstico geral
 
@@ -254,9 +254,12 @@ return result
 
 Recomendo uma refatoração incremental na arquitetura atual. Os problemas encontrados podem ser resolvidos preservando o armazenamento em arquivos e as proteções já existentes.
 
-## Validação realizada
+## Validação da análise original
+
+Os resultados abaixo registram a validação do levantamento antes das correções. O trabalho posterior e sua validação estão descritos em [execucao_auditoria_arquitetura.md](execucao_auditoria_arquitetura.md).
 
 - Testes de interface: 29 testes do fluxo principal e 23 testes auxiliares, total de 52 testes JavaScript aprovados.
+- Os testes JavaScript usam um ambiente simulado e não substituem uma validação no navegador.
 - Testes Python focados: 19 testes aprovados.
 - Suíte Python completa: execução interrompida por falta de progresso em um teste de transferência; o resultado geral é inconclusivo.
 - Reprodução dos dois problemas de consistência: ambos confirmados com dados fictícios.

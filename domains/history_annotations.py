@@ -12,7 +12,7 @@ from integrity import atomic_write_json
 MAX_ANNOTATION_LENGTH = 2000
 
 
-def _record_path(directory: Path, event_id: str, item_id: str) -> Path:
+def history_annotation_record_path(directory: Path, event_id: str, item_id: str) -> Path:
     key = f"{event_id}\0{item_id}".encode("utf-8")
     return Path(directory) / f"{hashlib.sha256(key).hexdigest()}.json"
 
@@ -35,8 +35,7 @@ def history_annotation_row_fingerprint(category: str, item: Dict[str, Any]) -> s
     return hashlib.sha256(payload.encode("utf-8")).hexdigest()
 
 
-def save_history_annotation(
-    directory: Path,
+def build_history_annotation_record(
     *,
     event_id: str,
     event_time: str,
@@ -49,7 +48,7 @@ def save_history_annotation(
     linha_hash: Optional[str] = None,
     updated_at: Optional[str] = None,
 ) -> Dict[str, Any]:
-    """Atomically save only the annotation and the row context needed to display it."""
+    """Create a validated annotation record with enough row context to display it."""
     if not isinstance(event_id, str) or not event_id.strip():
         raise ValueError("O identificador da atualização é inválido.")
     if not isinstance(item_id, str) or not item_id.strip():
@@ -77,7 +76,16 @@ def save_history_annotation(
     }
     if linha_hash is not None:
         record["linha_hash"] = linha_hash
-    target = _record_path(Path(directory), event_id, item_id)
+    return record
+
+
+def save_history_annotation(
+    directory: Path,
+    **values: Any,
+) -> Dict[str, Any]:
+    """Atomically save only the annotation and the row context needed to display it."""
+    record = build_history_annotation_record(**values)
+    target = history_annotation_record_path(directory, record["evento_id"], record["item_id"])
     target.parent.mkdir(parents=True, exist_ok=True)
     atomic_write_json(target, record)
     return record

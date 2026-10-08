@@ -183,13 +183,34 @@
           return;
         }
 
+        let responseData = {};
+        if (typeof result.response?.json === "function") {
+          try {
+            responseData = await result.response.json();
+          } catch (error) {
+            responseData = {};
+          }
+        }
+        const synchronizationPending = responseData?.sincronizacao === "pendente";
+        const savedOnThisDevice = responseData?.sincronizacao === "local";
         dirty = textarea.value !== annotation
           || annotationRevisions.get(key) !== requestRevision;
         if (!dirty) removeDraft();
         setPending(dirty);
         setStatus(
-          dirty ? "Salvando..." : "Salvo automaticamente",
-          dirty ? "text-cyan-300" : "text-emerald-300"
+          dirty
+            ? "Salvando..."
+            : synchronizationPending
+              ? "Salvo neste dispositivo; sincronização pendente"
+              : savedOnThisDevice
+                ? "Salvo neste dispositivo"
+                : "Salvo automaticamente",
+          dirty
+            ? "text-cyan-300"
+            : synchronizationPending
+              ? "text-amber-300"
+              : "text-emerald-300",
+          !dirty && synchronizationPending
         );
       } catch (error) {
         dirty = true;
@@ -216,7 +237,14 @@
       scheduleSave(500);
     };
     const onBlur = () => scheduleSave(0);
-    const onRetry = () => scheduleSave(0);
+    const onRetry = () => {
+      if (!dirty) {
+        dirty = true;
+        setPending(true);
+        persistDraft(textarea.value);
+      }
+      scheduleSave(0);
+    };
 
     textarea.addEventListener("input", onInput);
     textarea.addEventListener("blur", onBlur);

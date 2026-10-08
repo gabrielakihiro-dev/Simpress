@@ -1,17 +1,26 @@
 """Search and statistics API routes for the equipment catalog."""
 
-from typing import Any, Dict, List, Optional
+from dataclasses import dataclass
+from typing import Any, Callable, Dict, List, Optional, Sequence
 
 from fastapi import APIRouter, Query
 
 
-def create_equipment_search_router(ctx):
+@dataclass(frozen=True)
+class EquipmentSearchServices:
+    search: Callable[[str], List[Dict[str, Any]]]
+    normalize: Callable[[Any], str]
+    categories: Sequence[Dict[str, Any]]
+    get_stats: Callable[[], Dict[str, Any]]
+
+
+def create_equipment_search_router(services: EquipmentSearchServices):
     router = APIRouter()
 
     @router.get("/api/buscar")
     def buscar_seriais(q: str = Query(..., min_length=2)):
         """Busca rápida de seriais/modelos/apelidos/cidades para autocomplete."""
-        return ctx._buscar_equipamentos_por_termo(q)[:15]
+        return services.search(q)[:15]
 
     @router.get("/api/buscar-expandida")
     def buscar_seriais_expandida(
@@ -24,28 +33,28 @@ def create_equipment_search_router(ctx):
         include_filters: bool = False,
     ):
         """Retorna resultados paginados, filtros e total de correspondências."""
-        all_results = ctx._buscar_equipamentos_por_termo(q)
+        all_results = services.search(q)
 
         def filter_options(key: str) -> List[str]:
             options: Dict[str, str] = {}
             for item in all_results:
                 value = str(item.get(key) or "").strip()
-                normalized = ctx._normalizar_termo_busca(value)
+                normalized = services.normalize(value)
                 if normalized:
                     options.setdefault(normalized, value)
-            return sorted(options.values(), key=ctx._normalizar_termo_busca)
+            return sorted(options.values(), key=services.normalize)
 
-        normalized_category = ctx._normalizar_termo_busca(categoria)
-        valid_categories = {entry["value"] for entry in ctx._CATEGORIAS_EQUIPAMENTO}
+        normalized_category = services.normalize(categoria)
+        valid_categories = {entry["value"] for entry in services.categories}
         if normalized_category and normalized_category.lower() not in valid_categories:
             normalized_category = ""
-        normalized_type = ctx._normalizar_termo_busca(tipo)
-        normalized_city = ctx._normalizar_termo_busca(cidade)
+        normalized_type = services.normalize(tipo)
+        normalized_city = services.normalize(cidade)
         results = [
             item for item in all_results
             if (not normalized_category or item.get("categoria") == normalized_category.lower())
-            and (not normalized_type or ctx._normalizar_termo_busca(item.get("tipo")) == normalized_type)
-            and (not normalized_city or ctx._normalizar_termo_busca(item.get("retirada_cidade")) == normalized_city)
+            and (not normalized_type or services.normalize(item.get("tipo")) == normalized_type)
+            and (not normalized_city or services.normalize(item.get("retirada_cidade")) == normalized_city)
         ]
         page = results[offset:offset + limit]
         response = {
@@ -56,14 +65,14 @@ def create_equipment_search_router(ctx):
             "has_more": offset + len(page) < len(results),
         }
         if include_filters:
-            category_counts = {entry["value"]: 0 for entry in ctx._CATEGORIAS_EQUIPAMENTO}
+            category_counts = {entry["value"]: 0 for entry in services.categories}
             for item in all_results:
                 if item.get("categoria") in category_counts:
                     category_counts[item["categoria"]] += 1
             response["filters"] = {
                 "categories": [
                     {**entry, "count": category_counts[entry["value"]]}
-                    for entry in ctx._CATEGORIAS_EQUIPAMENTO
+                    for entry in services.categories
                 ],
                 "types": filter_options("tipo"),
                 "cities": filter_options("retirada_cidade"),
@@ -73,20 +82,7 @@ def create_equipment_search_router(ctx):
     @router.get("/api/stats")
     def get_stats():
         """Retorna métricas da base de dados."""
-        export_counts = ctx.count_export_changes()
-        export_status = ctx.get_export_status()
-        with ctx.STATE_LOCK:
-            stats_snapshot = ctx.deepcopy(ctx.stats_cache)
-            unit_count = len(ctx.unidades_cache)
-        return {
-            **stats_snapshot,
-            "exportacao_disponivel": export_status["available"],
-            "exportacao_motivo": export_status["reason"],
-            "total_apelidos_modificados": export_counts["apelidos"],
-            "total_id_clientes_modificados": export_counts["id_clientes"],
-            "total_alteracoes_exportaveis": export_counts["total"],
-            "total_unidades": unit_count,
-        }
+        return services.get_stats()
 
     return router, {
         "buscar_seriais": buscar_seriais,

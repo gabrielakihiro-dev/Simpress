@@ -245,6 +245,42 @@ test("clears pending state when an in-flight annotation finishes on its original
   harness.controller.dispose();
 });
 
+test("distinguishes a locally saved annotation that is still waiting to synchronize", async () => {
+  let calls = 0;
+  const harness = createAutosaveHarness(async () => {
+    calls += 1;
+    return {
+      ok: true,
+      status: 200,
+      json: async () => ({
+        sucesso: true,
+        sincronizacao: calls === 1 ? "pendente" : "sincronizada",
+      }),
+    };
+  });
+  harness.textarea.value = "Anotação preservada localmente";
+  harness.textarea.dispatchEvent(new Event("input"));
+  await harness.flushTimers();
+
+  assert.equal(calls, 1);
+  assert.equal(harness.status.textContent, "Salvo neste dispositivo; sincronização pendente");
+  assert.equal(harness.retryButton.hidden, false);
+  assert.equal(harness.textarea.dataset.annotationPending, "false");
+  assert.equal(harness.storageValues.size, 0);
+
+  const allowedExit = new Event("beforeunload", { cancelable: true });
+  harness.windowObject.dispatchEvent(allowedExit);
+  assert.equal(allowedExit.defaultPrevented, false);
+
+  harness.retryButton.dispatchEvent(new Event("click"));
+  await harness.flushTimers();
+  assert.equal(calls, 2);
+  assert.equal(harness.status.textContent, "Salvo automaticamente");
+  assert.equal(harness.retryButton.hidden, true);
+  assert.equal(harness.textarea.dataset.annotationPending, "false");
+  harness.controller.dispose();
+});
+
 test("recovers a saved local draft when the comparison is opened again", async () => {
   const storageValues = new Map();
   let calls = 0;
