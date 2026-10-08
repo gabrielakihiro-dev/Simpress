@@ -10,6 +10,7 @@ const annotationAutosave = require("../static/history-annotation-autosave.js");
 
 const appScript = fs.readFileSync(path.join(__dirname, "..", "static", "app.js"), "utf8");
 const appHtml = fs.readFileSync(path.join(__dirname, "..", "static", "index.html"), "utf8");
+const appCss = fs.readFileSync(path.join(__dirname, "..", "static", "app.css"), "utf8");
 
 class FakeElement {
   constructor(id = "") {
@@ -108,6 +109,7 @@ function createAppHarness(fetchApi, { stubDisplay = true, confirmResult = true }
   });
 
   vm.runInContext(appScript, context, { filename: "static/app.js" });
+  context.renderComparisonForTest = context.abrirModalComparacaoPlanilhas;
   vm.runInContext(`
     preencherRepresentanteRegional = () => {};
     showToast = (message, type) => workflowEffects.toasts.push({ message, type });
@@ -148,6 +150,29 @@ function createAppHarness(fetchApi, { stubDisplay = true, confirmResult = true }
 function apiResponse(body, { status = 200, ok = status >= 200 && status < 300 } = {}) {
   return { ok, status, json: async () => body };
 }
+
+test("stale-access report sorts by inactivity, shows its reference time, and signals horizontal scrolling", () => {
+  const harness = createAppHarness(async () => apiResponse({}), { stubDisplay: false });
+  const referenceTime = "2026-09-30T15:00:00-03:00";
+  harness.context.workflowComparison = {
+    horario_comparacao: referenceTime,
+    sem_acesso_14_dias: [
+      { computador: "PRNOTE-14", dias_sem_verificacao: 14 },
+      { computador: "PRNOTE-40", dias_sem_verificacao: 40 },
+    ],
+  };
+
+  harness.run("renderComparisonForTest(workflowComparison)");
+
+  const html = harness.element("comparacao-planilhas-conteudo").innerHTML;
+  assert.ok(html.indexOf("PRNOTE-40") < html.indexOf("PRNOTE-14"));
+  const formattedReferenceTime = harness.run(`formatarHorarioHistorico(${JSON.stringify(referenceTime)})`);
+  assert.ok(html.includes(`Atualização usada como referência: <time datetime="${referenceTime}">${formattedReferenceTime}</time>.`));
+  assert.ok(html.includes("Role a tabela horizontalmente para consultar todas as colunas."));
+  assert.match(appCss, /\.accessible-table-wrap\s*\{[^}]*overflow-x:\s*auto/s);
+  assert.match(appCss, /\.accessible-table-wrap:focus-visible\s*\{/);
+  assert.match(appCss, /\.accessible-table-wrap::-webkit-scrollbar\s*\{/);
+});
 
 test("equipment search fills pickup CNPJ and selected delivery unit fills its installation CNPJ", async () => {
   const equipment = {
