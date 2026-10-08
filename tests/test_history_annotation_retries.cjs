@@ -16,6 +16,30 @@ const errorResponse = status => ({
   json: async () => ({ detail: `HTTP ${status}` }),
 });
 
+test("annotation autosave defaults to the module root when no window object is supplied", () => {
+  class Control extends EventTarget {
+    constructor() {
+      super();
+      this.value = "";
+      this.dataset = {};
+      this.textContent = "";
+      this.className = "";
+      this.hidden = true;
+      this.disabled = false;
+    }
+  }
+
+  const controller = attachAnnotationAutosave({
+    textarea: new Control(),
+    status: new Control(),
+    retryButton: new Control(),
+    eventId: "module-root-event",
+    itemId: "module-root-item",
+    send: async () => successResponse,
+  });
+  assert.doesNotThrow(() => controller.dispose());
+});
+
 test("retries network failures and waits with bounded backoff", async () => {
   let calls = 0;
   const waits = [];
