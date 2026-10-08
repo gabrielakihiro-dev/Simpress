@@ -2119,6 +2119,14 @@
       const divergenciasLocal = comparison.divergencias_local || [];
       const seriesSemMapa = comparison.series_sem_mapeamento || [];
       const semAcesso14Dias = comparison.sem_acesso_14_dias || [];
+      const diasSemVerificacao = item => {
+        const dias = Number(item?.dias_sem_verificacao);
+        return Number.isFinite(dias) ? dias : 0;
+      };
+      const semAcesso14DiasOrdenados = [...semAcesso14Dias].sort((a, b) =>
+        diasSemVerificacao(b) - diasSemVerificacao(a)
+        || String(a.computador || "").localeCompare(String(b.computador || ""), "pt-BR")
+      );
       const ambiguidades = comparison.correspondencias_ambiguas || [];
       const registrosAmbiguos = comparison.registros_ambiguos || [];
       const arquivo = comparison.arquivos_enviados || {};
@@ -2154,7 +2162,7 @@
           <td class="px-3 py-2">${escapeHtml(item.local_detalhes || "—")}</td>
         </tr>`);
 
-      const semAcessoRows = semAcesso14Dias.map(item => `
+      const semAcessoRows = semAcesso14DiasOrdenados.map(item => `
         <tr class="text-slate-300">
           <td class="px-3 py-2 font-mono text-white whitespace-nowrap">${escapeHtml(item.computador || "—")}</td>
           <td class="px-3 py-2 font-mono whitespace-nowrap">${escapeHtml(item.serie || "—")}</td>
@@ -2279,7 +2287,8 @@
           ${renderizarTabelaComparacao(["Série", "Apelido manual", "na Simpress", "no endpoint", "Situação", "Ação"], manualAliasRows, "Nenhuma divergência entre apelidos manuais e as planilhas enviadas.")}
         </section>
         <section class="space-y-2">
-          <div><h4 class="text-sm font-bold text-rose-300">Sem acesso há 14 dias ou mais</h4><p class="text-[11px] text-slate-500">Notebook com última verificação com êxito igual ou anterior a 14 dias antes desta atualização.</p></div>
+          <div><h4 class="text-sm font-bold text-rose-300">Sem acesso há 14 dias ou mais</h4><p class="text-[11px] text-slate-500">Notebook com última verificação com êxito igual ou anterior a 14 dias na data e hora desta atualização.</p><p class="text-[11px] text-slate-400">Atualização usada como referência: ${comparison.horario_comparacao ? `<time datetime="${escapeHtml(comparison.horario_comparacao)}">${escapeHtml(formatarHorarioHistorico(comparison.horario_comparacao))}</time>` : "data e hora indisponíveis"}.</p></div>
+          ${semAcessoRows.length ? '<p class="comparison-table-scroll-hint">Role a tabela horizontalmente para consultar todas as colunas.</p>' : ""}
           ${renderizarTabelaComparacao(["Hostname/Apelido", "Série", "Última verificação com êxito", "Dias sem verificação", "Linha no endpoint"], semAcessoRows, "Nenhum notebook está há 14 dias ou mais sem verificação com êxito.")}
         </section>
         <section class="space-y-2">
