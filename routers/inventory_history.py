@@ -4,7 +4,7 @@ import re
 from datetime import date, datetime
 from io import BytesIO
 from pathlib import Path
-from typing import Any, Dict, Optional
+from typing import Any, Dict, List, Optional
 
 import openpyxl
 from fastapi import APIRouter, Query
@@ -562,7 +562,9 @@ def create_inventory_history_router(ctx):
             return None
         event_records.sort(key=lambda record: record["item_id"])
         event_time = next((record.get("horario") for record in event_records if record.get("horario")), "")
-        category_items = {category: [] for category in _ANNOTATABLE_COMPARISON_CATEGORIES}
+        category_items: Dict[str, List[Dict[str, Any]]] = {
+            category: [] for category in _ANNOTATABLE_COMPARISON_CATEGORIES
+        }
         synchronized_annotations = []
         for record in event_records:
             category = record.get("categoria")
