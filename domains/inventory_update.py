@@ -4,6 +4,198 @@ import asyncio
 from pathlib import Path
 from typing import Any, Dict
 
+from domains.history_annotations import history_annotation_row_fingerprint
+
+
+_ANNOTATABLE_COMPARISON_CATEGORIES = (
+    "apelidos_sem_atualizacao",
+    "sem_acesso_14_dias",
+    "ausentes_no_endpoint",
+    "ausentes_em_detalhes",
+    "divergencias_local",
+    "correspondencias_ambiguas",
+    "registros_ambiguos",
+    "series_sem_mapeamento",
+)
+
+
+def _legacy_annotation(comparison: Dict[str, Any], category: str, index: int) -> Any:
+    annotations = comparison.get("anotacoes")
+    if not isinstance(annotations, dict):
+        return None
+    legacy_category = (
+        "ambiguidades"
+        if category in ("correspondencias_ambiguas", "registros_ambiguos")
+        else category
+    )
+    legacy_index = index
+    if category == "registros_ambiguos":
+        ambiguity_items = comparison.get("correspondencias_ambiguas")
+        if isinstance(ambiguity_items, list):
+            legacy_index += len(ambiguity_items)
+    return annotations.get(f"{legacy_category}:{legacy_index}")
+
+
+def _copy_matching_history_annotations(
+    context: Any,
+    previous_history: Any,
+    new_event: Dict[str, Any],
+) -> list[Dict[str, str]]:
+    """Copy notes from the latest exactly matching prior rows into one new event."""
+    if not isinstance(previous_history, list):
+        return []
+    new_comparison = new_event.get("comparacao")
+    if not isinstance(new_comparison, dict):
+        return []
+
+    shared_annotations = {}
+    for record in context.load_history_annotations(context.HISTORY_ANNOTATIONS_DIR):
+        event_id = str(record.get("evento_id") or "")
+        item_id = str(record.get("item_id") or "")
+        if not event_id or not item_id:
+            continue
+        key = (event_id, item_id)
+        candidate = (str(record.get("atualizado_em") or ""), record)
+        if key not in shared_annotations or candidate[0] >= shared_annotations[key][0]:
+            shared_annotations[key] = candidate
+    shared_annotations = {key: value[1] for key, value in shared_annotations.items()}
+
+    new_fingerprints = set()
+    for category in _ANNOTATABLE_COMPARISON_CATEGORIES:
+        items = new_comparison.get(category)
+        if not isinstance(items, list):
+            continue
+        for item in items:
+            if isinstance(item, dict):
+                new_fingerprints.add(history_annotation_row_fingerprint(category, item))
+    if not new_fingerprints:
+        return []
+
+    latest_prior_notes: Dict[str, Any] = {}
+    for previous_event in reversed(previous_history):
+        if not isinstance(previous_event, dict):
+            continue
+        previous_comparison = previous_event.get("comparacao")
+        if not isinstance(previous_comparison, dict):
+            continue
+        event_id = str(previous_event.get("id") or previous_comparison.get("evento_id") or "")
+        event_matches: Dict[str, list[Any]] = {}
+        for category in _ANNOTATABLE_COMPARISON_CATEGORIES:
+            items = previous_comparison.get(category)
+            if not isinstance(items, list):
+                continue
+            for index, item in enumerate(items):
+                if not isinstance(item, dict):
+                    continue
+                fingerprint = history_annotation_row_fingerprint(category, item)
+                if fingerprint not in new_fingerprints or fingerprint in latest_prior_notes:
+                    continue
+                annotation = item.get("anotacao")
+                if not isinstance(annotation, str):
+                    annotation = _legacy_annotation(previous_comparison, category, index)
+                if not isinstance(annotation, str) and event_id:
+                    item_id = context.comparison_annotation_item_id(event_id, category, index, item)
+                    shared_record = shared_annotations.get((event_id, item_id))
+                    if isinstance(shared_record, dict):
+                        annotation = shared_record.get("anotacao")
+                event_matches.setdefault(fingerprint, []).append(annotation)
+
+        for fingerprint, annotations in event_matches.items():
+            first_annotation = annotations[0] if annotations else None
+            if isinstance(first_annotation, str) and all(
+                annotation == first_annotation for annotation in annotations
+            ):
+                latest_prior_notes[fingerprint] = first_annotation
+            else:
+                # A newer matching row without a note, or conflicting duplicate
+                # rows, prevents an older annotation from being resurrected.
+                latest_prior_notes[fingerprint] = None
+
+    local_event_ids = set()
+    for event in previous_history:
+        if not isinstance(event, dict):
+            continue
+        comparison = event.get("comparacao")
+        event_id = str(
+            event.get("id")
+            or (comparison.get("evento_id") if isinstance(comparison, dict) else "")
+            or ""
+        )
+        if event_id:
+            local_event_ids.add(event_id)
+    shared_only_events: Dict[tuple[str, str], list[Dict[str, Any]]] = {}
+    for record in shared_annotations.values():
+        if not isinstance(record, dict):
+            continue
+        event_id = str(record.get("evento_id") or "")
+        fingerprint = str(record.get("linha_hash") or "")
+        if (
+            not event_id
+            or event_id in local_event_ids
+            or fingerprint not in new_fingerprints
+        ):
+            continue
+        shared_only_events.setdefault((event_id, fingerprint), []).append(record)
+
+    ordered_shared_events = sorted(
+        shared_only_events.items(),
+        key=lambda entry: max(
+            (
+                str(record.get("horario") or ""),
+                str(record.get("atualizado_em") or ""),
+            )
+            for record in entry[1]
+        ),
+        reverse=True,
+    )
+    for (_, fingerprint), records in ordered_shared_events:
+        if fingerprint in latest_prior_notes:
+            continue
+        annotations = [record.get("anotacao") for record in records]
+        first_annotation = annotations[0] if annotations else None
+        if isinstance(first_annotation, str) and all(
+            annotation == first_annotation for annotation in annotations
+        ):
+            latest_prior_notes[fingerprint] = first_annotation
+        else:
+            latest_prior_notes[fingerprint] = None
+
+    copied = []
+    new_event_id = str(new_event.get("id") or "")
+    if not new_event_id:
+        return copied
+    for category in _ANNOTATABLE_COMPARISON_CATEGORIES:
+        items = new_comparison.get(category)
+        if not isinstance(items, list):
+            continue
+        for index, item in enumerate(items):
+            if not isinstance(item, dict):
+                continue
+            fingerprint = history_annotation_row_fingerprint(category, item)
+            annotation = latest_prior_notes.get(fingerprint)
+            if not isinstance(annotation, str) or not annotation:
+                continue
+            identity_item = {
+                key: value
+                for key, value in item.items()
+                if key not in {"anotacao", "anotacao_id"}
+            }
+            item_id = context.comparison_annotation_item_id(
+                new_event_id, category, index, identity_item
+            )
+            item["anotacao_id"] = item_id
+            item["anotacao"] = annotation
+            copied.append({
+                "item_id": item_id,
+                "serie": str(item.get("serie") or ""),
+                "computador": str(item.get("computador") or item.get("chave") or ""),
+                "motivo": str(item.get("motivo") or item.get("mensagem") or item.get("tipo") or ""),
+                "categoria": category,
+                "anotacao": annotation,
+                "linha_hash": fingerprint,
+            })
+    return copied
+
 
 async def read_uploaded_xlsx(upload: Any, role: str, context: Any) -> Dict[str, Any]:
     """Validate one uploaded workbook and retain its safe display name and bytes."""
@@ -208,6 +400,7 @@ def _commit_inventory_files(staged: Dict[str, Any], context: Any):
             "resumo": summary,
             "comparacao": comparison,
         }
+        copied_annotations = []
 
         def append_update(history):
             if not isinstance(history, list):
@@ -234,11 +427,32 @@ def _commit_inventory_files(staged: Dict[str, Any], context: Any):
                     ):
                         previous_divergence["resolucao"] = "substituida"
                         previous_divergence["horario_resolucao"] = comparison["horario_comparacao"]
+            copied_annotations[:] = _copy_matching_history_annotations(
+                ctx, updated, history_entry
+            )
             updated.append(history_entry)
             return updated
 
         transaction.update_json(ctx.COMPARISON_HISTORY_FILE, append_update, [])
         transaction.commit()
+        for copied_annotation in copied_annotations:
+            try:
+                ctx.save_history_annotation(
+                    ctx.HISTORY_ANNOTATIONS_DIR,
+                    event_id=event_id,
+                    event_time=history_entry["horario"],
+                    item_id=copied_annotation["item_id"],
+                    serie=copied_annotation["serie"],
+                    computador=copied_annotation["computador"],
+                    motivo=copied_annotation["motivo"],
+                    anotacao=copied_annotation["anotacao"],
+                    categoria=copied_annotation["categoria"],
+                    linha_hash=copied_annotation["linha_hash"],
+                )
+            except Exception:
+                # The annotation is already in local history and will be retried
+                # into shared storage when that event is next opened.
+                continue
         ctx.publish_database_state(prepared_state)
 
     historical_view = ctx.comparison_history_for_display(history_entry)
