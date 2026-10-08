@@ -461,8 +461,11 @@ Horário disponível para atendimento:</textarea>
             id="transfer-serial"
             readonly
             aria-readonly="true"
-            aria-label="Série selecionada para esta transferência"
+            aria-label="Série da transferência. Clique para pesquisar na aba Home quando estiver vazia."
             placeholder="Aguardando pesquisa..."
+            title="Clique para abrir a pesquisa na Home quando nenhuma série estiver selecionada"
+            onclick="abrirHomeParaPesquisarEquipamento()"
+            onkeydown="abrirHomeParaPesquisarEquipamento(event)"
             autocomplete="off"
           />
           <button

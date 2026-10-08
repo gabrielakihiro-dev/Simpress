@@ -226,6 +226,7 @@
       transition: border-color 180ms ease, box-shadow 180ms ease, background-color 180ms ease;
     }
     .transfer-serial-input-wrap input { width: 100%; min-width: 0; padding: 0.55rem 0; border: 0; outline: 0; background: transparent; color: #94a3b8; font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace; font-size: 0.95rem; font-weight: 650; letter-spacing: 0.08em; }
+    .transfer-equipment-banner[data-state="empty"] .transfer-serial-input-wrap input { cursor: pointer; }
     .transfer-serial-input-wrap input::placeholder { color: #64748b; font-family: inherit; font-size: 0.8rem; font-weight: 500; letter-spacing: 0; }
     .transfer-serial-status {
       display: inline-flex; align-items: center; justify-content: center; gap: 0.3rem; flex: none; padding: 0.35rem 0.6rem;
