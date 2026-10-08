@@ -2145,14 +2145,27 @@
       const divergenciasApelidosManuais = comparison.divergencias_apelidos_manuais || [];
       const permitirAnotacoes = Boolean(comparison.evento_id)
         && (comparison.contexto_historico === true || comparison.historico_salvo === true);
-      const renderizarCampoAnotacao = (item, contexto) => permitirAnotacoes ? `
+      const renderizarCampoAnotacao = (item, contexto) => {
+        if (!permitirAnotacoes) return "";
+        const anotacoes = [
+          item,
+          ...(Array.isArray(item.anotacoes_associadas)
+            ? item.anotacoes_associadas.filter(anotacao => typeof anotacao?.anotacao === "string" && anotacao.anotacao)
+            : []),
+        ];
+        return `
         <td class="px-3 py-2 min-w-[240px] align-top">
-          <textarea data-comparison-annotation data-annotation-id="${escapeHtml(item.anotacao_id || "")}" rows="2" maxlength="2000" class="w-full min-w-[220px] rounded-lg border border-slate-700 bg-slate-900 px-2.5 py-2 text-xs text-white placeholder:text-slate-500 focus:border-cyan-400 focus:outline-none focus:ring-1 focus:ring-cyan-400" aria-label="Anotações para ${escapeHtml(contexto)}, neste resultado" placeholder="Escreva uma anotação...">${escapeHtml(item.anotacao || "")}</textarea>
-          <div class="mt-1">
-            <p class="text-[10px] ${item.anotacao ? "text-emerald-300" : "text-slate-500"}" data-annotation-status aria-live="polite">${item.anotacao ? "Salvo automaticamente" : ""}</p>
-            <button type="button" class="mt-1 rounded-md border border-rose-400/40 px-2 py-1 text-[10px] text-rose-200 hover:bg-rose-500/10" data-annotation-retry hidden aria-label="Tentar novamente o salvamento desta anotação">Tentar salvar novamente</button>
-          </div>
-        </td>` : "";
+          ${anotacoes.map((anotacao, index) => `
+            <div class="${index ? "mt-2 border-t border-slate-700 pt-2" : ""}">
+              ${index ? '<p class="mb-1 text-[10px] text-slate-400">Anotação anterior</p>' : ""}
+              <textarea data-comparison-annotation data-annotation-id="${escapeHtml(anotacao.anotacao_id || "")}" rows="2" maxlength="2000" class="w-full min-w-[220px] rounded-lg border border-slate-700 bg-slate-900 px-2.5 py-2 text-xs text-white placeholder:text-slate-500 focus:border-cyan-400 focus:outline-none focus:ring-1 focus:ring-cyan-400" aria-label="${index ? "Anotação anterior para" : "Anotações para"} ${escapeHtml(contexto)}, neste resultado" placeholder="Escreva uma anotação...">${escapeHtml(anotacao.anotacao || "")}</textarea>
+              <div class="mt-1">
+                <p class="text-[10px] ${anotacao.anotacao ? "text-emerald-300" : "text-slate-500"}" data-annotation-status aria-live="polite">${anotacao.anotacao ? "Salvo automaticamente" : ""}</p>
+                <button type="button" class="mt-1 rounded-md border border-rose-400/40 px-2 py-1 text-[10px] text-rose-200 hover:bg-rose-500/10" data-annotation-retry hidden aria-label="Tentar novamente o salvamento desta anotação">Tentar salvar novamente</button>
+              </div>
+            </div>`).join("")}
+        </td>`;
+      };
       const formatarMotivoRevisao = motivo => formatarNomeFonteHistorico(motivo || "Conferir associação.")
         .replace(/\bno endpoint\b/gi, "no Endpoint");
       const formatarFonteAusencia = fonte => formatarNomeFonteHistorico(fonte)

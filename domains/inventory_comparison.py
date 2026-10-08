@@ -511,20 +511,76 @@ def comparison_history_for_display(evento: Dict[str, Any]) -> Dict[str, Any]:
         display_annotatable_items("divergencias_local", comparison.get("divergencias_local"))
     )
     comparison_view["divergencias_local"] = location_mismatches
-    for field in ("correspondencias_ambiguas", "registros_ambiguos", "series_sem_mapeamento"):
-        items = comparison.get(field)
-        if isinstance(items, list):
-            comparison_view[field] = display_annotatable_items(
-                field,
-                items,
-                legacy_category="ambiguidades" if field in ("correspondencias_ambiguas", "registros_ambiguos") else None,
-                legacy_index_offset=(
-                    len(comparison.get("correspondencias_ambiguas", []))
-                    if field == "registros_ambiguos"
-                    and isinstance(comparison.get("correspondencias_ambiguas"), list)
-                    else 0
-                ),
-            )
+    ambiguity_items = comparison.get("correspondencias_ambiguas")
+    ambiguous_records = comparison.get("registros_ambiguos")
+    if isinstance(ambiguity_items, list):
+        displayed_ambiguities = display_annotatable_items(
+            "correspondencias_ambiguas",
+            ambiguity_items,
+            legacy_category="ambiguidades",
+        )
+    else:
+        displayed_ambiguities = []
+    if isinstance(ambiguous_records, list):
+        displayed_ambiguous_records = display_annotatable_items(
+            "registros_ambiguos",
+            ambiguous_records,
+            legacy_category="ambiguidades",
+            legacy_index_offset=len(ambiguity_items) if isinstance(ambiguity_items, list) else 0,
+        )
+    else:
+        displayed_ambiguous_records = []
+
+    retained_ambiguities = []
+    duplicate_serial_type = normalize_reference_value("Número de série duplicado")
+    for issue in displayed_ambiguities:
+        if normalize_reference_value(issue.get("tipo")) != duplicate_serial_type:
+            retained_ambiguities.append(issue)
+            continue
+
+        duplicate_serial = normalize_reference_value(issue.get("chave"))
+        matching_record = next((
+            record for record in displayed_ambiguous_records
+            if duplicate_serial
+            and duplicate_serial in {
+                normalize_reference_value(serial)
+                for serial in re.split(r"\s*/\s*", str(record.get("serie") or ""))
+            }
+        ), None)
+        if matching_record is None:
+            ambiguous_sources = {
+                str(source.get("fonte")): "ambíguo"
+                for source in (issue.get("fontes") or [])
+                if isinstance(source, dict) and str(source.get("fonte") or "").strip()
+            }
+            displayed_ambiguous_records.append({
+                "computador": "Sem hostname/Apelido",
+                "serie": str(issue.get("chave") or ""),
+                "fontes": ambiguous_sources,
+                "motivo": issue.get("mensagem") or "A série aparece em mais de uma linha na mesma fonte.",
+                "anotacao_id": issue["anotacao_id"],
+                "anotacao": issue.get("anotacao", ""),
+            })
+            continue
+
+        associated_annotations = matching_record.get("anotacoes_associadas")
+        if not isinstance(associated_annotations, list):
+            associated_annotations = []
+            matching_record["anotacoes_associadas"] = associated_annotations
+        associated_annotations.append({
+            "anotacao_id": issue["anotacao_id"],
+            "anotacao": issue.get("anotacao", ""),
+        })
+
+    if isinstance(ambiguity_items, list):
+        comparison_view["correspondencias_ambiguas"] = retained_ambiguities
+    if isinstance(ambiguous_records, list) or isinstance(ambiguity_items, list):
+        comparison_view["registros_ambiguos"] = displayed_ambiguous_records
+    unmapped_series = comparison.get("series_sem_mapeamento")
+    if isinstance(unmapped_series, list):
+        comparison_view["series_sem_mapeamento"] = display_annotatable_items(
+            "series_sem_mapeamento", unmapped_series
+        )
     for field in ("apelidos_atualizados", "divergencias_apelidos_manuais"):
         items = comparison.get(field)
         if isinstance(items, list):
@@ -547,6 +603,10 @@ def comparison_history_for_display(evento: Dict[str, Any]) -> Dict[str, Any]:
     for key, items in missing_lists.items():
         if key in summary or key in comparison:
             summary[key] = len(items)
+    if "correspondencias_ambiguas" in summary or isinstance(ambiguity_items, list):
+        summary["correspondencias_ambiguas"] = (
+            len(retained_ambiguities) + len(displayed_ambiguous_records)
+        )
     summary["divergencias_local"] = len(location_mismatches)
     alias_changes = comparison.get("apelidos_atualizados")
     if isinstance(alias_changes, list):
