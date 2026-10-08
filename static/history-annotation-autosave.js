@@ -1,8 +1,8 @@
 (function (root, factory) {
-  const api = factory();
+  const api = factory(root);
   if (typeof module === "object" && module.exports) module.exports = api;
   else root.HistoryAnnotationAutosave = api;
-})(typeof window !== "undefined" ? window : globalThis, function () {
+})(typeof window !== "undefined" ? window : globalThis, function (root) {
   const DEFAULT_RETRY_DELAYS_MS = Object.freeze([500, 1000, 2000]);
   const pendingAnnotationKeys = new Set();
   const annotationRevisions = new Map();

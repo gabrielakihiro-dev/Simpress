@@ -14,6 +14,24 @@
     const modalReturnFocus = new Map();
     window.HistoryAnnotationAutosave.installPendingNavigationGuard(window);
 
+    function atualizarResumoSerieTransferencia(equipment) {
+      const banner = document.getElementById("transfer-equipment-banner");
+      const serialInput = document.getElementById("transfer-serial");
+      const description = document.getElementById("transfer-equipment-description");
+      const status = document.getElementById("transfer-serial-status");
+      const serial = String(equipment?.serial || "").trim().toUpperCase();
+      const selected = Boolean(serial);
+
+      if (serialInput) serialInput.value = serial;
+      if (banner) banner.dataset.state = selected ? "selected" : "empty";
+      if (description) {
+        description.textContent = selected
+          ? [equipment.modelo, equipment.tipo].filter(Boolean).join(" · ") || "Equipamento pesquisado e selecionado."
+          : "Pesquise e selecione um equipamento na aba Home para preencher a série.";
+      }
+      if (status) status.textContent = selected ? "Copiar" : "Aguardando";
+    }
+
     function campoRastreavelTransferencia(target) {
       if (!target || target.id === "input-serial" || !target.matches?.("input, select, textarea")) return null;
       const panel = document.getElementById("tab-panel-retirada-entrega");
@@ -38,6 +56,7 @@
     function definirEquipamentoAtual(equipment) {
       currentEquipamento = equipment;
       equipamentoSelectionRevision += 1;
+      atualizarResumoSerieTransferencia(equipment);
       const copySerialButton = document.getElementById("btn-copiar-serie");
       const hasSerial = Boolean(String(equipment?.serial || "").trim());
       if (copySerialButton) {
@@ -1302,6 +1321,7 @@
       tabHome.classList.toggle("is-active", homeAtiva);
       tabTransferencia.classList.toggle("is-active", !homeAtiva);
       document.body.classList.toggle("has-quick-actions", !homeAtiva);
+      if (!homeAtiva) atualizarResumoSerieTransferencia(currentEquipamento);
     }
 
     function controlarAbasTransferencia(event) {

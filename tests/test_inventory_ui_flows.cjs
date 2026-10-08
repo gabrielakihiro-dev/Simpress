@@ -213,6 +213,30 @@ test("copy serial action uses the currently selected equipment serial", async ()
   assert.equal(button.disabled, true);
 });
 
+test("transfer tab shows the selected serial with its copy action in the upper field", () => {
+  const bannerStart = appHtml.indexOf('id="transfer-equipment-banner"');
+  const copyButtonStart = appHtml.indexOf('id="btn-copiar-serie"');
+  const quickActionsStart = appHtml.indexOf('<aside aria-label="Painel de Ações Rápidas"');
+  assert.ok(bannerStart >= 0 && copyButtonStart > bannerStart && copyButtonStart < quickActionsStart);
+  assert.equal((appHtml.match(/id="btn-copiar-serie"/g) || []).length, 1);
+
+  const harness = createAppHarness(async () => {
+    throw new Error("A exibição da série não deve consultar a API");
+  });
+  harness.run("limparSelecaoEquipamento()");
+  harness.run('ativarAbaTransferencia("transferencia")');
+  assert.equal(harness.element("transfer-serial").value, "");
+  assert.equal(harness.element("btn-copiar-serie").disabled, true);
+
+  harness.selectEquipment({ serial: "brj5512fgd", modelo: "HP 640 G11", tipo: "Notebook" });
+  harness.run('ativarAbaTransferencia("transferencia")');
+  assert.equal(harness.element("transfer-serial").value, "BRJ5512FGD");
+  assert.equal(harness.element("transfer-equipment-banner").dataset.state, "selected");
+  assert.equal(harness.element("transfer-equipment-description").textContent, "HP 640 G11 · Notebook");
+  assert.equal(harness.element("transfer-serial-status").textContent, "Copiar");
+  assert.equal(harness.element("btn-copiar-serie").disabled, false);
+});
+
 function chooseUploadFiles(harness) {
   harness.element("upload-endpoint-file").files = [{ name: "endpoint-ficticio.xlsx" }];
   harness.element("upload-details-file").files = [{ name: "detalhes-ficticio.xlsx" }];

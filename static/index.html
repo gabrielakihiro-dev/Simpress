@@ -439,6 +439,48 @@ Horário disponível para atendimento:</textarea>
 
     <section id="tab-panel-retirada-entrega" class="app-tab-panel" role="tabpanel" aria-labelledby="tab-retirada-entrega" tabindex="0" hidden>
 
+    <div id="transfer-equipment-banner" class="transfer-equipment-banner" data-state="empty">
+      <div class="transfer-equipment-info">
+        <div class="transfer-equipment-icon" aria-hidden="true">
+          <i data-lucide="scan-barcode" class="w-5 h-5"></i>
+        </div>
+        <div class="min-w-0">
+          <p class="transfer-equipment-title">Equipamento desta transferência</p>
+          <p id="transfer-equipment-description" class="transfer-equipment-description" role="status" aria-live="polite">
+            Pesquise e selecione um equipamento na aba Home para preencher a série.
+          </p>
+        </div>
+      </div>
+      <div class="transfer-serial-field">
+        <label for="transfer-serial">Série do equipamento</label>
+        <div class="transfer-serial-input-wrap">
+          <i data-lucide="hash" class="w-4 h-4" aria-hidden="true"></i>
+          <input
+            type="text"
+            id="transfer-serial"
+            readonly
+            aria-readonly="true"
+            aria-label="Série selecionada para esta transferência"
+            placeholder="Aguardando pesquisa..."
+            autocomplete="off"
+          />
+          <button
+            type="button"
+            id="btn-copiar-serie"
+            onclick="copiarSerieAtual()"
+            disabled
+            aria-disabled="true"
+            aria-label="Copiar a série do equipamento selecionado"
+            title="Copiar a série do equipamento selecionado"
+            class="transfer-serial-status"
+          >
+            <i data-lucide="copy" class="w-3 h-3" aria-hidden="true"></i>
+            <span id="transfer-serial-status">Aguardando</span>
+          </button>
+        </div>
+      </div>
+    </div>
+
     <!-- FORMULÁRIO DE TRANSFERÊNCIA (2 COLUNAS: RETIRADA & ENTREGA) -->
     <div class="transfer-form-grid grid grid-cols-1 lg:grid-cols-2 gap-8">
 
@@ -850,19 +892,6 @@ Horário disponível para atendimento:</textarea>
           >
             <i data-lucide="file-spreadsheet" class="w-4 h-4"></i>
             <span>Gerar Planilha</span>
-          </button>
-
-          <button
-            type="button"
-            id="btn-copiar-serie"
-            onclick="copiarSerieAtual()"
-            disabled
-            aria-disabled="true"
-            class="px-4 py-2.5 rounded-xl bg-emerald-500/10 hover:bg-emerald-500/20 disabled:opacity-50 disabled:cursor-not-allowed text-emerald-200 border border-emerald-500/30 text-xs sm:text-sm font-semibold flex items-center gap-2 transition"
-            title="Copiar a série do equipamento pesquisado"
-          >
-            <i data-lucide="copy" class="w-4 h-4" aria-hidden="true"></i>
-            <span>Copiar Série</span>
           </button>
 
           <button
