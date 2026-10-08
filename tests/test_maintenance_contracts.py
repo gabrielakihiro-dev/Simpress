@@ -561,6 +561,7 @@ class MaintenanceContractTests(unittest.TestCase):
     def test_frontend_references_assets_served_from_the_existing_static_mount(self):
         index_file = app_config.STATIC_DIR / "index.html"
         html = index_file.read_text(encoding="utf-8")
+        self.assertIn('<link rel="icon" type="image/svg+xml" href="/static/favicon.svg">', html)
         self.assertIn('<link rel="stylesheet" href="/static/vendor/fonts.css">', html)
         self.assertIn('<link rel="stylesheet" href="/static/vendor/tailwind-3.4.17.css">', html)
         self.assertIn('<script src="/static/vendor/lucide-1.48.0.min.js"></script>', html)
@@ -574,6 +575,15 @@ class MaintenanceContractTests(unittest.TestCase):
         self.assertTrue((app_config.STATIC_DIR / "vendor" / "fonts.css").is_file())
         self.assertTrue((app_config.STATIC_DIR / "vendor" / "tailwind-3.4.17.css").is_file())
         self.assertTrue((app_config.STATIC_DIR / "vendor" / "lucide-1.48.0.min.js").is_file())
+        favicon_file = app_config.STATIC_DIR / "favicon.svg"
+        self.assertTrue(favicon_file.is_file())
+        favicon_route = next(
+            route for route in main.app.routes
+            if getattr(route, "path", None) == "/favicon.ico"
+        )
+        favicon_response = favicon_route.endpoint()
+        self.assertEqual(favicon_response.path, favicon_file)
+        self.assertEqual(favicon_response.media_type, "image/svg+xml")
 
         mounts = [
             route for route in main.app.routes
