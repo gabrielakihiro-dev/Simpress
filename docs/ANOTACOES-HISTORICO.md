@@ -1,6 +1,8 @@
 # Anotações do Histórico de Planilhas
 
-As anotações são associadas a uma linha de um resultado específico. Elas não são copiadas para atualizações futuras.
+As anotações são associadas a uma linha de um resultado específico. Elas não são copiadas para atualizações futuras. Cada linha mantém sua própria anotação nas seções **Linhas mantidas para conferência**, **Sem acesso há 14 dias ou mais**, **Equipamentos sem correspondência por fonte**, **Localidade divergente**, **Duplicidades e correspondências ambíguas** e **Séries sem local definido**. Em seções com mais de uma lista, a anotação continua vinculada à linha e à fonte correspondentes.
+
+As anotações são salvas automaticamente e podem ter até 2.000 caracteres. A exportação do Histórico de Planilhas inclui as anotações em cada aba de registros correspondente.
 
 ## Sincronização entre notebooks
 
@@ -16,6 +18,6 @@ Se o OneDrive não estiver configurado, as anotações ficam em `anotacoes_histo
 
 ## Dados e uso simultâneo
 
-Os arquivos compartilhados contêm somente a anotação e os identificadores e dados mínimos da linha necessários para mostrá-la em um clone sem histórico local. As planilhas e o histórico completo não são copiados para essa pasta.
+Os arquivos compartilhados contêm somente a anotação, a seção, os identificadores e os dados mínimos da linha necessários para mostrá-la em um clone sem histórico local. As planilhas e o histórico completo não são copiados para essa pasta.
 
 O OneDrive sincroniza arquivos entre dispositivos, mas não coordena edições simultâneas como um serviço transacional. Para evitar conflitos na mesma anotação, edite em um notebook por vez e aguarde o OneDrive concluir a sincronização antes de continuar no outro.
