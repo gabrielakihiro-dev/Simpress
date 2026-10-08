@@ -48,7 +48,9 @@ def _copy_matching_history_annotations(
     if not isinstance(new_comparison, dict):
         return []
 
-    shared_annotations = {}
+    shared_annotations_by_timestamp: Dict[
+        tuple[str, str], tuple[str, Dict[str, Any]]
+    ] = {}
     for record in context.load_history_annotations(context.HISTORY_ANNOTATIONS_DIR):
         event_id = str(record.get("evento_id") or "")
         item_id = str(record.get("item_id") or "")
@@ -56,9 +58,14 @@ def _copy_matching_history_annotations(
             continue
         key = (event_id, item_id)
         candidate = (str(record.get("atualizado_em") or ""), record)
-        if key not in shared_annotations or candidate[0] >= shared_annotations[key][0]:
-            shared_annotations[key] = candidate
-    shared_annotations = {key: value[1] for key, value in shared_annotations.items()}
+        if (
+            key not in shared_annotations_by_timestamp
+            or candidate[0] >= shared_annotations_by_timestamp[key][0]
+        ):
+            shared_annotations_by_timestamp[key] = candidate
+    shared_annotations: Dict[tuple[str, str], Dict[str, Any]] = {
+        key: value[1] for key, value in shared_annotations_by_timestamp.items()
+    }
 
     new_fingerprints = set()
     for category in _ANNOTATABLE_COMPARISON_CATEGORIES:
@@ -160,7 +167,7 @@ def _copy_matching_history_annotations(
         else:
             latest_prior_notes[fingerprint] = None
 
-    copied = []
+    copied: list[Dict[str, str]] = []
     new_event_id = str(new_event.get("id") or "")
     if not new_event_id:
         return copied
@@ -400,7 +407,7 @@ def _commit_inventory_files(staged: Dict[str, Any], context: Any):
             "resumo": summary,
             "comparacao": comparison,
         }
-        copied_annotations = []
+        copied_annotations: list[Dict[str, str]] = []
 
         def append_update(history):
             if not isinstance(history, list):
