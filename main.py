@@ -1551,10 +1551,12 @@ class LocalRequestSafetyMiddleware:
                 UPLOAD_ADMISSION.release()
 
 
+SERVER_PORT = int(os.environ.get("SIMPRESS_PORT", "8000"))
+
 _ALLOWED_LOCAL_AUTHORITIES = frozenset({
-    ("127.0.0.1", 8000),
-    ("localhost", 8000),
-    ("::1", 8000),
+    ("127.0.0.1", SERVER_PORT),
+    ("localhost", SERVER_PORT),
+    ("::1", SERVER_PORT),
 })
 
 
@@ -3323,4 +3325,5 @@ if __name__ == "__main__":
     print(f"[INFO] Diretório do projeto: {BASE_DIR}")
     print(f"[INFO] Modelo de transferência: {TEMPLATE_FILE} ({'OK' if TEMPLATE_FILE.is_file() else 'AUSENTE'})")
     print(f"[INFO] Fonte EquipamentosDetalhes: {equipment_source or 'AUSENTE'}")
-    uvicorn.run(app, host="127.0.0.1", port=8000)
+    print(f"[INFO] Porta local: {SERVER_PORT}")
+    uvicorn.run(app, host="127.0.0.1", port=SERVER_PORT)
