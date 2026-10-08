@@ -3299,6 +3299,10 @@ app.include_router(inventory_history_router)
 STATIC_DIR.mkdir(parents=True, exist_ok=True)
 app.mount("/static", StaticFiles(directory=str(STATIC_DIR)), name="static")
 
+@app.get("/favicon.ico", include_in_schema=False)
+def serve_favicon():
+    return FileResponse(STATIC_DIR / "favicon.svg", media_type="image/svg+xml")
+
 @app.get("/")
 def read_root():
     index_file = STATIC_DIR / "index.html"
