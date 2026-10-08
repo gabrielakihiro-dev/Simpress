@@ -107,7 +107,11 @@ from domains.inventory_comparison import (
     location_for_computer_name,
     normalize_reference_value,
 )
-from domains.history_annotations import load_history_annotations, save_history_annotation
+from domains.history_annotations import (
+    history_annotation_row_fingerprint,
+    load_history_annotations,
+    save_history_annotation,
+)
 from domains.inventory_update import read_uploaded_xlsx as _read_uploaded_xlsx
 from domains.inventory_update import update_inventory_files
 from domains.equipment_search import (

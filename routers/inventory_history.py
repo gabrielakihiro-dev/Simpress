@@ -527,6 +527,7 @@ def create_inventory_history_router(ctx):
                             motivo=str(item.get("motivo") or item.get("mensagem") or item.get("tipo") or ""),
                             anotacao=annotation,
                             categoria=category,
+                            linha_hash=ctx.history_annotation_row_fingerprint(category, item),
                         )
                     except Exception:
                         # Keep local history readable when OneDrive is temporarily unavailable.
@@ -1049,6 +1050,10 @@ def create_inventory_history_router(ctx):
                 motivo=str(annotation_row.get("motivo") or annotation_row.get("mensagem") or annotation_row.get("tipo") or ""),
                 anotacao=payload.anotacao,
                 categoria=str(annotation_row.get("categoria") or "apelidos_sem_atualizacao"),
+                linha_hash=ctx.history_annotation_row_fingerprint(
+                    str(annotation_row.get("categoria") or "apelidos_sem_atualizacao"),
+                    annotation_row,
+                ),
             )
         except ctx.HTTPException:
             raise
@@ -1398,6 +1403,7 @@ def create_inventory_history_router(ctx):
                         motivo=str(record.get("motivo") or ""),
                         anotacao="",
                         categoria=str(record.get("categoria") or "apelidos_sem_atualizacao"),
+                        linha_hash=record.get("linha_hash"),
                     )
         except Exception:
             status = 503 if ctx.HISTORY_ANNOTATIONS_SYNC_ENABLED else 500

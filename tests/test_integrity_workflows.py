@@ -1506,6 +1506,94 @@ class WorkflowIntegrityTests(unittest.TestCase):
         self.assertEqual(len(comparison_after_repeat), len(comparison_before) + 2)
         self.assertEqual(json.loads(self.manual_history.read_text(encoding="utf-8")), manual_before)
 
+    def test_inventory_update_copies_annotation_only_to_an_exact_matching_row(self):
+        make_details(self.details, [
+            ("SN-ANNOTATION", "HOST-ANNOTATION", "Modelo A", "Maringá", "Notebook", "87000000"),
+        ])
+        make_endpoint(self.endpoint, [("SN-ANNOTATION", "HOST-ANNOTATION")])
+        make_model(self.model)
+        self.assertTrue(main.load_database())
+
+        previous_row = {
+            "serie": "SN-ANNOTATION",
+            "computador": "HOST-ANNOTATION",
+            "dias_sem_verificacao": 14,
+            "ultima_verificacao": "2026-10-07T10:00:00-03:00",
+        }
+        previous_event = {
+            "id": "evento-anotado-anterior",
+            "horario": "2026-10-07T10:00:00-03:00",
+            "comparacao": {"sem_acesso_14_dias": [previous_row]},
+        }
+        self.comparison_history.write_text(json.dumps([previous_event]), encoding="utf-8")
+        previous_item_id = main.comparison_history_for_display(previous_event)["comparacao"][
+            "sem_acesso_14_dias"
+        ][0]["anotacao_id"]
+        main.salvar_anotacao_comparacao_historica(
+            previous_event["id"],
+            previous_item_id,
+            SimpleNamespace(anotacao="Acompanhar com a unidade."),
+        )
+
+        from domains.inventory_update import _commit_inventory_files
+
+        def commit_test_upload(endpoint_name, details_name):
+            endpoint_bytes = _endpoint_bytes([("SN-ANNOTATION", "HOST-ANNOTATION")])
+            details_bytes = _details_bytes([
+                ("SN-ANNOTATION", "HOST-ANNOTATION", "Modelo A", "Maringá", "Notebook", "87000000"),
+            ])
+            return _commit_inventory_files({
+                "endpoint": {
+                    "name": endpoint_name,
+                    "bytes": endpoint_bytes,
+                    "table": main.validate_uploaded_workbook(endpoint_bytes, "endpoint"),
+                },
+                "detalhes": {
+                    "name": details_name,
+                    "bytes": details_bytes,
+                    "table": main.validate_uploaded_workbook(details_bytes, "detalhes"),
+                },
+            }, main)
+
+        changed_row = {**previous_row, "dias_sem_verificacao": 15}
+        with patch.object(
+            main,
+            "compare_uploaded_workbooks",
+            return_value={"sem_acesso_14_dias": [copy.deepcopy(previous_row), changed_row]},
+        ):
+            result = commit_test_upload("InvAll_nova.xlsx", "Detalhes_novos.xlsx")
+
+        self.assertTrue(result["sucesso"])
+        history = json.loads(self.comparison_history.read_text(encoding="utf-8"))
+        new_event = history[-1]
+        new_rows = new_event["comparacao"]["sem_acesso_14_dias"]
+        self.assertEqual(new_rows[0]["anotacao"], "Acompanhar com a unidade.")
+        self.assertNotEqual(new_rows[0]["anotacao_id"], previous_item_id)
+        self.assertNotIn("anotacao", new_rows[1])
+        shared_new_event_records = [
+            record
+            for record in main.load_history_annotations(self.shared_annotations)
+            if record["evento_id"] == new_event["id"]
+        ]
+        self.assertEqual(len(shared_new_event_records), 1)
+        self.assertEqual(shared_new_event_records[0]["anotacao"], "Acompanhar com a unidade.")
+
+        # A clone without local comparison history can carry the note using
+        # the exact row fingerprint saved with the shared annotation.
+        self.comparison_history.write_text("[]", encoding="utf-8")
+        with patch.object(
+            main,
+            "compare_uploaded_workbooks",
+            return_value={"sem_acesso_14_dias": [copy.deepcopy(previous_row)]},
+        ):
+            clone_update = commit_test_upload("InvAll_clone.xlsx", "Detalhes_clone.xlsx")
+        self.assertTrue(clone_update["sucesso"])
+        clone_history = json.loads(self.comparison_history.read_text(encoding="utf-8"))
+        self.assertEqual(
+            clone_history[-1]["comparacao"]["sem_acesso_14_dias"][0]["anotacao"],
+            "Acompanhar com a unidade.",
+        )
+
     def test_annotation_uses_stable_review_id_after_display_filter_and_stays_event_scoped(self):
         filtered_out = {
             "serie": "SERIE-LOCAL-1",
@@ -1569,7 +1657,7 @@ class WorkflowIntegrityTests(unittest.TestCase):
         self.assertEqual(shared_record["anotacao"], "Conferir no próximo inventário.")
         self.assertEqual(set(shared_record), {
             "versao", "evento_id", "horario", "item_id", "serie", "computador",
-            "motivo", "categoria", "anotacao", "atualizado_em",
+            "motivo", "categoria", "anotacao", "atualizado_em", "linha_hash",
         })
 
         fresh_clone_history = self.root / "clone_novo" / "historico_comparacoes.json"

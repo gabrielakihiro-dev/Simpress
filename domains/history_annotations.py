@@ -17,6 +17,24 @@ def _record_path(directory: Path, event_id: str, item_id: str) -> Path:
     return Path(directory) / f"{hashlib.sha256(key).hexdigest()}.json"
 
 
+def history_annotation_row_fingerprint(category: str, item: Dict[str, Any]) -> str:
+    """Hash the complete row data and section, excluding annotation metadata."""
+    if not isinstance(item, dict):
+        raise ValueError("A linha da anotação é inválida.")
+    row_data = {
+        key: value
+        for key, value in item.items()
+        if key not in {"anotacao", "anotacao_id"}
+    }
+    payload = json.dumps(
+        [str(category or ""), row_data],
+        ensure_ascii=False,
+        sort_keys=True,
+        separators=(",", ":"),
+    )
+    return hashlib.sha256(payload.encode("utf-8")).hexdigest()
+
+
 def save_history_annotation(
     directory: Path,
     *,
@@ -28,6 +46,7 @@ def save_history_annotation(
     motivo: str,
     anotacao: str,
     categoria: str = "apelidos_sem_atualizacao",
+    linha_hash: Optional[str] = None,
     updated_at: Optional[str] = None,
 ) -> Dict[str, Any]:
     """Atomically save only the annotation and the row context needed to display it."""
@@ -37,6 +56,12 @@ def save_history_annotation(
         raise ValueError("O identificador da linha é inválido.")
     if not isinstance(anotacao, str) or len(anotacao) > MAX_ANNOTATION_LENGTH:
         raise ValueError("A anotação excede o limite permitido.")
+    if linha_hash is not None and (
+        not isinstance(linha_hash, str)
+        or len(linha_hash) != 64
+        or any(character not in "0123456789abcdef" for character in linha_hash)
+    ):
+        raise ValueError("A assinatura da linha é inválida.")
 
     record = {
         "versao": 1,
@@ -50,6 +75,8 @@ def save_history_annotation(
         "anotacao": anotacao,
         "atualizado_em": updated_at or datetime.now(timezone.utc).isoformat(timespec="microseconds"),
     }
+    if linha_hash is not None:
+        record["linha_hash"] = linha_hash
     target = _record_path(Path(directory), event_id, item_id)
     target.parent.mkdir(parents=True, exist_ok=True)
     atomic_write_json(target, record)
