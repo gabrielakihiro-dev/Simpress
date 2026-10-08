@@ -1324,6 +1324,16 @@
       if (!homeAtiva) atualizarResumoSerieTransferencia(currentEquipamento);
     }
 
+    function abrirHomeParaPesquisarEquipamento(event) {
+      const acionadoPorTeclado = event?.type === "keydown";
+      if (acionadoPorTeclado && event.key !== "Enter" && event.key !== " ") return;
+      if (String(currentEquipamento?.serial || "").trim()) return;
+
+      if (acionadoPorTeclado) event.preventDefault();
+      ativarAbaTransferencia("home");
+      document.getElementById("input-serial")?.focus();
+    }
+
     function controlarAbasTransferencia(event) {
       const tabs = Array.from(event.currentTarget.querySelectorAll('[role="tab"]'));
       const currentIndex = tabs.indexOf(event.target.closest('[role="tab"]'));

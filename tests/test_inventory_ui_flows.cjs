@@ -262,6 +262,35 @@ test("transfer tab shows the selected serial with its copy action in the upper f
   assert.equal(harness.element("btn-copiar-serie").disabled, false);
 });
 
+test("clicking an empty transfer serial opens Home and focuses equipment search", () => {
+  assert.match(appHtml, /id="transfer-serial"[\s\S]*?onclick="abrirHomeParaPesquisarEquipamento\(\)"/);
+  assert.match(appCss, /\.transfer-equipment-banner\[data-state="empty"\][^{]*\{[^}]*cursor:\s*pointer/s);
+
+  const harness = createAppHarness(async () => {
+    throw new Error("Opening the search must not call the API");
+  });
+  harness.run('ativarAbaTransferencia("transferencia")');
+  harness.run("abrirHomeParaPesquisarEquipamento()");
+
+  assert.equal(harness.element("tab-panel-home").hidden, false);
+  assert.equal(harness.element("tab-panel-retirada-entrega").hidden, true);
+  assert.equal(harness.element("tab-home").attributes.get("aria-selected"), "true");
+  assert.equal(harness.element("input-serial").focused, true);
+});
+
+test("clicking a selected transfer serial keeps the transfer tab active", () => {
+  const harness = createAppHarness(async () => {
+    throw new Error("Clicking a selected serial must not call the API");
+  });
+  harness.selectEquipment({ serial: "SERIE-SELECIONADA" });
+  harness.run('ativarAbaTransferencia("transferencia")');
+  harness.run("abrirHomeParaPesquisarEquipamento()");
+
+  assert.equal(harness.element("tab-panel-home").hidden, true);
+  assert.equal(harness.element("tab-panel-retirada-entrega").hidden, false);
+  assert.equal(harness.element("input-serial").focused, false);
+});
+
 function chooseUploadFiles(harness) {
   harness.element("upload-endpoint-file").files = [{ name: "endpoint-ficticio.xlsx" }];
   harness.element("upload-details-file").files = [{ name: "detalhes-ficticio.xlsx" }];
