@@ -108,8 +108,11 @@ def _export_note(
     index: int,
     item: Optional[Dict[str, Any]] = None,
 ) -> str:
-    if isinstance(item, dict) and isinstance(item.get("anotacao"), str):
-        return _export_text(item["anotacao"])
+    if isinstance(item, dict):
+        if isinstance(item.get("anotacao"), str):
+            return _export_text(item["anotacao"])
+        if item.get("anotacao_id"):
+            return ""
     annotations = comparison.get("anotacoes")
     if not isinstance(annotations, dict):
         return ""
@@ -550,6 +553,15 @@ def create_inventory_history_router(ctx):
                 record = annotations.get((event_id, str(item.get("anotacao_id") or "")))
                 if record is not None:
                     item["anotacao"] = record["anotacao"]
+                associated_annotations = item.get("anotacoes_associadas")
+                if not isinstance(associated_annotations, list):
+                    continue
+                for associated in associated_annotations:
+                    if not isinstance(associated, dict):
+                        continue
+                    associated_record = annotations.get((event_id, str(associated.get("anotacao_id") or "")))
+                    if associated_record is not None:
+                        associated["anotacao"] = associated_record["anotacao"]
         return event_view
 
 
@@ -663,10 +675,14 @@ def create_inventory_history_router(ctx):
         except ValueError:
             raise ctx.HTTPException(status_code=400, detail="Selecione uma data válida para exportação.") from None
 
+        history = ctx.load_comparison_history()
+        annotations = _latest_annotation_records(history)
         display_events = []
-        for event in ctx.load_comparison_history():
+        for event in history:
             if isinstance(event, dict) and str(event.get("horario") or "")[:10] == selected_date.isoformat():
-                display_events.append(ctx.comparison_history_for_display(event))
+                event_view = ctx.comparison_history_for_display(event)
+                _merge_shared_annotations(event_view, annotations)
+                display_events.append(event_view)
         if not display_events:
             raise ctx.HTTPException(status_code=404, detail="Não há registros de planilhas na data selecionada.")
         display_events.sort(key=_export_event_timestamp)
@@ -835,10 +851,11 @@ def create_inventory_history_router(ctx):
                     elif source.get("serie"):
                         label += f" — série {source['serie']}"
                     sources.append(label)
+                note = _export_note(comparison, "ambiguidades", index, item)
                 ambiguity_rows.append((
                     timestamp, item.get("tipo") or "Ambiguidade",
                     item.get("chave"), "; ".join(sources), item.get("mensagem"),
-                    _export_note(comparison, "ambiguidades", index, item),
+                    note,
                 ))
             for index, item in enumerate(ambiguous_records, start=len(ambiguities)):
                 ambiguous_sources = item.get("fontes") or {}
@@ -847,9 +864,16 @@ def create_inventory_history_router(ctx):
                     if status == "ambíguo"
                 ) if isinstance(ambiguous_sources, dict) else ""
                 record_key = f"{item.get('computador') or 'Sem hostname'} · {item.get('serie') or 'Sem série'}"
+                notes = [_export_note(comparison, "ambiguidades", index, item)]
+                notes.extend(
+                    _export_text(associated.get("anotacao"))
+                    for associated in item.get("anotacoes_associadas", [])
+                    if isinstance(associated, dict)
+                )
+                note = "\n".join(value for value in notes if value)
                 ambiguity_rows.append((
                     timestamp, "Presença ambígua", record_key,
-                    source_summary, item.get("motivo"), _export_note(comparison, "ambiguidades", index, item),
+                    source_summary, item.get("motivo"), note,
                 ))
 
         detail_total = sum(category_counts.values())
@@ -906,7 +930,7 @@ def create_inventory_history_router(ctx):
         )
         _write_export_table_sheet(
             workbook, "Ambiguidades", "Duplicidades e correspondências ambíguas",
-            "Séries duplicadas e registros sem correspondência única.",
+            "Presenças ambíguas e correspondências sem identificação única.",
             ["Data e hora", "Ocorrência", "Série ou hostname/Apelido",
              "Fontes", "Tratamento", "Anotação"],
             ambiguity_rows, "tblHistoricoAmbiguidades",
