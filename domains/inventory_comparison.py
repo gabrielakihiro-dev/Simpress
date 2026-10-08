@@ -311,6 +311,33 @@ def comparison_review_item_id(event_id: Any, index: int, item: Dict[str, Any]) -
     ))
     return hashlib.sha256(identity.encode("utf-8")).hexdigest()
 
+
+def comparison_annotation_item_id(
+    event_id: Any,
+    category: str,
+    index: int,
+    item: Dict[str, Any],
+) -> str:
+    """Return a stable, event-scoped ID for an annotatable comparison row."""
+    if category == "apelidos_sem_atualizacao":
+        # Preserve IDs used by existing shared annotations and older history rows.
+        return comparison_review_item_id(event_id, index, item)
+    stored_id = item.get("anotacao_id")
+    if isinstance(stored_id, str) and stored_id.strip():
+        return stored_id.strip()
+    identity = "\0".join((
+        str(event_id or ""),
+        str(category or ""),
+        str(index),
+        str(item.get("serie") or ""),
+        str(item.get("computador") or ""),
+        str(item.get("chave") or ""),
+        str(item.get("tipo") or ""),
+        str(item.get("motivo") or ""),
+        str(item.get("mensagem") or ""),
+    ))
+    return hashlib.sha256(identity.encode("utf-8")).hexdigest()
+
 def filter_update_unmatched_series(items: Any) -> List[Dict[str, Any]]:
     if not isinstance(items, list):
         return []
@@ -400,6 +427,32 @@ def comparison_history_for_display(evento: Dict[str, Any]) -> Dict[str, Any]:
                 cleaned[key] = display_source_values(cleaned[key])
         return cleaned
 
+    def display_annotatable_items(
+        category: str,
+        items: Any,
+        *,
+        legacy_category: Optional[str] = None,
+        legacy_index_offset: int = 0,
+    ) -> List[Dict[str, Any]]:
+        if not isinstance(items, list):
+            return []
+        legacy_annotations = comparison.get("anotacoes")
+        displayed = []
+        for index, item in enumerate(items):
+            if not isinstance(item, dict):
+                continue
+            item_view = dict(item)
+            item_view["anotacao_id"] = comparison_annotation_item_id(
+                evento.get("id"), category, index, item
+            )
+            if not isinstance(item_view.get("anotacao"), str) and isinstance(legacy_annotations, dict):
+                legacy_key = legacy_category or category
+                legacy_note = legacy_annotations.get(f"{legacy_key}:{index + legacy_index_offset}")
+                if isinstance(legacy_note, str):
+                    item_view["anotacao"] = legacy_note
+            displayed.append(display_history_item(item_view))
+        return displayed
+
     def display_history_files(files: Any) -> Any:
         if not isinstance(files, dict):
             return files
@@ -410,44 +463,42 @@ def comparison_history_for_display(evento: Dict[str, Any]) -> Dict[str, Any]:
 
     review_items = comparison.get("apelidos_sem_atualizacao")
     if isinstance(review_items, list):
-        review_items_with_ids = []
-        for index, item in enumerate(review_items):
-            if not isinstance(item, dict):
-                continue
-            item_with_id = dict(item)
-            item_with_id["anotacao_id"] = comparison_review_item_id(evento.get("id"), index, item)
-            review_items_with_ids.append(item_with_id)
+        review_items_with_ids = display_annotatable_items(
+            "apelidos_sem_atualizacao", review_items
+        )
         selected_review_items = (
             review_items_with_ids
             if is_pinned_baseline
             else filter_update_review_items(review_items_with_ids)
         )
-        comparison_view["apelidos_sem_atualizacao"] = [
-            display_history_item(item) for item in selected_review_items
-        ]
+        comparison_view["apelidos_sem_atualizacao"] = selected_review_items
 
     no_recent_verification = comparison.get("sem_acesso_14_dias")
     if isinstance(no_recent_verification, list):
-        comparison_view["sem_acesso_14_dias"] = [
-            display_history_item(item) for item in no_recent_verification
-        ]
+        comparison_view["sem_acesso_14_dias"] = display_annotatable_items(
+            "sem_acesso_14_dias", no_recent_verification
+        )
 
     if is_pinned_baseline:
         missing_lists = {
-            "ausentes_no_endpoint": filter_sebrae_owned_unmatched_items(
-                comparison.get("ausentes_no_endpoint")
+            "ausentes_no_endpoint": display_annotatable_items(
+                "ausentes_no_endpoint", comparison.get("ausentes_no_endpoint")
             ),
-            "ausentes_em_detalhes": filter_sebrae_owned_unmatched_items(
-                comparison.get("ausentes_em_detalhes")
+            "ausentes_em_detalhes": display_annotatable_items(
+                "ausentes_em_detalhes", comparison.get("ausentes_em_detalhes")
             ),
         }
     else:
         missing_lists = {
             "ausentes_no_endpoint": filter_update_unmatched_series(
-                comparison.get("ausentes_no_endpoint")
+                display_annotatable_items(
+                    "ausentes_no_endpoint", comparison.get("ausentes_no_endpoint")
+                )
             ),
             "ausentes_em_detalhes": filter_update_unmatched_details(
-                comparison.get("ausentes_em_detalhes")
+                display_annotatable_items(
+                    "ausentes_em_detalhes", comparison.get("ausentes_em_detalhes")
+                )
             ),
         }
         comparison_view["filtros_atualizacao_aplicados"] = True
@@ -455,17 +506,25 @@ def comparison_history_for_display(evento: Dict[str, Any]) -> Dict[str, Any]:
         key: filter_sebrae_owned_unmatched_items(items)
         for key, items in missing_lists.items()
     }
-    missing_lists = {
-        key: [display_history_item(item) for item in items]
-        for key, items in missing_lists.items()
-    }
     comparison_view.update(missing_lists)
-    location_mismatches = filter_curitiba_hostname_location_mismatches(comparison.get("divergencias_local"))
-    comparison_view["divergencias_local"] = [display_history_item(item) for item in location_mismatches]
-    for field in ("correspondencias_ambiguas", "registros_ambiguos"):
+    location_mismatches = filter_curitiba_hostname_location_mismatches(
+        display_annotatable_items("divergencias_local", comparison.get("divergencias_local"))
+    )
+    comparison_view["divergencias_local"] = location_mismatches
+    for field in ("correspondencias_ambiguas", "registros_ambiguos", "series_sem_mapeamento"):
         items = comparison.get(field)
         if isinstance(items, list):
-            comparison_view[field] = [display_history_item(item) for item in items]
+            comparison_view[field] = display_annotatable_items(
+                field,
+                items,
+                legacy_category="ambiguidades" if field in ("correspondencias_ambiguas", "registros_ambiguos") else None,
+                legacy_index_offset=(
+                    len(comparison.get("correspondencias_ambiguas", []))
+                    if field == "registros_ambiguos"
+                    and isinstance(comparison.get("correspondencias_ambiguas"), list)
+                    else 0
+                ),
+            )
     for field in ("apelidos_atualizados", "divergencias_apelidos_manuais"):
         items = comparison.get(field)
         if isinstance(items, list):

@@ -27,6 +27,7 @@ def save_history_annotation(
     computador: str,
     motivo: str,
     anotacao: str,
+    categoria: str = "apelidos_sem_atualizacao",
     updated_at: Optional[str] = None,
 ) -> Dict[str, Any]:
     """Atomically save only the annotation and the row context needed to display it."""
@@ -45,6 +46,7 @@ def save_history_annotation(
         "serie": str(serie or "")[:200],
         "computador": str(computador or "")[:500],
         "motivo": str(motivo or "")[:1000],
+        "categoria": str(categoria or "apelidos_sem_atualizacao")[:80],
         "anotacao": anotacao,
         "atualizado_em": updated_at or datetime.now(timezone.utc).isoformat(timespec="microseconds"),
     }

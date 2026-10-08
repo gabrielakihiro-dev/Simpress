@@ -2133,7 +2133,16 @@
       const apelidosAtualizados = comparison.apelidos_atualizados || [];
       const apelidosSemAtualizacao = comparison.apelidos_sem_atualizacao || [];
       const divergenciasApelidosManuais = comparison.divergencias_apelidos_manuais || [];
-      const permitirAnotacoes = comparison.contexto_historico === true && Boolean(comparison.evento_id);
+      const permitirAnotacoes = Boolean(comparison.evento_id)
+        && (comparison.contexto_historico === true || comparison.historico_salvo === true);
+      const renderizarCampoAnotacao = (item, contexto) => permitirAnotacoes ? `
+        <td class="px-3 py-2 min-w-[240px] align-top">
+          <textarea data-comparison-annotation data-annotation-id="${escapeHtml(item.anotacao_id || "")}" rows="2" maxlength="2000" class="w-full min-w-[220px] rounded-lg border border-slate-700 bg-slate-900 px-2.5 py-2 text-xs text-white placeholder:text-slate-500 focus:border-cyan-400 focus:outline-none focus:ring-1 focus:ring-cyan-400" aria-label="Anotações para ${escapeHtml(contexto)}, neste resultado" placeholder="Escreva uma anotação...">${escapeHtml(item.anotacao || "")}</textarea>
+          <div class="mt-1">
+            <p class="text-[10px] ${item.anotacao ? "text-emerald-300" : "text-slate-500"}" data-annotation-status aria-live="polite">${item.anotacao ? "Salvo automaticamente" : ""}</p>
+            <button type="button" class="mt-1 rounded-md border border-rose-400/40 px-2 py-1 text-[10px] text-rose-200 hover:bg-rose-500/10" data-annotation-retry hidden aria-label="Tentar novamente o salvamento desta anotação">Tentar salvar novamente</button>
+          </div>
+        </td>` : "";
       const formatarMotivoRevisao = motivo => formatarNomeFonteHistorico(motivo || "Conferir associação.")
         .replace(/\bno endpoint\b/gi, "no Endpoint");
       const formatarFonteAusencia = fonte => formatarNomeFonteHistorico(fonte)
@@ -2142,6 +2151,7 @@
       const formatarFonteAmbigua = fonte => formatarNomeFonteHistorico(fonte)
         .replace(/\bno endpoint\b/gi, "Endpoint");
       const aliasReviewHeaders = ["Série", "Hostname no Endpoint", "Motivo", ...(permitirAnotacoes ? ["Anotações"] : [])];
+      const annotationHeaders = permitirAnotacoes ? ["Anotações"] : [];
 
       document.getElementById("comparacao-planilhas-fontes").textContent =
         `no endpoint: ${formatarNomeFonteHistorico(arquivo.endpoint || "—")} · na Simpress: ${formatarNomeFonteHistorico(arquivo.detalhes || "—")}${comparison.horario_comparacao ? ` · ${formatarHorarioHistorico(comparison.horario_comparacao)}` : ""}`;
@@ -2152,6 +2162,7 @@
           <td class="px-3 py-2 font-mono whitespace-nowrap">${escapeHtml(item.serie || "—")}</td>
           <td class="px-3 py-2">${escapeHtml(item.local_previsto || "—")}</td>
           <td class="px-3 py-2 text-amber-300">${escapeHtml((Array.isArray(item.ausente_em) ? item.ausente_em : [item.ausente_em || item.fonte_ausente]).filter(Boolean).map(formatarFonteAusencia).join(", "))}</td>
+          ${renderizarCampoAnotacao(item, (item.computador ? `o hostname ${item.computador}, série ` : "a série ") + (item.serie || "vazia"))}
         </tr>`);
 
       const locationRows = divergenciasLocal.map(item => `
@@ -2160,6 +2171,7 @@
           <td class="px-3 py-2 font-mono whitespace-nowrap">${escapeHtml(item.serie || "—")}</td>
           <td class="px-3 py-2">${escapeHtml(item.local_previsto)}</td>
           <td class="px-3 py-2">${escapeHtml(item.local_detalhes || "—")}</td>
+          ${renderizarCampoAnotacao(item, `o computador ${item.computador || "sem hostname"}, série ${item.serie || "vazia"}`)}
         </tr>`);
 
       const semAcessoRows = semAcesso14DiasOrdenados.map(item => `
@@ -2169,6 +2181,7 @@
           <td class="px-3 py-2 whitespace-nowrap">${escapeHtml(item.ultima_verificacao ? formatarHorarioHistorico(item.ultima_verificacao) : "—")}</td>
           <td class="px-3 py-2">${Number(item.dias_sem_verificacao || 0).toLocaleString("pt-BR")}</td>
           <td class="px-3 py-2">${escapeHtml(String(item.linha_endpoint || "—"))}</td>
+          ${renderizarCampoAnotacao(item, `o hostname ${item.computador || "sem hostname"}, série ${item.serie || "vazia"}`)}
         </tr>`);
 
       const aliasUpdateRows = apelidosAtualizados.map(item => `
@@ -2185,13 +2198,7 @@
           <td class="px-3 py-2 font-mono text-white whitespace-nowrap">${escapeHtml(item.serie || "(vazia)")}</td>
           <td class="px-3 py-2 font-mono">${escapeHtml(item.computador || "—")}</td>
           <td class="px-3 py-2 text-amber-200">${escapeHtml(formatarMotivoRevisao(item.motivo))}</td>
-          ${permitirAnotacoes ? `<td class="px-3 py-2 min-w-[240px] align-top">
-            <textarea data-comparison-annotation data-annotation-id="${escapeHtml(item.anotacao_id || "")}" rows="2" maxlength="2000" class="w-full min-w-[220px] rounded-lg border border-slate-700 bg-slate-900 px-2.5 py-2 text-xs text-white placeholder:text-slate-500 focus:border-cyan-400 focus:outline-none focus:ring-1 focus:ring-cyan-400" aria-label="Anotações para ${escapeHtml((item.computador ? "o hostname " + item.computador + ", série " : "a série ") + (item.serie || "vazia"))}, neste resultado" placeholder="Escreva uma anotação...">${escapeHtml(item.anotacao || "")}</textarea>
-            <div class="mt-1">
-              <p class="text-[10px] ${item.anotacao ? "text-emerald-300" : "text-slate-500"}" data-annotation-status aria-live="polite">${item.anotacao ? "Salvo automaticamente" : ""}</p>
-              <button type="button" class="mt-1 rounded-md border border-rose-400/40 px-2 py-1 text-[10px] text-rose-200 hover:bg-rose-500/10" data-annotation-retry hidden aria-label="Tentar novamente o salvamento desta anotação">Tentar salvar novamente</button>
-            </div>
-          </td>` : ""}
+          ${renderizarCampoAnotacao(item, (item.computador ? `o hostname ${item.computador}, série ` : "a série ") + (item.serie || "vazia"))}
         </tr>`);
 
       const manualAliasRows = divergenciasApelidosManuais.map((item, index) => {
@@ -2225,10 +2232,12 @@
           <td class="px-3 py-2 font-mono text-white">${escapeHtml(item.serie)}</td>
           <td class="px-3 py-2">${Number(item.quantidade || 0)}</td>
           <td class="px-3 py-2 font-mono">${escapeHtml((item.exemplos || []).join(", "))}</td>
+          ${renderizarCampoAnotacao(item, `a série ${item.serie || "vazia"}`)}
         </tr>`);
 
       const ambiguityRows = [
         ...ambiguidades.map(item => ({
+          ...item,
           tipo: item.tipo,
           chave: item.chave,
           fontes: (item.fontes || []).map(source =>
@@ -2237,6 +2246,7 @@
           mensagem: formatarFonteAmbigua(item.mensagem || ""),
         })),
         ...registrosAmbiguos.map(item => ({
+          ...item,
           tipo: "Presença ambígua",
           chave: `${item.computador || "Sem hostname"} · ${item.serie || "Sem série"}`,
           fontes: Object.entries(item.fontes || {}).filter(([, status]) => status === "ambíguo").map(([source]) => formatarFonteAmbigua(source)).join(" · "),
@@ -2248,14 +2258,38 @@
           <td class="px-3 py-2 font-mono">${escapeHtml(item.chave || "—")}</td>
           <td class="px-3 py-2">${escapeHtml(item.fontes || "—")}</td>
           <td class="px-3 py-2">${escapeHtml(item.mensagem || "")}</td>
+          ${renderizarCampoAnotacao(item, `${item.tipo || "ambiguidade"}: ${item.chave || "sem identificador"}`)}
         </tr>`);
+
+      const categoriasAnotacoesSincronizadas = {
+        sem_acesso_14_dias: "Sem acesso há 14 dias ou mais",
+        ausentes_no_endpoint: "Sem correspondência — Endpoint",
+        ausentes_em_detalhes: "Sem correspondência — Simpress",
+        divergencias_local: "Localidade divergente",
+        correspondencias_ambiguas: "Duplicidades e correspondências ambíguas",
+        registros_ambiguos: "Duplicidades e correspondências ambíguas",
+        series_sem_mapeamento: "Séries sem local definido",
+        apelidos_sem_atualizacao: "Linhas mantidas para conferência",
+      };
+      const anotacoesSincronizadasRows = (comparison.anotacoes_sincronizadas || []).map(item => {
+        const motivo = item.motivo ? formatarNomeFonteHistorico(item.motivo) : "";
+        const identificador = [item.computador, item.serie && `série ${item.serie}`, motivo]
+          .filter(Boolean)
+          .join(" · ") || "Linha sem identificador";
+        return `
+          <tr class="text-slate-300">
+            <td class="px-3 py-2 text-amber-200">${escapeHtml(categoriasAnotacoesSincronizadas[item.categoria] || "Histórico de planilhas")}</td>
+            <td class="px-3 py-2">${escapeHtml(identificador)}</td>
+            ${renderizarCampoAnotacao(item, `${categoriasAnotacoesSincronizadas[item.categoria] || "a linha"}, ${identificador}`)}
+          </tr>`;
+      });
 
       document.getElementById("comparacao-planilhas-conteudo").innerHTML = comparison.somente_anotacoes_sincronizadas
         ? `
           <p class="text-xs text-cyan-200 bg-cyan-500/10 border border-cyan-500/25 rounded-lg px-3 py-2">Este clone contém as anotações sincronizadas. O resultado original e os arquivos da comparação não estão armazenados neste dispositivo.</p>
           <section class="space-y-2">
             <div><h4 class="text-sm font-bold text-amber-300">Anotações sincronizadas</h4><p class="text-[11px] text-slate-500">As anotações continuam vinculadas às linhas da atualização original.</p></div>
-            ${renderizarTabelaComparacao(aliasReviewHeaders, aliasReviewRows, "Nenhuma anotação sincronizada neste resultado.")}
+            ${renderizarTabelaComparacao(["Seção", "Linha", "Anotações"], anotacoesSincronizadasRows, "Nenhuma anotação sincronizada neste resultado.")}
           </section>`
         : `
         ${comparison.historico_salvo === false
@@ -2289,26 +2323,26 @@
         <section class="space-y-2">
           <div><h4 class="text-sm font-bold text-rose-300">Sem acesso há 14 dias ou mais</h4><p class="text-[11px] text-slate-500">Notebook com última verificação com êxito igual ou anterior a 14 dias na data e hora desta atualização.</p><p class="text-[11px] text-slate-400">Atualização usada como referência: ${comparison.horario_comparacao ? `<time datetime="${escapeHtml(comparison.horario_comparacao)}">${escapeHtml(formatarHorarioHistorico(comparison.horario_comparacao))}</time>` : "data e hora indisponíveis"}.</p></div>
           ${semAcessoRows.length ? '<p class="comparison-table-scroll-hint">Role a tabela horizontalmente para consultar todas as colunas.</p>' : ""}
-          ${renderizarTabelaComparacao(["Hostname/Apelido", "Série", "Última verificação com êxito", "Dias sem verificação", "Linha no endpoint"], semAcessoRows, "Nenhum notebook está há 14 dias ou mais sem verificação com êxito.")}
+          ${renderizarTabelaComparacao(["Hostname/Apelido", "Série", "Última verificação com êxito", "Dias sem verificação", "Linha no endpoint", ...annotationHeaders], semAcessoRows, "Nenhum notebook está há 14 dias ou mais sem verificação com êxito.")}
         </section>
         <section class="space-y-2">
           <div><h4 class="text-sm font-bold text-rose-300">Equipamentos sem correspondência por fonte</h4><p class="text-[11px] text-slate-500">Cada lista mostra equipamentos que não têm correspondência segura naquela fonte. Divergências de local aparecem em seção própria.</p></div>
           <h5 class="text-xs font-semibold text-slate-300">Sem correspondência — Endpoint (${ausentesEndpoint.length})</h5>
-          ${renderizarTabelaComparacao(["Hostname/Apelido", "Série", "Local previsto", "Sem correspondência em"], renderizarAusentes(ausentesEndpoint), "Todos os equipamentos têm correspondência segura com Endpoint.")}
+          ${renderizarTabelaComparacao(["Hostname/Apelido", "Série", "Local previsto", "Sem correspondência em", ...annotationHeaders], renderizarAusentes(ausentesEndpoint), "Todos os equipamentos têm correspondência segura com Endpoint.")}
           <h5 class="text-xs font-semibold text-slate-300">Sem correspondência — Simpress (${ausentesDetalhes.length})</h5>
-          ${renderizarTabelaComparacao(["Hostname/Apelido", "Série", "Local previsto", "Sem correspondência em"], renderizarAusentes(ausentesDetalhes), "Todos os equipamentos têm correspondência segura com Simpress.")}
+          ${renderizarTabelaComparacao(["Hostname/Apelido", "Série", "Local previsto", "Sem correspondência em", ...annotationHeaders], renderizarAusentes(ausentesDetalhes), "Todos os equipamentos têm correspondência segura com Simpress.")}
         </section>
         <section class="space-y-2">
           <div><h4 class="text-sm font-bold text-amber-300">Localidade divergente</h4><p class="text-[11px] text-slate-500">A localidade na Simpress é comparada com a classificação do hostname.</p></div>
-          ${renderizarTabelaComparacao(["Computador", "Série", "Local previsto", "Local na Simpress"], locationRows, "Nenhuma divergência de localidade encontrada.")}
+          ${renderizarTabelaComparacao(["Computador", "Série", "Local previsto", "Local na Simpress", ...annotationHeaders], locationRows, "Nenhuma divergência de localidade encontrada.")}
         </section>
         <section class="space-y-2">
           <div><h4 class="text-sm font-bold text-yellow-300">Duplicidades e correspondências ambíguas</h4><p class="text-[11px] text-slate-500">Nenhuma linha é escolhida automaticamente quando a série se repete ou o hostname/Apelido não identifica uma correspondência única.</p></div>
-          ${renderizarTabelaComparacao(["Ocorrência", "Série ou hostname/Apelido", "Fontes", "Tratamento"], ambiguityRows, "Nenhuma duplicidade ou correspondência ambígua encontrada.")}
+          ${renderizarTabelaComparacao(["Ocorrência", "Série ou hostname/Apelido", "Fontes", "Tratamento", ...annotationHeaders], ambiguityRows, "Nenhuma duplicidade ou correspondência ambígua encontrada.")}
         </section>
         <section class="space-y-2">
           <div><h4 class="text-sm font-bold text-sky-300">Séries sem local definido</h4><p class="text-[11px] text-slate-500">Não há regra de localidade cadastrada para estes prefixos.</p></div>
-          ${renderizarTabelaComparacao(["Série", "Quantidade", "Exemplos"], unmappedRows, "Todas as séries têm mapeamento de localidade.")}
+          ${renderizarTabelaComparacao(["Série", "Quantidade", "Exemplos", ...annotationHeaders], unmappedRows, "Todas as séries têm mapeamento de localidade.")}
         </section>
         <p class="text-[11px] text-emerald-300">Equipamentos carregados na Simpress: ${Number(comparison.total_equipamentos_carregados || 0).toLocaleString("pt-BR")}. Backup das versões anteriores: <span class="font-mono">planilhas_entrada/${escapeHtml(comparison.backup_diretorio || "_backups")}</span>.</p>
       `;

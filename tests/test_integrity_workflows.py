@@ -1569,7 +1569,7 @@ class WorkflowIntegrityTests(unittest.TestCase):
         self.assertEqual(shared_record["anotacao"], "Conferir no próximo inventário.")
         self.assertEqual(set(shared_record), {
             "versao", "evento_id", "horario", "item_id", "serie", "computador",
-            "motivo", "anotacao", "atualizado_em",
+            "motivo", "categoria", "anotacao", "atualizado_em",
         })
 
         fresh_clone_history = self.root / "clone_novo" / "historico_comparacoes.json"
@@ -1599,6 +1599,117 @@ class WorkflowIntegrityTests(unittest.TestCase):
                 item.get("somente_anotacoes_sincronizadas")
                 for item in main.get_historico_comparacoes()["eventos"]
             ))
+
+    def test_annotations_save_for_all_requested_sections_and_appear_in_excel_export(self):
+        event = {
+            "id": "evento-todas-anotacoes",
+            "horario": "2026-10-07T10:00:00-03:00",
+            "resumo": {},
+            "comparacao": {
+                "sem_acesso_14_dias": [{"serie": "S-ACESSO", "computador": "PRNOTE-ACESSO", "dias_sem_verificacao": 14}],
+                "ausentes_no_endpoint": [{"serie": "BRM-ENDPOINT", "computador": "PRNOTE-ENDPOINT", "local_previsto": "Maringá"}],
+                "ausentes_em_detalhes": [{"serie": "S-SIMPRESS", "computador": "PRMAC-SIMPRESS", "local_previsto": "Londrina"}],
+                "divergencias_local": [{"serie": "S-LOCAL", "computador": "PRNOTE-LOCAL", "local_previsto": "Maringá", "local_detalhes": "Londrina"}],
+                "correspondencias_ambiguas": [{"tipo": "Série duplicada", "chave": "S-DUP", "fontes": [], "mensagem": "Revisar duplicidade"}],
+                "registros_ambiguos": [{"serie": "S-AMB", "computador": "PRNOTE-AMB", "fontes": {"Endpoint": "ambíguo"}, "motivo": "Hostname duplicado"}],
+                "series_sem_mapeamento": [{"serie": "ZZ-SEM-LOCAL", "quantidade": 1, "exemplos": ["PRNOTE-SEM-LOCAL"]}],
+            },
+        }
+        self.comparison_history.write_text(json.dumps([event]), encoding="utf-8")
+        sections_and_notes = {
+            "sem_acesso_14_dias": "Verificar com suporte.",
+            "ausentes_no_endpoint": "Confirmar cadastro no Endpoint.",
+            "ausentes_em_detalhes": "Conferir com a Simpress.",
+            "divergencias_local": "Validar endereço da unidade.",
+            "correspondencias_ambiguas": "Conferir as séries duplicadas.",
+            "registros_ambiguos": "Validar hostname com a equipe local.",
+            "series_sem_mapeamento": "Cadastrar regra para o prefixo ZZ.",
+        }
+
+        displayed = main.get_comparacao_historica(event["id"])["evento"]["comparacao"]
+        item_ids = {
+            category: displayed[category][0]["anotacao_id"]
+            for category in sections_and_notes
+        }
+        self.assertEqual(len(set(item_ids.values())), len(item_ids))
+        for category, note in sections_and_notes.items():
+            result = main.salvar_anotacao_comparacao_historica(
+                event["id"], item_ids[category], SimpleNamespace(anotacao=note)
+            )
+            self.assertTrue(result["sucesso"])
+
+        stored = json.loads(self.comparison_history.read_text(encoding="utf-8"))[0]["comparacao"]
+        for category, note in sections_and_notes.items():
+            self.assertEqual(stored[category][0]["anotacao"], note)
+            self.assertEqual(stored[category][0]["anotacao_id"], item_ids[category])
+        shared_records = [json.loads(path.read_text(encoding="utf-8")) for path in self.shared_annotations.glob("*.json")]
+        self.assertEqual({record["categoria"] for record in shared_records}, set(sections_and_notes))
+
+        class CapturedResponse:
+            def __init__(self, content, media_type, headers):
+                self.body = content.read()
+                self.headers = headers
+
+        with patch("routers.inventory_history.StreamingResponse", CapturedResponse):
+            response = main.exportar_historico_comparacoes_excel(data="2026-10-07")
+        workbook = openpyxl.load_workbook(io.BytesIO(response.body), data_only=True)
+        try:
+            for sheet, category in (
+                ("Sem acesso", "sem_acesso_14_dias"),
+                ("Ausências", "ausentes_no_endpoint"),
+                ("Ausências", "ausentes_em_detalhes"),
+                ("Localidades", "divergencias_local"),
+                ("Localidades", "series_sem_mapeamento"),
+                ("Ambiguidades", "correspondencias_ambiguas"),
+                ("Ambiguidades", "registros_ambiguos"),
+            ):
+                cell_values = {
+                    cell.value
+                    for row in workbook[sheet].iter_rows()
+                    for cell in row
+                }
+                self.assertIn(sections_and_notes[category], cell_values)
+        finally:
+            workbook.close()
+
+    def test_non_review_annotation_is_available_on_a_clone_without_local_history(self):
+        row = {
+            "serie": "S-LOCAL-SYNC",
+            "computador": "PRNOTE-LOCAL-SYNC",
+            "local_previsto": "Maringá",
+            "local_detalhes": "Londrina",
+        }
+        event = {
+            "id": "evento-anotacao-local-sync",
+            "horario": "2026-10-07T11:00:00-03:00",
+            "comparacao": {"divergencias_local": [row]},
+        }
+        self.comparison_history.write_text(json.dumps([event]), encoding="utf-8")
+        item_id = main.comparison_history_for_display(event)["comparacao"]["divergencias_local"][0]["anotacao_id"]
+        main.salvar_anotacao_comparacao_historica(
+            event["id"], item_id, SimpleNamespace(anotacao="Conferir este endereço.")
+        )
+
+        fresh_clone_history = self.root / "clone_sem_historico" / "historico_comparacoes.json"
+        fresh_clone_history.parent.mkdir()
+        fresh_clone_history.write_text("[]", encoding="utf-8")
+        with patch.object(main, "COMPARISON_HISTORY_FILE", fresh_clone_history):
+            detail = main.get_comparacao_historica(event["id"])["evento"]
+            self.assertTrue(detail["somente_anotacoes_sincronizadas"])
+            self.assertEqual(
+                detail["comparacao"]["anotacoes_sincronizadas"][0]["categoria"],
+                "divergencias_local",
+            )
+            synchronized_row = detail["comparacao"]["divergencias_local"][0]
+            self.assertEqual(synchronized_row["anotacao"], "Conferir este endereço.")
+            self.assertEqual(synchronized_row["anotacao_id"], item_id)
+            main.salvar_anotacao_comparacao_historica(
+                event["id"], item_id, SimpleNamespace(anotacao="Endereço validado no clone.")
+            )
+
+        shared_record = json.loads(next(self.shared_annotations.glob("*.json")).read_text(encoding="utf-8"))
+        self.assertEqual(shared_record["categoria"], "divergencias_local")
+        self.assertEqual(shared_record["anotacao"], "Endereço validado no clone.")
 
     def test_legacy_local_annotation_is_copied_to_shared_storage_when_opened(self):
         event = {

@@ -20,8 +20,18 @@ test("shows synchronized annotations on a clone without local comparison history
 });
 
 test("distinguishes annotations with an empty serial by hostname", () => {
-  assert.ok(appScript.includes('item.computador ? "o hostname " + item.computador + ", série " : "a série "'));
+  assert.ok(appScript.includes('`o hostname ${item.computador}, série ` : "a série "'));
   assert.ok(appScript.includes('item.serie || "vazia"'));
+});
+
+test("renders an annotation column in every requested comparison section", () => {
+  assert.match(appScript, /const renderizarCampoAnotacao = \(item, contexto\)/);
+  assert.match(appScript, /"Linha no endpoint", \.\.\.annotationHeaders/);
+  assert.match(appScript, /"Sem correspondência em", \.\.\.annotationHeaders/);
+  assert.match(appScript, /"Local na Simpress", \.\.\.annotationHeaders/);
+  assert.match(appScript, /"Tratamento", \.\.\.annotationHeaders/);
+  assert.match(appScript, /"Exemplos", \.\.\.annotationHeaders/);
+  assert.match(appScript, /anotacoes_sincronizadas/);
 });
 
 test("loads the bounded autosave retry helper before the application", () => {

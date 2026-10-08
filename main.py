@@ -92,6 +92,7 @@ from domains.inventory_comparison import (
     _upload_alias_value,
     _upload_serial_value,
     _uploaded_aliases_by_serial,
+    comparison_annotation_item_id,
     compare_uploaded_workbooks,
     comparison_history_for_display,
     comparison_review_item_id,

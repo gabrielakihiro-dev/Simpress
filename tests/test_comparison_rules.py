@@ -60,6 +60,55 @@ class InventoryComparisonTests(unittest.TestCase):
             displayed_review["anotacao_id"],
             main.comparison_review_item_id(event["id"], 0, review),
         )
+
+    def test_all_history_detail_categories_receive_stable_event_scoped_annotation_ids(self):
+        filtered_endpoint = {"serie": "SERIE-IGNORADA", "computador": "PRNOTE-IGNORADO"}
+        endpoint_row = {"serie": "BRM-ENDPOINT-1", "computador": "PRNOTE-ENDPOINT"}
+        filtered_details = {"serie": "S-IGNORADA", "computador": "PRNOTE-IGNORADO"}
+        details_row = {"serie": "S-DETALHES-1", "computador": "PRMAC-DETALHES"}
+        filtered_location = {"serie": "S-CURITIBA", "computador": "PRNOTESJP01"}
+        location_row = {"serie": "S-LOCAL-1", "computador": "PRNOTEAPU01"}
+        event = {
+            "id": "evento-anotacoes-categorias",
+            "comparacao": {
+                "sem_acesso_14_dias": [{"serie": "S-ACESSO", "computador": "PRNOTE-ACESSO"}],
+                "ausentes_no_endpoint": [filtered_endpoint, endpoint_row],
+                "ausentes_em_detalhes": [filtered_details, details_row],
+                "divergencias_local": [filtered_location, location_row],
+                "correspondencias_ambiguas": [{"tipo": "Série duplicada", "chave": "S-DUP", "mensagem": "Revisar"}],
+                "registros_ambiguos": [{"serie": "S-AMB", "computador": "PRNOTE-AMB", "motivo": "Sem correspondência única"}],
+                "series_sem_mapeamento": [{"serie": "ZZ-SEM-LOCAL", "quantidade": 2, "exemplos": ["PRNOTE-X"]}],
+            },
+        }
+
+        displayed = main.comparison_history_for_display(event)["comparacao"]
+        visible_rows = [
+            displayed["sem_acesso_14_dias"][0],
+            displayed["ausentes_no_endpoint"][0],
+            displayed["ausentes_em_detalhes"][0],
+            displayed["divergencias_local"][0],
+            displayed["correspondencias_ambiguas"][0],
+            displayed["registros_ambiguos"][0],
+            displayed["series_sem_mapeamento"][0],
+        ]
+
+        self.assertEqual(len({row["anotacao_id"] for row in visible_rows}), len(visible_rows))
+        self.assertEqual(
+            displayed["ausentes_no_endpoint"][0]["anotacao_id"],
+            main.comparison_annotation_item_id(event["id"], "ausentes_no_endpoint", 1, endpoint_row),
+        )
+        self.assertEqual(
+            displayed["ausentes_em_detalhes"][0]["anotacao_id"],
+            main.comparison_annotation_item_id(event["id"], "ausentes_em_detalhes", 1, details_row),
+        )
+        self.assertEqual(
+            displayed["divergencias_local"][0]["anotacao_id"],
+            main.comparison_annotation_item_id(event["id"], "divergencias_local", 1, location_row),
+        )
+        self.assertNotIn("anotacao_id", endpoint_row)
+        self.assertNotIn("anotacao_id", details_row)
+        self.assertNotIn("anotacao_id", location_row)
+
     def test_two_sources_report_absence_and_location_without_comparing_ip(self):
         endpoint = source_table([
             {"NOMEDOCOMPUTADOR": "PRNOTEAPU01", "ROTULODESERVICONUMERODESERIE": "S-001", "IP": "10.0.0.1"},
@@ -222,8 +271,16 @@ class InventoryComparisonTests(unittest.TestCase):
             },
         }
         displayed_new = main.comparison_history_for_display(new_event)
-        self.assertEqual(displayed_new["comparacao"]["ausentes_no_endpoint"], [common_endpoint_item])
-        self.assertEqual(displayed_new["comparacao"]["ausentes_em_detalhes"], [common_detail_item])
+        self.assertEqual(
+            [{key: value for key, value in item.items() if key != "anotacao_id"}
+             for item in displayed_new["comparacao"]["ausentes_no_endpoint"]],
+            [common_endpoint_item],
+        )
+        self.assertEqual(
+            [{key: value for key, value in item.items() if key != "anotacao_id"}
+             for item in displayed_new["comparacao"]["ausentes_em_detalhes"]],
+            [common_detail_item],
+        )
         self.assertEqual(displayed_new["resumo"]["ausentes_no_endpoint"], 1)
         self.assertEqual(displayed_new["resumo"]["ausentes_em_detalhes"], 1)
         self.assertNotIn("ausentes_na_base_principal", displayed_new["comparacao"])
@@ -246,8 +303,16 @@ class InventoryComparisonTests(unittest.TestCase):
             },
         }
         displayed_old = main.comparison_history_for_display(old_event)
-        self.assertEqual(displayed_old["comparacao"]["ausentes_no_endpoint"], [common_endpoint_item])
-        self.assertEqual(displayed_old["comparacao"]["ausentes_em_detalhes"], [common_detail_item])
+        self.assertEqual(
+            [{key: value for key, value in item.items() if key != "anotacao_id"}
+             for item in displayed_old["comparacao"]["ausentes_no_endpoint"]],
+            [common_endpoint_item],
+        )
+        self.assertEqual(
+            [{key: value for key, value in item.items() if key != "anotacao_id"}
+             for item in displayed_old["comparacao"]["ausentes_em_detalhes"]],
+            [common_detail_item],
+        )
         self.assertEqual(displayed_old["resumo"]["ausentes_no_endpoint"], 1)
         self.assertEqual(displayed_old["resumo"]["ausentes_em_detalhes"], 1)
         self.assertEqual(old_event["comparacao"]["ausentes_no_endpoint"], expected_endpoint_items)

@@ -35,6 +35,17 @@ _EXPORT_MUTED = "63748A"
 _EXPORT_PALE = "F2F6FA"
 _EXPORT_BORDER = "D9E3ED"
 
+_ANNOTATABLE_COMPARISON_CATEGORIES = (
+    "apelidos_sem_atualizacao",
+    "sem_acesso_14_dias",
+    "ausentes_no_endpoint",
+    "ausentes_em_detalhes",
+    "divergencias_local",
+    "correspondencias_ambiguas",
+    "registros_ambiguos",
+    "series_sem_mapeamento",
+)
+
 
 def _export_text(value: Any) -> str:
     if value is None:
@@ -91,7 +102,14 @@ def _export_rows(comparison: Dict[str, Any], key: str) -> list:
     return [item for item in rows if isinstance(item, dict)] if isinstance(rows, list) else []
 
 
-def _export_note(comparison: Dict[str, Any], category: str, index: int) -> str:
+def _export_note(
+    comparison: Dict[str, Any],
+    category: str,
+    index: int,
+    item: Optional[Dict[str, Any]] = None,
+) -> str:
+    if isinstance(item, dict) and isinstance(item.get("anotacao"), str):
+        return _export_text(item["anotacao"])
     annotations = comparison.get("anotacoes")
     if not isinstance(annotations, dict):
         return ""
@@ -467,30 +485,49 @@ def create_inventory_history_router(ctx):
                 continue
             event_id = str(event.get("id") or "")
             comparison = event.get("comparacao")
-            review_items = comparison.get("apelidos_sem_atualizacao") if isinstance(comparison, dict) else None
-            if not event_id or not isinstance(review_items, list):
+            if not event_id or not isinstance(comparison, dict):
                 continue
-            for index, item in enumerate(review_items):
-                if not isinstance(item, dict) or not isinstance(item.get("anotacao"), str):
+            legacy_annotations = comparison.get("anotacoes")
+            for category in _ANNOTATABLE_COMPARISON_CATEGORIES:
+                items = comparison.get(category)
+                if not isinstance(items, list):
                     continue
-                item_id = ctx.comparison_review_item_id(event_id, index, item)
-                key = (event_id, item_id)
-                if key in records:
-                    continue
-                try:
-                    records[key] = ctx.save_history_annotation(
-                        ctx.HISTORY_ANNOTATIONS_DIR,
-                        event_id=event_id,
-                        event_time=str(event.get("horario") or ""),
-                        item_id=item_id,
-                        serie=str(item.get("serie") or ""),
-                        computador=str(item.get("computador") or ""),
-                        motivo=str(item.get("motivo") or ""),
-                        anotacao=item["anotacao"],
-                    )
-                except Exception:
-                    # Keep local history readable when OneDrive is temporarily unavailable.
-                    continue
+                for index, item in enumerate(items):
+                    if not isinstance(item, dict):
+                        continue
+                    annotation = item.get("anotacao")
+                    if not isinstance(annotation, str) and isinstance(legacy_annotations, dict):
+                        legacy_category = (
+                            "ambiguidades"
+                            if category in ("correspondencias_ambiguas", "registros_ambiguos")
+                            else category
+                        )
+                        legacy_index = index
+                        if category == "registros_ambiguos":
+                            ambiguity_items = comparison.get("correspondencias_ambiguas")
+                            legacy_index += len(ambiguity_items) if isinstance(ambiguity_items, list) else 0
+                        annotation = legacy_annotations.get(f"{legacy_category}:{legacy_index}")
+                    if not isinstance(annotation, str):
+                        continue
+                    item_id = ctx.comparison_annotation_item_id(event_id, category, index, item)
+                    key = (event_id, item_id)
+                    if key in records:
+                        continue
+                    try:
+                        records[key] = ctx.save_history_annotation(
+                            ctx.HISTORY_ANNOTATIONS_DIR,
+                            event_id=event_id,
+                            event_time=str(event.get("horario") or ""),
+                            item_id=item_id,
+                            serie=str(item.get("serie") or ""),
+                            computador=str(item.get("computador") or item.get("chave") or ""),
+                            motivo=str(item.get("motivo") or item.get("mensagem") or item.get("tipo") or ""),
+                            anotacao=annotation,
+                            categoria=category,
+                        )
+                    except Exception:
+                        # Keep local history readable when OneDrive is temporarily unavailable.
+                        continue
         return records
 
 
@@ -503,15 +540,16 @@ def create_inventory_history_router(ctx):
             return event_view
         comparison["anotacoes_sync_ativa"] = bool(ctx.HISTORY_ANNOTATIONS_SYNC_ENABLED)
         event_id = str(event_view.get("id") or "")
-        review_items = comparison.get("apelidos_sem_atualizacao")
-        if not isinstance(review_items, list):
-            return event_view
-        for item in review_items:
-            if not isinstance(item, dict):
+        for category in _ANNOTATABLE_COMPARISON_CATEGORIES:
+            items = comparison.get(category)
+            if not isinstance(items, list):
                 continue
-            record = annotations.get((event_id, str(item.get("anotacao_id") or "")))
-            if record is not None:
-                item["anotacao"] = record["anotacao"]
+            for item in items:
+                if not isinstance(item, dict):
+                    continue
+                record = annotations.get((event_id, str(item.get("anotacao_id") or "")))
+                if record is not None:
+                    item["anotacao"] = record["anotacao"]
         return event_view
 
 
@@ -524,35 +562,41 @@ def create_inventory_history_router(ctx):
             return None
         event_records.sort(key=lambda record: record["item_id"])
         event_time = next((record.get("horario") for record in event_records if record.get("horario")), "")
-        review_items = [
-            {
+        category_items = {category: [] for category in _ANNOTATABLE_COMPARISON_CATEGORIES}
+        synchronized_annotations = []
+        for record in event_records:
+            category = record.get("categoria")
+            if category not in category_items:
+                category = "apelidos_sem_atualizacao"
+            item = {
                 "serie": record.get("serie", ""),
                 "computador": record.get("computador", ""),
                 "motivo": record.get("motivo", ""),
                 "anotacao_id": record["item_id"],
                 "anotacao": record["anotacao"],
+                "categoria": category,
             }
-            for record in event_records
-        ]
+            category_items[category].append(item)
+            synchronized_annotations.append(item)
         return {
             "id": event_id,
             "horario": event_time,
             "somente_anotacoes_sincronizadas": True,
             "arquivos_enviados": {},
-            "resumo": {"apelidos_sem_atualizacao": len(review_items)},
+            "resumo": {
+                category: len(items)
+                for category, items in category_items.items()
+                if items
+            },
             "comparacao": {
                 "evento_id": event_id,
                 "horario_comparacao": event_time,
                 "tipo_operacao": "atualizacao",
                 "arquivos_enviados": {},
-                "apelidos_sem_atualizacao": review_items,
+                **category_items,
+                "anotacoes_sincronizadas": synchronized_annotations,
                 "apelidos_atualizados": [],
                 "divergencias_apelidos_manuais": [],
-                "ausentes_no_endpoint": [],
-                "ausentes_em_detalhes": [],
-                "divergencias_local": [],
-                "correspondencias_ambiguas": [],
-                "registros_ambiguos": [],
                 "anotacoes_sync_ativa": bool(ctx.HISTORY_ANNOTATIONS_SYNC_ENABLED),
                 "somente_anotacoes_sincronizadas": True,
             },
@@ -726,7 +770,7 @@ def create_inventory_history_router(ctx):
                     timestamp, event_type_label, "Para conferência",
                     item.get("serie"), item.get("computador"), "", "", "", None,
                     "Pendente", item.get("motivo"), "",
-                    _export_note(comparison, "apelidos_sem_atualizacao", index),
+                    _export_note(comparison, "apelidos_sem_atualizacao", index, item),
                 ))
             manual_status = {
                 "manter": "Alteração manual mantida",
@@ -755,27 +799,27 @@ def create_inventory_history_router(ctx):
                         timestamp, category,
                         _export_text(item.get("ausente_em") or item.get("fonte_ausente") or missing_source),
                         item.get("computador"), item.get("serie"), item.get("local_previsto"),
-                        _export_note(comparison, note_category, index),
+                        _export_note(comparison, note_category, index, item),
                     ))
 
             for index, item in enumerate(no_recent_verification):
                 no_access_rows.append((
                     timestamp, event_type_label, item.get("computador"), item.get("serie"),
                     _export_datetime(item.get("ultima_verificacao")), item.get("dias_sem_verificacao"),
-                    item.get("linha_endpoint"), _export_note(comparison, "sem_acesso_14_dias", index),
+                    item.get("linha_endpoint"), _export_note(comparison, "sem_acesso_14_dias", index, item),
                 ))
 
             for index, item in enumerate(local_divergences):
                 location_rows.append((
                     timestamp, "Localidade divergente", item.get("computador"),
                     item.get("serie"), item.get("local_previsto"), item.get("local_detalhes"),
-                    None, "", _export_note(comparison, "divergencias_local", index),
+                    None, "", _export_note(comparison, "divergencias_local", index, item),
                 ))
             for index, item in enumerate(unmapped_series):
                 location_rows.append((
                     timestamp, "Série sem local definido", "", item.get("serie"),
                     "", "", item.get("quantidade"), _export_text(item.get("exemplos")),
-                    _export_note(comparison, "series_sem_mapeamento", index),
+                    _export_note(comparison, "series_sem_mapeamento", index, item),
                 ))
 
             for index, item in enumerate(ambiguities):
@@ -792,7 +836,7 @@ def create_inventory_history_router(ctx):
                 ambiguity_rows.append((
                     timestamp, item.get("tipo") or "Ambiguidade",
                     item.get("chave"), "; ".join(sources), item.get("mensagem"),
-                    _export_note(comparison, "ambiguidades", index),
+                    _export_note(comparison, "ambiguidades", index, item),
                 ))
             for index, item in enumerate(ambiguous_records, start=len(ambiguities)):
                 ambiguous_sources = item.get("fontes") or {}
@@ -803,7 +847,7 @@ def create_inventory_history_router(ctx):
                 record_key = f"{item.get('computador') or 'Sem hostname'} · {item.get('serie') or 'Sem série'}"
                 ambiguity_rows.append((
                     timestamp, "Presença ambígua", record_key,
-                    source_summary, item.get("motivo"), _export_note(comparison, "ambiguidades", index),
+                    source_summary, item.get("motivo"), _export_note(comparison, "ambiguidades", index, item),
                 ))
 
         detail_total = sum(category_counts.values())
@@ -908,15 +952,23 @@ def create_inventory_history_router(ctx):
         annotation_row = None
         if event is not None:
             comparison = event.get("comparacao")
-            review_items = comparison.get("apelidos_sem_atualizacao") if isinstance(comparison, dict) else None
-            if isinstance(review_items, list):
-                for index, review_item in enumerate(review_items):
-                    if not isinstance(review_item, dict):
+            if isinstance(comparison, dict):
+                for category in _ANNOTATABLE_COMPARISON_CATEGORIES:
+                    items = comparison.get(category)
+                    if not isinstance(items, list):
                         continue
-                    stable_id = ctx.comparison_review_item_id(evento_id, index, review_item)
-                    if stable_id == item_id:
-                        annotation_row = dict(review_item)
-                        annotation_row["anotacao_id"] = stable_id
+                    for index, comparison_item in enumerate(items):
+                        if not isinstance(comparison_item, dict):
+                            continue
+                        stable_id = ctx.comparison_annotation_item_id(
+                            evento_id, category, index, comparison_item
+                        )
+                        if stable_id == item_id:
+                            annotation_row = dict(comparison_item)
+                            annotation_row["anotacao_id"] = stable_id
+                            annotation_row["categoria"] = category
+                            break
+                    if annotation_row is not None:
                         break
         else:
             annotation_row = next(
@@ -939,17 +991,22 @@ def create_inventory_history_router(ctx):
             if event is None:
                 raise ctx.HTTPException(status_code=404, detail="A atualização selecionada não existe mais no histórico.")
             comparison = event.get("comparacao")
-            review_items = comparison.get("apelidos_sem_atualizacao") if isinstance(comparison, dict) else None
-            if not isinstance(review_items, list):
+            if not isinstance(comparison, dict):
                 raise ctx.HTTPException(status_code=404, detail="A linha selecionada não existe neste resultado.")
-            for index, review_item in enumerate(review_items):
-                if not isinstance(review_item, dict):
+            for category in _ANNOTATABLE_COMPARISON_CATEGORIES:
+                items = comparison.get(category)
+                if not isinstance(items, list):
                     continue
-                stable_id = ctx.comparison_review_item_id(evento_id, index, review_item)
-                if stable_id == item_id:
-                    review_item["anotacao_id"] = stable_id
-                    review_item["anotacao"] = payload.anotacao
-                    return history
+                for index, comparison_item in enumerate(items):
+                    if not isinstance(comparison_item, dict):
+                        continue
+                    stable_id = ctx.comparison_annotation_item_id(
+                        evento_id, category, index, comparison_item
+                    )
+                    if stable_id == item_id:
+                        comparison_item["anotacao_id"] = stable_id
+                        comparison_item["anotacao"] = payload.anotacao
+                        return history
             raise ctx.HTTPException(status_code=404, detail="A linha selecionada não existe neste resultado.")
 
         try:
@@ -962,9 +1019,10 @@ def create_inventory_history_router(ctx):
                 event_time=str(event.get("horario") or "") if event is not None else str(annotation_row.get("horario") or ""),
                 item_id=item_id,
                 serie=str(annotation_row.get("serie") or ""),
-                computador=str(annotation_row.get("computador") or ""),
-                motivo=str(annotation_row.get("motivo") or ""),
+                computador=str(annotation_row.get("computador") or annotation_row.get("chave") or ""),
+                motivo=str(annotation_row.get("motivo") or annotation_row.get("mensagem") or annotation_row.get("tipo") or ""),
                 anotacao=payload.anotacao,
+                categoria=str(annotation_row.get("categoria") or "apelidos_sem_atualizacao"),
             )
         except ctx.HTTPException:
             raise
@@ -1313,6 +1371,7 @@ def create_inventory_history_router(ctx):
                         computador=str(record.get("computador") or ""),
                         motivo=str(record.get("motivo") or ""),
                         anotacao="",
+                        categoria=str(record.get("categoria") or "apelidos_sem_atualizacao"),
                     )
         except Exception:
             status = 503 if ctx.HISTORY_ANNOTATIONS_SYNC_ENABLED else 500
