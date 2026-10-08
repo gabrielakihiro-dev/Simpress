@@ -117,10 +117,12 @@ O inicializador confere se existem o ambiente `.venv` e o modelo de transferênc
 
 Abra no navegador:
 
-- Aplicação: <http://127.0.0.1:8000>
-- Documentação interativa da API: <http://127.0.0.1:8000/docs>
+- Aplicação (porta padrão): <http://127.0.0.1:8000>
+- Documentação interativa da API (porta padrão): <http://127.0.0.1:8000/docs>
 
-O servidor é iniciado em `127.0.0.1`, na porta `8000`. Para encerrar, volte à janela do servidor e pressione `Ctrl+C`.
+Se o iniciador escolher outra porta, use o endereço que ele mostrar no terminal.
+
+O iniciador usa `127.0.0.1:8000` quando disponível. Se outra aplicação ocupar essa porta, ele escolhe uma porta livre entre `8001` e `8099`; se o Simpress já estiver ativo nesse intervalo, abre a instância existente em vez de iniciar outra. O servidor continua restrito ao computador local. Para encerrar uma instância, volte à janela que a iniciou e pressione `Ctrl+C`.
 
 Na inicialização, o terminal e a aplicação mostram quais arquivos locais estão disponíveis e quais funções dependem deles. O painel **Ver detalhes de arquivos e funções** informa o impacto de cada ausência; **Atualizar status** repete a verificação. Esse botão verifica disponibilidade e formato do arquivo, mas não recarrega os equipamentos na memória. Para carregar arquivos alterados manualmente, reinicie o servidor; no uso normal, atualize os inventários pela própria aplicação.
 
@@ -280,7 +282,7 @@ iniciar_servidor.bat                  Inicializador local para Windows
 
 ## Dados e privacidade
 
-O servidor atende somente `127.0.0.1:8000` e não possui autenticação de usuário; não o exponha diretamente à rede. A documentação `/docs` também fica disponível apenas enquanto o servidor local está em execução.
+O servidor atende somente `127.0.0.1` em uma porta local entre `8000` e `8099` e não possui autenticação de usuário; não o exponha diretamente à rede. A documentação `/docs` também fica disponível apenas enquanto o servidor local está em execução.
 
 Planilhas operacionais, backups, exportações, históricos, apelidos e unidades personalizadas ficam no computador local e são ignorados pelo Git. O modelo vazio de transferência permanece versionado. Inclua os dados locais em uma rotina de backup apropriada se precisar preservá-los; não force a inclusão deles em commits nem compartilhe cópias com dados operacionais.
 

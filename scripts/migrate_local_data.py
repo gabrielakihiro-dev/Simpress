@@ -203,10 +203,19 @@ def migrate_local_data(project_root: Path) -> Dict[str, int]:
 
     for legacy_root in legacy_roots:
         for directory in sorted(legacy_root.rglob("*"), key=lambda item: len(item.parts), reverse=True):
-            if directory.is_dir() and not any(directory.iterdir()):
-                directory.rmdir()
-        if legacy_root.is_dir() and not any(legacy_root.iterdir()):
-            legacy_root.rmdir()
+            if directory.is_dir():
+                try:
+                    if not any(directory.iterdir()):
+                        directory.rmdir()
+                except OSError:
+                    # Empty legacy folders are optional cleanup; preserve them if Windows denies removal.
+                    continue
+        try:
+            if legacy_root.is_dir() and not any(legacy_root.iterdir()):
+                legacy_root.rmdir()
+        except OSError:
+            # Do not fail startup when only removing an empty legacy folder is blocked.
+            pass
 
     return {
         "movidos": len(moved),
