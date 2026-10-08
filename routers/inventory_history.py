@@ -1,18 +1,42 @@
 """Routes for inventory comparison history and restore operations."""
 
-import re
+import filecmp
+import hashlib
+import hmac
+import json
+import logging
+import os
+import shutil
+import uuid
+from copy import deepcopy
+from dataclasses import dataclass
 from datetime import date, datetime
 from io import BytesIO
 from pathlib import Path
-from typing import Any, Dict, List, Optional
+from typing import Any, Callable, Dict, List, Optional
+
+from domains.history_export import (
+    _export_datetime,
+    _export_event_timestamp,
+    _export_note,
+    _export_rows,
+    _export_text,
+    _history_display_files,
+    _history_display_text,
+    _write_export_summary_sheet,
+    _write_export_table_sheet,
+)
 
 import openpyxl
-from fastapi import APIRouter, Query
+from fastapi import APIRouter, HTTPException, Query
 from fastapi.responses import StreamingResponse
-from openpyxl.styles import Alignment, Border, Font, PatternFill, Side
-from openpyxl.utils import get_column_letter
-from openpyxl.worksheet.table import Table, TableStyleInfo
 from pydantic import BaseModel, Field
+from integrity import (
+    FileBusyError,
+    FileTransactionError,
+    TransactionConflictError,
+    WorkbookSafetyError,
+)
 
 
 class ManualAliasConflictResolutionPayload(BaseModel):
@@ -27,14 +51,6 @@ class ComparisonRestorePayload(BaseModel):
     preview_token: str = Field(..., min_length=64, max_length=64)
 
 
-_EXPORT_NAVY = "10213A"
-_EXPORT_NAVY_DARK = "0B1729"
-_EXPORT_CYAN = "00A3E0"
-_EXPORT_TEXT = "26364A"
-_EXPORT_MUTED = "63748A"
-_EXPORT_PALE = "F2F6FA"
-_EXPORT_BORDER = "D9E3ED"
-
 _ANNOTATABLE_COMPARISON_CATEGORIES = (
     "apelidos_sem_atualizacao",
     "sem_acesso_14_dias",
@@ -45,257 +61,46 @@ _ANNOTATABLE_COMPARISON_CATEGORIES = (
     "registros_ambiguos",
     "series_sem_mapeamento",
 )
+logger = logging.getLogger(__name__)
 
 
-def _export_text(value: Any) -> str:
-    if value is None:
-        return ""
-    if isinstance(value, dict):
-        value = "; ".join(f"{key}: {item}" for key, item in value.items())
-    elif isinstance(value, (list, tuple, set)):
-        value = "; ".join(str(item) for item in value if item is not None)
-    return str(value)[:32767]
+@dataclass(frozen=True)
+class InventoryHistoryServices:
+    """Explicit application services required by history routes."""
+
+    manual_aliases_by_serial: Callable[[Dict[str, str]], Dict[str, str]]
+    build_history_annotation_record: Callable[..., Dict[str, Any]]
+    comparison_annotation_item_id: Callable[..., str]
+    comparison_history_path: Callable[[], Path]
+    comparison_history_lock: Any
+    comparison_history_for_display: Callable[[Dict[str, Any]], Dict[str, Any]]
+    details_upload_path: Callable[[], Path]
+    endpoint_upload_path: Callable[[], Path]
+    get_equipment_snapshot: Callable[[], Dict[str, Dict[str, Any]]]
+    get_equipment_template_file: Callable[[], Optional[Path]]
+    history_annotation_record_path: Callable[..., Path]
+    history_annotation_row_fingerprint: Callable[[str, Dict[str, Any]], str]
+    history_annotations_directory: Callable[[], Path]
+    history_annotations_sync_enabled: Callable[[], bool]
+    input_directory: Callable[[], Path]
+    atomic_file_transaction: Callable[..., Any]
+    inventory_state_transaction: Callable[..., Any]
+    load_comparison_history: Callable[[], List[Dict[str, Any]]]
+    load_database: Callable[..., Any]
+    load_history_annotations: Callable[[Path], List[Dict[str, Any]]]
+    load_modified_apelidos: Callable[[], Dict[str, str]]
+    local_annotation_outbox_directory: Callable[[], Path]
+    max_upload_bytes: int
+    modified_aliases_path: Callable[[], Path]
+    normalize_reference_value: Callable[[Any], str]
+    publish_database_state: Callable[[Dict[str, Any]], None]
+    save_history_annotation: Callable[..., Dict[str, Any]]
+    transaction_root: Callable[[], Path]
+    upload_backups_directory: Callable[[], Path]
+    validate_uploaded_workbook: Callable[[bytes, str], Dict[str, Any]]
 
 
-def _history_display_text(value: Any) -> str:
-    """Mask legacy source names in history exports while keeping stored filenames intact."""
-    text = _export_text(value)
-    text = re.sub(r"\b(?:na|no|da|do|à|ao|pela|pelo|a|o)\s*InvAll", "no endpoint", text, flags=re.IGNORECASE)
-    text = re.sub(r"InvAll", "no endpoint", text, flags=re.IGNORECASE)
-    text = re.sub(
-        r"(?<![\w.-])(?:no\s+)?Endpoint(?![\w.-])",
-        "no endpoint",
-        text,
-        flags=re.IGNORECASE,
-    )
-    text = re.sub(r"\b(?:em|de|da|do|na|no|a|à|pela|pelo)\s*EquipamentosDetalhes", "na Simpress", text, flags=re.IGNORECASE)
-    text = re.sub(r"EquipamentosDetalhes", "na Simpress", text, flags=re.IGNORECASE)
-    return re.sub(r"\b(?:na\s+)?Simpress\b", "na Simpress", text, flags=re.IGNORECASE)
-
-
-def _history_display_files(value: Any) -> Dict[str, str]:
-    if not isinstance(value, dict):
-        return {}
-    return {key: _history_display_text(name) for key, name in value.items() if isinstance(key, str)}
-
-
-def _export_datetime(value: Any) -> Optional[datetime]:
-    if isinstance(value, datetime):
-        parsed = value
-    else:
-        try:
-            parsed = datetime.fromisoformat(str(value or "").replace("Z", "+00:00"))
-        except (TypeError, ValueError, OverflowError):
-            return None
-    if parsed.tzinfo is not None:
-        parsed = parsed.astimezone().replace(tzinfo=None)
-    return parsed
-
-
-def _export_event_timestamp(event: Dict[str, Any]) -> float:
-    parsed = _export_datetime(event.get("horario"))
-    return parsed.timestamp() if parsed is not None else float("-inf")
-
-
-def _export_rows(comparison: Dict[str, Any], key: str) -> list:
-    rows = comparison.get(key)
-    return [item for item in rows if isinstance(item, dict)] if isinstance(rows, list) else []
-
-
-def _export_note(
-    comparison: Dict[str, Any],
-    category: str,
-    index: int,
-    item: Optional[Dict[str, Any]] = None,
-) -> str:
-    if isinstance(item, dict):
-        if isinstance(item.get("anotacao"), str):
-            return _export_text(item["anotacao"])
-        if item.get("anotacao_id"):
-            return ""
-    annotations = comparison.get("anotacoes")
-    if not isinstance(annotations, dict):
-        return ""
-    return _export_text(annotations.get(f"{category}:{index}"))
-
-
-def _style_export_title(ws, title: str, subtitle: str, last_column: int) -> None:
-    ws.merge_cells(start_row=1, start_column=1, end_row=1, end_column=last_column)
-    title_cell = ws.cell(row=1, column=1, value=title)
-    title_cell.fill = PatternFill("solid", fgColor=_EXPORT_NAVY_DARK)
-    title_cell.font = Font(name="Aptos Display", size=18, bold=True, color="FFFFFF")
-    title_cell.alignment = Alignment(vertical="center")
-    ws.row_dimensions[1].height = 38
-
-    ws.merge_cells(start_row=2, start_column=1, end_row=2, end_column=last_column)
-    subtitle_cell = ws.cell(row=2, column=1, value=subtitle)
-    subtitle_cell.fill = PatternFill("solid", fgColor=_EXPORT_NAVY)
-    subtitle_cell.font = Font(name="Aptos", size=10, color="D7E5F3")
-    subtitle_cell.alignment = Alignment(vertical="center", wrap_text=True)
-    ws.row_dimensions[2].height = 26
-    ws.row_dimensions[3].height = 10
-
-
-def _safe_export_cell(cell, value: Any) -> None:
-    if isinstance(value, str):
-        cell.value = value[:32767]
-        # Force strings that begin with '=' to remain text instead of formulas.
-        cell.data_type = "s"
-        cell.number_format = "@"
-    else:
-        cell.value = value
-        if isinstance(value, datetime):
-            cell.number_format = "dd/mm/yyyy hh:mm"
-        elif isinstance(value, int) and not isinstance(value, bool):
-            cell.number_format = "#,##0"
-    cell.alignment = Alignment(vertical="top", wrap_text=True)
-
-
-def _estimated_row_height(values, widths) -> float:
-    lines = 1
-    for value, width in zip(values, widths):
-        if value is None:
-            continue
-        effective_width = max(10, min(float(width or 20), 60))
-        for line in str(value).splitlines() or [""]:
-            lines = max(lines, (len(line) // int(effective_width * 1.35)) + 1)
-    return min(90, max(25, lines * 15))
-
-
-def _write_export_table_sheet(
-    workbook,
-    sheet_name: str,
-    title: str,
-    subtitle: str,
-    headers,
-    rows,
-    table_name: str,
-    widths,
-) -> None:
-    ws = workbook.create_sheet(sheet_name)
-    ws.sheet_view.showGridLines = False
-    ws.sheet_view.zoomScale = 90
-    ws.sheet_properties.tabColor = _EXPORT_CYAN
-    _style_export_title(ws, title, subtitle, len(headers))
-
-    for column, header in enumerate(headers, start=1):
-        cell = ws.cell(row=4, column=column, value=header)
-        cell.fill = PatternFill("solid", fgColor=_EXPORT_NAVY)
-        cell.font = Font(name="Aptos", size=10, bold=True, color="FFFFFF")
-        cell.alignment = Alignment(vertical="center", wrap_text=True)
-        cell.border = Border(bottom=Side(style="medium", color=_EXPORT_CYAN))
-        ws.column_dimensions[get_column_letter(column)].width = widths[column - 1]
-    ws.row_dimensions[4].height = 34
-    ws.freeze_panes = "A5"
-
-    for row_index, values in enumerate(rows, start=5):
-        for column, value in enumerate(values, start=1):
-            cell = ws.cell(row=row_index, column=column)
-            _safe_export_cell(cell, value)
-            if row_index % 2 == 0:
-                cell.fill = PatternFill("solid", fgColor=_EXPORT_PALE)
-            cell.font = Font(name="Aptos", size=10, color=_EXPORT_TEXT)
-            cell.border = Border(bottom=Side(style="hair", color=_EXPORT_BORDER))
-        ws.row_dimensions[row_index].height = _estimated_row_height(values, widths)
-
-    if rows:
-        table = Table(
-            displayName=table_name,
-            ref=f"A4:{get_column_letter(len(headers))}{4 + len(rows)}",
-        )
-        table.tableStyleInfo = TableStyleInfo(
-            name="TableStyleMedium2",
-            showFirstColumn=False,
-            showLastColumn=False,
-            showRowStripes=True,
-            showColumnStripes=False,
-        )
-        ws.add_table(table)
-    else:
-        ws.auto_filter.ref = f"A4:{get_column_letter(len(headers))}4"
-
-    ws.sheet_properties.pageSetUpPr.fitToPage = True
-    ws.page_setup.orientation = "landscape"
-    ws.page_setup.fitToWidth = 1
-    ws.page_setup.fitToHeight = 0
-    ws.print_title_rows = "1:4"
-
-
-def _write_export_summary_sheet(workbook, generated_at, selected_date, events, event_counts, category_counts, detail_total) -> None:
-    ws = workbook.active
-    ws.title = "Resumo"
-    ws.sheet_view.showGridLines = False
-    ws.sheet_view.zoomScale = 95
-    ws.sheet_properties.tabColor = _EXPORT_CYAN
-    _style_export_title(
-        ws,
-        "Histórico de planilhas",
-        f"Data selecionada: {selected_date:%d/%m/%Y} · Exportado em {generated_at:%d/%m/%Y às %H:%M} · {len(events):,} eventos".replace(",", "."),
-        8,
-    )
-    for column in range(1, 9):
-        ws.column_dimensions[get_column_letter(column)].width = 18
-    for start_column, label, value in (
-        (1, "EVENTOS", len(events)),
-        (3, "ATUALIZAÇÕES", event_counts["atualizacao"]),
-        (5, "RESTAURAÇÕES", event_counts["restauracao"]),
-        (7, "LINHAS DE DETALHE", detail_total),
-    ):
-        end_column = start_column + 1
-        ws.merge_cells(start_row=4, start_column=start_column, end_row=4, end_column=end_column)
-        ws.merge_cells(start_row=5, start_column=start_column, end_row=5, end_column=end_column)
-        label_cell = ws.cell(row=4, column=start_column, value=label)
-        label_cell.fill = PatternFill("solid", fgColor="E7F3FA")
-        label_cell.font = Font(name="Aptos", size=9, bold=True, color=_EXPORT_MUTED)
-        label_cell.alignment = Alignment(horizontal="center", vertical="center")
-        value_cell = ws.cell(row=5, column=start_column, value=value)
-        value_cell.fill = PatternFill("solid", fgColor="F4F8FC")
-        value_cell.font = Font(name="Aptos Display", size=22, bold=True, color=_EXPORT_NAVY)
-        value_cell.alignment = Alignment(horizontal="center", vertical="center")
-        for row in (4, 5):
-            for column in range(start_column, end_column + 1):
-                ws.cell(row=row, column=column).border = Border(
-                    left=Side(style="thin", color=_EXPORT_BORDER),
-                    right=Side(style="thin", color=_EXPORT_BORDER),
-                    top=Side(style="thin", color=_EXPORT_BORDER),
-                    bottom=Side(style="thin", color=_EXPORT_BORDER),
-                )
-    ws.row_dimensions[4].height = 24
-    ws.row_dimensions[5].height = 42
-
-    ws.merge_cells("A7:B7")
-    section = ws["A7"]
-    section.value = "Registros por categoria"
-    section.fill = PatternFill("solid", fgColor=_EXPORT_NAVY)
-    section.font = Font(name="Aptos", size=11, bold=True, color="FFFFFF")
-    section.alignment = Alignment(vertical="center")
-    ws.row_dimensions[7].height = 25
-    for column, header in enumerate(("Categoria", "Linhas"), start=1):
-        cell = ws.cell(row=8, column=column, value=header)
-        cell.fill = PatternFill("solid", fgColor="DDEAF4")
-        cell.font = Font(name="Aptos", size=10, bold=True, color=_EXPORT_NAVY)
-        cell.alignment = Alignment(vertical="center")
-    for row_index, (label, count) in enumerate(category_counts.items(), start=9):
-        for column, value in enumerate((label, count), start=1):
-            cell = ws.cell(row=row_index, column=column, value=value)
-            cell.font = Font(name="Aptos", size=10, color=_EXPORT_TEXT)
-            cell.alignment = Alignment(vertical="center")
-            cell.border = Border(bottom=Side(style="hair", color=_EXPORT_BORDER))
-            if row_index % 2 == 0:
-                cell.fill = PatternFill("solid", fgColor=_EXPORT_PALE)
-        ws.cell(row=row_index, column=2).number_format = "#,##0"
-        ws.row_dimensions[row_index].height = 23
-
-    note_row = 10 + len(category_counts)
-    ws.merge_cells(start_row=note_row, start_column=1, end_row=note_row, end_column=8)
-    note = ws.cell(row=note_row, column=1)
-    note.value = "As abas seguintes mostram os eventos e os registros detalhados, incluindo as anotações salvas em cada comparação."
-    note.font = Font(name="Aptos", size=9, italic=True, color=_EXPORT_MUTED)
-    note.alignment = Alignment(wrap_text=True, vertical="center")
-    ws.row_dimensions[note_row].height = 30
-
-
-def create_inventory_history_router(ctx):
+def create_inventory_history_router(services: InventoryHistoryServices):
     router = APIRouter()
 
     def _comparison_event_type(evento: Dict[str, Any]) -> str:
@@ -311,28 +116,28 @@ def create_inventory_history_router(ctx):
     def _comparison_restore_backup_paths(evento: Dict[str, Any]) -> Dict[str, Path]:
         comparison = evento.get("comparacao")
         if not isinstance(comparison, dict):
-            raise ctx.HTTPException(status_code=409, detail="Esta atualização não possui um backup disponível para restauração.")
+            raise HTTPException(status_code=409, detail="Esta atualização não possui um backup disponível para restauração.")
         relative_value = comparison.get("backup_diretorio")
         if not isinstance(relative_value, str) or not relative_value.strip():
-            raise ctx.HTTPException(status_code=409, detail="Esta atualização não possui um backup disponível para restauração.")
+            raise HTTPException(status_code=409, detail="Esta atualização não possui um backup disponível para restauração.")
 
         relative_path = Path(relative_value)
         if relative_path.is_absolute() or not relative_path.parts or any(part in {".", ".."} for part in relative_path.parts):
-            raise ctx.HTTPException(status_code=409, detail="O caminho do backup desta atualização não é válido.")
+            raise HTTPException(status_code=409, detail="O caminho do backup desta atualização não é válido.")
 
         try:
-            backup_root = ctx.UPLOAD_BACKUPS_DIR.resolve(strict=False)
-            backup_directory = (ctx.INPUT_DIR / relative_path).resolve(strict=True)
+            backup_root = services.upload_backups_directory().resolve(strict=False)
+            backup_directory = (services.input_directory() / relative_path).resolve(strict=True)
         except (OSError, RuntimeError, ValueError):
-            raise ctx.HTTPException(status_code=409, detail="O backup desta atualização não está disponível.") from None
+            raise HTTPException(status_code=409, detail="O backup desta atualização não está disponível.") from None
         if backup_directory.parent != backup_root or not backup_directory.is_dir():
-            raise ctx.HTTPException(status_code=409, detail="O backup desta atualização não está disponível.")
+            raise HTTPException(status_code=409, detail="O backup desta atualização não está disponível.")
 
         missing_roles = comparison.get("backup_arquivos_ausentes")
         invalid_roles = comparison.get("backup_arquivos_invalidos")
         target_files = {
-            "endpoint": ctx.ENDPOINT_UPLOAD_FILE,
-            "detalhes": ctx.DETAILS_UPLOAD_FILE,
+            "endpoint": services.endpoint_upload_path(),
+            "detalhes": services.details_upload_path(),
         }
         paths: Dict[str, Path] = {}
         for role, target_path in target_files.items():
@@ -340,7 +145,7 @@ def create_inventory_history_router(ctx):
                 isinstance(missing_roles, dict) and missing_roles.get(role) is True
                 or isinstance(invalid_roles, dict) and invalid_roles.get(role) is True
             ):
-                raise ctx.HTTPException(status_code=409, detail="O backup desta atualização não contém dois inventários válidos.")
+                raise HTTPException(status_code=409, detail="O backup desta atualização não contém dois inventários válidos.")
             try:
                 role_directory = (backup_directory / role).resolve(strict=True)
                 if role_directory.parent != backup_directory or not role_directory.is_dir():
@@ -349,7 +154,7 @@ def create_inventory_history_router(ctx):
                 if backup_path.parent != role_directory or not backup_path.is_file():
                     raise ValueError("invalid backup file")
             except (OSError, RuntimeError, ValueError):
-                raise ctx.HTTPException(status_code=409, detail="O backup desta atualização não contém os dois inventários.") from None
+                raise HTTPException(status_code=409, detail="O backup desta atualização não contém os dois inventários.") from None
             paths[role] = backup_path
         return paths
 
@@ -358,12 +163,12 @@ def create_inventory_history_router(ctx):
         try:
             _comparison_restore_backup_paths(evento)
             return True
-        except ctx.HTTPException:
+        except HTTPException:
             return False
 
 
     def _sha256_file(path: Path) -> str:
-        digest = ctx.hashlib.sha256()
+        digest = hashlib.sha256()
         with path.open("rb") as stream:
             for block in iter(lambda: stream.read(1024 * 1024), b""):
                 digest.update(block)
@@ -377,64 +182,64 @@ def create_inventory_history_router(ctx):
             label = labels[role]
             try:
                 size = backup_path.stat().st_size
-                if size <= 0 or size > ctx.MAX_UPLOAD_BYTES:
-                    raise ctx.HTTPException(status_code=409, detail="O arquivo excede o limite de tamanho ou está vazio.")
+                if size <= 0 or size > services.max_upload_bytes:
+                    raise HTTPException(status_code=409, detail="O arquivo excede o limite de tamanho ou está vazio.")
                 file_bytes = backup_path.read_bytes()
-                table = ctx.validate_uploaded_workbook(file_bytes, role)
-            except ctx.HTTPException as error:
-                raise ctx.HTTPException(
+                table = services.validate_uploaded_workbook(file_bytes, role)
+            except HTTPException as error:
+                raise HTTPException(
                     status_code=409,
                     detail=f"O backup de {label} não passou na validação: {error.detail}",
                 ) from error
-            except ctx.WorkbookSafetyError as error:
-                raise ctx.HTTPException(
+            except WorkbookSafetyError as error:
+                raise HTTPException(
                     status_code=409,
                     detail=f"O backup de {label} não passou na validação: {error}",
                 ) from error
             except OSError:
-                raise ctx.HTTPException(status_code=409, detail=f"Não foi possível ler o backup de {label}.") from None
+                raise HTTPException(status_code=409, detail=f"Não foi possível ler o backup de {label}.") from None
             files[role] = {
                 "path": backup_path,
                 "name": backup_path.name,
                 "bytes": file_bytes,
-                "sha256": ctx.hashlib.sha256(file_bytes).hexdigest(),
+                "sha256": hashlib.sha256(file_bytes).hexdigest(),
                 "records": len(table.get("records", [])),
                 "size": size,
-                "modified": ctx.datetime.fromtimestamp(backup_path.stat().st_mtime).astimezone().isoformat(timespec="seconds"),
+                "modified": datetime.fromtimestamp(backup_path.stat().st_mtime).astimezone().isoformat(timespec="seconds"),
             }
         return files
 
 
     def _current_inventory_snapshot() -> tuple[Dict[str, Dict[str, Any]], Dict[str, Optional[str]]]:
         target_files = {
-            "endpoint": ctx.ENDPOINT_UPLOAD_FILE,
-            "detalhes": ctx.DETAILS_UPLOAD_FILE,
+            "endpoint": services.endpoint_upload_path(),
+            "detalhes": services.details_upload_path(),
         }
         metadata: Dict[str, Dict[str, Any]] = {}
         hashes: Dict[str, Optional[str]] = {}
         for role, target_path in target_files.items():
             if target_path.is_symlink():
-                raise ctx.HTTPException(status_code=409, detail="Um arquivo ativo foi substituído por um atalho; a restauração foi cancelada.")
+                raise HTTPException(status_code=409, detail="Um arquivo ativo foi substituído por um atalho; a restauração foi cancelada.")
             if target_path.exists() and not target_path.is_file():
-                raise ctx.HTTPException(status_code=409, detail=f"O caminho ativo {target_path.name} não é um arquivo regular.")
+                raise HTTPException(status_code=409, detail=f"O caminho ativo {target_path.name} não é um arquivo regular.")
             if not target_path.is_file():
                 metadata[role] = {"nome": target_path.name, "presente": False}
                 hashes[role] = None
                 continue
             try:
                 stat = target_path.stat()
-                if stat.st_size > ctx.MAX_UPLOAD_BYTES:
-                    raise ctx.HTTPException(status_code=409, detail=f"O arquivo ativo {target_path.name} excede o limite permitido para backup.")
+                if stat.st_size > services.max_upload_bytes:
+                    raise HTTPException(status_code=409, detail=f"O arquivo ativo {target_path.name} excede o limite permitido para backup.")
                 file_hash = _sha256_file(target_path)
-            except ctx.HTTPException:
+            except HTTPException:
                 raise
             except OSError:
-                raise ctx.HTTPException(status_code=409, detail=f"Não foi possível conferir o arquivo ativo {target_path.name}.") from None
+                raise HTTPException(status_code=409, detail=f"Não foi possível conferir o arquivo ativo {target_path.name}.") from None
             metadata[role] = {
                 "nome": target_path.name,
                 "presente": True,
                 "tamanho_bytes": stat.st_size,
-                "modificado_em": ctx.datetime.fromtimestamp(stat.st_mtime).astimezone().isoformat(timespec="seconds"),
+                "modificado_em": datetime.fromtimestamp(stat.st_mtime).astimezone().isoformat(timespec="seconds"),
             }
             hashes[role] = file_hash
         return metadata, hashes
@@ -442,11 +247,11 @@ def create_inventory_history_router(ctx):
 
     def _build_comparison_restore_context(evento_id: str) -> Dict[str, Any]:
         evento = next(
-            (item for item in ctx.load_comparison_history() if isinstance(item, dict) and item.get("id") == evento_id),
+            (item for item in services.load_comparison_history() if isinstance(item, dict) and item.get("id") == evento_id),
             None,
         )
         if evento is None:
-            raise ctx.HTTPException(status_code=404, detail="A atualização selecionada não existe no histórico de planilhas.")
+            raise HTTPException(status_code=404, detail="A atualização selecionada não existe no histórico de planilhas.")
 
         backup_paths = _comparison_restore_backup_paths(evento)
         backup_files = _validated_comparison_backup_files(backup_paths)
@@ -458,8 +263,8 @@ def create_inventory_history_router(ctx):
             "backup_hashes": {role: backup_files[role]["sha256"] for role in sorted(backup_files)},
             "ativos_hashes": current_hashes,
         }
-        preview_token = ctx.hashlib.sha256(
-            ctx.json.dumps(token_material, ensure_ascii=False, sort_keys=True, separators=(",", ":")).encode("utf-8")
+        preview_token = hashlib.sha256(
+            json.dumps(token_material, ensure_ascii=False, sort_keys=True, separators=(",", ":")).encode("utf-8")
         ).hexdigest()
         return {
             "evento": evento,
@@ -471,8 +276,9 @@ def create_inventory_history_router(ctx):
 
 
     def _latest_annotation_records(history=None):
+        """Load shared notes and let unsynchronized local edits take precedence."""
         latest: Dict[tuple[str, str], tuple[str, Dict[str, Any]]] = {}
-        for record in ctx.load_history_annotations(ctx.HISTORY_ANNOTATIONS_DIR):
+        for record in services.load_history_annotations(services.history_annotations_directory()):
             key = (record["evento_id"], record["item_id"])
             candidate = (str(record.get("atualizado_em") or ""), record)
             if key not in latest or candidate[0] >= latest[key][0]:
@@ -480,10 +286,76 @@ def create_inventory_history_router(ctx):
         records: Dict[tuple[str, str], Dict[str, Any]] = {
             key: value[1] for key, value in latest.items()
         }
+        for record in services.load_history_annotations(services.local_annotation_outbox_directory()):
+            key = (record["evento_id"], record["item_id"])
+            records[key] = record
+        return records
 
-        # Move notes made by older versions into the shared store on first view.
-        local_history = ctx.load_comparison_history() if history is None else history
-        for event in local_history:
+
+    def _sync_annotation_record(record: Dict[str, Any]) -> bool:
+        """Publish one queued annotation, then remove its durable local outbox entry."""
+        values = {
+            "event_id": record["evento_id"],
+            "event_time": str(record.get("horario") or ""),
+            "item_id": record["item_id"],
+            "serie": str(record.get("serie") or ""),
+            "computador": str(record.get("computador") or ""),
+            "motivo": str(record.get("motivo") or ""),
+            "anotacao": record["anotacao"],
+            "categoria": str(record.get("categoria") or "apelidos_sem_atualizacao"),
+            "linha_hash": record.get("linha_hash"),
+            "updated_at": str(record.get("atualizado_em") or "") or None,
+        }
+        try:
+            services.save_history_annotation(services.history_annotations_directory(), **values)
+        except Exception:
+            logger.exception(
+                "Anotação salva localmente e aguardando sincronização (evento=%s, item=%s).",
+                record["evento_id"],
+                record["item_id"],
+            )
+            return False
+
+        pending_path = services.history_annotation_record_path(
+            services.local_annotation_outbox_directory(),
+            record["evento_id"],
+            record["item_id"],
+        )
+        try:
+            with services.atomic_file_transaction(services.transaction_root(), [pending_path]) as transaction:
+                if not pending_path.exists():
+                    return True
+                pending_record = json.loads(pending_path.read_text(encoding="utf-8"))
+                if (
+                    not isinstance(pending_record, dict)
+                    or pending_record.get("atualizado_em") != record.get("atualizado_em")
+                    or pending_record.get("anotacao") != record.get("anotacao")
+                ):
+                    return False
+                transaction.stage_delete(pending_path)
+                transaction.commit()
+        except Exception:
+            logger.exception(
+                "A anotação foi sincronizada, mas a baixa da pendência falhou (evento=%s, item=%s).",
+                record["evento_id"],
+                record["item_id"],
+            )
+            return False
+        return True
+
+
+    def flush_pending_history_annotations() -> Dict[str, int]:
+        pending = services.load_history_annotations(services.local_annotation_outbox_directory())
+        synchronized = sum(1 for record in pending if _sync_annotation_record(record))
+        return {"pendentes": len(pending) - synchronized, "sincronizadas": synchronized}
+
+
+    def migrate_legacy_history_annotations() -> Dict[str, int]:
+        """Move legacy row notes into the durable outbox outside read requests."""
+        history = services.load_comparison_history()
+        records = _latest_annotation_records(history)
+        queued = 0
+        for event in history:
             if not isinstance(event, dict):
                 continue
             event_id = str(event.get("id") or "")
@@ -512,13 +384,13 @@ def create_inventory_history_router(ctx):
                         annotation = legacy_annotations.get(f"{legacy_category}:{legacy_index}")
                     if not isinstance(annotation, str):
                         continue
-                    item_id = ctx.comparison_annotation_item_id(event_id, category, index, item)
+                    item_id = services.comparison_annotation_item_id(event_id, category, index, item)
                     key = (event_id, item_id)
-                    if key in records:
+                    existing = records.get(key)
+                    if existing is not None and existing.get("anotacao") == annotation:
                         continue
                     try:
-                        records[key] = ctx.save_history_annotation(
-                            ctx.HISTORY_ANNOTATIONS_DIR,
+                        record = services.build_history_annotation_record(
                             event_id=event_id,
                             event_time=str(event.get("horario") or ""),
                             item_id=item_id,
@@ -527,12 +399,32 @@ def create_inventory_history_router(ctx):
                             motivo=str(item.get("motivo") or item.get("mensagem") or item.get("tipo") or ""),
                             anotacao=annotation,
                             categoria=category,
-                            linha_hash=ctx.history_annotation_row_fingerprint(category, item),
+                            linha_hash=services.history_annotation_row_fingerprint(category, item),
                         )
+                        services.save_history_annotation(
+                            services.local_annotation_outbox_directory(),
+                            event_id=event_id,
+                            event_time=record["horario"],
+                            item_id=item_id,
+                            serie=record["serie"],
+                            computador=record["computador"],
+                            motivo=record["motivo"],
+                            anotacao=annotation,
+                            categoria=category,
+                            linha_hash=record.get("linha_hash"),
+                            updated_at=record["atualizado_em"],
+                        )
+                        records[key] = record
+                        queued += 1
                     except Exception:
-                        # Keep local history readable when OneDrive is temporarily unavailable.
+                        logger.exception(
+                            "Falha ao colocar anotação legada na fila de sincronização (evento=%s, item=%s).",
+                            event_id,
+                            item_id,
+                        )
                         continue
-        return records
+        flush_result = flush_pending_history_annotations()
+        return {"legadas_enfileiradas": queued, **flush_result}
 
 
     def _merge_shared_annotations(
@@ -542,7 +434,7 @@ def create_inventory_history_router(ctx):
         comparison = event_view.get("comparacao")
         if not isinstance(comparison, dict):
             return event_view
-        comparison["anotacoes_sync_ativa"] = bool(ctx.HISTORY_ANNOTATIONS_SYNC_ENABLED)
+        comparison["anotacoes_sync_ativa"] = bool(services.history_annotations_sync_enabled())
         event_id = str(event_view.get("id") or "")
         for category in _ANNOTATABLE_COMPARISON_CATEGORIES:
             items = comparison.get(category)
@@ -612,17 +504,42 @@ def create_inventory_history_router(ctx):
                 "anotacoes_sincronizadas": synchronized_annotations,
                 "apelidos_atualizados": [],
                 "divergencias_apelidos_manuais": [],
-                "anotacoes_sync_ativa": bool(ctx.HISTORY_ANNOTATIONS_SYNC_ENABLED),
+                "anotacoes_sync_ativa": bool(services.history_annotations_sync_enabled()),
                 "somente_anotacoes_sincronizadas": True,
             },
         }
 
 
+    def _history_event_summary(event: Dict[str, Any]) -> Dict[str, Any]:
+        summary = event.get("resumo")
+        if isinstance(summary, dict):
+            return dict(summary)
+        comparison = event.get("comparacao")
+        comparison = comparison if isinstance(comparison, dict) else {}
+        categories = (
+            "apelidos_atualizados",
+            "apelidos_sem_atualizacao",
+            "sem_acesso_14_dias",
+            "ausentes_no_endpoint",
+            "ausentes_em_detalhes",
+            "divergencias_local",
+            "correspondencias_ambiguas",
+            "registros_ambiguos",
+            "divergencias_apelidos_manuais",
+            "series_sem_mapeamento",
+        )
+        result = {"total_endpoint": comparison.get("total_endpoint", 0)}
+        for category in categories:
+            values = comparison.get(category)
+            result[category] = len(values) if isinstance(values, list) else 0
+        return result
+
+
     @router.get("/api/historico-comparacoes")
     def get_historico_comparacoes():
         eventos = []
-        history = ctx.load_comparison_history()
-        annotations = _latest_annotation_records(history)
+        history = services.load_comparison_history()
+        annotations = _latest_annotation_records()
         local_event_ids = set()
         for evento in history:
             if not isinstance(evento, dict):
@@ -630,39 +547,45 @@ def create_inventory_history_router(ctx):
             event_id = str(evento.get("id") or "")
             if event_id:
                 local_event_ids.add(event_id)
-            event_view = ctx.comparison_history_for_display(evento)
-            _merge_shared_annotations(event_view, annotations)
-            comparison = event_view.get("comparacao")
+            comparison = evento.get("comparacao")
             comparison = comparison if isinstance(comparison, dict) else {}
             eventos.append({
-                "id": event_view.get("id"),
-                "horario": event_view.get("horario"),
-                "tipo": _comparison_event_type(event_view),
-                "arquivos_enviados": _history_display_files(event_view.get("arquivos_enviados")),
+                "id": evento.get("id"),
+                "horario": evento.get("horario"),
+                "tipo": _comparison_event_type(evento),
+                "arquivos_enviados": _history_display_files(evento.get("arquivos_enviados")),
                 "arquivos_restaurados": _history_display_files(comparison.get("arquivos_restaurados")),
                 "restauracao_de": comparison.get("restauracao_de", {}),
                 "restauravel": _comparison_event_has_restorable_backup(evento),
-                "resumo": event_view.get("resumo", {}),
+                "resumo": _history_event_summary(evento),
             })
         shared_event_ids = {event_id for event_id, _ in annotations}
         for event_id in shared_event_ids - local_event_ids:
-            event_view = _synthetic_annotation_event(event_id, annotations)
-            if event_view is None:
+            event_records = [
+                record for (record_event_id, _), record in annotations.items()
+                if record_event_id == event_id and record.get("anotacao")
+            ]
+            if not event_records:
                 continue
+            summary: Dict[str, int] = {}
+            for record in event_records:
+                category = str(record.get("categoria") or "apelidos_sem_atualizacao")
+                summary[category] = summary.get(category, 0) + 1
+            event_time = next((record.get("horario") for record in event_records if record.get("horario")), "")
             eventos.append({
-                "id": event_view["id"],
-                "horario": event_view["horario"],
+                "id": event_id,
+                "horario": event_time,
                 "tipo": "atualizacao",
                 "arquivos_enviados": {},
                 "arquivos_restaurados": {},
                 "restauracao_de": {},
                 "restauravel": False,
                 "somente_anotacoes_sincronizadas": True,
-                "resumo": event_view["resumo"],
+                "resumo": summary,
             })
         def event_timestamp(item: Dict[str, Any]) -> float:
             try:
-                return ctx.datetime.fromisoformat(str(item.get("horario") or "").replace("Z", "+00:00")).timestamp()
+                return datetime.fromisoformat(str(item.get("horario") or "").replace("Z", "+00:00")).timestamp()
             except (TypeError, ValueError, OverflowError):
                 return float("-inf")
         eventos.sort(key=event_timestamp, reverse=True)
@@ -674,18 +597,18 @@ def create_inventory_history_router(ctx):
         try:
             selected_date = date.fromisoformat(data)
         except ValueError:
-            raise ctx.HTTPException(status_code=400, detail="Selecione uma data válida para exportação.") from None
+            raise HTTPException(status_code=400, detail="Selecione uma data válida para exportação.") from None
 
-        history = ctx.load_comparison_history()
+        history = services.load_comparison_history()
         annotations = _latest_annotation_records(history)
         display_events = []
         for event in history:
             if isinstance(event, dict) and str(event.get("horario") or "")[:10] == selected_date.isoformat():
-                event_view = ctx.comparison_history_for_display(event)
+                event_view = services.comparison_history_for_display(event)
                 _merge_shared_annotations(event_view, annotations)
                 display_events.append(event_view)
         if not display_events:
-            raise ctx.HTTPException(status_code=404, detail="Não há registros de planilhas na data selecionada.")
+            raise HTTPException(status_code=404, detail="Não há registros de planilhas na data selecionada.")
         display_events.sort(key=_export_event_timestamp)
 
         event_counts = {"atualizacao": 0, "restauracao": 0}
@@ -952,16 +875,16 @@ def create_inventory_history_router(ctx):
     @router.get("/api/historico-comparacoes/{evento_id}")
     def get_comparacao_historica(evento_id: str):
         evento = next(
-            (item for item in ctx.load_comparison_history() if isinstance(item, dict) and item.get("id") == evento_id),
+            (item for item in services.load_comparison_history() if isinstance(item, dict) and item.get("id") == evento_id),
             None,
         )
         annotations = _latest_annotation_records()
         if evento is None:
             event_view = _synthetic_annotation_event(evento_id, annotations)
             if event_view is None:
-                raise ctx.HTTPException(status_code=404, detail="O resultado selecionado não existe no histórico de planilhas.")
+                raise HTTPException(status_code=404, detail="O resultado selecionado não existe no histórico de planilhas.")
             return {"evento": event_view}
-        event_view = ctx.comparison_history_for_display(evento)
+        event_view = services.comparison_history_for_display(evento)
         _merge_shared_annotations(event_view, annotations)
         return {"evento": event_view}
 
@@ -973,10 +896,12 @@ def create_inventory_history_router(ctx):
         payload: ComparisonAnnotationPayload,
     ):
         event = next(
-            (item for item in ctx.load_comparison_history() if isinstance(item, dict) and item.get("id") == evento_id),
+            (item for item in services.load_comparison_history() if isinstance(item, dict) and item.get("id") == evento_id),
             None,
         )
         annotation_row = None
+        annotation_category = "apelidos_sem_atualizacao"
+        annotation_line_hash = None
         if event is not None:
             comparison = event.get("comparacao")
             if isinstance(comparison, dict):
@@ -987,13 +912,13 @@ def create_inventory_history_router(ctx):
                     for index, comparison_item in enumerate(items):
                         if not isinstance(comparison_item, dict):
                             continue
-                        stable_id = ctx.comparison_annotation_item_id(
+                        stable_id = services.comparison_annotation_item_id(
                             evento_id, category, index, comparison_item
                         )
                         if stable_id == item_id:
                             annotation_row = dict(comparison_item)
                             annotation_row["anotacao_id"] = stable_id
-                            annotation_row["categoria"] = category
+                            annotation_category = category
                             break
                     if annotation_row is not None:
                         break
@@ -1005,21 +930,24 @@ def create_inventory_history_router(ctx):
                 ),
                 None,
             )
+            if isinstance(annotation_row, dict):
+                annotation_category = str(annotation_row.get("categoria") or annotation_category)
+                annotation_line_hash = annotation_row.get("linha_hash")
         if annotation_row is None:
-            raise ctx.HTTPException(status_code=404, detail="A linha selecionada não existe neste resultado.")
+            raise HTTPException(status_code=404, detail="A linha selecionada não existe neste resultado.")
 
         def update_annotation(history):
             if not isinstance(history, list):
-                raise ctx.HTTPException(status_code=500, detail="O histórico de planilhas não contém uma lista válida.")
+                raise HTTPException(status_code=500, detail="O histórico de planilhas não contém uma lista válida.")
             event = next(
                 (item for item in history if isinstance(item, dict) and item.get("id") == evento_id),
                 None,
             )
             if event is None:
-                raise ctx.HTTPException(status_code=404, detail="A atualização selecionada não existe mais no histórico.")
+                raise HTTPException(status_code=404, detail="A atualização selecionada não existe mais no histórico.")
             comparison = event.get("comparacao")
             if not isinstance(comparison, dict):
-                raise ctx.HTTPException(status_code=404, detail="A linha selecionada não existe neste resultado.")
+                raise HTTPException(status_code=404, detail="A linha selecionada não existe neste resultado.")
             for category in _ANNOTATABLE_COMPARISON_CATEGORIES:
                 items = comparison.get(category)
                 if not isinstance(items, list):
@@ -1027,40 +955,75 @@ def create_inventory_history_router(ctx):
                 for index, comparison_item in enumerate(items):
                     if not isinstance(comparison_item, dict):
                         continue
-                    stable_id = ctx.comparison_annotation_item_id(
+                    stable_id = services.comparison_annotation_item_id(
                         evento_id, category, index, comparison_item
                     )
                     if stable_id == item_id:
                         comparison_item["anotacao_id"] = stable_id
                         comparison_item["anotacao"] = payload.anotacao
                         return history
-            raise ctx.HTTPException(status_code=404, detail="A linha selecionada não existe neste resultado.")
+            raise HTTPException(status_code=404, detail="A linha selecionada não existe neste resultado.")
 
+        category = annotation_category
+        record_values = {
+            "event_id": evento_id,
+            "event_time": str(event.get("horario") or "") if event is not None else str(annotation_row.get("horario") or ""),
+            "item_id": item_id,
+            "serie": str(annotation_row.get("serie") or ""),
+            "computador": str(annotation_row.get("computador") or annotation_row.get("chave") or ""),
+            "motivo": str(annotation_row.get("motivo") or annotation_row.get("mensagem") or annotation_row.get("tipo") or ""),
+            "anotacao": payload.anotacao,
+            "categoria": category,
+            "linha_hash": annotation_line_hash or services.history_annotation_row_fingerprint(category, annotation_row),
+        }
+        record = services.build_history_annotation_record(**record_values)
+        pending_path = services.history_annotation_record_path(
+            services.local_annotation_outbox_directory(),
+            evento_id,
+            item_id,
+        )
         try:
-            if event is not None:
-                with ctx.COMPARISON_HISTORY_LOCK:
-                    ctx._atomic_json_update(ctx.COMPARISON_HISTORY_FILE, update_annotation, [])
-            ctx.save_history_annotation(
-                ctx.HISTORY_ANNOTATIONS_DIR,
-                event_id=evento_id,
-                event_time=str(event.get("horario") or "") if event is not None else str(annotation_row.get("horario") or ""),
-                item_id=item_id,
-                serie=str(annotation_row.get("serie") or ""),
-                computador=str(annotation_row.get("computador") or annotation_row.get("chave") or ""),
-                motivo=str(annotation_row.get("motivo") or annotation_row.get("mensagem") or annotation_row.get("tipo") or ""),
-                anotacao=payload.anotacao,
-                categoria=str(annotation_row.get("categoria") or "apelidos_sem_atualizacao"),
-                linha_hash=ctx.history_annotation_row_fingerprint(
-                    str(annotation_row.get("categoria") or "apelidos_sem_atualizacao"),
-                    annotation_row,
-                ),
-            )
-        except ctx.HTTPException:
+            with services.comparison_history_lock:
+                targets = [pending_path]
+                if event is not None:
+                    targets.append(services.comparison_history_path())
+                with services.atomic_file_transaction(services.transaction_root(), targets) as transaction:
+                    if event is not None:
+                        transaction.update_json(
+                            services.comparison_history_path(),
+                            update_annotation,
+                            [],
+                        )
+                    transaction.stage_bytes(
+                        pending_path,
+                        json.dumps(record, ensure_ascii=False, indent=2).encode("utf-8"),
+                        lambda path: json.loads(path.read_text(encoding="utf-8")),
+                    )
+                    transaction.commit()
+        except HTTPException:
             raise
         except Exception:
-            status = 503 if ctx.HISTORY_ANNOTATIONS_SYNC_ENABLED else 500
-            raise ctx.HTTPException(status_code=status, detail="Não foi possível salvar e sincronizar a anotação.") from None
-        return {"sucesso": True, "anotacao": payload.anotacao}
+            status = 503 if services.history_annotations_sync_enabled() else 500
+            logger.exception(
+                "Falha ao salvar anotação local (evento=%s, item=%s).",
+                evento_id,
+                item_id,
+            )
+            raise HTTPException(status_code=status, detail="Não foi possível salvar a anotação localmente.") from None
+
+        synchronized = _sync_annotation_record(record)
+        sync_status = (
+            "sincronizada"
+            if services.history_annotations_sync_enabled() and synchronized
+            else "pendente"
+            if services.history_annotations_sync_enabled()
+            else "local"
+        )
+        return {
+            "sucesso": True,
+            "anotacao": payload.anotacao,
+            "sincronizacao": sync_status,
+        }
 
 
     @router.get("/api/historico-comparacoes/{evento_id}/restauracao")
@@ -1090,8 +1053,8 @@ def create_inventory_history_router(ctx):
 
         try:
             context = _build_comparison_restore_context(evento_id)
-            if not ctx.hmac.compare_digest(payload.preview_token, context["preview_token"]):
-                raise ctx.HTTPException(
+            if not hmac.compare_digest(payload.preview_token, context["preview_token"]):
+                raise HTTPException(
                     status_code=409,
                     detail="Os arquivos ativos ou o backup mudaram desde a prévia. Atualize a prévia antes de restaurar.",
                 )
@@ -1099,28 +1062,28 @@ def create_inventory_history_router(ctx):
                 context["backup_files"][role]["sha256"] == context["current_hashes"][role]
                 for role in context["backup_files"]
             ):
-                raise ctx.HTTPException(status_code=409, detail="Os dois inventários ativos já correspondem ao backup selecionado.")
+                raise HTTPException(status_code=409, detail="Os dois inventários ativos já correspondem ao backup selecionado.")
 
-            restoration_time = ctx.datetime.now().astimezone().isoformat(timespec="seconds")
-            restoration_id = ctx.uuid.uuid4().hex
-            persistent_backup_dir = ctx.UPLOAD_BACKUPS_DIR / f"{ctx.datetime.now().strftime('%Y%m%d-%H%M%S')}-{ctx.uuid.uuid4().hex[:8]}"
+            restoration_time = datetime.now().astimezone().isoformat(timespec="seconds")
+            restoration_id = uuid.uuid4().hex
+            persistent_backup_dir = services.upload_backups_directory() / f"{datetime.now().strftime('%Y%m%d-%H%M%S')}-{uuid.uuid4().hex[:8]}"
             target_files = {
-                "endpoint": ctx.ENDPOINT_UPLOAD_FILE,
-                "detalhes": ctx.DETAILS_UPLOAD_FILE,
+                "endpoint": services.endpoint_upload_path(),
+                "detalhes": services.details_upload_path(),
             }
             source_event = context["evento"]
             source_comparison = source_event.get("comparacao") or {}
             source_backup_relative = source_comparison.get("backup_diretorio")
             transaction_targets = [
                 *target_files.values(),
-                ctx.COMPARISON_HISTORY_FILE,
-                ctx.MODIFIED_APELIDOS_FILE,
+                services.comparison_history_path(),
+                services.modified_aliases_path(),
             ]
 
-            with ctx.inventory_state_transaction(transaction_targets) as transaction:
+            with services.inventory_state_transaction(transaction_targets) as transaction:
                 _, locked_current_hashes = _current_inventory_snapshot()
                 if locked_current_hashes != context["current_hashes"]:
-                    raise ctx.HTTPException(
+                    raise HTTPException(
                         status_code=409,
                         detail="Os inventários ativos mudaram desde a prévia. Atualize a prévia antes de restaurar.",
                     )
@@ -1133,32 +1096,39 @@ def create_inventory_history_router(ctx):
                     expected_current_hash = context["current_hashes"][role]
                     if not target_path.is_file():
                         if expected_current_hash is not None:
-                            raise ctx.TransactionConflictError(f"'{target_path.name}' mudou durante a restauração.")
+                            raise TransactionConflictError(f"'{target_path.name}' mudou durante a restauração.")
                         missing_current_files[role] = True
                         invalid_current_files[role] = False
                         continue
                     if expected_current_hash is None:
-                        raise ctx.TransactionConflictError(f"'{target_path.name}' mudou durante a restauração.")
+                        raise TransactionConflictError(f"'{target_path.name}' mudou durante a restauração.")
                     backup_path = role_backup_dir / target_path.name
-                    ctx.shutil.copy2(target_path, backup_path)
+                    shutil.copy2(target_path, backup_path)
                     with backup_path.open("r+b") as backup_file:
                         backup_file.flush()
-                        ctx.os.fsync(backup_file.fileno())
+                        os.fsync(backup_file.fileno())
                     if (
-                        not ctx.filecmp.cmp(target_path, backup_path, shallow=False)
+                        not filecmp.cmp(target_path, backup_path, shallow=False)
                         or _sha256_file(backup_path) != expected_current_hash
                     ):
-                        raise ctx.TransactionConflictError(f"A cópia de segurança de '{target_path.name}' não passou na validação.")
+                        raise TransactionConflictError(f"A cópia de segurança de '{target_path.name}' não passou na validação.")
                     missing_current_files[role] = False
                     try:
-                        ctx.validate_uploaded_workbook(backup_path.read_bytes(), role)
+                        services.validate_uploaded_workbook(backup_path.read_bytes(), role)
                         invalid_current_files[role] = False
+                    except (HTTPException, WorkbookSafetyError):
+                        invalid_current_files[role] = True
                     except Exception:
+                        logger.exception(
+                            "Falha inesperada ao validar backup durante restauração (evento=%s, fonte=%s).",
+                            evento_id,
+                            role,
+                        )
                         invalid_current_files[role] = True
 
                 _, backed_up_current_hashes = _current_inventory_snapshot()
                 if backed_up_current_hashes != context["current_hashes"]:
-                    raise ctx.TransactionConflictError("Um inventário ativo mudou durante a cópia de segurança.")
+                    raise TransactionConflictError("Um inventário ativo mudou durante a cópia de segurança.")
 
                 for role, target_path in target_files.items():
                     backup_bytes = context["backup_files"][role]["bytes"]
@@ -1166,13 +1136,17 @@ def create_inventory_history_router(ctx):
                     def validate_staged_backup(path: Path, current_role=role, expected_bytes=backup_bytes):
                         candidate_bytes = path.read_bytes()
                         if candidate_bytes != expected_bytes:
-                            raise ctx.WorkbookSafetyError("O arquivo preparado difere do backup validado.")
-                        ctx.validate_uploaded_workbook(candidate_bytes, current_role)
+                            raise WorkbookSafetyError("O arquivo preparado difere do backup validado.")
+                        services.validate_uploaded_workbook(candidate_bytes, current_role)
 
                     transaction.stage_bytes(target_path, backup_bytes, validate_staged_backup)
 
                 transaction.apply()
-                if not ctx.load_database(transaction_locked=True):
+                prepared_state = services.load_database(
+                    transaction_locked=True,
+                    publish=False,
+                )
+                if not isinstance(prepared_state, dict):
                     raise RuntimeError("O conjunto restaurado não pôde ser carregado pelo site.")
 
                 restored_files = {role: path.name for role, path in target_files.items()}
@@ -1188,8 +1162,8 @@ def create_inventory_history_router(ctx):
                     "arquivos_restaurados": restored_files,
                     "total_endpoint_restaurado": context["backup_files"]["endpoint"]["records"],
                     "total_detalhes_restaurado": context["backup_files"]["detalhes"]["records"],
-                    "total_equipamentos_carregados": ctx.stats_cache.get("total_equipamentos", 0),
-                    "backup_diretorio": str(persistent_backup_dir.relative_to(ctx.INPUT_DIR)),
+                    "total_equipamentos_carregados": prepared_state["stats_cache"].get("total_equipamentos", 0),
+                    "backup_diretorio": str(persistent_backup_dir.relative_to(services.input_directory())),
                     "backup_arquivos_ausentes": missing_current_files,
                     "backup_arquivos_invalidos": invalid_current_files,
                     "historico_salvo": True,
@@ -1225,16 +1199,17 @@ def create_inventory_history_router(ctx):
                         or current_source_comparison.get("backup_diretorio") != source_backup_relative
                         or current_source_event.get("horario") != source_event.get("horario")
                     ):
-                        raise ctx.HTTPException(
+                        raise HTTPException(
                             status_code=409,
                             detail="A atualização selecionada mudou ou foi removida do histórico. A restauração foi cancelada.",
                         )
-                    updated = ctx.deepcopy(history)
+                    updated = deepcopy(history)
                     updated.append(restoration_event)
                     return updated
 
-                transaction.update_json(ctx.COMPARISON_HISTORY_FILE, append_restoration, [])
+                transaction.update_json(services.comparison_history_path(), append_restoration, [])
                 transaction.commit()
+                services.publish_database_state(prepared_state)
 
             return {
                 "sucesso": True,
@@ -1250,17 +1225,17 @@ def create_inventory_history_router(ctx):
                     "total_equipamentos_carregados": restoration_comparison["total_equipamentos_carregados"],
                 },
             }
-        except ctx.HTTPException:
+        except HTTPException:
             raise
-        except ctx.FileBusyError as error:
-            raise ctx.HTTPException(status_code=409, detail=str(error)) from error
-        except ctx.TransactionConflictError as error:
-            raise ctx.HTTPException(status_code=409, detail=f"Um arquivo mudou durante a restauração e nada foi sobrescrito: {error}") from error
-        except (ctx.FileTransactionError, ctx.WorkbookSafetyError) as error:
-            raise ctx.HTTPException(status_code=500, detail=f"Não foi possível concluir a restauração; os arquivos anteriores foram recuperados. {error}") from error
+        except FileBusyError as error:
+            raise HTTPException(status_code=409, detail=str(error)) from error
+        except TransactionConflictError as error:
+            raise HTTPException(status_code=409, detail=f"Um arquivo mudou durante a restauração e nada foi sobrescrito: {error}") from error
+        except (FileTransactionError, WorkbookSafetyError) as error:
+            raise HTTPException(status_code=500, detail=f"Não foi possível concluir a restauração; os arquivos anteriores foram recuperados. {error}") from error
         except Exception:
-            print("[ERRO] Falha ao restaurar o conjunto de planilhas.")
-            raise ctx.HTTPException(status_code=500, detail="Falha ao restaurar o conjunto; os arquivos anteriores foram recuperados.") from None
+            logger.exception("Falha inesperada ao restaurar conjunto de planilhas (evento=%s).", evento_id)
+            raise HTTPException(status_code=500, detail="Falha ao restaurar o conjunto; os arquivos anteriores foram recuperados.") from None
 
 
     @router.post("/api/historico-comparacoes/{evento_id}/apelido-manual/{serial}")
@@ -1271,52 +1246,52 @@ def create_inventory_history_router(ctx):
     ):
         acao = str(payload.acao or "").strip().lower()
         if acao not in {"manter", "excluir"}:
-            raise ctx.HTTPException(status_code=400, detail="Escolha manter ou excluir a alteração manual.")
+            raise HTTPException(status_code=400, detail="Escolha manter ou excluir a alteração manual.")
 
-        serial_key = ctx.normalize_reference_value(serial)
+        serial_key = services.normalize_reference_value(serial)
         if not serial_key:
-            raise ctx.HTTPException(status_code=400, detail="A série informada é inválida.")
+            raise HTTPException(status_code=400, detail="A série informada é inválida.")
 
         event = next(
-            (item for item in ctx.load_comparison_history() if isinstance(item, dict) and item.get("id") == evento_id),
+            (item for item in services.load_comparison_history() if isinstance(item, dict) and item.get("id") == evento_id),
             None,
         )
         if event is None:
-            raise ctx.HTTPException(status_code=404, detail="A atualização selecionada não existe no histórico.")
+            raise HTTPException(status_code=404, detail="A atualização selecionada não existe no histórico.")
         comparison = event.get("comparacao")
         divergences = comparison.get("divergencias_apelidos_manuais") if isinstance(comparison, dict) else None
         divergence = next(
             (
                 item for item in divergences or []
-                if isinstance(item, dict) and ctx.normalize_reference_value(item.get("serie")) == serial_key
+                if isinstance(item, dict) and services.normalize_reference_value(item.get("serie")) == serial_key
             ),
             None,
         )
         if divergence is None:
-            raise ctx.HTTPException(status_code=404, detail="A divergência de apelido não existe neste registro.")
+            raise HTTPException(status_code=404, detail="A divergência de apelido não existe neste registro.")
         if divergence.get("resolucao") != "pendente":
-            raise ctx.HTTPException(status_code=409, detail="Esta divergência já foi resolvida no histórico.")
+            raise HTTPException(status_code=409, detail="Esta divergência já foi resolvida no histórico.")
 
         expected_manual_alias = str(divergence.get("apelido_manual") or "").strip()
         target_serial = next(
             (
                 str(item.get("serial") or key).strip().upper()
-                for key, item in ctx.equipamentos_cache.items()
-                if ctx.normalize_reference_value(item.get("serial") or key) == serial_key
+                for key, item in services.get_equipment_snapshot().items()
+                if services.normalize_reference_value(item.get("serial") or key) == serial_key
             ),
             str(serial).strip().upper(),
         )
-        targets = [ctx.COMPARISON_HISTORY_FILE, ctx.MODIFIED_APELIDOS_FILE]
+        targets = [services.comparison_history_path(), services.modified_aliases_path()]
         if acao == "excluir":
-            details_file = ctx.get_equipamentos_template_file()
+            details_file = services.get_equipment_template_file()
             if details_file is None or not details_file.is_file():
-                raise ctx.HTTPException(status_code=404, detail="A planilha atual na Simpress não foi encontrada.")
+                raise HTTPException(status_code=404, detail="A planilha atual na Simpress não foi encontrada.")
             targets.append(details_file)
 
-        with ctx.inventory_state_transaction(targets) as transaction:
-            current_aliases = ctx._manual_aliases_by_serial(ctx.load_modified_apelidos())
+        with services.inventory_state_transaction(targets) as transaction:
+            current_aliases = services.manual_aliases_by_serial(services.load_modified_apelidos())
             if serial_key not in current_aliases or current_aliases[serial_key] != expected_manual_alias:
-                raise ctx.HTTPException(
+                raise HTTPException(
                     status_code=409,
                     detail="O apelido manual mudou desde esta comparação. Atualize o histórico antes de decidir.",
                 )
@@ -1325,15 +1300,15 @@ def create_inventory_history_router(ctx):
                 def remove_manual_override(data):
                     if not isinstance(data, dict):
                         raise RuntimeError("O arquivo de apelidos manuais não contém um objeto válido.")
-                    keys = [key for key in data if ctx.normalize_reference_value(key) == serial_key]
+                    keys = [key for key in data if services.normalize_reference_value(key) == serial_key]
                     if len(keys) != 1 or str(data.get(keys[0]) or "").strip() != expected_manual_alias:
-                        raise ctx.HTTPException(status_code=409, detail="O override manual mudou desde esta comparação.")
+                        raise HTTPException(status_code=409, detail="O override manual mudou desde esta comparação.")
                     updated = dict(data)
                     for key in keys:
                         updated.pop(key, None)
                     return updated
 
-                transaction.update_json(ctx.MODIFIED_APELIDOS_FILE, remove_manual_override, {})
+                transaction.update_json(services.modified_aliases_path(), remove_manual_override, {})
 
             def mark_divergence_resolved(history):
                 if not isinstance(history, list):
@@ -1341,32 +1316,32 @@ def create_inventory_history_router(ctx):
                 updated = list(history)
                 stored_event = next((item for item in updated if item.get("id") == evento_id), None)
                 if stored_event is None:
-                    raise ctx.HTTPException(status_code=409, detail="A atualização foi removida do histórico.")
+                    raise HTTPException(status_code=409, detail="A atualização foi removida do histórico.")
                 stored_comparison = stored_event.get("comparacao")
                 stored_divergences = stored_comparison.get("divergencias_apelidos_manuais") if isinstance(stored_comparison, dict) else None
                 stored_divergence = next(
                     (
                         item for item in stored_divergences or []
-                        if isinstance(item, dict) and ctx.normalize_reference_value(item.get("serie")) == serial_key
+                        if isinstance(item, dict) and services.normalize_reference_value(item.get("serie")) == serial_key
                     ),
                     None,
                 )
                 if stored_divergence is None or stored_divergence.get("resolucao") != "pendente":
-                    raise ctx.HTTPException(status_code=409, detail="A divergência já foi alterada no histórico.")
+                    raise HTTPException(status_code=409, detail="A divergência já foi alterada no histórico.")
                 stored_divergence["resolucao"] = acao
-                stored_divergence["horario_resolucao"] = ctx.datetime.now().astimezone().isoformat(timespec="seconds")
+                stored_divergence["horario_resolucao"] = datetime.now().astimezone().isoformat(timespec="seconds")
                 return updated
 
-            transaction.update_json(ctx.COMPARISON_HISTORY_FILE, mark_divergence_resolved, [])
+            transaction.update_json(services.comparison_history_path(), mark_divergence_resolved, [])
             transaction.apply()
-            if acao == "excluir" and not ctx.load_database(transaction_locked=True):
+            if acao == "excluir" and not services.load_database(transaction_locked=True):
                 raise RuntimeError("A base não pôde ser recarregada após excluir o override manual.")
             transaction.commit()
 
         equipment = next(
             (
-                item for key, item in ctx.equipamentos_cache.items()
-                if ctx.normalize_reference_value(item.get("serial") or key) == serial_key
+                item for key, item in services.get_equipment_snapshot().items()
+                if services.normalize_reference_value(item.get("serial") or key) == serial_key
             ),
             None,
         )
@@ -1381,37 +1356,81 @@ def create_inventory_history_router(ctx):
             "equipamento": {
                 key: value for key, value in equipment.items() if not key.startswith("_")
             } if equipment else None,
-            "total_modificados": len(ctx.load_modified_apelidos()),
+            "total_modificados": len(services.load_modified_apelidos()),
         }
 
 
     @router.delete("/api/historico-comparacoes/{evento_id}")
     def excluir_comparacao_historica(evento_id: str):
-        history = ctx.load_comparison_history()
-        if not any(isinstance(item, dict) and item.get("id") == evento_id for item in history):
-            raise ctx.HTTPException(status_code=404, detail="A atualização selecionada não existe mais no histórico.")
+        history = services.load_comparison_history()
+        event = next((item for item in history if isinstance(item, dict) and item.get("id") == evento_id), None)
+        if event is None:
+            raise HTTPException(status_code=404, detail="A atualização selecionada não existe mais no histórico.")
+        tombstones = []
+        for (record_event_id, _), record in _latest_annotation_records(history).items():
+            if record_event_id != evento_id:
+                continue
+            tombstones.append(services.build_history_annotation_record(
+                event_id=evento_id,
+                event_time=str(record.get("horario") or event.get("horario") or ""),
+                item_id=record["item_id"],
+                serie=str(record.get("serie") or ""),
+                computador=str(record.get("computador") or ""),
+                motivo=str(record.get("motivo") or ""),
+                anotacao="",
+                categoria=str(record.get("categoria") or "apelidos_sem_atualizacao"),
+                linha_hash=record.get("linha_hash"),
+            ))
+
+        pending_paths = [
+            services.history_annotation_record_path(
+                services.local_annotation_outbox_directory(),
+                record["evento_id"],
+                record["item_id"],
+            )
+            for record in tombstones
+        ]
         try:
-            for (record_event_id, _), record in _latest_annotation_records(history).items():
-                if record_event_id == evento_id:
-                    ctx.save_history_annotation(
-                        ctx.HISTORY_ANNOTATIONS_DIR,
-                        event_id=evento_id,
-                        event_time=str(record.get("horario") or ""),
-                        item_id=record["item_id"],
-                        serie=str(record.get("serie") or ""),
-                        computador=str(record.get("computador") or ""),
-                        motivo=str(record.get("motivo") or ""),
-                        anotacao="",
-                        categoria=str(record.get("categoria") or "apelidos_sem_atualizacao"),
-                        linha_hash=record.get("linha_hash"),
-                    )
+            with services.comparison_history_lock:
+                with services.atomic_file_transaction(
+                    services.transaction_root(),
+                    [services.comparison_history_path(), *pending_paths],
+                ) as transaction:
+                    result: Dict[str, Any] = {"total": None}
+
+                    def remove_event(rows):
+                        if not isinstance(rows, list) or any(not isinstance(row, dict) for row in rows):
+                            raise HTTPException(status_code=500, detail="O histórico de planilhas não contém uma lista válida.")
+                        updated = [row for row in rows if row.get("id") != evento_id]
+                        if len(updated) == len(rows):
+                            raise HTTPException(status_code=404, detail="A atualização selecionada não existe mais no histórico.")
+                        result["total"] = len(updated)
+                        return updated
+
+                    transaction.update_json(services.comparison_history_path(), remove_event, [])
+                    for record, pending_path in zip(tombstones, pending_paths):
+                        transaction.stage_bytes(
+                            pending_path,
+                            json.dumps(record, ensure_ascii=False, indent=2).encode("utf-8"),
+                            lambda path: json.loads(path.read_text(encoding="utf-8")),
+                        )
+                    transaction.commit()
+        except HTTPException:
+            raise
         except Exception:
-            status = 503 if ctx.HISTORY_ANNOTATIONS_SYNC_ENABLED else 500
-            raise ctx.HTTPException(status_code=status, detail="Não foi possível limpar as anotações sincronizadas.") from None
-        total = ctx.delete_comparison_history_entry(evento_id)
-        if total is None:
-            raise ctx.HTTPException(status_code=404, detail="A atualização selecionada não existe mais no histórico.")
-        return {"sucesso": True, "total": total}
+            logger.exception("Falha ao remover evento do histórico (evento=%s).", evento_id)
+            status = 503 if services.history_annotations_sync_enabled() else 500
+            raise HTTPException(status_code=status, detail="Não foi possível remover o resultado do histórico localmente.") from None
+
+        sync_results = [_sync_annotation_record(record) for record in tombstones]
+        pending_count = sum(not result for result in sync_results)
+        return {
+            "sucesso": True,
+            "total": result["total"],
+            "sincronizacao": "pendente" if pending_count else (
+                "sincronizada" if services.history_annotations_sync_enabled() else "local"
+            ),
+        }
 
     return router, {
         '_build_comparison_restore_context': _build_comparison_restore_context,
@@ -1421,6 +1440,8 @@ def create_inventory_history_router(ctx):
         '_current_inventory_snapshot': _current_inventory_snapshot,
         '_sha256_file': _sha256_file,
         '_validated_comparison_backup_files': _validated_comparison_backup_files,
+        'flush_pending_history_annotations': flush_pending_history_annotations,
+        'migrate_legacy_history_annotations': migrate_legacy_history_annotations,
         'excluir_comparacao_historica': excluir_comparacao_historica,
         'exportar_historico_comparacoes_excel': exportar_historico_comparacoes_excel,
         'get_comparacao_historica': get_comparacao_historica,

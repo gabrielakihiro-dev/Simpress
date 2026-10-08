@@ -1,10 +1,67 @@
 """Transactional workflow for replacing and comparing inventory snapshots."""
 
 import asyncio
+import filecmp
+import logging
+import re
+import shutil
+import uuid
+from copy import deepcopy
+from dataclasses import dataclass
+from datetime import datetime
 from pathlib import Path
-from typing import Any, Dict
+from typing import Any, Callable, Dict, List, Optional
+
+from fastapi import HTTPException
+from integrity import (
+    FileBusyError,
+    FileTransactionError,
+    TransactionConflictError,
+    WorkbookSafetyError,
+)
 
 from domains.history_annotations import history_annotation_row_fingerprint
+
+
+logger = logging.getLogger(__name__)
+
+
+@dataclass(frozen=True)
+class InventoryUpdateServices:
+    """Explicit application services used by the inventory upload workflow."""
+
+    max_upload_bytes: Callable[[], int]
+    workbook_parse_admission: Callable[[], Any]
+    validate_uploaded_workbook: Callable[[bytes, str], Dict[str, Any]]
+    input_directory: Callable[[], Path]
+    endpoint_upload_file: Callable[[], Path]
+    details_upload_file: Callable[[], Path]
+    comparison_history_file: Callable[[], Path]
+    upload_backups_directory: Callable[[], Path]
+    history_annotations_directory: Callable[[], Path]
+    get_primary_equipment_file: Callable[[], Optional[Path]]
+    compare_uploaded_workbooks: Callable[..., Dict[str, Any]]
+    inventory_state_transaction: Callable[..., Any]
+    get_equipment_snapshot: Callable[[], Dict[str, Dict[str, Any]]]
+    snapshot_equipment_aliases: Callable[
+        [Dict[str, Dict[str, Any]]], Dict[str, Dict[str, str]]
+    ]
+    load_modified_apelidos: Callable[[], Dict[str, str]]
+    manual_alias_source_snapshots: Callable[..., List[Dict[str, Any]]]
+    normalize_reference_value: Callable[[Any], str]
+    upload_serial_value: Callable[[Dict[str, Any], str], Any]
+    upload_alias_value: Callable[[Dict[str, Any], str], Any]
+    load_database: Callable[..., Any]
+    read_endpoint_alias_index: Callable[[], Dict[str, Any]]
+    compare_equipment_aliases: Callable[
+        [Dict[str, Dict[str, str]], Dict[str, Dict[str, str]]], List[Dict[str, Any]]
+    ]
+    endpoint_alias_review_items: Callable[..., List[Dict[str, Any]]]
+    publish_database_state: Callable[[Dict[str, Any]], None]
+    comparison_history_for_display: Callable[[Dict[str, Any]], Dict[str, Any]]
+    load_history_annotations: Callable[[Path], List[Dict[str, Any]]]
+    comparison_annotation_item_id: Callable[..., str]
+    save_history_annotation: Callable[..., Dict[str, Any]]
 
 
 _ANNOTATABLE_COMPARISON_CATEGORIES = (
@@ -37,7 +94,7 @@ def _legacy_annotation(comparison: Dict[str, Any], category: str, index: int) ->
 
 
 def _copy_matching_history_annotations(
-    context: Any,
+    services: InventoryUpdateServices,
     previous_history: Any,
     new_event: Dict[str, Any],
 ) -> list[Dict[str, str]]:
@@ -51,7 +108,7 @@ def _copy_matching_history_annotations(
     shared_annotations_by_timestamp: Dict[
         tuple[str, str], tuple[str, Dict[str, Any]]
     ] = {}
-    for record in context.load_history_annotations(context.HISTORY_ANNOTATIONS_DIR):
+    for record in services.load_history_annotations(services.history_annotations_directory()):
         event_id = str(record.get("evento_id") or "")
         item_id = str(record.get("item_id") or "")
         if not event_id or not item_id:
@@ -101,7 +158,7 @@ def _copy_matching_history_annotations(
                 if not isinstance(annotation, str):
                     annotation = _legacy_annotation(previous_comparison, category, index)
                 if not isinstance(annotation, str) and event_id:
-                    item_id = context.comparison_annotation_item_id(event_id, category, index, item)
+                    item_id = services.comparison_annotation_item_id(event_id, category, index, item)
                     shared_record = shared_annotations.get((event_id, item_id))
                     if isinstance(shared_record, dict):
                         annotation = shared_record.get("anotacao")
@@ -187,7 +244,7 @@ def _copy_matching_history_annotations(
                 for key, value in item.items()
                 if key not in {"anotacao", "anotacao_id"}
             }
-            item_id = context.comparison_annotation_item_id(
+            item_id = services.comparison_annotation_item_id(
                 new_event_id, category, index, identity_item
             )
             item["anotacao_id"] = item_id
@@ -204,45 +261,52 @@ def _copy_matching_history_annotations(
     return copied
 
 
-async def read_uploaded_xlsx(upload: Any, role: str, context: Any) -> Dict[str, Any]:
+async def read_uploaded_xlsx(
+    upload: Any,
+    role: str,
+    services: InventoryUpdateServices,
+) -> Dict[str, Any]:
     """Validate one uploaded workbook and retain its safe display name and bytes."""
-    ctx = context
     display_role = {
         "endpoint": "Endpoint",
         "detalhes": "Simpress",
     }.get(role, role)
-    original_name = ctx.re.split(r"[/\\]", str(upload.filename or ""))[-1]
+    original_name = re.split(r"[/\\]", str(upload.filename or ""))[-1]
     if not original_name or Path(original_name).suffix.lower() != ".xlsx":
-        raise ctx.HTTPException(status_code=400, detail=f"Selecione um arquivo .xlsx válido para {display_role}.")
+        raise HTTPException(status_code=400, detail=f"Selecione um arquivo .xlsx válido para {display_role}.")
 
-    file_bytes = await upload.read(ctx.MAX_UPLOAD_BYTES + 1)
+    max_upload_bytes = services.max_upload_bytes()
+    file_bytes = await upload.read(max_upload_bytes + 1)
     if not file_bytes:
-        raise ctx.HTTPException(status_code=400, detail=f"O arquivo de {display_role} está vazio.")
-    if len(file_bytes) > ctx.MAX_UPLOAD_BYTES:
-        raise ctx.HTTPException(status_code=413, detail=f"O arquivo de {display_role} excede o limite de 30 MB.")
+        raise HTTPException(status_code=400, detail=f"O arquivo de {display_role} está vazio.")
+    if len(file_bytes) > max_upload_bytes:
+        raise HTTPException(status_code=413, detail=f"O arquivo de {display_role} excede o limite de 30 MB.")
 
-    parse_admission = getattr(ctx, "WORKBOOK_PARSE_ADMISSION", None)
+    parse_admission = services.workbook_parse_admission()
     if parse_admission is not None and not parse_admission.acquire(blocking=False):
-        raise ctx.HTTPException(status_code=503, detail="A análise de planilhas está ocupada. Tente novamente em instantes.")
+        raise HTTPException(status_code=503, detail="A análise de planilhas está ocupada. Tente novamente em instantes.")
     try:
-        table = await asyncio.to_thread(ctx.validate_uploaded_workbook, file_bytes, role)
+        table = await asyncio.to_thread(services.validate_uploaded_workbook, file_bytes, role)
     finally:
         if parse_admission is not None:
             parse_admission.release()
     return {"name": original_name, "bytes": file_bytes, "table": table}
 
-async def update_inventory_files(endpoint_file: Any, details_file: Any, context: Any):
+async def update_inventory_files(
+    endpoint_file: Any,
+    details_file: Any,
+    services: InventoryUpdateServices,
+):
     """Read uploads asynchronously and run workbook and transaction work off-loop."""
-    ctx = context
     uploads = [endpoint_file, details_file]
 
     try:
         staged = {
-            "endpoint": await read_uploaded_xlsx(endpoint_file, "endpoint", ctx),
-            "detalhes": await read_uploaded_xlsx(details_file, "detalhes", ctx),
+            "endpoint": await read_uploaded_xlsx(endpoint_file, "endpoint", services),
+            "detalhes": await read_uploaded_xlsx(details_file, "detalhes", services),
         }
 
-        worker = asyncio.create_task(asyncio.to_thread(_commit_inventory_files, staged, ctx))
+        worker = asyncio.create_task(asyncio.to_thread(_commit_inventory_files, staged, services))
         try:
             return await asyncio.shield(worker)
         except asyncio.CancelledError:
@@ -250,32 +314,37 @@ async def update_inventory_files(endpoint_file: Any, details_file: Any, context:
             try:
                 await asyncio.shield(worker)
             except Exception:
-                pass
+                logger.exception("Falha na atualização em segundo plano após cancelamento da solicitação.")
             raise
-    except ctx.HTTPException:
+    except HTTPException:
         raise
-    except ctx.FileBusyError as error:
-        raise ctx.HTTPException(status_code=409, detail=str(error)) from error
-    except ctx.TransactionConflictError as error:
-        raise ctx.HTTPException(status_code=500, detail=f"A recuperação detectou uma alteração externa em um arquivo e parou sem sobrescrevê-lo: {error}") from error
-    except (ctx.FileTransactionError, ctx.WorkbookSafetyError) as error:
-        raise ctx.HTTPException(status_code=500, detail=f"Não foi possível concluir a atualização; a transação restaurou os arquivos anteriores. {error}") from error
+    except FileBusyError as error:
+        raise HTTPException(status_code=409, detail=str(error)) from error
+    except TransactionConflictError as error:
+        raise HTTPException(status_code=500, detail=f"A recuperação detectou uma alteração externa em um arquivo e parou sem sobrescrevê-lo: {error}") from error
+    except (FileTransactionError, WorkbookSafetyError) as error:
+        raise HTTPException(status_code=500, detail=f"Não foi possível concluir a atualização; a transação restaurou os arquivos anteriores. {error}") from error
     except Exception:
-        print("[ERRO] Falha ao atualizar o conjunto de planilhas.")
-        raise ctx.HTTPException(status_code=500, detail="Falha ao atualizar as planilhas; os arquivos anteriores foram restaurados.") from None
+        logger.exception("Falha inesperada ao atualizar o conjunto de planilhas.")
+        raise HTTPException(status_code=500, detail="Falha ao atualizar as planilhas; os arquivos anteriores foram restaurados.") from None
     finally:
         for upload in uploads:
             await upload.close()
 
 
-def _commit_inventory_files(staged: Dict[str, Any], context: Any):
+def _commit_inventory_files(staged: Dict[str, Any], services: InventoryUpdateServices):
     """Validate, compare, replace, reload, and journal inventories in a worker thread."""
-    ctx = context
-    ctx.INPUT_DIR.mkdir(parents=True, exist_ok=True)
-    active_details_file = ctx.get_primary_equipment_file()
+    input_directory = services.input_directory()
+    endpoint_upload_file = services.endpoint_upload_file()
+    details_upload_file = services.details_upload_file()
+    comparison_history_file = services.comparison_history_file()
+    upload_backups_directory = services.upload_backups_directory()
+    history_annotations_directory = services.history_annotations_directory()
+    input_directory.mkdir(parents=True, exist_ok=True)
+    active_details_file = services.get_primary_equipment_file()
     target_files = {
-        "endpoint": ctx.ENDPOINT_UPLOAD_FILE,
-        "detalhes": ctx.DETAILS_UPLOAD_FILE,
+        "endpoint": endpoint_upload_file,
+        "detalhes": details_upload_file,
     }
     backup_sources = {
         "endpoint": target_files["endpoint"] if target_files["endpoint"].is_file() else None,
@@ -286,8 +355,8 @@ def _commit_inventory_files(staged: Dict[str, Any], context: Any):
         "endpoint": staged["endpoint"]["name"],
         "detalhes": staged["detalhes"]["name"],
     }
-    comparison_time = ctx.datetime.now().astimezone()
-    comparison = ctx.compare_uploaded_workbooks(
+    comparison_time = datetime.now().astimezone()
+    comparison = services.compare_uploaded_workbooks(
         staged["endpoint"]["table"],
         staged["detalhes"]["table"],
         uploaded_names,
@@ -297,13 +366,12 @@ def _commit_inventory_files(staged: Dict[str, Any], context: Any):
     transaction_targets = [
         *target_files.values(),
         *(path for path in backup_sources.values() if path is not None),
-        ctx.COMPARISON_HISTORY_FILE,
+        comparison_history_file,
     ]
-    with ctx.inventory_state_transaction(transaction_targets) as transaction:
-        with ctx.STATE_LOCK:
-            previous_aliases = ctx.snapshot_equipment_aliases(ctx.deepcopy(ctx.equipamentos_cache))
-        manual_overrides = ctx.load_modified_apelidos()
-        manual_alias_sources = ctx._manual_alias_source_snapshots(
+    with services.inventory_state_transaction(transaction_targets) as transaction:
+        previous_aliases = services.snapshot_equipment_aliases(services.get_equipment_snapshot())
+        manual_overrides = services.load_modified_apelidos()
+        manual_alias_sources = services.manual_alias_source_snapshots(
             manual_overrides,
             staged["endpoint"]["table"],
             staged["detalhes"]["table"],
@@ -312,7 +380,7 @@ def _commit_inventory_files(staged: Dict[str, Any], context: Any):
             item for item in manual_alias_sources
             if item["diverge_detalhes"] or item["diverge_invall"]
         ]
-        backup_dir = ctx.UPLOAD_BACKUPS_DIR / f"{ctx.datetime.now().strftime('%Y%m%d-%H%M%S')}-{ctx.uuid.uuid4().hex[:8]}"
+        backup_dir = upload_backups_directory / f"{datetime.now().strftime('%Y%m%d-%H%M%S')}-{uuid.uuid4().hex[:8]}"
         backup_dir.mkdir(parents=True, exist_ok=False)
 
         missing_backup_files = {}
@@ -326,8 +394,8 @@ def _commit_inventory_files(staged: Dict[str, Any], context: Any):
                 continue
             missing_backup_files[role] = False
             backup_path = role_dir / target_path.name
-            ctx.shutil.copy2(source_path, backup_path)
-            if not ctx.filecmp.cmp(source_path, backup_path, shallow=False):
+            shutil.copy2(source_path, backup_path)
+            if not filecmp.cmp(source_path, backup_path, shallow=False):
                 raise RuntimeError(f"A cópia de segurança de '{target_path.name}' não passou na validação.")
 
         for role, target_path in target_files.items():
@@ -336,20 +404,20 @@ def _commit_inventory_files(staged: Dict[str, Any], context: Any):
             def validate_staged_upload(path: Path, current_role=role, expected_bytes=upload_bytes) -> None:
                 candidate_bytes = path.read_bytes()
                 if candidate_bytes != expected_bytes:
-                    raise ctx.WorkbookSafetyError("O arquivo preparado difere do inventário validado.")
-                ctx.validate_uploaded_workbook(candidate_bytes, current_role)
+                    raise WorkbookSafetyError("O arquivo preparado difere do inventário validado.")
+                services.validate_uploaded_workbook(candidate_bytes, current_role)
 
             transaction.stage_bytes(target_path, upload_bytes, validate_staged_upload)
 
         transaction.apply()
-        prepared_state = ctx.load_database(transaction_locked=True, publish=False)
+        prepared_state = services.load_database(transaction_locked=True, publish=False)
         if not isinstance(prepared_state, dict):
             raise RuntimeError("As planilhas enviadas não puderam ser carregadas pelo site.")
 
-        endpoint_index = ctx.read_endpoint_alias_index()
+        endpoint_index = services.read_endpoint_alias_index()
         detail_serial_counts: Dict[str, int] = {}
         for record in staged["detalhes"]["table"].get("records", []):
-            serial_key = ctx.normalize_reference_value(ctx._upload_serial_value(record, "detalhes"))
+            serial_key = services.normalize_reference_value(services.upload_serial_value(record, "detalhes"))
             if serial_key:
                 detail_serial_counts[serial_key] = detail_serial_counts.get(serial_key, 0) + 1
         detail_serials = set(detail_serial_counts)
@@ -357,20 +425,20 @@ def _commit_inventory_files(staged: Dict[str, Any], context: Any):
             serial_key for serial_key, count in detail_serial_counts.items() if count > 1
         }
         comparison["horario_comparacao"] = comparison_time.isoformat(timespec="seconds")
-        comparison["apelidos_atualizados"] = ctx.compare_equipment_aliases(
+        comparison["apelidos_atualizados"] = services.compare_equipment_aliases(
             previous_aliases,
-            ctx.snapshot_equipment_aliases(prepared_state["equipamentos_cache"]),
+            services.snapshot_equipment_aliases(prepared_state["equipamentos_cache"]),
         )
         for change in comparison["apelidos_atualizados"]:
             change["arquivos_origem"] = dict(uploaded_names)
             change["horario"] = comparison["horario_comparacao"]
-        comparison["apelidos_sem_atualizacao"] = ctx.endpoint_alias_review_items(
+        comparison["apelidos_sem_atualizacao"] = services.endpoint_alias_review_items(
             endpoint_index, detail_serials, detail_duplicates
         )
         for record in staged["detalhes"]["table"].get("records", []):
-            alias_without_serial = ctx._upload_alias_value(record, "detalhes")
-            if alias_without_serial and not ctx.normalize_reference_value(
-                ctx._upload_serial_value(record, "detalhes")
+            alias_without_serial = services.upload_alias_value(record, "detalhes")
+            if alias_without_serial and not services.normalize_reference_value(
+                services.upload_serial_value(record, "detalhes")
             ):
                 comparison["apelidos_sem_atualizacao"].append({
                     "serie": "",
@@ -379,14 +447,14 @@ def _commit_inventory_files(staged: Dict[str, Any], context: Any):
                 })
         comparison["divergencias_apelidos_manuais"] = manual_divergences
         comparison["fontes_apelidos_manuais"] = manual_alias_sources
-        comparison["backup_diretorio"] = str(backup_dir.relative_to(ctx.INPUT_DIR))
+        comparison["backup_diretorio"] = str(backup_dir.relative_to(input_directory))
         comparison["backup_arquivos_ausentes"] = missing_backup_files
         comparison["backup_arquivos_invalidos"] = invalid_backup_files
         comparison["total_equipamentos_carregados"] = prepared_state["stats_cache"].get("total_equipamentos", 0)
         comparison["ultima_atualizacao"] = prepared_state["stats_cache"].get("ultima_atualizacao", "")
         comparison["arquivos_enviados"] = uploaded_names
         comparison["historico_salvo"] = True
-        event_id = ctx.uuid.uuid4().hex
+        event_id = uuid.uuid4().hex
         comparison["evento_id"] = event_id
         summary = {
             "total_endpoint": comparison.get("total_endpoint", 0),
@@ -412,9 +480,9 @@ def _commit_inventory_files(staged: Dict[str, Any], context: Any):
         def append_update(history):
             if not isinstance(history, list):
                 raise RuntimeError("O histórico de planilhas não contém uma lista válida.")
-            updated = ctx.deepcopy(history)
+            updated = deepcopy(history)
             refreshed_serials = {
-                ctx.normalize_reference_value(item.get("serie"))
+                services.normalize_reference_value(item.get("serie"))
                 for item in manual_alias_sources
                 if item.get("detalhes_encontrado") or item.get("invall_encontrado")
             }
@@ -430,22 +498,20 @@ def _commit_inventory_files(staged: Dict[str, Any], context: Any):
                     if (
                         isinstance(previous_divergence, dict)
                         and previous_divergence.get("resolucao", "pendente") == "pendente"
-                        and ctx.normalize_reference_value(previous_divergence.get("serie")) in refreshed_serials
+                        and services.normalize_reference_value(previous_divergence.get("serie")) in refreshed_serials
                     ):
                         previous_divergence["resolucao"] = "substituida"
                         previous_divergence["horario_resolucao"] = comparison["horario_comparacao"]
-            copied_annotations[:] = _copy_matching_history_annotations(
-                ctx, updated, history_entry
-            )
+            copied_annotations[:] = _copy_matching_history_annotations(services, updated, history_entry)
             updated.append(history_entry)
             return updated
 
-        transaction.update_json(ctx.COMPARISON_HISTORY_FILE, append_update, [])
+        transaction.update_json(comparison_history_file, append_update, [])
         transaction.commit()
         for copied_annotation in copied_annotations:
             try:
-                ctx.save_history_annotation(
-                    ctx.HISTORY_ANNOTATIONS_DIR,
+                services.save_history_annotation(
+                    history_annotations_directory,
                     event_id=event_id,
                     event_time=history_entry["horario"],
                     item_id=copied_annotation["item_id"],
@@ -459,10 +525,16 @@ def _commit_inventory_files(staged: Dict[str, Any], context: Any):
             except Exception:
                 # The annotation is already in local history and will be retried
                 # into shared storage when that event is next opened.
+                logger.exception(
+                    "Anotação copiada permaneceu no histórico local; sincronização pendente "
+                    "(evento=%s, item=%s).",
+                    event_id,
+                    copied_annotation["item_id"],
+                )
                 continue
-        ctx.publish_database_state(prepared_state)
+        services.publish_database_state(prepared_state)
 
-    historical_view = ctx.comparison_history_for_display(history_entry)
+    historical_view = services.comparison_history_for_display(history_entry)
     historical_comparison = dict(historical_view.get("comparacao") or {})
     historical_comparison["evento_id"] = event_id
     historical_comparison["historico_salvo"] = True

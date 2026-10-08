@@ -67,3 +67,4 @@ def resolve_history_annotations_dir(base_dir: Path, environment=None):
 
 
 HISTORY_ANNOTATIONS_DIR, HISTORY_ANNOTATIONS_SYNC_ENABLED = resolve_history_annotations_dir(BASE_DIR)
+LOCAL_HISTORY_ANNOTATION_OUTBOX_DIR = STATE_DIR / "anotacoes_historico_pendentes"

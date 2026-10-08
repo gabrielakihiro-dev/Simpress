@@ -1,24 +1,29 @@
 """Read-only routes that describe local application configuration and readiness."""
 
+from dataclasses import dataclass
+from typing import Any, Callable, Dict
+
 from fastapi import APIRouter
 
 
-def create_system_router(ctx):
+@dataclass(frozen=True)
+class SystemRouteServices:
+    get_readiness_status: Callable[[], Dict[str, Any]]
+    get_transfer_form_defaults: Callable[[], Dict[str, str]]
+
+
+def create_system_router(services: SystemRouteServices):
     router = APIRouter()
 
     @router.get("/api/prontidao")
     def get_readiness_status():
         """Expose local file and feature availability for the status panel."""
-        return ctx.get_startup_readiness()
+        return services.get_readiness_status()
 
     @router.get("/api/config/transferencia")
     def get_transfer_form_defaults():
         """Return editable origin contact defaults configured for this installation."""
-        return {
-            "retirada_contato": ctx.TRANSFER_ORIGIN_CONTACT,
-            "retirada_email": ctx.TRANSFER_ORIGIN_EMAIL,
-            "retirada_telefone": ctx.TRANSFER_ORIGIN_PHONE,
-        }
+        return services.get_transfer_form_defaults()
 
     return router, {
         "get_readiness_status": get_readiness_status,

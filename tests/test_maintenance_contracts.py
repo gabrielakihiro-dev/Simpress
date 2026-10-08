@@ -116,6 +116,7 @@ class MaintenanceContractTests(unittest.TestCase):
             "COMPARISON_HISTORY_FILE",
             "HISTORY_ANNOTATIONS_DIR",
             "HISTORY_ANNOTATIONS_SYNC_ENABLED",
+            "LOCAL_HISTORY_ANNOTATION_OUTBOX_DIR",
             "TRANSACTION_ROOT",
         ):
             with self.subTest(path=name):
@@ -707,6 +708,8 @@ class MaintenanceContractTests(unittest.TestCase):
                 patch.object(main, "MODIFIED_APELIDOS_FILE", state_dir / "apelidos_modificados" / "apelidos_modificados.json"),
                 patch.object(main, "ALIAS_HISTORY_FILE", state_dir / "historico_alteracoes.json"),
                 patch.object(main, "COMPARISON_HISTORY_FILE", state_dir / "historico_comparacoes" / "historico_comparacoes.json"),
+                patch.object(main, "HISTORY_ANNOTATIONS_DIR", state_dir / "anotacoes_historico"),
+                patch.object(main, "LOCAL_HISTORY_ANNOTATION_OUTBOX_DIR", state_dir / "anotacoes_historico_pendentes"),
                 patch.object(main, "TRANSACTION_ROOT", root),
                 redirect_stdout(output),
             ):

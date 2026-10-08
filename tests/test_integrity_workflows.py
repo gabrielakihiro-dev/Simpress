@@ -250,6 +250,7 @@ class WorkflowIntegrityTests(unittest.TestCase):
         self.manual_history = self.root / "historico_alteracoes.json"
         self.comparison_history = self.root / "historico_comparacoes.json"
         self.shared_annotations = self.root / "shared_annotations"
+        self.pending_annotations = self.root / "pending_annotations"
         self.custom_units = self.root / "unidades_custom.json"
         self.stack = ExitStack()
         self.stack.enter_context(patch.object(main, "BASE_DIR", self.root))
@@ -262,6 +263,7 @@ class WorkflowIntegrityTests(unittest.TestCase):
         self.stack.enter_context(patch.object(main, "ALIAS_HISTORY_FILE", self.manual_history))
         self.stack.enter_context(patch.object(main, "COMPARISON_HISTORY_FILE", self.comparison_history))
         self.stack.enter_context(patch.object(main, "HISTORY_ANNOTATIONS_DIR", self.shared_annotations))
+        self.stack.enter_context(patch.object(main, "LOCAL_HISTORY_ANNOTATION_OUTBOX_DIR", self.pending_annotations))
         self.stack.enter_context(patch.object(main, "HISTORY_ANNOTATIONS_SYNC_ENABLED", True))
         self.stack.enter_context(patch.object(main, "CUSTOM_UNIDADES_FILE", self.custom_units))
         self.stack.enter_context(patch.object(main, "TRANSACTION_ROOT", self.root))
@@ -937,6 +939,50 @@ class WorkflowIntegrityTests(unittest.TestCase):
         self.assertEqual(self.details.read_bytes(), before)
         self.assertEqual(main.equipamentos_cache, cache_before)
 
+    def test_equipment_edit_prepares_endpoint_aliases_before_committing_workbook(self):
+        make_details(self.details, [
+            ("SN-PREPARE", "ALIAS-ORIGINAL", "Modelo antes", "Maringá", "Notebook", "87000000"),
+        ])
+        make_endpoint(self.endpoint, [("SN-PREPARE", "HOST-ENDPOINT")])
+        self.assertTrue(main.load_database())
+        selected = main.get_equipamento("SN-PREPARE")
+        workbook_before = self.details.read_bytes()
+        cache_before = copy.deepcopy(main.equipamentos_cache)
+
+        with patch.object(main, "read_endpoint_alias_index", side_effect=RuntimeError("falha de leitura simulada")):
+            with self.assertRaisesRegex(RuntimeError, "falha de leitura simulada"):
+                main.salvar_equipamento(main.EquipamentoUpdatePayload(
+                    serial="SN-PREPARE",
+                    revisao=selected["revisao"],
+                    modelo="Modelo depois",
+                ))
+
+        self.assertEqual(self.details.read_bytes(), workbook_before)
+        self.assertEqual(main.equipamentos_cache, cache_before)
+        self.assertEqual(main.get_equipamento("SN-PREPARE")["modelo"], "Modelo antes")
+
+    def test_equipment_edit_prepares_search_index_before_committing_workbook(self):
+        make_details(self.details, [
+            ("SN-INDEX-PREPARE", "ALIAS-ORIGINAL", "Modelo antes", "Maringá", "Notebook", "87000000"),
+        ])
+        make_endpoint(self.endpoint, [("SN-INDEX-PREPARE", "HOST-ENDPOINT")])
+        self.assertTrue(main.load_database())
+        selected = main.get_equipamento("SN-INDEX-PREPARE")
+        workbook_before = self.details.read_bytes()
+        cache_before = copy.deepcopy(main.equipamentos_cache)
+
+        with patch.object(main, "build_search_index", side_effect=RuntimeError("falha de índice simulada")):
+            with self.assertRaisesRegex(RuntimeError, "falha de índice simulada"):
+                main.salvar_equipamento(main.EquipamentoUpdatePayload(
+                    serial="SN-INDEX-PREPARE",
+                    revisao=selected["revisao"],
+                    modelo="Modelo depois",
+                ))
+
+        self.assertEqual(self.details.read_bytes(), workbook_before)
+        self.assertEqual(main.equipamentos_cache, cache_before)
+        self.assertEqual(main.get_equipamento("SN-INDEX-PREPARE")["modelo"], "Modelo antes")
+
     def test_equipment_edit_refuses_to_recreate_a_record_removed_after_load(self):
         make_details(self.details, [
             ("SN-REMOVIDO", "ALIAS-ORIGINAL", "Modelo original", "Maringá", "Notebook", "87000000"),
@@ -1553,7 +1599,7 @@ class WorkflowIntegrityTests(unittest.TestCase):
                     "bytes": details_bytes,
                     "table": main.validate_uploaded_workbook(details_bytes, "detalhes"),
                 },
-            }, main)
+            }, main._inventory_update_services)
 
         changed_row = {**previous_row, "dias_sem_verificacao": 15}
         with patch.object(
@@ -1799,7 +1845,7 @@ class WorkflowIntegrityTests(unittest.TestCase):
         self.assertEqual(shared_record["categoria"], "divergencias_local")
         self.assertEqual(shared_record["anotacao"], "Endereço validado no clone.")
 
-    def test_legacy_local_annotation_is_copied_to_shared_storage_when_opened(self):
+    def test_legacy_annotation_migrates_outside_the_history_read(self):
         event = {
             "id": "evento-legado-com-anotacao",
             "horario": "2026-10-05T10:00:00-03:00",
@@ -1817,7 +1863,92 @@ class WorkflowIntegrityTests(unittest.TestCase):
         detail = main.get_comparacao_historica(event["id"])["evento"]
         displayed_row = detail["comparacao"]["apelidos_sem_atualizacao"][0]
         self.assertEqual(displayed_row["anotacao"], "Anotação salva pela versão anterior.")
+        self.assertEqual(len(list(self.shared_annotations.glob("*.json"))), 0)
+        self.assertEqual(len(list(self.pending_annotations.glob("*.json"))), 0)
+
+        migration = main.migrate_legacy_history_annotations()
+        self.assertEqual(migration["legadas_enfileiradas"], 1)
+        self.assertEqual(migration["sincronizadas"], 1)
         self.assertEqual(len(list(self.shared_annotations.glob("*.json"))), 1)
+
+    def test_pending_local_annotation_overrides_stale_shared_copy_until_retry(self):
+        row = {
+            "serie": "SERIE-DUP-PENDING",
+            "computador": "PRNOTE-PENDING-A, PRNOTE-PENDING-B",
+            "motivo": "Série duplicada na InvAll; nenhum hostname foi escolhido.",
+        }
+        event = {
+            "id": "evento-pending-annotation",
+            "horario": "2026-10-07T12:00:00-03:00",
+            "comparacao": {"apelidos_sem_atualizacao": [row]},
+        }
+        self.comparison_history.write_text(json.dumps([event]), encoding="utf-8")
+        item_id = main.comparison_history_for_display(event)["comparacao"]["apelidos_sem_atualizacao"][0]["anotacao_id"]
+        main.save_history_annotation(
+            self.shared_annotations,
+            event_id=event["id"],
+            event_time=event["horario"],
+            item_id=item_id,
+            serie=row["serie"],
+            computador=row["computador"],
+            motivo=row["motivo"],
+            anotacao="Anotação compartilhada antiga.",
+            categoria="apelidos_sem_atualizacao",
+            linha_hash=main.history_annotation_row_fingerprint("apelidos_sem_atualizacao", row),
+        )
+
+        original_save = main.save_history_annotation
+
+        def fail_shared_save(directory, **values):
+            if Path(directory) == self.shared_annotations:
+                raise OSError("OneDrive indisponível no teste")
+            return original_save(directory, **values)
+
+        with patch.object(main, "save_history_annotation", side_effect=fail_shared_save):
+            saved = main.salvar_anotacao_comparacao_historica(
+                event["id"], item_id, SimpleNamespace(anotacao="Anotação local mais recente.")
+            )
+
+        self.assertEqual(saved["sincronizacao"], "pendente")
+        pending = main.load_history_annotations(self.pending_annotations)
+        self.assertEqual(len(pending), 1)
+        self.assertEqual(pending[0]["anotacao"], "Anotação local mais recente.")
+        detail = main.get_comparacao_historica(event["id"])["evento"]
+        displayed_row = detail["comparacao"]["apelidos_sem_atualizacao"][0]
+        self.assertEqual(displayed_row["anotacao"], "Anotação local mais recente.")
+
+        flushed = main.flush_pending_history_annotations()
+        self.assertEqual(flushed, {"pendentes": 0, "sincronizadas": 1})
+        self.assertEqual(list(self.pending_annotations.glob("*.json")), [])
+        shared = main.load_history_annotations(self.shared_annotations)
+        self.assertEqual(shared[0]["anotacao"], "Anotação local mais recente.")
+
+    def test_history_list_uses_saved_summary_without_transforming_rows_or_migrating_notes(self):
+        event = {
+            "id": "evento-resumo-rapido",
+            "horario": "2026-10-07T13:00:00-03:00",
+            "resumo": {"total_endpoint": 900, "ausentes_no_endpoint": 4},
+            "comparacao": {
+                "apelidos_sem_atualizacao": [{
+                    "serie": "SN-LEGACY-SUMMARY",
+                    "computador": "PRNOTE-LEGACY-SUMMARY",
+                    "anotacao": "Anotação legada permanece na consulta detalhada.",
+                }],
+            },
+        }
+        self.comparison_history.write_text(json.dumps([event]), encoding="utf-8")
+
+        with patch.object(
+            main,
+            "comparison_history_for_display",
+            side_effect=AssertionError("a listagem não deve transformar todas as linhas"),
+        ):
+            listed = main.get_historico_comparacoes()
+
+        self.assertEqual(listed["total"], 1)
+        self.assertEqual(listed["eventos"][0]["resumo"], event["resumo"])
+        self.assertEqual(list(self.shared_annotations.glob("*.json")), [])
+        self.assertEqual(list(self.pending_annotations.glob("*.json")), [])
 
     def test_upload_validation_and_transaction_do_not_block_the_event_loop(self):
         make_details(self.details, [
@@ -1832,6 +1963,8 @@ class WorkflowIntegrityTests(unittest.TestCase):
         allow_validation = threading.Event()
         transaction_started = threading.Event()
         allow_transaction = threading.Event()
+        retention_started = threading.Event()
+        allow_retention = threading.Event()
         original_validator = main.validate_uploaded_workbook
         original_loader = main.load_database
         worker_threads = {}
@@ -1850,6 +1983,12 @@ class WorkflowIntegrityTests(unittest.TestCase):
             if not allow_transaction.wait(3):
                 raise TimeoutError("o teste não liberou a transação pausada")
             return original_loader(*args, **kwargs)
+
+        def pause_retention():
+            worker_threads["retention"] = threading.get_ident()
+            retention_started.set()
+            if not allow_retention.wait(2):
+                raise TimeoutError("o teste não liberou a retenção pausada")
 
         upload_endpoint = UploadFile(
             filename="InvAll_nova.xlsx",
@@ -1882,9 +2021,15 @@ class WorkflowIntegrityTests(unittest.TestCase):
                 await wait_for_event(transaction_started, "a recarga transacional")
                 await asyncio.wait_for(asyncio.sleep(0.025), timeout=0.25)
                 self.assertFalse(task.done(), "a recarga pausada bloqueou ou encerrou a atualização")
+                allow_transaction.set()
+
+                await wait_for_event(retention_started, "a retenção")
+                await asyncio.wait_for(asyncio.sleep(0.025), timeout=0.25)
+                self.assertFalse(task.done(), "a retenção pausada bloqueou ou encerrou a atualização")
             finally:
                 allow_validation.set()
                 allow_transaction.set()
+                allow_retention.set()
 
             result = await task
             return loop_thread, result
@@ -1892,12 +2037,14 @@ class WorkflowIntegrityTests(unittest.TestCase):
         with (
             patch.object(main, "validate_uploaded_workbook", pause_validation),
             patch.object(main, "load_database", pause_transaction_reload),
+            patch.object(main, "prune_expired_histories", pause_retention),
         ):
             loop_thread, result = asyncio.run(run_upload_with_heartbeats())
 
         self.assertTrue(result["sucesso"])
         self.assertNotEqual(worker_threads["validation"], loop_thread)
         self.assertNotEqual(worker_threads["transaction"], loop_thread)
+        self.assertNotEqual(worker_threads["retention"], loop_thread)
         self.assertEqual(main.equipamentos_cache["SN-1"]["apelido"], "PRNOTE-NEW")
 
     def test_interrupted_upload_finishes_atomic_transaction_before_closing_request(self):
@@ -2176,6 +2323,66 @@ class WorkflowIntegrityTests(unittest.TestCase):
         self.assertTrue(restore_outcome["result"]["sucesso"])
         self.assertEqual(main.load_modified_apelidos(), {"SN-1": "MANUAL-COMMITTED"})
         self.assertEqual(main.equipamentos_cache["SN-1"]["apelido"], "MANUAL-COMMITTED")
+
+    def test_restore_keeps_old_cache_until_file_and_history_transaction_commits(self):
+        self.details.write_bytes(_details_bytes([
+            ("SN-RESTORE-PREPARE", "ALIAS-ATUAL", "Modelo atual", "Maringá", "Notebook", "87000000"),
+        ]))
+        self.endpoint.write_bytes(_endpoint_bytes([("SN-RESTORE-PREPARE", "HOST-ATUAL")]))
+        backup_dir = self.backups / "restore-prepared-state"
+        (backup_dir / "endpoint").mkdir(parents=True)
+        (backup_dir / "detalhes").mkdir()
+        (backup_dir / "endpoint" / self.endpoint.name).write_bytes(
+            _endpoint_bytes([("SN-RESTORE-PREPARE", "HOST-ANTIGO")])
+        )
+        (backup_dir / "detalhes" / self.details.name).write_bytes(_details_bytes([
+            ("SN-RESTORE-PREPARE", "ALIAS-ANTIGO", "Modelo antigo", "Londrina", "Notebook", "86000000"),
+        ]))
+        self.comparison_history.write_text(json.dumps([{
+            "id": "restore-prepared-event",
+            "horario": "2026-10-01T12:00:00-03:00",
+            "comparacao": {"backup_diretorio": str(backup_dir.relative_to(self.input_dir))},
+        }]), encoding="utf-8")
+        self.assertTrue(main.load_database())
+        preview = main.visualizar_restauracao_comparacao("restore-prepared-event")
+
+        state_prepared = threading.Event()
+        allow_commit = threading.Event()
+        original_loader = main.load_database
+
+        def pause_after_prepare(*args, **kwargs):
+            state = original_loader(*args, **kwargs)
+            if kwargs.get("publish") is False:
+                state_prepared.set()
+                if not allow_commit.wait(10):
+                    raise TimeoutError("o teste não liberou a confirmação da restauração")
+            return state
+
+        outcome = {}
+
+        def restore():
+            try:
+                outcome["result"] = main.restaurar_comparacao_historica(
+                    "restore-prepared-event",
+                    main.ComparisonRestorePayload(preview_token=preview["preview_token"]),
+                )
+            except BaseException as error:
+                outcome["error"] = error
+
+        with patch.object(main, "load_database", side_effect=pause_after_prepare):
+            worker = threading.Thread(target=restore)
+            worker.start()
+            try:
+                self.assertTrue(state_prepared.wait(10), "o estado restaurado não foi preparado")
+                self.assertEqual(main.get_equipamento("SN-RESTORE-PREPARE")["modelo"], "Modelo atual")
+            finally:
+                allow_commit.set()
+                worker.join(10)
+
+        self.assertFalse(worker.is_alive(), "a restauração não terminou")
+        self.assertNotIn("error", outcome)
+        self.assertTrue(outcome["result"]["sucesso"])
+        self.assertEqual(main.get_equipamento("SN-RESTORE-PREPARE")["modelo"], "Modelo antigo")
 
     def test_manual_alias_override_changes_export_only(self):
         detail_headers = ["Hostname", "Tipo", "Modelo", "Cidade", "CEP", "Serial"]

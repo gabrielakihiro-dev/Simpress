@@ -46,7 +46,7 @@ test("loads the bounded autosave retry helper before the application", () => {
   assert.ok(draftGuardScript < appScriptTag);
   assert.ok(retryScript < appScriptTag);
   assert.match(appScript, /attachAnnotationAutosave/);
-  assert.match(appScript, /Tentar salvar novamente/);
+  assert.match(appScript, /Tentar sincronizar novamente/);
   assert.match(appScript, /data-annotation-retry hidden/);
   assert.doesNotMatch(appScript, /class="hidden[^\"]*"[^>]*data-annotation-retry/);
 });

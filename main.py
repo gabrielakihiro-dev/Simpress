@@ -1,12 +1,13 @@
+import asyncio
 import io
 import filecmp
 import hashlib
 import hmac
 import json
+import logging
 import os
 import re
 import shutil
-import sys
 import threading
 import unicodedata
 import uuid
@@ -47,6 +48,7 @@ from app_config import (
     EXPORT_MODEL_FILE,
     HISTORY_ANNOTATIONS_DIR,
     HISTORY_ANNOTATIONS_SYNC_ENABLED,
+    LOCAL_HISTORY_ANNOTATION_OUTBOX_DIR,
     INPUT_DIR,
     MAX_API_REQUEST_BYTES,
     MAX_UPLOAD_BYTES,
@@ -69,6 +71,7 @@ from app_config import (
 from routers.inventory_history import (
     ComparisonAnnotationPayload,
     ComparisonRestorePayload,
+    InventoryHistoryServices,
     ManualAliasConflictResolutionPayload,
     create_inventory_history_router,
 )
@@ -108,10 +111,13 @@ from domains.inventory_comparison import (
     normalize_reference_value,
 )
 from domains.history_annotations import (
+    build_history_annotation_record,
     history_annotation_row_fingerprint,
+    history_annotation_record_path,
     load_history_annotations,
     save_history_annotation,
 )
+from domains.inventory_update import InventoryUpdateServices
 from domains.inventory_update import read_uploaded_xlsx as _read_uploaded_xlsx
 from domains.inventory_update import update_inventory_files
 from domains.equipment_search import (
@@ -122,9 +128,9 @@ from domains.equipment_search import (
     normalize_search_term,
     search_normalized_index as search_normalized_equipment_index,
 )
-from routers.equipment_search import create_equipment_search_router
-from routers.system import create_system_router
-from routers.units import UnidadePayload, create_units_router
+from routers.equipment_search import EquipmentSearchServices, create_equipment_search_router
+from routers.system import SystemRouteServices, create_system_router
+from routers.units import UnidadePayload, UnitRouteServices, create_units_router
 
 # Runtime synchronization and in-memory state remain in the application entry point.
 MODIFIED_APELIDOS_LOCK = threading.RLock()
@@ -133,6 +139,7 @@ COMPARISON_HISTORY_LOCK = threading.RLock()
 STATE_LOCK = threading.RLock()
 UPLOAD_ADMISSION = threading.BoundedSemaphore(MAX_CONCURRENT_UPLOAD_REQUESTS)
 WORKBOOK_PARSE_ADMISSION = threading.BoundedSemaphore(MAX_CONCURRENT_WORKBOOK_PARSERS)
+logger = logging.getLogger(__name__)
 
 
 class LocalJsonCorruptionError(ValueError):
@@ -1393,6 +1400,16 @@ def get_parque_file() -> Optional[Path]:
 async def lifespan(app: FastAPI):
     recover_pending_transactions(TRANSACTION_ROOT)
     try:
+        migration_result = await asyncio.to_thread(migrate_legacy_history_annotations)
+        if migration_result.get("legadas_enfileiradas"):
+            logger.info(
+                "Anotações legadas preparadas para sincronização: %s.",
+                migration_result,
+            )
+    except Exception:
+        logger.exception("Falha ao migrar anotações legadas do histórico de planilhas.")
+    annotation_sync_task = asyncio.create_task(_history_annotation_sync_worker())
+    try:
         prune_result = prune_expired_histories()
         if any(prune_result.values()):
             print(f"[RETENÇÃO] Registros e backups removidos conforme política de {HISTORY_RETENTION_DAYS} dias: {prune_result}.")
@@ -1403,7 +1420,23 @@ async def lifespan(app: FastAPI):
     except LocalJsonCorruptionError as error:
         print(f"[INDISPONÍVEL] Estado local preservado: {error}")
     report_startup_readiness()
-    yield
+    try:
+        yield
+    finally:
+        annotation_sync_task.cancel()
+        try:
+            await annotation_sync_task
+        except asyncio.CancelledError:
+            pass
+
+
+async def _history_annotation_sync_worker() -> None:
+    while True:
+        await asyncio.sleep(60)
+        try:
+            await asyncio.to_thread(flush_pending_history_annotations)
+        except Exception:
+            logger.exception("Falha inesperada ao tentar sincronizar anotações pendentes.")
 
 
 app = FastAPI(
@@ -1813,15 +1846,32 @@ def load_database(transaction_locked: bool = False, publish: bool = True) -> Any
             return _load_database_unlocked(publish=publish)
 
 
+def prepare_database_state(
+    equipment_cache: Dict[str, Dict[str, Any]],
+    unit_cache: List[Dict[str, Any]],
+    stats: Dict[str, Any],
+) -> Dict[str, Any]:
+    """Build every derived cache before a disk transaction is committed."""
+    return {
+        "equipamentos_cache": equipment_cache,
+        "unidades_cache": unit_cache,
+        "stats_cache": stats,
+        "equipment_search_index": build_search_index(
+            equipment_cache,
+            _normalizar_termo_busca,
+        ),
+    }
+
+
 def publish_database_state(state: Dict[str, Any]) -> None:
     global equipamentos_cache, unidades_cache, stats_cache
-    if not all(key in state for key in ("equipamentos_cache", "unidades_cache", "stats_cache")):
-        raise ValueError("O estado de inventário preparado está incompleto.")
+    global _EQUIPMENT_SEARCH_INDEX, _EQUIPMENT_SEARCH_INDEX_SOURCE
     with STATE_LOCK:
         equipamentos_cache = state["equipamentos_cache"]
         unidades_cache = state["unidades_cache"]
         stats_cache = state["stats_cache"]
-        _refresh_equipment_search_index_locked()
+        _EQUIPMENT_SEARCH_INDEX = state["equipment_search_index"]
+        _EQUIPMENT_SEARCH_INDEX_SOURCE = equipamentos_cache
 
 
 def _load_database_unlocked(publish: bool = True) -> Any:
@@ -2117,11 +2167,11 @@ def _load_database_unlocked(publish: bool = True) -> Any:
     }
 
     # Só publica os novos caches depois de ler, converter e validar toda a planilha.
-    state = {
-        "equipamentos_cache": new_equipamentos_cache,
-        "unidades_cache": new_unidades_cache,
-        "stats_cache": new_stats_cache,
-    }
+    state = prepare_database_state(
+        new_equipamentos_cache,
+        new_unidades_cache,
+        new_stats_cache,
+    )
     if publish:
         publish_database_state(state)
 
@@ -2412,10 +2462,18 @@ def save_equipment_to_excel(
     try:
         # Lock every candidate while resolving the current primary source. Only
         # that source is staged below; legacy copies remain untouched.
-        transaction_targets = [*detail_files, *json_mutations.keys()]
+        transaction_targets = list(dict.fromkeys([
+            *detail_files,
+            ENDPOINT_UPLOAD_FILE,
+            MODIFIED_APELIDOS_FILE,
+            *json_mutations.keys(),
+        ]))
         with AtomicFileTransaction(TRANSACTION_ROOT, transaction_targets) as transaction:
             with STATE_LOCK:
-                cached_equipment = deepcopy(equipamentos_cache.get(target_serial_upper))
+                next_equipment_cache = deepcopy(equipamentos_cache)
+                next_unit_cache = deepcopy(unidades_cache)
+                next_stats_cache = deepcopy(stats_cache)
+            cached_equipment = deepcopy(next_equipment_cache.get(target_serial_upper))
             if cached_equipment is None and not payload.novo:
                 raise HTTPException(
                     status_code=409,
@@ -2494,9 +2552,13 @@ def save_equipment_to_excel(
             )
             if not saved:
                 raise HTTPException(status_code=500, detail="Não foi possível atualizar o equipamento na planilha.")
+            staged_json: Dict[Path, Any] = {}
             for path, updater in json_mutations.items():
-                transaction.update_json(path, updater, [] if path == ALIAS_HISTORY_FILE else {})
-            transaction.commit()
+                staged_json[path] = transaction.update_json(
+                    path,
+                    updater,
+                    [] if path == ALIAS_HISTORY_FILE else {},
+                )
 
             endereco_info = (
                 snapshot_endereco_instalacao(cached_equipment)
@@ -2535,7 +2597,9 @@ def save_equipment_to_excel(
             id_cliente = updated_value("idCliente", "idCliente")
             desc_sugerida = get_suggested_description(tipo, modelo)
 
-            modified_aliases = load_modified_apelidos()
+            modified_aliases = staged_json.get(MODIFIED_APELIDOS_FILE)
+            if not isinstance(modified_aliases, dict):
+                modified_aliases = load_modified_apelidos()
             manual_aliases = _manual_aliases_by_serial(modified_aliases)
             normalized_serial = normalize_reference_value(target_serial_upper)
             local_alias = manual_aliases.get(normalized_serial, base_alias)
@@ -2570,19 +2634,29 @@ def save_equipment_to_excel(
                 ),
             }
 
+            endpoint_index = read_endpoint_alias_index()
             _apply_effective_alias(
                 updated_equipment,
-                read_endpoint_alias_index(),
+                endpoint_index,
                 details_duplicate=bool(
                     cached_equipment
                     and cached_equipment.get("invall_alias_status") == "serie_detalhes_duplicada"
                 ),
             )
-            with STATE_LOCK:
-                equipamentos_cache[target_serial_upper] = updated_equipment
-                stats_cache["total_equipamentos"] = len(equipamentos_cache)
-                stats_cache["ultima_atualizacao"] = datetime.now().strftime("%d/%m/%Y %H:%M")
-                _refresh_equipment_search_index_locked()
+            next_equipment_cache[target_serial_upper] = updated_equipment
+            next_stats_cache["total_equipamentos"] = len(next_equipment_cache)
+            next_stats_cache["ultima_atualizacao"] = datetime.now().strftime("%d/%m/%Y %H:%M")
+            prepared_state = prepare_database_state(
+                next_equipment_cache,
+                next_unit_cache,
+                next_stats_cache,
+            )
+
+            # All reads and derived data are prepared before the durable commit.
+            # Publishing afterward only swaps already-built references.
+            transaction.commit()
+            publish_database_state(prepared_state)
+            return updated_equipment, len(modified_aliases)
     except FileBusyError as error:
         raise HTTPException(status_code=409, detail=str(error)) from error
     except WorkbookSafetyError as error:
@@ -2656,22 +2730,16 @@ def salvar_equipamento(payload: EquipamentoUpdatePayload):
             return aliases
         json_mutations[MODIFIED_APELIDOS_FILE] = save_new_alias
 
-    save_equipment_to_excel(
+    saved_equipment, modified_alias_count = save_equipment_to_excel(
         payload,
         json_mutations=json_mutations,
         fields_to_update=requested_fields,
     )
-    total_mod = len(load_modified_apelidos())
-    with STATE_LOCK:
-        saved_equipment = deepcopy(equipamentos_cache.get(target_serial))
-        saved_stats_count = len(load_modified_apelidos())
-    if saved_equipment is None:
-        raise HTTPException(status_code=500, detail="O estado salvo do equipamento não foi publicado corretamente.")
     return {
         "sucesso": True,
         "mensagem": f"Equipamento {target_serial} atualizado com sucesso no site e na planilha Excel!",
         "equipamento": _public_equipment(saved_equipment),
-        "total_modificados": saved_stats_count
+        "total_modificados": modified_alias_count,
     }
 
 
@@ -2714,8 +2782,10 @@ def aplicar_alteracao_apelido(
     try:
         with AtomicFileTransaction(TRANSACTION_ROOT, targets) as transaction:
             with STATE_LOCK:
-                current_equipment = equipamentos_cache.get(target_serial)
-                equipamento = dict(current_equipment) if current_equipment is not None else None
+                next_equipment_cache = deepcopy(equipamentos_cache)
+                next_unit_cache = deepcopy(unidades_cache)
+                next_stats_cache = deepcopy(stats_cache)
+            equipamento = deepcopy(next_equipment_cache.get(target_serial))
             if equipamento is None:
                 raise HTTPException(status_code=404, detail=f"Equipamento com serial '{target_serial}' não encontrado na base de dados.")
 
@@ -2801,10 +2871,14 @@ def aplicar_alteracao_apelido(
                 read_endpoint_alias_index(),
                 details_duplicate=updated_equipment.get("invall_alias_status") == "serie_detalhes_duplicada",
             )
+            next_equipment_cache[target_serial] = updated_equipment
+            prepared_state = prepare_database_state(
+                next_equipment_cache,
+                next_unit_cache,
+                next_stats_cache,
+            )
             transaction.commit()
-            with STATE_LOCK:
-                equipamentos_cache[target_serial] = updated_equipment
-                _refresh_equipment_search_index_locked()
+            publish_database_state(prepared_state)
     except HTTPException:
         raise
     except FileBusyError as error:
@@ -3196,8 +3270,45 @@ def recarregar_base():
     }
 
 
+def _history_equipment_snapshot() -> Dict[str, Dict[str, Any]]:
+    with STATE_LOCK:
+        return deepcopy(equipamentos_cache)
+
+
+_inventory_update_services = InventoryUpdateServices(
+    max_upload_bytes=lambda: MAX_UPLOAD_BYTES,
+    workbook_parse_admission=lambda: WORKBOOK_PARSE_ADMISSION,
+    validate_uploaded_workbook=lambda *args, **kwargs: validate_uploaded_workbook(*args, **kwargs),
+    input_directory=lambda: INPUT_DIR,
+    endpoint_upload_file=lambda: ENDPOINT_UPLOAD_FILE,
+    details_upload_file=lambda: DETAILS_UPLOAD_FILE,
+    comparison_history_file=lambda: COMPARISON_HISTORY_FILE,
+    upload_backups_directory=lambda: UPLOAD_BACKUPS_DIR,
+    history_annotations_directory=lambda: HISTORY_ANNOTATIONS_DIR,
+    get_primary_equipment_file=lambda: get_primary_equipment_file(),
+    compare_uploaded_workbooks=lambda *args, **kwargs: compare_uploaded_workbooks(*args, **kwargs),
+    inventory_state_transaction=lambda targets: inventory_state_transaction(targets),
+    get_equipment_snapshot=_history_equipment_snapshot,
+    snapshot_equipment_aliases=lambda *args, **kwargs: snapshot_equipment_aliases(*args, **kwargs),
+    load_modified_apelidos=lambda: load_modified_apelidos(),
+    manual_alias_source_snapshots=lambda *args, **kwargs: _manual_alias_source_snapshots(*args, **kwargs),
+    normalize_reference_value=lambda *args, **kwargs: normalize_reference_value(*args, **kwargs),
+    upload_serial_value=_upload_serial_value,
+    upload_alias_value=_upload_alias_value,
+    load_database=lambda *args, **kwargs: load_database(*args, **kwargs),
+    read_endpoint_alias_index=lambda: read_endpoint_alias_index(),
+    compare_equipment_aliases=lambda *args, **kwargs: compare_equipment_aliases(*args, **kwargs),
+    endpoint_alias_review_items=lambda *args, **kwargs: endpoint_alias_review_items(*args, **kwargs),
+    publish_database_state=lambda *args, **kwargs: publish_database_state(*args, **kwargs),
+    comparison_history_for_display=lambda *args, **kwargs: comparison_history_for_display(*args, **kwargs),
+    load_history_annotations=lambda *args, **kwargs: load_history_annotations(*args, **kwargs),
+    comparison_annotation_item_id=lambda *args, **kwargs: comparison_annotation_item_id(*args, **kwargs),
+    save_history_annotation=lambda *args, **kwargs: save_history_annotation(*args, **kwargs),
+)
+
+
 async def read_uploaded_xlsx(upload: UploadFile, role: str) -> Dict[str, Any]:
-    return await _read_uploaded_xlsx(upload, role, sys.modules[__name__])
+    return await _read_uploaded_xlsx(upload, role, _inventory_update_services)
 
 
 @app.post("/api/planilhas/atualizar")
@@ -3208,12 +3319,16 @@ async def atualizar_planilhas(
     result = await update_inventory_files(
         endpoint_file,
         details_file,
-        context=sys.modules[__name__],
+        services=_inventory_update_services,
     )
     try:
-        prune_expired_histories()
-    except Exception as error:
-        print(f"[AVISO] A atualização foi concluída, mas a retenção automática falhou ({type(error).__name__}).")
+        await asyncio.to_thread(prune_expired_histories)
+    except Exception:
+        event_id = (result.get("comparacao") or {}).get("evento_id") if isinstance(result, dict) else None
+        logger.exception(
+            "Falha na retenção após a atualização confirmada (evento=%s).",
+            event_id or "desconhecido",
+        )
     return result
 
 
@@ -3252,28 +3367,70 @@ def _buscar_equipamentos_por_termo(q: str) -> List[Dict[str, Any]]:
     return search_normalized_equipment_index(current_index, term)
 
 
+def _get_stats_snapshot() -> Dict[str, Any]:
+    export_counts = count_export_changes()
+    export_status = get_export_status()
+    with STATE_LOCK:
+        stats_snapshot = deepcopy(stats_cache)
+        unit_count = len(unidades_cache)
+    return {
+        **stats_snapshot,
+        "exportacao_disponivel": export_status["available"],
+        "exportacao_motivo": export_status["reason"],
+        "total_apelidos_modificados": export_counts["apelidos"],
+        "total_id_clientes_modificados": export_counts["id_clientes"],
+        "total_alteracoes_exportaveis": export_counts["total"],
+        "total_unidades": unit_count,
+    }
+
+
+def _unit_cache_snapshot() -> List[Dict[str, Any]]:
+    with STATE_LOCK:
+        return deepcopy(unidades_cache)
 
 
 
 
 
 
-
-
-
-
-system_router, _system_exports = create_system_router(sys.modules[__name__])
+system_router, _system_exports = create_system_router(SystemRouteServices(
+    get_readiness_status=lambda: get_startup_readiness(),
+    get_transfer_form_defaults=lambda: {
+        "retirada_contato": TRANSFER_ORIGIN_CONTACT,
+        "retirada_email": TRANSFER_ORIGIN_EMAIL,
+        "retirada_telefone": TRANSFER_ORIGIN_PHONE,
+    },
+))
 get_readiness_status = _system_exports["get_readiness_status"]
 get_transfer_form_defaults = _system_exports["get_transfer_form_defaults"]
 app.include_router(system_router)
 
-units_router, _units_exports = create_units_router(sys.modules[__name__])
+units_router, _units_exports = create_units_router(UnitRouteServices(
+    format_cep=format_cep,
+    get_details_files=get_details_files,
+    endpoint_upload_file=lambda: ENDPOINT_UPLOAD_FILE,
+    modified_aliases_file=lambda: MODIFIED_APELIDOS_FILE,
+    custom_units_file=lambda: CUSTOM_UNIDADES_FILE,
+    export_model_file=lambda: EXPORT_MODEL_FILE,
+    transaction_root=lambda: TRANSACTION_ROOT,
+    get_units_snapshot=_unit_cache_snapshot,
+    coerce_unit_id=_coerce_unit_id,
+    unit_identity_key=_unit_identity_key,
+    local_json_corruption_error=LocalJsonCorruptionError,
+    load_database=lambda *args, **kwargs: load_database(*args, **kwargs),
+    publish_database_state=publish_database_state,
+))
 _public_unit_list = _units_exports["_public_unit_list"]
 salvar_unidade = _units_exports["salvar_unidade"]
 get_unidades = _units_exports["get_unidades"]
 app.include_router(units_router)
 
-equipment_search_router, _equipment_search_exports = create_equipment_search_router(sys.modules[__name__])
+equipment_search_router, _equipment_search_exports = create_equipment_search_router(EquipmentSearchServices(
+    search=_buscar_equipamentos_por_termo,
+    normalize=_normalizar_termo_busca,
+    categories=_CATEGORIAS_EQUIPAMENTO,
+    get_stats=_get_stats_snapshot,
+))
 buscar_seriais = _equipment_search_exports["buscar_seriais"]
 buscar_seriais_expandida = _equipment_search_exports["buscar_seriais_expandida"]
 get_stats = _equipment_search_exports["get_stats"]
@@ -3282,7 +3439,40 @@ app.include_router(equipment_search_router)
 transfer_router, gerar_planilha = create_transfer_router(lambda: TEMPLATE_FILE)
 app.include_router(transfer_router)
 
-inventory_history_router, _inventory_history_exports = create_inventory_history_router(sys.modules[__name__])
+inventory_history_router, _inventory_history_exports = create_inventory_history_router(InventoryHistoryServices(
+    manual_aliases_by_serial=_manual_aliases_by_serial,
+    build_history_annotation_record=lambda *args, **kwargs: build_history_annotation_record(*args, **kwargs),
+    comparison_annotation_item_id=comparison_annotation_item_id,
+    comparison_history_path=lambda: COMPARISON_HISTORY_FILE,
+    comparison_history_lock=COMPARISON_HISTORY_LOCK,
+    comparison_history_for_display=comparison_history_for_display,
+    details_upload_path=lambda: DETAILS_UPLOAD_FILE,
+    endpoint_upload_path=lambda: ENDPOINT_UPLOAD_FILE,
+    get_equipment_snapshot=_history_equipment_snapshot,
+    get_equipment_template_file=get_equipamentos_template_file,
+    history_annotation_record_path=history_annotation_record_path,
+    history_annotation_row_fingerprint=history_annotation_row_fingerprint,
+    history_annotations_directory=lambda: HISTORY_ANNOTATIONS_DIR,
+    history_annotations_sync_enabled=lambda: HISTORY_ANNOTATIONS_SYNC_ENABLED,
+    input_directory=lambda: INPUT_DIR,
+    atomic_file_transaction=lambda *args, **kwargs: AtomicFileTransaction(*args, **kwargs),
+    inventory_state_transaction=inventory_state_transaction,
+    load_comparison_history=load_comparison_history,
+    load_database=lambda *args, **kwargs: load_database(*args, **kwargs),
+    load_history_annotations=load_history_annotations,
+    load_modified_apelidos=load_modified_apelidos,
+    local_annotation_outbox_directory=lambda: LOCAL_HISTORY_ANNOTATION_OUTBOX_DIR,
+    max_upload_bytes=MAX_UPLOAD_BYTES,
+    modified_aliases_path=lambda: MODIFIED_APELIDOS_FILE,
+    normalize_reference_value=normalize_reference_value,
+    publish_database_state=publish_database_state,
+    save_history_annotation=lambda *args, **kwargs: save_history_annotation(*args, **kwargs),
+    transaction_root=lambda: TRANSACTION_ROOT,
+    upload_backups_directory=lambda: UPLOAD_BACKUPS_DIR,
+    validate_uploaded_workbook=lambda *args, **kwargs: validate_uploaded_workbook(*args, **kwargs),
+))
+flush_pending_history_annotations = _inventory_history_exports["flush_pending_history_annotations"]
+migrate_legacy_history_annotations = _inventory_history_exports["migrate_legacy_history_annotations"]
 _build_comparison_restore_context = _inventory_history_exports["_build_comparison_restore_context"]
 _comparison_event_has_restorable_backup = _inventory_history_exports["_comparison_event_has_restorable_backup"]
 _comparison_event_type = _inventory_history_exports["_comparison_event_type"]
