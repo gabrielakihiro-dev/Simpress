@@ -264,6 +264,7 @@ class MaintenanceContractTests(unittest.TestCase):
             if isinstance(node, ast.Call) and isinstance(node.func, ast.Name)
         }
         self.assertTrue(startup_calls.issubset(lifespan_calls))
+        self.assertIn("_report_startup_readiness_best_effort", lifespan_calls)
 
     def test_history_router_exports_are_explicit_and_ci_covers_all_test_suites(self):
         main_source = (PROJECT_ROOT / "main.py").read_text(encoding="utf-8")
@@ -724,6 +725,23 @@ class MaintenanceContractTests(unittest.TestCase):
             "[PRONTIDÃO] Geração de planilha de transferência: arquivos necessários presentes (checagem estrutural).",
             output.getvalue(),
         )
+
+    def test_readiness_report_failure_is_logged_and_suppressed(self):
+        with (
+            patch.object(main, "report_startup_readiness", side_effect=OSError("readiness unavailable")),
+            patch.object(main.logger, "exception") as log_exception,
+        ):
+            main._report_startup_readiness_best_effort()
+
+        log_exception.assert_called_once()
+
+    def test_windows_launcher_bootstraps_environment_without_gating_on_workbooks(self):
+        launcher = (PROJECT_ROOT / "iniciar_servidor.bat").read_text(encoding="utf-8")
+
+        self.assertIn("bootstrap_environment.py", launcher)
+        self.assertIn("--postgres-pilot", launcher)
+        self.assertNotIn('if not exist "%TEMPLATE%" goto', launcher)
+        self.assertNotIn(":missing_template", launcher)
 
 
 if __name__ == "__main__":

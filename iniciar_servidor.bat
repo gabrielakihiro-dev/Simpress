@@ -4,10 +4,10 @@ setlocal
 set "PROJECT_DIR=%~dp0"
 set "PYTHON=%PROJECT_DIR%.venv\Scripts\python.exe"
 set "MAIN=%PROJECT_DIR%main.py"
+set "BOOTSTRAPPER=%PROJECT_DIR%scripts\bootstrap_environment.py"
 set "PORT_SELECTOR=%PROJECT_DIR%scripts\select_server_port.py"
 set "MIGRATOR=%PROJECT_DIR%scripts\migrate_local_data.py"
 set "CLEANER=%PROJECT_DIR%scripts\cleanup_local_temps.py"
-set "TEMPLATE=%PROJECT_DIR%data\planilhas_entrada\(MODELO) - TRANSFERENCIA SIMPRESS.xlsx"
 set "SIMPRESS_PORT=8000"
 
 title Simpress - Servidor FastAPI
@@ -18,10 +18,40 @@ echo   Iniciando Servidor Simpress (FastAPI / Uvicorn)...
 echo   Projeto:      %PROJECT_DIR%
 echo ========================================================
 
-if not exist "%PYTHON%" goto missing_python
 if not exist "%MAIN%" goto missing_main
+if not "%SIMPRESS_PERSISTENCE_BACKEND%"=="" if /i not "%SIMPRESS_PERSISTENCE_BACKEND%"=="files" if /i not "%SIMPRESS_PERSISTENCE_BACKEND%"=="postgres" goto invalid_persistence
+if not exist "%BOOTSTRAPPER%" goto missing_bootstrapper
+
+if exist "%PYTHON%" goto bootstrap_using_project_python
+where py >nul 2>nul
+if not errorlevel 1 goto bootstrap_using_python_launcher
+where python >nul 2>nul
+if not errorlevel 1 goto bootstrap_using_python
+goto missing_python
+
+:bootstrap_using_project_python
+set "BOOTSTRAP_LAUNCHER=%PYTHON%"
+set "BOOTSTRAP_PREFIX="
+goto bootstrap_environment
+
+:bootstrap_using_python_launcher
+set "BOOTSTRAP_LAUNCHER=py"
+set "BOOTSTRAP_PREFIX=-3"
+goto bootstrap_environment
+
+:bootstrap_using_python
+set "BOOTSTRAP_LAUNCHER=python"
+set "BOOTSTRAP_PREFIX="
+
+:bootstrap_environment
+if /i "%SIMPRESS_PERSISTENCE_BACKEND%"=="postgres" (
+    "%BOOTSTRAP_LAUNCHER%" %BOOTSTRAP_PREFIX% "%BOOTSTRAPPER%" --project-root "%PROJECT_DIR%" --postgres-pilot
+) else (
+    "%BOOTSTRAP_LAUNCHER%" %BOOTSTRAP_PREFIX% "%BOOTSTRAPPER%" --project-root "%PROJECT_DIR%"
+)
+if errorlevel 1 goto bootstrap_failed
+if not exist "%PYTHON%" goto bootstrap_failed
 if /i "%SIMPRESS_PERSISTENCE_BACKEND%"=="postgres" goto postgres_pilot
-if not "%SIMPRESS_PERSISTENCE_BACKEND%"=="" if /i not "%SIMPRESS_PERSISTENCE_BACKEND%"=="files" goto invalid_persistence
 if not exist "%PORT_SELECTOR%" goto missing_port_selector
 if not exist "%MIGRATOR%" goto missing_migrator
 if not exist "%CLEANER%" goto missing_cleaner
@@ -35,7 +65,6 @@ if errorlevel 1 goto port_selection_failed
 if errorlevel 1 goto migration_failed
 "%PYTHON%" "%CLEANER%" --apply
 if errorlevel 1 goto cleanup_failed
-if not exist "%TEMPLATE%" goto missing_template
 
 call :select_server_port
 if errorlevel 10 goto already_running
@@ -69,8 +98,20 @@ pause
 exit /b 1
 
 :missing_python
-echo ERRO: Python do ambiente local nao encontrado:
-echo %PYTHON%
+echo ERRO: Python 3.12 ou superior nao foi encontrado.
+echo Instale Python 3.12 ou superior e execute este inicializador novamente.
+pause
+exit /b 1
+
+:missing_bootstrapper
+echo ERRO: configurador inicial do ambiente nao encontrado:
+echo %BOOTSTRAPPER%
+pause
+exit /b 1
+
+:bootstrap_failed
+echo ERRO: nao foi possivel preparar o ambiente Python.
+echo Confira a versao do Python e a conexao com a internet; depois tente novamente.
 pause
 exit /b 1
 
@@ -83,12 +124,6 @@ exit /b 1
 :missing_port_selector
 echo ERRO: ferramenta para verificar a porta local nao encontrada:
 echo %PORT_SELECTOR%
-pause
-exit /b 1
-
-:missing_template
-echo ERRO: modelo de transferencia nao encontrado:
-echo %TEMPLATE%
 pause
 exit /b 1
 
