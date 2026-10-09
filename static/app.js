@@ -12,6 +12,7 @@
     const equipmentLookupRequestGate = transferUtils.createRequestGate();
     const searchButtonInitialHtml = document.getElementById("btn-buscar-serial")?.innerHTML || "";
     const modalReturnFocus = new Map();
+    let comparisonAnnotationSyncObservers = [];
     const motion = window.SimpressMotion;
     let finishEquipmentLoading = () => {};
     motion?.installFeedback();
@@ -2114,13 +2115,48 @@
         return `<p class="text-sm text-slate-400 text-center py-5" role="status" aria-live="polite">${escapeHtml(emptyMessage)}</p>`;
       }
       const tableLabel = `Tabela de ${headers.join(", ")}`;
+      const mobileCards = rows.map((row, index) => {
+        const template = document.createElement("template");
+        template.innerHTML = row.trim();
+        const sourceRow = template.content.querySelector("tr");
+        const cells = Array.from(sourceRow?.cells || []);
+        if (!cells.length) return "";
+
+        const titleLabel = headers[0] || "Registro";
+        const titleText = cells[0].textContent.trim() || `Registro ${index + 1}`;
+        const titleContent = cells[0].innerHTML || escapeHtml(titleText);
+        const manualAliasRow = sourceRow.hasAttribute("data-manual-alias-row")
+          ? ` data-manual-alias-row="${escapeHtml(sourceRow.dataset.manualAliasRow)}"`
+          : "";
+        const fields = cells.slice(1).map((cell, cellIndex) => {
+          const label = headers[cellIndex + 1] || `Campo ${cellIndex + 2}`;
+          const annotationClass = cell.querySelector("[data-comparison-annotation]")
+            ? " comparison-mobile-card-field--annotation"
+            : "";
+          const manualAliasStatus = cell.hasAttribute("data-manual-alias-status")
+            ? " data-manual-alias-status"
+            : "";
+          return `
+            <div class="comparison-mobile-card-field${annotationClass}">
+              <dt>${escapeHtml(label)}</dt>
+              <dd${manualAliasStatus}>${cell.innerHTML}</dd>
+            </div>`;
+        }).join("");
+
+        return `
+          <article class="comparison-mobile-card" role="listitem"${manualAliasRow}>
+            <h5 class="comparison-mobile-card-title"><span class="sr-only">${escapeHtml(titleLabel)}: </span>${titleContent}</h5>
+            ${fields ? `<dl class="comparison-mobile-card-fields">${fields}</dl>` : ""}
+          </article>`;
+      }).join("");
       return `
-        <div class="accessible-table-wrap rounded-lg border border-slate-800" role="region" aria-label="${escapeHtml(tableLabel)}" tabindex="0">
+        <div class="accessible-table-wrap comparison-desktop-table rounded-lg border border-slate-800" role="region" aria-label="${escapeHtml(tableLabel)}" tabindex="0">
           <table class="min-w-full text-left text-sm" aria-label="${escapeHtml(tableLabel)}">
             <thead class="bg-slate-950 text-slate-300"><tr>${headers.map(header => `<th scope="col" class="px-3 py-2.5 font-semibold whitespace-nowrap">${escapeHtml(header)}</th>`).join("")}</tr></thead>
             <tbody class="divide-y divide-slate-800">${rows.join("")}</tbody>
           </table>
-        </div>`;
+        </div>
+        <div class="comparison-mobile-list" role="list" aria-label="${escapeHtml(`${tableLabel} em cartões`)}">${mobileCards}</div>`;
     }
 
     function abrirModalComparacaoPlanilhas(comparison) {
@@ -2323,6 +2359,8 @@
           </tr>`;
       });
 
+      comparisonAnnotationSyncObservers.forEach(observer => observer.disconnect());
+      comparisonAnnotationSyncObservers = [];
       document.getElementById("comparacao-planilhas-conteudo").innerHTML = comparison.somente_anotacoes_sincronizadas
         ? `
           <p class="text-xs text-cyan-200 bg-cyan-500/10 border border-cyan-500/25 rounded-lg px-3 py-2">Este clone contém as anotações sincronizadas. O resultado original e os arquivos da comparação não estão armazenados neste dispositivo.</p>
@@ -2361,7 +2399,6 @@
         </section>
         <section class="space-y-2">
           <div><h4 class="text-sm font-bold text-rose-300">Sem acesso há 14 dias ou mais</h4><p class="text-[11px] text-slate-500">Notebook com última verificação com êxito igual ou anterior a 14 dias na data e hora desta atualização.</p><p class="text-[11px] text-slate-400">Atualização usada como referência: ${comparison.horario_comparacao ? `<time datetime="${escapeHtml(comparison.horario_comparacao)}">${escapeHtml(formatarHorarioHistorico(comparison.horario_comparacao))}</time>` : "data e hora indisponíveis"}.</p></div>
-          ${semAcessoRows.length ? '<p class="comparison-table-scroll-hint">Role a tabela horizontalmente para consultar todas as colunas.</p>' : ""}
           ${renderizarTabelaComparacao(["Hostname/Apelido", "Série", "Última verificação com êxito", "Dias sem verificação", "Linha no endpoint", ...annotationHeaders], semAcessoRows, "Nenhum notebook está há 14 dias ou mais sem verificação com êxito.")}
         </section>
         <section class="space-y-2">
@@ -2391,6 +2428,7 @@
           if (item) resolverDivergenciaApelidoManual(comparison, item, button.dataset.manualAliasAction, button);
         });
       });
+      const annotationsById = new Map();
       document.querySelectorAll("[data-comparison-annotation]").forEach(textarea => {
         const itemId = textarea.dataset.annotationId;
         const status = textarea.parentElement.querySelector("[data-annotation-status]");
@@ -2413,6 +2451,45 @@
             }
           ),
         });
+        if (itemId) {
+          if (!annotationsById.has(itemId)) annotationsById.set(itemId, []);
+          annotationsById.get(itemId).push(textarea);
+        }
+      });
+      annotationsById.forEach(textareas => {
+        const syncState = (source, target) => {
+          if (target.value !== source.value) target.value = source.value;
+          const sourceStatus = source.parentElement.querySelector("[data-annotation-status]");
+          const targetStatus = target.parentElement.querySelector("[data-annotation-status]");
+          if (sourceStatus && targetStatus) {
+            if (targetStatus.textContent !== sourceStatus.textContent) targetStatus.textContent = sourceStatus.textContent;
+            if (targetStatus.className !== sourceStatus.className) targetStatus.className = sourceStatus.className;
+          }
+          const sourceRetry = source.parentElement.querySelector("[data-annotation-retry]");
+          const targetRetry = target.parentElement.querySelector("[data-annotation-retry]");
+          if (sourceRetry && targetRetry) {
+            targetRetry.hidden = sourceRetry.hidden;
+            targetRetry.disabled = sourceRetry.disabled;
+          }
+        };
+
+        textareas.forEach(source => {
+          source.addEventListener("input", () => {
+            textareas.forEach(target => {
+              if (target !== source) syncState(source, target);
+            });
+          });
+          const status = source.parentElement.querySelector("[data-annotation-status]");
+          if (status && textareas.length > 1) {
+            const observer = new MutationObserver(() => {
+              textareas.forEach(target => {
+                if (target !== source) syncState(source, target);
+              });
+            });
+            observer.observe(status, { attributes: true, childList: true, characterData: true, subtree: true });
+            comparisonAnnotationSyncObservers.push(observer);
+          }
+        });
       });
       abrirModalAcessivel("modal-comparacao-planilhas", '[aria-label="Fechar resultado"]', "fecharModalComparacaoPlanilhas");
     }
@@ -2426,9 +2503,18 @@
         `Remover a alteração manual da série ${item.serie}? O apelido voltará ao hostname da fonte no endpoint, se preenchido, ou ao valor cadastrado na Simpress.`
       )) return;
 
-      const row = botao.closest("tr");
-      const actionArea = row?.querySelector("[data-manual-alias-actions]");
-      const buttons = actionArea ? [...actionArea.querySelectorAll("button")] : [botao];
+      const row = botao.closest("[data-manual-alias-row]");
+      const rowIndex = row?.dataset.manualAliasRow;
+      const matchingRows = rowIndex === undefined
+        ? [row].filter(Boolean)
+        : [...document.querySelectorAll("#comparacao-planilhas-conteudo [data-manual-alias-row]")]
+          .filter(candidate => candidate.dataset.manualAliasRow === rowIndex);
+      const actionAreas = matchingRows
+        .map(candidate => candidate.querySelector("[data-manual-alias-actions]"))
+        .filter(Boolean);
+      const buttons = actionAreas.length
+        ? actionAreas.flatMap(actionArea => [...actionArea.querySelectorAll("button")])
+        : [botao];
       buttons.forEach(button => {
         button.disabled = true;
         button.setAttribute("aria-busy", "true");
@@ -2452,14 +2538,16 @@
             divergence => !divergence.resolucao || divergence.resolucao === "pendente"
           ).length;
         }
-        const status = row?.querySelector("[data-manual-alias-status]");
-        if (status) status.textContent = acao === "manter" ? "Alteração manual mantida" : "Alteração manual removida";
-        if (actionArea) {
+        matchingRows.forEach(candidate => {
+          const status = candidate.querySelector("[data-manual-alias-status]");
+          if (status) status.textContent = acao === "manter" ? "Alteração manual mantida" : "Alteração manual removida";
+        });
+        actionAreas.forEach(actionArea => {
           const concluido = document.createElement("span");
           concluido.className = "text-[10px] text-slate-500";
           concluido.textContent = "Concluído";
           actionArea.replaceWith(concluido);
-        }
+        });
 
         const equipment = data.equipamento;
         const currentSerial = String(currentEquipamento?.serial || "").replace(/[^A-Z0-9]/gi, "").toUpperCase();
@@ -2485,6 +2573,8 @@
     }
 
     function fecharModalComparacaoPlanilhas() {
+      comparisonAnnotationSyncObservers.forEach(observer => observer.disconnect());
+      comparisonAnnotationSyncObservers = [];
       fecharModalAcessivel("modal-comparacao-planilhas");
     }
 
