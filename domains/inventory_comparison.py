@@ -275,7 +275,7 @@ def filter_sebrae_owned_unmatched_items(items: Any) -> List[Dict[str, Any]]:
     ]
 
 def filter_update_review_items(items: Any) -> List[Dict[str, Any]]:
-    """Keep only duplicate/blank series and the requested source exceptions."""
+    """Keep review rows except Endpoint series shown in other result sections."""
     if not isinstance(items, list):
         return []
 
@@ -288,9 +288,12 @@ def filter_update_review_items(items: Any) -> List[Dict[str, Any]]:
             _comparison_source_text_for_display(str(item.get("motivo") or ""))
         )
         hostname = normalize_reference_value(item.get("computador"))
+        if (
+            "SERIEDUPLICADANOENDPOINT" in reason
+            or "SERIENAOENCONTRADANOENDPOINT" in reason
+        ):
+            continue
         if "SERIEDUPLICADA" in reason or not serial:
-            filtered.append(item)
-        elif "SERIENAOENCONTRADANOENDPOINT" in reason and serial.startswith(("BRJ", "BRM")):
             filtered.append(item)
         elif "SERIENAOENCONTRADANASIMPRESS" in reason and hostname.startswith("PRMAC"):
             filtered.append(item)
