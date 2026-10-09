@@ -10,6 +10,7 @@
   <link rel="stylesheet" href="/static/vendor/tailwind-3.4.17.css">
   <script src="/static/vendor/lucide-1.48.0.min.js"></script>
   <link rel="stylesheet" href="/static/app.css">
+  <link rel="stylesheet" href="/static/ui-motion.css">
 </head>
 <body class="min-h-full bg-gradient-to-br from-slate-950 via-slate-900 to-slate-950 text-slate-100 flex flex-col font-sans selection:bg-brand-500 selection:text-white">
 
@@ -217,6 +218,7 @@
       </div>
 
       <!-- CARD: EQUIPAMENTO ENCONTRADO -->
+      <div id="equipment-loading" class="ui-equipment-loading"></div>
       <div id="card-equipamento" role="region" aria-label="Dados do equipamento localizado" class="hidden mt-6 bg-slate-800/40 rounded-xl border border-slate-700/70 p-5 transition-all">
         <div class="flex flex-col lg:flex-row lg:items-center justify-between gap-4 pb-4 border-b border-slate-700/50">
           <div class="flex items-start sm:items-center space-x-4">
@@ -1421,6 +1423,7 @@ Horário disponível para atendimento:</textarea>
   <script src="/static/form-draft-guard.js"></script>
   <script src="/static/transfer-utils.js"></script>
   <script src="/static/history-annotation-autosave.js"></script>
+  <script src="/static/ui-motion.js"></script>
   <script src="/static/app.js"></script>
 </body>
 </html>
