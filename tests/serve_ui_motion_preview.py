@@ -57,6 +57,8 @@ class Handler(BaseHTTPRequestHandler):
                 self.send({"detail": "Arquivo não encontrado"}, 404)
                 return
             self.send(target.read_bytes(), content_type=mimetypes.guess_type(target.name)[0] or "application/octet-stream")
+        elif path == "/api/auth/session":
+            self.send({"enabled": False, "authenticated": False})
         elif path == "/api/stats":
             self.send({"total_equipamentos": 1, "total_unidades": 0, "exportacao_disponivel": False})
         elif path == "/api/prontidao":
