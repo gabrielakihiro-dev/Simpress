@@ -16,6 +16,13 @@ class LocalSupabaseSafetyTests(unittest.TestCase):
     def test_approved_config_passes(self):
         local.check_config()
 
+    def test_signup_must_stay_closed_but_password_provider_enabled(self):
+        config = (local.ROOT / "supabase/config.toml").read_text(encoding="utf-8")
+        for changed in (config.replace('enable_signup = false','enable_signup = true',1),
+                        config.replace('enable_signup = true','enable_signup = false',1)):
+            with patch.object(Path,"open",return_value=io.BytesIO(changed.encode())),self.assertRaises(RuntimeError):
+                local.check_config()
+
     def test_changed_project_and_linked_remote_are_rejected(self):
         config = (local.ROOT / "supabase/config.toml").read_text(encoding="utf-8")
         changed = config.replace('project_id = "simpress-dev"', 'project_id = "other"')

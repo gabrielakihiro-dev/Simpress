@@ -61,3 +61,21 @@ O usuário autorizou a implementação do plano da Etapa 4. O CLI **2.120.0** fo
 As três migrations foram aplicadas e o banco vazio foi reconstruído localmente sem seed. Cadastro e acesso ao domínio permanecem fechados; nenhum administrador ou bucket foi criado e não houve importação de dados reais. Os resultados detalhados e o encerramento dos serviços estão no [relatório da Etapa 4](migracao_supabase_etapa_4.md).
 
 O impedimento de CLI/runtime está resolvido para o desenvolvimento local validado. Isso não declara o ambiente pronto para uso oficial, nem comprova backup de desastre. `Backup_Banco` continua sem dump de banco. Nenhuma configuração remota, commit ou push realizado.
+
+## Revalidação na Etapa 6 — 09/10/2026
+
+O piloto passou a integrar Storage privado, histórico, anotações e backups lógicos. As cinco migrations foram aplicadas e a instância primária descartável foi reconstruída somente após a conferência de ausência de dados e identidade. A validação passou em 66 verificações SQL e quatro HTTP; o ensaio específico de arquivos passou em 48 verificações com fixtures sintéticas em banco separado.
+
+A conferência final encontrou 20 tabelas com RLS forçado, revisão zero, nenhum lote/modelo ativo, zero usuários Auth, buckets, objetos Storage, bancos temporários ou login efêmero. API e PostgreSQL permaneceram em loopback. Os serviços foram encerrados com volumes preservados.
+
+Foi implementado um gerador de arquivo do domínio e objetos para o destino aprovado `Backup_Banco/`. Nesta execução o backup foi ensaiado somente em pasta temporária com dados sintéticos, depois removidos. Backup diário, cópia independente e recuperação integral do serviço ainda dependem das próximas etapas. Consulte os procedimentos, resultados e limites no [relatório da Etapa 6](migracao_supabase_etapa_6.md). Nenhuma configuração remota, commit ou push foi executado nesta etapa.
+
+## Evolução de segurança na Etapa 7 — 09/10/2026
+
+A sexta migration acrescenta duas tabelas privadas de sessão e políticas para a única conta administradora aprovada. O piloto autenticado requer as dependências de `requirements-postgres.txt`, incluindo PyJWT 2.15.1 e cryptography 50.0.2. O modo de arquivos mantém suas dependências e operação local anteriores.
+
+Foi necessário habilitar `[auth.email].enable_signup` para permitir login por senha: no CLI, esse campo controla o provedor de e-mail. `[auth].enable_signup=false` continua bloqueando cadastro público. O helper verifica ambas as condições; o ensaio também tenta o cadastro diretamente na API. Alterar essa configuração exige encerrar e retomar o projeto local preservando seus volumes.
+
+`scripts/configure_auth_local.py --local-disposable` prepara a conta inicial interativamente. Ele não foi usado com credenciais reais nesta execução. `scripts/run_postgres_pilot.py --auth` mantém listener em loopback, desabilita confiança em proxy e usa login SQL efêmero sem bypass de RLS. O ensaio `scripts/verify_auth_pilot.py --local-disposable` aceita somente instalação vazia; não deve ser executado após provisionar a conta permanente.
+
+O exemplo hospedado e seu verificador são referências estáticas: não habilitam acesso remoto, não verificam TLS real e não fazem deploy. Backup de Auth, recuperação completa, cópia independente e entrada em produção continuam sujeitos à Etapa 8. Resultados e limites estão no [relatório da Etapa 7](migracao_supabase_etapa_7.md).

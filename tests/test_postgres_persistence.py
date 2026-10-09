@@ -56,9 +56,12 @@ class PersistenceConfigurationTests(unittest.TestCase):
             with self.subTest(size=size), self.assertRaises(PersistenceError):
                 PersistenceSettings.from_environment(env)
 
-    def test_route_boundary_keeps_storage_and_notes_for_stage_6(self):
-        for path in ("/api/planilhas/atualizar", "/api/exportar-equipamentos", "/api/gerar-planilha",
-                     "/api/historico-comparacoes", "/api/historico-comparacoes/a/anotacao"):
+    def test_route_boundary_enables_stage_6_with_exact_methods(self):
+        for method,path in (("POST","/api/planilhas/atualizar"),("GET","/api/exportar-equipamentos"),
+                            ("POST","/api/gerar-planilha"),("GET","/api/historico-comparacoes"),
+                            ("PUT","/api/historico-comparacoes/a/anotacoes/b")):
+            self.assertTrue(pilot_route_allowed(method,path))
+        for path in ("/api/piloto/unknown","/api/historico-comparacoes/a/anotacao"):
             self.assertFalse(pilot_route_allowed("POST", path))
             self.assertFalse(pilot_route_allowed("GET", path))
         self.assertTrue(pilot_route_allowed("GET", "/api/equipamento/SN1"))

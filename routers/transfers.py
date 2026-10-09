@@ -298,11 +298,15 @@ def _gerar_planilha_transferencia(payload: TransferenciaPayload, template_file: 
             wb.close()
 
 
-def create_transfer_router(template_file_provider: Callable[[], Path]):
+def create_transfer_router(template_file_provider: Callable[[], Path], generate_override=None):
     """Create the transfer route with a path provider that can follow runtime overrides."""
     router = APIRouter()
 
     def gerar_planilha(payload: TransferenciaPayload):
+        if generate_override is not None:
+            result = generate_override(payload)
+            if result is not None:
+                return result
         return _gerar_planilha_transferencia(payload, template_file_provider())
 
     router.add_api_route(

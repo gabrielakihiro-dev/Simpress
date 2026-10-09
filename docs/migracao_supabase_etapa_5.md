@@ -6,6 +6,8 @@
 
 **Referências:** [escopo aprovado](prompts_migracao_supabase_etapas_2_a_8.md), [arquitetura](migracao_supabase_etapa_2.md), [modelo](migracao_supabase_etapa_3.md), [esquema inicial](migracao_supabase_etapa_4.md) e [AGENTS.md](../AGENTS.md).
 
+**Evolução posterior:** a [Etapa 6](migracao_supabase_etapa_6.md) integra arquivos privados, comparações e anotações. Os bloqueios e as permissões descritos neste relatório correspondem à entrega original da Etapa 5; o ensaio `verify_postgres.py` foi atualizado para os novos contratos e para continuar verificando a proibição de alterações administrativas.
+
 ## 1. Fluxos implementados
 
 - Seleção explícita de persistência por processo: `files` ou `postgres`. Ausência de configuração mantém o modo de arquivos; valor inválido interrompe a inicialização. Falha no PostgreSQL não ativa arquivos como fallback.

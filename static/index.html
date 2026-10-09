@@ -56,6 +56,7 @@
             <i data-lucide="chevron-down" class="w-3 h-3" aria-hidden="true"></i>
           </summary>
           <div class="header-secondary-panel">
+            <button id="btn-auth-logout" type="button" hidden class="header-action-item hidden flex items-center gap-1.5">Sair</button>
             <button type="button" onclick="abrirModalAtualizarPlanilhas()" id="btn-atualizar-planilhas" class="header-action-item header-action-item--blue flex items-center gap-1.5" title="Comparar os arquivos e atualizar as bases do site">
               <i data-lucide="upload" class="header-action-icon header-action-icon--blue w-3 h-3" aria-hidden="true"></i>
               <span>Atualizar planilhas</span>
@@ -1426,6 +1427,7 @@ Horário disponível para atendimento:</textarea>
   <script src="/static/ui-motion.js"></script>
   <script src="/static/accessible-dialogs.js"></script>
   <script src="/static/ui-notifications.js"></script>
+  <script src="/static/auth-session.js"></script>
   <script src="/static/app.js"></script>
 </body>
 </html>

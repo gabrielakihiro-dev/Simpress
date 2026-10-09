@@ -136,6 +136,9 @@ from persistence.config import PersistenceError, PersistenceSettings
 from persistence.boundary import PersistenceBoundaryMiddleware, idempotency_key
 
 PERSISTENCE_SETTINGS = PersistenceSettings.from_environment()
+from security.config import AuthSettings
+from security.middleware import AuthenticationMiddleware
+AUTH_SETTINGS = AuthSettings.from_environment()
 _POSTGRES_BACKEND: Any = None
 
 
@@ -278,8 +281,8 @@ def delete_alias_history_entry(event_id: str) -> bool:
         return removed["value"]
 
 def load_comparison_history() -> List[Dict[str, Any]]:
-    if postgres_backend() is not None:
-        raise PersistenceError(501, "O histórico de comparações no PostgreSQL será integrado na Etapa 6.")
+    if (backend := postgres_backend()) is not None:
+        return backend.files.history.load()
     with COMPARISON_HISTORY_LOCK:
         if not COMPARISON_HISTORY_FILE.exists():
             return []
@@ -586,8 +589,9 @@ def get_startup_readiness() -> Dict[str, Any]:
             "files": {"inventario_equipamentos": {"available": available, "file": "PostgreSQL local", "reason": "OK" if available else reason}},
             "functions": {
                 "consulta_equipamentos": {"available": available, "missing_files": [] if available else [reason]},
-                **{name: {"available": False, "missing_files": ["Integração de arquivos pendente na Etapa 6"]}
-                   for name in ("geracao_transferencia", "comparacao_atualizacao_inventarios", "exportacao_equipamentos")},
+                "comparacao_atualizacao_inventarios": {"available":backend.files.storage is not None,"missing_files":[] if backend.files.storage is not None else ["Storage do piloto não configurado"]},
+                "geracao_transferencia": {"available":state.get("transfer_available",False),"missing_files":[] if state.get("transfer_available") else ["Modelo de transferência privado ausente"]},
+                "exportacao_equipamentos": {"available":state["stats_cache"].get("exportacao_disponivel",False),"missing_files":[] if state["stats_cache"].get("exportacao_disponivel") else [state["stats_cache"].get("exportacao_motivo", "Modelo de exportação ausente")]},
             },
         }
     try:
@@ -1703,6 +1707,7 @@ def _parse_request_authority(
 
 
 app.add_middleware(LocalRequestSafetyMiddleware)
+app.add_middleware(AuthenticationMiddleware, provider=postgres_backend, settings=lambda: AUTH_SETTINGS)
 
 # In-memory storage
 equipamentos_cache: Dict[str, Dict[str, Any]] = {}
@@ -3118,6 +3123,9 @@ def desfazer_alteracao_apelido(payload: ApelidoUndoPayload):
 @app.get("/api/exportar-equipamentos")
 def exportar_equipamentos():
     """Exporta a apresentação de referência com os registros da base ativa."""
+    if (backend := postgres_backend()) is not None:
+        from persistence.exports import equipment
+        return equipment(backend.files)
     source_file = EXPORT_MODEL_FILE
     current_file = get_parque_file()
     if not source_file.is_file():
@@ -3412,6 +3420,9 @@ async def atualizar_planilhas(
     endpoint_file: UploadFile = File(...),
     details_file: UploadFile = File(...),
 ):
+    if (backend := postgres_backend()) is not None:
+        from persistence.routes import update
+        return await update(backend.files,endpoint_file,details_file,read_uploaded_xlsx)
     result = await update_inventory_files(
         endpoint_file,
         details_file,
@@ -3540,7 +3551,14 @@ buscar_seriais_expandida = _equipment_search_exports["buscar_seriais_expandida"]
 get_stats = _equipment_search_exports["get_stats"]
 app.include_router(equipment_search_router)
 
-transfer_router, gerar_planilha = create_transfer_router(lambda: TEMPLATE_FILE)
+def _postgres_transfer(payload):
+    if (backend := postgres_backend()) is not None:
+        from persistence.exports import transfer
+        return transfer(backend.files,payload)
+    return None
+
+
+transfer_router, gerar_planilha = create_transfer_router(lambda: TEMPLATE_FILE, _postgres_transfer)
 app.include_router(transfer_router)
 
 inventory_history_router, _inventory_history_exports = create_inventory_history_router(InventoryHistoryServices(
@@ -3557,13 +3575,13 @@ inventory_history_router, _inventory_history_exports = create_inventory_history_
     history_annotation_record_path=history_annotation_record_path,
     history_annotation_row_fingerprint=history_annotation_row_fingerprint,
     history_annotations_directory=lambda: HISTORY_ANNOTATIONS_DIR,
-    history_annotations_sync_enabled=lambda: HISTORY_ANNOTATIONS_SYNC_ENABLED,
+    history_annotations_sync_enabled=lambda: postgres_backend() is not None or HISTORY_ANNOTATIONS_SYNC_ENABLED,
     input_directory=lambda: INPUT_DIR,
     atomic_file_transaction=lambda *args, **kwargs: AtomicFileTransaction(*args, **kwargs),
     inventory_state_transaction=inventory_state_transaction,
     load_comparison_history=load_comparison_history,
     load_database=lambda *args, **kwargs: load_database(*args, **kwargs),
-    load_history_annotations=load_history_annotations,
+    load_history_annotations=lambda directory: [] if postgres_backend() is not None else load_history_annotations(directory),
     load_modified_apelidos=load_modified_apelidos,
     local_annotation_outbox_directory=lambda: LOCAL_HISTORY_ANNOTATION_OUTBOX_DIR,
     max_upload_bytes=MAX_UPLOAD_BYTES,
@@ -3574,6 +3592,7 @@ inventory_history_router, _inventory_history_exports = create_inventory_history_
     transaction_root=lambda: TRANSACTION_ROOT,
     upload_backups_directory=lambda: UPLOAD_BACKUPS_DIR,
     validate_uploaded_workbook=lambda *args, **kwargs: validate_uploaded_workbook(*args, **kwargs),
+    postgres_files=lambda: backend.files if (backend := postgres_backend()) is not None else None,
 ))
 flush_pending_history_annotations = _inventory_history_exports["flush_pending_history_annotations"]
 migrate_legacy_history_annotations = _inventory_history_exports["migrate_legacy_history_annotations"]
@@ -3595,8 +3614,13 @@ restaurar_comparacao_historica = _inventory_history_exports["restaurar_comparaca
 visualizar_restauracao_comparacao = _inventory_history_exports["visualizar_restauracao_comparacao"]
 app.include_router(inventory_history_router)
 
+from persistence.routes import create_files_router
+app.include_router(create_files_router(postgres_backend,MAX_UPLOAD_BYTES))
+
 # Serve static files and frontend
 STATIC_DIR.mkdir(parents=True, exist_ok=True)
+from security.routes import create_auth_router
+app.include_router(create_auth_router(postgres_backend, lambda: AUTH_SETTINGS, STATIC_DIR))
 app.mount("/static", StaticFiles(directory=str(STATIC_DIR)), name="static")
 
 @app.get("/favicon.ico", include_in_schema=False)
@@ -3620,4 +3644,4 @@ if __name__ == "__main__":
     print(f"[INFO] Modelo de transferência: {TEMPLATE_FILE} ({'OK' if TEMPLATE_FILE.is_file() else 'AUSENTE'})")
     print(f"[INFO] Fonte EquipamentosDetalhes: {equipment_source or 'AUSENTE'}")
     print(f"[INFO] Porta local: {SERVER_PORT}")
-    uvicorn.run(app, host="127.0.0.1", port=SERVER_PORT)
+    uvicorn.run(app, host="127.0.0.1", port=SERVER_PORT, proxy_headers=False)

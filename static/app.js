@@ -1,5 +1,9 @@
     // State
     let currentEquipamento = null;
+    let inventoryUploadAttempt = null;
+    const inventoryRestoreAttempts = new Map();
+    const inventoryOperationKey = () => globalThis.crypto?.randomUUID?.()
+      || `${Date.now().toString(36)}-${Math.random().toString(36).slice(2)}`;
     let equipamentoSelectionRevision = 0;
     const CNPJ_FATURAMENTO_PADRAO = "75.110.585/0001-00";
     let retiradaCidadeSelecionada = "";
@@ -1896,9 +1900,14 @@
       const formData = new FormData();
       formData.append("endpoint_file", endpointFile);
       formData.append("details_file", detailsFile);
+      if (!inventoryUploadAttempt || inventoryUploadAttempt.endpoint !== endpointFile || inventoryUploadAttempt.details !== detailsFile) {
+        inventoryUploadAttempt = { endpoint: endpointFile, details: detailsFile, key: inventoryOperationKey() };
+      }
 
       try {
-        const response = await fetch("/api/planilhas/atualizar", { method: "POST", body: formData });
+        const response = await fetch("/api/planilhas/atualizar", {
+          method: "POST", body: formData, headers: { "Idempotency-Key": inventoryUploadAttempt.key },
+        });
         const result = await response.json().catch(() => ({}));
         if (!response.ok) {
           if (response.status === 404) {
@@ -1908,6 +1917,7 @@
           throw new Error(Array.isArray(detail) ? detail.map(item => item.msg || item).join("; ") : (detail || "Falha ao atualizar as planilhas."));
         }
 
+        inventoryUploadAttempt = null;
         const selectedSerial = currentEquipamento?.serial || "";
         const selectionRefresh = atualizarSelecaoAposSubstituirInventarios(selectedSerial);
         fecharModalAtualizarPlanilhas();
@@ -2691,12 +2701,19 @@
         if (!window.confirm(confirmation)) return;
 
         botao.textContent = "Restaurando...";
+        if (!inventoryRestoreAttempts.has(evento.id)) {
+          inventoryRestoreAttempts.set(evento.id, { token: preview.preview_token, key: inventoryOperationKey() });
+        }
+        const restoreAttempt = inventoryRestoreAttempts.get(evento.id);
         const response = await fetch(`/api/historico-comparacoes/${encodeURIComponent(evento.id)}/restaurar`, {
           method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ preview_token: preview.preview_token }),
+          headers: { "Content-Type": "application/json", "Idempotency-Key": restoreAttempt.key },
+          body: JSON.stringify({ preview_token: restoreAttempt.token }),
         });
         const data = await response.json().catch(() => ({}));
+        if (response.ok || (response.status === 409 && /prévia|estado mudou/i.test(String(data.detail || "")))) {
+          inventoryRestoreAttempts.delete(evento.id);
+        }
         if (!response.ok) throw new Error(data.detail || "Não foi possível restaurar o conjunto selecionado.");
 
         invalidarDadosEquipamentoAposRestauracao();

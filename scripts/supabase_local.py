@@ -68,7 +68,7 @@ def check_config() -> None:
         and "simpress" not in cfg["api"]["schemas"]
         and not cfg["db"]["seed"]["enabled"]
         and not cfg["auth"]["enable_signup"]
-        and not cfg["auth"]["email"]["enable_signup"]
+        and cfg["auth"]["email"]["enable_signup"]
         and not cfg["auth"]["enable_anonymous_sign_ins"]
     )
     if not expected:
@@ -178,6 +178,8 @@ def check_api(cli: list[str]) -> None:
     code, settings = get("/auth/v1/settings")
     if code != 200 or settings.get("disable_signup") is not True:
         raise RuntimeError("Auth public signup is not disabled.")
+    if settings.get("external",{}).get("email") is not True:
+        raise RuntimeError("The email/password provider required by stage 7 is disabled.")
     code, data = get("/rest/v1/configuracao", with_api_key=False)
     if code != 404 or data.get("code") != "PGRST205":
         raise RuntimeError("Private domain table unexpectedly resolves through the default public API.")
