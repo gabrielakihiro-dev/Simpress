@@ -27,10 +27,13 @@ async function openFixtureComparison(page) {
 test.beforeEach(async ({ page }) => {
   const sessionResponse = page.waitForResponse(response =>
     new URL(response.url()).pathname === "/api/auth/session");
+  const statsResponse = page.waitForResponse(response =>
+    new URL(response.url()).pathname === "/api/stats");
   await page.goto("/");
-  const response = await sessionResponse;
-  expect(response.status()).toBe(200);
-  expect(await response.json()).toEqual({ enabled: false, authenticated: false });
+  const [session, stats] = await Promise.all([sessionResponse, statsResponse]);
+  expect(session.status()).toBe(200);
+  expect(await session.json()).toEqual({ enabled: false, authenticated: false });
+  expect(stats.status()).toBe(200);
   await expect(page.locator("#stat-equipamentos")).toHaveText("1");
 });
 

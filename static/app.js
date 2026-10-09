@@ -446,7 +446,7 @@
     }
 
     // Initialize page behaviors
-    document.addEventListener("DOMContentLoaded", () => {
+    function inicializarAplicacao() {
       document.getElementById("input-serial")?.addEventListener("input", () => {
         equipamentoSelectionRevision += 1;
       });
@@ -476,7 +476,13 @@
         });
       });
 
-    });
+    }
+
+    if (document.readyState === "loading") {
+      document.addEventListener("DOMContentLoaded", inicializarAplicacao, { once: true });
+    } else {
+      inicializarAplicacao();
+    }
 
     // Toast system
     function showToast(message, type = "success") {
