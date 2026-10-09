@@ -699,6 +699,16 @@ def report_startup_readiness() -> None:
             print(f"[PRONTIDÃO] {function_labels[key]}: INDISPONÍVEL; dependência ausente ou inválida: {missing}.")
 
 
+def _report_startup_readiness_best_effort() -> None:
+    """Log feature readiness when possible without making it a startup requirement."""
+    try:
+        report_startup_readiness()
+    except Exception:
+        logger.exception(
+            "Não foi possível calcular a prontidão local; o servidor continuará em execução."
+        )
+
+
 def read_workbook_tables(file_bytes: bytes) -> List[Dict[str, Any]]:
     """Lê abas não vazias de um XLSX e retorna cabeçalhos normalizados e linhas."""
     workbook = None
@@ -1470,7 +1480,7 @@ async def lifespan(app: FastAPI):
         load_database()
     except LocalJsonCorruptionError as error:
         print(f"[INDISPONÍVEL] Estado local preservado: {error}")
-    report_startup_readiness()
+    _report_startup_readiness_best_effort()
     try:
         yield
     finally:

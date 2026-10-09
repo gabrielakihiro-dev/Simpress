@@ -30,7 +30,9 @@ git clone https://github.com/gabrielakihiro-dev/Simpress.git
 cd Simpress
 ```
 
-Crie o ambiente virtual com Python 3.12 ou superior. No Windows, use o Python Launcher:
+O inicializador `iniciar_servidor.bat` prepara automaticamente o ambiente na primeira execução: cria `.venv` e instala as dependências fixadas. Isso requer Python 3.12 ou superior e conexão com a internet na primeira instalação. Nas próximas inicializações, a instalação só se repete quando os arquivos de dependências mudarem.
+
+Para preparar o ambiente manualmente — por exemplo, se for iniciar o servidor diretamente pelo Python — use Python 3.12 ou superior. No Windows, use o Python Launcher:
 
 ```powershell
 py -3 -m venv .venv
@@ -66,7 +68,7 @@ Antes de iniciar o servidor, a limpeza recupera transações e considera tempor�
 
 | Arquivo | Local | Uso |
 | --- | --- | --- |
-| `(MODELO) - TRANSFERENCIA SIMPRESS.xlsx` | `data/planilhas_entrada` | Modelo da planilha oficial. É versionado no Git e exigido pelo inicializador `.bat`. |
+| `(MODELO) - TRANSFERENCIA SIMPRESS.xlsx` | `data/planilhas_entrada` | Modelo da planilha oficial, versionado no Git. É necessário para gerar transferências, mas sua ausência não impede o servidor de iniciar. |
 | `EquipamentosDetalhes*.xlsx` | `data/planilhas_entrada` | Inventário principal da busca. Na inicialização, o sistema usa o arquivo válido mais recente. |
 | `EquipamentosDetalhes_atual.xlsx` | `data/planilhas_entrada` | Destino da atualização Simpress, extraído do workbook contido no ZIP `EquipamentosDetalhes` enviado para a atualização. É a fonte oficial da composição e contagem do cadastro; não some registros da InvAll nem de snapshots anteriores. |
 | `InvAllComputersSummary_atual.xlsx` | `data/planilhas_entrada` | Fonte auxiliar de hostname por série e comparação. Não adiciona equipamentos à base oficial. |
@@ -75,7 +77,7 @@ Antes de iniciar o servidor, a limpeza recupera transações e considera tempor�
 | `historico_comparacoes.json` | `data/state/historico_comparacoes` | Histórico local de comparações. O arquivo, temporários e bloqueios não são versionados. |
 | Catálogo de unidades e histórico de apelidos | `data/state` | Estado local da aplicação; não é distribuído pelo Git. |
 
-As planilhas operacionais e o modelo de exportação precisam ser fornecidos localmente. Não coloque dados reais no repositório.
+As planilhas operacionais e o modelo de exportação precisam ser fornecidos localmente. Se estiverem ausentes, somente as funções que dependem desses arquivos ficam indisponíveis; o servidor e as demais áreas continuam acessíveis. Não coloque dados reais no repositório.
 
 ### Cabeçalhos dos inventários
 
@@ -107,7 +109,7 @@ Execute:
 .\iniciar_servidor.bat
 ```
 
-O inicializador confere se existem o ambiente `.venv` e o modelo de transferência, abre o servidor e mantém a janela aberta. Para iniciar sem o arquivo `.bat`, use:
+O inicializador cria ou atualiza o ambiente `.venv` quando necessário, executa a migração e a recuperação/limpeza seguras dos dados locais e abre o servidor. A prontidão das funções é informativa e a ausência de planilhas ou modelos locais não impede o startup. Para iniciar sem o arquivo `.bat`, prepare manualmente o ambiente como descrito em **Instalação** e use:
 
 ```powershell
 .\.venv\Scripts\python.exe scripts\migrate_local_data.py
@@ -209,8 +211,9 @@ Se uma cópia antiga estiver ausente ou inválida, confira manualmente os arquiv
 
 | Situação | O que conferir |
 | --- | --- |
-| O inicializador informa que não encontrou Python | Crie o ambiente `.venv` e confira se usa Python 3.12 ou superior. |
-| O inicializador informa que falta o modelo de transferência | Restaure `(MODELO) - TRANSFERENCIA SIMPRESS.xlsx` em `data/planilhas_entrada`. |
+| O inicializador informa que não encontrou Python 3.12 ou superior | Instale Python 3.12 ou superior e execute o inicializador novamente. |
+| A geração de transferência está indisponível | Confira o modelo `(MODELO) - TRANSFERENCIA SIMPRESS.xlsx` em `data/planilhas_entrada`; a ausência dele não impede iniciar o servidor. |
+| O servidor iniciou, mas algumas funções estão indisponíveis | Confira o painel de prontidão e forneça localmente os arquivos listados para as funções necessárias. |
 | A migração não consegue concluir uma recuperação ou encontra upload em andamento | Preserve os arquivos indicados. Confira `.transactions`; aguarde o upload terminar e execute a migração novamente quando a operação estiver resolvida. |
 | A migração informa que já existe um arquivo diferente no destino | Compare os dois arquivos e resolva o conflito manualmente antes de repetir `scripts/migrate_local_data.py`. A migração não substitui nenhum deles. |
 | A busca não encontra equipamentos ou escolheu dados antigos | Confira os cabeçalhos e a data de modificação dos arquivos `EquipamentosDetalhes*.xlsx` em `data/planilhas_entrada`. O sistema seleciona o mais recente que contém uma aba válida. Reinicie após substituir um arquivo manualmente. |
