@@ -194,7 +194,7 @@ def stop(cli: list[str]) -> None:
 
 def main() -> None:
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("action", choices=("check", "start", "resume", "validate", "reset", "stop"))
+    parser.add_argument("action", choices=("check", "start", "resume", "migrate", "validate", "reset", "stop"))
     action = parser.parse_args().action
     check_config()
     cli, docker = executables()
@@ -227,6 +227,16 @@ def main() -> None:
             stop(cli)
             raise
         print("simpress-dev started; PostgreSQL 17 and loopback bindings verified.")
+    elif action == "migrate":
+        check_db(docker)
+        check_receipt(docker)
+        marker = run([docker, "exec", DB_CONTAINER, "psql", "-X", "-U", "postgres", "-d", "postgres",
+                      "-Atc", "select obj_description('simpress'::regnamespace, 'pg_namespace');"]).strip()
+        if marker != "simpress-dev: disposable synthetic development; no operational data":
+            raise RuntimeError("Disposable database marker missing; migration refused.")
+        run([*cli, "db", "push", "--local", "--yes", "--agent", "no"], timeout=180)
+        check_db(docker)
+        print("Pending migrations applied only to identified disposable simpress-dev.")
     elif action == "reset":
         check_db(docker)
         check_receipt(docker)

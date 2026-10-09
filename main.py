@@ -8,6 +8,7 @@ import logging
 import os
 import re
 import shutil
+import sys
 import threading
 import unicodedata
 import uuid
@@ -131,6 +132,26 @@ from domains.equipment_search import (
 from routers.equipment_search import EquipmentSearchServices, create_equipment_search_router
 from routers.system import SystemRouteServices, create_system_router
 from routers.units import UnidadePayload, UnitRouteServices, create_units_router
+from persistence.config import PersistenceError, PersistenceSettings
+from persistence.boundary import PersistenceBoundaryMiddleware, idempotency_key
+
+PERSISTENCE_SETTINGS = PersistenceSettings.from_environment()
+_POSTGRES_BACKEND: Any = None
+
+
+def postgres_backend():
+    if PERSISTENCE_SETTINGS.backend == "files":
+        return None
+    if _POSTGRES_BACKEND is None:
+        raise PersistenceError(503, "PostgreSQL não foi inicializado; o modo de arquivos permanece separado.")
+    return _POSTGRES_BACKEND
+
+
+def postgres_command(command, payload):
+    backend = postgres_backend()
+    if backend is None:
+        return None
+    return backend.execute(command, payload, idempotency_key.get())
 
 # Runtime synchronization and in-memory state remain in the application entry point.
 MODIFIED_APELIDOS_LOCK = threading.RLock()
@@ -206,6 +227,8 @@ def _atomic_json_update(path: Path, updater, default):
         return updated
 
 def load_modified_apelidos() -> Dict[str, str]:
+    if (backend := postgres_backend()) is not None:
+        return backend.state()["aliases"]
     with MODIFIED_APELIDOS_LOCK:
         if not MODIFIED_APELIDOS_FILE.exists():
             return {}
@@ -226,6 +249,8 @@ def save_modified_apelido_record(serial: str, apelido: str) -> None:
             raise
 
 def load_alias_history() -> List[Dict[str, Any]]:
+    if (backend := postgres_backend()) is not None:
+        return backend.state()["history"]
     with ALIAS_HISTORY_LOCK:
         if not ALIAS_HISTORY_FILE.exists():
             return []
@@ -253,6 +278,8 @@ def delete_alias_history_entry(event_id: str) -> bool:
         return removed["value"]
 
 def load_comparison_history() -> List[Dict[str, Any]]:
+    if postgres_backend() is not None:
+        raise PersistenceError(501, "O histórico de comparações no PostgreSQL será integrado na Etapa 6.")
     with COMPARISON_HISTORY_LOCK:
         if not COMPARISON_HISTORY_FILE.exists():
             return []
@@ -551,6 +578,18 @@ def _check_startup_xlsx(path: Optional[Path]) -> Dict[str, Any]:
 
 def get_startup_readiness() -> Dict[str, Any]:
     """Map essential local files to the application functions that need them."""
+    if (backend := postgres_backend()) is not None:
+        state = backend.state()
+        available = bool(state["equipamentos_cache"])
+        reason = "Nenhum lote com equipamentos foi importado no piloto local."
+        return {
+            "files": {"inventario_equipamentos": {"available": available, "file": "PostgreSQL local", "reason": "OK" if available else reason}},
+            "functions": {
+                "consulta_equipamentos": {"available": available, "missing_files": [] if available else [reason]},
+                **{name: {"available": False, "missing_files": ["Integração de arquivos pendente na Etapa 6"]}
+                   for name in ("geracao_transferencia", "comparacao_atualizacao_inventarios", "exportacao_equipamentos")},
+            },
+        }
     try:
         details_candidates = get_details_files()
         details_directory_readable = True
@@ -1398,6 +1437,18 @@ def get_parque_file() -> Optional[Path]:
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
+    global _POSTGRES_BACKEND
+    if PERSISTENCE_SETTINGS.backend == "postgres":
+        from persistence.postgres import PostgresBackend
+        backend = PostgresBackend(PERSISTENCE_SETTINGS, sys.modules[__name__])
+        try:
+            await asyncio.to_thread(backend.open)
+            _POSTGRES_BACKEND = backend
+            yield
+        finally:
+            _POSTGRES_BACKEND = None
+            await asyncio.to_thread(backend.close)
+        return
     recover_pending_transactions(TRANSACTION_ROOT)
     try:
         migration_result = await asyncio.to_thread(migrate_legacy_history_annotations)
@@ -1445,6 +1496,14 @@ app = FastAPI(
     version="1.3.0",
     lifespan=lifespan,
 )
+
+
+@app.exception_handler(PersistenceError)
+async def persistence_error_handler(request, error):
+    return JSONResponse(status_code=error.status_code, content={"detail": error.detail})
+
+
+app.add_middleware(PersistenceBoundaryMiddleware, is_postgres=lambda: PERSISTENCE_SETTINGS.backend == "postgres")
 
 
 class LocalRequestSafetyMiddleware:
@@ -1832,6 +1891,10 @@ def _stable_unit_id(unit: Dict[str, Any], reserved_ids: Set[int]) -> int:
 
 
 def load_database(transaction_locked: bool = False, publish: bool = True) -> Any:
+    if (backend := postgres_backend()) is not None:
+        state = backend.state()
+        # PostgreSQL requests use their own committed snapshots, never the XLSX cache.
+        return True if publish else state
     if transaction_locked:
         return _load_database_unlocked(publish=publish)
     with lock_paths([TRANSACTION_ROOT / ".atomic-transactions"]):
@@ -2677,6 +2740,11 @@ def get_apelidos_modificados():
 def get_equipamento(serial: str):
     """Busca um equipamento pelo número de série (sem distinção de maiúsculas/minúsculas)."""
     clean_serial = serial.strip().upper()
+    if (backend := postgres_backend()) is not None:
+        equipment = backend.state()["equipamentos_cache"].get(clean_serial)
+        if equipment is not None:
+            return _public_equipment(equipment)
+        raise HTTPException(status_code=404, detail=f"Equipamento com serial '{serial}' não encontrado na base de dados.")
     with STATE_LOCK:
         equipment = deepcopy(equipamentos_cache.get(clean_serial))
     if equipment is not None:
@@ -2688,6 +2756,9 @@ def get_equipamento(serial: str):
 @app.post("/api/equipamento/salvar")
 def salvar_equipamento(payload: EquipamentoUpdatePayload):
     """Atualiza ou cadastra um equipamento tanto na memória do site quanto diretamente na planilha Excel."""
+    result = postgres_command("equipment", {"data": payload.model_dump(), "fields": sorted(payload.model_fields_set)})
+    if result is not None:
+        return result
     if not payload.serial or not payload.serial.strip():
         raise HTTPException(status_code=400, detail="Número de série é obrigatório.")
     if not normalize_reference_value(payload.serial):
@@ -2904,6 +2975,9 @@ def aplicar_alteracao_apelido(
 @app.post("/api/equipamento/atualizar-apelido")
 def atualizar_apelido(payload: ApelidoUpdatePayload):
     """Atualiza o apelido e registra o valor anterior, o novo e o horário."""
+    result = postgres_command("alias", payload.model_dump())
+    if result is not None:
+        return result
     target_serial = payload.serial.strip().upper()
     novo_apelido = payload.apelido.strip()
     resultado = aplicar_alteracao_apelido(target_serial, novo_apelido)
@@ -2928,6 +3002,9 @@ def get_historico_apelidos():
 @app.delete("/api/historico-alteracoes/{evento_id}")
 @app.delete("/api/historico-apelidos/{evento_id}")
 def excluir_evento_historico_apelido(evento_id: str):
+    result = postgres_command("delete_history", {"evento_id": evento_id})
+    if result is not None:
+        return result
     historico = load_alias_history()
     evento = next((item for item in historico if item.get("id") == evento_id), None)
     if evento is None:
@@ -2982,6 +3059,9 @@ def excluir_evento_historico_apelido(evento_id: str):
 
 @app.post("/api/equipamento/apelido/desfazer")
 def desfazer_alteracao_apelido(payload: ApelidoUndoPayload):
+    result = postgres_command("undo", payload.model_dump())
+    if result is not None:
+        return result
     historico = load_alias_history()
     evento = next((item for item in historico if item.get("id") == payload.evento_id), None)
     if evento is None:
@@ -3252,6 +3332,12 @@ def exportar_equipamentos():
 @app.post("/api/recarregar-base")
 def recarregar_base():
     """Recarrega a planilha válida mais recente da pasta de entrada e informa arquivo e total."""
+    if (backend := postgres_backend()) is not None:
+        state = backend.state()
+        stats = state["stats_cache"]
+        return {"sucesso": True, "arquivo_origem": stats["arquivo_origem"],
+                "total_equipamentos": stats["total_equipamentos"], "total_unidades": stats["total_unidades"],
+                "stats": stats, "mensagem": "Estado do PostgreSQL local recarregado."}
     if not load_database():
         raise HTTPException(
             status_code=400,
@@ -3360,6 +3446,9 @@ def _buscar_equipamentos_por_termo(q: str) -> List[Dict[str, Any]]:
     if not term:
         return []
 
+    if (backend := postgres_backend()) is not None:
+        return search_normalized_equipment_index(backend.state()["equipment_search_index"], term)
+
     with STATE_LOCK:
         if _EQUIPMENT_SEARCH_INDEX_SOURCE is not equipamentos_cache:
             _refresh_equipment_search_index_locked()
@@ -3368,6 +3457,8 @@ def _buscar_equipamentos_por_termo(q: str) -> List[Dict[str, Any]]:
 
 
 def _get_stats_snapshot() -> Dict[str, Any]:
+    if (backend := postgres_backend()) is not None:
+        return backend.state()["stats_cache"]
     export_counts = count_export_changes()
     export_status = get_export_status()
     with STATE_LOCK:
@@ -3385,6 +3476,8 @@ def _get_stats_snapshot() -> Dict[str, Any]:
 
 
 def _unit_cache_snapshot() -> List[Dict[str, Any]]:
+    if (backend := postgres_backend()) is not None:
+        return backend.state()["unidades_cache"]
     with STATE_LOCK:
         return deepcopy(unidades_cache)
 
@@ -3419,6 +3512,7 @@ units_router, _units_exports = create_units_router(UnitRouteServices(
     local_json_corruption_error=LocalJsonCorruptionError,
     load_database=lambda *args, **kwargs: load_database(*args, **kwargs),
     publish_database_state=publish_database_state,
+    save_postgres_unit=lambda payload: postgres_command("unit", payload.model_dump()),
 ))
 _public_unit_list = _units_exports["_public_unit_list"]
 salvar_unidade = _units_exports["salvar_unidade"]
@@ -3511,7 +3605,7 @@ def read_root():
 
 if __name__ == "__main__":
     import uvicorn
-    equipment_source = get_primary_equipment_file()
+    equipment_source = get_primary_equipment_file() if PERSISTENCE_SETTINGS.backend == "files" else "PostgreSQL local"
     print(f"[INFO] Diretório do projeto: {BASE_DIR}")
     print(f"[INFO] Modelo de transferência: {TEMPLATE_FILE} ({'OK' if TEMPLATE_FILE.is_file() else 'AUSENTE'})")
     print(f"[INFO] Fonte EquipamentosDetalhes: {equipment_source or 'AUSENTE'}")

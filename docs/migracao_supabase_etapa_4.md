@@ -6,6 +6,8 @@
 
 **Referências:** [modelo da Etapa 3](migracao_supabase_etapa_3.md), [arquitetura aprovada](migracao_supabase_etapa_2.md), [pré-requisitos](migracao_supabase_pre_requisitos_locais.md) e [regras do projeto](../AGENTS.md).
 
+**Atualização posterior — Etapa 5:** uma quarta migration acrescenta o resultado de operações idempotentes e acesso exclusivo de um papel separado para o piloto local. As três migrations e o acesso fechado descritos abaixo correspondem à entrega original da Etapa 4. Os papéis públicos e `simpress_runtime` permanecem fechados. A fixture estrutural passou a aceitar somente políticas do papel do piloto; veja o [relatório da Etapa 5](migracao_supabase_etapa_5.md).
+
 ## 1. Implementação
 
 ### CLI e configuração
