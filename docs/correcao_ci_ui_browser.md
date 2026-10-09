@@ -13,12 +13,21 @@
 
 ## Verificações locais
 
-- Repetição do cenário móvel afetado: **8 de 8 aprovadas**.
-- Suíte completa `npm run test:ui:e2e`: **17 de 17 aprovadas**, incluindo desktop, mobile e perfil de desempenho.
+- Repetição do cenário móvel de anotação: **8 de 8 aprovadas**.
+- Testes JavaScript de fluxo da aplicação (`node --test` conforme o CI): **72 de 72 aprovados**.
+- Suíte `npm run test:ui:e2e` após o ajuste final: **17 de 17 aprovados**, incluindo desktop, mobile e perfil de desempenho.
 - `node --check static/app.js`: aprovado.
 - `node --check tests/e2e/ui.spec.cjs`: aprovado.
 - `git diff --check`: aprovado.
-- A confirmação definitiva do CI remoto depende da nova execução após o push.
+
+## Ajustes encontrados no CI de acompanhamento
+
+O primeiro push da correção, commit `83615a2`, disparou a execução [37990748993](https://github.com/gabrielakihiro-dev/Simpress/actions/runs/37990748993). Ela confirmou que o cenário de anotação passou, mas também revelou dois pontos adicionais:
+
+- Os testes JavaScript executam a aplicação com um `document` simulado sem `readyState`. A inicialização imediata tratava esse documento como pronto e fazia chamadas de API durante os testes. O código agora inicializa imediatamente somente nos estados reais `interactive` e `complete`; nos demais casos aguarda `DOMContentLoaded`.
+- Um teste móvel expirou enquanto aguardava a resposta de sessão no evento de rede. O teste agora sincroniza o carregamento pelo endpoint de estatísticas e consulta a sessão diretamente, mantendo a verificação do estado esperado sem depender da captura do evento.
+
+Esses ajustes passaram localmente nas 72 verificações de fluxo e na suíte de 17 testes de navegador. O resultado do CI para o commit seguinte ainda precisa ser confirmado após o push.
 
 ## Estado atual do Supabase remoto
 

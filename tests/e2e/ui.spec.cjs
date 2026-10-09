@@ -25,14 +25,16 @@ async function openFixtureComparison(page) {
 }
 
 test.beforeEach(async ({ page }) => {
-  const sessionResponse = page.waitForResponse(response =>
-    new URL(response.url()).pathname === "/api/auth/session");
   const statsResponse = page.waitForResponse(response =>
     new URL(response.url()).pathname === "/api/stats");
   await page.goto("/");
-  const [session, stats] = await Promise.all([sessionResponse, statsResponse]);
-  expect(session.status()).toBe(200);
-  expect(await session.json()).toEqual({ enabled: false, authenticated: false });
+  const session = await page.evaluate(async () => {
+    const response = await fetch("/api/auth/session", { credentials: "same-origin" });
+    return { status: response.status, body: await response.json() };
+  });
+  const stats = await statsResponse;
+  expect(session.status).toBe(200);
+  expect(session.body).toEqual({ enabled: false, authenticated: false });
   expect(stats.status()).toBe(200);
   await expect(page.locator("#stat-equipamentos")).toHaveText("1");
 });
