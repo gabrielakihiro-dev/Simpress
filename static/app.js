@@ -2239,7 +2239,7 @@
           ${renderizarTabelaComparacao(["Série", "Apelido anterior", "Novo apelido / hostname", "Horário", "Arquivos de origem"], aliasUpdateRows, "Nenhum apelido ou hostname mudou nesta atualização.")}
         </section>
         <section class="space-y-2">
-          <div><h4 class="text-sm font-bold text-amber-300">Linhas mantidas para conferência</h4><p class="text-[11px] text-slate-500">Série vazia, ausente ou duplicada não é escolhida automaticamente; o apelido atual fica preservado.${permitirAnotacoes ? ` As anotações pertencem a esta linha desta atualização, não são reaproveitadas em novas atualizações e são salvas automaticamente${comparison.anotacoes_sync_ativa ? " e sincronizadas pela pasta OneDrive." : " neste dispositivo."}` : ""}</p></div>
+          <div><h4 class="text-sm font-bold text-amber-300">Linhas mantidas para conferência</h4><p class="text-[11px] text-slate-500">Série vazia, ausente ou duplicada não é escolhida automaticamente; o apelido atual fica preservado.${permitirAnotacoes ? ` As anotações continuam vinculadas a esta linha e atualização. Em novas atualizações, são reaplicadas somente quando os dados correspondem exatamente na mesma seção e a anotação mais recente não está vazia ou em conflito. São salvas automaticamente${comparison.anotacoes_sync_ativa ? " e sincronizadas pela pasta OneDrive." : " neste dispositivo."}` : ""}</p></div>
           ${renderizarTabelaComparacao(aliasReviewHeaders, aliasReviewRows, "Nenhuma linha de apelido precisa de conferência.")}
         </section>
         <section class="space-y-2">
