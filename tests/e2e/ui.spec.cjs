@@ -25,7 +25,13 @@ async function openFixtureComparison(page) {
 }
 
 test.beforeEach(async ({ page }) => {
+  const sessionResponse = page.waitForResponse(response =>
+    new URL(response.url()).pathname === "/api/auth/session");
   await page.goto("/");
+  const response = await sessionResponse;
+  expect(response.status()).toBe(200);
+  expect(await response.json()).toEqual({ enabled: false, authenticated: false });
+  await expect(page.locator("#stat-equipamentos")).toHaveText("1");
 });
 
 test("home has no WCAG 2.2 A/AA axe violations", async ({ page }) => {
