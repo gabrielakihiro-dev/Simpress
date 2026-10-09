@@ -43,7 +43,7 @@ select pg_temp.ok(
      from pg_class c join pg_namespace n on n.oid=c.relnamespace
      where n.nspname='simpress' and c.relkind='r'), 'RLS enabled and forced on every domain table');
 select pg_temp.ok(not exists(select 1 from pg_policies where schemaname='simpress'
-    and roles <> array['simpress_piloto']::name[]), 'no allow policies for public or non-pilot roles');
+    and roles not in (array['simpress_piloto']::name[],array['simpress_runtime']::name[])), 'no allow policies for public or client roles');
 select pg_temp.ok(
     (select not rolcanlogin and not rolsuper and not rolbypassrls and not rolcreatedb
       and not rolcreaterole and not rolinherit and not rolreplication
@@ -209,7 +209,7 @@ declare
     denied boolean;
     t record;
 begin
-    foreach role_name in array array['anon','authenticated','service_role','simpress_runtime'] loop
+    foreach role_name in array array['anon','authenticated','service_role'] loop
         perform pg_temp.ok(not has_schema_privilege(role_name,'simpress','USAGE'), role_name || ' has no schema usage');
         for t in select tablename from pg_tables where schemaname='simpress' loop
             if has_table_privilege(role_name,format('simpress.%I',t.tablename),'SELECT,INSERT,UPDATE,DELETE,TRUNCATE,REFERENCES,TRIGGER') then

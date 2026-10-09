@@ -17,6 +17,8 @@ class PersistenceSettings:
     backend: str = "files"
     database_url: str = field(default="", repr=False)
     pool_size: int = 4
+    storage_key: str = field(default="", repr=False)
+    auth_enabled: bool = False
 
     @classmethod
     def from_environment(cls, environment=None):
@@ -35,7 +37,7 @@ class PersistenceSettings:
                 url.scheme in {"postgres", "postgresql"}
                 and url.hostname == "127.0.0.1" and url.port == 54322
                 and url.path == "/postgres" and bool(url.password)
-                and url.username == "simpress_piloto_login"
+                and url.username == ("simpress_runtime_login" if env.get("SIMPRESS_AUTH_ENABLED") == "1" else "simpress_piloto_login")
                 and not url.query and not url.fragment
             )
             size = int(env.get("SIMPRESS_DATABASE_POOL_SIZE", "4"))
@@ -45,4 +47,7 @@ class PersistenceSettings:
         if not valid:
             # Never echo the URL, password, libpq options, or connection exception.
             raise PersistenceError(503, "Configuração PostgreSQL inválida para simpress-dev local.")
-        return cls(backend, value, size)
+        storage_key = env.get("SIMPRESS_STORAGE_SERVICE_KEY", "")
+        if storage_key and (not storage_key.isascii() or any(c.isspace() for c in storage_key)):
+            raise PersistenceError(503, "Configuração de Storage inválida para o piloto local.")
+        return cls(backend, value, size, storage_key, env.get("SIMPRESS_AUTH_ENABLED") == "1")

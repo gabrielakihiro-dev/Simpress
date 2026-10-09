@@ -24,14 +24,16 @@ jobs:
         with:
           node-version: "24"
       - name: Install Python dependencies
-        run: python -m pip install -r requirements.txt mypy==2.4.0
+        run: python -m pip install -r requirements-postgres.txt mypy==2.4.0
       - name: Run isolated Python tests
         run: python -B tests/run_tests.py
       - name: Run browser workflow tests
-        run: node --test tests/test_transfer_workflows.cjs tests/test_inventory_ui_flows.cjs tests/test_history_annotation_retries.cjs tests/test_history_annotations.cjs tests/test_form_draft_guard.cjs tests/test_catalog_search_utils.cjs tests/test_ui_motion.cjs
+        run: node --test tests/test_transfer_workflows.cjs tests/test_inventory_ui_flows.cjs tests/test_history_annotation_retries.cjs tests/test_history_annotations.cjs tests/test_form_draft_guard.cjs tests/test_catalog_search_utils.cjs tests/test_ui_motion.cjs tests/test_auth_session.cjs
       - name: Check JavaScript syntax
         run: |
           node --check static/app.js
+          node --check static/auth-session.js
+          node --check static/login.js
           node --check static/accessible-dialogs.js
           node --check static/transfer-utils.js
           node --check static/history-annotation-autosave.js
@@ -41,12 +43,13 @@ jobs:
           node --check static/ui-notifications.js
           node --check playwright.config.cjs
           node --check tests/e2e/ui.spec.cjs
+          node --check tests/e2e/auth-local.cjs
           node --check tailwind.config.cjs
           node --check scripts/copy_ui_assets.cjs
       - name: Check Python syntax
-        run: python -m compileall -q app_config.py main.py integrity.py openpyxl_compat.py xlsx_safety.py domains routers scripts tests/serve_ui_motion_preview.py
+        run: python -m compileall -q app_config.py main.py integrity.py openpyxl_compat.py xlsx_safety.py domains routers persistence security scripts tests/serve_ui_motion_preview.py
       - name: Run gradual static type checks
-        run: python -m mypy --platform win32 --ignore-missing-imports --check-untyped-defs app_config.py main.py integrity.py openpyxl_compat.py xlsx_safety.py domains/history_export.py domains/inventory_comparison.py domains/inventory_update.py domains/equipment_search.py routers/inventory_history.py routers/transfers.py routers/equipment_search.py routers/system.py routers/units.py scripts/migrate_local_data.py scripts/cleanup_local_temps.py
+        run: python -m mypy --explicit-package-bases --platform win32 --ignore-missing-imports --check-untyped-defs app_config.py main.py integrity.py openpyxl_compat.py xlsx_safety.py domains/history_export.py domains/inventory_comparison.py domains/inventory_update.py domains/equipment_search.py routers/inventory_history.py routers/transfers.py routers/equipment_search.py routers/system.py routers/units.py persistence security scripts/migrate_local_data.py scripts/cleanup_local_temps.py
       - name: Check tracked files for common credentials
         run: python -B scripts/check_secrets.py
       - name: Rebuild local interface assets

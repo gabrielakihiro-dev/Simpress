@@ -393,6 +393,24 @@ test("failed inventory upload keeps the selected equipment and shows its error",
   assert.equal(harness.element("btn-confirmar-planilhas").disabled, false);
 });
 
+test("inventory upload retry keeps its key until success or a new file selection", async () => {
+  const keys = [];
+  const harness = createAppHarness(async (url, options) => {
+    assert.equal(url, "/api/planilhas/atualizar");
+    keys.push(options.headers["Idempotency-Key"]);
+    if (keys.length === 1) throw new Error("Resposta perdida");
+    return apiResponse({ comparacao: {} });
+  });
+  chooseUploadFiles(harness);
+  await harness.run("enviarPlanilhas()");
+  await harness.run("enviarPlanilhas()");
+  assert.ok(keys[0]);
+  assert.equal(keys[1], keys[0]);
+  chooseUploadFiles(harness);
+  await harness.run("enviarPlanilhas()");
+  assert.notEqual(keys[2], keys[1]);
+});
+
 test("successful upload clears a selection removed from the replacement inventory", async () => {
   const harness = createAppHarness(async url => {
     if (url === "/api/planilhas/atualizar") return apiResponse({ comparacao: { id: "atualizacao" } });
@@ -578,6 +596,29 @@ test("failed restoration leaves the current selection intact and presents the er
   assert.equal(harness.effects.toasts.at(-1).type, "error");
   assert.equal(button.disabled, false);
   assert.equal(button.textContent, "Restaurar versão anterior");
+});
+
+test("restoration retry retains the original key and preview after a lost response", async () => {
+  const requests = [];
+  let previews = 0;
+  const harness = createAppHarness(async (url, options = {}) => {
+    if (url.endsWith("/restauracao")) {
+      previews += 1;
+      return apiResponse({ ...restorePreview, preview_token: String(previews).repeat(64) });
+    }
+    requests.push(options);
+    if (requests.length === 1) throw new Error("Resposta perdida");
+    return apiResponse({ evento: { total_equipamentos_carregados: 1, desfazer_disponivel: true } });
+  });
+  setButton(harness, new FakeElement(), "Restaurar versão anterior");
+  const restore = 'restaurarHistoricoComparacao({ id: "retry-fixture" }, restoreButton)';
+  await harness.run(restore);
+  await harness.run(restore);
+  assert.equal(requests[1].headers["Idempotency-Key"], requests[0].headers["Idempotency-Key"]);
+  assert.equal(requests[1].body, requests[0].body);
+  await harness.run(restore);
+  assert.notEqual(requests[2].headers["Idempotency-Key"], requests[1].headers["Idempotency-Key"]);
+  assert.notEqual(requests[2].body, requests[1].body);
 });
 
 test("copies the selected location postal code and installation CNPJ with the fixed billing CNPJ", async () => {

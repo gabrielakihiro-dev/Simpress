@@ -23,7 +23,6 @@ from psycopg_pool import ConnectionPool, PoolTimeout
 from persistence.config import PersistenceError
 
 MARKER = "simpress-dev: disposable synthetic development; no operational data"
-STORAGE_PENDING = "Esta função aguarda a integração de arquivos e histórico da Etapa 6."
 MAX_UNIT_ID = 9_007_199_254_740_991
 logger = logging.getLogger(__name__)
 
@@ -35,26 +34,42 @@ def canonical(value):
 class PostgresBackend:
     def __init__(self, settings, domain):
         self.domain = domain
+        self.authenticated = settings.auth_enabled
         self.pool = ConnectionPool[psycopg.Connection[dict[str, Any]]](
             settings.database_url, min_size=1, max_size=settings.pool_size,
             timeout=5, max_waiting=16, open=False, reconnect_timeout=5,
             kwargs={"autocommit": True, "row_factory": dict_row,
                     "connect_timeout": 3, "application_name": "simpress-local-pilot",
                     "host": "127.0.0.1", "hostaddr": "127.0.0.1", "port": 54322,
-                    "user": "simpress_piloto_login", "options": "", "gssencmode": "disable"},
+                    "user": "simpress_runtime_login" if self.authenticated else "simpress_piloto_login",
+                    "options": "", "gssencmode": "disable"},
             check=ConnectionPool.check_connection,
         )
+        from persistence.files import PostgresFiles
+        from persistence.storage import LocalStorage
+        self.files = PostgresFiles(self, LocalStorage(settings.storage_key) if settings.storage_key else None)
+        self.auth = None
+        if self.authenticated:
+            from security.auth import AuthService
+            self.auth = AuthService(self,domain.AUTH_SETTINGS)
 
     def open(self):
         try:
             self.pool.open(wait=True, timeout=8)
-            self.state()
+            if self.auth is not None:
+                self.auth.open()
+            else:
+                self.state()
         except Exception:
             self.pool.close()
             raise PersistenceError(503, "PostgreSQL local indisponível ou não autorizado; modo de arquivos não foi ativado.") from None
 
     def close(self):
         self.pool.close()
+        if self.auth is not None:
+            self.auth.close()
+        if self.files.storage is not None:
+            self.files.storage.close()
 
     @contextmanager
     def transaction(self, *, write=False):
@@ -66,13 +81,26 @@ class PostgresBackend:
                     conn.execute("set local statement_timeout = '5s'")
                     conn.execute("set local lock_timeout = '3s'")
                     conn.execute("set local idle_in_transaction_session_timeout = '10s'")
-                    self._check_login(conn)
-                    conn.execute("set local role simpress_piloto")
+                    self._check_login(conn,self.authenticated)
                     conn.execute("set local search_path = pg_catalog, simpress")
-                    conn.execute("set local simpress.piloto_local = 'on'")
-                    cfg = conn.execute("select admin_user_id, admin_habilitado from simpress.configuracao where id=1").fetchone()
-                    if not cfg or cfg["admin_user_id"] or cfg["admin_habilitado"]:
-                        raise PersistenceError(503, "O piloto sem autenticação não pode acessar uma instalação com administrador provisionado.")
+                    if self.authenticated:
+                        from security.context import principal
+                        identity = principal.get()
+                        if identity is None:
+                            raise PersistenceError(401,"Entre na sua conta para continuar.")
+                        conn.execute("set local role simpress_runtime")
+                        for name,value in (("request.jwt.claim.sub",identity.user_id),
+                            ("simpress.auth_session_id",identity.auth_session_id),("simpress.app_session_hash",identity.session_hash)):
+                            conn.execute("select set_config(%s,%s,true)",(name,value))
+                        authorized = conn.execute("select simpress_auth.is_admin() as allowed").fetchone()
+                        if not authorized or not authorized["allowed"]:
+                            raise PersistenceError(403,"A conta ou sessão não tem acesso a esta instalação.")
+                    else:
+                        conn.execute("set local role simpress_piloto")
+                        conn.execute("set local simpress.piloto_local = 'on'")
+                        cfg = conn.execute("select admin_user_id, admin_habilitado from simpress.configuracao where id=1").fetchone()
+                        if not cfg or cfg["admin_user_id"] or cfg["admin_habilitado"]:
+                            raise PersistenceError(503, "O piloto sem autenticação não pode acessar uma instalação com administrador provisionado.")
                     yield conn
         except (psycopg.errors.SerializationFailure, psycopg.errors.DeadlockDetected,
                 psycopg.errors.LockNotAvailable, psycopg.errors.UniqueViolation,
@@ -84,29 +112,33 @@ class PostgresBackend:
             raise PersistenceError(503, "PostgreSQL indisponível; confira o resultado antes de repetir com a mesma Idempotency-Key.") from None
 
     @staticmethod
-    def _check_login(conn):
+    def _check_login(conn, authenticated=False):
+        login = "simpress_runtime_login" if authenticated else "simpress_piloto_login"
+        roles = {"simpress_runtime","simpress_session_gateway"} if authenticated else {"simpress_piloto"}
         row = conn.execute("""select session_user as login, rolsuper, rolcreatedb,
             rolcreaterole, rolreplication, rolbypassrls, rolinherit,
             obj_description('simpress'::regnamespace, 'pg_namespace') as marker,
             current_setting('server_version_num')::int as version
             from pg_roles where rolname=session_user""").fetchone()
-        if (not row or row["login"] != "simpress_piloto_login" or row["marker"] != MARKER
+        if (not row or row["login"] != login or row["marker"] != MARKER
                 or not 170000 <= row["version"] < 180000
                 or any(row[k] for k in ("rolsuper", "rolcreatedb", "rolcreaterole", "rolreplication", "rolbypassrls", "rolinherit"))):
             raise PersistenceError(503, "A conexão não pertence ao piloto local com privilégios limitados.")
         unsafe = conn.execute("""select exists(select 1 from pg_class c join pg_namespace n
-            on n.oid=c.relnamespace where n.nspname='simpress' and
+            on n.oid=c.relnamespace where n.nspname in ('simpress','simpress_auth') and
             (pg_has_role(session_user,c.relowner,'MEMBER') or
              (c.relkind='r' and (not c.relrowsecurity or not c.relforcerowsecurity)))) as unsafe""").fetchone()
         memberships = conn.execute("""select r.rolname,m.inherit_option,m.set_option,m.admin_option
             from pg_auth_members m join pg_roles r on r.oid=m.roleid
             where m.member=(select oid from pg_roles where rolname=session_user)""").fetchall()
-        if (unsafe["unsafe"] or {r["rolname"] for r in memberships} != {"simpress_piloto"}
+        if (unsafe["unsafe"] or {r["rolname"] for r in memberships} != roles
                 or any(r["inherit_option"] or r["admin_option"] or not r["set_option"] for r in memberships)):
             raise PersistenceError(503, "Propriedade, RLS ou vínculos do papel PostgreSQL não correspondem ao piloto.")
-        pilot = conn.execute("""select rolcanlogin or rolsuper or rolcreatedb or rolcreaterole
-            or rolreplication or rolbypassrls or rolinherit as unsafe from pg_roles where rolname='simpress_piloto'""").fetchone()
-        if not pilot or pilot["unsafe"]:
+        unsafe_roles = conn.execute("""select count(*) as n,bool_or(rolcanlogin or rolsuper or rolcreatedb or rolcreaterole
+            or rolreplication or rolbypassrls or rolinherit
+            or exists(select 1 from pg_auth_members where member=r.oid)) as unsafe
+            from pg_roles r where rolname=any(%s)""",(list(roles),)).fetchone()
+        if not unsafe_roles or unsafe_roles["n"] != len(roles) or unsafe_roles["unsafe"]:
             raise PersistenceError(503, "O papel do piloto foi alterado; conexão recusada.")
 
     def _snapshot(self, conn, *, lock=False):
@@ -118,14 +150,14 @@ class PostgresBackend:
             active = conn.execute("select estado from simpress.lotes_inventario where id=%s", (batch,)).fetchone()
             if not active or active["estado"] != "validado":
                 raise PersistenceError(409, "O lote ativo não está validado; nenhuma operação foi aplicada.")
-        rows = conn.execute("""select e.*, f.ordem_aba, f.numero_linha
+        rows = conn.execute("""select e.*, f.ordem_aba, f.numero_linha, f.dados_interpretados as source_data
             from simpress.equipamentos_lote e left join simpress.linhas_fonte f on f.id=e.linha_origem_id
             where e.lote_id=%s order by f.ordem_aba nulls last, f.numero_linha nulls last, e.atualizado_em, e.id""", (batch,)).fetchall()
         sources = conn.execute("select papel,estado_validacao from simpress.fontes_lote where lote_id=%s", (batch,)).fetchall()
         endpoint = conn.execute("""select serie_bruta,dados_interpretados from simpress.linhas_fonte
             where lote_id=%s and papel='endpoint' order by ordem_aba,numero_linha""", (batch,)).fetchall()
         units = conn.execute("""select u.*, c.registro_original from simpress.unidades_catalogo u
-            left join simpress.unidades_customizadas c on c.unidade_id=u.id
+            left join simpress.unidades_customizadas c on c.unidade_id=u.id and u.origem='customizada'
             where u.ativa order by u.id""").fetchall()
         aliases = conn.execute("select chave_serie_original,apelido from simpress.apelidos_manuais order by chave_serie_original").fetchall()
         history = conn.execute("select registro_original from simpress.historico_apelidos order by ordem_evento").fetchall()
@@ -136,19 +168,8 @@ class PostgresBackend:
     def project(self, snapshot):
         d = self.domain
         counts = Counter(d.normalize_reference_value(r["serie_bruta"]) for r in snapshot["rows"])
-        endpoint_rows: dict[str, list[str]] = {}
-        for row in snapshot["endpoint"]:
-            key = d.normalize_reference_value(row["serie_bruta"])
-            parsed = row["dados_interpretados"]
-            alias = d._record_value(parsed, "NOMEDOCOMPUTADOR", "COMPUTERNAME", "HOSTNAME", "APELIDO")
-            if key:
-                endpoint_rows.setdefault(key, []).append(str(alias or "").strip())
-        index = {
-            "available": any(r["papel"] == "endpoint" and r["estado_validacao"] == "valido" for r in snapshot["sources"]),
-            "unique": {s: a[0] for s, a in endpoint_rows.items() if len(a) == 1 and a[0]},
-            "duplicates": {s: a for s, a in endpoint_rows.items() if len(a) > 1},
-            "blank_hostnames": {s: a for s, a in endpoint_rows.items() if len(a) == 1 and not a[0]},
-        }
+        index = self.files.endpoint_index([r["dados_interpretados"] for r in snapshot["endpoint"]])
+        index["available"] = any(r["papel"] == "endpoint" and r["estado_validacao"] == "valido" for r in snapshot["sources"])
         manual = d._manual_aliases_by_serial(snapshot["aliases"])
         cache = {}
         for row in snapshot["rows"]:
@@ -181,14 +202,18 @@ class PostgresBackend:
             item["label"] = f'{item["cidade"]} - {item["endereco"]} ({item["cnpj"]})'
             units.append(item)
         units.sort(key=lambda u: (not u.get("is_sede", False), u["cidade"], u["endereco"]))
+        alias_changes = sum(cache[r["chave_api"]]["apelido"] != str(r["apelido_base"] or "") for r in snapshot["rows"])
+        client_changes = sum(str(r["id_cliente"] or "") != str(d._record_value(r.get("source_data") or {},"IdCliente") or "") for r in snapshot["rows"])
+        export_available = self.files.storage is not None and bool(snapshot["global"]["modelo_exportacao_id"]) and bool(cache) and all(n==1 for n in counts.values())
         stats = {"total_equipamentos": len(cache), "total_unidades": len(units),
-            "total_apelidos_modificados": 0, "total_id_clientes_modificados": 0,
-            "total_alteracoes_exportaveis": 0, "exportacao_disponivel": False,
-            "exportacao_motivo": STORAGE_PENDING,
+            "total_apelidos_modificados": alias_changes, "total_id_clientes_modificados": client_changes,
+            "total_alteracoes_exportaveis": alias_changes+client_changes, "exportacao_disponivel": export_available,
+            "exportacao_motivo": "OK" if export_available else "Importe um modelo privado compatível e confira duplicidades antes de exportar.",
             "tipos": dict(Counter(r["tipo"] or "" for r in snapshot["rows"])),
             "arquivo_origem": "PostgreSQL local", "ultima_atualizacao": snapshot["global"]["atualizado_em"].strftime("%d/%m/%Y %H:%M")}
         return {**d.prepare_database_state(cache, units, stats), "aliases": snapshot["aliases"],
-                "history": snapshot["history"], "revision": snapshot["global"]["revisao_global"]}
+                "history": snapshot["history"], "revision": snapshot["global"]["revisao_global"],
+                "transfer_available": self.files.storage is not None and bool(snapshot["global"]["modelo_transferencia_id"])}
 
     def state(self):
         with self.transaction() as conn:

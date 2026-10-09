@@ -237,9 +237,9 @@ O servidor Python usa os arquivos gerados e não precisa de um processo Node.js 
 
 ### Migração para Supabase: ambiente local opcional
 
-As Etapas 1 a 5 estão documentadas. **Excel/JSON continua sendo o modo padrão.** A Etapa 5 adicionou um backend PostgreSQL opcional para consultas, catálogo, edição de equipamentos e apelidos em um piloto local descartável. A integração de arquivos, comparações e anotações pertence à Etapa 6; autenticação à Etapa 7. O Supabase não é necessário para executar o Simpress no modo atual.
+As Etapas 1 a 7 estão documentadas. **Excel/JSON continua sendo o modo padrão.** O piloto PostgreSQL opcional integra inventário, catálogo, apelidos, arquivos privados, comparações, anotações e restauração lógica. A Etapa 7 acrescenta login local com Supabase Auth e autorização para a única conta administradora aprovada. O Supabase não é necessário para executar o Simpress no modo atual.
 
-O ambiente de desenvolvimento usa o Supabase CLI **2.120.0**, fixado nas dependências, e PostgreSQL **17** no projeto `simpress-dev`. São quatro migrations e 20 tabelas no schema privado `simpress`, fora da Data API, com RLS habilitado e forçado. A Etapa 5 permite somente o papel próprio do piloto nas tabelas necessárias; `anon`, `authenticated`, `service_role` e `simpress_runtime` continuam sem acesso ao domínio. Não houve importação de dados reais nem criação de conta administradora ou buckets. A aplicação FastAPI continua sem autenticação de usuário.
+O ambiente usa o Supabase CLI **2.120.0** e PostgreSQL **17** no projeto `simpress-dev`. São seis migrations, 20 tabelas no schema privado `simpress` e duas tabelas de sessão/limitação de login no schema privado `simpress_auth`. RLS permanece habilitado e forçado. `simpress_runtime` acessa o domínio somente com sessão válida do administrador habilitado; `anon`, `authenticated` e `service_role` não recebem acesso ao domínio. O Storage mantém o bucket privado `simpress-pilot` e acesso mediado pelo backend. Os ensaios não importaram dados reais nem provisionaram conta permanente; a conta local é cadastrada posteriormente pelo operador. O modo Excel/JSON permanece sem autenticação e restrito ao uso local.
 
 Para o ambiente Windows aprovado, use WSL2 e Rancher Desktop com engine **Moby** e Kubernetes desabilitado, além do ambiente Python do projeto e Node.js/npm (a validação usou Node.js 24). A primeira preparação requer internet para baixar dependências e imagens. Consulte os [pré-requisitos locais](docs/migracao_supabase_pre_requisitos_locais.md).
 
@@ -283,9 +283,11 @@ Documentação da migração:
 - [Etapa 3 — modelo de dados](docs/migracao_supabase_etapa_3.md)
 - [Etapa 4 — esquema SQL e validação local](docs/migracao_supabase_etapa_4.md)
 - [Etapa 5 — integração incremental do FastAPI com PostgreSQL](docs/migracao_supabase_etapa_5.md)
+- [Etapa 6 — Storage privado, backups, histórico e anotações](docs/migracao_supabase_etapa_6.md)
+- [Etapa 7 — Auth, autorização e RLS](docs/migracao_supabase_etapa_7.md)
 - [Prompts das Etapas 2 a 8](docs/prompts_migracao_supabase_etapas_2_a_8.md)
 
-#### Executar o piloto PostgreSQL da Etapa 5
+#### Executar o piloto PostgreSQL das Etapas 5 e 6
 
 Instale as dependências opcionais e, com o Supabase local já iniciado, aplique migrations pendentes somente na instância descartável reconhecida:
 
@@ -297,15 +299,46 @@ Instale as dependências opcionais e, com o Supabase local já iniciado, aplique
 
 O iniciador do piloto abre o FastAPI em `127.0.0.1:8000`, cria um login SQL limitado com senha aleatória somente em memória e remove esse login ao encerrar normalmente. Recusa um login já existente. Não modifica a configuração permanente do modo de arquivos. O exemplo de variáveis está em [.env.supabase.example](.env.supabase.example); arquivos dotenv não são carregados automaticamente.
 
-O banco permanece sem inventário até a importação das próximas etapas. Sem lote validado ativo, cadastrar equipamento retorna conflito; o catálogo de unidades pode ser exercitado separadamente. No piloto PostgreSQL, funções de arquivos, comparação e anotações retornam indisponibilidade da Etapa 6. Para a operação atual completa, continue usando o modo de arquivos.
+O banco permanece sem inventário até uma importação explícita. Sem lote validado ativo, cadastrar equipamento retorna conflito; o catálogo de unidades pode ser exercitado separadamente. Para habilitar a Etapa 6, inicie com `scripts/run_postgres_pilot.py --storage`. A chave privilegiada do Storage fica somente na memória do servidor. Use apenas fixtures: modelos privados devem ser importados explicitamente antes de gerar transferências ou exportar equipamentos. Consulte o relatório da Etapa 6 para os endpoints e os procedimentos de recuperação.
 
 Ensaio reproduzível da integração, em um banco sintético separado criado e removido pela execução:
 
 ```powershell
 .\.venv\Scripts\python.exe -B scripts/verify_postgres.py --local-disposable
+.\.venv\Scripts\python.exe -B scripts/verify_storage_pilot.py --local-disposable
 ```
 
 O piloto não está liberado para dados reais, rede externa ou uso oficial. Para voltar ao modo padrão, encerre o piloto, remova as variáveis de configuração PostgreSQL do processo caso tenham sido definidas manualmente e execute `iniciar_servidor.bat`.
+
+#### Executar com autenticação da Etapa 7
+
+Após retomar o Supabase local e aplicar as migrations, provisione a conta inicial no terminal do computador, somente se ainda não houver administrador. E-mail e senha são solicitados interativamente; não envie a senha ao chat:
+
+```powershell
+.\.venv\Scripts\python.exe -B scripts/configure_auth_local.py --local-disposable
+```
+
+Após concluir o provisionamento, inicie o aplicativo em outro comando. Nas próximas inicializações, use somente este comando:
+
+```powershell
+.\.venv\Scripts\python.exe -B scripts/run_postgres_pilot.py --auth
+```
+
+Acesse `http://127.0.0.1:8000`. O cadastro público continua bloqueado; o provedor de e-mail/senha fica habilitado para entrar com a conta já provisionada. O iniciador guarda credenciais somente no processo e gera uma chave temporária de sessão quando `SIMPRESS_SESSION_KEY` não é fornecida. Nesse caso, reiniciar exige novo login. Uma instalação com administrador provisionado bloqueia o piloto sem autenticação, inclusive no banco.
+
+Se o Supabase estiver parado ou a porta 8000 estiver ocupada, consulte o [diagnóstico da inicialização local](docs/migracao_supabase_etapa_7_diagnostico_inicializacao.md). Preserve os volumes e a conta já cadastrada.
+
+Para testar a Etapa 7 **antes de provisionar uma conta**, em uma instância descartável vazia:
+
+```powershell
+.\.venv\Scripts\python.exe -B scripts/verify_auth_pilot.py --local-disposable
+# Opcional: exercitar também o login no Chromium já instalado pelo Playwright.
+.\.venv\Scripts\python.exe -B scripts/verify_auth_pilot.py --local-disposable --browser
+```
+
+O ensaio recusa dados, usuários, sessões, bucket ou logins preexistentes e remove as próprias fixtures. A configuração futura de hospedagem está em [.env.supabase.production.example](.env.supabase.production.example); seu verificador é apenas estático. Hospedagem, credenciais definitivas e recuperação integral de Auth continuam pendentes da Etapa 8.
+
+Backups do domínio e dos objetos privados podem ser gerados com `scripts/backup_postgres_pilot.py --local-disposable`; quando houver administrador provisionado, acrescente `--auth` e siga o procedimento do relatório da Etapa 7. O arquivo só é publicado em `Backup_Banco/` depois de verificar todas as entradas e hashes. Identidades e sessões Auth não são incluídas nesse backup; a recuperação completa do serviço será ensaiada na Etapa 8.
 
 ### Executar testes
 
@@ -365,7 +398,7 @@ iniciar_servidor.bat                  Inicializador local para Windows
 
 ## Dados e privacidade
 
-O servidor atende somente `127.0.0.1` em uma porta local entre `8000` e `8099` e não possui autenticação de usuário; não o exponha diretamente à rede. A documentação `/docs` também fica disponível apenas enquanto o servidor local está em execução.
+O servidor atende somente `127.0.0.1` em uma porta local entre `8000` e `8099`. O modo padrão Excel/JSON não possui autenticação de usuário; o piloto PostgreSQL da Etapa 7 exige a conta administradora quando iniciado com `--auth`. Ambos permanecem restritos ao computador. No piloto autenticado, `/docs` também exige login.
 
 Planilhas operacionais, backups, exportações, históricos, apelidos e unidades personalizadas ficam no computador local e são ignorados pelo Git. O modelo vazio de transferência permanece versionado. Inclua os dados locais em uma rotina de backup apropriada se precisar preservá-los; não force a inclusão deles em commits nem compartilhe cópias com dados operacionais.
 

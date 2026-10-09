@@ -2,23 +2,33 @@
 
 from contextvars import ContextVar
 import ipaddress
+import re
 from starlette.responses import JSONResponse
 
 idempotency_key = ContextVar("simpress_idempotency_key", default=None)
-PENDING = "Esta função aguarda a integração de arquivos e histórico da Etapa 6."
+PENDING = "Esta rota não está disponível no piloto PostgreSQL local."
 
 
 def pilot_route_allowed(method, path):
+    if path == "/api/auth/session" and method == "GET":
+        return True
+    if path in {"/api/auth/login", "/api/auth/logout", "/api/auth/logout-all"} and method == "POST":
+        return True
     reads = {"/api/buscar", "/api/buscar-expandida", "/api/stats", "/api/unidades",
              "/api/prontidao", "/api/config/transferencia", "/api/historico-alteracoes", "/api/historico-apelidos"}
     writes = {"/api/equipamento/salvar", "/api/equipamento/atualizar-apelido",
               "/api/equipamento/apelido/desfazer", "/api/unidade/salvar", "/api/recarregar-base"}
     if method == "GET":
-        return path in reads or (path.startswith("/api/equipamento/") and len(path.split("/")) == 4)
+        return (path in reads or path in {"/api/exportar-equipamentos","/api/historico-comparacoes","/api/historico-comparacoes/exportar/excel","/api/piloto/operacoes"}
+                or (path.startswith("/api/equipamento/") and len(path.split("/")) == 4)
+                or bool(re.fullmatch(r"/api/historico-comparacoes/[^/]+(?:/restauracao)?|/api/arquivos/[^/]+|/api/piloto/operacoes/[^/]+",path)))
     if method == "POST":
-        return path in writes
+        return (path in writes or path in {"/api/planilhas/atualizar","/api/gerar-planilha","/api/piloto/anotacoes/importar","/api/piloto/retencao"}
+                or bool(re.fullmatch(r"/api/historico-comparacoes/[^/]+/(?:restaurar|apelido-manual/[^/]+)|/api/piloto/modelos/(?:transferencia|exportacao)|/api/piloto/operacoes/[^/]+/(?:recuperar|cancelar)",path)))
+    if method == "PUT":
+        return bool(re.fullmatch(r"/api/historico-comparacoes/[^/]+/anotacoes/[^/]+",path))
     return method == "DELETE" and any(path.startswith(p) and len(path.split("/")) == 4 for p in
-        ("/api/historico-alteracoes/", "/api/historico-apelidos/"))
+        ("/api/historico-alteracoes/", "/api/historico-apelidos/", "/api/historico-comparacoes/"))
 
 
 class PersistenceBoundaryMiddleware:

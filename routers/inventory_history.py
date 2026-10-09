@@ -98,6 +98,7 @@ class InventoryHistoryServices:
     transaction_root: Callable[[], Path]
     upload_backups_directory: Callable[[], Path]
     validate_uploaded_workbook: Callable[[bytes, str], Dict[str, Any]]
+    postgres_files: Optional[Callable[[], Any]] = None
 
 
 def create_inventory_history_router(services: InventoryHistoryServices):
@@ -160,6 +161,8 @@ def create_inventory_history_router(services: InventoryHistoryServices):
 
 
     def _comparison_event_has_restorable_backup(evento: Dict[str, Any]) -> bool:
+        if services.postgres_files is not None and (files := services.postgres_files()) is not None:
+            return files.restorable(str(evento.get("id") or ""))
         try:
             _comparison_restore_backup_paths(evento)
             return True
@@ -895,6 +898,9 @@ def create_inventory_history_router(services: InventoryHistoryServices):
         item_id: str,
         payload: ComparisonAnnotationPayload,
     ):
+        if services.postgres_files is not None and (files := services.postgres_files()) is not None:
+            from persistence.boundary import idempotency_key
+            return files.history.mutate("note",{"event":evento_id,"item":item_id,"note":payload.anotacao},idempotency_key.get())
         event = next(
             (item for item in services.load_comparison_history() if isinstance(item, dict) and item.get("id") == evento_id),
             None,
@@ -1028,6 +1034,9 @@ def create_inventory_history_router(services: InventoryHistoryServices):
 
     @router.get("/api/historico-comparacoes/{evento_id}/restauracao")
     def visualizar_restauracao_comparacao(evento_id: str):
+        if services.postgres_files is not None and (files := services.postgres_files()) is not None:
+            context = files.restore_context(evento_id)
+            return {k:v for k,v in context.items() if k not in {"snapshot","revision"}}
         context = _build_comparison_restore_context(evento_id)
         return {
             "evento_id": evento_id,
@@ -1049,6 +1058,9 @@ def create_inventory_history_router(services: InventoryHistoryServices):
 
     @router.post("/api/historico-comparacoes/{evento_id}/restaurar")
     def restaurar_comparacao_historica(evento_id: str, payload: ComparisonRestorePayload):
+        if services.postgres_files is not None and (files := services.postgres_files()) is not None:
+            from persistence.boundary import idempotency_key
+            return files.restore(evento_id,payload.preview_token,idempotency_key.get())
         persistent_backup_dir = None
 
         try:
@@ -1244,6 +1256,9 @@ def create_inventory_history_router(services: InventoryHistoryServices):
         serial: str,
         payload: ManualAliasConflictResolutionPayload,
     ):
+        if services.postgres_files is not None and (files := services.postgres_files()) is not None:
+            from persistence.boundary import idempotency_key
+            return files.history.mutate("resolve",{"event":evento_id,"serial":serial,"action":payload.acao},idempotency_key.get())
         acao = str(payload.acao or "").strip().lower()
         if acao not in {"manter", "excluir"}:
             raise HTTPException(status_code=400, detail="Escolha manter ou excluir a alteração manual.")
@@ -1362,6 +1377,9 @@ def create_inventory_history_router(services: InventoryHistoryServices):
 
     @router.delete("/api/historico-comparacoes/{evento_id}")
     def excluir_comparacao_historica(evento_id: str):
+        if services.postgres_files is not None and (files := services.postgres_files()) is not None:
+            from persistence.boundary import idempotency_key
+            return files.history.mutate("delete",{"event":evento_id},idempotency_key.get())
         history = services.load_comparison_history()
         event = next((item for item in history if isinstance(item, dict) and item.get("id") == evento_id), None)
         if event is None:

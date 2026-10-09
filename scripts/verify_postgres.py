@@ -131,16 +131,12 @@ def main():
             except Exception as error:
                 import psycopg
                 ok(isinstance(error, psycopg.errors.InsufficientPrivilege), "login has no inherited domain grants")
-        # No allowances for runtime or client roles, nor access to annotations.
-        ok(sql("select has_schema_privilege('anon','simpress','usage') or has_schema_privilege('authenticated','simpress','usage') or has_schema_privilege('simpress_runtime','simpress','usage');").strip() == "f", "client and future runtime remain closed")
+        # Client/runtime stay closed; stage 6 now permits annotations in pilot context.
+        ok(sql("select has_schema_privilege('anon','simpress','usage') or has_schema_privilege('authenticated','simpress','usage');").strip() == "f", "client roles remain closed")
+        ok(sql("begin; grant simpress_runtime to postgres with set true; set local role simpress_runtime; select count(*) from simpress.configuracao; rollback;").strip() == "0", "runtime without verified session sees no domain rows")
         with backend.transaction() as conn:
-            try:
-                with conn.transaction():
-                    conn.execute("select * from simpress.anotacoes")
-                raise AssertionError("annotation access granted")
-            except Exception as error:
-                import psycopg
-                ok(isinstance(error, psycopg.errors.InsufficientPrivilege), "pilot cannot access stage 6 annotations")
+            ok(conn.execute("select count(*) as n from simpress.anotacoes").fetchone()["n"] == 0,
+               "pilot reads SQL annotations only through its explicit local context")
         # Real HTTP smoke uses a child owned by this script, not a preexisting app.
         with socket.socket() as probe:
             probe.bind(("127.0.0.1", 0))
@@ -183,7 +179,7 @@ def main():
         status, saved_http = request("/api/equipamento/atualizar-apelido", {"serial": "SYNTHETIC-1", "apelido": "HTTP"}, "http-alias-1")
         ok(status == 200 and saved_http["equipamento"]["apelido"] == "HTTP", "HTTP mutation commits to PostgreSQL")
         ok(request("/api/equipamento/atualizar-apelido", {"serial": "SYNTHETIC-1", "apelido": "HTTP"}, "http-alias-1")[1] == saved_http, "HTTP retry preserves Idempotency-Key")
-        ok(request("/api/exportar-equipamentos")[0] == 501 and request("/api/historico-comparacoes")[0] == 501, "HTTP prevents mixed file/database flows")
+        ok(request("/api/exportar-equipamentos")[0] == 409 and request("/api/historico-comparacoes")[0] == 200, "HTTP uses SQL history and requires a private export template")
         ok(request("/api/equipamento/salvar", {"serial": "", "novo": True})[0] == 422, "HTTP Pydantic validations preserved")
         ok(request("/api/equipamento/atualizar-apelido", {"serial": "SYNTHETIC-1", "apelido": "HTTP"}, "invalid key")[0] == 422,
            "HTTP rejects malformed idempotency keys")
@@ -207,11 +203,11 @@ def main():
         with backend.transaction(write=True) as conn:
             try:
                 with conn.transaction():
-                    conn.execute("update simpress.estado_aplicacao set lote_ativo_id=null where id=1")
-                raise AssertionError("active batch write allowed")
+                    conn.execute("update simpress.configuracao set admin_habilitado=false where id=1")
+                raise AssertionError("administrative configuration write allowed")
             except Exception as error:
                 import psycopg
-                ok(isinstance(error, psycopg.errors.InsufficientPrivilege), "pilot cannot replace active batch")
+                ok(isinstance(error, psycopg.errors.InsufficientPrivilege), "pilot cannot change administrative configuration")
         sql("insert into auth.users(id) values ('00000000-0000-0000-0000-000000000001'); update simpress.configuracao set admin_user_id='00000000-0000-0000-0000-000000000001' where id=1;")
         try:
             backend.state()
