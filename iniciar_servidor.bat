@@ -2,6 +2,7 @@
 setlocal
 
 set "PROJECT_DIR=%~dp0"
+set "PROJECT_ROOT=%PROJECT_DIR%."
 set "PYTHON=%PROJECT_DIR%.venv\Scripts\python.exe"
 set "MAIN=%PROJECT_DIR%main.py"
 set "BOOTSTRAPPER=%PROJECT_DIR%scripts\bootstrap_environment.py"
@@ -45,9 +46,9 @@ set "BOOTSTRAP_PREFIX="
 
 :bootstrap_environment
 if /i "%SIMPRESS_PERSISTENCE_BACKEND%"=="postgres" (
-    "%BOOTSTRAP_LAUNCHER%" %BOOTSTRAP_PREFIX% "%BOOTSTRAPPER%" --project-root "%PROJECT_DIR%" --postgres-pilot
+    "%BOOTSTRAP_LAUNCHER%" %BOOTSTRAP_PREFIX% "%BOOTSTRAPPER%" --project-root "%PROJECT_ROOT%" --postgres-pilot
 ) else (
-    "%BOOTSTRAP_LAUNCHER%" %BOOTSTRAP_PREFIX% "%BOOTSTRAPPER%" --project-root "%PROJECT_DIR%"
+    "%BOOTSTRAP_LAUNCHER%" %BOOTSTRAP_PREFIX% "%BOOTSTRAPPER%" --project-root "%PROJECT_ROOT%"
 )
 if errorlevel 1 goto bootstrap_failed
 if not exist "%PYTHON%" goto bootstrap_failed
