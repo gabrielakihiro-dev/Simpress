@@ -13,10 +13,11 @@ XLSX = "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
 
 
 class LocalStorage:
-    def __init__(self, key, *, transport=None):
+    def __init__(self, key, *, transport=None, rehearsal=False):
         if not key or not key.isascii() or any(c.isspace() for c in key):
             raise PersistenceError(503, "Configure a credencial de Storage somente no servidor local.")
-        self.client = httpx.Client(base_url="http://127.0.0.1:54321/storage/v1/",
+        port = 55421 if rehearsal else 54321
+        self.client = httpx.Client(base_url=f"http://127.0.0.1:{port}/storage/v1/",
             headers={"apikey": key, "Authorization": "Bearer " + key},
             trust_env=False, follow_redirects=False, timeout=30, transport=transport)
 

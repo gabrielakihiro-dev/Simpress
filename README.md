@@ -285,6 +285,7 @@ Documentação da migração:
 - [Etapa 5 — integração incremental do FastAPI com PostgreSQL](docs/migracao_supabase_etapa_5.md)
 - [Etapa 6 — Storage privado, backups, histórico e anotações](docs/migracao_supabase_etapa_6.md)
 - [Etapa 7 — Auth, autorização e RLS](docs/migracao_supabase_etapa_7.md)
+- [Etapa 8 — ensaio, reconciliação e recuperação](docs/migracao_supabase_etapa_8.md)
 - [Prompts das Etapas 2 a 8](docs/prompts_migracao_supabase_etapas_2_a_8.md)
 
 #### Executar o piloto PostgreSQL das Etapas 5 e 6
@@ -336,9 +337,29 @@ Para testar a Etapa 7 **antes de provisionar uma conta**, em uma instância desc
 .\.venv\Scripts\python.exe -B scripts/verify_auth_pilot.py --local-disposable --browser
 ```
 
-O ensaio recusa dados, usuários, sessões, bucket ou logins preexistentes e remove as próprias fixtures. A configuração futura de hospedagem está em [.env.supabase.production.example](.env.supabase.production.example); seu verificador é apenas estático. Hospedagem, credenciais definitivas e recuperação integral de Auth continuam pendentes da Etapa 8.
+O ensaio recusa dados, usuários, sessões, bucket ou logins preexistentes e remove as próprias fixtures. A configuração futura de hospedagem está em [.env.supabase.production.example](.env.supabase.production.example); seu verificador é apenas estático. Hospedagem e credenciais definitivas continuam pendentes; a recuperação integral da conta única foi ensaiada separadamente na Etapa 8.
 
-Backups do domínio e dos objetos privados podem ser gerados com `scripts/backup_postgres_pilot.py --local-disposable`; quando houver administrador provisionado, acrescente `--auth` e siga o procedimento do relatório da Etapa 7. O arquivo só é publicado em `Backup_Banco/` depois de verificar todas as entradas e hashes. Identidades e sessões Auth não são incluídas nesse backup; a recuperação completa do serviço será ensaiada na Etapa 8.
+Backups do domínio e dos objetos privados podem ser gerados com `scripts/backup_postgres_pilot.py --local-disposable`; quando houver administrador provisionado, acrescente `--auth` e siga o procedimento do relatório da Etapa 7. O arquivo só é publicado em `Backup_Banco/` depois de verificar todas as entradas e hashes. Identidades e sessões Auth não são incluídas nesse backup; o envelope criptografado da Etapa 8 inclui a identidade somente no ensaio sintético separado.
+
+#### Ensaiar migração e recuperação — Etapa 8
+
+Com as dependências opcionais instaladas, gere um plano offline usando somente dados fictícios:
+
+```powershell
+.\.venv\Scripts\python.exe -B scripts/verify_migration_pilot.py --local-disposable --dry-run
+```
+
+Para executar importação, reconciliação, falhas controladas, recuperação integral e rollback, mantenha o Rancher Desktop iniciado e as portas `55420`–`55422` livres:
+
+```powershell
+.\.venv\Scripts\python.exe -B scripts/verify_migration_pilot.py --local-disposable
+```
+
+O executor cria três instalações locais separadas e sequenciais com nomes `simpress-rehearsal-<identificador>-source`, `-restore` e `-rollback`. A instalação `simpress-dev`, sua conta e o servidor na porta 8000 são preservados. Os novos serviços publicam somente em loopback e são encerrados após o ensaio; seus volumes e recibos ficam disponíveis para inspeção. Planos e resultados ficam em `supabase/.temp/etapa8/`, ignorada pelo Git.
+
+A recuperação inclui as 20 tabelas, arquivos privados, migrations e a conta única fictícia de e-mail/senha, preservando o UUID e exigindo novo login. A chave criptográfica do ensaio existe somente na memória; os envelopes fictícios deixam de ser recuperáveis após encerrar o processo. O backup oficial exigirá guarda externa da chave e teste do destino independente.
+
+O ensaio não importa a base real nem libera uso oficial. O [relatório da Etapa 8](docs/migracao_supabase_etapa_8.md) contém resultados, limitações e o checklist para uma futura entrada em uso local. A rotina oficial de backup, o adaptador dos arquivos reais e a autorização da troca permanecem pendentes; hospedagem online terá preparação própria.
 
 ### Executar testes
 
@@ -379,6 +400,8 @@ scripts/cleanup_local_temps.py       Limpeza conservadora de arquivos temporári
 scripts/supabase_local.py            Controle e validação do Supabase local descartável
 scripts/run_postgres_pilot.py        FastAPI local com login SQL temporário e limitado
 scripts/verify_postgres.py           Ensaio sintético da integração PostgreSQL/HTTP
+scripts/verify_migration_pilot.py     Ensaio isolado de importação, recuperação e rollback
+scripts/migrate_supabase_bundle.py   Simulação offline de pacote sintético explícito
 persistence/                        Configuração, transações e projeções do backend PostgreSQL
 supabase/config.toml                 Configuração do projeto local simpress-dev
 supabase/migrations/                 Esquema SQL versionado da migração

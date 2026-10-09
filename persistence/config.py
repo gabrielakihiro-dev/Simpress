@@ -19,6 +19,8 @@ class PersistenceSettings:
     pool_size: int = 4
     storage_key: str = field(default="", repr=False)
     auth_enabled: bool = False
+    # Internal rehearsal only; from_environment never enables this profile.
+    rehearsal: bool = False
 
     @classmethod
     def from_environment(cls, environment=None):

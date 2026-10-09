@@ -17,6 +17,7 @@ class AuthSettings:
     api_key: str = field(default="", repr=False)
     session_key: str = field(default="", repr=False)
     secure: bool = False
+    rehearsal: bool = False
 
     @classmethod
     def from_environment(cls, env=None):
@@ -42,7 +43,7 @@ class AuthSettings:
             valid = (url.scheme == "http" and url.hostname == "127.0.0.1"
                 and url.port is not None and 8000 <= url.port <= 8099
                 and not url.username and not url.password and not url.path and not url.query and not url.fragment
-                and self.auth_url == "http://127.0.0.1:54321/auth/v1" and not self.secure)
+                and self.auth_url == ("http://127.0.0.1:55421/auth/v1" if self.rehearsal else "http://127.0.0.1:54321/auth/v1") and not self.secure)
             key = base64.urlsafe_b64decode(self.session_key.encode("ascii"))
             valid = valid and len(key) == 32 and len(self.session_key) == 44
             valid = valid and bool(self.api_key) and self.api_key.isascii() and not any(c.isspace() for c in self.api_key)

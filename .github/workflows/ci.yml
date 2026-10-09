@@ -49,7 +49,7 @@ jobs:
       - name: Check Python syntax
         run: python -m compileall -q app_config.py main.py integrity.py openpyxl_compat.py xlsx_safety.py domains routers persistence security scripts tests/serve_ui_motion_preview.py
       - name: Run gradual static type checks
-        run: python -m mypy --explicit-package-bases --platform win32 --ignore-missing-imports --check-untyped-defs app_config.py main.py integrity.py openpyxl_compat.py xlsx_safety.py domains/history_export.py domains/inventory_comparison.py domains/inventory_update.py domains/equipment_search.py routers/inventory_history.py routers/transfers.py routers/equipment_search.py routers/system.py routers/units.py persistence security scripts/migrate_local_data.py scripts/cleanup_local_temps.py
+        run: python -m mypy --explicit-package-bases --platform win32 --ignore-missing-imports --check-untyped-defs app_config.py main.py integrity.py openpyxl_compat.py xlsx_safety.py domains/history_export.py domains/inventory_comparison.py domains/inventory_update.py domains/equipment_search.py routers/inventory_history.py routers/transfers.py routers/equipment_search.py routers/system.py routers/units.py persistence security scripts/migrate_local_data.py scripts/cleanup_local_temps.py scripts/migrate_supabase_bundle.py scripts/rehearsal_fixtures.py scripts/rehearsal_stack.py scripts/verify_migration_pilot.py
       - name: Check tracked files for common credentials
         run: python -B scripts/check_secrets.py
       - name: Rebuild local interface assets

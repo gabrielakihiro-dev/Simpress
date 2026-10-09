@@ -35,19 +35,20 @@ class PostgresBackend:
     def __init__(self, settings, domain):
         self.domain = domain
         self.authenticated = settings.auth_enabled
+        self.rehearsal = settings.rehearsal
         self.pool = ConnectionPool[psycopg.Connection[dict[str, Any]]](
             settings.database_url, min_size=1, max_size=settings.pool_size,
             timeout=5, max_waiting=16, open=False, reconnect_timeout=5,
             kwargs={"autocommit": True, "row_factory": dict_row,
                     "connect_timeout": 3, "application_name": "simpress-local-pilot",
-                    "host": "127.0.0.1", "hostaddr": "127.0.0.1", "port": 54322,
+                    "host": "127.0.0.1", "hostaddr": "127.0.0.1", "port": 55422 if settings.rehearsal else 54322,
                     "user": "simpress_runtime_login" if self.authenticated else "simpress_piloto_login",
                     "options": "", "gssencmode": "disable"},
             check=ConnectionPool.check_connection,
         )
         from persistence.files import PostgresFiles
         from persistence.storage import LocalStorage
-        self.files = PostgresFiles(self, LocalStorage(settings.storage_key) if settings.storage_key else None)
+        self.files = PostgresFiles(self, LocalStorage(settings.storage_key, rehearsal=settings.rehearsal) if settings.storage_key else None)
         self.auth = None
         if self.authenticated:
             from security.auth import AuthService
