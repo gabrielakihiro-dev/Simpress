@@ -269,6 +269,39 @@
     .accessible-table-wrap th, .accessible-table-wrap td { vertical-align: top; }
     .accessible-table-wrap th { color: #cbd5e1; font-size: 0.8rem; }
     .accessible-table-wrap td { font-size: 0.8rem; line-height: 1.45; }
+    .comparison-mobile-list { display: none; }
+    .comparison-mobile-card {
+      min-width: 0; padding: 0.9rem; border: 1px solid rgba(51, 65, 85, 0.9); border-radius: 0.85rem;
+      background: linear-gradient(145deg, rgba(15, 23, 42, 0.96), rgba(2, 6, 23, 0.88));
+      box-shadow: inset 0 1px rgba(255, 255, 255, 0.025);
+    }
+    .comparison-mobile-card-title {
+      min-width: 0; margin: 0; color: #f8fafc; font-size: 0.9rem; font-weight: 700; line-height: 1.4;
+      overflow-wrap: anywhere;
+    }
+    .comparison-mobile-card-fields { display: grid; gap: 0.55rem; min-width: 0; margin: 0.7rem 0 0; }
+    .comparison-mobile-card-field {
+      display: grid; grid-template-columns: minmax(7.5rem, 0.8fr) minmax(0, 1.2fr); align-items: start; gap: 0.65rem;
+      min-width: 0; padding-top: 0.55rem; border-top: 1px solid rgba(51, 65, 85, 0.65);
+    }
+    .comparison-mobile-card-field dt {
+      color: #94a3b8; font-size: 0.65rem; font-weight: 700; letter-spacing: 0.035em; line-height: 1.45;
+      overflow-wrap: anywhere;
+    }
+    .comparison-mobile-card-field dd {
+      min-width: 0; margin: 0; color: #cbd5e1; font-size: 0.8rem; line-height: 1.45; overflow-wrap: anywhere; word-break: break-word;
+    }
+    .comparison-mobile-card-field--annotation { grid-template-columns: minmax(0, 1fr); }
+    .comparison-mobile-card dd > div, .comparison-mobile-card [data-manual-alias-actions] { min-width: 0; max-width: 100%; }
+    .comparison-mobile-card [data-comparison-annotation] {
+      box-sizing: border-box; width: 100%; min-width: 0 !important; min-height: 5rem; font-size: 16px !important;
+    }
+    @media (max-width: 1023px), (pointer: coarse) {
+      .comparison-desktop-table { display: none; }
+      .comparison-mobile-list {
+        display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 24rem), 1fr)); gap: 0.65rem; min-width: 0;
+      }
+    }
 
     .ticket-templates {
       margin-top: 1.25rem;
