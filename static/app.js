@@ -12,6 +12,9 @@
     const equipmentLookupRequestGate = transferUtils.createRequestGate();
     const searchButtonInitialHtml = document.getElementById("btn-buscar-serial")?.innerHTML || "";
     const modalReturnFocus = new Map();
+    const motion = window.SimpressMotion;
+    let finishEquipmentLoading = () => {};
+    motion?.installFeedback();
     window.HistoryAnnotationAutosave.installPendingNavigationGuard(window);
 
     function atualizarResumoSerieTransferencia(equipment) {
@@ -87,6 +90,7 @@
     }
 
     function invalidarBuscasEquipamento() {
+      finishEquipmentLoading();
       clearTimeout(debounceTimer);
       autocompleteRequestGate.invalidate();
       equipmentLookupRequestGate.invalidate();
@@ -146,7 +150,7 @@
       if (!modal) return;
 
       const openModals = [...document.querySelectorAll('[data-accessible-modal="true"]')]
-        .filter(item => !item.classList.contains("hidden"));
+        .filter(item => !item.classList.contains("hidden") && item.dataset.motionClosing !== "true");
       const previousModal = openModals[openModals.length - 1];
       if (previousModal && previousModal !== modal) {
         previousModal.inert = true;
@@ -155,6 +159,8 @@
 
       if (!modalReturnFocus.has(modal)) modalReturnFocus.set(modal, document.activeElement);
       modal.classList.remove("hidden");
+      modal.inert = false;
+      modal.removeAttribute("aria-hidden");
       modal.dataset.accessibleModal = "true";
       modal.dataset.closeFunction = closeFunction;
 
@@ -172,7 +178,9 @@
 
       document.body.classList.add("dialog-open");
       lucide.createIcons({ root: modal });
+      motion?.openOverlay(modal);
       requestAnimationFrame(() => {
+        if (modal.classList.contains("hidden") || modal.dataset.motionClosing === "true" || modal.inert) return;
         const preferred = initialFocusSelector ? dialog.querySelector(initialFocusSelector) : null;
         const target = preferred && !preferred.disabled ? preferred : dialog;
         target.focus({ preventScroll: true });
@@ -181,13 +189,14 @@
 
     function fecharModalAcessivel(modalId) {
       const modal = document.getElementById(modalId);
-      if (!modal || modal.classList.contains("hidden")) return;
-      modal.classList.add("hidden");
+      if (!modal || modal.classList.contains("hidden") || modal.dataset.motionClosing === "true") return;
+      if (motion) motion.closeOverlay(modal, () => modal.classList.add("hidden"));
+      else modal.classList.add("hidden");
       const returnFocus = modalReturnFocus.get(modal);
       modalReturnFocus.delete(modal);
 
       const openModals = [...document.querySelectorAll('[data-accessible-modal="true"]')]
-        .filter(item => !item.classList.contains("hidden"));
+        .filter(item => !item.classList.contains("hidden") && item.dataset.motionClosing !== "true");
       const activeModal = openModals[openModals.length - 1];
       if (activeModal) {
         activeModal.inert = false;
@@ -210,7 +219,7 @@
 
     document.addEventListener("keydown", event => {
       const openModals = [...document.querySelectorAll('[data-accessible-modal="true"]')]
-        .filter(item => !item.classList.contains("hidden"));
+        .filter(item => !item.classList.contains("hidden") && item.dataset.motionClosing !== "true");
       const modal = openModals[openModals.length - 1];
       if (!modal) {
         if (event.key === "Escape") {
@@ -620,7 +629,7 @@
         info: "info",
       };
 
-      toast.className = `flex items-center space-x-3 px-4 py-3 rounded-xl border shadow-xl backdrop-blur-md text-xs font-medium pointer-events-auto transform transition-all duration-300 opacity-0 translate-y-2 ${bgColors[type] || bgColors.info}`;
+      toast.className = `ui-toast flex items-center space-x-3 px-4 py-3 rounded-xl border shadow-xl backdrop-blur-md text-xs font-medium pointer-events-auto ${bgColors[type] || bgColors.info}`;
       const icon = createIcon(iconNames[type] || "info", "w-4 h-4 shrink-0");
       const messageElement = document.createElement("span");
       messageElement.textContent = String(message ?? "");
@@ -629,13 +638,11 @@
       container.appendChild(toast);
       lucide.createIcons({ root: toast });
 
-      requestAnimationFrame(() => {
-        toast.classList.remove("opacity-0", "translate-y-2");
-      });
+      motion?.reveal(toast);
 
       setTimeout(() => {
-        toast.classList.add("opacity-0", "translate-y-2");
-        setTimeout(() => toast.remove(), 300);
+        if (motion) motion.dismiss(toast, () => toast.remove());
+        else toast.remove();
       }, 4000);
     }
 
@@ -1205,6 +1212,7 @@
       cityFilter.disabled = true;
       status.textContent = carregarMais ? "Carregando mais resultados..." : "Carregando resultados...";
       if (!carregarMais) list.replaceChildren();
+      const stopLoading = motion?.startLoading(list, "Carregando resultados da pesquisa…") || (() => {});
 
       try {
         const params = new URLSearchParams({
@@ -1220,6 +1228,7 @@
 
         const page = await response.json();
         if (requestId !== pesquisaCompletaState.requestId) return;
+        stopLoading();
 
         atualizarOpcoesFiltrosPesquisa(page.filters);
         page.items.forEach((item, index) => {
@@ -1244,6 +1253,7 @@
           showToast(error.message || "Falha ao carregar resultados", "error");
         }
       } finally {
+        stopLoading();
         if (requestId === pesquisaCompletaState.requestId) {
           pesquisaCompletaState.loading = false;
           moreButton.disabled = false;
@@ -1312,6 +1322,7 @@
 
       if (!tabHome || !tabTransferencia || !painelHome || !painelTransferencia) return;
 
+      const mudou = painelHome.hidden === homeAtiva;
       painelHome.hidden = !homeAtiva;
       painelTransferencia.hidden = homeAtiva;
       tabHome.setAttribute("aria-selected", String(homeAtiva));
@@ -1322,6 +1333,7 @@
       tabTransferencia.classList.toggle("is-active", !homeAtiva);
       document.body.classList.toggle("has-quick-actions", !homeAtiva);
       if (!homeAtiva) atualizarResumoSerieTransferencia(currentEquipamento);
+      if (mudou) motion?.reveal(homeAtiva ? painelHome : painelTransferencia, "page");
     }
 
     function abrirHomeParaPesquisarEquipamento(event) {
@@ -1379,6 +1391,8 @@
       serialInput.setAttribute("aria-busy", "true");
       btn.innerHTML = `<i data-lucide="loader-2" class="w-4 h-4 animate-spin"></i><span>Localizando...</span>`;
       lucide.createIcons({ root: btn });
+      const stopLoading = motion?.startLoading(document.getElementById("equipment-loading"), "Localizando equipamento…", { rows: 1 }) || (() => {});
+      finishEquipmentLoading = stopLoading;
 
       try {
         const res = await fetch(`/api/equipamento/${encodeURIComponent(serial)}`, { signal: request.signal });
@@ -1426,6 +1440,7 @@
           showToast(err.message, "error");
         }
       } finally {
+        stopLoading();
         if (equipmentLookupRequestGate.isCurrent(request.id)) {
           btn.disabled = false;
           btn.removeAttribute("aria-busy");
@@ -1441,6 +1456,7 @@
       retiradaCidadeSelecionada = String(eq.retirada_cidade || "").trim();
       const card = document.getElementById("card-equipamento");
       card.classList.remove("hidden");
+      motion?.reveal(card);
 
       document.getElementById("card-serial").textContent = eq.serial;
       document.getElementById("ticket-templates-serial").textContent = eq.serial || "—";
@@ -2551,6 +2567,7 @@
       const lista = document.getElementById("lista-historico-comparacoes");
       lista.setAttribute("aria-busy", "true");
       lista.innerHTML = '<p class="text-sm text-slate-400 text-center py-8" role="status" aria-live="polite">Carregando histórico...</p>';
+      const stopLoading = motion?.startLoading(lista, "Carregando histórico…") || (() => {});
 
       try {
         const res = await fetch("/api/historico-comparacoes");
@@ -2652,6 +2669,7 @@
         erro.textContent = err.message || "Não foi possível carregar o histórico de planilhas.";
         lista.appendChild(erro);
       } finally {
+        stopLoading();
         lista.removeAttribute("aria-busy");
       }
     }
@@ -3048,6 +3066,7 @@
       const lista = document.getElementById("lista-historico-apelidos");
       lista.setAttribute("aria-busy", "true");
       lista.innerHTML = '<p class="text-sm text-slate-400 text-center py-8" role="status" aria-live="polite">Carregando histórico...</p>';
+      const stopLoading = motion?.startLoading(lista, "Carregando histórico…") || (() => {});
 
       try {
         const res = await fetch("/api/historico-alteracoes");
@@ -3196,6 +3215,7 @@
         erro.textContent = err.message || "Não foi possível carregar o histórico.";
         lista.appendChild(erro);
       } finally {
+        stopLoading();
         lista.removeAttribute("aria-busy");
       }
     }
