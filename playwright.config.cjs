@@ -1,0 +1,44 @@
+const { defineConfig } = require("@playwright/test");
+
+const fixturePython = process.env.PYTHON
+  ? `"${process.env.PYTHON}"`
+  : process.platform === "win32" ? "python" : "python3";
+
+module.exports = defineConfig({
+  testDir: "./tests/e2e",
+  fullyParallel: false,
+  workers: 1,
+  timeout: 20_000,
+  expect: { timeout: 5_000 },
+  reporter: [["list"], ["html", { outputFolder: "playwright-report", open: "never" }]],
+  outputDir: "test-results",
+  use: {
+    baseURL: "http://127.0.0.1:8765",
+    headless: true,
+    trace: "retain-on-failure",
+    screenshot: "only-on-failure",
+  },
+  projects: [
+    {
+      name: "desktop",
+      grepInvert: /@profile/,
+      use: { browserName: "chromium", viewport: { width: 1366, height: 900 } },
+    },
+    {
+      name: "mobile",
+      grepInvert: /@profile/,
+      use: { browserName: "chromium", viewport: { width: 390, height: 844 }, isMobile: true, hasTouch: true },
+    },
+    {
+      name: "desktop-profile",
+      grep: /@profile/,
+      use: { browserName: "chromium", viewport: { width: 1366, height: 900 }, trace: "off" },
+    },
+  ],
+  webServer: {
+    command: `${fixturePython} -B tests/serve_ui_motion_preview.py`,
+    url: "http://127.0.0.1:8765/",
+    reuseExistingServer: false,
+    timeout: 30_000,
+  },
+});

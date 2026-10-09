@@ -11,10 +11,15 @@
     const autocompleteRequestGate = transferUtils.createRequestGate();
     const equipmentLookupRequestGate = transferUtils.createRequestGate();
     const searchButtonInitialHtml = document.getElementById("btn-buscar-serial")?.innerHTML || "";
-    const modalReturnFocus = new Map();
     let comparisonAnnotationSyncObservers = [];
     const motion = window.SimpressMotion;
     let finishEquipmentLoading = () => {};
+    const accessibleDialogs = window.SimpressAccessibleDialogs({
+      document, window, motion, HTMLElement,
+      requestAnimationFrame: callback => requestAnimationFrame(callback),
+      lucide,
+    });
+    const notifications = window.SimpressNotifications({ document, window, lucide, motion, createIcon });
     motion?.installFeedback();
     window.HistoryAnnotationAutosave.installPendingNavigationGuard(window);
 
@@ -147,154 +152,15 @@
     }
 
     function abrirModalAcessivel(modalId, initialFocusSelector, closeFunction) {
-      const modal = document.getElementById(modalId);
-      if (!modal) return;
-
-      const openModals = [...document.querySelectorAll('[data-accessible-modal="true"]')]
-        .filter(item => !item.classList.contains("hidden") && item.dataset.motionClosing !== "true");
-      const previousModal = openModals[openModals.length - 1];
-      if (previousModal && previousModal !== modal) {
-        previousModal.inert = true;
-        previousModal.setAttribute("aria-hidden", "true");
-      }
-
-      if (!modalReturnFocus.has(modal)) modalReturnFocus.set(modal, document.activeElement);
-      modal.classList.remove("hidden");
-      modal.inert = false;
-      modal.removeAttribute("aria-hidden");
-      modal.dataset.accessibleModal = "true";
-      modal.dataset.closeFunction = closeFunction;
-
-      const dialog = modal.firstElementChild;
-      if (!dialog) return;
-      dialog.setAttribute("role", "dialog");
-      dialog.setAttribute("aria-modal", "true");
-      dialog.setAttribute("tabindex", "-1");
-      dialog.classList.add("modal-panel");
-      const heading = dialog.querySelector("h1, h2, h3");
-      if (heading) {
-        if (!heading.id) heading.id = `${modalId}-titulo`;
-        dialog.setAttribute("aria-labelledby", heading.id);
-      }
-
-      document.body.classList.add("dialog-open");
-      lucide.createIcons({ root: modal });
-      motion?.openOverlay(modal);
-      requestAnimationFrame(() => {
-        if (modal.classList.contains("hidden") || modal.dataset.motionClosing === "true" || modal.inert) return;
-        const preferred = initialFocusSelector ? dialog.querySelector(initialFocusSelector) : null;
-        const target = preferred && !preferred.disabled ? preferred : dialog;
-        target.focus({ preventScroll: true });
-      });
+      accessibleDialogs.open(modalId, initialFocusSelector, closeFunction);
     }
 
     function fecharModalAcessivel(modalId) {
-      const modal = document.getElementById(modalId);
-      if (!modal || modal.classList.contains("hidden") || modal.dataset.motionClosing === "true") return;
-      if (motion) motion.closeOverlay(modal, () => modal.classList.add("hidden"));
-      else modal.classList.add("hidden");
-      const returnFocus = modalReturnFocus.get(modal);
-      modalReturnFocus.delete(modal);
-
-      const openModals = [...document.querySelectorAll('[data-accessible-modal="true"]')]
-        .filter(item => !item.classList.contains("hidden") && item.dataset.motionClosing !== "true");
-      const activeModal = openModals[openModals.length - 1];
-      if (activeModal) {
-        activeModal.inert = false;
-        activeModal.removeAttribute("aria-hidden");
-        const target = returnFocus && activeModal.contains(returnFocus)
-          ? returnFocus
-          : activeModal.firstElementChild;
-        target?.focus({ preventScroll: true });
-        return;
-      }
-
-      document.body.classList.remove("dialog-open");
-      if (returnFocus instanceof HTMLElement && returnFocus.isConnected && !returnFocus.closest(".hidden") && returnFocus.getClientRects().length) {
-        returnFocus.focus({ preventScroll: true });
-      } else {
-        const fallback = document.querySelector(".header-secondary-actions > summary") || document.getElementById("input-serial");
-        fallback?.focus({ preventScroll: true });
-      }
+      accessibleDialogs.close(modalId);
     }
 
-    document.addEventListener("keydown", event => {
-      const openModals = [...document.querySelectorAll('[data-accessible-modal="true"]')]
-        .filter(item => !item.classList.contains("hidden") && item.dataset.motionClosing !== "true");
-      const modal = openModals[openModals.length - 1];
-      if (!modal) {
-        if (event.key === "Escape") {
-          const disclosure = [...document.querySelectorAll("details[open]")].pop();
-          if (disclosure) {
-            disclosure.open = false;
-            disclosure.querySelector("summary")?.focus();
-          }
-        }
-        return;
-      }
-
-      if (event.key === "Escape") {
-        event.preventDefault();
-        const close = window[modal.dataset.closeFunction];
-        if (typeof close === "function") close();
-        return;
-      }
-
-      if (event.key !== "Tab") return;
-      const dialog = modal.firstElementChild;
-      const focusable = [...dialog.querySelectorAll(
-        'a[href], button:not([disabled]), input:not([disabled]):not([type="hidden"]), select:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex="-1"])'
-      )].filter(element => element.getClientRects().length && !element.closest("[inert]"));
-      if (!focusable.length) {
-        event.preventDefault();
-        dialog.focus();
-        return;
-      }
-      const first = focusable[0];
-      const last = focusable[focusable.length - 1];
-      if (event.shiftKey && (document.activeElement === first || !modal.contains(document.activeElement))) {
-        event.preventDefault();
-        last.focus();
-      } else if (!event.shiftKey && (document.activeElement === last || !modal.contains(document.activeElement))) {
-        event.preventDefault();
-        first.focus();
-      }
-    });
-
     function associarRotulosAcessiveis() {
-      const fallbackLabels = new Map([
-        ["input-serial", "Número de série do equipamento"],
-        ["textarea-resumo-preview", "Resumo da transferência"],
-      ]);
-      document.querySelectorAll('input:not([type="hidden"]), select, textarea').forEach(control => {
-        if (control.labels?.length || control.hasAttribute("aria-label") || control.hasAttribute("aria-labelledby")) return;
-        if (!control.id) control.id = `campo-${Math.random().toString(36).slice(2, 9)}`;
-
-        let label = null;
-        let node = control;
-        while (node.parentElement && node.parentElement !== document.body && !label) {
-          const siblings = [...node.parentElement.children];
-          const priorSiblings = siblings.slice(0, siblings.indexOf(node)).reverse();
-          for (const sibling of priorSiblings) {
-            const candidates = [
-              ...(sibling.matches("label") ? [sibling] : []),
-              ...sibling.querySelectorAll("label"),
-            ];
-            label = candidates.find(candidate => !candidate.control && !candidate.htmlFor);
-            if (label) break;
-          }
-          node = node.parentElement;
-        }
-
-        if (label) {
-          label.htmlFor = control.id;
-          return;
-        }
-        const fallback = fallbackLabels.get(control.id)
-          || control.getAttribute("placeholder")
-          || control.id.replace(/[-_]+/g, " ");
-        control.setAttribute("aria-label", fallback.replace(/\s+/g, " ").trim());
-      });
+      accessibleDialogs.associateLabels();
     }
 
     // Phone field formatting
@@ -610,41 +476,7 @@
 
     // Toast system
     function showToast(message, type = "success") {
-      const container = document.getElementById("toast-container");
-      const toast = document.createElement("div");
-      toast.setAttribute("role", type === "error" ? "alert" : "status");
-      toast.setAttribute("aria-live", type === "error" ? "assertive" : "polite");
-      toast.setAttribute("aria-atomic", "true");
-
-      const bgColors = {
-        success: "bg-emerald-950/90 border-emerald-500/50 text-emerald-200",
-        error: "bg-rose-950/90 border-rose-500/50 text-rose-200",
-        warning: "bg-amber-950/90 border-amber-500/50 text-amber-200",
-        info: "bg-brand-950/90 border-brand-500/50 text-brand-200",
-      };
-
-      const iconNames = {
-        success: "check-circle",
-        error: "alert-circle",
-        warning: "alert-triangle",
-        info: "info",
-      };
-
-      toast.className = `ui-toast flex items-center space-x-3 px-4 py-3 rounded-xl border shadow-xl backdrop-blur-md text-xs font-medium pointer-events-auto ${bgColors[type] || bgColors.info}`;
-      const icon = createIcon(iconNames[type] || "info", "w-4 h-4 shrink-0");
-      const messageElement = document.createElement("span");
-      messageElement.textContent = String(message ?? "");
-      toast.replaceChildren(icon, messageElement);
-
-      container.appendChild(toast);
-      lucide.createIcons({ root: toast });
-
-      motion?.reveal(toast);
-
-      setTimeout(() => {
-        if (motion) motion.dismiss(toast, () => toast.remove());
-        else toast.remove();
-      }, 4000);
+      notifications.show(message, type);
     }
 
     function formatarContagemEstatistica(value) {
@@ -2151,6 +1983,7 @@
       }).join("");
       return `
         <div class="accessible-table-wrap comparison-desktop-table rounded-lg border border-slate-800" role="region" aria-label="${escapeHtml(tableLabel)}" tabindex="0">
+          <p class="comparison-table-scroll-hint px-3 pt-2">Role a tabela horizontalmente para consultar todas as colunas.</p>
           <table class="min-w-full text-left text-sm" aria-label="${escapeHtml(tableLabel)}">
             <thead class="bg-slate-950 text-slate-300"><tr>${headers.map(header => `<th scope="col" class="px-3 py-2.5 font-semibold whitespace-nowrap">${escapeHtml(header)}</th>`).join("")}</tr></thead>
             <tbody class="divide-y divide-slate-800">${rows.join("")}</tbody>

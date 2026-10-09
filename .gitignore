@@ -87,6 +87,9 @@ __pycache__/
 
 # Local server logs.
 /logs/
+/playwright-report/
+/test-results/
+/.npm-cache/
 # Transactional temporary files are created beside their destination.
 **/.*.xlsx.*.tmp
 **/.*.xlsm.*.tmp
