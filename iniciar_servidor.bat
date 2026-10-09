@@ -20,6 +20,8 @@ echo ========================================================
 
 if not exist "%PYTHON%" goto missing_python
 if not exist "%MAIN%" goto missing_main
+if /i "%SIMPRESS_PERSISTENCE_BACKEND%"=="postgres" goto postgres_pilot
+if not "%SIMPRESS_PERSISTENCE_BACKEND%"=="" if /i not "%SIMPRESS_PERSISTENCE_BACKEND%"=="files" goto invalid_persistence
 if not exist "%PORT_SELECTOR%" goto missing_port_selector
 if not exist "%MIGRATOR%" goto missing_migrator
 if not exist "%CLEANER%" goto missing_cleaner
@@ -53,6 +55,18 @@ if not "%SERVER_EXIT%"=="0" (
 
 pause
 exit /b %SERVER_EXIT%
+
+:postgres_pilot
+cd /d "%PROJECT_DIR%"
+"%PYTHON%" -B "%PROJECT_DIR%scripts\run_postgres_pilot.py"
+set "SERVER_EXIT=%ERRORLEVEL%"
+pause
+exit /b %SERVER_EXIT%
+
+:invalid_persistence
+echo ERRO: Backend de persistencia invalido. Use files ou postgres.
+pause
+exit /b 1
 
 :missing_python
 echo ERRO: Python do ambiente local nao encontrado:

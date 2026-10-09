@@ -234,9 +234,9 @@ O servidor Python usa os arquivos gerados e não precisa de um processo Node.js 
 
 ### Migração para Supabase: ambiente local opcional
 
-As Etapas 1 a 4 estão documentadas, e o esquema SQL da Etapa 4 foi validado em uma instância local descartável. **A aplicação continua usando Excel/JSON.** A integração do FastAPI com PostgreSQL será feita na Etapa 5; o Supabase ainda não é necessário para executar o Simpress.
+As Etapas 1 a 5 estão documentadas. **Excel/JSON continua sendo o modo padrão.** A Etapa 5 adicionou um backend PostgreSQL opcional para consultas, catálogo, edição de equipamentos e apelidos em um piloto local descartável. A integração de arquivos, comparações e anotações pertence à Etapa 6; autenticação à Etapa 7. O Supabase não é necessário para executar o Simpress no modo atual.
 
-O ambiente de desenvolvimento usa o Supabase CLI **2.120.0**, fixado nas dependências, e PostgreSQL **17** no projeto `simpress-dev`. São três migrations e 20 tabelas no schema privado `simpress`, fora da Data API, com RLS habilitado e forçado e sem políticas de liberação. Não houve importação de dados reais nem criação de conta administradora ou buckets. A aplicação FastAPI continua sem autenticação de usuário.
+O ambiente de desenvolvimento usa o Supabase CLI **2.120.0**, fixado nas dependências, e PostgreSQL **17** no projeto `simpress-dev`. São quatro migrations e 20 tabelas no schema privado `simpress`, fora da Data API, com RLS habilitado e forçado. A Etapa 5 permite somente o papel próprio do piloto nas tabelas necessárias; `anon`, `authenticated`, `service_role` e `simpress_runtime` continuam sem acesso ao domínio. Não houve importação de dados reais nem criação de conta administradora ou buckets. A aplicação FastAPI continua sem autenticação de usuário.
 
 Para o ambiente Windows aprovado, use WSL2 e Rancher Desktop com engine **Moby** e Kubernetes desabilitado, além do ambiente Python do projeto e Node.js/npm (a validação usou Node.js 24). A primeira preparação requer internet para baixar dependências e imagens. Consulte os [pré-requisitos locais](docs/migracao_supabase_pre_requisitos_locais.md).
 
@@ -279,7 +279,30 @@ Documentação da migração:
 - [Etapa 2 — decisões e escopo](docs/migracao_supabase_etapa_2.md)
 - [Etapa 3 — modelo de dados](docs/migracao_supabase_etapa_3.md)
 - [Etapa 4 — esquema SQL e validação local](docs/migracao_supabase_etapa_4.md)
+- [Etapa 5 — integração incremental do FastAPI com PostgreSQL](docs/migracao_supabase_etapa_5.md)
 - [Prompts das Etapas 2 a 8](docs/prompts_migracao_supabase_etapas_2_a_8.md)
+
+#### Executar o piloto PostgreSQL da Etapa 5
+
+Instale as dependências opcionais e, com o Supabase local já iniciado, aplique migrations pendentes somente na instância descartável reconhecida:
+
+```powershell
+.\.venv\Scripts\python.exe -m pip install -r requirements-postgres.txt
+.\.venv\Scripts\python.exe -B scripts/supabase_local.py migrate
+.\.venv\Scripts\python.exe -B scripts/run_postgres_pilot.py
+```
+
+O iniciador do piloto abre o FastAPI em `127.0.0.1:8000`, cria um login SQL limitado com senha aleatória somente em memória e remove esse login ao encerrar normalmente. Recusa um login já existente. Não modifica a configuração permanente do modo de arquivos. O exemplo de variáveis está em [.env.supabase.example](.env.supabase.example); arquivos dotenv não são carregados automaticamente.
+
+O banco permanece sem inventário até a importação das próximas etapas. Sem lote validado ativo, cadastrar equipamento retorna conflito; o catálogo de unidades pode ser exercitado separadamente. No piloto PostgreSQL, funções de arquivos, comparação e anotações retornam indisponibilidade da Etapa 6. Para a operação atual completa, continue usando o modo de arquivos.
+
+Ensaio reproduzível da integração, em um banco sintético separado criado e removido pela execução:
+
+```powershell
+.\.venv\Scripts\python.exe -B scripts/verify_postgres.py --local-disposable
+```
+
+O piloto não está liberado para dados reais, rede externa ou uso oficial. Para voltar ao modo padrão, encerre o piloto, remova as variáveis de configuração PostgreSQL do processo caso tenham sido definidas manualmente e execute `iniciar_servidor.bat`.
 
 ### Executar testes
 
@@ -318,6 +341,9 @@ scripts/copy_ui_assets.cjs           Cópia dos recursos locais para a interface
 scripts/migrate_local_data.py        Migração segura dos dados locais para data/
 scripts/cleanup_local_temps.py       Limpeza conservadora de arquivos temporários locais
 scripts/supabase_local.py            Controle e validação do Supabase local descartável
+scripts/run_postgres_pilot.py        FastAPI local com login SQL temporário e limitado
+scripts/verify_postgres.py           Ensaio sintético da integração PostgreSQL/HTTP
+persistence/                        Configuração, transações e projeções do backend PostgreSQL
 supabase/config.toml                 Configuração do projeto local simpress-dev
 supabase/migrations/                 Esquema SQL versionado da migração
 supabase/tests/                      Verificações SQL com dados sintéticos
@@ -329,6 +355,7 @@ logs/                                 Registros locais do servidor, ignorados pe
 docs/                                 Relatórios de revisão, desempenho e migração Supabase
 tests/                                Testes Python e JavaScript
 requirements.txt                     Dependências Python fixadas
+requirements-postgres.txt            Dependências opcionais do piloto PostgreSQL
 package.json / package-lock.json     Dependências da interface e Supabase CLI de desenvolvimento
 iniciar_servidor.bat                  Inicializador local para Windows
 ```

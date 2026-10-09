@@ -1,0 +1,4 @@
+# Optional local PostgreSQL pilot; the file backend needs only requirements.txt.
+-r requirements.txt
+psycopg[binary]==3.3.6
+psycopg-pool==3.3.3

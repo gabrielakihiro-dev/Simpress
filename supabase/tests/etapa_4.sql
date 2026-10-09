@@ -42,7 +42,8 @@ select pg_temp.ok(
     (select bool_and(c.relrowsecurity and c.relforcerowsecurity)
      from pg_class c join pg_namespace n on n.oid=c.relnamespace
      where n.nspname='simpress' and c.relkind='r'), 'RLS enabled and forced on every domain table');
-select pg_temp.ok(not exists(select 1 from pg_policies where schemaname='simpress'), 'no allow policies');
+select pg_temp.ok(not exists(select 1 from pg_policies where schemaname='simpress'
+    and roles <> array['simpress_piloto']::name[]), 'no allow policies for public or non-pilot roles');
 select pg_temp.ok(
     (select not rolcanlogin and not rolsuper and not rolbypassrls and not rolcreatedb
       and not rolcreaterole and not rolinherit and not rolreplication
