@@ -740,6 +740,8 @@ class MaintenanceContractTests(unittest.TestCase):
 
         self.assertIn("bootstrap_environment.py", launcher)
         self.assertIn("--postgres-pilot", launcher)
+        self.assertIn('set "PROJECT_ROOT=%PROJECT_DIR%."', launcher)
+        self.assertIn('--project-root "%PROJECT_ROOT%"', launcher)
         self.assertNotIn('if not exist "%TEMPLATE%" goto', launcher)
         self.assertNotIn(":missing_template", launcher)
 
