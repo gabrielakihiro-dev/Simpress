@@ -7,6 +7,8 @@ const transferUtils = require("../static/transfer-utils.js");
 const catalogSearch = require("../static/catalog-search-utils.js");
 const formDraftGuard = require("../static/form-draft-guard.js");
 const annotationAutosave = require("../static/history-annotation-autosave.js");
+const accessibleDialogs = require("../static/accessible-dialogs.js");
+const notifications = require("../static/ui-notifications.js");
 
 const appScript = fs.readFileSync(path.join(__dirname, "..", "static", "app.js"), "utf8");
 const appHtml = fs.readFileSync(path.join(__dirname, "..", "static", "index.html"), "utf8");
@@ -54,6 +56,29 @@ class FakeElement {
   getClientRects() { return [1]; }
 }
 
+class FakeTemplate extends FakeElement {
+  set innerHTML(value) { this.markup = String(value); }
+  get innerHTML() { return this.markup || ""; }
+  get content() {
+    const markup = this.innerHTML;
+    return {
+      querySelector: selector => {
+        if (selector !== "tr") return null;
+        const cells = [...markup.matchAll(/<td\b[^>]*>([\s\S]*?)<\/td>/gi)].map(match => {
+          const html = match[1];
+          return {
+            innerHTML: html,
+            textContent: html.replace(/<[^>]*>/g, "").replace(/&nbsp;/g, " ").trim(),
+            querySelector: () => null,
+            hasAttribute: () => false,
+          };
+        });
+        return { cells, dataset: {}, hasAttribute: () => false };
+      },
+    };
+  }
+}
+
 class FakeFormData {
   constructor() { this.fields = []; }
   append(...args) { this.fields.push(args); }
@@ -77,7 +102,7 @@ function createAppHarness(fetchApi, { stubDisplay = true, confirmResult = true }
       if (!elements.has(id)) elements.set(id, new FakeElement(id));
       return elements.get(id);
     },
-    createElement: tag => new FakeElement(tag),
+    createElement: tag => tag === "template" ? new FakeTemplate(tag) : new FakeElement(tag),
     querySelectorAll: () => [],
     querySelector(selector) {
       effects.focusedSelectors.push(selector);
@@ -89,9 +114,14 @@ function createAppHarness(fetchApi, { stubDisplay = true, confirmResult = true }
     SimpressCatalogSearch: catalogSearch,
     SimpressFormDraftGuard: formDraftGuard,
     HistoryAnnotationAutosave: annotationAutosave,
+    SimpressAccessibleDialogs: accessibleDialogs,
+    SimpressNotifications: notifications,
     URL: { createObjectURL: () => "blob:ficticio", revokeObjectURL() {} },
     matchMedia: () => ({ matches: false }),
     confirm: message => { effects.confirmations.push(message); return confirmResult; },
+    setTimeout,
+    clearTimeout,
+    addEventListener() {},
   };
   const context = vm.createContext({
     document,
@@ -103,6 +133,7 @@ function createAppHarness(fetchApi, { stubDisplay = true, confirmResult = true }
     HTMLElement: FakeElement,
     setTimeout,
     clearTimeout,
+    requestAnimationFrame: callback => callback(0),
     lucide: { createIcons() {} },
     console: { error() {}, warn() {}, log() {} },
     workflowEffects: effects,

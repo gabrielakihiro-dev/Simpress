@@ -619,7 +619,7 @@ class MaintenanceContractTests(unittest.TestCase):
     def test_dialog_overlays_stack_above_the_header_and_keep_keyboard_trapping(self):
         html = (app_config.STATIC_DIR / "index.html").read_text(encoding="utf-8")
         css = (app_config.STATIC_DIR / "app.css").read_text(encoding="utf-8")
-        script = (app_config.STATIC_DIR / "app.js").read_text(encoding="utf-8")
+        dialog_script = (app_config.STATIC_DIR / "accessible-dialogs.js").read_text(encoding="utf-8")
 
         dialogs = re.findall(r'<div id="(modal-[^"]+)" class="([^"]+)"', html)
         self.assertGreater(len(dialogs), 0)
@@ -632,11 +632,11 @@ class MaintenanceContractTests(unittest.TestCase):
         self.assertIsNotNone(overlay)
         self.assertIsNotNone(header)
         self.assertGreater(int(overlay.group(1)), int(header.group(1)))
-        self.assertIn('dialog.setAttribute("aria-modal", "true")', script)
-        self.assertIn('if (event.key === "Escape")', script)
-        self.assertIn('if (event.key !== "Tab") return;', script)
-        self.assertIn("event.shiftKey", script)
-        self.assertIn("target.focus({ preventScroll: true })", script)
+        self.assertIn('dialog.setAttribute("aria-modal", "true")', dialog_script)
+        self.assertIn('if (event.key === "Escape")', dialog_script)
+        self.assertIn('if (event.key !== "Tab") return;', dialog_script)
+        self.assertIn("event.shiftKey", dialog_script)
+        self.assertIn("target.focus({ preventScroll: true })", dialog_script)
 
     def test_startup_readiness_maps_missing_files_to_unavailable_functions(self):
         with tempfile.TemporaryDirectory() as temp_dir:
