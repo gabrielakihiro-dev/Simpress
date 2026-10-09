@@ -16,7 +16,7 @@ Aplicação web local para consultar equipamentos, preparar transferências Simp
 
 - Windows 10 ou superior.
 - Python 3.12 ou superior.
-- O servidor usa os arquivos locais já compilados da interface. Node.js e npm são necessários apenas para reconstruir esses arquivos ou executar os testes JavaScript.
+- O servidor usa os arquivos locais já compilados da interface. Node.js e npm são necessários para reconstruir esses arquivos, executar os testes JavaScript ou preparar o ambiente opcional de desenvolvimento Supabase.
 - Não é necessário ter acesso à internet para abrir a aplicação e carregar a interface. Os links para os sistemas de chamados da Simpress abrem páginas externas.
 
 O repositório é privado; a conta usada para cloná-lo precisa ter acesso.
@@ -232,6 +232,55 @@ npm run build:ui
 
 O servidor Python usa os arquivos gerados e não precisa de um processo Node.js em execução.
 
+### Migração para Supabase: ambiente local opcional
+
+As Etapas 1 a 4 estão documentadas, e o esquema SQL da Etapa 4 foi validado em uma instância local descartável. **A aplicação continua usando Excel/JSON.** A integração do FastAPI com PostgreSQL será feita na Etapa 5; o Supabase ainda não é necessário para executar o Simpress.
+
+O ambiente de desenvolvimento usa o Supabase CLI **2.120.0**, fixado nas dependências, e PostgreSQL **17** no projeto `simpress-dev`. São três migrations e 20 tabelas no schema privado `simpress`, fora da Data API, com RLS habilitado e forçado e sem políticas de liberação. Não houve importação de dados reais nem criação de conta administradora ou buckets. A aplicação FastAPI continua sem autenticação de usuário.
+
+Para o ambiente Windows aprovado, use WSL2 e Rancher Desktop com engine **Moby** e Kubernetes desabilitado, além do ambiente Python do projeto e Node.js/npm (a validação usou Node.js 24). A primeira preparação requer internet para baixar dependências e imagens. Consulte os [pré-requisitos locais](docs/migracao_supabase_pre_requisitos_locais.md).
+
+Na pasta do projeto, instale as dependências e crie uma instância nova:
+
+```powershell
+npm ci
+.\.venv\Scripts\python.exe -B scripts/supabase_local.py start
+```
+
+Se esta instalação já tiver sido criada e encerrada pelo helper, retome seus volumes reconhecidos com:
+
+```powershell
+.\.venv\Scripts\python.exe -B scripts/supabase_local.py resume
+```
+
+O helper localiza o Docker do Rancher no PATH do próprio processo e confere a identidade da instância e os endereços publicados. A API usa `127.0.0.1:54321` e o PostgreSQL usa `127.0.0.1:54322`; a porta `54320` está reservada para o banco temporário de validação. Os serviços opcionais, incluindo Studio, estão desabilitados.
+
+Para conferir o ambiente, validar o banco de desenvolvimento vazio e encerrar os serviços preservando os volumes:
+
+```powershell
+.\.venv\Scripts\python.exe -B scripts/supabase_local.py check
+.\.venv\Scripts\python.exe -B scripts/supabase_local.py validate
+.\.venv\Scripts\python.exe -B scripts/supabase_local.py stop
+```
+
+A validação da Etapa 4 passou em **66 verificações SQL, quatro verificações HTTP e nove testes do helper**. Os dados sintéticos das verificações SQL foram revertidos. A suíte completa da aplicação não foi repetida nesta etapa. Os serviços foram encerrados após a validação, preservando os volumes locais.
+
+Testes isolados do helper, sem iniciar o Supabase:
+
+```powershell
+.\.venv\Scripts\python.exe -B -m unittest tests.test_supabase_local -v
+```
+
+Volumes persistentes não substituem backups. A pasta local `Backup_Banco`, ignorada pelo Git, foi preparada como destino; nenhum backup do banco foi gerado nesta etapa. As instruções e restrições de reconstrução da instância descartável estão no relatório da Etapa 4.
+
+Documentação da migração:
+
+- [Etapa 1 — diagnóstico](docs/migracao_supabase_etapa_1.md)
+- [Etapa 2 — decisões e escopo](docs/migracao_supabase_etapa_2.md)
+- [Etapa 3 — modelo de dados](docs/migracao_supabase_etapa_3.md)
+- [Etapa 4 — esquema SQL e validação local](docs/migracao_supabase_etapa_4.md)
+- [Prompts das Etapas 2 a 8](docs/prompts_migracao_supabase_etapas_2_a_8.md)
+
 ### Executar testes
 
 Suíte Python:
@@ -268,15 +317,19 @@ static/                              Interface web, scripts e arquivos locais de
 scripts/copy_ui_assets.cjs           Cópia dos recursos locais para a interface
 scripts/migrate_local_data.py        Migração segura dos dados locais para data/
 scripts/cleanup_local_temps.py       Limpeza conservadora de arquivos temporários locais
+scripts/supabase_local.py            Controle e validação do Supabase local descartável
+supabase/config.toml                 Configuração do projeto local simpress-dev
+supabase/migrations/                 Esquema SQL versionado da migração
+supabase/tests/                      Verificações SQL com dados sintéticos
 data/planilhas_entrada/               Modelo de transferência e planilhas locais
 data/planilhas_entrada/_backups/      Cópias locais anteriores dos inventários
 data/state/                           Estado e históricos locais, ignorados pelo Git
 modelos/                              Modelo local de exportação de equipamentos
 logs/                                 Registros locais do servidor, ignorados pelo Git
-docs/                                 Relatórios de revisão e desempenho
+docs/                                 Relatórios de revisão, desempenho e migração Supabase
 tests/                                Testes Python e JavaScript
 requirements.txt                     Dependências Python fixadas
-package.json / package-lock.json     Dependências e compilação de recursos da interface
+package.json / package-lock.json     Dependências da interface e Supabase CLI de desenvolvimento
 iniciar_servidor.bat                  Inicializador local para Windows
 ```
 
