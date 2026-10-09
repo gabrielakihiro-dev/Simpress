@@ -478,10 +478,10 @@
 
     }
 
-    if (document.readyState === "loading") {
-      document.addEventListener("DOMContentLoaded", inicializarAplicacao, { once: true });
-    } else {
+    if (document.readyState === "interactive" || document.readyState === "complete") {
       inicializarAplicacao();
+    } else {
+      document.addEventListener("DOMContentLoaded", inicializarAplicacao, { once: true });
     }
 
     // Toast system
