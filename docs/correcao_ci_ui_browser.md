@@ -27,7 +27,7 @@ O primeiro push da correção, commit `83615a2`, disparou a execução [37990748
 - Os testes JavaScript executam a aplicação com um `document` simulado sem `readyState`. A inicialização imediata tratava esse documento como pronto e fazia chamadas de API durante os testes. O código agora inicializa imediatamente somente nos estados reais `interactive` e `complete`; nos demais casos aguarda `DOMContentLoaded`.
 - Um teste móvel expirou enquanto aguardava a resposta de sessão no evento de rede. O teste agora sincroniza o carregamento pelo endpoint de estatísticas e consulta a sessão diretamente, mantendo a verificação do estado esperado sem depender da captura do evento.
 
-Esses ajustes passaram localmente nas 72 verificações de fluxo e na suíte de 17 testes de navegador. O resultado do CI para o commit seguinte ainda precisa ser confirmado após o push.
+Esses ajustes passaram localmente nas 72 verificações de fluxo e na suíte de 17 testes de navegador. O commit `08e13776744cdab78dd81eddfe30d694a58fe1f2` também passou na execução [37991498532](https://github.com/gabrielakihiro-dev/Simpress/actions/runs/37991498532): `ui-browser`, `verify (3.12)` e `verify (3.14)` aprovados.
 
 ## Estado atual do Supabase remoto
 
