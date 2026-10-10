@@ -152,12 +152,15 @@ test("inventory evolution compares two saved updates and shows their row annotat
   await auditAccessibility(page, "#modal-evolucao-atualizacoes");
 });
 
-test("ticket tracking imports both workbooks and relates each serial to its OS", async ({ page }) => {
-  await page.setViewportSize({ width: 900, height: 640 });
+test("ticket tracking imports both workbooks and relates each serial to its OS", async ({ page }, testInfo) => {
+  await page.setViewportSize({ width: testInfo.project.name === "mobile" ? 390 : 1366, height: 640 });
   await page.locator(".header-secondary-actions > summary").click();
   await page.getByRole("button", { name: "Acompanhamento de Chamados" }).click();
   const dialog = page.locator("#modal-acompanhamento-chamados");
   await expect(dialog).toBeVisible();
+  const managementPanel = page.locator("#painel-dados-acompanhamento-chamados");
+  await expect(managementPanel).not.toHaveAttribute("open", "");
+  await managementPanel.locator("summary").click();
   await expect(page.locator("#arquivo-chamados-simpress")).toBeVisible();
   await expect(page.locator("#arquivo-chamados-oracle")).toBeVisible();
   await auditAccessibility(page, "#modal-acompanhamento-chamados");
@@ -176,19 +179,37 @@ test("ticket tracking imports both workbooks and relates each serial to its OS",
   await expect(page.locator("#lista-acompanhamento-chamados")).toContainText("DEMO-SN-001");
   await expect(page.locator("#lista-acompanhamento-chamados")).toContainText("7285070");
   await expect(page.locator("#lista-acompanhamento-chamados")).toContainText("261009-000816");
-  const ticketDescription = page.locator(".ticket-oracle-description").first();
+  await expect(managementPanel).not.toHaveAttribute("open", "");
+  const ticketCard = page.locator('#lista-acompanhamento-chamados article[data-ticket-serial="DEMO-SN-001"]');
+  await expect(ticketCard).toContainText("OS Simpress");
+  await expect(ticketCard).toContainText("OS Oracle");
+  await expect(ticketCard).toContainText("Pedido");
+  const ticketDetails = ticketCard.locator('details[data-ticket-section="details"]');
+  await expect(ticketDetails).toBeVisible();
+  await expect(ticketDetails).not.toHaveAttribute("open", "");
+  await ticketDetails.locator("summary").click();
+  await expect(ticketDetails).toHaveAttribute("open", "");
+  const ticketDescription = ticketCard.locator(".ticket-oracle-description").first();
   await expect(ticketDescription).toBeVisible();
   await expect(ticketDescription).not.toHaveAttribute("open", "");
   await expect(ticketDescription.locator("summary")).toContainText("Descrição do chamado");
   await ticketDescription.locator("summary").click();
   await expect(ticketDescription).toHaveAttribute("open", "");
   await expect(ticketDescription).toContainText("Solicito suporte técnico para o equipamento de demonstração.");
+  await expect(ticketCard.locator('details[data-ticket-section="conference"]')).toHaveCount(0);
+  await expect(ticketCard).not.toContainText("Conferência das relações");
+  await page.locator("#filtro-acompanhamento-chamados").fill("DEMO-SN-001");
+  await expect(ticketDetails).toHaveAttribute("open", "");
+  await page.locator("#filtro-acompanhamento-chamados").fill("");
   const contentScroller = dialog.locator("#conteudo-acompanhamento-chamados");
   const scrollMetrics = await contentScroller.evaluate((element) => ({
     clientHeight: element.clientHeight,
     scrollHeight: element.scrollHeight,
+    clientWidth: element.clientWidth,
+    scrollWidth: element.scrollWidth,
   }));
   expect(scrollMetrics.scrollHeight).toBeGreaterThan(scrollMetrics.clientHeight);
+  expect(scrollMetrics.scrollWidth).toBeLessThanOrEqual(scrollMetrics.clientWidth);
   await contentScroller.evaluate((element) => { element.scrollTop = element.scrollHeight; });
   await expect.poll(() => contentScroller.evaluate((element) => element.scrollTop)).toBeGreaterThan(0);
   await expect(dialog.getByRole("button", { name: "Fechar", exact: true })).toBeVisible();

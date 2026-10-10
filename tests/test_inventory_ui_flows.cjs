@@ -899,9 +899,26 @@ test("imports Simpress and Oracle files and displays the serial-to-OS reconcilia
   assert.match(ticketCards, /OS conferida/);
   assert.match(ticketCards, /7285070/);
   assert.match(ticketCards, /REQ-1/);
-  assert.match(ticketCards, /text-lg font-bold leading-none text-cyan-100/);
   assert.match(ticketCards, /text-lg font-bold leading-none text-violet-100/);
+  assert.match(ticketCards, /class="ticket-card-identifier border border-cyan/);
+  assert.match(ticketCards, /class="ticket-card-identifier border border-violet/);
   assert.equal(modal.id, "modal-acompanhamento-chamados");
+});
+
+test("opens ticket import controls only when there are no imported calls", () => {
+  const harness = createAppHarness(async () => apiResponse({}));
+  const managementPanel = harness.element("painel-dados-acompanhamento-chamados");
+  managementPanel.open = false;
+  harness.context.ticketTestReport = { resumo: {}, chamados: [] };
+  harness.run("acompanhamentoChamadosAtual = ticketTestReport; renderizarAcompanhamentoChamados()");
+
+  assert.equal(managementPanel.open, true);
+  assert.match(appHtml, /id="filtro-acompanhamento-chamados"/);
+  assert.match(appHtml, /id="btn-exportar-acompanhamento-chamados"[^>]*>Exportar Excel/);
+  assert.match(appHtml, /class="ticket-filter-toolbar"/);
+  assert.match(appHtml, /id="filtros-avancados-acompanhamento-chamados" class="ticket-disclosure[^>]*>/);
+  assert.match(appHtml, /id="painel-dados-acompanhamento-chamados" class="ticket-disclosure[^>]*>/);
+  assert.match(appCss, /\.ticket-filter-action\s*\{[^}]*width: auto;[^}]*min-height: 2\.25rem;/);
 });
 
 test("shows Simpress product and city while gating delivery address by order status", () => {
@@ -911,7 +928,7 @@ test("shows Simpress product and city while gating delivery address by order sta
     resumo: { series_total: 2, conferidas: 0, divergentes: 0, sem_os: 0, somente_simpress: 2, somente_oracle: 0 },
     chamados: [
       {
-        serie: "SN-ATIVO", relacao: "conferida", ordens_servico_conferidas: ["7124895", "7134662"], oracle: [{
+        serie: "SN-ATIVO", relacao: "conferida", ordens_servico_conferidas: ["7124895", "7134662"], alertas_relacao: [{ mensagem: "Pedido com possíveis duplicidades" }], oracle: [{
           solicitacao: "REQ-77", ordem_servico: "7134662", status: "Em execução", fila: "Fila A",
           logradouro: "R Caeté", numero_endereco: "150", bairro: "Prado Velho", cidade: "Curitiba", atendido_pela_inibicao: "Não", nome_filial: "SIMPRESS - PR",
           ultima_atualizacao: "09/10/2026 14:15",
@@ -936,24 +953,30 @@ test("shows Simpress product and city while gating delivery address by order sta
   };
   harness.run("acompanhamentoChamadosAtual = ticketTestReport; renderizarAcompanhamentoChamados()");
   const cards = harness.element("lista-acompanhamento-chamados").innerHTML;
-  assert.match(cards, /Descrição do produto: Notebook HP ProBook/);
   const activeCard = cards.split('data-ticket-serial="SN-ATIVO"')[1].split("</article>")[0];
-  const simpressCard = activeCard.split("Simpress · Acompanhamento de Pedidos")[1].split("</section>")[0];
-  const identifierRow = simpressCard.match(/<div class="mt-2 flex flex-wrap items-center gap-2 text-xs text-slate-300">([\s\S]*?)<\/div>/)?.[1] || "";
-  assert.match(identifierRow, /Pedido Simpress: 48076976/);
-  assert.doesNotMatch(identifierRow, />OV<\/span>/);
-  assert.match(identifierRow, /OV_15799764/);
-  assert.match(identifierRow, /border-cyan-400\/30 bg-cyan-500\/10/);
-  assert.match(cards, /Cidade de entrega: Curitiba/);
-  assert.match(cards, /Previsão de entrega: 28\/09\/2026/);
-  assert.match(cards, /Endereço de entrega: Rua das Flores, 123, Curitiba - PR/);
-  assert.match(cards, /text-cyan-100">7134662, 7124895<\/span>/);
-  assert.match(cards, /OS encontrada nas duas fontes: 7134662, 7124895/);
-  assert.match(cards, /Série encontrada em: Simpress e Oracle/);
-  assert.match(cards, /OS Oracle/);
-  assert.match(cards, /Sem atualização há/);
-  assert.match(cards, /Linha do tempo e anotações/);
-  const oracleCards = activeCard.split("Oracle · Gestão de Solicitações")[1];
+  const activeSummary = activeCard.split('<details class="ticket-disclosure mt-3')[0];
+  assert.match(activeSummary, /OS Simpress/);
+  assert.match(activeSummary, /OS Oracle/);
+  assert.match(activeSummary, /7134662/);
+  assert.match(activeSummary, /Pedido<\/b> 48076976/);
+  assert.match(activeSummary, /OV<\/b> OV_15799764/);
+  assert.match(activeSummary, /Status Simpress/);
+  assert.match(activeSummary, /Fila: Fila A/);
+  assert.match(activeSummary, /Cidade: Curitiba/);
+  assert.match(activeSummary, /Atendimento: Simpress/);
+  assert.match(activeSummary, /Atualização: Sem atualização há/);
+  assert.doesNotMatch(activeSummary, /Descrição do produto|Endereço de entrega|Série em/);
+  assert.doesNotMatch(activeSummary, /REQ-77|R Caeté/);
+  assert.match(activeCard, /data-ticket-section="details"/);
+  assert.match(activeCard, /Descrição do produto: Notebook HP ProBook/);
+  assert.match(activeCard, /Cidade de entrega: Curitiba/);
+  assert.match(activeCard, /Previsão de entrega: 28\/09\/2026/);
+  assert.match(activeCard, /Endereço de entrega: Rua das Flores, 123, Curitiba - PR/);
+  assert.doesNotMatch(activeCard, /data-ticket-section="conference"|Conferência das relações|Revisar relação/);
+  assert.match(activeSummary, /OS conferida/);
+  assert.match(activeCard, /data-ticket-section="timeline"/);
+  assert.match(activeCard, /Linha do tempo e anotações/);
+  const oracleCards = activeCard.split("Oracle · solicitações e OS")[1];
   assert.ok(oracleCards.indexOf("7134662") < oracleCards.indexOf("7124895"));
   assert.match(oracleCards, /Endereço: R Caeté, 150, Prado Velho, Curitiba/);
   assert.match(oracleCards, /Atendido pela inibição: Não/);
@@ -965,6 +988,10 @@ test("shows Simpress product and city while gating delivery address by order sta
   assert.ok(cards.includes("&lt;script&gt;alert(&#039;x&#039;)&lt;/script&gt;"));
   assert.doesNotMatch(cards, /<script>alert\('x'\)<\/script>/);
   assert.match(appCss, /\.ticket-oracle-description-content[\s\S]*max-height: 12rem; overflow: auto/);
+  assert.match(appCss, /\.ticket-disclosure > summary:focus-visible/);
+  assert.match(appCss, /\.ticket-card-meta > span:not\(:first-child\)::before,\s*\.ticket-card-triage > span:not\(:first-child\)::before\s*\{\s*content: "•";/);
+  assert.match(appHtml, /id="painel-dados-acompanhamento-chamados"/);
+  assert.match(appHtml, /id="filtros-avancados-acompanhamento-chamados"/);
   assert.doesNotMatch(cards, /Chamado do cliente: Não informado/);
   const deliveredCard = cards.split('data-ticket-serial="SN-ENTREGUE"')[1].split("</article>")[0];
   assert.match(deliveredCard, /Descrição do produto: Monitor HP/);

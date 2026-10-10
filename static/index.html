@@ -1408,28 +1408,38 @@ Horário disponível para atendimento:</textarea>
     <div class="modal-panel bg-slate-900 border border-cyan-500/30 rounded-2xl max-w-5xl w-full p-5 sm:p-6 shadow-2xl flex flex-col max-h-[92vh] overflow-hidden">
       <div class="flex items-start justify-between gap-4 pb-4 border-b border-slate-800 shrink-0"><div><h3 class="text-base font-bold text-white">Acompanhamento de Chamados</h3><p class="text-xs text-slate-400 mt-1">Importe as exportações da Simpress e do Oracle. As OS são relacionadas pelo número de série.</p></div><button type="button" onclick="fecharAcompanhamentoChamados()" class="text-slate-400 hover:text-white p-1 rounded-lg hover:bg-slate-800" aria-label="Fechar acompanhamento de chamados"><i data-lucide="x" class="w-5 h-5"></i></button></div>
       <div id="conteudo-acompanhamento-chamados" role="region" aria-label="Conteúdo do acompanhamento de chamados" tabindex="0" class="min-h-0 flex-1 overflow-y-auto overscroll-contain focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-cyan-400/60">
-      <form id="form-importar-acompanhamento-chamados" class="grid grid-cols-1 gap-3 border-b border-slate-800 py-4 md:grid-cols-[1fr_1fr_auto] md:items-end">
-        <label for="arquivo-chamados-simpress" class="text-xs text-slate-300">Simpress · Acompanhamento de Pedidos<input id="arquivo-chamados-simpress" name="simpress_file" type="file" accept=".xlsx,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" required class="mt-1 block w-full rounded-lg border border-slate-700 bg-slate-950 px-3 py-2 text-xs text-slate-300 file:mr-3 file:rounded-md file:border-0 file:bg-slate-800 file:px-2 file:py-1 file:text-xs file:text-slate-200"></label>
-        <label for="arquivo-chamados-oracle" class="text-xs text-slate-300">Oracle · Gestão de Solicitações<input id="arquivo-chamados-oracle" name="oracle_file" type="file" accept=".xlsx,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" required class="mt-1 block w-full rounded-lg border border-slate-700 bg-slate-950 px-3 py-2 text-xs text-slate-300 file:mr-3 file:rounded-md file:border-0 file:bg-slate-800 file:px-2 file:py-1 file:text-xs file:text-slate-200"></label>
-        <button id="btn-importar-acompanhamento-chamados" type="submit" class="rounded-lg border border-cyan-400/30 bg-cyan-500/15 px-4 py-2.5 text-xs font-semibold text-cyan-100 hover:bg-cyan-500/25">Importar planilhas</button>
-        <p id="status-importacao-chamados" class="text-[10px] text-slate-400 md:col-span-3" role="status" aria-live="polite"></p>
-      </form>
-      <div id="resumo-acompanhamento-chamados" class="shrink-0 py-3"></div>
-      <div class="grid grid-cols-1 md:grid-cols-[minmax(0,1fr)_auto_auto] gap-2 border-y border-slate-800 py-3 shrink-0">
-        <label for="versao-acompanhamento-chamados" class="text-xs text-slate-300">Versão das planilhas<select id="versao-acompanhamento-chamados" class="mt-1 block w-full rounded-lg border border-slate-700 bg-slate-950 px-3 py-2 text-sm text-white" onchange="selecionarVersaoChamados()"><option value="">Nenhuma importação</option></select></label>
-        <button type="button" id="btn-exportar-acompanhamento-chamados" class="self-end rounded-lg border border-emerald-400/30 bg-emerald-500/15 px-4 py-2 text-xs font-semibold text-emerald-100 hover:bg-emerald-500/25 disabled:cursor-not-allowed disabled:opacity-50" onclick="exportarAcompanhamentoChamados()" disabled>Exportar Excel filtrado</button>
-        <button type="button" id="btn-excluir-importacoes-antigas-chamados" class="self-end rounded-lg border border-rose-400/30 bg-rose-500/10 px-4 py-2 text-xs font-semibold text-rose-200 hover:bg-rose-500/20 disabled:cursor-not-allowed disabled:opacity-50" onclick="excluirImportacoesAntigasChamados()" disabled>Excluir importações antigas</button>
-        <details class="md:col-span-3 rounded-lg border border-slate-800 bg-slate-950/50 px-3 py-2">
-          <summary class="cursor-pointer text-xs font-semibold text-slate-300">Comparação com a importação anterior</summary>
-          <div id="evolucao-acompanhamento-chamados" class="pt-2 text-xs text-slate-300" role="status" aria-live="polite">O histórico de importações aparecerá aqui.</div>
+      <div class="space-y-3 py-3">
+        <details id="painel-dados-acompanhamento-chamados" class="ticket-disclosure rounded-lg border border-slate-800 bg-slate-950/50 px-3 py-2">
+          <summary class="ticket-disclosure-summary flex min-h-9 items-center justify-between gap-3 text-xs font-semibold text-slate-200">
+            <span>Importação e histórico</span>
+            <span id="versao-atual-acompanhamento-chamados" class="min-w-0 truncate text-right text-[10px] font-normal text-slate-500">Nenhuma importação</span>
+          </summary>
+          <div class="space-y-3 pt-3">
+            <form id="form-importar-acompanhamento-chamados" class="grid grid-cols-1 gap-3 border-b border-slate-800 pb-3 md:grid-cols-[1fr_1fr_auto] md:items-end">
+              <label for="arquivo-chamados-simpress" class="text-xs text-slate-300">Simpress · Acompanhamento de Pedidos<input id="arquivo-chamados-simpress" name="simpress_file" type="file" accept=".xlsx,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" required class="mt-1 block w-full rounded-lg border border-slate-700 bg-slate-950 px-3 py-2 text-xs text-slate-300 file:mr-3 file:rounded-md file:border-0 file:bg-slate-800 file:px-2 file:py-1 file:text-xs file:text-slate-200"></label>
+              <label for="arquivo-chamados-oracle" class="text-xs text-slate-300">Oracle · Gestão de Solicitações<input id="arquivo-chamados-oracle" name="oracle_file" type="file" accept=".xlsx,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" required class="mt-1 block w-full rounded-lg border border-slate-700 bg-slate-950 px-3 py-2 text-xs text-slate-300 file:mr-3 file:rounded-md file:border-0 file:bg-slate-800 file:px-2 file:py-1 file:text-xs file:text-slate-200"></label>
+              <button id="btn-importar-acompanhamento-chamados" type="submit" class="rounded-lg border border-cyan-400/30 bg-cyan-500/15 px-4 py-2.5 text-xs font-semibold text-cyan-100 hover:bg-cyan-500/25">Importar planilhas</button>
+              <p id="status-importacao-chamados" class="text-[10px] text-slate-400 md:col-span-3" role="status" aria-live="polite"></p>
+            </form>
+            <div id="resumo-acompanhamento-chamados" class="shrink-0"></div>
+            <div class="grid grid-cols-1 gap-2 md:grid-cols-[minmax(0,1fr)_auto]">
+              <label for="versao-acompanhamento-chamados" class="text-xs text-slate-300">Versão das planilhas<select id="versao-acompanhamento-chamados" class="mt-1 block w-full rounded-lg border border-slate-700 bg-slate-950 px-3 py-2 text-sm text-white" onchange="selecionarVersaoChamados()"><option value="">Nenhuma importação</option></select></label>
+              <button type="button" id="btn-excluir-importacoes-antigas-chamados" class="self-end rounded-lg border border-rose-400/30 bg-rose-500/10 px-4 py-2 text-xs font-semibold text-rose-200 hover:bg-rose-500/20 disabled:cursor-not-allowed disabled:opacity-50" onclick="excluirImportacoesAntigasChamados()" disabled>Excluir importações antigas</button>
+              <details class="ticket-disclosure md:col-span-2 rounded-lg border border-slate-800 bg-slate-950/40 px-3 py-2">
+                <summary class="ticket-disclosure-summary cursor-pointer text-xs font-semibold text-slate-300">Comparação com a importação anterior</summary>
+                <div id="evolucao-acompanhamento-chamados" class="pt-2 text-xs text-slate-300" role="status" aria-live="polite">O histórico de importações aparecerá aqui.</div>
+              </details>
+            </div>
+          </div>
         </details>
-      </div>
-      <div class="grid grid-cols-1 sm:grid-cols-[minmax(0,1fr)_auto_auto] gap-2 py-3 shrink-0">
-        <label for="filtro-acompanhamento-chamados" class="min-w-0 text-xs text-slate-300">Buscar série, pedido, OS ou status<input id="filtro-acompanhamento-chamados" type="search" autocomplete="off" class="mt-1 block w-full rounded-lg border border-slate-700 bg-slate-950 px-3 py-2 text-sm text-white placeholder:text-slate-500" placeholder="Digite para filtrar os chamados"></label>
-        <label class="flex items-center gap-2 self-end rounded-lg border border-slate-800 px-3 py-2 text-xs text-slate-200"><input id="somente-atencao-chamados" type="checkbox" class="accent-amber-400">Fila de atenção</label>
-        <button type="button" class="self-end rounded-lg border border-slate-700 px-3 py-2 text-xs text-slate-300 hover:bg-slate-800" onclick="limparFiltrosAcompanhamentoChamados()">Limpar filtros</button>
-        <details class="sm:col-span-3 rounded-lg border border-slate-800 px-3 py-2">
-          <summary class="cursor-pointer text-xs font-semibold text-slate-300">Filtros de triagem: relação, status, fila, cidade e atendimento</summary>
+        <div class="ticket-filter-toolbar">
+          <label for="filtro-acompanhamento-chamados" class="ticket-filter-search text-xs text-slate-300">Buscar série, pedido, OS ou status<input id="filtro-acompanhamento-chamados" type="search" autocomplete="off" class="mt-1 block w-full rounded-lg border border-slate-700 bg-slate-950 px-3 py-2 text-sm text-white placeholder:text-slate-500" placeholder="Digite para filtrar os chamados"></label>
+          <label title="Chamados ativos sem data ou com três dias ou mais sem atualização" class="ticket-filter-attention border border-amber-400/20 bg-amber-500/5 text-xs text-amber-100"><input id="somente-atencao-chamados" type="checkbox" class="accent-amber-400">Atenção · 3+ dias</label>
+          <button type="button" id="btn-exportar-acompanhamento-chamados" class="ticket-filter-action ticket-filter-export rounded-lg border border-emerald-400/30 bg-emerald-500/15 text-xs font-semibold text-emerald-100 hover:bg-emerald-500/25 disabled:cursor-not-allowed disabled:opacity-50" onclick="exportarAcompanhamentoChamados()" disabled>Exportar Excel</button>
+          <button type="button" class="ticket-filter-action ticket-filter-clear rounded-lg border border-slate-700 text-xs text-slate-300 hover:bg-slate-800" onclick="limparFiltrosAcompanhamentoChamados()">Limpar filtros</button>
+        </div>
+        <details id="filtros-avancados-acompanhamento-chamados" class="ticket-disclosure rounded-lg border border-slate-800 px-3 py-2">
+          <summary class="ticket-disclosure-summary cursor-pointer text-xs font-semibold text-slate-300"><span>Filtros avançados</span><span id="indicador-filtros-acompanhamento-chamados" class="text-[10px] font-normal text-slate-500">Relação, status, fila, cidade e atendimento</span></summary>
           <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-2 pt-3">
             <label for="relacao-acompanhamento-chamados" class="text-xs text-slate-300">Relação<select id="relacao-acompanhamento-chamados" class="mt-1 block w-full rounded-lg border border-slate-700 bg-slate-950 px-3 py-2 text-sm text-white"><option value="">Todas</option><option value="conferida">OS conferida</option><option value="divergente">OS divergente</option><option value="sem_os">Sem OS</option><option value="somente_simpress">Só Simpress</option><option value="somente_oracle">Só Oracle</option></select></label>
             <label for="status-acompanhamento-chamados" class="text-xs text-slate-300">Status Oracle<select id="status-acompanhamento-chamados" class="mt-1 block w-full rounded-lg border border-slate-700 bg-slate-950 px-3 py-2 text-sm text-white"><option value="">Todos</option></select></label>

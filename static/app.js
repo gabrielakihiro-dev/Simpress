@@ -3095,11 +3095,31 @@
       }
     }
 
+    function capturarExpansoesCartoesChamados(list) {
+      const expandedSections = new Set();
+      list.querySelectorAll?.('article[data-ticket-serial]').forEach(card => {
+        const serial = card.dataset.ticketSerial || "";
+        card.querySelectorAll('details[data-ticket-section]').forEach(section => {
+          if (section.open) expandedSections.add(JSON.stringify([serial, section.dataset.ticketSection || ""]));
+        });
+      });
+      return expandedSections;
+    }
+
     function renderizarAcompanhamentoChamados() {
       const data = acompanhamentoChamadosAtual || {};
       const summary = data.resumo || {};
       const sources = data.fontes || {};
       const list = document.getElementById("lista-acompanhamento-chamados");
+      const expandedSections = capturarExpansoesCartoesChamados(list);
+      const expandedKey = (serial, section) => JSON.stringify([serial, section]);
+      const managementPanel = document.getElementById("painel-dados-acompanhamento-chamados");
+      const hasTickets = Array.isArray(data.chamados) && data.chamados.length > 0;
+      if (!hasTickets) managementPanel.open = true;
+      const currentVersion = document.getElementById("versao-atual-acompanhamento-chamados");
+      currentVersion.textContent = data.atualizado_em
+        ? `Atualizado ${formatarHorarioHistorico(data.atualizado_em)}`
+        : hasTickets ? "Versão selecionada" : "Nenhuma importação";
       const summaryTarget = document.getElementById("resumo-acompanhamento-chamados");
       const summaryCards = [
         ["Séries", summary.series_total],
@@ -3109,8 +3129,8 @@
         ["Só no Oracle", summary.somente_oracle],
         ["Sem OS", summary.sem_os],
       ];
-      summaryTarget.innerHTML = `<div class="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-2">${summaryCards.map(([label, count]) => `<div class="rounded-lg border border-slate-800 bg-slate-950/70 px-3 py-2"><p class="text-[10px] text-slate-400">${label}</p><p class="mt-1 text-base font-semibold text-white">${Number(count) || 0}</p></div>`).join("")}</div>
-        <p class="mt-2 text-[10px] text-slate-500">Simpress: ${escapeHtml(sources.simpress?.arquivo || "aguardando importação")} · Oracle: ${escapeHtml(sources.oracle?.arquivo || "aguardando importação")}${data.atualizado_em ? ` · atualizado em ${escapeHtml(formatarHorarioHistorico(data.atualizado_em))}` : ""}</p>`;
+      summaryTarget.innerHTML = `<div class="grid grid-cols-2 gap-2 sm:grid-cols-3 lg:grid-cols-6">${summaryCards.map(([label, count]) => `<div class="rounded-md border border-slate-800 bg-slate-900/70 px-2.5 py-1.5"><p class="text-[9px] text-slate-400">${label}</p><p class="mt-0.5 text-sm font-semibold text-white">${Number(count) || 0}</p></div>`).join("")}</div>
+        <p class="mt-2 break-words text-[10px] text-slate-500">Simpress: ${escapeHtml(sources.simpress?.arquivo || "aguardando importação")} · Oracle: ${escapeHtml(sources.oracle?.arquivo || "aguardando importação")}</p>`;
 
       const filters = obterFiltrosChamados();
       const query = normalizarFiltroChamados(filters.search);
@@ -3130,6 +3150,10 @@
       atualizarOpcoesFiltroChamados("fila-acompanhamento-chamados", queues, "Todas");
       atualizarOpcoesFiltroChamados("cidade-acompanhamento-chamados", cities, "Todas");
       atualizarOpcoesFiltroChamados("atendimento-acompanhamento-chamados", providers, "Todos");
+      const activeAdvancedFilters = [filters.relation, filters.status, filters.queue, filters.city, filters.provider, filters.age_filter].filter(Boolean).length;
+      document.getElementById("indicador-filtros-acompanhamento-chamados").textContent = activeAdvancedFilters
+        ? `${activeAdvancedFilters} filtro${activeAdvancedFilters === 1 ? " ativo" : "s ativos"}`
+        : "Relação, status, fila, cidade e atendimento";
       const records = (Array.isArray(data.chamados) ? data.chamados : []).filter(record => {
         const oracle = Array.isArray(record.oracle) ? record.oracle : [];
         const attention = classificarAtencaoChamado(record);
@@ -3158,7 +3182,10 @@
         ["Sem data de atualização", missingDateRecords.length, "text-rose-200"],
         ["Atualizados há menos de 3 dias", freshRecords, "text-emerald-200"],
       ];
-      triageTarget.innerHTML = `<div class="rounded-lg border border-slate-800 bg-slate-950/40 p-2"><div class="mb-2 flex flex-wrap items-baseline justify-between gap-2"><h4 class="text-[11px] font-semibold text-slate-200">Triagem diária</h4><p class="text-[10px] text-slate-500">Fila de atenção: chamados ativos sem data ou com 3 dias ou mais sem atualização.</p></div><div class="grid grid-cols-2 gap-2 sm:grid-cols-4">${triageCards.map(([label, count, color]) => `<div class="rounded-md border border-slate-800 bg-slate-900/70 px-2.5 py-1.5"><p class="text-[9px] text-slate-400">${label}</p><p class="mt-0.5 text-sm font-semibold ${color}">${count}</p></div>`).join("")}</div></div>`;
+      triageTarget.innerHTML = `<div class="ticket-triage rounded-lg border border-slate-800 bg-slate-950/40 px-2 py-1.5"><div class="mb-1.5 flex flex-wrap items-baseline justify-between gap-2"><h4 class="text-[11px] font-semibold text-slate-200">Triagem diária</h4><p class="text-[10px] text-slate-500">Atenção: 3+ dias ou sem data.</p></div><div class="grid grid-cols-2 gap-1.5 sm:grid-cols-4">${triageCards.map(([label, count, color]) => {
+        const shortLabel = label === "Chamados ativos" ? "Ativos" : label === "Sem atualização há 3+ dias" ? "3+ dias" : label === "Sem data de atualização" ? "Sem data" : "Atualizados <3 dias";
+        return `<div class="rounded-md border border-slate-800 bg-slate-900/70 px-2 py-1" aria-label="${escapeHtml(label)}"><p class="text-[9px] text-slate-400">${shortLabel}</p><p class="text-sm font-semibold ${color}">${count}</p></div>`;
+      }).join("")}</div></div>`;
       const exportButton = document.getElementById("btn-exportar-acompanhamento-chamados");
       exportButton.disabled = !Array.isArray(data.chamados) || data.chamados.length === 0;
       if (!Array.isArray(data.chamados) || data.chamados.length === 0) {
@@ -3183,23 +3210,28 @@
         const simpress = record.simpress || {};
         const ordensVenda = Array.isArray(simpress.ordens_venda) ? simpress.ordens_venda : [];
         const ordensSimpress = Array.isArray(simpress.ordens_servico) ? simpress.ordens_servico : [];
+        const currentSimpressOrder = [...ordensSimpress].filter(Boolean).sort(compararOrdensServicoDecrescente)[0] || "";
         const chamadosCliente = chamadosClienteInformados(simpress.chamados_cliente);
         const enderecosEntrega = Array.isArray(simpress.enderecos_entrega) ? simpress.enderecos_entrega : [];
         const mostrarEnderecoEntrega = simpress.pedido_em_andamento && enderecosEntrega.some(Boolean);
         const previsoesEntrega = Array.isArray(simpress.previsoes_entrega) ? simpress.previsoes_entrega : [];
         const oracle = Array.isArray(record.oracle) ? record.oracle : [];
-        const provenance = record.fontes_relacao || {};
-        const seriesSources = provenance.serie || { simpress: Boolean(simpress.serie || simpress.pedidos?.length || ordensSimpress.length), oracle: oracle.length > 0 };
-        const seriesSourceLabels = [seriesSources.simpress ? "Simpress" : "", seriesSources.oracle ? "Oracle" : ""].filter(Boolean);
-        const relationAlerts = Array.isArray(record.alertas_relacao) ? record.alertas_relacao : [];
-        const oracleRows = oracle.length ? [...oracle].sort((left, right) => compararOrdensServicoDecrescente(left.ordem_servico, right.ordem_servico)).map(ticket => {
+        const orderedOracle = [...oracle].sort((left, right) => compararOrdensServicoDecrescente(left.ordem_servico, right.ordem_servico));
+        const currentOracle = orderedOracle[0] || {};
+        const hasActiveOracle = orderedOracle.some(ticket => !idadeAtualizacaoChamado(ticket).encerrado);
+        const updateAgeSummary = hasActiveOracle
+          ? attention.ultima_atualizacao
+            ? idadeAtualizacaoChamado({ ultima_atualizacao: attention.ultima_atualizacao }).rotulo
+            : "Sem data de atualização"
+          : currentOracle.ordem_servico ? "Chamado encerrado" : "Sem registro Oracle";
+        const oracleRows = orderedOracle.length ? orderedOracle.map(ticket => {
           const updateAge = idadeAtualizacaoChamado(ticket);
           const ageClass = updateAge.encerrado ? "text-slate-500" : updateAge.dias === null || updateAge.dias >= 3 ? "text-amber-200" : "text-emerald-200";
           const oracleAddress = [ticket.logradouro, ticket.numero_endereco, ticket.bairro, ticket.cidade]
             .map(value => String(value || "").trim())
             .filter(Boolean)
             .join(", ");
-          return `<div class="rounded-lg border border-slate-800 bg-slate-900/80 p-3">
+          return `<div class="rounded-lg border border-slate-800 bg-slate-900/80 p-2.5">
           <div class="flex flex-wrap items-center justify-between gap-2"><p class="text-xs font-semibold text-white">Solicitação Oracle ${escapeHtml(ticket.solicitacao || "Não informada")}</p><span class="inline-flex items-center gap-2 rounded-md border border-violet-400/30 bg-violet-500/10 px-2.5 py-1.5"><span class="text-[10px] font-semibold uppercase tracking-wide text-violet-200">OS Oracle</span><span class="font-mono text-lg font-bold leading-none text-violet-100">${escapeHtml(ticket.ordem_servico || "Não informada")}</span></span></div>
           <p class="mt-1 text-xs text-slate-300">${escapeHtml(ticket.status || "Status não informado")}${ticket.sub_status ? ` · ${escapeHtml(ticket.sub_status)}` : ""}</p>
           <p class="mt-1 text-[10px] text-slate-400">Fila: ${escapeHtml(ticket.fila || "Não informada")} · Fase: ${escapeHtml(ticket.fase_atendimento || "Não informada")}</p>
@@ -3212,31 +3244,58 @@
         </div>`;
         }).join("") : '<p class="text-xs text-slate-500">Sem registro correspondente no Oracle.</p>';
         const attentionClass = attention.em_atencao ? "border-amber-400/20 bg-amber-500/5 text-amber-200" : "border-slate-700 bg-slate-900 text-slate-400";
-        const reviewMarkup = relationAlerts.length ? `<div class="mt-3 rounded-lg border border-amber-400/30 bg-amber-500/5 px-3 py-2" role="note"><p class="text-[10px] font-semibold text-amber-200">Conferir relação entre as planilhas</p><ul class="mt-1 list-disc space-y-0.5 pl-4 text-[10px] text-amber-100">${relationAlerts.map(alert => `<li>${escapeHtml(alert.mensagem || "Relação incerta")}</li>`).join("")}</ul></div>` : "";
-        return `<article class="rounded-xl border border-slate-800 bg-slate-950/70 p-4" data-ticket-serial="${escapeHtml(record.serie)}">
-          <div class="flex flex-wrap items-center justify-between gap-2"><div class="min-w-0"><h4 class="font-mono text-sm font-semibold text-white">${escapeHtml(record.serie)}</h4><p class="mt-1 text-[10px] text-slate-400">Série encontrada em: ${escapeHtml(seriesSourceLabels.join(" e ") || "nenhuma fonte")}</p></div><div class="flex flex-wrap items-center gap-2"><span class="rounded-full border px-2.5 py-1 text-[10px] font-semibold ${relationClass}">${relationLabel}</span><span class="rounded-full border px-2.5 py-1 text-[10px] ${attentionClass}">${escapeHtml(attention.motivo)}</span></div></div>
-          <div class="mt-3 grid grid-cols-1 gap-3 lg:grid-cols-2">
-            <section class="rounded-lg border border-slate-800 bg-slate-900/50 p-3">
-              <h5 class="text-[10px] font-semibold uppercase tracking-wide text-cyan-200">Simpress · Acompanhamento de Pedidos</h5>
-              <div class="mt-2 flex flex-wrap items-center gap-2 text-xs text-slate-300">
-                <span>Pedido Simpress: ${formatarListaChamados(simpress.pedidos)}</span>
-                ${ordensVenda.some(Boolean) ? `<span aria-label="Ordem de venda Simpress" class="inline-flex items-center rounded-md border border-cyan-400/30 bg-cyan-500/10 px-2 py-1 font-mono font-semibold text-cyan-100">${formatarListaChamados(ordensVenda)}</span>` : ""}
-              </div>
-              <div class="mt-2 flex flex-wrap items-center gap-2"><span class="text-[10px] font-semibold uppercase tracking-wide text-cyan-200">OS Simpress</span><span class="rounded-md border border-cyan-400/30 bg-cyan-500/10 px-2.5 py-1.5 font-mono text-lg font-bold leading-none text-cyan-100">${formatarOrdensServico(ordensSimpress)}</span></div>
-              ${chamadosCliente.some(Boolean) ? `<p class="mt-2 text-xs text-slate-300">Chamado do cliente: ${formatarListaChamados(chamadosCliente)}</p>` : ""}
-              <p class="mt-1 text-xs text-slate-300">Descrição do produto: ${formatarListaChamados(simpress.descricoes_produto)}</p>
-              <p class="mt-1 text-xs text-slate-300">Cidade de entrega: ${formatarListaChamados(simpress.cidades_entrega)}</p>
-              ${previsoesEntrega.some(Boolean) ? `<p class="mt-1 text-xs text-slate-300">Previsão de entrega: ${formatarPrevisoesEntrega(previsoesEntrega)}</p>` : ""}
-              ${mostrarEnderecoEntrega ? `<p class="mt-1 break-words text-xs text-slate-300">Endereço de entrega: ${formatarListaChamados(enderecosEntrega)}</p>` : ""}
-              <p class="mt-1 text-xs text-slate-400">Status: ${formatarListaChamados(simpress.status)}</p>
-            </section>
-            <section class="space-y-2"><h5 class="px-1 text-[10px] font-semibold uppercase tracking-wide text-violet-200">Oracle · Gestão de Solicitações</h5>${oracleRows}</section>
+        const attentionLabel = attention.em_atencao ? attention.motivo : hasActiveOracle ? "Em dia" : currentOracle.ordem_servico ? "Encerrado" : "Em acompanhamento";
+        const cityLabels = cidadesDoChamado(record);
+        const providerLabels = atendimentosDoChamado(record).filter(provider => provider !== "Não informado");
+        const oracleStatus = [currentOracle.status, currentOracle.sub_status].filter(Boolean).join(" · ") || "Não informado";
+        const openDetails = expandedSections.has(expandedKey(record.serie, "details")) ? " open" : "";
+        return `<article class="ticket-card rounded-xl border border-slate-800 bg-slate-950/70 p-3 sm:p-3.5" data-ticket-serial="${escapeHtml(record.serie)}">
+          <div class="flex flex-wrap items-start justify-between gap-2">
+            <h4 class="min-w-0 break-all font-mono text-sm font-semibold text-white">${escapeHtml(record.serie)}</h4>
+            <div class="flex flex-wrap items-center gap-1.5"><span class="rounded-full border px-2 py-1 text-[10px] font-semibold ${relationClass}">${relationLabel}</span><span class="rounded-full border px-2 py-1 text-[10px] ${attentionClass}">${escapeHtml(attentionLabel)}</span></div>
           </div>
-          ${reviewMarkup}
-          ${record.ordens_servico_conferidas?.length ? `<p class="mt-3 text-[10px] text-emerald-200">OS encontrada nas duas fontes: ${formatarOrdensServico(record.ordens_servico_conferidas)}</p>` : ""}
-          <details class="mt-3 rounded-lg border border-cyan-400/20 bg-slate-900/50 px-3 py-2" data-ticket-timeline data-timeline-serial="${escapeHtml(record.serie)}" data-snapshot-id="${escapeHtml(data.snapshot_id || "")}" ontoggle="carregarLinhaDoTempoChamado(this)"><summary class="cursor-pointer text-xs font-semibold text-cyan-100">Linha do tempo e anotações</summary><div data-ticket-timeline-body><p class="py-2 text-[10px] text-slate-500">Abra para ver as mudanças desta série em cada importação e registrar a próxima ação.</p></div></details>
+          <div class="ticket-card-identifiers mt-2 grid grid-cols-1 gap-1.5 sm:grid-cols-2">
+            <div class="ticket-card-identifier border border-cyan-400/20 bg-cyan-500/5"><span>OS Simpress</span><strong>${formatarOrdensServico(currentSimpressOrder ? [currentSimpressOrder] : [])}</strong></div>
+            <div class="ticket-card-identifier border border-violet-400/20 bg-violet-500/5"><span>OS Oracle</span><strong>${escapeHtml(currentOracle.ordem_servico || "Não informado")}</strong></div>
+          </div>
+          <div class="ticket-card-meta mt-2 flex flex-wrap items-center gap-x-3 gap-y-1 text-[11px] text-slate-300">
+            <span><b>Pedido</b> ${formatarListaChamados(simpress.pedidos)}</span>
+            ${ordensVenda.some(Boolean) ? `<span><b>OV</b> ${formatarListaChamados(ordensVenda)}</span>` : ""}
+          </div>
+          <div class="ticket-card-status mt-2 grid grid-cols-1 gap-1.5 sm:grid-cols-2">
+            <p class="truncate text-xs text-cyan-100" title="Status Simpress: ${formatarListaChamados(simpress.status)}"><b>Simpress</b> · ${formatarListaChamados(simpress.status)}</p>
+            <p class="truncate text-xs text-violet-100" title="Status Oracle: ${escapeHtml(oracleStatus)}"><b>Oracle</b> · ${escapeHtml(oracleStatus)}</p>
+          </div>
+          <div class="ticket-card-triage mt-2 flex flex-wrap items-center gap-x-3 gap-y-1 text-[10px] text-slate-400">
+            <span>Fila: ${escapeHtml(currentOracle.fila || "Não informada")}</span>
+            <span>Cidade: ${escapeHtml(cityLabels.join(", ") || "Não informada")}</span>
+            <span>Atendimento: ${escapeHtml(providerLabels.join(", ") || "Não informado")}</span>
+            <span class="font-medium ${attention.em_atencao ? "text-amber-200" : "text-emerald-200"}">Atualização: ${escapeHtml(updateAgeSummary)}</span>
+          </div>
+          <details class="ticket-disclosure mt-3 rounded-lg border border-slate-800 bg-slate-900/40 px-3 py-2" data-ticket-section="details"${openDetails}>
+            <summary class="ticket-disclosure-summary cursor-pointer text-xs font-semibold text-slate-200">Detalhes do chamado</summary>
+            <div class="ticket-detail-grid grid grid-cols-1 gap-2 pt-2 lg:grid-cols-2">
+              <section class="rounded-lg border border-slate-800 bg-slate-950/50 p-2.5">
+                <h5 class="text-[10px] font-semibold uppercase tracking-wide text-cyan-200">Simpress</h5>
+                <p class="mt-1 text-xs text-slate-300">OS na planilha: ${formatarOrdensServico(ordensSimpress)}</p>
+                ${chamadosCliente.some(Boolean) ? `<p class="mt-1 text-xs text-slate-300">Chamado do cliente: ${formatarListaChamados(chamadosCliente)}</p>` : ""}
+                <p class="mt-1 break-words text-xs text-slate-300">Descrição do produto: ${formatarListaChamados(simpress.descricoes_produto)}</p>
+                <p class="mt-1 text-xs text-slate-300">Cidade de entrega: ${formatarListaChamados(simpress.cidades_entrega)}</p>
+                ${previsoesEntrega.some(Boolean) ? `<p class="mt-1 text-xs text-slate-300">Previsão de entrega: ${formatarPrevisoesEntrega(previsoesEntrega)}</p>` : ""}
+                ${mostrarEnderecoEntrega ? `<p class="mt-1 break-words text-xs text-slate-300">Endereço de entrega: ${formatarListaChamados(enderecosEntrega)}</p>` : ""}
+              </section>
+              <section class="space-y-2 rounded-lg border border-slate-800 bg-slate-950/50 p-2.5">
+                <h5 class="text-[10px] font-semibold uppercase tracking-wide text-violet-200">Oracle · solicitações e OS</h5>${oracleRows}
+              </section>
+            </div>
+          </details>
+          <details class="ticket-disclosure mt-2 rounded-lg border border-cyan-400/20 bg-slate-900/50 px-3 py-2" data-ticket-section="timeline" data-ticket-timeline data-timeline-serial="${escapeHtml(record.serie)}" data-snapshot-id="${escapeHtml(data.snapshot_id || "")}" ontoggle="carregarLinhaDoTempoChamado(this)"><summary class="ticket-disclosure-summary cursor-pointer text-xs font-semibold text-cyan-100">Linha do tempo e anotações</summary><div data-ticket-timeline-body><p class="py-2 text-[10px] text-slate-500">Abra para ver as mudanças desta série em cada importação e registrar a próxima ação.</p></div></details>
         </article>`;
       }).join("");
+      list.querySelectorAll?.('details[data-ticket-section="timeline"]').forEach(section => {
+        const card = section.closest("article[data-ticket-serial]");
+        if (card && expandedSections.has(expandedKey(card.dataset.ticketSerial || "", "timeline"))) section.open = true;
+      });
     }
 
     function limparFiltrosAcompanhamentoChamados() {
@@ -3334,6 +3393,7 @@
         renderizarAcompanhamentoChamados();
         await carregarEvolucaoChamados(data.snapshot_id || "");
       } catch (error) {
+        document.getElementById("painel-dados-acompanhamento-chamados").open = true;
         list.innerHTML = `<p class="py-8 text-center text-sm text-rose-300" role="alert">${escapeHtml(error.message || "Não foi possível carregar o acompanhamento de chamados.")}</p>`;
       }
     }
@@ -3366,6 +3426,7 @@
         simpressInput.value = "";
         oracleInput.value = "";
         status.textContent = "Planilhas importadas. As OS foram relacionadas pela série.";
+        document.getElementById("painel-dados-acompanhamento-chamados").open = false;
         renderizarAcompanhamentoChamados();
         await carregarEvolucaoChamados(data.snapshot_id || "");
         showToast("Acompanhamento de chamados atualizado.", "success");
