@@ -11,106 +11,126 @@
   <script src="/static/vendor/lucide-1.48.0.min.js"></script>
   <link rel="stylesheet" href="/static/app.css">
   <link rel="stylesheet" href="/static/ui-motion.css">
+  <link rel="stylesheet" href="/static/sidebar-navigation.css">
 </head>
 <body class="min-h-full bg-gradient-to-br from-slate-950 via-slate-900 to-slate-950 text-slate-100 flex flex-col font-sans selection:bg-brand-500 selection:text-white">
 
   <a class="skip-link" href="#main-content">Pular para o conteúdo principal</a>
 
-  <!-- TOP HEADER -->
-  <header class="site-header border-b border-slate-800/80 bg-slate-950/80 backdrop-blur-md sticky top-0 z-40">
-    <div class="header-inner max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 h-20 flex items-center justify-between">
-      <nav class="app-tabs header-app-tabs" role="tablist" aria-label="Etapas da transferência" onkeydown="controlarAbasTransferencia(event)">
-        <button type="button" id="tab-home" class="app-tab is-active" role="tab" aria-selected="true" aria-controls="tab-panel-home" tabindex="0" onclick="ativarAbaTransferencia('home')">
-          <i data-lucide="home" class="w-4 h-4" aria-hidden="true"></i>
-          <span>Home</span>
-        </button>
-        <button type="button" id="tab-retirada-entrega" class="app-tab" role="tab" aria-selected="false" aria-controls="tab-panel-retirada-entrega" tabindex="-1" onclick="ativarAbaTransferencia('transferencia')">
-          <i data-lucide="truck" class="w-4 h-4" aria-hidden="true"></i>
-          <span>Transporte</span>
-        </button>
-      </nav>
+  <div id="simpress-app-shell" class="simpress-app-shell" data-sidebar-collapsed="false" data-sidebar-open="false">
+    <div id="sidebar-backdrop" class="sidebar-backdrop" aria-hidden="true"></div>
 
-      <div class="header-base-summary hidden md:flex items-center gap-3 text-xs text-slate-400 bg-slate-900/80 px-3.5 py-2 rounded-lg border border-slate-800" aria-label="Resumo da base">
-        <span class="inline-flex items-center gap-1.5"><span class="h-1.5 w-1.5 rounded-full bg-emerald-400" aria-hidden="true"></span>Base: <strong class="text-slate-200" id="stat-equipamentos">Carregando…</strong> equipamentos</span>
-        <span aria-hidden="true" class="text-slate-700">|</span>
-        <span>Regionais: <strong class="text-slate-200" id="stat-unidades">Carregando…</strong></span>
-        <span aria-hidden="true" class="text-slate-700">|</span>
-        <span>Contrato: <strong class="text-slate-200">16467</strong></span>
+    <aside id="app-sidebar" class="app-sidebar" aria-label="Navegação principal">
+      <div class="sidebar-header">
+        <div class="sidebar-brand" aria-label="Simpress, gestão de equipamentos">
+          <span class="sidebar-brand-mark" aria-hidden="true">S</span>
+          <span class="sidebar-brand-copy">
+            <strong>Simpress</strong>
+            <small>Gestão de equipamentos</small>
+          </span>
+        </div>
+        <button type="button" id="btn-sidebar-toggle" class="sidebar-icon-button sidebar-collapse-button" aria-label="Recolher menu lateral" aria-controls="app-sidebar" aria-expanded="true" title="Recolher menu lateral">
+          <i data-lucide="chevron-left" class="sidebar-collapse-icon" aria-hidden="true"></i>
+        </button>
       </div>
 
-      <nav class="header-actions" aria-label="Ações do sistema">
-        <div class="header-primary-actions">
-          <button type="button" onclick="resetarFormulario()" id="btn-nova-transferencia" aria-label="Nova transferência" class="header-primary-icon-button flex items-center justify-center text-sky-100 bg-sky-700 hover:bg-sky-600 border border-sky-500/70 rounded-lg transition-all shadow-sm" title="Nova transferência">
-            <i data-lucide="rotate-ccw" class="w-3 h-3" aria-hidden="true"></i>
-          </button>
+      <div class="sidebar-scroll-area">
+        <div class="sidebar-primary-action">
+          <div class="header-primary-actions">
+            <button type="button" onclick="resetarFormulario()" id="btn-nova-transferencia" aria-label="Nova transferência" class="header-primary-icon-button sidebar-new-transfer flex items-center justify-center text-sky-100 bg-sky-700 hover:bg-sky-600 border border-sky-500/70 rounded-lg transition-all shadow-sm" title="Nova transferência">
+              <i data-lucide="rotate-ccw" class="w-4 h-4" aria-hidden="true"></i>
+              <span class="sidebar-item-label">Nova transferência</span>
+            </button>
+          </div>
         </div>
-        <details class="header-secondary-actions">
-          <summary aria-label="Abrir menu de ações do sistema">
-            <span>Ações</span>
-            <i data-lucide="chevron-down" class="w-3 h-3" aria-hidden="true"></i>
-          </summary>
-          <div class="header-secondary-panel">
+
+        <p class="sidebar-section-title">Navegação</p>
+        <nav class="app-tabs sidebar-tabs" role="tablist" aria-label="Etapas da transferência" onkeydown="controlarAbasTransferencia(event)">
+          <button type="button" id="tab-home" class="app-tab is-active" role="tab" aria-selected="true" aria-controls="tab-panel-home" tabindex="0" onclick="ativarAbaTransferencia('home')" aria-label="Home" title="Home">
+            <i data-lucide="home" class="w-4 h-4" aria-hidden="true"></i>
+            <span>Home</span>
+          </button>
+          <button type="button" id="tab-retirada-entrega" class="app-tab" role="tab" aria-selected="false" aria-controls="tab-panel-retirada-entrega" tabindex="-1" onclick="ativarAbaTransferencia('transferencia')" aria-label="Transporte" title="Transporte">
+            <i data-lucide="truck" class="w-4 h-4" aria-hidden="true"></i>
+            <span>Transporte</span>
+          </button>
+        </nav>
+
+        <div class="sidebar-divider" aria-hidden="true"></div>
+        <p class="sidebar-section-title">Ferramentas</p>
+
+        <nav class="header-actions sidebar-actions" aria-label="Ferramentas do sistema">
+          <div class="header-secondary-panel" role="group" aria-label="Ações do sistema">
             <button type="button" onclick="abrirModalAtualizarPlanilhas()" id="btn-atualizar-planilhas" class="header-action-item header-action-item--large header-action-item--primary flex items-center gap-2" title="Comparar os arquivos e atualizar as bases do site">
               <i data-lucide="upload" class="header-action-icon header-action-icon--blue w-3 h-3" aria-hidden="true"></i>
-              <span>Atualizar planilhas</span>
+              <span class="sidebar-item-label">Atualizar planilhas</span>
             </button>
             <button type="button" onclick="exportarEquipamentosAtualizados()" id="btn-exportar-equipamentos" aria-label="Exportar planilha Excel com apelidos e IdCliente atualizados" aria-labelledby="label-exportar-equipamentos" class="header-action-item header-action-item--large header-action-item--emerald hidden flex items-center gap-2" title="Baixar a planilha com apelidos e IdCliente atualizados">
               <i data-lucide="file-spreadsheet" class="header-action-icon" aria-hidden="true"></i>
-              <span id="label-exportar-equipamentos">Exportar Excel</span>
+              <span id="label-exportar-equipamentos" class="sidebar-item-label">Exportar Excel</span>
             </button>
             <button type="button" onclick="abrirAcompanhamentoChamados()" class="header-action-item header-action-item--large header-action-item--teal flex items-center gap-2" title="Relacionar séries, OS e status nos arquivos da Simpress e do Oracle">
               <i data-lucide="clipboard-list" class="header-action-icon header-action-icon--teal" aria-hidden="true"></i>
-              <span>Acompanhamento de Chamados</span>
+              <span class="sidebar-item-label">Acompanhamento de Chamados</span>
             </button>
             <details class="header-action-group" data-action-group="analysis">
-              <summary aria-label="Abrir ações de análise das planilhas" aria-controls="header-action-group-analysis">
+              <summary aria-label="Abrir análises e históricos" aria-controls="header-action-group-analysis" title="Análises e históricos">
                 <i data-lucide="chart-no-axes-combined" class="header-action-group-icon" aria-hidden="true"></i>
-                <span>Análises e histórico</span>
+                <span class="sidebar-item-label">Análises e históricos</span>
                 <span id="badge-total-historico-comparacoes" class="header-action-count" aria-label="Total no histórico de planilhas">0</span>
                 <i data-lucide="chevron-down" class="header-action-group-chevron" aria-hidden="true"></i>
               </summary>
-              <div id="header-action-group-analysis" class="header-action-group-items" role="group" aria-label="Análises e histórico de planilhas">
+              <div id="header-action-group-analysis" class="header-action-group-items" role="group" aria-label="Análises, históricos e catálogo de unidades">
                 <button type="button" onclick="abrirModalHistoricoComparacoes()" id="btn-historico-comparacoes" aria-label="Histórico de atualizações e comparação de planilhas" aria-labelledby="label-historico-comparacoes" class="header-action-item flex items-center gap-2" title="Consultar comparações e alterações de apelido feitas pela atualização das planilhas">
                   <i data-lucide="history" class="header-action-icon" aria-hidden="true"></i>
-                  <span id="label-historico-comparacoes">Histórico planilhas</span>
+                  <span id="label-historico-comparacoes" class="sidebar-item-label">Histórico planilhas</span>
                 </button>
                 <button type="button" onclick="abrirCentralPendencias()" class="header-action-item flex items-center gap-2" title="Revisar os pontos da atualização mais recente">
                   <i data-lucide="list-checks" class="header-action-icon" aria-hidden="true"></i>
-                  <span>Pendências</span>
+                  <span class="sidebar-item-label">Pendências</span>
                 </button>
                 <button type="button" onclick="abrirEvolucaoAtualizacoes()" class="header-action-item flex items-center gap-2" title="Comparar pendências entre duas atualizações">
                   <i data-lucide="activity" class="header-action-icon" aria-hidden="true"></i>
-                  <span>Evolução das atualizações</span>
+                  <span class="sidebar-item-label">Evolução das atualizações</span>
                 </button>
-              </div>
-            </details>
-            <details class="header-action-group" data-action-group="equipment">
-              <summary aria-label="Abrir ações de equipamentos e cadastros" aria-controls="header-action-group-equipment">
-                <i data-lucide="laptop" class="header-action-group-icon" aria-hidden="true"></i>
-                <span>Equipamentos e cadastros</span>
-                <span id="badge-total-historico-apelidos" class="header-action-count" aria-label="Total no histórico de alterações">0</span>
-                <i data-lucide="chevron-down" class="header-action-group-chevron" aria-hidden="true"></i>
-              </summary>
-              <div id="header-action-group-equipment" class="header-action-group-items" role="group" aria-label="Equipamentos e cadastros">
                 <button type="button" onclick="abrirModalHistoricoApelidos()" id="btn-historico-apelidos" aria-label="Histórico de alterações manuais" aria-labelledby="label-historico-apelidos" class="header-action-item flex items-center gap-2" title="Consultar histórico de alterações manuais">
                   <i data-lucide="history" class="header-action-icon" aria-hidden="true"></i>
-                  <span id="label-historico-apelidos">Histórico de alterações</span>
+                  <span id="label-historico-apelidos" class="sidebar-item-label">Histórico de alterações</span>
                 </button>
                 <button type="button" onclick="abrirModalGerenciarUnidades()" aria-label="Catálogo de unidades SEBRAE" aria-labelledby="label-catalogo-unidades" class="header-action-item flex items-center gap-2" title="Consultar e gerenciar o catálogo de unidades SEBRAE">
                   <i data-lucide="map-pin" class="header-action-icon" aria-hidden="true"></i>
-                  <span id="label-catalogo-unidades">Catálogo de unidades</span>
+                  <span id="label-catalogo-unidades" class="sidebar-item-label">Catálogo de unidades</span>
                 </button>
               </div>
             </details>
-            <button id="btn-auth-logout" type="button" hidden class="header-action-item header-action-item--logout hidden flex items-center gap-2">Sair</button>
           </div>
-        </details>
-      </nav>
-    </div>
-  </header>
+        </nav>
+      </div>
 
-  <!-- MAIN CONTAINER -->
-  <main id="main-content" class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 pt-8 pb-12 flex-1 w-full space-y-6">
+    </aside>
+
+    <div class="app-workspace">
+      <header class="site-header border-b border-slate-800/80 bg-slate-950/80 backdrop-blur-md sticky top-0 z-40">
+        <div class="header-inner max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 h-20 flex items-center justify-between">
+          <button type="button" id="btn-sidebar-open" class="sidebar-icon-button sidebar-mobile-open" aria-label="Abrir menu de navegação" aria-controls="app-sidebar" aria-expanded="false" title="Abrir menu de navegação">
+            <i data-lucide="menu" aria-hidden="true"></i>
+          </button>
+          <div class="header-context" aria-label="Aplicação Simpress para o SEBRAE Paraná">
+            <span>Simpress <span aria-hidden="true">·</span> SEBRAE/PR</span>
+            <strong>Gestão de equipamentos</strong>
+          </div>
+          <div class="header-base-summary hidden md:flex items-center gap-3 text-xs text-slate-400 bg-slate-900/80 px-3.5 py-2 rounded-lg border border-slate-800" aria-label="Resumo da base">
+            <span class="inline-flex items-center gap-1.5"><span class="h-1.5 w-1.5 rounded-full bg-emerald-400" aria-hidden="true"></span>Base: <strong class="text-slate-200" id="stat-equipamentos">Carregando…</strong> equipamentos</span>
+            <span aria-hidden="true" class="text-slate-700">|</span>
+            <span>Regionais: <strong class="text-slate-200" id="stat-unidades">Carregando…</strong></span>
+            <span aria-hidden="true" class="text-slate-700">|</span>
+            <span>Contrato: <strong class="text-slate-200">16467</strong></span>
+          </div>
+        </div>
+      </header>
+
+      <!-- MAIN CONTAINER -->
+      <main id="main-content" tabindex="-1" class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 pt-8 pb-12 flex-1 w-full space-y-6">
 
     <details id="readiness-panel" class="readiness-panel glass-card rounded-xl" data-state="loading" aria-labelledby="readiness-title" aria-busy="true">
       <summary class="readiness-panel-summary" aria-controls="readiness-content">
@@ -323,9 +343,13 @@
         </div>
 
         <section class="ticket-templates" aria-labelledby="ticket-templates-title">
-          <div class="ticket-templates-toggle-row">
+          <div class="ticket-templates-toggle-row flex flex-wrap gap-2">
             <button type="button" id="btn-toggle-ticket-templates" class="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-brand-500/20 hover:bg-brand-500/30 text-brand-300 hover:text-white border border-brand-500/40 text-xs font-semibold transition-all shadow-sm" aria-expanded="false" aria-controls="ticket-templates-content" onclick="alternarChamadosManuais()">
               <span>Mostrar textos para chamados</span>
+            </button>
+            <button type="button" id="btn-ir-para-transporte" class="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-sky-500/10 hover:bg-sky-500/20 text-sky-300 hover:text-sky-100 border border-sky-500/25 text-xs font-semibold transition" onclick="abrirAbaTransporteDoEquipamento()" title="Abrir a aba Transporte com o equipamento selecionado">
+              <i data-lucide="truck" class="w-3.5 h-3.5" aria-hidden="true"></i>
+              <span>Ir para Transporte</span>
             </button>
           </div>
           <div id="ticket-templates-content" hidden>
@@ -944,7 +968,9 @@ Horário disponível para atendimento:</textarea>
 
     </section>
 
-  </main>
+      </main>
+    </div>
+  </div>
 
   <!-- ========================================== -->
   <!-- MODAL DE PRÉ-VISUALIZAÇÃO DO RESUMO       -->
@@ -1403,16 +1429,18 @@ Horário disponível para atendimento:</textarea>
         <label class="flex items-center gap-2 self-end rounded-lg border border-slate-800 px-3 py-2 text-xs text-slate-200"><input id="somente-atencao-chamados" type="checkbox" class="accent-amber-400">Fila de atenção</label>
         <button type="button" class="self-end rounded-lg border border-slate-700 px-3 py-2 text-xs text-slate-300 hover:bg-slate-800" onclick="limparFiltrosAcompanhamentoChamados()">Limpar filtros</button>
         <details class="sm:col-span-3 rounded-lg border border-slate-800 px-3 py-2">
-          <summary class="cursor-pointer text-xs font-semibold text-slate-300">Filtros por relação, status, fila e atualização</summary>
-          <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-2 pt-3">
+          <summary class="cursor-pointer text-xs font-semibold text-slate-300">Filtros de triagem: relação, status, fila, cidade e atendimento</summary>
+          <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-2 pt-3">
             <label for="relacao-acompanhamento-chamados" class="text-xs text-slate-300">Relação<select id="relacao-acompanhamento-chamados" class="mt-1 block w-full rounded-lg border border-slate-700 bg-slate-950 px-3 py-2 text-sm text-white"><option value="">Todas</option><option value="conferida">OS conferida</option><option value="divergente">OS divergente</option><option value="sem_os">Sem OS</option><option value="somente_simpress">Só Simpress</option><option value="somente_oracle">Só Oracle</option></select></label>
             <label for="status-acompanhamento-chamados" class="text-xs text-slate-300">Status Oracle<select id="status-acompanhamento-chamados" class="mt-1 block w-full rounded-lg border border-slate-700 bg-slate-950 px-3 py-2 text-sm text-white"><option value="">Todos</option></select></label>
             <label for="fila-acompanhamento-chamados" class="text-xs text-slate-300">Fila Oracle<select id="fila-acompanhamento-chamados" class="mt-1 block w-full rounded-lg border border-slate-700 bg-slate-950 px-3 py-2 text-sm text-white"><option value="">Todas</option></select></label>
-            <label for="idade-acompanhamento-chamados" class="text-xs text-slate-300">Última atualização<select id="idade-acompanhamento-chamados" class="mt-1 block w-full rounded-lg border border-slate-700 bg-slate-950 px-3 py-2 text-sm text-white"><option value="">Qualquer data</option><option value="7">Há 7 dias ou mais</option><option value="14">Há 14 dias ou mais</option><option value="30">Há 30 dias ou mais</option><option value="sem_data">Sem data</option></select></label>
-            <label for="limite-desatualizacao-chamados" class="text-xs text-slate-300">Considerar desatualizado<select id="limite-desatualizacao-chamados" class="mt-1 block w-full rounded-lg border border-slate-700 bg-slate-950 px-3 py-2 text-sm text-white"><option value="3" selected>3 dias</option><option value="7">7 dias</option><option value="14">14 dias</option><option value="30">30 dias</option></select></label>
+            <label for="cidade-acompanhamento-chamados" class="text-xs text-slate-300">Cidade<select id="cidade-acompanhamento-chamados" class="mt-1 block w-full rounded-lg border border-slate-700 bg-slate-950 px-3 py-2 text-sm text-white"><option value="">Todas</option></select></label>
+            <label for="atendimento-acompanhamento-chamados" class="text-xs text-slate-300">Atendimento por<select id="atendimento-acompanhamento-chamados" class="mt-1 block w-full rounded-lg border border-slate-700 bg-slate-950 px-3 py-2 text-sm text-white"><option value="">Todos</option></select></label>
+            <label for="idade-acompanhamento-chamados" class="text-xs text-slate-300">Última atualização<select id="idade-acompanhamento-chamados" class="mt-1 block w-full rounded-lg border border-slate-700 bg-slate-950 px-3 py-2 text-sm text-white"><option value="">Qualquer data</option><option value="3">Há 3 dias ou mais</option><option value="7">Há 7 dias ou mais</option><option value="14">Há 14 dias ou mais</option><option value="30">Há 30 dias ou mais</option><option value="sem_data">Sem data</option></select></label>
           </div>
         </details>
       </div>
+      <div id="triagem-diaria-acompanhamento-chamados" class="shrink-0 pb-2" aria-live="polite"></div>
       <p id="contagem-acompanhamento-chamados" class="shrink-0 text-[10px] text-slate-500" role="status" aria-live="polite"></p>
       <div id="lista-acompanhamento-chamados" aria-live="polite" class="space-y-3 py-2"></div>
       </div>
@@ -1522,5 +1550,6 @@ Horário disponível para atendimento:</textarea>
   <script src="/static/ui-notifications.js"></script>
   <script src="/static/auth-session.js"></script>
   <script src="/static/app.js"></script>
+  <script src="/static/sidebar-navigation.js"></script>
 </body>
 </html>

@@ -3696,6 +3696,10 @@ app.include_router(create_operations_router(
     comparison_history_for_display=comparison_history_for_display,
     ticket_report_path=lambda: TICKET_REPORT_FILE,
     transaction_root=lambda: TRANSACTION_ROOT,
+    history_annotations_directory=lambda: HISTORY_ANNOTATIONS_DIR,
+    local_annotation_outbox_directory=lambda: LOCAL_HISTORY_ANNOTATION_OUTBOX_DIR,
+    history_annotations_sync_enabled=lambda: postgres_backend() is not None or HISTORY_ANNOTATIONS_SYNC_ENABLED,
+    load_history_annotation_records=lambda directory: load_history_annotations(directory),
 ))
 
 from persistence.routes import create_files_router

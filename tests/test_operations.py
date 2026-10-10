@@ -1,6 +1,7 @@
 """Tests for the operational history and ticket workflows."""
 
 from io import BytesIO
+from datetime import date, timedelta
 import json
 import tempfile
 import unittest
@@ -14,7 +15,7 @@ from starlette.datastructures import UploadFile
 
 from domains.history_insights import compare_updates, latest_update, pending_rows
 from domains.ticket_reporting import build_ticket_workbook
-from routers.operations import create_operations_router
+from routers.operations import TicketTimelineAnnotationPayload, create_operations_router
 
 PROJECT_ROOT = Path(__file__).resolve().parents[1]
 
@@ -317,6 +318,149 @@ class TicketImportRouteTests(unittest.TestCase):
             self.assertEqual([row["ordem_servico"] for row in ticket["oracle"]], ["7232035"])
             self.assertEqual(ticket["ordens_servico_conferidas"], ["7232035"])
 
+    def test_ticket_timeline_annotations_follow_exact_rows_with_independent_import_ids(self):
+        with tempfile.TemporaryDirectory(dir=PROJECT_ROOT) as directory:
+            root = Path(directory)
+            shared = root / "shared-annotations"
+            outbox = root / "annotation-outbox"
+            router = create_operations_router(
+                load_comparison_history=lambda: [],
+                comparison_history_for_display=lambda event: event,
+                ticket_report_path=lambda: root / "tickets.json",
+                transaction_root=lambda: root,
+                history_annotations_directory=lambda: shared,
+                local_annotation_outbox_directory=lambda: outbox,
+                history_annotations_sync_enabled=lambda: False,
+            )
+            simpress = self.workbook_bytes([
+                ["NumeroPedido", "NumeroSerie", "OrdemServico", "StatusAtual", "CidadeEntrega"],
+                [48076976, "SN-TIMELINE", 7232035, "Em separação", "Curitiba"],
+            ])
+            oracle = self.workbook_bytes([
+                ["Solicitação", "ID OS Corporate", "Número de Série", "Data da Última Atualização", "Nome da Filial", "Fila", "Status"],
+                ["REQ-TIMELINE", 7232035, "SN-TIMELINE", "2026-10-10 09:00", "PARCEIRO", "Fila A", "Em execução"],
+            ])
+            import_route = route_handler(router, "/api/operacoes/chamados/importar", "POST")
+
+            def import_same_rows():
+                return import_route(
+                    simpress_file=UploadFile(filename="pedidos.xlsx", file=BytesIO(simpress)),
+                    oracle_file=UploadFile(filename="oracle.xlsx", file=BytesIO(oracle)),
+                )
+
+            first = import_same_rows()
+            first_event = route_handler(router, "/api/operacoes/chamados/linha-do-tempo/{serial}", "GET")(
+                "SN-TIMELINE", snapshot_id=first["snapshot_id"],
+            )["eventos"][0]
+            save_annotation = route_handler(
+                router, "/api/operacoes/chamados/linha-do-tempo/{event_id}/{item_id}", "PUT",
+            )
+            saved = save_annotation(
+                event_id=first_event["snapshot_id"], item_id=first_event["item_id"],
+                payload=TicketTimelineAnnotationPayload(anotacao="Cobrar o parceiro"),
+            )
+            self.assertEqual(saved["sincronizacao"], "local")
+
+            second = import_same_rows()
+            events = route_handler(router, "/api/operacoes/chamados/linha-do-tempo/{serial}", "GET")(
+                "SN-TIMELINE",
+            )["eventos"]
+            self.assertEqual(len(events), 2)
+            self.assertEqual(events[-1]["anotacao"], "Cobrar o parceiro")
+            self.assertNotEqual(events[0]["item_id"], events[1]["item_id"])
+
+            save_annotation(
+                event_id=second["snapshot_id"], item_id=events[-1]["item_id"],
+                payload=TicketTimelineAnnotationPayload(anotacao=""),
+            )
+            third = import_same_rows()
+            third_events = route_handler(router, "/api/operacoes/chamados/linha-do-tempo/{serial}", "GET")(
+                "SN-TIMELINE",
+            )["eventos"]
+            self.assertEqual(third_events[-1]["snapshot_id"], third["snapshot_id"])
+            self.assertEqual(third_events[-1]["anotacao"], "")
+
+            fourth = import_same_rows()
+            fourth_events = route_handler(router, "/api/operacoes/chamados/linha-do-tempo/{serial}", "GET")(
+                "SN-TIMELINE",
+            )["eventos"]
+            self.assertEqual(fourth_events[-1]["snapshot_id"], fourth["snapshot_id"])
+            self.assertEqual(fourth_events[-1]["anotacao"], "")
+
+    def test_ticket_import_flags_duplicate_rows_and_ambiguous_source_relations(self):
+        with tempfile.TemporaryDirectory(dir=PROJECT_ROOT) as directory:
+            router = create_operations_router(
+                load_comparison_history=lambda: [],
+                comparison_history_for_display=lambda event: event,
+                ticket_report_path=lambda: Path(directory) / "tickets.json",
+                transaction_root=lambda: Path(directory),
+            )
+            simpress = self.workbook_bytes([
+                ["NumeroPedido", "NumeroSerie", "OrdemServico", "OrdemVenda"],
+                [48076976, "SN-REVISAO", 7279287, "OV_15785398"],
+                [48076976, "SN-REVISAO", 7279287, "OV_15785398"],
+            ])
+            oracle = self.workbook_bytes([
+                ["Solicitação", "ID OS Corporate", "Número de Série"],
+                ["REQ-1", 7279287, "SN-REVISAO"],
+                ["REQ-1", 7279287, "SN-REVISAO"],
+                ["REQ-2", 7279287, "SN-REVISAO"],
+            ])
+
+            report = route_handler(router, "/api/operacoes/chamados/importar", "POST")(
+                simpress_file=UploadFile(filename="simpress.xlsx", file=BytesIO(simpress)),
+                oracle_file=UploadFile(filename="oracle.xlsx", file=BytesIO(oracle)),
+            )
+            ticket = report["chamados"][0]
+            alert_types = {alert["tipo"] for alert in ticket["alertas_relacao"]}
+
+            self.assertEqual(ticket["fontes_relacao"]["serie"], {"simpress": True, "oracle": True})
+            self.assertEqual(ticket["fontes_relacao"]["pedido"]["simpress"], ["48076976"])
+            self.assertEqual(ticket["fontes_relacao"]["pedido"]["oracle_solicitacao"], ["REQ-1", "REQ-2"])
+            self.assertIn("duplicidade_simpress", alert_types)
+            self.assertIn("duplicidade_oracle", alert_types)
+            self.assertIn("solicitacoes_ambiguas_oracle", alert_types)
+            self.assertTrue(ticket["revisao_relacao"])
+
+    def test_export_keeps_attention_rule_fixed_at_three_days(self):
+        with tempfile.TemporaryDirectory(dir=PROJECT_ROOT) as directory:
+            path = Path(directory) / "tickets.json"
+            today = date.today()
+            tickets = []
+            for serial, order, age in (("SN-FRESH", "7279287", 2), ("SN-STALE", "7279280", 3)):
+                updated = (today - timedelta(days=age)).isoformat()
+                tickets.append({
+                    "serie": serial, "relacao": "conferida", "ordens_servico_conferidas": [order],
+                    "simpress": {"serie": serial, "pedidos": ["48076976"], "ordens_servico": [order]},
+                    "oracle": [{"ordem_servico": order, "status": "Em execução", "ultima_atualizacao": updated}],
+                })
+            path.write_text(json.dumps({
+                "snapshot_id": "attention-version", "atualizado_em": today.isoformat(),
+                "fontes": {}, "resumo": {"series_total": 2}, "chamados": tickets,
+            }), encoding="utf-8")
+            router = create_operations_router(
+                load_comparison_history=lambda: [],
+                comparison_history_for_display=lambda event: event,
+                ticket_report_path=lambda: path,
+                transaction_root=lambda: Path(directory),
+            )
+
+            captured = {}
+
+            def capture_export(snapshot, filtered, filters, **kwargs):
+                captured["serials"] = [ticket["serie"] for ticket in filtered]
+                captured["stale_days"] = filters["stale_days"]
+                return b"xlsx"
+
+            with patch("routers.operations.build_ticket_workbook", side_effect=capture_export):
+                response = route_handler(router, "/api/operacoes/chamados/exportar", "GET")(
+                    snapshot_id="attention-version", relation="", status="", queue="", city="", provider="",
+                    search="", stale_days=30, age_filter="", attention_only=True,
+                )
+            self.assertEqual(captured["serials"], ["SN-STALE"])
+            self.assertEqual(captured["stale_days"], 3)
+            self.assertEqual(response.headers["content-type"], "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet")
+
     def test_import_rejects_non_xlsx_and_missing_source_columns(self):
         with tempfile.TemporaryDirectory(dir=PROJECT_ROOT) as directory:
             router = create_operations_router(
@@ -450,8 +594,8 @@ class TicketImportRouteTests(unittest.TestCase):
 
             exported_workbook = {}
 
-            def build_and_capture(snapshot, tickets, filters):
-                exported_workbook["bytes"] = build_ticket_workbook(snapshot, tickets, filters)
+            def build_and_capture(snapshot, tickets, filters, **kwargs):
+                exported_workbook["bytes"] = build_ticket_workbook(snapshot, tickets, filters, **kwargs)
                 return exported_workbook["bytes"]
 
             with patch("routers.operations.build_ticket_workbook", side_effect=build_and_capture):

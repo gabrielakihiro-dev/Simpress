@@ -294,6 +294,23 @@ def _add_unique(target: List[str], value: str) -> None:
         target.append(value)
 
 
+def _duplicate_record_count(records: Sequence[Dict[str, Any]]) -> int:
+    """Count repeated rows after source grouping, without treating older orders as duplicates."""
+    seen = set()
+    duplicates = 0
+    for record in records:
+        signature = tuple(sorted(
+            (str(key), " ".join(str(value or "").strip().casefold().split()))
+            for key, value in record.items()
+            if key not in {"serie", "serie_chave"}
+        ))
+        if signature in seen:
+            duplicates += 1
+        else:
+            seen.add(signature)
+    return duplicates
+
+
 def _group_simpress(records: Iterable[Dict[str, Any]]) -> Dict[str, Dict[str, Any]]:
     source_rows: Dict[str, Dict[str, Any]] = OrderedDict()
     for record in records:
@@ -327,6 +344,26 @@ def _group_simpress(records: Iterable[Dict[str, Any]]) -> Dict[str, Dict[str, An
         ]
         latest_pedido = _latest_simpress_identifier(pedido_candidates)
         latest_pedido_key = _identifier_key(latest_pedido) if latest_pedido else ""
+        pedidos_na_os_atual = sorted(
+            {pedido for pedido in pedido_candidates if pedido},
+            key=_order_service_descending_key,
+            reverse=True,
+        )
+        current_pedido_records = [
+            record for record in current_records
+            if not latest_pedido_key or any(
+                _identifier_key(pedido) == latest_pedido_key
+                for pedido in _split_order_services(record.get("pedido", ""))
+            )
+        ]
+        ovs_no_pedido_atual = sorted(
+            {
+                order_of_sale
+                for record in current_pedido_records
+                for order_of_sale in _split_order_services(record.get("ordem_venda", ""))
+            },
+            key=_identifier_key,
+        )
         ticket_group: Dict[str, Any] = {
             "serie": source_group["serie"], "pedidos": [], "ordens_venda": [], "ordens_servico": [], "chamados_cliente": [],
             "status": [], "datas_pedido": [], "modelos": [], "descricoes_produto": [],
@@ -360,6 +397,11 @@ def _group_simpress(records: Iterable[Dict[str, Any]]) -> Dict[str, Dict[str, An
             for order in row_os:
                 if not latest_key or _identifier_key(order) == latest_key:
                     _add_unique(ticket_group["ordens_servico"], order)
+        ticket_group["_auditoria_relacao"] = {
+            "linhas_duplicadas": _duplicate_record_count(current_pedido_records),
+            "pedidos_na_os_atual": pedidos_na_os_atual,
+            "ovs_no_pedido_atual": ovs_no_pedido_atual,
+        }
         grouped[serial] = ticket_group
     return grouped
 
@@ -430,6 +472,11 @@ def reconcile_ticket_workbooks(
     for serial in sorted(set(simpress) | set(oracle)):
         simpress_data = simpress.get(serial)
         oracle_data = _keep_latest_oracle_order(oracle.get(serial, []))
+        simpress_audit = simpress_data.get("_auditoria_relacao", {}) if simpress_data else {}
+        simpress_payload = {
+            key: value for key, value in (simpress_data or {}).items()
+            if key != "_auditoria_relacao"
+        }
         simpress_os = set(simpress_data["ordens_servico"]) if simpress_data else set()
         oracle_os = {ticket["ordem_servico"] for ticket in oracle_data if ticket["ordem_servico"]}
         normalized_oracle_os = {_identifier_key(item) for item in oracle_os}
@@ -449,15 +496,80 @@ def reconcile_ticket_workbooks(
             relation = "somente_simpress"
         else:
             relation = "somente_oracle"
+        oracle_latest_os = {_identifier_key(ticket.get("ordem_servico")) for ticket in oracle_data if ticket.get("ordem_servico")}
+        oracle_current_source_rows = [
+            record for record in oracle_records
+            if record["serie_chave"] == serial
+            and _identifier_key(record.get("ordem_servico", "")) in oracle_latest_os
+        ]
+        oracle_duplicate_count = _duplicate_record_count(oracle_current_source_rows)
+        oracle_solicitations = sorted(
+            {str(ticket.get("solicitacao") or "").strip() for ticket in oracle_data if str(ticket.get("solicitacao") or "").strip()}
+        )
+        relation_alerts: List[Dict[str, str]] = []
+        if simpress_data and oracle_data:
+            if relation == "divergente":
+                relation_alerts.append({
+                    "tipo": "os_divergente",
+                    "mensagem": f"OS diferentes entre as fontes: Simpress {', '.join(sorted(simpress_os, key=_order_service_descending_key, reverse=True)) or 'sem OS'}; Oracle {', '.join(sorted(oracle_os, key=_order_service_descending_key, reverse=True)) or 'sem OS'}. Conferir.",
+                })
+            elif relation == "sem_os":
+                relation_alerts.append({"tipo": "sem_os", "mensagem": "A série aparece nas fontes, mas não há uma OS para confirmar a relação."})
+        elif simpress_data:
+            relation_alerts.append({"tipo": "fonte_oracle_ausente", "mensagem": "Série encontrada na Simpress, sem registro correspondente no Oracle."})
+        else:
+            relation_alerts.append({"tipo": "fonte_simpress_ausente", "mensagem": "Série encontrada no Oracle, sem pedido correspondente na Simpress."})
+        if simpress_audit.get("linhas_duplicadas", 0):
+            relation_alerts.append({
+                "tipo": "duplicidade_simpress",
+                "mensagem": f"{simpress_audit['linhas_duplicadas']} linha(s) repetida(s) na Simpress para o pedido e a OS atuais.",
+            })
+        if oracle_duplicate_count:
+            relation_alerts.append({
+                "tipo": "duplicidade_oracle",
+                "mensagem": f"{oracle_duplicate_count} linha(s) repetida(s) no Oracle para a OS atual.",
+            })
+        if len(simpress_audit.get("pedidos_na_os_atual", [])) > 1:
+            relation_alerts.append({
+                "tipo": "pedidos_ambiguos_simpress",
+                "mensagem": f"A OS Simpress atual aparece ligada a mais de um pedido: {', '.join(simpress_audit['pedidos_na_os_atual'])}.",
+            })
+        if len(simpress_audit.get("ovs_no_pedido_atual", [])) > 1:
+            relation_alerts.append({
+                "tipo": "ov_ambigua_simpress",
+                "mensagem": f"O pedido Simpress atual aparece ligado a mais de uma OV: {', '.join(simpress_audit['ovs_no_pedido_atual'])}.",
+            })
+        if len(oracle_solicitations) > 1:
+            relation_alerts.append({
+                "tipo": "solicitacoes_ambiguas_oracle",
+                "mensagem": f"A OS Oracle atual aparece ligada a mais de uma solicitação: {', '.join(oracle_solicitations)}.",
+            })
+        simpress_series = bool(simpress_data)
+        oracle_series = bool(oracle_data)
+        simpress_ticket_data = simpress_payload if simpress_data else {
+            "pedidos": [], "ordens_venda": [], "ordens_servico": [], "chamados_cliente": [],
+            "status": [], "datas_pedido": [], "modelos": [], "descricoes_produto": [],
+            "previsoes_entrega": [], "cidades_entrega": [], "enderecos_entrega": [], "pedido_em_andamento": False,
+        }
+        oracle_orders_current = sorted(oracle_os, key=_order_service_descending_key, reverse=True)
         tickets.append({
             "serie": simpress_data["serie"] if simpress_data else oracle_data[0]["serie"],
             "relacao": relation,
             "ordens_servico_conferidas": matching_os,
-            "simpress": simpress_data or {
-                "pedidos": [], "ordens_venda": [], "ordens_servico": [], "chamados_cliente": [],
-                "status": [], "datas_pedido": [], "modelos": [], "descricoes_produto": [],
-                "previsoes_entrega": [], "cidades_entrega": [], "enderecos_entrega": [], "pedido_em_andamento": False,
+            "fontes_relacao": {
+                "serie": {"simpress": simpress_series, "oracle": oracle_series},
+                "pedido": {
+                    "simpress": list(simpress_ticket_data.get("pedidos", [])),
+                    "oracle_solicitacao": oracle_solicitations,
+                },
+                "ordem_servico": {
+                    "simpress": sorted(simpress_os, key=_order_service_descending_key, reverse=True),
+                    "oracle": oracle_orders_current,
+                },
             },
+            "alertas_relacao": relation_alerts,
+            "revisao_relacao": bool(relation_alerts),
+            "simpress": simpress_ticket_data,
             "oracle": oracle_data,
         })
 

@@ -2,19 +2,31 @@
 
 import json
 from datetime import datetime
+import logging
 from io import BytesIO
 from pathlib import Path
-from typing import Any, Callable, Dict, List
+from typing import Any, Callable, Dict, List, Optional, Sequence
 from uuid import uuid4
 
 from fastapi import APIRouter, File, HTTPException, UploadFile
 from fastapi.responses import StreamingResponse
+from pydantic import BaseModel, Field
 
 from domains.history_insights import compare_updates, is_restoration, latest_update, pending_rows
+from domains.history_annotations import (
+    MAX_ANNOTATION_LENGTH,
+    build_history_annotation_record,
+    history_annotation_record_path,
+    history_annotation_row_fingerprint,
+    load_history_annotations,
+    save_history_annotation,
+)
 from domains.ticket_reconciliation import TicketWorkbookError, reconcile_ticket_workbooks
 from domains.ticket_reporting import (
     MAX_TICKET_SNAPSHOTS,
+    TICKET_TIMELINE_ANNOTATION_CATEGORY,
     TICKET_SNAPSHOT_FIELDS,
+    build_ticket_timeline,
     build_ticket_workbook,
     compare_ticket_snapshots,
     filter_ticket_records,
@@ -27,6 +39,11 @@ from xlsx_safety import XlsxLimitExceeded, XlsxPackageError
 
 
 MAX_TICKET_WORKBOOK_BYTES = 32 * 1024 * 1024
+logger = logging.getLogger(__name__)
+
+
+class TicketTimelineAnnotationPayload(BaseModel):
+    anotacao: str = Field(..., max_length=MAX_ANNOTATION_LENGTH)
 
 
 def create_operations_router(
@@ -35,6 +52,10 @@ def create_operations_router(
     comparison_history_for_display: Callable[[Dict[str, Any]], Dict[str, Any]],
     ticket_report_path: Callable[[], Path],
     transaction_root: Callable[[], Path],
+    history_annotations_directory: Optional[Callable[[], Path]] = None,
+    local_annotation_outbox_directory: Optional[Callable[[], Path]] = None,
+    history_annotations_sync_enabled: Optional[Callable[[], bool]] = None,
+    load_history_annotation_records: Optional[Callable[[Path], List[Dict[str, Any]]]] = None,
 ):
     router = APIRouter()
 
@@ -100,6 +121,154 @@ def create_operations_router(
 
     def displayed_ticket_snapshots(report: Dict[str, Any]) -> List[Dict[str, Any]]:
         return [normalize_ticket_snapshot(item) for item in ticket_report_snapshots(report)]
+
+    def annotation_directory() -> Path:
+        return history_annotations_directory() if history_annotations_directory else ticket_report_path().parent / "anotacoes_historico"
+
+    def annotation_outbox_directory() -> Path:
+        return local_annotation_outbox_directory() if local_annotation_outbox_directory else ticket_report_path().parent / "anotacoes_historico_pendentes"
+
+    def read_annotation_directory(directory: Path) -> List[Dict[str, Any]]:
+        reader = load_history_annotation_records or load_history_annotations
+        return reader(directory)
+
+    def latest_ticket_annotations() -> Dict[tuple[str, str], Dict[str, Any]]:
+        latest: Dict[tuple[str, str], tuple[str, Dict[str, Any]]] = {}
+        for directory in (annotation_directory(), annotation_outbox_directory()):
+            for record in read_annotation_directory(directory):
+                if record.get("categoria") != TICKET_TIMELINE_ANNOTATION_CATEGORY:
+                    continue
+                key = (str(record.get("evento_id") or ""), str(record.get("item_id") or ""))
+                if not all(key):
+                    continue
+                candidate = (str(record.get("atualizado_em") or ""), record)
+                if key not in latest or candidate[0] >= latest[key][0] or directory == annotation_outbox_directory():
+                    latest[key] = candidate
+        return {key: value[1] for key, value in latest.items()}
+
+    def _ticket_annotation_event(snapshot: Dict[str, Any], serial: str) -> Optional[Dict[str, Any]]:
+        return next((
+            event for event in build_ticket_timeline([snapshot], serial)
+            if event.get("snapshot_id") == snapshot.get("id")
+        ), None)
+
+    def _ticket_annotation_row_hash(event: Dict[str, Any]) -> str:
+        row = {"serie": event.get("serie", ""), **(event.get("estado") or {})}
+        return history_annotation_row_fingerprint(TICKET_TIMELINE_ANNOTATION_CATEGORY, row)
+
+    def _ticket_timeline_with_annotations(
+        snapshots: Sequence[Dict[str, Any]], serial: str,
+        records: Optional[Dict[tuple[str, str], Dict[str, Any]]] = None,
+    ) -> List[Dict[str, Any]]:
+        records = records if records is not None else latest_ticket_annotations()
+        events = build_ticket_timeline(snapshots, serial)
+        for event in events:
+            event["anotacao_id"] = event["item_id"]
+            record = records.get((event["snapshot_id"], event["item_id"]))
+            event["anotacao"] = str(record.get("anotacao") or "") if record else ""
+        return events
+
+    def initialize_ticket_timeline_annotations(
+        previous_snapshots: Sequence[Dict[str, Any]], current_snapshot: Dict[str, Any],
+    ) -> None:
+        """Create one independent annotation record per series/import and carry exact matches."""
+        stored = latest_ticket_annotations()
+        all_records = list(stored.values())
+        series = sorted({
+            str(ticket.get("serie") or "").strip()
+            for ticket in current_snapshot.get("chamados", [])
+            if isinstance(ticket, dict) and str(ticket.get("serie") or "").strip()
+        })
+        for serial in series:
+            current_event = _ticket_annotation_event(current_snapshot, serial)
+            if current_event is None:
+                continue
+            row_hash = _ticket_annotation_row_hash(current_event)
+            previous_match: Optional[Dict[str, Any]] = None
+            for prior_snapshot in previous_snapshots:
+                prior_event = _ticket_annotation_event(prior_snapshot, serial)
+                if prior_event and _ticket_annotation_row_hash(prior_event) == row_hash:
+                    previous_match = prior_event
+
+            if previous_match is not None:
+                prior_record = stored.get((previous_match["snapshot_id"], previous_match["item_id"]))
+                # A more recent local row without a note blocks reuse of an older note.
+                annotation = str(prior_record.get("anotacao") or "") if prior_record else ""
+            else:
+                matching = [
+                    record for record in all_records
+                    if record.get("categoria") == TICKET_TIMELINE_ANNOTATION_CATEGORY
+                    and record.get("linha_hash") == row_hash
+                    and str(record.get("evento_id") or "") != current_event["snapshot_id"]
+                    and str(record.get("horario") or "") < str(current_event.get("atualizado_em") or "")
+                ]
+                if matching:
+                    latest_time = max(str(record.get("horario") or "") for record in matching)
+                    latest = [record for record in matching if str(record.get("horario") or "") == latest_time]
+                    unique_notes = {str(record.get("anotacao") or "") for record in latest}
+                    annotation = next(iter(unique_notes)) if len(unique_notes) == 1 else ""
+                else:
+                    annotation = ""
+
+            try:
+                _persist_ticket_annotation(
+                    event_id=current_event["snapshot_id"],
+                    item_id=current_event["item_id"],
+                    serial=serial,
+                    event_time=current_event.get("atualizado_em", ""),
+                    row_hash=row_hash,
+                    annotation=annotation,
+                )
+            except HTTPException:
+                # The imported report is already committed; keep this failure visible in logs
+                # without falsely reporting the import itself as failed.
+                logger.exception("Importação salva; anotação de linha do tempo pendente para %s.", serial)
+
+    def _persist_ticket_annotation(
+        *, event_id: str, item_id: str, serial: str, event_time: str, row_hash: str, annotation: str,
+    ) -> bool:
+        values = {
+            "event_id": event_id,
+            "event_time": event_time,
+            "item_id": item_id,
+            "serie": serial,
+            "computador": "",
+            "motivo": "Linha do tempo do acompanhamento de chamados",
+            "anotacao": annotation,
+            "categoria": TICKET_TIMELINE_ANNOTATION_CATEGORY,
+            "linha_hash": row_hash,
+        }
+        record = build_history_annotation_record(**values)
+        pending_path = history_annotation_record_path(annotation_outbox_directory(), event_id, item_id)
+        try:
+            with AtomicFileTransaction(transaction_root(), [pending_path]) as transaction:
+                transaction.stage_bytes(
+                    pending_path,
+                    json.dumps(record, ensure_ascii=False, indent=2).encode("utf-8"),
+                    lambda path: json.loads(path.read_text(encoding="utf-8")),
+                )
+                transaction.commit()
+        except (OSError, FileBusyError, FileTransactionError):
+            logger.exception("Não foi possível enfileirar a anotação do chamado %s.", serial)
+            raise HTTPException(status_code=503, detail="Não foi possível salvar a anotação localmente.") from None
+
+        try:
+            save_history_annotation(annotation_directory(), **values)
+        except Exception:
+            logger.exception("Anotação do chamado %s salva e aguardando sincronização.", serial)
+            return False
+
+        try:
+            with AtomicFileTransaction(transaction_root(), [pending_path]) as transaction:
+                if pending_path.exists():
+                    saved = json.loads(pending_path.read_text(encoding="utf-8"))
+                    if saved.get("atualizado_em") == record.get("atualizado_em"):
+                        transaction.stage_delete(pending_path)
+                        transaction.commit()
+        except Exception:
+            logger.exception("Anotação sincronizada, mas a pendência do chamado %s não foi baixada.", serial)
+            return False
+        return True
 
     @router.get("/api/operacoes/chamados")
     def get_ticket_report():
@@ -175,19 +344,62 @@ def create_operations_router(
             raise HTTPException(status_code=422, detail="Selecione duas versões diferentes para comparar.")
         return compare_ticket_snapshots(previous, current)
 
+    @router.get("/api/operacoes/chamados/linha-do-tempo/{serial}")
+    def get_ticket_timeline(serial: str, snapshot_id: str = ""):
+        snapshots = displayed_ticket_snapshots(load_ticket_report())
+        if snapshot_id:
+            selected_index = next((index for index, item in enumerate(snapshots) if item.get("id") == snapshot_id), None)
+            if selected_index is None:
+                raise HTTPException(status_code=404, detail="A versão selecionada não existe no histórico de chamados.")
+            snapshots = snapshots[:selected_index + 1]
+        events = _ticket_timeline_with_annotations(snapshots, serial)
+        if not events:
+            raise HTTPException(status_code=404, detail="Não há histórico para esta série.")
+        return {"serie": events[-1]["serie"], "eventos": events, "total": len(events)}
+
+    @router.put("/api/operacoes/chamados/linha-do-tempo/{event_id}/{item_id}")
+    def save_ticket_timeline_annotation(event_id: str, item_id: str, payload: TicketTimelineAnnotationPayload):
+        snapshots = displayed_ticket_snapshots(load_ticket_report())
+        snapshot = next((item for item in snapshots if item.get("id") == event_id), None)
+        if snapshot is None:
+            raise HTTPException(status_code=404, detail="A importação desta linha do tempo não existe mais.")
+        event = next((
+            candidate
+            for ticket in snapshot.get("chamados", [])
+            if isinstance(ticket, dict)
+            for candidate in build_ticket_timeline([snapshot], str(ticket.get("serie") or ""))
+            if candidate.get("item_id") == item_id
+        ), None)
+        if event is None:
+            raise HTTPException(status_code=404, detail="A linha do tempo selecionada não existe nesta importação.")
+        synced = _persist_ticket_annotation(
+            event_id=event_id,
+            item_id=item_id,
+            serial=str(event.get("serie") or ""),
+            event_time=str(event.get("atualizado_em") or ""),
+            row_hash=_ticket_annotation_row_hash(event),
+            annotation=payload.anotacao,
+        )
+        sync_enabled = bool(history_annotations_sync_enabled and history_annotations_sync_enabled())
+        return {
+            "sucesso": True,
+            "anotacao": payload.anotacao,
+            "sincronizacao": "sincronizada" if sync_enabled and synced else "pendente" if sync_enabled else "local",
+        }
+
     @router.get("/api/operacoes/chamados/exportar")
     def export_ticket_report(
         snapshot_id: str = "",
         relation: str = "",
         status: str = "",
         queue: str = "",
+        city: str = "",
+        provider: str = "",
         search: str = "",
         stale_days: int = 3,
         age_filter: str = "",
         attention_only: bool = False,
     ):
-        if stale_days < 0 or stale_days > 3650:
-            raise HTTPException(status_code=422, detail="O limite de dias sem atualização deve estar entre 0 e 3650.")
         report = load_ticket_report()
         snapshots = displayed_ticket_snapshots(report)
         selected_id = snapshot_id or (snapshots[-1].get("id", "") if snapshots else "")
@@ -195,20 +407,32 @@ def create_operations_router(
         if snapshot is None:
             raise HTTPException(status_code=404, detail="A versão selecionada não existe no histórico de chamados.")
         filters = {
-            "relation": relation, "status": status, "queue": queue, "search": search,
-            "stale_days": stale_days, "age_filter": age_filter, "attention_only": attention_only,
+            "relation": relation, "status": status, "queue": queue, "city": city,
+            "provider": provider, "search": search, "stale_days": 3,
+            "age_filter": age_filter, "attention_only": attention_only,
         }
         tickets = filter_ticket_records(
             snapshot.get("chamados", []),
             relation=relation,
             status=status,
             queue=queue,
+            city=city,
+            provider=provider,
             search=search,
-            stale_days=stale_days,
+            stale_days=3,
             age_filter=age_filter,
             attention_only=attention_only,
         )
-        output = build_ticket_workbook(snapshot, tickets, filters)
+        selected_index = next((index for index, item in enumerate(snapshots) if item.get("id") == selected_id), len(snapshots) - 1)
+        timeline_snapshots = snapshots[:selected_index + 1]
+        annotation_records = latest_ticket_annotations()
+        timelines = {
+            str(ticket.get("serie") or ""): _ticket_timeline_with_annotations(
+                timeline_snapshots, str(ticket.get("serie") or ""), annotation_records
+            )
+            for ticket in tickets
+        }
+        output = build_ticket_workbook(snapshot, tickets, filters, timelines=timelines)
         date_label = str(snapshot.get("atualizado_em") or datetime.now().astimezone().isoformat())[:10].replace("-", "")
         return StreamingResponse(
             BytesIO(output),
@@ -257,12 +481,16 @@ def create_operations_router(
             "resumo": report.get("resumo", {}),
             "chamados": report.get("chamados", []),
         }
-        history = ticket_report_snapshots(load_ticket_report())
+        previous_report = load_ticket_report()
+        previous_snapshots = displayed_ticket_snapshots(previous_report)
+        history = ticket_report_snapshots(previous_report)
         history.append(snapshot)
         report["snapshot_id"] = snapshot["id"]
         report["historico"] = history[-MAX_TICKET_SNAPSHOTS:]
         save_ticket_report(report)
-        response = {key: value for key, value in report.items() if key != "historico"}
+        initialize_ticket_timeline_annotations(previous_snapshots, normalize_ticket_snapshot(snapshot))
+        displayed_report = normalize_ticket_snapshot(report)
+        response = {key: value for key, value in displayed_report.items() if key != "historico"}
         response["historico"] = [
             ticket_snapshot_metadata(item)
             for item in reversed(displayed_ticket_snapshots(report))
