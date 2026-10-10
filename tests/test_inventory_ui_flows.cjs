@@ -900,11 +900,15 @@ test("imports Simpress and Oracle files and displays the serial-to-OS reconcilia
     ["simpress_file", "pedidos.xlsx"], ["oracle_file", "solicitacoes.xlsx"],
   ]);
   const modal = harness.element("modal-acompanhamento-chamados");
+  const ticketCards = harness.element("lista-acompanhamento-chamados").innerHTML;
   assert.ok(appHtml.includes('id="modal-acompanhamento-chamados"'));
+  assert.match(appHtml, /id="conteudo-acompanhamento-chamados"[^>]*overflow-y-auto/);
   assert.match(appHtml, /Acompanhamento de Chamados/);
-  assert.match(harness.element("lista-acompanhamento-chamados").innerHTML, /OS conferida/);
-  assert.match(harness.element("lista-acompanhamento-chamados").innerHTML, /7285070/);
-  assert.match(harness.element("lista-acompanhamento-chamados").innerHTML, /REQ-1/);
+  assert.match(ticketCards, /OS conferida/);
+  assert.match(ticketCards, /7285070/);
+  assert.match(ticketCards, /REQ-1/);
+  assert.match(ticketCards, /text-lg font-bold leading-none text-cyan-100/);
+  assert.match(ticketCards, /text-lg font-bold leading-none text-violet-100/);
   assert.equal(modal.id, "modal-acompanhamento-chamados");
 });
 

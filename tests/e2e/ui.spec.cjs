@@ -143,6 +143,7 @@ test("inventory evolution compares two saved updates and shows their row annotat
 });
 
 test("ticket tracking imports both workbooks and relates each serial to its OS", async ({ page }) => {
+  await page.setViewportSize({ width: 900, height: 640 });
   await page.locator(".header-secondary-actions > summary").click();
   await page.getByRole("button", { name: "Acompanhamento de Chamados" }).click();
   const dialog = page.locator("#modal-acompanhamento-chamados");
@@ -165,6 +166,15 @@ test("ticket tracking imports both workbooks and relates each serial to its OS",
   await expect(page.locator("#lista-acompanhamento-chamados")).toContainText("DEMO-SN-001");
   await expect(page.locator("#lista-acompanhamento-chamados")).toContainText("7285070");
   await expect(page.locator("#lista-acompanhamento-chamados")).toContainText("261009-000816");
+  const contentScroller = dialog.locator("#conteudo-acompanhamento-chamados");
+  const scrollMetrics = await contentScroller.evaluate((element) => ({
+    clientHeight: element.clientHeight,
+    scrollHeight: element.scrollHeight,
+  }));
+  expect(scrollMetrics.scrollHeight).toBeGreaterThan(scrollMetrics.clientHeight);
+  await contentScroller.evaluate((element) => { element.scrollTop = element.scrollHeight; });
+  await expect.poll(() => contentScroller.evaluate((element) => element.scrollTop)).toBeGreaterThan(0);
+  await expect(dialog.getByRole("button", { name: "Fechar" })).toBeVisible();
   await expect.poll(async () => {
     const state = await (await page.request.get("/__ticket_import_state")).json();
     return state.imports;
