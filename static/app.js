@@ -9,6 +9,7 @@
     let retiradaCidadeSelecionada = "";
     let unidadesList = [];
     let acompanhamentoChamadosAtual = null;
+    let historicoAcompanhamentoChamados = [];
     let debounceTimer = null;
     const transferUtils = window.SimpressTransferUtils;
     const catalogSearch = window.SimpressCatalogSearch;
@@ -2791,6 +2792,142 @@
       return items.length ? items.map(escapeHtml).join(", ") : "Não informado";
     }
 
+    function normalizarFiltroChamados(value) {
+      return String(value || "").normalize("NFKD").replace(/[\u0300-\u036f]/g, "").trim().toLocaleLowerCase("pt-BR");
+    }
+
+    function valoresChamado(record) {
+      if (Array.isArray(record)) return record.flatMap(valoresChamado);
+      if (record && typeof record === "object") return Object.values(record).flatMap(valoresChamado);
+      return record == null ? [] : [String(record)];
+    }
+
+    function dataAtualizacaoChamado(value) {
+      const text = String(value || "").trim();
+      if (!text) return null;
+      const isoDate = /^(\d{4})-(\d{2})-(\d{2})/.exec(text);
+      if (isoDate) return new Date(Number(isoDate[1]), Number(isoDate[2]) - 1, Number(isoDate[3]));
+      const match = /^(\d{1,2})\/(\d{1,2})\/(\d{4})(?:\s+(\d{1,2}):(\d{2}))?/.exec(text);
+      if (match) return new Date(Number(match[3]), Number(match[2]) - 1, Number(match[1]), Number(match[4] || 0), Number(match[5] || 0));
+      const direct = new Date(text);
+      if (!Number.isNaN(direct.getTime())) return direct;
+      return null;
+    }
+
+    function classificarAtencaoChamado(record, limiteDias = 7) {
+      const oracle = Array.isArray(record.oracle) ? record.oracle : [];
+      const encerrados = ["conclu", "encerr", "finaliz", "cancel", "resolvid", "fechad", "closed", "complete"];
+      const ativos = oracle.filter(ticket => !encerrados.some(token => normalizarFiltroChamados(`${ticket.status || ""} ${ticket.sub_status || ""}`).includes(token)));
+      const datas = ativos.map(ticket => dataAtualizacaoChamado(ticket.ultima_atualizacao)).filter(Boolean);
+      const ultima = datas.length ? new Date(Math.max(...datas.map(value => value.getTime()))) : null;
+      const hoje = new Date();
+      const hojeUtc = Date.UTC(hoje.getFullYear(), hoje.getMonth(), hoje.getDate());
+      const ultimaUtc = ultima ? Date.UTC(ultima.getFullYear(), ultima.getMonth(), ultima.getDate()) : 0;
+      const idade = ultima ? Math.max(0, Math.floor((hojeUtc - ultimaUtc) / 86400000)) : null;
+      const desatualizado = ativos.length > 0 && (idade === null || idade >= limiteDias);
+      const prioridadeRelacao = { divergente: 0, sem_os: 1, somente_oracle: 3, somente_simpress: 4, conferida: 5 };
+      const prioridade = desatualizado ? Math.min(prioridadeRelacao[record.relacao] ?? 5, 2) : (prioridadeRelacao[record.relacao] ?? 5);
+      const rotulos = { divergente: "OS divergente", sem_os: "Sem OS", somente_oracle: "Somente Oracle", somente_simpress: "Somente Simpress", conferida: "OS conferida" };
+      const motivos = record.relacao === "conferida" ? [] : [rotulos[record.relacao] || "Revisar chamado"];
+      if (desatualizado) motivos.push(idade === null ? "Sem data de atualização" : `Sem atualização há ${idade} dias`);
+      return {
+        prioridade,
+        em_atencao: record.relacao !== "conferida" || desatualizado,
+        desatualizado,
+        dias_sem_atualizacao: idade,
+        ultima_atualizacao: ultima ? ultima.toISOString().slice(0, 10) : "",
+        motivo: motivos.join(" · ") || "Em acompanhamento",
+      };
+    }
+
+    function obterFiltrosChamados() {
+      return {
+        relation: document.getElementById("relacao-acompanhamento-chamados").value || "",
+        status: document.getElementById("status-acompanhamento-chamados").value || "",
+        queue: document.getElementById("fila-acompanhamento-chamados").value || "",
+        search: document.getElementById("filtro-acompanhamento-chamados").value.trim(),
+        stale_days: Number(document.getElementById("limite-desatualizacao-chamados").value) || 7,
+        age_filter: document.getElementById("idade-acompanhamento-chamados").value || "",
+        attention_only: Boolean(document.getElementById("somente-atencao-chamados").checked),
+      };
+    }
+
+    function atualizarOpcoesFiltroChamados(id, values, placeholder) {
+      const select = document.getElementById(id);
+      const previous = select.value;
+      const unique = [...new Set(values.filter(Boolean))].sort((a, b) => a.localeCompare(b, "pt-BR"));
+      const empty = document.createElement("option");
+      empty.value = "";
+      empty.textContent = placeholder;
+      const options = unique.map(value => {
+        const option = document.createElement("option");
+        option.value = value;
+        option.textContent = value;
+        return option;
+      });
+      select.replaceChildren(empty, ...options);
+      select.value = unique.includes(previous) ? previous : "";
+    }
+
+    function renderizarHistoricoAcompanhamentoChamados(data) {
+      const selector = document.getElementById("versao-acompanhamento-chamados");
+      const events = Array.isArray(data.historico) ? data.historico : [];
+      historicoAcompanhamentoChamados = events;
+      const selectedId = data.snapshot_id || "";
+      const options = events.map(event => {
+        const option = document.createElement("option");
+        option.value = event.id || "";
+        const sources = event.fontes || {};
+        const simpressName = typeof sources.simpress === "string" ? sources.simpress : sources.simpress?.arquivo;
+        const oracleName = typeof sources.oracle === "string" ? sources.oracle : sources.oracle?.arquivo;
+        const files = [simpressName, oracleName].filter(Boolean).join(" + ");
+        option.textContent = `${formatarHorarioHistorico(event.atualizado_em)}${files ? ` · ${files}` : ""}`;
+        return option;
+      });
+      const empty = document.createElement("option");
+      empty.value = "";
+      empty.textContent = "Nenhuma importação";
+      selector.replaceChildren(empty, ...options);
+      selector.value = selectedId;
+      selector.disabled = events.length === 0;
+      if (!selectedId && events.length) selector.value = events[0].id;
+    }
+
+    function renderizarEvolucaoChamados(data) {
+      const target = document.getElementById("evolucao-acompanhamento-chamados");
+      const counts = data.contagens || {};
+      const changes = data.mudancas || {};
+      const changed = Array.isArray(changes.alterados) ? changes.alterados : [];
+      const newRows = Array.isArray(changes.novos) ? changes.novos : [];
+      const absent = Array.isArray(changes.ausentes_arquivo) ? changes.ausentes_arquivo : [];
+      const details = [
+        ...newRows.slice(0, 5).map(serial => `<li><strong>Nova série:</strong> ${escapeHtml(serial)}</li>`),
+        ...changed.slice(0, 8).map(row => `<li><strong>${escapeHtml(row.serie)}:</strong> ${row.campos.map(field => escapeHtml(field.campo)).join(", ")}</li>`),
+        ...absent.slice(0, 5).map(serial => `<li><strong>Não consta na planilha atual:</strong> ${escapeHtml(serial)}</li>`),
+      ];
+      target.innerHTML = `<p class="font-semibold text-white">Comparação com a versão anterior · ${Number(counts.novos) || 0} novas · ${Number(counts.alterados) || 0} alteradas · ${Number(counts.iguais) || 0} sem mudança · ${Number(counts.ausentes_arquivo) || 0} ausentes</p><p class="mt-1 text-[10px] text-amber-200">${escapeHtml(data.aviso_ausentes || "Ausência na planilha não confirma resolução.")}</p>${details.length ? `<ul class="mt-2 list-disc space-y-1 pl-5 text-[10px] text-slate-300">${details.join("")}</ul>` : ""}`;
+    }
+
+    async function carregarEvolucaoChamados(snapshotId) {
+      const target = document.getElementById("evolucao-acompanhamento-chamados");
+      const index = historicoAcompanhamentoChamados.findIndex(event => event.id === snapshotId);
+      const older = index >= 0 ? historicoAcompanhamentoChamados[index + 1] : null;
+      if (!older) {
+        target.textContent = historicoAcompanhamentoChamados.length > 1
+          ? "Esta é a importação mais antiga disponível. Selecione uma versão mais recente para comparar."
+          : "A primeira importação ficará registrada aqui para comparação com as próximas planilhas.";
+        return;
+      }
+      target.textContent = "Comparando esta versão com a anterior…";
+      try {
+        const query = new URLSearchParams({ anterior: older.id, atual: snapshotId });
+        const response = await fetch(`/api/operacoes/chamados/evolucao?${query.toString()}`);
+        const data = await response.json().catch(() => ({}));
+        if (!response.ok) throw new Error(data.detail || "Não foi possível comparar as versões dos chamados.");
+        renderizarEvolucaoChamados(data);
+      } catch (error) { target.textContent = error.message || "Não foi possível comparar as versões dos chamados."; }
+    }
+
     function renderizarAcompanhamentoChamados() {
       const data = acompanhamentoChamadosAtual || {};
       const summary = data.resumo || {};
@@ -2808,18 +2945,39 @@
       summaryTarget.innerHTML = `<div class="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-2">${summaryCards.map(([label, count]) => `<div class="rounded-lg border border-slate-800 bg-slate-950/70 px-3 py-2"><p class="text-[10px] text-slate-400">${label}</p><p class="mt-1 text-base font-semibold text-white">${Number(count) || 0}</p></div>`).join("")}</div>
         <p class="mt-2 text-[10px] text-slate-500">Simpress: ${escapeHtml(sources.simpress?.arquivo || "aguardando importação")} · Oracle: ${escapeHtml(sources.oracle?.arquivo || "aguardando importação")}${data.atualizado_em ? ` · atualizado em ${escapeHtml(formatarHorarioHistorico(data.atualizado_em))}` : ""}</p>`;
 
-      const query = document.getElementById("filtro-acompanhamento-chamados").value.trim().toLocaleUpperCase("pt-BR");
+      const filters = obterFiltrosChamados();
+      const query = normalizarFiltroChamados(filters.search);
+      const statuses = [];
+      const queues = [];
+      (Array.isArray(data.chamados) ? data.chamados : []).forEach(record => (record.oracle || []).forEach(ticket => {
+        if (ticket.status) statuses.push(ticket.status);
+        if (ticket.fila) queues.push(ticket.fila);
+      }));
+      atualizarOpcoesFiltroChamados("status-acompanhamento-chamados", statuses, "Todos");
+      atualizarOpcoesFiltroChamados("fila-acompanhamento-chamados", queues, "Todas");
       const records = (Array.isArray(data.chamados) ? data.chamados : []).filter(record => {
-        const searchable = [
-          record.serie,
-          ...(record.simpress?.pedidos || []),
-          ...(record.simpress?.ordens_servico || []),
-          ...(record.simpress?.chamados_cliente || []),
-          ...(record.simpress?.status || []),
-          ...(record.oracle || []).flatMap(ticket => Object.values(ticket)),
-        ].join(" ").toLocaleUpperCase("pt-BR");
-        return searchable.includes(query);
+        const oracle = Array.isArray(record.oracle) ? record.oracle : [];
+        const attention = classificarAtencaoChamado(record, filters.stale_days);
+        if (filters.relation && record.relacao !== filters.relation) return false;
+        if ((filters.status || filters.queue) && !oracle.some(ticket =>
+          (!filters.status || normalizarFiltroChamados(ticket.status) === normalizarFiltroChamados(filters.status))
+          && (!filters.queue || normalizarFiltroChamados(ticket.fila) === normalizarFiltroChamados(filters.queue)))) return false;
+        if (filters.attention_only && !attention.em_atencao) return false;
+        if (filters.age_filter === "sem_data" && (!attention.desatualizado || attention.dias_sem_atualizacao !== null)) return false;
+        if (/^\d+$/.test(filters.age_filter) && (attention.dias_sem_atualizacao === null || attention.dias_sem_atualizacao < Number(filters.age_filter))) return false;
+        const searchable = normalizarFiltroChamados(valoresChamado(record).join(" "));
+        return !query || searchable.includes(query);
       });
+      records.sort((a, b) => {
+        const first = classificarAtencaoChamado(a, filters.stale_days);
+        const second = classificarAtencaoChamado(b, filters.stale_days);
+        return first.prioridade - second.prioridade
+          || (second.dias_sem_atualizacao || 0) - (first.dias_sem_atualizacao || 0)
+          || String(a.serie || "").localeCompare(String(b.serie || ""), "pt-BR");
+      });
+      document.getElementById("contagem-acompanhamento-chamados").textContent = `Exibindo ${records.length} de ${Array.isArray(data.chamados) ? data.chamados.length : 0} séries · priorizadas por atenção`;
+      const exportButton = document.getElementById("btn-exportar-acompanhamento-chamados");
+      exportButton.disabled = !Array.isArray(data.chamados) || data.chamados.length === 0;
       if (!Array.isArray(data.chamados) || data.chamados.length === 0) {
         list.innerHTML = '<p class="py-8 text-center text-sm text-slate-400" role="status">Importe as duas planilhas para relacionar as séries com as OS.</p>';
         return;
@@ -2838,6 +2996,7 @@
       };
       list.innerHTML = records.map(record => {
         const [relationLabel, relationClass] = relations[record.relacao] || relations.sem_os;
+        const attention = classificarAtencaoChamado(record, filters.stale_days);
         const simpress = record.simpress || {};
         const oracle = Array.isArray(record.oracle) ? record.oracle : [];
         const oracleRows = oracle.length ? oracle.map(ticket => `<div class="rounded-lg border border-slate-800 bg-slate-900/80 p-3">
@@ -2846,8 +3005,9 @@
           <p class="mt-1 text-[10px] text-slate-400">Fila: ${escapeHtml(ticket.fila || "Não informada")} · Fase: ${escapeHtml(ticket.fase_atendimento || "Não informada")}</p>
           <p class="mt-1 text-[10px] text-slate-500">Entregas: ${escapeHtml(ticket.status_entregas || "Não informado")} · Atividades: ${escapeHtml(ticket.status_atividades || "Não informado")}${ticket.ultima_atualizacao ? ` · Atualizado ${escapeHtml(formatarHorarioHistorico(ticket.ultima_atualizacao))}` : ""}</p>
         </div>`).join("") : '<p class="text-xs text-slate-500">Sem registro correspondente no Oracle.</p>';
+        const attentionClass = attention.em_atencao ? "border-amber-400/20 bg-amber-500/5 text-amber-200" : "border-slate-700 bg-slate-900 text-slate-400";
         return `<article class="rounded-xl border border-slate-800 bg-slate-950/70 p-4" data-ticket-serial="${escapeHtml(record.serie)}">
-          <div class="flex flex-wrap items-center justify-between gap-2"><h4 class="font-mono text-sm font-semibold text-white">${escapeHtml(record.serie)}</h4><span class="rounded-full border px-2.5 py-1 text-[10px] font-semibold ${relationClass}">${relationLabel}</span></div>
+          <div class="flex flex-wrap items-center justify-between gap-2"><h4 class="font-mono text-sm font-semibold text-white">${escapeHtml(record.serie)}</h4><div class="flex flex-wrap items-center gap-2"><span class="rounded-full border px-2.5 py-1 text-[10px] font-semibold ${relationClass}">${relationLabel}</span><span class="rounded-full border px-2.5 py-1 text-[10px] ${attentionClass}">${escapeHtml(attention.motivo)}</span></div></div>
           <div class="mt-3 grid grid-cols-1 gap-3 lg:grid-cols-2">
             <section class="rounded-lg border border-slate-800 bg-slate-900/50 p-3"><h5 class="text-[10px] font-semibold uppercase tracking-wide text-cyan-200">Simpress · Acompanhamento de Pedidos</h5><p class="mt-2 text-xs text-slate-300">Pedido: ${formatarListaChamados(simpress.pedidos)}</p><p class="mt-1 text-xs text-slate-300">OS: ${formatarListaChamados(simpress.ordens_servico)}</p><p class="mt-1 text-xs text-slate-300">Chamado do cliente: ${formatarListaChamados(simpress.chamados_cliente)}</p><p class="mt-1 text-xs text-slate-400">Status: ${formatarListaChamados(simpress.status)}</p></section>
             <section class="space-y-2"><h5 class="px-1 text-[10px] font-semibold uppercase tracking-wide text-violet-200">Oracle · Gestão de Solicitações</h5>${oracleRows}</section>
@@ -2855,6 +3015,66 @@
           ${record.ordens_servico_conferidas?.length ? `<p class="mt-3 text-[10px] text-emerald-200">OS encontrada nas duas fontes: ${formatarListaChamados(record.ordens_servico_conferidas)}</p>` : ""}
         </article>`;
       }).join("");
+    }
+
+    function limparFiltrosAcompanhamentoChamados() {
+      ["filtro-acompanhamento-chamados", "relacao-acompanhamento-chamados", "status-acompanhamento-chamados", "fila-acompanhamento-chamados", "idade-acompanhamento-chamados"].forEach(id => {
+        document.getElementById(id).value = "";
+      });
+      document.getElementById("limite-desatualizacao-chamados").value = "7";
+      document.getElementById("somente-atencao-chamados").checked = false;
+      renderizarAcompanhamentoChamados();
+    }
+
+    async function selecionarVersaoChamados() {
+      const snapshotId = document.getElementById("versao-acompanhamento-chamados").value;
+      if (!snapshotId) return;
+      const target = document.getElementById("lista-acompanhamento-chamados");
+      target.innerHTML = '<p class="py-8 text-center text-sm text-slate-400" role="status">Carregando versão selecionada…</p>';
+      try {
+        const response = await fetch(`/api/operacoes/chamados/snapshot/${encodeURIComponent(snapshotId)}`);
+        const data = await response.json().catch(() => ({}));
+        if (!response.ok) throw new Error(data.detail || "Não foi possível abrir esta versão.");
+        data.snapshot_id = snapshotId;
+        acompanhamentoChamadosAtual = data;
+        renderizarAcompanhamentoChamados();
+        await carregarEvolucaoChamados(snapshotId);
+      } catch (error) { target.innerHTML = `<p class="py-8 text-center text-sm text-rose-300" role="alert">${escapeHtml(error.message || "Não foi possível abrir esta versão.")}</p>`; }
+    }
+
+    async function exportarAcompanhamentoChamados() {
+      const button = document.getElementById("btn-exportar-acompanhamento-chamados");
+      const originalText = button.textContent;
+      const params = new URLSearchParams({ snapshot_id: acompanhamentoChamadosAtual?.snapshot_id || "" });
+      Object.entries(obterFiltrosChamados()).forEach(([key, value]) => {
+        if (value !== "" && value !== false) params.set(key, String(value));
+      });
+      button.disabled = true;
+      button.textContent = "Preparando Excel…";
+      try {
+        const response = await fetch(`/api/operacoes/chamados/exportar?${params.toString()}`);
+        if (!response.ok) {
+          const data = await response.json().catch(() => ({}));
+          throw new Error(data.detail || "Não foi possível exportar os chamados filtrados.");
+        }
+        const disposition = response.headers?.get("Content-Disposition") || "";
+        const match = /filename[^;=\n]*=((['"]).*?\2|[^;\n]*)/.exec(disposition);
+        const filename = match?.[1]?.replace(/["']/g, "") || "Acompanhamento_de_Chamados.xlsx";
+        const url = window.URL.createObjectURL(await response.blob());
+        const link = document.createElement("a");
+        link.href = url;
+        link.download = filename;
+        document.body.appendChild(link);
+        link.click();
+        link.remove();
+        window.setTimeout(() => window.URL.revokeObjectURL(url), 1000);
+        showToast("Excel dos chamados filtrados exportado.", "success");
+      } catch (error) {
+        showToast(error.message || "Não foi possível exportar os chamados filtrados.", "error");
+      } finally {
+        button.textContent = originalText;
+        renderizarAcompanhamentoChamados();
+      }
     }
 
     async function carregarAcompanhamentoChamados() {
@@ -2865,7 +3085,9 @@
         const data = await response.json().catch(() => ({}));
         if (!response.ok) throw new Error(data.detail || "Não foi possível carregar o acompanhamento de chamados.");
         acompanhamentoChamadosAtual = data;
+        renderizarHistoricoAcompanhamentoChamados(data);
         renderizarAcompanhamentoChamados();
+        await carregarEvolucaoChamados(data.snapshot_id || "");
       } catch (error) {
         list.innerHTML = `<p class="py-8 text-center text-sm text-rose-300" role="alert">${escapeHtml(error.message || "Não foi possível carregar o acompanhamento de chamados.")}</p>`;
       }
@@ -2895,10 +3117,12 @@
         const data = await response.json().catch(() => ({}));
         if (!response.ok) throw new Error(data.detail || "Não foi possível importar as planilhas.");
         acompanhamentoChamadosAtual = data;
+        renderizarHistoricoAcompanhamentoChamados(data);
         simpressInput.value = "";
         oracleInput.value = "";
         status.textContent = "Planilhas importadas. As OS foram relacionadas pela série.";
         renderizarAcompanhamentoChamados();
+        await carregarEvolucaoChamados(data.snapshot_id || "");
         showToast("Acompanhamento de chamados atualizado.", "success");
       } catch (error) {
         status.textContent = error.message || "Não foi possível importar as planilhas.";
@@ -2914,7 +3138,10 @@
       const form = document.getElementById("form-importar-acompanhamento-chamados");
       if (!form.dataset.bound) {
         form.addEventListener("submit", importarPlanilhasChamados);
-        document.getElementById("filtro-acompanhamento-chamados").addEventListener("input", renderizarAcompanhamentoChamados);
+        ["filtro-acompanhamento-chamados", "relacao-acompanhamento-chamados", "status-acompanhamento-chamados", "fila-acompanhamento-chamados", "idade-acompanhamento-chamados", "limite-desatualizacao-chamados", "somente-atencao-chamados"].forEach(id => {
+          const control = document.getElementById(id);
+          control.addEventListener(id === "filtro-acompanhamento-chamados" ? "input" : "change", renderizarAcompanhamentoChamados);
+        });
         form.dataset.bound = "true";
       }
       carregarAcompanhamentoChamados();

@@ -2,13 +2,24 @@
 
 import json
 from datetime import datetime
+from io import BytesIO
 from pathlib import Path
 from typing import Any, Callable, Dict, List
+from uuid import uuid4
 
 from fastapi import APIRouter, File, HTTPException, UploadFile
+from fastapi.responses import StreamingResponse
 
 from domains.history_insights import compare_updates, equipment_timeline, is_restoration, latest_update, pending_rows
 from domains.ticket_reconciliation import TicketWorkbookError, reconcile_ticket_workbooks
+from domains.ticket_reporting import (
+    MAX_TICKET_SNAPSHOTS,
+    build_ticket_workbook,
+    compare_ticket_snapshots,
+    filter_ticket_records,
+    ticket_report_snapshots,
+    ticket_snapshot_metadata,
+)
 from integrity import AtomicFileTransaction, FileBusyError, FileTransactionError
 from xlsx_safety import XlsxLimitExceeded, XlsxPackageError
 
@@ -79,6 +90,7 @@ def create_operations_router(
                     "sem_os": 0, "somente_simpress": 0, "somente_oracle": 0,
                 },
                 "chamados": [],
+                "historico": [],
             }
         try:
             data = json.loads(path.read_text(encoding="utf-8"))
@@ -102,7 +114,73 @@ def create_operations_router(
 
     @router.get("/api/operacoes/chamados")
     def get_ticket_report():
-        return load_ticket_report()
+        report = load_ticket_report()
+        current = next((item for item in reversed(ticket_report_snapshots(report)) if item), None)
+        response = {key: value for key, value in report.items() if key != "historico"}
+        response["snapshot_id"] = current.get("id", "") if current else ""
+        response["historico"] = [
+            ticket_snapshot_metadata(item)
+            for item in reversed(ticket_report_snapshots(report))
+        ]
+        return response
+
+    @router.get("/api/operacoes/chamados/historico")
+    def get_ticket_history():
+        snapshots = ticket_report_snapshots(load_ticket_report())
+        return {"eventos": [ticket_snapshot_metadata(item) for item in reversed(snapshots)], "total": len(snapshots)}
+
+    @router.get("/api/operacoes/chamados/snapshot/{snapshot_id}")
+    def get_ticket_snapshot(snapshot_id: str):
+        snapshot = next(
+            (item for item in ticket_report_snapshots(load_ticket_report()) if item.get("id") == snapshot_id),
+            None,
+        )
+        if snapshot is None:
+            raise HTTPException(status_code=404, detail="A versão selecionada não existe no histórico de chamados.")
+        return snapshot
+
+    @router.get("/api/operacoes/chamados/evolucao")
+    def get_ticket_evolution(anterior: str, atual: str):
+        snapshots = ticket_report_snapshots(load_ticket_report())
+        previous = next((item for item in snapshots if item.get("id") == anterior), None)
+        current = next((item for item in snapshots if item.get("id") == atual), None)
+        if previous is None or current is None:
+            raise HTTPException(status_code=404, detail="Uma das versões selecionadas não existe no histórico de chamados.")
+        if anterior == atual:
+            raise HTTPException(status_code=422, detail="Selecione duas versões diferentes para comparar.")
+        return compare_ticket_snapshots(previous, current)
+
+    @router.get("/api/operacoes/chamados/exportar")
+    def export_ticket_report(
+        snapshot_id: str = "",
+        relation: str = "",
+        status: str = "",
+        queue: str = "",
+        search: str = "",
+        stale_days: int = 7,
+        age_filter: str = "",
+        attention_only: bool = False,
+    ):
+        if stale_days < 0 or stale_days > 3650:
+            raise HTTPException(status_code=422, detail="O limite de dias sem atualização deve estar entre 0 e 3650.")
+        report = load_ticket_report()
+        snapshots = ticket_report_snapshots(report)
+        selected_id = snapshot_id or (snapshots[-1].get("id", "") if snapshots else "")
+        snapshot = next((item for item in snapshots if item.get("id") == selected_id), None)
+        if snapshot is None:
+            raise HTTPException(status_code=404, detail="A versão selecionada não existe no histórico de chamados.")
+        filters = {
+            "relation": relation, "status": status, "queue": queue, "search": search,
+            "stale_days": stale_days, "age_filter": age_filter, "attention_only": attention_only,
+        }
+        tickets = filter_ticket_records(snapshot.get("chamados", []), **filters)
+        output = build_ticket_workbook(snapshot, tickets, filters)
+        date_label = str(snapshot.get("atualizado_em") or datetime.now().astimezone().isoformat())[:10].replace("-", "")
+        return StreamingResponse(
+            BytesIO(output),
+            media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+            headers={"Content-Disposition": f'attachment; filename="Acompanhamento_de_Chamados_{date_label}.xlsx"'},
+        )
 
     @router.post("/api/operacoes/chamados/importar")
     def import_ticket_workbooks(
@@ -138,7 +216,23 @@ def create_operations_router(
             raise HTTPException(status_code=422, detail=str(error)) from None
 
         report["atualizado_em"] = datetime.now().astimezone().isoformat(timespec="seconds")
+        snapshot = {
+            "id": str(uuid4()),
+            "atualizado_em": report["atualizado_em"],
+            "fontes": report.get("fontes", {}),
+            "resumo": report.get("resumo", {}),
+            "chamados": report.get("chamados", []),
+        }
+        history = ticket_report_snapshots(load_ticket_report())
+        history.append(snapshot)
+        report["snapshot_id"] = snapshot["id"]
+        report["historico"] = history[-MAX_TICKET_SNAPSHOTS:]
         save_ticket_report(report)
-        return report
+        response = {key: value for key, value in report.items() if key != "historico"}
+        response["historico"] = [
+            ticket_snapshot_metadata(item)
+            for item in reversed(report["historico"])
+        ]
+        return response
 
     return router

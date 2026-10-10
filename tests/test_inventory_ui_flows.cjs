@@ -146,6 +146,7 @@ function createAppHarness(fetchApi, { stubDisplay = true, confirmResult = true, 
     navigator: { clipboard: { writeText: async text => effects.clipboardWrites.push(text) } },
     FormData: FakeFormData,
     HTMLElement: FakeElement,
+    URLSearchParams,
     setTimeout,
     clearTimeout,
     requestAnimationFrame: callback => callback(0),
@@ -905,6 +906,107 @@ test("imports Simpress and Oracle files and displays the serial-to-OS reconcilia
   assert.match(harness.element("lista-acompanhamento-chamados").innerHTML, /7285070/);
   assert.match(harness.element("lista-acompanhamento-chamados").innerHTML, /REQ-1/);
   assert.equal(modal.id, "modal-acompanhamento-chamados");
+});
+
+test("filters tickets by relation and prioritizes stale or divergent calls in the attention queue", () => {
+  const harness = createAppHarness(async () => apiResponse({}));
+  assert.equal(harness.run('dataAtualizacaoChamado("2026-10-09").getDate()'), 9);
+  assert.equal(harness.run('dataAtualizacaoChamado("2026-10-09T00:00:00Z").getDate()'), 9);
+  assert.equal(harness.run('dataAtualizacaoChamado("09/10/2026").getMonth()'), 9);
+  const fresh = new Date().toISOString();
+  harness.context.ticketTestReport = {
+    fontes: {},
+    resumo: { series_total: 4, conferidas: 3, divergentes: 1, sem_os: 0, somente_simpress: 0, somente_oracle: 0 },
+    chamados: [
+      { serie: "SN-FRESCA", relacao: "conferida", simpress: {}, oracle: [{ status: "Em execução", fila: "Fila A", ultima_atualizacao: fresh }] },
+      { serie: "SN-ATRASADA", relacao: "conferida", simpress: {}, oracle: [{ status: "Em execução", fila: "Fila B", ultima_atualizacao: "2000-01-01" }] },
+      { serie: "SN-DIVERGENTE", relacao: "divergente", simpress: {}, oracle: [{ status: "Em execução", fila: "Fila C", ultima_atualizacao: fresh }] },
+      { serie: "SN-FECHADA", relacao: "conferida", simpress: {}, oracle: [{ status: "Concluído", fila: "Fila D", ultima_atualizacao: "2000-01-01" }] },
+    ],
+  };
+  harness.run("acompanhamentoChamadosAtual = ticketTestReport");
+  harness.run("renderizarAcompanhamentoChamados()");
+
+  harness.element("relacao-acompanhamento-chamados").value = "divergente";
+  harness.run("renderizarAcompanhamentoChamados()");
+  let visible = harness.element("lista-acompanhamento-chamados").innerHTML;
+  assert.match(visible, /SN-DIVERGENTE/);
+  assert.doesNotMatch(visible, /SN-ATRASADA/);
+
+  harness.element("relacao-acompanhamento-chamados").value = "";
+  harness.element("somente-atencao-chamados").checked = true;
+  harness.run("renderizarAcompanhamentoChamados()");
+  visible = harness.element("lista-acompanhamento-chamados").innerHTML;
+  assert.match(visible, /SN-DIVERGENTE/);
+  assert.match(visible, /SN-ATRASADA/);
+  assert.doesNotMatch(visible, /SN-FRESCA/);
+  assert.doesNotMatch(visible, /SN-FECHADA/);
+  assert.match(appHtml, /id="versao-acompanhamento-chamados"/);
+  assert.match(appHtml, /id="evolucao-acompanhamento-chamados"/);
+  assert.match(appScript, /\/api\/operacoes\/chamados\/evolucao\?/);
+});
+
+test("exports the selected ticket snapshot with the active filters", async () => {
+  const requests = [];
+  const harness = createAppHarness(async url => {
+    requests.push(url);
+    return {
+      ok: true,
+      headers: { get: () => 'attachment; filename="Acompanhamento_de_Chamados.xlsx"' },
+      blob: async () => ({}),
+    };
+  });
+  harness.context.ticketTestReport = { snapshot_id: "version-1", resumo: {}, fontes: {}, chamados: [] };
+  harness.run("acompanhamentoChamadosAtual = ticketTestReport");
+  harness.element("relacao-acompanhamento-chamados").value = "divergente";
+  harness.element("filtro-acompanhamento-chamados").value = "SN-4";
+  harness.element("somente-atencao-chamados").checked = true;
+
+  await harness.run("exportarAcompanhamentoChamados()");
+
+  assert.equal(requests.length, 1);
+  assert.match(requests[0], /snapshot_id=version-1/);
+  assert.match(requests[0], /relation=divergente/);
+  assert.match(requests[0], /search=SN-4/);
+  assert.match(requests[0], /attention_only=true/);
+  assert.equal(harness.effects.toasts[0].type, "success");
+});
+
+test("shows imported ticket versions and compares the selected snapshot with the prior import", async () => {
+  const newer = { id: "version-2", atualizado_em: "2026-10-10T12:00:00Z", fontes: { simpress: "novo.xlsx", oracle: "novo-oracle.xlsx" }, resumo: {} };
+  const older = { id: "version-1", atualizado_em: "2026-10-09T12:00:00Z", fontes: { simpress: "anterior.xlsx", oracle: "anterior-oracle.xlsx" }, resumo: {} };
+  const report = {
+    fontes: {}, resumo: { series_total: 1, conferidas: 1, divergentes: 0, sem_os: 0, somente_simpress: 0, somente_oracle: 0 },
+    chamados: [{ serie: "DEMO-SN-001", relacao: "conferida", simpress: {}, oracle: [] }],
+  };
+  const current = { ...report, snapshot_id: newer.id, historico: [newer, older] };
+  const requests = [];
+  const harness = createAppHarness(async url => {
+    requests.push(url);
+    if (url === "/api/operacoes/chamados") return apiResponse(current);
+    if (url.startsWith("/api/operacoes/chamados/evolucao?")) return apiResponse({
+      contagens: { novos: 1, alterados: 2, iguais: 3, ausentes_arquivo: 1 },
+      mudancas: { novos: ["SN-NOVO"], alterados: [{ serie: "SN-ALTERADA", campos: [{ campo: "Status Oracle" }] }], ausentes_arquivo: ["SN-ANTIGA"] },
+      aviso_ausentes: "Ausência na planilha atual não confirma que o chamado foi resolvido.",
+    });
+    if (url.endsWith(`/snapshot/${older.id}`)) return apiResponse({ ...report, snapshot_id: older.id });
+    return apiResponse({ detail: "endpoint inesperado" }, { status: 404 });
+  });
+
+  await harness.run("carregarAcompanhamentoChamados()");
+
+  const versions = harness.element("versao-acompanhamento-chamados");
+  assert.equal(versions.children.length, 3);
+  assert.equal(versions.value, newer.id);
+  assert.match(harness.element("evolucao-acompanhamento-chamados").innerHTML, /2 alteradas/);
+  assert.match(harness.element("evolucao-acompanhamento-chamados").innerHTML, /SN-ANTIGA/);
+  assert.ok(requests.some(url => url.includes("anterior=version-1") && url.includes("atual=version-2")));
+
+  versions.value = older.id;
+  await harness.run("selecionarVersaoChamados()");
+  assert.match(harness.element("lista-acompanhamento-chamados").innerHTML, /DEMO-SN-001/);
+  assert.match(harness.element("evolucao-acompanhamento-chamados").textContent, /mais antiga/);
+  assert.ok(requests.some(url => url.endsWith(`/snapshot/${older.id}`)));
 });
 
 test("groups secondary actions while keeping spreadsheet updates prominent", () => {
