@@ -62,3 +62,19 @@ test("mobile header summary rule overrides the header's accessible summary displ
     /@media \(max-width: 900px\) and \(max-height: 500px\)[\s\S]*?\.header-inner > \.header-base-summary\s*\{\s*display:\s*none\s*!important;/,
   );
 });
+
+test("colors the analysis and equipment action groups distinctly", () => {
+  assert.match(appCss, /header-action-group\[data-action-group="analysis"\] > summary\s*\{[^}]*rgba\(251, 146, 60/);
+  assert.match(appCss, /header-action-group\[data-action-group="equipment"\] > summary\s*\{[^}]*rgba\(248, 113, 113/);
+});
+
+test("places the ticket action immediately after Excel export with a teal accent", () => {
+  const exportButton = indexHtml.indexOf('id="btn-exportar-equipamentos"');
+  const ticketAction = indexHtml.indexOf('onclick="abrirAcompanhamentoChamados()"');
+  const ticketActionEnd = indexHtml.indexOf("</button>", ticketAction);
+  const analysisGroup = indexHtml.indexOf('data-action-group="analysis"');
+  assert.ok(exportButton < ticketAction);
+  assert.ok(ticketAction < analysisGroup);
+  assert.match(indexHtml.slice(ticketAction, ticketActionEnd), /header-action-item--large[^"]*header-action-item--teal/);
+  assert.match(appCss, /header-secondary-panel \.header-action-item--teal\s*\{[^}]*rgba\(13, 148, 136/);
+});

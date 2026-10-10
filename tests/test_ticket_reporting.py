@@ -28,7 +28,7 @@ def _ticket(
         "solicitacao": "REQ-1", "ordem_servico": order, "status": status,
         "sub_status": "Pendente", "fila": queue, "fase_atendimento": "Execução",
         "ultima_atualizacao": last_update, "status_entregas": "", "status_atividades": "",
-        "assunto": "Atendimento",
+        "assunto": "Atendimento", "descricao": "Solicito suporte para o equipamento.",
     }]
     return {
         "serie": serial,
@@ -59,17 +59,41 @@ class TicketReportingTests(unittest.TestCase):
             [],
         )
 
-    def test_attention_queue_prioritizes_divergence_and_ignores_old_closed_tickets(self):
-        divergent = _ticket("SN-2", relation="divergente", last_update="2026-10-09")
-        stale = _ticket("SN-1", last_update="2026-09-20")
-        closed = _ticket("SN-3", status="Concluído", last_update="2026-01-01")
+    def test_attention_queue_only_flags_active_tickets_without_update_for_three_days(self):
+        divergent_but_recent = _ticket("SN-DIVERGENTE", relation="divergente", last_update="2026-10-09")
+        no_order_but_recent = _ticket("SN-SEM-OS", relation="sem_os", last_update="2026-10-09", order="")
+        only_one_source_but_recent = _ticket("SN-SOMENTE-SIMPRESS", relation="somente_simpress", status=None)
+        stale_at_threshold = _ticket("SN-3-DIAS", last_update="2026-10-07")
+        stale = _ticket("SN-ANTIGA", last_update="2026-09-20")
+        closed = _ticket("SN-FECHADA", status="Concluído", last_update="2026-01-01")
 
         rows = filter_ticket_records(
-            [closed, stale, divergent], attention_only=True, stale_days=7, today=date(2026, 10, 10)
+            [closed, only_one_source_but_recent, no_order_but_recent, divergent_but_recent, stale, stale_at_threshold],
+            attention_only=True, today=date(2026, 10, 10),
         )
-        self.assertEqual([row["serie"] for row in rows], ["SN-2", "SN-1"])
-        self.assertFalse(ticket_attention(closed, stale_days=7, today=date(2026, 10, 10))["em_atencao"])
+
+        self.assertEqual([row["serie"] for row in rows], ["SN-ANTIGA", "SN-3-DIAS"])
+        self.assertFalse(ticket_attention(divergent_but_recent, today=date(2026, 10, 10))["em_atencao"])
+        self.assertFalse(ticket_attention(no_order_but_recent, today=date(2026, 10, 10))["em_atencao"])
+        self.assertFalse(ticket_attention(only_one_source_but_recent, today=date(2026, 10, 10))["em_atencao"])
+        self.assertFalse(ticket_attention(closed, today=date(2026, 10, 10))["em_atencao"])
+        self.assertIn("Sem atualização há 3 dias", ticket_attention(stale_at_threshold, today=date(2026, 10, 10))["motivo"])
         self.assertIn("Sem atualização há 20 dias", ticket_attention(stale, today=date(2026, 10, 10))["motivo"])
+
+    def test_ticket_results_sort_by_highest_os_and_leave_missing_os_last(self):
+        high = _ticket("SN-7279287", order="7279287")
+        middle = _ticket("SN-7279280", order="7279280")
+        low = _ticket("SN-7265402", order="7265402")
+        no_order = _ticket("SN-SEM-OS", status=None, relation="sem_os", order="")
+        no_order["simpress"]["ordens_servico"] = []
+        no_order["ordens_servico_conferidas"] = []
+
+        rows = filter_ticket_records([low, no_order, middle, high], today=date(2026, 10, 10))
+
+        self.assertEqual(
+            [row["serie"] for row in rows],
+            ["SN-7279287", "SN-7279280", "SN-7265402", "SN-SEM-OS"],
+        )
 
     def test_missing_active_update_is_a_filterable_attention_item(self):
         missing = _ticket("SN-4", last_update="")
@@ -94,6 +118,152 @@ class TicketReportingTests(unittest.TestCase):
         self.assertEqual(result["mudancas"]["ausentes_arquivo"], ["OLD-2"])
         self.assertNotIn("resolvidos", result["contagens"])
         self.assertIn("não confirma", result["aviso_ausentes"])
+
+    def test_simpress_delivery_details_are_compared_and_exported_only_while_in_progress(self):
+        previous_ticket = _ticket("SN-DELIVERY")
+        previous_ticket["simpress"].update({
+            "descricoes_produto": ["Notebook modelo antigo"],
+            "previsoes_entrega": ["28/09/2026"],
+            "cidades_entrega": ["Curitiba"],
+            "enderecos_entrega": ["Rua antiga, 10, Curitiba - PR"],
+            "pedido_em_andamento": True,
+        })
+        current_ticket = _ticket("SN-DELIVERY")
+        current_ticket["simpress"].update({
+            "ordens_venda": ["OV_15799764"],
+            "descricoes_produto": ["Notebook modelo novo"],
+            "previsoes_entrega": ["15/09/2026"],
+            "cidades_entrega": ["Maringá"],
+            "enderecos_entrega": [],
+            "pedido_em_andamento": False,
+        })
+        comparison = compare_ticket_snapshots(
+            {"chamados": [previous_ticket]}, {"chamados": [current_ticket]},
+        )
+        changed_fields = {
+            field["campo"]
+            for row in comparison["mudancas"]["alterados"]
+            for field in row["campos"]
+        }
+        self.assertTrue({
+            "Descrição do produto Simpress", "Previsão de entrega Simpress",
+            "Cidade de entrega Simpress", "Endereço de entrega Simpress",
+        }.issubset(changed_fields))
+
+        current_ticket["simpress"].update({
+            "descricoes_produto": ["Notebook modelo novo"],
+            "previsoes_entrega": ["15/09/2026"],
+            "cidades_entrega": ["Maringá"],
+            "enderecos_entrega": ["Avenida Central, 500, Maringá - PR"],
+            "pedido_em_andamento": True,
+        })
+        content = build_ticket_workbook({"atualizado_em": "2026-10-10"}, [current_ticket], {})
+        workbook = openpyxl.load_workbook(BytesIO(content), data_only=True)
+        sheet = workbook["Chamados"]
+        columns = {cell.value: index for index, cell in enumerate(sheet[1], start=1)}
+        self.assertEqual(sheet.cell(2, columns["OV Simpress"]).value, "OV_15799764")
+        self.assertEqual(sheet.cell(2, columns["Descrição do produto"]).value, "Notebook modelo novo")
+        self.assertEqual(sheet.cell(2, columns["Cidade de entrega"]).value, "Maringá")
+        self.assertEqual(sheet.cell(2, columns["Endereço de entrega"]).value, "Avenida Central, 500, Maringá - PR")
+        self.assertEqual(sheet.cell(2, columns["Previsão de entrega"]).value, "15/09/2026")
+        workbook.close()
+
+        current_ticket["simpress"]["pedido_em_andamento"] = False
+        hidden_address = openpyxl.load_workbook(
+            BytesIO(build_ticket_workbook({"atualizado_em": "2026-10-10"}, [current_ticket], {})),
+            data_only=True,
+        )
+        hidden_columns = {cell.value: index for index, cell in enumerate(hidden_address["Chamados"][1], start=1)}
+        self.assertEqual(
+            hidden_address["Chamados"].cell(2, hidden_columns["Endereço de entrega"]).value,
+            None,
+        )
+        hidden_address.close()
+
+    def test_oracle_description_is_compared_and_exported(self):
+        previous = _ticket("SN-DESCRIPTION")
+        previous["oracle"][0]["descricao"] = "Solicito diagnóstico do equipamento."
+        current = _ticket("SN-DESCRIPTION")
+        long_description = "Solicito a troca do teclado e do mouse. " * 20
+        current["oracle"][0]["descricao"] = long_description
+        current["oracle"][0].update({
+            "logradouro": "R Caeté", "numero_endereco": "150", "bairro": "Prado Velho",
+            "cidade": "Curitiba", "atendido_pela_inibicao": "Não", "nome_filial": "SIMPRESS - PR",
+        })
+        without_description = _ticket("SN-SEM-DESCRICAO")
+        without_description["oracle"][0]["descricao"] = ""
+
+        comparison = compare_ticket_snapshots(
+            {"chamados": [previous]}, {"chamados": [current]},
+        )
+        changed_fields = [
+            field["campo"]
+            for row in comparison["mudancas"]["alterados"]
+            for field in row["campos"]
+        ]
+        self.assertIn("Descrição do chamado Oracle", changed_fields)
+        self.assertTrue({
+            "Logradouro Oracle", "Número do endereço Oracle", "Bairro Oracle", "Cidade Oracle",
+            "Atendido pela inibição Oracle", "Nome da filial Oracle",
+        }.issubset(changed_fields))
+
+        workbook = openpyxl.load_workbook(
+            BytesIO(build_ticket_workbook({"atualizado_em": "2026-10-10"}, [current, without_description], {})),
+            data_only=True,
+        )
+        sheet = workbook["Chamados"]
+        description_column = next(
+            index for index, cell in enumerate(sheet[1], start=1)
+            if cell.value == "Descrição do chamado Oracle"
+        )
+        self.assertEqual(sheet.cell(2, description_column).value, long_description)
+        self.assertFalse(sheet.cell(2, description_column).alignment.wrap_text)
+        self.assertEqual(sheet.row_dimensions[2].height, sheet.row_dimensions[3].height)
+        exported_columns = {cell.value: index for index, cell in enumerate(sheet[1], start=1)}
+        self.assertEqual(sheet.cell(2, exported_columns["Logradouro Oracle"]).value, "R Caeté")
+        self.assertEqual(sheet.cell(2, exported_columns["Número do endereço Oracle"]).value, "150")
+        self.assertEqual(sheet.cell(2, exported_columns["Bairro Oracle"]).value, "Prado Velho")
+        self.assertEqual(sheet.cell(2, exported_columns["Cidade Oracle"]).value, "Curitiba")
+        self.assertEqual(sheet.cell(2, exported_columns["Atendido pela inibição Oracle"]).value, "Não")
+        self.assertEqual(sheet.cell(2, exported_columns["Nome da filial Oracle"]).value, "SIMPRESS - PR")
+        workbook.close()
+
+    def test_oracle_service_orders_export_in_descending_numeric_order(self):
+        ticket = _ticket("SN-OS-ORDER")
+        ticket["simpress"]["ordens_servico"] = ["7124895", "7134662"]
+        ticket["oracle"] = [
+            {"solicitacao": "REQ-OLD", "ordem_servico": "7124895", "descricao": "OS anterior"},
+            {"solicitacao": "REQ-NEW", "ordem_servico": "7134662", "descricao": "OS atual"},
+        ]
+
+        workbook = openpyxl.load_workbook(
+            BytesIO(build_ticket_workbook({"atualizado_em": "2026-10-10"}, [ticket], {})),
+            data_only=True,
+        )
+        sheet = workbook["Chamados"]
+        order_column = next(index for index, cell in enumerate(sheet[1], start=1) if cell.value == "OS Oracle")
+        simpress_order_column = next(index for index, cell in enumerate(sheet[1], start=1) if cell.value == "OS Simpress")
+        self.assertEqual(order_column, simpress_order_column + 1)
+        self.assertEqual([sheet.cell(row, order_column).value for row in (2, 3)], ["7134662", "7124895"])
+        self.assertEqual(sheet.cell(2, simpress_order_column).value, "7134662, 7124895")
+        workbook.close()
+
+    def test_sales_order_is_included_in_simpress_history_comparison(self):
+        previous = _ticket("SN-OV")
+        current = _ticket("SN-OV")
+        previous["simpress"]["ordens_venda"] = ["OV_15799763"]
+        current["simpress"]["ordens_venda"] = ["OV_15799764"]
+
+        comparison = compare_ticket_snapshots(
+            {"chamados": [previous]}, {"chamados": [current]},
+        )
+
+        changed_fields = {
+            field["campo"]
+            for row in comparison["mudancas"]["alterados"]
+            for field in row["campos"]
+        }
+        self.assertIn("Ordem de venda (OV) Simpress", changed_fields)
 
     def test_legacy_report_gets_a_stable_snapshot_id_and_export_is_a_valid_filtered_xlsx(self):
         legacy = {"atualizado_em": "2026-10-09", "fontes": {}, "resumo": {}, "chamados": [_ticket()]}

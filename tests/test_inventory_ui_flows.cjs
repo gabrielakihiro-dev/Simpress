@@ -84,7 +84,7 @@ class FakeTemplate extends FakeElement {
             hasAttribute: () => false,
           };
         });
-        return { cells, dataset: {}, hasAttribute: () => false };
+        return { cells, dataset: {}, hasAttribute: () => false, getAttribute: () => null };
       },
     };
   }
@@ -857,14 +857,6 @@ test("centralizes the latest comparison issues with row-level annotation autosav
   assert.match(appScript, /Abrir atualização/);
 });
 
-test("shows an equipment timeline by normalized serial or hostname and keeps links to source updates", () => {
-  assert.match(appHtml, /id="modal-historico-equipamento"/);
-  assert.match(appHtml, /id="identificador-historico-equipamento"/);
-  assert.match(appScript, /\/api\/operacoes\/equipamento\/\$\{encodeURIComponent\(identifier\)\}/);
-  assert.match(appScript, /Abrir resultado da atualização/);
-  assert.match(appScript, /data-timeline-event/);
-});
-
 test("compares two complete inventory updates and annotates each source row in the evolution view", () => {
   assert.match(appHtml, /id="modal-evolucao-atualizacoes"/);
   assert.match(appHtml, /id="evolucao-anterior"/);
@@ -912,19 +904,122 @@ test("imports Simpress and Oracle files and displays the serial-to-OS reconcilia
   assert.equal(modal.id, "modal-acompanhamento-chamados");
 });
 
-test("filters tickets by relation and prioritizes stale or divergent calls in the attention queue", () => {
+test("shows Simpress product and city while gating delivery address by order status", () => {
+  const harness = createAppHarness(async () => apiResponse({}));
+  harness.context.ticketTestReport = {
+    fontes: {},
+    resumo: { series_total: 2, conferidas: 0, divergentes: 0, sem_os: 0, somente_simpress: 2, somente_oracle: 0 },
+    chamados: [
+      {
+        serie: "SN-ATIVO", relacao: "conferida", ordens_servico_conferidas: ["7124895", "7134662"], oracle: [{
+          solicitacao: "REQ-77", ordem_servico: "7134662", status: "Em execução", fila: "Fila A",
+          logradouro: "R Caeté", numero_endereco: "150", bairro: "Prado Velho", cidade: "Curitiba", atendido_pela_inibicao: "Não", nome_filial: "SIMPRESS - PR",
+          ultima_atualizacao: "09/10/2026 14:15",
+          descricao: `Solicito suporte para este equipamento. ${"Detalhe técnico importante. ".repeat(8)}<script>alert('x')</script>`,
+        }, { solicitacao: "REQ-76", ordem_servico: "7124895", status: "Concluído", fila: "Fila A" }],
+        simpress: {
+          pedidos: ["48076976"], ordens_venda: ["OV_15799764"], ordens_servico: ["7124895", "7134662"], chamados_cliente: ["Não informado", ""], status: ["Verificação de estoque"],
+          descricoes_produto: ["Notebook HP ProBook"], previsoes_entrega: ["2026-09-28"], cidades_entrega: ["Curitiba"],
+          enderecos_entrega: ["Rua das Flores, 123, Curitiba - PR"], pedido_em_andamento: true,
+        },
+      },
+      {
+        serie: "SN-ENTREGUE", relacao: "somente_simpress", ordens_servico_conferidas: [], oracle: [],
+        simpress: {
+          pedidos: ["48076977"], ordens_servico: ["7232036"], status: ["Pedido entregue"], chamados_cliente: ["INC-77"],
+          previsoes_entrega: ["15/09/2026"],
+          descricoes_produto: ["Monitor HP"], cidades_entrega: ["Maringá"],
+          enderecos_entrega: [], pedido_em_andamento: false,
+        },
+      },
+    ],
+  };
+  harness.run("acompanhamentoChamadosAtual = ticketTestReport; renderizarAcompanhamentoChamados()");
+  const cards = harness.element("lista-acompanhamento-chamados").innerHTML;
+  assert.match(cards, /Descrição do produto: Notebook HP ProBook/);
+  assert.match(cards, /OV: OV_15799764/);
+  assert.match(cards, /Cidade de entrega: Curitiba/);
+  assert.match(cards, /Previsão de entrega: 28\/09\/2026/);
+  assert.match(cards, /Endereço de entrega: Rua das Flores, 123, Curitiba - PR/);
+  assert.match(cards, /text-cyan-100">7134662, 7124895<\/span>/);
+  assert.match(cards, /OS encontrada nas duas fontes: 7134662, 7124895/);
+  const activeCard = cards.split('data-ticket-serial="SN-ATIVO"')[1].split("</article>")[0];
+  const oracleCards = activeCard.split("Oracle · Gestão de Solicitações")[1];
+  assert.ok(oracleCards.indexOf("7134662") < oracleCards.indexOf("7124895"));
+  assert.match(oracleCards, /Endereço: R Caeté, 150, Prado Velho, Curitiba/);
+  assert.match(oracleCards, /Atendido pela inibição: Não/);
+  assert.match(oracleCards, /Atendimento por: SIMPRESS - PR/);
+  assert.ok(oracleCards.includes(`Atualizado ${harness.run('formatarHorarioHistorico("09/10/2026 14:15")')}`));
+  assert.match(cards, /<details class="ticket-oracle-description">/);
+  assert.match(cards, /Descrição do chamado/);
+  assert.match(cards, /⌄ Expandir/);
+  assert.ok(cards.includes("&lt;script&gt;alert(&#039;x&#039;)&lt;/script&gt;"));
+  assert.doesNotMatch(cards, /<script>alert\('x'\)<\/script>/);
+  assert.match(appCss, /\.ticket-oracle-description-content[\s\S]*max-height: 12rem; overflow: auto/);
+  assert.doesNotMatch(cards, /Chamado do cliente: Não informado/);
+  const deliveredCard = cards.split('data-ticket-serial="SN-ENTREGUE"')[1].split("</article>")[0];
+  assert.match(deliveredCard, /Descrição do produto: Monitor HP/);
+  assert.match(deliveredCard, /Cidade de entrega: Maringá/);
+  assert.match(deliveredCard, /Previsão de entrega: 15\/09\/2026/);
+  assert.match(deliveredCard, /Chamado do cliente: INC-77/);
+  assert.doesNotMatch(deliveredCard, /Endereço de entrega:/);
+});
+
+test("sorts ticket cards by descending OS and leaves tickets without an OS at the end", () => {
+  const harness = createAppHarness(async () => apiResponse({}));
+  const ticket = (serie, order, source = "simpress") => ({
+    serie,
+    relacao: order ? "conferida" : "sem_os",
+    ordens_servico_conferidas: order ? [order] : [],
+    simpress: { ordens_servico: source === "simpress" && order ? [order] : [] },
+    oracle: order && source === "oracle" ? [{ ordem_servico: order, status: "Em execução" }] : [],
+  });
+  harness.context.ticketTestReport = {
+    fontes: {},
+    resumo: { series_total: 4, conferidas: 3, divergentes: 0, sem_os: 1, somente_simpress: 0, somente_oracle: 0 },
+    chamados: [
+      ticket("SN-7265402", "7265402"),
+      ticket("SN-SEM-OS", ""),
+      ticket("SN-7279280", "7279280", "oracle"),
+      ticket("SN-7279287", "7279287"),
+    ],
+  };
+
+  harness.run("acompanhamentoChamadosAtual = ticketTestReport; renderizarAcompanhamentoChamados()");
+
+  const serials = [...harness.element("lista-acompanhamento-chamados").innerHTML.matchAll(/data-ticket-serial="([^"]+)"/g)]
+    .map(match => match[1]);
+  assert.deepEqual(serials, ["SN-7279287", "SN-7279280", "SN-7265402", "SN-SEM-OS"]);
+  assert.match(harness.element("contagem-acompanhamento-chamados").textContent, /OS da maior para a menor, sem OS no final/);
+});
+
+test("filters tickets by relation and limits attention to active calls without updates for three days", () => {
   const harness = createAppHarness(async () => apiResponse({}));
   assert.equal(harness.run('dataAtualizacaoChamado("2026-10-09").getDate()'), 9);
   assert.equal(harness.run('dataAtualizacaoChamado("2026-10-09T00:00:00Z").getDate()'), 9);
   assert.equal(harness.run('dataAtualizacaoChamado("09/10/2026").getMonth()'), 9);
-  const fresh = new Date().toISOString();
+  const expectedOracleUpdate = new Intl.DateTimeFormat("pt-BR", { dateStyle: "short", timeStyle: "medium" })
+    .format(new Date(2026, 9, 9, 14, 15));
+  assert.equal(harness.run('formatarHorarioHistorico("09/10/2026 14:15")'), expectedOracleUpdate);
+  assert.equal(harness.run('formatarHorarioHistorico("2026-10-09")'), new Intl.DateTimeFormat("pt-BR", { dateStyle: "short", timeStyle: "medium" }).format(new Date(2026, 9, 9)));
+  const localDateOffset = days => {
+    const value = new Date();
+    value.setHours(12, 0, 0, 0);
+    value.setDate(value.getDate() - days);
+    return `${value.getFullYear()}-${String(value.getMonth() + 1).padStart(2, "0")}-${String(value.getDate()).padStart(2, "0")}`;
+  };
+  const fresh = localDateOffset(0);
+  const exactlyThreeDaysOld = localDateOffset(3);
   harness.context.ticketTestReport = {
     fontes: {},
-    resumo: { series_total: 4, conferidas: 3, divergentes: 1, sem_os: 0, somente_simpress: 0, somente_oracle: 0 },
+    resumo: { series_total: 7, conferidas: 3, divergentes: 1, sem_os: 1, somente_simpress: 1, somente_oracle: 1 },
     chamados: [
       { serie: "SN-FRESCA", relacao: "conferida", simpress: {}, oracle: [{ status: "Em execução", fila: "Fila A", ultima_atualizacao: fresh }] },
       { serie: "SN-ATRASADA", relacao: "conferida", simpress: {}, oracle: [{ status: "Em execução", fila: "Fila B", ultima_atualizacao: "2000-01-01" }] },
       { serie: "SN-DIVERGENTE", relacao: "divergente", simpress: {}, oracle: [{ status: "Em execução", fila: "Fila C", ultima_atualizacao: fresh }] },
+      { serie: "SN-LIMITE-3-DIAS", relacao: "conferida", simpress: {}, oracle: [{ status: "Em execução", fila: "Fila E", ultima_atualizacao: exactlyThreeDaysOld }] },
+      { serie: "SN-SEM-OS", relacao: "sem_os", simpress: {}, oracle: [{ status: "Em execução", fila: "Fila F", ultima_atualizacao: fresh }] },
+      { serie: "SN-SOMENTE-SIMPRESS", relacao: "somente_simpress", simpress: {}, oracle: [] },
       { serie: "SN-FECHADA", relacao: "conferida", simpress: {}, oracle: [{ status: "Concluído", fila: "Fila D", ultima_atualizacao: "2000-01-01" }] },
     ],
   };
@@ -941,8 +1036,11 @@ test("filters tickets by relation and prioritizes stale or divergent calls in th
   harness.element("somente-atencao-chamados").checked = true;
   harness.run("renderizarAcompanhamentoChamados()");
   visible = harness.element("lista-acompanhamento-chamados").innerHTML;
-  assert.match(visible, /SN-DIVERGENTE/);
   assert.match(visible, /SN-ATRASADA/);
+  assert.match(visible, /SN-LIMITE-3-DIAS/);
+  assert.doesNotMatch(visible, /SN-DIVERGENTE/);
+  assert.doesNotMatch(visible, /SN-SEM-OS/);
+  assert.doesNotMatch(visible, /SN-SOMENTE-SIMPRESS/);
   assert.doesNotMatch(visible, /SN-FRESCA/);
   assert.doesNotMatch(visible, /SN-FECHADA/);
   assert.match(appHtml, /id="versao-acompanhamento-chamados"/);
@@ -984,10 +1082,20 @@ test("shows imported ticket versions and compares the selected snapshot with the
     chamados: [{ serie: "DEMO-SN-001", relacao: "conferida", simpress: {}, oracle: [] }],
   };
   const current = { ...report, snapshot_id: newer.id, historico: [newer, older] };
+  const latestOnly = {
+    ...current,
+    chamados: [{ serie: "DEMO-SN-RECENTE", relacao: "conferida", simpress: {}, oracle: [] }],
+    historico: [newer],
+  };
+  let oldImportsDeleted = false;
   const requests = [];
-  const harness = createAppHarness(async url => {
-    requests.push(url);
-    if (url === "/api/operacoes/chamados") return apiResponse(current);
+  const harness = createAppHarness(async (url, options = {}) => {
+    requests.push({ url, method: options.method || "GET" });
+    if (url === "/api/operacoes/chamados/historico/antigas" && options.method === "DELETE") {
+      oldImportsDeleted = true;
+      return apiResponse({ removidas: 1, total: 1 });
+    }
+    if (url === "/api/operacoes/chamados") return apiResponse(oldImportsDeleted ? latestOnly : current);
     if (url.startsWith("/api/operacoes/chamados/evolucao?")) return apiResponse({
       contagens: { novos: 1, alterados: 2, iguais: 3, ausentes_arquivo: 1 },
       mudancas: { novos: ["SN-NOVO"], alterados: [{ serie: "SN-ALTERADA", campos: [{ campo: "Status Oracle" }] }], ausentes_arquivo: ["SN-ANTIGA"] },
@@ -1002,15 +1110,41 @@ test("shows imported ticket versions and compares the selected snapshot with the
   const versions = harness.element("versao-acompanhamento-chamados");
   assert.equal(versions.children.length, 3);
   assert.equal(versions.value, newer.id);
+  assert.equal(harness.element("btn-excluir-importacoes-antigas-chamados").disabled, false);
   assert.match(harness.element("evolucao-acompanhamento-chamados").innerHTML, /2 alteradas/);
   assert.match(harness.element("evolucao-acompanhamento-chamados").innerHTML, /SN-ANTIGA/);
-  assert.ok(requests.some(url => url.includes("anterior=version-1") && url.includes("atual=version-2")));
+  assert.ok(requests.some(({ url }) => url.includes("anterior=version-1") && url.includes("atual=version-2")));
+  assert.match(appHtml, /<button[^>]*id="btn-excluir-importacoes-antigas-chamados"[^>]*>Excluir importações antigas/);
 
   versions.value = older.id;
   await harness.run("selecionarVersaoChamados()");
   assert.match(harness.element("lista-acompanhamento-chamados").innerHTML, /DEMO-SN-001/);
   assert.match(harness.element("evolucao-acompanhamento-chamados").textContent, /mais antiga/);
-  assert.ok(requests.some(url => url.endsWith(`/snapshot/${older.id}`)));
+  assert.ok(requests.some(({ url }) => url.endsWith(`/snapshot/${older.id}`)));
+
+  await harness.run("excluirImportacoesAntigasChamados()");
+  assert.match(harness.effects.confirmations[0], /manter somente a mais recente/);
+  assert.ok(requests.some(({ url, method }) => url === "/api/operacoes/chamados/historico/antigas" && method === "DELETE"));
+  assert.equal(versions.children.length, 2);
+  assert.equal(versions.value, newer.id);
+  assert.match(harness.element("lista-acompanhamento-chamados").innerHTML, /DEMO-SN-RECENTE/);
+  assert.equal(harness.element("btn-excluir-importacoes-antigas-chamados").disabled, true);
+  assert.equal(harness.effects.toasts.at(-1).type, "success");
+});
+
+test("keeps old ticket imports when the deletion confirmation is cancelled", async () => {
+  const requests = [];
+  const harness = createAppHarness(async (url, options = {}) => {
+    requests.push({ url, method: options.method || "GET" });
+    return apiResponse({});
+  }, { confirmResult: false });
+  harness.run('renderizarHistoricoAcompanhamentoChamados({ snapshot_id: "new", historico: [{ id: "new" }, { id: "old" }] })');
+
+  await harness.run("excluirImportacoesAntigasChamados()");
+
+  assert.equal(harness.effects.confirmations.length, 1);
+  assert.equal(requests.length, 0);
+  assert.equal(harness.element("btn-excluir-importacoes-antigas-chamados").disabled, false);
 });
 
 test("groups secondary actions while keeping spreadsheet updates prominent", () => {
@@ -1027,7 +1161,7 @@ test("groups secondary actions while keeping spreadsheet updates prominent", () 
   assert.match(analysisGroup, /abrirModalHistoricoComparacoes\(\)/);
   assert.ok(analysisGroup.indexOf('id="btn-historico-comparacoes"') < analysisGroup.indexOf('onclick="abrirCentralPendencias()"'));
   assert.doesNotMatch(analysisGroup, /btn-exportar-equipamentos/);
-  assert.match(equipmentGroup, /abrirHistoricoEquipamento\(\)/);
+  assert.doesNotMatch(equipmentGroup, /abrirHistoricoEquipamento\(\)|Histórico por equipamento/);
   assert.match(equipmentGroup, /abrirModalHistoricoApelidos\(\)/);
   assert.match(appHtml, /onclick="abrirAcompanhamentoChamados\(\)"/);
   assert.doesNotMatch(appHtml, /Acompanhamento de transportes/);

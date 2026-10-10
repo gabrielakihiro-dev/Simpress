@@ -22,7 +22,7 @@ def pilot_route_allowed(method, path):
         return (path in reads or path in {"/api/exportar-equipamentos","/api/historico-comparacoes","/api/historico-comparacoes/exportar/excel","/api/piloto/operacoes",
                 "/api/operacoes/pendencias","/api/operacoes/evolucao"}
                 or (path.startswith("/api/equipamento/") and len(path.split("/")) == 4)
-                or bool(re.fullmatch(r"/api/historico-comparacoes/[^/]+(?:/restauracao)?|/api/arquivos/[^/]+|/api/piloto/operacoes/[^/]+|/api/operacoes/equipamento/[^/]+",path)))
+                or bool(re.fullmatch(r"/api/historico-comparacoes/[^/]+(?:/restauracao)?|/api/arquivos/[^/]+|/api/piloto/operacoes/[^/]+",path)))
     if method == "POST":
         return (path in writes or path in {"/api/planilhas/atualizar","/api/gerar-planilha","/api/piloto/anotacoes/importar","/api/piloto/retencao"}
                 or bool(re.fullmatch(r"/api/historico-comparacoes/[^/]+/(?:restaurar|apelido-manual/[^/]+)|/api/piloto/modelos/(?:transferencia|exportacao)|/api/piloto/operacoes/[^/]+/(?:recuperar|cancelar)",path)))

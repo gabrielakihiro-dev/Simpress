@@ -57,6 +57,7 @@ TICKET_REPORT = {
         "oracle": [{"solicitacao": "261009-000816", "ordem_servico": "7285070", "status": "Gestão da Mesa de Operações",
                     "sub_status": "Execução Pendente", "fila": "Mesa de Operações", "fase_atendimento": "Atendimento em Campo",
                     "status_entregas": "Sem Entregas", "status_atividades": "Atividades Pendentes", "assunto": "Corretiva Mobile",
+                    "descricao": "Solicito suporte técnico para o equipamento de demonstração.",
                     "data_criacao": "2026-10-09", "ultima_atualizacao": "2026-10-09", "data_conclusao": ""}],
     }],
 }
@@ -106,13 +107,6 @@ class Handler(BaseHTTPRequestHandler):
             self.send({"evento": {"id": DEMO_EVENT_ID, "horario": DEMO_EVENT["horario"]},
                        "pendencias": [{"categoria": "apelidos_sem_atualizacao",
                                        "secao": "Linhas mantidas para conferência", "item": item}]})
-        elif path.startswith("/api/operacoes/equipamento/"):
-            item = json.loads(json.dumps(DEMO_EVENT["comparacao"]["apelidos_sem_atualizacao"][0]))
-            item["anotacao"] = DEMO_ANNOTATION
-            self.send({"identificador": path.rsplit("/", 1)[1], "eventos": [{
-                "evento_id": DEMO_EVENT_ID, "horario": DEMO_EVENT["horario"],
-                "categoria": "apelidos_sem_atualizacao", "rotulo": "Linhas mantidas para conferência", "item": item,
-            }]})
         elif path == "/api/operacoes/evolucao":
             self.send({"anterior": {"id": PREVIOUS_EVENT_ID, "horario": PREVIOUS_EVENT["horario"]},
                        "atual": {"id": DEMO_EVENT_ID, "horario": DEMO_EVENT["horario"]},

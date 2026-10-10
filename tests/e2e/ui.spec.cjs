@@ -44,6 +44,29 @@ test("home has no WCAG 2.2 A/AA axe violations", async ({ page }) => {
   await auditAccessibility(page);
 });
 
+test("action menu groups have the requested colors and aligned primary action sizes", async ({ page }) => {
+  await page.locator(".header-secondary-actions > summary").click();
+  const updateButton = page.locator("#btn-atualizar-planilhas");
+  const exportButton = page.locator("#btn-exportar-equipamentos");
+  const ticketButton = page.getByRole("button", { name: "Acompanhamento de Chamados" });
+  await expect(exportButton).toBeVisible();
+  await expect(ticketButton).toBeVisible();
+  const heights = await Promise.all([updateButton, exportButton, ticketButton].map(button =>
+    button.evaluate(element => element.getBoundingClientRect().height)
+  ));
+  expect(heights[1]).toBe(heights[0]);
+  expect(heights[2]).toBe(heights[0]);
+
+  const ticketBackground = await ticketButton.evaluate(element => getComputedStyle(element).backgroundColor);
+  const analysisBackground = await page.locator('.header-action-group[data-action-group="analysis"] > summary')
+    .evaluate(element => getComputedStyle(element).backgroundColor);
+  const equipmentBackground = await page.locator('.header-action-group[data-action-group="equipment"] > summary')
+    .evaluate(element => getComputedStyle(element).backgroundColor);
+  expect(ticketBackground).toContain("13, 148, 136");
+  expect(analysisBackground).toContain("124, 45, 18");
+  expect(equipmentBackground).toContain("127, 29, 29");
+});
+
 test("tab navigation updates selected state and supports arrow keys", async ({ page }) => {
   const transferTab = page.getByRole("tab", { name: "Transporte" });
   const homeTab = page.getByRole("tab", { name: "Home" });
@@ -117,19 +140,6 @@ test("central pending view filters rows and autosaves their original comparison 
   });
 });
 
-test("equipment timeline searches a serial and opens a row-level annotation", async ({ page }) => {
-  await page.locator(".header-secondary-actions > summary").click();
-  await page.locator('.header-action-group[data-action-group="equipment"] > summary').click();
-  await page.getByRole("button", { name: "Histórico por equipamento" }).click();
-  const dialog = page.locator("#modal-historico-equipamento");
-  await expect(dialog).toBeVisible();
-  await page.locator("#identificador-historico-equipamento").fill("DEMO-SN-001");
-  await page.getByRole("button", { name: "Consultar", exact: true }).click();
-  await expect(page.locator("#lista-historico-equipamento")).toContainText("DEMO-HOST-001");
-  await expect(page.locator("#lista-historico-equipamento textarea[data-operational-annotation]")).toBeVisible();
-  await auditAccessibility(page, "#modal-historico-equipamento");
-});
-
 test("inventory evolution compares two saved updates and shows their row annotations", async ({ page }) => {
   await page.locator(".header-secondary-actions > summary").click();
   await page.locator('.header-action-group[data-action-group="analysis"] > summary').click();
@@ -166,6 +176,13 @@ test("ticket tracking imports both workbooks and relates each serial to its OS",
   await expect(page.locator("#lista-acompanhamento-chamados")).toContainText("DEMO-SN-001");
   await expect(page.locator("#lista-acompanhamento-chamados")).toContainText("7285070");
   await expect(page.locator("#lista-acompanhamento-chamados")).toContainText("261009-000816");
+  const ticketDescription = page.locator(".ticket-oracle-description").first();
+  await expect(ticketDescription).toBeVisible();
+  await expect(ticketDescription).not.toHaveAttribute("open", "");
+  await expect(ticketDescription.locator("summary")).toContainText("Descrição do chamado");
+  await ticketDescription.locator("summary").click();
+  await expect(ticketDescription).toHaveAttribute("open", "");
+  await expect(ticketDescription).toContainText("Solicito suporte técnico para o equipamento de demonstração.");
   const contentScroller = dialog.locator("#conteudo-acompanhamento-chamados");
   const scrollMetrics = await contentScroller.evaluate((element) => ({
     clientHeight: element.clientHeight,

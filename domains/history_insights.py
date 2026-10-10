@@ -4,7 +4,7 @@ import json
 import re
 import unicodedata
 from datetime import datetime, timezone
-from typing import Any, Dict, Iterable, Iterator, List, Optional
+from typing import Any, Dict, Iterable, List, Optional
 
 
 PENDING_CATEGORIES = {
@@ -18,13 +18,6 @@ PENDING_CATEGORIES = {
     "series_sem_mapeamento": "Séries sem local definido",
 }
 PINNED_BASELINE_ID = "e1f66787b2aa49a0bdbc848521ca1fc4"
-
-TIMELINE_CATEGORIES = {
-    **PENDING_CATEGORIES,
-    "apelidos_atualizados": "Apelido ou hostname atualizado",
-    "divergencias_apelidos_manuais": "Divergência de apelido manual",
-}
-
 
 def normalize_identifier(value: Any) -> str:
     text = unicodedata.normalize("NFKD", str(value or "").strip().upper())
@@ -72,70 +65,7 @@ def pending_rows(event: Dict[str, Any]) -> List[Dict[str, Any]]:
     return rows
 
 
-def _item_identifiers(item: Dict[str, Any]) -> Iterator[str]:
-    for key in ("serie", "serial", "numero_serie", "service_tag"):
-        value = normalize_identifier(item.get(key))
-        if value:
-            yield value
-    for key in ("computador", "hostname", "apelido", "nome_computador"):
-        value = normalize_identifier(item.get(key))
-        if value:
-            yield value
-
-
-def equipment_timeline(
-    history: Iterable[Dict[str, Any]],
-    alias_history: Iterable[Dict[str, Any]],
-    identifier: str,
-) -> List[Dict[str, Any]]:
-    query = normalize_identifier(identifier)
-    if not query:
-        return []
-    rows = []
-    matched_serials = {query}
-    for event in history:
-        if not isinstance(event, dict):
-            continue
-        comparison = event.get("comparacao")
-        if not isinstance(comparison, dict):
-            continue
-        event_id = str(event.get("id") or comparison.get("evento_id") or "")
-        event_time = str(event.get("horario") or comparison.get("horario_comparacao") or "")
-        for category, label in TIMELINE_CATEGORIES.items():
-            items = comparison.get(category)
-            if not isinstance(items, list):
-                continue
-            for item in items:
-                if not isinstance(item, dict) or query not in _item_identifiers(item):
-                    continue
-                serial_key = next((normalize_identifier(item.get(key)) for key in ("serie", "serial", "numero_serie", "service_tag")
-                                   if normalize_identifier(item.get(key))), "")
-                if serial_key:
-                    matched_serials.add(serial_key)
-                rows.append({
-                    "evento_id": event_id,
-                    "horario": event_time,
-                    "categoria": category,
-                    "rotulo": label,
-                    "item": dict(item),
-                })
-
-    for event in alias_history:
-        if not isinstance(event, dict) or normalize_identifier(event.get("serial")) not in matched_serials:
-            continue
-        rows.append({
-            "evento_id": str(event.get("id") or ""),
-            "horario": str(event.get("horario") or event.get("timestamp") or ""),
-            "categoria": "alteracao_manual",
-            "rotulo": "Alteração manual",
-            "item": dict(event),
-        })
-
-    return sorted(rows, key=lambda row: row["horario"], reverse=True)
-
-
 def _stable_row_key(item: Dict[str, Any], occurrence: int) -> str:
-    identifiers = _item_identifiers(item)
     serial = next((normalize_identifier(item.get(key)) for key in ("serie", "serial", "numero_serie", "service_tag")
                    if normalize_identifier(item.get(key))), "")
     hostname = next((normalize_identifier(item.get(key)) for key in ("computador", "hostname", "apelido", "nome_computador")
