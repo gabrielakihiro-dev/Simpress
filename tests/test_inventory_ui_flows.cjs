@@ -22,12 +22,15 @@ class FakeElement {
     this.innerHTML = "";
     this.className = "";
     this.disabled = false;
+    this.checked = false;
     this.isConnected = true;
     this.files = [];
     this.dataset = {};
     this.attributes = new Map();
     this.children = [];
+    this.listeners = new Map();
     this.focused = false;
+    this.clicked = false;
     this.isValid = true;
     const classes = new Set();
     this.classList = {
@@ -45,7 +48,15 @@ class FakeElement {
 
   setAttribute(name, value) { this.attributes.set(name, String(value)); }
   removeAttribute(name) { this.attributes.delete(name); }
-  addEventListener() {}
+  addEventListener(type, listener) {
+    if (!this.listeners.has(type)) this.listeners.set(type, []);
+    this.listeners.get(type).push(listener);
+  }
+  dispatchEvent(type) {
+    for (const listener of this.listeners.get(type) || []) listener({ target: this });
+  }
+  click() { this.clicked = true; }
+  remove() { this.isConnected = false; }
   replaceChildren(...children) { this.children = children; }
   appendChild(child) { this.children.push(child); return child; }
   querySelector() { return null; }
@@ -84,7 +95,7 @@ class FakeFormData {
   append(...args) { this.fields.push(args); }
 }
 
-function createAppHarness(fetchApi, { stubDisplay = true, confirmResult = true } = {}) {
+function createAppHarness(fetchApi, { stubDisplay = true, confirmResult = true, localStorage = new Map() } = {}) {
   const elements = new Map();
   const effects = {
     comparisons: [],
@@ -117,6 +128,10 @@ function createAppHarness(fetchApi, { stubDisplay = true, confirmResult = true }
     SimpressAccessibleDialogs: accessibleDialogs,
     SimpressNotifications: notifications,
     URL: { createObjectURL: () => "blob:ficticio", revokeObjectURL() {} },
+    localStorage: {
+      getItem: key => localStorage.get(key) ?? null,
+      setItem: (key, value) => localStorage.set(key, String(value)),
+    },
     matchMedia: () => ({ matches: false }),
     confirm: message => { effects.confirmations.push(message); return confirmResult; },
     setTimeout,
@@ -163,6 +178,7 @@ function createAppHarness(fetchApi, { stubDisplay = true, confirmResult = true }
   return {
     context,
     effects,
+    localStorage,
     element: id => document.getElementById(id),
     run: source => vm.runInContext(source, context),
     selectEquipment(equipment) {
@@ -373,6 +389,81 @@ test("successful inventory upload refreshes selection and presents comparison re
   assert.deepEqual(harness.effects.refreshes, ["estatisticas", "unidades", "contagem-historico"]);
   assert.equal(harness.element("btn-confirmar-planilhas").disabled, false);
   assert.equal(harness.effects.toasts.length, 0);
+});
+
+test("automatic history export preference is restored and saved in this browser", () => {
+  const localStorage = new Map();
+  const firstHarness = createAppHarness(async () => apiResponse({}), { localStorage });
+  firstHarness.run("inicializarExportacaoAutomaticaHistorico()");
+  const firstInput = firstHarness.element("auto-export-history-after-update");
+  assert.equal(firstInput.checked, false);
+  firstInput.checked = true;
+  firstInput.dispatchEvent("change");
+  assert.equal(localStorage.get("simpress:auto-export-history-after-update"), "true");
+
+  const nextHarness = createAppHarness(async () => apiResponse({}), { localStorage });
+  nextHarness.run("inicializarExportacaoAutomaticaHistorico()");
+  assert.equal(nextHarness.element("auto-export-history-after-update").checked, true);
+});
+
+test("enabled automatic history export downloads the updated event day", async () => {
+  const calls = [];
+  const eventTime = "2026-10-09T14:30:00-03:00";
+  const harness = createAppHarness(async url => {
+    calls.push(url);
+    if (url === "/api/planilhas/atualizar") {
+      return apiResponse({ comparacao: { horario_comparacao: eventTime } });
+    }
+    if (url === "/api/historico-comparacoes/exportar/excel?data=2026-10-09") {
+      return {
+        ok: true,
+        status: 200,
+        headers: { get: () => 'attachment; filename="Historico_Planilhas_20261009.xlsx"' },
+        blob: async () => ({}),
+      };
+    }
+    throw new Error(`Chamada API inesperada: ${url}`);
+  });
+  harness.element("auto-export-history-after-update").checked = true;
+  chooseUploadFiles(harness);
+
+  await harness.run("enviarPlanilhas()");
+
+  assert.deepEqual(calls, [
+    "/api/planilhas/atualizar",
+    "/api/historico-comparacoes/exportar/excel?data=2026-10-09",
+  ]);
+  assert.equal(harness.run("document.body.children.at(-1).clicked"), true);
+  assert.deepEqual(harness.effects.comparisons, [{ horario_comparacao: eventTime }]);
+  assert.equal(harness.effects.toasts.at(-1).message, "Histórico do dia exportado automaticamente.");
+});
+
+test("automatic export failure does not turn a successful inventory update into a failed upload", async () => {
+  const calls = [];
+  const eventTime = "2026-10-09T14:30:00-03:00";
+  const harness = createAppHarness(async url => {
+    calls.push(url);
+    if (url === "/api/planilhas/atualizar") {
+      return apiResponse({ comparacao: { horario_comparacao: eventTime } });
+    }
+    if (url === "/api/historico-comparacoes/exportar/excel?data=2026-10-09") {
+      return apiResponse({ detail: "Exportação indisponível no teste." }, { status: 503, ok: false });
+    }
+    throw new Error(`Chamada API inesperada: ${url}`);
+  });
+  harness.element("auto-export-history-after-update").checked = true;
+  chooseUploadFiles(harness);
+
+  await harness.run("enviarPlanilhas()");
+
+  assert.deepEqual(calls, [
+    "/api/planilhas/atualizar",
+    "/api/historico-comparacoes/exportar/excel?data=2026-10-09",
+  ]);
+  assert.deepEqual(harness.effects.comparisons, [{ horario_comparacao: eventTime }]);
+  assert.equal(harness.element("upload-planilhas-status").textContent, "");
+  assert.match(harness.effects.toasts.at(-1).message, /não foi possível exportar o histórico/);
+  assert.equal(harness.effects.toasts.at(-1).type, "warning");
 });
 
 test("failed inventory upload keeps the selected equipment and shows its error", async () => {

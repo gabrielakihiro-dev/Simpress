@@ -445,6 +445,28 @@
       });
     }
 
+    function inicializarExportacaoAutomaticaHistorico() {
+      const input = document.getElementById("auto-export-history-after-update");
+      if (!input) return;
+
+      try {
+        input.checked = window.localStorage.getItem("simpress:auto-export-history-after-update") === "true";
+      } catch (error) {
+        console.warn("Não foi possível ler a preferência de exportação automática do histórico.", error);
+      }
+
+      input.addEventListener("change", () => {
+        try {
+          window.localStorage.setItem(
+            "simpress:auto-export-history-after-update",
+            input.checked ? "true" : "false",
+          );
+        } catch (error) {
+          console.warn("Não foi possível salvar a preferência de exportação automática do histórico.", error);
+        }
+      });
+    }
+
     // Initialize page behaviors
     function inicializarAplicacao() {
       document.getElementById("input-serial")?.addEventListener("input", () => {
@@ -455,6 +477,7 @@
       popularSeletoresRepresentantesRegionais();
       associarRotulosAcessiveis();
       inicializarMascarasTelefone();
+      inicializarExportacaoAutomaticaHistorico();
       const almocoEntrega = document.getElementById("entrega-almoco");
       almocoEntrega?.addEventListener("input", atualizarObrigatoriedadeDuracaoPausaEntrega);
       almocoEntrega?.addEventListener("change", atualizarObrigatoriedadeDuracaoPausaEntrega);
@@ -1890,6 +1913,7 @@
     async function enviarPlanilhas() {
       const endpointFile = document.getElementById("upload-endpoint-file").files?.[0];
       const detailsFile = document.getElementById("upload-details-file").files?.[0];
+      const exportarHistoricoAutomaticamente = document.getElementById("auto-export-history-after-update")?.checked === true;
       if (!endpointFile || !detailsFile) {
         mostrarStatusUpload("Selecione Endpoint e EquipamentosDetalhes antes de atualizar.", true);
         return;
@@ -1899,6 +1923,8 @@
       const originalHtml = button.innerHTML;
       button.disabled = true;
       button.setAttribute("aria-busy", "true");
+      const autoExportInput = document.getElementById("auto-export-history-after-update");
+      if (autoExportInput) autoExportInput.disabled = true;
       document.getElementById("modal-atualizar-planilhas").setAttribute("aria-busy", "true");
       button.innerHTML = '<i data-lucide="loader-2" class="w-3.5 h-3.5 animate-spin"></i><span>Validando e atualizando...</span>';
       lucide.createIcons({ root: button });
@@ -1945,13 +1971,28 @@
         } else if (selectionRefreshStatus === "unavailable") {
           showToast("Não foi possível confirmar a série no inventário atualizado. Faça uma nova busca.", "warning");
         }
-        abrirModalComparacaoPlanilhas(result.comparacao || {});
+        const comparison = result.comparacao || {};
+        if (exportarHistoricoAutomaticamente) {
+          const historyDate = String(comparison.horario_comparacao || "").slice(0, 10);
+          try {
+            await baixarHistoricoComparacoesExcel(historyDate);
+            showToast("Histórico do dia exportado automaticamente.", "success");
+          } catch (error) {
+            console.warn("A atualização foi concluída, mas a exportação automática falhou:", error);
+            showToast(
+              `Atualização concluída, mas não foi possível exportar o histórico: ${error.message || "tente novamente pelo Histórico de Planilhas."}`,
+              "warning",
+            );
+          }
+        }
+        abrirModalComparacaoPlanilhas(comparison);
       } catch (error) {
         console.error("Erro ao atualizar planilhas:", error);
         mostrarStatusUpload(error.message || "Não foi possível atualizar as planilhas.", true);
       } finally {
         button.disabled = false;
         button.removeAttribute("aria-busy");
+        if (autoExportInput) autoExportInput.disabled = false;
         document.getElementById("modal-atualizar-planilhas").removeAttribute("aria-busy");
         button.innerHTML = originalHtml;
         lucide.createIcons({ root: button });
@@ -2613,6 +2654,34 @@
       }
     }
 
+    async function baixarHistoricoComparacoesExcel(data) {
+      if (!/^\d{4}-\d{2}-\d{2}$/.test(String(data || ""))) {
+        throw new Error("A data do histórico da atualização não está disponível.");
+      }
+
+      const res = await fetch(`/api/historico-comparacoes/exportar/excel?data=${encodeURIComponent(data)}`);
+      if (!res.ok) {
+        const errorData = await res.json().catch(() => ({}));
+        throw new Error(errorData.detail || "Não foi possível exportar o histórico selecionado.");
+      }
+
+      const disposition = res.headers.get("Content-Disposition") || "";
+      const match = /filename[^;=\n]*=((['"]).*?\2|[^;\n]*)/.exec(disposition);
+      const filename = match && match[1]
+        ? match[1].replace(/['"]/g, "")
+        : `Historico_Planilhas_${data.replace(/-/g, "")}.xlsx`;
+      const blob = await res.blob();
+      const url = window.URL.createObjectURL(blob);
+      const link = document.createElement("a");
+      link.href = url;
+      link.download = filename;
+      document.body.appendChild(link);
+      link.click();
+      link.remove();
+      window.setTimeout(() => window.URL.revokeObjectURL(url), 1000);
+      return filename;
+    }
+
     async function exportarHistoricoComparacoesExcel() {
       const select = document.getElementById("data-exportar-historico-comparacoes");
       const button = document.getElementById("btn-exportar-historico-comparacoes");
@@ -2631,26 +2700,7 @@
       }
 
       try {
-        const res = await fetch(`/api/historico-comparacoes/exportar/excel?data=${encodeURIComponent(data)}`);
-        if (!res.ok) {
-          const errorData = await res.json().catch(() => ({}));
-          throw new Error(errorData.detail || "Não foi possível exportar o histórico selecionado.");
-        }
-
-        const disposition = res.headers.get("Content-Disposition") || "";
-        const match = /filename[^;=\n]*=((['"]).*?\2|[^;\n]*)/.exec(disposition);
-        const filename = match && match[1]
-          ? match[1].replace(/['"]/g, "")
-          : `Historico_Planilhas_${data.replace(/-/g, "")}.xlsx`;
-        const blob = await res.blob();
-        const url = window.URL.createObjectURL(blob);
-        const link = document.createElement("a");
-        link.href = url;
-        link.download = filename;
-        document.body.appendChild(link);
-        link.click();
-        link.remove();
-        window.setTimeout(() => window.URL.revokeObjectURL(url), 1000);
+        await baixarHistoricoComparacoesExcel(data);
         showToast("Histórico exportado com sucesso!", "success");
       } catch (err) {
         console.error("Erro ao exportar histórico de planilhas:", err);

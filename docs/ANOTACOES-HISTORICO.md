@@ -6,6 +6,8 @@ Cada linha mantém sua própria anotação nas seções **Linhas mantidas para c
 
 As anotações são salvas automaticamente e podem ter até 2.000 caracteres. A exportação do Histórico de Planilhas inclui as anotações em cada aba de registros correspondente.
 
+No modal **Atualizar planilhas**, é possível marcar **Baixar o Histórico de Planilhas automaticamente**. Quando ativada, a preferência fica salva no navegador e, após uma atualização concluída, o aplicativo baixa o Excel com os registros e as anotações daquele dia. Se a exportação falhar, a atualização permanece concluída e o histórico continua disponível para exportação manual.
+
 ## Sincronização entre notebooks
 
 Quando o OneDrive corporativo ou pessoal está conectado, o aplicativo grava as anotações em:
