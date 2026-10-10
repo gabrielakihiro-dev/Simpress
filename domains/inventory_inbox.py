@@ -10,7 +10,7 @@ import uuid
 from contextlib import contextmanager
 from datetime import datetime, timezone
 from pathlib import Path
-from typing import Any, Awaitable, Callable, Optional
+from typing import Any, Awaitable, Callable, Optional, cast
 
 from fastapi import HTTPException
 
@@ -54,8 +54,9 @@ def _try_worker_lock(path: Path):
         else:
             import fcntl
 
+            fcntl_api = cast(Any, fcntl)
             try:
-                fcntl.flock(handle.fileno(), fcntl.LOCK_EX | fcntl.LOCK_NB)
+                fcntl_api.flock(handle.fileno(), fcntl_api.LOCK_EX | fcntl_api.LOCK_NB)
                 locked = True
             except OSError:
                 locked = False
@@ -70,7 +71,8 @@ def _try_worker_lock(path: Path):
             else:
                 import fcntl
 
-                fcntl.flock(handle.fileno(), fcntl.LOCK_UN)
+                fcntl_api = cast(Any, fcntl)
+                fcntl_api.flock(handle.fileno(), fcntl_api.LOCK_UN)
         if handle is not None:
             handle.close()
         _PROCESS_WORKER_LOCK.release()
