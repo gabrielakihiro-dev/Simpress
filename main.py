@@ -1,4 +1,5 @@
 import asyncio
+from collections import Counter
 import io
 import filecmp
 import hashlib
@@ -20,7 +21,6 @@ from typing import Dict, Iterable, List, Optional, Any, Set, Tuple
 from urllib.parse import quote, urlsplit
 
 import openpyxl
-import pandas as pd
 from fastapi import FastAPI, File, HTTPException, UploadFile
 from fastapi.responses import FileResponse, JSONResponse, StreamingResponse
 from fastapi.staticfiles import StaticFiles
@@ -64,6 +64,7 @@ from app_config import (
     STATIC_DIR,
     STATE_DIR,
     TEMPLATE_FILE,
+    TICKET_REPORT_FILE,
     TRANSACTION_ROOT,
     UPLOAD_BACKUPS_DIR,
     SUPPORTED_CONTRACT,
@@ -84,6 +85,7 @@ from routers.transfers import (
     create_transfer_router,
     formatar_telefone_brasileiro,
 )
+from routers.operations import create_operations_router
 from xlsx_safety import XlsxLimitExceeded, XlsxPackageError, validate_xlsx
 
 from domains.inventory_comparison import (
@@ -108,6 +110,7 @@ from domains.inventory_comparison import (
     filter_update_review_items,
     filter_update_unmatched_details,
     filter_update_unmatched_series,
+    is_missing_cell_value,
     is_curitiba_hostname_exception,
     is_prnoteti_curitiba_location_match,
     is_sebrae_owned_notebook_serial,
@@ -473,23 +476,42 @@ def validate_unambiguous_workbook_headers(headers: Iterable[Any]) -> None:
             raise WorkbookHeaderError(f"A planilha contém colunas candidatas conflitantes nas posições {columns}.")
 
 
-def _read_details_sheet_dataframe(file_path: Path, sheet_name: str):
-    """Read inventory cells without pandas converting text identifiers to missing/numeric values."""
+def _read_details_sheet_records(file_path: Path, sheet_name: str):
+    """Read inventory rows with openpyxl, preserving the cells used by the application."""
     workbook = None
     try:
         validate_xlsx(file_path)
         workbook = openpyxl.load_workbook(
             file_path, read_only=True, data_only=True, keep_links=False
         )
-        raw_headers = next(
-            workbook[sheet_name].iter_rows(min_row=1, max_row=1, values_only=True), ()
-        )
+        worksheet = workbook[sheet_name]
+        raw_headers = next(worksheet.iter_rows(min_row=1, max_row=1, values_only=True), ())
         validate_unambiguous_workbook_headers(raw_headers)
+        headers = []
+        used_headers = set()
+        for index, value in enumerate(raw_headers):
+            base = str(value).strip() if value is not None else f"Unnamed: {index}"
+            header = base
+            suffix = 1
+            while header in used_headers:
+                header = f"{base}.{suffix}"
+                suffix += 1
+            used_headers.add(header)
+            headers.append(header)
+
+        records = []
+        for values in worksheet.iter_rows(min_row=2, values_only=True):
+            if not any(value is not None and value != "" for value in values):
+                continue
+            records.append({
+                header: values[index] if index < len(values) and values[index] is not None else ""
+                for index, header in enumerate(headers)
+            })
     finally:
         if workbook is not None:
             workbook.close()
 
-    return pd.read_excel(file_path, sheet_name=sheet_name, dtype=object, keep_default_na=False)
+    return headers, records
 
 
 def find_details_sheet(file_path: Path) -> Optional[str]:
@@ -1743,11 +1765,8 @@ _EQUIPMENT_SEARCH_INDEX_SOURCE = None
 def format_cep(val: Any) -> str:
     if val is None:
         return ""
-    try:
-        if pd.isna(val):
-            return ""
-    except (TypeError, ValueError):
-        pass
+    if is_missing_cell_value(val):
+        return ""
     original = str(val).strip()
     if not original:
         return ""
@@ -1768,7 +1787,7 @@ def get_suggested_description(tipo: Optional[str], modelo: Optional[str]) -> str
     return f"{tipo} {m}".strip() if tipo else m
 
 def sanitize_value(val: Any, default: str = "") -> str:
-    if pd.isna(val) or val is None:
+    if is_missing_cell_value(val):
         return default
     return str(val).strip()
 
@@ -1991,14 +2010,13 @@ def _load_database_unlocked(publish: bool = True) -> Any:
         if sheet_target is None:
             print(f"[ERRO] {active_details_file.name} não contém cabeçalhos EquipamentosDetalhes válidos.")
             return False
-        df = _read_details_sheet_dataframe(active_details_file, sheet_target)
+        headers, records = _read_details_sheet_records(active_details_file, sheet_target)
     except Exception:
         print("[ERRO] Falha ao ler a planilha local de equipamentos.")
         return False
 
     # Strip column names e criar mapa normalizado de colunas
-    df.columns = [str(col).strip() for col in df.columns]
-    norm_cols = {normalize_workbook_header(c): c for c in df.columns}
+    norm_cols = {normalize_workbook_header(column): column for column in headers}
     new_equipamentos_cache: Dict[str, Dict[str, Any]] = {}
     details_serial_counts: Dict[str, int] = {}
 
@@ -2007,7 +2025,7 @@ def _load_database_unlocked(publish: bool = True) -> Any:
             key = normalize_workbook_header(a)
             if key in norm_cols:
                 val = row.get(norm_cols[key])
-                if pd.notna(val) and val is not None:
+                if not is_missing_cell_value(val):
                     return sanitize_value(val, default)
         return default
 
@@ -2022,14 +2040,14 @@ def _load_database_unlocked(publish: bool = True) -> Any:
                 and "FATURAMENTO" not in normalized_header
             ):
                 raw_value = row.get(source_header)
-                if pd.notna(raw_value) and raw_value is not None:
+                if not is_missing_cell_value(raw_value):
                     return sanitize_value(raw_value)
         return ""
 
     unidades_dict: Dict[Tuple[str, str, str], Dict[str, Any]] = {}
     sede_cnpjs = set()
 
-    for _, row in df.iterrows():
+    for row in records:
         raw_serial = get_row_val(row, *DETAILS_SERIAL_HEADER_ALIASES)
         if not raw_serial:
             continue
@@ -2249,7 +2267,11 @@ def _load_database_unlocked(publish: bool = True) -> Any:
 
     # Calculate stats
     tipo_col_real = norm_cols.get("tipo") or "Tipo"
-    type_counts = df[tipo_col_real].value_counts().to_dict() if tipo_col_real in df.columns else {}
+    type_counts = dict(Counter(
+        row.get(tipo_col_real, "")
+        for row in records
+        if tipo_col_real in headers
+    ).most_common())
     export_counts = count_export_changes(
         locked=True,
         endpoint_index=endpoint_index,
@@ -3668,6 +3690,14 @@ resolver_divergencia_apelido_manual = _inventory_history_exports["resolver_diver
 restaurar_comparacao_historica = _inventory_history_exports["restaurar_comparacao_historica"]
 visualizar_restauracao_comparacao = _inventory_history_exports["visualizar_restauracao_comparacao"]
 app.include_router(inventory_history_router)
+
+app.include_router(create_operations_router(
+    load_comparison_history=load_comparison_history,
+    comparison_history_for_display=comparison_history_for_display,
+    load_alias_history=load_alias_history,
+    ticket_report_path=lambda: TICKET_REPORT_FILE,
+    transaction_root=lambda: TRANSACTION_ROOT,
+))
 
 from persistence.routes import create_files_router
 app.include_router(create_files_router(postgres_backend,MAX_UPLOAD_BYTES))

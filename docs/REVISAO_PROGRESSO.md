@@ -5,7 +5,7 @@ Atualizado em 2026-10-03. Este documento registra a linha de base e o andamento 
 ## Escopo e entendimento inicial
 
 - **Objetivo:** aplicação web local para pesquisar equipamentos, preparar transferências Simpress em Excel, atualizar e comparar inventários, manter apelidos e unidades, consultar históricos e exportar dados.
-- **Tecnologias:** Python 3.12.14, FastAPI, pandas e openpyxl; interface em HTML, CSS e JavaScript; Tailwind, ícones e fontes locais; npm apenas para reconstruir os recursos da interface.
+- **Tecnologias:** Python 3.12.14, FastAPI e openpyxl; interface em HTML, CSS e JavaScript; Tailwind, ícones e fontes locais; npm apenas para reconstruir os recursos da interface.
 - **Áreas revisadas na auditoria anterior:** instruções e documentação, configuração, servidor e rotas, módulos de domínio, interface, planilhas e transações, testes e dependências.
 - **Regras locais:** `.cursor/rules/simpress-sebrae-owned-series.mdc` estabelece cinco números de série de equipamentos do SEBRAE que devem ser excluídos das comparações e regras de classificação de hostnames de Curitiba. Os testes devem preservar essas regras.
 

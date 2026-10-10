@@ -298,7 +298,7 @@ def validate_xlsx_archive(archive: zipfile.ZipFile) -> None:
 
 
 def validate_xlsx(source: Union[bytes, bytearray, Path, str, BinaryIO]) -> None:
-    """Validate bytes or a local file path before passing it to openpyxl/pandas."""
+    """Validate bytes or a local file path before passing it to openpyxl."""
     if isinstance(source, (bytes, bytearray)):
         from io import BytesIO
 

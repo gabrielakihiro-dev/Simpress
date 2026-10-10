@@ -43,6 +43,7 @@ CUSTOM_UNIDADES_FILE = STATE_DIR / "unidades_custom.json"
 MODIFIED_APELIDOS_FILE = STATE_DIR / "apelidos_modificados" / "apelidos_modificados.json"
 ALIAS_HISTORY_FILE = STATE_DIR / "historico_alteracoes.json"
 COMPARISON_HISTORY_FILE = STATE_DIR / "historico_comparacoes" / "historico_comparacoes.json"
+TICKET_REPORT_FILE = STATE_DIR / "historico_chamados.json"
 TRANSACTION_ROOT = BASE_DIR
 
 SUPPORTED_CONTRACT = 16467

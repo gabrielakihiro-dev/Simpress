@@ -25,7 +25,6 @@ def run() -> bool:
         tempfile.tempdir = temporary_root
         import integrity
         import openpyxl
-        import pandas
 
         # Keep fixture discovery independent from real operational workbooks.
         with (
@@ -33,11 +32,6 @@ def run() -> bool:
             patch.object(
                 openpyxl,
                 "load_workbook",
-                side_effect=RuntimeError("operational workbook access blocked during test import"),
-            ),
-            patch.object(
-                pandas,
-                "read_excel",
                 side_effect=RuntimeError("operational workbook access blocked during test import"),
             ),
         ):

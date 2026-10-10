@@ -8,6 +8,7 @@
     const CNPJ_FATURAMENTO_PADRAO = "75.110.585/0001-00";
     let retiradaCidadeSelecionada = "";
     let unidadesList = [];
+    let acompanhamentoChamadosAtual = null;
     let debounceTimer = null;
     const transferUtils = window.SimpressTransferUtils;
     const catalogSearch = window.SimpressCatalogSearch;
@@ -2532,6 +2533,391 @@
         const select = document.getElementById("data-exportar-historico-comparacoes");
         if (!select?.value) definirEstadoDatasExportacaoHistorico("Datas indisponíveis");
       }
+    }
+
+    let operationalPendingState = { evento: null, rows: [] };
+
+    function renderizarAnotacaoOperacional(item, contexto) {
+      const itemId = String(item?.anotacao_id || "");
+      if (!itemId) return "";
+      return `<label class="block min-w-[220px] text-[10px] text-slate-400">Anotação sobre ${escapeHtml(contexto)}
+        <textarea data-operational-annotation data-annotation-id="${escapeHtml(itemId)}" rows="2" maxlength="2000" class="mt-1 w-full rounded-lg border border-slate-700 bg-slate-900 px-2.5 py-2 text-xs text-white placeholder:text-slate-500 focus:border-cyan-400 focus:outline-none" placeholder="Escreva uma anotação...">${escapeHtml(item.anotacao || "")}</textarea>
+        <span class="mt-1 block text-[10px] ${item.anotacao ? "text-emerald-300" : "text-slate-500"}" data-annotation-status aria-live="polite">${item.anotacao ? "Salvo automaticamente" : ""}</span>
+        <button type="button" class="mt-1 rounded-md border border-rose-400/40 px-2 py-1 text-[10px] text-rose-200 hover:bg-rose-500/10" data-annotation-retry hidden aria-label="Tentar novamente a sincronização desta anotação">Tentar sincronizar novamente</button>
+      </label>`;
+    }
+
+    function conectarAnotacoesOperacionais(root, fallbackEventId) {
+      root.querySelectorAll("[data-operational-annotation]").forEach(textarea => {
+        const eventId = textarea.dataset.eventId || fallbackEventId;
+        const itemId = textarea.dataset.annotationId;
+        const status = textarea.parentElement.querySelector("[data-annotation-status]");
+        const retryButton = textarea.parentElement.querySelector("[data-annotation-retry]");
+        window.HistoryAnnotationAutosave.attachAnnotationAutosave({
+          textarea,
+          status,
+          retryButton,
+          eventId,
+          itemId,
+          send: ({ eventId: targetEventId, itemId: targetItemId, annotation }) => fetch(
+            `/api/historico-comparacoes/${encodeURIComponent(targetEventId)}/anotacoes/${encodeURIComponent(targetItemId)}`,
+            { method: "PUT", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ anotacao: annotation }) }
+          ),
+        });
+      });
+    }
+
+    function fecharCentralPendencias() { fecharModalAcessivel("modal-central-pendencias"); }
+
+    function renderizarCentralPendencias() {
+      const lista = document.getElementById("lista-central-pendencias");
+      const query = String(document.getElementById("filtro-operacional-pendencias").value || "").trim().toLocaleLowerCase("pt-BR");
+      const selectedCategory = document.getElementById("categoria-operacional-pendencias").value;
+      const categories = new Map();
+      operationalPendingState.rows.forEach(row => categories.set(row.categoria, row.secao));
+      const select = document.getElementById("categoria-operacional-pendencias");
+      const currentOptions = [...select.options].map(option => option.value).join("|");
+      const desiredOptions = ["", ...categories.keys()].join("|");
+      if (currentOptions !== desiredOptions) {
+        select.replaceChildren();
+        const allOption = document.createElement("option");
+        allOption.value = ""; allOption.textContent = "Todas as categorias"; select.appendChild(allOption);
+        categories.forEach((label, key) => {
+          const option = document.createElement("option"); option.value = key; option.textContent = label; select.appendChild(option);
+        });
+        select.value = selectedCategory;
+      }
+      const rows = operationalPendingState.rows.filter(row => {
+        if (selectedCategory && row.categoria !== selectedCategory) return false;
+        const searchable = JSON.stringify(row.item || {}).toLocaleLowerCase("pt-BR");
+        return !query || searchable.includes(query) || String(row.secao || "").toLocaleLowerCase("pt-BR").includes(query);
+      });
+      lista.replaceChildren();
+      if (!rows.length) {
+        const empty = document.createElement("p"); empty.className = "py-8 text-center text-sm text-slate-400";
+        empty.textContent = operationalPendingState.rows.length ? "Nenhuma pendência corresponde aos filtros." : "A atualização mais recente não tem pendências registradas.";
+        lista.appendChild(empty); return;
+      }
+      lista.innerHTML = rows.map(row => {
+        const item = row.item || {};
+        const title = item.computador || item.hostname || item.apelido || item.chave || item.serie || "Linha para revisão";
+        const serial = item.serie || item.serial || "";
+        const location = item.local_simpress || item.local || item.local_previsto || item.cidade || "";
+        const details = [
+          item.motivo,
+          item.ultima_verificacao && `Última verificação: ${item.ultima_verificacao}`,
+          Number.isFinite(Number(item.dias_sem_verificacao)) && `Sem verificação há ${Number(item.dias_sem_verificacao)} dias`,
+          item.local_simpress && item.local_previsto && `Local esperado: ${item.local_previsto} · na Simpress: ${item.local_simpress}`,
+          item.ausente_em && `Sem correspondência: ${(Array.isArray(item.ausente_em) ? item.ausente_em : [item.ausente_em]).map(source => formatarNomeFonteHistorico(source).replace(/\bno endpoint\b/gi, "Endpoint").replace(/\bna Simpress\b/gi, "Simpress")).join(", ")}`,
+          item.quantidade && `Ocorrências: ${item.quantidade}`,
+        ].filter(Boolean).join(" · ");
+        const context = `${title}${serial ? `, série ${serial}` : ""}`;
+        return `<article class="rounded-xl border border-slate-800 bg-slate-950/70 p-4" data-pending-row>
+          <div class="flex flex-col gap-3 md:flex-row md:items-start md:justify-between"><div class="min-w-0">
+            <p class="text-[10px] uppercase tracking-wide text-amber-300">${escapeHtml(row.secao)}</p>
+            <h4 class="mt-1 break-words text-sm font-semibold text-white">${escapeHtml(title)}</h4>
+            <p class="mt-1 text-xs text-slate-400">${serial ? `Série ${escapeHtml(serial)}` : "Série não informada"}${location ? ` · ${escapeHtml(location)}` : ""}</p>
+            ${details ? `<p class="mt-2 text-xs text-slate-300">${escapeHtml(details)}</p>` : ""}
+          </div><button type="button" data-pending-event="${escapeHtml(operationalPendingState.evento?.id || "")}" class="shrink-0 rounded-lg border border-cyan-400/25 bg-cyan-500/10 px-3 py-2 text-xs font-semibold text-cyan-200">Abrir atualização</button></div>
+          <div class="mt-3">${renderizarAnotacaoOperacional(item, context)}</div>
+        </article>`;
+      }).join("");
+      conectarAnotacoesOperacionais(lista, operationalPendingState.evento?.id);
+      lista.querySelectorAll("[data-pending-event]").forEach(button => button.addEventListener("click", async () => {
+        const eventId = button.dataset.pendingEvent;
+        fecharCentralPendencias();
+        if (eventId) await consultarHistoricoComparacao(eventId, button);
+      }));
+    }
+
+    async function abrirCentralPendencias() {
+      abrirModalAcessivel("modal-central-pendencias", '[aria-label="Fechar central de pendências"]', "fecharCentralPendencias");
+      const list = document.getElementById("lista-central-pendencias");
+      list.textContent = "Carregando pendências…";
+      try {
+        const response = await fetch("/api/operacoes/pendencias");
+        const data = await response.json().catch(() => ({}));
+        if (!response.ok) throw new Error(data.detail || "Não foi possível carregar as pendências.");
+        operationalPendingState = { evento: data.evento || null, rows: Array.isArray(data.pendencias) ? data.pendencias : [] };
+        document.getElementById("central-pendencias-referencia").textContent = data.evento?.horario
+          ? `Atualização usada como referência: ${formatarHorarioHistorico(data.evento.horario)} · ${operationalPendingState.rows.length} linhas para revisão`
+          : "Nenhuma atualização de inventário está disponível no histórico.";
+        renderizarCentralPendencias();
+      } catch (error) {
+        list.textContent = error.message || "Não foi possível carregar as pendências.";
+      }
+      const query = document.getElementById("filtro-operacional-pendencias");
+      const category = document.getElementById("categoria-operacional-pendencias");
+      if (!query.dataset.bound) { query.addEventListener("input", renderizarCentralPendencias); query.dataset.bound = "true"; }
+      if (!category.dataset.bound) { category.addEventListener("change", renderizarCentralPendencias); category.dataset.bound = "true"; }
+    }
+
+    function fecharHistoricoEquipamento() { fecharModalAcessivel("modal-historico-equipamento"); }
+
+    async function consultarLinhaDoTempoEquipamento() {
+      const identifier = document.getElementById("identificador-historico-equipamento").value.trim();
+      const list = document.getElementById("lista-historico-equipamento");
+      if (!identifier) return;
+      list.textContent = "Carregando histórico…";
+      try {
+        const response = await fetch(`/api/operacoes/equipamento/${encodeURIComponent(identifier)}`);
+        const data = await response.json().catch(() => ({}));
+        if (!response.ok) throw new Error(data.detail || "Não foi possível consultar o histórico deste equipamento.");
+        const events = Array.isArray(data.eventos) ? data.eventos : [];
+        if (!events.length) { list.textContent = "Nenhuma ocorrência encontrada para esta série ou hostname."; return; }
+        list.innerHTML = events.map(row => {
+          const item = row.item || {};
+          const title = item.computador || item.hostname || item.apelido_novo || item.serie || identifier;
+          const description = [
+            item.serie && `Série ${item.serie}`,
+            item.apelido_anterior && `Antes: ${item.apelido_anterior}`,
+            item.apelido_novo && `Depois: ${item.apelido_novo}`,
+            item.local_previsto && `Local esperado: ${item.local_previsto}`,
+            item.local_simpress && `na Simpress: ${item.local_simpress}`,
+            item.motivo,
+            Number.isFinite(Number(item.dias_sem_verificacao)) && `Sem verificação há ${Number(item.dias_sem_verificacao)} dias`,
+          ].filter(Boolean).join(" · ");
+          const note = renderizarAnotacaoOperacional(item, `${title}${item.serie ? `, série ${item.serie}` : ""}`);
+          return `<article class="rounded-xl border border-slate-800 bg-slate-950/70 p-4" data-timeline-event="${escapeHtml(row.evento_id || "")}">
+            <p class="text-[10px] uppercase tracking-wide text-violet-300">${escapeHtml(row.rotulo)}</p>
+            <p class="mt-1 text-xs text-slate-500">${escapeHtml(formatarHorarioHistorico(row.horario))}</p>
+            <h4 class="mt-1 break-words text-sm font-semibold text-white">${escapeHtml(title)}</h4>
+            ${description ? `<p class="mt-2 text-xs text-slate-300">${escapeHtml(description)}</p>` : ""}
+            ${note ? `<div class="mt-3">${note}</div>` : ""}
+            ${row.evento_id && row.categoria !== "alteracao_manual" ? `<button type="button" data-open-history-event="${escapeHtml(row.evento_id)}" class="mt-3 rounded-lg border border-cyan-400/25 bg-cyan-500/10 px-3 py-2 text-xs text-cyan-200">Abrir resultado da atualização</button>` : ""}
+          </article>`;
+        }).join("");
+        list.querySelectorAll("[data-timeline-event]").forEach(card => {
+          const notes = card.querySelectorAll("[data-operational-annotation]");
+          notes.forEach(note => { note.dataset.eventId = card.dataset.timelineEvent; });
+        });
+        conectarAnotacoesOperacionais(list, "");
+        list.querySelectorAll("[data-open-history-event]").forEach(button => button.addEventListener("click", async () => {
+          const eventId = button.dataset.openHistoryEvent;
+          fecharHistoricoEquipamento();
+          await consultarHistoricoComparacao(eventId, button);
+        }));
+      } catch (error) {
+        list.textContent = error.message || "Não foi possível consultar este histórico.";
+      }
+    }
+
+    function abrirHistoricoEquipamento() {
+      abrirModalAcessivel("modal-historico-equipamento", '[aria-label="Fechar histórico do equipamento"]', "fecharHistoricoEquipamento");
+      const input = document.getElementById("identificador-historico-equipamento");
+      if (!input.dataset.bound) {
+        document.getElementById("form-historico-equipamento").addEventListener("submit", event => { event.preventDefault(); consultarLinhaDoTempoEquipamento(); });
+        input.dataset.bound = "true";
+      }
+      if (!input.value && currentEquipamento?.serial) input.value = currentEquipamento.serial;
+      if (input.value) consultarLinhaDoTempoEquipamento();
+    }
+
+    function fecharEvolucaoAtualizacoes() { fecharModalAcessivel("modal-evolucao-atualizacoes"); }
+
+    function renderizarEvolucaoAtualizacoes(data) {
+      const target = document.getElementById("resultado-evolucao-atualizacoes");
+      const labels = { novos: "Novos", continuam: "Continuam", resolvidos: "Deixaram de aparecer" };
+      const colors = {
+        novos: "border-rose-500/20 bg-rose-500/5 text-rose-300",
+        continuam: "border-amber-500/20 bg-amber-500/5 text-amber-300",
+        resolvidos: "border-emerald-500/20 bg-emerald-500/5 text-emerald-300",
+      };
+      const rows = data.mudancas || {};
+      target.innerHTML = `<p class="text-xs text-slate-400">De ${escapeHtml(formatarHorarioHistorico(data.anterior?.horario))} para ${escapeHtml(formatarHorarioHistorico(data.atual?.horario))}</p>
+        <div class="grid grid-cols-1 sm:grid-cols-3 gap-2">${Object.keys(labels).map(key => `<div class="rounded-lg border ${colors[key]} p-3"><p class="text-xs">${labels[key]}</p><p class="mt-1 text-xl font-bold text-white">${Number(data.contagens?.[key] || 0)}</p></div>`).join("")}</div>
+        ${Object.keys(labels).map(key => `<section><h4 class="mb-2 text-sm font-semibold text-slate-200">${labels[key]}</h4>${(rows[key] || []).length ? `<ul class="space-y-1">${rows[key].map(row => {
+          const item = row.item || {}; const identity = item.computador || item.hostname || item.serie || item.chave || "Linha sem identificador";
+          const serial = item.serie ? ` · ${item.serie}` : "";
+          return `<li class="rounded-lg border border-slate-800 bg-slate-950/70 p-3 text-xs text-slate-200"><span class="font-medium">${escapeHtml(row.secao)}</span> · ${escapeHtml(identity + serial)}${row.evento_id ? ` <button type="button" data-evolution-event="${escapeHtml(row.evento_id)}" class="ml-2 text-cyan-300 underline">Abrir resultado</button>` : ""}${renderizarAnotacaoOperacional(item, `${identity}${serial}`)}</li>`;
+        }).join("")}</ul>` : `<p class="rounded-lg border border-slate-800 bg-slate-950/50 p-3 text-xs text-slate-500">Nenhum caso nesta categoria.</p>`}</section>`).join("")}`;
+      const rowsWithEvents = [...target.querySelectorAll("[data-evolution-event]")];
+      rowsWithEvents.forEach(button => button.addEventListener("click", async () => {
+        const eventId = button.dataset.evolutionEvent;
+        fecharEvolucaoAtualizacoes();
+        await consultarHistoricoComparacao(eventId, button);
+      }));
+      target.querySelectorAll("[data-operational-annotation]").forEach(textarea => {
+        const parent = textarea.closest("li");
+        const eventId = parent?.querySelector("[data-evolution-event]")?.dataset.evolutionEvent;
+        if (eventId) textarea.dataset.eventId = eventId;
+      });
+      conectarAnotacoesOperacionais(target, "");
+    }
+
+    async function compararEvolucaoSelecionada() {
+      const previous = document.getElementById("evolucao-anterior").value;
+      const current = document.getElementById("evolucao-atual").value;
+      const target = document.getElementById("resultado-evolucao-atualizacoes");
+      target.textContent = "Comparando atualizações…";
+      try {
+        const query = new URLSearchParams({ anterior: previous, atual: current });
+        const response = await fetch(`/api/operacoes/evolucao?${query.toString()}`);
+        const data = await response.json().catch(() => ({}));
+        if (!response.ok) throw new Error(data.detail || "Não foi possível comparar as atualizações.");
+        renderizarEvolucaoAtualizacoes(data);
+      } catch (error) { target.textContent = error.message || "Não foi possível comparar as atualizações."; }
+    }
+
+    async function abrirEvolucaoAtualizacoes() {
+      abrirModalAcessivel("modal-evolucao-atualizacoes", '[aria-label="Fechar evolução das atualizações"]', "fecharEvolucaoAtualizacoes");
+      const target = document.getElementById("resultado-evolucao-atualizacoes");
+      target.textContent = "Carregando atualizações…";
+      try {
+        const response = await fetch("/api/historico-comparacoes");
+        const data = await response.json().catch(() => ({}));
+        if (!response.ok) throw new Error(data.detail || "Não foi possível carregar o histórico.");
+        const events = (data.eventos || []).filter(event => event.tipo !== "restauracao" && !event.somente_anotacoes_sincronizadas);
+        const previous = document.getElementById("evolucao-anterior");
+        const current = document.getElementById("evolucao-atual");
+        [previous, current].forEach(select => {
+          select.replaceChildren();
+          events.forEach(event => { const option = document.createElement("option"); option.value = event.id; option.textContent = formatarHorarioHistorico(event.horario); select.appendChild(option); });
+        });
+        if (events.length < 2) { target.textContent = "São necessárias pelo menos duas atualizações completas para comparar a evolução."; return; }
+        current.value = events[0].id; previous.value = events[1].id;
+        if (!previous.dataset.bound) {
+          document.getElementById("form-evolucao-atualizacoes").addEventListener("submit", event => { event.preventDefault(); compararEvolucaoSelecionada(); });
+          previous.dataset.bound = "true";
+        }
+        await compararEvolucaoSelecionada();
+      } catch (error) { target.textContent = error.message || "Não foi possível carregar as atualizações."; }
+    }
+
+    function fecharAcompanhamentoChamados() { fecharModalAcessivel("modal-acompanhamento-chamados"); }
+
+    function formatarListaChamados(values) {
+      const items = Array.isArray(values) ? values.filter(Boolean) : [];
+      return items.length ? items.map(escapeHtml).join(", ") : "Não informado";
+    }
+
+    function renderizarAcompanhamentoChamados() {
+      const data = acompanhamentoChamadosAtual || {};
+      const summary = data.resumo || {};
+      const sources = data.fontes || {};
+      const list = document.getElementById("lista-acompanhamento-chamados");
+      const summaryTarget = document.getElementById("resumo-acompanhamento-chamados");
+      const summaryCards = [
+        ["Séries", summary.series_total],
+        ["OS conferidas", summary.conferidas],
+        ["OS divergentes", summary.divergentes],
+        ["Só na Simpress", summary.somente_simpress],
+        ["Só no Oracle", summary.somente_oracle],
+        ["Sem OS", summary.sem_os],
+      ];
+      summaryTarget.innerHTML = `<div class="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-2">${summaryCards.map(([label, count]) => `<div class="rounded-lg border border-slate-800 bg-slate-950/70 px-3 py-2"><p class="text-[10px] text-slate-400">${label}</p><p class="mt-1 text-base font-semibold text-white">${Number(count) || 0}</p></div>`).join("")}</div>
+        <p class="mt-2 text-[10px] text-slate-500">Simpress: ${escapeHtml(sources.simpress?.arquivo || "aguardando importação")} · Oracle: ${escapeHtml(sources.oracle?.arquivo || "aguardando importação")}${data.atualizado_em ? ` · atualizado em ${escapeHtml(formatarHorarioHistorico(data.atualizado_em))}` : ""}</p>`;
+
+      const query = document.getElementById("filtro-acompanhamento-chamados").value.trim().toLocaleUpperCase("pt-BR");
+      const records = (Array.isArray(data.chamados) ? data.chamados : []).filter(record => {
+        const searchable = [
+          record.serie,
+          ...(record.simpress?.pedidos || []),
+          ...(record.simpress?.ordens_servico || []),
+          ...(record.simpress?.chamados_cliente || []),
+          ...(record.simpress?.status || []),
+          ...(record.oracle || []).flatMap(ticket => Object.values(ticket)),
+        ].join(" ").toLocaleUpperCase("pt-BR");
+        return searchable.includes(query);
+      });
+      if (!Array.isArray(data.chamados) || data.chamados.length === 0) {
+        list.innerHTML = '<p class="py-8 text-center text-sm text-slate-400" role="status">Importe as duas planilhas para relacionar as séries com as OS.</p>';
+        return;
+      }
+      if (records.length === 0) {
+        list.innerHTML = '<p class="py-8 text-center text-sm text-slate-400" role="status">Nenhum chamado corresponde à busca.</p>';
+        return;
+      }
+
+      const relations = {
+        conferida: ["OS conferida", "border-emerald-400/30 bg-emerald-500/10 text-emerald-200"],
+        divergente: ["OS divergente", "border-amber-400/30 bg-amber-500/10 text-amber-100"],
+        sem_os: ["OS ausente", "border-slate-600 bg-slate-800 text-slate-200"],
+        somente_simpress: ["Sem registro no Oracle", "border-sky-400/30 bg-sky-500/10 text-sky-100"],
+        somente_oracle: ["Sem pedido Simpress", "border-violet-400/30 bg-violet-500/10 text-violet-100"],
+      };
+      list.innerHTML = records.map(record => {
+        const [relationLabel, relationClass] = relations[record.relacao] || relations.sem_os;
+        const simpress = record.simpress || {};
+        const oracle = Array.isArray(record.oracle) ? record.oracle : [];
+        const oracleRows = oracle.length ? oracle.map(ticket => `<div class="rounded-lg border border-slate-800 bg-slate-900/80 p-3">
+          <p class="text-xs font-semibold text-white">Solicitação ${escapeHtml(ticket.solicitacao || "Não informada")} · OS ${escapeHtml(ticket.ordem_servico || "Não informada")}</p>
+          <p class="mt-1 text-xs text-slate-300">${escapeHtml(ticket.status || "Status não informado")}${ticket.sub_status ? ` · ${escapeHtml(ticket.sub_status)}` : ""}</p>
+          <p class="mt-1 text-[10px] text-slate-400">Fila: ${escapeHtml(ticket.fila || "Não informada")} · Fase: ${escapeHtml(ticket.fase_atendimento || "Não informada")}</p>
+          <p class="mt-1 text-[10px] text-slate-500">Entregas: ${escapeHtml(ticket.status_entregas || "Não informado")} · Atividades: ${escapeHtml(ticket.status_atividades || "Não informado")}${ticket.ultima_atualizacao ? ` · Atualizado ${escapeHtml(formatarHorarioHistorico(ticket.ultima_atualizacao))}` : ""}</p>
+        </div>`).join("") : '<p class="text-xs text-slate-500">Sem registro correspondente no Oracle.</p>';
+        return `<article class="rounded-xl border border-slate-800 bg-slate-950/70 p-4" data-ticket-serial="${escapeHtml(record.serie)}">
+          <div class="flex flex-wrap items-center justify-between gap-2"><h4 class="font-mono text-sm font-semibold text-white">${escapeHtml(record.serie)}</h4><span class="rounded-full border px-2.5 py-1 text-[10px] font-semibold ${relationClass}">${relationLabel}</span></div>
+          <div class="mt-3 grid grid-cols-1 gap-3 lg:grid-cols-2">
+            <section class="rounded-lg border border-slate-800 bg-slate-900/50 p-3"><h5 class="text-[10px] font-semibold uppercase tracking-wide text-cyan-200">Simpress · Acompanhamento de Pedidos</h5><p class="mt-2 text-xs text-slate-300">Pedido: ${formatarListaChamados(simpress.pedidos)}</p><p class="mt-1 text-xs text-slate-300">OS: ${formatarListaChamados(simpress.ordens_servico)}</p><p class="mt-1 text-xs text-slate-300">Chamado do cliente: ${formatarListaChamados(simpress.chamados_cliente)}</p><p class="mt-1 text-xs text-slate-400">Status: ${formatarListaChamados(simpress.status)}</p></section>
+            <section class="space-y-2"><h5 class="px-1 text-[10px] font-semibold uppercase tracking-wide text-violet-200">Oracle · Gestão de Solicitações</h5>${oracleRows}</section>
+          </div>
+          ${record.ordens_servico_conferidas?.length ? `<p class="mt-3 text-[10px] text-emerald-200">OS encontrada nas duas fontes: ${formatarListaChamados(record.ordens_servico_conferidas)}</p>` : ""}
+        </article>`;
+      }).join("");
+    }
+
+    async function carregarAcompanhamentoChamados() {
+      const list = document.getElementById("lista-acompanhamento-chamados");
+      list.innerHTML = '<p class="py-8 text-center text-sm text-slate-400" role="status">Carregando acompanhamento…</p>';
+      try {
+        const response = await fetch("/api/operacoes/chamados");
+        const data = await response.json().catch(() => ({}));
+        if (!response.ok) throw new Error(data.detail || "Não foi possível carregar o acompanhamento de chamados.");
+        acompanhamentoChamadosAtual = data;
+        renderizarAcompanhamentoChamados();
+      } catch (error) {
+        list.innerHTML = `<p class="py-8 text-center text-sm text-rose-300" role="alert">${escapeHtml(error.message || "Não foi possível carregar o acompanhamento de chamados.")}</p>`;
+      }
+    }
+
+    async function importarPlanilhasChamados(event) {
+      event.preventDefault();
+      const form = document.getElementById("form-importar-acompanhamento-chamados");
+      const simpressInput = document.getElementById("arquivo-chamados-simpress");
+      const oracleInput = document.getElementById("arquivo-chamados-oracle");
+      const button = document.getElementById("btn-importar-acompanhamento-chamados");
+      const status = document.getElementById("status-importacao-chamados");
+      if (!simpressInput.files?.[0] || !oracleInput.files?.[0]) {
+        status.textContent = "Selecione as duas planilhas para importar.";
+        return;
+      }
+      const originalText = button.textContent;
+      button.disabled = true;
+      button.textContent = "Importando…";
+      form.setAttribute("aria-busy", "true");
+      status.textContent = "Lendo as planilhas e relacionando as séries…";
+      try {
+        const payload = new FormData();
+        payload.append("simpress_file", simpressInput.files[0]);
+        payload.append("oracle_file", oracleInput.files[0]);
+        const response = await fetch("/api/operacoes/chamados/importar", { method: "POST", body: payload });
+        const data = await response.json().catch(() => ({}));
+        if (!response.ok) throw new Error(data.detail || "Não foi possível importar as planilhas.");
+        acompanhamentoChamadosAtual = data;
+        simpressInput.value = "";
+        oracleInput.value = "";
+        status.textContent = "Planilhas importadas. As OS foram relacionadas pela série.";
+        renderizarAcompanhamentoChamados();
+        showToast("Acompanhamento de chamados atualizado.", "success");
+      } catch (error) {
+        status.textContent = error.message || "Não foi possível importar as planilhas.";
+      } finally {
+        button.disabled = false;
+        button.textContent = originalText;
+        form.removeAttribute("aria-busy");
+      }
+    }
+
+    function abrirAcompanhamentoChamados() {
+      abrirModalAcessivel("modal-acompanhamento-chamados", '[aria-label="Fechar acompanhamento de chamados"]', "fecharAcompanhamentoChamados");
+      const form = document.getElementById("form-importar-acompanhamento-chamados");
+      if (!form.dataset.bound) {
+        form.addEventListener("submit", importarPlanilhasChamados);
+        document.getElementById("filtro-acompanhamento-chamados").addEventListener("input", renderizarAcompanhamentoChamados);
+        form.dataset.bound = "true";
+      }
+      carregarAcompanhamentoChamados();
     }
 
     async function abrirModalHistoricoComparacoes() {

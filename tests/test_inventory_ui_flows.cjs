@@ -845,3 +845,85 @@ test("keeps a transfer search when the user cancels the discard confirmation", (
   assert.equal(harness.effects.confirmations.length, 1);
   assert.equal(harness.effects.toasts.length, 0);
 });
+
+test("centralizes the latest comparison issues with row-level annotation autosave and filters", () => {
+  assert.match(appHtml, /id="modal-central-pendencias"/);
+  assert.match(appHtml, /id="filtro-operacional-pendencias"/);
+  assert.match(appHtml, /id="categoria-operacional-pendencias"/);
+  assert.match(appScript, /fetch\("\/api\/operacoes\/pendencias"\)/);
+  assert.match(appScript, /data-operational-annotation/);
+  assert.match(appScript, /\/anotacoes\/\$\{encodeURIComponent\(targetItemId\)\}/);
+  assert.match(appScript, /Abrir atualização/);
+});
+
+test("shows an equipment timeline by normalized serial or hostname and keeps links to source updates", () => {
+  assert.match(appHtml, /id="modal-historico-equipamento"/);
+  assert.match(appHtml, /id="identificador-historico-equipamento"/);
+  assert.match(appScript, /\/api\/operacoes\/equipamento\/\$\{encodeURIComponent\(identifier\)\}/);
+  assert.match(appScript, /Abrir resultado da atualização/);
+  assert.match(appScript, /data-timeline-event/);
+});
+
+test("compares two complete inventory updates and annotates each source row in the evolution view", () => {
+  assert.match(appHtml, /id="modal-evolucao-atualizacoes"/);
+  assert.match(appHtml, /id="evolucao-anterior"/);
+  assert.match(appHtml, /id="evolucao-atual"/);
+  assert.match(appScript, /\/api\/operacoes\/evolucao\?/);
+  assert.match(appScript, /"Deixaram de aparecer"/);
+  assert.match(appScript, /data-evolution-event/);
+  assert.match(appScript, /renderizarAnotacaoOperacional\(item/);
+});
+
+test("imports Simpress and Oracle files and displays the serial-to-OS reconciliation", async () => {
+  const requests = [];
+  const report = {
+    fontes: { simpress: { arquivo: "pedidos.xlsx" }, oracle: { arquivo: "solicitacoes.xlsx" } },
+    resumo: { series_total: 1, conferidas: 1, divergentes: 0, sem_os: 0, somente_simpress: 0, somente_oracle: 0 },
+    chamados: [{
+      serie: "SERIE-1", relacao: "conferida", ordens_servico_conferidas: ["7285070"],
+      simpress: { pedidos: ["PED-1"], ordens_servico: ["7285070"], chamados_cliente: [], status: ["Em atendimento"] },
+      oracle: [{ solicitacao: "REQ-1", ordem_servico: "7285070", status: "Em execução", sub_status: "Pendente", fila: "Fila A", fase_atendimento: "Atendimento em campo", status_entregas: "Sem entregas", status_atividades: "Atividades pendentes" }],
+    }],
+  };
+  const harness = createAppHarness(async (url, options) => {
+    requests.push({ url, options });
+    return apiResponse(report);
+  });
+  harness.element("arquivo-chamados-simpress").files = [{ name: "pedidos.xlsx" }];
+  harness.element("arquivo-chamados-oracle").files = [{ name: "solicitacoes.xlsx" }];
+  await harness.run("importarPlanilhasChamados({ preventDefault() {} })");
+
+  assert.equal(requests[0].url, "/api/operacoes/chamados/importar");
+  assert.equal(requests[0].options.method, "POST");
+  assert.deepEqual(requests[0].options.body.fields.map(([name, file]) => [name, file.name]), [
+    ["simpress_file", "pedidos.xlsx"], ["oracle_file", "solicitacoes.xlsx"],
+  ]);
+  const modal = harness.element("modal-acompanhamento-chamados");
+  assert.ok(appHtml.includes('id="modal-acompanhamento-chamados"'));
+  assert.match(appHtml, /Acompanhamento de Chamados/);
+  assert.match(harness.element("lista-acompanhamento-chamados").innerHTML, /OS conferida/);
+  assert.match(harness.element("lista-acompanhamento-chamados").innerHTML, /7285070/);
+  assert.match(harness.element("lista-acompanhamento-chamados").innerHTML, /REQ-1/);
+  assert.equal(modal.id, "modal-acompanhamento-chamados");
+});
+
+test("groups secondary actions while keeping spreadsheet updates prominent", () => {
+  assert.match(appHtml, /id="btn-atualizar-planilhas" class="header-action-item header-action-item--large header-action-item--primary/);
+  assert.match(appHtml, /id="btn-atualizar-planilhas"[\s\S]*?<\/button>\s*<button[^>]*id="btn-exportar-equipamentos"/);
+  assert.match(appHtml, /id="btn-exportar-equipamentos"[^>]*header-action-item--large[^>]*header-action-item--emerald/);
+  assert.match(appHtml, /<details class="header-action-group" data-action-group="analysis">/);
+  assert.match(appHtml, /<details class="header-action-group" data-action-group="equipment">/);
+
+  const analysisGroup = appHtml.match(/<details class="header-action-group" data-action-group="analysis">([\s\S]*?)<\/details>/)?.[1] || "";
+  const equipmentGroup = appHtml.match(/<details class="header-action-group" data-action-group="equipment">([\s\S]*?)<\/details>/)?.[1] || "";
+  assert.match(analysisGroup, /abrirCentralPendencias\(\)/);
+  assert.match(analysisGroup, /abrirEvolucaoAtualizacoes\(\)/);
+  assert.match(analysisGroup, /abrirModalHistoricoComparacoes\(\)/);
+  assert.ok(analysisGroup.indexOf('id="btn-historico-comparacoes"') < analysisGroup.indexOf('onclick="abrirCentralPendencias()"'));
+  assert.doesNotMatch(analysisGroup, /btn-exportar-equipamentos/);
+  assert.match(equipmentGroup, /abrirHistoricoEquipamento\(\)/);
+  assert.match(equipmentGroup, /abrirModalHistoricoApelidos\(\)/);
+  assert.match(appHtml, /onclick="abrirAcompanhamentoChamados\(\)"/);
+  assert.doesNotMatch(appHtml, /Acompanhamento de transportes/);
+  assert.doesNotMatch(appScript, /\/api\/transferencias/);
+});

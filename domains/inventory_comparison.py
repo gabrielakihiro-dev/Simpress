@@ -1,12 +1,11 @@
 """Inventory comparison and source normalization rules."""
 
 import hashlib
+import math
 import re
 import unicodedata
 from datetime import date, datetime, time, timedelta
 from typing import Any, Dict, List, Optional
-
-import pandas as pd
 
 PINNED_COMPARISON_EVENT_ID = "e1f66787b2aa49a0bdbc848521ca1fc4"
 
@@ -14,11 +13,18 @@ PINNED_COMPARISON_EVENT_TIME = "2026-09-28T14:47:46-03:00"
 
 def normalize_reference_value(value: Any) -> str:
     """Normaliza valores de série, apelido e cidade para comparações consistentes."""
-    if value is None or pd.isna(value):
+    if is_missing_cell_value(value):
         return ""
     decomposed = unicodedata.normalize("NFKD", str(value).strip().upper())
     without_accents = "".join(char for char in decomposed if not unicodedata.combining(char))
     return re.sub(r"[^A-Z0-9]", "", without_accents)
+
+
+def is_missing_cell_value(value: Any) -> bool:
+    """Return whether an Excel scalar represents an empty or not-a-number cell."""
+    if value is None:
+        return True
+    return isinstance(value, float) and math.isnan(value)
 
 def _record_value(record: Dict[str, Any], *keys: str) -> Any:
     for key in keys:

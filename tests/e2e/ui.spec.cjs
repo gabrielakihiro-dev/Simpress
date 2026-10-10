@@ -18,9 +18,10 @@ async function auditAccessibility(page, scope = null) {
 
 async function openFixtureComparison(page) {
   await page.locator(".header-secondary-actions > summary").click();
+  await page.locator('.header-action-group[data-action-group="analysis"] > summary').click();
   await page.locator("#btn-historico-comparacoes").click();
   await expect(page.getByRole("dialog")).toBeVisible();
-  await page.getByRole("button", { name: "Consultar resultado" }).click();
+  await page.getByRole("button", { name: "Consultar resultado" }).first().click();
   await expect(page.locator('textarea[data-comparison-annotation]:visible').first()).toBeVisible();
 }
 
@@ -96,6 +97,79 @@ test("fixture annotation autosaves to the isolated in-memory endpoint", async ({
   await expect.poll(async () => (await page.request.get("/__fixture_state")).json()).toEqual({
     annotation: "Nota de usabilidade fictícia",
   });
+});
+
+test("central pending view filters rows and autosaves their original comparison annotations", async ({ page }) => {
+  await page.locator(".header-secondary-actions > summary").click();
+  await page.locator('.header-action-group[data-action-group="analysis"] > summary').click();
+  await page.getByRole("button", { name: "Pendências" }).click();
+  const dialog = page.locator("#modal-central-pendencias");
+  await expect(dialog).toBeVisible();
+  await auditAccessibility(page, "#modal-central-pendencias");
+  await page.locator("#filtro-operacional-pendencias").fill("DEMO-SN-001");
+  await expect(page.locator("#lista-central-pendencias [data-pending-row]")).toHaveCount(1);
+  const annotation = page.locator("#lista-central-pendencias textarea[data-operational-annotation]");
+  await annotation.fill("Revisar com a unidade");
+  await annotation.blur();
+  await expect(annotation.locator("xpath=..").locator("[data-annotation-status]")).toHaveText("Salvo automaticamente");
+  await expect.poll(async () => (await page.request.get("/__fixture_state")).json()).toEqual({
+    annotation: "Revisar com a unidade",
+  });
+});
+
+test("equipment timeline searches a serial and opens a row-level annotation", async ({ page }) => {
+  await page.locator(".header-secondary-actions > summary").click();
+  await page.locator('.header-action-group[data-action-group="equipment"] > summary').click();
+  await page.getByRole("button", { name: "Histórico por equipamento" }).click();
+  const dialog = page.locator("#modal-historico-equipamento");
+  await expect(dialog).toBeVisible();
+  await page.locator("#identificador-historico-equipamento").fill("DEMO-SN-001");
+  await page.getByRole("button", { name: "Consultar", exact: true }).click();
+  await expect(page.locator("#lista-historico-equipamento")).toContainText("DEMO-HOST-001");
+  await expect(page.locator("#lista-historico-equipamento textarea[data-operational-annotation]")).toBeVisible();
+  await auditAccessibility(page, "#modal-historico-equipamento");
+});
+
+test("inventory evolution compares two saved updates and shows their row annotations", async ({ page }) => {
+  await page.locator(".header-secondary-actions > summary").click();
+  await page.locator('.header-action-group[data-action-group="analysis"] > summary').click();
+  await page.getByRole("button", { name: "Evolução das atualizações" }).click();
+  const dialog = page.locator("#modal-evolucao-atualizacoes");
+  await expect(dialog).toBeVisible();
+  await expect(page.locator("#resultado-evolucao-atualizacoes")).toContainText("Deixaram de aparecer");
+  await expect(page.locator("#resultado-evolucao-atualizacoes")).toContainText("DEMO-SN-001");
+  await expect(page.locator("#resultado-evolucao-atualizacoes textarea[data-operational-annotation]")).toBeVisible();
+  await auditAccessibility(page, "#modal-evolucao-atualizacoes");
+});
+
+test("ticket tracking imports both workbooks and relates each serial to its OS", async ({ page }) => {
+  await page.locator(".header-secondary-actions > summary").click();
+  await page.getByRole("button", { name: "Acompanhamento de Chamados" }).click();
+  const dialog = page.locator("#modal-acompanhamento-chamados");
+  await expect(dialog).toBeVisible();
+  await expect(page.locator("#arquivo-chamados-simpress")).toBeVisible();
+  await expect(page.locator("#arquivo-chamados-oracle")).toBeVisible();
+  await auditAccessibility(page, "#modal-acompanhamento-chamados");
+  await page.locator("#arquivo-chamados-simpress").setInputFiles({
+    name: "Acompanhamento_de_Pedidos.xlsx",
+    mimeType: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+    buffer: Buffer.from("fixture xlsx"),
+  });
+  await page.locator("#arquivo-chamados-oracle").setInputFiles({
+    name: "Gestao_de_Solicitacoes.xlsx",
+    mimeType: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+    buffer: Buffer.from("fixture xlsx"),
+  });
+  await page.getByRole("button", { name: "Importar planilhas" }).click();
+  await expect(page.locator("#status-importacao-chamados")).toContainText("Planilhas importadas");
+  await expect(page.locator("#lista-acompanhamento-chamados")).toContainText("DEMO-SN-001");
+  await expect(page.locator("#lista-acompanhamento-chamados")).toContainText("7285070");
+  await expect(page.locator("#lista-acompanhamento-chamados")).toContainText("261009-000816");
+  await expect.poll(async () => {
+    const state = await (await page.request.get("/__ticket_import_state")).json();
+    return state.imports;
+  }).toBeGreaterThan(0);
+  await auditAccessibility(page, "#modal-acompanhamento-chamados");
 });
 
 test("layout stays within common responsive viewport widths", async ({ page }) => {

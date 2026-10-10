@@ -50,29 +50,63 @@
             <i data-lucide="chevron-down" class="w-3 h-3" aria-hidden="true"></i>
           </summary>
           <div class="header-secondary-panel">
-            <button id="btn-auth-logout" type="button" hidden class="header-action-item hidden flex items-center gap-1.5">Sair</button>
-            <button type="button" onclick="abrirModalAtualizarPlanilhas()" id="btn-atualizar-planilhas" class="header-action-item header-action-item--blue flex items-center gap-1.5" title="Comparar os arquivos e atualizar as bases do site">
+            <button type="button" onclick="abrirModalAtualizarPlanilhas()" id="btn-atualizar-planilhas" class="header-action-item header-action-item--large header-action-item--primary flex items-center gap-2" title="Comparar os arquivos e atualizar as bases do site">
               <i data-lucide="upload" class="header-action-icon header-action-icon--blue w-3 h-3" aria-hidden="true"></i>
               <span>Atualizar planilhas</span>
             </button>
-            <button type="button" onclick="exportarEquipamentosAtualizados()" id="btn-exportar-equipamentos" aria-label="Exportar planilha Excel com apelidos e IdCliente atualizados" aria-labelledby="label-exportar-equipamentos" class="header-action-item header-action-item--emerald hidden flex items-center gap-1.5" title="Baixar a planilha com apelidos e IdCliente atualizados">
-              <i data-lucide="file-spreadsheet" class="header-action-icon header-action-icon--emerald w-3 h-3" aria-hidden="true"></i>
+            <button type="button" onclick="exportarEquipamentosAtualizados()" id="btn-exportar-equipamentos" aria-label="Exportar planilha Excel com apelidos e IdCliente atualizados" aria-labelledby="label-exportar-equipamentos" class="header-action-item header-action-item--large header-action-item--emerald hidden flex items-center gap-2" title="Baixar a planilha com apelidos e IdCliente atualizados">
+              <i data-lucide="file-spreadsheet" class="header-action-icon" aria-hidden="true"></i>
               <span id="label-exportar-equipamentos">Exportar Excel</span>
             </button>
-            <button type="button" onclick="abrirModalHistoricoComparacoes()" id="btn-historico-comparacoes" aria-label="Histórico de atualizações e comparação de planilhas" aria-labelledby="label-historico-comparacoes" class="header-action-item header-action-item--cyan flex items-center gap-1.5" title="Consultar comparações e alterações de apelido feitas pela atualização das planilhas">
-              <i data-lucide="history" class="header-action-icon header-action-icon--cyan w-3 h-3" aria-hidden="true"></i>
-              <span id="label-historico-comparacoes">Histórico planilhas</span>
-              <span id="badge-total-historico-comparacoes" class="header-action-count">0</span>
+            <details class="header-action-group" data-action-group="analysis">
+              <summary aria-label="Abrir ações de análise das planilhas" aria-controls="header-action-group-analysis">
+                <i data-lucide="chart-no-axes-combined" class="header-action-group-icon" aria-hidden="true"></i>
+                <span>Análises e histórico</span>
+                <span id="badge-total-historico-comparacoes" class="header-action-count" aria-label="Total no histórico de planilhas">0</span>
+                <i data-lucide="chevron-down" class="header-action-group-chevron" aria-hidden="true"></i>
+              </summary>
+              <div id="header-action-group-analysis" class="header-action-group-items" role="group" aria-label="Análises e histórico de planilhas">
+                <button type="button" onclick="abrirModalHistoricoComparacoes()" id="btn-historico-comparacoes" aria-label="Histórico de atualizações e comparação de planilhas" aria-labelledby="label-historico-comparacoes" class="header-action-item flex items-center gap-2" title="Consultar comparações e alterações de apelido feitas pela atualização das planilhas">
+                  <i data-lucide="history" class="header-action-icon" aria-hidden="true"></i>
+                  <span id="label-historico-comparacoes">Histórico planilhas</span>
+                </button>
+                <button type="button" onclick="abrirCentralPendencias()" class="header-action-item flex items-center gap-2" title="Revisar os pontos da atualização mais recente">
+                  <i data-lucide="list-checks" class="header-action-icon" aria-hidden="true"></i>
+                  <span>Pendências</span>
+                </button>
+                <button type="button" onclick="abrirEvolucaoAtualizacoes()" class="header-action-item flex items-center gap-2" title="Comparar pendências entre duas atualizações">
+                  <i data-lucide="activity" class="header-action-icon" aria-hidden="true"></i>
+                  <span>Evolução das atualizações</span>
+                </button>
+              </div>
+            </details>
+            <details class="header-action-group" data-action-group="equipment">
+              <summary aria-label="Abrir ações de equipamentos e cadastros" aria-controls="header-action-group-equipment">
+                <i data-lucide="laptop" class="header-action-group-icon" aria-hidden="true"></i>
+                <span>Equipamentos e cadastros</span>
+                <span id="badge-total-historico-apelidos" class="header-action-count" aria-label="Total no histórico de alterações">0</span>
+                <i data-lucide="chevron-down" class="header-action-group-chevron" aria-hidden="true"></i>
+              </summary>
+              <div id="header-action-group-equipment" class="header-action-group-items" role="group" aria-label="Equipamentos e cadastros">
+                <button type="button" onclick="abrirHistoricoEquipamento()" class="header-action-item flex items-center gap-2" title="Consultar a linha do tempo de uma série ou hostname">
+                  <i data-lucide="laptop" class="header-action-icon" aria-hidden="true"></i>
+                  <span>Histórico por equipamento</span>
+                </button>
+                <button type="button" onclick="abrirModalHistoricoApelidos()" id="btn-historico-apelidos" aria-label="Histórico de alterações manuais" aria-labelledby="label-historico-apelidos" class="header-action-item flex items-center gap-2" title="Consultar histórico de alterações manuais">
+                  <i data-lucide="history" class="header-action-icon" aria-hidden="true"></i>
+                  <span id="label-historico-apelidos">Histórico de alterações</span>
+                </button>
+                <button type="button" onclick="abrirModalGerenciarUnidades()" aria-label="Catálogo de unidades SEBRAE" aria-labelledby="label-catalogo-unidades" class="header-action-item flex items-center gap-2" title="Consultar e gerenciar o catálogo de unidades SEBRAE">
+                  <i data-lucide="map-pin" class="header-action-icon" aria-hidden="true"></i>
+                  <span id="label-catalogo-unidades">Catálogo de unidades</span>
+                </button>
+              </div>
+            </details>
+            <button type="button" onclick="abrirAcompanhamentoChamados()" class="header-action-item flex items-center gap-2" title="Relacionar séries, OS e status nos arquivos da Simpress e do Oracle">
+              <i data-lucide="clipboard-list" class="header-action-icon" aria-hidden="true"></i>
+              <span>Acompanhamento de Chamados</span>
             </button>
-            <button type="button" onclick="abrirModalHistoricoApelidos()" id="btn-historico-apelidos" aria-label="Histórico de alterações manuais" aria-labelledby="label-historico-apelidos" class="header-action-item header-action-item--violet flex items-center gap-1.5" title="Consultar histórico de alterações manuais">
-              <i data-lucide="history" class="header-action-icon header-action-icon--violet w-3 h-3" aria-hidden="true"></i>
-              <span id="label-historico-apelidos">Histórico de alterações</span>
-              <span id="badge-total-historico-apelidos" class="header-action-count">0</span>
-            </button>
-            <button type="button" onclick="abrirModalGerenciarUnidades()" aria-label="Catálogo de unidades SEBRAE" aria-labelledby="label-catalogo-unidades" class="header-action-item header-action-item--amber flex items-center gap-1.5" title="Consultar e gerenciar o catálogo de unidades SEBRAE">
-              <i data-lucide="map-pin" class="header-action-icon header-action-icon--amber w-3 h-3" aria-hidden="true"></i>
-              <span id="label-catalogo-unidades">Catálogo de unidades</span>
-            </button>
+            <button id="btn-auth-logout" type="button" hidden class="header-action-item header-action-item--logout hidden flex items-center gap-2">Sair</button>
           </div>
         </details>
       </nav>
@@ -1318,6 +1352,59 @@ Horário disponível para atendimento:</textarea>
       <div class="pt-3 border-t border-slate-800 flex justify-end shrink-0">
         <button type="button" onclick="fecharModalComparacaoPlanilhas()" class="px-4 py-2 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-300 text-xs transition">Concluir</button>
       </div>
+    </div>
+  </div>
+
+  <!-- CENTRAL DE PENDÊNCIAS DA ATUALIZAÇÃO MAIS RECENTE -->
+  <div id="modal-central-pendencias" class="modal-overlay fixed inset-0 bg-slate-950/85 backdrop-blur-md z-[77] hidden flex items-center justify-center p-4">
+    <div class="modal-panel bg-slate-900 border border-amber-500/30 rounded-2xl max-w-6xl w-full p-6 shadow-2xl flex flex-col max-h-[92vh] overflow-hidden">
+      <div class="flex items-start justify-between gap-4 pb-4 border-b border-slate-800 shrink-0">
+        <div><h3 class="text-base font-bold text-white">Central de pendências</h3><p id="central-pendencias-referencia" class="text-xs text-slate-400 mt-1">Carregando a atualização mais recente…</p></div>
+        <button type="button" onclick="fecharCentralPendencias()" class="text-slate-400 hover:text-white p-1 rounded-lg hover:bg-slate-800" aria-label="Fechar central de pendências"><i data-lucide="x" class="w-5 h-5"></i></button>
+      </div>
+      <div class="grid grid-cols-1 sm:grid-cols-[minmax(0,1fr)_18rem] gap-2 py-3 shrink-0">
+        <label class="sr-only" for="filtro-operacional-pendencias">Filtrar pendências</label><input id="filtro-operacional-pendencias" type="search" placeholder="Filtrar por série, hostname ou local…" class="w-full rounded-lg border border-slate-700 bg-slate-950 px-3 py-2 text-sm text-white focus:border-amber-400 focus:outline-none">
+        <label class="sr-only" for="categoria-operacional-pendencias">Filtrar por categoria</label><select id="categoria-operacional-pendencias" class="w-full rounded-lg border border-slate-700 bg-slate-950 px-3 py-2 text-sm text-white focus:border-amber-400 focus:outline-none"><option value="">Todas as categorias</option></select>
+      </div>
+      <div id="lista-central-pendencias" aria-label="Pendências da atualização mais recente" aria-live="polite" class="overflow-auto flex-1 space-y-3"></div>
+      <div class="pt-3 border-t border-slate-800 flex justify-end shrink-0"><button type="button" onclick="fecharCentralPendencias()" class="px-4 py-2 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-300 text-xs">Fechar</button></div>
+    </div>
+  </div>
+
+  <!-- LINHA DO TEMPO POR EQUIPAMENTO -->
+  <div id="modal-historico-equipamento" class="modal-overlay fixed inset-0 bg-slate-950/85 backdrop-blur-md z-[77] hidden flex items-center justify-center p-4">
+    <div class="modal-panel bg-slate-900 border border-violet-500/30 rounded-2xl max-w-5xl w-full p-6 shadow-2xl flex flex-col max-h-[92vh] overflow-hidden">
+      <div class="flex items-start justify-between gap-4 pb-4 border-b border-slate-800 shrink-0"><div><h3 class="text-base font-bold text-white">Histórico por equipamento</h3><p class="text-xs text-slate-400 mt-1">Pesquise pela série ou pelo hostname para reunir as ocorrências salvas.</p></div><button type="button" onclick="fecharHistoricoEquipamento()" class="text-slate-400 hover:text-white p-1 rounded-lg hover:bg-slate-800" aria-label="Fechar histórico do equipamento"><i data-lucide="x" class="w-5 h-5"></i></button></div>
+      <form id="form-historico-equipamento" class="flex flex-col sm:flex-row gap-2 py-3 shrink-0"><label class="sr-only" for="identificador-historico-equipamento">Série ou hostname</label><input id="identificador-historico-equipamento" maxlength="200" required placeholder="Série ou hostname" class="min-w-0 flex-1 rounded-lg border border-slate-700 bg-slate-950 px-3 py-2 text-sm text-white focus:border-violet-400 focus:outline-none"><button type="submit" class="rounded-lg bg-violet-500/15 border border-violet-400/30 px-4 py-2 text-sm text-violet-100">Consultar</button></form>
+      <div id="lista-historico-equipamento" aria-label="Linha do tempo do equipamento" aria-live="polite" class="overflow-auto flex-1 space-y-3"></div>
+      <div class="pt-3 border-t border-slate-800 flex justify-end shrink-0"><button type="button" onclick="fecharHistoricoEquipamento()" class="px-4 py-2 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-300 text-xs">Fechar</button></div>
+    </div>
+  </div>
+
+  <!-- EVOLUÇÃO DAS PENDÊNCIAS ENTRE DUAS ATUALIZAÇÕES -->
+  <div id="modal-evolucao-atualizacoes" class="modal-overlay fixed inset-0 bg-slate-950/85 backdrop-blur-md z-[77] hidden flex items-center justify-center p-4">
+    <div class="modal-panel bg-slate-900 border border-cyan-500/30 rounded-2xl max-w-5xl w-full p-6 shadow-2xl flex flex-col max-h-[92vh] overflow-hidden">
+      <div class="flex items-start justify-between gap-4 pb-4 border-b border-slate-800 shrink-0"><div><h3 class="text-base font-bold text-white">Evolução das atualizações</h3><p class="text-xs text-slate-400 mt-1">Veja quantos casos surgiram, continuaram ou deixaram de aparecer.</p></div><button type="button" onclick="fecharEvolucaoAtualizacoes()" class="text-slate-400 hover:text-white p-1 rounded-lg hover:bg-slate-800" aria-label="Fechar evolução das atualizações"><i data-lucide="x" class="w-5 h-5"></i></button></div>
+      <form id="form-evolucao-atualizacoes" class="grid grid-cols-1 md:grid-cols-[1fr_1fr_auto] gap-2 py-3 shrink-0"><label class="text-xs text-slate-300">Atualização anterior<select id="evolucao-anterior" required class="mt-1 block w-full rounded-lg border border-slate-700 bg-slate-950 px-3 py-2 text-sm text-white"></select></label><label class="text-xs text-slate-300">Atualização atual<select id="evolucao-atual" required class="mt-1 block w-full rounded-lg border border-slate-700 bg-slate-950 px-3 py-2 text-sm text-white"></select></label><button type="submit" class="self-end rounded-lg bg-cyan-500/15 border border-cyan-400/30 px-4 py-2 text-sm text-cyan-100">Comparar</button></form>
+      <div id="resultado-evolucao-atualizacoes" aria-label="Resultado da comparação entre atualizações" aria-live="polite" class="overflow-auto flex-1 space-y-3"></div>
+      <div class="pt-3 border-t border-slate-800 flex justify-end shrink-0"><button type="button" onclick="fecharEvolucaoAtualizacoes()" class="px-4 py-2 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-300 text-xs">Fechar</button></div>
+    </div>
+  </div>
+
+  <!-- ACOMPANHAMENTO DE CHAMADOS -->
+  <div id="modal-acompanhamento-chamados" class="modal-overlay fixed inset-0 bg-slate-950/85 backdrop-blur-md z-[77] hidden flex items-center justify-center p-4">
+    <div class="modal-panel bg-slate-900 border border-cyan-500/30 rounded-2xl max-w-5xl w-full p-5 sm:p-6 shadow-2xl flex flex-col max-h-[92vh] overflow-hidden">
+      <div class="flex items-start justify-between gap-4 pb-4 border-b border-slate-800 shrink-0"><div><h3 class="text-base font-bold text-white">Acompanhamento de Chamados</h3><p class="text-xs text-slate-400 mt-1">Importe as exportações da Simpress e do Oracle. As OS são relacionadas pelo número de série.</p></div><button type="button" onclick="fecharAcompanhamentoChamados()" class="text-slate-400 hover:text-white p-1 rounded-lg hover:bg-slate-800" aria-label="Fechar acompanhamento de chamados"><i data-lucide="x" class="w-5 h-5"></i></button></div>
+      <form id="form-importar-acompanhamento-chamados" class="grid grid-cols-1 gap-3 border-b border-slate-800 py-4 md:grid-cols-[1fr_1fr_auto] md:items-end">
+        <label for="arquivo-chamados-simpress" class="text-xs text-slate-300">Simpress · Acompanhamento de Pedidos<input id="arquivo-chamados-simpress" name="simpress_file" type="file" accept=".xlsx,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" required class="mt-1 block w-full rounded-lg border border-slate-700 bg-slate-950 px-3 py-2 text-xs text-slate-300 file:mr-3 file:rounded-md file:border-0 file:bg-slate-800 file:px-2 file:py-1 file:text-xs file:text-slate-200"></label>
+        <label for="arquivo-chamados-oracle" class="text-xs text-slate-300">Oracle · Gestão de Solicitações<input id="arquivo-chamados-oracle" name="oracle_file" type="file" accept=".xlsx,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" required class="mt-1 block w-full rounded-lg border border-slate-700 bg-slate-950 px-3 py-2 text-xs text-slate-300 file:mr-3 file:rounded-md file:border-0 file:bg-slate-800 file:px-2 file:py-1 file:text-xs file:text-slate-200"></label>
+        <button id="btn-importar-acompanhamento-chamados" type="submit" class="rounded-lg border border-cyan-400/30 bg-cyan-500/15 px-4 py-2.5 text-xs font-semibold text-cyan-100 hover:bg-cyan-500/25">Importar planilhas</button>
+        <p id="status-importacao-chamados" class="text-[10px] text-slate-400 md:col-span-3" role="status" aria-live="polite"></p>
+      </form>
+      <div id="resumo-acompanhamento-chamados" class="shrink-0 py-3"></div>
+      <label for="filtro-acompanhamento-chamados" class="mb-2 text-xs text-slate-300">Filtrar por série, pedido, OS ou status<input id="filtro-acompanhamento-chamados" type="search" autocomplete="off" class="mt-1 block w-full rounded-lg border border-slate-700 bg-slate-950 px-3 py-2 text-sm text-white placeholder:text-slate-500" placeholder="Digite para filtrar os chamados"></label>
+      <div id="lista-acompanhamento-chamados" tabindex="0" aria-label="Chamados relacionados por número de série" aria-live="polite" class="overflow-auto min-h-0 flex-1 space-y-3 py-2"></div>
+      <div class="pt-3 border-t border-slate-800 flex justify-end shrink-0"><button type="button" onclick="fecharAcompanhamentoChamados()" class="px-4 py-2 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-300 text-xs">Fechar</button></div>
     </div>
   </div>
 
