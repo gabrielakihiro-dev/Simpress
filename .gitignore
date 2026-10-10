@@ -80,6 +80,7 @@ __pycache__/
 /data/state/historico_apelidos.json
 /data/state/apelidos_modificados.json
 /data/state/historico_comparacoes.json
+/data/state/entrada_automatica/
 /data/state/apelidos_modificados/*
 !/data/state/apelidos_modificados/.gitkeep
 /data/state/historico_comparacoes/*

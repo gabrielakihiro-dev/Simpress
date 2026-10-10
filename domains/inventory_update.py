@@ -296,6 +296,7 @@ async def update_inventory_files(
     endpoint_file: Any,
     details_file: Any,
     services: InventoryUpdateServices,
+    automatic_import_id: Optional[str] = None,
 ):
     """Read uploads asynchronously and run workbook and transaction work off-loop."""
     uploads = [endpoint_file, details_file]
@@ -306,7 +307,9 @@ async def update_inventory_files(
             "detalhes": await read_uploaded_xlsx(details_file, "detalhes", services),
         }
 
-        worker = asyncio.create_task(asyncio.to_thread(_commit_inventory_files, staged, services))
+        worker = asyncio.create_task(
+            asyncio.to_thread(_commit_inventory_files, staged, services, automatic_import_id)
+        )
         try:
             return await asyncio.shield(worker)
         except asyncio.CancelledError:
@@ -332,7 +335,11 @@ async def update_inventory_files(
             await upload.close()
 
 
-def _commit_inventory_files(staged: Dict[str, Any], services: InventoryUpdateServices):
+def _commit_inventory_files(
+    staged: Dict[str, Any],
+    services: InventoryUpdateServices,
+    automatic_import_id: Optional[str] = None,
+):
     """Validate, compare, replace, reload, and journal inventories in a worker thread."""
     input_directory = services.input_directory()
     endpoint_upload_file = services.endpoint_upload_file()
@@ -475,6 +482,8 @@ def _commit_inventory_files(staged: Dict[str, Any], services: InventoryUpdateSer
             "resumo": summary,
             "comparacao": comparison,
         }
+        if automatic_import_id:
+            history_entry["importacao_automatica_id"] = str(automatic_import_id)
         copied_annotations: list[Dict[str, str]] = []
 
         def append_update(history):

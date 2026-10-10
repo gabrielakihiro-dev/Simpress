@@ -75,6 +75,7 @@ Antes de iniciar o servidor, a limpeza recupera transações e considera tempor�
 | `EquipamentosDetalhes-exportacao.xlsx` | `modelos` | Modelo local de exportação. Não é distribuído pelo Git. |
 | `apelidos_modificados.json` | `data/state/apelidos_modificados` | Apelidos personalizados locais. O arquivo, temporários e bloqueios não são versionados. |
 | `historico_comparacoes.json` | `data/state/historico_comparacoes` | Histórico local de comparações. O arquivo, temporários e bloqueios não são versionados. |
+| Lotes para atualização automática | `data/state/entrada_automatica` | Fila local de entrada, arquivos processados e lotes com falha; não é versionada. |
 | Catálogo de unidades e histórico de apelidos | `data/state` | Estado local da aplicação; não é distribuído pelo Git. |
 
 As planilhas operacionais e o modelo de exportação precisam ser fornecidos localmente. Se estiverem ausentes, somente as funções que dependem desses arquivos ficam indisponíveis; o servidor e as demais áreas continuam acessíveis. Não coloque dados reais no repositório.
@@ -162,6 +163,33 @@ Na aba **Home**, **Mostrar textos para chamados** apresenta textos editáveis re
 3. Confira ausências em cada fonte, notebooks sem verificação com êxito há 14 dias ou mais, divergências de local, correspondências ambíguas, mudanças de hostname e casos que precisam de revisão.
 4. Leia o resultado antes de continuar. Cada atualização substitui integralmente os dois inventários ativos pelos arquivos validados; séries ausentes no novo relatório deixam de compor a base carregada.
 5. Consulte **Histórico planilhas** para rever comparações e, se houver um backup completo válido, pré-visualize os arquivos e datas antes de restaurar.
+
+#### Processar atualizações pela pasta de entrada
+
+Com o servidor local em execução, também é possível colocar os dois arquivos em um lote na pasta `data/state/entrada_automatica/pendentes`. O sistema verifica a fila a cada 10 segundos e usa a mesma validação, comparação, backups, histórico e transação da atualização manual.
+
+Crie uma pasta de lote com nome exclusivo e esta estrutura. Os nomes dos arquivos `.xlsx` podem ser os originais:
+
+```text
+data/state/entrada_automatica/pendentes/2026-10-09_lote-001/
+├── endpoint/
+│   └── InvAllComputersSummary.xlsx
+├── simpress/
+│   └── EquipamentosDetalhes.xlsx
+```
+
+Copie um arquivo para cada pasta de origem. Assim que os dois `.xlsx` aparecerem e permanecerem estáveis em duas verificações consecutivas, o importador processará o lote; cada pasta deve conter exatamente um `.xlsx` e cada arquivo respeitar o limite de 30 MB. Depois do processamento, o lote completo vai para `processadas`; arquivos recusados vão para `falhas`, junto de `_resultado.json` com o motivo. Nada é apagado. Lotes em `processando` são recuperados na inicialização, e um lote que já consta no histórico não é aplicado novamente.
+
+Exemplo no PowerShell, substituindo os caminhos e o nome do lote:
+
+```powershell
+$lote = "data\state\entrada_automatica\pendentes\2026-10-09_lote-001"
+New-Item -ItemType Directory -Force "$lote\endpoint", "$lote\simpress"
+Copy-Item "C:\caminho\InvAllComputersSummary.xlsx" "$lote\endpoint\"
+Copy-Item "C:\caminho\EquipamentosDetalhes.xlsx" "$lote\simpress\"
+```
+
+Para usar outra pasta como raiz, defina `SIMPRESS_IMPORT_INBOX_DIR` antes de iniciar o servidor. O caminho pode ser absoluto ou relativo à pasta do projeto; dentro dele, use as mesmas subpastas `pendentes`, `processando`, `processadas` e `falhas`. O importador é local ao servidor e não inicia no backend PostgreSQL. Para reenviar um lote com falha, corrija a causa e crie uma pasta com outro nome exclusivo.
 
 O sistema cria cópias dos inventários anteriores antes de substituí-los. A restauração também salva o conjunto que está ativo naquele momento e registra a operação no histórico, permitindo desfazê-la se esse backup também for completo e válido.
 
