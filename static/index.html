@@ -58,6 +58,10 @@
               <i data-lucide="file-spreadsheet" class="header-action-icon" aria-hidden="true"></i>
               <span id="label-exportar-equipamentos">Exportar Excel</span>
             </button>
+            <button type="button" onclick="abrirAcompanhamentoChamados()" class="header-action-item header-action-item--large header-action-item--teal flex items-center gap-2" title="Relacionar séries, OS e status nos arquivos da Simpress e do Oracle">
+              <i data-lucide="clipboard-list" class="header-action-icon header-action-icon--teal" aria-hidden="true"></i>
+              <span>Acompanhamento de Chamados</span>
+            </button>
             <details class="header-action-group" data-action-group="analysis">
               <summary aria-label="Abrir ações de análise das planilhas" aria-controls="header-action-group-analysis">
                 <i data-lucide="chart-no-axes-combined" class="header-action-group-icon" aria-hidden="true"></i>
@@ -88,10 +92,6 @@
                 <i data-lucide="chevron-down" class="header-action-group-chevron" aria-hidden="true"></i>
               </summary>
               <div id="header-action-group-equipment" class="header-action-group-items" role="group" aria-label="Equipamentos e cadastros">
-                <button type="button" onclick="abrirHistoricoEquipamento()" class="header-action-item flex items-center gap-2" title="Consultar a linha do tempo de uma série ou hostname">
-                  <i data-lucide="laptop" class="header-action-icon" aria-hidden="true"></i>
-                  <span>Histórico por equipamento</span>
-                </button>
                 <button type="button" onclick="abrirModalHistoricoApelidos()" id="btn-historico-apelidos" aria-label="Histórico de alterações manuais" aria-labelledby="label-historico-apelidos" class="header-action-item flex items-center gap-2" title="Consultar histórico de alterações manuais">
                   <i data-lucide="history" class="header-action-icon" aria-hidden="true"></i>
                   <span id="label-historico-apelidos">Histórico de alterações</span>
@@ -102,10 +102,6 @@
                 </button>
               </div>
             </details>
-            <button type="button" onclick="abrirAcompanhamentoChamados()" class="header-action-item flex items-center gap-2" title="Relacionar séries, OS e status nos arquivos da Simpress e do Oracle">
-              <i data-lucide="clipboard-list" class="header-action-icon" aria-hidden="true"></i>
-              <span>Acompanhamento de Chamados</span>
-            </button>
             <button id="btn-auth-logout" type="button" hidden class="header-action-item header-action-item--logout hidden flex items-center gap-2">Sair</button>
           </div>
         </details>
@@ -1371,16 +1367,6 @@ Horário disponível para atendimento:</textarea>
     </div>
   </div>
 
-  <!-- LINHA DO TEMPO POR EQUIPAMENTO -->
-  <div id="modal-historico-equipamento" class="modal-overlay fixed inset-0 bg-slate-950/85 backdrop-blur-md z-[77] hidden flex items-center justify-center p-4">
-    <div class="modal-panel bg-slate-900 border border-violet-500/30 rounded-2xl max-w-5xl w-full p-6 shadow-2xl flex flex-col max-h-[92vh] overflow-hidden">
-      <div class="flex items-start justify-between gap-4 pb-4 border-b border-slate-800 shrink-0"><div><h3 class="text-base font-bold text-white">Histórico por equipamento</h3><p class="text-xs text-slate-400 mt-1">Pesquise pela série ou pelo hostname para reunir as ocorrências salvas.</p></div><button type="button" onclick="fecharHistoricoEquipamento()" class="text-slate-400 hover:text-white p-1 rounded-lg hover:bg-slate-800" aria-label="Fechar histórico do equipamento"><i data-lucide="x" class="w-5 h-5"></i></button></div>
-      <form id="form-historico-equipamento" class="flex flex-col sm:flex-row gap-2 py-3 shrink-0"><label class="sr-only" for="identificador-historico-equipamento">Série ou hostname</label><input id="identificador-historico-equipamento" maxlength="200" required placeholder="Série ou hostname" class="min-w-0 flex-1 rounded-lg border border-slate-700 bg-slate-950 px-3 py-2 text-sm text-white focus:border-violet-400 focus:outline-none"><button type="submit" class="rounded-lg bg-violet-500/15 border border-violet-400/30 px-4 py-2 text-sm text-violet-100">Consultar</button></form>
-      <div id="lista-historico-equipamento" aria-label="Linha do tempo do equipamento" aria-live="polite" class="overflow-auto flex-1 space-y-3"></div>
-      <div class="pt-3 border-t border-slate-800 flex justify-end shrink-0"><button type="button" onclick="fecharHistoricoEquipamento()" class="px-4 py-2 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-300 text-xs">Fechar</button></div>
-    </div>
-  </div>
-
   <!-- EVOLUÇÃO DAS PENDÊNCIAS ENTRE DUAS ATUALIZAÇÕES -->
   <div id="modal-evolucao-atualizacoes" class="modal-overlay fixed inset-0 bg-slate-950/85 backdrop-blur-md z-[77] hidden flex items-center justify-center p-4">
     <div class="modal-panel bg-slate-900 border border-cyan-500/30 rounded-2xl max-w-5xl w-full p-6 shadow-2xl flex flex-col max-h-[92vh] overflow-hidden">
@@ -1403,10 +1389,11 @@ Horário disponível para atendimento:</textarea>
         <p id="status-importacao-chamados" class="text-[10px] text-slate-400 md:col-span-3" role="status" aria-live="polite"></p>
       </form>
       <div id="resumo-acompanhamento-chamados" class="shrink-0 py-3"></div>
-      <div class="grid grid-cols-1 md:grid-cols-[minmax(0,1fr)_auto] gap-2 border-y border-slate-800 py-3 shrink-0">
+      <div class="grid grid-cols-1 md:grid-cols-[minmax(0,1fr)_auto_auto] gap-2 border-y border-slate-800 py-3 shrink-0">
         <label for="versao-acompanhamento-chamados" class="text-xs text-slate-300">Versão das planilhas<select id="versao-acompanhamento-chamados" class="mt-1 block w-full rounded-lg border border-slate-700 bg-slate-950 px-3 py-2 text-sm text-white" onchange="selecionarVersaoChamados()"><option value="">Nenhuma importação</option></select></label>
         <button type="button" id="btn-exportar-acompanhamento-chamados" class="self-end rounded-lg border border-emerald-400/30 bg-emerald-500/15 px-4 py-2 text-xs font-semibold text-emerald-100 hover:bg-emerald-500/25 disabled:cursor-not-allowed disabled:opacity-50" onclick="exportarAcompanhamentoChamados()" disabled>Exportar Excel filtrado</button>
-        <details class="md:col-span-2 rounded-lg border border-slate-800 bg-slate-950/50 px-3 py-2">
+        <button type="button" id="btn-excluir-importacoes-antigas-chamados" class="self-end rounded-lg border border-rose-400/30 bg-rose-500/10 px-4 py-2 text-xs font-semibold text-rose-200 hover:bg-rose-500/20 disabled:cursor-not-allowed disabled:opacity-50" onclick="excluirImportacoesAntigasChamados()" disabled>Excluir importações antigas</button>
+        <details class="md:col-span-3 rounded-lg border border-slate-800 bg-slate-950/50 px-3 py-2">
           <summary class="cursor-pointer text-xs font-semibold text-slate-300">Comparação com a importação anterior</summary>
           <div id="evolucao-acompanhamento-chamados" class="pt-2 text-xs text-slate-300" role="status" aria-live="polite">O histórico de importações aparecerá aqui.</div>
         </details>
@@ -1422,7 +1409,7 @@ Horário disponível para atendimento:</textarea>
             <label for="status-acompanhamento-chamados" class="text-xs text-slate-300">Status Oracle<select id="status-acompanhamento-chamados" class="mt-1 block w-full rounded-lg border border-slate-700 bg-slate-950 px-3 py-2 text-sm text-white"><option value="">Todos</option></select></label>
             <label for="fila-acompanhamento-chamados" class="text-xs text-slate-300">Fila Oracle<select id="fila-acompanhamento-chamados" class="mt-1 block w-full rounded-lg border border-slate-700 bg-slate-950 px-3 py-2 text-sm text-white"><option value="">Todas</option></select></label>
             <label for="idade-acompanhamento-chamados" class="text-xs text-slate-300">Última atualização<select id="idade-acompanhamento-chamados" class="mt-1 block w-full rounded-lg border border-slate-700 bg-slate-950 px-3 py-2 text-sm text-white"><option value="">Qualquer data</option><option value="7">Há 7 dias ou mais</option><option value="14">Há 14 dias ou mais</option><option value="30">Há 30 dias ou mais</option><option value="sem_data">Sem data</option></select></label>
-            <label for="limite-desatualizacao-chamados" class="text-xs text-slate-300">Considerar desatualizado<select id="limite-desatualizacao-chamados" class="mt-1 block w-full rounded-lg border border-slate-700 bg-slate-950 px-3 py-2 text-sm text-white"><option value="7">7 dias</option><option value="14">14 dias</option><option value="30">30 dias</option></select></label>
+            <label for="limite-desatualizacao-chamados" class="text-xs text-slate-300">Considerar desatualizado<select id="limite-desatualizacao-chamados" class="mt-1 block w-full rounded-lg border border-slate-700 bg-slate-950 px-3 py-2 text-sm text-white"><option value="3" selected>3 dias</option><option value="7">7 dias</option><option value="14">14 dias</option><option value="30">30 dias</option></select></label>
           </div>
         </details>
       </div>

@@ -10,13 +10,15 @@ from uuid import uuid4
 from fastapi import APIRouter, File, HTTPException, UploadFile
 from fastapi.responses import StreamingResponse
 
-from domains.history_insights import compare_updates, equipment_timeline, is_restoration, latest_update, pending_rows
+from domains.history_insights import compare_updates, is_restoration, latest_update, pending_rows
 from domains.ticket_reconciliation import TicketWorkbookError, reconcile_ticket_workbooks
 from domains.ticket_reporting import (
     MAX_TICKET_SNAPSHOTS,
+    TICKET_SNAPSHOT_FIELDS,
     build_ticket_workbook,
     compare_ticket_snapshots,
     filter_ticket_records,
+    normalize_ticket_snapshot,
     ticket_report_snapshots,
     ticket_snapshot_metadata,
 )
@@ -31,7 +33,6 @@ def create_operations_router(
     *,
     load_comparison_history: Callable[[], List[Dict[str, Any]]],
     comparison_history_for_display: Callable[[Dict[str, Any]], Dict[str, Any]],
-    load_alias_history: Callable[[], List[Dict[str, Any]]],
     ticket_report_path: Callable[[], Path],
     transaction_root: Callable[[], Path],
 ):
@@ -46,21 +47,6 @@ def create_operations_router(
         return {
             "evento": {"id": event.get("id"), "horario": event.get("horario")},
             "pendencias": pending_rows(view),
-        }
-
-    @router.get("/api/operacoes/equipamento/{identificador}")
-    def get_equipment_timeline(identificador: str):
-        if not identificador.strip() or len(identificador) > 200:
-            raise HTTPException(status_code=422, detail="Informe uma série ou hostname válido.")
-        history = load_comparison_history()
-        displayed = [
-            comparison_history_for_display(event)
-            for event in history
-            if isinstance(event, dict)
-        ]
-        return {
-            "identificador": identificador,
-            "eventos": equipment_timeline(displayed, load_alias_history(), identificador),
         }
 
     @router.get("/api/operacoes/evolucao")
@@ -112,27 +98,66 @@ def create_operations_router(
         except (OSError, FileTransactionError):
             raise HTTPException(status_code=500, detail="Não foi possível salvar o acompanhamento de chamados.") from None
 
+    def displayed_ticket_snapshots(report: Dict[str, Any]) -> List[Dict[str, Any]]:
+        return [normalize_ticket_snapshot(item) for item in ticket_report_snapshots(report)]
+
     @router.get("/api/operacoes/chamados")
     def get_ticket_report():
         report = load_ticket_report()
-        current = next((item for item in reversed(ticket_report_snapshots(report)) if item), None)
+        snapshots = displayed_ticket_snapshots(report)
+        current = next((item for item in reversed(snapshots) if item), None)
         response = {key: value for key, value in report.items() if key != "historico"}
+        response = normalize_ticket_snapshot(response)
         response["snapshot_id"] = current.get("id", "") if current else ""
         response["historico"] = [
             ticket_snapshot_metadata(item)
-            for item in reversed(ticket_report_snapshots(report))
+            for item in reversed(snapshots)
         ]
         return response
 
     @router.get("/api/operacoes/chamados/historico")
     def get_ticket_history():
-        snapshots = ticket_report_snapshots(load_ticket_report())
+        snapshots = displayed_ticket_snapshots(load_ticket_report())
         return {"eventos": [ticket_snapshot_metadata(item) for item in reversed(snapshots)], "total": len(snapshots)}
+
+    @router.delete("/api/operacoes/chamados/historico/antigas")
+    def delete_old_ticket_imports():
+        path = ticket_report_path()
+        try:
+            path.parent.mkdir(parents=True, exist_ok=True)
+            with AtomicFileTransaction(transaction_root(), [path]) as transaction:
+                report = load_ticket_report()
+                snapshots = ticket_report_snapshots(report)
+                if len(snapshots) <= 1:
+                    latest = snapshots[-1] if snapshots else None
+                    return {
+                        "removidas": 0,
+                        "mantida": ticket_snapshot_metadata(latest) if latest else None,
+                        "total": len(snapshots),
+                    }
+
+                latest = snapshots[-1]
+                cleaned_report = dict(report)
+                cleaned_report.update({field: latest.get(field) for field in TICKET_SNAPSHOT_FIELDS})
+                cleaned_report["snapshot_id"] = latest["id"]
+                cleaned_report["historico"] = [latest]
+                transaction.update_json(path, lambda _current: cleaned_report, {})
+                transaction.commit()
+        except FileBusyError:
+            raise HTTPException(status_code=409, detail="O acompanhamento está sendo atualizado por outra operação local.") from None
+        except (OSError, FileTransactionError):
+            raise HTTPException(status_code=500, detail="Não foi possível remover as importações antigas do acompanhamento.") from None
+
+        return {
+            "removidas": len(snapshots) - 1,
+            "mantida": ticket_snapshot_metadata(latest),
+            "total": 1,
+        }
 
     @router.get("/api/operacoes/chamados/snapshot/{snapshot_id}")
     def get_ticket_snapshot(snapshot_id: str):
         snapshot = next(
-            (item for item in ticket_report_snapshots(load_ticket_report()) if item.get("id") == snapshot_id),
+            (item for item in displayed_ticket_snapshots(load_ticket_report()) if item.get("id") == snapshot_id),
             None,
         )
         if snapshot is None:
@@ -141,7 +166,7 @@ def create_operations_router(
 
     @router.get("/api/operacoes/chamados/evolucao")
     def get_ticket_evolution(anterior: str, atual: str):
-        snapshots = ticket_report_snapshots(load_ticket_report())
+        snapshots = displayed_ticket_snapshots(load_ticket_report())
         previous = next((item for item in snapshots if item.get("id") == anterior), None)
         current = next((item for item in snapshots if item.get("id") == atual), None)
         if previous is None or current is None:
@@ -157,14 +182,14 @@ def create_operations_router(
         status: str = "",
         queue: str = "",
         search: str = "",
-        stale_days: int = 7,
+        stale_days: int = 3,
         age_filter: str = "",
         attention_only: bool = False,
     ):
         if stale_days < 0 or stale_days > 3650:
             raise HTTPException(status_code=422, detail="O limite de dias sem atualização deve estar entre 0 e 3650.")
         report = load_ticket_report()
-        snapshots = ticket_report_snapshots(report)
+        snapshots = displayed_ticket_snapshots(report)
         selected_id = snapshot_id or (snapshots[-1].get("id", "") if snapshots else "")
         snapshot = next((item for item in snapshots if item.get("id") == selected_id), None)
         if snapshot is None:
@@ -231,7 +256,7 @@ def create_operations_router(
         response = {key: value for key, value in report.items() if key != "historico"}
         response["historico"] = [
             ticket_snapshot_metadata(item)
-            for item in reversed(report["historico"])
+            for item in reversed(displayed_ticket_snapshots(report))
         ]
         return response
 

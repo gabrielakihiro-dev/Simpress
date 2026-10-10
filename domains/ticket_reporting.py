@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from collections import Counter
 from copy import deepcopy
 from datetime import date, datetime
 from hashlib import sha256
@@ -22,6 +23,12 @@ TICKET_SNAPSHOT_FIELDS = ("atualizado_em", "fontes", "resumo", "chamados")
 ORACLE_CHANGE_FIELDS = (
     ("solicitacao", "Solicitação Oracle"),
     ("ordem_servico", "OS Oracle"),
+    ("logradouro", "Logradouro Oracle"),
+    ("numero_endereco", "Número do endereço Oracle"),
+    ("bairro", "Bairro Oracle"),
+    ("cidade", "Cidade Oracle"),
+    ("atendido_pela_inibicao", "Atendido pela inibição Oracle"),
+    ("nome_filial", "Nome da filial Oracle"),
     ("status", "Status Oracle"),
     ("sub_status", "Sub-status Oracle"),
     ("fila", "Fila Oracle"),
@@ -29,17 +36,23 @@ ORACLE_CHANGE_FIELDS = (
     ("status_entregas", "Status das entregas"),
     ("status_atividades", "Status das atividades"),
     ("assunto", "Assunto Oracle"),
+    ("descricao", "Descrição do chamado Oracle"),
     ("data_criacao", "Criação Oracle"),
     ("ultima_atualizacao", "Última atualização Oracle"),
     ("data_conclusao", "Conclusão Oracle"),
 )
 SIMPRESS_CHANGE_FIELDS = (
     ("pedidos", "Pedidos Simpress"),
+    ("ordens_venda", "Ordem de venda (OV) Simpress"),
     ("ordens_servico", "OS Simpress"),
     ("chamados_cliente", "Chamados do cliente"),
     ("status", "Status Simpress"),
     ("datas_pedido", "Datas dos pedidos"),
     ("modelos", "Modelos Simpress"),
+    ("descricoes_produto", "Descrição do produto Simpress"),
+    ("previsoes_entrega", "Previsão de entrega Simpress"),
+    ("cidades_entrega", "Cidade de entrega Simpress"),
+    ("enderecos_entrega", "Endereço de entrega Simpress"),
 )
 
 
@@ -52,6 +65,45 @@ def _stable_serial(value: Any) -> str:
 def _normalized_text(value: Any) -> str:
     plain = unicodedata.normalize("NFKD", str(value or ""))
     return " ".join(plain.encode("ascii", "ignore").decode("ascii").casefold().split())
+
+
+def _order_service_descending_key(value: Any) -> Tuple[bool, int, str]:
+    text = str(value or "").strip()
+    ascii_value = unicodedata.normalize("NFKD", text).encode("ascii", "ignore").decode("ascii")
+    digits = "" if re.search(r"[A-Za-z]", ascii_value) else re.sub(r"\D", "", ascii_value)
+    number = int(digits) if digits else None
+    return number is not None, number if number is not None else -1, _normalized_text(text)
+
+
+def _ticket_order_service_sort_key(ticket: Dict[str, Any]) -> Tuple[int, int, str]:
+    """Return the highest OS for a ticket, with missing OS values sorting last."""
+    simpress = ticket.get("simpress") if isinstance(ticket.get("simpress"), dict) else {}
+    oracle = ticket.get("oracle") if isinstance(ticket.get("oracle"), list) else []
+    values: List[Any] = []
+    for field_values in (simpress.get("ordens_servico"), ticket.get("ordens_servico_conferidas")):
+        if isinstance(field_values, (list, tuple, set)):
+            values.extend(field_values)
+        elif field_values:
+            values.append(field_values)
+    values.extend(
+        item.get("ordem_servico")
+        for item in oracle
+        if isinstance(item, dict)
+    )
+
+    missing_labels = {"nao informado", "nao informada", "sem os", "n/a", "na"}
+    candidates = [
+        str(value).strip()
+        for value in values
+        if value is not None and str(value).strip()
+        and _normalized_text(value) not in missing_labels
+    ]
+    if not candidates:
+        return 0, -1, ""
+
+    highest = max(candidates, key=_order_service_descending_key)
+    numeric, number, normalized = _order_service_descending_key(highest)
+    return (2 if numeric else 1), number, normalized
 
 
 def _ticket_snapshot(report: Dict[str, Any], snapshot_id: Optional[str] = None) -> Optional[Dict[str, Any]]:
@@ -91,6 +143,117 @@ def ticket_report_snapshots(report: Dict[str, Any]) -> List[Dict[str, Any]]:
         unique[snapshot["id"]] = snapshot
     ordered = list(unique.values())
     return ordered[-MAX_TICKET_SNAPSHOTS:]
+
+
+def _order_service_key(value: Any) -> str:
+    return re.sub(r"\s+", "", str(value or "")).upper()
+
+
+def _numeric_order_service(value: Any) -> Optional[int]:
+    normalized = unicodedata.normalize("NFKD", str(value or "")).encode("ascii", "ignore").decode("ascii")
+    if re.search(r"[A-Za-z]", normalized):
+        return None
+    digits = re.sub(r"\D", "", normalized)
+    return int(digits) if digits else None
+
+
+def _latest_simpress_identifier(values: Sequence[Any]) -> str:
+    candidates = [
+        item.strip()
+        for value in values
+        if value is not None
+        for item in re.split(r"[,;\n|]+", str(value))
+        if item.strip()
+    ]
+    if not candidates:
+        return ""
+    numeric = [(item, _numeric_order_service(item)) for item in candidates]
+    if all(number is not None for _, number in numeric):
+        return max(
+            ((item, number) for item, number in numeric if number is not None),
+            key=lambda entry: entry[1],
+        )[0]
+    return candidates[-1]
+
+
+def normalize_ticket_snapshot(snapshot: Dict[str, Any]) -> Dict[str, Any]:
+    """Project legacy reports with current Simpress pedido and OS IDs without changing stored data."""
+    normalized = deepcopy(snapshot)
+    tickets = normalized.get("chamados")
+    if not isinstance(tickets, list):
+        return normalized
+
+    changed = False
+    for ticket in tickets:
+        if not isinstance(ticket, dict):
+            continue
+        simpress = ticket.get("simpress")
+        if not isinstance(simpress, dict):
+            continue
+        orders = simpress.get("ordens_servico")
+        orders_changed = False
+        if isinstance(orders, list):
+            latest_os = _latest_simpress_identifier(orders)
+            latest_orders = [latest_os] if latest_os else []
+            orders_changed = orders != latest_orders
+            if orders_changed:
+                changed = True
+                simpress["ordens_servico"] = latest_orders
+
+        pedidos = simpress.get("pedidos")
+        if isinstance(pedidos, list):
+            latest_pedido = _latest_simpress_identifier(pedidos)
+            latest_pedidos = [latest_pedido] if latest_pedido else []
+            if pedidos != latest_pedidos:
+                changed = True
+                simpress["pedidos"] = latest_pedidos
+
+        if orders_changed:
+            oracle = ticket.get("oracle") if isinstance(ticket.get("oracle"), list) else []
+            oracle_orders = [
+                str(item.get("ordem_servico") or "").strip()
+                for item in oracle
+                if isinstance(item, dict) and str(item.get("ordem_servico") or "").strip()
+            ]
+            matched = (
+                [latest_os]
+                if latest_os and any(_order_service_key(item) == _order_service_key(latest_os) for item in oracle_orders)
+                else []
+            )
+            ticket["ordens_servico_conferidas"] = matched
+
+            simpress_present = bool(simpress.get("serie") or simpress.get("pedidos") or latest_os)
+            if simpress_present and oracle:
+                if matched:
+                    ticket["relacao"] = "conferida"
+                elif latest_os and oracle_orders:
+                    ticket["relacao"] = "divergente"
+                else:
+                    ticket["relacao"] = "sem_os"
+            elif simpress_present:
+                ticket["relacao"] = "somente_simpress"
+            elif oracle:
+                ticket["relacao"] = "somente_oracle"
+            else:
+                ticket["relacao"] = "sem_os"
+
+    if changed and isinstance(normalized.get("resumo"), dict):
+        relation_counts = Counter(
+            str(ticket.get("relacao") or "")
+            for ticket in tickets
+            if isinstance(ticket, dict)
+        )
+        summary = dict(normalized["resumo"])
+        summary.update({
+            "series_total": len(tickets),
+            "conferidas": relation_counts["conferida"],
+            "divergentes": relation_counts["divergente"],
+            "sem_os": relation_counts["sem_os"],
+            "somente_simpress": relation_counts["somente_simpress"],
+            "somente_oracle": relation_counts["somente_oracle"],
+        })
+        normalized["resumo"] = summary
+    return normalized
 
 
 def ticket_snapshot_metadata(snapshot: Dict[str, Any]) -> Dict[str, Any]:
@@ -133,10 +296,10 @@ def _is_closed(ticket: Dict[str, Any]) -> bool:
 def ticket_attention(
     ticket: Dict[str, Any],
     *,
-    stale_days: int = 7,
+    stale_days: int = 3,
     today: Optional[date] = None,
 ) -> Dict[str, Any]:
-    """Classify operational risk without interpreting a missing row as a resolution."""
+    """Flag active Oracle calls with no update date or no update within the threshold."""
     oracle = ticket.get("oracle") if isinstance(ticket.get("oracle"), list) else []
     active = [item for item in oracle if isinstance(item, dict) and not _is_closed(item)]
     update_dates = [_parse_date(item.get("ultima_atualizacao")) for item in active]
@@ -146,41 +309,18 @@ def ticket_attention(
     age = max(0, (reference - latest_date).days) if latest_date else None
     is_stale = bool(active and ((age is not None and age >= max(0, stale_days)) or latest_date is None))
 
-    relation = str(ticket.get("relacao") or "")
-    issue_priority = {
-        "divergente": 0,
-        "sem_os": 1,
-        "somente_oracle": 3,
-        "somente_simpress": 4,
-        "conferida": 5,
-    }.get(relation, 5)
-    if is_stale:
-        priority = min(issue_priority, 2)
-        freshness_label = "Sem data de atualização" if age is None else f"Sem atualização há {age} dias"
-    else:
-        priority = issue_priority
-        freshness_label = ""
-
-    relation_label = {
-        "divergente": "OS divergente",
-        "sem_os": "Sem OS",
-        "somente_oracle": "Somente Oracle",
-        "somente_simpress": "Somente Simpress",
-        "conferida": "OS conferida",
-    }.get(relation, "Revisar chamado")
-    reasons = [relation_label] if relation != "conferida" else []
-    if is_stale:
-        reasons.append(freshness_label)
-    if not reasons:
-        reasons.append("Em acompanhamento")
+    priority = 0 if is_stale else 1
+    reason = (
+        "Sem data de atualização" if age is None else f"Sem atualização há {age} dias"
+    ) if is_stale else "Em acompanhamento"
 
     return {
         "prioridade": priority,
-        "em_atencao": relation != "conferida" or is_stale,
+        "em_atencao": is_stale,
         "desatualizado": is_stale,
         "dias_sem_atualizacao": age,
         "ultima_atualizacao": latest_date.isoformat() if latest_date else "",
-        "motivo": " · ".join(reasons),
+        "motivo": reason,
     }
 
 
@@ -202,7 +342,7 @@ def filter_ticket_records(
     status: str = "",
     queue: str = "",
     search: str = "",
-    stale_days: int = 7,
+    stale_days: int = 3,
     age_filter: str = "",
     attention_only: bool = False,
     today: Optional[date] = None,
@@ -241,9 +381,15 @@ def filter_ticket_records(
         if query and query not in _normalized_text(" ".join(_walk_values(ticket))):
             continue
         age = attention["dias_sem_atualizacao"] or 0
-        matched.append(((attention["prioridade"], -age, _normalized_text(ticket.get("serie"))), ticket))
+        matched.append((
+            (attention["prioridade"], -age, _normalized_text(ticket.get("serie"))),
+            ticket,
+        ))
 
+    # Preserve attention ordering for equal OS values, while ordering the full
+    # result by the newest available OS and leaving records without OS at the end.
     matched.sort(key=lambda item: item[0])
+    matched.sort(key=lambda item: _ticket_order_service_sort_key(item[1]), reverse=True)
     return [ticket for _, ticket in matched]
 
 
@@ -359,24 +505,42 @@ def build_ticket_workbook(snapshot: Dict[str, Any], tickets: Sequence[Dict[str, 
 
     sheet = workbook.create_sheet("Chamados")
     headers = [
-        "Série", "Atenção", "Relação", "Pedidos Simpress", "OS Simpress", "Chamado do cliente", "Status Simpress", "Data do pedido", "Modelo",
-        "Solicitação Oracle", "OS Oracle", "Status Oracle", "Sub-status Oracle", "Fila Oracle",
+        "Série", "Atenção", "Relação", "Pedidos Simpress", "OV Simpress", "OS Simpress", "OS Oracle", "Chamado do cliente", "Status Simpress", "Data do pedido", "Modelo",
+        "Descrição do produto", "Cidade de entrega", "Endereço de entrega", "Previsão de entrega",
+        "Solicitação Oracle", "Logradouro Oracle", "Número do endereço Oracle", "Bairro Oracle", "Cidade Oracle",
+        "Atendido pela inibição Oracle", "Nome da filial Oracle", "Status Oracle", "Sub-status Oracle", "Fila Oracle",
         "Fase Oracle", "Última atualização Oracle", "Status entregas", "Status atividades", "Assunto",
+        "Descrição do chamado Oracle",
     ]
     sheet.append(headers)
     for ticket in tickets:
-        oracle_rows = [item for item in ticket.get("oracle", []) if isinstance(item, dict)] or [{}]
+        oracle_rows = sorted(
+            (item for item in ticket.get("oracle", []) if isinstance(item, dict)),
+            key=lambda item: _order_service_descending_key(item.get("ordem_servico", "")),
+            reverse=True,
+        ) or [{}]
         simpress = ticket.get("simpress") or {}
-        attention = ticket_attention(ticket, stale_days=int(filters.get("stale_days", 7)))
+        simpress_os = sorted(
+            (value for value in simpress.get("ordens_servico", []) if value),
+            key=_order_service_descending_key,
+            reverse=True,
+        )
+        attention = ticket_attention(ticket, stale_days=int(filters.get("stale_days", 3)))
         for oracle in oracle_rows:
             values = [
                 ticket.get("serie", ""), attention["motivo"], ticket.get("relacao", ""),
-                simpress.get("pedidos", []), simpress.get("ordens_servico", []), simpress.get("chamados_cliente", []),
+                simpress.get("pedidos", []), simpress.get("ordens_venda", []), simpress_os, oracle.get("ordem_servico", ""),
+                simpress.get("chamados_cliente", []),
                 simpress.get("status", []), simpress.get("datas_pedido", []), simpress.get("modelos", []),
-                oracle.get("solicitacao", ""), oracle.get("ordem_servico", ""), oracle.get("status", ""),
+                simpress.get("descricoes_produto", []), simpress.get("cidades_entrega", []),
+                simpress.get("enderecos_entrega", []) if simpress.get("pedido_em_andamento") else [],
+                simpress.get("previsoes_entrega", []),
+                oracle.get("solicitacao", ""), oracle.get("logradouro", ""),
+                oracle.get("numero_endereco", ""), oracle.get("bairro", ""), oracle.get("cidade", ""),
+                oracle.get("atendido_pela_inibicao", ""), oracle.get("nome_filial", ""), oracle.get("status", ""),
                 oracle.get("sub_status", ""), oracle.get("fila", ""), oracle.get("fase_atendimento", ""),
                 oracle.get("ultima_atualizacao", ""), oracle.get("status_entregas", ""),
-                oracle.get("status_atividades", ""), oracle.get("assunto", ""),
+                oracle.get("status_atividades", ""), oracle.get("assunto", ""), oracle.get("descricao", ""),
             ]
             sheet.append([_safe_cell(value) for value in values])
     sheet.freeze_panes = "A2"
@@ -386,8 +550,13 @@ def build_ticket_workbook(snapshot: Dict[str, Any], tickets: Sequence[Dict[str, 
         cell.font = Font(bold=True, color="FFFFFF")
         cell.fill = PatternFill("solid", fgColor="166534")
         cell.alignment = Alignment(vertical="center", wrap_text=True)
-    for index, width in enumerate((18, 36, 20, 24, 20, 24, 24, 22, 28, 22, 18, 24, 24, 24, 24, 24, 22, 22, 40), start=1):
+    for index, width in enumerate((18, 36, 20, 24, 22, 20, 18, 24, 24, 22, 28, 42, 24, 48, 20, 22, 30, 18, 24, 24, 30, 30, 24, 24, 24, 24, 22, 22, 40, 64, 64), start=1):
         sheet.column_dimensions[get_column_letter(index)].width = width
+    for row_number in range(2, sheet.max_row + 1):
+        sheet.row_dimensions[row_number].height = sheet.sheet_format.defaultRowHeight
+    description_column = len(headers)
+    for row in sheet.iter_rows(min_row=2, min_col=description_column, max_col=description_column):
+        row[0].alignment = Alignment(vertical="top", wrap_text=False)
     output = BytesIO()
     workbook.save(output)
     return output.getvalue()

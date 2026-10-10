@@ -10,7 +10,7 @@ Aplicação web local para consultar equipamentos, preparar transferências Simp
 - Textos prontos para solicitações de transporte, kit de teclado e mouse e defeitos, com opções para copiar o texto e abrir os links correspondentes.
 - Edição de apelidos e de outros campos permitidos do equipamento, com histórico e opção de desfazer alterações de apelido.
 - Comparação e atualização conjunta dos inventários Endpoint e Simpress, com histórico, backups locais e prévia de restauração.
-- Central de pendências, linha do tempo por equipamento e comparação da evolução entre atualizações.
+- Central de pendências e comparação da evolução entre atualizações.
 - Exportação de `Apelido` e, quando disponível, `IdCliente` para um modelo Excel local.
 - Catálogo de unidades, endereços, CNPJ e CEP, incluindo unidades personalizadas.
 
@@ -165,7 +165,7 @@ Na aba **Home**, **Mostrar textos para chamados** apresenta textos editáveis re
 
 ### Comparar e atualizar inventários
 
-Use **Pendências** para revisar e anotar as linhas da atualização mais recente; **Histórico por equipamento** reúne ocorrências pela série ou hostname; **Evolução das atualizações** conta casos novos, contínuos e resolvidos entre duas atualizações completas.
+Use **Pendências** para revisar e anotar as linhas da atualização mais recente; **Evolução das atualizações** conta casos novos, contínuos e resolvidos entre duas atualizações completas.
 
 1. Abra **Atualizar Planilhas**.
 2. Envie um arquivo `.xlsx` do **Endpoint** e um do **Simpress**.

@@ -61,7 +61,6 @@ class PersistenceConfigurationTests(unittest.TestCase):
                             ("POST","/api/gerar-planilha"),("GET","/api/historico-comparacoes"),
                             ("PUT","/api/historico-comparacoes/a/anotacoes/b"),
                             ("GET","/api/operacoes/pendencias"),
-                            ("GET","/api/operacoes/equipamento/SN1"),
                             ("GET","/api/operacoes/evolucao")):
             self.assertTrue(pilot_route_allowed(method,path))
         for path in ("/api/piloto/unknown","/api/historico-comparacoes/a/anotacao"):
@@ -72,6 +71,7 @@ class PersistenceConfigurationTests(unittest.TestCase):
         for method, path in (
             ("GET", "/api/operacoes/chamados"),
             ("GET", "/api/operacoes/chamados/historico"),
+            ("DELETE", "/api/operacoes/chamados/historico/antigas"),
             ("GET", "/api/operacoes/chamados/snapshot/version-1"),
             ("GET", "/api/operacoes/chamados/evolucao"),
             ("GET", "/api/operacoes/chamados/exportar"),

@@ -2019,6 +2019,15 @@
         const manualAliasRow = sourceRow.hasAttribute("data-manual-alias-row")
           ? ` data-manual-alias-row="${escapeHtml(sourceRow.dataset.manualAliasRow)}"`
           : "";
+        const comparisonTargetAttributes = [
+          "data-comparison-category",
+          "data-comparison-item-id",
+          "data-comparison-serial",
+          "data-comparison-hostname",
+        ].map(attribute => {
+          const value = sourceRow.getAttribute(attribute);
+          return value === null ? "" : ` ${attribute}="${escapeHtml(value)}"`;
+        }).join("");
         const fields = cells.slice(1).map((cell, cellIndex) => {
           const label = headers[cellIndex + 1] || `Campo ${cellIndex + 2}`;
           const annotationClass = cell.querySelector("[data-comparison-annotation]")
@@ -2035,7 +2044,7 @@
         }).join("");
 
         return `
-          <article class="comparison-mobile-card" role="listitem"${manualAliasRow}>
+          <article class="comparison-mobile-card" role="listitem"${manualAliasRow}${comparisonTargetAttributes}>
             <h5 class="comparison-mobile-card-title"><span class="sr-only">${escapeHtml(titleLabel)}: </span>${titleContent}</h5>
             ${fields ? `<dl class="comparison-mobile-card-fields">${fields}</dl>` : ""}
           </article>`;
@@ -2051,7 +2060,7 @@
         <div class="comparison-mobile-list" role="list" aria-label="${escapeHtml(`${tableLabel} em cartões`)}">${mobileCards}</div>`;
     }
 
-    function abrirModalComparacaoPlanilhas(comparison) {
+    function abrirModalComparacaoPlanilhas(comparison, navigationTarget = null) {
       const seriesSebrae = new Set([
         "BRJ135P5XS",
         "BRJ142QKBQ",
@@ -2117,14 +2126,15 @@
         .replace(/\bna Simpress\b/gi, "Simpress");
       const formatarFonteAmbigua = fonte => formatarNomeFonteHistorico(fonte)
         .replace(/\bno endpoint\b/gi, "Endpoint");
+      const atributosLinhaComparacao = (categoria, item) => `data-comparison-category="${escapeHtml(categoria)}" data-comparison-item-id="${escapeHtml(item?.anotacao_id || "")}" data-comparison-serial="${escapeHtml(item?.serie || "")}" data-comparison-hostname="${escapeHtml(item?.computador || item?.hostname || item?.apelido || "")}"`;
       const aliasReviewHeaders = ["Série", "Hostname no Endpoint", "Motivo", ...(permitirAnotacoes ? ["Anotações"] : [])];
       const annotationHeaders = permitirAnotacoes ? ["Anotações"] : [];
 
       document.getElementById("comparacao-planilhas-fontes").textContent =
         `no endpoint: ${formatarNomeFonteHistorico(arquivo.endpoint || "—")} · na Simpress: ${formatarNomeFonteHistorico(arquivo.detalhes || "—")}${comparison.horario_comparacao ? ` · ${formatarHorarioHistorico(comparison.horario_comparacao)}` : ""}`;
 
-      const renderizarAusentes = items => items.map(item => `
-        <tr class="text-slate-300">
+      const renderizarAusentes = (items, categoria) => items.map(item => `
+        <tr class="text-slate-300" ${atributosLinhaComparacao(categoria, item)}>
           <td class="px-3 py-2 font-mono text-white whitespace-nowrap">${escapeHtml(item.computador)}</td>
           <td class="px-3 py-2 font-mono whitespace-nowrap">${escapeHtml(item.serie || "—")}</td>
           <td class="px-3 py-2">${escapeHtml(item.local_previsto || "—")}</td>
@@ -2133,7 +2143,7 @@
         </tr>`);
 
       const locationRows = divergenciasLocal.map(item => `
-        <tr class="text-slate-300">
+        <tr class="text-slate-300" ${atributosLinhaComparacao("divergencias_local", item)}>
           <td class="px-3 py-2 font-mono text-white whitespace-nowrap">${escapeHtml(item.computador)}</td>
           <td class="px-3 py-2 font-mono whitespace-nowrap">${escapeHtml(item.serie || "—")}</td>
           <td class="px-3 py-2">${escapeHtml(item.local_previsto)}</td>
@@ -2142,7 +2152,7 @@
         </tr>`);
 
       const semAcessoRows = semAcesso14DiasOrdenados.map(item => `
-        <tr class="text-slate-300">
+        <tr class="text-slate-300" ${atributosLinhaComparacao("sem_acesso_14_dias", item)}>
           <td class="px-3 py-2 font-mono text-white whitespace-nowrap">${escapeHtml(item.computador || "—")}</td>
           <td class="px-3 py-2 font-mono whitespace-nowrap">${escapeHtml(item.serie || "—")}</td>
           <td class="px-3 py-2 whitespace-nowrap">${escapeHtml(item.ultima_verificacao ? formatarHorarioHistorico(item.ultima_verificacao) : "—")}</td>
@@ -2160,8 +2170,8 @@
           <td class="px-3 py-2 text-[10px]">${escapeHtml(formatarNomeFonteHistorico(Object.values(item.arquivos_origem || {}).join(" · ") || "—"))}</td>
         </tr>`);
 
-      const aliasReviewRows = apelidosSemAtualizacao.map((item, index) => `
-        <tr class="text-slate-300">
+      const aliasReviewRows = apelidosSemAtualizacao.map(item => `
+        <tr class="text-slate-300" ${atributosLinhaComparacao("apelidos_sem_atualizacao", item)}>
           <td class="px-3 py-2 font-mono text-white whitespace-nowrap">${escapeHtml(item.serie || "(vazia)")}</td>
           <td class="px-3 py-2 font-mono">${escapeHtml(item.computador || "—")}</td>
           <td class="px-3 py-2 text-amber-200">${escapeHtml(formatarMotivoRevisao(item.motivo))}</td>
@@ -2195,7 +2205,7 @@
       });
 
       const unmappedRows = seriesSemMapa.map(item => `
-        <tr class="text-slate-300">
+        <tr class="text-slate-300" ${atributosLinhaComparacao("series_sem_mapeamento", item)}>
           <td class="px-3 py-2 font-mono text-white">${escapeHtml(item.serie)}</td>
           <td class="px-3 py-2">${Number(item.quantidade || 0)}</td>
           <td class="px-3 py-2 font-mono">${escapeHtml((item.exemplos || []).join(", "))}</td>
@@ -2205,6 +2215,7 @@
       const ambiguityRows = [
         ...ambiguidades.map(item => ({
           ...item,
+          __categoriaPendencia: "correspondencias_ambiguas",
           tipo: item.tipo,
           chave: item.chave,
           fontes: (item.fontes || []).map(source =>
@@ -2214,13 +2225,14 @@
         })),
         ...registrosAmbiguos.map(item => ({
           ...item,
+          __categoriaPendencia: "registros_ambiguos",
           tipo: "Presença ambígua",
           chave: `${item.computador || "Sem hostname"} · ${item.serie || "Sem série"}`,
           fontes: Object.entries(item.fontes || {}).filter(([, status]) => status === "ambíguo").map(([source]) => formatarFonteAmbigua(source)).join(" · "),
           mensagem: formatarFonteAmbigua(item.motivo || ""),
         })),
       ].map(item => `
-        <tr class="text-slate-300">
+        <tr class="text-slate-300" ${atributosLinhaComparacao(item.__categoriaPendencia, item)}>
           <td class="px-3 py-2 text-amber-200">${escapeHtml(item.tipo || "Ambiguidade")}</td>
           <td class="px-3 py-2 font-mono">${escapeHtml(item.chave || "—")}</td>
           <td class="px-3 py-2">${escapeHtml(item.fontes || "—")}</td>
@@ -2296,9 +2308,9 @@
         <section class="space-y-2">
           <div><h4 class="text-sm font-bold text-rose-300">Equipamentos sem correspondência por fonte</h4><p class="text-[11px] text-slate-500">Cada lista mostra equipamentos que não têm correspondência segura naquela fonte. Divergências de local aparecem em seção própria.</p></div>
           <h5 class="text-xs font-semibold text-slate-300">Sem correspondência — Endpoint (${ausentesEndpoint.length})</h5>
-          ${renderizarTabelaComparacao(["Hostname/Apelido", "Série", "Local previsto", "Sem correspondência em", ...annotationHeaders], renderizarAusentes(ausentesEndpoint), "Todos os equipamentos têm correspondência segura com Endpoint.")}
+          ${renderizarTabelaComparacao(["Hostname/Apelido", "Série", "Local previsto", "Sem correspondência em", ...annotationHeaders], renderizarAusentes(ausentesEndpoint, "ausentes_no_endpoint"), "Todos os equipamentos têm correspondência segura com Endpoint.")}
           <h5 class="text-xs font-semibold text-slate-300">Sem correspondência — Simpress (${ausentesDetalhes.length})</h5>
-          ${renderizarTabelaComparacao(["Hostname/Apelido", "Série", "Local previsto", "Sem correspondência em", ...annotationHeaders], renderizarAusentes(ausentesDetalhes), "Todos os equipamentos têm correspondência segura com Simpress.")}
+          ${renderizarTabelaComparacao(["Hostname/Apelido", "Série", "Local previsto", "Sem correspondência em", ...annotationHeaders], renderizarAusentes(ausentesDetalhes, "ausentes_em_detalhes"), "Todos os equipamentos têm correspondência segura com Simpress.")}
         </section>
         <section class="space-y-2">
           <div><h4 class="text-sm font-bold text-amber-300">Localidade divergente</h4><p class="text-[11px] text-slate-500">A localidade na Simpress é comparada com a classificação do hostname.</p></div>
@@ -2384,6 +2396,34 @@
         });
       });
       abrirModalAcessivel("modal-comparacao-planilhas", '[aria-label="Fechar resultado"]', "fecharModalComparacaoPlanilhas");
+      if (navigationTarget) requestAnimationFrame(() => navegarParaLinhaComparacao(navigationTarget));
+    }
+
+    function normalizarIdentificadorLinhaComparacao(value) {
+      return String(value || "").normalize("NFKD").replace(/[\u0300-\u036f]/g, "").replace(/[^A-Z0-9]/gi, "").toUpperCase();
+    }
+
+    function navegarParaLinhaComparacao(target) {
+      const content = document.getElementById("comparacao-planilhas-conteudo");
+      if (!content || !target?.category) return;
+      const visibleRows = [...content.querySelectorAll("tr[data-comparison-category], .comparison-mobile-card[data-comparison-category]")]
+        .filter(row => row.getClientRects().length > 0 && row.dataset.comparisonCategory === target.category);
+      let row = target.itemId
+        ? visibleRows.find(candidate => candidate.dataset.comparisonItemId === target.itemId)
+        : null;
+      if (!row) {
+        const serial = normalizarIdentificadorLinhaComparacao(target.serial);
+        const hostname = normalizarIdentificadorLinhaComparacao(target.hostname);
+        row = visibleRows.find(candidate => {
+          const sameSerial = serial && normalizarIdentificadorLinhaComparacao(candidate.dataset.comparisonSerial) === serial;
+          const sameHostname = hostname && normalizarIdentificadorLinhaComparacao(candidate.dataset.comparisonHostname) === hostname;
+          return sameSerial ? (!hostname || sameHostname) : (!serial && sameHostname);
+        });
+      }
+      if (!row) return;
+      const reducedMotion = window.matchMedia?.("(prefers-reduced-motion: reduce)").matches;
+      row.scrollIntoView({ behavior: reducedMotion ? "auto" : "smooth", block: "center" });
+      motion?.reveal(row);
     }
 
     async function resolverDivergenciaApelidoManual(comparison, item, acao, botao) {
@@ -2619,15 +2659,21 @@
             <h4 class="mt-1 break-words text-sm font-semibold text-white">${escapeHtml(title)}</h4>
             <p class="mt-1 text-xs text-slate-400">${serial ? `Série ${escapeHtml(serial)}` : "Série não informada"}${location ? ` · ${escapeHtml(location)}` : ""}</p>
             ${details ? `<p class="mt-2 text-xs text-slate-300">${escapeHtml(details)}</p>` : ""}
-          </div><button type="button" data-pending-event="${escapeHtml(operationalPendingState.evento?.id || "")}" class="shrink-0 rounded-lg border border-cyan-400/25 bg-cyan-500/10 px-3 py-2 text-xs font-semibold text-cyan-200">Abrir atualização</button></div>
+          </div><button type="button" data-pending-event="${escapeHtml(operationalPendingState.evento?.id || "")}" data-pending-category="${escapeHtml(row.categoria || "")}" data-pending-item-id="${escapeHtml(item.anotacao_id || "")}" data-pending-serial="${escapeHtml(serial)}" data-pending-hostname="${escapeHtml(item.computador || item.hostname || item.apelido || "")}" class="shrink-0 rounded-lg border border-cyan-400/25 bg-cyan-500/10 px-3 py-2 text-xs font-semibold text-cyan-200">Abrir atualização</button></div>
           <div class="mt-3">${renderizarAnotacaoOperacional(item, context)}</div>
         </article>`;
       }).join("");
       conectarAnotacoesOperacionais(lista, operationalPendingState.evento?.id);
       lista.querySelectorAll("[data-pending-event]").forEach(button => button.addEventListener("click", async () => {
         const eventId = button.dataset.pendingEvent;
+        const target = {
+          category: button.dataset.pendingCategory,
+          itemId: button.dataset.pendingItemId,
+          serial: button.dataset.pendingSerial,
+          hostname: button.dataset.pendingHostname,
+        };
         fecharCentralPendencias();
-        if (eventId) await consultarHistoricoComparacao(eventId, button);
+        if (eventId) await consultarHistoricoComparacao(eventId, button, target);
       }));
     }
 
@@ -2651,67 +2697,6 @@
       const category = document.getElementById("categoria-operacional-pendencias");
       if (!query.dataset.bound) { query.addEventListener("input", renderizarCentralPendencias); query.dataset.bound = "true"; }
       if (!category.dataset.bound) { category.addEventListener("change", renderizarCentralPendencias); category.dataset.bound = "true"; }
-    }
-
-    function fecharHistoricoEquipamento() { fecharModalAcessivel("modal-historico-equipamento"); }
-
-    async function consultarLinhaDoTempoEquipamento() {
-      const identifier = document.getElementById("identificador-historico-equipamento").value.trim();
-      const list = document.getElementById("lista-historico-equipamento");
-      if (!identifier) return;
-      list.textContent = "Carregando histórico…";
-      try {
-        const response = await fetch(`/api/operacoes/equipamento/${encodeURIComponent(identifier)}`);
-        const data = await response.json().catch(() => ({}));
-        if (!response.ok) throw new Error(data.detail || "Não foi possível consultar o histórico deste equipamento.");
-        const events = Array.isArray(data.eventos) ? data.eventos : [];
-        if (!events.length) { list.textContent = "Nenhuma ocorrência encontrada para esta série ou hostname."; return; }
-        list.innerHTML = events.map(row => {
-          const item = row.item || {};
-          const title = item.computador || item.hostname || item.apelido_novo || item.serie || identifier;
-          const description = [
-            item.serie && `Série ${item.serie}`,
-            item.apelido_anterior && `Antes: ${item.apelido_anterior}`,
-            item.apelido_novo && `Depois: ${item.apelido_novo}`,
-            item.local_previsto && `Local esperado: ${item.local_previsto}`,
-            item.local_simpress && `na Simpress: ${item.local_simpress}`,
-            item.motivo,
-            Number.isFinite(Number(item.dias_sem_verificacao)) && `Sem verificação há ${Number(item.dias_sem_verificacao)} dias`,
-          ].filter(Boolean).join(" · ");
-          const note = renderizarAnotacaoOperacional(item, `${title}${item.serie ? `, série ${item.serie}` : ""}`);
-          return `<article class="rounded-xl border border-slate-800 bg-slate-950/70 p-4" data-timeline-event="${escapeHtml(row.evento_id || "")}">
-            <p class="text-[10px] uppercase tracking-wide text-violet-300">${escapeHtml(row.rotulo)}</p>
-            <p class="mt-1 text-xs text-slate-500">${escapeHtml(formatarHorarioHistorico(row.horario))}</p>
-            <h4 class="mt-1 break-words text-sm font-semibold text-white">${escapeHtml(title)}</h4>
-            ${description ? `<p class="mt-2 text-xs text-slate-300">${escapeHtml(description)}</p>` : ""}
-            ${note ? `<div class="mt-3">${note}</div>` : ""}
-            ${row.evento_id && row.categoria !== "alteracao_manual" ? `<button type="button" data-open-history-event="${escapeHtml(row.evento_id)}" class="mt-3 rounded-lg border border-cyan-400/25 bg-cyan-500/10 px-3 py-2 text-xs text-cyan-200">Abrir resultado da atualização</button>` : ""}
-          </article>`;
-        }).join("");
-        list.querySelectorAll("[data-timeline-event]").forEach(card => {
-          const notes = card.querySelectorAll("[data-operational-annotation]");
-          notes.forEach(note => { note.dataset.eventId = card.dataset.timelineEvent; });
-        });
-        conectarAnotacoesOperacionais(list, "");
-        list.querySelectorAll("[data-open-history-event]").forEach(button => button.addEventListener("click", async () => {
-          const eventId = button.dataset.openHistoryEvent;
-          fecharHistoricoEquipamento();
-          await consultarHistoricoComparacao(eventId, button);
-        }));
-      } catch (error) {
-        list.textContent = error.message || "Não foi possível consultar este histórico.";
-      }
-    }
-
-    function abrirHistoricoEquipamento() {
-      abrirModalAcessivel("modal-historico-equipamento", '[aria-label="Fechar histórico do equipamento"]', "fecharHistoricoEquipamento");
-      const input = document.getElementById("identificador-historico-equipamento");
-      if (!input.dataset.bound) {
-        document.getElementById("form-historico-equipamento").addEventListener("submit", event => { event.preventDefault(); consultarLinhaDoTempoEquipamento(); });
-        input.dataset.bound = "true";
-      }
-      if (!input.value && currentEquipamento?.serial) input.value = currentEquipamento.serial;
-      if (input.value) consultarLinhaDoTempoEquipamento();
     }
 
     function fecharEvolucaoAtualizacoes() { fecharModalAcessivel("modal-evolucao-atualizacoes"); }
@@ -2792,8 +2777,79 @@
       return items.length ? items.map(escapeHtml).join(", ") : "Não informado";
     }
 
+    function compararOrdensServicoDecrescente(left, right) {
+      const leftText = String(left || "").trim();
+      const rightText = String(right || "").trim();
+      const numericValue = value => {
+        const normalized = value.normalize("NFKD").replace(/[\u0300-\u036f]/g, "");
+        if (/[A-Za-z]/.test(normalized)) return null;
+        const digits = normalized.replace(/\D/g, "");
+        return digits ? BigInt(digits) : null;
+      };
+      const leftNumber = numericValue(leftText);
+      const rightNumber = numericValue(rightText);
+      if (leftNumber !== null && rightNumber !== null && leftNumber !== rightNumber) {
+        return leftNumber > rightNumber ? -1 : 1;
+      }
+      if (leftNumber !== null && rightNumber === null) return -1;
+      if (leftNumber === null && rightNumber !== null) return 1;
+      return rightText.localeCompare(leftText, "pt-BR", { numeric: true, sensitivity: "base" });
+    }
+
+    function obterOrdemServicoPrincipalChamado(record) {
+      const simpress = record?.simpress || {};
+      const oracle = Array.isArray(record?.oracle) ? record.oracle : [];
+      const values = [
+        ...(Array.isArray(simpress.ordens_servico) ? simpress.ordens_servico : []),
+        ...(Array.isArray(record?.ordens_servico_conferidas) ? record.ordens_servico_conferidas : []),
+        ...oracle.map(ticket => ticket?.ordem_servico),
+      ];
+      const missingLabels = new Set(["nao informado", "nao informada", "sem os", "n/a", "na"]);
+      const orders = values
+        .map(value => String(value || "").trim())
+        .filter(value => value && !missingLabels.has(normalizarFiltroChamados(value)));
+      return orders.reduce((highest, value) => (
+        !highest || compararOrdensServicoDecrescente(value, highest) < 0 ? value : highest
+      ), "");
+    }
+
+    function compararChamadosPorOrdemServicoDecrescente(left, right) {
+      const leftOrder = obterOrdemServicoPrincipalChamado(left);
+      const rightOrder = obterOrdemServicoPrincipalChamado(right);
+      if (!leftOrder && rightOrder) return 1;
+      if (leftOrder && !rightOrder) return -1;
+      return compararOrdensServicoDecrescente(leftOrder, rightOrder)
+        || String(left?.serie || "").localeCompare(String(right?.serie || ""), "pt-BR");
+    }
+
+    function formatarOrdensServico(values) {
+      const items = Array.isArray(values) ? values.filter(Boolean) : [];
+      return formatarListaChamados(items.sort(compararOrdensServicoDecrescente));
+    }
+
+    function formatarPrevisoesEntrega(values) {
+      const items = Array.isArray(values) ? values.filter(Boolean) : [];
+      if (!items.length) return "Não informado";
+      return items.map(value => {
+        const parsed = dataAtualizacaoChamado(value);
+        return escapeHtml(parsed ? parsed.toLocaleDateString("pt-BR") : value);
+      }).join(", ");
+    }
+
+    function resumirDescricaoChamado(value, limit = 150) {
+      const description = String(value || "").replace(/\s+/g, " ").trim();
+      return description.length > limit ? `${description.slice(0, limit).trimEnd()}…` : description;
+    }
+
     function normalizarFiltroChamados(value) {
       return String(value || "").normalize("NFKD").replace(/[\u0300-\u036f]/g, "").trim().toLocaleLowerCase("pt-BR");
+    }
+
+    function chamadosClienteInformados(values) {
+      return (Array.isArray(values) ? values : []).filter(value => {
+        const normalized = normalizarFiltroChamados(value);
+        return normalized && normalized !== "nao informado";
+      });
     }
 
     function valoresChamado(record) {
@@ -2814,7 +2870,7 @@
       return null;
     }
 
-    function classificarAtencaoChamado(record, limiteDias = 7) {
+    function classificarAtencaoChamado(record, limiteDias = 3) {
       const oracle = Array.isArray(record.oracle) ? record.oracle : [];
       const encerrados = ["conclu", "encerr", "finaliz", "cancel", "resolvid", "fechad", "closed", "complete"];
       const ativos = oracle.filter(ticket => !encerrados.some(token => normalizarFiltroChamados(`${ticket.status || ""} ${ticket.sub_status || ""}`).includes(token)));
@@ -2825,14 +2881,13 @@
       const ultimaUtc = ultima ? Date.UTC(ultima.getFullYear(), ultima.getMonth(), ultima.getDate()) : 0;
       const idade = ultima ? Math.max(0, Math.floor((hojeUtc - ultimaUtc) / 86400000)) : null;
       const desatualizado = ativos.length > 0 && (idade === null || idade >= limiteDias);
-      const prioridadeRelacao = { divergente: 0, sem_os: 1, somente_oracle: 3, somente_simpress: 4, conferida: 5 };
-      const prioridade = desatualizado ? Math.min(prioridadeRelacao[record.relacao] ?? 5, 2) : (prioridadeRelacao[record.relacao] ?? 5);
-      const rotulos = { divergente: "OS divergente", sem_os: "Sem OS", somente_oracle: "Somente Oracle", somente_simpress: "Somente Simpress", conferida: "OS conferida" };
-      const motivos = record.relacao === "conferida" ? [] : [rotulos[record.relacao] || "Revisar chamado"];
-      if (desatualizado) motivos.push(idade === null ? "Sem data de atualização" : `Sem atualização há ${idade} dias`);
+      const prioridade = desatualizado ? 0 : 1;
+      const motivos = desatualizado
+        ? [idade === null ? "Sem data de atualização" : `Sem atualização há ${idade} dias`]
+        : [];
       return {
         prioridade,
-        em_atencao: record.relacao !== "conferida" || desatualizado,
+        em_atencao: desatualizado,
         desatualizado,
         dias_sem_atualizacao: idade,
         ultima_atualizacao: ultima ? ultima.toISOString().slice(0, 10) : "",
@@ -2846,7 +2901,7 @@
         status: document.getElementById("status-acompanhamento-chamados").value || "",
         queue: document.getElementById("fila-acompanhamento-chamados").value || "",
         search: document.getElementById("filtro-acompanhamento-chamados").value.trim(),
-        stale_days: Number(document.getElementById("limite-desatualizacao-chamados").value) || 7,
+        stale_days: Number(document.getElementById("limite-desatualizacao-chamados").value) || 3,
         age_filter: document.getElementById("idade-acompanhamento-chamados").value || "",
         attention_only: Boolean(document.getElementById("somente-atencao-chamados").checked),
       };
@@ -2890,6 +2945,7 @@
       selector.replaceChildren(empty, ...options);
       selector.value = selectedId;
       selector.disabled = events.length === 0;
+      document.getElementById("btn-excluir-importacoes-antigas-chamados").disabled = events.length <= 1;
       if (!selectedId && events.length) selector.value = events[0].id;
     }
 
@@ -2968,14 +3024,8 @@
         const searchable = normalizarFiltroChamados(valoresChamado(record).join(" "));
         return !query || searchable.includes(query);
       });
-      records.sort((a, b) => {
-        const first = classificarAtencaoChamado(a, filters.stale_days);
-        const second = classificarAtencaoChamado(b, filters.stale_days);
-        return first.prioridade - second.prioridade
-          || (second.dias_sem_atualizacao || 0) - (first.dias_sem_atualizacao || 0)
-          || String(a.serie || "").localeCompare(String(b.serie || ""), "pt-BR");
-      });
-      document.getElementById("contagem-acompanhamento-chamados").textContent = `Exibindo ${records.length} de ${Array.isArray(data.chamados) ? data.chamados.length : 0} séries · priorizadas por atenção`;
+      records.sort(compararChamadosPorOrdemServicoDecrescente);
+      document.getElementById("contagem-acompanhamento-chamados").textContent = `Exibindo ${records.length} de ${Array.isArray(data.chamados) ? data.chamados.length : 0} séries · OS da maior para a menor, sem OS no final`;
       const exportButton = document.getElementById("btn-exportar-acompanhamento-chamados");
       exportButton.disabled = !Array.isArray(data.chamados) || data.chamados.length === 0;
       if (!Array.isArray(data.chamados) || data.chamados.length === 0) {
@@ -2998,22 +3048,47 @@
         const [relationLabel, relationClass] = relations[record.relacao] || relations.sem_os;
         const attention = classificarAtencaoChamado(record, filters.stale_days);
         const simpress = record.simpress || {};
+        const ordensVenda = Array.isArray(simpress.ordens_venda) ? simpress.ordens_venda : [];
         const ordensSimpress = Array.isArray(simpress.ordens_servico) ? simpress.ordens_servico : [];
+        const chamadosCliente = chamadosClienteInformados(simpress.chamados_cliente);
+        const enderecosEntrega = Array.isArray(simpress.enderecos_entrega) ? simpress.enderecos_entrega : [];
+        const mostrarEnderecoEntrega = simpress.pedido_em_andamento && enderecosEntrega.some(Boolean);
+        const previsoesEntrega = Array.isArray(simpress.previsoes_entrega) ? simpress.previsoes_entrega : [];
         const oracle = Array.isArray(record.oracle) ? record.oracle : [];
-        const oracleRows = oracle.length ? oracle.map(ticket => `<div class="rounded-lg border border-slate-800 bg-slate-900/80 p-3">
+        const oracleRows = oracle.length ? [...oracle].sort((left, right) => compararOrdensServicoDecrescente(left.ordem_servico, right.ordem_servico)).map(ticket => {
+          const oracleAddress = [ticket.logradouro, ticket.numero_endereco, ticket.bairro, ticket.cidade]
+            .map(value => String(value || "").trim())
+            .filter(Boolean)
+            .join(", ");
+          return `<div class="rounded-lg border border-slate-800 bg-slate-900/80 p-3">
           <div class="flex flex-wrap items-center justify-between gap-2"><p class="text-xs font-semibold text-white">Solicitação ${escapeHtml(ticket.solicitacao || "Não informada")}</p><span class="inline-flex items-center gap-2 rounded-md border border-violet-400/30 bg-violet-500/10 px-2.5 py-1.5"><span class="text-[10px] font-semibold uppercase tracking-wide text-violet-200">OS</span><span class="font-mono text-lg font-bold leading-none text-violet-100">${escapeHtml(ticket.ordem_servico || "Não informada")}</span></span></div>
           <p class="mt-1 text-xs text-slate-300">${escapeHtml(ticket.status || "Status não informado")}${ticket.sub_status ? ` · ${escapeHtml(ticket.sub_status)}` : ""}</p>
           <p class="mt-1 text-[10px] text-slate-400">Fila: ${escapeHtml(ticket.fila || "Não informada")} · Fase: ${escapeHtml(ticket.fase_atendimento || "Não informada")}</p>
+          <p class="mt-1 break-words text-[10px] text-slate-400">Endereço: ${escapeHtml(oracleAddress || "Não informado")}</p>
+          <p class="mt-1 text-[10px] text-slate-400">Atendido pela inibição: ${escapeHtml(ticket.atendido_pela_inibicao || "Não informado")}</p>
+          <p class="mt-1 text-[10px] text-slate-400">Atendimento por: ${escapeHtml(ticket.nome_filial || "Não informado")}</p>
           <p class="mt-1 text-[10px] text-slate-500">Entregas: ${escapeHtml(ticket.status_entregas || "Não informado")} · Atividades: ${escapeHtml(ticket.status_atividades || "Não informado")}${ticket.ultima_atualizacao ? ` · Atualizado ${escapeHtml(formatarHorarioHistorico(ticket.ultima_atualizacao))}` : ""}</p>
-        </div>`).join("") : '<p class="text-xs text-slate-500">Sem registro correspondente no Oracle.</p>';
+          ${String(ticket.descricao || "").trim() ? `<details class="ticket-oracle-description"><summary><span class="shrink-0 font-semibold text-violet-200">Descrição do chamado</span><span class="ticket-oracle-description-preview">${escapeHtml(resumirDescricaoChamado(ticket.descricao))}</span><span class="ticket-oracle-description-toggle ticket-oracle-description-expand">⌄ Expandir</span><span class="ticket-oracle-description-toggle ticket-oracle-description-collapse">⌃ Recolher</span></summary><div class="ticket-oracle-description-content">${escapeHtml(String(ticket.descricao).trim())}</div></details>` : ""}
+        </div>`;
+        }).join("") : '<p class="text-xs text-slate-500">Sem registro correspondente no Oracle.</p>';
         const attentionClass = attention.em_atencao ? "border-amber-400/20 bg-amber-500/5 text-amber-200" : "border-slate-700 bg-slate-900 text-slate-400";
         return `<article class="rounded-xl border border-slate-800 bg-slate-950/70 p-4" data-ticket-serial="${escapeHtml(record.serie)}">
           <div class="flex flex-wrap items-center justify-between gap-2"><h4 class="font-mono text-sm font-semibold text-white">${escapeHtml(record.serie)}</h4><div class="flex flex-wrap items-center gap-2"><span class="rounded-full border px-2.5 py-1 text-[10px] font-semibold ${relationClass}">${relationLabel}</span><span class="rounded-full border px-2.5 py-1 text-[10px] ${attentionClass}">${escapeHtml(attention.motivo)}</span></div></div>
           <div class="mt-3 grid grid-cols-1 gap-3 lg:grid-cols-2">
-            <section class="rounded-lg border border-slate-800 bg-slate-900/50 p-3"><h5 class="text-[10px] font-semibold uppercase tracking-wide text-cyan-200">Simpress · Acompanhamento de Pedidos</h5><p class="mt-2 text-xs text-slate-300">Pedido: ${formatarListaChamados(simpress.pedidos)}</p><div class="mt-2 flex flex-wrap items-center gap-2"><span class="text-[10px] font-semibold uppercase tracking-wide text-cyan-200">OS</span><span class="rounded-md border border-cyan-400/30 bg-cyan-500/10 px-2.5 py-1.5 font-mono text-lg font-bold leading-none text-cyan-100">${formatarListaChamados(ordensSimpress)}</span></div><p class="mt-2 text-xs text-slate-300">Chamado do cliente: ${formatarListaChamados(simpress.chamados_cliente)}</p><p class="mt-1 text-xs text-slate-400">Status: ${formatarListaChamados(simpress.status)}</p></section>
+            <section class="rounded-lg border border-slate-800 bg-slate-900/50 p-3">
+              <h5 class="text-[10px] font-semibold uppercase tracking-wide text-cyan-200">Simpress · Acompanhamento de Pedidos</h5>
+              <p class="mt-2 text-xs text-slate-300">Pedido: ${formatarListaChamados(simpress.pedidos)}${ordensVenda.some(Boolean) ? ` · OV: ${formatarListaChamados(ordensVenda)}` : ""}</p>
+              <div class="mt-2 flex flex-wrap items-center gap-2"><span class="text-[10px] font-semibold uppercase tracking-wide text-cyan-200">OS</span><span class="rounded-md border border-cyan-400/30 bg-cyan-500/10 px-2.5 py-1.5 font-mono text-lg font-bold leading-none text-cyan-100">${formatarOrdensServico(ordensSimpress)}</span></div>
+              ${chamadosCliente.some(Boolean) ? `<p class="mt-2 text-xs text-slate-300">Chamado do cliente: ${formatarListaChamados(chamadosCliente)}</p>` : ""}
+              <p class="mt-1 text-xs text-slate-300">Descrição do produto: ${formatarListaChamados(simpress.descricoes_produto)}</p>
+              <p class="mt-1 text-xs text-slate-300">Cidade de entrega: ${formatarListaChamados(simpress.cidades_entrega)}</p>
+              ${previsoesEntrega.some(Boolean) ? `<p class="mt-1 text-xs text-slate-300">Previsão de entrega: ${formatarPrevisoesEntrega(previsoesEntrega)}</p>` : ""}
+              ${mostrarEnderecoEntrega ? `<p class="mt-1 break-words text-xs text-slate-300">Endereço de entrega: ${formatarListaChamados(enderecosEntrega)}</p>` : ""}
+              <p class="mt-1 text-xs text-slate-400">Status: ${formatarListaChamados(simpress.status)}</p>
+            </section>
             <section class="space-y-2"><h5 class="px-1 text-[10px] font-semibold uppercase tracking-wide text-violet-200">Oracle · Gestão de Solicitações</h5>${oracleRows}</section>
           </div>
-          ${record.ordens_servico_conferidas?.length ? `<p class="mt-3 text-[10px] text-emerald-200">OS encontrada nas duas fontes: ${formatarListaChamados(record.ordens_servico_conferidas)}</p>` : ""}
+          ${record.ordens_servico_conferidas?.length ? `<p class="mt-3 text-[10px] text-emerald-200">OS encontrada nas duas fontes: ${formatarOrdensServico(record.ordens_servico_conferidas)}</p>` : ""}
         </article>`;
       }).join("");
     }
@@ -3022,7 +3097,7 @@
       ["filtro-acompanhamento-chamados", "relacao-acompanhamento-chamados", "status-acompanhamento-chamados", "fila-acompanhamento-chamados", "idade-acompanhamento-chamados"].forEach(id => {
         document.getElementById(id).value = "";
       });
-      document.getElementById("limite-desatualizacao-chamados").value = "7";
+      document.getElementById("limite-desatualizacao-chamados").value = "3";
       document.getElementById("somente-atencao-chamados").checked = false;
       renderizarAcompanhamentoChamados();
     }
@@ -3041,6 +3116,30 @@
         renderizarAcompanhamentoChamados();
         await carregarEvolucaoChamados(snapshotId);
       } catch (error) { target.innerHTML = `<p class="py-8 text-center text-sm text-rose-300" role="alert">${escapeHtml(error.message || "Não foi possível abrir esta versão.")}</p>`; }
+    }
+
+    async function excluirImportacoesAntigasChamados() {
+      const button = document.getElementById("btn-excluir-importacoes-antigas-chamados");
+      const olderCount = Math.max(0, historicoAcompanhamentoChamados.length - 1);
+      const olderLabel = olderCount === 1 ? "1 importação antiga" : `${olderCount} importações antigas`;
+      if (!olderCount || !window.confirm(`Excluir ${olderLabel} e manter somente a mais recente? Esta ação não poderá ser desfeita.`)) return;
+
+      button.disabled = true;
+      button.textContent = "Excluindo…";
+      try {
+        const response = await fetch("/api/operacoes/chamados/historico/antigas", { method: "DELETE" });
+        const data = await response.json().catch(() => ({}));
+        if (!response.ok) throw new Error(data.detail || "Não foi possível excluir as importações antigas.");
+        await carregarAcompanhamentoChamados();
+        const removedCount = Number(data.removidas) || 0;
+        const removedLabel = removedCount === 1 ? "1 importação antiga removida" : `${removedCount} importações antigas removidas`;
+        showToast(`${removedLabel}. A importação mais recente foi mantida.`, "success");
+      } catch (error) {
+        showToast(error.message || "Não foi possível excluir as importações antigas.", "error");
+      } finally {
+        button.textContent = "Excluir importações antigas";
+        button.disabled = historicoAcompanhamentoChamados.length <= 1;
+      }
     }
 
     async function exportarAcompanhamentoChamados() {
@@ -3412,7 +3511,7 @@
       }
     }
 
-    async function consultarHistoricoComparacao(eventoId, botao) {
+    async function consultarHistoricoComparacao(eventoId, botao, navigationTarget = null) {
       const textoOriginal = botao.textContent;
       botao.disabled = true;
       botao.setAttribute("aria-busy", "true");
@@ -3430,7 +3529,7 @@
           horario_comparacao: evento.horario || evento.comparacao?.horario_comparacao,
           historico_salvo: true,
           contexto_historico: true,
-        });
+        }, navigationTarget);
       } catch (err) {
         console.error("Erro ao abrir comparação salva:", err);
         showToast(err.message || "Não foi possível abrir este resultado.", "error");
@@ -3622,7 +3721,29 @@
     }
 
     function formatarHorarioHistorico(horario) {
-      const data = new Date(horario);
+      const text = String(horario || "").trim();
+      let data = null;
+      const brazilianDate = /^(\d{1,2})\/(\d{1,2})\/(\d{4})(?:[ T,]+(\d{1,2}):(\d{2})(?::(\d{2})(?:\.(\d{1,3}))?)?)?$/.exec(text);
+      if (brazilianDate) {
+        const [, day, month, year, hour = "0", minute = "0", second = "0", millisecond = "0"] = brazilianDate;
+        const parts = {
+          year: Number(year), month: Number(month), day: Number(day),
+          hour: Number(hour), minute: Number(minute), second: Number(second),
+          millisecond: Number(millisecond.padEnd(3, "0")),
+        };
+        const parsed = new Date(parts.year, parts.month - 1, parts.day, parts.hour, parts.minute, parts.second, parts.millisecond);
+        if (parsed.getFullYear() === parts.year && parsed.getMonth() === parts.month - 1 && parsed.getDate() === parts.day
+          && parsed.getHours() === parts.hour && parsed.getMinutes() === parts.minute && parsed.getSeconds() === parts.second) {
+          data = parsed;
+        }
+      }
+      const isoDateOnly = /^(\d{4})-(\d{2})-(\d{2})$/.exec(text);
+      if (!data && isoDateOnly) {
+        const [, year, month, day] = isoDateOnly;
+        const parsed = new Date(Number(year), Number(month) - 1, Number(day));
+        if (parsed.getFullYear() === Number(year) && parsed.getMonth() === Number(month) - 1 && parsed.getDate() === Number(day)) data = parsed;
+      }
+      if (!data) data = horario instanceof Date ? horario : new Date(horario);
       if (Number.isNaN(data.getTime())) return horario || "Horário indisponível";
       return new Intl.DateTimeFormat("pt-BR", {
         dateStyle: "short",

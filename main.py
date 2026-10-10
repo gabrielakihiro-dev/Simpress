@@ -3694,7 +3694,6 @@ app.include_router(inventory_history_router)
 app.include_router(create_operations_router(
     load_comparison_history=load_comparison_history,
     comparison_history_for_display=comparison_history_for_display,
-    load_alias_history=load_alias_history,
     ticket_report_path=lambda: TICKET_REPORT_FILE,
     transaction_root=lambda: TRANSACTION_ROOT,
 ))

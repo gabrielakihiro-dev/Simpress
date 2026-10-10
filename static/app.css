@@ -181,6 +181,22 @@
     .header-action-group > summary::-webkit-details-marker { display: none; }
     .header-action-group > summary:hover,
     .header-action-group[open] > summary { border-color: #29394f; background: #111c2e; color: #f8fafc; }
+    .header-action-group[data-action-group="analysis"] > summary {
+      border-color: rgba(251, 146, 60, 0.44); background: rgba(124, 45, 18, 0.3); color: #fed7aa;
+    }
+    .header-action-group[data-action-group="analysis"] > summary:hover,
+    .header-action-group[data-action-group="analysis"][open] > summary {
+      border-color: rgba(251, 146, 60, 0.7); background: rgba(154, 52, 18, 0.44); color: #ffedd5;
+    }
+    .header-action-group[data-action-group="analysis"] > summary .header-action-group-icon { color: #fdba74; }
+    .header-action-group[data-action-group="equipment"] > summary {
+      border-color: rgba(248, 113, 113, 0.42); background: rgba(127, 29, 29, 0.3); color: #fecaca;
+    }
+    .header-action-group[data-action-group="equipment"] > summary:hover,
+    .header-action-group[data-action-group="equipment"][open] > summary {
+      border-color: rgba(252, 165, 165, 0.7); background: rgba(153, 27, 27, 0.42); color: #fee2e2;
+    }
+    .header-action-group[data-action-group="equipment"] > summary .header-action-group-icon { color: #fca5a5; }
     .header-action-group-icon { width: 0.9rem; height: 0.9rem; flex: none; color: #8fa4bc; }
     .header-action-group-chevron { width: 0.8rem; height: 0.8rem; flex: none; margin-left: auto; color: #7c8da3; transition: transform 0.14s ease; }
     .header-action-group[open] .header-action-group-chevron { transform: rotate(180deg); }
@@ -214,12 +230,21 @@
     .header-action-item--cyan { --action-tint: 34, 211, 238; --action-text: #cffafe; }
     .header-action-item--emerald { --action-tint: 52, 211, 153; --action-text: #d1fae5; }
     .header-action-item--amber { --action-tint: 251, 191, 36; --action-text: #fef3c7; }
+    .header-action-item--teal { --action-tint: 45, 212, 191; --action-text: #ccfbf1; }
     .header-action-icon { flex: none; width: 0.75rem; height: 0.75rem; color: #94a3b8; }
     .header-action-icon--blue { color: #7dd3fc; }
     .header-action-icon--violet { color: #c4b5fd; }
     .header-action-icon--cyan { color: #67e8f9; }
     .header-action-icon--emerald { color: #6ee7b7; }
     .header-action-icon--amber { color: #fcd34d; }
+    .header-action-icon--teal { color: #5eead4; }
+    .header-secondary-panel .header-action-item--teal {
+      border-color: rgba(45, 212, 191, 0.38); background: rgba(13, 148, 136, 0.2); color: #ccfbf1;
+    }
+    .header-secondary-panel .header-action-item--teal:hover {
+      border-color: rgba(94, 234, 212, 0.66); background: rgba(13, 148, 136, 0.32); color: #f0fdfa;
+    }
+    .header-secondary-panel .header-action-item--teal .header-action-icon { color: #5eead4; }
     .header-action-count {
       display: inline-flex; align-items: center; justify-content: center; min-width: 1.2rem; height: 1.2rem;
       margin-left: auto; padding: 0 0.3rem; border: 1px solid #334155; border-radius: 999px;
@@ -344,6 +369,28 @@
     .comparison-mobile-card dd > div, .comparison-mobile-card [data-manual-alias-actions] { min-width: 0; max-width: 100%; }
     .comparison-mobile-card [data-comparison-annotation] {
       box-sizing: border-box; width: 100%; min-width: 0 !important; min-height: 5rem; font-size: 16px !important;
+    }
+    .ticket-oracle-description {
+      margin-top: 0.5rem; overflow: hidden; border: 1px solid rgba(167, 139, 250, 0.22); border-radius: 0.65rem;
+      background: rgba(2, 6, 23, 0.45);
+    }
+    .ticket-oracle-description > summary {
+      display: flex; min-height: 2.75rem; align-items: center; gap: 0.55rem; padding: 0.5rem 0.75rem;
+      color: #cbd5e1; cursor: pointer; list-style: none;
+    }
+    .ticket-oracle-description > summary::-webkit-details-marker { display: none; }
+    .ticket-oracle-description > summary:focus-visible { outline: 2px solid rgba(167, 139, 250, 0.8); outline-offset: -2px; }
+    .ticket-oracle-description[open] > summary { border-bottom: 1px solid rgba(167, 139, 250, 0.18); }
+    .ticket-oracle-description-preview {
+      flex: 1; min-width: 0; overflow: hidden; color: #94a3b8; font-size: 0.7rem; text-overflow: ellipsis; white-space: nowrap;
+    }
+    .ticket-oracle-description-toggle { flex: none; color: #c4b5fd; font-size: 0.65rem; font-weight: 700; }
+    .ticket-oracle-description-collapse { display: none; }
+    .ticket-oracle-description[open] .ticket-oracle-description-expand { display: none; }
+    .ticket-oracle-description[open] .ticket-oracle-description-collapse { display: inline; }
+    .ticket-oracle-description-content {
+      max-height: 12rem; overflow: auto; padding: 0.65rem 0.75rem; color: #cbd5e1; font-size: 0.75rem;
+      line-height: 1.55; overflow-wrap: anywhere; white-space: pre-wrap;
     }
     @media (max-width: 1023px), (pointer: coarse) {
       .comparison-desktop-table { display: none; }
