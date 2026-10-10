@@ -198,7 +198,16 @@ def create_operations_router(
             "relation": relation, "status": status, "queue": queue, "search": search,
             "stale_days": stale_days, "age_filter": age_filter, "attention_only": attention_only,
         }
-        tickets = filter_ticket_records(snapshot.get("chamados", []), **filters)
+        tickets = filter_ticket_records(
+            snapshot.get("chamados", []),
+            relation=relation,
+            status=status,
+            queue=queue,
+            search=search,
+            stale_days=stale_days,
+            age_filter=age_filter,
+            attention_only=attention_only,
+        )
         output = build_ticket_workbook(snapshot, tickets, filters)
         date_label = str(snapshot.get("atualizado_em") or datetime.now().astimezone().isoformat())[:10].replace("-", "")
         return StreamingResponse(
