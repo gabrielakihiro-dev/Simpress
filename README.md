@@ -6,9 +6,11 @@ Aplicação web local para consultar equipamentos, preparar transferências Simp
 
 - Busca por número de série, código de barras, apelido/hostname, modelo ou cidade. A busca completa pode ser filtrada por categoria e cidade.
 - Geração e download da planilha oficial de transferência a partir do modelo local.
+- Acompanhamento de Chamados que relaciona as séries e as OS das exportações Simpress e Oracle, com conferência de divergências.
 - Textos prontos para solicitações de transporte, kit de teclado e mouse e defeitos, com opções para copiar o texto e abrir os links correspondentes.
 - Edição de apelidos e de outros campos permitidos do equipamento, com histórico e opção de desfazer alterações de apelido.
 - Comparação e atualização conjunta dos inventários Endpoint e Simpress, com histórico, backups locais e prévia de restauração.
+- Central de pendências, linha do tempo por equipamento e comparação da evolução entre atualizações.
 - Exportação de `Apelido` e, quando disponível, `IdCliente` para um modelo Excel local.
 - Catálogo de unidades, endereços, CNPJ e CEP, incluindo unidades personalizadas.
 
@@ -31,6 +33,8 @@ cd Simpress
 ```
 
 O inicializador `iniciar_servidor.bat` prepara automaticamente o ambiente na primeira execução: cria `.venv` e instala as dependências fixadas. Isso requer Python 3.12 ou superior e conexão com a internet na primeira instalação. Nas próximas inicializações, a instalação só se repete quando os arquivos de dependências mudarem.
+
+Se o `pip` estiver ausente na `.venv`, o inicializador tenta recuperá-lo automaticamente com `ensurepip` e reinstala as dependências. A recuperação do `pip` usa os arquivos incluídos no Python; a instalação das dependências requer internet.
 
 Para preparar o ambiente manualmente — por exemplo, se for iniciar o servidor diretamente pelo Python — use Python 3.12 ou superior. No Windows, use o Python Launcher:
 
@@ -75,6 +79,7 @@ Antes de iniciar o servidor, a limpeza recupera transações e considera tempor�
 | `EquipamentosDetalhes-exportacao.xlsx` | `modelos` | Modelo local de exportação. Não é distribuído pelo Git. |
 | `apelidos_modificados.json` | `data/state/apelidos_modificados` | Apelidos personalizados locais. O arquivo, temporários e bloqueios não são versionados. |
 | `historico_comparacoes.json` | `data/state/historico_comparacoes` | Histórico local de comparações. O arquivo, temporários e bloqueios não são versionados. |
+| `historico_chamados.json` | `data/state` | Última relação importada entre as fontes Simpress e Oracle; o arquivo, temporários e bloqueios não são versionados. |
 | Lotes para atualização automática | `data/state/entrada_automatica` | Fila local de entrada, arquivos processados e lotes com falha; não é versionada. |
 | Catálogo de unidades e histórico de apelidos | `data/state` | Estado local da aplicação; não é distribuído pelo Git. |
 
@@ -154,9 +159,13 @@ Na pesquisa completa, combine os filtros de categoria e cidade. As categorias s�
 
 Para gerar a planilha, são obrigatórios: série do equipamento; CNPJ e endereço de retirada e entrega; nome, e-mail e telefone do contato de retirada; observações da retirada; nome, e-mail e telefone do destinatário; horário, almoço e observações da entrega. A duração da pausa da unidade de entrega também é obrigatória, exceto quando o horário de almoço indica que o escritório não fecha. O arquivo é preparado para download e não fica guardado como arquivo permanente pelo servidor.
 
+Em **Acompanhamento de Chamados**, importe o Excel **Acompanhamento de Pedidos** exportado da Simpress e o Excel **Gestão de Solicitações** exportado do Oracle. A aplicação relaciona as linhas pelo número de série e apresenta a OS de cada fonte, a solicitação Oracle e seus status. Quando as fontes tiverem OS diferentes para a mesma série, o registro é marcado para conferência. A relação mais recente fica salva no modo local de arquivos.
+
 Na aba **Home**, **Mostrar textos para chamados** apresenta textos editáveis relacionados ao equipamento. Use **Copiar** para levar o texto ao chamado; os botões **Link** abrem os sistemas externos correspondentes.
 
 ### Comparar e atualizar inventários
+
+Use **Pendências** para revisar e anotar as linhas da atualização mais recente; **Histórico por equipamento** reúne ocorrências pela série ou hostname; **Evolução das atualizações** conta casos novos, contínuos e resolvidos entre duas atualizações completas.
 
 1. Abra **Atualizar Planilhas**.
 2. Envie um arquivo `.xlsx` do **Endpoint** e um do **Simpress**.

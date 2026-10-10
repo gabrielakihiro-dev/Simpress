@@ -59,13 +59,19 @@ class PersistenceConfigurationTests(unittest.TestCase):
     def test_route_boundary_enables_stage_6_with_exact_methods(self):
         for method,path in (("POST","/api/planilhas/atualizar"),("GET","/api/exportar-equipamentos"),
                             ("POST","/api/gerar-planilha"),("GET","/api/historico-comparacoes"),
-                            ("PUT","/api/historico-comparacoes/a/anotacoes/b")):
+                            ("PUT","/api/historico-comparacoes/a/anotacoes/b"),
+                            ("GET","/api/operacoes/pendencias"),
+                            ("GET","/api/operacoes/equipamento/SN1"),
+                            ("GET","/api/operacoes/evolucao")):
             self.assertTrue(pilot_route_allowed(method,path))
         for path in ("/api/piloto/unknown","/api/historico-comparacoes/a/anotacao"):
             self.assertFalse(pilot_route_allowed("POST", path))
             self.assertFalse(pilot_route_allowed("GET", path))
         self.assertTrue(pilot_route_allowed("GET", "/api/equipamento/SN1"))
         self.assertTrue(pilot_route_allowed("POST", "/api/unidade/salvar"))
+        for method in ("GET", "POST"):
+            self.assertFalse(pilot_route_allowed(method, "/api/operacoes/chamados"))
+        self.assertFalse(pilot_route_allowed("POST", "/api/operacoes/chamados/importar"))
 
     def test_request_context_is_reset_and_nonlocal_requests_denied(self):
         observations, messages = [], []

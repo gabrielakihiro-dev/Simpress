@@ -78,6 +78,8 @@ __pycache__/
 /data/state/unidades_custom.json
 /data/state/historico_alteracoes.json
 /data/state/historico_apelidos.json
+/data/state/historico_transferencias.json
+/data/state/historico_chamados.json
 /data/state/apelidos_modificados.json
 /data/state/historico_comparacoes.json
 /data/state/entrada_automatica/*

@@ -68,6 +68,31 @@ def ensure_environment(
     except OSError:
         installed_digest = ""
 
+    pip_command = [str(python_path), "-m", "pip", "--version"]
+    pip_status = command_runner(
+        pip_command, cwd=str(root), check=False, capture_output=True,
+    )
+    if pip_status.returncode != 0:
+        report("Recuperando o pip ausente no ambiente virtual com ensurepip.")
+        recovery = command_runner(
+            [str(python_path), "-m", "ensurepip", "--upgrade"],
+            cwd=str(root),
+            check=False,
+        )
+        if recovery.returncode != 0:
+            raise RuntimeError(
+                f"Não foi possível recuperar o pip (código {recovery.returncode}). "
+                "Verifique se a instalação do Python inclui o módulo ensurepip."
+            )
+        pip_status = command_runner(
+            pip_command, cwd=str(root), check=False, capture_output=True,
+        )
+        if pip_status.returncode != 0:
+            raise RuntimeError("O pip continua indisponível após executar ensurepip.")
+        # A repaired environment must reinstall even if an old marker exists.
+        marker.unlink(missing_ok=True)
+        installed_digest = ""
+
     if installed_digest == digest:
         report("Dependências do projeto já estão preparadas.")
         return python_path
