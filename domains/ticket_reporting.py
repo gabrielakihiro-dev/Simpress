@@ -77,8 +77,10 @@ def _order_service_descending_key(value: Any) -> Tuple[bool, int, str]:
 
 def _ticket_order_service_sort_key(ticket: Dict[str, Any]) -> Tuple[int, int, str]:
     """Return the highest OS for a ticket, with missing OS values sorting last."""
-    simpress = ticket.get("simpress") if isinstance(ticket.get("simpress"), dict) else {}
-    oracle = ticket.get("oracle") if isinstance(ticket.get("oracle"), list) else []
+    simpress_value = ticket.get("simpress")
+    simpress: Dict[str, Any] = simpress_value if isinstance(simpress_value, dict) else {}
+    oracle_value = ticket.get("oracle")
+    oracle: List[Any] = oracle_value if isinstance(oracle_value, list) else []
     values: List[Any] = []
     for field_values in (simpress.get("ordens_servico"), ticket.get("ordens_servico_conferidas")):
         if isinstance(field_values, (list, tuple, set)):
@@ -209,7 +211,8 @@ def normalize_ticket_snapshot(snapshot: Dict[str, Any]) -> Dict[str, Any]:
                 simpress["pedidos"] = latest_pedidos
 
         if orders_changed:
-            oracle = ticket.get("oracle") if isinstance(ticket.get("oracle"), list) else []
+            oracle_value = ticket.get("oracle")
+            oracle: List[Any] = oracle_value if isinstance(oracle_value, list) else []
             oracle_orders = [
                 str(item.get("ordem_servico") or "").strip()
                 for item in oracle
@@ -300,10 +303,16 @@ def ticket_attention(
     today: Optional[date] = None,
 ) -> Dict[str, Any]:
     """Flag active Oracle calls with no update date or no update within the threshold."""
-    oracle = ticket.get("oracle") if isinstance(ticket.get("oracle"), list) else []
-    active = [item for item in oracle if isinstance(item, dict) and not _is_closed(item)]
-    update_dates = [_parse_date(item.get("ultima_atualizacao")) for item in active]
-    update_dates = [value for value in update_dates if value is not None]
+    oracle_value = ticket.get("oracle")
+    oracle: List[Any] = oracle_value if isinstance(oracle_value, list) else []
+    active: List[Dict[str, Any]] = [
+        item for item in oracle if isinstance(item, dict) and not _is_closed(item)
+    ]
+    update_dates: List[date] = []
+    for item in active:
+        update_date = _parse_date(item.get("ultima_atualizacao"))
+        if update_date is not None:
+            update_dates.append(update_date)
     latest_date = max(update_dates) if update_dates else None
     reference = today or datetime.now().astimezone().date()
     age = max(0, (reference - latest_date).days) if latest_date else None
