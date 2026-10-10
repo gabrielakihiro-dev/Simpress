@@ -274,11 +274,18 @@ def filter_sebrae_owned_unmatched_items(items: Any) -> List[Dict[str, Any]]:
         if not isinstance(item, dict) or not is_sebrae_owned_notebook_serial(item.get("serie"))
     ]
 
-def filter_update_review_items(items: Any) -> List[Dict[str, Any]]:
+def filter_update_review_items(
+    items: Any,
+    *,
+    endpoint_unmatched_serials: Optional[set] = None,
+    ambiguous_serials: Optional[set] = None,
+) -> List[Dict[str, Any]]:
     """Keep review rows except Endpoint series shown in other result sections."""
     if not isinstance(items, list):
         return []
 
+    endpoint_unmatched_serials = endpoint_unmatched_serials or set()
+    ambiguous_serials = ambiguous_serials or set()
     filtered = []
     for item in items:
         if not isinstance(item, dict):
@@ -288,12 +295,13 @@ def filter_update_review_items(items: Any) -> List[Dict[str, Any]]:
             _comparison_source_text_for_display(str(item.get("motivo") or ""))
         )
         hostname = normalize_reference_value(item.get("computador"))
-        if (
-            "SERIEDUPLICADANOENDPOINT" in reason
-            or "SERIENAOENCONTRADANOENDPOINT" in reason
-        ):
+        if "SERIEDUPLICADANOENDPOINT" in reason and serial in ambiguous_serials:
+            continue
+        if "SERIENAOENCONTRADANOENDPOINT" in reason and serial in endpoint_unmatched_serials:
             continue
         if "SERIEDUPLICADA" in reason or not serial:
+            filtered.append(item)
+        elif "SERIENAOENCONTRADANOENDPOINT" in reason and serial.startswith(("BRJ", "BRM")):
             filtered.append(item)
         elif "SERIENAOENCONTRADANASIMPRESS" in reason and hostname.startswith("PRMAC"):
             filtered.append(item)
@@ -388,6 +396,39 @@ def comparison_history_for_display(evento: Dict[str, Any]) -> Dict[str, Any]:
     for obsolete_key in ("total_base_principal", "ausentes_na_base_principal", "divergencias_endereco"):
         comparison_view.pop(obsolete_key, None)
 
+    endpoint_unmatched_items = comparison.get("ausentes_no_endpoint")
+    if not is_pinned_baseline:
+        endpoint_unmatched_items = filter_update_unmatched_series(endpoint_unmatched_items)
+    endpoint_unmatched_serials = {
+        normalize_reference_value(item.get("serie"))
+        for item in filter_sebrae_owned_unmatched_items(endpoint_unmatched_items)
+        if isinstance(item, dict) and normalize_reference_value(item.get("serie"))
+    }
+    duplicate_serial_type = normalize_reference_value("Número de série duplicado")
+    ambiguous_serials = set()
+    ambiguity_items_for_filter = comparison.get("correspondencias_ambiguas")
+    if isinstance(ambiguity_items_for_filter, list):
+        for issue in ambiguity_items_for_filter:
+            if (
+                isinstance(issue, dict)
+                and normalize_reference_value(issue.get("tipo")) == duplicate_serial_type
+            ):
+                duplicate_serial = normalize_reference_value(issue.get("chave"))
+                if duplicate_serial:
+                    ambiguous_serials.add(duplicate_serial)
+    ambiguous_records_for_filter = comparison.get("registros_ambiguos")
+    if isinstance(ambiguous_records_for_filter, list):
+        for record in ambiguous_records_for_filter:
+            if isinstance(record, dict):
+                ambiguous_serials.update(
+                    serial
+                    for serial in (
+                        normalize_reference_value(value)
+                        for value in re.split(r"\s*/\s*", str(record.get("serie") or ""))
+                    )
+                    if serial
+                )
+
     def without_legacy_source(item: Any) -> Any:
         if not isinstance(item, dict):
             return item
@@ -472,7 +513,11 @@ def comparison_history_for_display(evento: Dict[str, Any]) -> Dict[str, Any]:
         selected_review_items = (
             review_items_with_ids
             if is_pinned_baseline
-            else filter_update_review_items(review_items_with_ids)
+            else filter_update_review_items(
+                review_items_with_ids,
+                endpoint_unmatched_serials=endpoint_unmatched_serials,
+                ambiguous_serials=ambiguous_serials,
+            )
         )
         comparison_view["apelidos_sem_atualizacao"] = selected_review_items
 

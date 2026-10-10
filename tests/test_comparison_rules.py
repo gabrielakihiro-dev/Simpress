@@ -41,6 +41,60 @@ class InventoryComparisonTests(unittest.TestCase):
         )
         self.assertNotIn("anotacao_id", visible_review)
 
+    def test_review_rows_are_removed_only_when_the_same_series_is_shown_elsewhere(self):
+        review_items = [
+            {
+                "serie": "BRJ-DUP-MATCH",
+                "computador": "PRNOTE-DUP-MATCH",
+                "motivo": "Série duplicada no Endpoint; nenhum hostname foi escolhido.",
+            },
+            {
+                "serie": "BRJ-DUP-STANDALONE",
+                "computador": "PRNOTE-DUP-STANDALONE",
+                "motivo": "Série duplicada no Endpoint; nenhum hostname foi escolhido.",
+            },
+            {
+                "serie": "BRJ-MISSING-MATCH",
+                "computador": "PRNOTE-MISSING-MATCH",
+                "motivo": "Série não encontrada no Endpoint; apelido atual preservado.",
+            },
+            {
+                "serie": "BRJ-MISSING-STANDALONE",
+                "computador": "PRNOTE-MISSING-STANDALONE",
+                "motivo": "Série não encontrada no Endpoint; apelido atual preservado.",
+            },
+        ]
+        event = {
+            "id": "evento-series-sobrepostas",
+            "comparacao": {
+                "apelidos_sem_atualizacao": review_items,
+                "ausentes_no_endpoint": [{
+                    "serie": "BRJ-MISSING-MATCH",
+                    "computador": "PRNOTE-MISSING-MATCH",
+                }],
+                "correspondencias_ambiguas": [{
+                    "tipo": "Número de série duplicado",
+                    "chave": "BRJ-DUP-MATCH",
+                    "mensagem": "Série repetida no Endpoint.",
+                }],
+            },
+        }
+
+        displayed = main.comparison_history_for_display(event)["comparacao"]
+
+        self.assertEqual(
+            [item["serie"] for item in displayed["apelidos_sem_atualizacao"]],
+            ["BRJ-DUP-STANDALONE", "BRJ-MISSING-STANDALONE"],
+        )
+        self.assertEqual(
+            [item["serie"] for item in displayed["ausentes_no_endpoint"]],
+            ["BRJ-MISSING-MATCH"],
+        )
+        self.assertEqual(
+            [item["serie"] for item in displayed["registros_ambiguos"]],
+            ["BRJ-DUP-MATCH"],
+        )
+
     def test_pinned_comparison_review_rows_receive_annotation_ids(self):
         review = {
             "serie": "BRJ-PINNED-1",
