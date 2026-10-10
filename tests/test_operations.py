@@ -8,7 +8,8 @@ from pathlib import Path
 from unittest.mock import patch
 
 from fastapi import HTTPException
-from openpyxl import Workbook, load_workbook
+import openpyxl
+from openpyxl import Workbook
 from starlette.datastructures import UploadFile
 
 from domains.history_insights import compare_updates, latest_update, pending_rows
@@ -460,7 +461,7 @@ class TicketImportRouteTests(unittest.TestCase):
                 )
             workbook_bytes = exported_workbook["bytes"]
             self.assertEqual(export.headers["content-type"], "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet")
-            workbook = load_workbook(BytesIO(workbook_bytes), read_only=True, data_only=True)
+            workbook = openpyxl.load_workbook(BytesIO(workbook_bytes), read_only=True, data_only=True)
             try:
                 sheet = workbook["Chamados"]
                 headers = next(sheet.iter_rows(min_row=1, max_row=1))
