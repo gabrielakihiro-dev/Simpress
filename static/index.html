@@ -19,22 +19,16 @@
   <!-- TOP HEADER -->
   <header class="site-header border-b border-slate-800/80 bg-slate-950/80 backdrop-blur-md sticky top-0 z-40">
     <div class="header-inner max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 h-20 flex items-center justify-between">
-      <div class="header-brand flex items-center space-x-4">
-        <!-- Logo Badge -->
-        <div class="flex items-center space-x-3">
-          <div class="w-11 h-11 rounded-xl bg-gradient-to-tr from-brand-600 to-cyan-400 p-[2px] shadow-glow-blue flex items-center justify-center">
-            <div class="w-full h-full bg-slate-950 rounded-[10px] flex items-center justify-center font-bold text-white text-lg tracking-wider">
-              SP
-            </div>
-          </div>
-          <div>
-            <div class="flex items-center space-x-2">
-              <span class="brand-name font-bold text-lg text-white tracking-tight">SIMPRESS</span>
-              <span class="text-xs px-2 py-0.5 rounded-full bg-blue-500/20 text-blue-300 font-semibold border border-blue-500/30">SEBRAE/PR</span>
-            </div>
-          </div>
-        </div>
-      </div>
+      <nav class="app-tabs header-app-tabs" role="tablist" aria-label="Etapas da transferência" onkeydown="controlarAbasTransferencia(event)">
+        <button type="button" id="tab-home" class="app-tab is-active" role="tab" aria-selected="true" aria-controls="tab-panel-home" tabindex="0" onclick="ativarAbaTransferencia('home')">
+          <i data-lucide="home" class="w-4 h-4" aria-hidden="true"></i>
+          <span>Home</span>
+        </button>
+        <button type="button" id="tab-retirada-entrega" class="app-tab" role="tab" aria-selected="false" aria-controls="tab-panel-retirada-entrega" tabindex="-1" onclick="ativarAbaTransferencia('transferencia')">
+          <i data-lucide="truck" class="w-4 h-4" aria-hidden="true"></i>
+          <span>Transporte</span>
+        </button>
+      </nav>
 
       <div class="header-base-summary hidden md:flex items-center gap-3 text-xs text-slate-400 bg-slate-900/80 px-3.5 py-2 rounded-lg border border-slate-800" aria-label="Resumo da base">
         <span class="inline-flex items-center gap-1.5"><span class="h-1.5 w-1.5 rounded-full bg-emerald-400" aria-hidden="true"></span>Base: <strong class="text-slate-200" id="stat-equipamentos">Carregando…</strong> equipamentos</span>
@@ -88,30 +82,23 @@
   <!-- MAIN CONTAINER -->
   <main id="main-content" class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 pt-8 pb-12 flex-1 w-full space-y-6">
 
-    <section id="readiness-panel" class="readiness-panel glass-card rounded-xl px-4 py-3 sm:px-5" data-state="loading" aria-labelledby="readiness-title" aria-busy="true">
-      <div class="readiness-header">
-        <div>
-          <h2 id="readiness-title" class="text-sm font-semibold text-slate-100">Disponibilidade das funções</h2>
-          <p id="readiness-summary" class="text-xs text-slate-300 mt-1" role="status" aria-live="polite" aria-atomic="true">Verificando os arquivos locais…</p>
+    <details id="readiness-panel" class="readiness-panel glass-card rounded-xl" data-state="loading" aria-labelledby="readiness-title" aria-busy="true">
+      <summary class="readiness-panel-summary" aria-controls="readiness-content">
+        <span class="readiness-summary-copy">
+          <span id="readiness-title" class="readiness-title">Disponibilidade das funções</span>
+          <span id="readiness-summary" class="readiness-status" role="status" aria-live="polite" aria-atomic="true">Verificando os arquivos locais…</span>
+        </span>
+      </summary>
+      <div id="readiness-content" class="readiness-expanded-content">
+        <div class="readiness-header">
+          <button type="button" id="readiness-refresh" class="readiness-refresh" aria-label="Atualizar status dos arquivos e funções" disabled>Atualizar status</button>
         </div>
-        <button type="button" id="readiness-refresh" class="readiness-refresh" aria-label="Atualizar status dos arquivos e funções" disabled>Atualizar status</button>
+        <details class="readiness-details">
+          <summary>Ver detalhes de arquivos e funções</summary>
+          <div id="readiness-details-content" class="readiness-details-content"></div>
+        </details>
       </div>
-      <details class="readiness-details">
-        <summary>Ver detalhes de arquivos e funções</summary>
-        <div id="readiness-details-content" class="readiness-details-content"></div>
-      </details>
-    </section>
-
-    <nav class="app-tabs" role="tablist" aria-label="Etapas da transferência" onkeydown="controlarAbasTransferencia(event)">
-      <button type="button" id="tab-home" class="app-tab is-active" role="tab" aria-selected="true" aria-controls="tab-panel-home" tabindex="0" onclick="ativarAbaTransferencia('home')">
-        <i data-lucide="home" class="w-4 h-4" aria-hidden="true"></i>
-        <span>Home</span>
-      </button>
-      <button type="button" id="tab-retirada-entrega" class="app-tab" role="tab" aria-selected="false" aria-controls="tab-panel-retirada-entrega" tabindex="-1" onclick="ativarAbaTransferencia('transferencia')">
-        <i data-lucide="truck" class="w-4 h-4" aria-hidden="true"></i>
-        <span>Transporte</span>
-      </button>
-    </nav>
+    </details>
 
     <section id="tab-panel-home" class="app-tab-panel" role="tabpanel" aria-labelledby="tab-home" tabindex="0">
 
