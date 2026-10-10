@@ -1713,13 +1713,13 @@
       const campos = [
         { id: "retirada-contato", nome: "Nome do contato na retirada" },
         { id: "retirada-email", nome: "E-mail do contato na retirada" },
-        { id: "retirada-telefone", nome: "Telefone / Ramal do contato na retirada" },
-        { id: "retirada-obs", nome: "Observações Adicionais da Retirada" },
+        { id: "retirada-telefone", nome: "Celular" },
+        { id: "retirada-obs", nome: "Observações" },
         { id: "entrega-email", nome: "E-mail do Destinatário" },
-        { id: "entrega-telefone", nome: "Telefone / Ramal do Destinatário" },
+        { id: "entrega-telefone", nome: "Celular" },
         { id: "entrega-horario", nome: "Expediente da unidade de entrega" },
         { id: "entrega-almoco", nome: "Horário de almoço da unidade de entrega" },
-        { id: "entrega-obs", nome: "Observações Adicionais do Chamado" }
+        { id: "entrega-obs", nome: "Observações" }
       ];
       if (!entregaAlmocoNaoFecha()) {
         campos.push({ id: "entrega-pausa-duracao", nome: "Duração da pausa da unidade de entrega" });
