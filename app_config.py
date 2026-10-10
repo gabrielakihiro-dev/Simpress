@@ -9,6 +9,14 @@ DATA_DIR = BASE_DIR / "data"
 STATE_DIR = DATA_DIR / "state"
 STATIC_DIR = BASE_DIR / "static"
 INPUT_DIR = DATA_DIR / "planilhas_entrada"
+_automatic_inventory_inbox_override = str(os.environ.get("SIMPRESS_IMPORT_INBOX_DIR") or "").strip()
+AUTOMATIC_INVENTORY_INBOX_DIR = Path(
+    _automatic_inventory_inbox_override or STATE_DIR / "entrada_automatica"
+).expanduser()
+if not AUTOMATIC_INVENTORY_INBOX_DIR.is_absolute():
+    AUTOMATIC_INVENTORY_INBOX_DIR = BASE_DIR / AUTOMATIC_INVENTORY_INBOX_DIR
+AUTOMATIC_INVENTORY_INBOX_DIR = AUTOMATIC_INVENTORY_INBOX_DIR.resolve(strict=False)
+AUTOMATIC_INVENTORY_IMPORT_POLL_SECONDS = 10
 TEMPLATE_FILE = INPUT_DIR / "(MODELO) - TRANSFERENCIA SIMPRESS.xlsx"
 DETAILS_UPLOAD_FILE = INPUT_DIR / "EquipamentosDetalhes_atual.xlsx"
 ENDPOINT_UPLOAD_FILE = INPUT_DIR / "InvAllComputersSummary_atual.xlsx"

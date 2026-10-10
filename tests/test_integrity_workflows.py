@@ -1583,7 +1583,7 @@ class WorkflowIntegrityTests(unittest.TestCase):
 
         from domains.inventory_update import _commit_inventory_files
 
-        def commit_test_upload(endpoint_name, details_name):
+        def commit_test_upload(endpoint_name, details_name, automatic_import_id=None):
             endpoint_bytes = _endpoint_bytes([("SN-ANNOTATION", "HOST-ANNOTATION")])
             details_bytes = _details_bytes([
                 ("SN-ANNOTATION", "HOST-ANNOTATION", "Modelo A", "Maringá", "Notebook", "87000000"),
@@ -1599,7 +1599,7 @@ class WorkflowIntegrityTests(unittest.TestCase):
                     "bytes": details_bytes,
                     "table": main.validate_uploaded_workbook(details_bytes, "detalhes"),
                 },
-            }, main._inventory_update_services)
+            }, main._inventory_update_services, automatic_import_id)
 
         changed_row = {**previous_row, "dias_sem_verificacao": 15}
         with patch.object(
@@ -1607,11 +1607,16 @@ class WorkflowIntegrityTests(unittest.TestCase):
             "compare_uploaded_workbooks",
             return_value={"sem_acesso_14_dias": [copy.deepcopy(previous_row), changed_row]},
         ):
-            result = commit_test_upload("InvAll_nova.xlsx", "Detalhes_novos.xlsx")
+            result = commit_test_upload(
+                "InvAll_nova.xlsx",
+                "Detalhes_novos.xlsx",
+                automatic_import_id="lote-automacao-teste",
+            )
 
         self.assertTrue(result["sucesso"])
         history = json.loads(self.comparison_history.read_text(encoding="utf-8"))
         new_event = history[-1]
+        self.assertEqual(new_event["importacao_automatica_id"], "lote-automacao-teste")
         new_rows = new_event["comparacao"]["sem_acesso_14_dias"]
         self.assertEqual(new_rows[0]["anotacao"], "Acompanhar com a unidade.")
         self.assertNotEqual(new_rows[0]["anotacao_id"], previous_item_id)

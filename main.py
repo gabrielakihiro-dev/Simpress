@@ -25,6 +25,7 @@ from fastapi import FastAPI, File, HTTPException, UploadFile
 from fastapi.responses import FileResponse, JSONResponse, StreamingResponse
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel, Field, field_validator
+from starlette.datastructures import UploadFile as StarletteUploadFile
 from integrity import (
     AtomicFileTransaction,
     FileBusyError,
@@ -40,6 +41,8 @@ from integrity import (
 )
 from app_config import (
     ALIAS_HISTORY_FILE,
+    AUTOMATIC_INVENTORY_IMPORT_POLL_SECONDS,
+    AUTOMATIC_INVENTORY_INBOX_DIR,
     BASE_DIR,
     COMPARISON_HISTORY_FILE,
     CUSTOM_UNIDADES_FILE,
@@ -110,6 +113,10 @@ from domains.inventory_comparison import (
     is_sebrae_owned_notebook_serial,
     location_for_computer_name,
     normalize_reference_value,
+)
+from domains.inventory_inbox import (
+    AutomaticInventoryInbox,
+    automatic_inventory_import_worker as run_automatic_inventory_import_worker,
 )
 from domains.history_annotations import (
     build_history_annotation_record,
@@ -1474,6 +1481,7 @@ async def lifespan(app: FastAPI):
     except Exception:
         logger.exception("Falha ao migrar anotações legadas do histórico de planilhas.")
     annotation_sync_task = asyncio.create_task(_history_annotation_sync_worker())
+    automatic_import_task = asyncio.create_task(_automatic_inventory_import_worker())
     try:
         prune_result = prune_expired_histories()
         if any(prune_result.values()):
@@ -1489,10 +1497,12 @@ async def lifespan(app: FastAPI):
         yield
     finally:
         annotation_sync_task.cancel()
-        try:
-            await annotation_sync_task
-        except asyncio.CancelledError:
-            pass
+        automatic_import_task.cancel()
+        await asyncio.gather(
+            annotation_sync_task,
+            automatic_import_task,
+            return_exceptions=True,
+        )
 
 
 async def _history_annotation_sync_worker() -> None:
@@ -1502,6 +1512,20 @@ async def _history_annotation_sync_worker() -> None:
             await asyncio.to_thread(flush_pending_history_annotations)
         except Exception:
             logger.exception("Falha inesperada ao tentar sincronizar anotações pendentes.")
+
+
+async def _automatic_inventory_import_worker() -> None:
+    inbox = AutomaticInventoryInbox(
+        root=AUTOMATIC_INVENTORY_INBOX_DIR,
+        max_upload_bytes=MAX_UPLOAD_BYTES,
+        load_history=load_comparison_history,
+        import_batch=_import_automatic_inventory_batch,
+    )
+    logger.info("Entrada automática de planilhas ativa em %s.", AUTOMATIC_INVENTORY_INBOX_DIR)
+    await run_automatic_inventory_import_worker(
+        inbox,
+        poll_interval_seconds=AUTOMATIC_INVENTORY_IMPORT_POLL_SECONDS,
+    )
 
 
 app = FastAPI(
@@ -3409,6 +3433,37 @@ _inventory_update_services = InventoryUpdateServices(
     comparison_annotation_item_id=lambda *args, **kwargs: comparison_annotation_item_id(*args, **kwargs),
     save_history_annotation=lambda *args, **kwargs: save_history_annotation(*args, **kwargs),
 )
+
+
+async def _import_automatic_inventory_batch(
+    batch_id: str,
+    endpoint_name: str,
+    endpoint_bytes: bytes,
+    simpress_name: str,
+    simpress_bytes: bytes,
+):
+    endpoint_upload = StarletteUploadFile(
+        filename=endpoint_name,
+        file=io.BytesIO(endpoint_bytes),
+    )
+    simpress_upload = StarletteUploadFile(
+        filename=simpress_name,
+        file=io.BytesIO(simpress_bytes),
+    )
+    result = await update_inventory_files(
+        endpoint_upload,
+        simpress_upload,
+        services=_inventory_update_services,
+        automatic_import_id=batch_id,
+    )
+    try:
+        await asyncio.to_thread(prune_expired_histories)
+    except Exception:
+        logger.exception(
+            "Falha na retenção após a atualização automática confirmada (lote=%s).",
+            batch_id,
+        )
+    return result
 
 
 async def read_uploaded_xlsx(upload: UploadFile, role: str) -> Dict[str, Any]:
