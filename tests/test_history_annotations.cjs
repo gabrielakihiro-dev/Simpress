@@ -8,9 +8,10 @@ const indexHtml = fs.readFileSync(path.join(__dirname, "..", "static", "index.ht
 const appCss = fs.readFileSync(path.join(__dirname, "..", "static", "app.css"), "utf8");
 
 test("explains that history annotations belong to one row in one update", () => {
-  assert.match(appScript, /As anotações pertencem a esta linha desta atualização/);
-  assert.match(appScript, /não são reaproveitadas em novas atualizações/);
-  assert.match(appScript, /são salvas automaticamente/);
+  assert.match(appScript, /As anotações continuam vinculadas a esta linha e atualização/);
+  assert.match(appScript, /são reaplicadas somente quando os dados correspondem exatamente na mesma seção/);
+  assert.match(appScript, /São salvas automaticamente/);
+  assert.match(appScript, /sincronizadas pela pasta OneDrive/);
 });
 
 test("shows synchronized annotations on a clone without local comparison history", () => {
