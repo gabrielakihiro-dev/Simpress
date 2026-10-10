@@ -370,6 +370,51 @@
     .comparison-mobile-card [data-comparison-annotation] {
       box-sizing: border-box; width: 100%; min-width: 0 !important; min-height: 5rem; font-size: 16px !important;
     }
+    .ticket-disclosure > summary {
+      display: flex; min-width: 0; align-items: center; gap: 0.5rem; list-style: none;
+    }
+    .ticket-disclosure > summary::-webkit-details-marker { display: none; }
+    .ticket-disclosure > summary::before {
+      content: ""; flex: none; width: 0.42rem; height: 0.42rem; border-right: 1.5px solid #94a3b8; border-bottom: 1.5px solid #94a3b8;
+      transform: rotate(-45deg); transition: transform 0.15s ease;
+    }
+    .ticket-disclosure[open] > summary::before { transform: rotate(45deg); }
+    .ticket-disclosure > summary:focus-visible { outline: 2px solid rgba(34, 211, 238, 0.75); outline-offset: 3px; border-radius: 0.2rem; }
+    .ticket-disclosure > summary > span { min-width: 0; }
+    .ticket-card { min-width: 0; }
+    .ticket-card-identifiers { min-width: 0; }
+    .ticket-card-identifier {
+      display: flex; min-width: 0; align-items: center; justify-content: space-between; gap: 0.6rem; border-radius: 0.55rem; padding: 0.45rem 0.6rem;
+    }
+    .ticket-card-identifier > span { color: #94a3b8; font-size: 0.65rem; font-weight: 700; letter-spacing: 0.025em; }
+    .ticket-card-identifier > strong { min-width: 0; color: #e2e8f0; font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 0.9rem; line-height: 1.3; text-align: right; overflow-wrap: anywhere; }
+    .ticket-card-meta > span { min-width: 0; max-width: 100%; overflow-wrap: anywhere; }
+    .ticket-card-meta > span:not(:first-child)::before,
+    .ticket-card-triage > span:not(:first-child)::before {
+      content: "•"; display: inline-block; margin: 0 0.55rem 0 0.15rem; color: #64748b; font-weight: 700;
+    }
+    .ticket-card-meta b, .ticket-card-status b { color: #94a3b8; font-weight: 600; }
+    .ticket-card-status > p { min-width: 0; overflow-wrap: anywhere; }
+    .ticket-card-triage > span { max-width: 100%; overflow-wrap: anywhere; }
+    .ticket-filter-toolbar { display: flex; flex-wrap: wrap; align-items: flex-end; gap: 0.5rem; }
+    .ticket-filter-search { flex: 1 1 18rem; min-width: min(100%, 18rem); }
+    .ticket-filter-search input { min-height: 2.25rem; padding: 0.45rem 0.7rem; }
+    .ticket-filter-attention {
+      display: inline-flex; flex: 0 0 auto; align-items: center; gap: 0.45rem; min-height: 2.25rem;
+      padding: 0.4rem 0.65rem; border-radius: 0.6rem; white-space: nowrap;
+    }
+    .ticket-filter-action {
+      display: inline-flex; flex: 0 0 auto; width: auto; min-height: 2.25rem; align-items: center; justify-content: center;
+      padding: 0.4rem 0.8rem; white-space: nowrap;
+    }
+    @media (max-width: 640px) {
+      .ticket-filter-search { flex-basis: 100%; min-width: 100%; }
+      .ticket-filter-attention { margin-right: auto; }
+    }
+    @media (max-width: 420px) {
+      .ticket-filter-attention { gap: 0.35rem; padding-inline: 0.5rem; font-size: 0.65rem; }
+      .ticket-filter-action { padding-inline: 0.55rem; font-size: 0.68rem; }
+    }
     .ticket-oracle-description {
       margin-top: 0.5rem; overflow: hidden; border: 1px solid rgba(167, 139, 250, 0.22); border-radius: 0.65rem;
       background: rgba(2, 6, 23, 0.45);
