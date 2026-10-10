@@ -3077,7 +3077,10 @@
           <div class="mt-3 grid grid-cols-1 gap-3 lg:grid-cols-2">
             <section class="rounded-lg border border-slate-800 bg-slate-900/50 p-3">
               <h5 class="text-[10px] font-semibold uppercase tracking-wide text-cyan-200">Simpress · Acompanhamento de Pedidos</h5>
-              <p class="mt-2 text-xs text-slate-300">Pedido: ${formatarListaChamados(simpress.pedidos)}${ordensVenda.some(Boolean) ? ` · OV: ${formatarListaChamados(ordensVenda)}` : ""}</p>
+              <div class="mt-2 flex flex-wrap items-center gap-2 text-xs text-slate-300">
+                <span>Pedido: ${formatarListaChamados(simpress.pedidos)}</span>
+                ${ordensVenda.some(Boolean) ? `<span class="inline-flex items-center rounded-md border border-cyan-400/30 bg-cyan-500/10 px-2 py-1 font-mono font-semibold text-cyan-100">${formatarListaChamados(ordensVenda)}</span>` : ""}
+              </div>
               <div class="mt-2 flex flex-wrap items-center gap-2"><span class="text-[10px] font-semibold uppercase tracking-wide text-cyan-200">OS</span><span class="rounded-md border border-cyan-400/30 bg-cyan-500/10 px-2.5 py-1.5 font-mono text-lg font-bold leading-none text-cyan-100">${formatarOrdensServico(ordensSimpress)}</span></div>
               ${chamadosCliente.some(Boolean) ? `<p class="mt-2 text-xs text-slate-300">Chamado do cliente: ${formatarListaChamados(chamadosCliente)}</p>` : ""}
               <p class="mt-1 text-xs text-slate-300">Descrição do produto: ${formatarListaChamados(simpress.descricoes_produto)}</p>
