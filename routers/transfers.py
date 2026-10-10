@@ -156,20 +156,20 @@ def _gerar_planilha_transferencia(payload: TransferenciaPayload, template_file: 
 
     campos_obrigatorios: tuple[tuple[str, str], ...] = (
         ("serial", "Número de série do equipamento"),
-        ("retirada_cnpj", "CNPJ da unidade de retirada"),
-        ("retirada_endereco", "Endereço da unidade de retirada"),
-        ("entrega_cnpj", "CNPJ da unidade de entrega"),
-        ("entrega_endereco", "Endereço da unidade de entrega"),
+        ("retirada_cnpj", "CNPJ"),
+        ("retirada_endereco", "Endereço"),
+        ("entrega_cnpj", "CNPJ"),
+        ("entrega_endereco", "Endereço"),
         ("retirada_contato", "Nome do contato na retirada"),
         ("retirada_email", "E-mail do contato na retirada"),
-        ("retirada_telefone", "Telefone / Ramal do contato na retirada"),
-        ("retirada_obs", "Observações Adicionais da Retirada"),
+        ("retirada_telefone", "Celular"),
+        ("retirada_obs", "Observações"),
         ("entrega_contato", "Nome do Destinatário ou Representante"),
         ("entrega_email", "E-mail do Destinatário"),
-        ("entrega_telefone", "Telefone / Ramal do Destinatário"),
+        ("entrega_telefone", "Celular"),
         ("entrega_horario", "Expediente da unidade de entrega"),
         ("entrega_almoco", "Horário de almoço da unidade de entrega"),
-        ("entrega_obs", "Observações Adicionais do Chamado"),
+        ("entrega_obs", "Observações"),
     )
     almoco_entrega_normalizado = unicodedata.normalize("NFD", payload.entrega_almoco)
     almoco_entrega_normalizado = almoco_entrega_normalizado.encode("ascii", "ignore").decode("ascii").casefold()

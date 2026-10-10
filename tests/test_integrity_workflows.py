@@ -1396,10 +1396,10 @@ class WorkflowIntegrityTests(unittest.TestCase):
         invalid_fields = (
             ("serial", " ", "Número de série do equipamento"),
             ("serial", "---", "Número de série do equipamento precisa conter letras ou números"),
-            ("retirada_cnpj", "  ", "CNPJ da unidade de retirada"),
-            ("retirada_endereco", "", "Endereço da unidade de retirada"),
-            ("entrega_cnpj", " ", "CNPJ da unidade de entrega"),
-            ("entrega_endereco", "  ", "Endereço da unidade de entrega"),
+            ("retirada_cnpj", "  ", "CNPJ"),
+            ("retirada_endereco", "", "Endereço"),
+            ("entrega_cnpj", " ", "CNPJ"),
+            ("entrega_endereco", "  ", "Endereço"),
         )
 
         with patch.object(main, "TEMPLATE_FILE", template):
