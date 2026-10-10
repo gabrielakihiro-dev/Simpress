@@ -191,7 +191,8 @@ def normalize_ticket_snapshot(snapshot: Dict[str, Any]) -> Dict[str, Any]:
             continue
         simpress = ticket.get("simpress")
         if not isinstance(simpress, dict):
-            continue
+            simpress = {}
+            ticket["simpress"] = simpress
         orders = simpress.get("ordens_servico")
         orders_changed = False
         if isinstance(orders, list):
@@ -240,6 +241,10 @@ def normalize_ticket_snapshot(snapshot: Dict[str, Any]) -> Dict[str, Any]:
             else:
                 ticket["relacao"] = "sem_os"
 
+        ticket["fontes_relacao"] = ticket_relation_provenance(ticket)
+        ticket["alertas_relacao"] = ticket_relation_alerts(ticket)
+        ticket["revisao_relacao"] = bool(ticket["alertas_relacao"])
+
     if changed and isinstance(normalized.get("resumo"), dict):
         relation_counts = Counter(
             str(ticket.get("relacao") or "")
@@ -259,6 +264,63 @@ def normalize_ticket_snapshot(snapshot: Dict[str, Any]) -> Dict[str, Any]:
     return normalized
 
 
+def ticket_relation_provenance(ticket: Dict[str, Any]) -> Dict[str, Any]:
+    """Show which source supplied each identifier without changing stored rows."""
+    simpress_value = ticket.get("simpress")
+    simpress = simpress_value if isinstance(simpress_value, dict) else {}
+    oracle_value = ticket.get("oracle")
+    oracle = [item for item in oracle_value if isinstance(item, dict)] if isinstance(oracle_value, list) else []
+    relation = str(ticket.get("relacao") or "")
+
+    def values(value: Any) -> List[str]:
+        if not isinstance(value, (list, tuple, set)):
+            value = [value] if value else []
+        return sorted({str(item).strip() for item in value if str(item or "").strip()}, key=_normalized_text)
+
+    simpress_series = bool(
+        simpress.get("serie") or simpress.get("pedidos") or simpress.get("ordens_servico") or simpress.get("ordens_venda")
+    ) or relation == "somente_simpress"
+    oracle_series = bool(oracle) or relation == "somente_oracle"
+    return {
+        "serie": {"simpress": simpress_series, "oracle": oracle_series},
+        "pedido": {
+            "simpress": values(simpress.get("pedidos")),
+            "oracle_solicitacao": values([item.get("solicitacao") for item in oracle]),
+        },
+        "ordem_servico": {
+            "simpress": sorted(values(simpress.get("ordens_servico")), key=_order_service_descending_key, reverse=True),
+            "oracle": sorted(values([item.get("ordem_servico") for item in oracle]), key=_order_service_descending_key, reverse=True),
+        },
+    }
+
+
+def ticket_relation_alerts(ticket: Dict[str, Any]) -> List[Dict[str, str]]:
+    """Return actionable relation warnings, preserving parser-detected duplicates."""
+    provenance = ticket_relation_provenance(ticket)
+    simpress_os = provenance["ordem_servico"]["simpress"]
+    oracle_os = provenance["ordem_servico"]["oracle"]
+    existing = ticket.get("alertas_relacao")
+    alerts = [dict(item) for item in existing if isinstance(item, dict) and item.get("mensagem")] if isinstance(existing, list) else []
+    known = {str(item.get("tipo") or "") for item in alerts}
+
+    def add(kind: str, message: str) -> None:
+        if kind not in known:
+            alerts.append({"tipo": kind, "mensagem": message})
+            known.add(kind)
+
+    relation = str(ticket.get("relacao") or "")
+    series_sources = provenance["serie"]
+    if relation == "divergente":
+        add("os_divergente", f"OS diferentes entre as fontes: Simpress {', '.join(simpress_os) or 'sem OS'}; Oracle {', '.join(oracle_os) or 'sem OS'}. Conferir.")
+    elif relation == "sem_os":
+        add("sem_os", "A série aparece nas fontes, mas não há uma OS para confirmar a relação.")
+    elif relation == "somente_simpress" or (series_sources["simpress"] and not series_sources["oracle"]):
+        add("fonte_oracle_ausente", "Série encontrada na Simpress, sem registro correspondente no Oracle.")
+    elif relation == "somente_oracle" or (series_sources["oracle"] and not series_sources["simpress"]):
+        add("fonte_simpress_ausente", "Série encontrada no Oracle, sem pedido correspondente na Simpress.")
+    return alerts
+
+
 def ticket_snapshot_metadata(snapshot: Dict[str, Any]) -> Dict[str, Any]:
     sources = snapshot.get("fontes") or {}
     summary = snapshot.get("resumo") or {}
@@ -271,6 +333,149 @@ def ticket_snapshot_metadata(snapshot: Dict[str, Any]) -> Dict[str, Any]:
         },
         "resumo": deepcopy(summary),
     }
+
+
+TICKET_TIMELINE_ANNOTATION_CATEGORY = "linha_do_tempo_chamados"
+TICKET_TIMELINE_STATE_FIELDS = (
+    ("relacao", "Relação das fontes"),
+    ("pedidos_simpress", "Pedido Simpress"),
+    ("solicitacoes_oracle", "Solicitação Oracle"),
+    ("ordens_venda_simpress", "OV Simpress"),
+    ("ordens_servico_simpress", "OS Simpress"),
+    ("ordens_servico_oracle", "OS Oracle"),
+    ("status_simpress", "Status Simpress"),
+    ("status_oracle", "Status Oracle"),
+    ("filas_oracle", "Fila Oracle"),
+    ("cidades", "Cidade"),
+    ("atualizacoes_oracle", "Última atualização Oracle"),
+)
+
+
+def ticket_service_providers(ticket: Dict[str, Any]) -> List[str]:
+    """Classify Oracle service branches into triage-friendly provider groups."""
+    providers = set()
+    oracle = ticket.get("oracle")
+    for item in oracle if isinstance(oracle, list) else []:
+        if not isinstance(item, dict):
+            continue
+        branch = _normalized_text(item.get("nome_filial"))
+        if "parceiro" in branch:
+            providers.add("parceiro")
+        elif "simpress" in branch:
+            providers.add("simpress")
+        else:
+            providers.add("outro" if branch else "nao informado")
+    return sorted(providers)
+
+
+def ticket_city_values(ticket: Dict[str, Any]) -> List[str]:
+    """Return distinct service and delivery cities used by daily triage."""
+    values: Dict[str, str] = {}
+    simpress = ticket.get("simpress")
+    simpress = simpress if isinstance(simpress, dict) else {}
+    delivery_cities = simpress.get("cidades_entrega", [])
+    delivery_cities = delivery_cities if isinstance(delivery_cities, (list, tuple, set)) else [delivery_cities]
+    for value in delivery_cities:
+        text = str(value or "").strip()
+        if text:
+            values.setdefault(_normalized_text(text), text)
+    oracle = ticket.get("oracle")
+    for item in oracle if isinstance(oracle, list) else []:
+        if not isinstance(item, dict):
+            continue
+        text = str(item.get("cidade") or "").strip()
+        if text:
+            values.setdefault(_normalized_text(text), text)
+    return sorted(values.values(), key=_normalized_text)
+
+
+def ticket_timeline_item_id(snapshot_id: Any, serial: Any) -> str:
+    """Build an event-specific stable annotation ID for a ticket in a snapshot."""
+    material = f"{snapshot_id or ''}\0{_stable_serial(serial)}".encode("utf-8")
+    return "ticket-" + sha256(material).hexdigest()[:48]
+
+
+def ticket_timeline_state(ticket: Dict[str, Any]) -> Dict[str, Any]:
+    """Project the identifiers and service state that matter to ticket follow-up."""
+    simpress_value = ticket.get("simpress")
+    simpress = simpress_value if isinstance(simpress_value, dict) else {}
+    oracle_value = ticket.get("oracle")
+    oracle = [item for item in oracle_value if isinstance(item, dict)] if isinstance(oracle_value, list) else []
+
+    def simpress_values(field: str) -> List[str]:
+        values = simpress.get(field)
+        if not isinstance(values, (list, tuple, set)):
+            values = [values] if values else []
+        return sorted({str(value).strip() for value in values if str(value or "").strip()}, key=_normalized_text)
+
+    def oracle_values(field: str) -> List[str]:
+        return sorted({
+            str(item.get(field) or "").strip()
+            for item in oracle
+            if str(item.get(field) or "").strip()
+        }, key=_normalized_text)
+
+    status_oracle = sorted({
+        " · ".join(value for value in (
+            str(item.get("status") or "").strip(),
+            str(item.get("sub_status") or "").strip(),
+        ) if value)
+        for item in oracle
+        if str(item.get("status") or "").strip() or str(item.get("sub_status") or "").strip()
+    }, key=_normalized_text)
+    return {
+        "relacao": str(ticket.get("relacao") or ""),
+        "pedidos_simpress": simpress_values("pedidos"),
+        "solicitacoes_oracle": oracle_values("solicitacao"),
+        "ordens_venda_simpress": simpress_values("ordens_venda"),
+        "ordens_servico_simpress": simpress_values("ordens_servico"),
+        "ordens_servico_oracle": oracle_values("ordem_servico"),
+        "status_simpress": simpress_values("status"),
+        "status_oracle": status_oracle,
+        "filas_oracle": oracle_values("fila"),
+        "cidades": ticket_city_values(ticket),
+        "atualizacoes_oracle": oracle_values("ultima_atualizacao"),
+    }
+
+
+def build_ticket_timeline(snapshots: Sequence[Dict[str, Any]], serial: str) -> List[Dict[str, Any]]:
+    """List one auditable state checkpoint per import, with only changed fields highlighted."""
+    serial_key = _stable_serial(serial)
+    previous_state: Optional[Dict[str, Any]] = None
+    events: List[Dict[str, Any]] = []
+    for snapshot in snapshots:
+        if not isinstance(snapshot, dict):
+            continue
+        ticket = next((
+            item for item in snapshot.get("chamados", [])
+            if isinstance(item, dict) and _stable_serial(item.get("serie")) == serial_key
+        ), None)
+        if ticket is None:
+            continue
+        state = ticket_timeline_state(ticket)
+        changes = []
+        for field, label in TICKET_TIMELINE_STATE_FIELDS:
+            current_value = state.get(field)
+            previous_value = previous_state.get(field) if previous_state is not None else None
+            if previous_state is None:
+                if current_value in (None, "", []):
+                    continue
+                changes.append({"campo": label, "anterior": [], "atual": current_value})
+            elif current_value != previous_value:
+                changes.append({"campo": label, "anterior": previous_value, "atual": current_value})
+        snapshot_id = str(snapshot.get("id") or "")
+        events.append({
+            "snapshot_id": snapshot_id,
+            "item_id": ticket_timeline_item_id(snapshot_id, ticket.get("serie") or serial),
+            "serie": str(ticket.get("serie") or serial),
+            "atualizado_em": str(snapshot.get("atualizado_em") or ""),
+            "estado": state,
+            "mudancas": changes,
+            "tipo": "Importação inicial" if previous_state is None else "Dados alterados" if changes else "Sem mudanças",
+            "anotacao": "",
+        })
+        previous_state = state
+    return events
 
 
 def _parse_date(value: Any) -> Optional[date]:
@@ -350,6 +555,8 @@ def filter_ticket_records(
     relation: str = "",
     status: str = "",
     queue: str = "",
+    city: str = "",
+    provider: str = "",
     search: str = "",
     stale_days: int = 3,
     age_filter: str = "",
@@ -359,6 +566,8 @@ def filter_ticket_records(
     relation_filter = _normalized_text(relation)
     status_filter = _normalized_text(status)
     queue_filter = _normalized_text(queue)
+    city_filter = _normalized_text(city)
+    provider_filter = _normalized_text(provider)
     query = _normalized_text(search)
     minimum_age = int(age_filter) if str(age_filter).isdigit() else None
     missing_age = str(age_filter) == "sem_data"
@@ -370,6 +579,12 @@ def filter_ticket_records(
         oracle = [item for item in ticket.get("oracle", []) if isinstance(item, dict)]
         attention = ticket_attention(ticket, stale_days=stale_days, today=today)
         if relation_filter and _normalized_text(ticket.get("relacao")) != relation_filter:
+            continue
+        if city_filter and city_filter not in {_normalized_text(value) for value in ticket_city_values(ticket)}:
+            continue
+        if provider_filter and provider_filter not in {
+            _normalized_text(value) for value in ticket_service_providers(ticket)
+        }:
             continue
         if (status_filter or queue_filter) and not any(
             (not status_filter or _normalized_text(item.get("status")) == status_filter)
@@ -495,7 +710,13 @@ def _safe_cell(value: Any) -> Any:
     return result
 
 
-def build_ticket_workbook(snapshot: Dict[str, Any], tickets: Sequence[Dict[str, Any]], filters: Dict[str, Any]) -> bytes:
+def build_ticket_workbook(
+    snapshot: Dict[str, Any],
+    tickets: Sequence[Dict[str, Any]],
+    filters: Dict[str, Any],
+    *,
+    timelines: Optional[Dict[str, Sequence[Dict[str, Any]]]] = None,
+) -> bytes:
     workbook = Workbook()
     summary = workbook.active
     summary.title = "Resumo"
@@ -505,7 +726,7 @@ def build_ticket_workbook(snapshot: Dict[str, Any], tickets: Sequence[Dict[str, 
     summary.append(["Arquivo Simpress", (sources.get("simpress") or {}).get("arquivo", "")])
     summary.append(["Arquivo Oracle", (sources.get("oracle") or {}).get("arquivo", "")])
     summary.append(["Séries no resultado", len(tickets)])
-    for label, key in (("Relação", "relation"), ("Status Oracle", "status"), ("Fila Oracle", "queue"), ("Atualização", "age_filter"), ("Busca", "search"), ("Somente atenção", "attention_only")):
+    for label, key in (("Relação", "relation"), ("Status Oracle", "status"), ("Fila Oracle", "queue"), ("Cidade", "city"), ("Atendimento", "provider"), ("Atualização", "age_filter"), ("Busca", "search"), ("Somente atenção (3 dias)", "attention_only")):
         value = filters.get(key, "")
         if value not in (None, "", False):
             summary.append([label, str(value)])
@@ -519,7 +740,7 @@ def build_ticket_workbook(snapshot: Dict[str, Any], tickets: Sequence[Dict[str, 
         "Solicitação Oracle", "Logradouro Oracle", "Número do endereço Oracle", "Bairro Oracle", "Cidade Oracle",
         "Atendido pela inibição Oracle", "Nome da filial Oracle", "Status Oracle", "Sub-status Oracle", "Fila Oracle",
         "Fase Oracle", "Última atualização Oracle", "Status entregas", "Status atividades", "Assunto",
-        "Descrição do chamado Oracle",
+        "Descrição do chamado Oracle", "Série na Simpress", "Série no Oracle", "Origem do pedido", "Origem da OS", "Revisão da relação", "Motivo da revisão",
     ]
     sheet.append(headers)
     for ticket in tickets:
@@ -534,7 +755,9 @@ def build_ticket_workbook(snapshot: Dict[str, Any], tickets: Sequence[Dict[str, 
             key=_order_service_descending_key,
             reverse=True,
         )
-        attention = ticket_attention(ticket, stale_days=int(filters.get("stale_days", 3)))
+        attention = ticket_attention(ticket, stale_days=3)
+        provenance = ticket_relation_provenance(ticket)
+        alerts = ticket_relation_alerts(ticket)
         for oracle in oracle_rows:
             values = [
                 ticket.get("serie", ""), attention["motivo"], ticket.get("relacao", ""),
@@ -550,6 +773,12 @@ def build_ticket_workbook(snapshot: Dict[str, Any], tickets: Sequence[Dict[str, 
                 oracle.get("sub_status", ""), oracle.get("fila", ""), oracle.get("fase_atendimento", ""),
                 oracle.get("ultima_atualizacao", ""), oracle.get("status_entregas", ""),
                 oracle.get("status_atividades", ""), oracle.get("assunto", ""), oracle.get("descricao", ""),
+                "Simpress" if provenance["serie"]["simpress"] else "",
+                "Oracle" if provenance["serie"]["oracle"] else "",
+                "Simpress: pedido · Oracle: solicitação",
+                "Simpress / Oracle" if provenance["ordem_servico"]["oracle"] else "Simpress" if simpress_os else "Oracle",
+                "Sim" if alerts else "Não",
+                " · ".join(item["mensagem"] for item in alerts),
             ]
             sheet.append([_safe_cell(value) for value in values])
     sheet.freeze_panes = "A2"
@@ -559,13 +788,71 @@ def build_ticket_workbook(snapshot: Dict[str, Any], tickets: Sequence[Dict[str, 
         cell.font = Font(bold=True, color="FFFFFF")
         cell.fill = PatternFill("solid", fgColor="166534")
         cell.alignment = Alignment(vertical="center", wrap_text=True)
-    for index, width in enumerate((18, 36, 20, 24, 22, 20, 18, 24, 24, 22, 28, 42, 24, 48, 20, 22, 30, 18, 24, 24, 30, 30, 24, 24, 24, 24, 22, 22, 40, 64, 64), start=1):
+    for index, width in enumerate((18, 36, 20, 24, 22, 20, 18, 24, 24, 22, 28, 42, 24, 48, 20, 22, 30, 18, 24, 24, 30, 30, 24, 24, 24, 24, 22, 22, 40, 64, 64, 16, 16, 36, 24, 18, 72), start=1):
         sheet.column_dimensions[get_column_letter(index)].width = width
     for row_number in range(2, sheet.max_row + 1):
         sheet.row_dimensions[row_number].height = sheet.sheet_format.defaultRowHeight
-    description_column = len(headers)
+    description_column = headers.index("Descrição do chamado Oracle") + 1
     for row in sheet.iter_rows(min_row=2, min_col=description_column, max_col=description_column):
         row[0].alignment = Alignment(vertical="top", wrap_text=False)
+
+    review_sheet = workbook.create_sheet("Conferência das relações")
+    review_headers = [
+        "Série", "Relação", "Série na Simpress", "Série no Oracle", "Pedido Simpress",
+        "Solicitação Oracle", "OS Simpress", "OS Oracle", "Revisão necessária", "Motivo da revisão",
+    ]
+    review_sheet.append(review_headers)
+    for ticket in tickets:
+        provenance = ticket_relation_provenance(ticket)
+        simpress_pedidos = provenance["pedido"]["simpress"]
+        oracle_solicitations = provenance["pedido"]["oracle_solicitacao"]
+        simpress_orders = provenance["ordem_servico"]["simpress"]
+        oracle_orders = provenance["ordem_servico"]["oracle"]
+        alerts = ticket_relation_alerts(ticket)
+        review_sheet.append([_safe_cell(value) for value in (
+            ticket.get("serie", ""), ticket.get("relacao", ""),
+            "Simpress" if provenance["serie"]["simpress"] else "",
+            "Oracle" if provenance["serie"]["oracle"] else "",
+            simpress_pedidos, oracle_solicitations, simpress_orders, oracle_orders,
+            "Sim" if alerts else "Não", " · ".join(item["mensagem"] for item in alerts),
+        )])
+    review_sheet.freeze_panes = "A2"
+    review_sheet.auto_filter.ref = review_sheet.dimensions
+    review_sheet.row_dimensions[1].height = 30
+    for cell in review_sheet[1]:
+        cell.font = Font(bold=True, color="FFFFFF")
+        cell.fill = PatternFill("solid", fgColor="9A3412")
+        cell.alignment = Alignment(vertical="center", wrap_text=True)
+    for index, width in enumerate((20, 22, 18, 18, 28, 32, 24, 24, 20, 90), start=1):
+        review_sheet.column_dimensions[get_column_letter(index)].width = width
+
+    timeline_sheet = workbook.create_sheet("Linha do tempo")
+    timeline_headers = [
+        "Série", "Importação", "Evento", "Pedido Simpress", "Solicitação Oracle", "OV Simpress", "OS Simpress",
+        "OS Oracle", "Status Simpress", "Status Oracle", "Fila Oracle", "Última atualização Oracle", "Anotação",
+    ]
+    timeline_sheet.append(timeline_headers)
+    for ticket in tickets:
+        serial = str(ticket.get("serie") or "")
+        for event in (timelines or {}).get(serial, []):
+            state = event.get("estado") or {}
+            timeline_sheet.append([_safe_cell(value) for value in (
+                serial, event.get("atualizado_em", ""), event.get("tipo", ""),
+                state.get("pedidos_simpress", []), state.get("solicitacoes_oracle", []), state.get("ordens_venda_simpress", []),
+                state.get("ordens_servico_simpress", []), state.get("ordens_servico_oracle", []),
+                state.get("status_simpress", []), state.get("status_oracle", []),
+                state.get("filas_oracle", []), state.get("atualizacoes_oracle", []), event.get("anotacao", ""),
+            )])
+    timeline_sheet.freeze_panes = "A2"
+    timeline_sheet.auto_filter.ref = timeline_sheet.dimensions
+    timeline_sheet.row_dimensions[1].height = 30
+    for cell in timeline_sheet[1]:
+        cell.font = Font(bold=True, color="FFFFFF")
+        cell.fill = PatternFill("solid", fgColor="155E75")
+        cell.alignment = Alignment(vertical="center", wrap_text=True)
+    for index, width in enumerate((20, 24, 24, 28, 32, 24, 24, 24, 36, 36, 32, 32, 64), start=1):
+        timeline_sheet.column_dimensions[get_column_letter(index)].width = width
+
     output = BytesIO()
     workbook.save(output)
     return output.getvalue()

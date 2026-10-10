@@ -940,7 +940,7 @@ test("shows Simpress product and city while gating delivery address by order sta
   const activeCard = cards.split('data-ticket-serial="SN-ATIVO"')[1].split("</article>")[0];
   const simpressCard = activeCard.split("Simpress · Acompanhamento de Pedidos")[1].split("</section>")[0];
   const identifierRow = simpressCard.match(/<div class="mt-2 flex flex-wrap items-center gap-2 text-xs text-slate-300">([\s\S]*?)<\/div>/)?.[1] || "";
-  assert.match(identifierRow, /Pedido: 48076976/);
+  assert.match(identifierRow, /Pedido Simpress: 48076976/);
   assert.doesNotMatch(identifierRow, />OV<\/span>/);
   assert.match(identifierRow, /OV_15799764/);
   assert.match(identifierRow, /border-cyan-400\/30 bg-cyan-500\/10/);
@@ -949,6 +949,10 @@ test("shows Simpress product and city while gating delivery address by order sta
   assert.match(cards, /Endereço de entrega: Rua das Flores, 123, Curitiba - PR/);
   assert.match(cards, /text-cyan-100">7134662, 7124895<\/span>/);
   assert.match(cards, /OS encontrada nas duas fontes: 7134662, 7124895/);
+  assert.match(cards, /Série encontrada em: Simpress e Oracle/);
+  assert.match(cards, /OS Oracle/);
+  assert.match(cards, /Sem atualização há/);
+  assert.match(cards, /Linha do tempo e anotações/);
   const oracleCards = activeCard.split("Oracle · Gestão de Solicitações")[1];
   assert.ok(oracleCards.indexOf("7134662") < oracleCards.indexOf("7124895"));
   assert.match(oracleCards, /Endereço: R Caeté, 150, Prado Velho, Curitiba/);
@@ -1015,6 +1019,7 @@ test("filters tickets by relation and limits attention to active calls without u
   };
   const fresh = localDateOffset(0);
   const exactlyThreeDaysOld = localDateOffset(3);
+  assert.equal(harness.run('classificarAtencaoChamado({ oracle: [{ status: "Em execução", ultima_atualizacao: "' + exactlyThreeDaysOld + '" }] }, 30).em_atencao'), true);
   harness.context.ticketTestReport = {
     fontes: {},
     resumo: { series_total: 7, conferidas: 3, divergentes: 1, sem_os: 1, somente_simpress: 1, somente_oracle: 1 },
@@ -1049,8 +1054,47 @@ test("filters tickets by relation and limits attention to active calls without u
   assert.doesNotMatch(visible, /SN-FRESCA/);
   assert.doesNotMatch(visible, /SN-FECHADA/);
   assert.match(appHtml, /id="versao-acompanhamento-chamados"/);
+  assert.match(appHtml, /id="cidade-acompanhamento-chamados"/);
+  assert.match(appHtml, /id="atendimento-acompanhamento-chamados"/);
+  assert.match(appHtml, /id="triagem-diaria-acompanhamento-chamados"/);
+  assert.doesNotMatch(appHtml, /id="limite-desatualizacao-chamados"/);
   assert.match(appHtml, /id="evolucao-acompanhamento-chamados"/);
   assert.match(appScript, /\/api\/operacoes\/chamados\/evolucao\?/);
+});
+
+test("daily ticket triage filters by city, queue, and Simpress or Partner service", () => {
+  const harness = createAppHarness(async () => apiResponse({}));
+  harness.context.ticketTestReport = {
+    fontes: {}, resumo: { series_total: 2 },
+    chamados: [
+      { serie: "SN-SIMPRESS", relacao: "conferida", simpress: { cidades_entrega: ["Curitiba"] }, oracle: [{ cidade: "Curitiba", nome_filial: "SIMPRESS - PR", fila: "Fila A", status: "Em execução", ultima_atualizacao: "2026-10-10" }] },
+      { serie: "SN-PARCEIRO", relacao: "conferida", simpress: { cidades_entrega: ["Curitiba"] }, oracle: [{ cidade: "Maringá", nome_filial: "PARCEIRO", fila: "Fila B", status: "Em execução", ultima_atualizacao: "2026-10-10" }] },
+    ],
+  };
+  harness.run("acompanhamentoChamadosAtual = ticketTestReport; renderizarAcompanhamentoChamados()");
+  harness.element("cidade-acompanhamento-chamados").value = "Maringá";
+  harness.element("fila-acompanhamento-chamados").value = "Fila B";
+  harness.element("atendimento-acompanhamento-chamados").value = "Parceiro";
+  harness.run("renderizarAcompanhamentoChamados()");
+
+  const cards = harness.element("lista-acompanhamento-chamados").innerHTML;
+  assert.match(cards, /SN-PARCEIRO/);
+  assert.doesNotMatch(cards, /SN-SIMPRESS/);
+  assert.match(harness.element("triagem-diaria-acompanhamento-chamados").innerHTML, /Chamados ativos/);
+  assert.match(harness.element("triagem-diaria-acompanhamento-chamados").innerHTML, /3\+ dias/);
+  assert.match(appScript, /carregarLinhaDoTempoChamado/);
+  assert.match(appScript, /HistoryAnnotationAutosave\.attachAnnotationAutosave/);
+});
+
+test("renders ticket timeline changes and a 2000-character action note", () => {
+  const harness = createAppHarness(async () => apiResponse({}));
+  const html = harness.run('renderizarLinhaDoTempoChamado([{ snapshot_id: "import-1", item_id: "ticket-row-1", atualizado_em: "2026-10-10T10:00:00", tipo: "Dados alterados", estado: { pedidos_simpress: ["48076976"], solicitacoes_oracle: ["REQ-1"], ordens_servico_simpress: ["7279287"], ordens_servico_oracle: ["7279287"], status_oracle: ["Em execução"], atualizacoes_oracle: ["2026-10-10"] }, mudancas: [{ campo: "OS Simpress", anterior: ["7124895"], atual: ["7279287"] }], anotacao: "Acompanhar parceiro" }])');
+  assert.match(html, /Pedido Simpress/);
+  assert.match(html, /Solicitação Oracle/);
+  assert.match(html, /OS Oracle/);
+  assert.match(html, /7124895 → 7279287/);
+  assert.match(html, /maxlength="2000"/);
+  assert.match(html, /Acompanhar parceiro/);
 });
 
 test("exports the selected ticket snapshot with the active filters", async () => {
@@ -1067,6 +1111,8 @@ test("exports the selected ticket snapshot with the active filters", async () =>
   harness.run("acompanhamentoChamadosAtual = ticketTestReport");
   harness.element("relacao-acompanhamento-chamados").value = "divergente";
   harness.element("filtro-acompanhamento-chamados").value = "SN-4";
+  harness.element("cidade-acompanhamento-chamados").value = "Maringá";
+  harness.element("atendimento-acompanhamento-chamados").value = "Parceiro";
   harness.element("somente-atencao-chamados").checked = true;
 
   await harness.run("exportarAcompanhamentoChamados()");
@@ -1075,6 +1121,8 @@ test("exports the selected ticket snapshot with the active filters", async () =>
   assert.match(requests[0], /snapshot_id=version-1/);
   assert.match(requests[0], /relation=divergente/);
   assert.match(requests[0], /search=SN-4/);
+  assert.match(requests[0], /city=Maring%C3%A1/);
+  assert.match(requests[0], /provider=Parceiro/);
   assert.match(requests[0], /attention_only=true/);
   assert.equal(harness.effects.toasts[0].type, "success");
 });
@@ -1157,17 +1205,19 @@ test("groups secondary actions while keeping spreadsheet updates prominent", () 
   assert.match(appHtml, /id="btn-atualizar-planilhas"[\s\S]*?<\/button>\s*<button[^>]*id="btn-exportar-equipamentos"/);
   assert.match(appHtml, /id="btn-exportar-equipamentos"[^>]*header-action-item--large[^>]*header-action-item--emerald/);
   assert.match(appHtml, /<details class="header-action-group" data-action-group="analysis">/);
-  assert.match(appHtml, /<details class="header-action-group" data-action-group="equipment">/);
+  assert.doesNotMatch(appHtml, /data-action-group="equipment"|Equipamentos e cadastros/);
 
   const analysisGroup = appHtml.match(/<details class="header-action-group" data-action-group="analysis">([\s\S]*?)<\/details>/)?.[1] || "";
-  const equipmentGroup = appHtml.match(/<details class="header-action-group" data-action-group="equipment">([\s\S]*?)<\/details>/)?.[1] || "";
+  assert.match(analysisGroup, /<span class="sidebar-item-label">Análises e históricos<\/span>/);
   assert.match(analysisGroup, /abrirCentralPendencias\(\)/);
   assert.match(analysisGroup, /abrirEvolucaoAtualizacoes\(\)/);
   assert.match(analysisGroup, /abrirModalHistoricoComparacoes\(\)/);
+  assert.match(analysisGroup, /abrirModalHistoricoApelidos\(\)/);
+  assert.match(analysisGroup, /abrirModalGerenciarUnidades\(\)/);
   assert.ok(analysisGroup.indexOf('id="btn-historico-comparacoes"') < analysisGroup.indexOf('onclick="abrirCentralPendencias()"'));
+  assert.ok(analysisGroup.indexOf('onclick="abrirEvolucaoAtualizacoes()"') < analysisGroup.indexOf('id="btn-historico-apelidos"'));
+  assert.ok(analysisGroup.indexOf('id="btn-historico-apelidos"') < analysisGroup.indexOf('label-catalogo-unidades'));
   assert.doesNotMatch(analysisGroup, /btn-exportar-equipamentos/);
-  assert.doesNotMatch(equipmentGroup, /abrirHistoricoEquipamento\(\)|Histórico por equipamento/);
-  assert.match(equipmentGroup, /abrirModalHistoricoApelidos\(\)/);
   assert.match(appHtml, /onclick="abrirAcompanhamentoChamados\(\)"/);
   assert.doesNotMatch(appHtml, /Acompanhamento de transportes/);
   assert.doesNotMatch(appScript, /\/api\/transferencias/);
