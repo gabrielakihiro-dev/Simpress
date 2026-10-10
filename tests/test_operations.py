@@ -178,6 +178,53 @@ class TicketImportRouteTests(unittest.TestCase):
                 )
             self.assertEqual(missing_columns.exception.status_code, 422)
 
+    def test_import_history_snapshot_comparison_and_filtered_excel_export(self):
+        with tempfile.TemporaryDirectory(dir=PROJECT_ROOT) as directory:
+            path = Path(directory) / "state" / "tickets.json"
+            router = create_operations_router(
+                load_comparison_history=lambda: [],
+                comparison_history_for_display=lambda event: event,
+                load_alias_history=lambda: [],
+                ticket_report_path=lambda: path,
+                transaction_root=lambda: Path(directory),
+            )
+            import_endpoint = route_handler(router, "/api/operacoes/chamados/importar", "POST")
+
+            def import_version(simpress_rows, oracle_rows):
+                return import_endpoint(
+                    simpress_file=UploadFile(filename="pedidos.xlsx", file=BytesIO(self.workbook_bytes(simpress_rows))),
+                    oracle_file=UploadFile(filename="solicitacoes.xlsx", file=BytesIO(self.workbook_bytes(oracle_rows))),
+                )
+
+            first = import_version(
+                [["NumeroPedido", "NumeroSerie", "OrdemServico", "StatusAtual"], ["PED-1", "SN-1", 1001, "Aberto"]],
+                [["Solicitação", "ID OS Corporate", "Número de Série", "Status", "Fila"], ["REQ-1", 1001, "SN-1", "Em execução", "Fila A"]],
+            )
+            current = import_version(
+                [["NumeroPedido", "NumeroSerie", "OrdemServico", "StatusAtual"], ["PED-1", "SN-1", 2002, "Aberto"], ["PED-2", "SN-2", 3003, "Aguardando"]],
+                [["Solicitação", "ID OS Corporate", "Número de Série", "Status", "Fila"], ["REQ-1", 2002, "SN-1", "Em espera", "Fila B"]],
+            )
+
+            history = route_handler(router, "/api/operacoes/chamados/historico", "GET")()
+            self.assertEqual(history["total"], 2)
+            self.assertEqual(history["eventos"][0]["id"], current["snapshot_id"])
+            self.assertEqual(history["eventos"][1]["id"], first["snapshot_id"])
+
+            snapshot = route_handler(router, "/api/operacoes/chamados/snapshot/{snapshot_id}", "GET")(first["snapshot_id"])
+            self.assertEqual(len(snapshot["chamados"]), 1)
+            evolution = route_handler(router, "/api/operacoes/chamados/evolucao", "GET")(
+                anterior=first["snapshot_id"], atual=current["snapshot_id"]
+            )
+            self.assertEqual(evolution["contagens"], {"novos": 1, "alterados": 1, "iguais": 0, "ausentes_arquivo": 0})
+            self.assertIn("Status Oracle", [field["campo"] for field in evolution["mudancas"]["alterados"][0]["campos"]])
+
+            response = route_handler(router, "/api/operacoes/chamados/exportar", "GET")(
+                snapshot_id=current["snapshot_id"], relation="conferida", status="", queue="",
+                search="", stale_days=7, age_filter="", attention_only=False,
+            )
+            self.assertEqual(response.headers["content-type"], "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet")
+            self.assertIn("Acompanhamento_de_Chamados_", response.headers["content-disposition"])
+
 
 if __name__ == "__main__":
     unittest.main()

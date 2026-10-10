@@ -1402,7 +1402,30 @@ Horário disponível para atendimento:</textarea>
         <p id="status-importacao-chamados" class="text-[10px] text-slate-400 md:col-span-3" role="status" aria-live="polite"></p>
       </form>
       <div id="resumo-acompanhamento-chamados" class="shrink-0 py-3"></div>
-      <label for="filtro-acompanhamento-chamados" class="mb-2 text-xs text-slate-300">Filtrar por série, pedido, OS ou status<input id="filtro-acompanhamento-chamados" type="search" autocomplete="off" class="mt-1 block w-full rounded-lg border border-slate-700 bg-slate-950 px-3 py-2 text-sm text-white placeholder:text-slate-500" placeholder="Digite para filtrar os chamados"></label>
+      <div class="grid grid-cols-1 md:grid-cols-[minmax(0,1fr)_auto] gap-2 border-y border-slate-800 py-3 shrink-0">
+        <label for="versao-acompanhamento-chamados" class="text-xs text-slate-300">Versão das planilhas<select id="versao-acompanhamento-chamados" class="mt-1 block w-full rounded-lg border border-slate-700 bg-slate-950 px-3 py-2 text-sm text-white" onchange="selecionarVersaoChamados()"><option value="">Nenhuma importação</option></select></label>
+        <button type="button" id="btn-exportar-acompanhamento-chamados" class="self-end rounded-lg border border-emerald-400/30 bg-emerald-500/15 px-4 py-2 text-xs font-semibold text-emerald-100 hover:bg-emerald-500/25 disabled:cursor-not-allowed disabled:opacity-50" onclick="exportarAcompanhamentoChamados()" disabled>Exportar Excel filtrado</button>
+        <details class="md:col-span-2 rounded-lg border border-slate-800 bg-slate-950/50 px-3 py-2">
+          <summary class="cursor-pointer text-xs font-semibold text-slate-300">Comparação com a importação anterior</summary>
+          <div id="evolucao-acompanhamento-chamados" class="pt-2 text-xs text-slate-300" role="status" aria-live="polite">O histórico de importações aparecerá aqui.</div>
+        </details>
+      </div>
+      <div class="grid grid-cols-1 sm:grid-cols-[minmax(0,1fr)_auto_auto] gap-2 py-3 shrink-0">
+        <label for="filtro-acompanhamento-chamados" class="min-w-0 text-xs text-slate-300">Buscar série, pedido, OS ou status<input id="filtro-acompanhamento-chamados" type="search" autocomplete="off" class="mt-1 block w-full rounded-lg border border-slate-700 bg-slate-950 px-3 py-2 text-sm text-white placeholder:text-slate-500" placeholder="Digite para filtrar os chamados"></label>
+        <label class="flex items-center gap-2 self-end rounded-lg border border-slate-800 px-3 py-2 text-xs text-slate-200"><input id="somente-atencao-chamados" type="checkbox" class="accent-amber-400">Fila de atenção</label>
+        <button type="button" class="self-end rounded-lg border border-slate-700 px-3 py-2 text-xs text-slate-300 hover:bg-slate-800" onclick="limparFiltrosAcompanhamentoChamados()">Limpar filtros</button>
+        <details class="sm:col-span-3 rounded-lg border border-slate-800 px-3 py-2">
+          <summary class="cursor-pointer text-xs font-semibold text-slate-300">Filtros por relação, status, fila e atualização</summary>
+          <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-2 pt-3">
+            <label for="relacao-acompanhamento-chamados" class="text-xs text-slate-300">Relação<select id="relacao-acompanhamento-chamados" class="mt-1 block w-full rounded-lg border border-slate-700 bg-slate-950 px-3 py-2 text-sm text-white"><option value="">Todas</option><option value="conferida">OS conferida</option><option value="divergente">OS divergente</option><option value="sem_os">Sem OS</option><option value="somente_simpress">Só Simpress</option><option value="somente_oracle">Só Oracle</option></select></label>
+            <label for="status-acompanhamento-chamados" class="text-xs text-slate-300">Status Oracle<select id="status-acompanhamento-chamados" class="mt-1 block w-full rounded-lg border border-slate-700 bg-slate-950 px-3 py-2 text-sm text-white"><option value="">Todos</option></select></label>
+            <label for="fila-acompanhamento-chamados" class="text-xs text-slate-300">Fila Oracle<select id="fila-acompanhamento-chamados" class="mt-1 block w-full rounded-lg border border-slate-700 bg-slate-950 px-3 py-2 text-sm text-white"><option value="">Todas</option></select></label>
+            <label for="idade-acompanhamento-chamados" class="text-xs text-slate-300">Última atualização<select id="idade-acompanhamento-chamados" class="mt-1 block w-full rounded-lg border border-slate-700 bg-slate-950 px-3 py-2 text-sm text-white"><option value="">Qualquer data</option><option value="7">Há 7 dias ou mais</option><option value="14">Há 14 dias ou mais</option><option value="30">Há 30 dias ou mais</option><option value="sem_data">Sem data</option></select></label>
+            <label for="limite-desatualizacao-chamados" class="text-xs text-slate-300">Considerar desatualizado<select id="limite-desatualizacao-chamados" class="mt-1 block w-full rounded-lg border border-slate-700 bg-slate-950 px-3 py-2 text-sm text-white"><option value="7">7 dias</option><option value="14">14 dias</option><option value="30">30 dias</option></select></label>
+          </div>
+        </details>
+      </div>
+      <p id="contagem-acompanhamento-chamados" class="shrink-0 text-[10px] text-slate-500" role="status" aria-live="polite"></p>
       <div id="lista-acompanhamento-chamados" tabindex="0" aria-label="Chamados relacionados por número de série" aria-live="polite" class="overflow-auto min-h-0 flex-1 space-y-3 py-2"></div>
       <div class="pt-3 border-t border-slate-800 flex justify-end shrink-0"><button type="button" onclick="fecharAcompanhamentoChamados()" class="px-4 py-2 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-300 text-xs">Fechar</button></div>
     </div>

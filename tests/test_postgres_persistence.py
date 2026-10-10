@@ -69,9 +69,15 @@ class PersistenceConfigurationTests(unittest.TestCase):
             self.assertFalse(pilot_route_allowed("GET", path))
         self.assertTrue(pilot_route_allowed("GET", "/api/equipamento/SN1"))
         self.assertTrue(pilot_route_allowed("POST", "/api/unidade/salvar"))
-        for method in ("GET", "POST"):
-            self.assertFalse(pilot_route_allowed(method, "/api/operacoes/chamados"))
-        self.assertFalse(pilot_route_allowed("POST", "/api/operacoes/chamados/importar"))
+        for method, path in (
+            ("GET", "/api/operacoes/chamados"),
+            ("GET", "/api/operacoes/chamados/historico"),
+            ("GET", "/api/operacoes/chamados/snapshot/version-1"),
+            ("GET", "/api/operacoes/chamados/evolucao"),
+            ("GET", "/api/operacoes/chamados/exportar"),
+            ("POST", "/api/operacoes/chamados/importar"),
+        ):
+            self.assertFalse(pilot_route_allowed(method, path))
 
     def test_request_context_is_reset_and_nonlocal_requests_denied(self):
         observations, messages = [], []
