@@ -4,7 +4,7 @@ from datetime import date
 from io import BytesIO
 import unittest
 
-from openpyxl import load_workbook
+import openpyxl
 
 from domains.ticket_reporting import (
     build_ticket_workbook,
@@ -103,7 +103,7 @@ class TicketReportingTests(unittest.TestCase):
 
         filtered = filter_ticket_records(legacy["chamados"], relation="conferida")
         content = build_ticket_workbook(first[0], filtered, {"relation": "conferida"})
-        workbook = load_workbook(BytesIO(content), data_only=True)
+        workbook = openpyxl.load_workbook(BytesIO(content), data_only=True)
         self.assertEqual(workbook.sheetnames, ["Resumo", "Chamados"])
         sheet = workbook["Chamados"]
         self.assertEqual(sheet.max_row, 2)
@@ -112,7 +112,7 @@ class TicketReportingTests(unittest.TestCase):
 
         unsafe = _ticket("=1+1")
         unsafe_content = build_ticket_workbook(first[0], [unsafe], {})
-        unsafe_workbook = load_workbook(BytesIO(unsafe_content), data_only=False)
+        unsafe_workbook = openpyxl.load_workbook(BytesIO(unsafe_content), data_only=False)
         self.assertEqual(unsafe_workbook["Chamados"].cell(2, 1).value, "'=1+1")
         self.assertEqual(unsafe_workbook["Chamados"].cell(2, 1).data_type, "s")
 
