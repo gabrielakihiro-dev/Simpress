@@ -174,7 +174,7 @@ test("ticket tracking imports both workbooks and relates each serial to its OS",
   expect(scrollMetrics.scrollHeight).toBeGreaterThan(scrollMetrics.clientHeight);
   await contentScroller.evaluate((element) => { element.scrollTop = element.scrollHeight; });
   await expect.poll(() => contentScroller.evaluate((element) => element.scrollTop)).toBeGreaterThan(0);
-  await expect(dialog.getByRole("button", { name: "Fechar" })).toBeVisible();
+  await expect(dialog.getByRole("button", { name: "Fechar", exact: true })).toBeVisible();
   await expect.poll(async () => {
     const state = await (await page.request.get("/__ticket_import_state")).json();
     return state.imports;
