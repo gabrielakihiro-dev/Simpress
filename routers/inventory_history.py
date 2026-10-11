@@ -28,7 +28,8 @@ from domains.history_export import (
 )
 from domains.history_annotations import (
     annotation_record_values, annotation_view, annotation_export_text, same_annotation_revision,
-    resolve_history_annotations, sync_history_annotation, reuse_annotation_revision,
+    effective_history_annotation, load_effective_history_annotations,
+    sync_history_annotation, reuse_annotation_revision,
 )
 
 import openpyxl
@@ -286,10 +287,11 @@ def create_inventory_history_router(services: InventoryHistoryServices):
 
 
     def _latest_annotation_records(history=None):
-        return resolve_history_annotations([
-            *services.load_history_annotations(services.history_annotations_directory()),
-            *services.load_history_annotations(services.local_annotation_outbox_directory()),
-        ])
+        return load_effective_history_annotations(
+            services.history_annotations_directory(),
+            services.local_annotation_outbox_directory(),
+            services.load_history_annotations,
+        )
 
 
     def _sync_annotation_record(record: Dict[str, Any]) -> bool:
@@ -417,18 +419,20 @@ def create_inventory_history_router(services: InventoryHistoryServices):
             for item in items:
                 if not isinstance(item, dict):
                     continue
-                record = annotations.get((event_id, str(item.get("anotacao_id") or "")))
-                if record is not None:
-                    item.update(annotation_view(record))
+                item.update(effective_history_annotation(
+                    annotations, event_id, str(item.get("anotacao_id") or ""),
+                    item.get("anotacao"),
+                ))
                 associated_annotations = item.get("anotacoes_associadas")
                 if not isinstance(associated_annotations, list):
                     continue
                 for associated in associated_annotations:
                     if not isinstance(associated, dict):
                         continue
-                    associated_record = annotations.get((event_id, str(associated.get("anotacao_id") or "")))
-                    if associated_record is not None:
-                        associated.update(annotation_view(associated_record))
+                    associated.update(effective_history_annotation(
+                        annotations, event_id, str(associated.get("anotacao_id") or ""),
+                        associated.get("anotacao"),
+                    ))
         return event_view
 
 

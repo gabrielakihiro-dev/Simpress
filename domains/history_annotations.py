@@ -8,7 +8,7 @@ import tempfile
 import uuid
 from datetime import datetime, timezone
 from pathlib import Path
-from typing import Any, Dict, List, Optional, Iterable
+from typing import Any, Callable, Dict, List, Optional, Iterable
 
 
 MAX_ANNOTATION_LENGTH = 2000
@@ -238,6 +238,34 @@ def resolve_history_annotations(records: Iterable[Dict[str, Any]]) -> Dict[tuple
             ] if conflict else [],
         }
     return result
+
+
+def load_effective_history_annotations(
+    shared_directory: Path,
+    outbox_directory: Path,
+    loader: Callable[[Path], List[Dict[str, Any]]],
+) -> Dict[tuple[str, str], Dict[str, Any]]:
+    """Resolve shared and pending revisions together, without directory precedence."""
+    return resolve_history_annotations([
+        *loader(shared_directory), *loader(outbox_directory),
+    ])
+
+
+def effective_history_annotation(
+    records: Dict[tuple[str, str], Dict[str, Any]],
+    event_id: str,
+    item_id: str,
+    embedded: Any = None,
+    legacy: Any = None,
+) -> Dict[str, Any]:
+    """Return the observed note; even an empty revision or conflict blocks legacy text."""
+    record = records.get((event_id, item_id))
+    if record is not None:
+        return annotation_view(record)
+    for candidate in (embedded, legacy):
+        if isinstance(candidate, str):
+            return {"anotacao": candidate}
+    return {"anotacao": ""}
 
 
 def annotation_view(record: Dict[str, Any]) -> Dict[str, Any]:
