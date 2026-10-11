@@ -31,7 +31,9 @@ from domains.ticket_reporting import (
     MAX_TICKET_SNAPSHOTS,
     TICKET_TIMELINE_ANNOTATION_CATEGORY,
     TICKET_SNAPSHOT_FIELDS,
+    TicketTimelineIndex,
     build_ticket_timeline,
+    build_ticket_timeline_index,
     build_ticket_workbook,
     compare_ticket_snapshots,
     filter_ticket_records,
@@ -136,11 +138,11 @@ def create_operations_router(
             if record.get("categoria") == TICKET_TIMELINE_ANNOTATION_CATEGORY
         )
 
-    def _ticket_annotation_event(snapshot: Dict[str, Any], serial: str) -> Optional[Dict[str, Any]]:
-        return next((
-            event for event in build_ticket_timeline([snapshot], serial)
-            if event.get("snapshot_id") == snapshot.get("id")
-        ), None)
+    def _ticket_annotation_event(
+        snapshot: Dict[str, Any], serial: str, index: Optional[TicketTimelineIndex] = None,
+    ) -> Optional[Dict[str, Any]]:
+        timeline_index = index if index is not None else build_ticket_timeline_index([snapshot])
+        return timeline_index.event_for_snapshot(snapshot, serial)
 
     def _ticket_annotation_row_hash(event: Dict[str, Any]) -> str:
         row = {"serie": event.get("serie", ""), **(event.get("estado") or {})}
@@ -149,9 +151,10 @@ def create_operations_router(
     def _ticket_timeline_with_annotations(
         snapshots: Sequence[Dict[str, Any]], serial: str,
         records: Optional[Dict[tuple[str, str], Dict[str, Any]]] = None,
+        index: Optional[TicketTimelineIndex] = None,
     ) -> List[Dict[str, Any]]:
         records = records if records is not None else latest_ticket_annotations()
-        events = build_ticket_timeline(snapshots, serial)
+        events = build_ticket_timeline(snapshots, serial, index=index)
         for event in events:
             event["anotacao_id"] = event["item_id"]
             record = records.get((event["snapshot_id"], event["item_id"]))
@@ -165,19 +168,20 @@ def create_operations_router(
         stored = latest_ticket_annotations()
         all_records = list(stored.values())
         records = []
+        timeline_index = build_ticket_timeline_index([*previous_snapshots, current_snapshot])
         series = sorted({
             str(ticket.get("serie") or "").strip()
             for ticket in current_snapshot.get("chamados", [])
             if isinstance(ticket, dict) and str(ticket.get("serie") or "").strip()
         })
         for serial in series:
-            current_event = _ticket_annotation_event(current_snapshot, serial)
+            current_event = _ticket_annotation_event(current_snapshot, serial, timeline_index)
             if current_event is None:
                 continue
             row_hash = _ticket_annotation_row_hash(current_event)
             previous_match: Optional[Dict[str, Any]] = None
             for prior_snapshot in previous_snapshots:
-                prior_event = _ticket_annotation_event(prior_snapshot, serial)
+                prior_event = _ticket_annotation_event(prior_snapshot, serial, timeline_index)
                 if prior_event and _ticket_annotation_row_hash(prior_event) == row_hash:
                     previous_match = prior_event
 
@@ -358,13 +362,8 @@ def create_operations_router(
         snapshot = next((item for item in snapshots if item.get("id") == event_id), None)
         if snapshot is None:
             raise HTTPException(status_code=404, detail="A importação desta linha do tempo não existe mais.")
-        event = next((
-            candidate
-            for ticket in snapshot.get("chamados", [])
-            if isinstance(ticket, dict)
-            for candidate in build_ticket_timeline([snapshot], str(ticket.get("serie") or ""))
-            if candidate.get("item_id") == item_id
-        ), None)
+        timeline_index = build_ticket_timeline_index([snapshot])
+        event = timeline_index.events_by_item_id.get(item_id)
         if event is None:
             raise HTTPException(status_code=404, detail="A linha do tempo selecionada não existe nesta importação.")
         if len(payload.base_revisoes) > 1 and not payload.resolver_conflito:
@@ -424,9 +423,10 @@ def create_operations_router(
         selected_index = next((index for index, item in enumerate(snapshots) if item.get("id") == selected_id), len(snapshots) - 1)
         timeline_snapshots = snapshots[:selected_index + 1]
         annotation_records = latest_ticket_annotations()
+        timeline_index = build_ticket_timeline_index(timeline_snapshots)
         timelines = {
             str(ticket.get("serie") or ""): _ticket_timeline_with_annotations(
-                timeline_snapshots, str(ticket.get("serie") or ""), annotation_records
+                timeline_snapshots, str(ticket.get("serie") or ""), annotation_records, timeline_index
             )
             for ticket in tickets
         }

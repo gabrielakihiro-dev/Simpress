@@ -3,11 +3,15 @@
 from datetime import date, datetime
 from io import BytesIO
 import unittest
+from unittest.mock import patch
 
 import openpyxl
 
 from domains.ticket_reporting import (
     TICKET_TIMELINE_ANNOTATION_CATEGORY,
+    TICKET_TIMELINE_STATE_FIELDS,
+    _stable_serial,
+    build_ticket_timeline_index,
     build_ticket_timeline,
     build_ticket_workbook,
     compare_ticket_snapshots,
@@ -16,6 +20,8 @@ from domains.ticket_reporting import (
     ticket_relation_alerts,
     ticket_relation_provenance,
     ticket_report_snapshots,
+    ticket_timeline_item_id,
+    ticket_timeline_state,
 )
 
 
@@ -41,6 +47,46 @@ def _ticket(
         "simpress": {"pedidos": ["PED-1"], "ordens_servico": [order], "chamados_cliente": [], "status": ["Em atendimento"]},
         "oracle": oracle,
     }
+
+
+def _legacy_ticket_timeline(snapshots, serial):
+    """Reference the pre-index projection so fixtures compare every emitted field."""
+    serial_key = _stable_serial(serial)
+    previous_state = None
+    events = []
+    for snapshot in snapshots:
+        if not isinstance(snapshot, dict):
+            continue
+        ticket = next((
+            item for item in snapshot.get("chamados", [])
+            if isinstance(item, dict) and _stable_serial(item.get("serie")) == serial_key
+        ), None)
+        if ticket is None:
+            continue
+        state = ticket_timeline_state(ticket)
+        changes = []
+        for field, label in TICKET_TIMELINE_STATE_FIELDS:
+            current_value = state.get(field)
+            previous_value = previous_state.get(field) if previous_state is not None else None
+            if previous_state is None:
+                if current_value in (None, "", []):
+                    continue
+                changes.append({"campo": label, "anterior": [], "atual": current_value})
+            elif current_value != previous_value:
+                changes.append({"campo": label, "anterior": previous_value, "atual": current_value})
+        snapshot_id = str(snapshot.get("id") or "")
+        events.append({
+            "snapshot_id": snapshot_id,
+            "item_id": ticket_timeline_item_id(snapshot_id, ticket.get("serie") or serial),
+            "serie": str(ticket.get("serie") or serial),
+            "atualizado_em": str(snapshot.get("atualizado_em") or ""),
+            "estado": state,
+            "mudancas": changes,
+            "tipo": "Importação inicial" if previous_state is None else "Dados alterados" if changes else "Sem mudanças",
+            "anotacao": "",
+        })
+        previous_state = state
+    return events
 
 
 class TicketReportingTests(unittest.TestCase):
@@ -242,6 +288,57 @@ class TicketReportingTests(unittest.TestCase):
         self.assertNotEqual(events[0]["item_id"], events[1]["item_id"])
         self.assertTrue({"Pedido Simpress", "Solicitação Oracle", "OS Oracle", "Status Simpress", "Última atualização Oracle"}.issubset(changed_fields))
         self.assertEqual(events[1]["estado"]["pedidos_simpress"], ["48076980"])
+
+    def test_indexed_timeline_matches_legacy_output_with_absence_and_duplicate_series(self):
+        first = _ticket("SN-A", status="Em execução", order="100")
+        duplicate = _ticket("sn a", status="Aguardando", order="999")
+        snapshots = [
+            {"id": "v1", "atualizado_em": "2026-10-01", "chamados": [first, duplicate, _ticket("SN-B")]},
+            {"id": "v2", "atualizado_em": "2026-10-02", "chamados": [_ticket("SN-B", status="Em rota")]},
+            {"id": "v3", "atualizado_em": "2026-10-03", "chamados": [
+                _ticket("SN-A", status="Concluído", order="200"), _ticket("SN-B", status="Concluído"),
+            ]},
+        ]
+        index = build_ticket_timeline_index(snapshots)
+
+        for serial in ("sn-a", "SN-B", "missing"):
+            with self.subTest(serial=serial):
+                expected = _legacy_ticket_timeline(snapshots, serial)
+                self.assertEqual(build_ticket_timeline(snapshots, serial, index=index), expected)
+
+        duplicate_rows = index.rows_by_snapshot_serial[(id(snapshots[0]), "SNA")]
+        self.assertEqual(len(duplicate_rows), 2)
+        self.assertIs(duplicate_rows[0], first)
+        self.assertEqual(index.events_by_serial["SNA"][0]["estado"], ticket_timeline_state(first))
+        self.assertEqual([event["snapshot_id"] for event in index.events_by_serial["SNA"]], ["v1", "v3"])
+
+    def test_timeline_index_scans_each_snapshot_row_once_for_many_series(self):
+        class CountingRows(list):
+            visits = 0
+
+            def __iter__(self):
+                for row in super().__iter__():
+                    type(self).visits += 1
+                    yield row
+
+        series_count = 40
+        snapshot_count = 8
+        snapshots = [
+            {"id": f"v{snapshot_index}", "chamados": CountingRows([
+                _ticket(f"SN-{serial_index}", last_update=f"2026-10-{snapshot_index + 1:02d}")
+                for serial_index in range(series_count)
+            ])}
+            for snapshot_index in range(snapshot_count)
+        ]
+        CountingRows.visits = 0
+
+        with patch("domains.ticket_reporting._stable_serial", wraps=_stable_serial) as normalize_serial:
+            index = build_ticket_timeline_index(snapshots)
+            for serial_index in range(series_count):
+                build_ticket_timeline(snapshots, f"SN-{serial_index}", index=index)
+
+        self.assertEqual(CountingRows.visits, snapshot_count * series_count)
+        self.assertLess(normalize_serial.call_count, snapshot_count * series_count * series_count)
 
     def test_provenance_and_uncertain_relationships_are_exported_for_review(self):
         ticket = _ticket("SN-REVISAR", relation="divergente", order="7232035")
