@@ -3128,6 +3128,35 @@ class WorkflowIntegrityTests(unittest.TestCase):
         self.assertEqual(result[0]["retirada_cnpj"], "12.345.678/0001-90")
         self.assertEqual(normalize.call_count, 1)
 
+    def test_type_stats_resolve_normalized_alias_headers_and_keep_empty_rows(self):
+        from persistence.inventory_projection import equipment_rows
+
+        rows = [
+            ("SN-1", "HOST-1", "Modelo A", "Maringá", "Notebook", "87000000"),
+            ("SN-2", "HOST-2", "Modelo B", "Londrina", None, "86000000"),
+            (None, "HOST-3", "Modelo C", "Curitiba", "Monitor", "80000000"),
+        ]
+        expected = {"Notebook": 1, "": 1, "Monitor": 1}
+        for type_header in ("Tipo", "TIPO", " Tipo ", "ClasseEquipamento"):
+            with self.subTest(type_header=type_header):
+                make_details(
+                    self.details,
+                    rows,
+                    headers=["NumeroSerie", "Apelido", "Modelo", "Cidade", type_header, "CEP"],
+                )
+                self.assertTrue(main.load_database())
+                self.assertEqual(main.stats_cache["tipos"], expected)
+                projected = equipment_rows({"records": [{
+                    "NUMEROSERIE": "SN-1",
+                    "APELIDO": "HOST-1",
+                    "MODELO": "Modelo A",
+                    "CIDADE": "Maringá",
+                    main.normalize_workbook_header(type_header): "Notebook",
+                    "CEP": "87000000",
+                    "__excel_row_number__": 2,
+                }]}, main)
+                self.assertEqual(projected[0]["tipo"], "Notebook")
+
     def test_notebook_search_returns_installation_cnpj_for_every_synchronized_series(self):
         source_rows = [
             (

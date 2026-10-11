@@ -37,7 +37,7 @@ def equipment_rows(table, domain):
         pickup = f"{address} - {city}/{state} - CEP {cep}" if address else f"{city}/{state}"
         result.append({"source_row": record["__excel_row_number__"], "serie_bruta": serial,
             "chave_api": serial.upper(), "serie_normalizada": domain.normalize_reference_value(serial),
-            "modelo": value("Modelo"), "tipo": value("Tipo", "ClasseEquipamento"),
+            "modelo": value("Modelo"), "tipo": value(*domain.DETAILS_TYPE_HEADER_ALIASES),
             "apelido_base": value(*domain.DETAILS_ALIAS_HEADER_ALIASES), "id_cliente": value("IdCliente", "Id Cliente"),
             "contrato": contract, "razao_social": value("RazaoSocial", default=domain.SUPPORTED_CONTRACT_LEGAL_NAME),
             "endereco_instalacao": address, "retirada_cnpj": cnpj, "retirada_endereco": pickup,

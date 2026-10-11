@@ -399,6 +399,7 @@ DETAILS_SERIAL_HEADER_ALIASES = ("NUMEROSERIE", "NUMERODESERIE", "SERIAL")
 DETAILS_ALIAS_HEADER_ALIASES = (
     "APELIDO", "HOSTNAME", "NOMEDOCOMPUTADOR", "COMPUTERNAME"
 )
+DETAILS_TYPE_HEADER_ALIASES = ("Tipo", "ClasseEquipamento")
 DETAILS_INSTALLATION_CNPJ_HEADER_ALIASES = (
     "CNPJ Instalacao",
     "CNPJ de Instalacao",
@@ -2222,6 +2223,7 @@ def _load_database_unlocked(publish: bool = True) -> Any:
     norm_cols = {normalize_workbook_header(column): column for column in headers}
     new_equipamentos_cache: Dict[str, Dict[str, Any]] = {}
     details_serial_counts: Dict[str, int] = {}
+    tipo_header_aliases = DETAILS_TYPE_HEADER_ALIASES
 
     def get_row_val(row, *aliases, default=""):
         for a in aliases:
@@ -2259,7 +2261,7 @@ def _load_database_unlocked(publish: bool = True) -> Any:
         normalized_serial = normalize_reference_value(raw_serial)
         details_serial_counts[normalized_serial] = details_serial_counts.get(normalized_serial, 0) + 1
         modelo = get_row_val(row, "Modelo")
-        tipo = get_row_val(row, "Tipo", "ClasseEquipamento")
+        tipo = get_row_val(row, *tipo_header_aliases)
         apelido = get_row_val(row, *DETAILS_ALIAS_HEADER_ALIASES)
         id_cliente = get_row_val(row, "IdCliente", "Id Cliente")
         endereco = get_row_val(row, "Endereco", "Endereço")
@@ -2469,12 +2471,19 @@ def _load_database_unlocked(publish: bool = True) -> Any:
         )
 
     # Calculate stats
-    tipo_col_real = norm_cols.get("tipo") or "Tipo"
-    type_counts = dict(Counter(
-        row.get(tipo_col_real, "")
-        for row in records
-        if tipo_col_real in headers
-    ).most_common())
+    tipo_col_real = next(
+        (
+            norm_cols[normalized_header]
+            for alias in tipo_header_aliases
+            if (normalized_header := normalize_workbook_header(alias)) in norm_cols
+        ),
+        None,
+    )
+    type_counts = (
+        dict(Counter(row.get(tipo_col_real, "") for row in records).most_common())
+        if tipo_col_real is not None
+        else {}
+    )
     export_counts = count_export_changes(
         locked=True,
         endpoint_index=endpoint_index,
