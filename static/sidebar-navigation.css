@@ -903,6 +903,33 @@ body.sidebar-drawer-open {
   }
 }
 
+@media (max-width: 640px) {
+  .header-inner {
+    display: grid !important;
+    grid-template-columns: auto minmax(0, 1fr);
+    grid-template-rows: auto auto;
+  }
+
+  .header-inner > .sidebar-mobile-open {
+    grid-column: 1;
+    grid-row: 1;
+  }
+
+  .header-inner > .header-context {
+    grid-column: 2;
+    grid-row: 1;
+    min-width: 0;
+    max-width: 100%;
+  }
+
+  .header-inner > .header-actions {
+    grid-column: 1 / -1;
+    grid-row: 2;
+    min-width: 0;
+    width: 100%;
+  }
+}
+
 @media (prefers-reduced-motion: reduce) {
   .app-sidebar,
   .app-workspace,
