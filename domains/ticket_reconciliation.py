@@ -227,6 +227,7 @@ def _source_table(
             io.BytesIO(workbook_bytes), read_only=True, data_only=True, keep_links=False
         )
         candidates: List[Tuple[Any, int, Dict[str, int]]] = []
+        ambiguous_candidates: List[Tuple[Any, int, List[str]]] = []
         for worksheet in workbook.worksheets:
             last_header_row = min(worksheet.max_row, 30)
             for row_number, values in enumerate(
@@ -239,16 +240,32 @@ def _source_table(
                     if header:
                         normalized_headers.setdefault(header, []).append(index)
                 columns: Dict[str, int] = {}
+                ambiguous_fields: List[str] = []
                 for field, aliases in field_aliases.items():
-                    matched = [
-                        (alias, index)
+                    matched_indices = sorted({
+                        index
                         for alias in aliases
-                        for index in normalized_headers.get(alias, [])
-                    ]
-                    if matched:
-                        columns[field] = matched[0][1]
+                        for index in normalized_headers.get(normalize_header(alias), [])
+                    })
+                    if matched_indices:
+                        columns[field] = matched_indices[0]
+                        if len(matched_indices) > 1:
+                            ambiguous_fields.append(field)
                 if all(field in columns for field in required_fields):
-                    candidates.append((worksheet, row_number, columns))
+                    if ambiguous_fields:
+                        ambiguous_candidates.append((worksheet, row_number, ambiguous_fields))
+                    else:
+                        candidates.append((worksheet, row_number, columns))
+
+        if ambiguous_candidates:
+            worksheet, row_number, fields = ambiguous_candidates[0]
+            sheet_name = re.sub(r"[\x00-\x1f\x7f]+", " ", str(worksheet.title))
+            sheet_name = " ".join(sheet_name.split())[:31] or "sem nome"
+            field_names = ", ".join(field.replace("_", " ") for field in fields)
+            raise TicketWorkbookError(
+                f"A planilha {source_label} tem colunas ambíguas para o campo "
+                f"'{field_names}' na aba '{sheet_name}', linha {row_number}."
+            )
 
         if len(candidates) != 1:
             if not candidates:

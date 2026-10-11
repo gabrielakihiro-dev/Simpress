@@ -14,6 +14,7 @@ from openpyxl import Workbook
 from starlette.datastructures import UploadFile
 
 from domains.history_insights import compare_updates, latest_update, pending_rows
+from domains.ticket_reconciliation import ORACLE_FIELDS, TicketWorkbookError, _source_table
 from domains.ticket_reporting import build_ticket_workbook
 from routers.operations import TicketTimelineAnnotationPayload, create_operations_router
 
@@ -88,6 +89,18 @@ class TicketImportRouteTests(unittest.TestCase):
         worksheet = workbook.active
         for row in rows:
             worksheet.append(row)
+        output = BytesIO()
+        workbook.save(output)
+        return output.getvalue()
+
+    @staticmethod
+    def workbook_bytes_by_sheet(sheets):
+        workbook = Workbook()
+        for index, (name, rows) in enumerate(sheets.items()):
+            worksheet = workbook.active if index == 0 else workbook.create_sheet()
+            worksheet.title = name
+            for row in rows:
+                worksheet.append(row)
         output = BytesIO()
         workbook.save(output)
         return output.getvalue()
@@ -488,6 +501,136 @@ class TicketImportRouteTests(unittest.TestCase):
                     oracle_file=UploadFile(filename="oracle.xlsx", file=BytesIO(oracle)),
                 )
             self.assertEqual(missing_columns.exception.status_code, 422)
+
+    def test_source_table_rejects_duplicate_and_semantic_alias_columns(self):
+        for headers in (
+            ["NumeroPedido", "NumeroSerie", "NumeroSerie", "OrdemServico"],
+            ["NumeroPedido", "NumeroSerie", "Serial", "OrdemServico"],
+            ["NumeroPedido", "NumeroSerie", "OrdemServico", "StatusAtual", "StatusAtual"],
+        ):
+            with self.subTest(headers=headers):
+                workbook = self.workbook_bytes([headers, ["PED-1", "SN-1", "SN-2", 1001, "Em atendimento"][:len(headers)]])
+                with self.assertRaisesRegex(
+                    TicketWorkbookError,
+                    r"campo '.*' na aba 'Sheet', linha 1",
+                ):
+                    _source_table(
+                        workbook,
+                        "Simpress",
+                        {
+                            "serie": ("numeroserie", "serial"),
+                            "pedido": ("numeropedido",),
+                            "ordem_servico": ("ordemservico",),
+                            "status": ("statusatual",),
+                        },
+                        ("serie", "pedido", "ordem_servico"),
+                    )
+
+    def test_source_table_deduplicates_aliases_matching_the_same_physical_column(self):
+        workbook = self.workbook_bytes([
+            ["Numero Serie", "Pedido", "OS"],
+            ["SN-1", "PED-1", 1001],
+        ])
+        records, rows_without_serial = _source_table(
+            workbook,
+            "Teste",
+            {
+                "serie": ("numeroserie", "Número Série"),
+                "pedido": ("pedido",),
+                "ordem_servico": ("os",),
+            },
+            ("serie", "pedido", "ordem_servico"),
+        )
+
+        self.assertEqual(rows_without_serial, 0)
+        self.assertEqual(records[0]["serie"], "SN-1")
+        self.assertEqual(records[0]["pedido"], "PED-1")
+
+    def test_ambiguous_source_table_does_not_fall_back_to_a_valid_sheet(self):
+        workbook = self.workbook_bytes_by_sheet({
+            "Ambígua": [
+                ["NumeroPedido", "NumeroSerie", "Serial", "OrdemServico"],
+                ["PED-1", "SN-1", "SN-2", 1001],
+            ],
+            "Tabela válida": [
+                ["NumeroPedido", "NumeroSerie", "OrdemServico"],
+                ["PED-2", "SN-3", 1002],
+            ],
+        })
+
+        with self.assertRaisesRegex(
+            TicketWorkbookError,
+            r"campo 'serie' na aba 'Ambígua', linha 1",
+        ):
+            _source_table(
+                workbook,
+                "Simpress",
+                {
+                    "serie": ("numeroserie", "serial"),
+                    "pedido": ("numeropedido",),
+                    "ordem_servico": ("ordemservico",),
+                },
+                ("serie", "pedido", "ordem_servico"),
+            )
+
+    def test_oracle_source_rejects_multiple_columns_for_one_logical_field(self):
+        workbook = self.workbook_bytes([
+            ["Solicitação", "ID OS Corporate", "Número de Série", "Serial"],
+            ["REQ-1", 1001, "SN-1", "SN-2"],
+        ])
+
+        with self.assertRaisesRegex(
+            TicketWorkbookError,
+            r"Oracle.*campo 'serie'.*aba 'Sheet', linha 1",
+        ):
+            _source_table(
+                workbook,
+                "Oracle",
+                ORACLE_FIELDS,
+                ("serie", "solicitacao", "ordem_servico"),
+            )
+
+    def test_ambiguous_import_is_rejected_before_report_or_receipt_changes(self):
+        with tempfile.TemporaryDirectory(dir=PROJECT_ROOT) as directory:
+            path = Path(directory) / "state" / "tickets.json"
+            path.parent.mkdir(parents=True)
+            original = {
+                "chamados": [{"serie": "SN-OLD"}],
+                "historico": [{"id": "snapshot-old", "chamados": [{"serie": "SN-OLD"}]}],
+                "importacoes_automaticas": [{"lote_id": "lote-anterior", "snapshot_id": "snapshot-old"}],
+            }
+            original_bytes = json.dumps(original, ensure_ascii=False).encode("utf-8")
+            path.write_bytes(original_bytes)
+            router = create_operations_router(
+                load_comparison_history=lambda: [],
+                comparison_history_for_display=lambda event: event,
+                ticket_report_path=lambda: path,
+                transaction_root=lambda: Path(directory),
+            )
+            endpoint = route_handler(router, "/api/operacoes/chamados/importar", "POST")
+            oracle = self.workbook_bytes([
+                ["Solicitação", "ID OS Corporate", "Número de Série"],
+                ["REQ-1", 1001, "SN-1"],
+            ])
+            cases = (
+                ("repetido", ["NumeroPedido", "NumeroSerie", "NumeroSerie", "OrdemServico"]),
+                ("aliases", ["NumeroPedido", "NumeroSerie", "Serial", "OrdemServico"]),
+                ("opcional", ["NumeroPedido", "NumeroSerie", "OrdemServico", "StatusAtual", "StatusAtual"]),
+            )
+
+            for case_name, headers in cases:
+                with self.subTest(case=case_name):
+                    simpress = self.workbook_bytes([headers, ["PED-1", "SN-1", "SN-2", 1001, "Aberto"][:len(headers)]])
+                    with self.assertRaises(HTTPException) as raised:
+                        endpoint(
+                            simpress_file=UploadFile(filename="pedidos.xlsx", file=BytesIO(simpress)),
+                            oracle_file=UploadFile(filename="solicitacoes.xlsx", file=BytesIO(oracle)),
+                            automatic_import_id=f"lote-{case_name}",
+                        )
+                    self.assertEqual(raised.exception.status_code, 422)
+                    self.assertIn("campo", raised.exception.detail)
+                    self.assertIn("aba 'Sheet', linha 1", raised.exception.detail)
+                    self.assertEqual(path.read_bytes(), original_bytes)
 
     def test_import_history_snapshot_comparison_and_filtered_excel_export(self):
         with tempfile.TemporaryDirectory(dir=PROJECT_ROOT) as directory:
