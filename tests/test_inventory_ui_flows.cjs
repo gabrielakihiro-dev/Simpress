@@ -894,6 +894,9 @@ test("imports Simpress and Oracle files and displays the serial-to-OS reconcilia
   const modal = harness.element("modal-acompanhamento-chamados");
   const ticketCards = harness.element("lista-acompanhamento-chamados").innerHTML;
   assert.ok(appHtml.includes('id="modal-acompanhamento-chamados"'));
+  assert.match(appHtml, /href="https:\/\/simpress\.custhelp\.com\/AgentWeb\/" target="_blank" rel="noopener noreferrer"[^>]*aria-label="Abrir portal Oracle AgentWeb"/);
+  assert.match(appHtml, /href="https:\/\/ux\.simpress\.com\.br\/equipamentos\/acompanhamento" target="_blank" rel="noopener noreferrer"[^>]*aria-label="Abrir acompanhamento de chamados Simpress"/);
+  assert.equal((appHtml.match(/class="ticket-agent-link[^>]*"/g) || []).length, 2);
   assert.match(appHtml, /id="conteudo-acompanhamento-chamados"[^>]*overflow-y-auto/);
   assert.match(appHtml, /Acompanhamento de Chamados/);
   assert.match(ticketCards, /OS conferida/);
@@ -903,6 +906,16 @@ test("imports Simpress and Oracle files and displays the serial-to-OS reconcilia
   assert.match(ticketCards, /class="ticket-card-identifier border border-cyan/);
   assert.match(ticketCards, /class="ticket-card-identifier border border-violet/);
   assert.equal(modal.id, "modal-acompanhamento-chamados");
+});
+
+test("provides Endpoint and Simpress shortcuts in the spreadsheet update dialog", () => {
+  assert.match(appHtml, /id="modal-atualizar-planilhas"/);
+  assert.ok(appHtml.includes('href="https://centralendpoint.pr.sebrae.com.br/webclient#/uems/inventory/computers" target="_blank" rel="noopener noreferrer"'));
+  assert.ok(appHtml.includes('href="https://ux.simpress.com.br/MeusEquipamentos/Index" target="_blank" rel="noopener noreferrer"'));
+  assert.match(appHtml, /spreadsheet-source-link--endpoint[^>]*aria-label="Abrir inventário de computadores do Endpoint Central"/);
+  assert.match(appHtml, /spreadsheet-source-link--simpress[^>]*aria-label="Abrir Meus Equipamentos da Simpress"/);
+  assert.equal((appHtml.match(/class="spreadsheet-source-link spreadsheet-source-link--/g) || []).length, 2);
+  assert.match(appCss, /\.spreadsheet-source-link:focus-visible/);
 });
 
 test("opens ticket import controls only when there are no imported calls", () => {
@@ -916,7 +929,7 @@ test("opens ticket import controls only when there are no imported calls", () =>
   assert.match(appHtml, /id="filtro-acompanhamento-chamados"/);
   assert.match(appHtml, /id="btn-exportar-acompanhamento-chamados"[^>]*>Exportar Excel/);
   assert.match(appHtml, /class="ticket-filter-toolbar"/);
-  assert.match(appHtml, /id="filtros-avancados-acompanhamento-chamados" class="ticket-disclosure[^>]*>/);
+  assert.doesNotMatch(appHtml, /Filtros avançados|relacao-acompanhamento-chamados|status-acompanhamento-chamados|fila-acompanhamento-chamados|cidade-acompanhamento-chamados|atendimento-acompanhamento-chamados|idade-acompanhamento-chamados/);
   assert.match(appHtml, /id="painel-dados-acompanhamento-chamados" class="ticket-disclosure[^>]*>/);
   assert.match(appCss, /\.ticket-filter-action\s*\{[^}]*width: auto;[^}]*min-height: 2\.25rem;/);
 });
@@ -991,7 +1004,7 @@ test("shows Simpress product and city while gating delivery address by order sta
   assert.match(appCss, /\.ticket-disclosure > summary:focus-visible/);
   assert.match(appCss, /\.ticket-card-meta > span:not\(:first-child\)::before,\s*\.ticket-card-triage > span:not\(:first-child\)::before\s*\{\s*content: "•";/);
   assert.match(appHtml, /id="painel-dados-acompanhamento-chamados"/);
-  assert.match(appHtml, /id="filtros-avancados-acompanhamento-chamados"/);
+  assert.doesNotMatch(appHtml, /Filtros avançados|filtros-avancados-acompanhamento-chamados/);
   assert.doesNotMatch(cards, /Chamado do cliente: Não informado/);
   const deliveredCard = cards.split('data-ticket-serial="SN-ENTREGUE"')[1].split("</article>")[0];
   assert.match(deliveredCard, /Descrição do produto: Monitor HP/);
@@ -1029,7 +1042,7 @@ test("sorts ticket cards by descending OS and leaves tickets without an OS at th
   assert.match(harness.element("contagem-acompanhamento-chamados").textContent, /OS da maior para a menor, sem OS no final/);
 });
 
-test("filters tickets by relation and limits attention to active calls without updates for three days", () => {
+test("keeps the three-day attention rule and removes advanced ticket filters", () => {
   const harness = createAppHarness(async () => apiResponse({}));
   assert.equal(harness.run('dataAtualizacaoChamado("2026-10-09").getDate()'), 9);
   assert.equal(harness.run('dataAtualizacaoChamado("2026-10-09T00:00:00Z").getDate()'), 9);
@@ -1063,16 +1076,9 @@ test("filters tickets by relation and limits attention to active calls without u
   harness.run("acompanhamentoChamadosAtual = ticketTestReport");
   harness.run("renderizarAcompanhamentoChamados()");
 
-  harness.element("relacao-acompanhamento-chamados").value = "divergente";
-  harness.run("renderizarAcompanhamentoChamados()");
-  let visible = harness.element("lista-acompanhamento-chamados").innerHTML;
-  assert.match(visible, /SN-DIVERGENTE/);
-  assert.doesNotMatch(visible, /SN-ATRASADA/);
-
-  harness.element("relacao-acompanhamento-chamados").value = "";
   harness.element("somente-atencao-chamados").checked = true;
   harness.run("renderizarAcompanhamentoChamados()");
-  visible = harness.element("lista-acompanhamento-chamados").innerHTML;
+  const visible = harness.element("lista-acompanhamento-chamados").innerHTML;
   assert.match(visible, /SN-ATRASADA/);
   assert.match(visible, /SN-LIMITE-3-DIAS/);
   assert.doesNotMatch(visible, /SN-DIVERGENTE/);
@@ -1081,15 +1087,14 @@ test("filters tickets by relation and limits attention to active calls without u
   assert.doesNotMatch(visible, /SN-FRESCA/);
   assert.doesNotMatch(visible, /SN-FECHADA/);
   assert.match(appHtml, /id="versao-acompanhamento-chamados"/);
-  assert.match(appHtml, /id="cidade-acompanhamento-chamados"/);
-  assert.match(appHtml, /id="atendimento-acompanhamento-chamados"/);
+  assert.doesNotMatch(appHtml, /Filtros avançados|relacao-acompanhamento-chamados|status-acompanhamento-chamados|fila-acompanhamento-chamados|cidade-acompanhamento-chamados|atendimento-acompanhamento-chamados|idade-acompanhamento-chamados/);
   assert.match(appHtml, /id="triagem-diaria-acompanhamento-chamados"/);
   assert.doesNotMatch(appHtml, /id="limite-desatualizacao-chamados"/);
   assert.match(appHtml, /id="evolucao-acompanhamento-chamados"/);
   assert.match(appScript, /\/api\/operacoes\/chamados\/evolucao\?/);
 });
 
-test("daily ticket triage filters by city, queue, and Simpress or Partner service", () => {
+test("keeps city, queue, and provider visible in ticket cards without advanced filters", () => {
   const harness = createAppHarness(async () => apiResponse({}));
   harness.context.ticketTestReport = {
     fontes: {}, resumo: { series_total: 2 },
@@ -1099,18 +1104,39 @@ test("daily ticket triage filters by city, queue, and Simpress or Partner servic
     ],
   };
   harness.run("acompanhamentoChamadosAtual = ticketTestReport; renderizarAcompanhamentoChamados()");
-  harness.element("cidade-acompanhamento-chamados").value = "Maringá";
-  harness.element("fila-acompanhamento-chamados").value = "Fila B";
-  harness.element("atendimento-acompanhamento-chamados").value = "Parceiro";
-  harness.run("renderizarAcompanhamentoChamados()");
 
   const cards = harness.element("lista-acompanhamento-chamados").innerHTML;
+  assert.match(cards, /SN-SIMPRESS/);
   assert.match(cards, /SN-PARCEIRO/);
-  assert.doesNotMatch(cards, /SN-SIMPRESS/);
+  assert.match(cards, /Fila: Fila B/);
+  assert.match(cards, /Cidade: [^<]*Maringá/);
+  assert.match(cards, /Atendimento: Parceiro/);
   assert.match(harness.element("triagem-diaria-acompanhamento-chamados").innerHTML, /Chamados ativos/);
   assert.match(harness.element("triagem-diaria-acompanhamento-chamados").innerHTML, /3\+ dias/);
   assert.match(appScript, /carregarLinhaDoTempoChamado/);
   assert.match(appScript, /HistoryAnnotationAutosave\.attachAnnotationAutosave/);
+});
+
+test("clears the remaining ticket search and attention filters", () => {
+  const harness = createAppHarness(async () => apiResponse({}));
+  harness.context.ticketTestReport = {
+    fontes: {}, resumo: { series_total: 2 },
+    chamados: [
+      { serie: "SN-PRIMEIRA", relacao: "conferida", simpress: {}, oracle: [] },
+      { serie: "SN-SEGUNDA", relacao: "conferida", simpress: {}, oracle: [] },
+    ],
+  };
+  harness.run("acompanhamentoChamadosAtual = ticketTestReport; renderizarAcompanhamentoChamados()");
+  harness.element("filtro-acompanhamento-chamados").value = "PRIMEIRA";
+  harness.element("somente-atencao-chamados").checked = true;
+
+  harness.run("limparFiltrosAcompanhamentoChamados()");
+
+  assert.equal(harness.element("filtro-acompanhamento-chamados").value, "");
+  assert.equal(harness.element("somente-atencao-chamados").checked, false);
+  const cards = harness.element("lista-acompanhamento-chamados").innerHTML;
+  assert.match(cards, /SN-PRIMEIRA/);
+  assert.match(cards, /SN-SEGUNDA/);
 });
 
 test("renders ticket timeline changes and a 2000-character action note", () => {
@@ -1124,7 +1150,7 @@ test("renders ticket timeline changes and a 2000-character action note", () => {
   assert.match(html, /Acompanhar parceiro/);
 });
 
-test("exports the selected ticket snapshot with the active filters", async () => {
+test("exports the selected ticket snapshot with only the visible filters", async () => {
   const requests = [];
   const harness = createAppHarness(async url => {
     requests.push(url);
@@ -1136,21 +1162,16 @@ test("exports the selected ticket snapshot with the active filters", async () =>
   });
   harness.context.ticketTestReport = { snapshot_id: "version-1", resumo: {}, fontes: {}, chamados: [] };
   harness.run("acompanhamentoChamadosAtual = ticketTestReport");
-  harness.element("relacao-acompanhamento-chamados").value = "divergente";
   harness.element("filtro-acompanhamento-chamados").value = "SN-4";
-  harness.element("cidade-acompanhamento-chamados").value = "Maringá";
-  harness.element("atendimento-acompanhamento-chamados").value = "Parceiro";
   harness.element("somente-atencao-chamados").checked = true;
 
   await harness.run("exportarAcompanhamentoChamados()");
 
   assert.equal(requests.length, 1);
   assert.match(requests[0], /snapshot_id=version-1/);
-  assert.match(requests[0], /relation=divergente/);
   assert.match(requests[0], /search=SN-4/);
-  assert.match(requests[0], /city=Maring%C3%A1/);
-  assert.match(requests[0], /provider=Parceiro/);
   assert.match(requests[0], /attention_only=true/);
+  assert.doesNotMatch(requests[0], /relation=|status=|queue=|city=|provider=|age_filter=/);
   assert.equal(harness.effects.toasts[0].type, "success");
 });
 
