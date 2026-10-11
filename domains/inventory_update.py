@@ -2,6 +2,7 @@
 
 import asyncio
 import filecmp
+import json
 import logging
 import re
 import shutil
@@ -22,7 +23,7 @@ from integrity import (
 
 from domains.history_annotations import (
     effective_history_annotation, history_annotation_row_fingerprint,
-    load_effective_history_annotations,
+    load_effective_history_annotations, same_annotation_revision,
 )
 from domains.local_setup import unpack_simpress_zip
 
@@ -44,6 +45,8 @@ class InventoryUpdateServices:
     upload_backups_directory: Callable[[], Path]
     history_annotations_directory: Callable[[], Path]
     local_annotation_outbox_directory: Callable[[], Path]
+    build_history_annotation_record: Callable[..., Dict[str, Any]]
+    history_annotation_record_path: Callable[..., Path]
     get_primary_equipment_file: Callable[[], Optional[Path]]
     compare_uploaded_workbooks: Callable[..., Dict[str, Any]]
     inventory_state_transaction: Callable[..., Any]
@@ -66,7 +69,6 @@ class InventoryUpdateServices:
     comparison_history_for_display: Callable[[Dict[str, Any]], Dict[str, Any]]
     load_history_annotations: Callable[[Path], List[Dict[str, Any]]]
     comparison_annotation_item_id: Callable[..., str]
-    save_history_annotation: Callable[..., Dict[str, Any]]
 
 
 _ANNOTATABLE_COMPARISON_CATEGORIES = (
@@ -355,7 +357,6 @@ def _commit_inventory_files(
     details_upload_file = services.details_upload_file()
     comparison_history_file = services.comparison_history_file()
     upload_backups_directory = services.upload_backups_directory()
-    history_annotations_directory = services.history_annotations_directory()
     input_directory.mkdir(parents=True, exist_ok=True)
     active_details_file = services.get_primary_equipment_file()
     target_files = {
@@ -494,6 +495,7 @@ def _commit_inventory_files(
         if automatic_import_id:
             history_entry["importacao_automatica_id"] = str(automatic_import_id)
         copied_annotations: list[Dict[str, str]] = []
+        pending_annotation_records: list[tuple[Path, Dict[str, Any]]] = []
 
         def append_update(history):
             if not isinstance(history, list):
@@ -521,15 +523,8 @@ def _commit_inventory_files(
                         previous_divergence["resolucao"] = "substituida"
                         previous_divergence["horario_resolucao"] = comparison["horario_comparacao"]
             copied_annotations[:] = _copy_matching_history_annotations(services, updated, history_entry)
-            updated.append(history_entry)
-            return updated
-
-        transaction.update_json(comparison_history_file, append_update, [])
-        transaction.commit()
-        for copied_annotation in copied_annotations:
-            try:
-                services.save_history_annotation(
-                    history_annotations_directory,
+            for copied_annotation in copied_annotations:
+                record = services.build_history_annotation_record(
                     event_id=event_id,
                     event_time=history_entry["horario"],
                     item_id=copied_annotation["item_id"],
@@ -540,25 +535,48 @@ def _commit_inventory_files(
                     categoria=copied_annotation["categoria"],
                     linha_hash=copied_annotation["linha_hash"],
                 )
-            except Exception:
-                # The annotation is already in local history and will be retried
-                # into shared storage when that event is next opened.
-                logger.exception(
-                    "Anotação copiada permaneceu no histórico local; sincronização pendente "
-                    "(evento=%s, item=%s).",
-                    event_id,
-                    copied_annotation["item_id"],
+                target = services.history_annotation_record_path(
+                    services.local_annotation_outbox_directory(),
+                    record["evento_id"], record["item_id"], record["revisao_id"],
                 )
+                # The transaction-wide lock remains held; lock the discovered
+                # destination before staging it into the journal.
+                transaction.add_target(target)
+                pending_annotation_records.append((target, record))
+            updated.append(history_entry)
+            return updated
+
+        transaction.update_json(comparison_history_file, append_update, [])
+        for target, record in pending_annotation_records:
+            if target.exists():
+                existing = json.loads(target.read_text(encoding="utf-8"))
+                if not same_annotation_revision(existing, record):
+                    raise RuntimeError("A revisão pendente já existe com outro conteúdo; arquivo preservado.")
                 continue
+            payload = json.dumps(record, ensure_ascii=False, indent=2).encode("utf-8")
+
+            def validate_annotation(path: Path, expected=record) -> None:
+                actual = json.loads(path.read_text(encoding="utf-8"))
+                if not same_annotation_revision(actual, expected):
+                    raise RuntimeError("A anotação preparada não corresponde à revisão herdada.")
+
+            transaction.stage_bytes(target, payload, validate_annotation)
+        transaction.commit()
         services.publish_database_state(prepared_state)
 
     historical_view = services.comparison_history_for_display(history_entry)
     historical_comparison = dict(historical_view.get("comparacao") or {})
     historical_comparison["evento_id"] = event_id
     historical_comparison["historico_salvo"] = True
+    historical_comparison["anotacoes_herdadas_enfileiradas"] = len(copied_annotations)
+    historical_comparison["sincronizacao_anotacoes"] = (
+        "pendente" if copied_annotations else "nao_aplicavel"
+    )
     return {
         "sucesso": True,
         "comparacao": historical_comparison,
+        "anotacoes_herdadas_enfileiradas": len(copied_annotations),
+        "sincronizacao_anotacoes": "pendente" if copied_annotations else "nao_aplicavel",
         "stats": prepared_state["stats_cache"],
         "historico_salvo": True,
     }

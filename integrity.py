@@ -417,9 +417,9 @@ class AtomicFileTransaction:
             raise
 
     def add_target(self, target: Path) -> None:
-        """Add and lock a destination discovered while the transaction-wide lock is held."""
-        if not self._entered or self.manifest["entries"]:
-            raise FileTransactionError("Novos arquivos só podem ser incluídos antes do primeiro estágio.")
+        """Add and lock a destination discovered before this transaction is committed."""
+        if not self._entered or self._closed or self._committed:
+            raise FileTransactionError("Novos arquivos só podem ser incluídos em uma transação aberta.")
         resolved = Path(target).resolve(strict=False)
         if resolved in self.targets:
             return
