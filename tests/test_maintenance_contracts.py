@@ -375,6 +375,27 @@ class MaintenanceContractTests(unittest.TestCase):
         for extension in ("*.pem", "*.key", "*.p12", "*.pfx", "*.keystore"):
             self.assertIn(extension, ignore_rules)
 
+    def test_model_and_ticket_uploads_allow_multipart_beyond_small_json_limit(self):
+        body = b"x" * (app_config.MAX_API_REQUEST_BYTES + 1)
+        for path in ("/api/modelos/transferencia/importar", "/api/operacoes/chamados/importar"):
+            with self.subTest(path=path):
+                status, reached_app = _run_local_safety_middleware(
+                    ["localhost:8000"], path=path, method="POST", body=body,
+                )
+                self.assertEqual(status, 200)
+                self.assertTrue(reached_app)
+
+    def test_model_and_ticket_uploads_share_bounded_admission(self):
+        with patch.object(main, "UPLOAD_ADMISSION") as admission:
+            admission.acquire.return_value = False
+            for path in ("/api/modelos/exportacao/importar", "/api/operacoes/chamados/importar"):
+                status, reached_app = _run_local_safety_middleware(
+                    ["localhost:8000"], path=path, method="POST",
+                )
+                self.assertEqual(status, 503)
+                self.assertFalse(reached_app)
+            admission.release.assert_not_called()
+
     def test_readiness_endpoint_returns_the_existing_file_and_function_report(self):
         report = {
             "files": {"template_transferencia": {"available": True, "file": "modelo.xlsx", "reason": "OK"}},
@@ -660,6 +681,14 @@ class MaintenanceContractTests(unittest.TestCase):
             with (
                 patch.object(main, "get_primary_equipment_file", return_value=details),
                 patch.object(main, "get_details_files", return_value=[details]),
+                patch.object(main, "INPUT_DIR", root),
+                patch.object(main, "TRANSACTION_ROOT", root),
+                patch.object(main, "TICKET_REPORT_FILE", root / "chamados.json"),
+                patch.object(main, "load_modified_apelidos", return_value={}),
+                patch.object(main, "load_custom_units", return_value=[]),
+                patch.object(main, "ALIAS_HISTORY_FILE", root / "aliases.json"),
+                patch.object(main, "COMPARISON_HISTORY_FILE", root / "comparison.json"),
+                patch.object(main, "equipamentos_cache", {}),
                 patch.object(main, "TEMPLATE_FILE", root / "template.xlsx"),
                 patch.object(main, "DETAILS_UPLOAD_FILE", details),
                 patch.object(main, "ENDPOINT_UPLOAD_FILE", root / "endpoint.xlsx"),
@@ -667,16 +696,16 @@ class MaintenanceContractTests(unittest.TestCase):
             ):
                 report = main.get_startup_readiness()
 
-            self.assertTrue(report["files"]["inventario_equipamentos"]["available"])
+            self.assertFalse(report["files"]["inventario_equipamentos"]["available"])
             self.assertFalse(report["functions"]["geracao_transferencia"]["available"])
             self.assertEqual(
                 report["functions"]["geracao_transferencia"]["missing_files"],
-                ["template.xlsx"],
+                ["EquipamentosDetalhes_atual.xlsx", "template.xlsx"],
             )
             self.assertFalse(report["functions"]["comparacao_atualizacao_inventarios"]["available"])
             self.assertEqual(
                 report["functions"]["comparacao_atualizacao_inventarios"]["missing_files"],
-                ["endpoint.xlsx"],
+                ["EquipamentosDetalhes_atual.xlsx", "endpoint.xlsx"],
             )
             self.assertFalse(report["functions"]["exportacao_equipamentos"]["available"])
 
@@ -721,6 +750,9 @@ class MaintenanceContractTests(unittest.TestCase):
                 patch.object(main, "HISTORY_ANNOTATIONS_DIR", state_dir / "anotacoes_historico"),
                 patch.object(main, "LOCAL_HISTORY_ANNOTATION_OUTBOX_DIR", state_dir / "anotacoes_historico_pendentes"),
                 patch.object(main, "TRANSACTION_ROOT", root),
+                patch.object(main, "TICKET_REPORT_FILE", state_dir / "chamados.json"),
+                patch.object(main, "AUTOMATIC_INVENTORY_INBOX_DIR", state_dir / "inbox"),
+                patch.object(main, "AUTOMATIC_TICKET_INBOX_DIR", state_dir / "ticket_inbox"),
                 redirect_stdout(output),
             ):
                 async def run_application_lifespan():
@@ -731,7 +763,7 @@ class MaintenanceContractTests(unittest.TestCase):
 
         self.assertIn("[PRONTIDÃO] Verificação dos arquivos locais:", output.getvalue())
         self.assertIn(
-            "[PRONTIDÃO] Geração de planilha de transferência: arquivos necessários presentes (checagem estrutural).",
+            "[PRONTIDÃO] Geração de planilha de transferência: INDISPONÍVEL;",
             output.getvalue(),
         )
 

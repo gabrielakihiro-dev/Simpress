@@ -378,6 +378,7 @@ test("successful inventory upload refreshes selection and presents comparison re
   assert.deepEqual(calls.map(call => call.url), [
     "/api/planilhas/atualizar",
     "/api/equipamento/SERIE-ANTIGA",
+    "/api/prontidao",
   ]);
   assert.equal(calls[0].options.method, "POST");
   assert.deepEqual(calls[0].options.body.fields.map(([name]) => name), ["endpoint_file", "details_file"]);
@@ -432,6 +433,7 @@ test("enabled automatic history export downloads the updated event day", async (
 
   assert.deepEqual(calls, [
     "/api/planilhas/atualizar",
+    "/api/prontidao",
     "/api/historico-comparacoes/exportar/excel?data=2026-10-09",
   ]);
   assert.equal(harness.run("document.body.children.at(-1).clicked"), true);
@@ -459,6 +461,7 @@ test("automatic export failure does not turn a successful inventory update into 
 
   assert.deepEqual(calls, [
     "/api/planilhas/atualizar",
+    "/api/prontidao",
     "/api/historico-comparacoes/exportar/excel?data=2026-10-09",
   ]);
   assert.deepEqual(harness.effects.comparisons, [{ horario_comparacao: eventTime }]);

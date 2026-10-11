@@ -63,7 +63,7 @@ test("home has no WCAG 2.2 A/AA axe violations", async ({ page }) => {
   await auditAccessibility(page);
 });
 
-test("sidebar tools keep their accent colors and aligned primary action sizes", async ({ page }) => {
+test("sidebar tools keep accent colors and fit the multiline ticket label", async ({ page }) => {
   await openSidebarIfNeeded(page);
   const updateButton = page.locator("#btn-atualizar-planilhas");
   const exportButton = page.locator("#btn-exportar-equipamentos");
@@ -75,7 +75,16 @@ test("sidebar tools keep their accent colors and aligned primary action sizes", 
     button.evaluate(element => element.getBoundingClientRect().height)
   ));
   expect(heights[1]).toBe(heights[0]);
-  expect(heights[2]).toBe(heights[0]);
+  // The committed ticket label intentionally spans two lines with extra leading.
+  expect(heights[2]).toBeGreaterThanOrEqual(heights[0]);
+  const labelLayout = await ticketButton.locator(".sidebar-item-label").evaluate(label => {
+    const button = label.closest("button").getBoundingClientRect();
+    const text = label.getBoundingClientRect();
+    return { breaks: label.querySelectorAll("br").length,
+      fits: text.top >= button.top && text.bottom <= button.bottom && text.right <= button.right,
+      clipped: label.scrollWidth > label.clientWidth || label.scrollHeight > label.clientHeight };
+  });
+  expect(labelLayout).toEqual({ breaks: 1, fits: true, clipped: false });
 
   const ticketBackground = await ticketButton.evaluate(element => getComputedStyle(element).backgroundColor);
   const analysisBackground = await analysisButton.evaluate(element => getComputedStyle(element).backgroundColor);

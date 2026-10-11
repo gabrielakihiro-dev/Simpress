@@ -572,9 +572,17 @@
         const totalCount = functions.length;
         const allAvailable = totalCount > 0 && availableCount === totalCount;
         panel.dataset.state = allAvailable ? "ready" : "warning";
+        if (!panel.dataset.initialized) {
+          panel.open = !allAvailable;
+          const innerDetails = document.getElementById("readiness-details");
+          if (innerDetails) innerDetails.open = !allAvailable;
+          panel.dataset.initialized = "true";
+        }
         summary.textContent = allAvailable
           ? `Todas as ${totalCount} funções estão disponíveis.`
-          : `${availableCount} de ${totalCount} funções disponíveis. Confira os detalhes.`;
+          : report.backend === "files" && report.files.inventario_equipamentos?.state === "awaiting_import"
+            ? "Base ainda não importada. Comece pelo par de inventários Simpress e Endpoint."
+            : `${availableCount} de ${totalCount} funções disponíveis. Confira os arquivos pendentes abaixo.`;
 
         const functionLabels = {
           consulta_equipamentos: "Consulta de equipamentos",
@@ -589,11 +597,12 @@
           inventario_detalhes_atualizacao: "Inventário EquipamentosDetalhes para atualização",
           inventario_endpoint: "Inventário Endpoint",
           modelo_exportacao: "Modelo de exportação",
+          catalogos_locais: "Catálogos e históricos locais",
           historico_chamados: "Histórico do acompanhamento de chamados",
         };
 
         const content = document.createDocumentFragment();
-        adicionarGrupoProntidao(content, "Funções", functions, functionLabels, "function");
+        adicionarGrupoProntidao(content, "Funções", functions, functionLabels, "function", report.backend === "files");
         adicionarGrupoProntidao(content, "Arquivos locais", Object.entries(report.files), fileLabels, "file");
         details.replaceChildren(content);
       } catch (error) {
@@ -606,12 +615,25 @@
       }
     }
 
-    function adicionarGrupoProntidao(parent, title, entries, labels, type) {
+    function adicionarGrupoProntidao(parent, title, entries, labels, type, showActions = false) {
       const group = document.createElement("section");
       group.className = "readiness-group";
+      const headingRow = document.createElement("div");
+      headingRow.className = "readiness-group-heading";
       const heading = document.createElement("h3");
       heading.className = "readiness-group-title";
       heading.textContent = title;
+      const count = document.createElement("span");
+      count.className = "readiness-group-count";
+      count.textContent = `${entries.length} ${entries.length === 1 ? "item" : "itens"}`;
+      headingRow.append(heading, count);
+
+      const description = document.createElement("p");
+      description.className = "readiness-group-description";
+      description.textContent = type === "file"
+        ? "Planilhas e dados usados pelas funções."
+        : "Ações disponíveis na aplicação.";
+
       const list = document.createElement("ul");
       list.className = "readiness-list";
 
@@ -625,19 +647,52 @@
         label.textContent = labels[key] || key;
         const state = document.createElement("span");
         state.className = "readiness-item-state";
+        state.textContent = available ? "Disponível" : status.state === "awaiting_import" ? "Aguardando importação"
+          : status.state === "invalid" ? "Arquivo inválido" : "Indisponível";
+
         const availableFileDetail = status?.reason && status.reason !== "OK"
           ? status.reason
           : status?.file;
-        state.textContent = available
-          ? (type === "file" && availableFileDetail ? `Disponível — ${availableFileDetail}` : "Disponível")
-          : type === "file"
-            ? [status.file, status.reason].filter(Boolean).join(" — ") || "Indisponível"
-            : `Indisponível — ${(status.missing_files || []).join(", ") || "dependência ausente"}`;
-        item.append(label, state);
+        const detail = document.createElement("span");
+        detail.className = "readiness-item-detail";
+        const detailText = type === "file"
+          ? (available
+              ? availableFileDetail
+              : [status.file, status.reason].filter(Boolean).join(" — "))
+          : (!available
+              ? (status.missing_files || []).join(", ") || "dependência ausente"
+              : "");
+        if (detailText) {
+          detail.textContent = `Detalhe: ${detailText}`;
+          item.append(label, state, detail);
+        } else {
+          item.append(label, state);
+        }
+        if (showActions) {
+          const actions = {
+            consulta_equipamentos: ["Importar inventários", abrirModalAtualizarPlanilhas],
+            comparacao_atualizacao_inventarios: ["Importar inventários", abrirModalAtualizarPlanilhas],
+            geracao_transferencia: ["Importar arquivos", () => abrirImportacaoModelo("transferencia")],
+            exportacao_equipamentos: ["Importar arquivos", () => abrirImportacaoModelo("exportacao")],
+            acompanhamento_chamados: ["Importar chamados", () => {
+              document.getElementById("painel-dados-acompanhamento-chamados").open = true;
+              abrirAcompanhamentoChamados(true);
+            }],
+          };
+          if (actions[key]) {
+            const button = document.createElement("button");
+            button.type = "button";
+            button.className = "readiness-import";
+            button.textContent = actions[key][0];
+            button.setAttribute("aria-label", `${actions[key][0]} — ${labels[key] || key}`);
+            button.addEventListener("click", actions[key][1]);
+            item.appendChild(button);
+          }
+        }
         list.appendChild(item);
       });
 
-      group.append(heading, list);
+      group.append(headingRow, description, list);
       parent.appendChild(group);
     }
 
@@ -1904,6 +1959,64 @@
     // ==========================================
     // RECARREGAR / SINCRONIZAR PLANILHA BASE
     // ==========================================
+    let importacaoModeloOcupada = false;
+
+    function abrirImportacaoModelo(tipo) {
+      if (importacaoModeloOcupada) return;
+      const modal = document.getElementById("modal-importar-modelo");
+      modal.dataset.tipo = tipo;
+      document.getElementById("titulo-importar-modelo").textContent = tipo === "transferencia"
+        ? "Arquivos para transferência" : "Arquivos para exportação";
+      document.getElementById("descricao-importar-modelo").textContent = tipo === "transferencia"
+        ? "Importe o par de inventários e um modelo com o layout oficial de transferência da Simpress."
+        : "Importe o par de inventários e um modelo de exportação com série e apelido, contendo as mesmas séries da base ativa.";
+      document.getElementById("arquivo-modelo-local").value = "";
+      document.getElementById("status-modelo-local").textContent = "";
+      abrirModalAcessivel("modal-importar-modelo", "#arquivo-modelo-local", "fecharImportacaoModelo");
+    }
+
+    function fecharImportacaoModelo() {
+      if (!importacaoModeloOcupada) fecharModalAcessivel("modal-importar-modelo");
+    }
+
+    function importarInventariosDoModelo() {
+      if (importacaoModeloOcupada) return;
+      fecharImportacaoModelo();
+      abrirModalAtualizarPlanilhas();
+    }
+
+    async function enviarModeloLocal() {
+      if (importacaoModeloOcupada) return;
+      const modal = document.getElementById("modal-importar-modelo");
+      const file = document.getElementById("arquivo-modelo-local").files?.[0];
+      const status = document.getElementById("status-modelo-local");
+      status.setAttribute("role", "status");
+      if (!file) { status.textContent = "Selecione um modelo .xlsx."; return; }
+      const button = document.getElementById("btn-importar-modelo");
+      importacaoModeloOcupada = true;
+      button.disabled = true;
+      modal.setAttribute("aria-busy", "true");
+      status.textContent = "Validando e importando o modelo…";
+      const data = new FormData();
+      data.append("file", file);
+      try {
+        const response = await fetch(`/api/modelos/${modal.dataset.tipo}/importar`, { method: "POST", body: data });
+        const result = await response.json().catch(() => ({}));
+        if (!response.ok) throw new Error(result.detail || "Não foi possível importar o modelo.");
+        status.textContent = "Modelo importado. Confira abaixo se todas as dependências estão disponíveis.";
+        document.getElementById("arquivo-modelo-local").value = "";
+        await Promise.allSettled([carregarProntidao(), carregarEstatisticas(), carregarUnidades()]);
+        showToast("Modelo validado e importado.", "success");
+      } catch (error) {
+        status.setAttribute("role", "alert");
+        status.textContent = error.message || "Não foi possível importar o modelo.";
+      } finally {
+        importacaoModeloOcupada = false;
+        button.disabled = false;
+        modal.removeAttribute("aria-busy");
+      }
+    }
+
     function abrirModalAtualizarPlanilhas() {
       const status = document.getElementById("upload-planilhas-status");
       status.classList.add("hidden");
@@ -1978,7 +2091,8 @@
         await Promise.all([
           carregarEstatisticas(),
           carregarUnidades(),
-          carregarContagemHistoricoComparacoes()
+          carregarContagemHistoricoComparacoes(),
+          carregarProntidao()
         ]);
         const selectionRefreshStatus = await selectionRefresh;
         if (selectionRefreshStatus === "missing") {
@@ -3142,7 +3256,9 @@
       const exportButton = document.getElementById("btn-exportar-acompanhamento-chamados");
       exportButton.disabled = !Array.isArray(data.chamados) || data.chamados.length === 0;
       if (!Array.isArray(data.chamados) || data.chamados.length === 0) {
-        list.innerHTML = '<p class="py-8 text-center text-sm text-slate-400" role="status">Importe as duas planilhas para relacionar as séries com as OS.</p>';
+        list.innerHTML = data.atualizado_em
+          ? '<p class="py-8 text-center text-sm text-slate-400" role="status">Importação concluída. Nenhum chamado encontrado nas planilhas.</p>'
+          : '<p class="py-8 text-center text-sm text-slate-400" role="status">Importe as duas planilhas para relacionar as séries com as OS.</p>';
         return;
       }
       if (records.length === 0) {
@@ -3380,6 +3496,7 @@
         document.getElementById("painel-dados-acompanhamento-chamados").open = false;
         renderizarAcompanhamentoChamados();
         await carregarEvolucaoChamados(data.snapshot_id || "");
+        await carregarProntidao();
         showToast("Acompanhamento de chamados atualizado.", "success");
       } catch (error) {
         status.textContent = error.message || "Não foi possível importar as planilhas.";
@@ -3390,8 +3507,8 @@
       }
     }
 
-    function abrirAcompanhamentoChamados() {
-      abrirModalAcessivel("modal-acompanhamento-chamados", '[aria-label="Fechar acompanhamento de chamados"]', "fecharAcompanhamentoChamados");
+    function abrirAcompanhamentoChamados(importar = false) {
+      abrirModalAcessivel("modal-acompanhamento-chamados", importar ? '#arquivo-chamados-simpress' : '[aria-label="Fechar acompanhamento de chamados"]', "fecharAcompanhamentoChamados");
       const form = document.getElementById("form-importar-acompanhamento-chamados");
       if (!form.dataset.bound) {
         form.addEventListener("submit", importarPlanilhasChamados);

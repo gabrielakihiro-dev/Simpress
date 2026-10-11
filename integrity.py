@@ -1231,15 +1231,15 @@ def load_workbook_safely(
             "A leitura segura de XML do Excel requer defusedxml ativo no openpyxl."
         )
     temporary_handle = None
+    validate_xlsx(source)
+    _package_features(
+        source,
+        allow_threaded_comments=allow_threaded_comments,
+        allow_legacy_comments=allow_legacy_comments,
+        allow_custom_xml_passthrough=allow_custom_xml_passthrough,
+    )
     if isinstance(source, (str, os.PathLike, Path)):
         source_path = Path(source)
-        validate_xlsx(source_path)
-        _package_features(
-            source_path,
-            allow_threaded_comments=allow_threaded_comments,
-            allow_legacy_comments=allow_legacy_comments,
-            allow_custom_xml_passthrough=allow_custom_xml_passthrough,
-        )
         if source_path.suffix.lower() not in {".xlsx", ".xlsm", ".xltx", ".xltm"}:
             # openpyxl checks filename extensions even for a valid XLSX archive;
             # staged files use a neutral .tmp suffix until commit.
