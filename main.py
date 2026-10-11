@@ -88,6 +88,8 @@ from routers.transfers import (
     formatar_telefone_brasileiro,
 )
 from routers.operations import MAX_TICKET_WORKBOOK_BYTES, create_operations_router
+from routers.local_setup import create_local_setup_router
+from domains.local_setup import validate_local_model
 from xlsx_safety import XlsxLimitExceeded, XlsxPackageError, validate_xlsx
 
 from domains.inventory_comparison import (
@@ -614,15 +616,52 @@ def _check_startup_xlsx(path: Optional[Path]) -> Dict[str, Any]:
     return {"available": True, "file": path.name, "reason": "OK"}
 
 
+_READINESS_VALIDATION_CACHE = {}
+_READINESS_VALIDATION_LOCK = threading.Lock()
+
+
+def get_local_transfer_template() -> Path:
+    override = INPUT_DIR / "_modelos" / "transferencia.xlsx"
+    return override if override.exists() else TEMPLATE_FILE
+
+
+def _check_ready_workbook(path: Path, role: str) -> Dict[str, Any]:
+    status = {"available": False, "file": path.name, "reason": "ausente", "state": "awaiting_import"}
+    if not path.exists():
+        return status
+    try:
+        stat = path.stat()
+        key = (str(path.resolve()), stat.st_size, stat.st_mtime_ns, stat.st_ctime_ns, role)
+        with _READINESS_VALIDATION_LOCK:
+            cached = _READINESS_VALIDATION_CACHE.get(key)
+        if cached is not None:
+            return dict(cached)
+        if role in {"transferencia", "exportacao"}:
+            validate_local_model(path, role)
+        else:
+            if stat.st_size > MAX_UPLOAD_BYTES:
+                raise ValueError("A planilha excede o limite de 30 MB.")
+            validate_uploaded_workbook(path.read_bytes(), role)
+        status.update(available=True, reason="OK", state="ready")
+        with _READINESS_VALIDATION_LOCK:
+            if len(_READINESS_VALIDATION_CACHE) >= 64:
+                _READINESS_VALIDATION_CACHE.clear()
+            _READINESS_VALIDATION_CACHE[key] = dict(status)
+    except Exception as error:
+        status.update(reason=str(getattr(error, "detail", error)) or "planilha inválida", state="invalid")
+    return status
+
+
 def _check_startup_ticket_report(path: Optional[Path]) -> Dict[str, Any]:
     """Check ticket history storage while allowing a fresh, not-yet-imported setup."""
     if path is None:
         return {"available": False, "file": None, "reason": "arquivo de histórico não configurado"}
     if not path.exists():
         return {
-            "available": True,
+            "available": False,
             "file": path.name,
             "reason": "aguardando a primeira importação",
+            "state": "awaiting_import",
         }
     if not path.is_file():
         return {"available": False, "file": path.name, "reason": "caminho do histórico inválido"}
@@ -637,6 +676,14 @@ def _check_startup_ticket_report(path: Optional[Path]) -> Dict[str, Any]:
 
 
 def get_startup_readiness() -> Dict[str, Any]:
+    if postgres_backend() is not None:
+        return _get_startup_readiness_unlocked()
+    # Avoid publishing transient availability while an upload is being applied.
+    with lock_paths([TRANSACTION_ROOT / ".atomic-transactions"]):
+        return _get_startup_readiness_unlocked()
+
+
+def _get_startup_readiness_unlocked() -> Dict[str, Any]:
     """Map essential local files to the application functions that need them."""
     ticket_report_status = _check_startup_ticket_report(TICKET_REPORT_FILE)
     if (backend := postgres_backend()) is not None:
@@ -644,6 +691,7 @@ def get_startup_readiness() -> Dict[str, Any]:
         available = bool(state["equipamentos_cache"])
         reason = "Nenhum lote com equipamentos foi importado no piloto local."
         return {
+            "backend": "postgres",
             "files": {
                 "inventario_equipamentos": {"available": available, "file": "PostgreSQL local", "reason": "OK" if available else reason},
                 "historico_chamados": ticket_report_status,
@@ -667,8 +715,14 @@ def get_startup_readiness() -> Dict[str, Any]:
     except Exception:
         active_details = None
 
+    units_loaded = False
     if active_details is not None:
         details_status = _check_startup_xlsx(active_details)
+        with STATE_LOCK:
+            base_loaded = bool(equipamentos_cache)
+            units_loaded = bool(unidades_cache)
+        if details_status["available"] and not base_loaded:
+            details_status.update(available=False, reason="inventário não carregado; importe o par Simpress e Endpoint")
     elif details_candidates:
         details_status = {
             "available": False,
@@ -704,18 +758,27 @@ def get_startup_readiness() -> Dict[str, Any]:
         }
 
     files = {
-        "template_transferencia": _check_startup_xlsx(TEMPLATE_FILE),
+        "template_transferencia": _check_ready_workbook(get_local_transfer_template(), "transferencia"),
         "inventario_equipamentos": details_status,
-        "inventario_detalhes_atualizacao": _check_startup_xlsx(DETAILS_UPLOAD_FILE),
-        "inventario_endpoint": _check_startup_xlsx(ENDPOINT_UPLOAD_FILE),
-        "modelo_exportacao": _check_startup_xlsx(EXPORT_MODEL_FILE),
+        "inventario_detalhes_atualizacao": _check_ready_workbook(DETAILS_UPLOAD_FILE, "detalhes"),
+        "inventario_endpoint": _check_ready_workbook(ENDPOINT_UPLOAD_FILE, "endpoint"),
+        "modelo_exportacao": _check_ready_workbook(EXPORT_MODEL_FILE, "exportacao"),
         "catalogos_locais": local_state_status,
         "historico_chamados": ticket_report_status,
     }
+    if files["modelo_exportacao"]["available"] and details_status["available"]:
+        count_export_changes(locked=True)
+        export_status = get_export_status()
+        if not export_status["available"]:
+            files["modelo_exportacao"].update(available=False, state="invalid", reason=export_status["reason"])
+    for status in files.values():
+        status.setdefault("state", "ready" if status["available"] else
+                          "awaiting_import" if status["reason"] == "ausente" else "invalid")
     requirements = {
         "consulta_equipamentos": ["inventario_equipamentos", "catalogos_locais"],
-        "geracao_transferencia": ["template_transferencia"],
+        "geracao_transferencia": ["inventario_equipamentos", "catalogos_locais", "template_transferencia"],
         "comparacao_atualizacao_inventarios": [
+            "inventario_equipamentos",
             "inventario_detalhes_atualizacao",
             "inventario_endpoint",
         ],
@@ -725,15 +788,20 @@ def get_startup_readiness() -> Dict[str, Any]:
     functions = {
         name: {
             "available": all(files[key]["available"] for key in required_files),
-            "missing_files": [
+            "missing_files": list(dict.fromkeys(
                 files[key]["file"] or key
                 for key in required_files
                 if not files[key]["available"]
-            ],
+            )),
+            "state": "ready" if all(files[key]["available"] for key in required_files)
+                else "invalid" if any(files[key]["state"] == "invalid" for key in required_files)
+                else "awaiting_import",
         }
         for name, required_files in requirements.items()
     }
-    return {"files": files, "functions": functions}
+    if functions["geracao_transferencia"]["available"] and not units_loaded:
+        functions["geracao_transferencia"].update(available=False, state="invalid", missing_files=["localidades do inventário"])
+    return {"backend": "files", "files": files, "functions": functions}
 
 
 def report_startup_readiness() -> None:
@@ -1702,8 +1770,12 @@ class LocalRequestSafetyMiddleware:
             return
 
         is_inventory_upload = path == "/api/planilhas/atualizar"
+        is_model_upload = path.startswith("/api/modelos/") and path.endswith("/importar")
+        is_ticket_upload = path == "/api/operacoes/chamados/importar"
         body_limit = (
             MAX_UPLOAD_REQUEST_BYTES if is_inventory_upload
+            else MAX_UPLOAD_BYTES + 1024 * 1024 if is_model_upload
+            else 2 * MAX_TICKET_WORKBOOK_BYTES + 1024 * 1024 if is_ticket_upload
             else MAX_API_REQUEST_BYTES if path.startswith("/api/") and scope.get("method") in {"POST", "PUT", "PATCH"}
             else None
         )
@@ -1727,7 +1799,7 @@ class LocalRequestSafetyMiddleware:
                     await response(scope, receive, send)
                     return
 
-        uses_upload_admission = is_inventory_upload or path == "/api/recarregar-base"
+        uses_upload_admission = is_inventory_upload or is_model_upload or is_ticket_upload or path == "/api/recarregar-base"
         if uses_upload_admission and not UPLOAD_ADMISSION.acquire(blocking=False):
             response = JSONResponse(
                 status_code=503,
@@ -3645,9 +3717,12 @@ def _get_stats_snapshot() -> Dict[str, Any]:
     export_status = get_export_status()
     with STATE_LOCK:
         stats_snapshot = deepcopy(stats_cache)
+        equipment_count = len(equipamentos_cache)
         unit_count = len(unidades_cache)
     return {
         **stats_snapshot,
+        "total_equipamentos": equipment_count,
+        "base_importada": equipment_count > 0,
         "exportacao_disponivel": export_status["available"],
         "exportacao_motivo": export_status["reason"],
         "total_apelidos_modificados": export_counts["apelidos"],
@@ -3719,8 +3794,29 @@ def _postgres_transfer(payload):
     return None
 
 
-transfer_router, gerar_planilha = create_transfer_router(lambda: TEMPLATE_FILE, _postgres_transfer)
+transfer_router, gerar_planilha = create_transfer_router(get_local_transfer_template, _postgres_transfer)
 app.include_router(transfer_router)
+
+
+def _check_imported_export():
+    if get_primary_equipment_file() is not None:
+        count_export_changes(locked=True)
+        status = get_export_status()
+        return None if status["available"] else status["reason"]
+    return None  # A model can be configured before the first inventory pair.
+
+
+local_setup_router, importar_modelo_local = create_local_setup_router(
+    enabled=lambda: postgres_backend() is None,
+    model_path=lambda kind: INPUT_DIR / "_modelos" / "transferencia.xlsx" if kind == "transferencia" else EXPORT_MODEL_FILE,
+    transaction_root=lambda: TRANSACTION_ROOT,
+    backups_directory=lambda: UPLOAD_BACKUPS_DIR,
+    max_upload_bytes=lambda: MAX_UPLOAD_BYTES,
+    parser_admission=lambda: WORKBOOK_PARSE_ADMISSION,
+    export_dependency_paths=lambda: [*get_details_files(), ENDPOINT_UPLOAD_FILE, MODIFIED_APELIDOS_FILE],
+    validate_export=_check_imported_export,
+)
+app.include_router(local_setup_router)
 
 inventory_history_router, _inventory_history_exports = create_inventory_history_router(InventoryHistoryServices(
     manual_aliases_by_serial=_manual_aliases_by_serial,

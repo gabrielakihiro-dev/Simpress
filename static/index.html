@@ -143,7 +143,7 @@
         <div class="readiness-header">
           <button type="button" id="readiness-refresh" class="readiness-refresh" aria-label="Atualizar status dos arquivos e funções" disabled>Atualizar status</button>
         </div>
-        <details class="readiness-details">
+        <details id="readiness-details" class="readiness-details">
           <summary>Ver detalhes de arquivos e funções</summary>
           <div id="readiness-details-content" class="readiness-details-content"></div>
         </details>
@@ -1334,12 +1334,12 @@ Horário disponível para atendimento:</textarea>
 
         <label class="block bg-slate-950/60 border border-slate-800 rounded-xl p-4">
           <span class="block text-sm text-white font-semibold">2. Simpress</span>
-          <span class="block text-[11px] text-slate-400 mt-1">Precisa ter número de série, modelo, apelido e cidade.</span>
-          <input id="upload-details-file" type="file" accept=".xlsx,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" class="block w-full mt-3 text-xs text-slate-300 file:mr-3 file:rounded-lg file:border-0 file:bg-sky-500/15 file:px-3 file:py-2 file:text-xs file:font-semibold file:text-sky-300 hover:file:bg-sky-500/25" />
+          <span class="block text-[11px] text-slate-400 mt-1">Exporte o inventário completo de 50 colunas, incluindo o CNPJ de instalação. Aceita .xlsx ou o ZIP original com uma única planilha .xlsx.</span>
+          <input id="upload-details-file" type="file" accept=".xlsx,.zip,application/zip,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" class="block w-full mt-3 text-xs text-slate-300 file:mr-3 file:rounded-lg file:border-0 file:bg-sky-500/15 file:px-3 file:py-2 file:text-xs file:font-semibold file:text-sky-300 hover:file:bg-sky-500/25" />
           <span id="upload-details-name" class="block text-[11px] text-slate-500 mt-2">Nenhum arquivo selecionado</span>
         </label>
 
-        <p class="text-[11px] text-slate-500">Cada arquivo pode ter até 30 MB. Séries existentes mantêm os demais campos; endereço e localidade são sincronizados com a Simpress. Apelidos manuais prevalecem, e cada divergência permite manter ou remover o override. Séries novas são acrescentadas.</p>
+        <p class="text-[11px] text-slate-500">Envie sempre os dois inventários, inclusive no primeiro acesso. Cada arquivo e a planilha extraída do ZIP podem ter até 30 MB. Endereço e localidade são sincronizados com a Simpress. Apelidos manuais prevalecem, e divergências aparecem no histórico.</p>
         <label class="flex items-start gap-3 rounded-xl border border-cyan-500/20 bg-cyan-500/5 p-3 text-xs text-slate-300">
           <input id="auto-export-history-after-update" type="checkbox" class="mt-0.5 h-4 w-4 shrink-0 accent-cyan-400" />
           <span>
@@ -1357,6 +1357,22 @@ Horário disponível para atendimento:</textarea>
           Atualizar site
         </button>
       </div>
+    </div>
+  </div>
+
+  <div id="modal-importar-modelo" class="modal-overlay fixed inset-0 bg-slate-950/85 backdrop-blur-md z-[70] hidden flex items-center justify-center p-4">
+    <div class="local-setup-dialog">
+      <div class="local-setup-heading">
+        <h3 id="titulo-importar-modelo">Importar arquivos</h3>
+        <button type="button" class="readiness-import" onclick="fecharImportacaoModelo()" aria-label="Fechar importação de modelo">Fechar</button>
+      </div>
+      <p id="descricao-importar-modelo"></p>
+      <button type="button" class="readiness-import" onclick="importarInventariosDoModelo()">Importar inventários Simpress e Endpoint</button>
+      <label for="arquivo-modelo-local">Modelo .xlsx (até 30 MB)</label>
+      <input id="arquivo-modelo-local" type="file" accept=".xlsx,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" />
+      <p>Ao substituir um modelo importado, uma cópia anterior é guardada nos backups locais. O modelo de transferência incluído no projeto é preservado.</p>
+      <p id="status-modelo-local" role="status" aria-live="polite" aria-atomic="true"></p>
+      <button id="btn-importar-modelo" type="button" class="readiness-import" onclick="enviarModeloLocal()">Importar modelo</button>
     </div>
   </div>
 

@@ -21,6 +21,7 @@ from integrity import (
 )
 
 from domains.history_annotations import history_annotation_row_fingerprint
+from domains.local_setup import unpack_simpress_zip
 
 
 logger = logging.getLogger(__name__)
@@ -272,8 +273,11 @@ async def read_uploaded_xlsx(
         "detalhes": "Simpress",
     }.get(role, role)
     original_name = re.split(r"[/\\]", str(upload.filename or ""))[-1]
-    if not original_name or Path(original_name).suffix.lower() != ".xlsx":
-        raise HTTPException(status_code=400, detail=f"Selecione um arquivo .xlsx válido para {display_role}.")
+    suffix = Path(original_name).suffix.lower()
+    allowed_suffixes = {".xlsx", ".zip"} if role == "detalhes" else {".xlsx"}
+    if not original_name or suffix not in allowed_suffixes:
+        formats = ".xlsx ou .zip" if role == "detalhes" else ".xlsx"
+        raise HTTPException(status_code=400, detail=f"Selecione um arquivo {formats} válido para {display_role}.")
 
     max_upload_bytes = services.max_upload_bytes()
     file_bytes = await upload.read(max_upload_bytes + 1)
@@ -285,8 +289,21 @@ async def read_uploaded_xlsx(
     parse_admission = services.workbook_parse_admission()
     if parse_admission is not None and not parse_admission.acquire(blocking=False):
         raise HTTPException(status_code=503, detail="A análise de planilhas está ocupada. Tente novamente em instantes.")
+    def parse():
+        workbook_bytes = file_bytes
+        if suffix == ".zip":
+            workbook_bytes, _ = unpack_simpress_zip(file_bytes, max_upload_bytes)
+        return workbook_bytes, services.validate_uploaded_workbook(workbook_bytes, role)
+
+    worker = asyncio.create_task(asyncio.to_thread(parse))
     try:
-        table = await asyncio.to_thread(services.validate_uploaded_workbook, file_bytes, role)
+        file_bytes, table = await asyncio.shield(worker)
+    except asyncio.CancelledError:
+        try:
+            await asyncio.shield(worker)
+        except Exception:
+            logger.exception("Falha na validação de inventário após cancelamento.")
+        raise
     finally:
         if parse_admission is not None:
             parse_admission.release()
