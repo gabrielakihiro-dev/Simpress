@@ -2230,7 +2230,7 @@
         const anotacoes = [
           item,
           ...(Array.isArray(item.anotacoes_associadas)
-            ? item.anotacoes_associadas.filter(anotacao => typeof anotacao?.anotacao === "string" && anotacao.anotacao)
+            ? item.anotacoes_associadas.filter(anotacao => (typeof anotacao?.anotacao === "string" && anotacao.anotacao) || anotacao?.anotacao_conflito)
             : []),
         ];
         return `
@@ -2238,7 +2238,7 @@
           ${anotacoes.map((anotacao, index) => `
             <div class="${index ? "mt-2 border-t border-slate-700 pt-2" : ""}">
               ${index ? '<p class="mb-1 text-[10px] text-slate-400">Anotação anterior</p>' : ""}
-              <textarea data-comparison-annotation data-annotation-id="${escapeHtml(anotacao.anotacao_id || "")}" rows="2" maxlength="2000" class="w-full min-w-[220px] rounded-lg border border-slate-700 bg-slate-900 px-2.5 py-2 text-xs text-white placeholder:text-slate-500 focus:border-cyan-400 focus:outline-none focus:ring-1 focus:ring-cyan-400" aria-label="${index ? "Anotação anterior para" : "Anotações para"} ${escapeHtml(contexto)}, neste resultado" placeholder="Escreva uma anotação...">${escapeHtml(anotacao.anotacao || "")}</textarea>
+              <textarea data-comparison-annotation ${atributosVersaoAnotacao(anotacao)} data-annotation-id="${escapeHtml(anotacao.anotacao_id || "")}" rows="2" maxlength="2000" class="w-full min-w-[220px] rounded-lg border border-slate-700 bg-slate-900 px-2.5 py-2 text-xs text-white placeholder:text-slate-500 focus:border-cyan-400 focus:outline-none focus:ring-1 focus:ring-cyan-400" aria-label="${index ? "Anotação anterior para" : "Anotações para"} ${escapeHtml(contexto)}, neste resultado" placeholder="Escreva uma anotação...">${escapeHtml(anotacao.anotacao || "")}</textarea>
               <div class="mt-1">
                 <p class="text-[10px] ${anotacao.anotacao ? "text-emerald-300" : "text-slate-500"}" data-annotation-status aria-live="polite">${anotacao.anotacao ? "Salvo automaticamente" : ""}</p>
                 <button type="button" class="mt-1 rounded-md border border-rose-400/40 px-2 py-1 text-[10px] text-rose-200 hover:bg-rose-500/10" data-annotation-retry hidden aria-label="Tentar novamente a sincronização desta anotação">Tentar sincronizar novamente</button>
@@ -2470,7 +2470,7 @@
           retryButton,
           eventId: comparison.evento_id,
           itemId,
-          send: ({ eventId, itemId: reviewItemId, annotation }) => fetch(
+          send: ({ eventId, itemId: reviewItemId, annotation, revisionId, baseRevisions, resolveConflict }) => fetch(
             "/api/historico-comparacoes/"
               + encodeURIComponent(eventId)
               + "/anotacoes/"
@@ -2478,7 +2478,7 @@
             {
               method: "PUT",
               headers: { "Content-Type": "application/json" },
-              body: JSON.stringify({ anotacao: annotation }),
+              body: JSON.stringify({ anotacao: annotation, revisao_id: revisionId, base_revisoes: baseRevisions, resolver_conflito: resolveConflict }),
             }
           ),
         });
@@ -2490,6 +2490,10 @@
       annotationsById.forEach(textareas => {
         const syncState = (source, target) => {
           if (target.value !== source.value) target.value = source.value;
+          if (target.dataset.annotationVersion !== source.dataset.annotationVersion) {
+            target.dataset.annotationVersion = source.dataset.annotationVersion;
+            target.dispatchEvent(new Event("annotationversionchange"));
+          }
           const sourceStatus = source.parentElement.querySelector("[data-annotation-status]");
           const targetStatus = target.parentElement.querySelector("[data-annotation-status]");
           if (sourceStatus && targetStatus) {
@@ -2705,11 +2709,22 @@
 
     let operationalPendingState = { evento: null, rows: [] };
 
+    function atributosVersaoAnotacao(item) {
+      const version = {
+        anotacao_revisoes: item.anotacao_revisoes || [],
+        anotacao_conflito: Boolean(item.anotacao_conflito),
+        anotacao_conflitos: item.anotacao_conflitos || [],
+        anotacao_bases_ausentes: item.anotacao_bases_ausentes || [],
+        anotacao_integridade_invalida: Boolean(item.anotacao_integridade_invalida),
+      };
+      return `data-annotation-version="${escapeHtml(JSON.stringify(version))}"`;
+    }
+
     function renderizarAnotacaoOperacional(item, contexto) {
       const itemId = String(item?.anotacao_id || "");
       if (!itemId) return "";
       return `<label class="block min-w-[220px] text-[10px] text-slate-400">Anotação sobre ${escapeHtml(contexto)}
-        <textarea data-operational-annotation data-annotation-id="${escapeHtml(itemId)}" rows="2" maxlength="2000" class="mt-1 w-full rounded-lg border border-slate-700 bg-slate-900 px-2.5 py-2 text-xs text-white placeholder:text-slate-500 focus:border-cyan-400 focus:outline-none" placeholder="Escreva uma anotação...">${escapeHtml(item.anotacao || "")}</textarea>
+        <textarea data-operational-annotation ${atributosVersaoAnotacao(item)} data-annotation-id="${escapeHtml(itemId)}" rows="2" maxlength="2000" class="mt-1 w-full rounded-lg border border-slate-700 bg-slate-900 px-2.5 py-2 text-xs text-white placeholder:text-slate-500 focus:border-cyan-400 focus:outline-none" placeholder="Escreva uma anotação...">${escapeHtml(item.anotacao || "")}</textarea>
         <span class="mt-1 block text-[10px] ${item.anotacao ? "text-emerald-300" : "text-slate-500"}" data-annotation-status aria-live="polite">${item.anotacao ? "Salvo automaticamente" : ""}</span>
         <button type="button" class="mt-1 rounded-md border border-rose-400/40 px-2 py-1 text-[10px] text-rose-200 hover:bg-rose-500/10" data-annotation-retry hidden aria-label="Tentar novamente a sincronização desta anotação">Tentar sincronizar novamente</button>
       </label>`;
@@ -2727,9 +2742,9 @@
           retryButton,
           eventId,
           itemId,
-          send: ({ eventId: targetEventId, itemId: targetItemId, annotation }) => fetch(
+          send: ({ eventId: targetEventId, itemId: targetItemId, annotation, revisionId, baseRevisions, resolveConflict }) => fetch(
             `/api/historico-comparacoes/${encodeURIComponent(targetEventId)}/anotacoes/${encodeURIComponent(targetItemId)}`,
-            { method: "PUT", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ anotacao: annotation }) }
+            { method: "PUT", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ anotacao: annotation, revisao_id: revisionId, base_revisoes: baseRevisions, resolver_conflito: resolveConflict }) }
           ),
         });
       });
@@ -3146,7 +3161,7 @@
           <div class="flex flex-wrap items-center justify-between gap-2"><strong class="text-xs text-white">${escapeHtml(event.tipo || "Atualização")}</strong><time class="text-[10px] text-slate-400">${escapeHtml(formatarHorarioHistorico(event.atualizado_em))}</time></div>
           <dl class="mt-2 grid grid-cols-1 gap-x-4 gap-y-1 sm:grid-cols-2">${values.map(([label, value]) => `<div class="min-w-0 text-[10px]"><dt class="inline font-semibold text-slate-400">${label}: </dt><dd class="inline break-words text-slate-200">${escapeHtml(value)}</dd></div>`).join("")}</dl>
           <div class="mt-2 text-[10px] text-slate-300"><span class="font-semibold text-cyan-200">Mudanças:</span> ${changes.length ? changes.map(change => `${escapeHtml(change.campo)}${change.anterior?.length ? ` (${escapeHtml(formatValue(change.anterior))} → ` : " ("}${escapeHtml(formatValue(change.atual))})`).join(" · ") : "sem alterações nos campos acompanhados"}</div>
-          <label class="mt-3 block text-[10px] text-slate-400">Próxima ação ou o que já foi feito<textarea data-ticket-timeline-annotation data-event-id="${escapeHtml(event.snapshot_id || "")}" data-annotation-id="${escapeHtml(event.item_id || "")}" rows="2" maxlength="2000" class="mt-1 w-full rounded-lg border border-slate-700 bg-slate-900 px-2.5 py-2 text-xs text-white placeholder:text-slate-500 focus:border-cyan-400 focus:outline-none" placeholder="Ex.: cobrar atualização do parceiro, OS concluída...">${escapeHtml(event.anotacao || "")}</textarea><span class="mt-1 block text-[10px] text-slate-500" data-annotation-status aria-live="polite">${event.anotacao ? "Anotação salva" : ""}</span><button type="button" class="mt-1 rounded-md border border-rose-400/40 px-2 py-1 text-[10px] text-rose-200 hover:bg-rose-500/10" data-annotation-retry hidden aria-label="Tentar novamente a sincronização desta anotação">Tentar sincronizar novamente</button></label>
+          <label class="mt-3 block text-[10px] text-slate-400">Próxima ação ou o que já foi feito<textarea data-ticket-timeline-annotation ${atributosVersaoAnotacao(event)} data-event-id="${escapeHtml(event.snapshot_id || "")}" data-annotation-id="${escapeHtml(event.item_id || "")}" rows="2" maxlength="2000" class="mt-1 w-full rounded-lg border border-slate-700 bg-slate-900 px-2.5 py-2 text-xs text-white placeholder:text-slate-500 focus:border-cyan-400 focus:outline-none" placeholder="Ex.: cobrar atualização do parceiro, OS concluída...">${escapeHtml(event.anotacao || "")}</textarea><span class="mt-1 block text-[10px] text-slate-500" data-annotation-status aria-live="polite">${event.anotacao ? "Anotação salva" : ""}</span><button type="button" class="mt-1 rounded-md border border-rose-400/40 px-2 py-1 text-[10px] text-rose-200 hover:bg-rose-500/10" data-annotation-retry hidden aria-label="Tentar novamente a sincronização desta anotação">Tentar sincronizar novamente</button></label>
         </article>`;
       }).join("")}</div>`;
     }
@@ -3163,9 +3178,9 @@
           retryButton,
           eventId,
           itemId,
-          send: ({ eventId: targetEventId, itemId: targetItemId, annotation }) => fetch(
+          send: ({ eventId: targetEventId, itemId: targetItemId, annotation, revisionId, baseRevisions, resolveConflict }) => fetch(
             `/api/operacoes/chamados/linha-do-tempo/${encodeURIComponent(targetEventId)}/${encodeURIComponent(targetItemId)}`,
-            { method: "PUT", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ anotacao: annotation }) }
+            { method: "PUT", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ anotacao: annotation, revisao_id: revisionId, base_revisoes: baseRevisions, resolver_conflito: resolveConflict }) }
           ),
         });
       });

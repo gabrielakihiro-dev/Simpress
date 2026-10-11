@@ -17,6 +17,8 @@ from openpyxl import Workbook
 from openpyxl.styles import Alignment, Font, PatternFill
 from openpyxl.utils import get_column_letter
 
+from domains.history_annotations import annotation_export_text
+
 
 MAX_TICKET_SNAPSHOTS = 50
 TICKET_SNAPSHOT_FIELDS = ("atualizado_em", "fontes", "resumo", "chamados")
@@ -841,7 +843,7 @@ def build_ticket_workbook(
                 state.get("pedidos_simpress", []), state.get("solicitacoes_oracle", []), state.get("ordens_venda_simpress", []),
                 state.get("ordens_servico_simpress", []), state.get("ordens_servico_oracle", []),
                 state.get("status_simpress", []), state.get("status_oracle", []),
-                state.get("filas_oracle", []), state.get("atualizacoes_oracle", []), event.get("anotacao", ""),
+                state.get("filas_oracle", []), state.get("atualizacoes_oracle", []), annotation_export_text(event),
             )])
     timeline_sheet.freeze_panes = "A2"
     timeline_sheet.auto_filter.ref = timeline_sheet.dimensions

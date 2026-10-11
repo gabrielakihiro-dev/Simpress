@@ -20,7 +20,7 @@ from integrity import (
     WorkbookSafetyError,
 )
 
-from domains.history_annotations import history_annotation_row_fingerprint
+from domains.history_annotations import resolve_history_annotations, history_annotation_row_fingerprint
 from domains.local_setup import unpack_simpress_zip
 
 
@@ -106,24 +106,9 @@ def _copy_matching_history_annotations(
     if not isinstance(new_comparison, dict):
         return []
 
-    shared_annotations_by_timestamp: Dict[
-        tuple[str, str], tuple[str, Dict[str, Any]]
-    ] = {}
-    for record in services.load_history_annotations(services.history_annotations_directory()):
-        event_id = str(record.get("evento_id") or "")
-        item_id = str(record.get("item_id") or "")
-        if not event_id or not item_id:
-            continue
-        key = (event_id, item_id)
-        candidate = (str(record.get("atualizado_em") or ""), record)
-        if (
-            key not in shared_annotations_by_timestamp
-            or candidate[0] >= shared_annotations_by_timestamp[key][0]
-        ):
-            shared_annotations_by_timestamp[key] = candidate
-    shared_annotations: Dict[tuple[str, str], Dict[str, Any]] = {
-        key: value[1] for key, value in shared_annotations_by_timestamp.items()
-    }
+    shared_annotations = resolve_history_annotations(
+        services.load_history_annotations(services.history_annotations_directory())
+    )
 
     new_fingerprints = set()
     for category in _ANNOTATABLE_COMPARISON_CATEGORIES:
@@ -154,6 +139,11 @@ def _copy_matching_history_annotations(
                     continue
                 fingerprint = history_annotation_row_fingerprint(category, item)
                 if fingerprint not in new_fingerprints or fingerprint in latest_prior_notes:
+                    continue
+                item_id = services.comparison_annotation_item_id(event_id, category, index, item)
+                current_record = shared_annotations.get((event_id, item_id))
+                if current_record and current_record.get("anotacao_conflito"):
+                    event_matches.setdefault(fingerprint, []).append(None)
                     continue
                 annotation = item.get("anotacao")
                 if not isinstance(annotation, str):

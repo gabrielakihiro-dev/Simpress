@@ -81,6 +81,20 @@
       + encodeURIComponent(itemId);
   }
 
+  function readAnnotationVersion(textarea) {
+    try {
+      return JSON.parse(textarea.dataset.annotationVersion || "null");
+    } catch (error) {
+      return null;
+    }
+  }
+
+  function createRevisionId() {
+    if (typeof root.crypto?.randomUUID === "function") return root.crypto.randomUUID().replace(/-/g, "");
+    const bytes = root.crypto.getRandomValues(new Uint8Array(16));
+    return Array.from(bytes, byte => byte.toString(16).padStart(2, "0")).join("");
+  }
+
   function attachAnnotationAutosave({
     textarea,
     status,
@@ -107,6 +121,68 @@
     let dirty = false;
     let saving = false;
     let timer = null;
+    let version = readAnnotationVersion(textarea);
+    let conflicted = Boolean(version?.anotacao_conflito);
+    let resolvingConflict = false;
+    let conflictPanel = null;
+    let requestAttempt = null;
+    let draftBases = null;
+
+    const updateVersion = data => {
+      if (!Array.isArray(data?.anotacao_revisoes)) return;
+      version = data;
+      textarea.dataset.annotationVersion = JSON.stringify(data);
+      conflicted = Boolean(data.anotacao_conflito);
+      resolvingConflict = false;
+      renderConflict();
+    };
+    const renderConflict = () => {
+      conflictPanel?.remove();
+      conflictPanel = null;
+      textarea.readOnly = conflicted;
+      if (!conflicted || !textarea.ownerDocument) return;
+      const doc = textarea.ownerDocument;
+      conflictPanel = doc.createElement("div");
+      conflictPanel.className = "mt-2 space-y-2 text-xs text-amber-200";
+      conflictPanel.setAttribute("role", "group");
+      conflictPanel.setAttribute("aria-label", "Resolver conflito de anotação");
+      const notice = doc.createElement("p");
+      notice.textContent = "Conflito de anotação. As versões foram preservadas. Escolha ou componha um texto e confirme a resolução.";
+      conflictPanel.append(notice);
+      for (const candidate of version.anotacao_conflitos || []) {
+        const text = doc.createElement("p");
+        text.className = "whitespace-pre-wrap break-words";
+        text.textContent = candidate.anotacao || "(Anotação vazia)";
+        const choose = doc.createElement("button");
+        choose.type = "button";
+        choose.className = "rounded border border-slate-600 px-2 py-1";
+        choose.textContent = "Usar esta versão";
+        choose.addEventListener("click", () => { textarea.value = candidate.anotacao; });
+        conflictPanel.append(text, choose);
+      }
+      const compose = doc.createElement("button");
+      compose.type = "button";
+      compose.className = "rounded border border-slate-600 px-2 py-1";
+      compose.textContent = "Editar texto para resolução";
+      compose.addEventListener("click", () => { textarea.readOnly = false; textarea.focus(); });
+      const resolve = doc.createElement("button");
+      resolve.type = "button";
+      resolve.className = "rounded border border-amber-400 px-2 py-1";
+      resolve.textContent = "Resolver conflito com este texto";
+      resolve.disabled = Boolean(version.anotacao_bases_ausentes?.length || version.anotacao_integridade_invalida);
+      resolve.addEventListener("click", () => {
+        conflicted = false;
+        resolvingConflict = true;
+        draftBases = [...version.anotacao_revisoes];
+        onInput();
+        scheduleSave(0);
+      });
+      if (version.anotacao_integridade_invalida) notice.textContent += " Há arquivos de revisão inconsistentes; preserve-os para análise.";
+      else if (resolve.disabled) notice.textContent += " Aguarde a chegada das revisões-base pela sincronização e reabra o resultado.";
+      conflictPanel.append(compose, resolve);
+      textarea.parentElement.append(conflictPanel);
+      setStatus("Conflito de anotação; resolução necessária", "text-amber-300");
+    };
 
     const setPending = pending => {
       textarea.dataset.annotationPending = String(pending);
@@ -123,7 +199,12 @@
     };
     const persistDraft = value => {
       try {
-        draftStorage?.setItem(key, value);
+        const saved = version ? JSON.stringify({
+          format: "simpress-annotation-draft-v2", text: value,
+          bases: draftBases ?? version.anotacao_revisoes ?? [],
+          attempt: requestAttempt, resolveConflict: resolvingConflict,
+        }) : value;
+        draftStorage?.setItem(key, saved);
       } catch (error) {
         return false;
       }
@@ -146,21 +227,39 @@
     };
 
     async function saveAnnotation() {
-      if (saving || !dirty) return;
+      version = readAnnotationVersion(textarea) || version;
+      conflicted = Boolean(version?.anotacao_conflito) && !resolvingConflict;
+      if (saving || !dirty || conflicted) return;
       const annotation = textarea.value;
       const requestRevision = revision;
+      const baseRevisions = draftBases ?? version?.anotacao_revisoes ?? [];
+      const resolveConflict = resolvingConflict;
+      const attemptKey = JSON.stringify([annotation, baseRevisions, resolveConflict]);
+      if (!requestAttempt || requestAttempt.key !== attemptKey) {
+        requestAttempt = { key: attemptKey, id: version ? createRevisionId() : undefined };
+      }
+      const revisionId = requestAttempt.id;
+      persistDraft(annotation);
       saving = true;
       setStatus("Salvando...", "text-cyan-300");
       if (retryButton) retryButton.disabled = true;
 
       try {
         const result = await requestWithRetries(
-          () => send({
-            eventId,
-            itemId,
-            annotation,
-            storageKey: key,
-          }),
+          async () => {
+            const response = await send({
+              eventId,
+              itemId,
+              annotation,
+              storageKey: key,
+              revisionId, baseRevisions, resolveConflict,
+            });
+            // Even an obsolete UI request may have published a causal revision.
+            if (response?.ok && response.clone) {
+              updateVersion(await response.clone().json());
+            }
+            return response;
+          },
           {
             ...retryOptions,
             isCurrent: () => annotationRevisions.get(key) === requestRevision
@@ -171,6 +270,13 @@
             ),
           }
         );
+        if (conflicted) {
+          dirty = true;
+          persistDraft(textarea.value);
+          setPending(true);
+          setStatus("Conflito de anotação; versões preservadas", "text-amber-300");
+          return;
+        }
         if (result.stale) {
           if (annotationRevisions.get(key) !== revision) return;
           dirty = textarea.value !== annotation;
@@ -191,11 +297,26 @@
             responseData = {};
           }
         }
+        updateVersion(responseData);
+        if (conflicted) {
+          dirty = true;
+          persistDraft(textarea.value);
+          setPending(true);
+          setStatus("Conflito de anotação; versões preservadas", "text-amber-300");
+          return;
+        }
         const synchronizationPending = responseData?.sincronizacao === "pendente";
         const savedOnThisDevice = responseData?.sincronizacao === "local";
         dirty = textarea.value !== annotation
           || annotationRevisions.get(key) !== requestRevision;
-        if (!dirty) removeDraft();
+        if (!dirty) {
+          draftBases = null;
+          removeDraft();
+        } else if (version) {
+          // A newer local edit may include the revision just acknowledged by this request.
+          draftBases = [...version.anotacao_revisoes];
+          persistDraft(textarea.value);
+        }
         setPending(dirty);
         setStatus(
           dirty
@@ -228,6 +349,7 @@
     }
 
     const onInput = () => {
+      if (!dirty) draftBases = version ? [...version.anotacao_revisoes] : null;
       revision += 1;
       annotationRevisions.set(key, revision);
       dirty = true;
@@ -245,15 +367,32 @@
       }
       scheduleSave(0);
     };
+    const onVersionChange = () => updateVersion(readAnnotationVersion(textarea));
 
     textarea.addEventListener("input", onInput);
     textarea.addEventListener("blur", onBlur);
+    textarea.addEventListener("annotationversionchange", onVersionChange);
     retryButton?.addEventListener("click", onRetry);
 
     try {
       const savedDraft = draftStorage?.getItem(key);
       if (typeof savedDraft === "string") {
         textarea.value = savedDraft;
+        if (version) {
+          // Plain legacy drafts have no causal basis. Keep them independent of newer notes.
+          draftBases = [];
+          try {
+            const recovered = JSON.parse(savedDraft);
+            if (recovered?.format === "simpress-annotation-draft-v2"
+                && typeof recovered.text === "string" && Array.isArray(recovered.bases)
+                && recovered.bases.every(id => typeof id === "string")) {
+              textarea.value = recovered.text;
+              draftBases = recovered.bases;
+              if (/^[a-f0-9]{32}$/.test(recovered.attempt?.id)) requestAttempt = recovered.attempt;
+              resolvingConflict = recovered.resolveConflict === true;
+            }
+          } catch (error) { /* A legacy draft remains plain text. */ }
+        }
         dirty = true;
         revision += 1;
         annotationRevisions.set(key, revision);
@@ -266,13 +405,16 @@
     } catch (error) {
       setPending(false);
     }
+    renderConflict();
 
     return {
       dispose() {
         windowObject.clearTimeout(timer);
         textarea.removeEventListener("input", onInput);
         textarea.removeEventListener("blur", onBlur);
+        textarea.removeEventListener("annotationversionchange", onVersionChange);
         retryButton?.removeEventListener("click", onRetry);
+        conflictPanel?.remove();
       },
     };
   }
@@ -285,5 +427,6 @@
     installPendingNavigationGuard,
     isRetryableError,
     requestWithRetries,
+    readAnnotationVersion,
   };
 });

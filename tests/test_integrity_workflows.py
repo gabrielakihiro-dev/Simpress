@@ -18,6 +18,7 @@ from types import SimpleNamespace
 from unittest.mock import patch
 
 import openpyxl
+from domains.history_annotations import resolve_history_annotations
 from openpyxl.styles import Font, PatternFill
 from openpyxl.worksheet.table import Table, TableStyleInfo
 from starlette.datastructures import UploadFile
@@ -1708,7 +1709,7 @@ class WorkflowIntegrityTests(unittest.TestCase):
         self.assertEqual(shared_record["anotacao"], "Conferir no próximo inventário.")
         self.assertEqual(set(shared_record), {
             "versao", "evento_id", "horario", "item_id", "serie", "computador",
-            "motivo", "categoria", "anotacao", "atualizado_em", "linha_hash",
+            "motivo", "categoria", "anotacao", "atualizado_em", "linha_hash", "revisao_id", "base_revisoes",
         })
 
         fresh_clone_history = self.root / "clone_novo" / "historico_comparacoes.json"
@@ -1724,15 +1725,16 @@ class WorkflowIntegrityTests(unittest.TestCase):
             self.assertEqual(displayed_row["anotacao_id"], item_id)
 
             main.salvar_anotacao_comparacao_historica(
-                event["id"], item_id, SimpleNamespace(anotacao="Atualizado no notebook novo.")
+                event["id"], item_id, SimpleNamespace(anotacao="Atualizado no notebook novo.", base_revisoes=displayed_row["anotacao_revisoes"])
             )
 
-        refreshed_record = json.loads(shared_files[0].read_text(encoding="utf-8"))
+        refreshed_record = resolve_history_annotations(main.load_history_annotations(self.shared_annotations))[(event["id"], item_id)]
+        self.assertEqual(json.loads(shared_files[0].read_text(encoding="utf-8"))["anotacao"], "Conferir no próximo inventário.")
         self.assertEqual(refreshed_record["anotacao"], "Atualizado no notebook novo.")
 
         with patch.object(main, "COMPARISON_HISTORY_FILE", fresh_clone_history):
             main.salvar_anotacao_comparacao_historica(
-                event["id"], item_id, SimpleNamespace(anotacao="")
+                event["id"], item_id, SimpleNamespace(anotacao="", base_revisoes=refreshed_record["anotacao_revisoes"])
             )
             self.assertFalse(any(
                 item.get("somente_anotacoes_sincronizadas")
@@ -1843,10 +1845,10 @@ class WorkflowIntegrityTests(unittest.TestCase):
             self.assertEqual(synchronized_row["anotacao"], "Conferir este endereço.")
             self.assertEqual(synchronized_row["anotacao_id"], item_id)
             main.salvar_anotacao_comparacao_historica(
-                event["id"], item_id, SimpleNamespace(anotacao="Endereço validado no clone.")
+                event["id"], item_id, SimpleNamespace(anotacao="Endereço validado no clone.", base_revisoes=synchronized_row["anotacao_revisoes"])
             )
 
-        shared_record = json.loads(next(self.shared_annotations.glob("*.json")).read_text(encoding="utf-8"))
+        shared_record = resolve_history_annotations(main.load_history_annotations(self.shared_annotations))[(event["id"], item_id)]
         self.assertEqual(shared_record["categoria"], "divergencias_local")
         self.assertEqual(shared_record["anotacao"], "Endereço validado no clone.")
 
@@ -1911,7 +1913,7 @@ class WorkflowIntegrityTests(unittest.TestCase):
 
         with patch.object(main, "save_history_annotation", side_effect=fail_shared_save):
             saved = main.salvar_anotacao_comparacao_historica(
-                event["id"], item_id, SimpleNamespace(anotacao="Anotação local mais recente.")
+                event["id"], item_id, SimpleNamespace(anotacao="Anotação local mais recente.", base_revisoes=main.get_comparacao_historica(event["id"])["evento"]["comparacao"]["apelidos_sem_atualizacao"][0]["anotacao_revisoes"])
             )
 
         self.assertEqual(saved["sincronizacao"], "pendente")
@@ -1925,8 +1927,8 @@ class WorkflowIntegrityTests(unittest.TestCase):
         flushed = main.flush_pending_history_annotations()
         self.assertEqual(flushed, {"pendentes": 0, "sincronizadas": 1})
         self.assertEqual(list(self.pending_annotations.glob("*.json")), [])
-        shared = main.load_history_annotations(self.shared_annotations)
-        self.assertEqual(shared[0]["anotacao"], "Anotação local mais recente.")
+        shared = resolve_history_annotations(main.load_history_annotations(self.shared_annotations))
+        self.assertEqual(shared[(event["id"], item_id)]["anotacao"], "Anotação local mais recente.")
 
     def test_history_list_uses_saved_summary_without_transforming_rows_or_migrating_notes(self):
         event = {

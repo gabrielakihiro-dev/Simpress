@@ -3,6 +3,7 @@
 import re
 from datetime import datetime
 from typing import Any, Dict, Optional
+from domains.history_annotations import annotation_export_text
 
 from openpyxl.styles import Alignment, Border, Font, PatternFill, Side
 from openpyxl.utils import get_column_letter
@@ -80,6 +81,8 @@ def _export_note(
     item: Optional[Dict[str, Any]] = None,
 ) -> str:
     if isinstance(item, dict):
+        if item.get("anotacao_conflito"):
+            return _export_text(annotation_export_text(item))
         if isinstance(item.get("anotacao"), str):
             return _export_text(item["anotacao"])
         if item.get("anotacao_id"):
