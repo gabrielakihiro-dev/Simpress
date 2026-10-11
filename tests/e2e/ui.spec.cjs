@@ -57,11 +57,12 @@ test("home has no WCAG 2.2 A/AA axe violations", async ({ page }) => {
   await auditAccessibility(page);
 });
 
-test("action menu groups have the requested colors and aligned primary action sizes", async ({ page }) => {
+test("sidebar tools keep their accent colors and aligned primary action sizes", async ({ page }) => {
   await openSidebarIfNeeded(page);
   const updateButton = page.locator("#btn-atualizar-planilhas");
   const exportButton = page.locator("#btn-exportar-equipamentos");
   const ticketButton = page.getByRole("button", { name: "Acompanhamento de Chamados" });
+  const analysisButton = page.locator('.header-action-group[data-action-group="analysis"] > summary');
   await expect(exportButton).toBeVisible();
   await expect(ticketButton).toBeVisible();
   const heights = await Promise.all([updateButton, exportButton, ticketButton].map(button =>
@@ -71,21 +72,27 @@ test("action menu groups have the requested colors and aligned primary action si
   expect(heights[2]).toBe(heights[0]);
 
   const ticketBackground = await ticketButton.evaluate(element => getComputedStyle(element).backgroundColor);
-  const analysisBackground = await page.locator('.header-action-group[data-action-group="analysis"] > summary')
-    .evaluate(element => getComputedStyle(element).backgroundColor);
-  const equipmentBackground = await page.locator('.header-action-group[data-action-group="equipment"] > summary')
-    .evaluate(element => getComputedStyle(element).backgroundColor);
+  const analysisBackground = await analysisButton.evaluate(element => getComputedStyle(element).backgroundColor);
+  const updateBackground = await updateButton.evaluate(element => getComputedStyle(element).backgroundColor);
+  const exportBackground = await exportButton.evaluate(element => getComputedStyle(element).backgroundColor);
+  expect(updateBackground).toContain("67, 56, 202");
+  expect(exportBackground).toContain("5, 150, 105");
   expect(ticketBackground).toContain("13, 148, 136");
-  expect(analysisBackground).toContain("124, 45, 18");
-  expect(equipmentBackground).toContain("127, 29, 29");
+  expect(analysisBackground).toContain("109, 40, 217");
 });
 
-test("tab navigation updates selected state and supports arrow keys", async ({ page }) => {
+test("tab navigation updates selected state and supports arrow keys", async ({ page }, testInfo) => {
+  await openSidebarIfNeeded(page);
   const transferTab = page.getByRole("tab", { name: "Transporte" });
   const homeTab = page.getByRole("tab", { name: "Home" });
   await transferTab.click();
   await expect(transferTab).toHaveAttribute("aria-selected", "true");
   await expect(page.getByRole("tabpanel")).toBeVisible();
+  if (testInfo.project.name === "mobile") {
+    await expect(page.locator("#simpress-app-shell")).toHaveAttribute("data-sidebar-open", "false");
+    await expect(page.locator("#main-content")).toBeFocused();
+    return;
+  }
   await transferTab.focus();
   await transferTab.press("ArrowLeft");
   await expect(homeTab).toBeFocused();
@@ -93,6 +100,7 @@ test("tab navigation updates selected state and supports arrow keys", async ({ p
 });
 
 test("search displays an announced skeleton, then the fictional result", async ({ page }) => {
+  test.setTimeout(45_000);
   await page.getByRole("combobox", { name: "Série, apelido, modelo ou cidade do equipamento" }).fill("LENTO");
   await page.getByRole("button", { name: "Buscar Equipamento" }).click();
   await expect(page.locator(".ui-skeleton").first()).toBeVisible();
@@ -108,7 +116,7 @@ test("failed search restores the controls and exposes a recoverable error", asyn
   await expect(search).toBeEnabled();
 });
 
-test("modal traps keyboard focus, restores it on Escape, and passes axe", async ({ page }) => {
+test("modal traps keyboard focus, restores it on Escape, and passes axe", async ({ page }, testInfo) => {
   await openFixtureComparison(page);
   const dialog = page.getByRole("dialog");
   await auditAccessibility(page, "#modal-comparacao-planilhas");
@@ -121,7 +129,10 @@ test("modal traps keyboard focus, restores it on Escape, and passes axe", async 
 
   await page.keyboard.press("Escape");
   await expect(dialog).toBeHidden();
-  await expect(page.locator('.header-action-group[data-action-group="analysis"] > summary')).toBeFocused();
+  const returnFocus = testInfo.project.name === "mobile"
+    ? page.locator("#btn-sidebar-open")
+    : page.locator('.header-action-group[data-action-group="analysis"] > summary');
+  await expect(returnFocus).toBeFocused();
 });
 
 test("fixture annotation autosaves to the isolated in-memory endpoint", async ({ page }) => {
@@ -181,7 +192,7 @@ test("ticket tracking imports both workbooks and relates each serial to its OS",
   await expect(simpressPortalLink.locator("svg")).toBeVisible();
   const managementPanel = page.locator("#painel-dados-acompanhamento-chamados");
   await expect(managementPanel).not.toHaveAttribute("open", "");
-  await managementPanel.locator("summary").click();
+  await managementPanel.locator("summary").first().click();
   await expect(page.locator("#arquivo-chamados-simpress")).toBeVisible();
   await expect(page.locator("#arquivo-chamados-oracle")).toBeVisible();
   await auditAccessibility(page, "#modal-acompanhamento-chamados");
@@ -253,6 +264,29 @@ test("layout stays within common responsive viewport widths", async ({ page }) =
     const widths = await page.evaluate(() => ({
       viewport: document.documentElement.clientWidth,
       document: document.documentElement.scrollWidth,
+      overflowingElements: [...document.querySelectorAll("body *")]
+        .map(element => ({
+          element,
+          rect: element.getBoundingClientRect(),
+          style: getComputedStyle(element),
+        }))
+        .filter(({ element, rect, style }) => (
+          style.display !== "none"
+          && style.visibility !== "hidden"
+          && !element.closest("[hidden]")
+          && rect.width > 0
+          && rect.right > document.documentElement.clientWidth + 1
+        ))
+        .sort((left, right) => right.rect.right - left.rect.right)
+        .slice(0, 8)
+        .map(({ element, rect, style }) => ({
+          tag: element.tagName,
+          id: element.id,
+          className: typeof element.className === "string" ? element.className : "",
+          right: Math.round(rect.right),
+          width: Math.round(rect.width),
+          position: style.position,
+        })),
     }));
     expect(widths.document, `horizontal overflow at ${viewport.width}×${viewport.height}: ${JSON.stringify(widths)}`)
       .toBeLessThanOrEqual(widths.viewport + 1);

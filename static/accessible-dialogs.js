@@ -83,12 +83,24 @@
       && (!HTMLElementType || previousFocus instanceof HTMLElementType)
       && previousFocus.isConnected
       && !previousFocus.closest(".hidden")
+      && !previousFocus.closest("[inert]")
+      && window.getComputedStyle(previousFocus).visibility !== "hidden"
+      && window.getComputedStyle(previousFocus).display !== "none"
       && previousFocus.getClientRects().length;
     if (isConnectedVisibleElement) {
       previousFocus.focus({ preventScroll: true });
     } else {
-      const fallback = document.querySelector(".header-secondary-actions > summary")
-        || document.getElementById("input-serial");
+      const fallback = [
+        document.getElementById("btn-sidebar-open"),
+        document.querySelector('.header-action-group[data-action-group="analysis"] > summary'),
+        document.getElementById("input-serial"),
+      ].find(candidate => candidate
+        && candidate.isConnected
+        && !candidate.closest(".hidden")
+        && !candidate.closest("[inert]")
+        && window.getComputedStyle(candidate).visibility !== "hidden"
+        && window.getComputedStyle(candidate).display !== "none"
+        && candidate.getClientRects().length);
       fallback?.focus({ preventScroll: true });
     }
   }
