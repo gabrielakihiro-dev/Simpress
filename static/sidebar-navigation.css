@@ -784,6 +784,42 @@ body.sidebar-drawer-open {
     padding: 1rem 1rem 8.5rem !important;
   }
 
+  #readiness-panel,
+  #readiness-panel > .readiness-panel-summary,
+  #readiness-panel > .readiness-expanded-content,
+  #readiness-panel .readiness-header,
+  #readiness-panel .readiness-details-content {
+    min-width: 0;
+    max-width: 100%;
+  }
+
+  #readiness-panel > .readiness-panel-summary {
+    align-items: flex-start;
+  }
+
+  #readiness-panel .readiness-summary-copy {
+    flex: 1 1 0;
+    min-width: 0;
+  }
+
+  #readiness-panel .readiness-title,
+  #readiness-panel .readiness-status {
+    min-width: 0;
+    max-width: 100%;
+    overflow-wrap: anywhere;
+  }
+
+  #readiness-panel .readiness-header {
+    flex-wrap: wrap;
+    gap: 0.5rem;
+  }
+
+  #readiness-panel .readiness-refresh {
+    top: 0;
+    max-width: 100%;
+    margin-left: auto;
+  }
+
   .quick-actions {
     left: 0 !important;
   }
