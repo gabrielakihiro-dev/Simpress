@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from collections import Counter
 from copy import deepcopy
+from dataclasses import dataclass
 from datetime import date, datetime
 from hashlib import sha256
 from io import BytesIO
@@ -440,43 +441,90 @@ def ticket_timeline_state(ticket: Dict[str, Any]) -> Dict[str, Any]:
     }
 
 
-def build_ticket_timeline(snapshots: Sequence[Dict[str, Any]], serial: str) -> List[Dict[str, Any]]:
-    """List one auditable state checkpoint per import, with only changed fields highlighted."""
-    serial_key = _stable_serial(serial)
-    previous_state: Optional[Dict[str, Any]] = None
-    events: List[Dict[str, Any]] = []
-    for snapshot in snapshots:
+@dataclass(frozen=True)
+class TicketTimelineIndex:
+    """Operation-scoped timeline projection, retaining rows for duplicate series."""
+
+    snapshots: Tuple[Dict[str, Any], ...]
+    events_by_serial: Mapping[str, Tuple[Dict[str, Any], ...]]
+    events_by_item_id: Mapping[str, Dict[str, Any]]
+    events_by_snapshot_serial: Mapping[Tuple[int, str], Dict[str, Any]]
+    rows_by_snapshot_serial: Mapping[Tuple[int, str], Tuple[Dict[str, Any], ...]]
+
+    def event_for_snapshot(self, snapshot: Dict[str, Any], serial: Any) -> Optional[Dict[str, Any]]:
+        return self.events_by_snapshot_serial.get((id(snapshot), _stable_serial(serial)))
+
+
+def build_ticket_timeline_index(snapshots: Sequence[Dict[str, Any]]) -> TicketTimelineIndex:
+    """Index selected immutable snapshots once, preserving first-row timeline semantics."""
+    snapshot_values = tuple(snapshots)
+    events_by_serial: Dict[str, List[Dict[str, Any]]] = {}
+    events_by_item_id: Dict[str, Dict[str, Any]] = {}
+    events_by_snapshot_serial: Dict[Tuple[int, str], Dict[str, Any]] = {}
+    rows_by_snapshot_serial: Dict[Tuple[int, str], Tuple[Dict[str, Any], ...]] = {}
+    previous_state_by_serial: Dict[str, Dict[str, Any]] = {}
+
+    for snapshot in snapshot_values:
         if not isinstance(snapshot, dict):
             continue
-        ticket = next((
-            item for item in snapshot.get("chamados", [])
-            if isinstance(item, dict) and _stable_serial(item.get("serie")) == serial_key
-        ), None)
-        if ticket is None:
-            continue
-        state = ticket_timeline_state(ticket)
-        changes = []
-        for field, label in TICKET_TIMELINE_STATE_FIELDS:
-            current_value = state.get(field)
-            previous_value = previous_state.get(field) if previous_state is not None else None
-            if previous_state is None:
-                if current_value in (None, "", []):
-                    continue
-                changes.append({"campo": label, "anterior": [], "atual": current_value})
-            elif current_value != previous_value:
-                changes.append({"campo": label, "anterior": previous_value, "atual": current_value})
+        rows_by_key: Dict[str, List[Dict[str, Any]]] = {}
+        for ticket in snapshot.get("chamados", []):
+            if isinstance(ticket, dict):
+                rows_by_key.setdefault(_stable_serial(ticket.get("serie")), []).append(ticket)
+
+        snapshot_identity = id(snapshot)
         snapshot_id = str(snapshot.get("id") or "")
-        events.append({
-            "snapshot_id": snapshot_id,
-            "item_id": ticket_timeline_item_id(snapshot_id, ticket.get("serie") or serial),
-            "serie": str(ticket.get("serie") or serial),
-            "atualizado_em": str(snapshot.get("atualizado_em") or ""),
-            "estado": state,
-            "mudancas": changes,
-            "tipo": "Importação inicial" if previous_state is None else "Dados alterados" if changes else "Sem mudanças",
-            "anotacao": "",
-        })
-        previous_state = state
+        for serial_key, matching_rows in rows_by_key.items():
+            # Keep every duplicate row available for audit; the historical projection
+            # intentionally uses the first matching row, as the former `next(...)` did.
+            rows_by_snapshot_serial[(snapshot_identity, serial_key)] = tuple(matching_rows)
+            ticket = matching_rows[0]
+            state = ticket_timeline_state(ticket)
+            previous_state = previous_state_by_serial.get(serial_key)
+            changes = []
+            for field, label in TICKET_TIMELINE_STATE_FIELDS:
+                current_value = state.get(field)
+                previous_value = previous_state.get(field) if previous_state is not None else None
+                if previous_state is None:
+                    if current_value in (None, "", []):
+                        continue
+                    changes.append({"campo": label, "anterior": [], "atual": current_value})
+                elif current_value != previous_value:
+                    changes.append({"campo": label, "anterior": previous_value, "atual": current_value})
+            event: Dict[str, Any] = {
+                "snapshot_id": snapshot_id,
+                "item_id": ticket_timeline_item_id(snapshot_id, ticket.get("serie") or ""),
+                "serie": str(ticket.get("serie") or ""),
+                "atualizado_em": str(snapshot.get("atualizado_em") or ""),
+                "estado": state,
+                "mudancas": changes,
+                "tipo": "Importação inicial" if previous_state is None else "Dados alterados" if changes else "Sem mudanças",
+                "anotacao": "",
+            }
+            events_by_serial.setdefault(serial_key, []).append(event)
+            events_by_item_id.setdefault(event["item_id"], event)
+            events_by_snapshot_serial[(snapshot_identity, serial_key)] = event
+            previous_state_by_serial[serial_key] = state
+
+    return TicketTimelineIndex(
+        snapshots=snapshot_values,
+        events_by_serial={key: tuple(events) for key, events in events_by_serial.items()},
+        events_by_item_id=events_by_item_id,
+        events_by_snapshot_serial=events_by_snapshot_serial,
+        rows_by_snapshot_serial=rows_by_snapshot_serial,
+    )
+
+
+def build_ticket_timeline(
+    snapshots: Sequence[Dict[str, Any]], serial: str,
+    *, index: Optional[TicketTimelineIndex] = None,
+) -> List[Dict[str, Any]]:
+    """List one auditable state checkpoint per import, with only changed fields highlighted."""
+    timeline_index = index if index is not None else build_ticket_timeline_index(snapshots)
+    events = deepcopy(list(timeline_index.events_by_serial.get(_stable_serial(serial), ())))
+    for event in events:
+        if not event.get("serie") and serial:
+            event["serie"] = str(serial)
     return events
 
 
