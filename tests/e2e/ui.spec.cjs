@@ -271,14 +271,28 @@ test("layout stays within common responsive viewport widths", async ({ page }) =
         ))
         .sort((left, right) => right.rect.right - left.rect.right)
         .slice(0, 8)
-        .map(({ element, rect, style }) => ({
-          tag: element.tagName,
-          id: element.id,
-          className: typeof element.className === "string" ? element.className : "",
-          right: Math.round(rect.right),
-          width: Math.round(rect.width),
-          position: style.position,
-        })),
+        .map(({ element, rect, style }) => {
+          const ancestors = [];
+          let ancestor = element.parentElement;
+          while (ancestor && ancestors.length < 5) {
+            ancestors.push({
+              tag: ancestor.tagName,
+              id: ancestor.id,
+              className: typeof ancestor.className === "string" ? ancestor.className : "",
+            });
+            ancestor = ancestor.parentElement;
+          }
+          return {
+            tag: element.tagName,
+            id: element.id,
+            className: typeof element.className === "string" ? element.className : "",
+            text: (element.innerText || element.textContent || "").trim().replace(/\s+/g, " ").slice(0, 80),
+            right: Math.round(rect.right),
+            width: Math.round(rect.width),
+            position: style.position,
+            ancestors,
+          };
+        }),
     }));
     expect(widths.document, `horizontal overflow at ${viewport.width}×${viewport.height}: ${JSON.stringify(widths)}`)
       .toBeLessThanOrEqual(widths.viewport + 1);
