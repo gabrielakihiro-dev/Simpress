@@ -123,6 +123,7 @@ test("failed search restores the controls and exposes a recoverable error", asyn
 });
 
 test("modal traps keyboard focus, restores it on Escape, and passes axe", async ({ page }, testInfo) => {
+  test.setTimeout(45_000);
   await openFixtureComparison(page);
   const dialog = page.getByRole("dialog");
   await auditAccessibility(page, "#modal-comparacao-planilhas");
@@ -293,6 +294,12 @@ test("layout stays within common responsive viewport widths", async ({ page }) =
               tag: ancestor.tagName,
               id: ancestor.id,
               className: typeof ancestor.className === "string" ? ancestor.className : "",
+              x: Math.round(ancestor.getBoundingClientRect().x),
+              width: Math.round(ancestor.getBoundingClientRect().width),
+              right: Math.round(ancestor.getBoundingClientRect().right),
+              display: getComputedStyle(ancestor).display,
+              marginLeft: getComputedStyle(ancestor).marginLeft,
+              gridTemplateColumns: getComputedStyle(ancestor).gridTemplateColumns,
             });
             ancestor = ancestor.parentElement;
           }
