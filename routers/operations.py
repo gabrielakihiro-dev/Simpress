@@ -115,18 +115,6 @@ def create_operations_router(
             raise HTTPException(status_code=503, detail="O acompanhamento de chamados está inválido.")
         return data
 
-    def save_ticket_report(report: Dict[str, Any]) -> None:
-        path = ticket_report_path()
-        try:
-            path.parent.mkdir(parents=True, exist_ok=True)
-            with AtomicFileTransaction(transaction_root(), [path]) as transaction:
-                transaction.update_json(path, lambda _current: report, {})
-                transaction.commit()
-        except FileBusyError:
-            raise HTTPException(status_code=409, detail="O acompanhamento está sendo atualizado por outra operação local.") from None
-        except (OSError, FileTransactionError):
-            raise HTTPException(status_code=500, detail="Não foi possível salvar o acompanhamento de chamados.") from None
-
     def displayed_ticket_snapshots(report: Dict[str, Any]) -> List[Dict[str, Any]]:
         return [normalize_ticket_snapshot(item) for item in ticket_report_snapshots(report)]
 
@@ -170,12 +158,13 @@ def create_operations_router(
             event.update(annotation_view(record) if record else {"anotacao": "", "anotacao_revisoes": []})
         return events
 
-    def initialize_ticket_timeline_annotations(
+    def prepare_ticket_timeline_annotations(
         previous_snapshots: Sequence[Dict[str, Any]], current_snapshot: Dict[str, Any],
-    ) -> None:
-        """Create one independent annotation record per series/import and carry exact matches."""
+    ) -> List[Dict[str, Any]]:
+        """Prepare independent revisions from the predecessors read under the import lock."""
         stored = latest_ticket_annotations()
         all_records = list(stored.values())
+        records = []
         series = sorted({
             str(ticket.get("serie") or "").strip()
             for ticket in current_snapshot.get("chamados", [])
@@ -212,19 +201,24 @@ def create_operations_router(
                 else:
                     annotation = ""
 
-            try:
-                _persist_ticket_annotation(
-                    event_id=current_event["snapshot_id"],
-                    item_id=current_event["item_id"],
-                    serial=serial,
-                    event_time=current_event.get("atualizado_em", ""),
-                    row_hash=row_hash,
-                    annotation=annotation,
-                )
-            except HTTPException:
-                # The imported report is already committed; keep this failure visible in logs
-                # without falsely reporting the import itself as failed.
-                logger.exception("Importação salva; anotação de linha do tempo pendente para %s.", serial)
+            records.append(build_history_annotation_record(
+                event_id=current_event["snapshot_id"], event_time=current_event.get("atualizado_em", ""),
+                item_id=current_event["item_id"], serie=serial, computador="",
+                motivo="Linha do tempo do acompanhamento de chamados", anotacao=annotation,
+                categoria=TICKET_TIMELINE_ANNOTATION_CATEGORY, linha_hash=row_hash,
+            ))
+        return records
+
+    def sync_ticket_annotation(record: Dict[str, Any]) -> bool:
+        try:
+            return sync_history_annotation(
+                record, directory=annotation_directory(), outbox=annotation_outbox_directory(),
+                transaction_root=transaction_root(), transaction_factory=AtomicFileTransaction,
+                publisher=save_history_annotation,
+            )
+        except Exception:
+            logger.exception("Anotação do chamado %s salva e aguardando sincronização.", record.get("serie"))
+            return False
 
     def _persist_ticket_annotation(
         *, event_id: str, item_id: str, serial: str, event_time: str, row_hash: str, annotation: str,
@@ -269,15 +263,7 @@ def create_operations_router(
             logger.exception("Não foi possível enfileirar a anotação do chamado %s.", serial)
             raise HTTPException(status_code=503, detail="Não foi possível salvar a anotação localmente.") from None
 
-        try:
-            return sync_history_annotation(
-                record, directory=annotation_directory(), outbox=annotation_outbox_directory(),
-                transaction_root=transaction_root(), transaction_factory=AtomicFileTransaction,
-                publisher=save_history_annotation,
-            )
-        except Exception:
-            logger.exception("Anotação do chamado %s salva e aguardando sincronização.", serial)
-            return False
+        return sync_ticket_annotation(record)
 
     @router.get("/api/operacoes/chamados")
     def get_ticket_report():
@@ -473,7 +459,7 @@ def create_operations_router(
         simpress_bytes, simpress_filename = read_source(simpress_file, "Simpress")
         oracle_bytes, oracle_filename = read_source(oracle_file, "Oracle")
         try:
-            report = reconcile_ticket_workbooks(
+            parsed_report = reconcile_ticket_workbooks(
                 simpress_bytes,
                 oracle_bytes,
                 simpress_filename=simpress_filename,
@@ -486,37 +472,67 @@ def create_operations_router(
         except TicketWorkbookError as error:
             raise HTTPException(status_code=422, detail=str(error)) from None
 
-        report["atualizado_em"] = datetime.now().astimezone().isoformat(timespec="seconds")
-        snapshot = {
-            "id": str(uuid4()),
-            "atualizado_em": report["atualizado_em"],
-            "fontes": report.get("fontes", {}),
-            "resumo": report.get("resumo", {}),
-            "chamados": report.get("chamados", []),
-        }
-        previous_report = load_ticket_report()
-        automatic_imports = previous_report.get("importacoes_automaticas", [])
-        if not isinstance(automatic_imports, list):
-            automatic_imports = []
-        if automatic_import_id and any(
-            isinstance(item, dict) and item.get("lote_id") == automatic_import_id
-            for item in automatic_imports
-        ):
-            raise HTTPException(status_code=409, detail="Este lote já consta no histórico de chamados.")
-        previous_snapshots = displayed_ticket_snapshots(previous_report)
-        history = ticket_report_snapshots(previous_report)
-        history.append(snapshot)
-        report["snapshot_id"] = snapshot["id"]
-        report["historico"] = history[-MAX_TICKET_SNAPSHOTS:]
-        report["importacoes_automaticas"] = automatic_imports
-        if automatic_import_id:
-            report["importacoes_automaticas"].append({
-                "lote_id": automatic_import_id,
-                "snapshot_id": snapshot["id"],
-                "atualizado_em": snapshot["atualizado_em"],
-            })
-        save_ticket_report(report)
-        initialize_ticket_timeline_annotations(previous_snapshots, normalize_ticket_snapshot(snapshot))
+        path = ticket_report_path()
+        annotation_records: List[Dict[str, Any]] = []
+        pending_annotations: List[tuple[Path, Dict[str, Any]]] = []
+
+        def append_import(current: Any) -> Dict[str, Any]:
+            nonlocal annotation_records
+            if not isinstance(current, dict) or not isinstance(current.get("chamados"), list):
+                raise HTTPException(status_code=503, detail="O acompanhamento de chamados está inválido.")
+            receipts = current.get("importacoes_automaticas", [])
+            automatic_imports = list(receipts) if isinstance(receipts, list) else []
+            if automatic_import_id and any(
+                isinstance(item, dict) and item.get("lote_id") == automatic_import_id
+                for item in automatic_imports
+            ):
+                raise HTTPException(status_code=409, detail="Este lote já consta no histórico de chamados.")
+
+            updated = dict(parsed_report)
+            updated["atualizado_em"] = datetime.now().astimezone().isoformat(timespec="seconds")
+            snapshot = {"id": str(uuid4()), **{field: updated.get(field) for field in TICKET_SNAPSHOT_FIELDS}}
+            history = ticket_report_snapshots(current)
+            annotation_records = prepare_ticket_timeline_annotations(
+                [normalize_ticket_snapshot(item) for item in history], normalize_ticket_snapshot(snapshot),
+            )
+            # Discover every outbox target before staging. Revisions and the report commit together,
+            # so a following import can inherit notes even while shared publication is still pending.
+            for record in annotation_records:
+                pending_path = history_annotation_record_path(
+                    annotation_outbox_directory(), record["evento_id"], record["item_id"], record["revisao_id"],
+                )
+                transaction.add_target(pending_path)
+                pending_annotations.append((pending_path, record))
+
+            # The lock serializes commits: list position, never a wall clock, defines version order.
+            updated["snapshot_id"] = snapshot["id"]
+            updated["historico"] = (history + [snapshot])[-MAX_TICKET_SNAPSHOTS:]
+            if automatic_import_id:
+                automatic_imports.append({
+                    "lote_id": automatic_import_id, "snapshot_id": snapshot["id"],
+                    "atualizado_em": snapshot["atualizado_em"],
+                })
+            updated["importacoes_automaticas"] = automatic_imports
+            return updated
+
+        try:
+            with AtomicFileTransaction(transaction_root(), [path]) as transaction:
+                report = transaction.update_json(path, append_import, {"chamados": [], "historico": []})
+                for pending_path, record in pending_annotations:
+                    transaction.stage_bytes(
+                        pending_path, json.dumps(record, ensure_ascii=False, indent=2).encode("utf-8"),
+                        lambda staged: json.loads(staged.read_text(encoding="utf-8")),
+                    )
+                transaction.commit()
+        except FileBusyError:
+            raise HTTPException(status_code=409, detail="O acompanhamento está sendo atualizado por outra operação local.") from None
+        except (OSError, FileTransactionError) as error:
+            if isinstance(error.__cause__, (OSError, UnicodeError, json.JSONDecodeError)):
+                raise HTTPException(status_code=503, detail="O acompanhamento de chamados não pôde ser lido.") from None
+            raise HTTPException(status_code=500, detail="Não foi possível salvar o acompanhamento de chamados.") from None
+
+        for record in annotation_records:
+            sync_ticket_annotation(record)
         displayed_report = normalize_ticket_snapshot(report)
         response = {key: value for key, value in displayed_report.items() if key not in {"historico", "importacoes_automaticas"}}
         response["historico"] = [
