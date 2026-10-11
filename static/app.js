@@ -602,8 +602,109 @@
         };
 
         const content = document.createDocumentFragment();
-        adicionarGrupoProntidao(content, "Funções", functions, functionLabels, "function", report.backend === "files");
-        adicionarGrupoProntidao(content, "Arquivos locais", Object.entries(report.files), fileLabels, "file");
+        const inventoryFunctionKeys = [
+          "consulta_equipamentos",
+          "geracao_transferencia",
+          "comparacao_atualizacao_inventarios",
+          "exportacao_equipamentos",
+        ];
+        const inventoryFunctions = inventoryFunctionKeys
+          .map(key => [key, report.functions[key]])
+          .filter(([, status]) => status);
+        const inventoryFileLabels = {
+          inventario_equipamentos: "Base ativa",
+          inventario_detalhes_atualizacao: "Simpress",
+          inventario_endpoint: "Endpoint",
+        };
+        const inventoryFileKeys = report.backend === "files"
+          ? ["inventario_equipamentos", "inventario_detalhes_atualizacao", "inventario_endpoint"]
+          : ["inventario_equipamentos"];
+        const missingInventoryFiles = inventoryFileKeys
+          .filter(key => report.files[key]?.available !== true);
+        const inventoryInvalid = missingInventoryFiles.some(key => report.files[key]?.state === "invalid");
+        const sharedInventoryStatus = {
+          available: missingInventoryFiles.length === 0,
+          state: missingInventoryFiles.length === 0 ? "ready" : inventoryInvalid ? "invalid" : "awaiting_import",
+          missing_files: missingInventoryFiles.map(key => inventoryFileLabels[key] || key),
+          reason: missingInventoryFiles.map(key => {
+            const status = report.files[key];
+            const detail = status?.reason || (status?.state === "invalid" ? "arquivo inválido" : "aguardando importação");
+            return `${inventoryFileLabels[key] || key}: ${detail}`;
+          }).join(" · "),
+        };
+        const ticketStatus = {
+          ...(report.files.historico_chamados || {}),
+          ...(report.functions.acompanhamento_chamados || {}),
+        };
+        ticketStatus.state ||= ticketStatus.available === true ? "ready" : report.files.historico_chamados?.state || "awaiting_import";
+
+        adicionarGrupoProntidao(
+          content,
+          "Inventários",
+          [["inventarios_compartilhados", sharedInventoryStatus]],
+          { inventarios_compartilhados: report.backend === "files" ? "Simpress + Endpoint" : "Base de equipamentos" },
+          "shared_inventory",
+          {
+            description: report.backend === "files"
+              ? "Par compartilhado pelas quatro ações."
+              : "Base compartilhada pelas quatro ações.",
+            countLabel: sharedInventoryStatus.available ? "Disponível" : sharedInventoryStatus.state === "invalid" ? "Inválido" : "Pendente",
+            countState: sharedInventoryStatus.state,
+            showItemState: false,
+            groupAction: report.backend === "files"
+              ? {
+                  label: "Importar/atualizar inventários",
+                  ariaLabel: "Importar/atualizar inventários Simpress e Endpoint",
+                  onClick: abrirModalAtualizarPlanilhas,
+                }
+              : null,
+          }
+        );
+        adicionarGrupoProntidao(content, "Ações com inventário", inventoryFunctions, functionLabels, "function", {
+          description: "Usam a base compartilhada acima.",
+          countLabel: `${inventoryFunctions.length} ações`,
+          showItemState: false,
+          showItemDetails: false,
+        });
+        adicionarGrupoProntidao(
+          content,
+          "Acompanhamento de chamados",
+          [["acompanhamento_chamados", ticketStatus]],
+          functionLabels,
+          "function",
+          {
+            description: "Importação própria das planilhas da Simpress e do Oracle.",
+            countLabel: ticketStatus.available === true ? "Disponível" : ticketStatus.state === "invalid" ? "Inválido" : "Pendente",
+            countState: ticketStatus.state,
+            showItemState: false,
+            groupAction: {
+              label: "Importar planilhas de chamados",
+              ariaLabel: "Importar planilhas para acompanhamento de chamados",
+              onClick: () => {
+                document.getElementById("painel-dados-acompanhamento-chamados").open = true;
+                abrirAcompanhamentoChamados(true);
+              },
+            },
+          }
+        );
+        const sharedFileKeys = new Set([
+          "inventario_equipamentos",
+          "inventario_detalhes_atualizacao",
+          "inventario_endpoint",
+          "historico_chamados",
+        ]);
+        const additionalFiles = Object.entries(report.files).filter(([key]) => !sharedFileKeys.has(key));
+        if (additionalFiles.length) {
+          adicionarGrupoProntidao(content, "Outros arquivos locais", additionalFiles, fileLabels, "file", {
+            description: "Modelos e dados locais usados por algumas ações.",
+            itemActions: {
+              modelo_exportacao: {
+                label: "Importar modelo",
+                onClick: () => abrirImportacaoModelo("exportacao"),
+              },
+            },
+          });
+        }
         details.replaceChildren(content);
       } catch (error) {
         panel.dataset.state = "error";
@@ -615,7 +716,7 @@
       }
     }
 
-    function adicionarGrupoProntidao(parent, title, entries, labels, type, showActions = false) {
+    function adicionarGrupoProntidao(parent, title, entries, labels, type, options = {}) {
       const group = document.createElement("section");
       group.className = "readiness-group";
       const headingRow = document.createElement("div");
@@ -625,14 +726,15 @@
       heading.textContent = title;
       const count = document.createElement("span");
       count.className = "readiness-group-count";
-      count.textContent = `${entries.length} ${entries.length === 1 ? "item" : "itens"}`;
+      count.textContent = options.countLabel || `${entries.length} ${entries.length === 1 ? "item" : "itens"}`;
+      if (options.countState) count.dataset.state = options.countState;
       headingRow.append(heading, count);
 
       const description = document.createElement("p");
       description.className = "readiness-group-description";
-      description.textContent = type === "file"
+      description.textContent = options.description || (type === "file"
         ? "Planilhas e dados usados pelas funções."
-        : "Ações disponíveis na aplicação.";
+        : "Ações disponíveis na aplicação.");
 
       const list = document.createElement("ul");
       list.className = "readiness-list";
@@ -655,44 +757,47 @@
           : status?.file;
         const detail = document.createElement("span");
         detail.className = "readiness-item-detail";
-        const detailText = type === "file"
+        const detailText = options.showItemDetails === false ? "" : type === "shared_inventory"
+          ? (!available ? status.reason || (status.missing_files || []).join(", ") : "")
+          : type === "file"
           ? (available
               ? availableFileDetail
               : [status.file, status.reason].filter(Boolean).join(" — "))
           : (!available
               ? (status.missing_files || []).join(", ") || "dependência ausente"
               : "");
+        item.appendChild(label);
+        if (options.showItemState !== false) item.appendChild(state);
         if (detailText) {
           detail.textContent = `Detalhe: ${detailText}`;
-          item.append(label, state, detail);
-        } else {
-          item.append(label, state);
+          item.appendChild(detail);
         }
-        if (showActions) {
-          const actions = {
-            consulta_equipamentos: ["Importar inventários", abrirModalAtualizarPlanilhas],
-            comparacao_atualizacao_inventarios: ["Importar inventários", abrirModalAtualizarPlanilhas],
-            geracao_transferencia: ["Importar arquivos", () => abrirImportacaoModelo("transferencia")],
-            exportacao_equipamentos: ["Importar arquivos", () => abrirImportacaoModelo("exportacao")],
-            acompanhamento_chamados: ["Importar chamados", () => {
-              document.getElementById("painel-dados-acompanhamento-chamados").open = true;
-              abrirAcompanhamentoChamados(true);
-            }],
-          };
-          if (actions[key]) {
-            const button = document.createElement("button");
-            button.type = "button";
-            button.className = "readiness-import";
-            button.textContent = actions[key][0];
-            button.setAttribute("aria-label", `${actions[key][0]} — ${labels[key] || key}`);
-            button.addEventListener("click", actions[key][1]);
-            item.appendChild(button);
-          }
+        const action = options.itemActions?.[key];
+        if (action) {
+          const button = document.createElement("button");
+          button.type = "button";
+          button.className = "readiness-import";
+          button.textContent = action.label;
+          button.setAttribute("aria-label", action.ariaLabel || `${action.label} — ${labels[key] || key}`);
+          button.addEventListener("click", action.onClick);
+          item.appendChild(button);
         }
         list.appendChild(item);
       });
 
       group.append(headingRow, description, list);
+      if (options.groupAction) {
+        const actions = document.createElement("div");
+        actions.className = "readiness-group-actions";
+        const button = document.createElement("button");
+        button.type = "button";
+        button.className = "readiness-import";
+        button.textContent = options.groupAction.label;
+        button.setAttribute("aria-label", options.groupAction.ariaLabel || options.groupAction.label);
+        button.addEventListener("click", options.groupAction.onClick);
+        actions.appendChild(button);
+        group.appendChild(actions);
+      }
       parent.appendChild(group);
     }
 
@@ -1968,8 +2073,8 @@
       document.getElementById("titulo-importar-modelo").textContent = tipo === "transferencia"
         ? "Arquivos para transferência" : "Arquivos para exportação";
       document.getElementById("descricao-importar-modelo").textContent = tipo === "transferencia"
-        ? "Importe o par de inventários e um modelo com o layout oficial de transferência da Simpress."
-        : "Importe o par de inventários e um modelo de exportação com série e apelido, contendo as mesmas séries da base ativa.";
+        ? "A base Simpress + Endpoint é compartilhada. Se necessário, atualize-a no painel de disponibilidade; aqui, importe o modelo oficial de transferência da Simpress."
+        : "A base Simpress + Endpoint é compartilhada. Se necessário, atualize-a no painel de disponibilidade; aqui, importe o modelo de exportação com série e apelido das mesmas séries da base ativa.";
       document.getElementById("arquivo-modelo-local").value = "";
       document.getElementById("status-modelo-local").textContent = "";
       abrirModalAcessivel("modal-importar-modelo", "#arquivo-modelo-local", "fecharImportacaoModelo");
@@ -1977,12 +2082,6 @@
 
     function fecharImportacaoModelo() {
       if (!importacaoModeloOcupada) fecharModalAcessivel("modal-importar-modelo");
-    }
-
-    function importarInventariosDoModelo() {
-      if (importacaoModeloOcupada) return;
-      fecharImportacaoModelo();
-      abrirModalAtualizarPlanilhas();
     }
 
     async function enviarModeloLocal() {
