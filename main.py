@@ -2470,6 +2470,13 @@ def _load_database_unlocked(publish: bool = True) -> Any:
     return True
 
 # Models for API
+def _validate_equipment_serial(value: str) -> str:
+    """Apply the same non-empty serial semantics to every equipment edit route."""
+    if not normalize_reference_value(value):
+        raise ValueError("O número de série precisa conter letras ou números.")
+    return value.strip()
+
+
 class EquipamentoUpdatePayload(BaseModel):
     serial: str = Field(..., min_length=1, max_length=128, description="Número de Série do Equipamento")
     novo: bool = Field(False, description="Indica que o formulário está cadastrando um equipamento novo")
@@ -2488,16 +2495,19 @@ class EquipamentoUpdatePayload(BaseModel):
     @field_validator("serial")
     @classmethod
     def validate_serial(cls, value: str) -> str:
-        if not normalize_reference_value(value):
-            raise ValueError("O número de série precisa conter letras ou números.")
-        return value.strip()
+        return _validate_equipment_serial(value)
 
 
 
 
 class ApelidoUpdatePayload(BaseModel):
-    serial: str = Field(..., description="Número de Série do Equipamento")
-    apelido: str = Field(..., description="Novo Apelido / Hostname do Equipamento")
+    serial: str = Field(..., min_length=1, max_length=128, description="Número de Série do Equipamento")
+    apelido: str = Field(..., max_length=160, description="Novo Apelido / Hostname do Equipamento")
+
+    @field_validator("serial")
+    @classmethod
+    def validate_serial(cls, value: str) -> str:
+        return _validate_equipment_serial(value)
 
 
 class ApelidoUndoPayload(BaseModel):
