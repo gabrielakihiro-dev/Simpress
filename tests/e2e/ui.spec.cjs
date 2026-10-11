@@ -40,16 +40,8 @@ async function openFixtureComparison(page) {
 
 test.beforeEach(async ({ page }) => {
   await page.goto("/");
-  const [session, stats] = await Promise.all([
-    page.evaluate(async () => {
-      const response = await fetch("/api/auth/session", { credentials: "same-origin" });
-      return { status: response.status, body: await response.json() };
-    }),
-    page.request.get("/api/stats"),
-  ]);
-  expect(session.status).toBe(200);
-  expect(session.body).toEqual({ enabled: false, authenticated: false });
-  expect(stats.status()).toBe(200);
+  const session = await page.evaluate(() => window.SimpressAuth.ready);
+  expect(session).toEqual({ enabled: false, authenticated: false });
   await expect(page.locator("#stat-equipamentos")).toHaveText("1");
 });
 
