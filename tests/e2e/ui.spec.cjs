@@ -39,9 +39,23 @@ async function openFixtureComparison(page) {
 }
 
 test.beforeEach(async ({ page }) => {
-  await page.goto("/");
-  const session = await page.evaluate(() => window.SimpressAuth.ready);
-  expect(session).toEqual({ enabled: false, authenticated: false });
+  let sessionResponse;
+  let statsResponse;
+  for (let attempt = 0; attempt < 2; attempt++) {
+    const sessionResponsePromise = page.waitForResponse(response =>
+      new URL(response.url()).pathname === "/api/auth/session", { timeout: 5_000 }).catch(() => null);
+    const statsResponsePromise = page.waitForResponse(response =>
+      new URL(response.url()).pathname === "/api/stats", { timeout: 5_000 }).catch(() => null);
+    if (attempt === 0) await page.goto("/");
+    else await page.reload();
+    [sessionResponse, statsResponse] = await Promise.all([sessionResponsePromise, statsResponsePromise]);
+    if (sessionResponse && statsResponse) break;
+  }
+  expect(sessionResponse, "home should load the session endpoint").not.toBeNull();
+  expect(statsResponse, "home should load the statistics endpoint").not.toBeNull();
+  expect(sessionResponse.status()).toBe(200);
+  expect(await sessionResponse.json()).toEqual({ enabled: false, authenticated: false });
+  expect(statsResponse.status()).toBe(200);
   await expect(page.locator("#stat-equipamentos")).toHaveText("1");
 });
 
