@@ -15,6 +15,18 @@
 
   const returnFocus = new Map();
 
+  function isConnectedVisibleElement(element) {
+    if (!element
+      || (HTMLElementType && !(element instanceof HTMLElementType))
+      || !element.isConnected
+      || element.closest(".hidden")
+      || element.closest("[inert]")
+      || !element.getClientRects().length) return false;
+    if (typeof window.getComputedStyle !== "function") return true;
+    const style = window.getComputedStyle(element);
+    return style.visibility !== "hidden" && style.display !== "none";
+  }
+
   function open(modalId, initialFocusSelector, closeFunction) {
     const modal = document.getElementById(modalId);
     if (!modal) return;
@@ -79,15 +91,7 @@
     }
 
     document.body.classList.remove("dialog-open");
-    const isConnectedVisibleElement = previousFocus
-      && (!HTMLElementType || previousFocus instanceof HTMLElementType)
-      && previousFocus.isConnected
-      && !previousFocus.closest(".hidden")
-      && !previousFocus.closest("[inert]")
-      && window.getComputedStyle(previousFocus).visibility !== "hidden"
-      && window.getComputedStyle(previousFocus).display !== "none"
-      && previousFocus.getClientRects().length;
-    if (isConnectedVisibleElement) {
+    if (isConnectedVisibleElement(previousFocus)) {
       previousFocus.focus({ preventScroll: true });
     } else {
       const fallback = [
@@ -98,8 +102,9 @@
         && candidate.isConnected
         && !candidate.closest(".hidden")
         && !candidate.closest("[inert]")
-        && window.getComputedStyle(candidate).visibility !== "hidden"
-        && window.getComputedStyle(candidate).display !== "none"
+        && (typeof window.getComputedStyle !== "function"
+          || (window.getComputedStyle(candidate).visibility !== "hidden"
+            && window.getComputedStyle(candidate).display !== "none"))
         && candidate.getClientRects().length);
       fallback?.focus({ preventScroll: true });
     }
