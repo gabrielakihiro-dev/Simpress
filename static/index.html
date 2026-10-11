@@ -1354,7 +1354,7 @@ Horário disponível para atendimento:</textarea>
         <button type="button" onclick="fecharModalAtualizarPlanilhas()" class="px-4 py-2 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-300 text-xs transition">Cancelar</button>
         <button type="button" id="btn-confirmar-planilhas" onclick="enviarPlanilhas()" class="px-5 py-2 rounded-lg bg-sky-600 hover:bg-sky-500 text-white font-bold text-xs flex items-center gap-1.5 transition">
           <i data-lucide="refresh-cw" class="w-3.5 h-3.5"></i>
-          Atualizar site
+          Importar/atualizar inventários
         </button>
       </div>
     </div>
@@ -1367,7 +1367,6 @@ Horário disponível para atendimento:</textarea>
         <button type="button" class="readiness-import" onclick="fecharImportacaoModelo()" aria-label="Fechar importação de modelo">Fechar</button>
       </div>
       <p id="descricao-importar-modelo"></p>
-      <button type="button" class="readiness-import" onclick="importarInventariosDoModelo()">Importar inventários Simpress e Endpoint</button>
       <label for="arquivo-modelo-local">Modelo .xlsx (até 30 MB)</label>
       <input id="arquivo-modelo-local" type="file" accept=".xlsx,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" />
       <p>Ao substituir um modelo importado, uma cópia anterior é guardada nos backups locais. O modelo de transferência incluído no projeto é preservado.</p>
