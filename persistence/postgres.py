@@ -6,12 +6,15 @@ revision row, prepare the HTTP result, and return it only after the SQL COMMIT.
 
 from collections import Counter
 from contextlib import contextmanager
+from copy import deepcopy
 from datetime import datetime
 import hashlib
 import hmac
 import json
 import logging
 import re
+import sys
+from threading import Lock
 import uuid
 from typing import Any
 
@@ -20,10 +23,12 @@ from psycopg.rows import dict_row
 from psycopg.types.json import Jsonb
 from psycopg_pool import ConnectionPool, PoolTimeout
 
+from domains.equipment_search import search_normalized_index
 from persistence.config import PersistenceError
 
 MARKER = "simpress-dev: disposable synthetic development; no operational data"
 MAX_UNIT_ID = 9_007_199_254_740_991
+MAX_CACHED_EQUIPMENT_SEARCH_INDEX_BYTES = 32 * 1024 * 1024
 logger = logging.getLogger(__name__)
 
 
@@ -36,6 +41,8 @@ class PostgresBackend:
         self.domain = domain
         self.authenticated = settings.auth_enabled
         self.rehearsal = settings.rehearsal
+        self._equipment_search_index_lock = Lock()
+        self._equipment_search_index_cache = None
         self.pool = ConnectionPool[psycopg.Connection[dict[str, Any]]](
             settings.database_url, min_size=1, max_size=settings.pool_size,
             timeout=5, max_waiting=16, open=False, reconnect_timeout=5,
@@ -220,6 +227,67 @@ class PostgresBackend:
         with self.transaction() as conn:
             result = self.project(self._snapshot(conn))
         return result
+
+    @staticmethod
+    def _estimate_equipment_search_index_bytes(index):
+        """Conservatively estimate the retained Python objects in one index."""
+        size = sys.getsizeof(index)
+        for _position, searchable_values, result in index:
+            size += sys.getsizeof((_position, searchable_values, result))
+            size += sys.getsizeof(searchable_values)
+            size += sum(sys.getsizeof(value) for value in searchable_values)
+            size += sys.getsizeof(result)
+            size += sum(sys.getsizeof(key) + sys.getsizeof(value) for key, value in result.items())
+            if size > MAX_CACHED_EQUIPMENT_SEARCH_INDEX_BYTES:
+                break
+        return size
+
+    def search_equipment(self, normalized_term):
+        """Reuse one bounded search index while the active database generation is unchanged."""
+        if not normalized_term:
+            return []
+
+        pending_cache = None
+        with self.transaction() as conn:
+            current = conn.execute(
+                "select lote_ativo_id,revisao_global from simpress.estado_aplicacao where id=1"
+            ).fetchone()
+            if not current:
+                raise PersistenceError(503, "Estado global do banco ausente.")
+
+            active_batch = current["lote_ativo_id"]
+            revision = int(current["revisao_global"])
+            cache_key = (active_batch, revision)
+            if active_batch is not None:
+                active = conn.execute(
+                    "select estado from simpress.lotes_inventario where id=%s", (active_batch,)
+                ).fetchone()
+                if not active or active["estado"] != "validado":
+                    raise PersistenceError(409, "O lote ativo não está validado; nenhuma operação foi aplicada.")
+
+            with self._equipment_search_index_lock:
+                cached = self._equipment_search_index_cache
+            if cached is not None and cached[0] == cache_key:
+                index = cached[1]
+            else:
+                snapshot = self._snapshot(conn)
+                snapshot_state = snapshot["global"]
+                cache_key = (snapshot_state["lote_ativo_id"], int(snapshot_state["revisao_global"]))
+                projection = self.project(snapshot)
+                index = projection["equipment_search_index"]
+                del projection, snapshot
+                if self._estimate_equipment_search_index_bytes(index) <= MAX_CACHED_EQUIPMENT_SEARCH_INDEX_BYTES:
+                    pending_cache = (cache_key, index)
+
+        # Publish only after the read transaction exits successfully. A failed
+        # projection/transaction must never make a partial or stale index visible.
+        if pending_cache is not None:
+            with self._equipment_search_index_lock:
+                cached = self._equipment_search_index_cache
+                if cached is None or pending_cache[0][1] >= cached[0][1]:
+                    self._equipment_search_index_cache = pending_cache
+
+        return deepcopy(search_normalized_index(index, normalized_term))
 
     def execute(self, command, payload, idempotency_key=None):
         if idempotency_key is not None and not re.fullmatch(r"[A-Za-z0-9._:-]{1,128}", idempotency_key):

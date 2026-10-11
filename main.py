@@ -3762,7 +3762,7 @@ def _buscar_equipamentos_por_termo(q: str) -> List[Dict[str, Any]]:
         return []
 
     if (backend := postgres_backend()) is not None:
-        return search_normalized_equipment_index(backend.state()["equipment_search_index"], term)
+        return backend.search_equipment(term)
 
     with STATE_LOCK:
         if _EQUIPMENT_SEARCH_INDEX_SOURCE is not equipamentos_cache:
