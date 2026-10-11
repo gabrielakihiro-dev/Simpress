@@ -21,6 +21,7 @@ import openpyxl
 from domains.history_annotations import resolve_history_annotations
 from openpyxl.styles import Font, PatternFill
 from openpyxl.worksheet.table import Table, TableStyleInfo
+from pydantic import ValidationError
 from starlette.datastructures import UploadFile
 
 with patch("openpyxl.load_workbook", side_effect=RuntimeError("testes não acessam planilhas locais")):
@@ -299,6 +300,30 @@ class WorkflowIntegrityTests(unittest.TestCase):
             ["SERIE-ABC-001", "SERIE-ABC-002"],
         )
         self.assertEqual(main.get_equipamento("serie-abc-002")["serial"], "SERIE-ABC-002")
+
+    def test_alias_edit_payload_matches_equipment_serial_and_alias_limits(self):
+        for serial in ("S", "S" * 128):
+            with self.subTest(serial_length=len(serial)):
+                equipment = main.EquipamentoUpdatePayload(serial=serial)
+                alias = main.ApelidoUpdatePayload(serial=serial, apelido="A" * 160)
+                self.assertEqual(alias.serial, equipment.serial)
+                self.assertEqual(len(alias.apelido), 160)
+
+        for serial in ("", "   ", "---", "S" * 129):
+            with self.subTest(invalid_serial=serial[:12], serial_length=len(serial)):
+                with self.assertRaises(ValidationError):
+                    main.EquipamentoUpdatePayload(serial=serial)
+                with self.assertRaises(ValidationError):
+                    main.ApelidoUpdatePayload(serial=serial, apelido="HOST")
+
+        with self.assertRaises(ValidationError):
+            main.ApelidoUpdatePayload(serial="S-1", apelido="A" * 161)
+        with self.assertRaises(ValidationError):
+            main.EquipamentoUpdatePayload(serial="S-1", apelido="A" * 161)
+
+        # Empty aliases are the existing contract for clearing a manual alias.
+        self.assertEqual(main.ApelidoUpdatePayload(serial="S-1", apelido="").apelido, "")
+        self.assertEqual(main.ApelidoUpdatePayload(serial="S-1", apelido="   ").apelido, "   ")
 
     def test_unit_ids_survive_sorting_edits_additions_and_database_reload(self):
         make_details(self.details, [
