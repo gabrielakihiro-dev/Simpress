@@ -1,5 +1,6 @@
 import asyncio
 import copy
+from concurrent.futures import ThreadPoolExecutor
 import io
 import json
 import os
@@ -12,6 +13,7 @@ import warnings
 import zipfile
 from datetime import datetime, timezone
 from contextlib import ExitStack
+from dataclasses import replace
 from pathlib import Path
 from urllib.parse import unquote
 from types import SimpleNamespace
@@ -23,6 +25,7 @@ from openpyxl.styles import Font, PatternFill
 from openpyxl.worksheet.table import Table, TableStyleInfo
 from pydantic import ValidationError
 from starlette.datastructures import UploadFile
+from domains import inventory_update
 
 with patch("openpyxl.load_workbook", side_effect=RuntimeError("testes não acessam planilhas locais")):
     import main
@@ -244,6 +247,8 @@ class WorkflowIntegrityTests(unittest.TestCase):
         self.root = Path(self.temp_context.name)
         self.input_dir = self.root / "planilhas_entrada"
         self.input_dir.mkdir()
+        self.state_dir = self.root / "state"
+        self.state_dir.mkdir()
         self.details = self.input_dir / "EquipamentosDetalhes_atual.xlsx"
         self.endpoint = self.input_dir / "InvAllComputersSummary_atual.xlsx"
         self.model = self.input_dir / "modelo-ficticio.xlsx"
@@ -256,6 +261,7 @@ class WorkflowIntegrityTests(unittest.TestCase):
         self.custom_units = self.root / "unidades_custom.json"
         self.stack = ExitStack()
         self.stack.enter_context(patch.object(main, "BASE_DIR", self.root))
+        self.stack.enter_context(patch.object(main, "STATE_DIR", self.state_dir))
         self.stack.enter_context(patch.object(main, "INPUT_DIR", self.input_dir))
         self.stack.enter_context(patch.object(main, "DETAILS_UPLOAD_FILE", self.details))
         self.stack.enter_context(patch.object(main, "ENDPOINT_UPLOAD_FILE", self.endpoint))
@@ -284,6 +290,35 @@ class WorkflowIntegrityTests(unittest.TestCase):
         main.equipamentos_cache, main.unidades_cache, main.stats_cache = self.old_state
         self.stack.close()
         self.temp_context.cleanup()
+
+    def _submit_inventory_update(
+        self,
+        endpoint_bytes,
+        details_bytes,
+        key,
+        *,
+        endpoint_name="InvAll_idempotente.xlsx",
+        details_name="Detalhes_idempotentes.xlsx",
+        services=None,
+    ):
+        endpoint_upload = UploadFile(filename=endpoint_name, file=io.BytesIO(endpoint_bytes))
+        details_upload = UploadFile(filename=details_name, file=io.BytesIO(details_bytes))
+        return asyncio.run(main.update_inventory_files(
+            endpoint_upload,
+            details_upload,
+            services=services or main._inventory_update_services,
+            idempotency_key=key,
+        ))
+
+    def _prepare_inventory_upload_fixture(self):
+        make_details(self.details, [
+            ("SN-IDEMPOTENT", "HOST-OLD", "Modelo A", "Maringá", "Notebook", "87000000"),
+        ])
+        make_endpoint(self.endpoint, [("SN-IDEMPOTENT", "HOST-OLD")])
+        make_model(self.model)
+        self.comparison_history.write_text("[]", encoding="utf-8")
+        self.manual_history.write_text("[]", encoding="utf-8")
+        self.assertTrue(main.load_database())
 
     def test_partial_equipment_search_does_not_return_an_arbitrary_exact_lookup(self):
         main.equipamentos_cache = {
@@ -1533,6 +1568,241 @@ class WorkflowIntegrityTests(unittest.TestCase):
             item["serie"] == "" and "na Simpress" in item["motivo"]
             for item in comparison_after[-1]["comparacao"]["apelidos_sem_atualizacao"]
         ))
+
+    def test_inventory_idempotency_replay_survives_service_reinitialization(self):
+        self._prepare_inventory_upload_fixture()
+        endpoint_bytes = _endpoint_bytes([("SN-IDEMPOTENT", "HOST-NEW")])
+        details_bytes = _details_bytes([
+            ("SN-IDEMPOTENT", "HOST-NEW", "Modelo A", "Maringá", "Notebook", "87000000"),
+        ])
+
+        first = self._submit_inventory_update(endpoint_bytes, details_bytes, "upload-retry-01")
+        services_after_restart = replace(main._inventory_update_services)
+        repeated = self._submit_inventory_update(
+            endpoint_bytes,
+            details_bytes,
+            "upload-retry-01",
+            endpoint_name="renamed-endpoint.xlsx",
+            details_name="renamed-details.xlsx",
+            services=services_after_restart,
+        )
+
+        history = json.loads(self.comparison_history.read_text(encoding="utf-8"))
+        receipts = json.loads(
+            (self.state_dir / "inventory_update_idempotency.json").read_text(encoding="utf-8")
+        )
+        backup_directories = [path for path in self.backups.iterdir() if path.is_dir()]
+        self.assertEqual(repeated, first)
+        self.assertEqual(len(history), 1)
+        self.assertEqual(len(backup_directories), 1)
+        self.assertEqual(len(receipts["records"]), 1)
+        self.assertEqual(receipts["records"][0]["key"], "upload-retry-01")
+        self.assertEqual(receipts["records"][0]["result"], first)
+
+    def test_inventory_idempotency_hash_uses_role_and_committed_bytes_not_filename(self):
+        staged = {
+            "endpoint": {"name": "first.xlsx", "bytes": b"endpoint workbook"},
+            "detalhes": {"name": "details.zip", "bytes": b"details workbook"},
+        }
+        renamed = {
+            "endpoint": {"name": "renamed.xlsx", "bytes": b"endpoint workbook"},
+            "detalhes": {"name": "renamed.zip", "bytes": b"details workbook"},
+        }
+        multipart_reordered = {
+            "detalhes": {"name": "renamed.zip", "bytes": b"details workbook"},
+            "endpoint": {"name": "renamed.xlsx", "bytes": b"endpoint workbook"},
+        }
+        role_swapped = {
+            "endpoint": {"name": "renamed.xlsx", "bytes": b"details workbook"},
+            "detalhes": {"name": "renamed.zip", "bytes": b"endpoint workbook"},
+        }
+
+        self.assertEqual(
+            inventory_update._inventory_request_sha256(staged),
+            inventory_update._inventory_request_sha256(renamed),
+        )
+        self.assertEqual(
+            inventory_update._inventory_request_sha256(staged),
+            inventory_update._inventory_request_sha256(multipart_reordered),
+        )
+        self.assertNotEqual(
+            inventory_update._inventory_request_sha256(staged),
+            inventory_update._inventory_request_sha256(role_swapped),
+        )
+
+    def test_inventory_idempotency_conflict_preserves_all_committed_state(self):
+        self._prepare_inventory_upload_fixture()
+        details_bytes = _details_bytes([
+            ("SN-IDEMPOTENT", "HOST-NEW", "Modelo A", "Maringá", "Notebook", "87000000"),
+        ])
+        first = self._submit_inventory_update(
+            _endpoint_bytes([("SN-IDEMPOTENT", "HOST-NEW")]),
+            details_bytes,
+            "upload-conflict-01",
+        )
+        before = {
+            "endpoint": self.endpoint.read_bytes(),
+            "details": self.details.read_bytes(),
+            "history": self.comparison_history.read_bytes(),
+            "receipts": (self.state_dir / "inventory_update_idempotency.json").read_bytes(),
+            "backups": sorted(path.name for path in self.backups.iterdir() if path.is_dir()),
+        }
+
+        with self.assertRaises(main.HTTPException) as raised:
+            self._submit_inventory_update(
+                _endpoint_bytes([("SN-IDEMPOTENT", "HOST-DIFFERENT")]),
+                details_bytes,
+                "upload-conflict-01",
+            )
+
+        self.assertEqual(raised.exception.status_code, 409)
+        self.assertEqual(self.endpoint.read_bytes(), before["endpoint"])
+        self.assertEqual(self.details.read_bytes(), before["details"])
+        self.assertEqual(self.comparison_history.read_bytes(), before["history"])
+        self.assertEqual(
+            (self.state_dir / "inventory_update_idempotency.json").read_bytes(),
+            before["receipts"],
+        )
+        self.assertEqual(
+            sorted(path.name for path in self.backups.iterdir() if path.is_dir()),
+            before["backups"],
+        )
+        self.assertEqual(first["historico_salvo"], True)
+
+    def test_inventory_idempotency_replays_after_commit_when_response_is_lost(self):
+        self._prepare_inventory_upload_fixture()
+        endpoint_bytes = _endpoint_bytes([("SN-IDEMPOTENT", "HOST-NEW")])
+        details_bytes = _details_bytes([
+            ("SN-IDEMPOTENT", "HOST-NEW", "Modelo A", "Maringá", "Notebook", "87000000"),
+        ])
+
+        def lose_confirmation(_prepared_state):
+            raise RuntimeError("falha injetada depois da confirmação")
+
+        services_with_lost_response = replace(
+            main._inventory_update_services,
+            publish_database_state=lose_confirmation,
+        )
+        with self.assertRaises(main.HTTPException) as raised:
+            self._submit_inventory_update(
+                endpoint_bytes,
+                details_bytes,
+                "upload-response-lost-01",
+                services=services_with_lost_response,
+            )
+
+        self.assertEqual(raised.exception.status_code, 500)
+        self.assertIn("mesma Idempotency-Key", raised.exception.detail)
+        self.assertNotIn("restaurados", raised.exception.detail)
+        history_after_commit = json.loads(self.comparison_history.read_text(encoding="utf-8"))
+        self.assertEqual(len(history_after_commit), 1)
+        self.assertTrue((self.state_dir / "inventory_update_idempotency.json").is_file())
+
+        repeated = self._submit_inventory_update(
+            endpoint_bytes,
+            details_bytes,
+            "upload-response-lost-01",
+            services=replace(main._inventory_update_services),
+        )
+
+        self.assertEqual(repeated["comparacao"]["evento_id"], history_after_commit[0]["id"])
+        self.assertEqual(len(json.loads(self.comparison_history.read_text(encoding="utf-8"))), 1)
+        self.assertEqual(len([path for path in self.backups.iterdir() if path.is_dir()]), 1)
+        self.assertEqual(main.equipamentos_cache["SN-IDEMPOTENT"]["apelido"], "HOST-NEW")
+
+    def test_inventory_idempotency_precommit_failure_can_be_retried(self):
+        self._prepare_inventory_upload_fixture()
+        endpoint_bytes = _endpoint_bytes([("SN-IDEMPOTENT", "HOST-NEW")])
+        details_bytes = _details_bytes([
+            ("SN-IDEMPOTENT", "HOST-NEW", "Modelo A", "Maringá", "Notebook", "87000000"),
+        ])
+        original_endpoint = self.endpoint.read_bytes()
+        original_details = self.details.read_bytes()
+        original_commit = main.AtomicFileTransaction.commit
+
+        def fail_before_commit(transaction):
+            raise OSError("falha injetada antes da confirmação")
+
+        with patch.object(main.AtomicFileTransaction, "commit", fail_before_commit):
+            with self.assertRaises(main.HTTPException) as raised:
+                self._submit_inventory_update(endpoint_bytes, details_bytes, "upload-retry-after-failure")
+
+        self.assertEqual(raised.exception.status_code, 500)
+        self.assertEqual(self.endpoint.read_bytes(), original_endpoint)
+        self.assertEqual(self.details.read_bytes(), original_details)
+        self.assertEqual(json.loads(self.comparison_history.read_text(encoding="utf-8")), [])
+        self.assertFalse((self.state_dir / "inventory_update_idempotency.json").exists())
+        failed_backup_directories = [path for path in self.backups.iterdir() if path.is_dir()]
+        self.assertEqual(failed_backup_directories, [])
+
+        with patch.object(main.AtomicFileTransaction, "commit", original_commit):
+            result = self._submit_inventory_update(
+                endpoint_bytes,
+                details_bytes,
+                "upload-retry-after-failure",
+            )
+
+        self.assertTrue(result["sucesso"])
+        self.assertEqual(len(json.loads(self.comparison_history.read_text(encoding="utf-8"))), 1)
+        receipts = json.loads(
+            (self.state_dir / "inventory_update_idempotency.json").read_text(encoding="utf-8")
+        )
+        self.assertEqual([record["key"] for record in receipts["records"]], ["upload-retry-after-failure"])
+        self.assertEqual(len([path for path in self.backups.iterdir() if path.is_dir()]), 1)
+
+    def test_concurrent_inventory_requests_with_same_key_commit_once(self):
+        self._prepare_inventory_upload_fixture()
+        endpoint_bytes = _endpoint_bytes([("SN-IDEMPOTENT", "HOST-NEW")])
+        details_bytes = _details_bytes([
+            ("SN-IDEMPOTENT", "HOST-NEW", "Modelo A", "Maringá", "Notebook", "87000000"),
+        ])
+        compare_barrier = threading.Barrier(2)
+        original_compare = main.compare_uploaded_workbooks
+
+        def synchronize_comparisons(*args, **kwargs):
+            result = original_compare(*args, **kwargs)
+            compare_barrier.wait(timeout=10)
+            return result
+
+        with (
+            patch.object(main, "WORKBOOK_PARSE_ADMISSION", None),
+            patch.object(main, "compare_uploaded_workbooks", synchronize_comparisons),
+            ThreadPoolExecutor(max_workers=2) as pool,
+        ):
+            requests = [
+                pool.submit(
+                    self._submit_inventory_update,
+                    endpoint_bytes,
+                    details_bytes,
+                    "upload-concurrent-01",
+                    endpoint_name=f"endpoint-{index}.xlsx",
+                    details_name=f"details-{index}.xlsx",
+                )
+                for index in range(2)
+            ]
+            results = [request.result(timeout=30) for request in requests]
+
+        history = json.loads(self.comparison_history.read_text(encoding="utf-8"))
+        backup_directories = [path for path in self.backups.iterdir() if path.is_dir()]
+        self.assertEqual(results[0], results[1])
+        self.assertEqual(len(history), 1)
+        self.assertEqual(len(backup_directories), 1)
+
+    def test_inventory_idempotency_receipt_retention_is_bounded_and_fifo(self):
+        store = {"version": 1, "records": []}
+        for index in range(inventory_update.MAX_INVENTORY_IDEMPOTENCY_RECEIPTS + 1):
+            store = inventory_update._append_inventory_idempotency_receipt(
+                store,
+                f"key-{index}",
+                "a" * 64,
+                {"sucesso": True},
+            )
+
+        keys = [record["key"] for record in store["records"]]
+        self.assertEqual(len(keys), inventory_update.MAX_INVENTORY_IDEMPOTENCY_RECEIPTS)
+        self.assertNotIn("key-0", keys)
+        self.assertEqual(keys[0], "key-1")
+        self.assertEqual(keys[-1], f"key-{inventory_update.MAX_INVENTORY_IDEMPOTENCY_RECEIPTS}")
 
     def test_inventory_update_migrates_a_recognized_alternate_details_filename(self):
         alternate = self.input_dir / "EquipamentosDetalhes-exportado.xlsx"
