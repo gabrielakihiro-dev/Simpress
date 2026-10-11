@@ -722,16 +722,21 @@ def build_ticket_workbook(
     workbook = Workbook()
     summary = workbook.active
     summary.title = "Resumo"
+
+    def append_summary_row(label: str, value: Any) -> None:
+        # Escape external text without changing native numbers or dates.
+        summary.append([label, _safe_cell(value) if isinstance(value, str) else value])
+
     summary.append(["Acompanhamento de Chamados"])
-    summary.append(["Versão importada", snapshot.get("atualizado_em", "")])
+    append_summary_row("Versão importada", snapshot.get("atualizado_em", ""))
     sources = snapshot.get("fontes") or {}
-    summary.append(["Arquivo Simpress", (sources.get("simpress") or {}).get("arquivo", "")])
-    summary.append(["Arquivo Oracle", (sources.get("oracle") or {}).get("arquivo", "")])
-    summary.append(["Séries no resultado", len(tickets)])
+    append_summary_row("Arquivo Simpress", (sources.get("simpress") or {}).get("arquivo", ""))
+    append_summary_row("Arquivo Oracle", (sources.get("oracle") or {}).get("arquivo", ""))
+    append_summary_row("Séries no resultado", len(tickets))
     for label, key in (("Relação", "relation"), ("Status Oracle", "status"), ("Fila Oracle", "queue"), ("Cidade", "city"), ("Atendimento", "provider"), ("Atualização", "age_filter"), ("Busca", "search"), ("Somente atenção (3 dias)", "attention_only")):
         value = filters.get(key, "")
         if value not in (None, "", False):
-            summary.append([label, str(value)])
+            append_summary_row(label, str(value))
     summary.column_dimensions["A"].width = 24
     summary.column_dimensions["B"].width = 48
 
