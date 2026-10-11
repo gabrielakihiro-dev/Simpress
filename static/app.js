@@ -581,6 +581,7 @@
           geracao_transferencia: "Geração de transferência",
           comparacao_atualizacao_inventarios: "Comparação e atualização de inventários",
           exportacao_equipamentos: "Exportação de equipamentos",
+          acompanhamento_chamados: "Acompanhamento de Chamados",
         };
         const fileLabels = {
           template_transferencia: "Modelo de transferência",
@@ -588,6 +589,7 @@
           inventario_detalhes_atualizacao: "Inventário EquipamentosDetalhes para atualização",
           inventario_endpoint: "Inventário Endpoint",
           modelo_exportacao: "Modelo de exportação",
+          historico_chamados: "Histórico do acompanhamento de chamados",
         };
 
         const content = document.createDocumentFragment();
@@ -623,8 +625,11 @@
         label.textContent = labels[key] || key;
         const state = document.createElement("span");
         state.className = "readiness-item-state";
+        const availableFileDetail = status?.reason && status.reason !== "OK"
+          ? status.reason
+          : status?.file;
         state.textContent = available
-          ? (type === "file" && status.file ? `Disponível — ${status.file}` : "Disponível")
+          ? (type === "file" && availableFileDetail ? `Disponível — ${availableFileDetail}` : "Disponível")
           : type === "file"
             ? [status.file, status.reason].filter(Boolean).join(" — ") || "Indisponível"
             : `Indisponível — ${(status.missing_files || []).join(", ") || "dependência ausente"}`;
