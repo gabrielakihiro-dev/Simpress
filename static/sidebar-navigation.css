@@ -759,6 +759,8 @@ body.sidebar-drawer-open {
   }
 
   .app-workspace {
+    width: 100%;
+    min-width: 0;
     margin-left: 0 !important;
   }
 
@@ -908,6 +910,8 @@ body.sidebar-drawer-open {
     display: grid !important;
     grid-template-columns: auto minmax(0, 1fr);
     grid-template-rows: auto auto;
+    box-sizing: border-box;
+    min-width: 0;
   }
 
   .header-inner > .sidebar-mobile-open {
