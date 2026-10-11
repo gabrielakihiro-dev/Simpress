@@ -26,6 +26,10 @@ from domains.history_export import (
     _write_export_summary_sheet,
     _write_export_table_sheet,
 )
+from domains.history_annotations import (
+    annotation_record_values, annotation_view, annotation_export_text, same_annotation_revision,
+    resolve_history_annotations, sync_history_annotation, reuse_annotation_revision,
+)
 
 import openpyxl
 from fastapi import APIRouter, HTTPException, Query
@@ -45,6 +49,9 @@ class ManualAliasConflictResolutionPayload(BaseModel):
 
 class ComparisonAnnotationPayload(BaseModel):
     anotacao: str = Field(..., max_length=2000)
+    revisao_id: Optional[str] = Field(None, pattern=r"^[a-f0-9]{32}$")
+    base_revisoes: List[str] = Field(default_factory=list, max_length=100)
+    resolver_conflito: bool = False
 
 
 class ComparisonRestorePayload(BaseModel):
@@ -279,38 +286,21 @@ def create_inventory_history_router(services: InventoryHistoryServices):
 
 
     def _latest_annotation_records(history=None):
-        """Load shared notes and let unsynchronized local edits take precedence."""
-        latest: Dict[tuple[str, str], tuple[str, Dict[str, Any]]] = {}
-        for record in services.load_history_annotations(services.history_annotations_directory()):
-            key = (record["evento_id"], record["item_id"])
-            candidate = (str(record.get("atualizado_em") or ""), record)
-            if key not in latest or candidate[0] >= latest[key][0]:
-                latest[key] = candidate
-        records: Dict[tuple[str, str], Dict[str, Any]] = {
-            key: value[1] for key, value in latest.items()
-        }
-        for record in services.load_history_annotations(services.local_annotation_outbox_directory()):
-            key = (record["evento_id"], record["item_id"])
-            records[key] = record
-        return records
+        return resolve_history_annotations([
+            *services.load_history_annotations(services.history_annotations_directory()),
+            *services.load_history_annotations(services.local_annotation_outbox_directory()),
+        ])
 
 
     def _sync_annotation_record(record: Dict[str, Any]) -> bool:
-        """Publish one queued annotation, then remove its durable local outbox entry."""
-        values = {
-            "event_id": record["evento_id"],
-            "event_time": str(record.get("horario") or ""),
-            "item_id": record["item_id"],
-            "serie": str(record.get("serie") or ""),
-            "computador": str(record.get("computador") or ""),
-            "motivo": str(record.get("motivo") or ""),
-            "anotacao": record["anotacao"],
-            "categoria": str(record.get("categoria") or "apelidos_sem_atualizacao"),
-            "linha_hash": record.get("linha_hash"),
-            "updated_at": str(record.get("atualizado_em") or "") or None,
-        }
         try:
-            services.save_history_annotation(services.history_annotations_directory(), **values)
+            return sync_history_annotation(
+                record, directory=services.history_annotations_directory(),
+                outbox=services.local_annotation_outbox_directory(),
+                transaction_root=services.transaction_root(),
+                transaction_factory=services.atomic_file_transaction,
+                publisher=services.save_history_annotation,
+            )
         except Exception:
             logger.exception(
                 "Anotação salva localmente e aguardando sincronização (evento=%s, item=%s).",
@@ -318,34 +308,6 @@ def create_inventory_history_router(services: InventoryHistoryServices):
                 record["item_id"],
             )
             return False
-
-        pending_path = services.history_annotation_record_path(
-            services.local_annotation_outbox_directory(),
-            record["evento_id"],
-            record["item_id"],
-        )
-        try:
-            with services.atomic_file_transaction(services.transaction_root(), [pending_path]) as transaction:
-                if not pending_path.exists():
-                    return True
-                pending_record = json.loads(pending_path.read_text(encoding="utf-8"))
-                if (
-                    not isinstance(pending_record, dict)
-                    or pending_record.get("atualizado_em") != record.get("atualizado_em")
-                    or pending_record.get("anotacao") != record.get("anotacao")
-                ):
-                    return False
-                transaction.stage_delete(pending_path)
-                transaction.commit()
-        except Exception:
-            logger.exception(
-                "A anotação foi sincronizada, mas a baixa da pendência falhou (evento=%s, item=%s).",
-                record["evento_id"],
-                record["item_id"],
-            )
-            return False
-        return True
-
 
     def flush_pending_history_annotations() -> Dict[str, int]:
         pending = services.load_history_annotations(services.local_annotation_outbox_directory())
@@ -357,6 +319,12 @@ def create_inventory_history_router(services: InventoryHistoryServices):
         """Move legacy row notes into the durable outbox outside read requests."""
         history = services.load_comparison_history()
         records = _latest_annotation_records(history)
+        versioned_keys = {
+            (record["evento_id"], record["item_id"])
+            for directory in (services.history_annotations_directory(), services.local_annotation_outbox_directory())
+            for record in services.load_history_annotations(directory)
+            if record.get("versao") == 2
+        }
         queued = 0
         for event in history:
             if not isinstance(event, dict):
@@ -390,45 +358,48 @@ def create_inventory_history_router(services: InventoryHistoryServices):
                     item_id = services.comparison_annotation_item_id(event_id, category, index, item)
                     key = (event_id, item_id)
                     existing = records.get(key)
-                    if existing is not None and existing.get("anotacao") == annotation:
+                    # Embedded history is a legacy fallback, never a new edit over a revision.
+                    if key in versioned_keys or (existing is not None and existing.get("anotacao") == annotation):
                         continue
                     try:
-                        record = services.build_history_annotation_record(
-                            event_id=event_id,
-                            event_time=str(event.get("horario") or ""),
-                            item_id=item_id,
-                            serie=str(item.get("serie") or ""),
-                            computador=str(item.get("computador") or item.get("chave") or ""),
-                            motivo=str(item.get("motivo") or item.get("mensagem") or item.get("tipo") or ""),
-                            anotacao=annotation,
-                            categoria=category,
-                            linha_hash=services.history_annotation_row_fingerprint(category, item),
-                        )
-                        services.save_history_annotation(
+                        legacy = {
+                            "versao": 1, "evento_id": event_id, "item_id": item_id,
+                            "horario": str(event.get("horario") or ""),
+                            "serie": str(item.get("serie") or ""),
+                            "computador": str(item.get("computador") or item.get("chave") or ""),
+                            "motivo": str(item.get("motivo") or item.get("mensagem") or item.get("tipo") or ""),
+                            "anotacao": annotation, "categoria": category,
+                            "linha_hash": services.history_annotation_row_fingerprint(category, item),
+                            "atualizado_em": str(event.get("horario") or ""),
+                        }
+                        record = services.save_history_annotation(
                             services.local_annotation_outbox_directory(),
-                            event_id=event_id,
-                            event_time=record["horario"],
-                            item_id=item_id,
-                            serie=record["serie"],
-                            computador=record["computador"],
-                            motivo=record["motivo"],
-                            anotacao=annotation,
-                            categoria=category,
-                            linha_hash=record.get("linha_hash"),
-                            updated_at=record["atualizado_em"],
+                            **annotation_record_values(legacy),
                         )
                         records[key] = record
                         queued += 1
                     except Exception:
                         logger.exception(
                             "Falha ao colocar anotação legada na fila de sincronização (evento=%s, item=%s).",
-                            event_id,
-                            item_id,
+                            event_id, item_id,
                         )
                         continue
+        # Preserve existing v1 files and publish deterministic immutable copies.
+        for legacy in services.load_history_annotations(services.history_annotations_directory()):
+            if legacy.get("versao") == 1:
+                try:
+                    values = annotation_record_values(legacy)
+                    target = services.history_annotation_record_path(
+                        services.history_annotations_directory(), legacy["evento_id"], legacy["item_id"],
+                        values["revision_id"],
+                    )
+                    if not target.exists():
+                        services.save_history_annotation(services.local_annotation_outbox_directory(), **values)
+                        queued += 1
+                except Exception:
+                    logger.exception("A cópia imutável da anotação legada ficou pendente.")
         flush_result = flush_pending_history_annotations()
         return {"legadas_enfileiradas": queued, **flush_result}
-
 
     def _merge_shared_annotations(
         event_view: Dict[str, Any],
@@ -448,7 +419,7 @@ def create_inventory_history_router(services: InventoryHistoryServices):
                     continue
                 record = annotations.get((event_id, str(item.get("anotacao_id") or "")))
                 if record is not None:
-                    item["anotacao"] = record["anotacao"]
+                    item.update(annotation_view(record))
                 associated_annotations = item.get("anotacoes_associadas")
                 if not isinstance(associated_annotations, list):
                     continue
@@ -457,14 +428,14 @@ def create_inventory_history_router(services: InventoryHistoryServices):
                         continue
                     associated_record = annotations.get((event_id, str(associated.get("anotacao_id") or "")))
                     if associated_record is not None:
-                        associated["anotacao"] = associated_record["anotacao"]
+                        associated.update(annotation_view(associated_record))
         return event_view
 
 
     def _synthetic_annotation_event(event_id: str, records: Dict[tuple, Dict[str, Any]]) -> Optional[Dict[str, Any]]:
         event_records = [
             record for (record_event_id, _), record in records.items()
-            if record_event_id == event_id and record.get("anotacao")
+            if record_event_id == event_id and (record.get("anotacao") or record.get("anotacao_conflito"))
         ]
         if not event_records:
             return None
@@ -483,7 +454,7 @@ def create_inventory_history_router(services: InventoryHistoryServices):
                 "computador": record.get("computador", ""),
                 "motivo": record.get("motivo", ""),
                 "anotacao_id": record["item_id"],
-                "anotacao": record["anotacao"],
+                **annotation_view(record),
                 "categoria": category,
             }
             category_items[category].append(item)
@@ -511,6 +482,11 @@ def create_inventory_history_router(services: InventoryHistoryServices):
                 "somente_anotacoes_sincronizadas": True,
             },
         }
+
+    def history_annotation_view(event: Dict[str, Any]) -> Dict[str, Any]:
+        """Supply the observed text and causal bases to consumers that also edit notes."""
+        view = services.comparison_history_for_display(event)
+        return _merge_shared_annotations(view, _latest_annotation_records())
 
 
     def _history_event_summary(event: Dict[str, Any]) -> Dict[str, Any]:
@@ -566,7 +542,7 @@ def create_inventory_history_router(services: InventoryHistoryServices):
         for event_id in shared_event_ids - local_event_ids:
             event_records = [
                 record for (record_event_id, _), record in annotations.items()
-                if record_event_id == event_id and record.get("anotacao")
+                if record_event_id == event_id and (record.get("anotacao") or record.get("anotacao_conflito"))
             ]
             if not event_records:
                 continue
@@ -793,7 +769,7 @@ def create_inventory_history_router(services: InventoryHistoryServices):
                 record_key = f"{item.get('computador') or 'Sem hostname'} · {item.get('serie') or 'Sem série'}"
                 notes = [_export_note(comparison, "ambiguidades", index, item)]
                 notes.extend(
-                    _export_text(associated.get("anotacao"))
+                    _export_text(annotation_export_text(associated))
                     for associated in item.get("anotacoes_associadas", [])
                     if isinstance(associated, dict)
                 )
@@ -982,11 +958,21 @@ def create_inventory_history_router(services: InventoryHistoryServices):
             "categoria": category,
             "linha_hash": annotation_line_hash or services.history_annotation_row_fingerprint(category, annotation_row),
         }
-        record = services.build_history_annotation_record(**record_values)
+        base_revisions = getattr(payload, "base_revisoes", [])
+        if len(base_revisions) > 1 and not getattr(payload, "resolver_conflito", False):
+            raise HTTPException(409, detail="Confirme explicitamente a resolução do conflito.")
+        try:
+            record = services.build_history_annotation_record(
+                **record_values, revision_id=getattr(payload, "revisao_id", None),
+                base_revisions=base_revisions,
+            )
+        except ValueError as error:
+            raise HTTPException(422, detail=str(error)) from None
         pending_path = services.history_annotation_record_path(
             services.local_annotation_outbox_directory(),
             evento_id,
             item_id,
+            record["revisao_id"],
         )
         try:
             with services.comparison_history_lock:
@@ -994,12 +980,21 @@ def create_inventory_history_router(services: InventoryHistoryServices):
                 if event is not None:
                     targets.append(services.comparison_history_path())
                 with services.atomic_file_transaction(services.transaction_root(), targets) as transaction:
+                    try:
+                        record = reuse_annotation_revision(services.history_annotations_directory(), record)
+                    except ValueError as error:
+                        raise HTTPException(409, detail=str(error)) from None
                     if event is not None:
                         transaction.update_json(
                             services.comparison_history_path(),
                             update_annotation,
                             [],
                         )
+                    if pending_path.exists():
+                        existing = json.loads(pending_path.read_text(encoding="utf-8"))
+                        if not same_annotation_revision(existing, record):
+                            raise HTTPException(409, detail="A revisão já foi usada com outro conteúdo.")
+                        record = existing
                     transaction.stage_bytes(
                         pending_path,
                         json.dumps(record, ensure_ascii=False, indent=2).encode("utf-8"),
@@ -1027,7 +1022,8 @@ def create_inventory_history_router(services: InventoryHistoryServices):
         )
         return {
             "sucesso": True,
-            "anotacao": payload.anotacao,
+            **annotation_view(_latest_annotation_records()[(evento_id, item_id)]),
+            "revisao_salva": record["revisao_id"],
             "sincronizacao": sync_status,
         }
 
@@ -1396,6 +1392,7 @@ def create_inventory_history_router(services: InventoryHistoryServices):
                 computador=str(record.get("computador") or ""),
                 motivo=str(record.get("motivo") or ""),
                 anotacao="",
+                base_revisions=record.get("anotacao_revisoes", []),
                 categoria=str(record.get("categoria") or "apelidos_sem_atualizacao"),
                 linha_hash=record.get("linha_hash"),
             ))
@@ -1405,6 +1402,7 @@ def create_inventory_history_router(services: InventoryHistoryServices):
                 services.local_annotation_outbox_directory(),
                 record["evento_id"],
                 record["item_id"],
+                record["revisao_id"],
             )
             for record in tombstones
         ]
@@ -1460,6 +1458,7 @@ def create_inventory_history_router(services: InventoryHistoryServices):
         '_validated_comparison_backup_files': _validated_comparison_backup_files,
         'flush_pending_history_annotations': flush_pending_history_annotations,
         'migrate_legacy_history_annotations': migrate_legacy_history_annotations,
+        'history_annotation_view': history_annotation_view,
         'excluir_comparacao_historica': excluir_comparacao_historica,
         'exportar_historico_comparacoes_excel': exportar_historico_comparacoes_excel,
         'get_comparacao_historica': get_comparacao_historica,

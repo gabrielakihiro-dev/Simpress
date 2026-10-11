@@ -3873,7 +3873,7 @@ app.include_router(inventory_history_router)
 
 operations_router = create_operations_router(
     load_comparison_history=load_comparison_history,
-    comparison_history_for_display=comparison_history_for_display,
+    comparison_history_for_display=_inventory_history_exports["history_annotation_view"],
     ticket_report_path=lambda: TICKET_REPORT_FILE,
     transaction_root=lambda: TRANSACTION_ROOT,
     history_annotations_directory=lambda: HISTORY_ANNOTATIONS_DIR,

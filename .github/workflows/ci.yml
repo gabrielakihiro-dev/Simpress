@@ -28,7 +28,7 @@ jobs:
       - name: Run isolated Python tests
         run: python -B tests/run_tests.py
       - name: Run browser workflow tests
-        run: node --test tests/test_transfer_workflows.cjs tests/test_inventory_ui_flows.cjs tests/test_history_annotation_retries.cjs tests/test_history_annotations.cjs tests/test_form_draft_guard.cjs tests/test_catalog_search_utils.cjs tests/test_ui_motion.cjs tests/test_auth_session.cjs
+        run: node --test tests/test_transfer_workflows.cjs tests/test_inventory_ui_flows.cjs tests/test_history_annotation_retries.cjs tests/test_history_annotations.cjs tests/test_annotation_version_ui.cjs tests/test_form_draft_guard.cjs tests/test_catalog_search_utils.cjs tests/test_ui_motion.cjs tests/test_auth_session.cjs
       - name: Check JavaScript syntax
         run: |
           node --check static/app.js

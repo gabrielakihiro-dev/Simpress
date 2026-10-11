@@ -357,7 +357,7 @@ class TicketImportRouteTests(unittest.TestCase):
             )
             saved = save_annotation(
                 event_id=first_event["snapshot_id"], item_id=first_event["item_id"],
-                payload=TicketTimelineAnnotationPayload(anotacao="Cobrar o parceiro"),
+                payload=TicketTimelineAnnotationPayload(anotacao="Cobrar o parceiro", base_revisoes=first_event["anotacao_revisoes"]),
             )
             self.assertEqual(saved["sincronizacao"], "local")
 
@@ -371,7 +371,7 @@ class TicketImportRouteTests(unittest.TestCase):
 
             save_annotation(
                 event_id=second["snapshot_id"], item_id=events[-1]["item_id"],
-                payload=TicketTimelineAnnotationPayload(anotacao=""),
+                payload=TicketTimelineAnnotationPayload(anotacao="", base_revisoes=events[-1]["anotacao_revisoes"]),
             )
             third = import_same_rows()
             third_events = route_handler(router, "/api/operacoes/chamados/linha-do-tempo/{serial}", "GET")(

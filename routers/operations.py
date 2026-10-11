@@ -15,6 +15,11 @@ from pydantic import BaseModel, Field
 from domains.history_insights import compare_updates, is_restoration, latest_update, pending_rows
 from domains.history_annotations import (
     MAX_ANNOTATION_LENGTH,
+    reuse_annotation_revision,
+    annotation_view,
+    resolve_history_annotations,
+    same_annotation_revision,
+    sync_history_annotation,
     build_history_annotation_record,
     history_annotation_record_path,
     history_annotation_row_fingerprint,
@@ -44,6 +49,9 @@ logger = logging.getLogger(__name__)
 
 class TicketTimelineAnnotationPayload(BaseModel):
     anotacao: str = Field(..., max_length=MAX_ANNOTATION_LENGTH)
+    revisao_id: Optional[str] = Field(None, pattern=r"^[a-f0-9]{32}$")
+    base_revisoes: List[str] = Field(default_factory=list, max_length=100)
+    resolver_conflito: bool = False
 
 
 def create_operations_router(
@@ -133,18 +141,12 @@ def create_operations_router(
         return reader(directory)
 
     def latest_ticket_annotations() -> Dict[tuple[str, str], Dict[str, Any]]:
-        latest: Dict[tuple[str, str], tuple[str, Dict[str, Any]]] = {}
-        for directory in (annotation_directory(), annotation_outbox_directory()):
-            for record in read_annotation_directory(directory):
-                if record.get("categoria") != TICKET_TIMELINE_ANNOTATION_CATEGORY:
-                    continue
-                key = (str(record.get("evento_id") or ""), str(record.get("item_id") or ""))
-                if not all(key):
-                    continue
-                candidate = (str(record.get("atualizado_em") or ""), record)
-                if key not in latest or candidate[0] >= latest[key][0] or directory == annotation_outbox_directory():
-                    latest[key] = candidate
-        return {key: value[1] for key, value in latest.items()}
+        return resolve_history_annotations(
+            record
+            for directory in (annotation_directory(), annotation_outbox_directory())
+            for record in read_annotation_directory(directory)
+            if record.get("categoria") == TICKET_TIMELINE_ANNOTATION_CATEGORY
+        )
 
     def _ticket_annotation_event(snapshot: Dict[str, Any], serial: str) -> Optional[Dict[str, Any]]:
         return next((
@@ -165,7 +167,7 @@ def create_operations_router(
         for event in events:
             event["anotacao_id"] = event["item_id"]
             record = records.get((event["snapshot_id"], event["item_id"]))
-            event["anotacao"] = str(record.get("anotacao") or "") if record else ""
+            event.update(annotation_view(record) if record else {"anotacao": "", "anotacao_revisoes": []})
         return events
 
     def initialize_ticket_timeline_annotations(
@@ -226,6 +228,7 @@ def create_operations_router(
 
     def _persist_ticket_annotation(
         *, event_id: str, item_id: str, serial: str, event_time: str, row_hash: str, annotation: str,
+        revision_id: Optional[str] = None, base_revisions: Optional[List[str]] = None,
     ) -> bool:
         values = {
             "event_id": event_id,
@@ -238,10 +241,24 @@ def create_operations_router(
             "categoria": TICKET_TIMELINE_ANNOTATION_CATEGORY,
             "linha_hash": row_hash,
         }
-        record = build_history_annotation_record(**values)
-        pending_path = history_annotation_record_path(annotation_outbox_directory(), event_id, item_id)
+        try:
+            record = build_history_annotation_record(
+                **values, revision_id=revision_id, base_revisions=base_revisions,
+            )
+        except ValueError as error:
+            raise HTTPException(422, detail=str(error)) from None
+        pending_path = history_annotation_record_path(annotation_outbox_directory(), event_id, item_id, record["revisao_id"])
         try:
             with AtomicFileTransaction(transaction_root(), [pending_path]) as transaction:
+                try:
+                    record = reuse_annotation_revision(annotation_directory(), record)
+                except ValueError as error:
+                    raise HTTPException(409, detail=str(error)) from None
+                if pending_path.exists():
+                    existing = json.loads(pending_path.read_text(encoding="utf-8"))
+                    if not same_annotation_revision(existing, record):
+                        raise HTTPException(409, detail="A revisão já foi usada com outro conteúdo.")
+                    record = existing
                 transaction.stage_bytes(
                     pending_path,
                     json.dumps(record, ensure_ascii=False, indent=2).encode("utf-8"),
@@ -253,22 +270,14 @@ def create_operations_router(
             raise HTTPException(status_code=503, detail="Não foi possível salvar a anotação localmente.") from None
 
         try:
-            save_history_annotation(annotation_directory(), **values)
+            return sync_history_annotation(
+                record, directory=annotation_directory(), outbox=annotation_outbox_directory(),
+                transaction_root=transaction_root(), transaction_factory=AtomicFileTransaction,
+                publisher=save_history_annotation,
+            )
         except Exception:
             logger.exception("Anotação do chamado %s salva e aguardando sincronização.", serial)
             return False
-
-        try:
-            with AtomicFileTransaction(transaction_root(), [pending_path]) as transaction:
-                if pending_path.exists():
-                    saved = json.loads(pending_path.read_text(encoding="utf-8"))
-                    if saved.get("atualizado_em") == record.get("atualizado_em"):
-                        transaction.stage_delete(pending_path)
-                        transaction.commit()
-        except Exception:
-            logger.exception("Anotação sincronizada, mas a pendência do chamado %s não foi baixada.", serial)
-            return False
-        return True
 
     @router.get("/api/operacoes/chamados")
     def get_ticket_report():
@@ -372,6 +381,8 @@ def create_operations_router(
         ), None)
         if event is None:
             raise HTTPException(status_code=404, detail="A linha do tempo selecionada não existe nesta importação.")
+        if len(payload.base_revisoes) > 1 and not payload.resolver_conflito:
+            raise HTTPException(409, detail="Confirme explicitamente a resolução do conflito.")
         synced = _persist_ticket_annotation(
             event_id=event_id,
             item_id=item_id,
@@ -379,11 +390,12 @@ def create_operations_router(
             event_time=str(event.get("atualizado_em") or ""),
             row_hash=_ticket_annotation_row_hash(event),
             annotation=payload.anotacao,
+            revision_id=payload.revisao_id, base_revisions=payload.base_revisoes,
         )
         sync_enabled = bool(history_annotations_sync_enabled and history_annotations_sync_enabled())
         return {
             "sucesso": True,
-            "anotacao": payload.anotacao,
+            **annotation_view(latest_ticket_annotations()[(event_id, item_id)]),
             "sincronizacao": "sincronizada" if sync_enabled and synced else "pendente" if sync_enabled else "local",
         }
 
