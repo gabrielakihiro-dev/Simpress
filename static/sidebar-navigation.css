@@ -759,7 +759,7 @@ body.sidebar-drawer-open {
   }
 
   .app-workspace {
-    margin-left: 0;
+    margin-left: 0 !important;
   }
 
   .header-inner {
@@ -773,6 +773,10 @@ body.sidebar-drawer-open {
   }
 
   .header-base-summary {
+    display: none !important;
+  }
+
+  .header-inner > .header-base-summary {
     display: none !important;
   }
 
