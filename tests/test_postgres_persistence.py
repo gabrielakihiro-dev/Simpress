@@ -2,6 +2,7 @@
 
 from contextlib import contextmanager
 import importlib.util
+from threading import Lock
 import unittest
 from unittest.mock import Mock, patch
 
@@ -149,6 +150,122 @@ class CommitBoundaryTests(unittest.TestCase):
                                                          "estado": "confirmada", "resultado": {"sucesso": True}}
         with self.assertRaisesRegex(PersistenceError, "commit failure"):
             backend.execute("unit", {}, "synthetic")
+
+
+@unittest.skipUnless(
+    importlib.util.find_spec("psycopg") and importlib.util.find_spec("psycopg_pool"),
+    "optional PostgreSQL dependencies not installed",
+)
+class EquipmentSearchCacheTests(unittest.TestCase):
+    def setUp(self):
+        from persistence.postgres import PostgresBackend
+        from domains.equipment_search import build_search_index
+
+        self.backend = object.__new__(PostgresBackend)
+        self.backend._equipment_search_index_lock = Lock()
+        self.backend._equipment_search_index_cache = None
+        self.revision = 1
+        self.batch_id = "synthetic-active-batch"
+        self.alias = "Recepcao"
+        self.snapshot_calls = 0
+        self.active_state = "validado"
+        self.conn = Mock()
+
+        def execute(sql, params=()):
+            if "select lote_ativo_id,revisao_global" in sql:
+                return Mock(fetchone=Mock(return_value={
+                    "lote_ativo_id": self.batch_id,
+                    "revisao_global": self.revision,
+                }))
+            if "select estado from simpress.lotes_inventario" in sql:
+                self.assertEqual(params, (self.batch_id,))
+                return Mock(fetchone=Mock(return_value={"estado": self.active_state}))
+            raise AssertionError(f"Consulta inesperada no fixture: {sql}")
+
+        self.conn.execute.side_effect = execute
+
+        @contextmanager
+        def transaction():
+            yield self.conn
+
+        self.transaction_factory = transaction
+        self.backend.transaction = transaction
+
+        def snapshot(_conn):
+            self.snapshot_calls += 1
+            return {"global": {
+                "lote_ativo_id": self.batch_id,
+                "revisao_global": self.revision,
+            }, "alias": self.alias}
+
+        def project(current):
+            equipment = {
+                "SN-001": {"serial": "SN-001", "modelo": "Latitude 7440", "tipo": "Notebook",
+                           "apelido": current["alias"], "retirada_cidade": "Sao Paulo"},
+                "SN-002": {"serial": "SN-002", "modelo": "ThinkPad X1", "tipo": "Notebook",
+                           "apelido": "Financeiro", "retirada_cidade": "Curitiba"},
+            }
+            return {"equipment_search_index": build_search_index(equipment)}
+
+        self.backend._snapshot = snapshot
+        self.backend.project = project
+
+    def test_reuses_index_and_refreshes_after_another_process_changes_revision(self):
+        first = self.backend.search_equipment("SN-001")
+        repeated = self.backend.search_equipment("SN-001")
+        self.assertEqual(first, repeated)
+        self.assertEqual(self.snapshot_calls, 1)
+
+        # Simulate another process changing an alias and advancing the shared revision.
+        self.alias = "Atendimento"
+        self.revision += 1
+        self.assertEqual(self.backend.search_equipment("RECEPCAO"), [])
+        self.assertEqual(self.backend.search_equipment("ATENDIMENTO")[0]["apelido"], "Atendimento")
+        self.assertEqual(self.snapshot_calls, 2)
+
+    def test_search_order_matches_existing_normalized_index_contract(self):
+        from domains.equipment_search import build_search_index, search_normalized_index
+
+        equipment = {
+            "SN-001": {"serial": "SN-001", "modelo": "Latitude 7440", "tipo": "Notebook",
+                       "apelido": self.alias, "retirada_cidade": "Sao Paulo"},
+            "SN-002": {"serial": "SN-002", "modelo": "ThinkPad X1", "tipo": "Notebook",
+                       "apelido": "Financeiro", "retirada_cidade": "Curitiba"},
+        }
+        expected = search_normalized_index(build_search_index(equipment), "NOTEBOOK")
+        self.assertEqual(self.backend.search_equipment("NOTEBOOK"), expected)
+
+    def test_failed_refresh_does_not_serve_the_previous_revision(self):
+        self.backend.search_equipment("SN-001")
+        self.revision += 1
+        self.backend.project = Mock(side_effect=RuntimeError("synthetic projection failure"))
+        with self.assertRaisesRegex(RuntimeError, "projection failure"):
+            self.backend.search_equipment("SN-001")
+        self.assertEqual(self.snapshot_calls, 2)
+
+    def test_empty_term_skips_database_and_inactive_batch_is_rejected(self):
+        self.backend.transaction = Mock(side_effect=AssertionError("empty search opened a transaction"))
+        self.assertEqual(self.backend.search_equipment(""), [])
+        self.backend.transaction = self.transaction_factory
+
+        self.active_state = "em_processamento"
+        with self.assertRaisesRegex(PersistenceError, "não está validado"):
+            self.backend.search_equipment("SN-001")
+
+    def test_index_above_memory_budget_is_not_retained(self):
+        with patch("persistence.postgres.MAX_CACHED_EQUIPMENT_SEARCH_INDEX_BYTES", 0):
+            self.assertEqual(self.backend.search_equipment("SN-001")[0]["serial"], "SN-001")
+            self.assertIsNone(self.backend._equipment_search_index_cache)
+            self.backend.search_equipment("SN-001")
+        self.assertEqual(self.snapshot_calls, 2)
+
+    def test_main_search_dispatch_does_not_reload_full_state(self):
+        backend = Mock()
+        backend.search_equipment.return_value = [{"serial": "SN-001"}]
+        with patch.object(main, "postgres_backend", return_value=backend):
+            self.assertEqual(main._buscar_equipamentos_por_termo("sn-001"), [{"serial": "SN-001"}])
+        backend.search_equipment.assert_called_once_with("SN-001")
+        backend.state.assert_not_called()
 
 
 if __name__ == "__main__":
