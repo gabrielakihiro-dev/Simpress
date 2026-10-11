@@ -3601,6 +3601,8 @@ _inventory_update_services = InventoryUpdateServices(
     upload_backups_directory=lambda: UPLOAD_BACKUPS_DIR,
     history_annotations_directory=lambda: HISTORY_ANNOTATIONS_DIR,
     local_annotation_outbox_directory=lambda: LOCAL_HISTORY_ANNOTATION_OUTBOX_DIR,
+    build_history_annotation_record=lambda *args, **kwargs: build_history_annotation_record(*args, **kwargs),
+    history_annotation_record_path=history_annotation_record_path,
     get_primary_equipment_file=lambda: get_primary_equipment_file(),
     compare_uploaded_workbooks=lambda *args, **kwargs: compare_uploaded_workbooks(*args, **kwargs),
     inventory_state_transaction=lambda targets: inventory_state_transaction(targets),
@@ -3619,7 +3621,6 @@ _inventory_update_services = InventoryUpdateServices(
     comparison_history_for_display=lambda *args, **kwargs: comparison_history_for_display(*args, **kwargs),
     load_history_annotations=lambda *args, **kwargs: load_history_annotations(*args, **kwargs),
     comparison_annotation_item_id=lambda *args, **kwargs: comparison_annotation_item_id(*args, **kwargs),
-    save_history_annotation=lambda *args, **kwargs: save_history_annotation(*args, **kwargs),
 )
 
 

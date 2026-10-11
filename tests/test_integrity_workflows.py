@@ -1627,6 +1627,30 @@ class WorkflowIntegrityTests(unittest.TestCase):
             for record in main.load_history_annotations(self.shared_annotations)
             if record["evento_id"] == new_event["id"]
         ]
+        self.assertEqual(shared_new_event_records, [])
+        pending_new_event_records = [
+            record
+            for record in main.load_history_annotations(self.pending_annotations)
+            if record["evento_id"] == new_event["id"]
+        ]
+        self.assertEqual(len(pending_new_event_records), 1)
+        self.assertEqual(pending_new_event_records[0]["anotacao"], "Acompanhar com a unidade.")
+        self.assertEqual(result["anotacoes_herdadas_enfileiradas"], 1)
+        self.assertEqual(result["sincronizacao_anotacoes"], "pendente")
+
+        with patch.object(main, "save_history_annotation", side_effect=OSError("pasta compartilhada indisponível")):
+            failed_sync = main.flush_pending_history_annotations()
+        self.assertEqual(failed_sync, {"pendentes": 1, "sincronizadas": 0})
+        self.assertEqual(len(main.load_history_annotations(self.pending_annotations)), 1)
+        synced = main.flush_pending_history_annotations()
+        self.assertEqual(synced, {"pendentes": 0, "sincronizadas": 1})
+        repeated_sync = main.flush_pending_history_annotations()
+        self.assertEqual(repeated_sync, {"pendentes": 0, "sincronizadas": 0})
+        shared_new_event_records = [
+            record
+            for record in main.load_history_annotations(self.shared_annotations)
+            if record["evento_id"] == new_event["id"]
+        ]
         self.assertEqual(len(shared_new_event_records), 1)
         self.assertEqual(shared_new_event_records[0]["anotacao"], "Acompanhar com a unidade.")
 
@@ -1645,6 +1669,84 @@ class WorkflowIntegrityTests(unittest.TestCase):
             clone_history[-1]["comparacao"]["sem_acesso_14_dias"][0]["anotacao"],
             "Acompanhar com a unidade.",
         )
+
+    def test_inherited_annotation_outbox_commits_and_recovers_with_inventory_history(self):
+        from domains.inventory_update import _commit_inventory_files
+
+        make_details(self.details, [
+            ("SN-OUTBOX", "HOST-OUTBOX", "Modelo A", "Maringá", "Notebook", "87000000"),
+        ])
+        make_endpoint(self.endpoint, [("SN-OUTBOX", "HOST-OUTBOX")])
+        make_model(self.model)
+        self.assertTrue(main.load_database())
+
+        category = "sem_acesso_14_dias"
+        prior_row = {
+            "serie": "SN-OUTBOX", "computador": "HOST-OUTBOX",
+            "dias_sem_verificacao": 14, "ultima_verificacao": "2026-10-07T10:00:00-03:00",
+        }
+        prior_event = {"id": "evento-outbox-anterior", "horario": "2026-10-07T10:00:00-03:00",
+                       "comparacao": {category: [prior_row]}}
+        self.comparison_history.write_text(json.dumps([prior_event]), encoding="utf-8")
+        prior_item_id = main.comparison_history_for_display(prior_event)["comparacao"][category][0]["anotacao_id"]
+        main.salvar_anotacao_comparacao_historica(
+            prior_event["id"], prior_item_id, SimpleNamespace(anotacao="Revisar com a unidade."),
+        )
+
+        endpoint_bytes = _endpoint_bytes([("SN-OUTBOX", "HOST-OUTBOX")])
+        details_bytes = _details_bytes([
+            ("SN-OUTBOX", "HOST-OUTBOX", "Modelo A", "Maringá", "Notebook", "87000000"),
+        ])
+        staged = {
+            "endpoint": {"name": "InvAll_outbox.xlsx", "bytes": endpoint_bytes,
+                         "table": main.validate_uploaded_workbook(endpoint_bytes, "endpoint")},
+            "detalhes": {"name": "Detalhes_outbox.xlsx", "bytes": details_bytes,
+                         "table": main.validate_uploaded_workbook(details_bytes, "detalhes")},
+        }
+        comparison = {category: [copy.deepcopy(prior_row)]}
+
+        def update():
+            return _commit_inventory_files(staged, main._inventory_update_services)
+
+        before_files = (self.endpoint.read_bytes(), self.details.read_bytes())
+        history_before = self.comparison_history.read_bytes()
+        original_apply = main.AtomicFileTransaction.apply
+
+        def interrupt_before_confirmation(transaction):
+            original_apply(transaction)
+            raise RuntimeError("interrupção sintética antes da confirmação")
+
+        with patch.object(main, "compare_uploaded_workbooks", return_value=copy.deepcopy(comparison)), \
+             patch.object(main.AtomicFileTransaction, "commit", interrupt_before_confirmation), \
+             self.assertRaisesRegex(RuntimeError, "antes da confirmação"):
+            update()
+        self.assertEqual((self.endpoint.read_bytes(), self.details.read_bytes()), before_files)
+        self.assertEqual(self.comparison_history.read_bytes(), history_before)
+        self.assertEqual(main.load_history_annotations(self.pending_annotations), [])
+
+        with patch.object(main, "compare_uploaded_workbooks", return_value=copy.deepcopy(comparison)), \
+             patch.object(main, "publish_database_state", side_effect=RuntimeError("interrupção após confirmação")), \
+             self.assertRaisesRegex(RuntimeError, "após confirmação"):
+            update()
+        committed_history = json.loads(self.comparison_history.read_text(encoding="utf-8"))
+        new_event = committed_history[-1]
+        self.assertEqual(new_event["comparacao"][category][0]["anotacao"], "Revisar com a unidade.")
+        queued = main.load_history_annotations(self.pending_annotations)
+        self.assertEqual(len(queued), 1)
+        self.assertEqual(queued[0]["evento_id"], new_event["id"])
+
+        # Simulate process startup recovery: the shared publisher is offline,
+        # and the pending item is found and retried without opening a history route.
+        main.recover_pending_transactions(self.root)
+        with patch.object(main, "save_history_annotation", side_effect=OSError("rede indisponível")):
+            offline = main.flush_pending_history_annotations()
+        self.assertEqual(offline, {"pendentes": 1, "sincronizadas": 0})
+        self.assertEqual(len(main.load_history_annotations(self.pending_annotations)), 1)
+        online = main.flush_pending_history_annotations()
+        self.assertEqual(online, {"pendentes": 0, "sincronizadas": 1})
+        self.assertEqual(main.load_history_annotations(self.pending_annotations), [])
+        resolved = resolve_history_annotations(main.load_history_annotations(self.shared_annotations))
+        self.assertEqual(resolved[(new_event["id"], queued[0]["item_id"])]["anotacao"], "Revisar com a unidade.")
 
     def test_annotation_uses_stable_review_id_after_display_filter_and_stays_event_scoped(self):
         filtered_out = {
