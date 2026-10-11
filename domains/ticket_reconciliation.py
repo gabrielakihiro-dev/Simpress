@@ -94,8 +94,8 @@ def _serial_key(value: Any) -> str:
     return re.sub(r"[^A-Z0-9]+", "", normalized.upper())
 
 
-def _identifier_key(value: str) -> str:
-    return re.sub(r"\s+", "", value).upper()
+def _identifier_key(value: Any) -> str:
+    return re.sub(r"\s+", "", str(value or "")).upper()
 
 
 def _parse_order_date(value: str) -> Optional[datetime]:
@@ -546,7 +546,7 @@ def reconcile_ticket_workbooks(
             })
         simpress_series = bool(simpress_data)
         oracle_series = bool(oracle_data)
-        simpress_ticket_data = simpress_payload if simpress_data else {
+        simpress_ticket_data: Dict[str, Any] = simpress_payload if simpress_data else {
             "pedidos": [], "ordens_venda": [], "ordens_servico": [], "chamados_cliente": [],
             "status": [], "datas_pedido": [], "modelos": [], "descricoes_produto": [],
             "previsoes_entrega": [], "cidades_entrega": [], "enderecos_entrega": [], "pedido_em_andamento": False,

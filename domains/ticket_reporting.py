@@ -10,7 +10,7 @@ from io import BytesIO
 import json
 import re
 import unicodedata
-from typing import Any, Dict, Iterable, List, Optional, Sequence, Tuple
+from typing import Any, Dict, Iterable, List, Mapping, Optional, Sequence, Tuple
 from uuid import uuid4
 
 from openpyxl import Workbook
@@ -715,7 +715,7 @@ def build_ticket_workbook(
     tickets: Sequence[Dict[str, Any]],
     filters: Dict[str, Any],
     *,
-    timelines: Optional[Dict[str, Sequence[Dict[str, Any]]]] = None,
+    timelines: Optional[Mapping[str, Sequence[Dict[str, Any]]]] = None,
 ) -> bytes:
     workbook = Workbook()
     summary = workbook.active

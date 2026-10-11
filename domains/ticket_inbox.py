@@ -72,7 +72,8 @@ def _try_worker_lock(path: Path):
             else:
                 import fcntl
 
-                cast(Any, fcntl).flock(handle.fileno(), fcntl.LOCK_UN)
+                fcntl_api = cast(Any, fcntl)
+                fcntl_api.flock(handle.fileno(), fcntl_api.LOCK_UN)
         if handle is not None:
             handle.close()
         _WORKER_LOCK.release()
