@@ -2005,6 +2005,9 @@
         if (!response.ok) throw new Error(result.detail || "Não foi possível importar o modelo.");
         status.textContent = "Modelo importado. Confira abaixo se todas as dependências estão disponíveis.";
         document.getElementById("arquivo-modelo-local").value = "";
+        // The file replacement has completed; let the user dismiss the modal
+        // while readiness and the other secondary panels finish refreshing.
+        importacaoModeloOcupada = false;
         await Promise.allSettled([carregarProntidao(), carregarEstatisticas(), carregarUnidades()]);
         showToast("Modelo validado e importado.", "success");
       } catch (error) {

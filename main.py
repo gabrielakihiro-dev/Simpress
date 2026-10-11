@@ -616,7 +616,7 @@ def _check_startup_xlsx(path: Optional[Path]) -> Dict[str, Any]:
     return {"available": True, "file": path.name, "reason": "OK"}
 
 
-_READINESS_VALIDATION_CACHE = {}
+_READINESS_VALIDATION_CACHE: Dict[Tuple[str, int, int, int, str], Dict[str, Any]] = {}
 _READINESS_VALIDATION_LOCK = threading.Lock()
 
 
