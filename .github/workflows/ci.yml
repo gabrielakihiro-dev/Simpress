@@ -52,10 +52,12 @@ jobs:
         run: python -m mypy --explicit-package-bases --platform win32 --ignore-missing-imports --check-untyped-defs app_config.py main.py integrity.py openpyxl_compat.py xlsx_safety.py domains/history_export.py domains/inventory_comparison.py domains/inventory_update.py domains/equipment_search.py routers/inventory_history.py routers/transfers.py routers/equipment_search.py routers/system.py routers/units.py persistence security scripts/migrate_local_data.py scripts/cleanup_local_temps.py scripts/migrate_supabase_bundle.py scripts/rehearsal_fixtures.py scripts/rehearsal_stack.py scripts/verify_migration_pilot.py
       - name: Check tracked files for common credentials
         run: python -B scripts/check_secrets.py
+      - name: Install interface asset dependencies
+        run: npm ci
+      - name: Audit JavaScript dependencies
+        run: npm audit --audit-level=moderate
       - name: Rebuild local interface assets
-        run: |
-          npm ci
-          npm run build:ui
+        run: npm run build:ui
 
   ui-browser:
     runs-on: windows-latest
@@ -69,6 +71,10 @@ jobs:
           node-version: "24"
       - name: Install browser test dependencies
         run: npm ci
+      - name: Audit JavaScript dependencies
+        run: npm audit --audit-level=moderate
+      - name: Rebuild local interface assets
+        run: npm run build:ui
       - name: Install Chromium
         run: npx playwright install chromium
       - name: Test real interface in desktop and mobile viewports

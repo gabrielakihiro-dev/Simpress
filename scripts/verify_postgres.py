@@ -145,7 +145,7 @@ def main():
         # the isolated DB settings to the same real FastAPI lifespan.
         env = os.environ.copy()
         env["SIMPRESS_TEST_DATABASE_URL"] = url
-        launcher = "import os,main,uvicorn; from persistence.config import PersistenceSettings; main.PERSISTENCE_SETTINGS=PersistenceSettings('postgres',os.environ.pop('SIMPRESS_TEST_DATABASE_URL'),2); uvicorn.run(main.app,host='127.0.0.1',port=" + str(port) + ",log_level='error')"
+        launcher = "import os,main,uvicorn; from persistence.config import PersistenceSettings; main.PERSISTENCE_SETTINGS=PersistenceSettings('postgres',os.environ.pop('SIMPRESS_TEST_DATABASE_URL'),2); uvicorn.run(main.app,host='127.0.0.1',port=" + str(port) + ",log_level='error',proxy_headers=False)"
         server = subprocess.Popen([sys.executable, "-B", "-c", launcher], cwd=ROOT, env=env,
             stdout=subprocess.PIPE, stderr=subprocess.PIPE,
             creationflags=subprocess.CREATE_NO_WINDOW if os.name == "nt" else 0)

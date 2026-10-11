@@ -1,9 +1,9 @@
 """Request scope and feature boundary for the unfinished local PostgreSQL pilot."""
 
 from contextvars import ContextVar
-import ipaddress
 import re
 from starlette.responses import JSONResponse
+from security.network import is_direct_loopback_request
 
 idempotency_key = ContextVar("simpress_idempotency_key", default=None)
 PENDING = "Esta rota não está disponível no piloto PostgreSQL local."
@@ -41,12 +41,7 @@ class PersistenceBoundaryMiddleware:
         if scope["type"] != "http" or not self.is_postgres():
             await self.app(scope, receive, send)
             return
-        client = scope.get("client")
-        try:
-            local = client is not None and ipaddress.ip_address(client[0]).is_loopback
-        except ValueError:
-            local = False
-        if not local:
+        if not is_direct_loopback_request(scope):
             await JSONResponse({"detail": "O piloto PostgreSQL aceita somente conexões locais."}, status_code=403)(scope, receive, send)
             return
         path = scope.get("path", "")

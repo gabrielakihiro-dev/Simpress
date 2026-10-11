@@ -84,7 +84,8 @@ def _run_local_safety_middleware(
         headers.append((b"content-length", str(len(body)).encode("ascii")))
     if origin is not None:
         headers.append((b"origin", origin.encode("ascii")))
-    scope = {"type": "http", "path": path, "method": method, "headers": headers}
+    scope = {"type": "http", "path": path, "method": method, "headers": headers,
+             "client": ("127.0.0.1", 12345)}
     middleware = main.LocalRequestSafetyMiddleware(app)
     asyncio.run(middleware(scope, receive, send))
     status = next(
@@ -595,7 +596,7 @@ class MaintenanceContractTests(unittest.TestCase):
         html = index_file.read_text(encoding="utf-8")
         self.assertIn('<link rel="icon" type="image/svg+xml" href="/static/favicon.svg">', html)
         self.assertIn('<link rel="stylesheet" href="/static/vendor/fonts.css">', html)
-        self.assertIn('<link rel="stylesheet" href="/static/vendor/tailwind-3.4.17.css">', html)
+        self.assertIn('<link rel="stylesheet" href="/static/vendor/tailwind-4.3.3.css">', html)
         self.assertIn('<script src="/static/vendor/lucide-1.48.0.min.js"></script>', html)
         self.assertIn('<link rel="stylesheet" href="/static/app.css">', html)
         self.assertIn('<script src="/static/transfer-utils.js"></script>', html)
@@ -605,7 +606,7 @@ class MaintenanceContractTests(unittest.TestCase):
         self.assertTrue((app_config.STATIC_DIR / "app.js").is_file())
         self.assertTrue((app_config.STATIC_DIR / "transfer-utils.js").is_file())
         self.assertTrue((app_config.STATIC_DIR / "vendor" / "fonts.css").is_file())
-        self.assertTrue((app_config.STATIC_DIR / "vendor" / "tailwind-3.4.17.css").is_file())
+        self.assertTrue((app_config.STATIC_DIR / "vendor" / "tailwind-4.3.3.css").is_file())
         self.assertTrue((app_config.STATIC_DIR / "vendor" / "lucide-1.48.0.min.js").is_file())
         favicon_file = app_config.STATIC_DIR / "favicon.svg"
         self.assertTrue(favicon_file.is_file())

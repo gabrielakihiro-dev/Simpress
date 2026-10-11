@@ -1,3 +1,61 @@
-@tailwind base;
-@tailwind components;
-@tailwind utilities;
+@layer theme, base;
+@import "tailwindcss/theme.css" layer(theme);
+@import "tailwindcss/preflight.css" layer(base);
+/* Keep utilities unlayered, as in v3, so app.css element rules cannot hide them. */
+@import "tailwindcss/utilities.css" source(none);
+@config "../tailwind.config.cjs";
+@source "./index.html";
+@source "./app.js";
+
+/* Retain the defaults used by the existing interface during the v4 migration. */
+@theme {
+  --shadow-sm: 0 1px 2px 0 rgb(0 0 0 / 0.05);
+  --blur-sm: 4px;
+  --default-ring-width: 3px;
+  --default-ring-color: #3b82f6;
+}
+
+@utility outline-none {
+  outline: 2px solid transparent;
+  outline-offset: 2px;
+}
+
+/* Preserve v3 sibling spacing when panels or rows use the hidden attribute. */
+@utility space-y-* {
+  & > :where(:not(:last-child)) {
+    margin-block-start: 0;
+    margin-block-end: 0;
+  }
+  & > :not([hidden]) ~ :not([hidden]) {
+    --tw-space-y-reverse: 0;
+    margin-top: calc(--spacing(--value(number)) * (1 - var(--tw-space-y-reverse)));
+    margin-bottom: calc(--spacing(--value(number)) * var(--tw-space-y-reverse));
+  }
+}
+
+@utility space-x-* {
+  & > :where(:not(:last-child)) {
+    margin-inline-start: 0;
+    margin-inline-end: 0;
+  }
+  & > :not([hidden]) ~ :not([hidden]) {
+    --tw-space-x-reverse: 0;
+    margin-right: calc(--spacing(--value(number)) * var(--tw-space-x-reverse));
+    margin-left: calc(--spacing(--value(number)) * (1 - var(--tw-space-x-reverse)));
+  }
+}
+
+@layer base {
+  *, ::before, ::after, ::backdrop, ::file-selector-button {
+    border-color: var(--color-gray-200, currentColor);
+  }
+  input::placeholder, textarea::placeholder {
+    color: var(--color-gray-400);
+  }
+  button, [role="button"] {
+    cursor: pointer;
+  }
+  :disabled {
+    cursor: default;
+  }
+}
