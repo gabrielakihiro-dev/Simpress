@@ -6,6 +6,7 @@
   const DEFAULT_RETRY_DELAYS_MS = Object.freeze([500, 1000, 2000]);
   const pendingAnnotationKeys = new Set();
   const annotationRevisions = new Map();
+  const annotationOwners = new Map();
   const unloadGuardWindows = new WeakSet();
 
   function getErrorMessage(detail, fallback = "Não foi possível salvar a anotação.") {
@@ -116,8 +117,17 @@
         draftStorage = null;
       }
     }
-    let revision = (annotationRevisions.get(key) || 0) + 1;
-    annotationRevisions.set(key, revision);
+    const owner = {};
+    let disposed = false;
+    let revision = annotationRevisions.get(key) || 0;
+    const isMounted = () => !disposed && textarea.isConnected !== false;
+    const ownsCurrentRevision = () => isMounted() && annotationOwners.get(key) === owner;
+    const claimRevision = () => {
+      revision = (annotationRevisions.get(key) || 0) + 1;
+      annotationRevisions.set(key, revision);
+      annotationOwners.set(key, owner);
+    };
+    if (!pendingAnnotationKeys.has(key)) claimRevision();
     let dirty = false;
     let saving = false;
     let timer = null;
@@ -187,7 +197,7 @@
     const setPending = pending => {
       textarea.dataset.annotationPending = String(pending);
       if (pending) pendingAnnotationKeys.add(key);
-      else pendingAnnotationKeys.delete(key);
+      else if (ownsCurrentRevision()) pendingAnnotationKeys.delete(key);
     };
     const setStatus = (message, colorClass, canRetry = false) => {
       status.textContent = message;
@@ -219,6 +229,7 @@
       return true;
     };
     const scheduleSave = delay => {
+      if (!ownsCurrentRevision()) return;
       windowObject.clearTimeout(timer);
       timer = windowObject.setTimeout(() => {
         timer = null;
@@ -227,6 +238,7 @@
     };
 
     async function saveAnnotation() {
+      if (!ownsCurrentRevision()) return;
       version = readAnnotationVersion(textarea) || version;
       conflicted = Boolean(version?.anotacao_conflito) && !resolvingConflict;
       if (saving || !dirty || conflicted) return;
@@ -239,6 +251,9 @@
         requestAttempt = { key: attemptKey, id: version ? createRevisionId() : undefined };
       }
       const revisionId = requestAttempt.id;
+      const isRequestCurrent = () => ownsCurrentRevision()
+        && revision === requestRevision && textarea.value === annotation;
+      let responseData;
       persistDraft(annotation);
       saving = true;
       setStatus("Salvando...", "text-cyan-300");
@@ -254,22 +269,37 @@
               storageKey: key,
               revisionId, baseRevisions, resolveConflict,
             });
-            // Even an obsolete UI request may have published a causal revision.
-            if (response?.ok && response.clone) {
-              updateVersion(await response.clone().json());
+            if (response?.ok && ownsCurrentRevision()) {
+              // Read the acknowledgement before deciding whether this edit is current.
+              const acknowledgement = await response.json();
+              if (!acknowledgement || acknowledgement.sucesso === false
+                  || (acknowledgement.sucesso !== true && !Array.isArray(acknowledgement.anotacao_revisoes))
+                  || (acknowledgement.anotacao_conflito && !Array.isArray(acknowledgement.anotacao_revisoes))
+                  || (revisionId && !acknowledgement.anotacao_conflito
+                    && (!Array.isArray(acknowledgement.anotacao_revisoes)
+                      || !acknowledgement.anotacao_revisoes.includes(revisionId)))) {
+                throw new Error("Confirmação de salvamento inválida.");
+              }
+              responseData = acknowledgement;
             }
             return response;
           },
           {
             ...retryOptions,
-            isCurrent: () => annotationRevisions.get(key) === requestRevision
-              && textarea.value === annotation,
+            isCurrent: isRequestCurrent,
             onRetry: attempt => setStatus(
               "Falha temporária. Tentando salvar novamente (" + attempt + "/3)...",
               "text-amber-300"
             ),
           }
         );
+        if (!ownsCurrentRevision()) return;
+        // A successful older request from this field can still supply the causal
+        // bases for its next edit, but cannot acknowledge that edit.
+        updateVersion(responseData);
+        if (version && responseData && revision !== requestRevision) {
+          draftBases = [...version.anotacao_revisoes];
+        }
         if (conflicted) {
           dirty = true;
           persistDraft(textarea.value);
@@ -278,62 +308,31 @@
           return;
         }
         if (result.stale) {
-          if (annotationRevisions.get(key) !== revision) return;
-          dirty = textarea.value !== annotation;
-          if (!dirty) removeDraft();
-          setPending(dirty);
-          setStatus(
-            dirty ? "Salvando alteração mais recente..." : "Salvo automaticamente",
-            dirty ? "text-cyan-300" : "text-emerald-300"
-          );
-          return;
-        }
-
-        let responseData = {};
-        if (typeof result.response?.json === "function") {
-          try {
-            responseData = await result.response.json();
-          } catch (error) {
-            responseData = {};
-          }
-        }
-        updateVersion(responseData);
-        if (conflicted) {
           dirty = true;
           persistDraft(textarea.value);
           setPending(true);
-          setStatus("Conflito de anotação; versões preservadas", "text-amber-300");
+          setStatus("Salvando alteração mais recente...", "text-cyan-300");
           return;
         }
         const synchronizationPending = responseData?.sincronizacao === "pendente";
         const savedOnThisDevice = responseData?.sincronizacao === "local";
-        dirty = textarea.value !== annotation
-          || annotationRevisions.get(key) !== requestRevision;
-        if (!dirty) {
-          draftBases = null;
-          removeDraft();
-        } else if (version) {
-          // A newer local edit may include the revision just acknowledged by this request.
-          draftBases = [...version.anotacao_revisoes];
-          persistDraft(textarea.value);
-        }
-        setPending(dirty);
+        dirty = false;
+        draftBases = null;
+        removeDraft();
+        setPending(false);
         setStatus(
-          dirty
-            ? "Salvando..."
-            : synchronizationPending
-              ? "Salvo neste dispositivo; sincronização pendente"
-              : savedOnThisDevice
-                ? "Salvo neste dispositivo"
-                : "Salvo automaticamente",
-          dirty
-            ? "text-cyan-300"
-            : synchronizationPending
-              ? "text-amber-300"
-              : "text-emerald-300",
-          !dirty && synchronizationPending
+          synchronizationPending
+            ? "Salvo neste dispositivo; sincronização pendente"
+            : savedOnThisDevice
+              ? "Salvo neste dispositivo"
+              : "Salvo automaticamente",
+          synchronizationPending
+            ? "text-amber-300"
+            : "text-emerald-300",
+          synchronizationPending
         );
       } catch (error) {
+        if (!ownsCurrentRevision()) return;
         dirty = true;
         setPending(true);
         setStatus(
@@ -343,15 +342,18 @@
         );
       } finally {
         saving = false;
-        if (retryButton) retryButton.disabled = false;
-        if (dirty && textarea.value !== annotation) scheduleSave(0);
+        if (ownsCurrentRevision()) {
+          if (retryButton) retryButton.disabled = false;
+          if (dirty && !conflicted && revision !== requestRevision) scheduleSave(0);
+        }
       }
     }
 
     const onInput = () => {
+      if (!isMounted()) return;
       if (!dirty) draftBases = version ? [...version.anotacao_revisoes] : null;
-      revision += 1;
-      annotationRevisions.set(key, revision);
+      claimRevision();
+      requestAttempt = null;
       dirty = true;
       setPending(true);
       persistDraft(textarea.value);
@@ -360,6 +362,8 @@
     };
     const onBlur = () => scheduleSave(0);
     const onRetry = () => {
+      if (!isMounted()) return;
+      if (!ownsCurrentRevision()) onInput();
       if (!dirty) {
         dirty = true;
         setPending(true);
@@ -367,7 +371,7 @@
       }
       scheduleSave(0);
     };
-    const onVersionChange = () => updateVersion(readAnnotationVersion(textarea));
+    const onVersionChange = () => { if (isMounted()) updateVersion(readAnnotationVersion(textarea)); };
 
     textarea.addEventListener("input", onInput);
     textarea.addEventListener("blur", onBlur);
@@ -394,8 +398,7 @@
           } catch (error) { /* A legacy draft remains plain text. */ }
         }
         dirty = true;
-        revision += 1;
-        annotationRevisions.set(key, revision);
+        claimRevision();
         setPending(true);
         setStatus("Rascunho recuperado. Tentando salvar...", "text-amber-300");
         scheduleSave(0);
@@ -409,6 +412,8 @@
 
     return {
       dispose() {
+        disposed = true;
+        if (annotationOwners.get(key) === owner) annotationOwners.delete(key);
         windowObject.clearTimeout(timer);
         textarea.removeEventListener("input", onInput);
         textarea.removeEventListener("blur", onBlur);

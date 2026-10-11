@@ -157,7 +157,8 @@ class Handler(BaseHTTPRequestHandler):
                 self.send({"detail": "Anotação inválida"}, 422)
                 return
             DEMO_ANNOTATION = annotation
-            self.send({"sincronizacao": "sincronizada"})
+            self.send({"sucesso": True, "sincronizacao": "sincronizada",
+                       "anotacao_revisoes": [payload["revisao_id"]] if payload.get("revisao_id") else []})
         except (ValueError, json.JSONDecodeError):
             self.send({"detail": "JSON inválido"}, 400)
 
