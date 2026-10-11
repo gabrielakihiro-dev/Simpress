@@ -170,6 +170,48 @@ test("fixture annotation autosaves to the isolated in-memory endpoint", async ({
   });
 });
 
+for (const outcome of ["network failure", "success"]) {
+  test(`annotation A -> B -> A waits for the latest save after stale ${outcome}`, async ({ page }) => {
+    await openFixtureComparison(page);
+    await page.clock.install();
+    const requests = [];
+    await page.route("**/api/historico-comparacoes/*/anotacoes/*", route => {
+      requests.push({ route, body: route.request().postDataJSON() });
+    });
+    const annotation = page.locator('textarea[data-comparison-annotation]:visible').first();
+    const status = annotation.locator("xpath=..").locator("[data-annotation-status]");
+    const draftKey = await annotation.evaluate(el => window.HistoryAnnotationAutosave.createDraftStorageKey(
+      "fixture-event-001", el.dataset.annotationId
+    ));
+    await annotation.fill("A");
+    await annotation.blur();
+    await expect.poll(() => requests.length).toBe(1);
+    await annotation.fill("B");
+    await annotation.fill("A");
+    // Expire the debounce while the old request is still pending.
+    await page.clock.runFor(501);
+    if (outcome === "network failure") await requests[0].route.abort("failed");
+    else await requests[0].route.fulfill({ json: {
+      sucesso: true, anotacao_revisoes: [requests[0].body.revisao_id],
+    } });
+    await expect.poll(() => requests.length).toBe(2);
+    await expect(annotation).toHaveAttribute("data-annotation-pending", "true");
+    await expect(status).not.toHaveText("Salvo automaticamente");
+    expect(await page.evaluate(key => JSON.parse(localStorage.getItem(key)).text, draftKey)).toBe("A");
+    if (outcome === "success") {
+      expect(requests[1].body.base_revisoes).toEqual([requests[0].body.revisao_id]);
+    }
+    await requests[1].route.fulfill({ json: {
+      sucesso: true, anotacao_revisoes: [requests[1].body.revisao_id],
+    } });
+    await expect(status).toHaveText("Salvo automaticamente");
+    await expect(annotation).toHaveAttribute("data-annotation-pending", "false");
+    expect(await page.evaluate(key => localStorage.getItem(key), draftKey)).toBeNull();
+    await page.clock.runFor(5_000);
+    expect(requests).toHaveLength(2);
+  });
+}
+
 test("central pending view filters rows and autosaves their original comparison annotations", async ({ page }) => {
   await openAnalysisMenu(page);
   await page.getByRole("button", { name: "Pendências" }).click();

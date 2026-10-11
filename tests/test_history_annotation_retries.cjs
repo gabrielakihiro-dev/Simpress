@@ -135,17 +135,19 @@ test("formats structured API validation details as readable text", () => {
   assert.equal(getErrorMessage([]), "Não foi possível salvar a anotação.");
 });
 
-function createAutosaveHarness(send) {
+function createAutosaveHarness(send, options = {}) {
   const timers = new Map();
   let nextTimerId = 0;
   const windowObject = new EventTarget();
-  windowObject.setTimeout = callback => {
+  const delays = [];
+  windowObject.setTimeout = (callback, delay) => {
+    delays.push(delay);
     const id = ++nextTimerId;
     timers.set(id, callback);
     return id;
   };
   windowObject.clearTimeout = id => timers.delete(id);
-  const storageValues = new Map();
+  const storageValues = options.storageValues || new Map();
   const storage = {
     getItem: key => storageValues.has(key) ? storageValues.get(key) : null,
     setItem: (key, value) => storageValues.set(key, value),
@@ -163,13 +165,14 @@ function createAutosaveHarness(send) {
     }
   }
   const textarea = new Control();
+  if (options.version) textarea.dataset.annotationVersion = JSON.stringify(options.version);
   const status = new Control();
   const retryButton = new Control();
   const controller = attachAnnotationAutosave({
     textarea,
     status,
     retryButton,
-    eventId: "event-" + String(Math.random()),
+    eventId: options.eventId || "event-" + String(Math.random()),
     itemId: "review-item",
     send,
     retryOptions: { sleep: async () => {} },
@@ -183,8 +186,12 @@ function createAutosaveHarness(send) {
     storageValues,
     textarea,
     windowObject,
+    timers,
+    delays,
     async flushTimers() {
+      let flushed = 0;
       while (timers.size) {
+        assert.ok(++flushed < 50, "autosave must not loop indefinitely");
         const [id, callback] = timers.entries().next().value;
         timers.delete(id);
         callback();
@@ -224,9 +231,9 @@ test("keeps a failed annotation, warns before leaving, and exposes a retry butto
   harness.controller.dispose();
 });
 
-test("clears pending state when an in-flight annotation finishes on its original text", async () => {
-  let resolveSend;
-  const harness = createAutosaveHarness(() => new Promise(resolve => { resolveSend = resolve; }));
+for (const outcome of ["network failure", "success"]) test(`A -> B -> A requires a current acknowledgement after stale ${outcome}`, async () => {
+  const requests = [];
+  const harness = createAutosaveHarness(() => new Promise((resolve, reject) => { requests.push({ resolve, reject }); }));
   harness.textarea.value = "Texto que voltou ao original";
   harness.textarea.dispatchEvent(new Event("input"));
   await harness.flushTimers();
@@ -235,14 +242,256 @@ test("clears pending state when an in-flight annotation finishes on its original
   harness.textarea.dispatchEvent(new Event("input"));
   harness.textarea.value = "Texto que voltou ao original";
   harness.textarea.dispatchEvent(new Event("input"));
-  resolveSend(successResponse);
-  await new Promise(resolve => setImmediate(resolve));
+  // Let the debounce expire while the original request is still in flight.
   await harness.flushTimers();
-
+  if (outcome === "network failure") requests[0].reject(new TypeError("offline"));
+  else requests[0].resolve(successResponse);
+  await new Promise(resolve => setImmediate(resolve));
+  assert.equal(harness.textarea.dataset.annotationPending, "true");
+  assert.equal([...harness.storageValues.values()][0], "Texto que voltou ao original");
+  assert.doesNotMatch(harness.status.textContent, /Salvo/);
+  await harness.flushTimers();
+  assert.equal(requests.length, 2);
+  assert.equal(harness.storageValues.size, 1);
+  requests[1].resolve(successResponse);
+  await new Promise(resolve => setImmediate(resolve));
   assert.equal(harness.textarea.dataset.annotationPending, "false");
   assert.equal(harness.storageValues.size, 0);
   assert.equal(harness.status.textContent, "Salvo automaticamente");
   harness.controller.dispose();
+});
+
+test("an edit during acknowledgement parsing survives and is sent next", async () => {
+  let finishBody;
+  const sent = [];
+  const h = createAutosaveHarness(async payload => {
+    sent.push(payload.annotation);
+    return sent.length === 1
+      ? { ok: true, json: () => new Promise(resolve => { finishBody = resolve; }) }
+      : successResponse;
+  });
+  h.textarea.value = "A";
+  h.textarea.dispatchEvent(new Event("input"));
+  await h.flushTimers();
+  h.textarea.value = "B";
+  h.textarea.dispatchEvent(new Event("input"));
+  await h.flushTimers();
+  finishBody({ sucesso: true });
+  await new Promise(resolve => setImmediate(resolve));
+  assert.equal([...h.storageValues.values()][0], "B");
+  assert.equal(h.textarea.dataset.annotationPending, "true");
+  await h.flushTimers();
+  assert.deepEqual(sent, ["A", "B"]);
+  assert.equal(h.storageValues.size, 0);
+  h.controller.dispose();
+});
+
+test("input debounces for 500 ms and blur flushes the current edit immediately", async () => {
+  let calls = 0;
+  const h = createAutosaveHarness(async () => { calls++; return successResponse; });
+  h.textarea.value = "A";
+  h.textarea.dispatchEvent(new Event("input"));
+  h.textarea.value = "B";
+  h.textarea.dispatchEvent(new Event("input"));
+  assert.equal(calls, 0);
+  assert.equal(h.timers.size, 1);
+  assert.deepEqual(h.delays, [500, 500]);
+  h.textarea.dispatchEvent(new Event("blur"));
+  assert.equal(h.delays.at(-1), 0);
+  assert.equal(h.timers.size, 1);
+  await h.flushTimers();
+  assert.equal(calls, 1);
+  assert.equal(h.storageValues.size, 0);
+  h.controller.dispose();
+});
+
+test("a stale successful revision becomes a base, never a confirmation of A -> B -> A", async () => {
+  const requests = [];
+  const h = createAutosaveHarness(payload => new Promise(resolve => { requests.push({ payload, resolve }); }), {
+    version: { anotacao_revisoes: ["a".repeat(32)] },
+  });
+  h.textarea.value = "A";
+  h.textarea.dispatchEvent(new Event("input"));
+  await h.flushTimers();
+  h.textarea.value = "B";
+  h.textarea.dispatchEvent(new Event("input"));
+  h.textarea.value = "A";
+  h.textarea.dispatchEvent(new Event("input"));
+  requests[0].resolve({ ok: true, json: async () => ({ anotacao_revisoes: [requests[0].payload.revisionId] }) });
+  await new Promise(resolve => setImmediate(resolve));
+  assert.equal(h.textarea.dataset.annotationPending, "true");
+  await h.flushTimers();
+  assert.equal(requests.length, 2);
+  assert.deepEqual(requests[1].payload.baseRevisions, [requests[0].payload.revisionId]);
+  assert.notEqual(requests[1].payload.revisionId, requests[0].payload.revisionId);
+  assert.equal(JSON.parse([...h.storageValues.values()][0]).text, "A");
+  requests[1].resolve({ ok: true, json: async () => ({ anotacao_revisoes: [requests[1].payload.revisionId] }) });
+  await new Promise(resolve => setImmediate(resolve));
+  await h.flushTimers();
+  assert.equal(requests.length, 2);
+  assert.equal(h.storageValues.size, 0);
+  h.controller.dispose();
+});
+
+test("an older field cannot clear a newer pending draft or its navigation guard", async () => {
+  const options = { eventId: "shared-pending", storageValues: new Map() };
+  let finishOld, finishNew;
+  const first = createAutosaveHarness(() => new Promise(resolve => { finishOld = resolve; }), options);
+  const second = createAutosaveHarness(() => new Promise(resolve => { finishNew = resolve; }), options);
+  first.textarea.value = "A";
+  first.textarea.dispatchEvent(new Event("input"));
+  await first.flushTimers();
+  second.textarea.value = "B";
+  second.textarea.dispatchEvent(new Event("input"));
+  await second.flushTimers();
+  finishOld(successResponse);
+  await new Promise(resolve => setImmediate(resolve));
+  assert.equal([...second.storageValues.values()][0], "B");
+  assert.equal(second.textarea.dataset.annotationPending, "true");
+  const blocked = new Event("beforeunload", { cancelable: true });
+  second.windowObject.dispatchEvent(blocked);
+  assert.equal(blocked.defaultPrevented, true);
+  finishNew(successResponse);
+  await new Promise(resolve => setImmediate(resolve));
+  assert.equal(second.storageValues.size, 0);
+  const allowed = new Event("beforeunload", { cancelable: true });
+  second.windowObject.dispatchEvent(allowed);
+  assert.equal(allowed.defaultPrevented, false);
+  first.controller.dispose();
+  second.controller.dispose();
+});
+
+test("HTTP 409 preserves the draft with no automatic resend loop and permits a manual retry", async () => {
+  let calls = 0;
+  const h = createAutosaveHarness(async () => ++calls === 1 ? errorResponse(409) : successResponse);
+  h.textarea.value = "Preservar";
+  h.textarea.dispatchEvent(new Event("input"));
+  await h.flushTimers();
+  assert.equal(calls, 1);
+  assert.equal(h.status.textContent, "HTTP 409");
+  assert.equal(h.storageValues.size, 1);
+  assert.equal(h.retryButton.hidden, false);
+  assert.equal(h.timers.size, 0);
+  h.retryButton.dispatchEvent(new Event("click"));
+  await h.flushTimers();
+  assert.equal(calls, 2);
+  assert.equal(h.storageValues.size, 0);
+  h.controller.dispose();
+});
+
+for (const invalid of ["malformed JSON", "empty acknowledgement", "explicit failure", "wrong revision", "conflict without revisions"]) {
+  test(`${invalid} never confirms a versioned save and retries remain bounded`, async () => {
+    const sent = [];
+    let recovered = false;
+    const h = createAutosaveHarness(async payload => {
+      sent.push(payload);
+      return {
+        ok: true,
+        json: async () => {
+          if (recovered) return { anotacao_revisoes: [payload.revisionId] };
+          if (invalid === "malformed JSON") throw new SyntaxError("invalid JSON");
+          if (invalid === "explicit failure") return { sucesso: false, anotacao_revisoes: [payload.revisionId] };
+          if (invalid === "wrong revision") return { sucesso: true, anotacao_revisoes: ["f".repeat(32)] };
+          if (invalid === "conflict without revisions") return { sucesso: true, anotacao_conflito: true };
+          return {};
+        },
+      };
+    }, { version: { anotacao_revisoes: [] } });
+    h.textarea.value = "Preservar";
+    h.textarea.dispatchEvent(new Event("input"));
+    await h.flushTimers();
+    assert.equal(sent.length, 4);
+    assert.equal(new Set(sent.map(p => p.revisionId)).size, 1);
+    assert.equal(h.textarea.dataset.annotationPending, "true");
+    assert.equal(h.storageValues.size, 1);
+    assert.equal(h.retryButton.hidden, false);
+    assert.equal(h.timers.size, 0);
+    recovered = true;
+    h.retryButton.dispatchEvent(new Event("click"));
+    await h.flushTimers();
+    assert.equal(sent.length, 5);
+    assert.equal(new Set(sent.map(p => p.revisionId)).size, 1);
+    assert.equal(h.storageValues.size, 0);
+    h.controller.dispose();
+  });
+}
+
+test("an invalid stale acknowledgement cannot become a causal base for the latest edit", async () => {
+  let finish;
+  const sent = [];
+  const h = createAutosaveHarness(payload => {
+    sent.push(payload);
+    return sent.length === 1
+      ? new Promise(resolve => { finish = resolve; })
+      : Promise.resolve({ ok: true, json: async () => ({ anotacao_revisoes: [payload.revisionId] }) });
+  }, { version: { anotacao_revisoes: ["a".repeat(32)] } });
+  h.textarea.value = "A";
+  h.textarea.dispatchEvent(new Event("input"));
+  await h.flushTimers();
+  h.textarea.value = "B";
+  h.textarea.dispatchEvent(new Event("input"));
+  finish({ ok: true, json: async () => ({ sucesso: false, anotacao_revisoes: ["f".repeat(32)] }) });
+  await new Promise(resolve => setImmediate(resolve));
+  await h.flushTimers();
+  assert.equal(sent.length, 2);
+  assert.deepEqual(sent[1].baseRevisions, ["a".repeat(32)]);
+  assert.equal(h.storageValues.size, 0);
+  h.controller.dispose();
+});
+
+for (const outcome of ["success", "failure"]) test(`a late ${outcome} from another field cannot overwrite the current field`, async () => {
+  const options = { eventId: "shared-" + outcome, storageValues: new Map(), version: { anotacao_revisoes: [] } };
+  let finishOld;
+  let finishNew;
+  const first = createAutosaveHarness(() => new Promise((resolve, reject) => { finishOld = { resolve, reject }; }), options);
+  first.textarea.value = "A";
+  first.textarea.dispatchEvent(new Event("input"));
+  await first.flushTimers();
+  const second = createAutosaveHarness(payload => new Promise(resolve => {
+    finishNew = () => resolve({ ok: true, json: async () => ({ anotacao_revisoes: [payload.revisionId] }) });
+  }), options);
+  second.textarea.value = "B";
+  second.textarea.dispatchEvent(new Event("input"));
+  await second.flushTimers();
+  finishNew();
+  await new Promise(resolve => setImmediate(resolve));
+  assert.equal(second.storageValues.size, 0);
+  const oldStatus = first.status.textContent;
+  if (outcome === "success") {
+    const data = { anotacao_conflito: true, anotacao_revisoes: ["a".repeat(32)] };
+    finishOld.resolve({ ok: true, json: async () => data, clone: () => ({ json: async () => data }) });
+  } else finishOld.reject(new TypeError("offline"));
+  await new Promise(resolve => setImmediate(resolve));
+  await first.flushTimers();
+  assert.equal(first.status.textContent, oldStatus);
+  assert.deepEqual(JSON.parse(first.textarea.dataset.annotationVersion), { anotacao_revisoes: [] });
+  assert.equal(second.status.textContent, "Salvo automaticamente");
+  assert.equal(second.textarea.dataset.annotationPending, "false");
+  assert.equal(second.storageValues.size, 0);
+  first.controller.dispose();
+  second.controller.dispose();
+});
+
+for (const detached of [false, true]) test(`late responses cannot mutate a ${detached ? "detached" : "disposed"} component`, async () => {
+  let finish;
+  const options = { eventId: "unmounted-" + detached, storageValues: new Map() };
+  const h = createAutosaveHarness(() => new Promise(resolve => { finish = resolve; }), options);
+  h.textarea.value = "Rascunho";
+  h.textarea.dispatchEvent(new Event("input"));
+  await h.flushTimers();
+  const oldStatus = h.status.textContent;
+  if (detached) h.textarea.isConnected = false;
+  else h.controller.dispose();
+  finish(successResponse);
+  await new Promise(resolve => setImmediate(resolve));
+  assert.equal(h.status.textContent, oldStatus);
+  assert.equal(h.storageValues.size, 1);
+  assert.equal(h.timers.size, 0);
+  h.controller.dispose();
+  const reopened = createAutosaveHarness(async () => successResponse, options);
+  await reopened.flushTimers();
+  assert.equal(reopened.storageValues.size, 0);
+  reopened.controller.dispose();
 });
 
 test("distinguishes a locally saved annotation that is still waiting to synchronize", async () => {

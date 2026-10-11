@@ -68,7 +68,7 @@ test("conflict alternatives use text nodes and require explicit resolution, incl
   const sent = [];
   const h = harness(conflict, async payload => {
     sent.push(payload);
-    return response({ anotacao_revisoes: ["c".repeat(32)], anotacao_conflito: false });
+    return response({ anotacao_revisoes: [payload.revisionId], anotacao_conflito: false });
   });
   try {
     assert.equal(h.textarea.readOnly, true);
