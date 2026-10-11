@@ -2905,14 +2905,8 @@
 
     function obterFiltrosChamados() {
       return {
-        relation: document.getElementById("relacao-acompanhamento-chamados").value || "",
-        status: document.getElementById("status-acompanhamento-chamados").value || "",
-        queue: document.getElementById("fila-acompanhamento-chamados").value || "",
-        city: document.getElementById("cidade-acompanhamento-chamados").value || "",
-        provider: document.getElementById("atendimento-acompanhamento-chamados").value || "",
         search: document.getElementById("filtro-acompanhamento-chamados").value.trim(),
         stale_days: 3,
-        age_filter: document.getElementById("idade-acompanhamento-chamados").value || "",
         attention_only: Boolean(document.getElementById("somente-atencao-chamados").checked),
       };
     }
@@ -2949,23 +2943,6 @@
       const ultimaUtc = Date.UTC(ultima.getFullYear(), ultima.getMonth(), ultima.getDate());
       const dias = Math.max(0, Math.floor((hojeUtc - ultimaUtc) / 86400000));
       return { encerrado: false, dias, rotulo: dias === 1 ? "Sem atualização há 1 dia" : `Sem atualização há ${dias} dias` };
-    }
-
-    function atualizarOpcoesFiltroChamados(id, values, placeholder) {
-      const select = document.getElementById(id);
-      const previous = select.value;
-      const unique = [...new Set(values.filter(Boolean))].sort((a, b) => a.localeCompare(b, "pt-BR"));
-      const empty = document.createElement("option");
-      empty.value = "";
-      empty.textContent = placeholder;
-      const options = unique.map(value => {
-        const option = document.createElement("option");
-        option.value = value;
-        option.textContent = value;
-        return option;
-      });
-      select.replaceChildren(empty, ...options);
-      select.value = unique.includes(previous) ? previous : "";
     }
 
     function renderizarHistoricoAcompanhamentoChamados(data) {
@@ -3134,38 +3111,9 @@
 
       const filters = obterFiltrosChamados();
       const query = normalizarFiltroChamados(filters.search);
-      const statuses = [];
-      const queues = [];
-      const cities = [];
-      const providers = [];
-      (Array.isArray(data.chamados) ? data.chamados : []).forEach(record => (record.oracle || []).forEach(ticket => {
-        if (ticket.status) statuses.push(ticket.status);
-        if (ticket.fila) queues.push(ticket.fila);
-      }));
-      (Array.isArray(data.chamados) ? data.chamados : []).forEach(record => {
-        cities.push(...cidadesDoChamado(record));
-        providers.push(...atendimentosDoChamado(record));
-      });
-      atualizarOpcoesFiltroChamados("status-acompanhamento-chamados", statuses, "Todos");
-      atualizarOpcoesFiltroChamados("fila-acompanhamento-chamados", queues, "Todas");
-      atualizarOpcoesFiltroChamados("cidade-acompanhamento-chamados", cities, "Todas");
-      atualizarOpcoesFiltroChamados("atendimento-acompanhamento-chamados", providers, "Todos");
-      const activeAdvancedFilters = [filters.relation, filters.status, filters.queue, filters.city, filters.provider, filters.age_filter].filter(Boolean).length;
-      document.getElementById("indicador-filtros-acompanhamento-chamados").textContent = activeAdvancedFilters
-        ? `${activeAdvancedFilters} filtro${activeAdvancedFilters === 1 ? " ativo" : "s ativos"}`
-        : "Relação, status, fila, cidade e atendimento";
       const records = (Array.isArray(data.chamados) ? data.chamados : []).filter(record => {
-        const oracle = Array.isArray(record.oracle) ? record.oracle : [];
         const attention = classificarAtencaoChamado(record);
-        if (filters.relation && record.relacao !== filters.relation) return false;
-        if (filters.city && !cidadesDoChamado(record).some(city => normalizarFiltroChamados(city) === normalizarFiltroChamados(filters.city))) return false;
-        if (filters.provider && !atendimentosDoChamado(record).some(provider => normalizarFiltroChamados(provider) === normalizarFiltroChamados(filters.provider))) return false;
-        if ((filters.status || filters.queue) && !oracle.some(ticket =>
-          (!filters.status || normalizarFiltroChamados(ticket.status) === normalizarFiltroChamados(filters.status))
-          && (!filters.queue || normalizarFiltroChamados(ticket.fila) === normalizarFiltroChamados(filters.queue)))) return false;
         if (filters.attention_only && !attention.em_atencao) return false;
-        if (filters.age_filter === "sem_data" && (!attention.desatualizado || attention.dias_sem_atualizacao !== null)) return false;
-        if (/^\d+$/.test(filters.age_filter) && (attention.dias_sem_atualizacao === null || attention.dias_sem_atualizacao < Number(filters.age_filter))) return false;
         const searchable = normalizarFiltroChamados(valoresChamado(record).join(" "));
         return !query || searchable.includes(query);
       });
@@ -3299,9 +3247,7 @@
     }
 
     function limparFiltrosAcompanhamentoChamados() {
-      ["filtro-acompanhamento-chamados", "relacao-acompanhamento-chamados", "status-acompanhamento-chamados", "fila-acompanhamento-chamados", "cidade-acompanhamento-chamados", "atendimento-acompanhamento-chamados", "idade-acompanhamento-chamados"].forEach(id => {
-        document.getElementById(id).value = "";
-      });
+      document.getElementById("filtro-acompanhamento-chamados").value = "";
       document.getElementById("somente-atencao-chamados").checked = false;
       renderizarAcompanhamentoChamados();
     }
@@ -3444,7 +3390,7 @@
       const form = document.getElementById("form-importar-acompanhamento-chamados");
       if (!form.dataset.bound) {
         form.addEventListener("submit", importarPlanilhasChamados);
-        ["filtro-acompanhamento-chamados", "relacao-acompanhamento-chamados", "status-acompanhamento-chamados", "fila-acompanhamento-chamados", "cidade-acompanhamento-chamados", "atendimento-acompanhamento-chamados", "idade-acompanhamento-chamados", "somente-atencao-chamados"].forEach(id => {
+        ["filtro-acompanhamento-chamados", "somente-atencao-chamados"].forEach(id => {
           const control = document.getElementById(id);
           control.addEventListener(id === "filtro-acompanhamento-chamados" ? "input" : "change", renderizarAcompanhamentoChamados);
         });

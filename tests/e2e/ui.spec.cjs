@@ -158,6 +158,16 @@ test("ticket tracking imports both workbooks and relates each serial to its OS",
   await page.getByRole("button", { name: "Acompanhamento de Chamados" }).click();
   const dialog = page.locator("#modal-acompanhamento-chamados");
   await expect(dialog).toBeVisible();
+  await expect(dialog.locator("#filtros-avancados-acompanhamento-chamados")).toHaveCount(0);
+  await expect(dialog.locator("#filtro-acompanhamento-chamados")).toBeVisible();
+  await expect(dialog.locator("#somente-atencao-chamados")).toBeVisible();
+  await expect(dialog.locator("#triagem-diaria-acompanhamento-chamados")).toBeVisible();
+  const oraclePortalLink = dialog.getByRole("link", { name: "Abrir portal Oracle AgentWeb" });
+  const simpressPortalLink = dialog.getByRole("link", { name: "Abrir acompanhamento de chamados Simpress" });
+  await expect(oraclePortalLink).toHaveAttribute("href", "https://simpress.custhelp.com/AgentWeb/");
+  await expect(simpressPortalLink).toHaveAttribute("href", "https://ux.simpress.com.br/equipamentos/acompanhamento");
+  await expect(oraclePortalLink.locator("svg")).toBeVisible();
+  await expect(simpressPortalLink.locator("svg")).toBeVisible();
   const managementPanel = page.locator("#painel-dados-acompanhamento-chamados");
   await expect(managementPanel).not.toHaveAttribute("open", "");
   await managementPanel.locator("summary").click();

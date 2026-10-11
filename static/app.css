@@ -407,11 +407,37 @@
       display: inline-flex; flex: 0 0 auto; width: auto; min-height: 2.25rem; align-items: center; justify-content: center;
       padding: 0.4rem 0.8rem; white-space: nowrap;
     }
+    .ticket-header-actions { display: flex; flex: none; align-items: center; gap: 0.4rem; }
+    .ticket-agent-link {
+      display: inline-flex; min-height: 2rem; align-items: center; justify-content: center; gap: 0.45rem;
+      padding: 0.35rem 0.65rem; border: 1px solid rgba(var(--portal-tint), 0.3); border-radius: 0.6rem;
+      background: rgba(var(--portal-tint), 0.1); color: var(--portal-text); font-size: 0.7rem; font-weight: 600; white-space: nowrap;
+      transition: background-color 0.15s ease, border-color 0.15s ease;
+    }
+    .ticket-agent-link--oracle { --portal-tint: 167, 139, 250; --portal-text: #ddd6fe; }
+    .ticket-agent-link--simpress { --portal-tint: 45, 212, 191; --portal-text: #99f6e4; }
+    .ticket-agent-link:hover { border-color: rgba(var(--portal-tint), 0.55); background: rgba(var(--portal-tint), 0.18); }
+    .ticket-agent-link:focus-visible { outline: 2px solid rgba(var(--portal-tint), 0.8); outline-offset: 2px; }
+    .ticket-agent-link svg { width: 0.85rem; height: 0.85rem; flex: none; }
+    .spreadsheet-source-shortcuts { display: flex; flex-wrap: wrap; align-items: center; gap: 0.45rem; }
+    .spreadsheet-source-link {
+      display: inline-flex; min-height: 2rem; align-items: center; justify-content: center; gap: 0.4rem;
+      padding: 0.35rem 0.65rem; border: 1px solid rgba(var(--source-tint), 0.3); border-radius: 0.6rem;
+      background: rgba(var(--source-tint), 0.1); color: var(--source-text); font-size: 0.7rem; font-weight: 600; white-space: nowrap;
+      transition: background-color 0.15s ease, border-color 0.15s ease;
+    }
+    .spreadsheet-source-link--endpoint { --source-tint: 56, 189, 248; --source-text: #bae6fd; }
+    .spreadsheet-source-link--simpress { --source-tint: 45, 212, 191; --source-text: #99f6e4; }
+    .spreadsheet-source-link:hover { border-color: rgba(var(--source-tint), 0.55); background: rgba(var(--source-tint), 0.18); }
+    .spreadsheet-source-link:focus-visible { outline: 2px solid rgba(var(--source-tint), 0.8); outline-offset: 2px; }
+    .spreadsheet-source-link svg { width: 0.85rem; height: 0.85rem; flex: none; }
     @media (max-width: 640px) {
       .ticket-filter-search { flex-basis: 100%; min-width: 100%; }
       .ticket-filter-attention { margin-right: auto; }
     }
     @media (max-width: 420px) {
+      .ticket-header-actions { gap: 0.25rem; }
+      .ticket-agent-link { gap: 0.3rem; padding-inline: 0.45rem; font-size: 0.65rem; }
       .ticket-filter-attention { gap: 0.35rem; padding-inline: 0.5rem; font-size: 0.65rem; }
       .ticket-filter-action { padding-inline: 0.55rem; font-size: 0.68rem; }
     }
