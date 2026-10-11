@@ -1,6 +1,6 @@
 """Tests for ticket filters, attention, snapshots, and spreadsheet export."""
 
-from datetime import date
+from datetime import date, datetime
 from io import BytesIO
 import unittest
 
@@ -44,6 +44,104 @@ def _ticket(
 
 
 class TicketReportingTests(unittest.TestCase):
+    def test_export_summary_external_text_is_literal_in_every_metadata_and_filter(self):
+        filter_labels = {
+            "relation": "Relação", "status": "Status Oracle", "queue": "Fila Oracle",
+            "city": "Cidade", "provider": "Atendimento", "age_filter": "Atualização",
+            "search": "Busca", "attention_only": "Somente atenção (3 dias)",
+        }
+        for value in ("=1+1", "+1+1", "-1+1", "@SUM(A1)", "texto comum.xlsx", " \t=1+1"):
+            with self.subTest(value=value):
+                snapshot = {"atualizado_em": value, "fontes": {
+                    "simpress": {"arquivo": value}, "oracle": {"arquivo": value},
+                }}
+                content = build_ticket_workbook(snapshot, [_ticket()], dict.fromkeys(filter_labels, value))
+                workbook = openpyxl.load_workbook(BytesIO(content), data_only=False, keep_links=False)
+                try:
+                    rows = {row[0].value: row[1] for row in workbook["Resumo"].iter_rows(min_row=2)}
+                    expected = "'" + value if value.lstrip().startswith(("=", "+", "-", "@")) else value
+                    for label in ("Versão importada", "Arquivo Simpress", "Arquivo Oracle", *filter_labels.values()):
+                        with self.subTest(label=label):
+                            self.assertEqual(rows[label].data_type, "s")
+                            self.assertEqual(rows[label].value, expected)
+                            self.assertIsNone(rows[label].hyperlink)
+                    self.assertEqual(rows["Séries no resultado"].value, 1)
+                    self.assertEqual(rows["Séries no resultado"].data_type, "n")
+                    self.assertEqual(workbook["Resumo"].column_dimensions["A"].width, 24)
+                    self.assertEqual(workbook["Resumo"].column_dimensions["B"].width, 48)
+                finally:
+                    workbook.close()
+
+    def test_export_preserves_native_summary_dates_and_numeric_counts(self):
+        for timestamp in (date(2026, 10, 11), datetime(2026, 10, 11, 15, 30)):
+            with self.subTest(timestamp=timestamp):
+                content = build_ticket_workbook({"atualizado_em": timestamp}, [_ticket(), _ticket("SN-2")], {
+                    "age_filter": 7, "attention_only": True, "search": "", "status": None,
+                })
+                workbook = openpyxl.load_workbook(BytesIO(content), data_only=False, keep_links=False)
+                try:
+                    sheet = workbook["Resumo"]
+                    expected = timestamp if isinstance(timestamp, datetime) else datetime(2026, 10, 11)
+                    self.assertEqual(sheet["B2"].value, expected)
+                    self.assertEqual(sheet["B2"].data_type, "d")
+                    self.assertEqual(sheet["B5"].value, 2)
+                    self.assertEqual(sheet["B5"].data_type, "n")
+                    rows = {row[0].value: row[1].value for row in sheet.iter_rows(min_row=2)}
+                    self.assertEqual(rows["Atualização"], "7")
+                    self.assertEqual(rows["Somente atenção (3 dias)"], "True")
+                    self.assertNotIn("Busca", rows)
+                    self.assertNotIn("Status Oracle", rows)
+                finally:
+                    workbook.close()
+
+    def test_export_detail_review_and_timeline_inputs_remain_literal_and_keep_layout(self):
+        for value in ("=1+1", "+1+1", "-1+1", "@SUM(A1)", "texto comum", " \t=1+1"):
+            with self.subTest(value=value):
+                ticket = _ticket(value, last_update=value, order=value)
+                ticket["simpress"].update({field: [value] for field in (
+                    "pedidos", "ordens_venda", "chamados_cliente", "status", "datas_pedido", "modelos",
+                    "descricoes_produto", "cidades_entrega", "enderecos_entrega", "previsoes_entrega",
+                )})
+                ticket["simpress"]["pedido_em_andamento"] = True
+                ticket["oracle"][0].update(dict.fromkeys((
+                    "solicitacao", "logradouro", "numero_endereco", "bairro", "cidade", "atendido_pela_inibicao",
+                    "nome_filial", "status", "sub_status", "fila", "fase_atendimento", "ultima_atualizacao",
+                    "status_entregas", "status_atividades", "assunto", "descricao",
+                ), value))
+                event = {"atualizado_em": value, "tipo": value, "anotacao": value, "estado": {
+                    field: [value] for field in (
+                        "pedidos_simpress", "solicitacoes_oracle", "ordens_venda_simpress",
+                        "ordens_servico_simpress", "ordens_servico_oracle", "status_simpress", "status_oracle",
+                        "filas_oracle", "atualizacoes_oracle",
+                    )
+                }}
+                content = build_ticket_workbook({}, [ticket], {}, timelines={value: [event]})
+                workbook = openpyxl.load_workbook(BytesIO(content), data_only=False, keep_links=False)
+                try:
+                    expected = "'" + value if value.lstrip().startswith(("=", "+", "-", "@")) else value
+                    self.assertEqual(workbook.sheetnames, ["Resumo", "Chamados", "Conferência das relações", "Linha do tempo"])
+                    for name, columns in (("Chamados", 37), ("Conferência das relações", 10), ("Linha do tempo", 13)):
+                        sheet = workbook[name]
+                        self.assertEqual(sheet.max_row, 2)
+                        self.assertEqual(sheet.max_column, columns)
+                        self.assertEqual(sheet.freeze_panes, "A2")
+                        self.assertEqual(sheet.auto_filter.ref, sheet.dimensions)
+                        self.assertEqual(sheet.row_dimensions[1].height, 30)
+                        self.assertEqual(sheet["A2"].value, expected)
+                        self.assertTrue(sheet["A1"].font.bold)
+                        for row in sheet:
+                            for cell in row:
+                                self.assertNotEqual(cell.data_type, "f", (name, cell.coordinate))
+                                self.assertIsNone(cell.hyperlink)
+                    self.assertEqual(workbook["Chamados"]["D2"].value, expected)
+                    # The provenance view already trims surrounding whitespace.
+                    review_expected = "'" + value.strip() if value.strip().startswith(("=", "+", "-", "@")) else value.strip()
+                    self.assertEqual(workbook["Conferência das relações"]["E2"].value, review_expected)
+                    self.assertEqual(workbook["Linha do tempo"]["B2"].value, expected)
+                    self.assertEqual(workbook["Linha do tempo"]["M2"].value, expected)
+                finally:
+                    workbook.close()
+
     def test_filters_match_relation_status_queue_search_and_age(self):
         tickets = [
             _ticket(),
