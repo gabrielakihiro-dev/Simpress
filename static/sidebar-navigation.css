@@ -762,6 +762,7 @@ body.sidebar-drawer-open {
     width: 100%;
     min-width: 0;
     margin-left: 0 !important;
+    transition: none;
   }
 
   .header-inner {
@@ -824,6 +825,7 @@ body.sidebar-drawer-open {
 
   .quick-actions {
     left: 0 !important;
+    transition: none;
   }
 
   .simpress-app-shell[data-sidebar-collapsed="true"] .sidebar-header {
