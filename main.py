@@ -152,6 +152,7 @@ from routers.system import SystemRouteServices, create_system_router
 from routers.units import UnidadePayload, UnitRouteServices, create_units_router
 from persistence.config import PersistenceError, PersistenceSettings
 from persistence.boundary import PersistenceBoundaryMiddleware, idempotency_key
+from security.network import is_direct_loopback_request
 
 PERSISTENCE_SETTINGS = PersistenceSettings.from_environment()
 from security.config import AuthSettings
@@ -1719,7 +1720,7 @@ app.add_middleware(PersistenceBoundaryMiddleware, is_postgres=lambda: PERSISTENC
 
 
 class LocalRequestSafetyMiddleware:
-    """Restrict local request authorities, cap uploads, and hide internal exceptions."""
+    """Restrict local peers and authorities, cap uploads, and hide exceptions."""
 
     def __init__(self, app):
         self.app = app
@@ -1727,6 +1728,14 @@ class LocalRequestSafetyMiddleware:
     async def __call__(self, scope, receive, send):
         if scope["type"] != "http":
             await self.app(scope, receive, send)
+            return
+
+        if not is_direct_loopback_request(scope):
+            response = JSONResponse(
+                status_code=403,
+                content={"detail": "A aplicação aceita somente conexões locais diretas, sem proxy."},
+            )
+            await response(scope, receive, send)
             return
 
         path = scope.get("path", "")
