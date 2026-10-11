@@ -43,6 +43,8 @@ from app_config import (
     ALIAS_HISTORY_FILE,
     AUTOMATIC_INVENTORY_IMPORT_POLL_SECONDS,
     AUTOMATIC_INVENTORY_INBOX_DIR,
+    AUTOMATIC_TICKET_IMPORT_POLL_SECONDS,
+    AUTOMATIC_TICKET_INBOX_DIR,
     BASE_DIR,
     COMPARISON_HISTORY_FILE,
     CUSTOM_UNIDADES_FILE,
@@ -85,7 +87,7 @@ from routers.transfers import (
     create_transfer_router,
     formatar_telefone_brasileiro,
 )
-from routers.operations import create_operations_router
+from routers.operations import MAX_TICKET_WORKBOOK_BYTES, create_operations_router
 from xlsx_safety import XlsxLimitExceeded, XlsxPackageError, validate_xlsx
 
 from domains.inventory_comparison import (
@@ -120,6 +122,10 @@ from domains.inventory_comparison import (
 from domains.inventory_inbox import (
     AutomaticInventoryInbox,
     automatic_inventory_import_worker as run_automatic_inventory_import_worker,
+)
+from domains.ticket_inbox import (
+    AutomaticTicketInbox,
+    automatic_ticket_import_worker as run_automatic_ticket_import_worker,
 )
 from domains.history_annotations import (
     build_history_annotation_record,
@@ -608,19 +614,46 @@ def _check_startup_xlsx(path: Optional[Path]) -> Dict[str, Any]:
     return {"available": True, "file": path.name, "reason": "OK"}
 
 
+def _check_startup_ticket_report(path: Optional[Path]) -> Dict[str, Any]:
+    """Check ticket history storage while allowing a fresh, not-yet-imported setup."""
+    if path is None:
+        return {"available": False, "file": None, "reason": "arquivo de histórico não configurado"}
+    if not path.exists():
+        return {
+            "available": True,
+            "file": path.name,
+            "reason": "aguardando a primeira importação",
+        }
+    if not path.is_file():
+        return {"available": False, "file": path.name, "reason": "caminho do histórico inválido"}
+
+    try:
+        report = json.loads(path.read_text(encoding="utf-8"))
+    except (OSError, UnicodeError, json.JSONDecodeError):
+        return {"available": False, "file": path.name, "reason": "histórico inacessível ou JSON inválido"}
+    if not isinstance(report, dict) or not isinstance(report.get("chamados"), list):
+        return {"available": False, "file": path.name, "reason": "estrutura do histórico inválida"}
+    return {"available": True, "file": path.name, "reason": "OK"}
+
+
 def get_startup_readiness() -> Dict[str, Any]:
     """Map essential local files to the application functions that need them."""
+    ticket_report_status = _check_startup_ticket_report(TICKET_REPORT_FILE)
     if (backend := postgres_backend()) is not None:
         state = backend.state()
         available = bool(state["equipamentos_cache"])
         reason = "Nenhum lote com equipamentos foi importado no piloto local."
         return {
-            "files": {"inventario_equipamentos": {"available": available, "file": "PostgreSQL local", "reason": "OK" if available else reason}},
+            "files": {
+                "inventario_equipamentos": {"available": available, "file": "PostgreSQL local", "reason": "OK" if available else reason},
+                "historico_chamados": ticket_report_status,
+            },
             "functions": {
                 "consulta_equipamentos": {"available": available, "missing_files": [] if available else [reason]},
                 "comparacao_atualizacao_inventarios": {"available":backend.files.storage is not None,"missing_files":[] if backend.files.storage is not None else ["Storage do piloto não configurado"]},
                 "geracao_transferencia": {"available":state.get("transfer_available",False),"missing_files":[] if state.get("transfer_available") else ["Modelo de transferência privado ausente"]},
                 "exportacao_equipamentos": {"available":state["stats_cache"].get("exportacao_disponivel",False),"missing_files":[] if state["stats_cache"].get("exportacao_disponivel") else [state["stats_cache"].get("exportacao_motivo", "Modelo de exportação ausente")]},
+                "acompanhamento_chamados": {"available": ticket_report_status["available"], "missing_files": [] if ticket_report_status["available"] else [ticket_report_status["reason"]]},
             },
         }
     try:
@@ -677,6 +710,7 @@ def get_startup_readiness() -> Dict[str, Any]:
         "inventario_endpoint": _check_startup_xlsx(ENDPOINT_UPLOAD_FILE),
         "modelo_exportacao": _check_startup_xlsx(EXPORT_MODEL_FILE),
         "catalogos_locais": local_state_status,
+        "historico_chamados": ticket_report_status,
     }
     requirements = {
         "consulta_equipamentos": ["inventario_equipamentos", "catalogos_locais"],
@@ -686,6 +720,7 @@ def get_startup_readiness() -> Dict[str, Any]:
             "inventario_endpoint",
         ],
         "exportacao_equipamentos": ["inventario_equipamentos", "modelo_exportacao"],
+        "acompanhamento_chamados": ["historico_chamados"],
     }
     functions = {
         name: {
@@ -711,10 +746,18 @@ def report_startup_readiness() -> None:
         "inventario_endpoint": "Inventário InvAllComputersSummary",
         "modelo_exportacao": "Modelo de exportação",
         "catalogos_locais": "Catálogos e históricos locais",
+        "historico_chamados": "Histórico do acompanhamento de chamados",
     }
     print("[PRONTIDÃO] Verificação dos arquivos locais:")
     for key, status in report["files"].items():
-        state = "PACOTE XLSX válido" if status["available"] else f"INDISPONÍVEL ({status['reason']})"
+        if not status["available"]:
+            state = f"INDISPONÍVEL ({status['reason']})"
+        elif key == "historico_chamados":
+            state = "JSON válido" if status["reason"] == "OK" else status["reason"]
+        elif key == "catalogos_locais":
+            state = "catálogos e históricos disponíveis"
+        else:
+            state = "PACOTE XLSX válido"
         filename = status["file"] or "arquivo não localizado"
         print(f"[PRONTIDÃO] {labels[key]} — {filename}: {state}")
 
@@ -723,10 +766,16 @@ def report_startup_readiness() -> None:
         "geracao_transferencia": "Geração de planilha de transferência",
         "comparacao_atualizacao_inventarios": "Comparação e atualização de inventários",
         "exportacao_equipamentos": "Exportação de equipamentos",
+        "acompanhamento_chamados": "Acompanhamento de chamados",
     }
     for key, status in report["functions"].items():
         if status["available"]:
-            print(f"[PRONTIDÃO] {function_labels[key]}: arquivos necessários presentes (checagem estrutural).")
+            detail = (
+                "armazenamento do histórico disponível"
+                if key == "acompanhamento_chamados"
+                else "arquivos necessários presentes (checagem estrutural)"
+            )
+            print(f"[PRONTIDÃO] {function_labels[key]}: {detail}.")
         else:
             missing = ", ".join(status["missing_files"])
             print(f"[PRONTIDÃO] {function_labels[key]}: INDISPONÍVEL; dependência ausente ou inválida: {missing}.")
@@ -1504,6 +1553,7 @@ async def lifespan(app: FastAPI):
         logger.exception("Falha ao migrar anotações legadas do histórico de planilhas.")
     annotation_sync_task = asyncio.create_task(_history_annotation_sync_worker())
     automatic_import_task = asyncio.create_task(_automatic_inventory_import_worker())
+    automatic_ticket_import_task = asyncio.create_task(_automatic_ticket_import_worker())
     try:
         prune_result = prune_expired_histories()
         if any(prune_result.values()):
@@ -1520,9 +1570,11 @@ async def lifespan(app: FastAPI):
     finally:
         annotation_sync_task.cancel()
         automatic_import_task.cancel()
+        automatic_ticket_import_task.cancel()
         await asyncio.gather(
             annotation_sync_task,
             automatic_import_task,
+            automatic_ticket_import_task,
             return_exceptions=True,
         )
 
@@ -1547,6 +1599,38 @@ async def _automatic_inventory_import_worker() -> None:
     await run_automatic_inventory_import_worker(
         inbox,
         poll_interval_seconds=AUTOMATIC_INVENTORY_IMPORT_POLL_SECONDS,
+    )
+
+
+async def _automatic_ticket_import_worker() -> None:
+    endpoint = next((
+        route.endpoint
+        for route in operations_router.routes
+        if getattr(route, "path", None) == "/api/operacoes/chamados/importar"
+        and "POST" in getattr(route, "methods", set())
+    ), None)
+    if endpoint is None:
+        raise RuntimeError("A rota de importação de chamados não está registrada.")
+
+    def import_batch(batch_id: str, simpress_name: str, simpress_bytes: bytes, oracle_name: str, oracle_bytes: bytes):
+        simpress_upload = StarletteUploadFile(filename=simpress_name, file=io.BytesIO(simpress_bytes))
+        oracle_upload = StarletteUploadFile(filename=oracle_name, file=io.BytesIO(oracle_bytes))
+        return endpoint(
+            simpress_file=simpress_upload,
+            oracle_file=oracle_upload,
+            automatic_import_id=batch_id,
+        )
+
+    inbox = AutomaticTicketInbox(
+        root=AUTOMATIC_TICKET_INBOX_DIR,
+        report_path=TICKET_REPORT_FILE,
+        max_upload_bytes=MAX_TICKET_WORKBOOK_BYTES,
+        import_batch=import_batch,
+    )
+    logger.info("Entrada automática de chamados ativa em %s.", AUTOMATIC_TICKET_INBOX_DIR)
+    await run_automatic_ticket_import_worker(
+        inbox,
+        poll_interval_seconds=AUTOMATIC_TICKET_IMPORT_POLL_SECONDS,
     )
 
 
@@ -3691,7 +3775,7 @@ restaurar_comparacao_historica = _inventory_history_exports["restaurar_comparaca
 visualizar_restauracao_comparacao = _inventory_history_exports["visualizar_restauracao_comparacao"]
 app.include_router(inventory_history_router)
 
-app.include_router(create_operations_router(
+operations_router = create_operations_router(
     load_comparison_history=load_comparison_history,
     comparison_history_for_display=comparison_history_for_display,
     ticket_report_path=lambda: TICKET_REPORT_FILE,
@@ -3700,7 +3784,8 @@ app.include_router(create_operations_router(
     local_annotation_outbox_directory=lambda: LOCAL_HISTORY_ANNOTATION_OUTBOX_DIR,
     history_annotations_sync_enabled=lambda: postgres_backend() is not None or HISTORY_ANNOTATIONS_SYNC_ENABLED,
     load_history_annotation_records=lambda directory: load_history_annotations(directory),
-))
+)
+app.include_router(operations_router)
 
 from persistence.routes import create_files_router
 app.include_router(create_files_router(postgres_backend,MAX_UPLOAD_BYTES))

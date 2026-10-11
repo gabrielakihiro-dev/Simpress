@@ -275,7 +275,7 @@ def create_operations_router(
         report = load_ticket_report()
         snapshots = displayed_ticket_snapshots(report)
         current = next((item for item in reversed(snapshots) if item), None)
-        response = {key: value for key, value in report.items() if key != "historico"}
+        response = {key: value for key, value in report.items() if key not in {"historico", "importacoes_automaticas"}}
         response = normalize_ticket_snapshot(response)
         response["snapshot_id"] = current.get("id", "") if current else ""
         response["historico"] = [
@@ -444,6 +444,7 @@ def create_operations_router(
     def import_ticket_workbooks(
         simpress_file: UploadFile = File(...),
         oracle_file: UploadFile = File(...),
+        automatic_import_id: Optional[str] = None,
     ):
         def read_source(upload: UploadFile, source_label: str):
             raw_name = upload.filename or ""
@@ -482,15 +483,30 @@ def create_operations_router(
             "chamados": report.get("chamados", []),
         }
         previous_report = load_ticket_report()
+        automatic_imports = previous_report.get("importacoes_automaticas", [])
+        if not isinstance(automatic_imports, list):
+            automatic_imports = []
+        if automatic_import_id and any(
+            isinstance(item, dict) and item.get("lote_id") == automatic_import_id
+            for item in automatic_imports
+        ):
+            raise HTTPException(status_code=409, detail="Este lote já consta no histórico de chamados.")
         previous_snapshots = displayed_ticket_snapshots(previous_report)
         history = ticket_report_snapshots(previous_report)
         history.append(snapshot)
         report["snapshot_id"] = snapshot["id"]
         report["historico"] = history[-MAX_TICKET_SNAPSHOTS:]
+        report["importacoes_automaticas"] = automatic_imports
+        if automatic_import_id:
+            report["importacoes_automaticas"].append({
+                "lote_id": automatic_import_id,
+                "snapshot_id": snapshot["id"],
+                "atualizado_em": snapshot["atualizado_em"],
+            })
         save_ticket_report(report)
         initialize_ticket_timeline_annotations(previous_snapshots, normalize_ticket_snapshot(snapshot))
         displayed_report = normalize_ticket_snapshot(report)
-        response = {key: value for key, value in displayed_report.items() if key != "historico"}
+        response = {key: value for key, value in displayed_report.items() if key not in {"historico", "importacoes_automaticas"}}
         response["historico"] = [
             ticket_snapshot_metadata(item)
             for item in reversed(displayed_ticket_snapshots(report))

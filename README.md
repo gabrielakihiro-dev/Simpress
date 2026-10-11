@@ -7,6 +7,7 @@ Aplicação web local para consultar equipamentos, preparar transferências Simp
 - Busca por número de série, código de barras, apelido/hostname, modelo ou cidade. A busca completa pode ser filtrada por categoria e cidade.
 - Geração e download da planilha oficial de transferência a partir do modelo local.
 - Acompanhamento de Chamados que relaciona as séries e as OS das exportações Simpress e Oracle, com conferência de divergências.
+- Importação automática desse par de planilhas por lotes em pastas locais, com validação, histórico, proteção contra reimportação e recibos de processamento.
 - Textos prontos para solicitações de transporte, kit de teclado e mouse e defeitos, com opções para copiar o texto e abrir os links correspondentes.
 - Edição de apelidos e de outros campos permitidos do equipamento, com histórico e opção de desfazer alterações de apelido.
 - Comparação e atualização conjunta dos inventários Endpoint e Simpress, com histórico, backups locais e prévia de restauração.
@@ -81,6 +82,7 @@ Antes de iniciar o servidor, a limpeza recupera transações e considera tempor�
 | `historico_comparacoes.json` | `data/state/historico_comparacoes` | Histórico local de comparações. O arquivo, temporários e bloqueios não são versionados. |
 | `historico_chamados.json` | `data/state` | Até 50 versões importadas da relação Simpress/Oracle, com comparação, fila de atenção e exportação filtrada; o arquivo, temporários e bloqueios não são versionados. |
 | Lotes para atualização automática | `data/state/entrada_automatica` | Fila local de entrada, arquivos processados e lotes com falha; não é versionada. |
+| Lotes para chamados Simpress/Oracle | `data/state/entrada_chamados` | Fila local para importar automaticamente o par de planilhas de chamados; os arquivos e resultados ficam fora do Git. |
 | Catálogo de unidades e histórico de apelidos | `data/state` | Estado local da aplicação; não é distribuído pelo Git. |
 
 As planilhas operacionais e o modelo de exportação precisam ser fornecidos localmente. Se estiverem ausentes, somente as funções que dependem desses arquivos ficam indisponíveis; o servidor e as demais áreas continuam acessíveis. Não coloque dados reais no repositório.
@@ -159,9 +161,29 @@ Na pesquisa completa, combine os filtros de categoria e cidade. As categorias s�
 
 Para gerar a planilha, são obrigatórios: série do equipamento; CNPJ e endereço de retirada e entrega; nome, e-mail e telefone do contato de retirada; observações da retirada; nome, e-mail e telefone do destinatário; horário, almoço e observações da entrega. A duração da pausa da unidade de entrega também é obrigatória, exceto quando o horário de almoço indica que o escritório não fecha. O arquivo é preparado para download e não fica guardado como arquivo permanente pelo servidor.
 
-Em **Acompanhamento de Chamados**, importe o Excel **Acompanhamento de Pedidos** exportado da Simpress e o Excel **Gestão de Solicitações** exportado do Oracle. A aplicação relaciona as linhas pelo número de série e apresenta a OS de cada fonte, a solicitação Oracle e seus status. Quando as fontes tiverem OS diferentes para a mesma série, o registro é marcado para conferência. A relação mais recente fica salva no modo local de arquivos.
+Em **Acompanhamento de Chamados**, confira o histórico da relação entre o Excel **Acompanhamento de Pedidos** da Simpress e o Excel **Gestão de Solicitações** do Oracle. A aplicação relaciona as linhas pelo número de série e apresenta a OS de cada fonte, a solicitação Oracle e seus status. Quando as fontes tiverem OS diferentes para a mesma série, o registro é marcado para conferência. Para executar a importação operacional, use a fila local de pastas descrita a seguir; ela não depende do envio de arquivos pelo navegador nem de uma chamada HTTP.
 
 Na aba **Home**, **Mostrar textos para chamados** apresenta textos editáveis relacionados ao equipamento. Use **Copiar** para levar o texto ao chamado; os botões **Link** abrem os sistemas externos correspondentes.
+
+#### Importar chamados pela pasta do projeto
+
+Para executar uma OS, use a fila local em vez do formulário web ou de uma rota HTTP/HTTPS. Crie um lote com identificador exclusivo em `data/state/entrada_chamados/pendentes` e coloque exatamente um arquivo `.xlsx` em cada subpasta `simpress` e `oracle`. Preserve os arquivos de origem; o importador verifica se o par permaneceu estável em duas leituras, valida e reconcilia os workbooks, registra um novo evento no histórico de chamados e move o lote completo para `processadas`. Lotes recusados ficam em `falhas` com `_resultado.json`; nada é apagado. Lotes interrompidos são recuperados na inicialização, e um lote já registrado não é importado novamente.
+
+```text
+data/state/entrada_chamados/pendentes/2026-10-10_os-simpress/
+├── simpress/
+│   └── Acompanhamento_de_pedidos.xlsx
+└── oracle/
+    └── Gestao_de_Solicitacoes.xlsx
+```
+
+O servidor verifica a pasta a cada 10 segundos; com ele ativo, a importação começa após duas verificações estáveis (cerca de 20 segundos). Confirme `status: concluido` em `processadas/<lote>/_resultado.json` e a nova versão no histórico visual. Se o servidor não estiver ativo, processe uma vez pela rotina local:
+
+```powershell
+.\.venv\Scripts\python.exe scripts\process_ticket_inbox.py
+```
+
+O comando usa a mesma validação sem enviar requisições HTTP. Consulte `data/state/entrada_chamados/README.md` para ver o modelo de lote e um exemplo no PowerShell. A variável `SIMPRESS_TICKET_IMPORT_INBOX_DIR` permite definir outra raiz local. A fila funciona no modo de arquivos; não inclui os lotes operacionais no Git.
 
 ### Comparar e atualizar inventários
 
@@ -424,6 +446,7 @@ xlsx_safety.py                      Validação estrutural e limites de pacotes 
 openpyxl_compat.py                  Compatibilidade com arquivos lidos/escritos por openpyxl
 domains/inventory_comparison.py     Normalização e regras de comparação de inventários
 domains/inventory_update.py         Validação, atualização e histórico de inventários
+domains/ticket_inbox.py             Entrada estável, validação e arquivamento de lotes Simpress/Oracle
 domains/equipment_search.py         Normalização, categorização e indexação de equipamentos
 routers/transfers.py                Validação e geração da planilha de transferência
 routers/inventory_history.py        Histórico, resolução e restauração de inventários
@@ -434,6 +457,7 @@ static/                              Interface web, scripts e arquivos locais de
 scripts/copy_ui_assets.cjs           Cópia dos recursos locais para a interface
 scripts/migrate_local_data.py        Migração segura dos dados locais para data/
 scripts/cleanup_local_temps.py       Limpeza conservadora de arquivos temporários locais
+scripts/process_ticket_inbox.py      Processamento local imediato da fila de chamados Simpress/Oracle
 scripts/supabase_local.py            Controle e validação do Supabase local descartável
 scripts/run_postgres_pilot.py        FastAPI local com login SQL temporário e limitado
 scripts/verify_postgres.py           Ensaio sintético da integração PostgreSQL/HTTP
@@ -446,6 +470,7 @@ supabase/tests/                      Verificações SQL com dados sintéticos
 data/planilhas_entrada/               Modelo de transferência e planilhas locais
 data/planilhas_entrada/_backups/      Cópias locais anteriores dos inventários
 data/state/                           Estado e históricos locais, ignorados pelo Git
+data/state/entrada_chamados/          Modelo e instruções versionados; lotes e recibos operacionais ignorados pelo Git
 modelos/                              Modelo local de exportação de equipamentos
 logs/                                 Registros locais do servidor, ignorados pelo Git
 docs/                                 Relatórios de revisão, desempenho e migração Supabase
