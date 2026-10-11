@@ -1,17 +1,18 @@
 """Transactional workflow for replacing and comparing inventory snapshots."""
 
 import asyncio
-import filecmp
+import hashlib
 import json
 import logging
 import re
 import shutil
 import uuid
 from copy import deepcopy
+from contextlib import contextmanager
 from dataclasses import dataclass
 from datetime import datetime
 from pathlib import Path
-from typing import Any, Callable, Dict, List, Optional
+from typing import Any, Callable, Dict, Iterator, List, Optional
 
 from fastapi import HTTPException
 from integrity import (
@@ -42,6 +43,7 @@ class InventoryUpdateServices:
     endpoint_upload_file: Callable[[], Path]
     details_upload_file: Callable[[], Path]
     comparison_history_file: Callable[[], Path]
+    inventory_idempotency_file: Callable[[], Path]
     upload_backups_directory: Callable[[], Path]
     history_annotations_directory: Callable[[], Path]
     local_annotation_outbox_directory: Callable[[], Path]
@@ -81,6 +83,87 @@ _ANNOTATABLE_COMPARISON_CATEGORIES = (
     "registros_ambiguos",
     "series_sem_mapeamento",
 )
+
+# Keep the most recent confirmed writes. Once an entry is evicted, a retry is
+# treated as a new operation; the bounded receipt file cannot grow indefinitely.
+MAX_INVENTORY_IDEMPOTENCY_RECEIPTS = 256
+_IDEMPOTENCY_KEY_PATTERN = re.compile(r"[A-Za-z0-9._:-]{1,128}\Z")
+
+
+def _inventory_request_sha256(staged: Dict[str, Any]) -> str:
+    """Hash committed workbook bytes with explicit source-role framing."""
+    digest = hashlib.sha256()
+    for role in ("endpoint", "detalhes"):
+        role_bytes = role.encode("ascii")
+        workbook_bytes = staged[role]["bytes"]
+        digest.update(len(role_bytes).to_bytes(2, "big"))
+        digest.update(role_bytes)
+        digest.update(len(workbook_bytes).to_bytes(8, "big"))
+        digest.update(workbook_bytes)
+    return digest.hexdigest()
+
+
+def _validated_inventory_idempotency_store(value: Any) -> Dict[str, Any]:
+    if (
+        not isinstance(value, dict)
+        or type(value.get("version")) is not int
+        or value.get("version") != 1
+        or not isinstance(value.get("records"), list)
+    ):
+        raise RuntimeError("O registro local de idempotência está inválido; o arquivo foi preservado.")
+    seen_keys = set()
+    for record in value["records"]:
+        if (
+            not isinstance(record, dict)
+            or not isinstance(record.get("key"), str)
+            or not _IDEMPOTENCY_KEY_PATTERN.fullmatch(record["key"])
+            or record["key"] in seen_keys
+            or not isinstance(record.get("request_sha256"), str)
+            or not re.fullmatch(r"[a-f0-9]{64}", record["request_sha256"])
+            or not isinstance(record.get("result"), dict)
+        ):
+            raise RuntimeError("O registro local de idempotência está inválido; o arquivo foi preservado.")
+        seen_keys.add(record["key"])
+    if len(value["records"]) > MAX_INVENTORY_IDEMPOTENCY_RECEIPTS:
+        raise RuntimeError("O registro local de idempotência excede a retenção permitida; o arquivo foi preservado.")
+    return value
+
+
+def _append_inventory_idempotency_receipt(
+    value: Any,
+    key: str,
+    request_sha256: str,
+    result: Dict[str, Any],
+) -> Dict[str, Any]:
+    store = _validated_inventory_idempotency_store(
+        value if value is not None else {"version": 1, "records": []}
+    )
+    records = [record for record in store["records"] if record["key"] != key]
+    records.append({"key": key, "request_sha256": request_sha256, "result": result})
+    return {"version": 1, "records": records[-MAX_INVENTORY_IDEMPOTENCY_RECEIPTS:]}
+
+
+def _find_inventory_idempotency_receipt(value: Any, key: str) -> Optional[Dict[str, Any]]:
+    if value is None:
+        return None
+    store = _validated_inventory_idempotency_store(value)
+    return next((record for record in store["records"] if record["key"] == key), None)
+
+
+@contextmanager
+def _transaction_with_backup_cleanup(
+    transaction_context: Any,
+    backup_directory: Path,
+    backup_targets: Dict[str, Path],
+) -> Iterator[Any]:
+    """Remove only this attempt's empty backup tree when its transaction fails."""
+    try:
+        with transaction_context as transaction:
+            yield transaction
+    except BaseException:
+        if backup_directory.exists() and not any(path.is_file() for path in backup_targets.values()):
+            shutil.rmtree(backup_directory, ignore_errors=True)
+        raise
 
 
 def _legacy_annotation(comparison: Dict[str, Any], category: str, index: int) -> Any:
@@ -308,18 +391,31 @@ async def update_inventory_files(
     details_file: Any,
     services: InventoryUpdateServices,
     automatic_import_id: Optional[str] = None,
+    idempotency_key: Optional[str] = None,
 ):
     """Read uploads asynchronously and run workbook and transaction work off-loop."""
     uploads = [endpoint_file, details_file]
 
     try:
+        if idempotency_key is not None and not _IDEMPOTENCY_KEY_PATTERN.fullmatch(idempotency_key):
+            raise HTTPException(
+                status_code=422,
+                detail="Idempotency-Key deve conter de 1 a 128 letras, números, ponto, hífen, dois-pontos ou sublinhado.",
+            )
+
         staged = {
             "endpoint": await read_uploaded_xlsx(endpoint_file, "endpoint", services),
             "detalhes": await read_uploaded_xlsx(details_file, "detalhes", services),
         }
 
         worker = asyncio.create_task(
-            asyncio.to_thread(_commit_inventory_files, staged, services, automatic_import_id)
+            asyncio.to_thread(
+                _commit_inventory_files,
+                staged,
+                services,
+                automatic_import_id,
+                idempotency_key,
+            )
         )
         try:
             return await asyncio.shield(worker)
@@ -340,6 +436,14 @@ async def update_inventory_files(
         raise HTTPException(status_code=500, detail=f"Não foi possível concluir a atualização; a transação restaurou os arquivos anteriores. {error}") from error
     except Exception:
         logger.exception("Falha inesperada ao atualizar o conjunto de planilhas.")
+        if idempotency_key is not None:
+            raise HTTPException(
+                status_code=500,
+                detail=(
+                    "Não foi possível concluir a solicitação com segurança. Repita-a com a mesma "
+                    "Idempotency-Key para recuperar uma confirmação existente ou tentar novamente."
+                ),
+            ) from None
         raise HTTPException(status_code=500, detail="Falha ao atualizar as planilhas; os arquivos anteriores foram restaurados.") from None
     finally:
         for upload in uploads:
@@ -350,12 +454,14 @@ def _commit_inventory_files(
     staged: Dict[str, Any],
     services: InventoryUpdateServices,
     automatic_import_id: Optional[str] = None,
+    idempotency_key: Optional[str] = None,
 ):
     """Validate, compare, replace, reload, and journal inventories in a worker thread."""
     input_directory = services.input_directory()
     endpoint_upload_file = services.endpoint_upload_file()
     details_upload_file = services.details_upload_file()
     comparison_history_file = services.comparison_history_file()
+    inventory_idempotency_file = services.inventory_idempotency_file()
     upload_backups_directory = services.upload_backups_directory()
     input_directory.mkdir(parents=True, exist_ok=True)
     active_details_file = services.get_primary_equipment_file()
@@ -366,6 +472,14 @@ def _commit_inventory_files(
     backup_sources = {
         "endpoint": target_files["endpoint"] if target_files["endpoint"].is_file() else None,
         "detalhes": active_details_file,
+    }
+    request_sha256 = _inventory_request_sha256(staged) if idempotency_key is not None else None
+    backup_dir = upload_backups_directory / (
+        f"{datetime.now().strftime('%Y%m%d-%H%M%S')}-{uuid.uuid4().hex[:8]}"
+    )
+    backup_targets = {
+        role: backup_dir / role / target_path.name
+        for role, target_path in target_files.items()
     }
 
     uploaded_names = {
@@ -385,7 +499,35 @@ def _commit_inventory_files(
         *(path for path in backup_sources.values() if path is not None),
         comparison_history_file,
     ]
-    with services.inventory_state_transaction(transaction_targets) as transaction:
+    if idempotency_key is not None:
+        transaction_targets.append(inventory_idempotency_file)
+    with _transaction_with_backup_cleanup(
+        services.inventory_state_transaction(transaction_targets),
+        backup_dir,
+        backup_targets,
+    ) as transaction:
+        if idempotency_key is not None:
+            receipt_store = (
+                json.loads(inventory_idempotency_file.read_text(encoding="utf-8"))
+                if inventory_idempotency_file.exists()
+                else {"version": 1, "records": []}
+            )
+            prior_receipt = _find_inventory_idempotency_receipt(receipt_store, idempotency_key)
+            if prior_receipt is not None:
+                if prior_receipt["request_sha256"] != request_sha256:
+                    raise HTTPException(
+                        status_code=409,
+                        detail="A Idempotency-Key já foi confirmada com outro conteúdo.",
+                    )
+                replay_state = services.load_database(transaction_locked=True, publish=False)
+                if not isinstance(replay_state, dict):
+                    raise RuntimeError("O inventário confirmado não pôde ser recarregado antes da repetição.")
+                services.publish_database_state(replay_state)
+                return deepcopy(prior_receipt["result"])
+
+        for backup_target in backup_targets.values():
+            transaction.add_target(backup_target)
+
         previous_aliases = services.snapshot_equipment_aliases(services.get_equipment_snapshot())
         manual_overrides = services.load_modified_apelidos()
         manual_alias_sources = services.manual_alias_source_snapshots(
@@ -397,23 +539,21 @@ def _commit_inventory_files(
             item for item in manual_alias_sources
             if item["diverge_detalhes"] or item["diverge_invall"]
         ]
-        backup_dir = upload_backups_directory / f"{datetime.now().strftime('%Y%m%d-%H%M%S')}-{uuid.uuid4().hex[:8]}"
-        backup_dir.mkdir(parents=True, exist_ok=False)
-
         missing_backup_files = {}
         invalid_backup_files = {"endpoint": False, "detalhes": False}
-        for role, target_path in target_files.items():
-            role_dir = backup_dir / role
-            role_dir.mkdir(parents=True, exist_ok=True)
+        for role in target_files:
             source_path = backup_sources[role]
             if source_path is None or not source_path.is_file():
                 missing_backup_files[role] = True
                 continue
             missing_backup_files[role] = False
-            backup_path = role_dir / target_path.name
-            shutil.copy2(source_path, backup_path)
-            if not filecmp.cmp(source_path, backup_path, shallow=False):
-                raise RuntimeError(f"A cópia de segurança de '{target_path.name}' não passou na validação.")
+            backup_bytes = source_path.read_bytes()
+
+            def validate_backup(path: Path, expected_bytes=backup_bytes) -> None:
+                if path.read_bytes() != expected_bytes:
+                    raise RuntimeError("A cópia de segurança não corresponde ao arquivo de origem.")
+
+            transaction.stage_bytes(backup_targets[role], backup_bytes, validate_backup)
 
         for role, target_path in target_files.items():
             upload_bytes = staged[role]["bytes"]
@@ -561,22 +701,34 @@ def _commit_inventory_files(
                     raise RuntimeError("A anotação preparada não corresponde à revisão herdada.")
 
             transaction.stage_bytes(target, payload, validate_annotation)
+
+        historical_view = services.comparison_history_for_display(history_entry)
+        historical_comparison = dict(historical_view.get("comparacao") or {})
+        historical_comparison["evento_id"] = event_id
+        historical_comparison["historico_salvo"] = True
+        historical_comparison["anotacoes_herdadas_enfileiradas"] = len(copied_annotations)
+        historical_comparison["sincronizacao_anotacoes"] = (
+            "pendente" if copied_annotations else "nao_aplicavel"
+        )
+        response = {
+            "sucesso": True,
+            "comparacao": historical_comparison,
+            "anotacoes_herdadas_enfileiradas": len(copied_annotations),
+            "sincronizacao_anotacoes": "pendente" if copied_annotations else "nao_aplicavel",
+            "stats": deepcopy(prepared_state["stats_cache"]),
+            "historico_salvo": True,
+        }
+        if idempotency_key is not None:
+            transaction.update_json(
+                inventory_idempotency_file,
+                lambda current: _append_inventory_idempotency_receipt(
+                    current,
+                    idempotency_key,
+                    str(request_sha256),
+                    response,
+                ),
+                {"version": 1, "records": []},
+            )
         transaction.commit()
         services.publish_database_state(prepared_state)
-
-    historical_view = services.comparison_history_for_display(history_entry)
-    historical_comparison = dict(historical_view.get("comparacao") or {})
-    historical_comparison["evento_id"] = event_id
-    historical_comparison["historico_salvo"] = True
-    historical_comparison["anotacoes_herdadas_enfileiradas"] = len(copied_annotations)
-    historical_comparison["sincronizacao_anotacoes"] = (
-        "pendente" if copied_annotations else "nao_aplicavel"
-    )
-    return {
-        "sucesso": True,
-        "comparacao": historical_comparison,
-        "anotacoes_herdadas_enfileiradas": len(copied_annotations),
-        "sincronizacao_anotacoes": "pendente" if copied_annotations else "nao_aplicavel",
-        "stats": prepared_state["stats_cache"],
-        "historico_salvo": True,
-    }
+    return response

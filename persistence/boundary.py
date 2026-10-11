@@ -7,6 +7,7 @@ from security.network import is_direct_loopback_request
 
 idempotency_key = ContextVar("simpress_idempotency_key", default=None)
 PENDING = "Esta rota não está disponível no piloto PostgreSQL local."
+IDEMPOTENCY_KEY_PATTERN = re.compile(r"[A-Za-z0-9._:-]{1,128}\Z")
 
 
 def pilot_route_allowed(method, path):
@@ -38,21 +39,33 @@ class PersistenceBoundaryMiddleware:
         self.is_postgres = is_postgres
 
     async def __call__(self, scope, receive, send):
-        if scope["type"] != "http" or not self.is_postgres():
+        if scope["type"] != "http":
             await self.app(scope, receive, send)
             return
-        if not is_direct_loopback_request(scope):
-            await JSONResponse({"detail": "O piloto PostgreSQL aceita somente conexões locais."}, status_code=403)(scope, receive, send)
-            return
         path = scope.get("path", "")
-        if path.startswith("/api/") and not pilot_route_allowed(scope["method"], path):
-            await JSONResponse({"detail": PENDING}, status_code=501)(scope, receive, send)
+        is_postgres = self.is_postgres()
+        is_inventory_update = path == "/api/planilhas/atualizar" and scope.get("method") == "POST"
+        if not is_postgres and not is_inventory_update:
+            await self.app(scope, receive, send)
             return
+        if is_postgres:
+            if not is_direct_loopback_request(scope):
+                await JSONResponse({"detail": "O piloto PostgreSQL aceita somente conexões locais."}, status_code=403)(scope, receive, send)
+                return
+            if path.startswith("/api/") and not pilot_route_allowed(scope["method"], path):
+                await JSONResponse({"detail": PENDING}, status_code=501)(scope, receive, send)
+                return
         values = [v for k,v in scope.get("headers", []) if k.lower() == b"idempotency-key"]
-        if len(values) > 1:
+        if len(values) > 1 and (is_postgres or is_inventory_update):
             await JSONResponse({"detail": "Informe somente uma Idempotency-Key."}, status_code=422)(scope, receive, send)
             return
-        token = idempotency_key.set(values[0].decode("latin-1") if values else None)
+        key = values[0].decode("latin-1") if values else None
+        if is_inventory_update and key is not None and not IDEMPOTENCY_KEY_PATTERN.fullmatch(key):
+            await JSONResponse({
+                "detail": "Idempotency-Key deve conter de 1 a 128 letras, números, ponto, hífen, dois-pontos ou sublinhado."
+            }, status_code=422)(scope, receive, send)
+            return
+        token = idempotency_key.set(key)
         try:
             await self.app(scope, receive, send)
         finally:

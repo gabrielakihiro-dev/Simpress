@@ -151,7 +151,11 @@ from routers.equipment_search import EquipmentSearchServices, create_equipment_s
 from routers.system import SystemRouteServices, create_system_router
 from routers.units import UnidadePayload, UnitRouteServices, create_units_router
 from persistence.config import PersistenceError, PersistenceSettings
-from persistence.boundary import PersistenceBoundaryMiddleware, idempotency_key
+from persistence.boundary import (
+    IDEMPOTENCY_KEY_PATTERN,
+    PersistenceBoundaryMiddleware,
+    idempotency_key,
+)
 from security.network import is_direct_loopback_request
 
 PERSISTENCE_SETTINGS = PersistenceSettings.from_environment()
@@ -1809,14 +1813,47 @@ class LocalRequestSafetyMiddleware:
                     return
 
         uses_upload_admission = is_inventory_upload or is_model_upload or is_ticket_upload or path == "/api/recarregar-base"
-        if uses_upload_admission and not UPLOAD_ADMISSION.acquire(blocking=False):
-            response = JSONResponse(
-                status_code=503,
-                content={"detail": "A operação de inventário está ocupada. Tente novamente em instantes."},
-                headers={"Retry-After": "2"},
-            )
-            await response(scope, receive, send)
-            return
+        if uses_upload_admission:
+            key_headers = [value for name, value in raw_headers if name.lower() == b"idempotency-key"]
+            is_keyed_inventory_update = is_inventory_upload and scope.get("method") == "POST"
+            if is_keyed_inventory_update and len(key_headers) > 1:
+                response = JSONResponse(
+                    status_code=422,
+                    content={"detail": "Informe somente uma Idempotency-Key."},
+                )
+                await response(scope, receive, send)
+                return
+            if (
+                is_keyed_inventory_update
+                and key_headers
+                and not IDEMPOTENCY_KEY_PATTERN.fullmatch(key_headers[0].decode("latin-1"))
+            ):
+                response = JSONResponse(
+                    status_code=422,
+                    content={"detail": "Idempotency-Key deve conter de 1 a 128 letras, números, ponto, hífen, dois-pontos ou sublinhado."},
+                )
+                await response(scope, receive, send)
+                return
+            admitted = UPLOAD_ADMISSION.acquire(blocking=False)
+            if (
+                not admitted
+                and is_keyed_inventory_update
+                and len(key_headers) == 1
+            ):
+                # A keyed retry waits behind the in-flight upload so it can read
+                # the durable receipt instead of failing before idempotency runs.
+                deadline = asyncio.get_running_loop().time() + IDEMPOTENT_UPLOAD_ADMISSION_WAIT_SECONDS
+                while not admitted and asyncio.get_running_loop().time() < deadline:
+                    await asyncio.sleep(0.02)
+                    admitted = UPLOAD_ADMISSION.acquire(blocking=False)
+            if not admitted:
+                response = JSONResponse(
+                    status_code=503,
+                    content={"detail": "A operação de inventário está ocupada. Tente novamente em instantes."},
+                    headers={"Retry-After": "2"},
+                )
+                await response(scope, receive, send)
+                return
 
         response_started = False
         request_size = 0
@@ -1869,6 +1906,7 @@ class LocalRequestSafetyMiddleware:
 
 
 SERVER_PORT = int(os.environ.get("SIMPRESS_PORT", "8000"))
+IDEMPOTENT_UPLOAD_ADMISSION_WAIT_SECONDS = 120
 
 _ALLOWED_LOCAL_AUTHORITIES = frozenset({
     ("127.0.0.1", SERVER_PORT),
@@ -3608,6 +3646,7 @@ _inventory_update_services = InventoryUpdateServices(
     endpoint_upload_file=lambda: ENDPOINT_UPLOAD_FILE,
     details_upload_file=lambda: DETAILS_UPLOAD_FILE,
     comparison_history_file=lambda: COMPARISON_HISTORY_FILE,
+    inventory_idempotency_file=lambda: STATE_DIR / "inventory_update_idempotency.json",
     upload_backups_directory=lambda: UPLOAD_BACKUPS_DIR,
     history_annotations_directory=lambda: HISTORY_ANNOTATIONS_DIR,
     local_annotation_outbox_directory=lambda: LOCAL_HISTORY_ANNOTATION_OUTBOX_DIR,
@@ -3681,6 +3720,7 @@ async def atualizar_planilhas(
         endpoint_file,
         details_file,
         services=_inventory_update_services,
+        idempotency_key=idempotency_key.get(),
     )
     try:
         await asyncio.to_thread(prune_expired_histories)
