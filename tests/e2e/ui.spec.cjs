@@ -268,6 +268,12 @@ test("layout stays within common responsive viewport widths", async ({ page }) =
     { width: 1440, height: 900 },
   ]) {
     await page.setViewportSize(viewport);
+    await page.waitForFunction(
+      () => [...document.querySelector(".app-workspace").getAnimations()]
+        .every(animation => animation.playState !== "running"),
+      null,
+      { timeout: 1_000 },
+    );
     const widths = await page.evaluate(() => ({
       viewport: document.documentElement.clientWidth,
       document: document.documentElement.scrollWidth,
