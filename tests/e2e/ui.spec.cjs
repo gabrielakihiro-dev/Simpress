@@ -16,9 +16,22 @@ async function auditAccessibility(page, scope = null) {
   expect(summary, JSON.stringify(summary, null, 2)).toEqual([]);
 }
 
-async function openFixtureComparison(page) {
-  await page.locator(".header-secondary-actions > summary").click();
+async function openSidebarIfNeeded(page) {
+  const sidebarButton = page.locator("#btn-sidebar-open");
+  const shell = page.locator("#simpress-app-shell");
+  if (await sidebarButton.isVisible() && await shell.getAttribute("data-sidebar-open") !== "true") {
+    await sidebarButton.click();
+    await expect(shell).toHaveAttribute("data-sidebar-open", "true");
+  }
+}
+
+async function openAnalysisMenu(page) {
+  await openSidebarIfNeeded(page);
   await page.locator('.header-action-group[data-action-group="analysis"] > summary').click();
+}
+
+async function openFixtureComparison(page) {
+  await openAnalysisMenu(page);
   await page.locator("#btn-historico-comparacoes").click();
   await expect(page.getByRole("dialog")).toBeVisible();
   await page.getByRole("button", { name: "Consultar resultado" }).first().click();
@@ -45,7 +58,7 @@ test("home has no WCAG 2.2 A/AA axe violations", async ({ page }) => {
 });
 
 test("action menu groups have the requested colors and aligned primary action sizes", async ({ page }) => {
-  await page.locator(".header-secondary-actions > summary").click();
+  await openSidebarIfNeeded(page);
   const updateButton = page.locator("#btn-atualizar-planilhas");
   const exportButton = page.locator("#btn-exportar-equipamentos");
   const ticketButton = page.getByRole("button", { name: "Acompanhamento de Chamados" });
@@ -108,7 +121,7 @@ test("modal traps keyboard focus, restores it on Escape, and passes axe", async 
 
   await page.keyboard.press("Escape");
   await expect(dialog).toBeHidden();
-  await expect(page.locator(".header-secondary-actions > summary")).toBeFocused();
+  await expect(page.locator('.header-action-group[data-action-group="analysis"] > summary')).toBeFocused();
 });
 
 test("fixture annotation autosaves to the isolated in-memory endpoint", async ({ page }) => {
@@ -123,8 +136,7 @@ test("fixture annotation autosaves to the isolated in-memory endpoint", async ({
 });
 
 test("central pending view filters rows and autosaves their original comparison annotations", async ({ page }) => {
-  await page.locator(".header-secondary-actions > summary").click();
-  await page.locator('.header-action-group[data-action-group="analysis"] > summary').click();
+  await openAnalysisMenu(page);
   await page.getByRole("button", { name: "Pendências" }).click();
   const dialog = page.locator("#modal-central-pendencias");
   await expect(dialog).toBeVisible();
@@ -141,8 +153,7 @@ test("central pending view filters rows and autosaves their original comparison 
 });
 
 test("inventory evolution compares two saved updates and shows their row annotations", async ({ page }) => {
-  await page.locator(".header-secondary-actions > summary").click();
-  await page.locator('.header-action-group[data-action-group="analysis"] > summary').click();
+  await openAnalysisMenu(page);
   await page.getByRole("button", { name: "Evolução das atualizações" }).click();
   const dialog = page.locator("#modal-evolucao-atualizacoes");
   await expect(dialog).toBeVisible();
@@ -154,7 +165,7 @@ test("inventory evolution compares two saved updates and shows their row annotat
 
 test("ticket tracking imports both workbooks and relates each serial to its OS", async ({ page }, testInfo) => {
   await page.setViewportSize({ width: testInfo.project.name === "mobile" ? 390 : 1366, height: 640 });
-  await page.locator(".header-secondary-actions > summary").click();
+  await openSidebarIfNeeded(page);
   await page.getByRole("button", { name: "Acompanhamento de Chamados" }).click();
   const dialog = page.locator("#modal-acompanhamento-chamados");
   await expect(dialog).toBeVisible();
