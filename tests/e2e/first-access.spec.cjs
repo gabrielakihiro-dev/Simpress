@@ -84,6 +84,7 @@ test("ready setup starts collapsed and preserves user's disclosure choice", asyn
   await mockReadiness(page, () => readiness(true));
   await page.goto("/");
   const panel = page.locator("#readiness-panel");
+  await expect(panel).toHaveAttribute("aria-busy", "false", { timeout: 15_000 });
   await expect(page.locator("#readiness-summary")).toContainText("Todas as 5");
   await expect(panel).not.toHaveAttribute("open", "");
   await panel.locator(":scope > summary").click();
