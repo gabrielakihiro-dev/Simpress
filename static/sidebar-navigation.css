@@ -492,6 +492,14 @@ body.sidebar-drawer-open {
   color: #2dd4bf;
 }
 
+.sidebar-actions .header-secondary-panel > button.header-action-item--teal .sidebar-item-label {
+  flex: 1 1 auto;
+  overflow: visible;
+  text-overflow: clip;
+  white-space: normal;
+  line-height: 1.55;
+}
+
 .sidebar-actions .header-secondary-panel > button.header-action-item--teal:hover,
 .sidebar-actions .header-secondary-panel > button.header-action-item--teal:active {
   border-color: rgba(94, 234, 212, 0.4);
