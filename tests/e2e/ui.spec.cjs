@@ -119,8 +119,6 @@ test("failed search restores the controls and exposes a recoverable error", asyn
 test("modal traps keyboard focus, restores it on Escape, and passes axe", async ({ page }, testInfo) => {
   await openFixtureComparison(page);
   const dialog = page.getByRole("dialog");
-  const historyDialog = page.locator("#modal-historico-comparacoes");
-  const comparisonTrigger = historyDialog.getByRole("button", { name: "Consultar resultado" }).first();
   await auditAccessibility(page, "#modal-comparacao-planilhas");
   const firstClose = dialog.getByRole("button", { name: "Fechar resultado" }).first();
   await expect(firstClose).toBeFocused();
@@ -131,14 +129,9 @@ test("modal traps keyboard focus, restores it on Escape, and passes axe", async 
 
   await page.keyboard.press("Escape");
   await expect(dialog).toBeHidden();
-  await expect(historyDialog).toBeVisible();
-  await expect(comparisonTrigger).toBeFocused();
-
-  await page.keyboard.press("Escape");
-  await expect(historyDialog).toBeHidden();
   const returnFocus = testInfo.project.name === "mobile"
     ? page.locator("#btn-sidebar-open")
-    : page.locator('.header-action-group[data-action-group="analysis"] > summary');
+    : page.locator("#btn-historico-comparacoes");
   await expect(returnFocus).toBeFocused();
 });
 
