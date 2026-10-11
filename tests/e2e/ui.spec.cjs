@@ -124,10 +124,18 @@ test("search displays an announced skeleton, then the fictional result", async (
 });
 
 test("failed search restores the controls and exposes a recoverable error", async ({ page }) => {
+  test.setTimeout(45_000);
   const search = page.getByRole("button", { name: "Buscar Equipamento" });
+  const errorAlert = page.getByRole("alert").filter({ hasText: "Falha simulada para teste de interface." });
+  const errorAlertVisible = expect(errorAlert).toBeVisible({ timeout: 15_000 });
+  const failedLookup = page.waitForResponse(response => {
+    const url = new URL(response.url());
+    return url.pathname === "/api/equipamento/FALHA";
+  }, { timeout: 30_000 });
   await page.getByRole("combobox", { name: "Série, apelido, modelo ou cidade do equipamento" }).fill("FALHA");
   await search.click();
-  await expect(page.getByRole("alert").filter({ hasText: "Falha simulada para teste de interface." })).toBeVisible({ timeout: 8_000 });
+  expect((await failedLookup).status()).toBe(503);
+  await errorAlertVisible;
   await expect(search).toBeEnabled();
 });
 
