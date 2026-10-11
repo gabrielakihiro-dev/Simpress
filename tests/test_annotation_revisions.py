@@ -1,6 +1,7 @@
 """Causal annotation synchronization with two disposable clone roots."""
 
 import copy
+import io
 import json
 from pathlib import Path
 import tempfile
@@ -10,6 +11,7 @@ from types import SimpleNamespace
 from unittest.mock import patch
 
 from fastapi import HTTPException
+import openpyxl
 
 from domains.history_annotations import (
     annotation_record_values, annotation_revision, annotation_export_text,
@@ -17,6 +19,8 @@ from domains.history_annotations import (
     history_annotation_row_fingerprint, load_history_annotations,
     resolve_history_annotations, save_history_annotation, sync_history_annotation,
 )
+from domains.inventory_comparison import comparison_annotation_item_id
+from domains.inventory_update import _copy_matching_history_annotations
 from integrity import AtomicFileTransaction
 from routers.inventory_history import create_inventory_history_router, ComparisonAnnotationPayload
 from routers.operations import create_operations_router, TicketTimelineAnnotationPayload
@@ -257,6 +261,136 @@ class AnnotationRevisionTests(unittest.TestCase):
         self.assertEqual(row["anotacao"], "Compartilhado")
         self.assertEqual(row["anotacao_revisoes"], [latest["revisao_id"]])
         self.assertEqual(stored[0]["comparacao"]["sem_acesso_14_dias"][0]["anotacao"], "Local antigo")
+
+    def test_inheritance_uses_shared_and_pending_revisions_before_embedded_text(self):
+        category = "sem_acesso_14_dias"
+        row = {"serie": "S1", "computador": "HOST", "anotacao": "Texto antigo"}
+        previous = {"id": "older", "comparacao": {category: [row]}}
+        item_id = comparison_annotation_item_id("older", category, 0, row)
+        values = {**self.values, "event_id": "older", "item_id": item_id,
+                  "categoria": category, "linha_hash": history_annotation_row_fingerprint(category, row)}
+        shared = save_history_annotation(self.shared, **{**values, "anotacao": "Compartilhado"})
+        services = SimpleNamespace(
+            history_annotations_directory=lambda: self.shared,
+            local_annotation_outbox_directory=lambda: self.a,
+            load_history_annotations=load_history_annotations,
+            comparison_annotation_item_id=comparison_annotation_item_id,
+        )
+        raw_before = copy.deepcopy(previous)
+
+        def inherit(new_row, history=None, category_name=category):
+            event = {"id": "new", "comparacao": {category_name: [new_row]}}
+            records = _copy_matching_history_annotations(
+                services, history if history is not None else [previous], event)
+            return event["comparacao"][category_name][0], records
+
+        inherited, records = inherit({"serie": "S1", "computador": "HOST"})
+        self.assertEqual(inherited["anotacao"], "Compartilhado")
+        self.assertNotEqual(inherited["anotacao_id"], item_id)
+        self.assertEqual(records[0]["anotacao"], "Compartilhado")
+
+        pending = save_history_annotation(self.a, **{**values, "anotacao": "Pendente",
+            "base_revisions": [shared["revisao_id"]]})
+        self.assertEqual(inherit({"serie": "S1", "computador": "HOST"})[0]["anotacao"], "Pendente")
+        save_history_annotation(self.a, **{**values, "anotacao": "",
+            "base_revisions": [pending["revisao_id"]]})
+        self.assertEqual(inherit({"serie": "S1", "computador": "HOST"})[1], [])
+        self.assertEqual(inherit({"serie": "S1", "computador": "CHANGED"})[1], [])
+        self.assertEqual(inherit({"serie": "S1", "computador": "HOST"}, category_name="divergencias_local")[1], [])
+        self.assertEqual(previous, raw_before)
+
+    def test_newest_blank_and_conflicting_duplicates_block_inheritance(self):
+        services = SimpleNamespace(
+            history_annotations_directory=lambda: self.shared,
+            local_annotation_outbox_directory=lambda: self.a,
+            load_history_annotations=load_history_annotations,
+            comparison_annotation_item_id=comparison_annotation_item_id,
+        )
+        category = "sem_acesso_14_dias"
+        row = {"serie": "S1", "computador": "HOST"}
+        older = {"id": "older", "comparacao": {category: [{**row, "anotacao": "Antigo"}]}}
+        new = {"id": "new", "comparacao": {category: [dict(row)]}}
+        blank = {"id": "recent", "comparacao": {category: [dict(row)]}}
+        self.assertEqual(_copy_matching_history_annotations(services, [older, blank], copy.deepcopy(new)), [])
+        conflicting = {"id": "recent", "comparacao": {category: [
+            {**row, "anotacao": "A"}, {**row, "anotacao": "B"},
+        ]}}
+        self.assertEqual(_copy_matching_history_annotations(services, [older, conflicting], copy.deepcopy(new)), [])
+
+    def test_conflicting_revisions_block_old_embedded_text(self):
+        category = "sem_acesso_14_dias"
+        row = {"serie": "S1", "computador": "HOST", "anotacao": "Antiga"}
+        item_id = comparison_annotation_item_id("older", category, 0, row)
+        values = {**self.values, "event_id": "older", "item_id": item_id,
+                  "categoria": category, "linha_hash": history_annotation_row_fingerprint(category, row)}
+        save_history_annotation(self.shared, **{**values, "anotacao": "A"})
+        save_history_annotation(self.a, **{**values, "anotacao": "B"})
+        services = SimpleNamespace(
+            history_annotations_directory=lambda: self.shared,
+            local_annotation_outbox_directory=lambda: self.a,
+            load_history_annotations=load_history_annotations,
+            comparison_annotation_item_id=comparison_annotation_item_id,
+        )
+        event = {"id": "new", "comparacao": {category: [{"serie": "S1", "computador": "HOST"}]}}
+        self.assertEqual(_copy_matching_history_annotations(
+            services, [{"id": "older", "comparacao": {category: [row]}}], event), [])
+        self.assertNotIn("anotacao", event["comparacao"][category][0])
+
+    def test_shared_only_clone_inherits_exact_row_without_local_history(self):
+        category = "sem_acesso_14_dias"
+        row = {"serie": "S1", "computador": "HOST"}
+        save_history_annotation(self.shared, **{**self.values, "event_id": "remote",
+            "item_id": "remote-row", "categoria": category,
+            "linha_hash": history_annotation_row_fingerprint(category, row),
+            "anotacao": "Compartilhada"})
+        services = SimpleNamespace(
+            history_annotations_directory=lambda: self.shared,
+            local_annotation_outbox_directory=lambda: self.a,
+            load_history_annotations=load_history_annotations,
+            comparison_annotation_item_id=comparison_annotation_item_id,
+        )
+        event = {"id": "local-new", "comparacao": {category: [dict(row)]}}
+        copied = _copy_matching_history_annotations(services, [], event)
+        self.assertEqual(copied[0]["anotacao"], "Compartilhada")
+        self.assertNotEqual(copied[0]["item_id"], "remote-row")
+
+    def test_history_pending_evolution_and_excel_read_same_effective_note(self):
+        routes, history = self.inventory_router()
+        stored = json.loads(history.read_text(encoding="utf-8"))
+        stored[0]["comparacao"]["sem_acesso_14_dias"][0]["anotacao"] = "Legada"
+        stored.insert(0, {"id": "prior", "horario": "2026-10-10", "comparacao": {
+            "sem_acesso_14_dias": [{"serie": "S1", "computador": "HOST"}]}})
+        history.write_text(json.dumps(stored), encoding="utf-8")
+        before = history.read_bytes()
+        self.write(self.a, "Pendente", categoria="sem_acesso_14_dias")
+        detail = routes["get_comparacao_historica"]("event")["evento"]
+        self.assertEqual(detail["comparacao"]["sem_acesso_14_dias"][0]["anotacao"], "Pendente")
+        operations = create_operations_router(
+            load_comparison_history=lambda: json.loads(history.read_text(encoding="utf-8")),
+            comparison_history_for_display=routes["history_annotation_view"],
+            ticket_report_path=lambda: self.root / "tickets.json", transaction_root=lambda: self.root,
+        )
+        pending = next(route.endpoint for route in operations.routes
+                       if route.path == "/api/operacoes/pendencias")()
+        evolution = next(route.endpoint for route in operations.routes
+                         if route.path == "/api/operacoes/evolucao")("prior", "event")
+        self.assertEqual(pending["pendencias"][0]["item"]["anotacao"], "Pendente")
+        self.assertEqual(evolution["mudancas"]["continuam"][0]["item"]["anotacao"], "Pendente")
+
+        class CapturedResponse:
+            def __init__(self, content, media_type, headers):
+                self.body = content.read()
+
+        with patch("routers.inventory_history.StreamingResponse", CapturedResponse):
+            response = routes["exportar_historico_comparacoes_excel"](data="2026-10-11")
+        workbook = openpyxl.load_workbook(io.BytesIO(response.body), read_only=True, data_only=True)
+        try:
+            values = {cell.value for sheet in workbook for row in sheet.iter_rows() for cell in row}
+            self.assertIn("Pendente", values)
+            self.assertNotIn("Legada", values)
+        finally:
+            workbook.close()
+        self.assertEqual(history.read_bytes(), before)
 
     def test_different_legacy_history_and_shared_text_are_both_migrated(self):
         routes, history = self.inventory_router()

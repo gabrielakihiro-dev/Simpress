@@ -20,7 +20,10 @@ from integrity import (
     WorkbookSafetyError,
 )
 
-from domains.history_annotations import resolve_history_annotations, history_annotation_row_fingerprint
+from domains.history_annotations import (
+    effective_history_annotation, history_annotation_row_fingerprint,
+    load_effective_history_annotations,
+)
 from domains.local_setup import unpack_simpress_zip
 
 
@@ -40,6 +43,7 @@ class InventoryUpdateServices:
     comparison_history_file: Callable[[], Path]
     upload_backups_directory: Callable[[], Path]
     history_annotations_directory: Callable[[], Path]
+    local_annotation_outbox_directory: Callable[[], Path]
     get_primary_equipment_file: Callable[[], Optional[Path]]
     compare_uploaded_workbooks: Callable[..., Dict[str, Any]]
     inventory_state_transaction: Callable[..., Any]
@@ -106,8 +110,10 @@ def _copy_matching_history_annotations(
     if not isinstance(new_comparison, dict):
         return []
 
-    shared_annotations = resolve_history_annotations(
-        services.load_history_annotations(services.history_annotations_directory())
+    effective_annotations = load_effective_history_annotations(
+        services.history_annotations_directory(),
+        services.local_annotation_outbox_directory(),
+        services.load_history_annotations,
     )
 
     new_fingerprints = set()
@@ -141,18 +147,11 @@ def _copy_matching_history_annotations(
                 if fingerprint not in new_fingerprints or fingerprint in latest_prior_notes:
                     continue
                 item_id = services.comparison_annotation_item_id(event_id, category, index, item)
-                current_record = shared_annotations.get((event_id, item_id))
-                if current_record and current_record.get("anotacao_conflito"):
-                    event_matches.setdefault(fingerprint, []).append(None)
-                    continue
-                annotation = item.get("anotacao")
-                if not isinstance(annotation, str):
-                    annotation = _legacy_annotation(previous_comparison, category, index)
-                if not isinstance(annotation, str) and event_id:
-                    item_id = services.comparison_annotation_item_id(event_id, category, index, item)
-                    shared_record = shared_annotations.get((event_id, item_id))
-                    if isinstance(shared_record, dict):
-                        annotation = shared_record.get("anotacao")
+                observed = effective_history_annotation(
+                    effective_annotations, event_id, item_id,
+                    item.get("anotacao"), _legacy_annotation(previous_comparison, category, index),
+                )
+                annotation = None if observed.get("anotacao_conflito") else observed["anotacao"]
                 event_matches.setdefault(fingerprint, []).append(annotation)
 
         for fingerprint, annotations in event_matches.items():
@@ -179,7 +178,7 @@ def _copy_matching_history_annotations(
         if event_id:
             local_event_ids.add(event_id)
     shared_only_events: Dict[tuple[str, str], list[Dict[str, Any]]] = {}
-    for record in shared_annotations.values():
+    for record in effective_annotations.values():
         if not isinstance(record, dict):
             continue
         event_id = str(record.get("evento_id") or "")
@@ -206,7 +205,10 @@ def _copy_matching_history_annotations(
     for (_, fingerprint), records in ordered_shared_events:
         if fingerprint in latest_prior_notes:
             continue
-        annotations = [record.get("anotacao") for record in records]
+        annotations = [
+            None if record.get("anotacao_conflito") else record.get("anotacao")
+            for record in records
+        ]
         first_annotation = annotations[0] if annotations else None
         if isinstance(first_annotation, str) and all(
             annotation == first_annotation for annotation in annotations

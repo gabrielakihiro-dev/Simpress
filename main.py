@@ -3600,6 +3600,7 @@ _inventory_update_services = InventoryUpdateServices(
     comparison_history_file=lambda: COMPARISON_HISTORY_FILE,
     upload_backups_directory=lambda: UPLOAD_BACKUPS_DIR,
     history_annotations_directory=lambda: HISTORY_ANNOTATIONS_DIR,
+    local_annotation_outbox_directory=lambda: LOCAL_HISTORY_ANNOTATION_OUTBOX_DIR,
     get_primary_equipment_file=lambda: get_primary_equipment_file(),
     compare_uploaded_workbooks=lambda *args, **kwargs: compare_uploaded_workbooks(*args, **kwargs),
     inventory_state_transaction=lambda targets: inventory_state_transaction(targets),
