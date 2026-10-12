@@ -15,7 +15,7 @@
   <link rel="stylesheet" href="/static/styles/sidebar-navigation.css">
   <link rel="stylesheet" href="/static/styles/theme.css">
 </head>
-<body class="min-h-full bg-gradient-to-br from-slate-950 via-slate-900 to-slate-950 text-slate-100 flex flex-col font-sans selection:bg-brand-500 selection:text-white">
+<body class="min-h-full bg-gradient-to-br from-slate-950 via-slate-900 to-slate-950 text-slate-100 font-sans selection:bg-brand-500 selection:text-white">
 
   <a class="skip-link" href="#main-content">Pular para o conteúdo principal</a>
 
@@ -83,18 +83,20 @@
                   <i data-lucide="upload" class="header-action-icon" aria-hidden="true"></i>
                   <span id="label-exportar-equipamentos" class="sidebar-item-label">Exportar Excel</span>
                 </button>
-                <button type="button" onclick="abrirModalHistoricoComparacoes()" id="btn-historico-comparacoes" aria-label="Histórico de atualizações e comparação de planilhas" aria-labelledby="label-historico-comparacoes" class="header-action-item flex items-center gap-2" title="Consultar comparações e alterações de apelido feitas pela atualização das planilhas">
-                  <i data-lucide="history" class="header-action-icon" aria-hidden="true"></i>
-                  <span id="label-historico-comparacoes" class="sidebar-item-label">Histórico planilhas</span>
-                </button>
-                <button type="button" onclick="abrirCentralPendencias()" class="header-action-item flex items-center gap-2" title="Revisar os pontos da atualização mais recente">
-                  <i data-lucide="list-checks" class="header-action-icon" aria-hidden="true"></i>
-                  <span class="sidebar-item-label">Pendências</span>
-                </button>
-                <button type="button" onclick="abrirEvolucaoAtualizacoes()" class="header-action-item flex items-center gap-2" title="Comparar pendências entre duas atualizações">
-                  <i data-lucide="activity" class="header-action-icon" aria-hidden="true"></i>
-                  <span class="sidebar-item-label">Evolução das atualizações</span>
-                </button>
+                <div class="sidebar-related-links" role="group" aria-label="Histórico e análise da atualização">
+                  <button type="button" onclick="abrirModalHistoricoComparacoes()" id="btn-historico-comparacoes" aria-label="Histórico de atualizações e comparação de planilhas" aria-labelledby="label-historico-comparacoes" class="header-action-item flex items-center gap-2" title="Consultar comparações e alterações de apelido feitas pela atualização das planilhas">
+                    <i data-lucide="history" class="header-action-icon" aria-hidden="true"></i>
+                    <span id="label-historico-comparacoes" class="sidebar-item-label">Histórico planilhas</span>
+                  </button>
+                  <button type="button" onclick="abrirCentralPendencias()" class="header-action-item flex items-center gap-2" title="Revisar os pontos da atualização mais recente">
+                    <i data-lucide="list-checks" class="header-action-icon" aria-hidden="true"></i>
+                    <span class="sidebar-item-label">Pendências</span>
+                  </button>
+                  <button type="button" onclick="abrirEvolucaoAtualizacoes()" class="header-action-item flex items-center gap-2" title="Comparar pendências entre duas atualizações">
+                    <i data-lucide="activity" class="header-action-icon" aria-hidden="true"></i>
+                    <span class="sidebar-item-label">Evolução das atualizações</span>
+                  </button>
+                </div>
                 <button type="button" onclick="abrirModalHistoricoApelidos()" id="btn-historico-apelidos" aria-label="Histórico de alterações manuais" aria-labelledby="label-historico-apelidos" class="header-action-item flex items-center gap-2" title="Consultar histórico de alterações manuais">
                   <i data-lucide="history" class="header-action-icon" aria-hidden="true"></i>
                   <span id="label-historico-apelidos" class="sidebar-item-label">Histórico de alterações</span>
@@ -113,7 +115,7 @@
 
     <div class="app-workspace">
       <header class="site-header border-b border-slate-800/80 bg-slate-950/80 backdrop-blur-md sticky top-0 z-40">
-        <div class="header-inner max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 h-20 flex items-center justify-between">
+        <div class="header-inner">
           <button type="button" id="btn-sidebar-open" class="sidebar-icon-button sidebar-mobile-open" aria-label="Abrir menu de navegação" aria-controls="app-sidebar" aria-expanded="false" title="Abrir menu de navegação">
             <i data-lucide="menu" aria-hidden="true"></i>
           </button>
@@ -135,7 +137,7 @@
       </header>
 
       <!-- MAIN CONTAINER -->
-      <main id="main-content" tabindex="-1" class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 pt-8 pb-12 flex-1 w-full space-y-6">
+      <main id="main-content" tabindex="-1" class="flex-1 w-full space-y-6">
 
     <details id="readiness-panel" class="readiness-panel glass-card rounded-xl" data-state="loading" aria-labelledby="readiness-title" aria-busy="true">
       <summary class="readiness-panel-summary" aria-controls="readiness-content">
@@ -331,7 +333,7 @@
             <button
               type="button"
               onclick="abrirModalEditarEquipamento()"
-              class="mt-2 inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-brand-500/20 hover:bg-brand-500/30 text-brand-300 hover:text-white border border-brand-500/40 text-xs font-semibold transition-all shadow-sm"
+              class="equipment-edit-button mt-2 inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-brand-500/20 hover:bg-brand-500/30 text-brand-300 hover:text-white border border-brand-500/40 text-xs font-semibold transition-all shadow-sm"
               title="Editar dados cadastrais deste equipamento"
             >
               <i data-lucide="edit-3" class="w-3.5 h-3.5 text-brand-400"></i>
@@ -919,8 +921,8 @@ Horário disponível para atendimento:</textarea>
     <!-- ========================================== -->
     <!-- BARRA INFERIOR FIXA DE AÇÕES RÁPIDAS      -->
     <!-- ========================================== -->
-    <aside aria-label="Painel de Ações Rápidas" class="quick-actions fixed bottom-0 inset-x-0 bg-slate-950/90 backdrop-blur-xl border-t border-slate-800/90 py-4 px-4 sm:px-8 z-30 shadow-2xl">
-      <div class="quick-actions-inner max-w-7xl mx-auto flex flex-col sm:flex-row items-center justify-between gap-4">
+    <aside aria-label="Painel de Ações Rápidas" class="quick-actions fixed bottom-0 inset-x-0 bg-slate-950/90 backdrop-blur-xl border-t border-slate-800/90 z-30 shadow-2xl">
+      <div class="quick-actions-inner mx-auto flex flex-col sm:flex-row items-center justify-between gap-4">
         <div class="quick-actions-status flex items-center space-x-3 text-xs text-slate-400">
           <div class="w-2.5 h-2.5 rounded-full bg-brand-400" id="status-indicator" aria-hidden="true"></div>
           <div id="status-summary" role="status" aria-live="polite" aria-atomic="true">
@@ -943,7 +945,7 @@ Horário disponível para atendimento:</textarea>
           <button
             type="button"
             onclick="gerarTextoSolicitacaoTransporte()"
-            class="px-4 py-2.5 rounded-xl bg-brand-500/10 hover:bg-brand-500/20 text-brand-200 border border-brand-500/30 text-xs font-semibold flex items-center space-x-1.5 transition shadow-sm"
+            class="transport-request-button px-4 py-2.5 rounded-xl bg-brand-500/10 hover:bg-brand-500/20 text-brand-200 border border-brand-500/30 text-xs font-semibold flex items-center space-x-1.5 transition shadow-sm"
             title="Gerar texto de solicitação de transporte"
           >
             <i data-lucide="file-text" class="w-4 h-4"></i>
@@ -1218,7 +1220,7 @@ Horário disponível para atendimento:</textarea>
             <i data-lucide="building-2" class="w-5 h-5"></i>
           </div>
           <div>
-            <h3 class="text-base font-bold text-white flex items-center gap-2">
+            <h3 class="unit-modal-heading text-base font-bold text-white flex items-center gap-2">
               <span>Catálogo de Unidades & Regionais SEBRAE/PR</span>
               <span id="badge-total-unidades-modal" class="px-2 py-0.5 rounded-full text-xs font-semibold bg-amber-500/20 text-amber-300 border border-amber-500/30">30 unidades</span>
             </h3>
