@@ -20,7 +20,7 @@ TRANSFER_CELLS = (
 )
 
 
-def unpack_simpress_zip(data: bytes, limit: int) -> tuple[bytes, str]:
+def unpack_simpress_zip(data: bytes, limit: int, *, size_label: str = "30 MB") -> tuple[bytes, str]:
     """Read one bounded XLSX member without extracting anything to disk."""
     try:
         with zipfile.ZipFile(io.BytesIO(data)) as archive:
@@ -38,7 +38,7 @@ def unpack_simpress_zip(data: bytes, limit: int) -> tuple[bytes, str]:
                 if item.is_dir():
                     continue
                 if item.file_size > limit:
-                    raise HTTPException(413, "Um arquivo no ZIP excede o limite de 30 MB.")
+                    raise HTTPException(413, f"Um arquivo no ZIP excede o limite de {size_label}.")
                 if path.suffix.lower() == ".xlsx" and not path.name.startswith("~$"):
                     candidates.append(item)
             if len(candidates) != 1:
@@ -47,7 +47,7 @@ def unpack_simpress_zip(data: bytes, limit: int) -> tuple[bytes, str]:
             with archive.open(member) as stream:
                 workbook = stream.read(limit + 1)
             if len(workbook) > limit:
-                raise HTTPException(413, "A planilha descompactada excede o limite de 30 MB.")
+                raise HTTPException(413, f"A planilha descompactada excede o limite de {size_label}.")
             if not workbook:
                 raise HTTPException(400, "A planilha dentro do ZIP está vazia.")
             return workbook, member.filename

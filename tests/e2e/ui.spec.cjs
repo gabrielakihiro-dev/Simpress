@@ -269,19 +269,84 @@ test("ticket tracking imports both workbooks and relates each serial to its OS",
   await managementPanel.locator("summary").first().click();
   await expect(page.locator("#arquivo-chamados-simpress")).toBeVisible();
   await expect(page.locator("#arquivo-chamados-oracle")).toBeVisible();
+  await expect(page.locator("#nome-arquivo-chamados-simpress")).toHaveText("Nenhum arquivo selecionado");
+  await expect(page.locator("#nome-arquivo-chamados-oracle")).toHaveText("Nenhum arquivo selecionado");
+  if (testInfo.project.name === "desktop") {
+    const simpressLabelY = (await page.locator('label[for="arquivo-chamados-simpress"]').boundingBox()).y;
+    const oracleLabelY = (await page.locator('label[for="arquivo-chamados-oracle"]').boundingBox()).y;
+    const simpressPickerBox = await page.locator("#btn-escolher-arquivo-chamados-simpress")
+      .evaluate(button => {
+        const { y, height } = button.parentElement.getBoundingClientRect();
+        return { y, height };
+      });
+    const oraclePickerBox = await page.locator("#btn-escolher-arquivo-chamados-oracle")
+      .evaluate(button => {
+        const { y, height } = button.parentElement.getBoundingClientRect();
+        return { y, height };
+      });
+    const buttonStyles = await page.evaluate(() => {
+      const simpress = document.querySelector("#btn-escolher-arquivo-chamados-simpress");
+      const oracleButton = document.querySelector("#btn-escolher-arquivo-chamados-oracle");
+      const buttonMetrics = style => ({
+        height: style.height,
+        fontSize: style.fontSize,
+        lineHeight: style.lineHeight,
+        fontWeight: style.fontWeight,
+        paddingTop: style.paddingTop,
+        paddingBottom: style.paddingBottom,
+        paddingLeft: style.paddingLeft,
+        paddingRight: style.paddingRight,
+        borderRadius: style.borderRadius,
+        backgroundColor: style.backgroundColor,
+        color: style.color,
+      });
+      const filenameMetrics = element => {
+        const style = getComputedStyle(element);
+        return { fontFamily: style.fontFamily, fontSize: style.fontSize, fontWeight: style.fontWeight, color: style.color };
+      };
+      const importButton = document.querySelector("#btn-importar-acompanhamento-chamados");
+      const importRect = importButton.getBoundingClientRect();
+      const simpressRect = document.querySelector("#btn-escolher-arquivo-chamados-simpress").parentElement.getBoundingClientRect();
+      const oracleRect = document.querySelector("#btn-escolher-arquivo-chamados-oracle").parentElement.getBoundingClientRect();
+      return {
+        chooserButtons: {
+          simpress: buttonMetrics(getComputedStyle(simpress)),
+          oracle: buttonMetrics(getComputedStyle(oracleButton)),
+        },
+        filenames: {
+          simpress: filenameMetrics(document.querySelector("#nome-arquivo-chamados-simpress")),
+          oracle: filenameMetrics(document.querySelector("#nome-arquivo-chamados-oracle")),
+        },
+        importCenterOffset: Math.abs((importRect.top + importRect.height / 2) - (oracleRect.top + oracleRect.height / 2)),
+        pickerHeights: { simpress: simpressRect.height, oracle: oracleRect.height },
+      };
+    });
+    expect(Math.abs(simpressLabelY - oracleLabelY)).toBeLessThanOrEqual(1);
+    expect(Math.abs(simpressPickerBox.y - oraclePickerBox.y)).toBeLessThanOrEqual(1);
+    expect(Math.abs(simpressPickerBox.height - oraclePickerBox.height)).toBeLessThanOrEqual(1);
+    expect(buttonStyles.chooserButtons.oracle).toEqual(buttonStyles.chooserButtons.simpress);
+    expect(buttonStyles.filenames.oracle).toEqual(buttonStyles.filenames.simpress);
+    expect(buttonStyles.importCenterOffset).toBeLessThanOrEqual(1);
+  }
   await auditAccessibility(page, "#modal-acompanhamento-chamados");
   await page.locator("#arquivo-chamados-simpress").setInputFiles({
     name: "Acompanhamento_de_Pedidos.xlsx",
     mimeType: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
     buffer: Buffer.from("fixture xlsx"),
   });
-  await page.locator("#arquivo-chamados-oracle").setInputFiles({
+  const oracleFileChooserPromise = page.waitForEvent("filechooser");
+  await page.getByRole("button", { name: "Escolher arquivo do Oracle - Gestão de Solicitações" }).click();
+  const oracleFileChooser = await oracleFileChooserPromise;
+  await oracleFileChooser.setFiles({
     name: "Gestao_de_Solicitacoes.xlsx",
     mimeType: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
     buffer: Buffer.from("fixture xlsx"),
   });
+  await expect(page.locator("#nome-arquivo-chamados-oracle")).toHaveText("Gestao_de_Solicitacoes.xlsx");
   await page.getByRole("button", { name: "Importar planilhas" }).click();
   await expect(page.locator("#status-importacao-chamados")).toContainText("Planilhas importadas");
+  await expect(page.locator("#nome-arquivo-chamados-simpress")).toHaveText("Nenhum arquivo selecionado");
+  await expect(page.locator("#nome-arquivo-chamados-oracle")).toHaveText("Nenhum arquivo selecionado");
   await expect(page.locator("#lista-acompanhamento-chamados")).toContainText("DEMO-SN-001");
   await expect(page.locator("#lista-acompanhamento-chamados")).toContainText("7285070");
   await expect(page.locator("#lista-acompanhamento-chamados")).toContainText("261009-000816");

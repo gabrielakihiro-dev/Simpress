@@ -5,6 +5,7 @@ from datetime import date, timedelta
 import json
 import tempfile
 import unittest
+import zipfile
 from pathlib import Path
 from unittest.mock import patch
 
@@ -501,6 +502,38 @@ class TicketImportRouteTests(unittest.TestCase):
                     oracle_file=UploadFile(filename="oracle.xlsx", file=BytesIO(oracle)),
                 )
             self.assertEqual(missing_columns.exception.status_code, 422)
+
+    def test_import_accepts_simpress_zip_with_one_xlsx_member(self):
+        with tempfile.TemporaryDirectory(dir=PROJECT_ROOT) as directory:
+            router = create_operations_router(
+                load_comparison_history=lambda: [],
+                comparison_history_for_display=lambda event: event,
+                ticket_report_path=lambda: Path(directory) / "tickets.json",
+                transaction_root=lambda: Path(directory),
+            )
+            endpoint = route_handler(router, "/api/operacoes/chamados/importar", "POST")
+            simpress = self.workbook_bytes([
+                ["NumeroPedido", "NumeroSerie", "OrdemServico"],
+                ["PED-1", "SN-1", "1001"],
+            ])
+            oracle = self.workbook_bytes([
+                ["Solicitação", "ID OS Corporate", "Número de Série"],
+                ["REQ-1", "1001", "SN-1"],
+            ])
+            archive = BytesIO()
+            with zipfile.ZipFile(archive, "w", zipfile.ZIP_DEFLATED) as output:
+                output.writestr("Acompanhamento_de_pedidos.xlsx", simpress)
+
+            report = endpoint(
+                simpress_file=UploadFile(
+                    filename="Acompanhamento_de_pedidos.zip",
+                    file=BytesIO(archive.getvalue()),
+                ),
+                oracle_file=UploadFile(filename="solicitacoes.xlsx", file=BytesIO(oracle)),
+            )
+
+            self.assertEqual(report["fontes"]["simpress"]["arquivo"], "Acompanhamento_de_pedidos.zip")
+            self.assertEqual(report["resumo"]["conferidas"], 1)
 
     def test_source_table_rejects_duplicate_and_semantic_alias_columns(self):
         for headers in (
