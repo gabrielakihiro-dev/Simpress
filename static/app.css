@@ -154,23 +154,6 @@
     }
     .header-secondary-panel > button { width: 100%; min-height: 2.25rem; justify-content: flex-start; text-align: left; }
     .header-secondary-panel > button.header-action-item--large { min-height: 2.4rem; border-radius: 0.65rem; }
-    .header-secondary-panel > #btn-atualizar-planilhas {
-      border: 1px solid rgba(56, 189, 248, 0.35);
-      background: linear-gradient(110deg, rgba(2, 132, 199, 0.3), rgba(14, 116, 144, 0.2));
-      color: #e0f2fe; font-weight: 700;
-    }
-    .header-secondary-panel > #btn-atualizar-planilhas:hover {
-      border-color: rgba(125, 211, 252, 0.65); background: linear-gradient(110deg, rgba(2, 132, 199, 0.42), rgba(14, 116, 144, 0.3));
-    }
-    .header-secondary-panel > #btn-atualizar-planilhas .header-action-icon { color: #7dd3fc; }
-    .header-secondary-panel > #btn-exportar-equipamentos {
-      border-color: rgba(52, 211, 153, 0.32); background: rgba(16, 185, 129, 0.14); color: #a7f3d0;
-      font-weight: 600; transition: background-color 0.14s ease, border-color 0.14s ease, color 0.14s ease;
-    }
-    .header-secondary-panel > #btn-exportar-equipamentos:hover {
-      border-color: rgba(110, 231, 183, 0.62); background: rgba(16, 185, 129, 0.24); color: #d1fae5;
-    }
-    .header-secondary-panel > #btn-exportar-equipamentos .header-action-icon { color: #6ee7b7; }
     .header-action-group { min-width: 0; }
     .header-action-group > summary {
       list-style: none; display: flex; align-items: center; gap: 0.6rem; min-height: 2.25rem;
@@ -230,21 +213,21 @@
     .header-action-item--cyan { --action-tint: 34, 211, 238; --action-text: #cffafe; }
     .header-action-item--emerald { --action-tint: 52, 211, 153; --action-text: #d1fae5; }
     .header-action-item--amber { --action-tint: 251, 191, 36; --action-text: #fef3c7; }
-    .header-action-item--teal { --action-tint: 45, 212, 191; --action-text: #ccfbf1; }
+    .header-action-item--orange { --action-tint: 249, 115, 22; --action-text: #fed7aa; }
     .header-action-icon { flex: none; width: 0.75rem; height: 0.75rem; color: #94a3b8; }
     .header-action-icon--blue { color: #7dd3fc; }
     .header-action-icon--violet { color: #c4b5fd; }
     .header-action-icon--cyan { color: #67e8f9; }
     .header-action-icon--emerald { color: #6ee7b7; }
     .header-action-icon--amber { color: #fcd34d; }
-    .header-action-icon--teal { color: #5eead4; }
-    .header-secondary-panel .header-action-item--teal {
-      border-color: rgba(45, 212, 191, 0.38); background: rgba(13, 148, 136, 0.2); color: #ccfbf1;
+    .header-action-icon--orange { color: #fb923c; }
+    .header-secondary-panel .header-action-item--orange {
+      border-color: rgba(251, 146, 60, 0.38); background: rgba(234, 88, 12, 0.2); color: #fed7aa;
     }
-    .header-secondary-panel .header-action-item--teal:hover {
-      border-color: rgba(94, 234, 212, 0.66); background: rgba(13, 148, 136, 0.32); color: #f0fdfa;
+    .header-secondary-panel .header-action-item--orange:hover {
+      border-color: rgba(253, 186, 116, 0.66); background: rgba(234, 88, 12, 0.32); color: #ffedd5;
     }
-    .header-secondary-panel .header-action-item--teal .header-action-icon { color: #5eead4; }
+    .header-secondary-panel .header-action-item--orange .header-action-icon { color: #fb923c; }
     .header-action-count {
       display: inline-flex; align-items: center; justify-content: center; min-width: 1.2rem; height: 1.2rem;
       margin-left: auto; padding: 0 0.3rem; border: 1px solid #334155; border-radius: 999px;

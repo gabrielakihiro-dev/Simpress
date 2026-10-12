@@ -1561,23 +1561,27 @@ test("keeps old ticket imports when the deletion confirmation is cancelled", asy
 });
 
 test("groups secondary actions while keeping spreadsheet updates prominent", () => {
-  assert.match(appHtml, /id="btn-atualizar-planilhas" class="header-action-item header-action-item--large header-action-item--primary/);
-  assert.match(appHtml, /id="btn-atualizar-planilhas"[\s\S]*?<\/button>\s*<button[^>]*id="btn-exportar-equipamentos"/);
-  assert.match(appHtml, /id="btn-exportar-equipamentos"[^>]*header-action-item--large[^>]*header-action-item--emerald/);
+  assert.match(appHtml, /id="btn-atualizar-planilhas" class="header-action-item header-action-item--primary/);
+  assert.match(appHtml, /onclick="abrirAcompanhamentoChamados\(\)"[\s\S]*?<details class="header-action-group" data-action-group="analysis">/);
+  assert.match(appHtml, /id="btn-exportar-equipamentos"[^>]*header-action-item--primary/);
   assert.match(appHtml, /<details class="header-action-group" data-action-group="analysis">/);
   assert.doesNotMatch(appHtml, /data-action-group="equipment"|Equipamentos e cadastros/);
 
   const analysisGroup = appHtml.match(/<details class="header-action-group" data-action-group="analysis">([\s\S]*?)<\/details>/)?.[1] || "";
-  assert.match(analysisGroup, /<span class="sidebar-item-label">Análises e históricos<\/span>/);
+  assert.match(analysisGroup, /<span class="sidebar-item-label">Históricos e Análises<\/span>/);
+  assert.match(analysisGroup, /id="btn-atualizar-planilhas" class="header-action-item header-action-item--primary/);
+  assert.match(analysisGroup, /aria-label="Atualização, exportação, análises, históricos e catálogo de unidades"/);
   assert.match(analysisGroup, /abrirCentralPendencias\(\)/);
   assert.match(analysisGroup, /abrirEvolucaoAtualizacoes\(\)/);
   assert.match(analysisGroup, /abrirModalHistoricoComparacoes\(\)/);
   assert.match(analysisGroup, /abrirModalHistoricoApelidos\(\)/);
   assert.match(analysisGroup, /abrirModalGerenciarUnidades\(\)/);
   assert.ok(analysisGroup.indexOf('id="btn-historico-comparacoes"') < analysisGroup.indexOf('onclick="abrirCentralPendencias()"'));
+  assert.ok(analysisGroup.indexOf('id="btn-atualizar-planilhas"') < analysisGroup.indexOf('id="btn-historico-comparacoes"'));
+  assert.ok(analysisGroup.indexOf('id="btn-atualizar-planilhas"') < analysisGroup.indexOf('id="btn-exportar-equipamentos"'));
+  assert.ok(analysisGroup.indexOf('id="btn-exportar-equipamentos"') < analysisGroup.indexOf('id="btn-historico-comparacoes"'));
   assert.ok(analysisGroup.indexOf('onclick="abrirEvolucaoAtualizacoes()"') < analysisGroup.indexOf('id="btn-historico-apelidos"'));
   assert.ok(analysisGroup.indexOf('id="btn-historico-apelidos"') < analysisGroup.indexOf('label-catalogo-unidades'));
-  assert.doesNotMatch(analysisGroup, /btn-exportar-equipamentos/);
   assert.match(appHtml, /onclick="abrirAcompanhamentoChamados\(\)"/);
   assert.doesNotMatch(appHtml, /Acompanhamento de transportes/);
   assert.doesNotMatch(appScript, /\/api\/transferencias/);

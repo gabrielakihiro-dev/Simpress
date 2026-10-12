@@ -323,21 +323,7 @@ body.sidebar-drawer-open {
   transition: background-color 170ms ease, border-color 170ms ease, color 170ms ease, transform 170ms ease;
 }
 
-.sidebar-actions .header-secondary-panel > button#btn-atualizar-planilhas,
-.sidebar-actions .header-secondary-panel > button#btn-exportar-equipamentos {
-  min-height: 2.85rem;
-  border: 1px solid transparent;
-  border-radius: 0.75rem;
-  background: transparent;
-  color: #9aa9bd;
-  font-size: 0.79rem;
-  font-weight: 620;
-  box-shadow: none;
-}
-
-.sidebar-actions .header-secondary-panel > button:hover,
-.sidebar-actions .header-secondary-panel > button#btn-atualizar-planilhas:hover,
-.sidebar-actions .header-secondary-panel > button#btn-exportar-equipamentos:hover {
+.sidebar-actions .header-secondary-panel > button:hover {
   border-color: rgba(148, 163, 184, 0.1);
   background: rgba(51, 65, 85, 0.34);
   color: #f1f5f9;
@@ -357,21 +343,12 @@ body.sidebar-drawer-open {
   color: #8495ad;
 }
 
-.sidebar-actions .header-secondary-panel > button#btn-atualizar-planilhas .header-action-icon,
-.sidebar-actions .header-secondary-panel > button#btn-exportar-equipamentos .header-action-icon {
-  color: #8495ad;
-}
-
 .sidebar-actions .header-secondary-panel > button:hover svg,
-.sidebar-actions .header-secondary-panel > button#btn-atualizar-planilhas:hover .header-action-icon,
-.sidebar-actions .header-secondary-panel > button#btn-exportar-equipamentos:hover .header-action-icon,
 .sidebar-actions .header-action-group > summary:hover .header-action-group-icon {
   color: #c4b5fd;
 }
 
 .sidebar-actions .header-secondary-panel > button:active,
-.sidebar-actions .header-secondary-panel > button#btn-atualizar-planilhas:active,
-.sidebar-actions .header-secondary-panel > button#btn-exportar-equipamentos:active,
 .sidebar-actions .header-action-group > summary:active,
 .sidebar-actions .header-action-group[open] > summary {
   border-color: rgba(167, 139, 250, 0.24);
@@ -387,8 +364,6 @@ body.sidebar-drawer-open {
 }
 
 .sidebar-actions .header-secondary-panel > button:active svg,
-.sidebar-actions .header-secondary-panel > button#btn-atualizar-planilhas:active .header-action-icon,
-.sidebar-actions .header-secondary-panel > button#btn-exportar-equipamentos:active .header-action-icon,
 .sidebar-actions .header-action-group > summary:active .header-action-group-icon,
 .sidebar-actions .header-action-group[open] > summary .header-action-group-icon {
   color: #c4b5fd;
@@ -437,62 +412,17 @@ body.sidebar-drawer-open {
   transform: translateX(1px);
 }
 
-/* Dark, coordinated accents for the four primary tools. */
-.sidebar-actions .header-secondary-panel > button#btn-atualizar-planilhas {
-  border-color: rgba(129, 140, 248, 0.22);
-  background: rgba(67, 56, 202, 0.08);
-  color: #c7d2fe;
+.sidebar-actions .header-secondary-panel > button.header-action-item--orange {
+  border-color: rgba(251, 146, 60, 0.24);
+  background: rgba(234, 88, 12, 0.08);
+  color: #fed7aa;
 }
 
-.sidebar-actions .header-secondary-panel > button#btn-atualizar-planilhas .header-action-icon {
-  color: #818cf8;
+.sidebar-actions .header-secondary-panel > button.header-action-item--orange .header-action-icon {
+  color: #fb923c;
 }
 
-.sidebar-actions .header-secondary-panel > button#btn-atualizar-planilhas:hover,
-.sidebar-actions .header-secondary-panel > button#btn-atualizar-planilhas:active {
-  border-color: rgba(165, 180, 252, 0.42);
-  background: rgba(67, 56, 202, 0.16);
-  color: #e0e7ff;
-}
-
-.sidebar-actions .header-secondary-panel > button#btn-atualizar-planilhas:hover .header-action-icon,
-.sidebar-actions .header-secondary-panel > button#btn-atualizar-planilhas:active .header-action-icon {
-  color: #a5b4fc;
-}
-
-.sidebar-actions .header-secondary-panel > button#btn-exportar-equipamentos {
-  border-color: rgba(52, 211, 153, 0.2);
-  background: rgba(5, 150, 105, 0.08);
-  color: #a7f3d0;
-}
-
-.sidebar-actions .header-secondary-panel > button#btn-exportar-equipamentos .header-action-icon {
-  color: #34d399;
-}
-
-.sidebar-actions .header-secondary-panel > button#btn-exportar-equipamentos:hover,
-.sidebar-actions .header-secondary-panel > button#btn-exportar-equipamentos:active {
-  border-color: rgba(110, 231, 183, 0.4);
-  background: rgba(5, 150, 105, 0.16);
-  color: #d1fae5;
-}
-
-.sidebar-actions .header-secondary-panel > button#btn-exportar-equipamentos:hover .header-action-icon,
-.sidebar-actions .header-secondary-panel > button#btn-exportar-equipamentos:active .header-action-icon {
-  color: #6ee7b7;
-}
-
-.sidebar-actions .header-secondary-panel > button.header-action-item--teal {
-  border-color: rgba(45, 212, 191, 0.2);
-  background: rgba(13, 148, 136, 0.08);
-  color: #99f6e4;
-}
-
-.sidebar-actions .header-secondary-panel > button.header-action-item--teal .header-action-icon {
-  color: #2dd4bf;
-}
-
-.sidebar-actions .header-secondary-panel > button.header-action-item--teal .sidebar-item-label {
+.sidebar-actions .header-secondary-panel > button.header-action-item--orange .sidebar-item-label {
   flex: 1 1 auto;
   overflow: visible;
   text-overflow: clip;
@@ -500,16 +430,16 @@ body.sidebar-drawer-open {
   line-height: 1.55;
 }
 
-.sidebar-actions .header-secondary-panel > button.header-action-item--teal:hover,
-.sidebar-actions .header-secondary-panel > button.header-action-item--teal:active {
-  border-color: rgba(94, 234, 212, 0.4);
-  background: rgba(13, 148, 136, 0.16);
-  color: #ccfbf1;
+.sidebar-actions .header-secondary-panel > button.header-action-item--orange:hover,
+.sidebar-actions .header-secondary-panel > button.header-action-item--orange:active {
+  border-color: rgba(253, 186, 116, 0.42);
+  background: rgba(234, 88, 12, 0.16);
+  color: #ffedd5;
 }
 
-.sidebar-actions .header-secondary-panel > button.header-action-item--teal:hover .header-action-icon,
-.sidebar-actions .header-secondary-panel > button.header-action-item--teal:active .header-action-icon {
-  color: #5eead4;
+.sidebar-actions .header-secondary-panel > button.header-action-item--orange:hover .header-action-icon,
+.sidebar-actions .header-secondary-panel > button.header-action-item--orange:active .header-action-icon {
+  color: #fdba74;
 }
 
 .sidebar-actions .header-action-group[data-action-group="analysis"] > summary {
@@ -552,10 +482,12 @@ body.sidebar-drawer-open {
 
 .sidebar-actions .header-action-group-items {
   display: grid;
-  gap: 0.1rem;
-  margin: 0.14rem 0 0.3rem 1.16rem;
-  padding: 0.1rem 0 0.1rem 0.55rem;
-  border-left: 1px solid rgba(148, 163, 184, 0.18);
+  gap: 0.28rem;
+  margin: 0.22rem 0 0.38rem 0.32rem;
+  padding: 0.38rem;
+  border: 1px solid rgba(167, 139, 250, 0.18);
+  border-radius: 0.78rem;
+  background: rgba(49, 46, 129, 0.08);
 }
 
 .sidebar-actions .header-action-group-items .header-action-item {
@@ -582,6 +514,28 @@ body.sidebar-drawer-open {
   flex: none;
   width: 0.9rem;
   height: 0.9rem;
+}
+
+.sidebar-actions .header-action-group-items .header-action-item--primary {
+  border-color: rgba(129, 140, 248, 0.42);
+  background: linear-gradient(105deg, rgba(67, 56, 202, 0.28), rgba(49, 46, 129, 0.18));
+  color: #e0e7ff;
+  font-weight: 700;
+  box-shadow: inset 2px 0 #818cf8, 0 4px 12px rgba(49, 46, 129, 0.16);
+}
+
+.sidebar-actions .header-action-group-items .header-action-item--primary .header-action-icon {
+  color: #a5b4fc;
+}
+
+.sidebar-actions .header-action-group-items .header-action-item--primary:hover {
+  border-color: rgba(165, 180, 252, 0.6);
+  background: linear-gradient(105deg, rgba(67, 56, 202, 0.4), rgba(49, 46, 129, 0.26));
+  color: #fff;
+}
+
+.sidebar-actions .header-action-group-items .header-action-item--primary:hover .header-action-icon {
+  color: #c7d2fe;
 }
 
 .app-workspace {
@@ -723,9 +677,7 @@ body.sidebar-drawer-open {
 .simpress-app-shell[data-sidebar-collapsed="true"] .sidebar-actions .header-action-group-items {
   gap: 0.18rem;
   margin: 0.18rem 0 0.3rem;
-  padding: 0.2rem 0 0;
-  border-left: 0;
-  border-top: 1px solid rgba(148, 163, 184, 0.14);
+  padding: 0.24rem;
 }
 
 @media (max-width: 767px) {
@@ -881,11 +833,9 @@ body.sidebar-drawer-open {
   }
 
   .simpress-app-shell[data-sidebar-collapsed="true"] .sidebar-actions .header-action-group-items {
-    gap: 0.1rem;
-    margin: 0.14rem 0 0.3rem 1.16rem;
-    padding: 0.1rem 0 0.1rem 0.55rem;
-    border-top: 0;
-    border-left: 1px solid rgba(148, 163, 184, 0.18);
+    gap: 0.28rem;
+    margin: 0.22rem 0 0.38rem 0.32rem;
+    padding: 0.38rem;
   }
 
 }

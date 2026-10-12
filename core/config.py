@@ -59,7 +59,7 @@ SUPPORTED_CONTRACT_LEGAL_NAME = "SERV DE APOIO AS MICRO E PEQ EMP DO PARANA SEBR
 
 # Update these process environment values when the operation's origin contact changes.
 TRANSFER_ORIGIN_CONTACT = os.environ.get(
-    "SIMPRESS_TRANSFER_ORIGIN_CONTACT", "Gabriel Akihiro Noda Souza (Simpress)"
+    "SIMPRESS_TRANSFER_ORIGIN_CONTACT", "Gabriel Akihiro noda Souza"
 )
 TRANSFER_ORIGIN_EMAIL = os.environ.get("SIMPRESS_TRANSFER_ORIGIN_EMAIL", "gansouza@simpress.com.br")
 TRANSFER_ORIGIN_PHONE = os.environ.get("SIMPRESS_TRANSFER_ORIGIN_PHONE", "(41) 98751-2389")
