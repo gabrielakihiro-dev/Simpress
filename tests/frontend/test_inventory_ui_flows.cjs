@@ -211,7 +211,7 @@ function ticketSelectionHarness(fetchApi) {
   const harness = createAppHarness(fetchApi);
   harness.run(`
     renderizarAcompanhamentoChamados = () => {
-      document.getElementById("lista-acompanhamento-chamados").innerHTML = acompanhamentoChamadosAtual.snapshot_id;
+      document.getElementById("lista-acompanhamento-chamados").innerHTML = acompanhamentoChamadosAtual?.snapshot_id || "Importe as duas planilhas";
     };
     carregarEvolucaoChamados = async () => {};
   `);
@@ -247,6 +247,27 @@ test("stale ticket errors cannot replace a newer successful snapshot", async () 
   assert.equal(harness.element("lista-acompanhamento-chamados").innerHTML, "latest");
 });
 
+test("choosing no ticket import cancels a pending snapshot and clears the selected report", async () => {
+  const old = pendingTicketResponse();
+  const requests = [];
+  const harness = ticketSelectionHarness((url, options) => {
+    requests.push(options);
+    return old.promise;
+  });
+  harness.run('acompanhamentoChamadosAtual = { snapshot_id: "previous" }');
+  harness.element("versao-acompanhamento-chamados").value = "previous";
+  const pending = harness.run("selecionarVersaoChamados()");
+
+  harness.element("versao-acompanhamento-chamados").value = "";
+  await harness.run("selecionarVersaoChamados()");
+  old.resolve(apiResponse({}));
+  await pending;
+
+  assert.equal(requests[0].signal.aborted, true);
+  assert.equal(harness.run("acompanhamentoChamadosAtual"), null);
+  assert.match(harness.element("lista-acompanhamento-chamados").innerHTML, /Importe as duas planilhas/);
+});
+
 test("a late initial ticket load cannot overwrite a selected historical snapshot", async () => {
   const initial = pendingTicketResponse();
   const harness = ticketSelectionHarness(url => url.endsWith("/chamados") ? initial.promise : Promise.resolve(apiResponse({})));
@@ -266,6 +287,28 @@ test("closing ticket tracking cancels reads and ignores their late completion", 
   harness.run("fecharAcompanhamentoChamados()");
   response.resolve(apiResponse({})); await pending;
   assert.equal(harness.run("acompanhamentoChamadosAtual"), null);
+});
+
+test("rebuilding ticket cards aborts timeline reads tied to the old cards", async () => {
+  const response = pendingTicketResponse();
+  let options;
+  const harness = createAppHarness((_url, requestOptions) => {
+    options = requestOptions;
+    return response.promise;
+  });
+  const details = new FakeElement("timeline"), body = new FakeElement("timeline-body");
+  details.open = true;
+  details.querySelector = () => body;
+  harness.context.testTimeline = details;
+  const pending = harness.run("carregarLinhaDoTempoChamado(testTimeline)");
+
+  await harness.run("renderizarAcompanhamentoChamados()");
+
+  assert.equal(options.signal.aborted, true);
+  response.resolve(apiResponse({ eventos: [] }));
+  await pending;
+  assert.equal(details.dataset.ticketTimelineLoaded, undefined);
+  assert.match(body.innerHTML, /Carregando histórico/);
 });
 
 test("ticket evolution ignores a stale error after a newer comparison succeeds", async () => {

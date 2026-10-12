@@ -3145,9 +3145,13 @@
     function fecharAcompanhamentoChamados() {
       ticketSnapshotRequestGate.invalidate();
       ticketEvolutionRequestGate.invalidate();
+      cancelarLeiturasLinhasDoTempoChamados();
+      fecharModalAcessivel("modal-acompanhamento-chamados");
+    }
+
+    function cancelarLeiturasLinhasDoTempoChamados() {
       ticketTimelineRequests.forEach(gate => gate.invalidate());
       ticketTimelineRequests.clear();
-      fecharModalAcessivel("modal-acompanhamento-chamados");
     }
 
     function formatarListaChamados(values) {
@@ -3467,6 +3471,7 @@
     }
 
     function renderizarAcompanhamentoChamados() {
+      cancelarLeiturasLinhasDoTempoChamados();
       const data = acompanhamentoChamadosAtual || {};
       const summary = data.resumo || {};
       const sources = data.fontes || {};
@@ -3639,9 +3644,14 @@
 
     async function selecionarVersaoChamados() {
       const snapshotId = document.getElementById("versao-acompanhamento-chamados").value;
-      if (!snapshotId) return;
       const request = ticketSnapshotRequestGate.begin();
       ticketEvolutionRequestGate.invalidate();
+      if (!snapshotId) {
+        acompanhamentoChamadosAtual = null;
+        renderizarAcompanhamentoChamados();
+        return;
+      }
+      cancelarLeiturasLinhasDoTempoChamados();
       const target = document.getElementById("lista-acompanhamento-chamados");
       target.innerHTML = '<p class="py-8 text-center text-sm text-slate-400" role="status">Carregando versão selecionada…</p>';
       try {
@@ -3721,6 +3731,7 @@
     async function carregarAcompanhamentoChamados() {
       const request = ticketSnapshotRequestGate.begin();
       ticketEvolutionRequestGate.invalidate();
+      cancelarLeiturasLinhasDoTempoChamados();
       const list = document.getElementById("lista-acompanhamento-chamados");
       list.innerHTML = '<p class="py-8 text-center text-sm text-slate-400" role="status">Carregando acompanhamento…</p>';
       try {

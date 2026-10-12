@@ -45,6 +45,23 @@ test("extracted DOM helpers preserve safe rendering of external content", async 
       highlights: container.querySelectorAll(".serial-match").length,
       injected: Boolean(window.injected),
     };
+    result.highlightSamples = [
+      ["A'039x &amp", "039"],
+      ["<img src=x onerror=alert(1)> SERIAL", "serial"],
+      ["serial [A].* &", "[A].*"],
+      ["filial São José", "são"],
+    ].map(([value, query]) => {
+      const sample = document.createElement("div");
+      sample.innerHTML = highlightMatch(value, query);
+      const output = {
+        original: value,
+        text: sample.textContent,
+        highlights: sample.querySelectorAll(".serial-match").length,
+        images: sample.querySelectorAll("img").length,
+      };
+      sample.remove();
+      return output;
+    });
     container.remove();
     return result;
   });
@@ -52,4 +69,9 @@ test("extracted DOM helpers preserve safe rendering of external content", async 
   expect(rendered.highlights).toBe(1);
   expect(rendered.injected).toBe(false);
   expect(rendered.text).toContain('<img src=x onerror="window.injected=true"> SYNTHETIC');
+  expect(rendered.highlightSamples.map(sample => sample.text)).toEqual(
+    rendered.highlightSamples.map(sample => sample.original),
+  );
+  expect(rendered.highlightSamples.map(sample => sample.highlights)).toEqual([1, 1, 1, 1]);
+  expect(rendered.highlightSamples.map(sample => sample.images)).toEqual([0, 0, 0, 0]);
 });

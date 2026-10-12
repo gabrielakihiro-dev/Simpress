@@ -507,6 +507,7 @@ iniciar_servidor.bat                  Inicializador local para Windows
 ## Índice da documentação
 
 - [Relatório final da reorganização e refatoração](docs/desenvolvimento/relatorio-refatoracao-2026-10-12.md)
+- [Revisão e correções pós integração](docs/desenvolvimento/revisao-refatoracao-frontend-2026-10-12.md)
 - [Arquitetura e plano da refatoração](docs/arquitetura/analise-refatoracao-frontend.md)
 - [Primeiro acesso](docs/guias/PRIMEIRO_ACESSO.md)
 - [Anotações do histórico](docs/operacao/ANOTACOES-HISTORICO.md)
