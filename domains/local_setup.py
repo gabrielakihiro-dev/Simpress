@@ -1,6 +1,7 @@
 """Validation for first-use imports, independent of application storage."""
 
 import io
+import lzma
 import re
 import unicodedata
 import zipfile
@@ -54,7 +55,7 @@ def unpack_simpress_zip(data: bytes, limit: int, *, size_label: str = "30 MB") -
             return workbook, member.filename
     except HTTPException:
         raise
-    except (OSError, ValueError, RuntimeError, NotImplementedError, zipfile.BadZipFile, zlib.error) as error:
+    except (OSError, ValueError, RuntimeError, NotImplementedError, zipfile.BadZipFile, zlib.error, lzma.LZMAError) as error:
         raise HTTPException(400, "Não foi possível ler o ZIP da Simpress.") from error
 
 
