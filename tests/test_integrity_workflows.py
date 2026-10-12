@@ -2608,7 +2608,11 @@ class WorkflowIntegrityTests(unittest.TestCase):
                 self.assertTrue(transaction_started.is_set(), "a atualização não entrou na transação")
 
                 task.cancel()
-                await asyncio.sleep(0.025)
+                await asyncio.sleep(0)
+                task.cancel()
+                await asyncio.sleep(0)
+                task.cancel()
+                await asyncio.sleep(0)
                 self.assertFalse(task.done(), "o cancelamento liberou recursos antes da transação")
             finally:
                 allow_transaction.set()
@@ -2626,6 +2630,118 @@ class WorkflowIntegrityTests(unittest.TestCase):
         history = json.loads(self.comparison_history.read_text(encoding="utf-8"))
         self.assertEqual(len(history), 1)
         self.assertEqual(main.equipamentos_cache["SN-1"]["apelido"], "PRNOTE-NEW")
+
+    def test_repeated_upload_cancellation_keeps_parser_admission_until_worker_finishes(self):
+        admission = threading.BoundedSemaphore(1)
+        parser_started = threading.Event()
+        release_parser = threading.Event()
+        parser_finished = threading.Event()
+
+        def blocked_parser(_data, _role):
+            parser_started.set()
+            try:
+                if not release_parser.wait(3):
+                    raise TimeoutError("o teste não liberou o parser")
+                return {"records": []}
+            finally:
+                parser_finished.set()
+
+        services = SimpleNamespace(
+            max_upload_bytes=lambda: 1024,
+            workbook_parse_admission=lambda: admission,
+            validate_uploaded_workbook=blocked_parser,
+        )
+        upload = UploadFile(filename="endpoint-sintetico.xlsx", file=io.BytesIO(b"fixture"))
+
+        async def run():
+            task = asyncio.create_task(inventory_update.read_uploaded_xlsx(upload, "endpoint", services))
+            try:
+                self.assertTrue(await asyncio.wait_for(asyncio.to_thread(parser_started.wait, 3), 4))
+                for _ in range(3):
+                    task.cancel()
+                    await asyncio.sleep(0)
+                    self.assertFalse(task.done())
+                    self.assertFalse(admission.acquire(blocking=False))
+                release_parser.set()
+                with self.assertRaises(asyncio.CancelledError):
+                    await asyncio.wait_for(task, 4)
+            finally:
+                release_parser.set()
+                if not task.done():
+                    task.cancel()
+                    await asyncio.gather(task, return_exceptions=True)
+
+        asyncio.run(run())
+        self.assertTrue(parser_finished.is_set())
+        self.assertTrue(admission.acquire(blocking=False))
+        admission.release()
+
+    def test_preview_keeps_locked_snapshot_off_event_loop_until_repeated_cancellation(self):
+        lock_started = threading.Event()
+        release_lock = threading.Event()
+        lock_finished = threading.Event()
+
+        def blocked_lock_paths(_paths):
+            from contextlib import contextmanager
+
+            @contextmanager
+            def hold_lock():
+                lock_started.set()
+                try:
+                    if not release_lock.wait(3):
+                        raise TimeoutError("o teste não liberou o lock da prévia")
+                    yield
+                finally:
+                    lock_finished.set()
+
+            return hold_lock()
+
+        services = replace(
+            main._inventory_update_services,
+            get_primary_equipment_file=lambda: None,
+        )
+        endpoint_upload = UploadFile(
+            filename="endpoint-sintetico.xlsx",
+            file=io.BytesIO(_endpoint_bytes([("SN-PREVIEW-ASYNC", "HOST-1")])),
+        )
+        details_upload = UploadFile(
+            filename="detalhes-sinteticos.xlsx",
+            file=io.BytesIO(_details_bytes([
+                ("SN-PREVIEW-ASYNC", "HOST-1", "Modelo A", "Maringá", "Notebook", "87000000"),
+            ])),
+        )
+
+        async def run():
+            task = asyncio.create_task(inventory_update.preview_inventory_files(
+                endpoint_upload, details_upload, services,
+            ))
+            try:
+                self.assertTrue(await asyncio.wait_for(asyncio.to_thread(lock_started.wait, 3), 4))
+                loop_tick = asyncio.Event()
+                asyncio.get_running_loop().call_soon(loop_tick.set)
+                await asyncio.wait_for(loop_tick.wait(), 1)
+                self.assertFalse(task.done(), "o lock da prévia não pode bloquear a event loop")
+
+                task.cancel()
+                await asyncio.sleep(0)
+                task.cancel()
+                await asyncio.sleep(0)
+                self.assertFalse(task.done(), "a prévia cancelada deve aguardar a leitura protegida")
+                release_lock.set()
+                with self.assertRaises(asyncio.CancelledError):
+                    await asyncio.wait_for(task, 4)
+            finally:
+                release_lock.set()
+                if not task.done():
+                    task.cancel()
+                    await asyncio.gather(task, return_exceptions=True)
+
+        with patch.object(inventory_update, "lock_paths", side_effect=blocked_lock_paths):
+            asyncio.run(run())
+
+        self.assertTrue(lock_finished.is_set())
+        self.assertTrue(endpoint_upload.file.closed)
+        self.assertTrue(details_upload.file.closed)
 
     def test_upload_replaces_inventory_snapshot_and_keeps_duplicate_source_rows(self):
         make_details(self.details, [

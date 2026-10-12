@@ -22,6 +22,7 @@ from core.integrity import (
     WorkbookSafetyError,
     lock_paths,
 )
+from core.async_workers import await_worker_completion
 
 from domains.history_annotations import (
     effective_history_annotation, history_annotation_row_fingerprint,
@@ -378,13 +379,13 @@ async def read_uploaded_xlsx(
 
     worker = asyncio.create_task(asyncio.to_thread(parse))
     try:
-        file_bytes, table = await asyncio.shield(worker)
-    except asyncio.CancelledError:
-        try:
-            await asyncio.shield(worker)
-        except Exception:
-            logger.exception("Falha na validação de inventário após cancelamento.")
-        raise
+        file_bytes, table = await await_worker_completion(
+            worker,
+            on_cancelled_failure=lambda error: logger.error(
+                "Falha na validação de inventário após cancelamento.",
+                exc_info=(type(error), error, error.__traceback__),
+            ),
+        )
     finally:
         if parse_admission is not None:
             parse_admission.release()
@@ -404,11 +405,16 @@ async def preview_inventory_files(
             "endpoint": services.endpoint_upload_file(),
             "detalhes": services.get_primary_equipment_file() or services.details_upload_file(),
         }
-        with lock_paths(target_files.values()):
-            current_bytes = {
-                role: path.read_bytes() if path.is_file() else b""
-                for role, path in target_files.items()
-            }
+
+        def read_current_snapshot():
+            with lock_paths(target_files.values()):
+                return {
+                    role: path.read_bytes() if path.is_file() else b""
+                    for role, path in target_files.items()
+                }
+
+        snapshot_worker = asyncio.create_task(asyncio.to_thread(read_current_snapshot))
+        current_bytes = await await_worker_completion(snapshot_worker)
 
         def validate_current():
             with services.workbook_parse_admission():
@@ -479,15 +485,14 @@ async def update_inventory_files(
                 preview_token,
             )
         )
-        try:
-            return await asyncio.shield(worker)
-        except asyncio.CancelledError:
-            # Once the transaction starts, let it finish or roll back before releasing request resources.
-            try:
-                await asyncio.shield(worker)
-            except Exception:
-                logger.exception("Falha na atualização em segundo plano após cancelamento da solicitação.")
-            raise
+        # Once the transaction starts, let it finish or roll back before releasing request resources.
+        return await await_worker_completion(
+            worker,
+            on_cancelled_failure=lambda error: logger.error(
+                "Falha na atualização em segundo plano após cancelamento da solicitação.",
+                exc_info=(type(error), error, error.__traceback__),
+            ),
+        )
     except HTTPException:
         raise
     except FileBusyError as error:
