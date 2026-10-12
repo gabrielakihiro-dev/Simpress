@@ -75,7 +75,7 @@ test("sidebar tools keep accent colors and fit the multiline ticket label", asyn
   await openSidebarIfNeeded(page);
   const updateButton = page.locator("#btn-atualizar-planilhas");
   const exportButton = page.locator("#btn-exportar-equipamentos");
-  const ticketButton = page.getByRole("button", { name: "Acompanhamento de Chamados" });
+  const ticketButton = page.getByRole("button", { name: "Acompanhamento de Chamados", exact: true });
   const analysisButton = page.locator('.header-action-group[data-action-group="analysis"] > summary');
   await expect(exportButton).toBeVisible();
   await expect(ticketButton).toBeVisible();
@@ -251,7 +251,7 @@ test("inventory evolution compares two saved updates and shows their row annotat
 test("ticket tracking imports both workbooks and relates each serial to its OS", async ({ page }, testInfo) => {
   await page.setViewportSize({ width: testInfo.project.name === "mobile" ? 390 : 1366, height: 640 });
   await openSidebarIfNeeded(page);
-  await page.getByRole("button", { name: "Acompanhamento de Chamados" }).click();
+  await page.getByRole("button", { name: "Acompanhamento de Chamados", exact: true }).click();
   const dialog = page.locator("#modal-acompanhamento-chamados");
   await expect(dialog).toBeVisible();
   await expect(dialog.locator("#filtros-avancados-acompanhamento-chamados")).toHaveCount(0);

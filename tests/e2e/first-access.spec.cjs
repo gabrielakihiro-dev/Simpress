@@ -32,11 +32,12 @@ test("first access centralizes the inventory import and keeps calls separate", a
   await page.goto("/");
   const panel = page.locator("#readiness-panel");
   await expect(panel).toHaveAttribute("open", "");
-  await expect(page.locator("#readiness-details")).toHaveAttribute("open", "");
-  await expect(page.locator("#readiness-summary")).toContainText("Base ainda não importada");
+  await expect(page.locator("#readiness-summary")).toContainText("Nenhum dos 5 arquivos está disponível");
   await expect(panel.getByRole("button", { name: /Importar/ })).toHaveCount(3);
-  await expect(panel).toContainText("Catálogos e históricos locais");
-  await expect(panel.getByRole("heading", { name: "Ações com inventário" })).toBeVisible();
+  await expect(panel).not.toContainText("Catálogos e históricos locais");
+  await expect(panel.getByRole("heading", { name: "Ações com inventário" })).toHaveCount(0);
+  await expect(panel.getByRole("heading", { name: "Modelo de exportação" })).toBeVisible();
+  await expect(panel.locator("#readiness-details-content")).toBeVisible();
   await expect(panel.getByRole("heading", { name: "Acompanhamento de chamados" })).toBeVisible();
   await expect(page.locator(".readiness-panel-summary")).toHaveCSS("display", "flex");
   await expect(page.locator("#readiness-title")).toHaveCSS("font-size", "12px");
@@ -55,7 +56,10 @@ test("first access centralizes the inventory import and keeps calls separate", a
   await expect(page.locator("#modal-atualizar-planilhas")).toBeHidden();
 
   await expect(panel.getByRole("button", { name: "Importar modelo — Modelo de transferência", exact: true })).toHaveCount(0);
-  await panel.getByRole("button", { name: "Importar planilhas para acompanhamento de chamados", exact: true }).click();
+  const ticketGroup = panel.locator(".readiness-group").filter({
+    has: page.getByRole("heading", { name: "Acompanhamento de chamados" }),
+  });
+  await ticketGroup.getByRole("button", { name: "Importar planilhas de chamados", exact: true }).click();
   await expect(page.locator("#painel-dados-acompanhamento-chamados")).toHaveAttribute("open", "");
   await expect(page.locator("#arquivo-chamados-simpress")).toBeVisible();
   expect(errors).toEqual([]);
@@ -73,7 +77,11 @@ test("model import handles failure and refreshes availability after success", as
     return route.fulfill({ json: { sucesso: true } });
   });
   await page.goto("/");
-  await page.getByRole("button", { name: "Importar modelo — Modelo de exportação", exact: true }).click();
+  const exportModelGroup = page.locator(".readiness-group").filter({
+    has: page.getByRole("heading", { name: "Modelo de exportação" }),
+  });
+  await expect(exportModelGroup).toBeVisible();
+  await exportModelGroup.getByRole("button", { name: "Importar modelo de exportação", exact: true }).click();
   const chooseFileButton = page.getByRole("button", { name: "Escolher arquivo", exact: true });
   await expect(chooseFileButton).toBeVisible();
   const fileChooserPromise = page.waitForEvent("filechooser");
@@ -92,7 +100,7 @@ test("model import handles failure and refreshes availability after success", as
   await expect(page.locator("#readiness-panel").getByRole("button", { name: /Importar/ })).toHaveCount(3);
 });
 
-test("ready setup starts collapsed and preserves user's disclosure choice", async ({ page }) => {
+test("ready setup starts collapsed and uses one disclosure for the availability panel", async ({ page }) => {
   await mockReadiness(page, () => readiness(true));
   await page.goto("/");
   const panel = page.locator("#readiness-panel");
@@ -100,8 +108,8 @@ test("ready setup starts collapsed and preserves user's disclosure choice", asyn
   await expect(page.locator("#readiness-summary")).toContainText("Todos os 5 arquivos");
   await expect(panel).not.toHaveAttribute("open", "");
   await panel.locator(":scope > summary").click();
-  await page.locator("#readiness-details > summary").click();
-  await page.locator("#readiness-refresh").click();
   await expect(panel).toHaveAttribute("open", "");
   await expect(panel.getByRole("button", { name: /Importar/ })).toHaveCount(3);
+  await panel.locator(":scope > summary").click();
+  await expect(panel).not.toHaveAttribute("open", "");
 });

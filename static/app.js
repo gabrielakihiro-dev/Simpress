@@ -484,7 +484,6 @@
       almocoEntrega?.addEventListener("input", atualizarObrigatoriedadeDuracaoPausaEntrega);
       almocoEntrega?.addEventListener("change", atualizarObrigatoriedadeDuracaoPausaEntrega);
       atualizarObrigatoriedadeDuracaoPausaEntrega();
-      document.getElementById("readiness-refresh")?.addEventListener("click", carregarProntidao);
       carregarProntidao();
       carregarEstatisticas();
       carregarUnidades();
@@ -557,11 +556,9 @@
       const panel = document.getElementById("readiness-panel");
       const summary = document.getElementById("readiness-summary");
       const details = document.getElementById("readiness-details-content");
-      const refreshButton = document.getElementById("readiness-refresh");
-      if (!panel || !summary || !details || !refreshButton) return;
+      if (!panel || !summary || !details) return;
 
       panel.setAttribute("aria-busy", "true");
-      refreshButton.disabled = true;
       try {
         const response = await fetch("/api/prontidao", { cache: "no-store" });
         if (!response.ok) throw new Error("Falha ao consultar a disponibilidade local.");
@@ -584,8 +581,6 @@
         panel.dataset.state = allAvailable ? "ready" : "warning";
         if (!panel.dataset.initialized) {
           panel.open = !allAvailable;
-          const innerDetails = document.getElementById("readiness-details");
-          if (innerDetails) innerDetails.open = !allAvailable;
           panel.dataset.initialized = "true";
         }
         summary.textContent = allAvailable
@@ -662,7 +657,7 @@
             showItemState: false,
             groupAction: report.backend === "files"
               ? {
-                  label: "Importar/atualizar inventários",
+                  label: "Importar",
                   ariaLabel: "Importar/atualizar inventários Simpress e Endpoint",
                   onClick: abrirModalAtualizarPlanilhas,
                 }
@@ -681,8 +676,8 @@
             countState: ticketStatus.state,
             showItemState: false,
             groupAction: {
-              label: "Importar planilhas de chamados",
-              ariaLabel: "Importar planilhas para acompanhamento de chamados",
+              label: "Importar",
+              ariaLabel: "Importar planilhas de chamados",
               onClick: () => {
                 document.getElementById("painel-dados-acompanhamento-chamados").open = true;
                 abrirAcompanhamentoChamados(true);
@@ -707,7 +702,8 @@
               showItemState: false,
               itemActions: {
                 modelo_exportacao: {
-                  label: "Importar modelo",
+                  label: "Importar",
+                  ariaLabel: "Importar modelo de exportação",
                   onClick: () => abrirImportacaoModelo("exportacao"),
                 },
               },
@@ -717,11 +713,10 @@
         details.replaceChildren(content);
       } catch (error) {
         panel.dataset.state = "error";
-        summary.textContent = "Não foi possível consultar a disponibilidade das funções.";
-        details.textContent = "Confira se o servidor está em execução e tente atualizar o status.";
+        summary.textContent = "Não foi possível consultar a disponibilidade dos arquivos.";
+        details.textContent = "Confira se o servidor está em execução e recarregue a página.";
       } finally {
         panel.setAttribute("aria-busy", "false");
-        refreshButton.disabled = false;
       }
     }
 
