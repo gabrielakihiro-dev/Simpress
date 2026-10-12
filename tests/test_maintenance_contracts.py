@@ -422,7 +422,7 @@ class MaintenanceContractTests(unittest.TestCase):
         with patch.object(main, "get_startup_readiness", return_value=report):
             self.assertEqual(main.get_readiness_status(), report)
 
-    def test_readiness_panel_is_accessible_refreshable_and_renders_text_safely(self):
+    def test_readiness_panel_has_one_disclosure_and_renders_text_safely(self):
         html = (app_config.STATIC_DIR / "index.html").read_text(encoding="utf-8")
         script = (app_config.STATIC_DIR / "app.js").read_text(encoding="utf-8")
         panel_start = script.index("async function carregarProntidao()")
@@ -432,10 +432,10 @@ class MaintenanceContractTests(unittest.TestCase):
         self.assertIn('id="readiness-panel"', html)
         self.assertIn('id="readiness-summary"', html)
         self.assertIn('role="status" aria-live="polite"', html)
-        self.assertIn('id="readiness-refresh"', html)
-        self.assertIn("Ver detalhes de arquivos e funções", html)
+        self.assertNotIn('id="readiness-refresh"', html)
+        self.assertNotIn("Ver detalhes de arquivos e funções", html)
         self.assertIn('fetch("/api/prontidao"', panel_script)
-        self.assertIn('addEventListener("click", carregarProntidao)', script)
+        self.assertIn("carregarProntidao();", script)
         self.assertIn("details.replaceChildren(content)", panel_script)
         self.assertIn("panel.setAttribute(\"aria-busy\", \"false\")", panel_script)
         self.assertIn("status.missing_files", script)
