@@ -343,7 +343,7 @@ test("ticket tracking imports both workbooks and relates each serial to its OS",
     buffer: Buffer.from("fixture xlsx"),
   });
   await expect(page.locator("#nome-arquivo-chamados-oracle")).toHaveText("Gestao_de_Solicitacoes.xlsx");
-  await page.getByRole("button", { name: "Importar planilhas" }).click();
+  await page.getByRole("button", { name: "Importar planilhas", exact: true }).click();
   await expect(page.locator("#status-importacao-chamados")).toContainText("Planilhas importadas");
   await expect(page.locator("#nome-arquivo-chamados-simpress")).toHaveText("Nenhum arquivo selecionado");
   await expect(page.locator("#nome-arquivo-chamados-oracle")).toHaveText("Nenhum arquivo selecionado");
