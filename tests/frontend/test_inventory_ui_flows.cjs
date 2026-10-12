@@ -1468,8 +1468,12 @@ test("exports the selected ticket snapshot with only the visible filters", async
       blob: async () => ({}),
     };
   });
-  harness.context.ticketTestReport = { snapshot_id: "version-1", resumo: {}, fontes: {}, chamados: [] };
+  harness.context.ticketTestReport = {
+    snapshot_id: "version-1", resumo: {}, fontes: {},
+    chamados: [{ serie: "SN-4", simpress: {}, oracle: [] }],
+  };
   harness.run("acompanhamentoChamadosAtual = ticketTestReport");
+  harness.element("versao-acompanhamento-chamados").value = "version-1";
   harness.element("filtro-acompanhamento-chamados").value = "SN-4";
   harness.element("somente-atencao-chamados").checked = true;
 

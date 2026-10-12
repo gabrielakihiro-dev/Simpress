@@ -113,3 +113,52 @@ test("ready setup starts collapsed and uses one disclosure for the availability 
   await panel.locator(":scope > summary").click();
   await expect(panel).not.toHaveAttribute("open", "");
 });
+
+test("an older readiness response cannot overwrite or clear the newer request", async ({ page }) => {
+  await mockReadiness(page, () => readiness(true));
+  await page.goto("/");
+  const panel = page.locator("#readiness-panel");
+  await expect(panel).toHaveAttribute("aria-busy", "false", { timeout: 15_000 });
+  await expect(panel).toHaveAttribute("data-state", "ready");
+  await page.unroute("**/api/prontidao");
+
+  let releaseOld;
+  let releaseLatest;
+  let notifyOld;
+  let notifyLatest;
+  const oldStarted = new Promise(resolve => { notifyOld = resolve; });
+  const latestStarted = new Promise(resolve => { notifyLatest = resolve; });
+  let calls = 0;
+  await page.route("**/api/prontidao", async route => {
+    calls += 1;
+    if (calls === 1) {
+      notifyOld();
+      await new Promise(resolve => { releaseOld = resolve; });
+      await route.fulfill({ json: readiness(false) }).catch(() => {});
+      return;
+    }
+    notifyLatest();
+    await new Promise(resolve => { releaseLatest = resolve; });
+    await route.fulfill({ json: readiness(true) }).catch(() => {});
+  });
+
+  try {
+    await page.evaluate(() => { window.oldReadinessRequest = carregarProntidao(); });
+    await oldStarted;
+    await page.evaluate(() => { window.latestReadinessRequest = carregarProntidao(); });
+    await latestStarted;
+    releaseOld();
+    await page.evaluate(() => window.oldReadinessRequest);
+    await expect(panel).toHaveAttribute("aria-busy", "true");
+    await expect(panel).toHaveAttribute("data-state", "ready");
+
+    releaseLatest();
+    await page.evaluate(() => window.latestReadinessRequest);
+    await expect(panel).toHaveAttribute("aria-busy", "false");
+    await expect(panel).toHaveAttribute("data-state", "ready");
+    await expect(page.locator("#readiness-summary")).toContainText("Todos os 5 arquivos estão disponíveis");
+  } finally {
+    releaseOld?.();
+    releaseLatest?.();
+  }
+});
