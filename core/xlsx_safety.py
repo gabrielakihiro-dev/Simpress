@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import lzma
 import posixpath
 import re
 import threading
@@ -77,7 +78,7 @@ def _parse_control_xml(archive: zipfile.ZipFile, name: str, on_start) -> None:
             parser.ParseFile(stream)
     except XlsxPackageError:
         raise
-    except (expat.ExpatError, OSError, EOFError, zipfile.BadZipFile, zlib.error) as error:
+    except (expat.ExpatError, OSError, EOFError, zipfile.BadZipFile, zlib.error, lzma.LZMAError) as error:
         raise XlsxPackageError("O arquivo contém metadados XLSX inválidos.") from error
 
 
@@ -98,7 +99,7 @@ def _validate_auxiliary_xml(archive: zipfile.ZipFile, name: str) -> None:
             parser.ParseFile(stream)
     except XlsxPackageError:
         raise
-    except (expat.ExpatError, OSError, EOFError, zipfile.BadZipFile, zlib.error) as error:
+    except (expat.ExpatError, OSError, EOFError, zipfile.BadZipFile, zlib.error, lzma.LZMAError) as error:
         raise XlsxPackageError("A planilha contém uma parte XML inválida.") from error
 
 
@@ -260,7 +261,7 @@ def _scan_worksheet(archive: zipfile.ZipFile, name: str) -> tuple[int, int]:
             parser.ParseFile(stream)
     except XlsxPackageError:
         raise
-    except (expat.ExpatError, OSError, EOFError, zipfile.BadZipFile, zlib.error) as error:
+    except (expat.ExpatError, OSError, EOFError, zipfile.BadZipFile, zlib.error, lzma.LZMAError) as error:
         raise XlsxPackageError("Uma aba contém XML inválido ou incompleto.") from error
     return max_row, max_column
 
@@ -341,5 +342,5 @@ def validate_xlsx(source: Union[bytes, bytearray, Path, str, BinaryIO]) -> None:
                     _VALIDATED_PATHS.pop(next(iter(_VALIDATED_PATHS)))
     except XlsxPackageError:
         raise
-    except (OSError, ValueError, zipfile.BadZipFile, zipfile.LargeZipFile, zlib.error) as error:
+    except (OSError, ValueError, zipfile.BadZipFile, zipfile.LargeZipFile, zlib.error, lzma.LZMAError) as error:
         raise XlsxPackageError("O arquivo enviado não é uma planilha .xlsx válida.") from error
