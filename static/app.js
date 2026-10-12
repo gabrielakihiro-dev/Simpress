@@ -568,9 +568,18 @@
         const report = await response.json();
         if (!report?.functions || !report?.files) throw new Error("Resposta de disponibilidade inválida.");
 
-        const functions = Object.entries(report.functions);
-        const availableCount = functions.filter(([, status]) => status.available === true).length;
-        const totalCount = functions.length;
+        const readinessFileKeys = report.backend === "files"
+          ? [
+              "inventario_equipamentos",
+              "inventario_detalhes_atualizacao",
+              "inventario_endpoint",
+              "modelo_exportacao",
+              "historico_chamados",
+            ]
+          : Object.keys(report.files);
+        const readinessFiles = readinessFileKeys.map(key => report.files[key]).filter(Boolean);
+        const availableCount = readinessFiles.filter(status => status.available === true).length;
+        const totalCount = readinessFileKeys.length;
         const allAvailable = totalCount > 0 && availableCount === totalCount;
         panel.dataset.state = allAvailable ? "ready" : "warning";
         if (!panel.dataset.initialized) {
@@ -580,10 +589,12 @@
           panel.dataset.initialized = "true";
         }
         summary.textContent = allAvailable
-          ? `Todas as ${totalCount} funções estão disponíveis.`
-          : report.backend === "files" && report.files.inventario_equipamentos?.state === "awaiting_import"
-            ? "Base ainda não importada. Comece pelo par de inventários Simpress e Endpoint."
-            : `${availableCount} de ${totalCount} funções disponíveis. Confira os arquivos pendentes abaixo.`;
+          ? totalCount === 1 ? "O arquivo está disponível." : `Todos os ${totalCount} arquivos estão disponíveis.`
+          : totalCount === 0
+            ? "Não foi possível identificar os arquivos para verificar a disponibilidade."
+            : availableCount === 0
+              ? `Nenhum dos ${totalCount} arquivos está disponível. Confira os detalhes abaixo.`
+              : `${availableCount} de ${totalCount} arquivos disponíveis. Confira os detalhes abaixo.`;
 
         const functionLabels = {
           consulta_equipamentos: "Consulta de equipamentos",
@@ -603,15 +614,6 @@
         };
 
         const content = document.createDocumentFragment();
-        const inventoryFunctionKeys = [
-          "consulta_equipamentos",
-          "geracao_transferencia",
-          "comparacao_atualizacao_inventarios",
-          "exportacao_equipamentos",
-        ];
-        const inventoryFunctions = inventoryFunctionKeys
-          .map(key => [key, report.functions[key]])
-          .filter(([, status]) => status);
         const inventoryFileLabels = {
           inventario_equipamentos: "Base ativa",
           inventario_detalhes_atualizacao: "Simpress",
@@ -633,9 +635,15 @@
             return `${inventoryFileLabels[key] || key}: ${detail}`;
           }).join(" · "),
         };
+        const ticketFileStatus = report.files.historico_chamados || {};
+        const ticketFunctionStatus = report.functions.acompanhamento_chamados || {};
         const ticketStatus = {
-          ...(report.files.historico_chamados || {}),
-          ...(report.functions.acompanhamento_chamados || {}),
+          ...ticketFileStatus,
+          ...ticketFunctionStatus,
+          file: ticketFileStatus.file,
+          reason: ticketFunctionStatus.available === true
+            ? "OK"
+            : ticketFileStatus.reason || ticketFunctionStatus.missing_files?.join(", ") || "arquivo indisponível",
         };
         ticketStatus.state ||= ticketStatus.available === true ? "ready" : report.files.historico_chamados?.state || "awaiting_import";
 
@@ -661,12 +669,6 @@
               : null,
           }
         );
-        adicionarGrupoProntidao(content, "Ações com inventário", inventoryFunctions, functionLabels, "function", {
-          description: "Usam a base compartilhada acima.",
-          countLabel: `${inventoryFunctions.length} ações`,
-          showItemState: false,
-          showItemDetails: false,
-        });
         adicionarGrupoProntidao(
           content,
           "Acompanhamento de chamados",
@@ -688,23 +690,29 @@
             },
           }
         );
-        const sharedFileKeys = new Set([
-          "inventario_equipamentos",
-          "inventario_detalhes_atualizacao",
-          "inventario_endpoint",
-          "historico_chamados",
-        ]);
-        const additionalFiles = Object.entries(report.files).filter(([key]) => !sharedFileKeys.has(key));
-        if (additionalFiles.length) {
-          adicionarGrupoProntidao(content, "Outros arquivos locais", additionalFiles, fileLabels, "file", {
-            description: "Modelos e dados locais usados por algumas ações.",
-            itemActions: {
-              modelo_exportacao: {
-                label: "Importar modelo",
-                onClick: () => abrirImportacaoModelo("exportacao"),
+        const exportModelStatus = report.files.modelo_exportacao;
+        if (exportModelStatus) {
+          adicionarGrupoProntidao(
+            content,
+            "Modelo de exportação",
+            [["modelo_exportacao", exportModelStatus]],
+            fileLabels,
+            "file",
+            {
+              description: "Planilha usada pela exportação de equipamentos.",
+              countLabel: exportModelStatus.available
+                ? "Disponível"
+                : exportModelStatus.state === "invalid" ? "Inválido" : "Pendente",
+              countState: exportModelStatus.state,
+              showItemState: false,
+              itemActions: {
+                modelo_exportacao: {
+                  label: "Importar modelo",
+                  onClick: () => abrirImportacaoModelo("exportacao"),
+                },
               },
-            },
-          });
+            }
+          );
         }
         details.replaceChildren(content);
       } catch (error) {
@@ -765,7 +773,9 @@
               ? availableFileDetail
               : [status.file, status.reason].filter(Boolean).join(" — "))
           : (!available
-              ? (status.missing_files || []).join(", ") || "dependência ausente"
+              ? status.reason && status.reason !== "OK"
+                ? [status.file, status.reason].filter(Boolean).join(" — ")
+                : (status.missing_files || []).join(", ") || "dependência ausente"
               : "");
         item.appendChild(label);
         if (options.showItemState !== false) item.appendChild(state);

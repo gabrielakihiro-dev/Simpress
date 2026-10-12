@@ -85,7 +85,7 @@ test("model import handles failure and refreshes availability after success", as
   await expect(page.locator("#status-modelo-local")).toHaveText("Modelo incompatível com a base.");
   await expect(page.locator("#btn-importar-modelo")).toBeEnabled();
   await page.locator("#btn-importar-modelo").click();
-  await expect(page.locator("#readiness-summary")).toHaveText("Todas as 5 funções estão disponíveis.");
+  await expect(page.locator("#readiness-summary")).toHaveText("Todos os 5 arquivos estão disponíveis.");
   await expect(page.locator("#status-modelo-local")).toContainText("Modelo importado");
   await page.keyboard.press("Escape");
   await expect(page.locator("#modal-importar-modelo")).toBeHidden();
@@ -97,7 +97,7 @@ test("ready setup starts collapsed and preserves user's disclosure choice", asyn
   await page.goto("/");
   const panel = page.locator("#readiness-panel");
   await expect(panel).toHaveAttribute("aria-busy", "false", { timeout: 15_000 });
-  await expect(page.locator("#readiness-summary")).toContainText("Todas as 5");
+  await expect(page.locator("#readiness-summary")).toContainText("Todos os 5 arquivos");
   await expect(panel).not.toHaveAttribute("open", "");
   await panel.locator(":scope > summary").click();
   await page.locator("#readiness-details > summary").click();
