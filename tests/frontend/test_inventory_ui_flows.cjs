@@ -122,6 +122,7 @@ function createAppHarness(fetchApi, { stubDisplay = true, confirmResult = true, 
     },
   };
   const window = {
+    SimpressDomUtils: require("../../static/js/shared/dom-utils.js"),
     SimpressTransferUtils: transferUtils,
     SimpressCatalogSearch: catalogSearch,
     SimpressFormDraftGuard: formDraftGuard,
@@ -199,6 +200,124 @@ function createAppHarness(fetchApi, { stubDisplay = true, confirmResult = true, 
 function apiResponse(body, { status = 200, ok = status >= 200 && status < 300 } = {}) {
   return { ok, status, json: async () => body };
 }
+
+function pendingTicketResponse() {
+  let resolve, reject;
+  const promise = new Promise((yes, no) => { resolve = yes; reject = no; });
+  return { promise, resolve, reject };
+}
+
+function ticketSelectionHarness(fetchApi) {
+  const harness = createAppHarness(fetchApi);
+  harness.run(`
+    renderizarAcompanhamentoChamados = () => {
+      document.getElementById("lista-acompanhamento-chamados").innerHTML = acompanhamentoChamadosAtual.snapshot_id;
+    };
+    carregarEvolucaoChamados = async () => {};
+  `);
+  return harness;
+}
+
+test("latest ticket snapshot wins when responses arrive out of order", async () => {
+  const old = pendingTicketResponse(), latest = pendingTicketResponse();
+  const requests = [];
+  const harness = ticketSelectionHarness((url, options) => {
+    requests.push(options);
+    return url.endsWith("/old") ? old.promise : latest.promise;
+  });
+  harness.element("versao-acompanhamento-chamados").value = "old";
+  const first = harness.run("selecionarVersaoChamados()");
+  harness.element("versao-acompanhamento-chamados").value = "latest";
+  const second = harness.run("selecionarVersaoChamados()");
+  latest.resolve(apiResponse({})); await second;
+  old.resolve(apiResponse({})); await first;
+  assert.equal(harness.run("acompanhamentoChamadosAtual.snapshot_id"), "latest");
+  assert.equal(harness.element("lista-acompanhamento-chamados").innerHTML, "latest");
+  assert.equal(requests[0].signal.aborted, true);
+});
+
+test("stale ticket errors cannot replace a newer successful snapshot", async () => {
+  const old = pendingTicketResponse();
+  const harness = ticketSelectionHarness(url => url.endsWith("/old") ? old.promise : Promise.resolve(apiResponse({})));
+  harness.element("versao-acompanhamento-chamados").value = "old";
+  const first = harness.run("selecionarVersaoChamados()");
+  harness.element("versao-acompanhamento-chamados").value = "latest";
+  await harness.run("selecionarVersaoChamados()");
+  old.reject(new Error("falha antiga")); await first;
+  assert.equal(harness.element("lista-acompanhamento-chamados").innerHTML, "latest");
+});
+
+test("a late initial ticket load cannot overwrite a selected historical snapshot", async () => {
+  const initial = pendingTicketResponse();
+  const harness = ticketSelectionHarness(url => url.endsWith("/chamados") ? initial.promise : Promise.resolve(apiResponse({})));
+  const first = harness.run("carregarAcompanhamentoChamados()");
+  harness.element("versao-acompanhamento-chamados").value = "historical";
+  await harness.run("selecionarVersaoChamados()");
+  initial.resolve(apiResponse({ snapshot_id: "current", historico: [] })); await first;
+  assert.equal(harness.run("acompanhamentoChamadosAtual.snapshot_id"), "historical");
+});
+
+test("closing ticket tracking cancels reads and ignores their late completion", async () => {
+  const response = pendingTicketResponse();
+  const harness = ticketSelectionHarness(() => response.promise);
+  harness.run("fecharModalAcessivel = () => {}");
+  harness.element("versao-acompanhamento-chamados").value = "old";
+  const pending = harness.run("selecionarVersaoChamados()");
+  harness.run("fecharAcompanhamentoChamados()");
+  response.resolve(apiResponse({})); await pending;
+  assert.equal(harness.run("acompanhamentoChamadosAtual"), null);
+});
+
+test("ticket evolution ignores a stale error after a newer comparison succeeds", async () => {
+  const old = pendingTicketResponse();
+  const harness = createAppHarness(url => url.includes("atual=one") ? old.promise : Promise.resolve(apiResponse({ marker: "latest" })));
+  harness.run(`
+    historicoAcompanhamentoChamados = [{ id: "two" }, { id: "one" }, { id: "zero" }];
+    renderizarEvolucaoChamados = data => document.getElementById("evolucao-acompanhamento-chamados").textContent = data.marker;
+  `);
+  const first = harness.run('carregarEvolucaoChamados("one")');
+  await harness.run('carregarEvolucaoChamados("two")');
+  old.reject(new Error("falha antiga")); await first;
+  assert.equal(harness.element("evolucao-acompanhamento-chamados").textContent, "latest");
+});
+
+test("detached ticket timelines never install annotation editors after loading", async () => {
+  const response = pendingTicketResponse();
+  const harness = createAppHarness(() => response.promise);
+  const details = new FakeElement("timeline"), body = new FakeElement("timeline-body");
+  details.open = true;
+  details.dataset.timelineSerial = "SN-SYNTHETIC";
+  details.querySelector = () => body;
+  harness.context.testTimeline = details;
+  harness.run('conectarAnotacoesLinhaDoTempo = () => { throw new Error("editor should not attach"); }');
+  const pending = harness.run("carregarLinhaDoTempoChamado(testTimeline)");
+  details.isConnected = false;
+  response.resolve(apiResponse({ eventos: [] })); await pending;
+  assert.equal(details.dataset.ticketTimelineLoaded, undefined);
+  assert.doesNotMatch(body.innerHTML, /editor should not attach/);
+});
+
+test("timeline reads deduplicate while pending and allow retry after a network error", async () => {
+  const first = pendingTicketResponse();
+  let requests = 0;
+  const harness = createAppHarness(() => {
+    requests += 1;
+    return requests === 1 ? first.promise : Promise.resolve(apiResponse({ eventos: [] }));
+  });
+  const details = new FakeElement("timeline"), body = new FakeElement("timeline-body");
+  details.open = true;
+  details.querySelector = () => body;
+  harness.context.testTimeline = details;
+  harness.run("conectarAnotacoesLinhaDoTempo = () => {}");
+  const pending = harness.run("carregarLinhaDoTempoChamado(testTimeline)");
+  await harness.run("carregarLinhaDoTempoChamado(testTimeline)");
+  assert.equal(requests, 1);
+  first.reject(new Error("rede indisponível")); await pending;
+  assert.match(body.innerHTML, /rede indisponível/);
+  await harness.run("carregarLinhaDoTempoChamado(testTimeline)");
+  assert.equal(requests, 2);
+  assert.equal(details.dataset.ticketTimelineLoaded, "true");
+});
 
 test("stale-access report sorts by inactivity, shows its reference time, and signals horizontal scrolling", () => {
   const harness = createAppHarness(async () => apiResponse({}), { stubDisplay: false });
