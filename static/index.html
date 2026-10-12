@@ -1325,6 +1325,7 @@ Horário disponível para atendimento:</textarea>
           <a href="https://centralendpoint.pr.sebrae.com.br/webclient#/uems/inventory/computers" target="_blank" rel="noopener noreferrer" class="spreadsheet-source-link spreadsheet-source-link--endpoint" aria-label="Abrir inventário de computadores do Endpoint Central" title="Abrir inventário de computadores do Endpoint Central"><i data-lucide="link" aria-hidden="true"></i><span>Endpoint</span></a>
           <a href="https://ux.simpress.com.br/MeusEquipamentos/Index" target="_blank" rel="noopener noreferrer" class="spreadsheet-source-link spreadsheet-source-link--simpress" aria-label="Abrir Meus Equipamentos da Simpress" title="Abrir Meus Equipamentos da Simpress"><i data-lucide="link" aria-hidden="true"></i><span>Simpress</span></a>
         </div>
+        <p id="upload-impacto-aviso" class="text-xs rounded-lg px-3 py-2 bg-amber-500/10 border border-amber-500/25 text-amber-200">Ao confirmar, as duas bases ativas serão substituídas pelos arquivos selecionados. Séries ausentes de cada arquivo novo serão removidas daquela fonte; confira as contagens por fonte antes de confirmar.</p>
         <label class="block bg-slate-950/60 border border-slate-800 rounded-xl p-4">
           <span class="block text-sm text-white font-semibold">1. Endpoint</span>
           <span class="block text-[11px] text-slate-400 mt-1">Precisa ter nome do computador e rótulo de serviço/número de série.</span>
@@ -1347,14 +1348,19 @@ Horário disponível para atendimento:</textarea>
             <span class="mt-1 block text-[11px] text-slate-400">Após cada atualização, exporta os registros e as anotações do dia. Esta preferência fica salva neste navegador.</span>
           </span>
         </label>
+        <p id="upload-planilhas-preview" class="hidden text-xs rounded-lg px-3 py-2" role="status" aria-live="polite" aria-atomic="true"></p>
       <p id="upload-planilhas-status" class="hidden text-xs rounded-lg px-3 py-2" role="status" aria-live="polite" aria-atomic="true"></p>
       </div>
 
       <div class="pt-4 border-t border-slate-800 flex justify-end gap-2 shrink-0">
         <button type="button" onclick="fecharModalAtualizarPlanilhas()" class="px-4 py-2 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-300 text-xs transition">Cancelar</button>
-        <button type="button" id="btn-confirmar-planilhas" onclick="enviarPlanilhas()" class="px-5 py-2 rounded-lg bg-sky-600 hover:bg-sky-500 text-white font-bold text-xs flex items-center gap-1.5 transition">
+        <button type="button" id="btn-previsualizar-planilhas" onclick="previsualizarPlanilhas()" class="px-5 py-2 rounded-lg bg-sky-600 hover:bg-sky-500 text-white font-bold text-xs flex items-center gap-1.5 transition">
           <i data-lucide="refresh-cw" class="w-3.5 h-3.5"></i>
-          Importar/atualizar inventários
+          Pré-visualizar impacto
+        </button>
+        <button type="button" id="btn-confirmar-planilhas" onclick="enviarPlanilhas()" class="hidden px-5 py-2 rounded-lg bg-rose-700 hover:bg-rose-600 text-white font-bold text-xs flex items-center gap-1.5 transition">
+          <i data-lucide="check" class="w-3.5 h-3.5"></i>
+          Confirmar substituição
         </button>
       </div>
     </div>

@@ -20,6 +20,7 @@ from integrity import (
     FileTransactionError,
     TransactionConflictError,
     WorkbookSafetyError,
+    lock_paths,
 )
 
 from domains.history_annotations import (
@@ -71,6 +72,9 @@ class InventoryUpdateServices:
     comparison_history_for_display: Callable[[Dict[str, Any]], Dict[str, Any]]
     load_history_annotations: Callable[[Path], List[Dict[str, Any]]]
     comparison_annotation_item_id: Callable[..., str]
+    inventory_update_preview_summary: Callable[..., Dict[str, Any]]
+    create_inventory_preview_token: Callable[..., str]
+    verify_inventory_preview_token: Callable[..., bool]
 
 
 _ANNOTATABLE_COMPARISON_CATEGORIES = (
@@ -386,12 +390,69 @@ async def read_uploaded_xlsx(
             parse_admission.release()
     return {"name": original_name, "bytes": file_bytes, "table": table}
 
+async def preview_inventory_files(
+    endpoint_file: Any, details_file: Any, services: InventoryUpdateServices,
+):
+    """Validate uploads and summarize a locked snapshot, including first access."""
+    uploads = [endpoint_file, details_file]
+    try:
+        staged = {
+            "endpoint": await read_uploaded_xlsx(endpoint_file, "endpoint", services),
+            "detalhes": await read_uploaded_xlsx(details_file, "detalhes", services),
+        }
+        target_files = {
+            "endpoint": services.endpoint_upload_file(),
+            "detalhes": services.get_primary_equipment_file() or services.details_upload_file(),
+        }
+        with lock_paths(target_files.values()):
+            current_bytes = {
+                role: path.read_bytes() if path.is_file() else b""
+                for role, path in target_files.items()
+            }
+
+        def validate_current():
+            with services.workbook_parse_admission():
+                return {
+                    role: services.validate_uploaded_workbook(data, role) if data else {"records": []}
+                    for role, data in current_bytes.items()
+                }
+
+        try:
+            current_tables = await asyncio.to_thread(validate_current)
+        except HTTPException as error:
+            raise HTTPException(
+                status_code=409,
+                detail="A base ativa não pôde ser validada; a prévia foi cancelada.",
+            ) from error
+        changes = await asyncio.to_thread(
+            services.inventory_update_preview_summary,
+            current_tables,
+            {role: staged[role]["table"] for role in ("endpoint", "detalhes")},
+        )
+        return {
+            "arquivos": {
+                role: {"nome": staged[role]["name"], "linhas": len(staged[role]["table"].get("records", []))}
+                for role in ("endpoint", "detalhes")
+            },
+            "alteracoes": changes,
+            "preview_token": services.create_inventory_preview_token(staged, current_bytes),
+        }
+    except FileBusyError as error:
+        raise HTTPException(status_code=409, detail=str(error)) from error
+    except (WorkbookSafetyError, FileTransactionError) as error:
+        raise HTTPException(status_code=400, detail=f"Não foi possível gerar a prévia com segurança. {error}") from error
+    finally:
+        for upload in uploads:
+            await upload.close()
+
+
 async def update_inventory_files(
     endpoint_file: Any,
     details_file: Any,
     services: InventoryUpdateServices,
     automatic_import_id: Optional[str] = None,
     idempotency_key: Optional[str] = None,
+    preview_token: Optional[str] = None,
 ):
     """Read uploads asynchronously and run workbook and transaction work off-loop."""
     uploads = [endpoint_file, details_file]
@@ -415,6 +476,7 @@ async def update_inventory_files(
                 services,
                 automatic_import_id,
                 idempotency_key,
+                preview_token,
             )
         )
         try:
@@ -455,6 +517,7 @@ def _commit_inventory_files(
     services: InventoryUpdateServices,
     automatic_import_id: Optional[str] = None,
     idempotency_key: Optional[str] = None,
+    preview_token: Optional[str] = None,
 ):
     """Validate, compare, replace, reload, and journal inventories in a worker thread."""
     input_directory = services.input_directory()
@@ -524,6 +587,17 @@ def _commit_inventory_files(
                     raise RuntimeError("O inventário confirmado não pôde ser recarregado antes da repetição.")
                 services.publish_database_state(replay_state)
                 return deepcopy(prior_receipt["result"])
+
+        if preview_token is not None:
+            current_bytes = {
+                role: path.read_bytes() if path is not None and path.is_file() else b""
+                for role, path in backup_sources.items()
+            }
+            if not services.verify_inventory_preview_token(preview_token, staged, current_bytes):
+                raise HTTPException(
+                    status_code=409,
+                    detail="A prévia expirou ou os arquivos/base mudaram. Gere uma nova prévia antes de confirmar.",
+                )
 
         for backup_target in backup_targets.values():
             transaction.add_target(backup_target)

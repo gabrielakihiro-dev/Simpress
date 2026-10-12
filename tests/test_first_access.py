@@ -113,6 +113,28 @@ class FirstAccessTests(unittest.TestCase):
             self.assertTrue(report["functions"][key]["available"], key)
         self.assertEqual(json.loads(self.comparison_history.read_text(encoding="utf-8"))[-1]["arquivos_enviados"]["detalhes"], "simpress.zip")
 
+    def test_fresh_clone_previews_zip_before_confirming_initial_inventory(self):
+        endpoint = fixtures._endpoint_bytes([("SN-PREVIEW", "HOST-NEW")])
+        details = archive_bytes([("simpress.xlsx", fixtures._details_bytes([
+            ("SN-PREVIEW", "HOST-OLD", "Modelo A", "Curitiba", "Notebook", "80000000"),
+        ]))])
+        preview = asyncio.run(main.previsualizar_planilhas(
+            UploadFile(filename="endpoint.xlsx", file=io.BytesIO(endpoint)),
+            UploadFile(filename="simpress.zip", file=io.BytesIO(details)),
+        ))
+        for role in ("endpoint", "detalhes"):
+            self.assertEqual(preview["alteracoes"][role]["linhas_atuais"], 0)
+            self.assertEqual(preview["alteracoes"][role]["series_novas"], 1)
+        self.assertFalse(self.endpoint.exists())
+        self.assertFalse(self.details.exists())
+        result = asyncio.run(main.atualizar_planilhas(
+            UploadFile(filename="endpoint.xlsx", file=io.BytesIO(endpoint)),
+            UploadFile(filename="simpress.zip", file=io.BytesIO(details)),
+            preview_token=preview["preview_token"],
+        ))
+        self.assertTrue(result["sucesso"])
+        self.assertEqual(main._get_stats_snapshot()["total_equipamentos"], 1)
+
     def test_transfer_import_override_replacement_and_invalid_file_preserve_default(self):
         self.template.write_bytes(transfer_bytes())
         original = self.template.read_bytes()

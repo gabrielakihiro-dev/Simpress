@@ -11,6 +11,7 @@ import re
 import shutil
 import sys
 import threading
+import time
 import unicodedata
 import uuid
 from copy import deepcopy
@@ -21,11 +22,11 @@ from typing import Dict, Iterable, List, Optional, Any, Set, Tuple
 from urllib.parse import quote, urlsplit
 
 import openpyxl
-from fastapi import FastAPI, File, HTTPException, UploadFile
+from fastapi import FastAPI, File, Form, HTTPException, UploadFile
 from fastapi.responses import FileResponse, JSONResponse, StreamingResponse
-from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel, Field, field_validator
 from starlette.datastructures import UploadFile as StarletteUploadFile
+from routers.frontend import RevalidatingStaticFiles, frontend_response
 from integrity import (
     AtomicFileTransaction,
     FileBusyError,
@@ -138,6 +139,7 @@ from domains.history_annotations import (
 )
 from domains.inventory_update import InventoryUpdateServices
 from domains.inventory_update import read_uploaded_xlsx as _read_uploaded_xlsx
+from domains.inventory_update import preview_inventory_files
 from domains.inventory_update import update_inventory_files
 from domains.equipment_search import (
     CATEGORIES as _CATEGORIAS_EQUIPAMENTO,
@@ -221,6 +223,12 @@ def _read_json_history(path: Path, label: str) -> List[Dict[str, Any]]:
     if not isinstance(value, list) or any(not isinstance(item, dict) for item in value):
         raise LocalJsonCorruptionError(f"O histórico local de {label} precisa conter uma lista de registros.")
     return value
+UPLOAD_PREVIEW_TOKEN_SECRET = os.urandom(32)
+UPLOAD_PREVIEW_TOKEN_TTL_SECONDS = 10 * 60
+INVENTORY_UPLOAD_PATHS = frozenset({
+    "/api/planilhas/previsualizar",
+    "/api/planilhas/atualizar",
+})
 
 
 @contextmanager
@@ -1042,6 +1050,76 @@ def select_upload_table(tables: List[Dict[str, Any]], role: str) -> Dict[str, An
     return table
 
 
+def inventory_update_preview_summary(
+    current_tables: Dict[str, Dict[str, Any]],
+    incoming_tables: Dict[str, Dict[str, Any]],
+) -> Dict[str, Dict[str, int]]:
+    """Return counts only; never include row values or serials in an upload preview."""
+    summary = {}
+    for role in ("endpoint", "detalhes"):
+        def count_serials(table):
+            counts: Dict[str, int] = {}
+            for record in table.get("records", []):
+                serial_key = normalize_reference_value(_upload_serial_value(record, role))
+                if serial_key:
+                    counts[serial_key] = counts.get(serial_key, 0) + 1
+            return counts
+
+        current_counts = count_serials(current_tables[role])
+        incoming_counts = count_serials(incoming_tables[role])
+        current_serials = set(current_counts)
+        incoming_serials = set(incoming_counts)
+        summary[role] = {
+            "linhas_atuais": len(current_tables[role].get("records", [])),
+            "linhas_novas": len(incoming_tables[role].get("records", [])),
+            "series_novas": len(incoming_serials - current_serials),
+            "series_removidas": len(current_serials - incoming_serials),
+            "series_duplicadas_no_arquivo_novo": sum(
+                1 for count in incoming_counts.values() if count > 1
+            ),
+        }
+    return summary
+
+
+def _inventory_preview_token_payload(issued_at: int, staged, current_bytes) -> bytes:
+    payload = {
+        "versao": 1,
+        "emitido_em": issued_at,
+        "uploads": {
+            role: hashlib.sha256(staged[role]["bytes"]).hexdigest()
+            for role in ("endpoint", "detalhes")
+        },
+        "bases_atuais": {
+            role: hashlib.sha256(current_bytes[role]).hexdigest()
+            for role in ("endpoint", "detalhes")
+        },
+    }
+    return json.dumps(payload, sort_keys=True, separators=(",", ":")).encode("utf-8")
+
+
+def create_inventory_preview_token(staged, current_bytes) -> str:
+    issued_at = int(time.time())
+    payload = _inventory_preview_token_payload(issued_at, staged, current_bytes)
+    signature = hmac.new(UPLOAD_PREVIEW_TOKEN_SECRET, payload, hashlib.sha256).hexdigest()
+    return f"{issued_at}.{signature}"
+
+
+def verify_inventory_preview_token(token, staged, current_bytes) -> bool:
+    try:
+        issued_at_text, supplied_signature = str(token).split(".", 1)
+        issued_at = int(issued_at_text)
+        age = int(time.time()) - issued_at
+        if age < 0 or age > UPLOAD_PREVIEW_TOKEN_TTL_SECONDS:
+            return False
+        payload = _inventory_preview_token_payload(issued_at, staged, current_bytes)
+        expected_signature = hmac.new(
+            UPLOAD_PREVIEW_TOKEN_SECRET, payload, hashlib.sha256
+        ).hexdigest()
+        return hmac.compare_digest(supplied_signature, expected_signature)
+    except (AttributeError, TypeError, ValueError):
+        return False
+
+
 def _manual_alias_source_snapshots(
     overrides: Dict[str, str],
     endpoint_table: Dict[str, Any],
@@ -1783,7 +1861,7 @@ class LocalRequestSafetyMiddleware:
             await response(scope, receive, send)
             return
 
-        is_inventory_upload = path == "/api/planilhas/atualizar"
+        is_inventory_upload = path in INVENTORY_UPLOAD_PATHS
         is_model_upload = path.startswith("/api/modelos/") and path.endswith("/importar")
         is_ticket_upload = path == "/api/operacoes/chamados/importar"
         body_limit = (
@@ -3679,6 +3757,9 @@ _inventory_update_services = InventoryUpdateServices(
     comparison_history_for_display=lambda *args, **kwargs: comparison_history_for_display(*args, **kwargs),
     load_history_annotations=lambda *args, **kwargs: load_history_annotations(*args, **kwargs),
     comparison_annotation_item_id=lambda *args, **kwargs: comparison_annotation_item_id(*args, **kwargs),
+    inventory_update_preview_summary=inventory_update_preview_summary,
+    create_inventory_preview_token=create_inventory_preview_token,
+    verify_inventory_preview_token=verify_inventory_preview_token,
 )
 
 
@@ -3717,34 +3798,49 @@ async def read_uploaded_xlsx(upload: UploadFile, role: str) -> Dict[str, Any]:
     return await _read_uploaded_xlsx(upload, role, _inventory_update_services)
 
 
-@app.post("/api/planilhas/atualizar")
-async def atualizar_planilhas(
+async def previsualizar_planilhas(endpoint_file: UploadFile, details_file: UploadFile):
+    if postgres_backend() is not None:
+        await endpoint_file.close()
+        await details_file.close()
+        return {"preview_required": False}
+    return await preview_inventory_files(endpoint_file, details_file, services=_inventory_update_services)
+
+
+@app.post("/api/planilhas/previsualizar")
+async def previsualizar_planilhas_endpoint(
     endpoint_file: UploadFile = File(...),
     details_file: UploadFile = File(...),
 ):
+    return await previsualizar_planilhas(endpoint_file, details_file)
+
+
+async def atualizar_planilhas(
+    endpoint_file: UploadFile,
+    details_file: UploadFile,
+    preview_token: Optional[str] = None,
+):
     if (backend := postgres_backend()) is not None:
         from persistence.routes import update
-        return await update(backend.files,endpoint_file,details_file,read_uploaded_xlsx)
+        return await update(backend.files, endpoint_file, details_file, read_uploaded_xlsx)
     result = await update_inventory_files(
-        endpoint_file,
-        details_file,
-        services=_inventory_update_services,
-        idempotency_key=idempotency_key.get(),
+        endpoint_file, details_file, services=_inventory_update_services,
+        idempotency_key=idempotency_key.get(), preview_token=preview_token,
     )
     try:
         await asyncio.to_thread(prune_expired_histories)
     except Exception:
         event_id = (result.get("comparacao") or {}).get("evento_id") if isinstance(result, dict) else None
-        logger.exception(
-            "Falha na retenção após a atualização confirmada (evento=%s).",
-            event_id or "desconhecido",
-        )
+        logger.exception("Falha na retenção após a atualização confirmada (evento=%s).", event_id or "desconhecido")
     return result
 
 
-
-
-
+@app.post("/api/planilhas/atualizar")
+async def atualizar_planilhas_endpoint(
+    endpoint_file: UploadFile = File(...),
+    details_file: UploadFile = File(...),
+    preview_token: Optional[str] = Form(None, min_length=66, max_length=90),
+):
+    return await atualizar_planilhas(endpoint_file, details_file, preview_token=preview_token)
 
 
 
@@ -3960,7 +4056,7 @@ app.include_router(create_files_router(postgres_backend,MAX_UPLOAD_BYTES))
 STATIC_DIR.mkdir(parents=True, exist_ok=True)
 from security.routes import create_auth_router
 app.include_router(create_auth_router(postgres_backend, lambda: AUTH_SETTINGS, STATIC_DIR))
-app.mount("/static", StaticFiles(directory=str(STATIC_DIR)), name="static")
+app.mount("/static", RevalidatingStaticFiles(directory=str(STATIC_DIR)), name="static")
 
 @app.get("/favicon.ico", include_in_schema=False)
 def serve_favicon():
@@ -3970,7 +4066,7 @@ def serve_favicon():
 def read_root():
     index_file = STATIC_DIR / "index.html"
     if index_file.exists():
-        return FileResponse(index_file)
+        return frontend_response(STATIC_DIR)
     return {
         "mensagem": "API Simpress Transferência ativa. O arquivo static/index.html está sendo inicializado.",
         "docs": "/docs"

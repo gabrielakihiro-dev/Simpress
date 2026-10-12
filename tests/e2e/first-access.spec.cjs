@@ -38,6 +38,9 @@ test("first access centralizes the inventory import and keeps calls separate", a
   await expect(panel).toContainText("Catálogos e históricos locais");
   await expect(panel.getByRole("heading", { name: "Ações com inventário" })).toBeVisible();
   await expect(panel.getByRole("heading", { name: "Acompanhamento de chamados" })).toBeVisible();
+  await expect(page.locator(".readiness-panel-summary")).toHaveCSS("display", "flex");
+  await expect(page.locator("#readiness-title")).toHaveCSS("font-size", "12px");
+  await expect(page.locator(".readiness-details-content")).toHaveCSS("display", "grid");
   const audit = await new AxeBuilder({ page }).include("#readiness-panel")
     .withTags(["wcag2a", "wcag2aa", "wcag21aa", "wcag22aa"]).analyze();
   expect(audit.violations).toEqual([]);
@@ -46,6 +49,8 @@ test("first access centralizes the inventory import and keeps calls separate", a
   await panel.getByRole("button", { name: "Importar/atualizar inventários Simpress e Endpoint", exact: true }).click();
   await expect(page.locator("#upload-endpoint-file")).toBeFocused();
   await expect(page.locator("#upload-details-file")).toHaveAttribute("accept", /\.zip/);
+  await expect(page.locator(".spreadsheet-source-shortcuts")).toHaveCSS("display", "flex");
+  await expect(page.locator("#btn-previsualizar-planilhas")).toBeVisible();
   await page.keyboard.press("Escape");
   await expect(page.locator("#modal-atualizar-planilhas")).toBeHidden();
 

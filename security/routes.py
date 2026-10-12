@@ -3,7 +3,8 @@
 from pathlib import Path
 
 from fastapi import APIRouter, Request
-from fastapi.responses import FileResponse, JSONResponse
+from fastapi.responses import JSONResponse
+from routers.frontend import frontend_response
 
 from persistence.config import PersistenceError
 from persistence.routes import worker
@@ -25,7 +26,7 @@ def create_auth_router(provider, settings, static_dir):
 
     @router.get("/login",include_in_schema=False)
     def login_page():
-        return FileResponse(Path(static_dir)/"login.html")
+        return frontend_response(Path(static_dir), "login.html")
 
     @router.get("/api/auth/session")
     async def session(request: Request):
