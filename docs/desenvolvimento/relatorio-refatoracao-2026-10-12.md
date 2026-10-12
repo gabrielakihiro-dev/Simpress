@@ -222,7 +222,7 @@ O perfil anterior à refatoração funcional mediu p95 de transições de aproxi
 | 3 — refatoração | `39fbfd4` | [Aprovado em Python 3.12, 3.14 e browser](https://github.com/gabrielakihiro-dev/Simpress/actions/runs/38214735188) |
 | 4 — verificações adicionais | `dbc4ea8` | [Aprovado em Python 3.12, 3.14 e browser](https://github.com/gabrielakihiro-dev/Simpress/actions/runs/38215261854) |
 
-O commit deste relatório (`6da3aea`) também recebeu CI aprovado: [workflow da fase 5](https://github.com/gabrielakihiro-dev/Simpress/actions/runs/38215886495). O workflow da integração em `main` é acompanhado após o push em [Actions de main](https://github.com/gabrielakihiro-dev/Simpress/actions?query=branch%3Amain).
+O commit deste relatório (`6da3aea`) também recebeu CI aprovado: [workflow da fase 5](https://github.com/gabrielakihiro-dev/Simpress/actions/runs/38215886495). A integração publicada em `main` (`1f1b33d`) passou nos dois jobs Python e no job de navegador: [workflow da integração](https://github.com/gabrielakihiro-dev/Simpress/actions/runs/38271223148). Os testes e a CI da revisão posterior estão registrados no [relatório de revisão](revisao-refatoracao-frontend-2026-10-12.md).
 
 ## 8. Débitos técnicos priorizados
 

@@ -33,10 +33,20 @@
     if (!query) return escapeHtml(text);
     const q = query.trim();
     if (!q) return escapeHtml(text);
-    const safeText = escapeHtml(text);
-    const safeQuery = escapeHtml(q);
-    const regex = new RegExp(`(${safeQuery.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')})`, "gi");
-    return safeText.replace(regex, `<span class="serial-match">$1</span>`);
+    const value = String(text);
+    const pattern = q.split("").map(character =>
+      "^$.*+?()[]{}|\\".includes(character) ? "\\" + character : character
+    ).join("");
+    const regex = new RegExp(pattern, "gi");
+    let result = "";
+    let cursor = 0;
+    let match;
+    while ((match = regex.exec(value)) !== null) {
+      result += escapeHtml(value.slice(cursor, match.index));
+      result += '<span class="serial-match">' + escapeHtml(match[0]) + "</span>";
+      cursor = match.index + match[0].length;
+    }
+    return result + escapeHtml(value.slice(cursor));
   }
 
   return { escapeHtml, createTextElement, createIcon, highlightMatch };

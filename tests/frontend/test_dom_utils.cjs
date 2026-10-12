@@ -41,3 +41,11 @@ test("highlight queries treat regex metacharacters and external HTML as literal 
   assert.equal(highlightMatch("<script>x</script>", "x"), '&lt;script&gt;<span class="serial-match">x</span>&lt;/script&gt;');
   assert.equal(highlightMatch("<tag>", "  "), "&lt;tag&gt;");
 });
+
+test("highlighting text around HTML entities preserves the original visible value", () => {
+  const { highlightMatch } = createDomUtils(fakeDocument());
+  assert.equal(
+    highlightMatch("A'039x &amp", "039"),
+    "A&#039;<span class=\"serial-match\">039</span>x &amp;amp",
+  );
+});
