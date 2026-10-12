@@ -65,6 +65,7 @@ def _run_local_safety_middleware(
     method="GET",
     body=b"",
     include_content_length=True,
+    content_length=None,
 ):
     state = {"passed": False, "messages": []}
 
@@ -81,7 +82,7 @@ def _run_local_safety_middleware(
 
     headers = [(b"host", host.encode("ascii")) for host in host_values]
     if include_content_length:
-        headers.append((b"content-length", str(len(body)).encode("ascii")))
+        headers.append((b"content-length", str(len(body) if content_length is None else content_length).encode("ascii")))
     if origin is not None:
         headers.append((b"origin", origin.encode("ascii")))
     scope = {"type": "http", "path": path, "method": method, "headers": headers,
@@ -97,6 +98,17 @@ def _run_local_safety_middleware(
 
 
 class MaintenanceContractTests(unittest.TestCase):
+    def test_both_inventory_upload_routes_share_the_request_size_limit(self):
+        for path in main.INVENTORY_UPLOAD_PATHS:
+            with self.subTest(path=path):
+                status, passed = _run_local_safety_middleware(
+                    ["127.0.0.1:8000"],
+                    path=path,
+                    content_length=main.MAX_UPLOAD_REQUEST_BYTES + 1,
+                )
+                self.assertEqual(status, 413)
+                self.assertFalse(passed)
+
     def test_application_paths_remain_project_relative_and_reexported(self):
         self.assertEqual(app_config.BASE_DIR, PROJECT_ROOT.resolve())
         self.assertEqual(main.BASE_DIR, app_config.BASE_DIR)
@@ -180,6 +192,7 @@ class MaintenanceContractTests(unittest.TestCase):
             "/api/equipamento/apelidos-modificados": {"get"},
             "/api/exportar-equipamentos": {"get"},
             "/api/recarregar-base": {"post"},
+            "/api/planilhas/previsualizar": {"post"},
             "/api/planilhas/atualizar": {"post"},
             "/api/unidade/salvar": {"post"},
             "/api/unidades": {"get"},
@@ -194,6 +207,10 @@ class MaintenanceContractTests(unittest.TestCase):
             with self.subTest(path=path):
                 self.assertIn(path, paths)
                 self.assertTrue(methods.issubset(paths[path]))
+        upload = paths["/api/planilhas/atualizar"]["post"]
+        body_ref = upload["requestBody"]["content"]["multipart/form-data"]["schema"]["$ref"]
+        schema_name = body_ref.rsplit("/", 1)[-1]
+        self.assertIn("preview_token", main.app.openapi()["components"]["schemas"][schema_name]["properties"])
 
     def test_fixed_modified_alias_route_is_dispatched_before_serial_parameter(self):
         scope = {

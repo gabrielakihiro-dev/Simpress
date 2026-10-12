@@ -190,10 +190,12 @@ O comando usa a mesma validação sem enviar requisições HTTP. Consulte `data/
 Use **Pendências** para revisar e anotar as linhas da atualização mais recente; **Evolução das atualizações** conta casos novos, contínuos e resolvidos entre duas atualizações completas.
 
 1. Abra **Atualizar Planilhas**.
-2. Envie um arquivo `.xlsx` do **Endpoint** e um do **Simpress**.
-3. Confira ausências em cada fonte, notebooks sem verificação com êxito há 14 dias ou mais, divergências de local, correspondências ambíguas, mudanças de hostname e casos que precisam de revisão.
-4. Leia o resultado antes de continuar. Cada atualização substitui integralmente os dois inventários ativos pelos arquivos validados; séries ausentes no novo relatório deixam de compor a base carregada.
+2. Selecione um arquivo `.xlsx` do **Endpoint** e um `.xlsx` ou `.zip` do **Simpress**.
+3. Clique em **Pré-visualizar impacto** e confira as contagens de séries novas, removidas e duplicadas antes de **Confirmar substituição**. A prévia vale por dez minutos e precisa ser refeita se os arquivos ou a base ativa mudarem.
+4. Cada atualização substitui integralmente os dois inventários ativos pelos arquivos validados; séries ausentes no novo relatório deixam de compor a base carregada. Após confirmar, confira ausências em cada fonte, notebooks sem verificação com êxito há 14 dias ou mais, divergências de local, correspondências ambíguas, mudanças de hostname e casos que precisam de revisão.
 5. Consulte **Histórico planilhas** para rever comparações e, se houver um backup completo válido, pré-visualize os arquivos e datas antes de restaurar.
+
+A prévia também funciona na primeira importação, quando ainda não há inventário local. O processamento automático pela pasta de entrada mantém seu fluxo próprio. No piloto PostgreSQL, a confirmação mantém o fluxo existente, sem contagens de impacto.
 
 #### Processar atualizações pela pasta de entrada
 
@@ -300,6 +302,7 @@ Se uma cópia antiga estiver ausente ou inválida, confira manualmente os arquiv
 | A exportação está indisponível | Confira `modelos/EquipamentosDetalhes-exportacao.xlsx` e se ele contém as colunas de série e `Apelido`. |
 | Não é possível restaurar uma atualização | O histórico precisa ter o backup dos dois inventários, e ambos devem passar novamente pela validação. |
 | O painel de status continua desatualizado | Clique em **Atualizar status** para repetir a verificação; para carregar dados de inventário substituídos manualmente, reinicie o servidor. |
+| O visual continua antigo após `git pull` | Confirme a branch com `git switch main` e atualize com `git pull --ff-only origin main`. Encerre o servidor anterior e execute `iniciar_servidor.bat` da pasta atualizada. Recarregue com `Ctrl+F5` uma vez. As páginas passam a usar URLs de CSS e JavaScript vinculadas ao conteúdo dos arquivos para evitar versões antigas no cache. |
 
 ## Desenvolvimento
 

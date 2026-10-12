@@ -6,12 +6,15 @@ FALHA returns 503. History annotations are stored only in fixture memory.
 
 import json
 import mimetypes
+import sys
 import time
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 from urllib.parse import parse_qs, unquote, urlsplit
 
 STATIC = Path(__file__).resolve().parents[1] / "static"
+sys.path.insert(0, str(STATIC.parent))
+from domains.frontend_assets import versioned_html
 EQUIPMENT = {"serial": "LENTO", "modelo": "Notebook de demonstração", "tipo": "Notebook",
              "apelido": "DEMO-001", "retirada_cidade": "Curitiba", "retirada_endereco": "Endereço fictício"}
 DEMO_EVENT_ID = "fixture-event-001"
@@ -85,7 +88,8 @@ class Handler(BaseHTTPRequestHandler):
             if not target.is_relative_to(STATIC) or not target.is_file():
                 self.send({"detail": "Arquivo não encontrado"}, 404)
                 return
-            self.send(target.read_bytes(), content_type=mimetypes.guess_type(target.name)[0] or "application/octet-stream")
+            payload = versioned_html(STATIC).encode("utf-8") if path == "/" else target.read_bytes()
+            self.send(payload, content_type=mimetypes.guess_type(target.name)[0] or "application/octet-stream")
         elif path == "/api/auth/session":
             self.send({"enabled": False, "authenticated": False})
         elif path == "/api/stats":

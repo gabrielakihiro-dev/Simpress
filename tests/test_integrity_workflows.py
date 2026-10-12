@@ -1524,6 +1524,127 @@ class WorkflowIntegrityTests(unittest.TestCase):
         self.assertIsNone(updated_sheet["F2"].value)
         updated_workbook.close()
 
+    def test_upload_preview_reports_only_aggregate_deltas_and_preserves_active_files(self):
+        make_endpoint(self.endpoint, [
+            ("SERIE-ANTIGA", "HOST-ANTIGO"),
+            ("SERIE-MANTER", "HOST-MANTER"),
+            ("SERIE-DUP", "HOST-DUP-A"),
+            ("SERIE-DUP", "HOST-DUP-B"),
+        ])
+        self.details.write_bytes(_details_bytes([
+            ("SERIE-ANTIGA", "ALIAS-ANTIGO", "Modelo A", "Maringá", "Notebook", "87000000"),
+            ("SERIE-MANTER", "ALIAS-MANTER", "Modelo B", "Londrina", "Notebook", "86000000"),
+            ("SERIE-REMOVER", "ALIAS-REMOVER", "Modelo C", "Curitiba", "Notebook", "80000000"),
+        ]))
+        self.comparison_history.write_text("[]", encoding="utf-8")
+        endpoint_before = self.endpoint.read_bytes()
+        details_before = self.details.read_bytes()
+        history_before = self.comparison_history.read_bytes()
+        incoming_endpoint = _endpoint_bytes([
+            ("SERIE-NOVA", "HOST-NOVO"),
+            ("SERIE-MANTER", "HOST-MANTER"),
+            ("SERIE-DUP", "HOST-DUP-C"),
+            ("SERIE-DUP", "HOST-DUP-D"),
+        ])
+        incoming_details = _details_bytes([
+            ("SERIE-NOVA", "ALIAS-NOVO", "Modelo N", "Londrina", "Notebook", "86000000"),
+            ("SERIE-MANTER", "ALIAS-MANTER", "Modelo B", "Londrina", "Notebook", "86000000"),
+            ("SERIE-MANTER", "ALIAS-MANTER-DUP", "Modelo B", "Londrina", "Notebook", "86000000"),
+        ])
+
+        preview = asyncio.run(main.previsualizar_planilhas(
+            UploadFile(filename="endpoint-sintetico.xlsx", file=io.BytesIO(incoming_endpoint)),
+            UploadFile(filename="detalhes-sinteticos.xlsx", file=io.BytesIO(incoming_details)),
+        ))
+
+        self.assertEqual(preview["alteracoes"]["endpoint"], {
+            "linhas_atuais": 4,
+            "linhas_novas": 4,
+            "series_novas": 1,
+            "series_removidas": 1,
+            "series_duplicadas_no_arquivo_novo": 1,
+        })
+        self.assertEqual(preview["alteracoes"]["detalhes"], {
+            "linhas_atuais": 3,
+            "linhas_novas": 3,
+            "series_novas": 1,
+            "series_removidas": 2,
+            "series_duplicadas_no_arquivo_novo": 1,
+        })
+        self.assertNotIn("SERIE-", json.dumps(preview, ensure_ascii=False))
+        self.assertEqual(self.endpoint.read_bytes(), endpoint_before)
+        self.assertEqual(self.details.read_bytes(), details_before)
+        self.assertEqual(self.comparison_history.read_bytes(), history_before)
+        self.assertFalse(self.backups.exists())
+
+        staged = {
+            "endpoint": {"bytes": incoming_endpoint},
+            "detalhes": {"bytes": incoming_details},
+        }
+        current = {"endpoint": endpoint_before, "detalhes": details_before}
+        self.assertTrue(main.verify_inventory_preview_token(preview["preview_token"], staged, current))
+        self.assertFalse(main.verify_inventory_preview_token(
+            preview["preview_token"],
+            {**staged, "endpoint": {"bytes": incoming_endpoint + b"mudou"}},
+            current,
+        ))
+        self.assertFalse(main.verify_inventory_preview_token(
+            preview["preview_token"], staged, {**current, "endpoint": current["endpoint"] + b"mudou"}
+        ))
+
+    def test_upload_confirmation_rejects_a_stale_preview_without_replacing_files(self):
+        make_endpoint(self.endpoint, [("SERIE-ATUAL", "HOST-ATUAL")])
+        self.details.write_bytes(_details_bytes([
+            ("SERIE-ATUAL", "ALIAS-ATUAL", "Modelo A", "Maringá", "Notebook", "87000000"),
+        ]))
+        incoming_endpoint = _endpoint_bytes([("SERIE-NOVA", "HOST-NOVO")])
+        incoming_details = _details_bytes([
+            ("SERIE-NOVA", "ALIAS-NOVO", "Modelo N", "Londrina", "Notebook", "86000000"),
+        ])
+        preview = asyncio.run(main.previsualizar_planilhas(
+            UploadFile(filename="endpoint-sintetico.xlsx", file=io.BytesIO(incoming_endpoint)),
+            UploadFile(filename="detalhes-sinteticos.xlsx", file=io.BytesIO(incoming_details)),
+        ))
+        concurrent_endpoint = _endpoint_bytes([("SERIE-CONCORRENTE", "HOST-CONCORRENTE")])
+        self.endpoint.write_bytes(concurrent_endpoint)
+        details_before_confirm = self.details.read_bytes()
+
+        with self.assertRaises(main.HTTPException) as raised:
+            asyncio.run(main.atualizar_planilhas(
+                UploadFile(filename="endpoint-sintetico.xlsx", file=io.BytesIO(incoming_endpoint)),
+                UploadFile(filename="detalhes-sinteticos.xlsx", file=io.BytesIO(incoming_details)),
+                preview_token=preview["preview_token"],
+            ))
+
+        self.assertEqual(raised.exception.status_code, 409)
+        self.assertEqual(self.endpoint.read_bytes(), concurrent_endpoint)
+        self.assertEqual(self.details.read_bytes(), details_before_confirm)
+        self.assertFalse(self.backups.exists())
+
+    def test_preview_confirmation_retry_recovers_receipt_after_preview_expires(self):
+        endpoint = _endpoint_bytes([("SN-RETRY", "HOST-NEW")])
+        details = _details_bytes([
+            ("SN-RETRY", "HOST-NEW", "Modelo A", "Maringá", "Notebook", "87000000"),
+        ])
+        preview = asyncio.run(main.previsualizar_planilhas(
+            UploadFile(filename="endpoint.xlsx", file=io.BytesIO(endpoint)),
+            UploadFile(filename="simpress.xlsx", file=io.BytesIO(details)),
+        ))
+
+        def submit(services):
+            return asyncio.run(inventory_update.update_inventory_files(
+                UploadFile(filename="endpoint.xlsx", file=io.BytesIO(endpoint)),
+                UploadFile(filename="simpress.xlsx", file=io.BytesIO(details)),
+                services, idempotency_key="preview-response-lost",
+                preview_token=preview["preview_token"],
+            ))
+
+        first = submit(main._inventory_update_services)
+        expired_services = replace(main._inventory_update_services, verify_inventory_preview_token=lambda *args: False)
+        self.assertEqual(submit(expired_services), first)
+        self.assertEqual(len(json.loads(self.comparison_history.read_text(encoding="utf-8"))), 1)
+        self.assertEqual(len(list(self.backups.iterdir())), 1)
+
     def test_upload_appends_invall_alias_change_to_comparison_history_only(self):
         make_details(self.details, [("SN-1", "ALIAS-DETALHES", "Modelo A", "Maringá", "Notebook", "87000000")])
         make_endpoint(self.endpoint, [("SN-1", "PRNOTE-OLD")])

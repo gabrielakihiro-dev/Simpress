@@ -498,6 +498,7 @@
         const input = document.getElementById(inputId);
         input?.addEventListener("change", () => {
           document.getElementById(nameId).textContent = input.files?.[0]?.name || "Nenhum arquivo selecionado";
+          limparPreviaUploadPlanilhas();
         });
       });
 
@@ -2119,13 +2120,33 @@
       }
     }
 
+    let previaPlanilhasAtual = null;
+
+    function limparPreviaUploadPlanilhas(limparStatus = true) {
+      previaPlanilhasAtual = null;
+      const preview = document.getElementById("upload-planilhas-preview");
+      if (preview) {
+        preview.textContent = "";
+        preview.classList.add("hidden");
+      }
+      document.getElementById("btn-confirmar-planilhas")?.classList.add("hidden");
+      document.getElementById("btn-previsualizar-planilhas")?.classList.remove("hidden");
+      if (limparStatus) {
+        const status = document.getElementById("upload-planilhas-status");
+        status.textContent = "";
+        status.className = "hidden";
+        status.removeAttribute("role");
+        status.removeAttribute("aria-live");
+      }
+    }
+
     function abrirModalAtualizarPlanilhas() {
-      const status = document.getElementById("upload-planilhas-status");
-      status.classList.add("hidden");
+      limparPreviaUploadPlanilhas();
       abrirModalAcessivel("modal-atualizar-planilhas", "#upload-endpoint-file", "fecharModalAtualizarPlanilhas");
     }
 
     function fecharModalAtualizarPlanilhas() {
+      limparPreviaUploadPlanilhas();
       fecharModalAcessivel("modal-atualizar-planilhas");
     }
 
@@ -2138,33 +2159,144 @@
       status.className = erro
         ? "text-xs rounded-lg px-3 py-2 bg-rose-500/10 border border-rose-500/25 text-rose-300"
         : "text-xs rounded-lg px-3 py-2 bg-sky-500/10 border border-sky-500/25 text-sky-300";
+      if (erro) status.scrollIntoView?.({ block: "nearest" });
+    }
+
+    function renderizarPreviaUploadPlanilhas(result) {
+      if (result?.preview_required === false) {
+        const preview = document.getElementById("upload-planilhas-preview");
+        preview.textContent = "Confira os arquivos selecionados antes de confirmar a substituição.";
+        preview.className = "text-xs rounded-lg px-3 py-2 bg-slate-950 border border-slate-700 text-slate-200";
+        return;
+      }
+      if (!result?.preview_token || !result?.arquivos || !result?.alteracoes) {
+        throw new Error("A prévia recebida está incompleta. Gere uma nova prévia.");
+      }
+      const labels = {
+        endpoint: "Endpoint",
+        detalhes: "Simpress",
+      };
+      const linhas = ["Resumo da substituição (contagens por número de série):"];
+      for (const role of ["endpoint", "detalhes"]) {
+        const arquivo = result.arquivos[role] || {};
+        const alteracao = result.alteracoes[role] || {};
+        const formatar = valor => Number(valor || 0).toLocaleString("pt-BR");
+        linhas.push(
+          `${labels[role]} — ${arquivo.nome || "arquivo selecionado"} (${formatar(arquivo.linhas)} linhas)`,
+          `Séries novas: ${formatar(alteracao.series_novas)}; removidas: ${formatar(alteracao.series_removidas)}; duplicadas no arquivo novo: ${formatar(alteracao.series_duplicadas_no_arquivo_novo)}.`
+        );
+      }
+      const preview = document.getElementById("upload-planilhas-preview");
+      preview.textContent = linhas.join("\n");
+      preview.className = "text-xs rounded-lg px-3 py-2 bg-slate-950 border border-slate-700 text-slate-200 whitespace-pre-line";
+      preview.setAttribute("role", "status");
+      preview.setAttribute("aria-live", "polite");
+      preview.setAttribute("aria-atomic", "true");
+      preview.scrollIntoView?.({ block: "nearest" });
+    }
+
+    function arquivoSelecionadoContinuaIgual(input, arquivoPrevisto) {
+      return input.files?.[0] === arquivoPrevisto;
+    }
+
+    async function previsualizarPlanilhas() {
+      const endpointInput = document.getElementById("upload-endpoint-file");
+      const detailsInput = document.getElementById("upload-details-file");
+      const endpointFile = endpointInput.files?.[0];
+      const detailsFile = detailsInput.files?.[0];
+      if (!endpointFile || !detailsFile) {
+        mostrarStatusUpload("Selecione Endpoint e EquipamentosDetalhes antes de gerar a prévia.", true);
+        return;
+      }
+
+      const button = document.getElementById("btn-previsualizar-planilhas");
+      const originalHtml = button.innerHTML;
+      button.disabled = true;
+      endpointInput.disabled = true;
+      detailsInput.disabled = true;
+      button.setAttribute("aria-busy", "true");
+      document.getElementById("modal-atualizar-planilhas").setAttribute("aria-busy", "true");
+      button.innerHTML = '<i data-lucide="loader-2" class="w-3.5 h-3.5 animate-spin"></i><span>Validando arquivos...</span>';
+      lucide.createIcons({ root: button });
+
+      const formData = new FormData();
+      formData.append("endpoint_file", endpointFile);
+      formData.append("details_file", detailsFile);
+
+      try {
+        const response = await fetch("/api/planilhas/previsualizar", { method: "POST", body: formData });
+        const result = await response.json().catch(() => ({}));
+        if (!response.ok) {
+          if (response.status === 404) {
+            throw new Error("A API ativa está desatualizada. Feche a instância anterior e reinicie com iniciar_servidor.bat desta pasta.");
+          }
+          const detail = result.detail;
+          throw new Error(Array.isArray(detail) ? detail.map(item => item.msg || item).join("; ") : (detail || "Não foi possível gerar a prévia."));
+        }
+        renderizarPreviaUploadPlanilhas(result);
+        previaPlanilhasAtual = {
+          endpointFile,
+          detailsFile,
+          previewToken: result.preview_token,
+        };
+        document.getElementById("btn-previsualizar-planilhas").classList.add("hidden");
+        document.getElementById("btn-confirmar-planilhas").classList.remove("hidden");
+        mostrarStatusUpload("Confira as contagens e confirme somente se este impacto estiver correto.");
+      } catch (error) {
+        console.error("Erro ao pré-visualizar planilhas:", error);
+        limparPreviaUploadPlanilhas(false);
+        mostrarStatusUpload(error.message || "Não foi possível gerar a prévia.", true);
+      } finally {
+        endpointInput.disabled = false;
+        detailsInput.disabled = false;
+        button.disabled = false;
+        button.removeAttribute("aria-busy");
+        document.getElementById("modal-atualizar-planilhas").removeAttribute("aria-busy");
+        button.innerHTML = originalHtml;
+        lucide.createIcons({ root: button });
+      }
     }
 
     async function enviarPlanilhas() {
-      const endpointFile = document.getElementById("upload-endpoint-file").files?.[0];
-      const detailsFile = document.getElementById("upload-details-file").files?.[0];
+      const endpointInput = document.getElementById("upload-endpoint-file");
+      const detailsInput = document.getElementById("upload-details-file");
+      const endpointFile = endpointInput.files?.[0];
+      const detailsFile = detailsInput.files?.[0];
       const exportarHistoricoAutomaticamente = document.getElementById("auto-export-history-after-update")?.checked === true;
-      if (!endpointFile || !detailsFile) {
-        mostrarStatusUpload("Selecione Endpoint e EquipamentosDetalhes antes de atualizar.", true);
+      const preview = previaPlanilhasAtual;
+      if (!preview) {
+        mostrarStatusUpload("Gere uma prévia dos arquivos antes de confirmar a substituição.", true);
+        return;
+      }
+      if (
+        !arquivoSelecionadoContinuaIgual(endpointInput, preview.endpointFile)
+        || !arquivoSelecionadoContinuaIgual(detailsInput, preview.detailsFile)
+      ) {
+        limparPreviaUploadPlanilhas(false);
+        mostrarStatusUpload("Os arquivos mudaram depois da prévia. Gere uma nova prévia antes de confirmar.", true);
         return;
       }
 
       const button = document.getElementById("btn-confirmar-planilhas");
       const originalHtml = button.innerHTML;
       button.disabled = true;
+      endpointInput.disabled = true;
+      detailsInput.disabled = true;
       button.setAttribute("aria-busy", "true");
       const autoExportInput = document.getElementById("auto-export-history-after-update");
       if (autoExportInput) autoExportInput.disabled = true;
       document.getElementById("modal-atualizar-planilhas").setAttribute("aria-busy", "true");
-      button.innerHTML = '<i data-lucide="loader-2" class="w-3.5 h-3.5 animate-spin"></i><span>Validando e atualizando...</span>';
+      button.innerHTML = '<i data-lucide="loader-2" class="w-3.5 h-3.5 animate-spin"></i><span>Confirmando substituição...</span>';
       lucide.createIcons({ root: button });
 
       const formData = new FormData();
       formData.append("endpoint_file", endpointFile);
       formData.append("details_file", detailsFile);
+      let invalidarPrevia = false;
       if (!inventoryUploadAttempt || inventoryUploadAttempt.endpoint !== endpointFile || inventoryUploadAttempt.details !== detailsFile) {
         inventoryUploadAttempt = { endpoint: endpointFile, details: detailsFile, key: inventoryOperationKey() };
       }
+      if (preview.previewToken) formData.append("preview_token", preview.previewToken);
 
       try {
         const response = await fetch("/api/planilhas/atualizar", {
@@ -2172,6 +2304,7 @@
         });
         const result = await response.json().catch(() => ({}));
         if (!response.ok) {
+          invalidarPrevia = response.status < 500;
           if (response.status === 404) {
             throw new Error("A API ativa está desatualizada. Feche a instância anterior e reinicie com iniciar_servidor.bat desta pasta.");
           }
@@ -2219,8 +2352,11 @@
         abrirModalComparacaoPlanilhas(comparison);
       } catch (error) {
         console.error("Erro ao atualizar planilhas:", error);
+        if (invalidarPrevia) limparPreviaUploadPlanilhas(false);
         mostrarStatusUpload(error.message || "Não foi possível atualizar as planilhas.", true);
       } finally {
+        endpointInput.disabled = false;
+        detailsInput.disabled = false;
         button.disabled = false;
         button.removeAttribute("aria-busy");
         if (autoExportInput) autoExportInput.disabled = false;
