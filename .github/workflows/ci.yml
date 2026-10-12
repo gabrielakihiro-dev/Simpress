@@ -42,8 +42,10 @@ jobs:
           node --check static/js/shared/catalog-search-utils.js
           node --check static/js/ui/ui-motion.js
           node --check static/js/ui/ui-notifications.js
+          node --check static/js/ui/sidebar-navigation.js
           node --check playwright.config.cjs
           node --check tests/e2e/ui.spec.cjs
+          node --check tests/e2e/ticket-requests.spec.cjs
           node --check tests/e2e/auth-local.cjs
           node --check config/tailwind.config.cjs
           node --check scripts/build/copy_ui_assets.cjs
