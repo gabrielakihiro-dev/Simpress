@@ -8,19 +8,13 @@ from uuid import UUID
 from fastapi import APIRouter, File, HTTPException, UploadFile
 from fastapi.responses import Response
 
+from core.async_workers import await_worker_completion
 from persistence.boundary import idempotency_key
 
 
 async def worker(function, *args):
     task = asyncio.create_task(asyncio.to_thread(function,*args))
-    try:
-        return await asyncio.shield(task)
-    except asyncio.CancelledError:
-        try:
-            await asyncio.shield(task)
-        except Exception:
-            pass
-        raise
+    return await await_worker_completion(task)
 
 
 async def update(files, endpoint, details, read):

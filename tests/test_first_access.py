@@ -4,6 +4,7 @@ import asyncio
 import io
 import json
 import importlib.util
+import struct
 import unittest
 import zipfile
 from unittest.mock import patch
@@ -12,6 +13,7 @@ import openpyxl
 from starlette.datastructures import UploadFile
 
 from domains.local_setup import TRANSFER_CELLS, unpack_simpress_zip, validate_local_model
+from core.xlsx_safety import XlsxPackageError, validate_xlsx
 from tests import test_integrity_workflows as fixtures
 from tests.test_integrity_workflows import complete_details_headers, main, make_details, make_endpoint
 
@@ -48,6 +50,18 @@ def archive_bytes(entries):
         for name, data in entries:
             archive.writestr(name, data)
     return stream.getvalue()
+
+
+def corrupt_deflate_member(data, member_name):
+    """Set the reserved DEFLATE block type in one synthetic ZIP member."""
+    damaged = bytearray(data)
+    with zipfile.ZipFile(io.BytesIO(data)) as archive:
+        member = archive.getinfo(member_name)
+        offset = member.header_offset
+        filename_length, extra_length = struct.unpack_from("<HH", damaged, offset + 26)
+        compressed_start = offset + 30 + filename_length + extra_length
+    damaged[compressed_start] = (damaged[compressed_start] & ~0x06) | 0x06
+    return bytes(damaged)
 
 
 class FirstAccessTests(unittest.TestCase):
@@ -179,6 +193,25 @@ class FirstAccessTests(unittest.TestCase):
                                ([("a.xlsx", b"12345")], 4)]:
             with self.subTest(entries=entries), self.assertRaises(main.HTTPException):
                 unpack_simpress_zip(archive_bytes(entries), limit)
+
+    def test_deflate_corruption_maps_to_existing_xlsx_and_upload_errors(self):
+        valid_xlsx = workbook_bytes([["NumeroSerie", "Apelido"], ["SINTETICO-1", "HOST-1"]])
+        for member, expected in (
+            ("xl/workbook.xml", "O arquivo contém metadados XLSX inválidos."),
+            ("xl/worksheets/sheet1.xml", "Uma aba contém XML inválido ou incompleto."),
+            ("docProps/core.xml", "A planilha contém uma parte XML inválida."),
+        ):
+            with self.subTest(member=member), self.assertRaises(XlsxPackageError) as workbook_error:
+                validate_xlsx(corrupt_deflate_member(valid_xlsx, member))
+            self.assertEqual(str(workbook_error.exception), expected)
+
+        corrupt_outer_zip = corrupt_deflate_member(
+            archive_bytes([("simpress.xlsx", valid_xlsx)]), "simpress.xlsx",
+        )
+        with self.assertRaises(main.HTTPException) as zip_error:
+            unpack_simpress_zip(corrupt_outer_zip, 1_000_000)
+        self.assertEqual(zip_error.exception.status_code, 400)
+        self.assertEqual(zip_error.exception.detail, "Não foi possível ler o ZIP da Simpress.")
 
     def test_invalid_zip_cannot_replace_inventory_or_cache(self):
         self.import_pair()

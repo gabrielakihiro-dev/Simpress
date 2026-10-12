@@ -4,6 +4,7 @@ import io
 import re
 import unicodedata
 import zipfile
+import zlib
 from pathlib import PurePosixPath
 
 from fastapi import HTTPException
@@ -53,7 +54,7 @@ def unpack_simpress_zip(data: bytes, limit: int, *, size_label: str = "30 MB") -
             return workbook, member.filename
     except HTTPException:
         raise
-    except (OSError, ValueError, RuntimeError, NotImplementedError, zipfile.BadZipFile) as error:
+    except (OSError, ValueError, RuntimeError, NotImplementedError, zipfile.BadZipFile, zlib.error) as error:
         raise HTTPException(400, "Não foi possível ler o ZIP da Simpress.") from error
 
 
