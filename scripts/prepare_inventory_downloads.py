@@ -15,7 +15,7 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT))
-from app_config import AUTOMATIC_INVENTORY_INBOX_DIR, MAX_UPLOAD_BYTES
+from core.config import AUTOMATIC_INVENTORY_INBOX_DIR, MAX_UPLOAD_BYTES
 
 
 def recent_workbook(downloads: Path, prefix: str, since: datetime):

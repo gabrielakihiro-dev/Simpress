@@ -10,9 +10,9 @@ from contextlib import redirect_stdout
 from pathlib import Path
 from unittest.mock import patch
 
-import app_config
+from core import config as app_config
 import openpyxl
-import openpyxl_compat
+from core import openpyxl_compat
 from starlette.routing import Match
 
 
@@ -250,8 +250,8 @@ class MaintenanceContractTests(unittest.TestCase):
         )
 
     def test_tailwind_build_only_scans_fixed_local_assets(self):
-        configuration = (PROJECT_ROOT / "tailwind.config.cjs").read_text(encoding="utf-8")
-        self.assertIn('content: ["./static/index.html", "./static/app.js"]', configuration)
+        configuration = (PROJECT_ROOT / "config/tailwind.config.cjs").read_text(encoding="utf-8")
+        self.assertIn('content: ["../static/index.html", "../static/app.js", "../static/js/**/*.js", "../static/pages/**/*.html"]', configuration)
         self.assertNotIn("process.env", configuration)
         self.assertNotIn("userInput", configuration)
 
@@ -266,7 +266,7 @@ class MaintenanceContractTests(unittest.TestCase):
         self.assertEqual(openpyxl_compat.image_count(worksheet), 0)
         workbook.close()
 
-        integrity_source = (PROJECT_ROOT / "integrity.py").read_text(encoding="utf-8")
+        integrity_source = (PROJECT_ROOT / "core/integrity.py").read_text(encoding="utf-8")
         for internal_name in ("_cells", "_charts", "_images", "_cell_styles", "_named_styles", "_cf_rules"):
             self.assertNotRegex(integrity_source, rf"(?<!\w){re.escape(internal_name)}\b")
         with patch.object(openpyxl_compat.openpyxl, "__version__", "99.0"):
@@ -298,7 +298,7 @@ class MaintenanceContractTests(unittest.TestCase):
         self.assertNotIn("globals().update", main_source)
         workflow = (PROJECT_ROOT / ".github" / "workflows" / "ci.yml").read_text(encoding="utf-8")
         self.assertIn("tests/run_tests.py", workflow)
-        self.assertIn("tests/test_transfer_workflows.cjs tests/test_inventory_ui_flows.cjs", workflow)
+        self.assertIn("tests/frontend/test_transfer_workflows.cjs tests/frontend/test_inventory_ui_flows.cjs", workflow)
         self.assertIn("scripts/check_secrets.py", workflow)
 
     def test_transfer_contact_is_configured_and_workbook_metadata_is_anonymized(self):
@@ -616,12 +616,12 @@ class MaintenanceContractTests(unittest.TestCase):
         self.assertIn('<link rel="stylesheet" href="/static/vendor/tailwind-4.3.3.css">', html)
         self.assertIn('<script src="/static/vendor/lucide-1.48.0.min.js"></script>', html)
         self.assertIn('<link rel="stylesheet" href="/static/app.css">', html)
-        self.assertIn('<script src="/static/transfer-utils.js"></script>', html)
+        self.assertIn('<script src="/static/js/shared/transfer-utils.js"></script>', html)
         self.assertIn('<script src="/static/app.js"></script>', html)
         self.assertNotRegex(html, r"https://(?:fonts\.googleapis\.com|fonts\.gstatic\.com|cdn\.tailwindcss\.com|unpkg\.com)")
         self.assertTrue((app_config.STATIC_DIR / "app.css").is_file())
         self.assertTrue((app_config.STATIC_DIR / "app.js").is_file())
-        self.assertTrue((app_config.STATIC_DIR / "transfer-utils.js").is_file())
+        self.assertTrue((app_config.STATIC_DIR / "js/shared/transfer-utils.js").is_file())
         self.assertTrue((app_config.STATIC_DIR / "vendor" / "fonts.css").is_file())
         self.assertTrue((app_config.STATIC_DIR / "vendor" / "tailwind-4.3.3.css").is_file())
         self.assertTrue((app_config.STATIC_DIR / "vendor" / "lucide-1.48.0.min.js").is_file())
@@ -668,7 +668,7 @@ class MaintenanceContractTests(unittest.TestCase):
     def test_dialog_overlays_stack_above_the_header_and_keep_keyboard_trapping(self):
         html = (app_config.STATIC_DIR / "index.html").read_text(encoding="utf-8")
         css = (app_config.STATIC_DIR / "app.css").read_text(encoding="utf-8")
-        dialog_script = (app_config.STATIC_DIR / "accessible-dialogs.js").read_text(encoding="utf-8")
+        dialog_script = (app_config.STATIC_DIR / "js/ui/accessible-dialogs.js").read_text(encoding="utf-8")
 
         dialogs = re.findall(r'<div id="(modal-[^"]+)" class="([^"]+)"', html)
         self.assertGreater(len(dialogs), 0)

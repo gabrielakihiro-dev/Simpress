@@ -15,7 +15,7 @@ from pathlib import Path
 from typing import Any, Callable, Dict, Iterator, List, Optional
 
 from fastapi import HTTPException
-from integrity import (
+from core.integrity import (
     FileBusyError,
     FileTransactionError,
     TransactionConflictError,

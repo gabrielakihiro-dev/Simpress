@@ -11,7 +11,7 @@ from unittest.mock import patch
 
 import openpyxl
 
-import integrity
+from core import integrity
 
 
 PROJECT_ROOT = Path(__file__).resolve().parents[1]
@@ -57,7 +57,7 @@ class AtomicTransactionTests(unittest.TestCase):
             raise cleanup_error
 
         transaction._stack.callback(fail_cleanup)
-        with patch("integrity.lock_paths", side_effect=fail_target_lock):
+        with patch("core.integrity.lock_paths", side_effect=fail_target_lock):
             with self.assertRaises(integrity.FileBusyError) as raised:
                 transaction.__enter__()
 
@@ -75,7 +75,7 @@ class AtomicTransactionTests(unittest.TestCase):
                 return original_lock_paths(paths, timeout=0.5)
 
             try:
-                with patch("integrity.lock_paths", side_effect=bounded_lock_paths):
+                with patch("core.integrity.lock_paths", side_effect=bounded_lock_paths):
                     with integrity.AtomicFileTransaction(self.root, [target]):
                         acquired.set()
             except BaseException as error:
@@ -136,7 +136,7 @@ class AtomicTransactionTests(unittest.TestCase):
                 raise PermissionError("simulated workbook lock")
             return original_replace(source, destination)
 
-        with patch("integrity.os.replace", side_effect=fail_second_replace), patch("integrity._RETRY_DELAYS", (0, 0, 0)):
+        with patch("core.integrity.os.replace", side_effect=fail_second_replace), patch("core.integrity._RETRY_DELAYS", (0, 0, 0)):
             with self.assertRaises(integrity.FileBusyError):
                 with integrity.AtomicFileTransaction(self.root, [first, second]) as transaction:
                     transaction.stage_bytes(first, b"first-after")
@@ -157,7 +157,7 @@ class AtomicTransactionTests(unittest.TestCase):
                 raise PermissionError("simulated Excel lock")
             return original_replace(source, destination)
 
-        with patch("integrity.os.replace", side_effect=block_target), patch("integrity._RETRY_DELAYS", (0, 0, 0)):
+        with patch("core.integrity.os.replace", side_effect=block_target), patch("core.integrity._RETRY_DELAYS", (0, 0, 0)):
             with self.assertRaisesRegex(integrity.FileBusyError, "Feche a planilha"):
                 with integrity.AtomicFileTransaction(self.root, [target]) as transaction:
                     transaction.stage_bytes(target, b"replacement")

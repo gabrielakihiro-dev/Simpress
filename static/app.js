@@ -13,6 +13,10 @@
     let debounceTimer = null;
     const transferUtils = window.SimpressTransferUtils;
     const catalogSearch = window.SimpressCatalogSearch;
+    const domUtils = window.SimpressDomUtils(document);
+    const ticketSnapshotRequestGate = transferUtils.createRequestGate();
+    const ticketEvolutionRequestGate = transferUtils.createRequestGate();
+    const ticketTimelineRequests = new Map();
     const transferDraftTracker = window.SimpressFormDraftGuard.createDraftTracker();
     const autocompleteRequestGate = transferUtils.createRequestGate();
     const equipmentLookupRequestGate = transferUtils.createRequestGate();
@@ -940,40 +944,11 @@
       }
     }
 
-    function escapeHtml(str) {
-      if (str === null || str === undefined) return "";
-      return String(str)
-        .replace(/&/g, "&amp;")
-        .replace(/</g, "&lt;")
-        .replace(/>/g, "&gt;")
-        .replace(/"/g, "&quot;")
-        .replace(/'/g, "&#039;");
-    }
-
-    function createTextElement(tagName, className, value) {
-      const element = document.createElement(tagName);
-      if (className) element.className = className;
-      element.textContent = String(value ?? "");
-      return element;
-    }
-
-    function createIcon(name, className) {
-      const icon = document.createElement("i");
-      icon.setAttribute("data-lucide", name);
-      icon.className = className;
-      return icon;
-    }
-
-    function highlightMatch(text, query) {
-      if (!text) return "";
-      if (!query) return escapeHtml(text);
-      const q = query.trim();
-      if (!q) return escapeHtml(text);
-      const safeText = escapeHtml(text);
-      const safeQuery = escapeHtml(q);
-      const regex = new RegExp(`(${safeQuery.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')})`, "gi");
-      return safeText.replace(regex, `<span class="serial-match">$1</span>`);
-    }
+    // Keep global wrappers while inline handlers and renderers use these names.
+    function escapeHtml(str) { return domUtils.escapeHtml(str); }
+    function createTextElement(tagName, className, value) { return domUtils.createTextElement(tagName, className, value); }
+    function createIcon(name, className) { return domUtils.createIcon(name, className); }
+    function highlightMatch(text, query) { return domUtils.highlightMatch(text, query); }
 
     function updateAutocompleteHighlight() {
       const list = document.getElementById("autocomplete-list");
@@ -3167,7 +3142,13 @@
       } catch (error) { target.textContent = error.message || "Não foi possível carregar as atualizações."; }
     }
 
-    function fecharAcompanhamentoChamados() { fecharModalAcessivel("modal-acompanhamento-chamados"); }
+    function fecharAcompanhamentoChamados() {
+      ticketSnapshotRequestGate.invalidate();
+      ticketEvolutionRequestGate.invalidate();
+      ticketTimelineRequests.forEach(gate => gate.invalidate());
+      ticketTimelineRequests.clear();
+      fecharModalAcessivel("modal-acompanhamento-chamados");
+    }
 
     function formatarListaChamados(values) {
       const items = Array.isArray(values) ? values.filter(Boolean) : [];
@@ -3375,6 +3356,7 @@
     }
 
     async function carregarEvolucaoChamados(snapshotId) {
+      const request = ticketEvolutionRequestGate.begin();
       const target = document.getElementById("evolucao-acompanhamento-chamados");
       const index = historicoAcompanhamentoChamados.findIndex(event => event.id === snapshotId);
       const older = index >= 0 ? historicoAcompanhamentoChamados[index + 1] : null;
@@ -3387,11 +3369,15 @@
       target.textContent = "Comparando esta versão com a anterior…";
       try {
         const query = new URLSearchParams({ anterior: older.id, atual: snapshotId });
-        const response = await fetch(`/api/operacoes/chamados/evolucao?${query.toString()}`);
+        const response = await fetch(`/api/operacoes/chamados/evolucao?${query.toString()}`, { signal: request.signal });
         const data = await response.json().catch(() => ({}));
+        if (!ticketEvolutionRequestGate.isCurrent(request.id)) return;
         if (!response.ok) throw new Error(data.detail || "Não foi possível comparar as versões dos chamados.");
         renderizarEvolucaoChamados(data);
-      } catch (error) { target.textContent = error.message || "Não foi possível comparar as versões dos chamados."; }
+      } catch (error) {
+        if (!ticketEvolutionRequestGate.isCurrent(request.id)) return;
+        target.textContent = error.message || "Não foi possível comparar as versões dos chamados.";
+      }
     }
 
     function renderizarLinhaDoTempoChamado(events) {
@@ -3442,22 +3428,30 @@
     }
 
     async function carregarLinhaDoTempoChamado(details) {
-      if (!details?.open || details.dataset.ticketTimelineLoaded === "true") return;
+      if (!details?.open || details.dataset.ticketTimelineLoaded === "true" || ticketTimelineRequests.has(details)) return;
       const serial = details.dataset.timelineSerial || "";
       const snapshotId = details.dataset.snapshotId || acompanhamentoChamadosAtual?.snapshot_id || "";
       const body = details.querySelector("[data-ticket-timeline-body]");
       if (!body) return;
+      const gate = transferUtils.createRequestGate();
+      const request = gate.begin();
+      ticketTimelineRequests.set(details, gate);
+      const isCurrent = () => ticketTimelineRequests.get(details) === gate && details.isConnected !== false;
       body.innerHTML = '<p class="py-3 text-xs text-slate-400" role="status">Carregando histórico da série…</p>';
       try {
         const params = new URLSearchParams({ snapshot_id: snapshotId });
-        const response = await fetch(`/api/operacoes/chamados/linha-do-tempo/${encodeURIComponent(serial)}?${params.toString()}`);
+        const response = await fetch(`/api/operacoes/chamados/linha-do-tempo/${encodeURIComponent(serial)}?${params.toString()}`, { signal: request.signal });
         const data = await response.json().catch(() => ({}));
+        if (!isCurrent()) return;
         if (!response.ok) throw new Error(data.detail || "Não foi possível carregar a linha do tempo.");
         body.innerHTML = renderizarLinhaDoTempoChamado(data.eventos);
         conectarAnotacoesLinhaDoTempo(body);
         details.dataset.ticketTimelineLoaded = "true";
       } catch (error) {
+        if (!isCurrent()) return;
         body.innerHTML = `<p class="py-3 text-xs text-rose-300" role="alert">${escapeHtml(error.message || "Não foi possível carregar a linha do tempo.")}</p>`;
+      } finally {
+        if (ticketTimelineRequests.get(details) === gate) ticketTimelineRequests.delete(details);
       }
     }
 
@@ -3646,17 +3640,23 @@
     async function selecionarVersaoChamados() {
       const snapshotId = document.getElementById("versao-acompanhamento-chamados").value;
       if (!snapshotId) return;
+      const request = ticketSnapshotRequestGate.begin();
+      ticketEvolutionRequestGate.invalidate();
       const target = document.getElementById("lista-acompanhamento-chamados");
       target.innerHTML = '<p class="py-8 text-center text-sm text-slate-400" role="status">Carregando versão selecionada…</p>';
       try {
-        const response = await fetch(`/api/operacoes/chamados/snapshot/${encodeURIComponent(snapshotId)}`);
+        const response = await fetch(`/api/operacoes/chamados/snapshot/${encodeURIComponent(snapshotId)}`, { signal: request.signal });
         const data = await response.json().catch(() => ({}));
+        if (!ticketSnapshotRequestGate.isCurrent(request.id)) return;
         if (!response.ok) throw new Error(data.detail || "Não foi possível abrir esta versão.");
         data.snapshot_id = snapshotId;
         acompanhamentoChamadosAtual = data;
         renderizarAcompanhamentoChamados();
         await carregarEvolucaoChamados(snapshotId);
-      } catch (error) { target.innerHTML = `<p class="py-8 text-center text-sm text-rose-300" role="alert">${escapeHtml(error.message || "Não foi possível abrir esta versão.")}</p>`; }
+      } catch (error) {
+        if (!ticketSnapshotRequestGate.isCurrent(request.id)) return;
+        target.innerHTML = `<p class="py-8 text-center text-sm text-rose-300" role="alert">${escapeHtml(error.message || "Não foi possível abrir esta versão.")}</p>`;
+      }
     }
 
     async function excluirImportacoesAntigasChamados() {
@@ -3719,17 +3719,21 @@
     }
 
     async function carregarAcompanhamentoChamados() {
+      const request = ticketSnapshotRequestGate.begin();
+      ticketEvolutionRequestGate.invalidate();
       const list = document.getElementById("lista-acompanhamento-chamados");
       list.innerHTML = '<p class="py-8 text-center text-sm text-slate-400" role="status">Carregando acompanhamento…</p>';
       try {
-        const response = await fetch("/api/operacoes/chamados");
+        const response = await fetch("/api/operacoes/chamados", { signal: request.signal });
         const data = await response.json().catch(() => ({}));
+        if (!ticketSnapshotRequestGate.isCurrent(request.id)) return;
         if (!response.ok) throw new Error(data.detail || "Não foi possível carregar o acompanhamento de chamados.");
         acompanhamentoChamadosAtual = data;
         renderizarHistoricoAcompanhamentoChamados(data);
         renderizarAcompanhamentoChamados();
         await carregarEvolucaoChamados(data.snapshot_id || "");
       } catch (error) {
+        if (!ticketSnapshotRequestGate.isCurrent(request.id)) return;
         document.getElementById("painel-dados-acompanhamento-chamados").open = true;
         list.innerHTML = `<p class="py-8 text-center text-sm text-rose-300" role="alert">${escapeHtml(error.message || "Não foi possível carregar o acompanhamento de chamados.")}</p>`;
       }
@@ -3758,6 +3762,8 @@
         const response = await fetch("/api/operacoes/chamados/importar", { method: "POST", body: payload });
         const data = await response.json().catch(() => ({}));
         if (!response.ok) throw new Error(data.detail || "Não foi possível importar as planilhas.");
+        ticketSnapshotRequestGate.invalidate();
+        ticketEvolutionRequestGate.invalidate();
         acompanhamentoChamadosAtual = data;
         renderizarHistoricoAcompanhamentoChamados(data);
         simpressInput.value = "";
