@@ -77,14 +77,16 @@ test("sidebar tools keep accent colors and fit the multiline ticket label", asyn
   const exportButton = page.locator("#btn-exportar-equipamentos");
   const ticketButton = page.getByRole("button", { name: "Acompanhamento de Chamados", exact: true });
   const analysisButton = page.locator('.header-action-group[data-action-group="analysis"] > summary');
-  await expect(exportButton).toBeVisible();
   await expect(ticketButton).toBeVisible();
-  const heights = await Promise.all([updateButton, exportButton, ticketButton].map(button =>
+  const analysisGroup = page.locator('.header-action-group[data-action-group="analysis"]');
+  if (!(await analysisGroup.evaluate(element => element.open))) await analysisButton.click();
+  await expect(updateButton).toBeVisible();
+  await expect(exportButton).toBeVisible();
+  const heights = await Promise.all([exportButton, ticketButton].map(button =>
     button.evaluate(element => element.getBoundingClientRect().height)
   ));
-  expect(heights[1]).toBe(heights[0]);
   // The committed ticket label intentionally spans two lines with extra leading.
-  expect(heights[2]).toBeGreaterThanOrEqual(heights[0]);
+  expect(heights[1]).toBeGreaterThanOrEqual(heights[0]);
   const labelLayout = await ticketButton.locator(".sidebar-item-label").evaluate(label => {
     const button = label.closest("button").getBoundingClientRect();
     const text = label.getBoundingClientRect();
@@ -96,11 +98,19 @@ test("sidebar tools keep accent colors and fit the multiline ticket label", asyn
 
   const ticketBackground = await ticketButton.evaluate(element => getComputedStyle(element).backgroundColor);
   const analysisBackground = await analysisButton.evaluate(element => getComputedStyle(element).backgroundColor);
-  const updateBackground = await updateButton.evaluate(element => getComputedStyle(element).backgroundColor);
-  const exportBackground = await exportButton.evaluate(element => getComputedStyle(element).backgroundColor);
-  expect(updateBackground).toContain("67, 56, 202");
-  expect(exportBackground).toContain("5, 150, 105");
-  expect(ticketBackground).toContain("13, 148, 136");
+  const updateStyle = await updateButton.evaluate(element => {
+    const style = getComputedStyle(element);
+    return { backgroundImage: style.backgroundImage, fontWeight: style.fontWeight };
+  });
+  const exportStyle = await exportButton.evaluate(element => {
+    const style = getComputedStyle(element);
+    return { backgroundImage: style.backgroundImage, fontWeight: style.fontWeight };
+  });
+  expect(updateStyle.backgroundImage).toContain("linear-gradient");
+  expect(updateStyle.fontWeight).toBe("700");
+  expect(exportStyle.backgroundImage).toContain("linear-gradient");
+  expect(exportStyle.fontWeight).toBe("700");
+  expect(ticketBackground).toContain("234, 88, 12");
   expect(analysisBackground).toContain("109, 40, 217");
 });
 

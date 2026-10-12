@@ -68,13 +68,13 @@ test("colors the analysis and equipment action groups distinctly", () => {
   assert.match(appCss, /header-action-group\[data-action-group="equipment"\] > summary\s*\{[^}]*rgba\(248, 113, 113/);
 });
 
-test("places the ticket action immediately after Excel export with a teal accent", () => {
+test("places the ticket action before the analysis group with an orange accent", () => {
   const exportButton = indexHtml.indexOf('id="btn-exportar-equipamentos"');
   const ticketAction = indexHtml.indexOf('onclick="abrirAcompanhamentoChamados()"');
   const ticketActionEnd = indexHtml.indexOf("</button>", ticketAction);
   const analysisGroup = indexHtml.indexOf('data-action-group="analysis"');
-  assert.ok(exportButton < ticketAction);
   assert.ok(ticketAction < analysisGroup);
-  assert.match(indexHtml.slice(ticketAction, ticketActionEnd), /header-action-item--large[^"]*header-action-item--teal/);
-  assert.match(appCss, /header-secondary-panel \.header-action-item--teal\s*\{[^}]*rgba\(13, 148, 136/);
+  assert.ok(analysisGroup < exportButton);
+  assert.match(indexHtml.slice(ticketAction, ticketActionEnd), /header-action-item--large[^"]*header-action-item--orange/);
+  assert.match(appCss, /header-secondary-panel \.header-action-item--orange\s*\{[^}]*rgba\(234, 88, 12/);
 });
