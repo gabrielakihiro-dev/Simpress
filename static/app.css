@@ -43,6 +43,25 @@
       opacity: 1 !important;
       isolation: isolate;
     }
+    #autocomplete-box:not(.hidden) {
+      display: flex;
+      flex-direction: column;
+      max-height: min(34rem, var(--autocomplete-available-height, calc(100vh - 1rem)));
+    }
+    #autocomplete-header, #autocomplete-more-results, #autocomplete-footer { flex: 0 0 auto; }
+    #autocomplete-list { flex: 1 1 auto; min-height: 0; max-height: 24rem; overflow-y: auto; }
+    #autocomplete-more-results { padding: 0.65rem 0.75rem; background: rgba(2, 6, 23, 0.72); }
+    .autocomplete-more-button {
+      min-height: 2.75rem;
+      border: 1px solid rgba(125, 211, 252, 0.8);
+      background: #0284c7;
+      color: #fff;
+      font-size: 0.875rem;
+      font-weight: 700;
+      box-shadow: 0 4px 14px rgba(2, 132, 199, 0.28);
+    }
+    .autocomplete-more-button:hover { background: #0369a1; }
+    .autocomplete-more-button:focus-visible { outline: 2px solid #7dd3fc; outline-offset: 2px; }
     #autocomplete-list::-webkit-scrollbar {
       width: 6px;
     }
