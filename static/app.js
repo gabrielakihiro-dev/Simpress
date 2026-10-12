@@ -1070,6 +1070,16 @@
       return row;
     }
 
+    function ajustarAlturaAutocomplete() {
+      const box = document.getElementById("autocomplete-box");
+      if (!box || box.classList.contains("hidden")) return;
+
+      const viewport = window.visualViewport;
+      const viewportBottom = viewport ? viewport.offsetTop + viewport.height : window.innerHeight;
+      const availableHeight = Math.max(0, Math.floor(viewportBottom - box.getBoundingClientRect().top - 12));
+      box.style.setProperty("--autocomplete-available-height", `${availableHeight}px`);
+    }
+
     function renderAutocomplete(items, total = items?.length || 0, hasMore = false) {
       const box = document.getElementById("autocomplete-box");
       const list = document.getElementById("autocomplete-list");
@@ -1102,6 +1112,7 @@
         document.getElementById("input-serial").setAttribute("aria-expanded", "true");
         document.getElementById("input-serial").removeAttribute("aria-activedescendant");
         box.classList.remove("hidden");
+        ajustarAlturaAutocomplete();
         lucide.createIcons({ root: box });
         return;
       }
@@ -1121,6 +1132,7 @@
       items.forEach((item, index) => list.appendChild(criarLinhaAutocomplete(item, index, currentQuery)));
 
       box.classList.remove("hidden");
+      ajustarAlturaAutocomplete();
       lucide.createIcons({ root: box });
     }
 
@@ -1311,6 +1323,10 @@
         fecharAutocomplete();
       }
     });
+
+    window.addEventListener("resize", ajustarAlturaAutocomplete);
+    window.visualViewport?.addEventListener("resize", ajustarAlturaAutocomplete);
+    document.addEventListener("scroll", ajustarAlturaAutocomplete, { capture: true, passive: true });
 
     function fecharMenuSecundarioAoClicarFora(event) {
       const menu = document.querySelector(".header-secondary-actions");
