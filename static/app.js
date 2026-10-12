@@ -15,6 +15,7 @@
     const catalogSearch = window.SimpressCatalogSearch;
     const domUtils = window.SimpressDomUtils(document);
     const ticketSnapshotRequestGate = transferUtils.createRequestGate();
+    const readinessRequestGate = transferUtils.createRequestGate();
     const ticketEvolutionRequestGate = transferUtils.createRequestGate();
     const ticketTimelineRequests = new Map();
     const transferDraftTracker = window.SimpressFormDraftGuard.createDraftTracker();
@@ -562,11 +563,13 @@
       const details = document.getElementById("readiness-details-content");
       if (!panel || !summary || !details) return;
 
+      const request = readinessRequestGate.begin();
       panel.setAttribute("aria-busy", "true");
       try {
-        const response = await fetch("/api/prontidao", { cache: "no-store" });
+        const response = await fetch("/api/prontidao", { cache: "no-store", signal: request.signal });
         if (!response.ok) throw new Error("Falha ao consultar a disponibilidade local.");
         const report = await response.json();
+        if (!readinessRequestGate.isCurrent(request.id)) return;
         if (!report?.functions || !report?.files) throw new Error("Resposta de disponibilidade inválida.");
 
         const readinessFileKeys = report.backend === "files"
@@ -716,11 +719,12 @@
         }
         details.replaceChildren(content);
       } catch (error) {
+        if (!readinessRequestGate.isCurrent(request.id)) return;
         panel.dataset.state = "error";
         summary.textContent = "Não foi possível consultar a disponibilidade dos arquivos.";
         details.textContent = "Confira se o servidor está em execução e recarregue a página.";
       } finally {
-        panel.setAttribute("aria-busy", "false");
+        if (readinessRequestGate.isCurrent(request.id)) panel.setAttribute("aria-busy", "false");
       }
     }
 
@@ -3523,7 +3527,9 @@
         return `<div class="rounded-md border border-slate-800 bg-slate-900/70 px-2 py-1" aria-label="${escapeHtml(label)}"><p class="text-[9px] text-slate-400">${shortLabel}</p><p class="text-sm font-semibold ${color}">${count}</p></div>`;
       }).join("")}</div></div>`;
       const exportButton = document.getElementById("btn-exportar-acompanhamento-chamados");
-      exportButton.disabled = !Array.isArray(data.chamados) || data.chamados.length === 0;
+      const selectedSnapshotId = document.getElementById("versao-acompanhamento-chamados").value;
+      exportButton.disabled = !selectedSnapshotId || data.snapshot_id !== selectedSnapshotId
+        || !Array.isArray(data.chamados) || data.chamados.length === 0;
       if (!Array.isArray(data.chamados) || data.chamados.length === 0) {
         list.innerHTML = data.atualizado_em
           ? '<p class="py-8 text-center text-sm text-slate-400" role="status">Importação concluída. Nenhum chamado encontrado nas planilhas.</p>'
@@ -3646,12 +3652,17 @@
       const snapshotId = document.getElementById("versao-acompanhamento-chamados").value;
       const request = ticketSnapshotRequestGate.begin();
       ticketEvolutionRequestGate.invalidate();
+      cancelarLeiturasLinhasDoTempoChamados();
+      const exportButton = document.getElementById("btn-exportar-acompanhamento-chamados");
+      const evolutionTarget = document.getElementById("evolucao-acompanhamento-chamados");
+      exportButton.disabled = true;
       if (!snapshotId) {
         acompanhamentoChamadosAtual = null;
         renderizarAcompanhamentoChamados();
+        evolutionTarget.textContent = "Nenhuma importação selecionada.";
         return;
       }
-      cancelarLeiturasLinhasDoTempoChamados();
+      evolutionTarget.textContent = "Carregando comparação desta versão…";
       const target = document.getElementById("lista-acompanhamento-chamados");
       target.innerHTML = '<p class="py-8 text-center text-sm text-slate-400" role="status">Carregando versão selecionada…</p>';
       try {
@@ -3665,7 +3676,9 @@
         await carregarEvolucaoChamados(snapshotId);
       } catch (error) {
         if (!ticketSnapshotRequestGate.isCurrent(request.id)) return;
-        target.innerHTML = `<p class="py-8 text-center text-sm text-rose-300" role="alert">${escapeHtml(error.message || "Não foi possível abrir esta versão.")}</p>`;
+        const message = error.message || "Não foi possível abrir esta versão.";
+        target.innerHTML = `<p class="py-8 text-center text-sm text-rose-300" role="alert">${escapeHtml(message)}</p>`;
+        evolutionTarget.textContent = message;
       }
     }
 
@@ -3695,8 +3708,15 @@
 
     async function exportarAcompanhamentoChamados() {
       const button = document.getElementById("btn-exportar-acompanhamento-chamados");
+      const selectedSnapshotId = document.getElementById("versao-acompanhamento-chamados").value;
+      const loadedSnapshotId = acompanhamentoChamadosAtual?.snapshot_id || "";
+      if (!selectedSnapshotId || selectedSnapshotId !== loadedSnapshotId
+        || !Array.isArray(acompanhamentoChamadosAtual?.chamados) || acompanhamentoChamadosAtual.chamados.length === 0) {
+        showToast("Selecione e aguarde o carregamento de uma versão válida antes de exportar.", "error");
+        return;
+      }
       const originalText = button.textContent;
-      const params = new URLSearchParams({ snapshot_id: acompanhamentoChamadosAtual?.snapshot_id || "" });
+      const params = new URLSearchParams({ snapshot_id: selectedSnapshotId });
       Object.entries(obterFiltrosChamados()).forEach(([key, value]) => {
         if (value !== "" && value !== false) params.set(key, String(value));
       });
