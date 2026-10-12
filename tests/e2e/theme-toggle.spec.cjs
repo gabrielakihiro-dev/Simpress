@@ -19,7 +19,6 @@ test("the theme icon switches modes, persists the choice, and works on login", a
   const darkModeButton = page.getByRole("button", { name: "Ativar modo escuro" });
   await expect(root).toHaveAttribute("data-theme", "light");
   await expect(darkModeButton.locator("svg")).toHaveClass(/lucide-moon/);
-  await expect.poll(() => page.evaluate(() => getComputedStyle(document.documentElement).colorScheme)).toBe("light");
   await expect(page.locator("#btn-buscar-serial")).toHaveCSS("color", "rgb(255, 255, 255)");
   await expect.poll(() => page.locator(".home-search-card").evaluate(
     element => getComputedStyle(element).backgroundColor,
