@@ -9,6 +9,7 @@ from pathlib import Path
 
 from fastapi import APIRouter, File, HTTPException, UploadFile
 
+from core.async_workers import await_worker_completion
 from domains.local_setup import validate_local_model
 from core.integrity import AtomicFileTransaction, FileBusyError, FileTransactionError
 
@@ -61,14 +62,7 @@ def create_local_setup_router(*, enabled, model_path, transaction_root, backups_
                 admission = None
                 raise HTTPException(503, "A análise de planilhas está ocupada. Tente novamente em instantes.")
             worker = asyncio.create_task(asyncio.to_thread(commit_model, tipo, data))
-            try:
-                return await asyncio.shield(worker)
-            except asyncio.CancelledError:
-                try:
-                    await asyncio.shield(worker)
-                except Exception:
-                    pass  # The transaction has already rolled back; cancellation wins.
-                raise
+            return await await_worker_completion(worker)
         except FileBusyError as error:
             raise HTTPException(409, str(error)) from error
         except FileTransactionError as error:
