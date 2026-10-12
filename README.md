@@ -197,6 +197,26 @@ Use **Pendências** para revisar e anotar as linhas da atualização mais recent
 
 #### Processar atualizações pela pasta de entrada
 
+Para preparar automaticamente o par recém-exportado de Downloads, registre o horário de início **antes** das exportações e execute o preparador depois de acionar os dois downloads:
+
+```powershell
+$inicioInventarios = (Get-Date).ToString("o")
+# Exporte UX Simpress (contrato 16467) e Endpoint Central no Chrome.
+& .\.venv\Scripts\python.exe scripts\prepare_inventory_downloads.py --since $inicioInventarios
+```
+
+O preparador seleciona o download mais recente de cada fonte posterior ao horário informado: `InvAllComputersSummary*.xlsx` ou `.zip` para Endpoint e `EquipamentosDetalhes*.xlsx` ou `.zip` para Simpress. Um ZIP precisa conter exatamente um XLSX. Os originais permanecem em Downloads; a cópia do par completo é publicada de uma só vez na fila, com `_origem.json` contendo nomes, datas e hashes SHA-256. Sem os dois arquivos recentes, nenhum lote é publicado. Repetir o comando com o mesmo horário e par retorna o lote existente, inclusive se estiver em `falhas`, sem criar outra atualização.
+
+Se o servidor estiver parado, processe a fila diretamente, sem upload HTTP:
+
+```powershell
+& .\.venv\Scripts\python.exe scripts\process_inventory_inbox.py
+```
+
+O comando usa o importador e a transação existentes. Confira `processadas/<lote>/_resultado.json` com `status: concluido` e o evento com `importacao_automatica_id` no histórico; a contagem do comando também inclui lotes arquivados por falha e não substitui o recibo. Prefira o importador do servidor quando ele estiver ativo, para manter seus dados em memória atualizados. A sincronização das anotações continua usando a pasta compartilhada já configurada e sua fila de pendências; os comandos não publicam planilhas em serviços externos.
+
+Procedimento de exportação e importação: [Exportações de planilhas — UX Simpress + Endpoint Central](https://app.notion.com/p/Exporta-es-de-planilhas-UX-Simpress-Endpoint-Central-3f5922a10077801f99e2e26a4fee14b9). Acione cada exportação uma vez e prossiga; confira Downloads depois das duas ações. Autenticação de dois fatores e bloqueios do navegador podem exigir intervenção do usuário.
+
 Com o servidor local em execução, também é possível colocar os dois arquivos em um lote na pasta `data/state/entrada_automatica/pendentes`. O sistema verifica a fila a cada 10 segundos e usa a mesma validação, comparação, backups, histórico e transação da atualização manual.
 
 Crie uma pasta de lote com nome exclusivo e esta estrutura. Os nomes dos arquivos `.xlsx` podem ser os originais:
