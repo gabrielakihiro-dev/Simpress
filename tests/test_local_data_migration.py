@@ -125,7 +125,7 @@ class LocalDataMigrationTests(unittest.TestCase):
             pending.unlink()
             pending.parent.rmdir()
 
-        with patch("integrity.recover_pending_transactions", side_effect=recover_fixture_transaction) as recover:
+        with patch("core.integrity.recover_pending_transactions", side_effect=recover_fixture_transaction) as recover:
             migrate_local_data(self.root)
         recover.assert_called_once_with(self.root.resolve())
 
@@ -143,7 +143,7 @@ class LocalDataMigrationTests(unittest.TestCase):
         pending.parent.mkdir()
         pending.write_text("fixture manifest", encoding="utf-8")
 
-        with patch("integrity.recover_pending_transactions", side_effect=RuntimeError("fixture recovery failure")):
+        with patch("core.integrity.recover_pending_transactions", side_effect=RuntimeError("fixture recovery failure")):
             with self.assertRaisesRegex(MigrationConflictError, "(?i)não foi possível concluir a recuperação"):
                 migrate_local_data(self.root)
 

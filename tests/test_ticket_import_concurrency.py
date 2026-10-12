@@ -17,7 +17,7 @@ from starlette.datastructures import UploadFile
 from domains.history_annotations import load_history_annotations
 from domains.ticket_inbox import AutomaticTicketInbox
 from domains.ticket_reporting import MAX_TICKET_SNAPSHOTS
-from integrity import AtomicFileTransaction, FileTransactionError
+from core.integrity import AtomicFileTransaction, FileTransactionError
 from routers.operations import create_operations_router, TicketTimelineAnnotationPayload
 
 

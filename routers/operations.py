@@ -42,8 +42,8 @@ from domains.ticket_reporting import (
     ticket_report_snapshots,
     ticket_snapshot_metadata,
 )
-from integrity import AtomicFileTransaction, FileBusyError, FileTransactionError
-from xlsx_safety import XlsxLimitExceeded, XlsxPackageError
+from core.integrity import AtomicFileTransaction, FileBusyError, FileTransactionError
+from core.xlsx_safety import XlsxLimitExceeded, XlsxPackageError
 
 
 MAX_TICKET_WORKBOOK_BYTES = 32 * 1024 * 1024

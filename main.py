@@ -27,7 +27,7 @@ from fastapi.responses import FileResponse, JSONResponse, StreamingResponse
 from pydantic import BaseModel, Field, field_validator
 from starlette.datastructures import UploadFile as StarletteUploadFile
 from routers.frontend import RevalidatingStaticFiles, frontend_response
-from integrity import (
+from core.integrity import (
     AtomicFileTransaction,
     FileBusyError,
     FileTransactionError,
@@ -40,7 +40,7 @@ from integrity import (
     stage_workbook_update,
     workbook_snapshot,
 )
-from app_config import (
+from core.config import (
     ALIAS_HISTORY_FILE,
     AUTOMATIC_INVENTORY_IMPORT_POLL_SECONDS,
     AUTOMATIC_INVENTORY_INBOX_DIR,
@@ -91,7 +91,7 @@ from routers.transfers import (
 from routers.operations import MAX_TICKET_WORKBOOK_BYTES, create_operations_router
 from routers.local_setup import create_local_setup_router
 from domains.local_setup import validate_local_model
-from xlsx_safety import XlsxLimitExceeded, XlsxPackageError, validate_xlsx
+from core.xlsx_safety import XlsxLimitExceeded, XlsxPackageError, validate_xlsx
 
 from domains.inventory_comparison import (
     COMPARISON_SOURCE_LABELS,

@@ -21,7 +21,7 @@ from domains.history_annotations import (
 )
 from domains.inventory_comparison import comparison_annotation_item_id
 from domains.inventory_update import _copy_matching_history_annotations
-from integrity import AtomicFileTransaction
+from core.integrity import AtomicFileTransaction
 from routers.inventory_history import create_inventory_history_router, ComparisonAnnotationPayload
 from routers.operations import create_operations_router, TicketTimelineAnnotationPayload
 
@@ -428,7 +428,7 @@ class AnnotationRevisionTests(unittest.TestCase):
 
     def test_interrupted_acknowledgement_retries_without_replacing_shared_revision(self):
         record = self.write(self.a)
-        with patch("integrity.AtomicFileTransaction.commit", side_effect=OSError("interrupted")):
+        with patch("core.integrity.AtomicFileTransaction.commit", side_effect=OSError("interrupted")):
             with self.assertRaises(OSError):
                 self.sync(record, self.a)
         self.assertEqual(len(load_history_annotations(self.a)), 1)

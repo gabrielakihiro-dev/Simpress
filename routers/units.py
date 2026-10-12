@@ -7,7 +7,7 @@ from typing import Any, Callable, Dict, List, Optional
 
 from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel, Field, field_validator
-from integrity import AtomicFileTransaction, FileBusyError, FileTransactionError
+from core.integrity import AtomicFileTransaction, FileBusyError, FileTransactionError
 
 
 class UnidadePayload(BaseModel):
