@@ -10,8 +10,8 @@
   <link rel="stylesheet" href="/static/vendor/tailwind-4.3.3.css">
   <script src="/static/vendor/lucide-1.48.0.min.js"></script>
   <link rel="stylesheet" href="/static/app.css">
-  <link rel="stylesheet" href="/static/ui-motion.css">
-  <link rel="stylesheet" href="/static/sidebar-navigation.css">
+  <link rel="stylesheet" href="/static/styles/ui-motion.css">
+  <link rel="stylesheet" href="/static/styles/sidebar-navigation.css">
 </head>
 <body class="min-h-full bg-gradient-to-br from-slate-950 via-slate-900 to-slate-950 text-slate-100 flex flex-col font-sans selection:bg-brand-500 selection:text-white">
 
@@ -1579,15 +1579,16 @@ Horário disponível para atendimento:</textarea>
   <div id="toast-container" role="region" aria-label="Notificações" aria-live="polite" aria-relevant="additions text" aria-atomic="false" class="fixed top-24 right-6 z-[130] space-y-2 pointer-events-none"></div>
 
   <!-- JAVASCRIPT APPLICATION LOGIC -->
-  <script src="/static/catalog-search-utils.js"></script>
-  <script src="/static/form-draft-guard.js"></script>
-  <script src="/static/transfer-utils.js"></script>
-  <script src="/static/history-annotation-autosave.js"></script>
-  <script src="/static/ui-motion.js"></script>
-  <script src="/static/accessible-dialogs.js"></script>
-  <script src="/static/ui-notifications.js"></script>
-  <script src="/static/auth-session.js"></script>
+  <script src="/static/js/shared/dom-utils.js"></script>
+  <script src="/static/js/shared/catalog-search-utils.js"></script>
+  <script src="/static/js/shared/form-draft-guard.js"></script>
+  <script src="/static/js/shared/transfer-utils.js"></script>
+  <script src="/static/js/shared/history-annotation-autosave.js"></script>
+  <script src="/static/js/ui/ui-motion.js"></script>
+  <script src="/static/js/ui/accessible-dialogs.js"></script>
+  <script src="/static/js/ui/ui-notifications.js"></script>
+  <script src="/static/js/auth/auth-session.js"></script>
   <script src="/static/app.js"></script>
-  <script src="/static/sidebar-navigation.js"></script>
+  <script src="/static/js/ui/sidebar-navigation.js"></script>
 </body>
 </html>

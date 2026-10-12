@@ -14,7 +14,7 @@ PROJECT_ROOT = Path(__file__).resolve().parents[1]
 if str(PROJECT_ROOT) not in sys.path:
     sys.path.insert(0, str(PROJECT_ROOT))
 
-import integrity
+from core import integrity
 
 
 DEFAULT_MIN_AGE_HOURS = 24
@@ -34,7 +34,7 @@ def _digest(path: Path) -> str:
 
 
 def _target_for_temporary(temporary: Path) -> Optional[Path]:
-    """Recognize only the two temporary naming schemes owned by integrity.py."""
+    """Recognize only the two temporary naming schemes owned by core/integrity.py."""
     name = temporary.name
     if not name.startswith(".") or not name.endswith(".tmp"):
         return None

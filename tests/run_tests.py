@@ -23,7 +23,7 @@ def run() -> bool:
         dir=PROJECT_ROOT,
     ) as temporary_root:
         tempfile.tempdir = temporary_root
-        import integrity
+        from core import integrity
         import openpyxl
 
         # Keep fixture discovery independent from real operational workbooks.

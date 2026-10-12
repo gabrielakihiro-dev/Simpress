@@ -11,7 +11,7 @@ from typing import Any, Dict, Iterable, List, Mapping, Optional, Sequence, Tuple
 
 import openpyxl
 
-from xlsx_safety import validate_xlsx
+from core.xlsx_safety import validate_xlsx
 
 
 class TicketWorkbookError(ValueError):

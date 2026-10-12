@@ -26,7 +26,7 @@ def create_auth_router(provider, settings, static_dir):
 
     @router.get("/login",include_in_schema=False)
     def login_page():
-        return frontend_response(Path(static_dir), "login.html")
+        return frontend_response(Path(static_dir), "pages/login.html")
 
     @router.get("/api/auth/session")
     async def session(request: Request):

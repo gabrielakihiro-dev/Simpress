@@ -87,7 +87,7 @@ class LocalTemporaryCleanupTests(unittest.TestCase):
         transaction_dir.mkdir()
         (transaction_dir / "pending").write_text("fixture", encoding="utf-8")
 
-        with patch("integrity.recover_pending_transactions", side_effect=RuntimeError("fixture")):
+        with patch("core.integrity.recover_pending_transactions", side_effect=RuntimeError("fixture")):
             with self.assertRaises(CleanupBlockedError):
                 cleanup_local_temps(self.root)
         self.assertTrue(duplicate.exists())

@@ -10,7 +10,7 @@ from urllib.parse import quote
 from typing import Any
 
 from fastapi.responses import StreamingResponse
-from integrity import WorkbookSafetyError
+from core.integrity import WorkbookSafetyError
 
 from persistence.config import PersistenceError
 from persistence.storage import XLSX

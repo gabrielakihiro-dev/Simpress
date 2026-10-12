@@ -10,7 +10,7 @@ from pathlib import Path
 from fastapi import APIRouter, File, HTTPException, UploadFile
 
 from domains.local_setup import validate_local_model
-from integrity import AtomicFileTransaction, FileBusyError, FileTransactionError
+from core.integrity import AtomicFileTransaction, FileBusyError, FileTransactionError
 
 
 def create_local_setup_router(*, enabled, model_path, transaction_root, backups_directory,

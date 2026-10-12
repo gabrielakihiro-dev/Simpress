@@ -65,7 +65,7 @@ No VS Code, o interpretador configurado para este workspace é `.venv\Scripts\py
 
 ## Planilhas e arquivos locais
 
-Os caminhos são relativos à pasta do projeto e estão definidos em [app_config.py](app_config.py). Dados operacionais ficam em `data/`, e o modelo de exportação continua em `modelos/`. Não é necessário criar um arquivo `.env`; o programa não o carrega.
+Os caminhos são relativos à pasta do projeto e estão definidos em [core/config.py](core/config.py). Dados operacionais ficam em `data/`, e o modelo de exportação continua em `modelos/`. Não é necessário criar um arquivo `.env`; o programa não o carrega.
 
 Na primeira inicialização após atualizar uma instalação existente, o inicializador move os arquivos das pastas antigas para `data/`. A migração primeiro tenta concluir recuperações registradas em `.transactions`; se a recuperação falhar ou houver um upload temporário, ela interrompe sem mover os arquivos. Ela preserva os caminhos relativos dos backups e não sobrescreve destinos diferentes. Feche qualquer outro servidor antes de executar `scripts/migrate_local_data.py` manualmente.
 
@@ -323,7 +323,7 @@ As Etapas 1 a 7 estão documentadas. **Excel/JSON continua sendo o modo padrão.
 
 O ambiente usa o Supabase CLI **2.120.0** e PostgreSQL **17** no projeto `simpress-dev`. São seis migrations, 20 tabelas no schema privado `simpress` e duas tabelas de sessão/limitação de login no schema privado `simpress_auth`. RLS permanece habilitado e forçado. `simpress_runtime` acessa o domínio somente com sessão válida do administrador habilitado; `anon`, `authenticated` e `service_role` não recebem acesso ao domínio. O Storage mantém o bucket privado `simpress-pilot` e acesso mediado pelo backend. Os ensaios não importaram dados reais nem provisionaram conta permanente; a conta local é cadastrada posteriormente pelo operador. O modo Excel/JSON permanece sem autenticação e restrito ao uso local.
 
-Para o ambiente Windows aprovado, use WSL2 e Rancher Desktop com engine **Moby** e Kubernetes desabilitado, além do ambiente Python do projeto e Node.js/npm (a validação usou Node.js 24). A primeira preparação requer internet para baixar dependências e imagens. Consulte os [pré-requisitos locais](docs/migracao_supabase_pre_requisitos_locais.md).
+Para o ambiente Windows aprovado, use WSL2 e Rancher Desktop com engine **Moby** e Kubernetes desabilitado, além do ambiente Python do projeto e Node.js/npm (a validação usou Node.js 24). A primeira preparação requer internet para baixar dependências e imagens. Consulte os [pré-requisitos locais](docs/operacao/supabase/migracao_supabase_pre_requisitos_locais.md).
 
 Na pasta do projeto, instale as dependências e crie uma instância nova:
 
@@ -360,15 +360,15 @@ Volumes persistentes não substituem backups. A pasta local `Backup_Banco`, igno
 
 Documentação da migração:
 
-- [Etapa 1 — diagnóstico](docs/migracao_supabase_etapa_1.md)
-- [Etapa 2 — decisões e escopo](docs/migracao_supabase_etapa_2.md)
-- [Etapa 3 — modelo de dados](docs/migracao_supabase_etapa_3.md)
-- [Etapa 4 — esquema SQL e validação local](docs/migracao_supabase_etapa_4.md)
-- [Etapa 5 — integração incremental do FastAPI com PostgreSQL](docs/migracao_supabase_etapa_5.md)
-- [Etapa 6 — Storage privado, backups, histórico e anotações](docs/migracao_supabase_etapa_6.md)
-- [Etapa 7 — Auth, autorização e RLS](docs/migracao_supabase_etapa_7.md)
-- [Etapa 8 — ensaio, reconciliação e recuperação](docs/migracao_supabase_etapa_8.md)
-- [Prompts das Etapas 2 a 8](docs/prompts_migracao_supabase_etapas_2_a_8.md)
+- [Etapa 1 — diagnóstico](docs/operacao/supabase/migracao_supabase_etapa_1.md)
+- [Etapa 2 — decisões e escopo](docs/operacao/supabase/migracao_supabase_etapa_2.md)
+- [Etapa 3 — modelo de dados](docs/operacao/supabase/migracao_supabase_etapa_3.md)
+- [Etapa 4 — esquema SQL e validação local](docs/operacao/supabase/migracao_supabase_etapa_4.md)
+- [Etapa 5 — integração incremental do FastAPI com PostgreSQL](docs/operacao/supabase/migracao_supabase_etapa_5.md)
+- [Etapa 6 — Storage privado, backups, histórico e anotações](docs/operacao/supabase/migracao_supabase_etapa_6.md)
+- [Etapa 7 — Auth, autorização e RLS](docs/operacao/supabase/migracao_supabase_etapa_7.md)
+- [Etapa 8 — ensaio, reconciliação e recuperação](docs/operacao/supabase/migracao_supabase_etapa_8.md)
+- [Prompts das Etapas 2 a 8](docs/operacao/supabase/prompts_migracao_supabase_etapas_2_a_8.md)
 
 #### Executar o piloto PostgreSQL das Etapas 5 e 6
 
@@ -409,7 +409,7 @@ Após concluir o provisionamento, inicie o aplicativo em outro comando. Nas pró
 
 Acesse `http://127.0.0.1:8000`. O cadastro público continua bloqueado; o provedor de e-mail/senha fica habilitado para entrar com a conta já provisionada. O iniciador guarda credenciais somente no processo e gera uma chave temporária de sessão quando `SIMPRESS_SESSION_KEY` não é fornecida. Nesse caso, reiniciar exige novo login. Uma instalação com administrador provisionado bloqueia o piloto sem autenticação, inclusive no banco.
 
-Se o Supabase estiver parado ou a porta 8000 estiver ocupada, consulte o [diagnóstico da inicialização local](docs/migracao_supabase_etapa_7_diagnostico_inicializacao.md). Preserve os volumes e a conta já cadastrada.
+Se o Supabase estiver parado ou a porta 8000 estiver ocupada, consulte o [diagnóstico da inicialização local](docs/operacao/supabase/migracao_supabase_etapa_7_diagnostico_inicializacao.md). Preserve os volumes e a conta já cadastrada.
 
 Para testar a Etapa 7 **antes de provisionar uma conta**, em uma instância descartável vazia:
 
@@ -441,7 +441,7 @@ O executor cria três instalações locais separadas e sequenciais com nomes `si
 
 A recuperação inclui as 20 tabelas, arquivos privados, migrations e a conta única fictícia de e-mail/senha, preservando o UUID e exigindo novo login. A chave criptográfica do ensaio existe somente na memória; os envelopes fictícios deixam de ser recuperáveis após encerrar o processo. O backup oficial exigirá guarda externa da chave e teste do destino independente.
 
-O ensaio não importa a base real nem libera uso oficial. O [relatório da Etapa 8](docs/migracao_supabase_etapa_8.md) contém resultados, limitações e o checklist para uma futura entrada em uso local. A rotina oficial de backup, o adaptador dos arquivos reais e a autorização da troca permanecem pendentes; hospedagem online terá preparação própria.
+O ensaio não importa a base real nem libera uso oficial. O [relatório da Etapa 8](docs/operacao/supabase/migracao_supabase_etapa_8.md) contém resultados, limitações e o checklist para uma futura entrada em uso local. A rotina oficial de backup, o adaptador dos arquivos reais e a autorização da troca permanecem pendentes; hospedagem online terá preparação própria.
 
 ### Executar testes
 
@@ -454,7 +454,7 @@ Suíte Python:
 Testes da interface JavaScript:
 
 ```powershell
-node --test tests/test_inventory_ui_flows.cjs tests/test_transfer_workflows.cjs
+node --test tests/frontend/test_inventory_ui_flows.cjs tests/frontend/test_transfer_workflows.cjs
 ```
 
 O executor Python usa dados fictícios em uma pasta temporária, bloqueia a leitura das planilhas operacionais durante a descoberta dos testes e isola os testes de transação. Não use planilhas de produção como fixtures ou destinos.
@@ -463,10 +463,10 @@ O executor Python usa dados fictícios em uma pasta temporária, bloqueia a leit
 
 ```text
 main.py                              Aplicação FastAPI, inicialização e rotas principais
-app_config.py                       Caminhos locais, limites e padrões de configuração
-integrity.py                        Bloqueios, transações e recuperação de arquivos
-xlsx_safety.py                      Validação estrutural e limites de pacotes XLSX
-openpyxl_compat.py                  Compatibilidade com arquivos lidos/escritos por openpyxl
+core/config.py                       Caminhos locais, limites e padrões de configuração
+core/integrity.py                        Bloqueios, transações e recuperação de arquivos
+core/xlsx_safety.py                      Validação estrutural e limites de pacotes XLSX
+core/openpyxl_compat.py                  Compatibilidade com arquivos lidos/escritos por openpyxl
 domains/inventory_comparison.py     Normalização e regras de comparação de inventários
 domains/inventory_update.py         Validação, atualização e histórico de inventários
 domains/ticket_inbox.py             Entrada estável, validação e arquivamento de lotes Simpress/Oracle
@@ -477,7 +477,7 @@ routers/equipment_search.py         Rotas de busca e estatísticas de equipament
 routers/system.py                    Rotas de status e configuração do sistema
 routers/units.py                     Rotas e esquema do catálogo de unidades
 static/                              Interface web, scripts e arquivos locais de estilo/fonte/ícone
-scripts/copy_ui_assets.cjs           Cópia dos recursos locais para a interface
+scripts/build/copy_ui_assets.cjs           Cópia dos recursos locais para a interface
 scripts/migrate_local_data.py        Migração segura dos dados locais para data/
 scripts/cleanup_local_temps.py       Limpeza conservadora de arquivos temporários locais
 scripts/process_ticket_inbox.py      Processamento local imediato da fila de chamados Simpress/Oracle
@@ -503,6 +503,19 @@ requirements-postgres.txt            Dependências opcionais do piloto PostgreSQ
 package.json / package-lock.json     Dependências da interface e Supabase CLI de desenvolvimento
 iniciar_servidor.bat                  Inicializador local para Windows
 ```
+
+## Índice da documentação
+
+- [Relatório final da reorganização e refatoração](docs/desenvolvimento/relatorio-refatoracao-2026-10-12.md)
+- [Arquitetura e plano da refatoração](docs/arquitetura/analise-refatoracao-frontend.md)
+- [Primeiro acesso](docs/guias/PRIMEIRO_ACESSO.md)
+- [Anotações do histórico](docs/operacao/ANOTACOES-HISTORICO.md)
+- [Idempotência dos inventários](docs/operacao/idempotencia-atualizacao-inventario.md)
+- [Microinterações e acessibilidade](docs/desenvolvimento/MICROINTERACOES.md)
+- [Arquitetura e auditoria](docs/arquitetura/auditoria_arquitetura.md)
+- [Supabase: pré-requisitos locais](docs/operacao/supabase/migracao_supabase_pre_requisitos_locais.md)
+
+As entradas `static/index.html`, `static/app.js` e `static/app.css` conservam os caminhos atuais e as alterações locais. Páginas auxiliares ficam em `static/pages`, fontes de estilo em `static/styles`, JavaScript em `static/js/{shared,ui,auth}`, testes Node em `tests/frontend` e o servidor de fixtures em `tests/support`. A configuração e a segurança dos workbooks ficam em `core`; domínios, rotas, persistência e segurança conservam seus limites. Os scripts Python mantêm seus comandos públicos usados pelo inicializador e pelas filas locais.
 
 ## Dados e privacidade
 

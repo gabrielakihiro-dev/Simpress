@@ -9,7 +9,7 @@ import unittest
 from unittest.mock import Mock, patch
 
 with (
-    patch("integrity.recover_pending_transactions", return_value=None),
+    patch("core.integrity.recover_pending_transactions", return_value=None),
     patch("openpyxl.load_workbook", side_effect=RuntimeError("operational data blocked")),
     redirect_stdout(io.StringIO()),
 ):
