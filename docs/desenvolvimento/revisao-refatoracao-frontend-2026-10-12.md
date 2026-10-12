@@ -25,7 +25,7 @@ Os testes de regressão para a seleção vazia e a preservação do texto reprod
 - `npm ci` e `npm audit --audit-level=moderate`: dependências do lockfile instaladas, **zero vulnerabilidades**.
 - `npm run build:ui`: build concluído.
 - `compileall`, sintaxe de todos os JavaScript/CJS rastreados, scanner de credenciais, `git diff --check` e mypy: aprovados; mypy sem erros em **40 arquivos**.
-- O CI da integração inicial em `main` passou nos três jobs: [workflow 38271223148](https://github.com/gabrielakihiro-dev/Simpress/actions/runs/38271223148). A correção desta revisão foi submetida à execução própria de CI antes da conclusão.
+- O CI da integração inicial em `main` passou nos três jobs: [workflow 38271223148](https://github.com/gabrielakihiro-dev/Simpress/actions/runs/38271223148). O commit com as correções desta revisão (`5d7208a`) também passou nos três jobs na branch [workflow 38275161996](https://github.com/gabrielakihiro-dev/Simpress/actions/runs/38275161996) e na `main` [workflow 38275536046](https://github.com/gabrielakihiro-dev/Simpress/actions/runs/38275536046).
 
 ## Limites
 
