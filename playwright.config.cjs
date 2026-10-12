@@ -36,7 +36,7 @@ module.exports = defineConfig({
     },
   ],
   webServer: {
-    command: `${fixturePython} -B tests/serve_ui_motion_preview.py`,
+    command: `${fixturePython} -B tests/support/serve_ui_motion_preview.py`,
     url: "http://127.0.0.1:8765/",
     reuseExistingServer: false,
     timeout: 30_000,

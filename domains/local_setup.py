@@ -9,8 +9,8 @@ from pathlib import PurePosixPath
 from fastapi import HTTPException
 from openpyxl.cell.cell import MergedCell
 
-from integrity import load_workbook_safely
-from openpyxl_compat import stored_cells
+from core.integrity import load_workbook_safely
+from core.openpyxl_compat import stored_cells
 
 
 TRANSFER_CELLS = (

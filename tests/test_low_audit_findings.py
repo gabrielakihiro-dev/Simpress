@@ -3,7 +3,7 @@
 import io
 import unittest
 
-import app_config
+from core import config as app_config
 import main
 import openpyxl
 

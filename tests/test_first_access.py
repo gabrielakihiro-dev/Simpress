@@ -265,7 +265,7 @@ class FirstAccessTests(unittest.TestCase):
     def test_failed_durable_replacement_rolls_back_and_releases_parser(self):
         self.import_model("transferencia", transfer_bytes())
         before = main.get_local_transfer_template().read_bytes()
-        with patch("integrity._replace_with_retries", side_effect=main.FileBusyError("ocupado")):
+        with patch("core.integrity._replace_with_retries", side_effect=main.FileBusyError("ocupado")):
             with self.assertRaises(main.HTTPException) as caught:
                 self.import_model("transferencia", transfer_bytes())
         self.assertEqual(caught.exception.status_code, 409)
