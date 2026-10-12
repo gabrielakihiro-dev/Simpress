@@ -167,6 +167,5 @@ Além dos cinco itens de entrega acima, apresente uma tabela por fase contendo:
 | 1 — Análise | Preencher | Preencher | Preencher | Preencher | Preencher |
 | 2 — Refatoração | Preencher | Preencher | Preencher | Preencher | Preencher |
 | 3 — Verificação ampliada | Preencher | Preencher | Preencher | Preencher | Preencher |
-| 4 — Revisão de falhas | Preencher | Preencher | Preencher | Preencher | Preencher |
 
 Informe também a quantidade e os tipos de testes executados, falhas preexistentes, verificações não executadas, limitações de ambiente e riscos remanescentes. Se qualquer checkpoint Git/CI estiver incompleto, identifique-o explicitamente. Não confunda commit local, push confirmado, testes locais aprovados e CI aprovada.
