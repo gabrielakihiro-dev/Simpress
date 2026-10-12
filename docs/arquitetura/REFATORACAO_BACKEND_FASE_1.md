@@ -90,3 +90,4 @@ A workflow .github/workflows/ci.yml executa suíte Python e mypy em windows-late
 ## Arquivos complementares
 
 - [Mapa de contratos HTTP, parâmetros, autenticação, erros, armazenamento e consumidor](CONTRATOS_API_BACKEND.md).
+- Prompt operacional atualizado após a primeira verificação verde da CI: [PROMPT_REFATORACAO_BACKEND_SIMPRESS.md](../PROMPT_REFATORACAO_BACKEND_SIMPRESS.md).
