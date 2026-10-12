@@ -2076,9 +2076,17 @@
       document.getElementById("descricao-importar-modelo").textContent = tipo === "transferencia"
         ? "A base Simpress + Endpoint é compartilhada. Se necessário, atualize-a no painel de disponibilidade; aqui, importe o modelo oficial de transferência da Simpress."
         : "A base Simpress + Endpoint é compartilhada. Se necessário, atualize-a no painel de disponibilidade; aqui, importe o modelo de exportação com série e apelido das mesmas séries da base ativa.";
-      document.getElementById("arquivo-modelo-local").value = "";
+      const modelFile = document.getElementById("arquivo-modelo-local");
+      modelFile.value = "";
+      document.getElementById("nome-arquivo-modelo-local").textContent = "Nenhum arquivo escolhido";
+      if (!modelFile.dataset.changeBound) {
+        modelFile.addEventListener("change", () => {
+          document.getElementById("nome-arquivo-modelo-local").textContent = modelFile.files?.[0]?.name || "Nenhum arquivo escolhido";
+        });
+        modelFile.dataset.changeBound = "true";
+      }
       document.getElementById("status-modelo-local").textContent = "";
-      abrirModalAcessivel("modal-importar-modelo", "#arquivo-modelo-local", "fecharImportacaoModelo");
+      abrirModalAcessivel("modal-importar-modelo", "#btn-escolher-arquivo-modelo-local", "fecharImportacaoModelo");
     }
 
     function fecharImportacaoModelo() {
@@ -2105,6 +2113,7 @@
         if (!response.ok) throw new Error(result.detail || "Não foi possível importar o modelo.");
         status.textContent = "Modelo importado. Confira abaixo se todas as dependências estão disponíveis.";
         document.getElementById("arquivo-modelo-local").value = "";
+        document.getElementById("nome-arquivo-modelo-local").textContent = "Nenhum arquivo escolhido";
         // The file replacement has completed; let the user dismiss the modal
         // while readiness and the other secondary panels finish refreshing.
         importacaoModeloOcupada = false;
@@ -3747,7 +3756,9 @@
         acompanhamentoChamadosAtual = data;
         renderizarHistoricoAcompanhamentoChamados(data);
         simpressInput.value = "";
+        document.getElementById("nome-arquivo-chamados-simpress").textContent = "Nenhum arquivo selecionado";
         oracleInput.value = "";
+        document.getElementById("nome-arquivo-chamados-oracle").textContent = "Nenhum arquivo selecionado";
         status.textContent = "Planilhas importadas. As OS foram relacionadas pela série.";
         document.getElementById("painel-dados-acompanhamento-chamados").open = false;
         renderizarAcompanhamentoChamados();
@@ -3768,6 +3779,18 @@
       const form = document.getElementById("form-importar-acompanhamento-chamados");
       if (!form.dataset.bound) {
         form.addEventListener("submit", importarPlanilhasChamados);
+        const simpressInput = document.getElementById("arquivo-chamados-simpress");
+        const simpressFilename = document.getElementById("nome-arquivo-chamados-simpress");
+        const oracleInput = document.getElementById("arquivo-chamados-oracle");
+        const oracleFilename = document.getElementById("nome-arquivo-chamados-oracle");
+        document.getElementById("btn-escolher-arquivo-chamados-simpress").addEventListener("click", () => simpressInput.click());
+        simpressInput.addEventListener("change", () => {
+          simpressFilename.textContent = simpressInput.files?.[0]?.name || "Nenhum arquivo selecionado";
+        });
+        document.getElementById("btn-escolher-arquivo-chamados-oracle").addEventListener("click", () => oracleInput.click());
+        oracleInput.addEventListener("change", () => {
+          oracleFilename.textContent = oracleInput.files?.[0]?.name || "Nenhum arquivo selecionado";
+        });
         ["filtro-acompanhamento-chamados", "somente-atencao-chamados"].forEach(id => {
           const control = document.getElementById(id);
           control.addEventListener(id === "filtro-acompanhamento-chamados" ? "input" : "change", renderizarAcompanhamentoChamados);

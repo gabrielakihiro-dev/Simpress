@@ -27,6 +27,7 @@ from domains.history_annotations import (
     save_history_annotation,
 )
 from domains.ticket_reconciliation import TicketWorkbookError, reconcile_ticket_workbooks
+from domains.local_setup import unpack_simpress_zip
 from domains.ticket_reporting import (
     MAX_TICKET_SNAPSHOTS,
     TICKET_TIMELINE_ANNOTATION_CATEGORY,
@@ -444,19 +445,23 @@ def create_operations_router(
         oracle_file: UploadFile = File(...),
         automatic_import_id: Optional[str] = None,
     ):
-        def read_source(upload: UploadFile, source_label: str):
+        def read_source(upload: UploadFile, source_label: str, *, allow_zip: bool = False):
             raw_name = upload.filename or ""
             filename = raw_name.replace("\\", "/").rsplit("/", 1)[-1].strip()
-            if not filename.lower().endswith(".xlsx"):
-                raise HTTPException(status_code=400, detail=f"Selecione um arquivo .xlsx para a fonte {source_label}.")
+            is_zip = allow_zip and filename.lower().endswith(".zip")
+            if not filename.lower().endswith(".xlsx") and not is_zip:
+                accepted = ".xlsx ou .zip com uma planilha .xlsx" if allow_zip else ".xlsx"
+                raise HTTPException(status_code=400, detail=f"Selecione um arquivo {accepted} para a fonte {source_label}.")
             content = upload.file.read(MAX_TICKET_WORKBOOK_BYTES + 1)
             if len(content) > MAX_TICKET_WORKBOOK_BYTES:
                 raise HTTPException(status_code=413, detail=f"O arquivo {source_label} excede o limite de 32 MB.")
             if not content:
                 raise HTTPException(status_code=400, detail=f"O arquivo da fonte {source_label} está vazio.")
+            if is_zip:
+                content, _ = unpack_simpress_zip(content, MAX_TICKET_WORKBOOK_BYTES, size_label="32 MB")
             return content, filename[:200]
 
-        simpress_bytes, simpress_filename = read_source(simpress_file, "Simpress")
+        simpress_bytes, simpress_filename = read_source(simpress_file, "Simpress", allow_zip=True)
         oracle_bytes, oracle_filename = read_source(oracle_file, "Oracle")
         try:
             parsed_report = reconcile_ticket_workbooks(

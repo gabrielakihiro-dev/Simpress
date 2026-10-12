@@ -1374,7 +1374,11 @@ Horário disponível para atendimento:</textarea>
       </div>
       <p id="descricao-importar-modelo"></p>
       <label for="arquivo-modelo-local">Modelo .xlsx (até 30 MB)</label>
-      <input id="arquivo-modelo-local" type="file" accept=".xlsx,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" />
+      <input id="arquivo-modelo-local" type="file" accept=".xlsx,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" aria-hidden="true" tabindex="-1" hidden />
+      <div class="flex min-w-0 items-center gap-3">
+        <button id="btn-escolher-arquivo-modelo-local" type="button" class="readiness-import" aria-controls="arquivo-modelo-local" onclick="document.getElementById('arquivo-modelo-local').click()">Escolher arquivo</button>
+        <span id="nome-arquivo-modelo-local" class="min-w-0 truncate text-xs text-slate-400" aria-live="polite">Nenhum arquivo escolhido</span>
+      </div>
       <p>Ao substituir um modelo importado, uma cópia anterior é guardada nos backups locais. O modelo de transferência incluído no projeto é preservado.</p>
       <p id="status-modelo-local" role="status" aria-live="polite" aria-atomic="true"></p>
       <button id="btn-importar-modelo" type="button" class="readiness-import" onclick="enviarModeloLocal()">Importar modelo</button>
@@ -1442,9 +1446,24 @@ Horário disponível para atendimento:</textarea>
           </summary>
           <div class="space-y-3 pt-3">
             <form id="form-importar-acompanhamento-chamados" class="grid grid-cols-1 gap-3 border-b border-slate-800 pb-3 md:grid-cols-[1fr_1fr_auto] md:items-end">
-              <label for="arquivo-chamados-simpress" class="text-xs text-slate-300">Simpress · Acompanhamento de Pedidos<input id="arquivo-chamados-simpress" name="simpress_file" type="file" accept=".xlsx,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" required class="mt-1 block w-full rounded-lg border border-slate-700 bg-slate-950 px-3 py-2 text-xs text-slate-300 file:mr-3 file:rounded-md file:border-0 file:bg-slate-800 file:px-2 file:py-1 file:text-xs file:text-slate-200"></label>
-              <label for="arquivo-chamados-oracle" class="text-xs text-slate-300">Oracle · Gestão de Solicitações<input id="arquivo-chamados-oracle" name="oracle_file" type="file" accept=".xlsx,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" required class="mt-1 block w-full rounded-lg border border-slate-700 bg-slate-950 px-3 py-2 text-xs text-slate-300 file:mr-3 file:rounded-md file:border-0 file:bg-slate-800 file:px-2 file:py-1 file:text-xs file:text-slate-200"></label>
-              <button id="btn-importar-acompanhamento-chamados" type="submit" class="rounded-lg border border-cyan-400/30 bg-cyan-500/15 px-4 py-2.5 text-xs font-semibold text-cyan-100 hover:bg-cyan-500/25">Importar planilhas</button>
+              <div class="min-w-0">
+                <label for="arquivo-chamados-simpress" class="block text-xs text-slate-300">Simpress · Acompanhamento de Pedidos</label>
+                <input id="arquivo-chamados-simpress" name="simpress_file" type="file" accept=".xlsx,.zip,application/zip,application/x-zip-compressed,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" aria-describedby="arquivo-chamados-simpress-ajuda nome-arquivo-chamados-simpress" tabindex="-1" aria-hidden="true" class="sr-only">
+                <div class="mt-1 flex min-h-[54px] w-full min-w-0 items-center gap-3 rounded-lg border border-slate-700 bg-slate-950 px-2 py-1.5">
+                  <button id="btn-escolher-arquivo-chamados-simpress" type="button" aria-label="Escolher arquivo do Acompanhamento de Pedidos da Simpress" aria-controls="arquivo-chamados-simpress" class="shrink-0 rounded-md bg-slate-800 px-3 py-2 text-xs font-semibold text-slate-200 transition-colors hover:bg-slate-700 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-cyan-400/60">Escolher arquivo</button>
+                  <span id="nome-arquivo-chamados-simpress" class="min-w-0 truncate text-[11px] text-slate-400" aria-live="polite">Nenhum arquivo selecionado</span>
+                </div>
+              </div>
+              <div class="min-w-0">
+                <label for="arquivo-chamados-oracle" class="block text-xs text-slate-300">Oracle · Gestão de Solicitações</label>
+                <input id="arquivo-chamados-oracle" name="oracle_file" type="file" accept=".xlsx,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" aria-describedby="nome-arquivo-chamados-oracle" tabindex="-1" aria-hidden="true" required class="sr-only">
+                <div class="mt-1 flex min-h-[54px] w-full min-w-0 items-center gap-3 rounded-lg border border-slate-700 bg-slate-950 px-2 py-1.5">
+                  <button id="btn-escolher-arquivo-chamados-oracle" type="button" aria-label="Escolher arquivo do Oracle - Gestão de Solicitações" aria-controls="arquivo-chamados-oracle" class="shrink-0 rounded-md bg-slate-800 px-3 py-2 text-xs font-semibold text-slate-200 transition-colors hover:bg-slate-700 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-cyan-400/60">Escolher arquivo</button>
+                  <span id="nome-arquivo-chamados-oracle" class="min-w-0 truncate text-[11px] text-slate-400" aria-live="polite">Nenhum arquivo selecionado</span>
+                </div>
+              </div>
+              <button id="btn-importar-acompanhamento-chamados" type="submit" class="rounded-lg border border-cyan-400/30 bg-cyan-500/15 px-4 py-2.5 text-xs font-semibold text-cyan-100 hover:bg-cyan-500/25 md:mb-2">Importar planilhas</button>
+              <p id="arquivo-chamados-simpress-ajuda" class="text-[10px] text-slate-500 md:col-span-3">Simpress aceita .xlsx ou ZIP com uma única planilha .xlsx.</p>
               <p id="status-importacao-chamados" class="text-[10px] text-slate-400 md:col-span-3" role="status" aria-live="polite"></p>
             </form>
             <div id="resumo-acompanhamento-chamados" class="shrink-0"></div>

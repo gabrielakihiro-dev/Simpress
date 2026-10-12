@@ -74,7 +74,13 @@ test("model import handles failure and refreshes availability after success", as
   });
   await page.goto("/");
   await page.getByRole("button", { name: "Importar modelo — Modelo de exportação", exact: true }).click();
-  await page.locator("#arquivo-modelo-local").setInputFiles({ name: "modelo.xlsx", mimeType: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet", buffer: Buffer.from("synthetic browser upload; backend validation is tested in Python") });
+  const chooseFileButton = page.getByRole("button", { name: "Escolher arquivo", exact: true });
+  await expect(chooseFileButton).toBeVisible();
+  const fileChooserPromise = page.waitForEvent("filechooser");
+  await chooseFileButton.click();
+  const fileChooser = await fileChooserPromise;
+  await fileChooser.setFiles({ name: "modelo.xlsx", mimeType: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet", buffer: Buffer.from("synthetic browser upload; backend validation is tested in Python") });
+  await expect(page.locator("#nome-arquivo-modelo-local")).toHaveText("modelo.xlsx");
   await page.locator("#btn-importar-modelo").click();
   await expect(page.locator("#status-modelo-local")).toHaveText("Modelo incompatível com a base.");
   await expect(page.locator("#btn-importar-modelo")).toBeEnabled();
