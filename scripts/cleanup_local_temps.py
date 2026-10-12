@@ -34,7 +34,7 @@ def _digest(path: Path) -> str:
 
 
 def _target_for_temporary(temporary: Path) -> Optional[Path]:
-    """Recognize only the two temporary naming schemes owned by core/core\integrity.py."""
+    """Recognize only the two temporary naming schemes owned by core/integrity.py."""
     name = temporary.name
     if not name.startswith(".") or not name.endswith(".tmp"):
         return None
