@@ -28,10 +28,11 @@ jobs:
       - name: Run isolated Python tests
         run: python -B tests/run_tests.py
       - name: Run browser workflow tests
-        run: node --test tests/frontend/test_transfer_workflows.cjs tests/frontend/test_inventory_ui_flows.cjs tests/frontend/test_history_annotation_retries.cjs tests/frontend/test_history_annotations.cjs tests/frontend/test_annotation_version_ui.cjs tests/frontend/test_form_draft_guard.cjs tests/frontend/test_catalog_search_utils.cjs tests/frontend/test_ui_motion.cjs tests/frontend/test_auth_session.cjs
+        run: node --test tests/frontend/test_transfer_workflows.cjs tests/frontend/test_inventory_ui_flows.cjs tests/frontend/test_history_annotation_retries.cjs tests/frontend/test_history_annotations.cjs tests/frontend/test_annotation_version_ui.cjs tests/frontend/test_form_draft_guard.cjs tests/frontend/test_catalog_search_utils.cjs tests/frontend/test_ui_motion.cjs tests/frontend/test_auth_session.cjs tests/frontend/test_dom_utils.cjs
       - name: Check JavaScript syntax
         run: |
           node --check static/app.js
+          node --check static/js/shared/dom-utils.js
           node --check static/js/auth/auth-session.js
           node --check static/js/auth/login.js
           node --check static/js/ui/accessible-dialogs.js
