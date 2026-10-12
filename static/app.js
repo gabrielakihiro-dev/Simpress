@@ -656,6 +656,7 @@
           { inventarios_compartilhados: report.backend === "files" ? "Simpress + Endpoint" : "Base de equipamentos" },
           "shared_inventory",
           {
+            actionOnly: true,
             description: report.backend === "files"
               ? "Par compartilhado pelas quatro ações."
               : "Base compartilhada pelas quatro ações.",
@@ -678,13 +679,14 @@
           functionLabels,
           "function",
           {
+            actionOnly: true,
             description: "Importação própria das planilhas da Simpress e do Oracle.",
             countLabel: ticketStatus.available === true ? "Disponível" : ticketStatus.state === "invalid" ? "Inválido" : "Pendente",
             countState: ticketStatus.state,
             showItemState: false,
             groupAction: {
               label: "Importar",
-              ariaLabel: "Importar planilhas de chamados",
+              ariaLabel: "Importar planilhas para acompanhamento de chamados",
               onClick: () => {
                 document.getElementById("painel-dados-acompanhamento-chamados").open = true;
                 abrirAcompanhamentoChamados(true);
@@ -701,6 +703,7 @@
             fileLabels,
             "file",
             {
+              actionOnly: true,
               description: "Planilha usada pela exportação de equipamentos.",
               countLabel: exportModelStatus.available
                 ? "Disponível"
@@ -714,6 +717,11 @@
                   onClick: () => abrirImportacaoModelo("exportacao"),
                 },
               },
+              groupAction: {
+                label: "Importar",
+                ariaLabel: "Importar modelo de exportação",
+                onClick: () => abrirImportacaoModelo("exportacao"),
+              },
             }
           );
         }
@@ -721,8 +729,8 @@
       } catch (error) {
         if (!readinessRequestGate.isCurrent(request.id)) return;
         panel.dataset.state = "error";
-        summary.textContent = "Não foi possível consultar a disponibilidade dos arquivos.";
-        details.textContent = "Confira se o servidor está em execução e recarregue a página.";
+        summary.textContent = "Não foi possível consultar a disponibilidade das funções.";
+        details.textContent = "Confira se o servidor está em execução e recarregue a página para tentar novamente.";
       } finally {
         if (readinessRequestGate.isCurrent(request.id)) panel.setAttribute("aria-busy", "false");
       }
@@ -799,7 +807,7 @@
         list.appendChild(item);
       });
 
-      group.append(headingRow, description, list);
+      if (options.actionOnly) group.append(headingRow); else group.append(headingRow, description, list);
       if (options.groupAction) {
         const actions = document.createElement("div");
         actions.className = "readiness-group-actions";
@@ -2075,7 +2083,7 @@
         ? "Arquivos para transferência" : "Arquivos para exportação";
       document.getElementById("descricao-importar-modelo").textContent = tipo === "transferencia"
         ? "A base Simpress + Endpoint é compartilhada. Se necessário, atualize-a no painel de disponibilidade; aqui, importe o modelo oficial de transferência da Simpress."
-        : "A base Simpress + Endpoint é compartilhada. Se necessário, atualize-a no painel de disponibilidade; aqui, importe o modelo de exportação com série e apelido das mesmas séries da base ativa.";
+        : "Importe a planilha do modelo de exportação que atualiza os apelidos/hostnames.";
       const modelFile = document.getElementById("arquivo-modelo-local");
       modelFile.value = "";
       document.getElementById("nome-arquivo-modelo-local").textContent = "Nenhum arquivo escolhido";
@@ -4795,15 +4803,15 @@
         item.className = "flex items-center justify-between p-3 rounded-xl bg-slate-950/60 border border-slate-800/80 hover:border-amber-500/30 transition text-xs";
         item.innerHTML = `
           <div class="min-w-0 flex-1">
-            <div class="flex items-center gap-2">
+            <div class="unit-list-identity flex items-center gap-2">
               <span class="font-bold text-white text-sm">${escapeHtml(u.cidade)}</span>
               ${u.is_sede ? '<span class="px-2 py-0.5 rounded-full text-[10px] font-bold bg-amber-500/20 text-amber-300 border border-amber-500/30">SEDE</span>' : ''}
-              <span class="text-slate-400 font-mono text-[11px]">${escapeHtml(u.cnpj)}</span>
+              <span class="unit-list-cnpj text-slate-400 font-mono text-[11px]">${escapeHtml(u.cnpj)}</span>
               <button type="button" data-copy-field="CNPJ" class="p-1 rounded-md text-slate-400 hover:text-amber-200 hover:bg-slate-800 transition" title="Copiar CNPJ" aria-label="Copiar CNPJ">
                 <i data-lucide="copy" class="w-3.5 h-3.5" aria-hidden="true"></i>
               </button>
             </div>
-            <p class="text-slate-300 mt-0.5 truncate">${escapeHtml(u.endereco)}</p>
+            <p class="unit-list-address text-slate-300 mt-0.5 truncate">${escapeHtml(u.endereco)}</p>
             <div class="text-slate-500 font-mono text-[11px]">
               <div class="flex items-center gap-1.5">
                 <span>CEP: ${escapeHtml(u.cep)}</span>

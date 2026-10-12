@@ -58,7 +58,7 @@ html[data-theme="light"] ::selection {
 }
 
 html[data-theme="light"] .text-white {
-  color: #0f172a !important;
+  color: #0f172a;
 }
 
 html[data-theme="light"] :is(button, a).text-white:is(
@@ -73,10 +73,10 @@ html[data-theme="light"] :is(button, a):is(
   [class*="bg-violet-"], [class*="bg-purple-"], [class*="bg-teal-"],
   [class*="from-emerald-"], [class*="from-sky-"], [class*="from-brand-"]
 ) .text-white {
-  color: #fff !important;
+  color: #fff;
 }
 
-html[data-theme="light"] .text-slate-500 { color: #64748b !important; }
+html[data-theme="light"] .text-slate-500 { color: #64748b; }
 html[data-theme="light"] .glass-input::placeholder { color: #64748b; }
 html[data-theme="light"] .ui-toast[class~="bg-emerald-950/90"] { color: #d1fae5; }
 html[data-theme="light"] .ui-toast[class~="bg-rose-950/90"] { color: #ffe4e6; }
@@ -135,15 +135,15 @@ html[data-theme="light"] .theme-toggle-button:focus-visible {
 }
 
 html[data-theme="light"] .site-header {
-  border-bottom-color: #dbe4ef !important;
-  background: rgba(255, 255, 255, 0.92) !important;
+  border-bottom-color: #dbe4ef;
+  background: rgba(255, 255, 255, 0.92);
 }
 
 html[data-theme="light"] .header-context > span { color: #64748b; }
 html[data-theme="light"] .header-context > strong { color: #1e293b; }
 html[data-theme="light"] .header-base-summary {
-  border-color: #dbe4ef !important;
-  background: rgba(255, 255, 255, 0.88) !important;
+  border-color: #dbe4ef;
+  background: rgba(255, 255, 255, 0.88);
 }
 
 html[data-theme="light"] .glass-card {
@@ -284,25 +284,30 @@ html[data-theme="light"] .transfer-equipment-banner[data-state="selected"] .tran
 html[data-theme="light"] .transfer-equipment-banner[data-state="selected"] .transfer-serial-input-wrap input { color: #065f46; }
 html[data-theme="light"] .transfer-equipment-banner[data-state="selected"] .transfer-serial-status { border-color: #a7f3d0; background: #d1fae5; color: #065f46; }
 
-html[data-theme="light"] #autocomplete-box,
+html[data-theme="light"] #autocomplete-box {
+  border-color: #cbd5e1;
+  background: #fff;
+  color: #0f172a;
+  box-shadow: 0 16px 36px rgba(15, 23, 42, 0.16);
+}
 html[data-theme="light"] .autocomplete-row {
-  border-color: #cbd5e1 !important;
-  background: #fff !important;
+  border-color: #cbd5e1;
+  background: #fff;
   color: #0f172a;
   box-shadow: 0 16px 36px rgba(15, 23, 42, 0.15);
 }
 html[data-theme="light"] .autocomplete-row:hover,
 html[data-theme="light"] .autocomplete-row.active {
-  border-left-color: #0284c7 !important;
-  background: #e0f2fe !important;
+  border-left-color: #0284c7;
+  background: #e0f2fe;
 }
 html[data-theme="light"] .autocomplete-row.active .serial-badge,
 html[data-theme="light"] .autocomplete-row:hover .serial-badge,
 html[data-theme="light"] .serial-badge {
-  border-color: #7dd3fc !important;
-  background: #f0f9ff !important;
+  border-color: #7dd3fc;
+  background: #f0f9ff;
   color: #0f172a;
-  box-shadow: none !important;
+  box-shadow: none;
 }
 html[data-theme="light"] .serial-match { border-color: #7dd3fc; background: #dbeafe; color: #1e40af; box-shadow: none; }
 
@@ -395,54 +400,63 @@ body[data-theme-page="login"] .theme-toggle-button {
 #autocomplete-header,
 #autocomplete-footer { background-color: #060b17; }
 
-html[data-theme="light"] #autocomplete-box {
-  background: #fff !important;
-  border-color: #cbd5e1 !important;
-  box-shadow: 0 16px 36px rgba(15, 23, 42, 0.16) !important;
-}
 html[data-theme="light"] #autocomplete-header,
 html[data-theme="light"] #autocomplete-footer {
-  background-color: #f8fafc !important;
-  border-color: #e2e8f0 !important;
+  background-color: #f8fafc;
+  border-color: #e2e8f0;
 }
 html[data-theme="light"] #autocomplete-footer { color: #475569; }
-html[data-theme="light"] #autocomplete-list { background: #fff !important; }
+html[data-theme="light"] #autocomplete-list { background: #fff; }
 html[data-theme="light"] #autocomplete-list::-webkit-scrollbar-track { background: #f1f5f9; }
 html[data-theme="light"] #autocomplete-list::-webkit-scrollbar-thumb { background: #94a3b8; }
 html[data-theme="light"] #autocomplete-list::-webkit-scrollbar-thumb:hover { background: #0284c7; }
+html[data-theme="light"] #autocomplete-more-results {
+  border-color: #cbd5e1;
+  background: #f8fafc;
+}
+html[data-theme="light"] .autocomplete-more-button {
+  border-color: #7dd3fc;
+  background: #e0f2fe;
+  color: #075985;
+  box-shadow: 0 2px 8px rgba(2, 132, 199, 0.14);
+}
+html[data-theme="light"] .autocomplete-more-button:hover {
+  border-color: #38bdf8;
+  background: #bae6fd;
+}
 
 /* Give the three pale action buttons in the light theme a clear foreground. */
 html[data-theme="light"] :is(
   #btn-toggle-ticket-templates,
-  #card-equipamento button[onclick="abrirModalEditarEquipamento()"],
-  .quick-actions-buttons > button[title="Gerar texto de solicitação de transporte"]
+  .equipment-edit-button,
+  .transport-request-button
 ) {
-  border-color: #0284c7 !important;
-  background: #e0f2fe !important;
-  color: #075985 !important;
+  border-color: #0284c7;
+  background: #e0f2fe;
+  color: #075985;
   box-shadow: 0 1px 2px rgba(15, 23, 42, 0.12);
 }
 html[data-theme="light"] :is(
   #btn-toggle-ticket-templates,
-  #card-equipamento button[onclick="abrirModalEditarEquipamento()"],
-  .quick-actions-buttons > button[title="Gerar texto de solicitação de transporte"]
+  .equipment-edit-button,
+  .transport-request-button
 ):hover {
-  border-color: #0369a1 !important;
-  background: #bae6fd !important;
-  color: #0c4a6e !important;
+  border-color: #0369a1;
+  background: #bae6fd;
+  color: #0c4a6e;
 }
-html[data-theme="light"] #card-equipamento button[onclick="abrirModalEditarEquipamento()"] svg,
-html[data-theme="light"] .quick-actions-buttons > button[title="Gerar texto de solicitação de transporte"] svg {
-  color: #1d4ed8 !important;
+html[data-theme="light"] .equipment-edit-button svg,
+html[data-theme="light"] .transport-request-button svg {
+  color: #1d4ed8;
 }
 html[data-theme="light"] .quick-actions-buttons .header-action-item--violet {
-  border-color: #c4b5fd !important;
-  background: #f5f3ff !important;
-  color: #5b21b6 !important;
+  border-color: #c4b5fd;
+  background: #f5f3ff;
+  color: #5b21b6;
 }
 html[data-theme="light"] .quick-actions-buttons .header-action-item--violet:hover {
-  border-color: #8b5cf6 !important;
-  background: #ede9fe !important;
-  color: #4c1d95 !important;
+  border-color: #8b5cf6;
+  background: #ede9fe;
+  color: #4c1d95;
 }
-html[data-theme="light"] .quick-actions-buttons .header-action-icon--violet { color: #6d28d9 !important; }
+html[data-theme="light"] .quick-actions-buttons .header-action-icon--violet { color: #6d28d9; }
