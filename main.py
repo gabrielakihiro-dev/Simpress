@@ -1720,40 +1720,45 @@ async def lifespan(app: FastAPI):
             _POSTGRES_BACKEND = None
             await asyncio.to_thread(backend.close)
         return
-    recover_pending_transactions(TRANSACTION_ROOT)
+    def prepare_local_state() -> None:
+        """Recover, migrate, prune and load disk state in one worker thread."""
+        recover_pending_transactions(TRANSACTION_ROOT)
+        try:
+            migration_result = migrate_legacy_history_annotations()
+            if migration_result.get("legadas_enfileiradas"):
+                logger.info(
+                    "Anotações legadas preparadas para sincronização: %s.",
+                    migration_result,
+                )
+        except Exception:
+            logger.exception("Falha ao migrar anotações legadas do histórico de planilhas.")
+        try:
+            prune_result = prune_expired_histories()
+            if any(prune_result.values()):
+                print(f"[RETENÇÃO] Registros e backups removidos conforme política de {HISTORY_RETENTION_DAYS} dias: {prune_result}.")
+        except Exception as error:
+            print(f"[AVISO] A retenção automática não pôde ser concluída ({type(error).__name__}); os arquivos foram preservados.")
+        try:
+            load_database()
+        except LocalJsonCorruptionError as error:
+            print(f"[INDISPONÍVEL] Estado local preservado: {error}")
+        _report_startup_readiness_best_effort()
+
+    # Workers start only after the base is loaded, as before; disk work stays off the loop.
+    await asyncio.to_thread(prepare_local_state)
+    background_tasks: List[asyncio.Task] = []
     try:
-        migration_result = await asyncio.to_thread(migrate_legacy_history_annotations)
-        if migration_result.get("legadas_enfileiradas"):
-            logger.info(
-                "Anotações legadas preparadas para sincronização: %s.",
-                migration_result,
-            )
-    except Exception:
-        logger.exception("Falha ao migrar anotações legadas do histórico de planilhas.")
-    annotation_sync_task = asyncio.create_task(_history_annotation_sync_worker())
-    automatic_import_task = asyncio.create_task(_automatic_inventory_import_worker())
-    automatic_ticket_import_task = asyncio.create_task(_automatic_ticket_import_worker())
-    try:
-        prune_result = prune_expired_histories()
-        if any(prune_result.values()):
-            print(f"[RETENÇÃO] Registros e backups removidos conforme política de {HISTORY_RETENTION_DAYS} dias: {prune_result}.")
-    except Exception as error:
-        print(f"[AVISO] A retenção automática não pôde ser concluída ({type(error).__name__}); os arquivos foram preservados.")
-    try:
-        load_database()
-    except LocalJsonCorruptionError as error:
-        print(f"[INDISPONÍVEL] Estado local preservado: {error}")
-    _report_startup_readiness_best_effort()
-    try:
+        background_tasks.extend((
+            asyncio.create_task(_history_annotation_sync_worker()),
+            asyncio.create_task(_automatic_inventory_import_worker()),
+            asyncio.create_task(_automatic_ticket_import_worker()),
+        ))
         yield
     finally:
-        annotation_sync_task.cancel()
-        automatic_import_task.cancel()
-        automatic_ticket_import_task.cancel()
+        for task in background_tasks:
+            task.cancel()
         await asyncio.gather(
-            annotation_sync_task,
-            automatic_import_task,
-            automatic_ticket_import_task,
+            *background_tasks,
             return_exceptions=True,
         )
 
