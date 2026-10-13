@@ -350,5 +350,5 @@ p.text-center:is(.py-5, .py-8)[role="alert"] {
 @media (prefers-reduced-motion: reduce) {
   button[data-copy-state],
   button[data-copy-state="copied"] .ux-copy-check { animation: none; }
-  [data-ux-loading="true"]::before { animation-duration: 2.4s; }
+  [data-ux-loading="true"]::before { animation: none; }
 }
