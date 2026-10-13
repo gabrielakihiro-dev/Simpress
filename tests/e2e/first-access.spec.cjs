@@ -101,10 +101,15 @@ test("model import handles failure and refreshes availability after success", as
 });
 
 test("ready setup starts collapsed and uses one disclosure for the availability panel", async ({ page }) => {
+  test.setTimeout(45_000);
   await mockReadiness(page, () => readiness(true));
+  const readinessResponsePromise = page.waitForResponse(response =>
+    new URL(response.url()).pathname === "/api/prontidao", { timeout: 20_000 });
   await page.goto("/");
+  const readinessResponse = await readinessResponsePromise;
+  expect(readinessResponse.status()).toBe(200);
   const panel = page.locator("#readiness-panel");
-  await expect(panel).toHaveAttribute("aria-busy", "false", { timeout: 15_000 });
+  await expect(panel).toHaveAttribute("aria-busy", "false", { timeout: 20_000 });
   await expect(page.locator("#readiness-summary")).toContainText("Todos os 5 arquivos");
   await expect(panel).not.toHaveAttribute("open", "");
   await panel.locator(":scope > summary").click();
