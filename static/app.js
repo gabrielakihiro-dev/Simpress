@@ -3340,6 +3340,7 @@
         ["data_pedido", "Data do pedido"], ["liberacao_pedido", "Liberação do pedido"],
         ["verificado_estoque", "Verificado e estoque"], ["pedido_separacao", "Pedido em separação"],
         ["nota_fiscal_emitida", "Nota fiscal emitida"], ["previsao_entrega", "Previsão de entrega"],
+        ["entregue", "Pedido entregue"],
       ];
       if (Array.isArray(simpress.etapas_pedido) && simpress.etapas_pedido.length) {
         return simpress.etapas_pedido.map(etapa => ({ ...etapa, data: String(etapa.data || "").trim(), coluna: etapa.coluna_na_planilha !== false }));

@@ -31,6 +31,7 @@ SIMPresS_FIELDS = {
     "verificado_estoque": ("verificandoestoque", "verificadoestoque", "verificadoeestoque"),
     "pedido_separacao": ("pedidoemseparacao",),
     "nota_fiscal_emitida": ("notafiscalemitida",),
+    "entregue": ("entregue", "pedidoentregue", "dataentrega"),
     "modelo": ("modelodoequipamento",),
     "descricao_produto": ("descricaoproduto",),
     "cidade_entrega": ("cidadeentrega",),
@@ -74,6 +75,7 @@ SIMPRESS_ORDER_STAGES = (
     ("pedido_separacao", "Pedido em separação"),
     ("nota_fiscal_emitida", "Nota fiscal emitida"),
     ("previsao_entrega", "Previsão de entrega"),
+    ("entregue", "Pedido entregue"),
 )
 SIMPRESS_DATE_FIELDS = frozenset(field for field, _label in SIMPRESS_ORDER_STAGES) - {"data_pedido"}
 
