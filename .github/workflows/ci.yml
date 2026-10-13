@@ -1,0 +1,84 @@
+name: CI
+
+on:
+  push:
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  verify:
+    runs-on: windows-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        python-version: ["3.12", "3.14"]
+    steps:
+      - uses: actions/checkout@v6
+      - uses: actions/setup-python@v6
+        with:
+          python-version: ${{ matrix.python-version }}
+      - uses: actions/setup-node@v6
+        with:
+          node-version: "24"
+      - name: Install Python dependencies
+        run: python -m pip install -r requirements-postgres.txt mypy==2.4.0
+      - name: Run isolated Python tests
+        run: python -B tests/run_tests.py
+      - name: Run browser workflow tests
+        run: node --test tests/frontend/test_transfer_workflows.cjs tests/frontend/test_inventory_ui_flows.cjs tests/frontend/test_history_annotation_retries.cjs tests/frontend/test_history_annotations.cjs tests/frontend/test_annotation_version_ui.cjs tests/frontend/test_form_draft_guard.cjs tests/frontend/test_catalog_search_utils.cjs tests/frontend/test_ui_motion.cjs tests/frontend/test_auth_session.cjs tests/frontend/test_dom_utils.cjs
+      - name: Check JavaScript syntax
+        run: |
+          node --check static/app.js
+          node --check static/js/shared/dom-utils.js
+          node --check static/js/auth/auth-session.js
+          node --check static/js/auth/login.js
+          node --check static/js/ui/accessible-dialogs.js
+          node --check static/js/shared/transfer-utils.js
+          node --check static/js/shared/history-annotation-autosave.js
+          node --check static/js/shared/form-draft-guard.js
+          node --check static/js/shared/catalog-search-utils.js
+          node --check static/js/ui/ui-motion.js
+          node --check static/js/ui/ui-notifications.js
+          node --check static/js/ui/sidebar-navigation.js
+          node --check playwright.config.cjs
+          node --check tests/e2e/ui.spec.cjs
+          node --check tests/e2e/ticket-requests.spec.cjs
+          node --check tests/e2e/auth-local.cjs
+          node --check config/tailwind.config.cjs
+          node --check scripts/build/copy_ui_assets.cjs
+      - name: Check Python syntax
+        run: python -m compileall -q core/config.py main.py core/integrity.py core/openpyxl_compat.py core/xlsx_safety.py domains routers persistence security scripts tests/support/serve_ui_motion_preview.py
+      - name: Run gradual static type checks
+        run: python -m mypy --explicit-package-bases --platform win32 --ignore-missing-imports --check-untyped-defs core/config.py main.py core/integrity.py core/openpyxl_compat.py core/xlsx_safety.py domains/history_export.py domains/inventory_comparison.py domains/inventory_update.py domains/equipment_search.py routers/inventory_history.py routers/transfers.py routers/equipment_search.py routers/system.py routers/units.py persistence security scripts/migrate_local_data.py scripts/cleanup_local_temps.py scripts/migrate_supabase_bundle.py scripts/rehearsal_fixtures.py scripts/rehearsal_stack.py scripts/verify_migration_pilot.py
+      - name: Check tracked files for common credentials
+        run: python -B scripts/check_secrets.py
+      - name: Install interface asset dependencies
+        run: npm ci
+      - name: Audit JavaScript dependencies
+        run: npm audit --audit-level=moderate
+      - name: Rebuild local interface assets
+        run: npm run build:ui
+
+  ui-browser:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v6
+      - uses: actions/setup-python@v6
+        with:
+          python-version: "3.12"
+      - uses: actions/setup-node@v6
+        with:
+          node-version: "24"
+      - name: Install browser test dependencies
+        run: npm ci
+      - name: Audit JavaScript dependencies
+        run: npm audit --audit-level=moderate
+      - name: Rebuild local interface assets
+        run: npm run build:ui
+      - name: Install Chromium
+        run: npx playwright install chromium
+      - name: Test real interface in desktop and mobile viewports
+        run: npm run test:ui:e2e
