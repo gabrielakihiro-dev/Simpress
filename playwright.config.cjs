@@ -8,6 +8,9 @@ module.exports = defineConfig({
   testDir: "./tests/e2e",
   fullyParallel: false,
   workers: 1,
+  // Windows CI runners vary in speed; a consistent failure still fails every attempt,
+  // while timing flakes are retried and reported as "flaky" instead of failing the run.
+  retries: process.env.CI ? 2 : 0,
   timeout: 20_000,
   expect: { timeout: 5_000 },
   reporter: [["list"], ["html", { outputFolder: "playwright-report", open: "never" }]],
