@@ -317,6 +317,28 @@ class TicketImportRouteTests(unittest.TestCase):
                 ["01/09/2026", "02/09/2026", "03/09/2026", "", "", ""],
             )
 
+    def test_import_reads_the_stock_check_stage_from_the_real_export_header(self):
+        with tempfile.TemporaryDirectory(dir=PROJECT_ROOT) as directory:
+            router = create_operations_router(
+                load_comparison_history=lambda: [],
+                comparison_history_for_display=lambda event: event,
+                ticket_report_path=lambda: Path(directory) / "tickets.json",
+                transaction_root=lambda: Path(directory),
+            )
+            simpress = self.workbook_bytes([
+                ["NumeroPedido", "NumeroSerie", "OrdemServico", "StatusAtual", "DataPedido", "LiberacaoDoPedido", "VerificandoEstoque"],
+                [1, "SN-REAL", 10, "Verificação de estoque", "08/10/2026", "08/10/2026", "09/10/2026"],
+            ])
+            oracle = self.workbook_bytes([["Solicitação", "ID OS Corporate", "Número de Série"], ["REQ-1", 10, "SN-REAL"]])
+
+            report = route_handler(router, "/api/operacoes/chamados/importar", "POST")(
+                simpress_file=UploadFile(filename="pedidos.xlsx", file=BytesIO(simpress)),
+                oracle_file=UploadFile(filename="solicitacoes.xlsx", file=BytesIO(oracle)),
+            )
+
+            stages = {stage["chave"]: stage["data"] for stage in report["chamados"][0]["simpress"]["etapas_pedido"]}
+            self.assertEqual(stages["verificado_estoque"], "09/10/2026")
+
     def test_import_without_stage_columns_still_works_and_marks_them_absent(self):
         with tempfile.TemporaryDirectory(dir=PROJECT_ROOT) as directory:
             router = create_operations_router(

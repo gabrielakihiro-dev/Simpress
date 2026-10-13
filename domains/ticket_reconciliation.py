@@ -28,7 +28,7 @@ SIMPresS_FIELDS = {
     "previsao_entrega": ("previsaoentrega", "previsaodeentrega"),
     "data_pedido": ("datapedido",),
     "liberacao_pedido": ("liberacaodopedido", "liberacaopedido"),
-    "verificado_estoque": ("verificadoestoque", "verificadoeestoque"),
+    "verificado_estoque": ("verificandoestoque", "verificadoestoque", "verificadoeestoque"),
     "pedido_separacao": ("pedidoemseparacao",),
     "nota_fiscal_emitida": ("notafiscalemitida",),
     "modelo": ("modelodoequipamento",),
