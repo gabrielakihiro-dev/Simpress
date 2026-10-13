@@ -63,7 +63,7 @@
 
         <nav class="header-actions sidebar-actions" aria-label="Ferramentas do sistema">
           <div class="header-secondary-panel" role="group" aria-label="Ações do sistema">
-            <button type="button" onclick="abrirAcompanhamentoChamados()" class="header-action-item header-action-item--large header-action-item--orange flex items-center gap-2" title="Relacionar séries, OS e status nos arquivos da Simpress e do Oracle">
+            <button type="button" onclick="abrirAcompanhamentoChamados()" id="btn-acompanhamento-chamados" data-sidebar-page class="header-action-item header-action-item--large header-action-item--orange flex items-center gap-2" title="Relacionar séries, OS e status nos arquivos da Simpress e do Oracle">
               <i data-lucide="clipboard-list" class="header-action-icon header-action-icon--orange" aria-hidden="true"></i>
               <span class="sidebar-item-label">Acompanhamento de<br>Chamados</span>
             </button>
@@ -75,7 +75,7 @@
                 <i data-lucide="chevron-down" class="header-action-group-chevron" aria-hidden="true"></i>
               </summary>
               <div id="header-action-group-analysis" class="header-action-group-items" role="group" aria-label="Atualização, exportação, análises, históricos e catálogo de unidades">
-                <button type="button" onclick="abrirModalAtualizarPlanilhas()" id="btn-atualizar-planilhas" class="header-action-item header-action-item--primary flex items-center gap-2" title="Comparar os arquivos e atualizar as bases do site">
+                <button type="button" onclick="abrirModalAtualizarPlanilhas()" id="btn-atualizar-planilhas" data-sidebar-page class="header-action-item header-action-item--primary flex items-center gap-2" title="Comparar os arquivos e atualizar as bases do site">
                   <i data-lucide="upload" class="header-action-icon" aria-hidden="true"></i>
                   <span class="sidebar-item-label">Atualizar planilhas</span>
                 </button>
@@ -84,24 +84,20 @@
                   <span id="label-exportar-equipamentos" class="sidebar-item-label">Exportar Excel</span>
                 </button>
                 <div class="sidebar-related-links" role="group" aria-label="Histórico e análise da atualização">
-                  <button type="button" onclick="abrirModalHistoricoComparacoes()" id="btn-historico-comparacoes" aria-label="Histórico de atualizações e comparação de planilhas" aria-labelledby="label-historico-comparacoes" class="header-action-item flex items-center gap-2" title="Consultar comparações e alterações de apelido feitas pela atualização das planilhas">
+                  <button type="button" onclick="abrirModalHistoricoComparacoes()" id="btn-historico-comparacoes" data-sidebar-page aria-label="Histórico de atualizações e comparação de planilhas" aria-labelledby="label-historico-comparacoes" class="header-action-item flex items-center gap-2" title="Consultar comparações e alterações de apelido feitas pela atualização das planilhas">
                     <i data-lucide="history" class="header-action-icon" aria-hidden="true"></i>
                     <span id="label-historico-comparacoes" class="sidebar-item-label">Histórico planilhas</span>
                   </button>
-                  <button type="button" onclick="abrirCentralPendencias()" class="header-action-item flex items-center gap-2" title="Revisar os pontos da atualização mais recente">
-                    <i data-lucide="list-checks" class="header-action-icon" aria-hidden="true"></i>
-                    <span class="sidebar-item-label">Pendências</span>
-                  </button>
-                  <button type="button" onclick="abrirEvolucaoAtualizacoes()" class="header-action-item flex items-center gap-2" title="Comparar pendências entre duas atualizações">
+                  <button type="button" onclick="abrirEvolucaoAtualizacoes()" id="btn-evolucao-atualizacoes" data-sidebar-page class="header-action-item flex items-center gap-2" title="Comparar pendências entre duas atualizações">
                     <i data-lucide="activity" class="header-action-icon" aria-hidden="true"></i>
                     <span class="sidebar-item-label">Evolução das atualizações</span>
                   </button>
                 </div>
-                <button type="button" onclick="abrirModalHistoricoApelidos()" id="btn-historico-apelidos" aria-label="Histórico de alterações manuais" aria-labelledby="label-historico-apelidos" class="header-action-item flex items-center gap-2" title="Consultar histórico de alterações manuais">
+                <button type="button" onclick="abrirModalHistoricoApelidos()" id="btn-historico-apelidos" data-sidebar-page aria-label="Histórico de alterações manuais" aria-labelledby="label-historico-apelidos" class="header-action-item flex items-center gap-2" title="Consultar histórico de alterações manuais">
                   <i data-lucide="history" class="header-action-icon" aria-hidden="true"></i>
                   <span id="label-historico-apelidos" class="sidebar-item-label">Histórico de alterações</span>
                 </button>
-                <button type="button" onclick="abrirModalGerenciarUnidades()" aria-label="Catálogo de unidades SEBRAE" aria-labelledby="label-catalogo-unidades" class="header-action-item flex items-center gap-2" title="Consultar e gerenciar o catálogo de unidades SEBRAE">
+                <button type="button" onclick="abrirModalGerenciarUnidades()" id="btn-catalogo-unidades" data-sidebar-page aria-label="Catálogo de unidades SEBRAE" aria-labelledby="label-catalogo-unidades" class="header-action-item flex items-center gap-2" title="Consultar e gerenciar o catálogo de unidades SEBRAE">
                   <i data-lucide="map-pin" class="header-action-icon" aria-hidden="true"></i>
                   <span id="label-catalogo-unidades" class="sidebar-item-label">Catálogo de unidades</span>
                 </button>
@@ -237,7 +233,7 @@
           <div id="autocomplete-more-results" class="hidden px-4 py-2 border-t border-slate-800">
             <button type="button" onclick="abrirPesquisaCompleta()" class="autocomplete-more-button w-full inline-flex items-center justify-center gap-2 px-3 py-2 rounded-xl transition">
               <i data-lucide="list-checks" class="w-4 h-4" aria-hidden="true"></i>
-              <span>Mostrar mais</span>
+              <span data-autocomplete-more-label>Mostrar mais</span>
             </button>
           </div>
 
@@ -1404,22 +1400,6 @@ Horário disponível para atendimento:</textarea>
       <div class="pt-3 border-t border-slate-800 flex justify-end shrink-0">
         <button type="button" onclick="fecharModalComparacaoPlanilhas()" class="px-4 py-2 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-300 text-xs transition">Concluir</button>
       </div>
-    </div>
-  </div>
-
-  <!-- CENTRAL DE PENDÊNCIAS DA ATUALIZAÇÃO MAIS RECENTE -->
-  <div id="modal-central-pendencias" class="modal-overlay fixed inset-0 bg-slate-950/85 backdrop-blur-md z-[77] hidden flex items-center justify-center p-4">
-    <div class="modal-panel bg-slate-900 border border-amber-500/30 rounded-2xl max-w-6xl w-full p-6 shadow-2xl flex flex-col max-h-[92vh] overflow-hidden">
-      <div class="flex items-start justify-between gap-4 pb-4 border-b border-slate-800 shrink-0">
-        <div><h3 class="text-base font-bold text-white">Central de pendências</h3><p id="central-pendencias-referencia" class="text-xs text-slate-400 mt-1">Carregando a atualização mais recente…</p></div>
-        <button type="button" onclick="fecharCentralPendencias()" class="text-slate-400 hover:text-white p-1 rounded-lg hover:bg-slate-800" aria-label="Fechar central de pendências"><i data-lucide="x" class="w-5 h-5"></i></button>
-      </div>
-      <div class="grid grid-cols-1 sm:grid-cols-[minmax(0,1fr)_18rem] gap-2 py-3 shrink-0">
-        <label class="sr-only" for="filtro-operacional-pendencias">Filtrar pendências</label><input id="filtro-operacional-pendencias" type="search" placeholder="Filtrar por série, hostname ou local…" class="w-full rounded-lg border border-slate-700 bg-slate-950 px-3 py-2 text-sm text-white focus:border-amber-400 focus:outline-none">
-        <label class="sr-only" for="categoria-operacional-pendencias">Filtrar por categoria</label><select id="categoria-operacional-pendencias" class="w-full rounded-lg border border-slate-700 bg-slate-950 px-3 py-2 text-sm text-white focus:border-amber-400 focus:outline-none"><option value="">Todas as categorias</option></select>
-      </div>
-      <div id="lista-central-pendencias" aria-label="Pendências da atualização mais recente" aria-live="polite" class="overflow-auto flex-1 space-y-3"></div>
-      <div class="pt-3 border-t border-slate-800 flex justify-end shrink-0"><button type="button" onclick="fecharCentralPendencias()" class="px-4 py-2 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-300 text-xs">Fechar</button></div>
     </div>
   </div>
 
