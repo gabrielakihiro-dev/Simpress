@@ -14,6 +14,7 @@
   <link rel="stylesheet" href="/static/styles/ui-motion.css">
   <link rel="stylesheet" href="/static/styles/sidebar-navigation.css">
   <link rel="stylesheet" href="/static/styles/theme.css">
+  <link rel="stylesheet" href="/static/styles/ux-refinements.css">
 </head>
 <body class="min-h-full bg-gradient-to-br from-slate-950 via-slate-900 to-slate-950 text-slate-100 font-sans selection:bg-brand-500 selection:text-white">
 
@@ -552,7 +553,7 @@ Horário disponível para atendimento:</textarea>
         <div class="p-6 space-y-4 flex-1">
           <!-- CNPJ Retirada -->
           <div>
-            <label class="block text-xs font-semibold text-slate-300 mb-1">
+            <label for="retirada-cnpj" class="block text-xs font-semibold text-slate-300 mb-1">
               CNPJ:
             </label>
             <input
@@ -566,7 +567,7 @@ Horário disponível para atendimento:</textarea>
 
           <!-- Endereço Completo Retirada -->
           <div>
-            <label class="block text-xs font-semibold text-slate-300 mb-1">
+            <label for="retirada-endereco" class="block text-xs font-semibold text-slate-300 mb-1">
               Endereço:
             </label>
             <textarea
@@ -581,7 +582,7 @@ Horário disponível para atendimento:</textarea>
           <!-- Grade de Horários e Almoço -->
           <div class="grid grid-cols-1 sm:grid-cols-3 gap-3">
             <div>
-              <label class="block text-[11px] font-semibold text-slate-300 mb-1">Expediente:</label>
+              <label for="retirada-horario" class="block text-[11px] font-semibold text-slate-300 mb-1">Expediente:</label>
               <input
                 type="text"
                 id="retirada-horario"
@@ -590,7 +591,7 @@ Horário disponível para atendimento:</textarea>
               />
             </div>
             <div>
-              <label class="block text-[11px] font-semibold text-slate-300 mb-1">Almoço:</label>
+              <label for="retirada-almoco" class="block text-[11px] font-semibold text-slate-300 mb-1">Almoço:</label>
               <input
                 type="text"
                 id="retirada-almoco"
@@ -599,7 +600,7 @@ Horário disponível para atendimento:</textarea>
               />
             </div>
             <div>
-              <label class="block text-[11px] font-semibold text-slate-300 mb-1">Duração Pausa:</label>
+              <label for="retirada-pausa-duracao" class="block text-[11px] font-semibold text-slate-300 mb-1">Duração Pausa:</label>
               <input
                 type="text"
                 id="retirada-pausa-duracao"
@@ -612,7 +613,7 @@ Horário disponível para atendimento:</textarea>
           <!-- Acesso & Voltagem -->
           <div class="grid grid-cols-1 sm:grid-cols-3 gap-3">
             <div class="sm:col-span-2">
-              <label class="block text-[11px] font-semibold text-slate-300 mb-1">Tipo de Acesso:</label>
+              <label for="retirada-tipo-acesso" class="block text-[11px] font-semibold text-slate-300 mb-1">Tipo de Acesso:</label>
               <input
                 type="text"
                 id="retirada-tipo-acesso"
@@ -621,7 +622,7 @@ Horário disponível para atendimento:</textarea>
               />
             </div>
             <div>
-              <label class="block text-[11px] font-semibold text-slate-300 mb-1">Voltagem:</label>
+              <label for="retirada-voltagem" class="block text-[11px] font-semibold text-slate-300 mb-1">Voltagem:</label>
               <input
                 type="text"
                 id="retirada-voltagem"
@@ -648,7 +649,7 @@ Horário disponível para atendimento:</textarea>
             </div>
             <div class="grid grid-cols-1 sm:grid-cols-3 gap-3">
               <div>
-                <label class="block text-[11px] text-slate-400 mb-1">Nome: <span class="text-amber-400">*</span></label>
+                <label for="retirada-contato" class="block text-[11px] text-slate-400 mb-1">Nome: <span class="text-amber-400">*</span></label>
                 <input
                   type="text"
                   id="retirada-contato"
@@ -658,7 +659,7 @@ Horário disponível para atendimento:</textarea>
                 />
               </div>
               <div>
-                <label class="block text-[11px] text-slate-400 mb-1">E-mail: <span class="text-amber-400">*</span></label>
+                <label for="retirada-email" class="block text-[11px] text-slate-400 mb-1">E-mail: <span class="text-amber-400">*</span></label>
                 <input
                   type="email"
                   id="retirada-email"
@@ -668,7 +669,7 @@ Horário disponível para atendimento:</textarea>
                 />
               </div>
               <div>
-                <label class="block text-[11px] text-slate-400 mb-1">Celular: <span class="text-amber-400">*</span></label>
+                <label for="retirada-telefone" class="block text-[11px] text-slate-400 mb-1">Celular: <span class="text-amber-400">*</span></label>
                 <input
                   type="text"
                   id="retirada-telefone"
@@ -684,7 +685,7 @@ Horário disponível para atendimento:</textarea>
 
           <!-- Observações Retirada -->
           <div>
-            <label class="block text-[11px] font-semibold text-slate-400 mb-1">Observações: <span class="text-amber-400">*</span></label>
+            <label for="retirada-obs" class="block text-[11px] font-semibold text-slate-400 mb-1">Observações: <span class="text-amber-400">*</span></label>
             <input
               type="text"
               id="retirada-obs"
@@ -720,7 +721,7 @@ Horário disponível para atendimento:</textarea>
         <div class="p-6 space-y-4 flex-1">
           <!-- BUSCA RÁPIDA DE UNIDADE SEBRAE (DROPDOWN / AUTOCOMPLETE) -->
           <div>
-            <label class="block text-xs font-semibold text-slate-300 mb-1 flex items-center justify-between">
+            <label for="select-unidade-destino" class="block text-xs font-semibold text-slate-300 mb-1 flex items-center justify-between">
               <span class="flex items-center gap-1.5">
                 <i data-lucide="map-pin" class="w-3.5 h-3.5 text-emerald-400"></i>
                 Selecione a Unidade:
@@ -742,7 +743,7 @@ Horário disponível para atendimento:</textarea>
 
           <!-- CNPJ Entrega -->
           <div>
-            <label class="block text-xs font-semibold text-slate-300 mb-1">
+            <label for="entrega-cnpj" class="block text-xs font-semibold text-slate-300 mb-1">
               CNPJ:
             </label>
             <input
@@ -780,7 +781,7 @@ Horário disponível para atendimento:</textarea>
 
           <!-- Endereço Completo Entrega -->
           <div>
-            <label class="block text-xs font-semibold text-slate-300 mb-1">
+            <label for="entrega-endereco" class="block text-xs font-semibold text-slate-300 mb-1">
               Endereço:
             </label>
             <textarea
@@ -814,7 +815,7 @@ Horário disponível para atendimento:</textarea>
                 ></select>
               </div>
               <div>
-                <label class="block text-[11px] font-semibold text-slate-300 mb-1">
+                <label for="entrega-contato" class="block text-[11px] font-semibold text-slate-300 mb-1">
                   Nome do Destinatário ou Representante: <span class="text-amber-400">*</span>
                 </label>
                 <input
@@ -828,7 +829,7 @@ Horário disponível para atendimento:</textarea>
 
               <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
                 <div>
-                  <label class="block text-[11px] text-slate-300 mb-1">E-mail do Destinatário: <span class="text-amber-400">*</span></label>
+                  <label for="entrega-email" class="block text-[11px] text-slate-300 mb-1">E-mail do Destinatário: <span class="text-amber-400">*</span></label>
                   <input
                     type="email"
                     id="entrega-email"
@@ -838,7 +839,7 @@ Horário disponível para atendimento:</textarea>
                   />
                 </div>
                 <div>
-                  <label class="block text-[11px] text-slate-300 mb-1">Celular: <span class="text-amber-400">*</span></label>
+                  <label for="entrega-telefone" class="block text-[11px] text-slate-300 mb-1">Celular: <span class="text-amber-400">*</span></label>
                   <input
                     type="text"
                     id="entrega-telefone"
@@ -856,7 +857,7 @@ Horário disponível para atendimento:</textarea>
           <!-- Grade de Horários e Almoço Entrega -->
           <div class="grid grid-cols-1 sm:grid-cols-3 gap-3">
             <div>
-              <label class="block text-[11px] font-semibold text-slate-300 mb-1">Expediente: <span class="text-amber-400">*</span></label>
+              <label for="entrega-horario" class="block text-[11px] font-semibold text-slate-300 mb-1">Expediente: <span class="text-amber-400">*</span></label>
               <input
                 type="text"
                 id="entrega-horario"
@@ -866,7 +867,7 @@ Horário disponível para atendimento:</textarea>
               />
             </div>
             <div>
-              <label class="block text-[11px] font-semibold text-slate-300 mb-1">Almoço: <span class="text-amber-400">*</span></label>
+              <label for="entrega-almoco" class="block text-[11px] font-semibold text-slate-300 mb-1">Almoço: <span class="text-amber-400">*</span></label>
               <input
                 type="text"
                 id="entrega-almoco"
@@ -876,7 +877,7 @@ Horário disponível para atendimento:</textarea>
               />
             </div>
             <div>
-              <label class="block text-[11px] font-semibold text-slate-300 mb-1">Duração Pausa: <span id="entrega-pausa-obrigatorio" class="text-amber-400">*</span></label>
+              <label for="entrega-pausa-duracao" class="block text-[11px] font-semibold text-slate-300 mb-1">Duração Pausa: <span id="entrega-pausa-obrigatorio" class="text-amber-400">*</span></label>
               <input
                 type="text"
                 id="entrega-pausa-duracao"
@@ -890,7 +891,7 @@ Horário disponível para atendimento:</textarea>
           <!-- Observação do Chamado / Entrega -->
           <div>
             <div class="flex items-center justify-between mb-1">
-              <label class="block text-xs font-semibold text-slate-300">
+              <label for="entrega-obs" class="block text-xs font-semibold text-slate-300">
                 Observações: <span class="text-amber-400">*</span>
               </label>
               <span class="text-[10px] text-slate-400">Cel. B37 na planilha</span>
@@ -1578,5 +1579,6 @@ Horário disponível para atendimento:</textarea>
   <script src="/static/js/auth/auth-session.js"></script>
   <script src="/static/app.js"></script>
   <script src="/static/js/ui/sidebar-navigation.js"></script>
+  <script src="/static/js/ui/ux-enhancements.js"></script>
 </body>
 </html>

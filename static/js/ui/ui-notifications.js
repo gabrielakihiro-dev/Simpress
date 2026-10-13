@@ -14,6 +14,18 @@
   });
   const icons = Object.freeze({ success: "check-circle", error: "alert-circle", warning: "alert-triangle", info: "info" });
 
+  // Lets progressive enhancements (e.g. "Copiado!" on the clicked button) react to the outcome.
+  function announce(message, type) {
+    try {
+      if (typeof document.dispatchEvent !== "function" || typeof window.CustomEvent !== "function") return;
+      document.dispatchEvent(new window.CustomEvent("simpress:notify", {
+        detail: { message: String(message ?? ""), type },
+      }));
+    } catch (error) {
+      // Feedback hooks are optional; the toast itself was already shown.
+    }
+  }
+
   function show(message, type = "success") {
     const container = document.getElementById("toast-container");
     const toast = document.createElement("div");
@@ -29,6 +41,7 @@
     container.appendChild(toast);
     lucide.createIcons({ root: toast });
     motion?.reveal(toast);
+    announce(message, type);
 
     window.setTimeout(() => {
       if (motion) motion.dismiss(toast, () => toast.remove());
