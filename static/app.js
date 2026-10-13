@@ -3383,7 +3383,7 @@
           : concluida ? (posicao === ultimaComData ? "current" : "done") : "pending";
         const texto = concluida ? formatarDataEtapa(etapa.data) : etapa.coluna ? "Pendente" : "Não informado na planilha";
         const marcador = concluida ? (estado === "forecast" ? "◆" : "✓") : "○";
-        return `<li class="ticket-stage is-${estado}"><span class="ticket-stage-mark" aria-hidden="true">${marcador}</span><span class="ticket-stage-label">${escapeHtml(etapa.rotulo)}</span><span class="ticket-stage-date">${escapeHtml(texto)}</span></li>`;
+        return `<li class="ticket-stage is-${estado}"><span class="ticket-stage-mark" aria-hidden="true">${marcador}</span><span class="ticket-stage-text"><span class="ticket-stage-label">${escapeHtml(etapa.rotulo)}</span> - <span class="ticket-stage-date">${escapeHtml(texto)}</span></span></li>`;
       });
       return `<ol class="ticket-stages" aria-label="Etapas do pedido">${itens.join("")}</ol>`;
     }
