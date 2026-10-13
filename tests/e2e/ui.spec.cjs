@@ -405,6 +405,7 @@ test("layout stays within common responsive viewport widths", async ({ page }) =
   for (const viewport of [
     { width: 320, height: 740 },
     { width: 390, height: 844 },
+    { width: 767, height: 1024 },
     { width: 768, height: 1024 },
     { width: 844, height: 390 },
     { width: 1440, height: 900 },
@@ -468,8 +469,56 @@ test("layout stays within common responsive viewport widths", async ({ page }) =
   }
 });
 
-test("reduced-motion preference preserves modal operation", async ({ page }) => {
+test("keyboard focus stays visible over component and theme styles", async ({ page }) => {
+  await page.setViewportSize({ width: 1366, height: 900 });
+  const controls = [
+    ["#input-serial", "3px", "2px"],
+    ["#theme-toggle", "2px", "2px"],
+    ["#btn-nova-transferencia", "3px", "3px"],
+    ['.sidebar-tabs [role="tab"]:first-child', "3px", "3px"],
+    ['.header-action-group[data-action-group="analysis"] > summary', "3px", "3px"],
+  ];
+  for (const theme of ["dark", "light"]) {
+    await page.locator("html").evaluate((root, value) => { root.dataset.theme = value; }, theme);
+    await page.keyboard.press("Tab");
+    for (const [selector, width, offset] of controls) {
+      const control = page.locator(selector);
+      await control.focus();
+      await expect(control).toBeFocused();
+      await expect(control).toHaveCSS("outline-style", "solid");
+      await expect(control).toHaveCSS("outline-width", width);
+      await expect(control).toHaveCSS("outline-offset", offset);
+      await expect(control).toHaveCSS("outline-color", theme === "light" ? "rgb(2, 132, 199)" : "rgb(125, 211, 252)");
+      await expect(control).toHaveCSS("box-shadow", `${theme === "light" ? "rgb(255, 255, 255)" : "rgb(2, 6, 23)"} 0px 0px 0px 2px`);
+    }
+  }
+  await openFixtureComparison(page);
+  const annotation = page.locator('textarea[data-comparison-annotation]:visible').first();
+  for (const theme of ["dark", "light"]) {
+    await page.locator("html").evaluate((root, value) => { root.dataset.theme = value; }, theme);
+    await page.keyboard.press("Tab");
+    await annotation.focus();
+    await expect(annotation).toHaveCSS("outline-width", "3px");
+    await expect(annotation).toHaveCSS("outline-color", theme === "light" ? "rgb(2, 132, 199)" : "rgb(125, 211, 252)");
+  }
+});
+
+test("reduced-motion preference suppresses CSS motion and preserves modal operation", async ({ page }) => {
   await page.emulateMedia({ reducedMotion: "reduce" });
+  const movingElements = await page.evaluate(() => [...document.querySelectorAll("body *")].flatMap(element => {
+    return [null, "::before", "::after"].flatMap(pseudo => {
+      const style = getComputedStyle(element, pseudo);
+      const tooLong = value => value.split(",").some(duration => Number.parseFloat(duration) > 0.0000101);
+      if (tooLong(style.transitionDuration) || tooLong(style.animationDuration)
+          || (style.animationName !== "none" && style.animationIterationCount.split(",").some(count => count === "infinite" || Number(count) > 1))) {
+        return [{ tag: element.tagName, id: element.id, className: element.getAttribute("class"), pseudo,
+          transition: style.transitionDuration, animation: style.animationDuration, iterations: style.animationIterationCount }];
+      }
+      return [];
+    });
+  }));
+  expect(movingElements).toEqual([]);
+  await expect(page.locator("html")).toHaveCSS("scroll-behavior", "auto");
   await openFixtureComparison(page);
   const dialog = page.getByRole("dialog");
   await page.keyboard.press("Escape");

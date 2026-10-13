@@ -151,9 +151,9 @@ def main():
                         ok(client.get('/api/arquivos/'+str(source['id'])).content == staged['detalhes']['bytes'],'authorized original download preserves bytes')
                         event_id = 'stage7-event'
                         backend.files.annotations('synthetic.json',canonical({'historico':[{'id':event_id,'horario':'2026-10-09T10:00:00',
-                            'comparacao':{'sem_acesso_14_dias':[{'serie':'STAGE7-SYNTHETIC','motivo':'Fixture sintética'}]}}]}).encode(),'stage7-notes')
+                            'comparacao':{'sem_acesso_7_dias':[{'serie':'STAGE7-SYNTHETIC','motivo':'Fixture sintética'}]}}]}).encode(),'stage7-notes')
                         view = client.get('/api/historico-comparacoes/'+event_id).json()['evento']
-                        note_id = view['comparacao']['sem_acesso_14_dias'][0]['anotacao_id']
+                        note_id = view['comparacao']['sem_acesso_7_dias'][0]['anotacao_id']
                         note_url = '/api/historico-comparacoes/'+event_id+'/anotacoes/'+note_id
                         ok(client.put(note_url,headers=headers,json={'anotacao':'Autorizado'}).status_code == 200,'administrator edits event-bound annotation')
                         ok(anonymous.put(note_url,headers=headers,json={'anotacao':'Denied'}).status_code == 401,'anonymous annotation mutation denied')

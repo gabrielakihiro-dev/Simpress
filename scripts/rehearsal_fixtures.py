@@ -27,14 +27,14 @@ def generate(root, domain):
                         "anotacao_id": "row-" + category, "anotacao": note}]}})
     for number, note, label in ((1, "inteiro", "integer"), (1.0, "decimal", "decimal")):
         events.append({"id": "legacy-" + label, "horario": "invalid-original-date", "comparacao": {
-            "sem_acesso_14_dias": [{"serie": "NUMERIC", "value": number, "anotacao": note}]}})
+            "sem_acesso_7_dias": [{"serie": "NUMERIC", "value": number, "anotacao": note}]}})
     for note, label in (("antiga", "old"), ("", "latest")):
         events.append({"id": "legacy-blank-" + label, "comparacao": {
-            "sem_acesso_14_dias": [{"serie": "BLANK", "anotacao": note}]}})
-    events.append({"id": "legacy-conflicting", "comparacao": {"sem_acesso_14_dias": [
+            "sem_acesso_7_dias": [{"serie": "BLANK", "anotacao": note}]}})
+    events.append({"id": "legacy-conflicting", "comparacao": {"sem_acesso_7_dias": [
         {"serie": "CONFLICT", "anotacao": "A"}, {"serie": "CONFLICT", "anotacao": "B"}]}})
     history = {"historico": events, "anotacoes": [{"evento_id": "partial-event", "item_id": "shared-row-stable",
-        "categoria": "sem_acesso_14_dias", "serie": "SYN-01", "anotacao": "Sem histórico local",
+        "categoria": "sem_acesso_7_dias", "serie": "SYN-01", "anotacao": "Sem histórico local",
         "horario": "legacy-invalid", "atualizado_em": "legacy-invalid"}]}
     state = {"unidades": [{"id": 9_000_000_000_001, "cidade": "Cidade fictícia extra", "endereco": "Rua de teste",
                            "uf": "PR", "cep": "00000-000", "cnpj": "00000000000000", "campo_legado": "preservado"}],

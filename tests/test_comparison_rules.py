@@ -1,6 +1,7 @@
 import unittest
 import io
 from contextlib import redirect_stdout
+from datetime import datetime, timedelta, timezone
 from unittest.mock import patch
 
 from fastapi import HTTPException
@@ -15,6 +16,37 @@ def source_table(records, sheet="Inventario"):
 
 
 class InventoryComparisonTests(unittest.TestCase):
+    def test_stale_access_includes_exactly_seven_days_and_uses_current_category(self):
+        reference = datetime(2026, 10, 12, 15, 30, tzinfo=timezone(timedelta(hours=-3)))
+        ages = {
+            "RECENT": timedelta(days=7) - timedelta(seconds=1),
+            "BOUNDARY": timedelta(days=7),
+            "OLDER": timedelta(days=7, seconds=1),
+            "FUTURE": -timedelta(days=1),
+        }
+        records = [{
+            "NOMEDOCOMPUTADOR": f"PRNOTE-{serial}",
+            "SERIAL": serial,
+            "ULTIMAVERIFICACAOCOMEXITO": (reference - age).astimezone(timezone.utc).isoformat(),
+        } for serial, age in ages.items()]
+        records.append({"NOMEDOCOMPUTADOR": "PRNOTE-UNKNOWN", "SERIAL": "UNKNOWN"})
+
+        result = main.compare_uploaded_workbooks(
+            source_table(records), source_table([]), {}, as_of=reference,
+        )
+
+        self.assertEqual(
+            [key for key in result if key.startswith("sem_acesso_")],
+            ["sem_acesso_7_dias"],
+        )
+        rows = result["sem_acesso_7_dias"]
+        self.assertEqual([row["serie"] for row in rows], ["BOUNDARY", "OLDER"])
+        self.assertEqual([row["dias_sem_verificacao"] for row in rows], [7, 7])
+        event = {"id": "seven-day-boundary", "comparacao": result}
+        view = main.comparison_history_for_display(event)
+        self.assertEqual(view["resumo"]["sem_acesso_7_dias"], 2)
+        self.assertTrue(all(row["anotacao_id"] for row in view["comparacao"]["sem_acesso_7_dias"]))
+
     def test_legacy_review_item_id_survives_display_filtering(self):
         hidden_review = {
             "serie": "SERIE-LOCAL-1",
@@ -125,7 +157,7 @@ class InventoryComparisonTests(unittest.TestCase):
         event = {
             "id": "evento-anotacoes-categorias",
             "comparacao": {
-                "sem_acesso_14_dias": [{"serie": "S-ACESSO", "computador": "PRNOTE-ACESSO"}],
+                "sem_acesso_7_dias": [{"serie": "S-ACESSO", "computador": "PRNOTE-ACESSO"}],
                 "ausentes_no_endpoint": [filtered_endpoint, endpoint_row],
                 "ausentes_em_detalhes": [filtered_details, details_row],
                 "divergencias_local": [filtered_location, location_row],
@@ -137,7 +169,7 @@ class InventoryComparisonTests(unittest.TestCase):
 
         displayed = main.comparison_history_for_display(event)["comparacao"]
         visible_rows = [
-            displayed["sem_acesso_14_dias"][0],
+            displayed["sem_acesso_7_dias"][0],
             displayed["ausentes_no_endpoint"][0],
             displayed["ausentes_em_detalhes"][0],
             displayed["divergencias_local"][0],

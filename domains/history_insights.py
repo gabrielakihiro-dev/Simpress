@@ -9,7 +9,7 @@ from typing import Any, Dict, Iterable, List, Optional
 
 PENDING_CATEGORIES = {
     "apelidos_sem_atualizacao": "Linhas mantidas para conferência",
-    "sem_acesso_14_dias": "Sem acesso há 7 dias ou mais",
+    "sem_acesso_7_dias": "Sem acesso há 7 dias ou mais",
     "ausentes_no_endpoint": "Equipamentos sem correspondência por fonte — Endpoint",
     "ausentes_em_detalhes": "Equipamentos sem correspondência por fonte — Simpress",
     "divergencias_local": "Localidade divergente",

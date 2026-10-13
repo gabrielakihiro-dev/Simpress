@@ -527,10 +527,10 @@ def comparison_history_for_display(evento: Dict[str, Any]) -> Dict[str, Any]:
         )
         comparison_view["apelidos_sem_atualizacao"] = selected_review_items
 
-    no_recent_verification = comparison.get("sem_acesso_14_dias")
+    no_recent_verification = comparison.get("sem_acesso_7_dias")
     if isinstance(no_recent_verification, list):
-        comparison_view["sem_acesso_14_dias"] = display_annotatable_items(
-            "sem_acesso_14_dias", no_recent_verification
+        comparison_view["sem_acesso_7_dias"] = display_annotatable_items(
+            "sem_acesso_7_dias", no_recent_verification
         )
 
     if is_pinned_baseline:
@@ -668,9 +668,9 @@ def comparison_history_for_display(evento: Dict[str, Any]) -> Dict[str, Any]:
     alias_review = comparison_view.get("apelidos_sem_atualizacao")
     if isinstance(alias_review, list):
         summary["apelidos_sem_atualizacao"] = len(alias_review)
-    no_recent_verification = comparison_view.get("sem_acesso_14_dias")
+    no_recent_verification = comparison_view.get("sem_acesso_7_dias")
     if isinstance(no_recent_verification, list):
-        summary["sem_acesso_14_dias"] = len(no_recent_verification)
+        summary["sem_acesso_7_dias"] = len(no_recent_verification)
     manual_alias_divergences = comparison_view.get("divergencias_apelidos_manuais")
     if isinstance(manual_alias_divergences, list):
         summary["divergencias_apelidos_manuais"] = sum(
@@ -1109,7 +1109,7 @@ def compare_uploaded_workbooks(
         "total_detalhes": len(details_table["records"]),
         "ausentes_no_endpoint": missing_by_source["endpoint"],
         "ausentes_em_detalhes": missing_by_source["detalhes"],
-        "sem_acesso_14_dias": no_recent_verification,
+        "sem_acesso_7_dias": no_recent_verification,
         "correspondencias_ambiguas": issues,
         "registros_ambiguos": ambiguous_records,
         "divergencias_local": location_mismatches,

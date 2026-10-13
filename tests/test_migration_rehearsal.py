@@ -76,7 +76,7 @@ class MigrationRehearsalTests(unittest.TestCase):
     def test_notes_allow_empty_and_2000_but_reject_2001(self):
         bundle = self.bundle()
         self.assertEqual(len(bundle.history["historico"][0]["comparacao"]["apelidos_sem_atualizacao"][0]["anotacao"]), 2000)
-        self.assertEqual(bundle.history["historico"][1]["comparacao"]["sem_acesso_14_dias"][0]["anotacao"], "")
+        self.assertEqual(bundle.history["historico"][1]["comparacao"]["sem_acesso_7_dias"][0]["anotacao"], "")
         history = bundle.history
         history["anotacoes"][0]["anotacao"] = "a" * 2001
         self.rewrite("historico", history)

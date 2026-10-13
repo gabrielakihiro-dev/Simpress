@@ -60,5 +60,4 @@ input, select, textarea, .glass-input {
 @media (prefers-reduced-motion: reduce) {
   button:active:not(:disabled), summary:active { transform: none; }
   .ui-skeleton::after { animation: none; display: none; }
-  button, summary, input, select, textarea { transition: none !important; }
 }

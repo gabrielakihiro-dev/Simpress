@@ -31,10 +31,10 @@ def route_handler(router, path, method):
 
 class HistoryInsightTests(unittest.TestCase):
     def test_pending_center_uses_latest_update_and_keeps_annotation_identity(self):
-        old = {"id": "old", "horario": "2026-01-01", "comparacao": {"sem_acesso_14_dias": []}}
+        old = {"id": "old", "horario": "2026-01-01", "comparacao": {"sem_acesso_7_dias": []}}
         current = {
             "id": "current", "horario": "2026-02-01", "comparacao": {
-                "sem_acesso_14_dias": [{"serie": "ABC-1", "anotacao_id": "row-1", "anotacao": "Ver chamado"}],
+                "sem_acesso_7_dias": [{"serie": "ABC-1", "anotacao_id": "row-1", "anotacao": "Ver chamado"}],
                 "divergencias_local": [{"serie": "XYZ-2"}],
             },
         }
@@ -64,7 +64,7 @@ class HistoryInsightTests(unittest.TestCase):
             {"id": "before", "horario": "2026-01-01", "comparacao": {"divergencias_local": [{"serie": "A-1"}]}},
             {"id": "after", "horario": "2026-02-01", "comparacao": {
                 "divergencias_local": [{"serie": "A1", "anotacao_id": "note-1"}],
-                "sem_acesso_14_dias": [{"serie": "B-2", "computador": "PRNOTE2", "anotacao_id": "note-2"}],
+                "sem_acesso_7_dias": [{"serie": "B-2", "computador": "PRNOTE2", "anotacao_id": "note-2"}],
             }},
             {"id": "restore", "horario": "2026-03-01", "tipo": "restauracao", "comparacao": {}},
         ]

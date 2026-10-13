@@ -1,6 +1,17 @@
+/* A focus ring belongs to the focused element, never to its descendants. */
+@property --focus-shadow {
+  syntax: "*";
+  inherits: false;
+}
+:focus-visible {
+  --focus-shadow: 0 0 0 2px var(--focus-shadow-color, #020617);
+}
+
 /* The light palette remaps Tailwind's neutral and status text tokens without changing dark mode. */
 html[data-theme="light"] {
   color-scheme: light;
+  --focus-color: #0284c7;
+  --focus-shadow-color: #fff;
   --color-slate-50: #0f172a;
   --color-slate-100: #1e293b;
   --color-slate-200: #334155;
@@ -83,8 +94,8 @@ html[data-theme="light"] .ui-toast[class~="bg-rose-950/90"] { color: #ffe4e6; }
 html[data-theme="light"] .ui-toast[class~="bg-amber-950/90"] { color: #fef3c7; }
 html[data-theme="light"] .ui-toast[class~="bg-brand-950/90"] { color: #dbeafe; }
 html[data-theme="light"] :focus-visible {
-  outline-color: #0284c7 !important;
-  box-shadow: 0 0 0 2px #fff !important;
+  outline-color: var(--focus-color);
+  box-shadow: var(--focus-shadow);
 }
 
 .theme-toggle-button {
@@ -100,7 +111,7 @@ html[data-theme="light"] :focus-visible {
   border-radius: 0.75rem;
   background: rgba(15, 23, 42, 0.72);
   color: #cbd5e1;
-  transition: background-color 160ms ease, border-color 160ms ease, color 160ms ease;
+  transition: background-color var(--motion-duration, 160ms) ease, border-color var(--motion-duration, 160ms) ease, color var(--motion-duration, 160ms) ease;
 }
 
 .theme-toggle-button:hover {
@@ -110,7 +121,7 @@ html[data-theme="light"] :focus-visible {
 }
 
 .theme-toggle-button svg { width: 1.1rem; height: 1.1rem; }
-.theme-toggle-button:focus-visible { outline: 2px solid #7dd3fc !important; outline-offset: 2px !important; }
+.theme-toggle-button:focus-visible { outline: 2px solid var(--focus-color, #7dd3fc); outline-offset: 2px; }
 
 @media (max-width: 640px) {
   .header-inner { grid-template-columns: auto minmax(0, 1fr) auto; }
@@ -129,11 +140,6 @@ html[data-theme="light"] .theme-toggle-button:hover {
   color: #0f172a;
 }
 
-html[data-theme="light"] .theme-toggle-button:focus-visible {
-  outline-color: #0284c7 !important;
-  box-shadow: 0 0 0 2px #fff !important;
-}
-
 html[data-theme="light"] .site-header {
   border-bottom-color: #dbe4ef;
   background: rgba(255, 255, 255, 0.92);
@@ -149,7 +155,7 @@ html[data-theme="light"] .header-base-summary {
 html[data-theme="light"] .glass-card {
   border-color: #dbe4ef;
   background: #fff;
-  box-shadow: 0 12px 28px rgba(15, 23, 42, 0.07);
+  box-shadow: var(--focus-shadow, 0 12px 28px rgba(15, 23, 42, 0.07));
 }
 
 html[data-theme="light"] .glass-card-header {
@@ -165,13 +171,13 @@ html[data-theme="light"] .glass-input {
 
 html[data-theme="light"] .glass-input:focus {
   border-color: #0284c7;
-  box-shadow: 0 0 0 2px rgba(2, 132, 199, 0.18);
+  box-shadow: var(--focus-shadow, 0 0 0 2px rgba(2, 132, 199, 0.18));
 }
 
 html[data-theme="light"] .app-sidebar {
   border-right-color: #dbe4ef;
   background: linear-gradient(180deg, #fff, #f8fafc);
-  box-shadow: 12px 0 36px rgba(15, 23, 42, 0.08);
+  box-shadow: var(--focus-shadow, 12px 0 36px rgba(15, 23, 42, 0.08));
 }
 
 html[data-theme="light"] .sidebar-brand,
@@ -181,7 +187,7 @@ html[data-theme="light"] .sidebar-brand-mark {
   border-color: rgba(79, 70, 229, 0.62);
   background: linear-gradient(145deg, #8b7cff, #4f46e5);
   color: #fff;
-  box-shadow: inset 0 1px rgba(255, 255, 255, 0.2), 0 8px 20px rgba(79, 70, 229, 0.3);
+  box-shadow: var(--focus-shadow, inset 0 1px rgba(255, 255, 255, 0.2), 0 8px 20px rgba(79, 70, 229, 0.3));
 }
 html[data-theme="light"] .sidebar-section-title { color: #64748b; }
 html[data-theme="light"] .sidebar-divider { background: linear-gradient(90deg, transparent, #cbd5e1 16%, #cbd5e1 84%, transparent); }
@@ -219,7 +225,7 @@ html[data-theme="light"] .sidebar-actions .header-action-group[open] > summary {
   border-color: #c4b5fd;
   background: linear-gradient(100deg, #ede9fe, #f5f3ff);
   color: #4c1d95;
-  box-shadow: inset 2px 0 #7c3aed, 0 5px 18px rgba(49, 46, 129, 0.06);
+  box-shadow: var(--focus-shadow, inset 2px 0 #7c3aed, 0 5px 18px rgba(49, 46, 129, 0.06));
 }
 
 html[data-theme="light"] .sidebar-actions .header-secondary-panel > button.header-action-item--orange,
@@ -253,7 +259,7 @@ html[data-theme="light"] .sidebar-actions .header-action-group-items .header-act
   background: linear-gradient(100deg, #ede9fe, #f5f3ff);
   color: #4c1d95;
   font-weight: 700;
-  box-shadow: inset 2px 0 #7c3aed, 0 4px 12px rgba(49, 46, 129, 0.08);
+  box-shadow: var(--focus-shadow, inset 2px 0 #7c3aed, 0 4px 12px rgba(49, 46, 129, 0.08));
 }
 html[data-theme="light"] .sidebar-actions .header-action-group-items .header-action-item--primary .header-action-icon { color: #6d28d9; }
 html[data-theme="light"] .sidebar-actions .header-action-group-items .header-action-item--primary:hover {
@@ -288,13 +294,13 @@ html[data-theme="light"] #autocomplete-box {
   border-color: #cbd5e1;
   background: #fff;
   color: #0f172a;
-  box-shadow: 0 16px 36px rgba(15, 23, 42, 0.16);
+  box-shadow: var(--focus-shadow, 0 16px 36px rgba(15, 23, 42, 0.16));
 }
 html[data-theme="light"] .autocomplete-row {
   border-color: #cbd5e1;
   background: #fff;
   color: #0f172a;
-  box-shadow: 0 16px 36px rgba(15, 23, 42, 0.15);
+  box-shadow: var(--focus-shadow, 0 16px 36px rgba(15, 23, 42, 0.15));
 }
 html[data-theme="light"] .autocomplete-row:hover,
 html[data-theme="light"] .autocomplete-row.active {
@@ -307,14 +313,14 @@ html[data-theme="light"] .serial-badge {
   border-color: #7dd3fc;
   background: #f0f9ff;
   color: #0f172a;
-  box-shadow: none;
+  box-shadow: var(--focus-shadow, none);
 }
-html[data-theme="light"] .serial-match { border-color: #7dd3fc; background: #dbeafe; color: #1e40af; box-shadow: none; }
+html[data-theme="light"] .serial-match { border-color: #7dd3fc; background: #dbeafe; color: #1e40af; box-shadow: var(--focus-shadow, none); }
 
 html[data-theme="light"] .comparison-mobile-card {
   border-color: #dbe4ef;
   background: #fff;
-  box-shadow: 0 8px 20px rgba(15, 23, 42, 0.06);
+  box-shadow: var(--focus-shadow, 0 8px 20px rgba(15, 23, 42, 0.06));
 }
 html[data-theme="light"] .comparison-mobile-card-title { color: #0f172a; }
 html[data-theme="light"] .comparison-mobile-card-field { border-top-color: #e2e8f0; }
@@ -382,7 +388,7 @@ html[data-theme="light"] .local-setup-heading { color: #0f172a; }
 
 html[data-theme="light"] .sidebar-backdrop { background: rgba(15, 23, 42, 0.32); }
 html[data-theme="light"] body[data-theme-page="login"] { background: #f1f5f9; color: #0f172a; }
-html[data-theme="light"] body[data-theme-page="login"] main { border-color: #cbd5e1; background: #fff; box-shadow: 0 16px 40px rgba(15, 23, 42, 0.1); }
+html[data-theme="light"] body[data-theme-page="login"] main { border-color: #cbd5e1; background: #fff; box-shadow: var(--focus-shadow, 0 16px 40px rgba(15, 23, 42, 0.1)); }
 html[data-theme="light"] body[data-theme-page="login"] p { color: #475569; }
 html[data-theme="light"] body[data-theme-page="login"] input { border-color: #94a3b8; background: #fff; color: #0f172a; }
 html[data-theme="light"] body[data-theme-page="login"] button:not(.theme-toggle-button) { color: #fff; }
@@ -418,7 +424,7 @@ html[data-theme="light"] .autocomplete-more-button {
   border-color: #7dd3fc;
   background: #e0f2fe;
   color: #075985;
-  box-shadow: 0 2px 8px rgba(2, 132, 199, 0.14);
+  box-shadow: var(--focus-shadow, 0 2px 8px rgba(2, 132, 199, 0.14));
 }
 html[data-theme="light"] .autocomplete-more-button:hover {
   border-color: #38bdf8;
@@ -434,7 +440,7 @@ html[data-theme="light"] :is(
   border-color: #0284c7;
   background: #e0f2fe;
   color: #075985;
-  box-shadow: 0 1px 2px rgba(15, 23, 42, 0.12);
+  box-shadow: var(--focus-shadow, 0 1px 2px rgba(15, 23, 42, 0.12));
 }
 html[data-theme="light"] :is(
   #btn-toggle-ticket-templates,
@@ -460,3 +466,15 @@ html[data-theme="light"] .quick-actions-buttons .header-action-item--violet:hove
   color: #4c1d95;
 }
 html[data-theme="light"] .quick-actions-buttons .header-action-icon--violet { color: #6d28d9; }
+
+/* Components consume these timings instead of overriding the user's preference. */
+@media (prefers-reduced-motion: reduce) {
+  :root {
+    --motion-duration: 0.01ms;
+    --motion-fast: 0.01ms;
+    --motion-normal: 0.01ms;
+    --default-transition-duration: 0.01ms;
+    --animate-spin: spin 0.01ms linear 1;
+    --animate-pulse: pulse 0.01ms ease 1;
+  }
+}

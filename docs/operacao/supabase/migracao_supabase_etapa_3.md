@@ -316,7 +316,7 @@ Categorias internas preservadas:
 
 ```text
 apelidos_sem_atualizacao
-sem_acesso_14_dias
+sem_acesso_7_dias
 ausentes_no_endpoint
 ausentes_em_detalhes
 divergencias_local

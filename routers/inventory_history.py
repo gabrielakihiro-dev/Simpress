@@ -61,7 +61,7 @@ class ComparisonRestorePayload(BaseModel):
 
 _ANNOTATABLE_COMPARISON_CATEGORIES = (
     "apelidos_sem_atualizacao",
-    "sem_acesso_14_dias",
+    "sem_acesso_7_dias",
     "ausentes_no_endpoint",
     "ausentes_em_detalhes",
     "divergencias_local",
@@ -502,7 +502,7 @@ def create_inventory_history_router(services: InventoryHistoryServices):
         categories = (
             "apelidos_atualizados",
             "apelidos_sem_atualizacao",
-            "sem_acesso_14_dias",
+            "sem_acesso_7_dias",
             "ausentes_no_endpoint",
             "ausentes_em_detalhes",
             "divergencias_local",
@@ -628,7 +628,7 @@ def create_inventory_history_router(services: InventoryHistoryServices):
             manual_alias_conflicts = _export_rows(comparison, "divergencias_apelidos_manuais")
             absent_endpoint = _export_rows(comparison, "ausentes_no_endpoint")
             absent_simpress = _export_rows(comparison, "ausentes_em_detalhes")
-            no_recent_verification = _export_rows(comparison, "sem_acesso_14_dias")
+            no_recent_verification = _export_rows(comparison, "sem_acesso_7_dias")
             local_divergences = _export_rows(comparison, "divergencias_local")
             unmapped_series = _export_rows(comparison, "series_sem_mapeamento")
             ambiguities = _export_rows(comparison, "correspondencias_ambiguas")
@@ -731,7 +731,7 @@ def create_inventory_history_router(services: InventoryHistoryServices):
                 no_access_rows.append((
                     timestamp, event_type_label, item.get("computador"), item.get("serie"),
                     _export_datetime(item.get("ultima_verificacao")), item.get("dias_sem_verificacao"),
-                    item.get("linha_endpoint"), _export_note(comparison, "sem_acesso_14_dias", index, item),
+                    item.get("linha_endpoint"), _export_note(comparison, "sem_acesso_7_dias", index, item),
                 ))
 
             for index, item in enumerate(local_divergences):

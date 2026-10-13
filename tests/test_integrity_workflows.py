@@ -1986,11 +1986,11 @@ class WorkflowIntegrityTests(unittest.TestCase):
         previous_event = {
             "id": "evento-anotado-anterior",
             "horario": "2026-10-07T10:00:00-03:00",
-            "comparacao": {"sem_acesso_14_dias": [previous_row]},
+            "comparacao": {"sem_acesso_7_dias": [previous_row]},
         }
         self.comparison_history.write_text(json.dumps([previous_event]), encoding="utf-8")
         previous_item_id = main.comparison_history_for_display(previous_event)["comparacao"][
-            "sem_acesso_14_dias"
+            "sem_acesso_7_dias"
         ][0]["anotacao_id"]
         main.salvar_anotacao_comparacao_historica(
             previous_event["id"],
@@ -2022,7 +2022,7 @@ class WorkflowIntegrityTests(unittest.TestCase):
         with patch.object(
             main,
             "compare_uploaded_workbooks",
-            return_value={"sem_acesso_14_dias": [copy.deepcopy(previous_row), changed_row]},
+            return_value={"sem_acesso_7_dias": [copy.deepcopy(previous_row), changed_row]},
         ):
             result = commit_test_upload(
                 "InvAll_nova.xlsx",
@@ -2034,7 +2034,7 @@ class WorkflowIntegrityTests(unittest.TestCase):
         history = json.loads(self.comparison_history.read_text(encoding="utf-8"))
         new_event = history[-1]
         self.assertEqual(new_event["importacao_automatica_id"], "lote-automacao-teste")
-        new_rows = new_event["comparacao"]["sem_acesso_14_dias"]
+        new_rows = new_event["comparacao"]["sem_acesso_7_dias"]
         self.assertEqual(new_rows[0]["anotacao"], "Acompanhar com a unidade.")
         self.assertNotEqual(new_rows[0]["anotacao_id"], previous_item_id)
         self.assertNotIn("anotacao", new_rows[1])
@@ -2076,13 +2076,13 @@ class WorkflowIntegrityTests(unittest.TestCase):
         with patch.object(
             main,
             "compare_uploaded_workbooks",
-            return_value={"sem_acesso_14_dias": [copy.deepcopy(previous_row)]},
+            return_value={"sem_acesso_7_dias": [copy.deepcopy(previous_row)]},
         ):
             clone_update = commit_test_upload("InvAll_clone.xlsx", "Detalhes_clone.xlsx")
         self.assertTrue(clone_update["sucesso"])
         clone_history = json.loads(self.comparison_history.read_text(encoding="utf-8"))
         self.assertEqual(
-            clone_history[-1]["comparacao"]["sem_acesso_14_dias"][0]["anotacao"],
+            clone_history[-1]["comparacao"]["sem_acesso_7_dias"][0]["anotacao"],
             "Acompanhar com a unidade.",
         )
 
@@ -2096,7 +2096,7 @@ class WorkflowIntegrityTests(unittest.TestCase):
         make_model(self.model)
         self.assertTrue(main.load_database())
 
-        category = "sem_acesso_14_dias"
+        category = "sem_acesso_7_dias"
         prior_row = {
             "serie": "SN-OUTBOX", "computador": "HOST-OUTBOX",
             "dias_sem_verificacao": 14, "ultima_verificacao": "2026-10-07T10:00:00-03:00",
@@ -2265,7 +2265,7 @@ class WorkflowIntegrityTests(unittest.TestCase):
             "horario": "2026-10-07T10:00:00-03:00",
             "resumo": {},
             "comparacao": {
-                "sem_acesso_14_dias": [{"serie": "S-ACESSO", "computador": "PRNOTE-ACESSO", "dias_sem_verificacao": 14}],
+                "sem_acesso_7_dias": [{"serie": "S-ACESSO", "computador": "PRNOTE-ACESSO", "dias_sem_verificacao": 14}],
                 "ausentes_no_endpoint": [{"serie": "BRM-ENDPOINT", "computador": "PRNOTE-ENDPOINT", "local_previsto": "Maringá"}],
                 "ausentes_em_detalhes": [{"serie": "S-SIMPRESS", "computador": "PRMAC-SIMPRESS", "local_previsto": "Londrina"}],
                 "divergencias_local": [{"serie": "S-LOCAL", "computador": "PRNOTE-LOCAL", "local_previsto": "Maringá", "local_detalhes": "Londrina"}],
@@ -2276,7 +2276,7 @@ class WorkflowIntegrityTests(unittest.TestCase):
         }
         self.comparison_history.write_text(json.dumps([event]), encoding="utf-8")
         sections_and_notes = {
-            "sem_acesso_14_dias": "Verificar com suporte.",
+            "sem_acesso_7_dias": "Verificar com suporte.",
             "ausentes_no_endpoint": "Confirmar cadastro no Endpoint.",
             "ausentes_em_detalhes": "Conferir com a Simpress.",
             "divergencias_local": "Validar endereço da unidade.",
@@ -2314,7 +2314,7 @@ class WorkflowIntegrityTests(unittest.TestCase):
         workbook = openpyxl.load_workbook(io.BytesIO(response.body), data_only=True)
         try:
             for sheet, category in (
-                ("Sem acesso", "sem_acesso_14_dias"),
+                ("Sem acesso", "sem_acesso_7_dias"),
                 ("Ausências", "ausentes_no_endpoint"),
                 ("Ausências", "ausentes_em_detalhes"),
                 ("Localidades", "divergencias_local"),

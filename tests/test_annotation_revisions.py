@@ -196,11 +196,11 @@ class AnnotationRevisionTests(unittest.TestCase):
     def inventory_router(self):
         history = self.root / "history.json"
         event = {"id": "event", "horario": "2026-10-11", "comparacao": {
-            "sem_acesso_14_dias": [{"serie": "S1", "computador": "HOST"}]}}
+            "sem_acesso_7_dias": [{"serie": "S1", "computador": "HOST"}]}}
         history.write_text(json.dumps([event]), encoding="utf-8")
         def display(event):
             view = copy.deepcopy(event)
-            for row in view["comparacao"].get("sem_acesso_14_dias", []):
+            for row in view["comparacao"].get("sem_acesso_7_dias", []):
                 row["anotacao_id"] = "row"
             return view
         services = SimpleNamespace(
@@ -227,7 +227,7 @@ class AnnotationRevisionTests(unittest.TestCase):
         self.assertTrue(second["anotacao_conflito"])
         history.write_text("[]", encoding="utf-8")
         event = routes["get_comparacao_historica"]("event")["evento"]
-        row = event["comparacao"]["sem_acesso_14_dias"][0]
+        row = event["comparacao"]["sem_acesso_7_dias"][0]
         self.assertTrue(row["anotacao_conflito"])
         self.assertIn("A", annotation_export_text(row))
         with self.assertRaises(HTTPException) as error:
@@ -241,10 +241,10 @@ class AnnotationRevisionTests(unittest.TestCase):
     def test_history_migration_does_not_resurrect_embedded_old_text(self):
         routes, history = self.inventory_router()
         stored = json.loads(history.read_text())
-        stored[0]["comparacao"]["sem_acesso_14_dias"][0]["anotacao"] = "Texto antigo"
+        stored[0]["comparacao"]["sem_acesso_7_dias"][0]["anotacao"] = "Texto antigo"
         history.write_text(json.dumps(stored), encoding="utf-8")
         before = history.read_bytes()
-        self.write(self.shared, "", categoria="sem_acesso_14_dias")
+        self.write(self.shared, "", categoria="sem_acesso_7_dias")
         for _ in range(2):
             result = routes["migrate_legacy_history_annotations"]()
             self.assertEqual(result["legadas_enfileiradas"], 0)
@@ -254,16 +254,16 @@ class AnnotationRevisionTests(unittest.TestCase):
     def test_operational_editor_receives_the_text_and_bases_observed_in_history(self):
         routes, history = self.inventory_router()
         stored = json.loads(history.read_text())
-        stored[0]["comparacao"]["sem_acesso_14_dias"][0]["anotacao"] = "Local antigo"
-        latest = self.write(self.shared, "Compartilhado", categoria="sem_acesso_14_dias")
+        stored[0]["comparacao"]["sem_acesso_7_dias"][0]["anotacao"] = "Local antigo"
+        latest = self.write(self.shared, "Compartilhado", categoria="sem_acesso_7_dias")
         view = routes["history_annotation_view"](stored[0])
-        row = view["comparacao"]["sem_acesso_14_dias"][0]
+        row = view["comparacao"]["sem_acesso_7_dias"][0]
         self.assertEqual(row["anotacao"], "Compartilhado")
         self.assertEqual(row["anotacao_revisoes"], [latest["revisao_id"]])
-        self.assertEqual(stored[0]["comparacao"]["sem_acesso_14_dias"][0]["anotacao"], "Local antigo")
+        self.assertEqual(stored[0]["comparacao"]["sem_acesso_7_dias"][0]["anotacao"], "Local antigo")
 
     def test_inheritance_uses_shared_and_pending_revisions_before_embedded_text(self):
-        category = "sem_acesso_14_dias"
+        category = "sem_acesso_7_dias"
         row = {"serie": "S1", "computador": "HOST", "anotacao": "Texto antigo"}
         previous = {"id": "older", "comparacao": {category: [row]}}
         item_id = comparison_annotation_item_id("older", category, 0, row)
@@ -306,7 +306,7 @@ class AnnotationRevisionTests(unittest.TestCase):
             load_history_annotations=load_history_annotations,
             comparison_annotation_item_id=comparison_annotation_item_id,
         )
-        category = "sem_acesso_14_dias"
+        category = "sem_acesso_7_dias"
         row = {"serie": "S1", "computador": "HOST"}
         older = {"id": "older", "comparacao": {category: [{**row, "anotacao": "Antigo"}]}}
         new = {"id": "new", "comparacao": {category: [dict(row)]}}
@@ -318,7 +318,7 @@ class AnnotationRevisionTests(unittest.TestCase):
         self.assertEqual(_copy_matching_history_annotations(services, [older, conflicting], copy.deepcopy(new)), [])
 
     def test_conflicting_revisions_block_old_embedded_text(self):
-        category = "sem_acesso_14_dias"
+        category = "sem_acesso_7_dias"
         row = {"serie": "S1", "computador": "HOST", "anotacao": "Antiga"}
         item_id = comparison_annotation_item_id("older", category, 0, row)
         values = {**self.values, "event_id": "older", "item_id": item_id,
@@ -337,7 +337,7 @@ class AnnotationRevisionTests(unittest.TestCase):
         self.assertNotIn("anotacao", event["comparacao"][category][0])
 
     def test_shared_only_clone_inherits_exact_row_without_local_history(self):
-        category = "sem_acesso_14_dias"
+        category = "sem_acesso_7_dias"
         row = {"serie": "S1", "computador": "HOST"}
         save_history_annotation(self.shared, **{**self.values, "event_id": "remote",
             "item_id": "remote-row", "categoria": category,
@@ -357,14 +357,14 @@ class AnnotationRevisionTests(unittest.TestCase):
     def test_history_pending_evolution_and_excel_read_same_effective_note(self):
         routes, history = self.inventory_router()
         stored = json.loads(history.read_text(encoding="utf-8"))
-        stored[0]["comparacao"]["sem_acesso_14_dias"][0]["anotacao"] = "Legada"
+        stored[0]["comparacao"]["sem_acesso_7_dias"][0]["anotacao"] = "Legada"
         stored.insert(0, {"id": "prior", "horario": "2026-10-10", "comparacao": {
-            "sem_acesso_14_dias": [{"serie": "S1", "computador": "HOST"}]}})
+            "sem_acesso_7_dias": [{"serie": "S1", "computador": "HOST"}]}})
         history.write_text(json.dumps(stored), encoding="utf-8")
         before = history.read_bytes()
-        self.write(self.a, "Pendente", categoria="sem_acesso_14_dias")
+        self.write(self.a, "Pendente", categoria="sem_acesso_7_dias")
         detail = routes["get_comparacao_historica"]("event")["evento"]
-        self.assertEqual(detail["comparacao"]["sem_acesso_14_dias"][0]["anotacao"], "Pendente")
+        self.assertEqual(detail["comparacao"]["sem_acesso_7_dias"][0]["anotacao"], "Pendente")
         operations = create_operations_router(
             load_comparison_history=lambda: json.loads(history.read_text(encoding="utf-8")),
             comparison_history_for_display=routes["history_annotation_view"],
@@ -395,7 +395,7 @@ class AnnotationRevisionTests(unittest.TestCase):
     def test_different_legacy_history_and_shared_text_are_both_migrated(self):
         routes, history = self.inventory_router()
         stored = json.loads(history.read_text())
-        stored[0]["comparacao"]["sem_acesso_14_dias"][0]["anotacao"] = "Legada local"
+        stored[0]["comparacao"]["sem_acesso_7_dias"][0]["anotacao"] = "Legada local"
         history.write_text(json.dumps(stored), encoding="utf-8")
         legacy = {"versao": 1, "evento_id": "event", "item_id": "row", "anotacao": "Legada compartilhada"}
         path = history_annotation_record_path(self.shared, "event", "row")

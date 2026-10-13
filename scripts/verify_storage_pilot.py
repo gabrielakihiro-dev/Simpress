@@ -113,9 +113,9 @@ def main():
                 event_id = "http-annotation-fixture"
                 files.annotations("history_fixture.json",canonical({"historico":[{"id":event_id,
                     "horario":first["comparacao"]["horario_comparacao"],
-                    "comparacao":{"sem_acesso_14_dias":[{"serie":"SYNTHETIC-A","motivo":"Fixture sintética"}]}}]}).encode(),"http-fixture")
+                    "comparacao":{"sem_acesso_7_dias":[{"serie":"SYNTHETIC-A","motivo":"Fixture sintética"}]}}]}).encode(),"http-fixture")
                 view = client.get("/api/historico-comparacoes/"+event_id).json()["evento"]
-                category = "sem_acesso_14_dias"
+                category = "sem_acesso_7_dias"
                 row = view["comparacao"][category][0]
                 url = "/api/historico-comparacoes/"+event_id+"/anotacoes/"+row["anotacao_id"]
                 ok(client.put(url,json={"anotacao":""}).status_code == 200,"empty note accepted over HTTP")
@@ -184,38 +184,38 @@ def main():
         conflict(lambda:files.cancel(op),"confirmed/referenced objects cannot be deleted")
         # Exact carryover with numeric distinctions and latest blank/conflict rules.
         for number,note,label in ((1,"inteiro","int"),(1.0,"decimal","float")):
-            event = {"id":"legacy-"+label,"horario":"invalid-legacy-date","comparacao":{"sem_acesso_14_dias":[{"serie":"X","value":number,"anotacao":note}]}}
+            event = {"id":"legacy-"+label,"horario":"invalid-legacy-date","comparacao":{"sem_acesso_7_dias":[{"serie":"X","value":number,"anotacao":note}]}}
             files.annotations(label+".json",canonical({"historico":[event]}).encode(),label)
         with backend.transaction(write=True) as conn:
-            event = {"id":"new-exact","comparacao":{"sem_acesso_14_dias":[{"serie":"X","value":1}]}}
+            event = {"id":"new-exact","comparacao":{"sem_acesso_7_dias":[{"serie":"X","value":1}]}}
             files.history.insert(conn,event,reapply=True)
             notes = conn.execute("select texto from simpress.anotacoes where evento_id='new-exact'").fetchall()
             ok([n["texto"] for n in notes] == ["inteiro"],"annotation carryover distinguishes canonical 1 from 1.0")
-            files.history.insert(conn,{"id":"new-blank","comparacao":{"sem_acesso_14_dias":[{"serie":"X","value":1,"anotacao":""}]}})
-            files.history.insert(conn,{"id":"after-blank","comparacao":{"sem_acesso_14_dias":[{"serie":"X","value":1}]}},reapply=True)
+            files.history.insert(conn,{"id":"new-blank","comparacao":{"sem_acesso_7_dias":[{"serie":"X","value":1,"anotacao":""}]}})
+            files.history.insert(conn,{"id":"after-blank","comparacao":{"sem_acesso_7_dias":[{"serie":"X","value":1}]}},reapply=True)
             ok(not conn.execute("select * from simpress.anotacoes where evento_id='after-blank'").fetchall(),"latest empty annotation blocks resurrection of older note")
-            files.history.insert(conn,{"id":"duplicates","comparacao":{"sem_acesso_14_dias":[{"serie":"Y","anotacao":"one"},{"serie":"Y","anotacao":"two"}]}})
-            files.history.insert(conn,{"id":"after-conflict","comparacao":{"sem_acesso_14_dias":[{"serie":"Y"}]}},reapply=True)
+            files.history.insert(conn,{"id":"duplicates","comparacao":{"sem_acesso_7_dias":[{"serie":"Y","anotacao":"one"},{"serie":"Y","anotacao":"two"}]}})
+            files.history.insert(conn,{"id":"after-conflict","comparacao":{"sem_acesso_7_dias":[{"serie":"Y"}]}},reapply=True)
             ok(not conn.execute("select * from simpress.anotacoes where evento_id='after-conflict'").fetchall(),"conflicting duplicate notes do not carry over")
-        partial = {"evento_id":"external-legacy","item_id":"row-stable","categoria":"sem_acesso_14_dias","anotacao":"legada","horario":"invalid-date","atualizado_em":"invalid-date"}
+        partial = {"evento_id":"external-legacy","item_id":"row-stable","categoria":"sem_acesso_7_dias","anotacao":"legada","horario":"invalid-date","atualizado_em":"invalid-date"}
         files.annotations("partial.json",canonical({"anotacoes":[partial]}).encode(),"partial")
         view = next(e for e in files.history.load() if e["id"] == "external-legacy")
-        ok(view["comparacao"]["sem_acesso_14_dias"][0]["anotacao"] == "legada","annotation accessible without local event history; invalid date preserved")
+        ok(view["comparacao"]["sem_acesso_7_dias"][0]["anotacao"] == "legada","annotation accessible without local event history; invalid date preserved")
         files.history.mutate("note",{"event":"external-legacy","item":"row-stable","note":"editada"},"edit-partial")
         conflicting = files.annotations("old.json",canonical({"anotacoes":[{**partial,"anotacao":"antiga"}]}).encode(),"conflicting-legacy")
         ok(conflicting["conflitos"] == 1,"legacy import preserves newer annotation and journals conflict")
         files.annotations("deleted.json",canonical({"historico":[{"id":"deletion-fixture","comparacao":{
-            "sem_acesso_14_dias":[{"serie":"DELETEONLY","anotacao":"original"}]}}]}).encode(),"deleted-fixture")
+            "sem_acesso_7_dias":[{"serie":"DELETEONLY","anotacao":"original"}]}}]}).encode(),"deleted-fixture")
         deleted_view = next(e for e in files.history.load() if e["id"] == "deletion-fixture")
-        deleted_item = deleted_view["comparacao"]["sem_acesso_14_dias"][0]["anotacao_id"]
+        deleted_item = deleted_view["comparacao"]["sem_acesso_7_dias"][0]["anotacao_id"]
         files.history.mutate("delete",{"event":"deletion-fixture"},"delete-fixture")
         deleted_import = files.annotations("deleted-retry.json",canonical({"anotacoes":[{
-            "evento_id":"deletion-fixture","item_id":deleted_item,"categoria":"sem_acesso_14_dias",
+            "evento_id":"deletion-fixture","item_id":deleted_item,"categoria":"sem_acesso_7_dias",
             "anotacao":"ressuscitada","atualizado_em":"2100-01-01T00:00:00+00:00"}]}).encode(),"deleted-retry")
         ok(deleted_import["conflitos"] == 1 and not any(e["id"] == "deletion-fixture" for e in files.history.load()),
            "legacy reimport cannot resurrect annotations on a deleted event")
         files.annotations("retention.json",canonical({"historico":[{"id":"expired-empty","horario":"2000-01-01T00:00:00+00:00","comparacao":{}},
-            {"id":"expired-noted","horario":"2000-01-01T00:00:00+00:00","comparacao":{"sem_acesso_14_dias":[{"serie":"OLD","anotacao":"protegida"}]}},
+            {"id":"expired-noted","horario":"2000-01-01T00:00:00+00:00","comparacao":{"sem_acesso_7_dias":[{"serie":"OLD","anotacao":"protegida"}]}},
             {"id":"invalid-date","horario":"invalid-date","comparacao":{}}]}).encode(),"retention-fixture")
         ok(files.prune()["ocultados"] == 1 and any(e["id"] == "expired-noted" for e in files.history.load())
            and any(e["id"] == "invalid-date" for e in files.history.load()),"60-day visibility retention protects notes and invalid dates without deleting Storage")
