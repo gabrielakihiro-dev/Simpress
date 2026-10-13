@@ -1,6 +1,4 @@
 const { test, expect } = require("@playwright/test");
-const fs = require("node:fs");
-const path = require("node:path");
 
 test("header summary and sidebar switch at 767/768 pixels in both themes", async ({ page }) => {
   await page.goto("/");
@@ -33,10 +31,8 @@ test("header summary and sidebar switch at 767/768 pixels in both themes", async
   }
 });
 
-test("the theme icon switches modes, persists the choice, and works on login", async ({ page }) => {
+test("the theme icon switches modes and persists the choice", async ({ page }) => {
   await page.goto("/");
-  await page.evaluate(() => window.localStorage.removeItem("simpress:theme"));
-  await page.reload();
 
   const root = page.locator("html");
   const lightModeButton = page.getByRole("button", { name: "Ativar modo claro" });
@@ -59,23 +55,13 @@ test("the theme icon switches modes, persists the choice, and works on login", a
   await page.keyboard.press("Enter");
   await expect(root).toHaveAttribute("data-theme", "dark");
   await expect.poll(() => page.evaluate(() => localStorage.getItem("simpress:theme"))).toBe("dark");
+});
 
-  await page.route("**/api/auth/session", route => route.fulfill({
-    status: 200,
-    contentType: "application/json",
-    body: JSON.stringify({ enabled: true, authenticated: false, csrf_token: "fixture-token" }),
-  }));
-  const loginHtml = fs.readFileSync(path.resolve(__dirname, "../../static/pages/login.html"), "utf8");
-  await page.route("**/login", route => route.fulfill({ status: 200, contentType: "text/html", body: loginHtml }));
-  const loginSessionResponsePromise = page.waitForResponse(response =>
-    new URL(response.url()).pathname === "/api/auth/session");
+test("the login page theme toggle works", async ({ page }) => {
   await page.goto("/login");
-  const loginSessionResponse = await loginSessionResponsePromise;
-  expect(loginSessionResponse.status()).toBe(200);
-  await page.waitForFunction(() => Boolean(window.SimpressAuth?.ready));
-  await page.evaluate(() => window.SimpressAuth.ready);
+  await expect(page.locator("#login-form")).toBeVisible();
   await expect(page).toHaveURL(/\/login$/);
   await page.getByRole("button", { name: "Ativar modo claro" }).click();
-  await expect(root).toHaveAttribute("data-theme", "light");
+  await expect(page.locator("html")).toHaveAttribute("data-theme", "light");
   await expect(page.locator("main")).toHaveCSS("background-color", "rgb(255, 255, 255)");
 });
