@@ -401,6 +401,7 @@
     @media (min-width: 640px) {
       .ticket-stage { grid-template-columns: 1.1rem minmax(0, 1fr) auto; }
       .ticket-stage-date { grid-column: auto; }
+      .ticket-stages { grid-template-columns: repeat(2, minmax(0, 1fr)); }
     }
     .ticket-stage-label, .ticket-stage-date { min-width: 0; overflow-wrap: anywhere; }
     .ticket-stage.is-done { color: #a7f3d0; }
