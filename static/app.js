@@ -689,13 +689,11 @@
             countLabel: sharedInventoryStatus.available ? "Disponível" : sharedInventoryStatus.state === "invalid" ? "Inválido" : "Pendente",
             countState: sharedInventoryStatus.state,
             showItemState: false,
-            groupAction: report.backend === "files"
-              ? {
-                  label: "Importar",
-                  ariaLabel: "Importar/atualizar inventários Simpress e Endpoint",
-                  onClick: abrirModalAtualizarPlanilhas,
-                }
-              : null,
+            groupAction: {
+              label: "Importar",
+              ariaLabel: "Importar/atualizar inventários Simpress e Endpoint",
+              onClick: abrirModalAtualizarPlanilhas,
+            },
           }
         );
         adicionarGrupoProntidao(
