@@ -1,6 +1,7 @@
 import asyncio
 import json
 import tempfile
+import threading
 import unittest
 from pathlib import Path
 from unittest.mock import patch
@@ -138,6 +139,36 @@ class AutomaticInventoryInboxTests(unittest.TestCase):
             (self.inbox.processed_dir / "lote-001" / "_resultado.json").read_text(encoding="utf-8")
         )
         self.assertIn("não foi importado novamente", result["detalhe"])
+
+    def test_scan_keeps_event_loop_responsive_and_completes_async_import(self):
+        self._make_batch()
+        self.assertEqual(self._scan(), 0)
+        archiving = threading.Event()
+        release = threading.Event()
+        archive = self.inbox._archive
+
+        def slow_archive(*args, **kwargs):
+            archiving.set()
+            release.wait(5)
+            return archive(*args, **kwargs)
+
+        self.inbox._archive = slow_archive
+
+        async def run():
+            scan = asyncio.create_task(self.inbox.process_pending_once())
+            while not archiving.is_set():
+                await asyncio.sleep(0.01)
+            # Filesystem work is still blocked, yet this coroutine keeps running.
+            responsive = not scan.done()
+            release.set()
+            return await scan, responsive
+
+        completed, responsive = asyncio.run(run())
+
+        self.assertTrue(responsive)
+        self.assertEqual(completed, 1)
+        self.assertEqual(len(self.calls), 1)
+        self.assertTrue((self.inbox.processed_dir / "lote-001").is_dir())
 
     def test_oversized_workbook_is_failed_without_calling_update(self):
         self.inbox.max_upload_bytes = 4

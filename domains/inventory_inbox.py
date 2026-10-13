@@ -10,7 +10,7 @@ import uuid
 from contextlib import contextmanager
 from datetime import datetime, timezone
 from pathlib import Path
-from typing import Any, Awaitable, Callable, Optional, cast
+from typing import Any, Callable, Coroutine, Optional, cast
 
 from fastapi import HTTPException
 
@@ -86,7 +86,7 @@ class AutomaticInventoryInbox:
         root: Path,
         max_upload_bytes: int,
         load_history: Callable[[], Any],
-        import_batch: Callable[[str, str, bytes, str, bytes], Awaitable[Any]],
+        import_batch: Callable[[str, str, bytes, str, bytes], Coroutine[Any, Any, Any]],
     ) -> None:
         self.root = Path(root)
         self.max_upload_bytes = int(max_upload_bytes)
@@ -111,6 +111,15 @@ class AutomaticInventoryInbox:
         return self.root / "falhas"
 
     async def process_pending_once(self) -> int:
+        """Keep filesystem and workbook work off the application event loop.
+
+        The whole pass runs in one worker thread: the worker lock is acquired and
+        released by that thread, and a cancelled caller never abandons a claimed
+        batch midway because the thread finishes the current import.
+        """
+        return await asyncio.to_thread(self.process_pending_once_sync)
+
+    def process_pending_once_sync(self) -> int:
         """Process stable ready batches, returning the number completed or archived."""
         for directory in (
             self.pending_dir,
@@ -142,7 +151,7 @@ class AutomaticInventoryInbox:
                     continue
 
                 self._stable_snapshots.pop(batch_dir.name, None)
-                if not await self._process_stable_batch(batch_dir):
+                if not self._process_stable_batch(batch_dir):
                     continue
                 completed += 1
 
@@ -174,7 +183,7 @@ class AutomaticInventoryInbox:
         details = path.lstat()
         return (label, details.st_mode, details.st_size, details.st_mtime_ns)
 
-    async def _process_stable_batch(self, pending_batch: Path) -> bool:
+    def _process_stable_batch(self, pending_batch: Path) -> bool:
         batch_id = pending_batch.name
         processing_batch = self.processing_dir / batch_id
         if (self.processed_dir / batch_id).exists():
@@ -197,7 +206,7 @@ class AutomaticInventoryInbox:
             return False
 
         try:
-            history = await self._load_history()
+            history = self.load_history()
         except Exception:
             logger.exception("Não foi possível conferir a idempotência do lote %s.", batch_id)
             self._return_to_pending(processing_batch, batch_id)
@@ -212,7 +221,7 @@ class AutomaticInventoryInbox:
                 endpoint_bytes,
                 simpress_name,
                 simpress_bytes,
-            ) = await asyncio.to_thread(self._read_batch_files, processing_batch)
+            ) = self._read_batch_files(processing_batch)
         except InventoryInboxChanged:
             self._return_to_pending(processing_batch, batch_id)
             return False
@@ -223,13 +232,15 @@ class AutomaticInventoryInbox:
             return self._fail_batch(processing_batch, batch_id, "Não foi possível ler os arquivos do lote.")
 
         try:
-            await self.import_batch(
+            # This worker thread has no running loop; the import's own async
+            # reads and threaded commit run on a private loop until they finish.
+            asyncio.run(self.import_batch(
                 batch_id,
                 endpoint_name,
                 endpoint_bytes,
                 simpress_name,
                 simpress_bytes,
-            )
+            ))
         except HTTPException as error:
             if error.status_code in (409, 503):
                 logger.info("Lote %s aguardará nova tentativa: %s", batch_id, error.detail)
@@ -243,9 +254,6 @@ class AutomaticInventoryInbox:
 
         self._archive(processing_batch, self.processed_dir, batch_id, "concluido", "Importação confirmada no histórico.")
         return True
-
-    async def _load_history(self):
-        return await asyncio.to_thread(self.load_history)
 
     @staticmethod
     def _history_contains_batch(history: Any, batch_id: str) -> bool:

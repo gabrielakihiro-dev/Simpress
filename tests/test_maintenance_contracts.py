@@ -3,7 +3,9 @@ import ast
 import io
 import json
 import re
+import shutil
 import tempfile
+import threading
 import unittest
 import zipfile
 from contextlib import redirect_stdout
@@ -13,6 +15,8 @@ from unittest.mock import patch
 from core import config as app_config
 import openpyxl
 from core import openpyxl_compat
+from fastapi import HTTPException
+from persistence.config import PersistenceSettings
 from starlette.routing import Match
 
 
@@ -275,7 +279,7 @@ class MaintenanceContractTests(unittest.TestCase):
 
     def test_importing_main_has_no_operational_startup_calls(self):
         module_ast = ast.parse((PROJECT_ROOT / "main.py").read_text(encoding="utf-8"))
-        startup_calls = {"recover_pending_transactions", "load_database"}
+        startup_calls = {"_recover_pending_transactions_at_startup", "load_database"}
         module_level_calls = {
             node.value.func.id
             for node in module_ast.body
@@ -283,7 +287,7 @@ class MaintenanceContractTests(unittest.TestCase):
             and isinstance(node.value, ast.Call)
             and isinstance(node.value.func, ast.Name)
         }
-        self.assertTrue(startup_calls.isdisjoint(module_level_calls))
+        self.assertTrue((startup_calls | {"recover_pending_transactions"}).isdisjoint(module_level_calls))
         lifespan = next(node for node in module_ast.body if isinstance(node, ast.AsyncFunctionDef) and node.name == "lifespan")
         lifespan_calls = {
             node.func.id
@@ -713,7 +717,15 @@ class MaintenanceContractTests(unittest.TestCase):
                 patch.object(main, "EXPORT_MODEL_FILE", root / "export.xlsx"),
             ):
                 report = main.get_startup_readiness()
+                with patch.object(main, "get_transaction_recovery_block", return_value="journal divergente"):
+                    blocked_report = main.get_startup_readiness()
 
+            self.assertNotIn("gravacao_bloqueada", report)
+            self.assertEqual(
+                blocked_report["gravacao_bloqueada"],
+                {"available": False, "state": "invalid", "reason": "journal divergente"},
+            )
+            self.assertEqual(blocked_report["functions"], report["functions"])
             self.assertFalse(report["files"]["inventario_equipamentos"]["available"])
             self.assertFalse(report["functions"]["geracao_transferencia"]["available"])
             self.assertEqual(
@@ -784,6 +796,108 @@ class MaintenanceContractTests(unittest.TestCase):
             "[PRONTIDÃO] Geração de planilha de transferência: INDISPONÍVEL;",
             output.getvalue(),
         )
+
+    def test_lifespan_prepares_disk_state_off_loop_before_starting_workers(self):
+        events = []
+
+        def record(name, result=None):
+            def call(*_args, **_kwargs):
+                events.append((name, threading.get_ident()))
+                return result
+            return call
+
+        async def worker():
+            events.append(("worker", threading.get_ident()))
+            await asyncio.Event().wait()
+
+        async def run_application_lifespan():
+            loop_thread = threading.get_ident()
+            async with main.app.router.lifespan_context(main.app):
+                await asyncio.sleep(0)
+            return loop_thread
+
+        with (
+            patch.object(main, "PERSISTENCE_SETTINGS", PersistenceSettings("files")),
+            patch.object(main, "recover_pending_transactions", record("recover")),
+            patch.object(main, "migrate_legacy_history_annotations", record("migrate", {})),
+            patch.object(main, "prune_expired_histories", record("prune", {})),
+            patch.object(main, "load_database", record("load", True)),
+            patch.object(main, "_report_startup_readiness_best_effort", record("readiness")),
+            patch.object(main, "_history_annotation_sync_worker", worker),
+            patch.object(main, "_automatic_inventory_import_worker", worker),
+            patch.object(main, "_automatic_ticket_import_worker", worker),
+        ):
+            loop_thread = asyncio.run(run_application_lifespan())
+
+        names = [name for name, _ in events]
+        self.assertEqual(names, ["recover", "migrate", "prune", "load", "readiness", "worker", "worker", "worker"])
+        self.assertTrue(all(thread != loop_thread for _, thread in events[:5]))
+        self.assertTrue(all(thread == loop_thread for _, thread in events[5:]))
+
+    def test_diverged_recovery_journal_starts_read_only_until_resolved(self):
+        from core import integrity
+
+        self.addCleanup(setattr, main, "_TRANSACTION_RECOVERY_BLOCK", None)
+        events = []
+
+        def record(name, result=None):
+            def call(*_args, **_kwargs):
+                events.append(name)
+                return result
+            return call
+
+        async def worker():
+            events.append("worker")
+            await asyncio.Event().wait()
+
+        with tempfile.TemporaryDirectory() as temp_dir:
+            root = Path(temp_dir)
+            target = root / "apelidos.json"
+            target.write_bytes(b"before")
+            interrupted = integrity.AtomicFileTransaction(root, [target])
+            interrupted.__enter__()
+            interrupted.stage_bytes(target, b"after")
+            interrupted.apply()
+            interrupted.close_after_interruption()
+            # Matches neither recorded hash, so recovery must refuse to overwrite it.
+            target.write_bytes(b"edited elsewhere")
+
+            async def run_application_lifespan():
+                async with main.app.router.lifespan_context(main.app):
+                    await asyncio.sleep(0)
+                    message = await asyncio.to_thread(main.get_transaction_recovery_block)
+                    with self.assertRaises(HTTPException) as held:
+                        await asyncio.to_thread(main._raise_if_transaction_recovery_blocked)
+                return message, held.exception
+
+            with (
+                patch.object(main, "PERSISTENCE_SETTINGS", PersistenceSettings("files")),
+                patch.object(main, "TRANSACTION_ROOT", root),
+                patch.object(main, "recover_pending_transactions", integrity.recover_pending_transactions),
+                patch.object(main, "migrate_legacy_history_annotations", record("migrate", {})),
+                patch.object(main, "prune_expired_histories", record("prune", {})),
+                patch.object(main, "load_database", record("load", True)),
+                patch.object(main, "_report_startup_readiness_best_effort", record("readiness")),
+                patch.object(main, "_history_annotation_sync_worker", worker),
+                patch.object(main, "_automatic_inventory_import_worker", worker),
+                patch.object(main, "_automatic_ticket_import_worker", worker),
+                redirect_stdout(io.StringIO()) as output,
+            ):
+                message, held = asyncio.run(run_application_lifespan())
+
+                self.assertEqual(target.read_bytes(), b"edited elsewhere")
+                self.assertEqual(events, ["load", "readiness", "worker", "worker", "worker"])
+                self.assertIn("não corresponde ao estado esperado", message)
+                self.assertIn("[INDISPONÍVEL] Recuperação de gravação pendente:", output.getvalue())
+                # 503 is the inboxes' transient status: batches stay pending instead of failing.
+                self.assertEqual(held.status_code, 503)
+                self.assertEqual(held.detail, message)
+
+                # After manual review of the journal, writes resume without a restart.
+                for journal in (root / ".transactions").iterdir():
+                    shutil.rmtree(journal)
+                self.assertIsNone(main.get_transaction_recovery_block())
+                main._raise_if_transaction_recovery_blocked()
 
     def test_readiness_report_failure_is_logged_and_suppressed(self):
         with (
