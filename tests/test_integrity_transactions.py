@@ -136,7 +136,9 @@ class AtomicTransactionTests(unittest.TestCase):
                 raise PermissionError("simulated workbook lock")
             return original_replace(source, destination)
 
-        with patch("core.integrity.os.replace", side_effect=fail_second_replace), patch("core.integrity._RETRY_DELAYS", (0, 0, 0)):
+        with patch("core.integrity.os.replace", side_effect=fail_second_replace), patch("core.integrity._RETRY_DELAYS", (0, 0, 0)), patch(
+            "core.integrity._PERMISSION_RETRY_BUDGET", 0
+        ):
             with self.assertRaises(integrity.FileBusyError):
                 with integrity.AtomicFileTransaction(self.root, [first, second]) as transaction:
                     transaction.stage_bytes(first, b"first-after")
@@ -157,7 +159,9 @@ class AtomicTransactionTests(unittest.TestCase):
                 raise PermissionError("simulated Excel lock")
             return original_replace(source, destination)
 
-        with patch("core.integrity.os.replace", side_effect=block_target), patch("core.integrity._RETRY_DELAYS", (0, 0, 0)):
+        with patch("core.integrity.os.replace", side_effect=block_target), patch("core.integrity._RETRY_DELAYS", (0, 0, 0)), patch(
+            "core.integrity._PERMISSION_RETRY_BUDGET", 0
+        ):
             with self.assertRaisesRegex(integrity.FileBusyError, "Feche a planilha"):
                 with integrity.AtomicFileTransaction(self.root, [target]) as transaction:
                     transaction.stage_bytes(target, b"replacement")

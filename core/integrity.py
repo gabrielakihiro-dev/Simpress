@@ -7,6 +7,7 @@ import json
 import math
 import os
 import posixpath
+import random
 import re
 import shutil
 import tempfile
@@ -53,6 +54,11 @@ _PROCESS_LOCKS: Dict[str, threading.RLock] = {}
 _PROCESS_LOCKS_GUARD = threading.Lock()
 _REPLACE_ATTEMPTS = 4
 _RETRY_DELAYS = (0.1, 0.25, 0.5)
+# OneDrive and antivirus scanners can hold a just-written file for 1-3 s, so a
+# PermissionError gets a longer, jittered backoff than other OSErrors.
+_PERMISSION_RETRY_BUDGET = 8.0
+_PERMISSION_RETRY_BASE_DELAY = 0.1
+_PERMISSION_RETRY_MAX_DELAY = 1.5
 _MAX_XLSX_ENTRIES = MAX_XLSX_ARCHIVE_ENTRIES
 _MAX_XLSX_UNCOMPRESSED_BYTES = MAX_XLSX_UNCOMPRESSED_BYTES
 
@@ -197,22 +203,53 @@ def _write_temp(target: Path, writer: Callable[[Path], None], validator: Optiona
         raise
 
 
+class _PermissionBackoff:
+    """Deadline-bounded exponential backoff with jitter for transient sharing locks."""
+
+    def __init__(self) -> None:
+        self._deadline = time.monotonic() + _PERMISSION_RETRY_BUDGET
+        self._delay = _PERMISSION_RETRY_BASE_DELAY
+
+    def wait(self) -> bool:
+        """Sleep before the next attempt; False once the budget is exhausted."""
+        remaining = self._deadline - time.monotonic()
+        if remaining <= 0:
+            return False
+        time.sleep(min(remaining, self._delay * random.uniform(0.5, 1.0)))
+        self._delay = min(self._delay * 2, _PERMISSION_RETRY_MAX_DELAY)
+        return True
+
+
+def _unlink_with_backoff(path: Path, missing_ok: bool = False) -> None:
+    """Unlink, retrying PermissionError; the last PermissionError propagates."""
+    backoff = _PermissionBackoff()
+    while True:
+        try:
+            path.unlink(missing_ok=missing_ok)
+            return
+        except PermissionError:
+            if not backoff.wait():
+                raise
+
+
 def _replace_with_retries(source: Path, destination: Path) -> None:
-    for attempt in range(_REPLACE_ATTEMPTS):
+    backoff = _PermissionBackoff()
+    attempt = 0
+    while True:
         try:
             os.replace(source, destination)
             _fsync_directory(destination.parent)
             return
         except PermissionError as error:
-            if attempt == _REPLACE_ATTEMPTS - 1:
+            if not backoff.wait():
                 raise FileBusyError(
                     f"Não foi possível substituir '{destination.name}'. Feche a planilha no Excel e tente novamente."
                 ) from error
-            time.sleep(_RETRY_DELAYS[min(attempt, len(_RETRY_DELAYS) - 1)])
         except OSError as error:
-            if attempt == _REPLACE_ATTEMPTS - 1:
+            attempt += 1
+            if attempt == _REPLACE_ATTEMPTS:
                 raise FileTransactionError(f"Falha ao substituir '{destination.name}': {error.strerror or error}.") from error
-            time.sleep(_RETRY_DELAYS[min(attempt, len(_RETRY_DELAYS) - 1)])
+            time.sleep(_RETRY_DELAYS[min(attempt - 1, len(_RETRY_DELAYS) - 1)])
 
 
 def _fsync_directory(directory: Path) -> None:
@@ -298,7 +335,7 @@ def _restore_entry(root: Path, transaction_dir: Path, entry: Dict[str, Any]) -> 
         )
 
     if original_hash is None:
-        target.unlink(missing_ok=True)
+        _unlink_with_backoff(target, missing_ok=True)
         return
 
     backup = _safe_target(transaction_dir, entry["backup"])
@@ -522,14 +559,10 @@ class AtomicFileTransaction:
 
         if new_hash is None:
             if target.exists():
-                for attempt in range(_REPLACE_ATTEMPTS):
-                    try:
-                        target.unlink()
-                        break
-                    except PermissionError as error:
-                        if attempt == _REPLACE_ATTEMPTS - 1:
-                            raise FileBusyError(f"Feche '{target.name}' no Excel e tente novamente.") from error
-                        time.sleep(_RETRY_DELAYS[min(attempt, len(_RETRY_DELAYS) - 1)])
+                try:
+                    _unlink_with_backoff(target)
+                except PermissionError as error:
+                    raise FileBusyError(f"Feche '{target.name}' no Excel e tente novamente.") from error
                 _fsync_directory(target.parent)
             return
 
