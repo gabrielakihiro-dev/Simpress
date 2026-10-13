@@ -63,6 +63,14 @@ def _equipment(files):
             client = d.find_workbook_header_column(column_headers,("IDCLIENTE",))
             if serial is None or alias is None:
                 raise PersistenceError(409,"Modelo sem as colunas NumeroSerie e Apelido esperadas.")
+            header_style_updates = {}
+            default_header_style_id = ws.cell(1,serial+1).style_id
+            for column in (alias,client):
+                if column is None:
+                    continue
+                header_cell = ws.cell(1,column+1)
+                if header_cell.style_id != default_header_style_id:
+                    header_style_updates[(ws.title,header_cell.coordinate)] = default_header_style_id
             counts = Counter(d.normalize_reference_value(ws.cell(r,serial+1).value) for r in range(2,ws.max_row+1))
             counts.pop("",None)
             if set(counts) != set(normalized):
@@ -85,7 +93,12 @@ def _equipment(files):
                         alias_count += kind == "alias"
                         client_count += kind == "client"
                 formula_count += formula
-            content = d.serialize_workbook_validated(path,workbook,original,changes,allow_threaded_comments=True,allow_custom_xml_passthrough=True)
+            content = d.serialize_workbook_validated(
+                path,workbook,original,changes,
+                expected_cell_styles=header_style_updates,
+                allow_threaded_comments=True,
+                allow_custom_xml_passthrough=True,
+            )
         finally:
             workbook.close()
     endpoint_reviews = d.endpoint_alias_review_items(files.endpoint_index([r["dados_interpretados"] for r in snapshot["endpoint"]]),set(counts))
