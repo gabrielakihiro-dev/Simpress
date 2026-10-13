@@ -2,7 +2,7 @@
 
 As anotações são associadas a uma linha de um resultado específico. Ao gerar um novo histórico por atualização, a aplicação reaplica a anotação mais recente somente se encontrar, na mesma seção, uma linha com todos os dados exatamente iguais. A comparação desconsidera apenas os campos `anotacao` e `anotacao_id`; qualquer diferença nos demais campos impede a cópia. O novo evento recebe um identificador de anotação próprio, e a anotação anterior permanece no evento original. Se a ocorrência igual mais recente não tiver anotação, ou se linhas duplicadas e idênticas tiverem anotações conflitantes, uma anotação mais antiga não é reutilizada.
 
-Cada linha mantém sua própria anotação nas seções **Linhas mantidas para conferência**, **Sem acesso há 14 dias ou mais**, **Equipamentos sem correspondência por fonte**, **Localidade divergente**, **Duplicidades e correspondências ambíguas** e **Séries sem local definido**. Em seções com mais de uma lista, a anotação continua vinculada à linha e à fonte correspondentes.
+Cada linha mantém sua própria anotação nas seções **Linhas mantidas para conferência**, **Sem acesso há 7 dias ou mais**, **Equipamentos sem correspondência por fonte**, **Localidade divergente**, **Duplicidades e correspondências ambíguas** e **Séries sem local definido**. Em seções com mais de uma lista, a anotação continua vinculada à linha e à fonte correspondentes.
 
 As anotações são salvas automaticamente e podem ter até 2.000 caracteres. A exportação do Histórico de Planilhas inclui as anotações em cada aba de registros correspondente.
 

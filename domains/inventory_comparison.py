@@ -737,7 +737,7 @@ def compare_uploaded_workbooks(
     as_of = as_of or datetime.now().astimezone()
     if as_of.tzinfo is None:
         as_of = as_of.astimezone()
-    stale_threshold = as_of - timedelta(days=14)
+    stale_threshold = as_of - timedelta(days=7)
 
     endpoint_mac_serials = {
         record["serial_key"]
@@ -1088,7 +1088,7 @@ def compare_uploaded_workbooks(
                 "computador": computer_name,
                 "serie": record["serie"],
                 "ultima_verificacao": verified_at.isoformat(timespec="minutes"),
-                "dias_sem_verificacao": max(14, (as_of - verified_at).days),
+                "dias_sem_verificacao": max(7, (as_of - verified_at).days),
                 "linha_endpoint": record["row_number"],
             })
         if not computer_name.upper().startswith("PRNOTE") or location_for_computer_name(computer_name):
