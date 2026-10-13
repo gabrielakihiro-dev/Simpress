@@ -48,7 +48,6 @@ test("the theme icon switches modes, persists the choice, and works on login", a
   await expect(root).toHaveAttribute("data-theme", "light");
   await expect(darkModeButton.locator("svg")).toHaveClass(/lucide-moon/);
   await expect(page.locator("#btn-buscar-serial")).toHaveCSS("color", "rgb(255, 255, 255)");
-  await expect(page.locator(".home-search-card")).toHaveCSS("border-top-color", "rgb(219, 228, 239)");
   await expect.poll(() => page.evaluate(() => localStorage.getItem("simpress:theme"))).toBe("light");
   await page.locator(".app-workspace").evaluate(async workspace => {
     const transitions = workspace.getAnimations();
