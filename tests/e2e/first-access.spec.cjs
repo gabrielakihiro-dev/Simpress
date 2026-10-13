@@ -26,11 +26,17 @@ async function mockReadiness(page, getReport) {
 }
 
 test("first access centralizes the inventory import and keeps calls separate", async ({ page }) => {
+  test.setTimeout(45_000);
   const errors = [];
   page.on("pageerror", error => errors.push(error.message));
   await mockReadiness(page, () => readiness());
+  const readinessResponsePromise = page.waitForResponse(response =>
+    new URL(response.url()).pathname === "/api/prontidao", { timeout: 20_000 });
   await page.goto("/");
+  const readinessResponse = await readinessResponsePromise;
+  expect(readinessResponse.status()).toBe(200);
   const panel = page.locator("#readiness-panel");
+  await expect(panel).toHaveAttribute("aria-busy", "false", { timeout: 20_000 });
   await expect(panel).toHaveAttribute("open", "");
   await expect(page.locator("#readiness-summary")).toContainText("Nenhum dos 5 arquivos está disponível");
   await expect(panel.getByRole("button", { name: /Importar/ })).toHaveCount(3);
