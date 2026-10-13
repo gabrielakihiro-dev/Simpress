@@ -11,6 +11,11 @@ test("updated page avoids legacy asset URLs and styles the transfer banner", asy
     const url = await page.locator(selector).evaluate(element => element.href || element.src);
     expect(new URL(url).searchParams.get("v")).toMatch(/^[a-f0-9]{16}$/);
   }
+  const mobileSidebarButton = page.locator("#btn-sidebar-open");
+  if (await mobileSidebarButton.isVisible()) {
+    await mobileSidebarButton.click();
+    await expect(page.locator("#simpress-app-shell")).toHaveAttribute("data-sidebar-open", "true");
+  }
   await page.getByRole("tab", { name: "Transporte" }).click();
   await expect(page.locator("#tab-retirada-entrega")).toHaveAttribute("aria-selected", "true");
   await expect(page.locator("#transfer-equipment-banner")).toBeVisible();
