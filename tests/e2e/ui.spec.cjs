@@ -116,7 +116,7 @@ test("sidebar tools keep accent colors and fit the multiline ticket label", asyn
 
 test("tab navigation updates selected state and supports arrow keys", async ({ page }, testInfo) => {
   await openSidebarIfNeeded(page);
-  const transferTab = page.getByRole("tab", { name: "Transporte" });
+  const transferTab = page.locator("#tab-retirada-entrega");
   const homeTab = page.getByRole("tab", { name: "Home" });
   await transferTab.click();
   await expect(transferTab).toHaveAttribute("aria-selected", "true");
