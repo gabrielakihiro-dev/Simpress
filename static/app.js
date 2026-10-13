@@ -3371,7 +3371,7 @@
       if (previsao) partes.push(`<span class="ticket-process-forecast${atrasada ? " is-late" : ""}"><b>Previsão de entrega</b> ${escapeHtml(formatarDataEtapa(previsao.data))}${atrasada ? " · prazo vencido" : ""}</span>`);
       if (atual) partes.push(`<span class="ticket-process-current"><b>Etapa atual</b> ${escapeHtml(atual.rotulo)} · ${escapeHtml(formatarDataEtapa(atual.data))}</span>`);
       if (proxima) partes.push(`<span class="ticket-process-next"><b>Próxima</b> ${escapeHtml(proxima.rotulo)} · sem data</span>`);
-      return `<div class="ticket-process-summary mt-2" aria-label="Situação do pedido">${partes.join("")}</div>`;
+      return `<div class="ticket-process-summary mt-2" aria-label="Situação do pedido">${partes.join("")}</div>${renderizarLinhaProcessoPedido(simpress)}`;
     }
 
     function renderizarLinhaProcessoPedido(simpress) {
@@ -3791,8 +3791,6 @@
                 ${chamadosCliente.some(Boolean) ? `<p class="mt-1 text-xs text-slate-300">Chamado do cliente: ${formatarListaChamados(chamadosCliente)}</p>` : ""}
                 <p class="mt-1 break-words text-xs text-slate-300">Descrição do produto: ${formatarListaChamados(simpress.descricoes_produto)}</p>
                 <p class="mt-1 text-xs text-slate-300">Cidade de entrega: ${formatarListaChamados(simpress.cidades_entrega)}</p>
-                <h6 class="mt-2 text-[10px] font-semibold uppercase tracking-wide text-slate-400">Etapas do pedido</h6>
-                ${renderizarLinhaProcessoPedido(simpress)}
                 ${mostrarEnderecoEntrega ? `<p class="mt-1 break-words text-xs text-slate-300">Endereço de entrega: ${formatarListaChamados(enderecosEntrega)}</p>` : ""}
               </section>
               <section class="space-y-2 rounded-lg border border-slate-800 bg-slate-950/50 p-2.5">
