@@ -791,6 +791,41 @@ class WorkflowIntegrityTests(unittest.TestCase):
         self.assertEqual(raised.exception.status_code, 400)
         self.assertIn("cabeçalhos", raised.exception.detail.lower())
 
+    def test_unreadable_newest_source_does_not_fall_back_to_older_inventory(self):
+        archived = self.input_dir / "EquipamentosDetalhes_arquivo_antigo.xlsx"
+        make_details(self.details, [
+            ("SN-NOVO", "ALIAS-NOVO", "Modelo novo", "Maringá", "Notebook", "87000000"),
+        ])
+        make_details(archived, [
+            ("SN-ANTIGO", "ALIAS-ANTIGO", "Modelo antigo", "Ponta Grossa", "Notebook", "84000000"),
+        ])
+        make_endpoint(self.endpoint, [("OUTRA-SERIE", "HOST-OUTRO")])
+        make_model(self.model)
+        timestamp = time.time()
+        os.utime(archived, (timestamp - 60, timestamp - 60))
+        os.utime(self.details, (timestamp, timestamp))
+        self.assertTrue(main.load_database())
+        self.assertIn("SN-NOVO", main.equipamentos_cache)
+
+        real_open = open
+        locked = self.details.resolve()
+
+        def open_with_locked_newest(file, *args, **kwargs):
+            if Path(file).resolve() == locked:
+                raise PermissionError(13, "arquivo em uso")
+            return real_open(file, *args, **kwargs)
+
+        with patch("builtins.open", open_with_locked_newest):
+            with self.assertRaises(main.FileBusyError):
+                main.find_details_sheet(self.details)
+            with self.assertRaises(main.FileBusyError):
+                main.get_primary_equipment_file()
+            self.assertFalse(main.load_database())
+
+        self.assertIn("SN-NOVO", main.equipamentos_cache)
+        self.assertNotIn("SN-ANTIGO", main.equipamentos_cache)
+        self.assertEqual(main.get_primary_equipment_file().resolve(), self.details.resolve())
+
     def test_equipment_edit_changes_only_loaded_source_and_keeps_other_active_records(self):
         archived = self.input_dir / "EquipamentosDetalhes_arquivo_antigo.xlsx"
         make_details(self.details, [
