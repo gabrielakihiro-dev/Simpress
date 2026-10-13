@@ -4,6 +4,7 @@ import io
 import json
 import re
 import tempfile
+import threading
 import unittest
 import zipfile
 from contextlib import redirect_stdout
@@ -13,6 +14,7 @@ from unittest.mock import patch
 from core import config as app_config
 import openpyxl
 from core import openpyxl_compat
+from persistence.config import PersistenceSettings
 from starlette.routing import Match
 
 
@@ -784,6 +786,43 @@ class MaintenanceContractTests(unittest.TestCase):
             "[PRONTIDÃO] Geração de planilha de transferência: INDISPONÍVEL;",
             output.getvalue(),
         )
+
+    def test_lifespan_prepares_disk_state_off_loop_before_starting_workers(self):
+        events = []
+
+        def record(name, result=None):
+            def call(*_args, **_kwargs):
+                events.append((name, threading.get_ident()))
+                return result
+            return call
+
+        async def worker():
+            events.append(("worker", threading.get_ident()))
+            await asyncio.Event().wait()
+
+        async def run_application_lifespan():
+            loop_thread = threading.get_ident()
+            async with main.app.router.lifespan_context(main.app):
+                await asyncio.sleep(0)
+            return loop_thread
+
+        with (
+            patch.object(main, "PERSISTENCE_SETTINGS", PersistenceSettings("files")),
+            patch.object(main, "recover_pending_transactions", record("recover")),
+            patch.object(main, "migrate_legacy_history_annotations", record("migrate", {})),
+            patch.object(main, "prune_expired_histories", record("prune", {})),
+            patch.object(main, "load_database", record("load", True)),
+            patch.object(main, "_report_startup_readiness_best_effort", record("readiness")),
+            patch.object(main, "_history_annotation_sync_worker", worker),
+            patch.object(main, "_automatic_inventory_import_worker", worker),
+            patch.object(main, "_automatic_ticket_import_worker", worker),
+        ):
+            loop_thread = asyncio.run(run_application_lifespan())
+
+        names = [name for name, _ in events]
+        self.assertEqual(names, ["recover", "migrate", "prune", "load", "readiness", "worker", "worker", "worker"])
+        self.assertTrue(all(thread != loop_thread for _, thread in events[:5]))
+        self.assertTrue(all(thread == loop_thread for _, thread in events[5:]))
 
     def test_readiness_report_failure_is_logged_and_suppressed(self):
         with (

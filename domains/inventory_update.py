@@ -401,12 +401,12 @@ async def preview_inventory_files(
             "endpoint": await read_uploaded_xlsx(endpoint_file, "endpoint", services),
             "detalhes": await read_uploaded_xlsx(details_file, "detalhes", services),
         }
-        target_files = {
-            "endpoint": services.endpoint_upload_file(),
-            "detalhes": services.get_primary_equipment_file() or services.details_upload_file(),
-        }
-
         def read_current_snapshot():
+            # Resolving the active source opens workbooks; keep it off the event loop.
+            target_files = {
+                "endpoint": services.endpoint_upload_file(),
+                "detalhes": services.get_primary_equipment_file() or services.details_upload_file(),
+            }
             with lock_paths(target_files.values()):
                 return {
                     role: path.read_bytes() if path.is_file() else b""
