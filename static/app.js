@@ -162,12 +162,38 @@
       inputSerialInicial.focus({ preventScroll: true });
     }
 
-    function abrirModalAcessivel(modalId, initialFocusSelector, closeFunction) {
+    const paginaSidebarPorModal = new Map();
+
+    function atualizarPaginaSidebarAtiva() {
+      const openModals = [...document.querySelectorAll('[data-accessible-modal="true"]')]
+        .filter(modal => !modal.classList.contains("hidden") && modal.dataset.motionClosing !== "true");
+      const activeButtonId = [...openModals].reverse()
+        .map(modal => paginaSidebarPorModal.get(modal.id))
+        .find(Boolean) || "";
+      document.querySelectorAll("[data-sidebar-page]").forEach(button => {
+        const active = button.id === activeButtonId;
+        button.classList.toggle("is-active", active);
+        if (active) button.setAttribute("aria-current", "page");
+        else button.removeAttribute("aria-current");
+      });
+    }
+
+    const observerPaginaSidebar = new MutationObserver(atualizarPaginaSidebarAtiva);
+    document.querySelectorAll(".modal-overlay").forEach(modal => observerPaginaSidebar.observe(modal, {
+      attributes: true,
+      attributeFilter: ["class", "data-accessible-modal", "data-motion-closing"],
+    }));
+
+    function abrirModalAcessivel(modalId, initialFocusSelector, closeFunction, sidebarPageButtonId = null) {
+      if (sidebarPageButtonId) paginaSidebarPorModal.set(modalId, sidebarPageButtonId);
+      else paginaSidebarPorModal.delete(modalId);
       accessibleDialogs.open(modalId, initialFocusSelector, closeFunction);
+      requestAnimationFrame(atualizarPaginaSidebarAtiva);
     }
 
     function fecharModalAcessivel(modalId) {
       accessibleDialogs.close(modalId);
+      requestAnimationFrame(atualizarPaginaSidebarAtiva);
     }
 
     function associarRotulosAcessiveis() {
@@ -1094,6 +1120,7 @@
       const emptyState = document.getElementById("autocomplete-empty-state");
       const countEl = document.getElementById("autocomplete-count");
       const moreResults = document.getElementById("autocomplete-more-results");
+      const moreResultsLabel = moreResults.querySelector("[data-autocomplete-more-label]");
       const currentQuery = (document.getElementById("input-serial").value || "").trim();
 
       if (!items || items.length === 0) {
@@ -1115,6 +1142,8 @@
           </div>
         `;
         countEl.textContent = "0 encontrados";
+        moreResultsLabel.textContent = "Mostrar mais";
+        moreResults.querySelector("button")?.removeAttribute("aria-label");
         autocompleteItemsList = [];
         highlightedAutocompleteIndex = -1;
         document.getElementById("input-serial").setAttribute("aria-expanded", "true");
@@ -1134,6 +1163,12 @@
         ? `${items.length} de ${total}`
         : `${total} ${total === 1 ? "item" : "itens"}`;
       moreResults.classList.toggle("hidden", !hasMore);
+      const remainingResults = Math.max(0, Number(total) - items.length);
+      moreResultsLabel.textContent = `Mostrar mais (${remainingResults})`;
+      moreResults.querySelector("button")?.setAttribute(
+        "aria-label",
+        `Mostrar mais ${remainingResults} ${remainingResults === 1 ? "resultado" : "resultados"}`,
+      );
       document.getElementById("input-serial").setAttribute("aria-expanded", "true");
       document.getElementById("input-serial").removeAttribute("aria-activedescendant");
 
@@ -2159,7 +2194,7 @@
 
     function abrirModalAtualizarPlanilhas() {
       limparPreviaUploadPlanilhas();
-      abrirModalAcessivel("modal-atualizar-planilhas", "#upload-endpoint-file", "fecharModalAtualizarPlanilhas");
+      abrirModalAcessivel("modal-atualizar-planilhas", "#upload-endpoint-file", "fecharModalAtualizarPlanilhas", "btn-atualizar-planilhas");
     }
 
     function fecharModalAtualizarPlanilhas() {
@@ -2383,9 +2418,12 @@
       }
     }
 
-    function renderizarTabelaComparacao(headers, rows, emptyMessage) {
+    function renderizarTabelaComparacao(headers, rows, emptyMessage, filterCategory = "") {
+      const wrapFilterGroup = markup => filterCategory
+        ? `<div class="history-filter-group space-y-2" data-history-filter-group="${escapeHtml(filterCategory)}">${markup}</div>`
+        : markup;
       if (!rows.length) {
-        return `<p class="text-sm text-slate-400 text-center py-5" role="status" aria-live="polite">${escapeHtml(emptyMessage)}</p>`;
+        return wrapFilterGroup(`<p class="text-sm text-slate-400 text-center py-5" role="status" aria-live="polite">${escapeHtml(emptyMessage)}</p>`);
       }
       const tableLabel = `Tabela de ${headers.join(", ")}`;
       const mobileCards = rows.map((row, index) => {
@@ -2431,7 +2469,7 @@
             ${fields ? `<dl class="comparison-mobile-card-fields">${fields}</dl>` : ""}
           </article>`;
       }).join("");
-      return `
+      return wrapFilterGroup(`
         <div class="accessible-table-wrap comparison-desktop-table rounded-lg border border-slate-800" role="region" aria-label="${escapeHtml(tableLabel)}" tabindex="0">
           <p class="comparison-table-scroll-hint px-3 pt-2">Role a tabela horizontalmente para consultar todas as colunas.</p>
           <table class="min-w-full text-left text-sm" aria-label="${escapeHtml(tableLabel)}">
@@ -2439,7 +2477,7 @@
             <tbody class="divide-y divide-slate-800">${rows.join("")}</tbody>
           </table>
         </div>
-        <div class="comparison-mobile-list" role="list" aria-label="${escapeHtml(`${tableLabel} em cartões`)}">${mobileCards}</div>`;
+        <div class="comparison-mobile-list" role="list" aria-label="${escapeHtml(`${tableLabel} em cartões`)}">${mobileCards}</div>`);
     }
 
     function abrirModalComparacaoPlanilhas(comparison, navigationTarget = null) {
@@ -2511,6 +2549,26 @@
       const atributosLinhaComparacao = (categoria, item) => `data-comparison-category="${escapeHtml(categoria)}" data-comparison-item-id="${escapeHtml(item?.anotacao_id || "")}" data-comparison-serial="${escapeHtml(item?.serie || "")}" data-comparison-hostname="${escapeHtml(item?.computador || item?.hostname || item?.apelido || "")}"`;
       const aliasReviewHeaders = ["Série", "Hostname no Endpoint", "Motivo", ...(permitirAnotacoes ? ["Anotações"] : [])];
       const annotationHeaders = permitirAnotacoes ? ["Anotações"] : [];
+      const mostrarFiltrosHistorico = comparison.historico_salvo === true
+        || comparison.contexto_historico === true
+        || comparison.somente_anotacoes_sincronizadas === true;
+      const barraFiltrosHistorico = mostrarFiltrosHistorico ? `
+        <div class="history-filter-bar" data-history-filter-bar>
+          <div class="history-filter-controls">
+            <label class="history-filter-search-label">Pesquisar nas divergências
+              <input type="search" data-history-filter-search placeholder="Série, hostname, local ou anotação…" autocomplete="off">
+            </label>
+            <label class="history-filter-category-label">Tipo de divergência
+              <select data-history-filter-category aria-label="Filtrar por tipo de divergência">
+                <option value="">Todos os tipos</option>
+              </select>
+            </label>
+          </div>
+          <div class="history-filter-footer">
+            <label class="history-filter-annotated"><input type="checkbox" data-history-filter-annotated> Somente linhas com anotação</label>
+            <p data-history-filter-count role="status" aria-live="polite" aria-atomic="true"></p>
+          </div>
+        </div>` : "";
 
       document.getElementById("comparacao-planilhas-fontes").textContent =
         `no endpoint: ${formatarNomeFonteHistorico(arquivo.endpoint || "—")} · na Simpress: ${formatarNomeFonteHistorico(arquivo.detalhes || "—")}${comparison.horario_comparacao ? ` · ${formatarHorarioHistorico(comparison.horario_comparacao)}` : ""}`;
@@ -2576,7 +2634,7 @@
             </div>`
           : `<span class="text-[10px] text-slate-500">${resolvida ? "Concluído" : "Histórico indisponível"}</span>`;
         return `
-          <tr class="text-slate-300" data-manual-alias-row="${index}">
+          <tr class="text-slate-300" data-manual-alias-row="${index}" ${atributosLinhaComparacao("divergencias_apelidos_manuais", item)}>
             <td class="px-3 py-2 font-mono text-white whitespace-nowrap">${escapeHtml(item.serie || "—")}</td>
             <td class="px-3 py-2 font-mono text-cyan-200">${escapeHtml(item.apelido_manual || "(vazio)")}</td>
             <td class="px-3 py-2 font-mono">${escapeHtml(item.apelido_equipamentos_detalhes || (item.detalhes_encontrado ? "(vazio)" : "Série ausente"))}</td>
@@ -2631,6 +2689,7 @@
         registros_ambiguos: "Duplicidades e correspondências ambíguas",
         series_sem_mapeamento: "Séries sem local definido",
         apelidos_sem_atualizacao: "Linhas mantidas para conferência",
+        divergencias_apelidos_manuais: "Apelidos manuais divergentes",
       };
       const anotacoesSincronizadasRows = (comparison.anotacoes_sincronizadas || []).map(item => {
         const motivo = item.motivo ? formatarNomeFonteHistorico(item.motivo) : "";
@@ -2638,7 +2697,7 @@
           .filter(Boolean)
           .join(" · ") || "Linha sem identificador";
         return `
-          <tr class="text-slate-300">
+          <tr class="text-slate-300" ${atributosLinhaComparacao(item.categoria, item)}>
             <td class="px-3 py-2 text-amber-200">${escapeHtml(categoriasAnotacoesSincronizadas[item.categoria] || "Histórico de planilhas")}</td>
             <td class="px-3 py-2">${escapeHtml(identificador)}</td>
             ${renderizarCampoAnotacao(item, `${categoriasAnotacoesSincronizadas[item.categoria] || "a linha"}, ${identificador}`)}
@@ -2649,12 +2708,14 @@
       comparisonAnnotationSyncObservers = [];
       document.getElementById("comparacao-planilhas-conteudo").innerHTML = comparison.somente_anotacoes_sincronizadas
         ? `
+          ${barraFiltrosHistorico}
           <p class="text-xs text-cyan-200 bg-cyan-500/10 border border-cyan-500/25 rounded-lg px-3 py-2">Este clone contém as anotações sincronizadas. O resultado original e os arquivos da comparação não estão armazenados neste dispositivo.</p>
-          <section class="space-y-2">
+          <section class="space-y-2" data-history-filter-section>
             <div><h4 class="text-sm font-bold text-amber-300">Anotações sincronizadas</h4><p class="text-[11px] text-slate-500">As anotações continuam vinculadas às linhas da atualização original.</p></div>
-            ${renderizarTabelaComparacao(["Seção", "Linha", "Anotações"], anotacoesSincronizadasRows, "Nenhuma anotação sincronizada neste resultado.")}
+            ${renderizarTabelaComparacao(["Seção", "Linha", "Anotações"], anotacoesSincronizadasRows, "Nenhuma anotação sincronizada neste resultado.", "anotacoes_sincronizadas")}
           </section>`
         : `
+        ${barraFiltrosHistorico}
         ${comparison.historico_salvo === false
           ? `<p class="text-xs text-amber-200 bg-amber-500/10 border border-amber-500/25 rounded-lg px-3 py-2">${escapeHtml(comparison.aviso_historico || "Não foi possível salvar este resultado no histórico de comparações.")}</p>`
           : comparison.historico_salvo === true
@@ -2674,40 +2735,44 @@
           <div class="rounded-xl bg-amber-500/5 border border-amber-500/20 p-3"><p class="text-[10px] uppercase tracking-wide text-amber-300">Apelidos para conferência</p><p class="text-xl font-bold text-amber-200 mt-1">${apelidosSemAtualizacao.length}</p></div>
           <div class="rounded-xl bg-violet-500/5 border border-violet-500/20 p-3"><p class="text-[10px] uppercase tracking-wide text-violet-300">Divergências manuais pendentes</p><p id="comparacao-divergencias-manuais-pendentes" class="text-xl font-bold text-violet-200 mt-1">${divergenciasApelidosManuais.filter(item => !item.resolucao || item.resolucao === "pendente").length}</p></div>
         </div>
-        <section class="space-y-2">
+        <section class="space-y-2" data-history-filter-section>
           <div><h4 class="text-sm font-bold text-emerald-300">Apelidos/hostnames atualizados — no endpoint</h4><p class="text-[11px] text-slate-500">A lista compara os valores antes e depois pelo número de série.</p></div>
           ${renderizarTabelaComparacao(["Série", "Apelido anterior", "Novo apelido / hostname", "Horário", "Arquivos de origem"], aliasUpdateRows, "Nenhum apelido ou hostname mudou nesta atualização.")}
         </section>
-        <section class="space-y-2">
+        <section class="space-y-2" data-history-filter-section>
           <div><h4 class="text-sm font-bold text-amber-300">Linhas mantidas para conferência</h4><p class="text-[11px] text-slate-500">Série vazia, ausente ou duplicada não é escolhida automaticamente; o apelido atual fica preservado.${permitirAnotacoes ? ` As anotações continuam vinculadas a esta linha e atualização. Em novas atualizações, são reaplicadas somente quando os dados correspondem exatamente na mesma seção e a anotação mais recente não está vazia ou em conflito. São salvas automaticamente${comparison.anotacoes_sync_ativa ? " e sincronizadas pela pasta OneDrive." : " neste dispositivo."}` : ""}</p></div>
-          ${renderizarTabelaComparacao(aliasReviewHeaders, aliasReviewRows, "Nenhuma linha de apelido precisa de conferência.")}
+          ${renderizarTabelaComparacao(aliasReviewHeaders, aliasReviewRows, "Nenhuma linha de apelido precisa de conferência.", "apelidos_sem_atualizacao")}
         </section>
-        <section class="space-y-2">
+        <section class="space-y-2" data-history-filter-section>
           <div><h4 class="text-sm font-bold text-violet-300">Divergências com apelidos alterados manualmente</h4><p class="text-[11px] text-slate-500">O apelido manual prevalece nas pesquisas e exportações. “Manter manual” registra a decisão; “Excluir manual” remove apenas o override desta série e volta a usar o valor das planilhas.</p></div>
-          ${renderizarTabelaComparacao(["Série", "Apelido manual", "na Simpress", "no endpoint", "Situação", "Ação"], manualAliasRows, "Nenhuma divergência entre apelidos manuais e as planilhas enviadas.")}
+          ${renderizarTabelaComparacao(["Série", "Apelido manual", "na Simpress", "no endpoint", "Situação", "Ação"], manualAliasRows, "Nenhuma divergência entre apelidos manuais e as planilhas enviadas.", "divergencias_apelidos_manuais")}
         </section>
-        <section class="space-y-2">
+        <section class="space-y-2" data-history-filter-section>
           <div><h4 class="text-sm font-bold text-rose-300">Sem acesso há 7 dias ou mais</h4><p class="text-[11px] text-slate-500">Notebook com última verificação com êxito igual ou anterior a 7 dias na data e hora desta atualização.</p><p class="text-[11px] text-slate-400">Atualização usada como referência: ${comparison.horario_comparacao ? `<time datetime="${escapeHtml(comparison.horario_comparacao)}">${escapeHtml(formatarHorarioHistorico(comparison.horario_comparacao))}</time>` : "data e hora indisponíveis"}.</p></div>
-          ${renderizarTabelaComparacao(["Hostname/Apelido", "Série", "Última verificação com êxito", "Dias sem verificação", "Linha no endpoint", ...annotationHeaders], semAcessoRows, "Nenhum notebook está há 7 dias ou mais sem verificação com êxito.")}
+          ${renderizarTabelaComparacao(["Hostname/Apelido", "Série", "Última verificação com êxito", "Dias sem verificação", "Linha no endpoint", ...annotationHeaders], semAcessoRows, "Nenhum notebook está há 7 dias ou mais sem verificação com êxito.", "sem_acesso_7_dias")}
         </section>
-        <section class="space-y-2">
+        <section class="space-y-2" data-history-filter-section>
           <div><h4 class="text-sm font-bold text-rose-300">Equipamentos sem correspondência por fonte</h4><p class="text-[11px] text-slate-500">Cada lista mostra equipamentos que não têm correspondência segura naquela fonte. Divergências de local aparecem em seção própria.</p></div>
-          <h5 class="text-xs font-semibold text-slate-300">Sem correspondência — Endpoint (${ausentesEndpoint.length})</h5>
-          ${renderizarTabelaComparacao(["Hostname/Apelido", "Série", "Local previsto", "Sem correspondência em", ...annotationHeaders], renderizarAusentes(ausentesEndpoint, "ausentes_no_endpoint"), "Todos os equipamentos têm correspondência segura com Endpoint.")}
-          <h5 class="text-xs font-semibold text-slate-300">Sem correspondência — Simpress (${ausentesDetalhes.length})</h5>
-          ${renderizarTabelaComparacao(["Hostname/Apelido", "Série", "Local previsto", "Sem correspondência em", ...annotationHeaders], renderizarAusentes(ausentesDetalhes, "ausentes_em_detalhes"), "Todos os equipamentos têm correspondência segura com Simpress.")}
+          <div class="history-filter-group space-y-2" data-history-filter-group="ausentes_no_endpoint">
+            <h5 class="text-xs font-semibold text-slate-300">Sem correspondência — Endpoint (${ausentesEndpoint.length})</h5>
+            ${renderizarTabelaComparacao(["Hostname/Apelido", "Série", "Local previsto", "Sem correspondência em", ...annotationHeaders], renderizarAusentes(ausentesEndpoint, "ausentes_no_endpoint"), "Todos os equipamentos têm correspondência segura com Endpoint.")}
+          </div>
+          <div class="history-filter-group space-y-2" data-history-filter-group="ausentes_em_detalhes">
+            <h5 class="text-xs font-semibold text-slate-300">Sem correspondência — Simpress (${ausentesDetalhes.length})</h5>
+            ${renderizarTabelaComparacao(["Hostname/Apelido", "Série", "Local previsto", "Sem correspondência em", ...annotationHeaders], renderizarAusentes(ausentesDetalhes, "ausentes_em_detalhes"), "Todos os equipamentos têm correspondência segura com Simpress.")}
+          </div>
         </section>
-        <section class="space-y-2">
+        <section class="space-y-2" data-history-filter-section>
           <div><h4 class="text-sm font-bold text-amber-300">Localidade divergente</h4><p class="text-[11px] text-slate-500">A localidade na Simpress é comparada com a classificação do hostname.</p></div>
-          ${renderizarTabelaComparacao(["Computador", "Série", "Local previsto", "Local na Simpress", ...annotationHeaders], locationRows, "Nenhuma divergência de localidade encontrada.")}
+          ${renderizarTabelaComparacao(["Computador", "Série", "Local previsto", "Local na Simpress", ...annotationHeaders], locationRows, "Nenhuma divergência de localidade encontrada.", "divergencias_local")}
         </section>
-        <section class="space-y-2">
+        <section class="space-y-2" data-history-filter-section>
           <div><h4 class="text-sm font-bold text-yellow-300">Duplicidades e correspondências ambíguas</h4><p class="text-[11px] text-slate-500">Nenhuma linha é escolhida automaticamente quando a série se repete ou o hostname/Apelido não identifica uma correspondência única.</p></div>
-          ${renderizarTabelaComparacao(["Ocorrência", "Série ou hostname/Apelido", "Fontes", "Tratamento", ...annotationHeaders], ambiguityRows, "Nenhuma duplicidade ou correspondência ambígua encontrada.")}
+          ${renderizarTabelaComparacao(["Ocorrência", "Série ou hostname/Apelido", "Fontes", "Tratamento", ...annotationHeaders], ambiguityRows, "Nenhuma duplicidade ou correspondência ambígua encontrada.", "correspondencias_ambiguas")}
         </section>
-        <section class="space-y-2">
+        <section class="space-y-2" data-history-filter-section>
           <div><h4 class="text-sm font-bold text-sky-300">Séries sem local definido</h4><p class="text-[11px] text-slate-500">Não há regra de localidade cadastrada para estes prefixos.</p></div>
-          ${renderizarTabelaComparacao(["Série", "Quantidade", "Exemplos", ...annotationHeaders], unmappedRows, "Todas as séries têm mapeamento de localidade.")}
+          ${renderizarTabelaComparacao(["Série", "Quantidade", "Exemplos", ...annotationHeaders], unmappedRows, "Todas as séries têm mapeamento de localidade.", "series_sem_mapeamento")}
         </section>
         <p class="text-[11px] text-emerald-300">Equipamentos carregados na Simpress: ${Number(comparison.total_equipamentos_carregados || 0).toLocaleString("pt-BR")}. Backup das versões anteriores: <span class="font-mono">planilhas_entrada/${escapeHtml(comparison.backup_diretorio || "_backups")}</span>.</p>
       `;
@@ -2784,8 +2849,118 @@
           }
         });
       });
-      abrirModalAcessivel("modal-comparacao-planilhas", '[aria-label="Fechar resultado"]', "fecharModalComparacaoPlanilhas");
+      conectarFiltrosHistoricoComparacao(document.getElementById("comparacao-planilhas-conteudo"));
+      abrirModalAcessivel(
+        "modal-comparacao-planilhas",
+        '[aria-label="Fechar resultado"]',
+        "fecharModalComparacaoPlanilhas",
+        comparison.contexto_historico === true ? "btn-historico-comparacoes" : "btn-atualizar-planilhas",
+      );
       if (navigationTarget) requestAnimationFrame(() => navegarParaLinhaComparacao(navigationTarget));
+    }
+
+    function normalizarCategoriaFiltroHistorico(category) {
+      if (category === "registros_ambiguos") return "correspondencias_ambiguas";
+      return category;
+    }
+
+    function conectarFiltrosHistoricoComparacao(content) {
+      const filterBar = content?.querySelector("[data-history-filter-bar]");
+      if (!filterBar) return;
+
+      const categoryLabels = {
+        apelidos_sem_atualizacao: "Linhas mantidas para conferência",
+        sem_acesso_7_dias: "Sem acesso há 7 dias ou mais",
+        ausentes_no_endpoint: "Sem correspondência — Endpoint",
+        ausentes_em_detalhes: "Sem correspondência — Simpress",
+        divergencias_local: "Localidade divergente",
+        correspondencias_ambiguas: "Duplicidades e correspondências ambíguas",
+        divergencias_apelidos_manuais: "Apelidos manuais divergentes",
+        series_sem_mapeamento: "Séries sem local definido",
+      };
+      const searchInput = filterBar.querySelector("[data-history-filter-search]");
+      const categorySelect = filterBar.querySelector("[data-history-filter-category]");
+      const annotatedOnly = filterBar.querySelector("[data-history-filter-annotated]");
+      const status = filterBar.querySelector("[data-history-filter-count]");
+      const canonicalize = value => normalizarCategoriaFiltroHistorico(String(value || ""));
+      const normalizeText = value => String(value || "")
+        .normalize("NFKD")
+        .replace(/[\u0300-\u036f]/g, "")
+        .toLocaleLowerCase("pt-BR");
+      const setHidden = (element, hidden) => {
+        element.hidden = hidden;
+        element.classList.toggle("hidden", hidden);
+      };
+      const rows = [...content.querySelectorAll("tr[data-comparison-category]")];
+      const categories = [...new Set(rows.map(row => canonicalize(row.dataset.comparisonCategory)).filter(Boolean))]
+        .sort((left, right) => (categoryLabels[left] || left).localeCompare(categoryLabels[right] || right, "pt-BR"));
+      categorySelect.replaceChildren(new Option("Todos os tipos", ""));
+      categories.forEach(category => categorySelect.add(new Option(categoryLabels[category] || category, category)));
+
+      const hasAnnotation = row => [...row.querySelectorAll("[data-comparison-annotation]")].some(textarea => {
+        if (textarea.value.trim()) return true;
+        try {
+          const version = JSON.parse(textarea.dataset.annotationVersion || "null");
+          return Boolean(version?.anotacao_conflito || version?.anotacao_integridade_invalida);
+        } catch (error) {
+          return false;
+        }
+      });
+
+      const updateFilters = () => {
+        const query = normalizeText(searchInput.value.trim());
+        const selectedCategory = canonicalize(categorySelect.value);
+        const onlyAnnotated = annotatedOnly.checked;
+        const filtersActive = Boolean(query || selectedCategory || onlyAnnotated);
+        const allRows = [...content.querySelectorAll("tr[data-comparison-category], .comparison-mobile-card[data-comparison-category]")];
+
+        allRows.forEach(row => {
+          const category = canonicalize(row.dataset.comparisonCategory);
+          const annotationPresent = hasAnnotation(row);
+          const annotationText = [...row.querySelectorAll("[data-comparison-annotation]")]
+            .map(textarea => textarea.value)
+            .join(" ");
+          const searchable = normalizeText(`${row.textContent} ${annotationText} ${categoryLabels[category] || category}`);
+          const matches = (!selectedCategory || selectedCategory === category)
+            && (!query || searchable.includes(query))
+            && (!onlyAnnotated || annotationPresent);
+          setHidden(row, !matches);
+          row.classList.toggle("history-row-annotated", annotationPresent);
+        });
+
+        content.querySelectorAll("[data-history-filter-group]").forEach(group => {
+          const groupRows = [...group.querySelectorAll("tr[data-comparison-category], .comparison-mobile-card[data-comparison-category]")];
+          const hasVisibleRow = groupRows.some(row => !row.hidden);
+          setHidden(group, filtersActive && (groupRows.length === 0 || !hasVisibleRow));
+        });
+
+        content.querySelectorAll("[data-history-filter-section]").forEach(section => {
+          const groups = [...section.querySelectorAll(":scope > [data-history-filter-group]")];
+          setHidden(section, filtersActive && (!groups.length || groups.every(group => group.hidden)));
+        });
+
+        const visibleRows = rows.filter(row => !row.hidden && !row.closest("[data-history-filter-group]")?.hidden
+          && !row.closest("[data-history-filter-section]")?.hidden);
+        status.textContent = visibleRows.length
+          ? `${visibleRows.length.toLocaleString("pt-BR")} ${visibleRows.length === 1 ? "linha" : "linhas"} ${filtersActive ? "correspondem aos filtros" : "para conferência neste resultado"}.`
+          : filtersActive ? "Nenhuma linha corresponde aos filtros." : "Nenhuma linha de divergência neste resultado.";
+      };
+
+      searchInput.addEventListener("input", updateFilters);
+      categorySelect.addEventListener("change", updateFilters);
+      annotatedOnly.addEventListener("change", updateFilters);
+      content.querySelectorAll("[data-comparison-annotation]").forEach(textarea => {
+        textarea.addEventListener("input", updateFilters);
+        textarea.addEventListener("annotationversionchange", updateFilters);
+      });
+      const annotationVersionObserver = new MutationObserver(updateFilters);
+      annotationVersionObserver.observe(content, {
+        subtree: true,
+        attributes: true,
+        attributeFilter: ["data-annotation-version"],
+      });
+      comparisonAnnotationSyncObservers.push(annotationVersionObserver);
+      updateFilters();
     }
 
     function normalizarIdentificadorLinhaComparacao(value) {
@@ -2965,8 +3140,6 @@
       }
     }
 
-    let operationalPendingState = { evento: null, rows: [] };
-
     function atributosVersaoAnotacao(item) {
       const version = {
         anotacao_revisoes: item.anotacao_revisoes || [],
@@ -3006,97 +3179,6 @@
           ),
         });
       });
-    }
-
-    function fecharCentralPendencias() { fecharModalAcessivel("modal-central-pendencias"); }
-
-    function renderizarCentralPendencias() {
-      const lista = document.getElementById("lista-central-pendencias");
-      const query = String(document.getElementById("filtro-operacional-pendencias").value || "").trim().toLocaleLowerCase("pt-BR");
-      const selectedCategory = document.getElementById("categoria-operacional-pendencias").value;
-      const categories = new Map();
-      operationalPendingState.rows.forEach(row => categories.set(row.categoria, row.secao));
-      const select = document.getElementById("categoria-operacional-pendencias");
-      const currentOptions = [...select.options].map(option => option.value).join("|");
-      const desiredOptions = ["", ...categories.keys()].join("|");
-      if (currentOptions !== desiredOptions) {
-        select.replaceChildren();
-        const allOption = document.createElement("option");
-        allOption.value = ""; allOption.textContent = "Todas as categorias"; select.appendChild(allOption);
-        categories.forEach((label, key) => {
-          const option = document.createElement("option"); option.value = key; option.textContent = label; select.appendChild(option);
-        });
-        select.value = selectedCategory;
-      }
-      const rows = operationalPendingState.rows.filter(row => {
-        if (selectedCategory && row.categoria !== selectedCategory) return false;
-        const searchable = JSON.stringify(row.item || {}).toLocaleLowerCase("pt-BR");
-        return !query || searchable.includes(query) || String(row.secao || "").toLocaleLowerCase("pt-BR").includes(query);
-      });
-      lista.replaceChildren();
-      if (!rows.length) {
-        const empty = document.createElement("p"); empty.className = "py-8 text-center text-sm text-slate-400";
-        empty.textContent = operationalPendingState.rows.length ? "Nenhuma pendência corresponde aos filtros." : "A atualização mais recente não tem pendências registradas.";
-        lista.appendChild(empty); return;
-      }
-      lista.innerHTML = rows.map(row => {
-        const item = row.item || {};
-        const title = item.computador || item.hostname || item.apelido || item.chave || item.serie || "Linha para revisão";
-        const serial = item.serie || item.serial || "";
-        const location = item.local_simpress || item.local || item.local_previsto || item.cidade || "";
-        const details = [
-          item.motivo,
-          item.ultima_verificacao && `Última verificação: ${item.ultima_verificacao}`,
-          Number.isFinite(Number(item.dias_sem_verificacao)) && `Sem verificação há ${Number(item.dias_sem_verificacao)} dias`,
-          item.local_simpress && item.local_previsto && `Local esperado: ${item.local_previsto} · na Simpress: ${item.local_simpress}`,
-          item.ausente_em && `Sem correspondência: ${(Array.isArray(item.ausente_em) ? item.ausente_em : [item.ausente_em]).map(source => formatarNomeFonteHistorico(source).replace(/\bno endpoint\b/gi, "Endpoint").replace(/\bna Simpress\b/gi, "Simpress")).join(", ")}`,
-          item.quantidade && `Ocorrências: ${item.quantidade}`,
-        ].filter(Boolean).join(" · ");
-        const context = `${title}${serial ? `, série ${serial}` : ""}`;
-        return `<article class="rounded-xl border border-slate-800 bg-slate-950/70 p-4" data-pending-row>
-          <div class="flex flex-col gap-3 md:flex-row md:items-start md:justify-between"><div class="min-w-0">
-            <p class="text-[10px] uppercase tracking-wide text-amber-300">${escapeHtml(row.secao)}</p>
-            <h4 class="mt-1 break-words text-sm font-semibold text-white">${escapeHtml(title)}</h4>
-            <p class="mt-1 text-xs text-slate-400">${serial ? `Série ${escapeHtml(serial)}` : "Série não informada"}${location ? ` · ${escapeHtml(location)}` : ""}</p>
-            ${details ? `<p class="mt-2 text-xs text-slate-300">${escapeHtml(details)}</p>` : ""}
-          </div><button type="button" data-pending-event="${escapeHtml(operationalPendingState.evento?.id || "")}" data-pending-category="${escapeHtml(row.categoria || "")}" data-pending-item-id="${escapeHtml(item.anotacao_id || "")}" data-pending-serial="${escapeHtml(serial)}" data-pending-hostname="${escapeHtml(item.computador || item.hostname || item.apelido || "")}" class="shrink-0 rounded-lg border border-cyan-400/25 bg-cyan-500/10 px-3 py-2 text-xs font-semibold text-cyan-200">Abrir atualização</button></div>
-          <div class="mt-3">${renderizarAnotacaoOperacional(item, context)}</div>
-        </article>`;
-      }).join("");
-      conectarAnotacoesOperacionais(lista, operationalPendingState.evento?.id);
-      lista.querySelectorAll("[data-pending-event]").forEach(button => button.addEventListener("click", async () => {
-        const eventId = button.dataset.pendingEvent;
-        const target = {
-          category: button.dataset.pendingCategory,
-          itemId: button.dataset.pendingItemId,
-          serial: button.dataset.pendingSerial,
-          hostname: button.dataset.pendingHostname,
-        };
-        fecharCentralPendencias();
-        if (eventId) await consultarHistoricoComparacao(eventId, button, target);
-      }));
-    }
-
-    async function abrirCentralPendencias() {
-      abrirModalAcessivel("modal-central-pendencias", '[aria-label="Fechar central de pendências"]', "fecharCentralPendencias");
-      const list = document.getElementById("lista-central-pendencias");
-      list.textContent = "Carregando pendências…";
-      try {
-        const response = await fetch("/api/operacoes/pendencias");
-        const data = await response.json().catch(() => ({}));
-        if (!response.ok) throw new Error(data.detail || "Não foi possível carregar as pendências.");
-        operationalPendingState = { evento: data.evento || null, rows: Array.isArray(data.pendencias) ? data.pendencias : [] };
-        document.getElementById("central-pendencias-referencia").textContent = data.evento?.horario
-          ? `Atualização usada como referência: ${formatarHorarioHistorico(data.evento.horario)} · ${operationalPendingState.rows.length} linhas para revisão`
-          : "Nenhuma atualização de inventário está disponível no histórico.";
-        renderizarCentralPendencias();
-      } catch (error) {
-        list.textContent = error.message || "Não foi possível carregar as pendências.";
-      }
-      const query = document.getElementById("filtro-operacional-pendencias");
-      const category = document.getElementById("categoria-operacional-pendencias");
-      if (!query.dataset.bound) { query.addEventListener("input", renderizarCentralPendencias); query.dataset.bound = "true"; }
-      if (!category.dataset.bound) { category.addEventListener("change", renderizarCentralPendencias); category.dataset.bound = "true"; }
     }
 
     function fecharEvolucaoAtualizacoes() { fecharModalAcessivel("modal-evolucao-atualizacoes"); }
@@ -3146,7 +3228,7 @@
     }
 
     async function abrirEvolucaoAtualizacoes() {
-      abrirModalAcessivel("modal-evolucao-atualizacoes", '[aria-label="Fechar evolução das atualizações"]', "fecharEvolucaoAtualizacoes");
+      abrirModalAcessivel("modal-evolucao-atualizacoes", '[aria-label="Fechar evolução das atualizações"]', "fecharEvolucaoAtualizacoes", "btn-evolucao-atualizacoes");
       const target = document.getElementById("resultado-evolucao-atualizacoes");
       target.textContent = "Carregando atualizações…";
       try {
@@ -3841,7 +3923,7 @@
     }
 
     function abrirAcompanhamentoChamados(importar = false) {
-      abrirModalAcessivel("modal-acompanhamento-chamados", importar ? '#arquivo-chamados-simpress' : '[aria-label="Fechar acompanhamento de chamados"]', "fecharAcompanhamentoChamados");
+      abrirModalAcessivel("modal-acompanhamento-chamados", importar ? '#arquivo-chamados-simpress' : '[aria-label="Fechar acompanhamento de chamados"]', "fecharAcompanhamentoChamados", "btn-acompanhamento-chamados");
       const form = document.getElementById("form-importar-acompanhamento-chamados");
       if (!form.dataset.bound) {
         form.addEventListener("submit", importarPlanilhasChamados);
@@ -3867,7 +3949,7 @@
     }
 
     async function abrirModalHistoricoComparacoes() {
-      abrirModalAcessivel("modal-historico-comparacoes", '[aria-label="Fechar histórico de planilhas"]', "fecharModalHistoricoComparacoes");
+      abrirModalAcessivel("modal-historico-comparacoes", '[aria-label="Fechar histórico de planilhas"]', "fecharModalHistoricoComparacoes", "btn-historico-comparacoes");
       await carregarHistoricoComparacoes();
     }
 
@@ -4387,7 +4469,7 @@
     }
 
     async function abrirModalHistoricoApelidos() {
-      abrirModalAcessivel("modal-historico-apelidos", '[aria-label="Fechar histórico"]', "fecharModalHistoricoApelidos");
+      abrirModalAcessivel("modal-historico-apelidos", '[aria-label="Fechar histórico"]', "fecharModalHistoricoApelidos", "btn-historico-apelidos");
       await carregarHistoricoApelidos();
     }
 
@@ -4731,7 +4813,7 @@
       toggleFormNovaUnidade(false);
       renderListaUnidades(unidadesList);
       document.getElementById("badge-total-unidades-modal").textContent = `${unidadesList.length} unidades`;
-      abrirModalAcessivel("modal-gerenciar-unidades", "#input-filtro-unidades", "fecharModalGerenciarUnidades");
+      abrirModalAcessivel("modal-gerenciar-unidades", "#input-filtro-unidades", "fecharModalGerenciarUnidades", "btn-catalogo-unidades");
     }
 
     function fecharModalGerenciarUnidades() {
