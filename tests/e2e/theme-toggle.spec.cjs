@@ -68,6 +68,8 @@ test("the theme icon switches modes, persists the choice, and works on login", a
   const loginHtml = fs.readFileSync(path.resolve(__dirname, "../../static/pages/login.html"), "utf8");
   await page.route("**/login", route => route.fulfill({ status: 200, contentType: "text/html", body: loginHtml }));
   await page.goto("/login");
+  await page.evaluate(() => window.SimpressAuth.ready);
+  await expect(page).toHaveURL(/\/login$/);
   await page.getByRole("button", { name: "Ativar modo claro" }).click();
   await expect(root).toHaveAttribute("data-theme", "light");
   await expect(page.locator("main")).toHaveCSS("background-color", "rgb(255, 255, 255)");
