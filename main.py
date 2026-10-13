@@ -838,7 +838,11 @@ def _get_startup_readiness_unlocked() -> Dict[str, Any]:
     }
     if functions["geracao_transferencia"]["available"] and not units_loaded:
         functions["geracao_transferencia"].update(available=False, state="invalid", missing_files=["localidades do inventário"])
-    return {"backend": "files", "files": files, "functions": functions}
+    report: Dict[str, Any] = {"backend": "files", "files": files, "functions": functions}
+    # Additive key, present only in read-only mode, so existing consumers keep their shape.
+    if (recovery_block := get_transaction_recovery_block()) is not None:
+        report["gravacao_bloqueada"] = {"available": False, "state": "invalid", "reason": recovery_block}
+    return report
 
 
 def report_startup_readiness() -> None:
@@ -894,6 +898,64 @@ def _report_startup_readiness_best_effort() -> None:
         logger.exception(
             "Não foi possível calcular a prontidão local; o servidor continuará em execução."
         )
+
+
+# Message of the startup recovery that refused to touch a diverged file; None when writes are allowed.
+_TRANSACTION_RECOVERY_BLOCK: Optional[str] = None
+_TRANSACTION_RECOVERY_BLOCK_LOCK = threading.Lock()
+
+
+def _recover_pending_transactions_at_startup() -> bool:
+    """Recover interrupted writes, or start read-only when the journal no longer matches the files."""
+    global _TRANSACTION_RECOVERY_BLOCK
+    try:
+        recover_pending_transactions(TRANSACTION_ROOT)
+    except TransactionConflictError as error:
+        message = (
+            f"{error} As gravações ficam bloqueadas até a conferência manual da pasta "
+            f"'.transactions'; os dados exibidos podem refletir uma gravação incompleta."
+        )
+        with _TRANSACTION_RECOVERY_BLOCK_LOCK:
+            _TRANSACTION_RECOVERY_BLOCK = message
+        print(f"[INDISPONÍVEL] Recuperação de gravação pendente: {message}")
+        return False
+    with _TRANSACTION_RECOVERY_BLOCK_LOCK:
+        _TRANSACTION_RECOVERY_BLOCK = None
+    return True
+
+
+def _has_pending_transaction_journal() -> bool:
+    try:
+        return any(
+            (entry / "manifest.json").is_file()
+            for entry in (TRANSACTION_ROOT / ".transactions").iterdir()
+            if entry.is_dir()
+        )
+    except FileNotFoundError:
+        return False
+    except OSError:
+        # An unreadable journal folder cannot prove that recovery was resolved.
+        return True
+
+
+def get_transaction_recovery_block() -> Optional[str]:
+    """Return why writes are blocked, clearing the block once the journal was resolved manually."""
+    global _TRANSACTION_RECOVERY_BLOCK
+    with _TRANSACTION_RECOVERY_BLOCK_LOCK:
+        message = _TRANSACTION_RECOVERY_BLOCK
+        if message is None:
+            return None
+        # While blocked no transaction can open, so any remaining journal is the unresolved one.
+        if not _has_pending_transaction_journal():
+            _TRANSACTION_RECOVERY_BLOCK = None
+            return None
+        return message
+
+
+def _raise_if_transaction_recovery_blocked() -> None:
+    """Keep automatic batches pending (503 is transient for the inboxes) instead of failing them."""
+    if (message := get_transaction_recovery_block()) is not None:
+        raise HTTPException(status_code=503, detail=message)
 
 
 def read_workbook_tables(file_bytes: bytes) -> List[Dict[str, Any]]:
@@ -1722,22 +1784,23 @@ async def lifespan(app: FastAPI):
         return
     def prepare_local_state() -> None:
         """Recover, migrate, prune and load disk state in one worker thread."""
-        recover_pending_transactions(TRANSACTION_ROOT)
-        try:
-            migration_result = migrate_legacy_history_annotations()
-            if migration_result.get("legadas_enfileiradas"):
-                logger.info(
-                    "Anotações legadas preparadas para sincronização: %s.",
-                    migration_result,
-                )
-        except Exception:
-            logger.exception("Falha ao migrar anotações legadas do histórico de planilhas.")
-        try:
-            prune_result = prune_expired_histories()
-            if any(prune_result.values()):
-                print(f"[RETENÇÃO] Registros e backups removidos conforme política de {HISTORY_RETENTION_DAYS} dias: {prune_result}.")
-        except Exception as error:
-            print(f"[AVISO] A retenção automática não pôde ser concluída ({type(error).__name__}); os arquivos foram preservados.")
+        # A diverged journal keeps the server up in read-only mode; maintenance writes wait.
+        if _recover_pending_transactions_at_startup():
+            try:
+                migration_result = migrate_legacy_history_annotations()
+                if migration_result.get("legadas_enfileiradas"):
+                    logger.info(
+                        "Anotações legadas preparadas para sincronização: %s.",
+                        migration_result,
+                    )
+            except Exception:
+                logger.exception("Falha ao migrar anotações legadas do histórico de planilhas.")
+            try:
+                prune_result = prune_expired_histories()
+                if any(prune_result.values()):
+                    print(f"[RETENÇÃO] Registros e backups removidos conforme política de {HISTORY_RETENTION_DAYS} dias: {prune_result}.")
+            except Exception as error:
+                print(f"[AVISO] A retenção automática não pôde ser concluída ({type(error).__name__}); os arquivos foram preservados.")
         try:
             load_database()
         except LocalJsonCorruptionError as error:
@@ -1763,11 +1826,17 @@ async def lifespan(app: FastAPI):
         )
 
 
+def _flush_pending_history_annotations_unless_blocked() -> None:
+    # The outbox keeps every note; retrying against a blocked journal would only repeat the error.
+    if get_transaction_recovery_block() is None:
+        flush_pending_history_annotations()
+
+
 async def _history_annotation_sync_worker() -> None:
     while True:
         await asyncio.sleep(60)
         try:
-            await asyncio.to_thread(flush_pending_history_annotations)
+            await asyncio.to_thread(_flush_pending_history_annotations_unless_blocked)
         except Exception:
             logger.exception("Falha inesperada ao tentar sincronizar anotações pendentes.")
 
@@ -1797,6 +1866,7 @@ async def _automatic_ticket_import_worker() -> None:
         raise RuntimeError("A rota de importação de chamados não está registrada.")
 
     def import_batch(batch_id: str, simpress_name: str, simpress_bytes: bytes, oracle_name: str, oracle_bytes: bytes):
+        _raise_if_transaction_recovery_blocked()
         simpress_upload = StarletteUploadFile(filename=simpress_name, file=io.BytesIO(simpress_bytes))
         oracle_upload = StarletteUploadFile(filename=oracle_name, file=io.BytesIO(oracle_bytes))
         return endpoint(
@@ -3816,6 +3886,7 @@ async def _import_automatic_inventory_batch(
     simpress_name: str,
     simpress_bytes: bytes,
 ):
+    _raise_if_transaction_recovery_blocked()
     endpoint_upload = StarletteUploadFile(
         filename=endpoint_name,
         file=io.BytesIO(endpoint_bytes),

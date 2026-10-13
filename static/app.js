@@ -611,12 +611,15 @@
         const availableCount = readinessFiles.filter(status => status.available === true).length;
         const totalCount = readinessFileKeys.length;
         const allAvailable = totalCount > 0 && availableCount === totalCount;
-        panel.dataset.state = allAvailable ? "ready" : "warning";
+        const writeBlock = report.gravacao_bloqueada?.available === false ? report.gravacao_bloqueada : null;
+        panel.dataset.state = allAvailable && !writeBlock ? "ready" : "warning";
         if (!panel.dataset.initialized) {
-          panel.open = !allAvailable;
+          panel.open = !allAvailable || Boolean(writeBlock);
           panel.dataset.initialized = "true";
         }
-        summary.textContent = allAvailable
+        summary.textContent = writeBlock
+          ? "Modo leitura: uma gravação interrompida precisa de conferência. Confira os detalhes abaixo."
+          : allAvailable
           ? totalCount === 1 ? "O arquivo está disponível." : `Todos os ${totalCount} arquivos estão disponíveis.`
           : totalCount === 0
             ? "Não foi possível identificar os arquivos para verificar a disponibilidade."
@@ -642,6 +645,21 @@
         };
 
         const content = document.createDocumentFragment();
+        if (writeBlock) {
+          adicionarGrupoProntidao(
+            content,
+            "Gravações bloqueadas",
+            [["gravacao_bloqueada", writeBlock]],
+            { gravacao_bloqueada: "Importações e edições" },
+            "function",
+            {
+              description: "A consulta continua disponível; importações, edições e anotações aguardam a conferência.",
+              countLabel: "Modo leitura",
+              countState: "invalid",
+              showItemState: false,
+            }
+          );
+        }
         const inventoryFileLabels = {
           inventario_equipamentos: "Base ativa",
           inventario_detalhes_atualizacao: "Simpress",
