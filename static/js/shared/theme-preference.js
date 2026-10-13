@@ -46,12 +46,12 @@
   }
 
   document.addEventListener("click", function (event) {
-    const button = event.target instanceof Element ? event.target.closest("#theme-toggle") : null;
+    const button = event.composedPath().find(target => target?.id === "theme-toggle");
     if (!button) return;
 
     const nextTheme = document.documentElement.dataset.theme === "dark" ? "light" : "dark";
     applyTheme(nextTheme, true);
-  });
+  }, { capture: true });
 
   if (document.readyState === "loading") {
     document.addEventListener("DOMContentLoaded", initializeToggle, { once: true });
