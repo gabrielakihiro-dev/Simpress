@@ -1219,6 +1219,37 @@ class WorkflowIntegrityTests(unittest.TestCase):
         self.assertEqual(raised.exception.status_code, 409)
         self.assertEqual(self.model.read_bytes(), source_before)
 
+    def test_export_normalizes_blue_alias_and_idcliente_headers_without_changing_model(self):
+        make_details(self.details, [
+            ("S-1", "HOST-LOCAL", "Modelo A", "Maringá", "Notebook", "87000000", "ID-ATUAL"),
+        ], headers=["NumeroSerie", "Apelido", "Modelo", "Cidade", "Tipo", "CEP", "IdCliente"])
+        make_endpoint(self.endpoint, [("S-1", "HOST-ENDPOINT")])
+        workbook = openpyxl.Workbook()
+        worksheet = workbook.active
+        worksheet.title = "Parque"
+        worksheet.append(["NumeroSerie", "Apelido", "IdCliente", "Modelo"])
+        worksheet.append(["S-1", "HOST-ANTIGO", "ID-ANTIGO", "Modelo A"])
+        gray = PatternFill("solid", fgColor="808080")
+        blue = PatternFill("solid", fgColor="8EA9DB")
+        worksheet["A1"].fill = gray
+        worksheet["D1"].fill = gray
+        worksheet["B1"].fill = blue
+        worksheet["C1"].fill = blue
+        workbook.save(self.model)
+        workbook.close()
+        original_bytes = self.model.read_bytes()
+
+        response = main.exportar_equipamentos()
+        output = openpyxl.load_workbook(io.BytesIO(asyncio.run(_collect_stream(response))))
+        exported = output["Parque"]
+        self.assertEqual(exported["B1"].style_id, exported["A1"].style_id)
+        self.assertEqual(exported["C1"].style_id, exported["A1"].style_id)
+        self.assertEqual(exported["D1"].style_id, exported["A1"].style_id)
+        self.assertEqual(exported["B2"].value, "HOST-ENDPOINT")
+        self.assertEqual(exported["C2"].value, "ID-ATUAL")
+        output.close()
+        self.assertEqual(self.model.read_bytes(), original_bytes)
+
     def test_export_availability_and_output_track_alias_and_idcliente_changes(self):
         cases = [
             ("nenhuma", "HOST-SAME", "HOST-SAME", "ID-SAME", "ID-SAME", 0, 0),
