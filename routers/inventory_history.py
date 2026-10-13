@@ -599,7 +599,7 @@ def create_inventory_history_router(services: InventoryHistoryServices):
             "Apelidos atualizados": 0,
             "Apelidos para conferência": 0,
             "Divergências manuais": 0,
-            "Sem verificação há 14+ dias": 0,
+            "Sem verificação há 7+ dias": 0,
             "Ausentes no endpoint": 0,
             "Ausentes na Simpress": 0,
             "Divergências de localidade": 0,
@@ -642,7 +642,7 @@ def create_inventory_history_router(services: InventoryHistoryServices):
             category_counts["Apelidos atualizados"] += len(alias_updates)
             category_counts["Apelidos para conferência"] += len(alias_reviews)
             category_counts["Divergências manuais"] += len(manual_alias_conflicts)
-            category_counts["Sem verificação há 14+ dias"] += len(no_recent_verification)
+            category_counts["Sem verificação há 7+ dias"] += len(no_recent_verification)
             category_counts["Ausentes no endpoint"] += len(absent_endpoint)
             category_counts["Ausentes na Simpress"] += len(absent_simpress)
             category_counts["Divergências de localidade"] += len(local_divergences)
@@ -797,7 +797,7 @@ def create_inventory_history_router(services: InventoryHistoryServices):
             ["Ordem", "Data e hora", "Operação", "ID do evento", "Arquivo no endpoint", "Arquivo na Simpress",
              "Equipamentos no endpoint", "Equipamentos na Simpress", "Equipamentos carregados", "Apelidos atualizados",
              "Apelidos para conferência", "Divergências manuais pendentes", "Ausentes no endpoint",
-             "Ausentes na Simpress", "Sem verificação há 14+ dias", "Divergências de local", "Duplicidades e ambiguidades",
+             "Ausentes na Simpress", "Sem verificação há 7+ dias", "Divergências de local", "Duplicidades e ambiguidades",
              "Séries sem local", "Restauração de", "Diretório de backup"],
             history_rows, "tblHistoricoPlanilhas",
             [10, 20, 16, 34, 32, 42, 18, 18, 20, 17, 20, 22, 18, 18, 23, 18, 22, 17, 20, 36],
@@ -821,7 +821,7 @@ def create_inventory_history_router(services: InventoryHistoryServices):
         )
         _write_export_table_sheet(
             workbook, "Sem acesso", "Notebooks sem verificação recente",
-            "Notebooks cuja última verificação com êxito ocorreu há pelo menos 14 dias.",
+            "Notebooks cuja última verificação com êxito ocorreu há pelo menos 7 dias.",
             ["Data e hora", "Operação", "Hostname/Apelido", "Série", "Última verificação com êxito",
              "Dias sem verificação", "Linha no endpoint", "Anotação"],
             no_access_rows, "tblHistoricoSemAcesso",
