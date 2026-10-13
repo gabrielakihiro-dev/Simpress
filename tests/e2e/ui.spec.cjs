@@ -134,11 +134,24 @@ test("tab navigation updates selected state and supports arrow keys", async ({ p
 
 test("search displays an announced skeleton, then the fictional result", async ({ page }) => {
   test.setTimeout(45_000);
+  await page.route("**/api/buscar-expandida*", route => route.fulfill({ json: {
+    items: [], total: 0, has_more: false, filters: { categories: [], cities: [] },
+  } }));
+  const autocompleteResponsePromise = page.waitForResponse(response =>
+    new URL(response.url()).pathname === "/api/buscar-expandida", { timeout: 20_000 });
+  const equipmentResponsePromise = page.waitForResponse(response =>
+    new URL(response.url()).pathname === "/api/equipamento/LENTO", { timeout: 20_000 });
   await page.getByRole("combobox", { name: "Série, apelido, modelo ou cidade do equipamento" }).fill("LENTO");
+  const autocompleteResponse = await autocompleteResponsePromise;
+  expect(autocompleteResponse.status()).toBe(200);
+  await page.keyboard.press("Escape");
   await page.getByRole("button", { name: "Buscar Equipamento" }).click();
   await expect(page.locator(".ui-skeleton").first()).toBeVisible();
-  await expect(page.getByText("DEMO-001", { exact: true })).toBeVisible({ timeout: 8_000 });
-  await expect(page.locator("#card-equipamento")).toBeVisible();
+  const equipmentResponse = await equipmentResponsePromise;
+  expect(equipmentResponse.status()).toBe(200);
+  const equipmentCard = page.locator("#card-equipamento");
+  await expect(equipmentCard).toBeVisible({ timeout: 15_000 });
+  await expect(equipmentCard.locator("#badge-apelido")).toHaveText("DEMO-001");
 });
 
 test("failed search restores the controls and exposes a recoverable error", async ({ page }) => {

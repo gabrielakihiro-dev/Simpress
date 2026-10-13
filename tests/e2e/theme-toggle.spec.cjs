@@ -58,6 +58,9 @@ test("the theme icon switches modes and persists the choice", async ({ page }) =
 });
 
 test("the login page theme toggle works", async ({ page }) => {
+  await page.route("**/api/auth/session", route => route.fulfill({
+    json: { enabled: true, authenticated: false },
+  }));
   await page.goto("/login");
   await expect(page.locator("#login-form")).toBeVisible();
   await expect(page).toHaveURL(/\/login$/);
