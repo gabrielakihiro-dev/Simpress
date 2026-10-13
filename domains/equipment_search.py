@@ -1,0 +1,123 @@
+"""Search indexing and categorization for equipment records."""
+
+import unicodedata
+from typing import Any, Callable, Dict, Iterable, List, Tuple
+
+
+EquipmentSearchIndexEntry = Tuple[
+    int,
+    Tuple[str, str, str, str, str, str],
+    Dict[str, Any],
+]
+
+CATEGORIES = (
+    {"value": "notebook", "label": "Notebooks"},
+    {"value": "macbook", "label": "MacBooks"},
+    {"value": "monitor", "label": "Monitores"},
+    {"value": "fone", "label": "Fones"},
+)
+
+
+def normalize_search_term(value: Any) -> str:
+    """Normalize accents and casing for equipment search."""
+    text = unicodedata.normalize("NFKD", str(value or ""))
+    return "".join(character for character in text if not unicodedata.combining(character)).strip().upper()
+
+
+def categorize_equipment(kind: Any, model: Any, normalize: Callable[[Any], str] = normalize_search_term) -> str:
+    """Map inventory labels to the categories used by the search interface."""
+    text = f"{normalize(kind)} {normalize(model)}"
+    if "MACBOOK" in text:
+        return "macbook"
+    if "MONITOR" in text:
+        return "monitor"
+    if any(term in text for term in ("HEADSET", "HEADPHONE", "FONE", "EARPHONE", "EARBUD")):
+        return "fone"
+    if "NOTEBOOK" in text or "LAPTOP" in text:
+        return "notebook"
+    return ""
+
+
+def build_search_index(
+    equipment_cache: Dict[str, Dict[str, Any]],
+    normalize: Callable[[Any], str] = normalize_search_term,
+) -> Tuple[EquipmentSearchIndexEntry, ...]:
+    """Precompute normalized values once for each published cache generation."""
+    indexed: List[EquipmentSearchIndexEntry] = []
+    for index, (serial_key, item) in enumerate(equipment_cache.items()):
+        serial = str(item.get("serial") or serial_key)
+        model = str(item.get("modelo") or "")
+        kind = str(item.get("tipo") or "")
+        alias = str(item.get("apelido") or "")
+        city = str(item.get("retirada_cidade") or "")
+        category = categorize_equipment(kind, model, normalize)
+        category_label = next(
+            (entry["label"] for entry in CATEGORIES if entry["value"] == category),
+            "",
+        )
+        searchable_values = (
+            normalize(serial_key or serial),
+            normalize(model),
+            normalize(kind),
+            normalize(alias),
+            normalize(city),
+            normalize(category_label),
+        )
+        result = {
+            "serial": serial,
+            "modelo": model,
+            "tipo": kind,
+            "categoria": category,
+            "apelido": alias,
+            "retirada_cidade": city,
+            "retirada_cnpj": str(item.get("retirada_cnpj") or ""),
+            "invall_alias_status": item.get("invall_alias_status"),
+            "invall_alias_detail": item.get("invall_alias_detail"),
+        }
+        indexed.append((index, searchable_values, result))
+    return tuple(indexed)
+
+
+def search_index(
+    indexed: Iterable[EquipmentSearchIndexEntry],
+    query: Any,
+    normalize: Callable[[Any], str] = normalize_search_term,
+) -> List[Dict[str, Any]]:
+    """Find matching equipment and retain the established relevance ordering."""
+    return search_normalized_index(indexed, normalize(query))
+
+
+def search_normalized_index(
+    indexed: Iterable[EquipmentSearchIndexEntry],
+    term: str,
+) -> List[Dict[str, Any]]:
+    """Search with a term normalized by the caller."""
+    if not term:
+        return []
+
+    ranked_results: List[Tuple[int, int, Dict[str, Any]]] = []
+    for index, searchable_values, result in indexed:
+        serial_search, model_search, kind_search, alias_search, city_search, category_search = searchable_values
+        if not any(term in value for value in searchable_values):
+            continue
+
+        if term == serial_search:
+            rank = 0
+        elif serial_search.startswith(term):
+            rank = 1
+        elif term in serial_search:
+            rank = 2
+        elif term in model_search:
+            rank = 3
+        elif term in alias_search:
+            rank = 4
+        elif term in kind_search:
+            rank = 5
+        elif term in category_search:
+            rank = 6
+        else:
+            rank = 7
+        ranked_results.append((rank, index, result))
+
+    ranked_results.sort(key=lambda result: (result[0], result[1]))
+    return [result[2] for result in ranked_results]

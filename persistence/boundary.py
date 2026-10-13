@@ -1,0 +1,72 @@
+"""Request scope and feature boundary for the unfinished local PostgreSQL pilot."""
+
+from contextvars import ContextVar
+import re
+from starlette.responses import JSONResponse
+from security.network import is_direct_loopback_request
+
+idempotency_key = ContextVar("simpress_idempotency_key", default=None)
+PENDING = "Esta rota não está disponível no piloto PostgreSQL local."
+IDEMPOTENCY_KEY_PATTERN = re.compile(r"[A-Za-z0-9._:-]{1,128}\Z")
+
+
+def pilot_route_allowed(method, path):
+    if path == "/api/auth/session" and method == "GET":
+        return True
+    if path in {"/api/auth/login", "/api/auth/logout", "/api/auth/logout-all"} and method == "POST":
+        return True
+    reads = {"/api/buscar", "/api/buscar-expandida", "/api/stats", "/api/unidades",
+             "/api/prontidao", "/api/config/transferencia", "/api/historico-alteracoes", "/api/historico-apelidos"}
+    writes = {"/api/equipamento/salvar", "/api/equipamento/atualizar-apelido",
+              "/api/equipamento/apelido/desfazer", "/api/unidade/salvar", "/api/recarregar-base"}
+    if method == "GET":
+        return (path in reads or path in {"/api/exportar-equipamentos","/api/historico-comparacoes","/api/historico-comparacoes/exportar/excel","/api/piloto/operacoes",
+                "/api/operacoes/pendencias","/api/operacoes/evolucao"}
+                or (path.startswith("/api/equipamento/") and len(path.split("/")) == 4)
+                or bool(re.fullmatch(r"/api/historico-comparacoes/[^/]+(?:/restauracao)?|/api/arquivos/[^/]+|/api/piloto/operacoes/[^/]+",path)))
+    if method == "POST":
+        return (path in writes or path in {"/api/planilhas/atualizar","/api/gerar-planilha","/api/piloto/anotacoes/importar","/api/piloto/retencao"}
+                or bool(re.fullmatch(r"/api/historico-comparacoes/[^/]+/(?:restaurar|apelido-manual/[^/]+)|/api/piloto/modelos/(?:transferencia|exportacao)|/api/piloto/operacoes/[^/]+/(?:recuperar|cancelar)",path)))
+    if method == "PUT":
+        return bool(re.fullmatch(r"/api/historico-comparacoes/[^/]+/anotacoes/[^/]+",path))
+    return method == "DELETE" and any(path.startswith(p) and len(path.split("/")) == 4 for p in
+        ("/api/historico-alteracoes/", "/api/historico-apelidos/", "/api/historico-comparacoes/"))
+
+
+class PersistenceBoundaryMiddleware:
+    def __init__(self, app, is_postgres):
+        self.app = app
+        self.is_postgres = is_postgres
+
+    async def __call__(self, scope, receive, send):
+        if scope["type"] != "http":
+            await self.app(scope, receive, send)
+            return
+        path = scope.get("path", "")
+        is_postgres = self.is_postgres()
+        is_inventory_update = path == "/api/planilhas/atualizar" and scope.get("method") == "POST"
+        if not is_postgres and not is_inventory_update:
+            await self.app(scope, receive, send)
+            return
+        if is_postgres:
+            if not is_direct_loopback_request(scope):
+                await JSONResponse({"detail": "O piloto PostgreSQL aceita somente conexões locais."}, status_code=403)(scope, receive, send)
+                return
+            if path.startswith("/api/") and not pilot_route_allowed(scope["method"], path):
+                await JSONResponse({"detail": PENDING}, status_code=501)(scope, receive, send)
+                return
+        values = [v for k,v in scope.get("headers", []) if k.lower() == b"idempotency-key"]
+        if len(values) > 1 and (is_postgres or is_inventory_update):
+            await JSONResponse({"detail": "Informe somente uma Idempotency-Key."}, status_code=422)(scope, receive, send)
+            return
+        key = values[0].decode("latin-1") if values else None
+        if is_inventory_update and key is not None and not IDEMPOTENCY_KEY_PATTERN.fullmatch(key):
+            await JSONResponse({
+                "detail": "Idempotency-Key deve conter de 1 a 128 letras, números, ponto, hífen, dois-pontos ou sublinhado."
+            }, status_code=422)(scope, receive, send)
+            return
+        token = idempotency_key.set(key)
+        try:
+            await self.app(scope, receive, send)
+        finally:
+            idempotency_key.reset(token)

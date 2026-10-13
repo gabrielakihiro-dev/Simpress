@@ -1,0 +1,13 @@
+---
+description: Apply SEBRAE-owned and Curitiba-hostname rules to Simpress comparisons.
+alwaysApply: true
+---
+
+# Equipamentos do Sebrae nas comparações Simpress
+
+- Trate as séries `BRJ135P5XS`, `BRJ142QKBQ`, `BRJ9435VMR`, `BRJ9435VMF` e `BRJ149SCJG` como notebooks próprios do Sebrae, fora do inventário da Simpress.
+- Em todas as comparações de planilhas deste projeto, ignore essas séries na lista e na contagem de notebooks sem correspondência (`ausentes_em_detalhes`), inclusive ao consultar resultados já salvos no histórico.
+- Considere os hostnames iniciados por `PRNOTESJP`, `PRNOTERL` ou `PRNOTEARC` instalados em Curitiba, pois não têm endereço cadastrado próprio.
+- Para esses prefixos e quaisquer sufixos futuros, considere a localidade consistente com Curitiba, mesmo que `EquipamentosDetalhes` informe São José dos Pinhais, São José, Colombo, Araucária ou outra cidade; não os exiba como divergência de localidade.
+- Aplique as classificações atuais também na visualização do histórico, sem regravar nem apagar seus registros.
+- Mantenha intactas as linhas dos arquivos de origem; estas regras afetam apenas a classificação e a exibição do comparativo.

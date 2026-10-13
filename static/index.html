@@ -1,0 +1,1582 @@
+<!DOCTYPE html>
+<html lang="pt-BR" class="h-full bg-slate-900 text-slate-100" data-theme="dark">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <script src="/static/js/shared/theme-preference.js"></script>
+  <title>Simpress | Automação de Transferência de Equipamentos - SEBRAE/PR</title>
+  <link rel="icon" type="image/svg+xml" href="/static/favicon.svg">
+  
+  <link rel="stylesheet" href="/static/vendor/fonts.css">
+  <link rel="stylesheet" href="/static/vendor/tailwind-4.3.3.css">
+  <script src="/static/vendor/lucide-1.48.0.min.js"></script>
+  <link rel="stylesheet" href="/static/app.css">
+  <link rel="stylesheet" href="/static/styles/ui-motion.css">
+  <link rel="stylesheet" href="/static/styles/sidebar-navigation.css">
+  <link rel="stylesheet" href="/static/styles/theme.css">
+</head>
+<body class="min-h-full bg-gradient-to-br from-slate-950 via-slate-900 to-slate-950 text-slate-100 font-sans selection:bg-brand-500 selection:text-white">
+
+  <a class="skip-link" href="#main-content">Pular para o conteúdo principal</a>
+
+  <div id="simpress-app-shell" class="simpress-app-shell" data-sidebar-collapsed="false" data-sidebar-open="false">
+    <div id="sidebar-backdrop" class="sidebar-backdrop" aria-hidden="true"></div>
+
+    <aside id="app-sidebar" class="app-sidebar" aria-label="Navegação principal">
+      <div class="sidebar-header">
+        <div class="sidebar-brand" aria-label="Simpress, gestão de equipamentos">
+          <span class="sidebar-brand-mark" aria-hidden="true">S</span>
+          <span class="sidebar-brand-copy">
+            <strong>Simpress</strong>
+            <small>Gestão de equipamentos</small>
+          </span>
+        </div>
+        <button type="button" id="btn-sidebar-toggle" class="sidebar-icon-button sidebar-collapse-button" aria-label="Recolher menu lateral" aria-controls="app-sidebar" aria-expanded="true" title="Recolher menu lateral">
+          <i data-lucide="chevron-left" class="sidebar-collapse-icon" aria-hidden="true"></i>
+        </button>
+      </div>
+
+      <div class="sidebar-scroll-area">
+        <div class="sidebar-primary-action">
+          <div class="header-primary-actions">
+            <button type="button" onclick="resetarFormulario()" id="btn-nova-transferencia" aria-label="Nova transferência" class="header-primary-icon-button sidebar-new-transfer flex items-center justify-center text-sky-100 bg-sky-700 hover:bg-sky-600 border border-sky-500/70 rounded-lg transition-all shadow-sm" title="Nova transferência">
+              <i data-lucide="rotate-ccw" class="w-4 h-4" aria-hidden="true"></i>
+              <span class="sidebar-item-label">Nova transferência</span>
+            </button>
+          </div>
+        </div>
+
+        <p class="sidebar-section-title">Navegação</p>
+        <nav class="app-tabs sidebar-tabs" role="tablist" aria-label="Etapas da transferência" onkeydown="controlarAbasTransferencia(event)">
+          <button type="button" id="tab-home" class="app-tab is-active" role="tab" aria-selected="true" aria-controls="tab-panel-home" tabindex="0" onclick="ativarAbaTransferencia('home')" aria-label="Home" title="Home">
+            <i data-lucide="home" class="w-4 h-4" aria-hidden="true"></i>
+            <span>Home</span>
+          </button>
+          <button type="button" id="tab-retirada-entrega" class="app-tab" role="tab" aria-selected="false" aria-controls="tab-panel-retirada-entrega" tabindex="-1" onclick="ativarAbaTransferencia('transferencia')" aria-label="Transporte" title="Transporte">
+            <i data-lucide="truck" class="w-4 h-4" aria-hidden="true"></i>
+            <span>Transporte</span>
+          </button>
+        </nav>
+
+        <div class="sidebar-divider" aria-hidden="true"></div>
+        <p class="sidebar-section-title">Ferramentas</p>
+
+        <nav class="header-actions sidebar-actions" aria-label="Ferramentas do sistema">
+          <div class="header-secondary-panel" role="group" aria-label="Ações do sistema">
+            <button type="button" onclick="abrirAcompanhamentoChamados()" id="btn-acompanhamento-chamados" data-sidebar-page class="header-action-item header-action-item--large header-action-item--orange flex items-center gap-2" title="Relacionar séries, OS e status nos arquivos da Simpress e do Oracle">
+              <i data-lucide="clipboard-list" class="header-action-icon header-action-icon--orange" aria-hidden="true"></i>
+              <span class="sidebar-item-label">Acompanhamento de<br>Chamados</span>
+            </button>
+            <details class="header-action-group" data-action-group="analysis">
+              <summary aria-label="Abrir históricos e análises" aria-controls="header-action-group-analysis" title="Históricos e Análises">
+                <i data-lucide="chart-no-axes-combined" class="header-action-group-icon" aria-hidden="true"></i>
+                <span class="sidebar-item-label">Históricos e Análises</span>
+                <span id="badge-total-historico-comparacoes" class="header-action-count" aria-label="Total no histórico de planilhas">0</span>
+                <i data-lucide="chevron-down" class="header-action-group-chevron" aria-hidden="true"></i>
+              </summary>
+              <div id="header-action-group-analysis" class="header-action-group-items" role="group" aria-label="Atualização, exportação, análises, históricos e catálogo de unidades">
+                <button type="button" onclick="abrirModalAtualizarPlanilhas()" id="btn-atualizar-planilhas" data-sidebar-page class="header-action-item header-action-item--primary flex items-center gap-2" title="Comparar os arquivos e atualizar as bases do site">
+                  <i data-lucide="upload" class="header-action-icon" aria-hidden="true"></i>
+                  <span class="sidebar-item-label">Atualizar planilhas</span>
+                </button>
+                <button type="button" onclick="exportarEquipamentosAtualizados()" id="btn-exportar-equipamentos" aria-label="Exportar planilha Excel com apelidos e IdCliente atualizados" aria-labelledby="label-exportar-equipamentos" class="header-action-item header-action-item--primary hidden flex items-center gap-2" title="Baixar a planilha com apelidos e IdCliente atualizados">
+                  <i data-lucide="upload" class="header-action-icon" aria-hidden="true"></i>
+                  <span id="label-exportar-equipamentos" class="sidebar-item-label">Exportar Excel</span>
+                </button>
+                <div class="sidebar-related-links" role="group" aria-label="Histórico e análise da atualização">
+                  <button type="button" onclick="abrirModalHistoricoComparacoes()" id="btn-historico-comparacoes" data-sidebar-page aria-label="Histórico de atualizações e comparação de planilhas" aria-labelledby="label-historico-comparacoes" class="header-action-item flex items-center gap-2" title="Consultar comparações e alterações de apelido feitas pela atualização das planilhas">
+                    <i data-lucide="history" class="header-action-icon" aria-hidden="true"></i>
+                    <span id="label-historico-comparacoes" class="sidebar-item-label">Histórico planilhas</span>
+                  </button>
+                  <button type="button" onclick="abrirEvolucaoAtualizacoes()" id="btn-evolucao-atualizacoes" data-sidebar-page class="header-action-item flex items-center gap-2" title="Comparar pendências entre duas atualizações">
+                    <i data-lucide="activity" class="header-action-icon" aria-hidden="true"></i>
+                    <span class="sidebar-item-label">Evolução das atualizações</span>
+                  </button>
+                </div>
+                <button type="button" onclick="abrirModalHistoricoApelidos()" id="btn-historico-apelidos" data-sidebar-page aria-label="Histórico de alterações manuais" aria-labelledby="label-historico-apelidos" class="header-action-item flex items-center gap-2" title="Consultar histórico de alterações manuais">
+                  <i data-lucide="history" class="header-action-icon" aria-hidden="true"></i>
+                  <span id="label-historico-apelidos" class="sidebar-item-label">Histórico de alterações</span>
+                </button>
+                <button type="button" onclick="abrirModalGerenciarUnidades()" id="btn-catalogo-unidades" data-sidebar-page aria-label="Catálogo de unidades SEBRAE" aria-labelledby="label-catalogo-unidades" class="header-action-item flex items-center gap-2" title="Consultar e gerenciar o catálogo de unidades SEBRAE">
+                  <i data-lucide="map-pin" class="header-action-icon" aria-hidden="true"></i>
+                  <span id="label-catalogo-unidades" class="sidebar-item-label">Catálogo de unidades</span>
+                </button>
+              </div>
+            </details>
+          </div>
+        </nav>
+      </div>
+
+    </aside>
+
+    <div class="app-workspace">
+      <header class="site-header border-b border-slate-800/80 bg-slate-950/80 backdrop-blur-md sticky top-0 z-40">
+        <div class="header-inner">
+          <button type="button" id="btn-sidebar-open" class="sidebar-icon-button sidebar-mobile-open" aria-label="Abrir menu de navegação" aria-controls="app-sidebar" aria-expanded="false" title="Abrir menu de navegação">
+            <i data-lucide="menu" aria-hidden="true"></i>
+          </button>
+          <div class="header-context" aria-label="Aplicação Simpress para o SEBRAE Paraná">
+            <span>Simpress <span aria-hidden="true">·</span> SEBRAE/PR</span>
+            <strong>Gestão de equipamentos</strong>
+          </div>
+          <div class="header-base-summary hidden md:flex items-center gap-3 text-xs text-slate-400 bg-slate-900/80 px-3.5 py-2 rounded-lg border border-slate-800" aria-label="Resumo da base">
+            <span class="inline-flex items-center gap-1.5"><span class="h-1.5 w-1.5 rounded-full bg-emerald-400" aria-hidden="true"></span>Base: <strong class="text-slate-200" id="stat-equipamentos">Carregando…</strong> equipamentos</span>
+            <span aria-hidden="true" class="text-slate-700">|</span>
+            <span>Regionais: <strong class="text-slate-200" id="stat-unidades">Carregando…</strong></span>
+            <span aria-hidden="true" class="text-slate-700">|</span>
+            <span>Contrato: <strong class="text-slate-200">16467</strong></span>
+          </div>
+          <button type="button" id="theme-toggle" class="theme-toggle-button" aria-label="Ativar modo claro" title="Ativar modo claro">
+            <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="lucide lucide-sun" aria-hidden="true" focusable="false"><circle cx="12" cy="12" r="4"></circle><path d="M12 2v2"></path><path d="M12 20v2"></path><path d="m4.93 4.93 1.42 1.42"></path><path d="m17.65 17.65 1.42 1.42"></path><path d="M2 12h2"></path><path d="M20 12h2"></path><path d="m6.34 17.66-1.42 1.42"></path><path d="m19.07 4.93-1.42 1.42"></path></svg>
+          </button>
+        </div>
+      </header>
+
+      <!-- MAIN CONTAINER -->
+      <main id="main-content" tabindex="-1" class="flex-1 w-full space-y-6">
+
+    <details id="readiness-panel" class="readiness-panel glass-card rounded-xl" data-state="loading" aria-labelledby="readiness-title" aria-busy="true">
+      <summary class="readiness-panel-summary" aria-controls="readiness-content">
+        <span class="readiness-summary-copy">
+          <span id="readiness-title" class="readiness-title">Disponibilidade das funções</span>
+          <span id="readiness-summary" class="readiness-status" role="status" aria-live="polite" aria-atomic="true">Verificando os arquivos locais…</span>
+        </span>
+      </summary>
+      <div id="readiness-content" class="readiness-expanded-content">
+        <div id="readiness-details-content" class="readiness-details-content"></div>
+      </div>
+    </details>
+
+    <section id="tab-panel-home" class="app-tab-panel" role="tabpanel" aria-labelledby="tab-home" tabindex="0">
+
+    <!-- 1. BUSCA DE EQUIPAMENTO POR NÚMERO DE SÉRIE -->
+    <section class="glass-card home-search-card rounded-2xl p-6 sm:p-8 shadow-2xl relative z-50">
+      <div class="absolute inset-0 rounded-2xl overflow-hidden pointer-events-none">
+        <div class="absolute -right-16 -top-16 w-64 h-64 bg-brand-500/10 rounded-full blur-3xl"></div>
+      </div>
+
+      <div class="relative">
+        <label for="input-serial" class="home-search-label font-bold text-white">Pesquise por série, apelido, modelo ou cidade</label>
+        <form onsubmit="event.preventDefault(); buscarSerial();" class="flex flex-col sm:flex-row gap-4">
+          <div class="relative flex-1">
+            <input
+              type="text"
+              id="input-serial"
+              role="combobox"
+              aria-label="Série, apelido, modelo ou cidade do equipamento"
+              aria-autocomplete="list"
+              aria-controls="autocomplete-list"
+              aria-expanded="false"
+              aria-haspopup="listbox"
+              autocomplete="off"
+              placeholder="Série, apelido, modelo ou cidade..."
+              class="home-search-input w-full rounded-xl glass-input text-white font-mono tracking-wider placeholder:text-slate-500 placeholder:font-sans focus:outline-none uppercase"
+              oninput="handleSerialInput(this.value)"
+              onkeydown="handleSerialKeydown(event)"
+            />
+            <button
+              type="button"
+              id="btn-clear-serial"
+              aria-label="Limpar pesquisa"
+              title="Limpar pesquisa"
+              onclick="limparSerial()"
+              class="hidden absolute inset-y-0 right-0 pr-3.5 flex items-center text-slate-400 hover:text-white transition-colors"
+            >
+              <i data-lucide="x" class="w-5 h-5"></i>
+            </button>
+          </div>
+
+          <button
+            type="submit"
+            id="btn-buscar-serial"
+            class="home-search-button bg-brand-600 hover:bg-brand-500 text-white font-bold rounded-xl transition-all duration-200 flex items-center justify-center shadow-lg shadow-brand-600/30 shrink-0"
+          >
+            <i data-lucide="search" class="w-5 h-5"></i>
+            <span>Buscar Equipamento</span>
+          </button>
+        </form>
+
+        <!-- Autocomplete Suggestions Dropdown -->
+        <div
+          id="autocomplete-box"
+          class="hidden absolute top-full left-0 right-0 mt-2.5 rounded-2xl z-[100] overflow-hidden"
+        >
+          <!-- Header -->
+          <div
+            id="autocomplete-header"
+            class="sticky top-0 px-4 py-3 border-b border-slate-800 text-xs font-semibold flex justify-between items-center z-10 select-none"
+          >
+            <div class="flex items-center space-x-2">
+              <span class="w-2 h-2 rounded-full bg-cyan-400 animate-pulse"></span>
+              <span class="font-bold tracking-wider uppercase text-[11px] text-cyan-300 flex items-center gap-1.5">
+                <i data-lucide="layers" class="w-3.5 h-3.5 text-cyan-400"></i>
+                Resultados Encontrados no Parque
+              </span>
+            </div>
+            <div class="flex items-center space-x-3">
+              <span id="autocomplete-count" role="status" aria-live="polite" aria-atomic="true" class="px-2.5 py-0.5 rounded-full bg-cyan-500/20 text-cyan-300 border border-cyan-500/30 font-mono text-[11px] font-bold">
+                0 itens
+              </span>
+              <span class="hidden sm:inline-flex items-center text-[10px] text-slate-400 space-x-1">
+                <span>Navegar:</span>
+                <kbd class="px-1 py-0.5 bg-slate-800 border border-slate-700 rounded text-slate-300 font-mono text-[9px]">↑</kbd>
+                <kbd class="px-1 py-0.5 bg-slate-800 border border-slate-700 rounded text-slate-300 font-mono text-[9px]">↓</kbd>
+                <span class="ml-1">Selecionar:</span>
+                <kbd class="px-1 py-0.5 bg-slate-800 border border-slate-700 rounded text-slate-300 font-mono text-[9px]">Enter</kbd>
+              </span>
+            </div>
+          </div>
+
+          <!-- Items List Container -->
+          <div id="autocomplete-list" role="listbox" aria-label="Equipamentos encontrados" class="divide-y divide-slate-800/80 max-h-96 overflow-y-auto"></div>
+          <div id="autocomplete-empty-state" class="hidden" role="region" aria-label="Resultado da busca" aria-live="polite"></div>
+          <div id="autocomplete-more-results" class="hidden px-4 py-2 border-t border-slate-800">
+            <button type="button" onclick="abrirPesquisaCompleta()" class="autocomplete-more-button w-full inline-flex items-center justify-center gap-2 px-3 py-2 rounded-xl transition">
+              <i data-lucide="list-checks" class="w-4 h-4" aria-hidden="true"></i>
+              <span data-autocomplete-more-label>Mostrar mais</span>
+            </button>
+          </div>
+
+          <!-- Footer Tips -->
+          <div
+            id="autocomplete-footer"
+            class="px-4 py-2 border-t border-slate-800 text-[11px] text-slate-400 flex items-center justify-between select-none"
+          >
+            <span class="flex items-center gap-1.5">
+              <i data-lucide="sparkles" class="w-3.5 h-3.5 text-cyan-400"></i>
+              <span>Clique no equipamento ou use <kbd class="px-1.5 py-0.5 bg-slate-800 border border-slate-700 rounded text-slate-300 font-mono text-[9px]">Enter</kbd> para preenchimento imediato</span>
+            </span>
+            <span class="text-[10px] text-slate-500 font-mono hidden sm:inline"><kbd class="px-1 py-0.5 bg-slate-800 border border-slate-700 rounded text-slate-400 text-[9px]">ESC</kbd> para fechar</span>
+          </div>
+        </div>
+      </div>
+
+      <!-- CARD: EQUIPAMENTO ENCONTRADO -->
+      <div id="equipment-loading" class="ui-equipment-loading"></div>
+      <div id="card-equipamento" role="region" aria-label="Dados do equipamento localizado" class="hidden mt-6 bg-slate-800/40 rounded-xl border border-slate-700/70 p-5 transition-all">
+        <div class="flex flex-col lg:flex-row lg:items-center justify-between gap-4 pb-4 border-b border-slate-700/50">
+          <div class="flex items-start sm:items-center space-x-4">
+            <div id="equip-icon-box" class="w-14 h-14 rounded-xl bg-emerald-500/10 border border-emerald-500/30 flex items-center justify-center shrink-0 text-emerald-400">
+              <i id="equip-icon" data-lucide="laptop" class="w-7 h-7"></i>
+            </div>
+            <div>
+              <div class="flex flex-wrap items-center gap-2">
+                <span id="badge-tipo" class="px-2.5 py-0.5 rounded-full text-xs font-semibold bg-emerald-500/20 text-emerald-300 border border-emerald-500/30">
+                  Notebook
+                </span>
+                <span class="text-xs px-2 py-0.5 rounded-full bg-slate-700 text-slate-300 font-mono">
+                  Série: <strong id="card-serial" class="text-white font-bold tracking-wider">5CG6051BVN</strong>
+                </span>
+                <span id="badge-apelido" class="text-xs px-2 py-0.5 rounded-full bg-slate-800 text-cyan-300 font-mono border border-cyan-500/20">
+                  PRNOTEDIREX007
+                </span>
+                <button
+                  type="button"
+                  onclick="abrirModalEditarApelido()"
+                  class="inline-flex items-center gap-1 px-2 py-1 rounded-lg bg-cyan-500/10 hover:bg-cyan-500/20 text-cyan-300 border border-cyan-500/30 text-[11px] font-semibold transition"
+                  title="Alterar somente o apelido deste equipamento"
+                >
+                  <i data-lucide="pencil" class="w-3 h-3"></i>
+                  <span>Editar Apelido</span>
+                </button>
+              </div>
+              <p id="badge-apelido-status" class="hidden text-[11px] text-amber-200 mt-1" role="status" aria-live="polite"></p>
+              <h3 id="card-modelo" class="text-lg font-bold text-white mt-1">HP EB 6 G1I</h3>
+              <p id="card-id-cliente" class="text-xs text-slate-400">Id Cliente: Note diretoria Tipo 2</p>
+            </div>
+          </div>
+
+          <!-- Local Atual do Equipamento -->
+          <div class="flex flex-col sm:items-end justify-center bg-slate-900/60 px-4 py-3 rounded-lg border border-slate-800 text-xs">
+            <span class="text-slate-400 flex items-center gap-1.5">
+              <i data-lucide="map-pin" class="w-3.5 h-3.5 text-amber-400"></i>
+              Local Atual no Parque:
+            </span>
+            <span id="card-localizacao" class="text-slate-200 font-medium mt-0.5">Curitiba - R Caeté, 150 - SEDE - Prado Velho</span>
+            <span id="card-cnpj-atual" class="text-slate-400 font-mono text-[11px] mt-0.5">CNPJ: Não especificado</span>
+            <div class="mt-2 flex flex-wrap items-center gap-1.5" role="group" aria-label="Copiar dados da localidade de retirada">
+              <button
+                type="button"
+                onclick="copiarDadoLocalAtual('cep')"
+                class="inline-flex items-center gap-1 px-2 py-1 rounded-md bg-slate-800/80 hover:bg-cyan-500/10 text-slate-300 hover:text-cyan-200 border border-slate-700/70 text-[10px] font-semibold transition"
+                title="Copiar o CEP da localidade de retirada"
+                aria-label="Copiar CEP da localidade de retirada"
+              >
+                <i data-lucide="copy" class="w-3 h-3" aria-hidden="true"></i>
+                <span>CEP</span>
+              </button>
+              <button
+                type="button"
+                onclick="copiarDadoLocalAtual('faturamento')"
+                class="inline-flex items-center gap-1 px-2 py-1 rounded-md bg-slate-800/80 hover:bg-cyan-500/10 text-slate-300 hover:text-cyan-200 border border-slate-700/70 text-[10px] font-semibold transition"
+                title="Copiar o CNPJ de faturamento padrão"
+                aria-label="Copiar CNPJ de faturamento"
+              >
+                <i data-lucide="copy" class="w-3 h-3" aria-hidden="true"></i>
+                <span>CNPJ Fat.</span>
+              </button>
+              <button
+                type="button"
+                onclick="copiarDadoLocalAtual('instalacao')"
+                class="inline-flex items-center gap-1 px-2 py-1 rounded-md bg-slate-800/80 hover:bg-cyan-500/10 text-slate-300 hover:text-cyan-200 border border-slate-700/70 text-[10px] font-semibold transition"
+                title="Copiar o CNPJ de instalação da localidade de retirada"
+                aria-label="Copiar CNPJ de instalação da localidade de retirada"
+              >
+                <i data-lucide="copy" class="w-3 h-3" aria-hidden="true"></i>
+                <span>CNPJ Inst.</span>
+              </button>
+            </div>
+            <button
+              type="button"
+              onclick="abrirModalEditarEquipamento()"
+              class="equipment-edit-button mt-2 inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-brand-500/20 hover:bg-brand-500/30 text-brand-300 hover:text-white border border-brand-500/40 text-xs font-semibold transition-all shadow-sm"
+              title="Editar dados cadastrais deste equipamento"
+            >
+              <i data-lucide="edit-3" class="w-3.5 h-3.5 text-brand-400"></i>
+              <span>Editar Dados / Endereço</span>
+            </button>
+          </div>
+        </div>
+
+        <section class="ticket-templates" aria-labelledby="ticket-templates-title">
+          <div class="ticket-templates-toggle-row flex flex-wrap gap-2">
+            <button type="button" id="btn-toggle-ticket-templates" class="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-brand-500/20 hover:bg-brand-500/30 text-brand-300 hover:text-white border border-brand-500/40 text-xs font-semibold transition-all shadow-sm" aria-expanded="false" aria-controls="ticket-templates-content" onclick="alternarChamadosManuais()">
+              <span>Mostrar textos para chamados</span>
+            </button>
+            <button type="button" id="btn-ir-para-transporte" class="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-sky-500/10 hover:bg-sky-500/20 text-sky-300 hover:text-sky-100 border border-sky-500/25 text-xs font-semibold transition" onclick="abrirAbaTransporteDoEquipamento()" title="Abrir a aba Transporte com o equipamento selecionado">
+              <i data-lucide="truck" class="w-3.5 h-3.5" aria-hidden="true"></i>
+              <span>Ir para Transporte</span>
+            </button>
+          </div>
+          <div id="ticket-templates-content" hidden>
+            <div class="ticket-templates-heading">
+              <div>
+                <h4 id="ticket-templates-title" class="text-sm font-bold text-white">Textos prontos para chamados manuais</h4>
+                <p class="text-xs text-slate-400 mt-1">Série pesquisada: <strong id="ticket-templates-serial" class="font-mono text-cyan-200">—</strong></p>
+              </div>
+              <p class="text-xs text-slate-400">Revise os campos e copie o texto para o chamado.</p>
+            </div>
+
+            <div class="ticket-template-grid">
+            <article class="ticket-template-card">
+              <div class="ticket-template-card-header">
+                <h5 class="ticket-template-title">
+                  Deslocamento de Notebook
+                  <span class="ticket-template-title-detail">(Transporte)</span>
+                </h5>
+                <div class="ticket-template-actions">
+                  <button type="button" class="ticket-template-view ticket-template-toggle" aria-controls="visualizacao-chamado-deslocamento" aria-expanded="false" onclick="alternarVisualizacaoModelo(this)"><span>Mostrar Texto</span></button>
+                  <button type="button" class="ticket-template-copy" onclick="copiarModeloChamado('texto-chamado-deslocamento')">
+                    <i data-lucide="copy" class="w-3.5 h-3.5" aria-hidden="true"></i>
+                    <span>Copiar</span>
+                  </button>
+                  <a class="ticket-template-view ticket-template-link" href="https://ux.simpress.com.br/ng/gerar-ticket/consulta" target="_blank" rel="noopener noreferrer"><span>Link</span><i data-lucide="arrow-up-right" class="w-3.5 h-3.5" aria-hidden="true"></i></a>
+                </div>
+              </div>
+              <div id="visualizacao-chamado-deslocamento" class="ticket-template-preview" hidden>
+                <label class="ticket-template-label" for="texto-chamado-deslocamento">Texto para solicitação de deslocamento técnico</label>
+                <textarea id="texto-chamado-deslocamento" class="ticket-template-textarea" spellcheck="true">Prezados,
+
+Solicito o deslocamento de um técnico à unidade do Sebrae para realizar a sanitização e configuração de um notebook para novo usuário.
+
+Ressalto que o procedimento deve ser realizado exclusivamente através do pendrive com a ISO padrão disponível no local, seguindo as etapas descritas na folha de configuração já compartilhada. Este é o procedimento padrão estipulado pelo cliente e devidamente previsto em edital.
+
+Em caso de dúvidas durante o processo, entre em contato com o responsável configurado para a retirada do equipamento.
+
+Contato no local:
+Colaborador(a) Novo(a):
+Data de Instalação:
+Horário da Instalação:
+
+Lembrando que é necessário o correto preenchimento do termo e anexá-lo ao chamado no fechamento.</textarea>
+                <p class="ticket-template-help">Você pode preencher os dados em aberto antes de copiar.</p>
+              </div>
+            </article>
+
+            <article class="ticket-template-card">
+              <div class="ticket-template-card-header">
+                <h5 class="ticket-template-title">
+                  Solicitação de kit
+                  <span class="ticket-template-title-detail">(Teclado + Mouse)</span>
+                </h5>
+                <div class="ticket-template-actions">
+                  <button type="button" class="ticket-template-view ticket-template-toggle" aria-controls="visualizacao-chamado-teclado-mouse" aria-expanded="false" onclick="alternarVisualizacaoModelo(this)"><span>Mostrar Texto</span></button>
+                  <button type="button" class="ticket-template-copy" onclick="copiarModeloChamado('texto-chamado-teclado-mouse')">
+                    <i data-lucide="copy" class="w-3.5 h-3.5" aria-hidden="true"></i>
+                    <span>Copiar</span>
+                  </button>
+                  <a class="ticket-template-view ticket-template-link" href="https://ux.simpress.com.br/ng/solicitar-atendimento/equipamentos/1" target="_blank" rel="noopener noreferrer"><span>Link</span><i data-lucide="arrow-up-right" class="w-3.5 h-3.5" aria-hidden="true"></i></a>
+                </div>
+              </div>
+              <div id="visualizacao-chamado-teclado-mouse" class="ticket-template-preview" hidden>
+                <label class="ticket-template-label" for="texto-chamado-teclado-mouse">Texto para solicitação de kit de teclado e mouse</label>
+                <textarea id="texto-chamado-teclado-mouse" class="ticket-template-textarea" spellcheck="true">Olá, solicito um novo kit de teclado + mouse, pois [descrever o motivo da solicitação].
+
+Nome do(a) Colaborador(a):
+Horário de funcionamento:
+
+Produto HP: 18H24AA_AC4_2 (Recebimento Santana) ou 18H24AA#AC4
+Modelo: 230 Wireless Mouse and Keyboard Combo</textarea>
+                <p class="ticket-template-help">Você pode preencher os dados em aberto antes de copiar.</p>
+              </div>
+            </article>
+
+            <article class="ticket-template-card">
+              <div class="ticket-template-card-header">
+                <h5 class="ticket-template-title">Mau funcionamento<span class="ticket-template-title-detail">(Defeitos)</span></h5>
+                <div class="ticket-template-actions">
+                  <button type="button" class="ticket-template-view ticket-template-toggle" aria-controls="visualizacao-chamado-mau-funcionamento" aria-expanded="false" onclick="alternarVisualizacaoModelo(this)"><span>Mostrar Texto</span></button>
+                  <button type="button" class="ticket-template-copy" onclick="copiarModeloChamado('texto-chamado-mau-funcionamento')">
+                    <i data-lucide="copy" class="w-3.5 h-3.5" aria-hidden="true"></i>
+                    <span>Copiar</span>
+                  </button>
+                  <a class="ticket-template-view ticket-template-link" href="https://ux.simpress.com.br/ng/solicitar-atendimento/equipamentos/1" target="_blank" rel="noopener noreferrer"><span>Link</span><i data-lucide="arrow-up-right" class="w-3.5 h-3.5" aria-hidden="true"></i></a>
+                </div>
+              </div>
+              <div id="visualizacao-chamado-mau-funcionamento" class="ticket-template-preview" hidden>
+                <label class="ticket-template-label" for="texto-chamado-mau-funcionamento">Texto para avaliação de mau funcionamento</label>
+                <textarea id="texto-chamado-mau-funcionamento" class="ticket-template-textarea" spellcheck="true">Prezados,
+Solicito o envio de um técnico para avaliar o mau funcionamento do equipamento [identificação]. Peço que verifique a causa do problema, realize o diagnóstico e informe as providências necessárias.
+
+Descrição do Problema:
+
+Nome do(a) colaborador(a):
+Horário disponível para atendimento:</textarea>
+                <p class="ticket-template-help">Você pode preencher os dados em aberto antes de copiar.</p>
+              </div>
+            </article>
+
+            <article class="ticket-template-card">
+              <div class="ticket-template-card-header">
+                <h5 class="ticket-template-title">Uso inadequado<span class="ticket-template-title-detail">(Laudo técnico)</span></h5>
+                <div class="ticket-template-actions">
+                  <button type="button" class="ticket-template-view ticket-template-toggle" aria-controls="visualizacao-chamado-uso-inadequado" aria-expanded="false" onclick="alternarVisualizacaoModelo(this)"><span>Mostrar Texto</span></button>
+                  <button type="button" class="ticket-template-copy" onclick="copiarModeloChamado('texto-chamado-uso-inadequado')">
+                    <i data-lucide="copy" class="w-3.5 h-3.5" aria-hidden="true"></i>
+                    <span>Copiar</span>
+                  </button>
+                  <a class="ticket-template-view ticket-template-link" href="https://ux.simpress.com.br/ng/solicitar-atendimento/equipamentos/1" target="_blank" rel="noopener noreferrer"><span>Link</span><i data-lucide="arrow-up-right" class="w-3.5 h-3.5" aria-hidden="true"></i></a>
+                </div>
+              </div>
+              <div id="visualizacao-chamado-uso-inadequado" class="ticket-template-preview" hidden>
+                <label class="ticket-template-label" for="texto-chamado-uso-inadequado">Texto para avaliação de possível uso inadequado</label>
+                <textarea id="texto-chamado-uso-inadequado" class="ticket-template-textarea" spellcheck="true">Prezados,
+Solicito o envio de um técnico para avaliar o equipamento após relato de possível uso inadequado pelo(a) colaborador(a). Peço que registre as condições encontradas, avalie a causa do problema e informe as providências recomendadas.
+
+Descrição:
+
+Nome do(a) colaborador(a):
+Horário disponível para atendimento:</textarea>
+                <p class="ticket-template-help">Você pode preencher os dados em aberto antes de copiar.</p>
+              </div>
+            </article>
+            </div>
+          </div>
+        </section>
+      </div>
+    </section>
+
+    </section>
+
+    <section id="tab-panel-retirada-entrega" class="app-tab-panel" role="tabpanel" aria-labelledby="tab-retirada-entrega" tabindex="0" hidden>
+
+    <div id="transfer-equipment-banner" class="transfer-equipment-banner" data-state="empty">
+      <div class="transfer-equipment-info">
+        <div class="transfer-equipment-icon" aria-hidden="true">
+          <i data-lucide="scan-barcode" class="w-5 h-5"></i>
+        </div>
+        <div class="min-w-0">
+          <p class="transfer-equipment-title">Equipamento desta transferência</p>
+          <p id="transfer-equipment-description" class="transfer-equipment-description" role="status" aria-live="polite">
+            Pesquise e selecione um equipamento na aba Home para preencher a série.
+          </p>
+        </div>
+      </div>
+      <div class="transfer-serial-field">
+        <label for="transfer-serial">Série do equipamento</label>
+        <div class="transfer-serial-input-wrap">
+          <i data-lucide="hash" class="w-4 h-4" aria-hidden="true"></i>
+          <input
+            type="text"
+            id="transfer-serial"
+            readonly
+            aria-readonly="true"
+            aria-label="Série da transferência. Clique para pesquisar na aba Home quando estiver vazia."
+            placeholder="Aguardando pesquisa..."
+            title="Clique para abrir a pesquisa na Home quando nenhuma série estiver selecionada"
+            onclick="abrirHomeParaPesquisarEquipamento()"
+            onkeydown="abrirHomeParaPesquisarEquipamento(event)"
+            autocomplete="off"
+          />
+          <button
+            type="button"
+            id="btn-copiar-serie"
+            onclick="copiarSerieAtual()"
+            disabled
+            aria-disabled="true"
+            aria-label="Copiar a série do equipamento selecionado"
+            title="Copiar a série do equipamento selecionado"
+            class="transfer-serial-status"
+          >
+            <i data-lucide="copy" class="w-3 h-3" aria-hidden="true"></i>
+            <span id="transfer-serial-status">Aguardando</span>
+          </button>
+        </div>
+      </div>
+    </div>
+
+    <!-- FORMULÁRIO DE TRANSFERÊNCIA (2 COLUNAS: RETIRADA & ENTREGA) -->
+    <div class="transfer-form-grid grid grid-cols-1 lg:grid-cols-2 gap-8">
+
+      <!-- ========================================== -->
+      <!-- COLUNA ESQUERDA: RETIRADA (ORIGEM)        -->
+      <!-- ========================================== -->
+      <section class="glass-card rounded-2xl overflow-hidden shadow-xl flex flex-col border border-slate-800">
+        <!-- Header Origem -->
+        <div class="glass-card-header p-5 flex items-center justify-between">
+          <div class="flex items-center space-x-3">
+            <div class="w-9 h-9 rounded-lg bg-amber-500/10 border border-amber-500/30 flex items-center justify-center text-amber-400">
+              <i data-lucide="box" class="w-5 h-5"></i>
+            </div>
+            <div>
+              <h2 class="text-base font-bold text-white flex items-center gap-2">
+                <span>1. Dados de Retirada</span>
+                <span class="text-[11px] px-2 py-0.5 rounded-full bg-amber-500/20 text-amber-300 border border-amber-500/30 font-semibold uppercase">Origem</span>
+              </h2>
+              <p class="text-xs text-slate-400">Local onde a transportadora fará a coleta</p>
+            </div>
+          </div>
+
+        </div>
+
+        <div class="p-6 space-y-4 flex-1">
+          <!-- CNPJ Retirada -->
+          <div>
+            <label class="block text-xs font-semibold text-slate-300 mb-1">
+              CNPJ:
+            </label>
+            <input
+              type="text"
+              id="retirada-cnpj"
+              readonly
+              class="w-full px-3.5 py-2.5 rounded-lg glass-input text-sm text-slate-100 focus:outline-none"
+              placeholder="CNPJ da instalação / filial"
+            />
+          </div>
+
+          <!-- Endereço Completo Retirada -->
+          <div>
+            <label class="block text-xs font-semibold text-slate-300 mb-1">
+              Endereço:
+            </label>
+            <textarea
+              id="retirada-endereco"
+              rows="2"
+              readonly
+              class="w-full px-3.5 py-2 rounded-lg glass-input text-sm text-slate-100 focus:outline-none"
+              placeholder="Pesquise um número de série para preencher automaticamente o endereço..."
+            ></textarea>
+          </div>
+
+          <!-- Grade de Horários e Almoço -->
+          <div class="grid grid-cols-1 sm:grid-cols-3 gap-3">
+            <div>
+              <label class="block text-[11px] font-semibold text-slate-300 mb-1">Expediente:</label>
+              <input
+                type="text"
+                id="retirada-horario"
+                value="09:00:00 às 18:00:00"
+                class="w-full px-3 py-2 rounded-lg glass-input text-xs text-slate-200 focus:outline-none"
+              />
+            </div>
+            <div>
+              <label class="block text-[11px] font-semibold text-slate-300 mb-1">Almoço:</label>
+              <input
+                type="text"
+                id="retirada-almoco"
+                value="12:00:00"
+                class="w-full px-3 py-2 rounded-lg glass-input text-xs text-slate-200 focus:outline-none"
+              />
+            </div>
+            <div>
+              <label class="block text-[11px] font-semibold text-slate-300 mb-1">Duração Pausa:</label>
+              <input
+                type="text"
+                id="retirada-pausa-duracao"
+                value="1h12"
+                class="w-full px-3 py-2 rounded-lg glass-input text-xs text-slate-200 focus:outline-none"
+              />
+            </div>
+          </div>
+
+          <!-- Acesso & Voltagem -->
+          <div class="grid grid-cols-1 sm:grid-cols-3 gap-3">
+            <div class="sm:col-span-2">
+              <label class="block text-[11px] font-semibold text-slate-300 mb-1">Tipo de Acesso:</label>
+              <input
+                type="text"
+                id="retirada-tipo-acesso"
+                value="Elevador / Rampa / Térreo"
+                class="w-full px-3 py-2 rounded-lg glass-input text-xs text-slate-200 focus:outline-none"
+              />
+            </div>
+            <div>
+              <label class="block text-[11px] font-semibold text-slate-300 mb-1">Voltagem:</label>
+              <input
+                type="text"
+                id="retirada-voltagem"
+                value="Bivolt"
+                class="w-full px-3 py-2 rounded-lg glass-input text-xs text-slate-200 focus:outline-none"
+              />
+            </div>
+          </div>
+
+          <!-- Contato Suporte Retirada -->
+          <div class="pt-2 border-t border-slate-800">
+            <h4 class="text-xs font-semibold text-slate-400 uppercase tracking-wider mb-2 flex items-center gap-1.5">
+              <i data-lucide="user-check" class="w-3.5 h-3.5 text-amber-400"></i>
+              Contato no Ponto de Retirada / Representante Regional
+            </h4>
+            <div class="mb-3">
+              <label class="block text-[11px] text-slate-400 mb-1" for="retirada-representante">Representante Regional (seleção automática pela cidade):</label>
+              <select
+                id="retirada-representante"
+                onchange="handleRepresentanteRegionalChange('retirada', this.value)"
+                class="w-full px-3 py-2 rounded-lg glass-input text-xs text-slate-200 focus:outline-none"
+                aria-label="Representante regional do ponto de retirada"
+              ></select>
+            </div>
+            <div class="grid grid-cols-1 sm:grid-cols-3 gap-3">
+              <div>
+                <label class="block text-[11px] text-slate-400 mb-1">Nome: <span class="text-amber-400">*</span></label>
+                <input
+                  type="text"
+                  id="retirada-contato"
+                  required
+                  class="w-full px-3 py-2 rounded-lg glass-input text-xs text-slate-200 focus:outline-none"
+                  autocomplete="name"
+                />
+              </div>
+              <div>
+                <label class="block text-[11px] text-slate-400 mb-1">E-mail: <span class="text-amber-400">*</span></label>
+                <input
+                  type="email"
+                  id="retirada-email"
+                  required
+                  class="w-full px-3 py-2 rounded-lg glass-input text-xs text-slate-200 focus:outline-none"
+                  autocomplete="email"
+                />
+              </div>
+              <div>
+                <label class="block text-[11px] text-slate-400 mb-1">Celular: <span class="text-amber-400">*</span></label>
+                <input
+                  type="text"
+                  id="retirada-telefone"
+                  required
+                  class="w-full px-3 py-2 rounded-lg glass-input text-xs text-slate-200 focus:outline-none font-mono"
+                  inputmode="tel"
+                  autocomplete="tel"
+                  placeholder="(00) 9xxxx-xxxx"
+                />
+              </div>
+            </div>
+          </div>
+
+          <!-- Observações Retirada -->
+          <div>
+            <label class="block text-[11px] font-semibold text-slate-400 mb-1">Observações: <span class="text-amber-400">*</span></label>
+            <input
+              type="text"
+              id="retirada-obs"
+              required
+              class="w-full px-3 py-2 rounded-lg glass-input text-xs text-slate-200 focus:outline-none"
+              placeholder="Ex: Notebook + kit na mochila"
+            />
+          </div>
+        </div>
+      </section>
+
+      <!-- ========================================== -->
+      <!-- COLUNA DIREITA: ENTREGA (DESTINO)         -->
+      <!-- ========================================== -->
+      <section class="glass-card rounded-2xl overflow-hidden shadow-xl flex flex-col border border-slate-800">
+        <!-- Header Destino -->
+        <div class="glass-card-header p-5 flex items-center justify-between">
+          <div class="flex items-center space-x-3">
+            <div class="w-9 h-9 rounded-lg bg-emerald-500/10 border border-emerald-500/30 flex items-center justify-center text-emerald-400">
+              <i data-lucide="truck" class="w-5 h-5"></i>
+            </div>
+            <div>
+              <h2 class="text-base font-bold text-white flex items-center gap-2">
+                <span>2. Dados de Entrega</span>
+                <span class="text-[11px] px-2 py-0.5 rounded-full bg-emerald-500/20 text-emerald-300 border border-emerald-500/30 font-semibold uppercase">Destino</span>
+              </h2>
+              <p class="text-xs text-slate-400">Unidade SEBRAE e destinatário final</p>
+            </div>
+          </div>
+          <span class="text-xs text-emerald-400 font-medium">Preenchimento Inteligente</span>
+        </div>
+
+        <div class="p-6 space-y-4 flex-1">
+          <!-- BUSCA RÁPIDA DE UNIDADE SEBRAE (DROPDOWN / AUTOCOMPLETE) -->
+          <div>
+            <label class="block text-xs font-semibold text-slate-300 mb-1 flex items-center justify-between">
+              <span class="flex items-center gap-1.5">
+                <i data-lucide="map-pin" class="w-3.5 h-3.5 text-emerald-400"></i>
+                Selecione a Unidade:
+              </span>
+              <span id="filiais-count" class="text-[10px] text-slate-400">30 filiais catalogadas</span>
+            </label>
+            <div class="relative">
+              <select
+                id="select-unidade-destino"
+                onchange="handleUnidadeDestinoChange(this.value)"
+                class="w-full px-3.5 py-2.5 rounded-lg glass-input text-sm text-slate-100 focus:outline-none cursor-pointer appearance-none bg-no-repeat pr-10"
+                style="background-image: url('data:image/svg+xml;charset=US-ASCII,%3Csvg%20xmlns%3D%22http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%22%20width%3D%2220%22%20height%3D%2220%22%20viewBox%3D%220%200%2024%2024%22%20fill%3D%22none%22%20stroke%3D%22%2394a3b8%22%20stroke-width%3D%222%22%20stroke-linecap%3D%22round%22%20stroke-linejoin%3D%22round%22%3E%3Cpath%20d%3D%22m6%209%206%206%206-6%22%2F%3E%3C%2Fsvg%3E'); background-position: right 0.75rem center; background-size: 1.25rem; background-repeat: no-repeat;"
+              >
+                <option value="">-- Escolha a Cidade ou Regional de Destino --</option>
+              </select>
+            </div>
+
+          </div>
+
+          <!-- CNPJ Entrega -->
+          <div>
+            <label class="block text-xs font-semibold text-slate-300 mb-1">
+              CNPJ:
+            </label>
+            <input
+              type="text"
+              id="entrega-cnpj"
+              readonly
+              class="w-full px-3.5 py-2.5 rounded-lg glass-input text-sm text-slate-100 focus:outline-none"
+              placeholder="CNPJ da instalação / filial"
+            />
+            <div class="mt-2 flex flex-wrap items-center gap-1.5" role="group" aria-label="Copiar dados de faturamento e instalação da entrega">
+              <button
+                type="button"
+                onclick="copiarDadoEntrega('faturamento')"
+                class="inline-flex items-center gap-1 px-2 py-1 rounded-md bg-slate-800/80 hover:bg-emerald-500/10 text-slate-300 hover:text-emerald-200 border border-slate-700/70 text-[10px] font-semibold transition"
+                title="Copiar o CNPJ de faturamento padrão"
+                aria-label="Copiar CNPJ de faturamento da entrega"
+              >
+                <i data-lucide="copy" class="w-3 h-3" aria-hidden="true"></i>
+                <span>CNPJ Fat.</span>
+              </button>
+              <button
+                type="button"
+                id="btn-copiar-cnpj-instalacao-entrega"
+                disabled
+                onclick="copiarDadoEntrega('instalacao')"
+                class="inline-flex items-center gap-1 px-2 py-1 rounded-md bg-slate-800/80 hover:bg-emerald-500/10 text-slate-300 hover:text-emerald-200 border border-slate-700/70 text-[10px] font-semibold transition"
+                title="Copiar o CNPJ de instalação da unidade de destino selecionada"
+                aria-label="Copiar CNPJ de instalação da unidade de destino"
+              >
+                <i data-lucide="copy" class="w-3 h-3" aria-hidden="true"></i>
+                <span>CNPJ Inst.</span>
+              </button>
+            </div>
+          </div>
+
+          <!-- Endereço Completo Entrega -->
+          <div>
+            <label class="block text-xs font-semibold text-slate-300 mb-1">
+              Endereço:
+            </label>
+            <textarea
+              id="entrega-endereco"
+              rows="2"
+              readonly
+              class="w-full px-3.5 py-2 rounded-lg glass-input text-sm text-slate-100 focus:outline-none"
+              placeholder="Selecione uma unidade acima para carregar o endereço completo..."
+            ></textarea>
+          </div>
+
+          <!-- Dados do Destinatário (Colaborador / Contato) -->
+          <div class="pt-2 border-t border-slate-800">
+            <h4 class="text-xs font-semibold text-slate-300 uppercase tracking-wider mb-2 flex items-center justify-between">
+              <span class="flex items-center gap-1.5">
+                <i data-lucide="user" class="w-3.5 h-3.5 text-emerald-400"></i>
+                Dados do Destinatário no SEBRAE
+              </span>
+              <span class="text-[10px] text-amber-400 font-normal">* Obrigatório para entrega</span>
+            </h4>
+            <div class="space-y-3">
+              <div>
+                <label class="block text-[11px] font-semibold text-slate-300 mb-1" for="entrega-representante">
+                  Representante Regional (seleção automática pela cidade):
+                </label>
+                <select
+                  id="entrega-representante"
+                  onchange="handleRepresentanteRegionalChange('entrega', this.value)"
+                  class="w-full px-3 py-2 rounded-lg glass-input text-xs text-slate-100 focus:outline-none"
+                  aria-label="Representante regional da unidade de entrega"
+                ></select>
+              </div>
+              <div>
+                <label class="block text-[11px] font-semibold text-slate-300 mb-1">
+                  Nome do Destinatário ou Representante: <span class="text-amber-400">*</span>
+                </label>
+                <input
+                  type="text"
+                  id="entrega-contato"
+                  required
+                  class="w-full px-3 py-2 rounded-lg glass-input text-xs text-slate-100 focus:outline-none"
+                  placeholder="Preenchido automaticamente pela cidade ou informe o contato"
+                />
+              </div>
+
+              <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                <div>
+                  <label class="block text-[11px] text-slate-300 mb-1">E-mail do Destinatário: <span class="text-amber-400">*</span></label>
+                  <input
+                    type="email"
+                    id="entrega-email"
+                    required
+                    class="w-full px-3 py-2 rounded-lg glass-input text-xs text-slate-100 focus:outline-none"
+                    placeholder="nome@pr.sebrae.com.br"
+                  />
+                </div>
+                <div>
+                  <label class="block text-[11px] text-slate-300 mb-1">Celular: <span class="text-amber-400">*</span></label>
+                  <input
+                    type="text"
+                    id="entrega-telefone"
+                    required
+                    class="w-full px-3 py-2 rounded-lg glass-input text-xs text-slate-100 focus:outline-none font-mono"
+                    inputmode="tel"
+                    autocomplete="tel"
+                    placeholder="(00) 9xxxx-xxxx"
+                  />
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <!-- Grade de Horários e Almoço Entrega -->
+          <div class="grid grid-cols-1 sm:grid-cols-3 gap-3">
+            <div>
+              <label class="block text-[11px] font-semibold text-slate-300 mb-1">Expediente: <span class="text-amber-400">*</span></label>
+              <input
+                type="text"
+                id="entrega-horario"
+                required
+                value="09:00:00 às 18:00:00"
+                class="w-full px-3 py-2 rounded-lg glass-input text-xs text-slate-200 focus:outline-none"
+              />
+            </div>
+            <div>
+              <label class="block text-[11px] font-semibold text-slate-300 mb-1">Almoço: <span class="text-amber-400">*</span></label>
+              <input
+                type="text"
+                id="entrega-almoco"
+                required
+                value="12:00:00"
+                class="w-full px-3 py-2 rounded-lg glass-input text-xs text-slate-200 focus:outline-none"
+              />
+            </div>
+            <div>
+              <label class="block text-[11px] font-semibold text-slate-300 mb-1">Duração Pausa: <span id="entrega-pausa-obrigatorio" class="text-amber-400">*</span></label>
+              <input
+                type="text"
+                id="entrega-pausa-duracao"
+                required
+                value="1h"
+                class="w-full px-3 py-2 rounded-lg glass-input text-xs text-slate-200 focus:outline-none"
+              />
+            </div>
+          </div>
+
+          <!-- Observação do Chamado / Entrega -->
+          <div>
+            <div class="flex items-center justify-between mb-1">
+              <label class="block text-xs font-semibold text-slate-300">
+                Observações: <span class="text-amber-400">*</span>
+              </label>
+              <span class="text-[10px] text-slate-400">Cel. B37 na planilha</span>
+            </div>
+            <textarea
+              id="entrega-obs"
+              required
+              rows="2"
+              class="w-full px-3.5 py-2 rounded-lg glass-input text-xs text-slate-100 focus:outline-none"
+              placeholder="Ex: Equipamento para nova contratação / Substituição preventiva..."
+            ></textarea>
+            <!-- Chips de observação rápida -->
+            <div class="flex flex-wrap gap-1.5 mt-1.5">
+              <button type="button" onclick="adicionarObsChamado('Equipamento para colaborador(a) substituição preventiva.')" class="px-2 py-0.5 rounded text-[10px] bg-slate-800 hover:bg-slate-700 text-slate-400 hover:text-slate-200 border border-slate-700/60">+ Substituição</button>
+              <button type="button" onclick="adicionarObsChamado('Equipamento destinado ao onboarding de novo colaborador(a).')" class="px-2 py-0.5 rounded text-[10px] bg-slate-800 hover:bg-slate-700 text-slate-400 hover:text-slate-200 border border-slate-700/60">+ Novo Colaborador</button>
+              <button type="button" onclick="adicionarObsChamado('Equipamento para substituição por lentidão/defeito físico.')" class="px-2 py-0.5 rounded text-[10px] bg-slate-800 hover:bg-slate-700 text-slate-400 hover:text-slate-200 border border-slate-700/60">+ Defeito/Troca</button>
+            </div>
+          </div>
+        </div>
+      </section>
+
+    </div>
+
+    <!-- ========================================== -->
+    <!-- BARRA INFERIOR FIXA DE AÇÕES RÁPIDAS      -->
+    <!-- ========================================== -->
+    <aside aria-label="Painel de Ações Rápidas" class="quick-actions fixed bottom-0 inset-x-0 bg-slate-950/90 backdrop-blur-xl border-t border-slate-800/90 z-30 shadow-2xl">
+      <div class="quick-actions-inner mx-auto flex flex-col sm:flex-row items-center justify-between gap-4">
+        <div class="quick-actions-status flex items-center space-x-3 text-xs text-slate-400">
+          <div class="w-2.5 h-2.5 rounded-full bg-brand-400" id="status-indicator" aria-hidden="true"></div>
+          <div id="status-summary" role="status" aria-live="polite" aria-atomic="true">
+            <span class="text-slate-300 font-medium">Pronto para emissão.</span>
+            <span class="hidden md:inline text-slate-500">Verifique os dados antes de gerar a planilha oficial Simpress.</span>
+          </div>
+        </div>
+
+        <div class="quick-actions-buttons flex flex-wrap sm:flex-nowrap items-center gap-3 w-full sm:w-auto justify-end">
+          <button
+            type="button"
+            id="btn-gerar-planilha"
+            onclick="gerarPlanilhaExcel()"
+            class="px-6 py-2.5 rounded-xl bg-gradient-to-r from-emerald-600 to-teal-500 hover:from-emerald-500 hover:to-teal-400 text-white font-bold text-xs sm:text-sm flex items-center space-x-2.5 shadow-glow-emerald transition-all transform hover:scale-[1.02] active:scale-[0.98]"
+          >
+            <i data-lucide="file-spreadsheet" class="w-4 h-4"></i>
+            <span>Gerar Planilha</span>
+          </button>
+
+          <button
+            type="button"
+            onclick="gerarTextoSolicitacaoTransporte()"
+            class="transport-request-button px-4 py-2.5 rounded-xl bg-brand-500/10 hover:bg-brand-500/20 text-brand-200 border border-brand-500/30 text-xs font-semibold flex items-center space-x-1.5 transition shadow-sm"
+            title="Gerar texto de solicitação de transporte"
+          >
+            <i data-lucide="file-text" class="w-4 h-4"></i>
+            <span>Texto para Transporte</span>
+          </button>
+
+          <a
+            href="https://ux.simpress.com.br/ng/gerar-ticket/consulta"
+            target="_blank"
+            rel="noopener noreferrer"
+            aria-label="Abrir site Simpress para gerar chamado"
+            title="Abrir site Simpress para gerar chamado"
+            class="header-action-item header-action-item--violet inline-flex items-center justify-center"
+          >
+            <i data-lucide="link" class="header-action-icon header-action-icon--violet" aria-hidden="true"></i>
+          </a>
+        </div>
+      </div>
+    </aside>
+
+    </section>
+
+      </main>
+    </div>
+  </div>
+
+  <!-- ========================================== -->
+  <!-- MODAL DE PRÉ-VISUALIZAÇÃO DO RESUMO       -->
+  <!-- ========================================== -->
+  <div id="modal-preview" class="modal-overlay fixed inset-0 bg-slate-950/80 backdrop-blur-sm z-50 hidden flex items-center justify-center p-4">
+    <div class="bg-slate-900 border border-slate-700 rounded-2xl max-w-2xl w-full p-6 shadow-2xl relative flex flex-col max-h-[90vh]">
+      <div class="flex items-center justify-between pb-4 border-b border-slate-800">
+        <div class="flex items-center space-x-2.5">
+          <i data-lucide="file-text" class="w-5 h-5 text-brand-400"></i>
+          <h3 class="text-base font-bold text-white">Resumo Estruturado da Transferência</h3>
+        </div>
+        <button type="button" onclick="fecharModalPreview()" class="text-slate-400 hover:text-white transition" aria-label="Fechar resumo">
+          <i data-lucide="x" class="w-5 h-5" aria-hidden="true"></i>
+        </button>
+      </div>
+
+      <div class="py-4 overflow-y-auto flex-1 font-mono text-xs">
+        <textarea
+          id="textarea-resumo-preview"
+          rows="15"
+          readonly
+          class="w-full bg-slate-950/80 border border-slate-800 rounded-xl p-4 text-slate-300 font-mono text-xs leading-relaxed focus:outline-none"
+        ></textarea>
+      </div>
+
+      <div class="pt-4 border-t border-slate-800 flex justify-between items-center">
+        <span class="text-[11px] text-slate-400">Pronto para colar em chamados Jira, GLPI ou Teams.</span>
+        <div class="flex space-x-2">
+          <button
+            onclick="copiarTextoDoModal()"
+            class="px-4 py-2 rounded-lg bg-brand-600 hover:bg-brand-500 text-white font-semibold text-xs flex items-center space-x-1.5 transition"
+          >
+            <i data-lucide="copy" class="w-3.5 h-3.5"></i>
+            <span>Copiar Texto</span>
+          </button>
+          <button
+            onclick="fecharModalPreview()"
+            class="px-4 py-2 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-300 text-xs transition"
+          >
+            Fechar
+          </button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ========================================== -->
+  <!-- MODAL DE TEXTO PARA SOLICITAÇÃO DE TRANSPORTE -->
+  <!-- ========================================== -->
+  <div id="modal-texto-transporte" class="modal-overlay fixed inset-0 bg-slate-950/80 backdrop-blur-sm z-50 hidden flex items-center justify-center p-4">
+    <div class="bg-slate-900 border border-slate-700 rounded-2xl max-w-2xl w-full p-6 shadow-2xl relative flex flex-col max-h-[90vh]">
+      <div class="flex items-center justify-between pb-4 border-b border-slate-800">
+        <div class="flex items-center space-x-2.5">
+          <i data-lucide="truck" class="w-5 h-5 text-brand-400"></i>
+          <h3 class="text-base font-bold text-white">Solicitação de Transporte</h3>
+        </div>
+        <button type="button" onclick="fecharModalTextoTransporte()" class="text-slate-400 hover:text-white transition" aria-label="Fechar texto de solicitação">
+          <i data-lucide="x" class="w-5 h-5" aria-hidden="true"></i>
+        </button>
+      </div>
+
+      <div class="py-4 overflow-y-auto flex-1">
+        <textarea
+          id="textarea-texto-transporte"
+          rows="10"
+          readonly
+          aria-label="Texto gerado para solicitação de transporte"
+          class="w-full bg-slate-950/80 border border-slate-800 rounded-xl p-4 text-slate-300 text-sm leading-relaxed focus:outline-none"
+        ></textarea>
+      </div>
+
+      <div class="pt-4 border-t border-slate-800 flex flex-wrap justify-between items-center gap-3">
+        <span class="text-[11px] text-slate-400">Confira os endereços e copie o texto para sua solicitação.</span>
+        <div class="flex space-x-2">
+          <button
+            type="button"
+            onclick="copiarTextoSolicitacaoTransporte()"
+            class="px-4 py-2 rounded-lg bg-brand-600 hover:bg-brand-500 text-white font-semibold text-xs flex items-center space-x-1.5 transition"
+          >
+            <i data-lucide="copy" class="w-3.5 h-3.5"></i>
+            <span>Copiar Texto</span>
+          </button>
+          <button
+            type="button"
+            onclick="fecharModalTextoTransporte()"
+            class="px-4 py-2 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-300 text-xs transition"
+          >
+            Fechar
+          </button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ==================================================== -->
+  <!-- MODAL DE ATUALIZAÇÃO / CADASTRO DE EQUIPAMENTO       -->
+  <!-- ==================================================== -->
+  <div id="modal-editar-equipamento" class="modal-overlay fixed inset-0 bg-slate-950/85 backdrop-blur-md z-50 hidden flex items-center justify-center p-4">
+    <div class="bg-slate-900 border border-slate-700/80 rounded-2xl max-w-2xl w-full p-6 shadow-2xl relative flex flex-col max-h-[92vh] overflow-hidden">
+      <!-- Modal Header -->
+      <div class="flex items-center justify-between pb-4 border-b border-slate-800 shrink-0">
+        <div class="flex items-center space-x-3">
+          <div class="w-10 h-10 rounded-xl bg-brand-500/10 border border-brand-500/30 flex items-center justify-center text-brand-400">
+            <i data-lucide="edit" class="w-5 h-5"></i>
+          </div>
+          <div>
+            <h3 class="text-base font-bold text-white flex items-center gap-2">
+              <span id="modal-edit-titulo">Atualizar Dados do Equipamento</span>
+              <span id="modal-edit-serial-badge" class="px-2 py-0.5 rounded-full text-xs font-mono font-bold bg-brand-500/20 text-brand-300 border border-brand-500/30"></span>
+            </h3>
+            <p class="text-xs text-slate-400">As alterações serão salvas no site e gravadas diretamente na planilha oficial Excel.</p>
+          </div>
+        </div>
+        <button type="button" onclick="fecharModalEditarEquipamento()" class="text-slate-400 hover:text-white p-1 rounded-lg hover:bg-slate-800 transition" aria-label="Fechar edição do equipamento">
+          <i data-lucide="x" class="w-5 h-5" aria-hidden="true"></i>
+        </button>
+      </div>
+
+      <!-- Modal Body (Form) -->
+      <div class="py-4 overflow-y-auto flex-1 space-y-4 pr-1">
+        
+        <!-- Bloco 1: Identificação do Hardware -->
+        <div class="bg-slate-950/60 p-4 rounded-xl border border-slate-800/80 space-y-3">
+          <h4 class="text-xs font-bold text-brand-400 uppercase tracking-wider flex items-center gap-1.5">
+            <i data-lucide="cpu" class="w-3.5 h-3.5"></i>
+            <span>Identificação do Equipamento</span>
+          </h4>
+          <div class="grid grid-cols-1 sm:grid-cols-2 gap-3 text-xs">
+            <div>
+              <label class="block text-slate-300 font-semibold mb-1">Número de Série:</label>
+              <input type="text" id="edit-serial" class="w-full px-3 py-2 rounded-lg glass-input text-white font-mono uppercase font-bold focus:outline-none" />
+            </div>
+            <div>
+              <label class="block text-slate-300 font-semibold mb-1">Tipo de Equipamento:</label>
+              <select id="edit-tipo" class="w-full px-3 py-2 rounded-lg glass-input text-white focus:outline-none">
+                <option value="Notebook">Notebook</option>
+                <option value="Micro Computador">Micro Computador</option>
+                <option value="Headsets">Headsets</option>
+                <option value="Monitor">Monitor</option>
+                <option value="Impressora">Impressora</option>
+                <option value="Outro">Outro</option>
+              </select>
+            </div>
+            <div>
+              <label class="block text-slate-300 font-semibold mb-1">Modelo do Hardware:</label>
+              <input type="text" id="edit-modelo" placeholder="Ex: HP EB 6 G1I" class="w-full px-3 py-2 rounded-lg glass-input text-slate-200 focus:outline-none" />
+            </div>
+            <div id="edit-apelido-field">
+              <label class="block text-slate-300 font-semibold mb-1">Apelido / Hostname:</label>
+              <input type="text" id="edit-apelido" placeholder="Ex: PRNOTEDIREX007" class="w-full px-3 py-2 rounded-lg glass-input text-slate-200 font-mono focus:outline-none" />
+              <p class="text-[10px] text-slate-500 mt-1">Para equipamentos existentes, altere o apelido pelo botão próprio no cartão.</p>
+            </div>
+            <div class="sm:col-span-2">
+              <label class="block text-slate-300 font-semibold mb-1">Id Cliente / Observação de Uso:</label>
+              <input type="text" id="edit-id-cliente" placeholder="Ex: Note diretoria Tipo 2" class="w-full px-3 py-2 rounded-lg glass-input text-slate-200 focus:outline-none" />
+            </div>
+          </div>
+        </div>
+
+        <p class="rounded-lg border border-slate-800 bg-slate-950/50 px-3 py-2 text-[11px] text-slate-400" role="note">
+          Endereço, cidade, UF, CEP e CNPJ são carregados automaticamente da planilha da Simpress ao atualizar as planilhas.
+        </p>
+
+      </div>
+
+      <!-- Modal Footer -->
+      <div class="pt-4 border-t border-slate-800 flex justify-between items-center shrink-0">
+        <span class="text-[11px] text-slate-400">Grava no arquivo Excel físico e atualiza a tela na hora.</span>
+        <div class="flex space-x-2">
+          <button
+            type="button"
+            onclick="fecharModalEditarEquipamento()"
+            class="px-4 py-2 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-300 text-xs transition"
+          >
+            Cancelar
+          </button>
+          <button
+            type="button"
+            id="btn-salvar-equipamento"
+            onclick="salvarDadosEquipamento()"
+            class="px-5 py-2 rounded-lg bg-emerald-600 hover:bg-emerald-500 text-white font-bold text-xs flex items-center space-x-1.5 shadow-glow-emerald transition"
+          >
+            <i data-lucide="check" class="w-4 h-4"></i>
+            <span>Salvar no Site e na Planilha</span>
+          </button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- MODAL PARA ALTERAR SOMENTE O APELIDO -->
+  <div id="modal-editar-apelido" class="modal-overlay fixed inset-0 bg-slate-950/85 backdrop-blur-md z-[60] hidden flex items-center justify-center p-4">
+    <div class="bg-slate-900 border border-cyan-500/30 rounded-2xl max-w-md w-full p-6 shadow-2xl">
+      <div class="flex items-start justify-between gap-4 mb-5">
+        <div>
+          <h3 class="text-base font-bold text-white">Editar apelido</h3>
+          <p class="text-xs text-slate-400 mt-1">O apelido manual prevalece nas próximas exportações do Excel.</p>
+        </div>
+        <button type="button" onclick="fecharModalEditarApelido()" class="text-slate-400 hover:text-white p-1 rounded-lg hover:bg-slate-800 transition" aria-label="Fechar">
+          <i data-lucide="x" class="w-5 h-5"></i>
+        </button>
+      </div>
+      <label for="edit-apelido-isolado" class="block text-xs text-slate-300 font-semibold mb-1">Novo apelido / hostname</label>
+      <input type="text" id="edit-apelido-isolado" class="w-full px-3 py-2.5 rounded-lg glass-input text-white font-mono focus:outline-none" autocomplete="off" />
+      <p id="apelido-serial-contexto" class="text-[11px] text-slate-500 font-mono mt-2"></p>
+      <div class="flex justify-end gap-2 mt-6 pt-4 border-t border-slate-800">
+        <button type="button" onclick="fecharModalEditarApelido()" class="px-4 py-2 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-300 text-xs transition">Cancelar</button>
+        <button type="button" id="btn-salvar-apelido" onclick="salvarApelido()" class="px-4 py-2 rounded-lg bg-cyan-600 hover:bg-cyan-500 text-white font-bold text-xs transition">Salvar apelido</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- MODAL DO HISTÓRICO DE ALTERAÇÕES DE APELIDO -->
+  <div id="modal-historico-apelidos" class="modal-overlay fixed inset-0 bg-slate-950/85 backdrop-blur-md z-[55] hidden flex items-center justify-center p-4">
+    <div class="bg-slate-900 border border-violet-500/30 rounded-2xl max-w-6xl w-full p-6 shadow-2xl flex flex-col max-h-[90vh]">
+      <div class="flex items-start justify-between gap-4 pb-4 border-b border-slate-800 shrink-0">
+        <div>
+          <h3 class="text-base font-bold text-white flex items-center gap-2">
+            <i data-lucide="history" class="w-4 h-4 text-violet-400"></i>
+            Histórico de alterações
+            <span id="total-historico-apelidos" class="px-2 py-0.5 rounded-full text-[10px] font-semibold bg-violet-500/15 text-violet-300 border border-violet-500/25">0 registros</span>
+          </h3>
+          <p class="text-xs text-slate-400 mt-1">Excluir o registro mais recente de um campo restaura e salva o valor anterior no equipamento e remove esse evento do histórico.</p>
+        </div>
+        <button type="button" onclick="fecharModalHistoricoApelidos()" class="text-slate-400 hover:text-white p-1 rounded-lg hover:bg-slate-800 transition" aria-label="Fechar histórico">
+          <i data-lucide="x" class="w-5 h-5"></i>
+        </button>
+      </div>
+      <div id="lista-historico-apelidos" aria-label="Eventos de alterações manuais" class="overflow-auto flex-1 py-4">
+        <p class="text-sm text-slate-400 text-center py-8" role="status" aria-live="polite">Carregando histórico...</p>
+      </div>
+      <div class="pt-3 border-t border-slate-800 flex justify-end shrink-0">
+        <button type="button" onclick="fecharModalHistoricoApelidos()" class="px-4 py-2 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-300 text-xs transition">Fechar</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- ==================================================== -->
+  <!-- MODAL DE GERENCIAMENTO DE REGIONAIS & ENDEREÇOS     -->
+  <!-- ==================================================== -->
+  <div id="modal-gerenciar-unidades" class="modal-overlay fixed inset-0 bg-slate-950/85 backdrop-blur-md z-[65] hidden flex items-center justify-center p-4">
+    <div class="bg-slate-900 border border-slate-700/80 rounded-2xl max-w-3xl w-full p-6 shadow-2xl relative flex flex-col max-h-[92vh] overflow-hidden">
+      <!-- Header -->
+      <div class="flex items-center justify-between pb-4 border-b border-slate-800 shrink-0">
+        <div class="flex items-center space-x-3">
+          <div class="w-10 h-10 rounded-xl bg-amber-500/10 border border-amber-500/30 flex items-center justify-center text-amber-400">
+            <i data-lucide="building-2" class="w-5 h-5"></i>
+          </div>
+          <div>
+            <h3 class="unit-modal-heading text-base font-bold text-white flex items-center gap-2">
+              <span>Catálogo de Unidades & Regionais SEBRAE/PR</span>
+              <span id="badge-total-unidades-modal" class="px-2 py-0.5 rounded-full text-xs font-semibold bg-amber-500/20 text-amber-300 border border-amber-500/30">30 unidades</span>
+            </h3>
+            <p class="text-xs text-slate-400">Consulte ou cadastre endereços e CNPJs oficiais das filiais.</p>
+          </div>
+        </div>
+        <button type="button" onclick="fecharModalGerenciarUnidades()" class="text-slate-400 hover:text-white p-1 rounded-lg hover:bg-slate-800 transition" aria-label="Fechar catálogo de unidades">
+          <i data-lucide="x" class="w-5 h-5" aria-hidden="true"></i>
+        </button>
+      </div>
+
+      <!-- Search & Add Bar -->
+      <div class="py-3 flex flex-col sm:flex-row gap-3 border-b border-slate-800 shrink-0">
+        <div class="relative flex-1">
+          <i data-lucide="search" class="w-4 h-4 text-slate-400 absolute left-3 top-3"></i>
+          <input
+            type="text"
+            id="input-filtro-unidades"
+            oninput="filtrarUnidadesModal(this.value)"
+            placeholder="Filtrar por cidade, endereço ou CNPJ..."
+            class="w-full pl-9 pr-3 py-2 rounded-lg glass-input text-xs text-slate-200 placeholder:text-slate-500 focus:outline-none"
+          />
+        </div>
+        <button
+          onclick="toggleFormNovaUnidade()"
+          class="px-3.5 py-2 rounded-lg bg-brand-600 hover:bg-brand-500 text-white text-xs font-bold flex items-center justify-center gap-1.5 transition"
+        >
+          <i data-lucide="plus" class="w-3.5 h-3.5"></i>
+          <span>Nova Filial</span>
+        </button>
+      </div>
+
+      <!-- Formulário de Nova Unidade (Expandível) -->
+      <div id="form-nova-unidade" class="hidden py-3 bg-slate-950/80 p-4 rounded-xl border border-slate-800/80 mt-2 shrink-0 space-y-3">
+        <h4 class="text-xs font-bold text-cyan-400 flex items-center gap-1.5">
+          <i data-lucide="plus-circle" class="w-3.5 h-3.5"></i>
+          <span id="form-unidade-titulo">Cadastrar Nova Unidade / Filial</span>
+        </h4>
+        <input type="hidden" id="form-unidade-id" />
+        <div class="grid grid-cols-1 sm:grid-cols-3 gap-2.5 text-xs">
+          <div>
+            <label class="block text-slate-300 font-semibold mb-1">Cidade:</label>
+            <input type="text" id="form-unidade-cidade" placeholder="Ex: Paranaguá" class="w-full px-2.5 py-1.5 rounded-lg glass-input text-slate-200 focus:outline-none" />
+          </div>
+          <div class="sm:col-span-2">
+            <label class="block text-slate-300 font-semibold mb-1">Endereço:</label>
+            <input type="text" id="form-unidade-endereco" placeholder="Ex: Rua Princesa Isabel, 100" class="w-full px-2.5 py-1.5 rounded-lg glass-input text-slate-200 focus:outline-none" />
+          </div>
+          <div>
+            <label class="block text-slate-300 font-semibold mb-1">CEP:</label>
+            <input type="text" id="form-unidade-cep" placeholder="83203-000" class="w-full px-2.5 py-1.5 rounded-lg glass-input text-slate-200 font-mono focus:outline-none" />
+          </div>
+          <div>
+            <label class="block text-slate-300 font-semibold mb-1">CNPJ:</label>
+            <input type="text" id="form-unidade-cnpj" placeholder="CNPJ da instalação / filial" class="w-full px-2.5 py-1.5 rounded-lg glass-input text-slate-200 font-mono focus:outline-none" />
+          </div>
+          <div class="flex items-end gap-2">
+            <button id="btn-salvar-unidade" onclick="salvarUnidadeForm()" class="flex-1 py-1.5 px-3 rounded-lg bg-emerald-600 hover:bg-emerald-500 text-white font-bold text-xs flex items-center justify-center gap-1 transition">
+              <i data-lucide="check" class="w-3.5 h-3.5"></i>
+              <span>Salvar</span>
+            </button>
+            <button onclick="toggleFormNovaUnidade(false)" class="py-1.5 px-3 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-300 text-xs transition">
+              Cancelar
+            </button>
+          </div>
+        </div>
+      </div>
+
+      <!-- Lista de Unidades -->
+      <div id="lista-unidades-container" class="py-3 overflow-y-auto flex-1 space-y-2 pr-1">
+        <!-- Linhas geradas dinamicamente via JS -->
+      </div>
+
+      <!-- Footer -->
+      <div class="pt-3 border-t border-slate-800 flex justify-end shrink-0">
+        <button onclick="fecharModalGerenciarUnidades()" class="px-4 py-2 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-300 text-xs transition">
+          Fechar
+        </button>
+      </div>
+    </div>
+  </div>
+
+  <!-- MODAL PARA COMPARAR ENDPOINT E EQUIPAMENTOSDETALHES -->
+  <div id="modal-atualizar-planilhas" class="modal-overlay fixed inset-0 bg-slate-950/85 backdrop-blur-md z-[70] hidden flex items-center justify-center p-4">
+    <div class="bg-slate-900 border border-sky-500/30 rounded-2xl max-w-2xl w-full p-6 shadow-2xl flex flex-col max-h-[92vh] overflow-hidden">
+      <div class="flex items-start justify-between gap-4 pb-4 border-b border-slate-800 shrink-0">
+        <div>
+          <h3 class="text-base font-bold text-white flex items-center gap-2">
+            <i data-lucide="upload" class="w-5 h-5 text-sky-400"></i>
+            Atualizar planilhas
+          </h3>
+          <p class="text-xs text-slate-400 mt-1">Envie os dois arquivos para atualizar o cadastro. Endereço e localidade acompanham a Simpress; apelidos alterados manualmente continuam prioritários e divergências aparecem no histórico.</p>
+        </div>
+        <button type="button" onclick="fecharModalAtualizarPlanilhas()" class="text-slate-400 hover:text-white p-1 rounded-lg hover:bg-slate-800 transition" aria-label="Fechar">
+          <i data-lucide="x" class="w-5 h-5"></i>
+        </button>
+      </div>
+
+      <div class="overflow-y-auto py-4 space-y-4">
+        <div class="spreadsheet-source-shortcuts" role="group" aria-label="Acessar sistemas de origem das planilhas">
+          <span class="text-[11px] font-medium text-slate-400">Abrir sistemas:</span>
+          <a href="https://centralendpoint.pr.sebrae.com.br/webclient#/uems/inventory/computers" target="_blank" rel="noopener noreferrer" class="spreadsheet-source-link spreadsheet-source-link--endpoint" aria-label="Abrir inventário de computadores do Endpoint Central" title="Abrir inventário de computadores do Endpoint Central"><i data-lucide="link" aria-hidden="true"></i><span>Endpoint</span></a>
+          <a href="https://ux.simpress.com.br/MeusEquipamentos/Index" target="_blank" rel="noopener noreferrer" class="spreadsheet-source-link spreadsheet-source-link--simpress" aria-label="Abrir Meus Equipamentos da Simpress" title="Abrir Meus Equipamentos da Simpress"><i data-lucide="link" aria-hidden="true"></i><span>Simpress</span></a>
+        </div>
+        <p id="upload-impacto-aviso" class="text-xs rounded-lg px-3 py-2 bg-amber-500/10 border border-amber-500/25 text-amber-200">Ao confirmar, as duas bases ativas serão substituídas pelos arquivos selecionados. Séries ausentes de cada arquivo novo serão removidas daquela fonte; confira as contagens por fonte antes de confirmar.</p>
+        <label class="block bg-slate-950/60 border border-slate-800 rounded-xl p-4">
+          <span class="block text-sm text-white font-semibold">1. Endpoint</span>
+          <span class="block text-[11px] text-slate-400 mt-1">Precisa ter nome do computador e rótulo de serviço/número de série.</span>
+          <input id="upload-endpoint-file" type="file" accept=".xlsx,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" class="block w-full mt-3 text-xs text-slate-300 file:mr-3 file:rounded-lg file:border-0 file:bg-sky-500/15 file:px-3 file:py-2 file:text-xs file:font-semibold file:text-sky-300 hover:file:bg-sky-500/25" />
+          <span id="upload-endpoint-name" class="block text-[11px] text-slate-500 mt-2">Nenhum arquivo selecionado</span>
+        </label>
+
+        <label class="block bg-slate-950/60 border border-slate-800 rounded-xl p-4">
+          <span class="block text-sm text-white font-semibold">2. Simpress</span>
+          <span class="block text-[11px] text-slate-400 mt-1">Exporte o inventário completo de 50 colunas, incluindo o CNPJ de instalação. Aceita .xlsx ou o ZIP original com uma única planilha .xlsx.</span>
+          <input id="upload-details-file" type="file" accept=".xlsx,.zip,application/zip,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" class="block w-full mt-3 text-xs text-slate-300 file:mr-3 file:rounded-lg file:border-0 file:bg-sky-500/15 file:px-3 file:py-2 file:text-xs file:font-semibold file:text-sky-300 hover:file:bg-sky-500/25" />
+          <span id="upload-details-name" class="block text-[11px] text-slate-500 mt-2">Nenhum arquivo selecionado</span>
+        </label>
+
+        <p class="text-[11px] text-slate-500">Envie sempre os dois inventários, inclusive no primeiro acesso. Cada arquivo e a planilha extraída do ZIP podem ter até 30 MB. Endereço e localidade são sincronizados com a Simpress. Apelidos manuais prevalecem, e divergências aparecem no histórico.</p>
+        <label class="flex items-start gap-3 rounded-xl border border-cyan-500/20 bg-cyan-500/5 p-3 text-xs text-slate-300">
+          <input id="auto-export-history-after-update" type="checkbox" class="mt-0.5 h-4 w-4 shrink-0 accent-cyan-400" />
+          <span>
+            <span class="block font-semibold text-cyan-100">Baixar o Histórico de Planilhas automaticamente</span>
+            <span class="mt-1 block text-[11px] text-slate-400">Após cada atualização, exporta os registros e as anotações do dia. Esta preferência fica salva neste navegador.</span>
+          </span>
+        </label>
+        <p id="upload-planilhas-preview" class="hidden text-xs rounded-lg px-3 py-2" role="status" aria-live="polite" aria-atomic="true"></p>
+      <p id="upload-planilhas-status" class="hidden text-xs rounded-lg px-3 py-2" role="status" aria-live="polite" aria-atomic="true"></p>
+      </div>
+
+      <div class="pt-4 border-t border-slate-800 flex justify-end gap-2 shrink-0">
+        <button type="button" onclick="fecharModalAtualizarPlanilhas()" class="px-4 py-2 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-300 text-xs transition">Cancelar</button>
+        <button type="button" id="btn-previsualizar-planilhas" onclick="previsualizarPlanilhas()" class="px-5 py-2 rounded-lg bg-sky-600 hover:bg-sky-500 text-white font-bold text-xs flex items-center gap-1.5 transition">
+          <i data-lucide="refresh-cw" class="w-3.5 h-3.5"></i>
+          Pré-visualizar impacto
+        </button>
+        <button type="button" id="btn-confirmar-planilhas" onclick="enviarPlanilhas()" class="hidden px-5 py-2 rounded-lg bg-rose-700 hover:bg-rose-600 text-white font-bold text-xs flex items-center gap-1.5 transition">
+          <i data-lucide="check" class="w-3.5 h-3.5"></i>
+          Confirmar substituição
+        </button>
+      </div>
+    </div>
+  </div>
+
+  <div id="modal-importar-modelo" class="modal-overlay fixed inset-0 bg-slate-950/85 backdrop-blur-md z-[70] hidden flex items-center justify-center p-4">
+    <div class="local-setup-dialog">
+      <div class="local-setup-heading">
+        <h3 id="titulo-importar-modelo">Importar arquivos</h3>
+        <button type="button" class="readiness-import" onclick="fecharImportacaoModelo()" aria-label="Fechar importação de modelo" title="Fechar">
+          <i data-lucide="x" class="w-4 h-4" aria-hidden="true"></i>
+        </button>
+      </div>
+      <p id="descricao-importar-modelo"></p>
+      <label for="arquivo-modelo-local">Modelo .xlsx (até 30 MB)</label>
+      <input id="arquivo-modelo-local" type="file" accept=".xlsx,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" aria-hidden="true" tabindex="-1" hidden />
+      <div class="flex min-w-0 items-center gap-3">
+        <button id="btn-escolher-arquivo-modelo-local" type="button" class="readiness-import" aria-controls="arquivo-modelo-local" onclick="document.getElementById('arquivo-modelo-local').click()">Escolher arquivo</button>
+        <span id="nome-arquivo-modelo-local" class="min-w-0 truncate text-xs text-slate-400" aria-live="polite">Nenhum arquivo escolhido</span>
+      </div>
+      <p>Ao substituir um modelo importado, uma cópia anterior é guardada nos backups locais. O modelo de transferência incluído no projeto é preservado.</p>
+      <p id="status-modelo-local" role="status" aria-live="polite" aria-atomic="true"></p>
+      <button id="btn-importar-modelo" type="button" class="readiness-import" onclick="enviarModeloLocal()">Importar</button>
+    </div>
+  </div>
+
+  <!-- RESULTADO DA COMPARAÇÃO DAS PLANILHAS -->
+  <div id="modal-comparacao-planilhas" class="modal-overlay fixed inset-0 bg-slate-950/85 backdrop-blur-md z-[75] hidden flex items-center justify-center p-4">
+    <div class="bg-slate-900 border border-emerald-500/30 rounded-2xl max-w-6xl w-full p-6 shadow-2xl flex flex-col max-h-[92vh] overflow-hidden">
+      <div class="flex items-start justify-between gap-4 pb-4 border-b border-slate-800 shrink-0">
+        <div>
+          <h3 class="text-base font-bold text-white flex items-center gap-2">
+            <i data-lucide="list-checks" class="w-5 h-5 text-emerald-400"></i>
+            Resultado da atualização das planilhas
+          </h3>
+          <p id="comparacao-planilhas-fontes" class="text-xs text-slate-400 mt-1"></p>
+        </div>
+        <button type="button" onclick="fecharModalComparacaoPlanilhas()" class="text-slate-400 hover:text-white p-1 rounded-lg hover:bg-slate-800 transition" aria-label="Fechar resultado">
+          <i data-lucide="x" class="w-5 h-5"></i>
+        </button>
+      </div>
+      <div id="comparacao-planilhas-conteudo" class="overflow-y-auto flex-1 py-4 space-y-5"></div>
+      <div class="pt-3 border-t border-slate-800 flex justify-end shrink-0">
+        <button type="button" onclick="fecharModalComparacaoPlanilhas()" class="px-4 py-2 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-300 text-xs transition">Concluir</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- EVOLUÇÃO DAS PENDÊNCIAS ENTRE DUAS ATUALIZAÇÕES -->
+  <div id="modal-evolucao-atualizacoes" class="modal-overlay fixed inset-0 bg-slate-950/85 backdrop-blur-md z-[77] hidden flex items-center justify-center p-4">
+    <div class="modal-panel bg-slate-900 border border-cyan-500/30 rounded-2xl max-w-5xl w-full p-6 shadow-2xl flex flex-col max-h-[92vh] overflow-hidden">
+      <div class="flex items-start justify-between gap-4 pb-4 border-b border-slate-800 shrink-0"><div><h3 class="text-base font-bold text-white">Evolução das atualizações</h3><p class="text-xs text-slate-400 mt-1">Veja quantos casos surgiram, continuaram ou deixaram de aparecer.</p></div><button type="button" onclick="fecharEvolucaoAtualizacoes()" class="text-slate-400 hover:text-white p-1 rounded-lg hover:bg-slate-800" aria-label="Fechar evolução das atualizações"><i data-lucide="x" class="w-5 h-5"></i></button></div>
+      <form id="form-evolucao-atualizacoes" class="grid grid-cols-1 md:grid-cols-[1fr_1fr_auto] gap-2 py-3 shrink-0"><label class="text-xs text-slate-300">Atualização anterior<select id="evolucao-anterior" required class="mt-1 block w-full rounded-lg border border-slate-700 bg-slate-950 px-3 py-2 text-sm text-white"></select></label><label class="text-xs text-slate-300">Atualização atual<select id="evolucao-atual" required class="mt-1 block w-full rounded-lg border border-slate-700 bg-slate-950 px-3 py-2 text-sm text-white"></select></label><button type="submit" class="self-end rounded-lg bg-cyan-500/15 border border-cyan-400/30 px-4 py-2 text-sm text-cyan-100">Comparar</button></form>
+      <div id="resultado-evolucao-atualizacoes" aria-label="Resultado da comparação entre atualizações" aria-live="polite" class="overflow-auto flex-1 space-y-3"></div>
+      <div class="pt-3 border-t border-slate-800 flex justify-end shrink-0"><button type="button" onclick="fecharEvolucaoAtualizacoes()" class="px-4 py-2 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-300 text-xs">Fechar</button></div>
+    </div>
+  </div>
+
+  <!-- ACOMPANHAMENTO DE CHAMADOS -->
+  <div id="modal-acompanhamento-chamados" class="modal-overlay fixed inset-0 bg-slate-950/85 backdrop-blur-md z-[77] hidden flex items-center justify-center p-4">
+    <div class="modal-panel bg-slate-900 border border-cyan-500/30 rounded-2xl max-w-5xl w-full p-5 sm:p-6 shadow-2xl flex flex-col max-h-[92vh] overflow-hidden">
+      <div class="flex items-start justify-between gap-4 pb-4 border-b border-slate-800 shrink-0"><div><h3 class="text-base font-bold text-white">Acompanhamento de Chamados</h3><p class="text-xs text-slate-400 mt-1">Importe as exportações da Simpress e do Oracle. As OS são relacionadas pelo número de série.</p></div><div class="ticket-header-actions"><a href="https://simpress.custhelp.com/AgentWeb/" target="_blank" rel="noopener noreferrer" class="ticket-agent-link ticket-agent-link--oracle" aria-label="Abrir portal Oracle AgentWeb" title="Abrir portal Oracle AgentWeb"><i data-lucide="link" aria-hidden="true"></i><span>Oracle</span></a><a href="https://ux.simpress.com.br/equipamentos/acompanhamento" target="_blank" rel="noopener noreferrer" class="ticket-agent-link ticket-agent-link--simpress" aria-label="Abrir acompanhamento de chamados Simpress" title="Abrir acompanhamento de chamados Simpress"><i data-lucide="link" aria-hidden="true"></i><span>Simpress</span></a><button type="button" onclick="fecharAcompanhamentoChamados()" class="text-slate-400 hover:text-white p-1 rounded-lg hover:bg-slate-800" aria-label="Fechar acompanhamento de chamados"><i data-lucide="x" class="w-5 h-5"></i></button></div></div>
+      <div id="conteudo-acompanhamento-chamados" role="region" aria-label="Conteúdo do acompanhamento de chamados" tabindex="0" class="min-h-0 flex-1 overflow-y-auto overscroll-contain focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-cyan-400/60">
+      <div class="space-y-3 py-3">
+        <details id="painel-dados-acompanhamento-chamados" class="ticket-disclosure rounded-lg border border-slate-800 bg-slate-950/50 px-3 py-2">
+          <summary class="ticket-disclosure-summary flex min-h-9 items-center justify-between gap-3 text-xs font-semibold text-slate-200">
+            <span>Importação e histórico</span>
+            <span id="versao-atual-acompanhamento-chamados" class="min-w-0 truncate text-right text-[10px] font-normal text-slate-500">Nenhuma importação</span>
+          </summary>
+          <div class="space-y-3 pt-3">
+            <form id="form-importar-acompanhamento-chamados" class="grid grid-cols-1 gap-3 border-b border-slate-800 pb-3 md:grid-cols-[1fr_1fr_auto] md:items-end">
+              <div class="min-w-0">
+                <label for="arquivo-chamados-simpress" class="block text-xs text-slate-300">Simpress · Acompanhamento de Pedidos</label>
+                <input id="arquivo-chamados-simpress" name="simpress_file" type="file" accept=".xlsx,.zip,application/zip,application/x-zip-compressed,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" aria-describedby="arquivo-chamados-simpress-ajuda nome-arquivo-chamados-simpress" tabindex="-1" aria-hidden="true" class="sr-only">
+                <div class="mt-1 flex min-h-[54px] w-full min-w-0 items-center gap-3 rounded-lg border border-slate-700 bg-slate-950 px-2 py-1.5">
+                  <button id="btn-escolher-arquivo-chamados-simpress" type="button" aria-label="Escolher arquivo do Acompanhamento de Pedidos da Simpress" aria-controls="arquivo-chamados-simpress" class="shrink-0 rounded-md bg-slate-800 px-3 py-2 text-xs font-semibold text-slate-200 transition-colors hover:bg-slate-700 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-cyan-400/60">Escolher arquivo</button>
+                  <span id="nome-arquivo-chamados-simpress" class="min-w-0 truncate text-[11px] text-slate-400" aria-live="polite">Nenhum arquivo selecionado</span>
+                </div>
+              </div>
+              <div class="min-w-0">
+                <label for="arquivo-chamados-oracle" class="block text-xs text-slate-300">Oracle · Gestão de Solicitações</label>
+                <input id="arquivo-chamados-oracle" name="oracle_file" type="file" accept=".xlsx,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" aria-describedby="nome-arquivo-chamados-oracle" tabindex="-1" aria-hidden="true" required class="sr-only">
+                <div class="mt-1 flex min-h-[54px] w-full min-w-0 items-center gap-3 rounded-lg border border-slate-700 bg-slate-950 px-2 py-1.5">
+                  <button id="btn-escolher-arquivo-chamados-oracle" type="button" aria-label="Escolher arquivo do Oracle - Gestão de Solicitações" aria-controls="arquivo-chamados-oracle" class="shrink-0 rounded-md bg-slate-800 px-3 py-2 text-xs font-semibold text-slate-200 transition-colors hover:bg-slate-700 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-cyan-400/60">Escolher arquivo</button>
+                  <span id="nome-arquivo-chamados-oracle" class="min-w-0 truncate text-[11px] text-slate-400" aria-live="polite">Nenhum arquivo selecionado</span>
+                </div>
+              </div>
+              <button id="btn-importar-acompanhamento-chamados" type="submit" class="rounded-lg border border-cyan-400/30 bg-cyan-500/15 px-4 py-2.5 text-xs font-semibold text-cyan-100 hover:bg-cyan-500/25 md:mb-2">Importar planilhas</button>
+              <p id="arquivo-chamados-simpress-ajuda" class="text-[10px] text-slate-500 md:col-span-3">Simpress aceita .xlsx ou ZIP com uma única planilha .xlsx.</p>
+              <p id="status-importacao-chamados" class="text-[10px] text-slate-400 md:col-span-3" role="status" aria-live="polite"></p>
+            </form>
+            <div id="resumo-acompanhamento-chamados" class="shrink-0"></div>
+            <div class="grid grid-cols-1 gap-2 md:grid-cols-[minmax(0,1fr)_auto]">
+              <label for="versao-acompanhamento-chamados" class="text-xs text-slate-300">Versão das planilhas<select id="versao-acompanhamento-chamados" class="mt-1 block w-full rounded-lg border border-slate-700 bg-slate-950 px-3 py-2 text-sm text-white" onchange="selecionarVersaoChamados()"><option value="">Nenhuma importação</option></select></label>
+              <button type="button" id="btn-excluir-importacoes-antigas-chamados" class="self-end rounded-lg border border-rose-400/30 bg-rose-500/10 px-4 py-2 text-xs font-semibold text-rose-200 hover:bg-rose-500/20 disabled:cursor-not-allowed disabled:opacity-50" onclick="excluirImportacoesAntigasChamados()" disabled>Excluir importações antigas</button>
+              <details class="ticket-disclosure md:col-span-2 rounded-lg border border-slate-800 bg-slate-950/40 px-3 py-2">
+                <summary class="ticket-disclosure-summary cursor-pointer text-xs font-semibold text-slate-300">Comparação com a importação anterior</summary>
+                <div id="evolucao-acompanhamento-chamados" class="pt-2 text-xs text-slate-300" role="status" aria-live="polite">O histórico de importações aparecerá aqui.</div>
+              </details>
+            </div>
+          </div>
+        </details>
+        <div class="ticket-filter-toolbar">
+          <label for="filtro-acompanhamento-chamados" class="ticket-filter-search text-xs text-slate-300">Buscar série, pedido, OS ou status<input id="filtro-acompanhamento-chamados" type="search" autocomplete="off" class="mt-1 block w-full rounded-lg border border-slate-700 bg-slate-950 px-3 py-2 text-sm text-white placeholder:text-slate-500" placeholder="Digite para filtrar os chamados"></label>
+          <label title="Chamados ativos sem data ou com três dias ou mais sem atualização" class="ticket-filter-attention border border-amber-400/20 bg-amber-500/5 text-xs text-amber-100"><input id="somente-atencao-chamados" type="checkbox" class="accent-amber-400">Atenção · 3+ dias</label>
+          <button type="button" id="btn-exportar-acompanhamento-chamados" class="ticket-filter-action ticket-filter-export rounded-lg border border-emerald-400/30 bg-emerald-500/15 text-xs font-semibold text-emerald-100 hover:bg-emerald-500/25 disabled:cursor-not-allowed disabled:opacity-50" onclick="exportarAcompanhamentoChamados()" disabled>Exportar Excel</button>
+          <button type="button" class="ticket-filter-action ticket-filter-clear rounded-lg border border-slate-700 text-xs text-slate-300 hover:bg-slate-800" onclick="limparFiltrosAcompanhamentoChamados()">Limpar filtros</button>
+        </div>
+      </div>
+      <div id="triagem-diaria-acompanhamento-chamados" class="shrink-0 pb-2" aria-live="polite"></div>
+      <p id="contagem-acompanhamento-chamados" class="shrink-0 text-[10px] text-slate-500" role="status" aria-live="polite"></p>
+      <div id="lista-acompanhamento-chamados" aria-live="polite" class="space-y-3 py-2"></div>
+      </div>
+      <div class="pt-3 border-t border-slate-800 flex justify-end shrink-0"><button type="button" onclick="fecharAcompanhamentoChamados()" class="px-4 py-2 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-300 text-xs">Fechar</button></div>
+    </div>
+  </div>
+
+  <!-- HISTÓRICO DAS COMPARAÇÕES DE PLANILHAS -->
+  <div id="modal-historico-comparacoes" class="modal-overlay fixed inset-0 bg-slate-950/85 backdrop-blur-md z-[76] hidden flex items-center justify-center p-4">
+    <div class="bg-slate-900 border border-cyan-500/30 rounded-2xl max-w-5xl w-full p-6 shadow-2xl flex flex-col max-h-[92vh] overflow-hidden">
+      <div class="flex flex-wrap items-center justify-between gap-4 pb-4 border-b border-slate-800 shrink-0">
+        <div>
+          <h3 class="text-base font-bold text-white flex items-center gap-2">
+            <i data-lucide="history" class="w-4 h-4 text-cyan-400"></i>
+            Histórico de atualizações de planilhas
+          </h3>
+          <p id="total-historico-comparacoes" class="text-xs text-slate-400 mt-1">0 registros</p>
+        </div>
+        <div class="flex flex-wrap items-end justify-end gap-2 shrink-0">
+          <div class="flex flex-col gap-1 shrink-0">
+            <label for="data-exportar-historico-comparacoes" class="text-xs text-slate-300">
+              Data para exportar
+              <select id="data-exportar-historico-comparacoes" aria-label="Selecionar a data do histórico para exportar" class="mt-1 block min-w-36 rounded-lg border border-slate-700 bg-slate-950 px-3 py-2 text-sm text-white focus:border-cyan-400 focus:outline-none disabled:cursor-not-allowed disabled:opacity-60" disabled>
+                <option value="">Carregando datas...</option>
+              </select>
+            </label>
+          </div>
+          <div class="flex items-center gap-2">
+            <button type="button" id="btn-exportar-historico-comparacoes" onclick="exportarHistoricoComparacoesExcel()" class="inline-flex items-center gap-2 rounded-lg bg-cyan-500/10 px-3 py-2 text-xs font-semibold text-cyan-200 border border-cyan-500/25 transition hover:bg-cyan-500/20 disabled:cursor-not-allowed disabled:opacity-50" aria-label="Exportar o histórico da data selecionada para Excel" title="Baixar os registros e as anotações da data selecionada" disabled>
+              <i data-lucide="download" class="w-4 h-4" aria-hidden="true"></i>
+              <span class="hidden sm:inline">Exportar Excel</span>
+            </button>
+            <button type="button" onclick="fecharModalHistoricoComparacoes()" class="text-slate-400 hover:text-white p-1 rounded-lg hover:bg-slate-800 transition" aria-label="Fechar histórico de planilhas">
+              <i data-lucide="x" class="w-5 h-5"></i>
+            </button>
+          </div>
+        </div>
+      </div>
+      <div id="lista-historico-comparacoes" aria-label="Atualizações registradas" class="overflow-auto flex-1 py-4 space-y-3"></div>
+      <div class="pt-3 border-t border-slate-800 flex justify-end shrink-0">
+        <button type="button" onclick="fecharModalHistoricoComparacoes()" class="px-4 py-2 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-300 text-xs transition">Fechar</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- PESQUISA AMPLIADA DE EQUIPAMENTOS -->
+  <div id="modal-pesquisa-completa" class="modal-overlay fixed inset-0 bg-slate-950/85 backdrop-blur-md z-[100] hidden flex items-center justify-center p-4" onclick="if (event.target === this) fecharModalPesquisaCompleta()">
+    <div class="modal-panel bg-slate-900 border border-cyan-500/30 rounded-2xl max-w-7xl w-full p-6 shadow-2xl flex flex-col max-h-[92vh] overflow-hidden">
+      <div class="flex items-start justify-between gap-4 pb-4 border-b border-slate-800 shrink-0">
+        <div class="min-w-0">
+          <h3 class="text-base font-bold text-white flex items-center gap-2">
+            <i data-lucide="search" class="w-5 h-5 text-cyan-400" aria-hidden="true"></i>
+            Resultados da pesquisa
+          </h3>
+          <p class="text-xs text-slate-400 mt-1">Termo: <span id="pesquisa-completa-termo" class="font-mono text-cyan-300 break-all"></span></p>
+        </div>
+        <div class="flex items-center gap-3 shrink-0">
+          <span id="pesquisa-completa-contagem" class="px-2.5 py-1 rounded-full bg-cyan-500/15 text-cyan-300 border border-cyan-500/25 text-xs font-semibold" role="status" aria-live="polite">0 resultados</span>
+          <button type="button" id="btn-fechar-pesquisa-completa" onclick="fecharModalPesquisaCompleta()" class="text-slate-400 hover:text-white p-1 rounded-lg hover:bg-slate-800 transition" aria-label="Fechar resultados da pesquisa">
+            <i data-lucide="x" class="w-5 h-5" aria-hidden="true"></i>
+          </button>
+        </div>
+      </div>
+      <div class="grid grid-cols-1 sm:grid-cols-2 gap-3 py-3 border-b border-slate-800 shrink-0">
+        <label for="filtro-pesquisa-categoria" class="text-xs text-slate-300">
+          Categoria
+          <select id="filtro-pesquisa-categoria" onchange="alterarFiltrosPesquisaCompleta()" class="mt-1 w-full rounded-lg glass-input bg-slate-950 px-3 py-2 text-sm text-white focus:outline-none">
+            <option value="">Todas as categorias</option>
+            <option value="notebook">Notebooks</option>
+            <option value="macbook">MacBooks</option>
+            <option value="monitor">Monitores</option>
+            <option value="fone">Fones</option>
+          </select>
+        </label>
+        <label for="filtro-pesquisa-cidade" class="text-xs text-slate-300">
+          Cidade
+          <select id="filtro-pesquisa-cidade" onchange="alterarFiltrosPesquisaCompleta()" class="mt-1 w-full rounded-lg glass-input bg-slate-950 px-3 py-2 text-sm text-white focus:outline-none">
+            <option value="">Todas as cidades</option>
+          </select>
+        </label>
+        <button type="button" id="btn-limpar-filtros-pesquisa" onclick="limparFiltrosPesquisaCompleta()" class="hidden sm:col-span-2 justify-self-end text-xs text-cyan-300 hover:text-white transition">
+          Limpar filtros
+        </button>
+      </div>
+      <p id="pesquisa-completa-status" class="text-xs text-slate-400 py-3 shrink-0" role="status" aria-live="polite">Carregando resultados...</p>
+      <div id="pesquisa-completa-lista" class="overflow-y-auto flex-1 min-h-0 py-2 space-y-2" aria-label="Resultados completos da pesquisa"></div>
+      <div class="pt-3 border-t border-slate-800 flex items-center justify-between gap-3 shrink-0">
+        <button type="button" id="btn-carregar-mais-pesquisa" onclick="carregarMaisResultadosPesquisa()" class="hidden inline-flex items-center gap-2 px-4 py-2 rounded-lg bg-sky-600 hover:bg-sky-500 disabled:opacity-50 disabled:cursor-wait text-white text-xs font-semibold transition">
+          <i data-lucide="plus" class="w-4 h-4" aria-hidden="true"></i>
+          <span>Carregar mais</span>
+        </button>
+        <button type="button" onclick="fecharModalPesquisaCompleta()" class="ml-auto px-4 py-2 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-300 text-xs transition">Fechar</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- TOAST NOTIFICATION CONTAINER -->
+  <div id="toast-container" role="region" aria-label="Notificações" aria-live="polite" aria-relevant="additions text" aria-atomic="false" class="fixed top-24 right-6 z-[130] space-y-2 pointer-events-none"></div>
+
+  <!-- JAVASCRIPT APPLICATION LOGIC -->
+  <script src="/static/js/shared/dom-utils.js"></script>
+  <script src="/static/js/shared/catalog-search-utils.js"></script>
+  <script src="/static/js/shared/form-draft-guard.js"></script>
+  <script src="/static/js/shared/transfer-utils.js"></script>
+  <script src="/static/js/shared/history-annotation-autosave.js"></script>
+  <script src="/static/js/ui/ui-motion.js"></script>
+  <script src="/static/js/ui/accessible-dialogs.js"></script>
+  <script src="/static/js/ui/ui-notifications.js"></script>
+  <script src="/static/js/auth/auth-session.js"></script>
+  <script src="/static/app.js"></script>
+  <script src="/static/js/ui/sidebar-navigation.js"></script>
+</body>
+</html>

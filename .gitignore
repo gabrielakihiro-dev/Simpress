@@ -1,0 +1,127 @@
+# Python
+.venv/
+venv/
+node_modules/
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+
+# Environments
+.env
+.env.local
+.env.*
+!.env.example
+!.env.*.example
+*.pem
+*.key
+*.p12
+*.pfx
+*.keystore
+
+# IDE
+.vscode/*
+!.vscode/settings.json
+!.vscode/launch.json
+
+# Temporary Excel/Office files
+~$*.xlsx
+~$*.xls
+
+# Operational workbooks and local comparison backups; retain the blank transfer template.
+/planilhas_entrada/*.xlsx
+/planilhas_entrada/**/*.xlsx
+!/planilhas_entrada/(MODELO) - TRANSFERENCIA SIMPRESS.xlsx
+/planilhas_entrada/*.xls
+/planilhas_entrada/**/*.xls
+/planilhas_entrada/*.xlsm
+/planilhas_entrada/**/*.xlsm
+/planilhas_entrada/*.csv
+/planilhas_entrada/**/*.csv
+/planilhas_entrada/*.tsv
+/planilhas_entrada/**/*.tsv
+/planilhas_entrada/_backups/
+/outputs/
+/modelos/EquipamentosDetalhes-exportacao.xlsx
+
+# Local operational state and histories
+/apelidos_modificados.json
+/apelidos_modificados/*
+!/apelidos_modificados/.gitkeep
+/unidades_custom.json
+/historico_alteracoes.json
+/historico_apelidos.json
+/historico_comparacoes.json
+/historico_comparacoes/*
+!/historico_comparacoes/.gitkeep
+/anotacoes_historico/
+/.transactions/
+**/.*.lock
+/planilhas_entrada/.upload-staging-*/
+# Migrated operational workbook directory.
+/data/migration_conflicts/
+/data/planilhas_entrada/*.xlsx
+/data/planilhas_entrada/**/*.xlsx
+!/data/planilhas_entrada/(MODELO) - TRANSFERENCIA SIMPRESS.xlsx
+/data/planilhas_entrada/*.xls
+/data/planilhas_entrada/**/*.xls
+/data/planilhas_entrada/*.xlsm
+/data/planilhas_entrada/**/*.xlsm
+/data/planilhas_entrada/*.csv
+/data/planilhas_entrada/**/*.csv
+/data/planilhas_entrada/*.tsv
+/data/planilhas_entrada/**/*.tsv
+/data/planilhas_entrada/_backups/
+/data/planilhas_entrada/.upload-staging-*/
+
+# Migrated operational state and histories.
+/data/state/unidades_custom.json
+/data/state/historico_alteracoes.json
+/data/state/historico_apelidos.json
+/data/state/historico_transferencias.json
+/data/state/historico_chamados.json
+/data/state/apelidos_modificados.json
+/data/state/historico_comparacoes.json
+/data/state/entrada_automatica/*
+!/data/state/entrada_automatica/README.md
+!/data/state/entrada_automatica/modelo_lote/
+/data/state/entrada_automatica/modelo_lote/*
+!/data/state/entrada_automatica/modelo_lote/endpoint/
+/data/state/entrada_automatica/modelo_lote/endpoint/*
+!/data/state/entrada_automatica/modelo_lote/endpoint/.gitkeep
+!/data/state/entrada_automatica/modelo_lote/simpress/
+/data/state/entrada_automatica/modelo_lote/simpress/*
+!/data/state/entrada_automatica/modelo_lote/simpress/.gitkeep
+!/data/state/entrada_automatica/pendentes/
+/data/state/entrada_automatica/pendentes/*
+!/data/state/entrada_automatica/pendentes/.gitkeep
+/data/state/entrada_chamados/*
+!/data/state/entrada_chamados/README.md
+!/data/state/entrada_chamados/modelo_lote/
+/data/state/entrada_chamados/modelo_lote/*
+!/data/state/entrada_chamados/modelo_lote/simpress/
+/data/state/entrada_chamados/modelo_lote/simpress/*
+!/data/state/entrada_chamados/modelo_lote/simpress/.gitkeep
+!/data/state/entrada_chamados/modelo_lote/oracle/
+/data/state/entrada_chamados/modelo_lote/oracle/*
+!/data/state/entrada_chamados/modelo_lote/oracle/.gitkeep
+!/data/state/entrada_chamados/pendentes/
+/data/state/entrada_chamados/pendentes/*
+!/data/state/entrada_chamados/pendentes/.gitkeep
+/data/state/apelidos_modificados/*
+!/data/state/apelidos_modificados/.gitkeep
+/data/state/historico_comparacoes/*
+!/data/state/historico_comparacoes/.gitkeep
+
+# Local server logs.
+/logs/
+/playwright-report/
+/test-results/
+/.npm-cache/
+
+# Local database backups contain operational data and must stay outside Git.
+/Backup_Banco/
+# Transactional temporary files are created beside their destination.
+**/.*.xlsx.*.tmp
+**/.*.xlsm.*.tmp
+**/.*.json.*.tmp
