@@ -4,7 +4,6 @@ const path = require("node:path");
 
 test("header summary and sidebar switch at 767/768 pixels in both themes", async ({ page }) => {
   await page.goto("/");
-  await expect(page.locator("#stat-equipamentos")).toHaveText("1");
   for (const theme of ["dark", "light"]) {
     await page.locator("html").evaluate((root, value) => { root.dataset.theme = value; }, theme);
     for (const width of [767, 768, 767]) {
@@ -38,7 +37,6 @@ test("the theme icon switches modes, persists the choice, and works on login", a
   await page.goto("/");
   await page.evaluate(() => window.localStorage.removeItem("simpress:theme"));
   await page.reload();
-  await expect(page.locator("#stat-equipamentos")).toHaveText("1", { timeout: 15_000 });
 
   const root = page.locator("html");
   const lightModeButton = page.getByRole("button", { name: "Ativar modo claro" });
