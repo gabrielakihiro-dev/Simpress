@@ -396,7 +396,12 @@
     .ticket-process-summary > .ticket-process-forecast { order: -1; flex: 1 1 100%; font-size: 0.85rem; font-weight: 600; color: #a5f3fc; border-color: rgba(34, 211, 238, 0.45); background: rgba(8, 145, 178, 0.14); }
     .ticket-process-summary > .ticket-process-forecast.is-late { color: #fde68a; border-color: rgba(251, 191, 36, 0.5); background: rgba(217, 119, 6, 0.14); }
     .ticket-stages { display: grid; grid-template-columns: 1fr; gap: 0.3rem; margin: 0.4rem 0 0; padding: 0; list-style: none; }
-    .ticket-stage { display: grid; grid-template-columns: 1.1rem minmax(0, 1fr) auto; align-items: baseline; gap: 0.4rem; border-radius: 0.4rem; padding: 0.3rem 0.5rem; font-size: 0.72rem; border: 1px solid #1e293b; }
+    .ticket-stage { display: grid; grid-template-columns: 1.1rem minmax(0, 1fr); align-items: baseline; gap: 0.1rem 0.4rem; border-radius: 0.4rem; padding: 0.3rem 0.5rem; font-size: 0.72rem; border: 1px solid #1e293b; }
+    .ticket-stage-date { grid-column: 2; }
+    @media (min-width: 640px) {
+      .ticket-stage { grid-template-columns: 1.1rem minmax(0, 1fr) auto; }
+      .ticket-stage-date { grid-column: auto; }
+    }
     .ticket-stage-label, .ticket-stage-date { min-width: 0; overflow-wrap: anywhere; }
     .ticket-stage.is-done { color: #a7f3d0; }
     .ticket-stage.is-current { color: #67e8f9; border-color: rgba(34, 211, 238, 0.4); background: rgba(8, 145, 178, 0.1); font-weight: 600; }
