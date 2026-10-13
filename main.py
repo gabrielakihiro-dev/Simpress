@@ -536,8 +536,27 @@ def _read_details_sheet_records(file_path: Path, sheet_name: str):
     return headers, records
 
 
+def _ensure_workbook_readable(file_path: Path) -> None:
+    """Distingue arquivo indisponível (travado, sincronizando) de arquivo inválido."""
+    try:
+        with open(file_path, "rb"):
+            return
+    except FileNotFoundError:
+        return
+    except OSError as error:
+        raise FileBusyError(
+            f"Não foi possível ler '{Path(file_path).name}' agora; verifique se o arquivo "
+            "está sendo sincronizado ou usado por outro programa e tente novamente."
+        ) from error
+
+
 def find_details_sheet(file_path: Path) -> Optional[str]:
-    """Retorna uma aba EquipamentosDetalhes com os campos usados pelo site."""
+    """Retorna uma aba EquipamentosDetalhes com os campos usados pelo site.
+
+    Levanta FileBusyError quando o arquivo existe mas não pode ser lido; ``None``
+    significa somente que o arquivo não tem uma aba de inventário válida.
+    """
+    _ensure_workbook_readable(file_path)
     workbook = None
     try:
         validate_xlsx(file_path)
@@ -584,7 +603,11 @@ def get_details_files() -> List[Path]:
 
 
 def get_primary_equipment_file() -> Optional[Path]:
-    """Retorna o EquipamentosDetalhes válido mais recente, fonte única do cadastro."""
+    """Retorna o EquipamentosDetalhes válido mais recente, fonte única do cadastro.
+
+    Um candidato ilegível interrompe a busca com FileBusyError em vez de deixar
+    um arquivo mais antigo assumir a base ativa.
+    """
     return next(
         (path for path in get_details_files() if find_details_sheet(path) is not None),
         None,
@@ -1468,7 +1491,11 @@ def get_export_status() -> Dict[str, Any]:
 
 def _export_files_signature() -> tuple:
     signature: List[Any] = []
-    for path in (get_parque_file(), EXPORT_MODEL_FILE, ENDPOINT_UPLOAD_FILE, MODIFIED_APELIDOS_FILE):
+    try:
+        active_file = get_parque_file()
+    except FileBusyError:
+        active_file = None
+    for path in (active_file, EXPORT_MODEL_FILE, ENDPOINT_UPLOAD_FILE, MODIFIED_APELIDOS_FILE):
         if path is None:
             signature.append(None)
             continue
@@ -2279,7 +2306,11 @@ def publish_database_state(state: Dict[str, Any]) -> None:
 
 def _load_database_unlocked(publish: bool = True) -> Any:
     global equipamentos_cache, unidades_cache, stats_cache
-    active_details_file = get_parque_file()
+    try:
+        active_details_file = get_parque_file()
+    except FileBusyError as error:
+        print(f"[AVISO] {error} A base carregada foi mantida.")
+        return False
     if active_details_file is None or not active_details_file.exists():
         print(f"[AVISO] Nenhuma planilha EquipamentosDetalhes válida encontrada em {INPUT_DIR}!")
         return False
@@ -4084,7 +4115,10 @@ def read_root():
 
 if __name__ == "__main__":
     import uvicorn
-    equipment_source = get_primary_equipment_file() if PERSISTENCE_SETTINGS.backend == "files" else "PostgreSQL local"
+    try:
+        equipment_source = get_primary_equipment_file() if PERSISTENCE_SETTINGS.backend == "files" else "PostgreSQL local"
+    except FileBusyError:
+        equipment_source = "INDISPONÍVEL no momento (arquivo em uso)"
     print(f"[INFO] Diretório do projeto: {BASE_DIR}")
     print(f"[INFO] Modelo de transferência: {TEMPLATE_FILE} ({'OK' if TEMPLATE_FILE.is_file() else 'AUSENTE'})")
     print(f"[INFO] Fonte EquipamentosDetalhes: {equipment_source or 'AUSENTE'}")
