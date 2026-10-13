@@ -261,6 +261,7 @@ def _gerar_planilha_transferencia(payload: TransferenciaPayload, template_file: 
                 allow_threaded_comments=True,
                 allow_legacy_comments=True,
                 allow_custom_xml_passthrough=True,
+                normalize_threaded_comment_placeholders=True,
             )
             wb.close()
 

@@ -733,6 +733,12 @@ def _tables_grew_by_one_row(before: tuple, after: tuple) -> bool:
 _XLSX_MAIN_NS = "{http://schemas.openxmlformats.org/spreadsheetml/2006/main}"
 _XLSX_DOCUMENT_REL_NS = "{http://schemas.openxmlformats.org/officeDocument/2006/relationships}"
 _XLSX_PACKAGE_REL_NS = "{http://schemas.openxmlformats.org/package/2006/relationships}"
+_XLSX_REVISION_NS = "{http://schemas.microsoft.com/office/spreadsheetml/2014/revision}"
+_XLSX_THREADED_COMMENTS_NS = "{http://schemas.microsoft.com/office/spreadsheetml/2018/threadedcomments}"
+_COMMENT_AUTHOR_ELEMENT_RE = re.compile(
+    rb"<(?P<name>(?:[A-Za-z_][A-Za-z0-9_.-]*:)?author)(?=[\s/>])[^>]*>(?P<content>.*?)</(?P=name)\s*>",
+    re.DOTALL,
+)
 _CELL_TAG_RE = re.compile(rb"<(?P<name>(?:[A-Za-z_][A-Za-z0-9_.-]*:)?c)(?=[\s/>])")
 _CELL_REFERENCE_RE = re.compile(rb"(?<![A-Za-z0-9_.:-])r\s*=\s*([\"'])(.*?)\1")
 _CELL_ATTRIBUTE_RE = re.compile(rb"\s+t\s*=\s*(?:\"[^\"]*\"|'[^']*')")
@@ -879,6 +885,127 @@ def _apply_xml_patches(xml: bytes, patches: Iterable[tuple[int, int, bytes]]) ->
     return b"".join(parts)
 
 
+def _threaded_comment_placeholder_updates(source: Path) -> tuple[Dict[str, bytes], Dict[tuple, str]]:
+    """Correct legacy-comment author placeholders paired with threaded comments."""
+    package_updates: Dict[str, bytes] = {}
+    cell_author_updates: Dict[tuple, str] = {}
+    try:
+        with zipfile.ZipFile(source, "r") as archive:
+            package_names = {item.filename for item in archive.infolist()}
+            worksheet_paths = _worksheet_part_paths(archive)
+            for sheet_name, sheet_path in worksheet_paths.items():
+                relationships_path = posixpath.join(
+                    posixpath.dirname(sheet_path),
+                    "_rels",
+                    posixpath.basename(sheet_path) + ".rels",
+                )
+                if relationships_path not in package_names:
+                    continue
+                relationships_root = ET.fromstring(archive.read(relationships_path))
+                comment_relationship = None
+                threaded_relationship = None
+                for relationship in relationships_root.findall(f"{_XLSX_PACKAGE_REL_NS}Relationship"):
+                    relationship_type = relationship.attrib.get("Type", "")
+                    if relationship_type.endswith("/comments"):
+                        comment_relationship = relationship
+                    elif relationship_type.endswith("/threadedComment"):
+                        threaded_relationship = relationship
+                if comment_relationship is None or threaded_relationship is None:
+                    continue
+
+                related_paths = []
+                for relationship in (comment_relationship, threaded_relationship):
+                    if relationship.attrib.get("TargetMode", "Internal").lower() == "external":
+                        raise WorkbookSafetyError("Um comentário da planilha aponta para um recurso externo.")
+                    target = relationship.attrib.get("Target", "").replace("\\", "/")
+                    related_path = (
+                        posixpath.normpath(target.lstrip("/"))
+                        if target.startswith("/")
+                        else posixpath.normpath(posixpath.join(posixpath.dirname(sheet_path), target))
+                    )
+                    if related_path.startswith("../") or related_path not in package_names:
+                        raise WorkbookSafetyError("O pacote não contém uma parte de comentários declarada.")
+                    related_paths.append(related_path)
+                comment_path, threaded_path = related_paths
+                comment_xml = archive.read(comment_path)
+                comment_root = ET.fromstring(comment_xml)
+                threaded_root = ET.fromstring(archive.read(threaded_path))
+                author_list = comment_root.find(f"{_XLSX_MAIN_NS}authors")
+                comment_list = comment_root.find(f"{_XLSX_MAIN_NS}commentList")
+                if author_list is None or comment_list is None:
+                    continue
+                authors = author_list.findall(f"{_XLSX_MAIN_NS}author")
+                comments = comment_list.findall(f"{_XLSX_MAIN_NS}comment")
+
+                threaded_by_reference = {}
+                for threaded_comment in threaded_root.iter(f"{_XLSX_THREADED_COMMENTS_NS}threadedComment"):
+                    if threaded_comment.attrib.get("parentId"):
+                        continue
+                    reference = threaded_comment.attrib.get("ref")
+                    threaded_id = threaded_comment.attrib.get("id")
+                    if not reference or not threaded_id:
+                        continue
+                    if reference in threaded_by_reference:
+                        raise WorkbookSafetyError("Há comentários encadeados ambíguos na planilha de origem.")
+                    threaded_by_reference[reference] = threaded_id
+
+                author_targets: Dict[int, str] = {}
+                paired_comments = []
+                for comment in comments:
+                    reference = comment.attrib.get("ref")
+                    threaded_id = comment.attrib.get(f"{_XLSX_REVISION_NS}uid")
+                    if not reference or not threaded_id or threaded_by_reference.get(reference) != threaded_id:
+                        continue
+                    try:
+                        author_id = int(comment.attrib["authorId"])
+                    except (KeyError, TypeError, ValueError) as error:
+                        raise WorkbookSafetyError("Um comentário encadeado não tem autor de compatibilidade válido.") from error
+                    if author_id < 0 or author_id >= len(authors):
+                        raise WorkbookSafetyError("Um comentário encadeado referencia um autor inexistente.")
+                    expected_author = f"tc={threaded_id}"
+                    prior_author = author_targets.get(author_id)
+                    if prior_author is not None and prior_author != expected_author:
+                        raise WorkbookSafetyError("Autores compartilhados tornam os comentários encadeados ambíguos.")
+                    author_targets[author_id] = expected_author
+                    paired_comments.append((reference, author_id, expected_author))
+
+                if not paired_comments:
+                    continue
+
+                paired_keys = {(reference, author_id) for reference, author_id, _ in paired_comments}
+                for comment in comments:
+                    reference = comment.attrib.get("ref")
+                    try:
+                        author_id = int(comment.attrib["authorId"])
+                    except (KeyError, TypeError, ValueError):
+                        continue
+                    if author_id in author_targets and (reference, author_id) not in paired_keys:
+                        raise WorkbookSafetyError("Um autor de compatibilidade também é usado por uma anotação independente.")
+
+                author_tags = list(_COMMENT_AUTHOR_ELEMENT_RE.finditer(comment_xml))
+                if len(author_tags) != len(authors):
+                    raise WorkbookSafetyError("Não foi possível identificar com segurança os autores dos comentários.")
+                patches = []
+                for author_id, expected_author in author_targets.items():
+                    if authors[author_id].text == expected_author:
+                        continue
+                    tag = author_tags[author_id]
+                    replacement = escape(expected_author).encode("utf-8")
+                    patches.append((tag.start("content"), tag.end("content"), replacement))
+                updated_xml = _apply_xml_patches(comment_xml, patches) if patches else comment_xml
+                if updated_xml != comment_xml:
+                    prior_update = package_updates.get(comment_path)
+                    if prior_update is not None and prior_update != updated_xml:
+                        raise WorkbookSafetyError("Uma parte de comentários está vinculada a mais de uma aba.")
+                    package_updates[comment_path] = updated_xml
+                for reference, _, expected_author in paired_comments:
+                    cell_author_updates[(sheet_name, reference.upper())] = expected_author
+    except WorkbookSafetyError:
+        raise
+    except (KeyError, OSError, zipfile.BadZipFile, ET.ParseError, ValueError) as error:
+        raise WorkbookSafetyError("Não foi possível validar os comentários encadeados da planilha.") from error
+    return package_updates, cell_author_updates
+
 def _patch_worksheet_cells(xml: bytes, updates: Dict[str, Any]) -> bytes:
     """Replace selected existing cell values and retain all other sheet XML bytes."""
     ranges = _cell_ranges(xml)
@@ -903,8 +1030,9 @@ def _write_package_with_cell_updates(
     source: Path,
     destination: Path,
     expected_values: Dict[tuple, Any],
+    additional_part_updates: Optional[Dict[str, bytes]] = None,
 ) -> set:
-    """Copy the original XLSX package and patch only authorized existing cells."""
+    """Copy the original XLSX package and patch only explicitly authorized parts."""
     updates_by_sheet: Dict[str, Dict[str, Any]] = {}
     for key, value in expected_values.items():
         if not isinstance(key, tuple) or len(key) != 2:
@@ -919,11 +1047,15 @@ def _write_package_with_cell_updates(
             if len(names) != len(set(names)):
                 raise WorkbookSafetyError("O arquivo Excel contém partes duplicadas no pacote.")
             worksheet_paths = _worksheet_part_paths(original)
-            updated_paths = {}
+            updated_paths = dict(additional_part_updates or {})
+            if not set(updated_paths).issubset(names):
+                raise WorkbookSafetyError("Uma alteração autorizada aponta para uma parte inexistente do arquivo Excel.")
             for sheet_name, updates in updates_by_sheet.items():
                 part_path = worksheet_paths.get(sheet_name)
                 if part_path is None:
                     raise WorkbookSafetyError(f"A aba '{sheet_name}' não existe no modelo original.")
+                if part_path in updated_paths:
+                    raise WorkbookSafetyError("Uma parte da planilha foi autorizada para duas alterações diferentes.")
                 updated_paths[part_path] = _patch_worksheet_cells(original.read(part_path), updates)
 
             with zipfile.ZipFile(destination, "w") as output:
@@ -1278,6 +1410,8 @@ def validate_workbook_roundtrip(
     allow_threaded_comments: bool = False,
     allow_legacy_comments: bool = False,
     allow_custom_xml_passthrough: bool = False,
+    allowed_package_part_updates: Optional[set] = None,
+    comment_author_updates: Optional[Dict[tuple, str]] = None,
 ) -> None:
     """Reopen the temporary workbook and ensure only explicitly allowed values changed."""
     _package_features(
@@ -1291,6 +1425,7 @@ def validate_workbook_roundtrip(
         if set(candidate_entries) != set(original_package_entries):
             raise WorkbookSafetyError("A planilha temporária alterou as partes do arquivo fora das células autorizadas.")
         allowed_parts = _updated_worksheet_parts(candidate_path, expected_values)
+        allowed_parts.update(allowed_package_part_updates or set())
         changed_parts = {
             name for name, digest in original_package_entries.items()
             if candidate_entries[name] != digest
@@ -1364,13 +1499,19 @@ def validate_workbook_roundtrip(
             if not value_matches:
                 raise WorkbookSafetyError(f"O valor da célula '{sheet_name}!{coordinate}' não corresponde ao esperado.")
             if prior is not None:
+                expected_prior = prior
+                expected_author = (comment_author_updates or {}).get((sheet_name, coordinate.upper()))
+                if expected_author is not None:
+                    if prior[4] is None:
+                        raise WorkbookSafetyError(f"O comentário '{sheet_name}!{coordinate}' não pôde ser validado.")
+                    expected_prior = (*prior[:4], (prior[4][0], expected_author))
                 if coordinate in allowed:
                     metadata_matches = (
                         _cell_data_type_matches(actual, allowed[coordinate])
-                        and actual[2:] == prior[2:]
+                        and actual[2:] == expected_prior[2:]
                     )
                 else:
-                    metadata_matches = _cell_metadata_matches(actual, prior)
+                    metadata_matches = _cell_metadata_matches(actual, expected_prior)
                 if not metadata_matches:
                     raise WorkbookSafetyError(f"A célula '{sheet_name}!{coordinate}' alterou fórmula, estilo ou recurso associado.")
             elif coordinate not in allowed:
@@ -1389,16 +1530,21 @@ def serialize_workbook_validated(
     allow_threaded_comments: bool = False,
     allow_legacy_comments: bool = False,
     allow_custom_xml_passthrough: bool = False,
+    normalize_threaded_comment_placeholders: bool = False,
 ) -> bytes:
     """Save to a same-volume temporary, reopen, validate, and return its bytes."""
     source = Path(source).resolve(strict=False)
     original_entries = _package_hashes(source)
+    comment_part_updates: Dict[str, bytes] = {}
+    comment_author_updates: Dict[tuple, str] = {}
+    if normalize_threaded_comment_placeholders:
+        comment_part_updates, comment_author_updates = _threaded_comment_placeholder_updates(source)
 
     def write(temp: Path) -> None:
         changed_values = _changed_expected_values(original_snapshot, expected_values)
-        if changed_values:
+        if changed_values or comment_part_updates:
             _write_package_with_cell_updates(
-                source, temp, changed_values,
+                source, temp, changed_values, comment_part_updates,
             )
         else:
             shutil.copyfile(source, temp)
@@ -1413,6 +1559,8 @@ def serialize_workbook_validated(
             allow_threaded_comments=allow_threaded_comments,
             allow_legacy_comments=allow_legacy_comments,
             allow_custom_xml_passthrough=allow_custom_xml_passthrough,
+            allowed_package_part_updates=set(comment_part_updates),
+            comment_author_updates=comment_author_updates,
         ),
     )
     try:
