@@ -25,7 +25,11 @@
   const MESSAGES = Object.freeze({
     required: "Campo obrigatório.",
     email: "E-mail em formato inválido.",
+    phone: "Celular inválido: informe DDD e número.",
   });
+  const RECENT_UNITS_KEY = "simpress:recent-units";
+  const RECENT_OBS_KEY = "simpress:recent-obs";
+  const RECENT_LIMIT = 5;
   const COPY_SELECTOR = '[onclick*="copiar"], [data-copy-field], .ticket-template-copy';
   const COPY_STATES = Object.freeze({ success: "copied", warning: "warning", error: "error" });
   const COPY_MATCH_WINDOW_MS = 2500;
@@ -33,11 +37,56 @@
   const COPIED_LABEL = "Copiado!";
   const CHECK_ICON = '<svg class="ux-copy-check" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><path d="M20 6 9 17l-5-5"></path></svg>';
 
+  // Mirrors TransferenciaPayload.validate_phone (routers/transfers.py): DDD + 8/9 digits, optional +55 and ramal.
+  function phoneProblem(value) {
+    const text = String(value ?? "").trim();
+    if (!text) return null;
+    const main = text.replace(/\s*(?:ramal|ram\.?|ext\.?|x)\s*[:.]?\s*\d+\s*$/i, "");
+    let digits = main.replace(/\D/g, "");
+    if (main.trimStart().startsWith("+") && digits.startsWith("55")) digits = digits.slice(2);
+    else if (digits.startsWith("0055") && (digits.length === 14 || digits.length === 15)) digits = digits.slice(4);
+    else if (digits.startsWith("55") && (digits.length === 12 || digits.length === 13)) digits = digits.slice(2);
+    return digits.length === 10 || digits.length === 11 ? null : "phone";
+  }
+
+  // Masks plain Brazilian numbers while typing; anything with +, letters or a ramal is left untouched.
+  function formatPhone(value) {
+    const text = String(value ?? "");
+    if (/[^\d\s()-]/.test(text)) return text;
+    const digits = text.replace(/\D/g, "").slice(0, 11);
+    if (!digits) return "";
+    if (digits.length <= 2) return `(${digits}`;
+    const area = digits.slice(0, 2);
+    const rest = digits.slice(2);
+    if (rest.length <= 4) return `(${area}) ${rest}`;
+    const split = digits.length === 11 ? 5 : 4;
+    return `(${area}) ${rest.slice(0, split)}-${rest.slice(split)}`;
+  }
+
   function fieldProblem(field) {
     if (!field) return null;
     if (!String(field.value ?? "").trim()) return "required";
     if (field.type === "email" && typeof field.checkValidity === "function" && !field.checkValidity()) return "email";
+    if (/-telefone$/.test(String(field.id || "")) && phoneProblem(field.value)) return "phone";
     return null;
+  }
+
+  // Keyboard shortcuts: "/" or Ctrl/Cmd+K focus the search, Ctrl/Cmd+Enter generates the sheet.
+  function shortcutAction(event, { typing = false, modalOpen = false, transferVisible = false } = {}) {
+    if (modalOpen || event.defaultPrevented || event.isComposing || event.altKey) return null;
+    const key = String(event.key || "");
+    const command = event.ctrlKey || event.metaKey;
+    if (command && !event.shiftKey && key.toLowerCase() === "k") return "search";
+    if (key === "/" && !command && !typing) return "search";
+    if (command && key === "Enter" && transferVisible) return "generate";
+    return null;
+  }
+
+  function pushRecent(list, value, limit = RECENT_LIMIT) {
+    const text = String(value ?? "").trim();
+    if (!text) return Array.isArray(list) ? list.slice(0, limit) : [];
+    const rest = (Array.isArray(list) ? list : []).filter(item => String(item) !== text);
+    return [text, ...rest].slice(0, limit);
   }
 
   // The lunch-break duration is only required while app.js keeps it `required`.
@@ -94,6 +143,14 @@
       ? new win.ResizeObserver(entries => entries.forEach(entry => updateOverflow(entry.target)))
       : null;
     let pendingCopy = null;
+    const storage = (() => { try { return win.localStorage || null; } catch (error) { return null; } })();
+    const readRecent = key => {
+      try {
+        const parsed = JSON.parse(storage?.getItem(key) || "[]");
+        return Array.isArray(parsed) ? parsed.filter(item => typeof item === "string") : [];
+      } catch (error) { return []; }
+    };
+    const writeRecent = (key, list) => { try { storage?.setItem(key, JSON.stringify(list)); } catch (error) { /* optional */ } };
     let refreshQueued = false;
 
     // ---------- Copy feedback on the clicked button ----------
@@ -279,20 +336,132 @@
       const copyTrigger = target?.closest?.(COPY_SELECTOR);
       if (isCopyTrigger(copyTrigger) && !copyTrigger.disabled) pendingCopy = { trigger: copyTrigger, at: Date.now() };
       if (target?.closest?.("#btn-gerar-planilha")) setTouched(true);
-      if (target?.closest?.("#btn-nova-transferencia")) win.setTimeout(() => { setTouched(false); refresh(); }, 0);
       win.setTimeout(scheduleRefresh, 0);
     }, true);
 
     doc.addEventListener("input", event => {
-      if (REQUIRED_IDS.has(event.target?.id)) event.target.dataset.uxDirty = "true";
+      const target = event.target;
+      if (REQUIRED_IDS.has(target?.id)) target.dataset.uxDirty = "true";
+      const typedAtEnd = target?.selectionStart == null || target.selectionStart === target.value.length;
+      if (/-telefone$/.test(String(target?.id || "")) && typedAtEnd && !/^(deleteContent)/.test(event.inputType || "")) {
+        const masked = formatPhone(target.value);
+        if (masked !== target.value) target.value = masked;
+      }
       scheduleRefresh();
     }, true);
     doc.addEventListener("change", scheduleRefresh, true);
     doc.addEventListener("focusout", event => {
       const field = event.target;
+      if (/-telefone$/.test(String(field?.id || ""))) {
+        const masked = formatPhone(field.value);
+        if (masked !== field.value) field.value = masked;
+      }
       if (REQUIRED_IDS.has(field?.id) && field.dataset.uxDirty === "true") field.dataset.uxTouched = "true";
       scheduleRefresh();
     }, true);
+    // Fires only after the reset was confirmed and applied, so a cancelled dialog keeps the validation state.
+    doc.addEventListener("simpress:form-reset", () => { setTouched(false); scheduleRefresh(); });
+
+    doc.addEventListener("keydown", event => {
+      const target = event.target;
+      const typing = Boolean(target) && (/^(INPUT|TEXTAREA|SELECT)$/.test(String(target.tagName || "")) || target.isContentEditable === true);
+      const panel = byId("tab-panel-retirada-entrega");
+      const action = shortcutAction(event, {
+        typing,
+        modalOpen: Boolean(doc.querySelector('[data-accessible-modal="true"]:not(.hidden):not([data-motion-closing="true"])')),
+        transferVisible: Boolean(panel) && !panel.hidden,
+      });
+      if (action === "search") {
+        const input = byId("input-serial");
+        if (!input) return;
+        event.preventDefault();
+        if (typeof win.ativarAbaTransferencia === "function") win.ativarAbaTransferencia("home");
+        input.focus();
+        input.select?.();
+      } else if (action === "generate") {
+        const button = byId("btn-gerar-planilha");
+        if (!button || button.disabled) return;
+        event.preventDefault();
+        button.click();
+      }
+    });
+
+    // ---------- Recent destinations and observations ----------
+    function ensureRecentRow(id, label, anchor) {
+      let row = byId(id);
+      if (!row && anchor) {
+        row = doc.createElement("div");
+        row.id = id;
+        row.className = "ux-recent";
+        row.setAttribute("role", "group");
+        row.setAttribute("aria-label", label);
+        anchor.insertAdjacentElement("afterend", row);
+      }
+      return row;
+    }
+
+    function fillRecentRow(row, label, items, onPick) {
+      if (!row) return;
+      row.replaceChildren();
+      row.hidden = items.length === 0;
+      if (!items.length) return;
+      const caption = doc.createElement("span");
+      caption.className = "ux-recent-label";
+      caption.textContent = label;
+      row.appendChild(caption);
+      items.forEach(item => {
+        const chip = doc.createElement("button");
+        chip.type = "button";
+        chip.className = "ux-recent-chip";
+        chip.textContent = item.length > 34 ? `${item.slice(0, 33)}…` : item;
+        chip.title = item;
+        chip.addEventListener("click", () => onPick(item));
+        row.appendChild(chip);
+      });
+    }
+
+    // Recents store the exact option label, so cities with several units stay unambiguous.
+    function pickRecentUnit(label) {
+      const select = byId("select-unidade-destino");
+      const option = select && Array.from(select.options).find(item => item.value && String(item.textContent).trim() === label);
+      if (!option) {
+        if (typeof win.showToast === "function") win.showToast("Esse destino não está mais no catálogo.", "warning");
+        return;
+      }
+      select.value = option.value;
+      select.dispatchEvent(new win.Event("change", { bubbles: true }));
+    }
+
+    function pickRecentObservation(text) {
+      if (typeof win.adicionarObsChamado === "function") win.adicionarObsChamado(text);
+      else {
+        const field = byId("entrega-obs");
+        if (!field) return;
+        field.value = field.value.trim() ? `${field.value} ${text}` : text;
+        field.dispatchEvent(new win.Event("input", { bubbles: true }));
+      }
+      byId("entrega-obs")?.focus();
+    }
+
+    function renderRecents() {
+      const select = byId("select-unidade-destino");
+      const unitsRow = ensureRecentRow("ux-recent-units", "Destinos recentes", select?.parentElement);
+      fillRecentRow(unitsRow, "Recentes:", readRecent(RECENT_UNITS_KEY), pickRecentUnit);
+      const obs = byId("entrega-obs");
+      const quickChips = obs?.parentElement?.querySelector(".flex.flex-wrap");
+      const obsRow = ensureRecentRow("ux-recent-obs", "Observações recentes", quickChips || obs);
+      fillRecentRow(obsRow, "Já usadas:", readRecent(RECENT_OBS_KEY), pickRecentObservation);
+    }
+
+    doc.addEventListener("simpress:transfer-generated", event => {
+      const payload = event.detail?.payload || {};
+      const select = byId("select-unidade-destino");
+      const unitLabel = select && select.value ? String(select.options[select.selectedIndex]?.textContent || "").trim() : "";
+      writeRecent(RECENT_UNITS_KEY, pushRecent(readRecent(RECENT_UNITS_KEY), unitLabel));
+      writeRecent(RECENT_OBS_KEY, pushRecent(readRecent(RECENT_OBS_KEY), payload.entrega_obs));
+      renderRecents();
+    });
+
     doc.addEventListener("scroll", event => {
       if (event.target?.classList?.contains("accessible-table-wrap")) updateOverflow(event.target);
     }, true);
@@ -307,6 +476,7 @@
     function start() {
       observer?.observe(doc.body, { childList: true, subtree: true });
       scanDynamicContent();
+      renderRecents();
       refresh();
     }
     if (doc.readyState === "loading") doc.addEventListener("DOMContentLoaded", start, { once: true });
@@ -321,6 +491,10 @@
     listPendingFields,
     describePending,
     isCopyTrigger,
+    phoneProblem,
+    formatPhone,
+    shortcutAction,
+    pushRecent,
     copyStateFor,
     overflowState,
     install,

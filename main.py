@@ -69,6 +69,7 @@ from core.config import (
     TEMPLATE_FILE,
     TICKET_REPORT_FILE,
     TRANSACTION_ROOT,
+    TRANSFER_HISTORY_FILE,
     UPLOAD_BACKUPS_DIR,
     SUPPORTED_CONTRACT,
     SUPPORTED_CONTRACT_LEGAL_NAME,
@@ -88,6 +89,8 @@ from routers.transfers import (
     create_transfer_router,
     formatar_telefone_brasileiro,
 )
+from routers.transfer_history import TransferHistoryServices, create_transfer_history_router
+from routers.dashboard import DashboardServices, create_dashboard_router
 from routers.operations import MAX_TICKET_WORKBOOK_BYTES, create_operations_router
 from routers.local_setup import create_local_setup_router
 from domains.local_setup import validate_local_model
@@ -3972,6 +3975,37 @@ def _postgres_transfer(payload):
 
 transfer_router, gerar_planilha = create_transfer_router(get_local_transfer_template, _postgres_transfer)
 app.include_router(transfer_router)
+
+transfer_history_router, _transfer_history_exports = create_transfer_history_router(TransferHistoryServices(
+    history_file=lambda: TRANSFER_HISTORY_FILE,
+    transaction_root=lambda: TRANSACTION_ROOT,
+))
+listar_historico_transferencias = _transfer_history_exports["listar_historico_transferencias"]
+registrar_historico_transferencia = _transfer_history_exports["registrar_historico_transferencia"]
+app.include_router(transfer_history_router)
+
+
+def _dashboard_equipment_snapshot() -> List[Dict[str, Any]]:
+    with STATE_LOCK:
+        return [
+            {"tipo": item.get("tipo"), "modelo": item.get("modelo"), "retirada_cidade": item.get("retirada_cidade")}
+            for item in equipamentos_cache.values()
+        ]
+
+
+def _dashboard_comparison_events() -> List[Dict[str, Any]]:
+    return get_historico_comparacoes()["eventos"]
+
+
+dashboard_router, _dashboard_exports = create_dashboard_router(DashboardServices(
+    get_equipment=_dashboard_equipment_snapshot,
+    get_stats=_get_stats_snapshot,
+    get_comparison_events=_dashboard_comparison_events,
+    categories=_CATEGORIAS_EQUIPAMENTO,
+    categorize=_categoria_equipamento,
+))
+obter_painel = _dashboard_exports["obter_painel"]
+app.include_router(dashboard_router)
 
 
 def _check_imported_export():
