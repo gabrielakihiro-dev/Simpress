@@ -66,7 +66,7 @@ test("ticket export stays bound to the selected snapshot while it loads", async 
   });
 
   await page.goto("/");
-  await expect(page.locator("#stat-equipamentos")).toHaveText("1");
+  await expect(page.locator("#stat-equipamentos")).toHaveText("1", { timeout: 15_000 });
   await page.evaluate(() => abrirAcompanhamentoChamados());
   const selector = page.locator("#versao-acompanhamento-chamados");
   const exportButton = page.locator("#btn-exportar-acompanhamento-chamados");

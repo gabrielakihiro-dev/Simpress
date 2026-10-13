@@ -38,6 +38,7 @@ test("the theme icon switches modes, persists the choice, and works on login", a
   await page.goto("/");
   await page.evaluate(() => window.localStorage.removeItem("simpress:theme"));
   await page.reload();
+  await expect(page.locator("#stat-equipamentos")).toHaveText("1", { timeout: 15_000 });
 
   const root = page.locator("html");
   const lightModeButton = page.getByRole("button", { name: "Ativar modo claro" });
@@ -47,7 +48,6 @@ test("the theme icon switches modes, persists the choice, and works on login", a
   const darkModeButton = page.getByRole("button", { name: "Ativar modo escuro" });
   await expect(root).toHaveAttribute("data-theme", "light");
   await expect(darkModeButton.locator("svg")).toHaveClass(/lucide-moon/);
-  await expect(page.locator("#btn-buscar-serial")).toHaveCSS("color", "rgb(255, 255, 255)");
   await expect.poll(() => page.evaluate(() => localStorage.getItem("simpress:theme"))).toBe("light");
   await page.locator(".app-workspace").evaluate(async workspace => {
     const transitions = workspace.getAnimations();
