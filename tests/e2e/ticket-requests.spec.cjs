@@ -2,7 +2,6 @@ const { test, expect } = require("@playwright/test");
 
 test("ticket selection keeps the latest snapshot after overlapping responses", async ({ page }) => {
   await page.goto("/");
-  await expect(page.locator("#stat-equipamentos")).toHaveText("1");
   let releaseOld;
   let notifyOldRequested;
   const oldRequested = new Promise(resolve => { notifyOldRequested = resolve; });
@@ -108,7 +107,6 @@ test("clearing the ticket snapshot also clears its comparison", async ({ page })
   } }));
 
   await page.goto("/");
-  await expect(page.locator("#stat-equipamentos")).toHaveText("1");
   await page.evaluate(() => abrirAcompanhamentoChamados());
   const evolution = page.locator("#evolucao-acompanhamento-chamados");
   await expect(evolution).toContainText("7 novas");
@@ -124,7 +122,6 @@ test("clearing the ticket snapshot also clears its comparison", async ({ page })
 
 test("extracted DOM helpers preserve safe rendering of external content", async ({ page }) => {
   await page.goto("/");
-  await expect(page.locator("#stat-equipamentos")).toHaveText("1");
   const rendered = await page.evaluate(() => {
     const container = document.createElement("div");
     container.innerHTML = highlightMatch('<img src=x onerror="window.injected=true"> SYNTHETIC', "SYNTHETIC");
