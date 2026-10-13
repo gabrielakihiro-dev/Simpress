@@ -349,8 +349,11 @@ def _latest_stage_date(values: Sequence[str]) -> str:
     texts = [value.strip() for value in values if value and value.strip()]
     if not texts:
         return ""
-    parsed = [(_parse_order_date(text), text) for text in texts]
-    dated = [item for item in parsed if item[0] is not None]
+    dated: List[Tuple[datetime, str]] = []
+    for text in texts:
+        parsed = _parse_order_date(text)
+        if parsed is not None:
+            dated.append((parsed, text))
     if dated:
         return _simpress_date_text(max(dated, key=lambda item: item[0])[1])
     return texts[-1]
