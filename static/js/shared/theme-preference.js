@@ -42,15 +42,16 @@
   document.documentElement.dataset.theme = getSavedTheme();
 
   function initializeToggle() {
-    const button = document.getElementById("theme-toggle");
     updateToggle(document.documentElement.dataset.theme);
+  }
+
+  document.addEventListener("click", function (event) {
+    const button = event.target instanceof Element ? event.target.closest("#theme-toggle") : null;
     if (!button) return;
 
-    button.addEventListener("click", function () {
-      const nextTheme = document.documentElement.dataset.theme === "dark" ? "light" : "dark";
-      applyTheme(nextTheme, true);
-    });
-  }
+    const nextTheme = document.documentElement.dataset.theme === "dark" ? "light" : "dark";
+    applyTheme(nextTheme, true);
+  });
 
   if (document.readyState === "loading") {
     document.addEventListener("DOMContentLoaded", initializeToggle, { once: true });
