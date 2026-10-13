@@ -11,7 +11,8 @@ test("updated page avoids legacy asset URLs and styles the transfer banner", asy
     const url = await page.locator(selector).evaluate(element => element.href || element.src);
     expect(new URL(url).searchParams.get("v")).toMatch(/^[a-f0-9]{16}$/);
   }
-  await page.evaluate(() => ativarAbaTransferencia("transferencia"));
+  await page.getByRole("tab", { name: "Transporte" }).click();
+  await expect(page.locator("#tab-retirada-entrega")).toHaveAttribute("aria-selected", "true");
   await expect(page.locator("#transfer-equipment-banner")).toBeVisible();
   await expect(page.locator("#transfer-equipment-banner")).toHaveCSS("display", "flex");
   await expect(page.locator("#transfer-equipment-banner")).toHaveCSS("border-radius", "18px");
