@@ -152,6 +152,7 @@ function createAppHarness(fetchApi, { stubDisplay = true, confirmResult = true, 
     setTimeout,
     clearTimeout,
     requestAnimationFrame: callback => callback(0),
+    MutationObserver: class { observe() {} disconnect() {} },
     lucide: { createIcons() {} },
     console: { error() {}, warn() {}, log() {} },
     workflowEffects: effects,
@@ -1155,14 +1156,13 @@ test("keeps a transfer search when the user cancels the discard confirmation", (
   assert.equal(harness.effects.toasts.length, 0);
 });
 
-test("centralizes the latest comparison issues with row-level annotation autosave and filters", () => {
-  assert.match(appHtml, /id="modal-central-pendencias"/);
-  assert.match(appHtml, /id="filtro-operacional-pendencias"/);
-  assert.match(appHtml, /id="categoria-operacional-pendencias"/);
-  assert.match(appScript, /fetch\("\/api\/operacoes\/pendencias"\)/);
-  assert.match(appScript, /data-operational-annotation/);
+test("filters comparison history while preserving row-level annotation autosave", () => {
+  assert.doesNotMatch(appHtml, /id="modal-central-pendencias"/);
+  assert.match(appScript, /data-history-filter-search/);
+  assert.match(appScript, /data-history-filter-category/);
+  assert.match(appScript, /data-history-filter-annotated/);
+  assert.match(appScript, /history-row-annotated/);
   assert.match(appScript, /\/anotacoes\/\$\{encodeURIComponent\(targetItemId\)\}/);
-  assert.match(appScript, /Abrir atualização/);
 });
 
 test("compares two complete inventory updates and annotates each source row in the evolution view", () => {
@@ -1561,7 +1561,7 @@ test("keeps old ticket imports when the deletion confirmation is cancelled", asy
 });
 
 test("groups secondary actions while keeping spreadsheet updates prominent", () => {
-  assert.match(appHtml, /id="btn-atualizar-planilhas" class="header-action-item header-action-item--primary/);
+  assert.match(appHtml, /id="btn-atualizar-planilhas"[^>]*class="header-action-item header-action-item--primary/);
   assert.match(appHtml, /onclick="abrirAcompanhamentoChamados\(\)"[\s\S]*?<details class="header-action-group" data-action-group="analysis">/);
   assert.match(appHtml, /id="btn-exportar-equipamentos"[^>]*header-action-item--primary/);
   assert.match(appHtml, /<details class="header-action-group" data-action-group="analysis">/);
@@ -1569,14 +1569,13 @@ test("groups secondary actions while keeping spreadsheet updates prominent", () 
 
   const analysisGroup = appHtml.match(/<details class="header-action-group" data-action-group="analysis">([\s\S]*?)<\/details>/)?.[1] || "";
   assert.match(analysisGroup, /<span class="sidebar-item-label">Históricos e Análises<\/span>/);
-  assert.match(analysisGroup, /id="btn-atualizar-planilhas" class="header-action-item header-action-item--primary/);
+  assert.match(analysisGroup, /id="btn-atualizar-planilhas"[^>]*class="header-action-item header-action-item--primary/);
   assert.match(analysisGroup, /aria-label="Atualização, exportação, análises, históricos e catálogo de unidades"/);
-  assert.match(analysisGroup, /abrirCentralPendencias\(\)/);
+  assert.doesNotMatch(analysisGroup, /abrirCentralPendencias\(\)/);
   assert.match(analysisGroup, /abrirEvolucaoAtualizacoes\(\)/);
   assert.match(analysisGroup, /abrirModalHistoricoComparacoes\(\)/);
   assert.match(analysisGroup, /abrirModalHistoricoApelidos\(\)/);
   assert.match(analysisGroup, /abrirModalGerenciarUnidades\(\)/);
-  assert.ok(analysisGroup.indexOf('id="btn-historico-comparacoes"') < analysisGroup.indexOf('onclick="abrirCentralPendencias()"'));
   assert.ok(analysisGroup.indexOf('id="btn-atualizar-planilhas"') < analysisGroup.indexOf('id="btn-historico-comparacoes"'));
   assert.ok(analysisGroup.indexOf('id="btn-atualizar-planilhas"') < analysisGroup.indexOf('id="btn-exportar-equipamentos"'));
   assert.ok(analysisGroup.indexOf('id="btn-exportar-equipamentos"') < analysisGroup.indexOf('id="btn-historico-comparacoes"'));

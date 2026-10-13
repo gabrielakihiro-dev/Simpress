@@ -1519,12 +1519,12 @@ def validate_workbook_roundtrip(
     for (sheet_name, coordinate), value in expected_values.items():
         expected_by_sheet.setdefault(sheet_name, {})[coordinate] = value
     styles_by_sheet: Dict[str, Dict[str, int]] = {}
-    for key, style_id in (expected_cell_styles or {}).items():
-        if not isinstance(key, tuple) or len(key) != 2:
+    for style_key, style_id in (expected_cell_styles or {}).items():
+        if not isinstance(style_key, tuple) or len(style_key) != 2:
             raise WorkbookSafetyError("A lista de estilos autorizados da planilha é inválida.")
         if isinstance(style_id, bool) or not isinstance(style_id, int) or style_id < 0:
             raise WorkbookSafetyError("O estilo autorizado da célula não é válido.")
-        sheet_name, coordinate = key
+        sheet_name, coordinate = style_key
         styles_by_sheet.setdefault(str(sheet_name), {})[str(coordinate).upper()] = style_id
 
     for sheet_name, before in original_snapshot["worksheets"].items():
