@@ -741,6 +741,7 @@ _COMMENT_AUTHOR_ELEMENT_RE = re.compile(
 )
 _CELL_TAG_RE = re.compile(rb"<(?P<name>(?:[A-Za-z_][A-Za-z0-9_.-]*:)?c)(?=[\s/>])")
 _CELL_REFERENCE_RE = re.compile(rb"(?<![A-Za-z0-9_.:-])r\s*=\s*([\"'])(.*?)\1")
+_CELL_STYLE_ATTRIBUTE_RE = re.compile(rb"\s+s\s*=\s*([\"'])(.*?)\1")
 _CELL_ATTRIBUTE_RE = re.compile(rb"\s+t\s*=\s*(?:\"[^\"]*\"|'[^']*')")
 _CELL_TYPE_RE = re.compile(rb"\s+t\s*=\s*(?:\"(?P<double>[^\"]*)\"|'(?P<single>[^']*)')")
 _FORMULA_ELEMENT_RE = re.compile(
@@ -1006,21 +1007,67 @@ def _threaded_comment_placeholder_updates(source: Path) -> tuple[Dict[str, bytes
         raise WorkbookSafetyError("Não foi possível validar os comentários encadeados da planilha.") from error
     return package_updates, cell_author_updates
 
-def _patch_worksheet_cells(xml: bytes, updates: Dict[str, Any]) -> bytes:
-    """Replace selected existing cell values and retain all other sheet XML bytes."""
+
+def _replace_cell_style_id(opening: bytes, style_id: int) -> bytes:
+    """Set one existing cell style reference without changing other attributes."""
+    if isinstance(style_id, bool) or not isinstance(style_id, int) or style_id < 0:
+        raise WorkbookSafetyError("O estilo autorizado da célula não é válido.")
+    match = _CELL_STYLE_ATTRIBUTE_RE.search(opening)
+    current_style_id = 0
+    if match is not None:
+        try:
+            current_style_id = int(match.group(2))
+        except ValueError as error:
+            raise WorkbookSafetyError("Uma célula contém uma referência de estilo inválida.") from error
+    if current_style_id == style_id:
+        return opening
+    if style_id == 0:
+        return _CELL_STYLE_ATTRIBUTE_RE.sub(b"", opening)
+    attribute = b' s="' + str(style_id).encode("ascii") + b'"'
+    if match is not None:
+        return opening[:match.start()] + attribute + opening[match.end():]
+    if opening[:-1].rstrip().endswith(b"/"):
+        slash = opening.rfind(b"/", 0, len(opening) - 1)
+        return opening[:slash] + attribute + opening[slash:]
+    return opening[:-1] + attribute + b">"
+
+
+def _patch_worksheet_cells(
+    xml: bytes,
+    updates: Dict[str, Any],
+    style_updates: Optional[Dict[str, int]] = None,
+) -> bytes:
+    """Update explicitly authorized cell values/styles and retain other sheet XML bytes."""
+    style_updates = style_updates or {}
+    normalized_updates = {str(address).upper(): value for address, value in updates.items()}
+    normalized_style_updates = {
+        str(address).upper(): style_id for address, style_id in style_updates.items()
+    }
     ranges = _cell_ranges(xml)
     patches = []
-    for address, value in updates.items():
-        normalized_address = str(address).upper()
+    for normalized_address in set(normalized_updates) | set(normalized_style_updates):
         cell_range = ranges.get(normalized_address)
         if cell_range is None:
             raise WorkbookSafetyError(f"A célula autorizada '{normalized_address}' não existe no modelo.")
         start, end, opening_end, tag_name = cell_range
         opening = xml[start:opening_end]
-        self_closing = opening[:-1].rstrip().endswith(b"/")
-        content_end = end if self_closing else end - len(b"</" + tag_name + b">")
-        existing_content = b"" if self_closing else xml[opening_end:content_end]
-        replacement = _replacement_cell_xml(opening, tag_name, value, existing_content)
+        if normalized_address in normalized_updates:
+            self_closing = opening[:-1].rstrip().endswith(b"/")
+            content_end = end if self_closing else end - len(b"</" + tag_name + b">")
+            existing_content = b"" if self_closing else xml[opening_end:content_end]
+            replacement = _replacement_cell_xml(
+                opening, tag_name, normalized_updates[normalized_address], existing_content
+            )
+        else:
+            replacement = xml[start:end]
+        if normalized_address in normalized_style_updates:
+            replacement_opening_end = _xml_tag_end(replacement, 0)
+            replacement = (
+                _replace_cell_style_id(
+                    replacement[:replacement_opening_end], normalized_style_updates[normalized_address]
+                )
+                + replacement[replacement_opening_end:]
+            )
         patches.append((start, end, replacement))
 
     return _apply_xml_patches(xml, patches)
@@ -1031,6 +1078,7 @@ def _write_package_with_cell_updates(
     destination: Path,
     expected_values: Dict[tuple, Any],
     additional_part_updates: Optional[Dict[str, bytes]] = None,
+    expected_cell_styles: Optional[Dict[tuple, int]] = None,
 ) -> set:
     """Copy the original XLSX package and patch only explicitly authorized parts."""
     updates_by_sheet: Dict[str, Dict[str, Any]] = {}
@@ -1039,6 +1087,12 @@ def _write_package_with_cell_updates(
             raise WorkbookSafetyError("A lista de alterações autorizadas da planilha é inválida.")
         sheet_name, address = key
         updates_by_sheet.setdefault(str(sheet_name), {})[str(address)] = value
+    styles_by_sheet: Dict[str, Dict[str, int]] = {}
+    for key, style_id in (expected_cell_styles or {}).items():
+        if not isinstance(key, tuple) or len(key) != 2:
+            raise WorkbookSafetyError("A lista de estilos autorizados da planilha é inválida.")
+        sheet_name, address = key
+        styles_by_sheet.setdefault(str(sheet_name), {})[str(address)] = style_id
 
     try:
         with zipfile.ZipFile(source, "r") as original:
@@ -1050,13 +1104,17 @@ def _write_package_with_cell_updates(
             updated_paths = dict(additional_part_updates or {})
             if not set(updated_paths).issubset(names):
                 raise WorkbookSafetyError("Uma alteração autorizada aponta para uma parte inexistente do arquivo Excel.")
-            for sheet_name, updates in updates_by_sheet.items():
+            for sheet_name in set(updates_by_sheet) | set(styles_by_sheet):
                 part_path = worksheet_paths.get(sheet_name)
                 if part_path is None:
                     raise WorkbookSafetyError(f"A aba '{sheet_name}' não existe no modelo original.")
                 if part_path in updated_paths:
                     raise WorkbookSafetyError("Uma parte da planilha foi autorizada para duas alterações diferentes.")
-                updated_paths[part_path] = _patch_worksheet_cells(original.read(part_path), updates)
+                updated_paths[part_path] = _patch_worksheet_cells(
+                    original.read(part_path),
+                    updates_by_sheet.get(sheet_name, {}),
+                    styles_by_sheet.get(sheet_name, {}),
+                )
 
             with zipfile.ZipFile(destination, "w") as output:
                 output.comment = original.comment
@@ -1403,6 +1461,7 @@ def validate_workbook_roundtrip(
     candidate_path: Path,
     expected_values: Dict[tuple, Any],
     *,
+    expected_cell_styles: Optional[Dict[tuple, int]] = None,
     original_package_parts: Optional[Dict[str, str]] = None,
     original_package_entries: Optional[Dict[str, str]] = None,
     allow_dimension_growth: bool = False,
@@ -1413,7 +1472,7 @@ def validate_workbook_roundtrip(
     allowed_package_part_updates: Optional[set] = None,
     comment_author_updates: Optional[Dict[tuple, str]] = None,
 ) -> None:
-    """Reopen the temporary workbook and ensure only explicitly allowed values changed."""
+    """Reopen the workbook and ensure only explicitly allowed cell values/styles changed."""
     _package_features(
         candidate_path,
         allow_threaded_comments=allow_threaded_comments,
@@ -1424,7 +1483,8 @@ def validate_workbook_roundtrip(
         candidate_entries = _package_hashes(candidate_path)
         if set(candidate_entries) != set(original_package_entries):
             raise WorkbookSafetyError("A planilha temporária alterou as partes do arquivo fora das células autorizadas.")
-        allowed_parts = _updated_worksheet_parts(candidate_path, expected_values)
+        authorized_cells = {**expected_values, **(expected_cell_styles or {})}
+        allowed_parts = _updated_worksheet_parts(candidate_path, authorized_cells)
         allowed_parts.update(allowed_package_part_updates or set())
         changed_parts = {
             name for name, digest in original_package_entries.items()
@@ -1458,10 +1518,19 @@ def validate_workbook_roundtrip(
     expected_by_sheet: Dict[str, Dict[str, Any]] = {}
     for (sheet_name, coordinate), value in expected_values.items():
         expected_by_sheet.setdefault(sheet_name, {})[coordinate] = value
+    styles_by_sheet: Dict[str, Dict[str, int]] = {}
+    for key, style_id in (expected_cell_styles or {}).items():
+        if not isinstance(key, tuple) or len(key) != 2:
+            raise WorkbookSafetyError("A lista de estilos autorizados da planilha é inválida.")
+        if isinstance(style_id, bool) or not isinstance(style_id, int) or style_id < 0:
+            raise WorkbookSafetyError("O estilo autorizado da célula não é válido.")
+        sheet_name, coordinate = key
+        styles_by_sheet.setdefault(str(sheet_name), {})[str(coordinate).upper()] = style_id
 
     for sheet_name, before in original_snapshot["worksheets"].items():
         after = candidate["worksheets"][sheet_name]
         allowed = expected_by_sheet.get(sheet_name, {})
+        allowed_styles = styles_by_sheet.get(sheet_name, {})
         structural_keys = (
             "sheet_state", "merged", "row_dimensions", "column_dimensions", "freeze_panes",
             "auto_filter", "auto_filter_details", "tables", "validations", "conditional_formatting",
@@ -1489,7 +1558,7 @@ def validate_workbook_roundtrip(
 
         before_cells = before["cells"]
         after_cells = after["cells"]
-        for coordinate in set(before_cells) | set(after_cells) | set(allowed):
+        for coordinate in set(before_cells) | set(after_cells) | set(allowed) | set(allowed_styles):
             prior = before_cells.get(coordinate)
             actual = after_cells.get(coordinate)
             expected = allowed.get(coordinate, prior[0] if prior else None)
@@ -1500,11 +1569,14 @@ def validate_workbook_roundtrip(
                 raise WorkbookSafetyError(f"O valor da célula '{sheet_name}!{coordinate}' não corresponde ao esperado.")
             if prior is not None:
                 expected_prior = prior
+                expected_style_id = allowed_styles.get(coordinate)
+                if expected_style_id is not None:
+                    expected_prior = (*prior[:2], expected_style_id, *prior[3:])
                 expected_author = (comment_author_updates or {}).get((sheet_name, coordinate.upper()))
                 if expected_author is not None:
-                    if prior[4] is None:
+                    if expected_prior[4] is None:
                         raise WorkbookSafetyError(f"O comentário '{sheet_name}!{coordinate}' não pôde ser validado.")
-                    expected_prior = (*prior[:4], (prior[4][0], expected_author))
+                    expected_prior = (*expected_prior[:4], (expected_prior[4][0], expected_author))
                 if coordinate in allowed:
                     metadata_matches = (
                         _cell_data_type_matches(actual, allowed[coordinate])
@@ -1526,6 +1598,7 @@ def serialize_workbook_validated(
     original_snapshot: Dict[str, Any],
     expected_values: Dict[tuple, Any],
     *,
+    expected_cell_styles: Optional[Dict[tuple, int]] = None,
     allow_dimension_growth: bool = False,
     allow_threaded_comments: bool = False,
     allow_legacy_comments: bool = False,
@@ -1542,9 +1615,9 @@ def serialize_workbook_validated(
 
     def write(temp: Path) -> None:
         changed_values = _changed_expected_values(original_snapshot, expected_values)
-        if changed_values or comment_part_updates:
+        if changed_values or comment_part_updates or expected_cell_styles:
             _write_package_with_cell_updates(
-                source, temp, changed_values, comment_part_updates,
+                source, temp, changed_values, comment_part_updates, expected_cell_styles,
             )
         else:
             shutil.copyfile(source, temp)
@@ -1554,6 +1627,7 @@ def serialize_workbook_validated(
         write,
         lambda path: validate_workbook_roundtrip(
             original_snapshot, path, expected_values,
+            expected_cell_styles=expected_cell_styles,
             original_package_entries=original_entries,
             allow_dimension_growth=allow_dimension_growth,
             allow_threaded_comments=allow_threaded_comments,

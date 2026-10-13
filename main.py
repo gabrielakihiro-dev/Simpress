@@ -3506,6 +3506,14 @@ def exportar_equipamentos():
             serial_col = serial_col_index + 1
             apelido_col = apelido_col_index + 1
             id_cliente_col = id_cliente_col_index + 1 if id_cliente_col_index is not None else None
+            header_style_updates = {}
+            default_header_style_id = ws.cell(row=1, column=serial_col).style_id
+            for column in (apelido_col, id_cliente_col):
+                if column is None:
+                    continue
+                header_cell = ws.cell(row=1, column=column)
+                if header_cell.style_id != default_header_style_id:
+                    header_style_updates[(ws.title, header_cell.coordinate)] = default_header_style_id
 
             current_sheet_name = find_details_sheet(current_file)
             if current_sheet_name is None:
@@ -3620,7 +3628,9 @@ def exportar_equipamentos():
             ]
             review_summary = [item for item in review_summary if item["total"]]
             output_bytes = serialize_workbook_validated(
-                source_file, wb, original, expected_values, allow_threaded_comments=True
+                source_file, wb, original, expected_values,
+                expected_cell_styles=header_style_updates,
+                allow_threaded_comments=True,
             )
 
         now_str = datetime.now().strftime("%d-%m-%Y_%H%M%S")
