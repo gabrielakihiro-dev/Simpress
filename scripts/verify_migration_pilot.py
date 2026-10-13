@@ -190,7 +190,7 @@ def main():
                 with backend.transaction(write=True) as conn:
                     for tag, row in (("integer", {"serie": "NUMERIC", "value": 1}), ("decimal", {"serie": "NUMERIC", "value": 1.0}),
                                      ("blank", {"serie": "BLANK"}), ("conflict", {"serie": "CONFLICT"})):
-                        backend.files.history.insert(conn, {"id": "reapply-" + tag, "comparacao": {"sem_acesso_14_dias": [row]}}, reapply=True)
+                        backend.files.history.insert(conn, {"id": "reapply-" + tag, "comparacao": {"sem_acesso_7_dias": [row]}}, reapply=True)
                     conn.execute("update simpress.estado_aplicacao set revisao_global=revisao_global+1 where id=1")
                 with backend.transaction() as conn:
                     notes = {r["evento_id"]: r["texto"] for r in conn.execute("select evento_id,texto from simpress.anotacoes where evento_id like 'reapply-%%'").fetchall()}

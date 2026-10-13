@@ -92,8 +92,8 @@ declare
     row_a2 uuid;
     row_b uuid;
     row_endpoint uuid;
-    canonical_a text := '["sem_acesso_14_dias",{"valor":1}]';
-    canonical_b text := '["sem_acesso_14_dias",{"valor":1.0}]';
+    canonical_a text := '["sem_acesso_7_dias",{"valor":1}]';
+    canonical_b text := '["sem_acesso_7_dias",{"valor":1.0}]';
     bad_canonical text;
     unicode_canonical text := '["series_sem_mapeamento",{"serie":"Á-01","valor":null}]';
 begin
@@ -149,22 +149,22 @@ begin
     insert into simpress.eventos_comparacao(evento_id,ordem_evento,tipo,completude,horario_original,protegido_retencao,motivo_protecao)
       values ('shared-only',2,'comparacao','contexto_parcial','invalid date',true,'annotation context');
     insert into simpress.linhas_comparacao(evento_id,item_id,categoria,ordem_linha,payload_canonico,linha_hash)
-      values ('legacy-event/A','legacy-item','sem_acesso_14_dias',0,canonical_a,encode(sha256(convert_to(canonical_a,'UTF8')),'hex')),
-             ('legacy-event/A','duplicate-data','sem_acesso_14_dias',1,canonical_a,encode(sha256(convert_to(canonical_a,'UTF8')),'hex')),
-             ('legacy-event/B','new-item','sem_acesso_14_dias',0,canonical_b,encode(sha256(convert_to(canonical_b,'UTF8')),'hex'));
+      values ('legacy-event/A','legacy-item','sem_acesso_7_dias',0,canonical_a,encode(sha256(convert_to(canonical_a,'UTF8')),'hex')),
+             ('legacy-event/A','duplicate-data','sem_acesso_7_dias',1,canonical_a,encode(sha256(convert_to(canonical_a,'UTF8')),'hex')),
+             ('legacy-event/B','new-item','sem_acesso_7_dias',0,canonical_b,encode(sha256(convert_to(canonical_b,'UTF8')),'hex'));
     insert into simpress.linhas_comparacao(evento_id,item_id,categoria,ordem_linha,contexto_parcial)
       values ('shared-only','partial-item','series_sem_mapeamento',0,true);
     perform pg_temp.ok((select count(*)=2 from simpress.linhas_comparacao where evento_id='legacy-event/A'), 'equal fingerprints do not merge separate rows');
     perform pg_temp.ok((select count(distinct linha_hash)=2 from simpress.linhas_comparacao where payload_canonico is not null), '1 and 1.0 retain different canonical hashes');
     perform pg_temp.ok((select count(distinct payload_canonico)=2 from simpress.linhas_comparacao where payload_canonico is not null), 'canonical text is not rewritten through JSONB');
     perform pg_temp.reject($q$insert into simpress.linhas_comparacao(evento_id,item_id,categoria,ordem_linha,payload_canonico,linha_hash)
-      values ('legacy-event/A','bad-hash','sem_acesso_14_dias',2,'["sem_acesso_14_dias",{}]',repeat('0',64))$q$,
+      values ('legacy-event/A','bad-hash','sem_acesso_7_dias',2,'["sem_acesso_7_dias",{}]',repeat('0',64))$q$,
       '23514', 'canonical hash mismatch rejected');
     perform pg_temp.reject($q$insert into simpress.linhas_comparacao(evento_id,item_id,categoria,ordem_linha)
-      values ('legacy-event/A','missing-payload','sem_acesso_14_dias',2)$q$, '23514', 'complete row requires canonical payload');
-    foreach bad_canonical in array array['[null,{}]','["different-category",{}]','["sem_acesso_14_dias",{"anotacao":"excluded metadata"}]'] loop
+      values ('legacy-event/A','missing-payload','sem_acesso_7_dias',2)$q$, '23514', 'complete row requires canonical payload');
+    foreach bad_canonical in array array['[null,{}]','["different-category",{}]','["sem_acesso_7_dias",{"anotacao":"excluded metadata"}]'] loop
       perform pg_temp.reject(format($q$insert into simpress.linhas_comparacao(evento_id,item_id,categoria,ordem_linha,payload_canonico,linha_hash)
-        values ('legacy-event/A','bad-category','sem_acesso_14_dias',2,%L,%L)$q$,
+        values ('legacy-event/A','bad-category','sem_acesso_7_dias',2,%L,%L)$q$,
         bad_canonical,encode(sha256(convert_to(bad_canonical,'UTF8')),'hex')),
         '23514', 'invalid category or annotation metadata rejected: ' || bad_canonical);
     end loop;

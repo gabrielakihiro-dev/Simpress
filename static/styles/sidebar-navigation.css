@@ -38,8 +38,8 @@ body.sidebar-drawer-open {
   background:
     radial-gradient(ellipse at 0 0, rgba(99, 102, 241, 0.13), transparent 42%),
     linear-gradient(180deg, rgba(10, 17, 32, 0.99), rgba(6, 12, 24, 0.99));
-  box-shadow: 12px 0 36px rgba(2, 6, 23, 0.16);
-  transition: width 210ms ease;
+  box-shadow: var(--focus-shadow, 12px 0 36px rgba(2, 6, 23, 0.16));
+  transition: width var(--motion-duration, 210ms) ease;
 }
 
 .sidebar-header {
@@ -72,7 +72,7 @@ body.sidebar-drawer-open {
   color: #e9e6ff;
   font-size: 1.05rem;
   font-weight: 850;
-  box-shadow: inset 0 1px rgba(255, 255, 255, 0.08), 0 8px 18px rgba(76, 64, 175, 0.16);
+  box-shadow: var(--focus-shadow, inset 0 1px rgba(255, 255, 255, 0.08), 0 8px 18px rgba(76, 64, 175, 0.16));
 }
 
 .sidebar-brand-copy {
@@ -113,7 +113,7 @@ body.sidebar-drawer-open {
   border-radius: 0.7rem;
   background: transparent;
   color: #9babc0;
-  transition: background-color 160ms ease, border-color 160ms ease, color 160ms ease;
+  transition: background-color var(--motion-duration, 160ms) ease, border-color var(--motion-duration, 160ms) ease, color var(--motion-duration, 160ms) ease;
 }
 
 .sidebar-icon-button:hover {
@@ -128,7 +128,7 @@ body.sidebar-drawer-open {
 }
 
 .sidebar-collapse-icon {
-  transition: transform 210ms ease;
+  transition: transform var(--motion-duration, 210ms) ease;
 }
 
 .simpress-app-shell[data-sidebar-collapsed="true"] .sidebar-collapse-icon {
@@ -168,8 +168,8 @@ body.sidebar-drawer-open {
   color: #f5f3ff;
   font-size: 0.79rem;
   font-weight: 730;
-  box-shadow: 0 10px 22px rgba(49, 46, 129, 0.28), inset 0 1px rgba(255, 255, 255, 0.08);
-  transition: border-color 170ms ease, background-color 170ms ease, box-shadow 170ms ease, transform 170ms ease;
+  box-shadow: var(--focus-shadow, 0 10px 22px rgba(49, 46, 129, 0.28), inset 0 1px rgba(255, 255, 255, 0.08));
+  transition: border-color var(--motion-duration, 170ms) ease, background-color var(--motion-duration, 170ms) ease, box-shadow var(--motion-duration, 170ms) ease, transform var(--motion-duration, 170ms) ease;
 }
 
 .sidebar-primary-action .header-primary-actions > #btn-nova-transferencia {
@@ -183,7 +183,7 @@ body.sidebar-drawer-open {
 .sidebar-primary-action #btn-nova-transferencia:hover {
   border-color: rgba(196, 181, 253, 0.78);
   background: linear-gradient(110deg, rgba(109, 93, 231, 0.96), rgba(79, 70, 229, 0.92));
-  box-shadow: 0 12px 25px rgba(49, 46, 129, 0.36), inset 0 1px rgba(255, 255, 255, 0.12);
+  box-shadow: var(--focus-shadow, 0 12px 25px rgba(49, 46, 129, 0.36), inset 0 1px rgba(255, 255, 255, 0.12));
   transform: translateY(-1px);
 }
 
@@ -245,7 +245,7 @@ body.sidebar-drawer-open {
   font-weight: 620;
   text-align: left;
   cursor: pointer;
-  transition: background-color 170ms ease, border-color 170ms ease, color 170ms ease, transform 170ms ease;
+  transition: background-color var(--motion-duration, 170ms) ease, border-color var(--motion-duration, 170ms) ease, color var(--motion-duration, 170ms) ease, transform var(--motion-duration, 170ms) ease;
 }
 
 .sidebar-tabs .app-tab svg {
@@ -253,7 +253,7 @@ body.sidebar-drawer-open {
   width: 1rem;
   height: 1rem;
   color: #8495ad;
-  transition: color 170ms ease, transform 170ms ease;
+  transition: color var(--motion-duration, 170ms) ease, transform var(--motion-duration, 170ms) ease;
 }
 
 .sidebar-tabs .app-tab:hover {
@@ -272,7 +272,7 @@ body.sidebar-drawer-open {
   border-color: rgba(167, 139, 250, 0.24);
   background: linear-gradient(100deg, rgba(109, 93, 231, 0.26), rgba(79, 70, 229, 0.09));
   color: #f4f2ff;
-  box-shadow: inset 2px 0 #a5a0ff, 0 5px 18px rgba(49, 46, 129, 0.1);
+  box-shadow: var(--focus-shadow, inset 2px 0 #a5a0ff, 0 5px 18px rgba(49, 46, 129, 0.1));
 }
 
 .sidebar-tabs .app-tab.is-active svg,
@@ -299,7 +299,7 @@ body.sidebar-drawer-open {
   border: 0;
   border-radius: 0;
   background: transparent;
-  box-shadow: none;
+  box-shadow: var(--focus-shadow, none);
 }
 
 .sidebar-actions .header-secondary-panel > button {
@@ -318,8 +318,8 @@ body.sidebar-drawer-open {
   font-weight: 620;
   text-align: left;
   cursor: pointer;
-  box-shadow: none;
-  transition: background-color 170ms ease, border-color 170ms ease, color 170ms ease, transform 170ms ease;
+  box-shadow: var(--focus-shadow, none);
+  transition: background-color var(--motion-duration, 170ms) ease, border-color var(--motion-duration, 170ms) ease, color var(--motion-duration, 170ms) ease, transform var(--motion-duration, 170ms) ease;
 }
 
 .sidebar-actions .header-secondary-panel > button:hover {
@@ -335,7 +335,7 @@ body.sidebar-drawer-open {
   width: 1rem;
   height: 1rem;
   color: #8495ad;
-  transition: color 170ms ease, transform 170ms ease;
+  transition: color var(--motion-duration, 170ms) ease, transform var(--motion-duration, 170ms) ease;
 }
 
 .sidebar-actions .header-action-group[data-action-group] > summary .header-action-group-icon {
@@ -353,13 +353,7 @@ body.sidebar-drawer-open {
   border-color: rgba(167, 139, 250, 0.24);
   background: linear-gradient(100deg, rgba(109, 93, 231, 0.26), rgba(79, 70, 229, 0.09));
   color: #f4f2ff;
-  box-shadow: inset 2px 0 #a5a0ff, 0 5px 18px rgba(49, 46, 129, 0.1);
-}
-
-.sidebar-actions .header-secondary-panel > button:focus-visible,
-.sidebar-actions .header-action-group > summary:focus-visible {
-  outline: 2px solid rgba(56, 189, 248, 0.9);
-  outline-offset: 2px;
+  box-shadow: var(--focus-shadow, inset 2px 0 #a5a0ff, 0 5px 18px rgba(49, 46, 129, 0.1));
 }
 
 .sidebar-actions .header-secondary-panel > button:active svg,
@@ -393,7 +387,7 @@ body.sidebar-drawer-open {
   font-weight: 620;
   line-height: 1.25;
   cursor: pointer;
-  transition: background-color 170ms ease, border-color 170ms ease, color 170ms ease, transform 170ms ease;
+  transition: background-color var(--motion-duration, 170ms) ease, border-color var(--motion-duration, 170ms) ease, color var(--motion-duration, 170ms) ease, transform var(--motion-duration, 170ms) ease;
 }
 
 .sidebar-actions .header-action-group[data-action-group="analysis"] > summary .sidebar-item-label {
@@ -458,7 +452,7 @@ body.sidebar-drawer-open {
   border-color: rgba(167, 139, 250, 0.36);
   background: rgba(109, 40, 217, 0.16);
   color: #f5f3ff;
-  box-shadow: inset 2px 0 #8b5cf6, 0 5px 18px rgba(49, 46, 129, 0.08);
+  box-shadow: var(--focus-shadow, inset 2px 0 #8b5cf6, 0 5px 18px rgba(49, 46, 129, 0.08));
 }
 
 .sidebar-actions .header-action-group[data-action-group="analysis"] > summary .header-action-group-icon {
@@ -541,7 +535,7 @@ body.sidebar-drawer-open {
   background: linear-gradient(105deg, rgba(67, 56, 202, 0.28), rgba(49, 46, 129, 0.18));
   color: #e0e7ff;
   font-weight: 700;
-  box-shadow: inset 2px 0 #818cf8, 0 4px 12px rgba(49, 46, 129, 0.16);
+  box-shadow: var(--focus-shadow, inset 2px 0 #818cf8, 0 4px 12px rgba(49, 46, 129, 0.16));
 }
 
 .sidebar-actions .header-action-group-items .header-action-item--primary .header-action-icon {
@@ -562,7 +556,7 @@ body.sidebar-drawer-open {
   min-width: 0;
   min-height: 100vh;
   margin-left: var(--sidebar-width);
-  transition: margin-left 210ms ease;
+  transition: margin-left var(--motion-duration, 210ms) ease;
 }
 
 .site-header {
@@ -623,7 +617,7 @@ body.sidebar-drawer-open {
 
 .quick-actions {
   left: var(--sidebar-width);
-  transition: left 210ms ease;
+  transition: left var(--motion-duration, 210ms) ease;
 }
 
 .quick-actions-inner {
@@ -712,7 +706,7 @@ body.sidebar-drawer-open {
     padding: 0.9rem 0.8rem 0.8rem;
     transform: translateX(-104%);
     visibility: hidden;
-    transition: transform 210ms ease, visibility 210ms ease;
+    transition: transform var(--motion-duration, 210ms) ease, visibility var(--motion-duration, 210ms) ease;
   }
 
   .simpress-app-shell[data-sidebar-open="true"] .app-sidebar {
@@ -729,7 +723,7 @@ body.sidebar-drawer-open {
     background: rgba(2, 6, 23, 0.68);
     opacity: 0;
     pointer-events: none;
-    transition: opacity 210ms ease;
+    transition: opacity var(--motion-duration, 210ms) ease;
     backdrop-filter: blur(2px);
   }
 
@@ -910,7 +904,7 @@ body.sidebar-drawer-open {
   .sidebar-actions .header-secondary-panel > button,
   .sidebar-actions .header-action-group > summary,
   .sidebar-backdrop {
-    scroll-behavior: auto !important;
-    transition-duration: 0.01ms !important;
+    scroll-behavior: auto;
+    transition-duration: var(--motion-duration, 0.01ms);
   }
 }

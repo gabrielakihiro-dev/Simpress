@@ -2463,7 +2463,7 @@
         : filtrarSeriesSebrae(comparison.ausentes_em_detalhes);
       const divergenciasLocal = comparison.divergencias_local || [];
       const seriesSemMapa = comparison.series_sem_mapeamento || [];
-      const semAcesso7Dias = comparison.sem_acesso_14_dias || [];
+      const semAcesso7Dias = comparison.sem_acesso_7_dias || [];
       const diasSemVerificacao = item => {
         const dias = Number(item?.dias_sem_verificacao);
         return Number.isFinite(dias) ? dias : 0;
@@ -2534,7 +2534,7 @@
         </tr>`);
 
       const semAcessoRows = semAcesso7DiasOrdenados.map(item => `
-        <tr class="text-slate-300" ${atributosLinhaComparacao("sem_acesso_14_dias", item)}>
+        <tr class="text-slate-300" ${atributosLinhaComparacao("sem_acesso_7_dias", item)}>
           <td class="px-3 py-2 font-mono text-white whitespace-nowrap">${escapeHtml(item.computador || "—")}</td>
           <td class="px-3 py-2 font-mono whitespace-nowrap">${escapeHtml(item.serie || "—")}</td>
           <td class="px-3 py-2 whitespace-nowrap">${escapeHtml(item.ultima_verificacao ? formatarHorarioHistorico(item.ultima_verificacao) : "—")}</td>
@@ -2623,7 +2623,7 @@
         </tr>`);
 
       const categoriasAnotacoesSincronizadas = {
-        sem_acesso_14_dias: "Sem acesso há 7 dias ou mais",
+        sem_acesso_7_dias: "Sem acesso há 7 dias ou mais",
         ausentes_no_endpoint: "Sem correspondência — Endpoint",
         ausentes_em_detalhes: "Sem correspondência — Simpress",
         divergencias_local: "Localidade divergente",
@@ -3929,7 +3929,7 @@
             const restauracaoDe = evento.restauracao_de || {};
             contagens.textContent = `Restauração do conjunto anterior a ${formatarHorarioHistorico(restauracaoDe.horario)} · registros restaurados: no endpoint ${Number(resumo.total_endpoint_restaurado || 0).toLocaleString("pt-BR")}, na Simpress ${Number(resumo.total_detalhes_restaurado || 0).toLocaleString("pt-BR")}`;
           } else {
-            contagens.textContent = `Apelidos/hostnames atualizados: ${Number(resumo.apelidos_atualizados || 0)} · sem acesso há 7+ dias: ${Number(resumo.sem_acesso_14_dias || 0)} · divergências manuais pendentes: ${Number(resumo.divergencias_apelidos_manuais || 0)} · equipamentos sem correspondência — no endpoint: ${Number(resumo.ausentes_no_endpoint || 0)} · na Simpress: ${Number(resumo.ausentes_em_detalhes || 0)} · divergências de local: ${Number(resumo.divergencias_local || 0)} · ambiguidades: ${Number(resumo.correspondencias_ambiguas || 0)}`;
+            contagens.textContent = `Apelidos/hostnames atualizados: ${Number(resumo.apelidos_atualizados || 0)} · sem acesso há 7+ dias: ${Number(resumo.sem_acesso_7_dias || 0)} · divergências manuais pendentes: ${Number(resumo.divergencias_apelidos_manuais || 0)} · equipamentos sem correspondência — no endpoint: ${Number(resumo.ausentes_no_endpoint || 0)} · na Simpress: ${Number(resumo.ausentes_em_detalhes || 0)} · divergências de local: ${Number(resumo.divergencias_local || 0)} · ambiguidades: ${Number(resumo.correspondencias_ambiguas || 0)}`;
           }
           info.appendChild(contagens);
           card.appendChild(info);

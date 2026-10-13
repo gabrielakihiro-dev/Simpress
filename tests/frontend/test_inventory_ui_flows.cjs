@@ -367,7 +367,7 @@ test("stale-access report sorts by inactivity, shows its reference time, and sig
   const referenceTime = "2026-09-30T15:00:00-03:00";
   harness.context.workflowComparison = {
     horario_comparacao: referenceTime,
-    sem_acesso_14_dias: [
+    sem_acesso_7_dias: [
       { computador: "PRNOTE-14", dias_sem_verificacao: 14 },
       { computador: "PRNOTE-40", dias_sem_verificacao: 40 },
     ],
@@ -381,7 +381,7 @@ test("stale-access report sorts by inactivity, shows its reference time, and sig
   assert.ok(html.includes(`Atualização usada como referência: <time datetime="${referenceTime}">${formattedReferenceTime}</time>.`));
   assert.ok(html.includes("Role a tabela horizontalmente para consultar todas as colunas."));
   assert.match(appCss, /\.accessible-table-wrap\s*\{[^}]*overflow-x:\s*auto/s);
-  assert.match(appCss, /\.accessible-table-wrap:focus-visible\s*\{/);
+  assert.match(appCss, /:root :focus-visible\s*\{/);
   assert.match(appCss, /\.accessible-table-wrap::-webkit-scrollbar\s*\{/);
 });
 

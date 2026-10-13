@@ -80,7 +80,7 @@ class InventoryUpdateServices:
 
 _ANNOTATABLE_COMPARISON_CATEGORIES = (
     "apelidos_sem_atualizacao",
-    "sem_acesso_14_dias",
+    "sem_acesso_7_dias",
     "ausentes_no_endpoint",
     "ausentes_em_detalhes",
     "divergencias_local",
@@ -696,7 +696,7 @@ def _commit_inventory_files(
             "total_endpoint": comparison.get("total_endpoint", 0),
             "ausentes_no_endpoint": len(comparison.get("ausentes_no_endpoint", [])),
             "ausentes_em_detalhes": len(comparison.get("ausentes_em_detalhes", [])),
-            "sem_acesso_14_dias": len(comparison.get("sem_acesso_14_dias", [])),
+            "sem_acesso_7_dias": len(comparison.get("sem_acesso_7_dias", [])),
             "divergencias_local": len(comparison.get("divergencias_local", [])),
             "correspondencias_ambiguas": len(comparison.get("correspondencias_ambiguas", [])),
             "series_sem_mapeamento": len(comparison.get("series_sem_mapeamento", [])),
