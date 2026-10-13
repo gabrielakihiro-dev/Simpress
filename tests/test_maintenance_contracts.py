@@ -240,7 +240,7 @@ class MaintenanceContractTests(unittest.TestCase):
         css = (app_config.STATIC_DIR / "app.css").read_text(encoding="utf-8")
 
         self.assertRegex(html, r'id="toast-container"[^>]*z-\[130\]')
-        self.assertIn(".modal-overlay { z-index: 120 !important; }", css)
+        self.assertRegex(css, r"\.modal-overlay\s*\{\s*z-index:\s*120;\s*\}")
 
     def test_excel_exports_show_only_success_confirmation(self):
         script = (app_config.STATIC_DIR / "app.js").read_text(encoding="utf-8")
@@ -676,8 +676,8 @@ class MaintenanceContractTests(unittest.TestCase):
             with self.subTest(dialog=dialog_id):
                 self.assertIn("modal-overlay", class_names)
 
-        overlay = re.search(r"\.modal-overlay\s*\{\s*z-index:\s*(\d+)\s*!important;\s*\}", css)
-        header = re.search(r"\.site-header\s*\{\s*z-index:\s*(\d+)\s*!important;\s*\}", css)
+        overlay = re.search(r"\.modal-overlay\s*\{\s*z-index:\s*(\d+);\s*\}", css)
+        header = re.search(r"\.site-header\s*\{\s*z-index:\s*(\d+);\s*\}", css)
         self.assertIsNotNone(overlay)
         self.assertIsNotNone(header)
         self.assertGreater(int(overlay.group(1)), int(header.group(1)))

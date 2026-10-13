@@ -230,18 +230,22 @@ for (const outcome of ["network failure", "success"]) {
   });
 }
 
-test("central pending view filters rows and autosaves their original comparison annotations", async ({ page }) => {
-  await openAnalysisMenu(page);
-  await page.getByRole("button", { name: "Pendências" }).click();
-  const dialog = page.locator("#modal-central-pendencias");
+test("comparison history filters rows and autosaves their original annotations", async ({ page }) => {
+  await openFixtureComparison(page);
+  const dialog = page.locator("#modal-comparacao-planilhas");
   await expect(dialog).toBeVisible();
-  await auditAccessibility(page, "#modal-central-pendencias");
-  await page.locator("#filtro-operacional-pendencias").fill("DEMO-SN-001");
-  await expect(page.locator("#lista-central-pendencias [data-pending-row]")).toHaveCount(1);
-  const annotation = page.locator("#lista-central-pendencias textarea[data-operational-annotation]");
+  await auditAccessibility(page, "#modal-comparacao-planilhas");
+  await dialog.locator("[data-history-filter-search]").fill("DEMO-SN-001");
+  await dialog.locator("[data-history-filter-category]").selectOption("apelidos_sem_atualizacao");
+  const row = dialog.locator('[data-history-filter-group="apelidos_sem_atualizacao"] [data-comparison-item-id]:visible');
+  await expect(row).toHaveCount(1);
+  const annotation = row.locator("textarea[data-comparison-annotation]");
   await annotation.fill("Revisar com a unidade");
   await annotation.blur();
   await expect(annotation.locator("xpath=..").locator("[data-annotation-status]")).toHaveText("Salvo automaticamente");
+  await expect(row).toHaveClass(/history-row-annotated/);
+  await dialog.locator("[data-history-filter-annotated]").check();
+  await expect(row).toBeVisible();
   await expect.poll(async () => (await page.request.get("/__fixture_state")).json()).toEqual({
     annotation: "Revisar com a unidade",
   });

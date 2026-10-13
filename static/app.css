@@ -422,6 +422,7 @@
     .spreadsheet-source-link--endpoint { --source-tint: 56, 189, 248; --source-text: #bae6fd; }
     .spreadsheet-source-link--simpress { --source-tint: 45, 212, 191; --source-text: #99f6e4; }
     .spreadsheet-source-link:hover { border-color: rgba(var(--source-tint), 0.55); background: rgba(var(--source-tint), 0.18); }
+    .spreadsheet-source-link:focus-visible { outline: 2px solid var(--source-text); outline-offset: 2px; }
     .spreadsheet-source-link svg { width: 0.85rem; height: 0.85rem; flex: none; }
     @media (max-width: 640px) {
       .ticket-filter-search { flex-basis: 100%; min-width: 100%; }

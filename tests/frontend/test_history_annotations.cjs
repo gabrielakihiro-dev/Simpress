@@ -55,11 +55,11 @@ test("loads the bounded autosave retry helper before the application", () => {
 test("mobile header summary rule overrides the header's accessible summary display rule", () => {
   assert.match(
     appCss,
-    /@media \(max-width: 640px\)[\s\S]*?\.header-inner > \.header-base-summary\s*\{\s*display:\s*none\s*!important;/,
+    /@media \(max-width: 640px\)[\s\S]*?\.header-inner > \.header-base-summary\s*\{\s*display:\s*none;/,
   );
   assert.match(
     appCss,
-    /@media \(max-width: 900px\) and \(max-height: 500px\)[\s\S]*?\.header-inner > \.header-base-summary\s*\{\s*display:\s*none\s*!important;/,
+    /@media \(max-width: 900px\) and \(max-height: 500px\)[\s\S]*?\.header-inner > \.header-base-summary\s*\{\s*display:\s*none;/,
   );
 });
 

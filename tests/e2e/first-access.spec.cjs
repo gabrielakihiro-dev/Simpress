@@ -59,7 +59,7 @@ test("first access centralizes the inventory import and keeps calls separate", a
   const ticketGroup = panel.locator(".readiness-group").filter({
     has: page.getByRole("heading", { name: "Acompanhamento de chamados" }),
   });
-  await ticketGroup.getByRole("button", { name: "Importar planilhas de chamados", exact: true }).click();
+  await ticketGroup.getByRole("button", { name: "Importar planilhas para acompanhamento de chamados", exact: true }).click();
   await expect(page.locator("#painel-dados-acompanhamento-chamados")).toHaveAttribute("open", "");
   await expect(page.locator("#arquivo-chamados-simpress")).toBeVisible();
   expect(errors).toEqual([]);

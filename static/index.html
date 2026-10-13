@@ -1366,7 +1366,9 @@ Horário disponível para atendimento:</textarea>
     <div class="local-setup-dialog">
       <div class="local-setup-heading">
         <h3 id="titulo-importar-modelo">Importar arquivos</h3>
-        <button type="button" class="readiness-import" onclick="fecharImportacaoModelo()" aria-label="Fechar importação de modelo">Fechar</button>
+        <button type="button" class="readiness-import" onclick="fecharImportacaoModelo()" aria-label="Fechar importação de modelo" title="Fechar">
+          <i data-lucide="x" class="w-4 h-4" aria-hidden="true"></i>
+        </button>
       </div>
       <p id="descricao-importar-modelo"></p>
       <label for="arquivo-modelo-local">Modelo .xlsx (até 30 MB)</label>

@@ -43,18 +43,12 @@ test("the theme icon switches modes, persists the choice, and works on login", a
   const lightModeButton = page.getByRole("button", { name: "Ativar modo claro" });
   await expect(root).toHaveAttribute("data-theme", "dark");
   await expect(lightModeButton.locator("svg")).toHaveClass(/lucide-sun/);
-  const darkCardBackground = await page.locator(".home-search-card").evaluate(
-    element => getComputedStyle(element).backgroundColor,
-  );
-
   await lightModeButton.click();
   const darkModeButton = page.getByRole("button", { name: "Ativar modo escuro" });
   await expect(root).toHaveAttribute("data-theme", "light");
   await expect(darkModeButton.locator("svg")).toHaveClass(/lucide-moon/);
   await expect(page.locator("#btn-buscar-serial")).toHaveCSS("color", "rgb(255, 255, 255)");
-  await expect.poll(() => page.locator(".home-search-card").evaluate(
-    element => getComputedStyle(element).backgroundColor,
-  )).not.toBe(darkCardBackground);
+  await expect(page.locator(".home-search-card")).toHaveCSS("border-top-color", "rgb(219, 228, 239)");
   await expect.poll(() => page.evaluate(() => localStorage.getItem("simpress:theme"))).toBe("light");
   await page.locator(".app-workspace").evaluate(async workspace => {
     const transitions = workspace.getAnimations();
