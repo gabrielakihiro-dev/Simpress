@@ -27,6 +27,10 @@ SIMPresS_FIELDS = {
     "status": ("statusatual",),
     "previsao_entrega": ("previsaoentrega", "previsaodeentrega"),
     "data_pedido": ("datapedido",),
+    "liberacao_pedido": ("liberacaodopedido", "liberacaopedido"),
+    "verificado_estoque": ("verificadoestoque", "verificadoeestoque"),
+    "pedido_separacao": ("pedidoemseparacao",),
+    "nota_fiscal_emitida": ("notafiscalemitida",),
     "modelo": ("modelodoequipamento",),
     "descricao_produto": ("descricaoproduto",),
     "cidade_entrega": ("cidadeentrega",),
@@ -60,6 +64,18 @@ ORACLE_FIELDS = {
     "ultima_atualizacao": ("datadaultimaatualizacao", "dataultimaatualizacao"),
     "data_conclusao": ("datadeconclusao",),
 }
+
+
+# Order process in the fixed sequence of the Simpress export, ending at the delivery forecast.
+SIMPRESS_ORDER_STAGES = (
+    ("data_pedido", "Data do pedido"),
+    ("liberacao_pedido", "Liberação do pedido"),
+    ("verificado_estoque", "Verificado e estoque"),
+    ("pedido_separacao", "Pedido em separação"),
+    ("nota_fiscal_emitida", "Nota fiscal emitida"),
+    ("previsao_entrega", "Previsão de entrega"),
+)
+SIMPRESS_DATE_FIELDS = frozenset(field for field, _label in SIMPRESS_ORDER_STAGES) - {"data_pedido"}
 
 
 def normalize_header(value: Any) -> str:
@@ -292,7 +308,7 @@ def _source_table(
                 if field == "serie":
                     continue
                 raw_value = values[index] if index < len(values) else None
-                record[field] = _simpress_date_text(raw_value) if field == "previsao_entrega" else _text(raw_value)
+                record[field] = _simpress_date_text(raw_value) if field in SIMPRESS_DATE_FIELDS else _text(raw_value)
             records.append(record)
         return records, rows_without_serial
     except TicketWorkbookError:
@@ -326,6 +342,43 @@ def _duplicate_record_count(records: Sequence[Dict[str, Any]]) -> int:
         else:
             seen.add(signature)
     return duplicates
+
+
+def _latest_stage_date(values: Sequence[str]) -> str:
+    """Return the most recent date among rows, comparing parsed dates when possible."""
+    texts = [value.strip() for value in values if value and value.strip()]
+    if not texts:
+        return ""
+    parsed = [(_parse_order_date(text), text) for text in texts]
+    dated = [item for item in parsed if item[0] is not None]
+    if dated:
+        return _simpress_date_text(max(dated, key=lambda item: item[0])[1])
+    return texts[-1]
+
+
+def _build_order_stages(records: Sequence[Dict[str, Any]]) -> Dict[str, Any]:
+    """Describe each process stage separately; a stage without a date stays empty."""
+    stages: List[Dict[str, Any]] = []
+    for field, label in SIMPRESS_ORDER_STAGES:
+        stages.append({
+            "chave": field,
+            "rotulo": label,
+            "data": _latest_stage_date([str(record.get(field, "") or "") for record in records]),
+            "coluna_na_planilha": any(field in record for record in records),
+        })
+    # The delivery forecast is not an event: only earlier stages define where the order is.
+    events = [stage for stage in stages if stage["chave"] != "previsao_entrega"]
+    reached = [index for index, stage in enumerate(events) if stage["data"]]
+    current = events[reached[-1]] if reached else None
+    following = next(
+        (stage for stage in events[(reached[-1] + 1 if reached else 0):] if stage["coluna_na_planilha"] and not stage["data"]),
+        None,
+    )
+    return {
+        "etapas_pedido": stages,
+        "etapa_atual": {"chave": current["chave"], "rotulo": current["rotulo"], "data": current["data"]} if current else None,
+        "proxima_etapa": {"chave": following["chave"], "rotulo": following["rotulo"]} if following else None,
+    }
 
 
 def _group_simpress(records: Iterable[Dict[str, Any]]) -> Dict[str, Dict[str, Any]]:
@@ -414,6 +467,7 @@ def _group_simpress(records: Iterable[Dict[str, Any]]) -> Dict[str, Dict[str, An
             for order in row_os:
                 if not latest_key or _identifier_key(order) == latest_key:
                     _add_unique(ticket_group["ordens_servico"], order)
+        ticket_group.update(_build_order_stages(current_pedido_records))
         ticket_group["_auditoria_relacao"] = {
             "linhas_duplicadas": _duplicate_record_count(current_pedido_records),
             "pedidos_na_os_atual": pedidos_na_os_atual,
@@ -567,6 +621,7 @@ def reconcile_ticket_workbooks(
             "pedidos": [], "ordens_venda": [], "ordens_servico": [], "chamados_cliente": [],
             "status": [], "datas_pedido": [], "modelos": [], "descricoes_produto": [],
             "previsoes_entrega": [], "cidades_entrega": [], "enderecos_entrega": [], "pedido_em_andamento": False,
+            "etapas_pedido": [], "etapa_atual": None, "proxima_etapa": None,
         }
         oracle_orders_current = sorted(oracle_os, key=_order_service_descending_key, reverse=True)
         tickets.append({

@@ -390,6 +390,19 @@
     .ticket-card-meta b, .ticket-card-status b { color: #94a3b8; font-weight: 600; }
     .ticket-card-status > p { min-width: 0; overflow-wrap: anywhere; }
     .ticket-card-triage > span { max-width: 100%; overflow-wrap: anywhere; }
+    .ticket-process-summary { display: flex; flex-wrap: wrap; gap: 0.4rem; min-width: 0; }
+    .ticket-process-summary > span { min-width: 0; max-width: 100%; overflow-wrap: anywhere; border: 1px solid #334155; border-radius: 0.5rem; padding: 0.3rem 0.55rem; font-size: 0.7rem; color: #cbd5e1; background: rgba(15, 23, 42, 0.6); }
+    .ticket-process-summary b { color: #94a3b8; font-weight: 600; margin-right: 0.25rem; }
+    .ticket-process-summary > .ticket-process-forecast { order: -1; flex: 1 1 100%; font-size: 0.85rem; font-weight: 600; color: #a5f3fc; border-color: rgba(34, 211, 238, 0.45); background: rgba(8, 145, 178, 0.14); }
+    .ticket-process-summary > .ticket-process-forecast.is-late { color: #fde68a; border-color: rgba(251, 191, 36, 0.5); background: rgba(217, 119, 6, 0.14); }
+    .ticket-stages { display: grid; grid-template-columns: 1fr; gap: 0.3rem; margin: 0.4rem 0 0; padding: 0; list-style: none; }
+    .ticket-stage { display: grid; grid-template-columns: 1.1rem minmax(0, 1fr) auto; align-items: baseline; gap: 0.4rem; border-radius: 0.4rem; padding: 0.3rem 0.5rem; font-size: 0.72rem; border: 1px solid #1e293b; }
+    .ticket-stage-label, .ticket-stage-date { min-width: 0; overflow-wrap: anywhere; }
+    .ticket-stage.is-done { color: #a7f3d0; }
+    .ticket-stage.is-current { color: #67e8f9; border-color: rgba(34, 211, 238, 0.4); background: rgba(8, 145, 178, 0.1); font-weight: 600; }
+    .ticket-stage.is-forecast { color: #a5f3fc; border-color: rgba(34, 211, 238, 0.45); background: rgba(8, 145, 178, 0.14); font-weight: 700; }
+    .ticket-stage.is-pending { color: #64748b; }
+    .ticket-stage.is-pending .ticket-stage-date { font-style: italic; }
     .ticket-filter-toolbar { display: flex; flex-wrap: wrap; align-items: flex-end; gap: 0.5rem; }
     .ticket-filter-search { flex: 1 1 18rem; min-width: min(100%, 18rem); }
     .ticket-filter-search input { min-height: 2.25rem; padding: 0.45rem 0.7rem; }
