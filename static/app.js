@@ -50,6 +50,12 @@
           : "Pesquise e selecione um equipamento na aba Home para preencher a série.";
       }
       if (status) status.textContent = selected ? "Copiar" : "Aguardando";
+      const users = document.getElementById("transfer-equipment-users");
+      if (users) {
+        const logged = String(equipment?.usuarios_logados || "").trim();
+        users.textContent = selected && logged ? `Usuários logados: ${logged}` : "";
+        users.classList.toggle("hidden", !users.textContent);
+      }
     }
 
     function campoRastreavelTransferencia(target) {
@@ -1571,6 +1577,9 @@
         : "";
       aliasStatus.classList.toggle("hidden", !aliasStatus.textContent);
       document.getElementById("card-id-cliente").textContent = eq.idCliente ? `Id Cliente: ${eq.idCliente}` : "";
+      const loggedUsers = document.getElementById("card-usuarios-logados");
+      loggedUsers.textContent = eq.usuarios_logados ? `Usuários logados: ${eq.usuarios_logados}` : "";
+      loggedUsers.classList.toggle("hidden", !loggedUsers.textContent);
       document.getElementById("card-localizacao").textContent = `${eq.retirada_cidade || ''} - ${eq.retirada_endereco ? eq.retirada_endereco.split('-')[0].trim() : ''}`;
       document.getElementById("card-cnpj-atual").textContent = `CNPJ: ${eq.retirada_cnpj || 'Não especificado'}`;
 
