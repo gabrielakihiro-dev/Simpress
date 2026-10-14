@@ -80,7 +80,6 @@ class InventoryHistoryServices:
     build_history_annotation_record: Callable[..., Dict[str, Any]]
     comparison_annotation_item_id: Callable[..., str]
     comparison_history_path: Callable[[], Path]
-    comparison_history_lock: Any
     comparison_history_for_display: Callable[[Dict[str, Any]], Dict[str, Any]]
     details_upload_path: Callable[[], Path]
     endpoint_upload_path: Callable[[], Path]
@@ -979,32 +978,32 @@ def create_inventory_history_router(services: InventoryHistoryServices):
             record["revisao_id"],
         )
         try:
-            with services.comparison_history_lock:
-                targets = [pending_path]
+            # The transaction locks the history file; no Python lock is held around it.
+            targets = [pending_path]
+            if event is not None:
+                targets.append(services.comparison_history_path())
+            with services.atomic_file_transaction(services.transaction_root(), targets) as transaction:
+                try:
+                    record = reuse_annotation_revision(services.history_annotations_directory(), record)
+                except ValueError as error:
+                    raise HTTPException(409, detail=str(error)) from None
                 if event is not None:
-                    targets.append(services.comparison_history_path())
-                with services.atomic_file_transaction(services.transaction_root(), targets) as transaction:
-                    try:
-                        record = reuse_annotation_revision(services.history_annotations_directory(), record)
-                    except ValueError as error:
-                        raise HTTPException(409, detail=str(error)) from None
-                    if event is not None:
-                        transaction.update_json(
-                            services.comparison_history_path(),
-                            update_annotation,
-                            [],
-                        )
-                    if pending_path.exists():
-                        existing = json.loads(pending_path.read_text(encoding="utf-8"))
-                        if not same_annotation_revision(existing, record):
-                            raise HTTPException(409, detail="A revisão já foi usada com outro conteúdo.")
-                        record = existing
-                    transaction.stage_bytes(
-                        pending_path,
-                        json.dumps(record, ensure_ascii=False, indent=2).encode("utf-8"),
-                        lambda path: json.loads(path.read_text(encoding="utf-8")),
+                    transaction.update_json(
+                        services.comparison_history_path(),
+                        update_annotation,
+                        [],
                     )
-                    transaction.commit()
+                if pending_path.exists():
+                    existing = json.loads(pending_path.read_text(encoding="utf-8"))
+                    if not same_annotation_revision(existing, record):
+                        raise HTTPException(409, detail="A revisão já foi usada com outro conteúdo.")
+                    record = existing
+                transaction.stage_bytes(
+                    pending_path,
+                    json.dumps(record, ensure_ascii=False, indent=2).encode("utf-8"),
+                    lambda path: json.loads(path.read_text(encoding="utf-8")),
+                )
+                transaction.commit()
         except HTTPException:
             raise
         except Exception:
@@ -1411,30 +1410,29 @@ def create_inventory_history_router(services: InventoryHistoryServices):
             for record in tombstones
         ]
         try:
-            with services.comparison_history_lock:
-                with services.atomic_file_transaction(
-                    services.transaction_root(),
-                    [services.comparison_history_path(), *pending_paths],
-                ) as transaction:
-                    result: Dict[str, Any] = {"total": None}
+            with services.atomic_file_transaction(
+                services.transaction_root(),
+                [services.comparison_history_path(), *pending_paths],
+            ) as transaction:
+                result: Dict[str, Any] = {"total": None}
 
-                    def remove_event(rows):
-                        if not isinstance(rows, list) or any(not isinstance(row, dict) for row in rows):
-                            raise HTTPException(status_code=500, detail="O histórico de planilhas não contém uma lista válida.")
-                        updated = [row for row in rows if row.get("id") != evento_id]
-                        if len(updated) == len(rows):
-                            raise HTTPException(status_code=404, detail="A atualização selecionada não existe mais no histórico.")
-                        result["total"] = len(updated)
-                        return updated
+                def remove_event(rows):
+                    if not isinstance(rows, list) or any(not isinstance(row, dict) for row in rows):
+                        raise HTTPException(status_code=500, detail="O histórico de planilhas não contém uma lista válida.")
+                    updated = [row for row in rows if row.get("id") != evento_id]
+                    if len(updated) == len(rows):
+                        raise HTTPException(status_code=404, detail="A atualização selecionada não existe mais no histórico.")
+                    result["total"] = len(updated)
+                    return updated
 
-                    transaction.update_json(services.comparison_history_path(), remove_event, [])
-                    for record, pending_path in zip(tombstones, pending_paths):
-                        transaction.stage_bytes(
-                            pending_path,
-                            json.dumps(record, ensure_ascii=False, indent=2).encode("utf-8"),
-                            lambda path: json.loads(path.read_text(encoding="utf-8")),
-                        )
-                    transaction.commit()
+                transaction.update_json(services.comparison_history_path(), remove_event, [])
+                for record, pending_path in zip(tombstones, pending_paths):
+                    transaction.stage_bytes(
+                        pending_path,
+                        json.dumps(record, ensure_ascii=False, indent=2).encode("utf-8"),
+                        lambda path: json.loads(path.read_text(encoding="utf-8")),
+                    )
+                transaction.commit()
         except HTTPException:
             raise
         except Exception:

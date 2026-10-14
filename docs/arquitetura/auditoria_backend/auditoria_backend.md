@@ -103,8 +103,8 @@ Todas as etapas devem preservar rotas, DTOs e a suíte `tests/run_tests.py`.
        await self.import_batch(...)
    ```
 3. **Subida resiliente.** Tratar `TransactionConflictError` no `lifespan` com modo leitura e mensagem (requer decisão de produto).
-4. **Backoff de `PermissionError`** em `os.replace` e `unlink`; documentar a exclusão das pastas de trabalho do sync do OneDrive.
-5. **Hierarquia de locks.** Documentar global → arquivo → lock Python folha; remover os helpers mortos de `main.py:263-383`; não segurar lock Python durante a transação.
+4. **Backoff de `PermissionError`** em `os.replace` e `unlink`; documentar a exclusão das pastas de trabalho do sync do OneDrive. Ver [onedrive_pastas_de_trabalho.md](onedrive_pastas_de_trabalho.md).
+5. **Hierarquia de locks.** Documentar global → arquivo → lock Python folha; remover os helpers mortos de `main.py:263-383`; não segurar lock Python durante a transação. Ver [hierarquia_de_locks.md](hierarquia_de_locks.md).
 6. **E/S de anotações.** Distinguir "ilegível" de "inválido"; cachear a listagem.
 7. **Prontidão** sem lock global, com cache.
 8. **Memória do parse.** Materializar só a aba selecionada, depois de medir.

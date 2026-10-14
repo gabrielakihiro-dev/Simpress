@@ -213,7 +213,7 @@ class AnnotationRevisionTests(unittest.TestCase):
             history_annotation_row_fingerprint=history_annotation_row_fingerprint,
             transaction_root=lambda: self.root, atomic_file_transaction=AtomicFileTransaction,
             load_comparison_history=lambda: json.loads(history.read_text(encoding="utf-8")),
-            comparison_history_path=lambda: history, comparison_history_lock=threading.RLock(),
+            comparison_history_path=lambda: history,
             comparison_annotation_item_id=lambda *args: "row", comparison_history_for_display=display,
             history_annotations_sync_enabled=lambda: True,
         )
