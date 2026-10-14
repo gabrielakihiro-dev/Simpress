@@ -1324,15 +1324,16 @@ def load_endpoint_aliases() -> Dict[str, str]:
 def read_endpoint_alias_index() -> Dict[str, Any]:
     """Retorna associações unívocas e linhas que precisam de conferência."""
     if not ENDPOINT_UPLOAD_FILE.is_file():
-        return {"available": False, "unique": {}, "duplicates": {}, "blank_serials": [], "blank_hostnames": {}}
+        return {"available": False, "unique": {}, "duplicates": {}, "blank_serials": [], "blank_hostnames": {}, "users": {}}
 
     try:
         table = validate_uploaded_workbook(ENDPOINT_UPLOAD_FILE.read_bytes(), "endpoint")
     except Exception:
         print("[AVISO] Não foi possível ler os hostnames atuais da InvAll.")
-        return {"available": False, "unique": {}, "duplicates": {}, "blank_serials": [], "blank_hostnames": {}}
+        return {"available": False, "unique": {}, "duplicates": {}, "blank_serials": [], "blank_hostnames": {}, "users": {}}
 
     rows_by_serial: Dict[str, List[Dict[str, str]]] = {}
+    users_by_serial: Dict[str, List[str]] = {}
     blank_serials: List[Dict[str, str]] = []
     for record in table.get("records", []):
         serial = _record_value(
@@ -1347,9 +1348,13 @@ def read_endpoint_alias_index() -> Dict[str, Any]:
         hostname = str(
             _record_value(record, "NOMEDOCOMPUTADOR", "COMPUTERNAME", "HOSTNAME", "APELIDO") or ""
         ).strip()
+        logged_users = str(_record_value(record, "USUARIOSLOGADOS", "USUARIOLOGADO") or "").strip()
+        if normalize_reference_value(logged_users) == "NA":
+            logged_users = ""
         row = {"serie": str(serial or "").strip(), "hostname": hostname}
         if serial_key:
             rows_by_serial.setdefault(serial_key, []).append(row)
+            users_by_serial.setdefault(serial_key, []).append(logged_users)
         elif hostname:
             blank_serials.append(row)
 
@@ -1364,8 +1369,15 @@ def read_endpoint_alias_index() -> Dict[str, Any]:
         else:
             blank_hostnames[serial_key] = rows[0]
 
+    users = {
+        serial_key: values[0]
+        for serial_key, values in users_by_serial.items()
+        if len(values) == 1 and values[0]
+    }
+
     return {
         "available": True,
+        "users": users,
         "unique": unique,
         "duplicates": duplicates,
         "blank_serials": blank_serials,
@@ -1497,6 +1509,7 @@ def _apply_effective_alias(
     local_alias = str(equipment.get("_apelido_local", equipment.get("_apelido_base", "")) or "").strip()
     manual_override = bool(equipment.get("_apelido_manual_override"))
     equipment["apelido"] = local_alias
+    equipment["usuarios_logados"] = endpoint_index.get("users", {}).get(serial_key, "")
 
     if not endpoint_index.get("available"):
         equipment["invall_alias_status"] = "indisponivel"

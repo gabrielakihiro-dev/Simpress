@@ -71,6 +71,7 @@ def build_search_index(
             "apelido": alias,
             "retirada_cidade": city,
             "retirada_cnpj": str(item.get("retirada_cnpj") or ""),
+            "usuarios_logados": str(item.get("usuarios_logados") or ""),
             "invall_alias_status": item.get("invall_alias_status"),
             "invall_alias_detail": item.get("invall_alias_detail"),
         }
