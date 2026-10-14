@@ -166,7 +166,7 @@ class TicketReportingTests(unittest.TestCase):
                 try:
                     expected = "'" + value if value.lstrip().startswith(("=", "+", "-", "@")) else value
                     self.assertEqual(workbook.sheetnames, ["Resumo", "Chamados", "Conferência das relações", "Linha do tempo"])
-                    for name, columns in (("Chamados", 43), ("Conferência das relações", 10), ("Linha do tempo", 13)):
+                    for name, columns in (("Chamados", 44), ("Conferência das relações", 10), ("Linha do tempo", 13)):
                         sheet = workbook[name]
                         self.assertEqual(sheet.max_row, 2)
                         self.assertEqual(sheet.max_column, columns)
