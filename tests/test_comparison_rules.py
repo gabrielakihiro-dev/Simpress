@@ -420,6 +420,31 @@ class InventoryComparisonTests(unittest.TestCase):
             main.SERIE_LOCAL_MAP.clear()
             main.SERIE_LOCAL_MAP.update(original_map)
 
+    def test_bkp_and_bk_hostname_city_or_sector_names_are_not_unmapped(self):
+        hostname_locations = [
+            ("PRNOTEBKPMARINGA001", "Maringá"),
+            ("PRNOTEBKMARINGA002", "Maringá"),
+            ("PRNOTEBKPPATOBRANCO003", "Pato Branco"),
+            ("PRNOTEBKCORNELIOPROCOPIO004", "Cornélio Procópio"),
+            ("PRNOTEBKPDIREX005", "Curitiba"),
+            ("PRNOTEBKTI006", "Curitiba UTIC"),
+        ]
+
+        for hostname, expected_location in hostname_locations:
+            with self.subTest(hostname=hostname):
+                self.assertEqual(main.location_for_computer_name(hostname), expected_location)
+
+        result = main.compare_uploaded_workbooks(
+            source_table([
+                {"NOMEDOCOMPUTADOR": hostname, "SERIAL": f"SERIAL-{index}"}
+                for index, (hostname, _) in enumerate(hostname_locations, start=1)
+            ]),
+            source_table([]),
+            {},
+        )
+
+        self.assertEqual(result["series_sem_mapeamento"], [])
+
     def test_multiple_matching_sheets_return_a_clear_error(self):
         tables = [
             {"sheet": "Endpoint 1", "headers": {"NOMEDOCOMPUTADOR", "SERIAL"}, "records": [{"SERIAL": "S1"}]},
