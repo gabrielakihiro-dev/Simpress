@@ -62,7 +62,8 @@ def build_dashboard(services: DashboardServices) -> Dict[str, Any]:
         events = []
     if events and isinstance(events[0], dict):
         event = events[0]
-        summary = event.get("resumo") if isinstance(event.get("resumo"), dict) else {}
+        summary_value: Any = event.get("resumo")
+        summary: Dict[str, Any] = summary_value if isinstance(summary_value, dict) else {}
         latest = {
             "id": event.get("id"),
             "horario": event.get("horario"),

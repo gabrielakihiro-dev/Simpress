@@ -543,7 +543,7 @@ test("reduced-motion preference suppresses CSS motion and preserves modal operat
 });
 
 test("@profile UI route transitions retain responsive frame pacing", async ({ page }, testInfo) => {
-  await page.waitForLoadState("networkidle");
+  await expect(page.locator("#tab-panel-home")).toBeVisible();
   await page.evaluate(() => document.fonts.ready);
   const profile = await page.evaluate(async () => {
     const longTasks = [];
