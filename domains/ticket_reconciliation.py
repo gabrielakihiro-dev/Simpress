@@ -31,6 +31,7 @@ SIMPresS_FIELDS = {
     "verificado_estoque": ("verificandoestoque", "verificadoestoque", "verificadoeestoque"),
     "pedido_separacao": ("pedidoemseparacao",),
     "nota_fiscal_emitida": ("notafiscalemitida",),
+    "a_caminho": ("acaminho",),
     "entregue": ("entregue", "pedidoentregue", "dataentrega"),
     "modelo": ("modelodoequipamento",),
     "descricao_produto": ("descricaoproduto",),
@@ -71,9 +72,10 @@ ORACLE_FIELDS = {
 SIMPRESS_ORDER_STAGES = (
     ("data_pedido", "Data do pedido"),
     ("liberacao_pedido", "Liberação do pedido"),
-    ("verificado_estoque", "Verificado e estoque"),
+    ("verificado_estoque", "Verificando estoque"),
     ("pedido_separacao", "Pedido em separação"),
     ("nota_fiscal_emitida", "Nota fiscal emitida"),
+    ("a_caminho", "A caminho"),
     ("previsao_entrega", "Previsão de entrega"),
     ("entregue", "Pedido entregue"),
 )

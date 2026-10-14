@@ -3338,8 +3338,8 @@
     function etapasProcessoPedido(simpress) {
       const rotulos = [
         ["data_pedido", "Data do pedido"], ["liberacao_pedido", "Liberação do pedido"],
-        ["verificado_estoque", "Verificado e estoque"], ["pedido_separacao", "Pedido em separação"],
-        ["nota_fiscal_emitida", "Nota fiscal emitida"], ["previsao_entrega", "Previsão de entrega"],
+        ["verificado_estoque", "Verificando estoque"], ["pedido_separacao", "Pedido em separação"],
+        ["nota_fiscal_emitida", "Nota fiscal emitida"], ["a_caminho", "A caminho"], ["previsao_entrega", "Previsão de entrega"],
         ["entregue", "Pedido entregue"],
       ];
       if (Array.isArray(simpress.etapas_pedido) && simpress.etapas_pedido.length) {
