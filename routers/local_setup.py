@@ -2,6 +2,7 @@
 
 import asyncio
 import io
+import logging
 import re
 import uuid
 from datetime import datetime
@@ -11,7 +12,11 @@ from fastapi import APIRouter, File, HTTPException, UploadFile
 
 from core.async_workers import await_worker_completion
 from domains.local_setup import validate_local_model
-from core.integrity import AtomicFileTransaction, FileBusyError, FileTransactionError
+from core.integrity import AtomicFileTransaction, FileBusyError, FileTransactionError, WorkbookSafetyError
+from core.xlsx_safety import WORKBOOK_READ_ERRORS
+
+
+logger = logging.getLogger(__name__)
 
 
 def create_local_setup_router(*, enabled, model_path, transaction_root, backups_directory,
@@ -21,7 +26,8 @@ def create_local_setup_router(*, enabled, model_path, transaction_root, backups_
     def commit_model(kind, data):
         try:
             validate_local_model(io.BytesIO(data), kind)
-        except Exception as error:
+        except (WorkbookSafetyError, *WORKBOOK_READ_ERRORS) as error:
+            logger.warning("Falha ao validar modelo importado (papel=%s, erro=%s).", kind, type(error).__name__)
             raise HTTPException(400, f"Modelo inválido: {error}") from error
         target = model_path(kind)
         backup = backups_directory() / "modelos" / (
