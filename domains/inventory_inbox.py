@@ -6,6 +6,7 @@ import logging
 import os
 import stat
 import threading
+import time
 import uuid
 from contextlib import contextmanager
 from datetime import datetime, timezone
@@ -17,6 +18,10 @@ from fastapi import HTTPException
 
 logger = logging.getLogger(__name__)
 _PROCESS_WORKER_LOCK = threading.Lock()
+# OneDrive and antivirus filters briefly open files that were just written, and
+# Windows refuses to rename a folder while any file inside it is open.
+_RENAME_PERMISSION_RETRY_SECONDS = 3.0
+_RENAME_PERMISSION_RETRY_MAX_DELAY = 0.25
 
 
 class InventoryInboxError(ValueError):
@@ -76,6 +81,22 @@ def _try_worker_lock(path: Path):
         if handle is not None:
             handle.close()
         _PROCESS_WORKER_LOCK.release()
+
+
+def _rename_batch(source: Path, destination: Path) -> None:
+    """Rename a batch folder, waiting out transient sharing locks; other errors propagate."""
+    deadline = time.monotonic() + _RENAME_PERMISSION_RETRY_SECONDS
+    delay = 0.01
+    while True:
+        try:
+            source.rename(destination)
+            return
+        except PermissionError:
+            remaining = deadline - time.monotonic()
+            if remaining <= 0:
+                raise
+            time.sleep(min(remaining, delay))
+            delay = min(delay * 2, _RENAME_PERMISSION_RETRY_MAX_DELAY)
 
 
 class AutomaticInventoryInbox:
@@ -200,7 +221,7 @@ class AutomaticInventoryInbox:
             )
 
         try:
-            pending_batch.rename(processing_batch)
+            _rename_batch(pending_batch, processing_batch)
         except OSError:
             logger.exception("Não foi possível reservar o lote automático %s.", batch_id)
             return False
@@ -337,7 +358,7 @@ class AutomaticInventoryInbox:
                 )
                 continue
             try:
-                processing_batch.rename(pending_batch)
+                _rename_batch(processing_batch, pending_batch)
             except OSError:
                 logger.exception("Não foi possível recuperar o lote interrompido %s.", processing_batch.name)
 
@@ -351,7 +372,7 @@ class AutomaticInventoryInbox:
             )
             return
         try:
-            processing_batch.rename(pending_batch)
+            _rename_batch(processing_batch, pending_batch)
         except OSError:
             logger.exception("Não foi possível devolver o lote %s à fila pendente.", batch_id)
 
@@ -371,7 +392,7 @@ class AutomaticInventoryInbox:
         destination = destination_root / batch_dir.name
         if destination.exists():
             destination = destination_root / f"{batch_dir.name}--{uuid.uuid4().hex[:8]}"
-        batch_dir.rename(destination)
+        _rename_batch(batch_dir, destination)
         status_path = destination / "_resultado.json"
         temporary_path = destination / f"._resultado-{uuid.uuid4().hex}.tmp"
         temporary_path.write_text(
