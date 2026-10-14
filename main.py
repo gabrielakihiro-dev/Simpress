@@ -182,6 +182,10 @@ def postgres_command(command, payload):
     return backend.execute(command, payload, idempotency_key.get())
 
 # Runtime synchronization and in-memory state remain in the application entry point.
+# Lock hierarchy (docs/arquitetura/auditoria_backend/hierarquia_de_locks.md): the global
+# ".atomic-transactions" lock, then file locks, then these Python locks as leaves.
+# Hold a leaf lock only around memory or a single file read; never open a
+# transaction, call lock_paths or load_database while holding one.
 MODIFIED_APELIDOS_LOCK = threading.RLock()
 ALIAS_HISTORY_LOCK = threading.RLock()
 COMPARISON_HISTORY_LOCK = threading.RLock()
@@ -254,12 +258,6 @@ def _json_bytes(value: Any) -> bytes:
     return json.dumps(value, ensure_ascii=False, indent=2).encode("utf-8")
 
 
-def _atomic_json_update(path: Path, updater, default):
-    with AtomicFileTransaction(TRANSACTION_ROOT, [path]) as transaction:
-        updated = transaction.update_json(path, updater, default)
-        transaction.commit()
-        return updated
-
 def load_modified_apelidos() -> Dict[str, str]:
     if (backend := postgres_backend()) is not None:
         return backend.state()["aliases"]
@@ -267,20 +265,6 @@ def load_modified_apelidos() -> Dict[str, str]:
         if not MODIFIED_APELIDOS_FILE.exists():
             return {}
         return _read_json_object(MODIFIED_APELIDOS_FILE, "apelidos")
-
-def save_modified_apelido_record(serial: str, apelido: str) -> None:
-    s_key = serial.strip().upper()
-    ap_val = apelido.strip()
-    with MODIFIED_APELIDOS_LOCK:
-        try:
-            _atomic_json_update(
-                MODIFIED_APELIDOS_FILE,
-                lambda data: {**_validate_json_object(data, "apelidos"), s_key: ap_val},
-                {},
-            )
-        except Exception:
-            print("[ERRO] Falha ao gravar o arquivo local de apelidos.")
-            raise
 
 def load_alias_history() -> List[Dict[str, Any]]:
     if (backend := postgres_backend()) is not None:
@@ -292,24 +276,6 @@ def load_alias_history() -> List[Dict[str, Any]]:
             return _read_json_history(ALIAS_HISTORY_FILE, "apelidos")
         except LocalJsonCorruptionError as error:
             raise HTTPException(status_code=503, detail=str(error)) from error
-
-def append_alias_history_entry(entry: Dict[str, Any]) -> None:
-    with ALIAS_HISTORY_LOCK:
-        def append(history):
-            history = _validate_json_history(history, "apelidos")
-            return [*history, entry]
-        _atomic_json_update(ALIAS_HISTORY_FILE, append, [])
-
-def delete_alias_history_entry(event_id: str) -> bool:
-    with ALIAS_HISTORY_LOCK:
-        removed = {"value": False}
-        def remove(history):
-            history = _validate_json_history(history, "apelidos")
-            filtered = [entry for entry in history if entry.get("id") != event_id]
-            removed["value"] = len(filtered) != len(history)
-            return filtered
-        _atomic_json_update(ALIAS_HISTORY_FILE, remove, [])
-        return removed["value"]
 
 def load_comparison_history() -> List[Dict[str, Any]]:
     if (backend := postgres_backend()) is not None:
@@ -362,25 +328,6 @@ def latest_comparison_update_entry(history: Optional[List[Dict[str, Any]]] = Non
 
     return max(candidates, key=event_timestamp)
 
-
-def append_comparison_history_entry(entry: Dict[str, Any]) -> None:
-    with COMPARISON_HISTORY_LOCK:
-        def append(history):
-            history = _validate_json_history(history, "comparações")
-            return [*history, entry]
-        _atomic_json_update(COMPARISON_HISTORY_FILE, append, [])
-
-def delete_comparison_history_entry(event_id: str) -> Optional[int]:
-    with COMPARISON_HISTORY_LOCK:
-        result: Dict[str, Optional[int]] = {"total": None}
-        def remove(history):
-            history = _validate_json_history(history, "comparações")
-            filtered = [entry for entry in history if entry.get("id") != event_id]
-            if len(filtered) != len(history):
-                result["total"] = len(filtered)
-            return filtered
-        _atomic_json_update(COMPARISON_HISTORY_FILE, remove, [])
-        return result["total"]
 
 def build_alias_change_entry(
     serial: str,
@@ -2222,42 +2169,43 @@ def prune_expired_histories(now: Optional[datetime] = None) -> Dict[str, int]:
     active_backup_paths: Set[Path] = set()
     targets = [path for path in (ALIAS_HISTORY_FILE, COMPARISON_HISTORY_FILE) if path.exists()]
 
-    with ALIAS_HISTORY_LOCK, COMPARISON_HISTORY_LOCK:
-        if targets:
-            with AtomicFileTransaction(TRANSACTION_ROOT, targets) as transaction:
-                if ALIAS_HISTORY_FILE in targets:
-                    def keep_alias_events(value):
-                        events = _validate_json_history(value, "apelidos")
-                        kept = []
-                        for event in events:
-                            timestamp = _history_event_datetime(event)
-                            if timestamp is not None and timestamp < cutoff:
-                                results["apelidos_removidos"] += 1
-                            else:
-                                kept.append(event)
-                        return kept
-                    transaction.update_json(ALIAS_HISTORY_FILE, keep_alias_events, [])
-
-                if COMPARISON_HISTORY_FILE in targets:
-                    def keep_comparison_events(value):
-                        events = _validate_json_history(value, "comparações")
-                        kept = []
-                        for event in events:
-                            timestamp = _history_event_datetime(event)
-                            is_pinned = event.get("id") == PINNED_COMPARISON_EVENT_ID
-                            if not is_pinned and timestamp is not None and timestamp < cutoff:
-                                backup_path = _backup_directory_from_history(event)
-                                if backup_path is not None:
-                                    expired_backup_paths.add(backup_path)
-                                results["comparacoes_removidas"] += 1
-                                continue
+    # The transaction's file locks serialize the histories; holding the Python
+    # history locks here would invert the global → file → leaf order.
+    if targets:
+        with AtomicFileTransaction(TRANSACTION_ROOT, targets) as transaction:
+            if ALIAS_HISTORY_FILE in targets:
+                def keep_alias_events(value):
+                    events = _validate_json_history(value, "apelidos")
+                    kept = []
+                    for event in events:
+                        timestamp = _history_event_datetime(event)
+                        if timestamp is not None and timestamp < cutoff:
+                            results["apelidos_removidos"] += 1
+                        else:
                             kept.append(event)
+                    return kept
+                transaction.update_json(ALIAS_HISTORY_FILE, keep_alias_events, [])
+
+            if COMPARISON_HISTORY_FILE in targets:
+                def keep_comparison_events(value):
+                    events = _validate_json_history(value, "comparações")
+                    kept = []
+                    for event in events:
+                        timestamp = _history_event_datetime(event)
+                        is_pinned = event.get("id") == PINNED_COMPARISON_EVENT_ID
+                        if not is_pinned and timestamp is not None and timestamp < cutoff:
                             backup_path = _backup_directory_from_history(event)
                             if backup_path is not None:
-                                active_backup_paths.add(backup_path)
-                        return kept
-                    transaction.update_json(COMPARISON_HISTORY_FILE, keep_comparison_events, [])
-                transaction.commit()
+                                expired_backup_paths.add(backup_path)
+                            results["comparacoes_removidas"] += 1
+                            continue
+                        kept.append(event)
+                        backup_path = _backup_directory_from_history(event)
+                        if backup_path is not None:
+                            active_backup_paths.add(backup_path)
+                    return kept
+                transaction.update_json(COMPARISON_HISTORY_FILE, keep_comparison_events, [])
+            transaction.commit()
 
     if UPLOAD_BACKUPS_DIR.is_symlink() or not UPLOAD_BACKUPS_DIR.is_dir():
         return results
@@ -4106,7 +4054,6 @@ inventory_history_router, _inventory_history_exports = create_inventory_history_
     build_history_annotation_record=lambda *args, **kwargs: build_history_annotation_record(*args, **kwargs),
     comparison_annotation_item_id=comparison_annotation_item_id,
     comparison_history_path=lambda: COMPARISON_HISTORY_FILE,
-    comparison_history_lock=COMPARISON_HISTORY_LOCK,
     comparison_history_for_display=comparison_history_for_display,
     details_upload_path=lambda: DETAILS_UPLOAD_FILE,
     endpoint_upload_path=lambda: ENDPOINT_UPLOAD_FILE,

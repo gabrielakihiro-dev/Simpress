@@ -3397,8 +3397,15 @@ class WorkflowIntegrityTests(unittest.TestCase):
         original_overrides = self.overrides.read_bytes()
         with self.assertRaises(main.LocalJsonCorruptionError):
             main.load_modified_apelidos()
+        # Production writers update aliases through a transaction, never a bare write.
         with self.assertRaises(main.FileTransactionError):
-            main.save_modified_apelido_record("SN-1", "HOST-1")
+            with main.AtomicFileTransaction(main.TRANSACTION_ROOT, [self.overrides]) as transaction:
+                transaction.update_json(
+                    self.overrides,
+                    lambda data: {**main._validate_json_object(data, "apelidos"), "SN-1": "HOST-1"},
+                    {},
+                )
+                transaction.commit()
         self.assertEqual(self.overrides.read_bytes(), original_overrides)
 
         self.custom_units.write_text('{"wrong":"shape"}', encoding="utf-8")
