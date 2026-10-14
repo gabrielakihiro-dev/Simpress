@@ -11,6 +11,10 @@ import zlib
 from pathlib import Path
 from typing import Any, BinaryIO, Dict, List, Optional, Tuple, Union
 from xml.parsers import expat
+from xml.etree.ElementTree import ParseError
+
+from defusedxml.common import DefusedXmlException
+from openpyxl.utils.exceptions import InvalidFileException
 
 from core.config import (
     MAX_XLSX_ARCHIVE_ENTRIES,
@@ -30,6 +34,15 @@ class XlsxPackageError(ValueError):
 
 class XlsxLimitExceeded(XlsxPackageError):
     """The XLSX package exceeds a configured processing limit."""
+
+
+# Expected failures from ZIP/XML/openpyxl readers. Programming errors such as
+# TypeError, AttributeError and unrelated RuntimeError must reach the caller.
+WORKBOOK_READ_ERRORS = (
+    OSError, ValueError, KeyError, IndexError, EOFError,
+    zipfile.BadZipFile, zipfile.LargeZipFile, zlib.error, lzma.LZMAError,
+    ParseError, DefusedXmlException, InvalidFileException,
+)
 
 
 _CELL_REFERENCE = re.compile(r"^\$?([A-Za-z]{1,3})\$?([1-9][0-9]*)$")

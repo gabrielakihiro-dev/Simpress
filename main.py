@@ -91,7 +91,7 @@ from routers.transfers import (
 from routers.operations import MAX_TICKET_WORKBOOK_BYTES, create_operations_router
 from routers.local_setup import create_local_setup_router
 from domains.local_setup import validate_local_model
-from core.xlsx_safety import XlsxLimitExceeded, XlsxPackageError, validate_xlsx
+from core.xlsx_safety import WORKBOOK_READ_ERRORS, XlsxLimitExceeded, XlsxPackageError, validate_xlsx
 
 from domains.inventory_comparison import (
     COMPARISON_SOURCE_LABELS,
@@ -527,7 +527,11 @@ def find_details_sheet(file_path: Path) -> Optional[str]:
         if matching_sheets:
             matching_sheets.sort(key=lambda item: item[0], reverse=True)
             return matching_sheets[0][1]
-    except Exception:
+    except WORKBOOK_READ_ERRORS as error:
+        logger.warning(
+            "Falha ao localizar aba de inventário (arquivo=%s, papel=detalhes, erro=%s).",
+            file_path.name, type(error).__name__,
+        )
         return None
     finally:
         if workbook is not None:
@@ -631,7 +635,11 @@ def _check_ready_workbook(path: Path, role: str) -> Dict[str, Any]:
             if len(_READINESS_VALIDATION_CACHE) >= 64:
                 _READINESS_VALIDATION_CACHE.clear()
             _READINESS_VALIDATION_CACHE[key] = dict(status)
-    except Exception as error:
+    except (HTTPException, FileBusyError, WorkbookSafetyError, *WORKBOOK_READ_ERRORS) as error:
+        logger.warning(
+            "Falha ao verificar prontidão da planilha (arquivo=%s, papel=%s, erro=%s).",
+            path.name, role, type(error).__name__,
+        )
         status.update(reason=str(getattr(error, "detail", error)) or "planilha inválida", state="invalid")
     return status
 
@@ -691,12 +699,14 @@ def _get_startup_readiness_unlocked() -> Dict[str, Any]:
     try:
         details_candidates = get_details_files()
         details_directory_readable = True
-    except Exception:
+    except OSError as error:
+        logger.warning("Falha ao listar inventários (papel=detalhes, erro=%s).", type(error).__name__)
         details_candidates = []
         details_directory_readable = False
     try:
         active_details = get_primary_equipment_file()
-    except Exception:
+    except (OSError, FileBusyError) as error:
+        logger.warning("Falha ao selecionar inventário ativo (papel=detalhes, erro=%s).", type(error).__name__)
         active_details = None
 
     units_loaded = False
@@ -947,7 +957,8 @@ def read_workbook_tables(file_bytes: bytes) -> List[Dict[str, Any]]:
         raise
     except WorkbookHeaderError as error:
         raise HTTPException(status_code=400, detail=f"Cabeçalhos inválidos: {error}") from None
-    except Exception:
+    except WORKBOOK_READ_ERRORS as error:
+        logger.warning("Falha ao ler tabelas da planilha (papel=upload, erro=%s).", type(error).__name__)
         raise HTTPException(
             status_code=400,
             detail="O arquivo enviado não contém uma planilha .xlsx válida ou legível.",
@@ -1253,7 +1264,11 @@ def load_export_model_aliases() -> Dict[str, str]:
         )
     except HTTPException:
         raise
-    except Exception:
+    except WORKBOOK_READ_ERRORS as error:
+        logger.warning(
+            "Falha ao ler modelo (arquivo=%s, papel=exportacao, erro=%s).",
+            EXPORT_MODEL_FILE.name, type(error).__name__,
+        )
         raise HTTPException(
             status_code=500,
             detail="Não foi possível ler o modelo de exportação."
@@ -1275,8 +1290,11 @@ def read_endpoint_alias_index() -> Dict[str, Any]:
 
     try:
         table = validate_uploaded_workbook(ENDPOINT_UPLOAD_FILE.read_bytes(), "endpoint")
-    except Exception:
-        print("[AVISO] Não foi possível ler os hostnames atuais da InvAll.")
+    except (OSError, HTTPException) as error:
+        logger.warning(
+            "Falha ao ler hostnames (arquivo=%s, papel=endpoint, erro=%s).",
+            ENDPOINT_UPLOAD_FILE.name, type(error).__name__,
+        )
         return {"available": False, "unique": {}, "duplicates": {}, "blank_serials": [], "blank_hostnames": {}, "users": {}}
 
     rows_by_serial: Dict[str, List[Dict[str, str]]] = {}
@@ -2360,8 +2378,11 @@ def _load_database_unlocked(publish: bool = True) -> Any:
             print(f"[ERRO] {active_details_file.name} não contém cabeçalhos EquipamentosDetalhes válidos.")
             return False
         headers, records = _read_details_sheet_records(active_details_file, sheet_target)
-    except Exception:
-        print("[ERRO] Falha ao ler a planilha local de equipamentos.")
+    except (FileBusyError, *WORKBOOK_READ_ERRORS) as error:
+        logger.warning(
+            "Falha ao ler base de equipamentos (arquivo=%s, papel=detalhes, erro=%s).",
+            active_details_file.name, type(error).__name__,
+        )
         return False
 
     # Strip column names e criar mapa normalizado de colunas

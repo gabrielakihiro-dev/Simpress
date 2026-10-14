@@ -3,10 +3,12 @@
 from __future__ import annotations
 
 import asyncio
+import logging
 from typing import Callable, TypeVar
 
 
 _Result = TypeVar("_Result")
+logger = logging.getLogger(__name__)
 
 
 async def await_worker_completion(
@@ -32,6 +34,10 @@ async def await_worker_completion(
             continue
         except Exception as error:
             if cancellation_requested:
+                logger.warning(
+                    "Falha de tarefa após cancelamento da requisição (erro=%s).",
+                    type(error).__name__,
+                )
                 if on_cancelled_failure is not None:
                     on_cancelled_failure(error)
                 raise asyncio.CancelledError from None
