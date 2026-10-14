@@ -8,6 +8,7 @@ from unittest.mock import patch
 
 from fastapi import HTTPException
 
+from domains import inventory_inbox
 from domains.inventory_inbox import AutomaticInventoryInbox
 
 
@@ -129,7 +130,9 @@ class AutomaticInventoryInboxTests(unittest.TestCase):
     def test_recovered_batch_already_in_history_is_archived_without_reimport(self):
         interrupted = self._make_batch()
         self.inbox.processing_dir.mkdir(parents=True)
-        interrupted.rename(self.inbox.processing_dir / interrupted.name)
+        # The project root may sit in a OneDrive folder whose filter briefly opens
+        # just-written files, so the simulated interruption tolerates that lock.
+        inventory_inbox._rename_batch(interrupted, self.inbox.processing_dir / interrupted.name)
         self.history.append({"importacao_automatica_id": "lote-001"})
 
         self.assertEqual(self._scan(), 0)
@@ -156,7 +159,7 @@ class AutomaticInventoryInboxTests(unittest.TestCase):
 
         async def run():
             scan = asyncio.create_task(self.inbox.process_pending_once())
-            while not archiving.is_set():
+            while not archiving.is_set() and not scan.done():
                 await asyncio.sleep(0.01)
             # Filesystem work is still blocked, yet this coroutine keeps running.
             responsive = not scan.done()
@@ -169,6 +172,44 @@ class AutomaticInventoryInboxTests(unittest.TestCase):
         self.assertEqual(completed, 1)
         self.assertEqual(len(self.calls), 1)
         self.assertTrue((self.inbox.processed_dir / "lote-001").is_dir())
+
+    def _fail_renames_from(self, source, failures):
+        rename = Path.rename
+        remaining = [failures]
+
+        def flaky_rename(path, target):
+            if path == source and remaining[0] > 0:
+                remaining[0] -= 1
+                raise PermissionError(13, "Acesso negado", str(path))
+            return rename(path, target)
+
+        return patch.object(Path, "rename", autospec=True, side_effect=flaky_rename)
+
+    def test_transient_sharing_lock_on_claim_is_retried_in_the_same_scan(self):
+        batch = self._make_batch()
+        self.assertEqual(self._scan(), 0)
+
+        with self._fail_renames_from(batch, failures=2):
+            self.assertEqual(self._scan(), 1)
+
+        self.assertEqual(len(self.calls), 1)
+        self.assertFalse(batch.exists())
+        self.assertTrue((self.inbox.processed_dir / "lote-001").is_dir())
+
+    def test_persistent_sharing_lock_on_claim_keeps_batch_pending(self):
+        batch = self._make_batch()
+        self.assertEqual(self._scan(), 0)
+
+        with (
+            patch.object(inventory_inbox, "_RENAME_PERMISSION_RETRY_SECONDS", 0.05),
+            self._fail_renames_from(batch, failures=10_000),
+            self.assertLogs(inventory_inbox.logger, "ERROR"),
+        ):
+            self.assertEqual(self._scan(), 0)
+
+        self.assertEqual(self.calls, [])
+        self.assertTrue(batch.is_dir())
+        self.assertEqual(list(self.inbox.processing_dir.iterdir()), [])
 
     def test_oversized_workbook_is_failed_without_calling_update(self):
         self.inbox.max_upload_bytes = 4
