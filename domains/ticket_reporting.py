@@ -60,9 +60,10 @@ SIMPRESS_CHANGE_FIELDS = (
 # "Data do pedido" and "Previsão de entrega" are already compared through the lists above.
 SIMPRESS_STAGE_CHANGE_FIELDS = (
     ("liberacao_pedido", "Liberação do pedido Simpress"),
-    ("verificado_estoque", "Verificado e estoque Simpress"),
+    ("verificado_estoque", "Verificando estoque Simpress"),
     ("pedido_separacao", "Pedido em separação Simpress"),
     ("nota_fiscal_emitida", "Nota fiscal emitida Simpress"),
+    ("a_caminho", "A caminho Simpress"),
     ("entregue", "Pedido entregue Simpress"),
 )
 
@@ -816,7 +817,7 @@ def build_ticket_workbook(
     sheet = workbook.create_sheet("Chamados")
     headers = [
         "Série", "Atenção", "Relação", "Pedidos Simpress", "OV Simpress", "OS Simpress", "OS Oracle", "Chamado do cliente", "Status Simpress", "Data do pedido",
-        "Liberação do pedido", "Verificado e estoque", "Pedido em separação", "Nota fiscal emitida", "Pedido entregue", "Etapa atual", "Modelo",
+        "Liberação do pedido", "Verificando estoque", "Pedido em separação", "Nota fiscal emitida", "A caminho", "Pedido entregue", "Etapa atual", "Modelo",
         "Descrição do produto", "Cidade de entrega", "Endereço de entrega", "Previsão de entrega",
         "Solicitação Oracle", "Logradouro Oracle", "Número do endereço Oracle", "Bairro Oracle", "Cidade Oracle",
         "Atendido pela inibição Oracle", "Nome da filial Oracle", "Status Oracle", "Sub-status Oracle", "Fila Oracle",
@@ -846,7 +847,7 @@ def build_ticket_workbook(
                 simpress.get("chamados_cliente", []),
                 simpress.get("status", []), simpress.get("datas_pedido", []),
                 ticket_stage_date(ticket, "liberacao_pedido"), ticket_stage_date(ticket, "verificado_estoque"),
-                ticket_stage_date(ticket, "pedido_separacao"), ticket_stage_date(ticket, "nota_fiscal_emitida"), ticket_stage_date(ticket, "entregue"),
+                ticket_stage_date(ticket, "pedido_separacao"), ticket_stage_date(ticket, "nota_fiscal_emitida"), ticket_stage_date(ticket, "a_caminho"), ticket_stage_date(ticket, "entregue"),
                 (simpress.get("etapa_atual") or {}).get("rotulo", "") if isinstance(simpress.get("etapa_atual"), dict) else "",
                 simpress.get("modelos", []),
                 simpress.get("descricoes_produto", []), simpress.get("cidades_entrega", []),
@@ -873,7 +874,7 @@ def build_ticket_workbook(
         cell.font = Font(bold=True, color="FFFFFF")
         cell.fill = PatternFill("solid", fgColor="166534")
         cell.alignment = Alignment(vertical="center", wrap_text=True)
-    for index, width in enumerate((18, 36, 20, 24, 22, 20, 18, 24, 24, 22, 22, 22, 22, 22, 22, 24, 28, 42, 24, 48, 20, 22, 30, 18, 24, 24, 30, 30, 24, 24, 24, 24, 22, 22, 40, 64, 64, 16, 16, 36, 24, 18, 72), start=1):
+    for index, width in enumerate((18, 36, 20, 24, 22, 20, 18, 24, 24, 22, 22, 22, 22, 22, 22, 22, 24, 28, 42, 24, 48, 20, 22, 30, 18, 24, 24, 30, 30, 24, 24, 24, 24, 22, 22, 40, 64, 64, 16, 16, 36, 24, 18, 72), start=1):
         sheet.column_dimensions[get_column_letter(index)].width = width
     for row_number in range(2, sheet.max_row + 1):
         sheet.row_dimensions[row_number].height = sheet.sheet_format.defaultRowHeight
