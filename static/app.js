@@ -3340,6 +3340,7 @@
         ["data_pedido", "Data do pedido"], ["liberacao_pedido", "Liberação do pedido"],
         ["verificado_estoque", "Verificado e estoque"], ["pedido_separacao", "Pedido em separação"],
         ["nota_fiscal_emitida", "Nota fiscal emitida"], ["previsao_entrega", "Previsão de entrega"],
+        ["entregue", "Pedido entregue"],
       ];
       if (Array.isArray(simpress.etapas_pedido) && simpress.etapas_pedido.length) {
         return simpress.etapas_pedido.map(etapa => ({ ...etapa, data: String(etapa.data || "").trim(), coluna: etapa.coluna_na_planilha !== false }));
@@ -3371,7 +3372,7 @@
       if (previsao) partes.push(`<span class="ticket-process-forecast${atrasada ? " is-late" : ""}"><b>Previsão de entrega</b> ${escapeHtml(formatarDataEtapa(previsao.data))}${atrasada ? " · prazo vencido" : ""}</span>`);
       if (atual) partes.push(`<span class="ticket-process-current"><b>Etapa atual</b> ${escapeHtml(atual.rotulo)} · ${escapeHtml(formatarDataEtapa(atual.data))}</span>`);
       if (proxima) partes.push(`<span class="ticket-process-next"><b>Próxima</b> ${escapeHtml(proxima.rotulo)} · sem data</span>`);
-      return `<div class="ticket-process-summary mt-2" aria-label="Situação do pedido">${partes.join("")}</div>`;
+      return `<div class="ticket-process-summary mt-2" aria-label="Situação do pedido">${partes.join("")}</div>${renderizarLinhaProcessoPedido(simpress)}`;
     }
 
     function renderizarLinhaProcessoPedido(simpress) {
@@ -3383,7 +3384,7 @@
           : concluida ? (posicao === ultimaComData ? "current" : "done") : "pending";
         const texto = concluida ? formatarDataEtapa(etapa.data) : etapa.coluna ? "Pendente" : "Não informado na planilha";
         const marcador = concluida ? (estado === "forecast" ? "◆" : "✓") : "○";
-        return `<li class="ticket-stage is-${estado}"><span class="ticket-stage-mark" aria-hidden="true">${marcador}</span><span class="ticket-stage-label">${escapeHtml(etapa.rotulo)}</span><span class="ticket-stage-date">${escapeHtml(texto)}</span></li>`;
+        return `<li class="ticket-stage is-${estado}"><span class="ticket-stage-mark" aria-hidden="true">${marcador}</span><span class="ticket-stage-text"><span class="ticket-stage-label">${escapeHtml(etapa.rotulo)}</span> - <span class="ticket-stage-date">${escapeHtml(texto)}</span></span></li>`;
       });
       return `<ol class="ticket-stages" aria-label="Etapas do pedido">${itens.join("")}</ol>`;
     }
@@ -3791,8 +3792,6 @@
                 ${chamadosCliente.some(Boolean) ? `<p class="mt-1 text-xs text-slate-300">Chamado do cliente: ${formatarListaChamados(chamadosCliente)}</p>` : ""}
                 <p class="mt-1 break-words text-xs text-slate-300">Descrição do produto: ${formatarListaChamados(simpress.descricoes_produto)}</p>
                 <p class="mt-1 text-xs text-slate-300">Cidade de entrega: ${formatarListaChamados(simpress.cidades_entrega)}</p>
-                <h6 class="mt-2 text-[10px] font-semibold uppercase tracking-wide text-slate-400">Etapas do pedido</h6>
-                ${renderizarLinhaProcessoPedido(simpress)}
                 ${mostrarEnderecoEntrega ? `<p class="mt-1 break-words text-xs text-slate-300">Endereço de entrega: ${formatarListaChamados(enderecosEntrega)}</p>` : ""}
               </section>
               <section class="space-y-2 rounded-lg border border-slate-800 bg-slate-950/50 p-2.5">
