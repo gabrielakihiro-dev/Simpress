@@ -363,6 +363,14 @@ html[data-theme="light"] .accessible-table-wrap::-webkit-scrollbar-thumb { borde
 html[data-theme="light"] .ticket-card-identifier > span,
 html[data-theme="light"] .ticket-card-meta b,
 html[data-theme="light"] .ticket-card-status b { color: #64748b; }
+html[data-theme="light"] .ticket-process-summary > span { background: #f8fafc; border-color: #cbd5e1; color: #334155; }
+html[data-theme="light"] .ticket-process-summary b { color: #64748b; }
+html[data-theme="light"] .ticket-process-summary > .ticket-process-forecast { color: #0e7490; background: #ecfeff; border-color: #67e8f9; }
+html[data-theme="light"] .ticket-process-summary > .ticket-process-forecast.is-late { color: #92400e; background: #fffbeb; border-color: #fcd34d; }
+html[data-theme="light"] .ticket-stage { border-color: #e2e8f0; }
+html[data-theme="light"] .ticket-stage.is-done { color: #047857; }
+html[data-theme="light"] .ticket-stage.is-current, html[data-theme="light"] .ticket-stage.is-forecast { color: #0e7490; background: #ecfeff; border-color: #67e8f9; }
+html[data-theme="light"] .ticket-stage.is-pending { color: #64748b; }
 html[data-theme="light"] .ticket-card-identifier > strong { color: #1e293b; }
 html[data-theme="light"] .ticket-oracle-description { border-color: #ddd6fe; background: #f8fafc; }
 html[data-theme="light"] .ticket-oracle-description > summary,

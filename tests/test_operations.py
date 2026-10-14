@@ -11,6 +11,7 @@ from unittest.mock import patch
 
 from fastapi import HTTPException
 import openpyxl
+from openpyxl.utils import column_index_from_string
 from openpyxl import Workbook
 from starlette.datastructures import UploadFile
 
@@ -273,6 +274,165 @@ class TicketImportRouteTests(unittest.TestCase):
                 self.assertEqual(len(by_serial[serial]["cidades_entrega"]), 1)
             self.assertEqual(by_serial["SN-ENTREGUE"]["previsoes_entrega"], ["15/09/2026"])
             self.assertEqual(by_serial["SN-CANCELADO"]["previsoes_entrega"], [])
+
+    def test_import_exposes_each_order_stage_date_separately_in_process_order(self):
+        with tempfile.TemporaryDirectory(dir=PROJECT_ROOT) as directory:
+            router = create_operations_router(
+                load_comparison_history=lambda: [],
+                comparison_history_for_display=lambda event: event,
+                ticket_report_path=lambda: Path(directory) / "tickets.json",
+                transaction_root=lambda: Path(directory),
+            )
+            simpress = self.workbook_bytes([
+                [
+                    "NumeroPedido", "NumeroSerie", "OrdemServico", "StatusAtual", "DataPedido",
+                    "Liberação do Pedido", "Verificado e Estoque", "PedidoEmSeparacao", "NotaFiscalEmitida", "ACaminho", "PrevisaoEntrega",
+                ],
+                [1, "SN-COMPLETO", 10, "Em transporte", "01/09/2026", "02/09/2026", "03/09/2026", "04/09/2026", "05/09/2026", "06/09/2026", "20/09/2026"],
+                [2, "SN-PARCIAL", 11, "Em separação", "01/09/2026", "02/09/2026", "03/09/2026", "", "", "", ""],
+            ])
+            oracle = self.workbook_bytes([["Solicitação", "ID OS Corporate", "Número de Série"], ["REQ-1", 10, "SN-COMPLETO"]])
+
+            report = route_handler(router, "/api/operacoes/chamados/importar", "POST")(
+                simpress_file=UploadFile(filename="pedidos.xlsx", file=BytesIO(simpress)),
+                oracle_file=UploadFile(filename="solicitacoes.xlsx", file=BytesIO(oracle)),
+            )
+
+            by_serial = {ticket["serie"]: ticket["simpress"] for ticket in report["chamados"]}
+            complete = by_serial["SN-COMPLETO"]
+            self.assertEqual(
+                [(stage["chave"], stage["data"]) for stage in complete["etapas_pedido"]],
+                [
+                    ("data_pedido", "01/09/2026"), ("liberacao_pedido", "02/09/2026"),
+                    ("verificado_estoque", "03/09/2026"), ("pedido_separacao", "04/09/2026"),
+                    ("nota_fiscal_emitida", "05/09/2026"), ("a_caminho", "06/09/2026"),
+                    ("previsao_entrega", "20/09/2026"),
+                    ("entregue", ""),
+                ],
+            )
+            self.assertEqual(complete["etapa_atual"]["rotulo"], "A caminho")
+            self.assertIsNone(complete["proxima_etapa"])
+            partial = by_serial["SN-PARCIAL"]
+            self.assertEqual(partial["etapa_atual"]["rotulo"], "Verificando estoque")
+            self.assertEqual(partial["proxima_etapa"]["rotulo"], "Pedido em separação")
+            self.assertEqual(
+                [stage["data"] for stage in partial["etapas_pedido"]],
+                ["01/09/2026", "02/09/2026", "03/09/2026", "", "", "", "", ""],
+            )
+
+    def test_import_reads_the_stock_check_stage_from_the_real_export_header(self):
+        with tempfile.TemporaryDirectory(dir=PROJECT_ROOT) as directory:
+            router = create_operations_router(
+                load_comparison_history=lambda: [],
+                comparison_history_for_display=lambda event: event,
+                ticket_report_path=lambda: Path(directory) / "tickets.json",
+                transaction_root=lambda: Path(directory),
+            )
+            simpress = self.workbook_bytes([
+                ["NumeroPedido", "NumeroSerie", "OrdemServico", "StatusAtual", "DataPedido", "LiberacaoDoPedido", "VerificandoEstoque"],
+                [1, "SN-REAL", 10, "Verificação de estoque", "08/10/2026", "08/10/2026", "09/10/2026"],
+            ])
+            oracle = self.workbook_bytes([["Solicitação", "ID OS Corporate", "Número de Série"], ["REQ-1", 10, "SN-REAL"]])
+
+            report = route_handler(router, "/api/operacoes/chamados/importar", "POST")(
+                simpress_file=UploadFile(filename="pedidos.xlsx", file=BytesIO(simpress)),
+                oracle_file=UploadFile(filename="solicitacoes.xlsx", file=BytesIO(oracle)),
+            )
+
+            stages = {stage["chave"]: stage["data"] for stage in report["chamados"][0]["simpress"]["etapas_pedido"]}
+            self.assertEqual(stages["verificado_estoque"], "09/10/2026")
+
+    def test_import_maps_each_stage_to_its_fixed_column_of_the_real_export(self):
+        with tempfile.TemporaryDirectory(dir=PROJECT_ROOT) as directory:
+            router = create_operations_router(
+                load_comparison_history=lambda: [],
+                comparison_history_for_display=lambda event: event,
+                ticket_report_path=lambda: Path(directory) / "tickets.json",
+                transaction_root=lambda: Path(directory),
+            )
+            stage_headers = {
+                "AR": "LiberacaoDoPedido", "AS": "VerificandoEstoque", "AT": "PedidoEmSeparacao",
+                "AU": "NotaFiscalEmitida", "AY": "ACaminho", "AZ": "PrevisaoEntrega", "BA": "Entregue",
+            }
+            fixed = {"A": "NumeroPedido", "C": "DataPedido", "O": "OrdemServico", "S": "NumeroSerie", "AQ": "StatusAtual"}
+            header = [""] * column_index_from_string("BA")
+            row = [""] * len(header)
+            for letter, name in {**fixed, **stage_headers}.items():
+                header[column_index_from_string(letter) - 1] = name
+            row[0], row[2], row[14], row[18], row[42] = 1, "01/10/2026", 10, "SN-REAL", "Entregue"
+            for offset, letter in enumerate(stage_headers):
+                row[column_index_from_string(letter) - 1] = f"{offset + 2:02d}/10/2026"
+            simpress = self.workbook_bytes([header, row])
+            oracle = self.workbook_bytes([["Solicitação", "ID OS Corporate", "Número de Série"], ["REQ-1", 10, "SN-REAL"]])
+
+            report = route_handler(router, "/api/operacoes/chamados/importar", "POST")(
+                simpress_file=UploadFile(filename="pedidos.xlsx", file=BytesIO(simpress)),
+                oracle_file=UploadFile(filename="solicitacoes.xlsx", file=BytesIO(oracle)),
+            )
+
+            stages = {stage["chave"]: stage["data"] for stage in report["chamados"][0]["simpress"]["etapas_pedido"]}
+            self.assertEqual(
+                stages,
+                {
+                    "data_pedido": "01/10/2026", "liberacao_pedido": "02/10/2026", "verificado_estoque": "03/10/2026",
+                    "pedido_separacao": "04/10/2026", "nota_fiscal_emitida": "05/10/2026", "a_caminho": "06/10/2026",
+                    "previsao_entrega": "07/10/2026", "entregue": "08/10/2026",
+                },
+            )
+
+    def test_import_reads_the_delivery_date_and_makes_delivered_the_current_stage(self):
+        with tempfile.TemporaryDirectory(dir=PROJECT_ROOT) as directory:
+            router = create_operations_router(
+                load_comparison_history=lambda: [],
+                comparison_history_for_display=lambda event: event,
+                ticket_report_path=lambda: Path(directory) / "tickets.json",
+                transaction_root=lambda: Path(directory),
+            )
+            simpress = self.workbook_bytes([
+                ["NumeroPedido", "NumeroSerie", "OrdemServico", "StatusAtual", "DataPedido", "NotaFiscalEmitida", "PrevisaoEntrega", "Entregue"],
+                [1, "SN-ENTREGUE", 10, "Pedido entregue", "20/09/2026", "24/09/2026", "28/09/2026", "27/09/2026"],
+            ])
+            oracle = self.workbook_bytes([["Solicitação", "ID OS Corporate", "Número de Série"], ["REQ-1", 10, "SN-ENTREGUE"]])
+
+            report = route_handler(router, "/api/operacoes/chamados/importar", "POST")(
+                simpress_file=UploadFile(filename="pedidos.xlsx", file=BytesIO(simpress)),
+                oracle_file=UploadFile(filename="solicitacoes.xlsx", file=BytesIO(oracle)),
+            )
+
+            simpress_data = report["chamados"][0]["simpress"]
+            stages = {stage["chave"]: stage["data"] for stage in simpress_data["etapas_pedido"]}
+            self.assertEqual(stages["entregue"], "27/09/2026")
+            self.assertEqual(simpress_data["etapa_atual"]["rotulo"], "Pedido entregue")
+
+    def test_import_without_stage_columns_still_works_and_marks_them_absent(self):
+        with tempfile.TemporaryDirectory(dir=PROJECT_ROOT) as directory:
+            router = create_operations_router(
+                load_comparison_history=lambda: [],
+                comparison_history_for_display=lambda event: event,
+                ticket_report_path=lambda: Path(directory) / "tickets.json",
+                transaction_root=lambda: Path(directory),
+            )
+            simpress = self.workbook_bytes([
+                ["NumeroPedido", "NumeroSerie", "OrdemServico", "StatusAtual", "DataPedido"],
+                [1, "SN-ANTIGO", 10, "Em andamento", "01/09/2026"],
+            ])
+            oracle = self.workbook_bytes([["Solicitação", "ID OS Corporate", "Número de Série"], ["REQ-1", 10, "SN-ANTIGO"]])
+
+            report = route_handler(router, "/api/operacoes/chamados/importar", "POST")(
+                simpress_file=UploadFile(filename="pedidos.xlsx", file=BytesIO(simpress)),
+                oracle_file=UploadFile(filename="solicitacoes.xlsx", file=BytesIO(oracle)),
+            )
+
+            simpress_data = report["chamados"][0]["simpress"]
+            columns = {stage["chave"]: stage["coluna_na_planilha"] for stage in simpress_data["etapas_pedido"]}
+            self.assertEqual(
+                columns,
+                {"data_pedido": True, "liberacao_pedido": False, "verificado_estoque": False,
+                 "pedido_separacao": False, "nota_fiscal_emitida": False, "a_caminho": False, "previsao_entrega": False,
+                 "entregue": False},
+            )
+            self.assertEqual(simpress_data["etapa_atual"]["rotulo"], "Data do pedido")
+            self.assertIsNone(simpress_data["proxima_etapa"])
 
     def test_import_keeps_the_sales_order_attached_to_the_latest_simpress_order(self):
         with tempfile.TemporaryDirectory(dir=PROJECT_ROOT) as directory:

@@ -1291,7 +1291,9 @@ test("shows Simpress product and city while gating delivery address by order sta
   assert.match(activeCard, /data-ticket-section="details"/);
   assert.match(activeCard, /Descrição do produto: Notebook HP ProBook/);
   assert.match(activeCard, /Cidade de entrega: Curitiba/);
-  assert.match(activeCard, /Previsão de entrega: 28\/09\/2026/);
+  assert.match(activeSummary, /Previsão de entrega<\/b> 28\/09\/2026/);
+  assert.match(activeCard, /ticket-stage is-forecast[^>]*>.*?Previsão de entrega.*?28\/09\/2026/s);
+  assert.match(activeCard, /ticket-stage is-pending[^>]*>.*?Liberação do pedido.*?Não informado na planilha/s);
   assert.match(activeCard, /Endereço de entrega: Rua das Flores, 123, Curitiba - PR/);
   assert.doesNotMatch(activeCard, /data-ticket-section="conference"|Conferência das relações|Revisar relação/);
   assert.match(activeSummary, /OS conferida/);
@@ -1317,7 +1319,7 @@ test("shows Simpress product and city while gating delivery address by order sta
   const deliveredCard = cards.split('data-ticket-serial="SN-ENTREGUE"')[1].split("</article>")[0];
   assert.match(deliveredCard, /Descrição do produto: Monitor HP/);
   assert.match(deliveredCard, /Cidade de entrega: Maringá/);
-  assert.match(deliveredCard, /Previsão de entrega: 15\/09\/2026/);
+  assert.match(deliveredCard, /ticket-stage is-forecast[^>]*>.*?Previsão de entrega.*?15\/09\/2026/s);
   assert.match(deliveredCard, /Chamado do cliente: INC-77/);
   assert.doesNotMatch(deliveredCard, /Endereço de entrega:/);
 });
