@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import hashlib
 import json
+import logging
 import math
 import os
 import posixpath
@@ -51,6 +52,7 @@ class WorkbookSafetyError(FileTransactionError):
 
 
 _PROCESS_LOCKS: Dict[str, threading.RLock] = {}
+logger = logging.getLogger(__name__)
 _PROCESS_LOCKS_GUARD = threading.Lock()
 _REPLACE_ATTEMPTS = 4
 _RETRY_DELAYS = (0.1, 0.25, 0.5)
@@ -360,9 +362,13 @@ def _recover_transaction(root: Path, transaction_dir: Path) -> None:
         return
     try:
         manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
-        if manifest.get("version") != 1 or not isinstance(manifest.get("entries"), list):
+        if not isinstance(manifest, dict) or manifest.get("version") != 1 or not isinstance(manifest.get("entries"), list):
             raise ValueError("versão ou lista de arquivos inválida")
-    except Exception as error:
+    except (OSError, ValueError) as error:
+        logger.warning(
+            "Falha ao ler registro de recuperação (arquivo=%s, erro=%s).",
+            manifest_path.name, type(error).__name__,
+        )
         raise TransactionConflictError(f"O registro de recuperação '{manifest_path.name}' está inválido: {error}.") from error
 
     if manifest.get("phase") == "committed":
@@ -538,7 +544,11 @@ class AtomicFileTransaction:
         if target.exists():
             try:
                 current = json.loads(target.read_text(encoding="utf-8"))
-            except Exception as error:
+            except (OSError, ValueError) as error:
+                logger.warning(
+                    "Falha ao ler JSON para atualização (arquivo=%s, erro=%s).",
+                    target.name, type(error).__name__,
+                )
                 raise FileTransactionError(f"Não foi possível ler '{target.name}' para atualizá-lo com segurança.") from error
         updated = updater(current)
         payload = json.dumps(updated, ensure_ascii=False, indent=2).encode("utf-8")

@@ -5,13 +5,17 @@ from __future__ import annotations
 from collections import Counter, OrderedDict
 from datetime import date, datetime
 import io
+import logging
 import re
 import unicodedata
 from typing import Any, Dict, Iterable, List, Mapping, Optional, Sequence, Tuple
 
 import openpyxl
 
-from core.xlsx_safety import validate_xlsx
+from core.xlsx_safety import WORKBOOK_READ_ERRORS, validate_xlsx
+
+
+logger = logging.getLogger(__name__)
 
 
 class TicketWorkbookError(ValueError):
@@ -317,7 +321,8 @@ def _source_table(
         return records, rows_without_serial
     except TicketWorkbookError:
         raise
-    except Exception as error:
+    except WORKBOOK_READ_ERRORS as error:
+        logger.warning("Falha ao ler tabela de chamados (papel=%s, erro=%s).", source_label, type(error).__name__)
         raise TicketWorkbookError(
             f"Não foi possível ler a planilha {source_label}. Confira se o arquivo está íntegro."
         ) from error
