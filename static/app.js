@@ -3335,13 +3335,58 @@
       return formatarListaChamados(items.sort(compararOrdensServicoDecrescente));
     }
 
-    function formatarPrevisoesEntrega(values) {
-      const items = Array.isArray(values) ? values.filter(Boolean) : [];
-      if (!items.length) return "Não informado";
-      return items.map(value => {
-        const parsed = dataAtualizacaoChamado(value);
-        return escapeHtml(parsed ? parsed.toLocaleDateString("pt-BR") : value);
-      }).join(", ");
+    function etapasProcessoPedido(simpress) {
+      const rotulos = [
+        ["data_pedido", "Data do pedido"], ["liberacao_pedido", "Liberação do pedido"],
+        ["verificado_estoque", "Verificando estoque"], ["pedido_separacao", "Pedido em separação"],
+        ["nota_fiscal_emitida", "Nota fiscal emitida"], ["a_caminho", "A caminho"], ["previsao_entrega", "Previsão de entrega"],
+        ["entregue", "Pedido entregue"],
+      ];
+      if (Array.isArray(simpress.etapas_pedido) && simpress.etapas_pedido.length) {
+        return simpress.etapas_pedido.map(etapa => ({ ...etapa, data: String(etapa.data || "").trim(), coluna: etapa.coluna_na_planilha !== false }));
+      }
+      // Versões antigas guardavam só a data do pedido e a previsão, em listas.
+      const primeiro = valores => (Array.isArray(valores) ? valores.filter(Boolean) : [])[0] || "";
+      return rotulos.map(([chave, rotulo]) => {
+        const data = chave === "data_pedido" ? primeiro(simpress.datas_pedido) : chave === "previsao_entrega" ? primeiro(simpress.previsoes_entrega) : "";
+        return { chave, rotulo, data, coluna: Boolean(data) };
+      });
+    }
+
+    function formatarDataEtapa(value) {
+      const parsed = dataAtualizacaoChamado(value);
+      return parsed ? parsed.toLocaleDateString("pt-BR") : String(value || "");
+    }
+
+    function renderizarResumoProcessoPedido(simpress) {
+      const etapas = etapasProcessoPedido(simpress);
+      if (!etapas.some(etapa => etapa.data)) return "";
+      const previsao = etapas.find(etapa => etapa.chave === "previsao_entrega" && etapa.data);
+      const eventos = etapas.filter(etapa => etapa.chave !== "previsao_entrega");
+      const atual = [...eventos].reverse().find(etapa => etapa.data);
+      const proxima = atual ? eventos.slice(eventos.indexOf(atual) + 1).find(etapa => etapa.coluna && !etapa.data) : null;
+      const previsaoData = previsao ? dataAtualizacaoChamado(previsao.data) : null;
+      const hoje = new Date(); hoje.setHours(0, 0, 0, 0);
+      const atrasada = Boolean(previsaoData && previsaoData < hoje && simpress.pedido_em_andamento);
+      const partes = [];
+      if (previsao) partes.push(`<span class="ticket-process-forecast${atrasada ? " is-late" : ""}"><b>Previsão de entrega</b> ${escapeHtml(formatarDataEtapa(previsao.data))}${atrasada ? " · prazo vencido" : ""}</span>`);
+      if (atual) partes.push(`<span class="ticket-process-current"><b>Etapa atual</b> ${escapeHtml(atual.rotulo)} · ${escapeHtml(formatarDataEtapa(atual.data))}</span>`);
+      if (proxima) partes.push(`<span class="ticket-process-next"><b>Próxima</b> ${escapeHtml(proxima.rotulo)} · sem data</span>`);
+      return `<div class="ticket-process-summary mt-2" aria-label="Situação do pedido">${partes.join("")}</div>${renderizarLinhaProcessoPedido(simpress)}`;
+    }
+
+    function renderizarLinhaProcessoPedido(simpress) {
+      const etapas = etapasProcessoPedido(simpress);
+      const ultimaComData = etapas.reduce((indice, etapa, posicao) => (etapa.chave !== "previsao_entrega" && etapa.data ? posicao : indice), -1);
+      const itens = etapas.map((etapa, posicao) => {
+        const concluida = Boolean(etapa.data);
+        const estado = etapa.chave === "previsao_entrega" ? (concluida ? "forecast" : "pending")
+          : concluida ? (posicao === ultimaComData ? "current" : "done") : "pending";
+        const texto = concluida ? formatarDataEtapa(etapa.data) : etapa.coluna ? "Pendente" : "Não informado na planilha";
+        const marcador = concluida ? (estado === "forecast" ? "◆" : "✓") : "○";
+        return `<li class="ticket-stage is-${estado}"><span class="ticket-stage-mark" aria-hidden="true">${marcador}</span><span class="ticket-stage-text"><span class="ticket-stage-label">${escapeHtml(etapa.rotulo)}</span> - <span class="ticket-stage-date">${escapeHtml(texto)}</span></span></li>`;
+      });
+      return `<ol class="ticket-stages" aria-label="Etapas do pedido">${itens.join("")}</ol>`;
     }
 
     function resumirDescricaoChamado(value, limit = 150) {
@@ -3680,7 +3725,6 @@
         const chamadosCliente = chamadosClienteInformados(simpress.chamados_cliente);
         const enderecosEntrega = Array.isArray(simpress.enderecos_entrega) ? simpress.enderecos_entrega : [];
         const mostrarEnderecoEntrega = simpress.pedido_em_andamento && enderecosEntrega.some(Boolean);
-        const previsoesEntrega = Array.isArray(simpress.previsoes_entrega) ? simpress.previsoes_entrega : [];
         const oracle = Array.isArray(record.oracle) ? record.oracle : [];
         const orderedOracle = [...oracle].sort((left, right) => compararOrdensServicoDecrescente(left.ordem_servico, right.ordem_servico));
         const currentOracle = orderedOracle[0] || {};
@@ -3724,6 +3768,7 @@
             <div class="ticket-card-identifier border border-cyan-400/20 bg-cyan-500/5"><span>OS Simpress</span><strong>${formatarOrdensServico(currentSimpressOrder ? [currentSimpressOrder] : [])}</strong></div>
             <div class="ticket-card-identifier border border-violet-400/20 bg-violet-500/5"><span>OS Oracle</span><strong>${escapeHtml(currentOracle.ordem_servico || "Não informado")}</strong></div>
           </div>
+          ${renderizarResumoProcessoPedido(simpress)}
           <div class="ticket-card-meta mt-2 flex flex-wrap items-center gap-x-3 gap-y-1 text-[11px] text-slate-300">
             <span><b>Pedido</b> ${formatarListaChamados(simpress.pedidos)}</span>
             ${ordensVenda.some(Boolean) ? `<span><b>OV</b> ${formatarListaChamados(ordensVenda)}</span>` : ""}
@@ -3747,7 +3792,6 @@
                 ${chamadosCliente.some(Boolean) ? `<p class="mt-1 text-xs text-slate-300">Chamado do cliente: ${formatarListaChamados(chamadosCliente)}</p>` : ""}
                 <p class="mt-1 break-words text-xs text-slate-300">Descrição do produto: ${formatarListaChamados(simpress.descricoes_produto)}</p>
                 <p class="mt-1 text-xs text-slate-300">Cidade de entrega: ${formatarListaChamados(simpress.cidades_entrega)}</p>
-                ${previsoesEntrega.some(Boolean) ? `<p class="mt-1 text-xs text-slate-300">Previsão de entrega: ${formatarPrevisoesEntrega(previsoesEntrega)}</p>` : ""}
                 ${mostrarEnderecoEntrega ? `<p class="mt-1 break-words text-xs text-slate-300">Endereço de entrega: ${formatarListaChamados(enderecosEntrega)}</p>` : ""}
               </section>
               <section class="space-y-2 rounded-lg border border-slate-800 bg-slate-950/50 p-2.5">
