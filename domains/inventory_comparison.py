@@ -690,6 +690,21 @@ def comparison_history_for_display(evento: Dict[str, Any]) -> Dict[str, Any]:
         event_view["arquivos_restaurados"] = display_history_files(restored_files)
     return event_view
 
+def _location_for_hostname_target(target: str) -> Optional[str]:
+    for prefix in sorted(SERIE_LOCAL_MAP, key=len, reverse=True):
+        if target.startswith(normalize_reference_value(prefix)):
+            return SERIE_LOCAL_MAP[prefix]
+    city_names = sorted(
+        ((normalize_reference_value(city), city) for city in set(SERIE_LOCAL_MAP.values())),
+        key=lambda item: len(item[0]),
+        reverse=True,
+    )
+    for normalized_city, city in city_names:
+        if normalized_city and target.startswith(normalized_city):
+            return city
+    return None
+
+
 def location_for_computer_name(computer_name: str) -> Optional[str]:
     name = str(computer_name or "").strip().upper()
     if not name.startswith("PRNOTE"):
@@ -699,23 +714,15 @@ def location_for_computer_name(computer_name: str) -> Optional[str]:
         backup_target = suffix[len("BACKUP"):]
         if not backup_target or not re.search(r"[A-Z]", backup_target):
             return "Curitiba"
-        for prefix in sorted(SERIE_LOCAL_MAP, key=len, reverse=True):
-            if backup_target.startswith(prefix):
-                return SERIE_LOCAL_MAP[prefix]
-        city_names = sorted(
-            ((normalize_reference_value(city), city) for city in set(SERIE_LOCAL_MAP.values())),
-            key=lambda item: len(item[0]),
-            reverse=True,
-        )
-        for normalized_city, city in city_names:
-            if backup_target.startswith(normalized_city):
-                return city
-        return None
+        return _location_for_hostname_target(backup_target)
     if suffix.startswith(CURITIBA_HOSTNAME_PREFIXES):
         return "Curitiba"
-    prefix_source = suffix[3:] if suffix.startswith("BKP") else suffix
+    if suffix.startswith("BKP"):
+        return _location_for_hostname_target(suffix[3:])
+    if suffix.startswith("BK"):
+        return _location_for_hostname_target(suffix[2:])
     for prefix in sorted(SERIE_LOCAL_MAP, key=len, reverse=True):
-        if prefix_source.startswith(prefix):
+        if suffix.startswith(prefix):
             return SERIE_LOCAL_MAP[prefix]
     return None
 
@@ -1098,6 +1105,8 @@ def compare_uploaded_workbooks(
             suffix = suffix[len("BACKUP"):]
         elif suffix.startswith("BKP"):
             suffix = suffix[3:]
+        elif suffix.startswith("BK"):
+            suffix = suffix[2:]
         series_code = next(
             (prefix for prefix in sorted(SERIE_LOCAL_MAP, key=len, reverse=True) if suffix.startswith(prefix)),
             suffix.rstrip("0123456789-_") or suffix,
