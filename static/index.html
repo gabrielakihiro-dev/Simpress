@@ -163,6 +163,7 @@
             <input
               type="text"
               id="input-serial"
+              aria-keyshortcuts="/ Control+K"
               role="combobox"
               aria-label="Série, apelido, modelo ou cidade do equipamento"
               aria-autocomplete="list"
@@ -526,6 +527,13 @@ Horário disponível para atendimento:</textarea>
           </button>
         </div>
       </div>
+    </div>
+
+    <div class="flex justify-end -mt-3 mb-5">
+      <button type="button" id="btn-historico-transferencias" onclick="abrirModalHistoricoTransferencias()" class="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-slate-800/80 hover:bg-slate-700 text-slate-200 border border-slate-700/70 text-xs font-semibold transition" title="Ver as planilhas de transferência já geradas">
+        <i data-lucide="history" class="w-3.5 h-3.5" aria-hidden="true"></i>
+        <span>Transferências geradas</span>
+      </button>
     </div>
 
     <!-- FORMULÁRIO DE TRANSFERÊNCIA (2 COLUNAS: RETIRADA & ENTREGA) -->
@@ -935,6 +943,8 @@ Horário disponível para atendimento:</textarea>
             type="button"
             id="btn-gerar-planilha"
             onclick="gerarPlanilhaExcel()"
+            aria-keyshortcuts="Control+Enter"
+            title="Gerar Planilha (Ctrl+Enter)"
             class="px-6 py-2.5 rounded-xl bg-gradient-to-r from-emerald-600 to-teal-500 hover:from-emerald-500 hover:to-teal-400 text-white font-bold text-xs sm:text-sm flex items-center space-x-2.5 shadow-glow-emerald transition-all transform hover:scale-[1.02] active:scale-[0.98]"
           >
             <i data-lucide="file-spreadsheet" class="w-4 h-4"></i>
@@ -1012,6 +1022,50 @@ Horário disponível para atendimento:</textarea>
             Fechar
           </button>
         </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ========================================== -->
+  <!-- MODAL: HISTÓRICO DE TRANSFERÊNCIAS GERADAS -->
+  <!-- ========================================== -->
+  <div id="modal-historico-transferencias" class="modal-overlay fixed inset-0 bg-slate-950/80 backdrop-blur-sm z-50 hidden flex items-center justify-center p-4">
+    <div class="bg-slate-900 border border-slate-700 rounded-2xl max-w-5xl w-full p-6 shadow-2xl relative flex flex-col max-h-[90vh]">
+      <div class="flex items-center justify-between pb-4 border-b border-slate-800">
+        <div class="flex items-center space-x-2.5">
+          <i data-lucide="history" class="w-5 h-5 text-brand-400" aria-hidden="true"></i>
+          <h3 class="text-base font-bold text-white">Transferências geradas</h3>
+        </div>
+        <button type="button" onclick="fecharModalHistoricoTransferencias()" class="text-slate-400 hover:text-white transition" aria-label="Fechar transferências geradas">
+          <i data-lucide="x" class="w-5 h-5" aria-hidden="true"></i>
+        </button>
+      </div>
+      <div class="pt-4 shrink-0">
+        <label for="filtro-historico-transferencias" class="block text-xs font-semibold text-slate-300 mb-1">Buscar por série, cidade, destinatário ou observação</label>
+        <input type="search" id="filtro-historico-transferencias" autocomplete="off" class="w-full px-3.5 py-2.5 rounded-lg glass-input text-sm text-slate-100 focus:outline-none" placeholder="Ex.: BRJ5512FGD ou Londrina" />
+        <p id="historico-transferencias-status" class="text-xs text-slate-400 mt-2" role="status" aria-live="polite"></p>
+      </div>
+      <div id="lista-historico-transferencias" class="overflow-y-auto flex-1 min-h-0 py-3" aria-label="Transferências geradas"></div>
+      <div class="pt-3 border-t border-slate-800 flex items-center justify-between gap-3 shrink-0">
+        <span class="text-[11px] text-slate-400">Guardado somente neste computador. "Duplicar destino" não altera o equipamento selecionado.</span>
+        <button type="button" onclick="fecharModalHistoricoTransferencias()" class="px-4 py-2 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-300 text-xs transition">Fechar</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- ========================================== -->
+  <!-- MODAL DE CONFIRMAÇÃO DE AÇÃO              -->
+  <!-- ========================================== -->
+  <div id="modal-confirmar-acao" class="modal-overlay fixed inset-0 bg-slate-950/80 backdrop-blur-sm z-50 hidden flex items-center justify-center p-4">
+    <div class="bg-slate-900 border border-slate-700 rounded-2xl max-w-md w-full p-6 shadow-2xl relative flex flex-col max-h-[90vh]">
+      <div class="flex items-center space-x-2.5 pb-4 border-b border-slate-800">
+        <i data-lucide="alert-triangle" class="w-5 h-5 text-amber-400" aria-hidden="true"></i>
+        <h3 id="titulo-confirmar-acao" class="text-base font-bold text-white">Confirmar ação</h3>
+      </div>
+      <p id="mensagem-confirmar-acao" class="py-4 text-sm leading-relaxed text-slate-300"></p>
+      <div class="pt-4 border-t border-slate-800 flex flex-wrap justify-end gap-2">
+        <button type="button" id="btn-confirmar-acao-cancelar" onclick="responderConfirmacaoAcao(false)" class="px-4 py-2 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-200 text-xs font-semibold transition">Cancelar</button>
+        <button type="button" id="btn-confirmar-acao-ok" onclick="responderConfirmacaoAcao(true)" class="px-4 py-2 rounded-lg bg-rose-700 hover:bg-rose-600 text-white text-xs font-bold transition">Confirmar</button>
       </div>
     </div>
   </div>
@@ -1582,5 +1636,7 @@ Horário disponível para atendimento:</textarea>
   <script src="/static/app.js"></script>
   <script src="/static/js/ui/sidebar-navigation.js"></script>
   <script src="/static/js/ui/ux-enhancements.js"></script>
+  <script src="/static/js/ui/transfer-history.js"></script>
+  <script src="/static/js/ui/data-panels.js"></script>
 </body>
 </html>

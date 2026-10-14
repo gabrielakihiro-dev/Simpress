@@ -2074,6 +2074,7 @@
         a.remove();
 
         showToast("Planilha Exportada com Sucesso!", "success");
+        emitirEventoInterface("simpress:transfer-generated", { payload });
 
       } catch (err) {
         console.error("Erro ao gerar planilha:", err);
@@ -2087,10 +2088,44 @@
     }
 
     // Reset Form for New Transfer
-    function resetarFormulario() {
+    // Accessible replacement for window.confirm; falls back to it when the dialog markup is absent.
+    let confirmacaoAcaoPendente = null;
+    function confirmarAcao({ titulo, mensagem, confirmar = "Confirmar", cancelar = "Cancelar" }) {
+      const modal = document.getElementById("modal-confirmar-acao");
+      const botaoConfirmar = modal?.querySelector?.("#btn-confirmar-acao-ok");
+      if (!botaoConfirmar) return Promise.resolve(window.confirm(mensagem));
+      if (confirmacaoAcaoPendente) return confirmacaoAcaoPendente.promise;
+      let resolver;
+      const promise = new Promise(resolve => { resolver = resolve; });
+      confirmacaoAcaoPendente = { promise, resolver };
+      document.getElementById("titulo-confirmar-acao").textContent = titulo;
+      document.getElementById("mensagem-confirmar-acao").textContent = mensagem;
+      botaoConfirmar.textContent = confirmar;
+      document.getElementById("btn-confirmar-acao-cancelar").textContent = cancelar;
+      abrirModalAcessivel("modal-confirmar-acao", "#btn-confirmar-acao-cancelar", "fecharConfirmacaoAcao");
+      return promise;
+    }
+
+    function responderConfirmacaoAcao(resposta) {
+      const pendente = confirmacaoAcaoPendente;
+      confirmacaoAcaoPendente = null;
+      fecharModalAcessivel("modal-confirmar-acao");
+      pendente?.resolver(resposta);
+    }
+
+    function fecharConfirmacaoAcao() {
+      responderConfirmacaoAcao(false);
+    }
+
+    async function resetarFormulario() {
       const query = document.getElementById("input-serial").value.trim();
       if ((transferDraftTracker.isDirty() || currentEquipamento || query)
-          && !window.confirm("Há dados preenchidos nesta transferência. Deseja descartar o rascunho e começar outra?")) {
+          && !(await confirmarAcao({
+            titulo: "Descartar esta transferência?",
+            mensagem: "Há dados preenchidos nesta transferência. Deseja descartar o rascunho e começar outra?",
+            confirmar: "Descartar e começar outra",
+            cancelar: "Continuar editando",
+          }))) {
         return;
       }
       transferDraftTracker.reset();
@@ -2128,6 +2163,18 @@
       showToast("Formulário limpo. Pronto para uma nova busca.", "info");
       ativarAbaTransferencia("home");
       document.getElementById("input-serial").focus();
+      emitirEventoInterface("simpress:form-reset");
+    }
+
+    // Optional hook for progressive enhancements; never affects the main flow.
+    function emitirEventoInterface(tipo, detalhe = {}) {
+      try {
+        if (typeof document.dispatchEvent === "function" && typeof window.CustomEvent === "function") {
+          document.dispatchEvent(new window.CustomEvent(tipo, { detail: detalhe }));
+        }
+      } catch (error) {
+        // Enhancements are optional.
+      }
     }
 
     // ==========================================
