@@ -218,8 +218,8 @@ html[data-theme="light"] .transfer-form-grid button.text-slate-400 { color: #334
   box-shadow: inset 0 -1px var(--ux-border-strong);
   letter-spacing: 0.01em;
 }
-/* Sticky headers need a bounded scroll box; keep it generous. */
-.comparison-desktop-table { max-height: min(70vh, 44rem); overflow: auto; }
+/* Only scroll horizontally here: the table grows with its rows and the modal's own scroll handles height. */
+.comparison-desktop-table { overflow-x: auto; }
 /* :where() keeps stripes below any status background already on a row. */
 :where(.accessible-table-wrap tbody tr:nth-child(even)) { background-color: var(--ux-table-stripe); }
 /* background-image overlays without replacing row/cell status colors. */
