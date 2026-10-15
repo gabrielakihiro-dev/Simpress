@@ -105,7 +105,7 @@ html[data-theme="light"] :focus-visible {
   border-radius: 0.75rem;
   background: rgba(15, 23, 42, 0.72);
   color: #cbd5e1;
-  transition: background-color var(--motion-duration, 160ms) ease, border-color var(--motion-duration, 160ms) ease, color var(--motion-duration, 160ms) ease;
+  transition: background-color var(--motion-fast) var(--motion-ease), border-color var(--motion-fast) var(--motion-ease), color var(--motion-fast) var(--motion-ease);
 }
 
 .theme-toggle-button:hover {
