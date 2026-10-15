@@ -125,3 +125,7 @@ __pycache__/
 **/.*.xlsx.*.tmp
 **/.*.xlsm.*.tmp
 **/.*.json.*.tmp
+
+# Local server logs and inventory update receipts are runtime state.
+/data/logs/
+/data/state/inventory_update_idempotency.json

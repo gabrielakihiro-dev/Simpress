@@ -11,6 +11,7 @@ import re
 import shutil
 import threading
 import time
+import traceback
 import unicodedata
 import uuid
 from copy import deepcopy
@@ -62,6 +63,7 @@ from core.config import (
     MAX_CONCURRENT_UPLOAD_REQUESTS,
     MAX_CONCURRENT_WORKBOOK_PARSERS,
     HISTORY_RETENTION_DAYS,
+    LOG_DIR,
     MODIFIED_APELIDOS_FILE,
     STATIC_DIR,
     STATE_DIR,
@@ -93,6 +95,7 @@ from routers.dashboard import DashboardServices, create_dashboard_router
 from routers.operations import MAX_TICKET_WORKBOOK_BYTES, create_operations_router
 from routers.local_setup import create_local_setup_router
 from domains.local_setup import validate_local_model
+from core.logging_setup import configure_logging
 from core.xlsx_safety import WORKBOOK_READ_ERRORS, XlsxLimitExceeded, XlsxPackageError, validate_xlsx
 
 from domains.inventory_comparison import (
@@ -1817,6 +1820,30 @@ app = FastAPI(
 app.add_middleware(InventoryUpdateMiddleware)
 
 
+# Sent on every response, early rejections included; HTML pages add their CSP in routers/frontend.py.
+SECURITY_RESPONSE_HEADERS = (
+    (b"x-content-type-options", b"nosniff"),
+    (b"referrer-policy", b"no-referrer"),
+    (b"x-frame-options", b"DENY"),
+    (b"cross-origin-opener-policy", b"same-origin"),
+    (b"cross-origin-resource-policy", b"same-origin"),
+)
+# Sec-Fetch-Site values for the app's own pages and URLs typed or bookmarked by the user.
+_ALLOWED_API_FETCH_SITES = frozenset({b"same-origin", b"none"})
+
+
+def _send_with_security_headers(send):
+    async def send_with_headers(message):
+        if message["type"] == "http.response.start":
+            headers = list(message.get("headers", []))
+            present = {name.lower() for name, _ in headers}
+            headers.extend(header for header in SECURITY_RESPONSE_HEADERS if header[0] not in present)
+            message = {**message, "headers": headers}
+        await send(message)
+
+    return send_with_headers
+
+
 class LocalRequestSafetyMiddleware:
     """Restrict local peers and authorities, cap uploads, and hide exceptions."""
 
@@ -1828,6 +1855,7 @@ class LocalRequestSafetyMiddleware:
             await self.app(scope, receive, send)
             return
 
+        send = _send_with_security_headers(send)
         if not is_direct_loopback_request(scope):
             response = JSONResponse(
                 status_code=403,
@@ -1868,6 +1896,18 @@ class LocalRequestSafetyMiddleware:
         if path.startswith("/api/") and origin_values and (
             len(origin_values) != 1
             or _parse_request_authority(origin_values[0], is_origin=True) != host_authority
+        ):
+            response = JSONResponse(
+                status_code=403,
+                content={"detail": "Origem não autorizada para a aplicação local."},
+            )
+            await response(scope, receive, send)
+            return
+
+        # GETs from another site carry no Origin; the browser's fetch metadata still names the caller.
+        fetch_sites = [value.lower() for key, value in raw_headers if key.lower() == b"sec-fetch-site"]
+        if path.startswith("/api/") and fetch_sites and (
+            len(fetch_sites) != 1 or fetch_sites[0] not in _ALLOWED_API_FETCH_SITES
         ):
             response = JSONResponse(
                 status_code=403,
@@ -1982,10 +2022,23 @@ class LocalRequestSafetyMiddleware:
                 return
             response = JSONResponse(status_code=503, content={"detail": str(error)})
             await response(scope, receive, send)
+        except FileBusyError as error:
+            # Routes without their own mapping (readiness during an import) answer like the others.
+            if response_started:
+                return
+            response = JSONResponse(
+                status_code=409,
+                content={"detail": str(error)},
+                headers={"Retry-After": "2"},
+            )
+            await response(scope, receive, send)
         except Exception as error:
-            print(
-                f"[ERRO] Falha interna na rota {path or '/'} "
-                f"({type(error).__name__})."
+            # Frames and source lines only: exception messages may quote workbook cells.
+            logger.error(
+                "Falha interna na rota %s (%s).\n%s",
+                path or "/",
+                type(error).__name__,
+                "".join(traceback.format_tb(error.__traceback__)).rstrip(),
             )
             if response_started:
                 return
@@ -2126,7 +2179,7 @@ def _backup_directory_from_history(event: Dict[str, Any]) -> Optional[Path]:
 
 
 def prune_expired_histories(now: Optional[datetime] = None) -> Dict[str, int]:
-    """Apply the approved 90-day policy and remove only verified, unreferenced backups."""
+    """Apply the HISTORY_RETENTION_DAYS policy and remove only verified, unreferenced backups."""
     current_time = (now or datetime.now().astimezone()).astimezone()
     cutoff = current_time - timedelta(days=HISTORY_RETENTION_DAYS)
     results = {"apelidos_removidos": 0, "comparacoes_removidas": 0, "backups_removidos": 0}
@@ -4077,6 +4130,7 @@ def read_root():
 
 if __name__ == "__main__":
     import uvicorn
+    log_file = configure_logging(LOG_DIR)
     try:
         equipment_source: Path | str | None = get_primary_equipment_file()
     except FileBusyError:
@@ -4085,4 +4139,5 @@ if __name__ == "__main__":
     print(f"[INFO] Modelo de transferência: {TEMPLATE_FILE} ({'OK' if TEMPLATE_FILE.is_file() else 'AUSENTE'})")
     print(f"[INFO] Fonte EquipamentosDetalhes: {equipment_source or 'AUSENTE'}")
     print(f"[INFO] Porta local: {SERVER_PORT}")
+    print(f"[INFO] Log local: {log_file}")
     uvicorn.run(app, host="127.0.0.1", port=SERVER_PORT, proxy_headers=False)
