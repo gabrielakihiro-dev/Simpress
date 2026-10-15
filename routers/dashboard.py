@@ -15,7 +15,7 @@ ATTENTION_FIELDS = (
     ("correspondencias_ambiguas", "Correspondências ambíguas"),
     ("series_sem_mapeamento", "Séries sem mapeamento"),
 )
-TOP_CITIES = 5
+TOP_CITIES = None  # lista todas as cidades; o painel limita a altura com rolagem
 ENDPOINT_ABSENCE_CATEGORIES = frozenset({"notebook", "macbook"})
 
 
@@ -51,6 +51,7 @@ def build_dashboard(services: DashboardServices) -> Dict[str, Any]:
     equipment = list(services.get_equipment())
     by_category: Counter = Counter()
     by_city: Counter = Counter()
+    by_city_category: Dict[str, Counter] = {}
     category_by_serial: Dict[str, str] = {}
     without_city = 0
     for item in equipment:
@@ -64,13 +65,22 @@ def build_dashboard(services: DashboardServices) -> Dict[str, Any]:
         city = str(item.get("retirada_cidade") or "").strip()
         if city:
             by_city[city] += 1
+            if category:
+                by_city_category.setdefault(category, Counter())[city] += 1
         else:
             without_city += 1
     categories: List[Dict[str, Any]] = [
         {"value": entry["value"], "label": entry["label"], "total": by_category.get(entry["value"], 0)}
         for entry in services.categories
     ]
-    ranked = sorted(by_city.items(), key=lambda pair: (-pair[1], pair[0].casefold()))
+    def top_cities(counter: Counter) -> List[Dict[str, Any]]:
+        ranked_cities = sorted(counter.items(), key=lambda pair: (-pair[1], pair[0].casefold()))
+        return [{"cidade": city, "total": total} for city, total in ranked_cities[:TOP_CITIES]]
+
+    cities_by_category = {
+        entry["value"]: top_cities(by_city_category.get(entry["value"], Counter()))
+        for entry in services.categories
+    }
     stats = services.get_stats() or {}
 
     latest = None
@@ -107,7 +117,8 @@ def build_dashboard(services: DashboardServices) -> Dict[str, Any]:
         "total_unidades": _count(stats.get("total_unidades")),
         "por_categoria": categories,
         "sem_categoria": by_category.get("", 0),
-        "cidades_principais": [{"cidade": city, "total": total} for city, total in ranked[:TOP_CITIES]],
+        "cidades_principais": top_cities(by_city),
+        "cidades_por_categoria": cities_by_category,
         "total_cidades": len(by_city),
         "sem_cidade": without_city,
         "ultima_atualizacao": stats.get("ultima_atualizacao") or "",

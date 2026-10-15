@@ -454,6 +454,11 @@
     }
   }
 
+  // Home dashboard shortcut: opens the saved result and scrolls to the section named by `secao`.
+  function abrirResultadoHistoricoComparacao(eventoId, secao, botao) {
+    return consultarHistoricoComparacao(eventoId, botao, { section: secao });
+  }
+
   async function excluirHistoricoComparacao(evento, botao) {
     const dataHora = formatarHorarioHistorico(evento.horario);
     if (!(await app.confirmarAcao({
@@ -488,5 +493,6 @@
     carregarContagemHistoricoComparacoes, fecharEvolucaoAtualizacoes, abrirEvolucaoAtualizacoes,
     abrirModalHistoricoComparacoes, fecharModalHistoricoComparacoes, carregarHistoricoComparacoes,
     baixarHistoricoComparacoesExcel, exportarHistoricoComparacoesExcel, restaurarHistoricoComparacao,
+    abrirResultadoHistoricoComparacao,
   };
 });

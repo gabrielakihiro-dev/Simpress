@@ -640,7 +640,17 @@
 
   function navegarParaLinhaComparacao(target) {
     const content = document.getElementById("comparacao-planilhas-conteudo");
-    if (!content || !target?.category) return;
+    if (!content) return;
+    if (target?.section) {
+      const group = [...content.querySelectorAll("[data-history-filter-group]")]
+        .find(candidate => candidate.dataset.historyFilterGroup === target.section && candidate.getClientRects().length > 0);
+      if (!group) return;
+      const reduced = window.matchMedia?.("(prefers-reduced-motion: reduce)").matches;
+      group.scrollIntoView({ behavior: reduced ? "auto" : "smooth", block: "start" });
+      motion?.reveal(group);
+      return;
+    }
+    if (!target?.category) return;
     const visibleRows = [...content.querySelectorAll("tr[data-comparison-category], .comparison-mobile-card[data-comparison-category]")]
       .filter(row => row.getClientRects().length > 0 && row.dataset.comparisonCategory === target.category);
     let row = target.itemId

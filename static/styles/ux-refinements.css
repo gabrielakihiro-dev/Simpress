@@ -363,6 +363,17 @@ html[data-ux-density="compact"] .comparison-desktop-table td {
 .ux-home-panel[hidden] { display: none; }
 .ux-home-title { margin: 0 0 var(--ux-space-4); color: var(--ux-text); font-size: 1.05rem; font-weight: 700; }
 .ux-home-subtitle { margin: 0 0 var(--ux-space-3); color: var(--ux-text-muted); font-size: 0.78rem; font-weight: 700; text-transform: uppercase; letter-spacing: 0.04em; }
+.ux-city-head { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: var(--ux-space-2); margin-bottom: var(--ux-space-3); }
+.ux-city-head .ux-home-subtitle { margin: 0; }
+.ux-city-filter {
+  padding: 0.25rem 0.5rem;
+  border: 1px solid var(--ux-border, #334155);
+  border-radius: 0.5rem;
+  background: transparent;
+  color: var(--ux-text);
+  font-size: 0.8rem;
+}
+.ux-city-filter option { color: #0f172a; background: #fff; }
 .ux-home-empty, .ux-home-note { margin: 0; color: var(--ux-text-muted); font-size: 0.85rem; }
 .ux-home-note--ok { color: var(--ux-success-fg); }
 .ux-stat-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(8.5rem, 1fr)); gap: var(--ux-space-3); }
@@ -390,3 +401,19 @@ html[data-ux-density="compact"] .comparison-desktop-table td {
   .ux-bar-row { grid-template-columns: minmax(4rem, 7rem) 1fr 2.5rem; }
 }
 .ux-home-note + .ux-attention { margin-top: var(--ux-space-3); }
+
+/* Ranking de cidades: todas as cidades, em linhas compactas com rolagem própria. */
+.ux-city-list { max-height: 15rem; overflow-y: auto; padding-right: 0.35rem; scrollbar-width: thin; scrollbar-color: #475569 transparent; }
+.ux-city-list .ux-bars { gap: 0.2rem; }
+.ux-city-list .ux-bar-row { font-size: 0.78rem; gap: var(--ux-space-2); line-height: 1.2; }
+.ux-city-list .ux-bar { height: 0.4rem; }
+
+/* Linhas de atenção clicáveis: levam à seção correspondente no resultado da última atualização. */
+.ux-attention-row:has(.ux-attention-row-button) { padding: 0; }
+.ux-attention-row-button {
+  display: flex; justify-content: space-between; gap: var(--ux-space-3); width: 100%;
+  padding: 0.35rem 0.6rem; border: 0; border-radius: inherit; background: transparent;
+  color: inherit; font: inherit; text-align: left; cursor: pointer;
+}
+.ux-attention-row-button:hover { background: rgba(250, 204, 21, 0.12); }
+.ux-attention-row-button:focus-visible { outline: 2px solid var(--ux-accent); outline-offset: 2px; }
