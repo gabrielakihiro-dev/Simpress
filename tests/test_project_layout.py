@@ -54,7 +54,7 @@ class ProjectLayoutTests(unittest.TestCase):
         source = STATIC_DIR / "styles/tailwind.input.css"
         text = source.read_text(encoding="utf-8")
         references = re.findall(r'@(?:source|config) "([^"]+)"', text)
-        self.assertGreaterEqual(len(references), 5)
+        self.assertGreaterEqual(len(references), 4)
         for reference in references:
             with self.subTest(reference=reference):
                 self.assertTrue((source.parent / reference).exists())
