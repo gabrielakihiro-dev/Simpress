@@ -25,11 +25,11 @@
   }
 
   // No geometry reads, forced reflow, per-frame JS, or permanent compositor hints.
-  function animate(element, keyframes, time = duration.normal, complete = () => {}) {
+  function animate(element, keyframes, time = duration.normal, complete = () => {}, delay = 0) {
     if (!element) { complete(); return; }
     cancel(element);
     if (preference?.matches || typeof element.animate !== "function") { complete(); return; }
-    const animation = element.animate(keyframes, { duration: time, easing, fill: "both" });
+    const animation = element.animate(keyframes, { duration: time, easing, fill: "both", delay });
     const entry = { animation, finish };
     running.set(element, entry);
     function finish() {
@@ -53,6 +53,13 @@
 
   function reveal(element, preset = "content") {
     animate(element, frames[preset] || frames.content);
+  }
+
+  // Short cascade for a freshly rendered group; items past the cap appear with the last one.
+  function stagger(elements, preset = "content", { step = 30, max = 6 } = {}) {
+    Array.from(elements || []).forEach((element, index) => {
+      animate(element, frames[preset] || frames.content, duration.normal, undefined, Math.min(index, max - 1) * step);
+    });
   }
 
   function openOverlay(overlay) {
@@ -142,5 +149,5 @@
     });
   }
 
-  return Object.freeze({ duration, reveal, openOverlay, closeOverlay, dismiss, startLoading, installFeedback });
+  return Object.freeze({ duration, reveal, stagger, openOverlay, closeOverlay, dismiss, startLoading, installFeedback });
 });

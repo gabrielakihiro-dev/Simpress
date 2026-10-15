@@ -125,6 +125,19 @@ test("rapid route switches cancel previous entrances and use only transform and 
   assert.equal(latest.cancelled, true);
 });
 
+test("stagger cascades a capped delay and skips motion when reduced", () => {
+  const { motion } = harness();
+  const items = Array.from({ length: 8 }, () => new Element());
+  motion.stagger(items, "content", { step: 30, max: 6 });
+  assert.deepEqual(items.map(item => item.animations[0].options.delay), [0, 30, 60, 90, 120, 150, 150, 150]);
+  items[0].animations[0].frames.forEach(frame => assert.deepEqual(Object.keys(frame).sort(), ["opacity", "transform"]));
+
+  const reduced = harness(true);
+  const still = [new Element(), new Element()];
+  reduced.motion.stagger(still);
+  assert.deepEqual(still.map(item => item.animations.length), [0, 0]);
+});
+
 test("drawer uses a horizontal transform preset", () => {
   const { motion } = harness();
   const drawer = overlay();
