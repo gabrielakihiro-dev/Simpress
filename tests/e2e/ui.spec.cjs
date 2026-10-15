@@ -170,6 +170,23 @@ test("failed search restores the controls and exposes a recoverable error", asyn
   await expect(search).toBeEnabled();
 });
 
+test("delete confirmation opens above the history dialog and cancelling keeps the record", async ({ page }) => {
+  await openAnalysisMenu(page);
+  await page.locator("#btn-historico-comparacoes").click();
+  const history = page.locator("#modal-historico-comparacoes");
+  const deleteButton = history.getByRole("button", { name: /^Excluir atualização de/ }).first();
+  await deleteButton.click();
+  const confirmation = page.getByRole("dialog", { name: "Excluir atualização?" });
+  await expect(confirmation).toBeVisible();
+  const zIndex = selector => page.locator(selector).evaluate(element => Number(getComputedStyle(element).zIndex));
+  expect(await zIndex("#modal-confirmar-acao")).toBeGreaterThan(await zIndex("#modal-historico-comparacoes"));
+  await expect(page.locator("#btn-confirmar-acao-ok")).toHaveAttribute("data-variant", "danger");
+  await confirmation.getByRole("button", { name: "Cancelar" }).click();
+  await expect(page.locator("#modal-confirmar-acao")).toBeHidden();
+  await expect(history).toBeVisible();
+  await expect(deleteButton).toBeFocused();
+});
+
 test("modal traps keyboard focus, restores it on Escape, and passes axe", async ({ page }, testInfo) => {
   test.setTimeout(45_000);
   await openFixtureComparison(page);

@@ -30,7 +30,7 @@
   const RECENT_UNITS_KEY = "simpress:recent-units";
   const RECENT_OBS_KEY = "simpress:recent-obs";
   const RECENT_LIMIT = 5;
-  const COPY_SELECTOR = '[onclick*="copiar"], [data-copy-field], .ticket-template-copy';
+  const COPY_SELECTOR = '[data-on-click^="copiar"], [data-copy-field], .ticket-template-copy';
   const COPY_STATES = Object.freeze({ success: "copied", warning: "warning", error: "error" });
   const COPY_MATCH_WINDOW_MS = 2500;
   const COPY_FEEDBACK_MS = 1800;
@@ -111,8 +111,8 @@
   function isCopyTrigger(element) {
     if (!element || typeof element.getAttribute !== "function") return false;
     if (String(element.tagName || "").toUpperCase() !== "BUTTON") return false;
-    const handler = element.getAttribute("onclick") || "";
-    return /\bcopiar[A-Z]\w*\s*\(/.test(handler)
+    const action = element.getAttribute("data-on-click") || "";
+    return /^copiar[A-Z]\w*$/.test(action)
       || element.hasAttribute?.("data-copy-field") === true
       || element.classList?.contains?.("ticket-template-copy") === true;
   }

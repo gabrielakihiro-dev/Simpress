@@ -27,6 +27,21 @@
     return style.visibility !== "hidden" && style.display !== "none";
   }
 
+  function stackLevel(modal) {
+    const inline = Number(modal.style?.zIndex);
+    if (inline) return inline;
+    if (typeof window.getComputedStyle !== "function") return 0;
+    return Number(window.getComputedStyle(modal).zIndex) || 0;
+  }
+
+  // Every overlay shares one z-index in CSS, so DOM order would decide which one is on top.
+  // Raise the newly opened dialog above the ones already open, whatever its position in the page.
+  function raiseAbove(modal, openModals) {
+    if (!modal.style) return;
+    const highest = openModals.filter(item => item !== modal).reduce((top, item) => Math.max(top, stackLevel(item)), 0);
+    modal.style.zIndex = highest ? String(highest + 1) : "";
+  }
+
   function open(modalId, initialFocusSelector, closeFunction) {
     const modal = document.getElementById(modalId);
     if (!modal) return;
@@ -40,6 +55,7 @@
     }
 
     if (!returnFocus.has(modal)) returnFocus.set(modal, document.activeElement);
+    raiseAbove(modal, openModals);
     modal.classList.remove("hidden");
     modal.inert = false;
     modal.removeAttribute("aria-hidden");
@@ -72,8 +88,12 @@
   function close(modalId) {
     const modal = document.getElementById(modalId);
     if (!modal || modal.classList.contains("hidden") || modal.dataset.motionClosing === "true") return;
-    if (motion) motion.closeOverlay(modal, () => modal.classList.add("hidden"));
-    else modal.classList.add("hidden");
+    const hide = () => {
+      modal.classList.add("hidden");
+      if (modal.style) modal.style.zIndex = "";
+    };
+    if (motion) motion.closeOverlay(modal, hide);
+    else hide();
 
     const previousFocus = returnFocus.get(modal);
     returnFocus.delete(modal);

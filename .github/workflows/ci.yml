@@ -40,7 +40,7 @@ jobs:
       - name: Run isolated Python tests
         run: python -B tests/run_tests.py
       - name: Run browser workflow tests
-        run: node --test tests/frontend/test_transfer_workflows.cjs tests/frontend/test_inventory_ui_flows.cjs tests/frontend/test_history_annotation_retries.cjs tests/frontend/test_history_annotations.cjs tests/frontend/test_annotation_version_ui.cjs tests/frontend/test_form_draft_guard.cjs tests/frontend/test_catalog_search_utils.cjs tests/frontend/test_ui_motion.cjs tests/frontend/test_auth_session.cjs tests/frontend/test_dom_utils.cjs
+        run: node --test tests/frontend/test_transfer_workflows.cjs tests/frontend/test_inventory_ui_flows.cjs tests/frontend/test_history_annotation_retries.cjs tests/frontend/test_history_annotations.cjs tests/frontend/test_annotation_version_ui.cjs tests/frontend/test_form_draft_guard.cjs tests/frontend/test_catalog_search_utils.cjs tests/frontend/test_ui_motion.cjs tests/frontend/test_auth_session.cjs tests/frontend/test_dom_utils.cjs tests/frontend/test_lucide_subset.cjs tests/frontend/test_action_dispatcher.cjs
       - name: Check JavaScript syntax
         run: |
           node --check static/app.js
@@ -55,12 +55,14 @@ jobs:
           node --check static/js/ui/ui-motion.js
           node --check static/js/ui/ui-notifications.js
           node --check static/js/ui/sidebar-navigation.js
+          node --check static/js/ui/action-dispatcher.js
           node --check playwright.config.cjs
           node --check tests/e2e/ui.spec.cjs
           node --check tests/e2e/ticket-requests.spec.cjs
           node --check tests/e2e/auth-local.cjs
           node --check config/tailwind.config.cjs
           node --check scripts/build/copy_ui_assets.cjs
+          node --check scripts/build/lucide-subset.cjs
       - name: Check Python syntax
         run: python -m compileall -q core/config.py main.py core/integrity.py core/openpyxl_compat.py core/xlsx_safety.py domains routers persistence security scripts tests/support/serve_ui_motion_preview.py
       - name: Run gradual static type checks
