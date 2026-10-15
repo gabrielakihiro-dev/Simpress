@@ -73,24 +73,6 @@ class BootstrapEnvironmentTests(unittest.TestCase):
                 report=Mock(),
             )
 
-    def test_postgres_mode_installs_optional_manifest(self):
-        (self.project_root / "requirements-postgres.txt").write_text(
-            "-r requirements.txt\npsycopg[binary]==3.3.6\n",
-            encoding="utf-8",
-        )
-        self.create_virtual_environment(self.project_root / ".venv")
-        command_runner = Mock(return_value=SimpleNamespace(returncode=0))
-
-        ensure_environment(
-            self.project_root,
-            postgres_pilot=True,
-            python_version=(3, 14, 7),
-            command_runner=command_runner,
-            report=Mock(),
-        )
-
-        command = command_runner.call_args.args[0]
-        self.assertEqual(command[-1], str(self.project_root / "requirements-postgres.txt"))
 
     def test_does_not_write_install_marker_when_pip_fails(self):
         self.create_virtual_environment(self.project_root / ".venv")

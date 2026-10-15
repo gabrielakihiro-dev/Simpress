@@ -340,7 +340,7 @@
         renderPanel(data);
         renderBadge(divergenceTotal(data.ultima_comparacao));
       } catch (error) {
-        // The dashboard is optional (e.g. unavailable in Postgres mode); never disturb the main flow.
+        // The dashboard is optional; never disturb the main flow.
         if (serial === requestSerial) { if (panel) panel.hidden = true; renderBadge(0); }
         win.console?.warn?.("Painel indisponível:", error?.message || error);
       }

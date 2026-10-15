@@ -85,10 +85,9 @@ class Handler(BaseHTTPRequestHandler):
     def do_GET(self):
         url = urlsplit(self.path)
         path = unquote(url.path)
-        if path == "/" or path == "/login" or path.startswith("/static/"):
+        if path == "/" or path.startswith("/static/"):
             relative_path = (
                 "index.html" if path == "/"
-                else "pages/login.html" if path == "/login"
                 else path.removeprefix("/static/")
             )
             target = (STATIC / relative_path).resolve()
@@ -96,14 +95,8 @@ class Handler(BaseHTTPRequestHandler):
                 self.send({"detail": "Arquivo não encontrado"}, 404)
                 return
             payload = versioned_html(STATIC).encode("utf-8") if path == "/" else target.read_bytes()
-            content_type = (
-                "text/html; charset=utf-8"
-                if path == "/login"
-                else mimetypes.guess_type(target.name)[0] or "application/octet-stream"
-            )
+            content_type = mimetypes.guess_type(target.name)[0] or "application/octet-stream"
             self.send(payload, content_type=content_type)
-        elif path == "/api/auth/session":
-            self.send({"enabled": False, "authenticated": False})
         elif path == "/api/stats":
             self.send({"total_equipamentos": 1, "total_unidades": 0, "exportacao_disponivel": False})
         elif path == "/api/prontidao":

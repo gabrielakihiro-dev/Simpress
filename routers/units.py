@@ -72,7 +72,6 @@ class UnitRouteServices:
     local_json_corruption_error: Callable[[str], Exception]
     load_database: Callable[..., Any]
     publish_database_state: Callable[[Dict[str, Any]], None]
-    save_postgres_unit: Optional[Callable[[UnidadePayload], Optional[Dict[str, Any]]]] = None
 
 
 def create_units_router(services: UnitRouteServices):
@@ -87,10 +86,6 @@ def create_units_router(services: UnitRouteServices):
     @router.post("/api/unidade/salvar")
     def salvar_unidade(payload: UnidadePayload):
         """Salva ou edita uma regional/filial SEBRAE e persiste no catálogo."""
-        if services.save_postgres_unit is not None:
-            result = services.save_postgres_unit(payload)
-            if result is not None:
-                return result
         cidade = payload.cidade.strip()
         endereco = payload.endereco.strip()
         uf = (payload.uf.strip() if payload.uf else "PR").upper()

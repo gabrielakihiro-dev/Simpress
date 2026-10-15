@@ -6,15 +6,12 @@ import tempfile
 import threading
 import unittest
 from pathlib import Path
-from types import SimpleNamespace
 from unittest.mock import patch
 
 from fastapi import HTTPException
 from starlette.datastructures import UploadFile
 
 from core.async_workers import await_worker_completion
-from persistence.boundary import idempotency_key
-from persistence.routes import update as update_pilot_inventory
 from routers.local_setup import create_local_setup_router
 
 
@@ -52,7 +49,6 @@ class WorkerConsumerCancellationTests(unittest.IsolatedAsyncioTestCase):
             return "synthetic validation rejection" if reject else None
 
         _, import_model = create_local_setup_router(
-            enabled=lambda: True,
             model_path=lambda _kind: target,
             transaction_root=lambda: root,
             backups_directory=lambda: root / "backups",
@@ -103,59 +99,3 @@ class WorkerConsumerCancellationTests(unittest.IsolatedAsyncioTestCase):
 
     async def test_model_worker_rolls_back_before_releasing_resources_after_cancellation(self):
         await self._assert_model_cancellation(reject=True)
-
-    async def _assert_pilot_cancellation(self, *, fail):
-        started = threading.Event()
-        release = threading.Event()
-        finished = threading.Event()
-        calls = []
-
-        async def read(upload, role):
-            return {"role": role, "bytes": await upload.read()}
-
-        def update(staged, key):
-            calls.append((staged, key, idempotency_key.get()))
-            started.set()
-            try:
-                if not release.wait(10):
-                    raise TimeoutError("the test did not release the pilot worker")
-                if fail:
-                    raise RuntimeError("synthetic pilot failure")
-                return {"sucesso": True}
-            finally:
-                finished.set()
-
-        endpoint = UploadFile(filename="endpoint.xlsx", file=io.BytesIO(b"synthetic endpoint"))
-        details = UploadFile(filename="simpress.xlsx", file=io.BytesIO(b"synthetic details"))
-        token = idempotency_key.set("phase4-synthetic-key")
-        try:
-            request = asyncio.create_task(update_pilot_inventory(SimpleNamespace(update=update), endpoint, details, read))
-            try:
-                self.assertTrue(await asyncio.wait_for(asyncio.to_thread(started.wait, 10), 12))
-                for _ in range(4):
-                    request.cancel()
-                    await asyncio.sleep(0)
-                    self.assertFalse(request.done())
-                    self.assertFalse(endpoint.file.closed)
-                    self.assertFalse(details.file.closed)
-                release.set()
-                with self.assertRaises(asyncio.CancelledError):
-                    await asyncio.wait_for(request, 12)
-            finally:
-                release.set()
-                await asyncio.wait_for(asyncio.gather(request, return_exceptions=True), 12)
-        finally:
-            idempotency_key.reset(token)
-        self.assertTrue(finished.is_set())
-        self.assertTrue(endpoint.file.closed)
-        self.assertTrue(details.file.closed)
-        self.assertEqual(calls, [({
-            "endpoint": {"role": "endpoint", "bytes": b"synthetic endpoint"},
-            "detalhes": {"role": "detalhes", "bytes": b"synthetic details"},
-        }, "phase4-synthetic-key", "phase4-synthetic-key")])
-
-    async def test_pilot_keeps_uploads_until_successful_worker_finishes_after_cancellation(self):
-        await self._assert_pilot_cancellation(fail=False)
-
-    async def test_pilot_keeps_uploads_until_failed_worker_finishes_after_cancellation(self):
-        await self._assert_pilot_cancellation(fail=True)

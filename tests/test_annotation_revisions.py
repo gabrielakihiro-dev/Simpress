@@ -204,7 +204,7 @@ class AnnotationRevisionTests(unittest.TestCase):
                 row["anotacao_id"] = "row"
             return view
         services = SimpleNamespace(
-            postgres_files=None, history_annotations_directory=lambda: self.shared,
+            history_annotations_directory=lambda: self.shared,
             local_annotation_outbox_directory=lambda: self.a,
             load_history_annotations=load_history_annotations,
             build_history_annotation_record=build_history_annotation_record,

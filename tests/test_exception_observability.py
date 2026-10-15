@@ -78,7 +78,6 @@ class ExceptionObservabilityTests(unittest.TestCase):
         with ExitStack() as stack:
             for name in ("INPUT_DIR", "ALIAS_HISTORY_FILE", "COMPARISON_HISTORY_FILE", "TICKET_REPORT_FILE"):
                 stack.enter_context(patch.object(main, name, self.root / name))
-            stack.enter_context(patch.object(main, "postgres_backend", return_value=None))
             stack.enter_context(patch.object(main, "load_modified_apelidos", return_value={}))
             stack.enter_context(patch.object(main, "load_custom_units", return_value=[]))
             stack.enter_context(patch.object(main, "get_transaction_recovery_block", return_value=None))
@@ -192,7 +191,7 @@ class ExceptionObservabilityTests(unittest.TestCase):
         target.write_bytes(b"previous model")
         admission = threading.BoundedSemaphore(1)
         _, endpoint = create_local_setup_router(
-            enabled=lambda: True, model_path=lambda kind: target,
+            model_path=lambda kind: target,
             transaction_root=lambda: self.root, backups_directory=lambda: self.root / "backups",
             max_upload_bytes=lambda: 1024, parser_admission=lambda: admission,
             export_dependency_paths=lambda: [], validate_export=lambda: None,

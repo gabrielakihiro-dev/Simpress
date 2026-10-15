@@ -20,7 +20,6 @@ echo   Projeto:      %PROJECT_DIR%
 echo ========================================================
 
 if not exist "%MAIN%" goto missing_main
-if not "%SIMPRESS_PERSISTENCE_BACKEND%"=="" if /i not "%SIMPRESS_PERSISTENCE_BACKEND%"=="files" if /i not "%SIMPRESS_PERSISTENCE_BACKEND%"=="postgres" goto invalid_persistence
 if not exist "%BOOTSTRAPPER%" goto missing_bootstrapper
 
 if exist "%PYTHON%" goto bootstrap_using_project_python
@@ -45,14 +44,9 @@ set "BOOTSTRAP_LAUNCHER=python"
 set "BOOTSTRAP_PREFIX="
 
 :bootstrap_environment
-if /i "%SIMPRESS_PERSISTENCE_BACKEND%"=="postgres" (
-    "%BOOTSTRAP_LAUNCHER%" %BOOTSTRAP_PREFIX% "%BOOTSTRAPPER%" --project-root "%PROJECT_ROOT%" --postgres-pilot
-) else (
-    "%BOOTSTRAP_LAUNCHER%" %BOOTSTRAP_PREFIX% "%BOOTSTRAPPER%" --project-root "%PROJECT_ROOT%"
-)
+"%BOOTSTRAP_LAUNCHER%" %BOOTSTRAP_PREFIX% "%BOOTSTRAPPER%" --project-root "%PROJECT_ROOT%"
 if errorlevel 1 goto bootstrap_failed
 if not exist "%PYTHON%" goto bootstrap_failed
-if /i "%SIMPRESS_PERSISTENCE_BACKEND%"=="postgres" goto postgres_pilot
 if not exist "%PORT_SELECTOR%" goto missing_port_selector
 if not exist "%MIGRATOR%" goto missing_migrator
 if not exist "%CLEANER%" goto missing_cleaner
@@ -85,18 +79,6 @@ if not "%SERVER_EXIT%"=="0" (
 
 pause
 exit /b %SERVER_EXIT%
-
-:postgres_pilot
-cd /d "%PROJECT_DIR%"
-"%PYTHON%" -B "%PROJECT_DIR%scripts\run_postgres_pilot.py"
-set "SERVER_EXIT=%ERRORLEVEL%"
-pause
-exit /b %SERVER_EXIT%
-
-:invalid_persistence
-echo ERRO: Backend de persistencia invalido. Use files ou postgres.
-pause
-exit /b 1
 
 :missing_python
 echo ERRO: Python 3.12 ou superior nao foi encontrado.

@@ -86,7 +86,7 @@ test("click targets forward to another element and unknown actions only warn", (
 
 test("pages no longer use inline event handler attributes", () => {
   const root = path.resolve(__dirname, "..", "..", "static");
-  for (const file of ["index.html", "pages/login.html", "app.js"]) {
+  for (const file of ["index.html", "app.js"]) {
     const source = fs.readFileSync(path.join(root, file), "utf8");
     assert.doesNotMatch(source, /\son[a-z]+\s*=\s*["']/, file);
   }

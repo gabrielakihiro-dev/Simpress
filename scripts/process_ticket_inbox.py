@@ -17,9 +17,6 @@ def main() -> int:
     from domains.ticket_inbox import AutomaticTicketInbox
     from starlette.datastructures import UploadFile
 
-    if application.PERSISTENCE_SETTINGS.backend == "postgres":
-        print("A entrada por pastas está disponível somente no modo local de arquivos.")
-        return 2
 
     endpoint = next((
         route.endpoint
