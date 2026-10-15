@@ -48,16 +48,16 @@ test("pending list honors the conditional lunch-break duration and keeps gate or
 test("copy triggers are recognized only on copy buttons", () => {
   const button = (onclick, extra = {}) => ({
     tagName: "BUTTON",
-    getAttribute: name => (name === "onclick" ? onclick : null),
+    getAttribute: name => (name === "data-on-click" ? onclick : null),
     hasAttribute: name => Boolean(extra[name]),
     classList: { contains: name => (extra.classes || []).includes(name) },
   });
-  assert.equal(ux.isCopyTrigger(button("copiarDadoLocalAtual('cep')")), true);
-  assert.equal(ux.isCopyTrigger(button("copiarSerieAtual()")), true);
+  assert.equal(ux.isCopyTrigger(button("copiarDadoLocalAtual")), true);
+  assert.equal(ux.isCopyTrigger(button("copiarSerieAtual")), true);
   assert.equal(ux.isCopyTrigger(button("", { "data-copy-field": true })), true);
   assert.equal(ux.isCopyTrigger(button("", { classes: ["ticket-template-copy"] })), true);
-  assert.equal(ux.isCopyTrigger(button("gerarPlanilhaExcel()")), false);
-  assert.equal(ux.isCopyTrigger({ ...button("copiarSerieAtual()"), tagName: "A" }), false);
+  assert.equal(ux.isCopyTrigger(button("gerarPlanilhaExcel")), false);
+  assert.equal(ux.isCopyTrigger({ ...button("copiarSerieAtual"), tagName: "A" }), false);
   assert.equal(ux.copyStateFor("success"), "copied");
   assert.equal(ux.copyStateFor("warning"), "warning");
   assert.equal(ux.copyStateFor("error"), "error");

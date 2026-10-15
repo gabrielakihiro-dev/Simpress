@@ -475,7 +475,7 @@ test("transfer tab shows the selected serial with its copy action in the upper f
 });
 
 test("clicking an empty transfer serial opens Home and focuses equipment search", () => {
-  assert.match(appHtml, /id="transfer-serial"[\s\S]*?onclick="abrirHomeParaPesquisarEquipamento\(\)"/);
+  assert.match(appHtml, /id="transfer-serial"[\s\S]*?data-on-click="abrirHomeParaPesquisarEquipamento"/);
   assert.match(appCss, /\.transfer-equipment-banner\[data-state="empty"\][^{]*\{[^}]*cursor:\s*pointer/s);
 
   const harness = createAppHarness(async () => {
@@ -1106,7 +1106,7 @@ test("copies the fixed billing CNPJ and installation CNPJ for the selected deliv
 test("starts with the delivery installation CNPJ copy button disabled", () => {
   assert.match(
     appHtml,
-    /<button\s+type="button"\s+id="btn-copiar-cnpj-instalacao-entrega"\s+disabled\s+onclick="copiarDadoEntrega\('instalacao'\)"/
+    /<button\s+type="button"\s+id="btn-copiar-cnpj-instalacao-entrega"\s+disabled\s+data-on-click="copiarDadoEntrega" data-args='\["instalacao"\]'/
   );
 });
 
@@ -1564,7 +1564,7 @@ test("keeps old ticket imports when the deletion confirmation is cancelled", asy
 
 test("groups secondary actions while keeping spreadsheet updates prominent", () => {
   assert.match(appHtml, /id="btn-atualizar-planilhas"[^>]*class="header-action-item header-action-item--primary/);
-  assert.match(appHtml, /onclick="abrirAcompanhamentoChamados\(\)"[\s\S]*?<details class="header-action-group" data-action-group="analysis">/);
+  assert.match(appHtml, /data-on-click="abrirAcompanhamentoChamados"[\s\S]*?<details class="header-action-group" data-action-group="analysis">/);
   assert.match(appHtml, /id="btn-exportar-equipamentos"[^>]*header-action-item--primary/);
   assert.match(appHtml, /<details class="header-action-group" data-action-group="analysis">/);
   assert.doesNotMatch(appHtml, /data-action-group="equipment"|Equipamentos e cadastros/);
@@ -1573,17 +1573,17 @@ test("groups secondary actions while keeping spreadsheet updates prominent", () 
   assert.match(analysisGroup, /<span class="sidebar-item-label">Históricos e Análises<\/span>/);
   assert.match(analysisGroup, /id="btn-atualizar-planilhas"[^>]*class="header-action-item header-action-item--primary/);
   assert.match(analysisGroup, /aria-label="Atualização, exportação, análises, históricos e catálogo de unidades"/);
-  assert.doesNotMatch(analysisGroup, /abrirCentralPendencias\(\)/);
-  assert.match(analysisGroup, /abrirEvolucaoAtualizacoes\(\)/);
-  assert.match(analysisGroup, /abrirModalHistoricoComparacoes\(\)/);
-  assert.match(analysisGroup, /abrirModalHistoricoApelidos\(\)/);
-  assert.match(analysisGroup, /abrirModalGerenciarUnidades\(\)/);
+  assert.doesNotMatch(analysisGroup, /data-on-click="abrirCentralPendencias"/);
+  assert.match(analysisGroup, /data-on-click="abrirEvolucaoAtualizacoes"/);
+  assert.match(analysisGroup, /data-on-click="abrirModalHistoricoComparacoes"/);
+  assert.match(analysisGroup, /data-on-click="abrirModalHistoricoApelidos"/);
+  assert.match(analysisGroup, /data-on-click="abrirModalGerenciarUnidades"/);
   assert.ok(analysisGroup.indexOf('id="btn-atualizar-planilhas"') < analysisGroup.indexOf('id="btn-historico-comparacoes"'));
   assert.ok(analysisGroup.indexOf('id="btn-atualizar-planilhas"') < analysisGroup.indexOf('id="btn-exportar-equipamentos"'));
   assert.ok(analysisGroup.indexOf('id="btn-exportar-equipamentos"') < analysisGroup.indexOf('id="btn-historico-comparacoes"'));
-  assert.ok(analysisGroup.indexOf('onclick="abrirEvolucaoAtualizacoes()"') < analysisGroup.indexOf('id="btn-historico-apelidos"'));
+  assert.ok(analysisGroup.indexOf('data-on-click="abrirEvolucaoAtualizacoes"') < analysisGroup.indexOf('id="btn-historico-apelidos"'));
   assert.ok(analysisGroup.indexOf('id="btn-historico-apelidos"') < analysisGroup.indexOf('label-catalogo-unidades'));
-  assert.match(appHtml, /onclick="abrirAcompanhamentoChamados\(\)"/);
+  assert.match(appHtml, /data-on-click="abrirAcompanhamentoChamados"/);
   assert.doesNotMatch(appHtml, /Acompanhamento de transportes/);
   assert.doesNotMatch(appScript, /\/api\/transferencias/);
 });

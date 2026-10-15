@@ -821,3 +821,9 @@
     @media (prefers-reduced-motion: reduce) {
       html { scroll-behavior: auto; }
     }
+
+/* Confirmation dialog: destructive actions stay red, reversible ones use the primary accent. */
+.confirm-action-ok[data-variant="danger"] { background-color: #be123c; }
+.confirm-action-ok[data-variant="danger"]:hover { background-color: #e11d48; }
+.confirm-action-ok[data-variant="primary"] { background-color: #0369a1; }
+.confirm-action-ok[data-variant="primary"]:hover { background-color: #0284c7; }

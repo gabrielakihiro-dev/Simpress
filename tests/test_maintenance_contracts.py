@@ -618,7 +618,7 @@ class MaintenanceContractTests(unittest.TestCase):
         self.assertIn('<link rel="icon" type="image/svg+xml" href="/static/favicon.svg">', html)
         self.assertIn('<link rel="stylesheet" href="/static/vendor/fonts.css">', html)
         self.assertIn('<link rel="stylesheet" href="/static/vendor/tailwind-4.3.3.css">', html)
-        self.assertIn('<script src="/static/vendor/lucide-1.48.0.min.js"></script>', html)
+        self.assertIn('<script src="/static/vendor/lucide-1.48.0-subset.js"></script>', html)
         self.assertIn('<link rel="stylesheet" href="/static/app.css">', html)
         self.assertIn('<script src="/static/js/shared/transfer-utils.js"></script>', html)
         self.assertIn('<script src="/static/app.js"></script>', html)
@@ -628,7 +628,7 @@ class MaintenanceContractTests(unittest.TestCase):
         self.assertTrue((app_config.STATIC_DIR / "js/shared/transfer-utils.js").is_file())
         self.assertTrue((app_config.STATIC_DIR / "vendor" / "fonts.css").is_file())
         self.assertTrue((app_config.STATIC_DIR / "vendor" / "tailwind-4.3.3.css").is_file())
-        self.assertTrue((app_config.STATIC_DIR / "vendor" / "lucide-1.48.0.min.js").is_file())
+        self.assertTrue((app_config.STATIC_DIR / "vendor" / "lucide-1.48.0-subset.js").is_file())
         favicon_file = app_config.STATIC_DIR / "favicon.svg"
         self.assertTrue(favicon_file.is_file())
         favicon_route = next(
