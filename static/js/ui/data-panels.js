@@ -264,7 +264,7 @@
       }
       const stats = el("div", "ux-stat-grid");
       stats.setAttribute("role", "list");
-      stats.append(stat("Equipamentos", data.total_equipamentos), stat("Unidades", data.total_unidades), stat("Cidades", data.total_cidades));
+      stats.append(stat("Equipamentos", data.total_equipamentos), stat("Unidades", data.total_unidades));
       (data.por_categoria || []).forEach(category => stats.append(stat(category.label, category.total)));
       stats.querySelectorAll(".ux-stat").forEach(item => item.setAttribute("role", "listitem"));
       host.append(stats);
