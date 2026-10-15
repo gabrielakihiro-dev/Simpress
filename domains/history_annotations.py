@@ -1,15 +1,21 @@
 """Small per-row annotation records kept outside the cloned repository."""
 
+import copy
 import hashlib
 import json
+import logging
 import os
 import re
 import tempfile
+import threading
 import uuid
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any, Callable, Dict, List, Optional, Iterable
 
+from core.integrity import FileBusyError
+
+logger = logging.getLogger(__name__)
 
 MAX_ANNOTATION_LENGTH = 2000
 _REVISION_ID = re.compile(r"(?:[a-f0-9]{32}|legacy-[a-f0-9]{64})\Z")
@@ -243,9 +249,15 @@ def resolve_history_annotations(records: Iterable[Dict[str, Any]]) -> Dict[tuple
 def load_effective_history_annotations(
     shared_directory: Path,
     outbox_directory: Path,
-    loader: Callable[[Path], List[Dict[str, Any]]],
+    loader: Callable[..., List[Dict[str, Any]]],
+    *,
+    strict: bool = False,
 ) -> Dict[tuple[str, str], Dict[str, Any]]:
     """Resolve shared and pending revisions together, without directory precedence."""
+    if strict:
+        return resolve_history_annotations([
+            *loader(shared_directory, strict=True), *loader(outbox_directory, strict=True),
+        ])
     return resolve_history_annotations([
         *loader(shared_directory), *loader(outbox_directory),
     ])
@@ -309,36 +321,88 @@ def sync_history_annotation(record, *, directory, outbox, transaction_root,
     return True
 
 
-def load_history_annotations(directory: Path) -> List[Dict[str, Any]]:
-    """Read valid annotation records; ignore incomplete OneDrive sync copies."""
+class AnnotationReadError(FileBusyError):
+    """An annotation file exists but could not be read (locked or a cloud placeholder)."""
+
+
+# Parsed records keyed by directory, then file name, valid while (size, mtime_ns) match.
+# ``None`` marks an invalid file so it is not reparsed on every listing.
+_RecordCache = Dict[str, tuple[int, int, Optional[Dict[str, Any]]]]
+_load_cache: Dict[str, _RecordCache] = {}
+_load_cache_lock = threading.Lock()
+
+
+def _validated_annotation_record(record: Any) -> Optional[Dict[str, Any]]:
+    if not isinstance(record, dict) or record.get("versao") not in (1, 2):
+        return None
+    if not isinstance(record.get("evento_id"), str) or not record["evento_id"].strip():
+        return None
+    if not isinstance(record.get("item_id"), str) or not record["item_id"].strip():
+        return None
+    if not isinstance(record.get("anotacao"), str) or len(record["anotacao"]) > MAX_ANNOTATION_LENGTH:
+        return None
+    try:
+        if record["versao"] == 2:
+            validated = build_history_annotation_record(**annotation_record_values(record))
+            if not same_annotation_revision(validated, record):
+                return None
+        else:
+            annotation_revision(record)
+    except (ValueError, TypeError, KeyError):
+        return None
+    return record
+
+
+def load_history_annotations(directory: Path, *, strict: bool = False) -> List[Dict[str, Any]]:
+    """Read valid annotation records, ignoring invalid ones (e.g. incomplete sync copies).
+
+    A file that exists but cannot be read (``OSError``, e.g. locked by OneDrive or
+    an offline placeholder) is not the same as an invalid one: with ``strict`` it
+    raises ``AnnotationReadError`` so callers that inherit notes can retry instead
+    of silently dropping a revision; otherwise it is logged and the rest is returned.
+    """
     root = Path(directory)
     if not root.is_dir():
         return []
 
+    cache_key = str(root.resolve(strict=False))
+    with _load_cache_lock:
+        previous = dict(_load_cache.get(cache_key, {}))
+    current: _RecordCache = {}
     records = []
+    unreadable = []
     for path in sorted(root.glob("*.json")):
-        if path.is_symlink() or not path.is_file():
-            continue
         try:
-            record = json.loads(path.read_text(encoding="utf-8"))
-        except (OSError, UnicodeError, json.JSONDecodeError):
-            continue
-        if not isinstance(record, dict) or record.get("versao") not in (1, 2):
-            continue
-        if not isinstance(record.get("evento_id"), str) or not record["evento_id"].strip():
-            continue
-        if not isinstance(record.get("item_id"), str) or not record["item_id"].strip():
-            continue
-        if not isinstance(record.get("anotacao"), str) or len(record["anotacao"]) > MAX_ANNOTATION_LENGTH:
-            continue
-        try:
-            if record["versao"] == 2:
-                validated = build_history_annotation_record(**annotation_record_values(record))
-                if not same_annotation_revision(validated, record):
-                    continue
+            if path.is_symlink() or not path.is_file():
+                continue
+            status = path.stat()
+            cached = previous.get(path.name)
+            if cached is not None and cached[:2] == (status.st_size, status.st_mtime_ns):
+                record = cached[2]
             else:
-                annotation_revision(record)
-        except (ValueError, TypeError, KeyError):
+                raw = path.read_bytes()
+                try:
+                    record = _validated_annotation_record(json.loads(raw.decode("utf-8")))
+                except (UnicodeError, json.JSONDecodeError):
+                    record = None
+        except FileNotFoundError:
+            continue  # Removed between listing and reading, e.g. by a concurrent flush.
+        except OSError as error:
+            logger.warning(
+                "Anotação ilegível ignorada nesta leitura (arquivo=%s, erro=%s).",
+                path.name, type(error).__name__,
+            )
+            unreadable.append(path.name)
             continue
-        records.append(record)
+        current[path.name] = (status.st_size, status.st_mtime_ns, record)
+        if record is not None:
+            records.append(copy.deepcopy(record))
+
+    with _load_cache_lock:
+        _load_cache[cache_key] = current
+    if strict and unreadable:
+        raise AnnotationReadError(
+            "Há anotações do histórico que não puderam ser lidas agora (arquivo em uso ou ainda "
+            "não baixado pelo OneDrive). Aguarde a sincronização e tente novamente."
+        )
     return records
