@@ -1,0 +1,51 @@
+/** Labels and date-times shown by the history views (Histórico de Planilhas, alias history, ticket tracking). */
+(function (root, factory) {
+  const api = factory();
+  if (typeof module === "object" && module.exports) module.exports = api;
+  else root.SimpressHistoryFormat = api;
+})(typeof window !== "undefined" ? window : globalThis, function createHistoryFormat() {
+  "use strict";
+
+  function formatarNomeFonteHistorico(valor) {
+    return String(valor || "")
+      .replace(/\b(?:na|no|da|do|à|ao|pela|pelo|a|o)\s*InvAll/gi, "no endpoint")
+      .replace(/InvAll/gi, "no endpoint")
+      .replace(/\b(?:em|de|da|do|na|no|a|à|pela|pelo)\s*EquipamentosDetalhes/gi, "na Simpress")
+      .replace(/EquipamentosDetalhes/gi, "na Simpress")
+      .replace(/(?<![\w.-])(?:no\s+)?Endpoint(?![\w.-])/gi, "no endpoint")
+      .replace(/\b(?:na\s+)?Simpress\b/gi, "na Simpress");
+  }
+
+  function formatarHorarioHistorico(horario) {
+    const text = String(horario || "").trim();
+    let data = null;
+    const brazilianDate = /^(\d{1,2})\/(\d{1,2})\/(\d{4})(?:[ T,]+(\d{1,2}):(\d{2})(?::(\d{2})(?:\.(\d{1,3}))?)?)?$/.exec(text);
+    if (brazilianDate) {
+      const [, day, month, year, hour = "0", minute = "0", second = "0", millisecond = "0"] = brazilianDate;
+      const parts = {
+        year: Number(year), month: Number(month), day: Number(day),
+        hour: Number(hour), minute: Number(minute), second: Number(second),
+        millisecond: Number(millisecond.padEnd(3, "0")),
+      };
+      const parsed = new Date(parts.year, parts.month - 1, parts.day, parts.hour, parts.minute, parts.second, parts.millisecond);
+      if (parsed.getFullYear() === parts.year && parsed.getMonth() === parts.month - 1 && parsed.getDate() === parts.day
+        && parsed.getHours() === parts.hour && parsed.getMinutes() === parts.minute && parsed.getSeconds() === parts.second) {
+        data = parsed;
+      }
+    }
+    const isoDateOnly = /^(\d{4})-(\d{2})-(\d{2})$/.exec(text);
+    if (!data && isoDateOnly) {
+      const [, year, month, day] = isoDateOnly;
+      const parsed = new Date(Number(year), Number(month) - 1, Number(day));
+      if (parsed.getFullYear() === Number(year) && parsed.getMonth() === Number(month) - 1 && parsed.getDate() === Number(day)) data = parsed;
+    }
+    if (!data) data = horario instanceof Date ? horario : new Date(horario);
+    if (Number.isNaN(data.getTime())) return horario || "Horário indisponível";
+    return new Intl.DateTimeFormat("pt-BR", {
+      dateStyle: "short",
+      timeStyle: "medium"
+    }).format(data);
+  }
+
+  return { formatarNomeFonteHistorico, formatarHorarioHistorico };
+});
