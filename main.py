@@ -62,6 +62,7 @@ from core.config import (
     MAX_CONCURRENT_UPLOAD_REQUESTS,
     MAX_CONCURRENT_WORKBOOK_PARSERS,
     HISTORY_RETENTION_DAYS,
+    LOG_DIR,
     MODIFIED_APELIDOS_FILE,
     STATIC_DIR,
     STATE_DIR,
@@ -93,6 +94,7 @@ from routers.dashboard import DashboardServices, create_dashboard_router
 from routers.operations import MAX_TICKET_WORKBOOK_BYTES, create_operations_router
 from routers.local_setup import create_local_setup_router
 from domains.local_setup import validate_local_model
+from core.logging_setup import configure_logging
 from core.xlsx_safety import WORKBOOK_READ_ERRORS, XlsxLimitExceeded, XlsxPackageError, validate_xlsx
 
 from domains.inventory_comparison import (
@@ -1292,7 +1294,7 @@ def _backup_directory_from_history(event: Dict[str, Any]) -> Optional[Path]:
 
 
 def prune_expired_histories(now: Optional[datetime] = None) -> Dict[str, int]:
-    """Apply the approved 90-day policy and remove only verified, unreferenced backups."""
+    """Apply the HISTORY_RETENTION_DAYS policy and remove only verified, unreferenced backups."""
     current_time = (now or datetime.now().astimezone()).astimezone()
     cutoff = current_time - timedelta(days=HISTORY_RETENTION_DAYS)
     results = {"apelidos_removidos": 0, "comparacoes_removidas": 0, "backups_removidos": 0}
@@ -3243,6 +3245,7 @@ def read_root():
 
 if __name__ == "__main__":
     import uvicorn
+    log_file = configure_logging(LOG_DIR)
     try:
         equipment_source: Path | str | None = get_primary_equipment_file()
     except FileBusyError:
@@ -3251,4 +3254,5 @@ if __name__ == "__main__":
     print(f"[INFO] Modelo de transferência: {TEMPLATE_FILE} ({'OK' if TEMPLATE_FILE.is_file() else 'AUSENTE'})")
     print(f"[INFO] Fonte EquipamentosDetalhes: {equipment_source or 'AUSENTE'}")
     print(f"[INFO] Porta local: {SERVER_PORT}")
+    print(f"[INFO] Log local: {log_file}")
     uvicorn.run(app, host="127.0.0.1", port=SERVER_PORT, proxy_headers=False)

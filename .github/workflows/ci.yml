@@ -75,9 +75,9 @@ jobs:
           node --check scripts/build/copy_ui_assets.cjs
           node --check scripts/build/lucide-subset.cjs
       - name: Check Python syntax
-        run: python -m compileall -q core/config.py main.py core/integrity.py core/openpyxl_compat.py core/xlsx_safety.py domains routers security scripts tests/support/serve_ui_motion_preview.py
+        run: python -m compileall -q core/config.py main.py core/integrity.py core/openpyxl_compat.py core/xlsx_safety.py core/logging_setup.py domains routers security scripts tests/support/serve_ui_motion_preview.py
       - name: Run gradual static type checks
-        run: python -m mypy --explicit-package-bases --platform win32 --ignore-missing-imports --check-untyped-defs core/config.py main.py core/integrity.py core/openpyxl_compat.py core/xlsx_safety.py domains/history_export.py domains/inventory_comparison.py domains/inventory_update.py domains/equipment_search.py domains/effective_alias.py domains/uploaded_workbooks.py domains/readiness.py routers/inventory_history.py routers/transfers.py routers/equipment_search.py routers/system.py routers/units.py core/inventory_requests.py security scripts/migrate_local_data.py scripts/cleanup_local_temps.py
+        run: python -m mypy --explicit-package-bases --platform win32 --ignore-missing-imports --check-untyped-defs core/config.py main.py core/integrity.py core/logging_setup.py core/openpyxl_compat.py core/xlsx_safety.py domains/history_export.py domains/inventory_comparison.py domains/inventory_update.py domains/equipment_search.py domains/effective_alias.py domains/uploaded_workbooks.py domains/readiness.py routers/inventory_history.py routers/transfers.py routers/equipment_search.py routers/system.py routers/units.py core/inventory_requests.py security scripts/migrate_local_data.py scripts/cleanup_local_temps.py
       - name: Check tracked files for common credentials
         run: python -B scripts/check_secrets.py
       - name: Install interface asset dependencies

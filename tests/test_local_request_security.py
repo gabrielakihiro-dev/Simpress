@@ -18,7 +18,9 @@ with (
 HTTP_TEST_AVAILABLE = importlib.util.find_spec("httpx") is not None
 if HTTP_TEST_AVAILABLE:
     from fastapi.testclient import TestClient
+from core.integrity import FileBusyError
 from core.inventory_requests import InventoryUpdateMiddleware
+from security import local_requests
 from uvicorn.middleware.proxy_headers import ProxyHeadersMiddleware
 
 
@@ -52,7 +54,85 @@ def run_boundary(
                 if message["type"] == "http.response.start"), bool(reached)
 
 
+def run_endpoint(endpoint, *, headers=(), path="/api/stats", method="GET", client=("127.0.0.1", 1234)):
+    messages = []
+
+    async def receive():
+        return {"type": "http.request", "body": b"", "more_body": False}
+
+    async def send(message):
+        messages.append(message)
+
+    scope = {"type": "http", "path": path, "method": method,
+             "scheme": "http", "client": client,
+             "headers": [(b"host", f"localhost:{main.SERVER_PORT}".encode()), *headers]}
+    asyncio.run(main.LocalRequestSafetyMiddleware(endpoint)(scope, receive, send))
+    start = next(message for message in messages if message["type"] == "http.response.start")
+    body = b"".join(message.get("body", b"") for message in messages if message["type"] == "http.response.body")
+    return start["status"], {name.lower(): value for name, value in start["headers"]}, body
+
+
+async def ok_endpoint(scope, receive, send):
+    await send({"type": "http.response.start", "status": 200, "headers": []})
+    await send({"type": "http.response.body", "body": b"ok"})
+
+
 class LocalRequestSecurityTests(unittest.TestCase):
+    def test_every_response_carries_the_browser_hardening_headers(self):
+        for client, expected in ((("127.0.0.1", 1234), 200), (("192.0.2.1", 1234), 403)):
+            with self.subTest(client=client):
+                status, headers, _ = run_endpoint(ok_endpoint, client=client)
+                self.assertEqual(status, expected)
+                for name, value in local_requests.SECURITY_RESPONSE_HEADERS:
+                    self.assertEqual(headers[name], value)
+
+    def test_route_headers_take_precedence_over_defaults(self):
+        async def framed(scope, receive, send):
+            await send({"type": "http.response.start", "status": 200,
+                        "headers": [(b"X-Frame-Options", b"SAMEORIGIN")]})
+            await send({"type": "http.response.body", "body": b""})
+
+        _, headers, _ = run_endpoint(framed)
+        self.assertEqual(headers[b"x-frame-options"], b"SAMEORIGIN")
+
+    def test_api_rejects_requests_that_the_browser_marks_as_cross_site(self):
+        for value, expected in ((b"cross-site", 403), (b"same-site", 403), (b"Cross-Site", 403),
+                                (b"same-origin", 200), (b"none", 200)):
+            with self.subTest(sec_fetch_site=value):
+                status, _, _ = run_endpoint(ok_endpoint, headers=[(b"sec-fetch-site", value)])
+                self.assertEqual(status, expected)
+        status, _, _ = run_endpoint(ok_endpoint, headers=[(b"sec-fetch-site", b"none"),
+                                                         (b"sec-fetch-site", b"none")])
+        self.assertEqual(status, 403)
+        # A link from another site may still open the page itself.
+        status, _, _ = run_endpoint(ok_endpoint, path="/", headers=[(b"sec-fetch-site", b"cross-site")])
+        self.assertEqual(status, 200)
+
+    def test_unmapped_busy_file_answers_409_with_its_message(self):
+        async def busy(scope, receive, send):
+            raise FileBusyError("A planilha ou configuração está ocupada por outra operação local.")
+
+        status, headers, body = run_endpoint(busy, path="/api/prontidao")
+        self.assertEqual(status, 409)
+        self.assertEqual(headers[b"retry-after"], b"2")
+        self.assertIn("ocupada por outra operação local", body.decode("utf-8"))
+
+    def test_unexpected_failure_logs_the_stack_without_the_exception_message(self):
+        private_value = "PRIVATE_CELL_VALUE"
+
+        async def failing(scope, receive, send):
+            raise ValueError(private_value)
+
+        with self.assertLogs(local_requests.logger, level="ERROR") as captured:
+            status, _, body = run_endpoint(failing, path="/api/stats")
+        self.assertEqual(status, 500)
+        self.assertNotIn("PRIVATE_CELL_VALUE", body.decode("utf-8"))
+        text = "\n".join(captured.output)
+        self.assertIn("/api/stats", text)
+        self.assertIn("ValueError", text)
+        self.assertIn("in failing", text)
+        self.assertNotIn("PRIVATE_CELL_VALUE", text)
+
     def test_keyed_inventory_retry_waits_for_in_flight_upload_admission(self):
         admission = threading.BoundedSemaphore(1)
         self.assertTrue(admission.acquire(blocking=False))
