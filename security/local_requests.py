@@ -6,14 +6,30 @@ unexpected exceptions with a generic response.
 """
 
 import asyncio
+import logging
+import traceback
 from dataclasses import dataclass
 from typing import Any, Callable, FrozenSet, Optional, Tuple, Type
 from urllib.parse import urlsplit
 
 from fastapi.responses import JSONResponse
 
+from core.integrity import FileBusyError
 from core.inventory_requests import IDEMPOTENCY_KEY_PATTERN
 from security.network import is_direct_loopback_request
+
+logger = logging.getLogger(__name__)
+
+# Sent on every response, early rejections included; HTML pages add their CSP in routers/frontend.py.
+SECURITY_RESPONSE_HEADERS = (
+    (b"x-content-type-options", b"nosniff"),
+    (b"referrer-policy", b"no-referrer"),
+    (b"x-frame-options", b"DENY"),
+    (b"cross-origin-opener-policy", b"same-origin"),
+    (b"cross-origin-resource-policy", b"same-origin"),
+)
+# Sec-Fetch-Site values for the app's own pages and URLs typed or bookmarked by the user.
+ALLOWED_API_FETCH_SITES = frozenset({b"same-origin", b"none"})
 
 
 class RequestBodyTooLarge(Exception):
@@ -86,6 +102,18 @@ def parse_request_authority(
     return hostname.rstrip(".").lower(), port
 
 
+def send_with_security_headers(send):
+    async def send_with_headers(message):
+        if message["type"] == "http.response.start":
+            headers = list(message.get("headers", []))
+            present = {name.lower() for name, _ in headers}
+            headers.extend(header for header in SECURITY_RESPONSE_HEADERS if header[0] not in present)
+            message = {**message, "headers": headers}
+        await send(message)
+
+    return send_with_headers
+
+
 class LocalRequestSafetyMiddleware:
     """Restrict local peers and authorities, cap uploads, and hide exceptions."""
 
@@ -98,6 +126,7 @@ class LocalRequestSafetyMiddleware:
             await self.app(scope, receive, send)
             return
 
+        send = send_with_security_headers(send)
         if not is_direct_loopback_request(scope):
             response = JSONResponse(
                 status_code=403,
@@ -139,6 +168,18 @@ class LocalRequestSafetyMiddleware:
         if path.startswith("/api/") and origin_values and (
             len(origin_values) != 1
             or parse_request_authority(origin_values[0], is_origin=True) != host_authority
+        ):
+            response = JSONResponse(
+                status_code=403,
+                content={"detail": "Origem não autorizada para a aplicação local."},
+            )
+            await response(scope, receive, send)
+            return
+
+        # GETs from another site carry no Origin; the browser's fetch metadata still names the caller.
+        fetch_sites = [value.lower() for key, value in raw_headers if key.lower() == b"sec-fetch-site"]
+        if path.startswith("/api/") and fetch_sites and (
+            len(fetch_sites) != 1 or fetch_sites[0] not in ALLOWED_API_FETCH_SITES
         ):
             response = JSONResponse(
                 status_code=403,
@@ -255,10 +296,23 @@ class LocalRequestSafetyMiddleware:
                 return
             response = JSONResponse(status_code=503, content={"detail": str(error)})
             await response(scope, receive, send)
+        except FileBusyError as error:
+            # Routes without their own mapping (readiness during an import) answer like the others.
+            if response_started:
+                return
+            response = JSONResponse(
+                status_code=409,
+                content={"detail": str(error)},
+                headers={"Retry-After": "2"},
+            )
+            await response(scope, receive, send)
         except Exception as error:
-            print(
-                f"[ERRO] Falha interna na rota {path or '/'} "
-                f"({type(error).__name__})."
+            # Frames and source lines only: exception messages may quote workbook cells.
+            logger.error(
+                "Falha interna na rota %s (%s).\n%s",
+                path or "/",
+                type(error).__name__,
+                "".join(traceback.format_tb(error.__traceback__)).rstrip(),
             )
             if response_started:
                 return

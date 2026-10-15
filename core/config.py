@@ -7,6 +7,7 @@ from pathlib import Path
 BASE_DIR = Path(__file__).resolve().parents[1]
 DATA_DIR = BASE_DIR / "data"
 STATE_DIR = DATA_DIR / "state"
+LOG_DIR = DATA_DIR / "logs"
 STATIC_DIR = BASE_DIR / "static"
 INPUT_DIR = DATA_DIR / "planilhas_entrada"
 _automatic_inventory_inbox_override = str(os.environ.get("SIMPRESS_IMPORT_INBOX_DIR") or "").strip()
