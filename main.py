@@ -3221,7 +3221,7 @@ operations_router = create_operations_router(
     history_annotations_directory=lambda: HISTORY_ANNOTATIONS_DIR,
     local_annotation_outbox_directory=lambda: LOCAL_HISTORY_ANNOTATION_OUTBOX_DIR,
     history_annotations_sync_enabled=lambda: HISTORY_ANNOTATIONS_SYNC_ENABLED,
-    load_history_annotation_records=lambda directory: load_history_annotations(directory),
+    load_history_annotation_records=lambda directory, **kwargs: load_history_annotations(directory, **kwargs),
 )
 app.include_router(operations_router)
 

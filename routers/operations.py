@@ -15,6 +15,7 @@ from pydantic import BaseModel, Field
 from domains.history_insights import compare_updates, is_restoration, latest_update, pending_rows
 from domains.history_annotations import (
     MAX_ANNOTATION_LENGTH,
+    AnnotationReadError,
     reuse_annotation_revision,
     annotation_view,
     resolve_history_annotations,
@@ -66,7 +67,7 @@ def create_operations_router(
     history_annotations_directory: Optional[Callable[[], Path]] = None,
     local_annotation_outbox_directory: Optional[Callable[[], Path]] = None,
     history_annotations_sync_enabled: Optional[Callable[[], bool]] = None,
-    load_history_annotation_records: Optional[Callable[[Path], List[Dict[str, Any]]]] = None,
+    load_history_annotation_records: Optional[Callable[..., List[Dict[str, Any]]]] = None,
 ):
     router = APIRouter()
 
@@ -127,15 +128,15 @@ def create_operations_router(
     def annotation_outbox_directory() -> Path:
         return local_annotation_outbox_directory() if local_annotation_outbox_directory else ticket_report_path().parent / "anotacoes_historico_pendentes"
 
-    def read_annotation_directory(directory: Path) -> List[Dict[str, Any]]:
+    def read_annotation_directory(directory: Path, strict: bool = False) -> List[Dict[str, Any]]:
         reader = load_history_annotation_records or load_history_annotations
-        return reader(directory)
+        return reader(directory, strict=True) if strict else reader(directory)
 
-    def latest_ticket_annotations() -> Dict[tuple[str, str], Dict[str, Any]]:
+    def latest_ticket_annotations(strict: bool = False) -> Dict[tuple[str, str], Dict[str, Any]]:
         return resolve_history_annotations(
             record
             for directory in (annotation_directory(), annotation_outbox_directory())
-            for record in read_annotation_directory(directory)
+            for record in read_annotation_directory(directory, strict)
             if record.get("categoria") == TICKET_TIMELINE_ANNOTATION_CATEGORY
         )
 
@@ -166,7 +167,8 @@ def create_operations_router(
         previous_snapshots: Sequence[Dict[str, Any]], current_snapshot: Dict[str, Any],
     ) -> List[Dict[str, Any]]:
         """Prepare independent revisions from the predecessors read under the import lock."""
-        stored = latest_ticket_annotations()
+        # An unreadable revision must abort (409) rather than skip an existing note.
+        stored = latest_ticket_annotations(strict=True)
         all_records = list(stored.values())
         records = []
         timeline_index = build_ticket_timeline_index([*previous_snapshots, current_snapshot])
@@ -529,6 +531,8 @@ def create_operations_router(
                         lambda staged: json.loads(staged.read_text(encoding="utf-8")),
                     )
                 transaction.commit()
+        except AnnotationReadError as error:
+            raise HTTPException(status_code=409, detail=str(error)) from None
         except FileBusyError:
             raise HTTPException(status_code=409, detail="O acompanhamento está sendo atualizado por outra operação local.") from None
         except (OSError, FileTransactionError) as error:
