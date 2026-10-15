@@ -569,6 +569,8 @@
         if (!res.ok) throw new Error("Falha ao consultar as estatísticas locais.");
         const stats = await res.json();
         definirEstatistica("stat-equipamentos", stats.total_equipamentos);
+        const rotuloEquipamentos = document.getElementById("stat-equipamentos-rotulo");
+        if (rotuloEquipamentos) rotuloEquipamentos.textContent = pluralize(stats.total_equipamentos, "equipamento");
         definirEstatistica("stat-unidades", stats.total_unidades);
         const exportButton = document.getElementById("btn-exportar-equipamentos");
         if (exportButton) {
@@ -909,7 +911,7 @@
           atualizarEstadoCopiaCnpjEntrega();
 
           const countEl = document.getElementById("filiais-count");
-          if (countEl) countEl.textContent = `${unidadesList.length} filiais catalogadas`;
+          if (countEl) countEl.textContent = `${unidadesList.length} ${pluralize(unidadesList.length, "filial catalogada", "filiais catalogadas")}`;
         }
       } catch (err) {
         console.error("Falha ao carregar unidades:", err);
@@ -1009,6 +1011,7 @@
     function createTextElement(tagName, className, value) { return domUtils.createTextElement(tagName, className, value); }
     function createIcon(name, className) { return domUtils.createIcon(name, className); }
     function highlightMatch(text, query) { return domUtils.highlightMatch(text, query); }
+    function pluralize(count, singular, plural) { return domUtils.pluralize(count, singular, plural); }
 
     function updateAutocompleteHighlight() {
       const list = document.getElementById("autocomplete-list");
@@ -1157,7 +1160,7 @@
             </div>
             <p class="text-sm font-semibold text-slate-200" role="status" aria-live="polite">Nenhum equipamento localizado</p>
             <p class="text-xs text-slate-500 max-w-sm">Nenhum registro com o termo <span class="font-mono text-cyan-400 font-bold">"${escapeHtml(currentQuery)}"</span> foi encontrado no inventário do SEBRAE/PR.</p>
-            <button type="button" onclick="cadastrarNovoSerial(document.getElementById('input-serial').value)" class="mt-2 inline-flex items-center gap-1.5 px-3.5 py-2 rounded-lg bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-bold transition shadow-lg">
+            <button type="button" data-on-click="cadastrarNovoSerialPesquisado" class="mt-2 inline-flex items-center gap-1.5 px-3.5 py-2 rounded-lg bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-bold transition shadow-lg">
               <i data-lucide="plus-circle" class="w-3.5 h-3.5" aria-hidden="true"></i>
               <span>Cadastrar "${escapeHtml(currentQuery)}" como Novo Equipamento</span>
             </button>
@@ -1336,9 +1339,11 @@
         if (page.total === 0) {
           status.textContent = "Nenhum equipamento encontrado para esse termo.";
         } else if (page.has_more) {
-          status.textContent = `Exibindo ${pesquisaCompletaState.offset} de ${page.total} resultados.`;
+          status.textContent = `Exibindo ${pesquisaCompletaState.offset} de ${page.total} ${pluralize(page.total, "resultado")}.`;
         } else {
-          status.textContent = `Todos os ${page.total} resultados foram exibidos.`;
+          status.textContent = page.total === 1
+            ? "O único resultado foi exibido."
+            : `Todos os ${page.total} resultados foram exibidos.`;
         }
         moreButton.classList.toggle("hidden", !page.has_more);
         lucide.createIcons({ root: list });
@@ -2090,7 +2095,7 @@
     // Reset Form for New Transfer
     // Accessible replacement for window.confirm; falls back to it when the dialog markup is absent.
     let confirmacaoAcaoPendente = null;
-    function confirmarAcao({ titulo, mensagem, confirmar = "Confirmar", cancelar = "Cancelar" }) {
+    function confirmarAcao({ titulo, mensagem, confirmar = "Confirmar", cancelar = "Cancelar", destrutiva = true }) {
       const modal = document.getElementById("modal-confirmar-acao");
       const botaoConfirmar = modal?.querySelector?.("#btn-confirmar-acao-ok");
       if (!botaoConfirmar) return Promise.resolve(window.confirm(mensagem));
@@ -2101,6 +2106,7 @@
       document.getElementById("titulo-confirmar-acao").textContent = titulo;
       document.getElementById("mensagem-confirmar-acao").textContent = mensagem;
       botaoConfirmar.textContent = confirmar;
+      botaoConfirmar.dataset.variant = destrutiva ? "danger" : "primary";
       document.getElementById("btn-confirmar-acao-cancelar").textContent = cancelar;
       abrirModalAcessivel("modal-confirmar-acao", "#btn-confirmar-acao-cancelar", "fecharConfirmacaoAcao");
       return promise;
@@ -2731,7 +2737,7 @@
           tipo: item.tipo,
           chave: item.chave,
           fontes: (item.fontes || []).map(source =>
-            `${formatarFonteAmbigua(source.fonte)}${source.quantidade ? ` (${source.quantidade} registros)` : source.serie ? ` — série ${source.serie}` : ""}`
+            `${formatarFonteAmbigua(source.fonte)}${source.quantidade ? ` (${source.quantidade} ${pluralize(source.quantidade, "registro")})` : source.serie ? ` — série ${source.serie}` : ""}`
           ).join(" · "),
           mensagem: formatarFonteAmbigua(item.mensagem || ""),
         })),
@@ -3067,9 +3073,11 @@
         showToast("Este registro não permite resolver a divergência.", "error");
         return;
       }
-      if (acao === "excluir" && !window.confirm(
-        `Remover a alteração manual da série ${item.serie}? O apelido voltará ao hostname da fonte no endpoint, se preenchido, ou ao valor cadastrado na Simpress.`
-      )) return;
+      if (acao === "excluir" && !(await confirmarAcao({
+        titulo: "Remover alteração manual?",
+        mensagem: `Remover a alteração manual da série ${item.serie}? O apelido voltará ao hostname da fonte no endpoint, se preenchido, ou ao valor cadastrado na Simpress.`,
+        confirmar: "Remover alteração",
+      }))) return;
 
       const row = botao.closest("[data-manual-alias-row]");
       const rowIndex = row?.dataset.manualAliasRow;
@@ -3492,7 +3500,7 @@
       const desatualizado = ativos.length > 0 && (idade === null || idade >= 3);
       const prioridade = desatualizado ? 0 : 1;
       const motivos = desatualizado
-        ? [idade === null ? "Sem data de atualização" : `Sem atualização há ${idade} dias`]
+        ? [idade === null ? "Sem data de atualização" : `Sem atualização há ${idade} ${pluralize(idade, "dia")}`]
         : [];
       return {
         prioridade,
@@ -3827,7 +3835,7 @@
           ${renderizarResumoProcessoPedido(simpress)}
           <div class="ticket-card-meta mt-2 flex flex-wrap items-center gap-x-3 gap-y-1 text-[11px] text-slate-300">
             <span><b>Pedido</b> ${formatarListaChamados(simpress.pedidos)}</span>
-            ${ordensVenda.some(Boolean) ? `<span><b>OV</b> ${formatarListaChamados(ordensVenda)}</span>` : ""}
+            ${ordensVenda.some(Boolean) ? `<span>${formatarListaChamados(ordensVenda)}</span>` : ""}
           </div>
           <div class="ticket-card-status mt-2 grid grid-cols-1 gap-1.5 sm:grid-cols-2">
             <p class="truncate text-xs text-cyan-100" title="Status Simpress: ${formatarListaChamados(simpress.status)}"><b>Simpress</b> · ${formatarListaChamados(simpress.status)}</p>
@@ -3855,7 +3863,7 @@
               </section>
             </div>
           </details>
-          <details class="ticket-disclosure mt-2 rounded-lg border border-cyan-400/20 bg-slate-900/50 px-3 py-2" data-ticket-section="timeline" data-ticket-timeline data-timeline-serial="${escapeHtml(record.serie)}" data-snapshot-id="${escapeHtml(data.snapshot_id || "")}" ontoggle="carregarLinhaDoTempoChamado(this)"><summary class="ticket-disclosure-summary cursor-pointer text-xs font-semibold text-cyan-100">Linha do tempo e anotações</summary><div data-ticket-timeline-body><p class="py-2 text-[10px] text-slate-500">Abra para ver as mudanças desta série em cada importação e registrar a próxima ação.</p></div></details>
+          <details class="ticket-disclosure mt-2 rounded-lg border border-cyan-400/20 bg-slate-900/50 px-3 py-2" data-ticket-section="timeline" data-ticket-timeline data-timeline-serial="${escapeHtml(record.serie)}" data-snapshot-id="${escapeHtml(data.snapshot_id || "")}" data-on-toggle="carregarLinhaDoTempoChamado" data-args='["$this"]'><summary class="ticket-disclosure-summary cursor-pointer text-xs font-semibold text-cyan-100">Linha do tempo e anotações</summary><div data-ticket-timeline-body><p class="py-2 text-[10px] text-slate-500">Abra para ver as mudanças desta série em cada importação e registrar a próxima ação.</p></div></details>
         </article>`;
       }).join("");
       list.querySelectorAll?.('details[data-ticket-section="timeline"]').forEach(section => {
@@ -3908,7 +3916,11 @@
       const button = document.getElementById("btn-excluir-importacoes-antigas-chamados");
       const olderCount = Math.max(0, historicoAcompanhamentoChamados.length - 1);
       const olderLabel = olderCount === 1 ? "1 importação antiga" : `${olderCount} importações antigas`;
-      if (!olderCount || !window.confirm(`Excluir ${olderLabel} e manter somente a mais recente? Esta ação não poderá ser desfeita.`)) return;
+      if (!olderCount || !(await confirmarAcao({
+        titulo: "Excluir importações antigas?",
+        mensagem: `Excluir ${olderLabel} e manter somente a mais recente? Esta ação não poderá ser desfeita.`,
+        confirmar: "Excluir",
+      }))) return;
 
       button.disabled = true;
       button.textContent = "Excluindo…";
@@ -4284,7 +4296,12 @@
           "",
           "Os dois inventários serão substituídos juntos e a ação ficará registrada no histórico. Continuar?",
         ].join("\n");
-        if (!window.confirm(confirmation)) return;
+        if (!(await confirmarAcao({
+          titulo: "Restaurar inventários?",
+          mensagem: confirmation,
+          confirmar: "Restaurar",
+          destrutiva: false,
+        }))) return;
 
         botao.textContent = "Restaurando...";
         if (!inventoryRestoreAttempts.has(evento.id)) {
@@ -4315,7 +4332,7 @@
         const reversao = data.evento?.desfazer_disponivel
           ? "A restauração pode ser desfeita pelo histórico."
           : "O backup do conjunto substituído está incompleto ou inválido; não é possível desfazer pelo histórico.";
-        showToast(`Inventários restaurados. ${total} equipamentos carregados. ${reversao}`, "success");
+        showToast(`Inventários restaurados. ${total} ${pluralize(total, "equipamento carregado", "equipamentos carregados")}. ${reversao}`, "success");
       } catch (err) {
         console.error("Erro ao restaurar o conjunto de planilhas:", err);
         showToast(err.message || "Não foi possível restaurar o conjunto selecionado.", "error");
@@ -4358,7 +4375,11 @@
 
     async function excluirHistoricoComparacao(evento, botao) {
       const dataHora = formatarHorarioHistorico(evento.horario);
-      if (!window.confirm(`Tem certeza de que deseja excluir esta atualização de ${dataHora}? Essa ação não poderá ser desfeita.`)) return;
+      if (!(await confirmarAcao({
+        titulo: "Excluir atualização?",
+        mensagem: `Tem certeza de que deseja excluir esta atualização de ${dataHora}? Essa ação não poderá ser desfeita.`,
+        confirmar: "Excluir",
+      }))) return;
 
       const textoOriginal = botao.textContent;
       botao.disabled = true;
@@ -4445,6 +4466,10 @@
       document.getElementById("edit-id-cliente").value = currentEquipamento.idCliente || "";
 
       abrirModalAcessivel("modal-editar-equipamento", "#edit-modelo", "fecharModalEditarEquipamento");
+    }
+
+    function cadastrarNovoSerialPesquisado() {
+      cadastrarNovoSerial(document.getElementById("input-serial")?.value || "");
     }
 
     function cadastrarNovoSerial(serial) {
@@ -4769,7 +4794,12 @@
 
     async function desfazerAlteracaoApelido(evento, botao) {
       const apelidoAnterior = evento.apelido_anterior || "(vazio)";
-      if (!window.confirm(`Desfazer a alteração da série ${evento.serial} e restaurar o apelido ${apelidoAnterior}?`)) return;
+      if (!(await confirmarAcao({
+        titulo: "Desfazer alteração?",
+        mensagem: `Desfazer a alteração da série ${evento.serial} e restaurar o apelido ${apelidoAnterior}?`,
+        confirmar: "Desfazer",
+        destrutiva: false,
+      }))) return;
 
       const textoOriginal = botao.textContent;
       botao.disabled = true;
@@ -4799,7 +4829,11 @@
     }
 
     async function excluirRegistroHistorico(evento, botao) {
-      if (!window.confirm("Tem certeza de que deseja excluir esse registro? Essa ação não poderá ser desfeita")) return;
+      if (!(await confirmarAcao({
+        titulo: "Excluir registro?",
+        mensagem: "Tem certeza de que deseja excluir esse registro? Essa ação não poderá ser desfeita.",
+        confirmar: "Excluir",
+      }))) return;
 
       const textoOriginal = botao.textContent;
       botao.disabled = true;
@@ -4928,7 +4962,7 @@
       document.getElementById("input-filtro-unidades").value = "";
       toggleFormNovaUnidade(false);
       renderListaUnidades(unidadesList);
-      document.getElementById("badge-total-unidades-modal").textContent = `${unidadesList.length} unidades`;
+      document.getElementById("badge-total-unidades-modal").textContent = `${unidadesList.length} ${pluralize(unidadesList.length, "unidade")}`;
       abrirModalAcessivel("modal-gerenciar-unidades", "#input-filtro-unidades", "fecharModalGerenciarUnidades", "btn-catalogo-unidades");
     }
 

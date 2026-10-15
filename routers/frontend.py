@@ -5,11 +5,14 @@ from pathlib import Path
 from fastapi.responses import HTMLResponse
 from fastapi.staticfiles import StaticFiles
 
-from domains.frontend_assets import versioned_html
+from domains.frontend_assets import CONTENT_SECURITY_POLICY, versioned_html
 
 
 def frontend_response(static_dir: Path, name: str = "index.html") -> HTMLResponse:
-    return HTMLResponse(versioned_html(static_dir, name), headers={"Cache-Control": "no-store"})
+    return HTMLResponse(
+        versioned_html(static_dir, name),
+        headers={"Cache-Control": "no-store", "Content-Security-Policy": CONTENT_SECURITY_POLICY},
+    )
 
 
 class RevalidatingStaticFiles(StaticFiles):
