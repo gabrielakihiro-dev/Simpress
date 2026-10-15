@@ -7,7 +7,6 @@
 @source "../index.html";
 @source "../app.js";
 @source "../js";
-@source "../pages";
 
 /* Retain the defaults used by the existing interface during the v4 migration. */
 @theme {
