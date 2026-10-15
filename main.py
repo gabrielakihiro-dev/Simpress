@@ -11,7 +11,6 @@ import re
 import shutil
 import threading
 import time
-import traceback
 import unicodedata
 import uuid
 from copy import deepcopy
@@ -19,11 +18,11 @@ from contextlib import asynccontextmanager, contextmanager
 from datetime import datetime, timedelta
 from pathlib import Path
 from typing import Dict, Iterable, List, Optional, Any, Set, Tuple
-from urllib.parse import quote, urlsplit
+from urllib.parse import quote
 
 import openpyxl
 from fastapi import FastAPI, File, Form, HTTPException, UploadFile
-from fastapi.responses import FileResponse, JSONResponse, StreamingResponse
+from fastapi.responses import FileResponse, StreamingResponse
 from pydantic import BaseModel, Field, field_validator
 from starlette.datastructures import UploadFile as StarletteUploadFile
 from routers.frontend import RevalidatingStaticFiles, frontend_response
@@ -142,6 +141,21 @@ from domains.history_annotations import (
     load_history_annotations,
     save_history_annotation,
 )
+from domains import effective_alias
+from domains import readiness, uploaded_workbooks
+from domains.uploaded_workbooks import (
+    DETAILS_ALIAS_HEADER_ALIASES,
+    DETAILS_COMPLETE_SOURCE_COLUMN_COUNT,
+    DETAILS_INSTALLATION_CNPJ_HEADER_ALIASES,
+    DETAILS_REQUIRED_HEADERS,
+    DETAILS_SERIAL_HEADER_ALIASES,
+    DETAILS_TYPE_HEADER_ALIASES,
+    WorkbookHeaderError,
+    find_workbook_header_column,
+    normalize_workbook_header,
+    select_upload_table,
+    validate_unambiguous_workbook_headers,
+)
 from domains.inventory_update import InventoryUpdateServices
 from domains.inventory_update import preview_inventory_files
 from domains.inventory_update import update_inventory_files
@@ -157,11 +171,17 @@ from routers.equipment_search import EquipmentSearchServices, create_equipment_s
 from routers.system import SystemRouteServices, create_system_router
 from routers.units import UnidadePayload, UnitRouteServices, create_units_router
 from core.inventory_requests import (
-    IDEMPOTENCY_KEY_PATTERN,
     InventoryUpdateMiddleware,
     idempotency_key,
 )
-from security.network import is_direct_loopback_request
+from security.local_requests import (
+    LocalRequestSafetyMiddleware as _LocalRequestSafetyMiddleware,
+    LocalRequestSafetyServices,
+    RequestBodyLimits,
+    RequestBodyTooLarge,
+    allowed_local_authorities,
+    parse_request_authority,
+)
 
 # Runtime synchronization and in-memory state remain in the application entry point.
 # Lock hierarchy (docs/arquitetura/auditoria_backend/hierarquia_de_locks.md): the global
@@ -179,10 +199,6 @@ logger = logging.getLogger(__name__)
 
 class LocalJsonCorruptionError(ValueError):
     """A persisted JSON file is present but cannot be trusted or updated safely."""
-
-
-class RequestBodyTooLarge(Exception):
-    pass
 
 
 def _read_json_object(path: Path, label: str) -> Dict[str, Any]:
@@ -326,27 +342,6 @@ def build_alias_change_entry(
         "referencia_id": reference_id,
     }
 
-DETAILS_SERIAL_HEADER_ALIASES = ("NUMEROSERIE", "NUMERODESERIE", "SERIAL")
-DETAILS_ALIAS_HEADER_ALIASES = (
-    "APELIDO", "HOSTNAME", "NOMEDOCOMPUTADOR", "COMPUTERNAME"
-)
-DETAILS_TYPE_HEADER_ALIASES = ("Tipo", "ClasseEquipamento")
-DETAILS_INSTALLATION_CNPJ_HEADER_ALIASES = (
-    "CNPJ Instalacao",
-    "CNPJ de Instalacao",
-    "CNPJ de Instalação",
-    "CnpjInstalacao",
-    "CnpjDeInstalacao",
-    "CNPJ Instalacao Filial",
-    "CNPJ de Instalacao Filial",
-    "CNPJ da Instalacao Filial",
-    "CNPJ da Instalacao",
-    "CNPJ da Filial",
-)
-DETAILS_REQUIRED_HEADERS = frozenset({"MODELO", "CIDADE"})
-DETAILS_COMPLETE_SOURCE_COLUMN_COUNT = 50
-
-
 def _equipment_revision(serial: Any, modelo: Any, tipo: Any, apelido: Any, id_cliente: Any) -> str:
     values = []
     for index, value in enumerate((serial, modelo, tipo, apelido, id_cliente)):
@@ -361,15 +356,6 @@ def _equipment_revision(serial: Any, modelo: Any, tipo: Any, apelido: Any, id_cl
     return hashlib.sha256(payload).hexdigest()
 
 
-def normalize_workbook_header(value: Any) -> str:
-    """Normaliza cabeçalhos com a mesma regra usada pelas tabelas enviadas."""
-    return normalize_reference_value(value)
-
-
-class WorkbookHeaderError(ValueError):
-    """An uploaded workbook has duplicate or semantically ambiguous columns."""
-
-
 def normalize_contract_value(value: Any) -> str:
     """Normalize Excel integer cells without accepting a different contract."""
     normalized = sanitize_value(value).strip()
@@ -378,99 +364,12 @@ def normalize_contract_value(value: Any) -> str:
     return normalized
 
 
-def find_workbook_header_column(headers: Iterable[Any], aliases: Iterable[str]) -> Optional[int]:
-    """Return one unambiguous column whose normalized header matches an accepted alias."""
-    normalized_aliases = {normalize_workbook_header(alias) for alias in aliases}
-    matches = [
-        index
-        for index, value in enumerate(headers)
-        if normalize_workbook_header(value) in normalized_aliases
-    ]
-    if len(matches) > 1:
-        columns = ", ".join(str(index + 1) for index in matches)
-        raise ValueError(f"Mais de uma coluna corresponde ao mesmo campo (colunas {columns}).")
-    return matches[0] if matches else None
-
-
-def validate_unambiguous_workbook_headers(headers: Iterable[Any]) -> None:
-    """Reject duplicate normalized headers before mapping rows into dictionaries."""
-    normalized_headers = [normalize_workbook_header(header) for header in headers]
-    positions: Dict[str, List[int]] = {}
-    for index, normalized in enumerate(normalized_headers):
-        if normalized:
-            positions.setdefault(normalized, []).append(index)
-    duplicates = [indexes for indexes in positions.values() if len(indexes) > 1]
-    if duplicates:
-        columns = ", ".join(
-            "/".join(str(index + 1) for index in indexes)
-            for indexes in duplicates
-        )
-        raise WorkbookHeaderError(f"A planilha contém cabeçalhos repetidos nas colunas {columns}.")
-
-    alias_groups = (
-        DETAILS_SERIAL_HEADER_ALIASES,
-        DETAILS_ALIAS_HEADER_ALIASES,
-        ("NOMEDOCOMPUTADOR", "COMPUTERNAME", "HOSTNAME"),
-        ("ROTULODESERVICONUMERODESERIE", "NUMEROSERIE", "NUMERODESERIE", "SERIAL", "SERVICETAG"),
-    )
-    for aliases in alias_groups:
-        accepted = {normalize_workbook_header(alias) for alias in aliases}
-        matches = [index for index, value in enumerate(normalized_headers) if value in accepted]
-        if len(matches) > 1:
-            columns = ", ".join(str(index + 1) for index in matches)
-            raise WorkbookHeaderError(f"A planilha contém colunas candidatas conflitantes nas posições {columns}.")
+_ensure_workbook_readable = uploaded_workbooks.ensure_workbook_readable
 
 
 def _read_details_sheet_records(file_path: Path, sheet_name: str):
     """Read inventory rows with openpyxl, preserving the cells used by the application."""
-    workbook = None
-    try:
-        validate_xlsx(file_path)
-        workbook = openpyxl.load_workbook(
-            file_path, read_only=True, data_only=True, keep_links=False
-        )
-        worksheet = workbook[sheet_name]
-        raw_headers = next(worksheet.iter_rows(min_row=1, max_row=1, values_only=True), ())
-        validate_unambiguous_workbook_headers(raw_headers)
-        headers = []
-        used_headers = set()
-        for index, value in enumerate(raw_headers):
-            base = str(value).strip() if value is not None else f"Unnamed: {index}"
-            header = base
-            suffix = 1
-            while header in used_headers:
-                header = f"{base}.{suffix}"
-                suffix += 1
-            used_headers.add(header)
-            headers.append(header)
-
-        records = []
-        for values in worksheet.iter_rows(min_row=2, values_only=True):
-            if not any(value is not None and value != "" for value in values):
-                continue
-            records.append({
-                header: values[index] if index < len(values) and values[index] is not None else ""
-                for index, header in enumerate(headers)
-            })
-    finally:
-        if workbook is not None:
-            workbook.close()
-
-    return headers, records
-
-
-def _ensure_workbook_readable(file_path: Path) -> None:
-    """Distingue arquivo indisponível (travado, sincronizando) de arquivo inválido."""
-    try:
-        with open(file_path, "rb"):
-            return
-    except FileNotFoundError:
-        return
-    except OSError as error:
-        raise FileBusyError(
-            f"Não foi possível ler '{Path(file_path).name}' agora; verifique se o arquivo "
-            "está sendo sincronizado ou usado por outro programa e tente novamente."
-        ) from error
+    return uploaded_workbooks.read_details_sheet_records(_workbook_reader_services, file_path, sheet_name)
 
 
 def find_details_sheet(file_path: Path) -> Optional[str]:
@@ -479,40 +378,25 @@ def find_details_sheet(file_path: Path) -> Optional[str]:
     Levanta FileBusyError quando o arquivo existe mas não pode ser lido; ``None``
     significa somente que o arquivo não tem uma aba de inventário válida.
     """
-    _ensure_workbook_readable(file_path)
-    workbook = None
-    try:
-        validate_xlsx(file_path)
-        workbook = openpyxl.load_workbook(file_path, read_only=True, data_only=True)
-        matching_sheets = []
-        for worksheet in workbook.worksheets:
-            headers = next(worksheet.iter_rows(min_row=1, max_row=1, values_only=True), ())
-            validate_unambiguous_workbook_headers(headers)
-            normalized_headers = {
-                normalize_workbook_header(value)
-                for value in headers
-                if value is not None
-            }
+    return uploaded_workbooks.find_details_sheet(_workbook_reader_services, file_path)
 
-            has_serial = bool(set(DETAILS_SERIAL_HEADER_ALIASES) & normalized_headers)
-            has_alias = bool(set(DETAILS_ALIAS_HEADER_ALIASES) & normalized_headers)
-            if has_serial and has_alias and DETAILS_REQUIRED_HEADERS.issubset(normalized_headers):
-                priority = int("parque" in worksheet.title.lower() or "equipamento" in worksheet.title.lower())
-                matching_sheets.append((priority, worksheet.title))
 
-        if matching_sheets:
-            matching_sheets.sort(key=lambda item: item[0], reverse=True)
-            return matching_sheets[0][1]
-    except WORKBOOK_READ_ERRORS as error:
-        logger.warning(
-            "Falha ao localizar aba de inventário (arquivo=%s, papel=detalhes, erro=%s).",
-            file_path.name, type(error).__name__,
-        )
-        return None
-    finally:
-        if workbook is not None:
-            workbook.close()
-    return None
+def validate_xlsx_package(file_bytes: bytes) -> None:
+    """Rejects non-XLSX, malformed, or excessively large ZIP packages before parsing."""
+    uploaded_workbooks.validate_xlsx_package(file_bytes, validate_xlsx)
+
+
+def read_workbook_tables(file_bytes: bytes) -> List[Dict[str, Any]]:
+    """Lê abas não vazias de um XLSX e retorna cabeçalhos normalizados e linhas."""
+    return uploaded_workbooks.read_workbook_tables(_workbook_reader_services, file_bytes)
+
+
+_workbook_reader_services = uploaded_workbooks.WorkbookReaderServices(
+    validate_xlsx=lambda *args, **kwargs: validate_xlsx(*args, **kwargs),
+    validate_xlsx_package=lambda file_bytes: validate_xlsx_package(file_bytes),
+    ensure_workbook_readable=lambda file_path: _ensure_workbook_readable(file_path),
+    logger=logger,
+)
 
 
 def get_details_files() -> List[Path]:
@@ -541,47 +425,15 @@ def get_primary_equipment_file() -> Optional[Path]:
     )
 
 
-def validate_xlsx_package(file_bytes: bytes) -> None:
-    """Rejects non-XLSX, malformed, or excessively large ZIP packages before parsing."""
-    try:
-        validate_xlsx(file_bytes)
-    except XlsxLimitExceeded as error:
-        raise HTTPException(status_code=413, detail=str(error)) from None
-    except XlsxPackageError:
-        raise HTTPException(
-            status_code=400,
-            detail="O arquivo enviado não é uma planilha .xlsx válida.",
-        ) from None
-    except HTTPException:
-        raise
-    except (OSError, ValueError):
-        raise HTTPException(
-            status_code=400,
-            detail="O arquivo enviado não é uma planilha .xlsx válida.",
-        ) from None
-
-
 def _check_startup_xlsx(path: Optional[Path]) -> Dict[str, Any]:
     """Check the local XLSX container without loading or logging workbook data."""
-    if path is None:
-        return {"available": False, "file": None, "reason": "ausente"}
-    if not path.is_file():
-        return {"available": False, "file": path.name, "reason": "ausente"}
-
-    try:
-        validate_xlsx(path)
-    except XlsxLimitExceeded:
-        return {"available": False, "file": path.name, "reason": "planilha excede os limites de processamento"}
-    except XlsxPackageError:
-        return {"available": False, "file": path.name, "reason": "arquivo inacessível ou XLSX inválido"}
-    except (OSError, ValueError):
-        return {"available": False, "file": path.name, "reason": "arquivo inacessível ou XLSX inválido"}
-
-    return {"available": True, "file": path.name, "reason": "OK"}
+    return readiness.check_startup_xlsx(path, validate_xlsx)
 
 
-_READINESS_VALIDATION_CACHE: Dict[Tuple[str, int, int, int, str], Dict[str, Any]] = {}
-_READINESS_VALIDATION_LOCK = threading.Lock()
+_READY_WORKBOOK_CACHE = readiness.ReadyWorkbookCache()
+_READINESS_VALIDATION_CACHE = _READY_WORKBOOK_CACHE.entries
+_READINESS_VALIDATION_LOCK = _READY_WORKBOOK_CACHE.lock
+_READINESS_REPORT_CACHE = readiness.ReadinessReportCache()
 
 
 def get_local_transfer_template() -> Path:
@@ -590,217 +442,102 @@ def get_local_transfer_template() -> Path:
 
 
 def _check_ready_workbook(path: Path, role: str) -> Dict[str, Any]:
-    status = {"available": False, "file": path.name, "reason": "ausente", "state": "awaiting_import"}
-    if not path.exists():
-        return status
+    return readiness.check_ready_workbook(path, role, _ready_workbook_services, _READY_WORKBOOK_CACHE)
+
+
+_check_startup_ticket_report = readiness.check_startup_ticket_report
+
+
+def _readiness_loaded_state() -> Tuple[bool, bool]:
+    with STATE_LOCK:
+        return bool(equipamentos_cache), bool(unidades_cache)
+
+
+def _validate_local_state_for_readiness() -> None:
+    load_modified_apelidos()
+    load_custom_units()
+    if ALIAS_HISTORY_FILE.exists():
+        load_alias_history()
+    if COMPARISON_HISTORY_FILE.exists():
+        load_comparison_history()
+
+
+def _refresh_export_status_for_readiness() -> Dict[str, Any]:
+    # Readiness reads without the transaction lock; files are replaced atomically.
+    count_export_changes(locked=True)
+    return get_export_status()
+
+
+def _readiness_signature() -> Tuple[Any, ...]:
+    """Everything the readiness report reads, so a cached report is never stale."""
     try:
-        stat = path.stat()
-        key = (str(path.resolve()), stat.st_size, stat.st_mtime_ns, stat.st_ctime_ns, role)
-        with _READINESS_VALIDATION_LOCK:
-            cached = _READINESS_VALIDATION_CACHE.get(key)
-        if cached is not None:
-            return dict(cached)
-        if role in {"transferencia", "exportacao"}:
-            validate_local_model(path, role)
-        else:
-            if stat.st_size > MAX_UPLOAD_BYTES:
-                raise ValueError("A planilha excede o limite de 30 MB.")
-            validate_uploaded_workbook(path.read_bytes(), role)
-        status.update(available=True, reason="OK", state="ready")
-        with _READINESS_VALIDATION_LOCK:
-            if len(_READINESS_VALIDATION_CACHE) >= 64:
-                _READINESS_VALIDATION_CACHE.clear()
-            _READINESS_VALIDATION_CACHE[key] = dict(status)
-    except (HTTPException, FileBusyError, WorkbookSafetyError, *WORKBOOK_READ_ERRORS) as error:
-        logger.warning(
-            "Falha ao verificar prontidão da planilha (arquivo=%s, papel=%s, erro=%s).",
-            path.name, role, type(error).__name__,
-        )
-        status.update(reason=str(getattr(error, "detail", error)) or "planilha inválida", state="invalid")
-    return status
-
-
-def _check_startup_ticket_report(path: Optional[Path]) -> Dict[str, Any]:
-    """Check ticket history storage while allowing a fresh, not-yet-imported setup."""
-    if path is None:
-        return {"available": False, "file": None, "reason": "arquivo de histórico não configurado"}
-    if not path.exists():
-        return {
-            "available": False,
-            "file": path.name,
-            "reason": "aguardando a primeira importação",
-            "state": "awaiting_import",
-        }
-    if not path.is_file():
-        return {"available": False, "file": path.name, "reason": "caminho do histórico inválido"}
-
-    try:
-        report = json.loads(path.read_text(encoding="utf-8"))
-    except (OSError, UnicodeError, json.JSONDecodeError):
-        return {"available": False, "file": path.name, "reason": "histórico inacessível ou JSON inválido"}
-    if not isinstance(report, dict) or not isinstance(report.get("chamados"), list):
-        return {"available": False, "file": path.name, "reason": "estrutura do histórico inválida"}
-    return {"available": True, "file": path.name, "reason": "OK"}
+        details_files: Any = tuple(get_details_files())
+    except OSError as error:
+        details_files = type(error).__name__
+    watched = (
+        TICKET_REPORT_FILE,
+        DETAILS_UPLOAD_FILE,
+        ENDPOINT_UPLOAD_FILE,
+        EXPORT_MODEL_FILE,
+        MODIFIED_APELIDOS_FILE,
+        CUSTOM_UNIDADES_FILE,
+        ALIAS_HISTORY_FILE,
+        COMPARISON_HISTORY_FILE,
+        INPUT_DIR / "_modelos" / "transferencia.xlsx",
+        TEMPLATE_FILE,
+    )
+    details_signature = (
+        readiness.file_signature(details_files) if isinstance(details_files, tuple) else details_files
+    )
+    return (
+        readiness.file_signature(watched),
+        details_signature,
+        _readiness_loaded_state(),
+        get_transaction_recovery_block(),
+    )
 
 
 def get_startup_readiness() -> Dict[str, Any]:
-    # Avoid publishing transient availability while an upload is being applied.
-    with lock_paths([TRANSACTION_ROOT / ".atomic-transactions"]):
-        return _get_startup_readiness_unlocked()
+    """Readiness without the global transaction lock, cached while its inputs stay the same."""
+    return _READINESS_REPORT_CACHE.get_or_compute(_readiness_signature(), _get_startup_readiness_unlocked)
 
 
 def _get_startup_readiness_unlocked() -> Dict[str, Any]:
     """Map essential local files to the application functions that need them."""
-    ticket_report_status = _check_startup_ticket_report(TICKET_REPORT_FILE)
-    try:
-        details_candidates = get_details_files()
-        details_directory_readable = True
-    except OSError as error:
-        logger.warning("Falha ao listar inventários (papel=detalhes, erro=%s).", type(error).__name__)
-        details_candidates = []
-        details_directory_readable = False
-    try:
-        active_details = get_primary_equipment_file()
-    except (OSError, FileBusyError) as error:
-        logger.warning("Falha ao selecionar inventário ativo (papel=detalhes, erro=%s).", type(error).__name__)
-        active_details = None
+    return readiness.build_readiness_report(_readiness_services)
 
-    units_loaded = False
-    if active_details is not None:
-        details_status = _check_startup_xlsx(active_details)
-        with STATE_LOCK:
-            base_loaded = bool(equipamentos_cache)
-            units_loaded = bool(unidades_cache)
-        if details_status["available"] and not base_loaded:
-            details_status.update(available=False, reason="inventário não carregado; importe o par Simpress e Endpoint")
-    elif details_candidates:
-        details_status = {
-            "available": False,
-            "file": details_candidates[0].name,
-            "reason": "nenhum inventário contém aba e cabeçalhos válidos",
-        }
-    elif not details_directory_readable:
-        details_status = {
-            "available": False,
-            "file": DETAILS_UPLOAD_FILE.name,
-            "reason": "não foi possível ler a pasta de inventários",
-        }
-    else:
-        details_status = {
-            "available": False,
-            "file": DETAILS_UPLOAD_FILE.name,
-            "reason": "ausente",
-        }
 
-    try:
-        load_modified_apelidos()
-        load_custom_units()
-        if ALIAS_HISTORY_FILE.exists():
-            load_alias_history()
-        if COMPARISON_HISTORY_FILE.exists():
-            load_comparison_history()
-        local_state_status = {"available": True, "file": "catálogos e históricos JSON", "reason": "OK"}
-    except (LocalJsonCorruptionError, HTTPException) as error:
-        local_state_status = {
-            "available": False,
-            "file": "catálogos e históricos JSON",
-            "reason": str(getattr(error, "detail", error)),
-        }
+_ready_workbook_services = readiness.ReadyWorkbookServices(
+    validate_local_model=lambda *args, **kwargs: validate_local_model(*args, **kwargs),
+    validate_uploaded_workbook=lambda *args, **kwargs: validate_uploaded_workbook(*args, **kwargs),
+    max_upload_bytes=lambda: MAX_UPLOAD_BYTES,
+    logger=logger,
+)
 
-    files = {
-        "template_transferencia": _check_ready_workbook(get_local_transfer_template(), "transferencia"),
-        "inventario_equipamentos": details_status,
-        "inventario_detalhes_atualizacao": _check_ready_workbook(DETAILS_UPLOAD_FILE, "detalhes"),
-        "inventario_endpoint": _check_ready_workbook(ENDPOINT_UPLOAD_FILE, "endpoint"),
-        "modelo_exportacao": _check_ready_workbook(EXPORT_MODEL_FILE, "exportacao"),
-        "catalogos_locais": local_state_status,
-        "historico_chamados": ticket_report_status,
-    }
-    if files["modelo_exportacao"]["available"] and details_status["available"]:
-        count_export_changes(locked=True)
-        export_status = get_export_status()
-        if not export_status["available"]:
-            files["modelo_exportacao"].update(available=False, state="invalid", reason=export_status["reason"])
-    for status in files.values():
-        status.setdefault("state", "ready" if status["available"] else
-                          "awaiting_import" if status["reason"] == "ausente" else "invalid")
-    requirements = {
-        "consulta_equipamentos": ["inventario_equipamentos", "catalogos_locais"],
-        "geracao_transferencia": ["inventario_equipamentos", "catalogos_locais", "template_transferencia"],
-        "comparacao_atualizacao_inventarios": [
-            "inventario_equipamentos",
-            "inventario_detalhes_atualizacao",
-            "inventario_endpoint",
-        ],
-        "exportacao_equipamentos": ["inventario_equipamentos", "modelo_exportacao"],
-        "acompanhamento_chamados": ["historico_chamados"],
-    }
-    functions = {
-        name: {
-            "available": all(files[key]["available"] for key in required_files),
-            "missing_files": list(dict.fromkeys(
-                files[key]["file"] or key
-                for key in required_files
-                if not files[key]["available"]
-            )),
-            "state": "ready" if all(files[key]["available"] for key in required_files)
-                else "invalid" if any(files[key]["state"] == "invalid" for key in required_files)
-                else "awaiting_import",
-        }
-        for name, required_files in requirements.items()
-    }
-    if functions["geracao_transferencia"]["available"] and not units_loaded:
-        functions["geracao_transferencia"].update(available=False, state="invalid", missing_files=["localidades do inventário"])
-    report: Dict[str, Any] = {"backend": "files", "files": files, "functions": functions}
-    # Additive key, present only in read-only mode, so existing consumers keep their shape.
-    if (recovery_block := get_transaction_recovery_block()) is not None:
-        report["gravacao_bloqueada"] = {"available": False, "state": "invalid", "reason": recovery_block}
-    return report
+_readiness_services = readiness.ReadinessServices(
+    ticket_report_file=lambda: TICKET_REPORT_FILE,
+    details_upload_file=lambda: DETAILS_UPLOAD_FILE,
+    endpoint_upload_file=lambda: ENDPOINT_UPLOAD_FILE,
+    export_model_file=lambda: EXPORT_MODEL_FILE,
+    get_details_files=lambda: get_details_files(),
+    get_primary_equipment_file=lambda: get_primary_equipment_file(),
+    get_local_transfer_template=lambda: get_local_transfer_template(),
+    check_startup_xlsx=lambda path: _check_startup_xlsx(path),
+    check_ready_workbook=lambda path, role: _check_ready_workbook(path, role),
+    check_startup_ticket_report=lambda path: _check_startup_ticket_report(path),
+    loaded_state=lambda: _readiness_loaded_state(),
+    validate_local_state=lambda: _validate_local_state_for_readiness(),
+    local_state_errors=(LocalJsonCorruptionError, HTTPException),
+    refresh_export_status=lambda: _refresh_export_status_for_readiness(),
+    get_transaction_recovery_block=lambda: get_transaction_recovery_block(),
+    logger=logger,
+)
 
 
 def report_startup_readiness() -> None:
     """Log a clear feature impact summary without exposing workbook contents."""
-    report = get_startup_readiness()
-    labels = {
-        "template_transferencia": "Modelo de transferência",
-        "inventario_equipamentos": "Inventário ativo EquipamentosDetalhes",
-        "inventario_detalhes_atualizacao": "EquipamentosDetalhes para atualização",
-        "inventario_endpoint": "Inventário InvAllComputersSummary",
-        "modelo_exportacao": "Modelo de exportação",
-        "catalogos_locais": "Catálogos e históricos locais",
-        "historico_chamados": "Histórico do acompanhamento de chamados",
-    }
-    print("[PRONTIDÃO] Verificação dos arquivos locais:")
-    for key, status in report["files"].items():
-        if not status["available"]:
-            state = f"INDISPONÍVEL ({status['reason']})"
-        elif key == "historico_chamados":
-            state = "JSON válido" if status["reason"] == "OK" else status["reason"]
-        elif key == "catalogos_locais":
-            state = "catálogos e históricos disponíveis"
-        else:
-            state = "PACOTE XLSX válido"
-        filename = status["file"] or "arquivo não localizado"
-        print(f"[PRONTIDÃO] {labels[key]} — {filename}: {state}")
-
-    function_labels = {
-        "consulta_equipamentos": "Consulta de equipamentos",
-        "geracao_transferencia": "Geração de planilha de transferência",
-        "comparacao_atualizacao_inventarios": "Comparação e atualização de inventários",
-        "exportacao_equipamentos": "Exportação de equipamentos",
-        "acompanhamento_chamados": "Acompanhamento de chamados",
-    }
-    for key, status in report["functions"].items():
-        if status["available"]:
-            detail = (
-                "armazenamento do histórico disponível"
-                if key == "acompanhamento_chamados"
-                else "arquivos necessários presentes (checagem estrutural)"
-            )
-            print(f"[PRONTIDÃO] {function_labels[key]}: {detail}.")
-        else:
-            missing = ", ".join(status["missing_files"])
-            print(f"[PRONTIDÃO] {function_labels[key]}: INDISPONÍVEL; dependência ausente ou inválida: {missing}.")
+    for line in readiness.readiness_log_lines(get_startup_readiness()):
+        print(line)
 
 
 def _report_startup_readiness_best_effort() -> None:
@@ -869,184 +606,6 @@ def _raise_if_transaction_recovery_blocked() -> None:
     """Keep automatic batches pending (503 is transient for the inboxes) instead of failing them."""
     if (message := get_transaction_recovery_block()) is not None:
         raise HTTPException(status_code=503, detail=message)
-
-
-def read_workbook_tables(file_bytes: bytes) -> List[Dict[str, Any]]:
-    """Lê abas não vazias de um XLSX e retorna cabeçalhos normalizados e linhas."""
-    workbook = None
-    try:
-        validate_xlsx_package(file_bytes)
-        workbook = openpyxl.load_workbook(
-            io.BytesIO(file_bytes),
-            read_only=True,
-            data_only=True,
-            keep_links=False,
-        )
-        tables = []
-        for worksheet in workbook.worksheets:
-            iterator = worksheet.iter_rows(values_only=True)
-            raw_headers = next(iterator, ())
-            headers = [normalize_workbook_header(value) for value in raw_headers]
-            if not any(headers):
-                continue
-            validate_unambiguous_workbook_headers(raw_headers)
-
-            records = []
-            for excel_row_number, values in enumerate(iterator, start=2):
-                if not any(value is not None and str(value).strip() for value in values):
-                    continue
-                record = {
-                    headers[index]: values[index]
-                    for index in range(min(len(headers), len(values)))
-                    if headers[index]
-                }
-                record["__excel_row_number__"] = excel_row_number
-                records.append(record)
-            tables.append({
-                "sheet": worksheet.title,
-                "headers": set(headers),
-                "column_count": sum(bool(header) for header in headers),
-                "records": records,
-            })
-        return tables
-    except HTTPException:
-        raise
-    except WorkbookHeaderError as error:
-        raise HTTPException(status_code=400, detail=f"Cabeçalhos inválidos: {error}") from None
-    except WORKBOOK_READ_ERRORS as error:
-        logger.warning("Falha ao ler tabelas da planilha (papel=upload, erro=%s).", type(error).__name__)
-        raise HTTPException(
-            status_code=400,
-            detail="O arquivo enviado não contém uma planilha .xlsx válida ou legível.",
-        ) from None
-    finally:
-        if workbook is not None:
-            workbook.close()
-
-
-def select_upload_table(tables: List[Dict[str, Any]], role: str) -> Dict[str, Any]:
-    """Validates the required columns and refuses to guess between matching sheets."""
-    serial_headers = set(DETAILS_SERIAL_HEADER_ALIASES)
-    alias_headers = set(DETAILS_ALIAS_HEADER_ALIASES)
-
-    if role == "detalhes":
-        required = set(DETAILS_REQUIRED_HEADERS)
-        basic_candidates = [
-            table for table in tables
-            if required.issubset(table["headers"])
-            and table["headers"] & serial_headers
-            and table["headers"] & alias_headers
-        ]
-        installation_cnpj_headers = {
-            normalize_workbook_header(alias)
-            for alias in DETAILS_INSTALLATION_CNPJ_HEADER_ALIASES
-        }
-        candidates = [
-            table for table in basic_candidates
-            if table.get("column_count", len(table["headers"] - {""})) == DETAILS_COMPLETE_SOURCE_COLUMN_COUNT
-            and table["headers"] & installation_cnpj_headers
-        ]
-        description = (
-            "a base completa de EquipamentosDetalhes com exatamente "
-            f"{DETAILS_COMPLETE_SOURCE_COLUMN_COUNT} colunas, incluindo número de série, "
-            "apelido/hostname, modelo, cidade e CNPJ de instalação"
-        )
-    elif role == "endpoint":
-        name_headers = {"NOMEDOCOMPUTADOR", "COMPUTERNAME", "HOSTNAME"}
-        service_tag_headers = {
-            "ROTULODESERVICONUMERODESERIE", "NUMEROSERIE", "NUMERODESERIE", "SERIAL", "SERVICETAG"
-        }
-        candidates = [
-            table for table in tables
-            if table["headers"] & name_headers and table["headers"] & service_tag_headers
-        ]
-        description = "nome do computador e rótulo de serviço/número de série"
-    else:
-        raise ValueError(f"Papel de planilha desconhecido: {role}")
-
-    candidates = [table for table in candidates if table["records"]]
-    if not candidates:
-        display_role = {
-            "endpoint": "Endpoint",
-            "detalhes": "Simpress",
-        }[role]
-        if role == "detalhes" and any(table["records"] for table in basic_candidates):
-            actual_column_counts = sorted({
-                table.get("column_count", len(table["headers"] - {""}))
-                for table in basic_candidates
-            })
-            schema_problems = []
-            if any(count != DETAILS_COMPLETE_SOURCE_COLUMN_COUNT for count in actual_column_counts):
-                schema_problems.append(
-                    "possui " + ", ".join(str(count) for count in actual_column_counts) + " colunas"
-                )
-            if any(not (table["headers"] & installation_cnpj_headers) for table in basic_candidates):
-                schema_problems.append("não contém o cabeçalho CNPJ de instalação")
-            problem_summary = " e ".join(schema_problems) or "não corresponde ao formato completo"
-            raise HTTPException(
-                status_code=400,
-                detail=(
-                    f"A planilha enviada como Simpress foi recusada: {problem_summary}. "
-                    "A base de entrada precisa ter exatamente "
-                    f"{DETAILS_COMPLETE_SOURCE_COLUMN_COUNT} colunas e o cabeçalho CNPJ de instalação. "
-                    "A planilha reduzida do Exportar Excel não pode ser usada em Atualizar Planilhas."
-                ),
-            )
-        raise HTTPException(
-            status_code=400,
-            detail=f"A planilha enviada como {display_role} não contém uma aba com os cabeçalhos obrigatórios: {description}.",
-        )
-
-    if len(candidates) > 1:
-        sheet_names = ", ".join(f"'{table['sheet']}'" for table in candidates)
-        display_role = {
-            "endpoint": "Endpoint",
-            "detalhes": "Simpress",
-        }[role]
-        raise HTTPException(
-            status_code=400,
-            detail=(
-                f"O arquivo selecionado para {display_role} tem mais de uma aba compatível "
-                f"({sheet_names}). A seleção automática foi cancelada; envie um arquivo com "
-                "apenas a aba correta para evitar comparar a tabela errada."
-            ),
-        )
-
-    table = candidates[0]
-    if role == "endpoint":
-        name_column = next(key for key in ("NOMEDOCOMPUTADOR", "COMPUTERNAME", "HOSTNAME") if key in table["headers"])
-        populated_rows = sum(1 for row in table["records"] if str(row.get(name_column) or "").strip())
-    else:
-        populated_rows = sum(
-            1 for row in table["records"]
-            if _record_value(row, "NumeroSerie", "Número de série", "Serial", "ServiceTag")
-        )
-
-    if populated_rows == 0:
-        raise HTTPException(status_code=400, detail=f"A aba '{table['sheet']}' não tem linhas de dados utilizáveis.")
-
-    if role == "detalhes":
-        installation_cnpj_column = next(
-            header for header in table["headers"] if header in installation_cnpj_headers
-        )
-        missing_installation_cnpj_rows = sum(
-            1
-            for row in table["records"]
-            if _record_value(row, "NumeroSerie", "Número de série", "Serial", "ServiceTag")
-            and not str(row.get(installation_cnpj_column) or "").strip()
-        )
-        if missing_installation_cnpj_rows:
-            raise HTTPException(
-                status_code=400,
-                detail=(
-                    "A base completa da Simpress contém "
-                    f"{missing_installation_cnpj_rows} série(s) sem CNPJ de instalação. "
-                    "Preencha esse campo para todas as séries antes de atualizar as planilhas."
-                ),
-            )
-
-    table["populated_rows"] = populated_rows
-    return table
 
 
 def inventory_update_preview_summary(
@@ -1241,179 +800,12 @@ def load_endpoint_aliases() -> Dict[str, str]:
 
 def read_endpoint_alias_index() -> Dict[str, Any]:
     """Retorna associações unívocas e linhas que precisam de conferência."""
-    if not ENDPOINT_UPLOAD_FILE.is_file():
-        return {"available": False, "unique": {}, "duplicates": {}, "blank_serials": [], "blank_hostnames": {}, "users": {}}
-
-    try:
-        table = validate_uploaded_workbook(ENDPOINT_UPLOAD_FILE.read_bytes(), "endpoint")
-    except (OSError, HTTPException) as error:
-        logger.warning(
-            "Falha ao ler hostnames (arquivo=%s, papel=endpoint, erro=%s).",
-            ENDPOINT_UPLOAD_FILE.name, type(error).__name__,
-        )
-        return {"available": False, "unique": {}, "duplicates": {}, "blank_serials": [], "blank_hostnames": {}, "users": {}}
-
-    rows_by_serial: Dict[str, List[Dict[str, str]]] = {}
-    users_by_serial: Dict[str, List[str]] = {}
-    blank_serials: List[Dict[str, str]] = []
-    for record in table.get("records", []):
-        serial = _record_value(
-            record,
-            "ROTULODESERVICONUMERODESERIE",
-            "NUMEROSERIE",
-            "NUMERODESERIE",
-            "SERIAL",
-            "SERVICETAG",
-        )
-        serial_key = normalize_reference_value(serial)
-        hostname = str(
-            _record_value(record, "NOMEDOCOMPUTADOR", "COMPUTERNAME", "HOSTNAME", "APELIDO") or ""
-        ).strip()
-        logged_users = str(_record_value(record, "USUARIOSLOGADOS", "USUARIOLOGADO") or "").strip()
-        if normalize_reference_value(logged_users) == "NA":
-            logged_users = ""
-        row = {"serie": str(serial or "").strip(), "hostname": hostname}
-        if serial_key:
-            rows_by_serial.setdefault(serial_key, []).append(row)
-            users_by_serial.setdefault(serial_key, []).append(logged_users)
-        elif hostname:
-            blank_serials.append(row)
-
-    unique: Dict[str, str] = {}
-    duplicates: Dict[str, List[Dict[str, str]]] = {}
-    blank_hostnames: Dict[str, Dict[str, str]] = {}
-    for serial_key, rows in rows_by_serial.items():
-        if len(rows) > 1:
-            duplicates[serial_key] = rows
-        elif rows[0]["hostname"]:
-            unique[serial_key] = rows[0]["hostname"]
-        else:
-            blank_hostnames[serial_key] = rows[0]
-
-    users = {
-        serial_key: values[0]
-        for serial_key, values in users_by_serial.items()
-        if len(values) == 1 and values[0]
-    }
-
-    return {
-        "available": True,
-        "users": users,
-        "unique": unique,
-        "duplicates": duplicates,
-        "blank_serials": blank_serials,
-        "blank_hostnames": blank_hostnames,
-    }
+    return effective_alias.read_endpoint_alias_index(_effective_alias_services)
 
 
-def endpoint_alias_review_items(
-    index: Dict[str, Any],
-    details_serials: Optional[Set[str]] = None,
-    details_duplicate_serials: Optional[Set[str]] = None,
-) -> List[Dict[str, str]]:
-    """Describe InvAll rows that were deliberately not applied."""
-    items: List[Dict[str, str]] = []
-    for serial_key, rows in sorted(index.get("duplicates", {}).items()):
-        items.append({
-            "serie": rows[0].get("serie") or serial_key,
-            "computador": ", ".join(row.get("hostname", "") for row in rows if row.get("hostname")),
-            "motivo": "Série duplicada no endpoint; nenhum hostname foi escolhido.",
-        })
-    for row in index.get("blank_serials", []):
-        items.append({
-            "serie": "",
-            "computador": row.get("hostname", ""),
-            "motivo": "Número de série vazio no endpoint; hostname mantido sem associação.",
-        })
-    for serial_key, row in sorted(index.get("blank_hostnames", {}).items()):
-        items.append({
-            "serie": row.get("serie") or serial_key,
-            "computador": "",
-            "motivo": "Hostname vazio no endpoint; apelido atual preservado.",
-        })
-    if details_serials is not None:
-        raw_details_duplicates = {
-            normalize_reference_value(serial)
-            for serial in (details_duplicate_serials or set())
-        }
-        mac_endpoint_serials = {
-            normalize_reference_value(serial_key)
-            for serial_key, hostname in index.get("unique", {}).items()
-            if normalize_reference_value(hostname).startswith("PRMAC")
-        }
-        normalized_details_serials = set()
-        normalized_details_duplicates = set()
-        canonical_sources: Dict[str, Set[str]] = {}
-        for serial_value in details_serials:
-            serial_key = normalize_reference_value(serial_value)
-            if not serial_key:
-                continue
-            comparison_key = (
-                serial_key[1:]
-                if serial_key.startswith("S") and serial_key[1:] in mac_endpoint_serials
-                else serial_key
-            )
-            normalized_details_serials.add(comparison_key)
-            canonical_sources.setdefault(comparison_key, set()).add(serial_key)
-            if serial_key in raw_details_duplicates:
-                normalized_details_duplicates.add(comparison_key)
-        for comparison_key, source_keys in canonical_sources.items():
-            if len(source_keys) > 1:
-                normalized_details_duplicates.add(comparison_key)
-        details_serials = normalized_details_serials
-        details_duplicates = normalized_details_duplicates
-        for serial_key in sorted(details_duplicates):
-            items.append({
-                "serie": serial_key,
-                "computador": index.get("unique", {}).get(serial_key, ""),
-                "motivo": "Série duplicada na Simpress; nenhum registro foi escolhido.",
-            })
-        known_invall_serials = (
-            set(index.get("unique", {}))
-            | set(index.get("duplicates", {}))
-            | set(index.get("blank_hostnames", {}))
-        )
-        for serial_key in sorted(details_serials - known_invall_serials - details_duplicates):
-            items.append({
-                "serie": serial_key,
-                "computador": "",
-                "motivo": (
-                    "Endpoint indisponível; apelido atual preservado para conferência."
-                    if not index.get("available")
-                    else "Série não encontrada no endpoint; apelido atual preservado."
-                ),
-            })
-        for serial_key, hostname in sorted(index.get("unique", {}).items()):
-            if serial_key not in details_serials:
-                items.append({
-                    "serie": serial_key,
-                    "computador": hostname,
-                    "motivo": "Série não encontrada na Simpress; nenhum dado foi alterado.",
-                })
-    return items
-
-
-def _manual_alias_for_serial(overrides: Dict[str, str], serial: Any, fallback: str) -> str:
-    serial_key = normalize_reference_value(serial)
-    matches = [
-        str(alias or "").strip()
-        for key, alias in overrides.items()
-        if normalize_reference_value(key) == serial_key
-    ]
-    return matches[0] if serial_key and len(matches) == 1 else fallback
-
-
-def _manual_aliases_by_serial(overrides: Dict[str, str]) -> Dict[str, str]:
-    aliases_by_serial: Dict[str, List[str]] = {}
-    for serial, alias in overrides.items():
-        serial_key = normalize_reference_value(serial)
-        if serial_key:
-            aliases_by_serial.setdefault(serial_key, []).append(str(alias or "").strip())
-    return {
-        serial_key: aliases[0]
-        for serial_key, aliases in aliases_by_serial.items()
-        if len(aliases) == 1
-    }
+endpoint_alias_review_items = effective_alias.endpoint_alias_review_items
+_manual_alias_for_serial = effective_alias.manual_alias_for_serial
+_manual_aliases_by_serial = effective_alias.manual_aliases_by_serial
 
 
 def _apply_effective_alias(
@@ -1426,47 +818,24 @@ def _apply_effective_alias(
         with lock_paths([TRANSACTION_ROOT / ".atomic-transactions"]):
             with lock_paths([ENDPOINT_UPLOAD_FILE]):
                 endpoint_index = read_endpoint_alias_index()
-    serial_key = normalize_reference_value(equipment.get("serial"))
-    local_alias = str(equipment.get("_apelido_local", equipment.get("_apelido_base", "")) or "").strip()
-    manual_override = bool(equipment.get("_apelido_manual_override"))
-    equipment["apelido"] = local_alias
-    equipment["usuarios_logados"] = endpoint_index.get("users", {}).get(serial_key, "")
-
-    if not endpoint_index.get("available"):
-        equipment["invall_alias_status"] = "indisponivel"
-        equipment["invall_alias_detail"] = "O Endpoint ativo não pôde ser lido; o apelido atual foi mantido."
-    elif details_duplicate:
-        equipment["invall_alias_status"] = "serie_detalhes_duplicada"
-        equipment["invall_alias_detail"] = "A série aparece mais de uma vez na Simpress; confira antes de aplicar um hostname."
-    elif serial_key in endpoint_index.get("duplicates", {}):
-        equipment["invall_alias_status"] = "serie_invall_duplicada"
-        equipment["invall_alias_detail"] = "A série aparece mais de uma vez no endpoint; o apelido atual foi mantido."
-    elif serial_key in endpoint_index.get("unique", {}):
-        if not manual_override:
-            equipment["apelido"] = endpoint_index["unique"][serial_key]
-        equipment["invall_alias_status"] = "aplicado"
-        equipment["invall_alias_detail"] = (
-            "Série associada ao Endpoint; o apelido manual prevalece."
-            if manual_override
-            else "Hostname do Endpoint associado pela série normalizada."
-        )
-    elif serial_key in endpoint_index.get("blank_hostnames", {}):
-        equipment["invall_alias_status"] = "hostname_vazio"
-        equipment["invall_alias_detail"] = "O Endpoint tem a série, mas o hostname está vazio; o apelido atual foi mantido."
-    else:
-        equipment["invall_alias_status"] = "serie_nao_encontrada"
-        equipment["invall_alias_detail"] = "Série não encontrada no endpoint; o apelido atual foi mantido."
+    effective_alias.apply_effective_alias(equipment, endpoint_index, details_duplicate=details_duplicate)
 
 
 def get_export_aliases(endpoint_index: Optional[Dict[str, Any]] = None) -> Dict[str, str]:
     """Combina hostnames da InvAll com apelidos manuais, que têm prioridade."""
-    aliases = dict(
+    endpoint_aliases = (
         endpoint_index.get("unique", {})
         if endpoint_index is not None
         else load_endpoint_aliases()
     )
-    aliases.update(_manual_aliases_by_serial(load_modified_apelidos()))
-    return aliases
+    return effective_alias.merge_export_aliases(endpoint_aliases, load_modified_apelidos())
+
+
+_effective_alias_services = effective_alias.EffectiveAliasServices(
+    endpoint_upload_file=lambda: ENDPOINT_UPLOAD_FILE,
+    validate_uploaded_workbook=lambda *args, **kwargs: validate_uploaded_workbook(*args, **kwargs),
+    logger=logger,
+)
 
 
 _EXPORT_STATUS_LOCK = threading.Lock()
@@ -1820,286 +1189,32 @@ app = FastAPI(
 app.add_middleware(InventoryUpdateMiddleware)
 
 
-# Sent on every response, early rejections included; HTML pages add their CSP in routers/frontend.py.
-SECURITY_RESPONSE_HEADERS = (
-    (b"x-content-type-options", b"nosniff"),
-    (b"referrer-policy", b"no-referrer"),
-    (b"x-frame-options", b"DENY"),
-    (b"cross-origin-opener-policy", b"same-origin"),
-    (b"cross-origin-resource-policy", b"same-origin"),
-)
-# Sec-Fetch-Site values for the app's own pages and URLs typed or bookmarked by the user.
-_ALLOWED_API_FETCH_SITES = frozenset({b"same-origin", b"none"})
-
-
-def _send_with_security_headers(send):
-    async def send_with_headers(message):
-        if message["type"] == "http.response.start":
-            headers = list(message.get("headers", []))
-            present = {name.lower() for name, _ in headers}
-            headers.extend(header for header in SECURITY_RESPONSE_HEADERS if header[0] not in present)
-            message = {**message, "headers": headers}
-        await send(message)
-
-    return send_with_headers
-
-
-class LocalRequestSafetyMiddleware:
-    """Restrict local peers and authorities, cap uploads, and hide exceptions."""
-
-    def __init__(self, app):
-        self.app = app
-
-    async def __call__(self, scope, receive, send):
-        if scope["type"] != "http":
-            await self.app(scope, receive, send)
-            return
-
-        send = _send_with_security_headers(send)
-        if not is_direct_loopback_request(scope):
-            response = JSONResponse(
-                status_code=403,
-                content={"detail": "A aplicação aceita somente conexões locais diretas, sem proxy."},
-            )
-            await response(scope, receive, send)
-            return
-
-        path = scope.get("path", "")
-        raw_headers = scope.get("headers", [])
-        headers = {key.lower(): value for key, value in raw_headers}
-        host_values = [value for key, value in raw_headers if key.lower() == b"host"]
-        if len(host_values) != 1:
-            response = JSONResponse(
-                status_code=400,
-                content={"detail": "O cabeçalho Host da solicitação é inválido."},
-            )
-            await response(scope, receive, send)
-            return
-
-        host_authority = _parse_request_authority(host_values[0])
-        if host_authority is None:
-            response = JSONResponse(
-                status_code=400,
-                content={"detail": "O cabeçalho Host da solicitação é inválido."},
-            )
-            await response(scope, receive, send)
-            return
-        if host_authority not in _ALLOWED_LOCAL_AUTHORITIES:
-            response = JSONResponse(
-                status_code=403,
-                content={"detail": "O Host não está autorizado para a aplicação local."},
-            )
-            await response(scope, receive, send)
-            return
-
-        origin_values = [value for key, value in raw_headers if key.lower() == b"origin"]
-        if path.startswith("/api/") and origin_values and (
-            len(origin_values) != 1
-            or _parse_request_authority(origin_values[0], is_origin=True) != host_authority
-        ):
-            response = JSONResponse(
-                status_code=403,
-                content={"detail": "Origem não autorizada para a aplicação local."},
-            )
-            await response(scope, receive, send)
-            return
-
-        # GETs from another site carry no Origin; the browser's fetch metadata still names the caller.
-        fetch_sites = [value.lower() for key, value in raw_headers if key.lower() == b"sec-fetch-site"]
-        if path.startswith("/api/") and fetch_sites and (
-            len(fetch_sites) != 1 or fetch_sites[0] not in _ALLOWED_API_FETCH_SITES
-        ):
-            response = JSONResponse(
-                status_code=403,
-                content={"detail": "Origem não autorizada para a aplicação local."},
-            )
-            await response(scope, receive, send)
-            return
-
-        is_inventory_upload = path in INVENTORY_UPLOAD_PATHS
-        is_model_upload = path.startswith("/api/modelos/") and path.endswith("/importar")
-        is_ticket_upload = path == "/api/operacoes/chamados/importar"
-        body_limit = (
-            MAX_UPLOAD_REQUEST_BYTES if is_inventory_upload
-            else MAX_UPLOAD_BYTES + 1024 * 1024 if is_model_upload
-            else 2 * MAX_TICKET_WORKBOOK_BYTES + 1024 * 1024 if is_ticket_upload
-            else MAX_API_REQUEST_BYTES if path.startswith("/api/") and scope.get("method") in {"POST", "PUT", "PATCH"}
-            else None
-        )
-        if body_limit is not None:
-            content_length = headers.get(b"content-length")
-            if content_length is not None:
-                try:
-                    request_size = int(content_length)
-                except (TypeError, ValueError):
-                    response = JSONResponse(
-                        status_code=400,
-                        content={"detail": "O tamanho do envio é inválido."},
-                    )
-                    await response(scope, receive, send)
-                    return
-                if request_size > body_limit:
-                    response = JSONResponse(
-                        status_code=413,
-                        content={"detail": "O corpo da solicitação excede o limite permitido."},
-                    )
-                    await response(scope, receive, send)
-                    return
-
-        uses_upload_admission = is_inventory_upload or is_model_upload or is_ticket_upload or path == "/api/recarregar-base"
-        if uses_upload_admission:
-            key_headers = [value for name, value in raw_headers if name.lower() == b"idempotency-key"]
-            is_keyed_inventory_update = is_inventory_upload and scope.get("method") == "POST"
-            if is_keyed_inventory_update and len(key_headers) > 1:
-                response = JSONResponse(
-                    status_code=422,
-                    content={"detail": "Informe somente uma Idempotency-Key."},
-                )
-                await response(scope, receive, send)
-                return
-            if (
-                is_keyed_inventory_update
-                and key_headers
-                and not IDEMPOTENCY_KEY_PATTERN.fullmatch(key_headers[0].decode("latin-1"))
-            ):
-                response = JSONResponse(
-                    status_code=422,
-                    content={"detail": "Idempotency-Key deve conter de 1 a 128 letras, números, ponto, hífen, dois-pontos ou sublinhado."},
-                )
-                await response(scope, receive, send)
-                return
-            admitted = UPLOAD_ADMISSION.acquire(blocking=False)
-            if (
-                not admitted
-                and is_keyed_inventory_update
-                and len(key_headers) == 1
-            ):
-                # A keyed retry waits behind the in-flight upload so it can read
-                # the durable receipt instead of failing before idempotency runs.
-                deadline = asyncio.get_running_loop().time() + IDEMPOTENT_UPLOAD_ADMISSION_WAIT_SECONDS
-                while not admitted and asyncio.get_running_loop().time() < deadline:
-                    await asyncio.sleep(0.02)
-                    admitted = UPLOAD_ADMISSION.acquire(blocking=False)
-            if not admitted:
-                response = JSONResponse(
-                    status_code=503,
-                    content={"detail": "A operação de inventário está ocupada. Tente novamente em instantes."},
-                    headers={"Retry-After": "2"},
-                )
-                await response(scope, receive, send)
-                return
-
-        response_started = False
-        request_size = 0
-
-        async def safe_send(message):
-            nonlocal response_started
-            if message["type"] == "http.response.start":
-                response_started = True
-            await send(message)
-
-        async def limited_receive():
-            nonlocal request_size
-            message = await receive()
-            if body_limit is not None and message["type"] == "http.request":
-                request_size += len(message.get("body", b""))
-                if request_size > body_limit:
-                    raise RequestBodyTooLarge()
-            return message
-
-        try:
-            await self.app(scope, limited_receive, safe_send)
-        except RequestBodyTooLarge:
-            if response_started:
-                return
-            response = JSONResponse(
-                status_code=413,
-                content={"detail": "O corpo da solicitação excede o limite permitido."},
-            )
-            await response(scope, receive, send)
-        except LocalJsonCorruptionError as error:
-            if response_started:
-                return
-            response = JSONResponse(status_code=503, content={"detail": str(error)})
-            await response(scope, receive, send)
-        except FileBusyError as error:
-            # Routes without their own mapping (readiness during an import) answer like the others.
-            if response_started:
-                return
-            response = JSONResponse(
-                status_code=409,
-                content={"detail": str(error)},
-                headers={"Retry-After": "2"},
-            )
-            await response(scope, receive, send)
-        except Exception as error:
-            # Frames and source lines only: exception messages may quote workbook cells.
-            logger.error(
-                "Falha interna na rota %s (%s).\n%s",
-                path or "/",
-                type(error).__name__,
-                "".join(traceback.format_tb(error.__traceback__)).rstrip(),
-            )
-            if response_started:
-                return
-            response = JSONResponse(
-                status_code=500,
-                content={"detail": "Falha interna do servidor. Consulte os logs locais."},
-            )
-            await response(scope, receive, send)
-        finally:
-            if uses_upload_admission:
-                UPLOAD_ADMISSION.release()
-
-
 SERVER_PORT = int(os.environ.get("SIMPRESS_PORT", "8000"))
 IDEMPOTENT_UPLOAD_ADMISSION_WAIT_SECONDS = 120
 
-_ALLOWED_LOCAL_AUTHORITIES = frozenset({
-    ("127.0.0.1", SERVER_PORT),
-    ("localhost", SERVER_PORT),
-    ("::1", SERVER_PORT),
-})
+_ALLOWED_LOCAL_AUTHORITIES = allowed_local_authorities(SERVER_PORT)
+_parse_request_authority = parse_request_authority
+
+_local_request_safety_services = LocalRequestSafetyServices(
+    allowed_authorities=lambda: _ALLOWED_LOCAL_AUTHORITIES,
+    inventory_upload_paths=lambda: INVENTORY_UPLOAD_PATHS,
+    body_limits=lambda: RequestBodyLimits(
+        upload_request_bytes=MAX_UPLOAD_REQUEST_BYTES,
+        upload_bytes=MAX_UPLOAD_BYTES,
+        ticket_workbook_bytes=MAX_TICKET_WORKBOOK_BYTES,
+        api_request_bytes=MAX_API_REQUEST_BYTES,
+    ),
+    upload_admission=lambda: UPLOAD_ADMISSION,
+    idempotent_upload_wait_seconds=lambda: IDEMPOTENT_UPLOAD_ADMISSION_WAIT_SECONDS,
+    service_unavailable_errors=(LocalJsonCorruptionError,),
+)
 
 
-def _parse_request_authority(
-    value: bytes,
-    *,
-    is_origin: bool = False,
-) -> Optional[tuple[str, int]]:
-    """Normalize a local Host or HTTP Origin without accepting suffix tricks."""
-    try:
-        text = value.decode("ascii")
-    except UnicodeDecodeError:
-        return None
-    if not text or text != text.strip() or any(ord(character) < 0x20 for character in text):
-        return None
+class LocalRequestSafetyMiddleware(_LocalRequestSafetyMiddleware):
+    """Restrict local peers and authorities, cap uploads, and hide exceptions."""
 
-    try:
-        if is_origin:
-            parsed = urlsplit(text)
-            if (
-                parsed.scheme.lower() != "http"
-                or not parsed.netloc
-                or parsed.path
-                or parsed.query
-                or parsed.fragment
-            ):
-                return None
-        else:
-            parsed = urlsplit(f"//{text}")
-            if parsed.path or parsed.query or parsed.fragment:
-                return None
-        if parsed.username is not None or parsed.password is not None:
-            return None
-        hostname = parsed.hostname
-        port = parsed.port
-    except ValueError:
-        return None
-
-    if hostname is None or port is None:
-        return None
-    return hostname.rstrip(".").lower(), port
+    def __init__(self, app):
+        super().__init__(app, _local_request_safety_services)
 
 
 app.add_middleware(LocalRequestSafetyMiddleware)

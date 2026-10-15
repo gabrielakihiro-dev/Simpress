@@ -8,9 +8,9 @@ Toda thread adquire locks nesta ordem. Ela pode pular níveis, mas nunca voltar 
 
 | Nível | Lock | Onde | Como é adquirido |
 | :--- | :--- | :--- | :--- |
-| 1 | Global `.atomic-transactions` | `AtomicFileTransaction.__enter__`, `recover_pending_transactions`, `load_database()`, `get_startup_readiness()` (`core/integrity.py`, `main.py`) | `lock_paths([root / ".atomic-transactions"])` |
+| 1 | Global `.atomic-transactions` | `AtomicFileTransaction.__enter__`, `recover_pending_transactions`, `load_database()` (`core/integrity.py`, `main.py`) | `lock_paths([root / ".atomic-transactions"])` |
 | 2 | Locks de arquivo | `lock_paths(...)`: `RLock` por caminho e `.<arquivo>.lock` do sistema operacional | Uma única chamada com todos os caminhos, em ordem canônica. Fora de transação, só leitura (prévia, modelo de transferência) |
-| 3 | Locks Python (folha) | `STATE_LOCK`, `ALIAS_HISTORY_LOCK`, `COMPARISON_HISTORY_LOCK`, `MODIFIED_APELIDOS_LOCK`, `_READINESS_VALIDATION_LOCK`, `_TRANSACTION_RECOVERY_BLOCK_LOCK`, `_EXPORT_STATUS_LOCK`, `_EXPORT_COUNTS_LOCK` (`main.py`); `_PATH_CACHE_LOCK` (`core/xlsx_safety.py`); `_equipment_search_index_lock` (`persistence/postgres.py`) | `with LOCK:` em volta de memória ou de uma única leitura de arquivo |
+| 3 | Locks Python (folha) | `STATE_LOCK`, `ALIAS_HISTORY_LOCK`, `COMPARISON_HISTORY_LOCK`, `MODIFIED_APELIDOS_LOCK`, `_READINESS_VALIDATION_LOCK` e o lock de `ReadinessReportCache` (`domains/readiness.py`), `_TRANSACTION_RECOVERY_BLOCK_LOCK`, `_EXPORT_STATUS_LOCK`, `_EXPORT_COUNTS_LOCK` (`main.py`); `_PATH_CACHE_LOCK` (`core/xlsx_safety.py`); `_equipment_search_index_lock` (`persistence/postgres.py`) | `with LOCK:` em volta de memória ou de uma única leitura de arquivo |
 
 `AtomicFileTransaction.add_target` pega mais locks de arquivo depois dos primeiros. Isso é seguro porque só acontece com o lock global preso, que serializa todas as transações.
 
@@ -45,3 +45,7 @@ Efeito colateral aceito: antes, um leitor do histórico de comparações esperav
 - Com a hierarquia, a leitura termina na hora, a transação fecha e a operação conclui.
 
 O resultado não depende do escalonamento das threads, porque a sincronização é feita por eventos. Cada thread tem limite de 10 s.
+
+## Prontidão sem lock global
+
+Passo 7 do roteiro (15/10/2026). `get_startup_readiness()` não pega mais o lock global. Os escritores trocam arquivos com `os.replace`, então a prontidão lê a versão anterior ou a nova. O relatório fica em `ReadinessReportCache` por até 2 s, e só enquanto a assinatura dos arquivos lidos (caminho, tamanho, `mtime` e `ctime`), o estado carregado em memória e o bloqueio de gravação forem os mesmos. A assinatura é tirada antes de montar o relatório, e o relatório é montado fora do lock do cache. Uma importação em andamento não gera mais `FileBusyError` (HTTP 500) em `/api/prontidao`.

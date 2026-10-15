@@ -18,7 +18,9 @@ with (
 HTTP_TEST_AVAILABLE = importlib.util.find_spec("httpx") is not None
 if HTTP_TEST_AVAILABLE:
     from fastapi.testclient import TestClient
+from core.integrity import FileBusyError
 from core.inventory_requests import InventoryUpdateMiddleware
+from security import local_requests
 from uvicorn.middleware.proxy_headers import ProxyHeadersMiddleware
 
 
@@ -81,7 +83,7 @@ class LocalRequestSecurityTests(unittest.TestCase):
             with self.subTest(client=client):
                 status, headers, _ = run_endpoint(ok_endpoint, client=client)
                 self.assertEqual(status, expected)
-                for name, value in main.SECURITY_RESPONSE_HEADERS:
+                for name, value in local_requests.SECURITY_RESPONSE_HEADERS:
                     self.assertEqual(headers[name], value)
 
     def test_route_headers_take_precedence_over_defaults(self):
@@ -108,7 +110,7 @@ class LocalRequestSecurityTests(unittest.TestCase):
 
     def test_unmapped_busy_file_answers_409_with_its_message(self):
         async def busy(scope, receive, send):
-            raise main.FileBusyError("A planilha ou configuração está ocupada por outra operação local.")
+            raise FileBusyError("A planilha ou configuração está ocupada por outra operação local.")
 
         status, headers, body = run_endpoint(busy, path="/api/prontidao")
         self.assertEqual(status, 409)
@@ -121,7 +123,7 @@ class LocalRequestSecurityTests(unittest.TestCase):
         async def failing(scope, receive, send):
             raise ValueError(private_value)
 
-        with self.assertLogs(main.logger, level="ERROR") as captured:
+        with self.assertLogs(local_requests.logger, level="ERROR") as captured:
             status, _, body = run_endpoint(failing, path="/api/stats")
         self.assertEqual(status, 500)
         self.assertNotIn("PRIVATE_CELL_VALUE", body.decode("utf-8"))

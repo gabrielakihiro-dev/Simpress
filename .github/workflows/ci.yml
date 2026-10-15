@@ -40,10 +40,24 @@ jobs:
       - name: Run isolated Python tests
         run: python -B tests/run_tests.py
       - name: Run browser workflow tests
-        run: node --test tests/frontend/test_transfer_workflows.cjs tests/frontend/test_inventory_ui_flows.cjs tests/frontend/test_history_annotation_retries.cjs tests/frontend/test_history_annotations.cjs tests/frontend/test_annotation_version_ui.cjs tests/frontend/test_form_draft_guard.cjs tests/frontend/test_catalog_search_utils.cjs tests/frontend/test_ui_motion.cjs tests/frontend/test_dom_utils.cjs tests/frontend/test_lucide_subset.cjs tests/frontend/test_action_dispatcher.cjs
+        run: node --test tests/frontend/test_transfer_workflows.cjs tests/frontend/test_inventory_ui_flows.cjs tests/frontend/test_history_annotation_retries.cjs tests/frontend/test_history_annotations.cjs tests/frontend/test_annotation_version_ui.cjs tests/frontend/test_form_draft_guard.cjs tests/frontend/test_catalog_search_utils.cjs tests/frontend/test_ui_motion.cjs tests/frontend/test_dom_utils.cjs tests/frontend/test_lucide_subset.cjs tests/frontend/test_action_dispatcher.cjs tests/frontend/test_feature_modules.cjs tests/frontend/test_data_panels.cjs tests/frontend/test_ux_enhancements.cjs
       - name: Check JavaScript syntax
         run: |
           node --check static/app.js
+          node --check static/js/shared/history-format.js
+          node --check static/js/features/app-shell.js
+          node --check static/js/features/dashboard.js
+          node --check static/js/features/regional-contacts.js
+          node --check static/js/features/transfer-form.js
+          node --check static/js/features/equipment-search.js
+          node --check static/js/features/units-catalog.js
+          node --check static/js/features/inventory-upload.js
+          node --check static/js/features/comparison-result.js
+          node --check static/js/features/comparison-history.js
+          node --check static/js/features/ticket-rules.js
+          node --check static/js/features/ticket-tracking.js
+          node --check static/js/features/equipment-editor.js
+          node --check static/js/features/alias-history.js
           node --check static/js/shared/dom-utils.js
           node --check static/js/ui/accessible-dialogs.js
           node --check static/js/shared/transfer-utils.js
@@ -63,7 +77,7 @@ jobs:
       - name: Check Python syntax
         run: python -m compileall -q core/config.py main.py core/integrity.py core/openpyxl_compat.py core/xlsx_safety.py core/logging_setup.py domains routers security scripts tests/support/serve_ui_motion_preview.py
       - name: Run gradual static type checks
-        run: python -m mypy --explicit-package-bases --platform win32 --ignore-missing-imports --check-untyped-defs core/config.py main.py core/integrity.py core/logging_setup.py core/openpyxl_compat.py core/xlsx_safety.py domains/history_export.py domains/inventory_comparison.py domains/inventory_update.py domains/equipment_search.py routers/inventory_history.py routers/transfers.py routers/equipment_search.py routers/system.py routers/units.py core/inventory_requests.py security scripts/migrate_local_data.py scripts/cleanup_local_temps.py
+        run: python -m mypy --explicit-package-bases --platform win32 --ignore-missing-imports --check-untyped-defs core/config.py main.py core/integrity.py core/logging_setup.py core/openpyxl_compat.py core/xlsx_safety.py domains/history_export.py domains/inventory_comparison.py domains/inventory_update.py domains/equipment_search.py domains/effective_alias.py domains/uploaded_workbooks.py domains/readiness.py routers/inventory_history.py routers/transfers.py routers/equipment_search.py routers/system.py routers/units.py core/inventory_requests.py security scripts/migrate_local_data.py scripts/cleanup_local_temps.py
       - name: Check tracked files for common credentials
         run: python -B scripts/check_secrets.py
       - name: Install interface asset dependencies
