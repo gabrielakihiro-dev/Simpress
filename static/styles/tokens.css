@@ -165,7 +165,6 @@ html[data-theme="light"] {
 /* Components consume these timings instead of overriding the user's preference. */
 @media (prefers-reduced-motion: reduce) {
   :root {
-    --motion-duration: 0.01ms;
     --motion-fast: 0.01ms;
     --motion-normal: 0.01ms;
     --default-transition-duration: 0.01ms;

@@ -4,6 +4,7 @@
   const STORAGE_KEY = "simpress.sidebar.collapsed";
   const MOBILE_QUERY = "(max-width: 767px)";
   const COMPACT_QUERY = "(min-width: 768px) and (max-width: 1199px)";
+  const REDUCED_MOTION_QUERY = "(prefers-reduced-motion: reduce)";
 
   function inicializarMenuLateral() {
     const shell = document.getElementById("simpress-app-shell");
@@ -17,10 +18,13 @@
 
     const mobileQuery = window.matchMedia(MOBILE_QUERY);
     const compactQuery = window.matchMedia(COMPACT_QUERY);
+    const reducedMotionQuery = window.matchMedia(REDUCED_MOTION_QUERY);
     let hasSavedPreference = false;
+    // The view transition applies the state a frame later; a quick second click must see the pending one.
+    let recolhidoPendente = null;
 
     function menuRecolhido() {
-      return shell.dataset.sidebarCollapsed === "true";
+      return recolhidoPendente ?? shell.dataset.sidebarCollapsed === "true";
     }
 
     function menuMovelAberto() {
@@ -42,8 +46,20 @@
       mobileOpenButton.setAttribute("aria-expanded", String(menuMovelAberto()));
     }
 
-    function definirMenuRecolhido(recolhido, persistir = true) {
-      shell.dataset.sidebarCollapsed = String(recolhido);
+    function definirMenuRecolhido(recolhido, persistir = true, animar = false) {
+      recolhidoPendente = recolhido;
+      const aplicar = () => {
+        if (recolhidoPendente !== recolhido) return;
+        recolhidoPendente = null;
+        shell.dataset.sidebarCollapsed = String(recolhido);
+        atualizarBotoes();
+      };
+      // Without the API, or with reduced motion, the menu switches in a single step.
+      if (animar && typeof document.startViewTransition === "function" && !reducedMotionQuery.matches) {
+        document.startViewTransition(aplicar);
+      } else {
+        aplicar();
+      }
       if (persistir) {
         hasSavedPreference = true;
         try {
@@ -52,7 +68,6 @@
           // The menu remains usable if storage is unavailable.
         }
       }
-      atualizarBotoes();
     }
 
     function fecharMenuMovel(restaurarFoco = false) {
@@ -95,7 +110,7 @@
         fecharMenuMovel(true);
         return;
       }
-      definirMenuRecolhido(!menuRecolhido());
+      definirMenuRecolhido(!menuRecolhido(), true, true);
     });
 
     mobileOpenButton.addEventListener("click", () => {
