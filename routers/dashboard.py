@@ -9,13 +9,14 @@ from fastapi import APIRouter
 ATTENTION_FIELDS = (
     ("divergencias_local", "Divergências com a base local"),
     ("sem_acesso_7_dias", "Sem acesso há 7 dias"),
-    ("ausentes_no_endpoint", "Ausentes no endpoint"),
+    ("ausentes_no_endpoint", "Ausentes no endpoint (somente Notebooks e MacBooks)"),
     ("ausentes_em_detalhes", "Ausentes nos detalhes"),
     ("divergencias_apelidos_manuais", "Apelidos manuais divergentes"),
     ("correspondencias_ambiguas", "Correspondências ambíguas"),
     ("series_sem_mapeamento", "Séries sem mapeamento"),
 )
 TOP_CITIES = 5
+ENDPOINT_ABSENCE_CATEGORIES = frozenset({"notebook", "macbook"})
 
 
 @dataclass(frozen=True)
@@ -34,15 +35,32 @@ def _count(value: Any) -> int:
         return 0
 
 
+def _endpoint_absences_in_scope(items: Sequence[Any], category_by_serial: Dict[str, str]) -> int:
+    """Count endpoint absences whose serial belongs to notebooks or MacBooks in the base."""
+    total = 0
+    for item in items:
+        if not isinstance(item, dict):
+            continue
+        serials = str(item.get("serie") or "").split(" / ")
+        if any(category_by_serial.get(serial.strip().upper()) in ENDPOINT_ABSENCE_CATEGORIES for serial in serials):
+            total += 1
+    return total
+
+
 def build_dashboard(services: DashboardServices) -> Dict[str, Any]:
     equipment = list(services.get_equipment())
     by_category: Counter = Counter()
     by_city: Counter = Counter()
+    category_by_serial: Dict[str, str] = {}
     without_city = 0
     for item in equipment:
         if not isinstance(item, dict):
             continue
-        by_category[services.categorize(item.get("tipo"), item.get("modelo"))] += 1
+        category = services.categorize(item.get("tipo"), item.get("modelo"))
+        by_category[category] += 1
+        serial = str(item.get("serial") or "").strip().upper()
+        if serial:
+            category_by_serial[serial] = category
         city = str(item.get("retirada_cidade") or "").strip()
         if city:
             by_city[city] += 1
@@ -64,14 +82,22 @@ def build_dashboard(services: DashboardServices) -> Dict[str, Any]:
         event = events[0]
         summary_value: Any = event.get("resumo")
         summary: Dict[str, Any] = summary_value if isinstance(summary_value, dict) else {}
+        details_value: Any = event.get("comparacao")
+        details: Dict[str, Any] = details_value if isinstance(details_value, dict) else {}
+        absences_value: Any = details.get("ausentes_no_endpoint")
+        totals = {field: _count(summary.get(field)) for field, _ in ATTENTION_FIELDS}
+        # Without the detailed list the notebook/MacBook scope cannot be applied, so the row is omitted.
+        totals["ausentes_no_endpoint"] = (
+            _endpoint_absences_in_scope(absences_value, category_by_serial) if isinstance(absences_value, list) else 0
+        )
         latest = {
             "id": event.get("id"),
             "horario": event.get("horario"),
             "tipo": event.get("tipo"),
             "atencao": [
-                {"campo": field, "rotulo": label, "total": _count(summary.get(field))}
+                {"campo": field, "rotulo": label, "total": totals[field]}
                 for field, label in ATTENTION_FIELDS
-                if _count(summary.get(field)) > 0
+                if totals[field] > 0
             ],
         }
 

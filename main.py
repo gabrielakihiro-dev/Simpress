@@ -3123,13 +3123,23 @@ app.include_router(transfer_history_router)
 def _dashboard_equipment_snapshot() -> List[Dict[str, Any]]:
     with STATE_LOCK:
         return [
-            {"tipo": item.get("tipo"), "modelo": item.get("modelo"), "retirada_cidade": item.get("retirada_cidade")}
+            {"serial": item.get("serial"), "tipo": item.get("tipo"), "modelo": item.get("modelo"), "retirada_cidade": item.get("retirada_cidade")}
             for item in equipamentos_cache.values()
         ]
 
 
 def _dashboard_comparison_events() -> List[Dict[str, Any]]:
-    return get_historico_comparacoes()["eventos"]
+    eventos = get_historico_comparacoes()["eventos"]
+    if not eventos:
+        return eventos
+    # The list endpoint omits the detailed comparison; the panel only reads the newest event,
+    # so only that event receives the endpoint absence list needed for the notebook/MacBook count.
+    newest_id = str(eventos[0].get("id") or "")
+    for item in load_comparison_history():
+        if isinstance(item, dict) and str(item.get("id") or "") == newest_id and isinstance(item.get("comparacao"), dict):
+            details = {"ausentes_no_endpoint": item["comparacao"].get("ausentes_no_endpoint")}
+            return [{**eventos[0], "comparacao": details}, *eventos[1:]]
+    return eventos
 
 
 dashboard_router, _dashboard_exports = create_dashboard_router(DashboardServices(
