@@ -4,7 +4,7 @@
   else (root.SimpressFeatures = root.SimpressFeatures || {}).dashboard = factory;
 })(typeof window !== "undefined" ? window : globalThis, function createDashboard(context) {
   "use strict";
-  const { app, transferUtils } = context;
+  const { app, transferUtils, motion } = context;
   const { pluralize } = context.dom;
 
   const readinessRequestGate = transferUtils.createRequestGate();
@@ -101,6 +101,11 @@
       adicionarGrupoAcompanhamentoChamados(content, report);
       if (report.files.modelo_exportacao) adicionarGrupoModeloExportacao(content, report.files.modelo_exportacao);
       details.replaceChildren(content);
+      // Later refreshes after saves update in place; only the first render cascades in.
+      if (!details.dataset.revealed) {
+        details.dataset.revealed = "true";
+        motion?.stagger(details.children);
+      }
     } catch (error) {
       if (!readinessRequestGate.isCurrent(request.id)) return;
       panel.dataset.state = "error";

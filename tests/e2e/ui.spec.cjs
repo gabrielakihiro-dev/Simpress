@@ -105,7 +105,7 @@ test("sidebar tools keep accent colors and fit the multiline ticket label", asyn
   expect(exportStyle.backgroundImage).toContain("linear-gradient");
   expect(exportStyle.fontWeight).toBe("700");
   expect(ticketBackground).toContain("234, 88, 12");
-  expect(analysisBackground).toContain("109, 40, 217");
+  expect(analysisBackground).toContain("2, 132, 199");
 });
 
 test("tab navigation updates selected state and supports arrow keys", async ({ page }, testInfo) => {
