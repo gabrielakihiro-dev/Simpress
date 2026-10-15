@@ -4,7 +4,7 @@
   else (root.SimpressFeatures = root.SimpressFeatures || {}).ticketTracking = factory;
 })(typeof window !== "undefined" ? window : globalThis, function createTicketTracking(context) {
   "use strict";
-  const { app, appState, transferUtils } = context;
+  const { app, appState, transferUtils, motion } = context;
   const { escapeHtml } = context.dom;
   const { formatarHorarioHistorico } = context.historyFormat;
   const {
@@ -230,7 +230,10 @@
       return;
     }
 
+    // Cascade only when cards replace a message; re-filtering while typing must not replay it.
+    const primeiraRenderizacao = !list.querySelector?.("article[data-ticket-serial]");
     list.innerHTML = records.map(record => renderizarCartaoChamado(record, data.snapshot_id, expandedSections)).join("");
+    if (primeiraRenderizacao) motion?.stagger(list.children);
     list.querySelectorAll?.('details[data-ticket-section="timeline"]').forEach(section => {
       const card = section.closest("article[data-ticket-serial]");
       if (card && expandedSections.has(chaveSecaoCartao(card.dataset.ticketSerial || "", "timeline"))) section.open = true;

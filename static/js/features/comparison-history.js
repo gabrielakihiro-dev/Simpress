@@ -182,6 +182,7 @@
       }
 
       eventos.forEach(evento => lista.appendChild(criarCartaoHistoricoComparacao(evento)));
+      motion?.stagger(lista.children);
     } catch (err) {
       console.error("Erro ao carregar histórico de planilhas:", err);
       const select = document.getElementById("data-exportar-historico-comparacoes");
