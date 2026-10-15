@@ -3,6 +3,7 @@ const fs = require("node:fs");
 const path = require("node:path");
 const test = require("node:test");
 const { dispatch } = require("../../static/js/ui/action-dispatcher.js");
+const { appScriptFiles } = require("./support/app-sources.cjs");
 
 function element(attrs = {}, parentElement = null) {
   return {
@@ -86,7 +87,7 @@ test("click targets forward to another element and unknown actions only warn", (
 
 test("pages no longer use inline event handler attributes", () => {
   const root = path.resolve(__dirname, "..", "..", "static");
-  for (const file of ["index.html", "app.js"]) {
+  for (const file of ["index.html", ...appScriptFiles()]) {
     const source = fs.readFileSync(path.join(root, file), "utf8");
     assert.doesNotMatch(source, /\son[a-z]+\s*=\s*["']/, file);
   }

@@ -30,6 +30,13 @@ with patch(
 PROJECT_ROOT = Path(__file__).resolve().parents[1]
 
 
+def _frontend_script() -> str:
+    """static/app.js and the feature modules it bootstraps, in index.html order."""
+    html = (app_config.STATIC_DIR / "index.html").read_text(encoding="utf-8")
+    files = re.findall(r'<script src="/static/((?:js/features/[^"]+|js/shared/history-format\.js|app\.js))"></script>', html)
+    return "\n".join((app_config.STATIC_DIR / name).read_text(encoding="utf-8") for name in files)
+
+
 def _xlsx_with_worksheet_xml(*worksheet_xml: str) -> bytes:
     content = io.BytesIO()
     with zipfile.ZipFile(content, "w") as archive:
@@ -246,7 +253,7 @@ class MaintenanceContractTests(unittest.TestCase):
         self.assertRegex(css, r"\.modal-overlay\s*\{\s*z-index:\s*120;\s*\}")
 
     def test_excel_exports_show_only_success_confirmation(self):
-        script = (app_config.STATIC_DIR / "app.js").read_text(encoding="utf-8")
+        script = _frontend_script()
         self.assertEqual(
             script.count('showToast("Planilha Exportada com Sucesso!", "success");'),
             2,
@@ -310,7 +317,7 @@ class MaintenanceContractTests(unittest.TestCase):
         self.assertEqual(defaults["retirada_email"], app_config.TRANSFER_ORIGIN_EMAIL)
         self.assertEqual(defaults["retirada_telefone"], app_config.TRANSFER_ORIGIN_PHONE)
         html = (app_config.STATIC_DIR / "index.html").read_text(encoding="utf-8")
-        script = (app_config.STATIC_DIR / "app.js").read_text(encoding="utf-8")
+        script = _frontend_script()
         self.assertIn("/api/config/transferencia", script)
         self.assertNotIn("gansouza@simpress.com.br", html + script)
 
@@ -427,7 +434,7 @@ class MaintenanceContractTests(unittest.TestCase):
 
     def test_readiness_panel_has_one_disclosure_and_renders_text_safely(self):
         html = (app_config.STATIC_DIR / "index.html").read_text(encoding="utf-8")
-        script = (app_config.STATIC_DIR / "app.js").read_text(encoding="utf-8")
+        script = _frontend_script()
         panel_start = script.index("async function carregarProntidao()")
         panel_end = script.index("function adicionarGrupoProntidao", panel_start)
         panel_script = script[panel_start:panel_end]
@@ -646,7 +653,7 @@ class MaintenanceContractTests(unittest.TestCase):
         self.assertEqual(mounts[0].path, "/static")
 
     def test_restore_invalidates_stale_equipment_and_refreshes_inventory_views(self):
-        script = (app_config.STATIC_DIR / "app.js").read_text(encoding="utf-8")
+        script = _frontend_script()
         invalidation_start = script.index("function invalidarDadosEquipamentoAposRestauracao()")
         invalidation_end = script.index("const inputSerialInicial", invalidation_start)
         invalidation = script[invalidation_start:invalidation_end]
