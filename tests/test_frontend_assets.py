@@ -1,10 +1,12 @@
 """Frontend updates must replace cached assets even with unchanged timestamps."""
 
+import hashlib
 import os
 from pathlib import Path
 import re
 import tempfile
 import unittest
+from unittest.mock import patch
 
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
@@ -43,6 +45,15 @@ class FrontendAssetTests(unittest.TestCase):
         self.assertNotEqual(old_url, new_url)
         self.assertEqual(self.client.get(new_url).text, "window.revision = 2;")
         self.assertEqual(new_html.text, versioned_html(self.root))
+
+    def test_unchanged_assets_reuse_their_digest(self):
+        first = versioned_html(self.root)
+        with patch("domains.frontend_assets.hashlib.sha256", wraps=hashlib.sha256) as sha256:
+            self.assertEqual(versioned_html(self.root), first)
+            sha256.assert_not_called()
+            (self.root / "app.css").write_text("body {color: blue;}", encoding="utf-8")
+            self.assertNotEqual(versioned_html(self.root), first)
+            self.assertEqual(sha256.call_count, 1)
 
     def test_static_responses_revalidate_and_keep_conditional_requests(self):
         response = self.client.get("/static/app.css")
