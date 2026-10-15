@@ -9,7 +9,7 @@ import unittest
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
 
-from domains.frontend_assets import versioned_html
+from domains.frontend_assets import CONTENT_SECURITY_POLICY, versioned_html
 from routers.frontend import RevalidatingStaticFiles, frontend_response
 
 
@@ -51,6 +51,21 @@ class FrontendAssetTests(unittest.TestCase):
         cached = self.client.get("/static/app.css", headers={"If-None-Match": response.headers["etag"]})
         self.assertEqual(cached.status_code, 304)
         self.assertEqual(cached.headers["cache-control"], "no-cache")
+
+    def test_pages_forbid_inline_scripts_through_content_security_policy(self):
+        policy = self.client.get("/").headers["content-security-policy"]
+        self.assertEqual(policy, CONTENT_SECURITY_POLICY)
+        script_src = next(part for part in policy.split(";") if part.strip().startswith("script-src"))
+        self.assertEqual(script_src.strip(), "script-src 'self'")
+        self.assertIn("frame-ancestors 'none'", policy)
+
+    def test_real_pages_have_no_inline_scripts_or_event_handler_attributes(self):
+        static_dir = Path(__file__).resolve().parents[1] / "static"
+        for name in ("index.html", "pages/login.html"):
+            html = (static_dir / name).read_text(encoding="utf-8")
+            self.assertNotRegex(html, r"\son[a-z]+\s*=\s*[\"']", name)
+            self.assertNotRegex(html, r"<script(?![^>]*\bsrc=)[^>]*>", name)
+            self.assertNotIn("javascript:", html, name)
 
 
 if __name__ == "__main__":

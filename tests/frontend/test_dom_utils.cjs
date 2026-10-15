@@ -49,3 +49,12 @@ test("highlighting text around HTML entities preserves the original visible valu
     "A&#039;<span class=\"serial-match\">039</span>x &amp;amp",
   );
 });
+
+test("pluralize keeps the singular only for exactly one item", () => {
+  const { pluralize } = createDomUtils(fakeDocument());
+  assert.equal(pluralize(1, "equipamento"), "equipamento");
+  assert.equal(pluralize(0, "equipamento"), "equipamentos");
+  assert.equal(pluralize(16467, "equipamento"), "equipamentos");
+  assert.equal(pluralize("1", "filial catalogada", "filiais catalogadas"), "filial catalogada");
+  assert.equal(pluralize(2, "filial catalogada", "filiais catalogadas"), "filiais catalogadas");
+});

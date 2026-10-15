@@ -14,7 +14,7 @@ from urllib.parse import parse_qs, unquote, urlsplit
 
 STATIC = Path(__file__).resolve().parents[2] / "static"
 sys.path.insert(0, str(STATIC.parent))
-from domains.frontend_assets import versioned_html
+from domains.frontend_assets import CONTENT_SECURITY_POLICY, versioned_html
 EQUIPMENT = {"serial": "LENTO", "modelo": "Notebook de demonstração", "tipo": "Notebook",
              "apelido": "DEMO-001", "retirada_cidade": "Curitiba", "retirada_endereco": "Endereço fictício"}
 DEMO_EVENT_ID = "fixture-event-001"
@@ -74,6 +74,8 @@ class Handler(BaseHTTPRequestHandler):
         self.send_header("Content-Type", content_type)
         self.send_header("Content-Length", str(len(payload)))
         self.send_header("Cache-Control", "no-store")
+        if content_type.startswith("text/html"):
+            self.send_header("Content-Security-Policy", CONTENT_SECURITY_POLICY)
         self.end_headers()
         try:
             self.wfile.write(payload)

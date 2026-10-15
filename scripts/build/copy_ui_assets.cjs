@@ -1,5 +1,6 @@
 const fs = require("node:fs");
 const path = require("node:path");
+const { writeLucideSubset } = require("./lucide-subset.cjs");
 
 const root = path.resolve(__dirname, "..", "..");
 const vendorDir = path.join(root, "static", "vendor");
@@ -18,11 +19,8 @@ function copyPackageFile(packageName, sourceRelativePath, destinationName) {
   fs.copyFileSync(source, destination);
 }
 
-copyPackageFile(
-  "lucide",
-  "dist/umd/lucide.min.js",
-  `lucide-${versions.lucide}.min.js`,
-);
+writeLucideSubset(root, versions.lucide);
+fs.rmSync(path.join(vendorDir, `lucide-${versions.lucide}.min.js`), { force: true });
 copyPackageFile("lucide", "LICENSE", "LICENSE-lucide.txt");
 copyPackageFile("tailwindcss", "LICENSE", "LICENSE-tailwindcss.txt");
 copyPackageFile(

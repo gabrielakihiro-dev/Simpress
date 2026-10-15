@@ -70,7 +70,7 @@ test("colors the analysis and equipment action groups distinctly", () => {
 
 test("places the ticket action before the analysis group with an orange accent", () => {
   const exportButton = indexHtml.indexOf('id="btn-exportar-equipamentos"');
-  const ticketAction = indexHtml.indexOf('onclick="abrirAcompanhamentoChamados()"');
+  const ticketAction = indexHtml.indexOf('data-on-click="abrirAcompanhamentoChamados"');
   const ticketActionEnd = indexHtml.indexOf("</button>", ticketAction);
   const analysisGroup = indexHtml.indexOf('data-action-group="analysis"');
   assert.ok(ticketAction < analysisGroup);

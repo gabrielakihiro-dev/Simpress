@@ -5,6 +5,7 @@ import hmac
 from starlette.requests import Request
 from starlette.responses import JSONResponse, RedirectResponse
 
+from domains.frontend_assets import CONTENT_SECURITY_POLICY
 from persistence.config import PersistenceError
 from security.context import principal
 
@@ -53,7 +54,7 @@ class AuthenticationMiddleware:
                 fixed = {b"cache-control":b"no-store",b"x-content-type-options":b"nosniff",
                     b"x-frame-options":b"DENY",b"referrer-policy":b"no-referrer",
                     b"permissions-policy":b"camera=(), microphone=(), geolocation=()",
-                    b"content-security-policy":b"default-src 'self'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline'; img-src 'self' data:; font-src 'self'; connect-src 'self'; object-src 'none'; base-uri 'none'; frame-ancestors 'none'; form-action 'self'"}
+                    b"content-security-policy":CONTENT_SECURITY_POLICY.encode()}
                 if settings.secure:
                     fixed[b"strict-transport-security"] = b"max-age=31536000"
                 message = {**message,"headers":[(k,v) for k,v in headers if k.lower() not in fixed]+list(fixed.items())}

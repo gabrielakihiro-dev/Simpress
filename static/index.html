@@ -9,7 +9,7 @@
   
   <link rel="stylesheet" href="/static/vendor/fonts.css">
   <link rel="stylesheet" href="/static/vendor/tailwind-4.3.3.css">
-  <script src="/static/vendor/lucide-1.48.0.min.js"></script>
+  <script src="/static/vendor/lucide-1.48.0-subset.js"></script>
   <link rel="stylesheet" href="/static/app.css">
   <link rel="stylesheet" href="/static/styles/ui-motion.css">
   <link rel="stylesheet" href="/static/styles/sidebar-navigation.css">
@@ -40,7 +40,7 @@
       <div class="sidebar-scroll-area">
         <div class="sidebar-primary-action">
           <div class="header-primary-actions">
-            <button type="button" onclick="resetarFormulario()" id="btn-nova-transferencia" aria-label="Nova transferência" class="header-primary-icon-button sidebar-new-transfer flex items-center justify-center text-sky-100 bg-sky-700 hover:bg-sky-600 border border-sky-500/70 rounded-lg transition-all shadow-sm" title="Nova transferência">
+            <button type="button" data-on-click="resetarFormulario" id="btn-nova-transferencia" aria-label="Nova transferência" class="header-primary-icon-button sidebar-new-transfer flex items-center justify-center text-sky-100 bg-sky-700 hover:bg-sky-600 border border-sky-500/70 rounded-lg transition-all shadow-sm" title="Nova transferência">
               <i data-lucide="rotate-ccw" class="w-4 h-4" aria-hidden="true"></i>
               <span class="sidebar-item-label">Nova transferência</span>
             </button>
@@ -48,12 +48,12 @@
         </div>
 
         <p class="sidebar-section-title">Navegação</p>
-        <nav class="app-tabs sidebar-tabs" role="tablist" aria-label="Etapas da transferência" onkeydown="controlarAbasTransferencia(event)">
-          <button type="button" id="tab-home" class="app-tab is-active" role="tab" aria-selected="true" aria-controls="tab-panel-home" tabindex="0" onclick="ativarAbaTransferencia('home')" aria-label="Home" title="Home">
+        <nav class="app-tabs sidebar-tabs" role="tablist" aria-label="Etapas da transferência" data-on-keydown="controlarAbasTransferencia" data-args='["$event"]'>
+          <button type="button" id="tab-home" class="app-tab is-active" role="tab" aria-selected="true" aria-controls="tab-panel-home" tabindex="0" data-on-click="ativarAbaTransferencia" data-args='["home"]' aria-label="Home" title="Home">
             <i data-lucide="home" class="w-4 h-4" aria-hidden="true"></i>
             <span>Home</span>
           </button>
-          <button type="button" id="tab-retirada-entrega" class="app-tab" role="tab" aria-selected="false" aria-controls="tab-panel-retirada-entrega" tabindex="-1" onclick="ativarAbaTransferencia('transferencia')" aria-label="Transporte" title="Transporte">
+          <button type="button" id="tab-retirada-entrega" class="app-tab" role="tab" aria-selected="false" aria-controls="tab-panel-retirada-entrega" tabindex="-1" data-on-click="ativarAbaTransferencia" data-args='["transferencia"]' aria-label="Transporte" title="Transporte">
             <i data-lucide="truck" class="w-4 h-4" aria-hidden="true"></i>
             <span>Transporte</span>
           </button>
@@ -64,7 +64,7 @@
 
         <nav class="header-actions sidebar-actions" aria-label="Ferramentas do sistema">
           <div class="header-secondary-panel" role="group" aria-label="Ações do sistema">
-            <button type="button" onclick="abrirAcompanhamentoChamados()" id="btn-acompanhamento-chamados" data-sidebar-page class="header-action-item header-action-item--large header-action-item--orange flex items-center gap-2" title="Relacionar séries, OS e status nos arquivos da Simpress e do Oracle">
+            <button type="button" data-on-click="abrirAcompanhamentoChamados" id="btn-acompanhamento-chamados" data-sidebar-page class="header-action-item header-action-item--large header-action-item--orange flex items-center gap-2" title="Relacionar séries, OS e status nos arquivos da Simpress e do Oracle">
               <i data-lucide="clipboard-list" class="header-action-icon header-action-icon--orange" aria-hidden="true"></i>
               <span class="sidebar-item-label">Acompanhamento de<br>Chamados</span>
             </button>
@@ -76,29 +76,29 @@
                 <i data-lucide="chevron-down" class="header-action-group-chevron" aria-hidden="true"></i>
               </summary>
               <div id="header-action-group-analysis" class="header-action-group-items" role="group" aria-label="Atualização, exportação, análises, históricos e catálogo de unidades">
-                <button type="button" onclick="abrirModalAtualizarPlanilhas()" id="btn-atualizar-planilhas" data-sidebar-page class="header-action-item header-action-item--primary flex items-center gap-2" title="Comparar os arquivos e atualizar as bases do site">
+                <button type="button" data-on-click="abrirModalAtualizarPlanilhas" id="btn-atualizar-planilhas" data-sidebar-page class="header-action-item header-action-item--primary flex items-center gap-2" title="Comparar os arquivos e atualizar as bases do site">
                   <i data-lucide="upload" class="header-action-icon" aria-hidden="true"></i>
                   <span class="sidebar-item-label">Atualizar planilhas</span>
                 </button>
-                <button type="button" onclick="exportarEquipamentosAtualizados()" id="btn-exportar-equipamentos" aria-label="Exportar planilha Excel com apelidos e IdCliente atualizados" aria-labelledby="label-exportar-equipamentos" class="header-action-item header-action-item--primary hidden flex items-center gap-2" title="Baixar a planilha com apelidos e IdCliente atualizados">
-                  <i data-lucide="upload" class="header-action-icon" aria-hidden="true"></i>
+                <button type="button" data-on-click="exportarEquipamentosAtualizados" id="btn-exportar-equipamentos" aria-label="Exportar planilha Excel com apelidos e IdCliente atualizados" aria-labelledby="label-exportar-equipamentos" class="header-action-item header-action-item--primary hidden flex items-center gap-2" title="Baixar a planilha com apelidos e IdCliente atualizados">
+                  <i data-lucide="download" class="header-action-icon" aria-hidden="true"></i>
                   <span id="label-exportar-equipamentos" class="sidebar-item-label">Exportar Excel</span>
                 </button>
                 <div class="sidebar-related-links" role="group" aria-label="Histórico e análise da atualização">
-                  <button type="button" onclick="abrirModalHistoricoComparacoes()" id="btn-historico-comparacoes" data-sidebar-page aria-label="Histórico de atualizações e comparação de planilhas" aria-labelledby="label-historico-comparacoes" class="header-action-item flex items-center gap-2" title="Consultar comparações e alterações de apelido feitas pela atualização das planilhas">
+                  <button type="button" data-on-click="abrirModalHistoricoComparacoes" id="btn-historico-comparacoes" data-sidebar-page aria-label="Histórico de atualizações e comparação de planilhas" aria-labelledby="label-historico-comparacoes" class="header-action-item flex items-center gap-2" title="Consultar comparações e alterações de apelido feitas pela atualização das planilhas">
                     <i data-lucide="history" class="header-action-icon" aria-hidden="true"></i>
                     <span id="label-historico-comparacoes" class="sidebar-item-label">Histórico planilhas</span>
                   </button>
-                  <button type="button" onclick="abrirEvolucaoAtualizacoes()" id="btn-evolucao-atualizacoes" data-sidebar-page class="header-action-item flex items-center gap-2" title="Comparar pendências entre duas atualizações">
+                  <button type="button" data-on-click="abrirEvolucaoAtualizacoes" id="btn-evolucao-atualizacoes" data-sidebar-page class="header-action-item flex items-center gap-2" title="Comparar pendências entre duas atualizações">
                     <i data-lucide="activity" class="header-action-icon" aria-hidden="true"></i>
                     <span class="sidebar-item-label">Evolução das atualizações</span>
                   </button>
                 </div>
-                <button type="button" onclick="abrirModalHistoricoApelidos()" id="btn-historico-apelidos" data-sidebar-page aria-label="Histórico de alterações manuais" aria-labelledby="label-historico-apelidos" class="header-action-item flex items-center gap-2" title="Consultar histórico de alterações manuais">
+                <button type="button" data-on-click="abrirModalHistoricoApelidos" id="btn-historico-apelidos" data-sidebar-page aria-label="Histórico de alterações manuais" aria-labelledby="label-historico-apelidos" class="header-action-item flex items-center gap-2" title="Consultar histórico de alterações manuais">
                   <i data-lucide="history" class="header-action-icon" aria-hidden="true"></i>
                   <span id="label-historico-apelidos" class="sidebar-item-label">Histórico de alterações</span>
                 </button>
-                <button type="button" onclick="abrirModalGerenciarUnidades()" id="btn-catalogo-unidades" data-sidebar-page aria-label="Catálogo de unidades SEBRAE" aria-labelledby="label-catalogo-unidades" class="header-action-item flex items-center gap-2" title="Consultar e gerenciar o catálogo de unidades SEBRAE">
+                <button type="button" data-on-click="abrirModalGerenciarUnidades" id="btn-catalogo-unidades" data-sidebar-page aria-label="Catálogo de unidades SEBRAE" aria-labelledby="label-catalogo-unidades" class="header-action-item flex items-center gap-2" title="Consultar e gerenciar o catálogo de unidades SEBRAE">
                   <i data-lucide="map-pin" class="header-action-icon" aria-hidden="true"></i>
                   <span id="label-catalogo-unidades" class="sidebar-item-label">Catálogo de unidades</span>
                 </button>
@@ -121,7 +121,7 @@
             <strong>Gestão de equipamentos</strong>
           </div>
           <div class="header-base-summary hidden md:flex items-center gap-3 text-xs text-slate-400 bg-slate-900/80 px-3.5 py-2 rounded-lg border border-slate-800" aria-label="Resumo da base">
-            <span class="inline-flex items-center gap-1.5"><span class="h-1.5 w-1.5 rounded-full bg-emerald-400" aria-hidden="true"></span>Base: <strong class="text-slate-200" id="stat-equipamentos">Carregando…</strong> equipamentos</span>
+            <span class="inline-flex items-center gap-1.5"><span class="h-1.5 w-1.5 rounded-full bg-emerald-400" aria-hidden="true"></span>Base: <strong class="text-slate-200" id="stat-equipamentos">Carregando…</strong> <span id="stat-equipamentos-rotulo">equipamentos</span></span>
             <span aria-hidden="true" class="text-slate-700">|</span>
             <span>Regionais: <strong class="text-slate-200" id="stat-unidades">Carregando…</strong></span>
             <span aria-hidden="true" class="text-slate-700">|</span>
@@ -158,7 +158,7 @@
 
       <div class="relative">
         <label for="input-serial" class="home-search-label font-bold text-white">Pesquise por série, apelido, modelo ou cidade</label>
-        <form onsubmit="event.preventDefault(); buscarSerial();" class="flex flex-col sm:flex-row gap-4">
+        <form data-on-submit="buscarSerial" class="flex flex-col sm:flex-row gap-4">
           <div class="relative flex-1">
             <input
               type="text"
@@ -173,15 +173,15 @@
               autocomplete="off"
               placeholder="Série, apelido, modelo ou cidade..."
               class="home-search-input w-full rounded-xl glass-input text-white font-mono tracking-wider placeholder:text-slate-500 placeholder:font-sans focus:outline-none uppercase"
-              oninput="handleSerialInput(this.value)"
-              onkeydown="handleSerialKeydown(event)"
+              data-on-input="handleSerialInput" data-args='["$value"]'
+              data-on-keydown="handleSerialKeydown" data-args='["$event"]'
             />
             <button
               type="button"
               id="btn-clear-serial"
               aria-label="Limpar pesquisa"
               title="Limpar pesquisa"
-              onclick="limparSerial()"
+              data-on-click="limparSerial"
               class="hidden absolute inset-y-0 right-0 pr-3.5 flex items-center text-slate-400 hover:text-white transition-colors"
             >
               <i data-lucide="x" class="w-5 h-5"></i>
@@ -233,7 +233,7 @@
           <div id="autocomplete-list" role="listbox" aria-label="Equipamentos encontrados" class="divide-y divide-slate-800/80 max-h-96 overflow-y-auto"></div>
           <div id="autocomplete-empty-state" class="hidden" role="region" aria-label="Resultado da busca" aria-live="polite"></div>
           <div id="autocomplete-more-results" class="hidden px-4 py-2 border-t border-slate-800">
-            <button type="button" onclick="abrirPesquisaCompleta()" class="autocomplete-more-button w-full inline-flex items-center justify-center gap-2 px-3 py-2 rounded-xl transition">
+            <button type="button" data-on-click="abrirPesquisaCompleta" class="autocomplete-more-button w-full inline-flex items-center justify-center gap-2 px-3 py-2 rounded-xl transition">
               <i data-lucide="list-checks" class="w-4 h-4" aria-hidden="true"></i>
               <span data-autocomplete-more-label>Mostrar mais</span>
             </button>
@@ -274,7 +274,7 @@
                 </span>
                 <button
                   type="button"
-                  onclick="abrirModalEditarApelido()"
+                  data-on-click="abrirModalEditarApelido"
                   class="inline-flex items-center gap-1 px-2 py-1 rounded-lg bg-cyan-500/10 hover:bg-cyan-500/20 text-cyan-300 border border-cyan-500/30 text-[11px] font-semibold transition"
                   title="Alterar somente o apelido deste equipamento"
                 >
@@ -300,7 +300,7 @@
             <div class="mt-2 flex flex-wrap items-center gap-1.5" role="group" aria-label="Copiar dados da localidade de retirada">
               <button
                 type="button"
-                onclick="copiarDadoLocalAtual('cep')"
+                data-on-click="copiarDadoLocalAtual" data-args='["cep"]'
                 class="inline-flex items-center gap-1 px-2 py-1 rounded-md bg-slate-800/80 hover:bg-cyan-500/10 text-slate-300 hover:text-cyan-200 border border-slate-700/70 text-[10px] font-semibold transition"
                 title="Copiar o CEP da localidade de retirada"
                 aria-label="Copiar CEP da localidade de retirada"
@@ -310,7 +310,7 @@
               </button>
               <button
                 type="button"
-                onclick="copiarDadoLocalAtual('faturamento')"
+                data-on-click="copiarDadoLocalAtual" data-args='["faturamento"]'
                 class="inline-flex items-center gap-1 px-2 py-1 rounded-md bg-slate-800/80 hover:bg-cyan-500/10 text-slate-300 hover:text-cyan-200 border border-slate-700/70 text-[10px] font-semibold transition"
                 title="Copiar o CNPJ de faturamento padrão"
                 aria-label="Copiar CNPJ de faturamento"
@@ -320,7 +320,7 @@
               </button>
               <button
                 type="button"
-                onclick="copiarDadoLocalAtual('instalacao')"
+                data-on-click="copiarDadoLocalAtual" data-args='["instalacao"]'
                 class="inline-flex items-center gap-1 px-2 py-1 rounded-md bg-slate-800/80 hover:bg-cyan-500/10 text-slate-300 hover:text-cyan-200 border border-slate-700/70 text-[10px] font-semibold transition"
                 title="Copiar o CNPJ de instalação da localidade de retirada"
                 aria-label="Copiar CNPJ de instalação da localidade de retirada"
@@ -331,7 +331,7 @@
             </div>
             <button
               type="button"
-              onclick="abrirModalEditarEquipamento()"
+              data-on-click="abrirModalEditarEquipamento"
               class="equipment-edit-button mt-2 inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-brand-500/20 hover:bg-brand-500/30 text-brand-300 hover:text-white border border-brand-500/40 text-xs font-semibold transition-all shadow-sm"
               title="Editar dados cadastrais deste equipamento"
             >
@@ -343,10 +343,10 @@
 
         <section class="ticket-templates" aria-labelledby="ticket-templates-title">
           <div class="ticket-templates-toggle-row flex flex-wrap gap-2">
-            <button type="button" id="btn-toggle-ticket-templates" class="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-brand-500/20 hover:bg-brand-500/30 text-brand-300 hover:text-white border border-brand-500/40 text-xs font-semibold transition-all shadow-sm" aria-expanded="false" aria-controls="ticket-templates-content" onclick="alternarChamadosManuais()">
+            <button type="button" id="btn-toggle-ticket-templates" class="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-brand-500/20 hover:bg-brand-500/30 text-brand-300 hover:text-white border border-brand-500/40 text-xs font-semibold transition-all shadow-sm" aria-expanded="false" aria-controls="ticket-templates-content" data-on-click="alternarChamadosManuais">
               <span>Mostrar textos para chamados</span>
             </button>
-            <button type="button" id="btn-ir-para-transporte" class="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-sky-500/10 hover:bg-sky-500/20 text-sky-300 hover:text-sky-100 border border-sky-500/25 text-xs font-semibold transition" onclick="abrirAbaTransporteDoEquipamento()" title="Abrir a aba Transporte com o equipamento selecionado">
+            <button type="button" id="btn-ir-para-transporte" class="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-sky-500/10 hover:bg-sky-500/20 text-sky-300 hover:text-sky-100 border border-sky-500/25 text-xs font-semibold transition" data-on-click="abrirAbaTransporteDoEquipamento" title="Abrir a aba Transporte com o equipamento selecionado">
               <i data-lucide="truck" class="w-3.5 h-3.5" aria-hidden="true"></i>
               <span>Ir para Transporte</span>
             </button>
@@ -368,8 +368,8 @@
                   <span class="ticket-template-title-detail">(Transporte)</span>
                 </h5>
                 <div class="ticket-template-actions">
-                  <button type="button" class="ticket-template-view ticket-template-toggle" aria-controls="visualizacao-chamado-deslocamento" aria-expanded="false" onclick="alternarVisualizacaoModelo(this)"><span>Mostrar Texto</span></button>
-                  <button type="button" class="ticket-template-copy" onclick="copiarModeloChamado('texto-chamado-deslocamento')">
+                  <button type="button" class="ticket-template-view ticket-template-toggle" aria-controls="visualizacao-chamado-deslocamento" aria-expanded="false" data-on-click="alternarVisualizacaoModelo" data-args='["$this"]'><span>Mostrar Texto</span></button>
+                  <button type="button" class="ticket-template-copy" data-on-click="copiarModeloChamado" data-args='["texto-chamado-deslocamento"]'>
                     <i data-lucide="copy" class="w-3.5 h-3.5" aria-hidden="true"></i>
                     <span>Copiar</span>
                   </button>
@@ -403,8 +403,8 @@ Lembrando que é necessário o correto preenchimento do termo e anexá-lo ao cha
                   <span class="ticket-template-title-detail">(Teclado + Mouse)</span>
                 </h5>
                 <div class="ticket-template-actions">
-                  <button type="button" class="ticket-template-view ticket-template-toggle" aria-controls="visualizacao-chamado-teclado-mouse" aria-expanded="false" onclick="alternarVisualizacaoModelo(this)"><span>Mostrar Texto</span></button>
-                  <button type="button" class="ticket-template-copy" onclick="copiarModeloChamado('texto-chamado-teclado-mouse')">
+                  <button type="button" class="ticket-template-view ticket-template-toggle" aria-controls="visualizacao-chamado-teclado-mouse" aria-expanded="false" data-on-click="alternarVisualizacaoModelo" data-args='["$this"]'><span>Mostrar Texto</span></button>
+                  <button type="button" class="ticket-template-copy" data-on-click="copiarModeloChamado" data-args='["texto-chamado-teclado-mouse"]'>
                     <i data-lucide="copy" class="w-3.5 h-3.5" aria-hidden="true"></i>
                     <span>Copiar</span>
                   </button>
@@ -428,8 +428,8 @@ Modelo: 230 Wireless Mouse and Keyboard Combo</textarea>
               <div class="ticket-template-card-header">
                 <h5 class="ticket-template-title">Mau funcionamento<span class="ticket-template-title-detail">(Defeitos)</span></h5>
                 <div class="ticket-template-actions">
-                  <button type="button" class="ticket-template-view ticket-template-toggle" aria-controls="visualizacao-chamado-mau-funcionamento" aria-expanded="false" onclick="alternarVisualizacaoModelo(this)"><span>Mostrar Texto</span></button>
-                  <button type="button" class="ticket-template-copy" onclick="copiarModeloChamado('texto-chamado-mau-funcionamento')">
+                  <button type="button" class="ticket-template-view ticket-template-toggle" aria-controls="visualizacao-chamado-mau-funcionamento" aria-expanded="false" data-on-click="alternarVisualizacaoModelo" data-args='["$this"]'><span>Mostrar Texto</span></button>
+                  <button type="button" class="ticket-template-copy" data-on-click="copiarModeloChamado" data-args='["texto-chamado-mau-funcionamento"]'>
                     <i data-lucide="copy" class="w-3.5 h-3.5" aria-hidden="true"></i>
                     <span>Copiar</span>
                   </button>
@@ -453,8 +453,8 @@ Horário disponível para atendimento:</textarea>
               <div class="ticket-template-card-header">
                 <h5 class="ticket-template-title">Uso inadequado<span class="ticket-template-title-detail">(Laudo técnico)</span></h5>
                 <div class="ticket-template-actions">
-                  <button type="button" class="ticket-template-view ticket-template-toggle" aria-controls="visualizacao-chamado-uso-inadequado" aria-expanded="false" onclick="alternarVisualizacaoModelo(this)"><span>Mostrar Texto</span></button>
-                  <button type="button" class="ticket-template-copy" onclick="copiarModeloChamado('texto-chamado-uso-inadequado')">
+                  <button type="button" class="ticket-template-view ticket-template-toggle" aria-controls="visualizacao-chamado-uso-inadequado" aria-expanded="false" data-on-click="alternarVisualizacaoModelo" data-args='["$this"]'><span>Mostrar Texto</span></button>
+                  <button type="button" class="ticket-template-copy" data-on-click="copiarModeloChamado" data-args='["texto-chamado-uso-inadequado"]'>
                     <i data-lucide="copy" class="w-3.5 h-3.5" aria-hidden="true"></i>
                     <span>Copiar</span>
                   </button>
@@ -508,14 +508,14 @@ Horário disponível para atendimento:</textarea>
             aria-label="Série da transferência. Clique para pesquisar na aba Home quando estiver vazia."
             placeholder="Aguardando pesquisa..."
             title="Clique para abrir a pesquisa na Home quando nenhuma série estiver selecionada"
-            onclick="abrirHomeParaPesquisarEquipamento()"
-            onkeydown="abrirHomeParaPesquisarEquipamento(event)"
+            data-on-click="abrirHomeParaPesquisarEquipamento"
+            data-on-keydown="abrirHomeParaPesquisarEquipamento" data-args='["$event"]'
             autocomplete="off"
           />
           <button
             type="button"
             id="btn-copiar-serie"
-            onclick="copiarSerieAtual()"
+            data-on-click="copiarSerieAtual"
             disabled
             aria-disabled="true"
             aria-label="Copiar a série do equipamento selecionado"
@@ -530,7 +530,7 @@ Horário disponível para atendimento:</textarea>
     </div>
 
     <div class="flex justify-end -mt-3 mb-5">
-      <button type="button" id="btn-historico-transferencias" onclick="abrirModalHistoricoTransferencias()" class="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-slate-800/80 hover:bg-slate-700 text-slate-200 border border-slate-700/70 text-xs font-semibold transition" title="Ver as planilhas de transferência já geradas">
+      <button type="button" id="btn-historico-transferencias" data-on-click="abrirModalHistoricoTransferencias" class="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-slate-800/80 hover:bg-slate-700 text-slate-200 border border-slate-700/70 text-xs font-semibold transition" title="Ver as planilhas de transferência já geradas">
         <i data-lucide="history" class="w-3.5 h-3.5" aria-hidden="true"></i>
         <span>Transferências geradas</span>
       </button>
@@ -652,7 +652,7 @@ Horário disponível para atendimento:</textarea>
               <label class="block text-[11px] text-slate-400 mb-1" for="retirada-representante">Representante Regional (seleção automática pela cidade):</label>
               <select
                 id="retirada-representante"
-                onchange="handleRepresentanteRegionalChange('retirada', this.value)"
+                data-on-change="handleRepresentanteRegionalChange" data-args='["retirada", "$value"]'
                 class="w-full px-3 py-2 rounded-lg glass-input text-xs text-slate-200 focus:outline-none"
                 aria-label="Representante regional do ponto de retirada"
               ></select>
@@ -741,7 +741,7 @@ Horário disponível para atendimento:</textarea>
             <div class="relative">
               <select
                 id="select-unidade-destino"
-                onchange="handleUnidadeDestinoChange(this.value)"
+                data-on-change="handleUnidadeDestinoChange" data-args='["$value"]'
                 class="w-full px-3.5 py-2.5 rounded-lg glass-input text-sm text-slate-100 focus:outline-none cursor-pointer appearance-none bg-no-repeat pr-10"
                 style="background-image: url('data:image/svg+xml;charset=US-ASCII,%3Csvg%20xmlns%3D%22http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%22%20width%3D%2220%22%20height%3D%2220%22%20viewBox%3D%220%200%2024%2024%22%20fill%3D%22none%22%20stroke%3D%22%2394a3b8%22%20stroke-width%3D%222%22%20stroke-linecap%3D%22round%22%20stroke-linejoin%3D%22round%22%3E%3Cpath%20d%3D%22m6%209%206%206%206-6%22%2F%3E%3C%2Fsvg%3E'); background-position: right 0.75rem center; background-size: 1.25rem; background-repeat: no-repeat;"
               >
@@ -766,7 +766,7 @@ Horário disponível para atendimento:</textarea>
             <div class="mt-2 flex flex-wrap items-center gap-1.5" role="group" aria-label="Copiar dados de faturamento e instalação da entrega">
               <button
                 type="button"
-                onclick="copiarDadoEntrega('faturamento')"
+                data-on-click="copiarDadoEntrega" data-args='["faturamento"]'
                 class="inline-flex items-center gap-1 px-2 py-1 rounded-md bg-slate-800/80 hover:bg-emerald-500/10 text-slate-300 hover:text-emerald-200 border border-slate-700/70 text-[10px] font-semibold transition"
                 title="Copiar o CNPJ de faturamento padrão"
                 aria-label="Copiar CNPJ de faturamento da entrega"
@@ -778,7 +778,7 @@ Horário disponível para atendimento:</textarea>
                 type="button"
                 id="btn-copiar-cnpj-instalacao-entrega"
                 disabled
-                onclick="copiarDadoEntrega('instalacao')"
+                data-on-click="copiarDadoEntrega" data-args='["instalacao"]'
                 class="inline-flex items-center gap-1 px-2 py-1 rounded-md bg-slate-800/80 hover:bg-emerald-500/10 text-slate-300 hover:text-emerald-200 border border-slate-700/70 text-[10px] font-semibold transition"
                 title="Copiar o CNPJ de instalação da unidade de destino selecionada"
                 aria-label="Copiar CNPJ de instalação da unidade de destino"
@@ -819,7 +819,7 @@ Horário disponível para atendimento:</textarea>
                 </label>
                 <select
                   id="entrega-representante"
-                  onchange="handleRepresentanteRegionalChange('entrega', this.value)"
+                  data-on-change="handleRepresentanteRegionalChange" data-args='["entrega", "$value"]'
                   class="w-full px-3 py-2 rounded-lg glass-input text-xs text-slate-100 focus:outline-none"
                   aria-label="Representante regional da unidade de entrega"
                 ></select>
@@ -915,9 +915,9 @@ Horário disponível para atendimento:</textarea>
             ></textarea>
             <!-- Chips de observação rápida -->
             <div class="flex flex-wrap gap-1.5 mt-1.5">
-              <button type="button" onclick="adicionarObsChamado('Equipamento para colaborador(a) substituição preventiva.')" class="px-2 py-0.5 rounded text-[10px] bg-slate-800 hover:bg-slate-700 text-slate-400 hover:text-slate-200 border border-slate-700/60">+ Substituição</button>
-              <button type="button" onclick="adicionarObsChamado('Equipamento destinado ao onboarding de novo colaborador(a).')" class="px-2 py-0.5 rounded text-[10px] bg-slate-800 hover:bg-slate-700 text-slate-400 hover:text-slate-200 border border-slate-700/60">+ Novo Colaborador</button>
-              <button type="button" onclick="adicionarObsChamado('Equipamento para substituição por lentidão/defeito físico.')" class="px-2 py-0.5 rounded text-[10px] bg-slate-800 hover:bg-slate-700 text-slate-400 hover:text-slate-200 border border-slate-700/60">+ Defeito/Troca</button>
+              <button type="button" data-on-click="adicionarObsChamado" data-args='["Equipamento para colaborador(a) substituição preventiva."]' class="px-2 py-0.5 rounded text-[10px] bg-slate-800 hover:bg-slate-700 text-slate-400 hover:text-slate-200 border border-slate-700/60">+ Substituição</button>
+              <button type="button" data-on-click="adicionarObsChamado" data-args='["Equipamento destinado ao onboarding de novo colaborador(a)."]' class="px-2 py-0.5 rounded text-[10px] bg-slate-800 hover:bg-slate-700 text-slate-400 hover:text-slate-200 border border-slate-700/60">+ Novo Colaborador</button>
+              <button type="button" data-on-click="adicionarObsChamado" data-args='["Equipamento para substituição por lentidão/defeito físico."]' class="px-2 py-0.5 rounded text-[10px] bg-slate-800 hover:bg-slate-700 text-slate-400 hover:text-slate-200 border border-slate-700/60">+ Defeito/Troca</button>
             </div>
           </div>
         </div>
@@ -942,7 +942,7 @@ Horário disponível para atendimento:</textarea>
           <button
             type="button"
             id="btn-gerar-planilha"
-            onclick="gerarPlanilhaExcel()"
+            data-on-click="gerarPlanilhaExcel"
             aria-keyshortcuts="Control+Enter"
             title="Gerar Planilha (Ctrl+Enter)"
             class="px-6 py-2.5 rounded-xl bg-gradient-to-r from-emerald-600 to-teal-500 hover:from-emerald-500 hover:to-teal-400 text-white font-bold text-xs sm:text-sm flex items-center space-x-2.5 shadow-glow-emerald transition-all transform hover:scale-[1.02] active:scale-[0.98]"
@@ -953,7 +953,7 @@ Horário disponível para atendimento:</textarea>
 
           <button
             type="button"
-            onclick="gerarTextoSolicitacaoTransporte()"
+            data-on-click="gerarTextoSolicitacaoTransporte"
             class="transport-request-button px-4 py-2.5 rounded-xl bg-brand-500/10 hover:bg-brand-500/20 text-brand-200 border border-brand-500/30 text-xs font-semibold flex items-center space-x-1.5 transition shadow-sm"
             title="Gerar texto de solicitação de transporte"
           >
@@ -991,7 +991,7 @@ Horário disponível para atendimento:</textarea>
           <i data-lucide="file-text" class="w-5 h-5 text-brand-400"></i>
           <h3 class="text-base font-bold text-white">Resumo Estruturado da Transferência</h3>
         </div>
-        <button type="button" onclick="fecharModalPreview()" class="text-slate-400 hover:text-white transition" aria-label="Fechar resumo">
+        <button type="button" data-on-click="fecharModalPreview" class="text-slate-400 hover:text-white transition" aria-label="Fechar resumo">
           <i data-lucide="x" class="w-5 h-5" aria-hidden="true"></i>
         </button>
       </div>
@@ -1009,14 +1009,14 @@ Horário disponível para atendimento:</textarea>
         <span class="text-[11px] text-slate-400">Pronto para colar em chamados Jira, GLPI ou Teams.</span>
         <div class="flex space-x-2">
           <button
-            onclick="copiarTextoDoModal()"
+            data-on-click="copiarTextoDoModal"
             class="px-4 py-2 rounded-lg bg-brand-600 hover:bg-brand-500 text-white font-semibold text-xs flex items-center space-x-1.5 transition"
           >
             <i data-lucide="copy" class="w-3.5 h-3.5"></i>
             <span>Copiar Texto</span>
           </button>
           <button
-            onclick="fecharModalPreview()"
+            data-on-click="fecharModalPreview"
             class="px-4 py-2 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-300 text-xs transition"
           >
             Fechar
@@ -1036,7 +1036,7 @@ Horário disponível para atendimento:</textarea>
           <i data-lucide="history" class="w-5 h-5 text-brand-400" aria-hidden="true"></i>
           <h3 class="text-base font-bold text-white">Transferências geradas</h3>
         </div>
-        <button type="button" onclick="fecharModalHistoricoTransferencias()" class="text-slate-400 hover:text-white transition" aria-label="Fechar transferências geradas">
+        <button type="button" data-on-click="fecharModalHistoricoTransferencias" class="text-slate-400 hover:text-white transition" aria-label="Fechar transferências geradas">
           <i data-lucide="x" class="w-5 h-5" aria-hidden="true"></i>
         </button>
       </div>
@@ -1048,7 +1048,7 @@ Horário disponível para atendimento:</textarea>
       <div id="lista-historico-transferencias" class="overflow-y-auto flex-1 min-h-0 py-3" aria-label="Transferências geradas"></div>
       <div class="pt-3 border-t border-slate-800 flex items-center justify-between gap-3 shrink-0">
         <span class="text-[11px] text-slate-400">Guardado somente neste computador. "Duplicar destino" não altera o equipamento selecionado.</span>
-        <button type="button" onclick="fecharModalHistoricoTransferencias()" class="px-4 py-2 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-300 text-xs transition">Fechar</button>
+        <button type="button" data-on-click="fecharModalHistoricoTransferencias" class="px-4 py-2 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-300 text-xs transition">Fechar</button>
       </div>
     </div>
   </div>
@@ -1062,10 +1062,10 @@ Horário disponível para atendimento:</textarea>
         <i data-lucide="alert-triangle" class="w-5 h-5 text-amber-400" aria-hidden="true"></i>
         <h3 id="titulo-confirmar-acao" class="text-base font-bold text-white">Confirmar ação</h3>
       </div>
-      <p id="mensagem-confirmar-acao" class="py-4 text-sm leading-relaxed text-slate-300"></p>
+      <p id="mensagem-confirmar-acao" class="py-4 text-sm leading-relaxed text-slate-300 whitespace-pre-line"></p>
       <div class="pt-4 border-t border-slate-800 flex flex-wrap justify-end gap-2">
-        <button type="button" id="btn-confirmar-acao-cancelar" onclick="responderConfirmacaoAcao(false)" class="px-4 py-2 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-200 text-xs font-semibold transition">Cancelar</button>
-        <button type="button" id="btn-confirmar-acao-ok" onclick="responderConfirmacaoAcao(true)" class="px-4 py-2 rounded-lg bg-rose-700 hover:bg-rose-600 text-white text-xs font-bold transition">Confirmar</button>
+        <button type="button" id="btn-confirmar-acao-cancelar" data-on-click="responderConfirmacaoAcao" data-args='[false]' class="px-4 py-2 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-200 text-xs font-semibold transition">Cancelar</button>
+        <button type="button" id="btn-confirmar-acao-ok" data-on-click="responderConfirmacaoAcao" data-args='[true]' data-variant="danger" class="confirm-action-ok px-4 py-2 rounded-lg text-white text-xs font-bold transition">Confirmar</button>
       </div>
     </div>
   </div>
@@ -1080,7 +1080,7 @@ Horário disponível para atendimento:</textarea>
           <i data-lucide="truck" class="w-5 h-5 text-brand-400"></i>
           <h3 class="text-base font-bold text-white">Solicitação de Transporte</h3>
         </div>
-        <button type="button" onclick="fecharModalTextoTransporte()" class="text-slate-400 hover:text-white transition" aria-label="Fechar texto de solicitação">
+        <button type="button" data-on-click="fecharModalTextoTransporte" class="text-slate-400 hover:text-white transition" aria-label="Fechar texto de solicitação">
           <i data-lucide="x" class="w-5 h-5" aria-hidden="true"></i>
         </button>
       </div>
@@ -1100,7 +1100,7 @@ Horário disponível para atendimento:</textarea>
         <div class="flex space-x-2">
           <button
             type="button"
-            onclick="copiarTextoSolicitacaoTransporte()"
+            data-on-click="copiarTextoSolicitacaoTransporte"
             class="px-4 py-2 rounded-lg bg-brand-600 hover:bg-brand-500 text-white font-semibold text-xs flex items-center space-x-1.5 transition"
           >
             <i data-lucide="copy" class="w-3.5 h-3.5"></i>
@@ -1108,7 +1108,7 @@ Horário disponível para atendimento:</textarea>
           </button>
           <button
             type="button"
-            onclick="fecharModalTextoTransporte()"
+            data-on-click="fecharModalTextoTransporte"
             class="px-4 py-2 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-300 text-xs transition"
           >
             Fechar
@@ -1137,7 +1137,7 @@ Horário disponível para atendimento:</textarea>
             <p class="text-xs text-slate-400">As alterações serão salvas no site e gravadas diretamente na planilha oficial Excel.</p>
           </div>
         </div>
-        <button type="button" onclick="fecharModalEditarEquipamento()" class="text-slate-400 hover:text-white p-1 rounded-lg hover:bg-slate-800 transition" aria-label="Fechar edição do equipamento">
+        <button type="button" data-on-click="fecharModalEditarEquipamento" class="text-slate-400 hover:text-white p-1 rounded-lg hover:bg-slate-800 transition" aria-label="Fechar edição do equipamento">
           <i data-lucide="x" class="w-5 h-5" aria-hidden="true"></i>
         </button>
       </div>
@@ -1195,7 +1195,7 @@ Horário disponível para atendimento:</textarea>
         <div class="flex space-x-2">
           <button
             type="button"
-            onclick="fecharModalEditarEquipamento()"
+            data-on-click="fecharModalEditarEquipamento"
             class="px-4 py-2 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-300 text-xs transition"
           >
             Cancelar
@@ -1203,7 +1203,7 @@ Horário disponível para atendimento:</textarea>
           <button
             type="button"
             id="btn-salvar-equipamento"
-            onclick="salvarDadosEquipamento()"
+            data-on-click="salvarDadosEquipamento"
             class="px-5 py-2 rounded-lg bg-emerald-600 hover:bg-emerald-500 text-white font-bold text-xs flex items-center space-x-1.5 shadow-glow-emerald transition"
           >
             <i data-lucide="check" class="w-4 h-4"></i>
@@ -1222,7 +1222,7 @@ Horário disponível para atendimento:</textarea>
           <h3 class="text-base font-bold text-white">Editar apelido</h3>
           <p class="text-xs text-slate-400 mt-1">O apelido manual prevalece nas próximas exportações do Excel.</p>
         </div>
-        <button type="button" onclick="fecharModalEditarApelido()" class="text-slate-400 hover:text-white p-1 rounded-lg hover:bg-slate-800 transition" aria-label="Fechar">
+        <button type="button" data-on-click="fecharModalEditarApelido" class="text-slate-400 hover:text-white p-1 rounded-lg hover:bg-slate-800 transition" aria-label="Fechar">
           <i data-lucide="x" class="w-5 h-5"></i>
         </button>
       </div>
@@ -1230,8 +1230,8 @@ Horário disponível para atendimento:</textarea>
       <input type="text" id="edit-apelido-isolado" class="w-full px-3 py-2.5 rounded-lg glass-input text-white font-mono focus:outline-none" autocomplete="off" />
       <p id="apelido-serial-contexto" class="text-[11px] text-slate-500 font-mono mt-2"></p>
       <div class="flex justify-end gap-2 mt-6 pt-4 border-t border-slate-800">
-        <button type="button" onclick="fecharModalEditarApelido()" class="px-4 py-2 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-300 text-xs transition">Cancelar</button>
-        <button type="button" id="btn-salvar-apelido" onclick="salvarApelido()" class="px-4 py-2 rounded-lg bg-cyan-600 hover:bg-cyan-500 text-white font-bold text-xs transition">Salvar apelido</button>
+        <button type="button" data-on-click="fecharModalEditarApelido" class="px-4 py-2 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-300 text-xs transition">Cancelar</button>
+        <button type="button" id="btn-salvar-apelido" data-on-click="salvarApelido" class="px-4 py-2 rounded-lg bg-cyan-600 hover:bg-cyan-500 text-white font-bold text-xs transition">Salvar apelido</button>
       </div>
     </div>
   </div>
@@ -1248,7 +1248,7 @@ Horário disponível para atendimento:</textarea>
           </h3>
           <p class="text-xs text-slate-400 mt-1">Excluir o registro mais recente de um campo restaura e salva o valor anterior no equipamento e remove esse evento do histórico.</p>
         </div>
-        <button type="button" onclick="fecharModalHistoricoApelidos()" class="text-slate-400 hover:text-white p-1 rounded-lg hover:bg-slate-800 transition" aria-label="Fechar histórico">
+        <button type="button" data-on-click="fecharModalHistoricoApelidos" class="text-slate-400 hover:text-white p-1 rounded-lg hover:bg-slate-800 transition" aria-label="Fechar histórico">
           <i data-lucide="x" class="w-5 h-5"></i>
         </button>
       </div>
@@ -1256,7 +1256,7 @@ Horário disponível para atendimento:</textarea>
         <p class="text-sm text-slate-400 text-center py-8" role="status" aria-live="polite">Carregando histórico...</p>
       </div>
       <div class="pt-3 border-t border-slate-800 flex justify-end shrink-0">
-        <button type="button" onclick="fecharModalHistoricoApelidos()" class="px-4 py-2 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-300 text-xs transition">Fechar</button>
+        <button type="button" data-on-click="fecharModalHistoricoApelidos" class="px-4 py-2 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-300 text-xs transition">Fechar</button>
       </div>
     </div>
   </div>
@@ -1280,7 +1280,7 @@ Horário disponível para atendimento:</textarea>
             <p class="text-xs text-slate-400">Consulte ou cadastre endereços e CNPJs oficiais das filiais.</p>
           </div>
         </div>
-        <button type="button" onclick="fecharModalGerenciarUnidades()" class="text-slate-400 hover:text-white p-1 rounded-lg hover:bg-slate-800 transition" aria-label="Fechar catálogo de unidades">
+        <button type="button" data-on-click="fecharModalGerenciarUnidades" class="text-slate-400 hover:text-white p-1 rounded-lg hover:bg-slate-800 transition" aria-label="Fechar catálogo de unidades">
           <i data-lucide="x" class="w-5 h-5" aria-hidden="true"></i>
         </button>
       </div>
@@ -1292,13 +1292,13 @@ Horário disponível para atendimento:</textarea>
           <input
             type="text"
             id="input-filtro-unidades"
-            oninput="filtrarUnidadesModal(this.value)"
+            data-on-input="filtrarUnidadesModal" data-args='["$value"]'
             placeholder="Filtrar por cidade, endereço ou CNPJ..."
             class="w-full pl-9 pr-3 py-2 rounded-lg glass-input text-xs text-slate-200 placeholder:text-slate-500 focus:outline-none"
           />
         </div>
         <button
-          onclick="toggleFormNovaUnidade()"
+          data-on-click="toggleFormNovaUnidade"
           class="px-3.5 py-2 rounded-lg bg-brand-600 hover:bg-brand-500 text-white text-xs font-bold flex items-center justify-center gap-1.5 transition"
         >
           <i data-lucide="plus" class="w-3.5 h-3.5"></i>
@@ -1331,11 +1331,11 @@ Horário disponível para atendimento:</textarea>
             <input type="text" id="form-unidade-cnpj" placeholder="CNPJ da instalação / filial" class="w-full px-2.5 py-1.5 rounded-lg glass-input text-slate-200 font-mono focus:outline-none" />
           </div>
           <div class="flex items-end gap-2">
-            <button id="btn-salvar-unidade" onclick="salvarUnidadeForm()" class="flex-1 py-1.5 px-3 rounded-lg bg-emerald-600 hover:bg-emerald-500 text-white font-bold text-xs flex items-center justify-center gap-1 transition">
+            <button id="btn-salvar-unidade" data-on-click="salvarUnidadeForm" class="flex-1 py-1.5 px-3 rounded-lg bg-emerald-600 hover:bg-emerald-500 text-white font-bold text-xs flex items-center justify-center gap-1 transition">
               <i data-lucide="check" class="w-3.5 h-3.5"></i>
               <span>Salvar</span>
             </button>
-            <button onclick="toggleFormNovaUnidade(false)" class="py-1.5 px-3 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-300 text-xs transition">
+            <button data-on-click="toggleFormNovaUnidade" data-args='[false]' class="py-1.5 px-3 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-300 text-xs transition">
               Cancelar
             </button>
           </div>
@@ -1349,7 +1349,7 @@ Horário disponível para atendimento:</textarea>
 
       <!-- Footer -->
       <div class="pt-3 border-t border-slate-800 flex justify-end shrink-0">
-        <button onclick="fecharModalGerenciarUnidades()" class="px-4 py-2 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-300 text-xs transition">
+        <button data-on-click="fecharModalGerenciarUnidades" class="px-4 py-2 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-300 text-xs transition">
           Fechar
         </button>
       </div>
@@ -1367,7 +1367,7 @@ Horário disponível para atendimento:</textarea>
           </h3>
           <p class="text-xs text-slate-400 mt-1">Envie os dois arquivos para atualizar o cadastro. Endereço e localidade acompanham a Simpress; apelidos alterados manualmente continuam prioritários e divergências aparecem no histórico.</p>
         </div>
-        <button type="button" onclick="fecharModalAtualizarPlanilhas()" class="text-slate-400 hover:text-white p-1 rounded-lg hover:bg-slate-800 transition" aria-label="Fechar">
+        <button type="button" data-on-click="fecharModalAtualizarPlanilhas" class="text-slate-400 hover:text-white p-1 rounded-lg hover:bg-slate-800 transition" aria-label="Fechar">
           <i data-lucide="x" class="w-5 h-5"></i>
         </button>
       </div>
@@ -1406,12 +1406,12 @@ Horário disponível para atendimento:</textarea>
       </div>
 
       <div class="pt-4 border-t border-slate-800 flex justify-end gap-2 shrink-0">
-        <button type="button" onclick="fecharModalAtualizarPlanilhas()" class="px-4 py-2 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-300 text-xs transition">Cancelar</button>
-        <button type="button" id="btn-previsualizar-planilhas" onclick="previsualizarPlanilhas()" class="px-5 py-2 rounded-lg bg-sky-600 hover:bg-sky-500 text-white font-bold text-xs flex items-center gap-1.5 transition">
+        <button type="button" data-on-click="fecharModalAtualizarPlanilhas" class="px-4 py-2 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-300 text-xs transition">Cancelar</button>
+        <button type="button" id="btn-previsualizar-planilhas" data-on-click="previsualizarPlanilhas" class="px-5 py-2 rounded-lg bg-sky-600 hover:bg-sky-500 text-white font-bold text-xs flex items-center gap-1.5 transition">
           <i data-lucide="refresh-cw" class="w-3.5 h-3.5"></i>
           Pré-visualizar impacto
         </button>
-        <button type="button" id="btn-confirmar-planilhas" onclick="enviarPlanilhas()" class="hidden px-5 py-2 rounded-lg bg-rose-700 hover:bg-rose-600 text-white font-bold text-xs flex items-center gap-1.5 transition">
+        <button type="button" id="btn-confirmar-planilhas" data-on-click="enviarPlanilhas" class="hidden px-5 py-2 rounded-lg bg-rose-700 hover:bg-rose-600 text-white font-bold text-xs flex items-center gap-1.5 transition">
           <i data-lucide="check" class="w-3.5 h-3.5"></i>
           Confirmar substituição
         </button>
@@ -1423,7 +1423,7 @@ Horário disponível para atendimento:</textarea>
     <div class="local-setup-dialog">
       <div class="local-setup-heading">
         <h3 id="titulo-importar-modelo">Importar arquivos</h3>
-        <button type="button" class="readiness-import" onclick="fecharImportacaoModelo()" aria-label="Fechar importação de modelo" title="Fechar">
+        <button type="button" class="readiness-import" data-on-click="fecharImportacaoModelo" aria-label="Fechar importação de modelo" title="Fechar">
           <i data-lucide="x" class="w-4 h-4" aria-hidden="true"></i>
         </button>
       </div>
@@ -1431,12 +1431,12 @@ Horário disponível para atendimento:</textarea>
       <label for="arquivo-modelo-local">Modelo .xlsx (até 30 MB)</label>
       <input id="arquivo-modelo-local" type="file" accept=".xlsx,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" aria-hidden="true" tabindex="-1" hidden />
       <div class="flex min-w-0 items-center gap-3">
-        <button id="btn-escolher-arquivo-modelo-local" type="button" class="readiness-import" aria-controls="arquivo-modelo-local" onclick="document.getElementById('arquivo-modelo-local').click()">Escolher arquivo</button>
+        <button id="btn-escolher-arquivo-modelo-local" type="button" class="readiness-import" aria-controls="arquivo-modelo-local" data-click-target="arquivo-modelo-local">Escolher arquivo</button>
         <span id="nome-arquivo-modelo-local" class="min-w-0 truncate text-xs text-slate-400" aria-live="polite">Nenhum arquivo escolhido</span>
       </div>
       <p>Ao substituir um modelo importado, uma cópia anterior é guardada nos backups locais. O modelo de transferência incluído no projeto é preservado.</p>
       <p id="status-modelo-local" role="status" aria-live="polite" aria-atomic="true"></p>
-      <button id="btn-importar-modelo" type="button" class="readiness-import" onclick="enviarModeloLocal()">Importar</button>
+      <button id="btn-importar-modelo" type="button" class="readiness-import" data-on-click="enviarModeloLocal">Importar</button>
     </div>
   </div>
 
@@ -1451,13 +1451,13 @@ Horário disponível para atendimento:</textarea>
           </h3>
           <p id="comparacao-planilhas-fontes" class="text-xs text-slate-400 mt-1"></p>
         </div>
-        <button type="button" onclick="fecharModalComparacaoPlanilhas()" class="text-slate-400 hover:text-white p-1 rounded-lg hover:bg-slate-800 transition" aria-label="Fechar resultado">
+        <button type="button" data-on-click="fecharModalComparacaoPlanilhas" class="text-slate-400 hover:text-white p-1 rounded-lg hover:bg-slate-800 transition" aria-label="Fechar resultado">
           <i data-lucide="x" class="w-5 h-5"></i>
         </button>
       </div>
       <div id="comparacao-planilhas-conteudo" class="overflow-y-auto flex-1 py-4 space-y-5"></div>
       <div class="pt-3 border-t border-slate-800 flex justify-end shrink-0">
-        <button type="button" onclick="fecharModalComparacaoPlanilhas()" class="px-4 py-2 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-300 text-xs transition">Concluir</button>
+        <button type="button" data-on-click="fecharModalComparacaoPlanilhas" class="px-4 py-2 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-300 text-xs transition">Concluir</button>
       </div>
     </div>
   </div>
@@ -1465,17 +1465,17 @@ Horário disponível para atendimento:</textarea>
   <!-- EVOLUÇÃO DAS PENDÊNCIAS ENTRE DUAS ATUALIZAÇÕES -->
   <div id="modal-evolucao-atualizacoes" class="modal-overlay fixed inset-0 bg-slate-950/85 backdrop-blur-md z-[77] hidden flex items-center justify-center p-4">
     <div class="modal-panel bg-slate-900 border border-cyan-500/30 rounded-2xl max-w-5xl w-full p-6 shadow-2xl flex flex-col max-h-[92vh] overflow-hidden">
-      <div class="flex items-start justify-between gap-4 pb-4 border-b border-slate-800 shrink-0"><div><h3 class="text-base font-bold text-white">Evolução das atualizações</h3><p class="text-xs text-slate-400 mt-1">Veja quantos casos surgiram, continuaram ou deixaram de aparecer.</p></div><button type="button" onclick="fecharEvolucaoAtualizacoes()" class="text-slate-400 hover:text-white p-1 rounded-lg hover:bg-slate-800" aria-label="Fechar evolução das atualizações"><i data-lucide="x" class="w-5 h-5"></i></button></div>
+      <div class="flex items-start justify-between gap-4 pb-4 border-b border-slate-800 shrink-0"><div><h3 class="text-base font-bold text-white">Evolução das atualizações</h3><p class="text-xs text-slate-400 mt-1">Veja quantos casos surgiram, continuaram ou deixaram de aparecer.</p></div><button type="button" data-on-click="fecharEvolucaoAtualizacoes" class="text-slate-400 hover:text-white p-1 rounded-lg hover:bg-slate-800" aria-label="Fechar evolução das atualizações"><i data-lucide="x" class="w-5 h-5"></i></button></div>
       <form id="form-evolucao-atualizacoes" class="grid grid-cols-1 md:grid-cols-[1fr_1fr_auto] gap-2 py-3 shrink-0"><label class="text-xs text-slate-300">Atualização anterior<select id="evolucao-anterior" required class="mt-1 block w-full rounded-lg border border-slate-700 bg-slate-950 px-3 py-2 text-sm text-white"></select></label><label class="text-xs text-slate-300">Atualização atual<select id="evolucao-atual" required class="mt-1 block w-full rounded-lg border border-slate-700 bg-slate-950 px-3 py-2 text-sm text-white"></select></label><button type="submit" class="self-end rounded-lg bg-cyan-500/15 border border-cyan-400/30 px-4 py-2 text-sm text-cyan-100">Comparar</button></form>
       <div id="resultado-evolucao-atualizacoes" aria-label="Resultado da comparação entre atualizações" aria-live="polite" class="overflow-auto flex-1 space-y-3"></div>
-      <div class="pt-3 border-t border-slate-800 flex justify-end shrink-0"><button type="button" onclick="fecharEvolucaoAtualizacoes()" class="px-4 py-2 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-300 text-xs">Fechar</button></div>
+      <div class="pt-3 border-t border-slate-800 flex justify-end shrink-0"><button type="button" data-on-click="fecharEvolucaoAtualizacoes" class="px-4 py-2 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-300 text-xs">Fechar</button></div>
     </div>
   </div>
 
   <!-- ACOMPANHAMENTO DE CHAMADOS -->
   <div id="modal-acompanhamento-chamados" class="modal-overlay fixed inset-0 bg-slate-950/85 backdrop-blur-md z-[77] hidden flex items-center justify-center p-4">
     <div class="modal-panel bg-slate-900 border border-cyan-500/30 rounded-2xl max-w-5xl w-full p-5 sm:p-6 shadow-2xl flex flex-col max-h-[92vh] overflow-hidden">
-      <div class="flex items-start justify-between gap-4 pb-4 border-b border-slate-800 shrink-0"><div><h3 class="text-base font-bold text-white">Acompanhamento de Chamados</h3><p class="text-xs text-slate-400 mt-1">Importe as exportações da Simpress e do Oracle. As OS são relacionadas pelo número de série.</p></div><div class="ticket-header-actions"><a href="https://simpress.custhelp.com/AgentWeb/" target="_blank" rel="noopener noreferrer" class="ticket-agent-link ticket-agent-link--oracle" aria-label="Abrir portal Oracle AgentWeb" title="Abrir portal Oracle AgentWeb"><i data-lucide="link" aria-hidden="true"></i><span>Oracle</span></a><a href="https://ux.simpress.com.br/equipamentos/acompanhamento" target="_blank" rel="noopener noreferrer" class="ticket-agent-link ticket-agent-link--simpress" aria-label="Abrir acompanhamento de chamados Simpress" title="Abrir acompanhamento de chamados Simpress"><i data-lucide="link" aria-hidden="true"></i><span>Simpress</span></a><button type="button" onclick="fecharAcompanhamentoChamados()" class="text-slate-400 hover:text-white p-1 rounded-lg hover:bg-slate-800" aria-label="Fechar acompanhamento de chamados"><i data-lucide="x" class="w-5 h-5"></i></button></div></div>
+      <div class="flex items-start justify-between gap-4 pb-4 border-b border-slate-800 shrink-0"><div><h3 class="text-base font-bold text-white">Acompanhamento de Chamados</h3><p class="text-xs text-slate-400 mt-1">Importe as exportações da Simpress e do Oracle. As OS são relacionadas pelo número de série.</p></div><div class="ticket-header-actions"><a href="https://simpress.custhelp.com/AgentWeb/" target="_blank" rel="noopener noreferrer" class="ticket-agent-link ticket-agent-link--oracle" aria-label="Abrir portal Oracle AgentWeb" title="Abrir portal Oracle AgentWeb"><i data-lucide="link" aria-hidden="true"></i><span>Oracle</span></a><a href="https://ux.simpress.com.br/equipamentos/acompanhamento" target="_blank" rel="noopener noreferrer" class="ticket-agent-link ticket-agent-link--simpress" aria-label="Abrir acompanhamento de chamados Simpress" title="Abrir acompanhamento de chamados Simpress"><i data-lucide="link" aria-hidden="true"></i><span>Simpress</span></a><button type="button" data-on-click="fecharAcompanhamentoChamados" class="text-slate-400 hover:text-white p-1 rounded-lg hover:bg-slate-800" aria-label="Fechar acompanhamento de chamados"><i data-lucide="x" class="w-5 h-5"></i></button></div></div>
       <div id="conteudo-acompanhamento-chamados" role="region" aria-label="Conteúdo do acompanhamento de chamados" tabindex="0" class="min-h-0 flex-1 overflow-y-auto overscroll-contain focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-cyan-400/60">
       <div class="space-y-3 py-3">
         <details id="painel-dados-acompanhamento-chamados" class="ticket-disclosure rounded-lg border border-slate-800 bg-slate-950/50 px-3 py-2">
@@ -1507,8 +1507,8 @@ Horário disponível para atendimento:</textarea>
             </form>
             <div id="resumo-acompanhamento-chamados" class="shrink-0"></div>
             <div class="grid grid-cols-1 gap-2 md:grid-cols-[minmax(0,1fr)_auto]">
-              <label for="versao-acompanhamento-chamados" class="text-xs text-slate-300">Versão das planilhas<select id="versao-acompanhamento-chamados" class="mt-1 block w-full rounded-lg border border-slate-700 bg-slate-950 px-3 py-2 text-sm text-white" onchange="selecionarVersaoChamados()"><option value="">Nenhuma importação</option></select></label>
-              <button type="button" id="btn-excluir-importacoes-antigas-chamados" class="self-end rounded-lg border border-rose-400/30 bg-rose-500/10 px-4 py-2 text-xs font-semibold text-rose-200 hover:bg-rose-500/20 disabled:cursor-not-allowed disabled:opacity-50" onclick="excluirImportacoesAntigasChamados()" disabled>Excluir importações antigas</button>
+              <label for="versao-acompanhamento-chamados" class="text-xs text-slate-300">Versão das planilhas<select id="versao-acompanhamento-chamados" class="mt-1 block w-full rounded-lg border border-slate-700 bg-slate-950 px-3 py-2 text-sm text-white" data-on-change="selecionarVersaoChamados"><option value="">Nenhuma importação</option></select></label>
+              <button type="button" id="btn-excluir-importacoes-antigas-chamados" class="self-end rounded-lg border border-rose-400/30 bg-rose-500/10 px-4 py-2 text-xs font-semibold text-rose-200 hover:bg-rose-500/20 disabled:cursor-not-allowed disabled:opacity-50" data-on-click="excluirImportacoesAntigasChamados" disabled>Excluir importações antigas</button>
               <details class="ticket-disclosure md:col-span-2 rounded-lg border border-slate-800 bg-slate-950/40 px-3 py-2">
                 <summary class="ticket-disclosure-summary cursor-pointer text-xs font-semibold text-slate-300">Comparação com a importação anterior</summary>
                 <div id="evolucao-acompanhamento-chamados" class="pt-2 text-xs text-slate-300" role="status" aria-live="polite">O histórico de importações aparecerá aqui.</div>
@@ -1519,15 +1519,15 @@ Horário disponível para atendimento:</textarea>
         <div class="ticket-filter-toolbar">
           <label for="filtro-acompanhamento-chamados" class="ticket-filter-search text-xs text-slate-300">Buscar série, pedido, OS ou status<input id="filtro-acompanhamento-chamados" type="search" autocomplete="off" class="mt-1 block w-full rounded-lg border border-slate-700 bg-slate-950 px-3 py-2 text-sm text-white placeholder:text-slate-500" placeholder="Digite para filtrar os chamados"></label>
           <label title="Chamados ativos sem data ou com três dias ou mais sem atualização" class="ticket-filter-attention border border-amber-400/20 bg-amber-500/5 text-xs text-amber-100"><input id="somente-atencao-chamados" type="checkbox" class="accent-amber-400">Atenção · 3+ dias</label>
-          <button type="button" id="btn-exportar-acompanhamento-chamados" class="ticket-filter-action ticket-filter-export rounded-lg border border-emerald-400/30 bg-emerald-500/15 text-xs font-semibold text-emerald-100 hover:bg-emerald-500/25 disabled:cursor-not-allowed disabled:opacity-50" onclick="exportarAcompanhamentoChamados()" disabled>Exportar Excel</button>
-          <button type="button" class="ticket-filter-action ticket-filter-clear rounded-lg border border-slate-700 text-xs text-slate-300 hover:bg-slate-800" onclick="limparFiltrosAcompanhamentoChamados()">Limpar filtros</button>
+          <button type="button" id="btn-exportar-acompanhamento-chamados" class="ticket-filter-action ticket-filter-export rounded-lg border border-emerald-400/30 bg-emerald-500/15 text-xs font-semibold text-emerald-100 hover:bg-emerald-500/25 disabled:cursor-not-allowed disabled:opacity-50" data-on-click="exportarAcompanhamentoChamados" disabled>Exportar Excel</button>
+          <button type="button" class="ticket-filter-action ticket-filter-clear rounded-lg border border-slate-700 text-xs text-slate-300 hover:bg-slate-800" data-on-click="limparFiltrosAcompanhamentoChamados">Limpar filtros</button>
         </div>
       </div>
       <div id="triagem-diaria-acompanhamento-chamados" class="shrink-0 pb-2" aria-live="polite"></div>
       <p id="contagem-acompanhamento-chamados" class="shrink-0 text-[10px] text-slate-500" role="status" aria-live="polite"></p>
       <div id="lista-acompanhamento-chamados" aria-live="polite" class="space-y-3 py-2"></div>
       </div>
-      <div class="pt-3 border-t border-slate-800 flex justify-end shrink-0"><button type="button" onclick="fecharAcompanhamentoChamados()" class="px-4 py-2 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-300 text-xs">Fechar</button></div>
+      <div class="pt-3 border-t border-slate-800 flex justify-end shrink-0"><button type="button" data-on-click="fecharAcompanhamentoChamados" class="px-4 py-2 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-300 text-xs">Fechar</button></div>
     </div>
   </div>
 
@@ -1552,11 +1552,11 @@ Horário disponível para atendimento:</textarea>
             </label>
           </div>
           <div class="flex items-center gap-2">
-            <button type="button" id="btn-exportar-historico-comparacoes" onclick="exportarHistoricoComparacoesExcel()" class="inline-flex items-center gap-2 rounded-lg bg-cyan-500/10 px-3 py-2 text-xs font-semibold text-cyan-200 border border-cyan-500/25 transition hover:bg-cyan-500/20 disabled:cursor-not-allowed disabled:opacity-50" aria-label="Exportar o histórico da data selecionada para Excel" title="Baixar os registros e as anotações da data selecionada" disabled>
+            <button type="button" id="btn-exportar-historico-comparacoes" data-on-click="exportarHistoricoComparacoesExcel" class="inline-flex items-center gap-2 rounded-lg bg-cyan-500/10 px-3 py-2 text-xs font-semibold text-cyan-200 border border-cyan-500/25 transition hover:bg-cyan-500/20 disabled:cursor-not-allowed disabled:opacity-50" aria-label="Exportar o histórico da data selecionada para Excel" title="Baixar os registros e as anotações da data selecionada" disabled>
               <i data-lucide="download" class="w-4 h-4" aria-hidden="true"></i>
               <span class="hidden sm:inline">Exportar Excel</span>
             </button>
-            <button type="button" onclick="fecharModalHistoricoComparacoes()" class="text-slate-400 hover:text-white p-1 rounded-lg hover:bg-slate-800 transition" aria-label="Fechar histórico de planilhas">
+            <button type="button" data-on-click="fecharModalHistoricoComparacoes" class="text-slate-400 hover:text-white p-1 rounded-lg hover:bg-slate-800 transition" aria-label="Fechar histórico de planilhas">
               <i data-lucide="x" class="w-5 h-5"></i>
             </button>
           </div>
@@ -1564,13 +1564,13 @@ Horário disponível para atendimento:</textarea>
       </div>
       <div id="lista-historico-comparacoes" aria-label="Atualizações registradas" class="overflow-auto flex-1 py-4 space-y-3"></div>
       <div class="pt-3 border-t border-slate-800 flex justify-end shrink-0">
-        <button type="button" onclick="fecharModalHistoricoComparacoes()" class="px-4 py-2 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-300 text-xs transition">Fechar</button>
+        <button type="button" data-on-click="fecharModalHistoricoComparacoes" class="px-4 py-2 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-300 text-xs transition">Fechar</button>
       </div>
     </div>
   </div>
 
   <!-- PESQUISA AMPLIADA DE EQUIPAMENTOS -->
-  <div id="modal-pesquisa-completa" class="modal-overlay fixed inset-0 bg-slate-950/85 backdrop-blur-md z-[100] hidden flex items-center justify-center p-4" onclick="if (event.target === this) fecharModalPesquisaCompleta()">
+  <div id="modal-pesquisa-completa" class="modal-overlay fixed inset-0 bg-slate-950/85 backdrop-blur-md z-[100] hidden flex items-center justify-center p-4" data-on-click="fecharModalPesquisaCompleta" data-on-self-only>
     <div class="modal-panel bg-slate-900 border border-cyan-500/30 rounded-2xl max-w-7xl w-full p-6 shadow-2xl flex flex-col max-h-[92vh] overflow-hidden">
       <div class="flex items-start justify-between gap-4 pb-4 border-b border-slate-800 shrink-0">
         <div class="min-w-0">
@@ -1582,7 +1582,7 @@ Horário disponível para atendimento:</textarea>
         </div>
         <div class="flex items-center gap-3 shrink-0">
           <span id="pesquisa-completa-contagem" class="px-2.5 py-1 rounded-full bg-cyan-500/15 text-cyan-300 border border-cyan-500/25 text-xs font-semibold" role="status" aria-live="polite">0 resultados</span>
-          <button type="button" id="btn-fechar-pesquisa-completa" onclick="fecharModalPesquisaCompleta()" class="text-slate-400 hover:text-white p-1 rounded-lg hover:bg-slate-800 transition" aria-label="Fechar resultados da pesquisa">
+          <button type="button" id="btn-fechar-pesquisa-completa" data-on-click="fecharModalPesquisaCompleta" class="text-slate-400 hover:text-white p-1 rounded-lg hover:bg-slate-800 transition" aria-label="Fechar resultados da pesquisa">
             <i data-lucide="x" class="w-5 h-5" aria-hidden="true"></i>
           </button>
         </div>
@@ -1590,7 +1590,7 @@ Horário disponível para atendimento:</textarea>
       <div class="grid grid-cols-1 sm:grid-cols-2 gap-3 py-3 border-b border-slate-800 shrink-0">
         <label for="filtro-pesquisa-categoria" class="text-xs text-slate-300">
           Categoria
-          <select id="filtro-pesquisa-categoria" onchange="alterarFiltrosPesquisaCompleta()" class="mt-1 w-full rounded-lg glass-input bg-slate-950 px-3 py-2 text-sm text-white focus:outline-none">
+          <select id="filtro-pesquisa-categoria" data-on-change="alterarFiltrosPesquisaCompleta" class="mt-1 w-full rounded-lg glass-input bg-slate-950 px-3 py-2 text-sm text-white focus:outline-none">
             <option value="">Todas as categorias</option>
             <option value="notebook">Notebooks</option>
             <option value="macbook">MacBooks</option>
@@ -1600,22 +1600,22 @@ Horário disponível para atendimento:</textarea>
         </label>
         <label for="filtro-pesquisa-cidade" class="text-xs text-slate-300">
           Cidade
-          <select id="filtro-pesquisa-cidade" onchange="alterarFiltrosPesquisaCompleta()" class="mt-1 w-full rounded-lg glass-input bg-slate-950 px-3 py-2 text-sm text-white focus:outline-none">
+          <select id="filtro-pesquisa-cidade" data-on-change="alterarFiltrosPesquisaCompleta" class="mt-1 w-full rounded-lg glass-input bg-slate-950 px-3 py-2 text-sm text-white focus:outline-none">
             <option value="">Todas as cidades</option>
           </select>
         </label>
-        <button type="button" id="btn-limpar-filtros-pesquisa" onclick="limparFiltrosPesquisaCompleta()" class="hidden sm:col-span-2 justify-self-end text-xs text-cyan-300 hover:text-white transition">
+        <button type="button" id="btn-limpar-filtros-pesquisa" data-on-click="limparFiltrosPesquisaCompleta" class="hidden sm:col-span-2 justify-self-end text-xs text-cyan-300 hover:text-white transition">
           Limpar filtros
         </button>
       </div>
       <p id="pesquisa-completa-status" class="text-xs text-slate-400 py-3 shrink-0" role="status" aria-live="polite">Carregando resultados...</p>
       <div id="pesquisa-completa-lista" class="overflow-y-auto flex-1 min-h-0 py-2 space-y-2" aria-label="Resultados completos da pesquisa"></div>
       <div class="pt-3 border-t border-slate-800 flex items-center justify-between gap-3 shrink-0">
-        <button type="button" id="btn-carregar-mais-pesquisa" onclick="carregarMaisResultadosPesquisa()" class="hidden inline-flex items-center gap-2 px-4 py-2 rounded-lg bg-sky-600 hover:bg-sky-500 disabled:opacity-50 disabled:cursor-wait text-white text-xs font-semibold transition">
+        <button type="button" id="btn-carregar-mais-pesquisa" data-on-click="carregarMaisResultadosPesquisa" class="hidden inline-flex items-center gap-2 px-4 py-2 rounded-lg bg-sky-600 hover:bg-sky-500 disabled:opacity-50 disabled:cursor-wait text-white text-xs font-semibold transition">
           <i data-lucide="plus" class="w-4 h-4" aria-hidden="true"></i>
           <span>Carregar mais</span>
         </button>
-        <button type="button" onclick="fecharModalPesquisaCompleta()" class="ml-auto px-4 py-2 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-300 text-xs transition">Fechar</button>
+        <button type="button" data-on-click="fecharModalPesquisaCompleta" class="ml-auto px-4 py-2 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-300 text-xs transition">Fechar</button>
       </div>
     </div>
   </div>
@@ -1624,6 +1624,7 @@ Horário disponível para atendimento:</textarea>
   <div id="toast-container" role="region" aria-label="Notificações" aria-live="polite" aria-relevant="additions text" aria-atomic="false" class="fixed top-24 right-6 z-[130] space-y-2 pointer-events-none"></div>
 
   <!-- JAVASCRIPT APPLICATION LOGIC -->
+  <script src="/static/js/ui/action-dispatcher.js"></script>
   <script src="/static/js/shared/dom-utils.js"></script>
   <script src="/static/js/shared/catalog-search-utils.js"></script>
   <script src="/static/js/shared/form-draft-guard.js"></script>

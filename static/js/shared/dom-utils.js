@@ -28,6 +28,11 @@
     return icon;
   }
 
+  // Portuguese counts: only exactly one is singular ("1 dia", "0 dias", "2 dias").
+  function pluralize(count, singular, plural = `${singular}s`) {
+    return Number(count) === 1 ? singular : plural;
+  }
+
   function highlightMatch(text, query) {
     if (!text) return "";
     if (!query) return escapeHtml(text);
@@ -49,5 +54,5 @@
     return result + escapeHtml(value.slice(cursor));
   }
 
-  return { escapeHtml, createTextElement, createIcon, highlightMatch };
+  return { escapeHtml, createTextElement, createIcon, highlightMatch, pluralize };
 });
