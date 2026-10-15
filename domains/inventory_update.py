@@ -71,7 +71,7 @@ class InventoryUpdateServices:
     endpoint_alias_review_items: Callable[..., List[Dict[str, Any]]]
     publish_database_state: Callable[[Dict[str, Any]], None]
     comparison_history_for_display: Callable[[Dict[str, Any]], Dict[str, Any]]
-    load_history_annotations: Callable[[Path], List[Dict[str, Any]]]
+    load_history_annotations: Callable[..., List[Dict[str, Any]]]
     comparison_annotation_item_id: Callable[..., str]
     inventory_update_preview_summary: Callable[..., Dict[str, Any]]
     create_inventory_preview_token: Callable[..., str]
@@ -204,6 +204,8 @@ def _copy_matching_history_annotations(
         services.history_annotations_directory(),
         services.local_annotation_outbox_directory(),
         services.load_history_annotations,
+        # An unreadable revision must abort (409) rather than skip an existing note.
+        strict=True,
     )
 
     new_fingerprints = set()
