@@ -53,6 +53,10 @@ class DashboardRouteTests(unittest.TestCase):
         self.assertEqual(data["total_cidades"], 2)
         self.assertEqual(data["cidades_principais"][0], {"cidade": "Curitiba", "total": 2})
         self.assertEqual(data["total_unidades"], 4)
+        self.assertEqual(data["cidades_por_categoria"], {
+            "notebook": [{"cidade": "Curitiba", "total": 2}],
+            "monitor": [{"cidade": "Londrina", "total": 1}],
+        })
 
     def test_latest_comparison_lists_only_attention_items(self):
         events = [{"id": "e1", "horario": "2026-01-01T10:00:00", "tipo": "atualizacao",
