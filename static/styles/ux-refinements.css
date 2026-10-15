@@ -334,6 +334,10 @@ html[data-ux-density="compact"] .comparison-desktop-table td {
   padding-bottom: 0.25rem;
   font-size: 0.8rem;
 }
+/* Tighter column gaps, with a wider notes field so annotations are easier to read. */
+.comparison-desktop-table th,
+.comparison-desktop-table td { padding-left: 0.5rem; padding-right: 0.5rem; }
+.comparison-desktop-table [data-comparison-annotation] { min-width: 320px; }
 
 .ux-divergence-badge {
   min-width: 1.25rem;
