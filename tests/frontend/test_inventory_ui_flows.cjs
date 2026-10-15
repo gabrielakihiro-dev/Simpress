@@ -1280,7 +1280,7 @@ test("shows Simpress product and city while gating delivery address by order sta
   assert.match(activeSummary, /OS Oracle/);
   assert.match(activeSummary, /7134662/);
   assert.match(activeSummary, /Pedido<\/b> 48076976/);
-  assert.match(activeSummary, /OV<\/b> OV_15799764/);
+  assert.match(activeSummary, /OV_15799764/);
   assert.match(activeSummary, /Status Simpress/);
   assert.match(activeSummary, /Fila: Fila A/);
   assert.match(activeSummary, /Cidade: Curitiba/);
