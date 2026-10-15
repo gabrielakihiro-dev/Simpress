@@ -6,7 +6,8 @@ const ux = require("../../static/js/ui/ux-enhancements.js");
 const createNotifications = require("../../static/js/ui/ui-notifications.js");
 
 const staticDir = path.join(__dirname, "..", "..", "static");
-const appScript = fs.readFileSync(path.join(staticDir, "app.js"), "utf8");
+const { appSource } = require("./support/app-sources.cjs");
+const appScript = appSource();
 const appHtml = fs.readFileSync(path.join(staticDir, "index.html"), "utf8");
 const uxCss = fs.readFileSync(path.join(staticDir, "styles", "ux-refinements.css"), "utf8");
 const tokensCss = fs.readFileSync(path.join(staticDir, "styles", "tokens.css"), "utf8");
@@ -15,10 +16,10 @@ function field(value, { type = "text", required = true, valid = true } = {}) {
   return { value, type, required, checkValidity: () => valid };
 }
 
-test("required-field list mirrors the generation gate in app.js", () => {
+test("required-field list mirrors the generation gate in the transfer form", () => {
   const gate = appScript.match(/function validarCamposObrigatoriosPlanilha\(\)\s*\{([\s\S]*?)\n\s*return true;/)?.[1] || "";
   const gateIds = [...gate.matchAll(/id: "([^"]+)"/g)].map(match => match[1]);
-  assert.ok(gateIds.length >= 9, "the gate in app.js should still list its required fields");
+  assert.ok(gateIds.length >= 9, "the generation gate should still list its required fields");
   assert.deepEqual([...ux.REQUIRED_FIELDS.map(item => item.id)].sort(), [...new Set(gateIds)].sort());
 });
 
