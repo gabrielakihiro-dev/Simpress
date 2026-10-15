@@ -9,6 +9,7 @@ const staticDir = path.join(__dirname, "..", "..", "static");
 const appScript = fs.readFileSync(path.join(staticDir, "app.js"), "utf8");
 const appHtml = fs.readFileSync(path.join(staticDir, "index.html"), "utf8");
 const uxCss = fs.readFileSync(path.join(staticDir, "styles", "ux-refinements.css"), "utf8");
+const tokensCss = fs.readFileSync(path.join(staticDir, "styles", "tokens.css"), "utf8");
 
 function field(value, { type = "text", required = true, valid = true } = {}) {
   return { value, type, required, checkValidity: () => valid };
@@ -116,9 +117,10 @@ test("index loads the refinement layer last and links every transfer label", () 
 
 test("refinement layer defines both themes and respects reduced motion", () => {
   for (const token of ["--ux-success-fg", "--ux-pending-fg", "--ux-warning-fg", "--ux-critical-fg", "--ux-neutral-fg"]) {
-    assert.equal((uxCss.match(new RegExp(`${token}:`, "g")) || []).length, 2, `${token} must exist in dark and light`);
+    assert.equal((tokensCss.match(new RegExp(`${token}:`, "g")) || []).length, 2, `${token} must exist in dark and light`);
   }
-  assert.match(uxCss, /html\[data-theme="light"\]\s*\{/);
+  assert.match(tokensCss, /html\[data-theme="light"\]\s*\{/);
+  assert.doesNotMatch(uxCss, /^\s*--ux-[\w-]+:/m, "tokens are defined once, in tokens.css");
   assert.match(uxCss, /\.accessible-table-wrap thead th\s*\{[^}]*position: sticky/);
   assert.match(uxCss, /@media \(prefers-reduced-motion: reduce\)/);
   assert.doesNotMatch(uxCss, /@import|https?:\/\//, "the layer must stay offline");
