@@ -161,93 +161,50 @@
     campo.dataset.representanteAutoValue = valorNovo || "";
   }
 
+  // Fields filled from a representative, in order. Contact fields are forced whenever a representative matches
+  // and clear only for a named one; schedule fields are forced only by their own value and clear for any match.
+  const CAMPOS_PREENCHIDOS_POR_REPRESENTANTE = [
+    { campo: "contato", chave: "nome", forcarPorValor: false, limparSe: null },
+    { campo: "email", chave: "email", forcarPorValor: false, limparSe: "nome" },
+    { campo: "telefone", chave: "telefone", forcarPorValor: false, limparSe: "nome" },
+    { campo: "horario", chave: "horario", forcarPorValor: true, limparSe: "representante" },
+    { campo: "almoco", chave: "almoco", forcarPorValor: true, limparSe: "representante" },
+    { campo: "pausaDuracao", chave: "pausaDuracao", forcarPorValor: true, limparSe: "representante" },
+  ];
+
+  function valorDoRepresentante(representante, chave) {
+    if (chave === "telefone") {
+      return representante?.telefone ? app.formatarTelefoneBrasileiro(representante.telefone) : "";
+    }
+    return representante?.[chave] || "";
+  }
+
+  function deveLimparCampoRegional(representante, regra, valor) {
+    const elegivel = regra.limparSe === "nome" ? Boolean(representante?.nome)
+      : regra.limparSe === "representante" ? Boolean(representante)
+        : false;
+    return elegivel && Object.prototype.hasOwnProperty.call(representante, regra.chave) && !valor;
+  }
+
   function preencherRepresentanteRegional(tipo, cidade, forcar = false) {
     const campos = CAMPOS_CONTATO_REGIONAL[tipo];
     if (!campos) return null;
 
     const representante = obterRepresentanteRegional(cidade);
     const seletor = document.getElementById(campos.selectId);
-    const contato = document.getElementById(campos.contatoId);
-    const email = document.getElementById(campos.emailId);
-    const telefone = document.getElementById(campos.telefoneId);
-    const horario = document.getElementById(campos.horarioId);
-    const almoco = document.getElementById(campos.almocoId);
-    const pausaDuracao = document.getElementById(campos.pausaDuracaoId);
     if (seletor) seletor.value = representante?.cidade || "";
-    if (contato) {
+    CAMPOS_PREENCHIDOS_POR_REPRESENTANTE.forEach((regra) => {
+      const campo = document.getElementById(campos[`${regra.campo}Id`]);
+      if (!campo) return;
+      const valor = valorDoRepresentante(representante, regra.chave);
       atualizarCampoContatoRegional(
-        contato,
-        representante?.nome || "",
-        campos.contatoPadrao,
-        forcar && Boolean(representante)
+        campo,
+        valor,
+        campos[`${regra.campo}Padrao`],
+        forcar && Boolean(regra.forcarPorValor ? valor : representante),
+        deveLimparCampoRegional(representante, regra, valor)
       );
-    }
-    if (email) {
-      const limparEmail = Boolean(representante?.nome)
-        && Object.prototype.hasOwnProperty.call(representante, "email")
-        && !representante.email;
-      atualizarCampoContatoRegional(
-        email,
-        representante?.email || "",
-        campos.emailPadrao,
-        forcar && Boolean(representante),
-        limparEmail
-      );
-    }
-    if (telefone) {
-      const telefoneRepresentante = representante?.telefone
-        ? app.formatarTelefoneBrasileiro(representante.telefone)
-        : "";
-      const limparTelefone = Boolean(representante?.nome)
-        && Object.prototype.hasOwnProperty.call(representante, "telefone")
-        && !telefoneRepresentante;
-      atualizarCampoContatoRegional(
-        telefone,
-        telefoneRepresentante,
-        campos.telefonePadrao,
-        forcar && Boolean(representante),
-        limparTelefone
-      );
-    }
-    if (horario) {
-      const horarioRepresentante = representante?.horario || "";
-      const limparHorario = Boolean(representante)
-        && Object.prototype.hasOwnProperty.call(representante, "horario")
-        && !horarioRepresentante;
-      atualizarCampoContatoRegional(
-        horario,
-        horarioRepresentante,
-        campos.horarioPadrao,
-        forcar && Boolean(horarioRepresentante),
-        limparHorario
-      );
-    }
-    if (almoco) {
-      const almocoRepresentante = representante?.almoco || "";
-      const limparAlmoco = Boolean(representante)
-        && Object.prototype.hasOwnProperty.call(representante, "almoco")
-        && !almocoRepresentante;
-      atualizarCampoContatoRegional(
-        almoco,
-        almocoRepresentante,
-        campos.almocoPadrao,
-        forcar && Boolean(almocoRepresentante),
-        limparAlmoco
-      );
-    }
-    if (pausaDuracao) {
-      const pausaRepresentante = representante?.pausaDuracao || "";
-      const limparPausa = Boolean(representante)
-        && Object.prototype.hasOwnProperty.call(representante, "pausaDuracao")
-        && !pausaRepresentante;
-      atualizarCampoContatoRegional(
-        pausaDuracao,
-        pausaRepresentante,
-        campos.pausaDuracaoPadrao,
-        forcar && Boolean(pausaRepresentante),
-        limparPausa
-      );
-    }
+    });
     if (tipo === "entrega") app.atualizarObrigatoriedadeDuracaoPausaEntrega();
     return representante;
   }

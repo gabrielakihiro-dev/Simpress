@@ -30,11 +30,13 @@
     });
   }
 
+  const ARQUIVOS_ATUALIZACAO_PLANILHAS = [
+    ["upload-endpoint-file", "upload-endpoint-name"],
+    ["upload-details-file", "upload-details-name"]
+  ];
+
   function inicializarArquivosAtualizacaoPlanilhas() {
-    [
-      ["upload-endpoint-file", "upload-endpoint-name"],
-      ["upload-details-file", "upload-details-name"]
-    ].forEach(([inputId, nameId]) => {
+    ARQUIVOS_ATUALIZACAO_PLANILHAS.forEach(([inputId, nameId]) => {
       const input = document.getElementById(inputId);
       input?.addEventListener("change", () => {
         document.getElementById(nameId).textContent = input.files?.[0]?.name || "Nenhum arquivo selecionado";
@@ -181,6 +183,39 @@
     return input.files?.[0] === arquivoPrevisto;
   }
 
+  // Disables the given controls and shows a spinner on the button; returns a function that restores them.
+  function travarEnvioPlanilhas(button, mensagem, controles) {
+    const modal = document.getElementById("modal-atualizar-planilhas");
+    const originalHtml = button.innerHTML;
+    controles.forEach(controle => { controle.disabled = true; });
+    button.setAttribute("aria-busy", "true");
+    modal.setAttribute("aria-busy", "true");
+    button.innerHTML = `<i data-lucide="loader-2" class="w-3.5 h-3.5 animate-spin"></i><span>${mensagem}</span>`;
+    lucide.createIcons({ root: button });
+    return () => {
+      controles.forEach(controle => { controle.disabled = false; });
+      button.removeAttribute("aria-busy");
+      modal.removeAttribute("aria-busy");
+      button.innerHTML = originalHtml;
+      lucide.createIcons({ root: button });
+    };
+  }
+
+  function erroRespostaPlanilhas(response, result, mensagemPadrao) {
+    if (response.status === 404) {
+      return new Error("A API ativa está desatualizada. Feche a instância anterior e reinicie com iniciar_servidor.bat desta pasta.");
+    }
+    const detail = result.detail;
+    return new Error(Array.isArray(detail) ? detail.map(item => item.msg || item).join("; ") : (detail || mensagemPadrao));
+  }
+
+  function formularioArquivosPlanilhas(endpointFile, detailsFile) {
+    const formData = new FormData();
+    formData.append("endpoint_file", endpointFile);
+    formData.append("details_file", detailsFile);
+    return formData;
+  }
+
   async function previsualizarPlanilhas() {
     const endpointInput = document.getElementById("upload-endpoint-file");
     const detailsInput = document.getElementById("upload-details-file");
@@ -192,29 +227,13 @@
     }
 
     const button = document.getElementById("btn-previsualizar-planilhas");
-    const originalHtml = button.innerHTML;
-    button.disabled = true;
-    endpointInput.disabled = true;
-    detailsInput.disabled = true;
-    button.setAttribute("aria-busy", "true");
-    document.getElementById("modal-atualizar-planilhas").setAttribute("aria-busy", "true");
-    button.innerHTML = '<i data-lucide="loader-2" class="w-3.5 h-3.5 animate-spin"></i><span>Validando arquivos...</span>';
-    lucide.createIcons({ root: button });
-
-    const formData = new FormData();
-    formData.append("endpoint_file", endpointFile);
-    formData.append("details_file", detailsFile);
+    const destravar = travarEnvioPlanilhas(button, "Validando arquivos...", [button, endpointInput, detailsInput]);
+    const formData = formularioArquivosPlanilhas(endpointFile, detailsFile);
 
     try {
       const response = await fetch("/api/planilhas/previsualizar", { method: "POST", body: formData });
       const result = await response.json().catch(() => ({}));
-      if (!response.ok) {
-        if (response.status === 404) {
-          throw new Error("A API ativa está desatualizada. Feche a instância anterior e reinicie com iniciar_servidor.bat desta pasta.");
-        }
-        const detail = result.detail;
-        throw new Error(Array.isArray(detail) ? detail.map(item => item.msg || item).join("; ") : (detail || "Não foi possível gerar a prévia."));
-      }
+      if (!response.ok) throw erroRespostaPlanilhas(response, result, "Não foi possível gerar a prévia.");
       renderizarPreviaUploadPlanilhas(result);
       appState.previaPlanilhasAtual = {
         endpointFile,
@@ -229,14 +248,63 @@
       app.limparPreviaUploadPlanilhas(false);
       mostrarStatusUpload(error.message || "Não foi possível gerar a prévia.", true);
     } finally {
-      endpointInput.disabled = false;
-      detailsInput.disabled = false;
-      button.disabled = false;
-      button.removeAttribute("aria-busy");
-      document.getElementById("modal-atualizar-planilhas").removeAttribute("aria-busy");
-      button.innerHTML = originalHtml;
-      lucide.createIcons({ root: button });
+      destravar();
     }
+  }
+
+  // One idempotency key per selected file pair, kept across retries until the upload succeeds.
+  function chaveIdempotenciaUpload(endpointFile, detailsFile) {
+    if (!inventoryUploadAttempt || inventoryUploadAttempt.endpoint !== endpointFile || inventoryUploadAttempt.details !== detailsFile) {
+      inventoryUploadAttempt = { endpoint: endpointFile, details: detailsFile, key: inventoryOperationKey() };
+    }
+    return inventoryUploadAttempt.key;
+  }
+
+  function limparArquivosAtualizacaoPlanilhas() {
+    ARQUIVOS_ATUALIZACAO_PLANILHAS.forEach(([inputId, nameId]) => {
+      document.getElementById(inputId).value = "";
+      document.getElementById(nameId).textContent = "Nenhum arquivo selecionado";
+    });
+  }
+
+  function avisarSelecaoAposAtualizacao(status) {
+    if (status === "missing") {
+      app.showToast("A série selecionada não está no inventário atualizado. Selecione outro equipamento.", "warning");
+    } else if (status === "unavailable") {
+      app.showToast("Não foi possível confirmar a série no inventário atualizado. Faça uma nova busca.", "warning");
+    }
+  }
+
+  async function exportarHistoricoAposAtualizacao(comparison) {
+    const historyDate = String(comparison.horario_comparacao || "").slice(0, 10);
+    try {
+      await app.baixarHistoricoComparacoesExcel(historyDate);
+      app.showToast("Histórico do dia exportado automaticamente.", "success");
+    } catch (error) {
+      console.warn("A atualização foi concluída, mas a exportação automática falhou:", error);
+      app.showToast(
+        `Atualização concluída, mas não foi possível exportar o histórico: ${error.message || "tente novamente pelo Histórico de Planilhas."}`,
+        "warning",
+      );
+    }
+  }
+
+  async function concluirAtualizacaoPlanilhas(result, exportarHistoricoAutomaticamente) {
+    inventoryUploadAttempt = null;
+    const selectedSerial = appState.currentEquipamento?.serial || "";
+    const selectionRefresh = app.atualizarSelecaoAposSubstituirInventarios(selectedSerial);
+    app.fecharModalAtualizarPlanilhas();
+    limparArquivosAtualizacaoPlanilhas();
+    await Promise.all([
+      app.carregarEstatisticas(),
+      app.carregarUnidades(),
+      app.carregarContagemHistoricoComparacoes(),
+      app.carregarProntidao()
+    ]);
+    avisarSelecaoAposAtualizacao(await selectionRefresh);
+    const comparison = result.comparacao || {};
+    if (exportarHistoricoAutomaticamente) await exportarHistoricoAposAtualizacao(comparison);
+    app.abrirModalComparacaoPlanilhas(comparison);
   }
 
   async function enviarPlanilhas() {
@@ -260,91 +328,33 @@
     }
 
     const button = document.getElementById("btn-confirmar-planilhas");
-    const originalHtml = button.innerHTML;
-    button.disabled = true;
-    endpointInput.disabled = true;
-    detailsInput.disabled = true;
-    button.setAttribute("aria-busy", "true");
     const autoExportInput = document.getElementById("auto-export-history-after-update");
-    if (autoExportInput) autoExportInput.disabled = true;
-    document.getElementById("modal-atualizar-planilhas").setAttribute("aria-busy", "true");
-    button.innerHTML = '<i data-lucide="loader-2" class="w-3.5 h-3.5 animate-spin"></i><span>Confirmando substituição...</span>';
-    lucide.createIcons({ root: button });
-
-    const formData = new FormData();
-    formData.append("endpoint_file", endpointFile);
-    formData.append("details_file", detailsFile);
-    let invalidarPrevia = false;
-    if (!inventoryUploadAttempt || inventoryUploadAttempt.endpoint !== endpointFile || inventoryUploadAttempt.details !== detailsFile) {
-      inventoryUploadAttempt = { endpoint: endpointFile, details: detailsFile, key: inventoryOperationKey() };
-    }
+    const destravar = travarEnvioPlanilhas(
+      button,
+      "Confirmando substituição...",
+      [button, endpointInput, detailsInput, autoExportInput].filter(Boolean),
+    );
+    const formData = formularioArquivosPlanilhas(endpointFile, detailsFile);
+    const idempotencyKey = chaveIdempotenciaUpload(endpointFile, detailsFile);
     if (preview.previewToken) formData.append("preview_token", preview.previewToken);
+    let invalidarPrevia = false;
 
     try {
       const response = await fetch("/api/planilhas/atualizar", {
-        method: "POST", body: formData, headers: { "Idempotency-Key": inventoryUploadAttempt.key },
+        method: "POST", body: formData, headers: { "Idempotency-Key": idempotencyKey },
       });
       const result = await response.json().catch(() => ({}));
       if (!response.ok) {
         invalidarPrevia = response.status < 500;
-        if (response.status === 404) {
-          throw new Error("A API ativa está desatualizada. Feche a instância anterior e reinicie com iniciar_servidor.bat desta pasta.");
-        }
-        const detail = result.detail;
-        throw new Error(Array.isArray(detail) ? detail.map(item => item.msg || item).join("; ") : (detail || "Falha ao atualizar as planilhas."));
+        throw erroRespostaPlanilhas(response, result, "Falha ao atualizar as planilhas.");
       }
-
-      inventoryUploadAttempt = null;
-      const selectedSerial = appState.currentEquipamento?.serial || "";
-      const selectionRefresh = app.atualizarSelecaoAposSubstituirInventarios(selectedSerial);
-      app.fecharModalAtualizarPlanilhas();
-      [
-        ["upload-endpoint-file", "upload-endpoint-name"],
-        ["upload-details-file", "upload-details-name"]
-      ].forEach(([inputId, nameId]) => {
-        document.getElementById(inputId).value = "";
-        document.getElementById(nameId).textContent = "Nenhum arquivo selecionado";
-      });
-      await Promise.all([
-        app.carregarEstatisticas(),
-        app.carregarUnidades(),
-        app.carregarContagemHistoricoComparacoes(),
-        app.carregarProntidao()
-      ]);
-      const selectionRefreshStatus = await selectionRefresh;
-      if (selectionRefreshStatus === "missing") {
-        app.showToast("A série selecionada não está no inventário atualizado. Selecione outro equipamento.", "warning");
-      } else if (selectionRefreshStatus === "unavailable") {
-        app.showToast("Não foi possível confirmar a série no inventário atualizado. Faça uma nova busca.", "warning");
-      }
-      const comparison = result.comparacao || {};
-      if (exportarHistoricoAutomaticamente) {
-        const historyDate = String(comparison.horario_comparacao || "").slice(0, 10);
-        try {
-          await app.baixarHistoricoComparacoesExcel(historyDate);
-          app.showToast("Histórico do dia exportado automaticamente.", "success");
-        } catch (error) {
-          console.warn("A atualização foi concluída, mas a exportação automática falhou:", error);
-          app.showToast(
-            `Atualização concluída, mas não foi possível exportar o histórico: ${error.message || "tente novamente pelo Histórico de Planilhas."}`,
-            "warning",
-          );
-        }
-      }
-      app.abrirModalComparacaoPlanilhas(comparison);
+      await concluirAtualizacaoPlanilhas(result, exportarHistoricoAutomaticamente);
     } catch (error) {
       console.error("Erro ao atualizar planilhas:", error);
       if (invalidarPrevia) app.limparPreviaUploadPlanilhas(false);
       mostrarStatusUpload(error.message || "Não foi possível atualizar as planilhas.", true);
     } finally {
-      endpointInput.disabled = false;
-      detailsInput.disabled = false;
-      button.disabled = false;
-      button.removeAttribute("aria-busy");
-      if (autoExportInput) autoExportInput.disabled = false;
-      document.getElementById("modal-atualizar-planilhas").removeAttribute("aria-busy");
-      button.innerHTML = originalHtml;
-      lucide.createIcons({ root: button });
+      destravar();
     }
   }
 

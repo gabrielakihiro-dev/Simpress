@@ -30,13 +30,6 @@ with patch(
 PROJECT_ROOT = Path(__file__).resolve().parents[1]
 
 
-def _frontend_script() -> str:
-    """static/app.js and the feature modules it bootstraps, in index.html order."""
-    html = (app_config.STATIC_DIR / "index.html").read_text(encoding="utf-8")
-    files = re.findall(r'<script src="/static/((?:js/features/[^"]+|js/shared/history-format\.js|app\.js))"></script>', html)
-    return "\n".join((app_config.STATIC_DIR / name).read_text(encoding="utf-8") for name in files)
-
-
 def _xlsx_with_worksheet_xml(*worksheet_xml: str) -> bytes:
     content = io.BytesIO()
     with zipfile.ZipFile(content, "w") as archive:
@@ -105,6 +98,13 @@ def _run_local_safety_middleware(
         if message["type"] == "http.response.start"
     )
     return status, state["passed"]
+
+
+def _frontend_script() -> str:
+    """static/app.js and the feature modules it bootstraps, in index.html order."""
+    html = (app_config.STATIC_DIR / "index.html").read_text(encoding="utf-8")
+    files = re.findall(r'<script src="/static/((?:js/features/[^"]+|js/shared/history-format\.js|app\.js))"></script>', html)
+    return "\n".join((app_config.STATIC_DIR / name).read_text(encoding="utf-8") for name in files)
 
 
 class MaintenanceContractTests(unittest.TestCase):
