@@ -18,11 +18,11 @@ from contextlib import asynccontextmanager, contextmanager
 from datetime import datetime, timedelta
 from pathlib import Path
 from typing import Dict, Iterable, List, Optional, Any, Set, Tuple
-from urllib.parse import quote, urlsplit
+from urllib.parse import quote
 
 import openpyxl
 from fastapi import FastAPI, File, Form, HTTPException, UploadFile
-from fastapi.responses import FileResponse, JSONResponse, StreamingResponse
+from fastapi.responses import FileResponse, StreamingResponse
 from pydantic import BaseModel, Field, field_validator
 from starlette.datastructures import UploadFile as StarletteUploadFile
 from routers.frontend import RevalidatingStaticFiles, frontend_response
@@ -169,11 +169,17 @@ from routers.equipment_search import EquipmentSearchServices, create_equipment_s
 from routers.system import SystemRouteServices, create_system_router
 from routers.units import UnidadePayload, UnitRouteServices, create_units_router
 from core.inventory_requests import (
-    IDEMPOTENCY_KEY_PATTERN,
     InventoryUpdateMiddleware,
     idempotency_key,
 )
-from security.network import is_direct_loopback_request
+from security.local_requests import (
+    LocalRequestSafetyMiddleware as _LocalRequestSafetyMiddleware,
+    LocalRequestSafetyServices,
+    RequestBodyLimits,
+    RequestBodyTooLarge,
+    allowed_local_authorities,
+    parse_request_authority,
+)
 
 # Runtime synchronization and in-memory state remain in the application entry point.
 # Lock hierarchy (docs/arquitetura/auditoria_backend/hierarquia_de_locks.md): the global
@@ -191,10 +197,6 @@ logger = logging.getLogger(__name__)
 
 class LocalJsonCorruptionError(ValueError):
     """A persisted JSON file is present but cannot be trusted or updated safely."""
-
-
-class RequestBodyTooLarge(Exception):
-    pass
 
 
 def _read_json_object(path: Path, label: str) -> Dict[str, Any]:
@@ -1185,236 +1187,32 @@ app = FastAPI(
 app.add_middleware(InventoryUpdateMiddleware)
 
 
-class LocalRequestSafetyMiddleware:
-    """Restrict local peers and authorities, cap uploads, and hide exceptions."""
-
-    def __init__(self, app):
-        self.app = app
-
-    async def __call__(self, scope, receive, send):
-        if scope["type"] != "http":
-            await self.app(scope, receive, send)
-            return
-
-        if not is_direct_loopback_request(scope):
-            response = JSONResponse(
-                status_code=403,
-                content={"detail": "A aplicação aceita somente conexões locais diretas, sem proxy."},
-            )
-            await response(scope, receive, send)
-            return
-
-        path = scope.get("path", "")
-        raw_headers = scope.get("headers", [])
-        headers = {key.lower(): value for key, value in raw_headers}
-        host_values = [value for key, value in raw_headers if key.lower() == b"host"]
-        if len(host_values) != 1:
-            response = JSONResponse(
-                status_code=400,
-                content={"detail": "O cabeçalho Host da solicitação é inválido."},
-            )
-            await response(scope, receive, send)
-            return
-
-        host_authority = _parse_request_authority(host_values[0])
-        if host_authority is None:
-            response = JSONResponse(
-                status_code=400,
-                content={"detail": "O cabeçalho Host da solicitação é inválido."},
-            )
-            await response(scope, receive, send)
-            return
-        if host_authority not in _ALLOWED_LOCAL_AUTHORITIES:
-            response = JSONResponse(
-                status_code=403,
-                content={"detail": "O Host não está autorizado para a aplicação local."},
-            )
-            await response(scope, receive, send)
-            return
-
-        origin_values = [value for key, value in raw_headers if key.lower() == b"origin"]
-        if path.startswith("/api/") and origin_values and (
-            len(origin_values) != 1
-            or _parse_request_authority(origin_values[0], is_origin=True) != host_authority
-        ):
-            response = JSONResponse(
-                status_code=403,
-                content={"detail": "Origem não autorizada para a aplicação local."},
-            )
-            await response(scope, receive, send)
-            return
-
-        is_inventory_upload = path in INVENTORY_UPLOAD_PATHS
-        is_model_upload = path.startswith("/api/modelos/") and path.endswith("/importar")
-        is_ticket_upload = path == "/api/operacoes/chamados/importar"
-        body_limit = (
-            MAX_UPLOAD_REQUEST_BYTES if is_inventory_upload
-            else MAX_UPLOAD_BYTES + 1024 * 1024 if is_model_upload
-            else 2 * MAX_TICKET_WORKBOOK_BYTES + 1024 * 1024 if is_ticket_upload
-            else MAX_API_REQUEST_BYTES if path.startswith("/api/") and scope.get("method") in {"POST", "PUT", "PATCH"}
-            else None
-        )
-        if body_limit is not None:
-            content_length = headers.get(b"content-length")
-            if content_length is not None:
-                try:
-                    request_size = int(content_length)
-                except (TypeError, ValueError):
-                    response = JSONResponse(
-                        status_code=400,
-                        content={"detail": "O tamanho do envio é inválido."},
-                    )
-                    await response(scope, receive, send)
-                    return
-                if request_size > body_limit:
-                    response = JSONResponse(
-                        status_code=413,
-                        content={"detail": "O corpo da solicitação excede o limite permitido."},
-                    )
-                    await response(scope, receive, send)
-                    return
-
-        uses_upload_admission = is_inventory_upload or is_model_upload or is_ticket_upload or path == "/api/recarregar-base"
-        if uses_upload_admission:
-            key_headers = [value for name, value in raw_headers if name.lower() == b"idempotency-key"]
-            is_keyed_inventory_update = is_inventory_upload and scope.get("method") == "POST"
-            if is_keyed_inventory_update and len(key_headers) > 1:
-                response = JSONResponse(
-                    status_code=422,
-                    content={"detail": "Informe somente uma Idempotency-Key."},
-                )
-                await response(scope, receive, send)
-                return
-            if (
-                is_keyed_inventory_update
-                and key_headers
-                and not IDEMPOTENCY_KEY_PATTERN.fullmatch(key_headers[0].decode("latin-1"))
-            ):
-                response = JSONResponse(
-                    status_code=422,
-                    content={"detail": "Idempotency-Key deve conter de 1 a 128 letras, números, ponto, hífen, dois-pontos ou sublinhado."},
-                )
-                await response(scope, receive, send)
-                return
-            admitted = UPLOAD_ADMISSION.acquire(blocking=False)
-            if (
-                not admitted
-                and is_keyed_inventory_update
-                and len(key_headers) == 1
-            ):
-                # A keyed retry waits behind the in-flight upload so it can read
-                # the durable receipt instead of failing before idempotency runs.
-                deadline = asyncio.get_running_loop().time() + IDEMPOTENT_UPLOAD_ADMISSION_WAIT_SECONDS
-                while not admitted and asyncio.get_running_loop().time() < deadline:
-                    await asyncio.sleep(0.02)
-                    admitted = UPLOAD_ADMISSION.acquire(blocking=False)
-            if not admitted:
-                response = JSONResponse(
-                    status_code=503,
-                    content={"detail": "A operação de inventário está ocupada. Tente novamente em instantes."},
-                    headers={"Retry-After": "2"},
-                )
-                await response(scope, receive, send)
-                return
-
-        response_started = False
-        request_size = 0
-
-        async def safe_send(message):
-            nonlocal response_started
-            if message["type"] == "http.response.start":
-                response_started = True
-            await send(message)
-
-        async def limited_receive():
-            nonlocal request_size
-            message = await receive()
-            if body_limit is not None and message["type"] == "http.request":
-                request_size += len(message.get("body", b""))
-                if request_size > body_limit:
-                    raise RequestBodyTooLarge()
-            return message
-
-        try:
-            await self.app(scope, limited_receive, safe_send)
-        except RequestBodyTooLarge:
-            if response_started:
-                return
-            response = JSONResponse(
-                status_code=413,
-                content={"detail": "O corpo da solicitação excede o limite permitido."},
-            )
-            await response(scope, receive, send)
-        except LocalJsonCorruptionError as error:
-            if response_started:
-                return
-            response = JSONResponse(status_code=503, content={"detail": str(error)})
-            await response(scope, receive, send)
-        except Exception as error:
-            print(
-                f"[ERRO] Falha interna na rota {path or '/'} "
-                f"({type(error).__name__})."
-            )
-            if response_started:
-                return
-            response = JSONResponse(
-                status_code=500,
-                content={"detail": "Falha interna do servidor. Consulte os logs locais."},
-            )
-            await response(scope, receive, send)
-        finally:
-            if uses_upload_admission:
-                UPLOAD_ADMISSION.release()
-
-
 SERVER_PORT = int(os.environ.get("SIMPRESS_PORT", "8000"))
 IDEMPOTENT_UPLOAD_ADMISSION_WAIT_SECONDS = 120
 
-_ALLOWED_LOCAL_AUTHORITIES = frozenset({
-    ("127.0.0.1", SERVER_PORT),
-    ("localhost", SERVER_PORT),
-    ("::1", SERVER_PORT),
-})
+_ALLOWED_LOCAL_AUTHORITIES = allowed_local_authorities(SERVER_PORT)
+_parse_request_authority = parse_request_authority
+
+_local_request_safety_services = LocalRequestSafetyServices(
+    allowed_authorities=lambda: _ALLOWED_LOCAL_AUTHORITIES,
+    inventory_upload_paths=lambda: INVENTORY_UPLOAD_PATHS,
+    body_limits=lambda: RequestBodyLimits(
+        upload_request_bytes=MAX_UPLOAD_REQUEST_BYTES,
+        upload_bytes=MAX_UPLOAD_BYTES,
+        ticket_workbook_bytes=MAX_TICKET_WORKBOOK_BYTES,
+        api_request_bytes=MAX_API_REQUEST_BYTES,
+    ),
+    upload_admission=lambda: UPLOAD_ADMISSION,
+    idempotent_upload_wait_seconds=lambda: IDEMPOTENT_UPLOAD_ADMISSION_WAIT_SECONDS,
+    service_unavailable_errors=(LocalJsonCorruptionError,),
+)
 
 
-def _parse_request_authority(
-    value: bytes,
-    *,
-    is_origin: bool = False,
-) -> Optional[tuple[str, int]]:
-    """Normalize a local Host or HTTP Origin without accepting suffix tricks."""
-    try:
-        text = value.decode("ascii")
-    except UnicodeDecodeError:
-        return None
-    if not text or text != text.strip() or any(ord(character) < 0x20 for character in text):
-        return None
+class LocalRequestSafetyMiddleware(_LocalRequestSafetyMiddleware):
+    """Restrict local peers and authorities, cap uploads, and hide exceptions."""
 
-    try:
-        if is_origin:
-            parsed = urlsplit(text)
-            if (
-                parsed.scheme.lower() != "http"
-                or not parsed.netloc
-                or parsed.path
-                or parsed.query
-                or parsed.fragment
-            ):
-                return None
-        else:
-            parsed = urlsplit(f"//{text}")
-            if parsed.path or parsed.query or parsed.fragment:
-                return None
-        if parsed.username is not None or parsed.password is not None:
-            return None
-        hostname = parsed.hostname
-        port = parsed.port
-    except ValueError:
-        return None
-
-    if hostname is None or port is None:
-        return None
-    return hostname.rstrip(".").lower(), port
+    def __init__(self, app):
+        super().__init__(app, _local_request_safety_services)
 
 
 app.add_middleware(LocalRequestSafetyMiddleware)
