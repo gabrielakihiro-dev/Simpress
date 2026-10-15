@@ -26,7 +26,7 @@ test("ticket selection keeps the latest snapshot after overlapping responses", a
   });
   releaseOld();
   await page.evaluate(() => window.testOldSelection);
-  expect(await page.evaluate(() => acompanhamentoChamadosAtual.snapshot_id)).toBe("latest");
+  expect(await page.evaluate(() => SimpressApp.state.acompanhamentoChamadosAtual.snapshot_id)).toBe("latest");
   expect(await page.locator("#lista-acompanhamento-chamados").textContent()).toContain("SN-LATEST");
   expect(await page.locator("#lista-acompanhamento-chamados").textContent()).not.toContain("SN-OLD");
 });
@@ -115,7 +115,7 @@ test("clearing the ticket snapshot also clears its comparison", async ({ page })
     document.getElementById("versao-acompanhamento-chamados").value = "";
     await selecionarVersaoChamados();
   });
-  expect(await page.evaluate(() => acompanhamentoChamadosAtual)).toBeNull();
+  expect(await page.evaluate(() => SimpressApp.state.acompanhamentoChamadosAtual)).toBeNull();
   await expect(evolution).toHaveText("Nenhuma importação selecionada.");
   await expect(evolution).not.toContainText("7 novas");
 });

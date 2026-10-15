@@ -8,7 +8,8 @@ const history = require("../../static/js/ui/transfer-history.js");
 
 const staticDir = path.join(__dirname, "..", "..", "static");
 const appHtml = fs.readFileSync(path.join(staticDir, "index.html"), "utf8");
-const appScript = fs.readFileSync(path.join(staticDir, "app.js"), "utf8");
+const { appSource } = require("./support/app-sources.cjs");
+const appScript = appSource();
 
 test("sorting compares numbers, dates and text naturally and keeps empties last", () => {
   assert.ok(panels.compareValues("2", "10") < 0);
