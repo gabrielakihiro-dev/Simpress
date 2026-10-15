@@ -427,7 +427,12 @@
   }
 
   async function consultarHistoricoComparacao(eventoId, botao, navigationTarget = null) {
-    const textoOriginal = botao.textContent;
+    const conteudoOriginal = [...botao.childNodes];
+    const restaurarBotao = () => {
+      botao.disabled = false;
+      botao.removeAttribute("aria-busy");
+      botao.replaceChildren(...conteudoOriginal);
+    };
     botao.disabled = true;
     botao.setAttribute("aria-busy", "true");
     botao.textContent = "Carregando...";
@@ -445,12 +450,11 @@
         historico_salvo: true,
         contexto_historico: true,
       }, navigationTarget);
+      restaurarBotao();
     } catch (err) {
       console.error("Erro ao abrir comparação salva:", err);
       app.showToast(err.message || "Não foi possível abrir este resultado.", "error");
-      botao.disabled = false;
-      botao.removeAttribute("aria-busy");
-      botao.textContent = textoOriginal;
+      restaurarBotao();
     }
   }
 

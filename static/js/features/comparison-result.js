@@ -646,7 +646,12 @@
         .find(candidate => candidate.dataset.historyFilterGroup === target.section && candidate.getClientRects().length > 0);
       if (!group) return;
       const reduced = window.matchMedia?.("(prefers-reduced-motion: reduce)").matches;
-      group.scrollIntoView({ behavior: reduced ? "auto" : "smooth", block: "start" });
+      // Include the section title when the section holds only this group, and stop well below the sticky filter bar.
+      const section = group.closest("[data-history-filter-section]");
+      const anchor = section && section.querySelectorAll("[data-history-filter-group]").length === 1 ? section : group;
+      const bar = content.querySelector("[data-history-filter-bar]");
+      anchor.style.scrollMarginTop = `${(bar ? bar.offsetHeight : 0) + 32}px`;
+      anchor.scrollIntoView({ behavior: reduced ? "auto" : "smooth", block: "start" });
       motion?.reveal(group);
       return;
     }
