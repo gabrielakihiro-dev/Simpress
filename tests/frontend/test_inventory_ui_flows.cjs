@@ -10,7 +10,9 @@ const annotationAutosave = require("../../static/js/shared/history-annotation-au
 const accessibleDialogs = require("../../static/js/ui/accessible-dialogs.js");
 const notifications = require("../../static/js/ui/ui-notifications.js");
 
-const appScript = fs.readFileSync(path.join(__dirname, "..", "..", "static", "app.js"), "utf8");
+const { appScripts, appSource } = require("./support/app-sources.cjs");
+
+const appScript = appSource();
 const appHtml = fs.readFileSync(path.join(__dirname, "..", "..", "static", "index.html"), "utf8");
 const appCss = fs.readFileSync(path.join(__dirname, "..", "..", "static", "app.css"), "utf8");
 
@@ -158,7 +160,7 @@ function createAppHarness(fetchApi, { stubDisplay = true, confirmResult = true, 
     workflowEffects: effects,
   });
 
-  vm.runInContext(appScript, context, { filename: "static/app.js" });
+  for (const { file, source } of appScripts()) vm.runInContext(source, context, { filename: file });
   context.renderComparisonForTest = context.abrirModalComparacaoPlanilhas;
   vm.runInContext(`
     preencherRepresentanteRegional = () => {};
@@ -189,7 +191,7 @@ function createAppHarness(fetchApi, { stubDisplay = true, confirmResult = true, 
       context.workflowEquipment = equipment;
       vm.runInContext(`
         definirEquipamentoAtual(workflowEquipment);
-        retiradaCidadeSelecionada = workflowEquipment.retirada_cidade || "";
+        SimpressApp.state.retiradaCidadeSelecionada = workflowEquipment.retirada_cidade || "";
       `, context);
       document.getElementById("input-serial").value = equipment.serial;
       document.getElementById("retirada-endereco").value = equipment.retirada_endereco || "";
@@ -212,7 +214,7 @@ function ticketSelectionHarness(fetchApi) {
   const harness = createAppHarness(fetchApi);
   harness.run(`
     renderizarAcompanhamentoChamados = () => {
-      document.getElementById("lista-acompanhamento-chamados").innerHTML = acompanhamentoChamadosAtual?.snapshot_id || "Importe as duas planilhas";
+      document.getElementById("lista-acompanhamento-chamados").innerHTML = SimpressApp.state.acompanhamentoChamadosAtual?.snapshot_id || "Importe as duas planilhas";
     };
     carregarEvolucaoChamados = async () => {};
   `);
@@ -232,7 +234,7 @@ test("latest ticket snapshot wins when responses arrive out of order", async () 
   const second = harness.run("selecionarVersaoChamados()");
   latest.resolve(apiResponse({})); await second;
   old.resolve(apiResponse({})); await first;
-  assert.equal(harness.run("acompanhamentoChamadosAtual.snapshot_id"), "latest");
+  assert.equal(harness.run("SimpressApp.state.acompanhamentoChamadosAtual.snapshot_id"), "latest");
   assert.equal(harness.element("lista-acompanhamento-chamados").innerHTML, "latest");
   assert.equal(requests[0].signal.aborted, true);
 });
@@ -255,7 +257,7 @@ test("choosing no ticket import cancels a pending snapshot and clears the select
     requests.push(options);
     return old.promise;
   });
-  harness.run('acompanhamentoChamadosAtual = { snapshot_id: "previous" }');
+  harness.run('SimpressApp.state.acompanhamentoChamadosAtual = { snapshot_id: "previous" }');
   harness.element("versao-acompanhamento-chamados").value = "previous";
   const pending = harness.run("selecionarVersaoChamados()");
 
@@ -265,7 +267,7 @@ test("choosing no ticket import cancels a pending snapshot and clears the select
   await pending;
 
   assert.equal(requests[0].signal.aborted, true);
-  assert.equal(harness.run("acompanhamentoChamadosAtual"), null);
+  assert.equal(harness.run("SimpressApp.state.acompanhamentoChamadosAtual"), null);
   assert.match(harness.element("lista-acompanhamento-chamados").innerHTML, /Importe as duas planilhas/);
 });
 
@@ -276,7 +278,7 @@ test("a late initial ticket load cannot overwrite a selected historical snapshot
   harness.element("versao-acompanhamento-chamados").value = "historical";
   await harness.run("selecionarVersaoChamados()");
   initial.resolve(apiResponse({ snapshot_id: "current", historico: [] })); await first;
-  assert.equal(harness.run("acompanhamentoChamadosAtual.snapshot_id"), "historical");
+  assert.equal(harness.run("SimpressApp.state.acompanhamentoChamadosAtual.snapshot_id"), "historical");
 });
 
 test("closing ticket tracking cancels reads and ignores their late completion", async () => {
@@ -287,7 +289,7 @@ test("closing ticket tracking cancels reads and ignores their late completion", 
   const pending = harness.run("selecionarVersaoChamados()");
   harness.run("fecharAcompanhamentoChamados()");
   response.resolve(apiResponse({})); await pending;
-  assert.equal(harness.run("acompanhamentoChamadosAtual"), null);
+  assert.equal(harness.run("SimpressApp.state.acompanhamentoChamadosAtual"), null);
 });
 
 test("rebuilding ticket cards aborts timeline reads tied to the old cards", async () => {
@@ -316,7 +318,7 @@ test("ticket evolution ignores a stale error after a newer comparison succeeds",
   const old = pendingTicketResponse();
   const harness = createAppHarness(url => url.includes("atual=one") ? old.promise : Promise.resolve(apiResponse({ marker: "latest" })));
   harness.run(`
-    historicoAcompanhamentoChamados = [{ id: "two" }, { id: "one" }, { id: "zero" }];
+    SimpressApp.state.historicoAcompanhamentoChamados = [{ id: "two" }, { id: "one" }, { id: "zero" }];
     renderizarEvolucaoChamados = data => document.getElementById("evolucao-acompanhamento-chamados").textContent = data.marker;
   `);
   const first = harness.run('carregarEvolucaoChamados("one")');
@@ -406,7 +408,7 @@ test("equipment search fills pickup CNPJ and selected delivery unit fills its in
   harness.context.workflowUnits = [
     { id: 17, cidade: "Foz do Iguaçu", cnpj: deliveryCnpj, endereco_completo: "R das Guianas, 151" },
   ];
-  harness.run("unidadesList = workflowUnits");
+  harness.run("SimpressApp.state.unidadesList = workflowUnits");
   harness.context.workflowSearchItem = equipment;
 
   await harness.run("selecionarItemAutocomplete(workflowSearchItem)");
@@ -574,7 +576,7 @@ test("successful inventory upload refreshes selection and presents comparison re
   assert.equal(calls[1].options.body.fields[0][1], endpointFile);
   assert.equal(calls[1].options.body.fields[1][1], detailsFile);
   assert.equal(calls[1].options.body.fields[2][1], "token-ficticio");
-  assert.equal(harness.run("currentEquipamento.modelo"), "Modelo atualizado");
+  assert.equal(harness.run("SimpressApp.state.currentEquipamento.modelo"), "Modelo atualizado");
   assert.equal(harness.element("retirada-endereco").value, "Rua nova, 20");
   assert.equal(harness.element("card-equipamento").classList.contains("hidden"), false);
   assert.equal(harness.element("upload-endpoint-file").value, "");
@@ -680,7 +682,7 @@ test("failed inventory upload keeps the selected equipment and shows its error",
   await harness.run("previsualizarPlanilhas()");
   await harness.run("enviarPlanilhas()");
 
-  assert.equal(harness.run("currentEquipamento.serial"), "SERIE-ANTIGA");
+  assert.equal(harness.run("SimpressApp.state.currentEquipamento.serial"), "SERIE-ANTIGA");
   assert.equal(harness.element("retirada-endereco").value, "Rua antiga, 10");
   assert.equal(harness.element("card-equipamento").classList.contains("hidden"), false);
   assert.equal(harness.element("upload-planilhas-status").textContent, "Arquivo fictício inválido");
@@ -766,7 +768,7 @@ test("cancelling a completed preview never submits an inventory replacement", as
   harness.run("fecharModalAtualizarPlanilhas()");
 
   assert.deepEqual(calls, ["/api/planilhas/previsualizar"]);
-  assert.equal(harness.run("previaPlanilhasAtual"), null);
+  assert.equal(harness.run("SimpressApp.state.previaPlanilhasAtual"), null);
   assert.equal(harness.element("btn-confirmar-planilhas").classList.contains("hidden"), true);
 });
 
@@ -807,11 +809,11 @@ test("successful upload clears a selection removed from the replacement inventor
   await harness.run("previsualizarPlanilhas()");
   await harness.run("enviarPlanilhas()");
 
-  assert.equal(harness.run("currentEquipamento"), null);
+  assert.equal(harness.run("SimpressApp.state.currentEquipamento"), null);
   assert.equal(harness.element("input-serial").value, "");
   assert.equal(harness.element("retirada-endereco").value, "");
   assert.equal(harness.element("card-equipamento").classList.contains("hidden"), true);
-  assert.equal(harness.run('transferUtils.serialForTransfer(currentEquipamento, document.getElementById("input-serial").value)'), "");
+  assert.equal(harness.run('window.SimpressTransferUtils.serialForTransfer(SimpressApp.state.currentEquipamento, document.getElementById("input-serial").value)'), "");
   assert.equal(harness.effects.toasts.at(-1).type, "warning");
   assert.match(harness.effects.toasts.at(-1).message, /não está no inventário atualizado/);
 });
@@ -840,7 +842,7 @@ test("late post-upload equipment response cannot replace a newer search", async 
     await new Promise(resolve => setImmediate(resolve));
   }
   assert.equal(typeof resolveRefresh, "function");
-  assert.equal(harness.run("currentEquipamento"), null);
+  assert.equal(harness.run("SimpressApp.state.currentEquipamento"), null);
   assert.equal(harness.element("retirada-endereco").value, "");
 
   harness.element("input-serial").value = "SERIE-NOVA";
@@ -849,8 +851,8 @@ test("late post-upload equipment response cannot replace a newer search", async 
   resolveRefresh(apiResponse({ ...priorEquipment, modelo: "Resposta atrasada" }));
   await upload;
 
-  assert.equal(harness.run("currentEquipamento.serial"), "SERIE-NOVA");
-  assert.equal(harness.run("currentEquipamento.modelo"), "Busca atual");
+  assert.equal(harness.run("SimpressApp.state.currentEquipamento.serial"), "SERIE-NOVA");
+  assert.equal(harness.run("SimpressApp.state.currentEquipamento.modelo"), "Busca atual");
   assert.equal(harness.element("card-equipamento").classList.contains("hidden"), false);
   assert.equal(harness.effects.comparisons.length, 1);
   assert.equal(harness.effects.toasts.some(item => item.message.includes("Não foi possível confirmar")), false);
@@ -876,7 +878,7 @@ test("late alias save confirms success without taking over a newer selection", a
   resolveSave(apiResponse({ equipamento: { ...original, apelido: "HOST-ATUALIZADO" } }));
   await saving;
 
-  assert.equal(harness.run("currentEquipamento.serial"), "SERIE-NOVA");
+  assert.equal(harness.run("SimpressApp.state.currentEquipamento.serial"), "SERIE-NOVA");
   assert.equal(harness.element("input-serial").value, "SERIE-NOVA");
   assert.equal(harness.effects.toasts.at(-1).type, "success");
   assert.equal(harness.element("modal-editar-apelido").classList.contains("hidden"), false);
@@ -906,7 +908,7 @@ test("late equipment save leaves a newer selection and search intact", async () 
   resolveSave(apiResponse({ equipamento: { ...original, modelo: "Modelo atualizado" }, mensagem: "Salvo" }));
   await saving;
 
-  assert.equal(harness.run("currentEquipamento.serial"), "SERIE-NOVA");
+  assert.equal(harness.run("SimpressApp.state.currentEquipamento.serial"), "SERIE-NOVA");
   assert.equal(harness.element("input-serial").value, "SERIE-NOVA");
   assert.equal(harness.element("retirada-endereco").value, "Rua nova, 20");
   assert.equal(harness.effects.toasts.at(-1).type, "success");
@@ -948,7 +950,7 @@ test("successful restoration clears old transfer data and refreshes inventory vi
   assert.deepEqual(calls.map(call => call.options.method || "GET"), ["GET", "POST"]);
   assert.equal(harness.effects.confirmations.length, 1);
   assert.match(harness.effects.confirmations[0], /endpoint-anterior\.xlsx/);
-  assert.equal(harness.run("currentEquipamento"), null);
+  assert.equal(harness.run("SimpressApp.state.currentEquipamento"), null);
   assert.equal(harness.element("input-serial").value, "");
   assert.equal(harness.element("retirada-endereco").value, "");
   assert.equal(harness.element("textarea-resumo-preview").value, "");
@@ -974,7 +976,7 @@ test("failed restoration leaves the current selection intact and presents the er
 
   await harness.run(`restaurarHistoricoComparacao({ id: "evento-ficticio", horario: "2026-10-03T10:00:00-03:00" }, restoreButton)`);
 
-  assert.equal(harness.run("currentEquipamento.serial"), "SERIE-ANTIGA");
+  assert.equal(harness.run("SimpressApp.state.currentEquipamento.serial"), "SERIE-ANTIGA");
   assert.equal(harness.element("retirada-endereco").value, "Rua antiga, 10");
   assert.equal(harness.effects.refreshes.length, 0);
   assert.equal(harness.effects.toasts.at(-1).message, "Backup fictício indisponível");
@@ -1042,7 +1044,7 @@ test("copies the currently selected pickup locality after forcing the headquarte
     cep: "80220-300",
     cnpj: "01.234.567/0001-89",
   };
-  harness.run("unidadesList = [workflowSede]; forcarSedePradoVelho()");
+  harness.run("SimpressApp.state.unidadesList = [workflowSede]; forcarSedePradoVelho()");
 
   await harness.run('copiarDadoLocalAtual("cep")');
   await harness.run('copiarDadoLocalAtual("instalacao")');
@@ -1058,7 +1060,7 @@ test("copies the fixed billing CNPJ and installation CNPJ for the selected deliv
   ];
   const harness = createAppHarness(async () => { throw new Error("Nenhuma chamada de API esperada"); });
   harness.context.workflowUnits = units;
-  harness.run("unidadesList = workflowUnits");
+  harness.run("SimpressApp.state.unidadesList = workflowUnits");
   const installCopyButton = harness.element("btn-copiar-cnpj-instalacao-entrega");
   installCopyButton.disabled = true;
   assert.equal(installCopyButton.disabled, true);
@@ -1215,7 +1217,7 @@ test("opens ticket import controls only when there are no imported calls", () =>
   const managementPanel = harness.element("painel-dados-acompanhamento-chamados");
   managementPanel.open = false;
   harness.context.ticketTestReport = { resumo: {}, chamados: [] };
-  harness.run("acompanhamentoChamadosAtual = ticketTestReport; renderizarAcompanhamentoChamados()");
+  harness.run("SimpressApp.state.acompanhamentoChamadosAtual = ticketTestReport; renderizarAcompanhamentoChamados()");
 
   assert.equal(managementPanel.open, true);
   assert.match(appHtml, /id="filtro-acompanhamento-chamados"/);
@@ -1256,7 +1258,7 @@ test("shows Simpress product and city while gating delivery address by order sta
       },
     ],
   };
-  harness.run("acompanhamentoChamadosAtual = ticketTestReport; renderizarAcompanhamentoChamados()");
+  harness.run("SimpressApp.state.acompanhamentoChamadosAtual = ticketTestReport; renderizarAcompanhamentoChamados()");
   const cards = harness.element("lista-acompanhamento-chamados").innerHTML;
   const activeCard = cards.split('data-ticket-serial="SN-ATIVO"')[1].split("</article>")[0];
   const activeSummary = activeCard.split('<details class="ticket-disclosure mt-3')[0];
@@ -1328,7 +1330,7 @@ test("sorts ticket cards by descending OS and leaves tickets without an OS at th
     ],
   };
 
-  harness.run("acompanhamentoChamadosAtual = ticketTestReport; renderizarAcompanhamentoChamados()");
+  harness.run("SimpressApp.state.acompanhamentoChamadosAtual = ticketTestReport; renderizarAcompanhamentoChamados()");
 
   const serials = [...harness.element("lista-acompanhamento-chamados").innerHTML.matchAll(/data-ticket-serial="([^"]+)"/g)]
     .map(match => match[1]);
@@ -1367,7 +1369,7 @@ test("keeps the three-day attention rule and removes advanced ticket filters", (
       { serie: "SN-FECHADA", relacao: "conferida", simpress: {}, oracle: [{ status: "Concluído", fila: "Fila D", ultima_atualizacao: "2000-01-01" }] },
     ],
   };
-  harness.run("acompanhamentoChamadosAtual = ticketTestReport");
+  harness.run("SimpressApp.state.acompanhamentoChamadosAtual = ticketTestReport");
   harness.run("renderizarAcompanhamentoChamados()");
 
   harness.element("somente-atencao-chamados").checked = true;
@@ -1397,7 +1399,7 @@ test("keeps city, queue, and provider visible in ticket cards without advanced f
       { serie: "SN-PARCEIRO", relacao: "conferida", simpress: { cidades_entrega: ["Curitiba"] }, oracle: [{ cidade: "Maringá", nome_filial: "PARCEIRO", fila: "Fila B", status: "Em execução", ultima_atualizacao: "2026-10-10" }] },
     ],
   };
-  harness.run("acompanhamentoChamadosAtual = ticketTestReport; renderizarAcompanhamentoChamados()");
+  harness.run("SimpressApp.state.acompanhamentoChamadosAtual = ticketTestReport; renderizarAcompanhamentoChamados()");
 
   const cards = harness.element("lista-acompanhamento-chamados").innerHTML;
   assert.match(cards, /SN-SIMPRESS/);
@@ -1420,7 +1422,7 @@ test("clears the remaining ticket search and attention filters", () => {
       { serie: "SN-SEGUNDA", relacao: "conferida", simpress: {}, oracle: [] },
     ],
   };
-  harness.run("acompanhamentoChamadosAtual = ticketTestReport; renderizarAcompanhamentoChamados()");
+  harness.run("SimpressApp.state.acompanhamentoChamadosAtual = ticketTestReport; renderizarAcompanhamentoChamados()");
   harness.element("filtro-acompanhamento-chamados").value = "PRIMEIRA";
   harness.element("somente-atencao-chamados").checked = true;
 
@@ -1458,7 +1460,7 @@ test("exports the selected ticket snapshot with only the visible filters", async
     snapshot_id: "version-1", resumo: {}, fontes: {},
     chamados: [{ serie: "SN-4", simpress: {}, oracle: [] }],
   };
-  harness.run("acompanhamentoChamadosAtual = ticketTestReport");
+  harness.run("SimpressApp.state.acompanhamentoChamadosAtual = ticketTestReport");
   harness.element("versao-acompanhamento-chamados").value = "version-1";
   harness.element("filtro-acompanhamento-chamados").value = "SN-4";
   harness.element("somente-atencao-chamados").checked = true;
