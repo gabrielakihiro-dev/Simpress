@@ -3835,7 +3835,7 @@
           ${renderizarResumoProcessoPedido(simpress)}
           <div class="ticket-card-meta mt-2 flex flex-wrap items-center gap-x-3 gap-y-1 text-[11px] text-slate-300">
             <span><b>Pedido</b> ${formatarListaChamados(simpress.pedidos)}</span>
-            ${ordensVenda.some(Boolean) ? `<span><b>OV</b> ${formatarListaChamados(ordensVenda)}</span>` : ""}
+            ${ordensVenda.some(Boolean) ? `<span>${formatarListaChamados(ordensVenda)}</span>` : ""}
           </div>
           <div class="ticket-card-status mt-2 grid grid-cols-1 gap-1.5 sm:grid-cols-2">
             <p class="truncate text-xs text-cyan-100" title="Status Simpress: ${formatarListaChamados(simpress.status)}"><b>Simpress</b> · ${formatarListaChamados(simpress.status)}</p>
