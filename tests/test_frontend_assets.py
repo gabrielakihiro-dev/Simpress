@@ -61,7 +61,7 @@ class FrontendAssetTests(unittest.TestCase):
 
     def test_real_pages_have_no_inline_scripts_or_event_handler_attributes(self):
         static_dir = Path(__file__).resolve().parents[1] / "static"
-        for name in ("index.html", "pages/login.html"):
+        for name in ("index.html",):
             html = (static_dir / name).read_text(encoding="utf-8")
             self.assertNotRegex(html, r"\son[a-z]+\s*=\s*[\"']", name)
             self.assertNotRegex(html, r"<script(?![^>]*\bsrc=)[^>]*>", name)

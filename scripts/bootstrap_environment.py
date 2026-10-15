@@ -31,7 +31,6 @@ def _requirements_digest(requirements: Sequence[Path]) -> str:
 def ensure_environment(
     project_root: Path,
     *,
-    postgres_pilot: bool = False,
     python_version: Sequence[int] | None = None,
     command_runner: Callable[..., subprocess.CompletedProcess] = subprocess.run,
     environment_creator: Callable[[Path], None] | None = None,
@@ -56,10 +55,6 @@ def ensure_environment(
     runtime_requirements = root / "requirements.txt"
     requirements = [runtime_requirements]
     install_manifest = runtime_requirements
-    if postgres_pilot:
-        postgres_requirements = root / "requirements-postgres.txt"
-        requirements.append(postgres_requirements)
-        install_manifest = postgres_requirements
 
     digest = _requirements_digest(requirements)
     marker = venv_dir / INSTALL_MARKER
@@ -131,14 +126,9 @@ def main(argv: Sequence[str] | None = None) -> int:
         type=Path,
         default=Path(__file__).resolve().parents[1],
     )
-    parser.add_argument(
-        "--postgres-pilot",
-        action="store_true",
-        help="Install the optional PostgreSQL pilot dependencies too.",
-    )
     args = parser.parse_args(argv)
     try:
-        ensure_environment(args.project_root, postgres_pilot=args.postgres_pilot)
+        ensure_environment(args.project_root)
     except (OSError, RuntimeError, subprocess.SubprocessError) as error:
         print(f"[ERRO] {error}", file=sys.stderr)
         return 1

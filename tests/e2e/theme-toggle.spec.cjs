@@ -56,15 +56,3 @@ test("the theme icon switches modes and persists the choice", async ({ page }) =
   await expect(root).toHaveAttribute("data-theme", "dark");
   await expect.poll(() => page.evaluate(() => localStorage.getItem("simpress:theme"))).toBe("dark");
 });
-
-test("the login page theme toggle works", async ({ page }) => {
-  await page.route("**/api/auth/session", route => route.fulfill({
-    json: { enabled: true, authenticated: false },
-  }));
-  await page.goto("/login");
-  await expect(page.locator("#login-form")).toBeVisible();
-  await expect(page).toHaveURL(/\/login$/);
-  await page.getByRole("button", { name: "Ativar modo claro" }).click();
-  await expect(page.locator("html")).toHaveAttribute("data-theme", "light");
-  await expect(page.locator("main")).toHaveCSS("background-color", "rgb(255, 255, 255)");
-});

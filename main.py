@@ -9,7 +9,6 @@ import logging
 import os
 import re
 import shutil
-import sys
 import threading
 import time
 import unicodedata
@@ -141,7 +140,6 @@ from domains.history_annotations import (
     save_history_annotation,
 )
 from domains.inventory_update import InventoryUpdateServices
-from domains.inventory_update import read_uploaded_xlsx as _read_uploaded_xlsx
 from domains.inventory_update import preview_inventory_files
 from domains.inventory_update import update_inventory_files
 from domains.equipment_search import (
@@ -155,34 +153,12 @@ from domains.equipment_search import (
 from routers.equipment_search import EquipmentSearchServices, create_equipment_search_router
 from routers.system import SystemRouteServices, create_system_router
 from routers.units import UnidadePayload, UnitRouteServices, create_units_router
-from persistence.config import PersistenceError, PersistenceSettings
-from persistence.boundary import (
+from core.inventory_requests import (
     IDEMPOTENCY_KEY_PATTERN,
-    PersistenceBoundaryMiddleware,
+    InventoryUpdateMiddleware,
     idempotency_key,
 )
 from security.network import is_direct_loopback_request
-
-PERSISTENCE_SETTINGS = PersistenceSettings.from_environment()
-from security.config import AuthSettings
-from security.middleware import AuthenticationMiddleware
-AUTH_SETTINGS = AuthSettings.from_environment()
-_POSTGRES_BACKEND: Any = None
-
-
-def postgres_backend():
-    if PERSISTENCE_SETTINGS.backend == "files":
-        return None
-    if _POSTGRES_BACKEND is None:
-        raise PersistenceError(503, "PostgreSQL não foi inicializado; o modo de arquivos permanece separado.")
-    return _POSTGRES_BACKEND
-
-
-def postgres_command(command, payload):
-    backend = postgres_backend()
-    if backend is None:
-        return None
-    return backend.execute(command, payload, idempotency_key.get())
 
 # Runtime synchronization and in-memory state remain in the application entry point.
 # Lock hierarchy (docs/arquitetura/auditoria_backend/hierarquia_de_locks.md): the global
@@ -262,16 +238,12 @@ def _json_bytes(value: Any) -> bytes:
 
 
 def load_modified_apelidos() -> Dict[str, str]:
-    if (backend := postgres_backend()) is not None:
-        return backend.state()["aliases"]
     with MODIFIED_APELIDOS_LOCK:
         if not MODIFIED_APELIDOS_FILE.exists():
             return {}
         return _read_json_object(MODIFIED_APELIDOS_FILE, "apelidos")
 
 def load_alias_history() -> List[Dict[str, Any]]:
-    if (backend := postgres_backend()) is not None:
-        return backend.state()["history"]
     with ALIAS_HISTORY_LOCK:
         if not ALIAS_HISTORY_FILE.exists():
             return []
@@ -281,8 +253,6 @@ def load_alias_history() -> List[Dict[str, Any]]:
             raise HTTPException(status_code=503, detail=str(error)) from error
 
 def load_comparison_history() -> List[Dict[str, Any]]:
-    if (backend := postgres_backend()) is not None:
-        return backend.files.history.load()
     with COMPARISON_HISTORY_LOCK:
         if not COMPARISON_HISTORY_FILE.exists():
             return []
@@ -671,8 +641,6 @@ def _check_startup_ticket_report(path: Optional[Path]) -> Dict[str, Any]:
 
 
 def get_startup_readiness() -> Dict[str, Any]:
-    if postgres_backend() is not None:
-        return _get_startup_readiness_unlocked()
     # Avoid publishing transient availability while an upload is being applied.
     with lock_paths([TRANSACTION_ROOT / ".atomic-transactions"]):
         return _get_startup_readiness_unlocked()
@@ -681,24 +649,6 @@ def get_startup_readiness() -> Dict[str, Any]:
 def _get_startup_readiness_unlocked() -> Dict[str, Any]:
     """Map essential local files to the application functions that need them."""
     ticket_report_status = _check_startup_ticket_report(TICKET_REPORT_FILE)
-    if (backend := postgres_backend()) is not None:
-        state = backend.state()
-        available = bool(state["equipamentos_cache"])
-        reason = "Nenhum lote com equipamentos foi importado no piloto local."
-        return {
-            "backend": "postgres",
-            "files": {
-                "inventario_equipamentos": {"available": available, "file": "PostgreSQL local", "reason": "OK" if available else reason},
-                "historico_chamados": ticket_report_status,
-            },
-            "functions": {
-                "consulta_equipamentos": {"available": available, "missing_files": [] if available else [reason]},
-                "comparacao_atualizacao_inventarios": {"available":backend.files.storage is not None,"missing_files":[] if backend.files.storage is not None else ["Storage do piloto não configurado"]},
-                "geracao_transferencia": {"available":state.get("transfer_available",False),"missing_files":[] if state.get("transfer_available") else ["Modelo de transferência privado ausente"]},
-                "exportacao_equipamentos": {"available":state["stats_cache"].get("exportacao_disponivel",False),"missing_files":[] if state["stats_cache"].get("exportacao_disponivel") else [state["stats_cache"].get("exportacao_motivo", "Modelo de exportação ausente")]},
-                "acompanhamento_chamados": {"available": ticket_report_status["available"], "missing_files": [] if ticket_report_status["available"] else [ticket_report_status["reason"]]},
-            },
-        }
     try:
         details_candidates = get_details_files()
         details_directory_readable = True
@@ -1751,18 +1701,6 @@ def get_parque_file() -> Optional[Path]:
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    global _POSTGRES_BACKEND
-    if PERSISTENCE_SETTINGS.backend == "postgres":
-        from persistence.postgres import PostgresBackend
-        backend = PostgresBackend(PERSISTENCE_SETTINGS, sys.modules[__name__])
-        try:
-            await asyncio.to_thread(backend.open)
-            _POSTGRES_BACKEND = backend
-            yield
-        finally:
-            _POSTGRES_BACKEND = None
-            await asyncio.to_thread(backend.close)
-        return
     def prepare_local_state() -> None:
         """Recover, migrate, prune and load disk state in one worker thread."""
         # A diverged journal keeps the server up in read-only mode; maintenance writes wait.
@@ -1876,13 +1814,7 @@ app = FastAPI(
     lifespan=lifespan,
 )
 
-
-@app.exception_handler(PersistenceError)
-async def persistence_error_handler(request, error):
-    return JSONResponse(status_code=error.status_code, content={"detail": error.detail})
-
-
-app.add_middleware(PersistenceBoundaryMiddleware, is_postgres=lambda: PERSISTENCE_SETTINGS.backend == "postgres")
+app.add_middleware(InventoryUpdateMiddleware)
 
 
 class LocalRequestSafetyMiddleware:
@@ -2118,7 +2050,6 @@ def _parse_request_authority(
 
 
 app.add_middleware(LocalRequestSafetyMiddleware)
-app.add_middleware(AuthenticationMiddleware, provider=postgres_backend, settings=lambda: AUTH_SETTINGS)
 
 # In-memory storage
 equipamentos_cache: Dict[str, Dict[str, Any]] = {}
@@ -2315,10 +2246,6 @@ def _stable_unit_id(unit: Dict[str, Any], reserved_ids: Set[int]) -> int:
 
 
 def load_database(transaction_locked: bool = False, publish: bool = True) -> Any:
-    if (backend := postgres_backend()) is not None:
-        state = backend.state()
-        # PostgreSQL requests use their own committed snapshots, never the XLSX cache.
-        return True if publish else state
     if transaction_locked:
         return _load_database_unlocked(publish=publish)
     with lock_paths([TRANSACTION_ROOT / ".atomic-transactions"]):
@@ -3192,11 +3119,6 @@ def get_apelidos_modificados():
 def get_equipamento(serial: str):
     """Busca um equipamento pelo número de série (sem distinção de maiúsculas/minúsculas)."""
     clean_serial = serial.strip().upper()
-    if (backend := postgres_backend()) is not None:
-        equipment = backend.state()["equipamentos_cache"].get(clean_serial)
-        if equipment is not None:
-            return _public_equipment(equipment)
-        raise HTTPException(status_code=404, detail=f"Equipamento com serial '{serial}' não encontrado na base de dados.")
     with STATE_LOCK:
         equipment = deepcopy(equipamentos_cache.get(clean_serial))
     if equipment is not None:
@@ -3208,9 +3130,6 @@ def get_equipamento(serial: str):
 @app.post("/api/equipamento/salvar")
 def salvar_equipamento(payload: EquipamentoUpdatePayload):
     """Atualiza ou cadastra um equipamento tanto na memória do site quanto diretamente na planilha Excel."""
-    result = postgres_command("equipment", {"data": payload.model_dump(), "fields": sorted(payload.model_fields_set)})
-    if result is not None:
-        return result
     if not payload.serial or not payload.serial.strip():
         raise HTTPException(status_code=400, detail="Número de série é obrigatório.")
     if not normalize_reference_value(payload.serial):
@@ -3427,9 +3346,6 @@ def aplicar_alteracao_apelido(
 @app.post("/api/equipamento/atualizar-apelido")
 def atualizar_apelido(payload: ApelidoUpdatePayload):
     """Atualiza o apelido e registra o valor anterior, o novo e o horário."""
-    result = postgres_command("alias", payload.model_dump())
-    if result is not None:
-        return result
     target_serial = payload.serial.strip().upper()
     novo_apelido = payload.apelido.strip()
     resultado = aplicar_alteracao_apelido(target_serial, novo_apelido)
@@ -3454,9 +3370,6 @@ def get_historico_apelidos():
 @app.delete("/api/historico-alteracoes/{evento_id}")
 @app.delete("/api/historico-apelidos/{evento_id}")
 def excluir_evento_historico_apelido(evento_id: str):
-    result = postgres_command("delete_history", {"evento_id": evento_id})
-    if result is not None:
-        return result
     historico = load_alias_history()
     evento = next((item for item in historico if item.get("id") == evento_id), None)
     if evento is None:
@@ -3511,9 +3424,6 @@ def excluir_evento_historico_apelido(evento_id: str):
 
 @app.post("/api/equipamento/apelido/desfazer")
 def desfazer_alteracao_apelido(payload: ApelidoUndoPayload):
-    result = postgres_command("undo", payload.model_dump())
-    if result is not None:
-        return result
     historico = load_alias_history()
     evento = next((item for item in historico if item.get("id") == payload.evento_id), None)
     if evento is None:
@@ -3560,9 +3470,6 @@ def desfazer_alteracao_apelido(payload: ApelidoUndoPayload):
 @app.get("/api/exportar-equipamentos")
 def exportar_equipamentos():
     """Exporta a apresentação de referência com os registros da base ativa."""
-    if (backend := postgres_backend()) is not None:
-        from persistence.exports import equipment
-        return equipment(backend.files)
     source_file = EXPORT_MODEL_FILE
     current_file = get_parque_file()
     if not source_file.is_file():
@@ -3797,12 +3704,6 @@ def exportar_equipamentos():
 @app.post("/api/recarregar-base")
 def recarregar_base():
     """Recarrega a planilha válida mais recente da pasta de entrada e informa arquivo e total."""
-    if (backend := postgres_backend()) is not None:
-        state = backend.state()
-        stats = state["stats_cache"]
-        return {"sucesso": True, "arquivo_origem": stats["arquivo_origem"],
-                "total_equipamentos": stats["total_equipamentos"], "total_unidades": stats["total_unidades"],
-                "stats": stats, "mensagem": "Estado do PostgreSQL local recarregado."}
     if not load_database():
         raise HTTPException(
             status_code=400,
@@ -3896,15 +3797,9 @@ async def _import_automatic_inventory_batch(
     return result
 
 
-async def read_uploaded_xlsx(upload: UploadFile, role: str) -> Dict[str, Any]:
-    return await _read_uploaded_xlsx(upload, role, _inventory_update_services)
 
 
 async def previsualizar_planilhas(endpoint_file: UploadFile, details_file: UploadFile):
-    if postgres_backend() is not None:
-        await endpoint_file.close()
-        await details_file.close()
-        return {"preview_required": False}
     return await preview_inventory_files(endpoint_file, details_file, services=_inventory_update_services)
 
 
@@ -3921,9 +3816,6 @@ async def atualizar_planilhas(
     details_file: UploadFile,
     preview_token: Optional[str] = None,
 ):
-    if (backend := postgres_backend()) is not None:
-        from persistence.routes import update
-        return await update(backend.files, endpoint_file, details_file, read_uploaded_xlsx)
     result = await update_inventory_files(
         endpoint_file, details_file, services=_inventory_update_services,
         idempotency_key=idempotency_key.get(), preview_token=preview_token,
@@ -3968,8 +3860,6 @@ def _buscar_equipamentos_por_termo(q: str) -> List[Dict[str, Any]]:
     if not term:
         return []
 
-    if (backend := postgres_backend()) is not None:
-        return backend.search_equipment(term)
 
     with STATE_LOCK:
         if _EQUIPMENT_SEARCH_INDEX_SOURCE is not equipamentos_cache:
@@ -3979,8 +3869,6 @@ def _buscar_equipamentos_por_termo(q: str) -> List[Dict[str, Any]]:
 
 
 def _get_stats_snapshot() -> Dict[str, Any]:
-    if (backend := postgres_backend()) is not None:
-        return backend.state()["stats_cache"]
     export_counts = count_export_changes()
     export_status = get_export_status()
     with STATE_LOCK:
@@ -4001,8 +3889,6 @@ def _get_stats_snapshot() -> Dict[str, Any]:
 
 
 def _unit_cache_snapshot() -> List[Dict[str, Any]]:
-    if (backend := postgres_backend()) is not None:
-        return backend.state()["unidades_cache"]
     with STATE_LOCK:
         return deepcopy(unidades_cache)
 
@@ -4037,7 +3923,6 @@ units_router, _units_exports = create_units_router(UnitRouteServices(
     local_json_corruption_error=LocalJsonCorruptionError,
     load_database=lambda *args, **kwargs: load_database(*args, **kwargs),
     publish_database_state=publish_database_state,
-    save_postgres_unit=lambda payload: postgres_command("unit", payload.model_dump()),
 ))
 _public_unit_list = _units_exports["_public_unit_list"]
 salvar_unidade = _units_exports["salvar_unidade"]
@@ -4055,14 +3940,7 @@ buscar_seriais_expandida = _equipment_search_exports["buscar_seriais_expandida"]
 get_stats = _equipment_search_exports["get_stats"]
 app.include_router(equipment_search_router)
 
-def _postgres_transfer(payload):
-    if (backend := postgres_backend()) is not None:
-        from persistence.exports import transfer
-        return transfer(backend.files,payload)
-    return None
-
-
-transfer_router, gerar_planilha = create_transfer_router(get_local_transfer_template, _postgres_transfer)
+transfer_router, gerar_planilha = create_transfer_router(get_local_transfer_template)
 app.include_router(transfer_router)
 
 transfer_history_router, _transfer_history_exports = create_transfer_history_router(TransferHistoryServices(
@@ -4106,7 +3984,6 @@ def _check_imported_export():
 
 
 local_setup_router, importar_modelo_local = create_local_setup_router(
-    enabled=lambda: postgres_backend() is None,
     model_path=lambda kind: INPUT_DIR / "_modelos" / "transferencia.xlsx" if kind == "transferencia" else EXPORT_MODEL_FILE,
     transaction_root=lambda: TRANSACTION_ROOT,
     backups_directory=lambda: UPLOAD_BACKUPS_DIR,
@@ -4130,13 +4007,13 @@ inventory_history_router, _inventory_history_exports = create_inventory_history_
     history_annotation_record_path=history_annotation_record_path,
     history_annotation_row_fingerprint=history_annotation_row_fingerprint,
     history_annotations_directory=lambda: HISTORY_ANNOTATIONS_DIR,
-    history_annotations_sync_enabled=lambda: postgres_backend() is not None or HISTORY_ANNOTATIONS_SYNC_ENABLED,
+    history_annotations_sync_enabled=lambda: HISTORY_ANNOTATIONS_SYNC_ENABLED,
     input_directory=lambda: INPUT_DIR,
     atomic_file_transaction=lambda *args, **kwargs: AtomicFileTransaction(*args, **kwargs),
     inventory_state_transaction=inventory_state_transaction,
     load_comparison_history=load_comparison_history,
     load_database=lambda *args, **kwargs: load_database(*args, **kwargs),
-    load_history_annotations=lambda directory: [] if postgres_backend() is not None else load_history_annotations(directory),
+    load_history_annotations=lambda directory: load_history_annotations(directory),
     load_modified_apelidos=load_modified_apelidos,
     local_annotation_outbox_directory=lambda: LOCAL_HISTORY_ANNOTATION_OUTBOX_DIR,
     max_upload_bytes=MAX_UPLOAD_BYTES,
@@ -4147,7 +4024,6 @@ inventory_history_router, _inventory_history_exports = create_inventory_history_
     transaction_root=lambda: TRANSACTION_ROOT,
     upload_backups_directory=lambda: UPLOAD_BACKUPS_DIR,
     validate_uploaded_workbook=lambda *args, **kwargs: validate_uploaded_workbook(*args, **kwargs),
-    postgres_files=lambda: backend.files if (backend := postgres_backend()) is not None else None,
 ))
 flush_pending_history_annotations = _inventory_history_exports["flush_pending_history_annotations"]
 migrate_legacy_history_annotations = _inventory_history_exports["migrate_legacy_history_annotations"]
@@ -4176,18 +4052,13 @@ operations_router = create_operations_router(
     transaction_root=lambda: TRANSACTION_ROOT,
     history_annotations_directory=lambda: HISTORY_ANNOTATIONS_DIR,
     local_annotation_outbox_directory=lambda: LOCAL_HISTORY_ANNOTATION_OUTBOX_DIR,
-    history_annotations_sync_enabled=lambda: postgres_backend() is not None or HISTORY_ANNOTATIONS_SYNC_ENABLED,
+    history_annotations_sync_enabled=lambda: HISTORY_ANNOTATIONS_SYNC_ENABLED,
     load_history_annotation_records=lambda directory: load_history_annotations(directory),
 )
 app.include_router(operations_router)
 
-from persistence.routes import create_files_router
-app.include_router(create_files_router(postgres_backend,MAX_UPLOAD_BYTES))
-
 # Serve static files and frontend
 STATIC_DIR.mkdir(parents=True, exist_ok=True)
-from security.routes import create_auth_router
-app.include_router(create_auth_router(postgres_backend, lambda: AUTH_SETTINGS, STATIC_DIR))
 app.mount("/static", RevalidatingStaticFiles(directory=str(STATIC_DIR)), name="static")
 
 @app.get("/favicon.ico", include_in_schema=False)
@@ -4207,7 +4078,7 @@ def read_root():
 if __name__ == "__main__":
     import uvicorn
     try:
-        equipment_source = get_primary_equipment_file() if PERSISTENCE_SETTINGS.backend == "files" else "PostgreSQL local"
+        equipment_source: Path | str | None = get_primary_equipment_file()
     except FileBusyError:
         equipment_source = "INDISPONÍVEL no momento (arquivo em uso)"
     print(f"[INFO] Diretório do projeto: {BASE_DIR}")

@@ -31,7 +31,7 @@ class ProjectLayoutTests(unittest.TestCase):
             client=("127.0.0.1", 1234),
         )
         self.addCleanup(client.close)
-        for route in ("/", "/login"):
+        for route in ("/",):
             with self.subTest(route=route):
                 response = client.get(route)
                 self.assertEqual(response.status_code, 200)

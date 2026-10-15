@@ -1,1 +1,1 @@
-"""Authentication boundary for the explicitly enabled PostgreSQL application."""
+"""Connection safety for the local application."""

@@ -1,4 +1,4 @@
-"""Connection policy shared by the file backend and local PostgreSQL pilot."""
+"""Connection policy for the local application."""
 
 import ipaddress
 from typing import Any, Mapping

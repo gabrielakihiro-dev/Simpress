@@ -424,20 +424,6 @@ html[data-theme="light"] .local-setup-dialog { border-color: #7dd3fc; background
 html[data-theme="light"] .local-setup-heading { color: #0f172a; }
 
 html[data-theme="light"] .sidebar-backdrop { background: rgba(15, 23, 42, 0.32); }
-html[data-theme="light"] body[data-theme-page="login"] { background: #f1f5f9; color: #0f172a; }
-html[data-theme="light"] body[data-theme-page="login"] main { border-color: #cbd5e1; background: #fff; box-shadow: var(--focus-shadow, 0 16px 40px rgba(15, 23, 42, 0.1)); }
-html[data-theme="light"] body[data-theme-page="login"] p { color: #475569; }
-html[data-theme="light"] body[data-theme-page="login"] input { border-color: #94a3b8; background: #fff; color: #0f172a; }
-html[data-theme="light"] body[data-theme-page="login"] button:not(.theme-toggle-button) { color: #fff; }
-html[data-theme="light"] body[data-theme-page="login"] .theme-toggle-button { color: #334155; }
-
-body[data-theme-page="login"] .theme-toggle-button {
-  position: fixed;
-  top: 1rem;
-  right: 1rem;
-  z-index: 2;
-  margin: 0;
-}
 
 /* Search results retain the dark palette only while the dark theme is active. */
 #autocomplete-header,

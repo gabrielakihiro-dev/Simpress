@@ -606,15 +606,13 @@
         if (!readinessRequestGate.isCurrent(request.id)) return;
         if (!report?.functions || !report?.files) throw new Error("Resposta de disponibilidade inválida.");
 
-        const readinessFileKeys = report.backend === "files"
-          ? [
-              "inventario_equipamentos",
-              "inventario_detalhes_atualizacao",
-              "inventario_endpoint",
-              "modelo_exportacao",
-              "historico_chamados",
-            ]
-          : Object.keys(report.files);
+        const readinessFileKeys = [
+          "inventario_equipamentos",
+          "inventario_detalhes_atualizacao",
+          "inventario_endpoint",
+          "modelo_exportacao",
+          "historico_chamados",
+        ];
         const readinessFiles = readinessFileKeys.map(key => report.files[key]).filter(Boolean);
         const availableCount = readinessFiles.filter(status => status.available === true).length;
         const totalCount = readinessFileKeys.length;
@@ -673,9 +671,7 @@
           inventario_detalhes_atualizacao: "Simpress",
           inventario_endpoint: "Endpoint",
         };
-        const inventoryFileKeys = report.backend === "files"
-          ? ["inventario_equipamentos", "inventario_detalhes_atualizacao", "inventario_endpoint"]
-          : ["inventario_equipamentos"];
+        const inventoryFileKeys = ["inventario_equipamentos", "inventario_detalhes_atualizacao", "inventario_endpoint"];
         const missingInventoryFiles = inventoryFileKeys
           .filter(key => report.files[key]?.available !== true);
         const inventoryInvalid = missingInventoryFiles.some(key => report.files[key]?.state === "invalid");
@@ -705,13 +701,11 @@
           content,
           "Inventários",
           [["inventarios_compartilhados", sharedInventoryStatus]],
-          { inventarios_compartilhados: report.backend === "files" ? "Simpress + Endpoint" : "Base de equipamentos" },
+          { inventarios_compartilhados: "Simpress + Endpoint" },
           "shared_inventory",
           {
             actionOnly: true,
-            description: report.backend === "files"
-              ? "Par compartilhado pelas quatro ações."
-              : "Base compartilhada pelas quatro ações.",
+            description: "Par compartilhado pelas quatro ações.",
             countLabel: sharedInventoryStatus.available ? "Disponível" : sharedInventoryStatus.state === "invalid" ? "Inválido" : "Pendente",
             countState: sharedInventoryStatus.state,
             showItemState: false,
@@ -2293,12 +2287,6 @@
     }
 
     function renderizarPreviaUploadPlanilhas(result) {
-      if (result?.preview_required === false) {
-        const preview = document.getElementById("upload-planilhas-preview");
-        preview.textContent = "Confira os arquivos selecionados antes de confirmar a substituição.";
-        preview.className = "text-xs rounded-lg px-3 py-2 bg-slate-950 border border-slate-700 text-slate-200";
-        return;
-      }
       if (!result?.preview_token || !result?.arquivos || !result?.alteracoes) {
         throw new Error("A prévia recebida está incompleta. Gere uma nova prévia.");
       }

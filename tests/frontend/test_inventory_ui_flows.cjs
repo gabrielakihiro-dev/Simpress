@@ -770,22 +770,6 @@ test("cancelling a completed preview never submits an inventory replacement", as
   assert.equal(harness.element("btn-confirmar-planilhas").classList.contains("hidden"), true);
 });
 
-test("PostgreSQL confirmation keeps its existing upload without inventing impact counts", async () => {
-  let submitted;
-  const harness = createAppHarness(async (url, options) => {
-    if (url === "/api/planilhas/previsualizar") return apiResponse({ preview_required: false });
-    assert.equal(url, "/api/planilhas/atualizar");
-    submitted = options.body.fields;
-    return apiResponse({ comparacao: {} });
-  });
-  chooseUploadFiles(harness);
-  await harness.run("previsualizarPlanilhas()");
-  assert.match(harness.element("upload-planilhas-preview").textContent, /Confira os arquivos selecionados/);
-  assert.doesNotMatch(harness.element("upload-planilhas-preview").textContent, /Séries novas/);
-  await harness.run("enviarPlanilhas()");
-  assert.deepEqual(submitted.map(([name]) => name), ["endpoint_file", "details_file"]);
-  assert.equal(harness.element("modal-atualizar-planilhas").classList.contains("hidden"), true);
-});
 
 test("inventory upload retry keeps its key until success or a new file selection", async () => {
   const keys = [];

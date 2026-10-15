@@ -19,7 +19,7 @@ Aplicação web local para consultar equipamentos, preparar transferências Simp
 
 - Windows 10 ou superior.
 - Python 3.12 ou superior.
-- O servidor usa os arquivos locais já compilados da interface. Node.js e npm são necessários para reconstruir esses arquivos, executar os testes JavaScript ou preparar o ambiente opcional de desenvolvimento Supabase.
+- O servidor usa os arquivos locais já compilados da interface. Node.js e npm são necessários para reconstruir esses arquivos, executar os testes JavaScript.
 - Não é necessário ter acesso à internet para abrir a aplicação e carregar a interface. Os links para os sistemas de chamados da Simpress abrem páginas externas.
 
 O repositório é privado; a conta usada para cloná-lo precisa ter acesso.
@@ -195,7 +195,7 @@ Use **Pendências** para revisar e anotar as linhas da atualização mais recent
 4. Cada atualização substitui integralmente os dois inventários ativos pelos arquivos validados; séries ausentes no novo relatório deixam de compor a base carregada. Após confirmar, confira ausências em cada fonte, notebooks sem verificação com êxito há 7 dias ou mais, divergências de local, correspondências ambíguas, mudanças de hostname e casos que precisam de revisão.
 5. Consulte **Histórico planilhas** para rever comparações e, se houver um backup completo válido, pré-visualize os arquivos e datas antes de restaurar.
 
-A prévia também funciona na primeira importação, quando ainda não há inventário local. O processamento automático pela pasta de entrada mantém seu fluxo próprio. No piloto PostgreSQL, a confirmação mantém o fluxo existente, sem contagens de impacto.
+A prévia também funciona na primeira importação, quando ainda não há inventário local. O processamento automático pela pasta de entrada mantém seu fluxo próprio.
 
 #### Processar atualizações pela pasta de entrada
 
@@ -242,7 +242,7 @@ Copy-Item "C:\caminho\InvAllComputersSummary.xlsx" "$lote\endpoint\"
 Copy-Item "C:\caminho\EquipamentosDetalhes.xlsx" "$lote\simpress\"
 ```
 
-Para usar outra pasta como raiz, defina `SIMPRESS_IMPORT_INBOX_DIR` antes de iniciar o servidor. O caminho pode ser absoluto ou relativo à pasta do projeto; dentro dele, use as mesmas subpastas `pendentes`, `processando`, `processadas` e `falhas`. O importador é local ao servidor e não inicia no backend PostgreSQL. Para reenviar um lote com falha, corrija a causa e crie uma pasta com outro nome exclusivo.
+Para usar outra pasta como raiz, defina `SIMPRESS_IMPORT_INBOX_DIR` antes de iniciar o servidor. O caminho pode ser absoluto ou relativo à pasta do projeto; dentro dele, use as mesmas subpastas `pendentes`, `processando`, `processadas` e `falhas`. O importador é local ao servidor. Para reenviar um lote com falha, corrija a causa e crie uma pasta com outro nome exclusivo.
 
 O sistema cria cópias dos inventários anteriores antes de substituí-los. A restauração também salva o conjunto que está ativo naquele momento e registra a operação no histórico, permitindo desfazê-la se esse backup também for completo e válido.
 
@@ -317,132 +317,6 @@ npm run build:ui
 
 O servidor Python usa os arquivos gerados e não precisa de um processo Node.js em execução.
 
-### Migração para Supabase: ambiente local opcional
-
-As Etapas 1 a 7 estão documentadas. **Excel/JSON continua sendo o modo padrão.** O piloto PostgreSQL opcional integra inventário, catálogo, apelidos, arquivos privados, comparações, anotações e restauração lógica. A Etapa 7 acrescenta login local com Supabase Auth e autorização para a única conta administradora aprovada. O Supabase não é necessário para executar o Simpress no modo atual.
-
-O ambiente usa o Supabase CLI **2.120.0** e PostgreSQL **17** no projeto `simpress-dev`. São seis migrations, 20 tabelas no schema privado `simpress` e duas tabelas de sessão/limitação de login no schema privado `simpress_auth`. RLS permanece habilitado e forçado. `simpress_runtime` acessa o domínio somente com sessão válida do administrador habilitado; `anon`, `authenticated` e `service_role` não recebem acesso ao domínio. O Storage mantém o bucket privado `simpress-pilot` e acesso mediado pelo backend. Os ensaios não importaram dados reais nem provisionaram conta permanente; a conta local é cadastrada posteriormente pelo operador. O modo Excel/JSON permanece sem autenticação e restrito ao uso local.
-
-Para o ambiente Windows aprovado, use WSL2 e Rancher Desktop com engine **Moby** e Kubernetes desabilitado, além do ambiente Python do projeto e Node.js/npm (a validação usou Node.js 24). A primeira preparação requer internet para baixar dependências e imagens. Consulte os [pré-requisitos locais](docs/operacao/supabase/migracao_supabase_pre_requisitos_locais.md).
-
-Na pasta do projeto, instale as dependências e crie uma instância nova:
-
-```powershell
-npm ci
-.\.venv\Scripts\python.exe -B scripts/supabase_local.py start
-```
-
-Se esta instalação já tiver sido criada e encerrada pelo helper, retome seus volumes reconhecidos com:
-
-```powershell
-.\.venv\Scripts\python.exe -B scripts/supabase_local.py resume
-```
-
-O helper localiza o Docker do Rancher no PATH do próprio processo e confere a identidade da instância e os endereços publicados. A API usa `127.0.0.1:54321` e o PostgreSQL usa `127.0.0.1:54322`; a porta `54320` está reservada para o banco temporário de validação. Os serviços opcionais, incluindo Studio, estão desabilitados.
-
-Para conferir o ambiente, validar o banco de desenvolvimento vazio e encerrar os serviços preservando os volumes:
-
-```powershell
-.\.venv\Scripts\python.exe -B scripts/supabase_local.py check
-.\.venv\Scripts\python.exe -B scripts/supabase_local.py validate
-.\.venv\Scripts\python.exe -B scripts/supabase_local.py stop
-```
-
-A validação da Etapa 4 passou em **66 verificações SQL, quatro verificações HTTP e nove testes do helper**. Os dados sintéticos das verificações SQL foram revertidos. A suíte completa da aplicação não foi repetida nesta etapa. Os serviços foram encerrados após a validação, preservando os volumes locais.
-
-Testes isolados do helper, sem iniciar o Supabase:
-
-```powershell
-.\.venv\Scripts\python.exe -B -m unittest tests.test_supabase_local -v
-```
-
-Volumes persistentes não substituem backups. A pasta local `Backup_Banco`, ignorada pelo Git, foi preparada como destino; nenhum backup do banco foi gerado nesta etapa. As instruções e restrições de reconstrução da instância descartável estão no relatório da Etapa 4.
-
-Documentação da migração:
-
-- [Etapa 1 — diagnóstico](docs/operacao/supabase/migracao_supabase_etapa_1.md)
-- [Etapa 2 — decisões e escopo](docs/operacao/supabase/migracao_supabase_etapa_2.md)
-- [Etapa 3 — modelo de dados](docs/operacao/supabase/migracao_supabase_etapa_3.md)
-- [Etapa 4 — esquema SQL e validação local](docs/operacao/supabase/migracao_supabase_etapa_4.md)
-- [Etapa 5 — integração incremental do FastAPI com PostgreSQL](docs/operacao/supabase/migracao_supabase_etapa_5.md)
-- [Etapa 6 — Storage privado, backups, histórico e anotações](docs/operacao/supabase/migracao_supabase_etapa_6.md)
-- [Etapa 7 — Auth, autorização e RLS](docs/operacao/supabase/migracao_supabase_etapa_7.md)
-- [Etapa 8 — ensaio, reconciliação e recuperação](docs/operacao/supabase/migracao_supabase_etapa_8.md)
-- [Prompts das Etapas 2 a 8](docs/operacao/supabase/prompts_migracao_supabase_etapas_2_a_8.md)
-
-#### Executar o piloto PostgreSQL das Etapas 5 e 6
-
-Instale as dependências opcionais e, com o Supabase local já iniciado, aplique migrations pendentes somente na instância descartável reconhecida:
-
-```powershell
-.\.venv\Scripts\python.exe -m pip install -r requirements-postgres.txt
-.\.venv\Scripts\python.exe -B scripts/supabase_local.py migrate
-.\.venv\Scripts\python.exe -B scripts/run_postgres_pilot.py
-```
-
-O iniciador do piloto abre o FastAPI em `127.0.0.1:8000`, cria um login SQL limitado com senha aleatória somente em memória e remove esse login ao encerrar normalmente. Recusa um login já existente. Não modifica a configuração permanente do modo de arquivos. O exemplo de variáveis está em [.env.supabase.example](.env.supabase.example); arquivos dotenv não são carregados automaticamente.
-
-O banco permanece sem inventário até uma importação explícita. Sem lote validado ativo, cadastrar equipamento retorna conflito; o catálogo de unidades pode ser exercitado separadamente. Para habilitar a Etapa 6, inicie com `scripts/run_postgres_pilot.py --storage`. A chave privilegiada do Storage fica somente na memória do servidor. Use apenas fixtures: modelos privados devem ser importados explicitamente antes de gerar transferências ou exportar equipamentos. Consulte o relatório da Etapa 6 para os endpoints e os procedimentos de recuperação.
-
-Ensaio reproduzível da integração, em um banco sintético separado criado e removido pela execução:
-
-```powershell
-.\.venv\Scripts\python.exe -B scripts/verify_postgres.py --local-disposable
-.\.venv\Scripts\python.exe -B scripts/verify_storage_pilot.py --local-disposable
-```
-
-O piloto não está liberado para dados reais, rede externa ou uso oficial. Para voltar ao modo padrão, encerre o piloto, remova as variáveis de configuração PostgreSQL do processo caso tenham sido definidas manualmente e execute `iniciar_servidor.bat`.
-
-#### Executar com autenticação da Etapa 7
-
-Após retomar o Supabase local e aplicar as migrations, provisione a conta inicial no terminal do computador, somente se ainda não houver administrador. E-mail e senha são solicitados interativamente; não envie a senha ao chat:
-
-```powershell
-.\.venv\Scripts\python.exe -B scripts/configure_auth_local.py --local-disposable
-```
-
-Após concluir o provisionamento, inicie o aplicativo em outro comando. Nas próximas inicializações, use somente este comando:
-
-```powershell
-.\.venv\Scripts\python.exe -B scripts/run_postgres_pilot.py --auth
-```
-
-Acesse `http://127.0.0.1:8000`. O cadastro público continua bloqueado; o provedor de e-mail/senha fica habilitado para entrar com a conta já provisionada. O iniciador guarda credenciais somente no processo e gera uma chave temporária de sessão quando `SIMPRESS_SESSION_KEY` não é fornecida. Nesse caso, reiniciar exige novo login. Uma instalação com administrador provisionado bloqueia o piloto sem autenticação, inclusive no banco.
-
-Se o Supabase estiver parado ou a porta 8000 estiver ocupada, consulte o [diagnóstico da inicialização local](docs/operacao/supabase/migracao_supabase_etapa_7_diagnostico_inicializacao.md). Preserve os volumes e a conta já cadastrada.
-
-Para testar a Etapa 7 **antes de provisionar uma conta**, em uma instância descartável vazia:
-
-```powershell
-.\.venv\Scripts\python.exe -B scripts/verify_auth_pilot.py --local-disposable
-# Opcional: exercitar também o login no Chromium já instalado pelo Playwright.
-.\.venv\Scripts\python.exe -B scripts/verify_auth_pilot.py --local-disposable --browser
-```
-
-O ensaio recusa dados, usuários, sessões, bucket ou logins preexistentes e remove as próprias fixtures. A configuração futura de hospedagem está em [.env.supabase.production.example](.env.supabase.production.example); seu verificador é apenas estático. Hospedagem e credenciais definitivas continuam pendentes; a recuperação integral da conta única foi ensaiada separadamente na Etapa 8.
-
-Backups do domínio e dos objetos privados podem ser gerados com `scripts/backup_postgres_pilot.py --local-disposable`; quando houver administrador provisionado, acrescente `--auth` e siga o procedimento do relatório da Etapa 7. O arquivo só é publicado em `Backup_Banco/` depois de verificar todas as entradas e hashes. Identidades e sessões Auth não são incluídas nesse backup; o envelope criptografado da Etapa 8 inclui a identidade somente no ensaio sintético separado.
-
-#### Ensaiar migração e recuperação — Etapa 8
-
-Com as dependências opcionais instaladas, gere um plano offline usando somente dados fictícios:
-
-```powershell
-.\.venv\Scripts\python.exe -B scripts/verify_migration_pilot.py --local-disposable --dry-run
-```
-
-Para executar importação, reconciliação, falhas controladas, recuperação integral e rollback, mantenha o Rancher Desktop iniciado e as portas `55420`–`55422` livres:
-
-```powershell
-.\.venv\Scripts\python.exe -B scripts/verify_migration_pilot.py --local-disposable
-```
-
-O executor cria três instalações locais separadas e sequenciais com nomes `simpress-rehearsal-<identificador>-source`, `-restore` e `-rollback`. A instalação `simpress-dev`, sua conta e o servidor na porta 8000 são preservados. Os novos serviços publicam somente em loopback e são encerrados após o ensaio; seus volumes e recibos ficam disponíveis para inspeção. Planos e resultados ficam em `supabase/.temp/etapa8/`, ignorada pelo Git.
-
-A recuperação inclui as 20 tabelas, arquivos privados, migrations e a conta única fictícia de e-mail/senha, preservando o UUID e exigindo novo login. A chave criptográfica do ensaio existe somente na memória; os envelopes fictícios deixam de ser recuperáveis após encerrar o processo. O backup oficial exigirá guarda externa da chave e teste do destino independente.
-
-O ensaio não importa a base real nem libera uso oficial. O [relatório da Etapa 8](docs/operacao/supabase/migracao_supabase_etapa_8.md) contém resultados, limitações e o checklist para uma futura entrada em uso local. A rotina oficial de backup, o adaptador dos arquivos reais e a autorização da troca permanecem pendentes; hospedagem online terá preparação própria.
-
 ### Executar testes
 
 Suíte Python:
@@ -481,26 +355,16 @@ scripts/build/copy_ui_assets.cjs           Cópia dos recursos locais para a int
 scripts/migrate_local_data.py        Migração segura dos dados locais para data/
 scripts/cleanup_local_temps.py       Limpeza conservadora de arquivos temporários locais
 scripts/process_ticket_inbox.py      Processamento local imediato da fila de chamados Simpress/Oracle
-scripts/supabase_local.py            Controle e validação do Supabase local descartável
-scripts/run_postgres_pilot.py        FastAPI local com login SQL temporário e limitado
-scripts/verify_postgres.py           Ensaio sintético da integração PostgreSQL/HTTP
-scripts/verify_migration_pilot.py     Ensaio isolado de importação, recuperação e rollback
-scripts/migrate_supabase_bundle.py   Simulação offline de pacote sintético explícito
-persistence/                        Configuração, transações e projeções do backend PostgreSQL
-supabase/config.toml                 Configuração do projeto local simpress-dev
-supabase/migrations/                 Esquema SQL versionado da migração
-supabase/tests/                      Verificações SQL com dados sintéticos
 data/planilhas_entrada/               Modelo de transferência e planilhas locais
 data/planilhas_entrada/_backups/      Cópias locais anteriores dos inventários
 data/state/                           Estado e históricos locais, ignorados pelo Git
 data/state/entrada_chamados/          Modelo e instruções versionados; lotes e recibos operacionais ignorados pelo Git
 modelos/                              Modelo local de exportação de equipamentos
 logs/                                 Registros locais do servidor, ignorados pelo Git
-docs/                                 Relatórios de revisão, desempenho e migração Supabase
+docs/                                 Relatórios de revisão e desempenho
 tests/                                Testes Python e JavaScript
 requirements.txt                     Dependências Python fixadas
-requirements-postgres.txt            Dependências opcionais do piloto PostgreSQL
-package.json / package-lock.json     Dependências da interface e Supabase CLI de desenvolvimento
+package.json / package-lock.json     Dependências de desenvolvimento da interface
 iniciar_servidor.bat                  Inicializador local para Windows
 ```
 
@@ -514,13 +378,12 @@ iniciar_servidor.bat                  Inicializador local para Windows
 - [Idempotência dos inventários](docs/operacao/idempotencia-atualizacao-inventario.md)
 - [Microinterações e acessibilidade](docs/desenvolvimento/MICROINTERACOES.md)
 - [Arquitetura e auditoria](docs/arquitetura/auditoria_arquitetura.md)
-- [Supabase: pré-requisitos locais](docs/operacao/supabase/migracao_supabase_pre_requisitos_locais.md)
 
-As entradas `static/index.html`, `static/app.js` e `static/app.css` conservam os caminhos atuais e as alterações locais. Páginas auxiliares ficam em `static/pages`, fontes de estilo em `static/styles`, JavaScript em `static/js/{shared,ui,auth}`, testes Node em `tests/frontend` e o servidor de fixtures em `tests/support`. A configuração e a segurança dos workbooks ficam em `core`; domínios, rotas, persistência e segurança conservam seus limites. Os scripts Python mantêm seus comandos públicos usados pelo inicializador e pelas filas locais.
+As entradas `static/index.html`, `static/app.js` e `static/app.css` conservam os caminhos atuais e as alterações locais. Fontes de estilo ficam em `static/styles`, JavaScript em `static/js/{shared,ui}`, testes Node em `tests/frontend` e o servidor de fixtures em `tests/support`. A configuração e a segurança dos workbooks ficam em `core`; domínios, rotas e segurança conservam seus limites. Os scripts Python mantêm seus comandos públicos usados pelo inicializador e pelas filas locais.
 
 ## Dados e privacidade
 
-O servidor atende somente `127.0.0.1` em uma porta local entre `8000` e `8099`. O modo padrão Excel/JSON não possui autenticação de usuário; o piloto PostgreSQL da Etapa 7 exige a conta administradora quando iniciado com `--auth`. Ambos permanecem restritos ao computador. No piloto autenticado, `/docs` também exige login.
+O servidor atende somente `127.0.0.1` em uma porta local entre `8000` e `8099`. Os dados são persistidos em arquivos Excel/JSON locais, com acesso direto à aplicação e à documentação `/docs` no próprio computador.
 
 Planilhas operacionais, backups, exportações, históricos, apelidos e unidades personalizadas ficam no computador local e são ignorados pelo Git. O modelo vazio de transferência permanece versionado. Inclua os dados locais em uma rotina de backup apropriada se precisar preservá-los; não force a inclusão deles em commits nem compartilhe cópias com dados operacionais.
 

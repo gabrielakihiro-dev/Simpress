@@ -16,7 +16,6 @@ from core import config as app_config
 import openpyxl
 from core import openpyxl_compat
 from fastapi import HTTPException
-from persistence.config import PersistenceSettings
 from starlette.routing import Match
 
 
@@ -817,7 +816,6 @@ class MaintenanceContractTests(unittest.TestCase):
             return loop_thread
 
         with (
-            patch.object(main, "PERSISTENCE_SETTINGS", PersistenceSettings("files")),
             patch.object(main, "recover_pending_transactions", record("recover")),
             patch.object(main, "migrate_legacy_history_annotations", record("migrate", {})),
             patch.object(main, "prune_expired_histories", record("prune", {})),
@@ -871,7 +869,6 @@ class MaintenanceContractTests(unittest.TestCase):
                 return message, held.exception
 
             with (
-                patch.object(main, "PERSISTENCE_SETTINGS", PersistenceSettings("files")),
                 patch.object(main, "TRANSACTION_ROOT", root),
                 patch.object(main, "recover_pending_transactions", integrity.recover_pending_transactions),
                 patch.object(main, "migrate_legacy_history_annotations", record("migrate", {})),
@@ -912,7 +909,7 @@ class MaintenanceContractTests(unittest.TestCase):
         launcher = (PROJECT_ROOT / "iniciar_servidor.bat").read_text(encoding="utf-8")
 
         self.assertIn("bootstrap_environment.py", launcher)
-        self.assertIn("--postgres-pilot", launcher)
+        self.assertNotIn("--postgres-pilot", launcher)
         self.assertIn('set "PROJECT_ROOT=%PROJECT_DIR%."', launcher)
         self.assertIn('--project-root "%PROJECT_ROOT%"', launcher)
         self.assertNotIn('if not exist "%TEMPLATE%" goto', launcher)

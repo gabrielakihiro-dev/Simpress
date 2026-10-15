@@ -19,7 +19,7 @@ from core.xlsx_safety import WORKBOOK_READ_ERRORS
 logger = logging.getLogger(__name__)
 
 
-def create_local_setup_router(*, enabled, model_path, transaction_root, backups_directory,
+def create_local_setup_router(*, model_path, transaction_root, backups_directory,
                               max_upload_bytes, parser_admission, export_dependency_paths, validate_export):
     router = APIRouter()
 
@@ -51,8 +51,6 @@ def create_local_setup_router(*, enabled, model_path, transaction_root, backups_
     async def import_model(tipo: str, file: UploadFile = File(...)):
         admission = None
         try:
-            if not enabled():
-                raise HTTPException(404, "Importação local disponível somente no modo de arquivos.")
             if tipo not in {"transferencia", "exportacao"}:
                 raise HTTPException(404, "Tipo de modelo não encontrado.")
             name = re.split(r"[/\\]", str(file.filename or ""))[-1]

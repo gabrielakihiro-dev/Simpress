@@ -16,9 +16,6 @@ async def process() -> int:
     import main as application
     from domains.inventory_inbox import AutomaticInventoryInbox
 
-    if application.PERSISTENCE_SETTINGS.backend == "postgres":
-        print("A entrada por pastas está disponível somente no modo local de arquivos.")
-        return 2
     print("Recuperando transações e carregando a base atual...", flush=True)
     application.recover_pending_transactions(application.TRANSACTION_ROOT)
     application.load_database()

@@ -81,20 +81,6 @@ test("available local files still show five items and the inventory import", asy
   await expect(panel.getByRole("button", { name: "Importar/atualizar inventários Simpress e Endpoint" })).toHaveCount(1);
 });
 
-test("PostgreSQL availability keeps the inventory import accessible", async ({ page }) => {
-  const report = readiness(false);
-  report.backend = "postgres";
-  report.files = {
-    inventario_equipamentos: report.files.inventario_equipamentos,
-    historico_chamados: report.files.historico_chamados,
-  };
-  await mockReadiness(page, () => report);
-  await page.goto("/");
-  const panel = page.locator("#readiness-panel");
-  await expect(panel).toHaveAttribute("aria-busy", "false");
-  await panel.getByRole("button", { name: "Importar/atualizar inventários Simpress e Endpoint" }).click();
-  await expect(page.locator("#upload-endpoint-file")).toBeFocused();
-});
 
 test("model import handles failure and refreshes availability after success", async ({ page }) => {
   let ready = false;
