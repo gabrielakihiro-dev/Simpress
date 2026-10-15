@@ -302,6 +302,9 @@ Se uma cópia antiga estiver ausente ou inválida, confira manualmente os arquiv
 | A exportação está indisponível | Confira `modelos/EquipamentosDetalhes-exportacao.xlsx` e se ele contém as colunas de série e `Apelido`. |
 | Não é possível restaurar uma atualização | O histórico precisa ter o backup dos dois inventários, e ambos devem passar novamente pela validação. |
 | O painel de status continua desatualizado | Clique em **Atualizar status** para repetir a verificação; para carregar dados de inventário substituídos manualmente, reinicie o servidor. |
+| Uma ação mostrou “Falha interna do servidor” | Consulte `data/logs/simpress.log` (ou `simpress.log.1` a `.5`, os anteriores). O registro mostra a rota e o ponto do código da falha, sem o conteúdo das planilhas. |
+| A interface informa que um arquivo está em uso ou ocupado | Feche a planilha no Excel ou aguarde a sincronização do OneDrive e tente de novo. A resposta 409 não altera nenhum arquivo. |
+| Uma chamada a `/api/` feita de outra página ou porta retorna 403 | É esperado: a API aceita só chamadas da própria interface ou de endereços digitados no navegador. Use a interface em `http://127.0.0.1:<porta>`. |
 | O visual continua antigo após `git pull` | Confirme a branch com `git switch main` e atualize com `git pull --ff-only origin main`. Encerre o servidor anterior e execute `iniciar_servidor.bat` da pasta atualizada. Recarregue com `Ctrl+F5` uma vez. As páginas passam a usar URLs de CSS e JavaScript vinculadas ao conteúdo dos arquivos para evitar versões antigas no cache. |
 
 ## Desenvolvimento
@@ -328,7 +331,7 @@ Suíte Python:
 Testes da interface JavaScript:
 
 ```powershell
-node --test tests/frontend/test_inventory_ui_flows.cjs tests/frontend/test_transfer_workflows.cjs
+node --test "tests/frontend/*.cjs"
 ```
 
 O executor Python usa dados fictícios em uma pasta temporária, bloqueia a leitura das planilhas operacionais durante a descoberta dos testes e isola os testes de transação. Não use planilhas de produção como fixtures ou destinos.
@@ -341,16 +344,23 @@ core/config.py                       Caminhos locais, limites e padrões de conf
 core/integrity.py                        Bloqueios, transações e recuperação de arquivos
 core/xlsx_safety.py                      Validação estrutural e limites de pacotes XLSX
 core/openpyxl_compat.py                  Compatibilidade com arquivos lidos/escritos por openpyxl
+core/logging_setup.py                    Logs do servidor no console e em data/logs/simpress.log
 domains/inventory_comparison.py     Normalização e regras de comparação de inventários
 domains/inventory_update.py         Validação, atualização e histórico de inventários
 domains/ticket_inbox.py             Entrada estável, validação e arquivamento de lotes Simpress/Oracle
 domains/equipment_search.py         Normalização, categorização e indexação de equipamentos
+domains/effective_alias.py          Precedência do apelido: manual, hostname do Endpoint, Simpress
+domains/uploaded_workbooks.py       Leitura e validação das planilhas enviadas
+domains/readiness.py                Painel de prontidão dos arquivos locais
+domains/history_annotations.py      Anotações do histórico de planilhas
+security/local_requests.py          Acesso só local, cabeçalhos de segurança e limites de envio
 routers/transfers.py                Validação e geração da planilha de transferência
 routers/inventory_history.py        Histórico, resolução e restauração de inventários
 routers/equipment_search.py         Rotas de busca e estatísticas de equipamentos
 routers/system.py                    Rotas de status e configuração do sistema
 routers/units.py                     Rotas e esquema do catálogo de unidades
 static/                              Interface web, scripts e arquivos locais de estilo/fonte/ícone
+static/js/features/                  Módulos da interface por funcionalidade
 scripts/build/copy_ui_assets.cjs           Cópia dos recursos locais para a interface
 scripts/migrate_local_data.py        Migração segura dos dados locais para data/
 scripts/cleanup_local_temps.py       Limpeza conservadora de arquivos temporários locais
@@ -360,7 +370,7 @@ data/planilhas_entrada/_backups/      Cópias locais anteriores dos inventários
 data/state/                           Estado e históricos locais, ignorados pelo Git
 data/state/entrada_chamados/          Modelo e instruções versionados; lotes e recibos operacionais ignorados pelo Git
 modelos/                              Modelo local de exportação de equipamentos
-logs/                                 Registros locais do servidor, ignorados pelo Git
+data/logs/                            Registros locais do servidor, ignorados pelo Git
 docs/                                 Relatórios de revisão e desempenho
 tests/                                Testes Python e JavaScript
 requirements.txt                     Dependências Python fixadas
@@ -378,13 +388,14 @@ iniciar_servidor.bat                  Inicializador local para Windows
 - [Idempotência dos inventários](docs/operacao/idempotencia-atualizacao-inventario.md)
 - [Microinterações e acessibilidade](docs/desenvolvimento/MICROINTERACOES.md)
 - [Arquitetura e auditoria](docs/arquitetura/auditoria_arquitetura.md)
+- [Auditoria do backend e situação do roteiro](docs/arquitetura/auditoria_backend/README.md)
 
-As entradas `static/index.html`, `static/app.js` e `static/app.css` conservam os caminhos atuais e as alterações locais. Fontes de estilo ficam em `static/styles`, JavaScript em `static/js/{shared,ui}`, testes Node em `tests/frontend` e o servidor de fixtures em `tests/support`. A configuração e a segurança dos workbooks ficam em `core`; domínios, rotas e segurança conservam seus limites. Os scripts Python mantêm seus comandos públicos usados pelo inicializador e pelas filas locais.
+As entradas `static/index.html`, `static/app.js` e `static/app.css` conservam os caminhos atuais e as alterações locais. Fontes de estilo ficam em `static/styles`, JavaScript em `static/js/{shared,ui,features}`, testes Node em `tests/frontend` e o servidor de fixtures em `tests/support`. A configuração e a segurança dos workbooks ficam em `core`; domínios, rotas e segurança conservam seus limites. Os scripts Python mantêm seus comandos públicos usados pelo inicializador e pelas filas locais.
 
 ## Dados e privacidade
 
-O servidor atende somente `127.0.0.1` em uma porta local entre `8000` e `8099`. Os dados são persistidos em arquivos Excel/JSON locais, com acesso direto à aplicação e à documentação `/docs` no próprio computador.
+O servidor atende somente `127.0.0.1` em uma porta local entre `8000` e `8099`. Os dados são persistidos em arquivos Excel/JSON locais, com acesso direto à aplicação e à documentação `/docs` no próprio computador. As páginas usam uma política de conteúdo que só permite scripts do próprio servidor, e todas as respostas trazem cabeçalhos que impedem a exibição dentro de outros sites. A API recusa chamadas que o navegador identifica como vindas de outro site.
 
-Planilhas operacionais, backups, exportações, históricos, apelidos e unidades personalizadas ficam no computador local e são ignorados pelo Git. O modelo vazio de transferência permanece versionado. Inclua os dados locais em uma rotina de backup apropriada se precisar preservá-los; não force a inclusão deles em commits nem compartilhe cópias com dados operacionais.
+Planilhas operacionais, backups, logs, exportações, históricos, apelidos e unidades personalizadas ficam no computador local e são ignorados pelo Git. O modelo vazio de transferência permanece versionado. Inclua os dados locais em uma rotina de backup apropriada se precisar preservá-los; não force a inclusão deles em commits nem compartilhe cópias com dados operacionais.
 
 Arquivos operacionais que já foram versionados continuam recuperáveis no histórico Git local. As regras atuais de `.gitignore` impedem novos rastreamentos, mas não reescrevem o histórico existente.
