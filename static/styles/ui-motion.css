@@ -1,11 +1,6 @@
-:root {
-  --motion-fast: 160ms;
-  --motion-normal: 220ms;
-  --motion-ease: cubic-bezier(0.22, 1, 0.36, 1);
-}
-
+/* Timings come from tokens.css (--motion-*), which also honours reduced motion. */
 /* Only explicit properties; never transition dimensions or use transition: all. */
-button, .app-tab, summary, .transition, .transition-all {
+button, summary, .transition, .transition-all {
   transition-property: background-color, border-color, color, opacity, transform;
   transition-duration: var(--motion-fast);
   transition-timing-function: var(--motion-ease);
