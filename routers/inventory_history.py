@@ -27,6 +27,7 @@ from domains.history_export import (
     _write_export_table_sheet,
 )
 from domains.history_annotations import (
+    AnnotationReadError, resolve_history_annotations,
     annotation_record_values, annotation_view, annotation_export_text, same_annotation_revision,
     effective_history_annotation, load_effective_history_annotations,
     sync_history_annotation, reuse_annotation_revision,
@@ -94,7 +95,7 @@ class InventoryHistoryServices:
     inventory_state_transaction: Callable[..., Any]
     load_comparison_history: Callable[[], List[Dict[str, Any]]]
     load_database: Callable[..., Any]
-    load_history_annotations: Callable[[Path], List[Dict[str, Any]]]
+    load_history_annotations: Callable[..., List[Dict[str, Any]]]
     load_modified_apelidos: Callable[[], Dict[str, str]]
     local_annotation_outbox_directory: Callable[[], Path]
     max_upload_bytes: int
@@ -316,11 +317,22 @@ def create_inventory_history_router(services: InventoryHistoryServices):
     def migrate_legacy_history_annotations() -> Dict[str, int]:
         """Move legacy row notes into the durable outbox outside read requests."""
         history = services.load_comparison_history()
-        records = _latest_annotation_records(history)
+        try:
+            # A revision that exists but cannot be read must not look absent here, or
+            # the embedded legacy text would be queued as a false concurrent edit.
+            shared_records = services.load_history_annotations(services.history_annotations_directory(), strict=True)
+            outbox_records = services.load_history_annotations(
+                services.local_annotation_outbox_directory(), strict=True,
+            )
+        except AnnotationReadError:
+            logger.warning(
+                "Migração de anotações legadas adiada para a próxima execução: há revisões ilegíveis no momento."
+            )
+            return {"legadas_enfileiradas": 0, "adiada": 1, **flush_pending_history_annotations()}
+        records = resolve_history_annotations([*shared_records, *outbox_records])
         versioned_keys = {
             (record["evento_id"], record["item_id"])
-            for directory in (services.history_annotations_directory(), services.local_annotation_outbox_directory())
-            for record in services.load_history_annotations(directory)
+            for record in (*shared_records, *outbox_records)
             if record.get("versao") == 2
         }
         queued = 0
@@ -383,7 +395,7 @@ def create_inventory_history_router(services: InventoryHistoryServices):
                         )
                         continue
         # Preserve existing v1 files and publish deterministic immutable copies.
-        for legacy in services.load_history_annotations(services.history_annotations_directory()):
+        for legacy in shared_records:
             if legacy.get("versao") == 1:
                 try:
                     values = annotation_record_values(legacy)

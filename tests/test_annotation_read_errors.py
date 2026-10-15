@@ -11,14 +11,16 @@ from unittest.mock import patch
 from fastapi import HTTPException
 from starlette.datastructures import UploadFile
 
-from core.integrity import FileBusyError
+from core.integrity import AtomicFileTransaction, FileBusyError
 from domains import history_annotations
 from domains.history_annotations import (
-    AnnotationReadError, history_annotation_row_fingerprint, load_history_annotations,
+    AnnotationReadError, build_history_annotation_record, history_annotation_record_path,
+    history_annotation_row_fingerprint, load_history_annotations, resolve_history_annotations,
     save_history_annotation,
 )
 from domains.inventory_comparison import comparison_annotation_item_id
 from domains.inventory_update import _copy_matching_history_annotations
+from routers.inventory_history import create_inventory_history_router
 from routers.operations import create_operations_router, TicketTimelineAnnotationPayload
 
 
@@ -157,6 +159,63 @@ class InventoryInheritanceReadErrorTests(unittest.TestCase):
 
         records = _copy_matching_history_annotations(services, [previous], new_event())
         self.assertEqual([record["anotacao"] for record in records], [SECRET_NOTE])
+
+
+class LegacyMigrationReadErrorTests(unittest.TestCase):
+    def setUp(self):
+        temporary = tempfile.TemporaryDirectory(dir=ROOT, prefix=".annotation-read-test-")
+        self.addCleanup(temporary.cleanup)
+        self.root = Path(temporary.name)
+        self.shared = self.root / "shared"
+        self.outbox = self.root / "outbox"
+        category = "sem_acesso_7_dias"
+        event = {"id": "event", "horario": "2026-10-11", "comparacao": {
+            category: [{"serie": "S1", "computador": "HOST", "anotacao": SECRET_NOTE}]}}
+        self.history = [event]
+        services = SimpleNamespace(
+            history_annotations_directory=lambda: self.shared,
+            local_annotation_outbox_directory=lambda: self.outbox,
+            load_history_annotations=load_history_annotations,
+            build_history_annotation_record=build_history_annotation_record,
+            save_history_annotation=save_history_annotation,
+            history_annotation_record_path=history_annotation_record_path,
+            history_annotation_row_fingerprint=history_annotation_row_fingerprint,
+            transaction_root=lambda: self.root,
+            atomic_file_transaction=AtomicFileTransaction,
+            load_comparison_history=lambda: self.history,
+            comparison_annotation_item_id=lambda *args: "row",
+        )
+        self.migrate = create_inventory_history_router(services)[1]["migrate_legacy_history_annotations"]
+        # The newer shared revision cleared the note the history still embeds.
+        save_history_annotation(
+            self.shared, event_id="event", item_id="row", event_time="2026-10-11", serie="S1",
+            computador="HOST", motivo="", anotacao="", categoria=category,
+        )
+
+    def view(self):
+        return resolve_history_annotations([
+            *load_history_annotations(self.shared), *load_history_annotations(self.outbox),
+        ])[("event", "row")]
+
+    def test_unreadable_revision_defers_migration_instead_of_queuing_a_false_conflict(self):
+        with LockedFiles(lambda path: path.parent == self.shared), \
+                self.assertLogs(level="WARNING") as logs:
+            result = self.migrate()
+        self.assertEqual(result["legadas_enfileiradas"], 0)
+        self.assertEqual(result["adiada"], 1)
+        self.assertEqual(list(self.outbox.glob("*.json")), [])
+        self.assertEqual(len(list(self.shared.glob("*.json"))), 1)
+        output = "\n".join(logs.output)
+        self.assertIn("adiada", output)
+        self.assertNotIn(SECRET_NOTE, output)
+
+        # Next run, with the file readable again, recognizes the revision and queues nothing.
+        result = self.migrate()
+        self.assertEqual(result["legadas_enfileiradas"], 0)
+        self.assertNotIn("adiada", result)
+        view = self.view()
+        self.assertFalse(view.get("anotacao_conflito"))
+        self.assertEqual(view["anotacao"], "")
 
 
 def parsed_report(simpress_bytes, _oracle_bytes, **_kwargs):
