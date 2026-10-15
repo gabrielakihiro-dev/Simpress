@@ -140,7 +140,7 @@ from domains.history_annotations import (
     save_history_annotation,
 )
 from domains import effective_alias
-from domains import uploaded_workbooks
+from domains import readiness, uploaded_workbooks
 from domains.uploaded_workbooks import (
     DETAILS_ALIAS_HEADER_ALIASES,
     DETAILS_COMPLETE_SOURCE_COLUMN_COUNT,
@@ -423,25 +423,13 @@ def get_primary_equipment_file() -> Optional[Path]:
 
 def _check_startup_xlsx(path: Optional[Path]) -> Dict[str, Any]:
     """Check the local XLSX container without loading or logging workbook data."""
-    if path is None:
-        return {"available": False, "file": None, "reason": "ausente"}
-    if not path.is_file():
-        return {"available": False, "file": path.name, "reason": "ausente"}
-
-    try:
-        validate_xlsx(path)
-    except XlsxLimitExceeded:
-        return {"available": False, "file": path.name, "reason": "planilha excede os limites de processamento"}
-    except XlsxPackageError:
-        return {"available": False, "file": path.name, "reason": "arquivo inacessível ou XLSX inválido"}
-    except (OSError, ValueError):
-        return {"available": False, "file": path.name, "reason": "arquivo inacessível ou XLSX inválido"}
-
-    return {"available": True, "file": path.name, "reason": "OK"}
+    return readiness.check_startup_xlsx(path, validate_xlsx)
 
 
-_READINESS_VALIDATION_CACHE: Dict[Tuple[str, int, int, int, str], Dict[str, Any]] = {}
-_READINESS_VALIDATION_LOCK = threading.Lock()
+_READY_WORKBOOK_CACHE = readiness.ReadyWorkbookCache()
+_READINESS_VALIDATION_CACHE = _READY_WORKBOOK_CACHE.entries
+_READINESS_VALIDATION_LOCK = _READY_WORKBOOK_CACHE.lock
+_READINESS_REPORT_CACHE = readiness.ReadinessReportCache()
 
 
 def get_local_transfer_template() -> Path:
@@ -450,217 +438,102 @@ def get_local_transfer_template() -> Path:
 
 
 def _check_ready_workbook(path: Path, role: str) -> Dict[str, Any]:
-    status = {"available": False, "file": path.name, "reason": "ausente", "state": "awaiting_import"}
-    if not path.exists():
-        return status
+    return readiness.check_ready_workbook(path, role, _ready_workbook_services, _READY_WORKBOOK_CACHE)
+
+
+_check_startup_ticket_report = readiness.check_startup_ticket_report
+
+
+def _readiness_loaded_state() -> Tuple[bool, bool]:
+    with STATE_LOCK:
+        return bool(equipamentos_cache), bool(unidades_cache)
+
+
+def _validate_local_state_for_readiness() -> None:
+    load_modified_apelidos()
+    load_custom_units()
+    if ALIAS_HISTORY_FILE.exists():
+        load_alias_history()
+    if COMPARISON_HISTORY_FILE.exists():
+        load_comparison_history()
+
+
+def _refresh_export_status_for_readiness() -> Dict[str, Any]:
+    # Readiness reads without the transaction lock; files are replaced atomically.
+    count_export_changes(locked=True)
+    return get_export_status()
+
+
+def _readiness_signature() -> Tuple[Any, ...]:
+    """Everything the readiness report reads, so a cached report is never stale."""
     try:
-        stat = path.stat()
-        key = (str(path.resolve()), stat.st_size, stat.st_mtime_ns, stat.st_ctime_ns, role)
-        with _READINESS_VALIDATION_LOCK:
-            cached = _READINESS_VALIDATION_CACHE.get(key)
-        if cached is not None:
-            return dict(cached)
-        if role in {"transferencia", "exportacao"}:
-            validate_local_model(path, role)
-        else:
-            if stat.st_size > MAX_UPLOAD_BYTES:
-                raise ValueError("A planilha excede o limite de 30 MB.")
-            validate_uploaded_workbook(path.read_bytes(), role)
-        status.update(available=True, reason="OK", state="ready")
-        with _READINESS_VALIDATION_LOCK:
-            if len(_READINESS_VALIDATION_CACHE) >= 64:
-                _READINESS_VALIDATION_CACHE.clear()
-            _READINESS_VALIDATION_CACHE[key] = dict(status)
-    except (HTTPException, FileBusyError, WorkbookSafetyError, *WORKBOOK_READ_ERRORS) as error:
-        logger.warning(
-            "Falha ao verificar prontidão da planilha (arquivo=%s, papel=%s, erro=%s).",
-            path.name, role, type(error).__name__,
-        )
-        status.update(reason=str(getattr(error, "detail", error)) or "planilha inválida", state="invalid")
-    return status
-
-
-def _check_startup_ticket_report(path: Optional[Path]) -> Dict[str, Any]:
-    """Check ticket history storage while allowing a fresh, not-yet-imported setup."""
-    if path is None:
-        return {"available": False, "file": None, "reason": "arquivo de histórico não configurado"}
-    if not path.exists():
-        return {
-            "available": False,
-            "file": path.name,
-            "reason": "aguardando a primeira importação",
-            "state": "awaiting_import",
-        }
-    if not path.is_file():
-        return {"available": False, "file": path.name, "reason": "caminho do histórico inválido"}
-
-    try:
-        report = json.loads(path.read_text(encoding="utf-8"))
-    except (OSError, UnicodeError, json.JSONDecodeError):
-        return {"available": False, "file": path.name, "reason": "histórico inacessível ou JSON inválido"}
-    if not isinstance(report, dict) or not isinstance(report.get("chamados"), list):
-        return {"available": False, "file": path.name, "reason": "estrutura do histórico inválida"}
-    return {"available": True, "file": path.name, "reason": "OK"}
+        details_files: Any = tuple(get_details_files())
+    except OSError as error:
+        details_files = type(error).__name__
+    watched = (
+        TICKET_REPORT_FILE,
+        DETAILS_UPLOAD_FILE,
+        ENDPOINT_UPLOAD_FILE,
+        EXPORT_MODEL_FILE,
+        MODIFIED_APELIDOS_FILE,
+        CUSTOM_UNIDADES_FILE,
+        ALIAS_HISTORY_FILE,
+        COMPARISON_HISTORY_FILE,
+        INPUT_DIR / "_modelos" / "transferencia.xlsx",
+        TEMPLATE_FILE,
+    )
+    details_signature = (
+        readiness.file_signature(details_files) if isinstance(details_files, tuple) else details_files
+    )
+    return (
+        readiness.file_signature(watched),
+        details_signature,
+        _readiness_loaded_state(),
+        get_transaction_recovery_block(),
+    )
 
 
 def get_startup_readiness() -> Dict[str, Any]:
-    # Avoid publishing transient availability while an upload is being applied.
-    with lock_paths([TRANSACTION_ROOT / ".atomic-transactions"]):
-        return _get_startup_readiness_unlocked()
+    """Readiness without the global transaction lock, cached while its inputs stay the same."""
+    return _READINESS_REPORT_CACHE.get_or_compute(_readiness_signature(), _get_startup_readiness_unlocked)
 
 
 def _get_startup_readiness_unlocked() -> Dict[str, Any]:
     """Map essential local files to the application functions that need them."""
-    ticket_report_status = _check_startup_ticket_report(TICKET_REPORT_FILE)
-    try:
-        details_candidates = get_details_files()
-        details_directory_readable = True
-    except OSError as error:
-        logger.warning("Falha ao listar inventários (papel=detalhes, erro=%s).", type(error).__name__)
-        details_candidates = []
-        details_directory_readable = False
-    try:
-        active_details = get_primary_equipment_file()
-    except (OSError, FileBusyError) as error:
-        logger.warning("Falha ao selecionar inventário ativo (papel=detalhes, erro=%s).", type(error).__name__)
-        active_details = None
+    return readiness.build_readiness_report(_readiness_services)
 
-    units_loaded = False
-    if active_details is not None:
-        details_status = _check_startup_xlsx(active_details)
-        with STATE_LOCK:
-            base_loaded = bool(equipamentos_cache)
-            units_loaded = bool(unidades_cache)
-        if details_status["available"] and not base_loaded:
-            details_status.update(available=False, reason="inventário não carregado; importe o par Simpress e Endpoint")
-    elif details_candidates:
-        details_status = {
-            "available": False,
-            "file": details_candidates[0].name,
-            "reason": "nenhum inventário contém aba e cabeçalhos válidos",
-        }
-    elif not details_directory_readable:
-        details_status = {
-            "available": False,
-            "file": DETAILS_UPLOAD_FILE.name,
-            "reason": "não foi possível ler a pasta de inventários",
-        }
-    else:
-        details_status = {
-            "available": False,
-            "file": DETAILS_UPLOAD_FILE.name,
-            "reason": "ausente",
-        }
 
-    try:
-        load_modified_apelidos()
-        load_custom_units()
-        if ALIAS_HISTORY_FILE.exists():
-            load_alias_history()
-        if COMPARISON_HISTORY_FILE.exists():
-            load_comparison_history()
-        local_state_status = {"available": True, "file": "catálogos e históricos JSON", "reason": "OK"}
-    except (LocalJsonCorruptionError, HTTPException) as error:
-        local_state_status = {
-            "available": False,
-            "file": "catálogos e históricos JSON",
-            "reason": str(getattr(error, "detail", error)),
-        }
+_ready_workbook_services = readiness.ReadyWorkbookServices(
+    validate_local_model=lambda *args, **kwargs: validate_local_model(*args, **kwargs),
+    validate_uploaded_workbook=lambda *args, **kwargs: validate_uploaded_workbook(*args, **kwargs),
+    max_upload_bytes=lambda: MAX_UPLOAD_BYTES,
+    logger=logger,
+)
 
-    files = {
-        "template_transferencia": _check_ready_workbook(get_local_transfer_template(), "transferencia"),
-        "inventario_equipamentos": details_status,
-        "inventario_detalhes_atualizacao": _check_ready_workbook(DETAILS_UPLOAD_FILE, "detalhes"),
-        "inventario_endpoint": _check_ready_workbook(ENDPOINT_UPLOAD_FILE, "endpoint"),
-        "modelo_exportacao": _check_ready_workbook(EXPORT_MODEL_FILE, "exportacao"),
-        "catalogos_locais": local_state_status,
-        "historico_chamados": ticket_report_status,
-    }
-    if files["modelo_exportacao"]["available"] and details_status["available"]:
-        count_export_changes(locked=True)
-        export_status = get_export_status()
-        if not export_status["available"]:
-            files["modelo_exportacao"].update(available=False, state="invalid", reason=export_status["reason"])
-    for status in files.values():
-        status.setdefault("state", "ready" if status["available"] else
-                          "awaiting_import" if status["reason"] == "ausente" else "invalid")
-    requirements = {
-        "consulta_equipamentos": ["inventario_equipamentos", "catalogos_locais"],
-        "geracao_transferencia": ["inventario_equipamentos", "catalogos_locais", "template_transferencia"],
-        "comparacao_atualizacao_inventarios": [
-            "inventario_equipamentos",
-            "inventario_detalhes_atualizacao",
-            "inventario_endpoint",
-        ],
-        "exportacao_equipamentos": ["inventario_equipamentos", "modelo_exportacao"],
-        "acompanhamento_chamados": ["historico_chamados"],
-    }
-    functions = {
-        name: {
-            "available": all(files[key]["available"] for key in required_files),
-            "missing_files": list(dict.fromkeys(
-                files[key]["file"] or key
-                for key in required_files
-                if not files[key]["available"]
-            )),
-            "state": "ready" if all(files[key]["available"] for key in required_files)
-                else "invalid" if any(files[key]["state"] == "invalid" for key in required_files)
-                else "awaiting_import",
-        }
-        for name, required_files in requirements.items()
-    }
-    if functions["geracao_transferencia"]["available"] and not units_loaded:
-        functions["geracao_transferencia"].update(available=False, state="invalid", missing_files=["localidades do inventário"])
-    report: Dict[str, Any] = {"backend": "files", "files": files, "functions": functions}
-    # Additive key, present only in read-only mode, so existing consumers keep their shape.
-    if (recovery_block := get_transaction_recovery_block()) is not None:
-        report["gravacao_bloqueada"] = {"available": False, "state": "invalid", "reason": recovery_block}
-    return report
+_readiness_services = readiness.ReadinessServices(
+    ticket_report_file=lambda: TICKET_REPORT_FILE,
+    details_upload_file=lambda: DETAILS_UPLOAD_FILE,
+    endpoint_upload_file=lambda: ENDPOINT_UPLOAD_FILE,
+    export_model_file=lambda: EXPORT_MODEL_FILE,
+    get_details_files=lambda: get_details_files(),
+    get_primary_equipment_file=lambda: get_primary_equipment_file(),
+    get_local_transfer_template=lambda: get_local_transfer_template(),
+    check_startup_xlsx=lambda path: _check_startup_xlsx(path),
+    check_ready_workbook=lambda path, role: _check_ready_workbook(path, role),
+    check_startup_ticket_report=lambda path: _check_startup_ticket_report(path),
+    loaded_state=lambda: _readiness_loaded_state(),
+    validate_local_state=lambda: _validate_local_state_for_readiness(),
+    local_state_errors=(LocalJsonCorruptionError, HTTPException),
+    refresh_export_status=lambda: _refresh_export_status_for_readiness(),
+    get_transaction_recovery_block=lambda: get_transaction_recovery_block(),
+    logger=logger,
+)
 
 
 def report_startup_readiness() -> None:
     """Log a clear feature impact summary without exposing workbook contents."""
-    report = get_startup_readiness()
-    labels = {
-        "template_transferencia": "Modelo de transferência",
-        "inventario_equipamentos": "Inventário ativo EquipamentosDetalhes",
-        "inventario_detalhes_atualizacao": "EquipamentosDetalhes para atualização",
-        "inventario_endpoint": "Inventário InvAllComputersSummary",
-        "modelo_exportacao": "Modelo de exportação",
-        "catalogos_locais": "Catálogos e históricos locais",
-        "historico_chamados": "Histórico do acompanhamento de chamados",
-    }
-    print("[PRONTIDÃO] Verificação dos arquivos locais:")
-    for key, status in report["files"].items():
-        if not status["available"]:
-            state = f"INDISPONÍVEL ({status['reason']})"
-        elif key == "historico_chamados":
-            state = "JSON válido" if status["reason"] == "OK" else status["reason"]
-        elif key == "catalogos_locais":
-            state = "catálogos e históricos disponíveis"
-        else:
-            state = "PACOTE XLSX válido"
-        filename = status["file"] or "arquivo não localizado"
-        print(f"[PRONTIDÃO] {labels[key]} — {filename}: {state}")
-
-    function_labels = {
-        "consulta_equipamentos": "Consulta de equipamentos",
-        "geracao_transferencia": "Geração de planilha de transferência",
-        "comparacao_atualizacao_inventarios": "Comparação e atualização de inventários",
-        "exportacao_equipamentos": "Exportação de equipamentos",
-        "acompanhamento_chamados": "Acompanhamento de chamados",
-    }
-    for key, status in report["functions"].items():
-        if status["available"]:
-            detail = (
-                "armazenamento do histórico disponível"
-                if key == "acompanhamento_chamados"
-                else "arquivos necessários presentes (checagem estrutural)"
-            )
-            print(f"[PRONTIDÃO] {function_labels[key]}: {detail}.")
-        else:
-            missing = ", ".join(status["missing_files"])
-            print(f"[PRONTIDÃO] {function_labels[key]}: INDISPONÍVEL; dependência ausente ou inválida: {missing}.")
+    for line in readiness.readiness_log_lines(get_startup_readiness()):
+        print(line)
 
 
 def _report_startup_readiness_best_effort() -> None:
