@@ -30,6 +30,17 @@ with patch(
 PROJECT_ROOT = Path(__file__).resolve().parents[1]
 
 
+def _css_layer(selector: str) -> int:
+    """z-index of a selector in static/app.css, resolved through the --z-* scale in tokens.css."""
+    css = (app_config.STATIC_DIR / "app.css").read_text(encoding="utf-8")
+    tokens = (app_config.STATIC_DIR / "styles" / "tokens.css").read_text(encoding="utf-8")
+    scale = {name: int(value) for name, value in re.findall(r"(--z-[\w-]+):\s*(\d+);", tokens)}
+    match = re.search(re.escape(selector) + r"\s*\{[^}]*?z-index:\s*var\((--z-[\w-]+)\);", css)
+    if match is None:
+        raise AssertionError(f"{selector} has no z-index from the --z-* scale")
+    return scale[match.group(1)]
+
+
 def _xlsx_with_worksheet_xml(*worksheet_xml: str) -> bytes:
     content = io.BytesIO()
     with zipfile.ZipFile(content, "w") as archive:
@@ -247,10 +258,9 @@ class MaintenanceContractTests(unittest.TestCase):
 
     def test_toasts_render_above_modal_overlays(self):
         html = (app_config.STATIC_DIR / "index.html").read_text(encoding="utf-8")
-        css = (app_config.STATIC_DIR / "app.css").read_text(encoding="utf-8")
 
-        self.assertRegex(html, r'id="toast-container"[^>]*z-\[130\]')
-        self.assertRegex(css, r"\.modal-overlay\s*\{\s*z-index:\s*120;\s*\}")
+        self.assertNotRegex(html, r'id="toast-container"[^>]*\bz-')
+        self.assertGreater(_css_layer("#toast-container"), _css_layer(".modal-overlay"))
 
     def test_excel_exports_show_only_success_confirmation(self):
         script = _frontend_script()
@@ -677,7 +687,6 @@ class MaintenanceContractTests(unittest.TestCase):
 
     def test_dialog_overlays_stack_above_the_header_and_keep_keyboard_trapping(self):
         html = (app_config.STATIC_DIR / "index.html").read_text(encoding="utf-8")
-        css = (app_config.STATIC_DIR / "app.css").read_text(encoding="utf-8")
         dialog_script = (app_config.STATIC_DIR / "js/ui/accessible-dialogs.js").read_text(encoding="utf-8")
 
         dialogs = re.findall(r'<div id="(modal-[^"]+)" class="([^"]+)"', html)
@@ -685,12 +694,11 @@ class MaintenanceContractTests(unittest.TestCase):
         for dialog_id, class_names in dialogs:
             with self.subTest(dialog=dialog_id):
                 self.assertIn("modal-overlay", class_names)
+                # .modal-overlay owns the layer; open order (accessible-dialogs.js) stacks dialogs.
+                self.assertNotRegex(class_names, r"(?:^|\s)z-")
 
-        overlay = re.search(r"\.modal-overlay\s*\{\s*z-index:\s*(\d+);\s*\}", css)
-        header = re.search(r"\.site-header\s*\{\s*z-index:\s*(\d+);\s*\}", css)
-        self.assertIsNotNone(overlay)
-        self.assertIsNotNone(header)
-        self.assertGreater(int(overlay.group(1)), int(header.group(1)))
+        self.assertGreater(_css_layer(".modal-overlay"), _css_layer(".site-header"))
+        self.assertGreater(_css_layer(".site-header"), _css_layer(".quick-actions"))
         self.assertIn('dialog.setAttribute("aria-modal", "true")', dialog_script)
         self.assertIn('if (event.key === "Escape")', dialog_script)
         self.assertIn('if (event.key !== "Tab") return;', dialog_script)

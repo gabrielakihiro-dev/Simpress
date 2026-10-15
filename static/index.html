@@ -9,6 +9,7 @@
   
   <link rel="stylesheet" href="/static/vendor/fonts.css">
   <link rel="stylesheet" href="/static/vendor/tailwind-4.3.3.css">
+  <link rel="stylesheet" href="/static/styles/tokens.css">
   <script src="/static/vendor/lucide-1.48.0-subset.js"></script>
   <link rel="stylesheet" href="/static/app.css">
   <link rel="stylesheet" href="/static/styles/ui-motion.css">
@@ -111,7 +112,7 @@
     </aside>
 
     <div class="app-workspace">
-      <header class="site-header border-b border-slate-800/80 bg-slate-950/80 backdrop-blur-md sticky top-0 z-40">
+      <header class="site-header border-b border-slate-800/80 bg-slate-950/80 backdrop-blur-md sticky top-0">
         <div class="header-inner">
           <button type="button" id="btn-sidebar-open" class="sidebar-icon-button sidebar-mobile-open" aria-label="Abrir menu de navegação" aria-controls="app-sidebar" aria-expanded="false" title="Abrir menu de navegação">
             <i data-lucide="menu" aria-hidden="true"></i>
@@ -201,7 +202,7 @@
         <!-- Autocomplete Suggestions Dropdown -->
         <div
           id="autocomplete-box"
-          class="hidden absolute top-full left-0 right-0 mt-2.5 rounded-2xl z-[100] overflow-hidden"
+          class="hidden absolute top-full left-0 right-0 mt-2.5 rounded-2xl overflow-hidden"
         >
           <!-- Header -->
           <div
@@ -928,7 +929,7 @@ Horário disponível para atendimento:</textarea>
     <!-- ========================================== -->
     <!-- BARRA INFERIOR FIXA DE AÇÕES RÁPIDAS      -->
     <!-- ========================================== -->
-    <aside aria-label="Painel de Ações Rápidas" class="quick-actions fixed bottom-0 inset-x-0 bg-slate-950/90 backdrop-blur-xl border-t border-slate-800/90 z-30 shadow-2xl">
+    <aside aria-label="Painel de Ações Rápidas" class="quick-actions fixed bottom-0 inset-x-0 bg-slate-950/90 backdrop-blur-xl border-t border-slate-800/90 shadow-2xl">
       <div class="quick-actions-inner mx-auto flex flex-col sm:flex-row items-center justify-between gap-4">
         <div class="quick-actions-status flex items-center space-x-3 text-xs text-slate-400">
           <div class="w-2.5 h-2.5 rounded-full bg-brand-400" id="status-indicator" aria-hidden="true"></div>
@@ -984,8 +985,8 @@ Horário disponível para atendimento:</textarea>
   <!-- ========================================== -->
   <!-- MODAL DE PRÉ-VISUALIZAÇÃO DO RESUMO       -->
   <!-- ========================================== -->
-  <div id="modal-preview" class="modal-overlay fixed inset-0 bg-slate-950/80 backdrop-blur-sm z-50 hidden flex items-center justify-center p-4">
-    <div class="bg-slate-900 border border-slate-700 rounded-2xl max-w-2xl w-full p-6 shadow-2xl relative flex flex-col max-h-[90vh]">
+  <div id="modal-preview" class="modal-overlay fixed inset-0 bg-slate-950/80 backdrop-blur-sm hidden flex items-center justify-center p-4">
+    <div class="bg-surface-overlay border border-slate-700 rounded-2xl max-w-2xl w-full p-6 shadow-2xl relative flex flex-col max-h-[90vh]">
       <div class="flex items-center justify-between pb-4 border-b border-slate-800">
         <div class="flex items-center space-x-2.5">
           <i data-lucide="file-text" class="w-5 h-5 text-brand-400"></i>
@@ -1029,8 +1030,8 @@ Horário disponível para atendimento:</textarea>
   <!-- ========================================== -->
   <!-- MODAL: HISTÓRICO DE TRANSFERÊNCIAS GERADAS -->
   <!-- ========================================== -->
-  <div id="modal-historico-transferencias" class="modal-overlay fixed inset-0 bg-slate-950/80 backdrop-blur-sm z-50 hidden flex items-center justify-center p-4">
-    <div class="bg-slate-900 border border-slate-700 rounded-2xl max-w-5xl w-full p-6 shadow-2xl relative flex flex-col max-h-[90vh]">
+  <div id="modal-historico-transferencias" class="modal-overlay fixed inset-0 bg-slate-950/80 backdrop-blur-sm hidden flex items-center justify-center p-4">
+    <div class="bg-surface-overlay border border-slate-700 rounded-2xl max-w-5xl w-full p-6 shadow-2xl relative flex flex-col max-h-[90vh]">
       <div class="flex items-center justify-between pb-4 border-b border-slate-800">
         <div class="flex items-center space-x-2.5">
           <i data-lucide="history" class="w-5 h-5 text-brand-400" aria-hidden="true"></i>
@@ -1056,8 +1057,8 @@ Horário disponível para atendimento:</textarea>
   <!-- ========================================== -->
   <!-- MODAL DE CONFIRMAÇÃO DE AÇÃO              -->
   <!-- ========================================== -->
-  <div id="modal-confirmar-acao" class="modal-overlay fixed inset-0 bg-slate-950/80 backdrop-blur-sm z-50 hidden flex items-center justify-center p-4">
-    <div class="bg-slate-900 border border-slate-700 rounded-2xl max-w-md w-full p-6 shadow-2xl relative flex flex-col max-h-[90vh]">
+  <div id="modal-confirmar-acao" class="modal-overlay fixed inset-0 bg-slate-950/80 backdrop-blur-sm hidden flex items-center justify-center p-4">
+    <div class="bg-surface-overlay border border-slate-700 rounded-2xl max-w-md w-full p-6 shadow-2xl relative flex flex-col max-h-[90vh]">
       <div class="flex items-center space-x-2.5 pb-4 border-b border-slate-800">
         <i data-lucide="alert-triangle" class="w-5 h-5 text-amber-400" aria-hidden="true"></i>
         <h3 id="titulo-confirmar-acao" class="text-base font-bold text-white">Confirmar ação</h3>
@@ -1073,8 +1074,8 @@ Horário disponível para atendimento:</textarea>
   <!-- ========================================== -->
   <!-- MODAL DE TEXTO PARA SOLICITAÇÃO DE TRANSPORTE -->
   <!-- ========================================== -->
-  <div id="modal-texto-transporte" class="modal-overlay fixed inset-0 bg-slate-950/80 backdrop-blur-sm z-50 hidden flex items-center justify-center p-4">
-    <div class="bg-slate-900 border border-slate-700 rounded-2xl max-w-2xl w-full p-6 shadow-2xl relative flex flex-col max-h-[90vh]">
+  <div id="modal-texto-transporte" class="modal-overlay fixed inset-0 bg-slate-950/80 backdrop-blur-sm hidden flex items-center justify-center p-4">
+    <div class="bg-surface-overlay border border-slate-700 rounded-2xl max-w-2xl w-full p-6 shadow-2xl relative flex flex-col max-h-[90vh]">
       <div class="flex items-center justify-between pb-4 border-b border-slate-800">
         <div class="flex items-center space-x-2.5">
           <i data-lucide="truck" class="w-5 h-5 text-brand-400"></i>
@@ -1121,8 +1122,8 @@ Horário disponível para atendimento:</textarea>
   <!-- ==================================================== -->
   <!-- MODAL DE ATUALIZAÇÃO / CADASTRO DE EQUIPAMENTO       -->
   <!-- ==================================================== -->
-  <div id="modal-editar-equipamento" class="modal-overlay fixed inset-0 bg-slate-950/85 backdrop-blur-md z-50 hidden flex items-center justify-center p-4">
-    <div class="bg-slate-900 border border-slate-700/80 rounded-2xl max-w-2xl w-full p-6 shadow-2xl relative flex flex-col max-h-[92vh] overflow-hidden">
+  <div id="modal-editar-equipamento" class="modal-overlay fixed inset-0 bg-slate-950/85 backdrop-blur-md hidden flex items-center justify-center p-4">
+    <div class="bg-surface-overlay border border-slate-700/80 rounded-2xl max-w-2xl w-full p-6 shadow-2xl relative flex flex-col max-h-[92vh] overflow-hidden">
       <!-- Modal Header -->
       <div class="flex items-center justify-between pb-4 border-b border-slate-800 shrink-0">
         <div class="flex items-center space-x-3">
@@ -1215,8 +1216,8 @@ Horário disponível para atendimento:</textarea>
   </div>
 
   <!-- MODAL PARA ALTERAR SOMENTE O APELIDO -->
-  <div id="modal-editar-apelido" class="modal-overlay fixed inset-0 bg-slate-950/85 backdrop-blur-md z-[60] hidden flex items-center justify-center p-4">
-    <div class="bg-slate-900 border border-cyan-500/30 rounded-2xl max-w-md w-full p-6 shadow-2xl">
+  <div id="modal-editar-apelido" class="modal-overlay fixed inset-0 bg-slate-950/85 backdrop-blur-md hidden flex items-center justify-center p-4">
+    <div class="bg-surface-overlay border border-cyan-500/30 rounded-2xl max-w-md w-full p-6 shadow-2xl">
       <div class="flex items-start justify-between gap-4 mb-5">
         <div>
           <h3 class="text-base font-bold text-white">Editar apelido</h3>
@@ -1237,8 +1238,8 @@ Horário disponível para atendimento:</textarea>
   </div>
 
   <!-- MODAL DO HISTÓRICO DE ALTERAÇÕES DE APELIDO -->
-  <div id="modal-historico-apelidos" class="modal-overlay fixed inset-0 bg-slate-950/85 backdrop-blur-md z-[55] hidden flex items-center justify-center p-4">
-    <div class="bg-slate-900 border border-violet-500/30 rounded-2xl max-w-6xl w-full p-6 shadow-2xl flex flex-col max-h-[90vh]">
+  <div id="modal-historico-apelidos" class="modal-overlay fixed inset-0 bg-slate-950/85 backdrop-blur-md hidden flex items-center justify-center p-4">
+    <div class="bg-surface-overlay border border-violet-500/30 rounded-2xl max-w-6xl w-full p-6 shadow-2xl flex flex-col max-h-[90vh]">
       <div class="flex items-start justify-between gap-4 pb-4 border-b border-slate-800 shrink-0">
         <div>
           <h3 class="text-base font-bold text-white flex items-center gap-2">
@@ -1264,8 +1265,8 @@ Horário disponível para atendimento:</textarea>
   <!-- ==================================================== -->
   <!-- MODAL DE GERENCIAMENTO DE REGIONAIS & ENDEREÇOS     -->
   <!-- ==================================================== -->
-  <div id="modal-gerenciar-unidades" class="modal-overlay fixed inset-0 bg-slate-950/85 backdrop-blur-md z-[65] hidden flex items-center justify-center p-4">
-    <div class="bg-slate-900 border border-slate-700/80 rounded-2xl max-w-3xl w-full p-6 shadow-2xl relative flex flex-col max-h-[92vh] overflow-hidden">
+  <div id="modal-gerenciar-unidades" class="modal-overlay fixed inset-0 bg-slate-950/85 backdrop-blur-md hidden flex items-center justify-center p-4">
+    <div class="bg-surface-overlay border border-slate-700/80 rounded-2xl max-w-3xl w-full p-6 shadow-2xl relative flex flex-col max-h-[92vh] overflow-hidden">
       <!-- Header -->
       <div class="flex items-center justify-between pb-4 border-b border-slate-800 shrink-0">
         <div class="flex items-center space-x-3">
@@ -1357,8 +1358,8 @@ Horário disponível para atendimento:</textarea>
   </div>
 
   <!-- MODAL PARA COMPARAR ENDPOINT E EQUIPAMENTOSDETALHES -->
-  <div id="modal-atualizar-planilhas" class="modal-overlay fixed inset-0 bg-slate-950/85 backdrop-blur-md z-[70] hidden flex items-center justify-center p-4">
-    <div class="bg-slate-900 border border-sky-500/30 rounded-2xl max-w-2xl w-full p-6 shadow-2xl flex flex-col max-h-[92vh] overflow-hidden">
+  <div id="modal-atualizar-planilhas" class="modal-overlay fixed inset-0 bg-slate-950/85 backdrop-blur-md hidden flex items-center justify-center p-4">
+    <div class="bg-surface-overlay border border-sky-500/30 rounded-2xl max-w-2xl w-full p-6 shadow-2xl flex flex-col max-h-[92vh] overflow-hidden">
       <div class="flex items-start justify-between gap-4 pb-4 border-b border-slate-800 shrink-0">
         <div>
           <h3 class="text-base font-bold text-white flex items-center gap-2">
@@ -1419,7 +1420,7 @@ Horário disponível para atendimento:</textarea>
     </div>
   </div>
 
-  <div id="modal-importar-modelo" class="modal-overlay fixed inset-0 bg-slate-950/85 backdrop-blur-md z-[70] hidden flex items-center justify-center p-4">
+  <div id="modal-importar-modelo" class="modal-overlay fixed inset-0 bg-slate-950/85 backdrop-blur-md hidden flex items-center justify-center p-4">
     <div class="local-setup-dialog">
       <div class="local-setup-heading">
         <h3 id="titulo-importar-modelo">Importar arquivos</h3>
@@ -1441,8 +1442,8 @@ Horário disponível para atendimento:</textarea>
   </div>
 
   <!-- RESULTADO DA COMPARAÇÃO DAS PLANILHAS -->
-  <div id="modal-comparacao-planilhas" class="modal-overlay fixed inset-0 bg-slate-950/85 backdrop-blur-md z-[75] hidden flex items-center justify-center p-4">
-    <div class="bg-slate-900 border border-emerald-500/30 rounded-2xl max-w-6xl w-full p-6 shadow-2xl flex flex-col max-h-[92vh] overflow-hidden">
+  <div id="modal-comparacao-planilhas" class="modal-overlay fixed inset-0 bg-slate-950/85 backdrop-blur-md hidden flex items-center justify-center p-4">
+    <div class="bg-surface-overlay border border-emerald-500/30 rounded-2xl max-w-6xl w-full p-6 shadow-2xl flex flex-col max-h-[92vh] overflow-hidden">
       <div class="flex items-start justify-between gap-4 pb-4 border-b border-slate-800 shrink-0">
         <div>
           <h3 class="text-base font-bold text-white flex items-center gap-2">
@@ -1463,8 +1464,8 @@ Horário disponível para atendimento:</textarea>
   </div>
 
   <!-- EVOLUÇÃO DAS PENDÊNCIAS ENTRE DUAS ATUALIZAÇÕES -->
-  <div id="modal-evolucao-atualizacoes" class="modal-overlay fixed inset-0 bg-slate-950/85 backdrop-blur-md z-[77] hidden flex items-center justify-center p-4">
-    <div class="modal-panel bg-slate-900 border border-cyan-500/30 rounded-2xl max-w-5xl w-full p-6 shadow-2xl flex flex-col max-h-[92vh] overflow-hidden">
+  <div id="modal-evolucao-atualizacoes" class="modal-overlay fixed inset-0 bg-slate-950/85 backdrop-blur-md hidden flex items-center justify-center p-4">
+    <div class="modal-panel bg-surface-overlay border border-cyan-500/30 rounded-2xl max-w-5xl w-full p-6 shadow-2xl flex flex-col max-h-[92vh] overflow-hidden">
       <div class="flex items-start justify-between gap-4 pb-4 border-b border-slate-800 shrink-0"><div><h3 class="text-base font-bold text-white">Evolução das atualizações</h3><p class="text-xs text-slate-400 mt-1">Veja quantos casos surgiram, continuaram ou deixaram de aparecer.</p></div><button type="button" data-on-click="fecharEvolucaoAtualizacoes" class="text-slate-400 hover:text-white p-1 rounded-lg hover:bg-slate-800" aria-label="Fechar evolução das atualizações"><i data-lucide="x" class="w-5 h-5"></i></button></div>
       <form id="form-evolucao-atualizacoes" class="grid grid-cols-1 md:grid-cols-[1fr_1fr_auto] gap-2 py-3 shrink-0"><label class="text-xs text-slate-300">Atualização anterior<select id="evolucao-anterior" required class="mt-1 block w-full rounded-lg border border-slate-700 bg-slate-950 px-3 py-2 text-sm text-white"></select></label><label class="text-xs text-slate-300">Atualização atual<select id="evolucao-atual" required class="mt-1 block w-full rounded-lg border border-slate-700 bg-slate-950 px-3 py-2 text-sm text-white"></select></label><button type="submit" class="self-end rounded-lg bg-cyan-500/15 border border-cyan-400/30 px-4 py-2 text-sm text-cyan-100">Comparar</button></form>
       <div id="resultado-evolucao-atualizacoes" aria-label="Resultado da comparação entre atualizações" aria-live="polite" class="overflow-auto flex-1 space-y-3"></div>
@@ -1473,8 +1474,8 @@ Horário disponível para atendimento:</textarea>
   </div>
 
   <!-- ACOMPANHAMENTO DE CHAMADOS -->
-  <div id="modal-acompanhamento-chamados" class="modal-overlay fixed inset-0 bg-slate-950/85 backdrop-blur-md z-[77] hidden flex items-center justify-center p-4">
-    <div class="modal-panel bg-slate-900 border border-cyan-500/30 rounded-2xl max-w-5xl w-full p-5 sm:p-6 shadow-2xl flex flex-col max-h-[92vh] overflow-hidden">
+  <div id="modal-acompanhamento-chamados" class="modal-overlay fixed inset-0 bg-slate-950/85 backdrop-blur-md hidden flex items-center justify-center p-4">
+    <div class="modal-panel bg-surface-overlay border border-cyan-500/30 rounded-2xl max-w-5xl w-full p-5 sm:p-6 shadow-2xl flex flex-col max-h-[92vh] overflow-hidden">
       <div class="flex items-start justify-between gap-4 pb-4 border-b border-slate-800 shrink-0"><div><h3 class="text-base font-bold text-white">Acompanhamento de Chamados</h3><p class="text-xs text-slate-400 mt-1">Importe as exportações da Simpress e do Oracle. As OS são relacionadas pelo número de série.</p></div><div class="ticket-header-actions"><a href="https://simpress.custhelp.com/AgentWeb/" target="_blank" rel="noopener noreferrer" class="ticket-agent-link ticket-agent-link--oracle" aria-label="Abrir portal Oracle AgentWeb" title="Abrir portal Oracle AgentWeb"><i data-lucide="link" aria-hidden="true"></i><span>Oracle</span></a><a href="https://ux.simpress.com.br/equipamentos/acompanhamento" target="_blank" rel="noopener noreferrer" class="ticket-agent-link ticket-agent-link--simpress" aria-label="Abrir acompanhamento de chamados Simpress" title="Abrir acompanhamento de chamados Simpress"><i data-lucide="link" aria-hidden="true"></i><span>Simpress</span></a><button type="button" data-on-click="fecharAcompanhamentoChamados" class="text-slate-400 hover:text-white p-1 rounded-lg hover:bg-slate-800" aria-label="Fechar acompanhamento de chamados"><i data-lucide="x" class="w-5 h-5"></i></button></div></div>
       <div id="conteudo-acompanhamento-chamados" role="region" aria-label="Conteúdo do acompanhamento de chamados" tabindex="0" class="min-h-0 flex-1 overflow-y-auto overscroll-contain focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-cyan-400/60">
       <div class="space-y-3 py-3">
@@ -1532,8 +1533,8 @@ Horário disponível para atendimento:</textarea>
   </div>
 
   <!-- HISTÓRICO DAS COMPARAÇÕES DE PLANILHAS -->
-  <div id="modal-historico-comparacoes" class="modal-overlay fixed inset-0 bg-slate-950/85 backdrop-blur-md z-[76] hidden flex items-center justify-center p-4">
-    <div class="bg-slate-900 border border-cyan-500/30 rounded-2xl max-w-5xl w-full p-6 shadow-2xl flex flex-col max-h-[92vh] overflow-hidden">
+  <div id="modal-historico-comparacoes" class="modal-overlay fixed inset-0 bg-slate-950/85 backdrop-blur-md hidden flex items-center justify-center p-4">
+    <div class="bg-surface-overlay border border-cyan-500/30 rounded-2xl max-w-5xl w-full p-6 shadow-2xl flex flex-col max-h-[92vh] overflow-hidden">
       <div class="flex flex-wrap items-center justify-between gap-4 pb-4 border-b border-slate-800 shrink-0">
         <div>
           <h3 class="text-base font-bold text-white flex items-center gap-2">
@@ -1570,8 +1571,8 @@ Horário disponível para atendimento:</textarea>
   </div>
 
   <!-- PESQUISA AMPLIADA DE EQUIPAMENTOS -->
-  <div id="modal-pesquisa-completa" class="modal-overlay fixed inset-0 bg-slate-950/85 backdrop-blur-md z-[100] hidden flex items-center justify-center p-4" data-on-click="fecharModalPesquisaCompleta" data-on-self-only>
-    <div class="modal-panel bg-slate-900 border border-cyan-500/30 rounded-2xl max-w-7xl w-full p-6 shadow-2xl flex flex-col max-h-[92vh] overflow-hidden">
+  <div id="modal-pesquisa-completa" class="modal-overlay fixed inset-0 bg-slate-950/85 backdrop-blur-md hidden flex items-center justify-center p-4" data-on-click="fecharModalPesquisaCompleta" data-on-self-only>
+    <div class="modal-panel bg-surface-overlay border border-cyan-500/30 rounded-2xl max-w-7xl w-full p-6 shadow-2xl flex flex-col max-h-[92vh] overflow-hidden">
       <div class="flex items-start justify-between gap-4 pb-4 border-b border-slate-800 shrink-0">
         <div class="min-w-0">
           <h3 class="text-base font-bold text-white flex items-center gap-2">
@@ -1621,7 +1622,7 @@ Horário disponível para atendimento:</textarea>
   </div>
 
   <!-- TOAST NOTIFICATION CONTAINER -->
-  <div id="toast-container" role="region" aria-label="Notificações" aria-live="polite" aria-relevant="additions text" aria-atomic="false" class="fixed top-24 right-6 z-[130] space-y-2 pointer-events-none"></div>
+  <div id="toast-container" role="region" aria-label="Notificações" aria-live="polite" aria-relevant="additions text" aria-atomic="false" class="fixed top-24 right-6 space-y-2 pointer-events-none"></div>
 
   <!-- JAVASCRIPT APPLICATION LOGIC -->
   <script src="/static/js/ui/action-dispatcher.js"></script>

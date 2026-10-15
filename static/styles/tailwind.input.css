@@ -16,6 +16,23 @@
   --default-ring-color: #3b82f6;
 }
 
+/* Semantic colors from tokens.css as utilities (bg-surface-raised, text-fg-muted, border-line…).
+   `inline` emits var(--surface…) directly, so they follow the active theme without the slate remap. */
+@theme inline {
+  --color-surface: var(--surface);
+  --color-surface-raised: var(--surface-raised);
+  --color-surface-sunken: var(--surface-sunken);
+  --color-surface-field: var(--surface-field);
+  --color-surface-overlay: var(--surface-overlay);
+  --color-fg: var(--text);
+  --color-fg-muted: var(--text-muted);
+  --color-line: var(--border);
+  --color-line-subtle: var(--border-subtle);
+  --color-line-strong: var(--border-strong);
+  --color-accent: var(--accent);
+  --color-danger: var(--danger);
+}
+
 @utility outline-none {
   outline: 2px solid transparent;
   outline-offset: 2px;

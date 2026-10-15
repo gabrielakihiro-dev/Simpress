@@ -1,0 +1,175 @@
+/*
+ * Design tokens — loaded right after Tailwind, before every component stylesheet.
+ * Dark is the default theme; html[data-theme="light"] redefines only token values,
+ * so components that use these tokens need no light-theme selectors of their own.
+ */
+
+/* A focus ring belongs to the focused element, never to its descendants. */
+@property --focus-shadow {
+  syntax: "*";
+  inherits: false;
+}
+
+:root {
+  /* ---------- Stacking scale ---------- */
+  --z-quick-actions: 30;
+  --z-header: 60;
+  --z-sidebar: 70;
+  --z-drawer-backdrop: 74;
+  --z-drawer: 75;
+  --z-dropdown: 80;
+  --z-popover: 100;
+  --z-overlay: 120;
+  --z-toast: 130;
+
+  /* ---------- Motion ---------- */
+  --motion-fast: 160ms;
+  --motion-normal: 220ms;
+  --motion-ease: cubic-bezier(0.22, 1, 0.36, 1);
+
+  /* ---------- Refinement layer tokens (ux-refinements.css) ---------- */
+  --ux-font-mono: "JetBrains Mono Variable", ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+
+  --ux-space-1: 0.25rem;
+  --ux-space-2: 0.5rem;
+  --ux-space-3: 0.75rem;
+  --ux-space-4: 1rem;
+  --ux-space-5: 1.5rem;
+  --ux-space-6: 2rem;
+
+  --ux-radius-sm: 0.375rem;
+  --ux-radius-md: 0.6rem;
+  --ux-radius-lg: 0.875rem;
+  --ux-radius-xl: 1.125rem;
+  --ux-radius-pill: 999px;
+
+  --ux-surface-0: #020617;
+  --ux-surface-1: #0f172a;
+  --ux-surface-2: #1e293b;
+  --ux-surface-subtle: rgba(15, 23, 42, 0.55);
+  --ux-border: rgba(148, 163, 184, 0.22);
+  --ux-border-strong: rgba(148, 163, 184, 0.42);
+  --ux-text: #f1f5f9;
+  --ux-text-muted: #a9b7c8;
+  --ux-accent: #38bdf8;
+
+  --ux-shadow-1: 0 1px 2px rgba(2, 6, 23, 0.35);
+  --ux-shadow-2: 0 6px 18px rgba(2, 6, 23, 0.32);
+  --ux-shadow-3: 0 18px 40px rgba(2, 6, 23, 0.46);
+
+  /* Status scale: success · pending · warning · critical · neutral */
+  --ux-success-fg: #6ee7b7;
+  --ux-success-bg: rgba(16, 185, 129, 0.14);
+  --ux-success-border: rgba(52, 211, 153, 0.5);
+  --ux-pending-fg: #7dd3fc;
+  --ux-pending-bg: rgba(14, 165, 233, 0.13);
+  --ux-pending-border: rgba(56, 189, 248, 0.45);
+  --ux-warning-fg: #fcd34d;
+  --ux-warning-bg: rgba(245, 158, 11, 0.13);
+  --ux-warning-border: rgba(251, 191, 36, 0.48);
+  --ux-critical-fg: #fda4af;
+  --ux-critical-bg: rgba(244, 63, 94, 0.13);
+  --ux-critical-border: rgba(251, 113, 133, 0.6);
+  --ux-critical-ring: rgba(244, 63, 94, 0.22);
+  --ux-neutral-fg: #cbd5e1;
+  --ux-neutral-bg: rgba(148, 163, 184, 0.1);
+  --ux-neutral-border: rgba(148, 163, 184, 0.3);
+
+  --ux-cta-bg: #0369a1;
+  --ux-cta-bg-hover: #075985;
+  --ux-cta-fg: #ffffff;
+  --ux-cta-border: rgba(125, 211, 252, 0.7);
+
+  --ux-table-head-bg: #020617;
+  --ux-table-stripe: rgba(148, 163, 184, 0.045);
+  --ux-table-hover: rgba(56, 189, 248, 0.09);
+
+  /* ---------- Semantic tokens ----------
+   * Components use these instead of Tailwind palette colors, so the light theme
+   * no longer depends on remapping --color-slate-* (see theme.css). They are also
+   * exposed as utilities (bg-surface-raised, text-text-muted, border-border…) in
+   * tailwind.input.css for markup that moves off the slate scale. */
+  --surface: #020617;
+  --surface-raised: rgba(30, 41, 59, 0.7);
+  --surface-sunken: rgba(15, 23, 42, 0.6);
+  --surface-field: rgba(15, 23, 42, 0.8);
+  --surface-header: rgba(7, 13, 26, 0.84);
+  --surface-overlay: oklch(0.208 0.042 265.755); /* Tailwind slate-900, the dialog panel color */
+  --text: var(--ux-text);
+  --text-muted: #a9b7c8;
+  --border: rgba(255, 255, 255, 0.08);
+  --border-subtle: rgba(255, 255, 255, 0.06);
+  --border-strong: var(--ux-border-strong);
+  --border-chrome: rgba(148, 163, 184, 0.13);
+  --accent: #38a9f7;
+  --accent-ring: rgba(56, 169, 247, 0.2);
+  --accent-solid: var(--ux-cta-bg);
+  --accent-solid-hover: #0284c7;
+  --danger: var(--ux-critical-fg);
+  --danger-solid: #be123c;
+  --danger-solid-hover: #e11d48;
+}
+
+html[data-theme="light"] {
+  --ux-surface-0: #ffffff;
+  --ux-surface-1: #f8fafc;
+  --ux-surface-2: #f1f5f9;
+  --ux-surface-subtle: #f8fafc;
+  --ux-border: #e2e8f0;
+  --ux-border-strong: #cbd5e1;
+  --ux-text: #0f172a;
+  --ux-text-muted: #475569;
+  --ux-accent: #0284c7;
+
+  --ux-shadow-1: 0 1px 2px rgba(15, 23, 42, 0.08);
+  --ux-shadow-2: 0 6px 16px rgba(15, 23, 42, 0.08);
+  --ux-shadow-3: 0 16px 36px rgba(15, 23, 42, 0.14);
+
+  --ux-success-fg: #047857;
+  --ux-success-bg: #ecfdf5;
+  --ux-success-border: #6ee7b7;
+  --ux-pending-fg: #075985;
+  --ux-pending-bg: #f0f9ff;
+  --ux-pending-border: #7dd3fc;
+  --ux-warning-fg: #92400e;
+  --ux-warning-bg: #fffbeb;
+  --ux-warning-border: #fcd34d;
+  --ux-critical-fg: #be123c;
+  --ux-critical-bg: #fff1f2;
+  --ux-critical-border: #fb7185;
+  --ux-critical-ring: rgba(225, 29, 72, 0.16);
+  --ux-neutral-fg: #475569;
+  --ux-neutral-bg: #f1f5f9;
+  --ux-neutral-border: #cbd5e1;
+
+  --ux-cta-border: #0369a1;
+
+  --ux-table-head-bg: #f1f5f9;
+  --ux-table-stripe: rgba(15, 23, 42, 0.028);
+  --ux-table-hover: rgba(2, 132, 199, 0.07);
+
+  --surface: #f1f5f9;
+  --surface-raised: #ffffff;
+  --surface-sunken: #f8fafc;
+  --surface-field: #ffffff;
+  --surface-header: rgba(255, 255, 255, 0.92);
+  --surface-overlay: #f8fafc;
+  --text-muted: #64748b;
+  --border: #dbe4ef;
+  --border-subtle: #e2e8f0;
+  --border-chrome: #dbe4ef;
+  --accent: #0284c7;
+  --accent-ring: rgba(2, 132, 199, 0.18);
+}
+
+/* Components consume these timings instead of overriding the user's preference. */
+@media (prefers-reduced-motion: reduce) {
+  :root {
+    --motion-duration: 0.01ms;
+    --motion-fast: 0.01ms;
+    --motion-normal: 0.01ms;
+    --default-transition-duration: 0.01ms;
+    --animate-spin: spin 0.01ms linear 1;
+    --animate-pulse: pulse 0.01ms ease 1;
+  }
+}
