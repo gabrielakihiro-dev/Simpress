@@ -3306,7 +3306,9 @@ class WorkflowIntegrityTests(unittest.TestCase):
         self.assertEqual(latest_event["apelido_novo"], "ALIAS-MANUAL")
 
         undone = main.desfazer_alteracao_apelido(main.ApelidoUndoPayload(evento_id=latest_event["id"]))
-        self.assertEqual(undone["equipamento"]["apelido"], "ALIAS-ORIGINAL")
+        # Sem override antes da edição, o desfazer remove o override e o hostname do Endpoint volta a valer.
+        self.assertEqual(undone["equipamento"]["apelido"], "HOST-INVALL")
+        self.assertEqual(main.load_modified_apelidos(), {})
         self.assertEqual(len(json.loads(self.manual_history.read_text(encoding="utf-8"))), 3)
         self.assertEqual(json.loads(self.comparison_history.read_text(encoding="utf-8")), [{"id": "planilha-antiga"}])
         saved_details = openpyxl.load_workbook(self.details, data_only=True)
@@ -3322,6 +3324,86 @@ class WorkflowIntegrityTests(unittest.TestCase):
         self.assertEqual(raised.exception.status_code, 409)
         self.assertEqual(self.details.read_bytes(), details_before_stale_undo)
         self.assertEqual(main.load_modified_apelidos(), {"SN-1": "VALOR-EXTERNO"})
+
+    def _prepare_alias_undo_fixture(self, manual_history=None):
+        make_details(self.details, [("SN-1", "ALIAS-ORIGINAL", "Modelo A", "Maringá", "Notebook", "87000000")])
+        make_endpoint(self.endpoint, [("SN-1", "HOST-INVALL")])
+        make_model(self.model)
+        self.comparison_history.write_text("[]", encoding="utf-8")
+        if manual_history is not None:
+            self.manual_history.write_text(json.dumps(manual_history), encoding="utf-8")
+
+    def test_undo_without_previous_override_removes_override_and_restores_endpoint_hostname(self):
+        self._prepare_alias_undo_fixture()
+        self.assertTrue(main.load_database())
+        self.assertEqual(main.equipamentos_cache["SN-1"]["apelido"], "HOST-INVALL")
+
+        main.atualizar_apelido(main.ApelidoUpdatePayload(serial="SN-1", apelido="ALIAS-MANUAL"))
+        edit_event = json.loads(self.manual_history.read_text(encoding="utf-8"))[-1]
+        self.assertIs(edit_event["tinha_override"], False)
+        self.assertEqual(main.load_modified_apelidos(), {"SN-1": "ALIAS-MANUAL"})
+
+        undone = main.desfazer_alteracao_apelido(main.ApelidoUndoPayload(evento_id=edit_event["id"]))
+
+        self.assertEqual(main.load_modified_apelidos(), {})
+        self.assertEqual(undone["equipamento"]["apelido"], "HOST-INVALL")
+        self.assertFalse(main.equipamentos_cache["SN-1"]["_apelido_manual_override"])
+        undo_event = json.loads(self.manual_history.read_text(encoding="utf-8"))[-1]
+        self.assertEqual(undo_event["acao"], "desfazer")
+        self.assertEqual(undo_event["apelido_anterior"], "ALIAS-MANUAL")
+        self.assertEqual(undo_event["apelido_novo"], "ALIAS-ORIGINAL")
+        self.assertIs(undo_event["tinha_override"], True)
+
+        # Um novo hostname no Endpoint passa a valer, porque não sobrou override manual.
+        make_endpoint(self.endpoint, [("SN-1", "HOST-INVALL-NOVO")])
+        self.assertTrue(main.load_database())
+        self.assertEqual(main.equipamentos_cache["SN-1"]["apelido"], "HOST-INVALL-NOVO")
+
+    def test_undo_with_previous_override_restores_that_override(self):
+        self._prepare_alias_undo_fixture()
+        self.overrides.write_text(json.dumps({"SN-1": "MANUAL-ANTIGO"}), encoding="utf-8")
+        self.assertTrue(main.load_database())
+        self.assertEqual(main.equipamentos_cache["SN-1"]["apelido"], "MANUAL-ANTIGO")
+
+        main.atualizar_apelido(main.ApelidoUpdatePayload(serial="SN-1", apelido="MANUAL-NOVO"))
+        edit_event = json.loads(self.manual_history.read_text(encoding="utf-8"))[-1]
+        self.assertIs(edit_event["tinha_override"], True)
+
+        undone = main.desfazer_alteracao_apelido(main.ApelidoUndoPayload(evento_id=edit_event["id"]))
+
+        self.assertEqual(main.load_modified_apelidos(), {"SN-1": "MANUAL-ANTIGO"})
+        self.assertEqual(undone["equipamento"]["apelido"], "MANUAL-ANTIGO")
+
+    def test_undo_of_event_without_override_marker_keeps_legacy_behavior(self):
+        legacy_event = {
+            "id": "evento-legado",
+            "tipo": "apelido",
+            "serial": "SN-1",
+            "apelido_anterior": "ALIAS-ORIGINAL",
+            "apelido_novo": "ALIAS-MANUAL",
+            "horario": "2026-10-01T10:00:00-03:00",
+        }
+        self._prepare_alias_undo_fixture(manual_history=[legacy_event])
+        self.overrides.write_text(json.dumps({"SN-1": "ALIAS-MANUAL"}), encoding="utf-8")
+        self.assertTrue(main.load_database())
+
+        undone = main.desfazer_alteracao_apelido(main.ApelidoUndoPayload(evento_id="evento-legado"))
+
+        self.assertEqual(main.load_modified_apelidos(), {"SN-1": "ALIAS-ORIGINAL"})
+        self.assertEqual(undone["equipamento"]["apelido"], "ALIAS-ORIGINAL")
+
+    def test_deleting_latest_alias_event_without_previous_override_removes_override(self):
+        self._prepare_alias_undo_fixture()
+        self.assertTrue(main.load_database())
+        main.atualizar_apelido(main.ApelidoUpdatePayload(serial="SN-1", apelido="ALIAS-MANUAL"))
+        edit_event = json.loads(self.manual_history.read_text(encoding="utf-8"))[-1]
+
+        restored = main.excluir_evento_historico_apelido(edit_event["id"])
+
+        self.assertEqual(main.load_modified_apelidos(), {})
+        self.assertEqual(restored["equipamento"]["apelido"], "HOST-INVALL")
+        remaining_ids = [item["id"] for item in json.loads(self.manual_history.read_text(encoding="utf-8"))]
+        self.assertNotIn(edit_event["id"], remaining_ids)
 
     def test_address_history_restoration_remains_rejected_without_mutation(self):
         make_details(self.details, [

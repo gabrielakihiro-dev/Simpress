@@ -327,10 +327,11 @@ def build_alias_change_entry(
     new_alias: str,
     action: str = "alteracao",
     reference_id: Optional[str] = None,
+    had_override: Optional[bool] = None,
 ) -> Dict[str, Any]:
     with STATE_LOCK:
         equipment = dict(equipamentos_cache.get(serial, {}))
-    return {
+    entry = {
         "id": uuid.uuid4().hex,
         "tipo": "apelido",
         "serial": serial,
@@ -341,6 +342,10 @@ def build_alias_change_entry(
         "acao": action,
         "referencia_id": reference_id,
     }
+    if had_override is not None:
+        # Undo needs to know whether to restore a value or drop the override again.
+        entry["tinha_override"] = had_override
+    return entry
 
 def _equipment_revision(serial: Any, modelo: Any, tipo: Any, apelido: Any, id_cliente: Any) -> str:
     values = []
@@ -2362,7 +2367,9 @@ def aplicar_alteracao_apelido(
     expected_current_local: Optional[str] = None,
     expected_latest_event_id: Optional[str] = None,
     remove_history_event_id: Optional[str] = None,
+    drop_override: bool = False,
 ) -> Dict[str, Any]:
+    """Save a manual alias, or with ``drop_override`` remove it so the sources apply again."""
     with STATE_LOCK:
         initial_equipment = equipamentos_cache.get(target_serial)
         initial_equipment = dict(initial_equipment) if initial_equipment is not None else None
@@ -2424,6 +2431,9 @@ def aplicar_alteracao_apelido(
                 )
 
             apelido_anterior = str(equipamento.get("_apelido_local", equipamento.get("_apelido_base", "")) or "").strip()
+            had_override = bool(equipamento.get("_apelido_manual_override"))
+            if drop_override:
+                novo_apelido = str(equipamento.get("_apelido_base", "") or "").strip()
             history_will_change = (apelido_anterior != novo_apelido and registrar_historico) or bool(remove_history_event_id)
             if expected_latest_event_id:
                 current_history = load_alias_history()
@@ -2455,7 +2465,8 @@ def aplicar_alteracao_apelido(
                     )
                 for key in matching_keys:
                     aliases.pop(key, None)
-                aliases[target_serial] = novo_apelido
+                if not drop_override:
+                    aliases[target_serial] = novo_apelido
                 return aliases
 
             transaction.update_json(MODIFIED_APELIDOS_FILE, update_overrides, {})
@@ -2469,13 +2480,15 @@ def aplicar_alteracao_apelido(
                         if len(updated) == len(history):
                             raise HTTPException(status_code=409, detail="O registro foi alterado por outra ação; atualize o histórico e tente novamente.")
                     if apelido_anterior != novo_apelido and registrar_historico:
-                        updated.append(build_alias_change_entry(target_serial, apelido_anterior, novo_apelido, action, reference_id))
+                        updated.append(build_alias_change_entry(
+                            target_serial, apelido_anterior, novo_apelido, action, reference_id, had_override,
+                        ))
                     return updated
                 transaction.update_json(ALIAS_HISTORY_FILE, update_history, [])
 
             updated_equipment = dict(equipamento)
             updated_equipment["_apelido_local"] = novo_apelido
-            updated_equipment["_apelido_manual_override"] = True
+            updated_equipment["_apelido_manual_override"] = not drop_override
             _apply_effective_alias(
                 updated_equipment,
                 read_endpoint_alias_index(),
@@ -2578,6 +2591,7 @@ def excluir_evento_historico_apelido(evento_id: str):
         expected_current_local=apelido_novo,
         expected_latest_event_id=evento_id,
         remove_history_event_id=evento_id,
+        drop_override=evento.get("tinha_override") is False,
     )
     equipamento_restaurado = resultado["equipamento"]
 
@@ -2626,6 +2640,7 @@ def desfazer_alteracao_apelido(payload: ApelidoUndoPayload):
         reference_id=evento["id"],
         expected_current_local=apelido_evento,
         expected_latest_event_id=evento["id"],
+        drop_override=evento.get("tinha_override") is False,
     )
     return {
         "sucesso": True,
