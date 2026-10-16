@@ -1271,7 +1271,8 @@ test("shows Simpress product and city while gating delivery address by order sta
   assert.match(activeSummary, /Fila: Fila A/);
   assert.match(activeSummary, /Cidade: Curitiba/);
   assert.match(activeSummary, /Atendimento: Simpress/);
-  assert.match(activeSummary, /Atualização: Sem atualização há/);
+  assert.doesNotMatch(activeSummary, /Atualização:/);
+  assert.match(activeSummary, /title="Sem atualização há[^"]*">Sem atualização há/);
   assert.doesNotMatch(activeSummary, /Descrição do produto|Endereço de entrega|Série em/);
   assert.doesNotMatch(activeSummary, /REQ-77|R Caeté/);
   assert.match(activeCard, /data-ticket-section="details"/);
@@ -1308,6 +1309,10 @@ test("shows Simpress product and city while gating delivery address by order sta
   assert.match(deliveredCard, /ticket-stage is-forecast[^>]*>.*?Previsão de entrega.*?15\/09\/2026/s);
   assert.match(deliveredCard, /Chamado do cliente: INC-77/);
   assert.doesNotMatch(deliveredCard, /Endereço de entrega:/);
+  const deliveredSummary = deliveredCard.split('<details class="ticket-disclosure mt-3')[0];
+  assert.match(deliveredSummary, /OS Oracle<\/span><strong class="is-empty">Sem OS<\/strong>/);
+  assert.doesNotMatch(deliveredSummary.replace(/<details[\s\S]*?<\/details>/, ""), /Não informad|Fila:|<b>Oracle<\/b>/);
+  assert.match(activeCard, /<details class="ticket-disclosure ticket-stages-disclosure[^"]*" data-ticket-section="stages"><summary[^>]*>Etapas do pedido/);
 });
 
 test("sorts ticket cards by descending OS and leaves tickets without an OS at the end", () => {
