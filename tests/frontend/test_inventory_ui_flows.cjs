@@ -1196,7 +1196,11 @@ test("imports Simpress and Oracle files and displays the serial-to-OS reconcilia
   assert.match(ticketCards, /OS conferida/);
   assert.match(ticketCards, /7285070/);
   assert.match(ticketCards, /REQ-1/);
-  assert.match(ticketCards, /text-lg font-bold leading-none text-violet-100/);
+  // The current Oracle OS is highlighted only once, at the top of the card.
+  assert.doesNotMatch(ticketCards, /text-lg font-bold leading-none text-violet-100/);
+  assert.equal((ticketCards.match(/<strong>7285070<\/strong>/g) || []).length, 2);
+  assert.match(ticketCards, /class="ticket-oracle-request"[\s\S]*Solicitação REQ-1[\s\S]*OS <span class="font-mono text-slate-200">7285070/);
+  assert.doesNotMatch(ticketCards, /<section class="[^"]*rounded-lg border/);
   assert.match(ticketCards, /class="ticket-card-identifier border border-cyan/);
   assert.match(ticketCards, /class="ticket-card-identifier border border-violet/);
   assert.equal(modal.id, "modal-acompanhamento-chamados");
@@ -1271,7 +1275,8 @@ test("shows Simpress product and city while gating delivery address by order sta
   assert.match(activeSummary, /Fila: Fila A/);
   assert.match(activeSummary, /Cidade: Curitiba/);
   assert.match(activeSummary, /Atendimento: Simpress/);
-  assert.match(activeSummary, /Atualização: Sem atualização há/);
+  assert.doesNotMatch(activeSummary, /Atualização:/);
+  assert.match(activeSummary, /title="Sem atualização há[^"]*">Sem atualização há/);
   assert.doesNotMatch(activeSummary, /Descrição do produto|Endereço de entrega|Série em/);
   assert.doesNotMatch(activeSummary, /REQ-77|R Caeté/);
   assert.match(activeCard, /data-ticket-section="details"/);
@@ -1291,7 +1296,12 @@ test("shows Simpress product and city while gating delivery address by order sta
   assert.match(oracleCards, /Atendido pela inibição: Não/);
   assert.match(oracleCards, /Atendimento por: SIMPRESS - PR/);
   assert.ok(oracleCards.includes(`Atualizado ${harness.run('formatarHorarioHistorico("09/10/2026 14:15")')}`));
-  assert.match(cards, /<details class="ticket-oracle-description">/);
+  assert.match(cards, /<details class="ticket-oracle-description"><summary class="text-xs">/);
+  // The description summary uses the same 12px scale as the other summaries in the card.
+  const descriptionSummaryCss = appCss.match(/\.ticket-oracle-description > summary \{([^}]*)\}/)[1];
+  assert.match(descriptionSummaryCss, /font-size: 0\.75rem;/);
+  assert.doesNotMatch(descriptionSummaryCss, /min-height/);
+  assert.doesNotMatch(cards, /text-\[(9|10)px\]/);
   assert.match(cards, /Descrição do chamado/);
   assert.match(cards, /⌄ Expandir/);
   assert.ok(cards.includes("&lt;script&gt;alert(&#039;x&#039;)&lt;/script&gt;"));
@@ -1308,6 +1318,10 @@ test("shows Simpress product and city while gating delivery address by order sta
   assert.match(deliveredCard, /ticket-stage is-forecast[^>]*>.*?Previsão de entrega.*?15\/09\/2026/s);
   assert.match(deliveredCard, /Chamado do cliente: INC-77/);
   assert.doesNotMatch(deliveredCard, /Endereço de entrega:/);
+  const deliveredSummary = deliveredCard.split('<details class="ticket-disclosure mt-3')[0];
+  assert.match(deliveredSummary, /OS Oracle<\/span><strong class="is-empty">Sem OS<\/strong>/);
+  assert.doesNotMatch(deliveredSummary.replace(/<details[\s\S]*?<\/details>/, ""), /Não informad|Fila:|<b>Oracle<\/b>/);
+  assert.match(activeCard, /<details class="ticket-disclosure ticket-stages-disclosure[^"]*" data-ticket-section="stages"><summary[^>]*>Etapas do pedido/);
 });
 
 test("sorts ticket cards by descending OS and leaves tickets without an OS at the end", () => {
@@ -1411,6 +1425,66 @@ test("keeps city, queue, and provider visible in ticket cards without advanced f
   assert.match(harness.element("triagem-diaria-acompanhamento-chamados").innerHTML, /3\+ dias/);
   assert.match(appScript, /carregarLinhaDoTempoChamado/);
   assert.match(appScript, /HistoryAnnotationAutosave\.attachAnnotationAutosave/);
+});
+
+test("filters tickets by daily triage indicator while counting the whole import", () => {
+  const harness = createAppHarness(async () => apiResponse({}));
+  const localDate = offset => {
+    const date = new Date();
+    date.setDate(date.getDate() - offset);
+    return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, "0")}-${String(date.getDate()).padStart(2, "0")}`;
+  };
+  harness.context.ticketTestReport = {
+    fontes: {}, resumo: { series_total: 5 },
+    chamados: [
+      { serie: "SN-FRESCA", relacao: "conferida", simpress: {}, oracle: [{ status: "Em execução", ultima_atualizacao: localDate(0) }] },
+      { serie: "SN-ATRASADA", relacao: "conferida", simpress: {}, oracle: [{ status: "Em execução", ultima_atualizacao: localDate(5) }] },
+      { serie: "SN-SEM-DATA", relacao: "conferida", simpress: {}, oracle: [{ status: "Em execução" }] },
+      { serie: "SN-FECHADA", relacao: "conferida", simpress: {}, oracle: [{ status: "Concluído", ultima_atualizacao: localDate(9) }] },
+      { serie: "SN-SOMENTE-SIMPRESS", relacao: "somente_simpress", simpress: {}, oracle: [] },
+    ],
+  };
+  harness.run("SimpressApp.state.acompanhamentoChamadosAtual = ticketTestReport; renderizarAcompanhamentoChamados()");
+  const triage = () => harness.element("triagem-diaria-acompanhamento-chamados").innerHTML;
+  const cards = () => harness.element("lista-acompanhamento-chamados").innerHTML;
+  const button = key => triage().match(new RegExp(`<button[^>]*data-ticket-triage-filter="${key}"[^>]*>`))[0];
+
+  assert.match(triage(), /3 ativos de 5 séries · 2 sem chamado aberto no Oracle/);
+  assert.match(button("ativos"), /aria-label="Chamados ativos: 3"/);
+  assert.match(button("atrasados"), /aria-label="Sem atualização há 3\+ dias: 1"/);
+  assert.match(button("sem_data"), /aria-label="Sem data de atualização: 1"/);
+  assert.match(button("em_dia"), /aria-label="Atualizados há menos de 3 dias: 1"/);
+  ["ativos", "atrasados", "sem_data", "em_dia"].forEach(key => {
+    assert.match(button(key), /type="button"/);
+    assert.match(button(key), /aria-pressed="false"/);
+    assert.match(button(key), /data-on-click="filtrarTriagemChamados"/);
+  });
+  assert.doesNotMatch(triage(), /text-\[(9|10)px\]/);
+
+  harness.run('filtrarTriagemChamados("atrasados")');
+  assert.match(button("atrasados"), /aria-pressed="true"/);
+  assert.match(button("ativos"), /aria-pressed="false"/);
+  assert.match(cards(), /SN-ATRASADA/);
+  assert.doesNotMatch(cards(), /SN-FRESCA|SN-SEM-DATA|SN-FECHADA|SN-SOMENTE-SIMPRESS/);
+  assert.match(harness.element("contagem-acompanhamento-chamados").textContent, /Exibindo 1 de 5 séries/);
+  assert.match(button("ativos"), /aria-label="Chamados ativos: 3"/, "counts ignore the active filter");
+
+  harness.run('filtrarTriagemChamados("ativos")');
+  ["SN-FRESCA", "SN-ATRASADA", "SN-SEM-DATA"].forEach(serial => assert.ok(cards().includes(serial), serial));
+  assert.doesNotMatch(cards(), /SN-FECHADA|SN-SOMENTE-SIMPRESS/);
+  harness.element("filtro-acompanhamento-chamados").value = "FRESCA";
+  harness.run("renderizarAcompanhamentoChamados()");
+  assert.match(cards(), /SN-FRESCA/);
+  assert.doesNotMatch(cards(), /SN-ATRASADA|SN-SEM-DATA/);
+  assert.match(button("ativos"), /aria-label="Chamados ativos: 3"/, "counts ignore the search");
+
+  harness.run('filtrarTriagemChamados("ativos")');
+  assert.match(button("ativos"), /aria-pressed="false"/);
+  harness.run('filtrarTriagemChamados("sem_data")');
+  harness.run("limparFiltrosAcompanhamentoChamados()");
+  assert.equal(harness.run("SimpressApp.state.filtroTriagemChamados"), "");
+  assert.match(cards(), /SN-FECHADA/);
+  assert.match(appCss, /\.ticket-triage-filter\[aria-pressed="true"\]/);
 });
 
 test("clears the remaining ticket search and attention filters", () => {

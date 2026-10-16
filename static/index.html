@@ -1476,13 +1476,13 @@ Horário disponível para atendimento:</textarea>
   <!-- ACOMPANHAMENTO DE CHAMADOS -->
   <div id="modal-acompanhamento-chamados" class="modal-overlay fixed inset-0 bg-slate-950/85 backdrop-blur-md hidden flex items-center justify-center p-4">
     <div class="modal-panel bg-surface-overlay border border-cyan-500/30 rounded-2xl max-w-5xl w-full p-5 sm:p-6 shadow-2xl flex flex-col max-h-[92vh] overflow-hidden">
-      <div class="flex items-start justify-between gap-4 pb-4 border-b border-slate-800 shrink-0"><div><h3 class="text-base font-bold text-white">Acompanhamento de Chamados</h3><p class="text-xs text-slate-400 mt-1">Importe as exportações da Simpress e do Oracle. As OS são relacionadas pelo número de série.</p></div><div class="ticket-header-actions"><a href="https://simpress.custhelp.com/AgentWeb/" target="_blank" rel="noopener noreferrer" class="ticket-agent-link ticket-agent-link--oracle" aria-label="Abrir portal Oracle AgentWeb" title="Abrir portal Oracle AgentWeb"><i data-lucide="link" aria-hidden="true"></i><span>Oracle</span></a><a href="https://ux.simpress.com.br/equipamentos/acompanhamento" target="_blank" rel="noopener noreferrer" class="ticket-agent-link ticket-agent-link--simpress" aria-label="Abrir acompanhamento de chamados Simpress" title="Abrir acompanhamento de chamados Simpress"><i data-lucide="link" aria-hidden="true"></i><span>Simpress</span></a><button type="button" data-on-click="fecharAcompanhamentoChamados" class="text-slate-400 hover:text-white p-1 rounded-lg hover:bg-slate-800" aria-label="Fechar acompanhamento de chamados"><i data-lucide="x" class="w-5 h-5"></i></button></div></div>
+      <div class="ticket-modal-header flex items-start justify-between gap-4 pb-4 border-b border-slate-800 shrink-0"><div class="min-w-0"><h3 class="text-base font-bold text-white">Acompanhamento de Chamados</h3><p class="text-xs text-slate-400 mt-1">OS da Simpress e do Oracle relacionadas pelo número de série.</p></div><div class="ticket-header-actions"><a href="https://simpress.custhelp.com/AgentWeb/" target="_blank" rel="noopener noreferrer" class="ticket-agent-link ticket-agent-link--oracle" aria-label="Abrir portal Oracle AgentWeb" title="Abrir portal Oracle AgentWeb"><i data-lucide="link" aria-hidden="true"></i><span>Oracle</span></a><a href="https://ux.simpress.com.br/equipamentos/acompanhamento" target="_blank" rel="noopener noreferrer" class="ticket-agent-link ticket-agent-link--simpress" aria-label="Abrir acompanhamento de chamados Simpress" title="Abrir acompanhamento de chamados Simpress"><i data-lucide="link" aria-hidden="true"></i><span>Simpress</span></a><button type="button" data-on-click="fecharAcompanhamentoChamados" class="text-slate-400 hover:text-white p-1 rounded-lg hover:bg-slate-800" aria-label="Fechar acompanhamento de chamados"><i data-lucide="x" class="w-5 h-5"></i></button></div></div>
       <div id="conteudo-acompanhamento-chamados" role="region" aria-label="Conteúdo do acompanhamento de chamados" tabindex="0" class="min-h-0 flex-1 overflow-y-auto overscroll-contain focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-cyan-400/60">
       <div class="space-y-3 py-3">
         <details id="painel-dados-acompanhamento-chamados" class="ticket-disclosure rounded-lg border border-slate-800 bg-slate-950/50 px-3 py-2">
           <summary class="ticket-disclosure-summary flex min-h-9 items-center justify-between gap-3 text-xs font-semibold text-slate-200">
             <span>Importação e histórico</span>
-            <span id="versao-atual-acompanhamento-chamados" class="min-w-0 truncate text-right text-[10px] font-normal text-slate-500">Nenhuma importação</span>
+            <span id="versao-atual-acompanhamento-chamados" class="min-w-0 truncate text-right text-[11px] font-normal text-slate-500">Nenhuma importação</span>
           </summary>
           <div class="space-y-3 pt-3">
             <form id="form-importar-acompanhamento-chamados" class="grid grid-cols-1 gap-3 border-b border-slate-800 pb-3 md:grid-cols-[1fr_1fr_auto] md:items-end">
@@ -1503,8 +1503,8 @@ Horário disponível para atendimento:</textarea>
                 </div>
               </div>
               <button id="btn-importar-acompanhamento-chamados" type="submit" class="rounded-lg border border-cyan-400/30 bg-cyan-500/15 px-4 py-2.5 text-xs font-semibold text-cyan-100 hover:bg-cyan-500/25 md:mb-2">Importar planilhas</button>
-              <p id="arquivo-chamados-simpress-ajuda" class="text-[10px] text-slate-500 md:col-span-3">Simpress aceita .xlsx ou ZIP com uma única planilha .xlsx.</p>
-              <p id="status-importacao-chamados" class="text-[10px] text-slate-400 md:col-span-3" role="status" aria-live="polite"></p>
+              <p id="arquivo-chamados-simpress-ajuda" class="text-[11px] text-slate-500 md:col-span-3">Simpress aceita .xlsx ou ZIP com uma única planilha .xlsx.</p>
+              <p id="status-importacao-chamados" class="text-[11px] text-slate-400 md:col-span-3" role="status" aria-live="polite"></p>
             </form>
             <div id="resumo-acompanhamento-chamados" class="shrink-0"></div>
             <div class="grid grid-cols-1 gap-2 md:grid-cols-[minmax(0,1fr)_auto]">
@@ -1518,14 +1518,14 @@ Horário disponível para atendimento:</textarea>
           </div>
         </details>
         <div class="ticket-filter-toolbar">
-          <label for="filtro-acompanhamento-chamados" class="ticket-filter-search text-xs text-slate-300">Buscar série, pedido, OS ou status<input id="filtro-acompanhamento-chamados" type="search" autocomplete="off" class="mt-1 block w-full rounded-lg border border-slate-700 bg-slate-950 px-3 py-2 text-sm text-white placeholder:text-slate-500" placeholder="Digite para filtrar os chamados"></label>
+          <label for="filtro-acompanhamento-chamados" class="ticket-filter-search text-xs text-slate-300"><span class="sr-only">Buscar série, pedido, OS ou status</span><input id="filtro-acompanhamento-chamados" type="search" autocomplete="off" class="block w-full rounded-lg border border-slate-700 bg-slate-950 px-3 py-2 text-sm text-white placeholder:text-slate-500" placeholder="Buscar série, pedido, OS ou status"></label>
           <label title="Chamados ativos sem data ou com três dias ou mais sem atualização" class="ticket-filter-attention border border-amber-400/20 bg-amber-500/5 text-xs text-amber-100"><input id="somente-atencao-chamados" type="checkbox" class="accent-amber-400">Atenção · 3+ dias</label>
           <button type="button" id="btn-exportar-acompanhamento-chamados" class="ticket-filter-action ticket-filter-export rounded-lg border border-emerald-400/30 bg-emerald-500/15 text-xs font-semibold text-emerald-100 hover:bg-emerald-500/25 disabled:cursor-not-allowed disabled:opacity-50" data-on-click="exportarAcompanhamentoChamados" disabled>Exportar Excel</button>
           <button type="button" class="ticket-filter-action ticket-filter-clear rounded-lg border border-slate-700 text-xs text-slate-300 hover:bg-slate-800" data-on-click="limparFiltrosAcompanhamentoChamados">Limpar filtros</button>
         </div>
       </div>
-      <div id="triagem-diaria-acompanhamento-chamados" class="shrink-0 pb-2" aria-live="polite"></div>
-      <p id="contagem-acompanhamento-chamados" class="shrink-0 text-[10px] text-slate-500" role="status" aria-live="polite"></p>
+      <div id="triagem-diaria-acompanhamento-chamados" class="shrink-0 pb-2"></div>
+      <p id="contagem-acompanhamento-chamados" class="shrink-0 text-[11px] text-slate-500" role="status" aria-live="polite"></p>
       <div id="lista-acompanhamento-chamados" aria-live="polite" class="space-y-3 py-2"></div>
       </div>
       <div class="pt-3 border-t border-slate-800 flex justify-end shrink-0"><button type="button" data-on-click="fecharAcompanhamentoChamados" class="px-4 py-2 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-300 text-xs">Fechar</button></div>
