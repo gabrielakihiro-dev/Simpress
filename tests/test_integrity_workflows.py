@@ -884,6 +884,61 @@ class WorkflowIntegrityTests(unittest.TestCase):
         workbook.close()
         self.assertEqual(main.get_equipamento("SN-CLEAR")["modelo"], "")
 
+    def test_cache_reloads_after_another_process_replaces_the_active_files(self):
+        make_details(self.details, [
+            ("SN-EXTERNO", "ALIAS-EXTERNO", "Modelo antes", "Maringá", "Notebook", "87000000"),
+        ])
+        make_endpoint(self.endpoint, [("SN-OUTRO", "HOST-OUTRO")])
+        make_model(self.model)
+        self.assertTrue(main.load_database())
+        self.assertFalse(main.reload_database_if_changed_externally())
+
+        # An in-process edit publishes its own state and must not trigger a reload.
+        main.aplicar_alteracao_apelido("SN-EXTERNO", "MANUAL-LOCAL")
+        with patch.object(main, "load_database", side_effect=AssertionError("recarga desnecessária")):
+            self.assertFalse(main.reload_database_if_changed_externally())
+
+        # The inbox script running in another process rewrites the workbook.
+        make_details(self.details, [
+            ("SN-EXTERNO", "ALIAS-EXTERNO", "Modelo depois", "Maringá", "Notebook", "87000000"),
+            ("SN-NOVO-EXTERNO", "ALIAS-NOVO", "Modelo novo", "Maringá", "Notebook", "87000000"),
+        ])
+        later = time.time() + 5
+        os.utime(self.details, (later, later))
+        self.assertEqual(main.equipamentos_cache["SN-EXTERNO"]["modelo"], "Modelo antes")
+
+        self.assertTrue(main.reload_database_if_changed_externally())
+
+        self.assertEqual(main.equipamentos_cache["SN-EXTERNO"]["modelo"], "Modelo depois")
+        self.assertIn("SN-NOVO-EXTERNO", main.equipamentos_cache)
+        self.assertEqual(main.equipamentos_cache["SN-EXTERNO"]["apelido"], "MANUAL-LOCAL")
+        self.assertFalse(main.reload_database_if_changed_externally())
+
+    def test_equipment_text_starting_with_formula_marker_is_saved_as_literal_text(self):
+        make_details(self.details, [
+            ("SN-FORMULA", "ALIAS-FORMULA", "Modelo original", "Maringá", "Notebook", "87000000"),
+        ])
+        make_endpoint(self.endpoint, [("SN-OUTRO", "HOST-OUTRO")])
+        make_model(self.model)
+        self.assertTrue(main.load_database())
+        selected = main.get_equipamento("SN-FORMULA")
+        payload_text = '=HYPERLINK("http://example.invalid","abrir")'
+
+        result = main.salvar_equipamento(main.EquipamentoUpdatePayload(
+            serial="SN-FORMULA",
+            revisao=selected["revisao"],
+            modelo=payload_text,
+        ))
+
+        self.assertTrue(result["sucesso"])
+        with zipfile.ZipFile(self.details) as archive:
+            sheet_xml = archive.read("xl/worksheets/sheet1.xml").decode("utf-8")
+        self.assertNotIn("<f>", sheet_xml)
+        workbook = openpyxl.load_workbook(self.details, data_only=False)
+        cell = workbook["EquipamentosDetalhes"]["C2"]
+        self.assertEqual((cell.value, cell.data_type), (payload_text, "s"))
+        workbook.close()
+
     def test_equipment_edit_preserves_the_supported_16467_contract_metadata(self):
         headers = [
             "NumeroSerie", "Apelido", "Modelo", "Cidade", "Tipo", "CEP",
@@ -3030,6 +3085,54 @@ class WorkflowIntegrityTests(unittest.TestCase):
         self.assertTrue(restore_outcome["result"]["sucesso"])
         self.assertEqual(main.load_modified_apelidos(), {"SN-1": "MANUAL-COMMITTED"})
         self.assertEqual(main.equipamentos_cache["SN-1"]["apelido"], "MANUAL-COMMITTED")
+
+    def test_restore_counts_manual_aliases_left_without_equipment_and_keeps_them(self):
+        make_details(self.details, [
+            ("SN-1", "ALIAS-ATUAL", "Modelo A", "Maringá", "Notebook", "87000000"),
+            ("SN-NOVO", "ALIAS-NOVO", "Modelo B", "Maringá", "Notebook", "87000000"),
+        ])
+        make_endpoint(self.endpoint, [("SN-1", "PRNOTE-ATUAL"), ("SN-NOVO", "PRNOTE-NOVO")])
+        backup_dir = self.backups / "restore-orphans"
+        (backup_dir / "endpoint").mkdir(parents=True)
+        (backup_dir / "detalhes").mkdir()
+        make_endpoint(backup_dir / "endpoint" / self.endpoint.name, [("SN-1", "PRNOTE-ANTIGO")])
+        backup_headers = complete_details_headers(
+            ["NumeroSerie", "Apelido", "Modelo", "Cidade", "Tipo", "CEP"]
+        )
+        backup_row = ["SN-1", "ALIAS-ANTIGO", "Modelo A", "Maringá", "Notebook", "87000000"]
+        backup_row.extend([None] * (len(backup_headers) - len(backup_row)))
+        cnpj_header_keys = {
+            main.normalize_workbook_header(header)
+            for header in main.DETAILS_INSTALLATION_CNPJ_HEADER_ALIASES
+        }
+        cnpj_column = next(
+            index for index, header in enumerate(backup_headers)
+            if main.normalize_workbook_header(header) in cnpj_header_keys
+        )
+        backup_row[cnpj_column] = "12345678000195"
+        make_details(backup_dir / "detalhes" / self.details.name, [backup_row], headers=backup_headers)
+        self.comparison_history.write_text(json.dumps([{
+            "id": "restore-orphans-event",
+            "horario": "2026-10-01T12:00:00-03:00",
+            "comparacao": {"backup_diretorio": str(backup_dir.relative_to(self.input_dir))},
+        }]), encoding="utf-8")
+        self.assertTrue(main.load_database())
+        main.aplicar_alteracao_apelido("SN-1", "MANUAL-1")
+        main.aplicar_alteracao_apelido("SN-NOVO", "MANUAL-NOVO")
+        preview = main.visualizar_restauracao_comparacao("restore-orphans-event")
+
+        result = main.restaurar_comparacao_historica(
+            "restore-orphans-event",
+            main.ComparisonRestorePayload(preview_token=preview["preview_token"]),
+        )
+
+        self.assertEqual(result["evento"]["apelidos_manuais_sem_equipamento"], 1)
+        saved = next(
+            event for event in json.loads(self.comparison_history.read_text(encoding="utf-8"))
+            if event.get("tipo") == "restauracao"
+        )
+        self.assertEqual(saved["comparacao"]["apelidos_manuais_sem_equipamento"], 1)
+        self.assertEqual(main.load_modified_apelidos(), {"SN-1": "MANUAL-1", "SN-NOVO": "MANUAL-NOVO"})
 
     def test_restore_keeps_old_cache_until_file_and_history_transaction_commits(self):
         self.details.write_bytes(_details_bytes([

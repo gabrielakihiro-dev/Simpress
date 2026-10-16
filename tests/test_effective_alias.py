@@ -79,6 +79,17 @@ class EffectiveAliasPrecedenceTests(unittest.TestCase):
         self.assertEqual(effective_alias.manual_alias_for_serial(overrides, "S2", "fallback"), "fallback")
         self.assertEqual(effective_alias.manual_alias_for_serial(overrides, "", "fallback"), "fallback")
 
+    def test_colliding_override_keys_with_the_same_alias_are_kept(self):
+        overrides = {"ab-1": "MANUAL", "AB1": "MANUAL", "C2": "X", "c-2": "Y"}
+        effective_alias._last_alias_conflicts = 0
+        with self.assertLogs("domains.effective_alias", level="WARNING") as logs:
+            aliases = effective_alias.manual_aliases_by_serial(overrides)
+        self.assertEqual(aliases, {"AB1": "MANUAL"})
+        self.assertIn("1 série(s)", logs.output[0])
+        self.assertNotIn("C2", logs.output[0])
+        with self.assertNoLogs("domains.effective_alias", level="WARNING"):
+            effective_alias.manual_aliases_by_serial(overrides)
+
 
 class EndpointAliasIndexTests(unittest.TestCase):
     def test_index_separates_unique_duplicate_and_blank_rows(self):

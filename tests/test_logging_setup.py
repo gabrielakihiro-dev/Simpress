@@ -54,6 +54,29 @@ class LoggingSetupTests(unittest.TestCase):
         self.assertEqual(len(handlers), 1)
         self.assertIsInstance(handlers[0], logging.StreamHandler)
 
+    def test_logged_exceptions_keep_frames_but_drop_messages_with_paths(self):
+        log_file = logging_setup.configure_logging(self.log_dir)
+        # Built outside the raising line: frames quote source lines, not exception messages.
+        path = "C:/Users/" + "Fulano" + "/OneDrive/EquipamentosDetalhes.xlsx"
+        try:
+            raise PermissionError(path)
+        except PermissionError:
+            logging.getLogger("domains.example").exception("Falha ao gravar.")
+        for handler in self.added_handlers():
+            handler.flush()
+
+        text = log_file.read_text(encoding="utf-8")
+        self.assertIn("Falha ao gravar.", text)
+        self.assertIn("test_logged_exceptions_keep_frames_but_drop_messages_with_paths", text)
+        self.assertIn("PermissionError", text)
+        self.assertNotIn("Fulano", text)
+
+    def test_redacted_reference_is_stable_and_hides_the_value(self):
+        token = logging_setup.redact_reference("SERIE-FICTICIA-01")
+        self.assertEqual(token, logging_setup.redact_reference("SERIE-FICTICIA-01"))
+        self.assertNotIn("FICTICIA", token)
+        self.assertEqual(logging_setup.redact_reference(""), "-")
+
 
 if __name__ == "__main__":
     unittest.main()

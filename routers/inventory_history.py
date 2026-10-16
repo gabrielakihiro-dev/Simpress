@@ -1161,6 +1161,16 @@ def create_inventory_history_router(services: InventoryHistoryServices):
                     raise RuntimeError("O conjunto restaurado não pôde ser carregado pelo site.")
 
                 restored_files = {role: path.name for role, path in target_files.items()}
+                # Overrides are kept on purpose (restoring again brings them back); the count
+                # tells the user how many no longer match a serial of the restored inventory.
+                restored_serials = {
+                    services.normalize_reference_value(equipment.get("serial") or key)
+                    for key, equipment in (prepared_state.get("equipamentos_cache") or {}).items()
+                    if isinstance(equipment, dict)
+                }
+                orphan_manual_aliases = len(
+                    set(services.manual_aliases_by_serial(services.load_modified_apelidos())) - restored_serials
+                )
                 restoration_comparison = {
                     "evento_id": restoration_id,
                     "tipo_operacao": "restauracao",
@@ -1174,6 +1184,7 @@ def create_inventory_history_router(services: InventoryHistoryServices):
                     "total_endpoint_restaurado": context["backup_files"]["endpoint"]["records"],
                     "total_detalhes_restaurado": context["backup_files"]["detalhes"]["records"],
                     "total_equipamentos_carregados": prepared_state["stats_cache"].get("total_equipamentos", 0),
+                    "apelidos_manuais_sem_equipamento": orphan_manual_aliases,
                     "backup_diretorio": str(persistent_backup_dir.relative_to(services.input_directory())),
                     "backup_arquivos_ausentes": missing_current_files,
                     "backup_arquivos_invalidos": invalid_current_files,
@@ -1234,6 +1245,7 @@ def create_inventory_history_router(services: InventoryHistoryServices):
                     "total_endpoint_restaurado": restoration_comparison["total_endpoint_restaurado"],
                     "total_detalhes_restaurado": restoration_comparison["total_detalhes_restaurado"],
                     "total_equipamentos_carregados": restoration_comparison["total_equipamentos_carregados"],
+                    "apelidos_manuais_sem_equipamento": orphan_manual_aliases,
                 },
             }
         except HTTPException:

@@ -1,6 +1,6 @@
 # Auditoria do backend — segunda rodada (15/10/2026)
 
-**Escopo:** segurança local, planilhas, integridade dos dados entre XLSX e JSON, concorrência e desempenho. Complementa [auditoria_backend.md](auditoria_backend.md) (13/10) e não a substitui. Somente análise: nenhum código ou dado do projeto foi alterado.
+**Escopo:** segurança local, planilhas, integridade dos dados entre XLSX e JSON, concorrência e desempenho. Complementa [auditoria_backend.md](auditoria_backend.md) (13/10) e não a substitui. As seções 1 a 6 registram a análise, feita sem alterar código. A seção 7 traz a situação depois das correções.
 **Evidência:** cada achado é **Confirmado** (leitura inequívoca, script ou medição) ou **Inferido**. Exemplos usam dados fictícios.
 
 ## 1. Limites da análise
@@ -145,3 +145,23 @@ Rotas limpas: `dashboard`, `equipment_search`, `system`, `transfer_history`, `tr
 5. B1 e B2: indexação das chaves, item de colisão no "para conferência" e contagem de órfãos na restauração, respeitando as regras de rótulos e anotações do `AGENTS.md`.
 6. B4, B7, B8, B9: endurecimentos pequenos.
 7. B10 (passo 10): extrações de `routers/inventory_history.py` e `main.py`.
+
+## 7. Situação após as correções (15/10/2026)
+
+M1 foi corrigido na branch `fix-desfazer-apelido-override`. Os demais itens estão na branch `fix-auditoria-pendentes`, cada um com teste de regressão.
+
+| Achado | Situação | Correção e teste |
+| --- | --- | --- |
+| M1 | Corrigido | Evento guarda `tinha_override`. Desfazer ou excluir sem override anterior remove a chave (`tests/test_integrity_workflows.py`, testes `test_undo_*`). |
+| M2 | Corrigido | `publish_database_state` guarda a assinatura (caminho, tamanho, `mtime_ns`) dos arquivos da base. O worker `_external_change_reload_worker` confere a cada 10 s e chama `load_database()` quando outro processo alterou os arquivos. Gravações do próprio site não disparam recarga (`test_cache_reloads_after_another_process_replaces_the_active_files`). |
+| M3 | Parcial | A mensagem de recusa e o `README.md` informam o limite real (256 MB descompactados, cerca de 70 mil linhas com 50 colunas). Ler só a aba e as colunas usadas fica para quando o inventário passar de uns 20 mil equipamentos. |
+| B1 | Corrigido | Chaves que colidem com o mesmo apelido são mantidas. Conflitos continuam ignorados, mas são registrados no log sem a série, uma vez por mudança de contagem. Editar o apelido resolve o conflito (`tests/test_effective_alias.py`). |
+| B2 | Corrigido | A restauração grava `apelidos_manuais_sem_equipamento` no evento e na resposta, sem apagar overrides (`test_restore_counts_manual_aliases_left_without_equipment_and_keeps_them`). |
+| B3 | Corrigido | `/docs`, `/redoc` e `/openapi.json` respondem 404, salvo com `SIMPRESS_ENABLE_DOCS=1` (`test_interactive_docs_are_disabled_by_default`). |
+| B4 | Corrigido | O handshake WebSocket exige peer loopback, `Host` autorizado e `Origin` igual ao `Host`. Sem isso, a conexão é fechada antes do aceite (`test_websocket_handshake_requires_loopback_host_and_same_origin`). |
+| B5 | Aceito | Não muda. Um processo local sem cabeçalhos de navegador já consegue ler `data/` diretamente, então exigir `Origin` não protege nada no modelo local sem login. Chamadas de outro site continuam bloqueadas. |
+| B6 | Corrigido | Também confirmado: na edição de equipamento, um texto iniciado por `=` era **recusado** pela validação (falha fechada, sem injeção). O helper `set_cell_value_as_text` (`core/xlsx_safety.py`) grava esses textos como texto literal em edição, transferência e histórico. A exportação de chamados mantém o prefixo `'`, já coberto por teste (`tests/test_formula_text_cells.py`, `test_equipment_text_starting_with_formula_marker_is_saved_as_literal_text`). |
+| B7 | Parcial | `RedactingFormatter` remove a mensagem das exceções no log e mantém tipo e pilha. As séries dos chamados aparecem como `ref-<hash>`. O log de acesso do `uvicorn` foi desligado (`tests/test_logging_setup.py`). Os contatos padrão em `core/config.py` continuam versionados: tirá-los muda as planilhas de transferência de quem não definir as variáveis `SIMPRESS_TRANSFER_ORIGIN_*`, e isso é decisão do responsável. |
+| B8 | Corrigido e confirmado | O teste comprovou a falha: uma junção NTFS fazia o importador ler um arquivo fora da fila. `is_link_or_junction` (`core/local_paths.py`) é aplicado às duas filas de entrada (`test_junction_*`). |
+| B9 | Corrigido | As leituras consultadas pela página (contagem da exportação e índice do Endpoint) esperam no máximo 3 s pelo lock e depois respondem 409. O painel mantém os números anteriores (`tests/test_read_lock_timeouts.py`). |
+| B10 | Pendente | Extrair a restauração e a exportação de `routers/inventory_history.py` e continuar o passo 10 em `main.py`. É uma refatoração sem mudança de comportamento, melhor feita em PR próprio. |

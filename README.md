@@ -128,7 +128,7 @@ O inicializador cria ou atualiza o ambiente `.venv` quando necessário, executa 
 Abra no navegador:
 
 - Aplicação (porta padrão): <http://127.0.0.1:8000>
-- Documentação interativa da API (porta padrão): <http://127.0.0.1:8000/docs>
+- Documentação interativa da API: desligada por padrão. Para desenvolvimento, defina `$env:SIMPRESS_ENABLE_DOCS = "1"` antes de iniciar e abra <http://127.0.0.1:8000/docs>.
 
 Se o iniciador escolher outra porta, use o endereço que ele mostrar no terminal.
 
@@ -183,7 +183,7 @@ O servidor verifica a pasta a cada 10 segundos; com ele ativo, a importação co
 .\.venv\Scripts\python.exe scripts\process_ticket_inbox.py
 ```
 
-O comando usa a mesma validação sem enviar requisições HTTP. Consulte `data/state/entrada_chamados/README.md` para ver o modelo de lote e um exemplo no PowerShell. A variável `SIMPRESS_TICKET_IMPORT_INBOX_DIR` permite definir outra raiz local. A fila funciona no modo de arquivos; não inclui os lotes operacionais no Git.
+O comando usa a mesma validação sem enviar requisições HTTP. Se o site estiver aberto, ele percebe em até 10 segundos as planilhas trocadas pelo comando e recarrega a base sozinho. Consulte `data/state/entrada_chamados/README.md` para ver o modelo de lote e um exemplo no PowerShell. A variável `SIMPRESS_TICKET_IMPORT_INBOX_DIR` permite definir outra raiz local. A fila funciona no modo de arquivos; não inclui os lotes operacionais no Git.
 
 ### Comparar e atualizar inventários
 
@@ -272,7 +272,7 @@ Use **Pular para o conteúdo principal** para ignorar o cabeçalho. Na lista rá
 
 ## Limites de planilhas
 
-Cada arquivo enviado pode ter até **30 MB**. Para manter a leitura previsível, cada arquivo também pode ter até **128 abas**, **250.000 linhas por aba** e **5.000.000 de posições usadas no total**. O pacote XLSX descompactado é limitado a 256 MB. Os limites se aplicam aos arquivos enviados e às planilhas locais processadas.
+Cada arquivo enviado pode ter até **30 MB**. Para manter a leitura previsível, cada arquivo também pode ter até **128 abas**, **250.000 linhas por aba** e **5.000.000 de posições usadas no total**. O pacote XLSX descompactado é limitado a 256 MB. Na prática, esse é o limite que costuma valer primeiro: a exportação completa da Simpress, com 50 colunas, cabe com cerca de 70 mil linhas (medido em 15/10/2026), e as 250.000 linhas por aba só cabem em planilhas com até 20 colunas. Perto desse teto, a leitura leva mais de um minuto e usa cerca de 450 MB de memória. Os limites se aplicam aos arquivos enviados e às planilhas locais processadas.
 
 Arquivos precisam ser `.xlsx` válidos. Planilhas vazias, corrompidas, com cabeçalhos ausentes/ambíguos ou sem linhas utilizáveis podem ser recusadas. Se duas abas de um arquivo forem compatíveis com o mesmo tipo de inventário, selecione ou prepare um arquivo que contenha apenas a aba correta.
 
@@ -394,7 +394,7 @@ As entradas `static/index.html`, `static/app.js` e `static/app.css` conservam os
 
 ## Dados e privacidade
 
-O servidor atende somente `127.0.0.1` em uma porta local entre `8000` e `8099`. Os dados são persistidos em arquivos Excel/JSON locais, com acesso direto à aplicação e à documentação `/docs` no próprio computador. As páginas usam uma política de conteúdo que só permite scripts do próprio servidor, e todas as respostas trazem cabeçalhos que impedem a exibição dentro de outros sites. A API recusa chamadas que o navegador identifica como vindas de outro site.
+O servidor atende somente `127.0.0.1` em uma porta local entre `8000` e `8099`. Os dados são persistidos em arquivos Excel/JSON locais, com acesso direto à aplicação no próprio computador. A documentação `/docs` só fica disponível com `SIMPRESS_ENABLE_DOCS=1`, e o log de acesso do servidor fica desligado para não registrar buscas por série ou hostname. Mensagens de exceção não entram no log, porque podem conter caminhos com o nome do usuário do Windows; as séries citadas no log aparecem como uma referência curta (`ref-...`). As páginas usam uma política de conteúdo que só permite scripts do próprio servidor, e todas as respostas trazem cabeçalhos que impedem a exibição dentro de outros sites. A API recusa chamadas que o navegador identifica como vindas de outro site.
 
 Planilhas operacionais, backups, logs, exportações, históricos, apelidos e unidades personalizadas ficam no computador local e são ignorados pelo Git. O modelo vazio de transferência permanece versionado. Inclua os dados locais em uma rotina de backup apropriada se precisar preservá-los; não force a inclusão deles em commits nem compartilhe cópias com dados operacionais.
 

@@ -3,7 +3,7 @@
 Documentos desta pasta:
 
 - [auditoria_backend.md](auditoria_backend.md): diagnóstico por pilar, matriz de riscos e roteiro de refatoração (13/10/2026).
-- [auditoria_backend_2026-10-15.md](auditoria_backend_2026-10-15.md): segunda rodada (segurança local, integridade dos dados, concorrência e medição de memória), com o status atualizado dos pendentes.
+- [auditoria_backend_2026-10-15.md](auditoria_backend_2026-10-15.md): segunda rodada (segurança local, integridade dos dados, concorrência e medição de memória), com o status atualizado dos pendentes e a situação de cada achado após as correções (seção 7).
 - [onedrive_pastas_de_trabalho.md](onedrive_pastas_de_trabalho.md): backoff de `PermissionError` e exclusão das pastas de trabalho da sincronização do OneDrive (passo 4).
 - [hierarquia_de_locks.md](hierarquia_de_locks.md): ordem global → arquivo → lock Python folha, inversões corrigidas e teste de regressão (passo 5).
 

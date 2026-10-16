@@ -14,6 +14,9 @@ from fastapi import HTTPException
 
 from domains.inventory_comparison import _record_value, normalize_reference_value
 
+logger = logging.getLogger(__name__)
+_last_alias_conflicts = 0
+
 
 @dataclass(frozen=True)
 class EffectiveAliasServices:
@@ -188,23 +191,35 @@ def endpoint_alias_review_items(
 
 def manual_alias_for_serial(overrides: Dict[str, str], serial: Any, fallback: str) -> str:
     serial_key = normalize_reference_value(serial)
-    matches = [
-        str(alias or "").strip()
-        for key, alias in overrides.items()
-        if normalize_reference_value(key) == serial_key
-    ]
-    return matches[0] if serial_key and len(matches) == 1 else fallback
+    if not serial_key:
+        return fallback
+    return manual_aliases_by_serial(overrides).get(serial_key, fallback)
 
 
 def manual_aliases_by_serial(overrides: Dict[str, str]) -> Dict[str, str]:
-    """Keep only manual overrides whose normalized serial is unambiguous."""
-    aliases_by_serial: Dict[str, List[str]] = {}
+    """Keep only manual overrides whose normalized serial is unambiguous.
+
+    Keys that differ only by case or punctuation collapse to one serial. They are
+    kept when they agree on the alias; conflicting ones are ignored (the sheet alias
+    wins) and logged without serials, since nothing tells which edit is the right one.
+    Editing that alias again replaces every colliding key and resolves the conflict.
+    """
+    aliases_by_serial: Dict[str, Set[str]] = {}
     for serial, alias in overrides.items():
         serial_key = normalize_reference_value(serial)
         if serial_key:
-            aliases_by_serial.setdefault(serial_key, []).append(str(alias or "").strip())
+            aliases_by_serial.setdefault(serial_key, set()).add(str(alias or "").strip())
+    global _last_alias_conflicts
+    conflicts = sum(1 for aliases in aliases_by_serial.values() if len(aliases) > 1)
+    # Logged only when the count changes: the stats poll calls this every few seconds.
+    if conflicts and conflicts != _last_alias_conflicts:
+        logger.warning(
+            "%d série(s) com apelidos manuais conflitantes foram ignoradas; edite o apelido para resolver.",
+            conflicts,
+        )
+    _last_alias_conflicts = conflicts
     return {
-        serial_key: aliases[0]
+        serial_key: next(iter(aliases))
         for serial_key, aliases in aliases_by_serial.items()
         if len(aliases) == 1
     }
