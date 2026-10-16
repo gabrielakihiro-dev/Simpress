@@ -1,39 +1,23 @@
 """Routes for inventory comparison history and restore operations."""
 
-import filecmp
-import hashlib
-import hmac
 import json
 import logging
-import os
-import shutil
-import uuid
-from copy import deepcopy
 from dataclasses import dataclass
 from datetime import date, datetime
-from io import BytesIO
+from functools import partial
 from pathlib import Path
 from typing import Any, Callable, Dict, List, Optional
 
-from domains.history_export import (
-    _export_datetime,
-    _export_event_timestamp,
-    _export_note,
-    _export_rows,
-    _export_text,
-    _history_display_files,
-    _history_display_text,
-    _write_export_summary_sheet,
-    _write_export_table_sheet,
-)
+from domains import history_restore
+from domains.history_export import _history_display_files, build_history_export_workbook
+from domains.history_restore import HistoryRestoreError, comparison_event_type
 from domains.history_annotations import (
     AnnotationReadError, resolve_history_annotations,
-    annotation_record_values, annotation_view, annotation_export_text, same_annotation_revision,
+    annotation_record_values, annotation_view, same_annotation_revision,
     effective_history_annotation, load_effective_history_annotations,
     sync_history_annotation, reuse_annotation_revision,
 )
 
-import openpyxl
 from fastapi import APIRouter, HTTPException, Query
 from fastapi.responses import StreamingResponse
 from pydantic import BaseModel, Field
@@ -110,178 +94,6 @@ class InventoryHistoryServices:
 
 def create_inventory_history_router(services: InventoryHistoryServices):
     router = APIRouter()
-
-    def _comparison_event_type(evento: Dict[str, Any]) -> str:
-        comparison = evento.get("comparacao")
-        if (
-            evento.get("tipo") == "restauracao"
-            or isinstance(comparison, dict) and comparison.get("tipo_operacao") == "restauracao"
-        ):
-            return "restauracao"
-        return "atualizacao"
-
-
-    def _comparison_restore_backup_paths(evento: Dict[str, Any]) -> Dict[str, Path]:
-        comparison = evento.get("comparacao")
-        if not isinstance(comparison, dict):
-            raise HTTPException(status_code=409, detail="Esta atualização não possui um backup disponível para restauração.")
-        relative_value = comparison.get("backup_diretorio")
-        if not isinstance(relative_value, str) or not relative_value.strip():
-            raise HTTPException(status_code=409, detail="Esta atualização não possui um backup disponível para restauração.")
-
-        relative_path = Path(relative_value)
-        if relative_path.is_absolute() or not relative_path.parts or any(part in {".", ".."} for part in relative_path.parts):
-            raise HTTPException(status_code=409, detail="O caminho do backup desta atualização não é válido.")
-
-        try:
-            backup_root = services.upload_backups_directory().resolve(strict=False)
-            backup_directory = (services.input_directory() / relative_path).resolve(strict=True)
-        except (OSError, RuntimeError, ValueError):
-            raise HTTPException(status_code=409, detail="O backup desta atualização não está disponível.") from None
-        if backup_directory.parent != backup_root or not backup_directory.is_dir():
-            raise HTTPException(status_code=409, detail="O backup desta atualização não está disponível.")
-
-        missing_roles = comparison.get("backup_arquivos_ausentes")
-        invalid_roles = comparison.get("backup_arquivos_invalidos")
-        target_files = {
-            "endpoint": services.endpoint_upload_path(),
-            "detalhes": services.details_upload_path(),
-        }
-        paths: Dict[str, Path] = {}
-        for role, target_path in target_files.items():
-            if (
-                isinstance(missing_roles, dict) and missing_roles.get(role) is True
-                or isinstance(invalid_roles, dict) and invalid_roles.get(role) is True
-            ):
-                raise HTTPException(status_code=409, detail="O backup desta atualização não contém dois inventários válidos.")
-            try:
-                role_directory = (backup_directory / role).resolve(strict=True)
-                if role_directory.parent != backup_directory or not role_directory.is_dir():
-                    raise ValueError("invalid backup role directory")
-                backup_path = (role_directory / target_path.name).resolve(strict=True)
-                if backup_path.parent != role_directory or not backup_path.is_file():
-                    raise ValueError("invalid backup file")
-            except (OSError, RuntimeError, ValueError):
-                raise HTTPException(status_code=409, detail="O backup desta atualização não contém os dois inventários.") from None
-            paths[role] = backup_path
-        return paths
-
-
-    def _comparison_event_has_restorable_backup(evento: Dict[str, Any]) -> bool:
-        try:
-            _comparison_restore_backup_paths(evento)
-            return True
-        except HTTPException:
-            return False
-
-
-    def _sha256_file(path: Path) -> str:
-        digest = hashlib.sha256()
-        with path.open("rb") as stream:
-            for block in iter(lambda: stream.read(1024 * 1024), b""):
-                digest.update(block)
-        return digest.hexdigest()
-
-
-    def _validated_comparison_backup_files(paths: Dict[str, Path]) -> Dict[str, Dict[str, Any]]:
-        labels = {"endpoint": "no endpoint", "detalhes": "na Simpress"}
-        files: Dict[str, Dict[str, Any]] = {}
-        for role, backup_path in paths.items():
-            label = labels[role]
-            try:
-                size = backup_path.stat().st_size
-                if size <= 0 or size > services.max_upload_bytes:
-                    raise HTTPException(status_code=409, detail="O arquivo excede o limite de tamanho ou está vazio.")
-                file_bytes = backup_path.read_bytes()
-                table = services.validate_uploaded_workbook(file_bytes, role)
-            except HTTPException as error:
-                raise HTTPException(
-                    status_code=409,
-                    detail=f"O backup de {label} não passou na validação: {error.detail}",
-                ) from error
-            except WorkbookSafetyError as error:
-                raise HTTPException(
-                    status_code=409,
-                    detail=f"O backup de {label} não passou na validação: {error}",
-                ) from error
-            except OSError:
-                raise HTTPException(status_code=409, detail=f"Não foi possível ler o backup de {label}.") from None
-            files[role] = {
-                "path": backup_path,
-                "name": backup_path.name,
-                "bytes": file_bytes,
-                "sha256": hashlib.sha256(file_bytes).hexdigest(),
-                "records": len(table.get("records", [])),
-                "size": size,
-                "modified": datetime.fromtimestamp(backup_path.stat().st_mtime).astimezone().isoformat(timespec="seconds"),
-            }
-        return files
-
-
-    def _current_inventory_snapshot() -> tuple[Dict[str, Dict[str, Any]], Dict[str, Optional[str]]]:
-        target_files = {
-            "endpoint": services.endpoint_upload_path(),
-            "detalhes": services.details_upload_path(),
-        }
-        metadata: Dict[str, Dict[str, Any]] = {}
-        hashes: Dict[str, Optional[str]] = {}
-        for role, target_path in target_files.items():
-            if target_path.is_symlink():
-                raise HTTPException(status_code=409, detail="Um arquivo ativo foi substituído por um atalho; a restauração foi cancelada.")
-            if target_path.exists() and not target_path.is_file():
-                raise HTTPException(status_code=409, detail=f"O caminho ativo {target_path.name} não é um arquivo regular.")
-            if not target_path.is_file():
-                metadata[role] = {"nome": target_path.name, "presente": False}
-                hashes[role] = None
-                continue
-            try:
-                stat = target_path.stat()
-                if stat.st_size > services.max_upload_bytes:
-                    raise HTTPException(status_code=409, detail=f"O arquivo ativo {target_path.name} excede o limite permitido para backup.")
-                file_hash = _sha256_file(target_path)
-            except HTTPException:
-                raise
-            except OSError:
-                raise HTTPException(status_code=409, detail=f"Não foi possível conferir o arquivo ativo {target_path.name}.") from None
-            metadata[role] = {
-                "nome": target_path.name,
-                "presente": True,
-                "tamanho_bytes": stat.st_size,
-                "modificado_em": datetime.fromtimestamp(stat.st_mtime).astimezone().isoformat(timespec="seconds"),
-            }
-            hashes[role] = file_hash
-        return metadata, hashes
-
-
-    def _build_comparison_restore_context(evento_id: str) -> Dict[str, Any]:
-        evento = next(
-            (item for item in services.load_comparison_history() if isinstance(item, dict) and item.get("id") == evento_id),
-            None,
-        )
-        if evento is None:
-            raise HTTPException(status_code=404, detail="A atualização selecionada não existe no histórico de planilhas.")
-
-        backup_paths = _comparison_restore_backup_paths(evento)
-        backup_files = _validated_comparison_backup_files(backup_paths)
-        current_files, current_hashes = _current_inventory_snapshot()
-        token_material = {
-            "evento_id": evento_id,
-            "horario": evento.get("horario"),
-            "backup_diretorio": evento.get("comparacao", {}).get("backup_diretorio"),
-            "backup_hashes": {role: backup_files[role]["sha256"] for role in sorted(backup_files)},
-            "ativos_hashes": current_hashes,
-        }
-        preview_token = hashlib.sha256(
-            json.dumps(token_material, ensure_ascii=False, sort_keys=True, separators=(",", ":")).encode("utf-8")
-        ).hexdigest()
-        return {
-            "evento": evento,
-            "backup_files": backup_files,
-            "current_files": current_files,
-            "current_hashes": current_hashes,
-            "preview_token": preview_token,
-        }
-
 
     def _latest_annotation_records(history=None):
         return load_effective_history_annotations(
@@ -543,11 +355,11 @@ def create_inventory_history_router(services: InventoryHistoryServices):
             eventos.append({
                 "id": evento.get("id"),
                 "horario": evento.get("horario"),
-                "tipo": _comparison_event_type(evento),
+                "tipo": comparison_event_type(evento),
                 "arquivos_enviados": _history_display_files(evento.get("arquivos_enviados")),
                 "arquivos_restaurados": _history_display_files(comparison.get("arquivos_restaurados")),
                 "restauracao_de": comparison.get("restauracao_de", {}),
-                "restauravel": _comparison_event_has_restorable_backup(evento),
+                "restauravel": history_restore.event_has_restorable_backup(services, evento),
                 "resumo": _history_event_summary(evento),
             })
         shared_event_ids = {event_id for event_id, _ in annotations}
@@ -600,262 +412,7 @@ def create_inventory_history_router(services: InventoryHistoryServices):
                 display_events.append(event_view)
         if not display_events:
             raise HTTPException(status_code=404, detail="Não há registros de planilhas na data selecionada.")
-        display_events.sort(key=_export_event_timestamp)
-
-        event_counts = {"atualizacao": 0, "restauracao": 0}
-        category_counts = {
-            "Apelidos atualizados": 0,
-            "Apelidos para conferência": 0,
-            "Divergências manuais": 0,
-            "Sem verificação há 7+ dias": 0,
-            "Ausentes no endpoint": 0,
-            "Ausentes na Simpress": 0,
-            "Divergências de localidade": 0,
-            "Duplicidades e ambiguidades": 0,
-            "Séries sem local definido": 0,
-        }
-        history_rows = []
-        alias_rows = []
-        absence_rows = []
-        no_access_rows = []
-        location_rows = []
-        ambiguity_rows = []
-
-        for order, event in enumerate(display_events, start=1):
-            comparison = event.get("comparacao")
-            comparison = comparison if isinstance(comparison, dict) else {}
-            summary = event.get("resumo")
-            summary = summary if isinstance(summary, dict) else {}
-            event_type = _comparison_event_type(event)
-            event_type_label = "Restauração" if event_type == "restauracao" else "Atualização"
-            event_counts[event_type] += 1
-            timestamp = _export_datetime(event.get("horario") or comparison.get("horario_comparacao"))
-            event_id = _export_text(event.get("id") or comparison.get("evento_id"))
-            alias_updates = _export_rows(comparison, "apelidos_atualizados")
-            alias_reviews = _export_rows(comparison, "apelidos_sem_atualizacao")
-            manual_alias_conflicts = _export_rows(comparison, "divergencias_apelidos_manuais")
-            absent_endpoint = _export_rows(comparison, "ausentes_no_endpoint")
-            absent_simpress = _export_rows(comparison, "ausentes_em_detalhes")
-            no_recent_verification = _export_rows(comparison, "sem_acesso_7_dias")
-            local_divergences = _export_rows(comparison, "divergencias_local")
-            unmapped_series = _export_rows(comparison, "series_sem_mapeamento")
-            ambiguities = _export_rows(comparison, "correspondencias_ambiguas")
-            ambiguous_records = _export_rows(comparison, "registros_ambiguos")
-
-            manual_pending_count = sum(
-                1 for item in manual_alias_conflicts
-                if item.get("resolucao", "pendente") == "pendente"
-            )
-            ambiguity_count = len(ambiguities) + len(ambiguous_records)
-            category_counts["Apelidos atualizados"] += len(alias_updates)
-            category_counts["Apelidos para conferência"] += len(alias_reviews)
-            category_counts["Divergências manuais"] += len(manual_alias_conflicts)
-            category_counts["Sem verificação há 7+ dias"] += len(no_recent_verification)
-            category_counts["Ausentes no endpoint"] += len(absent_endpoint)
-            category_counts["Ausentes na Simpress"] += len(absent_simpress)
-            category_counts["Divergências de localidade"] += len(local_divergences)
-            category_counts["Duplicidades e ambiguidades"] += ambiguity_count
-            category_counts["Séries sem local definido"] += len(unmapped_series)
-
-            files_uploaded = event.get("arquivos_enviados")
-            if not isinstance(files_uploaded, dict):
-                files_uploaded = comparison.get("arquivos_enviados")
-            files_uploaded = files_uploaded if isinstance(files_uploaded, dict) else {}
-            files_restored = comparison.get("arquivos_restaurados")
-            files_restored = files_restored if isinstance(files_restored, dict) else {}
-            endpoint_file = files_restored.get("endpoint") if event_type == "restauracao" else files_uploaded.get("endpoint")
-            simpress_file = files_restored.get("detalhes") if event_type == "restauracao" else files_uploaded.get("detalhes")
-            history_rows.append((
-                order,
-                timestamp,
-                event_type_label,
-                event_id,
-                _history_display_text(endpoint_file),
-                _history_display_text(simpress_file),
-                comparison.get("total_endpoint", summary.get("total_endpoint")),
-                comparison.get("total_detalhes", summary.get("total_detalhes")),
-                comparison.get("total_equipamentos_carregados", summary.get("total_equipamentos_carregados")),
-                len(alias_updates),
-                len(alias_reviews),
-                manual_pending_count,
-                len(absent_endpoint),
-                len(absent_simpress),
-                len(no_recent_verification),
-                len(local_divergences),
-                ambiguity_count,
-                len(unmapped_series),
-                _export_datetime((comparison.get("restauracao_de") or {}).get("horario"))
-                if isinstance(comparison.get("restauracao_de"), dict) else None,
-                _export_text(comparison.get("backup_diretorio")),
-            ))
-
-            for item in alias_updates:
-                alias_rows.append((
-                    timestamp, event_type_label, "Apelido atualizado",
-                    item.get("serie"), "", item.get("apelido_anterior"),
-                    item.get("apelido_equipamentos_detalhes"),
-                    item.get("apelido_novo") or item.get("apelido_invall"),
-                    _export_datetime(item.get("horario")), "Concluído", "",
-                    _history_display_text(item.get("arquivos_origem")), "",
-                ))
-            for index, item in enumerate(alias_reviews):
-                alias_rows.append((
-                    timestamp, event_type_label, "Para conferência",
-                    item.get("serie"), item.get("computador"), "", "", "", None,
-                    "Pendente", item.get("motivo"), "",
-                    _export_note(comparison, "apelidos_sem_atualizacao", index, item),
-                ))
-            manual_status = {
-                "manter": "Alteração manual mantida",
-                "excluir": "Alteração manual removida",
-                "substituida": "Atualizada por nova planilha",
-                "pendente": "Pendente",
-            }
-            for item in manual_alias_conflicts:
-                resolution = item.get("resolucao") or "pendente"
-                alias_rows.append((
-                    timestamp, event_type_label, "Divergência manual",
-                    item.get("serie"), "", item.get("apelido_manual"),
-                    item.get("apelido_equipamentos_detalhes"), item.get("apelido_invall"),
-                    _export_datetime(item.get("horario_resolucao")),
-                    manual_status.get(resolution, _export_text(resolution)),
-                    "Diferença entre apelido manual e as planilhas de origem.", "", "",
-                ))
-
-            for category, items, note_category in (
-                ("Ausente no endpoint", absent_endpoint, "ausentes_no_endpoint"),
-                ("Ausente na Simpress", absent_simpress, "ausentes_em_detalhes"),
-            ):
-                missing_source = "no endpoint" if category == "Ausente no endpoint" else "na Simpress"
-                for index, item in enumerate(items):
-                    absence_rows.append((
-                        timestamp, category,
-                        _export_text(item.get("ausente_em") or item.get("fonte_ausente") or missing_source),
-                        item.get("computador"), item.get("serie"), item.get("local_previsto"),
-                        _export_note(comparison, note_category, index, item),
-                    ))
-
-            for index, item in enumerate(no_recent_verification):
-                no_access_rows.append((
-                    timestamp, event_type_label, item.get("computador"), item.get("serie"),
-                    _export_datetime(item.get("ultima_verificacao")), item.get("dias_sem_verificacao"),
-                    item.get("linha_endpoint"), _export_note(comparison, "sem_acesso_7_dias", index, item),
-                ))
-
-            for index, item in enumerate(local_divergences):
-                location_rows.append((
-                    timestamp, "Localidade divergente", item.get("computador"),
-                    item.get("serie"), item.get("local_previsto"), item.get("local_detalhes"),
-                    None, "", _export_note(comparison, "divergencias_local", index, item),
-                ))
-            for index, item in enumerate(unmapped_series):
-                location_rows.append((
-                    timestamp, "Série sem local definido", "", item.get("serie"),
-                    "", "", item.get("quantidade"), _export_text(item.get("exemplos")),
-                    _export_note(comparison, "series_sem_mapeamento", index, item),
-                ))
-
-            for index, item in enumerate(ambiguities):
-                sources = []
-                for source in item.get("fontes") or []:
-                    if not isinstance(source, dict):
-                        continue
-                    label = _export_text(source.get("fonte"))
-                    if source.get("quantidade"):
-                        label += f" ({source['quantidade']} registros)"
-                    elif source.get("serie"):
-                        label += f" — série {source['serie']}"
-                    sources.append(label)
-                note = _export_note(comparison, "ambiguidades", index, item)
-                ambiguity_rows.append((
-                    timestamp, item.get("tipo") or "Ambiguidade",
-                    item.get("chave"), "; ".join(sources), item.get("mensagem"),
-                    note,
-                ))
-            for index, item in enumerate(ambiguous_records, start=len(ambiguities)):
-                ambiguous_sources = item.get("fontes") or {}
-                source_summary = "; ".join(
-                    str(source) for source, status in ambiguous_sources.items()
-                    if status == "ambíguo"
-                ) if isinstance(ambiguous_sources, dict) else ""
-                record_key = f"{item.get('computador') or 'Sem hostname'} · {item.get('serie') or 'Sem série'}"
-                notes = [_export_note(comparison, "ambiguidades", index, item)]
-                notes.extend(
-                    _export_text(annotation_export_text(associated))
-                    for associated in item.get("anotacoes_associadas", [])
-                    if isinstance(associated, dict)
-                )
-                note = "\n".join(value for value in notes if value)
-                ambiguity_rows.append((
-                    timestamp, "Presença ambígua", record_key,
-                    source_summary, item.get("motivo"), note,
-                ))
-
-        detail_total = sum(category_counts.values())
-        workbook = openpyxl.Workbook()
-        workbook.properties.title = "Histórico de atualizações de planilhas"
-        workbook.properties.subject = "Comparações, registros e anotações do histórico de planilhas"
-        workbook.properties.creator = "Simpress"
-        generated_at = datetime.now().astimezone().replace(tzinfo=None)
-        _write_export_summary_sheet(workbook, generated_at, selected_date, display_events, event_counts, category_counts, detail_total)
-
-        _write_export_table_sheet(
-            workbook, "Histórico", "Eventos de planilhas",
-            "Uma linha por atualização ou restauração, em ordem cronológica.",
-            ["Ordem", "Data e hora", "Operação", "ID do evento", "Arquivo no endpoint", "Arquivo na Simpress",
-             "Equipamentos no endpoint", "Equipamentos na Simpress", "Equipamentos carregados", "Apelidos atualizados",
-             "Apelidos para conferência", "Divergências manuais pendentes", "Ausentes no endpoint",
-             "Ausentes na Simpress", "Sem verificação há 7+ dias", "Divergências de local", "Duplicidades e ambiguidades",
-             "Séries sem local", "Restauração de", "Diretório de backup"],
-            history_rows, "tblHistoricoPlanilhas",
-            [10, 20, 16, 34, 32, 42, 18, 18, 20, 17, 20, 22, 18, 18, 23, 18, 22, 17, 20, 36],
-        )
-        _write_export_table_sheet(
-            workbook, "Apelidos", "Apelidos e hostnames",
-            "Atualizações, linhas que precisam de conferência e divergências manuais registradas.",
-            ["Data e hora", "Operação", "Categoria", "Série", "Hostname/Apelido",
-             "Apelido anterior/manual", "Apelido na Simpress", "Apelido no endpoint/novo", "Horário da alteração",
-             "Situação", "Motivo", "Arquivos de origem", "Anotação"],
-            alias_rows, "tblHistoricoApelidos",
-            [20, 16, 24, 18, 28, 30, 30, 32, 20, 29, 56, 36, 42],
-        )
-        _write_export_table_sheet(
-            workbook, "Ausências", "Equipamentos ausentes por fonte",
-            "Registros sem correspondência segura no endpoint ou na Simpress.",
-            ["Data e hora", "Categoria", "Ausente em", "Hostname/Apelido", "Série",
-             "Local previsto", "Anotação"],
-            absence_rows, "tblHistoricoAusencias",
-            [20, 24, 22, 32, 18, 28, 42],
-        )
-        _write_export_table_sheet(
-            workbook, "Sem acesso", "Notebooks sem verificação recente",
-            "Notebooks cuja última verificação com êxito ocorreu há pelo menos 7 dias.",
-            ["Data e hora", "Operação", "Hostname/Apelido", "Série", "Última verificação com êxito",
-             "Dias sem verificação", "Linha no endpoint", "Anotação"],
-            no_access_rows, "tblHistoricoSemAcesso",
-            [20, 16, 32, 20, 26, 20, 16, 42],
-        )
-        _write_export_table_sheet(
-            workbook, "Localidades", "Divergências e séries sem local",
-            "Diferenças de localidade e prefixos sem regra cadastrada.",
-            ["Data e hora", "Categoria", "Computador", "Série", "Local previsto",
-             "Local na Simpress", "Quantidade", "Exemplos", "Anotação"],
-            location_rows, "tblHistoricoLocalidades",
-            [20, 28, 30, 18, 28, 28, 14, 54, 42],
-        )
-        _write_export_table_sheet(
-            workbook, "Ambiguidades", "Duplicidades e correspondências ambíguas",
-            "Presenças ambíguas e correspondências sem identificação única.",
-            ["Data e hora", "Ocorrência", "Série ou hostname/Apelido",
-             "Fontes", "Tratamento", "Anotação"],
-            ambiguity_rows, "tblHistoricoAmbiguidades",
-            [20, 27, 48, 34, 66, 42],
-        )
-
-        output = BytesIO()
-        workbook.save(output)
-        output.seek(0)
-        filename = f"Historico_Planilhas_{selected_date:%Y%m%d}_{generated_at:%H%M%S}.xlsx"
+        output, filename = build_history_export_workbook(display_events, selected_date)
         return StreamingResponse(
             output,
             media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
@@ -1039,215 +596,18 @@ def create_inventory_history_router(services: InventoryHistoryServices):
 
     @router.get("/api/historico-comparacoes/{evento_id}/restauracao")
     def visualizar_restauracao_comparacao(evento_id: str):
-        context = _build_comparison_restore_context(evento_id)
-        return {
-            "evento_id": evento_id,
-            "evento_horario": context["evento"].get("horario"),
-            "tipo_evento": _comparison_event_type(context["evento"]),
-            "arquivos_backup": {
-                role: {
-                    "nome": item["name"],
-                    "registros": item["records"],
-                    "tamanho_bytes": item["size"],
-                    "modificado_em": item["modified"],
-                }
-                for role, item in context["backup_files"].items()
-            },
-            "arquivos_atuais": context["current_files"],
-            "preview_token": context["preview_token"],
-        }
+        try:
+            return history_restore.restore_preview(services, evento_id)
+        except HistoryRestoreError as error:
+            raise HTTPException(status_code=error.status_code, detail=error.detail) from error
 
 
     @router.post("/api/historico-comparacoes/{evento_id}/restaurar")
     def restaurar_comparacao_historica(evento_id: str, payload: ComparisonRestorePayload):
-        persistent_backup_dir = None
-
         try:
-            context = _build_comparison_restore_context(evento_id)
-            if not hmac.compare_digest(payload.preview_token, context["preview_token"]):
-                raise HTTPException(
-                    status_code=409,
-                    detail="Os arquivos ativos ou o backup mudaram desde a prévia. Atualize a prévia antes de restaurar.",
-                )
-            if all(
-                context["backup_files"][role]["sha256"] == context["current_hashes"][role]
-                for role in context["backup_files"]
-            ):
-                raise HTTPException(status_code=409, detail="Os dois inventários ativos já correspondem ao backup selecionado.")
-
-            restoration_time = datetime.now().astimezone().isoformat(timespec="seconds")
-            restoration_id = uuid.uuid4().hex
-            persistent_backup_dir = services.upload_backups_directory() / f"{datetime.now().strftime('%Y%m%d-%H%M%S')}-{uuid.uuid4().hex[:8]}"
-            target_files = {
-                "endpoint": services.endpoint_upload_path(),
-                "detalhes": services.details_upload_path(),
-            }
-            source_event = context["evento"]
-            source_comparison = source_event.get("comparacao") or {}
-            source_backup_relative = source_comparison.get("backup_diretorio")
-            transaction_targets = [
-                *target_files.values(),
-                services.comparison_history_path(),
-                services.modified_aliases_path(),
-            ]
-
-            with services.inventory_state_transaction(transaction_targets) as transaction:
-                _, locked_current_hashes = _current_inventory_snapshot()
-                if locked_current_hashes != context["current_hashes"]:
-                    raise HTTPException(
-                        status_code=409,
-                        detail="Os inventários ativos mudaram desde a prévia. Atualize a prévia antes de restaurar.",
-                    )
-                persistent_backup_dir.mkdir(parents=True, exist_ok=False)
-                missing_current_files: Dict[str, bool] = {}
-                invalid_current_files: Dict[str, bool] = {}
-                for role, target_path in target_files.items():
-                    role_backup_dir = persistent_backup_dir / role
-                    role_backup_dir.mkdir(parents=True, exist_ok=True)
-                    expected_current_hash = context["current_hashes"][role]
-                    if not target_path.is_file():
-                        if expected_current_hash is not None:
-                            raise TransactionConflictError(f"'{target_path.name}' mudou durante a restauração.")
-                        missing_current_files[role] = True
-                        invalid_current_files[role] = False
-                        continue
-                    if expected_current_hash is None:
-                        raise TransactionConflictError(f"'{target_path.name}' mudou durante a restauração.")
-                    backup_path = role_backup_dir / target_path.name
-                    shutil.copy2(target_path, backup_path)
-                    with backup_path.open("r+b") as backup_file:
-                        backup_file.flush()
-                        os.fsync(backup_file.fileno())
-                    if (
-                        not filecmp.cmp(target_path, backup_path, shallow=False)
-                        or _sha256_file(backup_path) != expected_current_hash
-                    ):
-                        raise TransactionConflictError(f"A cópia de segurança de '{target_path.name}' não passou na validação.")
-                    missing_current_files[role] = False
-                    try:
-                        services.validate_uploaded_workbook(backup_path.read_bytes(), role)
-                        invalid_current_files[role] = False
-                    except (HTTPException, WorkbookSafetyError):
-                        invalid_current_files[role] = True
-                    except Exception:
-                        logger.exception(
-                            "Falha inesperada ao validar backup durante restauração (evento=%s, fonte=%s).",
-                            evento_id,
-                            role,
-                        )
-                        invalid_current_files[role] = True
-
-                _, backed_up_current_hashes = _current_inventory_snapshot()
-                if backed_up_current_hashes != context["current_hashes"]:
-                    raise TransactionConflictError("Um inventário ativo mudou durante a cópia de segurança.")
-
-                for role, target_path in target_files.items():
-                    backup_bytes = context["backup_files"][role]["bytes"]
-
-                    def validate_staged_backup(path: Path, current_role=role, expected_bytes=backup_bytes):
-                        candidate_bytes = path.read_bytes()
-                        if candidate_bytes != expected_bytes:
-                            raise WorkbookSafetyError("O arquivo preparado difere do backup validado.")
-                        services.validate_uploaded_workbook(candidate_bytes, current_role)
-
-                    transaction.stage_bytes(target_path, backup_bytes, validate_staged_backup)
-
-                transaction.apply()
-                prepared_state = services.load_database(
-                    transaction_locked=True,
-                    publish=False,
-                )
-                if not isinstance(prepared_state, dict):
-                    raise RuntimeError("O conjunto restaurado não pôde ser carregado pelo site.")
-
-                restored_files = {role: path.name for role, path in target_files.items()}
-                # Overrides are kept on purpose (restoring again brings them back); the count
-                # tells the user how many no longer match a serial of the restored inventory.
-                restored_serials = {
-                    services.normalize_reference_value(equipment.get("serial") or key)
-                    for key, equipment in (prepared_state.get("equipamentos_cache") or {}).items()
-                    if isinstance(equipment, dict)
-                }
-                orphan_manual_aliases = len(
-                    set(services.manual_aliases_by_serial(services.load_modified_apelidos())) - restored_serials
-                )
-                restoration_comparison = {
-                    "evento_id": restoration_id,
-                    "tipo_operacao": "restauracao",
-                    "horario_comparacao": restoration_time,
-                    "restauracao_de": {
-                        "evento_id": evento_id,
-                        "horario": source_event.get("horario"),
-                        "tipo": _comparison_event_type(source_event),
-                    },
-                    "arquivos_restaurados": restored_files,
-                    "total_endpoint_restaurado": context["backup_files"]["endpoint"]["records"],
-                    "total_detalhes_restaurado": context["backup_files"]["detalhes"]["records"],
-                    "total_equipamentos_carregados": prepared_state["stats_cache"].get("total_equipamentos", 0),
-                    "apelidos_manuais_sem_equipamento": orphan_manual_aliases,
-                    "backup_diretorio": str(persistent_backup_dir.relative_to(services.input_directory())),
-                    "backup_arquivos_ausentes": missing_current_files,
-                    "backup_arquivos_invalidos": invalid_current_files,
-                    "historico_salvo": True,
-                }
-                restoration_event = {
-                    "id": restoration_id,
-                    "tipo": "restauracao",
-                    "horario": restoration_time,
-                    "arquivos_restaurados": restored_files,
-                    "restauracao_de": restoration_comparison["restauracao_de"],
-                    "resumo": {
-                        "restauracao": True,
-                        "total_endpoint_restaurado": restoration_comparison["total_endpoint_restaurado"],
-                        "total_detalhes_restaurado": restoration_comparison["total_detalhes_restaurado"],
-                    },
-                    "comparacao": restoration_comparison,
-                }
-
-                def append_restoration(history):
-                    if not isinstance(history, list):
-                        raise RuntimeError("O histórico de planilhas não contém uma lista válida.")
-                    current_source_event = next(
-                        (item for item in history if isinstance(item, dict) and item.get("id") == evento_id),
-                        None,
-                    )
-                    current_source_comparison = (
-                        current_source_event.get("comparacao")
-                        if isinstance(current_source_event, dict) else None
-                    )
-                    if (
-                        not isinstance(current_source_event, dict)
-                        or not isinstance(current_source_comparison, dict)
-                        or current_source_comparison.get("backup_diretorio") != source_backup_relative
-                        or current_source_event.get("horario") != source_event.get("horario")
-                    ):
-                        raise HTTPException(
-                            status_code=409,
-                            detail="A atualização selecionada mudou ou foi removida do histórico. A restauração foi cancelada.",
-                        )
-                    updated = deepcopy(history)
-                    updated.append(restoration_event)
-                    return updated
-
-                transaction.update_json(services.comparison_history_path(), append_restoration, [])
-                transaction.commit()
-                services.publish_database_state(prepared_state)
-
-            return {
-                "sucesso": True,
-                "evento": {
-                    "id": restoration_id,
-                    "tipo": "restauracao",
-                    "horario": restoration_time,
-                    "restauracao_de": restoration_comparison["restauracao_de"],
-                    "arquivos_restaurados": restored_files,
-                    "desfazer_disponivel": not any(missing_current_files.values()) and not any(invalid_current_files.values()),
-                    "total_endpoint_restaurado": restoration_comparison["total_endpoint_restaurado"],
-                    "total_detalhes_restaurado": restoration_comparison["total_detalhes_restaurado"],
-                    "total_equipamentos_carregados": restoration_comparison["total_equipamentos_carregados"],
-                    "apelidos_manuais_sem_equipamento": orphan_manual_aliases,
-                },
-            }
+            return history_restore.restore_comparison(services, evento_id, payload.preview_token)
+        except HistoryRestoreError as error:
+            raise HTTPException(status_code=error.status_code, detail=error.detail) from error
         except HTTPException:
             raise
         except FileBusyError as error:
@@ -1457,13 +817,13 @@ def create_inventory_history_router(services: InventoryHistoryServices):
         }
 
     return router, {
-        '_build_comparison_restore_context': _build_comparison_restore_context,
-        '_comparison_event_has_restorable_backup': _comparison_event_has_restorable_backup,
-        '_comparison_event_type': _comparison_event_type,
-        '_comparison_restore_backup_paths': _comparison_restore_backup_paths,
-        '_current_inventory_snapshot': _current_inventory_snapshot,
-        '_sha256_file': _sha256_file,
-        '_validated_comparison_backup_files': _validated_comparison_backup_files,
+        '_build_comparison_restore_context': partial(history_restore.build_restore_context, services),
+        '_comparison_event_has_restorable_backup': partial(history_restore.event_has_restorable_backup, services),
+        '_comparison_event_type': comparison_event_type,
+        '_comparison_restore_backup_paths': partial(history_restore.restore_backup_paths, services),
+        '_current_inventory_snapshot': partial(history_restore.current_inventory_snapshot, services),
+        '_sha256_file': history_restore.sha256_file,
+        '_validated_comparison_backup_files': partial(history_restore.validated_backup_files, services),
         'flush_pending_history_annotations': flush_pending_history_annotations,
         'migrate_legacy_history_annotations': migrate_legacy_history_annotations,
         'history_annotation_view': history_annotation_view,
