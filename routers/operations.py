@@ -12,6 +12,7 @@ from fastapi import APIRouter, File, HTTPException, UploadFile
 from fastapi.responses import StreamingResponse
 from pydantic import BaseModel, Field
 
+from core.logging_setup import redact_reference
 from domains.history_insights import compare_updates, is_restoration, latest_update, pending_rows
 from domains.history_annotations import (
     MAX_ANNOTATION_LENGTH,
@@ -224,7 +225,7 @@ def create_operations_router(
                 publisher=save_history_annotation,
             )
         except Exception:
-            logger.exception("Anotação do chamado %s salva e aguardando sincronização.", record.get("serie"))
+            logger.exception("Anotação do chamado %s salva e aguardando sincronização.", redact_reference(record.get("serie")))
             return False
 
     def _persist_ticket_annotation(
@@ -267,7 +268,7 @@ def create_operations_router(
                 )
                 transaction.commit()
         except (OSError, FileBusyError, FileTransactionError):
-            logger.exception("Não foi possível enfileirar a anotação do chamado %s.", serial)
+            logger.exception("Não foi possível enfileirar a anotação do chamado %s.", redact_reference(serial))
             raise HTTPException(status_code=503, detail="Não foi possível salvar a anotação localmente.") from None
 
         return sync_ticket_annotation(record)

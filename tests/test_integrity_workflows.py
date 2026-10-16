@@ -884,6 +884,61 @@ class WorkflowIntegrityTests(unittest.TestCase):
         workbook.close()
         self.assertEqual(main.get_equipamento("SN-CLEAR")["modelo"], "")
 
+    def test_cache_reloads_after_another_process_replaces_the_active_files(self):
+        make_details(self.details, [
+            ("SN-EXTERNO", "ALIAS-EXTERNO", "Modelo antes", "Maringá", "Notebook", "87000000"),
+        ])
+        make_endpoint(self.endpoint, [("SN-OUTRO", "HOST-OUTRO")])
+        make_model(self.model)
+        self.assertTrue(main.load_database())
+        self.assertFalse(main.reload_database_if_changed_externally())
+
+        # An in-process edit publishes its own state and must not trigger a reload.
+        main.aplicar_alteracao_apelido("SN-EXTERNO", "MANUAL-LOCAL")
+        with patch.object(main, "load_database", side_effect=AssertionError("recarga desnecessária")):
+            self.assertFalse(main.reload_database_if_changed_externally())
+
+        # The inbox script running in another process rewrites the workbook.
+        make_details(self.details, [
+            ("SN-EXTERNO", "ALIAS-EXTERNO", "Modelo depois", "Maringá", "Notebook", "87000000"),
+            ("SN-NOVO-EXTERNO", "ALIAS-NOVO", "Modelo novo", "Maringá", "Notebook", "87000000"),
+        ])
+        later = time.time() + 5
+        os.utime(self.details, (later, later))
+        self.assertEqual(main.equipamentos_cache["SN-EXTERNO"]["modelo"], "Modelo antes")
+
+        self.assertTrue(main.reload_database_if_changed_externally())
+
+        self.assertEqual(main.equipamentos_cache["SN-EXTERNO"]["modelo"], "Modelo depois")
+        self.assertIn("SN-NOVO-EXTERNO", main.equipamentos_cache)
+        self.assertEqual(main.equipamentos_cache["SN-EXTERNO"]["apelido"], "MANUAL-LOCAL")
+        self.assertFalse(main.reload_database_if_changed_externally())
+
+    def test_equipment_text_starting_with_formula_marker_is_saved_as_literal_text(self):
+        make_details(self.details, [
+            ("SN-FORMULA", "ALIAS-FORMULA", "Modelo original", "Maringá", "Notebook", "87000000"),
+        ])
+        make_endpoint(self.endpoint, [("SN-OUTRO", "HOST-OUTRO")])
+        make_model(self.model)
+        self.assertTrue(main.load_database())
+        selected = main.get_equipamento("SN-FORMULA")
+        payload_text = '=HYPERLINK("http://example.invalid","abrir")'
+
+        result = main.salvar_equipamento(main.EquipamentoUpdatePayload(
+            serial="SN-FORMULA",
+            revisao=selected["revisao"],
+            modelo=payload_text,
+        ))
+
+        self.assertTrue(result["sucesso"])
+        with zipfile.ZipFile(self.details) as archive:
+            sheet_xml = archive.read("xl/worksheets/sheet1.xml").decode("utf-8")
+        self.assertNotIn("<f>", sheet_xml)
+        workbook = openpyxl.load_workbook(self.details, data_only=False)
+        cell = workbook["EquipamentosDetalhes"]["C2"]
+        self.assertEqual((cell.value, cell.data_type), (payload_text, "s"))
+        workbook.close()
+
     def test_equipment_edit_preserves_the_supported_16467_contract_metadata(self):
         headers = [
             "NumeroSerie", "Apelido", "Modelo", "Cidade", "Tipo", "CEP",
@@ -3031,6 +3086,54 @@ class WorkflowIntegrityTests(unittest.TestCase):
         self.assertEqual(main.load_modified_apelidos(), {"SN-1": "MANUAL-COMMITTED"})
         self.assertEqual(main.equipamentos_cache["SN-1"]["apelido"], "MANUAL-COMMITTED")
 
+    def test_restore_counts_manual_aliases_left_without_equipment_and_keeps_them(self):
+        make_details(self.details, [
+            ("SN-1", "ALIAS-ATUAL", "Modelo A", "Maringá", "Notebook", "87000000"),
+            ("SN-NOVO", "ALIAS-NOVO", "Modelo B", "Maringá", "Notebook", "87000000"),
+        ])
+        make_endpoint(self.endpoint, [("SN-1", "PRNOTE-ATUAL"), ("SN-NOVO", "PRNOTE-NOVO")])
+        backup_dir = self.backups / "restore-orphans"
+        (backup_dir / "endpoint").mkdir(parents=True)
+        (backup_dir / "detalhes").mkdir()
+        make_endpoint(backup_dir / "endpoint" / self.endpoint.name, [("SN-1", "PRNOTE-ANTIGO")])
+        backup_headers = complete_details_headers(
+            ["NumeroSerie", "Apelido", "Modelo", "Cidade", "Tipo", "CEP"]
+        )
+        backup_row = ["SN-1", "ALIAS-ANTIGO", "Modelo A", "Maringá", "Notebook", "87000000"]
+        backup_row.extend([None] * (len(backup_headers) - len(backup_row)))
+        cnpj_header_keys = {
+            main.normalize_workbook_header(header)
+            for header in main.DETAILS_INSTALLATION_CNPJ_HEADER_ALIASES
+        }
+        cnpj_column = next(
+            index for index, header in enumerate(backup_headers)
+            if main.normalize_workbook_header(header) in cnpj_header_keys
+        )
+        backup_row[cnpj_column] = "12345678000195"
+        make_details(backup_dir / "detalhes" / self.details.name, [backup_row], headers=backup_headers)
+        self.comparison_history.write_text(json.dumps([{
+            "id": "restore-orphans-event",
+            "horario": "2026-10-01T12:00:00-03:00",
+            "comparacao": {"backup_diretorio": str(backup_dir.relative_to(self.input_dir))},
+        }]), encoding="utf-8")
+        self.assertTrue(main.load_database())
+        main.aplicar_alteracao_apelido("SN-1", "MANUAL-1")
+        main.aplicar_alteracao_apelido("SN-NOVO", "MANUAL-NOVO")
+        preview = main.visualizar_restauracao_comparacao("restore-orphans-event")
+
+        result = main.restaurar_comparacao_historica(
+            "restore-orphans-event",
+            main.ComparisonRestorePayload(preview_token=preview["preview_token"]),
+        )
+
+        self.assertEqual(result["evento"]["apelidos_manuais_sem_equipamento"], 1)
+        saved = next(
+            event for event in json.loads(self.comparison_history.read_text(encoding="utf-8"))
+            if event.get("tipo") == "restauracao"
+        )
+        self.assertEqual(saved["comparacao"]["apelidos_manuais_sem_equipamento"], 1)
+        self.assertEqual(main.load_modified_apelidos(), {"SN-1": "MANUAL-1", "SN-NOVO": "MANUAL-NOVO"})
+
     def test_restore_keeps_old_cache_until_file_and_history_transaction_commits(self):
         self.details.write_bytes(_details_bytes([
             ("SN-RESTORE-PREPARE", "ALIAS-ATUAL", "Modelo atual", "Maringá", "Notebook", "87000000"),
@@ -3306,7 +3409,9 @@ class WorkflowIntegrityTests(unittest.TestCase):
         self.assertEqual(latest_event["apelido_novo"], "ALIAS-MANUAL")
 
         undone = main.desfazer_alteracao_apelido(main.ApelidoUndoPayload(evento_id=latest_event["id"]))
-        self.assertEqual(undone["equipamento"]["apelido"], "ALIAS-ORIGINAL")
+        # Sem override antes da edição, o desfazer remove o override e o hostname do Endpoint volta a valer.
+        self.assertEqual(undone["equipamento"]["apelido"], "HOST-INVALL")
+        self.assertEqual(main.load_modified_apelidos(), {})
         self.assertEqual(len(json.loads(self.manual_history.read_text(encoding="utf-8"))), 3)
         self.assertEqual(json.loads(self.comparison_history.read_text(encoding="utf-8")), [{"id": "planilha-antiga"}])
         saved_details = openpyxl.load_workbook(self.details, data_only=True)
@@ -3322,6 +3427,86 @@ class WorkflowIntegrityTests(unittest.TestCase):
         self.assertEqual(raised.exception.status_code, 409)
         self.assertEqual(self.details.read_bytes(), details_before_stale_undo)
         self.assertEqual(main.load_modified_apelidos(), {"SN-1": "VALOR-EXTERNO"})
+
+    def _prepare_alias_undo_fixture(self, manual_history=None):
+        make_details(self.details, [("SN-1", "ALIAS-ORIGINAL", "Modelo A", "Maringá", "Notebook", "87000000")])
+        make_endpoint(self.endpoint, [("SN-1", "HOST-INVALL")])
+        make_model(self.model)
+        self.comparison_history.write_text("[]", encoding="utf-8")
+        if manual_history is not None:
+            self.manual_history.write_text(json.dumps(manual_history), encoding="utf-8")
+
+    def test_undo_without_previous_override_removes_override_and_restores_endpoint_hostname(self):
+        self._prepare_alias_undo_fixture()
+        self.assertTrue(main.load_database())
+        self.assertEqual(main.equipamentos_cache["SN-1"]["apelido"], "HOST-INVALL")
+
+        main.atualizar_apelido(main.ApelidoUpdatePayload(serial="SN-1", apelido="ALIAS-MANUAL"))
+        edit_event = json.loads(self.manual_history.read_text(encoding="utf-8"))[-1]
+        self.assertIs(edit_event["tinha_override"], False)
+        self.assertEqual(main.load_modified_apelidos(), {"SN-1": "ALIAS-MANUAL"})
+
+        undone = main.desfazer_alteracao_apelido(main.ApelidoUndoPayload(evento_id=edit_event["id"]))
+
+        self.assertEqual(main.load_modified_apelidos(), {})
+        self.assertEqual(undone["equipamento"]["apelido"], "HOST-INVALL")
+        self.assertFalse(main.equipamentos_cache["SN-1"]["_apelido_manual_override"])
+        undo_event = json.loads(self.manual_history.read_text(encoding="utf-8"))[-1]
+        self.assertEqual(undo_event["acao"], "desfazer")
+        self.assertEqual(undo_event["apelido_anterior"], "ALIAS-MANUAL")
+        self.assertEqual(undo_event["apelido_novo"], "ALIAS-ORIGINAL")
+        self.assertIs(undo_event["tinha_override"], True)
+
+        # Um novo hostname no Endpoint passa a valer, porque não sobrou override manual.
+        make_endpoint(self.endpoint, [("SN-1", "HOST-INVALL-NOVO")])
+        self.assertTrue(main.load_database())
+        self.assertEqual(main.equipamentos_cache["SN-1"]["apelido"], "HOST-INVALL-NOVO")
+
+    def test_undo_with_previous_override_restores_that_override(self):
+        self._prepare_alias_undo_fixture()
+        self.overrides.write_text(json.dumps({"SN-1": "MANUAL-ANTIGO"}), encoding="utf-8")
+        self.assertTrue(main.load_database())
+        self.assertEqual(main.equipamentos_cache["SN-1"]["apelido"], "MANUAL-ANTIGO")
+
+        main.atualizar_apelido(main.ApelidoUpdatePayload(serial="SN-1", apelido="MANUAL-NOVO"))
+        edit_event = json.loads(self.manual_history.read_text(encoding="utf-8"))[-1]
+        self.assertIs(edit_event["tinha_override"], True)
+
+        undone = main.desfazer_alteracao_apelido(main.ApelidoUndoPayload(evento_id=edit_event["id"]))
+
+        self.assertEqual(main.load_modified_apelidos(), {"SN-1": "MANUAL-ANTIGO"})
+        self.assertEqual(undone["equipamento"]["apelido"], "MANUAL-ANTIGO")
+
+    def test_undo_of_event_without_override_marker_keeps_legacy_behavior(self):
+        legacy_event = {
+            "id": "evento-legado",
+            "tipo": "apelido",
+            "serial": "SN-1",
+            "apelido_anterior": "ALIAS-ORIGINAL",
+            "apelido_novo": "ALIAS-MANUAL",
+            "horario": "2026-10-01T10:00:00-03:00",
+        }
+        self._prepare_alias_undo_fixture(manual_history=[legacy_event])
+        self.overrides.write_text(json.dumps({"SN-1": "ALIAS-MANUAL"}), encoding="utf-8")
+        self.assertTrue(main.load_database())
+
+        undone = main.desfazer_alteracao_apelido(main.ApelidoUndoPayload(evento_id="evento-legado"))
+
+        self.assertEqual(main.load_modified_apelidos(), {"SN-1": "ALIAS-ORIGINAL"})
+        self.assertEqual(undone["equipamento"]["apelido"], "ALIAS-ORIGINAL")
+
+    def test_deleting_latest_alias_event_without_previous_override_removes_override(self):
+        self._prepare_alias_undo_fixture()
+        self.assertTrue(main.load_database())
+        main.atualizar_apelido(main.ApelidoUpdatePayload(serial="SN-1", apelido="ALIAS-MANUAL"))
+        edit_event = json.loads(self.manual_history.read_text(encoding="utf-8"))[-1]
+
+        restored = main.excluir_evento_historico_apelido(edit_event["id"])
+
+        self.assertEqual(main.load_modified_apelidos(), {})
+        self.assertEqual(restored["equipamento"]["apelido"], "HOST-INVALL")
+        remaining_ids = [item["id"] for item in json.loads(self.manual_history.read_text(encoding="utf-8"))]
+        self.assertNotIn(edit_event["id"], remaining_ids)
 
     def test_address_history_restoration_remains_rejected_without_mutation(self):
         make_details(self.details, [

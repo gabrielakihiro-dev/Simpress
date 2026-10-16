@@ -121,7 +121,30 @@ class LocalRequestSafetyMiddleware:
         self.app = app
         self.services = services
 
+    def websocket_allowed(self, scope) -> bool:
+        """Browsers do not apply the same-origin policy to WebSockets, so Origin is mandatory."""
+        if not is_direct_loopback_request(scope):
+            return False
+        raw_headers = scope.get("headers", [])
+        host_values = [value for key, value in raw_headers if key.lower() == b"host"]
+        origin_values = [value for key, value in raw_headers if key.lower() == b"origin"]
+        if len(host_values) != 1 or len(origin_values) != 1:
+            return False
+        host_authority = parse_request_authority(host_values[0])
+        return (
+            host_authority is not None
+            and host_authority in self.services.allowed_authorities()
+            and parse_request_authority(origin_values[0], is_origin=True) == host_authority
+        )
+
     async def __call__(self, scope, receive, send):
+        if scope["type"] == "websocket":
+            if not self.websocket_allowed(scope):
+                # Closing before accept makes the server answer the handshake with 403.
+                await send({"type": "websocket.close", "code": 1008})
+                return
+            await self.app(scope, receive, send)
+            return
         if scope["type"] != "http":
             await self.app(scope, receive, send)
             return
