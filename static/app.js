@@ -35,6 +35,8 @@
     unidadesList: [],
     acompanhamentoChamadosAtual: null,
     historicoAcompanhamentoChamados: [],
+    // Triage indicator chosen as a list filter ("ativos", "atrasados", "sem_data", "em_dia" or empty).
+    filtroTriagemChamados: "",
     previaPlanilhasAtual: null,
   };
 
