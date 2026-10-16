@@ -231,6 +231,7 @@
     let lastFetch = 0;
     let requestSerial = 0;
     let cityFilter = "";
+    let panelExpanded = false;
 
     function ensurePanel() {
       if (panel) return panel;
@@ -257,7 +258,9 @@
       host.replaceChildren();
       const title = el("h2", "ux-home-title", "Resumo do parque");
       title.id = "ux-home-panel-title";
-      host.append(title);
+      const header = el("div", "ux-home-header");
+      header.append(title);
+      host.append(header);
       if (!data.base_importada) {
         host.append(el("p", "ux-home-empty", "Nenhuma base importada ainda. Use “Atualizar planilhas” para carregar os equipamentos."));
         host.hidden = false;
@@ -268,7 +271,10 @@
       stats.append(stat("Equipamentos", data.total_equipamentos), stat("Unidades", data.total_unidades));
       (data.por_categoria || []).forEach(category => stats.append(stat(category.label, category.total)));
       stats.querySelectorAll(".ux-stat").forEach(item => item.setAttribute("role", "listitem"));
-      host.append(stats);
+      const body = el("div", "ux-home-body");
+      body.id = "ux-home-body";
+      body.hidden = !panelExpanded;
+      body.append(stats);
 
       const columns = el("div", "ux-home-columns");
       if ((data.cidades_principais || []).length) {
@@ -343,7 +349,20 @@
         status.append(el("p", "ux-home-note ux-home-note--ok", "Nenhum ponto de atenção na última comparação."));
       }
       columns.append(status);
-      host.append(columns);
+      body.append(columns);
+      const toggle = el("button", "ux-home-toggle");
+      toggle.type = "button";
+      toggle.setAttribute("aria-controls", "ux-home-body");
+      const syncToggle = () => {
+        body.hidden = !panelExpanded;
+        toggle.setAttribute("aria-expanded", String(panelExpanded));
+        toggle.textContent = panelExpanded ? "Minimizar" : "Maximizar";
+        title.classList.toggle("ux-home-title--collapsed", !panelExpanded);
+      };
+      toggle.addEventListener("click", () => { panelExpanded = !panelExpanded; syncToggle(); });
+      syncToggle();
+      header.append(toggle);
+      host.append(body);
       host.hidden = false;
     }
 
