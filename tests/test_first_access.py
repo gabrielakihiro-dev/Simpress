@@ -13,6 +13,7 @@ from unittest.mock import patch
 import openpyxl
 from starlette.datastructures import UploadFile
 
+from core.config import format_size_limit
 from domains.local_setup import TRANSFER_CELLS, unpack_simpress_zip, validate_local_model
 from core.xlsx_safety import XlsxPackageError, validate_xlsx
 from tests import test_integrity_workflows as fixtures
@@ -203,6 +204,15 @@ class FirstAccessTests(unittest.TestCase):
                                ([("a.xlsx", b"12345")], 4)]:
             with self.subTest(entries=entries), self.assertRaises(main.HTTPException):
                 unpack_simpress_zip(archive_bytes(entries), limit)
+
+    def test_size_limit_messages_follow_the_configured_limit(self):
+        self.assertEqual(format_size_limit(60 * 1024 * 1024), "60 MB")
+        self.assertEqual(format_size_limit(64 * 1024 * 1024), "64 MB")
+        self.assertEqual(format_size_limit(2048), "2 KB")
+        self.assertEqual(format_size_limit(4), "4 bytes")
+        with self.assertRaises(main.HTTPException) as caught:
+            unpack_simpress_zip(archive_bytes([("a.xlsx", b"12345")]), 4)
+        self.assertIn("limite de 4 bytes", caught.exception.detail)
 
     def test_compression_corruption_maps_to_existing_xlsx_and_upload_errors(self):
         valid_xlsx = workbook_bytes([["NumeroSerie", "Apelido"], ["SINTETICO-1", "HOST-1"]])

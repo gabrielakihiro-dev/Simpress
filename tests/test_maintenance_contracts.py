@@ -566,7 +566,7 @@ class MaintenanceContractTests(unittest.TestCase):
     def test_xlsx_total_dimension_budget_applies_across_worksheets(self):
         sheet_xml = (
             '<worksheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main">'
-            '<dimension ref="A1:Z100000"/><sheetData/></worksheet>'
+            '<dimension ref="A1:Z200000"/><sheetData/></worksheet>'
         )
         package = _xlsx_with_worksheet_xml(sheet_xml, sheet_xml)
 
@@ -607,7 +607,7 @@ class MaintenanceContractTests(unittest.TestCase):
         self.assertIn("colunas", raised.exception.detail)
 
     def test_xlsx_implicit_cells_count_toward_rectangular_dimension_limit(self):
-        implicit_cells = "<c><v>1</v></c>" * 26
+        implicit_cells = "<c><v>1</v></c>" * 52
         package = _xlsx_with_worksheet_xml(
             '<worksheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main">'
             '<sheetData><row r="200000">' + implicit_cells + '</row></sheetData></worksheet>'
