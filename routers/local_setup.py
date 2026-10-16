@@ -11,6 +11,7 @@ from pathlib import Path
 from fastapi import APIRouter, File, HTTPException, UploadFile
 
 from core.async_workers import await_worker_completion
+from core.config import format_size_limit
 from domains.local_setup import validate_local_model
 from core.integrity import AtomicFileTransaction, FileBusyError, FileTransactionError, WorkbookSafetyError
 from core.xlsx_safety import WORKBOOK_READ_ERRORS
@@ -59,8 +60,9 @@ def create_local_setup_router(*, model_path, transaction_root, backups_directory
             data = await file.read(max_upload_bytes() + 1)
             if not data:
                 raise HTTPException(400, "O modelo está vazio.")
-            if len(data) > max_upload_bytes():
-                raise HTTPException(413, "O modelo excede o limite de 30 MB.")
+            model_limit = max_upload_bytes()
+            if len(data) > model_limit:
+                raise HTTPException(413, f"O modelo excede o limite de {format_size_limit(model_limit)}.")
             admission = parser_admission()
             if not admission.acquire(blocking=False):
                 admission = None

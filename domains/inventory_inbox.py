@@ -15,6 +15,7 @@ from typing import Any, Callable, Coroutine, Optional, cast
 
 from fastapi import HTTPException
 
+from core.config import format_size_limit
 from core.local_paths import is_link_or_junction
 
 
@@ -332,11 +333,7 @@ class AutomaticInventoryInbox:
         return path.name, file_bytes
 
     def _upload_limit_label(self) -> str:
-        if self.max_upload_bytes >= 1024 * 1024:
-            return f"{self.max_upload_bytes / (1024 * 1024):g} MB"
-        if self.max_upload_bytes >= 1024:
-            return f"{self.max_upload_bytes / 1024:g} KB"
-        return f"{self.max_upload_bytes} bytes"
+        return format_size_limit(self.max_upload_bytes)
 
     def _read_batch_files(self, batch_dir: Path) -> tuple[str, bytes, str, bytes]:
         endpoint_path = self._select_workbook(batch_dir, "endpoint")

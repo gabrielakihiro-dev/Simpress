@@ -11,6 +11,7 @@ from pathlib import PurePosixPath
 from fastapi import HTTPException
 from openpyxl.cell.cell import MergedCell
 
+from core.config import format_size_limit
 from core.integrity import load_workbook_safely
 from core.openpyxl_compat import stored_cells
 
@@ -22,8 +23,9 @@ TRANSFER_CELLS = (
 )
 
 
-def unpack_simpress_zip(data: bytes, limit: int, *, size_label: str = "30 MB") -> tuple[bytes, str]:
+def unpack_simpress_zip(data: bytes, limit: int) -> tuple[bytes, str]:
     """Read one bounded XLSX member without extracting anything to disk."""
+    size_label = format_size_limit(limit)
     try:
         with zipfile.ZipFile(io.BytesIO(data)) as archive:
             members = archive.infolist()
