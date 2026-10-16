@@ -31,7 +31,7 @@ def recent_workbook(downloads: Path, prefix: str, since: datetime):
     source = max(candidates, key=lambda path: (path.stat().st_mtime_ns, path.name))
     before = source.stat()
     if before.st_size > MAX_UPLOAD_BYTES:
-        raise ValueError(f"Download excede 30 MB: {source.name}")
+        raise ValueError(f"Download excede 60 MB: {source.name}")
     payload = source.read_bytes()
     after = source.stat()
     if (before.st_size, before.st_mtime_ns) != (after.st_size, after.st_mtime_ns):
@@ -47,7 +47,7 @@ def recent_workbook(downloads: Path, prefix: str, since: datetime):
                 raise ValueError(f"O ZIP deve conter exatamente um XLSX: {source.name}")
             entry = entries[0]
             if entry.file_size > MAX_UPLOAD_BYTES:
-                raise ValueError("A planilha extraída excede 30 MB.")
+                raise ValueError("A planilha extraída excede 60 MB.")
             member = entry.filename
             name = Path(member.replace("\\", "/")).name
             payload = archive.read(entry)

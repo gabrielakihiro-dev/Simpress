@@ -22,7 +22,7 @@ TRANSFER_CELLS = (
 )
 
 
-def unpack_simpress_zip(data: bytes, limit: int, *, size_label: str = "30 MB") -> tuple[bytes, str]:
+def unpack_simpress_zip(data: bytes, limit: int, *, size_label: str = "60 MB") -> tuple[bytes, str]:
     """Read one bounded XLSX member without extracting anything to disk."""
     try:
         with zipfile.ZipFile(io.BytesIO(data)) as archive:

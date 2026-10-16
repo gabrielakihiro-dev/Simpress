@@ -368,7 +368,7 @@ async def read_uploaded_xlsx(
     if not file_bytes:
         raise HTTPException(status_code=400, detail=f"O arquivo de {display_role} está vazio.")
     if len(file_bytes) > max_upload_bytes:
-        raise HTTPException(status_code=413, detail=f"O arquivo de {display_role} excede o limite de 30 MB.")
+        raise HTTPException(status_code=413, detail=f"O arquivo de {display_role} excede o limite de 60 MB.")
 
     parse_admission = services.workbook_parse_admission()
     if parse_admission is not None and not parse_admission.acquire(blocking=False):

@@ -252,14 +252,14 @@ class AutomaticTicketInbox:
             if before.st_size <= 0:
                 raise TicketInboxError(f"O arquivo '{path.name}' está vazio.")
             if before.st_size > self.max_upload_bytes:
-                raise TicketInboxError(f"O arquivo '{path.name}' excede o limite de 32 MB.")
+                raise TicketInboxError(f"O arquivo '{path.name}' excede o limite de 64 MB.")
             with os.fdopen(descriptor, "rb", closefd=False) as source:
                 content = source.read(self.max_upload_bytes + 1)
             after = os.fstat(descriptor)
         finally:
             os.close(descriptor)
         if len(content) > self.max_upload_bytes:
-            raise TicketInboxError(f"O arquivo '{path.name}' excede o limite de 32 MB.")
+            raise TicketInboxError(f"O arquivo '{path.name}' excede o limite de 64 MB.")
         if (before.st_size, before.st_mtime_ns) != (after.st_size, after.st_mtime_ns):
             raise TicketInboxChanged("O arquivo mudou durante a leitura.")
         return path.name, content

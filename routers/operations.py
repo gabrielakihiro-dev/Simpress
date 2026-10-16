@@ -48,7 +48,7 @@ from core.integrity import AtomicFileTransaction, FileBusyError, FileTransaction
 from core.xlsx_safety import XlsxLimitExceeded, XlsxPackageError
 
 
-MAX_TICKET_WORKBOOK_BYTES = 32 * 1024 * 1024
+MAX_TICKET_WORKBOOK_BYTES = 64 * 1024 * 1024
 logger = logging.getLogger(__name__)
 
 
@@ -457,11 +457,11 @@ def create_operations_router(
                 raise HTTPException(status_code=400, detail=f"Selecione um arquivo {accepted} para a fonte {source_label}.")
             content = upload.file.read(MAX_TICKET_WORKBOOK_BYTES + 1)
             if len(content) > MAX_TICKET_WORKBOOK_BYTES:
-                raise HTTPException(status_code=413, detail=f"O arquivo {source_label} excede o limite de 32 MB.")
+                raise HTTPException(status_code=413, detail=f"O arquivo {source_label} excede o limite de 64 MB.")
             if not content:
                 raise HTTPException(status_code=400, detail=f"O arquivo da fonte {source_label} está vazio.")
             if is_zip:
-                content, _ = unpack_simpress_zip(content, MAX_TICKET_WORKBOOK_BYTES, size_label="32 MB")
+                content, _ = unpack_simpress_zip(content, MAX_TICKET_WORKBOOK_BYTES, size_label="64 MB")
             return content, filename[:200]
 
         simpress_bytes, simpress_filename = read_source(simpress_file, "Simpress", allow_zip=True)
