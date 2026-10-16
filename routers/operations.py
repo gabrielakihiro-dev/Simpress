@@ -49,7 +49,7 @@ from core.integrity import AtomicFileTransaction, FileBusyError, FileTransaction
 from core.xlsx_safety import XlsxLimitExceeded, XlsxPackageError
 
 
-MAX_TICKET_WORKBOOK_BYTES = 64 * 1024 * 1024
+MAX_TICKET_WORKBOOK_BYTES = 60 * 1024 * 1024
 logger = logging.getLogger(__name__)
 
 
