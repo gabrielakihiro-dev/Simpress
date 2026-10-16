@@ -234,9 +234,9 @@
     const primeiraRenderizacao = !list.querySelector?.("article[data-ticket-serial]");
     list.innerHTML = records.map(record => renderizarCartaoChamado(record, data.snapshot_id, expandedSections)).join("");
     if (primeiraRenderizacao) motion?.stagger(list.children);
-    list.querySelectorAll?.('details[data-ticket-section="timeline"]').forEach(section => {
+    list.querySelectorAll?.('details[data-ticket-section="timeline"], details[data-ticket-section="stages"]').forEach(section => {
       const card = section.closest("article[data-ticket-serial]");
-      if (card && expandedSections.has(chaveSecaoCartao(card.dataset.ticketSerial || "", "timeline"))) section.open = true;
+      if (card && expandedSections.has(chaveSecaoCartao(card.dataset.ticketSerial || "", section.dataset.ticketSection))) section.open = true;
     });
   }
 
@@ -316,47 +316,55 @@
     const providerLabels = atendimentosDoChamado(record).filter(provider => provider !== "Não informado");
     const oracleStatus = [currentOracle.status, currentOracle.sub_status].filter(Boolean).join(" · ") || "Não informado";
     const openDetails = expandedSections.has(chaveSecaoCartao(record.serie, "details")) ? " open" : "";
+    // Empty fields stay out of the card; the relation badge already says which source is missing.
+    const temValor = values => Array.isArray(values) && values.some(Boolean);
+    const identificador = (label, value, classes) => `<div class="ticket-card-identifier border ${classes}"><span>${label}</span>${value ? `<strong>${value}</strong>` : '<strong class="is-empty">Sem OS</strong>'}</div>`;
+    const metaPedido = [
+      temValor(simpress.pedidos) ? `<span><b>Pedido</b> ${formatarListaChamados(simpress.pedidos)}</span>` : "",
+      temValor(ordensVenda) ? `<span>${formatarListaChamados(ordensVenda)}</span>` : "",
+    ].join("");
+    const statusLinhas = [
+      temValor(simpress.status) ? `<p class="truncate text-xs text-cyan-100" title="Status Simpress: ${formatarListaChamados(simpress.status)}"><b>Simpress</b> · ${formatarListaChamados(simpress.status)}</p>` : "",
+      orderedOracle.length ? `<p class="truncate text-xs text-violet-100" title="Status Oracle: ${escapeHtml(oracleStatus)}"><b>Oracle</b> · ${escapeHtml(oracleStatus)}</p>` : "",
+    ].join("");
+    const triagem = [
+      currentOracle.fila ? `<span>Fila: ${escapeHtml(currentOracle.fila)}</span>` : "",
+      cityLabels.length ? `<span>Cidade: ${escapeHtml(cityLabels.join(", "))}</span>` : "",
+      providerLabels.length ? `<span>Atendimento: ${escapeHtml(providerLabels.join(", "))}</span>` : "",
+    ].join("");
+    const detalhesSimpress = [
+      temValor(ordensSimpress) ? `<p class="mt-1 text-xs text-slate-300">OS na planilha: ${formatarOrdensServico(ordensSimpress)}</p>` : "",
+      chamadosCliente.some(Boolean) ? `<p class="mt-1 text-xs text-slate-300">Chamado do cliente: ${formatarListaChamados(chamadosCliente)}</p>` : "",
+      temValor(simpress.descricoes_produto) ? `<p class="mt-1 break-words text-xs text-slate-300">Descrição do produto: ${formatarListaChamados(simpress.descricoes_produto)}</p>` : "",
+      temValor(simpress.cidades_entrega) ? `<p class="mt-1 text-xs text-slate-300">Cidade de entrega: ${formatarListaChamados(simpress.cidades_entrega)}</p>` : "",
+      mostrarEnderecoEntrega ? `<p class="mt-1 break-words text-xs text-slate-300">Endereço de entrega: ${formatarListaChamados(enderecosEntrega)}</p>` : "",
+    ].join("") || '<p class="mt-1 text-xs text-slate-500">Sem registro correspondente na Simpress.</p>';
     return `<article class="ticket-card rounded-xl border border-slate-800 bg-slate-950/70 p-3 sm:p-3.5" data-ticket-serial="${escapeHtml(record.serie)}">
           <div class="flex flex-wrap items-start justify-between gap-2">
             <h4 class="min-w-0 break-all font-mono text-sm font-semibold text-white">${escapeHtml(record.serie)}</h4>
-            <div class="flex flex-wrap items-center gap-1.5"><span class="rounded-full border px-2 py-1 text-[10px] font-semibold ${relationClass}">${relationLabel}</span><span class="rounded-full border px-2 py-1 text-[10px] ${attentionClass}">${escapeHtml(attentionLabel)}</span></div>
+            <div class="flex flex-wrap items-center gap-1.5"><span class="rounded-full border px-2 py-1 text-[10px] font-semibold ${relationClass}">${relationLabel}</span><span class="rounded-full border px-2 py-1 text-[10px] ${attentionClass}" title="${escapeHtml(updateAgeSummary)}">${escapeHtml(attentionLabel)}</span></div>
           </div>
           <div class="ticket-card-identifiers mt-2 grid grid-cols-1 gap-1.5 sm:grid-cols-2">
-            <div class="ticket-card-identifier border border-cyan-400/20 bg-cyan-500/5"><span>OS Simpress</span><strong>${formatarOrdensServico(currentSimpressOrder ? [currentSimpressOrder] : [])}</strong></div>
-            <div class="ticket-card-identifier border border-violet-400/20 bg-violet-500/5"><span>OS Oracle</span><strong>${escapeHtml(currentOracle.ordem_servico || "Não informado")}</strong></div>
+            ${identificador("OS Simpress", currentSimpressOrder ? formatarOrdensServico([currentSimpressOrder]) : "", "border-cyan-400/20 bg-cyan-500/5")}
+            ${identificador("OS Oracle", currentOracle.ordem_servico ? escapeHtml(currentOracle.ordem_servico) : "", "border-violet-400/20 bg-violet-500/5")}
           </div>
           ${renderizarResumoProcessoPedido(simpress)}
-          <div class="ticket-card-meta mt-2 flex flex-wrap items-center gap-x-3 gap-y-1 text-[11px] text-slate-300">
-            <span><b>Pedido</b> ${formatarListaChamados(simpress.pedidos)}</span>
-            ${ordensVenda.some(Boolean) ? `<span>${formatarListaChamados(ordensVenda)}</span>` : ""}
-          </div>
-          <div class="ticket-card-status mt-2 grid grid-cols-1 gap-1.5 sm:grid-cols-2">
-            <p class="truncate text-xs text-cyan-100" title="Status Simpress: ${formatarListaChamados(simpress.status)}"><b>Simpress</b> · ${formatarListaChamados(simpress.status)}</p>
-            <p class="truncate text-xs text-violet-100" title="Status Oracle: ${escapeHtml(oracleStatus)}"><b>Oracle</b> · ${escapeHtml(oracleStatus)}</p>
-          </div>
-          <div class="ticket-card-triage mt-2 flex flex-wrap items-center gap-x-3 gap-y-1 text-[10px] text-slate-400">
-            <span>Fila: ${escapeHtml(currentOracle.fila || "Não informada")}</span>
-            <span>Cidade: ${escapeHtml(cityLabels.join(", ") || "Não informada")}</span>
-            <span>Atendimento: ${escapeHtml(providerLabels.join(", ") || "Não informado")}</span>
-            <span class="font-medium ${attention.em_atencao ? "text-amber-200" : "text-emerald-200"}">Atualização: ${escapeHtml(updateAgeSummary)}</span>
-          </div>
-          <details class="ticket-disclosure mt-3 rounded-lg border border-slate-800 bg-slate-900/40 px-3 py-2" data-ticket-section="details"${openDetails}>
+          ${metaPedido ? `<div class="ticket-card-meta mt-2 flex flex-wrap items-center gap-x-3 gap-y-1 text-[11px] text-slate-300">${metaPedido}</div>` : ""}
+          ${statusLinhas ? `<div class="ticket-card-status mt-2 grid grid-cols-1 gap-1.5 sm:grid-cols-2">${statusLinhas}</div>` : ""}
+          ${triagem ? `<div class="ticket-card-triage mt-1.5 flex flex-wrap items-center gap-x-3 gap-y-1 text-[10px] text-slate-400">${triagem}</div>` : ""}
+          <details class="ticket-disclosure mt-3 rounded-lg border border-slate-800 bg-slate-900/40 px-3 py-1.5" data-ticket-section="details"${openDetails}>
             <summary class="ticket-disclosure-summary cursor-pointer text-xs font-semibold text-slate-200">Detalhes do chamado</summary>
             <div class="ticket-detail-grid grid grid-cols-1 gap-2 pt-2 lg:grid-cols-2">
               <section class="rounded-lg border border-slate-800 bg-slate-950/50 p-2.5">
                 <h5 class="text-[10px] font-semibold uppercase tracking-wide text-cyan-200">Simpress</h5>
-                <p class="mt-1 text-xs text-slate-300">OS na planilha: ${formatarOrdensServico(ordensSimpress)}</p>
-                ${chamadosCliente.some(Boolean) ? `<p class="mt-1 text-xs text-slate-300">Chamado do cliente: ${formatarListaChamados(chamadosCliente)}</p>` : ""}
-                <p class="mt-1 break-words text-xs text-slate-300">Descrição do produto: ${formatarListaChamados(simpress.descricoes_produto)}</p>
-                <p class="mt-1 text-xs text-slate-300">Cidade de entrega: ${formatarListaChamados(simpress.cidades_entrega)}</p>
-                ${mostrarEnderecoEntrega ? `<p class="mt-1 break-words text-xs text-slate-300">Endereço de entrega: ${formatarListaChamados(enderecosEntrega)}</p>` : ""}
+                ${detalhesSimpress}
               </section>
               <section class="space-y-2 rounded-lg border border-slate-800 bg-slate-950/50 p-2.5">
                 <h5 class="text-[10px] font-semibold uppercase tracking-wide text-violet-200">Oracle · solicitações e OS</h5>${oracleRows}
               </section>
             </div>
           </details>
-          <details class="ticket-disclosure mt-2 rounded-lg border border-cyan-400/20 bg-slate-900/50 px-3 py-2" data-ticket-section="timeline" data-ticket-timeline data-timeline-serial="${escapeHtml(record.serie)}" data-snapshot-id="${escapeHtml(snapshotId || "")}" data-on-toggle="carregarLinhaDoTempoChamado" data-args='["$this"]'><summary class="ticket-disclosure-summary cursor-pointer text-xs font-semibold text-cyan-100">Linha do tempo e anotações</summary><div data-ticket-timeline-body><p class="py-2 text-[10px] text-slate-500">Abra para ver as mudanças desta série em cada importação e registrar a próxima ação.</p></div></details>
+          <details class="ticket-disclosure mt-2 rounded-lg border border-cyan-400/20 bg-slate-900/50 px-3 py-1.5" data-ticket-section="timeline" data-ticket-timeline data-timeline-serial="${escapeHtml(record.serie)}" data-snapshot-id="${escapeHtml(snapshotId || "")}" data-on-toggle="carregarLinhaDoTempoChamado" data-args='["$this"]'><summary class="ticket-disclosure-summary cursor-pointer text-xs font-semibold text-cyan-100">Linha do tempo e anotações</summary><div data-ticket-timeline-body><p class="py-2 text-[10px] text-slate-500">Abra para ver as mudanças desta série em cada importação e registrar a próxima ação.</p></div></details>
         </article>`;
   }
 
@@ -367,14 +375,20 @@
       .map(value => String(value || "").trim())
       .filter(Boolean)
       .join(", ");
+    // Only filled fields are listed, joined with " · ".
+    const linha = (color, fields) => {
+      const parts = fields.filter(([, value]) => String(value || "").trim())
+        .map(([label, value]) => label === "Atualizado" ? `Atualizado ${escapeHtml(value)}` : `${label}: ${escapeHtml(value)}`);
+      return parts.length ? `<p class="mt-1 text-[10px] ${color}">${parts.join(" · ")}</p>` : "";
+    };
     return `<div class="rounded-lg border border-slate-800 bg-slate-900/80 p-2.5">
           <div class="flex flex-wrap items-center justify-between gap-2"><p class="text-xs font-semibold text-white">Solicitação Oracle ${escapeHtml(ticket.solicitacao || "Não informada")}</p><span class="inline-flex items-center gap-2 rounded-md border border-violet-400/30 bg-violet-500/10 px-2.5 py-1.5"><span class="text-[10px] font-semibold uppercase tracking-wide text-violet-200">OS Oracle</span><span class="font-mono text-lg font-bold leading-none text-violet-100">${escapeHtml(ticket.ordem_servico || "Não informada")}</span></span></div>
           <p class="mt-1 text-xs text-slate-300">${escapeHtml(ticket.status || "Status não informado")}${ticket.sub_status ? ` · ${escapeHtml(ticket.sub_status)}` : ""}</p>
-          <p class="mt-1 text-[10px] text-slate-400">Fila: ${escapeHtml(ticket.fila || "Não informada")} · Fase: ${escapeHtml(ticket.fase_atendimento || "Não informada")}</p>
-          <p class="mt-1 break-words text-[10px] text-slate-400">Endereço: ${escapeHtml(oracleAddress || "Não informado")}</p>
-          <p class="mt-1 text-[10px] text-slate-400">Atendido pela inibição: ${escapeHtml(ticket.atendido_pela_inibicao || "Não informado")}</p>
-          <p class="mt-1 text-[10px] text-slate-400">Atendimento por: ${escapeHtml(ticket.nome_filial || "Não informado")}</p>
-          <p class="mt-1 text-[10px] text-slate-500">Entregas: ${escapeHtml(ticket.status_entregas || "Não informado")} · Atividades: ${escapeHtml(ticket.status_atividades || "Não informado")}${ticket.ultima_atualizacao ? ` · Atualizado ${escapeHtml(formatarHorarioHistorico(ticket.ultima_atualizacao))}` : ""}</p>
+          ${linha("text-slate-400", [["Fila", ticket.fila], ["Fase", ticket.fase_atendimento]])}
+          ${oracleAddress ? `<p class="mt-1 break-words text-[10px] text-slate-400">Endereço: ${escapeHtml(oracleAddress)}</p>` : ""}
+          ${linha("text-slate-400", [["Atendido pela inibição", ticket.atendido_pela_inibicao]])}
+          ${linha("text-slate-400", [["Atendimento por", ticket.nome_filial]])}
+          ${linha("text-slate-500", [["Entregas", ticket.status_entregas], ["Atividades", ticket.status_atividades], ["Atualizado", ticket.ultima_atualizacao && formatarHorarioHistorico(ticket.ultima_atualizacao)]])}
           <p class="mt-1 text-[10px] font-medium ${ageClass}">${escapeHtml(updateAge.rotulo)}</p>
           ${String(ticket.descricao || "").trim() ? `<details class="ticket-oracle-description"><summary><span class="shrink-0 font-semibold text-violet-200">Descrição do chamado</span><span class="ticket-oracle-description-preview">${escapeHtml(resumirDescricaoChamado(ticket.descricao))}</span><span class="ticket-oracle-description-toggle ticket-oracle-description-expand">⌄ Expandir</span><span class="ticket-oracle-description-toggle ticket-oracle-description-collapse">⌃ Recolher</span></summary><div class="ticket-oracle-description-content">${escapeHtml(String(ticket.descricao).trim())}</div></details>` : ""}
         </div>`;
