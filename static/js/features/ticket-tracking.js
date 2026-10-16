@@ -84,7 +84,7 @@
       ...changed.slice(0, 8).map(row => `<li><strong>${escapeHtml(row.serie)}:</strong> ${row.campos.map(field => escapeHtml(field.campo)).join(", ")}</li>`),
       ...absent.slice(0, 5).map(serial => `<li><strong>Não consta na planilha atual:</strong> ${escapeHtml(serial)}</li>`),
     ];
-    target.innerHTML = `<p class="font-semibold text-white">Comparação com a versão anterior · ${Number(counts.novos) || 0} novas · ${Number(counts.alterados) || 0} alteradas · ${Number(counts.iguais) || 0} sem mudança · ${Number(counts.ausentes_arquivo) || 0} ausentes</p><p class="mt-1 text-[10px] text-amber-200">${escapeHtml(data.aviso_ausentes || "Ausência na planilha não confirma resolução.")}</p>${details.length ? `<ul class="mt-2 list-disc space-y-1 pl-5 text-[10px] text-slate-300">${details.join("")}</ul>` : ""}`;
+    target.innerHTML = `<p class="font-semibold text-white">Comparação com a versão anterior · ${Number(counts.novos) || 0} novas · ${Number(counts.alterados) || 0} alteradas · ${Number(counts.iguais) || 0} sem mudança · ${Number(counts.ausentes_arquivo) || 0} ausentes</p><p class="mt-1 text-[11px] text-amber-200">${escapeHtml(data.aviso_ausentes || "Ausência na planilha não confirma resolução.")}</p>${details.length ? `<ul class="mt-2 list-disc space-y-1 pl-5 text-[11px] text-slate-300">${details.join("")}</ul>` : ""}`;
   }
 
   async function carregarEvolucaoChamados(snapshotId) {
@@ -131,10 +131,10 @@
       const values = fields.map(([key, label]) => [label, formatValue(state[key])]).filter(([, value]) => value);
       const changes = Array.isArray(event.mudancas) ? event.mudancas : [];
       return `<article class="rounded-lg border border-slate-800 bg-slate-950/70 p-3" data-ticket-timeline-event="${escapeHtml(event.item_id || "")}">
-          <div class="flex flex-wrap items-center justify-between gap-2"><strong class="text-xs text-white">${escapeHtml(event.tipo || "Atualização")}</strong><time class="text-[10px] text-slate-400">${escapeHtml(formatarHorarioHistorico(event.atualizado_em))}</time></div>
-          <dl class="mt-2 grid grid-cols-1 gap-x-4 gap-y-1 sm:grid-cols-2">${values.map(([label, value]) => `<div class="min-w-0 text-[10px]"><dt class="inline font-semibold text-slate-400">${label}: </dt><dd class="inline break-words text-slate-200">${escapeHtml(value)}</dd></div>`).join("")}</dl>
-          <div class="mt-2 text-[10px] text-slate-300"><span class="font-semibold text-cyan-200">Mudanças:</span> ${changes.length ? changes.map(change => `${escapeHtml(change.campo)}${change.anterior?.length ? ` (${escapeHtml(formatValue(change.anterior))} → ` : " ("}${escapeHtml(formatValue(change.atual))})`).join(" · ") : "sem alterações nos campos acompanhados"}</div>
-          <label class="mt-3 block text-[10px] text-slate-400">Próxima ação ou o que já foi feito<textarea data-ticket-timeline-annotation ${app.atributosVersaoAnotacao(event)} data-event-id="${escapeHtml(event.snapshot_id || "")}" data-annotation-id="${escapeHtml(event.item_id || "")}" rows="2" maxlength="2000" class="mt-1 w-full rounded-lg border border-slate-700 bg-slate-900 px-2.5 py-2 text-xs text-white placeholder:text-slate-500 focus:border-cyan-400 focus:outline-none" placeholder="Ex.: cobrar atualização do parceiro, OS concluída...">${escapeHtml(event.anotacao || "")}</textarea><span class="mt-1 block text-[10px] text-slate-500" data-annotation-status aria-live="polite">${event.anotacao ? "Anotação salva" : ""}</span><button type="button" class="mt-1 rounded-md border border-rose-400/40 px-2 py-1 text-[10px] text-rose-200 hover:bg-rose-500/10" data-annotation-retry hidden aria-label="Tentar novamente a sincronização desta anotação">Tentar sincronizar novamente</button></label>
+          <div class="flex flex-wrap items-center justify-between gap-2"><strong class="text-xs text-white">${escapeHtml(event.tipo || "Atualização")}</strong><time class="text-[11px] text-slate-400">${escapeHtml(formatarHorarioHistorico(event.atualizado_em))}</time></div>
+          <dl class="mt-2 grid grid-cols-1 gap-x-4 gap-y-1 sm:grid-cols-2">${values.map(([label, value]) => `<div class="min-w-0 text-[11px]"><dt class="inline font-semibold text-slate-400">${label}: </dt><dd class="inline break-words text-slate-200">${escapeHtml(value)}</dd></div>`).join("")}</dl>
+          <div class="mt-2 text-[11px] text-slate-300"><span class="font-semibold text-cyan-200">Mudanças:</span> ${changes.length ? changes.map(change => `${escapeHtml(change.campo)}${change.anterior?.length ? ` (${escapeHtml(formatValue(change.anterior))} → ` : " ("}${escapeHtml(formatValue(change.atual))})`).join(" · ") : "sem alterações nos campos acompanhados"}</div>
+          <label class="mt-3 block text-[11px] text-slate-400">Próxima ação ou o que já foi feito<textarea data-ticket-timeline-annotation ${app.atributosVersaoAnotacao(event)} data-event-id="${escapeHtml(event.snapshot_id || "")}" data-annotation-id="${escapeHtml(event.item_id || "")}" rows="2" maxlength="2000" class="mt-1 w-full rounded-lg border border-slate-700 bg-slate-900 px-2.5 py-2 text-xs text-white placeholder:text-slate-500 focus:border-cyan-400 focus:outline-none" placeholder="Ex.: cobrar atualização do parceiro, OS concluída...">${escapeHtml(event.anotacao || "")}</textarea><span class="mt-1 block text-[11px] text-slate-500" data-annotation-status aria-live="polite">${event.anotacao ? "Anotação salva" : ""}</span><button type="button" class="mt-1 rounded-md border border-rose-400/40 px-2 py-1 text-[11px] text-rose-200 hover:bg-rose-500/10" data-annotation-retry hidden aria-label="Tentar novamente a sincronização desta anotação">Tentar sincronizar novamente</button></label>
         </article>`;
     }).join("")}</div>`;
   }
@@ -214,7 +214,7 @@
 
     const records = filtrarChamados(data.chamados);
     document.getElementById("contagem-acompanhamento-chamados").textContent = `Exibindo ${records.length} de ${Array.isArray(data.chamados) ? data.chamados.length : 0} séries · OS da maior para a menor, sem OS no final`;
-    renderizarTriagemChamados(records);
+    renderizarTriagemChamados(data.chamados);
     const exportButton = document.getElementById("btn-exportar-acompanhamento-chamados");
     const selectedSnapshotId = document.getElementById("versao-acompanhamento-chamados").value;
     exportButton.disabled = !selectedSnapshotId || data.snapshot_id !== selectedSnapshotId
@@ -226,7 +226,7 @@
       return;
     }
     if (records.length === 0) {
-      list.innerHTML = '<p class="py-8 text-center text-sm text-slate-400" role="status">Nenhum chamado corresponde à busca.</p>';
+      list.innerHTML = '<p class="py-8 text-center text-sm text-slate-400" role="status">Nenhum chamado corresponde aos filtros.</p>';
       return;
     }
 
@@ -234,9 +234,9 @@
     const primeiraRenderizacao = !list.querySelector?.("article[data-ticket-serial]");
     list.innerHTML = records.map(record => renderizarCartaoChamado(record, data.snapshot_id, expandedSections)).join("");
     if (primeiraRenderizacao) motion?.stagger(list.children);
-    list.querySelectorAll?.('details[data-ticket-section="timeline"]').forEach(section => {
+    list.querySelectorAll?.('details[data-ticket-section="timeline"], details[data-ticket-section="stages"]').forEach(section => {
       const card = section.closest("article[data-ticket-serial]");
-      if (card && expandedSections.has(chaveSecaoCartao(card.dataset.ticketSerial || "", "timeline"))) section.open = true;
+      if (card && expandedSections.has(chaveSecaoCartao(card.dataset.ticketSerial || "", section.dataset.ticketSection))) section.open = true;
     });
   }
 
@@ -252,8 +252,8 @@
       ["Só no Oracle", summary.somente_oracle],
       ["Sem OS", summary.sem_os],
     ];
-    summaryTarget.innerHTML = `<div class="grid grid-cols-2 gap-2 sm:grid-cols-3 lg:grid-cols-6">${summaryCards.map(([label, count]) => `<div class="rounded-md border border-slate-800 bg-slate-900/70 px-2.5 py-1.5"><p class="text-[9px] text-slate-400">${label}</p><p class="mt-0.5 text-sm font-semibold text-white">${Number(count) || 0}</p></div>`).join("")}</div>
-        <p class="mt-2 break-words text-[10px] text-slate-500">Simpress: ${escapeHtml(sources.simpress?.arquivo || "aguardando importação")} · Oracle: ${escapeHtml(sources.oracle?.arquivo || "aguardando importação")}</p>`;
+    summaryTarget.innerHTML = `<div class="grid grid-cols-2 gap-2 sm:grid-cols-3 lg:grid-cols-6">${summaryCards.map(([label, count]) => `<div class="rounded-md border border-slate-800 bg-slate-900/70 px-2.5 py-1.5"><p class="text-[11px] text-slate-400">${label}</p><p class="mt-0.5 text-sm font-semibold text-white">${Number(count) || 0}</p></div>`).join("")}</div>
+        <p class="mt-2 break-words text-[11px] text-slate-500">Simpress: ${escapeHtml(sources.simpress?.arquivo || "aguardando importação")} · Oracle: ${escapeHtml(sources.oracle?.arquivo || "aguardando importação")}</p>`;
   }
 
   // Search and the attention filter, ordered by service order (highest first, without one last).
@@ -263,6 +263,7 @@
     const records = (Array.isArray(chamados) ? chamados : []).filter(record => {
       const attention = classificarAtencaoChamado(record);
       if (filters.attention_only && !attention.em_atencao) return false;
+      if (!correspondeTriagemChamado(record, appState.filtroTriagemChamados)) return false;
       const searchable = normalizarFiltroChamados(valoresChamado(record).join(" "));
       return !query || searchable.includes(query);
     });
@@ -270,22 +271,54 @@
     return records;
   }
 
-  function renderizarTriagemChamados(records) {
+  // Daily triage groups: only series with an open Oracle ticket count as active.
+  function grupoTriagemChamado(record) {
+    const active = (Array.isArray(record.oracle) ? record.oracle : []).some(ticket => !idadeAtualizacaoChamado(ticket).encerrado);
+    if (!active) return "";
+    const attention = classificarAtencaoChamado(record);
+    if (!attention.em_atencao) return "em_dia";
+    return attention.dias_sem_atualizacao === null ? "sem_data" : "atrasados";
+  }
+
+  function correspondeTriagemChamado(record, filter) {
+    if (!filter) return true;
+    const group = grupoTriagemChamado(record);
+    return filter === "ativos" ? Boolean(group) : group === filter;
+  }
+
+  function filtrarTriagemChamados(filter) {
+    appState.filtroTriagemChamados = appState.filtroTriagemChamados === filter ? "" : filter;
+    app.renderizarAcompanhamentoChamados();
+  }
+
+  // Counts come from the whole import so they stay put while the search or a triage filter narrows the list.
+  function renderizarTriagemChamados(chamados) {
     const triageTarget = document.getElementById("triagem-diaria-acompanhamento-chamados");
-    const activeRecords = records.filter(record => (Array.isArray(record.oracle) ? record.oracle : []).some(ticket => !idadeAtualizacaoChamado(ticket).encerrado));
-    const attentionRecords = activeRecords.filter(record => classificarAtencaoChamado(record).em_atencao);
-    const missingDateRecords = activeRecords.filter(record => classificarAtencaoChamado(record).dias_sem_atualizacao === null);
-    const freshRecords = activeRecords.length - attentionRecords.length;
+    const allRecords = Array.isArray(chamados) ? chamados : [];
+    const counts = { ativos: 0, atrasados: 0, sem_data: 0, em_dia: 0 };
+    allRecords.forEach(record => {
+      const group = grupoTriagemChamado(record);
+      if (!group) return;
+      counts.ativos += 1;
+      counts[group] += 1;
+    });
+    const selected = appState.filtroTriagemChamados || "";
+    const focused = typeof document.activeElement?.closest === "function"
+      ? document.activeElement.closest("[data-ticket-triage-filter]")?.dataset.ticketTriageFilter || ""
+      : "";
     const triageCards = [
-      ["Chamados ativos", activeRecords.length, "text-white"],
-      ["Sem atualização há 3+ dias", attentionRecords.length - missingDateRecords.length, "text-amber-200"],
-      ["Sem data de atualização", missingDateRecords.length, "text-rose-200"],
-      ["Atualizados há menos de 3 dias", freshRecords, "text-emerald-200"],
+      ["ativos", "Ativos", "Chamados ativos", "text-white"],
+      ["atrasados", "3+ dias", "Sem atualização há 3+ dias", "text-amber-200"],
+      ["sem_data", "Sem data", "Sem data de atualização", "text-rose-200"],
+      ["em_dia", "Atualizados <3 dias", "Atualizados há menos de 3 dias", "text-emerald-200"],
     ];
-    triageTarget.innerHTML = `<div class="ticket-triage rounded-lg border border-slate-800 bg-slate-950/40 px-2 py-1.5"><div class="mb-1.5 flex flex-wrap items-baseline justify-between gap-2"><h4 class="text-[11px] font-semibold text-slate-200">Triagem diária</h4><p class="text-[10px] text-slate-500">Atenção: 3+ dias ou sem data.</p></div><div class="grid grid-cols-2 gap-1.5 sm:grid-cols-4">${triageCards.map(([label, count, color]) => {
-      const shortLabel = label === "Chamados ativos" ? "Ativos" : label === "Sem atualização há 3+ dias" ? "3+ dias" : label === "Sem data de atualização" ? "Sem data" : "Atualizados <3 dias";
-      return `<div class="rounded-md border border-slate-800 bg-slate-900/70 px-2 py-1" aria-label="${escapeHtml(label)}"><p class="text-[9px] text-slate-400">${shortLabel}</p><p class="text-sm font-semibold ${color}">${count}</p></div>`;
-    }).join("")}</div></div>`;
+    const inactive = allRecords.length - counts.ativos;
+    const explanation = `${counts.ativos} ${counts.ativos === 1 ? "ativo" : "ativos"} de ${allRecords.length} ${allRecords.length === 1 ? "série" : "séries"}${inactive ? ` · ${inactive} sem chamado aberto no Oracle (encerrados ou sem registro)` : ""}`;
+    triageTarget.innerHTML = `<div class="ticket-triage rounded-lg border border-slate-800 bg-slate-950/40 px-2 py-1.5"><div class="mb-1.5 flex flex-wrap items-baseline justify-between gap-x-3"><h4 class="text-[11px] font-semibold text-slate-200">Triagem diária</h4><p class="text-[11px] text-slate-400" data-ticket-triage-explanation>${escapeHtml(explanation)}</p></div><div class="grid grid-cols-2 gap-1.5 sm:grid-cols-4" role="group" aria-label="Filtrar chamados pela triagem diária">${triageCards.map(([key, shortLabel, label, color]) => {
+      const pressed = selected === key;
+      return `<button type="button" class="ticket-triage-filter rounded-md border border-slate-800 bg-slate-900/70 px-2 py-1 text-left" data-ticket-triage-filter="${key}" data-on-click="filtrarTriagemChamados" data-args='["${key}"]' aria-pressed="${pressed}" aria-label="${escapeHtml(`${label}: ${counts[key]}`)}" title="${escapeHtml(pressed ? "Mostrar todos os chamados" : `Mostrar somente: ${label}`)}"><span class="block text-[11px] text-slate-400">${shortLabel}</span><span class="block text-sm font-semibold ${color}">${counts[key]}</span></button>`;
+    }).join("")}</div><p class="mt-1.5 text-[11px] text-slate-400">Atenção: 3+ dias ou sem data · selecione um indicador para filtrar a lista.</p></div>`;
+    if (focused) triageTarget.querySelector?.(`[data-ticket-triage-filter="${focused}"]`)?.focus();
   }
 
   function renderizarCartaoChamado(record, snapshotId, expandedSections) {
@@ -316,47 +349,55 @@
     const providerLabels = atendimentosDoChamado(record).filter(provider => provider !== "Não informado");
     const oracleStatus = [currentOracle.status, currentOracle.sub_status].filter(Boolean).join(" · ") || "Não informado";
     const openDetails = expandedSections.has(chaveSecaoCartao(record.serie, "details")) ? " open" : "";
+    // Empty fields stay out of the card; the relation badge already says which source is missing.
+    const temValor = values => Array.isArray(values) && values.some(Boolean);
+    const identificador = (label, value, classes) => `<div class="ticket-card-identifier border ${classes}"><span>${label}</span>${value ? `<strong>${value}</strong>` : '<strong class="is-empty">Sem OS</strong>'}</div>`;
+    const metaPedido = [
+      temValor(simpress.pedidos) ? `<span><b>Pedido</b> ${formatarListaChamados(simpress.pedidos)}</span>` : "",
+      temValor(ordensVenda) ? `<span>${formatarListaChamados(ordensVenda)}</span>` : "",
+    ].join("");
+    const statusLinhas = [
+      temValor(simpress.status) ? `<p class="truncate text-xs text-cyan-100" title="Status Simpress: ${formatarListaChamados(simpress.status)}"><b>Simpress</b> · ${formatarListaChamados(simpress.status)}</p>` : "",
+      orderedOracle.length ? `<p class="truncate text-xs text-violet-100" title="Status Oracle: ${escapeHtml(oracleStatus)}"><b>Oracle</b> · ${escapeHtml(oracleStatus)}</p>` : "",
+    ].join("");
+    const triagem = [
+      currentOracle.fila ? `<span>Fila: ${escapeHtml(currentOracle.fila)}</span>` : "",
+      cityLabels.length ? `<span>Cidade: ${escapeHtml(cityLabels.join(", "))}</span>` : "",
+      providerLabels.length ? `<span>Atendimento: ${escapeHtml(providerLabels.join(", "))}</span>` : "",
+    ].join("");
+    const detalhesSimpress = [
+      temValor(ordensSimpress) ? `<p class="mt-1 text-xs text-slate-300">OS na planilha: ${formatarOrdensServico(ordensSimpress)}</p>` : "",
+      chamadosCliente.some(Boolean) ? `<p class="mt-1 text-xs text-slate-300">Chamado do cliente: ${formatarListaChamados(chamadosCliente)}</p>` : "",
+      temValor(simpress.descricoes_produto) ? `<p class="mt-1 break-words text-xs text-slate-300">Descrição do produto: ${formatarListaChamados(simpress.descricoes_produto)}</p>` : "",
+      temValor(simpress.cidades_entrega) ? `<p class="mt-1 text-xs text-slate-300">Cidade de entrega: ${formatarListaChamados(simpress.cidades_entrega)}</p>` : "",
+      mostrarEnderecoEntrega ? `<p class="mt-1 break-words text-xs text-slate-300">Endereço de entrega: ${formatarListaChamados(enderecosEntrega)}</p>` : "",
+    ].join("") || '<p class="mt-1 text-xs text-slate-500">Sem registro correspondente na Simpress.</p>';
     return `<article class="ticket-card rounded-xl border border-slate-800 bg-slate-950/70 p-3 sm:p-3.5" data-ticket-serial="${escapeHtml(record.serie)}">
           <div class="flex flex-wrap items-start justify-between gap-2">
             <h4 class="min-w-0 break-all font-mono text-sm font-semibold text-white">${escapeHtml(record.serie)}</h4>
-            <div class="flex flex-wrap items-center gap-1.5"><span class="rounded-full border px-2 py-1 text-[10px] font-semibold ${relationClass}">${relationLabel}</span><span class="rounded-full border px-2 py-1 text-[10px] ${attentionClass}">${escapeHtml(attentionLabel)}</span></div>
+            <div class="flex flex-wrap items-center gap-1.5"><span class="rounded-full border px-2 py-1 text-[11px] font-semibold ${relationClass}">${relationLabel}</span><span class="rounded-full border px-2 py-1 text-[11px] ${attentionClass}" title="${escapeHtml(updateAgeSummary)}">${escapeHtml(attentionLabel)}</span></div>
           </div>
           <div class="ticket-card-identifiers mt-2 grid grid-cols-1 gap-1.5 sm:grid-cols-2">
-            <div class="ticket-card-identifier border border-cyan-400/20 bg-cyan-500/5"><span>OS Simpress</span><strong>${formatarOrdensServico(currentSimpressOrder ? [currentSimpressOrder] : [])}</strong></div>
-            <div class="ticket-card-identifier border border-violet-400/20 bg-violet-500/5"><span>OS Oracle</span><strong>${escapeHtml(currentOracle.ordem_servico || "Não informado")}</strong></div>
+            ${identificador("OS Simpress", currentSimpressOrder ? formatarOrdensServico([currentSimpressOrder]) : "", "border-cyan-400/20 bg-cyan-500/5")}
+            ${identificador("OS Oracle", currentOracle.ordem_servico ? escapeHtml(currentOracle.ordem_servico) : "", "border-violet-400/20 bg-violet-500/5")}
           </div>
           ${renderizarResumoProcessoPedido(simpress)}
-          <div class="ticket-card-meta mt-2 flex flex-wrap items-center gap-x-3 gap-y-1 text-[11px] text-slate-300">
-            <span><b>Pedido</b> ${formatarListaChamados(simpress.pedidos)}</span>
-            ${ordensVenda.some(Boolean) ? `<span>${formatarListaChamados(ordensVenda)}</span>` : ""}
-          </div>
-          <div class="ticket-card-status mt-2 grid grid-cols-1 gap-1.5 sm:grid-cols-2">
-            <p class="truncate text-xs text-cyan-100" title="Status Simpress: ${formatarListaChamados(simpress.status)}"><b>Simpress</b> · ${formatarListaChamados(simpress.status)}</p>
-            <p class="truncate text-xs text-violet-100" title="Status Oracle: ${escapeHtml(oracleStatus)}"><b>Oracle</b> · ${escapeHtml(oracleStatus)}</p>
-          </div>
-          <div class="ticket-card-triage mt-2 flex flex-wrap items-center gap-x-3 gap-y-1 text-[10px] text-slate-400">
-            <span>Fila: ${escapeHtml(currentOracle.fila || "Não informada")}</span>
-            <span>Cidade: ${escapeHtml(cityLabels.join(", ") || "Não informada")}</span>
-            <span>Atendimento: ${escapeHtml(providerLabels.join(", ") || "Não informado")}</span>
-            <span class="font-medium ${attention.em_atencao ? "text-amber-200" : "text-emerald-200"}">Atualização: ${escapeHtml(updateAgeSummary)}</span>
-          </div>
-          <details class="ticket-disclosure mt-3 rounded-lg border border-slate-800 bg-slate-900/40 px-3 py-2" data-ticket-section="details"${openDetails}>
+          ${metaPedido ? `<div class="ticket-card-meta mt-2 flex flex-wrap items-center gap-x-3 gap-y-1 text-[11px] text-slate-300">${metaPedido}</div>` : ""}
+          ${statusLinhas ? `<div class="ticket-card-status mt-2 grid grid-cols-1 gap-1.5 sm:grid-cols-2">${statusLinhas}</div>` : ""}
+          ${triagem ? `<div class="ticket-card-triage mt-1.5 flex flex-wrap items-center gap-x-3 gap-y-1 text-[11px] text-slate-400">${triagem}</div>` : ""}
+          <details class="ticket-disclosure mt-3 rounded-lg border border-slate-800 bg-slate-900/40 px-3 py-1.5" data-ticket-section="details"${openDetails}>
             <summary class="ticket-disclosure-summary cursor-pointer text-xs font-semibold text-slate-200">Detalhes do chamado</summary>
-            <div class="ticket-detail-grid grid grid-cols-1 gap-2 pt-2 lg:grid-cols-2">
-              <section class="rounded-lg border border-slate-800 bg-slate-950/50 p-2.5">
-                <h5 class="text-[10px] font-semibold uppercase tracking-wide text-cyan-200">Simpress</h5>
-                <p class="mt-1 text-xs text-slate-300">OS na planilha: ${formatarOrdensServico(ordensSimpress)}</p>
-                ${chamadosCliente.some(Boolean) ? `<p class="mt-1 text-xs text-slate-300">Chamado do cliente: ${formatarListaChamados(chamadosCliente)}</p>` : ""}
-                <p class="mt-1 break-words text-xs text-slate-300">Descrição do produto: ${formatarListaChamados(simpress.descricoes_produto)}</p>
-                <p class="mt-1 text-xs text-slate-300">Cidade de entrega: ${formatarListaChamados(simpress.cidades_entrega)}</p>
-                ${mostrarEnderecoEntrega ? `<p class="mt-1 break-words text-xs text-slate-300">Endereço de entrega: ${formatarListaChamados(enderecosEntrega)}</p>` : ""}
+            <div class="ticket-detail-grid">
+              <section class="ticket-detail-section">
+                <h5 class="text-[11px] font-semibold uppercase tracking-wide text-cyan-200">Simpress</h5>
+                ${detalhesSimpress}
               </section>
-              <section class="space-y-2 rounded-lg border border-slate-800 bg-slate-950/50 p-2.5">
-                <h5 class="text-[10px] font-semibold uppercase tracking-wide text-violet-200">Oracle · solicitações e OS</h5>${oracleRows}
+              <section class="ticket-detail-section">
+                <h5 class="text-[11px] font-semibold uppercase tracking-wide text-violet-200">Oracle · solicitações e OS</h5>${oracleRows}
               </section>
             </div>
           </details>
-          <details class="ticket-disclosure mt-2 rounded-lg border border-cyan-400/20 bg-slate-900/50 px-3 py-2" data-ticket-section="timeline" data-ticket-timeline data-timeline-serial="${escapeHtml(record.serie)}" data-snapshot-id="${escapeHtml(snapshotId || "")}" data-on-toggle="carregarLinhaDoTempoChamado" data-args='["$this"]'><summary class="ticket-disclosure-summary cursor-pointer text-xs font-semibold text-cyan-100">Linha do tempo e anotações</summary><div data-ticket-timeline-body><p class="py-2 text-[10px] text-slate-500">Abra para ver as mudanças desta série em cada importação e registrar a próxima ação.</p></div></details>
+          <details class="ticket-disclosure mt-2 rounded-lg border border-cyan-400/20 bg-slate-900/50 px-3 py-1.5" data-ticket-section="timeline" data-ticket-timeline data-timeline-serial="${escapeHtml(record.serie)}" data-snapshot-id="${escapeHtml(snapshotId || "")}" data-on-toggle="carregarLinhaDoTempoChamado" data-args='["$this"]'><summary class="ticket-disclosure-summary cursor-pointer text-xs font-semibold text-cyan-100">Linha do tempo e anotações</summary><div data-ticket-timeline-body><p class="py-2 text-[11px] text-slate-400">Abra para ver as mudanças desta série em cada importação e registrar a próxima ação.</p></div></details>
         </article>`;
   }
 
@@ -367,22 +408,30 @@
       .map(value => String(value || "").trim())
       .filter(Boolean)
       .join(", ");
-    return `<div class="rounded-lg border border-slate-800 bg-slate-900/80 p-2.5">
-          <div class="flex flex-wrap items-center justify-between gap-2"><p class="text-xs font-semibold text-white">Solicitação Oracle ${escapeHtml(ticket.solicitacao || "Não informada")}</p><span class="inline-flex items-center gap-2 rounded-md border border-violet-400/30 bg-violet-500/10 px-2.5 py-1.5"><span class="text-[10px] font-semibold uppercase tracking-wide text-violet-200">OS Oracle</span><span class="font-mono text-lg font-bold leading-none text-violet-100">${escapeHtml(ticket.ordem_servico || "Não informada")}</span></span></div>
+    // Only filled fields are listed, joined with " · ".
+    const linha = (color, fields) => {
+      const parts = fields.filter(([, value]) => String(value || "").trim())
+        .map(([label, value]) => label === "Atualizado" ? `Atualizado ${escapeHtml(value)}` : `${label}: ${escapeHtml(value)}`);
+      return parts.length ? `<p class="mt-1 text-[11px] ${color}">${parts.join(" · ")}</p>` : "";
+    };
+    // The current OS is already highlighted at the top of the card, so each request lists it as plain text.
+    return `<div class="ticket-oracle-request">
+          <p class="flex flex-wrap items-baseline gap-x-3 text-xs"><span class="font-semibold text-white">Solicitação ${escapeHtml(ticket.solicitacao || "não informada")}</span><span class="text-slate-400">OS <span class="font-mono text-slate-200">${escapeHtml(ticket.ordem_servico || "não informada")}</span></span></p>
           <p class="mt-1 text-xs text-slate-300">${escapeHtml(ticket.status || "Status não informado")}${ticket.sub_status ? ` · ${escapeHtml(ticket.sub_status)}` : ""}</p>
-          <p class="mt-1 text-[10px] text-slate-400">Fila: ${escapeHtml(ticket.fila || "Não informada")} · Fase: ${escapeHtml(ticket.fase_atendimento || "Não informada")}</p>
-          <p class="mt-1 break-words text-[10px] text-slate-400">Endereço: ${escapeHtml(oracleAddress || "Não informado")}</p>
-          <p class="mt-1 text-[10px] text-slate-400">Atendido pela inibição: ${escapeHtml(ticket.atendido_pela_inibicao || "Não informado")}</p>
-          <p class="mt-1 text-[10px] text-slate-400">Atendimento por: ${escapeHtml(ticket.nome_filial || "Não informado")}</p>
-          <p class="mt-1 text-[10px] text-slate-500">Entregas: ${escapeHtml(ticket.status_entregas || "Não informado")} · Atividades: ${escapeHtml(ticket.status_atividades || "Não informado")}${ticket.ultima_atualizacao ? ` · Atualizado ${escapeHtml(formatarHorarioHistorico(ticket.ultima_atualizacao))}` : ""}</p>
-          <p class="mt-1 text-[10px] font-medium ${ageClass}">${escapeHtml(updateAge.rotulo)}</p>
-          ${String(ticket.descricao || "").trim() ? `<details class="ticket-oracle-description"><summary><span class="shrink-0 font-semibold text-violet-200">Descrição do chamado</span><span class="ticket-oracle-description-preview">${escapeHtml(resumirDescricaoChamado(ticket.descricao))}</span><span class="ticket-oracle-description-toggle ticket-oracle-description-expand">⌄ Expandir</span><span class="ticket-oracle-description-toggle ticket-oracle-description-collapse">⌃ Recolher</span></summary><div class="ticket-oracle-description-content">${escapeHtml(String(ticket.descricao).trim())}</div></details>` : ""}
+          ${linha("text-slate-400", [["Fila", ticket.fila], ["Fase", ticket.fase_atendimento]])}
+          ${oracleAddress ? `<p class="mt-1 break-words text-[11px] text-slate-400">Endereço: ${escapeHtml(oracleAddress)}</p>` : ""}
+          ${linha("text-slate-400", [["Atendido pela inibição", ticket.atendido_pela_inibicao]])}
+          ${linha("text-slate-400", [["Atendimento por", ticket.nome_filial]])}
+          ${linha("text-slate-400", [["Entregas", ticket.status_entregas], ["Atividades", ticket.status_atividades], ["Atualizado", ticket.ultima_atualizacao && formatarHorarioHistorico(ticket.ultima_atualizacao)]])}
+          <p class="mt-1 text-[11px] font-medium ${ageClass}">${escapeHtml(updateAge.rotulo)}</p>
+          ${String(ticket.descricao || "").trim() ? `<details class="ticket-oracle-description"><summary class="text-xs"><span class="shrink-0 font-semibold text-violet-200">Descrição do chamado</span><span class="ticket-oracle-description-preview">${escapeHtml(resumirDescricaoChamado(ticket.descricao))}</span><span class="ticket-oracle-description-toggle ticket-oracle-description-expand">⌄ Expandir</span><span class="ticket-oracle-description-toggle ticket-oracle-description-collapse">⌃ Recolher</span></summary><div class="ticket-oracle-description-content">${escapeHtml(String(ticket.descricao).trim())}</div></details>` : ""}
         </div>`;
   }
 
   function limparFiltrosAcompanhamentoChamados() {
     document.getElementById("filtro-acompanhamento-chamados").value = "";
     document.getElementById("somente-atencao-chamados").checked = false;
+    appState.filtroTriagemChamados = "";
     app.renderizarAcompanhamentoChamados();
   }
 
@@ -587,7 +636,7 @@
   return {
     fecharAcompanhamentoChamados, renderizarHistoricoAcompanhamentoChamados, renderizarEvolucaoChamados,
     carregarEvolucaoChamados, renderizarLinhaDoTempoChamado, conectarAnotacoesLinhaDoTempo,
-    carregarLinhaDoTempoChamado, renderizarAcompanhamentoChamados, limparFiltrosAcompanhamentoChamados,
+    carregarLinhaDoTempoChamado, renderizarAcompanhamentoChamados, filtrarTriagemChamados, limparFiltrosAcompanhamentoChamados,
     selecionarVersaoChamados, excluirImportacoesAntigasChamados, exportarAcompanhamentoChamados,
     carregarAcompanhamentoChamados, importarPlanilhasChamados, abrirAcompanhamentoChamados,
   };
