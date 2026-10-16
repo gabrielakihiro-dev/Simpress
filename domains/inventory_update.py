@@ -23,6 +23,7 @@ from core.integrity import (
     lock_paths,
 )
 from core.async_workers import await_worker_completion
+from core.config import format_size_limit
 
 from domains.history_annotations import (
     effective_history_annotation, history_annotation_row_fingerprint,
@@ -368,7 +369,7 @@ async def read_uploaded_xlsx(
     if not file_bytes:
         raise HTTPException(status_code=400, detail=f"O arquivo de {display_role} está vazio.")
     if len(file_bytes) > max_upload_bytes:
-        raise HTTPException(status_code=413, detail=f"O arquivo de {display_role} excede o limite de 60 MB.")
+        raise HTTPException(status_code=413, detail=f"O arquivo de {display_role} excede o limite de {format_size_limit(max_upload_bytes)}.")
 
     parse_admission = services.workbook_parse_admission()
     if parse_admission is not None and not parse_admission.acquire(blocking=False):
