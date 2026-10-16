@@ -3194,6 +3194,19 @@ class WorkflowIntegrityTests(unittest.TestCase):
         self.assertTrue(outcome["result"]["sucesso"])
         self.assertEqual(main.get_equipamento("SN-RESTORE-PREPARE")["modelo"], "Modelo antigo")
 
+    def test_marked_manual_alias_is_flagged_for_review_even_when_base_matches_sheet(self):
+        details = {"records": [{"NUMERODESERIE": "SN-1", "APELIDO": "PRNOTETI024 Gabriel"}]}
+        endpoint = {"records": [{"NUMEROSERIE": "SN-1", "NOMEDOCOMPUTADOR": "PRNOTETI024 Gabriel"}]}
+
+        snapshots = main._manual_alias_source_snapshots(
+            {"SN-1": "PRNOTETI024 Gabriel (M)"}, endpoint, details
+        )
+
+        self.assertEqual(len(snapshots), 1)
+        self.assertTrue(snapshots[0]["diverge_detalhes"])
+        self.assertTrue(snapshots[0]["diverge_invall"])
+        self.assertEqual(snapshots[0]["resolucao"], "pendente")
+
     def test_manual_alias_override_changes_export_only(self):
         detail_headers = ["Hostname", "Tipo", "Modelo", "Cidade", "CEP", "Serial"]
         make_details(

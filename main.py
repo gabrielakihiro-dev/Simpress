@@ -708,17 +708,17 @@ def _manual_alias_source_snapshots(
         if endpoint_record is None and details_record is None:
             continue
 
-        # O marcador (M) não conta: um apelido igual à planilha, só marcado, não diverge.
-        manual_base = effective_alias.strip_manual_alias_marker(manual_alias)
+        # O marcador (M) conta na comparação: todo apelido manual presente nas planilhas
+        # enviadas fica pendente no histórico até o usuário decidir manter ou excluir.
         invall_alias = _upload_alias_value(endpoint_record, "endpoint") if endpoint_record else ""
         details_alias = _upload_alias_value(details_record, "detalhes") if details_record else ""
         details_differs = (
             details_record is not None
-            and normalize_reference_value(details_alias) != normalize_reference_value(manual_base)
+            and normalize_reference_value(details_alias) != normalize_reference_value(manual_alias)
         )
         invall_differs = (
             endpoint_record is not None
-            and normalize_reference_value(invall_alias) != normalize_reference_value(manual_base)
+            and normalize_reference_value(invall_alias) != normalize_reference_value(manual_alias)
         )
         source_serial = (
             _upload_serial_value(details_record, "detalhes") if details_record else ""
