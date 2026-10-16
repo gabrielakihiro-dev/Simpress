@@ -1452,9 +1452,14 @@ Horário disponível para atendimento:</textarea>
           </h3>
           <p id="comparacao-planilhas-fontes" class="text-xs text-slate-400 mt-1"></p>
         </div>
-        <button type="button" data-on-click="fecharModalComparacaoPlanilhas" class="text-slate-400 hover:text-white p-1 rounded-lg hover:bg-slate-800 transition" aria-label="Fechar resultado">
-          <i data-lucide="x" class="w-5 h-5"></i>
-        </button>
+        <div class="flex shrink-0 items-center gap-1">
+          <button type="button" id="btn-exportar-resultado-comparacao" data-on-click="exportarResultadoComparacaoPlanilhas" class="text-slate-400 hover:text-emerald-300 p-1 rounded-lg hover:bg-slate-800 transition disabled:cursor-not-allowed disabled:opacity-50" aria-label="Exportar este resultado para Excel" title="Exportar este resultado para Excel (registros e anotações do dia)" disabled>
+            <i data-lucide="download" class="w-5 h-5" aria-hidden="true"></i>
+          </button>
+          <button type="button" data-on-click="fecharModalComparacaoPlanilhas" class="text-slate-400 hover:text-white p-1 rounded-lg hover:bg-slate-800 transition" aria-label="Fechar resultado">
+            <i data-lucide="x" class="w-5 h-5"></i>
+          </button>
+        </div>
       </div>
       <div id="comparacao-planilhas-conteudo" class="history-modal-scroll overflow-y-auto flex-1 min-h-0 py-4 space-y-5"></div>
       <div class="pt-3 border-t border-slate-800 flex justify-end shrink-0">

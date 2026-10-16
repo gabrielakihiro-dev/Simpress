@@ -338,6 +338,34 @@
     }
   }
 
+  async function exportarResultadoComparacaoPlanilhas() {
+    const button = document.getElementById("btn-exportar-resultado-comparacao");
+    const data = button?.dataset.historyDate || "";
+    if (!data) {
+      app.showToast("Este resultado não tem uma data de histórico para exportar.", "warning");
+      return;
+    }
+
+    const htmlOriginal = button.innerHTML;
+    button.disabled = true;
+    button.setAttribute("aria-busy", "true");
+    button.innerHTML = '<i data-lucide="loader-2" class="w-5 h-5 animate-spin" aria-hidden="true"></i>';
+    lucide.createIcons({ root: button });
+
+    try {
+      await app.baixarHistoricoComparacoesExcel(data);
+      app.showToast("Resultado exportado com sucesso!", "success");
+    } catch (err) {
+      console.error("Erro ao exportar resultado da atualização das planilhas:", err);
+      app.showToast(err.message || "Não foi possível exportar o resultado.", "error");
+    } finally {
+      button.disabled = !button.dataset.historyDate;
+      button.removeAttribute("aria-busy");
+      button.innerHTML = htmlOriginal;
+      lucide.createIcons({ root: button });
+    }
+  }
+
   async function restaurarHistoricoComparacao(evento, botao) {
     const textoOriginal = botao.textContent;
     botao.disabled = true;
@@ -496,7 +524,8 @@
   return {
     carregarContagemHistoricoComparacoes, fecharEvolucaoAtualizacoes, abrirEvolucaoAtualizacoes,
     abrirModalHistoricoComparacoes, fecharModalHistoricoComparacoes, carregarHistoricoComparacoes,
-    baixarHistoricoComparacoesExcel, exportarHistoricoComparacoesExcel, restaurarHistoricoComparacao,
+    baixarHistoricoComparacoesExcel, exportarHistoricoComparacoesExcel, exportarResultadoComparacaoPlanilhas,
+    restaurarHistoricoComparacao,
     abrirResultadoHistoricoComparacao,
   };
 });
