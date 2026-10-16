@@ -3,6 +3,7 @@
 import re
 from datetime import datetime
 from typing import Any, Dict, Optional
+from core.xlsx_safety import set_cell_value_as_text
 from domains.history_annotations import annotation_export_text
 
 from openpyxl.styles import Alignment, Border, Font, PatternFill, Side
@@ -112,9 +113,7 @@ def _style_export_title(ws, title: str, subtitle: str, last_column: int) -> None
 
 def _safe_export_cell(cell, value: Any) -> None:
     if isinstance(value, str):
-        cell.value = value[:32767]
-        # Force strings that begin with '=' to remain text instead of formulas.
-        cell.data_type = "s"
+        set_cell_value_as_text(cell, value[:32767])
         cell.number_format = "@"
     else:
         cell.value = value

@@ -10,6 +10,7 @@ from fastapi import APIRouter, HTTPException
 from fastapi.responses import StreamingResponse
 from pydantic import BaseModel, Field, field_validator
 from core.config import TRANSFER_ORIGIN_CONTACT, TRANSFER_ORIGIN_EMAIL, TRANSFER_ORIGIN_PHONE
+from core.xlsx_safety import set_cell_value_as_text
 
 from core.integrity import (
     FileBusyError,
@@ -208,7 +209,7 @@ def _gerar_planilha_transferencia(payload: TransferenciaPayload, template_file: 
             expected_values = {}
 
             def set_template_cell(address: str, value: Any) -> None:
-                ws[address].value = value
+                set_cell_value_as_text(ws[address], value)
                 expected_values[(ws.title, address)] = value
 
             serial_val = payload.serial.strip().upper()

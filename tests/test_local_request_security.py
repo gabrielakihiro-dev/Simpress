@@ -256,7 +256,7 @@ class LocalRequestSecurityTests(unittest.TestCase):
                                   ("::ffff:127.0.0.1", 200), ("192.0.2.1", 403)):
             client = TestClient(main.app, base_url=origin, client=(address, 1234))
             self.addCleanup(client.close)
-            for path in ("/", "/static/favicon.svg", "/openapi.json"):
+            for path in ("/", "/static/favicon.svg"):
                 with self.subTest(address=address, path=path):
                     self.assertEqual(client.get(path).status_code, expected)
 
@@ -272,6 +272,48 @@ class LocalRequestSecurityTests(unittest.TestCase):
         for path in ("/api/auth/login", "/api/auth/logout", "/api/auth/logout-all"):
             with self.subTest(path=path):
                 self.assertEqual(client.post(path, json={}).status_code, 404)
+
+    @unittest.skipUnless(HTTP_TEST_AVAILABLE, "Optional httpx test dependency is not installed")
+    def test_interactive_docs_are_disabled_by_default(self):
+        self.assertFalse(main.API_DOCS_ENABLED)
+        client = TestClient(main.app, base_url=f"http://127.0.0.1:{main.SERVER_PORT}",
+                            client=("127.0.0.1", 1234))
+        self.addCleanup(client.close)
+        for path in ("/docs", "/redoc", "/openapi.json"):
+            with self.subTest(path=path):
+                self.assertEqual(client.get(path).status_code, 404)
+        self.assertIn("/api/buscar", main.app.openapi()["paths"])
+
+    def test_websocket_handshake_requires_loopback_host_and_same_origin(self):
+        authority = f"localhost:{main.SERVER_PORT}".encode()
+        same_origin = (b"origin", b"http://" + authority)
+        cases = (
+            (("127.0.0.1", 1234), [(b"host", authority), same_origin], True),
+            (("127.0.0.1", 1234), [(b"host", authority)], False),
+            (("127.0.0.1", 1234), [(b"host", authority), (b"origin", b"http://evil.example")], False),
+            (("127.0.0.1", 1234), [(b"host", b"evil.example:80"), (b"origin", b"http://evil.example:80")], False),
+            (("192.0.2.1", 1234), [(b"host", authority), same_origin], False),
+        )
+        for client, headers, allowed in cases:
+            with self.subTest(client=client, headers=headers):
+                messages = []
+                reached = []
+
+                async def endpoint(scope, receive, send):
+                    reached.append(True)
+                    await send({"type": "websocket.accept"})
+
+                async def receive():
+                    return {"type": "websocket.connect"}
+
+                async def send(message):
+                    messages.append(message)
+
+                scope = {"type": "websocket", "path": "/ws", "scheme": "ws",
+                         "client": client, "headers": headers}
+                asyncio.run(main.LocalRequestSafetyMiddleware(endpoint)(scope, receive, send))
+                self.assertEqual(bool(reached), allowed)
+                self.assertEqual(messages[0]["type"], "websocket.accept" if allowed else "websocket.close")
 
 
 if __name__ == "__main__":

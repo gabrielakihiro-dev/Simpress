@@ -46,6 +46,8 @@
   async function carregarEstatisticas() {
     try {
       const res = await fetch("/api/stats");
+      // 409: an import holds the files; keep the last numbers until the next poll.
+      if (res.status === 409) return;
       if (!res.ok) throw new Error("Falha ao consultar as estatísticas locais.");
       const stats = await res.json();
       definirEstatistica("stat-equipamentos", stats.total_equipamentos);
