@@ -30,23 +30,41 @@ class HistoryRestoreError(Exception):
 
 
 class HistoryRestoreServices(Protocol):
-    """Application services the restore workflow reads from the history router's services."""
+    """Application services the restore workflow reads from the history router's services.
 
-    comparison_history_path: Callable[[], Path]
-    details_upload_path: Callable[[], Path]
-    endpoint_upload_path: Callable[[], Path]
-    input_directory: Callable[[], Path]
-    inventory_state_transaction: Callable[..., Any]
-    load_comparison_history: Callable[[], List[Dict[str, Any]]]
-    load_database: Callable[..., Any]
-    load_modified_apelidos: Callable[[], Dict[str, str]]
-    manual_aliases_by_serial: Callable[[Dict[str, str]], Dict[str, str]]
-    max_upload_bytes: int
-    modified_aliases_path: Callable[[], Path]
-    normalize_reference_value: Callable[[Any], str]
-    publish_database_state: Callable[[Dict[str, Any]], None]
-    upload_backups_directory: Callable[[], Path]
-    validate_uploaded_workbook: Callable[[bytes, str], Dict[str, Any]]
+    Members are read-only so the router's frozen services dataclass satisfies the protocol.
+    """
+
+    @property
+    def comparison_history_path(self) -> Callable[[], Path]: ...
+    @property
+    def details_upload_path(self) -> Callable[[], Path]: ...
+    @property
+    def endpoint_upload_path(self) -> Callable[[], Path]: ...
+    @property
+    def input_directory(self) -> Callable[[], Path]: ...
+    @property
+    def inventory_state_transaction(self) -> Callable[..., Any]: ...
+    @property
+    def load_comparison_history(self) -> Callable[[], List[Dict[str, Any]]]: ...
+    @property
+    def load_database(self) -> Callable[..., Any]: ...
+    @property
+    def load_modified_apelidos(self) -> Callable[[], Dict[str, str]]: ...
+    @property
+    def manual_aliases_by_serial(self) -> Callable[[Dict[str, str]], Dict[str, str]]: ...
+    @property
+    def max_upload_bytes(self) -> int: ...
+    @property
+    def modified_aliases_path(self) -> Callable[[], Path]: ...
+    @property
+    def normalize_reference_value(self) -> Callable[[Any], str]: ...
+    @property
+    def publish_database_state(self) -> Callable[[Dict[str, Any]], None]: ...
+    @property
+    def upload_backups_directory(self) -> Callable[[], Path]: ...
+    @property
+    def validate_uploaded_workbook(self) -> Callable[[bytes, str], Dict[str, Any]]: ...
 
 
 def comparison_event_type(evento: Dict[str, Any]) -> str:
