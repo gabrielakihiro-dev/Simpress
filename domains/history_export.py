@@ -1,11 +1,14 @@
 """Excel presentation helpers for inventory comparison history."""
 
 import re
-from datetime import datetime
-from typing import Any, Dict, Optional
+from datetime import date, datetime
+from io import BytesIO
+from typing import Any, Dict, List, Optional, Tuple
 from core.xlsx_safety import set_cell_value_as_text
 from domains.history_annotations import annotation_export_text
+from domains.history_restore import comparison_event_type
 
+import openpyxl
 from openpyxl.styles import Alignment, Border, Font, PatternFill, Side
 from openpyxl.utils import get_column_letter
 from openpyxl.worksheet.table import Table, TableStyleInfo
@@ -266,3 +269,267 @@ def _write_export_summary_sheet(workbook, generated_at, selected_date, events, e
     note.font = Font(name="Aptos", size=9, italic=True, color=_EXPORT_MUTED)
     note.alignment = Alignment(wrap_text=True, vertical="center")
     ws.row_dimensions[note_row].height = 30
+
+
+def build_history_export_workbook(
+    display_events: List[Dict[str, Any]],
+    selected_date: date,
+) -> Tuple[BytesIO, str]:
+    """Build the history workbook for one day; returns the rewound stream and its filename."""
+    display_events.sort(key=_export_event_timestamp)
+
+    event_counts = {"atualizacao": 0, "restauracao": 0}
+    category_counts = {
+        "Apelidos atualizados": 0,
+        "Apelidos para conferência": 0,
+        "Divergências manuais": 0,
+        "Sem verificação há 7+ dias": 0,
+        "Ausentes no endpoint": 0,
+        "Ausentes na Simpress": 0,
+        "Divergências de localidade": 0,
+        "Duplicidades e ambiguidades": 0,
+        "Séries sem local definido": 0,
+    }
+    history_rows = []
+    alias_rows = []
+    absence_rows = []
+    no_access_rows = []
+    location_rows = []
+    ambiguity_rows = []
+
+    for order, event in enumerate(display_events, start=1):
+        comparison = event.get("comparacao")
+        comparison = comparison if isinstance(comparison, dict) else {}
+        summary = event.get("resumo")
+        summary = summary if isinstance(summary, dict) else {}
+        event_type = comparison_event_type(event)
+        event_type_label = "Restauração" if event_type == "restauracao" else "Atualização"
+        event_counts[event_type] += 1
+        timestamp = _export_datetime(event.get("horario") or comparison.get("horario_comparacao"))
+        event_id = _export_text(event.get("id") or comparison.get("evento_id"))
+        alias_updates = _export_rows(comparison, "apelidos_atualizados")
+        alias_reviews = _export_rows(comparison, "apelidos_sem_atualizacao")
+        manual_alias_conflicts = _export_rows(comparison, "divergencias_apelidos_manuais")
+        absent_endpoint = _export_rows(comparison, "ausentes_no_endpoint")
+        absent_simpress = _export_rows(comparison, "ausentes_em_detalhes")
+        no_recent_verification = _export_rows(comparison, "sem_acesso_7_dias")
+        local_divergences = _export_rows(comparison, "divergencias_local")
+        unmapped_series = _export_rows(comparison, "series_sem_mapeamento")
+        ambiguities = _export_rows(comparison, "correspondencias_ambiguas")
+        ambiguous_records = _export_rows(comparison, "registros_ambiguos")
+
+        manual_pending_count = sum(
+            1 for item in manual_alias_conflicts
+            if item.get("resolucao", "pendente") == "pendente"
+        )
+        ambiguity_count = len(ambiguities) + len(ambiguous_records)
+        category_counts["Apelidos atualizados"] += len(alias_updates)
+        category_counts["Apelidos para conferência"] += len(alias_reviews)
+        category_counts["Divergências manuais"] += len(manual_alias_conflicts)
+        category_counts["Sem verificação há 7+ dias"] += len(no_recent_verification)
+        category_counts["Ausentes no endpoint"] += len(absent_endpoint)
+        category_counts["Ausentes na Simpress"] += len(absent_simpress)
+        category_counts["Divergências de localidade"] += len(local_divergences)
+        category_counts["Duplicidades e ambiguidades"] += ambiguity_count
+        category_counts["Séries sem local definido"] += len(unmapped_series)
+
+        files_uploaded = event.get("arquivos_enviados")
+        if not isinstance(files_uploaded, dict):
+            files_uploaded = comparison.get("arquivos_enviados")
+        files_uploaded = files_uploaded if isinstance(files_uploaded, dict) else {}
+        files_restored = comparison.get("arquivos_restaurados")
+        files_restored = files_restored if isinstance(files_restored, dict) else {}
+        endpoint_file = files_restored.get("endpoint") if event_type == "restauracao" else files_uploaded.get("endpoint")
+        simpress_file = files_restored.get("detalhes") if event_type == "restauracao" else files_uploaded.get("detalhes")
+        history_rows.append((
+            order,
+            timestamp,
+            event_type_label,
+            event_id,
+            _history_display_text(endpoint_file),
+            _history_display_text(simpress_file),
+            comparison.get("total_endpoint", summary.get("total_endpoint")),
+            comparison.get("total_detalhes", summary.get("total_detalhes")),
+            comparison.get("total_equipamentos_carregados", summary.get("total_equipamentos_carregados")),
+            len(alias_updates),
+            len(alias_reviews),
+            manual_pending_count,
+            len(absent_endpoint),
+            len(absent_simpress),
+            len(no_recent_verification),
+            len(local_divergences),
+            ambiguity_count,
+            len(unmapped_series),
+            _export_datetime((comparison.get("restauracao_de") or {}).get("horario"))
+            if isinstance(comparison.get("restauracao_de"), dict) else None,
+            _export_text(comparison.get("backup_diretorio")),
+        ))
+
+        for item in alias_updates:
+            alias_rows.append((
+                timestamp, event_type_label, "Apelido atualizado",
+                item.get("serie"), "", item.get("apelido_anterior"),
+                item.get("apelido_equipamentos_detalhes"),
+                item.get("apelido_novo") or item.get("apelido_invall"),
+                _export_datetime(item.get("horario")), "Concluído", "",
+                _history_display_text(item.get("arquivos_origem")), "",
+            ))
+        for index, item in enumerate(alias_reviews):
+            alias_rows.append((
+                timestamp, event_type_label, "Para conferência",
+                item.get("serie"), item.get("computador"), "", "", "", None,
+                "Pendente", item.get("motivo"), "",
+                _export_note(comparison, "apelidos_sem_atualizacao", index, item),
+            ))
+        manual_status = {
+            "manter": "Alteração manual mantida",
+            "excluir": "Alteração manual removida",
+            "substituida": "Atualizada por nova planilha",
+            "pendente": "Pendente",
+        }
+        for item in manual_alias_conflicts:
+            resolution = item.get("resolucao") or "pendente"
+            alias_rows.append((
+                timestamp, event_type_label, "Divergência manual",
+                item.get("serie"), "", item.get("apelido_manual"),
+                item.get("apelido_equipamentos_detalhes"), item.get("apelido_invall"),
+                _export_datetime(item.get("horario_resolucao")),
+                manual_status.get(resolution, _export_text(resolution)),
+                "Diferença entre apelido manual e as planilhas de origem.", "", "",
+            ))
+
+        for category, items, note_category in (
+            ("Ausente no endpoint", absent_endpoint, "ausentes_no_endpoint"),
+            ("Ausente na Simpress", absent_simpress, "ausentes_em_detalhes"),
+        ):
+            missing_source = "no endpoint" if category == "Ausente no endpoint" else "na Simpress"
+            for index, item in enumerate(items):
+                absence_rows.append((
+                    timestamp, category,
+                    _export_text(item.get("ausente_em") or item.get("fonte_ausente") or missing_source),
+                    item.get("computador"), item.get("serie"), item.get("local_previsto"),
+                    _export_note(comparison, note_category, index, item),
+                ))
+
+        for index, item in enumerate(no_recent_verification):
+            no_access_rows.append((
+                timestamp, event_type_label, item.get("computador"), item.get("serie"),
+                _export_datetime(item.get("ultima_verificacao")), item.get("dias_sem_verificacao"),
+                item.get("linha_endpoint"), _export_note(comparison, "sem_acesso_7_dias", index, item),
+            ))
+
+        for index, item in enumerate(local_divergences):
+            location_rows.append((
+                timestamp, "Localidade divergente", item.get("computador"),
+                item.get("serie"), item.get("local_previsto"), item.get("local_detalhes"),
+                None, "", _export_note(comparison, "divergencias_local", index, item),
+            ))
+        for index, item in enumerate(unmapped_series):
+            location_rows.append((
+                timestamp, "Série sem local definido", "", item.get("serie"),
+                "", "", item.get("quantidade"), _export_text(item.get("exemplos")),
+                _export_note(comparison, "series_sem_mapeamento", index, item),
+            ))
+
+        for index, item in enumerate(ambiguities):
+            sources = []
+            for source in item.get("fontes") or []:
+                if not isinstance(source, dict):
+                    continue
+                label = _export_text(source.get("fonte"))
+                if source.get("quantidade"):
+                    label += f" ({source['quantidade']} registros)"
+                elif source.get("serie"):
+                    label += f" — série {source['serie']}"
+                sources.append(label)
+            note = _export_note(comparison, "ambiguidades", index, item)
+            ambiguity_rows.append((
+                timestamp, item.get("tipo") or "Ambiguidade",
+                item.get("chave"), "; ".join(sources), item.get("mensagem"),
+                note,
+            ))
+        for index, item in enumerate(ambiguous_records, start=len(ambiguities)):
+            ambiguous_sources = item.get("fontes") or {}
+            source_summary = "; ".join(
+                str(source) for source, status in ambiguous_sources.items()
+                if status == "ambíguo"
+            ) if isinstance(ambiguous_sources, dict) else ""
+            record_key = f"{item.get('computador') or 'Sem hostname'} · {item.get('serie') or 'Sem série'}"
+            notes = [_export_note(comparison, "ambiguidades", index, item)]
+            notes.extend(
+                _export_text(annotation_export_text(associated))
+                for associated in item.get("anotacoes_associadas", [])
+                if isinstance(associated, dict)
+            )
+            note = "\n".join(value for value in notes if value)
+            ambiguity_rows.append((
+                timestamp, "Presença ambígua", record_key,
+                source_summary, item.get("motivo"), note,
+            ))
+
+    detail_total = sum(category_counts.values())
+    workbook = openpyxl.Workbook()
+    workbook.properties.title = "Histórico de atualizações de planilhas"
+    workbook.properties.subject = "Comparações, registros e anotações do histórico de planilhas"
+    workbook.properties.creator = "Simpress"
+    generated_at = datetime.now().astimezone().replace(tzinfo=None)
+    _write_export_summary_sheet(workbook, generated_at, selected_date, display_events, event_counts, category_counts, detail_total)
+
+    _write_export_table_sheet(
+        workbook, "Histórico", "Eventos de planilhas",
+        "Uma linha por atualização ou restauração, em ordem cronológica.",
+        ["Ordem", "Data e hora", "Operação", "ID do evento", "Arquivo no endpoint", "Arquivo na Simpress",
+         "Equipamentos no endpoint", "Equipamentos na Simpress", "Equipamentos carregados", "Apelidos atualizados",
+         "Apelidos para conferência", "Divergências manuais pendentes", "Ausentes no endpoint",
+         "Ausentes na Simpress", "Sem verificação há 7+ dias", "Divergências de local", "Duplicidades e ambiguidades",
+         "Séries sem local", "Restauração de", "Diretório de backup"],
+        history_rows, "tblHistoricoPlanilhas",
+        [10, 20, 16, 34, 32, 42, 18, 18, 20, 17, 20, 22, 18, 18, 23, 18, 22, 17, 20, 36],
+    )
+    _write_export_table_sheet(
+        workbook, "Apelidos", "Apelidos e hostnames",
+        "Atualizações, linhas que precisam de conferência e divergências manuais registradas.",
+        ["Data e hora", "Operação", "Categoria", "Série", "Hostname/Apelido",
+         "Apelido anterior/manual", "Apelido na Simpress", "Apelido no endpoint/novo", "Horário da alteração",
+         "Situação", "Motivo", "Arquivos de origem", "Anotação"],
+        alias_rows, "tblHistoricoApelidos",
+        [20, 16, 24, 18, 28, 30, 30, 32, 20, 29, 56, 36, 42],
+    )
+    _write_export_table_sheet(
+        workbook, "Ausências", "Equipamentos ausentes por fonte",
+        "Registros sem correspondência segura no endpoint ou na Simpress.",
+        ["Data e hora", "Categoria", "Ausente em", "Hostname/Apelido", "Série",
+         "Local previsto", "Anotação"],
+        absence_rows, "tblHistoricoAusencias",
+        [20, 24, 22, 32, 18, 28, 42],
+    )
+    _write_export_table_sheet(
+        workbook, "Sem acesso", "Notebooks sem verificação recente",
+        "Notebooks cuja última verificação com êxito ocorreu há pelo menos 7 dias.",
+        ["Data e hora", "Operação", "Hostname/Apelido", "Série", "Última verificação com êxito",
+         "Dias sem verificação", "Linha no endpoint", "Anotação"],
+        no_access_rows, "tblHistoricoSemAcesso",
+        [20, 16, 32, 20, 26, 20, 16, 42],
+    )
+    _write_export_table_sheet(
+        workbook, "Localidades", "Divergências e séries sem local",
+        "Diferenças de localidade e prefixos sem regra cadastrada.",
+        ["Data e hora", "Categoria", "Computador", "Série", "Local previsto",
+         "Local na Simpress", "Quantidade", "Exemplos", "Anotação"],
+        location_rows, "tblHistoricoLocalidades",
+        [20, 28, 30, 18, 28, 28, 14, 54, 42],
+    )
+    _write_export_table_sheet(
+        workbook, "Ambiguidades", "Duplicidades e correspondências ambíguas",
+        "Presenças ambíguas e correspondências sem identificação única.",
+        ["Data e hora", "Ocorrência", "Série ou hostname/Apelido",
+         "Fontes", "Tratamento", "Anotação"],
+        ambiguity_rows, "tblHistoricoAmbiguidades",
+        [20, 27, 48, 34, 66, 42],
+    )
+
+    output = BytesIO()
+    workbook.save(output)
+    output.seek(0)
+    filename = f"Historico_Planilhas_{selected_date:%Y%m%d}_{generated_at:%H%M%S}.xlsx"
+    return output, filename
