@@ -360,7 +360,7 @@
           ${barra}
           <p class="text-xs text-cyan-200 bg-cyan-500/10 border border-cyan-500/25 rounded-lg px-3 py-2">Este clone contém as anotações sincronizadas. O resultado original e os arquivos da comparação não estão armazenados neste dispositivo.</p>
           <section class="space-y-2" data-history-filter-section>
-            <div><h4 class="text-sm font-bold text-amber-300">Anotações sincronizadas</h4><p class="text-[11px] text-slate-500">As anotações continuam vinculadas às linhas da atualização original.</p></div>
+            <div><h4 class="text-sm font-bold text-amber-300">Anotações sincronizadas</h4><p class="text-[11px] text-slate-500">Anotações feitas nas linhas desta atualização, com a seção e a linha a que pertencem.</p></div>
             ${renderizarTabelaComparacao(["Seção", "Linha", "Anotações"], anotacoesSincronizadasRows, "Nenhuma anotação sincronizada neste resultado.", "anotacoes_sincronizadas")}
           </section>`;
   }
@@ -401,23 +401,23 @@
           <div class="rounded-xl bg-violet-500/5 border border-violet-500/20 p-3"><p class="text-[10px] uppercase tracking-wide text-violet-300">Divergências manuais pendentes</p><p id="comparacao-divergencias-manuais-pendentes" class="text-xl font-bold text-violet-200 mt-1">${divergenciasApelidosManuais.filter(item => !item.resolucao || item.resolucao === "pendente").length}</p></div>
         </div>
         <section class="space-y-2" data-history-filter-section>
-          <div><h4 class="text-sm font-bold text-emerald-300">Apelidos/hostnames atualizados — no endpoint</h4><p class="text-[11px] text-slate-500">A lista compara os valores antes e depois pelo número de série.</p></div>
+          <div><h4 class="text-sm font-bold text-emerald-300">Apelidos/hostnames atualizados — no endpoint</h4><p class="text-[11px] text-slate-500">Equipamentos cujo apelido ou hostname mudou nesta atualização, com o valor anterior e o novo, identificados pela série.</p></div>
           ${renderizarTabelaComparacao(["Série", "Apelido anterior", "Novo apelido / hostname", "Horário", "Arquivos de origem"], aliasUpdateRows, "Nenhum apelido ou hostname mudou nesta atualização.")}
         </section>
         <section class="space-y-2" data-history-filter-section>
-          <div><h4 class="text-sm font-bold text-amber-300">Linhas mantidas para conferência</h4><p class="text-[11px] text-slate-500">Série vazia, ausente ou duplicada não é escolhida automaticamente; o apelido atual fica preservado.${permitirAnotacoes ? ` As anotações continuam vinculadas a esta linha e atualização. Em novas atualizações, são reaplicadas somente quando os dados correspondem exatamente na mesma seção e a anotação mais recente não está vazia ou em conflito. São salvas automaticamente${comparison.anotacoes_sync_ativa ? " e sincronizadas pela pasta OneDrive." : " neste dispositivo."}` : ""}</p></div>
+          <div><h4 class="text-sm font-bold text-amber-300">Linhas mantidas para conferência</h4><p class="text-[11px] text-slate-500">Linhas que não puderam ser atualizadas automaticamente (série vazia, ausente ou duplicada). O apelido atual foi mantido; o motivo está na coluna ao lado.${permitirAnotacoes ? ` Suas anotações ficam salvas${comparison.anotacoes_sync_ativa ? " e sincronizadas pelo OneDrive" : " neste dispositivo"} e só são copiadas para uma nova atualização se a linha for idêntica.` : ""}</p></div>
           ${renderizarTabelaComparacao(aliasReviewHeaders, aliasReviewRows, "Nenhuma linha de apelido precisa de conferência.", "apelidos_sem_atualizacao")}
         </section>
         <section class="space-y-2" data-history-filter-section>
-          <div><h4 class="text-sm font-bold text-violet-300">Divergências com apelidos alterados manualmente</h4><p class="text-[11px] text-slate-500">O apelido manual prevalece nas pesquisas e exportações. “Manter manual” registra a decisão; “Excluir manual” remove apenas o override desta série e volta a usar o valor das planilhas.</p></div>
+          <div><h4 class="text-sm font-bold text-violet-300">Divergências com apelidos alterados manualmente</h4><p class="text-[11px] text-slate-500">Apelidos definidos manualmente que diferem do valor da Simpress ou do endpoint. O apelido manual continua valendo. Escolha “Manter manual” para confirmar ou “Excluir manual” para voltar ao valor das planilhas.</p></div>
           ${renderizarTabelaComparacao(["Série", "Apelido manual", "na Simpress", "no endpoint", "Situação", "Ação"], manualAliasRows, "Nenhuma divergência entre apelidos manuais e as planilhas enviadas.", "divergencias_apelidos_manuais")}
         </section>
         <section class="space-y-2" data-history-filter-section>
-          <div><h4 class="text-sm font-bold text-rose-300">Sem acesso há 7 dias ou mais</h4><p class="text-[11px] text-slate-500">Notebook com última verificação com êxito igual ou anterior a 7 dias na data e hora desta atualização.</p><p class="text-[11px] text-slate-400">Atualização usada como referência: ${comparison.horario_comparacao ? `<time datetime="${escapeHtml(comparison.horario_comparacao)}">${escapeHtml(formatarHorarioHistorico(comparison.horario_comparacao))}</time>` : "data e hora indisponíveis"}.</p></div>
+          <div><h4 class="text-sm font-bold text-rose-300">Sem acesso há 7 dias ou mais</h4><p class="text-[11px] text-slate-500">Notebooks cuja última verificação com êxito ocorreu há 7 dias ou mais, contados a partir desta atualização.</p><p class="text-[11px] text-slate-400">Atualização usada como referência: ${comparison.horario_comparacao ? `<time datetime="${escapeHtml(comparison.horario_comparacao)}">${escapeHtml(formatarHorarioHistorico(comparison.horario_comparacao))}</time>` : "data e hora indisponíveis"}.</p></div>
           ${renderizarTabelaComparacao(["Hostname/Apelido", "Série", "Última verificação com êxito", "Dias sem verificação", "Linha no endpoint", ...annotationHeaders], semAcessoRows, "Nenhum notebook está há 7 dias ou mais sem verificação com êxito.", "sem_acesso_7_dias")}
         </section>
         <section class="space-y-2" data-history-filter-section>
-          <div><h4 class="text-sm font-bold text-rose-300">Equipamentos sem correspondência por fonte</h4><p class="text-[11px] text-slate-500">Cada lista mostra equipamentos que não têm correspondência segura naquela fonte. Divergências de local aparecem em seção própria.</p></div>
+          <div><h4 class="text-sm font-bold text-rose-300">Equipamentos sem correspondência por fonte</h4><p class="text-[11px] text-slate-500">Equipamentos que não foram encontrados de forma segura em uma das fontes: Endpoint ou Simpress. Cada lista indica a fonte onde falta o registro.</p></div>
           <div class="history-filter-group space-y-2" data-history-filter-group="ausentes_no_endpoint">
             <h5 class="text-xs font-semibold text-slate-300">Sem correspondência — Endpoint (${ausentesEndpoint.length})</h5>
             ${renderizarTabelaComparacao(["Hostname/Apelido", "Série", "Local previsto", "Sem correspondência em", ...annotationHeaders], linhasAusentes(ausentesEndpoint, "ausentes_no_endpoint", colunas), "Todos os equipamentos têm correspondência segura com Endpoint.")}
@@ -428,15 +428,15 @@
           </div>
         </section>
         <section class="space-y-2" data-history-filter-section>
-          <div><h4 class="text-sm font-bold text-amber-300">Localidade divergente</h4><p class="text-[11px] text-slate-500">A localidade na Simpress é comparada com a classificação do hostname.</p></div>
+          <div><h4 class="text-sm font-bold text-amber-300">Localidade divergente</h4><p class="text-[11px] text-slate-500">Equipamentos cujo local cadastrado na Simpress é diferente do local previsto pelo prefixo da série.</p></div>
           ${renderizarTabelaComparacao(["Computador", "Série", "Local previsto", "Local na Simpress", ...annotationHeaders], locationRows, "Nenhuma divergência de localidade encontrada.", "divergencias_local")}
         </section>
         <section class="space-y-2" data-history-filter-section>
-          <div><h4 class="text-sm font-bold text-yellow-300">Duplicidades e correspondências ambíguas</h4><p class="text-[11px] text-slate-500">Nenhuma linha é escolhida automaticamente quando a série se repete ou o hostname/Apelido não identifica uma correspondência única.</p></div>
+          <div><h4 class="text-sm font-bold text-yellow-300">Duplicidades e correspondências ambíguas</h4><p class="text-[11px] text-slate-500">Séries ou hostnames repetidos, ou que não identificam um único equipamento. Nada foi escolhido automaticamente; confira cada caso.</p></div>
           ${renderizarTabelaComparacao(["Ocorrência", "Série ou hostname/Apelido", "Fontes", "Tratamento", ...annotationHeaders], ambiguityRows, "Nenhuma duplicidade ou correspondência ambígua encontrada.", "correspondencias_ambiguas")}
         </section>
         <section class="space-y-2" data-history-filter-section>
-          <div><h4 class="text-sm font-bold text-sky-300">Séries sem local definido</h4><p class="text-[11px] text-slate-500">Não há regra de localidade cadastrada para estes prefixos.</p></div>
+          <div><h4 class="text-sm font-bold text-sky-300">Séries sem local definido</h4><p class="text-[11px] text-slate-500">Prefixos de série sem local cadastrado, com a quantidade de equipamentos e exemplos.</p></div>
           ${renderizarTabelaComparacao(["Série", "Quantidade", "Exemplos", ...annotationHeaders], unmappedRows, "Todas as séries têm mapeamento de localidade.", "series_sem_mapeamento")}
         </section>
         <p class="text-[11px] text-emerald-300">Equipamentos carregados na Simpress: ${Number(comparison.total_equipamentos_carregados || 0).toLocaleString("pt-BR")}. Backup das versões anteriores: <span class="font-mono">planilhas_entrada/${escapeHtml(comparison.backup_diretorio || "_backups")}</span>.</p>

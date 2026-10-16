@@ -10,10 +10,9 @@ const indexHtml = fs.readFileSync(path.join(__dirname, "..", "..", "static", "in
 const appCss = fs.readFileSync(path.join(__dirname, "..", "..", "static", "app.css"), "utf8");
 
 test("explains that history annotations belong to one row in one update", () => {
-  assert.match(appScript, /As anotações continuam vinculadas a esta linha e atualização/);
-  assert.match(appScript, /são reaplicadas somente quando os dados correspondem exatamente na mesma seção/);
-  assert.match(appScript, /São salvas automaticamente/);
-  assert.match(appScript, /sincronizadas pela pasta OneDrive/);
+  assert.match(appScript, /só são copiadas para uma nova atualização se a linha for idêntica/);
+  assert.match(appScript, /Suas anotações ficam salvas/);
+  assert.match(appScript, /sincronizadas pelo OneDrive/);
 });
 
 test("shows synchronized annotations on a clone without local comparison history", () => {
