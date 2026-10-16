@@ -3230,13 +3230,13 @@ class WorkflowIntegrityTests(unittest.TestCase):
             ))
 
             self.assertTrue(result["salvo_no_disco"])
-            self.assertEqual(result["equipamento"]["apelido"], "HOST-MANUAL")
-            self.assertEqual(main.load_modified_apelidos(), {"S-1": "HOST-MANUAL"})
+            self.assertEqual(result["equipamento"]["apelido"], "HOST-MANUAL (M)")
+            self.assertEqual(main.load_modified_apelidos(), {"S-1": "HOST-MANUAL (M)"})
             self.assertEqual(self.details.read_bytes(), original_details)
 
             response = main.exportar_equipamentos()
             exported = openpyxl.load_workbook(io.BytesIO(response.body), data_only=False)
-            self.assertEqual(exported["Parque"]["B2"].value, "HOST-MANUAL")
+            self.assertEqual(exported["Parque"]["B2"].value, "HOST-MANUAL (M)")
             self.assertEqual(exported["Parque"]["C2"].value, "MANTER")
             exported.close()
 
@@ -3352,7 +3352,7 @@ class WorkflowIntegrityTests(unittest.TestCase):
         event_id = "comparacao-manual-ficticia"
         divergence = {
             "serie": "SN-1",
-            "apelido_manual": "HOST-MANUAL",
+            "apelido_manual": "HOST-MANUAL (M)",
             "apelido_equipamentos_detalhes": "HOST-DETAILS-NEW",
             "apelido_invall": "HOST-INVALL-NEW",
             "invall_encontrado": True,
@@ -3362,7 +3362,7 @@ class WorkflowIntegrityTests(unittest.TestCase):
             "id": event_id,
             "comparacao": {"divergencias_apelidos_manuais": [divergence]},
         }]), encoding="utf-8")
-        self.assertEqual(divergence["apelido_manual"], "HOST-MANUAL")
+        self.assertEqual(divergence["apelido_manual"], "HOST-MANUAL (M)")
         self.assertEqual(divergence["apelido_equipamentos_detalhes"], "HOST-DETAILS-NEW")
         self.assertEqual(divergence["apelido_invall"], "HOST-INVALL-NEW")
 
@@ -3402,11 +3402,11 @@ class WorkflowIntegrityTests(unittest.TestCase):
         self.assertTrue(main.load_database())
 
         saved = main.atualizar_apelido(main.ApelidoUpdatePayload(serial="SN-1", apelido="ALIAS-MANUAL"))
-        self.assertEqual(saved["equipamento"]["apelido"], "ALIAS-MANUAL")
+        self.assertEqual(saved["equipamento"]["apelido"], "ALIAS-MANUAL (M)")
         history_after_save = json.loads(self.manual_history.read_text(encoding="utf-8"))
         latest_event = history_after_save[-1]
         self.assertEqual(latest_event["apelido_anterior"], "ALIAS-ORIGINAL")
-        self.assertEqual(latest_event["apelido_novo"], "ALIAS-MANUAL")
+        self.assertEqual(latest_event["apelido_novo"], "ALIAS-MANUAL (M)")
 
         undone = main.desfazer_alteracao_apelido(main.ApelidoUndoPayload(evento_id=latest_event["id"]))
         # Sem override antes da edição, o desfazer remove o override e o hostname do Endpoint volta a valer.
@@ -3444,7 +3444,7 @@ class WorkflowIntegrityTests(unittest.TestCase):
         main.atualizar_apelido(main.ApelidoUpdatePayload(serial="SN-1", apelido="ALIAS-MANUAL"))
         edit_event = json.loads(self.manual_history.read_text(encoding="utf-8"))[-1]
         self.assertIs(edit_event["tinha_override"], False)
-        self.assertEqual(main.load_modified_apelidos(), {"SN-1": "ALIAS-MANUAL"})
+        self.assertEqual(main.load_modified_apelidos(), {"SN-1": "ALIAS-MANUAL (M)"})
 
         undone = main.desfazer_alteracao_apelido(main.ApelidoUndoPayload(evento_id=edit_event["id"]))
 
@@ -3453,7 +3453,7 @@ class WorkflowIntegrityTests(unittest.TestCase):
         self.assertFalse(main.equipamentos_cache["SN-1"]["_apelido_manual_override"])
         undo_event = json.loads(self.manual_history.read_text(encoding="utf-8"))[-1]
         self.assertEqual(undo_event["acao"], "desfazer")
-        self.assertEqual(undo_event["apelido_anterior"], "ALIAS-MANUAL")
+        self.assertEqual(undo_event["apelido_anterior"], "ALIAS-MANUAL (M)")
         self.assertEqual(undo_event["apelido_novo"], "ALIAS-ORIGINAL")
         self.assertIs(undo_event["tinha_override"], True)
 

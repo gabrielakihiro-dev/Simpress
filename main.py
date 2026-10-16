@@ -708,15 +708,17 @@ def _manual_alias_source_snapshots(
         if endpoint_record is None and details_record is None:
             continue
 
+        # O marcador (M) não conta: um apelido igual à planilha, só marcado, não diverge.
+        manual_base = effective_alias.strip_manual_alias_marker(manual_alias)
         invall_alias = _upload_alias_value(endpoint_record, "endpoint") if endpoint_record else ""
         details_alias = _upload_alias_value(details_record, "detalhes") if details_record else ""
         details_differs = (
             details_record is not None
-            and normalize_reference_value(details_alias) != normalize_reference_value(manual_alias)
+            and normalize_reference_value(details_alias) != normalize_reference_value(manual_base)
         )
         invall_differs = (
             endpoint_record is not None
-            and normalize_reference_value(invall_alias) != normalize_reference_value(manual_alias)
+            and normalize_reference_value(invall_alias) != normalize_reference_value(manual_base)
         )
         source_serial = (
             _upload_serial_value(details_record, "detalhes") if details_record else ""
@@ -2597,7 +2599,8 @@ def aplicar_alteracao_apelido(
 def atualizar_apelido(payload: ApelidoUpdatePayload):
     """Atualiza o apelido e registra o valor anterior, o novo e o horário."""
     target_serial = payload.serial.strip().upper()
-    novo_apelido = payload.apelido.strip()
+    # Toda edição manual termina em " (M)" para indicar a origem na tela e nas exportações.
+    novo_apelido = effective_alias.with_manual_alias_marker(payload.apelido)
     resultado = aplicar_alteracao_apelido(target_serial, novo_apelido)
 
     return {
