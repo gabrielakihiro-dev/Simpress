@@ -6,6 +6,7 @@ applied only when the serial appears exactly once in both sources.
 """
 
 import logging
+import re
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any, Callable, Dict, Iterable, List, Optional, Set
@@ -16,6 +17,20 @@ from domains.inventory_comparison import _record_value, normalize_reference_valu
 
 logger = logging.getLogger(__name__)
 _last_alias_conflicts = 0
+
+MANUAL_ALIAS_MARKER = "(M)"
+_MANUAL_ALIAS_MARKER_PATTERN = re.compile(r"\s*\(M\)\s*$", re.IGNORECASE)
+
+
+def strip_manual_alias_marker(alias: Any) -> str:
+    """Return the alias without the trailing ``(M)`` manual marker."""
+    return _MANUAL_ALIAS_MARKER_PATTERN.sub("", str(alias or "")).strip()
+
+
+def with_manual_alias_marker(alias: Any) -> str:
+    """Return the alias ending in exactly one `` (M)``; empty aliases stay empty."""
+    base = strip_manual_alias_marker(alias)
+    return f"{base} {MANUAL_ALIAS_MARKER}" if base else ""
 
 
 @dataclass(frozen=True)
