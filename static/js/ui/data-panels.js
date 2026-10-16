@@ -230,6 +230,8 @@
     let panel = null;
     let lastFetch = 0;
     let requestSerial = 0;
+    let cityFilter = "";
+    let panelExpanded = false;
 
     function ensurePanel() {
       if (panel) return panel;
@@ -256,7 +258,9 @@
       host.replaceChildren();
       const title = el("h2", "ux-home-title", "Resumo do parque");
       title.id = "ux-home-panel-title";
-      host.append(title);
+      const header = el("div", "ux-home-header");
+      header.append(title);
+      host.append(header);
       if (!data.base_importada) {
         host.append(el("p", "ux-home-empty", "Nenhuma base importada ainda. Use “Atualizar planilhas” para carregar os equipamentos."));
         host.hidden = false;
@@ -264,29 +268,56 @@
       }
       const stats = el("div", "ux-stat-grid");
       stats.setAttribute("role", "list");
-      stats.append(stat("Equipamentos", data.total_equipamentos), stat("Unidades", data.total_unidades), stat("Cidades", data.total_cidades));
+      stats.append(stat("Equipamentos", data.total_equipamentos), stat("Unidades", data.total_unidades));
       (data.por_categoria || []).forEach(category => stats.append(stat(category.label, category.total)));
       stats.querySelectorAll(".ux-stat").forEach(item => item.setAttribute("role", "listitem"));
-      host.append(stats);
+      const body = el("div", "ux-home-body");
+      body.id = "ux-home-body";
+      body.hidden = !panelExpanded;
+      body.append(stats);
 
       const columns = el("div", "ux-home-columns");
-      const cities = data.cidades_principais || [];
-      if (cities.length) {
+      if ((data.cidades_principais || []).length) {
         const block = el("div", "ux-home-block");
-        block.append(el("h3", "ux-home-subtitle", "Cidades com mais equipamentos"));
-        const list = el("ul", "ux-bars");
-        const widths = barPercentages(cities);
-        cities.forEach((city, index) => {
-          const row = el("li", "ux-bar-row");
-          const bar = el("span", "ux-bar");
-          bar.setAttribute("aria-hidden", "true");
-          const fill = el("span", "ux-bar-fill");
-          fill.style.width = `${widths[index]}%`;
-          bar.append(fill);
-          row.append(el("span", "ux-bar-label", city.cidade), bar, el("span", "ux-bar-value", formatNumber(city.total)));
-          list.append(row);
+        const head = el("div", "ux-city-head");
+        head.append(el("h3", "ux-home-subtitle", "Cidades com mais equipamentos"));
+        const categories = data.por_categoria || [];
+        if (!categories.some(category => category.value === cityFilter)) cityFilter = "";
+        const select = el("select", "ux-city-filter");
+        select.setAttribute("aria-label", "Filtrar cidades por tipo de equipamento");
+        [{ value: "", label: "Todos" }, ...categories].forEach(option => {
+          const node = el("option", "", option.label);
+          node.value = option.value;
+          select.append(node);
         });
-        block.append(list);
+        select.value = cityFilter;
+        head.append(select);
+        block.append(head);
+        const listHost = el("div", "ux-city-list");
+        const fillList = () => {
+          const cities = cityFilter ? (data.cidades_por_categoria?.[cityFilter] || []) : (data.cidades_principais || []);
+          listHost.replaceChildren();
+          if (!cities.length) {
+            listHost.append(el("p", "ux-home-note", "Nenhum equipamento desse tipo com cidade informada."));
+            return;
+          }
+          const list = el("ul", "ux-bars");
+          const widths = barPercentages(cities);
+          cities.forEach((city, index) => {
+            const row = el("li", "ux-bar-row");
+            const bar = el("span", "ux-bar");
+            bar.setAttribute("aria-hidden", "true");
+            const fill = el("span", "ux-bar-fill");
+            fill.style.width = `${widths[index]}%`;
+            bar.append(fill);
+            row.append(el("span", "ux-bar-label", city.cidade), bar, el("span", "ux-bar-value", formatNumber(city.total)));
+            list.append(row);
+          });
+          listHost.append(list);
+        };
+        select.addEventListener("change", () => { cityFilter = select.value; fillList(); });
+        fillList();
+        block.append(listHost);
         if (data.sem_cidade > 0) block.append(el("p", "ux-home-note", `${pluralize(data.sem_cidade, "equipamento sem cidade", "equipamentos sem cidade")} na base.`));
         columns.append(block);
       }
@@ -300,7 +331,17 @@
         const list = el("ul", "ux-attention");
         attention.forEach(item => {
           const row = el("li", "ux-attention-row");
-          row.append(el("span", "", item.rotulo), el("strong", "", formatNumber(item.total)));
+          const eventId = data.ultima_comparacao?.id;
+          if (eventId && typeof win.abrirResultadoHistoricoComparacao === "function") {
+            const button = el("button", "ux-attention-row-button");
+            button.type = "button";
+            button.setAttribute("aria-label", `${item.rotulo}: ${formatNumber(item.total)}. Abrir esta seção no resultado da última atualização.`);
+            button.append(el("span", "", item.rotulo), el("strong", "", formatNumber(item.total)));
+            button.addEventListener("click", () => win.abrirResultadoHistoricoComparacao(eventId, item.campo, button));
+            row.append(button);
+          } else {
+            row.append(el("span", "", item.rotulo), el("strong", "", formatNumber(item.total)));
+          }
           list.append(row);
         });
         status.append(list);
@@ -308,7 +349,20 @@
         status.append(el("p", "ux-home-note ux-home-note--ok", "Nenhum ponto de atenção na última comparação."));
       }
       columns.append(status);
-      host.append(columns);
+      body.append(columns);
+      const toggle = el("button", "ux-home-toggle");
+      toggle.type = "button";
+      toggle.setAttribute("aria-controls", "ux-home-body");
+      const syncToggle = () => {
+        body.hidden = !panelExpanded;
+        toggle.setAttribute("aria-expanded", String(panelExpanded));
+        toggle.textContent = panelExpanded ? "Minimizar" : "Maximizar";
+        title.classList.toggle("ux-home-title--collapsed", !panelExpanded);
+      };
+      toggle.addEventListener("click", () => { panelExpanded = !panelExpanded; syncToggle(); });
+      syncToggle();
+      header.append(toggle);
+      host.append(body);
       host.hidden = false;
     }
 
