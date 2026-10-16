@@ -142,7 +142,7 @@ def check_ready_workbook(
             services.validate_local_model(path, role)
         else:
             if stat.st_size > services.max_upload_bytes():
-                raise ValueError("A planilha excede o limite de 30 MB.")
+                raise ValueError("A planilha excede o limite de 60 MB.")
             services.validate_uploaded_workbook(path.read_bytes(), role)
         status.update(available=True, reason="OK", state="ready")
         cache.put(key, status)

@@ -60,7 +60,7 @@ def create_local_setup_router(*, model_path, transaction_root, backups_directory
             if not data:
                 raise HTTPException(400, "O modelo está vazio.")
             if len(data) > max_upload_bytes():
-                raise HTTPException(413, "O modelo excede o limite de 30 MB.")
+                raise HTTPException(413, "O modelo excede o limite de 60 MB.")
             admission = parser_admission()
             if not admission.acquire(blocking=False):
                 admission = None

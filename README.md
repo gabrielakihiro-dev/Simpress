@@ -231,7 +231,7 @@ data/state/entrada_automatica/pendentes/2026-10-09_lote-001/
 │   └── EquipamentosDetalhes.xlsx
 ```
 
-Copie um arquivo para cada pasta de origem. Assim que os dois `.xlsx` aparecerem e permanecerem estáveis em duas verificações consecutivas, o importador processará o lote; cada pasta deve conter exatamente um `.xlsx` e cada arquivo respeitar o limite de 30 MB. Depois do processamento, o lote completo vai para `processadas`; arquivos recusados vão para `falhas`, junto de `_resultado.json` com o motivo. Nada é apagado. Lotes em `processando` são recuperados na inicialização, e um lote que já consta no histórico não é aplicado novamente.
+Copie um arquivo para cada pasta de origem. Assim que os dois `.xlsx` aparecerem e permanecerem estáveis em duas verificações consecutivas, o importador processará o lote; cada pasta deve conter exatamente um `.xlsx` e cada arquivo respeitar o limite de 60 MB. Depois do processamento, o lote completo vai para `processadas`; arquivos recusados vão para `falhas`, junto de `_resultado.json` com o motivo. Nada é apagado. Lotes em `processando` são recuperados na inicialização, e um lote que já consta no histórico não é aplicado novamente.
 
 Exemplo no PowerShell, substituindo os caminhos e o nome do lote:
 
@@ -272,7 +272,7 @@ Use **Pular para o conteúdo principal** para ignorar o cabeçalho. Na lista rá
 
 ## Limites de planilhas
 
-Cada arquivo enviado pode ter até **30 MB**. Para manter a leitura previsível, cada arquivo também pode ter até **128 abas**, **250.000 linhas por aba** e **5.000.000 de posições usadas no total**. O pacote XLSX descompactado é limitado a 256 MB. Na prática, esse é o limite que costuma valer primeiro: a exportação completa da Simpress, com 50 colunas, cabe com cerca de 70 mil linhas (medido em 15/10/2026), e as 250.000 linhas por aba só cabem em planilhas com até 20 colunas. Perto desse teto, a leitura leva mais de um minuto e usa cerca de 450 MB de memória. Os limites se aplicam aos arquivos enviados e às planilhas locais processadas.
+Cada arquivo enviado pode ter até **60 MB**. Para manter a leitura previsível, cada arquivo também pode ter até **128 abas**, **250.000 linhas por aba** e **10.000.000 de posições usadas no total**. O pacote XLSX descompactado é limitado a 512 MB. Na prática, esse é o limite que costuma valer primeiro: a exportação completa da Simpress, com 50 colunas, cabe com cerca de 140 mil linhas (estimado a partir da medição de 15/10/2026 com o limite anterior de 256 MB), e as 250.000 linhas por aba só cabem em planilhas com até 40 colunas. Perto desse teto, a leitura leva mais de dois minutos e pode usar cerca de 900 MB de memória. Os limites se aplicam aos arquivos enviados e às planilhas locais processadas.
 
 Arquivos precisam ser `.xlsx` válidos. Planilhas vazias, corrompidas, com cabeçalhos ausentes/ambíguos ou sem linhas utilizáveis podem ser recusadas. Se duas abas de um arquivo forem compatíveis com o mesmo tipo de inventário, selecione ou prepare um arquivo que contenha apenas a aba correta.
 
