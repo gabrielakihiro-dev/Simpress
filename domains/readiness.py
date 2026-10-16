@@ -18,6 +18,7 @@ from typing import Any, Callable, Dict, Hashable, Iterable, List, Optional, Tupl
 
 from fastapi import HTTPException
 
+from core.config import format_size_limit
 from core.integrity import FileBusyError, WorkbookSafetyError
 from core.xlsx_safety import WORKBOOK_READ_ERRORS, XlsxLimitExceeded, XlsxPackageError, validate_xlsx
 
@@ -141,8 +142,9 @@ def check_ready_workbook(
         if role in {"transferencia", "exportacao"}:
             services.validate_local_model(path, role)
         else:
-            if stat.st_size > services.max_upload_bytes():
-                raise ValueError("A planilha excede o limite de 60 MB.")
+            max_upload_bytes = services.max_upload_bytes()
+            if stat.st_size > max_upload_bytes:
+                raise ValueError(f"A planilha excede o limite de {format_size_limit(max_upload_bytes)}.")
             services.validate_uploaded_workbook(path.read_bytes(), role)
         status.update(available=True, reason="OK", state="ready")
         cache.put(key, status)

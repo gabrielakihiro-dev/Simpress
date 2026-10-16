@@ -48,6 +48,15 @@ MAX_XLSX_TOTAL_CELLS = 10_000_000
 MAX_XLSX_TOTAL_MERGED_CELLS = MAX_XLSX_TOTAL_CELLS
 MAX_XLSX_CONTROL_XML_BYTES = 8 * 1024 * 1024
 
+
+def format_size_limit(byte_count: int) -> str:
+    """Render a byte limit for user-facing messages, so labels follow the configured values."""
+    if byte_count >= 1024 * 1024:
+        return f"{byte_count / (1024 * 1024):g} MB"
+    if byte_count >= 1024:
+        return f"{byte_count / 1024:g} KB"
+    return f"{byte_count} bytes"
+
 CUSTOM_UNIDADES_FILE = STATE_DIR / "unidades_custom.json"
 MODIFIED_APELIDOS_FILE = STATE_DIR / "apelidos_modificados" / "apelidos_modificados.json"
 ALIAS_HISTORY_FILE = STATE_DIR / "historico_alteracoes.json"
