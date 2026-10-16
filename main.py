@@ -95,7 +95,13 @@ from routers.operations import MAX_TICKET_WORKBOOK_BYTES, create_operations_rout
 from routers.local_setup import create_local_setup_router
 from domains.local_setup import validate_local_model
 from core.logging_setup import configure_logging
-from core.xlsx_safety import WORKBOOK_READ_ERRORS, XlsxLimitExceeded, XlsxPackageError, validate_xlsx
+from core.xlsx_safety import (
+    WORKBOOK_READ_ERRORS,
+    XlsxLimitExceeded,
+    XlsxPackageError,
+    set_cell_value_as_text,
+    validate_xlsx,
+)
 
 from domains.inventory_comparison import (
     COMPARISON_SOURCE_LABELS,
@@ -188,6 +194,9 @@ from security.local_requests import (
 # ".atomic-transactions" lock, then file locks, then these Python locks as leaves.
 # Hold a leaf lock only around memory or a single file read; never open a
 # transaction, call lock_paths or load_database while holding one.
+# Read-only routes polled by the page give up early (409 + Retry-After) instead of
+# holding a worker thread for the full 15 s while an import owns the global lock.
+READ_LOCK_TIMEOUT_SECONDS = 3.0
 MODIFIED_APELIDOS_LOCK = threading.RLock()
 ALIAS_HISTORY_LOCK = threading.RLock()
 COMPARISON_HISTORY_LOCK = threading.RLock()
@@ -327,10 +336,11 @@ def build_alias_change_entry(
     new_alias: str,
     action: str = "alteracao",
     reference_id: Optional[str] = None,
+    had_override: Optional[bool] = None,
 ) -> Dict[str, Any]:
     with STATE_LOCK:
         equipment = dict(equipamentos_cache.get(serial, {}))
-    return {
+    entry = {
         "id": uuid.uuid4().hex,
         "tipo": "apelido",
         "serial": serial,
@@ -341,6 +351,10 @@ def build_alias_change_entry(
         "acao": action,
         "referencia_id": reference_id,
     }
+    if had_override is not None:
+        # Undo needs to know whether to restore a value or drop the override again.
+        entry["tinha_override"] = had_override
+    return entry
 
 def _equipment_revision(serial: Any, modelo: Any, tipo: Any, apelido: Any, id_cliente: Any) -> str:
     values = []
@@ -815,8 +829,8 @@ def _apply_effective_alias(
     details_duplicate: bool = False,
 ) -> None:
     if endpoint_index is None:
-        with lock_paths([TRANSACTION_ROOT / ".atomic-transactions"]):
-            with lock_paths([ENDPOINT_UPLOAD_FILE]):
+        with lock_paths([TRANSACTION_ROOT / ".atomic-transactions"], timeout=READ_LOCK_TIMEOUT_SECONDS):
+            with lock_paths([ENDPOINT_UPLOAD_FILE], timeout=READ_LOCK_TIMEOUT_SECONDS):
                 endpoint_index = read_endpoint_alias_index()
     effective_alias.apply_effective_alias(equipment, endpoint_index, details_duplicate=details_duplicate)
 
@@ -1009,14 +1023,14 @@ def count_export_changes(
 
     if locked:
         return count_with_cache()
-    with lock_paths([TRANSACTION_ROOT / ".atomic-transactions"]):
+    with lock_paths([TRANSACTION_ROOT / ".atomic-transactions"], timeout=READ_LOCK_TIMEOUT_SECONDS):
         detail_files = get_details_files()
         with lock_paths([
             *detail_files,
             ENDPOINT_UPLOAD_FILE,
             MODIFIED_APELIDOS_FILE,
             EXPORT_MODEL_FILE,
-        ]):
+        ], timeout=READ_LOCK_TIMEOUT_SECONDS):
             return count_with_cache()
 
 
@@ -1106,6 +1120,7 @@ async def lifespan(app: FastAPI):
             asyncio.create_task(_history_annotation_sync_worker()),
             asyncio.create_task(_automatic_inventory_import_worker()),
             asyncio.create_task(_automatic_ticket_import_worker()),
+            asyncio.create_task(_external_change_reload_worker()),
         ))
         yield
     finally:
@@ -1115,6 +1130,36 @@ async def lifespan(app: FastAPI):
             *background_tasks,
             return_exceptions=True,
         )
+
+
+def reload_database_if_changed_externally() -> bool:
+    """Reload the cache when the active files differ from the published ones."""
+    if get_transaction_recovery_block() is not None:
+        return False
+    with STATE_LOCK:
+        loaded = _LOADED_FILES_SIGNATURE
+    if loaded is None:
+        return False
+    try:
+        if _inventory_files_signature() == loaded:
+            return False
+    except OSError:
+        return False
+    logger.info("Planilhas ou configurações alteradas fora do site; recarregando a base.")
+    try:
+        return bool(load_database())
+    except (FileBusyError, LocalJsonCorruptionError) as error:
+        logger.warning("Recarga adiada (%s); nova tentativa no próximo ciclo.", type(error).__name__)
+        return False
+
+
+async def _external_change_reload_worker() -> None:
+    while True:
+        await asyncio.sleep(EXTERNAL_CHANGE_POLL_SECONDS)
+        try:
+            await asyncio.to_thread(reload_database_if_changed_externally)
+        except Exception:
+            logger.exception("Falha inesperada ao conferir alterações externas da base.")
 
 
 def _flush_pending_history_annotations_unless_blocked() -> None:
@@ -1179,11 +1224,17 @@ async def _automatic_ticket_import_worker() -> None:
     )
 
 
+# Interactive docs expose the API contract to any local process; developers opt in.
+API_DOCS_ENABLED = os.environ.get("SIMPRESS_ENABLE_DOCS", "").strip() == "1"
+
 app = FastAPI(
     title="Simpress Transferência de Equipamentos - SEBRAE/PR",
     description="Sistema inteligente para emissão automatizada de planilhas oficiais de transferência de equipamentos.",
     version="1.3.0",
     lifespan=lifespan,
+    docs_url="/docs" if API_DOCS_ENABLED else None,
+    redoc_url="/redoc" if API_DOCS_ENABLED else None,
+    openapi_url="/openapi.json" if API_DOCS_ENABLED else None,
 )
 
 app.add_middleware(InventoryUpdateMiddleware)
@@ -1445,10 +1496,33 @@ def prepare_database_state(
     }
 
 
+# Files behind the published cache; a change made by another process (the inbox
+# scripts in scripts/) is noticed by _external_change_reload_worker.
+EXTERNAL_CHANGE_POLL_SECONDS = 10
+_LOADED_FILES_SIGNATURE: Optional[tuple] = None
+
+
+def _inventory_files_signature() -> tuple:
+    signature: List[Any] = []
+    for path in (*get_details_files(), ENDPOINT_UPLOAD_FILE, MODIFIED_APELIDOS_FILE, CUSTOM_UNIDADES_FILE, EXPORT_MODEL_FILE):
+        try:
+            stat = path.stat()
+            signature.append((str(path), stat.st_size, stat.st_mtime_ns))
+        except OSError:
+            signature.append((str(path), None))
+    return tuple(signature)
+
+
 def publish_database_state(state: Dict[str, Any]) -> None:
     global equipamentos_cache, unidades_cache, stats_cache
-    global _EQUIPMENT_SEARCH_INDEX, _EQUIPMENT_SEARCH_INDEX_SOURCE
+    global _EQUIPMENT_SEARCH_INDEX, _EQUIPMENT_SEARCH_INDEX_SOURCE, _LOADED_FILES_SIGNATURE
+    # Callers publish while holding the file locks of the state they read or committed.
+    try:
+        files_signature: Optional[tuple] = _inventory_files_signature()
+    except OSError:
+        files_signature = None
     with STATE_LOCK:
+        _LOADED_FILES_SIGNATURE = files_signature
         equipamentos_cache = state["equipamentos_cache"]
         unidades_cache = state["unidades_cache"]
         stats_cache = state["stats_cache"]
@@ -1930,7 +2004,7 @@ def _edit_equipment_workbook(
             return
         cell = ws.cell(row=target_row, column=column)
         persisted_value = "" if value is None else value
-        cell.value = persisted_value
+        set_cell_value_as_text(cell, persisted_value)
         expected[(ws.title, cell.coordinate)] = persisted_value
 
     if not matching_rows:
@@ -2362,7 +2436,9 @@ def aplicar_alteracao_apelido(
     expected_current_local: Optional[str] = None,
     expected_latest_event_id: Optional[str] = None,
     remove_history_event_id: Optional[str] = None,
+    drop_override: bool = False,
 ) -> Dict[str, Any]:
+    """Save a manual alias, or with ``drop_override`` remove it so the sources apply again."""
     with STATE_LOCK:
         initial_equipment = equipamentos_cache.get(target_serial)
         initial_equipment = dict(initial_equipment) if initial_equipment is not None else None
@@ -2424,6 +2500,9 @@ def aplicar_alteracao_apelido(
                 )
 
             apelido_anterior = str(equipamento.get("_apelido_local", equipamento.get("_apelido_base", "")) or "").strip()
+            had_override = bool(equipamento.get("_apelido_manual_override"))
+            if drop_override:
+                novo_apelido = str(equipamento.get("_apelido_base", "") or "").strip()
             history_will_change = (apelido_anterior != novo_apelido and registrar_historico) or bool(remove_history_event_id)
             if expected_latest_event_id:
                 current_history = load_alias_history()
@@ -2455,7 +2534,8 @@ def aplicar_alteracao_apelido(
                     )
                 for key in matching_keys:
                     aliases.pop(key, None)
-                aliases[target_serial] = novo_apelido
+                if not drop_override:
+                    aliases[target_serial] = novo_apelido
                 return aliases
 
             transaction.update_json(MODIFIED_APELIDOS_FILE, update_overrides, {})
@@ -2469,13 +2549,15 @@ def aplicar_alteracao_apelido(
                         if len(updated) == len(history):
                             raise HTTPException(status_code=409, detail="O registro foi alterado por outra ação; atualize o histórico e tente novamente.")
                     if apelido_anterior != novo_apelido and registrar_historico:
-                        updated.append(build_alias_change_entry(target_serial, apelido_anterior, novo_apelido, action, reference_id))
+                        updated.append(build_alias_change_entry(
+                            target_serial, apelido_anterior, novo_apelido, action, reference_id, had_override,
+                        ))
                     return updated
                 transaction.update_json(ALIAS_HISTORY_FILE, update_history, [])
 
             updated_equipment = dict(equipamento)
             updated_equipment["_apelido_local"] = novo_apelido
-            updated_equipment["_apelido_manual_override"] = True
+            updated_equipment["_apelido_manual_override"] = not drop_override
             _apply_effective_alias(
                 updated_equipment,
                 read_endpoint_alias_index(),
@@ -2578,6 +2660,7 @@ def excluir_evento_historico_apelido(evento_id: str):
         expected_current_local=apelido_novo,
         expected_latest_event_id=evento_id,
         remove_history_event_id=evento_id,
+        drop_override=evento.get("tinha_override") is False,
     )
     equipamento_restaurado = resultado["equipamento"]
 
@@ -2626,6 +2709,7 @@ def desfazer_alteracao_apelido(payload: ApelidoUndoPayload):
         reference_id=evento["id"],
         expected_current_local=apelido_evento,
         expected_latest_event_id=evento["id"],
+        drop_override=evento.get("tinha_override") is False,
     )
     return {
         "sucesso": True,
@@ -3265,4 +3349,5 @@ if __name__ == "__main__":
     print(f"[INFO] Fonte EquipamentosDetalhes: {equipment_source or 'AUSENTE'}")
     print(f"[INFO] Porta local: {SERVER_PORT}")
     print(f"[INFO] Log local: {log_file}")
-    uvicorn.run(app, host="127.0.0.1", port=SERVER_PORT, proxy_headers=False)
+    # Access lines would carry ?q= searches (serials, hostnames) to the console.
+    uvicorn.run(app, host="127.0.0.1", port=SERVER_PORT, proxy_headers=False, access_log=False)

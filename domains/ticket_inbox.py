@@ -16,6 +16,8 @@ from typing import Any, Callable, Optional, cast
 
 from fastapi import HTTPException
 
+from core.local_paths import is_link_or_junction
+
 
 logger = logging.getLogger(__name__)
 _WORKER_LOCK = threading.Lock()
@@ -129,7 +131,7 @@ class AutomaticTicketInbox:
             self._recover_interrupted_batches()
             active_names: set[str] = set()
             for batch_dir in sorted(self.pending_dir.iterdir(), key=lambda item: item.name.casefold()):
-                if batch_dir.is_symlink() or not batch_dir.is_dir():
+                if is_link_or_junction(batch_dir) or not batch_dir.is_dir():
                     continue
                 active_names.add(batch_dir.name)
                 try:
@@ -154,10 +156,10 @@ class AutomaticTicketInbox:
         entries: list[tuple[Any, ...]] = []
         for role in self.ROLES:
             role_dir = batch_dir / role
-            if not role_dir.exists() and not role_dir.is_symlink():
+            if not role_dir.exists() and not is_link_or_junction(role_dir):
                 return None
             entries.append(self._stat_signature(role, role_dir))
-            if role_dir.is_symlink() or not role_dir.is_dir():
+            if is_link_or_junction(role_dir) or not role_dir.is_dir():
                 continue
             files = sorted(role_dir.iterdir(), key=lambda item: item.name.casefold())
             entries.extend(self._stat_signature(f"{role}/{item.name}", item) for item in files)
@@ -228,18 +230,18 @@ class AutomaticTicketInbox:
     @staticmethod
     def _select_workbook(batch_dir: Path, role: str) -> Path:
         role_dir = batch_dir / role
-        if role_dir.is_symlink() or not role_dir.is_dir():
+        if is_link_or_junction(role_dir) or not role_dir.is_dir():
             raise TicketInboxError(f"Crie a pasta '{role}' diretamente no lote.")
         files = [item for item in role_dir.iterdir() if item.suffix.lower() == ".xlsx" and not item.name.startswith("~$")]
         if len(files) != 1:
             raise TicketInboxError(f"A pasta '{role}' deve conter exatamente um arquivo .xlsx; encontrados: {len(files)}.")
         path = files[0]
-        if path.is_symlink() or not path.is_file():
+        if is_link_or_junction(path) or not path.is_file():
             raise TicketInboxError(f"O arquivo de '{role}' precisa ser um arquivo normal, sem link simbólico.")
         return path
 
     def _read_workbook(self, path: Path) -> tuple[str, bytes]:
-        if path.is_symlink():
+        if is_link_or_junction(path):
             raise TicketInboxError("Links simbólicos não podem ser processados na pasta de entrada.")
         flags = os.O_RDONLY | getattr(os, "O_BINARY", 0) | getattr(os, "O_NOFOLLOW", 0)
         descriptor = os.open(path, flags)
@@ -264,7 +266,7 @@ class AutomaticTicketInbox:
 
     def _recover_interrupted_batches(self) -> None:
         for processing_batch in sorted(self.processing_dir.iterdir(), key=lambda item: item.name.casefold()):
-            if processing_batch.is_symlink() or not processing_batch.is_dir():
+            if is_link_or_junction(processing_batch) or not processing_batch.is_dir():
                 continue
             pending_batch = self.pending_dir / processing_batch.name
             if pending_batch.exists():

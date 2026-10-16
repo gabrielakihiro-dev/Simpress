@@ -287,7 +287,11 @@ def validate_xlsx_archive(archive: zipfile.ZipFile) -> None:
     if len({entry.filename for entry in entries}) != len(entries):
         raise XlsxPackageError("O arquivo XLSX contém nomes de partes duplicados.")
     if sum(entry.file_size for entry in entries) > MAX_XLSX_UNCOMPRESSED_BYTES:
-        raise XlsxLimitExceeded("O conteúdo descompactado da planilha excede o limite permitido.")
+        raise XlsxLimitExceeded(
+            "O conteúdo descompactado da planilha excede o limite de "
+            f"{MAX_XLSX_UNCOMPRESSED_BYTES // (1024 * 1024)} MB (cerca de 70 mil linhas na "
+            "exportação completa de 50 colunas). Divida a planilha ou remova abas que não são usadas."
+        )
 
     names = {entry.filename for entry in entries}
     if "[Content_Types].xml" not in names:
@@ -357,3 +361,14 @@ def validate_xlsx(source: Union[bytes, bytearray, Path, str, BinaryIO]) -> None:
         raise
     except (OSError, ValueError, zipfile.BadZipFile, zipfile.LargeZipFile, zlib.error, lzma.LZMAError) as error:
         raise XlsxPackageError("O arquivo enviado não é uma planilha .xlsx válida.") from error
+
+
+def set_cell_value_as_text(cell: Any, value: Any) -> None:
+    """Assign a cell so user text that starts with '=' stays literal text.
+
+    openpyxl turns such strings into formulas, which the round-trip validation then
+    rejects (or, in a new workbook, Excel would evaluate). Other values keep their type.
+    """
+    cell.value = value
+    if isinstance(value, str) and cell.data_type == "f":
+        cell.data_type = "s"

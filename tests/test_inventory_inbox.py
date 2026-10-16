@@ -127,6 +127,42 @@ class AutomaticInventoryInboxTests(unittest.TestCase):
         self.assertTrue((failed / "endpoint" / "InvAll_original.xlsx").is_file())
         self.assertEqual(self.calls[0][0], "lote-001")
 
+    def _make_junction(self, link: Path, target: Path) -> None:
+        try:
+            import _winapi
+            _winapi.CreateJunction(str(target), str(link))
+        except (ImportError, AttributeError, OSError) as error:
+            self.skipTest(f"Junções NTFS indisponíveis: {error}")
+
+    def test_junction_role_folder_is_not_read_outside_the_inbox(self):
+        outside = Path(self.temporary.name) / "fora-da-fila"
+        outside.mkdir()
+        (outside / "EquipamentosDetalhes_externo.xlsx").write_bytes(b"outside data")
+        batch = self._make_batch()
+        simpress_dir = batch / "simpress"
+        (simpress_dir / "EquipamentosDetalhes_original.xlsx").unlink()
+        simpress_dir.rmdir()
+        self._make_junction(simpress_dir, outside)
+
+        self._scan_until_settled()
+
+        self.assertEqual(self.calls, [])
+        self.assertTrue((outside / "EquipamentosDetalhes_externo.xlsx").is_file())
+
+    def test_junction_batch_folder_is_ignored(self):
+        outside = Path(self.temporary.name) / "lote-externo"
+        (outside / "endpoint").mkdir(parents=True)
+        (outside / "simpress").mkdir()
+        (outside / "endpoint" / "InvAll.xlsx").write_bytes(b"endpoint data")
+        (outside / "simpress" / "EquipamentosDetalhes.xlsx").write_bytes(b"simpress data")
+        self.inbox.pending_dir.mkdir(parents=True, exist_ok=True)
+        self._make_junction(self.inbox.pending_dir / "lote-junction", outside)
+
+        self._scan_until_settled()
+
+        self.assertEqual(self.calls, [])
+        self.assertTrue((outside / "simpress" / "EquipamentosDetalhes.xlsx").is_file())
+
     def test_recovered_batch_already_in_history_is_archived_without_reimport(self):
         interrupted = self._make_batch()
         self.inbox.processing_dir.mkdir(parents=True)
