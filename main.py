@@ -708,6 +708,8 @@ def _manual_alias_source_snapshots(
         if endpoint_record is None and details_record is None:
             continue
 
+        # O marcador (M) conta na comparação: todo apelido manual presente nas planilhas
+        # enviadas fica pendente no histórico até o usuário decidir manter ou excluir.
         invall_alias = _upload_alias_value(endpoint_record, "endpoint") if endpoint_record else ""
         details_alias = _upload_alias_value(details_record, "detalhes") if details_record else ""
         details_differs = (
@@ -2597,7 +2599,8 @@ def aplicar_alteracao_apelido(
 def atualizar_apelido(payload: ApelidoUpdatePayload):
     """Atualiza o apelido e registra o valor anterior, o novo e o horário."""
     target_serial = payload.serial.strip().upper()
-    novo_apelido = payload.apelido.strip()
+    # Toda edição manual termina em " (M)" para indicar a origem na tela e nas exportações.
+    novo_apelido = effective_alias.with_manual_alias_marker(payload.apelido)
     resultado = aplicar_alteracao_apelido(target_serial, novo_apelido)
 
     return {

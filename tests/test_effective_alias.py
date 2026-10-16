@@ -20,6 +20,23 @@ def equipment(serial, simpress_alias="SIMPRESS-ALIAS", manual_alias=None):
     return item
 
 
+class ManualAliasMarkerTests(unittest.TestCase):
+    def test_marker_is_appended_once(self):
+        mark = effective_alias.with_manual_alias_marker
+        self.assertEqual(mark("PRNOTETI024 Gabriel"), "PRNOTETI024 Gabriel (M)")
+        self.assertEqual(mark("PRNOTETI024 Gabriel (M)"), "PRNOTETI024 Gabriel (M)")
+        self.assertEqual(mark("  PRNOTETI024 Gabriel(m)  "), "PRNOTETI024 Gabriel (M)")
+
+    def test_empty_alias_gets_no_marker(self):
+        self.assertEqual(effective_alias.with_manual_alias_marker("  "), "")
+        self.assertEqual(effective_alias.with_manual_alias_marker("(M)"), "")
+
+    def test_strip_removes_only_trailing_marker(self):
+        strip = effective_alias.strip_manual_alias_marker
+        self.assertEqual(strip("HOST (M)"), "HOST")
+        self.assertEqual(strip("HOST (M) 2"), "HOST (M) 2")
+
+
 class EffectiveAliasPrecedenceTests(unittest.TestCase):
     def apply(self, item, index, **kwargs):
         effective_alias.apply_effective_alias(item, index, **kwargs)
