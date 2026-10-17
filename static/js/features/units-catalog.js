@@ -200,7 +200,7 @@
 
       if (!res.ok) {
         const errData = await res.json().catch(() => ({}));
-        throw new Error(errData.detail || "Erro ao salvar unidade.");
+        throw app.createApiError(errData.detail, "Erro ao salvar unidade.");
       }
 
       const data = await res.json();

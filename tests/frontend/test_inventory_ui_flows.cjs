@@ -124,6 +124,7 @@ function createAppHarness(fetchApi, { stubDisplay = true, confirmResult = true, 
     },
   };
   const window = {
+    document,
     SimpressDomUtils: require("../../static/js/shared/dom-utils.js"),
     SimpressTransferUtils: transferUtils,
     SimpressCatalogSearch: catalogSearch,

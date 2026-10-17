@@ -75,7 +75,7 @@ class HistoryDisplayLabelTests(unittest.TestCase):
 const fs = require('node:fs');
 const vm = require('node:vm');
 const format = require('./static/js/shared/history-format.js');
-const source = fs.readFileSync('static/js/features/comparison-result.js', 'utf8');
+const source = fs.readFileSync('static/js/ui/comparison-result-renderer.js', 'utf8');
 const functions = source.slice(source.indexOf('  const formatarMotivoRevisao'), source.indexOf('  const atributosLinhaComparacao'));
 const labels = JSON.parse(fs.readFileSync(0, 'utf8'));
 const headers = source.match(/aliasReviewHeaders: (\[[^\n]+\])/)[1];

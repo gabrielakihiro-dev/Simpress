@@ -112,9 +112,9 @@ def _run_local_safety_middleware(
 
 
 def _frontend_script() -> str:
-    """static/app.js and the feature modules it bootstraps, in index.html order."""
-    html = (app_config.STATIC_DIR / "index.html").read_text(encoding="utf-8")
-    files = re.findall(r'<script src="/static/((?:js/features/[^"]+|js/shared/history-format\.js|app\.js))"></script>', html)
+    """Application modules in the explicit browser entry order."""
+    entry = (app_config.STATIC_DIR / "app-entry.js").read_text(encoding="utf-8")
+    files = re.findall(r'^\s*import\s+["\']\./([^"\']+\.js)["\'];?\s*$', entry, re.MULTILINE)
     return "\n".join((app_config.STATIC_DIR / name).read_text(encoding="utf-8") for name in files)
 
 
@@ -638,11 +638,14 @@ class MaintenanceContractTests(unittest.TestCase):
         self.assertIn('<link rel="stylesheet" href="/static/vendor/tailwind-4.3.3.css">', html)
         self.assertIn('<script src="/static/vendor/lucide-1.48.0-subset.js"></script>', html)
         self.assertIn('<link rel="stylesheet" href="/static/app.css">', html)
-        self.assertIn('<script src="/static/js/shared/transfer-utils.js"></script>', html)
-        self.assertIn('<script src="/static/app.js"></script>', html)
+        self.assertIn('<script type="module" src="/static/app-entry.js"></script>', html)
+        entry = (app_config.STATIC_DIR / "app-entry.js").read_text(encoding="utf-8")
+        self.assertIn('import "./js/shared/transfer-utils.js";', entry)
+        self.assertIn('import "./app.js";', entry)
         self.assertNotRegex(html, r"https://(?:fonts\.googleapis\.com|fonts\.gstatic\.com|cdn\.tailwindcss\.com|unpkg\.com)")
         self.assertTrue((app_config.STATIC_DIR / "app.css").is_file())
         self.assertTrue((app_config.STATIC_DIR / "app.js").is_file())
+        self.assertTrue((app_config.STATIC_DIR / "app-entry.js").is_file())
         self.assertTrue((app_config.STATIC_DIR / "js/shared/transfer-utils.js").is_file())
         self.assertTrue((app_config.STATIC_DIR / "vendor" / "fonts.css").is_file())
         self.assertTrue((app_config.STATIC_DIR / "vendor" / "tailwind-4.3.3.css").is_file())

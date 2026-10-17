@@ -9,6 +9,7 @@ const staticDir = path.join(__dirname, "..", "..", "static");
 const { appSource } = require("./support/app-sources.cjs");
 const appScript = appSource();
 const appHtml = fs.readFileSync(path.join(staticDir, "index.html"), "utf8");
+const appEntry = fs.readFileSync(path.join(staticDir, "app-entry.js"), "utf8");
 const uxCss = fs.readFileSync(path.join(staticDir, "styles", "ux-refinements.css"), "utf8");
 const tokensCss = fs.readFileSync(path.join(staticDir, "styles", "tokens.css"), "utf8");
 
@@ -105,8 +106,8 @@ test("index loads the refinement layer last and links every transfer label", () 
   const theme = appHtml.indexOf("/static/styles/theme.css");
   const refinements = appHtml.indexOf("/static/styles/ux-refinements.css");
   assert.ok(theme > 0 && refinements > theme, "ux-refinements.css must load after theme.css");
-  const app = appHtml.indexOf('<script src="/static/app.js">');
-  const enhancements = appHtml.indexOf('<script src="/static/js/ui/ux-enhancements.js">');
+  const app = appEntry.indexOf('./app.js');
+  const enhancements = appEntry.indexOf('./js/ui/ux-enhancements.js');
   assert.ok(app > 0 && enhancements > app, "ux-enhancements.js must load after app.js");
 
   const start = appHtml.indexOf('id="tab-panel-retirada-entrega"');

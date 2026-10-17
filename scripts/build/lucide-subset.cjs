@@ -4,7 +4,7 @@ const fs = require("node:fs");
 const path = require("node:path");
 
 // Names assembled at runtime that a literal scan cannot see.
-// Keep in sync with tipoIcon in static/js/features/equipment-search.js and the icon map in static/js/ui/ui-notifications.js.
+// Keep in sync with the equipment search renderer and the icon map in static/js/ui/ui-notifications.js.
 const DYNAMIC_ICON_NAMES = Object.freeze([
   "laptop", "monitor", "tv", "box",
   "check-circle", "alert-circle", "alert-triangle", "info",
