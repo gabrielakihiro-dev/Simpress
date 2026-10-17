@@ -195,19 +195,6 @@ html[data-theme="light"] .transfer-form-grid h2 > .text-emerald-300 { color: #06
 html[data-theme="light"] .transfer-form-grid .glass-card-header .text-emerald-400 { color: #047857; }
 html[data-theme="light"] .transfer-form-grid button.text-slate-400 { color: #334155; }
 
-/* ---------- 6. Home → Transporte call to action ---------- */
-#btn-ir-para-transporte {
-  border-color: var(--ux-cta-border);
-  background-color: var(--ux-cta-bg);
-  color: var(--ux-cta-fg);
-  font-weight: 700;
-  box-shadow: var(--focus-shadow, var(--ux-shadow-1));
-}
-#btn-ir-para-transporte:hover {
-  background-color: var(--ux-cta-bg-hover);
-  color: var(--ux-cta-fg);
-}
-
 /* ---------- 7. Dense data tables ---------- */
 .accessible-table-wrap table { font-variant-numeric: tabular-nums; }
 .accessible-table-wrap thead th {
@@ -373,7 +360,7 @@ html[data-ux-density="compact"] .comparison-desktop-table td {
 }
 
 .ux-home-panel {
-  margin-top: var(--ux-space-5);
+  margin-top: var(--ux-space-6);
   padding: var(--ux-space-5);
   border-radius: var(--ux-radius-xl);
 }

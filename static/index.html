@@ -121,12 +121,12 @@
             <span>Simpress <span aria-hidden="true">·</span> SEBRAE/PR</span>
             <strong>Gestão de equipamentos</strong>
           </div>
-          <div class="header-base-summary hidden md:flex items-center gap-3 text-xs text-slate-400 bg-slate-900/80 px-3.5 py-2 rounded-lg border border-slate-800" aria-label="Resumo da base">
-            <span class="inline-flex items-center gap-1.5"><span class="h-1.5 w-1.5 rounded-full bg-emerald-400" aria-hidden="true"></span>Base: <strong class="text-slate-200" id="stat-equipamentos">Carregando…</strong> <span id="stat-equipamentos-rotulo">equipamentos</span></span>
+          <div class="header-base-summary hidden md:flex items-center gap-3 text-xs text-fg-muted bg-surface-sunken px-3.5 py-2 rounded-lg border border-line" aria-label="Resumo da base">
+            <span class="inline-flex items-center gap-1.5"><span id="stat-base-dot" class="h-1.5 w-1.5 rounded-full bg-emerald-400" aria-hidden="true"></span>Base: <strong class="text-fg" id="stat-equipamentos">Carregando…</strong> <span id="stat-equipamentos-rotulo">equipamentos</span></span>
             <span aria-hidden="true" class="text-slate-700">|</span>
-            <span>Regionais: <strong class="text-slate-200" id="stat-unidades">Carregando…</strong></span>
+            <span>Regionais: <strong class="text-fg" id="stat-unidades">Carregando…</strong></span>
             <span aria-hidden="true" class="text-slate-700">|</span>
-            <span>Contrato: <strong class="text-slate-200">16467</strong></span>
+            <span>Contrato: <strong class="text-fg">16467</strong></span>
           </div>
           <button type="button" id="theme-toggle" class="theme-toggle-button" aria-label="Ativar modo claro" title="Ativar modo claro">
             <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="lucide lucide-sun" aria-hidden="true" focusable="false"><circle cx="12" cy="12" r="4"></circle><path d="M12 2v2"></path><path d="M12 20v2"></path><path d="m4.93 4.93 1.42 1.42"></path><path d="m17.65 17.65 1.42 1.42"></path><path d="M2 12h2"></path><path d="M20 12h2"></path><path d="m6.34 17.66-1.42 1.42"></path><path d="m19.07 4.93-1.42 1.42"></path></svg>
@@ -152,10 +152,7 @@
     <section id="tab-panel-home" class="app-tab-panel" role="tabpanel" aria-labelledby="tab-home" tabindex="0">
 
     <!-- 1. BUSCA DE EQUIPAMENTO POR NÚMERO DE SÉRIE -->
-    <section class="glass-card home-search-card rounded-2xl p-6 sm:p-8 shadow-2xl relative z-50">
-      <div class="absolute inset-0 rounded-2xl overflow-hidden pointer-events-none">
-        <div class="absolute -right-16 -top-16 w-64 h-64 bg-brand-500/10 rounded-full blur-3xl"></div>
-      </div>
+    <section class="glass-card home-search-card rounded-2xl p-6 sm:p-8 relative z-50">
 
       <div class="relative">
         <label for="input-serial" class="home-search-label font-bold text-white">Pesquise por série, apelido, modelo ou cidade</label>
@@ -195,7 +192,7 @@
             class="home-search-button bg-brand-600 hover:bg-brand-500 text-white font-bold rounded-xl transition-all duration-200 flex items-center justify-center shadow-lg shadow-brand-600/30 shrink-0"
           >
             <i data-lucide="search" class="w-5 h-5"></i>
-            <span>Buscar Equipamento</span>
+            <span>Buscar equipamento</span>
           </button>
         </form>
 
@@ -256,100 +253,100 @@
 
       <!-- CARD: EQUIPAMENTO ENCONTRADO -->
       <div id="equipment-loading" class="ui-equipment-loading"></div>
-      <div id="card-equipamento" role="region" aria-label="Dados do equipamento localizado" class="hidden mt-6 bg-slate-800/40 rounded-xl border border-slate-700/70 p-5 transition-all">
-        <div class="flex flex-col lg:flex-row lg:items-center justify-between gap-4 pb-4 border-b border-slate-700/50">
-          <div class="flex items-start sm:items-center space-x-4">
-            <div id="equip-icon-box" class="w-14 h-14 rounded-xl bg-emerald-500/10 border border-emerald-500/30 flex items-center justify-center shrink-0 text-emerald-400">
-              <i id="equip-icon" data-lucide="laptop" class="w-7 h-7"></i>
+      <div id="card-equipamento" role="region" aria-label="Dados do equipamento localizado" class="hidden equipment-card">
+        <div class="equipment-card-main">
+          <div class="equipment-identity">
+            <div id="equip-icon-box" class="equipment-icon" aria-hidden="true">
+              <i id="equip-icon" data-lucide="laptop"></i>
             </div>
-            <div>
-              <div class="flex flex-wrap items-center gap-2">
-                <span id="badge-tipo" class="px-2.5 py-0.5 rounded-full text-xs font-semibold bg-emerald-500/20 text-emerald-300 border border-emerald-500/30">
-                  Notebook
+            <div class="min-w-0">
+              <div class="equipment-meta">
+                <span id="badge-tipo" class="equipment-type-chip">Notebook</span>
+                <span class="equipment-meta-item">
+                  <span class="equipment-meta-label">Série</span>
+                  <strong id="card-serial" class="equipment-meta-value">5CG6051BVN</strong>
                 </span>
-                <span class="text-xs px-2 py-0.5 rounded-full bg-slate-700 text-slate-300 font-mono">
-                  Série: <strong id="card-serial" class="text-white font-bold tracking-wider">5CG6051BVN</strong>
+                <span class="equipment-meta-item">
+                  <span class="equipment-meta-label">Apelido</span>
+                  <span id="badge-apelido" class="equipment-meta-value">PRNOTEDIREX007</span>
+                  <button
+                    type="button"
+                    data-on-click="abrirModalEditarApelido"
+                    class="btn btn-tertiary btn-icon equipment-alias-edit"
+                    aria-label="Editar apelido"
+                    title="Alterar somente o apelido deste equipamento"
+                  >
+                    <i data-lucide="pencil" aria-hidden="true"></i>
+                  </button>
                 </span>
-                <span id="badge-apelido" class="text-xs px-2 py-0.5 rounded-full bg-slate-800 text-cyan-300 font-mono border border-cyan-500/20">
-                  PRNOTEDIREX007
-                </span>
-                <button
-                  type="button"
-                  data-on-click="abrirModalEditarApelido"
-                  class="inline-flex items-center gap-1 px-2 py-1 rounded-lg bg-cyan-500/10 hover:bg-cyan-500/20 text-cyan-300 border border-cyan-500/30 text-[11px] font-semibold transition"
-                  title="Alterar somente o apelido deste equipamento"
-                >
-                  <i data-lucide="pencil" class="w-3 h-3"></i>
-                  <span>Editar Apelido</span>
-                </button>
               </div>
-              <p id="badge-apelido-status" class="hidden text-[11px] text-amber-200 mt-1" role="status" aria-live="polite"></p>
-              <h3 id="card-modelo" class="text-lg font-bold text-white mt-1">HP EB 6 G1I</h3>
-              <p id="card-id-cliente" class="text-xs text-slate-400">Id Cliente: Note diretoria Tipo 2</p>
-              <p id="card-usuarios-logados" class="hidden text-xs text-slate-400 mt-0.5"></p>
+              <p id="badge-apelido-status" class="hidden equipment-alias-status" role="status" aria-live="polite"></p>
+              <h3 id="card-modelo" class="equipment-model">HP EB 6 G1I</h3>
+              <p id="card-id-cliente" class="equipment-detail">Id Cliente: Note diretoria Tipo 2</p>
+              <p id="card-usuarios-logados" class="hidden equipment-detail"></p>
             </div>
           </div>
 
           <!-- Local Atual do Equipamento -->
-          <div class="flex flex-col sm:items-end justify-center bg-slate-900/60 px-4 py-3 rounded-lg border border-slate-800 text-xs">
-            <span class="text-slate-400 flex items-center gap-1.5">
-              <i data-lucide="map-pin" class="w-3.5 h-3.5 text-amber-400"></i>
-              Local Atual no Parque:
+          <div class="equipment-location">
+            <span class="equipment-location-label">
+              <i data-lucide="map-pin" aria-hidden="true"></i>
+              Local atual no parque
             </span>
-            <span id="card-localizacao" class="text-slate-200 font-medium mt-0.5">Curitiba - R Caeté, 150 - SEDE - Prado Velho</span>
-            <span id="card-cnpj-atual" class="text-slate-400 font-mono text-[11px] mt-0.5">CNPJ: Não especificado</span>
-            <div class="mt-2 flex flex-wrap items-center gap-1.5" role="group" aria-label="Copiar dados da localidade de retirada">
+            <span id="card-localizacao" class="equipment-location-address">Curitiba - R Caeté, 150 - SEDE - Prado Velho</span>
+            <span id="card-cnpj-atual" class="equipment-location-cnpj">CNPJ: Não especificado</span>
+            <div class="equipment-copy-actions" role="group" aria-label="Copiar dados da localidade de retirada">
               <button
                 type="button"
                 data-on-click="copiarDadoLocalAtual" data-args='["cep"]'
-                class="inline-flex items-center gap-1 px-2 py-1 rounded-md bg-slate-800/80 hover:bg-cyan-500/10 text-slate-300 hover:text-cyan-200 border border-slate-700/70 text-[10px] font-semibold transition"
+                class="btn btn-tertiary"
                 title="Copiar o CEP da localidade de retirada"
                 aria-label="Copiar CEP da localidade de retirada"
               >
-                <i data-lucide="copy" class="w-3 h-3" aria-hidden="true"></i>
+                <i data-lucide="copy" aria-hidden="true"></i>
                 <span>CEP</span>
               </button>
               <button
                 type="button"
                 data-on-click="copiarDadoLocalAtual" data-args='["faturamento"]'
-                class="inline-flex items-center gap-1 px-2 py-1 rounded-md bg-slate-800/80 hover:bg-cyan-500/10 text-slate-300 hover:text-cyan-200 border border-slate-700/70 text-[10px] font-semibold transition"
+                class="btn btn-tertiary"
                 title="Copiar o CNPJ de faturamento padrão"
                 aria-label="Copiar CNPJ de faturamento"
               >
-                <i data-lucide="copy" class="w-3 h-3" aria-hidden="true"></i>
+                <i data-lucide="copy" aria-hidden="true"></i>
                 <span>CNPJ Fat.</span>
               </button>
               <button
                 type="button"
                 data-on-click="copiarDadoLocalAtual" data-args='["instalacao"]'
-                class="inline-flex items-center gap-1 px-2 py-1 rounded-md bg-slate-800/80 hover:bg-cyan-500/10 text-slate-300 hover:text-cyan-200 border border-slate-700/70 text-[10px] font-semibold transition"
+                class="btn btn-tertiary"
                 title="Copiar o CNPJ de instalação da localidade de retirada"
                 aria-label="Copiar CNPJ de instalação da localidade de retirada"
               >
-                <i data-lucide="copy" class="w-3 h-3" aria-hidden="true"></i>
+                <i data-lucide="copy" aria-hidden="true"></i>
                 <span>CNPJ Inst.</span>
               </button>
             </div>
-            <button
-              type="button"
-              data-on-click="abrirModalEditarEquipamento"
-              class="equipment-edit-button mt-2 inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-brand-500/20 hover:bg-brand-500/30 text-brand-300 hover:text-white border border-brand-500/40 text-xs font-semibold transition-all shadow-sm"
-              title="Editar dados cadastrais deste equipamento"
-            >
-              <i data-lucide="edit-3" class="w-3.5 h-3.5 text-brand-400"></i>
-              <span>Editar Dados / Endereço</span>
-            </button>
           </div>
         </div>
 
         <section class="ticket-templates" aria-labelledby="ticket-templates-title">
-          <div class="ticket-templates-toggle-row flex flex-wrap gap-2">
-            <button type="button" id="btn-toggle-ticket-templates" class="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-brand-500/20 hover:bg-brand-500/30 text-brand-300 hover:text-white border border-brand-500/40 text-xs font-semibold transition-all shadow-sm" aria-expanded="false" aria-controls="ticket-templates-content" data-on-click="alternarChamadosManuais">
+          <div class="ticket-templates-toggle-row">
+            <button type="button" id="btn-ir-para-transporte" class="btn btn-secondary-accent" data-on-click="abrirAbaTransporteDoEquipamento" title="Abrir a aba Transporte com o equipamento selecionado">
+              <i data-lucide="truck" aria-hidden="true"></i>
+              <span>Ir para Transporte</span>
+            </button>
+            <button type="button" id="btn-toggle-ticket-templates" class="btn btn-secondary" aria-expanded="false" aria-controls="ticket-templates-content" data-on-click="alternarChamadosManuais">
               <span>Mostrar textos para chamados</span>
             </button>
-            <button type="button" id="btn-ir-para-transporte" class="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-sky-500/10 hover:bg-sky-500/20 text-sky-300 hover:text-sky-100 border border-sky-500/25 text-xs font-semibold transition" data-on-click="abrirAbaTransporteDoEquipamento" title="Abrir a aba Transporte com o equipamento selecionado">
-              <i data-lucide="truck" class="w-3.5 h-3.5" aria-hidden="true"></i>
-              <span>Ir para Transporte</span>
+            <button
+              type="button"
+              data-on-click="abrirModalEditarEquipamento"
+              class="btn btn-secondary equipment-edit-button"
+              title="Editar dados cadastrais deste equipamento"
+            >
+              <i data-lucide="edit-3" aria-hidden="true"></i>
+              <span>Editar dados e endereço</span>
             </button>
           </div>
           <div id="ticket-templates-content" hidden>
