@@ -160,14 +160,14 @@ body.sidebar-drawer-open {
   min-width: 0;
   min-height: 2.9rem;
   padding: 0.72rem 0.9rem;
-  border: 1px solid var(--sidebar-cta-border);
+  border: 1px solid var(--primary);
   border-radius: 0.82rem;
-  background: var(--accent-solid);
-  color: var(--sidebar-cta-fg);
+  background: var(--primary);
+  color: var(--primary-fg);
   font-size: 0.79rem;
   font-weight: 730;
-  box-shadow: var(--focus-shadow, var(--sidebar-cta-shadow));
-  transition: border-color var(--motion-fast) var(--motion-ease), background-color var(--motion-fast) var(--motion-ease), box-shadow var(--motion-fast) var(--motion-ease), transform var(--motion-fast) var(--motion-ease);
+  box-shadow: var(--focus-shadow, none);
+  transition: border-color var(--motion-fast) var(--motion-ease), background-color var(--motion-fast) var(--motion-ease);
 }
 
 .sidebar-primary-action .header-primary-actions > #btn-nova-transferencia {
@@ -179,17 +179,15 @@ body.sidebar-drawer-open {
 }
 
 .sidebar-primary-action #btn-nova-transferencia:hover {
-  border-color: var(--sidebar-cta-hover-border);
-  background: var(--accent-solid-hover);
-  box-shadow: var(--focus-shadow, var(--sidebar-cta-hover-shadow));
-  transform: translateY(-1px);
+  border-color: var(--primary-hover);
+  background: var(--primary-hover);
 }
 
 .sidebar-primary-action #btn-nova-transferencia svg {
   flex: none;
   width: 1rem;
   height: 1rem;
-  color: var(--sidebar-cta-icon);
+  color: currentColor;
 }
 
 .sidebar-item-label {

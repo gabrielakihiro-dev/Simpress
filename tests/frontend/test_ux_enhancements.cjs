@@ -45,6 +45,9 @@ test("pending list honors the conditional lunch-break duration and keeps gate or
   assert.equal(ux.describePending(0), "Campos obrigatórios completos");
   assert.equal(ux.describePending(1), "1 campo pendente");
   assert.equal(ux.describePending(4), "4 campos pendentes");
+  assert.equal(ux.shortPendingLabel(0), "Campos completos");
+  assert.equal(ux.shortPendingLabel(1), "pendente");
+  assert.equal(ux.shortPendingLabel(4), "pendentes");
 });
 
 test("copy triggers are recognized only on copy buttons", () => {

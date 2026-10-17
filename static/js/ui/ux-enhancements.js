@@ -108,6 +108,12 @@
     return count === 1 ? "1 campo pendente" : `${count} campos pendentes`;
   }
 
+  // Visible chip text: the count badge already shows the number, so "4" + "pendentes" reads "4 pendentes".
+  function shortPendingLabel(count) {
+    if (count <= 0) return "Campos completos";
+    return count === 1 ? "pendente" : "pendentes";
+  }
+
   function isCopyTrigger(element) {
     if (!element || typeof element.getAttribute !== "function") return false;
     if (String(element.tagName || "").toUpperCase() !== "BUTTON") return false;
@@ -268,7 +274,7 @@
       chip.id = "ux-pending-chip";
       chip.className = "ux-pending-chip";
       chip.innerHTML = '<span class="ux-pending-chip-count" aria-hidden="true"><span data-ux-count>0</span></span>'
-        + '<span data-ux-label></span><span class="ux-pending-chip-action" aria-hidden="true">· ir ao próximo</span>';
+        + '<span data-ux-label aria-hidden="true"></span>';
       chip.addEventListener("click", () => {
         const [next] = listPendingFields(byId);
         if (!next) return;
@@ -285,11 +291,12 @@
       const count = pending.length;
       chip.dataset.status = count ? "pending" : "success";
       chip.querySelector("[data-ux-count]").textContent = count ? String(count) : "✓";
-      chip.querySelector("[data-ux-label]").textContent = describePending(count);
+      chip.querySelector("[data-ux-label]").textContent = shortPendingLabel(count);
       if (count) {
+        const shortText = `${count} ${shortPendingLabel(count)}`;
         chip.removeAttribute("aria-disabled");
-        chip.title = `Próximo: ${pending[0].label}`;
-        chip.setAttribute("aria-label", `${describePending(count)}. Ir para o próximo: ${pending[0].label}`);
+        chip.title = `${describePending(count)}. Próximo: ${pending[0].label}`;
+        chip.setAttribute("aria-label", `Ir ao próximo campo pendente: ${shortText}. Próximo: ${pending[0].label}`);
       } else {
         chip.setAttribute("aria-disabled", "true");
         chip.title = "Todos os campos obrigatórios estão preenchidos";
@@ -490,6 +497,7 @@
     isFieldActive,
     listPendingFields,
     describePending,
+    shortPendingLabel,
     isCopyTrigger,
     phoneProblem,
     formatPhone,
