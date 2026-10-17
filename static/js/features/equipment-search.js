@@ -341,7 +341,7 @@
             </div>
             <p class="text-sm font-semibold text-slate-200" role="status" aria-live="polite">Nenhum equipamento localizado</p>
             <p class="text-xs text-slate-500 max-w-sm">Nenhum registro com o termo <span class="font-mono text-cyan-400 font-bold">"${escapeHtml(currentQuery)}"</span> foi encontrado no inventário do SEBRAE/PR.</p>
-            <button type="button" data-on-click="cadastrarNovoSerialPesquisado" class="mt-2 inline-flex items-center gap-1.5 px-3.5 py-2 rounded-lg bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-bold transition shadow-lg">
+            <button type="button" data-on-click="cadastrarNovoSerialPesquisado" class="mt-2 inline-flex items-center gap-1.5 px-3.5 py-2 rounded-lg bg-emerald-700 hover:bg-emerald-800 text-white text-xs font-bold transition shadow-lg">
               <i data-lucide="plus-circle" class="w-3.5 h-3.5" aria-hidden="true"></i>
               <span>Cadastrar "${escapeHtml(currentQuery)}" como Novo Equipamento</span>
             </button>

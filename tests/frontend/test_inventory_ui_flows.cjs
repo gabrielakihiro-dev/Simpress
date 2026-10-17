@@ -1207,8 +1207,8 @@ test("imports Simpress and Oracle files and displays the serial-to-OS reconcilia
   assert.equal((ticketCards.match(/<strong>7285070<\/strong>/g) || []).length, 2);
   assert.match(ticketCards, /class="ticket-oracle-request"[\s\S]*Solicitação REQ-1[\s\S]*OS <span class="font-mono text-slate-200">7285070/);
   assert.doesNotMatch(ticketCards, /<section class="[^"]*rounded-lg border/);
-  assert.match(ticketCards, /class="ticket-card-identifier border border-cyan/);
-  assert.match(ticketCards, /class="ticket-card-identifier border border-violet/);
+  assert.match(ticketCards, /class="ticket-card-identifier border src-simpress-soft"/);
+  assert.match(ticketCards, /class="ticket-card-identifier border src-oracle-soft"/);
   assert.equal(modal.id, "modal-acompanhamento-chamados");
 });
 

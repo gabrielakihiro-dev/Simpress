@@ -75,6 +75,11 @@
   --ux-neutral-bg: rgba(148, 163, 184, 0.1);
   --ux-neutral-border: rgba(148, 163, 184, 0.3);
 
+  /* Ticket sources: Simpress follows the info (pending) scale; Oracle is the only violet role. */
+  --source-oracle-fg: #ddd6fe;
+  --source-oracle-bg: rgba(139, 92, 246, 0.13);
+  --source-oracle-border: rgba(167, 139, 250, 0.42);
+
   --ux-cta-bg: #0369a1;
   --ux-cta-bg-hover: #075985;
   --ux-cta-fg: #ffffff;
@@ -102,6 +107,8 @@
   --border-strong: var(--ux-border-strong);
   --border-chrome: rgba(148, 163, 184, 0.13);
   --accent: #38a9f7;
+  --accent-text: #38a9f7;
+  --text-placeholder: #8494a8;
   --accent-ring: rgba(56, 169, 247, 0.2);
   --accent-solid: var(--primary);
   --accent-solid-hover: var(--primary-hover);
@@ -213,6 +220,10 @@ html[data-theme="light"] {
 
   --ux-cta-border: #0369a1;
 
+  --source-oracle-fg: #5b21b6;
+  --source-oracle-bg: #f5f3ff;
+  --source-oracle-border: #c4b5fd;
+
   --ux-table-head-bg: #f1f5f9;
   --ux-table-stripe: rgba(15, 23, 42, 0.028);
   --ux-table-hover: rgba(2, 132, 199, 0.07);
@@ -223,11 +234,13 @@ html[data-theme="light"] {
   --surface-field: #ffffff;
   --surface-header: rgba(255, 255, 255, 0.92);
   --surface-overlay: #f8fafc;
-  --text-muted: #64748b;
+  --text-muted: #5b6b80;
+  --text-placeholder: #5b6b80;
   --border: #dbe4ef;
   --border-subtle: #e2e8f0;
   --border-chrome: #dbe4ef;
   --accent: #0284c7;
+  --accent-text: #0369a1;
   --accent-ring: rgba(2, 132, 199, 0.18);
   /* Same hue as dark; white text: 5.9:1 at rest, 9.4:1 on hover. */
   --primary: #0369a1;
