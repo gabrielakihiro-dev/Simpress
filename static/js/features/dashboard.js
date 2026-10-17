@@ -100,10 +100,12 @@
       const writeBlock = report.gravacao_bloqueada?.available === false ? report.gravacao_bloqueada : null;
       panel.dataset.state = counts.allAvailable && !writeBlock ? "ready" : "warning";
       if (!panel.dataset.initialized) {
-        panel.open = !counts.allAvailable || Boolean(writeBlock);
+        // On phones the panel would push the search below the fold; it opens on demand there.
+        panel.open = !telaEstreita() && (!counts.allAvailable || Boolean(writeBlock));
         panel.dataset.initialized = "true";
       }
       summary.textContent = resumoProntidao(counts, writeBlock);
+      definirResumoCurto(resumoCurtoProntidao(counts, writeBlock));
 
       const content = document.createDocumentFragment();
       if (writeBlock) adicionarGrupoGravacoesBloqueadas(content, writeBlock);
@@ -120,6 +122,7 @@
       if (!readinessRequestGate.isCurrent(request.id)) return;
       panel.dataset.state = "error";
       summary.textContent = "Não foi possível consultar a disponibilidade das funções.";
+      definirResumoCurto("Indisponível");
       details.textContent = "Confira se o servidor está em execução e recarregue a página para tentar novamente.";
     } finally {
       if (readinessRequestGate.isCurrent(request.id)) panel.setAttribute("aria-busy", "false");
@@ -139,6 +142,25 @@
     const availableCount = readinessFiles.filter(status => status.available === true).length;
     const totalCount = readinessFileKeys.length;
     return { availableCount, totalCount, allAvailable: totalCount > 0 && availableCount === totalCount };
+  }
+
+  function telaEstreita() {
+    return typeof globalThis.matchMedia === "function" && globalThis.matchMedia("(max-width: 640px)").matches;
+  }
+
+  // One-line summary shown on phones while the panel is closed; the full sentence stays the live status.
+  function definirResumoCurto(text) {
+    const shortSummary = document.getElementById("readiness-summary-short");
+    if (shortSummary) shortSummary.textContent = text;
+  }
+
+  function resumoCurtoProntidao({ availableCount, totalCount, allAvailable }, writeBlock) {
+    if (writeBlock) return "Modo leitura";
+    if (allAvailable) return "Tudo disponível";
+    if (totalCount === 0) return "Verificação indisponível";
+    const pending = totalCount - availableCount;
+    // Fits beside the title at 360px; the full sentence names the files.
+    return pending === 1 ? "1 pendente" : `${pending} pendentes`;
   }
 
   function resumoProntidao({ availableCount, totalCount, allAvailable }, writeBlock) {
