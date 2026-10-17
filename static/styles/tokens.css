@@ -113,9 +113,10 @@
   --accent-solid: var(--primary);
   --accent-solid-hover: var(--primary-hover);
   /* One primary color for the main action of each area (sidebar, Home search, Transporte).
-   * White text keeps AA contrast on both shades: 5.9:1 at rest, 7.6:1 on hover. */
-  --primary: #0369a1;
-  --primary-hover: #075985;
+   * Same values as Tailwind's brand-600/700, used by the bg-brand-600 buttons in index.html.
+   * White text keeps AA contrast on both shades: 5.1:1 at rest, 7.2:1 on hover. */
+  --primary: #026fc7;
+  --primary-hover: #0358a1;
   --primary-fg: #ffffff;
   --danger: var(--ux-critical-fg);
   --danger-solid: #be123c;
@@ -242,9 +243,9 @@ html[data-theme="light"] {
   --accent: #0284c7;
   --accent-text: #0369a1;
   --accent-ring: rgba(2, 132, 199, 0.18);
-  /* Same hue as dark; white text: 5.9:1 at rest, 9.4:1 on hover. */
-  --primary: #0369a1;
-  --primary-hover: #0c4a6e;
+  /* Same values as dark (brand-600/700). */
+  --primary: #026fc7;
+  --primary-hover: #0358a1;
   --primary-fg: #ffffff;
 
   --sidebar-bg: linear-gradient(180deg, #fff, #f8fafc);
