@@ -7,11 +7,13 @@
   <title>Simpress | Automação de Transferência de Equipamentos - SEBRAE/PR</title>
   <link rel="icon" type="image/svg+xml" href="/static/favicon.svg">
   
+  <!-- CSS order is intentional: vendor utilities, design tokens, app styles, then focused refinements. -->
   <link rel="stylesheet" href="/static/vendor/fonts.css">
   <link rel="stylesheet" href="/static/vendor/tailwind-4.3.3.css">
   <link rel="stylesheet" href="/static/styles/tokens.css">
   <script src="/static/vendor/lucide-1.48.0-subset.js"></script>
   <link rel="stylesheet" href="/static/app.css">
+  <!-- Component and theme layers follow app.css; refinements stay last by design. -->
   <link rel="stylesheet" href="/static/styles/ui-motion.css">
   <link rel="stylesheet" href="/static/styles/sidebar-navigation.css">
   <link rel="stylesheet" href="/static/styles/theme.css">
@@ -1636,35 +1638,7 @@ Horário disponível para atendimento:</textarea>
   <!-- TOAST NOTIFICATION CONTAINER -->
   <div id="toast-container" role="region" aria-label="Notificações" aria-live="polite" aria-relevant="additions text" aria-atomic="false" class="fixed top-24 right-6 space-y-2 pointer-events-none"></div>
 
-  <!-- JAVASCRIPT APPLICATION LOGIC -->
-  <script src="/static/js/ui/action-dispatcher.js"></script>
-  <script src="/static/js/shared/dom-utils.js"></script>
-  <script src="/static/js/shared/catalog-search-utils.js"></script>
-  <script src="/static/js/shared/recent-equipment.js"></script>
-  <script src="/static/js/shared/form-draft-guard.js"></script>
-  <script src="/static/js/shared/transfer-utils.js"></script>
-  <script src="/static/js/shared/history-annotation-autosave.js"></script>
-  <script src="/static/js/ui/ui-motion.js"></script>
-  <script src="/static/js/ui/accessible-dialogs.js"></script>
-  <script src="/static/js/ui/ui-notifications.js"></script>
-  <script src="/static/js/shared/history-format.js"></script>
-  <script src="/static/js/features/ticket-rules.js"></script>
-  <script src="/static/js/features/app-shell.js"></script>
-  <script src="/static/js/features/dashboard.js"></script>
-  <script src="/static/js/features/regional-contacts.js"></script>
-  <script src="/static/js/features/transfer-form.js"></script>
-  <script src="/static/js/features/equipment-search.js"></script>
-  <script src="/static/js/features/units-catalog.js"></script>
-  <script src="/static/js/features/inventory-upload.js"></script>
-  <script src="/static/js/features/comparison-result.js"></script>
-  <script src="/static/js/features/comparison-history.js"></script>
-  <script src="/static/js/features/ticket-tracking.js"></script>
-  <script src="/static/js/features/equipment-editor.js"></script>
-  <script src="/static/js/features/alias-history.js"></script>
-  <script src="/static/app.js"></script>
-  <script src="/static/js/ui/sidebar-navigation.js"></script>
-  <script src="/static/js/ui/ux-enhancements.js"></script>
-  <script src="/static/js/ui/transfer-history.js"></script>
-  <script src="/static/js/ui/data-panels.js"></script>
+  <!-- Browser entry; app-entry.js owns the ordered import graph. -->
+  <script type="module" src="/static/app-entry.js"></script>
 </body>
 </html>

@@ -35,7 +35,7 @@ test("the generated subset contains every icon name used in static/", () => {
 });
 
 test("runtime icon names listed for the build still exist in the sources", () => {
-  const sources = ["static/js/features/equipment-search.js", "static/js/ui/ui-notifications.js"]
+  const sources = ["static/js/ui/equipment-search-renderers.js", "static/js/ui/ui-notifications.js"]
     .map(file => fs.readFileSync(path.join(root, file), "utf8")).join("\n");
   for (const name of DYNAMIC_ICON_NAMES) assert.match(sources, new RegExp(`["']${name}["']`), name);
 });

@@ -1,0 +1,35 @@
+// Keep the browser dependency graph in one place. Shared utilities load before
+// features, the bootstrap publishes feature actions, and page enhancements load last.
+import "./js/ui/action-dispatcher.js";
+import "./js/shared/dom-utils.js";
+import "./js/shared/catalog-search-utils.js";
+import "./js/shared/recent-equipment.js";
+import "./js/shared/form-draft-guard.js";
+import "./js/shared/transfer-utils.js";
+import "./js/shared/history-annotation-autosave.js";
+import "./js/shared/api-errors.js";
+import "./js/ui/ui-motion.js";
+import "./js/ui/accessible-dialogs.js";
+import "./js/ui/ui-notifications.js";
+import "./js/shared/history-format.js";
+import "./js/features/ticket-rules.js";
+import "./js/features/app-shell.js";
+import "./js/features/dashboard.js";
+import "./js/features/regional-contacts.js";
+import "./js/features/transfer-form.js";
+import "./js/ui/equipment-search-renderers.js";
+import "./js/features/equipment-search.js";
+import "./js/features/full-equipment-search.js";
+import "./js/features/units-catalog.js";
+import "./js/features/inventory-upload.js";
+import "./js/ui/comparison-result-renderer.js";
+import "./js/features/comparison-result.js";
+import "./js/features/comparison-history.js";
+import "./js/features/ticket-tracking.js";
+import "./js/features/equipment-editor.js";
+import "./js/features/alias-history.js";
+import "./app.js";
+import "./js/ui/sidebar-navigation.js";
+import "./js/ui/ux-enhancements.js";
+import "./js/ui/transfer-history.js";
+import "./js/ui/data-panels.js";

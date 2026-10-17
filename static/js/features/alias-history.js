@@ -57,7 +57,7 @@
     try {
       const res = await fetch("/api/historico-alteracoes");
       const data = await res.json().catch(() => ({}));
-      if (!res.ok) throw new Error(data.detail || "Não foi possível carregar o histórico.");
+      if (!res.ok) throw app.createApiError(data.detail, "Não foi possível carregar o histórico.");
 
       const eventos = Array.isArray(data.eventos) ? data.eventos : [];
       definirTotalHistoricoApelidos(eventos.length);
@@ -241,7 +241,7 @@
         body: JSON.stringify({ evento_id: evento.id })
       });
       const data = await res.json().catch(() => ({}));
-      if (!res.ok) throw new Error(data.detail || "Não foi possível desfazer a alteração.");
+      if (!res.ok) throw app.createApiError(data.detail, "Não foi possível desfazer a alteração.");
 
       if (appState.currentEquipamento && appState.currentEquipamento.serial === data.equipamento.serial) {
         app.definirEquipamentoAtual(data.equipamento);
@@ -271,7 +271,7 @@
     try {
       const res = await fetch(`/api/historico-alteracoes/${encodeURIComponent(evento.id)}`, { method: "DELETE" });
       const data = await res.json().catch(() => ({}));
-      if (!res.ok) throw new Error(data.detail || "Não foi possível excluir o registro.");
+      if (!res.ok) throw app.createApiError(data.detail, "Não foi possível excluir o registro.");
       if (appState.currentEquipamento && appState.currentEquipamento.serial === data.equipamento.serial) {
         app.definirEquipamentoAtual(data.equipamento);
         document.getElementById("badge-apelido").textContent = appState.currentEquipamento.apelido || "Sem Apelido";

@@ -93,7 +93,7 @@
     try {
       const response = await fetch(`/api/modelos/${modal.dataset.tipo}/importar`, { method: "POST", body: data });
       const result = await response.json().catch(() => ({}));
-      if (!response.ok) throw new Error(result.detail || "Não foi possível importar o modelo.");
+      if (!response.ok) throw app.createApiError(result.detail, "Não foi possível importar o modelo.");
       status.textContent = "Modelo importado. Confira abaixo se todas as dependências estão disponíveis.";
       document.getElementById("arquivo-modelo-local").value = "";
       document.getElementById("nome-arquivo-modelo-local").textContent = "Nenhum arquivo escolhido";
@@ -206,7 +206,7 @@
       return new Error("A API ativa está desatualizada. Feche a instância anterior e reinicie com iniciar_servidor.bat desta pasta.");
     }
     const detail = result.detail;
-    return new Error(Array.isArray(detail) ? detail.map(item => item.msg || item).join("; ") : (detail || mensagemPadrao));
+    return app.createApiError(detail, mensagemPadrao);
   }
 
   function formularioArquivosPlanilhas(endpointFile, detailsFile) {
@@ -370,7 +370,7 @@
       const res = await fetch("/api/exportar-equipamentos");
       if (!res.ok) {
         const errData = await res.json().catch(() => ({}));
-        throw new Error(errData.detail || "Falha ao exportar a planilha de equipamentos.");
+        throw app.createApiError(errData.detail, "Falha ao exportar a planilha de equipamentos.");
       }
 
       const disposition = res.headers.get("Content-Disposition") || "";
