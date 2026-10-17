@@ -42,6 +42,12 @@
     if (element) element.textContent = formatarContagemEstatistica(value);
   }
 
+  // Green dot only while the base holds equipment; amber when it is empty or unreadable.
+  function definirEstadoBase(total) {
+    const dot = document.getElementById("stat-base-dot");
+    if (dot) dot.dataset.state = Number(total) > 0 ? "ready" : "empty";
+  }
+
   // Load statistics from API
   async function carregarEstatisticas() {
     try {
@@ -51,6 +57,7 @@
       if (!res.ok) throw new Error("Falha ao consultar as estatísticas locais.");
       const stats = await res.json();
       definirEstatistica("stat-equipamentos", stats.total_equipamentos);
+      definirEstadoBase(stats.total_equipamentos);
       const rotuloEquipamentos = document.getElementById("stat-equipamentos-rotulo");
       if (rotuloEquipamentos) rotuloEquipamentos.textContent = pluralize(stats.total_equipamentos, "equipamento");
       definirEstatistica("stat-unidades", stats.total_unidades);
@@ -69,6 +76,7 @@
     } catch (err) {
       console.warn("Não foi possível carregar estatísticas:", err);
       definirEstatistica("stat-equipamentos", null);
+      definirEstadoBase(null);
       definirEstatistica("stat-unidades", null);
     }
   }
