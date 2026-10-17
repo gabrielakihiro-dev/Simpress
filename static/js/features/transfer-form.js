@@ -11,20 +11,18 @@
 
   function atualizarResumoSerieTransferencia(equipment) {
     const banner = document.getElementById("transfer-equipment-banner");
-    const serialInput = document.getElementById("transfer-serial");
+    const serialValue = document.getElementById("transfer-serial");
     const description = document.getElementById("transfer-equipment-description");
-    const status = document.getElementById("transfer-serial-status");
     const serial = String(equipment?.serial || "").trim().toUpperCase();
     const selected = Boolean(serial);
 
-    if (serialInput) serialInput.value = serial;
+    if (serialValue) serialValue.textContent = serial;
     if (banner) banner.dataset.state = selected ? "selected" : "empty";
     if (description) {
       description.textContent = selected
         ? [equipment.modelo, equipment.tipo].filter(Boolean).join(" · ") || "Equipamento pesquisado e selecionado."
-        : "Pesquise e selecione um equipamento na aba Home para preencher a série.";
+        : "Nenhum equipamento selecionado. Pesquise na Home para preencher a série.";
     }
-    if (status) status.textContent = selected ? "Copiar" : "Aguardando";
     const users = document.getElementById("transfer-equipment-users");
     if (users) {
       const logged = String(equipment?.usuarios_logados || "").trim();
@@ -87,12 +85,9 @@
     painelTransporte.focus();
   }
 
-  function abrirHomeParaPesquisarEquipamento(event) {
-    const acionadoPorTeclado = event?.type === "keydown";
-    if (acionadoPorTeclado && event.key !== "Enter" && event.key !== " ") return;
+  function abrirHomeParaPesquisarEquipamento() {
     if (String(appState.currentEquipamento?.serial || "").trim()) return;
 
-    if (acionadoPorTeclado) event.preventDefault();
     app.ativarAbaTransferencia("home");
     document.getElementById("input-serial")?.focus();
   }
