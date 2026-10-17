@@ -556,7 +556,15 @@
     }
 
     /* Equipment result card: neutral surfaces; color only marks the alias warning. */
-    .equipment-card { margin-top: 1.5rem; padding: 1.25rem; border: 1px solid var(--border); border-radius: 0.75rem; background: var(--surface-sunken); }
+    /* Blue identifies the equipment and green its current location; text colors come from
+     * the status tokens, so both themes keep AA contrast without their own selectors. */
+    .equipment-card {
+      margin-top: 1.5rem; padding: 1.25rem; border: 1px solid var(--border); border-radius: 0.75rem;
+      background:
+        linear-gradient(90deg, var(--accent), var(--ux-success-fg)) top / 100% 3px no-repeat,
+        radial-gradient(ellipse at 0 0, var(--ux-pending-bg), transparent 45%),
+        var(--surface-sunken);
+    }
     .equipment-card-main {
       display: grid; gap: 1rem; align-items: start; padding-bottom: 1rem; border-bottom: 1px solid var(--border-subtle);
     }
@@ -566,13 +574,13 @@
     .equipment-identity { display: flex; align-items: flex-start; gap: 1rem; min-width: 0; }
     .equipment-icon {
       display: flex; align-items: center; justify-content: center; flex: none; width: 3rem; height: 3rem;
-      border: 1px solid var(--border); border-radius: 0.75rem; background: var(--surface-raised); color: var(--text-muted);
+      border: 1px solid var(--ux-pending-border); border-radius: 0.75rem; background: var(--ux-pending-bg); color: var(--accent-text);
     }
     .equipment-icon svg { width: 1.5rem; height: 1.5rem; }
     .equipment-meta { display: flex; flex-wrap: wrap; align-items: center; gap: 0.35rem 1rem; }
     .equipment-type-chip {
-      padding: 0.125rem 0.6rem; border: 1px solid var(--border-strong); border-radius: 999px;
-      color: var(--text); font-size: 0.75rem; font-weight: 600;
+      padding: 0.125rem 0.6rem; border: 1px solid var(--ux-pending-border); border-radius: 999px;
+      background: var(--ux-pending-bg); color: var(--ux-pending-fg); font-size: 0.75rem; font-weight: 600;
     }
     .equipment-meta-item { display: inline-flex; align-items: center; gap: 0.4rem; min-width: 0; font-size: 0.75rem; }
     .equipment-meta-label { color: var(--text-muted); }
@@ -580,22 +588,26 @@
       color: var(--text); font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
       font-weight: 600; letter-spacing: 0.04em; overflow-wrap: anywhere;
     }
+    .equipment-meta-value-accent { color: var(--accent-text); }
     .equipment-alias-edit { min-width: 2rem; min-height: 2rem; padding: 0.3rem; }
     .equipment-alias-status { margin-top: 0.35rem; color: var(--ux-warning-fg); font-size: 0.6875rem; }
     .equipment-model { margin-top: 0.4rem; color: var(--text); font-size: 1.125rem; font-weight: 700; line-height: 1.35; }
     .equipment-detail { margin-top: 0.125rem; color: var(--text-muted); font-size: 0.75rem; }
     .equipment-location {
       display: flex; flex-direction: column; align-items: flex-start; gap: 0.2rem; min-width: 0; padding: 0.75rem 1rem;
-      border: 1px solid var(--border-subtle); border-radius: 0.6rem; background: var(--surface-raised); font-size: 0.75rem;
+      border: 1px solid var(--ux-success-border); border-radius: 0.6rem; font-size: 0.75rem;
+      background: linear-gradient(var(--ux-success-bg), var(--ux-success-bg)), var(--surface-raised);
     }
     .equipment-location-label {
-      display: inline-flex; align-items: center; gap: 0.35rem; color: var(--text-muted);
+      display: inline-flex; align-items: center; gap: 0.35rem; color: var(--ux-success-fg);
       font-size: 0.6875rem; font-weight: 600; letter-spacing: 0.05em; text-transform: uppercase;
     }
     .equipment-location-label svg { width: 0.875rem; height: 0.875rem; }
     .equipment-location-address { color: var(--text); font-size: 0.875rem; font-weight: 600; overflow-wrap: anywhere; }
     .equipment-location-cnpj { color: var(--text-muted); font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace; font-size: 0.6875rem; }
     .equipment-copy-actions { display: flex; flex-wrap: wrap; gap: 0.25rem; margin: 0.35rem 0 0 -0.6rem; }
+    .equipment-copy-actions .btn svg { color: var(--ux-success-fg); }
+    .equipment-edit-button svg { color: var(--ux-warning-fg); }
     .ticket-templates {
       margin-top: 1rem;
     }
