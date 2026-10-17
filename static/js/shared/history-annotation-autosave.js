@@ -201,7 +201,13 @@
     };
     const setStatus = (message, colorClass, canRetry = false) => {
       status.textContent = message;
-      status.className = "mt-1 text-[10px] " + colorClass;
+      const stateClass = {
+        "text-emerald-300": "is-saved",
+        "text-amber-300": "is-warn",
+        "text-rose-300": "is-error",
+        "text-cyan-300": "is-busy",
+      }[colorClass] || "";
+      status.className = "annotation-status mt-1 " + stateClass;
       if (retryButton) {
         retryButton.hidden = !canRetry;
         retryButton.disabled = saving;

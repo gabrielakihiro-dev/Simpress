@@ -183,10 +183,10 @@
           ${anotacoes.map((anotacao, index) => `
             <div class="${index ? "mt-2 border-t border-slate-700 pt-2" : ""}">
               ${index ? '<p class="mb-1 text-[10px] text-slate-400">Anotação anterior</p>' : ""}
-              <textarea data-comparison-annotation ${app.atributosVersaoAnotacao(anotacao)} data-annotation-id="${escapeHtml(anotacao.anotacao_id || "")}" rows="2" maxlength="2000" class="w-full min-w-[220px] rounded-lg border border-slate-700 bg-slate-900 px-2.5 py-2 text-xs text-white placeholder:text-slate-500 focus:border-cyan-400 focus:outline-none focus:ring-1 focus:ring-cyan-400" aria-label="${index ? "Anotação anterior para" : "Anotações para"} ${escapeHtml(contexto)}, neste resultado" placeholder="Escreva uma anotação...">${escapeHtml(anotacao.anotacao || "")}</textarea>
+              <textarea data-comparison-annotation ${app.atributosVersaoAnotacao(anotacao)} data-annotation-id="${escapeHtml(anotacao.anotacao_id || "")}" rows="2" maxlength="2000" class="annotation-field w-full min-w-[220px]" aria-label="${index ? "Anotação anterior para" : "Anotações para"} ${escapeHtml(contexto)}, neste resultado" placeholder="Escreva uma anotação...">${escapeHtml(anotacao.anotacao || "")}</textarea>
               <div class="mt-1">
-                <p class="text-[10px] ${anotacao.anotacao ? "text-emerald-300" : "text-slate-500"}" data-annotation-status aria-live="polite">${anotacao.anotacao ? "Salvo automaticamente" : ""}</p>
-                <button type="button" class="mt-1 rounded-md border border-rose-400/40 px-2 py-1 text-[10px] text-rose-200 hover:bg-rose-500/10" data-annotation-retry hidden aria-label="Tentar novamente a sincronização desta anotação">Tentar sincronizar novamente</button>
+                <p class="annotation-status${anotacao.anotacao ? " is-saved" : ""}" data-annotation-status aria-live="polite">${anotacao.anotacao ? "Salvo automaticamente" : ""}</p>
+                <button type="button" class="annotation-retry mt-1" data-annotation-retry hidden aria-label="Tentar novamente a sincronização desta anotação">Tentar sincronizar novamente</button>
               </div>
             </div>`).join("")}
         </td>`;
@@ -273,7 +273,7 @@
         <tr class="text-slate-300" ${atributosLinhaComparacao("apelidos_sem_atualizacao", item)}>
           <td class="px-3 py-2 font-mono text-white whitespace-nowrap">${escapeHtml(item.serie || "(vazia)")}</td>
           <td class="px-3 py-2 font-mono">${escapeHtml(item.computador || "—")}</td>
-          <td class="px-3 py-2 text-amber-200">${escapeHtml(formatarMotivoRevisao(item.motivo))}</td>
+          <td class="px-3 py-2 text-slate-300">${escapeHtml(formatarMotivoRevisao(item.motivo))}</td>
           ${renderizarCampoAnotacao(item, (item.computador ? `o hostname ${item.computador}, série ` : "a série ") + (item.serie || "vazia"))}
         </tr>`);
   }
@@ -338,7 +338,7 @@
       })),
     ].map(item => `
         <tr class="text-slate-300" ${atributosLinhaComparacao(item.__categoriaPendencia, item)}>
-          <td class="px-3 py-2 text-amber-200">${escapeHtml(item.tipo || "Ambiguidade")}</td>
+          <td class="px-3 py-2 text-slate-300">${escapeHtml(item.tipo || "Ambiguidade")}</td>
           <td class="px-3 py-2 font-mono">${escapeHtml(item.chave || "—")}</td>
           <td class="px-3 py-2">${escapeHtml(item.fontes || "—")}</td>
           <td class="px-3 py-2">${escapeHtml(item.mensagem || "")}</td>
@@ -354,7 +354,7 @@
         .join(" · ") || "Linha sem identificador";
       return `
           <tr class="text-slate-300" ${atributosLinhaComparacao(item.categoria, item)}>
-            <td class="px-3 py-2 text-amber-200">${escapeHtml(CATEGORIAS_ANOTACOES_SINCRONIZADAS[item.categoria] || "Histórico de planilhas")}</td>
+            <td class="px-3 py-2 text-slate-300">${escapeHtml(CATEGORIAS_ANOTACOES_SINCRONIZADAS[item.categoria] || "Histórico de planilhas")}</td>
             <td class="px-3 py-2">${escapeHtml(identificador)}</td>
             ${renderizarCampoAnotacao(item, `${CATEGORIAS_ANOTACOES_SINCRONIZADAS[item.categoria] || "a linha"}, ${identificador}`)}
           </tr>`;
@@ -377,7 +377,7 @@
     const anotacoesSincronizadasRows = linhasAnotacoesSincronizadas(comparison.anotacoes_sincronizadas || [], colunas);
     return `
           ${barra}
-          <p class="text-xs text-cyan-200 bg-cyan-500/10 border border-cyan-500/25 rounded-lg px-3 py-2">Este clone contém as anotações sincronizadas. O resultado original e os arquivos da comparação não estão armazenados neste dispositivo.</p>
+          <p class="notice notice-info">Este clone contém as anotações sincronizadas. O resultado original e os arquivos da comparação não estão armazenados neste dispositivo.</p>
           <section class="space-y-2" data-history-filter-section>
             <div>${tituloSecaoComparacao("Anotações sincronizadas", "neutro")}<p class="text-[11px] text-slate-500">Anotações feitas nas linhas desta atualização, com a seção e a linha a que pertencem.</p></div>
             ${renderizarTabelaComparacao(["Seção", "Linha", "Anotações"], anotacoesSincronizadasRows, "Nenhuma anotação sincronizada neste resultado.", "anotacoes_sincronizadas")}
@@ -401,12 +401,12 @@
     return `
         ${barra}
         ${comparison.historico_salvo === false
-        ? `<p class="text-xs text-amber-200 bg-amber-500/10 border border-amber-500/25 rounded-lg px-3 py-2">${escapeHtml(comparison.aviso_historico || "Não foi possível salvar este resultado no histórico de comparações.")}</p>`
+        ? `<p class="notice notice-warn">${escapeHtml(comparison.aviso_historico || "Não foi possível salvar este resultado no histórico de comparações.")}</p>`
         : comparison.historico_salvo === true
-          ? '<p class="text-xs text-cyan-200 bg-cyan-500/10 border border-cyan-500/25 rounded-lg px-3 py-2">Resultado registrado no Histórico de planilhas.</p>'
+          ? '<p class="notice notice-info">Resultado registrado no Histórico de planilhas.</p>'
           : ""}
         ${Number(comparison.anotacoes_herdadas_enfileiradas || 0) > 0
-        ? `<p class="text-xs text-amber-200 bg-amber-500/10 border border-amber-500/25 rounded-lg px-3 py-2">${Number(comparison.anotacoes_herdadas_enfileiradas).toLocaleString("pt-BR")} anotações herdadas foram gravadas junto com o resultado. A sincronização com a pasta compartilhada será tentada automaticamente.</p>`
+        ? `<p class="notice notice-warn">${Number(comparison.anotacoes_herdadas_enfileiradas).toLocaleString("pt-BR")} anotações herdadas foram gravadas junto com o resultado. A sincronização com a pasta compartilhada será tentada automaticamente.</p>`
         : ""}
         <div class="grid grid-cols-2 md:grid-cols-3 xl:grid-cols-4 gap-3">
           ${cartaoMetricaComparacao("Notebooks comparados", comparison.total_endpoint, null)}
@@ -800,9 +800,9 @@
     const itemId = String(item?.anotacao_id || "");
     if (!itemId) return "";
     return `<label class="block min-w-[220px] text-[10px] text-slate-400">Anotação sobre ${escapeHtml(contexto)}
-        <textarea data-operational-annotation ${app.atributosVersaoAnotacao(item)} data-annotation-id="${escapeHtml(itemId)}" rows="2" maxlength="2000" class="mt-1 w-full rounded-lg border border-slate-700 bg-slate-900 px-2.5 py-2 text-xs text-white placeholder:text-slate-500 focus:border-cyan-400 focus:outline-none" placeholder="Escreva uma anotação...">${escapeHtml(item.anotacao || "")}</textarea>
-        <span class="mt-1 block text-[10px] ${item.anotacao ? "text-emerald-300" : "text-slate-500"}" data-annotation-status aria-live="polite">${item.anotacao ? "Salvo automaticamente" : ""}</span>
-        <button type="button" class="mt-1 rounded-md border border-rose-400/40 px-2 py-1 text-[10px] text-rose-200 hover:bg-rose-500/10" data-annotation-retry hidden aria-label="Tentar novamente a sincronização desta anotação">Tentar sincronizar novamente</button>
+        <textarea data-operational-annotation ${app.atributosVersaoAnotacao(item)} data-annotation-id="${escapeHtml(itemId)}" rows="2" maxlength="2000" class="annotation-field mt-1 w-full" placeholder="Escreva uma anotação...">${escapeHtml(item.anotacao || "")}</textarea>
+        <span class="annotation-status mt-1${item.anotacao ? " is-saved" : ""}" data-annotation-status aria-live="polite">${item.anotacao ? "Salvo automaticamente" : ""}</span>
+        <button type="button" class="annotation-retry mt-1" data-annotation-retry hidden aria-label="Tentar novamente a sincronização desta anotação">Tentar sincronizar novamente</button>
       </label>`;
   }
 

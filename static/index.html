@@ -191,7 +191,7 @@
           <button
             type="submit"
             id="btn-buscar-serial"
-            class="home-search-button btn-primary font-bold rounded-xl flex items-center justify-center shrink-0"
+            class="home-search-button bg-brand-600 hover:bg-brand-700 text-white font-bold rounded-xl transition-all duration-200 flex items-center justify-center shadow-lg shadow-brand-600/30 shrink-0"
           >
             <i data-lucide="search" class="w-5 h-5"></i>
             <span>Buscar equipamento</span>
@@ -946,7 +946,7 @@ Horário disponível para atendimento:</textarea>
             data-on-click="gerarPlanilhaExcel"
             aria-keyshortcuts="Control+Enter"
             title="Gerar Planilha (Ctrl+Enter)"
-            class="btn-primary px-6 py-2.5 rounded-xl font-bold text-xs sm:text-sm flex items-center space-x-2.5"
+            class="px-6 py-2.5 rounded-xl bg-gradient-to-r from-emerald-700 to-teal-700 hover:from-emerald-800 hover:to-teal-800 text-white font-bold text-xs sm:text-sm flex items-center space-x-2.5 shadow-glow-emerald transition-all"
           >
             <i data-lucide="file-spreadsheet" class="w-4 h-4"></i>
             <span>Gerar Planilha</span>
@@ -1012,7 +1012,7 @@ Horário disponível para atendimento:</textarea>
         <div class="flex space-x-2">
           <button
             data-on-click="copiarTextoDoModal"
-            class="px-4 py-2 rounded-lg bg-brand-600 hover:bg-brand-500 text-white font-semibold text-xs flex items-center space-x-1.5 transition"
+            class="px-4 py-2 rounded-lg bg-brand-600 hover:bg-brand-700 text-white font-semibold text-xs flex items-center space-x-1.5 transition"
           >
             <i data-lucide="copy" class="w-3.5 h-3.5"></i>
             <span>Copiar Texto</span>
@@ -1103,7 +1103,7 @@ Horário disponível para atendimento:</textarea>
           <button
             type="button"
             data-on-click="copiarTextoSolicitacaoTransporte"
-            class="px-4 py-2 rounded-lg bg-brand-600 hover:bg-brand-500 text-white font-semibold text-xs flex items-center space-x-1.5 transition"
+            class="px-4 py-2 rounded-lg bg-brand-600 hover:bg-brand-700 text-white font-semibold text-xs flex items-center space-x-1.5 transition"
           >
             <i data-lucide="copy" class="w-3.5 h-3.5"></i>
             <span>Copiar Texto</span>
@@ -1206,7 +1206,7 @@ Horário disponível para atendimento:</textarea>
             type="button"
             id="btn-salvar-equipamento"
             data-on-click="salvarDadosEquipamento"
-            class="px-5 py-2 rounded-lg bg-emerald-600 hover:bg-emerald-500 text-white font-bold text-xs flex items-center space-x-1.5 shadow-glow-emerald transition"
+            class="px-5 py-2 rounded-lg bg-emerald-700 hover:bg-emerald-800 text-white font-bold text-xs flex items-center space-x-1.5 shadow-glow-emerald transition"
           >
             <i data-lucide="check" class="w-4 h-4"></i>
             <span>Salvar no Site e na Planilha</span>
@@ -1233,7 +1233,7 @@ Horário disponível para atendimento:</textarea>
       <p id="apelido-serial-contexto" class="text-[11px] text-slate-500 font-mono mt-2"></p>
       <div class="flex justify-end gap-2 mt-6 pt-4 border-t border-slate-800">
         <button type="button" data-on-click="fecharModalEditarApelido" class="px-4 py-2 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-300 text-xs transition">Cancelar</button>
-        <button type="button" id="btn-salvar-apelido" data-on-click="salvarApelido" class="px-4 py-2 rounded-lg bg-cyan-600 hover:bg-cyan-500 text-white font-bold text-xs transition">Salvar apelido</button>
+        <button type="button" id="btn-salvar-apelido" data-on-click="salvarApelido" class="px-4 py-2 rounded-lg bg-sky-700 hover:bg-sky-800 text-white font-bold text-xs transition">Salvar apelido</button>
       </div>
     </div>
   </div>
@@ -1301,7 +1301,7 @@ Horário disponível para atendimento:</textarea>
         </div>
         <button
           data-on-click="toggleFormNovaUnidade"
-          class="px-3.5 py-2 rounded-lg bg-brand-600 hover:bg-brand-500 text-white text-xs font-bold flex items-center justify-center gap-1.5 transition"
+          class="px-3.5 py-2 rounded-lg bg-brand-600 hover:bg-brand-700 text-white text-xs font-bold flex items-center justify-center gap-1.5 transition"
         >
           <i data-lucide="plus" class="w-3.5 h-3.5"></i>
           <span>Nova Filial</span>
@@ -1333,7 +1333,7 @@ Horário disponível para atendimento:</textarea>
             <input type="text" id="form-unidade-cnpj" placeholder="CNPJ da instalação / filial" class="w-full px-2.5 py-1.5 rounded-lg glass-input text-slate-200 font-mono focus:outline-none" />
           </div>
           <div class="flex items-end gap-2">
-            <button id="btn-salvar-unidade" data-on-click="salvarUnidadeForm" class="flex-1 py-1.5 px-3 rounded-lg bg-emerald-600 hover:bg-emerald-500 text-white font-bold text-xs flex items-center justify-center gap-1 transition">
+            <button id="btn-salvar-unidade" data-on-click="salvarUnidadeForm" class="flex-1 py-1.5 px-3 rounded-lg bg-emerald-700 hover:bg-emerald-800 text-white font-bold text-xs flex items-center justify-center gap-1 transition">
               <i data-lucide="check" class="w-3.5 h-3.5"></i>
               <span>Salvar</span>
             </button>
@@ -1415,7 +1415,7 @@ Horário disponível para atendimento:</textarea>
 
       <div class="pt-4 border-t border-slate-800 flex justify-end gap-2 shrink-0">
         <button type="button" data-on-click="fecharModalAtualizarPlanilhas" class="px-4 py-2 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-300 text-xs transition">Cancelar</button>
-        <button type="button" id="btn-previsualizar-planilhas" data-on-click="previsualizarPlanilhas" class="px-5 py-2 rounded-lg bg-sky-600 hover:bg-sky-500 text-white font-bold text-xs flex items-center gap-1.5 transition">
+        <button type="button" id="btn-previsualizar-planilhas" data-on-click="previsualizarPlanilhas" class="px-5 py-2 rounded-lg bg-sky-700 hover:bg-sky-800 text-white font-bold text-xs flex items-center gap-1.5 transition">
           <i data-lucide="refresh-cw" class="w-3.5 h-3.5"></i>
           Pré-visualizar impacto
         </button>
@@ -1460,7 +1460,7 @@ Horário disponível para atendimento:</textarea>
           <p id="comparacao-planilhas-fontes" class="text-xs text-slate-400 mt-1"></p>
         </div>
         <div class="flex shrink-0 items-center gap-1">
-          <button type="button" id="btn-exportar-resultado-comparacao" data-on-click="exportarResultadoComparacaoPlanilhas" class="text-slate-400 hover:text-emerald-300 p-1 rounded-lg hover:bg-slate-800 transition disabled:cursor-not-allowed disabled:opacity-50" aria-label="Exportar este resultado para Excel" title="Exportar este resultado para Excel (registros e anotações do dia)" disabled>
+          <button type="button" id="btn-exportar-resultado-comparacao" data-on-click="exportarResultadoComparacaoPlanilhas" class="text-slate-400 hover:text-white p-1 rounded-lg hover:bg-slate-800 transition disabled:cursor-not-allowed disabled:opacity-50" aria-label="Exportar este resultado para Excel" title="Exportar este resultado para Excel (registros e anotações do dia)" disabled>
             <i data-lucide="download" class="w-5 h-5" aria-hidden="true"></i>
           </button>
           <button type="button" data-on-click="fecharModalComparacaoPlanilhas" class="text-slate-400 hover:text-white p-1 rounded-lg hover:bg-slate-800 transition" aria-label="Fechar resultado">
@@ -1532,7 +1532,7 @@ Horário disponível para atendimento:</textarea>
         <div class="ticket-filter-toolbar">
           <label for="filtro-acompanhamento-chamados" class="ticket-filter-search text-xs text-slate-300"><span class="sr-only">Buscar série, pedido, OS ou status</span><input id="filtro-acompanhamento-chamados" type="search" autocomplete="off" class="block w-full rounded-lg border border-slate-700 bg-slate-950 px-3 py-2 text-sm text-white placeholder:text-slate-500" placeholder="Buscar série, pedido, OS ou status"></label>
           <label title="Chamados ativos sem data ou com três dias ou mais sem atualização" class="ticket-filter-attention border border-amber-400/20 bg-amber-500/5 text-xs text-amber-100"><input id="somente-atencao-chamados" type="checkbox" class="accent-amber-400">Atenção · 3+ dias</label>
-          <button type="button" id="btn-exportar-acompanhamento-chamados" class="ticket-filter-action ticket-filter-export rounded-lg border border-emerald-400/30 bg-emerald-500/15 text-xs font-semibold text-emerald-100 hover:bg-emerald-500/25 disabled:cursor-not-allowed disabled:opacity-50" data-on-click="exportarAcompanhamentoChamados" disabled>Exportar Excel</button>
+          <button type="button" id="btn-exportar-acompanhamento-chamados" class="ticket-filter-action ticket-filter-export btn-secondary rounded-lg text-xs font-semibold disabled:cursor-not-allowed disabled:opacity-50" data-on-click="exportarAcompanhamentoChamados" disabled>Exportar Excel</button>
           <button type="button" class="ticket-filter-action ticket-filter-clear rounded-lg border border-slate-700 text-xs text-slate-300 hover:bg-slate-800" data-on-click="limparFiltrosAcompanhamentoChamados">Limpar filtros</button>
         </div>
       </div>
@@ -1565,7 +1565,7 @@ Horário disponível para atendimento:</textarea>
             </label>
           </div>
           <div class="flex items-center gap-2">
-            <button type="button" id="btn-exportar-historico-comparacoes" data-on-click="exportarHistoricoComparacoesExcel" class="inline-flex items-center gap-2 rounded-lg bg-cyan-500/10 px-3 py-2 text-xs font-semibold text-cyan-200 border border-cyan-500/25 transition hover:bg-cyan-500/20 disabled:cursor-not-allowed disabled:opacity-50" aria-label="Exportar o histórico da data selecionada para Excel" title="Baixar os registros e as anotações da data selecionada" disabled>
+            <button type="button" id="btn-exportar-historico-comparacoes" data-on-click="exportarHistoricoComparacoesExcel" class="btn btn-secondary gap-2 px-3 py-2 disabled:cursor-not-allowed disabled:opacity-50" aria-label="Exportar o histórico da data selecionada para Excel" title="Baixar os registros e as anotações da data selecionada" disabled>
               <i data-lucide="download" class="w-4 h-4" aria-hidden="true"></i>
               <span class="hidden sm:inline">Exportar Excel</span>
             </button>
@@ -1624,7 +1624,7 @@ Horário disponível para atendimento:</textarea>
       <p id="pesquisa-completa-status" class="text-xs text-slate-400 py-3 shrink-0" role="status" aria-live="polite">Carregando resultados...</p>
       <div id="pesquisa-completa-lista" class="overflow-y-auto flex-1 min-h-0 py-2 space-y-2" aria-label="Resultados completos da pesquisa"></div>
       <div class="pt-3 border-t border-slate-800 flex items-center justify-between gap-3 shrink-0">
-        <button type="button" id="btn-carregar-mais-pesquisa" data-on-click="carregarMaisResultadosPesquisa" class="hidden inline-flex items-center gap-2 px-4 py-2 rounded-lg bg-sky-600 hover:bg-sky-500 disabled:opacity-50 disabled:cursor-wait text-white text-xs font-semibold transition">
+        <button type="button" id="btn-carregar-mais-pesquisa" data-on-click="carregarMaisResultadosPesquisa" class="hidden inline-flex items-center gap-2 px-4 py-2 rounded-lg bg-sky-700 hover:bg-sky-800 disabled:opacity-50 disabled:cursor-wait text-white text-xs font-semibold transition">
           <i data-lucide="plus" class="w-4 h-4" aria-hidden="true"></i>
           <span>Carregar mais</span>
         </button>
