@@ -141,6 +141,83 @@ test("search displays an announced skeleton, then the fictional result", async (
   await expect(equipmentCard.locator("#badge-apelido")).toHaveText("DEMO-001");
 });
 
+test("search shortcuts focus Home search except while typing or with a dialog open", async ({ page }, testInfo) => {
+  const input = page.locator("#input-serial");
+  const homeTab = page.locator("#tab-home");
+  await expect(input).toHaveAttribute("aria-keyshortcuts", "/ Control+K Meta+K");
+  const hint = page.locator(".home-search-shortcut");
+  if (testInfo.project.name === "mobile") await expect(hint).toBeHidden();
+  else {
+    await input.blur();
+    await expect(hint).toBeVisible();
+    await expect(hint).toHaveText("/");
+  }
+
+  await openSidebarIfNeeded(page);
+  await page.locator("#tab-retirada-entrega").click();
+  await expect(homeTab).toHaveAttribute("aria-selected", "false");
+  await page.locator("#main-content").focus();
+  await page.keyboard.press("/");
+  await expect(homeTab).toHaveAttribute("aria-selected", "true");
+  await expect(page.locator("#tab-panel-home")).toBeVisible();
+  await expect(input).toBeFocused();
+  await expect(input).toHaveValue("");
+
+  await openSidebarIfNeeded(page);
+  await page.locator("#tab-retirada-entrega").click();
+  const notes = page.locator("#entrega-obs");
+  await notes.fill("");
+  await notes.focus();
+  await page.keyboard.press("/");
+  await expect(notes).toHaveValue("/");
+  await expect(notes).toBeFocused();
+  await page.keyboard.press("Control+K");
+  await expect(homeTab).toHaveAttribute("aria-selected", "true");
+  await expect(input).toBeFocused();
+
+  await openAnalysisMenu(page);
+  await page.locator("#btn-historico-comparacoes").click();
+  const dialog = page.getByRole("dialog");
+  await expect(dialog).toBeVisible();
+  await page.keyboard.press("Control+K");
+  await page.keyboard.press("/");
+  await expect(dialog).toBeVisible();
+  await expect(input).not.toBeFocused();
+});
+
+test("recent lookups reopen the result and can be cleared", async ({ page }) => {
+  test.setTimeout(45_000);
+  const recentSection = page.getByRole("region", { name: "Pesquisas recentes" });
+  await expect(recentSection).toBeHidden();
+  await page.evaluate(() => localStorage.setItem("simpress:recent-equipment", JSON.stringify([
+    { serial: "OUTRO", apelido: "DEMO-002", cidade: "Londrina" },
+    { serial: "LENTO", apelido: "DEMO-001", cidade: "Curitiba" },
+  ])));
+  await page.reload();
+  await expect(recentSection).toBeVisible();
+  const items = recentSection.getByRole("listitem");
+  await expect(items).toHaveCount(2);
+  const lento = recentSection.getByRole("button", { name: "LENTO, apelido DEMO-001, cidade Curitiba. Abrir resultado" });
+  await expect(lento).toContainText("LENTO");
+  await expect(lento).toContainText("DEMO-001");
+  await expect(lento).toContainText("Curitiba");
+
+  const lookup = page.waitForResponse(response =>
+    new URL(response.url()).pathname === "/api/equipamento/LENTO", { timeout: 20_000 });
+  await lento.click();
+  await expect(page.locator("#input-serial")).toHaveValue("LENTO");
+  expect((await lookup).status()).toBe(200);
+  await expect(page.locator("#card-equipamento")).toBeVisible({ timeout: 15_000 });
+  await expect(page.locator("#card-serial")).toHaveText("LENTO");
+  await expect(recentSection.locator(".home-recent-serial")).toHaveText(["LENTO", "OUTRO"]);
+  await auditAccessibility(page, "#home-recentes");
+
+  await recentSection.getByRole("button", { name: "Limpar pesquisas recentes" }).click();
+  await expect(recentSection).toBeHidden();
+  await expect(page.locator("#input-serial")).toBeFocused();
+  expect(await page.evaluate(() => localStorage.getItem("simpress:recent-equipment"))).toBeNull();
+});
+
 test("failed search restores the controls and exposes a recoverable error", async ({ page }) => {
   test.setTimeout(45_000);
   const search = page.getByRole("button", { name: "Buscar Equipamento" });
