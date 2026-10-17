@@ -677,6 +677,13 @@
     }
   }
 
+  // City plus the street part of the address; no dangling " - " when one is missing.
+  function formatarLocalAtual(eq) {
+    const cidade = String(eq?.retirada_cidade || "").trim();
+    const endereco = String(eq?.retirada_endereco || "").split("-")[0].trim();
+    return [cidade, endereco].filter(Boolean).join(" - ") || "Não especificado";
+  }
+
   // Render Equipment Card & Populate Retirada Section
   function exibirEquipamento(eq) {
     appState.retiradaCidadeSelecionada = String(eq.retirada_cidade || "").trim();
@@ -699,27 +706,16 @@
     const loggedUsers = document.getElementById("card-usuarios-logados");
     loggedUsers.textContent = eq.usuarios_logados ? `Usuários logados: ${eq.usuarios_logados}` : "";
     loggedUsers.classList.toggle("hidden", !loggedUsers.textContent);
-    document.getElementById("card-localizacao").textContent = `${eq.retirada_cidade || ''} - ${eq.retirada_endereco ? eq.retirada_endereco.split('-')[0].trim() : ''}`;
+    document.getElementById("card-localizacao").textContent = app.formatarLocalAtual(eq);
     document.getElementById("card-cnpj-atual").textContent = `CNPJ: ${eq.retirada_cnpj || 'Não especificado'}`;
 
-    // Icon & Badge styling by Type
+    // Type is shown as text in the neutral chip; the icon only changes shape.
     const iconBox = document.getElementById("equip-icon-box");
     const icon = document.getElementById("equip-icon");
-    const badgeTipo = document.getElementById("badge-tipo");
-
-    if (eq.tipo === "Notebook") {
-      icon.setAttribute("data-lucide", "laptop");
-      iconBox.className = "w-14 h-14 rounded-xl bg-emerald-500/10 border border-emerald-500/30 flex items-center justify-center shrink-0 text-emerald-400";
-      badgeTipo.className = "px-2.5 py-0.5 rounded-full text-xs font-semibold bg-emerald-500/20 text-emerald-300 border border-emerald-500/30";
-    } else if (eq.tipo === "Micro Computador") {
-      icon.setAttribute("data-lucide", "monitor");
-      iconBox.className = "w-14 h-14 rounded-xl bg-blue-500/10 border border-blue-500/30 flex items-center justify-center shrink-0 text-blue-400";
-      badgeTipo.className = "px-2.5 py-0.5 rounded-full text-xs font-semibold bg-blue-500/20 text-blue-300 border border-blue-500/30";
-    } else {
-      icon.setAttribute("data-lucide", "headphones");
-      iconBox.className = "w-14 h-14 rounded-xl bg-purple-500/10 border border-purple-500/30 flex items-center justify-center shrink-0 text-purple-400";
-      badgeTipo.className = "px-2.5 py-0.5 rounded-full text-xs font-semibold bg-purple-500/20 text-purple-300 border border-purple-500/30";
-    }
+    // Literal setAttribute calls keep each icon in the generated Lucide subset.
+    if (eq.tipo === "Notebook") icon.setAttribute("data-lucide", "laptop");
+    else if (eq.tipo === "Micro Computador") icon.setAttribute("data-lucide", "monitor");
+    else icon.setAttribute("data-lucide", "headphones");
     lucide.createIcons({ root: iconBox });
 
     // Automatically fill RETIRADA (Origem) section!
@@ -742,6 +738,6 @@
     invalidarDadosEquipamentoAposRestauracao, atualizarSelecaoAposSubstituirInventarios, handleSerialInput,
     handleSerialKeydown, selecionarItemAutocomplete, abrirPesquisaCompleta, alterarFiltrosPesquisaCompleta,
     limparFiltrosPesquisaCompleta, carregarMaisResultadosPesquisa, fecharModalPesquisaCompleta, fecharAutocomplete,
-    limparSerial, buscarSerial, exibirEquipamento,
+    limparSerial, buscarSerial, exibirEquipamento, formatarLocalAtual,
   };
 });

@@ -1622,16 +1622,18 @@ test("keeps old ticket imports when the deletion confirmation is cancelled", asy
   assert.equal(harness.element("btn-excluir-importacoes-antigas-chamados").disabled, false);
 });
 
-test("groups secondary actions while keeping spreadsheet updates prominent", () => {
-  assert.match(appHtml, /id="btn-atualizar-planilhas"[^>]*class="header-action-item header-action-item--primary/);
+test("groups secondary actions under neutral Ações and Consultas headings", () => {
+  assert.doesNotMatch(appHtml, /header-action-item--primary|sidebar-related-links/);
   assert.match(appHtml, /data-on-click="abrirAcompanhamentoChamados"[\s\S]*?<details class="header-action-group" data-action-group="analysis">/);
-  assert.match(appHtml, /id="btn-exportar-equipamentos"[^>]*header-action-item--primary/);
   assert.match(appHtml, /<details class="header-action-group" data-action-group="analysis">/);
   assert.doesNotMatch(appHtml, /data-action-group="equipment"|Equipamentos e cadastros/);
 
   const analysisGroup = appHtml.match(/<details class="header-action-group" data-action-group="analysis">([\s\S]*?)<\/details>/)?.[1] || "";
   assert.match(analysisGroup, /<span class="sidebar-item-label">Históricos e Análises<\/span>/);
-  assert.match(analysisGroup, /id="btn-atualizar-planilhas"[^>]*class="header-action-item header-action-item--primary/);
+  assert.match(analysisGroup, /<p class="sidebar-subgroup-title" aria-hidden="true">Ações<\/p>\s*<button[^>]*id="btn-atualizar-planilhas"/);
+  assert.match(analysisGroup, /<p class="sidebar-subgroup-title" aria-hidden="true">Consultas<\/p>\s*<button[^>]*id="btn-historico-comparacoes"/);
+  assert.match(analysisGroup, /id="btn-historico-comparacoes"[^>]*aria-labelledby="label-historico-comparacoes badge-total-historico-comparacoes"[\s\S]*?<span id="badge-total-historico-comparacoes" class="header-action-count"[^>]*>0<\/span>\s*<\/button>/);
+  assert.doesNotMatch(analysisGroup.slice(0, analysisGroup.indexOf("</summary>")), /header-action-count/);
   assert.match(analysisGroup, /aria-label="Atualização, exportação, análises, históricos e catálogo de unidades"/);
   assert.doesNotMatch(analysisGroup, /data-on-click="abrirCentralPendencias"/);
   assert.match(analysisGroup, /data-on-click="abrirEvolucaoAtualizacoes"/);

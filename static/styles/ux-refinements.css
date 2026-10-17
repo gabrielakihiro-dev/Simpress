@@ -188,25 +188,13 @@ button[data-copy-state="warning"], button[data-copy-state="error"] { animation: 
 .ux-pending-chip-action { opacity: 0.85; font-weight: 600; }
 .ux-pending-chip[data-status="success"] .ux-pending-chip-action { display: none; }
 @media (pointer: coarse) { .ux-pending-chip { min-height: 44px; } }
-@media (max-width: 640px) { .ux-pending-chip-action { display: none; } }
+@media (max-width: 1439px) { .ux-pending-chip-action { display: none; } }
+@media (min-width: 768px) { #btn-gerar-planilha { white-space: nowrap; } }
 
 /* Light theme: pre-existing axe color-contrast failures in the delivery card. */
 html[data-theme="light"] .transfer-form-grid h2 > .text-emerald-300 { color: #065f46; }
 html[data-theme="light"] .transfer-form-grid .glass-card-header .text-emerald-400 { color: #047857; }
 html[data-theme="light"] .transfer-form-grid button.text-slate-400 { color: #334155; }
-
-/* ---------- 6. Home → Transporte call to action ---------- */
-#btn-ir-para-transporte {
-  border-color: var(--ux-cta-border);
-  background-color: var(--ux-cta-bg);
-  color: var(--ux-cta-fg);
-  font-weight: 700;
-  box-shadow: var(--focus-shadow, var(--ux-shadow-1));
-}
-#btn-ir-para-transporte:hover {
-  background-color: var(--ux-cta-bg-hover);
-  color: var(--ux-cta-fg);
-}
 
 /* ---------- 7. Dense data tables ---------- */
 .accessible-table-wrap table { font-variant-numeric: tabular-nums; }
@@ -353,10 +341,27 @@ html[data-ux-density="compact"] .comparison-desktop-table td {
   line-height: 1.15rem;
   text-align: center;
 }
-#simpress-app-shell[data-sidebar-collapsed="true"] .ux-divergence-badge { display: none; }
+/* Collapsed desktop sidebar: the count becomes a dot on the group icon. */
+@media (min-width: 768px) {
+  #simpress-app-shell[data-sidebar-collapsed="true"] .header-action-group > summary { position: relative; }
+  #simpress-app-shell[data-sidebar-collapsed="true"] .ux-divergence-badge {
+    position: absolute;
+    top: 0.45rem;
+    right: 0.6rem;
+    width: 0.55rem;
+    min-width: 0;
+    height: 0.55rem;
+    padding: 0;
+    margin: 0;
+    overflow: hidden;
+    background: var(--ux-critical-fg);
+    font-size: 0;
+    line-height: 0;
+  }
+}
 
 .ux-home-panel {
-  margin-top: var(--ux-space-5);
+  margin-top: var(--ux-space-6);
   padding: var(--ux-space-5);
   border-radius: var(--ux-radius-xl);
 }

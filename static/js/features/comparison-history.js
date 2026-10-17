@@ -6,14 +6,17 @@
   "use strict";
   const { app, motion, inventoryOperationKey } = context;
   const { escapeHtml, pluralize } = context.dom;
-  const { formatarNomeFonteHistorico, formatarHorarioHistorico } = context.historyFormat;
+  const { formatarNomeFonteHistorico, formatarHorarioHistorico, classesMetricaHistorico } = context.historyFormat;
 
   const inventoryRestoreAttempts = new Map();
 
   function definirTotalHistoricoComparacoes(total) {
     const valor = Number(total || 0);
-    document.getElementById("badge-total-historico-comparacoes").textContent = valor;
-    document.getElementById("total-historico-comparacoes").textContent = `${valor} ${valor === 1 ? "registro" : "registros"}`;
+    const rotulo = `${valor} ${valor === 1 ? "registro" : "registros"}`;
+    const badge = document.getElementById("badge-total-historico-comparacoes");
+    badge.textContent = valor;
+    badge.setAttribute("aria-label", rotulo);
+    document.getElementById("total-historico-comparacoes").textContent = rotulo;
   }
 
   function definirEstadoDatasExportacaoHistorico(mensagem) {
@@ -293,18 +296,16 @@
   function criarMetricasHistoricoComparacao(metricas) {
     const grade = document.createElement("dl");
     grade.className = "grid grid-cols-2 sm:grid-cols-4 gap-2";
-    metricas.forEach(({ rotulo, valor, alerta = "amber" }) => {
+    metricas.forEach(({ rotulo, valor, tom = "amber" }) => {
       const numero = Number(valor || 0);
-      const destaque = numero > 0 && alerta
-        ? (alerta === "rose" ? "border-rose-500/25 bg-rose-500/5 text-rose-200" : "border-amber-500/25 bg-amber-500/5 text-amber-200")
-        : "border-slate-800 bg-slate-900/40 text-slate-500";
+      const classes = classesMetricaHistorico(numero, tom);
       const chip = document.createElement("div");
-      chip.className = `flex flex-col-reverse rounded-lg border px-3 py-2 ${destaque}`;
+      chip.className = `flex flex-col-reverse rounded-lg px-3 py-2 ${classes.cartao}`;
       const nome = document.createElement("dt");
-      nome.className = "text-[11px] leading-tight";
+      nome.className = "text-[11px] leading-tight text-slate-400";
       nome.textContent = rotulo;
       const quantidade = document.createElement("dd");
-      quantidade.className = `text-base font-semibold ${numero > 0 ? "text-white" : ""}`;
+      quantidade.className = `text-base font-semibold ${classes.numero}`;
       quantidade.textContent = numero.toLocaleString("pt-BR");
       chip.append(nome, quantidade);
       grade.appendChild(chip);
@@ -327,18 +328,18 @@
       origem.className = "text-xs text-slate-400";
       origem.textContent = `Restauração do conjunto anterior a ${formatarHorarioHistorico(restauracaoDe.horario)}`;
       partes.push(origem, criarMetricasHistoricoComparacao([
-        { rotulo: "Restaurados – Endpoint", valor: resumo.total_endpoint_restaurado, alerta: null },
-        { rotulo: "Restaurados – Simpress", valor: resumo.total_detalhes_restaurado, alerta: null },
+        { rotulo: "Restaurados – Endpoint", valor: resumo.total_endpoint_restaurado, tom: null },
+        { rotulo: "Restaurados – Simpress", valor: resumo.total_detalhes_restaurado, tom: null },
       ]));
     } else {
       partes.push(criarMetricasHistoricoComparacao([
-        { rotulo: "Apelidos atualizados", valor: resumo.apelidos_atualizados },
+        { rotulo: "Apelidos atualizados", valor: resumo.apelidos_atualizados, tom: "emerald" },
         { rotulo: "Sem acesso 7+ dias", valor: resumo.sem_acesso_7_dias },
-        { rotulo: "Divergências manuais", valor: resumo.divergencias_apelidos_manuais, alerta: "rose" },
+        { rotulo: "Divergências manuais", valor: resumo.divergencias_apelidos_manuais, tom: "rose" },
         { rotulo: "Sem correspondência – Endpoint", valor: resumo.ausentes_no_endpoint },
         { rotulo: "Sem correspondência – Simpress", valor: resumo.ausentes_em_detalhes },
         { rotulo: "Divergências de local", valor: resumo.divergencias_local },
-        { rotulo: "Ambiguidades", valor: resumo.correspondencias_ambiguas, alerta: "rose" },
+        { rotulo: "Ambiguidades", valor: resumo.correspondencias_ambiguas, tom: "rose" },
       ]));
     }
     return partes;

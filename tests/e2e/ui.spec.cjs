@@ -65,10 +65,11 @@ test("home preserves typography and spacing around hidden panels", async ({ page
   await expect(page.locator("#tab-panel-home")).toHaveCSS("margin-bottom", "0px");
 });
 
-test("sidebar tools keep accent colors and fit the multiline ticket label", async ({ page }) => {
+test("sidebar tools share one neutral style and keep labels on one line", async ({ page }) => {
   await openSidebarIfNeeded(page);
   const updateButton = page.locator("#btn-atualizar-planilhas");
   const exportButton = page.locator("#btn-exportar-equipamentos");
+  const historyButton = page.locator("#btn-historico-comparacoes");
   const ticketButton = page.getByRole("button", { name: "Acompanhamento de Chamados", exact: true });
   const analysisButton = page.locator('.header-action-group[data-action-group="analysis"] > summary');
   await expect(ticketButton).toBeVisible();
@@ -76,36 +77,28 @@ test("sidebar tools keep accent colors and fit the multiline ticket label", asyn
   if (!(await analysisGroup.evaluate(element => element.open))) await analysisButton.click();
   await expect(updateButton).toBeVisible();
   await expect(exportButton).toBeVisible();
-  const heights = await Promise.all([exportButton, ticketButton].map(button =>
-    button.evaluate(element => element.getBoundingClientRect().height)
-  ));
-  // The committed ticket label intentionally spans two lines with extra leading.
-  expect(heights[1]).toBeGreaterThanOrEqual(heights[0]);
-  const labelLayout = await ticketButton.locator(".sidebar-item-label").evaluate(label => {
-    const button = label.closest("button").getBoundingClientRect();
-    const text = label.getBoundingClientRect();
-    return { breaks: label.querySelectorAll("br").length,
-      fits: text.top >= button.top && text.bottom <= button.bottom && text.right <= button.right,
-      clipped: label.scrollWidth > label.clientWidth || label.scrollHeight > label.clientHeight };
-  });
-  expect(labelLayout).toEqual({ breaks: 1, fits: true, clipped: false });
+  await expect(historyButton.locator("#badge-total-historico-comparacoes")).toBeVisible();
 
-  const ticketBackground = await ticketButton.evaluate(element => getComputedStyle(element).backgroundColor);
-  const analysisBackground = await analysisButton.evaluate(element => getComputedStyle(element).backgroundColor);
-  const updateStyle = await updateButton.evaluate(element => {
+  const rowStyle = locator => locator.evaluate(element => {
     const style = getComputedStyle(element);
-    return { backgroundImage: style.backgroundImage, fontWeight: style.fontWeight };
+    return { backgroundImage: style.backgroundImage, backgroundColor: style.backgroundColor, fontWeight: style.fontWeight };
   });
-  const exportStyle = await exportButton.evaluate(element => {
-    const style = getComputedStyle(element);
-    return { backgroundImage: style.backgroundImage, fontWeight: style.fontWeight };
-  });
-  expect(updateStyle.backgroundImage).toContain("linear-gradient");
-  expect(updateStyle.fontWeight).toBe("700");
-  expect(exportStyle.backgroundImage).toContain("linear-gradient");
-  expect(exportStyle.fontWeight).toBe("700");
-  expect(ticketBackground).toContain("234, 88, 12");
-  expect(analysisBackground).toContain("2, 132, 199");
+  const [updateStyle, exportStyle, historyStyle, ticketStyle] = await Promise.all(
+    [updateButton, exportButton, historyButton, ticketButton].map(rowStyle));
+  for (const style of [updateStyle, exportStyle]) {
+    expect(style.backgroundImage).toBe("none");
+    expect(style.fontWeight).toBe(historyStyle.fontWeight);
+  }
+  expect(ticketStyle.backgroundColor).not.toContain("234, 88, 12");
+
+  for (const button of [ticketButton, analysisButton]) {
+    const label = await button.locator(".sidebar-item-label").first().evaluate(element => ({
+      breaks: element.querySelectorAll("br").length,
+      truncated: element.scrollWidth > element.clientWidth,
+      lines: Math.round(element.getBoundingClientRect().height / parseFloat(getComputedStyle(element).lineHeight)),
+    }));
+    expect(label).toEqual({ breaks: 0, truncated: false, lines: 1 });
+  }
 });
 
 test("tab navigation updates selected state and supports arrow keys", async ({ page }, testInfo) => {
