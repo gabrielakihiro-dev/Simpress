@@ -127,6 +127,12 @@
   --primary: #0369a1;
   --primary-hover: #075985;
   --primary-fg: #ffffff;
+  /* Secondary accent buttons (.btn-secondary-accent). */
+  --accent-button-border: var(--accent);
+  --accent-button-fg: var(--accent-text);
+  --accent-button-hover-bg: var(--accent-ring);
+  /* Keyboard focus outline; theme.css sets the light value. */
+  --focus-color: #7dd3fc;
   --danger: var(--ux-critical-fg);
   --danger-solid: #be123c;
   --danger-solid-hover: #e11d48;
@@ -189,11 +195,30 @@
   --header-summary-border: rgba(148, 163, 184, 0.16);
   --header-summary-bg: rgba(15, 23, 42, 0.68);
 
-  /* Header dropdown menu (app.css): colors shared by several of its rows. */
+  /* Header dropdown menu (app.css): the same values in both themes, because
+   * sidebar-navigation.css restyles the menu rows that are still in use. */
   --menu-icon: #8fa4bc;
   --menu-rule: #26364a;
-  --menu-orange-fg: #fed7aa;
-  --menu-orange-icon: #fb923c;
+  --menu-border: #334155;
+  --menu-button-shadow: 0 1px 2px rgba(0, 0, 0, 0.18);
+  --menu-toggle-bg: rgba(15, 23, 42, 0.88);
+  --menu-toggle-hover-bg: #1e293b;
+  --menu-toggle-hover-border: #475569;
+  --menu-toggle-hover-fg: #f1f5f9;
+  --menu-panel-bg: #0b1220;
+  --menu-panel-shadow: 0 18px 40px rgba(0, 0, 0, 0.46);
+  --menu-group-fg: #d5deea;
+  --menu-group-hover-bg: #111c2e;
+  --menu-group-hover-border: #29394f;
+  --menu-fg-hover: #f8fafc;
+  --menu-chevron: #7c8da3;
+  --menu-item-fg: #b9c6d6;
+  --menu-item-hover-bg: #172437;
+  --menu-item-active-bg: #1e3047;
+  --menu-action-tint: 148, 163, 184;
+  --menu-action-fg: #cbd5e1;
+  --menu-action-icon: #94a3b8;
+  --menu-count-bg: #172033;
 
   /* ---------- Home (app.css) ---------- */
   /* Search popover: the list under the Home search field. */
@@ -278,6 +303,8 @@
   /* ---------- Shared scrollbars and tints (app.css) ---------- */
   /* Scrollbar colors below stay the same in both themes unless the light block redefines them. */
   --scrollbar-track: #0f172a;
+  --scrollbar-thumb: #334155;
+  --scrollbar-thumb-hover: #475569;
   --scrollbar-thumb-strong: #64748b;
   --scrollbar-thumb-strong-hover: #94a3b8;
   --table-scrollbar-track: #1e293b;
@@ -325,6 +352,11 @@
   --stage-current-border: rgba(34, 211, 238, 0.4);
   --oracle-description-rule: rgba(167, 139, 250, 0.45);
   --oracle-description-toggle: #c4b5fd;
+
+  /* ---------- Other app.css components ---------- */
+  --skip-link-bg: #e0f2fe; /* same values in both themes */
+  --skip-link-fg: #082f49;
+  --setup-dialog-bg: #0f172a;
 }
 
 html[data-theme="light"] {
@@ -394,6 +426,10 @@ html[data-theme="light"] {
   --primary: #0369a1;
   --primary-hover: #0c4a6e;
   --primary-fg: #ffffff;
+  /* --accent (#0284c7) is under 4.5:1 on white for small text, so accent buttons use a darker shade. */
+  --accent-button-border: #0369a1;
+  --accent-button-fg: #075985;
+  --accent-button-hover-bg: #e0f2fe;
 
   --sidebar-bg: linear-gradient(180deg, #fff, #f8fafc);
   --sidebar-shadow: 12px 0 36px rgba(15, 23, 42, 0.08);
@@ -550,6 +586,10 @@ html[data-theme="light"] {
   --stage-current-border: #67e8f9;
   --oracle-description-rule: #c4b5fd;
   --oracle-description-toggle: #6d28d9;
+
+  --setup-dialog-bg: #fff;
+  /* Light only: in the dark theme .glass-card keeps its utility shadow (shadow-2xl). */
+  --glass-card-light-shadow: 0 12px 28px rgba(15, 23, 42, 0.07);
 }
 
 /* Components consume these timings instead of overriding the user's preference. */
