@@ -306,6 +306,25 @@
   --annotated-card-bg: rgba(6, 78, 59, 0.24);
   --annotated-card-border: rgba(52, 211, 153, 0.62);
   --annotated-card-glow: 0 4px 14px rgba(6, 78, 59, 0.16);
+
+  /* ---------- Acompanhamento de Chamados (app.css) ---------- */
+  --disclosure-chevron: #94a3b8; /* same value in both themes */
+  --ticket-identifier-label: var(--text-muted);
+  --ticket-rule: #1e293b;
+  --ticket-border: #334155;
+  /* Forecast (cyan) and late forecast (amber) on the process summary and stages. */
+  --forecast-fg: #a5f3fc;
+  --forecast-bg: rgba(8, 145, 178, 0.14);
+  --forecast-border: rgba(34, 211, 238, 0.45);
+  --forecast-late-fg: #fde68a;
+  --forecast-late-bg: rgba(217, 119, 6, 0.14);
+  --forecast-late-border: rgba(251, 191, 36, 0.5);
+  --stage-done-fg: #a7f3d0;
+  --stage-current-fg: #67e8f9;
+  --stage-current-bg: rgba(8, 145, 178, 0.1);
+  --stage-current-border: rgba(34, 211, 238, 0.4);
+  --oracle-description-rule: rgba(167, 139, 250, 0.45);
+  --oracle-description-toggle: #c4b5fd;
 }
 
 html[data-theme="light"] {
@@ -515,6 +534,22 @@ html[data-theme="light"] {
   --annotated-card-bg: #ecfdf5;
   --annotated-card-border: #6ee7b7;
   --annotated-card-glow: 0 4px 12px rgba(5, 150, 105, 0.12);
+
+  --ticket-identifier-label: #64748b;
+  --ticket-rule: #e2e8f0;
+  --ticket-border: #cbd5e1;
+  --forecast-fg: #0e7490;
+  --forecast-bg: #ecfeff;
+  --forecast-border: #67e8f9;
+  --forecast-late-fg: #92400e;
+  --forecast-late-bg: #fffbeb;
+  --forecast-late-border: #fcd34d;
+  --stage-done-fg: #047857;
+  --stage-current-fg: #0e7490;
+  --stage-current-bg: #ecfeff;
+  --stage-current-border: #67e8f9;
+  --oracle-description-rule: #c4b5fd;
+  --oracle-description-toggle: #6d28d9;
 }
 
 /* Components consume these timings instead of overriding the user's preference. */
