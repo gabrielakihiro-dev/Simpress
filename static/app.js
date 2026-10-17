@@ -16,6 +16,7 @@
     "regionalContacts",
     "transferForm",
     "equipmentSearch",
+    "fullEquipmentSearch",
     "unitsCatalog",
     "inventoryUpload",
     "comparisonResult",
@@ -45,6 +46,9 @@
     app,
     appState,
     dom: domUtils,
+    apiErrors: window.SimpressApiErrors,
+    equipmentSearchRenderer: window.SimpressEquipmentSearchRenderers,
+    comparisonResultRenderer: window.SimpressComparisonResultRenderer,
     historyFormat: window.SimpressHistoryFormat,
     ticketRules: window.SimpressTicketRules(domUtils),
     transferUtils: window.SimpressTransferUtils,
@@ -66,6 +70,7 @@
 
   const { escapeHtml, createTextElement, createIcon, highlightMatch, pluralize } = domUtils;
   publish({ escapeHtml, createTextElement, createIcon, highlightMatch, pluralize }, "dom");
+  publish({ createApiError: context.apiErrors.create }, "apiErrors");
   publish(context.historyFormat, "historyFormat");
   publish(context.ticketRules, "ticketRules");
   FEATURE_ORDER.forEach(name => {

@@ -7,6 +7,7 @@ const { appSource } = require("./support/app-sources.cjs");
 
 const appScript = appSource();
 const indexHtml = fs.readFileSync(path.join(__dirname, "..", "..", "static", "index.html"), "utf8");
+const appEntry = fs.readFileSync(path.join(__dirname, "..", "..", "static", "app-entry.js"), "utf8");
 const appCss = fs.readFileSync(path.join(__dirname, "..", "..", "static", "app.css"), "utf8");
 
 test("explains that history annotations belong to one row in one update", () => {
@@ -36,10 +37,10 @@ test("renders an annotation column in every requested comparison section", () =>
 });
 
 test("loads the bounded autosave retry helper before the application", () => {
-  const catalogScript = indexHtml.indexOf("/static/js/shared/catalog-search-utils.js");
-  const draftGuardScript = indexHtml.indexOf("/static/js/shared/form-draft-guard.js");
-  const retryScript = indexHtml.indexOf("/static/js/shared/history-annotation-autosave.js");
-  const appScriptTag = indexHtml.indexOf("/static/app.js");
+  const catalogScript = appEntry.indexOf('./js/shared/catalog-search-utils.js');
+  const draftGuardScript = appEntry.indexOf('./js/shared/form-draft-guard.js');
+  const retryScript = appEntry.indexOf('./js/shared/history-annotation-autosave.js');
+  const appScriptTag = appEntry.indexOf('./app.js');
   assert.notEqual(catalogScript, -1);
   assert.notEqual(draftGuardScript, -1);
   assert.notEqual(retryScript, -1);
