@@ -18,11 +18,11 @@
   const ticketTimelineRequests = new Map();
 
   const RELACOES_CHAMADO = {
-    conferida: ["OS conferida", "border-emerald-400/30 bg-emerald-500/10 text-emerald-200"],
-    divergente: ["OS divergente", "border-amber-400/30 bg-amber-500/10 text-amber-100"],
-    sem_os: ["OS ausente", "border-slate-600 bg-slate-800 text-slate-200"],
-    somente_simpress: ["Sem registro no Oracle", "border-sky-400/30 bg-sky-500/10 text-sky-100"],
-    somente_oracle: ["Sem pedido Simpress", "border-violet-400/30 bg-violet-500/10 text-violet-100"],
+    conferida: ["OS conferida", "chip-success"],
+    divergente: ["OS divergente", "chip-warning"],
+    sem_os: ["OS ausente", "chip-neutral"],
+    somente_simpress: ["Sem registro no Oracle", "chip-info"],
+    somente_oracle: ["Sem pedido Simpress", "chip-oracle"],
   };
   // Cards keep their open sections when the list is rendered again.
   const chaveSecaoCartao = (serial, section) => JSON.stringify([serial, section]);
@@ -357,8 +357,8 @@
       temValor(ordensVenda) ? `<span>${formatarListaChamados(ordensVenda)}</span>` : "",
     ].join("");
     const statusLinhas = [
-      temValor(simpress.status) ? `<p class="truncate text-xs text-cyan-100" title="Status Simpress: ${formatarListaChamados(simpress.status)}"><b>Simpress</b> · ${formatarListaChamados(simpress.status)}</p>` : "",
-      orderedOracle.length ? `<p class="truncate text-xs text-violet-100" title="Status Oracle: ${escapeHtml(oracleStatus)}"><b>Oracle</b> · ${escapeHtml(oracleStatus)}</p>` : "",
+      temValor(simpress.status) ? `<p class="truncate text-xs src-simpress-text" title="Status Simpress: ${formatarListaChamados(simpress.status)}"><b>Simpress</b> · ${formatarListaChamados(simpress.status)}</p>` : "",
+      orderedOracle.length ? `<p class="truncate text-xs src-oracle-text" title="Status Oracle: ${escapeHtml(oracleStatus)}"><b>Oracle</b> · ${escapeHtml(oracleStatus)}</p>` : "",
     ].join("");
     const triagem = [
       currentOracle.fila ? `<span>Fila: ${escapeHtml(currentOracle.fila)}</span>` : "",
@@ -378,8 +378,8 @@
             <div class="flex flex-wrap items-center gap-1.5"><span class="rounded-full border px-2 py-1 text-[11px] font-semibold ${relationClass}">${relationLabel}</span><span class="rounded-full border px-2 py-1 text-[11px] ${attentionClass}" title="${escapeHtml(updateAgeSummary)}">${escapeHtml(attentionLabel)}</span></div>
           </div>
           <div class="ticket-card-identifiers mt-2 grid grid-cols-1 gap-1.5 sm:grid-cols-2">
-            ${identificador("OS Simpress", currentSimpressOrder ? formatarOrdensServico([currentSimpressOrder]) : "", "border-cyan-400/20 bg-cyan-500/5")}
-            ${identificador("OS Oracle", currentOracle.ordem_servico ? escapeHtml(currentOracle.ordem_servico) : "", "border-violet-400/20 bg-violet-500/5")}
+            ${identificador("OS Simpress", currentSimpressOrder ? formatarOrdensServico([currentSimpressOrder]) : "", "src-simpress-soft")}
+            ${identificador("OS Oracle", currentOracle.ordem_servico ? escapeHtml(currentOracle.ordem_servico) : "", "src-oracle-soft")}
           </div>
           ${renderizarResumoProcessoPedido(simpress)}
           ${metaPedido ? `<div class="ticket-card-meta mt-2 flex flex-wrap items-center gap-x-3 gap-y-1 text-[11px] text-slate-300">${metaPedido}</div>` : ""}
@@ -389,11 +389,11 @@
             <summary class="ticket-disclosure-summary cursor-pointer text-xs font-semibold text-slate-200">Detalhes do chamado</summary>
             <div class="ticket-detail-grid">
               <section class="ticket-detail-section">
-                <h5 class="text-[11px] font-semibold uppercase tracking-wide text-cyan-200">Simpress</h5>
+                <h5 class="text-[11px] font-semibold uppercase tracking-wide src-simpress-text">Simpress</h5>
                 ${detalhesSimpress}
               </section>
               <section class="ticket-detail-section">
-                <h5 class="text-[11px] font-semibold uppercase tracking-wide text-violet-200">Oracle · solicitações e OS</h5>${oracleRows}
+                <h5 class="text-[11px] font-semibold uppercase tracking-wide src-oracle-text">Oracle · solicitações e OS</h5>${oracleRows}
               </section>
             </div>
           </details>
@@ -424,7 +424,7 @@
           ${linha("text-slate-400", [["Atendimento por", ticket.nome_filial]])}
           ${linha("text-slate-400", [["Entregas", ticket.status_entregas], ["Atividades", ticket.status_atividades], ["Atualizado", ticket.ultima_atualizacao && formatarHorarioHistorico(ticket.ultima_atualizacao)]])}
           <p class="mt-1 text-[11px] font-medium ${ageClass}">${escapeHtml(updateAge.rotulo)}</p>
-          ${String(ticket.descricao || "").trim() ? `<details class="ticket-oracle-description"><summary class="text-xs"><span class="shrink-0 font-semibold text-violet-200">Descrição do chamado</span><span class="ticket-oracle-description-preview">${escapeHtml(resumirDescricaoChamado(ticket.descricao))}</span><span class="ticket-oracle-description-toggle ticket-oracle-description-expand">⌄ Expandir</span><span class="ticket-oracle-description-toggle ticket-oracle-description-collapse">⌃ Recolher</span></summary><div class="ticket-oracle-description-content">${escapeHtml(String(ticket.descricao).trim())}</div></details>` : ""}
+          ${String(ticket.descricao || "").trim() ? `<details class="ticket-oracle-description"><summary class="text-xs"><span class="shrink-0 font-semibold src-oracle-text">Descrição do chamado</span><span class="ticket-oracle-description-preview">${escapeHtml(resumirDescricaoChamado(ticket.descricao))}</span><span class="ticket-oracle-description-toggle ticket-oracle-description-expand">⌄ Expandir</span><span class="ticket-oracle-description-toggle ticket-oracle-description-collapse">⌃ Recolher</span></summary><div class="ticket-oracle-description-content">${escapeHtml(String(ticket.descricao).trim())}</div></details>` : ""}
         </div>`;
   }
 

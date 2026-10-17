@@ -203,7 +203,7 @@
     }
   }
 
-  const CLASSE_BOTAO_HISTORICO = "w-full sm:w-auto h-9 inline-flex items-center justify-center px-3 rounded-lg border text-xs font-semibold transition";
+  const CLASSE_BOTAO_HISTORICO = "btn w-full sm:w-auto h-9";
 
   function chaveDiaHistorico(horario) {
     const data = String(horario || "").slice(0, 10);
@@ -353,7 +353,7 @@
     if (!restauracao) {
       const consultar = document.createElement("button");
       consultar.type = "button";
-      consultar.className = `${CLASSE_BOTAO_HISTORICO} bg-cyan-500/10 hover:bg-cyan-500/20 text-cyan-200 border-cyan-500/25`;
+      consultar.className = `${CLASSE_BOTAO_HISTORICO} btn-secondary-accent`;
       consultar.textContent = evento.somente_anotacoes_sincronizadas ? "Consultar anotações" : "Consultar resultado";
       consultar.addEventListener("click", () => consultarHistoricoComparacao(evento.id, consultar));
       acoes.appendChild(consultar);
@@ -362,7 +362,7 @@
     if (evento.restauravel) {
       const restaurar = document.createElement("button");
       restaurar.type = "button";
-      restaurar.className = `${CLASSE_BOTAO_HISTORICO} bg-amber-500/10 hover:bg-amber-500/20 text-amber-200 border-amber-500/25`;
+      restaurar.className = `${CLASSE_BOTAO_HISTORICO} btn-secondary`;
       restaurar.textContent = restauracao ? "Desfazer restauração" : "Restaurar versão anterior";
       restaurar.setAttribute("aria-label", `${restauracao ? "Desfazer restauração de" : "Restaurar versões anteriores à atualização de"} ${formatarHorarioHistorico(evento.horario)}`);
       restaurar.addEventListener("click", () => app.restaurarHistoricoComparacao(evento, restaurar));
@@ -372,7 +372,7 @@
     if (!evento.somente_anotacoes_sincronizadas) {
       const excluir = document.createElement("button");
       excluir.type = "button";
-      excluir.className = `${CLASSE_BOTAO_HISTORICO} bg-transparent hover:bg-rose-500/10 text-rose-300 border-rose-500/30`;
+      excluir.className = `${CLASSE_BOTAO_HISTORICO} btn-danger-ghost`;
       excluir.textContent = "Excluir";
       excluir.setAttribute("aria-label", `Excluir atualização de ${formatarHorarioHistorico(evento.horario)}`);
       excluir.addEventListener("click", () => excluirHistoricoComparacao(evento, excluir));
