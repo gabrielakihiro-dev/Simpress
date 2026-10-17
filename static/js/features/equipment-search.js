@@ -748,7 +748,7 @@
     document.getElementById("card-localizacao").textContent = app.formatarLocalAtual(eq);
     document.getElementById("card-cnpj-atual").textContent = `CNPJ: ${eq.retirada_cnpj || 'Não especificado'}`;
 
-    // Type is shown as text in the neutral chip; the icon only changes shape.
+    // Type is shown as text in the chip; the icon only changes shape.
     const iconBox = document.getElementById("equip-icon-box");
     const icon = document.getElementById("equip-icon");
     // Literal setAttribute calls keep each icon in the generated Lucide subset.
