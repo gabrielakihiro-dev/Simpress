@@ -41,7 +41,7 @@
       <div class="sidebar-scroll-area">
         <div class="sidebar-primary-action">
           <div class="header-primary-actions">
-            <button type="button" data-on-click="resetarFormulario" id="btn-nova-transferencia" aria-label="Nova transferência" class="header-primary-icon-button sidebar-new-transfer flex items-center justify-center text-sky-100 bg-sky-700 hover:bg-sky-600 border border-sky-500/70 rounded-lg transition-all shadow-sm" title="Nova transferência">
+            <button type="button" data-on-click="resetarFormulario" id="btn-nova-transferencia" aria-label="Nova transferência" class="header-primary-icon-button sidebar-new-transfer btn-primary flex items-center justify-center rounded-lg" title="Nova transferência">
               <i data-lucide="rotate-ccw" class="w-4 h-4" aria-hidden="true"></i>
               <span class="sidebar-item-label">Nova transferência</span>
             </button>
@@ -142,6 +142,7 @@
         <span class="readiness-summary-copy">
           <span id="readiness-title" class="readiness-title">Disponibilidade das funções</span>
           <span id="readiness-summary" class="readiness-status" role="status" aria-live="polite" aria-atomic="true">Verificando os arquivos locais…</span>
+          <span id="readiness-summary-short" class="readiness-status-short" aria-hidden="true">Verificando…</span>
         </span>
       </summary>
       <div id="readiness-content" class="readiness-expanded-content">
@@ -169,7 +170,7 @@
               aria-expanded="false"
               aria-haspopup="listbox"
               autocomplete="off"
-              placeholder="Série, apelido, modelo ou cidade..."
+              placeholder="Ex.: BRJ1234 ou Curitiba"
               class="home-search-input w-full rounded-xl glass-input text-white font-mono tracking-wider placeholder:text-slate-500 placeholder:font-sans focus:outline-none uppercase"
               data-on-input="handleSerialInput" data-args='["$value"]'
               data-on-keydown="handleSerialKeydown" data-args='["$event"]'
@@ -189,7 +190,7 @@
           <button
             type="submit"
             id="btn-buscar-serial"
-            class="home-search-button bg-brand-600 hover:bg-brand-500 text-white font-bold rounded-xl transition-all duration-200 flex items-center justify-center shadow-lg shadow-brand-600/30 shrink-0"
+            class="home-search-button btn-primary font-bold rounded-xl flex items-center justify-center shrink-0"
           >
             <i data-lucide="search" class="w-5 h-5"></i>
             <span>Buscar equipamento</span>
@@ -940,7 +941,7 @@ Horário disponível para atendimento:</textarea>
             data-on-click="gerarPlanilhaExcel"
             aria-keyshortcuts="Control+Enter"
             title="Gerar Planilha (Ctrl+Enter)"
-            class="px-6 py-2.5 rounded-xl bg-gradient-to-r from-emerald-600 to-teal-500 hover:from-emerald-500 hover:to-teal-400 text-white font-bold text-xs sm:text-sm flex items-center space-x-2.5 shadow-glow-emerald transition-all"
+            class="btn-primary px-6 py-2.5 rounded-xl font-bold text-xs sm:text-sm flex items-center space-x-2.5"
           >
             <i data-lucide="file-spreadsheet" class="w-4 h-4"></i>
             <span>Gerar Planilha</span>

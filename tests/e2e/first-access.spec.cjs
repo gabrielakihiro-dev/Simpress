@@ -37,8 +37,17 @@ test("first access centralizes the inventory import and keeps calls separate", a
   expect(readinessResponse.status()).toBe(200);
   const panel = page.locator("#readiness-panel");
   await expect(panel).toHaveAttribute("aria-busy", "false", { timeout: 20_000 });
-  await expect(panel).toHaveAttribute("open", "");
   await expect(page.locator("#readiness-summary")).toContainText("Nenhum dos 5 arquivos está disponível");
+  if (page.viewportSize().width <= 640) {
+    // Phones start closed with a one-line summary, so the search stays above the fold.
+    await expect(panel).not.toHaveAttribute("open", "");
+    await expect(page.locator("#readiness-summary-short")).toBeVisible();
+    await expect(page.locator("#readiness-summary-short")).toHaveText("5 pendentes");
+    expect((await page.locator(".readiness-panel-summary").boundingBox()).height).toBeLessThanOrEqual(48);
+    await panel.locator(":scope > summary").click();
+  }
+  await expect(panel).toHaveAttribute("open", "");
+  await expect(page.locator("#readiness-summary-short")).toBeHidden();
   await expect(panel.getByRole("button", { name: /Importar/ })).toHaveCount(3);
   await expect(panel).not.toContainText("Catálogos e históricos locais");
   await expect(panel.getByRole("heading", { name: "Ações com inventário" })).toHaveCount(0);
@@ -94,6 +103,8 @@ test("model import handles failure and refreshes availability after success", as
     return route.fulfill({ json: { sucesso: true } });
   });
   await page.goto("/");
+  await expect(page.locator("#readiness-panel")).toHaveAttribute("aria-busy", "false");
+  if (page.viewportSize().width <= 640) await page.locator("#readiness-panel > summary").click();
   const exportModelGroup = page.locator(".readiness-group").filter({
     has: page.getByRole("heading", { name: "Modelo de exportação" }),
   });
