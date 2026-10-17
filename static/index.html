@@ -161,7 +161,7 @@
             <input
               type="text"
               id="input-serial"
-              aria-keyshortcuts="/ Control+K"
+              aria-keyshortcuts="/ Control+K Meta+K"
               role="combobox"
               aria-label="Série, apelido, modelo ou cidade do equipamento"
               aria-autocomplete="list"
@@ -184,6 +184,7 @@
             >
               <i data-lucide="x" class="w-5 h-5"></i>
             </button>
+            <kbd class="home-search-shortcut" aria-hidden="true" title="Atalho: / ou Ctrl+K">/</kbd>
           </div>
 
           <button
@@ -475,6 +476,15 @@ Horário disponível para atendimento:</textarea>
           </div>
         </section>
       </div>
+    </section>
+
+    <!-- PESQUISAS RECENTES (localStorage do navegador; oculta enquanto vazia) -->
+    <section id="home-recentes" class="home-recent glass-card rounded-2xl" aria-labelledby="home-recentes-titulo" hidden>
+      <div class="home-recent-header">
+        <h2 id="home-recentes-titulo" class="home-recent-title">Pesquisas recentes</h2>
+        <button type="button" id="btn-limpar-recentes" class="btn btn-tertiary" data-on-click="limparPesquisasRecentes" aria-label="Limpar pesquisas recentes">Limpar</button>
+      </div>
+      <ul id="home-recentes-lista" class="home-recent-list"></ul>
     </section>
 
     </section>
@@ -1628,6 +1638,7 @@ Horário disponível para atendimento:</textarea>
   <script src="/static/js/ui/action-dispatcher.js"></script>
   <script src="/static/js/shared/dom-utils.js"></script>
   <script src="/static/js/shared/catalog-search-utils.js"></script>
+  <script src="/static/js/shared/recent-equipment.js"></script>
   <script src="/static/js/shared/form-draft-guard.js"></script>
   <script src="/static/js/shared/transfer-utils.js"></script>
   <script src="/static/js/shared/history-annotation-autosave.js"></script>
