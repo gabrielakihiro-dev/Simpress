@@ -37,12 +37,8 @@ function listFiles(relativeDir, extension, { recursive = false, prefix = "", exc
 }
 
 const PYTHON_COMPILE_TARGETS = [
-  "core/config.py",
+  "core",
   "main.py",
-  "core/integrity.py",
-  "core/openpyxl_compat.py",
-  "core/xlsx_safety.py",
-  "core/logging_setup.py",
   "domains",
   "routers",
   "security",
@@ -50,29 +46,13 @@ const PYTHON_COMPILE_TARGETS = [
   "tests/support/serve_ui_motion_preview.py",
 ];
 
-// Escopo gradual de tipos: amplie esta lista conforme os módulos forem tipados.
+// Todos os módulos da aplicação; scripts de manutenção mantêm a cobertura anterior.
 const MYPY_TARGETS = [
-  "core/config.py",
-  "main.py",
-  "core/integrity.py",
-  "core/logging_setup.py",
-  "core/openpyxl_compat.py",
-  "core/xlsx_safety.py",
-  "domains/history_export.py",
-  "domains/history_restore.py",
-  "domains/inventory_comparison.py",
-  "domains/inventory_update.py",
-  "domains/equipment_search.py",
-  "domains/effective_alias.py",
-  "domains/uploaded_workbooks.py",
-  "domains/readiness.py",
-  "routers/inventory_history.py",
-  "routers/transfers.py",
-  "routers/equipment_search.py",
-  "routers/system.py",
-  "routers/units.py",
-  "core/inventory_requests.py",
+  "core",
+  "domains",
+  "routers",
   "security",
+  "main.py",
   "scripts/migrate_local_data.py",
   "scripts/cleanup_local_temps.py",
 ];
@@ -144,4 +124,4 @@ function main() {
 
 if (require.main === module) main();
 
-module.exports = { javascriptFilesToCheck, listFiles };
+module.exports = { buildSteps, javascriptFilesToCheck, listFiles };

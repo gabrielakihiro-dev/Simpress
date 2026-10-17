@@ -125,6 +125,7 @@ __pycache__/
 **/.*.xlsx.*.tmp
 **/.*.xlsm.*.tmp
 **/.*.json.*.tmp
+**/.temp-quarantine/
 
 # Local server logs and inventory update receipts are runtime state.
 /data/logs/

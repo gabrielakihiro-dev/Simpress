@@ -7,6 +7,7 @@ from typing import Any, Dict, List, Optional, Tuple
 from core.xlsx_safety import set_cell_value_as_text
 from domains.history_annotations import annotation_export_text
 from domains.history_restore import comparison_event_type
+from domains.inventory_comparison import _comparison_source_text_for_display
 
 import openpyxl
 from openpyxl.styles import Alignment, Border, Font, PatternFill, Side
@@ -33,26 +34,21 @@ def _export_text(value: Any) -> str:
     return str(value)[:32767]
 
 
-def _history_display_text(value: Any) -> str:
-    """Mask legacy source names in history exports while keeping stored filenames intact."""
-    text = _export_text(value)
-    text = re.sub(r"\b(?:na|no|da|do|à|ao|pela|pelo|a|o)\s*InvAll", "no endpoint", text, flags=re.IGNORECASE)
-    text = re.sub(r"InvAll", "no endpoint", text, flags=re.IGNORECASE)
-    text = re.sub(
-        r"(?<![\w.-])(?:no\s+)?Endpoint(?![\w.-])",
-        "no endpoint",
-        text,
-        flags=re.IGNORECASE,
-    )
-    text = re.sub(r"\b(?:em|de|da|do|na|no|a|à|pela|pelo)\s*EquipamentosDetalhes", "na Simpress", text, flags=re.IGNORECASE)
-    text = re.sub(r"EquipamentosDetalhes", "na Simpress", text, flags=re.IGNORECASE)
-    return re.sub(r"\b(?:na\s+)?Simpress\b", "na Simpress", text, flags=re.IGNORECASE)
-
-
 def _history_display_files(value: Any) -> Dict[str, str]:
     if not isinstance(value, dict):
         return {}
-    return {key: _history_display_text(name) for key, name in value.items() if isinstance(key, str)}
+    return {
+        key: _comparison_source_text_for_display(_export_text(name))
+        for key, name in value.items() if isinstance(key, str)
+    }
+
+
+def _history_section_text(value: Any, *, bare_sources: bool = False) -> str:
+    text = _comparison_source_text_for_display(_export_text(value))
+    if bare_sources:
+        text = re.sub(r"\bno endpoint\b", "Endpoint", text, flags=re.IGNORECASE)
+        return re.sub(r"\bna Simpress\b", "Simpress", text, flags=re.IGNORECASE)
+    return re.sub(r"\bno endpoint\b", "no Endpoint", text, flags=re.IGNORECASE)
 
 
 def _export_datetime(value: Any) -> Optional[datetime]:
@@ -276,7 +272,7 @@ def build_history_export_workbook(
     selected_date: date,
 ) -> Tuple[BytesIO, str]:
     """Build the history workbook for one day; returns the rewound stream and its filename."""
-    display_events.sort(key=_export_event_timestamp)
+    display_events = sorted(display_events, key=_export_event_timestamp)
 
     event_counts = {"atualizacao": 0, "restauracao": 0}
     category_counts = {
@@ -346,8 +342,8 @@ def build_history_export_workbook(
             timestamp,
             event_type_label,
             event_id,
-            _history_display_text(endpoint_file),
-            _history_display_text(simpress_file),
+            _comparison_source_text_for_display(_export_text(endpoint_file)),
+            _comparison_source_text_for_display(_export_text(simpress_file)),
             comparison.get("total_endpoint", summary.get("total_endpoint")),
             comparison.get("total_detalhes", summary.get("total_detalhes")),
             comparison.get("total_equipamentos_carregados", summary.get("total_equipamentos_carregados")),
@@ -372,13 +368,13 @@ def build_history_export_workbook(
                 item.get("apelido_equipamentos_detalhes"),
                 item.get("apelido_novo") or item.get("apelido_invall"),
                 _export_datetime(item.get("horario")), "Concluído", "",
-                _history_display_text(item.get("arquivos_origem")), "",
+                _comparison_source_text_for_display(_export_text(item.get("arquivos_origem"))), "",
             ))
         for index, item in enumerate(alias_reviews):
             alias_rows.append((
                 timestamp, event_type_label, "Para conferência",
                 item.get("serie"), item.get("computador"), "", "", "", None,
-                "Pendente", item.get("motivo"), "",
+                "Pendente", _history_section_text(item.get("motivo") or "Conferir associação."), "",
                 _export_note(comparison, "apelidos_sem_atualizacao", index, item),
             ))
         manual_status = {
@@ -406,7 +402,13 @@ def build_history_export_workbook(
             for index, item in enumerate(items):
                 absence_rows.append((
                     timestamp, category,
-                    _export_text(item.get("ausente_em") or item.get("fonte_ausente") or missing_source),
+                    ", ".join(
+                        _history_section_text(source, bare_sources=True)
+                        for source in (
+                            item["ausente_em"] if isinstance(item.get("ausente_em"), list)
+                            else [item.get("ausente_em") or item.get("fonte_ausente") or missing_source]
+                        ) if source
+                    ),
                     item.get("computador"), item.get("serie"), item.get("local_previsto"),
                     _export_note(comparison, note_category, index, item),
                 ))
@@ -436,7 +438,7 @@ def build_history_export_workbook(
             for source in item.get("fontes") or []:
                 if not isinstance(source, dict):
                     continue
-                label = _export_text(source.get("fonte"))
+                label = _history_section_text(source.get("fonte"), bare_sources=True)
                 if source.get("quantidade"):
                     label += f" ({source['quantidade']} registros)"
                 elif source.get("serie"):
@@ -445,13 +447,14 @@ def build_history_export_workbook(
             note = _export_note(comparison, "ambiguidades", index, item)
             ambiguity_rows.append((
                 timestamp, item.get("tipo") or "Ambiguidade",
-                item.get("chave"), "; ".join(sources), item.get("mensagem"),
+                item.get("chave"), "; ".join(sources),
+                _history_section_text(item.get("mensagem"), bare_sources=True),
                 note,
             ))
         for index, item in enumerate(ambiguous_records, start=len(ambiguities)):
             ambiguous_sources = item.get("fontes") or {}
             source_summary = "; ".join(
-                str(source) for source, status in ambiguous_sources.items()
+                _history_section_text(source, bare_sources=True) for source, status in ambiguous_sources.items()
                 if status == "ambíguo"
             ) if isinstance(ambiguous_sources, dict) else ""
             record_key = f"{item.get('computador') or 'Sem hostname'} · {item.get('serie') or 'Sem série'}"
@@ -464,7 +467,7 @@ def build_history_export_workbook(
             note = "\n".join(value for value in notes if value)
             ambiguity_rows.append((
                 timestamp, "Presença ambígua", record_key,
-                source_summary, item.get("motivo"), note,
+                source_summary, _history_section_text(item.get("motivo"), bare_sources=True), note,
             ))
 
     detail_total = sum(category_counts.values())
@@ -489,7 +492,7 @@ def build_history_export_workbook(
     _write_export_table_sheet(
         workbook, "Apelidos", "Apelidos e hostnames",
         "Atualizações, linhas que precisam de conferência e divergências manuais registradas.",
-        ["Data e hora", "Operação", "Categoria", "Série", "Hostname/Apelido",
+        ["Data e hora", "Operação", "Categoria", "Série", "Hostname no Endpoint",
          "Apelido anterior/manual", "Apelido na Simpress", "Apelido no endpoint/novo", "Horário da alteração",
          "Situação", "Motivo", "Arquivos de origem", "Anotação"],
         alias_rows, "tblHistoricoApelidos",

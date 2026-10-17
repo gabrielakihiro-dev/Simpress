@@ -152,27 +152,28 @@ COMPARISON_AMBIGUITY_SOURCE_LABELS = {
 
 def _comparison_source_text_for_display(value: str) -> str:
     """Atualiza apenas textos de apresentação, preservando arquivos e dados de origem."""
-    value = re.sub(
-        r"\b(?:na|no|da|do|à|ao|pela|pelo|a|o)\s*InvAll",
-        "no endpoint",
-        value,
-        flags=re.IGNORECASE,
+    def replace_source(match: re.Match[str]) -> str:
+        simpress = match["source"].lower() in ("simpress", "equipamentosdetalhes")
+        name = "Simpress" if simpress else "Endpoint"
+        preposition = match["preposition"] or ""
+        if match["filename"]:
+            filename_source = name if match["source"].lower() in ("invall", "equipamentosdetalhes") else match["source"]
+            return preposition + filename_source + match["filename"]
+        if not preposition and match.start() and value[match.start() - 1] in "_.-":
+            return match[0]  # Preserve identifiers such as PRNOTE-ENDPOINT.
+        if match["source"].lower() in ("invall", "equipamentosdetalhes"):
+            # Legacy prose uses the approved source label (including old "na InvAll").
+            return "na Simpress" if simpress else "no endpoint"
+        if preposition:
+            return preposition + ("endpoint" if not simpress and preposition.strip().lower() == "no" else name)
+        return "na Simpress" if simpress else "no endpoint"
+
+    return re.sub(
+        r"(?<![^\W_])(?P<preposition>(?:de|da|do|das|dos|na|no|pela|pelo|em|à|ao|a|o)\s+)?"
+        r"(?P<source>EquipamentosDetalhes|InvAll|Simpress|Endpoint)"
+        r"(?P<filename>[\w.-]*(?: \(\d+\))?\.[a-z0-9]{1,10}\b)?(?![\w-]|\.\w)",
+        replace_source, value, flags=re.IGNORECASE,
     )
-    value = re.sub(r"InvAll", "no endpoint", value, flags=re.IGNORECASE)
-    value = re.sub(
-        r"(?<![\w.-])(?:no\s+)?Endpoint(?![\w.-])",
-        "no endpoint",
-        value,
-        flags=re.IGNORECASE,
-    )
-    value = re.sub(
-        r"\b(?:em|de|da|do|na|no|a|à|pela|pelo)\s*EquipamentosDetalhes",
-        "na Simpress",
-        value,
-        flags=re.IGNORECASE,
-    )
-    value = re.sub(r"EquipamentosDetalhes", "na Simpress", value, flags=re.IGNORECASE)
-    return re.sub(r"\b(?:na\s+)?Simpress\b", "na Simpress", value, flags=re.IGNORECASE)
 
 def _comparison_source_records(table: Dict[str, Any], role: str) -> List[Dict[str, Any]]:
     """Converts source-specific columns to a shared, comparison-only record shape."""
