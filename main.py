@@ -3215,17 +3215,48 @@ def _dashboard_equipment_snapshot() -> List[Dict[str, Any]]:
         ]
 
 
+def _comparison_history_signature() -> Optional[tuple]:
+    try:
+        stat = COMPARISON_HISTORY_FILE.stat()
+    except OSError:
+        return None
+    return (str(COMPARISON_HISTORY_FILE.resolve(strict=False)), stat.st_size, stat.st_mtime_ns, stat.st_ctime_ns)
+
+
+# The panel's absence list of the newest event, kept while the history file signature
+# and the event id match, so each refresh of the panel does not reparse the whole history.
+_DASHBOARD_DETAILS_CACHE: Optional[tuple] = None
+_DASHBOARD_DETAILS_CACHE_LOCK = threading.Lock()
+
+
+def _dashboard_event_details(event_id: str) -> Optional[Dict[str, Any]]:
+    global _DASHBOARD_DETAILS_CACHE
+    signature = _comparison_history_signature()
+    with _DASHBOARD_DETAILS_CACHE_LOCK:
+        cached = _DASHBOARD_DETAILS_CACHE
+    if signature is not None and cached is not None and cached[:2] == (signature, event_id):
+        return deepcopy(cached[2])
+    details = None
+    for item in load_comparison_history():
+        if isinstance(item, dict) and str(item.get("id") or "") == event_id and isinstance(item.get("comparacao"), dict):
+            details = {"ausentes_no_endpoint": item["comparacao"].get("ausentes_no_endpoint")}
+            break
+    # A write between the two stats may have been read halfway; cache only a stable file.
+    if signature is not None and signature == _comparison_history_signature():
+        with _DASHBOARD_DETAILS_CACHE_LOCK:
+            _DASHBOARD_DETAILS_CACHE = (signature, event_id, deepcopy(details))
+    return details
+
+
 def _dashboard_comparison_events() -> List[Dict[str, Any]]:
     eventos = get_historico_comparacoes()["eventos"]
     if not eventos:
         return eventos
     # The list endpoint omits the detailed comparison; the panel only reads the newest event,
     # so only that event receives the endpoint absence list needed for the notebook/MacBook count.
-    newest_id = str(eventos[0].get("id") or "")
-    for item in load_comparison_history():
-        if isinstance(item, dict) and str(item.get("id") or "") == newest_id and isinstance(item.get("comparacao"), dict):
-            details = {"ausentes_no_endpoint": item["comparacao"].get("ausentes_no_endpoint")}
-            return [{**eventos[0], "comparacao": details}, *eventos[1:]]
+    details = _dashboard_event_details(str(eventos[0].get("id") or ""))
+    if details is not None:
+        return [{**eventos[0], "comparacao": details}, *eventos[1:]]
     return eventos
 
 
