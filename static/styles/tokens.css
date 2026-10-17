@@ -264,6 +264,16 @@
   --readiness-invalid-border: rgba(251, 113, 133, 0.22);
   --readiness-import-bg: rgba(14, 165, 233, 0.1);
   --readiness-import-hover-bg: rgba(14, 165, 233, 0.22);
+
+  /* ---------- Transporte (app.css) ---------- */
+  --required-mark: #fb7185;
+  /* Pickup and delivery card icons. */
+  --transfer-pickup-fg: #fbbf24;
+  --transfer-pickup-bg: rgba(251, 191, 36, 0.14);
+  --transfer-pickup-border: rgba(251, 191, 36, 0.45);
+  --transfer-delivery-fg: #34d399;
+  --transfer-delivery-bg: rgba(52, 211, 153, 0.14);
+  --transfer-delivery-border: rgba(52, 211, 153, 0.45);
 }
 
 html[data-theme="light"] {
@@ -445,6 +455,14 @@ html[data-theme="light"] {
   --readiness-invalid-border: #fda4af;
   --readiness-import-bg: #f0f9ff;
   --readiness-import-hover-bg: #e0f2fe;
+
+  --required-mark: #be123c;
+  --transfer-pickup-fg: #b45309;
+  --transfer-pickup-bg: #fffbeb;
+  --transfer-pickup-border: #fcd34d;
+  --transfer-delivery-fg: #047857;
+  --transfer-delivery-bg: #ecfdf5;
+  --transfer-delivery-border: #6ee7b7;
 }
 
 /* Components consume these timings instead of overriding the user's preference. */

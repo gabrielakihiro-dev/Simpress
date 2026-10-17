@@ -165,17 +165,14 @@
       cursor: not-allowed; opacity: 1; border-style: dashed; background: var(--surface-sunken); color: var(--text-muted);
     }
     .btn-chip:disabled:hover { border-color: var(--border-strong); }
-    .required-mark { color: #fb7185; font-weight: 700; }
-    html[data-theme="light"] .required-mark { color: #be123c; }
+    .required-mark { color: var(--required-mark); font-weight: 700; }
     .transfer-card-icon {
       display: flex; align-items: center; justify-content: center; flex: none; width: 2.25rem; height: 2.25rem;
       border: 1px solid var(--border-strong); border-radius: 0.5rem; background: var(--surface-raised); color: var(--text-muted);
     }
     .transfer-card-icon svg { width: 1.25rem; height: 1.25rem; }
-    .transfer-card-icon-pickup { border-color: rgba(251, 191, 36, 0.45); background: rgba(251, 191, 36, 0.14); color: #fbbf24; }
-    .transfer-card-icon-delivery { border-color: rgba(52, 211, 153, 0.45); background: rgba(52, 211, 153, 0.14); color: #34d399; }
-    html[data-theme="light"] .transfer-card-icon-pickup { border-color: #fcd34d; background: #fffbeb; color: #b45309; }
-    html[data-theme="light"] .transfer-card-icon-delivery { border-color: #6ee7b7; background: #ecfdf5; color: #047857; }
+    .transfer-card-icon-pickup { border-color: var(--transfer-pickup-border); background: var(--transfer-pickup-bg); color: var(--transfer-pickup-fg); }
+    .transfer-card-icon-delivery { border-color: var(--transfer-delivery-border); background: var(--transfer-delivery-bg); color: var(--transfer-delivery-fg); }
     .transfer-form-grid { align-items: start; }
     .quick-actions-link { white-space: nowrap; }
     /* Tailwind's slate-500 is below AA contrast on the dark surfaces. */
