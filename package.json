@@ -2,6 +2,7 @@
   "name": "simpress-local-ui-assets",
   "private": true,
   "scripts": {
+    "verify": "node scripts/verify.cjs",
     "test:ui:e2e": "playwright test",
     "profile:ui": "playwright test --project=desktop-profile",
     "build:ui": "node scripts/build/copy_ui_assets.cjs && tailwindcss --input static/styles/tailwind.input.css --output static/vendor/tailwind-4.3.3.css --minify"

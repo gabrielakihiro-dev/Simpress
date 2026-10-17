@@ -317,9 +317,11 @@ class MaintenanceContractTests(unittest.TestCase):
         main_source = (PROJECT_ROOT / "main.py").read_text(encoding="utf-8")
         self.assertNotIn("globals().update", main_source)
         workflow = (PROJECT_ROOT / ".github" / "workflows" / "ci.yml").read_text(encoding="utf-8")
-        self.assertIn("tests/run_tests.py", workflow)
-        self.assertIn("tests/frontend/test_transfer_workflows.cjs tests/frontend/test_inventory_ui_flows.cjs", workflow)
-        self.assertIn("scripts/check_secrets.py", workflow)
+        self.assertIn("node scripts/verify.cjs", workflow)
+        verify_script = (PROJECT_ROOT / "scripts" / "verify.cjs").read_text(encoding="utf-8")
+        self.assertIn("tests/run_tests.py", verify_script)
+        self.assertIn('listFiles("tests/frontend", ".cjs", { prefix: "test_" })', verify_script)
+        self.assertIn("scripts/check_secrets.py", verify_script)
 
     def test_transfer_contact_is_configured_and_workbook_metadata_is_anonymized(self):
         defaults = main.get_transfer_form_defaults()
