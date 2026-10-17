@@ -464,21 +464,27 @@ test("transfer tab shows the selected serial with its copy action in the upper f
   });
   harness.run("limparSelecaoEquipamento()");
   harness.run('ativarAbaTransferencia("transferencia")');
-  assert.equal(harness.element("transfer-serial").value, "");
+  assert.equal(harness.element("transfer-serial").textContent, "");
   assert.equal(harness.element("btn-copiar-serie").disabled, true);
 
   harness.selectEquipment({ serial: "brj5512fgd", modelo: "HP 640 G11", tipo: "Notebook" });
   harness.run('ativarAbaTransferencia("transferencia")');
-  assert.equal(harness.element("transfer-serial").value, "BRJ5512FGD");
+  assert.equal(harness.element("transfer-serial").textContent, "BRJ5512FGD");
   assert.equal(harness.element("transfer-equipment-banner").dataset.state, "selected");
   assert.equal(harness.element("transfer-equipment-description").textContent, "HP 640 G11 · Notebook");
-  assert.equal(harness.element("transfer-serial-status").textContent, "Copiar");
+  assert.match(appHtml, /<span id="transfer-serial-status">Copiar<\/span>/);
   assert.equal(harness.element("btn-copiar-serie").disabled, false);
 });
 
-test("clicking an empty transfer serial opens Home and focuses equipment search", () => {
-  assert.match(appHtml, /id="transfer-serial"[\s\S]*?data-on-click="abrirHomeParaPesquisarEquipamento"/);
-  assert.match(appCss, /\.transfer-equipment-banner\[data-state="empty"\][^{]*\{[^}]*cursor:\s*pointer/s);
+test("the empty transfer banner offers a real button that opens Home and focuses equipment search", () => {
+  assert.match(appHtml, /<button[^>]*id="btn-pesquisar-equipamento-home"[^>]*data-on-click="abrirHomeParaPesquisarEquipamento"[^>]*data-show="empty"/);
+  assert.match(appHtml, /<span id="transfer-serial"/);
+  assert.doesNotMatch(appHtml, /<input[^>]*id="transfer-serial"/);
+  assert.match(appHtml, /id="btn-copiar-serie"[^>]*aria-label="Copiar série"/);
+  assert.match(appCss, /\.transfer-equipment-banner\[data-state="empty"\] \[data-show="selected"\]/);
+  assert.match(appCss, /\.transfer-equipment-banner\[data-state="selected"\] \[data-show="empty"\] \{ display: none; \}/);
+  const header = appHtml.slice(appHtml.indexOf('class="transfer-equipment-header"'), appHtml.indexOf('class="transfer-equipment-body"'));
+  assert.match(header, /id="btn-historico-transferencias"/);
 
   const harness = createAppHarness(async () => {
     throw new Error("Opening the search must not call the API");
@@ -492,7 +498,7 @@ test("clicking an empty transfer serial opens Home and focuses equipment search"
   assert.equal(harness.element("input-serial").focused, true);
 });
 
-test("clicking a selected transfer serial keeps the transfer tab active", () => {
+test("the Home search action does nothing while a serial is selected", () => {
   const harness = createAppHarness(async () => {
     throw new Error("Clicking a selected serial must not call the API");
   });
