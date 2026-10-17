@@ -188,7 +188,8 @@ button[data-copy-state="warning"], button[data-copy-state="error"] { animation: 
 .ux-pending-chip-action { opacity: 0.85; font-weight: 600; }
 .ux-pending-chip[data-status="success"] .ux-pending-chip-action { display: none; }
 @media (pointer: coarse) { .ux-pending-chip { min-height: 44px; } }
-@media (max-width: 640px) { .ux-pending-chip-action { display: none; } }
+@media (max-width: 1439px) { .ux-pending-chip-action { display: none; } }
+@media (min-width: 768px) { #btn-gerar-planilha { white-space: nowrap; } }
 
 /* Light theme: pre-existing axe color-contrast failures in the delivery card. */
 html[data-theme="light"] .transfer-form-grid h2 > .text-emerald-300 { color: #065f46; }

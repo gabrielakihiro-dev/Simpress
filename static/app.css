@@ -124,16 +124,21 @@
     .btn-tertiary:hover { background: var(--surface-sunken); color: var(--text); }
     .btn-icon { min-width: 2.25rem; padding: 0.4rem; }
     button:disabled { cursor: wait; opacity: 0.72; }
-    #btn-copiar-cnpj-instalacao-entrega:disabled {
-      cursor: not-allowed;
-      opacity: 0.42;
-      background-color: rgba(30, 41, 59, 0.8);
-      color: #cbd5e1;
+    /* Compact action chips (CNPJ, quick notes, history): neutral surface, readable when disabled. */
+    .btn-chip { min-height: 2.25rem; padding: 0.3rem 0.65rem; }
+    .btn-chip:disabled, .btn-chip[aria-disabled="true"] {
+      cursor: not-allowed; opacity: 1; border-style: dashed; background: var(--surface-sunken); color: var(--text-muted);
     }
-    #btn-copiar-cnpj-instalacao-entrega:disabled:hover {
-      background-color: rgba(30, 41, 59, 0.8);
-      color: #cbd5e1;
+    .btn-chip:disabled:hover { border-color: var(--border-strong); }
+    .required-mark { color: #fb7185; font-weight: 700; }
+    html[data-theme="light"] .required-mark { color: #be123c; }
+    .transfer-card-icon {
+      display: flex; align-items: center; justify-content: center; flex: none; width: 2.25rem; height: 2.25rem;
+      border: 1px solid var(--border-strong); border-radius: 0.5rem; background: var(--surface-raised); color: var(--text-muted);
     }
+    .transfer-card-icon svg { width: 1.25rem; height: 1.25rem; }
+    .transfer-form-grid { align-items: start; }
+    .quick-actions-link { white-space: nowrap; }
     /* Tailwind's slate-500 is below AA contrast on the dark surfaces. */
     .text-slate-500 { color: var(--text-muted); }
     .skip-link {
@@ -288,7 +293,7 @@
       font-family: inherit; font-size: 0.625rem; font-weight: 750; letter-spacing: 0.035em; text-transform: uppercase;
       cursor: pointer; transition: border-color var(--motion-fast) var(--motion-ease), background-color var(--motion-fast) var(--motion-ease), color var(--motion-fast) var(--motion-ease), transform var(--motion-fast) var(--motion-ease);
     }
-    .transfer-serial-status:disabled { cursor: not-allowed; opacity: 0.72; }
+    .transfer-serial-status:disabled { cursor: not-allowed; opacity: 1; }
     .transfer-equipment-banner[data-state="selected"] .transfer-serial-status:hover:not(:disabled) { border-color: rgba(110, 231, 183, 0.7); background: rgba(16, 185, 129, 0.22); transform: translateY(-1px); }
     .transfer-equipment-banner[data-state="selected"] .transfer-serial-field > label { color: #6ee7b7; }
     .transfer-equipment-banner[data-state="selected"] .transfer-serial-input-wrap { border-color: rgba(52, 211, 153, 0.52); background: rgba(2, 44, 34, 0.48); box-shadow: var(--focus-shadow, 0 0 0 3px rgba(16, 185, 129, 0.08), inset 0 1px rgba(255, 255, 255, 0.035)); color: #6ee7b7; }
@@ -764,7 +769,9 @@
       .quick-actions { padding: 0.65rem 0.75rem max(0.65rem, env(safe-area-inset-bottom)); }
       .quick-actions-inner { align-items: stretch; gap: 0.55rem; }
       .quick-actions-status { gap: 0.55rem; font-size: 0.75rem; }
-      .quick-actions-buttons { display: grid; grid-template-columns: minmax(0, 1.5fr) minmax(0, 1fr); gap: 0.5rem; width: 100%; }
+      .quick-actions-buttons { display: grid; grid-template-columns: minmax(0, 1.5fr) minmax(0, 1fr) 48px; gap: 0.5rem; width: 100%; }
+      .quick-actions-link { min-width: 48px; min-height: 48px; padding: 0; }
+      .quick-actions-link-label { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
       .quick-actions-buttons > button { min-width: 0; min-height: 48px; justify-content: center; padding: 0.55rem 0.5rem; text-align: center; white-space: normal; line-height: 1.25; }
       .autocomplete-row { flex-wrap: wrap; align-items: flex-start; }
       .autocomplete-row > div:first-child { flex-wrap: wrap; }
@@ -904,6 +911,7 @@ html[data-theme="light"] .transfer-equipment-description { color: #475569; }
 html[data-theme="light"] .transfer-equipment-banner[data-state="selected"] .transfer-equipment-description { color: #047857; }
 html[data-theme="light"] .transfer-serial-field > label { color: #0e7490; }
 html[data-theme="light"] .transfer-serial-input-wrap { border-color: #cbd5e1; background: #fff; color: #64748b; }
+html[data-theme="light"] .transfer-serial-status { border-color: #cbd5e1; background: #f1f5f9; color: #475569; }
 html[data-theme="light"] .transfer-serial-input-wrap input { color: #334155; }
 html[data-theme="light"] .transfer-serial-input-wrap input::placeholder { color: #64748b; }
 html[data-theme="light"] .transfer-equipment-banner[data-state="selected"] .transfer-serial-field > label { color: #047857; }
@@ -1047,36 +1055,10 @@ html[data-theme="light"] .autocomplete-more-button:hover {
   background: #bae6fd;
 }
 
-/* The transport request button keeps a clear foreground in the light theme. */
-html[data-theme="light"] .transport-request-button {
-  border-color: #0284c7;
-  background: #e0f2fe;
-  color: #075985;
-  box-shadow: var(--focus-shadow, 0 1px 2px rgba(15, 23, 42, 0.12));
-}
-html[data-theme="light"] .transport-request-button:hover {
-  border-color: #0369a1;
-  background: #bae6fd;
-  color: #0c4a6e;
-}
-html[data-theme="light"] .transport-request-button svg {
-  color: #1d4ed8;
-}
 html[data-theme="light"] .app-tab-panel:focus-visible { outline-color: var(--border-strong); }
 /* --accent (#0284c7) is under 4.5:1 on white for small text, so accent buttons use a darker shade. */
 html[data-theme="light"] .btn-secondary-accent { border-color: #0369a1; color: #075985; }
 html[data-theme="light"] .btn-secondary-accent:hover { background: #e0f2fe; }
-html[data-theme="light"] .quick-actions-buttons .header-action-item--violet {
-  border-color: #c4b5fd;
-  background: #f5f3ff;
-  color: #5b21b6;
-}
-html[data-theme="light"] .quick-actions-buttons .header-action-item--violet:hover {
-  border-color: #8b5cf6;
-  background: #ede9fe;
-  color: #4c1d95;
-}
-html[data-theme="light"] .quick-actions-buttons .header-action-icon--violet { color: #6d28d9; }
 
 /* ---------- History filters (Histórico de Planilhas) ---------- */
 .history-filter-bar {
