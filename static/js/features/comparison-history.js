@@ -12,8 +12,11 @@
 
   function definirTotalHistoricoComparacoes(total) {
     const valor = Number(total || 0);
-    document.getElementById("badge-total-historico-comparacoes").textContent = valor;
-    document.getElementById("total-historico-comparacoes").textContent = `${valor} ${valor === 1 ? "registro" : "registros"}`;
+    const rotulo = `${valor} ${valor === 1 ? "registro" : "registros"}`;
+    const badge = document.getElementById("badge-total-historico-comparacoes");
+    badge.textContent = valor;
+    badge.setAttribute("aria-label", rotulo);
+    document.getElementById("total-historico-comparacoes").textContent = rotulo;
   }
 
   function definirEstadoDatasExportacaoHistorico(mensagem) {

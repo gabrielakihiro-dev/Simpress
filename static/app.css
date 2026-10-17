@@ -178,22 +178,6 @@
     .header-action-group > summary::-webkit-details-marker { display: none; }
     .header-action-group > summary:hover,
     .header-action-group[open] > summary { border-color: #29394f; background: #111c2e; color: #f8fafc; }
-    .header-action-group[data-action-group="analysis"] > summary {
-      border-color: rgba(251, 146, 60, 0.44); background: rgba(124, 45, 18, 0.3); color: var(--menu-orange-fg);
-    }
-    .header-action-group[data-action-group="analysis"] > summary:hover,
-    .header-action-group[data-action-group="analysis"][open] > summary {
-      border-color: rgba(251, 146, 60, 0.7); background: rgba(154, 52, 18, 0.44); color: #ffedd5;
-    }
-    .header-action-group[data-action-group="analysis"] > summary .header-action-group-icon { color: #fdba74; }
-    .header-action-group[data-action-group="equipment"] > summary {
-      border-color: rgba(248, 113, 113, 0.42); background: rgba(127, 29, 29, 0.3); color: #fecaca;
-    }
-    .header-action-group[data-action-group="equipment"] > summary:hover,
-    .header-action-group[data-action-group="equipment"][open] > summary {
-      border-color: rgba(252, 165, 165, 0.7); background: rgba(153, 27, 27, 0.42); color: #fee2e2;
-    }
-    .header-action-group[data-action-group="equipment"] > summary .header-action-group-icon { color: #fca5a5; }
     .header-action-group-icon { width: 0.9rem; height: 0.9rem; flex: none; color: var(--menu-icon); }
     .header-action-group-chevron { width: 0.8rem; height: 0.8rem; flex: none; margin-left: auto; color: #7c8da3; transition: transform var(--motion-fast) var(--motion-ease); }
     .header-action-group[open] .header-action-group-chevron { transform: rotate(180deg); }

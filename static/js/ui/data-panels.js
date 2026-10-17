@@ -367,19 +367,28 @@
     }
 
     // ----- sidebar divergence badge -----
+    // The group summary carries only this alert count; the summary's aria-label replaces its content, so it repeats the count.
+    const SUMMARY_LABEL = "Abrir históricos e análises";
     function renderBadge(total) {
-      const anchor = doc.getElementById("badge-total-historico-comparacoes");
+      const summary = doc.querySelector('.header-action-group[data-action-group="analysis"] > summary');
+      const anchor = summary?.querySelector(".header-action-group-chevron");
       if (!anchor) return;
       let badge = doc.getElementById("badge-divergencias-ux");
-      if (!total) { badge?.remove(); return; }
+      if (!total) {
+        badge?.remove();
+        summary.setAttribute("aria-label", SUMMARY_LABEL);
+        return;
+      }
       if (!badge) {
         badge = el("span", "ux-divergence-badge");
         badge.id = "badge-divergencias-ux";
-        anchor.insertAdjacentElement("afterend", badge);
+        anchor.insertAdjacentElement("beforebegin", badge);
       }
+      const label = `${pluralize(total, "divergência", "divergências")} na última atualização`;
       badge.textContent = total > 99 ? "99+" : String(total);
-      badge.setAttribute("aria-label", `${pluralize(total, "divergência", "divergências")} na última atualização`);
-      badge.title = badge.getAttribute("aria-label");
+      badge.setAttribute("aria-label", label);
+      badge.title = label;
+      summary.setAttribute("aria-label", `${SUMMARY_LABEL}, ${label}`);
     }
 
     async function refresh(force) {
