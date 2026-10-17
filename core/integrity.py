@@ -193,15 +193,15 @@ def _write_temp(target: Path, writer: Callable[[Path], None], validator: Optiona
             validator(temp_path)
         return temp_path
     except PermissionError as error:
-        temp_path.unlink(missing_ok=True)
+        _cleanup_temporary(temp_path)
         raise FileBusyError(
             f"Não foi possível gravar o temporário de '{target.name}'. Verifique se o arquivo ou a pasta está aberto ou sendo sincronizado."
         ) from error
     except OSError as error:
-        temp_path.unlink(missing_ok=True)
+        _cleanup_temporary(temp_path)
         raise FileTransactionError(f"Falha ao preparar '{target.name}': {error.strerror or error}.") from error
-    except Exception:
-        temp_path.unlink(missing_ok=True)
+    except BaseException:
+        _cleanup_temporary(temp_path)
         raise
 
 
@@ -232,6 +232,14 @@ def _unlink_with_backoff(path: Path, missing_ok: bool = False) -> None:
         except PermissionError:
             if not backoff.wait():
                 raise
+
+
+def _cleanup_temporary(path: Path) -> None:
+    """Retry owned temporary removal without hiding the original operation error."""
+    try:
+        _unlink_with_backoff(path, missing_ok=True)
+    except OSError as error:
+        logger.warning("%s %s", path, type(error).__name__)
 
 
 def _replace_with_retries(source: Path, destination: Path) -> None:
@@ -279,7 +287,7 @@ def atomic_write_bytes(path: Path, data: bytes, validator: Optional[Callable[[Pa
         try:
             _replace_with_retries(temp_path, target)
         finally:
-            temp_path.unlink(missing_ok=True)
+            _cleanup_temporary(temp_path)
 
 
 def atomic_write_json(path: Path, value: Any) -> None:
@@ -298,7 +306,7 @@ def atomic_copy_file(source: Path, destination: Path, validator: Optional[Callab
         try:
             _replace_with_retries(temp_path, destination)
         finally:
-            temp_path.unlink(missing_ok=True)
+            _cleanup_temporary(temp_path)
 
 
 def _safe_target(root: Path, relative_path: str) -> Path:
@@ -320,7 +328,7 @@ def _persist_manifest(manifest_path: Path, manifest: Dict[str, Any]) -> None:
     try:
         _replace_with_retries(temp, manifest_path)
     finally:
-        temp.unlink(missing_ok=True)
+        _cleanup_temporary(temp)
 
 
 def _restore_entry(root: Path, transaction_dir: Path, entry: Dict[str, Any]) -> None:
@@ -352,7 +360,7 @@ def _restore_entry(root: Path, transaction_dir: Path, entry: Dict[str, Any]) -> 
             raise TransactionConflictError(f"A restauração temporária de '{target.name}' falhou na validação.")
         _replace_with_retries(temp, target)
     finally:
-        temp.unlink(missing_ok=True)
+        _cleanup_temporary(temp)
 
 
 def _recover_transaction(root: Path, transaction_dir: Path) -> None:
@@ -393,10 +401,10 @@ def _cleanup_staged_files(root: Path, entries: Iterable[Dict[str, Any]]) -> None
         try:
             stage_path = _safe_target(root, relative)
             if stage_path.is_file() and _hash_file(stage_path) == expected_hash:
-                stage_path.unlink()
-        except (OSError, FileTransactionError):
+                _unlink_with_backoff(stage_path, missing_ok=True)
+        except (OSError, FileTransactionError) as error:
             # Keep ambiguous artifacts for manual recovery instead of deleting user data.
-            continue
+            logger.warning("%s %s", relative, type(error).__name__)
 
 
 def _recover_pending_locked(root: Path) -> None:
@@ -501,24 +509,24 @@ class AtomicFileTransaction:
                 raise FileTransactionError(f"A cópia de segurança de '{target.name}' não passou na validação.")
 
         stage_path = None
-        new_hash = None
-        if not delete:
-            stage_path = _write_temp(target, writer, validator)
-            new_hash = _hash_file(stage_path)
-
-        entry = {
-            "target": self._target_relative(target),
-            "stage": self._target_relative(stage_path) if stage_path else None,
-            "backup": backup_relative if original_hash is not None else None,
-            "original_hash": original_hash,
-            "new_hash": new_hash,
-        }
-        self.manifest["entries"].append(entry)
         try:
+            new_hash = None
+            if not delete:
+                stage_path = _write_temp(target, writer, validator)
+                new_hash = _hash_file(stage_path)
+
+            entry = {
+                "target": self._target_relative(target),
+                "stage": self._target_relative(stage_path) if stage_path else None,
+                "backup": backup_relative if original_hash is not None else None,
+                "original_hash": original_hash,
+                "new_hash": new_hash,
+            }
+            self.manifest["entries"].append(entry)
             _persist_manifest(self.manifest_path, self.manifest)
-        except Exception:
+        except BaseException:
             if stage_path:
-                stage_path.unlink(missing_ok=True)
+                _cleanup_temporary(stage_path)
             raise
 
     def stage_bytes(self, target: Path, data: bytes, validator: Optional[Callable[[Path], None]] = None) -> None:
@@ -602,13 +610,14 @@ class AtomicFileTransaction:
         self.manifest["phase"] = "committed"
         _persist_manifest(self.manifest_path, self.manifest)
         self._committed = True
+        _cleanup_staged_files(self.root, self.manifest["entries"])
         shutil.rmtree(self.transaction_dir, ignore_errors=True)
 
     def rollback(self) -> None:
         if self.manifest_path.exists():
             for entry in reversed(self.manifest["entries"]):
                 _restore_entry(self.root, self.transaction_dir, entry)
-            _cleanup_staged_files(self.root, self.manifest["entries"])
+        _cleanup_staged_files(self.root, self.manifest["entries"])
         shutil.rmtree(self.transaction_dir, ignore_errors=True)
 
     def close_after_interruption(self) -> None:

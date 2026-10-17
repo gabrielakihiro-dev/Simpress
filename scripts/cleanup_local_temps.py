@@ -1,12 +1,16 @@
-"""Safely clean abandoned atomic-write temporaries that duplicate their target."""
+"""Remove duplicate temporaries and quarantine differing snapshots older than seven days."""
 
 from __future__ import annotations
 
 import argparse
 import hashlib
+import json
+import os
 import re
 import sys
+import tempfile
 import time
+from datetime import datetime, timezone
 from pathlib import Path
 from typing import Dict, List, Optional, Tuple
 
@@ -15,9 +19,12 @@ if str(PROJECT_ROOT) not in sys.path:
     sys.path.insert(0, str(PROJECT_ROOT))
 
 from core import integrity
+from core.local_paths import is_link_or_junction
 
 
 DEFAULT_MIN_AGE_HOURS = 24
+QUARANTINE_AGE_HOURS = 7 * 24
+QUARANTINE_DIRECTORY = ".temp-quarantine"
 _RANDOM_TEMP_SUFFIX = re.compile(r"^[A-Za-z0-9_]{8}$")
 
 
@@ -62,13 +69,35 @@ def _committed_reference_files(target: Path, input_dir: Path) -> List[Path]:
     return references
 
 
+def _quarantine_temporary(temporary: Path, digest: str) -> None:
+    """Write metadata before moving; keep both the snapshot and its report locally."""
+    quarantine = temporary.parent / QUARANTINE_DIRECTORY
+    if is_link_or_junction(quarantine):
+        raise CleanupBlockedError("A pasta de quarentena não pode ser um link ou junção.")
+    quarantine.mkdir(exist_ok=True)
+    batch = Path(tempfile.mkdtemp(prefix="snapshot-", dir=quarantine))
+    metadata = temporary.stat()
+    report = {"arquivos": [{
+        "nome": temporary.name,
+        "tamanho": metadata.st_size,
+        "data_modificacao": datetime.fromtimestamp(metadata.st_mtime, timezone.utc).isoformat(),
+        "sha256": digest,
+    }]}
+    # If reporting or moving fails, the source is preserved and the error propagates.
+    with (batch / "relatorio.json").open("x", encoding="utf-8") as stream:
+        json.dump(report, stream, ensure_ascii=False, indent=2)
+        stream.flush()
+        os.fsync(stream.fileno())
+    integrity._replace_with_retries(temporary, batch / temporary.name)
+
+
 def cleanup_local_temps(
     project_root: Path,
     *,
     min_age_hours: float = DEFAULT_MIN_AGE_HOURS,
     dry_run: bool = False,
 ) -> Dict[str, int]:
-    """Remove old same-content duplicates while preserving differing snapshots."""
+    """Remove duplicates; preserve old differing snapshots in a local quarantine."""
     if min_age_hours < 0:
         raise ValueError("A idade mínima não pode ser negativa.")
     root = Path(project_root).resolve()
@@ -106,6 +135,8 @@ def cleanup_local_temps(
         "iguais_prontos": 0,
         "recentes_preservados": 0,
         "diferentes_preservados": 0,
+        "quarentena_prontos": 0,
+        "quarentenados": 0,
         "sem_destino_preservados": 0,
         "formato_desconhecido_preservado": 0,
         "bloqueados_preservados": 0,
@@ -114,7 +145,10 @@ def cleanup_local_temps(
     candidates: List[Path] = []
     for scan_root in scan_roots:
         if scan_root.is_dir() and not scan_root.is_symlink():
-            candidates.extend(path for path in scan_root.rglob("*.tmp") if path.is_file())
+            candidates.extend(
+                path for path in scan_root.rglob("*.tmp")
+                if QUARANTINE_DIRECTORY not in path.relative_to(scan_root).parts and path.is_file()
+            )
 
     for temporary in sorted(set(candidates)):
         result["examinados"] += 1
@@ -137,6 +171,15 @@ def cleanup_local_temps(
                     result["sem_destino_preservados"] += 1
                     continue
                 temporary_hash = _digest(temporary)
+                # Even a match in an old backup cannot authorize deleting a
+                # snapshot that differs from today's target after seven days.
+                if (age_hours > QUARANTINE_AGE_HOURS
+                        and target.is_file() and temporary_hash != _digest(target)):
+                    result["quarentena_prontos"] += 1
+                    if not dry_run:
+                        _quarantine_temporary(temporary, temporary_hash)
+                        result["quarentenados"] += 1
+                    continue
                 if not any(temporary_hash == _digest(reference) for reference in reference_files):
                     result["diferentes_preservados"] += 1
                     continue
@@ -155,6 +198,8 @@ def _summary(result: Dict[str, int], *, dry_run: bool) -> str:
     count = result["iguais_prontos"] if dry_run else result["removidos"]
     return (
         f"Limpeza concluída: {count} {action}; "
+        f"{result['quarentena_prontos'] if dry_run else result['quarentenados']} "
+        f"versão(ões) diferente(s) {'para quarentena' if dry_run else 'em quarentena'}; "
         f"{result['diferentes_preservados']} versão(ões) diferente(s), "
         f"{result['recentes_preservados']} arquivo(s) recente(s) e "
         f"{result['bloqueados_preservados']} arquivo(s) bloqueado(s) preservado(s)."
@@ -166,7 +211,7 @@ if __name__ == "__main__":
     parser.add_argument(
         "--apply",
         action="store_true",
-        help="Remove somente temporários antigos idênticos ao arquivo de destino.",
+        help="Remove duplicatas antigas e move versões diferentes com mais de 7 dias para quarentena.",
     )
     parser.add_argument(
         "--min-age-hours",
