@@ -1047,6 +1047,8 @@ html[data-theme="light"] .quick-actions-buttons .header-action-icon--violet { co
   background: rgba(15, 23, 42, 0.97);
   box-shadow: var(--focus-shadow, 0 8px 24px rgba(2, 6, 23, 0.28));
 }
+/* The result list has 1rem of top padding (py-4); stick to the scroll edge so rows do not show above the bar. */
+#comparacao-planilhas-conteudo > .history-filter-bar { top: -1rem; }
 .history-filter-controls {
   display: grid;
   grid-template-columns: minmax(0, 1fr) minmax(13rem, 0.45fr);
