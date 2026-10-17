@@ -275,7 +275,7 @@
       if (appState.currentEquipamento && appState.currentEquipamento.serial === data.equipamento.serial) {
         app.definirEquipamentoAtual(data.equipamento);
         document.getElementById("badge-apelido").textContent = appState.currentEquipamento.apelido || "Sem Apelido";
-        document.getElementById("card-localizacao").textContent = `${appState.currentEquipamento.retirada_cidade || ""} - ${appState.currentEquipamento.retirada_endereco ? appState.currentEquipamento.retirada_endereco.split("-")[0].trim() : ""}`;
+        document.getElementById("card-localizacao").textContent = app.formatarLocalAtual(appState.currentEquipamento);
         document.getElementById("card-cnpj-atual").textContent = `CNPJ: ${appState.currentEquipamento.retirada_cnpj || "Não especificado"}`;
       }
       await carregarHistoricoApelidos();

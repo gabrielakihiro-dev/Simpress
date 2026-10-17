@@ -47,5 +47,16 @@
     }).format(data);
   }
 
-  return { formatarNomeFonteHistorico, formatarHorarioHistorico };
+  // Metric cards share one neutral surface; the tone only colors the left edge, and only when the count is above zero.
+  const ACENTOS_METRICA = { amber: "border-l-amber-400", rose: "border-l-rose-400", emerald: "border-l-emerald-400" };
+
+  function classesMetricaHistorico(valor, tom) {
+    const ativo = Number(valor || 0) > 0;
+    return {
+      cartao: `border border-slate-800 border-l-2 bg-slate-900/40 ${ativo && ACENTOS_METRICA[tom] ? ACENTOS_METRICA[tom] : "border-l-slate-800"}`,
+      numero: ativo ? "text-white" : "text-slate-500",
+    };
+  }
+
+  return { formatarNomeFonteHistorico, formatarHorarioHistorico, classesMetricaHistorico };
 });
