@@ -181,7 +181,7 @@
         return;
       }
 
-      eventos.forEach(evento => lista.appendChild(criarCartaoHistoricoComparacao(evento)));
+      lista.append(...criarGruposHistoricoComparacao(eventos));
       motion?.stagger(lista.children);
     } catch (err) {
       console.error("Erro ao carregar histórico de planilhas:", err);
@@ -200,55 +200,159 @@
     }
   }
 
+  const CLASSE_BOTAO_HISTORICO = "w-full sm:w-auto h-9 inline-flex items-center justify-center px-3 rounded-lg border text-xs font-semibold transition";
+
+  function chaveDiaHistorico(horario) {
+    const data = String(horario || "").slice(0, 10);
+    return /^\d{4}-\d{2}-\d{2}$/.test(data) ? data : "";
+  }
+
+  function rotuloDiaHistorico(chave, hoje = new Date()) {
+    if (!chave) return "Sem data";
+    const doisDigitos = valor => String(valor).padStart(2, "0");
+    const chaveLocal = data => `${data.getFullYear()}-${doisDigitos(data.getMonth() + 1)}-${doisDigitos(data.getDate())}`;
+    const ontem = new Date(hoje.getFullYear(), hoje.getMonth(), hoje.getDate() - 1);
+    if (chave === chaveLocal(hoje)) return "Hoje";
+    if (chave === chaveLocal(ontem)) return "Ontem";
+    const [ano, mes, dia] = chave.split("-");
+    return `${dia}/${mes}/${ano}`;
+  }
+
+  function criarGruposHistoricoComparacao(eventos) {
+    const grupos = new Map();
+    eventos.forEach(evento => {
+      const chave = chaveDiaHistorico(evento.horario);
+      if (!grupos.has(chave)) grupos.set(chave, []);
+      grupos.get(chave).push(evento);
+    });
+
+    return [...grupos].map(([chave, eventosDoDia]) => {
+      const grupo = document.createElement("section");
+      grupo.className = "space-y-2";
+      const titulo = document.createElement("h4");
+      titulo.className = "flex items-center gap-2 px-1 text-[11px] font-semibold uppercase tracking-wide text-slate-400";
+      titulo.textContent = rotuloDiaHistorico(chave);
+      const quantidade = document.createElement("span");
+      quantidade.className = "font-normal normal-case tracking-normal text-slate-500";
+      quantidade.textContent = `· ${eventosDoDia.length} ${eventosDoDia.length === 1 ? "registro" : "registros"}`;
+      titulo.appendChild(quantidade);
+      grupo.setAttribute("aria-label", `Atualizações de ${titulo.firstChild.textContent}`);
+      grupo.appendChild(titulo);
+      eventosDoDia.forEach(evento => grupo.appendChild(criarCartaoHistoricoComparacao(evento)));
+      return grupo;
+    });
+  }
+
   function criarCartaoHistoricoComparacao(evento) {
     const card = document.createElement("article");
-    card.className = "flex flex-col md:flex-row md:items-center justify-between gap-3 rounded-xl border border-slate-800 bg-slate-950/70 p-4";
-    card.append(criarResumoHistoricoComparacao(evento), criarAcoesHistoricoComparacao(evento));
+    card.className = "rounded-xl border border-slate-800 bg-slate-950/70 p-4 space-y-3";
+    card.append(...criarResumoHistoricoComparacao(evento), criarAcoesHistoricoComparacao(evento));
     return card;
+  }
+
+  function criarCabecalhoHistoricoComparacao(evento) {
+    const restauracao = evento.tipo === "restauracao";
+    const [tipo, cores] = evento.somente_anotacoes_sincronizadas
+      ? ["Anotações sincronizadas", "border-slate-600/60 bg-slate-800/60 text-slate-300"]
+      : restauracao
+        ? ["Restauração", "border-amber-500/30 bg-amber-500/10 text-amber-200"]
+        : ["Atualização", "border-cyan-500/30 bg-cyan-500/10 text-cyan-200"];
+
+    const cabecalho = document.createElement("header");
+    cabecalho.className = "flex flex-wrap items-center justify-between gap-2";
+    const dataHora = document.createElement("p");
+    dataHora.className = "text-sm font-semibold text-white";
+    dataHora.textContent = formatarHorarioHistorico(evento.horario);
+    const selo = document.createElement("span");
+    selo.className = `shrink-0 rounded-full border px-2.5 py-0.5 text-[11px] font-medium ${cores}`;
+    selo.textContent = tipo;
+    cabecalho.append(dataHora, selo);
+    return cabecalho;
+  }
+
+  function criarArquivosHistoricoComparacao(evento) {
+    const restauracao = evento.tipo === "restauracao";
+    const arquivos = restauracao ? (evento.arquivos_restaurados || {}) : (evento.arquivos_enviados || {});
+    const lista = document.createElement("dl");
+    lista.className = "grid grid-cols-[auto_minmax(0,1fr)] gap-x-3 gap-y-1 text-xs";
+    lista.setAttribute("aria-label", restauracao ? "Inventários restaurados" : "Arquivos enviados");
+    [["Endpoint", arquivos.endpoint], ["Simpress", arquivos.detalhes]].forEach(([fonte, arquivo]) => {
+      const nome = formatarNomeFonteHistorico(arquivo || "—");
+      const rotulo = document.createElement("dt");
+      rotulo.className = "text-slate-500";
+      rotulo.textContent = fonte;
+      const valor = document.createElement("dd");
+      valor.className = "min-w-0 truncate text-slate-300";
+      valor.textContent = nome;
+      valor.title = nome;
+      lista.append(rotulo, valor);
+    });
+    return lista;
+  }
+
+  function criarMetricasHistoricoComparacao(metricas) {
+    const grade = document.createElement("dl");
+    grade.className = "grid grid-cols-2 sm:grid-cols-4 gap-2";
+    metricas.forEach(({ rotulo, valor, alerta = "amber" }) => {
+      const numero = Number(valor || 0);
+      const destaque = numero > 0 && alerta
+        ? (alerta === "rose" ? "border-rose-500/25 bg-rose-500/5 text-rose-200" : "border-amber-500/25 bg-amber-500/5 text-amber-200")
+        : "border-slate-800 bg-slate-900/40 text-slate-500";
+      const chip = document.createElement("div");
+      chip.className = `flex flex-col-reverse rounded-lg border px-3 py-2 ${destaque}`;
+      const nome = document.createElement("dt");
+      nome.className = "text-[11px] leading-tight";
+      nome.textContent = rotulo;
+      const quantidade = document.createElement("dd");
+      quantidade.className = `text-base font-semibold ${numero > 0 ? "text-white" : ""}`;
+      quantidade.textContent = numero.toLocaleString("pt-BR");
+      chip.append(nome, quantidade);
+      grade.appendChild(chip);
+    });
+    return grade;
   }
 
   function criarResumoHistoricoComparacao(evento) {
     const resumo = evento.resumo || {};
-    const restauracao = evento.tipo === "restauracao";
-    const arquivos = restauracao ? (evento.arquivos_restaurados || {}) : (evento.arquivos_enviados || {});
+    const partes = [criarCabecalhoHistoricoComparacao(evento), criarArquivosHistoricoComparacao(evento)];
 
-    const info = document.createElement("div");
-    info.className = "min-w-0 space-y-1";
-    const dataHora = document.createElement("p");
-    dataHora.className = "text-sm font-semibold text-white";
-    dataHora.textContent = formatarHorarioHistorico(evento.horario);
-    info.appendChild(dataHora);
-
-    const fontes = document.createElement("p");
-    fontes.className = "text-xs text-slate-400 break-words";
-    fontes.textContent = restauracao
-      ? `Inventários restaurados — no endpoint: ${formatarNomeFonteHistorico(arquivos.endpoint || "—")} · na Simpress: ${formatarNomeFonteHistorico(arquivos.detalhes || "—")}`
-      : `no endpoint: ${formatarNomeFonteHistorico(arquivos.endpoint || "—")} · na Simpress: ${formatarNomeFonteHistorico(arquivos.detalhes || "—")}`;
-    info.appendChild(fontes);
-
-    const contagens = document.createElement("p");
-    contagens.className = "text-[11px] text-slate-500";
     if (evento.somente_anotacoes_sincronizadas) {
-      contagens.textContent = "As anotações podem ser consultadas e editadas neste notebook.";
-    } else if (restauracao) {
+      const aviso = document.createElement("p");
+      aviso.className = "text-xs text-slate-400";
+      aviso.textContent = "As anotações podem ser consultadas e editadas neste notebook.";
+      partes.push(aviso);
+    } else if (evento.tipo === "restauracao") {
       const restauracaoDe = evento.restauracao_de || {};
-      contagens.textContent = `Restauração do conjunto anterior a ${formatarHorarioHistorico(restauracaoDe.horario)} · registros restaurados: no endpoint ${Number(resumo.total_endpoint_restaurado || 0).toLocaleString("pt-BR")}, na Simpress ${Number(resumo.total_detalhes_restaurado || 0).toLocaleString("pt-BR")}`;
+      const origem = document.createElement("p");
+      origem.className = "text-xs text-slate-400";
+      origem.textContent = `Restauração do conjunto anterior a ${formatarHorarioHistorico(restauracaoDe.horario)}`;
+      partes.push(origem, criarMetricasHistoricoComparacao([
+        { rotulo: "Restaurados – Endpoint", valor: resumo.total_endpoint_restaurado, alerta: null },
+        { rotulo: "Restaurados – Simpress", valor: resumo.total_detalhes_restaurado, alerta: null },
+      ]));
     } else {
-      contagens.textContent = `Apelidos/hostnames atualizados: ${Number(resumo.apelidos_atualizados || 0)} · sem acesso há 7+ dias: ${Number(resumo.sem_acesso_7_dias || 0)} · divergências manuais pendentes: ${Number(resumo.divergencias_apelidos_manuais || 0)} · equipamentos sem correspondência — no endpoint: ${Number(resumo.ausentes_no_endpoint || 0)} · na Simpress: ${Number(resumo.ausentes_em_detalhes || 0)} · divergências de local: ${Number(resumo.divergencias_local || 0)} · ambiguidades: ${Number(resumo.correspondencias_ambiguas || 0)}`;
+      partes.push(criarMetricasHistoricoComparacao([
+        { rotulo: "Apelidos atualizados", valor: resumo.apelidos_atualizados },
+        { rotulo: "Sem acesso 7+ dias", valor: resumo.sem_acesso_7_dias },
+        { rotulo: "Divergências manuais", valor: resumo.divergencias_apelidos_manuais, alerta: "rose" },
+        { rotulo: "Sem correspondência – Endpoint", valor: resumo.ausentes_no_endpoint },
+        { rotulo: "Sem correspondência – Simpress", valor: resumo.ausentes_em_detalhes },
+        { rotulo: "Divergências de local", valor: resumo.divergencias_local },
+        { rotulo: "Ambiguidades", valor: resumo.correspondencias_ambiguas, alerta: "rose" },
+      ]));
     }
-    info.appendChild(contagens);
-    return info;
+    return partes;
   }
 
   function criarAcoesHistoricoComparacao(evento) {
     const restauracao = evento.tipo === "restauracao";
     const acoes = document.createElement("div");
-    acoes.className = "flex flex-wrap items-center gap-2";
+    acoes.className = "flex flex-col sm:flex-row sm:flex-wrap sm:justify-end gap-2 border-t border-slate-800/80 pt-3";
 
     if (!restauracao) {
       const consultar = document.createElement("button");
       consultar.type = "button";
-      consultar.className = "shrink-0 px-3 py-2 rounded-lg bg-cyan-500/10 hover:bg-cyan-500/20 text-cyan-200 border border-cyan-500/25 text-xs font-semibold transition";
+      consultar.className = `${CLASSE_BOTAO_HISTORICO} bg-cyan-500/10 hover:bg-cyan-500/20 text-cyan-200 border-cyan-500/25`;
       consultar.textContent = evento.somente_anotacoes_sincronizadas ? "Consultar anotações" : "Consultar resultado";
       consultar.addEventListener("click", () => consultarHistoricoComparacao(evento.id, consultar));
       acoes.appendChild(consultar);
@@ -257,7 +361,7 @@
     if (evento.restauravel) {
       const restaurar = document.createElement("button");
       restaurar.type = "button";
-      restaurar.className = "shrink-0 px-3 py-2 rounded-lg bg-amber-500/10 hover:bg-amber-500/20 text-amber-200 border border-amber-500/25 text-xs font-semibold transition";
+      restaurar.className = `${CLASSE_BOTAO_HISTORICO} bg-amber-500/10 hover:bg-amber-500/20 text-amber-200 border-amber-500/25`;
       restaurar.textContent = restauracao ? "Desfazer restauração" : "Restaurar versão anterior";
       restaurar.setAttribute("aria-label", `${restauracao ? "Desfazer restauração de" : "Restaurar versões anteriores à atualização de"} ${formatarHorarioHistorico(evento.horario)}`);
       restaurar.addEventListener("click", () => app.restaurarHistoricoComparacao(evento, restaurar));
@@ -267,7 +371,7 @@
     if (!evento.somente_anotacoes_sincronizadas) {
       const excluir = document.createElement("button");
       excluir.type = "button";
-      excluir.className = "shrink-0 px-3 py-2 rounded-lg bg-rose-500/10 hover:bg-rose-500/20 text-rose-200 border border-rose-500/25 text-xs font-semibold transition";
+      excluir.className = `${CLASSE_BOTAO_HISTORICO} bg-transparent hover:bg-rose-500/10 text-rose-300 border-rose-500/30`;
       excluir.textContent = "Excluir";
       excluir.setAttribute("aria-label", `Excluir atualização de ${formatarHorarioHistorico(evento.horario)}`);
       excluir.addEventListener("click", () => excluirHistoricoComparacao(evento, excluir));
