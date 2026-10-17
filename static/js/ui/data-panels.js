@@ -235,7 +235,8 @@
 
     function ensurePanel() {
       if (panel) return panel;
-      const anchor = doc.querySelector("#tab-panel-home .home-search-card");
+      // Below the recent lookups when the page has them, so they stay next to the search.
+      const anchor = doc.querySelector("#tab-panel-home #home-recentes") || doc.querySelector("#tab-panel-home .home-search-card");
       if (!anchor) return null;
       panel = el("section", "ux-home-panel glass-card");
       panel.id = "ux-home-panel";

@@ -4,8 +4,9 @@
   else (root.SimpressFeatures = root.SimpressFeatures || {}).equipmentSearch = factory;
 })(typeof window !== "undefined" ? window : globalThis, function createEquipmentSearch(context) {
   "use strict";
-  const { app, appState, motion, transferUtils } = context;
+  const { app, appState, motion, transferUtils, recentEquipment } = context;
   const { escapeHtml, createTextElement, highlightMatch, pluralize } = context.dom;
+  const recentStore = recentEquipment?.createStore(() => window.localStorage) || null;
 
   let debounceTimer = null;
   const autocompleteRequestGate = transferUtils.createRequestGate();
@@ -657,6 +658,7 @@
       }
       app.definirEquipamentoAtual(data);
       app.exibirEquipamento(data);
+      if (recentStore) renderizarPesquisasRecentes(recentStore.add(data));
       app.showToast(`Equipamento ${data.serial} localizado com sucesso!`, "success");
 
     } catch (err) {
@@ -676,6 +678,43 @@
       }
     }
   }
+
+  // Recent lookups below the search card. Hidden while empty; each row repeats the normal search.
+  function renderizarPesquisasRecentes(entries = recentStore?.read() || []) {
+    const section = document.getElementById("home-recentes");
+    const list = document.getElementById("home-recentes-lista");
+    if (!section || !list) return;
+    list.replaceChildren(...entries.map(entry => {
+      const item = document.createElement("li");
+      const button = document.createElement("button");
+      button.type = "button";
+      button.className = "home-recent-item";
+      button.dataset.serial = entry.serial;
+      button.setAttribute("aria-label", recentEquipment.describeEntry(entry));
+      button.append(
+        createTextElement("span", "home-recent-serial", entry.serial),
+        createTextElement("span", "home-recent-alias", entry.apelido || "Sem apelido"),
+        createTextElement("span", "home-recent-city", entry.cidade || "Cidade não informada"),
+      );
+      button.addEventListener("click", () => app.abrirPesquisaRecente(entry.serial));
+      item.append(button);
+      return item;
+    }));
+    section.hidden = entries.length === 0;
+  }
+
+  function abrirPesquisaRecente(serial) {
+    const entry = (recentStore?.read() || []).find(item => item.serial === serial) || { serial };
+    window.scrollTo?.({ top: 0, behavior: "smooth" });
+    return app.selecionarItemAutocomplete(entry);
+  }
+
+  function limparPesquisasRecentes() {
+    renderizarPesquisasRecentes(recentStore?.clear() || []);
+    document.getElementById("input-serial")?.focus({ preventScroll: true });
+  }
+
+  if (recentStore) renderizarPesquisasRecentes();
 
   // City plus the street part of the address; no dangling " - " when one is missing.
   function formatarLocalAtual(eq) {
@@ -738,6 +777,6 @@
     invalidarDadosEquipamentoAposRestauracao, atualizarSelecaoAposSubstituirInventarios, handleSerialInput,
     handleSerialKeydown, selecionarItemAutocomplete, abrirPesquisaCompleta, alterarFiltrosPesquisaCompleta,
     limparFiltrosPesquisaCompleta, carregarMaisResultadosPesquisa, fecharModalPesquisaCompleta, fecharAutocomplete,
-    limparSerial, buscarSerial, exibirEquipamento, formatarLocalAtual,
+    limparSerial, buscarSerial, exibirEquipamento, formatarLocalAtual, abrirPesquisaRecente, limparPesquisasRecentes,
   };
 });
