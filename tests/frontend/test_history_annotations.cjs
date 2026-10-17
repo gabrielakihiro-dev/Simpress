@@ -63,18 +63,18 @@ test("mobile header summary rule overrides the header's accessible summary displ
   );
 });
 
-test("colors the analysis and equipment action groups distinctly", () => {
-  assert.match(appCss, /header-action-group\[data-action-group="analysis"\] > summary\s*\{[^}]*rgba\(251, 146, 60/);
-  assert.match(appCss, /header-action-group\[data-action-group="equipment"\] > summary\s*\{[^}]*rgba\(248, 113, 113/);
+test("keeps the sidebar action groups neutral", () => {
+  assert.doesNotMatch(appCss, /header-action-group\[data-action-group="(analysis|equipment)"\] > summary/);
 });
 
-test("places the ticket action before the analysis group with an orange accent", () => {
+test("places the ticket action before the analysis group without a color of its own", () => {
   const exportButton = indexHtml.indexOf('id="btn-exportar-equipamentos"');
   const ticketAction = indexHtml.indexOf('data-on-click="abrirAcompanhamentoChamados"');
   const ticketActionEnd = indexHtml.indexOf("</button>", ticketAction);
   const analysisGroup = indexHtml.indexOf('data-action-group="analysis"');
   assert.ok(ticketAction < analysisGroup);
   assert.ok(analysisGroup < exportButton);
-  assert.match(indexHtml.slice(ticketAction, ticketActionEnd), /header-action-item--large[^"]*header-action-item--orange/);
-  assert.match(appCss, /header-secondary-panel \.header-action-item--orange\s*\{[^}]*rgba\(234, 88, 12/);
+  const ticketMarkup = indexHtml.slice(ticketAction, ticketActionEnd);
+  assert.match(ticketMarkup, /header-action-item--large/);
+  assert.doesNotMatch(ticketMarkup, /--orange|<br>/);
 });

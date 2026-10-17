@@ -353,7 +353,24 @@ html[data-ux-density="compact"] .comparison-desktop-table td {
   line-height: 1.15rem;
   text-align: center;
 }
-#simpress-app-shell[data-sidebar-collapsed="true"] .ux-divergence-badge { display: none; }
+/* Collapsed desktop sidebar: the count becomes a dot on the group icon. */
+@media (min-width: 768px) {
+  #simpress-app-shell[data-sidebar-collapsed="true"] .header-action-group > summary { position: relative; }
+  #simpress-app-shell[data-sidebar-collapsed="true"] .ux-divergence-badge {
+    position: absolute;
+    top: 0.45rem;
+    right: 0.6rem;
+    width: 0.55rem;
+    min-width: 0;
+    height: 0.55rem;
+    padding: 0;
+    margin: 0;
+    overflow: hidden;
+    background: var(--ux-critical-fg);
+    font-size: 0;
+    line-height: 0;
+  }
+}
 
 .ux-home-panel {
   margin-top: var(--ux-space-5);

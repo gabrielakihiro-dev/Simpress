@@ -65,38 +65,38 @@
 
         <nav class="header-actions sidebar-actions" aria-label="Ferramentas do sistema">
           <div class="header-secondary-panel" role="group" aria-label="Ações do sistema">
-            <button type="button" data-on-click="abrirAcompanhamentoChamados" id="btn-acompanhamento-chamados" data-sidebar-page class="header-action-item header-action-item--large header-action-item--orange flex items-center gap-2" title="Relacionar séries, OS e status nos arquivos da Simpress e do Oracle">
-              <i data-lucide="clipboard-list" class="header-action-icon header-action-icon--orange" aria-hidden="true"></i>
-              <span class="sidebar-item-label">Acompanhamento de<br>Chamados</span>
+            <button type="button" data-on-click="abrirAcompanhamentoChamados" id="btn-acompanhamento-chamados" data-sidebar-page class="header-action-item header-action-item--large flex items-center gap-2" title="Relacionar séries, OS e status nos arquivos da Simpress e do Oracle">
+              <i data-lucide="clipboard-list" class="header-action-icon" aria-hidden="true"></i>
+              <span class="sidebar-item-label">Acompanhamento de Chamados</span>
             </button>
             <details class="header-action-group" data-action-group="analysis">
               <summary aria-label="Abrir históricos e análises" aria-controls="header-action-group-analysis" title="Históricos e Análises">
                 <i data-lucide="chart-no-axes-combined" class="header-action-group-icon" aria-hidden="true"></i>
                 <span class="sidebar-item-label">Históricos e Análises</span>
-                <span id="badge-total-historico-comparacoes" class="header-action-count" aria-label="Total no histórico de planilhas">0</span>
                 <i data-lucide="chevron-down" class="header-action-group-chevron" aria-hidden="true"></i>
               </summary>
               <div id="header-action-group-analysis" class="header-action-group-items" role="group" aria-label="Atualização, exportação, análises, históricos e catálogo de unidades">
-                <button type="button" data-on-click="abrirModalAtualizarPlanilhas" id="btn-atualizar-planilhas" data-sidebar-page class="header-action-item header-action-item--primary flex items-center gap-2" title="Comparar os arquivos e atualizar as bases do site">
+                <p class="sidebar-subgroup-title" aria-hidden="true">Ações</p>
+                <button type="button" data-on-click="abrirModalAtualizarPlanilhas" id="btn-atualizar-planilhas" data-sidebar-page class="header-action-item flex items-center gap-2" title="Comparar os arquivos e atualizar as bases do site">
                   <i data-lucide="upload" class="header-action-icon" aria-hidden="true"></i>
                   <span class="sidebar-item-label">Atualizar planilhas</span>
                 </button>
-                <button type="button" data-on-click="exportarEquipamentosAtualizados" id="btn-exportar-equipamentos" aria-label="Exportar planilha Excel com apelidos e IdCliente atualizados" aria-labelledby="label-exportar-equipamentos" class="header-action-item header-action-item--primary hidden flex items-center gap-2" title="Baixar a planilha com apelidos e IdCliente atualizados">
+                <button type="button" data-on-click="exportarEquipamentosAtualizados" id="btn-exportar-equipamentos" aria-label="Exportar planilha Excel com apelidos e IdCliente atualizados" aria-labelledby="label-exportar-equipamentos" class="header-action-item hidden flex items-center gap-2" title="Baixar a planilha com apelidos e IdCliente atualizados">
                   <i data-lucide="download" class="header-action-icon" aria-hidden="true"></i>
                   <span id="label-exportar-equipamentos" class="sidebar-item-label">Exportar Excel</span>
                 </button>
-                <div class="sidebar-related-links" role="group" aria-label="Histórico e análise da atualização">
-                  <button type="button" data-on-click="abrirModalHistoricoComparacoes" id="btn-historico-comparacoes" data-sidebar-page aria-label="Histórico de atualizações e comparação de planilhas" aria-labelledby="label-historico-comparacoes" class="header-action-item flex items-center gap-2" title="Consultar comparações e alterações de apelido feitas pela atualização das planilhas">
-                    <i data-lucide="history" class="header-action-icon" aria-hidden="true"></i>
-                    <span id="label-historico-comparacoes" class="sidebar-item-label">Histórico planilhas</span>
-                  </button>
-                  <button type="button" data-on-click="abrirEvolucaoAtualizacoes" id="btn-evolucao-atualizacoes" data-sidebar-page class="header-action-item flex items-center gap-2" title="Comparar pendências entre duas atualizações">
-                    <i data-lucide="activity" class="header-action-icon" aria-hidden="true"></i>
-                    <span class="sidebar-item-label">Evolução das atualizações</span>
-                  </button>
-                </div>
+                <p class="sidebar-subgroup-title" aria-hidden="true">Consultas</p>
+                <button type="button" data-on-click="abrirModalHistoricoComparacoes" id="btn-historico-comparacoes" data-sidebar-page aria-label="Histórico de atualizações e comparação de planilhas" aria-labelledby="label-historico-comparacoes badge-total-historico-comparacoes" class="header-action-item flex items-center gap-2" title="Consultar comparações e alterações de apelido feitas pela atualização das planilhas">
+                  <i data-lucide="file-clock" class="header-action-icon" aria-hidden="true"></i>
+                  <span id="label-historico-comparacoes" class="sidebar-item-label">Histórico planilhas</span>
+                  <span id="badge-total-historico-comparacoes" class="header-action-count" aria-label="0 registros">0</span>
+                </button>
+                <button type="button" data-on-click="abrirEvolucaoAtualizacoes" id="btn-evolucao-atualizacoes" data-sidebar-page class="header-action-item flex items-center gap-2" title="Comparar pendências entre duas atualizações">
+                  <i data-lucide="activity" class="header-action-icon" aria-hidden="true"></i>
+                  <span class="sidebar-item-label">Evolução das atualizações</span>
+                </button>
                 <button type="button" data-on-click="abrirModalHistoricoApelidos" id="btn-historico-apelidos" data-sidebar-page aria-label="Histórico de alterações manuais" aria-labelledby="label-historico-apelidos" class="header-action-item flex items-center gap-2" title="Consultar histórico de alterações manuais">
-                  <i data-lucide="history" class="header-action-icon" aria-hidden="true"></i>
+                  <i data-lucide="user-pen" class="header-action-icon" aria-hidden="true"></i>
                   <span id="label-historico-apelidos" class="sidebar-item-label">Histórico de alterações</span>
                 </button>
                 <button type="button" data-on-click="abrirModalGerenciarUnidades" id="btn-catalogo-unidades" data-sidebar-page aria-label="Catálogo de unidades SEBRAE" aria-labelledby="label-catalogo-unidades" class="header-action-item flex items-center gap-2" title="Consultar e gerenciar o catálogo de unidades SEBRAE">
