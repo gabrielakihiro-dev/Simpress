@@ -37,13 +37,13 @@ jobs:
           cache: npm
       - name: Install Python dependencies
         run: python -m pip install -r requirements.txt httpx==0.28.1 mypy==2.4.0
+      - name: Install interface asset dependencies
+        run: npm ci
       - name: Run project verification (tests, syntax, types and credentials)
         # Mesma verificação de `npm run verify`; a lista de checagens fica em scripts/verify.cjs.
         run: node scripts/verify.cjs
         env:
           PYTHON: python
-      - name: Install interface asset dependencies
-        run: npm ci
       - name: Audit JavaScript dependencies
         run: npm audit --audit-level=moderate
       - name: Rebuild local interface assets

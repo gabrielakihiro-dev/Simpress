@@ -89,7 +89,7 @@
       });
 
       const data = await res.json().catch(() => ({}));
-      if (!res.ok) throw new Error(data.detail || "Falha ao salvar o apelido.");
+      if (!res.ok) throw app.createApiError(data.detail, "Falha ao salvar o apelido.");
 
       const stillSelected = appState.equipamentoSelectionRevision === selectionRevisionAtSave
         && String(appState.currentEquipamento?.serial || "").toUpperCase() === String(serial).toUpperCase();
@@ -176,7 +176,7 @@
 
       if (!res.ok) {
         const errData = await res.json().catch(() => ({}));
-        throw new Error(errData.detail || "Falha ao salvar equipamento.");
+        throw app.createApiError(errData.detail, "Falha ao salvar equipamento.");
       }
 
       const data = await res.json();

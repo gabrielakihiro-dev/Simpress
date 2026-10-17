@@ -120,7 +120,7 @@
       const query = new URLSearchParams({ anterior: previous, atual: current });
       const response = await fetch(`/api/operacoes/evolucao?${query.toString()}`);
       const data = await response.json().catch(() => ({}));
-      if (!response.ok) throw new Error(data.detail || "Não foi possível comparar as atualizações.");
+      if (!response.ok) throw app.createApiError(data.detail, "Não foi possível comparar as atualizações.");
       renderizarEvolucaoAtualizacoes(data);
     } catch (error) { target.textContent = error.message || "Não foi possível comparar as atualizações."; }
   }
@@ -132,7 +132,7 @@
     try {
       const response = await fetch("/api/historico-comparacoes");
       const data = await response.json().catch(() => ({}));
-      if (!response.ok) throw new Error(data.detail || "Não foi possível carregar o histórico.");
+      if (!response.ok) throw app.createApiError(data.detail, "Não foi possível carregar o histórico.");
       const events = (data.eventos || []).filter(event => event.tipo !== "restauracao" && !event.somente_anotacoes_sincronizadas);
       const previous = document.getElementById("evolucao-anterior");
       const current = document.getElementById("evolucao-atual");
@@ -168,7 +168,7 @@
     try {
       const res = await fetch("/api/historico-comparacoes");
       const data = await res.json().catch(() => ({}));
-      if (!res.ok) throw new Error(data.detail || "Não foi possível carregar o histórico de planilhas.");
+      if (!res.ok) throw app.createApiError(data.detail, "Não foi possível carregar o histórico de planilhas.");
 
       const eventos = Array.isArray(data.eventos) ? data.eventos : [];
       definirTotalHistoricoComparacoes(data.total ?? eventos.length);
@@ -390,7 +390,7 @@
     const res = await fetch(`/api/historico-comparacoes/exportar/excel?data=${encodeURIComponent(data)}`);
     if (!res.ok) {
       const errorData = await res.json().catch(() => ({}));
-      throw new Error(errorData.detail || "Não foi possível exportar o histórico selecionado.");
+      throw app.createApiError(errorData.detail, "Não foi possível exportar o histórico selecionado.");
     }
 
     const disposition = res.headers.get("Content-Disposition") || "";
@@ -480,7 +480,7 @@
     try {
       const previewResponse = await fetch(`/api/historico-comparacoes/${encodeURIComponent(evento.id)}/restauracao`);
       const preview = await previewResponse.json().catch(() => ({}));
-      if (!previewResponse.ok) throw new Error(preview.detail || "Não foi possível validar o backup selecionado.");
+      if (!previewResponse.ok) throw app.createApiError(preview.detail, "Não foi possível validar o backup selecionado.");
 
       const backup = preview.arquivos_backup || {};
       const endpointBackup = backup.endpoint || {};
@@ -531,7 +531,7 @@
       if (response.ok || (response.status === 409 && /prévia|estado mudou/i.test(String(data.detail || "")))) {
         inventoryRestoreAttempts.delete(evento.id);
       }
-      if (!response.ok) throw new Error(data.detail || "Não foi possível restaurar o conjunto selecionado.");
+      if (!response.ok) throw app.createApiError(data.detail, "Não foi possível restaurar o conjunto selecionado.");
 
       app.invalidarDadosEquipamentoAposRestauracao();
       await Promise.allSettled([
@@ -572,7 +572,7 @@
     try {
       const res = await fetch(`/api/historico-comparacoes/${encodeURIComponent(eventoId)}`);
       const data = await res.json().catch(() => ({}));
-      if (!res.ok) throw new Error(data.detail || "Não foi possível abrir este resultado.");
+      if (!res.ok) throw app.createApiError(data.detail, "Não foi possível abrir este resultado.");
 
       const evento = data.evento || {};
       app.fecharModalHistoricoComparacoes();
@@ -613,7 +613,7 @@
         method: "DELETE",
       });
       const data = await res.json().catch(() => ({}));
-      if (!res.ok) throw new Error(data.detail || "Não foi possível excluir esta atualização.");
+      if (!res.ok) throw app.createApiError(data.detail, "Não foi possível excluir esta atualização.");
 
       await app.carregarHistoricoComparacoes();
       app.showToast("Atualização excluída do histórico.", "success");

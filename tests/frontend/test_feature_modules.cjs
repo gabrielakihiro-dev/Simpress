@@ -34,6 +34,7 @@ function bootPage() {
     querySelectorAll: () => [],
   };
   const window = {
+    document,
     SimpressDomUtils: require("../../static/js/shared/dom-utils.js"),
     SimpressTransferUtils: require("../../static/js/shared/transfer-utils.js"),
     SimpressCatalogSearch: require("../../static/js/shared/catalog-search-utils.js"),

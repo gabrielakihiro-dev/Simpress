@@ -8,6 +8,7 @@ const history = require("../../static/js/ui/transfer-history.js");
 
 const staticDir = path.join(__dirname, "..", "..", "static");
 const appHtml = fs.readFileSync(path.join(staticDir, "index.html"), "utf8");
+const appEntry = fs.readFileSync(path.join(staticDir, "app-entry.js"), "utf8");
 const { appSource } = require("./support/app-sources.cjs");
 const appScript = appSource();
 
@@ -49,7 +50,7 @@ test("bar widths scale to the largest city", () => {
 });
 
 test("dashboard module is loaded, offline and touches only the allowed endpoint", () => {
-  assert.match(appHtml, /<script src="\/static\/js\/ui\/data-panels\.js"><\/script>/);
+  assert.match(appEntry, /import "\.\/js\/ui\/data-panels\.js";/);
   const source = fs.readFileSync(path.join(staticDir, "js", "ui", "data-panels.js"), "utf8");
   assert.doesNotMatch(source, /https?:\/\//);
   assert.doesNotMatch(source, /innerHTML/);

@@ -5,7 +5,8 @@
     "verify": "node scripts/verify.cjs",
     "test:ui:e2e": "playwright test",
     "profile:ui": "playwright test --project=desktop-profile",
-    "build:ui": "node scripts/build/copy_ui_assets.cjs && tailwindcss --input static/styles/tailwind.input.css --output static/vendor/tailwind-4.3.3.css --minify"
+    "build:ui": "node scripts/build/copy_ui_assets.cjs && tailwindcss --input static/styles/tailwind.input.css --output static/vendor/tailwind-4.3.3.css --minify",
+    "typecheck:ui": "tsc --project tsconfig.ui.json"
   },
   "devDependencies": {
     "@axe-core/playwright": "4.13.0",
@@ -14,7 +15,8 @@
     "@playwright/test": "1.64.0",
     "@tailwindcss/cli": "4.3.3",
     "lucide": "1.48.0",
-    "tailwindcss": "4.3.3"
+    "tailwindcss": "4.3.3",
+    "typescript": "^6.0.3"
   },
   "overrides": {
     "@tailwindcss/cli": {

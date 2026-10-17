@@ -4,6 +4,8 @@ const { buildSteps, javascriptFilesToCheck, listFiles } = require("../../scripts
 
 test("verification discovers recent-equipment tests and all five previously omitted modules", () => {
   const steps = buildSteps("python");
+  const typecheckStep = steps.find(step => step.name === "Tipos JavaScript (TypeScript gradual)");
+  assert.ok(typecheckStep?.args?.includes("tsconfig.ui.json"));
   const testStep = steps.find(step => step.args?.includes("--test"));
   assert.ok(testStep.args.includes("tests/frontend/test_recent_equipment.cjs"));
   const checked = javascriptFilesToCheck();

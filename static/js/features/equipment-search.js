@@ -1,11 +1,12 @@
-/** Equipment search: serial autocomplete, the full search dialog, exact lookup, and the selected equipment card. */
+/** Equipment lookup, serial autocomplete, recent searches, and the selected equipment card. */
 (function (root, factory) {
   if (typeof module === "object" && module.exports) module.exports = factory;
   else (root.SimpressFeatures = root.SimpressFeatures || {}).equipmentSearch = factory;
 })(typeof window !== "undefined" ? window : globalThis, function createEquipmentSearch(context) {
   "use strict";
   const { app, appState, motion, transferUtils, recentEquipment } = context;
-  const { escapeHtml, createTextElement, highlightMatch, pluralize } = context.dom;
+  const { createTextElement } = context.dom;
+  const renderers = context.equipmentSearchRenderer(context);
   const recentStore = recentEquipment?.createStore(() => window.localStorage) || null;
 
   let debounceTimer = null;
@@ -108,10 +109,6 @@
   let autocompleteItemsList = [];
 
   let highlightedAutocompleteIndex = -1;
-
-  const PESQUISA_COMPLETA_PAGINA = 50;
-
-  let pesquisaCompletaState = { query: "", categoria: "", cidade: "", offset: 0, total: 0, loading: false, requestId: 0 };
 
   function handleSerialInput(val) {
     app.invalidarBuscasEquipamento();
@@ -221,95 +218,6 @@
     return app.buscarSerial(item);
   }
 
-  function conteudoLinhaResultado(item, currentQuery) {
-    let tipoIcon = "laptop";
-    let tipoBadgeClass = "bg-emerald-500/15 text-emerald-300 border border-emerald-500/30";
-
-    if (item.tipo === "Micro Computador") {
-      tipoIcon = "monitor";
-      tipoBadgeClass = "bg-blue-500/15 text-blue-300 border border-blue-500/30";
-    } else if (item.tipo === "Monitor") {
-      tipoIcon = "tv";
-      tipoBadgeClass = "bg-indigo-500/15 text-indigo-300 border border-indigo-500/30";
-    } else if (item.tipo !== "Notebook") {
-      tipoIcon = "box";
-      tipoBadgeClass = "bg-purple-500/15 text-purple-300 border border-purple-500/30";
-    }
-
-    return `
-        <div class="flex items-center gap-3 min-w-0 flex-1">
-          <div class="serial-badge flex items-center gap-2 px-3 py-1.5 rounded-lg shrink-0">
-            <i data-lucide="hash" class="w-4 h-4 text-cyan-400 shrink-0" aria-hidden="true"></i>
-            <span class="font-mono font-bold text-white text-sm sm:text-base tracking-widest">${highlightMatch(item.serial, currentQuery)}</span>
-          </div>
-          <span class="inline-flex items-center gap-1.5 text-xs font-semibold px-2.5 py-1 rounded-full ${tipoBadgeClass} shrink-0">
-            <i data-lucide="${tipoIcon}" class="w-3.5 h-3.5 shrink-0" aria-hidden="true"></i>
-            <span>${escapeHtml(item.tipo || "Equipamento")}</span>
-          </span>
-          <div class="min-w-0 flex items-center gap-2 flex-1">
-            <span class="text-xs sm:text-sm font-medium text-slate-200 truncate" title="${escapeHtml(item.modelo || "")}">
-              ${escapeHtml(item.modelo || "Sem modelo especificado")}
-            </span>
-            ${item.apelido ? `
-              <span class="autocomplete-alias inline-flex items-center gap-1 text-[11px] font-mono px-2 py-0.5 rounded-md bg-slate-900/90 text-cyan-300 border border-cyan-500/30 shrink-0" title="Apelido / Hostname">
-                <i data-lucide="terminal" class="w-2.5 h-2.5 text-cyan-400" aria-hidden="true"></i>
-                <span>${escapeHtml(item.apelido)}</span>
-              </span>
-            ` : ""}
-            ${item.invall_alias_status && item.invall_alias_status !== "aplicado" ? `
-              <span class="text-[10px] text-amber-200 shrink-0" title="${escapeHtml(item.invall_alias_detail || "Conferir associação com a InvAll")}">Conferir InvAll</span>
-            ` : ""}
-          </div>
-        </div>
-        <div class="flex items-center gap-2 shrink-0 ml-2">
-          <div class="flex items-center gap-1 text-xs text-amber-300 bg-amber-500/10 border border-amber-500/25 px-2.5 py-1 rounded-lg font-medium" title="Cidade / Unidade Atual">
-            <i data-lucide="map-pin" class="w-3.5 h-3.5 text-amber-400 shrink-0" aria-hidden="true"></i>
-            <span>${escapeHtml(item.retirada_cidade || "PR")}</span>
-          </div>
-          <div class="hidden sm:flex items-center text-xs text-slate-400 group-hover:text-cyan-300 transition-colors ml-1 font-mono">
-            <span class="text-[11px] mr-1 hidden lg:inline opacity-70">Selecionar</span>
-            <kbd class="px-1.5 py-0.5 text-[10px] bg-slate-900 border border-slate-700 rounded text-slate-300 shadow-sm">↵</kbd>
-          </div>
-        </div>
-      `;
-  }
-
-  function criarLinhaAutocomplete(item, index, currentQuery) {
-    const row = document.createElement("div");
-    row.id = `autocomplete-option-${index}`;
-    row.setAttribute("role", "option");
-    row.setAttribute("aria-selected", "false");
-    row.className = "autocomplete-row group px-4 py-2.5 cursor-pointer flex items-center justify-between gap-3";
-    row.onclick = () => app.selecionarItemAutocomplete(item);
-    row.onmouseenter = () => {
-      highlightedAutocompleteIndex = index;
-      updateAutocompleteHighlight();
-    };
-    row.innerHTML = conteudoLinhaResultado(item, currentQuery);
-    return row;
-  }
-
-  function criarLinhaPesquisaCompleta(item, index, currentQuery) {
-    const row = document.createElement("button");
-    row.type = "button";
-    row.className = "autocomplete-row group w-full text-left px-4 py-2.5 cursor-pointer flex items-center justify-between gap-3 rounded-lg";
-    row.setAttribute("aria-label", [
-      "Selecionar equipamento",
-      item.serial,
-      item.tipo,
-      item.modelo,
-      item.apelido,
-      item.retirada_cidade,
-    ].filter(Boolean).join(", "));
-    row.dataset.resultIndex = String(index);
-    row.innerHTML = conteudoLinhaResultado(item, currentQuery);
-    row.addEventListener("click", () => {
-      app.fecharModalPesquisaCompleta();
-      app.selecionarItemAutocomplete(item);
-    });
-    return row;
-  }
-
   function ajustarAlturaAutocomplete() {
     const box = document.getElementById("autocomplete-box");
     if (!box || box.classList.contains("hidden")) return;
@@ -378,179 +286,17 @@
     document.getElementById("input-serial").setAttribute("aria-expanded", "true");
     document.getElementById("input-serial").removeAttribute("aria-activedescendant");
 
-    items.forEach((item, index) => list.appendChild(criarLinhaAutocomplete(item, index, currentQuery)));
+    items.forEach((item, index) => list.appendChild(renderers.criarLinhaAutocomplete(item, index, currentQuery, {
+      onSelect: () => app.selecionarItemAutocomplete(item),
+      onHighlight: () => {
+        highlightedAutocompleteIndex = index;
+        updateAutocompleteHighlight();
+      },
+    })));
 
     box.classList.remove("hidden");
     ajustarAlturaAutocomplete();
     lucide.createIcons({ root: box });
-  }
-
-  function abrirPesquisaCompleta() {
-    const query = (document.getElementById("input-serial").value || "").trim();
-    if (query.length < 2) {
-      app.showToast("Digite ao menos 2 caracteres para pesquisar", "warning");
-      return;
-    }
-
-    const requestId = pesquisaCompletaState.requestId + 1;
-    pesquisaCompletaState = { query, categoria: "", cidade: "", offset: 0, total: 0, loading: false, requestId };
-    document.getElementById("pesquisa-completa-termo").textContent = query;
-    document.getElementById("pesquisa-completa-contagem").textContent = "Buscando...";
-    document.getElementById("pesquisa-completa-status").textContent = "Carregando resultados...";
-    const resultList = document.getElementById("pesquisa-completa-lista");
-    resultList.replaceChildren();
-    resultList.scrollTop = 0;
-    document.getElementById("btn-carregar-mais-pesquisa").classList.add("hidden");
-    document.getElementById("filtro-pesquisa-categoria").value = "";
-    document.getElementById("filtro-pesquisa-cidade").value = "";
-    document.getElementById("btn-limpar-filtros-pesquisa").classList.add("hidden");
-
-    app.abrirModalAcessivel("modal-pesquisa-completa", "#btn-fechar-pesquisa-completa", "fecharModalPesquisaCompleta");
-    app.fecharAutocomplete();
-    carregarResultadosPesquisaCompleta(false, requestId);
-  }
-
-  function preencherOpcoesFiltroPesquisa(selectId, values, defaultLabel, selectedValue) {
-    const select = document.getElementById(selectId);
-    select.replaceChildren(new Option(defaultLabel, ""));
-    values.forEach(value => select.add(new Option(value, value)));
-    select.value = values.includes(selectedValue) ? selectedValue : "";
-    return select.value;
-  }
-
-  function atualizarOpcoesFiltrosPesquisa(filters = {}) {
-    const categorySelect = document.getElementById("filtro-pesquisa-categoria");
-    const selectedCategory = pesquisaCompletaState.categoria;
-    const categories = filters.categories || [
-      { value: "notebook", label: "Notebooks" },
-      { value: "macbook", label: "MacBooks" },
-      { value: "monitor", label: "Monitores" },
-      { value: "fone", label: "Fones" },
-    ];
-    categorySelect.replaceChildren(new Option("Todas as categorias", ""));
-    categories.forEach(({ value, label, count }) => {
-      const suffix = Number.isFinite(count) ? ` (${count})` : "";
-      categorySelect.add(new Option(`${label}${suffix}`, value));
-    });
-    categorySelect.value = categories.some(({ value }) => value === selectedCategory) ? selectedCategory : "";
-    pesquisaCompletaState.categoria = categorySelect.value;
-    pesquisaCompletaState.cidade = preencherOpcoesFiltroPesquisa(
-      "filtro-pesquisa-cidade",
-      filters.cities || [],
-      "Todas as cidades",
-      pesquisaCompletaState.cidade,
-    );
-    document.getElementById("btn-limpar-filtros-pesquisa").classList.toggle(
-      "hidden",
-      !pesquisaCompletaState.categoria && !pesquisaCompletaState.cidade,
-    );
-  }
-
-  function alterarFiltrosPesquisaCompleta() {
-    if (pesquisaCompletaState.loading) return;
-    const categoria = document.getElementById("filtro-pesquisa-categoria").value;
-    const cidade = document.getElementById("filtro-pesquisa-cidade").value;
-    if (categoria === pesquisaCompletaState.categoria && cidade === pesquisaCompletaState.cidade) return;
-
-    pesquisaCompletaState.categoria = categoria;
-    pesquisaCompletaState.cidade = cidade;
-    pesquisaCompletaState.offset = 0;
-    pesquisaCompletaState.total = 0;
-    pesquisaCompletaState.requestId += 1;
-    const resultList = document.getElementById("pesquisa-completa-lista");
-    resultList.replaceChildren();
-    resultList.scrollTop = 0;
-    document.getElementById("pesquisa-completa-contagem").textContent = "Buscando...";
-    document.getElementById("btn-carregar-mais-pesquisa").classList.add("hidden");
-    document.getElementById("btn-limpar-filtros-pesquisa").classList.toggle("hidden", !categoria && !cidade);
-    carregarResultadosPesquisaCompleta(false, pesquisaCompletaState.requestId);
-  }
-
-  function limparFiltrosPesquisaCompleta() {
-    document.getElementById("filtro-pesquisa-categoria").value = "";
-    document.getElementById("filtro-pesquisa-cidade").value = "";
-    app.alterarFiltrosPesquisaCompleta();
-  }
-
-  async function carregarResultadosPesquisaCompleta(carregarMais = false, requestId = pesquisaCompletaState.requestId) {
-    if (pesquisaCompletaState.loading || requestId !== pesquisaCompletaState.requestId) return;
-
-    const modal = document.getElementById("modal-pesquisa-completa");
-    const list = document.getElementById("pesquisa-completa-lista");
-    const status = document.getElementById("pesquisa-completa-status");
-    const count = document.getElementById("pesquisa-completa-contagem");
-    const moreButton = document.getElementById("btn-carregar-mais-pesquisa");
-    const categoryFilter = document.getElementById("filtro-pesquisa-categoria");
-    const cityFilter = document.getElementById("filtro-pesquisa-cidade");
-    const offset = carregarMais ? pesquisaCompletaState.offset : 0;
-
-    pesquisaCompletaState.loading = true;
-    moreButton.disabled = true;
-    moreButton.setAttribute("aria-busy", "true");
-    categoryFilter.disabled = true;
-    cityFilter.disabled = true;
-    status.textContent = carregarMais ? "Carregando mais resultados..." : "Carregando resultados...";
-    if (!carregarMais) list.replaceChildren();
-    const stopLoading = motion?.startLoading(list, "Carregando resultados da pesquisa…") || (() => {});
-
-    try {
-      const params = new URLSearchParams({
-        q: pesquisaCompletaState.query,
-        offset: String(offset),
-        limit: String(PESQUISA_COMPLETA_PAGINA),
-        include_filters: "true",
-      });
-      if (pesquisaCompletaState.categoria) params.set("categoria", pesquisaCompletaState.categoria);
-      if (pesquisaCompletaState.cidade) params.set("cidade", pesquisaCompletaState.cidade);
-      const response = await fetch(`/api/buscar-expandida?${params.toString()}`);
-      if (!response.ok) throw new Error("Não foi possível carregar os resultados da pesquisa.");
-
-      const page = await response.json();
-      if (requestId !== pesquisaCompletaState.requestId) return;
-      stopLoading();
-
-      atualizarOpcoesFiltrosPesquisa(page.filters);
-      page.items.forEach((item, index) => {
-        list.appendChild(criarLinhaPesquisaCompleta(item, offset + index, pesquisaCompletaState.query));
-      });
-      pesquisaCompletaState.offset = offset + page.items.length;
-      pesquisaCompletaState.total = page.total;
-      count.textContent = page.total === 1 ? "1 resultado" : `${page.total} resultados`;
-
-      if (page.total === 0) {
-        status.textContent = "Nenhum equipamento encontrado para esse termo.";
-      } else if (page.has_more) {
-        status.textContent = `Exibindo ${pesquisaCompletaState.offset} de ${page.total} ${pluralize(page.total, "resultado")}.`;
-      } else {
-        status.textContent = page.total === 1
-          ? "O único resultado foi exibido."
-          : `Todos os ${page.total} resultados foram exibidos.`;
-      }
-      moreButton.classList.toggle("hidden", !page.has_more);
-      lucide.createIcons({ root: list });
-    } catch (error) {
-      if (requestId === pesquisaCompletaState.requestId) {
-        status.textContent = "Não foi possível carregar a pesquisa. Feche a janela e tente novamente.";
-        app.showToast(error.message || "Falha ao carregar resultados", "error");
-      }
-    } finally {
-      stopLoading();
-      if (requestId === pesquisaCompletaState.requestId) {
-        pesquisaCompletaState.loading = false;
-        moreButton.disabled = false;
-        moreButton.removeAttribute("aria-busy");
-        categoryFilter.disabled = false;
-        cityFilter.disabled = false;
-      }
-    }
-  }
-
-  function carregarMaisResultadosPesquisa() {
-    carregarResultadosPesquisaCompleta(true);
-  }
-
-  function fecharModalPesquisaCompleta() {
-    app.fecharModalAcessivel("modal-pesquisa-completa");
   }
 
   function fecharAutocomplete() {
@@ -639,7 +385,7 @@
           }
           if (!equipmentLookupRequestGate.isCurrent(request.id)) return;
         }
-        throw new Error(errData.detail || "Equipamento não encontrado na base de dados.");
+        throw app.createApiError(errData.detail, "Equipamento não encontrado na base de dados.");
       }
 
       const data = await res.json();
@@ -775,8 +521,7 @@
   return {
     definirEquipamentoAtual, limparSelecaoEquipamento, invalidarBuscasEquipamento,
     invalidarDadosEquipamentoAposRestauracao, atualizarSelecaoAposSubstituirInventarios, handleSerialInput,
-    handleSerialKeydown, selecionarItemAutocomplete, abrirPesquisaCompleta, alterarFiltrosPesquisaCompleta,
-    limparFiltrosPesquisaCompleta, carregarMaisResultadosPesquisa, fecharModalPesquisaCompleta, fecharAutocomplete,
+    handleSerialKeydown, selecionarItemAutocomplete, fecharAutocomplete,
     limparSerial, buscarSerial, exibirEquipamento, formatarLocalAtual, abrirPesquisaRecente, limparPesquisasRecentes,
   };
 });

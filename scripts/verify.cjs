@@ -87,6 +87,11 @@ function buildSteps(python) {
         return failures.length === 0;
       },
     },
+    {
+      name: "Tipos JavaScript (TypeScript gradual)",
+      command: process.execPath,
+      args: [path.join(ROOT, "node_modules/typescript/bin/tsc"), "--project", "tsconfig.ui.json"],
+    },
     { name: "Sintaxe Python (compileall)", command: python, args: ["-m", "compileall", "-q", ...PYTHON_COMPILE_TARGETS] },
     {
       name: "Tipos (mypy gradual)",

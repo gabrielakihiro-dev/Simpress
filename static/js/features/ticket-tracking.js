@@ -104,7 +104,7 @@
       const response = await fetch(`/api/operacoes/chamados/evolucao?${query.toString()}`, { signal: request.signal });
       const data = await response.json().catch(() => ({}));
       if (!ticketEvolutionRequestGate.isCurrent(request.id)) return;
-      if (!response.ok) throw new Error(data.detail || "Não foi possível comparar as versões dos chamados.");
+      if (!response.ok) throw app.createApiError(data.detail, "Não foi possível comparar as versões dos chamados.");
       app.renderizarEvolucaoChamados(data);
     } catch (error) {
       if (!ticketEvolutionRequestGate.isCurrent(request.id)) return;
@@ -175,7 +175,7 @@
       const response = await fetch(`/api/operacoes/chamados/linha-do-tempo/${encodeURIComponent(serial)}?${params.toString()}`, { signal: request.signal });
       const data = await response.json().catch(() => ({}));
       if (!isCurrent()) return;
-      if (!response.ok) throw new Error(data.detail || "Não foi possível carregar a linha do tempo.");
+      if (!response.ok) throw app.createApiError(data.detail, "Não foi possível carregar a linha do tempo.");
       body.innerHTML = app.renderizarLinhaDoTempoChamado(data.eventos);
       app.conectarAnotacoesLinhaDoTempo(body);
       details.dataset.ticketTimelineLoaded = "true";
@@ -456,7 +456,7 @@
       const response = await fetch(`/api/operacoes/chamados/snapshot/${encodeURIComponent(snapshotId)}`, { signal: request.signal });
       const data = await response.json().catch(() => ({}));
       if (!ticketSnapshotRequestGate.isCurrent(request.id)) return;
-      if (!response.ok) throw new Error(data.detail || "Não foi possível abrir esta versão.");
+      if (!response.ok) throw app.createApiError(data.detail, "Não foi possível abrir esta versão.");
       data.snapshot_id = snapshotId;
       appState.acompanhamentoChamadosAtual = data;
       app.renderizarAcompanhamentoChamados();
@@ -484,7 +484,7 @@
     try {
       const response = await fetch("/api/operacoes/chamados/historico/antigas", { method: "DELETE" });
       const data = await response.json().catch(() => ({}));
-      if (!response.ok) throw new Error(data.detail || "Não foi possível excluir as importações antigas.");
+      if (!response.ok) throw app.createApiError(data.detail, "Não foi possível excluir as importações antigas.");
       await app.carregarAcompanhamentoChamados();
       const removedCount = Number(data.removidas) || 0;
       const removedLabel = removedCount === 1 ? "1 importação antiga removida" : `${removedCount} importações antigas removidas`;
@@ -517,7 +517,7 @@
       const response = await fetch(`/api/operacoes/chamados/exportar?${params.toString()}`);
       if (!response.ok) {
         const data = await response.json().catch(() => ({}));
-        throw new Error(data.detail || "Não foi possível exportar os chamados filtrados.");
+        throw app.createApiError(data.detail, "Não foi possível exportar os chamados filtrados.");
       }
       const disposition = response.headers?.get("Content-Disposition") || "";
       const match = /filename[^;=\n]*=((['"]).*?\2|[^;\n]*)/.exec(disposition);
@@ -549,7 +549,7 @@
       const response = await fetch("/api/operacoes/chamados", { signal: request.signal });
       const data = await response.json().catch(() => ({}));
       if (!ticketSnapshotRequestGate.isCurrent(request.id)) return;
-      if (!response.ok) throw new Error(data.detail || "Não foi possível carregar o acompanhamento de chamados.");
+      if (!response.ok) throw app.createApiError(data.detail, "Não foi possível carregar o acompanhamento de chamados.");
       appState.acompanhamentoChamadosAtual = data;
       app.renderizarHistoricoAcompanhamentoChamados(data);
       app.renderizarAcompanhamentoChamados();
@@ -583,7 +583,7 @@
       payload.append("oracle_file", oracleInput.files[0]);
       const response = await fetch("/api/operacoes/chamados/importar", { method: "POST", body: payload });
       const data = await response.json().catch(() => ({}));
-      if (!response.ok) throw new Error(data.detail || "Não foi possível importar as planilhas.");
+      if (!response.ok) throw app.createApiError(data.detail, "Não foi possível importar as planilhas.");
       ticketSnapshotRequestGate.invalidate();
       ticketEvolutionRequestGate.invalidate();
       appState.acompanhamentoChamadosAtual = data;

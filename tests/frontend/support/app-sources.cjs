@@ -1,22 +1,36 @@
-// The page script is split into static/js/features/* plus the static/app.js bootstrap.
-// These helpers load them in index.html order, for vm harnesses and for source-level checks.
+// app-entry.js owns the ordered browser imports. VM harnesses evaluate the application
+// factories and bootstrap in that order; standalone UI integrations have dedicated tests.
 const fs = require("node:fs");
 const path = require("node:path");
 
 const staticDir = path.join(__dirname, "..", "..", "..", "static");
-const indexHtml = fs.readFileSync(path.join(staticDir, "index.html"), "utf8");
-
-// Scripts the bootstrap depends on that belong to the application itself (not vendor or shared UI helpers).
-const APP_SCRIPT_PATTERN = /<script src="\/static\/((?:js\/features\/[^"]+|js\/shared\/history-format\.js|app\.js))"><\/script>/g;
+const entrySource = fs.readFileSync(path.join(staticDir, "app-entry.js"), "utf8");
+const APP_IMPORT_PATTERN = /^\s*import\s+["']\.\/([^"']+\.js)["'];?\s*$/gm;
 
 function appScriptFiles() {
-  const files = [...indexHtml.matchAll(APP_SCRIPT_PATTERN)].map(match => match[1]);
-  if (files[files.length - 1] !== "app.js") throw new Error("static/app.js must be the last application script in index.html");
+  const files = [...entrySource.matchAll(APP_IMPORT_PATTERN)].map(match => match[1]);
+  const bootstrapIndex = files.indexOf("app.js");
+  if (bootstrapIndex === -1) throw new Error("static/app-entry.js must import static/app.js");
+  if (!files.slice(0, bootstrapIndex).some(file => file.startsWith("js/features/"))) {
+    throw new Error("feature factories must load before static/app.js");
+  }
+  if (!files.slice(bootstrapIndex + 1).includes("js/ui/ux-enhancements.js")) {
+    throw new Error("page enhancements must load after static/app.js");
+  }
   return files;
 }
 
 function appScripts() {
-  return appScriptFiles().map(file => ({ file: `static/${file}`, source: fs.readFileSync(path.join(staticDir, file), "utf8") }));
+  const isApplicationSource = file => file.startsWith("js/features/")
+    || file === "js/shared/api-errors.js"
+    || file === "js/shared/history-format.js"
+    || file === "js/ui/comparison-result-renderer.js"
+    || file === "js/ui/equipment-search-renderers.js"
+    || file === "app.js";
+  return appScriptFiles().filter(isApplicationSource).map(file => ({
+    file: `static/${file}`,
+    source: fs.readFileSync(path.join(staticDir, file), "utf8"),
+  }));
 }
 
 function appSource() {
