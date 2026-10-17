@@ -1,0 +1,11 @@
+{
+  "version": "0.0.1",
+  "configurations": [
+    {
+      "name": "ui-fixture",
+      "runtimeExecutable": "python",
+      "runtimeArgs": ["-B", "tests/support/serve_ui_motion_preview.py"],
+      "port": 8765
+    }
+  ]
+}
