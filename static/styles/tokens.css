@@ -103,8 +103,13 @@
   --border-chrome: rgba(148, 163, 184, 0.13);
   --accent: #38a9f7;
   --accent-ring: rgba(56, 169, 247, 0.2);
-  --accent-solid: var(--ux-cta-bg);
-  --accent-solid-hover: #0284c7;
+  --accent-solid: var(--primary);
+  --accent-solid-hover: var(--primary-hover);
+  /* One primary color for the main action of each area (sidebar, Home search, Transporte).
+   * White text keeps AA contrast on both shades: 5.9:1 at rest, 7.6:1 on hover. */
+  --primary: #0369a1;
+  --primary-hover: #075985;
+  --primary-fg: #ffffff;
   --danger: var(--ux-critical-fg);
   --danger-solid: #be123c;
   --danger-solid-hover: #e11d48;
@@ -130,13 +135,6 @@
   --sidebar-icon-button-hover-fg: #f8fafc;
   --sidebar-section-title: #74849c;
   --sidebar-divider-line: rgba(148, 163, 184, 0.2);
-
-  --sidebar-cta-border: rgba(56, 189, 248, 0.54);
-  --sidebar-cta-fg: #f0f9ff;
-  --sidebar-cta-icon: #e0f2fe;
-  --sidebar-cta-shadow: 0 10px 22px rgba(12, 74, 110, 0.28), inset 0 1px rgba(255, 255, 255, 0.08);
-  --sidebar-cta-hover-border: rgba(125, 211, 252, 0.78);
-  --sidebar-cta-hover-shadow: 0 12px 25px rgba(12, 74, 110, 0.36), inset 0 1px rgba(255, 255, 255, 0.12);
 
   /* Navigation rows: tabs, tool buttons and group summaries. */
   --sidebar-item-fg: #9aa9bd;
@@ -231,6 +229,10 @@ html[data-theme="light"] {
   --border-chrome: #dbe4ef;
   --accent: #0284c7;
   --accent-ring: rgba(2, 132, 199, 0.18);
+  /* Same hue as dark; white text: 5.9:1 at rest, 9.4:1 on hover. */
+  --primary: #0369a1;
+  --primary-hover: #0c4a6e;
+  --primary-fg: #ffffff;
 
   --sidebar-bg: linear-gradient(180deg, #fff, #f8fafc);
   --sidebar-shadow: 12px 0 36px rgba(15, 23, 42, 0.08);

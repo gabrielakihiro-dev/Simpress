@@ -493,7 +493,8 @@ test("layout stays within common responsive viewport widths", async ({ page }) =
 test("keyboard focus stays visible over component and theme styles", async ({ page }) => {
   await page.setViewportSize({ width: 1366, height: 900 });
   const controls = [
-    ["#input-serial", "3px", "2px"],
+    // The Home search shows a single ring: the outline replaces its border, with no halo shadow.
+    ["#input-serial", "3px", "0px", "none"],
     ["#theme-toggle", "2px", "2px"],
     ["#btn-nova-transferencia", "3px", "3px"],
     ['.sidebar-tabs [role="tab"]:first-child', "3px", "3px"],
@@ -502,7 +503,7 @@ test("keyboard focus stays visible over component and theme styles", async ({ pa
   for (const theme of ["dark", "light"]) {
     await page.locator("html").evaluate((root, value) => { root.dataset.theme = value; }, theme);
     await page.keyboard.press("Tab");
-    for (const [selector, width, offset] of controls) {
+    for (const [selector, width, offset, shadow] of controls) {
       const control = page.locator(selector);
       await control.focus();
       await expect(control).toBeFocused();
@@ -510,7 +511,8 @@ test("keyboard focus stays visible over component and theme styles", async ({ pa
       await expect(control).toHaveCSS("outline-width", width);
       await expect(control).toHaveCSS("outline-offset", offset);
       await expect(control).toHaveCSS("outline-color", theme === "light" ? "rgb(2, 132, 199)" : "rgb(125, 211, 252)");
-      await expect(control).toHaveCSS("box-shadow", `${theme === "light" ? "rgb(255, 255, 255)" : "rgb(2, 6, 23)"} 0px 0px 0px 2px`);
+      await expect(control).toHaveCSS("box-shadow", shadow
+        ?? `${theme === "light" ? "rgb(255, 255, 255)" : "rgb(2, 6, 23)"} 0px 0px 0px 2px`);
     }
   }
   await openFixtureComparison(page);
