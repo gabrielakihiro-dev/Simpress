@@ -448,7 +448,7 @@
     }
     .ticket-disclosure > summary::-webkit-details-marker { display: none; }
     .ticket-disclosure > summary::before {
-      content: ""; flex: none; width: 0.42rem; height: 0.42rem; border-right: 1.5px solid #94a3b8; border-bottom: 1.5px solid #94a3b8;
+      content: ""; flex: none; width: 0.42rem; height: 0.42rem; border-right: 1.5px solid var(--disclosure-chevron); border-bottom: 1.5px solid var(--disclosure-chevron);
       transform: rotate(-45deg); transition: transform var(--motion-fast) var(--motion-ease);
     }
     .ticket-disclosure[open] > summary::before { transform: rotate(45deg); }
@@ -459,7 +459,7 @@
     .ticket-card-identifier {
       display: flex; min-width: 0; align-items: center; justify-content: space-between; gap: 0.6rem; border-radius: 0.55rem; padding: 0.45rem 0.6rem;
     }
-    .ticket-card-identifier > span { color: var(--text-muted); font-size: 0.7rem; font-weight: 700; letter-spacing: 0.025em; }
+    .ticket-card-identifier > span { color: var(--ticket-identifier-label); font-size: 0.7rem; font-weight: 700; letter-spacing: 0.025em; }
     .ticket-card-identifier > strong { min-width: 0; color: var(--text); font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 0.9rem; line-height: 1.3; text-align: right; overflow-wrap: anywhere; }
     .ticket-card-identifier > strong.is-empty { color: var(--text-placeholder); font-family: inherit; font-size: 0.72rem; font-weight: 500; }
     .ticket-stages-disclosure > summary { padding-block: 0.15rem; }
@@ -469,37 +469,37 @@
     /* Details sections are separated by rules, not boxed, so the card does not stack four borders. */
     .ticket-detail-grid { display: grid; grid-template-columns: minmax(0, 1fr); gap: 0.6rem; padding-top: 0.5rem; }
     .ticket-detail-section { min-width: 0; }
-    .ticket-detail-section + .ticket-detail-section { border-top: 1px solid #1e293b; padding-top: 0.6rem; }
+    .ticket-detail-section + .ticket-detail-section { border-top: 1px solid var(--ticket-rule); padding-top: 0.6rem; }
     @media (min-width: 1024px) {
       .ticket-detail-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 1rem; }
-      .ticket-detail-section + .ticket-detail-section { border-top: 0; border-left: 1px solid #1e293b; padding-top: 0; padding-left: 1rem; }
+      .ticket-detail-section + .ticket-detail-section { border-top: 0; border-left: 1px solid var(--ticket-rule); padding-top: 0; padding-left: 1rem; }
     }
     .ticket-oracle-request { min-width: 0; margin-top: 0.5rem; }
-    .ticket-oracle-request + .ticket-oracle-request { border-top: 1px dashed #334155; padding-top: 0.5rem; }
+    .ticket-oracle-request + .ticket-oracle-request { border-top: 1px dashed var(--ticket-border); padding-top: 0.5rem; }
     .ticket-card-meta > span { min-width: 0; max-width: 100%; overflow-wrap: anywhere; }
     .ticket-card-meta > span:not(:first-child)::before,
     .ticket-card-triage > span:not(:first-child)::before {
-      content: "•"; display: inline-block; margin: 0 0.55rem 0 0.15rem; color: #64748b; font-weight: 700;
+      content: "•"; display: inline-block; margin: 0 0.55rem 0 0.15rem; color: var(--text-faint); font-weight: 700;
     }
-    .ticket-card-meta b, .ticket-card-status b { color: #94a3b8; font-weight: 600; }
+    .ticket-card-meta b, .ticket-card-status b { color: var(--text-subtle); font-weight: 600; }
     .ticket-card-status > p { min-width: 0; overflow-wrap: anywhere; }
     .ticket-card-triage > span { max-width: 100%; overflow-wrap: anywhere; }
     .ticket-process-summary { display: flex; flex-wrap: wrap; gap: 0.4rem; min-width: 0; }
-    .ticket-process-summary > span { min-width: 0; max-width: 100%; overflow-wrap: anywhere; border: 1px solid #334155; border-radius: 0.5rem; padding: 0.3rem 0.55rem; font-size: 0.7rem; color: #cbd5e1; background: rgba(15, 23, 42, 0.6); }
-    .ticket-process-summary b { color: #94a3b8; font-weight: 600; margin-right: 0.25rem; }
-    .ticket-process-summary > .ticket-process-forecast { order: -1; flex: 1 1 100%; font-size: 0.85rem; font-weight: 600; color: #a5f3fc; border-color: rgba(34, 211, 238, 0.45); background: rgba(8, 145, 178, 0.14); }
-    .ticket-process-summary > .ticket-process-forecast.is-late { color: #fde68a; border-color: rgba(251, 191, 36, 0.5); background: rgba(217, 119, 6, 0.14); }
+    .ticket-process-summary > span { min-width: 0; max-width: 100%; overflow-wrap: anywhere; border: 1px solid var(--ticket-border); border-radius: 0.5rem; padding: 0.3rem 0.55rem; font-size: 0.7rem; color: var(--text-body); background: var(--surface-sunken); }
+    .ticket-process-summary b { color: var(--text-subtle); font-weight: 600; margin-right: 0.25rem; }
+    .ticket-process-summary > .ticket-process-forecast { order: -1; flex: 1 1 100%; font-size: 0.85rem; font-weight: 600; color: var(--forecast-fg); border-color: var(--forecast-border); background: var(--forecast-bg); }
+    .ticket-process-summary > .ticket-process-forecast.is-late { color: var(--forecast-late-fg); border-color: var(--forecast-late-border); background: var(--forecast-late-bg); }
     .ticket-stages { display: grid; grid-template-columns: 1fr; gap: 0.3rem; margin: 0.4rem 0 0; padding: 0; list-style: none; }
-    .ticket-stage { display: grid; grid-template-columns: 1.1rem minmax(0, 1fr); align-items: baseline; gap: 0.4rem; border-radius: 0.4rem; padding: 0.3rem 0.5rem; font-size: 0.72rem; border: 1px solid #1e293b; }
+    .ticket-stage { display: grid; grid-template-columns: 1.1rem minmax(0, 1fr); align-items: baseline; gap: 0.4rem; border-radius: 0.4rem; padding: 0.3rem 0.5rem; font-size: 0.72rem; border: 1px solid var(--ticket-rule); }
     .ticket-stage-text { min-width: 0; overflow-wrap: anywhere; }
     .ticket-stage-date { font-weight: 700; }
     @media (min-width: 640px) {
       .ticket-stages { grid-template-columns: repeat(2, minmax(0, 1fr)); }
     }
-    .ticket-stage.is-done { color: #a7f3d0; }
-    .ticket-stage.is-current { color: #67e8f9; border-color: rgba(34, 211, 238, 0.4); background: rgba(8, 145, 178, 0.1); font-weight: 600; }
-    .ticket-stage.is-forecast { color: #a5f3fc; border-color: rgba(34, 211, 238, 0.45); background: rgba(8, 145, 178, 0.14); font-weight: 700; }
-    .ticket-stage.is-pending { color: #94a3b8; }
+    .ticket-stage.is-done { color: var(--stage-done-fg); }
+    .ticket-stage.is-current { color: var(--stage-current-fg); border-color: var(--stage-current-border); background: var(--stage-current-bg); font-weight: 600; }
+    .ticket-stage.is-forecast { color: var(--forecast-fg); border-color: var(--forecast-border); background: var(--forecast-bg); font-weight: 700; }
+    .ticket-stage.is-pending { color: var(--text-subtle); }
     .ticket-stage.is-pending .ticket-stage-date { font-style: italic; }
     .ticket-filter-toolbar { display: flex; flex-wrap: wrap; align-items: flex-end; gap: 0.5rem; }
     .ticket-filter-search { flex: 1 1 18rem; min-width: min(100%, 18rem); }
@@ -519,8 +519,8 @@
       background: rgba(var(--portal-tint), 0.1); color: var(--portal-text); font-size: 0.7rem; font-weight: 600; white-space: nowrap;
       transition: background-color var(--motion-fast) var(--motion-ease), border-color var(--motion-fast) var(--motion-ease);
     }
-    .ticket-agent-link--oracle { --portal-tint: 167, 139, 250; --portal-text: #ddd6fe; }
-    .ticket-agent-link--simpress { --portal-tint: 45, 212, 191; --portal-text: #99f6e4; }
+    .ticket-agent-link--oracle { --portal-tint: var(--tint-violet); --portal-text: var(--source-oracle-fg); }
+    .ticket-agent-link--simpress { --portal-tint: var(--tint-teal); --portal-text: var(--source-simpress-link-fg); }
     .ticket-agent-link:hover { border-color: rgba(var(--portal-tint), 0.55); background: rgba(var(--portal-tint), 0.18); }
     .ticket-agent-link svg { width: 0.85rem; height: 0.85rem; flex: none; }
     .spreadsheet-source-shortcuts { display: flex; flex-wrap: wrap; align-items: center; gap: 0.45rem; }
@@ -551,21 +551,21 @@
       .ticket-filter-action { padding-inline: 0.55rem; font-size: 0.68rem; }
     }
     /* Same scale as the other card summaries: an accent rule instead of another nested box. */
-    .ticket-oracle-description { margin-top: 0.4rem; border-left: 2px solid rgba(167, 139, 250, 0.45); }
+    .ticket-oracle-description { margin-top: 0.4rem; border-left: 2px solid var(--oracle-description-rule); }
     .ticket-oracle-description > summary {
       display: flex; align-items: center; gap: 0.5rem; padding: 0.15rem 0 0.15rem 0.55rem;
-      color: #cbd5e1; font-size: 0.75rem; line-height: 1.25rem; cursor: pointer; list-style: none;
+      color: var(--text-body); font-size: 0.75rem; line-height: 1.25rem; cursor: pointer; list-style: none;
     }
     .ticket-oracle-description > summary::-webkit-details-marker { display: none; }
         .ticket-oracle-description-preview {
-      flex: 1; min-width: 0; overflow: hidden; color: #94a3b8; font-size: 0.7rem; text-overflow: ellipsis; white-space: nowrap;
+      flex: 1; min-width: 0; overflow: hidden; color: var(--text-subtle); font-size: 0.7rem; text-overflow: ellipsis; white-space: nowrap;
     }
-    .ticket-oracle-description-toggle { flex: none; color: #c4b5fd; font-size: 0.7rem; font-weight: 700; }
+    .ticket-oracle-description-toggle { flex: none; color: var(--oracle-description-toggle); font-size: 0.7rem; font-weight: 700; }
     .ticket-oracle-description-collapse { display: none; }
     .ticket-oracle-description[open] .ticket-oracle-description-expand { display: none; }
     .ticket-oracle-description[open] .ticket-oracle-description-collapse { display: inline; }
     .ticket-oracle-description-content {
-      max-height: 12rem; overflow: auto; padding: 0.3rem 0 0.2rem 0.55rem; color: #cbd5e1; font-size: 0.75rem;
+      max-height: 12rem; overflow: auto; padding: 0.3rem 0 0.2rem 0.55rem; color: var(--text-body); font-size: 0.75rem;
       line-height: 1.55; overflow-wrap: anywhere; white-space: pre-wrap;
     }
     @media (max-width: 1023px), (pointer: coarse) {
@@ -998,26 +998,8 @@ html[data-theme="light"] .autocomplete-row.active .serial-badge,
 html[data-theme="light"] .autocomplete-row:hover .serial-badge,
 html[data-theme="light"] .serial-badge { color: var(--text); }
 
-html[data-theme="light"] .ticket-card-identifier > span,
-html[data-theme="light"] .ticket-card-meta b,
-html[data-theme="light"] .ticket-card-status b { color: #64748b; }
-html[data-theme="light"] .ticket-process-summary > span { background: #f8fafc; border-color: #cbd5e1; color: #334155; }
-html[data-theme="light"] .ticket-process-summary b { color: #64748b; }
-html[data-theme="light"] .ticket-process-summary > .ticket-process-forecast { color: #0e7490; background: #ecfeff; border-color: #67e8f9; }
-html[data-theme="light"] .ticket-process-summary > .ticket-process-forecast.is-late { color: #92400e; background: #fffbeb; border-color: #fcd34d; }
-html[data-theme="light"] .ticket-stage { border-color: #e2e8f0; }
-html[data-theme="light"] .ticket-stage.is-done { color: #047857; }
-html[data-theme="light"] .ticket-stage.is-current, html[data-theme="light"] .ticket-stage.is-forecast { color: #0e7490; background: #ecfeff; border-color: #67e8f9; }
-html[data-theme="light"] .ticket-stage.is-pending { color: #64748b; }
-html[data-theme="light"] .ticket-oracle-description { border-left-color: #c4b5fd; }
-html[data-theme="light"] .ticket-detail-section + .ticket-detail-section { border-color: #e2e8f0; }
-html[data-theme="light"] .ticket-oracle-request + .ticket-oracle-request { border-top-color: #cbd5e1; }
-html[data-theme="light"] .ticket-oracle-description > summary,
-html[data-theme="light"] .ticket-oracle-description-content { color: #334155; }
-html[data-theme="light"] .ticket-oracle-description-preview { color: #64748b; }
-html[data-theme="light"] .ticket-oracle-description-toggle { color: #6d28d9; }
-html[data-theme="light"] .ticket-agent-link--oracle { --portal-text: #5b21b6; }
-html[data-theme="light"] .ticket-agent-link--simpress { --portal-text: #0f766e; }
+/* Light only: in the dark theme the other sides keep the utility border color. */
+html[data-theme="light"] .ticket-detail-section + .ticket-detail-section { border-color: var(--ticket-rule); }
 
 /* The readiness panel sits on the raised surface in the light theme. */
 html[data-theme="light"] .readiness-panel { background: var(--surface-raised); }
