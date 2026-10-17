@@ -274,6 +274,38 @@
   --transfer-delivery-fg: #34d399;
   --transfer-delivery-bg: rgba(52, 211, 153, 0.14);
   --transfer-delivery-border: rgba(52, 211, 153, 0.45);
+
+  /* ---------- Shared scrollbars and tints (app.css) ---------- */
+  /* Scrollbar colors below stay the same in both themes unless the light block redefines them. */
+  --scrollbar-track: #0f172a;
+  --scrollbar-thumb-strong: #64748b;
+  --scrollbar-thumb-strong-hover: #94a3b8;
+  --table-scrollbar-track: #1e293b;
+  --modal-scrollbar-thumb: #475569;
+  /* RGB channels for rgba() tints: link and menu chips keep the same hue in both themes. */
+  --tint-sky: 56, 189, 248;
+  --tint-teal: 45, 212, 191;
+  --tint-violet: 167, 139, 250;
+  --source-simpress-link-fg: #99f6e4;
+
+  /* ---------- Historico de Planilhas and result (app.css) ---------- */
+  --result-card-bg: linear-gradient(145deg, rgba(15, 23, 42, 0.96), rgba(2, 6, 23, 0.88));
+  --result-card-border: rgba(51, 65, 85, 0.9);
+  --result-card-rule: rgba(51, 65, 85, 0.65);
+  --result-card-shadow: inset 0 1px rgba(255, 255, 255, 0.025);
+  --history-filter-bg: rgba(15, 23, 42, 0.97);
+  --history-filter-border: rgba(148, 163, 184, 0.24);
+  --history-filter-shadow: 0 8px 24px rgba(2, 6, 23, 0.28);
+  --history-field-border: #475569;
+  --history-field-focus-ring: 0 0 0 2px rgba(56, 189, 248, 0.16);
+  --history-check-label: #d1d5db;
+  /* Rows with an annotation: emerald marks only the annotated ones. */
+  --annotated-check: #34d399; /* same value in both themes */
+  --annotated-mark: #34d399;
+  --annotated-row-bg: rgba(16, 185, 129, 0.09);
+  --annotated-card-bg: rgba(6, 78, 59, 0.24);
+  --annotated-card-border: rgba(52, 211, 153, 0.62);
+  --annotated-card-glow: 0 4px 14px rgba(6, 78, 59, 0.16);
 }
 
 html[data-theme="light"] {
@@ -463,6 +495,26 @@ html[data-theme="light"] {
   --transfer-delivery-fg: #047857;
   --transfer-delivery-bg: #ecfdf5;
   --transfer-delivery-border: #6ee7b7;
+
+  --table-scrollbar-track: #e2e8f0;
+  --modal-scrollbar-thumb: #94a3b8;
+  --source-simpress-link-fg: #0f766e;
+
+  --result-card-bg: #fff;
+  --result-card-border: #dbe4ef;
+  --result-card-rule: #e2e8f0;
+  --result-card-shadow: 0 8px 20px rgba(15, 23, 42, 0.06);
+  --history-filter-bg: rgba(248, 250, 252, 0.97);
+  --history-filter-border: #cbd5e1;
+  --history-filter-shadow: 0 8px 22px rgba(15, 23, 42, 0.12);
+  --history-field-border: #cbd5e1;
+  --history-field-focus-ring: 0 0 0 2px rgba(2, 132, 199, 0.14);
+  --history-check-label: #334155;
+  --annotated-mark: #059669;
+  --annotated-row-bg: #ecfdf5;
+  --annotated-card-bg: #ecfdf5;
+  --annotated-card-border: #6ee7b7;
+  --annotated-card-glow: 0 4px 12px rgba(5, 150, 105, 0.12);
 }
 
 /* Components consume these timings instead of overriding the user's preference. */
