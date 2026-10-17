@@ -74,6 +74,9 @@
   --ux-neutral-fg: #cbd5e1;
   --ux-neutral-bg: rgba(148, 163, 184, 0.1);
   --ux-neutral-border: rgba(148, 163, 184, 0.3);
+  /* Small status dots (base summary, readiness title). */
+  --ux-success-dot: var(--ux-success-fg);
+  --ux-warning-dot: var(--ux-warning-fg);
 
   /* Ticket sources: Simpress follows the info (pending) scale; Oracle is the only violet role. */
   --source-oracle-fg: #ddd6fe;
@@ -109,6 +112,13 @@
   --accent: #38a9f7;
   --accent-text: #38a9f7;
   --text-placeholder: #8494a8;
+  /* Text tiers used by app.css components, brightest first. */
+  --text-strong: #f8fafc;
+  --text-heading: #e2e8f0;
+  --text-body: #cbd5e1;
+  --text-subtle: #94a3b8;
+  --text-count: #94a3b8;
+  --text-faint: #64748b; /* same value in both themes */
   --accent-ring: rgba(56, 169, 247, 0.2);
   --accent-solid: var(--primary);
   --accent-solid-hover: var(--primary-hover);
@@ -184,6 +194,76 @@
   --menu-rule: #26364a;
   --menu-orange-fg: #fed7aa;
   --menu-orange-icon: #fb923c;
+
+  /* ---------- Home (app.css) ---------- */
+  /* Search popover: the list under the Home search field. */
+  --search-popover-bg: #080e1c;
+  --search-popover-border: rgba(56, 169, 247, 0.45);
+  --search-popover-shadow: 0 18px 40px -12px rgba(2, 6, 23, 0.72), 0 0 0 1px rgba(255, 255, 255, 0.06);
+  --search-popover-chrome: #060b17;
+  --search-scrollbar-track: #060b17;
+  --search-scrollbar-thumb: #1e3a5f;
+  --search-row-active-bg: linear-gradient(90deg, rgba(14, 140, 233, 0.22) 0%, rgba(15, 23, 42, 0.95) 100%);
+  --search-row-rail: transparent;
+  --search-row-shadow: none; /* rows get a shadow only in the light theme */
+  --search-badge-bg: #040814;
+  --search-badge-border: rgba(56, 169, 247, 0.35);
+  --search-badge-shadow: inset 0 1px 3px rgba(0, 0, 0, 0.7);
+  --search-badge-active-bg: #020617;
+  --search-badge-active-border: #38a9f7;
+  --search-badge-active-shadow: 0 0 0 1px rgba(56, 169, 247, 0.35);
+  --search-match-bg: rgba(14, 140, 233, 0.38);
+  --search-match-fg: #7cc7fb;
+  --search-match-border: rgba(56, 169, 247, 0.5);
+  --search-more-bg: rgba(2, 6, 23, 0.72);
+  --search-more-button-bg: #0284c7;
+  --search-more-button-hover-bg: #0369a1;
+  --search-more-button-fg: #fff;
+  --search-more-button-border: rgba(125, 211, 252, 0.8);
+  --search-more-button-hover-border: rgba(125, 211, 252, 0.8);
+  --search-more-button-shadow: 0 4px 14px rgba(2, 132, 199, 0.28);
+
+  /* Soft info actions (copy template, import a base, Endpoint link). */
+  --info-soft-fg: #bae6fd;
+  --info-soft-border: rgba(125, 211, 252, 0.3);
+
+  /* Ticket text templates in the equipment result. */
+  --template-card-bg: rgba(15, 23, 42, 0.46);
+  --template-card-border: rgba(148, 163, 184, 0.2);
+  --template-field-bg: rgba(2, 6, 23, 0.75);
+  --template-field-border: rgba(148, 163, 184, 0.35);
+  /* The field focus keeps the dark accent in both themes. */
+  --template-field-focus-border: #38a9f7;
+  --template-field-focus-ring: 0 0 0 2px rgba(56, 169, 247, 0.2);
+  --template-button-bg: rgba(15, 23, 42, 0.65);
+  --template-button-border: rgba(148, 163, 184, 0.32);
+  --template-button-hover-bg: rgba(30, 41, 59, 0.9);
+  --template-button-hover-border: rgba(148, 163, 184, 0.58);
+  --template-copy-bg: rgba(14, 140, 233, 0.12);
+  --template-copy-border: rgba(56, 189, 248, 0.35);
+  --template-copy-hover-bg: rgba(14, 140, 233, 0.22);
+  --template-copy-hover-border: rgba(56, 189, 248, 0.6);
+  --template-link-bg: rgba(124, 58, 237, 0.16);
+  --template-link-border: rgba(167, 139, 250, 0.55);
+  --template-link-hover-bg: rgba(124, 58, 237, 0.28);
+  --template-link-hover-border: rgba(196, 181, 253, 0.8);
+
+  /* Base readiness panel. */
+  --readiness-summary-hover-bg: rgba(148, 163, 184, 0.035);
+  --readiness-group-bg: rgba(2, 6, 23, 0.22);
+  --readiness-group-border: rgba(148, 163, 184, 0.12);
+  --readiness-count-border: rgba(148, 163, 184, 0.14);
+  --readiness-item-bg: rgba(15, 23, 42, 0.42);
+  --readiness-item-border: rgba(148, 163, 184, 0.08);
+  --readiness-ready-fg: #86efac;
+  --readiness-ready-bg: rgba(34, 197, 94, 0.08);
+  --readiness-ready-border: rgba(74, 222, 128, 0.16);
+  --readiness-pending-bg: rgba(245, 158, 11, 0.08);
+  --readiness-pending-border: rgba(251, 191, 36, 0.2);
+  --readiness-invalid-bg: rgba(244, 63, 94, 0.08);
+  --readiness-invalid-border: rgba(251, 113, 133, 0.22);
+  --readiness-import-bg: rgba(14, 165, 233, 0.1);
+  --readiness-import-hover-bg: rgba(14, 165, 233, 0.22);
 }
 
 html[data-theme="light"] {
@@ -217,6 +297,8 @@ html[data-theme="light"] {
   --ux-neutral-fg: #475569;
   --ux-neutral-bg: #f1f5f9;
   --ux-neutral-border: #cbd5e1;
+  --ux-success-dot: #059669;
+  --ux-warning-dot: #d97706;
 
   --ux-cta-border: #0369a1;
 
@@ -236,6 +318,11 @@ html[data-theme="light"] {
   --surface-overlay: #f8fafc;
   --text-muted: #5b6b80;
   --text-placeholder: #5b6b80;
+  --text-strong: #0f172a;
+  --text-heading: #1e293b;
+  --text-body: #334155;
+  --text-subtle: #64748b;
+  --text-count: #475569;
   --border: #dbe4ef;
   --border-subtle: #e2e8f0;
   --border-chrome: #dbe4ef;
@@ -296,6 +383,68 @@ html[data-theme="light"] {
   --header-context-title: #1e293b;
   --header-summary-border: #dbe4ef;
   --header-summary-bg: rgba(255, 255, 255, 0.88);
+
+  --search-popover-bg: #fff;
+  --search-popover-border: #cbd5e1;
+  --search-popover-shadow: 0 16px 36px rgba(15, 23, 42, 0.16);
+  --search-popover-chrome: #f8fafc;
+  --search-scrollbar-track: #f1f5f9;
+  --search-scrollbar-thumb: #94a3b8;
+  --search-row-active-bg: #e0f2fe;
+  --search-row-rail: #cbd5e1;
+  --search-row-shadow: 0 16px 36px rgba(15, 23, 42, 0.15);
+  --search-badge-bg: #f0f9ff;
+  --search-badge-border: #7dd3fc;
+  --search-badge-shadow: none;
+  --search-badge-active-bg: #f0f9ff;
+  --search-badge-active-border: #7dd3fc;
+  --search-badge-active-shadow: none;
+  --search-match-bg: #dbeafe;
+  --search-match-fg: #1e40af;
+  --search-match-border: #7dd3fc;
+  --search-more-bg: #f8fafc;
+  --search-more-button-bg: #e0f2fe;
+  --search-more-button-hover-bg: #bae6fd;
+  --search-more-button-fg: #075985;
+  --search-more-button-border: #7dd3fc;
+  --search-more-button-hover-border: #38bdf8;
+  --search-more-button-shadow: 0 2px 8px rgba(2, 132, 199, 0.14);
+
+  --info-soft-fg: #075985;
+  --info-soft-border: #7dd3fc;
+
+  --template-card-bg: #f8fafc;
+  --template-card-border: #dbe4ef;
+  --template-field-bg: #fff;
+  --template-field-border: #cbd5e1;
+  --template-button-bg: #fff;
+  --template-button-border: #cbd5e1;
+  --template-button-hover-bg: #f1f5f9;
+  --template-button-hover-border: #94a3b8;
+  --template-copy-bg: #f0f9ff;
+  --template-copy-border: #7dd3fc;
+  --template-copy-hover-bg: #e0f2fe;
+  --template-copy-hover-border: #38bdf8;
+  --template-link-bg: #f5f3ff;
+  --template-link-border: #c4b5fd;
+  --template-link-hover-bg: #ede9fe;
+  --template-link-hover-border: #a78bfa;
+
+  --readiness-summary-hover-bg: #f8fafc;
+  --readiness-group-bg: #f8fafc;
+  --readiness-group-border: #e2e8f0;
+  --readiness-count-border: #cbd5e1;
+  --readiness-item-bg: #fff;
+  --readiness-item-border: #e2e8f0;
+  --readiness-ready-fg: #047857;
+  --readiness-ready-bg: #ecfdf5;
+  --readiness-ready-border: #a7f3d0;
+  --readiness-pending-bg: #fffbeb;
+  --readiness-pending-border: #fcd34d;
+  --readiness-invalid-bg: #fff1f2;
+  --readiness-invalid-border: #fda4af;
+  --readiness-import-bg: #f0f9ff;
+  --readiness-import-hover-bg: #e0f2fe;
 }
 
 /* Components consume these timings instead of overriding the user's preference. */
