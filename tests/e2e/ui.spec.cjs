@@ -769,6 +769,7 @@ test("stale base alert shows the last update date and opens the base update", as
     await expect(page.locator("#modal-atualizar-planilhas")).toBeVisible();
     await page.keyboard.press("Escape");
     await expect(page.locator("#modal-atualizar-planilhas")).toBeHidden();
+    await expect(page.locator("#btn-alerta-base-atualizar")).toBeFocused();
 
     await request.get("/__fixture_base_desatualizada?estado=sem_base");
     await page.reload();
