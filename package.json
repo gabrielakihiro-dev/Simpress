@@ -1,6 +1,7 @@
 {
   "name": "simpress-local-ui-assets",
   "private": true,
+  "license": "UNLICENSED",
   "scripts": {
     "verify": "node scripts/verify.cjs",
     "test:ui:e2e": "playwright test",
