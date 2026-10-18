@@ -14,9 +14,8 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any, Callable, Optional, cast
 
-from fastapi import HTTPException
-
 from core.config import format_size_limit
+from core.errors import DomainError
 from core.local_paths import is_link_or_junction
 
 
@@ -205,7 +204,7 @@ class AutomaticTicketInbox:
 
         try:
             self.import_batch(batch_id, simpress_name, simpress_bytes, oracle_name, oracle_bytes)
-        except HTTPException as error:
+        except DomainError as error:
             if error.status_code in (409, 503):
                 logger.info("Lote de chamados %s aguardará nova tentativa: %s", batch_id, error.detail)
                 self._return_to_pending(processing_batch, batch_id)

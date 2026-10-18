@@ -14,6 +14,7 @@ import openpyxl
 from starlette.datastructures import UploadFile
 
 from core.config import format_size_limit
+from core.errors import DomainError
 from domains.local_setup import TRANSFER_CELLS, unpack_simpress_zip, validate_local_model
 from core.xlsx_safety import XlsxPackageError, validate_xlsx
 from tests import test_integrity_workflows as fixtures
@@ -202,7 +203,7 @@ class FirstAccessTests(unittest.TestCase):
         for entries, limit in [([("a.xlsx", b"a"), ("b.xlsx", b"b")], 100),
                                ([("a.txt", b"a")], 100), ([("../a.xlsx", b"a")], 100),
                                ([("a.xlsx", b"12345")], 4)]:
-            with self.subTest(entries=entries), self.assertRaises(main.HTTPException):
+            with self.subTest(entries=entries), self.assertRaises(DomainError):
                 unpack_simpress_zip(archive_bytes(entries), limit)
 
     def test_size_limit_messages_follow_the_configured_limit(self):
@@ -210,7 +211,7 @@ class FirstAccessTests(unittest.TestCase):
         self.assertEqual(format_size_limit(64 * 1024 * 1024), "64 MB")
         self.assertEqual(format_size_limit(2048), "2 KB")
         self.assertEqual(format_size_limit(4), "4 bytes")
-        with self.assertRaises(main.HTTPException) as caught:
+        with self.assertRaises(DomainError) as caught:
             unpack_simpress_zip(archive_bytes([("a.xlsx", b"12345")]), 4)
         self.assertIn("limite de 4 bytes", caught.exception.detail)
 
@@ -235,7 +236,7 @@ class FirstAccessTests(unittest.TestCase):
                 archive_bytes([("simpress.xlsx", valid_xlsx)], compression), "simpress.xlsx",
             )
             with self.subTest(compression=compression, member="simpress.xlsx"):
-                with self.assertRaises(main.HTTPException) as zip_error:
+                with self.assertRaises(DomainError) as zip_error:
                     unpack_simpress_zip(corrupt_outer_zip, 1_000_000)
                 self.assertEqual(zip_error.exception.status_code, 400)
                 self.assertEqual(zip_error.exception.detail, "Não foi possível ler o ZIP da Simpress.")
@@ -301,7 +302,7 @@ class FirstAccessTests(unittest.TestCase):
     def test_invalid_zip_cannot_replace_inventory_or_cache(self):
         self.import_pair()
         before = self.details.read_bytes()
-        with self.assertRaises(main.HTTPException):
+        with self.assertRaises(DomainError):
             asyncio.run(main.atualizar_planilhas(
                 endpoint_file=UploadFile(filename="endpoint.xlsx", file=io.BytesIO(self.endpoint.read_bytes())),
                 details_file=UploadFile(filename="simpress.zip", file=io.BytesIO(b"broken zip")),

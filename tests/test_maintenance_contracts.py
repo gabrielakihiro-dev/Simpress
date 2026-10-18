@@ -13,6 +13,7 @@ from pathlib import Path
 from unittest.mock import patch
 
 from core import config as app_config
+from core.errors import DomainError
 import openpyxl
 from core import openpyxl_compat
 from fastapi import HTTPException
@@ -465,7 +466,7 @@ class MaintenanceContractTests(unittest.TestCase):
         self.assertNotIn("innerHTML", panel_script)
 
     def test_non_xlsx_upload_is_rejected_before_workbook_processing(self):
-        with self.assertRaises(main.HTTPException) as raised:
+        with self.assertRaises(DomainError) as raised:
             main.validate_uploaded_workbook(b"fictional invalid upload", "endpoint")
 
         self.assertEqual(raised.exception.status_code, 400)
@@ -524,7 +525,7 @@ class MaintenanceContractTests(unittest.TestCase):
         )
 
         with patch("openpyxl.load_workbook", side_effect=AssertionError("openpyxl must not run")):
-            with self.assertRaises(main.HTTPException) as raised:
+            with self.assertRaises(DomainError) as raised:
                 main.read_workbook_tables(package)
 
         self.assertEqual(raised.exception.status_code, 413)
@@ -560,7 +561,7 @@ class MaintenanceContractTests(unittest.TestCase):
             '</row></sheetData></worksheet>'
         )
 
-        with self.assertRaises(main.HTTPException) as raised:
+        with self.assertRaises(DomainError) as raised:
             main.validate_uploaded_workbook(package, "endpoint")
 
         self.assertEqual(raised.exception.status_code, 413)
@@ -572,7 +573,7 @@ class MaintenanceContractTests(unittest.TestCase):
         )
         package = _xlsx_with_worksheet_xml(sheet_xml, sheet_xml)
 
-        with self.assertRaises(main.HTTPException) as raised:
+        with self.assertRaises(DomainError) as raised:
             main.validate_xlsx_package(package)
 
         self.assertEqual(raised.exception.status_code, 413)
@@ -602,7 +603,7 @@ class MaintenanceContractTests(unittest.TestCase):
             '</worksheet>'
         )
 
-        with self.assertRaises(main.HTTPException) as raised:
+        with self.assertRaises(DomainError) as raised:
             main.validate_xlsx_package(package)
 
         self.assertEqual(raised.exception.status_code, 413)
@@ -615,7 +616,7 @@ class MaintenanceContractTests(unittest.TestCase):
             '<sheetData><row r="200000">' + implicit_cells + '</row></sheetData></worksheet>'
         )
 
-        with self.assertRaises(main.HTTPException) as raised:
+        with self.assertRaises(DomainError) as raised:
             main.validate_xlsx_package(package)
 
         self.assertEqual(raised.exception.status_code, 413)

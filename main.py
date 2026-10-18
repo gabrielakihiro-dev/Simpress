@@ -21,8 +21,8 @@ from typing import Dict, Iterable, List, Optional, Any, Set, Tuple
 from urllib.parse import quote
 
 import openpyxl
-from fastapi import FastAPI, File, Form, HTTPException, UploadFile
-from fastapi.responses import FileResponse, StreamingResponse
+from fastapi import FastAPI, File, Form, HTTPException, Request, UploadFile
+from fastapi.responses import FileResponse, JSONResponse, StreamingResponse
 from pydantic import BaseModel, Field, field_validator
 from starlette.datastructures import UploadFile as StarletteUploadFile
 from routers.frontend import RevalidatingStaticFiles, frontend_response
@@ -39,6 +39,7 @@ from core.integrity import (
     stage_workbook_update,
     workbook_snapshot,
 )
+from core.errors import DomainError
 from core.config import (
     ALIAS_HISTORY_FILE,
     AUTOMATIC_INVENTORY_IMPORT_POLL_SECONDS,
@@ -620,6 +621,11 @@ def _raise_if_transaction_recovery_blocked() -> None:
     """Keep automatic batches pending (503 is transient for the inboxes) instead of failing them."""
     if (message := get_transaction_recovery_block()) is not None:
         raise HTTPException(status_code=503, detail=message)
+
+
+def _as_domain_error(error: HTTPException) -> DomainError:
+    """Hand an HTTP error to the automatic inboxes, which only know domain errors."""
+    return DomainError(error.detail, status_code=error.status_code)
 
 
 def inventory_update_preview_summary(
@@ -1204,14 +1210,17 @@ async def _automatic_ticket_import_worker() -> None:
         raise RuntimeError("A rota de importação de chamados não está registrada.")
 
     def import_batch(batch_id: str, simpress_name: str, simpress_bytes: bytes, oracle_name: str, oracle_bytes: bytes):
-        _raise_if_transaction_recovery_blocked()
-        simpress_upload = StarletteUploadFile(filename=simpress_name, file=io.BytesIO(simpress_bytes))
-        oracle_upload = StarletteUploadFile(filename=oracle_name, file=io.BytesIO(oracle_bytes))
-        return endpoint(
-            simpress_file=simpress_upload,
-            oracle_file=oracle_upload,
-            automatic_import_id=batch_id,
-        )
+        try:
+            _raise_if_transaction_recovery_blocked()
+            simpress_upload = StarletteUploadFile(filename=simpress_name, file=io.BytesIO(simpress_bytes))
+            oracle_upload = StarletteUploadFile(filename=oracle_name, file=io.BytesIO(oracle_bytes))
+            return endpoint(
+                simpress_file=simpress_upload,
+                oracle_file=oracle_upload,
+                automatic_import_id=batch_id,
+            )
+        except HTTPException as error:
+            raise _as_domain_error(error) from error
 
     inbox = AutomaticTicketInbox(
         root=AUTOMATIC_TICKET_INBOX_DIR,
@@ -1238,6 +1247,12 @@ app = FastAPI(
     redoc_url="/redoc" if API_DOCS_ENABLED else None,
     openapi_url="/openapi.json" if API_DOCS_ENABLED else None,
 )
+
+
+@app.exception_handler(DomainError)
+async def domain_error_handler(_request: Request, error: DomainError) -> JSONResponse:
+    """Answer domain errors with the same body FastAPI produces for HTTPException."""
+    return JSONResponse({"detail": error.detail}, status_code=error.status_code)
 
 app.add_middleware(InventoryUpdateMiddleware)
 
@@ -2579,7 +2594,7 @@ def aplicar_alteracao_apelido(
             )
             transaction.commit()
             publish_database_state(prepared_state)
-    except HTTPException:
+    except (HTTPException, DomainError):
         raise
     except FileBusyError as error:
         raise HTTPException(status_code=409, detail=str(error)) from error
@@ -2944,7 +2959,7 @@ def exportar_equipamentos():
             media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
             headers=headers
         )
-    except HTTPException:
+    except (HTTPException, DomainError):
         raise
     except FileBusyError as error:
         raise HTTPException(status_code=409, detail=str(error)) from error
@@ -3023,6 +3038,7 @@ _inventory_update_services = InventoryUpdateServices(
     inventory_update_preview_summary=inventory_update_preview_summary,
     create_inventory_preview_token=create_inventory_preview_token,
     verify_inventory_preview_token=verify_inventory_preview_token,
+    external_errors=(HTTPException,),
 )
 
 
@@ -3033,21 +3049,24 @@ async def _import_automatic_inventory_batch(
     simpress_name: str,
     simpress_bytes: bytes,
 ):
-    _raise_if_transaction_recovery_blocked()
-    endpoint_upload = StarletteUploadFile(
-        filename=endpoint_name,
-        file=io.BytesIO(endpoint_bytes),
-    )
-    simpress_upload = StarletteUploadFile(
-        filename=simpress_name,
-        file=io.BytesIO(simpress_bytes),
-    )
-    result = await update_inventory_files(
-        endpoint_upload,
-        simpress_upload,
-        services=_inventory_update_services,
-        automatic_import_id=batch_id,
-    )
+    try:
+        _raise_if_transaction_recovery_blocked()
+        endpoint_upload = StarletteUploadFile(
+            filename=endpoint_name,
+            file=io.BytesIO(endpoint_bytes),
+        )
+        simpress_upload = StarletteUploadFile(
+            filename=simpress_name,
+            file=io.BytesIO(simpress_bytes),
+        )
+        result = await update_inventory_files(
+            endpoint_upload,
+            simpress_upload,
+            services=_inventory_update_services,
+            automatic_import_id=batch_id,
+        )
+    except HTTPException as error:
+        raise _as_domain_error(error) from error
     try:
         await asyncio.to_thread(prune_expired_histories)
     except Exception:

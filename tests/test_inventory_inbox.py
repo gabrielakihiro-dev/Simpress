@@ -6,7 +6,7 @@ import unittest
 from pathlib import Path
 from unittest.mock import patch
 
-from fastapi import HTTPException
+from core.errors import DomainConflictError, DomainValidationError
 
 from domains import inventory_inbox
 from domains.inventory_inbox import AutomaticInventoryInbox
@@ -103,7 +103,7 @@ class AutomaticInventoryInboxTests(unittest.TestCase):
         self.assertEqual(len(self.calls), 1)
 
     def test_transient_conflict_returns_batch_to_pending_for_retry(self):
-        self.import_error = HTTPException(status_code=409, detail="ocupado")
+        self.import_error = DomainConflictError("ocupado")
         self._make_batch()
         self._scan_until_settled()
         self.assertTrue((self.inbox.pending_dir / "lote-001").is_dir())
@@ -116,7 +116,7 @@ class AutomaticInventoryInboxTests(unittest.TestCase):
         self.assertTrue((self.inbox.processed_dir / "lote-001").is_dir())
 
     def test_permanent_validation_error_is_archived_with_reason_and_source_files(self):
-        self.import_error = HTTPException(status_code=400, detail="cabeçalho inválido")
+        self.import_error = DomainValidationError("cabeçalho inválido")
         self._make_batch()
         self._scan_until_settled()
 
