@@ -91,9 +91,7 @@
     const data = new FormData();
     data.append("file", file);
     try {
-      const response = await fetch(`/api/modelos/${modal.dataset.tipo}/importar`, { method: "POST", body: data });
-      const result = await response.json().catch(() => ({}));
-      if (!response.ok) throw app.createApiError(result.detail, "Não foi possível importar o modelo.");
+      const result = await app.apiFetch(`/api/modelos/${modal.dataset.tipo}/importar`, { method: "POST", body: data, errorMessage: "Não foi possível importar o modelo." });
       status.textContent = "Modelo importado. Confira abaixo se todas as dependências estão disponíveis.";
       document.getElementById("arquivo-modelo-local").value = "";
       document.getElementById("nome-arquivo-modelo-local").textContent = "Nenhum arquivo escolhido";
@@ -201,12 +199,11 @@
     };
   }
 
-  function erroRespostaPlanilhas(response, result, mensagemPadrao) {
-    if (response.status === 404) {
+  function erroRespostaPlanilhas(error) {
+    if (error.status === 404) {
       return new Error("A API ativa está desatualizada. Feche a instância anterior e reinicie com iniciar_servidor.bat desta pasta.");
     }
-    const detail = result.detail;
-    return app.createApiError(detail, mensagemPadrao);
+    return error;
   }
 
   function formularioArquivosPlanilhas(endpointFile, detailsFile) {
@@ -231,9 +228,9 @@
     const formData = formularioArquivosPlanilhas(endpointFile, detailsFile);
 
     try {
-      const response = await fetch("/api/planilhas/previsualizar", { method: "POST", body: formData });
-      const result = await response.json().catch(() => ({}));
-      if (!response.ok) throw erroRespostaPlanilhas(response, result, "Não foi possível gerar a prévia.");
+      const result = await app.apiFetch("/api/planilhas/previsualizar", {
+        method: "POST", body: formData, errorMessage: "Não foi possível gerar a prévia.",
+      }).catch(error => { throw erroRespostaPlanilhas(error); });
       renderizarPreviaUploadPlanilhas(result);
       appState.previaPlanilhasAtual = {
         endpointFile,
@@ -340,14 +337,13 @@
     let invalidarPrevia = false;
 
     try {
-      const response = await fetch("/api/planilhas/atualizar", {
+      const result = await app.apiFetch("/api/planilhas/atualizar", {
         method: "POST", body: formData, headers: { "Idempotency-Key": idempotencyKey },
+        errorMessage: "Falha ao atualizar as planilhas.",
+      }).catch(error => {
+        if (error.status !== undefined) invalidarPrevia = error.status < 500;
+        throw erroRespostaPlanilhas(error);
       });
-      const result = await response.json().catch(() => ({}));
-      if (!response.ok) {
-        invalidarPrevia = response.status < 500;
-        throw erroRespostaPlanilhas(response, result, "Falha ao atualizar as planilhas.");
-      }
       await concluirAtualizacaoPlanilhas(result, exportarHistoricoAutomaticamente);
     } catch (error) {
       console.error("Erro ao atualizar planilhas:", error);
@@ -367,11 +363,10 @@
     lucide.createIcons({ root: btn });
 
     try {
-      const res = await fetch("/api/exportar-equipamentos");
-      if (!res.ok) {
-        const errData = await res.json().catch(() => ({}));
-        throw app.createApiError(errData.detail, "Falha ao exportar a planilha de equipamentos.");
-      }
+      const res = await app.apiFetch("/api/exportar-equipamentos", {
+        responseType: "response",
+        errorMessage: "Falha ao exportar a planilha de equipamentos.",
+      });
 
       const disposition = res.headers.get("Content-Disposition") || "";
       const match = /filename[^;=\n]*=((['"]).*?\2|[^;\n]*)/.exec(disposition);

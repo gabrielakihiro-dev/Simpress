@@ -1,6 +1,7 @@
 const assert = require("node:assert/strict");
 const test = require("node:test");
 const apiErrors = require("../../static/js/shared/api-errors.js");
+const { apiFetch } = require("../../static/js/shared/api-fetch.js");
 const createUnitsCatalog = require("../../static/js/features/units-catalog.js");
 
 test("API error formatter extracts readable Pydantic validation messages", () => {
@@ -41,6 +42,7 @@ test("unit save surfaces a readable validation message instead of [object Object
   const messages = [];
   const app = {
     createApiError: apiErrors.create,
+    apiFetch,
     showToast: (message, level) => messages.push({ message, level }),
   };
   const feature = createUnitsCatalog({

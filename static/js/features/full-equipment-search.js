@@ -127,10 +127,9 @@
       });
       if (pesquisaCompletaState.categoria) params.set("categoria", pesquisaCompletaState.categoria);
       if (pesquisaCompletaState.cidade) params.set("cidade", pesquisaCompletaState.cidade);
-      const response = await fetch(`/api/buscar-expandida?${params.toString()}`);
-      if (!response.ok) throw new Error("Não foi possível carregar os resultados da pesquisa.");
-
-      const page = await response.json();
+      const page = await app.apiFetch(`/api/buscar-expandida?${params.toString()}`, {
+        errorMessage: "Não foi possível carregar os resultados da pesquisa.",
+      });
       if (requestId !== pesquisaCompletaState.requestId) return;
       stopLoading();
 

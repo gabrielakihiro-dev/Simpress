@@ -82,14 +82,12 @@
     btn.textContent = "Salvando...";
 
     try {
-      const res = await fetch("/api/equipamento/atualizar-apelido", {
+      const data = await app.apiFetch("/api/equipamento/atualizar-apelido", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ serial, apelido })
+        body: JSON.stringify({ serial, apelido }),
+        errorMessage: "Falha ao salvar o apelido.",
       });
-
-      const data = await res.json().catch(() => ({}));
-      if (!res.ok) throw app.createApiError(data.detail, "Falha ao salvar o apelido.");
 
       const stillSelected = appState.equipamentoSelectionRevision === selectionRevisionAtSave
         && String(appState.currentEquipamento?.serial || "").toUpperCase() === String(serial).toUpperCase();
@@ -168,18 +166,12 @@
     lucide.createIcons({ root: btn });
 
     try {
-      const res = await fetch("/api/equipamento/salvar", {
+      const data = await app.apiFetch("/api/equipamento/salvar", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(payload)
+        body: JSON.stringify(payload),
+        errorMessage: "Falha ao salvar equipamento.",
       });
-
-      if (!res.ok) {
-        const errData = await res.json().catch(() => ({}));
-        throw app.createApiError(errData.detail, "Falha ao salvar equipamento.");
-      }
-
-      const data = await res.json();
       const stillSelected = appState.equipamentoSelectionRevision === selectionRevisionAtSave;
       if (stillSelected) {
         const dadosEntrega = capturarDadosEntrega();
