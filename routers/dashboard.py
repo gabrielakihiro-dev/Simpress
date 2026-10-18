@@ -2,9 +2,12 @@
 
 from collections import Counter
 from dataclasses import dataclass
-from typing import Any, Callable, Dict, List, Sequence
+from typing import Any, Callable, Dict, List, Optional, Sequence
 
-from fastapi import APIRouter
+from fastapi import APIRouter, Body, HTTPException
+
+from core.integrity import FileBusyError, FileTransactionError
+from domains.usage_metrics import InvalidManualMinutesError, UsageMetricsCorruptionError
 
 ATTENTION_FIELDS = (
     ("divergencias_local", "Divergências com a base local"),
@@ -26,6 +29,9 @@ class DashboardServices:
     get_comparison_events: Callable[[], Sequence[Dict[str, Any]]]
     categories: Sequence[Dict[str, str]]
     categorize: Callable[[Any, Any], str]
+    # Local usage counters (domains/usage_metrics.py); optional so the panel works without them.
+    get_usage_summary: Optional[Callable[[], Dict[str, Any]]] = None
+    set_manual_minutes: Optional[Callable[[Any], Dict[str, Any]]] = None
 
 
 def _count(value: Any) -> int:
@@ -124,7 +130,18 @@ def build_dashboard(services: DashboardServices) -> Dict[str, Any]:
         "ultima_atualizacao": stats.get("ultima_atualizacao") or "",
         "arquivo_origem": stats.get("arquivo_origem") or "",
         "ultima_comparacao": latest,
+        "uso_30_dias": _usage_summary(services),
     }
+
+
+def _usage_summary(services: DashboardServices) -> Optional[Dict[str, Any]]:
+    if services.get_usage_summary is None:
+        return None
+    try:
+        return services.get_usage_summary()
+    except Exception:
+        # The usage card is optional; the inventory summary must still load.
+        return None
 
 
 def create_dashboard_router(services: DashboardServices):
@@ -134,5 +151,22 @@ def create_dashboard_router(services: DashboardServices):
     def obter_painel():
         """Resumo somente leitura da base para a página inicial."""
         return build_dashboard(services)
+
+    if services.set_manual_minutes is not None:
+        set_manual_minutes = services.set_manual_minutes
+
+        @router.put("/api/painel/tempos-manuais")
+        def salvar_tempos_manuais(payload: Dict[str, Any] = Body(...)):
+            """Tempo manual estimado (minutos) por tarefa, usado para estimar as horas economizadas."""
+            try:
+                return set_manual_minutes(payload.get("tempos_minutos"))
+            except InvalidManualMinutesError as error:
+                raise HTTPException(status_code=422, detail=str(error)) from None
+            except UsageMetricsCorruptionError as error:
+                raise HTTPException(status_code=503, detail=str(error)) from None
+            except FileBusyError:
+                raise HTTPException(status_code=409, detail="As métricas de uso estão sendo gravadas; tente novamente.") from None
+            except FileTransactionError:
+                raise HTTPException(status_code=503, detail="Não foi possível salvar os tempos; o arquivo de métricas foi preservado.") from None
 
     return router, {"obter_painel": obter_painel}

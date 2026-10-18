@@ -425,3 +425,47 @@ html[data-ux-density="compact"] .comparison-desktop-table td {
 }
 .ux-attention-row-button:hover { background: rgba(250, 204, 21, 0.12); }
 .ux-attention-row-button:focus-visible { outline: 2px solid var(--ux-accent); outline-offset: 2px; }
+
+/* Uso nos últimos 30 dias: contagens locais e horas economizadas (estimativa). */
+.usage-card {
+  margin-top: var(--ux-space-6);
+  padding: var(--ux-space-5);
+  border-radius: var(--ux-radius-xl);
+}
+.usage-card[hidden] { display: none; }
+.usage-card[data-enter="true"] { animation: usage-card-enter var(--motion-normal) var(--motion-ease); }
+@keyframes usage-card-enter {
+  from { opacity: 0; transform: translateY(6px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+.usage-card-header { display: flex; flex-wrap: wrap; align-items: baseline; justify-content: space-between; gap: var(--ux-space-1) var(--ux-space-3); margin-bottom: var(--ux-space-4); }
+.usage-card[data-state="error"] #uso-30-dias-periodo { color: var(--ux-warning-fg); }
+.usage-card-grid { display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); gap: var(--ux-space-3); margin: 0; padding: 0; list-style: none; }
+.usage-stat .ux-stat-value { font-variant-numeric: tabular-nums; }
+.usage-card-hours { margin: var(--ux-space-4) 0 0; color: var(--ux-text-muted); font-size: 0.85rem; }
+.usage-card-hours[data-state="estimated"] { color: var(--ux-text); }
+.usage-card-hours-value { color: var(--ux-success-fg); font-size: 1.05rem; font-variant-numeric: tabular-nums; }
+.usage-card-settings { margin-top: var(--ux-space-4); border-top: 1px solid var(--ux-border); padding-top: var(--ux-space-3); }
+.usage-card-settings-summary { width: fit-content; color: var(--ux-text-muted); font-size: 0.82rem; font-weight: 600; border-radius: var(--ux-radius-sm); }
+.usage-card-settings-summary:hover { color: var(--ux-text); }
+.usage-card-settings-summary:focus-visible { outline: 2px solid var(--ux-accent); outline-offset: 2px; }
+.usage-card-settings[open] .usage-card-form { animation: usage-card-enter var(--motion-fast) var(--motion-ease); }
+.usage-card-form { display: grid; gap: var(--ux-space-3); margin-top: var(--ux-space-3); }
+.usage-card-fields { display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); gap: var(--ux-space-3); }
+.usage-card-field { display: grid; gap: var(--ux-space-1); color: var(--ux-text-muted); font-size: 0.78rem; }
+.usage-card-field .glass-input { width: 100%; min-height: 2.25rem; padding: 0.35rem 0.6rem; border-radius: var(--ux-radius-md); font-size: 0.85rem; }
+.usage-card-actions { display: flex; flex-wrap: wrap; align-items: center; gap: var(--ux-space-3); }
+@media (max-width: 64rem) {
+  .usage-card-grid, .usage-card-fields { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+}
+@media (max-width: 40rem) {
+  .usage-card { margin-top: var(--ux-space-4); padding: var(--ux-space-4); }
+  .usage-card-grid, .usage-card-fields { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .usage-card-field .glass-input { min-height: 48px; font-size: 16px; }
+}
+@media (max-width: 22.5rem) {
+  .usage-card-grid, .usage-card-fields { grid-template-columns: minmax(0, 1fr); }
+}
+@media (prefers-reduced-motion: reduce) {
+  .usage-card[data-enter="true"], .usage-card-settings[open] .usage-card-form { animation: none; }
+}
