@@ -24,6 +24,7 @@
     "ticketTracking",
     "equipmentEditor",
     "aliasHistory",
+    "monthlyReport",
   ]);
 
   // State shared by more than one feature. Each feature keeps the rest of its state private.

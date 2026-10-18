@@ -59,6 +59,7 @@ from core.config import (
     MAX_CONCURRENT_WORKBOOK_PARSERS,
     HISTORY_RETENTION_DAYS,
     LOG_DIR,
+    MANUAL_USERS_FILE,
     MODIFIED_APELIDOS_FILE,
     STALE_BASE_ALERT_DAYS,
     STATIC_DIR,
@@ -88,6 +89,7 @@ from routers.transfer_history import TransferHistoryServices, create_transfer_hi
 from routers.dashboard import DashboardServices, create_dashboard_router
 from routers.operations import MAX_TICKET_WORKBOOK_BYTES, create_operations_router
 from routers.local_setup import create_local_setup_router
+from routers.monthly_report import MonthlyReportServices, create_monthly_report_router
 from domains.local_setup import load_origin_contact, validate_local_model
 from core.logging_setup import configure_logging
 from core.xlsx_safety import (
@@ -142,7 +144,7 @@ from domains.history_annotations import (
     save_history_annotation,
 )
 from domains import effective_alias
-from domains import alias_changes, equipment_export, inventory_state
+from domains import alias_changes, equipment_export, inventory_state, user_changes
 from domains.alias_changes import (
     compare_equipment_aliases,
     snapshot_equipment_aliases,
@@ -182,7 +184,7 @@ from domains.equipment_search import (
 from routers.equipment_search import EquipmentSearchServices, create_equipment_search_router
 from routers.system import SystemRouteServices, create_system_router
 from routers.units import UnidadePayload, UnitRouteServices, create_units_router
-from routers.aliases import ApelidoUndoPayload, ApelidoUpdatePayload, create_alias_router
+from routers.aliases import ApelidoUndoPayload, ApelidoUpdatePayload, UsuarioUpdatePayload, create_alias_router
 from core.inventory_requests import (
     InventoryUpdateMiddleware,
     idempotency_key,
@@ -272,6 +274,12 @@ def load_modified_apelidos() -> Dict[str, str]:
         if not MODIFIED_APELIDOS_FILE.exists():
             return {}
         return _read_json_object(MODIFIED_APELIDOS_FILE, "apelidos")
+
+def load_manual_users() -> Dict[str, str]:
+    with MODIFIED_APELIDOS_LOCK:
+        if not MANUAL_USERS_FILE.exists():
+            return {}
+        return _read_json_object(MANUAL_USERS_FILE, "usuários manuais")
 
 def load_alias_history() -> List[Dict[str, Any]]:
     with ALIAS_HISTORY_LOCK:
@@ -740,7 +748,14 @@ def load_endpoint_aliases() -> Dict[str, str]:
 
 def read_endpoint_alias_index() -> Dict[str, Any]:
     """Retorna associações unívocas e linhas que precisam de conferência."""
-    return effective_alias.read_endpoint_alias_index(_effective_alias_services)
+    index = effective_alias.read_endpoint_alias_index(_effective_alias_services)
+    try:
+        index["manual_users"] = user_changes.manual_users_by_serial(load_manual_users())
+    except LocalJsonCorruptionError as error:
+        # Um arquivo manual ilegível não pode impedir o carregamento do inventário.
+        logger.warning("Usuários manuais ignorados: %s", error)
+        index["manual_users"] = {}
+    return index
 
 
 endpoint_alias_review_items = effective_alias.endpoint_alias_review_items
@@ -1677,6 +1692,8 @@ _alias_change_services = alias_changes.AliasChangeServices(
     public_equipment=lambda equipment: _public_equipment(equipment),
     logger=logger,
     external_errors=(HTTPException,),
+    manual_users_file=lambda: MANUAL_USERS_FILE,
+    load_manual_users=lambda: load_manual_users(),
 )
 
 # Registered directly on the app, before /api/equipamento/{serial}, so the fixed
@@ -1687,6 +1704,7 @@ atualizar_apelido = _alias_exports.atualizar_apelido
 get_historico_apelidos = _alias_exports.get_historico_apelidos
 excluir_evento_historico_apelido = _alias_exports.excluir_evento_historico_apelido
 desfazer_alteracao_apelido = _alias_exports.desfazer_alteracao_apelido
+atualizar_usuario = _alias_exports.atualizar_usuario
 
 
 # Endpoints
@@ -1859,6 +1877,7 @@ _inventory_update_services = InventoryUpdateServices(
     create_inventory_preview_token=create_inventory_preview_token,
     verify_inventory_preview_token=verify_inventory_preview_token,
     external_errors=(HTTPException,),
+    alias_history_file=lambda: ALIAS_HISTORY_FILE,
 )
 
 
@@ -2197,6 +2216,20 @@ operations_router = create_operations_router(
     record_ticket_reconciliation=usage_metrics.record_ticket_reconciliation,
 )
 app.include_router(operations_router)
+
+
+def _monthly_report_inventory() -> Tuple[List[Dict[str, Any]], Dict[str, Any]]:
+    with STATE_LOCK:
+        return deepcopy(list(inventory_state.equipamentos_cache.values())), deepcopy(inventory_state.stats_cache)
+
+
+app.include_router(create_monthly_report_router(MonthlyReportServices(
+    inventory_snapshot=_monthly_report_inventory,
+    load_comparison_history=load_comparison_history,
+    comparison_history_for_display=comparison_history_for_display,
+    ticket_report_path=lambda: TICKET_REPORT_FILE,
+    read_usage_metrics=usage_metrics.read,
+)))
 
 # Serve static files and frontend
 STATIC_DIR.mkdir(parents=True, exist_ok=True)
