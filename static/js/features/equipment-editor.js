@@ -108,6 +108,78 @@
     }
   }
 
+  // Usuário logado: vem do Endpoint; quando ele não informa, permite digitar o usuário manualmente.
+  function atualizarUsuarioLogadoCard(eq) {
+    const texto = document.getElementById("card-usuarios-logados");
+    const acoes = document.getElementById("card-usuario-manual-acoes");
+    const formulario = document.getElementById("form-usuario-manual");
+    const usuario = String(eq?.usuarios_logados || "").trim();
+    const manual = eq?.usuarios_logados_origem === "manual";
+    texto.textContent = usuario ? `Usuários logados: ${usuario}${manual ? " (M)" : ""}` : "";
+    texto.classList.toggle("hidden", !usuario);
+    acoes.classList.toggle("hidden", !manual);
+    // Sem usuário no Endpoint nem manual: mostra o campo para digitar.
+    formulario.classList.toggle("hidden", Boolean(usuario) || !eq?.serial);
+    if (!usuario) document.getElementById("input-usuario-manual").value = "";
+  }
+
+  function editarUsuarioLogado() {
+    const atual = appState.currentEquipamento;
+    if (!atual) return;
+    const formulario = document.getElementById("form-usuario-manual");
+    const campo = document.getElementById("input-usuario-manual");
+    formulario.classList.remove("hidden");
+    campo.value = atual.usuarios_logados || "";
+    campo.focus();
+    campo.select();
+  }
+
+  async function enviarUsuarioLogado(usuario, mensagemSucesso) {
+    if (!appState.currentEquipamento) {
+      app.showToast("Localize um equipamento antes de informar o usuário.", "warning");
+      return;
+    }
+    const serial = appState.currentEquipamento.serial;
+    const selectionRevisionAtSave = appState.equipamentoSelectionRevision;
+    const botao = document.getElementById("btn-salvar-usuario-manual");
+    botao.disabled = true;
+    botao.setAttribute("aria-busy", "true");
+    try {
+      const data = await app.apiFetch("/api/equipamento/atualizar-usuario", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ serial, usuario }),
+        errorMessage: "Falha ao salvar o usuário.",
+      });
+      const stillSelected = appState.equipamentoSelectionRevision === selectionRevisionAtSave
+        && String(appState.currentEquipamento?.serial || "").toUpperCase() === String(serial).toUpperCase();
+      if (stillSelected) {
+        app.definirEquipamentoAtual(data.equipamento);
+        atualizarUsuarioLogadoCard(appState.currentEquipamento);
+      }
+      app.showToast(mensagemSucesso, "success");
+    } catch (err) {
+      console.error("Erro ao salvar usuário logado:", err);
+      app.showToast(err.message || "Falha ao salvar o usuário.", "error");
+    } finally {
+      botao.disabled = false;
+      botao.removeAttribute("aria-busy");
+    }
+  }
+
+  function salvarUsuarioLogado() {
+    const usuario = document.getElementById("input-usuario-manual").value.trim();
+    if (!usuario) {
+      app.showToast("Digite o usuário antes de salvar.", "warning");
+      return Promise.resolve();
+    }
+    return enviarUsuarioLogado(usuario, "Usuário salvo e registrado no histórico de alterações.");
+  }
+
+  function limparUsuarioLogado() {
+    return enviarUsuarioLogado("", "Usuário manual removido e registrado no histórico de alterações.");
+  }
+
   const CAMPOS_ENTREGA_PRESERVADOS_AO_EDITAR_EQUIPAMENTO = [
     "select-unidade-destino",
     "entrega-cnpj",
@@ -200,5 +272,6 @@
   return {
     abrirModalEditarEquipamento, cadastrarNovoSerialPesquisado, fecharModalEditarEquipamento, abrirModalEditarApelido,
     fecharModalEditarApelido, salvarApelido, salvarDadosEquipamento,
+    atualizarUsuarioLogadoCard, editarUsuarioLogado, salvarUsuarioLogado, limparUsuarioLogado,
   };
 });

@@ -492,9 +492,7 @@
       : "";
     aliasStatus.classList.toggle("hidden", !aliasStatus.textContent);
     document.getElementById("card-id-cliente").textContent = eq.idCliente ? `Id Cliente: ${eq.idCliente}` : "";
-    const loggedUsers = document.getElementById("card-usuarios-logados");
-    loggedUsers.textContent = eq.usuarios_logados ? `Usuários logados: ${eq.usuarios_logados}` : "";
-    loggedUsers.classList.toggle("hidden", !loggedUsers.textContent);
+    app.atualizarUsuarioLogadoCard(eq);
     document.getElementById("card-localizacao").textContent = app.formatarLocalAtual(eq);
     document.getElementById("card-cnpj-atual").textContent = `CNPJ: ${eq.retirada_cnpj || 'Não especificado'}`;
 

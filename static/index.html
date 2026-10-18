@@ -287,7 +287,18 @@
               <p id="badge-apelido-status" class="hidden equipment-alias-status" role="status" aria-live="polite"></p>
               <h3 id="card-modelo" class="equipment-model">HP EB 6 G1I</h3>
               <p id="card-id-cliente" class="equipment-detail">Id Cliente: Note diretoria Tipo 2</p>
-              <p id="card-usuarios-logados" class="hidden equipment-detail"></p>
+              <div class="equipment-user">
+                <p id="card-usuarios-logados" class="hidden equipment-detail"></p>
+                <span id="card-usuario-manual-acoes" class="hidden equipment-user-actions">
+                  <button type="button" data-on-click="editarUsuarioLogado" class="btn btn-tertiary equipment-user-button" title="Alterar o usuário informado manualmente">Editar</button>
+                  <button type="button" data-on-click="limparUsuarioLogado" class="btn btn-tertiary equipment-user-button" title="Remover o usuário informado manualmente">Limpar</button>
+                </span>
+              </div>
+              <form id="form-usuario-manual" class="hidden equipment-user-form" data-on-submit="salvarUsuarioLogado" autocomplete="off">
+                <label for="input-usuario-manual" class="equipment-user-label">Usuário logado (vazio no Endpoint)</label>
+                <input id="input-usuario-manual" type="text" maxlength="160" class="equipment-user-input" placeholder="Digite o usuário">
+                <button type="submit" id="btn-salvar-usuario-manual" class="btn btn-secondary equipment-user-button">Salvar usuário</button>
+              </form>
             </div>
           </div>
 

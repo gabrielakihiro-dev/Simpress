@@ -47,6 +47,14 @@ class AliasChangeServices:
     public_equipment: Callable[[Dict[str, Any]], Dict[str, Any]]
     logger: logging.Logger
     external_errors: Tuple[Type[BaseException], ...] = ()
+    # Manual logged-in user (see domains/user_changes.py); optional so older wiring keeps working.
+    manual_users_file: Optional[Callable[[], Path]] = None
+    load_manual_users: Optional[Callable[[], Dict[str, str]]] = None
+
+
+def _is_alias_event(item: Dict[str, Any]) -> bool:
+    """Alias events (legacy ones have no ``tipo``) are undone independently of users and warnings."""
+    return item.get("tipo") in (None, "apelido")
 
 
 def validate_equipment_serial(value: str) -> str:
@@ -204,7 +212,7 @@ def apply_alias_change(
                 latest = next((
                     item for item in reversed(current_history)
                     if str(item.get("serial") or "").strip().upper() == target_serial
-                    and item.get("tipo") != "endereco"
+                    and _is_alias_event(item)
                 ), None)
                 if not latest or latest.get("id") != expected_latest_event_id:
                     raise DomainConflictError("Só é possível desfazer a alteração manual mais recente deste equipamento.")
@@ -323,7 +331,7 @@ def restore_alias_history_event(services: AliasChangeServices, evento_id: str) -
         (
             item for item in reversed(historico)
             if str(item.get("serial") or "").strip().upper() == target_serial
-            and ("endereco" if item.get("tipo") == "endereco" else "apelido") == tipo_evento
+            and _is_alias_event(item)
         ),
         None,
     )
@@ -372,7 +380,7 @@ def undo_alias_change(services: AliasChangeServices, evento_id: str) -> Dict[str
         (
             item for item in reversed(historico)
             if str(item.get("serial") or "").strip().upper() == target_serial
-            and item.get("tipo") != "endereco"
+            and _is_alias_event(item)
         ),
         None,
     )
