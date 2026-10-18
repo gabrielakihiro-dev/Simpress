@@ -163,6 +163,7 @@ from domains.uploaded_workbooks import (
     validate_unambiguous_workbook_headers,
 )
 from domains.inventory_update import InventoryUpdateServices
+from domains.usage_metrics import UsageMetricsMiddleware, UsageMetricsStore
 from domains.inventory_update import preview_inventory_files
 from domains.inventory_update import update_inventory_files
 from domains.equipment_search import (
@@ -1240,6 +1241,10 @@ app = FastAPI(
 )
 
 app.add_middleware(InventoryUpdateMiddleware)
+
+# Daily counts only (no serials, hostnames or terms); see docs/operacao/metricas-uso.md.
+usage_metrics = UsageMetricsStore(lambda: STATE_DIR / "metricas_uso.json", lambda: TRANSACTION_ROOT)
+app.add_middleware(UsageMetricsMiddleware, store=usage_metrics)
 
 
 SERVER_PORT = int(os.environ.get("SIMPRESS_PORT", "8000"))
@@ -3042,6 +3047,7 @@ async def _import_automatic_inventory_batch(
         services=_inventory_update_services,
         automatic_import_id=batch_id,
     )
+    await asyncio.to_thread(usage_metrics.record_comparison, result)
     try:
         await asyncio.to_thread(prune_expired_histories)
     except Exception:
@@ -3075,6 +3081,7 @@ async def atualizar_planilhas(
         endpoint_file, details_file, services=_inventory_update_services,
         idempotency_key=idempotency_key.get(), preview_token=preview_token,
     )
+    await asyncio.to_thread(usage_metrics.record_comparison, result)
     try:
         await asyncio.to_thread(prune_expired_histories)
     except Exception:
@@ -3266,6 +3273,8 @@ dashboard_router, _dashboard_exports = create_dashboard_router(DashboardServices
     get_comparison_events=_dashboard_comparison_events,
     categories=_CATEGORIAS_EQUIPAMENTO,
     categorize=_categoria_equipamento,
+    get_usage_summary=usage_metrics.summary,
+    set_manual_minutes=usage_metrics.set_manual_minutes,
 ))
 obter_painel = _dashboard_exports["obter_painel"]
 app.include_router(dashboard_router)
@@ -3350,6 +3359,7 @@ operations_router = create_operations_router(
     local_annotation_outbox_directory=lambda: LOCAL_HISTORY_ANNOTATION_OUTBOX_DIR,
     history_annotations_sync_enabled=lambda: HISTORY_ANNOTATIONS_SYNC_ENABLED,
     load_history_annotation_records=lambda directory, **kwargs: load_history_annotations(directory, **kwargs),
+    record_ticket_reconciliation=usage_metrics.record_ticket_reconciliation,
 )
 app.include_router(operations_router)
 

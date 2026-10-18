@@ -379,6 +379,10 @@ class FirstAccessTests(unittest.TestCase):
             wb = openpyxl.load_workbook(io.BytesIO(output.content))
             self.assertEqual(wb.active["B2"].value, "HOST-NEW")
             wb.close()
+            usage = client.get("/api/painel").json()["uso_30_dias"]["totais"]
+            self.assertEqual((usage["transferencias"], usage["comparacoes"], usage["exportacoes"]), (1, 1, 1))
+        metrics = json.loads((self.state_dir / "metricas_uso.json").read_text(encoding="utf-8"))
+        self.assertNotIn("S-1", json.dumps(metrics))
 
     def test_failed_durable_replacement_rolls_back_and_releases_parser(self):
         self.import_model("transferencia", transfer_bytes())
