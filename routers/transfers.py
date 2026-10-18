@@ -1,6 +1,7 @@
 """Transfer form schema and official workbook generation route."""
 
 import io
+import logging
 import re
 import unicodedata
 from pathlib import Path
@@ -21,6 +22,8 @@ from core.integrity import (
     serialize_workbook_validated,
     workbook_snapshot,
 )
+
+logger = logging.getLogger(__name__)
 
 
 class TransferenciaPayload(BaseModel):
@@ -293,7 +296,7 @@ def _gerar_planilha_transferencia(payload: TransferenciaPayload, template_file: 
     except FileTransactionError as error:
         raise HTTPException(status_code=500, detail=f"Não foi possível validar a planilha gerada: {error}") from error
     except Exception:
-        print("[ERRO] Falha ao gerar a planilha de transferência.")
+        logger.exception("Falha ao gerar a planilha de transferência.")
         raise HTTPException(status_code=500, detail="Erro ao processar o modelo Excel.") from None
     finally:
         if wb is not None:
