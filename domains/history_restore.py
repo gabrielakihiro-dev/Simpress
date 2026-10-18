@@ -13,7 +13,7 @@ from datetime import datetime
 from pathlib import Path
 from typing import Any, Callable, Dict, List, Optional, Protocol
 
-from fastapi import HTTPException
+from core.errors import DomainError
 from core.integrity import TransactionConflictError, WorkbookSafetyError
 
 
@@ -156,7 +156,7 @@ def validated_backup_files(
                 raise HistoryRestoreError(409, "O arquivo excede o limite de tamanho ou está vazio.")
             file_bytes = backup_path.read_bytes()
             table = services.validate_uploaded_workbook(file_bytes, role)
-        except (HistoryRestoreError, HTTPException) as error:
+        except (HistoryRestoreError, DomainError) as error:
             raise HistoryRestoreError(
                 409,
                 f"O backup de {label} não passou na validação: {error.detail}",
@@ -300,7 +300,7 @@ def _back_up_current_inventories(
         try:
             services.validate_uploaded_workbook(backup_path.read_bytes(), role)
             invalid_current_files[role] = False
-        except (HTTPException, WorkbookSafetyError):
+        except (DomainError, WorkbookSafetyError):
             invalid_current_files[role] = True
         except Exception:
             logger.exception(

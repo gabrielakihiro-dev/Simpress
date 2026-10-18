@@ -13,9 +13,8 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any, Callable, Coroutine, Optional, cast
 
-from fastapi import HTTPException
-
 from core.config import format_size_limit
+from core.errors import DomainError
 from core.local_paths import is_link_or_junction
 
 
@@ -265,7 +264,7 @@ class AutomaticInventoryInbox:
                 simpress_name,
                 simpress_bytes,
             ))
-        except HTTPException as error:
+        except DomainError as error:
             if error.status_code in (409, 503):
                 logger.info("Lote %s aguardará nova tentativa: %s", batch_id, error.detail)
                 self._return_to_pending(processing_batch, batch_id)

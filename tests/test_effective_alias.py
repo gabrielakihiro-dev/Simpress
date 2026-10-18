@@ -3,7 +3,7 @@ import tempfile
 import unittest
 from pathlib import Path
 
-from fastapi import HTTPException
+from core.errors import DomainValidationError
 
 from domains import effective_alias
 
@@ -138,7 +138,7 @@ class EndpointAliasIndexTests(unittest.TestCase):
             endpoint_file.write_bytes(b"fixture")
 
             def reject(*_args):
-                raise HTTPException(400, "invalid")
+                raise DomainValidationError("invalid")
 
             services = effective_alias.EffectiveAliasServices(
                 endpoint_upload_file=lambda: endpoint_file,

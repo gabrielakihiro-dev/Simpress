@@ -26,6 +26,7 @@ from openpyxl.worksheet.table import Table, TableStyleInfo
 from pydantic import ValidationError
 from starlette.datastructures import UploadFile
 from domains import inventory_update
+from core.errors import DomainError
 
 with patch("openpyxl.load_workbook", side_effect=RuntimeError("testes não acessam planilhas locais")):
     import main
@@ -638,7 +639,7 @@ class WorkflowIntegrityTests(unittest.TestCase):
         )
         reduced_bytes = reduced_export.read_bytes()
 
-        with self.assertRaises(main.HTTPException) as reduced_error:
+        with self.assertRaises(DomainError) as reduced_error:
             main.validate_uploaded_workbook(reduced_bytes, "detalhes")
 
         self.assertEqual(reduced_error.exception.status_code, 400)
@@ -655,7 +656,7 @@ class WorkflowIntegrityTests(unittest.TestCase):
             "192.0.2.1", "Notebook", "Nao", "Nao", "2020-01-01", "2020-01-01",
         ]
         make_details(reduced_export, [export_row], headers=export_headers)
-        with self.assertRaises(main.HTTPException) as seventeen_column_error:
+        with self.assertRaises(DomainError) as seventeen_column_error:
             main.validate_uploaded_workbook(reduced_export.read_bytes(), "detalhes")
 
         self.assertEqual(seventeen_column_error.exception.status_code, 400)
@@ -672,7 +673,7 @@ class WorkflowIntegrityTests(unittest.TestCase):
             [("SERIE-FICTICIA", "ALIAS-FICTICIO", "Modelo A", "Maringá", "Notebook", "87000000")],
             headers=headers_without_cnpj,
         )
-        with self.assertRaises(main.HTTPException) as missing_cnpj_error:
+        with self.assertRaises(DomainError) as missing_cnpj_error:
             main.validate_uploaded_workbook(reduced_export.read_bytes(), "detalhes")
 
         self.assertEqual(missing_cnpj_error.exception.status_code, 400)
@@ -686,7 +687,7 @@ class WorkflowIntegrityTests(unittest.TestCase):
             [("SERIE-FICTICIA", "ALIAS-FICTICIO", "Modelo A", "Maringá", "Notebook", "87000000")],
             headers=headers_with_empty_cnpj,
         )
-        with self.assertRaises(main.HTTPException) as empty_cnpj_error:
+        with self.assertRaises(DomainError) as empty_cnpj_error:
             main.validate_uploaded_workbook(reduced_export.read_bytes(), "detalhes")
 
         self.assertEqual(empty_cnpj_error.exception.status_code, 400)
@@ -704,7 +705,7 @@ class WorkflowIntegrityTests(unittest.TestCase):
             )
             reduced_bytes = reduced_path.read_bytes()
 
-        with self.assertRaises(main.HTTPException) as raised:
+        with self.assertRaises(DomainError) as raised:
             asyncio.run(main.atualizar_planilhas(
                 UploadFile(filename="InvAll_nova.xlsx", file=io.BytesIO(_endpoint_bytes([("SERIE-NOVA", "ALIAS-NOVO")]))),
                 UploadFile(filename="EquipamentosDetalhes-exportado.xlsx", file=io.BytesIO(reduced_bytes)),
@@ -785,7 +786,7 @@ class WorkflowIntegrityTests(unittest.TestCase):
             headers=["NumeroSerie", "Apelido", "apelido", "Modelo", "Cidade", "Tipo"],
         )
 
-        with self.assertRaises(main.HTTPException) as raised:
+        with self.assertRaises(DomainError) as raised:
             main.validate_uploaded_workbook(self.details.read_bytes(), "detalhes")
 
         self.assertEqual(raised.exception.status_code, 400)
@@ -1730,7 +1731,7 @@ class WorkflowIntegrityTests(unittest.TestCase):
         self.endpoint.write_bytes(concurrent_endpoint)
         details_before_confirm = self.details.read_bytes()
 
-        with self.assertRaises(main.HTTPException) as raised:
+        with self.assertRaises(DomainError) as raised:
             asyncio.run(main.atualizar_planilhas(
                 UploadFile(filename="endpoint-sintetico.xlsx", file=io.BytesIO(incoming_endpoint)),
                 UploadFile(filename="detalhes-sinteticos.xlsx", file=io.BytesIO(incoming_details)),
@@ -1890,7 +1891,7 @@ class WorkflowIntegrityTests(unittest.TestCase):
             "backups": sorted(path.name for path in self.backups.iterdir() if path.is_dir()),
         }
 
-        with self.assertRaises(main.HTTPException) as raised:
+        with self.assertRaises(DomainError) as raised:
             self._submit_inventory_update(
                 _endpoint_bytes([("SN-IDEMPOTENT", "HOST-DIFFERENT")]),
                 details_bytes,
@@ -1925,7 +1926,7 @@ class WorkflowIntegrityTests(unittest.TestCase):
             main._inventory_update_services,
             publish_database_state=lose_confirmation,
         )
-        with self.assertRaises(main.HTTPException) as raised:
+        with self.assertRaises(DomainError) as raised:
             self._submit_inventory_update(
                 endpoint_bytes,
                 details_bytes,
@@ -1966,7 +1967,7 @@ class WorkflowIntegrityTests(unittest.TestCase):
             raise OSError("falha injetada antes da confirmação")
 
         with patch.object(main.AtomicFileTransaction, "commit", fail_before_commit):
-            with self.assertRaises(main.HTTPException) as raised:
+            with self.assertRaises(DomainError) as raised:
                 self._submit_inventory_update(endpoint_bytes, details_bytes, "upload-retry-after-failure")
 
         self.assertEqual(raised.exception.status_code, 500)
@@ -2935,7 +2936,7 @@ class WorkflowIntegrityTests(unittest.TestCase):
             return original_update(transaction, path, updater, default)
 
         with patch.object(main.AtomicFileTransaction, "update_json", fail_comparison_history):
-            with self.assertRaises(main.HTTPException) as raised:
+            with self.assertRaises(DomainError) as raised:
                 asyncio.run(main.atualizar_planilhas(
                     UploadFile(filename="InvAll_falha.xlsx", file=io.BytesIO(endpoint_bytes)),
                     UploadFile(filename="Detalhes_falha.xlsx", file=io.BytesIO(details_bytes)),
@@ -3004,7 +3005,7 @@ class WorkflowIntegrityTests(unittest.TestCase):
                 worker.join(10)
 
         self.assertFalse(worker.is_alive(), "a transação de upload não terminou")
-        self.assertIsInstance(upload_outcome.get("error"), main.HTTPException)
+        self.assertIsInstance(upload_outcome.get("error"), DomainError)
         self.assertEqual(upload_outcome["error"].status_code, 500)
         self.assertEqual({path: path.read_bytes() for path in committed_workbooks}, committed_workbooks)
         self.assertEqual(self.overrides.read_text(encoding="utf-8"), committed_overrides)

@@ -12,9 +12,9 @@ from contextlib import contextmanager
 from dataclasses import dataclass
 from datetime import datetime
 from pathlib import Path
-from typing import Any, Callable, Dict, Iterator, List, Optional
+from typing import Any, Callable, Dict, Iterator, List, Optional, Tuple, Type
 
-from fastapi import HTTPException
+from core.errors import DomainBusyError, DomainConflictError, DomainError, DomainValidationError
 from core.integrity import (
     FileBusyError,
     FileTransactionError,
@@ -77,6 +77,9 @@ class InventoryUpdateServices:
     inventory_update_preview_summary: Callable[..., Dict[str, Any]]
     create_inventory_preview_token: Callable[..., str]
     verify_inventory_preview_token: Callable[..., bool]
+    # Errors raised by the application callbacks above (e.g. the HTTP layer's own
+    # exceptions) that must reach the caller unchanged instead of becoming a 500.
+    external_errors: Tuple[Type[BaseException], ...] = ()
 
 
 _ANNOTATABLE_COMPARISON_CATEGORIES = (
@@ -362,18 +365,18 @@ async def read_uploaded_xlsx(
     allowed_suffixes = {".xlsx", ".zip"} if role == "detalhes" else {".xlsx"}
     if not original_name or suffix not in allowed_suffixes:
         formats = ".xlsx ou .zip" if role == "detalhes" else ".xlsx"
-        raise HTTPException(status_code=400, detail=f"Selecione um arquivo {formats} válido para {display_role}.")
+        raise DomainValidationError(f"Selecione um arquivo {formats} válido para {display_role}.")
 
     max_upload_bytes = services.max_upload_bytes()
     file_bytes = await upload.read(max_upload_bytes + 1)
     if not file_bytes:
-        raise HTTPException(status_code=400, detail=f"O arquivo de {display_role} está vazio.")
+        raise DomainValidationError(f"O arquivo de {display_role} está vazio.")
     if len(file_bytes) > max_upload_bytes:
-        raise HTTPException(status_code=413, detail=f"O arquivo de {display_role} excede o limite de {format_size_limit(max_upload_bytes)}.")
+        raise DomainValidationError(f"O arquivo de {display_role} excede o limite de {format_size_limit(max_upload_bytes)}.", status_code=413)
 
     parse_admission = services.workbook_parse_admission()
     if parse_admission is not None and not parse_admission.acquire(blocking=False):
-        raise HTTPException(status_code=503, detail="A análise de planilhas está ocupada. Tente novamente em instantes.")
+        raise DomainBusyError("A análise de planilhas está ocupada. Tente novamente em instantes.")
     def parse():
         workbook_bytes = file_bytes
         if suffix == ".zip":
@@ -428,9 +431,8 @@ async def preview_inventory_files(
 
         try:
             current_tables = await asyncio.to_thread(validate_current)
-        except HTTPException as error:
-            raise HTTPException(
-                status_code=409,
+        except DomainError as error:
+            raise DomainConflictError(
                 detail="A base ativa não pôde ser validada; a prévia foi cancelada.",
             ) from error
         changes = await asyncio.to_thread(
@@ -447,9 +449,9 @@ async def preview_inventory_files(
             "preview_token": services.create_inventory_preview_token(staged, current_bytes),
         }
     except FileBusyError as error:
-        raise HTTPException(status_code=409, detail=str(error)) from error
+        raise DomainConflictError(str(error)) from error
     except (WorkbookSafetyError, FileTransactionError) as error:
-        raise HTTPException(status_code=400, detail=f"Não foi possível gerar a prévia com segurança. {error}") from error
+        raise DomainValidationError(f"Não foi possível gerar a prévia com segurança. {error}") from error
     finally:
         for upload in uploads:
             await upload.close()
@@ -465,10 +467,11 @@ async def update_inventory_files(
 ):
     """Read uploads asynchronously and run workbook and transaction work off-loop."""
     uploads = [endpoint_file, details_file]
+    passthrough_errors: Tuple[Type[BaseException], ...] = (DomainError, *services.external_errors)
 
     try:
         if idempotency_key is not None and not _IDEMPOTENCY_KEY_PATTERN.fullmatch(idempotency_key):
-            raise HTTPException(
+            raise DomainValidationError(
                 status_code=422,
                 detail="Idempotency-Key deve conter de 1 a 128 letras, números, ponto, hífen, dois-pontos ou sublinhado.",
             )
@@ -496,25 +499,24 @@ async def update_inventory_files(
                 exc_info=(type(error), error, error.__traceback__),
             ),
         )
-    except HTTPException:
+    except passthrough_errors:
         raise
     except FileBusyError as error:
-        raise HTTPException(status_code=409, detail=str(error)) from error
+        raise DomainConflictError(str(error)) from error
     except TransactionConflictError as error:
-        raise HTTPException(status_code=500, detail=f"A recuperação detectou uma alteração externa em um arquivo e parou sem sobrescrevê-lo: {error}") from error
+        raise DomainError(f"A recuperação detectou uma alteração externa em um arquivo e parou sem sobrescrevê-lo: {error}") from error
     except (FileTransactionError, WorkbookSafetyError) as error:
-        raise HTTPException(status_code=500, detail=f"Não foi possível concluir a atualização; a transação restaurou os arquivos anteriores. {error}") from error
+        raise DomainError(f"Não foi possível concluir a atualização; a transação restaurou os arquivos anteriores. {error}") from error
     except Exception:
         logger.exception("Falha inesperada ao atualizar o conjunto de planilhas.")
         if idempotency_key is not None:
-            raise HTTPException(
-                status_code=500,
+            raise DomainError(
                 detail=(
                     "Não foi possível concluir a solicitação com segurança. Repita-a com a mesma "
                     "Idempotency-Key para recuperar uma confirmação existente ou tentar novamente."
                 ),
             ) from None
-        raise HTTPException(status_code=500, detail="Falha ao atualizar as planilhas; os arquivos anteriores foram restaurados.") from None
+        raise DomainError("Falha ao atualizar as planilhas; os arquivos anteriores foram restaurados.") from None
     finally:
         for upload in uploads:
             await upload.close()
@@ -586,8 +588,7 @@ def _commit_inventory_files(
             prior_receipt = _find_inventory_idempotency_receipt(receipt_store, idempotency_key)
             if prior_receipt is not None:
                 if prior_receipt["request_sha256"] != request_sha256:
-                    raise HTTPException(
-                        status_code=409,
+                    raise DomainConflictError(
                         detail="A Idempotency-Key já foi confirmada com outro conteúdo.",
                     )
                 replay_state = services.load_database(transaction_locked=True, publish=False)
@@ -602,8 +603,7 @@ def _commit_inventory_files(
                 for role, path in backup_sources.items()
             }
             if not services.verify_inventory_preview_token(preview_token, staged, current_bytes):
-                raise HTTPException(
-                    status_code=409,
+                raise DomainConflictError(
                     detail="A prévia expirou ou os arquivos/base mudaram. Gere uma nova prévia antes de confirmar.",
                 )
 
