@@ -9,7 +9,6 @@ from typing import Any, Callable, Literal
 from fastapi import APIRouter, HTTPException
 from fastapi.responses import StreamingResponse
 from pydantic import BaseModel, Field, field_validator
-from core.config import TRANSFER_ORIGIN_CONTACT, TRANSFER_ORIGIN_EMAIL, TRANSFER_ORIGIN_PHONE
 from core.xlsx_safety import set_cell_value_as_text
 
 from core.integrity import (
@@ -38,9 +37,9 @@ class TransferenciaPayload(BaseModel):
     retirada_pausa_duracao: str = Field("1h12", max_length=64)
     retirada_tipo_acesso: str = Field("Elevador / Rampa / Térreo", max_length=160)
     retirada_acesso_obs: str = Field("", max_length=1000)
-    retirada_contato: str = Field(TRANSFER_ORIGIN_CONTACT, max_length=160)
-    retirada_email: str = Field(TRANSFER_ORIGIN_EMAIL, max_length=254)
-    retirada_telefone: str = Field(TRANSFER_ORIGIN_PHONE, max_length=64)
+    retirada_contato: str = Field("", max_length=160)
+    retirada_email: str = Field("", max_length=254)
+    retirada_telefone: str = Field("", max_length=64)
     retirada_obs: str = Field("", max_length=2000)
     retirada_voltagem: str = Field("Bivolt", max_length=64)
 

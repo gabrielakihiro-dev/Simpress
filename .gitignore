@@ -136,3 +136,6 @@ __pycache__/
 /.claude/prints/
 /.claude/worktrees/
 /.claude/settings.local.json
+
+# Local transfer origin contact (personal data); only the example is versioned.
+/config/contato_origem.json

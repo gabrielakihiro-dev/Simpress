@@ -653,6 +653,10 @@ Horário disponível para atendimento:</textarea>
               <i aria-hidden="true" data-lucide="user-check" class="w-3.5 h-3.5"></i>
               Contato no Ponto de Retirada / Representante Regional
             </h4>
+            <div id="aviso-contato-origem" class="hidden mb-3 text-xs rounded-lg px-3 py-2 bg-amber-500/10 border border-amber-500/25 text-amber-200" role="status">
+              <p id="aviso-contato-origem-texto">Contato de origem não configurado nesta instalação. Preencha nome, e-mail e celular abaixo para esta transferência ou salve um contato padrão.</p>
+              <button type="button" id="btn-configurar-contato-origem" class="btn btn-secondary btn-chip mt-2" aria-haspopup="dialog" aria-controls="modal-contato-origem" data-on-click="abrirConfiguracaoContatoOrigem">Configurar contato de origem</button>
+            </div>
             <div class="mb-3">
               <label class="block text-[11px] text-slate-400 mb-1" for="retirada-representante">Representante Regional (seleção automática pela cidade):</label>
               <select
@@ -1447,6 +1451,35 @@ Horário disponível para atendimento:</textarea>
       <p>Ao substituir um modelo importado, uma cópia anterior é guardada nos backups locais. O modelo de transferência incluído no projeto é preservado.</p>
       <p id="status-modelo-local" role="status" aria-live="polite" aria-atomic="true"></p>
       <button id="btn-importar-modelo" type="button" class="readiness-import" data-on-click="enviarModeloLocal">Importar</button>
+    </div>
+  </div>
+
+  <div id="modal-contato-origem" class="modal-overlay fixed inset-0 bg-slate-950/85 backdrop-blur-md hidden flex items-center justify-center p-4">
+    <div class="local-setup-dialog">
+      <div class="local-setup-heading">
+        <h3 id="titulo-contato-origem">Contato de origem</h3>
+        <button type="button" class="readiness-import" data-on-click="fecharConfiguracaoContatoOrigem" aria-label="Fechar configuração do contato de origem" title="Fechar">
+          <i data-lucide="x" class="w-4 h-4" aria-hidden="true"></i>
+        </button>
+      </div>
+      <p>Usado como contato da retirada em novas transferências. Fica salvo somente neste computador, em <code>config/contato_origem.json</code>.</p>
+      <p id="contato-origem-ambiente" class="hidden">Campos bloqueados vêm das variáveis de ambiente <code>SIMPRESS_TRANSFER_ORIGIN_*</code> e têm prioridade sobre o arquivo.</p>
+      <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
+        <div class="sm:col-span-2">
+          <label for="contato-origem-nome" class="block text-[11px] text-slate-400 mb-1">Nome: <span class="required-mark" aria-hidden="true">*</span></label>
+          <input type="text" id="contato-origem-nome" maxlength="160" required autocomplete="name" class="w-full px-3 py-2 rounded-lg glass-input text-xs text-slate-200 focus:outline-none" />
+        </div>
+        <div>
+          <label for="contato-origem-email" class="block text-[11px] text-slate-400 mb-1">E-mail: <span class="required-mark" aria-hidden="true">*</span></label>
+          <input type="email" id="contato-origem-email" maxlength="254" required autocomplete="email" class="w-full px-3 py-2 rounded-lg glass-input text-xs text-slate-200 focus:outline-none" />
+        </div>
+        <div>
+          <label for="contato-origem-telefone" class="block text-[11px] text-slate-400 mb-1">Celular: <span class="required-mark" aria-hidden="true">*</span></label>
+          <input type="text" id="contato-origem-telefone" maxlength="64" required inputmode="tel" autocomplete="tel" placeholder="(00) 9xxxx-xxxx" class="w-full px-3 py-2 rounded-lg glass-input text-xs text-slate-200 focus:outline-none font-mono" />
+        </div>
+      </div>
+      <p id="status-contato-origem" role="status" aria-live="polite" aria-atomic="true"></p>
+      <button id="btn-salvar-contato-origem" type="button" class="readiness-import" data-on-click="salvarConfiguracaoContatoOrigem">Salvar contato</button>
     </div>
   </div>
 

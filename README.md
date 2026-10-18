@@ -101,7 +101,19 @@ Quando o CNPJ da unidade de instalação estiver disponível em `CNPJ Instalacao
 
 ### Contato padrão da retirada
 
-Os dados padrão do contato de retirada podem ser definidos nas variáveis de ambiente abaixo. Defina-as no PowerShell antes de iniciar o servidor; reinicie o processo depois de alterá-las.
+O contato de retirada (nome, e-mail e celular) é dado pessoal e não fica no código. Cada campo é lido nesta ordem:
+
+1. variável de ambiente (`SIMPRESS_TRANSFER_ORIGIN_CONTACT`, `SIMPRESS_TRANSFER_ORIGIN_EMAIL`, `SIMPRESS_TRANSFER_ORIGIN_PHONE`);
+2. arquivo local `config/contato_origem.json`, ignorado pelo Git;
+3. vazio.
+
+Sem dados, a aba **Transporte** mostra um aviso com o botão **Configurar contato de origem**, que grava `config/contato_origem.json` sem reiniciar o servidor. Para criar o arquivo manualmente, copie o exemplo com dados fictícios e edite os valores:
+
+```powershell
+Copy-Item config\contato_origem.exemplo.json config\contato_origem.json
+```
+
+As variáveis de ambiente têm prioridade sobre o arquivo. Defina-as no PowerShell antes de iniciar o servidor; reinicie o processo depois de alterá-las.
 
 ```powershell
 $env:SIMPRESS_TRANSFER_ORIGIN_CONTACT = "Nome do contato"
