@@ -12,7 +12,7 @@ O Simpress é um site que roda **somente no seu computador** (Windows). Os dados
 4. [Atualizar a base EquipamentosDetalhes](#4-atualizar-a-base-equipamentosdetalhes)
 5. [Comparar os inventários](#5-comparar-os-inventários)
 6. [Gerar uma transferência](#6-gerar-uma-transferência)
-7. [Importar OS pela pasta `entrada_chamados`](#7-importar-os-pela-pasta-entrada_chamados)
+7. [Importar OS (tela ou pasta `entrada_chamados`)](#7-importar-os-tela-ou-pasta-entrada_chamados)
 8. [Restaurar um backup](#8-restaurar-um-backup)
 9. [Os 5 erros mais comuns](#9-os-5-erros-mais-comuns)
 
@@ -141,11 +141,20 @@ Se **Gerar Planilha** não funcionar, confira se o modelo `(MODELO) - TRANSFEREN
 
 **Textos prontos para chamados:** na **Home**, depois de pesquisar o equipamento, o botão de textos para chamados manuais mostra modelos editáveis. Use **Copiar** para levar o texto ao chamado.
 
-## 7. Importar OS pela pasta `entrada_chamados`
+## 7. Importar OS (tela ou pasta `entrada_chamados`)
 
-Esta rotina relaciona o Excel **Acompanhamento de Pedidos** (Simpress) com o Excel **Gestão de Solicitações** (Oracle) pelo número de série. A importação é feita **só pela pasta local**, não pelo formulário do navegador.
+Esta rotina relaciona o Excel **Acompanhamento de Pedidos** (Simpress) com o Excel **Gestão de Solicitações** (Oracle) pelo número de série. Há dois caminhos: o **formulário na tela** (mais simples para uso manual) e a **pasta local** (usada na rotina automatizada de OS). Os dois chegam ao mesmo histórico.
 
-**Passos**
+### Opção A — pela tela
+
+1. Abra **Acompanhamento de Chamados** no menu lateral e, em **Importação e histórico**, use os dois campos de arquivo.
+2. Em **Simpress · Acompanhamento de Pedidos**, clique em **Escolher arquivo** e selecione o `.xlsx` (ou ZIP com uma única planilha `.xlsx`).
+3. Em **Oracle · Gestão de Solicitações**, clique em **Escolher arquivo** e selecione o `.xlsx`.
+4. Clique em **Importar planilhas** (até 60 MB por arquivo).
+
+**Como confirmar:** aparecem a mensagem "Planilhas importadas. As OS foram relacionadas pela série." e o aviso "Acompanhamento de chamados atualizado.", e a lista passa a mostrar a nova versão. Se faltar um dos arquivos, a tela pede "Selecione as duas planilhas para importar."
+
+### Opção B — pela pasta local
 
 1. Exporte as duas planilhas (UX Simpress, contrato 16467, e Oracle) e guarde-as em um lugar conhecido. Se uma exportação for bloqueada pelo site, não tente contornar: peça ao responsável.
 2. Abra a pasta `data/state/entrada_chamados`.
