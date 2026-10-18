@@ -1,3 +1,4 @@
+// @ts-check
 (function (root, factory) {
   const utils = factory();
   if (typeof module === "object" && module.exports) module.exports = utils;
@@ -5,6 +6,7 @@
 })(typeof window === "undefined" ? globalThis : window, function () {
   function createRequestGate() {
     let sequence = 0;
+    /** @type {AbortController | null} */
     let controller = null;
 
     return {
@@ -20,23 +22,30 @@
         sequence += 1;
         return sequence;
       },
+      /** @param {number} id */
       isCurrent(id) {
         return id === sequence;
       },
     };
   }
 
+  /** @param {any} selectedEquipment @param {unknown} inputValue @returns {string} */
   function serialForTransfer(selectedEquipment, inputValue) {
     const serial = String(selectedEquipment?.serial || "").trim().toUpperCase();
     const query = String(inputValue || "").trim().toUpperCase();
     return serial && serial === query ? serial : "";
   }
 
+  /** @param {{ isCurrent: (id: number) => boolean }} gate @param {number} requestId @param {unknown} currentValue @param {unknown} requestedValue @returns {boolean} */
   function isCurrentQuery(gate, requestId, currentValue, requestedValue) {
     return gate.isCurrent(requestId)
       && String(currentValue || "").trim().toUpperCase() === String(requestedValue || "").trim().toUpperCase();
   }
 
+  /**
+   * @param {{ requestGate: any, serial: unknown, invalidateSearches?: () => void, clearSelection?: (keepInput: boolean) => void,
+   *   fetchEquipment: (serial: string, options: { signal: AbortSignal }) => Promise<any>, applyEquipment: (data: any) => any }} options
+   */
   async function refreshSelectionAfterInventoryReplacement({
     requestGate,
     serial,
@@ -80,6 +89,7 @@
     }
   }
 
+  /** @param {unknown} value @returns {string} */
   function formatBrazilPhone(value) {
     const original = String(value || "").trim();
     if (!original) return "";
