@@ -285,9 +285,11 @@ def load_database_unlocked(services: InventoryStateServices, publish: bool = Tru
     unidades_dict: Dict[Tuple[str, str, str], Dict[str, Any]] = {}
     sede_cnpjs = set()
 
+    rows_without_serial = 0
     for row in records:
         raw_serial = get_row_val(row, *DETAILS_SERIAL_HEADER_ALIASES)
         if not raw_serial:
+            rows_without_serial += any(not is_missing_cell_value(value) for value in row.values())
             continue
         
         serial_key = raw_serial.upper()
@@ -532,6 +534,9 @@ def load_database_unlocked(services: InventoryStateServices, publish: bool = Tru
         "exportacao_disponivel": export_status["available"],
         "exportacao_motivo": export_status["reason"],
         "tipos": type_counts,
+        # Flagged in the monthly report; they never change the total of unique serials.
+        "linhas_sem_serie": rows_without_serial,
+        "series_duplicadas": {serial: count for serial, count in details_serial_counts.items() if count > 1},
         "arquivo_origem": active_details_file.name,
         "ultima_atualizacao": datetime.now().strftime("%d/%m/%Y %H:%M")
     }
