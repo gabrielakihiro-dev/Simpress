@@ -65,6 +65,16 @@ TICKET_REPORT = {
     }],
 }
 ticket_import_count = 0
+DEFAULT_ORIGIN_CONTACT = {"contato": "Contato fictício", "email": "teste@example.invalid", "telefone": "41900000000"}
+origin_contact = dict(DEFAULT_ORIGIN_CONTACT)
+
+
+def origin_contact_config():
+    values = {"retirada_contato": origin_contact["contato"], "retirada_email": origin_contact["email"],
+              "retirada_telefone": origin_contact["telefone"]}
+    return {**values, "contato_origem_configurado": all(values.values()),
+            "contato_origem_fontes": {key: "arquivo" if value else "" for key, value in values.items()},
+            "contato_origem_arquivo_invalido": False}
 
 
 class Handler(BaseHTTPRequestHandler):
@@ -106,8 +116,7 @@ class Handler(BaseHTTPRequestHandler):
         elif path == "/api/unidades":
             self.send([])
         elif path == "/api/config/transferencia":
-            self.send({"retirada_contato": "Contato fictício", "retirada_email": "teste@example.invalid",
-                       "retirada_telefone": "41900000000"})
+            self.send(origin_contact_config())
         elif path == "/api/historico-comparacoes":
             self.send({"eventos": [DEMO_EVENT, PREVIOUS_EVENT], "total": 2})
         elif path == "/api/operacoes/pendencias":
@@ -155,6 +164,15 @@ class Handler(BaseHTTPRequestHandler):
     def do_PUT(self):
         global DEMO_ANNOTATION
         path = urlsplit(self.path).path
+        if path == "/api/config/transferencia/contato-origem":
+            size = int(self.headers.get("Content-Length", "0"))
+            payload = json.loads(self.rfile.read(size) or b"{}")
+            if not all(str(payload.get(key) or "").strip() for key in DEFAULT_ORIGIN_CONTACT):
+                self.send({"detail": 'Preencha o campo "Nome" do contato de origem.'}, 422)
+                return
+            origin_contact.update({key: str(payload[key]).strip() for key in DEFAULT_ORIGIN_CONTACT})
+            self.send(origin_contact_config())
+            return
         if path != f"/api/historico-comparacoes/{DEMO_EVENT_ID}/anotacoes/{DEMO_ANNOTATION_ID}":
             self.send({"detail": "Endpoint de teste não encontrado"}, 404)
             return
