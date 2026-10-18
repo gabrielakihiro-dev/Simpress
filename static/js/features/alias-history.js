@@ -55,9 +55,7 @@
     const stopLoading = motion?.startLoading(lista, "Carregando histórico…") || (() => {});
 
     try {
-      const res = await fetch("/api/historico-alteracoes");
-      const data = await res.json().catch(() => ({}));
-      if (!res.ok) throw app.createApiError(data.detail, "Não foi possível carregar o histórico.");
+      const data = await app.apiFetch("/api/historico-alteracoes", { errorMessage: "Não foi possível carregar o histórico." });
 
       const eventos = Array.isArray(data.eventos) ? data.eventos : [];
       definirTotalHistoricoApelidos(eventos.length);
@@ -235,13 +233,12 @@
     botao.disabled = true;
     botao.textContent = "Desfazendo...";
     try {
-      const res = await fetch("/api/equipamento/apelido/desfazer", {
+      const data = await app.apiFetch("/api/equipamento/apelido/desfazer", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ evento_id: evento.id })
+        body: JSON.stringify({ evento_id: evento.id }),
+        errorMessage: "Não foi possível desfazer a alteração.",
       });
-      const data = await res.json().catch(() => ({}));
-      if (!res.ok) throw app.createApiError(data.detail, "Não foi possível desfazer a alteração.");
 
       if (appState.currentEquipamento && appState.currentEquipamento.serial === data.equipamento.serial) {
         app.definirEquipamentoAtual(data.equipamento);
@@ -269,9 +266,7 @@
     botao.disabled = true;
     botao.textContent = "Excluindo...";
     try {
-      const res = await fetch(`/api/historico-alteracoes/${encodeURIComponent(evento.id)}`, { method: "DELETE" });
-      const data = await res.json().catch(() => ({}));
-      if (!res.ok) throw app.createApiError(data.detail, "Não foi possível excluir o registro.");
+      const data = await app.apiFetch(`/api/historico-alteracoes/${encodeURIComponent(evento.id)}`, { method: "DELETE", errorMessage: "Não foi possível excluir o registro." });
       if (appState.currentEquipamento && appState.currentEquipamento.serial === data.equipamento.serial) {
         app.definirEquipamentoAtual(data.equipamento);
         document.getElementById("badge-apelido").textContent = appState.currentEquipamento.apelido || "Sem Apelido";

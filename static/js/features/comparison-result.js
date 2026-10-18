@@ -305,16 +305,15 @@
       button.setAttribute("aria-busy", "true");
     });
     try {
-      const response = await fetch(
+      const data = await app.apiFetch(
         `/api/historico-comparacoes/${encodeURIComponent(comparison.evento_id)}/apelido-manual/${encodeURIComponent(item.serie)}`,
         {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({ acao }),
+          errorMessage: "Não foi possível resolver a divergência.",
         }
       );
-      const data = await response.json().catch(() => ({}));
-      if (!response.ok) throw app.createApiError(data.detail, "Não foi possível resolver a divergência.");
 
       item.resolucao = data.resolucao;
       const pendingCounter = document.getElementById("comparacao-divergencias-manuais-pendentes");

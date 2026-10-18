@@ -47,6 +47,7 @@
     appState,
     dom: domUtils,
     apiErrors: window.SimpressApiErrors,
+    apiFetch: window.SimpressApiFetch.apiFetch,
     equipmentSearchRenderer: window.SimpressEquipmentSearchRenderers,
     comparisonResultRenderer: window.SimpressComparisonResultRenderer,
     historyFormat: window.SimpressHistoryFormat,
@@ -71,6 +72,7 @@
   const { escapeHtml, createTextElement, createIcon, highlightMatch, pluralize } = domUtils;
   publish({ escapeHtml, createTextElement, createIcon, highlightMatch, pluralize }, "dom");
   publish({ createApiError: context.apiErrors.create }, "apiErrors");
+  publish({ apiFetch: context.apiFetch }, "apiFetch");
   publish(context.historyFormat, "historyFormat");
   publish(context.ticketRules, "ticketRules");
   FEATURE_ORDER.forEach(name => {

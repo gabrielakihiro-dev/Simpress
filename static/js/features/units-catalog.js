@@ -192,18 +192,12 @@
     };
 
     try {
-      const res = await fetch("/api/unidade/salvar", {
+      const data = await app.apiFetch("/api/unidade/salvar", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(payload)
+        body: JSON.stringify(payload),
+        errorMessage: "Erro ao salvar unidade.",
       });
-
-      if (!res.ok) {
-        const errData = await res.json().catch(() => ({}));
-        throw app.createApiError(errData.detail, "Erro ao salvar unidade.");
-      }
-
-      const data = await res.json();
       await app.carregarUnidades();
       renderListaUnidades(appState.unidadesList);
       app.toggleFormNovaUnidade(false);
