@@ -8,7 +8,7 @@ import io
 import logging
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Any, Callable, Dict, Iterable, List, Optional
+from typing import Any, Callable, Dict, Iterable, List, Optional, Tuple
 
 import openpyxl
 
@@ -99,7 +99,9 @@ def validate_unambiguous_workbook_headers(headers: Iterable[Any]) -> None:
             raise WorkbookHeaderError(f"A planilha contém colunas candidatas conflitantes nas posições {columns}.")
 
 
-def read_details_sheet_records(services: WorkbookReaderServices, file_path: Path, sheet_name: str):
+def read_details_sheet_records(
+    services: WorkbookReaderServices, file_path: Path, sheet_name: str
+) -> Tuple[List[str], List[Dict[str, Any]]]:
     """Read inventory rows with openpyxl, preserving the cells used by the application."""
     workbook = None
     try:
@@ -110,7 +112,7 @@ def read_details_sheet_records(services: WorkbookReaderServices, file_path: Path
         worksheet = workbook[sheet_name]
         raw_headers = next(worksheet.iter_rows(min_row=1, max_row=1, values_only=True), ())
         validate_unambiguous_workbook_headers(raw_headers)
-        headers = []
+        headers: List[str] = []
         used_headers = set()
         for index, value in enumerate(raw_headers):
             base = str(value).strip() if value is not None else f"Unnamed: {index}"
@@ -122,7 +124,7 @@ def read_details_sheet_records(services: WorkbookReaderServices, file_path: Path
             used_headers.add(header)
             headers.append(header)
 
-        records = []
+        records: List[Dict[str, Any]] = []
         for values in worksheet.iter_rows(min_row=2, values_only=True):
             if not any(value is not None and value != "" for value in values):
                 continue

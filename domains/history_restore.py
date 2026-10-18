@@ -361,7 +361,9 @@ def restore_comparison(services: HistoryRestoreServices, evento_id: str, preview
         for role, target_path in target_files.items():
             backup_bytes = context["backup_files"][role]["bytes"]
 
-            def validate_staged_backup(path: Path, current_role=role, expected_bytes=backup_bytes):
+            def validate_staged_backup(
+                path: Path, current_role: str = role, expected_bytes: bytes = backup_bytes
+            ) -> None:
                 candidate_bytes = path.read_bytes()
                 if candidate_bytes != expected_bytes:
                     raise WorkbookSafetyError("O arquivo preparado difere do backup validado.")
@@ -421,7 +423,7 @@ def restore_comparison(services: HistoryRestoreServices, evento_id: str, preview
             "comparacao": restoration_comparison,
         }
 
-        def append_restoration(history):
+        def append_restoration(history: Any) -> List[Any]:
             if not isinstance(history, list):
                 raise RuntimeError("O histórico de planilhas não contém uma lista válida.")
             current_source_event = next(
