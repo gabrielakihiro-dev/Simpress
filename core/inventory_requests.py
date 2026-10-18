@@ -4,6 +4,7 @@ from contextvars import ContextVar
 import re
 
 from starlette.responses import JSONResponse
+from starlette.types import ASGIApp, Receive, Scope, Send
 
 
 idempotency_key: ContextVar[str | None] = ContextVar("simpress_idempotency_key", default=None)
@@ -11,10 +12,10 @@ IDEMPOTENCY_KEY_PATTERN = re.compile(r"[A-Za-z0-9._:-]{1,128}\Z")
 
 
 class InventoryUpdateMiddleware:
-    def __init__(self, app):
+    def __init__(self, app: ASGIApp) -> None:
         self.app = app
 
-    async def __call__(self, scope, receive, send):
+    async def __call__(self, scope: Scope, receive: Receive, send: Send) -> None:
         if (scope["type"] != "http" or scope.get("path") != "/api/planilhas/atualizar"
                 or scope.get("method") != "POST"):
             await self.app(scope, receive, send)

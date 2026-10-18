@@ -1,6 +1,7 @@
 """Project-relative paths and limits used by the local application."""
 
 import os
+from collections.abc import Mapping
 from pathlib import Path
 
 
@@ -74,7 +75,7 @@ SUPPORTED_CONTRACT_LEGAL_NAME = "SERV DE APOIO AS MICRO E PEQ EMP DO PARANA SEBR
 TRANSFER_ORIGIN_CONTACT_FILE = BASE_DIR / "config" / "contato_origem.json"
 
 
-def resolve_history_annotations_dir(base_dir: Path, environment=None):
+def resolve_history_annotations_dir(base_dir: Path, environment: Mapping[str, str] | None = None) -> tuple[Path, bool]:
     """Choose a shared annotation folder when OneDrive or an override is available."""
     env = os.environ if environment is None else environment
     override = str(env.get("SIMPRESS_ANNOTATIONS_DIR") or "").strip()
