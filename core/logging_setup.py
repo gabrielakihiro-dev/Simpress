@@ -5,6 +5,7 @@ import logging
 import traceback
 from logging.handlers import RotatingFileHandler
 from pathlib import Path
+from typing import Any
 
 LOG_FORMAT = "%(asctime)s [%(levelname)s] %(name)s: %(message)s"
 LOG_FILE_NAME = "simpress.log"
@@ -20,7 +21,7 @@ class RedactingFormatter(logging.Formatter):
     validation errors may quote workbook cells, serial numbers or e-mails.
     """
 
-    def formatException(self, ei) -> str:
+    def formatException(self, ei: Any) -> str:
         error_type, error, tb = ei
         frames = "".join(traceback.format_tb(tb)).rstrip()
         name = getattr(error_type, "__name__", "Exception")
@@ -29,7 +30,7 @@ class RedactingFormatter(logging.Formatter):
         return "\n".join(("Traceback (most recent call last):", frames, name))
 
 
-def redact_reference(value) -> str:
+def redact_reference(value: object) -> str:
     """Short stable token that lets logs correlate a serial or hostname without exposing it."""
     text = str(value or "").strip()
     if not text:

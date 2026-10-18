@@ -1,3 +1,4 @@
+// @ts-check
 (function (root, factory) {
   const api = factory(root);
   if (typeof module === "object" && module.exports) module.exports = api;
@@ -9,6 +10,11 @@
   const annotationOwners = new Map();
   const unloadGuardWindows = new WeakSet();
 
+  /**
+   * @param {any} detail
+   * @param {string} [fallback]
+   * @returns {string}
+   */
   function getErrorMessage(detail, fallback = "Não foi possível salvar a anotação.") {
     if (typeof detail === "string" && detail.trim()) return detail;
     if (Array.isArray(detail)) {
@@ -24,12 +30,18 @@
     return fallback;
   }
 
+  /** @param {any} error @returns {boolean} */
   function isRetryableError(error) {
     if (error?.name === "AbortError") return false;
     const status = Number(error?.status);
     return !Number.isFinite(status) || status === 408 || status === 425 || status === 429 || status >= 500;
   }
 
+  /**
+   * @param {() => Promise<any>} send
+   * @param {{ retryDelays?: readonly number[], isCurrent?: () => boolean, onRetry?: (attempt: number, error?: any) => void, [key: string]: any }} [options]
+   * @returns {Promise<any>}
+   */
   async function requestWithRetries(send, options = {}) {
     const retryDelays = options.retryDelays || DEFAULT_RETRY_DELAYS_MS;
     const isCurrent = options.isCurrent || (() => true);
@@ -50,7 +62,7 @@
               data = {};
             }
           }
-          const failure = new Error(getErrorMessage(data.detail));
+          const failure = /** @type {Error & { status?: number }} */ (new Error(getErrorMessage(data.detail)));
           failure.status = response?.status;
           throw failure;
         }
@@ -65,6 +77,7 @@
     }
   }
 
+  /** @param {any} [windowObject] */
   function installPendingNavigationGuard(windowObject = root) {
     if (!windowObject?.addEventListener || unloadGuardWindows.has(windowObject)) return;
     unloadGuardWindows.add(windowObject);
@@ -75,6 +88,7 @@
     });
   }
 
+  /** @param {string | number} eventId @param {string | number} itemId @returns {string} */
   function createDraftStorageKey(eventId, itemId) {
     return "simpress:historico-anotacao:"
       + encodeURIComponent(eventId)
@@ -82,6 +96,7 @@
       + encodeURIComponent(itemId);
   }
 
+  /** @param {any} textarea */
   function readAnnotationVersion(textarea) {
     try {
       return JSON.parse(textarea.dataset.annotationVersion || "null");
@@ -90,12 +105,17 @@
     }
   }
 
+  /** @returns {string} */
   function createRevisionId() {
     if (typeof root.crypto?.randomUUID === "function") return root.crypto.randomUUID().replace(/-/g, "");
     const bytes = root.crypto.getRandomValues(new Uint8Array(16));
     return Array.from(bytes, byte => byte.toString(16).padStart(2, "0")).join("");
   }
 
+  /**
+   * @param {{ textarea: any, status?: any, retryButton?: any, eventId: string | number, itemId: string | number,
+   *   send: (request: any) => Promise<any>, retryOptions?: object, storage?: any, windowObject?: any }} options
+   */
   function attachAnnotationAutosave({
     textarea,
     status,
@@ -259,6 +279,7 @@
       const revisionId = requestAttempt.id;
       const isRequestCurrent = () => ownsCurrentRevision()
         && revision === requestRevision && textarea.value === annotation;
+      /** @type {any} */
       let responseData;
       persistDraft(annotation);
       saving = true;

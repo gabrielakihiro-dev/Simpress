@@ -13,6 +13,7 @@ from typing import Any, Callable, FrozenSet, Optional, Tuple, Type
 from urllib.parse import urlsplit
 
 from fastapi.responses import JSONResponse
+from starlette.types import ASGIApp, Message, Receive, Scope, Send
 
 from core.integrity import FileBusyError
 from core.inventory_requests import IDEMPOTENCY_KEY_PATTERN
@@ -102,8 +103,8 @@ def parse_request_authority(
     return hostname.rstrip(".").lower(), port
 
 
-def send_with_security_headers(send):
-    async def send_with_headers(message):
+def send_with_security_headers(send: Send) -> Send:
+    async def send_with_headers(message: Message) -> None:
         if message["type"] == "http.response.start":
             headers = list(message.get("headers", []))
             present = {name.lower() for name, _ in headers}
@@ -117,11 +118,11 @@ def send_with_security_headers(send):
 class LocalRequestSafetyMiddleware:
     """Restrict local peers and authorities, cap uploads, and hide exceptions."""
 
-    def __init__(self, app, services: LocalRequestSafetyServices):
+    def __init__(self, app: ASGIApp, services: LocalRequestSafetyServices) -> None:
         self.app = app
         self.services = services
 
-    def websocket_allowed(self, scope) -> bool:
+    def websocket_allowed(self, scope: Scope) -> bool:
         """Browsers do not apply the same-origin policy to WebSockets, so Origin is mandatory."""
         if not is_direct_loopback_request(scope):
             return False
@@ -137,7 +138,7 @@ class LocalRequestSafetyMiddleware:
             and parse_request_authority(origin_values[0], is_origin=True) == host_authority
         )
 
-    async def __call__(self, scope, receive, send):
+    async def __call__(self, scope: Scope, receive: Receive, send: Send) -> None:
         if scope["type"] == "websocket":
             if not self.websocket_allowed(scope):
                 # Closing before accept makes the server answer the handshake with 403.
@@ -289,13 +290,13 @@ class LocalRequestSafetyMiddleware:
         response_started = False
         request_size = 0
 
-        async def safe_send(message):
+        async def safe_send(message: Message) -> None:
             nonlocal response_started
             if message["type"] == "http.response.start":
                 response_started = True
             await send(message)
 
-        async def limited_receive():
+        async def limited_receive() -> Message:
             nonlocal request_size
             message = await receive()
             if body_limit is not None and message["type"] == "http.request":

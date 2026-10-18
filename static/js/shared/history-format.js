@@ -1,3 +1,4 @@
+// @ts-check
 /** Labels and date-times shown by the history views (Histórico de Planilhas, alias history, ticket tracking). */
 (function (root, factory) {
   const api = factory();
@@ -6,6 +7,7 @@
 })(typeof window !== "undefined" ? window : globalThis, function createHistoryFormat() {
   "use strict";
 
+  /** @param {unknown} valor @returns {string} */
   function formatarNomeFonteHistorico(valor) {
     return String(valor || "")
       .replace(/\b(?:na|no|da|do|à|ao|pela|pelo|a|o)\s*InvAll/gi, "no endpoint")
@@ -16,6 +18,7 @@
       .replace(/\b(?:na\s+)?Simpress\b/gi, "na Simpress");
   }
 
+  /** @param {any} horario @returns {any} */
   function formatarHorarioHistorico(horario) {
     const text = String(horario || "").trim();
     let data = null;
@@ -50,6 +53,7 @@
   // Metric cards share one neutral surface; the tone only colors the left edge, and only when the count is above zero.
   const ACENTOS_METRICA = { amber: "border-l-amber-400", rose: "border-l-rose-400", emerald: "border-l-emerald-400" };
 
+  /** @param {unknown} valor @param {string} tom @returns {{ cartao: string, numero: string }} */
   function classesMetricaHistorico(valor, tom) {
     const ativo = Number(valor || 0) > 0;
     return {

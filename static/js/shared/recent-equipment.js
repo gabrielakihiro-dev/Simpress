@@ -1,3 +1,4 @@
+// @ts-check
 /** Recent equipment lookups shown on Home: the last few series, kept per browser in localStorage. */
 (function (root, factory) {
   const api = factory();
@@ -9,6 +10,9 @@
   const STORAGE_KEY = "simpress:recent-equipment";
   const LIMIT = 5;
 
+  /** @typedef {{ serial: string, apelido: string, cidade: string }} RecentEntry */
+
+  /** @param {any} equipment @returns {RecentEntry | null} */
   function normalizeEntry(equipment) {
     const serial = String(equipment?.serial ?? "").trim().toUpperCase();
     if (!serial) return null;
@@ -20,6 +24,7 @@
   }
 
   // Valid entries only, one per series (first wins), at most `limit`.
+  /** @param {unknown} list @param {number} [limit] @returns {RecentEntry[]} */
   function sanitizeList(list, limit = LIMIT) {
     const seen = new Set();
     const entries = [];
@@ -34,6 +39,7 @@
   }
 
   // Most recent first; a series already in the list moves to the top with its newest data.
+  /** @param {unknown} list @param {any} equipment @param {number} [limit] @returns {RecentEntry[]} */
   function pushRecentEquipment(list, equipment, limit = LIMIT) {
     const entry = normalizeEntry(equipment);
     const rest = sanitizeList(list, Infinity);
@@ -41,6 +47,7 @@
     return [entry, ...rest.filter(item => item.serial !== entry.serial)].slice(0, limit);
   }
 
+  /** @param {RecentEntry} entry @returns {string} */
   function describeEntry(entry) {
     // Starts with the visible series so speech input matches the button text.
     return [
@@ -51,7 +58,9 @@
   }
 
   // `getStorage` may throw or return null (private mode, blocked storage); the list then lives in memory only.
+  /** @param {() => any} getStorage @param {string} [key] */
   function createStore(getStorage, key = STORAGE_KEY) {
+    /** @type {RecentEntry[]} */
     let memory = [];
     const storage = () => {
       try { return getStorage() || null; } catch (error) { return null; }
@@ -67,6 +76,7 @@
       }
     }
 
+    /** @param {unknown} list @returns {RecentEntry[]} */
     function write(list) {
       memory = sanitizeList(list);
       try { storage()?.setItem(key, JSON.stringify(memory)); } catch (error) { /* optional */ }

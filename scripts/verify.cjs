@@ -57,6 +57,9 @@ const MYPY_TARGETS = [
   "scripts/cleanup_local_temps.py",
 ];
 
+// Pacotes que já exigem anotações em todas as funções (--disallow-untyped-defs).
+const MYPY_STRICT_TARGETS = ["core", "security"];
+
 function javascriptFilesToCheck() {
   return [
     ...listFiles("static", ".js", { recursive: true, exclude: ["static/vendor"] }),
@@ -99,6 +102,15 @@ function buildSteps(python) {
       args: [
         "-m", "mypy", "--explicit-package-bases", "--platform", "win32",
         "--ignore-missing-imports", "--check-untyped-defs", ...MYPY_TARGETS,
+      ],
+    },
+    {
+      name: "Tipos (mypy estrito: core e security)",
+      command: python,
+      args: [
+        "-m", "mypy", "--explicit-package-bases", "--platform", "win32",
+        "--ignore-missing-imports", "--check-untyped-defs", "--disallow-untyped-defs",
+        ...MYPY_STRICT_TARGETS,
       ],
     },
     { name: "Credenciais em arquivos versionados", command: python, args: ["-B", "scripts/check_secrets.py"] },

@@ -1,3 +1,4 @@
+// @ts-check
 (function () {
   const storageKey = "simpress:theme";
   const allowedThemes = new Set(["dark", "light"]);
@@ -11,6 +12,7 @@
     }
   }
 
+  /** @param {string | undefined} theme */
   function updateToggle(theme) {
     const button = document.getElementById("theme-toggle");
     if (!button) return;
@@ -26,6 +28,7 @@
     button.innerHTML = `<svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="lucide lucide-${iconName}" aria-hidden="true" focusable="false">${iconPaths}</svg>`;
   }
 
+  /** @param {string | undefined} theme @param {boolean} persist */
   function applyTheme(theme, persist) {
     const nextTheme = allowedThemes.has(theme) ? theme : "dark";
     document.documentElement.dataset.theme = nextTheme;
