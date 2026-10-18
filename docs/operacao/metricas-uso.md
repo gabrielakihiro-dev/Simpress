@@ -38,7 +38,7 @@ Arquivo: `data/state/metricas_uso.json` (estado operacional, fora do Git).
 
 ## Tela
 
-Cartão `Uso nos últimos 30 dias` na Home, logo abaixo de `Resumo do parque` (`#uso-30-dias`, `aria-labelledby="uso-30-dias-titulo"`).
+Cartão `Uso nos últimos 30 dias` na aba `Resumo` (`#uso-30-dias`, `aria-labelledby="uso-30-dias-titulo"`), logo abaixo de `Resumo do parque`. A aba fica na barra lateral logo abaixo de `Transporte`, e os dois cartões são preenchidos pelo mesmo painel da base.
 
 - Cinco indicadores: `Transferências geradas`, `Comparações feitas`, `Exportações`, `OS conciliadas`, `Buscas`. Desktop: uma linha de cinco; telas estreitas: cards em duas colunas (uma coluna abaixo de 360 px), com os mesmos números.
 - Linha `Horas economizadas (estimativa)`: aparece quando ao menos um tempo foi configurado; sem tempos, mostra o convite `Informe o tempo manual de cada tarefa para estimar as horas economizadas.`
