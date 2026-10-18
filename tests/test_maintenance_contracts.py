@@ -1,5 +1,6 @@
 import asyncio
 import ast
+import hashlib
 import io
 import json
 import re
@@ -325,14 +326,20 @@ class MaintenanceContractTests(unittest.TestCase):
         self.assertIn("scripts/check_secrets.py", verify_script)
 
     def test_transfer_contact_is_configured_and_workbook_metadata_is_anonymized(self):
-        defaults = main.get_transfer_form_defaults()
-        self.assertEqual(defaults["retirada_contato"], app_config.TRANSFER_ORIGIN_CONTACT)
-        self.assertEqual(defaults["retirada_email"], app_config.TRANSFER_ORIGIN_EMAIL)
-        self.assertEqual(defaults["retirada_telefone"], app_config.TRANSFER_ORIGIN_PHONE)
+        with tempfile.TemporaryDirectory() as temp, patch.dict("os.environ", {
+            "SIMPRESS_TRANSFER_ORIGIN_CONTACT": "", "SIMPRESS_TRANSFER_ORIGIN_EMAIL": "",
+            "SIMPRESS_TRANSFER_ORIGIN_PHONE": "",
+        }), patch.object(main, "TRANSFER_ORIGIN_CONTACT_FILE", Path(temp) / "contato_origem.json"):
+            defaults = main.get_transfer_form_defaults()
+        self.assertEqual([defaults[key] for key in ("retirada_contato", "retirada_email", "retirada_telefone")],
+                         ["", "", ""])
+        self.assertFalse(defaults["contato_origem_configurado"])
+        config_source = (app_config.BASE_DIR / "core" / "config.py").read_text(encoding="utf-8")
+        self.assertNotIn("simpress.com.br", config_source)
         html = (app_config.STATIC_DIR / "index.html").read_text(encoding="utf-8")
         script = _frontend_script()
         self.assertIn("/api/config/transferencia", script)
-        self.assertNotIn("gansouza@simpress.com.br", html + script)
+        self.assertNotRegex(html + script, r"[\w.-]+@simpress\.com\.br")
 
         template = app_config.TEMPLATE_FILE
         with zipfile.ZipFile(template) as archive:
@@ -341,14 +348,19 @@ class MaintenanceContractTests(unittest.TestCase):
                 for name in archive.namelist()
                 if name.endswith((".xml", ".vml"))
             ).lower()
+        self.assertNotRegex(package_xml, r"[\w.-]+@simpress\.com\.br")
         for personal_value in (
-            "gabriel akihiro noda souza",
-            "gansouza@simpress.com.br",
             "paula caroline evangelista",
-            "pcevangelista@simpress.com.br",
             "rayra ibere vieira bicas",
         ):
             self.assertNotIn(personal_value, package_xml)
+        # The former origin contact name is checked by digest so this guard does not version it again.
+        words = re.findall(r"\w+", package_xml)
+        four_word_digests = {
+            hashlib.sha256(" ".join(words[index:index + 4]).encode("utf-8")).hexdigest()
+            for index in range(len(words) - 3)
+        }
+        self.assertNotIn("7e97b755d3fbc116bdf414f3eb236fb7fe089d316665048f1b05bded6d500c46", four_word_digests)
         self.assertIn("instruções do formulário", package_xml)
 
     def test_real_asgi_request_dispatches_the_fixed_modified_alias_route(self):

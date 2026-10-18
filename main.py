@@ -74,9 +74,7 @@ from core.config import (
     UPLOAD_BACKUPS_DIR,
     SUPPORTED_CONTRACT,
     SUPPORTED_CONTRACT_LEGAL_NAME,
-    TRANSFER_ORIGIN_CONTACT,
-    TRANSFER_ORIGIN_EMAIL,
-    TRANSFER_ORIGIN_PHONE,
+    TRANSFER_ORIGIN_CONTACT_FILE,
 )
 from routers.inventory_history import (
     ComparisonAnnotationPayload,
@@ -94,7 +92,7 @@ from routers.transfer_history import TransferHistoryServices, create_transfer_hi
 from routers.dashboard import DashboardServices, create_dashboard_router
 from routers.operations import MAX_TICKET_WORKBOOK_BYTES, create_operations_router
 from routers.local_setup import create_local_setup_router
-from domains.local_setup import validate_local_model
+from domains.local_setup import load_origin_contact, validate_local_model
 from core.logging_setup import configure_logging
 from core.xlsx_safety import (
     WORKBOOK_READ_ERRORS,
@@ -3179,11 +3177,7 @@ def _unit_cache_snapshot() -> List[Dict[str, Any]]:
 
 system_router, _system_exports = create_system_router(SystemRouteServices(
     get_readiness_status=lambda: get_startup_readiness(),
-    get_transfer_form_defaults=lambda: {
-        "retirada_contato": TRANSFER_ORIGIN_CONTACT,
-        "retirada_email": TRANSFER_ORIGIN_EMAIL,
-        "retirada_telefone": TRANSFER_ORIGIN_PHONE,
-    },
+    get_transfer_form_defaults=lambda: load_origin_contact(TRANSFER_ORIGIN_CONTACT_FILE),
 ))
 get_readiness_status = _system_exports["get_readiness_status"]
 get_transfer_form_defaults = _system_exports["get_transfer_form_defaults"]
@@ -3312,6 +3306,7 @@ local_setup_router, importar_modelo_local = create_local_setup_router(
     parser_admission=lambda: WORKBOOK_PARSE_ADMISSION,
     export_dependency_paths=lambda: [*get_details_files(), ENDPOINT_UPLOAD_FILE, MODIFIED_APELIDOS_FILE],
     validate_export=_check_imported_export,
+    origin_contact_file=lambda: TRANSFER_ORIGIN_CONTACT_FILE,
 )
 app.include_router(local_setup_router)
 
