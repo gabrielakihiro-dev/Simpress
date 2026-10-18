@@ -15,6 +15,7 @@ from starlette.datastructures import UploadFile
 
 import main
 from core import integrity
+from core.errors import DomainError, DomainValidationError
 from core.async_workers import await_worker_completion
 from core.xlsx_safety import WORKBOOK_READ_ERRORS
 from domains import ticket_reconciliation
@@ -65,14 +66,14 @@ class ExceptionObservabilityTests(unittest.TestCase):
     def test_ready_workbook_preserves_invalid_state_and_logs_role(self):
         with (
             patch.dict(main._READINESS_VALIDATION_CACHE, {}, clear=True),
-            patch.object(main, "validate_uploaded_workbook", side_effect=HTTPException(400, PRIVATE_CONTENT)),
+            patch.object(main, "validate_uploaded_workbook", side_effect=DomainValidationError(PRIVATE_CONTENT)),
             self.assertLogs(main.logger, level="WARNING") as log,
         ):
             result = main._check_ready_workbook(self.file, "endpoint")
         self.assertFalse(result["available"])
         self.assertEqual(result["state"], "invalid")
         self.assertEqual(result["reason"], PRIVATE_CONTENT)
-        self.assert_safe_log(log, self.file.name, "papel=endpoint", "HTTPException")
+        self.assert_safe_log(log, self.file.name, "papel=endpoint", "DomainValidationError")
 
     def readiness(self, *, listing_error=None, selection_error=None):
         with ExitStack() as stack:
@@ -105,7 +106,7 @@ class ExceptionObservabilityTests(unittest.TestCase):
             patch.object(main, "validate_xlsx_package"),
             patch.object(main.openpyxl, "load_workbook", side_effect=BadZipFile(PRIVATE_CONTENT)),
             self.assertLogs(main.logger, level="WARNING") as log,
-            self.assertRaises(HTTPException) as error,
+            self.assertRaises(DomainError) as error,
         ):
             main.read_workbook_tables(b"synthetic")
         self.assertEqual(error.exception.status_code, 400)
@@ -127,12 +128,12 @@ class ExceptionObservabilityTests(unittest.TestCase):
     def test_endpoint_read_failure_keeps_unavailable_index_and_safe_log(self):
         with (
             patch.object(main, "ENDPOINT_UPLOAD_FILE", self.file),
-            patch.object(main, "validate_uploaded_workbook", side_effect=HTTPException(400, PRIVATE_CONTENT)),
+            patch.object(main, "validate_uploaded_workbook", side_effect=DomainValidationError(PRIVATE_CONTENT)),
             self.assertLogs(main.logger, level="WARNING") as log,
         ):
             result = main.read_endpoint_alias_index()
         self.assertEqual(result, {"available": False, "unique": {}, "duplicates": {}, "blank_serials": [], "blank_hostnames": {}, "users": {}})
-        self.assert_safe_log(log, self.file.name, "papel=endpoint", "HTTPException")
+        self.assert_safe_log(log, self.file.name, "papel=endpoint", "DomainValidationError")
 
     def test_inventory_read_failure_keeps_published_cache_and_logs(self):
         previous = {"SYNTHETIC": {"serial": "SYNTHETIC"}}

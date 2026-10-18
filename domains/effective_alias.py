@@ -11,7 +11,7 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Any, Callable, Dict, Iterable, List, Optional, Set
 
-from fastapi import HTTPException
+from core.errors import DomainError
 
 from domains.inventory_comparison import _record_value, normalize_reference_value
 
@@ -107,7 +107,7 @@ def read_endpoint_alias_index(services: EffectiveAliasServices) -> Dict[str, Any
 
     try:
         table = services.validate_uploaded_workbook(endpoint_file.read_bytes(), "endpoint")
-    except (OSError, HTTPException) as error:
+    except (OSError, DomainError) as error:
         services.logger.warning(
             "Falha ao ler hostnames (arquivo=%s, papel=endpoint, erro=%s).",
             endpoint_file.name, type(error).__name__,

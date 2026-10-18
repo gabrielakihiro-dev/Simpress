@@ -4,7 +4,7 @@ from contextlib import redirect_stdout
 from datetime import datetime, timedelta, timezone
 from unittest.mock import patch
 
-from fastapi import HTTPException
+from core.errors import DomainError
 
 with patch("openpyxl.load_workbook", side_effect=RuntimeError("testes não acessam planilhas locais")):
     with redirect_stdout(io.StringIO()):
@@ -451,7 +451,7 @@ class InventoryComparisonTests(unittest.TestCase):
             {"sheet": "Endpoint 2", "headers": {"HOSTNAME", "SERVICETAG"}, "records": [{"SERVICETAG": "S2"}]},
         ]
 
-        with self.assertRaises(HTTPException) as raised:
+        with self.assertRaises(DomainError) as raised:
             main.select_upload_table(tables, "endpoint")
 
         self.assertIn("Endpoint 1", raised.exception.detail)

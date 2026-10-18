@@ -21,6 +21,7 @@ from domains.history_annotations import (
 from fastapi import APIRouter, HTTPException, Query
 from fastapi.responses import StreamingResponse
 from pydantic import BaseModel, Field
+from core.errors import DomainError
 from core.integrity import (
     FileBusyError,
     FileTransactionError,
@@ -567,7 +568,7 @@ def create_inventory_history_router(services: InventoryHistoryServices):
                     lambda path: json.loads(path.read_text(encoding="utf-8")),
                 )
                 transaction.commit()
-        except HTTPException:
+        except (HTTPException, DomainError):
             raise
         except Exception:
             status = 503 if services.history_annotations_sync_enabled() else 500
@@ -608,7 +609,7 @@ def create_inventory_history_router(services: InventoryHistoryServices):
             return history_restore.restore_comparison(services, evento_id, payload.preview_token)
         except HistoryRestoreError as error:
             raise HTTPException(status_code=error.status_code, detail=error.detail) from error
-        except HTTPException:
+        except (HTTPException, DomainError):
             raise
         except FileBusyError as error:
             raise HTTPException(status_code=409, detail=str(error)) from error
@@ -799,7 +800,7 @@ def create_inventory_history_router(services: InventoryHistoryServices):
                         lambda path: json.loads(path.read_text(encoding="utf-8")),
                     )
                 transaction.commit()
-        except HTTPException:
+        except (HTTPException, DomainError):
             raise
         except Exception:
             logger.exception("Falha ao remover evento do histórico (evento=%s).", evento_id)
