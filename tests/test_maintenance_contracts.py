@@ -769,7 +769,6 @@ class MaintenanceContractTests(unittest.TestCase):
         self.assertEqual(status["reason"], "arquivo inacessível ou XLSX inválido")
 
     def test_application_startup_reports_readiness_without_workbook_values(self):
-        output = io.StringIO()
 
         with tempfile.TemporaryDirectory(prefix=".startup-test-", dir=PROJECT_ROOT) as temp_dir:
             root = Path(temp_dir)
@@ -802,7 +801,7 @@ class MaintenanceContractTests(unittest.TestCase):
                 patch.object(main, "TICKET_REPORT_FILE", state_dir / "chamados.json"),
                 patch.object(main, "AUTOMATIC_INVENTORY_INBOX_DIR", state_dir / "inbox"),
                 patch.object(main, "AUTOMATIC_TICKET_INBOX_DIR", state_dir / "ticket_inbox"),
-                redirect_stdout(output),
+                self.assertLogs(main.logger, level="INFO") as logs,
             ):
                 async def run_application_lifespan():
                     async with main.app.router.lifespan_context(main.app):
@@ -810,11 +809,9 @@ class MaintenanceContractTests(unittest.TestCase):
 
                 asyncio.run(run_application_lifespan())
 
-        self.assertIn("[PRONTIDÃO] Verificação dos arquivos locais:", output.getvalue())
-        self.assertIn(
-            "[PRONTIDÃO] Geração de planilha de transferência: INDISPONÍVEL;",
-            output.getvalue(),
-        )
+        logged = "\n".join(logs.output)
+        self.assertIn("[PRONTIDÃO] Verificação dos arquivos locais:", logged)
+        self.assertIn("[PRONTIDÃO] Geração de planilha de transferência: INDISPONÍVEL;", logged)
 
     def test_lifespan_prepares_disk_state_off_loop_before_starting_workers(self):
         events = []
@@ -898,14 +895,14 @@ class MaintenanceContractTests(unittest.TestCase):
                 patch.object(main, "_history_annotation_sync_worker", worker),
                 patch.object(main, "_automatic_inventory_import_worker", worker),
                 patch.object(main, "_automatic_ticket_import_worker", worker),
-                redirect_stdout(io.StringIO()) as output,
+                self.assertLogs(main.logger, level="INFO") as logs,
             ):
                 message, held = asyncio.run(run_application_lifespan())
 
                 self.assertEqual(target.read_bytes(), b"edited elsewhere")
                 self.assertEqual(events, ["load", "readiness", "worker", "worker", "worker"])
                 self.assertIn("não corresponde ao estado esperado", message)
-                self.assertIn("[INDISPONÍVEL] Recuperação de gravação pendente:", output.getvalue())
+                self.assertIn("Recuperação de gravação pendente indisponível:", "\n".join(logs.output))
                 # 503 is the inboxes' transient status: batches stay pending instead of failing.
                 self.assertEqual(held.status_code, 503)
                 self.assertEqual(held.detail, message)

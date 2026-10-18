@@ -7,6 +7,7 @@ Mapa dos contratos locais registrados na análise dos handlers FastAPI e consumi
 - Arquivo aponta para o handler principal; serviços chamados estão no relatório da Fase 1.
 - Endpoints exigem conexão local direta, com as verificações de rede, Host e origem do middleware local. O acesso à aplicação é direto.
 - Erros mostram códigos e mensagens estáveis quando úteis. Campos inválidos ou ausentes de FastAPI/Pydantic retornam 422 com detail estruturado. O middleware pode retornar 400 para Host/cabeçalho malformado, 403 para rede/Host/origem recusados, 413 para limite total, 500 com “Falha interna do servidor. Consulte os logs locais.” e 503 para corrupção JSON. Detalhes validados dinamicamente não são uma única frase imutável.
+- Limites: corpo JSON de /api até 1 MB (MAX_API_REQUEST_BYTES); uploads multipart com até 60 MB por arquivo (MAX_UPLOAD_BYTES, core/config.py; MAX_TICKET_WORKBOOK_BYTES, routers/operations.py) e requisição total de até 121 MB (MAX_UPLOAD_REQUEST_BYTES).
 - Upload é multipart/form-data; download retorna bytes/MIME com Content-Disposition quando aplicável. Idempotency-Key não consta no schema OpenAPI: política está no middleware.
 
 ## Prontidão, pesquisa, equipamentos e unidades
@@ -36,8 +37,8 @@ Mapa dos contratos locais registrados na análise dos handlers FastAPI e consumi
 | # | Método e caminho | Entrada/validação | Resposta de sucesso | Erros notáveis e acesso |
 | --- | --- | --- | --- | --- |
 | 18 | POST /api/gerar-planilha | JSON TransferenciaPayload: série, contrato, empresa e campos de retirada/entrega. CNPJ (14 dígitos quando preenchido), email e telefone validados. Rota exige dados de contato, endereço, horário e observações nos dois locais; pausa na entrega é exigida exceto para “escritório não fecha”. | XLSX com células editáveis preenchidas e revalidadas. | 422 campo obrigatório inválido; 500 modelo ausente/geração. Arquivos. routers/transfers.py; static/js/features/transfer-form.js. |
-| 19 | POST /api/modelos/{tipo}/importar | Multipart file; tipo transferencia ou exportacao; .xlsx até 30 MiB. Valida layout/células graváveis antes da troca. | {sucesso,mensagem,arquivo}. | 400 extensão/conteúdo/layout; 404 tipo/arquivo indisponível; 409 ocupação; 413 limite; 503 parser; 500 gravação. Arquivos. routers/local_setup.py; static/js/features/inventory-upload.js. |
-| 20 | POST /api/planilhas/previsualizar | Multipart endpoint_file XLSX e details_file XLSX ou ZIP; até 30 MiB cada. ZIP Simpress exige exatamente uma planilha válida. | {arquivos:{endpoint:{nome,linhas},detalhes:{nome,linhas}},alteracoes,preview_token}. | 400 inválido; 409 base/lock; 413 limites; 500 inesperado. Arquivos. main.py, domains/inventory_update.py; static/js/features/inventory-upload.js. |
+| 19 | POST /api/modelos/{tipo}/importar | Multipart file; tipo transferencia ou exportacao; .xlsx até 60 MB (MAX_UPLOAD_BYTES em core/config.py). Valida layout/células graváveis antes da troca. | {sucesso,mensagem,arquivo}. | 400 extensão/conteúdo/layout; 404 tipo/arquivo indisponível; 409 ocupação; 413 limite; 503 parser; 500 gravação. Arquivos. routers/local_setup.py; static/js/features/inventory-upload.js. |
+| 20 | POST /api/planilhas/previsualizar | Multipart endpoint_file XLSX e details_file XLSX ou ZIP; até 60 MB cada (MAX_UPLOAD_BYTES). ZIP Simpress exige exatamente uma planilha válida. | {arquivos:{endpoint:{nome,linhas},detalhes:{nome,linhas}},alteracoes,preview_token}. | 400 inválido; 409 base/lock; 413 limites; 500 inesperado. Arquivos. main.py, domains/inventory_update.py; static/js/features/inventory-upload.js. |
 | 21 | POST /api/planilhas/atualizar | Multipart dos dois arquivos; preview_token opcional; header Idempotency-Key opcional (1–128 caracteres [A-Za-z0-9._:-]). | {sucesso,mensagem,comparacao,anotacoes_herdadas_enfileiradas,sincronizacao_anotacoes,stats,historico_salvo}; chave idempotente pode repetir resultado. | 400 entrada inválida; 409 preview stale, chave em conflito ou lock; 413 limite; 422 form/header; 503 parser/estado; 500 transação. Arquivos. main.py, domains/inventory_update.py; static/js/features/inventory-upload.js. |
 | 22 | POST /api/recarregar-base | Sem body; carrega fontes locais/configuradas. | {sucesso,arquivo_origem,total_equipamentos,total_unidades,stats,mensagem}. | 400 sem planilha válida. Arquivos. main.py. |
 
@@ -68,13 +69,21 @@ Mapa dos contratos locais registrados na análise dos handlers FastAPI e consumi
 | 38 | GET /api/operacoes/chamados/linha-do-tempo/{serial} | Path série; snapshot_id opcional, limita timeline àquela versão. | {serie,eventos,total}, com anotações por evento. | 404 sem histórico/versão. routers/operations.py; static/js/features/ticket-tracking.js. |
 | 39 | PUT /api/operacoes/chamados/linha-do-tempo/{event_id}/{item_id} | JSON anotacao até 2.000, revisão, bases e confirmação explícita de conflito. | {sucesso,anotacao,anotacao_revisoes,flags de conflito,sincronizacao}. | 404 snapshot/linha; 409 conflito; 422 schema; 500/503 persistência. routers/operations.py; static/js/features/ticket-tracking.js. |
 | 40 | GET /api/operacoes/chamados/exportar | Queries opcionais snapshot_id, relation, status, queue, city, provider, search e age_filter; stale_days (3) e attention_only booleano. | XLSX filtrado com timeline e anotações. | 404 snapshot; 422 query. routers/operations.py; static/js/features/ticket-tracking.js. |
-| 41 | POST /api/operacoes/chamados/importar | Multipart simpress_file XLSX/ZIP e oracle_file XLSX, até 32 MiB cada; automatic_import_id opcional. | Relatório conciliado e metadados de histórico; grava snapshot/recibo atomicamente. | 400 arquivo/coluna; 409 lote duplicado/lock; 413 limite; 422 headers/reconciliação; 503 estado; 500 gravação. routers/operations.py; static/js/features/ticket-tracking.js/inbox. |
+| 41 | POST /api/operacoes/chamados/importar | Multipart simpress_file XLSX/ZIP e oracle_file XLSX, até 60 MB cada (MAX_TICKET_WORKBOOK_BYTES em routers/operations.py); automatic_import_id opcional. | Relatório conciliado e metadados de histórico; grava snapshot/recibo atomicamente. | 400 arquivo/coluna; 409 lote duplicado/lock; 413 limite; 422 headers/reconciliação; 503 estado; 500 gravação. routers/operations.py; static/js/features/ticket-tracking.js/inbox. |
 
 ## Página inicial
 
 | # | Método e caminho | Entrada/validação | Resposta de sucesso | Erros notáveis e acesso |
 | --- | --- | --- | --- | --- |
 | 42 | GET / | Sem parâmetros; serve interface versionada quando static/index.html existe. | HTML; assets apontados por hash. | Fallback JSON se HTML faltar; recusas do middleware local. main.py. |
+
+## Painel e histórico de transferências
+
+| # | Método e caminho | Entrada/validação | Resposta de sucesso | Erros notáveis e acesso |
+| --- | --- | --- | --- | --- |
+| 43 | GET /api/painel | Sem parâmetros. | Resumo somente leitura: {base_importada,total_equipamentos,total_unidades,por_categoria,sem_categoria,cidades_principais,cidades_por_categoria,total_cidades,sem_cidade,ultima_atualizacao,arquivo_origem,ultima_comparacao}; ultima_comparacao traz {id,horario,tipo,atencao} ou nulo. | 200 também sem base. Local. routers/dashboard.py; static/js/ui/data-panels.js. |
+| 44 | GET /api/historico-transferencias | Queries limite 1–200 (50) e busca até 128 caracteres (sem acento e sem diferenciar maiúsculas em serial, cidades, contato e observações). | {total,itens}, mais recentes primeiro. | 503 arquivo ilegível (dados preservados). Arquivos. routers/transfer_history.py; static/js/ui/transfer-history.js. |
+| 45 | POST /api/historico-transferencias | JSON TransferenciaPayload (mesmo schema de /api/gerar-planilha); mantém só os 500 registros mais recentes. | 201 {sucesso,id,criado_em}. | 409 ocupação; 422 schema; 503 histórico ilegível; 500 gravação. Arquivos. routers/transfer_history.py; static/js/ui/transfer-history.js. |
 
 ## Regras de compatibilidade
 

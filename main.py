@@ -551,7 +551,7 @@ _readiness_services = readiness.ReadinessServices(
 def report_startup_readiness() -> None:
     """Log a clear feature impact summary without exposing workbook contents."""
     for line in readiness.readiness_log_lines(get_startup_readiness()):
-        print(line)
+        logger.info("%s", line)
 
 
 def _report_startup_readiness_best_effort() -> None:
@@ -581,7 +581,7 @@ def _recover_pending_transactions_at_startup() -> bool:
         )
         with _TRANSACTION_RECOVERY_BLOCK_LOCK:
             _TRANSACTION_RECOVERY_BLOCK = message
-        print(f"[INDISPONÍVEL] Recuperação de gravação pendente: {message}")
+        logger.error("Recuperação de gravação pendente indisponível: %s", message)
         return False
     with _TRANSACTION_RECOVERY_BLOCK_LOCK:
         _TRANSACTION_RECOVERY_BLOCK = None
@@ -994,7 +994,7 @@ def count_export_changes(
                 "total": alias_count + id_cliente_count,
             }
         except Exception as error:
-            print(f"[AVISO] Contagem de exportação indisponível ({type(error).__name__}).")
+            logger.warning("Contagem de exportação indisponível (%s).", type(error).__name__)
             _set_export_status(False, "Não foi possível conferir o modelo e a base de exportação.")
             return empty_counts.copy()
         finally:
@@ -1105,13 +1105,13 @@ async def lifespan(app: FastAPI):
             try:
                 prune_result = prune_expired_histories()
                 if any(prune_result.values()):
-                    print(f"[RETENÇÃO] Registros e backups removidos conforme política de {HISTORY_RETENTION_DAYS} dias: {prune_result}.")
+                    logger.info("Registros e backups removidos conforme política de %s dias: %s.", HISTORY_RETENTION_DAYS, prune_result)
             except Exception as error:
-                print(f"[AVISO] A retenção automática não pôde ser concluída ({type(error).__name__}); os arquivos foram preservados.")
+                logger.warning("A retenção automática não pôde ser concluída (%s); os arquivos foram preservados.", type(error).__name__)
         try:
             load_database()
         except LocalJsonCorruptionError as error:
-            print(f"[INDISPONÍVEL] Estado local preservado: {error}")
+            logger.error("Estado local preservado: %s", error)
         _report_startup_readiness_best_effort()
 
     # Workers start only after the base is loaded, as before; disk work stays off the loop.
@@ -1422,7 +1422,7 @@ def prune_expired_histories(now: Optional[datetime] = None) -> Dict[str, int]:
             shutil.rmtree(path)
             results["backups_removidos"] += 1
         except OSError as error:
-            print(f"[AVISO] Não foi possível remover backup vencido '{path.name}': {type(error).__name__}.")
+            logger.warning("Não foi possível remover backup vencido '%s': %s.", path.name, type(error).__name__)
     return results
 
 
@@ -1537,19 +1537,19 @@ def _load_database_unlocked(publish: bool = True) -> Any:
     try:
         active_details_file = get_parque_file()
     except FileBusyError as error:
-        print(f"[AVISO] {error} A base carregada foi mantida.")
+        logger.warning("%s A base carregada foi mantida.", error)
         return False
     if active_details_file is None or not active_details_file.exists():
-        print(f"[AVISO] Nenhuma planilha EquipamentosDetalhes válida encontrada em {INPUT_DIR}!")
+        logger.warning("Nenhuma planilha EquipamentosDetalhes válida encontrada em %s.", INPUT_DIR)
         return False
 
-    print(f"[INFO] Carregando equipamentos de {active_details_file.name}...")
+    logger.info("Carregando equipamentos de %s...", active_details_file.name)
     
     # Usa a aba com os campos necessários, sem depender do nome da aba.
     try:
         sheet_target = find_details_sheet(active_details_file)
         if sheet_target is None:
-            print(f"[ERRO] {active_details_file.name} não contém cabeçalhos EquipamentosDetalhes válidos.")
+            logger.error("%s não contém cabeçalhos EquipamentosDetalhes válidos.", active_details_file.name)
             return False
         headers, records = _read_details_sheet_records(active_details_file, sheet_target)
     except (FileBusyError, *WORKBOOK_READ_ERRORS) as error:
@@ -1617,9 +1617,10 @@ def _load_database_unlocked(publish: bool = True) -> Any:
         )
         contrato = normalize_contract_value(contrato_value) or str(SUPPORTED_CONTRACT)
         if contrato != str(SUPPORTED_CONTRACT):
-            print(
-                f"[ERRO] A base contém contrato {contrato}; somente o contrato "
-                f"{SUPPORTED_CONTRACT} é suportado. O cache anterior foi mantido."
+            logger.error(
+                "A base contém contrato %s; somente o contrato %s é suportado. O cache anterior foi mantido.",
+                contrato,
+                SUPPORTED_CONTRACT,
             )
             return False
         razao_social = get_row_val(
@@ -1677,7 +1678,7 @@ def _load_database_unlocked(publish: bool = True) -> Any:
                 }
 
     if not new_equipamentos_cache:
-        print(f"[ERRO] {active_details_file.name} não contém equipamentos com número de série; os dados atuais foram mantidos.")
+        logger.error("%s não contém equipamentos com número de série; os dados atuais foram mantidos.", active_details_file.name)
         return False
 
     # Filter units according to user specifications:
@@ -1720,7 +1721,7 @@ def _load_database_unlocked(publish: bool = True) -> Any:
     # Inserir o Curitiba oficial com o padrão exato solicitado
     sede_cnpj = next(iter(sede_cnpjs)) if len(sede_cnpjs) == 1 else ""
     if len(sede_cnpjs) > 1:
-        print("[AVISO] A base contém mais de um CNPJ de instalação para a Sede Curitiba; o CNPJ da unidade ficou vazio.")
+        logger.warning("A base contém mais de um CNPJ de instalação para a Sede Curitiba; o CNPJ da unidade ficou vazio.")
     curitiba_label = "Curitiba - R Caeté, 150 - SEDE - Prado Velho"
     if sede_cnpj:
         curitiba_label += f" ({sede_cnpj})"
@@ -1851,7 +1852,12 @@ def _load_database_unlocked(publish: bool = True) -> Any:
     if publish:
         publish_database_state(state)
 
-    print(f"[SUCESSO] Base carregada: {len(new_equipamentos_cache)} equipamentos ({len(mod_apelidos)} com apelido modificado) e {len(new_unidades_cache)} unidades catalogadas.")
+    logger.info(
+        "Base carregada: %d equipamentos (%d com apelido modificado) e %d unidades catalogadas.",
+        len(new_equipamentos_cache),
+        len(mod_apelidos),
+        len(new_unidades_cache),
+    )
     if not publish:
         return state
     return True
@@ -2585,7 +2591,7 @@ def aplicar_alteracao_apelido(
     try:
         prune_expired_histories()
     except Exception as error:
-        print(f"[AVISO] O apelido foi salvo, mas a retenção automática falhou ({type(error).__name__}).")
+        logger.warning("O apelido foi salvo, mas a retenção automática falhou (%s).", type(error).__name__)
 
     return {
         "equipamento": updated_equipment,
@@ -2947,7 +2953,7 @@ def exportar_equipamentos():
     except FileTransactionError as error:
         raise HTTPException(status_code=500, detail=f"Não foi possível validar a exportação: {error}") from error
     except Exception:
-        print("[ERRO] Falha ao exportar a base local de equipamentos.")
+        logger.exception("Falha ao exportar a base local de equipamentos.")
         raise HTTPException(status_code=500, detail="Erro ao exportar a base de equipamentos.") from None
     finally:
         if wb is not None:
