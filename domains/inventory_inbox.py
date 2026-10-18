@@ -11,7 +11,7 @@ import uuid
 from contextlib import contextmanager
 from datetime import datetime, timezone
 from pathlib import Path
-from typing import Any, Callable, Coroutine, Optional, cast
+from typing import Any, Callable, Coroutine, Iterator, Optional, cast
 
 from core.config import format_size_limit
 from core.errors import DomainError
@@ -35,7 +35,7 @@ class InventoryInboxChanged(RuntimeError):
 
 
 @contextmanager
-def _try_worker_lock(path: Path):
+def _try_worker_lock(path: Path) -> Iterator[bool]:
     """Hold a non-blocking process lock while recovering and claiming batches."""
     if not _PROCESS_WORKER_LOCK.acquire(blocking=False):
         yield False
