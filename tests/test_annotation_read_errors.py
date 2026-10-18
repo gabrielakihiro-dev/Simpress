@@ -185,7 +185,7 @@ class LegacyMigrationReadErrorTests(unittest.TestCase):
             load_comparison_history=lambda: self.history,
             comparison_annotation_item_id=lambda *args: "row",
         )
-        self.migrate = create_inventory_history_router(services)[1]["migrate_legacy_history_annotations"]
+        self.migrate = create_inventory_history_router(services)[1].migrate_legacy_history_annotations
         # The newer shared revision cleared the note the history still embeds.
         save_history_annotation(
             self.shared, event_id="event", item_id="row", event_time="2026-10-11", serie="S1",

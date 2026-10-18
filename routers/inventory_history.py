@@ -6,7 +6,7 @@ from dataclasses import dataclass
 from datetime import date, datetime
 from functools import partial
 from pathlib import Path
-from typing import Any, Callable, Dict, List, Optional
+from typing import Any, Callable, Dict, List, Optional, Tuple
 
 from domains import history_restore
 from domains.history_export import _history_display_files, build_history_export_workbook
@@ -93,7 +93,32 @@ class InventoryHistoryServices:
     validate_uploaded_workbook: Callable[[bytes, str], Dict[str, Any]]
 
 
-def create_inventory_history_router(services: InventoryHistoryServices):
+@dataclass(frozen=True)
+class InventoryHistoryRouteExports:
+    """Routes and history helpers exposed to ``main`` and the tests."""
+
+    build_comparison_restore_context: Callable[..., Any]
+    comparison_event_has_restorable_backup: Callable[..., Any]
+    comparison_event_type: Callable[..., Any]
+    comparison_restore_backup_paths: Callable[..., Any]
+    current_inventory_snapshot: Callable[..., Any]
+    sha256_file: Callable[..., Any]
+    validated_comparison_backup_files: Callable[..., Any]
+    flush_pending_history_annotations: Callable[..., Any]
+    migrate_legacy_history_annotations: Callable[..., Any]
+    history_annotation_view: Callable[..., Any]
+    excluir_comparacao_historica: Callable[..., Any]
+    exportar_historico_comparacoes_excel: Callable[..., Any]
+    get_comparacao_historica: Callable[..., Any]
+    get_historico_comparacoes: Callable[..., Any]
+    salvar_anotacao_comparacao: Callable[..., Any]
+    salvar_anotacao_comparacao_historica: Callable[..., Any]
+    resolver_divergencia_apelido_manual: Callable[..., Any]
+    restaurar_comparacao_historica: Callable[..., Any]
+    visualizar_restauracao_comparacao: Callable[..., Any]
+
+
+def create_inventory_history_router(services: InventoryHistoryServices) -> Tuple[APIRouter, InventoryHistoryRouteExports]:
     router = APIRouter()
 
     def _latest_annotation_records(history=None):
@@ -817,24 +842,24 @@ def create_inventory_history_router(services: InventoryHistoryServices):
             ),
         }
 
-    return router, {
-        '_build_comparison_restore_context': partial(history_restore.build_restore_context, services),
-        '_comparison_event_has_restorable_backup': partial(history_restore.event_has_restorable_backup, services),
-        '_comparison_event_type': comparison_event_type,
-        '_comparison_restore_backup_paths': partial(history_restore.restore_backup_paths, services),
-        '_current_inventory_snapshot': partial(history_restore.current_inventory_snapshot, services),
-        '_sha256_file': history_restore.sha256_file,
-        '_validated_comparison_backup_files': partial(history_restore.validated_backup_files, services),
-        'flush_pending_history_annotations': flush_pending_history_annotations,
-        'migrate_legacy_history_annotations': migrate_legacy_history_annotations,
-        'history_annotation_view': history_annotation_view,
-        'excluir_comparacao_historica': excluir_comparacao_historica,
-        'exportar_historico_comparacoes_excel': exportar_historico_comparacoes_excel,
-        'get_comparacao_historica': get_comparacao_historica,
-        'get_historico_comparacoes': get_historico_comparacoes,
-        'salvar_anotacao_comparacao': salvar_anotacao_comparacao_historica,
-        'salvar_anotacao_comparacao_historica': salvar_anotacao_comparacao_historica,
-        'resolver_divergencia_apelido_manual': resolver_divergencia_apelido_manual,
-        'restaurar_comparacao_historica': restaurar_comparacao_historica,
-        'visualizar_restauracao_comparacao': visualizar_restauracao_comparacao,
-    }
+    return router, InventoryHistoryRouteExports(
+        build_comparison_restore_context=partial(history_restore.build_restore_context, services),
+        comparison_event_has_restorable_backup=partial(history_restore.event_has_restorable_backup, services),
+        comparison_event_type=comparison_event_type,
+        comparison_restore_backup_paths=partial(history_restore.restore_backup_paths, services),
+        current_inventory_snapshot=partial(history_restore.current_inventory_snapshot, services),
+        sha256_file=history_restore.sha256_file,
+        validated_comparison_backup_files=partial(history_restore.validated_backup_files, services),
+        flush_pending_history_annotations=flush_pending_history_annotations,
+        migrate_legacy_history_annotations=migrate_legacy_history_annotations,
+        history_annotation_view=history_annotation_view,
+        excluir_comparacao_historica=excluir_comparacao_historica,
+        exportar_historico_comparacoes_excel=exportar_historico_comparacoes_excel,
+        get_comparacao_historica=get_comparacao_historica,
+        get_historico_comparacoes=get_historico_comparacoes,
+        salvar_anotacao_comparacao=salvar_anotacao_comparacao_historica,
+        salvar_anotacao_comparacao_historica=salvar_anotacao_comparacao_historica,
+        resolver_divergencia_apelido_manual=resolver_divergencia_apelido_manual,
+        restaurar_comparacao_historica=restaurar_comparacao_historica,
+        visualizar_restauracao_comparacao=visualizar_restauracao_comparacao,
+    )
