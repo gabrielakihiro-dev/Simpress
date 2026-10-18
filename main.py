@@ -1,5 +1,4 @@
 import asyncio
-from collections import Counter
 import io
 import filecmp
 import hashlib
@@ -11,7 +10,6 @@ import re
 import shutil
 import threading
 import time
-import unicodedata
 import uuid
 from copy import deepcopy
 from contextlib import asynccontextmanager, contextmanager
@@ -147,6 +145,15 @@ from domains.history_annotations import (
     save_history_annotation,
 )
 from domains import effective_alias
+from domains import inventory_state
+from domains.inventory_state import (
+    STATE_LOCK,
+    _coerce_unit_id,
+    _unit_identity_key,
+    format_cep,
+    get_suggested_description,
+    normalize_contract_value,
+)
 from domains import readiness, uploaded_workbooks
 from domains.uploaded_workbooks import (
     DETAILS_ALIAS_HEADER_ALIASES,
@@ -154,7 +161,6 @@ from domains.uploaded_workbooks import (
     DETAILS_INSTALLATION_CNPJ_HEADER_ALIASES,
     DETAILS_REQUIRED_HEADERS,
     DETAILS_SERIAL_HEADER_ALIASES,
-    DETAILS_TYPE_HEADER_ALIASES,
     WorkbookHeaderError,
     find_workbook_header_column,
     normalize_workbook_header,
@@ -167,7 +173,6 @@ from domains.inventory_update import preview_inventory_files
 from domains.inventory_update import update_inventory_files
 from domains.equipment_search import (
     CATEGORIES as _CATEGORIAS_EQUIPAMENTO,
-    EquipmentSearchIndexEntry,
     build_search_index,
     categorize_equipment,
     normalize_search_term,
@@ -196,11 +201,11 @@ from security.local_requests import (
 # transaction, call lock_paths or load_database while holding one.
 # Read-only routes polled by the page give up early (409 + Retry-After) instead of
 # holding a worker thread for the full 15 s while an import owns the global lock.
+# STATE_LOCK guards the inventory caches in domains/inventory_state.py.
 READ_LOCK_TIMEOUT_SECONDS = 3.0
 MODIFIED_APELIDOS_LOCK = threading.RLock()
 ALIAS_HISTORY_LOCK = threading.RLock()
 COMPARISON_HISTORY_LOCK = threading.RLock()
-STATE_LOCK = threading.RLock()
 UPLOAD_ADMISSION = threading.BoundedSemaphore(MAX_CONCURRENT_UPLOAD_REQUESTS)
 WORKBOOK_PARSE_ADMISSION = threading.BoundedSemaphore(MAX_CONCURRENT_WORKBOOK_PARSERS)
 logger = logging.getLogger(__name__)
@@ -245,19 +250,14 @@ INVENTORY_UPLOAD_PATHS = frozenset({
 @contextmanager
 def inventory_state_transaction(targets):
     """Keep an in-memory inventory snapshot aligned with a file transaction."""
-    global equipamentos_cache, unidades_cache, stats_cache
     with AtomicFileTransaction(TRANSACTION_ROOT, targets) as transaction:
         with STATE_LOCK:
-            state_before = (
-                deepcopy(equipamentos_cache),
-                deepcopy(unidades_cache),
-                deepcopy(stats_cache),
-            )
+            state_before = inventory_state.snapshot_state()
         try:
             yield transaction
         except BaseException:
             with STATE_LOCK:
-                equipamentos_cache, unidades_cache, stats_cache = state_before
+                inventory_state.restore_state(state_before)
             raise
 
 
@@ -339,7 +339,7 @@ def build_alias_change_entry(
     had_override: Optional[bool] = None,
 ) -> Dict[str, Any]:
     with STATE_LOCK:
-        equipment = dict(equipamentos_cache.get(serial, {}))
+        equipment = dict(inventory_state.equipamentos_cache.get(serial, {}))
     entry = {
         "id": uuid.uuid4().hex,
         "tipo": "apelido",
@@ -368,14 +368,6 @@ def _equipment_revision(serial: Any, modelo: Any, tipo: Any, apelido: Any, id_cl
         values.append(text)
     payload = json.dumps(values, ensure_ascii=False, separators=(",", ":")).encode("utf-8")
     return hashlib.sha256(payload).hexdigest()
-
-
-def normalize_contract_value(value: Any) -> str:
-    """Normalize Excel integer cells without accepting a different contract."""
-    normalized = sanitize_value(value).strip()
-    if re.fullmatch(r"\d+\.0+", normalized):
-        normalized = normalized.split(".", 1)[0]
-    return normalized
 
 
 _ensure_workbook_readable = uploaded_workbooks.ensure_workbook_readable
@@ -464,7 +456,7 @@ _check_startup_ticket_report = readiness.check_startup_ticket_report
 
 def _readiness_loaded_state() -> Tuple[bool, bool]:
     with STATE_LOCK:
-        return bool(equipamentos_cache), bool(unidades_cache)
+        return bool(inventory_state.equipamentos_cache), bool(inventory_state.unidades_cache)
 
 
 def _validate_local_state_for_readiness() -> None:
@@ -1144,11 +1136,11 @@ def reload_database_if_changed_externally() -> bool:
     if get_transaction_recovery_block() is not None:
         return False
     with STATE_LOCK:
-        loaded = _LOADED_FILES_SIGNATURE
+        loaded = inventory_state.loaded_files_signature
     if loaded is None:
         return False
     try:
-        if _inventory_files_signature() == loaded:
+        if inventory_state.inventory_files_signature(_inventory_state_services) == loaded:
             return False
     except OSError:
         return False
@@ -1290,42 +1282,6 @@ class LocalRequestSafetyMiddleware(_LocalRequestSafetyMiddleware):
 
 app.add_middleware(LocalRequestSafetyMiddleware)
 
-# In-memory storage
-equipamentos_cache: Dict[str, Dict[str, Any]] = {}
-unidades_cache: List[Dict[str, Any]] = []
-stats_cache: Dict[str, Any] = {}
-_EQUIPMENT_SEARCH_INDEX: Tuple[EquipmentSearchIndexEntry, ...] = ()
-_EQUIPMENT_SEARCH_INDEX_SOURCE = None
-
-def format_cep(val: Any) -> str:
-    if val is None:
-        return ""
-    if is_missing_cell_value(val):
-        return ""
-    original = str(val).strip()
-    if not original:
-        return ""
-    digits = re.sub(r"\D", "", original)
-    if len(digits) != 8:
-        return original
-    return f"{digits[:5]}-{digits[5:]}"
-
-def get_suggested_description(tipo: Optional[str], modelo: Optional[str]) -> str:
-    t = (tipo or "").strip().lower()
-    m = (modelo or "").strip()
-    if "notebook" in t:
-        return "Notebook + kit na mochila"
-    elif "micro" in t or "computador" in t:
-        return f"{m} + cabos e periféricos"
-    elif "headset" in t:
-        return f"Headset {m}"
-    return f"{tipo} {m}".strip() if tipo else m
-
-def sanitize_value(val: Any, default: str = "") -> str:
-    if is_missing_cell_value(val):
-        return default
-    return str(val).strip()
-
 def load_custom_units() -> List[Dict[str, Any]]:
     if not CUSTOM_UNIDADES_FILE.exists():
         return []
@@ -1450,43 +1406,9 @@ def _validate_json_history(value: Any, label: str) -> List[Dict[str, Any]]:
     return value
 
 
-def _coerce_unit_id(value: Any) -> Optional[int]:
-    if isinstance(value, bool) or value is None:
-        return None
-    try:
-        unit_id = int(value)
-    except (TypeError, ValueError):
-        return None
-    return unit_id if unit_id > 0 else None
-
-
-def _unit_identity_key(unit: Dict[str, Any]) -> str:
-    return "\x1f".join(
-        unicodedata.normalize("NFKC", str(unit.get(field) or "")).strip().casefold()
-        for field in ("cidade", "endereco", "cnpj", "uf")
-    )
-
-
-def _stable_unit_source_key(unit: Dict[str, Any]) -> str:
-    """Keep inventory identity stable while editable location fields change."""
-    return hashlib.sha256(_unit_identity_key(unit).encode("utf-8")).hexdigest()
-
-
-def _stable_unit_id(unit: Dict[str, Any], reserved_ids: Set[int]) -> int:
-    """Return a deterministic numeric ID for inventory-derived units."""
-    identity = _unit_identity_key(unit)
-    collision_index = 0
-    while True:
-        seed = identity if collision_index == 0 else f"{identity}\x1f{collision_index}"
-        candidate = int.from_bytes(hashlib.sha256(seed.encode("utf-8")).digest()[:6], "big") or 1
-        if candidate not in reserved_ids:
-            return candidate
-        collision_index += 1
-
-
 def load_database(transaction_locked: bool = False, publish: bool = True) -> Any:
     if transaction_locked:
-        return _load_database_unlocked(publish=publish)
+        return inventory_state.load_database_unlocked(_inventory_state_services, publish=publish)
     with lock_paths([TRANSACTION_ROOT / ".atomic-transactions"]):
         detail_files = get_details_files()
         with lock_paths([
@@ -1496,7 +1418,7 @@ def load_database(transaction_locked: bool = False, publish: bool = True) -> Any
             CUSTOM_UNIDADES_FILE,
             EXPORT_MODEL_FILE,
         ]):
-            return _load_database_unlocked(publish=publish)
+            return inventory_state.load_database_unlocked(_inventory_state_services, publish=publish)
 
 
 def prepare_database_state(
@@ -1505,380 +1427,38 @@ def prepare_database_state(
     stats: Dict[str, Any],
 ) -> Dict[str, Any]:
     """Build every derived cache before a disk transaction is committed."""
-    return {
-        "equipamentos_cache": equipment_cache,
-        "unidades_cache": unit_cache,
-        "stats_cache": stats,
-        "equipment_search_index": build_search_index(
-            equipment_cache,
-            _normalizar_termo_busca,
-        ),
-    }
+    return inventory_state.prepare_database_state(equipment_cache, unit_cache, stats, _inventory_state_services)
 
 
 # Files behind the published cache; a change made by another process (the inbox
 # scripts in scripts/) is noticed by _external_change_reload_worker.
 EXTERNAL_CHANGE_POLL_SECONDS = 10
-_LOADED_FILES_SIGNATURE: Optional[tuple] = None
-
-
-def _inventory_files_signature() -> tuple:
-    signature: List[Any] = []
-    for path in (*get_details_files(), ENDPOINT_UPLOAD_FILE, MODIFIED_APELIDOS_FILE, CUSTOM_UNIDADES_FILE, EXPORT_MODEL_FILE):
-        try:
-            stat = path.stat()
-            signature.append((str(path), stat.st_size, stat.st_mtime_ns))
-        except OSError:
-            signature.append((str(path), None))
-    return tuple(signature)
 
 
 def publish_database_state(state: Dict[str, Any]) -> None:
-    global equipamentos_cache, unidades_cache, stats_cache
-    global _EQUIPMENT_SEARCH_INDEX, _EQUIPMENT_SEARCH_INDEX_SOURCE, _LOADED_FILES_SIGNATURE
-    # Callers publish while holding the file locks of the state they read or committed.
-    try:
-        files_signature: Optional[tuple] = _inventory_files_signature()
-    except OSError:
-        files_signature = None
-    with STATE_LOCK:
-        _LOADED_FILES_SIGNATURE = files_signature
-        equipamentos_cache = state["equipamentos_cache"]
-        unidades_cache = state["unidades_cache"]
-        stats_cache = state["stats_cache"]
-        _EQUIPMENT_SEARCH_INDEX = state["equipment_search_index"]
-        _EQUIPMENT_SEARCH_INDEX_SOURCE = equipamentos_cache
+    inventory_state.publish_database_state(state, _inventory_state_services)
 
 
-def _load_database_unlocked(publish: bool = True) -> Any:
-    global equipamentos_cache, unidades_cache, stats_cache
-    try:
-        active_details_file = get_parque_file()
-    except FileBusyError as error:
-        logger.warning("%s A base carregada foi mantida.", error)
-        return False
-    if active_details_file is None or not active_details_file.exists():
-        logger.warning("Nenhuma planilha EquipamentosDetalhes válida encontrada em %s.", INPUT_DIR)
-        return False
-
-    logger.info("Carregando equipamentos de %s...", active_details_file.name)
-    
-    # Usa a aba com os campos necessários, sem depender do nome da aba.
-    try:
-        sheet_target = find_details_sheet(active_details_file)
-        if sheet_target is None:
-            logger.error("%s não contém cabeçalhos EquipamentosDetalhes válidos.", active_details_file.name)
-            return False
-        headers, records = _read_details_sheet_records(active_details_file, sheet_target)
-    except (FileBusyError, *WORKBOOK_READ_ERRORS) as error:
-        logger.warning(
-            "Falha ao ler base de equipamentos (arquivo=%s, papel=detalhes, erro=%s).",
-            active_details_file.name, type(error).__name__,
-        )
-        return False
-
-    # Strip column names e criar mapa normalizado de colunas
-    norm_cols = {normalize_workbook_header(column): column for column in headers}
-    new_equipamentos_cache: Dict[str, Dict[str, Any]] = {}
-    details_serial_counts: Dict[str, int] = {}
-    tipo_header_aliases = DETAILS_TYPE_HEADER_ALIASES
-
-    def get_row_val(row, *aliases, default=""):
-        for a in aliases:
-            key = normalize_workbook_header(a)
-            if key in norm_cols:
-                val = row.get(norm_cols[key])
-                if not is_missing_cell_value(val):
-                    return sanitize_value(val, default)
-        return default
-
-    def get_installation_cnpj(row):
-        value = get_row_val(row, *DETAILS_INSTALLATION_CNPJ_HEADER_ALIASES)
-        if value:
-            return value
-        for normalized_header, source_header in norm_cols.items():
-            if (
-                "CNPJ" in normalized_header
-                and ("INSTALACAO" in normalized_header or "FILIAL" in normalized_header)
-                and "FATURAMENTO" not in normalized_header
-            ):
-                raw_value = row.get(source_header)
-                if not is_missing_cell_value(raw_value):
-                    return sanitize_value(raw_value)
-        return ""
-
-    unidades_dict: Dict[Tuple[str, str, str], Dict[str, Any]] = {}
-    sede_cnpjs = set()
-
-    for row in records:
-        raw_serial = get_row_val(row, *DETAILS_SERIAL_HEADER_ALIASES)
-        if not raw_serial:
-            continue
-        
-        serial_key = raw_serial.upper()
-        normalized_serial = normalize_reference_value(raw_serial)
-        details_serial_counts[normalized_serial] = details_serial_counts.get(normalized_serial, 0) + 1
-        modelo = get_row_val(row, "Modelo")
-        tipo = get_row_val(row, *tipo_header_aliases)
-        apelido = get_row_val(row, *DETAILS_ALIAS_HEADER_ALIASES)
-        id_cliente = get_row_val(row, "IdCliente", "Id Cliente")
-        endereco = get_row_val(row, "Endereco", "Endereço")
-        cidade = get_row_val(row, "Cidade")
-        uf = get_row_val(row, "UF", default="PR")
-        raw_cep = get_row_val(row, "CEP")
-        cep_formatado = format_cep(raw_cep)
-        
-        cnpj_instalacao = get_installation_cnpj(row)
-
-        contrato_value = get_row_val(
-            row, "CodigoContrato", "Codigo Contrato", default=str(SUPPORTED_CONTRACT)
-        )
-        contrato = normalize_contract_value(contrato_value) or str(SUPPORTED_CONTRACT)
-        if contrato != str(SUPPORTED_CONTRACT):
-            logger.error(
-                "A base contém contrato %s; somente o contrato %s é suportado. O cache anterior foi mantido.",
-                contrato,
-                SUPPORTED_CONTRACT,
-            )
-            return False
-        razao_social = get_row_val(
-            row, "RazaoSocial", "Razao Social", default=SUPPORTED_CONTRACT_LEGAL_NAME
-        ) or SUPPORTED_CONTRACT_LEGAL_NAME
-
-        # Check if Sede Curitiba
-        is_sede = ("caeté" in endereco.lower() or "caete" in endereco.lower() or "sede" in endereco.lower() or "sede" in cidade.lower()) and ("curitiba" in cidade.lower() or "sede" in cidade.lower())
-        if is_sede:
-            if cnpj_instalacao:
-                sede_cnpjs.add(cnpj_instalacao)
-            endereco = "R Caeté, 150 - SEDE - Prado Velho"
-            cidade = "Curitiba"
-            uf = "PR"
-            cep_formatado = "80220-300"
-            retirada_endereco = "R Caeté, 150 - SEDE - Prado Velho - Curitiba/PR - CEP 80220-300"
-        else:
-            retirada_endereco = f"{endereco} - {cidade}/{uf} - CEP {cep_formatado}" if endereco else f"{cidade}/{uf}"
-
-        # Suggested description
-        desc_sugerida = get_suggested_description(tipo, modelo)
-
-        new_equipamentos_cache[serial_key] = {
-            "serial": raw_serial,
-            "_source_file": str(active_details_file.resolve()),
-            "_source_sheet": sheet_target,
-            "modelo": modelo,
-            "tipo": tipo,
-            "apelido": apelido,
-            "_apelido_base": apelido,
-            "_apelido_local": apelido,
-            "idCliente": id_cliente,
-            "descricao_sugerida": desc_sugerida,
-            "endereco_instalacao": endereco,
-            "retirada_cnpj": cnpj_instalacao,
-            "retirada_endereco": retirada_endereco,
-            "retirada_cidade": cidade,
-            "retirada_uf": uf,
-            "retirada_cep": cep_formatado,
-            "contrato": contrato,
-            "razao_social": razao_social
-        }
-
-        # Candidate unit
-        if cidade or endereco:
-            u_key = (cidade.strip(), endereco.strip(), cnpj_instalacao.strip())
-            if u_key not in unidades_dict:
-                unidades_dict[u_key] = {
-                    "cidade": cidade.strip(),
-                    "endereco": endereco.strip(),
-                    "uf": uf.strip(),
-                    "cep": cep_formatado.strip(),
-                    "cnpj": cnpj_instalacao.strip(),
-                    "retirada_endereco": retirada_endereco
-                }
-
-    if not new_equipamentos_cache:
-        logger.error("%s não contém equipamentos com número de série; os dados atuais foram mantidos.", active_details_file.name)
-        return False
-
-    # Filter units according to user specifications:
-    filtered_units: List[Dict[str, Any]] = []
-    for u in unidades_dict.values():
-        cid_lower = u["cidade"].lower()
-        end_lower = u["endereco"].lower()
-
-        # 1. Curitiba: remover todas as outras (oficial Curitiba SEDE será inserido exclusivamente)
-        if "curitiba" in cid_lower:
-            continue
-
-        # 2. Cascavel: somente ao lado da Plantar
-        if "cascavel" in cid_lower:
-            if "plantar" not in end_lower:
-                continue
-
-        # 3. Foz do Iguaçu: só deixe uma (duplicada)
-        if "foz do igua" in cid_lower:
-            if any("foz do igua" in x["cidade"].lower() for x in filtered_units):
-                continue
-
-        # 4. Maringá: deixe só o Terreo
-        if "maring" in cid_lower:
-            if "terreo" not in end_lower and "térreo" not in end_lower:
-                continue
-
-        # 5. Telêmaco Borba: deixe só o da Sala 1
-        if "tel" in cid_lower and "borba" in cid_lower:
-            if "sala 1" not in end_lower:
-                continue
-
-        # 6. Toledo: deixe só com os caracteres minúsculos (ignorar a versão em CAIXA ALTA)
-        if "toledo" in cid_lower:
-            if u["endereco"].isupper():
-                continue
-
-        filtered_units.append(u)
-
-    # Inserir o Curitiba oficial com o padrão exato solicitado
-    sede_cnpj = next(iter(sede_cnpjs)) if len(sede_cnpjs) == 1 else ""
-    if len(sede_cnpjs) > 1:
-        logger.warning("A base contém mais de um CNPJ de instalação para a Sede Curitiba; o CNPJ da unidade ficou vazio.")
-    curitiba_label = "Curitiba - R Caeté, 150 - SEDE - Prado Velho"
-    if sede_cnpj:
-        curitiba_label += f" ({sede_cnpj})"
-    curitiba_oficial = {
-        "cidade": "Curitiba",
-        "endereco": "R Caeté, 150 - SEDE - Prado Velho",
-        "uf": "PR",
-        "cep": "80220-300",
-        "cnpj": sede_cnpj,
-        "is_sede": True,
-        "endereco_completo": "R Caeté, 150 - SEDE - Prado Velho - Curitiba/PR - CEP 80220-300",
-        "label": curitiba_label,
-    }
-    curitiba_oficial["_source_key"] = _stable_unit_source_key(curitiba_oficial)
-
-    final_units = [curitiba_oficial]
-    for u in filtered_units:
-        final_units.append({
-            "cidade": u["cidade"],
-            "endereco": u["endereco"],
-            "uf": u["uf"],
-            "cep": u["cep"],
-            "cnpj": u["cnpj"],
-            "is_sede": False,
-            "endereco_completo": u["retirada_endereco"],
-            "label": f"{u['cidade']} - {u['endereco']}" + (f" ({u['cnpj']})" if u["cnpj"] else ""),
-            "_source_key": _stable_unit_source_key(u),
-        })
-
-    # Mesclar unidades customizadas/editadas pelo usuário
-    custom_units = load_custom_units()
-    for cu in custom_units:
-        source_key = cu.get("_source_key")
-        if source_key:
-            match = next((x for x in final_units if x.get("_source_key") == source_key), None)
-        else:
-            match = next((
-                x for x in final_units
-                if str(x.get("cidade") or "").lower() == str(cu.get("cidade") or "").lower()
-                and x.get("cnpj") == cu.get("cnpj")
-            ), None)
-        if match:
-            match.update(cu)
-        else:
-            final_units.append(cu)
-
-    # Sort for display, but retain persisted IDs and give inventory-derived
-    # units a deterministic ID that does not depend on their position.
-    new_unidades_cache = sorted(final_units, key=lambda u: (not u.get("is_sede", False), u.get("cidade", ""), u.get("endereco", "")))
-    reserved_unit_ids = {
-        unit_id
-        for unit in custom_units
-        if (unit_id := _coerce_unit_id(unit.get("id"))) is not None
-    }
-    reserved_unit_ids.update(
-        unit_id
-        for unit in new_unidades_cache
-        if (unit_id := _coerce_unit_id(unit.get("id"))) is not None
-    )
-    for unit in new_unidades_cache:
-        if _coerce_unit_id(unit.get("id")) is not None:
-            continue
-        generated_id = _stable_unit_id(unit, reserved_unit_ids)
-        unit["id"] = generated_id
-        reserved_unit_ids.add(generated_id)
-
-    # Apelidos manuais persistem por série e prevalecem sobre o hostname da InvAll.
-    mod_apelidos = load_modified_apelidos()
-    manual_aliases = _manual_aliases_by_serial(mod_apelidos)
-    endpoint_index = read_endpoint_alias_index()
-    for serial_key, equipment in new_equipamentos_cache.items():
-        equipment["_revisao"] = _equipment_revision(
-            equipment.get("serial"),
-            equipment.get("modelo"),
-            equipment.get("tipo"),
-            equipment.get("_apelido_base"),
-            equipment.get("idCliente"),
-        )
-        normalized_serial = normalize_reference_value(equipment.get("serial"))
-        equipment["_apelido_manual_override"] = normalized_serial in manual_aliases
-        equipment["_apelido_local"] = manual_aliases.get(
-            normalized_serial, equipment.get("_apelido_base", "")
-        )
-        _apply_effective_alias(
-            equipment,
-            endpoint_index,
-            details_duplicate=details_serial_counts.get(normalized_serial, 0) > 1,
-        )
-
-    # Calculate stats
-    tipo_col_real = next(
-        (
-            norm_cols[normalized_header]
-            for alias in tipo_header_aliases
-            if (normalized_header := normalize_workbook_header(alias)) in norm_cols
-        ),
-        None,
-    )
-    type_counts = (
-        dict(Counter(row.get(tipo_col_real, "") for row in records).most_common())
-        if tipo_col_real is not None
-        else {}
-    )
-    export_counts = count_export_changes(
-        locked=True,
-        endpoint_index=endpoint_index,
-    )
-    export_status = get_export_status()
-    new_stats_cache = {
-        "total_equipamentos": len(new_equipamentos_cache),
-        "total_unidades": len(new_unidades_cache),
-        "total_apelidos_modificados": export_counts["apelidos"],
-        "total_id_clientes_modificados": export_counts["id_clientes"],
-        "total_alteracoes_exportaveis": export_counts["total"],
-        "exportacao_disponivel": export_status["available"],
-        "exportacao_motivo": export_status["reason"],
-        "tipos": type_counts,
-        "arquivo_origem": active_details_file.name,
-        "ultima_atualizacao": datetime.now().strftime("%d/%m/%Y %H:%M")
-    }
-
-    # Só publica os novos caches depois de ler, converter e validar toda a planilha.
-    state = prepare_database_state(
-        new_equipamentos_cache,
-        new_unidades_cache,
-        new_stats_cache,
-    )
-    if publish:
-        publish_database_state(state)
-
-    logger.info(
-        "Base carregada: %d equipamentos (%d com apelido modificado) e %d unidades catalogadas.",
-        len(new_equipamentos_cache),
-        len(mod_apelidos),
-        len(new_unidades_cache),
-    )
-    if not publish:
-        return state
-    return True
+# Late-bound so tests that patch these main attributes keep affecting the load.
+_inventory_state_services = inventory_state.InventoryStateServices(
+    get_parque_file=lambda: get_parque_file(),
+    input_dir=lambda: INPUT_DIR,
+    find_details_sheet=lambda file_path: find_details_sheet(file_path),
+    read_details_sheet_records=lambda file_path, sheet_name: _read_details_sheet_records(file_path, sheet_name),
+    load_custom_units=lambda: load_custom_units(),
+    load_modified_apelidos=lambda: load_modified_apelidos(),
+    read_endpoint_alias_index=lambda: read_endpoint_alias_index(),
+    equipment_revision=lambda *args: _equipment_revision(*args),
+    apply_effective_alias=lambda *args, **kwargs: _apply_effective_alias(*args, **kwargs),
+    count_export_changes=lambda *args, **kwargs: count_export_changes(*args, **kwargs),
+    get_export_status=lambda: get_export_status(),
+    prepare_database_state=lambda *args: prepare_database_state(*args),
+    publish_database_state=lambda state: publish_database_state(state),
+    build_search_index=lambda *args: build_search_index(*args),
+    normalize_search_term=lambda value: _normalizar_termo_busca(value),
+    inventory_files=lambda: (*get_details_files(), ENDPOINT_UPLOAD_FILE, MODIFIED_APELIDOS_FILE, CUSTOM_UNIDADES_FILE, EXPORT_MODEL_FILE),
+    logger=logger,
+)
 
 # Models for API
 def _validate_equipment_serial(value: str) -> str:
@@ -2180,9 +1760,9 @@ def save_equipment_to_excel(
         ]))
         with AtomicFileTransaction(TRANSACTION_ROOT, transaction_targets) as transaction:
             with STATE_LOCK:
-                next_equipment_cache = deepcopy(equipamentos_cache)
-                next_unit_cache = deepcopy(unidades_cache)
-                next_stats_cache = deepcopy(stats_cache)
+                next_equipment_cache = deepcopy(inventory_state.equipamentos_cache)
+                next_unit_cache = deepcopy(inventory_state.unidades_cache)
+                next_stats_cache = deepcopy(inventory_state.stats_cache)
             cached_equipment = deepcopy(next_equipment_cache.get(target_serial_upper))
             if cached_equipment is None and not payload.novo:
                 raise HTTPException(
@@ -2388,7 +1968,7 @@ def get_equipamento(serial: str):
     """Busca um equipamento pelo número de série (sem distinção de maiúsculas/minúsculas)."""
     clean_serial = serial.strip().upper()
     with STATE_LOCK:
-        equipment = deepcopy(equipamentos_cache.get(clean_serial))
+        equipment = deepcopy(inventory_state.equipamentos_cache.get(clean_serial))
     if equipment is not None:
         return _public_equipment(equipment)
 
@@ -2406,7 +1986,7 @@ def salvar_equipamento(payload: EquipamentoUpdatePayload):
     target_serial = payload.serial.strip().upper()
     requested_fields = set(payload.model_fields_set)
     with STATE_LOCK:
-        equipamento_existente = deepcopy(equipamentos_cache.get(target_serial))
+        equipamento_existente = deepcopy(inventory_state.equipamentos_cache.get(target_serial))
     if payload.novo and equipamento_existente is not None:
         raise HTTPException(
             status_code=409,
@@ -2466,7 +2046,7 @@ def aplicar_alteracao_apelido(
 ) -> Dict[str, Any]:
     """Save a manual alias, or with ``drop_override`` remove it so the sources apply again."""
     with STATE_LOCK:
-        initial_equipment = equipamentos_cache.get(target_serial)
+        initial_equipment = inventory_state.equipamentos_cache.get(target_serial)
         initial_equipment = dict(initial_equipment) if initial_equipment is not None else None
     if initial_equipment is None:
         raise HTTPException(status_code=404, detail=f"Equipamento com serial '{target_serial}' não encontrado na base de dados.")
@@ -2494,9 +2074,9 @@ def aplicar_alteracao_apelido(
     try:
         with AtomicFileTransaction(TRANSACTION_ROOT, targets) as transaction:
             with STATE_LOCK:
-                next_equipment_cache = deepcopy(equipamentos_cache)
-                next_unit_cache = deepcopy(unidades_cache)
-                next_stats_cache = deepcopy(stats_cache)
+                next_equipment_cache = deepcopy(inventory_state.equipamentos_cache)
+                next_unit_cache = deepcopy(inventory_state.unidades_cache)
+                next_stats_cache = deepcopy(inventory_state.stats_cache)
             equipamento = deepcopy(next_equipment_cache.get(target_serial))
             if equipamento is None:
                 raise HTTPException(status_code=404, detail=f"Equipamento com serial '{target_serial}' não encontrado na base de dados.")
@@ -2653,7 +2233,7 @@ def excluir_evento_historico_apelido(evento_id: str):
         raise HTTPException(status_code=404, detail="O registro selecionado não existe mais no histórico.")
 
     target_serial = str(evento.get("serial") or "").strip().upper()
-    equipamento = equipamentos_cache.get(target_serial)
+    equipamento = inventory_state.equipamentos_cache.get(target_serial)
     if equipamento is None:
         raise HTTPException(status_code=404, detail=f"Equipamento com serial '{target_serial}' não encontrado na base de dados.")
 
@@ -2708,7 +2288,7 @@ def desfazer_alteracao_apelido(payload: ApelidoUndoPayload):
         raise HTTPException(status_code=404, detail="A alteração selecionada não existe no histórico.")
 
     target_serial = str(evento.get("serial") or "").strip().upper()
-    equipamento = equipamentos_cache.get(target_serial)
+    equipamento = inventory_state.equipamentos_cache.get(target_serial)
     if equipamento is None:
         raise HTTPException(status_code=404, detail=f"Equipamento com serial '{target_serial}' não encontrado na base de dados.")
 
@@ -2989,21 +2569,21 @@ def recarregar_base():
             detail=f"Nenhuma planilha válida pôde ser carregada em '{INPUT_DIR.name}'."
         )
 
-    filename = stats_cache["arquivo_origem"]
-    total_equipamentos = stats_cache["total_equipamentos"]
+    filename = inventory_state.stats_cache["arquivo_origem"]
+    total_equipamentos = inventory_state.stats_cache["total_equipamentos"]
     return {
         "sucesso": True,
         "arquivo_origem": filename,
         "total_equipamentos": total_equipamentos,
         "mensagem": f"Planilha '{filename}' carregada com {total_equipamentos} equipamentos.",
-        "stats": stats_cache,
-        "total_unidades": len(unidades_cache)
+        "stats": inventory_state.stats_cache,
+        "total_unidades": len(inventory_state.unidades_cache)
     }
 
 
 def _history_equipment_snapshot() -> Dict[str, Dict[str, Any]]:
     with STATE_LOCK:
-        return deepcopy(equipamentos_cache)
+        return deepcopy(inventory_state.equipamentos_cache)
 
 
 _inventory_update_services = InventoryUpdateServices(
@@ -3134,9 +2714,7 @@ def _categoria_equipamento(tipo: Any, modelo: Any) -> str:
 
 def _refresh_equipment_search_index_locked() -> None:
     """Precompute normalized searchable values once per published cache generation."""
-    global _EQUIPMENT_SEARCH_INDEX, _EQUIPMENT_SEARCH_INDEX_SOURCE
-    _EQUIPMENT_SEARCH_INDEX = build_search_index(equipamentos_cache, _normalizar_termo_busca)
-    _EQUIPMENT_SEARCH_INDEX_SOURCE = equipamentos_cache
+    inventory_state.refresh_search_index_locked(_inventory_state_services)
 
 
 def _buscar_equipamentos_por_termo(q: str) -> List[Dict[str, Any]]:
@@ -3146,10 +2724,7 @@ def _buscar_equipamentos_por_termo(q: str) -> List[Dict[str, Any]]:
         return []
 
 
-    with STATE_LOCK:
-        if _EQUIPMENT_SEARCH_INDEX_SOURCE is not equipamentos_cache:
-            _refresh_equipment_search_index_locked()
-        current_index = _EQUIPMENT_SEARCH_INDEX
+    current_index = inventory_state.current_search_index(_inventory_state_services)
     return search_normalized_equipment_index(current_index, term)
 
 
@@ -3157,9 +2732,9 @@ def _get_stats_snapshot() -> Dict[str, Any]:
     export_counts = count_export_changes()
     export_status = get_export_status()
     with STATE_LOCK:
-        stats_snapshot = deepcopy(stats_cache)
-        equipment_count = len(equipamentos_cache)
-        unit_count = len(unidades_cache)
+        stats_snapshot = deepcopy(inventory_state.stats_cache)
+        equipment_count = len(inventory_state.equipamentos_cache)
+        unit_count = len(inventory_state.unidades_cache)
     return {
         **stats_snapshot,
         "total_equipamentos": equipment_count,
@@ -3175,7 +2750,7 @@ def _get_stats_snapshot() -> Dict[str, Any]:
 
 def _unit_cache_snapshot() -> List[Dict[str, Any]]:
     with STATE_LOCK:
-        return deepcopy(unidades_cache)
+        return deepcopy(inventory_state.unidades_cache)
 
 
 
@@ -3237,7 +2812,7 @@ def _dashboard_equipment_snapshot() -> List[Dict[str, Any]]:
     with STATE_LOCK:
         return [
             {"serial": item.get("serial"), "tipo": item.get("tipo"), "modelo": item.get("modelo"), "retirada_cidade": item.get("retirada_cidade")}
-            for item in equipamentos_cache.values()
+            for item in inventory_state.equipamentos_cache.values()
         ]
 
 

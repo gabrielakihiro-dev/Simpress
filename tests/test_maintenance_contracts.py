@@ -17,6 +17,7 @@ from core import config as app_config
 from core.errors import DomainError
 import openpyxl
 from core import openpyxl_compat
+from domains import inventory_state
 from fastapi import HTTPException
 from starlette.routing import Match
 
@@ -742,7 +743,7 @@ class MaintenanceContractTests(unittest.TestCase):
                 patch.object(main, "load_custom_units", return_value=[]),
                 patch.object(main, "ALIAS_HISTORY_FILE", root / "aliases.json"),
                 patch.object(main, "COMPARISON_HISTORY_FILE", root / "comparison.json"),
-                patch.object(main, "equipamentos_cache", {}),
+                patch.object(inventory_state, "equipamentos_cache", {}),
                 patch.object(main, "TEMPLATE_FILE", root / "template.xlsx"),
                 patch.object(main, "DETAILS_UPLOAD_FILE", details),
                 patch.object(main, "ENDPOINT_UPLOAD_FILE", root / "endpoint.xlsx"),
