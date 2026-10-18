@@ -673,7 +673,7 @@ def _commit_inventory_files(
                 }
                 source_label = hashlib.sha256(staged["endpoint"]["bytes"]).hexdigest()[:16]
 
-                def append_endpoint_warnings(history):
+                def append_endpoint_warnings(history: Any) -> List[Any]:
                     if not isinstance(history, list):
                         raise RuntimeError("O histórico de alterações não contém uma lista válida.")
                     return [*history, *build_endpoint_warning_entries(
