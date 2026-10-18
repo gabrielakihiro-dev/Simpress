@@ -235,14 +235,14 @@
 
     function ensurePanel() {
       if (panel) return panel;
-      // Below the recent lookups when the page has them, so they stay next to the search.
-      const anchor = doc.querySelector("#tab-panel-home #home-recentes") || doc.querySelector("#tab-panel-home .home-search-card");
-      if (!anchor) return null;
+      // Lives in the Resumo tab, above the usage card.
+      const host = doc.getElementById("resumo-cards");
+      if (!host) return null;
       panel = el("section", "ux-home-panel glass-card");
       panel.id = "ux-home-panel";
       panel.setAttribute("aria-labelledby", "ux-home-panel-title");
       panel.hidden = true;
-      anchor.insertAdjacentElement("afterend", panel);
+      host.prepend(panel);
       return panel;
     }
 
@@ -412,18 +412,17 @@
       }
     }
 
-    function homeIsActive() {
-      return doc.getElementById("tab-home")?.getAttribute("aria-selected") === "true";
-    }
-
     new win.MutationObserver(scanTables).observe(doc.body, { childList: true, subtree: true });
     scanTables();
 
     // A change of the history counter means an update/restore/delete happened: refresh both the panel and the badge.
     const counter = doc.getElementById("badge-total-historico-comparacoes");
     if (counter) new win.MutationObserver(() => refresh(true)).observe(counter, { childList: true, characterData: true, subtree: true });
-    const homeTab = doc.getElementById("tab-home");
-    if (homeTab) new win.MutationObserver(() => { if (homeIsActive()) refresh(false); }).observe(homeTab, { attributes: true, attributeFilter: ["aria-selected"] });
+    // The cards are in the Resumo tab; Home keeps refreshing too, for the sidebar divergence badge.
+    const abasComDados = ["tab-home", "tab-resumo"].map(id => doc.getElementById(id)).filter(Boolean);
+    const abaComDadosAtiva = () => abasComDados.some(tab => tab.getAttribute("aria-selected") === "true");
+    const abasObserver = new win.MutationObserver(() => { if (abaComDadosAtiva()) refresh(false); });
+    abasComDados.forEach(tab => abasObserver.observe(tab, { attributes: true, attributeFilter: ["aria-selected"] }));
 
     ensurePanel();
     refresh(true);
