@@ -267,6 +267,12 @@ class Handler(BaseHTTPRequestHandler):
         self.send(TICKET_REPORT)
 
 
+class UIFixtureServer(ThreadingHTTPServer):
+    # The module graph arrives in a burst. The default queue of five connections
+    # drops imports when Windows CI is slower to accept them, preventing startup.
+    request_queue_size = 128
+
+
 if __name__ == "__main__":
     print("UI fixture: http://127.0.0.1:8765/ — LENTO / FALHA", flush=True)
-    ThreadingHTTPServer(("127.0.0.1", 8765), Handler).serve_forever()
+    UIFixtureServer(("127.0.0.1", 8765), Handler).serve_forever()
