@@ -15,6 +15,7 @@ from starlette.datastructures import UploadFile
 
 from core.config import format_size_limit
 from core.errors import DomainError
+from domains import inventory_state
 from domains.local_setup import TRANSFER_CELLS, unpack_simpress_zip, validate_local_model
 from core.xlsx_safety import XlsxPackageError, validate_xlsx
 from tests import test_integrity_workflows as fixtures
@@ -133,7 +134,7 @@ class FirstAccessTests(unittest.TestCase):
         result = self.import_pair(zipped=True)
         self.assertTrue(result["sucesso"])
         self.assertEqual(main._get_stats_snapshot()["total_equipamentos"], 1)
-        self.assertTrue(main.unidades_cache)
+        self.assertTrue(inventory_state.unidades_cache)
         report = main.get_startup_readiness()
         for key in ("consulta_equipamentos", "geracao_transferencia", "comparacao_atualizacao_inventarios"):
             self.assertTrue(report["functions"][key]["available"], key)
@@ -268,7 +269,7 @@ class FirstAccessTests(unittest.TestCase):
         self.import_pair()
         tracked = [self.endpoint, self.details, self.comparison_history, self.overrides]
         before = {path: path.read_bytes() for path in tracked if path.is_file()}
-        cache_before = copy.deepcopy(main.equipamentos_cache)
+        cache_before = copy.deepcopy(inventory_state.equipamentos_cache)
         stats_before = main._get_stats_snapshot()
         valid_xlsx = self.details.read_bytes()
         with zipfile.ZipFile(io.BytesIO(valid_xlsx)) as archive:
@@ -294,7 +295,7 @@ class FirstAccessTests(unittest.TestCase):
                             if name.endswith(".zip"):
                                 self.assertEqual(response.json()["detail"], "Não foi possível ler o ZIP da Simpress.")
                             self.assertEqual({path: path.read_bytes() for path in before}, before)
-                            self.assertEqual(main.equipamentos_cache, cache_before)
+                            self.assertEqual(inventory_state.equipamentos_cache, cache_before)
                             self.assertEqual(main._get_stats_snapshot(), stats_before)
         finally:
             client.close()

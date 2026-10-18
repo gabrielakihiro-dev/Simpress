@@ -18,7 +18,7 @@ from core import integrity
 from core.errors import DomainError, DomainValidationError
 from core.async_workers import await_worker_completion
 from core.xlsx_safety import WORKBOOK_READ_ERRORS
-from domains import ticket_reconciliation
+from domains import inventory_state, ticket_reconciliation
 from routers.local_setup import create_local_setup_router
 
 
@@ -141,11 +141,11 @@ class ExceptionObservabilityTests(unittest.TestCase):
             patch.object(main, "get_parque_file", return_value=self.file),
             patch.object(main, "find_details_sheet", return_value="fixture"),
             patch.object(main, "_read_details_sheet_records", side_effect=OSError(PRIVATE_CONTENT)),
-            patch.object(main, "equipamentos_cache", previous),
+            patch.object(inventory_state, "equipamentos_cache", previous),
             self.assertLogs(main.logger, level="WARNING") as log,
         ):
-            self.assertFalse(main._load_database_unlocked())
-            self.assertIs(main.equipamentos_cache, previous)
+            self.assertFalse(main.load_database(transaction_locked=True))
+            self.assertIs(inventory_state.equipamentos_cache, previous)
         self.assert_safe_log(log, self.file.name, "papel=detalhes", "OSError")
 
     def test_invalid_recovery_manifest_is_logged_and_preserved(self):
