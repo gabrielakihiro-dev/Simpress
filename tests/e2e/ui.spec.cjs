@@ -751,3 +751,31 @@ test("usage card shows 30-day counts and estimates hours from the configured min
   await expect(transfers).not.toHaveAttribute("aria-invalid", "true");
   await auditAccessibility(page, "#uso-30-dias");
 });
+
+test("stale base alert shows the last update date and opens the base update", async ({ page, request }) => {
+  const alert = page.locator("#alerta-base-desatualizada");
+  await expect(alert).toBeHidden();
+  try {
+    await request.get("/__fixture_base_desatualizada?estado=desatualizada");
+    await page.reload();
+    await expect(alert).toBeVisible();
+    await expect(alert.getByRole("heading", { name: "Base desatualizada" })).toBeVisible();
+    await expect(alert.locator("#alerta-base-desatualizada-texto")).toHaveText(
+      "A base na Simpress foi atualizada pela última vez em 08/10/2026 às 20:15, há 9 dias. O limite é de 7 dias."
+    );
+    await auditAccessibility(page, "#alerta-base-desatualizada");
+
+    await alert.getByRole("button", { name: "Atualizar base" }).click();
+    await expect(page.locator("#modal-atualizar-planilhas")).toBeVisible();
+    await page.keyboard.press("Escape");
+    await expect(page.locator("#modal-atualizar-planilhas")).toBeHidden();
+    await expect(page.locator("#btn-alerta-base-atualizar")).toBeFocused();
+
+    await request.get("/__fixture_base_desatualizada?estado=sem_base");
+    await page.reload();
+    await expect(alert.getByRole("heading", { name: "Base não encontrada" })).toBeVisible();
+    await expect(alert.getByRole("button", { name: "Importar base" })).toBeVisible();
+  } finally {
+    await request.get("/__fixture_base_desatualizada?estado=atualizada");
+  }
+});
