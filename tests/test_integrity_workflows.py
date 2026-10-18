@@ -25,7 +25,7 @@ from openpyxl.styles import Font, PatternFill
 from openpyxl.worksheet.table import Table, TableStyleInfo
 from pydantic import ValidationError
 from starlette.datastructures import UploadFile
-from domains import inventory_update
+from domains import inventory_state, inventory_update
 from core.errors import DomainError
 
 with patch("openpyxl.load_workbook", side_effect=RuntimeError("testes não acessam planilhas locais")):
@@ -277,18 +277,18 @@ class WorkflowIntegrityTests(unittest.TestCase):
         self.stack.enter_context(patch.object(main, "CUSTOM_UNIDADES_FILE", self.custom_units))
         self.stack.enter_context(patch.object(main, "TRANSACTION_ROOT", self.root))
         self.old_state = (
-            copy.deepcopy(main.equipamentos_cache),
-            copy.deepcopy(main.unidades_cache),
-            copy.deepcopy(main.stats_cache),
+            copy.deepcopy(inventory_state.equipamentos_cache),
+            copy.deepcopy(inventory_state.unidades_cache),
+            copy.deepcopy(inventory_state.stats_cache),
         )
-        main.equipamentos_cache = {}
-        main.unidades_cache = []
-        main.stats_cache = {}
+        inventory_state.equipamentos_cache = {}
+        inventory_state.unidades_cache = []
+        inventory_state.stats_cache = {}
         self.overrides.write_text("{}", encoding="utf-8")
         self.custom_units.write_text("[]", encoding="utf-8")
 
     def tearDown(self):
-        main.equipamentos_cache, main.unidades_cache, main.stats_cache = self.old_state
+        inventory_state.equipamentos_cache, inventory_state.unidades_cache, inventory_state.stats_cache = self.old_state
         self.stack.close()
         self.temp_context.cleanup()
 
@@ -322,7 +322,7 @@ class WorkflowIntegrityTests(unittest.TestCase):
         self.assertTrue(main.load_database())
 
     def test_partial_equipment_search_does_not_return_an_arbitrary_exact_lookup(self):
-        main.equipamentos_cache = {
+        inventory_state.equipamentos_cache = {
             "SERIE-ABC-001": {"serial": "SERIE-ABC-001", "modelo": "MODELO A"},
             "SERIE-ABC-002": {"serial": "SERIE-ABC-002", "modelo": "MODELO B"},
         }
@@ -384,9 +384,9 @@ class WorkflowIntegrityTests(unittest.TestCase):
         self.custom_units.write_text(json.dumps([saved_zeta]), encoding="utf-8")
 
         self.assertTrue(main.load_database())
-        zeta = next(unit for unit in main.unidades_cache if unit["cidade"] == "Zeta")
+        zeta = next(unit for unit in inventory_state.unidades_cache if unit["cidade"] == "Zeta")
         self.assertEqual(zeta["id"], 47)
-        ids_before = {unit["cidade"]: unit["id"] for unit in main.unidades_cache}
+        ids_before = {unit["cidade"]: unit["id"] for unit in inventory_state.unidades_cache}
         self.assertEqual(len(set(ids_before.values())), len(ids_before))
 
         main.salvar_unidade(main.UnidadePayload(
@@ -396,7 +396,7 @@ class WorkflowIntegrityTests(unittest.TestCase):
             cep="86700-000",
             cnpj="08.000.000/0000-08",
         ))
-        ids_after_add = {unit["cidade"]: unit["id"] for unit in main.unidades_cache}
+        ids_after_add = {unit["cidade"]: unit["id"] for unit in inventory_state.unidades_cache}
         for city, unit_id in ids_before.items():
             self.assertEqual(ids_after_add[city], unit_id)
         self.assertIn("Arapongas", ids_after_add)
@@ -415,7 +415,7 @@ class WorkflowIntegrityTests(unittest.TestCase):
         edited_zeta = next(unit for unit in saved_units if unit["id"] == 47)
         self.assertEqual(edited_zeta["endereco"], "Rua Fictícia, 48")
         self.assertEqual(
-            next(unit for unit in main.unidades_cache if unit["cidade"] == "Zeta")["id"],
+            next(unit for unit in inventory_state.unidades_cache if unit["cidade"] == "Zeta")["id"],
             47,
         )
 
@@ -454,7 +454,7 @@ class WorkflowIntegrityTests(unittest.TestCase):
         )
         for index, (original_city, updated_city, updated_cnpj) in enumerate(edits, start=1):
             with self.subTest(city=original_city):
-                source_unit = next(unit for unit in main.unidades_cache if unit["cidade"] == original_city)
+                source_unit = next(unit for unit in inventory_state.unidades_cache if unit["cidade"] == original_city)
                 source_key = source_unit["_source_key"]
                 source_id = source_unit["id"]
                 saved = main.salvar_unidade(main.UnidadePayload(
@@ -467,7 +467,7 @@ class WorkflowIntegrityTests(unittest.TestCase):
                 ))
 
                 linked_units = [
-                    unit for unit in main.unidades_cache
+                    unit for unit in inventory_state.unidades_cache
                     if unit.get("_source_key") == source_key
                 ]
                 self.assertEqual(len(linked_units), 1)
@@ -525,7 +525,7 @@ class WorkflowIntegrityTests(unittest.TestCase):
         saved_ids = [unit["id"] for unit in persisted]
         self.assertEqual(len(saved_ids), len(set(saved_ids)))
         self.assertTrue({"Unidade Concorrente A", "Unidade Concorrente B"}.issubset(
-            {unit["cidade"] for unit in main.unidades_cache}
+            {unit["cidade"] for unit in inventory_state.unidades_cache}
         ))
 
     def test_unit_save_transaction_failure_preserves_catalog_and_cache(self):
@@ -537,7 +537,7 @@ class WorkflowIntegrityTests(unittest.TestCase):
         self.custom_units.write_text("[]", encoding="utf-8")
         self.assertTrue(main.load_database())
         catalog_before = self.custom_units.read_bytes()
-        units_before = copy.deepcopy(main.unidades_cache)
+        units_before = copy.deepcopy(inventory_state.unidades_cache)
 
         with patch.object(
             main.AtomicFileTransaction,
@@ -555,7 +555,7 @@ class WorkflowIntegrityTests(unittest.TestCase):
 
         self.assertEqual(raised.exception.status_code, 500)
         self.assertEqual(self.custom_units.read_bytes(), catalog_before)
-        self.assertEqual(main.unidades_cache, units_before)
+        self.assertEqual(inventory_state.unidades_cache, units_before)
 
     def test_unit_save_rolls_back_when_resulting_inventory_cannot_be_reloaded(self):
         make_details(self.details, [
@@ -565,7 +565,7 @@ class WorkflowIntegrityTests(unittest.TestCase):
         make_model(self.model)
         self.assertTrue(main.load_database())
         self.custom_units.write_text("[]", encoding="utf-8")
-        units_before = copy.deepcopy(main.unidades_cache)
+        units_before = copy.deepcopy(inventory_state.unidades_cache)
         payload = main.UnidadePayload(
             cidade="Unidade Não Persistida",
             endereco="Rua Fictícia, 12",
@@ -580,7 +580,7 @@ class WorkflowIntegrityTests(unittest.TestCase):
 
         self.assertEqual(raised.exception.status_code, 500)
         self.assertEqual(self.custom_units.read_text(encoding="utf-8"), "[]")
-        self.assertEqual(main.unidades_cache, units_before)
+        self.assertEqual(inventory_state.unidades_cache, units_before)
 
     def test_repeating_unit_creation_is_idempotent(self):
         make_details(self.details, [
@@ -744,13 +744,13 @@ class WorkflowIntegrityTests(unittest.TestCase):
         self.assertEqual(records[3]["CNPJInstalacao"], "00987654000188")
 
         self.assertTrue(main.load_database())
-        self.assertIn("001234", main.equipamentos_cache)
-        self.assertIn("1234", main.equipamentos_cache)
-        self.assertIn("NA", main.equipamentos_cache)
-        self.assertNotIn("HOST-SEM-SERIE", main.equipamentos_cache)
-        self.assertEqual(main.equipamentos_cache["001234"]["apelido"], "HOST-TEXTO")
-        self.assertEqual(main.equipamentos_cache["1234"]["apelido"], "HOST-NUMERICO")
-        self.assertEqual(main.equipamentos_cache["NA"]["retirada_cnpj"], "00987654000188")
+        self.assertIn("001234", inventory_state.equipamentos_cache)
+        self.assertIn("1234", inventory_state.equipamentos_cache)
+        self.assertIn("NA", inventory_state.equipamentos_cache)
+        self.assertNotIn("HOST-SEM-SERIE", inventory_state.equipamentos_cache)
+        self.assertEqual(inventory_state.equipamentos_cache["001234"]["apelido"], "HOST-TEXTO")
+        self.assertEqual(inventory_state.equipamentos_cache["1234"]["apelido"], "HOST-NUMERICO")
+        self.assertEqual(inventory_state.equipamentos_cache["NA"]["retirada_cnpj"], "00987654000188")
 
     def test_installation_cnpj_header_with_branch_suffix_populates_equipment_and_unit(self):
         cnpj = "12.345.678/0001-90"
@@ -774,7 +774,7 @@ class WorkflowIntegrityTests(unittest.TestCase):
 
         self.assertTrue(main.load_database())
         equipment = main.get_equipamento("SERIE-CNPJ-FICTICIA")
-        delivery_unit = next(unit for unit in main.unidades_cache if unit["cidade"] == "Foz do Iguaçu")
+        delivery_unit = next(unit for unit in inventory_state.unidades_cache if unit["cidade"] == "Foz do Iguaçu")
 
         self.assertEqual(equipment["retirada_cnpj"], cnpj)
         self.assertEqual(delivery_unit["cnpj"], cnpj)
@@ -806,7 +806,7 @@ class WorkflowIntegrityTests(unittest.TestCase):
         os.utime(archived, (timestamp - 60, timestamp - 60))
         os.utime(self.details, (timestamp, timestamp))
         self.assertTrue(main.load_database())
-        self.assertIn("SN-NOVO", main.equipamentos_cache)
+        self.assertIn("SN-NOVO", inventory_state.equipamentos_cache)
 
         real_open = open
         locked = self.details.resolve()
@@ -823,8 +823,8 @@ class WorkflowIntegrityTests(unittest.TestCase):
                 main.get_primary_equipment_file()
             self.assertFalse(main.load_database())
 
-        self.assertIn("SN-NOVO", main.equipamentos_cache)
-        self.assertNotIn("SN-ANTIGO", main.equipamentos_cache)
+        self.assertIn("SN-NOVO", inventory_state.equipamentos_cache)
+        self.assertNotIn("SN-ANTIGO", inventory_state.equipamentos_cache)
         self.assertEqual(main.get_primary_equipment_file().resolve(), self.details.resolve())
 
     def test_equipment_edit_changes_only_loaded_source_and_keeps_other_active_records(self):
@@ -860,10 +860,10 @@ class WorkflowIntegrityTests(unittest.TestCase):
         self.assertEqual(archived.read_bytes(), archived_before)
         self.assertEqual(main.get_primary_equipment_file().resolve(), self.details.resolve())
         self.assertTrue(main.load_database())
-        self.assertIn("SN-EDITAR", main.equipamentos_cache)
-        self.assertIn("SN-MANTER", main.equipamentos_cache)
-        self.assertEqual(main.equipamentos_cache["SN-EDITAR"]["modelo"], "Modelo atualizado")
-        self.assertEqual(main.equipamentos_cache["SN-MANTER"]["modelo"], "Modelo manter")
+        self.assertIn("SN-EDITAR", inventory_state.equipamentos_cache)
+        self.assertIn("SN-MANTER", inventory_state.equipamentos_cache)
+        self.assertEqual(inventory_state.equipamentos_cache["SN-EDITAR"]["modelo"], "Modelo atualizado")
+        self.assertEqual(inventory_state.equipamentos_cache["SN-MANTER"]["modelo"], "Modelo manter")
 
     def test_explicit_null_clears_the_same_field_in_excel_and_cache(self):
         make_details(self.details, [
@@ -906,13 +906,13 @@ class WorkflowIntegrityTests(unittest.TestCase):
         ])
         later = time.time() + 5
         os.utime(self.details, (later, later))
-        self.assertEqual(main.equipamentos_cache["SN-EXTERNO"]["modelo"], "Modelo antes")
+        self.assertEqual(inventory_state.equipamentos_cache["SN-EXTERNO"]["modelo"], "Modelo antes")
 
         self.assertTrue(main.reload_database_if_changed_externally())
 
-        self.assertEqual(main.equipamentos_cache["SN-EXTERNO"]["modelo"], "Modelo depois")
-        self.assertIn("SN-NOVO-EXTERNO", main.equipamentos_cache)
-        self.assertEqual(main.equipamentos_cache["SN-EXTERNO"]["apelido"], "MANUAL-LOCAL")
+        self.assertEqual(inventory_state.equipamentos_cache["SN-EXTERNO"]["modelo"], "Modelo depois")
+        self.assertIn("SN-NOVO-EXTERNO", inventory_state.equipamentos_cache)
+        self.assertEqual(inventory_state.equipamentos_cache["SN-EXTERNO"]["apelido"], "MANUAL-LOCAL")
         self.assertFalse(main.reload_database_if_changed_externally())
 
     def test_equipment_text_starting_with_formula_marker_is_saved_as_literal_text(self):
@@ -966,14 +966,14 @@ class WorkflowIntegrityTests(unittest.TestCase):
         self.assertEqual(updated["contrato"], "16467")
         self.assertEqual(updated["razao_social"], "RAZAO SOCIAL FICTICIA")
 
-        previous_cache = copy.deepcopy(main.equipamentos_cache)
+        previous_cache = copy.deepcopy(inventory_state.equipamentos_cache)
         make_details(
             self.details,
             [("SN-OUTRO-CONTRATO", "HOST-OUTRO", "Modelo", "Maringá", "Notebook", "87000000", 777, "RAZAO OUTRA")],
             headers=headers,
         )
         self.assertFalse(main.load_database())
-        self.assertEqual(main.equipamentos_cache, previous_cache)
+        self.assertEqual(inventory_state.equipamentos_cache, previous_cache)
 
     def test_equipment_serial_that_normalizes_to_empty_is_rejected(self):
         make_details(self.details, [("SN-BASE", "HOST-BASE", "Modelo", "Maringá", "Notebook", "87000000")])
@@ -983,7 +983,7 @@ class WorkflowIntegrityTests(unittest.TestCase):
 
         with self.assertRaises(ValueError):
             main.EquipamentoUpdatePayload(serial="---", novo=True)
-        self.assertNotIn("---", main.equipamentos_cache)
+        self.assertNotIn("---", inventory_state.equipamentos_cache)
 
     def test_unit_payload_rejects_invalid_cep_uf_and_cnpj(self):
         base = {"cidade": "Maringá", "endereco": "Rua Fictícia", "cnpj": "11.000.000/0000-00"}
@@ -1015,7 +1015,7 @@ class WorkflowIntegrityTests(unittest.TestCase):
         workbook.save(self.details)
         workbook.close()
         before = self.details.read_bytes()
-        cache_before = copy.deepcopy(main.equipamentos_cache)
+        cache_before = copy.deepcopy(inventory_state.equipamentos_cache)
 
         with self.assertRaises(main.HTTPException) as raised:
             main.salvar_equipamento(main.EquipamentoUpdatePayload(
@@ -1026,10 +1026,10 @@ class WorkflowIntegrityTests(unittest.TestCase):
         self.assertEqual(raised.exception.status_code, 409)
         self.assertIn("mais de uma vez", raised.exception.detail)
         self.assertEqual(self.details.read_bytes(), before)
-        self.assertEqual(main.equipamentos_cache, cache_before)
+        self.assertEqual(inventory_state.equipamentos_cache, cache_before)
 
         self.assertTrue(main.load_database())
-        cache_before = copy.deepcopy(main.equipamentos_cache)
+        cache_before = copy.deepcopy(inventory_state.equipamentos_cache)
         with self.assertRaises(main.HTTPException) as raised:
             main.salvar_equipamento(main.EquipamentoUpdatePayload(
                 serial="SN-DUP", modelo="Modelo incorreto", tipo="Notebook",
@@ -1038,7 +1038,7 @@ class WorkflowIntegrityTests(unittest.TestCase):
         self.assertEqual(raised.exception.status_code, 409)
         self.assertIn("duplicada", raised.exception.detail)
         self.assertEqual(self.details.read_bytes(), before)
-        self.assertEqual(main.equipamentos_cache, cache_before)
+        self.assertEqual(inventory_state.equipamentos_cache, cache_before)
 
     def test_equipment_edit_refuses_a_new_active_source_after_cache_load(self):
         make_details(self.details, [
@@ -1047,7 +1047,7 @@ class WorkflowIntegrityTests(unittest.TestCase):
         make_endpoint(self.endpoint, [("OUTRA-SERIE", "HOST-OUTRO")])
         make_model(self.model)
         self.assertTrue(main.load_database())
-        cache_before = copy.deepcopy(main.equipamentos_cache)
+        cache_before = copy.deepcopy(inventory_state.equipamentos_cache)
         source_before = self.details.read_bytes()
 
         newer_source = self.input_dir / "EquipamentosDetalhes_mais_novo.xlsx"
@@ -1068,7 +1068,7 @@ class WorkflowIntegrityTests(unittest.TestCase):
         self.assertIn("base ativa mudou", raised.exception.detail)
         self.assertEqual(self.details.read_bytes(), source_before)
         self.assertEqual(newer_source.read_bytes(), newer_before)
-        self.assertEqual(main.equipamentos_cache, cache_before)
+        self.assertEqual(inventory_state.equipamentos_cache, cache_before)
 
     def test_equipment_edit_failure_preserves_workbook_and_cache(self):
         make_details(self.details, [
@@ -1078,7 +1078,7 @@ class WorkflowIntegrityTests(unittest.TestCase):
         make_model(self.model)
         self.assertTrue(main.load_database())
         before = self.details.read_bytes()
-        cache_before = copy.deepcopy(main.equipamentos_cache)
+        cache_before = copy.deepcopy(inventory_state.equipamentos_cache)
 
         with patch.object(main, "stage_workbook_update", side_effect=main.FileTransactionError("falha fictícia")):
             with self.assertRaises(main.HTTPException) as raised:
@@ -1089,7 +1089,7 @@ class WorkflowIntegrityTests(unittest.TestCase):
 
         self.assertEqual(raised.exception.status_code, 500)
         self.assertEqual(self.details.read_bytes(), before)
-        self.assertEqual(main.equipamentos_cache, cache_before)
+        self.assertEqual(inventory_state.equipamentos_cache, cache_before)
 
     def test_equipment_edit_prepares_endpoint_aliases_before_committing_workbook(self):
         make_details(self.details, [
@@ -1099,7 +1099,7 @@ class WorkflowIntegrityTests(unittest.TestCase):
         self.assertTrue(main.load_database())
         selected = main.get_equipamento("SN-PREPARE")
         workbook_before = self.details.read_bytes()
-        cache_before = copy.deepcopy(main.equipamentos_cache)
+        cache_before = copy.deepcopy(inventory_state.equipamentos_cache)
 
         with patch.object(main, "read_endpoint_alias_index", side_effect=RuntimeError("falha de leitura simulada")):
             with self.assertRaisesRegex(RuntimeError, "falha de leitura simulada"):
@@ -1110,7 +1110,7 @@ class WorkflowIntegrityTests(unittest.TestCase):
                 ))
 
         self.assertEqual(self.details.read_bytes(), workbook_before)
-        self.assertEqual(main.equipamentos_cache, cache_before)
+        self.assertEqual(inventory_state.equipamentos_cache, cache_before)
         self.assertEqual(main.get_equipamento("SN-PREPARE")["modelo"], "Modelo antes")
 
     def test_equipment_edit_prepares_search_index_before_committing_workbook(self):
@@ -1121,7 +1121,7 @@ class WorkflowIntegrityTests(unittest.TestCase):
         self.assertTrue(main.load_database())
         selected = main.get_equipamento("SN-INDEX-PREPARE")
         workbook_before = self.details.read_bytes()
-        cache_before = copy.deepcopy(main.equipamentos_cache)
+        cache_before = copy.deepcopy(inventory_state.equipamentos_cache)
 
         with patch.object(main, "build_search_index", side_effect=RuntimeError("falha de índice simulada")):
             with self.assertRaisesRegex(RuntimeError, "falha de índice simulada"):
@@ -1132,7 +1132,7 @@ class WorkflowIntegrityTests(unittest.TestCase):
                 ))
 
         self.assertEqual(self.details.read_bytes(), workbook_before)
-        self.assertEqual(main.equipamentos_cache, cache_before)
+        self.assertEqual(inventory_state.equipamentos_cache, cache_before)
         self.assertEqual(main.get_equipamento("SN-INDEX-PREPARE")["modelo"], "Modelo antes")
 
     def test_equipment_edit_refuses_to_recreate_a_record_removed_after_load(self):
@@ -1142,7 +1142,7 @@ class WorkflowIntegrityTests(unittest.TestCase):
         make_endpoint(self.endpoint, [("OUTRA-SERIE", "HOST-OUTRO")])
         make_model(self.model)
         self.assertTrue(main.load_database())
-        cache_before = copy.deepcopy(main.equipamentos_cache)
+        cache_before = copy.deepcopy(inventory_state.equipamentos_cache)
         equipment_revision = main.get_equipamento("SN-REMOVIDO")["revisao"]
 
         make_details(self.details, [
@@ -1159,7 +1159,7 @@ class WorkflowIntegrityTests(unittest.TestCase):
         self.assertEqual(raised.exception.status_code, 409)
         self.assertIn("não está mais", raised.exception.detail)
         self.assertEqual(self.details.read_bytes(), source_before)
-        self.assertEqual(main.equipamentos_cache, cache_before)
+        self.assertEqual(inventory_state.equipamentos_cache, cache_before)
 
     def test_new_equipment_is_appended_only_when_marked_as_new(self):
         make_details(self.details, [
@@ -1175,10 +1175,10 @@ class WorkflowIntegrityTests(unittest.TestCase):
         ))
 
         self.assertTrue(result["sucesso"])
-        self.assertIn("SN-NOVO", main.equipamentos_cache)
+        self.assertIn("SN-NOVO", inventory_state.equipamentos_cache)
         self.assertTrue(main.load_database())
-        self.assertIn("SN-BASE", main.equipamentos_cache)
-        self.assertIn("SN-NOVO", main.equipamentos_cache)
+        self.assertIn("SN-BASE", inventory_state.equipamentos_cache)
+        self.assertIn("SN-NOVO", inventory_state.equipamentos_cache)
 
     def test_invall_is_joined_by_normalized_serial_for_site_and_search_without_rewriting_details(self):
         make_details(self.details, [
@@ -1198,15 +1198,15 @@ class WorkflowIntegrityTests(unittest.TestCase):
         before = self.details.read_bytes()
 
         self.assertTrue(main.load_database())
-        self.assertEqual(main.equipamentos_cache["S-1"]["apelido"], "HOST-UNICO")
-        self.assertEqual(main.equipamentos_cache["S-1"]["invall_alias_status"], "aplicado")
-        self.assertEqual(main.equipamentos_cache["DUP"]["apelido"], "ALIAS-DUP")
-        self.assertEqual(main.equipamentos_cache["DUP"]["invall_alias_status"], "serie_invall_duplicada")
-        self.assertEqual(main.equipamentos_cache["NO-SOURCE"]["apelido"], "ALIAS-KEEP")
-        self.assertEqual(main.equipamentos_cache["NO-SOURCE"]["invall_alias_status"], "serie_nao_encontrada")
-        self.assertEqual(main.equipamentos_cache["DETAIL-DUP"]["invall_alias_status"], "serie_detalhes_duplicada")
-        self.assertEqual(main.equipamentos_cache["DETAIL DUP"]["invall_alias_status"], "serie_detalhes_duplicada")
-        self.assertEqual(main.equipamentos_cache["DETAIL-DUP"]["apelido"], "ALIAS-DETAIL-DUP-A")
+        self.assertEqual(inventory_state.equipamentos_cache["S-1"]["apelido"], "HOST-UNICO")
+        self.assertEqual(inventory_state.equipamentos_cache["S-1"]["invall_alias_status"], "aplicado")
+        self.assertEqual(inventory_state.equipamentos_cache["DUP"]["apelido"], "ALIAS-DUP")
+        self.assertEqual(inventory_state.equipamentos_cache["DUP"]["invall_alias_status"], "serie_invall_duplicada")
+        self.assertEqual(inventory_state.equipamentos_cache["NO-SOURCE"]["apelido"], "ALIAS-KEEP")
+        self.assertEqual(inventory_state.equipamentos_cache["NO-SOURCE"]["invall_alias_status"], "serie_nao_encontrada")
+        self.assertEqual(inventory_state.equipamentos_cache["DETAIL-DUP"]["invall_alias_status"], "serie_detalhes_duplicada")
+        self.assertEqual(inventory_state.equipamentos_cache["DETAIL DUP"]["invall_alias_status"], "serie_detalhes_duplicada")
+        self.assertEqual(inventory_state.equipamentos_cache["DETAIL-DUP"]["apelido"], "ALIAS-DETAIL-DUP-A")
         self.assertEqual(main.get_equipamento("s-1")["apelido"], "HOST-UNICO")
         quick_results = main.buscar_seriais("HOST-UNICO")
         self.assertEqual(quick_results[0]["apelido"], "HOST-UNICO")
@@ -1789,7 +1789,7 @@ class WorkflowIntegrityTests(unittest.TestCase):
         ))
 
         self.assertTrue(result["sucesso"])
-        self.assertEqual(main.equipamentos_cache["SN-1"]["apelido"], "PRNOTE-NEW")
+        self.assertEqual(inventory_state.equipamentos_cache["SN-1"]["apelido"], "PRNOTE-NEW")
         saved_details = openpyxl.load_workbook(self.details, data_only=True)
         self.assertEqual(saved_details["EquipamentosDetalhes"]["B2"].value, details_before_upload_alias)
         saved_details.close()
@@ -1951,7 +1951,7 @@ class WorkflowIntegrityTests(unittest.TestCase):
         self.assertEqual(repeated["comparacao"]["evento_id"], history_after_commit[0]["id"])
         self.assertEqual(len(json.loads(self.comparison_history.read_text(encoding="utf-8"))), 1)
         self.assertEqual(len([path for path in self.backups.iterdir() if path.is_dir()]), 1)
-        self.assertEqual(main.equipamentos_cache["SN-IDEMPOTENT"]["apelido"], "HOST-NEW")
+        self.assertEqual(inventory_state.equipamentos_cache["SN-IDEMPOTENT"]["apelido"], "HOST-NEW")
 
     def test_inventory_idempotency_precommit_failure_can_be_retried(self):
         self._prepare_inventory_upload_fixture()
@@ -2692,7 +2692,7 @@ class WorkflowIntegrityTests(unittest.TestCase):
         self.assertNotEqual(worker_threads["validation"], loop_thread)
         self.assertNotEqual(worker_threads["transaction"], loop_thread)
         self.assertNotEqual(worker_threads["retention"], loop_thread)
-        self.assertEqual(main.equipamentos_cache["SN-1"]["apelido"], "PRNOTE-NEW")
+        self.assertEqual(inventory_state.equipamentos_cache["SN-1"]["apelido"], "PRNOTE-NEW")
 
     def test_interrupted_upload_finishes_atomic_transaction_before_closing_request(self):
         make_details(self.details, [
@@ -2751,7 +2751,7 @@ class WorkflowIntegrityTests(unittest.TestCase):
         self.assertEqual(self.details.read_bytes(), details_bytes)
         history = json.loads(self.comparison_history.read_text(encoding="utf-8"))
         self.assertEqual(len(history), 1)
-        self.assertEqual(main.equipamentos_cache["SN-1"]["apelido"], "PRNOTE-NEW")
+        self.assertEqual(inventory_state.equipamentos_cache["SN-1"]["apelido"], "PRNOTE-NEW")
 
     def test_repeated_upload_cancellation_keeps_parser_admission_until_worker_finishes(self):
         admission = threading.BoundedSemaphore(1)
@@ -2913,10 +2913,10 @@ class WorkflowIntegrityTests(unittest.TestCase):
         self.assertEqual(endpoint_rows, [("SN-MANTER", "HOST-NOVO"), ("SN-DUP", "HOST-DUPLICADO")])
         saved_endpoint.close()
 
-        self.assertNotIn("SN-REMOVER", main.equipamentos_cache)
-        self.assertEqual(main.equipamentos_cache["SN-MANTER"]["apelido"], "HOST-NOVO")
-        self.assertEqual(main.equipamentos_cache["SN-DUP"]["invall_alias_status"], "serie_detalhes_duplicada")
-        self.assertNotEqual(main.equipamentos_cache["SN-DUP"]["apelido"], "HOST-DUPLICADO")
+        self.assertNotIn("SN-REMOVER", inventory_state.equipamentos_cache)
+        self.assertEqual(inventory_state.equipamentos_cache["SN-MANTER"]["apelido"], "HOST-NOVO")
+        self.assertEqual(inventory_state.equipamentos_cache["SN-DUP"]["invall_alias_status"], "serie_detalhes_duplicada")
+        self.assertNotEqual(inventory_state.equipamentos_cache["SN-DUP"]["apelido"], "HOST-DUPLICADO")
 
     def test_upload_history_failure_rolls_back_workbooks_history_and_memory(self):
         make_details(self.details, [("SN-1", "ALIAS-DETALHES", "Modelo A", "Maringá", "Notebook", "87000000")])
@@ -2925,7 +2925,7 @@ class WorkflowIntegrityTests(unittest.TestCase):
         self.comparison_history.write_text("[]", encoding="utf-8")
         self.assertTrue(main.load_database())
         before_bytes = {path: path.read_bytes() for path in (self.details, self.endpoint)}
-        before_cache = copy.deepcopy(main.equipamentos_cache)
+        before_cache = copy.deepcopy(inventory_state.equipamentos_cache)
         endpoint_bytes = _endpoint_bytes([("SN-1", "PRNOTE-NEW")])
         details_bytes = _details_bytes([("SN-1", "ALIAS-DETALHES", "Modelo A", "Maringá", "Notebook", "87000000")])
         original_update = main.AtomicFileTransaction.update_json
@@ -2945,7 +2945,7 @@ class WorkflowIntegrityTests(unittest.TestCase):
         self.assertIn("restaurados", raised.exception.detail)
         self.assertEqual({path: path.read_bytes() for path in before_bytes}, before_bytes)
         self.assertEqual(self.comparison_history.read_text(encoding="utf-8"), "[]")
-        self.assertEqual(main.equipamentos_cache, before_cache)
+        self.assertEqual(inventory_state.equipamentos_cache, before_cache)
 
     def test_upload_failure_preserves_alias_committed_while_upload_waited_for_lock(self):
         make_details(self.details, [("SN-1", "ALIAS-DETALHES", "Modelo A", "Maringá", "Notebook", "87000000")])
@@ -2999,7 +2999,7 @@ class WorkflowIntegrityTests(unittest.TestCase):
                 main.aplicar_alteracao_apelido("SN-1", "MANUAL-COMMITTED")
                 committed_workbooks = {path: path.read_bytes() for path in (self.details, self.endpoint)}
                 committed_overrides = self.overrides.read_text(encoding="utf-8")
-                self.assertEqual(main.equipamentos_cache["SN-1"]["apelido"], "MANUAL-COMMITTED")
+                self.assertEqual(inventory_state.equipamentos_cache["SN-1"]["apelido"], "MANUAL-COMMITTED")
             finally:
                 allow_upload.set()
                 worker.join(10)
@@ -3010,7 +3010,7 @@ class WorkflowIntegrityTests(unittest.TestCase):
         self.assertEqual({path: path.read_bytes() for path in committed_workbooks}, committed_workbooks)
         self.assertEqual(self.overrides.read_text(encoding="utf-8"), committed_overrides)
         self.assertEqual(self.comparison_history.read_text(encoding="utf-8"), "[]")
-        self.assertEqual(main.equipamentos_cache["SN-1"]["apelido"], "MANUAL-COMMITTED")
+        self.assertEqual(inventory_state.equipamentos_cache["SN-1"]["apelido"], "MANUAL-COMMITTED")
 
     def test_stale_restore_preview_does_not_revert_concurrent_alias_commit_in_cache(self):
         make_details(self.details, [("SN-1", "ALIAS-ATUAL", "Modelo A", "Maringá", "Notebook", "87000000")])
@@ -3076,7 +3076,7 @@ class WorkflowIntegrityTests(unittest.TestCase):
             try:
                 self.assertTrue(restore_waiting.wait(10), "a restauração não chegou ao bloqueio esperado")
                 main.aplicar_alteracao_apelido("SN-1", "MANUAL-COMMITTED")
-                self.assertEqual(main.equipamentos_cache["SN-1"]["apelido"], "MANUAL-COMMITTED")
+                self.assertEqual(inventory_state.equipamentos_cache["SN-1"]["apelido"], "MANUAL-COMMITTED")
             finally:
                 allow_restore.set()
                 worker.join(10)
@@ -3085,7 +3085,7 @@ class WorkflowIntegrityTests(unittest.TestCase):
         self.assertNotIn("error", restore_outcome)
         self.assertTrue(restore_outcome["result"]["sucesso"])
         self.assertEqual(main.load_modified_apelidos(), {"SN-1": "MANUAL-COMMITTED"})
-        self.assertEqual(main.equipamentos_cache["SN-1"]["apelido"], "MANUAL-COMMITTED")
+        self.assertEqual(inventory_state.equipamentos_cache["SN-1"]["apelido"], "MANUAL-COMMITTED")
 
     def test_restore_counts_manual_aliases_left_without_equipment_and_keeps_them(self):
         make_details(self.details, [
@@ -3303,7 +3303,7 @@ class WorkflowIntegrityTests(unittest.TestCase):
         self.overrides.write_text("{}", encoding="utf-8")
         self.manual_history.write_text("[]", encoding="utf-8")
         self.assertTrue(main.load_database())
-        cached_before = copy.deepcopy(main.equipamentos_cache)
+        cached_before = copy.deepcopy(inventory_state.equipamentos_cache)
         original_source = Path(cached_before["SN-1"]["_source_file"]).resolve()
 
         older_mtime = time.time_ns() - 10_000_000_000
@@ -3328,7 +3328,7 @@ class WorkflowIntegrityTests(unittest.TestCase):
         self.assertEqual(self.details.read_bytes(), original_before)
         self.assertEqual(self.overrides.read_bytes(), overrides_before)
         self.assertEqual(self.manual_history.read_bytes(), history_before)
-        self.assertEqual(main.equipamentos_cache, cached_before)
+        self.assertEqual(inventory_state.equipamentos_cache, cached_before)
 
     def test_manual_alias_can_be_removed_after_inventory_refresh_with_hostname_table(self):
         details_headers = ["NumeroSerie", "Hostname", "Modelo", "Cidade", "Tipo", "CEP"]
@@ -3453,7 +3453,7 @@ class WorkflowIntegrityTests(unittest.TestCase):
     def test_undo_without_previous_override_removes_override_and_restores_endpoint_hostname(self):
         self._prepare_alias_undo_fixture()
         self.assertTrue(main.load_database())
-        self.assertEqual(main.equipamentos_cache["SN-1"]["apelido"], "HOST-INVALL")
+        self.assertEqual(inventory_state.equipamentos_cache["SN-1"]["apelido"], "HOST-INVALL")
 
         main.atualizar_apelido(main.ApelidoUpdatePayload(serial="SN-1", apelido="ALIAS-MANUAL"))
         edit_event = json.loads(self.manual_history.read_text(encoding="utf-8"))[-1]
@@ -3464,7 +3464,7 @@ class WorkflowIntegrityTests(unittest.TestCase):
 
         self.assertEqual(main.load_modified_apelidos(), {})
         self.assertEqual(undone["equipamento"]["apelido"], "HOST-INVALL")
-        self.assertFalse(main.equipamentos_cache["SN-1"]["_apelido_manual_override"])
+        self.assertFalse(inventory_state.equipamentos_cache["SN-1"]["_apelido_manual_override"])
         undo_event = json.loads(self.manual_history.read_text(encoding="utf-8"))[-1]
         self.assertEqual(undo_event["acao"], "desfazer")
         self.assertEqual(undo_event["apelido_anterior"], "ALIAS-MANUAL (M)")
@@ -3474,13 +3474,13 @@ class WorkflowIntegrityTests(unittest.TestCase):
         # Um novo hostname no Endpoint passa a valer, porque não sobrou override manual.
         make_endpoint(self.endpoint, [("SN-1", "HOST-INVALL-NOVO")])
         self.assertTrue(main.load_database())
-        self.assertEqual(main.equipamentos_cache["SN-1"]["apelido"], "HOST-INVALL-NOVO")
+        self.assertEqual(inventory_state.equipamentos_cache["SN-1"]["apelido"], "HOST-INVALL-NOVO")
 
     def test_undo_with_previous_override_restores_that_override(self):
         self._prepare_alias_undo_fixture()
         self.overrides.write_text(json.dumps({"SN-1": "MANUAL-ANTIGO"}), encoding="utf-8")
         self.assertTrue(main.load_database())
-        self.assertEqual(main.equipamentos_cache["SN-1"]["apelido"], "MANUAL-ANTIGO")
+        self.assertEqual(inventory_state.equipamentos_cache["SN-1"]["apelido"], "MANUAL-ANTIGO")
 
         main.atualizar_apelido(main.ApelidoUpdatePayload(serial="SN-1", apelido="MANUAL-NOVO"))
         edit_event = json.loads(self.manual_history.read_text(encoding="utf-8"))[-1]
@@ -3538,7 +3538,7 @@ class WorkflowIntegrityTests(unittest.TestCase):
         self.assertTrue(main.load_database())
         details_before = self.details.read_bytes()
         history_before = self.manual_history.read_bytes()
-        equipment_before = copy.deepcopy(main.equipamentos_cache["SN-ENDERECO"])
+        equipment_before = copy.deepcopy(inventory_state.equipamentos_cache["SN-ENDERECO"])
 
         with self.assertRaises(main.HTTPException) as raised:
             main.excluir_evento_historico_apelido("historico-endereco-ficticio")
@@ -3547,7 +3547,7 @@ class WorkflowIntegrityTests(unittest.TestCase):
         self.assertIn("atualizados pela planilha", raised.exception.detail)
         self.assertEqual(self.details.read_bytes(), details_before)
         self.assertEqual(self.manual_history.read_bytes(), history_before)
-        self.assertEqual(main.equipamentos_cache["SN-ENDERECO"], equipment_before)
+        self.assertEqual(inventory_state.equipamentos_cache["SN-ENDERECO"], equipment_before)
 
     def test_90_day_retention_preserves_recent_invalid_and_pinned_history(self):
         now = datetime(2026, 10, 4, 12, tzinfo=timezone.utc)
@@ -3621,7 +3621,7 @@ class WorkflowIntegrityTests(unittest.TestCase):
         self.assertEqual(self.manual_history.read_bytes(), original_history)
 
     def test_search_reuses_pre_normalized_inventory_values(self):
-        main.equipamentos_cache = {
+        inventory_state.equipamentos_cache = {
             "SN-1": {
                 "serial": "SN-1", "modelo": "Notebook One", "tipo": "Notebook",
                 "apelido": "HOST-ONE", "retirada_cnpj": "12.345.678/0001-90",
@@ -3653,7 +3653,7 @@ class WorkflowIntegrityTests(unittest.TestCase):
                     headers=["NumeroSerie", "Apelido", "Modelo", "Cidade", type_header, "CEP"],
                 )
                 self.assertTrue(main.load_database())
-                self.assertEqual(main.stats_cache["tipos"], expected)
+                self.assertEqual(inventory_state.stats_cache["tipos"], expected)
 
     def test_notebook_search_returns_installation_cnpj_for_every_synchronized_series(self):
         source_rows = [
@@ -3690,7 +3690,7 @@ class WorkflowIntegrityTests(unittest.TestCase):
 
     def test_export_statistics_keep_unavailable_distinct_from_zero_changes(self):
         with (
-            patch.object(main, "stats_cache", {"total_equipamentos": 12}),
+            patch.object(inventory_state, "stats_cache", {"total_equipamentos": 12}),
             patch.object(main, "count_export_changes", return_value={"apelidos": 0, "id_clientes": 0, "total": 0}),
             patch.object(main, "get_export_status", return_value={"available": False, "reason": "modelo ausente"}),
         ):
@@ -3700,7 +3700,7 @@ class WorkflowIntegrityTests(unittest.TestCase):
         self.assertEqual(unavailable["total_alteracoes_exportaveis"], 0)
 
         with (
-            patch.object(main, "stats_cache", {"total_equipamentos": 12}),
+            patch.object(inventory_state, "stats_cache", {"total_equipamentos": 12}),
             patch.object(main, "count_export_changes", return_value={"apelidos": 0, "id_clientes": 0, "total": 0}),
             patch.object(main, "get_export_status", return_value={"available": True, "reason": "OK"}),
         ):
