@@ -1,19 +1,25 @@
 """Validation for first-use imports, independent of application storage."""
 
 import io
+import json
+import logging
 import lzma
+import os
 import re
 import unicodedata
 import zipfile
 import zlib
-from pathlib import PurePosixPath
+from pathlib import Path, PurePosixPath
 
 from fastapi import HTTPException
 from openpyxl.cell.cell import MergedCell
 
 from core.config import format_size_limit
-from core.integrity import load_workbook_safely
+from core.integrity import atomic_write_json, load_workbook_safely
 from core.openpyxl_compat import stored_cells
+
+
+logger = logging.getLogger(__name__)
 
 
 TRANSFER_CELLS = (
@@ -117,3 +123,56 @@ def validate_local_model(source, kind: str) -> None:
             raise ValueError("Tipo de modelo inválido.")
     finally:
         wb.close()
+
+
+# Payload field, environment variable, key in config/contato_origem.json and length limit.
+ORIGIN_CONTACT_FIELDS = (
+    ("retirada_contato", "SIMPRESS_TRANSFER_ORIGIN_CONTACT", "contato", 160),
+    ("retirada_email", "SIMPRESS_TRANSFER_ORIGIN_EMAIL", "email", 254),
+    ("retirada_telefone", "SIMPRESS_TRANSFER_ORIGIN_PHONE", "telefone", 64),
+)
+
+
+def _read_origin_contact_file(path: Path) -> tuple[dict, bool]:
+    """Return the stored values and whether the file exists but could not be used."""
+    try:
+        stored = json.loads(Path(path).read_text(encoding="utf-8-sig"))
+    except FileNotFoundError:
+        return {}, False
+    except (OSError, ValueError):
+        logger.warning("Arquivo de contato de origem ilegível; os campos ficam vazios.")
+        return {}, True
+    if not isinstance(stored, dict):
+        logger.warning("Arquivo de contato de origem sem objeto JSON; os campos ficam vazios.")
+        return {}, True
+    return stored, False
+
+
+def load_origin_contact(path: Path, environment=None) -> dict:
+    """Resolve each origin contact field: environment variable, then local file, then empty."""
+    env = os.environ if environment is None else environment
+    stored, invalid_file = _read_origin_contact_file(path)
+    values, sources = {}, {}
+    for field, variable, key, limit in ORIGIN_CONTACT_FIELDS:
+        from_env = str(env.get(variable) or "").strip()
+        from_file = stored.get(key)
+        from_file = from_file.strip() if isinstance(from_file, str) else ""
+        if from_env:
+            values[field], sources[field] = from_env[:limit], "ambiente"
+        elif from_file:
+            values[field], sources[field] = from_file[:limit], "arquivo"
+        else:
+            values[field], sources[field] = "", ""
+    return {
+        **values,
+        "contato_origem_configurado": all(values.values()),
+        "contato_origem_fontes": sources,
+        "contato_origem_arquivo_invalido": invalid_file,
+    }
+
+
+def save_origin_contact(path: Path, contato: str, email: str, telefone: str) -> None:
+    """Write the already validated contact to the git-ignored local file."""
+    target = Path(path)
+    target.parent.mkdir(parents=True, exist_ok=True)
+    atomic_write_json(target, {"contato": contato, "email": email, "telefone": telefone})

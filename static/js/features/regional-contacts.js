@@ -69,25 +69,120 @@
     }
   };
 
+  const AVISO_CONTATO_ORIGEM = "Contato de origem não configurado nesta instalação. Preencha nome, e-mail e celular abaixo para esta transferência ou salve um contato padrão.";
+  const AVISO_ARQUIVO_CONTATO_INVALIDO = "O arquivo config/contato_origem.json não pôde ser lido. Preencha o contato abaixo ou salve-o novamente.";
+  const CAMPOS_CONTATO_ORIGEM = [
+    ["retirada_contato", "contato", "contato-origem-nome", "contatoPadrao", "contatoId"],
+    ["retirada_email", "email", "contato-origem-email", "emailPadrao", "emailId"],
+    ["retirada_telefone", "telefone", "contato-origem-telefone", "telefonePadrao", "telefoneId"],
+  ];
+  let configuracaoContatoOrigem = null;
+  let salvandoContatoOrigem = false;
+
+  // Fills the pickup contact from the installation defaults, replacing only values the user did not edit.
+  function aplicarConfiguracaoTransferencia(config) {
+    configuracaoContatoOrigem = config;
+    const origin = CAMPOS_CONTATO_REGIONAL.retirada;
+    CAMPOS_CONTATO_ORIGEM.forEach(([campoApi, , , defaultKey, inputKey]) => {
+      const value = config[campoApi];
+      const normalized = typeof value === "string" ? value.trim() : "";
+      const anterior = origin[defaultKey];
+      origin[defaultKey] = normalized;
+      const input = document.getElementById(origin[inputKey]);
+      if (input && (!input.value.trim() || input.value.trim() === anterior)) input.value = normalized;
+    });
+    const aviso = document.getElementById("aviso-contato-origem");
+    if (aviso) {
+      const texto = document.getElementById("aviso-contato-origem-texto");
+      if (texto) texto.textContent = config.contato_origem_arquivo_invalido ? AVISO_ARQUIVO_CONTATO_INVALIDO : AVISO_CONTATO_ORIGEM;
+      aviso.classList.toggle("hidden", config.contato_origem_configurado !== false);
+    }
+  }
+
   async function carregarConfiguracaoTransferencia() {
     try {
       const response = await fetch("/api/config/transferencia", { cache: "no-store" });
       if (!response.ok) throw new Error("Falha ao carregar os contatos padrão da instalação.");
-      const config = await response.json();
-      const origin = CAMPOS_CONTATO_REGIONAL.retirada;
-      const fields = [
-        ["contatoPadrao", "contatoId", config.retirada_contato],
-        ["emailPadrao", "emailId", config.retirada_email],
-        ["telefonePadrao", "telefoneId", config.retirada_telefone],
-      ];
-      fields.forEach(([defaultKey, inputKey, value]) => {
-        const normalized = typeof value === "string" ? value.trim() : "";
-        origin[defaultKey] = normalized;
-        const input = document.getElementById(origin[inputKey]);
-        if (input && !input.value.trim()) input.value = normalized;
-      });
+      aplicarConfiguracaoTransferencia(await response.json());
     } catch (error) {
       console.warn("Não foi possível carregar os contatos de retirada configurados:", error);
+    }
+  }
+
+  function abrirConfiguracaoContatoOrigem() {
+    if (salvandoContatoOrigem) return;
+    const config = configuracaoContatoOrigem || {};
+    const fontes = config.contato_origem_fontes || {};
+    let algumAmbiente = false;
+    CAMPOS_CONTATO_ORIGEM.forEach(([campoApi, , inputId]) => {
+      const input = document.getElementById(inputId);
+      if (!input) return;
+      const doAmbiente = fontes[campoApi] === "ambiente";
+      algumAmbiente ||= doAmbiente;
+      input.value = typeof config[campoApi] === "string" ? config[campoApi] : "";
+      input.readOnly = doAmbiente;
+      input.required = !doAmbiente;
+      input.setAttribute("aria-required", String(!doAmbiente));
+    });
+    document.getElementById("contato-origem-ambiente")?.classList.toggle("hidden", !algumAmbiente);
+    const status = document.getElementById("status-contato-origem");
+    status.setAttribute("role", "status");
+    status.textContent = "";
+    const primeiroEditavel = CAMPOS_CONTATO_ORIGEM.map(([, , id]) => document.getElementById(id))
+      .find(input => input && !input.readOnly);
+    app.abrirModalAcessivel(
+      "modal-contato-origem",
+      primeiroEditavel ? `#${primeiroEditavel.id}` : "#btn-salvar-contato-origem",
+      "fecharConfiguracaoContatoOrigem",
+    );
+  }
+
+  function fecharConfiguracaoContatoOrigem() {
+    if (!salvandoContatoOrigem) app.fecharModalAcessivel("modal-contato-origem");
+  }
+
+  async function salvarConfiguracaoContatoOrigem() {
+    if (salvandoContatoOrigem) return;
+    const modal = document.getElementById("modal-contato-origem");
+    const status = document.getElementById("status-contato-origem");
+    const button = document.getElementById("btn-salvar-contato-origem");
+    const fontes = configuracaoContatoOrigem?.contato_origem_fontes || {};
+    const payload = {};
+    for (const [campoApi, chave, inputId] of CAMPOS_CONTATO_ORIGEM) {
+      const input = document.getElementById(inputId);
+      // Environment values stay out of the local file; the server keeps them in front.
+      payload[chave] = fontes[campoApi] === "ambiente" ? "" : (input?.value || "").trim();
+      if (fontes[campoApi] !== "ambiente" && !payload[chave]) {
+        status.setAttribute("role", "alert");
+        status.textContent = `Preencha o campo "${input?.labels?.[0]?.textContent.replace("*", "").replace(":", "").trim() || chave}".`;
+        input?.focus();
+        return;
+      }
+    }
+    salvandoContatoOrigem = true;
+    button.disabled = true;
+    modal.setAttribute("aria-busy", "true");
+    status.setAttribute("role", "status");
+    status.textContent = "Salvando o contato de origem…";
+    try {
+      const response = await fetch("/api/config/transferencia/contato-origem", {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(payload),
+      });
+      const result = await response.json().catch(() => ({}));
+      if (!response.ok) throw app.createApiError(result.detail, "Não foi possível salvar o contato de origem.");
+      aplicarConfiguracaoTransferencia(result);
+      salvandoContatoOrigem = false;
+      app.fecharModalAcessivel("modal-contato-origem");
+      app.showToast("Contato de origem salvo.", "success");
+    } catch (error) {
+      status.setAttribute("role", "alert");
+      status.textContent = error.message || "Não foi possível salvar o contato de origem.";
+    } finally {
+      salvandoContatoOrigem = false;
+      button.disabled = false;
+      modal.removeAttribute("aria-busy");
     }
   }
 
@@ -243,6 +338,7 @@
 
   return {
     formatarTelefoneBrasileiro, carregarConfiguracaoTransferencia, entregaAlmocoNaoFecha,
+    abrirConfiguracaoContatoOrigem, fecharConfiguracaoContatoOrigem, salvarConfiguracaoContatoOrigem,
     atualizarObrigatoriedadeDuracaoPausaEntrega, popularSeletoresRepresentantesRegionais,
     preencherRepresentanteRegional, handleRepresentanteRegionalChange, inicializarMascarasTelefone,
   };

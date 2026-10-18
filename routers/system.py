@@ -9,7 +9,7 @@ from fastapi import APIRouter
 @dataclass(frozen=True)
 class SystemRouteServices:
     get_readiness_status: Callable[[], Dict[str, Any]]
-    get_transfer_form_defaults: Callable[[], Dict[str, str]]
+    get_transfer_form_defaults: Callable[[], Dict[str, Any]]
 
 
 def create_system_router(services: SystemRouteServices):
@@ -22,7 +22,7 @@ def create_system_router(services: SystemRouteServices):
 
     @router.get("/api/config/transferencia")
     def get_transfer_form_defaults():
-        """Return editable origin contact defaults configured for this installation."""
+        """Return the origin contact defaults (environment, then config/contato_origem.json)."""
         return services.get_transfer_form_defaults()
 
     return router, {
