@@ -9,6 +9,7 @@ set "BOOTSTRAPPER=%PROJECT_DIR%scripts\bootstrap_environment.py"
 set "PORT_SELECTOR=%PROJECT_DIR%scripts\select_server_port.py"
 set "MIGRATOR=%PROJECT_DIR%scripts\migrate_local_data.py"
 set "CLEANER=%PROJECT_DIR%scripts\cleanup_local_temps.py"
+set "UPDATER=%PROJECT_DIR%scripts\check_update.py"
 set "SIMPRESS_PORT=8000"
 
 title Simpress - Servidor FastAPI
@@ -44,6 +45,21 @@ set "BOOTSTRAP_LAUNCHER=python"
 set "BOOTSTRAP_PREFIX="
 
 :bootstrap_environment
+rem Atualizacao opcional: so para a tag vX.Y.Z mais nova do origin/main, por
+rem fast-forward (git merge --ff-only); nunca reset/clean/stash/force.
+rem Sem tag publicada, nenhuma atualizacao e oferecida.
+rem O bloco abaixo e lido inteiro antes de executar; se o proprio .bat mudar,
+rem ele se reinicia uma vez em vez de continuar lendo o arquivo alterado.
+if exist "%UPDATER%" if not defined SIMPRESS_ATUALIZACAO_VERIFICADA (
+    set "SIMPRESS_ATUALIZACAO_VERIFICADA=1"
+    "%BOOTSTRAP_LAUNCHER%" %BOOTSTRAP_PREFIX% "%UPDATER%" --project-root "%PROJECT_ROOT%"
+    if errorlevel 3 if not errorlevel 4 (
+        echo.
+        call "%~f0" %*
+        exit /b
+    )
+    echo.
+)
 "%BOOTSTRAP_LAUNCHER%" %BOOTSTRAP_PREFIX% "%BOOTSTRAPPER%" --project-root "%PROJECT_ROOT%"
 if errorlevel 1 goto bootstrap_failed
 if not exist "%PYTHON%" goto bootstrap_failed

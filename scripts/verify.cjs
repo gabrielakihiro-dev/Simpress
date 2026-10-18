@@ -55,6 +55,7 @@ const MYPY_TARGETS = [
   "main.py",
   "scripts/migrate_local_data.py",
   "scripts/cleanup_local_temps.py",
+  "scripts/check_update.py",
 ];
 
 // Pacotes que já exigem anotações em todas as funções (--disallow-untyped-defs).

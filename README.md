@@ -129,6 +129,8 @@ Execute:
 .\iniciar_servidor.bat
 ```
 
+Antes de preparar o ambiente, o inicializador verifica se há uma **versão publicada** mais nova que a instalada, isto é, uma tag `vX.Y.Z` no `origin` que esteja no histórico de `origin/main`. Commits novos no `main` sem tag não são oferecidos. Se houver, mostra a versão e o trecho correspondente do [CHANGELOG](CHANGELOG.md) e pergunta `Há uma versão nova (vX.Y.Z). Atualizar agora? (S/N)`. A atualização é opcional e só faz fast-forward até o commit da tag (`git merge --ff-only`); ela é recusada, com o motivo em português, quando não existe nenhuma tag publicada, há alterações locais em arquivos rastreados, o branch não é `main`, o histórico divergiu, o fast-forward falha ou não há Git ou rede. Nesses casos o servidor inicia com a versão atual. O processo nunca usa `reset`, `clean`, `stash` nem `--force`, e não toca em `data/` nem em arquivos não rastreados. Se `requirements.txt` mudar, as dependências são reinstaladas na `.venv` logo em seguida; se o próprio `.bat` mudar, ele se reinicia uma vez. Para desativar a verificação, defina `SIMPRESS_VERIFICAR_ATUALIZACAO=0` (permanente: `setx SIMPRESS_VERIFICAR_ATUALIZACAO 0`). Detalhes em [Atualização com um clique](docs/operacao/atualizacao-um-clique.md).
+
 O inicializador cria ou atualiza o ambiente `.venv` quando necessário, executa a migração e a recuperação/limpeza seguras dos dados locais e abre o servidor. A prontidão das funções é informativa e a ausência de planilhas ou modelos locais não impede o startup. Para iniciar sem o arquivo `.bat`, prepare manualmente o ambiente como descrito em **Instalação** e use:
 
 ```powershell
@@ -317,6 +319,7 @@ Se uma cópia antiga estiver ausente ou inválida, confira manualmente os arquiv
 | Uma ação mostrou “Falha interna do servidor” | Consulte `data/logs/simpress.log` (ou `simpress.log.1` a `.5`, os anteriores). O registro mostra a rota e o ponto do código da falha, sem o conteúdo das planilhas. |
 | A interface informa que um arquivo está em uso ou ocupado | Feche a planilha no Excel ou aguarde a sincronização do OneDrive e tente de novo. A resposta 409 não altera nenhum arquivo. |
 | Uma chamada a `/api/` feita de outra página ou porta retorna 403 | É esperado: a API aceita só chamadas da própria interface ou de endereços digitados no navegador. Use a interface em `http://127.0.0.1:<porta>`. |
+| O inicializador não oferece a atualização | Leia o motivo mostrado no terminal: a atualização só é oferecida quando existe uma tag `vX.Y.Z` mais nova publicada no `origin/main` (veja [Versionamento](docs/guias/versionamento.md)), no branch `main`, sem alterações locais rastreadas (`git status`), com rede e sem `SIMPRESS_VERIFICAR_ATUALIZACAO=0`. |
 | O visual continua antigo após `git pull` | Confirme a branch com `git switch main` e atualize com `git pull --ff-only origin main`. Encerre o servidor anterior e execute `iniciar_servidor.bat` da pasta atualizada. Recarregue com `Ctrl+F5` uma vez. As páginas passam a usar URLs de CSS e JavaScript vinculadas ao conteúdo dos arquivos para evitar versões antigas no cache. |
 
 ## Desenvolvimento
@@ -397,8 +400,11 @@ iniciar_servidor.bat                  Inicializador local para Windows
 - [Revisão e correções pós integração](docs/desenvolvimento/revisao-refatoracao-frontend-2026-10-12.md)
 - [Arquitetura e plano da refatoração](docs/arquitetura/analise-refatoracao-frontend.md)
 - [Primeiro acesso](docs/guias/PRIMEIRO_ACESSO.md)
+- [Versionamento e publicação de versões](docs/guias/versionamento.md)
+- [Changelog](CHANGELOG.md)
 - [Anotações do histórico](docs/operacao/ANOTACOES-HISTORICO.md)
 - [Idempotência dos inventários](docs/operacao/idempotencia-atualizacao-inventario.md)
+- [Atualização com um clique](docs/operacao/atualizacao-um-clique.md)
 - [Microinterações e acessibilidade](docs/desenvolvimento/MICROINTERACOES.md)
 - [Arquitetura e auditoria](docs/arquitetura/auditoria_arquitetura.md)
 - [Auditoria do backend e situação do roteiro](docs/arquitetura/auditoria_backend/README.md)
