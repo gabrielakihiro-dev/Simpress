@@ -157,6 +157,8 @@
       } catch (error) { return []; }
     };
     const writeRecent = (key, list) => { try { storage?.setItem(key, JSON.stringify(list)); } catch (error) { /* optional */ } };
+    // Destinos recentes foram removidos: apaga o histórico salvo neste navegador.
+    try { storage?.removeItem(RECENT_UNITS_KEY); } catch (error) { /* optional */ }
     let refreshQueued = false;
 
     // ---------- Copy feedback on the clicked button ----------
@@ -427,18 +429,6 @@
       });
     }
 
-    // Recents store the exact option label, so cities with several units stay unambiguous.
-    function pickRecentUnit(label) {
-      const select = byId("select-unidade-destino");
-      const option = select && Array.from(select.options).find(item => item.value && String(item.textContent).trim() === label);
-      if (!option) {
-        if (typeof win.showToast === "function") win.showToast("Esse destino não está mais no catálogo.", "warning");
-        return;
-      }
-      select.value = option.value;
-      select.dispatchEvent(new win.Event("change", { bubbles: true }));
-    }
-
     function pickRecentObservation(text) {
       if (typeof win.adicionarObsChamado === "function") win.adicionarObsChamado(text);
       else {
@@ -451,9 +441,6 @@
     }
 
     function renderRecents() {
-      const select = byId("select-unidade-destino");
-      const unitsRow = ensureRecentRow("ux-recent-units", "Destinos recentes", select?.parentElement);
-      fillRecentRow(unitsRow, "Recentes:", readRecent(RECENT_UNITS_KEY), pickRecentUnit);
       const obs = byId("entrega-obs");
       const quickChips = obs?.parentElement?.querySelector(".flex.flex-wrap");
       const obsRow = ensureRecentRow("ux-recent-obs", "Observações recentes", quickChips || obs);
@@ -462,9 +449,6 @@
 
     doc.addEventListener("simpress:transfer-generated", event => {
       const payload = event.detail?.payload || {};
-      const select = byId("select-unidade-destino");
-      const unitLabel = select && select.value ? String(select.options[select.selectedIndex]?.textContent || "").trim() : "";
-      writeRecent(RECENT_UNITS_KEY, pushRecent(readRecent(RECENT_UNITS_KEY), unitLabel));
       writeRecent(RECENT_OBS_KEY, pushRecent(readRecent(RECENT_OBS_KEY), payload.entrega_obs));
       renderRecents();
     });
