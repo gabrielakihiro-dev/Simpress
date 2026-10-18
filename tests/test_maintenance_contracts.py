@@ -569,8 +569,8 @@ class MaintenanceContractTests(unittest.TestCase):
     def test_xlsx_dimension_check_uses_actual_cells_not_only_declared_range(self):
         package = _xlsx_with_worksheet_xml(
             '<worksheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main">'
-            '<dimension ref="A1:B2"/><sheetData><row r="250001">'
-            '<c r="A250001" t="inlineStr"><is><t>fixture</t></is></c>'
+            '<dimension ref="A1:B2"/><sheetData><row r="70001">'
+            '<c r="A70001" t="inlineStr"><is><t>fixture</t></is></c>'
             '</row></sheetData></worksheet>'
         )
 
@@ -582,7 +582,7 @@ class MaintenanceContractTests(unittest.TestCase):
     def test_xlsx_total_dimension_budget_applies_across_worksheets(self):
         sheet_xml = (
             '<worksheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main">'
-            '<dimension ref="A1:Z200000"/><sheetData/></worksheet>'
+            '<dimension ref="A1:Z70000"/><sheetData/></worksheet>'
         )
         package = _xlsx_with_worksheet_xml(sheet_xml, sheet_xml)
 
@@ -626,7 +626,7 @@ class MaintenanceContractTests(unittest.TestCase):
         implicit_cells = "<c><v>1</v></c>" * 52
         package = _xlsx_with_worksheet_xml(
             '<worksheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main">'
-            '<sheetData><row r="200000">' + implicit_cells + '</row></sheetData></worksheet>'
+            '<sheetData><row r="70000">' + implicit_cells + '</row></sheetData></worksheet>'
         )
 
         with self.assertRaises(DomainError) as raised:

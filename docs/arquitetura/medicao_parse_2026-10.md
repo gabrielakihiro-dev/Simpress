@@ -81,6 +81,8 @@ Riscos:
 
 ## Recomendação
 
+> Situação em 17/10/2026: a opção (b) foi aplicada em `core/config.py` com os valores da tabela acima. Os números citados como "atuais" neste documento são os limites vigentes na data da medição.
+
 1. **Adotar (b)** em um PR pequeno: reduz o pior caso sem tocar na lógica de leitura nem nos contratos de API.
 2. **Adiar (a)** enquanto o volume real ficar abaixo de ~10 mil linhas (parse < 7 s e < 40 MB). Reavaliar se o cadastro passar de ~30 mil linhas ou se o servidor local passar a processar vários uploads em paralelo (`MAX_CONCURRENT_WORKBOOK_PARSERS` é 1).
 3. Se (a) for feita, começar pela parte barata e segura: ler **uma só aba** (a escolhida) e abrir o arquivo **uma vez** no caminho local; só depois cortar colunas.
