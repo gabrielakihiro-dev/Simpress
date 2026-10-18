@@ -161,7 +161,7 @@ def apply_user_change(
             if expected_current is not None and previous_user != expected_current:
                 raise DomainConflictError("O usuário salvo mudou depois deste registro; nenhuma alteração foi aplicada.")
 
-            def update_users(data):
+            def update_users(data: Any) -> Dict[str, Any]:
                 users = dict(services.validate_json_object(data, "usuários manuais"))
                 for key in [k for k in users if normalize_reference_value(k) == serial_key]:
                     users.pop(key, None)
@@ -175,7 +175,7 @@ def apply_user_change(
             if history_changes:
                 label = equipment.get("modelo") or equipment.get("tipo") or "Equipamento"
 
-                def update_history(history):
+                def update_history(history: Any) -> List[Dict[str, Any]]:
                     history = list(services.validate_json_history(history, "histórico"))
                     if expected_latest_event_id:
                         latest = next((
@@ -280,7 +280,7 @@ def dismiss_warning_event(services: AliasChangeServices, evento_id: str) -> Dict
     _require_user_services(services)
     removed = {"done": False}
     with services.atomic_file_transaction(services.transaction_root(), [services.alias_history_file()]) as transaction:
-        def drop(history):
+        def drop(history: Any) -> List[Dict[str, Any]]:
             history = list(services.validate_json_history(history, "histórico"))
             kept = [item for item in history if not (item.get("id") == evento_id and item.get("tipo") == WARNING_EVENT_TYPE)]
             removed["done"] = len(kept) != len(history)
