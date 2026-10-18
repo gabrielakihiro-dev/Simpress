@@ -67,9 +67,7 @@
 
   async function carregarContagemHistoricoComparacoes() {
     try {
-      const res = await fetch("/api/historico-comparacoes");
-      if (!res.ok) throw new Error("Não foi possível carregar as datas do histórico.");
-      const data = await res.json();
+      const data = await app.apiFetch("/api/historico-comparacoes", { errorMessage: "Não foi possível carregar as datas do histórico." });
       definirTotalHistoricoComparacoes(data.total);
       atualizarDatasExportacaoHistorico(data.eventos);
     } catch (err) {
@@ -118,9 +116,7 @@
     target.textContent = "Comparando atualizações…";
     try {
       const query = new URLSearchParams({ anterior: previous, atual: current });
-      const response = await fetch(`/api/operacoes/evolucao?${query.toString()}`);
-      const data = await response.json().catch(() => ({}));
-      if (!response.ok) throw app.createApiError(data.detail, "Não foi possível comparar as atualizações.");
+      const data = await app.apiFetch(`/api/operacoes/evolucao?${query.toString()}`, { errorMessage: "Não foi possível comparar as atualizações." });
       renderizarEvolucaoAtualizacoes(data);
     } catch (error) { target.textContent = error.message || "Não foi possível comparar as atualizações."; }
   }
@@ -130,9 +126,7 @@
     const target = document.getElementById("resultado-evolucao-atualizacoes");
     target.textContent = "Carregando atualizações…";
     try {
-      const response = await fetch("/api/historico-comparacoes");
-      const data = await response.json().catch(() => ({}));
-      if (!response.ok) throw app.createApiError(data.detail, "Não foi possível carregar o histórico.");
+      const data = await app.apiFetch("/api/historico-comparacoes", { errorMessage: "Não foi possível carregar o histórico." });
       const events = (data.eventos || []).filter(event => event.tipo !== "restauracao" && !event.somente_anotacoes_sincronizadas);
       const previous = document.getElementById("evolucao-anterior");
       const current = document.getElementById("evolucao-atual");
@@ -166,9 +160,7 @@
     const stopLoading = motion?.startLoading(lista, "Carregando histórico…") || (() => {});
 
     try {
-      const res = await fetch("/api/historico-comparacoes");
-      const data = await res.json().catch(() => ({}));
-      if (!res.ok) throw app.createApiError(data.detail, "Não foi possível carregar o histórico de planilhas.");
+      const data = await app.apiFetch("/api/historico-comparacoes", { errorMessage: "Não foi possível carregar o histórico de planilhas." });
 
       const eventos = Array.isArray(data.eventos) ? data.eventos : [];
       definirTotalHistoricoComparacoes(data.total ?? eventos.length);
@@ -387,11 +379,10 @@
       throw new Error("A data do histórico da atualização não está disponível.");
     }
 
-    const res = await fetch(`/api/historico-comparacoes/exportar/excel?data=${encodeURIComponent(data)}`);
-    if (!res.ok) {
-      const errorData = await res.json().catch(() => ({}));
-      throw app.createApiError(errorData.detail, "Não foi possível exportar o histórico selecionado.");
-    }
+    const res = await app.apiFetch(`/api/historico-comparacoes/exportar/excel?data=${encodeURIComponent(data)}`, {
+      responseType: "response",
+      errorMessage: "Não foi possível exportar o histórico selecionado.",
+    });
 
     const disposition = res.headers.get("Content-Disposition") || "";
     const match = /filename[^;=\n]*=((['"]).*?\2|[^;\n]*)/.exec(disposition);
@@ -478,9 +469,7 @@
     botao.textContent = "Preparando...";
 
     try {
-      const previewResponse = await fetch(`/api/historico-comparacoes/${encodeURIComponent(evento.id)}/restauracao`);
-      const preview = await previewResponse.json().catch(() => ({}));
-      if (!previewResponse.ok) throw app.createApiError(preview.detail, "Não foi possível validar o backup selecionado.");
+      const preview = await app.apiFetch(`/api/historico-comparacoes/${encodeURIComponent(evento.id)}/restauracao`, { errorMessage: "Não foi possível validar o backup selecionado." });
 
       const backup = preview.arquivos_backup || {};
       const endpointBackup = backup.endpoint || {};
@@ -522,16 +511,18 @@
         inventoryRestoreAttempts.set(evento.id, { token: preview.preview_token, key: inventoryOperationKey() });
       }
       const restoreAttempt = inventoryRestoreAttempts.get(evento.id);
-      const response = await fetch(`/api/historico-comparacoes/${encodeURIComponent(evento.id)}/restaurar`, {
+      const data = await app.apiFetch(`/api/historico-comparacoes/${encodeURIComponent(evento.id)}/restaurar`, {
         method: "POST",
         headers: { "Content-Type": "application/json", "Idempotency-Key": restoreAttempt.key },
         body: JSON.stringify({ preview_token: restoreAttempt.token }),
+        errorMessage: "Não foi possível restaurar o conjunto selecionado.",
+      }).catch(error => {
+        if (error.status === 409 && /prévia|estado mudou/i.test(String(error.detail || ""))) {
+          inventoryRestoreAttempts.delete(evento.id);
+        }
+        throw error;
       });
-      const data = await response.json().catch(() => ({}));
-      if (response.ok || (response.status === 409 && /prévia|estado mudou/i.test(String(data.detail || "")))) {
-        inventoryRestoreAttempts.delete(evento.id);
-      }
-      if (!response.ok) throw app.createApiError(data.detail, "Não foi possível restaurar o conjunto selecionado.");
+      inventoryRestoreAttempts.delete(evento.id);
 
       app.invalidarDadosEquipamentoAposRestauracao();
       await Promise.allSettled([
@@ -570,9 +561,7 @@
     botao.setAttribute("aria-busy", "true");
     botao.textContent = "Carregando...";
     try {
-      const res = await fetch(`/api/historico-comparacoes/${encodeURIComponent(eventoId)}`);
-      const data = await res.json().catch(() => ({}));
-      if (!res.ok) throw app.createApiError(data.detail, "Não foi possível abrir este resultado.");
+      const data = await app.apiFetch(`/api/historico-comparacoes/${encodeURIComponent(eventoId)}`, { errorMessage: "Não foi possível abrir este resultado." });
 
       const evento = data.evento || {};
       app.fecharModalHistoricoComparacoes();
@@ -609,11 +598,10 @@
     botao.setAttribute("aria-busy", "true");
     botao.textContent = "Excluindo...";
     try {
-      const res = await fetch(`/api/historico-comparacoes/${encodeURIComponent(evento.id)}`, {
+      await app.apiFetch(`/api/historico-comparacoes/${encodeURIComponent(evento.id)}`, {
         method: "DELETE",
+        errorMessage: "Não foi possível excluir esta atualização.",
       });
-      const data = await res.json().catch(() => ({}));
-      if (!res.ok) throw app.createApiError(data.detail, "Não foi possível excluir esta atualização.");
 
       await app.carregarHistoricoComparacoes();
       app.showToast("Atualização excluída do histórico.", "success");

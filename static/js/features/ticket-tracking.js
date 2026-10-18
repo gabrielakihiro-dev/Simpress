@@ -101,10 +101,8 @@
     target.textContent = "Comparando esta versão com a anterior…";
     try {
       const query = new URLSearchParams({ anterior: older.id, atual: snapshotId });
-      const response = await fetch(`/api/operacoes/chamados/evolucao?${query.toString()}`, { signal: request.signal });
-      const data = await response.json().catch(() => ({}));
+      const data = await app.apiFetch(`/api/operacoes/chamados/evolucao?${query.toString()}`, { signal: request.signal, errorMessage: "Não foi possível comparar as versões dos chamados." });
       if (!ticketEvolutionRequestGate.isCurrent(request.id)) return;
-      if (!response.ok) throw app.createApiError(data.detail, "Não foi possível comparar as versões dos chamados.");
       app.renderizarEvolucaoChamados(data);
     } catch (error) {
       if (!ticketEvolutionRequestGate.isCurrent(request.id)) return;
@@ -172,10 +170,8 @@
     body.innerHTML = '<p class="py-3 text-xs text-slate-400" role="status">Carregando histórico da série…</p>';
     try {
       const params = new URLSearchParams({ snapshot_id: snapshotId });
-      const response = await fetch(`/api/operacoes/chamados/linha-do-tempo/${encodeURIComponent(serial)}?${params.toString()}`, { signal: request.signal });
-      const data = await response.json().catch(() => ({}));
+      const data = await app.apiFetch(`/api/operacoes/chamados/linha-do-tempo/${encodeURIComponent(serial)}?${params.toString()}`, { signal: request.signal, errorMessage: "Não foi possível carregar a linha do tempo." });
       if (!isCurrent()) return;
-      if (!response.ok) throw app.createApiError(data.detail, "Não foi possível carregar a linha do tempo.");
       body.innerHTML = app.renderizarLinhaDoTempoChamado(data.eventos);
       app.conectarAnotacoesLinhaDoTempo(body);
       details.dataset.ticketTimelineLoaded = "true";
@@ -453,10 +449,8 @@
     const target = document.getElementById("lista-acompanhamento-chamados");
     target.innerHTML = '<p class="py-8 text-center text-sm text-slate-400" role="status">Carregando versão selecionada…</p>';
     try {
-      const response = await fetch(`/api/operacoes/chamados/snapshot/${encodeURIComponent(snapshotId)}`, { signal: request.signal });
-      const data = await response.json().catch(() => ({}));
+      const data = await app.apiFetch(`/api/operacoes/chamados/snapshot/${encodeURIComponent(snapshotId)}`, { signal: request.signal, errorMessage: "Não foi possível abrir esta versão." });
       if (!ticketSnapshotRequestGate.isCurrent(request.id)) return;
-      if (!response.ok) throw app.createApiError(data.detail, "Não foi possível abrir esta versão.");
       data.snapshot_id = snapshotId;
       appState.acompanhamentoChamadosAtual = data;
       app.renderizarAcompanhamentoChamados();
@@ -482,9 +476,7 @@
     button.disabled = true;
     button.textContent = "Excluindo…";
     try {
-      const response = await fetch("/api/operacoes/chamados/historico/antigas", { method: "DELETE" });
-      const data = await response.json().catch(() => ({}));
-      if (!response.ok) throw app.createApiError(data.detail, "Não foi possível excluir as importações antigas.");
+      const data = await app.apiFetch("/api/operacoes/chamados/historico/antigas", { method: "DELETE", errorMessage: "Não foi possível excluir as importações antigas." });
       await app.carregarAcompanhamentoChamados();
       const removedCount = Number(data.removidas) || 0;
       const removedLabel = removedCount === 1 ? "1 importação antiga removida" : `${removedCount} importações antigas removidas`;
@@ -514,11 +506,10 @@
     button.disabled = true;
     button.textContent = "Preparando Excel…";
     try {
-      const response = await fetch(`/api/operacoes/chamados/exportar?${params.toString()}`);
-      if (!response.ok) {
-        const data = await response.json().catch(() => ({}));
-        throw app.createApiError(data.detail, "Não foi possível exportar os chamados filtrados.");
-      }
+      const response = await app.apiFetch(`/api/operacoes/chamados/exportar?${params.toString()}`, {
+        responseType: "response",
+        errorMessage: "Não foi possível exportar os chamados filtrados.",
+      });
       const disposition = response.headers?.get("Content-Disposition") || "";
       const match = /filename[^;=\n]*=((['"]).*?\2|[^;\n]*)/.exec(disposition);
       const filename = match?.[1]?.replace(/["']/g, "") || "Acompanhamento_de_Chamados.xlsx";
@@ -546,10 +537,8 @@
     const list = document.getElementById("lista-acompanhamento-chamados");
     list.innerHTML = '<p class="py-8 text-center text-sm text-slate-400" role="status">Carregando acompanhamento…</p>';
     try {
-      const response = await fetch("/api/operacoes/chamados", { signal: request.signal });
-      const data = await response.json().catch(() => ({}));
+      const data = await app.apiFetch("/api/operacoes/chamados", { signal: request.signal, errorMessage: "Não foi possível carregar o acompanhamento de chamados." });
       if (!ticketSnapshotRequestGate.isCurrent(request.id)) return;
-      if (!response.ok) throw app.createApiError(data.detail, "Não foi possível carregar o acompanhamento de chamados.");
       appState.acompanhamentoChamadosAtual = data;
       app.renderizarHistoricoAcompanhamentoChamados(data);
       app.renderizarAcompanhamentoChamados();
@@ -581,9 +570,7 @@
       const payload = new FormData();
       payload.append("simpress_file", simpressInput.files[0]);
       payload.append("oracle_file", oracleInput.files[0]);
-      const response = await fetch("/api/operacoes/chamados/importar", { method: "POST", body: payload });
-      const data = await response.json().catch(() => ({}));
-      if (!response.ok) throw app.createApiError(data.detail, "Não foi possível importar as planilhas.");
+      const data = await app.apiFetch("/api/operacoes/chamados/importar", { method: "POST", body: payload, errorMessage: "Não foi possível importar as planilhas." });
       ticketSnapshotRequestGate.invalidate();
       ticketEvolutionRequestGate.invalidate();
       appState.acompanhamentoChamadosAtual = data;

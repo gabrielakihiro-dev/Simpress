@@ -522,21 +522,15 @@
     lucide.createIcons({ root: btn });
 
     try {
-      const res = await fetch("/api/gerar-planilha", {
+      const res = await app.apiFetch("/api/gerar-planilha", {
         method: "POST",
         headers: {
           "Content-Type": "application/json"
         },
-        body: JSON.stringify(payload)
+        body: JSON.stringify(payload),
+        responseType: "response",
+        errorMessage: "Falha ao gerar o arquivo Excel no servidor.",
       });
-
-      if (!res.ok) {
-        const errData = await res.json().catch(() => ({}));
-        throw new Error(window.HistoryAnnotationAutosave.getErrorMessage(
-          errData.detail,
-          "Falha ao gerar o arquivo Excel no servidor."
-        ));
-      }
 
       // Get Filename from Header
       const filenameSerial = String(payload.serial || "").replace(/[^\w-]/g, "_");
