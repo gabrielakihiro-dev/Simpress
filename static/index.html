@@ -87,6 +87,10 @@
                   <i data-lucide="download" class="header-action-icon" aria-hidden="true"></i>
                   <span id="label-exportar-equipamentos" class="sidebar-item-label">Exportar Excel</span>
                 </button>
+                <button type="button" data-on-click="abrirRelatorioMensal" id="btn-relatorio-mensal" data-sidebar-page aria-haspopup="dialog" aria-controls="modal-relatorio-mensal" class="header-action-item flex items-center gap-2" title="Baixar o relatório mensal do contrato em Excel">
+                  <i data-lucide="file-spreadsheet" class="header-action-icon" aria-hidden="true"></i>
+                  <span class="sidebar-item-label">Relatório mensal</span>
+                </button>
                 <p class="sidebar-subgroup-title" aria-hidden="true">Consultas</p>
                 <button type="button" data-on-click="abrirModalHistoricoComparacoes" id="btn-historico-comparacoes" data-sidebar-page aria-label="Histórico de atualizações e comparação de planilhas" aria-labelledby="label-historico-comparacoes badge-total-historico-comparacoes" class="header-action-item flex items-center gap-2" title="Consultar comparações e alterações de apelido feitas pela atualização das planilhas">
                   <i data-lucide="file-clock" class="header-action-icon" aria-hidden="true"></i>
@@ -297,7 +301,18 @@
               <p id="badge-apelido-status" class="hidden equipment-alias-status" role="status" aria-live="polite"></p>
               <h3 id="card-modelo" class="equipment-model">HP EB 6 G1I</h3>
               <p id="card-id-cliente" class="equipment-detail">Id Cliente: Note diretoria Tipo 2</p>
-              <p id="card-usuarios-logados" class="hidden equipment-detail"></p>
+              <div class="equipment-user">
+                <p id="card-usuarios-logados" class="hidden equipment-detail"></p>
+                <span id="card-usuario-manual-acoes" class="hidden equipment-user-actions">
+                  <button type="button" data-on-click="editarUsuarioLogado" class="btn btn-tertiary equipment-user-button" title="Alterar o usuário informado manualmente">Editar</button>
+                  <button type="button" data-on-click="limparUsuarioLogado" class="btn btn-tertiary equipment-user-button" title="Remover o usuário informado manualmente">Limpar</button>
+                </span>
+              </div>
+              <form id="form-usuario-manual" class="hidden equipment-user-form" data-on-submit="salvarUsuarioLogado" autocomplete="off">
+                <label for="input-usuario-manual" class="equipment-user-label">Usuário logado (vazio no Endpoint)</label>
+                <input id="input-usuario-manual" type="text" maxlength="160" class="equipment-user-input" placeholder="Digite o usuário">
+                <button type="submit" id="btn-salvar-usuario-manual" class="btn btn-secondary equipment-user-button">Salvar usuário</button>
+              </form>
             </div>
           </div>
 
@@ -1523,6 +1538,30 @@ Horário disponível para atendimento:</textarea>
       </div>
       <p id="status-contato-origem" role="status" aria-live="polite" aria-atomic="true"></p>
       <button id="btn-salvar-contato-origem" type="button" class="readiness-import" data-on-click="salvarConfiguracaoContatoOrigem">Salvar contato</button>
+    </div>
+  </div>
+
+  <!-- RELATÓRIO MENSAL DO CONTRATO (docs/operacao/relatorio-mensal.md) -->
+  <div id="modal-relatorio-mensal" class="modal-overlay fixed inset-0 bg-slate-950/85 backdrop-blur-md hidden flex items-center justify-center p-4">
+    <div class="local-setup-dialog monthly-report-dialog">
+      <div class="local-setup-heading">
+        <h3 id="titulo-relatorio-mensal">Relatório mensal</h3>
+        <button type="button" class="readiness-import" data-on-click="fecharRelatorioMensal" aria-label="Fechar relatório mensal" title="Fechar">
+          <i data-lucide="x" class="w-4 h-4" aria-hidden="true"></i>
+        </button>
+      </div>
+      <form id="form-relatorio-mensal" class="monthly-report-form" aria-labelledby="titulo-relatorio-mensal" novalidate data-on-submit="exportarRelatorioMensal">
+        <p id="relatorio-mensal-descricao">Planilha para o gestor do contrato com o inventário da base oficial na Simpress, a última comparação do mês, as OS abertas, concluídas e pendentes e o uso do sistema no mês.</p>
+        <div>
+          <label for="relatorio-mensal-mes" class="block text-[11px] text-slate-400 mb-1">Mês: <span class="required-mark" aria-hidden="true">*</span></label>
+          <input type="month" id="relatorio-mensal-mes" name="mes" required min="2000-01" aria-describedby="relatorio-mensal-descricao" class="w-full px-3 py-2 rounded-lg glass-input text-xs text-slate-200 focus:outline-none" />
+        </div>
+        <p id="status-relatorio-mensal" role="status" aria-live="polite" aria-atomic="true"></p>
+        <button id="btn-exportar-relatorio-mensal" type="submit" class="readiness-import">
+          <i data-lucide="download" class="w-4 h-4" aria-hidden="true"></i>
+          <span>Exportar relatório</span>
+        </button>
+      </form>
     </div>
   </div>
 

@@ -132,7 +132,7 @@ class ExceptionObservabilityTests(unittest.TestCase):
             self.assertLogs(main.logger, level="WARNING") as log,
         ):
             result = main.read_endpoint_alias_index()
-        self.assertEqual(result, {"available": False, "unique": {}, "duplicates": {}, "blank_serials": [], "blank_hostnames": {}, "users": {}})
+        self.assertEqual(result, {"available": False, "unique": {}, "duplicates": {}, "blank_serials": [], "blank_hostnames": {}, "users": {}, "manual_users": {}})
         self.assert_safe_log(log, self.file.name, "papel=endpoint", "DomainValidationError")
 
     def test_inventory_read_failure_keeps_published_cache_and_logs(self):
