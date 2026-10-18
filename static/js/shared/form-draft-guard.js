@@ -1,3 +1,4 @@
+// @ts-check
 (function (root, factory) {
   const api = factory();
   if (typeof module === "object" && module.exports) module.exports = api;
@@ -7,6 +8,7 @@
     const originalValues = new Map();
     const currentValues = new Map();
 
+    /** @param {unknown} fieldId @param {unknown} value */
     function capture(fieldId, value) {
       const id = String(fieldId ?? "");
       if (!id || originalValues.has(id)) return;
@@ -15,6 +17,7 @@
       currentValues.set(id, normalized);
     }
 
+    /** @param {unknown} fieldId @param {unknown} value */
     function update(fieldId, value) {
       const id = String(fieldId ?? "");
       if (!id) return;

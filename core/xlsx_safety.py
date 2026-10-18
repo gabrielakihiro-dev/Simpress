@@ -9,7 +9,7 @@ import threading
 import zipfile
 import zlib
 from pathlib import Path
-from typing import Any, BinaryIO, Dict, List, Optional, Tuple, Union
+from typing import Any, BinaryIO, Callable, Dict, List, Optional, Tuple, Union
 from xml.parsers import expat
 from xml.etree.ElementTree import ParseError
 
@@ -76,7 +76,7 @@ def _parse_dimension(reference: str) -> tuple[int, int]:
     return max(row for row, _ in coordinates), max(column for _, column in coordinates)
 
 
-def _parse_control_xml(archive: zipfile.ZipFile, name: str, on_start) -> None:
+def _parse_control_xml(archive: zipfile.ZipFile, name: str, on_start: Callable[..., None]) -> None:
     parser = expat.ParserCreate()
     parser.SetParamEntityParsing(expat.XML_PARAM_ENTITY_PARSING_NEVER)
 
