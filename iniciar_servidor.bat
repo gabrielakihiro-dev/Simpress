@@ -45,7 +45,9 @@ set "BOOTSTRAP_LAUNCHER=python"
 set "BOOTSTRAP_PREFIX="
 
 :bootstrap_environment
-rem Atualizacao opcional: somente git pull --ff-only, nunca reset/clean/stash/force.
+rem Atualizacao opcional: so para a tag vX.Y.Z mais nova do origin/main, por
+rem fast-forward (git merge --ff-only); nunca reset/clean/stash/force.
+rem Sem tag publicada, nenhuma atualizacao e oferecida.
 rem O bloco abaixo e lido inteiro antes de executar; se o proprio .bat mudar,
 rem ele se reinicia uma vez em vez de continuar lendo o arquivo alterado.
 if exist "%UPDATER%" if not defined SIMPRESS_ATUALIZACAO_VERIFICADA (
