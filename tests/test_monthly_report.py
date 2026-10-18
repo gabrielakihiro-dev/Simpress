@@ -289,7 +289,9 @@ class WorkbookTests(unittest.TestCase):
         self.assertEqual(values["Equipamentos na base"], 4)
         self.assertEqual(values["Linhas sem número de série"], 2)
         self.assertEqual(values["Séries duplicadas"], 1)
-        self.assertEqual(values["Data da comparação"], "15/10/2026 09:00")
+        # The report shows the event in the server's local time zone, so CI (UTC) and Curitiba differ.
+        local_time = datetime.fromisoformat("2026-10-15T09:00:00-03:00").astimezone()
+        self.assertEqual(values["Data da comparação"], local_time.strftime("%d/%m/%Y %H:%M"))
         self.assertEqual(values[SECTION_ENDPOINT], 1)
         self.assertEqual(values[SECTION_SIMPRESS], 1)
         self.assertEqual(values[SECTION_LOCATION], 1)
