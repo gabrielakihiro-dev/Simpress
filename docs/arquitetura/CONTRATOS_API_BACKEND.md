@@ -87,6 +87,12 @@ Mapa dos contratos locais registrados na análise dos handlers FastAPI e consumi
 | 46 | PUT /api/painel/tempos-manuais | JSON {tempos_minutos:{transferencias,comparacoes,exportacoes,os_conciliadas,buscas}}, minutos por tarefa ou nulo. | Resumo uso_30_dias atualizado, com horas_economizadas estimadas. | 422 tempos inválidos; 409 ocupação; 503 métricas ilegíveis ou gravação falhou (arquivo preservado). Arquivos. routers/dashboard.py; static/js/features/dashboard.js. |
 | 47 | PUT /api/config/transferencia/contato-origem | JSON {contato,email,telefone}; campos vindos de variável de ambiente podem ficar vazios. | Mesmo corpo de GET /api/config/transferencia, já com o contato gravado em config/contato_origem.json (ignorado pelo Git). | 404 configuração indisponível; 422 campo obrigatório ou formato; 500 gravação. Arquivos. routers/local_setup.py; static/js/features/regional-contacts.js. |
 
+## Relatório mensal
+
+| # | Método e caminho | Entrada/validação | Resposta de sucesso | Erros notáveis e acesso |
+| --- | --- | --- | --- | --- |
+| 48 | GET /api/relatorio-mensal | Query mes AAAA-MM, até o mês atual. | XLSX Relatorio-mensal-AAAA-MM.xlsx com inventário da base oficial, última comparação até o fim do mês, OS do mês e uso do mês (docs/operacao/relatorio-mensal.md). Não grava estado. | 422 mês inválido ou futuro; 503 base não carregada ou histórico de chamados ilegível. Somente leitura. routers/monthly_report.py; static/js/features/monthly-report.js. |
+
 ## Regras de compatibilidade
 
 - Rótulos de apresentação do Histórico de Planilhas seguem as instruções locais; mantenha valores brutos e identificadores necessários à auditoria/restauração.

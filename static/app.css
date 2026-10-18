@@ -934,6 +934,11 @@
     .local-setup-heading h3 { font-size: 1rem; font-weight: 700; }
     .local-setup-dialog input { width: 100%; min-width: 0; }
     .local-setup-dialog[aria-busy="true"] { cursor: wait; }
+    .monthly-report-dialog { max-width: 28rem; }
+    .monthly-report-form { display: grid; gap: 1rem; }
+    .monthly-report-dialog .readiness-import { display: inline-flex; align-items: center; gap: 0.4rem; }
+    .monthly-report-dialog #status-relatorio-mensal:empty { display: none; }
+    .monthly-report-dialog #status-relatorio-mensal[data-state="error"] { color: var(--danger); }
     @media (max-width: 640px) {
       .readiness-panel-summary { min-height: 2.75rem; }
       /* Closed on phones: one line with the short summary; the full sentence stays for screen readers. */

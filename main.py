@@ -87,6 +87,7 @@ from routers.transfer_history import TransferHistoryServices, create_transfer_hi
 from routers.dashboard import DashboardServices, create_dashboard_router
 from routers.operations import MAX_TICKET_WORKBOOK_BYTES, create_operations_router
 from routers.local_setup import create_local_setup_router
+from routers.monthly_report import MonthlyReportServices, create_monthly_report_router
 from domains.local_setup import load_origin_contact, validate_local_model
 from core.logging_setup import configure_logging
 from core.xlsx_safety import (
@@ -2193,6 +2194,20 @@ operations_router = create_operations_router(
     record_ticket_reconciliation=usage_metrics.record_ticket_reconciliation,
 )
 app.include_router(operations_router)
+
+
+def _monthly_report_inventory() -> Tuple[List[Dict[str, Any]], Dict[str, Any]]:
+    with STATE_LOCK:
+        return deepcopy(list(inventory_state.equipamentos_cache.values())), deepcopy(inventory_state.stats_cache)
+
+
+app.include_router(create_monthly_report_router(MonthlyReportServices(
+    inventory_snapshot=_monthly_report_inventory,
+    load_comparison_history=load_comparison_history,
+    comparison_history_for_display=comparison_history_for_display,
+    ticket_report_path=lambda: TICKET_REPORT_FILE,
+    read_usage_metrics=usage_metrics.read,
+)))
 
 # Serve static files and frontend
 STATIC_DIR.mkdir(parents=True, exist_ok=True)
