@@ -58,7 +58,7 @@ const MYPY_TARGETS = [
 ];
 
 // Pacotes que já exigem anotações em todas as funções (--disallow-untyped-defs).
-const MYPY_STRICT_TARGETS = ["core", "security"];
+const MYPY_STRICT_TARGETS = ["core", "domains", "security"];
 
 function javascriptFilesToCheck() {
   return [
@@ -105,7 +105,7 @@ function buildSteps(python) {
       ],
     },
     {
-      name: "Tipos (mypy estrito: core e security)",
+      name: "Tipos (mypy estrito: core, domains e security)",
       command: python,
       args: [
         "-m", "mypy", "--explicit-package-bases", "--platform", "win32",

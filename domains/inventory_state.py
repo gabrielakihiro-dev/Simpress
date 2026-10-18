@@ -258,7 +258,7 @@ def load_database_unlocked(services: InventoryStateServices, publish: bool = Tru
     details_serial_counts: Dict[str, int] = {}
     tipo_header_aliases = DETAILS_TYPE_HEADER_ALIASES
 
-    def get_row_val(row, *aliases, default=""):
+    def get_row_val(row: Dict[str, Any], *aliases: str, default: str = "") -> str:
         for a in aliases:
             key = normalize_workbook_header(a)
             if key in norm_cols:
@@ -267,7 +267,7 @@ def load_database_unlocked(services: InventoryStateServices, publish: bool = Tru
                     return sanitize_value(val, default)
         return default
 
-    def get_installation_cnpj(row):
+    def get_installation_cnpj(row: Dict[str, Any]) -> str:
         value = get_row_val(row, *DETAILS_INSTALLATION_CNPJ_HEADER_ALIASES)
         if value:
             return value
