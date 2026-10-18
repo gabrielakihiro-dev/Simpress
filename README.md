@@ -380,6 +380,7 @@ iniciar_servidor.bat                  Inicializador local para Windows
 
 ## Índice da documentação
 
+- [Manual do usuário](docs/guias/manual_usuario.md) (para operadores, sem linguagem técnica)
 - [Relatório final da reorganização e refatoração](docs/desenvolvimento/relatorio-refatoracao-2026-10-12.md)
 - [Revisão e correções pós integração](docs/desenvolvimento/revisao-refatoracao-frontend-2026-10-12.md)
 - [Arquitetura e plano da refatoração](docs/arquitetura/analise-refatoracao-frontend.md)
