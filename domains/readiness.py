@@ -16,9 +16,8 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Any, Callable, Dict, Hashable, Iterable, List, Optional, Tuple, Type
 
-from fastapi import HTTPException
-
 from core.config import format_size_limit
+from core.errors import DomainError
 from core.integrity import FileBusyError, WorkbookSafetyError
 from core.xlsx_safety import WORKBOOK_READ_ERRORS, XlsxLimitExceeded, XlsxPackageError, validate_xlsx
 
@@ -148,7 +147,7 @@ def check_ready_workbook(
             services.validate_uploaded_workbook(path.read_bytes(), role)
         status.update(available=True, reason="OK", state="ready")
         cache.put(key, status)
-    except (HTTPException, FileBusyError, WorkbookSafetyError, *WORKBOOK_READ_ERRORS) as error:
+    except (DomainError, FileBusyError, WorkbookSafetyError, *WORKBOOK_READ_ERRORS) as error:
         services.logger.warning(
             "Falha ao verificar prontidão da planilha (arquivo=%s, papel=%s, erro=%s).",
             path.name, role, type(error).__name__,

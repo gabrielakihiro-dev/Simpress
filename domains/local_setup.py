@@ -8,10 +8,10 @@ import zipfile
 import zlib
 from pathlib import PurePosixPath
 
-from fastapi import HTTPException
 from openpyxl.cell.cell import MergedCell
 
 from core.config import format_size_limit
+from core.errors import DomainError, DomainValidationError
 from core.integrity import load_workbook_safely
 from core.openpyxl_compat import stored_cells
 
@@ -30,35 +30,35 @@ def unpack_simpress_zip(data: bytes, limit: int) -> tuple[bytes, str]:
         with zipfile.ZipFile(io.BytesIO(data)) as archive:
             members = archive.infolist()
             if len(members) > 1000 or sum(item.file_size for item in members) > 2 * limit:
-                raise HTTPException(413, "O ZIP excede os limites de descompactação.")
+                raise DomainValidationError("O ZIP excede os limites de descompactação.", status_code=413)
             candidates = []
             for item in members:
                 name = item.filename.replace("\\", "/")
                 path = PurePosixPath(name)
                 if path.is_absolute() or ".." in path.parts or ":" in name or "\x00" in name:
-                    raise HTTPException(400, "O ZIP contém um caminho inválido.")
+                    raise DomainValidationError("O ZIP contém um caminho inválido.")
                 if item.flag_bits & 1:
-                    raise HTTPException(400, "Envie um ZIP sem senha.")
+                    raise DomainValidationError("Envie um ZIP sem senha.")
                 if item.is_dir():
                     continue
                 if item.file_size > limit:
-                    raise HTTPException(413, f"Um arquivo no ZIP excede o limite de {size_label}.")
+                    raise DomainValidationError(f"Um arquivo no ZIP excede o limite de {size_label}.", status_code=413)
                 if path.suffix.lower() == ".xlsx" and not path.name.startswith("~$"):
                     candidates.append(item)
             if len(candidates) != 1:
-                raise HTTPException(400, "O ZIP da Simpress precisa conter exatamente uma planilha .xlsx.")
+                raise DomainValidationError("O ZIP da Simpress precisa conter exatamente uma planilha .xlsx.")
             member = candidates[0]
             with archive.open(member) as stream:
                 workbook = stream.read(limit + 1)
             if len(workbook) > limit:
-                raise HTTPException(413, f"A planilha descompactada excede o limite de {size_label}.")
+                raise DomainValidationError(f"A planilha descompactada excede o limite de {size_label}.", status_code=413)
             if not workbook:
-                raise HTTPException(400, "A planilha dentro do ZIP está vazia.")
+                raise DomainValidationError("A planilha dentro do ZIP está vazia.")
             return workbook, member.filename
-    except HTTPException:
+    except DomainError:
         raise
     except (OSError, ValueError, RuntimeError, NotImplementedError, zipfile.BadZipFile, zlib.error, lzma.LZMAError) as error:
-        raise HTTPException(400, "Não foi possível ler o ZIP da Simpress.") from error
+        raise DomainValidationError("Não foi possível ler o ZIP da Simpress.") from error
 
 
 def _normalize(value):

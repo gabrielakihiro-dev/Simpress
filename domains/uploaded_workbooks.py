@@ -11,8 +11,8 @@ from pathlib import Path
 from typing import Any, Callable, Dict, Iterable, List, Optional
 
 import openpyxl
-from fastapi import HTTPException
 
+from core.errors import DomainError, DomainValidationError
 from core.integrity import FileBusyError
 from core.xlsx_safety import WORKBOOK_READ_ERRORS, XlsxLimitExceeded, XlsxPackageError, validate_xlsx
 from domains.inventory_comparison import _record_value, normalize_reference_value
@@ -198,17 +198,15 @@ def validate_xlsx_package(file_bytes: bytes, validate: Callable[[Any], Any] = va
     try:
         validate(file_bytes)
     except XlsxLimitExceeded as error:
-        raise HTTPException(status_code=413, detail=str(error)) from None
+        raise DomainValidationError(str(error), status_code=413) from None
     except XlsxPackageError:
-        raise HTTPException(
-            status_code=400,
+        raise DomainValidationError(
             detail="O arquivo enviado não é uma planilha .xlsx válida.",
         ) from None
-    except HTTPException:
+    except DomainError:
         raise
     except (OSError, ValueError):
-        raise HTTPException(
-            status_code=400,
+        raise DomainValidationError(
             detail="O arquivo enviado não é uma planilha .xlsx válida.",
         ) from None
 
@@ -251,14 +249,13 @@ def read_workbook_tables(services: WorkbookReaderServices, file_bytes: bytes) ->
                 "records": records,
             })
         return tables
-    except HTTPException:
+    except DomainError:
         raise
     except WorkbookHeaderError as error:
-        raise HTTPException(status_code=400, detail=f"Cabeçalhos inválidos: {error}") from None
+        raise DomainValidationError(f"Cabeçalhos inválidos: {error}") from None
     except WORKBOOK_READ_ERRORS as error:
         services.logger.warning("Falha ao ler tabelas da planilha (papel=upload, erro=%s).", type(error).__name__)
-        raise HTTPException(
-            status_code=400,
+        raise DomainValidationError(
             detail="O arquivo enviado não contém uma planilha .xlsx válida ou legível.",
         ) from None
     finally:
@@ -325,8 +322,7 @@ def select_upload_table(tables: List[Dict[str, Any]], role: str) -> Dict[str, An
             if any(not (table["headers"] & installation_cnpj_headers) for table in basic_candidates):
                 schema_problems.append("não contém o cabeçalho CNPJ de instalação")
             problem_summary = " e ".join(schema_problems) or "não corresponde ao formato completo"
-            raise HTTPException(
-                status_code=400,
+            raise DomainValidationError(
                 detail=(
                     f"A planilha enviada como Simpress foi recusada: {problem_summary}. "
                     "A base de entrada precisa ter exatamente "
@@ -334,8 +330,7 @@ def select_upload_table(tables: List[Dict[str, Any]], role: str) -> Dict[str, An
                     "A planilha reduzida do Exportar Excel não pode ser usada em Atualizar Planilhas."
                 ),
             )
-        raise HTTPException(
-            status_code=400,
+        raise DomainValidationError(
             detail=f"A planilha enviada como {display_role} não contém uma aba com os cabeçalhos obrigatórios: {description}.",
         )
 
@@ -345,8 +340,7 @@ def select_upload_table(tables: List[Dict[str, Any]], role: str) -> Dict[str, An
             "endpoint": "Endpoint",
             "detalhes": "Simpress",
         }[role]
-        raise HTTPException(
-            status_code=400,
+        raise DomainValidationError(
             detail=(
                 f"O arquivo selecionado para {display_role} tem mais de uma aba compatível "
                 f"({sheet_names}). A seleção automática foi cancelada; envie um arquivo com "
@@ -365,7 +359,7 @@ def select_upload_table(tables: List[Dict[str, Any]], role: str) -> Dict[str, An
         )
 
     if populated_rows == 0:
-        raise HTTPException(status_code=400, detail=f"A aba '{table['sheet']}' não tem linhas de dados utilizáveis.")
+        raise DomainValidationError(f"A aba '{table['sheet']}' não tem linhas de dados utilizáveis.")
 
     if role == "detalhes":
         installation_cnpj_column = next(
@@ -378,8 +372,7 @@ def select_upload_table(tables: List[Dict[str, Any]], role: str) -> Dict[str, An
             and not str(row.get(installation_cnpj_column) or "").strip()
         )
         if missing_installation_cnpj_rows:
-            raise HTTPException(
-                status_code=400,
+            raise DomainValidationError(
                 detail=(
                     "A base completa da Simpress contém "
                     f"{missing_installation_cnpj_rows} série(s) sem CNPJ de instalação. "

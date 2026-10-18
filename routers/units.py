@@ -7,6 +7,7 @@ from typing import Any, Callable, Dict, List, Optional
 
 from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel, Field, field_validator
+from core.errors import DomainError
 from core.integrity import AtomicFileTransaction, FileBusyError, FileTransactionError
 
 
@@ -192,7 +193,7 @@ def create_units_router(services: UnitRouteServices):
                 transaction.commit()
                 services.publish_database_state(prepared_state)
                 published_units = list(prepared_state["unidades_cache"])
-        except HTTPException:
+        except (HTTPException, DomainError):
             raise
         except FileBusyError as error:
             raise HTTPException(status_code=409, detail=str(error)) from error
