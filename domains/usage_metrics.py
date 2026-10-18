@@ -34,6 +34,7 @@ HTTP_METRIC_ROUTES: Tuple[Tuple[str, str, str], ...] = (
     ("GET", "/api/exportar-equipamentos", "exportacoes"),
     ("GET", "/api/historico-comparacoes/exportar/excel", "exportacoes"),
     ("GET", "/api/operacoes/chamados/exportar", "exportacoes"),
+    ("GET", "/api/relatorio-mensal", "exportacoes"),
     ("GET", "/api/buscar", "buscas"),
     ("GET", "/api/buscar-expandida", "buscas"),
 )

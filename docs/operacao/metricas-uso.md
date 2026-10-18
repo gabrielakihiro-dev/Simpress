@@ -26,7 +26,7 @@ Arquivo: `data/state/metricas_uso.json` (estado operacional, fora do Git).
 | --- | --- |
 | `transferencias` | `POST /api/gerar-planilha` respondeu 2xx (planilha de transferência gerada). |
 | `comparacoes` | Atualização de inventário confirmada (manual em `/api/planilhas/atualizar` ou pela entrada automática). Repetições da mesma confirmação (mesmo `evento_id`, por `Idempotency-Key`) contam uma vez enquanto o servidor estiver aberto. |
-| `exportacoes` | 2xx em `GET /api/exportar-equipamentos`, `GET /api/historico-comparacoes/exportar/excel` ou `GET /api/operacoes/chamados/exportar`. |
+| `exportacoes` | 2xx em `GET /api/exportar-equipamentos`, `GET /api/historico-comparacoes/exportar/excel`, `GET /api/operacoes/chamados/exportar` ou `GET /api/relatorio-mensal`. |
 | `os_conciliadas` | Importação de chamados confirmada (manual ou pela pasta `entrada_chamados`): soma `resumo.series_total` do relatório conciliado. |
 | `buscas` | 2xx em `GET /api/buscar` ou `GET /api/buscar-expandida` (somente `offset=0`). Termos que só estendem ou encurtam o termo anterior em até 30 s (digitação do autocompletar, troca de filtros) contam como a mesma busca. O termo fica só em memória. |
 
