@@ -7,7 +7,7 @@
   const { app, appState, motion } = context;
   const { escapeHtml } = context.dom;
   const renderer = context.comparisonResultRenderer(context);
-  const { formatarNomeFonteHistorico, formatarHorarioHistorico } = context.historyFormat;
+  const { formatarNomeFonteHistorico, formatarHorarioHistorico, classesMetricaHistorico } = context.historyFormat;
 
   let comparisonAnnotationSyncObservers = [];
 
@@ -34,6 +34,7 @@
     conectarAcoesApelidosManuais(comparison, listas.divergenciasApelidosManuais);
     conectarAnotacoesComparacao(comparison);
     conectarFiltrosHistoricoComparacao(content);
+    conectarCartoesResumoComparacao();
     app.abrirModalAcessivel(
       "modal-comparacao-planilhas",
       '[aria-label="Fechar resultado"]',
@@ -325,7 +326,7 @@
         pendingCounter.textContent = pendentes;
         pendingCounter.className = `text-xl font-bold mt-1 ${classes.numero}`;
         const card = pendingCounter.closest("[data-metric-tone]");
-        if (card) card.className = `rounded-xl p-3 ${classes.cartao}`;
+        if (card) card.className = `${card.classList.contains("comparison-metric-link") ? "comparison-metric-link " : ""}rounded-xl p-3 ${classes.cartao}`;
       }
       matchingRows.forEach(candidate => {
         const status = candidate.querySelector("[data-manual-alias-status]");
@@ -357,8 +358,39 @@
     }
   }
 
+  function conectarCartoesResumoComparacao() {
+    document.querySelectorAll("#comparacao-planilhas-conteudo [data-comparison-section-target]").forEach(button => {
+      button.addEventListener("click", () => irParaSecaoComparacao(button.dataset.comparisonSectionTarget));
+    });
+  }
+
+  // Scrolls the result dialog to a section title and focuses it. A section hidden by the history
+  // filters can only be reached by clearing them, so every filter is reset in that case.
   function irParaSecaoComparacao(sectionId) {
-    document.getElementById(sectionId)?.scrollIntoView({ behavior: "smooth", block: "start" });
+    const content = document.getElementById("comparacao-planilhas-conteudo");
+    const heading = sectionId ? document.getElementById(sectionId) : null;
+    if (!content || !heading || !content.contains(heading)) return false;
+    const oculta = () => Boolean(heading.closest("[hidden]"));
+    if (oculta()) limparFiltrosHistoricoComparacao(content);
+    if (oculta()) return false;
+    const reduced = window.matchMedia?.("(prefers-reduced-motion: reduce)").matches;
+    const bar = content.querySelector("[data-history-filter-bar]");
+    heading.style.scrollMarginTop = `${(bar ? bar.offsetHeight : 0) + 16}px`;
+    // Focus without scrolling; scrollIntoView then places the title just below the sticky filter bar.
+    heading.focus({ preventScroll: true });
+    heading.scrollIntoView({ behavior: reduced ? "auto" : "smooth", block: "start" });
+    return true;
+  }
+
+  function limparFiltrosHistoricoComparacao(content) {
+    const searchInput = content.querySelector("[data-history-filter-search]");
+    const categorySelect = content.querySelector("[data-history-filter-category]");
+    const annotatedOnly = content.querySelector("[data-history-filter-annotated]");
+    if (searchInput) searchInput.value = "";
+    if (categorySelect) categorySelect.value = "";
+    if (annotatedOnly) annotatedOnly.checked = false;
+    // conectarFiltrosHistoricoComparacao recomputes visibility on these events.
+    searchInput?.dispatchEvent(new Event("input", { bubbles: true }));
   }
 
   function fecharModalComparacaoPlanilhas() {
