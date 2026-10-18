@@ -77,6 +77,39 @@ def origin_contact_config():
             "contato_origem_arquivo_invalido": False}
 
 
+USAGE_METRICS = ("transferencias", "comparacoes", "exportacoes", "os_conciliadas", "buscas")
+USAGE_TOTALS = {"transferencias": 12, "comparacoes": 4, "exportacoes": 7, "os_conciliadas": 86, "buscas": 143}
+USAGE_MINUTES = {metric: None for metric in USAGE_METRICS}
+
+
+def usage_summary():
+    configured = {metric: value for metric, value in USAGE_MINUTES.items() if value is not None}
+    minutes = sum(USAGE_TOTALS[metric] * value for metric, value in configured.items())
+    return {
+        "periodo": {"inicio": "2026-09-18", "fim": "2026-10-17", "dias": 30},
+        "totais": dict(USAGE_TOTALS),
+        "por_dia": [],
+        "registro_desde": "2026-10-01",
+        "tempos_minutos": dict(USAGE_MINUTES),
+        "tempos_configurados": bool(configured),
+        "minutos_economizados": round(minutes, 1),
+        "horas_economizadas": round(minutes / 60, 1),
+        "disponivel": True,
+    }
+
+
+def dashboard_payload():
+    return {
+        "base_importada": True, "total_equipamentos": 1, "total_unidades": 0,
+        "por_categoria": [{"value": "notebook", "label": "Notebooks", "total": 1}],
+        "sem_categoria": 0, "cidades_principais": [{"cidade": "Curitiba", "total": 1}],
+        "cidades_por_categoria": {"notebook": [{"cidade": "Curitiba", "total": 1}]},
+        "total_cidades": 1, "sem_cidade": 0, "ultima_atualizacao": "08/10/2026 09:00",
+        "arquivo_origem": "simpress-demo.xlsx", "ultima_comparacao": None,
+        "uso_30_dias": usage_summary(),
+    }
+
+
 class Handler(BaseHTTPRequestHandler):
     def send(self, body, status=200, content_type="application/json; charset=utf-8"):
         payload = body if isinstance(body, bytes) else json.dumps(body, ensure_ascii=False).encode()
@@ -109,6 +142,8 @@ class Handler(BaseHTTPRequestHandler):
             self.send(payload, content_type=content_type)
         elif path == "/api/stats":
             self.send({"total_equipamentos": 1, "total_unidades": 0, "exportacao_disponivel": False})
+        elif path == "/api/painel":
+            self.send(dashboard_payload())
         elif path == "/api/prontidao":
             self.send({"functions": {"consulta_equipamentos": {"available": True}}, "files": {}})
         elif path == "/__fixture_state":
@@ -172,6 +207,20 @@ class Handler(BaseHTTPRequestHandler):
                 return
             origin_contact.update({key: str(payload[key]).strip() for key in DEFAULT_ORIGIN_CONTACT})
             self.send(origin_contact_config())
+            return
+        if path == "/api/painel/tempos-manuais":
+            size = int(self.headers.get("Content-Length", "0"))
+            try:
+                minutes = json.loads(self.rfile.read(size)).get("tempos_minutos")
+            except (ValueError, AttributeError):
+                minutes = None
+            if not isinstance(minutes, dict):
+                self.send({"detail": "Informe os tempos por tarefa."}, 422)
+                return
+            for metric in USAGE_METRICS:
+                value = minutes.get(metric)
+                USAGE_MINUTES[metric] = value if isinstance(value, (int, float)) and 0 <= value <= 480 else None
+            self.send(usage_summary())
             return
         if path != f"/api/historico-comparacoes/{DEMO_EVENT_ID}/anotacoes/{DEMO_ANNOTATION_ID}":
             self.send({"detail": "Endpoint de teste não encontrado"}, 404)

@@ -106,6 +106,7 @@
     app.carregarContagemHistoricoApelidos();
     app.carregarContagemHistoricoComparacoes();
     app.inicializarArquivosAtualizacaoPlanilhas();
+    app.inicializarUsoUltimos30Dias();
   }
 
   if (document.readyState === "interactive" || document.readyState === "complete") {
