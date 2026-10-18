@@ -10,13 +10,11 @@ import re
 import shutil
 import threading
 import time
-import uuid
 from copy import deepcopy
 from contextlib import asynccontextmanager, contextmanager
 from datetime import datetime, timedelta
 from pathlib import Path
 from typing import Dict, Iterable, List, Optional, Any, Set, Tuple
-from urllib.parse import quote
 
 import openpyxl
 from fastapi import FastAPI, File, Form, HTTPException, Request, UploadFile
@@ -33,7 +31,6 @@ from core.integrity import (
     lock_paths,
     load_workbook_safely,
     recover_pending_transactions,
-    serialize_workbook_validated,
     stage_workbook_update,
     workbook_snapshot,
 )
@@ -93,7 +90,6 @@ from routers.local_setup import create_local_setup_router
 from domains.local_setup import load_origin_contact, validate_local_model
 from core.logging_setup import configure_logging
 from core.xlsx_safety import (
-    WORKBOOK_READ_ERRORS,
     XlsxLimitExceeded,
     XlsxPackageError,
     set_cell_value_as_text,
@@ -145,7 +141,12 @@ from domains.history_annotations import (
     save_history_annotation,
 )
 from domains import effective_alias
-from domains import inventory_state
+from domains import alias_changes, equipment_export, inventory_state
+from domains.alias_changes import (
+    compare_equipment_aliases,
+    snapshot_equipment_aliases,
+    validate_equipment_serial as _validate_equipment_serial,
+)
 from domains.inventory_state import (
     STATE_LOCK,
     _coerce_unit_id,
@@ -162,7 +163,6 @@ from domains.uploaded_workbooks import (
     DETAILS_REQUIRED_HEADERS,
     DETAILS_SERIAL_HEADER_ALIASES,
     WorkbookHeaderError,
-    find_workbook_header_column,
     normalize_workbook_header,
     select_upload_table,
     validate_unambiguous_workbook_headers,
@@ -181,6 +181,7 @@ from domains.equipment_search import (
 from routers.equipment_search import EquipmentSearchServices, create_equipment_search_router
 from routers.system import SystemRouteServices, create_system_router
 from routers.units import UnidadePayload, UnitRouteServices, create_units_router
+from routers.aliases import ApelidoUndoPayload, ApelidoUpdatePayload, create_alias_router
 from core.inventory_requests import (
     InventoryUpdateMiddleware,
     idempotency_key,
@@ -329,32 +330,6 @@ def latest_comparison_update_entry(history: Optional[List[Dict[str, Any]]] = Non
 
     return max(candidates, key=event_timestamp)
 
-
-def build_alias_change_entry(
-    serial: str,
-    previous_alias: str,
-    new_alias: str,
-    action: str = "alteracao",
-    reference_id: Optional[str] = None,
-    had_override: Optional[bool] = None,
-) -> Dict[str, Any]:
-    with STATE_LOCK:
-        equipment = dict(inventory_state.equipamentos_cache.get(serial, {}))
-    entry = {
-        "id": uuid.uuid4().hex,
-        "tipo": "apelido",
-        "serial": serial,
-        "equipamento": equipment.get("modelo") or equipment.get("tipo") or "Equipamento",
-        "apelido_anterior": previous_alias,
-        "apelido_novo": new_alias,
-        "horario": datetime.now().astimezone().isoformat(timespec="seconds"),
-        "acao": action,
-        "referencia_id": reference_id,
-    }
-    if had_override is not None:
-        # Undo needs to know whether to restore a value or drop the override again.
-        entry["tinha_override"] = had_override
-    return entry
 
 def _equipment_revision(serial: Any, modelo: Any, tipo: Any, apelido: Any, id_cliente: Any) -> str:
     values = []
@@ -754,56 +729,7 @@ def validate_uploaded_workbook(file_bytes: bytes, role: str) -> Dict[str, Any]:
 
 def load_export_model_aliases() -> Dict[str, str]:
     """Lê os apelidos do modelo fixo usado como base de exportação."""
-    if not EXPORT_MODEL_FILE.is_file():
-        raise HTTPException(
-            status_code=404,
-            detail=f"O modelo de exportação '{EXPORT_MODEL_FILE.name}' não foi encontrado."
-        )
-
-    workbook = None
-    try:
-        validate_xlsx(EXPORT_MODEL_FILE)
-        workbook = openpyxl.load_workbook(EXPORT_MODEL_FILE, read_only=True, data_only=True)
-        for worksheet in workbook.worksheets:
-            header_row = [cell.value for cell in next(worksheet.iter_rows(max_row=1), ())]
-            serial_col = find_workbook_header_column(header_row, DETAILS_SERIAL_HEADER_ALIASES)
-            alias_col = find_workbook_header_column(header_row, ("APELIDO",))
-            if serial_col is None or alias_col is None:
-                continue
-
-            aliases_by_serial: Dict[str, List[str]] = {}
-            for row in worksheet.iter_rows(min_row=2, values_only=True):
-                serial = row[serial_col] if serial_col < len(row) else None
-                if serial is None or not str(serial).strip():
-                    continue
-                alias = row[alias_col] if alias_col < len(row) else None
-                serial_key = normalize_reference_value(serial)
-                if serial_key:
-                    aliases_by_serial.setdefault(serial_key, []).append("" if alias is None else str(alias).strip())
-            return {
-                serial: values[0]
-                for serial, values in aliases_by_serial.items()
-                if len(values) == 1
-            }
-
-        raise HTTPException(
-            status_code=500,
-            detail=f"O modelo '{EXPORT_MODEL_FILE.name}' não contém as colunas NumeroSerie e Apelido."
-        )
-    except HTTPException:
-        raise
-    except WORKBOOK_READ_ERRORS as error:
-        logger.warning(
-            "Falha ao ler modelo (arquivo=%s, papel=exportacao, erro=%s).",
-            EXPORT_MODEL_FILE.name, type(error).__name__,
-        )
-        raise HTTPException(
-            status_code=500,
-            detail="Não foi possível ler o modelo de exportação."
-        ) from None
-    finally:
-        if workbook is not None:
-            workbook.close()
+    return equipment_export.load_export_model_aliases(_equipment_export_services)
 
 
 def load_endpoint_aliases() -> Dict[str, str]:
@@ -834,16 +760,6 @@ def _apply_effective_alias(
     effective_alias.apply_effective_alias(equipment, endpoint_index, details_duplicate=details_duplicate)
 
 
-def get_export_aliases(endpoint_index: Optional[Dict[str, Any]] = None) -> Dict[str, str]:
-    """Combina hostnames da InvAll com apelidos manuais, que têm prioridade."""
-    endpoint_aliases = (
-        endpoint_index.get("unique", {})
-        if endpoint_index is not None
-        else load_endpoint_aliases()
-    )
-    return effective_alias.merge_export_aliases(endpoint_aliases, load_modified_apelidos())
-
-
 _effective_alias_services = effective_alias.EffectiveAliasServices(
     endpoint_upload_file=lambda: ENDPOINT_UPLOAD_FILE,
     validate_uploaded_workbook=lambda *args, **kwargs: validate_uploaded_workbook(*args, **kwargs),
@@ -851,38 +767,28 @@ _effective_alias_services = effective_alias.EffectiveAliasServices(
 )
 
 
-_EXPORT_STATUS_LOCK = threading.Lock()
-_EXPORT_COUNTS_LOCK = threading.Lock()
-_EXPORT_STATUS = {"available": False, "reason": "A exportação ainda não foi conferida."}
-_EXPORT_COUNTS_CACHE: Dict[Any, Dict[str, Any]] = {}
-
-
-def _set_export_status(available: bool, reason: str) -> None:
-    with _EXPORT_STATUS_LOCK:
-        _EXPORT_STATUS.update({"available": available, "reason": reason})
+# Late-bound so tests that patch these main attributes keep affecting the export.
+_equipment_export_services = equipment_export.EquipmentExportServices(
+    export_model_file=lambda: EXPORT_MODEL_FILE,
+    endpoint_upload_file=lambda: ENDPOINT_UPLOAD_FILE,
+    modified_aliases_file=lambda: MODIFIED_APELIDOS_FILE,
+    transaction_root=lambda: TRANSACTION_ROOT,
+    read_lock_timeout=lambda: READ_LOCK_TIMEOUT_SECONDS,
+    get_parque_file=lambda: get_parque_file(),
+    get_details_files=lambda: get_details_files(),
+    find_details_sheet=lambda file_path: find_details_sheet(file_path),
+    read_endpoint_alias_index=lambda: read_endpoint_alias_index(),
+    load_modified_apelidos=lambda: load_modified_apelidos(),
+    latest_comparison_update_entry=lambda: latest_comparison_update_entry(),
+    validate_xlsx=lambda file_path: validate_xlsx(file_path),
+    lock_paths=lambda *args, **kwargs: lock_paths(*args, **kwargs),
+    logger=logger,
+    external_errors=(HTTPException,),
+)
 
 
 def get_export_status() -> Dict[str, Any]:
-    with _EXPORT_STATUS_LOCK:
-        return dict(_EXPORT_STATUS)
-
-
-def _export_files_signature() -> tuple:
-    signature: List[Any] = []
-    try:
-        active_file = get_parque_file()
-    except FileBusyError:
-        active_file = None
-    for path in (active_file, EXPORT_MODEL_FILE, ENDPOINT_UPLOAD_FILE, MODIFIED_APELIDOS_FILE):
-        if path is None:
-            signature.append(None)
-            continue
-        try:
-            stat = path.stat()
-            signature.append((str(path.resolve(strict=False)), stat.st_size, stat.st_mtime_ns, stat.st_ctime_ns))
-        except OSError:
-            signature.append((str(path.resolve(strict=False)), None))
-    return tuple(signature)
+    return equipment_export.get_export_status()
 
 
 def count_export_changes(
@@ -890,190 +796,7 @@ def count_export_changes(
     endpoint_index: Optional[Dict[str, Any]] = None,
 ) -> Dict[str, int]:
     """Count writable alias and IdCliente cells that export would change."""
-    empty_counts = {"apelidos": 0, "id_clientes": 0, "total": 0}
-
-    def count() -> Dict[str, int]:
-        source_file = get_parque_file()
-        if source_file is None or not source_file.is_file() or not EXPORT_MODEL_FILE.is_file():
-            _set_export_status(False, "A base ativa ou o modelo de exportação está ausente.")
-            return empty_counts.copy()
-
-        model_wb = None
-        current_wb = None
-        try:
-            validate_xlsx(EXPORT_MODEL_FILE)
-            model_wb = openpyxl.load_workbook(EXPORT_MODEL_FILE, read_only=True, data_only=False)
-            model_sheet_name = next(
-                (name for name in model_wb.sheetnames if "parque" in name.lower() or "equipamento" in name.lower()),
-                model_wb.sheetnames[0],
-            )
-            model_ws = model_wb[model_sheet_name]
-            model_headers = [cell.value for cell in next(model_ws.iter_rows(max_row=1), ())]
-            model_serial_col = find_workbook_header_column(model_headers, DETAILS_SERIAL_HEADER_ALIASES)
-            model_alias_col = find_workbook_header_column(model_headers, ("APELIDO",))
-            model_id_col = find_workbook_header_column(model_headers, ("IDCLIENTE",))
-            if model_serial_col is None or model_alias_col is None:
-                _set_export_status(False, "O modelo de exportação não contém as colunas obrigatórias.")
-                return empty_counts.copy()
-
-            current_sheet_name = find_details_sheet(source_file)
-            if current_sheet_name is None:
-                _set_export_status(False, "A base ativa não contém uma aba de inventário compatível.")
-                return empty_counts.copy()
-            current_wb = openpyxl.load_workbook(source_file, read_only=True, data_only=False)
-            current_ws = current_wb[current_sheet_name]
-            current_headers = [cell.value for cell in next(current_ws.iter_rows(max_row=1), ())]
-            current_serial_col = find_workbook_header_column(current_headers, DETAILS_SERIAL_HEADER_ALIASES)
-            current_alias_col = find_workbook_header_column(current_headers, DETAILS_ALIAS_HEADER_ALIASES)
-            current_id_col = find_workbook_header_column(current_headers, ("IDCLIENTE",))
-            if current_serial_col is None or current_alias_col is None:
-                _set_export_status(False, "A base ativa não contém as colunas de série e apelido.")
-                return empty_counts.copy()
-
-            current_rows: Dict[str, Dict[str, Any]] = {}
-            for cells in current_ws.iter_rows(min_row=2, values_only=True):
-                serial_key = normalize_reference_value(
-                    cells[current_serial_col] if current_serial_col < len(cells) else None
-                )
-                if not serial_key:
-                    continue
-                if serial_key in current_rows:
-                    _set_export_status(False, "A base ativa contém séries duplicadas; a exportação exige revisão.")
-                    return empty_counts.copy()
-                current_rows[serial_key] = {
-                    "apelido": cells[current_alias_col] if current_alias_col < len(cells) else None,
-                    "id_cliente": cells[current_id_col] if current_id_col is not None and current_id_col < len(cells) else None,
-                }
-
-            model_rows = []
-            model_serial_counts: Dict[str, int] = {}
-            for cells in model_ws.iter_rows(min_row=2):
-                serial_key = normalize_reference_value(
-                    cells[model_serial_col].value if model_serial_col < len(cells) else None
-                )
-                if not serial_key:
-                    continue
-                model_serial_counts[serial_key] = model_serial_counts.get(serial_key, 0) + 1
-                model_rows.append((serial_key, cells))
-            if set(model_serial_counts) != set(current_rows):
-                _set_export_status(False, "O modelo e a base ativa não contêm o mesmo conjunto de séries.")
-                return empty_counts.copy()
-
-            effective_endpoint_index = endpoint_index if endpoint_index is not None else read_endpoint_alias_index()
-            aliases = get_export_aliases(effective_endpoint_index)
-            alias_count = 0
-            id_cliente_count = 0
-            for serial_key, cells in model_rows:
-                if model_serial_counts.get(serial_key) != 1:
-                    continue
-                current = current_rows[serial_key]
-                alias_cell = cells[model_alias_col] if model_alias_col < len(cells) else None
-                if alias_cell is not None and alias_cell.data_type != "f":
-                    updated_alias = aliases.get(serial_key, current["apelido"])
-                    if updated_alias is None:
-                        updated_alias = ""
-                    if alias_cell.value != updated_alias:
-                        alias_count += 1
-
-                if model_id_col is not None and current_id_col is not None:
-                    id_cell = cells[model_id_col] if model_id_col < len(cells) else None
-                    if id_cell is not None and id_cell.data_type != "f":
-                        updated_id = current["id_cliente"]
-                        if updated_id is None:
-                            updated_id = ""
-                        if id_cell.value != updated_id:
-                            id_cliente_count += 1
-
-            _set_export_status(True, "OK")
-            return {
-                "apelidos": alias_count,
-                "id_clientes": id_cliente_count,
-                "total": alias_count + id_cliente_count,
-            }
-        except Exception as error:
-            logger.warning("Contagem de exportação indisponível (%s).", type(error).__name__)
-            _set_export_status(False, "Não foi possível conferir o modelo e a base de exportação.")
-            return empty_counts.copy()
-        finally:
-            if model_wb is not None:
-                model_wb.close()
-            if current_wb is not None:
-                current_wb.close()
-
-    def count_with_cache() -> Dict[str, int]:
-        if endpoint_index is not None:
-            return count()
-        key = _export_files_signature()
-        with _EXPORT_COUNTS_LOCK:
-            cached = _EXPORT_COUNTS_CACHE.get(key)
-            if cached is not None:
-                _set_export_status(cached["available"], cached["reason"])
-                return {name: cached[name] for name in empty_counts}
-        values = count()
-        status = get_export_status()
-        with _EXPORT_COUNTS_LOCK:
-            _EXPORT_COUNTS_CACHE.clear()
-            _EXPORT_COUNTS_CACHE[key] = {
-                **values,
-                "available": status["available"],
-                "reason": status["reason"],
-            }
-        return values
-
-    if locked:
-        return count_with_cache()
-    with lock_paths([TRANSACTION_ROOT / ".atomic-transactions"], timeout=READ_LOCK_TIMEOUT_SECONDS):
-        detail_files = get_details_files()
-        with lock_paths([
-            *detail_files,
-            ENDPOINT_UPLOAD_FILE,
-            MODIFIED_APELIDOS_FILE,
-            EXPORT_MODEL_FILE,
-        ], timeout=READ_LOCK_TIMEOUT_SECONDS):
-            return count_with_cache()
-
-
-def snapshot_equipment_aliases(
-    equipment_records: Dict[str, Dict[str, Any]],
-) -> Dict[str, Dict[str, str]]:
-    """Captura apelidos únicos por série para comparar antes e depois da atualização."""
-    by_serial: Dict[str, List[Dict[str, str]]] = {}
-    for equipment in equipment_records.values():
-        if equipment.get("invall_alias_status") == "serie_detalhes_duplicada":
-            continue
-        serial = str(equipment.get("serial") or "").strip()
-        serial_key = normalize_reference_value(serial)
-        if not serial_key:
-            continue
-        by_serial.setdefault(serial_key, []).append({
-            "serie": serial,
-            "apelido": str(equipment.get("apelido") or "").strip(),
-        })
-
-    # Não escolher automaticamente quando a mesma série aparece mais de uma vez.
-    return {
-        serial: records[0]
-        for serial, records in by_serial.items()
-        if len(records) == 1
-    }
-
-
-def compare_equipment_aliases(
-    previous: Dict[str, Dict[str, str]],
-    current: Dict[str, Dict[str, str]],
-) -> List[Dict[str, str]]:
-    """Lista mudanças de apelido entre duas cargas do cadastro, comparando por série."""
-    changes = []
-    for serial_key, updated in current.items():
-        previous_record = previous.get(serial_key)
-        if previous_record is None or previous_record["apelido"] == updated["apelido"]:
-            continue
-        changes.append({
-            "serie": updated["serie"],
-            "apelido_anterior": previous_record["apelido"],
-            "apelido_novo": updated["apelido"],
-        })
-    return sorted(changes, key=lambda item: item["serie"])
+    return equipment_export.count_export_changes(_equipment_export_services, locked, endpoint_index)
 
 
 def get_equipamentos_template_file() -> Optional[Path]:
@@ -1461,13 +1184,6 @@ _inventory_state_services = inventory_state.InventoryStateServices(
 )
 
 # Models for API
-def _validate_equipment_serial(value: str) -> str:
-    """Apply the same non-empty serial semantics to every equipment edit route."""
-    if not normalize_reference_value(value):
-        raise ValueError("O número de série precisa conter letras ou números.")
-    return value.strip()
-
-
 class EquipamentoUpdatePayload(BaseModel):
     serial: str = Field(..., min_length=1, max_length=128, description="Número de Série do Equipamento")
     novo: bool = Field(False, description="Indica que o formulário está cadastrando um equipamento novo")
@@ -1487,22 +1203,6 @@ class EquipamentoUpdatePayload(BaseModel):
     @classmethod
     def validate_serial(cls, value: str) -> str:
         return _validate_equipment_serial(value)
-
-
-
-
-class ApelidoUpdatePayload(BaseModel):
-    serial: str = Field(..., min_length=1, max_length=128, description="Número de Série do Equipamento")
-    apelido: str = Field(..., max_length=160, description="Novo Apelido / Hostname do Equipamento")
-
-    @field_validator("serial")
-    @classmethod
-    def validate_serial(cls, value: str) -> str:
-        return _validate_equipment_serial(value)
-
-
-class ApelidoUndoPayload(BaseModel):
-    evento_id: str = Field(..., description="ID do evento de apelido que deve ser desfeito")
 
 
 def _public_equipment(equipment: Dict[str, Any]) -> Dict[str, Any]:
@@ -1955,11 +1655,37 @@ def save_equipment_to_excel(
         raise HTTPException(status_code=500, detail=f"Não foi possível concluir a gravação: {error}") from error
 
 
-@app.get("/api/equipamento/apelidos-modificados")
-def get_apelidos_modificados():
-    """Retorna o registro de todos os apelidos que foram modificados pelo usuário."""
-    apelidos = load_modified_apelidos()
-    return {"total": len(apelidos), "apelidos": apelidos}
+# Late-bound so tests that patch these main attributes keep affecting alias changes.
+_alias_change_services = alias_changes.AliasChangeServices(
+    modified_aliases_file=lambda: MODIFIED_APELIDOS_FILE,
+    alias_history_file=lambda: ALIAS_HISTORY_FILE,
+    transaction_root=lambda: TRANSACTION_ROOT,
+    atomic_file_transaction=lambda root, targets: AtomicFileTransaction(root, targets),
+    get_details_files=lambda: get_details_files(),
+    get_primary_equipment_file=lambda: get_primary_equipment_file(),
+    find_details_sheet=lambda file_path: find_details_sheet(file_path),
+    load_alias_history=lambda: load_alias_history(),
+    load_modified_apelidos=lambda: load_modified_apelidos(),
+    validate_json_object=lambda value, label: _validate_json_object(value, label),
+    validate_json_history=lambda value, label: _validate_json_history(value, label),
+    read_endpoint_alias_index=lambda: read_endpoint_alias_index(),
+    apply_effective_alias=lambda *args, **kwargs: _apply_effective_alias(*args, **kwargs),
+    prepare_database_state=lambda *args: prepare_database_state(*args),
+    publish_database_state=lambda state: publish_database_state(state),
+    prune_expired_histories=lambda: prune_expired_histories(),
+    public_equipment=lambda equipment: _public_equipment(equipment),
+    logger=logger,
+    external_errors=(HTTPException,),
+)
+
+# Registered directly on the app, before /api/equipamento/{serial}, so the fixed
+# "apelidos-modificados" path is matched first and is not read as a serial.
+_alias_router, _alias_exports = create_alias_router(_alias_change_services, app.router)
+get_apelidos_modificados = _alias_exports.get_apelidos_modificados
+atualizar_apelido = _alias_exports.atualizar_apelido
+get_historico_apelidos = _alias_exports.get_historico_apelidos
+excluir_evento_historico_apelido = _alias_exports.excluir_evento_historico_apelido
+desfazer_alteracao_apelido = _alias_exports.desfazer_alteracao_apelido
 
 
 # Endpoints
@@ -2045,519 +1771,29 @@ def aplicar_alteracao_apelido(
     drop_override: bool = False,
 ) -> Dict[str, Any]:
     """Save a manual alias, or with ``drop_override`` remove it so the sources apply again."""
-    with STATE_LOCK:
-        initial_equipment = inventory_state.equipamentos_cache.get(target_serial)
-        initial_equipment = dict(initial_equipment) if initial_equipment is not None else None
-    if initial_equipment is None:
-        raise HTTPException(status_code=404, detail=f"Equipamento com serial '{target_serial}' não encontrado na base de dados.")
-
-    cached_source = initial_equipment.get("_source_file")
-    cached_sheet = initial_equipment.get("_source_sheet")
-    if not cached_source or not cached_sheet:
-        raise HTTPException(
-            status_code=409,
-            detail="A origem deste equipamento não está mais disponível no cache; recarregue a base antes de editar.",
-        )
-    source_file = Path(cached_source).resolve(strict=False)
-    detail_files = get_details_files()
-    locked_detail_files = {Path(path).resolve(strict=False) for path in detail_files}
-    if source_file not in locked_detail_files:
-        raise HTTPException(
-            status_code=409,
-            detail="A planilha de origem mudou depois que este equipamento foi carregado; recarregue a base antes de editar.",
-        )
-
-    # Lock source files alongside the alias/history JSON so uploads cannot race
-    # with a manual override decision. Manual overrides never edit that source.
-    targets = [MODIFIED_APELIDOS_FILE, ALIAS_HISTORY_FILE, *detail_files]
-
-    try:
-        with AtomicFileTransaction(TRANSACTION_ROOT, targets) as transaction:
-            with STATE_LOCK:
-                next_equipment_cache = deepcopy(inventory_state.equipamentos_cache)
-                next_unit_cache = deepcopy(inventory_state.unidades_cache)
-                next_stats_cache = deepcopy(inventory_state.stats_cache)
-            equipamento = deepcopy(next_equipment_cache.get(target_serial))
-            if equipamento is None:
-                raise HTTPException(status_code=404, detail=f"Equipamento com serial '{target_serial}' não encontrado na base de dados.")
-
-            current_source = equipamento.get("_source_file")
-            current_sheet = equipamento.get("_source_sheet")
-            active_file = get_primary_equipment_file()
-            locked_files = {Path(path).resolve(strict=False) for path in detail_files}
-            if (
-                not current_source
-                or Path(current_source).resolve(strict=False) != source_file
-                or active_file is None
-                or not active_file.is_file()
-                or active_file.resolve(strict=False) != source_file
-                or active_file.resolve(strict=False) not in locked_files
-            ):
-                raise HTTPException(
-                    status_code=409,
-                    detail="A planilha de origem mudou depois que este equipamento foi carregado; recarregue a base antes de editar.",
-                )
-
-            active_sheet = find_details_sheet(active_file)
-            if not current_sheet or current_sheet != cached_sheet or active_sheet != cached_sheet:
-                raise HTTPException(
-                    status_code=409,
-                    detail="A aba de origem mudou depois que este equipamento foi carregado; recarregue a base antes de editar.",
-                )
-
-            apelido_anterior = str(equipamento.get("_apelido_local", equipamento.get("_apelido_base", "")) or "").strip()
-            had_override = bool(equipamento.get("_apelido_manual_override"))
-            if drop_override:
-                novo_apelido = str(equipamento.get("_apelido_base", "") or "").strip()
-            history_will_change = (apelido_anterior != novo_apelido and registrar_historico) or bool(remove_history_event_id)
-            if expected_latest_event_id:
-                current_history = load_alias_history()
-                latest = next((
-                    item for item in reversed(current_history)
-                    if str(item.get("serial") or "").strip().upper() == target_serial
-                    and item.get("tipo") != "endereco"
-                ), None)
-                if not latest or latest.get("id") != expected_latest_event_id:
-                    raise HTTPException(status_code=409, detail="Só é possível desfazer a alteração manual mais recente deste equipamento.")
-                local_now = str(equipamento.get("_apelido_local", equipamento.get("_apelido_base", "")) or "").strip()
-                if local_now != str(expected_current_local or "").strip():
-                    raise HTTPException(status_code=409, detail="O apelido salvo mudou depois deste registro; nenhuma alteração foi aplicada.")
-
-            def update_overrides(data):
-                aliases = dict(_validate_json_object(data, "apelidos"))
-                matching_keys = [
-                    key for key in aliases
-                    if normalize_reference_value(key) == normalize_reference_value(target_serial)
-                ]
-                if expected_current_local is not None and (
-                    len(matching_keys) != 1
-                    or str(aliases.get(matching_keys[0]) or "").strip()
-                    != str(expected_current_local or "").strip()
-                ):
-                    raise HTTPException(
-                        status_code=409,
-                        detail="O apelido manual salvo mudou depois deste registro; nenhuma alteração foi aplicada.",
-                    )
-                for key in matching_keys:
-                    aliases.pop(key, None)
-                if not drop_override:
-                    aliases[target_serial] = novo_apelido
-                return aliases
-
-            transaction.update_json(MODIFIED_APELIDOS_FILE, update_overrides, {})
-
-            if history_will_change:
-                def update_history(history):
-                    history = _validate_json_history(history, "apelidos")
-                    updated = list(history)
-                    if remove_history_event_id:
-                        updated = [item for item in updated if item.get("id") != remove_history_event_id]
-                        if len(updated) == len(history):
-                            raise HTTPException(status_code=409, detail="O registro foi alterado por outra ação; atualize o histórico e tente novamente.")
-                    if apelido_anterior != novo_apelido and registrar_historico:
-                        updated.append(build_alias_change_entry(
-                            target_serial, apelido_anterior, novo_apelido, action, reference_id, had_override,
-                        ))
-                    return updated
-                transaction.update_json(ALIAS_HISTORY_FILE, update_history, [])
-
-            updated_equipment = dict(equipamento)
-            updated_equipment["_apelido_local"] = novo_apelido
-            updated_equipment["_apelido_manual_override"] = not drop_override
-            _apply_effective_alias(
-                updated_equipment,
-                read_endpoint_alias_index(),
-                details_duplicate=updated_equipment.get("invall_alias_status") == "serie_detalhes_duplicada",
-            )
-            next_equipment_cache[target_serial] = updated_equipment
-            prepared_state = prepare_database_state(
-                next_equipment_cache,
-                next_unit_cache,
-                next_stats_cache,
-            )
-            transaction.commit()
-            publish_database_state(prepared_state)
-    except (HTTPException, DomainError):
-        raise
-    except FileBusyError as error:
-        raise HTTPException(status_code=409, detail=str(error)) from error
-    except WorkbookSafetyError as error:
-        raise HTTPException(status_code=409, detail=f"Gravação cancelada: {error}") from error
-    except FileTransactionError as error:
-        raise HTTPException(status_code=500, detail=f"Não foi possível concluir a alteração de apelido: {error}") from error
-
-    try:
-        prune_expired_histories()
-    except Exception as error:
-        logger.warning("O apelido foi salvo, mas a retenção automática falhou (%s).", type(error).__name__)
-
-    return {
-        "equipamento": updated_equipment,
-        "apelido_anterior": apelido_anterior,
-        "apelido_novo": novo_apelido,
-        "salvo_no_disco": True,
-    }
-
-
-@app.post("/api/equipamento/atualizar-apelido")
-def atualizar_apelido(payload: ApelidoUpdatePayload):
-    """Atualiza o apelido e registra o valor anterior, o novo e o horário."""
-    target_serial = payload.serial.strip().upper()
-    # Toda edição manual termina em " (M)" para indicar a origem na tela e nas exportações.
-    novo_apelido = effective_alias.with_manual_alias_marker(payload.apelido)
-    resultado = aplicar_alteracao_apelido(target_serial, novo_apelido)
-
-    return {
-        "sucesso": True,
-        "mensagem": "Apelido salvo para as próximas pesquisas e exportações do Excel.",
-        **{**resultado, "equipamento": _public_equipment(resultado["equipamento"])},
-        "total_modificados": len(load_modified_apelidos()),
-    }
-
-
-@app.get("/api/historico-alteracoes")
-@app.get("/api/historico-apelidos")
-def get_historico_apelidos():
-    historico = load_alias_history()
-    return {"total": len(historico), "eventos": list(reversed(historico))}
-
-
-
-
-@app.delete("/api/historico-alteracoes/{evento_id}")
-@app.delete("/api/historico-apelidos/{evento_id}")
-def excluir_evento_historico_apelido(evento_id: str):
-    historico = load_alias_history()
-    evento = next((item for item in historico if item.get("id") == evento_id), None)
-    if evento is None:
-        raise HTTPException(status_code=404, detail="O registro selecionado não existe mais no histórico.")
-
-    target_serial = str(evento.get("serial") or "").strip().upper()
-    equipamento = inventory_state.equipamentos_cache.get(target_serial)
-    if equipamento is None:
-        raise HTTPException(status_code=404, detail=f"Equipamento com serial '{target_serial}' não encontrado na base de dados.")
-
-    if evento.get("tipo") == "endereco":
-        raise HTTPException(
-            status_code=409,
-            detail="Endereços são atualizados pela planilha da Simpress e não podem mais ser restaurados manualmente.",
-        )
-    tipo_evento = "apelido"
-    evento_mais_recente = next(
-        (
-            item for item in reversed(historico)
-            if str(item.get("serial") or "").strip().upper() == target_serial
-            and ("endereco" if item.get("tipo") == "endereco" else "apelido") == tipo_evento
-        ),
-        None,
-    )
-    if not evento_mais_recente or evento_mais_recente.get("id") != evento_id:
-        raise HTTPException(status_code=409, detail="Só é possível excluir e restaurar o registro mais recente daquele campo.")
-
-    apelido_atual = str(equipamento.get("_apelido_local", equipamento.get("_apelido_base", "")) or "").strip()
-    apelido_novo = str(evento.get("apelido_novo") or "").strip()
-    if apelido_atual != apelido_novo:
-        raise HTTPException(status_code=409, detail="O apelido salvo não corresponde mais a este registro. Recarregue a base antes de restaurar.")
-
-    apelido_anterior = str(evento.get("apelido_anterior") or "").strip()
-    resultado = aplicar_alteracao_apelido(
+    return alias_changes.apply_alias_change(
+        _alias_change_services,
         target_serial,
-        apelido_anterior,
-        registrar_historico=False,
-        expected_current_local=apelido_novo,
-        expected_latest_event_id=evento_id,
-        remove_history_event_id=evento_id,
-        drop_override=evento.get("tinha_override") is False,
+        novo_apelido,
+        action=action,
+        reference_id=reference_id,
+        registrar_historico=registrar_historico,
+        expected_current_local=expected_current_local,
+        expected_latest_event_id=expected_latest_event_id,
+        remove_history_event_id=remove_history_event_id,
+        drop_override=drop_override,
     )
-    equipamento_restaurado = resultado["equipamento"]
-
-    return {
-        "sucesso": True,
-        "evento_id": evento_id,
-        "tipo": tipo_evento,
-        "equipamento": _public_equipment(equipamento_restaurado),
-        "mensagem": "Valor anterior restaurado para pesquisas e exportações; registro removido do histórico.",
-    }
-
-
-@app.post("/api/equipamento/apelido/desfazer")
-def desfazer_alteracao_apelido(payload: ApelidoUndoPayload):
-    historico = load_alias_history()
-    evento = next((item for item in historico if item.get("id") == payload.evento_id), None)
-    if evento is None:
-        raise HTTPException(status_code=404, detail="A alteração selecionada não existe no histórico.")
-
-    target_serial = str(evento.get("serial") or "").strip().upper()
-    equipamento = inventory_state.equipamentos_cache.get(target_serial)
-    if equipamento is None:
-        raise HTTPException(status_code=404, detail=f"Equipamento com serial '{target_serial}' não encontrado na base de dados.")
-
-    evento_mais_recente = next(
-        (
-            item for item in reversed(historico)
-            if str(item.get("serial") or "").strip().upper() == target_serial
-            and item.get("tipo") != "endereco"
-        ),
-        None,
-    )
-    if not evento_mais_recente or evento_mais_recente.get("id") != evento.get("id"):
-        raise HTTPException(status_code=409, detail="Só é possível desfazer a alteração mais recente deste equipamento.")
-
-    apelido_atual = str(equipamento.get("_apelido_local", equipamento.get("_apelido_base", "")) or "").strip()
-    apelido_evento = str(evento.get("apelido_novo") or "").strip()
-    if apelido_atual != apelido_evento:
-        raise HTTPException(status_code=409, detail="O valor salvo foi alterado depois deste registro. Recarregue o histórico antes de desfazer.")
-
-    apelido_restaurado = str(evento.get("apelido_anterior") or "").strip()
-    resultado = aplicar_alteracao_apelido(
-        target_serial,
-        apelido_restaurado,
-        action="desfazer",
-        reference_id=evento["id"],
-        expected_current_local=apelido_evento,
-        expected_latest_event_id=evento["id"],
-        drop_override=evento.get("tinha_override") is False,
-    )
-    return {
-        "sucesso": True,
-        "mensagem": "Apelido restaurado; a reversão foi registrada no histórico.",
-        **{**resultado, "equipamento": _public_equipment(resultado["equipamento"])},
-        "total_modificados": len(load_modified_apelidos()),
-    }
 
 
 @app.get("/api/exportar-equipamentos")
 def exportar_equipamentos():
     """Exporta a apresentação de referência com os registros da base ativa."""
-    source_file = EXPORT_MODEL_FILE
-    current_file = get_parque_file()
-    if not source_file.is_file():
-        raise HTTPException(
-            status_code=404,
-            detail=f"O modelo de exportação '{source_file.name}' não foi encontrado."
-        )
-    if current_file is None or not current_file.is_file():
-        raise HTTPException(status_code=404, detail="A base atual da Simpress não foi encontrada.")
-
-    wb = None
-    current_wb = None
-    try:
-        with lock_paths([source_file, current_file, ENDPOINT_UPLOAD_FILE, MODIFIED_APELIDOS_FILE]):
-            validate_xlsx(source_file)
-            wb = load_workbook_safely(source_file, allow_threaded_comments=True)
-            original = workbook_snapshot(wb)
-            sheet_target = next(
-                (name for name in wb.sheetnames if "parque" in name.lower() or "equipamento" in name.lower()),
-                wb.sheetnames[0],
-            )
-            ws = wb[sheet_target]
-            header_row = [cell.value for cell in next(ws.iter_rows(max_row=1), ())]
-            serial_col_index = find_workbook_header_column(header_row, DETAILS_SERIAL_HEADER_ALIASES)
-            apelido_col_index = find_workbook_header_column(header_row, ("APELIDO",))
-            id_cliente_col_index = find_workbook_header_column(header_row, ("IDCLIENTE",))
-            if serial_col_index is None or apelido_col_index is None:
-                raise HTTPException(
-                    status_code=500,
-                    detail=f"A planilha '{source_file.name}' não contém as colunas NumeroSerie e Apelido esperadas."
-                )
-            serial_col = serial_col_index + 1
-            apelido_col = apelido_col_index + 1
-            id_cliente_col = id_cliente_col_index + 1 if id_cliente_col_index is not None else None
-            header_style_updates = {}
-            default_header_style_id = ws.cell(row=1, column=serial_col).style_id
-            for column in (apelido_col, id_cliente_col):
-                if column is None:
-                    continue
-                header_cell = ws.cell(row=1, column=column)
-                if header_cell.style_id != default_header_style_id:
-                    header_style_updates[(ws.title, header_cell.coordinate)] = default_header_style_id
-
-            current_sheet_name = find_details_sheet(current_file)
-            if current_sheet_name is None:
-                raise HTTPException(status_code=409, detail="A base atual da Simpress não tem os cabeçalhos esperados.")
-            current_wb = openpyxl.load_workbook(current_file, read_only=True, data_only=False)
-            current_ws = current_wb[current_sheet_name]
-            current_headers = [cell.value for cell in next(current_ws.iter_rows(max_row=1), ())]
-            current_serial_col_index = find_workbook_header_column(current_headers, DETAILS_SERIAL_HEADER_ALIASES)
-            if current_serial_col_index is None:
-                raise HTTPException(status_code=409, detail="A base atual não contém NumeroSerie.")
-            current_alias_col_index = find_workbook_header_column(current_headers, DETAILS_ALIAS_HEADER_ALIASES)
-            if current_alias_col_index is None:
-                raise HTTPException(status_code=409, detail="A base atual não contém Apelido ou Hostname.")
-            current_serial_col = current_serial_col_index + 1
-            current_alias_col = current_alias_col_index + 1
-            current_id_cliente_col_index = find_workbook_header_column(current_headers, ("IDCLIENTE",))
-            current_id_cliente_col = current_id_cliente_col_index + 1 if current_id_cliente_col_index is not None else None
-            current_rows = {}
-            for cells in current_ws.iter_rows(min_row=2, values_only=True):
-                serial_key = normalize_reference_value(cells[current_serial_col - 1])
-                if not serial_key:
-                    continue
-                if serial_key in current_rows:
-                    raise HTTPException(status_code=409, detail="A base atual contém séries duplicadas; confira antes de exportar.")
-                current_rows[serial_key] = {
-                    "apelido": cells[current_alias_col - 1],
-                    "id_cliente": cells[current_id_cliente_col - 1] if current_id_cliente_col else None,
-                }
-
-            endpoint_index = read_endpoint_alias_index()
-            aliases = get_export_aliases(endpoint_index)
-            serial_counts: Dict[str, int] = {}
-            for row in range(2, ws.max_row + 1):
-                serial_key = normalize_reference_value(ws.cell(row=row, column=serial_col).value)
-                if serial_key:
-                    serial_counts[serial_key] = serial_counts.get(serial_key, 0) + 1
-
-            if set(serial_counts) != set(current_rows):
-                raise HTTPException(
-                    status_code=409,
-                    detail="As séries da base atual diferem das linhas do modelo de exportação. Atualize o modelo antes de exportar."
-                )
-
-            expected_values = {}
-            alias_update_count = 0
-            id_cliente_update_count = 0
-            skipped_duplicate_rows = set()
-            skipped_formula_rows = 0
-            skipped_formula_serials = set()
-            for row in range(2, ws.max_row + 1):
-                serial_key = normalize_reference_value(ws.cell(row=row, column=serial_col).value)
-                if not serial_key:
-                    continue
-                if serial_counts.get(serial_key) != 1:
-                    skipped_duplicate_rows.add(serial_key)
-                    continue
-
-                formula_skipped = False
-                alias_cell = ws.cell(row=row, column=apelido_col)
-                if alias_cell.data_type == "f":
-                    formula_skipped = True
-                else:
-                    updated_alias = aliases.get(
-                        serial_key,
-                        current_rows[serial_key]["apelido"],
-                    )
-                    if updated_alias is None:
-                        updated_alias = ""
-                    if alias_cell.value != updated_alias:
-                        alias_cell.value = updated_alias
-                        expected_values[(ws.title, alias_cell.coordinate)] = updated_alias
-                        alias_update_count += 1
-
-                if id_cliente_col and current_id_cliente_col:
-                    id_cliente_cell = ws.cell(row=row, column=id_cliente_col)
-                    if id_cliente_cell.data_type == "f":
-                        formula_skipped = True
-                    else:
-                        updated_id_cliente = current_rows[serial_key]["id_cliente"]
-                        if updated_id_cliente is None:
-                            updated_id_cliente = ""
-                        if id_cliente_cell.value != updated_id_cliente:
-                            id_cliente_cell.value = updated_id_cliente
-                            expected_values[(ws.title, id_cliente_cell.coordinate)] = updated_id_cliente
-                            id_cliente_update_count += 1
-
-                if formula_skipped:
-                    skipped_formula_rows += 1
-                    skipped_formula_serials.add(serial_key)
-
-            review_items = endpoint_alias_review_items(endpoint_index, set(serial_counts))
-            pending_review_count = len(review_items) + len(skipped_duplicate_rows) + skipped_formula_rows
-            review_summary = [
-                {
-                    "motivo": "Registros do Endpoint que exigem conferência",
-                    "total": len(review_items),
-                    "series": [
-                        str(item.get("serie") or "")[:64]
-                        for item in review_items if item.get("serie")
-                    ][:10],
-                },
-                {
-                    "motivo": "Séries duplicadas no modelo de exportação",
-                    "total": len(skipped_duplicate_rows),
-                    "series": sorted(skipped_duplicate_rows)[:10],
-                },
-                {
-                    "motivo": "Linhas protegidas por fórmulas",
-                    "total": skipped_formula_rows,
-                    "series": sorted(skipped_formula_serials)[:10],
-                },
-            ]
-            review_summary = [item for item in review_summary if item["total"]]
-            output_bytes = serialize_workbook_validated(
-                source_file, wb, original, expected_values,
-                expected_cell_styles=header_style_updates,
-                allow_threaded_comments=True,
-            )
-
-        now_str = datetime.now().strftime("%d-%m-%Y_%H%M%S")
-        export_filename = f"EquipamentosDetalhes-{now_str}.xlsx"
-        buffer = io.BytesIO(output_bytes)
-        buffer.seek(0)
-
-        latest_history = None
-        try:
-            latest_history = latest_comparison_update_entry()
-        except HTTPException:
-            pass
-        history_alias_count = 0
-        history_timestamp = ""
-        if isinstance(latest_history, dict):
-            history_comparison = latest_history.get("comparacao")
-            history_comparison = history_comparison if isinstance(history_comparison, dict) else {}
-            history_alias_changes = history_comparison.get("apelidos_atualizados")
-            if isinstance(history_alias_changes, list):
-                history_alias_count = len(history_alias_changes)
-            else:
-                history_summary = latest_history.get("resumo")
-                if isinstance(history_summary, dict):
-                    try:
-                        history_alias_count = max(0, int(history_summary.get("apelidos_atualizados", 0)))
-                    except (TypeError, ValueError):
-                        history_alias_count = 0
-            history_timestamp = str(
-                latest_history.get("horario")
-                or history_comparison.get("horario_comparacao")
-                or ""
-            )
-
-        headers = {
-            "Content-Disposition": f'attachment; filename="{export_filename}"',
-            "Access-Control-Expose-Headers": (
-                "Content-Disposition, X-Total-Alterados, X-Total-IdCliente-Alterados, "
-                "X-Total-Alteracoes-Exportadas, X-Total-Conferencia, X-Conferencia-Resumo, "
-                "X-Historico-Apelidos-Atualizados, X-Historico-Horario"
-            ),
-            "X-Total-Alterados": str(alias_update_count),
-            "X-Total-IdCliente-Alterados": str(id_cliente_update_count),
-            "X-Total-Alteracoes-Exportadas": str(alias_update_count + id_cliente_update_count),
-            "X-Total-Conferencia": str(pending_review_count),
-            "X-Conferencia-Resumo": quote(json.dumps(review_summary, ensure_ascii=False, separators=(",", ":"))),
-            "X-Historico-Apelidos-Atualizados": str(history_alias_count),
-            "X-Historico-Horario": history_timestamp,
-        }
-
-        return StreamingResponse(
-            buffer,
-            media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
-            headers=headers
-        )
-    except (HTTPException, DomainError):
-        raise
-    except FileBusyError as error:
-        raise HTTPException(status_code=409, detail=str(error)) from error
-    except WorkbookSafetyError as error:
-        raise HTTPException(status_code=409, detail=f"Exportação cancelada para preservar a planilha: {error}") from error
-    except FileTransactionError as error:
-        raise HTTPException(status_code=500, detail=f"Não foi possível validar a exportação: {error}") from error
-    except Exception:
-        logger.exception("Falha ao exportar a base local de equipamentos.")
-        raise HTTPException(status_code=500, detail="Erro ao exportar a base de equipamentos.") from None
-    finally:
-        if wb is not None:
-            wb.close()
-        if current_wb is not None:
-            current_wb.close()
+    export = equipment_export.build_equipment_export(_equipment_export_services)
+    return StreamingResponse(
+        io.BytesIO(export.content),
+        media_type=equipment_export.XLSX_MEDIA_TYPE,
+        headers=export.headers,
+    )
 
 
 @app.post("/api/recarregar-base")
@@ -2761,8 +1997,8 @@ system_router, _system_exports = create_system_router(SystemRouteServices(
     get_readiness_status=lambda: get_startup_readiness(),
     get_transfer_form_defaults=lambda: load_origin_contact(TRANSFER_ORIGIN_CONTACT_FILE),
 ))
-get_readiness_status = _system_exports["get_readiness_status"]
-get_transfer_form_defaults = _system_exports["get_transfer_form_defaults"]
+get_readiness_status = _system_exports.get_readiness_status
+get_transfer_form_defaults = _system_exports.get_transfer_form_defaults
 app.include_router(system_router)
 
 units_router, _units_exports = create_units_router(UnitRouteServices(
@@ -2780,9 +2016,9 @@ units_router, _units_exports = create_units_router(UnitRouteServices(
     load_database=lambda *args, **kwargs: load_database(*args, **kwargs),
     publish_database_state=publish_database_state,
 ))
-_public_unit_list = _units_exports["_public_unit_list"]
-salvar_unidade = _units_exports["salvar_unidade"]
-get_unidades = _units_exports["get_unidades"]
+_public_unit_list = _units_exports.public_unit_list
+salvar_unidade = _units_exports.salvar_unidade
+get_unidades = _units_exports.get_unidades
 app.include_router(units_router)
 
 equipment_search_router, _equipment_search_exports = create_equipment_search_router(EquipmentSearchServices(
@@ -2791,9 +2027,9 @@ equipment_search_router, _equipment_search_exports = create_equipment_search_rou
     categories=_CATEGORIAS_EQUIPAMENTO,
     get_stats=_get_stats_snapshot,
 ))
-buscar_seriais = _equipment_search_exports["buscar_seriais"]
-buscar_seriais_expandida = _equipment_search_exports["buscar_seriais_expandida"]
-get_stats = _equipment_search_exports["get_stats"]
+buscar_seriais = _equipment_search_exports.buscar_seriais
+buscar_seriais_expandida = _equipment_search_exports.buscar_seriais_expandida
+get_stats = _equipment_search_exports.get_stats
 app.include_router(equipment_search_router)
 
 transfer_router, gerar_planilha = create_transfer_router(get_local_transfer_template)
@@ -2803,8 +2039,8 @@ transfer_history_router, _transfer_history_exports = create_transfer_history_rou
     history_file=lambda: TRANSFER_HISTORY_FILE,
     transaction_root=lambda: TRANSACTION_ROOT,
 ))
-listar_historico_transferencias = _transfer_history_exports["listar_historico_transferencias"]
-registrar_historico_transferencia = _transfer_history_exports["registrar_historico_transferencia"]
+listar_historico_transferencias = _transfer_history_exports.listar_historico_transferencias
+registrar_historico_transferencia = _transfer_history_exports.registrar_historico_transferencia
 app.include_router(transfer_history_router)
 
 
@@ -2870,7 +2106,7 @@ dashboard_router, _dashboard_exports = create_dashboard_router(DashboardServices
     get_usage_summary=usage_metrics.summary,
     set_manual_minutes=usage_metrics.set_manual_minutes,
 ))
-obter_painel = _dashboard_exports["obter_painel"]
+obter_painel = _dashboard_exports.obter_painel
 app.include_router(dashboard_router)
 
 
@@ -2925,29 +2161,29 @@ inventory_history_router, _inventory_history_exports = create_inventory_history_
     upload_backups_directory=lambda: UPLOAD_BACKUPS_DIR,
     validate_uploaded_workbook=lambda *args, **kwargs: validate_uploaded_workbook(*args, **kwargs),
 ))
-flush_pending_history_annotations = _inventory_history_exports["flush_pending_history_annotations"]
-migrate_legacy_history_annotations = _inventory_history_exports["migrate_legacy_history_annotations"]
-_build_comparison_restore_context = _inventory_history_exports["_build_comparison_restore_context"]
-_comparison_event_has_restorable_backup = _inventory_history_exports["_comparison_event_has_restorable_backup"]
-_comparison_event_type = _inventory_history_exports["_comparison_event_type"]
-_comparison_restore_backup_paths = _inventory_history_exports["_comparison_restore_backup_paths"]
-_current_inventory_snapshot = _inventory_history_exports["_current_inventory_snapshot"]
-_sha256_file = _inventory_history_exports["_sha256_file"]
-_validated_comparison_backup_files = _inventory_history_exports["_validated_comparison_backup_files"]
-excluir_comparacao_historica = _inventory_history_exports["excluir_comparacao_historica"]
-exportar_historico_comparacoes_excel = _inventory_history_exports["exportar_historico_comparacoes_excel"]
-get_comparacao_historica = _inventory_history_exports["get_comparacao_historica"]
-get_historico_comparacoes = _inventory_history_exports["get_historico_comparacoes"]
-salvar_anotacao_comparacao = _inventory_history_exports["salvar_anotacao_comparacao"]
-salvar_anotacao_comparacao_historica = _inventory_history_exports["salvar_anotacao_comparacao_historica"]
-resolver_divergencia_apelido_manual = _inventory_history_exports["resolver_divergencia_apelido_manual"]
-restaurar_comparacao_historica = _inventory_history_exports["restaurar_comparacao_historica"]
-visualizar_restauracao_comparacao = _inventory_history_exports["visualizar_restauracao_comparacao"]
+flush_pending_history_annotations = _inventory_history_exports.flush_pending_history_annotations
+migrate_legacy_history_annotations = _inventory_history_exports.migrate_legacy_history_annotations
+_build_comparison_restore_context = _inventory_history_exports.build_comparison_restore_context
+_comparison_event_has_restorable_backup = _inventory_history_exports.comparison_event_has_restorable_backup
+_comparison_event_type = _inventory_history_exports.comparison_event_type
+_comparison_restore_backup_paths = _inventory_history_exports.comparison_restore_backup_paths
+_current_inventory_snapshot = _inventory_history_exports.current_inventory_snapshot
+_sha256_file = _inventory_history_exports.sha256_file
+_validated_comparison_backup_files = _inventory_history_exports.validated_comparison_backup_files
+excluir_comparacao_historica = _inventory_history_exports.excluir_comparacao_historica
+exportar_historico_comparacoes_excel = _inventory_history_exports.exportar_historico_comparacoes_excel
+get_comparacao_historica = _inventory_history_exports.get_comparacao_historica
+get_historico_comparacoes = _inventory_history_exports.get_historico_comparacoes
+salvar_anotacao_comparacao = _inventory_history_exports.salvar_anotacao_comparacao
+salvar_anotacao_comparacao_historica = _inventory_history_exports.salvar_anotacao_comparacao_historica
+resolver_divergencia_apelido_manual = _inventory_history_exports.resolver_divergencia_apelido_manual
+restaurar_comparacao_historica = _inventory_history_exports.restaurar_comparacao_historica
+visualizar_restauracao_comparacao = _inventory_history_exports.visualizar_restauracao_comparacao
 app.include_router(inventory_history_router)
 
 operations_router = create_operations_router(
     load_comparison_history=load_comparison_history,
-    comparison_history_for_display=_inventory_history_exports["history_annotation_view"],
+    comparison_history_for_display=_inventory_history_exports.history_annotation_view,
     ticket_report_path=lambda: TICKET_REPORT_FILE,
     transaction_root=lambda: TRANSACTION_ROOT,
     history_annotations_directory=lambda: HISTORY_ANNOTATIONS_DIR,

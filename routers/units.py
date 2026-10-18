@@ -3,7 +3,7 @@
 import re
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Any, Callable, Dict, List, Optional
+from typing import Any, Callable, Dict, List, Optional, Tuple
 
 from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel, Field, field_validator
@@ -75,7 +75,16 @@ class UnitRouteServices:
     publish_database_state: Callable[[Dict[str, Any]], None]
 
 
-def create_units_router(services: UnitRouteServices):
+@dataclass(frozen=True)
+class UnitRouteExports:
+    """Routes and helpers exposed to ``main``."""
+
+    public_unit_list: Callable[..., Any]
+    salvar_unidade: Callable[..., Any]
+    get_unidades: Callable[..., Any]
+
+
+def create_units_router(services: UnitRouteServices) -> Tuple[APIRouter, UnitRouteExports]:
     router = APIRouter()
 
     def public_unit_list(units: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
@@ -212,9 +221,8 @@ def create_units_router(services: UnitRouteServices):
         units = services.get_units_snapshot()
         return public_unit_list(units)
 
-    return router, {
-        "_public_unit_list": public_unit_list,
-        "UnidadePayload": UnidadePayload,
-        "salvar_unidade": salvar_unidade,
-        "get_unidades": get_unidades,
-    }
+    return router, UnitRouteExports(
+        public_unit_list=public_unit_list,
+        salvar_unidade=salvar_unidade,
+        get_unidades=get_unidades,
+    )

@@ -1,7 +1,7 @@
 """Search and statistics API routes for the equipment catalog."""
 
 from dataclasses import dataclass
-from typing import Any, Callable, Dict, List, Optional, Sequence
+from typing import Any, Callable, Dict, List, Optional, Sequence, Tuple
 
 from fastapi import APIRouter, Query
 
@@ -14,7 +14,16 @@ class EquipmentSearchServices:
     get_stats: Callable[[], Dict[str, Any]]
 
 
-def create_equipment_search_router(services: EquipmentSearchServices):
+@dataclass(frozen=True)
+class EquipmentSearchRouteExports:
+    """Routes exposed to ``main`` for direct calls in tests and helpers."""
+
+    buscar_seriais: Callable[..., Any]
+    buscar_seriais_expandida: Callable[..., Any]
+    get_stats: Callable[..., Any]
+
+
+def create_equipment_search_router(services: EquipmentSearchServices) -> Tuple[APIRouter, EquipmentSearchRouteExports]:
     router = APIRouter()
 
     @router.get("/api/buscar")
@@ -84,8 +93,8 @@ def create_equipment_search_router(services: EquipmentSearchServices):
         """Retorna métricas da base de dados."""
         return services.get_stats()
 
-    return router, {
-        "buscar_seriais": buscar_seriais,
-        "buscar_seriais_expandida": buscar_seriais_expandida,
-        "get_stats": get_stats,
-    }
+    return router, EquipmentSearchRouteExports(
+        buscar_seriais=buscar_seriais,
+        buscar_seriais_expandida=buscar_seriais_expandida,
+        get_stats=get_stats,
+    )
