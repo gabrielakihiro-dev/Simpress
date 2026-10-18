@@ -12,6 +12,7 @@
     "strict": false
   },
   "include": [
-    "static/js/shared/api-errors.js"
+    "static/js/shared/api-errors.js",
+    "static/js/shared/api-fetch.js"
   ]
 }

@@ -23,6 +23,7 @@ function appScriptFiles() {
 function appScripts() {
   const isApplicationSource = file => file.startsWith("js/features/")
     || file === "js/shared/api-errors.js"
+    || file === "js/shared/api-fetch.js"
     || file === "js/shared/history-format.js"
     || file === "js/ui/comparison-result-renderer.js"
     || file === "js/ui/equipment-search-renderers.js"

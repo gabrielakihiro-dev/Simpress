@@ -368,12 +368,17 @@
     finishEquipmentLoading = stopLoading;
 
     try {
-      const res = await fetch(`/api/equipamento/${encodeURIComponent(serial)}`, { signal: request.signal });
-      if (!equipmentLookupRequestGate.isCurrent(request.id)) return;
-      if (!res.ok) {
-        const errData = await res.json().catch(() => ({}));
+      let data;
+      try {
+        data = await app.apiFetch(`/api/equipamento/${encodeURIComponent(serial)}`, {
+          signal: request.signal,
+          errorMessage: "Equipamento não encontrado na base de dados.",
+        });
+      } catch (lookupError) {
+        // Only HTTP failures carry a status; network errors and cancellation propagate unchanged.
+        if (lookupError.status === undefined) throw lookupError;
         if (!equipmentLookupRequestGate.isCurrent(request.id)) return;
-        if (res.status === 404 && serial.length >= 2) {
+        if (lookupError.status === 404 && serial.length >= 2) {
           const searchRes = await fetch(`/api/buscar-expandida?q=${encodeURIComponent(serial)}&limit=15`, { signal: request.signal });
           if (!equipmentLookupRequestGate.isCurrent(request.id)) return;
           if (searchRes.ok) {
@@ -385,10 +390,9 @@
           }
           if (!equipmentLookupRequestGate.isCurrent(request.id)) return;
         }
-        throw app.createApiError(errData.detail, "Equipamento não encontrado na base de dados.");
+        throw lookupError;
       }
-
-      const data = await res.json();
+      if (!equipmentLookupRequestGate.isCurrent(request.id)) return;
       if (!transferUtils.isCurrentQuery(equipmentLookupRequestGate, request.id, serialInput.value, serial)) return;
       if (transferUtils.serialForTransfer(data, serial) !== serial) {
         throw new Error("A busca não retornou uma correspondência exata. Escolha um equipamento na lista.");

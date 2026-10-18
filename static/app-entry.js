@@ -8,6 +8,7 @@ import "./js/shared/form-draft-guard.js";
 import "./js/shared/transfer-utils.js";
 import "./js/shared/history-annotation-autosave.js";
 import "./js/shared/api-errors.js";
+import "./js/shared/api-fetch.js";
 import "./js/ui/ui-motion.js";
 import "./js/ui/accessible-dialogs.js";
 import "./js/ui/ui-notifications.js";
