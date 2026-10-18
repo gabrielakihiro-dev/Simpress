@@ -88,6 +88,12 @@ Mapa dos contratos locais registrados na análise dos handlers FastAPI e consumi
 | 47 | PUT /api/config/transferencia/contato-origem | JSON {contato,email,telefone}; campos vindos de variável de ambiente podem ficar vazios. | Mesmo corpo de GET /api/config/transferencia, já com o contato gravado em config/contato_origem.json (ignorado pelo Git). | 404 configuração indisponível; 422 campo obrigatório ou formato; 500 gravação. Arquivos. routers/local_setup.py; static/js/features/regional-contacts.js. |
 | 48 | POST /api/equipamento/atualizar-usuario | JSON {serial (1–128),usuario (até 160)}; usuario vazio remove o usuário manual. Só aceita valor quando o Endpoint não informa usuário para a série. | {sucesso,mensagem,equipamento,usuario_anterior,usuario_novo}; equipamento traz usuarios_logados e usuarios_logados_origem (endpoint/manual). | 404 equipamento; 409 Endpoint já informa usuário ou concorrência; 422 schema. O evento tipo "usuario" vai para o histórico de alterações e pode ser desfeito/excluído pelas rotas 12 e 15; avisos tipo "aviso_endpoint" (usuário/hostname que sumiu numa nova atualização do InvAll) também aparecem ali e são removidos pela rota 15. Local. routers/aliases.py; static/js/features/equipment-editor.js. |
 
+## Relatório mensal
+
+| # | Método e caminho | Entrada/validação | Resposta de sucesso | Erros notáveis e acesso |
+| --- | --- | --- | --- | --- |
+| 49 | GET /api/relatorio-mensal | Query mes AAAA-MM, até o mês atual. | XLSX Relatorio-mensal-AAAA-MM.xlsx com inventário da base oficial, última comparação até o fim do mês, OS do mês e uso do mês (docs/operacao/relatorio-mensal.md). Não grava estado. | 422 mês inválido ou futuro; 503 base não carregada ou histórico de chamados ilegível. Somente leitura. routers/monthly_report.py; static/js/features/monthly-report.js. |
+
 ## Regras de compatibilidade
 
 - Rótulos de apresentação do Histórico de Planilhas seguem as instruções locais; mantenha valores brutos e identificadores necessários à auditoria/restauração.

@@ -3655,6 +3655,22 @@ class WorkflowIntegrityTests(unittest.TestCase):
                 self.assertTrue(main.load_database())
                 self.assertEqual(inventory_state.stats_cache["tipos"], expected)
 
+    def test_stats_flag_rows_without_serial_and_duplicated_serials(self):
+        make_details(
+            self.details,
+            [
+                ("SN-1", "HOST-1", "Modelo A", "Maringá", "Notebook", "87000000"),
+                ("SN-1", "HOST-1B", "Modelo A", "Maringá", "Notebook", "87000000"),
+                ("SN-2", "HOST-2", "Modelo B", "Londrina", "Monitor", "86000000"),
+                (None, "HOST-3", "Modelo C", "Curitiba", "Monitor", "80000000"),
+            ],
+            headers=["NumeroSerie", "Apelido", "Modelo", "Cidade", "Tipo", "CEP"],
+        )
+        self.assertTrue(main.load_database())
+        self.assertEqual(len(inventory_state.equipamentos_cache), 2)
+        self.assertEqual(inventory_state.stats_cache["linhas_sem_serie"], 1)
+        self.assertEqual(inventory_state.stats_cache["series_duplicadas"], {"SN1": 2})
+
     def test_notebook_search_returns_installation_cnpj_for_every_synchronized_series(self):
         source_rows = [
             (
