@@ -98,6 +98,18 @@ def usage_summary():
     }
 
 
+# Stale base alert: fresh by default so other tests keep the Home layout; e2e switches it per test.
+BASE_FRESHNESS = {
+    "atualizada": {"estado": "atualizada", "limite_dias": 7, "dias_sem_atualizacao": 2,
+                   "ultima_atualizacao": "2026-10-15T20:15:53-03:00", "origem_data": "historico"},
+    "desatualizada": {"estado": "desatualizada", "limite_dias": 7, "dias_sem_atualizacao": 9,
+                      "ultima_atualizacao": "2026-10-08T20:15:00-03:00", "origem_data": "historico"},
+    "sem_base": {"estado": "sem_base", "limite_dias": 7, "dias_sem_atualizacao": None,
+                 "ultima_atualizacao": "", "origem_data": ""},
+}
+base_freshness_state = "atualizada"
+
+
 def dashboard_payload():
     return {
         "base_importada": True, "total_equipamentos": 1, "total_unidades": 0,
@@ -107,6 +119,7 @@ def dashboard_payload():
         "total_cidades": 1, "sem_cidade": 0, "ultima_atualizacao": "08/10/2026 09:00",
         "arquivo_origem": "simpress-demo.xlsx", "ultima_comparacao": None,
         "uso_30_dias": usage_summary(),
+        "base_desatualizada": BASE_FRESHNESS[base_freshness_state],
     }
 
 
@@ -126,6 +139,7 @@ class Handler(BaseHTTPRequestHandler):
             pass  # Expected when testing cancelled searches.
 
     def do_GET(self):
+        global base_freshness_state
         url = urlsplit(self.path)
         path = unquote(url.path)
         if path == "/" or path.startswith("/static/"):
@@ -146,6 +160,10 @@ class Handler(BaseHTTPRequestHandler):
             self.send(dashboard_payload())
         elif path == "/api/prontidao":
             self.send({"functions": {"consulta_equipamentos": {"available": True}}, "files": {}})
+        elif path == "/__fixture_base_desatualizada":
+            requested = parse_qs(url.query).get("estado", ["atualizada"])[0]
+            base_freshness_state = requested if requested in BASE_FRESHNESS else "atualizada"
+            self.send({"estado": base_freshness_state})
         elif path == "/__fixture_state":
             self.send({"annotation": DEMO_ANNOTATION})
         elif path == "/api/unidades":
