@@ -383,6 +383,134 @@
     parent.appendChild(group);
   }
 
+  // ---------- Uso nos últimos 30 dias ----------
+  const USAGE_METRICS = Object.freeze(["transferencias", "comparacoes", "exportacoes", "os_conciliadas", "buscas"]);
+  const MAX_MANUAL_MINUTES = 480;
+
+  function formatarData(iso) {
+    const match = /^(\d{4})-(\d{2})-(\d{2})$/.exec(String(iso || ""));
+    return match ? `${match[3]}/${match[2]}/${match[1]}` : "";
+  }
+
+  function formatarHoras(value) {
+    const hours = Number(value);
+    if (!Number.isFinite(hours) || hours < 0) return "0 h";
+    return `${hours.toLocaleString("pt-BR", { maximumFractionDigits: 1 })} h`;
+  }
+
+  // Empty field = not configured (null); anything else must be a number from 0 to 480.
+  function lerTemposManuais(form) {
+    const minutes = {};
+    for (const metric of USAGE_METRICS) {
+      const field = form.elements.namedItem(metric);
+      const raw = String(field?.value ?? "").trim().replace(",", ".");
+      field?.removeAttribute("aria-invalid");
+      if (!raw) { minutes[metric] = null; continue; }
+      const value = Number(raw);
+      if (!Number.isFinite(value) || value < 0 || value > MAX_MANUAL_MINUTES) {
+        field?.setAttribute("aria-invalid", "true");
+        return { error: `Use de 0 a ${MAX_MANUAL_MINUTES} minutos.`, field };
+      }
+      minutes[metric] = value;
+    }
+    return { minutes };
+  }
+
+  function renderizarUsoUltimos30Dias(usage) {
+    const card = document.getElementById("uso-30-dias");
+    if (!card) return;
+    if (!usage || typeof usage !== "object" || !usage.totais) {
+      card.hidden = true;
+      return;
+    }
+    const totals = usage.totais;
+    card.querySelectorAll("[data-usage-metric]").forEach(item => {
+      const value = item.querySelector("[data-usage-value]");
+      if (value) value.textContent = formatarContagemEstatistica(totals[item.dataset.usageMetric] ?? 0);
+    });
+
+    const period = document.getElementById("uso-30-dias-periodo");
+    if (period) {
+      const since = formatarData(usage.registro_desde);
+      period.textContent = usage.disponivel === false
+        ? "Não foi possível ler as métricas locais; as contagens foram preservadas."
+        : since ? `Registrado desde ${since}` : "Nenhuma tarefa registrada ainda.";
+    }
+
+    const hours = document.getElementById("uso-30-dias-horas");
+    if (hours) {
+      hours.replaceChildren();
+      if (usage.tempos_configurados) {
+        const value = document.createElement("strong");
+        value.className = "usage-card-hours-value";
+        value.textContent = formatarHoras(usage.horas_economizadas);
+        hours.append("Horas economizadas (estimativa): ", value);
+        hours.dataset.state = "estimated";
+      } else {
+        hours.textContent = "Informe o tempo manual de cada tarefa para estimar as horas economizadas.";
+        hours.dataset.state = "empty";
+      }
+    }
+
+    const form = document.getElementById("uso-30-dias-form");
+    // Never overwrite what the user is typing.
+    if (form && !form.contains(document.activeElement)) {
+      USAGE_METRICS.forEach(metric => {
+        const field = form.elements.namedItem(metric);
+        const value = usage.tempos_minutos?.[metric];
+        if (field) field.value = typeof value === "number" ? String(value) : "";
+      });
+    }
+
+    card.dataset.state = usage.disponivel === false ? "error" : "ready";
+    if (card.hidden) {
+      card.hidden = false;
+      card.dataset.enter = "true";
+    }
+  }
+
+  async function salvarTemposManuaisUso(event) {
+    event?.preventDefault?.();
+    const form = document.getElementById("uso-30-dias-form");
+    const status = document.getElementById("uso-30-dias-status");
+    const button = document.getElementById("btn-salvar-tempos-uso");
+    if (!form) return;
+    const parsed = lerTemposManuais(form);
+    if (parsed.error) {
+      if (status) status.textContent = parsed.error;
+      parsed.field?.focus();
+      return;
+    }
+    button?.setAttribute("aria-busy", "true");
+    if (button) button.disabled = true;
+    try {
+      const response = await fetch("/api/painel/tempos-manuais", {
+        method: "PUT",
+        headers: { "Content-Type": "application/json", Accept: "application/json" },
+        body: JSON.stringify({ tempos_minutos: parsed.minutes }),
+      });
+      const body = await response.json().catch(() => ({}));
+      if (!response.ok) throw new Error(typeof body.detail === "string" ? body.detail : "Não foi possível salvar os tempos.");
+      document.activeElement?.blur?.();
+      renderizarUsoUltimos30Dias(body);
+      if (status) status.textContent = "Tempos salvos.";
+    } catch (error) {
+      if (status) status.textContent = error?.message || "Não foi possível salvar os tempos.";
+    } finally {
+      button?.removeAttribute("aria-busy");
+      if (button) button.disabled = false;
+    }
+  }
+
+  // The Home panel (static/js/ui/data-panels.js) owns the /api/painel request and announces each response.
+  function inicializarUsoUltimos30Dias() {
+    document.addEventListener("simpress:painel-atualizado", event => renderizarUsoUltimos30Dias(event.detail?.uso_30_dias));
+    document.getElementById("uso-30-dias-form")?.addEventListener("submit", salvarTemposManuaisUso);
+    document.getElementById("uso-30-dias")?.addEventListener("animationend", event => {
+      delete event.currentTarget.dataset.enter;
+    });
+  }
+
   function atualizarIndicadoresPosSalvamento() {
     // Atualiza os indicadores sem atrasar o fechamento do formulário após salvar.
     void Promise.allSettled([
@@ -393,5 +521,6 @@
 
   return {
     carregarEstatisticas, carregarProntidao, atualizarIndicadoresPosSalvamento,
+    inicializarUsoUltimos30Dias, renderizarUsoUltimos30Dias,
   };
 });

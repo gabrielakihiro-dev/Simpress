@@ -403,6 +403,8 @@
         if (serial !== requestSerial) return;
         renderPanel(data);
         renderBadge(divergenceTotal(data.ultima_comparacao));
+        // Other Home cards (usage in the last 30 days) render from the same response.
+        doc.dispatchEvent(new win.CustomEvent("simpress:painel-atualizado", { detail: data }));
       } catch (error) {
         // The dashboard is optional; never disturb the main flow.
         if (serial === requestSerial) { if (panel) panel.hidden = true; renderBadge(0); }

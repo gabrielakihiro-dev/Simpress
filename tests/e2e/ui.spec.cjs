@@ -728,3 +728,26 @@ test("@profile UI route transitions retain responsive frame pacing", async ({ pa
     "a transient main-thread task should not block the page for a quarter second")
     .toBeLessThan(250);
 });
+
+test("usage card shows 30-day counts and estimates hours from the configured minutes", async ({ page }) => {
+  const card = page.locator("#uso-30-dias");
+  await expect(card).toBeVisible();
+  await expect(card.getByRole("heading", { name: "Uso nos últimos 30 dias" })).toBeVisible();
+  await expect(card.locator('[data-usage-metric="transferencias"] [data-usage-value]')).toHaveText("12");
+  await expect(card.locator('[data-usage-metric="buscas"] [data-usage-value]')).toHaveText("143");
+
+  await card.locator("#uso-30-dias-tempos > summary").click();
+  const transfers = card.getByLabel("Transferências geradas");
+  await transfers.fill("999");
+  await card.getByRole("button", { name: "Salvar tempos" }).click();
+  await expect(card.locator("#uso-30-dias-status")).toHaveText("Use de 0 a 480 minutos.");
+  await expect(transfers).toHaveAttribute("aria-invalid", "true");
+
+  await transfers.fill("15");
+  for (const label of ["Comparações feitas", "Exportações", "OS conciliadas", "Buscas"]) await card.getByLabel(label).fill("");
+  await card.getByRole("button", { name: "Salvar tempos" }).click();
+  await expect(card.locator("#uso-30-dias-status")).toHaveText("Tempos salvos.");
+  await expect(card.locator("#uso-30-dias-horas")).toHaveText("Horas economizadas (estimativa): 3 h");
+  await expect(transfers).not.toHaveAttribute("aria-invalid", "true");
+  await auditAccessibility(page, "#uso-30-dias");
+});
