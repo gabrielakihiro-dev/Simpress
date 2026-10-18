@@ -51,7 +51,7 @@ class StaleBaseStatusTests(unittest.TestCase):
         self.assertEqual(result["estado"], "desatualizada")
         self.assertEqual(result["dias_sem_atualizacao"], 9)
         self.assertEqual(result["origem_data"], "historico")
-        self.assertEqual(result["ultima_atualizacao"], updated.astimezone().isoformat(timespec="seconds"))
+        self.assertEqual(result["ultima_atualizacao"], updated.isoformat(timespec="seconds"))
         self.assertEqual(result["limite_dias"], 7)
 
     def test_limit_is_strictly_more_than_seven_days(self):
