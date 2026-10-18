@@ -2,7 +2,7 @@
 
 from collections import Counter
 from dataclasses import dataclass
-from typing import Any, Callable, Dict, List, Optional, Sequence
+from typing import Any, Callable, Dict, List, Optional, Sequence, Tuple
 
 from fastapi import APIRouter, Body, HTTPException
 
@@ -144,7 +144,14 @@ def _usage_summary(services: DashboardServices) -> Optional[Dict[str, Any]]:
         return None
 
 
-def create_dashboard_router(services: DashboardServices):
+@dataclass(frozen=True)
+class DashboardRouteExports:
+    """Routes exposed to ``main`` for direct calls in tests and helpers."""
+
+    obter_painel: Callable[..., Any]
+
+
+def create_dashboard_router(services: DashboardServices) -> Tuple[APIRouter, DashboardRouteExports]:
     router = APIRouter()
 
     @router.get("/api/painel")
@@ -169,4 +176,6 @@ def create_dashboard_router(services: DashboardServices):
             except FileTransactionError:
                 raise HTTPException(status_code=503, detail="Não foi possível salvar os tempos; o arquivo de métricas foi preservado.") from None
 
-    return router, {"obter_painel": obter_painel}
+    return router, DashboardRouteExports(
+        obter_painel=obter_painel,
+    )

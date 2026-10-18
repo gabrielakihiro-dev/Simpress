@@ -1305,7 +1305,7 @@ class WorkflowIntegrityTests(unittest.TestCase):
             ("S-1", "LOCAL-ATUAL", "Modelo atual", "Maringá", "Notebook", "87000000"),
             ("S-3", "NOVO", "Modelo novo", "Curitiba", "Notebook", "80000000"),
         ])
-        with self.assertRaises(main.HTTPException) as raised:
+        with self.assertRaises(DomainError) as raised:
             main.exportar_equipamentos()
         self.assertEqual(raised.exception.status_code, 409)
         self.assertEqual(self.model.read_bytes(), source_before)
@@ -3320,7 +3320,7 @@ class WorkflowIntegrityTests(unittest.TestCase):
 
         self.assertEqual(main.get_primary_equipment_file().resolve(), replacement_source.resolve())
         self.assertEqual(original_source, self.details.resolve())
-        with self.assertRaises(main.HTTPException) as raised:
+        with self.assertRaises(DomainError) as raised:
             main.atualizar_apelido(main.ApelidoUpdatePayload(serial="SN-1", apelido="HOST-MANUAL"))
 
         self.assertEqual(raised.exception.status_code, 409)
@@ -3436,7 +3436,7 @@ class WorkflowIntegrityTests(unittest.TestCase):
         latest_undo = json.loads(self.manual_history.read_text(encoding="utf-8"))[-1]
         self.overrides.write_text(json.dumps({"SN-1": "VALOR-EXTERNO"}), encoding="utf-8")
         details_before_stale_undo = self.details.read_bytes()
-        with self.assertRaises(main.HTTPException) as raised:
+        with self.assertRaises(DomainError) as raised:
             main.desfazer_alteracao_apelido(main.ApelidoUndoPayload(evento_id=latest_undo["id"]))
         self.assertEqual(raised.exception.status_code, 409)
         self.assertEqual(self.details.read_bytes(), details_before_stale_undo)
@@ -3540,7 +3540,7 @@ class WorkflowIntegrityTests(unittest.TestCase):
         history_before = self.manual_history.read_bytes()
         equipment_before = copy.deepcopy(inventory_state.equipamentos_cache["SN-ENDERECO"])
 
-        with self.assertRaises(main.HTTPException) as raised:
+        with self.assertRaises(DomainError) as raised:
             main.excluir_evento_historico_apelido("historico-endereco-ficticio")
 
         self.assertEqual(raised.exception.status_code, 409)

@@ -1,7 +1,7 @@
 """Read-only routes that describe local application configuration and readiness."""
 
 from dataclasses import dataclass
-from typing import Any, Callable, Dict
+from typing import Any, Callable, Dict, Tuple
 
 from fastapi import APIRouter
 
@@ -12,7 +12,15 @@ class SystemRouteServices:
     get_transfer_form_defaults: Callable[[], Dict[str, Any]]
 
 
-def create_system_router(services: SystemRouteServices):
+@dataclass(frozen=True)
+class SystemRouteExports:
+    """Routes exposed to ``main`` for direct calls in tests and helpers."""
+
+    get_readiness_status: Callable[..., Any]
+    get_transfer_form_defaults: Callable[..., Any]
+
+
+def create_system_router(services: SystemRouteServices) -> Tuple[APIRouter, SystemRouteExports]:
     router = APIRouter()
 
     @router.get("/api/prontidao")
@@ -25,7 +33,7 @@ def create_system_router(services: SystemRouteServices):
         """Return the origin contact defaults (environment, then config/contato_origem.json)."""
         return services.get_transfer_form_defaults()
 
-    return router, {
-        "get_readiness_status": get_readiness_status,
-        "get_transfer_form_defaults": get_transfer_form_defaults,
-    }
+    return router, SystemRouteExports(
+        get_readiness_status=get_readiness_status,
+        get_transfer_form_defaults=get_transfer_form_defaults,
+    )

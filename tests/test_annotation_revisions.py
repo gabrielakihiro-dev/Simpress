@@ -221,12 +221,12 @@ class AnnotationRevisionTests(unittest.TestCase):
 
     def test_history_routes_expose_conflicts_and_allow_explicit_resolution_without_local_history(self):
         routes, history = self.inventory_router()
-        save = routes["salvar_anotacao_comparacao_historica"]
+        save = routes.salvar_anotacao_comparacao_historica
         first = save("event", "row", ComparisonAnnotationPayload(anotacao="A"))
         second = save("event", "row", ComparisonAnnotationPayload(anotacao="B"))
         self.assertTrue(second["anotacao_conflito"])
         history.write_text("[]", encoding="utf-8")
-        event = routes["get_comparacao_historica"]("event")["evento"]
+        event = routes.get_comparacao_historica("event")["evento"]
         row = event["comparacao"]["sem_acesso_7_dias"][0]
         self.assertTrue(row["anotacao_conflito"])
         self.assertIn("A", annotation_export_text(row))
@@ -246,7 +246,7 @@ class AnnotationRevisionTests(unittest.TestCase):
         before = history.read_bytes()
         self.write(self.shared, "", categoria="sem_acesso_7_dias")
         for _ in range(2):
-            result = routes["migrate_legacy_history_annotations"]()
+            result = routes.migrate_legacy_history_annotations()
             self.assertEqual(result["legadas_enfileiradas"], 0)
         self.assertEqual(history.read_bytes(), before)
         self.assertEqual(self.view()["anotacao"], "")
@@ -256,7 +256,7 @@ class AnnotationRevisionTests(unittest.TestCase):
         stored = json.loads(history.read_text())
         stored[0]["comparacao"]["sem_acesso_7_dias"][0]["anotacao"] = "Local antigo"
         latest = self.write(self.shared, "Compartilhado", categoria="sem_acesso_7_dias")
-        view = routes["history_annotation_view"](stored[0])
+        view = routes.history_annotation_view(stored[0])
         row = view["comparacao"]["sem_acesso_7_dias"][0]
         self.assertEqual(row["anotacao"], "Compartilhado")
         self.assertEqual(row["anotacao_revisoes"], [latest["revisao_id"]])
@@ -363,11 +363,11 @@ class AnnotationRevisionTests(unittest.TestCase):
         history.write_text(json.dumps(stored), encoding="utf-8")
         before = history.read_bytes()
         self.write(self.a, "Pendente", categoria="sem_acesso_7_dias")
-        detail = routes["get_comparacao_historica"]("event")["evento"]
+        detail = routes.get_comparacao_historica("event")["evento"]
         self.assertEqual(detail["comparacao"]["sem_acesso_7_dias"][0]["anotacao"], "Pendente")
         operations = create_operations_router(
             load_comparison_history=lambda: json.loads(history.read_text(encoding="utf-8")),
-            comparison_history_for_display=routes["history_annotation_view"],
+            comparison_history_for_display=routes.history_annotation_view,
             ticket_report_path=lambda: self.root / "tickets.json", transaction_root=lambda: self.root,
         )
         pending = next(route.endpoint for route in operations.routes
@@ -382,7 +382,7 @@ class AnnotationRevisionTests(unittest.TestCase):
                 self.body = content.read()
 
         with patch("routers.inventory_history.StreamingResponse", CapturedResponse):
-            response = routes["exportar_historico_comparacoes_excel"](data="2026-10-11")
+            response = routes.exportar_historico_comparacoes_excel(data="2026-10-11")
         workbook = openpyxl.load_workbook(io.BytesIO(response.body), read_only=True, data_only=True)
         try:
             values = {cell.value for sheet in workbook for row in sheet.iter_rows() for cell in row}
@@ -402,18 +402,18 @@ class AnnotationRevisionTests(unittest.TestCase):
         path.parent.mkdir(parents=True)
         path.write_text(json.dumps(legacy), encoding="utf-8")
         before = path.read_bytes(), history.read_bytes()
-        routes["migrate_legacy_history_annotations"]()
+        routes.migrate_legacy_history_annotations()
         view = self.view()
         self.assertEqual({c["anotacao"] for c in view["anotacao_conflitos"]},
                          {"Legada local", "Legada compartilhada"})
         self.assertEqual((path.read_bytes(), history.read_bytes()), before)
         count = len(list(self.shared.glob("*.json")))
-        routes["migrate_legacy_history_annotations"]()
+        routes.migrate_legacy_history_annotations()
         self.assertEqual(len(list(self.shared.glob("*.json"))), count)
 
     def test_retry_with_changed_content_is_rejected_after_acknowledgement(self):
         routes, history = self.inventory_router()
-        save = routes["salvar_anotacao_comparacao_historica"]
+        save = routes.salvar_anotacao_comparacao_historica
         payload = ComparisonAnnotationPayload(anotacao="A", revisao_id="1" * 32)
         first = save("event", "row", payload)
         before = history.read_bytes()
