@@ -345,6 +345,24 @@ test("comparison history filters rows and autosaves their original annotations",
   });
 });
 
+test("comparison summary cards jump to their section and clear filters that hide it", async ({ page }) => {
+  await openFixtureComparison(page);
+  const dialog = page.locator("#modal-comparacao-planilhas");
+  // Only "Apelidos para conferência" has rows in the fixture; zero-count cards stay static.
+  const links = dialog.locator("[data-comparison-section-target]");
+  await expect(links).toHaveCount(1);
+  const card = dialog.getByRole("button", { name: /Apelidos para conferência: 1\. Ir para Linhas mantidas para conferência/ });
+  await expect(card).toHaveCSS("cursor", "pointer");
+
+  await dialog.locator("[data-history-filter-search]").fill("nenhuma linha corresponde");
+  const heading = dialog.locator("#comparacao-secao-linhas-conferencia");
+  await expect(heading).toBeHidden();
+  await card.click();
+  await expect(dialog.locator("[data-history-filter-search]")).toHaveValue("");
+  await expect(heading).toBeFocused();
+  await expect(heading).toBeInViewport();
+});
+
 test("inventory evolution compares two saved updates and shows their row annotations", async ({ page }) => {
   await openAnalysisMenu(page);
   await page.getByRole("button", { name: "Evolução das atualizações" }).click();
