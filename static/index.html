@@ -158,6 +158,16 @@
 
     <section id="tab-panel-home" class="app-tab-panel" role="tabpanel" aria-labelledby="tab-home" tabindex="0">
 
+    <!-- ALERTA DE BASE DESATUALIZADA (docs/operacao/alerta-base-desatualizada.md; oculto até o painel responder) -->
+    <section id="alerta-base-desatualizada" class="stale-base-alert" role="status" aria-labelledby="alerta-base-desatualizada-titulo" data-state="loading" hidden>
+      <i data-lucide="alert-triangle" class="stale-base-alert-icon" aria-hidden="true"></i>
+      <div class="stale-base-alert-copy">
+        <h2 id="alerta-base-desatualizada-titulo" class="stale-base-alert-title">Base desatualizada</h2>
+        <p id="alerta-base-desatualizada-texto" class="stale-base-alert-text"></p>
+      </div>
+      <button type="button" id="btn-alerta-base-atualizar" data-on-click="abrirModalAtualizarPlanilhas" class="btn btn-secondary stale-base-alert-action">Atualizar base</button>
+    </section>
+
     <!-- 1. BUSCA DE EQUIPAMENTO POR NÚMERO DE SÉRIE -->
     <section class="glass-card home-search-card rounded-2xl p-6 sm:p-8 relative z-50">
 

@@ -61,6 +61,7 @@ from core.config import (
     LOG_DIR,
     MANUAL_USERS_FILE,
     MODIFIED_APELIDOS_FILE,
+    STALE_BASE_ALERT_DAYS,
     STATIC_DIR,
     STATE_DIR,
     TEMPLATE_FILE,
@@ -2124,6 +2125,9 @@ dashboard_router, _dashboard_exports = create_dashboard_router(DashboardServices
     categorize=_categoria_equipamento,
     get_usage_summary=usage_metrics.summary,
     set_manual_minutes=usage_metrics.set_manual_minutes,
+    get_comparison_history=lambda: load_comparison_history(),
+    get_details_file=lambda: DETAILS_UPLOAD_FILE,
+    stale_base_days=STALE_BASE_ALERT_DAYS,
 ))
 obter_painel = _dashboard_exports.obter_painel
 app.include_router(dashboard_router)

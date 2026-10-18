@@ -1,7 +1,9 @@
 """Read-only summary used by the Home dashboard panel."""
 
 from collections import Counter
-from dataclasses import dataclass
+from dataclasses import dataclass, field
+from datetime import datetime, timedelta
+from pathlib import Path
 from typing import Any, Callable, Dict, List, Optional, Sequence, Tuple
 
 from fastapi import APIRouter, Body, HTTPException
@@ -20,6 +22,13 @@ ATTENTION_FIELDS = (
 )
 TOP_CITIES = None  # lista todas as cidades; o painel limita a altura com rolagem
 ENDPOINT_ABSENCE_CATEGORIES = frozenset({"notebook", "macbook"})
+DEFAULT_STALE_BASE_DAYS = 7
+# A base file modified this long after the newest history event was replaced outside the import flow.
+OUT_OF_FLOW_TOLERANCE = timedelta(minutes=10)
+
+
+def _local_now() -> datetime:
+    return datetime.now().astimezone()
 
 
 @dataclass(frozen=True)
@@ -32,6 +41,11 @@ class DashboardServices:
     # Local usage counters (domains/usage_metrics.py); optional so the panel works without them.
     get_usage_summary: Optional[Callable[[], Dict[str, Any]]] = None
     set_manual_minutes: Optional[Callable[[Any], Dict[str, Any]]] = None
+    # Stale base alert (docs/operacao/alerta-base-desatualizada.md); optional like the usage card.
+    get_comparison_history: Optional[Callable[[], Sequence[Dict[str, Any]]]] = None
+    get_details_file: Optional[Callable[[], Optional[Path]]] = None
+    stale_base_days: int = DEFAULT_STALE_BASE_DAYS
+    now: Callable[[], datetime] = field(default=_local_now)
 
 
 def _count(value: Any) -> int:
@@ -131,6 +145,7 @@ def build_dashboard(services: DashboardServices) -> Dict[str, Any]:
         "arquivo_origem": stats.get("arquivo_origem") or "",
         "ultima_comparacao": latest,
         "uso_30_dias": _usage_summary(services),
+        "base_desatualizada": _stale_base_summary(services),
     }
 
 
@@ -142,6 +157,112 @@ def _usage_summary(services: DashboardServices) -> Optional[Dict[str, Any]]:
     except Exception:
         # The usage card is optional; the inventory summary must still load.
         return None
+
+
+def _parse_event_time(value: Any) -> Optional[datetime]:
+    try:
+        parsed = datetime.fromisoformat(str(value or "").strip().replace("Z", "+00:00"))
+    except ValueError:
+        return None
+    # History times carry an offset; a naive value is read as local time.
+    return parsed if parsed.tzinfo is not None else parsed.astimezone()
+
+
+def _is_restoration(event: Dict[str, Any]) -> bool:
+    comparison = event.get("comparacao")
+    return event.get("tipo") == "restauracao" or (
+        isinstance(comparison, dict) and comparison.get("tipo_operacao") == "restauracao"
+    )
+
+
+def _restored_event_id(event: Dict[str, Any]) -> str:
+    comparison = event.get("comparacao")
+    source = event.get("restauracao_de")
+    if not isinstance(source, dict) and isinstance(comparison, dict):
+        source = comparison.get("restauracao_de")
+    return str(source.get("evento_id") or "") if isinstance(source, dict) else ""
+
+
+def base_date_from_history(history: Sequence[Any]) -> Tuple[Optional[datetime], Optional[datetime]]:
+    """Return (date of the active base content, time of the newest event) from the comparison history.
+
+    An update makes the base as new as the event. A restoration brings back the files that were
+    active before the restored event (its backup), so the base takes the date it had at that point;
+    when that predates the available history, the restored event time is the newest possible bound.
+    """
+    events: List[Tuple[datetime, Dict[str, Any]]] = []
+    for event in history:
+        if isinstance(event, dict) and (moment := _parse_event_time(event.get("horario"))) is not None:
+            events.append((moment, event))
+    events.sort(key=lambda pair: pair[0])
+    event_times = {str(event.get("id") or ""): moment for moment, event in events}
+    content_date: Optional[datetime] = None
+    content_before: Dict[str, Optional[datetime]] = {}
+    for moment, event in events:
+        event_id = str(event.get("id") or "")
+        if event_id:
+            content_before[event_id] = content_date
+        if _is_restoration(event):
+            source_id = _restored_event_id(event)
+            content_date = content_before.get(source_id) or event_times.get(source_id) or moment
+        else:
+            content_date = moment
+    return content_date, (events[-1][0] if events else None)
+
+
+def stale_base_status(
+    history: Sequence[Any],
+    details_file: Optional[Path],
+    now: datetime,
+    limit_days: int = DEFAULT_STALE_BASE_DAYS,
+) -> Dict[str, Any]:
+    """Decide whether the official EquipamentosDetalhes base is older than ``limit_days``."""
+    result: Dict[str, Any] = {
+        "estado": "sem_base",
+        "limite_dias": limit_days,
+        "dias_sem_atualizacao": None,
+        "ultima_atualizacao": "",
+        "origem_data": "",
+    }
+    if details_file is None or not details_file.is_file():
+        return result
+    file_time = datetime.fromtimestamp(details_file.stat().st_mtime).astimezone()
+    base_date, newest_event = base_date_from_history(history)
+    source = "historico"
+    # The file date is the last resort: no usable history, or the file was replaced outside the flow.
+    if base_date is None or newest_event is None or file_time > newest_event + OUT_OF_FLOW_TOLERANCE:
+        base_date, source = file_time, "arquivo"
+    age = now - base_date
+    result.update({
+        "estado": "desatualizada" if age > timedelta(days=limit_days) else "atualizada",
+        "dias_sem_atualizacao": max(age.days, 0),
+        "ultima_atualizacao": base_date.isoformat(timespec="seconds"),
+        "origem_data": source,
+    })
+    return result
+
+
+def _stale_base_summary(services: DashboardServices) -> Optional[Dict[str, Any]]:
+    if services.get_details_file is None:
+        return None
+    history: Sequence[Any] = []
+    if services.get_comparison_history is not None:
+        try:
+            history = services.get_comparison_history()
+        except Exception:
+            # An unreadable history falls back to the file date.
+            history = []
+    try:
+        return stale_base_status(history, services.get_details_file(), services.now(), services.stale_base_days)
+    except Exception:
+        # The alert is optional; the inventory summary must still load.
+        return {
+            "estado": "indisponivel",
+            "limite_dias": services.stale_base_days,
+            "dias_sem_atualizacao": None,
+            "ultima_atualizacao": "",
+            "origem_data": "",
+        }
 
 
 @dataclass(frozen=True)
