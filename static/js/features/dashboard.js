@@ -511,6 +511,57 @@
     });
   }
 
+  // ---------- Alerta de base desatualizada (docs/operacao/alerta-base-desatualizada.md) ----------
+  function formatarDataHora(iso) {
+    const match = /^(\d{4})-(\d{2})-(\d{2})T(\d{2}):(\d{2})/.exec(String(iso || ""));
+    return match ? `${match[3]}/${match[2]}/${match[1]} às ${match[4]}:${match[5]}` : "";
+  }
+
+  function textoBaseDesatualizada(info) {
+    const limit = Number(info.limite_dias);
+    const days = Number(info.dias_sem_atualizacao);
+    const when = formatarDataHora(info.ultima_atualizacao);
+    // Below one more full day than the limit, the floor count would read as "7 dias" for a base past the limit.
+    const dias = count => `${count} ${pluralize(count, "dia")}`;
+    const age = days > limit ? `há ${dias(days)}` : `há mais de ${dias(limit)}`;
+    const since = when ? `em ${when}, ${age}` : age;
+    return `A base na Simpress foi atualizada pela última vez ${since}. O limite é de ${dias(limit)}.`;
+  }
+
+  function renderizarAlertaBaseDesatualizada(info) {
+    const card = document.getElementById("alerta-base-desatualizada");
+    if (!card) return;
+    const state = info && typeof info === "object" ? info.estado : null;
+    if (state !== "desatualizada" && state !== "sem_base") {
+      card.hidden = true;
+      card.dataset.state = state || "hidden";
+      return;
+    }
+    const missing = state === "sem_base";
+    const title = document.getElementById("alerta-base-desatualizada-titulo");
+    const text = document.getElementById("alerta-base-desatualizada-texto");
+    const button = document.getElementById("btn-alerta-base-atualizar");
+    if (title) title.textContent = missing ? "Base não encontrada" : "Base desatualizada";
+    if (text) {
+      text.textContent = missing
+        ? "Nenhuma base na Simpress foi importada. Importe as planilhas para consultar e comparar equipamentos."
+        : textoBaseDesatualizada(info);
+    }
+    if (button) button.textContent = missing ? "Importar base" : "Atualizar base";
+    card.dataset.state = state;
+    if (card.hidden) {
+      card.hidden = false;
+      card.dataset.enter = "true";
+    }
+  }
+
+  function inicializarAlertaBaseDesatualizada() {
+    document.addEventListener("simpress:painel-atualizado", event => renderizarAlertaBaseDesatualizada(event.detail?.base_desatualizada));
+    document.getElementById("alerta-base-desatualizada")?.addEventListener("animationend", event => {
+      delete event.currentTarget.dataset.enter;
+    });
+  }
+
   function atualizarIndicadoresPosSalvamento() {
     // Atualiza os indicadores sem atrasar o fechamento do formulário após salvar.
     void Promise.allSettled([
@@ -522,5 +573,6 @@
   return {
     carregarEstatisticas, carregarProntidao, atualizarIndicadoresPosSalvamento,
     inicializarUsoUltimos30Dias, renderizarUsoUltimos30Dias,
+    inicializarAlertaBaseDesatualizada, renderizarAlertaBaseDesatualizada,
   };
 });
