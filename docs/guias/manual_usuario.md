@@ -55,8 +55,9 @@ Sem algum desses arquivos o sistema abre normalmente; só as funções que depen
 
 1. Na pasta do projeto, dê dois cliques em **`iniciar_servidor.bat`** (ou, no PowerShell, `.\iniciar_servidor.bat`).
 2. Na **primeira vez**, aguarde: o programa cria o ambiente (`.venv`) e baixa as dependências. Pode levar alguns minutos.
-3. Quando o terminal mostrar a linha **`Site: http://127.0.0.1:8000`**, abra esse endereço no navegador. Se a porta 8000 estiver ocupada, o iniciador usa outra (entre 8001 e 8099) e mostra o endereço correto no terminal — use o que aparecer lá.
-4. **Deixe a janela preta (terminal) aberta** enquanto usa o sistema. Para encerrar, volte a ela e pressione `Ctrl+C`.
+3. Se aparecer **"Há uma versão nova (v1.1.0). Atualizar agora? (S/N)"** (com o número da versão nova), leia logo acima o resumo do que mudou e digite `S` e Enter para atualizar, ou `N` para continuar com a versão atual. Só aparecem versões publicadas e testadas; mudanças ainda em teste não são oferecidas. A atualização é opcional e não mexe nos seus dados (`data/`). Se o sistema não puder atualizar (sem internet, alterações locais, nenhuma versão publicada, etc.), ele mostra o motivo e abre normalmente com a versão atual; se avisar que as dependências mudaram, aguarde a reinstalação. O histórico de versões fica no arquivo `CHANGELOG.md`, na pasta do projeto.
+4. Quando o terminal mostrar a linha **`Site: http://127.0.0.1:8000`**, abra esse endereço no navegador. Se a porta 8000 estiver ocupada, o iniciador usa outra (entre 8001 e 8099) e mostra o endereço correto no terminal — use o que aparecer lá.
+5. **Deixe a janela preta (terminal) aberta** enquanto usa o sistema. Para encerrar, volte a ela e pressione `Ctrl+C`.
 
 **Como confirmar:** a página do Simpress carrega no navegador. Se o Simpress já estava aberto, o iniciador apenas abre a instância existente, sem iniciar uma segunda cópia.
 
