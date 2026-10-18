@@ -1,6 +1,6 @@
 # Medição do parse de planilhas (achados M3/N7)
 
-Data: 17/10/2026. Escopo: somente medição e recomendação, sem alteração de código de produção. Referência: `docs/arquitetura/auditoria_tecnica_2026-10-17.md` (M3/N7).
+Data: 17/10/2026. Escopo: somente medição e recomendação, sem alteração de código de produção. Referência: achados M3/N7 da auditoria técnica interna de 17/10/2026 (documento local, não versionado no repositório).
 
 ## Resumo
 
