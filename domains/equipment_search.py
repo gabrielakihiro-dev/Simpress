@@ -6,7 +6,7 @@ from typing import Any, Callable, Dict, Iterable, List, Tuple
 
 EquipmentSearchIndexEntry = Tuple[
     int,
-    Tuple[str, str, str, str, str, str],
+    Tuple[str, str, str, str, str, str, str],
     Dict[str, Any],
 ]
 
@@ -62,6 +62,7 @@ def build_search_index(
             normalize(alias),
             normalize(city),
             normalize(category_label),
+            normalize(item.get("usuarios_logados") or ""),
         )
         result = {
             "serial": serial,
@@ -72,6 +73,7 @@ def build_search_index(
             "retirada_cidade": city,
             "retirada_cnpj": str(item.get("retirada_cnpj") or ""),
             "usuarios_logados": str(item.get("usuarios_logados") or ""),
+            "usuarios_logados_origem": str(item.get("usuarios_logados_origem") or ""),
             "invall_alias_status": item.get("invall_alias_status"),
             "invall_alias_detail": item.get("invall_alias_detail"),
         }
@@ -98,7 +100,7 @@ def search_normalized_index(
 
     ranked_results: List[Tuple[int, int, Dict[str, Any]]] = []
     for index, searchable_values, result in indexed:
-        serial_search, model_search, kind_search, alias_search, city_search, category_search = searchable_values
+        serial_search, model_search, kind_search, alias_search, city_search, category_search, user_search = searchable_values
         if not any(term in value for value in searchable_values):
             continue
 
@@ -116,8 +118,10 @@ def search_normalized_index(
             rank = 5
         elif term in category_search:
             rank = 6
-        else:
+        elif term in user_search:
             rank = 7
+        else:
+            rank = 8
         ranked_results.append((rank, index, result))
 
     ranked_results.sort(key=lambda result: (result[0], result[1]))

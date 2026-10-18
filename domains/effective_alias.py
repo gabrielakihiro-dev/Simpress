@@ -117,6 +117,32 @@ def read_endpoint_alias_index(services: EffectiveAliasServices) -> Dict[str, Any
     return build_endpoint_alias_index(table.get("records", []))
 
 
+def endpoint_loss_warnings(
+    previous: Dict[str, Any],
+    current: Dict[str, Any],
+) -> List[Dict[str, str]]:
+    """List series whose Endpoint user or hostname disappeared between two InvAll files.
+
+    Nothing is reported when either index is unavailable, and ambiguous series
+    (duplicated in the new file) are skipped because they already have their own status.
+    """
+    if not previous.get("available") or not current.get("available"):
+        return []
+    warnings: List[Dict[str, str]] = []
+    duplicates = set(current.get("duplicates", {}))
+    previous_serials = set(previous.get("users", {})) | set(previous.get("unique", {}))
+    for serial_key in sorted(previous_serials):
+        if serial_key in duplicates or serial_key in previous.get("duplicates", {}):
+            continue
+        previous_user = previous.get("users", {}).get(serial_key, "")
+        if previous_user and not current.get("users", {}).get(serial_key):
+            warnings.append({"serial_key": serial_key, "motivo": "usuario_removido", "valor_anterior": previous_user})
+        previous_host = previous.get("unique", {}).get(serial_key, "")
+        if previous_host and serial_key not in current.get("unique", {}):
+            warnings.append({"serial_key": serial_key, "motivo": "hostname_removido", "valor_anterior": previous_host})
+    return warnings
+
+
 def endpoint_alias_review_items(
     index: Dict[str, Any],
     details_serials: Optional[Set[str]] = None,
@@ -251,7 +277,13 @@ def apply_effective_alias(
     local_alias = str(equipment.get("_apelido_local", equipment.get("_apelido_base", "")) or "").strip()
     manual_override = bool(equipment.get("_apelido_manual_override"))
     equipment["apelido"] = local_alias
-    equipment["usuarios_logados"] = endpoint_index.get("users", {}).get(serial_key, "")
+    endpoint_user = endpoint_index.get("users", {}).get(serial_key, "")
+    manual_user = str(endpoint_index.get("manual_users", {}).get(serial_key, "") or "").strip()
+    # O usuário do Endpoint sempre prevalece; o manual só preenche a lacuna.
+    equipment["usuarios_logados"] = endpoint_user or manual_user
+    equipment["usuarios_logados_origem"] = (
+        "endpoint" if endpoint_user else "manual" if manual_user else ""
+    )
 
     if not endpoint_index.get("available"):
         equipment["invall_alias_status"] = "indisponivel"

@@ -6,13 +6,23 @@ from typing import Any, Callable, Optional, Tuple
 from fastapi import APIRouter
 from pydantic import BaseModel, Field, field_validator
 
-from domains import alias_changes
+from domains import alias_changes, user_changes
 from domains.alias_changes import AliasChangeServices, validate_equipment_serial
 
 
 class ApelidoUpdatePayload(BaseModel):
     serial: str = Field(..., min_length=1, max_length=128, description="Número de Série do Equipamento")
     apelido: str = Field(..., max_length=160, description="Novo Apelido / Hostname do Equipamento")
+
+    @field_validator("serial")
+    @classmethod
+    def validate_serial(cls, value: str) -> str:
+        return validate_equipment_serial(value)
+
+
+class UsuarioUpdatePayload(BaseModel):
+    serial: str = Field(..., min_length=1, max_length=128, description="Número de Série do Equipamento")
+    usuario: str = Field("", max_length=user_changes.MAX_USER_LENGTH, description="Usuário logado manual; vazio remove")
 
     @field_validator("serial")
     @classmethod
@@ -33,6 +43,7 @@ class AliasRouteExports:
     get_historico_apelidos: Callable[..., Any]
     excluir_evento_historico_apelido: Callable[..., Any]
     desfazer_alteracao_apelido: Callable[..., Any]
+    atualizar_usuario: Callable[..., Any]
 
 
 def create_alias_router(
@@ -57,14 +68,30 @@ def create_alias_router(
     def get_historico_apelidos():
         return alias_changes.alias_history_listing(services)
 
+    def _event_type(evento_id: str) -> str:
+        event = next((item for item in services.load_alias_history() if item.get("id") == evento_id), None)
+        return str((event or {}).get("tipo") or "")
+
     @router.delete("/api/historico-alteracoes/{evento_id}")
     @router.delete("/api/historico-apelidos/{evento_id}")
     def excluir_evento_historico_apelido(evento_id: str):
+        event_type = _event_type(evento_id)
+        if event_type == user_changes.USER_EVENT_TYPE:
+            return user_changes.restore_user_history_event(services, evento_id)
+        if event_type == user_changes.WARNING_EVENT_TYPE:
+            return user_changes.dismiss_warning_event(services, evento_id)
         return alias_changes.restore_alias_history_event(services, evento_id)
 
     @router.post("/api/equipamento/apelido/desfazer")
     def desfazer_alteracao_apelido(payload: ApelidoUndoPayload):
+        if _event_type(payload.evento_id) == user_changes.USER_EVENT_TYPE:
+            return user_changes.undo_user_change(services, payload.evento_id)
         return alias_changes.undo_alias_change(services, payload.evento_id)
+
+    @router.post("/api/equipamento/atualizar-usuario")
+    def atualizar_usuario(payload: UsuarioUpdatePayload):
+        """Salva (ou limpa) o usuário logado manual de um equipamento sem usuário no Endpoint."""
+        return user_changes.update_manual_user(services, payload.serial, payload.usuario)
 
     return router, AliasRouteExports(
         get_apelidos_modificados=get_apelidos_modificados,
@@ -72,4 +99,5 @@ def create_alias_router(
         get_historico_apelidos=get_historico_apelidos,
         excluir_evento_historico_apelido=excluir_evento_historico_apelido,
         desfazer_alteracao_apelido=desfazer_alteracao_apelido,
+        atualizar_usuario=atualizar_usuario,
     )

@@ -29,7 +29,9 @@ from domains.history_annotations import (
     effective_history_annotation, history_annotation_row_fingerprint,
     load_effective_history_annotations, same_annotation_revision,
 )
+from domains.effective_alias import endpoint_loss_warnings
 from domains.local_setup import unpack_simpress_zip
+from domains.user_changes import build_endpoint_warning_entries
 
 
 logger = logging.getLogger(__name__)
@@ -80,6 +82,8 @@ class InventoryUpdateServices:
     # Errors raised by the application callbacks above (e.g. the HTTP layer's own
     # exceptions) that must reach the caller unchanged instead of becoming a 500.
     external_errors: Tuple[Type[BaseException], ...] = ()
+    # Where warnings about Endpoint users/hostnames that vanished are recorded; None disables them.
+    alias_history_file: Optional[Callable[[], Path]] = None
 
 
 _ANNOTATABLE_COMPARISON_CATEGORIES = (
@@ -574,6 +578,9 @@ def _commit_inventory_files(
     ]
     if idempotency_key is not None:
         transaction_targets.append(inventory_idempotency_file)
+    alias_history_file = services.alias_history_file() if services.alias_history_file is not None else None
+    if alias_history_file is not None:
+        transaction_targets.append(alias_history_file)
     with _transaction_with_backup_cleanup(
         services.inventory_state_transaction(transaction_targets),
         backup_dir,
@@ -611,6 +618,7 @@ def _commit_inventory_files(
             transaction.add_target(backup_target)
 
         previous_aliases = services.snapshot_equipment_aliases(services.get_equipment_snapshot())
+        previous_endpoint_index = services.read_endpoint_alias_index()
         manual_overrides = services.load_modified_apelidos()
         manual_alias_sources = services.manual_alias_source_snapshots(
             manual_overrides,
@@ -654,6 +662,23 @@ def _commit_inventory_files(
             raise RuntimeError("As planilhas enviadas não puderam ser carregadas pelo site.")
 
         endpoint_index = services.read_endpoint_alias_index()
+        if alias_history_file is not None:
+            loss_warnings = endpoint_loss_warnings(previous_endpoint_index, endpoint_index)
+            if loss_warnings:
+                equipment_by_key = {
+                    services.normalize_reference_value(item.get("serial")): item
+                    for item in prepared_state["equipamentos_cache"].values()
+                }
+                source_label = hashlib.sha256(staged["endpoint"]["bytes"]).hexdigest()[:16]
+
+                def append_endpoint_warnings(history):
+                    if not isinstance(history, list):
+                        raise RuntimeError("O histórico de alterações não contém uma lista válida.")
+                    return [*history, *build_endpoint_warning_entries(
+                        loss_warnings, equipment_by_key, history, source_label,
+                    )]
+
+                transaction.update_json(alias_history_file, append_endpoint_warnings, [])
         detail_serial_counts: Dict[str, int] = {}
         for record in staged["detalhes"]["table"].get("records", []):
             serial_key = services.normalize_reference_value(services.upload_serial_value(record, "detalhes"))
