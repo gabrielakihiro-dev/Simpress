@@ -118,7 +118,7 @@ class ExceptionObservabilityTests(unittest.TestCase):
             patch.object(main, "EXPORT_MODEL_FILE", self.file),
             patch.object(main, "validate_xlsx", side_effect=ValueError(PRIVATE_CONTENT)),
             self.assertLogs(main.logger, level="WARNING") as log,
-            self.assertRaises(HTTPException) as error,
+            self.assertRaises(DomainError) as error,
         ):
             main.load_export_model_aliases()
         self.assertEqual(error.exception.status_code, 500)
