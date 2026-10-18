@@ -21,7 +21,7 @@ Avisar quando a base oficial `EquipamentosDetalhes` (`data/planilhas_entrada/Equ
 
 - O limite padrão é de 7 dias, ajustável em `core/config.py` (`STALE_BASE_ALERT_DAYS`).
 - **Aparece** quando o tempo desde a última atualização é maior que o limite (7 dias e 1 minuto já conta; exatamente 7 dias, não).
-- **Some** na próxima resposta de `/api/painel` depois de uma atualização ou restauração que traga a data para dentro do limite. O painel já é recarregado quando o contador do histórico muda.
+- **Some** na próxima resposta de `/api/painel` depois de uma atualização ou restauração que traga a data para dentro do limite. O painel já é recarregado quando o contador do histórico muda, o que acontece na própria aba depois de uma atualização pelo modal ou de uma restauração. Uma importação pela pasta de entrada automática roda em segundo plano: como os demais números do painel, o alerta de uma página já aberta só some ao voltar para a aba Home ou recarregar a página.
 - **Base inexistente:** se o arquivo não existir, aparece o aviso "Base não encontrada" em vez do alerta, e a tela continua funcionando.
 - Se a data não puder ser lida (erro inesperado), o alerta fica oculto e o resto do painel carrega normalmente.
 
