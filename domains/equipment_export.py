@@ -130,20 +130,44 @@ def get_export_aliases(
     return merge_export_aliases(endpoint_aliases, services.load_modified_apelidos())
 
 
+@dataclass(frozen=True)
+class ExportStatus:
+    """Whether the export can run, with the reason shown when it cannot."""
+
+    available: bool
+    reason: str
+
+    def as_dict(self) -> Dict[str, Any]:
+        return {"available": self.available, "reason": self.reason}
+
+
+@dataclass(frozen=True)
+class CachedExportCounts:
+    """Counts and status computed for one signature of the export files."""
+
+    counts: Dict[str, int]
+    status: ExportStatus
+
+
 _EXPORT_STATUS_LOCK = threading.Lock()
 _EXPORT_COUNTS_LOCK = threading.Lock()
-_EXPORT_STATUS = {"available": False, "reason": "A exportação ainda não foi conferida."}
-_EXPORT_COUNTS_CACHE: Dict[Any, Dict[str, Any]] = {}
+_export_status = ExportStatus(available=False, reason="A exportação ainda não foi conferida.")
+_EXPORT_COUNTS_CACHE: Dict[Any, CachedExportCounts] = {}
 
 
 def _set_export_status(available: bool, reason: str) -> None:
+    global _export_status
     with _EXPORT_STATUS_LOCK:
-        _EXPORT_STATUS.update({"available": available, "reason": reason})
+        _export_status = ExportStatus(available=available, reason=reason)
+
+
+def _current_export_status() -> ExportStatus:
+    with _EXPORT_STATUS_LOCK:
+        return _export_status
 
 
 def get_export_status() -> Dict[str, Any]:
-    with _EXPORT_STATUS_LOCK:
-        return dict(_EXPORT_STATUS)
+    return _current_export_status().as_dict()
 
 
 def export_files_signature(services: EquipmentExportServices) -> tuple:
@@ -287,17 +311,13 @@ def count_export_changes(
         with _EXPORT_COUNTS_LOCK:
             cached = _EXPORT_COUNTS_CACHE.get(key)
             if cached is not None:
-                _set_export_status(cached["available"], cached["reason"])
-                return {name: cached[name] for name in empty_counts}
+                _set_export_status(cached.status.available, cached.status.reason)
+                return {name: cached.counts[name] for name in empty_counts}
         values = count()
-        status = get_export_status()
+        status = _current_export_status()
         with _EXPORT_COUNTS_LOCK:
             _EXPORT_COUNTS_CACHE.clear()
-            _EXPORT_COUNTS_CACHE[key] = {
-                **values,
-                "available": status["available"],
-                "reason": status["reason"],
-            }
+            _EXPORT_COUNTS_CACHE[key] = CachedExportCounts(counts=dict(values), status=status)
         return values
 
     if locked:

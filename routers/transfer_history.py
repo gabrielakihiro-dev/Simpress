@@ -6,7 +6,7 @@ from pathlib import Path
 import json
 import threading
 import unicodedata
-from typing import Any, Callable, Dict, List
+from typing import Any, Callable, Dict, List, Tuple
 from uuid import uuid4
 
 from fastapi import APIRouter, HTTPException, Query
@@ -55,7 +55,15 @@ def build_record(payload: TransferenciaPayload) -> Dict[str, Any]:
     }
 
 
-def create_transfer_history_router(services: TransferHistoryServices):
+@dataclass(frozen=True)
+class TransferHistoryRouteExports:
+    """Routes exposed to ``main`` for direct calls in tests and helpers."""
+
+    listar_historico_transferencias: Callable[..., Any]
+    registrar_historico_transferencia: Callable[..., Any]
+
+
+def create_transfer_history_router(services: TransferHistoryServices) -> Tuple[APIRouter, TransferHistoryRouteExports]:
     router = APIRouter()
 
     @router.get("/api/historico-transferencias")
@@ -111,7 +119,7 @@ def create_transfer_history_router(services: TransferHistoryServices):
             raise HTTPException(status_code=500, detail=f"Falha ao registrar o histórico de transferências: {error}") from error
         return {"sucesso": True, "id": record["id"], "criado_em": record["criado_em"]}
 
-    return router, {
-        "listar_historico_transferencias": listar_historico_transferencias,
-        "registrar_historico_transferencia": registrar_historico_transferencia,
-    }
+    return router, TransferHistoryRouteExports(
+        listar_historico_transferencias=listar_historico_transferencias,
+        registrar_historico_transferencia=registrar_historico_transferencia,
+    )

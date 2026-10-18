@@ -1681,11 +1681,11 @@ _alias_change_services = alias_changes.AliasChangeServices(
 # Registered directly on the app, before /api/equipamento/{serial}, so the fixed
 # "apelidos-modificados" path is matched first and is not read as a serial.
 _alias_router, _alias_exports = create_alias_router(_alias_change_services, app.router)
-get_apelidos_modificados = _alias_exports["get_apelidos_modificados"]
-atualizar_apelido = _alias_exports["atualizar_apelido"]
-get_historico_apelidos = _alias_exports["get_historico_apelidos"]
-excluir_evento_historico_apelido = _alias_exports["excluir_evento_historico_apelido"]
-desfazer_alteracao_apelido = _alias_exports["desfazer_alteracao_apelido"]
+get_apelidos_modificados = _alias_exports.get_apelidos_modificados
+atualizar_apelido = _alias_exports.atualizar_apelido
+get_historico_apelidos = _alias_exports.get_historico_apelidos
+excluir_evento_historico_apelido = _alias_exports.excluir_evento_historico_apelido
+desfazer_alteracao_apelido = _alias_exports.desfazer_alteracao_apelido
 
 
 # Endpoints
@@ -1997,8 +1997,8 @@ system_router, _system_exports = create_system_router(SystemRouteServices(
     get_readiness_status=lambda: get_startup_readiness(),
     get_transfer_form_defaults=lambda: load_origin_contact(TRANSFER_ORIGIN_CONTACT_FILE),
 ))
-get_readiness_status = _system_exports["get_readiness_status"]
-get_transfer_form_defaults = _system_exports["get_transfer_form_defaults"]
+get_readiness_status = _system_exports.get_readiness_status
+get_transfer_form_defaults = _system_exports.get_transfer_form_defaults
 app.include_router(system_router)
 
 units_router, _units_exports = create_units_router(UnitRouteServices(
@@ -2016,9 +2016,9 @@ units_router, _units_exports = create_units_router(UnitRouteServices(
     load_database=lambda *args, **kwargs: load_database(*args, **kwargs),
     publish_database_state=publish_database_state,
 ))
-_public_unit_list = _units_exports["_public_unit_list"]
-salvar_unidade = _units_exports["salvar_unidade"]
-get_unidades = _units_exports["get_unidades"]
+_public_unit_list = _units_exports.public_unit_list
+salvar_unidade = _units_exports.salvar_unidade
+get_unidades = _units_exports.get_unidades
 app.include_router(units_router)
 
 equipment_search_router, _equipment_search_exports = create_equipment_search_router(EquipmentSearchServices(
@@ -2027,9 +2027,9 @@ equipment_search_router, _equipment_search_exports = create_equipment_search_rou
     categories=_CATEGORIAS_EQUIPAMENTO,
     get_stats=_get_stats_snapshot,
 ))
-buscar_seriais = _equipment_search_exports["buscar_seriais"]
-buscar_seriais_expandida = _equipment_search_exports["buscar_seriais_expandida"]
-get_stats = _equipment_search_exports["get_stats"]
+buscar_seriais = _equipment_search_exports.buscar_seriais
+buscar_seriais_expandida = _equipment_search_exports.buscar_seriais_expandida
+get_stats = _equipment_search_exports.get_stats
 app.include_router(equipment_search_router)
 
 transfer_router, gerar_planilha = create_transfer_router(get_local_transfer_template)
@@ -2039,8 +2039,8 @@ transfer_history_router, _transfer_history_exports = create_transfer_history_rou
     history_file=lambda: TRANSFER_HISTORY_FILE,
     transaction_root=lambda: TRANSACTION_ROOT,
 ))
-listar_historico_transferencias = _transfer_history_exports["listar_historico_transferencias"]
-registrar_historico_transferencia = _transfer_history_exports["registrar_historico_transferencia"]
+listar_historico_transferencias = _transfer_history_exports.listar_historico_transferencias
+registrar_historico_transferencia = _transfer_history_exports.registrar_historico_transferencia
 app.include_router(transfer_history_router)
 
 
@@ -2106,7 +2106,7 @@ dashboard_router, _dashboard_exports = create_dashboard_router(DashboardServices
     get_usage_summary=usage_metrics.summary,
     set_manual_minutes=usage_metrics.set_manual_minutes,
 ))
-obter_painel = _dashboard_exports["obter_painel"]
+obter_painel = _dashboard_exports.obter_painel
 app.include_router(dashboard_router)
 
 
@@ -2161,29 +2161,29 @@ inventory_history_router, _inventory_history_exports = create_inventory_history_
     upload_backups_directory=lambda: UPLOAD_BACKUPS_DIR,
     validate_uploaded_workbook=lambda *args, **kwargs: validate_uploaded_workbook(*args, **kwargs),
 ))
-flush_pending_history_annotations = _inventory_history_exports["flush_pending_history_annotations"]
-migrate_legacy_history_annotations = _inventory_history_exports["migrate_legacy_history_annotations"]
-_build_comparison_restore_context = _inventory_history_exports["_build_comparison_restore_context"]
-_comparison_event_has_restorable_backup = _inventory_history_exports["_comparison_event_has_restorable_backup"]
-_comparison_event_type = _inventory_history_exports["_comparison_event_type"]
-_comparison_restore_backup_paths = _inventory_history_exports["_comparison_restore_backup_paths"]
-_current_inventory_snapshot = _inventory_history_exports["_current_inventory_snapshot"]
-_sha256_file = _inventory_history_exports["_sha256_file"]
-_validated_comparison_backup_files = _inventory_history_exports["_validated_comparison_backup_files"]
-excluir_comparacao_historica = _inventory_history_exports["excluir_comparacao_historica"]
-exportar_historico_comparacoes_excel = _inventory_history_exports["exportar_historico_comparacoes_excel"]
-get_comparacao_historica = _inventory_history_exports["get_comparacao_historica"]
-get_historico_comparacoes = _inventory_history_exports["get_historico_comparacoes"]
-salvar_anotacao_comparacao = _inventory_history_exports["salvar_anotacao_comparacao"]
-salvar_anotacao_comparacao_historica = _inventory_history_exports["salvar_anotacao_comparacao_historica"]
-resolver_divergencia_apelido_manual = _inventory_history_exports["resolver_divergencia_apelido_manual"]
-restaurar_comparacao_historica = _inventory_history_exports["restaurar_comparacao_historica"]
-visualizar_restauracao_comparacao = _inventory_history_exports["visualizar_restauracao_comparacao"]
+flush_pending_history_annotations = _inventory_history_exports.flush_pending_history_annotations
+migrate_legacy_history_annotations = _inventory_history_exports.migrate_legacy_history_annotations
+_build_comparison_restore_context = _inventory_history_exports.build_comparison_restore_context
+_comparison_event_has_restorable_backup = _inventory_history_exports.comparison_event_has_restorable_backup
+_comparison_event_type = _inventory_history_exports.comparison_event_type
+_comparison_restore_backup_paths = _inventory_history_exports.comparison_restore_backup_paths
+_current_inventory_snapshot = _inventory_history_exports.current_inventory_snapshot
+_sha256_file = _inventory_history_exports.sha256_file
+_validated_comparison_backup_files = _inventory_history_exports.validated_comparison_backup_files
+excluir_comparacao_historica = _inventory_history_exports.excluir_comparacao_historica
+exportar_historico_comparacoes_excel = _inventory_history_exports.exportar_historico_comparacoes_excel
+get_comparacao_historica = _inventory_history_exports.get_comparacao_historica
+get_historico_comparacoes = _inventory_history_exports.get_historico_comparacoes
+salvar_anotacao_comparacao = _inventory_history_exports.salvar_anotacao_comparacao
+salvar_anotacao_comparacao_historica = _inventory_history_exports.salvar_anotacao_comparacao_historica
+resolver_divergencia_apelido_manual = _inventory_history_exports.resolver_divergencia_apelido_manual
+restaurar_comparacao_historica = _inventory_history_exports.restaurar_comparacao_historica
+visualizar_restauracao_comparacao = _inventory_history_exports.visualizar_restauracao_comparacao
 app.include_router(inventory_history_router)
 
 operations_router = create_operations_router(
     load_comparison_history=load_comparison_history,
-    comparison_history_for_display=_inventory_history_exports["history_annotation_view"],
+    comparison_history_for_display=_inventory_history_exports.history_annotation_view,
     ticket_report_path=lambda: TICKET_REPORT_FILE,
     transaction_root=lambda: TRANSACTION_ROOT,
     history_annotations_directory=lambda: HISTORY_ANNOTATIONS_DIR,
