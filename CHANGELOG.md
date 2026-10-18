@@ -12,7 +12,10 @@ Proposta: publicar estas mudanças como a primeira versão, **v1.0.0** (a data s
 
 ### Adicionado
 
-- **Relatório mensal:** o botão **Relatório mensal**, em **Históricos e Análises**, baixa uma planilha do mês com o inventário oficial por tipo e por unidade, a última comparação do mês e as OS.
+- **Relatório mensal:** o botão **Relatório mensal**, em **Históricos e Análises**, baixa uma planilha do mês com o inventário oficial por tipo e por unidade, a última comparação do mês, as OS e os pedidos abertos, concluídos e pendentes, e o uso do sistema no mês.
+- **Usuário logado informado à mão:** quando o Endpoint não traz o usuário de um equipamento, você pode digitá-lo no cartão do equipamento (**Salvar usuário**, **Editar**, **Limpar**). O usuário do Endpoint sempre prevalece, e a mudança fica no **Histórico de alterações**, com opção de desfazer.
+- **Busca por usuário:** a pesquisa também encontra equipamentos pelo nome do usuário logado.
+- **Avisos do Endpoint:** ao atualizar as planilhas, um equipamento que perdeu o usuário ou o hostname no Endpoint gera um aviso no **Histórico de alterações**.
 - **Uso nos últimos 30 dias:** o painel inicial mostra quantas transferências, comparações, exportações, OS conciliadas e buscas foram feitas, com uma estimativa das horas poupadas.
 - **Contato de origem configurável:** o contato de origem das transferências (nome, e-mail e celular) agora é salvo pela própria tela de Transporte, em **Configurar contato de origem**, sem mexer no código.
 - **Atualização com um clique:** ao abrir o `iniciar_servidor.bat`, o Simpress avisa quando há uma versão nova, mostra o que mudou e pergunta se você quer atualizar. A atualização é opcional e não mexe nos seus dados.
