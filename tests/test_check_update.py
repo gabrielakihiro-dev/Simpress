@@ -11,17 +11,28 @@ from scripts.check_update import (
     DISABLE_VARIABLE,
     EXIT_CONTINUE,
     EXIT_LAUNCHER_CHANGED,
+    changelog_notes,
     check_for_update,
+    parse_remote_tags,
 )
 
 PROJECT_ROOT = Path(__file__).resolve().parents[1]
-FORBIDDEN_GIT_COMMANDS = {"reset", "clean", "stash", "checkout", "restore", "merge", "rebase"}
+FORBIDDEN_GIT_COMMANDS = {"reset", "clean", "stash", "checkout", "restore", "rebase", "pull", "tag"}
 GIT_IDENTITY = [
     "-c", "user.name=Teste",
     "-c", "user.email=teste@example.invalid",
     "-c", "commit.gpgsign=false",
+    "-c", "tag.gpgsign=false",
     "-c", "core.hooksPath=",
 ]
+CHANGELOG_TEMPLATE = """# Changelog
+
+## [Não lançado]
+
+- algo ainda sem versão
+
+{sections}
+"""
 
 
 def git(cwd, *args):
@@ -63,7 +74,8 @@ class CheckUpdateWithRealRepositoriesTests(unittest.TestCase):
         commit_file(self.publisher, "README.md", "v1\n", "versão inicial")
         commit_file(self.publisher, "requirements.txt", "fastapi==1.0\n", "dependências")
         commit_file(self.publisher, "iniciar_servidor.bat", "@echo off\n", "inicializador")
-        git(self.publisher, "push", "-q", "origin", "main")
+        self.changelog_sections = []
+        self.release("1.0.0", "- primeira versão")
         git(base, "clone", "-q", str(self.origin), str(self.checkout))
         # Operational data and untracked files must survive every scenario.
         (self.checkout / "data").mkdir()
@@ -88,16 +100,32 @@ class CheckUpdateWithRealRepositoriesTests(unittest.TestCase):
         for call in self.git_calls:
             self.assertFalse(FORBIDDEN_GIT_COMMANDS & set(call), call)
             self.assertNotIn("--force", call)
-            if "pull" in call:
+            if "merge" in call:
                 self.assertIn("--ff-only", call)
 
     def recording_runner(self, command, **kwargs):
         self.git_calls.append(list(command))
         return subprocess.run(command, **kwargs)
 
-    def publish(self, relative="README.md", content="v2\n", message="versão nova"):
+    def publish(self, relative="README.md", content="v2\n", message="commit sem versão"):
         commit_file(self.publisher, relative, content, message)
         git(self.publisher, "push", "-q", "origin", "main")
+
+    def release(self, version, notes, files=None):
+        """Commit the CHANGELOG section (plus optional files) on main and push tag vX.Y.Z."""
+        for relative, content in (files or {}).items():
+            (self.publisher / relative).write_text(content, encoding="utf-8")
+            git(self.publisher, "add", relative)
+        self.changelog_sections.insert(0, f"## [{version}] - 2026-10-20\n\n{notes}\n")
+        commit_file(
+            self.publisher,
+            "CHANGELOG.md",
+            CHANGELOG_TEMPLATE.format(sections="\n".join(self.changelog_sections)),
+            f"versão {version}",
+        )
+        git(self.publisher, "tag", "-a", f"v{version}", "-m", f"Simpress v{version}")
+        git(self.publisher, "push", "-q", "origin", "main", f"v{version}")
+        return git(self.publisher, "rev-parse", "HEAD")
 
     def run_check(self, environ=None):
         return check_for_update(
@@ -114,20 +142,117 @@ class CheckUpdateWithRealRepositoriesTests(unittest.TestCase):
     def output(self):
         return "\n".join(self.messages)
 
-    def test_applies_fast_forward_when_user_accepts(self):
-        self.publish()
+    def ran(self, subcommand):
+        return any(subcommand in call for call in self.git_calls)
+
+    def test_fast_forwards_to_new_tag_and_shows_changelog(self):
+        released = self.release("1.1.0", "- relatório novo", files={"README.md": "v2\n"})
 
         self.assertEqual(self.run_check(), EXIT_CONTINUE)
 
-        self.assertEqual(self.head(), git(self.publisher, "rev-parse", "HEAD"))
+        self.assertEqual(self.head(), released)
         self.assertEqual((self.checkout / "README.md").read_text(encoding="utf-8"), "v2\n")
-        self.prompt.assert_called_once_with("Há uma versão nova. Atualizar agora? (S/N) ")
-        self.assertIn("versão nova", self.output())
-        self.assertIn("Atualização concluída.", self.output())
+        self.prompt.assert_called_once_with("Há uma versão nova (v1.1.0). Atualizar agora? (S/N) ")
+        self.assertIn("Versão nova disponível: v1.1.0 (instalada: v1.0.0).", self.output())
+        self.assertIn("## [1.1.0] - 2026-10-20", self.output())
+        self.assertIn("- relatório novo", self.output())
+        self.assertNotIn("primeira versão", self.output())
+        self.assertNotIn("algo ainda sem versão", self.output())
+        self.assertIn("Atualização concluída: Simpress v1.1.0.", self.output())
         self.assertNotIn("requirements.txt mudou", self.output())
 
-    def test_keeps_current_version_when_user_declines_or_input_is_closed(self):
+    def test_untagged_commits_on_main_are_not_offered(self):
         self.publish()
+        before = self.head()
+
+        self.run_check()
+
+        self.prompt.assert_not_called()
+        self.assertEqual(self.head(), before)
+        self.assertIn("Você já está na versão mais recente (v1.0.0).", self.output())
+
+    def test_stops_at_the_tag_even_when_main_is_ahead(self):
+        released = self.release("1.1.0", "- correção")
+        self.publish(message="commit depois da tag, ainda sem CI")
+
+        self.run_check()
+
+        self.assertEqual(self.head(), released)
+        self.assertNotEqual(self.head(), git(self.publisher, "rev-parse", "HEAD"))
+
+    def test_shows_every_skipped_version_in_the_changelog(self):
+        self.release("1.1.0", "- novidade da 1.1")
+        self.release("1.2.0", "- novidade da 1.2")
+        self.prompt.return_value = "N"
+
+        self.run_check()
+
+        self.prompt.assert_called_once_with("Há uma versão nova (v1.2.0). Atualizar agora? (S/N) ")
+        self.assertIn("- novidade da 1.1", self.output())
+        self.assertIn("- novidade da 1.2", self.output())
+        self.assertNotIn("primeira versão", self.output())
+
+    def test_without_any_tag_explains_and_does_not_update(self):
+        git(self.publisher, "push", "-q", "origin", ":refs/tags/v1.0.0")
+        self.publish()
+        before = self.head()
+
+        self.run_check()
+
+        self.prompt.assert_not_called()
+        self.assertEqual(self.head(), before)
+        self.assertFalse(self.ran("fetch"))
+        self.assertIn("Nenhuma versão publicada foi encontrada", self.output())
+        self.assertIn("commits novos sem tag não são oferecidos", self.output())
+        self.assertIn("Iniciando com a versão atual.", self.output())
+
+    def test_ignores_tags_that_are_not_plain_versions(self):
+        git(self.publisher, "push", "-q", "origin", ":refs/tags/v1.0.0")
+        self.publish()
+        for name in ("v2.0.0-rc1", "teste", "2.0.0"):
+            git(self.publisher, "tag", name)
+            git(self.publisher, "push", "-q", "origin", name)
+
+        self.run_check()
+
+        self.prompt.assert_not_called()
+        self.assertIn("Nenhuma versão publicada foi encontrada", self.output())
+
+    def test_ignores_local_tags_that_are_not_on_origin(self):
+        git(self.checkout, "switch", "-q", "-c", "experimento")
+        commit_file(self.checkout, "x.txt", "x\n", "experimento local")
+        git(self.checkout, "tag", "v9.0.0")
+        git(self.checkout, "switch", "-q", "main")
+
+        self.run_check()
+
+        self.prompt.assert_not_called()
+        self.assertIn("Você já está na versão mais recente (v1.0.0).", self.output())
+
+    def test_offers_first_tag_to_checkout_without_installed_version(self):
+        git(self.publisher, "push", "-q", "origin", ":refs/tags/v1.0.0")
+        released = self.release("1.1.0", "- primeira tag publicada")
+
+        self.run_check()
+
+        self.assertEqual(self.head(), released)
+        self.assertIn("(instalada: nenhuma versão publicada)", self.output())
+
+    def test_refuses_tag_outside_origin_main(self):
+        git(self.publisher, "switch", "-q", "-c", "experimento")
+        commit_file(self.publisher, "README.md", "experimento\n", "fora do main")
+        git(self.publisher, "tag", "-a", "v2.0.0", "-m", "tag errada")
+        git(self.publisher, "push", "-q", "origin", "experimento", "v2.0.0")
+        before = self.head()
+
+        self.run_check()
+
+        self.prompt.assert_not_called()
+        self.assertEqual(self.head(), before)
+        self.assertIn("A versão v2.0.0 não está no histórico de origin/main", self.output())
+
+    def test_keeps_current_version_when_user_declines_or_input_is_closed(self):
+        self.release("1.1.0", "- novidade")
         before = self.head()
         for answer in ("N", "", "talvez"):
             self.prompt.return_value = answer
@@ -138,13 +263,8 @@ class CheckUpdateWithRealRepositoriesTests(unittest.TestCase):
         self.assertEqual(self.head(), before)
         self.assertIn("Atualização adiada. Iniciando com a versão atual.", self.output())
 
-    def test_reports_when_already_up_to_date(self):
-        self.run_check()
-        self.prompt.assert_not_called()
-        self.assertIn("Você já está na versão mais recente.", self.output())
-
     def test_refuses_with_tracked_local_changes(self):
-        self.publish()
+        self.release("1.1.0", "- novidade")
         before = self.head()
         (self.checkout / "README.md").write_text("editado localmente\n", encoding="utf-8")
 
@@ -153,23 +273,23 @@ class CheckUpdateWithRealRepositoriesTests(unittest.TestCase):
         self.prompt.assert_not_called()
         self.assertEqual(self.head(), before)
         self.assertEqual((self.checkout / "README.md").read_text(encoding="utf-8"), "editado localmente\n")
-        self.assertIn("existem alterações locais", self.output())
+        self.assertIn("Há uma versão nova (v1.1.0), mas existem alterações locais", self.output())
         self.assertIn("README.md", self.output())
         self.assertIn("Iniciando com a versão atual.", self.output())
 
-    def test_refuses_outside_main_without_fetching(self):
+    def test_refuses_outside_main_without_contacting_origin(self):
         git(self.checkout, "switch", "-q", "-c", "outro")
-        self.publish()
+        self.release("1.1.0", "- novidade")
 
         self.run_check()
 
         self.prompt.assert_not_called()
-        self.assertFalse(any("fetch" in call for call in self.git_calls))
+        self.assertFalse(self.ran("fetch") or self.ran("ls-remote"))
         self.assertIn("só no branch main (atual: outro)", self.output())
 
     def test_refuses_detached_head(self):
         git(self.checkout, "switch", "-q", "--detach")
-        self.publish()
+        self.release("1.1.0", "- novidade")
 
         self.run_check()
 
@@ -178,23 +298,23 @@ class CheckUpdateWithRealRepositoriesTests(unittest.TestCase):
 
     def test_refuses_when_local_history_diverged(self):
         commit_file(self.checkout, "local.txt", "x\n", "commit local")
-        self.publish()
+        self.release("1.1.0", "- novidade")
         before = self.head()
 
         self.run_check()
 
         self.prompt.assert_not_called()
         self.assertEqual(self.head(), before)
-        self.assertIn("commits que não estão em origin/main", self.output())
+        self.assertIn("commits que não estão na versão v1.1.0", self.output())
 
     def test_reports_failed_fast_forward_without_touching_untracked_file(self):
-        self.publish("anotacao_local.txt", "remoto\n", "arquivo que colide")
+        self.release("1.1.0", "- arquivo que colide", files={"anotacao_local.txt": "remoto\n"})
         before = self.head()
 
         self.run_check()
 
         self.assertEqual(self.head(), before)
-        self.assertIn("git pull --ff-only falhou", self.output())
+        self.assertIn("o fast-forward para v1.1.0 falhou", self.output())
 
     def test_reports_missing_network_or_origin(self):
         git(self.checkout, "remote", "set-url", "origin", str(Path(self.temporary_directory.name) / "inexistente.git"))
@@ -205,21 +325,21 @@ class CheckUpdateWithRealRepositoriesTests(unittest.TestCase):
         self.assertIn("Não foi possível consultar o servidor Git", self.output())
 
     def test_warns_when_requirements_change(self):
-        self.publish("requirements.txt", "fastapi==2.0\n", "atualiza dependências")
+        self.release("1.1.0", "- dependências", files={"requirements.txt": "fastapi==2.0\n"})
 
         self.assertEqual(self.run_check(), EXIT_CONTINUE)
 
         self.assertIn("O requirements.txt mudou; as dependências serão reinstaladas a seguir.", self.output())
 
     def test_signals_launcher_restart_when_launcher_changes(self):
-        self.publish("iniciar_servidor.bat", "@echo off\necho novo\n", "novo inicializador")
+        self.release("1.1.0", "- inicializador", files={"iniciar_servidor.bat": "@echo off\necho novo\n"})
 
         self.assertEqual(self.run_check(), EXIT_LAUNCHER_CHANGED)
 
         self.assertIn("O inicializador foi atualizado e será reiniciado.", self.output())
 
     def test_disabled_by_environment_variable(self):
-        self.publish()
+        self.release("1.1.0", "- novidade")
         before = self.head()
 
         self.run_check({DISABLE_VARIABLE: "0"})
@@ -227,6 +347,53 @@ class CheckUpdateWithRealRepositoriesTests(unittest.TestCase):
         self.assertEqual(self.git_calls, [])
         self.assertEqual(self.head(), before)
         self.assertIn("desativada", self.output())
+
+
+class VersionParsingTests(unittest.TestCase):
+    def test_parse_remote_tags_prefers_peeled_commit_and_ignores_other_names(self):
+        output = "\n".join([
+            "aaa\trefs/tags/v1.0.0",
+            "bbb\trefs/tags/v1.0.0^{}",
+            "ccc\trefs/tags/v1.10.0",
+            "ddd\trefs/tags/v1.2.0",
+            "eee\trefs/tags/v2.0.0-rc1",
+            "fff\trefs/tags/versao",
+        ])
+
+        self.assertEqual(
+            parse_remote_tags(output),
+            [((1, 0, 0), "bbb"), ((1, 2, 0), "ddd"), ((1, 10, 0), "ccc")],
+        )
+
+    def test_changelog_notes_keep_only_versions_after_installed(self):
+        text = "\n".join([
+            "# Changelog",
+            "## [Não lançado]",
+            "- futuro",
+            "## [1.2.0] - 2026-11-01",
+            "- dois",
+            "",
+            "## [1.1.0]",
+            "- um",
+            "## [1.0.0]",
+            "- zero",
+            "[1.2.0]: https://example.invalid",
+        ])
+
+        self.assertEqual(
+            changelog_notes(text, (1, 0, 0), (1, 2, 0)),
+            ["## [1.2.0] - 2026-11-01", "- dois", "", "## [1.1.0]", "- um"],
+        )
+        self.assertEqual(changelog_notes(text, None, (1, 0, 0)), ["## [1.0.0]", "- zero"])
+        self.assertEqual(changelog_notes("", (1, 0, 0), (1, 1, 0)), [])
+
+    def test_changelog_notes_are_truncated(self):
+        text = "## [1.1.0]\n" + "\n".join(f"- item {index}" for index in range(100))
+
+        notes = changelog_notes(text, (1, 0, 0), (1, 1, 0))
+
+        self.assertEqual(len(notes), 41)
+        self.assertIn("continua no CHANGELOG.md", notes[-1])
 
 
 class CheckUpdateWithoutGitTests(unittest.TestCase):
@@ -248,9 +415,9 @@ class CheckUpdateWithoutGitTests(unittest.TestCase):
         output = self.run_check(Mock(return_value=subprocess.CompletedProcess([], 128, "", "fatal")))
         self.assertIn("não é um repositório Git", output)
 
-    def test_fetch_timeout_is_reported(self):
+    def test_network_timeout_is_reported(self):
         def runner(command, **kwargs):
-            if "fetch" in command:
+            if "ls-remote" in command:
                 raise subprocess.TimeoutExpired(command, kwargs.get("timeout"))
             if "symbolic-ref" in command:
                 return subprocess.CompletedProcess(command, 0, "main\n", "")
@@ -276,6 +443,12 @@ class LauncherContractTests(unittest.TestCase):
         self.assertIn('call "%~f0"', launcher)
         for forbidden in ("git reset", "git clean", "git stash", "--force"):
             self.assertNotIn(forbidden, launcher)
+
+    def test_project_changelog_has_unreleased_section(self):
+        changelog = (PROJECT_ROOT / "CHANGELOG.md").read_text(encoding="utf-8")
+
+        self.assertIn("## [Não lançado]", changelog)
+        self.assertIn("v1.0.0", changelog)
 
 
 if __name__ == "__main__":
