@@ -377,7 +377,7 @@ async def read_uploaded_xlsx(
     parse_admission = services.workbook_parse_admission()
     if parse_admission is not None and not parse_admission.acquire(blocking=False):
         raise DomainBusyError("A análise de planilhas está ocupada. Tente novamente em instantes.")
-    def parse():
+    def parse() -> Tuple[bytes, Dict[str, Any]]:
         workbook_bytes = file_bytes
         if suffix == ".zip":
             workbook_bytes, _ = unpack_simpress_zip(file_bytes, max_upload_bytes)
@@ -399,7 +399,7 @@ async def read_uploaded_xlsx(
 
 async def preview_inventory_files(
     endpoint_file: Any, details_file: Any, services: InventoryUpdateServices,
-):
+) -> Dict[str, Any]:
     """Validate uploads and summarize a locked snapshot, including first access."""
     uploads = [endpoint_file, details_file]
     try:
@@ -407,7 +407,7 @@ async def preview_inventory_files(
             "endpoint": await read_uploaded_xlsx(endpoint_file, "endpoint", services),
             "detalhes": await read_uploaded_xlsx(details_file, "detalhes", services),
         }
-        def read_current_snapshot():
+        def read_current_snapshot() -> Dict[str, bytes]:
             # Resolving the active source opens workbooks; keep it off the event loop.
             target_files = {
                 "endpoint": services.endpoint_upload_file(),
@@ -422,7 +422,7 @@ async def preview_inventory_files(
         snapshot_worker = asyncio.create_task(asyncio.to_thread(read_current_snapshot))
         current_bytes = await await_worker_completion(snapshot_worker)
 
-        def validate_current():
+        def validate_current() -> Dict[str, Dict[str, Any]]:
             with services.workbook_parse_admission():
                 return {
                     role: services.validate_uploaded_workbook(data, role) if data else {"records": []}
@@ -464,7 +464,7 @@ async def update_inventory_files(
     automatic_import_id: Optional[str] = None,
     idempotency_key: Optional[str] = None,
     preview_token: Optional[str] = None,
-):
+) -> Dict[str, Any]:
     """Read uploads asynchronously and run workbook and transaction work off-loop."""
     uploads = [endpoint_file, details_file]
     passthrough_errors: Tuple[Type[BaseException], ...] = (DomainError, *services.external_errors)
@@ -528,7 +528,7 @@ def _commit_inventory_files(
     automatic_import_id: Optional[str] = None,
     idempotency_key: Optional[str] = None,
     preview_token: Optional[str] = None,
-):
+) -> Dict[str, Any]:
     """Validate, compare, replace, reload, and journal inventories in a worker thread."""
     input_directory = services.input_directory()
     endpoint_upload_file = services.endpoint_upload_file()
@@ -631,7 +631,7 @@ def _commit_inventory_files(
             missing_backup_files[role] = False
             backup_bytes = source_path.read_bytes()
 
-            def validate_backup(path: Path, expected_bytes=backup_bytes) -> None:
+            def validate_backup(path: Path, expected_bytes: bytes = backup_bytes) -> None:
                 if path.read_bytes() != expected_bytes:
                     raise RuntimeError("A cópia de segurança não corresponde ao arquivo de origem.")
 
@@ -640,7 +640,9 @@ def _commit_inventory_files(
         for role, target_path in target_files.items():
             upload_bytes = staged[role]["bytes"]
 
-            def validate_staged_upload(path: Path, current_role=role, expected_bytes=upload_bytes) -> None:
+            def validate_staged_upload(
+                path: Path, current_role: str = role, expected_bytes: bytes = upload_bytes
+            ) -> None:
                 candidate_bytes = path.read_bytes()
                 if candidate_bytes != expected_bytes:
                     raise WorkbookSafetyError("O arquivo preparado difere do inventário validado.")
@@ -719,7 +721,7 @@ def _commit_inventory_files(
         copied_annotations: list[Dict[str, str]] = []
         pending_annotation_records: list[tuple[Path, Dict[str, Any]]] = []
 
-        def append_update(history):
+        def append_update(history: Any) -> List[Any]:
             if not isinstance(history, list):
                 raise RuntimeError("O histórico de planilhas não contém uma lista válida.")
             updated = deepcopy(history)
@@ -777,7 +779,7 @@ def _commit_inventory_files(
                 continue
             payload = json.dumps(record, ensure_ascii=False, indent=2).encode("utf-8")
 
-            def validate_annotation(path: Path, expected=record) -> None:
+            def validate_annotation(path: Path, expected: Dict[str, Any] = record) -> None:
                 actual = json.loads(path.read_text(encoding="utf-8"))
                 if not same_annotation_revision(actual, expected):
                     raise RuntimeError("A anotação preparada não corresponde à revisão herdada.")

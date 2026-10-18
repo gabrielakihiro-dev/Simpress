@@ -12,7 +12,7 @@ import uuid
 from contextlib import contextmanager
 from datetime import datetime, timezone
 from pathlib import Path
-from typing import Any, Callable, Optional, cast
+from typing import Any, Callable, Iterator, Optional, cast
 
 from core.config import format_size_limit
 from core.errors import DomainError
@@ -32,7 +32,7 @@ class TicketInboxChanged(RuntimeError):
 
 
 @contextmanager
-def _try_worker_lock(path: Path):
+def _try_worker_lock(path: Path) -> Iterator[bool]:
     if not _WORKER_LOCK.acquire(blocking=False):
         yield False
         return

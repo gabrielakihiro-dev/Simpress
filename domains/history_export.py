@@ -3,16 +3,18 @@
 import re
 from datetime import date, datetime
 from io import BytesIO
-from typing import Any, Dict, List, Optional, Tuple
+from typing import Any, Dict, List, Mapping, Optional, Sequence, Tuple
 from core.xlsx_safety import set_cell_value_as_text
 from domains.history_annotations import annotation_export_text
 from domains.history_restore import comparison_event_type
 from domains.inventory_comparison import _comparison_source_text_for_display
 
 import openpyxl
+from openpyxl.cell.cell import Cell
 from openpyxl.styles import Alignment, Border, Font, PatternFill, Side
 from openpyxl.utils import get_column_letter
 from openpyxl.worksheet.table import Table, TableStyleInfo
+from openpyxl.worksheet.worksheet import Worksheet
 
 
 _EXPORT_NAVY = "10213A"
@@ -93,7 +95,7 @@ def _export_note(
     return _export_text(annotations.get(f"{category}:{index}"))
 
 
-def _style_export_title(ws, title: str, subtitle: str, last_column: int) -> None:
+def _style_export_title(ws: Worksheet, title: str, subtitle: str, last_column: int) -> None:
     ws.merge_cells(start_row=1, start_column=1, end_row=1, end_column=last_column)
     title_cell = ws.cell(row=1, column=1, value=title)
     title_cell.fill = PatternFill("solid", fgColor=_EXPORT_NAVY_DARK)
@@ -110,7 +112,7 @@ def _style_export_title(ws, title: str, subtitle: str, last_column: int) -> None
     ws.row_dimensions[3].height = 10
 
 
-def _safe_export_cell(cell, value: Any) -> None:
+def _safe_export_cell(cell: Cell, value: Any) -> None:
     if isinstance(value, str):
         set_cell_value_as_text(cell, value[:32767])
         cell.number_format = "@"
@@ -123,7 +125,7 @@ def _safe_export_cell(cell, value: Any) -> None:
     cell.alignment = Alignment(vertical="top", wrap_text=True)
 
 
-def _estimated_row_height(values, widths) -> float:
+def _estimated_row_height(values: Sequence[Any], widths: Sequence[Optional[float]]) -> float:
     lines = 1
     for value, width in zip(values, widths):
         if value is None:
@@ -135,14 +137,14 @@ def _estimated_row_height(values, widths) -> float:
 
 
 def _write_export_table_sheet(
-    workbook,
+    workbook: openpyxl.Workbook,
     sheet_name: str,
     title: str,
     subtitle: str,
-    headers,
-    rows,
+    headers: Sequence[str],
+    rows: Sequence[Sequence[Any]],
     table_name: str,
-    widths,
+    widths: Sequence[float],
 ) -> None:
     ws = workbook.create_sheet(sheet_name)
     ws.sheet_view.showGridLines = False
@@ -193,7 +195,15 @@ def _write_export_table_sheet(
     ws.print_title_rows = "1:4"
 
 
-def _write_export_summary_sheet(workbook, generated_at, selected_date, events, event_counts, category_counts, detail_total) -> None:
+def _write_export_summary_sheet(
+    workbook: openpyxl.Workbook,
+    generated_at: datetime,
+    selected_date: date,
+    events: Sequence[Dict[str, Any]],
+    event_counts: Mapping[str, int],
+    category_counts: Mapping[str, int],
+    detail_total: int,
+) -> None:
     ws = workbook.active
     ws.title = "Resumo"
     ws.sheet_view.showGridLines = False
@@ -248,8 +258,8 @@ def _write_export_summary_sheet(workbook, generated_at, selected_date, events, e
         cell.font = Font(name="Aptos", size=10, bold=True, color=_EXPORT_NAVY)
         cell.alignment = Alignment(vertical="center")
     for row_index, (label, count) in enumerate(category_counts.items(), start=9):
-        for column, value in enumerate((label, count), start=1):
-            cell = ws.cell(row=row_index, column=column, value=value)
+        for column, cell_value in enumerate((label, count), start=1):
+            cell = ws.cell(row=row_index, column=column, value=cell_value)
             cell.font = Font(name="Aptos", size=10, color=_EXPORT_TEXT)
             cell.alignment = Alignment(vertical="center")
             cell.border = Border(bottom=Side(style="hair", color=_EXPORT_BORDER))
