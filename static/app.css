@@ -1070,6 +1070,27 @@ html[data-theme="light"] .app-tab-panel:focus-visible { outline-color: var(--bor
   font-size: 0.73rem;
 }
 .history-filter-annotated input { width: 1rem; height: 1rem; accent-color: var(--annotated-check); }
+/* Summary cards that jump to their section: same surface at rest, a quiet tint on hover. */
+.comparison-metric-link {
+  display: block;
+  width: 100%;
+  text-align: left;
+  font: inherit;
+  color: inherit;
+  cursor: pointer;
+  transition: box-shadow var(--motion-fast) ease, border-color var(--motion-fast) ease;
+}
+/* An inset shadow tints the card without replacing its background; focus keeps its own ring. */
+.comparison-metric-link:hover:not(:focus-visible) {
+  box-shadow: inset 0 0 0 100vmax var(--ux-table-hover);
+  border-top-color: var(--ux-border-strong);
+  border-right-color: var(--ux-border-strong);
+  border-bottom-color: var(--ux-border-strong);
+}
+#comparacao-planilhas-conteudo [tabindex="-1"]:focus-visible { outline: 2px solid var(--border-strong); outline-offset: 4px; border-radius: 0.4rem; }
+@media (prefers-reduced-motion: reduce) {
+  .comparison-metric-link { transition: none; }
+}
 .history-filter-footer [data-history-filter-count] {
   margin: 0;
   color: var(--text-count);

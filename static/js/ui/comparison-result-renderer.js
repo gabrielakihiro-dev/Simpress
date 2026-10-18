@@ -329,13 +329,33 @@
 
   const PONTOS_SECAO = { amber: "bg-amber-400", rose: "bg-rose-400", emerald: "bg-emerald-400", neutro: "bg-slate-500" };
 
-  function tituloSecaoComparacao(titulo, tom) {
-    return `<h4 class="flex items-center gap-2 text-sm font-bold text-white"><span class="h-2 w-2 shrink-0 rounded-full ${PONTOS_SECAO[tom]}" aria-hidden="true"></span>${escapeHtml(titulo)}</h4>`;
+  // Summary card -> section title it jumps to. The title id is stable because only one result is open at a time.
+  const SECOES_CARTOES_RESUMO = {
+    ausentes_no_endpoint: { id: "comparacao-secao-ausentes-endpoint", titulo: "Sem correspondência — Endpoint" },
+    ausentes_em_detalhes: { id: "comparacao-secao-ausentes-simpress", titulo: "Sem correspondência — Simpress" },
+    divergencias_local: { id: "comparacao-secao-localidade-divergente", titulo: "Localidade divergente" },
+    correspondencias_ambiguas: { id: "comparacao-secao-ambiguidades", titulo: "Duplicidades e correspondências ambíguas" },
+    series_sem_mapeamento: { id: "comparacao-secao-series-sem-local", titulo: "Séries sem local definido" },
+    apelidos_atualizados: { id: "comparacao-secao-apelidos-atualizados", titulo: "Apelidos/hostnames atualizados — no endpoint" },
+    apelidos_sem_atualizacao: { id: "comparacao-secao-linhas-conferencia", titulo: "Linhas mantidas para conferência" },
+    divergencias_apelidos_manuais: { id: "comparacao-secao-apelidos-manuais", titulo: "Divergências com apelidos alterados manualmente" },
+  };
+
+  function tituloSecaoComparacao(titulo, tom, idSecao = "") {
+    const alvo = idSecao ? ` id="${idSecao}" tabindex="-1"` : "";
+    return `<h4${alvo} class="flex items-center gap-2 text-sm font-bold text-white"><span class="h-2 w-2 shrink-0 rounded-full ${PONTOS_SECAO[tom]}" aria-hidden="true"></span>${escapeHtml(titulo)}</h4>`;
   }
 
-  function cartaoMetricaComparacao(rotulo, valor, tom, idNumero = "") {
+  // Cards with a count above zero and a matching section become buttons that scroll to it; the rest stay static.
+  function cartaoMetricaComparacao(rotulo, valor, tom, idNumero = "", chaveSecao = "") {
     const classes = classesMetricaHistorico(valor, tom);
-    return `<div class="rounded-xl p-3 ${classes.cartao}" data-metric-tone="${tom || ""}"><p class="text-[10px] uppercase tracking-wide text-slate-400">${escapeHtml(rotulo)}</p><p${idNumero ? ` id="${idNumero}"` : ""} class="text-xl font-bold mt-1 ${classes.numero}">${Number(valor || 0).toLocaleString("pt-BR")}</p></div>`;
+    const numero = Number(valor || 0);
+    const conteudo = `<p class="text-[10px] uppercase tracking-wide text-slate-400">${escapeHtml(rotulo)}</p><p${idNumero ? ` id="${idNumero}"` : ""} class="text-xl font-bold mt-1 ${classes.numero}">${numero.toLocaleString("pt-BR")}</p>`;
+    const secao = SECOES_CARTOES_RESUMO[chaveSecao];
+    if (!secao || numero <= 0) {
+      return `<div class="rounded-xl p-3 ${classes.cartao}" data-metric-tone="${tom || ""}">${conteudo}</div>`;
+    }
+    return `<button type="button" class="comparison-metric-link rounded-xl p-3 ${classes.cartao}" data-metric-tone="${tom || ""}" data-comparison-section-target="${secao.id}" aria-label="${escapeHtml(`${rotulo}: ${numero.toLocaleString("pt-BR")}. Ir para ${secao.titulo}`)}">${conteudo}</button>`;
   }
 
   function conteudoAnotacoesSincronizadas(comparison, colunas) {
@@ -376,25 +396,25 @@
         : ""}
         <div class="grid grid-cols-2 md:grid-cols-3 xl:grid-cols-4 gap-3">
           ${cartaoMetricaComparacao("Notebooks comparados", comparison.total_endpoint, null)}
-          ${cartaoMetricaComparacao("Sem correspondência — no endpoint", ausentesEndpoint.length, "amber")}
-          ${cartaoMetricaComparacao("Sem correspondência — na Simpress", ausentesDetalhes.length, "amber")}
-          ${cartaoMetricaComparacao("Divergências de local", divergenciasLocal.length, "amber")}
-          ${cartaoMetricaComparacao("Duplicidades e ambiguidades", ambiguityRows.length, "rose")}
-          ${cartaoMetricaComparacao("Séries sem mapeamento", seriesSemMapa.length, "amber")}
-          ${cartaoMetricaComparacao("Apelidos/hostnames atualizados", apelidosAtualizados.length, "emerald")}
-          ${cartaoMetricaComparacao("Apelidos para conferência", apelidosSemAtualizacao.length, "amber")}
-          ${cartaoMetricaComparacao("Divergências manuais pendentes", divergenciasApelidosManuais.filter(item => !item.resolucao || item.resolucao === "pendente").length, "rose", "comparacao-divergencias-manuais-pendentes")}
+          ${cartaoMetricaComparacao("Sem correspondência — no endpoint", ausentesEndpoint.length, "amber", "", "ausentes_no_endpoint")}
+          ${cartaoMetricaComparacao("Sem correspondência — na Simpress", ausentesDetalhes.length, "amber", "", "ausentes_em_detalhes")}
+          ${cartaoMetricaComparacao("Divergências de local", divergenciasLocal.length, "amber", "", "divergencias_local")}
+          ${cartaoMetricaComparacao("Duplicidades e ambiguidades", ambiguityRows.length, "rose", "", "correspondencias_ambiguas")}
+          ${cartaoMetricaComparacao("Séries sem mapeamento", seriesSemMapa.length, "amber", "", "series_sem_mapeamento")}
+          ${cartaoMetricaComparacao("Apelidos/hostnames atualizados", apelidosAtualizados.length, "emerald", "", "apelidos_atualizados")}
+          ${cartaoMetricaComparacao("Apelidos para conferência", apelidosSemAtualizacao.length, "amber", "", "apelidos_sem_atualizacao")}
+          ${cartaoMetricaComparacao("Divergências manuais pendentes", divergenciasApelidosManuais.filter(item => !item.resolucao || item.resolucao === "pendente").length, "rose", "comparacao-divergencias-manuais-pendentes", "divergencias_apelidos_manuais")}
         </div>
         <section class="space-y-2" data-history-filter-section>
-          <div>${tituloSecaoComparacao("Apelidos/hostnames atualizados — no endpoint", "emerald")}<p class="text-[11px] text-slate-500">Equipamentos cujo apelido ou hostname mudou nesta atualização, com o valor anterior e o novo, identificados pela série.</p></div>
+          <div>${tituloSecaoComparacao("Apelidos/hostnames atualizados — no endpoint", "emerald", SECOES_CARTOES_RESUMO.apelidos_atualizados.id)}<p class="text-[11px] text-slate-500">Equipamentos cujo apelido ou hostname mudou nesta atualização, com o valor anterior e o novo, identificados pela série.</p></div>
           ${renderizarTabelaComparacao(["Série", "Apelido anterior", "Novo apelido / hostname", "Horário", "Arquivos de origem"], aliasUpdateRows, "Nenhum apelido ou hostname mudou nesta atualização.")}
         </section>
         <section class="space-y-2" data-history-filter-section>
-          <div>${tituloSecaoComparacao("Linhas mantidas para conferência", "amber")}<p class="text-[11px] text-slate-500">Série(s) vazia(s) não é escolhida automaticamente; o apelido atual fica preservado.${permitirAnotacoes ? " As anotações continuam vinculadas a esta linha e atualização. Em novas atualizações, são reaplicadas somente quando os dados correspondem exatamente na mesma seção e a anotação mais recente não está vazia ou em conflito." : ""}</p></div>
+          <div>${tituloSecaoComparacao("Linhas mantidas para conferência", "amber", SECOES_CARTOES_RESUMO.apelidos_sem_atualizacao.id)}<p class="text-[11px] text-slate-500">Série(s) vazia(s) não é escolhida automaticamente; o apelido atual fica preservado.${permitirAnotacoes ? " As anotações continuam vinculadas a esta linha e atualização. Em novas atualizações, são reaplicadas somente quando os dados correspondem exatamente na mesma seção e a anotação mais recente não está vazia ou em conflito." : ""}</p></div>
           ${renderizarTabelaComparacao(aliasReviewHeaders, aliasReviewRows, "Nenhuma linha de apelido precisa de conferência.", "apelidos_sem_atualizacao")}
         </section>
         <section class="space-y-2" data-history-filter-section>
-          <div>${tituloSecaoComparacao("Divergências com apelidos alterados manualmente", "rose")}<p class="text-[11px] text-slate-500">Apelidos marcados com (M), definidos manualmente, que constam nas planilhas enviadas. O apelido (M) continua valendo sobre as planilhas até você decidir. Escolha “Manter manual” para confirmar a identificação (M) ou “Excluir manual” para voltar ao valor das planilhas.</p></div>
+          <div>${tituloSecaoComparacao("Divergências com apelidos alterados manualmente", "rose", SECOES_CARTOES_RESUMO.divergencias_apelidos_manuais.id)}<p class="text-[11px] text-slate-500">Apelidos marcados com (M), definidos manualmente, que constam nas planilhas enviadas. O apelido (M) continua valendo sobre as planilhas até você decidir. Escolha “Manter manual” para confirmar a identificação (M) ou “Excluir manual” para voltar ao valor das planilhas.</p></div>
           ${renderizarTabelaComparacao(["Série", "Apelido manual", "na Simpress", "no endpoint", "Situação", "Ação"], manualAliasRows, "Nenhuma divergência entre apelidos manuais e as planilhas enviadas.", "divergencias_apelidos_manuais")}
         </section>
         <section class="space-y-2" data-history-filter-section>
@@ -404,24 +424,24 @@
         <section class="space-y-2" data-history-filter-section>
           <div>${tituloSecaoComparacao("Equipamentos sem correspondência por fonte", "amber")}<p class="text-[11px] text-slate-500">Equipamentos que não foram encontrados de forma segura em uma das fontes: Endpoint ou Simpress. Cada lista indica a fonte onde falta o registro.</p></div>
           <div class="history-filter-group space-y-2" data-history-filter-group="ausentes_no_endpoint">
-            <h5 class="text-xs font-semibold text-slate-300">Sem correspondência — Endpoint (${ausentesEndpoint.length})</h5>
+            <h5 id="${SECOES_CARTOES_RESUMO.ausentes_no_endpoint.id}" tabindex="-1" class="text-xs font-semibold text-slate-300">Sem correspondência — Endpoint (${ausentesEndpoint.length})</h5>
             ${renderizarTabelaComparacao(["Hostname/Apelido", "Série", "Local previsto", "Sem correspondência em", ...annotationHeaders], linhasAusentes(ausentesEndpoint, "ausentes_no_endpoint", colunas), "Todos os equipamentos têm correspondência segura com Endpoint.")}
           </div>
           <div class="history-filter-group space-y-2" data-history-filter-group="ausentes_em_detalhes">
-            <h5 class="text-xs font-semibold text-slate-300">Sem correspondência — Simpress (${ausentesDetalhes.length})</h5>
+            <h5 id="${SECOES_CARTOES_RESUMO.ausentes_em_detalhes.id}" tabindex="-1" class="text-xs font-semibold text-slate-300">Sem correspondência — Simpress (${ausentesDetalhes.length})</h5>
             ${renderizarTabelaComparacao(["Hostname/Apelido", "Série", "Local previsto", "Sem correspondência em", ...annotationHeaders], linhasAusentes(ausentesDetalhes, "ausentes_em_detalhes", colunas), "Todos os equipamentos têm correspondência segura com Simpress.")}
           </div>
         </section>
         <section class="space-y-2" data-history-filter-section>
-          <div>${tituloSecaoComparacao("Localidade divergente", "amber")}<p class="text-[11px] text-slate-500">Equipamentos cujo local cadastrado na Simpress é diferente do local previsto pelo prefixo da série.</p></div>
+          <div>${tituloSecaoComparacao("Localidade divergente", "amber", SECOES_CARTOES_RESUMO.divergencias_local.id)}<p class="text-[11px] text-slate-500">Equipamentos cujo local cadastrado na Simpress é diferente do local previsto pelo prefixo da série.</p></div>
           ${renderizarTabelaComparacao(["Computador", "Série", "Local previsto", "Local na Simpress", ...annotationHeaders], locationRows, "Nenhuma divergência de localidade encontrada.", "divergencias_local")}
         </section>
         <section class="space-y-2" data-history-filter-section>
-          <div>${tituloSecaoComparacao("Duplicidades e correspondências ambíguas", "rose")}<p class="text-[11px] text-slate-500">Séries ou hostnames repetidos, ou que não identificam um único equipamento.</p></div>
+          <div>${tituloSecaoComparacao("Duplicidades e correspondências ambíguas", "rose", SECOES_CARTOES_RESUMO.correspondencias_ambiguas.id)}<p class="text-[11px] text-slate-500">Séries ou hostnames repetidos, ou que não identificam um único equipamento.</p></div>
           ${renderizarTabelaComparacao(["Ocorrência", "Série ou hostname/Apelido", "Fontes", "Tratamento", ...annotationHeaders], ambiguityRows, "Nenhuma duplicidade ou correspondência ambígua encontrada.", "correspondencias_ambiguas")}
         </section>
         <section class="space-y-2" data-history-filter-section>
-          <div>${tituloSecaoComparacao("Séries sem local definido", "amber")}<p class="text-[11px] text-slate-500">Prefixos de série sem local cadastrado, com a quantidade de equipamentos e exemplos.</p></div>
+          <div>${tituloSecaoComparacao("Séries sem local definido", "amber", SECOES_CARTOES_RESUMO.series_sem_mapeamento.id)}<p class="text-[11px] text-slate-500">Prefixos de série sem local cadastrado, com a quantidade de equipamentos e exemplos.</p></div>
           ${renderizarTabelaComparacao(["Série", "Quantidade", "Exemplos", ...annotationHeaders], unmappedRows, "Todas as séries têm mapeamento de localidade.", "series_sem_mapeamento")}
         </section>
         <p class="text-[11px] text-slate-400">Equipamentos carregados na Simpress: ${Number(comparison.total_equipamentos_carregados || 0).toLocaleString("pt-BR")}. Backup das versões anteriores: <span class="font-mono">data/planilhas_entrada/${escapeHtml(comparison.backup_diretorio || "_backups")}</span>.</p>
@@ -430,5 +450,5 @@
 
 
 
-  return { listasComparacao, criarColunasAnotacao, conteudoAnotacoesSincronizadas, conteudoResultadoComparacao };
+  return { listasComparacao, criarColunasAnotacao, conteudoAnotacoesSincronizadas, conteudoResultadoComparacao, SECOES_CARTOES_RESUMO };
 });
