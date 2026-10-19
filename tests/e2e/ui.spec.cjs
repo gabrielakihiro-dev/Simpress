@@ -730,6 +730,8 @@ test("@profile UI route transitions retain responsive frame pacing", async ({ pa
 });
 
 test("usage card shows 30-day counts and estimates hours from the configured minutes", async ({ page }) => {
+  await openSidebarIfNeeded(page);
+  await page.locator("#tab-resumo").click();
   const card = page.locator("#uso-30-dias");
   await expect(card).toBeVisible();
   await expect(card.getByRole("heading", { name: "Uso nos últimos 30 dias" })).toBeVisible();
