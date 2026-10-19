@@ -118,7 +118,7 @@ process.stdout.write(JSON.stringify(result));
                 self.assertEqual(workbook["Ausências"].cell(6, 3).value, screen["simpressAbsence"])
                 for row in (5, 6):
                     self.assertEqual(workbook["Ambiguidades"].cell(row, 4).value, screen["ambiguity"][index])
-                    self.assertEqual(workbook["Ambiguidades"].cell(row, 5).value, screen["ambiguity"][index])
+                    self.assertEqual(workbook["Ambiguidades"].cell(row, 6).value, screen["ambiguity"][index])
                 workbook.close()
                 self.assertEqual(event, original)
 

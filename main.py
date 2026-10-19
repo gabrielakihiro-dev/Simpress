@@ -61,6 +61,7 @@ from core.config import (
     LOG_DIR,
     MANUAL_USERS_FILE,
     MODIFIED_APELIDOS_FILE,
+    REMOVED_ENDPOINT_HOSTNAMES_FILE,
     MONTHLY_REPORT_CHECK_SECONDS,
     MONTHLY_REPORT_FIRST_CHECK_SECONDS,
     MONTHLY_REPORTS_DIR,
@@ -193,6 +194,8 @@ from routers.equipment_search import EquipmentSearchServices, create_equipment_s
 from routers.system import SystemRouteServices, create_system_router
 from routers.units import UnidadePayload, UnitRouteServices, create_units_router
 from routers.aliases import ApelidoUndoPayload, ApelidoUpdatePayload, UsuarioUpdatePayload, create_alias_router
+from routers.endpoint_removals import create_endpoint_removals_router
+from domains import endpoint_removals
 from core.inventory_requests import (
     InventoryUpdateMiddleware,
     idempotency_key,
@@ -282,6 +285,22 @@ def load_modified_apelidos() -> Dict[str, str]:
         if not MODIFIED_APELIDOS_FILE.exists():
             return {}
         return _read_json_object(MODIFIED_APELIDOS_FILE, "apelidos")
+
+def load_removed_endpoint_hostnames() -> List[Dict[str, Any]]:
+    with MODIFIED_APELIDOS_LOCK:
+        if not REMOVED_ENDPOINT_HOSTNAMES_FILE.exists():
+            return []
+        return _read_json_history(REMOVED_ENDPOINT_HOSTNAMES_FILE, "hostnames removidos")
+
+
+def removed_endpoint_hostname_keys() -> frozenset:
+    """Pares (série, hostname) descartados; um arquivo ilegível não bloqueia o inventário."""
+    try:
+        return endpoint_removals.removal_keys(load_removed_endpoint_hostnames())
+    except LocalJsonCorruptionError as error:
+        logger.warning("Hostnames removidos ignorados: %s", error)
+        return frozenset()
+
 
 def load_manual_users() -> Dict[str, str]:
     with MODIFIED_APELIDOS_LOCK:
@@ -756,7 +775,7 @@ def load_endpoint_aliases() -> Dict[str, str]:
 
 def read_endpoint_alias_index() -> Dict[str, Any]:
     """Retorna associações unívocas e linhas que precisam de conferência."""
-    index = effective_alias.read_endpoint_alias_index(_effective_alias_services)
+    index = effective_alias.read_endpoint_alias_index(_effective_alias_services, removed_endpoint_hostname_keys())
     try:
         index["manual_users"] = user_changes.manual_users_by_serial(load_manual_users())
     except LocalJsonCorruptionError as error:
@@ -808,6 +827,7 @@ _equipment_export_services = equipment_export.EquipmentExportServices(
     lock_paths=lambda *args, **kwargs: lock_paths(*args, **kwargs),
     logger=logger,
     external_errors=(HTTPException,),
+    removed_hostnames_file=lambda: REMOVED_ENDPOINT_HOSTNAMES_FILE,
 )
 
 
@@ -1163,6 +1183,7 @@ def load_database(transaction_locked: bool = False, publish: bool = True) -> Any
             *detail_files,
             ENDPOINT_UPLOAD_FILE,
             MODIFIED_APELIDOS_FILE,
+            REMOVED_ENDPOINT_HOSTNAMES_FILE,
             CUSTOM_UNIDADES_FILE,
             EXPORT_MODEL_FILE,
         ]):
@@ -1204,7 +1225,14 @@ _inventory_state_services = inventory_state.InventoryStateServices(
     publish_database_state=lambda state: publish_database_state(state),
     build_search_index=lambda *args: build_search_index(*args),
     normalize_search_term=lambda value: _normalizar_termo_busca(value),
-    inventory_files=lambda: (*get_details_files(), ENDPOINT_UPLOAD_FILE, MODIFIED_APELIDOS_FILE, CUSTOM_UNIDADES_FILE, EXPORT_MODEL_FILE),
+    inventory_files=lambda: (
+        *get_details_files(),
+        ENDPOINT_UPLOAD_FILE,
+        MODIFIED_APELIDOS_FILE,
+        REMOVED_ENDPOINT_HOSTNAMES_FILE,
+        CUSTOM_UNIDADES_FILE,
+        EXPORT_MODEL_FILE,
+    ),
     logger=logger,
 )
 
@@ -1715,6 +1743,18 @@ excluir_evento_historico_apelido = _alias_exports.excluir_evento_historico_apeli
 desfazer_alteracao_apelido = _alias_exports.desfazer_alteracao_apelido
 atualizar_usuario = _alias_exports.atualizar_usuario
 
+_endpoint_removal_services = endpoint_removals.EndpointRemovalServices(
+    removals_file=lambda: REMOVED_ENDPOINT_HOSTNAMES_FILE,
+    load_removals=lambda: load_removed_endpoint_hostnames(),
+    validate_json_history=lambda value, label: _validate_json_history(value, label),
+    transaction_root=lambda: TRANSACTION_ROOT,
+    atomic_file_transaction=lambda root, targets: AtomicFileTransaction(root, targets),
+    read_endpoint_alias_index=lambda: read_endpoint_alias_index(),
+    reload_database=lambda: load_database(),
+    external_errors=(HTTPException,),
+)
+app.include_router(create_endpoint_removals_router(_endpoint_removal_services))
+
 
 # Endpoints
 @app.get("/api/equipamento/{serial}")
@@ -1887,6 +1927,7 @@ _inventory_update_services = InventoryUpdateServices(
     verify_inventory_preview_token=verify_inventory_preview_token,
     external_errors=(HTTPException,),
     alias_history_file=lambda: ALIAS_HISTORY_FILE,
+    removed_endpoint_hostnames=lambda: removed_endpoint_hostname_keys(),
 )
 
 

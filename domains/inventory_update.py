@@ -84,6 +84,8 @@ class InventoryUpdateServices:
     external_errors: Tuple[Type[BaseException], ...] = ()
     # Where warnings about Endpoint users/hostnames that vanished are recorded; None disables them.
     alias_history_file: Optional[Callable[[], Path]] = None
+    # Normalized (serial, hostname) pairs discarded from the Endpoint duplicates; None keeps every row.
+    removed_endpoint_hostnames: Optional[Callable[[], Any]] = None
 
 
 _ANNOTATABLE_COMPARISON_CATEGORIES = (
@@ -564,11 +566,16 @@ def _commit_inventory_files(
         "detalhes": staged["detalhes"]["name"],
     }
     comparison_time = datetime.now().astimezone()
+    comparison_options: Dict[str, Any] = {"as_of": comparison_time}
+    if services.removed_endpoint_hostnames is not None:
+        removed_hostnames = services.removed_endpoint_hostnames()
+        if removed_hostnames:
+            comparison_options["removed_endpoint_hostnames"] = removed_hostnames
     comparison = services.compare_uploaded_workbooks(
         staged["endpoint"]["table"],
         staged["detalhes"]["table"],
         uploaded_names,
-        as_of=comparison_time,
+        **comparison_options,
     )
 
     transaction_targets = [
