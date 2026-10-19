@@ -571,6 +571,10 @@ def _commit_inventory_files(
         removed_hostnames = services.removed_endpoint_hostnames()
         if removed_hostnames:
             comparison_options["removed_endpoint_hostnames"] = removed_hostnames
+    # O Endpoint em disco ainda é o anterior: ele indica quais hostnames sumiram no novo.
+    comparison_options["previous_endpoint_hostnames"] = dict(
+        services.read_endpoint_alias_index().get("unique", {})
+    )
     comparison = services.compare_uploaded_workbooks(
         staged["endpoint"]["table"],
         staged["detalhes"]["table"],
