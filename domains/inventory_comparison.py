@@ -755,14 +755,81 @@ def location_for_computer_name(computer_name: str) -> Optional[str]:
             return SERIE_LOCAL_MAP[prefix]
     return None
 
+def _vanished_hostname_stale_items(
+    endpoint_table: Dict[str, Any],
+    source_records: Dict[str, List[Dict[str, Any]]],
+    previous_endpoint_hostnames: Optional[Dict[str, str]],
+    as_of: datetime,
+    stale_threshold: datetime,
+) -> List[Dict[str, Any]]:
+    """Stale Endpoint rows whose hostname is blank, shown with the last known hostname.
+
+    The hostname comes from the previous Endpoint file or, once that file no longer has it
+    either, from EquipamentosDetalhes (which is never changed). Rows without a hostname that
+    can be recovered, or with a serial that is not in the cadastro, are left out.
+    """
+    details_aliases: Dict[str, List[str]] = {}
+    for record in source_records["detalhes"]:
+        if record["serial_key"] and record["computador"]:
+            details_aliases.setdefault(record["serial_key"], []).append(record["computador"])
+    present_serials = {
+        record["serial_key"] for record in source_records["endpoint"] if record["serial_key"]
+    }
+    previous_hostnames = {
+        normalize_reference_value(serial): hostname
+        for serial, hostname in (previous_endpoint_hostnames or {}).items()
+    }
+    items: List[Dict[str, Any]] = []
+    seen_serials: set = set()
+    for fallback_row_number, row in enumerate(endpoint_table.get("records", []), start=2):
+        hostname = str(_record_value(row, "NOMEDOCOMPUTADOR", "COMPUTERNAME", "HOSTNAME") or "").strip()
+        serial_value = _record_value(
+            row, "ROTULODESERVICONUMERODESERIE", "NUMEROSERIE", "NUMERODESERIE", "SERIAL", "SERVICETAG"
+        )
+        serial_key = normalize_reference_value(serial_value)
+        if hostname or not serial_key or serial_key in present_serials or serial_key in seen_serials:
+            continue
+        verified_at = _parse_verification_datetime(_upload_verification_value(row), as_of.tzinfo)
+        if verified_at is None or verified_at > stale_threshold:
+            continue
+        candidates = details_aliases.get(serial_key) or details_aliases.get(f"S{serial_key}") or []
+        previous_hostname = previous_hostnames.get(serial_key, "")
+        if previous_hostname:
+            known_hostname, origin = previous_hostname, "endpoint_anterior"
+        elif len(candidates) == 1:
+            known_hostname, origin = candidates[0], "simpress"
+        else:
+            continue
+        seen_serials.add(serial_key)
+        source_row_number = row.get("__excel_row_number__")
+        items.append({
+            "computador": known_hostname,
+            "serie": str(serial_value or "").strip(),
+            "ultima_verificacao": verified_at.isoformat(timespec="minutes"),
+            "dias_sem_verificacao": max(7, (as_of - verified_at).days),
+            "linha_endpoint": (
+                source_row_number
+                if isinstance(source_row_number, int) and not isinstance(source_row_number, bool)
+                else fallback_row_number
+            ),
+            "hostname_sumiu_endpoint": True,
+            "hostname_origem": origin,
+        })
+    return items
+
+
 def compare_uploaded_workbooks(
     endpoint_table: Dict[str, Any],
     details_table: Dict[str, Any],
     uploaded_names: Dict[str, str],
     as_of: Optional[datetime] = None,
     removed_endpoint_hostnames: FrozenSet[Tuple[str, str]] = frozenset(),
+    previous_endpoint_hostnames: Optional[Dict[str, str]] = None,
 ) -> Dict[str, Any]:
     """Compares Endpoint and EquipamentosDetalhes without silently selecting duplicate matches.
+
+    ``previous_endpoint_hostnames`` maps normalized serials to the unique hostnames of the
+    previous Endpoint file; it only labels Endpoint rows whose hostname disappeared.
 
     ``removed_endpoint_hostnames`` lists normalized (serial, hostname) pairs the user
     discarded from the Endpoint duplicates; those rows are left out of the comparison
@@ -1178,6 +1245,14 @@ def compare_uploaded_workbooks(
             suffix.rstrip("0123456789-_") or suffix,
         )
         unmapped_series.setdefault(series_code, []).append(computer_name)
+
+    no_recent_verification.extend(_vanished_hostname_stale_items(
+        endpoint_table,
+        source_records,
+        previous_endpoint_hostnames,
+        as_of,
+        stale_threshold,
+    ))
 
     return {
         "total_endpoint": total_endpoint,
