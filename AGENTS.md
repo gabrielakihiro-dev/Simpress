@@ -56,6 +56,10 @@ Ao exibir ou exportar o Histórico de Planilhas, disponibilize um campo de anota
 - Se uma exportação (inclusive do Endpoint Central) for bloqueada, não tente contornar o bloqueio nem repita cliques às cegas. Use arquivo manual somente quando o usuário identificar sua origem.
 - Interrompa se o usuário disser "pare" ou "cancelar". Detalhes na skill `.claude/skills/rotina-os-chamados`.
 
+## Rotina de exportação de inventários
+
+Quando o usuário disser "Executar" ou "exportar planilhas", siga a skill `.claude/skills/rotina-exportar-planilhas` (UX Simpress + Endpoint Central, importação pela pasta `data/state/entrada_automatica`). As mesmas regras de login, bloqueio e "pare"/"cancelar" da rotina de OS se aplicam. "Executar OS Simpress" aciona a rotina de OS acima.
+
 ## Arquitetura local
 
 O Simpress roda somente localmente: servidor FastAPI e dados em `data/`, com as anotações do histórico sincronizadas pela pasta compartilhada já configurada. Não há backend remoto nem Supabase. Qualquer proposta de migração para um serviço externo deve começar por uma análise que não altere código nem dados.
