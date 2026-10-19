@@ -754,6 +754,61 @@ test("usage card shows 30-day counts and estimates hours from the configured min
   await auditAccessibility(page, "#uso-30-dias");
 });
 
+test("Resumo tab switches panels, keeps ARIA state and supports arrow keys", async ({ page }) => {
+  const tabs = { home: "#tab-home", transporte: "#tab-retirada-entrega", resumo: "#tab-resumo" };
+  const panels = { home: "#tab-panel-home", transporte: "#tab-panel-retirada-entrega", resumo: "#tab-panel-resumo" };
+  async function expectOnly(ativa) {
+    for (const nome of Object.keys(tabs)) {
+      const selecionada = nome === ativa;
+      await expect(page.locator(tabs[nome])).toHaveAttribute("aria-selected", String(selecionada));
+      await expect(page.locator(tabs[nome])).toHaveAttribute("tabindex", selecionada ? "0" : "-1");
+      if (selecionada) await expect(page.locator(panels[nome])).toBeVisible();
+      else await expect(page.locator(panels[nome])).toBeHidden();
+    }
+    await expect(page.locator("body")).toHaveClass(ativa === "transporte" ? /has-quick-actions/ : /^(?!.*has-quick-actions).*$/);
+  }
+
+  await openSidebarIfNeeded(page);
+  await page.locator(tabs.resumo).click();
+  await expectOnly("resumo");
+  await expect(page.locator("#ux-home-panel")).toBeVisible();
+  await expect(page.locator("#uso-30-dias")).toBeVisible();
+
+  await openSidebarIfNeeded(page);
+  await page.locator(tabs.transporte).click();
+  await expectOnly("transporte");
+
+  await openSidebarIfNeeded(page);
+  await page.locator(tabs.home).click();
+  await expectOnly("home");
+
+  // Setas: Home -> Transporte -> Resumo -> (volta) Home; End vai para Resumo.
+  // No celular o menu lateral fecha ao escolher uma aba e o foco sai da lista, então só o desktop encadeia teclas.
+  if (await page.locator("#btn-sidebar-open").isVisible()) return;
+  await page.locator(tabs.home).focus();
+  await page.keyboard.press("ArrowDown");
+  await expectOnly("transporte");
+  await page.keyboard.press("ArrowDown");
+  await expectOnly("resumo");
+  await page.keyboard.press("ArrowDown");
+  await expectOnly("home");
+  await page.keyboard.press("End");
+  await expectOnly("resumo");
+});
+
+test("usage card shows stat cards in two columns on narrow screens", async ({ page }) => {
+  await page.setViewportSize({ width: 390, height: 844 });
+  await openSidebarIfNeeded(page);
+  await page.locator("#tab-resumo").click();
+  const grid = page.locator("#uso-30-dias-lista");
+  await expect(grid).toBeVisible();
+  const columns = await grid.evaluate(el => getComputedStyle(el).gridTemplateColumns.split(" ").length);
+  expect(columns).toBe(2);
+  await expect(grid.locator("[data-usage-metric]")).toHaveCount(5);
+  const overflow = await page.evaluate(() => document.documentElement.scrollWidth - document.documentElement.clientWidth);
+  expect(overflow).toBeLessThanOrEqual(0);
+});
+
 test("stale base alert shows the last update date and opens the base update", async ({ page, request }) => {
   const alert = page.locator("#alerta-base-desatualizada");
   await expect(alert).toBeHidden();
