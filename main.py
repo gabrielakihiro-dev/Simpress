@@ -61,6 +61,9 @@ from core.config import (
     LOG_DIR,
     MANUAL_USERS_FILE,
     MODIFIED_APELIDOS_FILE,
+    MONTHLY_REPORT_CHECK_SECONDS,
+    MONTHLY_REPORT_FIRST_CHECK_SECONDS,
+    MONTHLY_REPORTS_DIR,
     STALE_BASE_ALERT_DAYS,
     STATIC_DIR,
     STATE_DIR,
@@ -89,7 +92,11 @@ from routers.transfer_history import TransferHistoryServices, create_transfer_hi
 from routers.dashboard import DashboardServices, create_dashboard_router
 from routers.operations import MAX_TICKET_WORKBOOK_BYTES, create_operations_router
 from routers.local_setup import create_local_setup_router
-from routers.monthly_report import MonthlyReportServices, create_monthly_report_router
+from routers.monthly_report import (
+    MonthlyReportServices,
+    create_monthly_report_router,
+    generate_previous_month_report,
+)
 from domains.local_setup import load_origin_contact, validate_local_model
 from core.logging_setup import configure_logging
 from core.xlsx_safety import (
@@ -859,6 +866,7 @@ async def lifespan(app: FastAPI):
             asyncio.create_task(_automatic_inventory_import_worker()),
             asyncio.create_task(_automatic_ticket_import_worker()),
             asyncio.create_task(_external_change_reload_worker()),
+            asyncio.create_task(_monthly_report_worker()),
         ))
         yield
     finally:
@@ -2223,13 +2231,32 @@ def _monthly_report_inventory() -> Tuple[List[Dict[str, Any]], Dict[str, Any]]:
         return deepcopy(list(inventory_state.equipamentos_cache.values())), deepcopy(inventory_state.stats_cache)
 
 
-app.include_router(create_monthly_report_router(MonthlyReportServices(
+_monthly_report_services = MonthlyReportServices(
     inventory_snapshot=_monthly_report_inventory,
     load_comparison_history=load_comparison_history,
     comparison_history_for_display=comparison_history_for_display,
     ticket_report_path=lambda: TICKET_REPORT_FILE,
     read_usage_metrics=usage_metrics.read,
-)))
+)
+app.include_router(create_monthly_report_router(_monthly_report_services))
+
+
+def _generate_previous_month_report_best_effort() -> None:
+    """Save last month's report when missing; failures wait for the next check."""
+    if get_transaction_recovery_block() is not None:
+        return
+    try:
+        generate_previous_month_report(_monthly_report_services, MONTHLY_REPORTS_DIR, TRANSACTION_ROOT)
+    except Exception as error:
+        logger.warning("O relatório mensal automático não pôde ser gerado agora (erro=%s); nova tentativa em breve.", type(error).__name__)
+
+
+async def _monthly_report_worker() -> None:
+    # The first check waits for the startup imports; later ones also cover month turns while running.
+    await asyncio.sleep(MONTHLY_REPORT_FIRST_CHECK_SECONDS)
+    while True:
+        await asyncio.to_thread(_generate_previous_month_report_best_effort)
+        await asyncio.sleep(MONTHLY_REPORT_CHECK_SECONDS)
 
 # Serve static files and frontend
 STATIC_DIR.mkdir(parents=True, exist_ok=True)
