@@ -62,6 +62,12 @@ class EquipmentExportServices:
     lock_paths: Callable[..., ContextManager[Any]]
     logger: logging.Logger
     external_errors: Tuple[Type[BaseException], ...] = ()
+    # Hostnames the user discarded from the Endpoint duplicates; they decide which one is exported.
+    removed_hostnames_file: Optional[Callable[[], Path]] = None
+
+
+def _removed_hostnames_paths(services: EquipmentExportServices) -> List[Path]:
+    return [services.removed_hostnames_file()] if services.removed_hostnames_file is not None else []
 
 
 @dataclass(frozen=True)
@@ -176,7 +182,13 @@ def export_files_signature(services: EquipmentExportServices) -> tuple:
         active_file = services.get_parque_file()
     except FileBusyError:
         active_file = None
-    for path in (active_file, services.export_model_file(), services.endpoint_upload_file(), services.modified_aliases_file()):
+    for path in (
+        active_file,
+        services.export_model_file(),
+        services.endpoint_upload_file(),
+        services.modified_aliases_file(),
+        *_removed_hostnames_paths(services),
+    ):
         if path is None:
             signature.append(None)
             continue
@@ -328,6 +340,7 @@ def count_export_changes(
             *detail_files,
             services.endpoint_upload_file(),
             services.modified_aliases_file(),
+            *_removed_hostnames_paths(services),
             services.export_model_file(),
         ], timeout=services.read_lock_timeout()):
             return count_with_cache()
@@ -346,7 +359,13 @@ def build_equipment_export(services: EquipmentExportServices) -> EquipmentExport
     current_wb = None
     passthrough_errors: Tuple[Type[BaseException], ...] = (DomainError, *services.external_errors)
     try:
-        with services.lock_paths([source_file, current_file, services.endpoint_upload_file(), services.modified_aliases_file()]):
+        with services.lock_paths([
+            source_file,
+            current_file,
+            services.endpoint_upload_file(),
+            services.modified_aliases_file(),
+            *_removed_hostnames_paths(services),
+        ]):
             services.validate_xlsx(source_file)
             wb = load_workbook_safely(source_file, allow_threaded_comments=True)
             original = workbook_snapshot(wb)
