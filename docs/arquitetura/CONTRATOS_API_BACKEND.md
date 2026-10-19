@@ -93,6 +93,9 @@ Mapa dos contratos locais registrados na análise dos handlers FastAPI e consumi
 | # | Método e caminho | Entrada/validação | Resposta de sucesso | Erros notáveis e acesso |
 | --- | --- | --- | --- | --- |
 | 49 | GET /api/relatorio-mensal | Query mes AAAA-MM, até o mês atual. | XLSX Relatorio-mensal-AAAA-MM.xlsx com inventário da base oficial, última comparação até o fim do mês, OS do mês e uso do mês (docs/operacao/relatorio-mensal.md). Não grava estado. | 422 mês inválido ou futuro; 503 base não carregada ou histórico de chamados ilegível. Somente leitura. routers/monthly_report.py; static/js/features/monthly-report.js. |
+| 50 | GET /api/endpoint/hostnames-removidos | Sem parâmetros. | {removidos:[{serie,hostname,removido_em}]}, pares descartados das duplicidades do Endpoint. | 200; arquivo ilegível é tratado como erro sem alterar os dados. Somente leitura. routers/endpoint_removals.py; static/js/features/comparison-result.js. |
+| 51 | POST /api/endpoint/hostnames-removidos | JSON {serie, hostname}; o par precisa ser uma duplicidade atual do Endpoint e ao menos um hostname da série deve restar. | {sucesso,serie,hostname,mantidos,mensagem}; o hostname mantido passa a valer na base e nas exportações. A planilha de origem não é alterada. | 409 par fora das duplicidades, já removido, último hostname ou concorrência; 422 campo vazio ou acima do limite; 500 gravação. Local. routers/endpoint_removals.py; static/js/features/comparison-result.js. |
+| 52 | POST /api/endpoint/hostnames-removidos/restaurar | JSON {serie, hostname} de um par removido. | {sucesso,serie,hostname,mensagem}; a duplicidade volta a valer. | Par que não estava removido não altera nada; 409 concorrência; 422 campo vazio ou acima do limite; 500 gravação. Local. routers/endpoint_removals.py; static/js/features/comparison-result.js. |
 
 ## Regras de compatibilidade
 

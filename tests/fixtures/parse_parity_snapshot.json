@@ -163,6 +163,7 @@
      "local_previsto": "Sem mapeamento de local",
      "motivo": "Há registros duplicados ou uma alternativa de hostname/Apelido que não é única.",
      "serie": "FVFAMB001 / SFVFAMB001",
+     "ultima_verificacao": null,
      "usuario": "sebrae\\fabi"
     },
     {
@@ -175,6 +176,7 @@
      "local_previsto": "Cascavel",
      "motivo": "Há registros duplicados ou uma alternativa de hostname/Apelido que não é única.",
      "serie": "BRJ300DUP1",
+     "ultima_verificacao": null,
      "usuario": ""
     }
    ],
@@ -1857,6 +1859,7 @@
      "local_previsto": "Sem mapeamento de local",
      "motivo": "Há registros duplicados ou uma alternativa de hostname/Apelido que não é única.",
      "serie": "FVFAMB001 / SFVFAMB001",
+     "ultima_verificacao": null,
      "usuario": "sebrae\\fabi"
     },
     {
@@ -1869,6 +1872,7 @@
      "local_previsto": "Cascavel",
      "motivo": "Há registros duplicados ou uma alternativa de hostname/Apelido que não é única.",
      "serie": "BRJ300DUP1",
+     "ultima_verificacao": null,
      "usuario": ""
     }
    ],

@@ -9,7 +9,7 @@ import logging
 import re
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Any, Callable, Dict, Iterable, List, Optional, Set
+from typing import Any, Callable, Dict, FrozenSet, Iterable, List, Optional, Set, Tuple
 
 from core.errors import DomainError
 
@@ -44,8 +44,15 @@ def unavailable_endpoint_alias_index() -> Dict[str, Any]:
     return {"available": False, "unique": {}, "duplicates": {}, "blank_serials": [], "blank_hostnames": {}, "users": {}}
 
 
-def build_endpoint_alias_index(records: Iterable[Dict[str, Any]]) -> Dict[str, Any]:
-    """Split Endpoint rows into unique associations and rows to review."""
+def build_endpoint_alias_index(
+    records: Iterable[Dict[str, Any]],
+    removed: FrozenSet[Tuple[str, str]] = frozenset(),
+) -> Dict[str, Any]:
+    """Split Endpoint rows into unique associations and rows to review.
+
+    ``removed`` holds normalized (serial, hostname) pairs the user discarded from
+    the duplicates; those rows are skipped, so the remaining hostname becomes unique.
+    """
     rows_by_serial: Dict[str, List[Dict[str, str]]] = {}
     users_by_serial: Dict[str, List[str]] = {}
     blank_serials: List[Dict[str, str]] = []
@@ -65,6 +72,8 @@ def build_endpoint_alias_index(records: Iterable[Dict[str, Any]]) -> Dict[str, A
         logged_users = str(_record_value(record, "USUARIOSLOGADOS", "USUARIOLOGADO") or "").strip()
         if normalize_reference_value(logged_users) == "NA":
             logged_users = ""
+        if serial_key and hostname and (serial_key, normalize_reference_value(hostname)) in removed:
+            continue
         row = {"serie": str(serial or "").strip(), "hostname": hostname}
         if serial_key:
             rows_by_serial.setdefault(serial_key, []).append(row)
@@ -99,7 +108,10 @@ def build_endpoint_alias_index(records: Iterable[Dict[str, Any]]) -> Dict[str, A
     }
 
 
-def read_endpoint_alias_index(services: EffectiveAliasServices) -> Dict[str, Any]:
+def read_endpoint_alias_index(
+    services: EffectiveAliasServices,
+    removed: FrozenSet[Tuple[str, str]] = frozenset(),
+) -> Dict[str, Any]:
     """Retorna associações unívocas e linhas que precisam de conferência."""
     endpoint_file = services.endpoint_upload_file()
     if not endpoint_file.is_file():
@@ -114,7 +126,7 @@ def read_endpoint_alias_index(services: EffectiveAliasServices) -> Dict[str, Any
         )
         return unavailable_endpoint_alias_index()
 
-    return build_endpoint_alias_index(table.get("records", []))
+    return build_endpoint_alias_index(table.get("records", []), removed)
 
 
 def endpoint_loss_warnings(
