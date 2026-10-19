@@ -41,6 +41,8 @@ MAX_CONCURRENT_WORKBOOK_PARSERS = 1
 HISTORY_RETENTION_DAYS = 60
 # Home alert: the official EquipamentosDetalhes base older than this many days (docs/operacao/alerta-base-desatualizada.md).
 STALE_BASE_ALERT_DAYS = 7
+# Home alert: open tickets without an Oracle update for this many days (docs/operacao/alertas-os-divergencias.md).
+STALE_TICKET_ALERT_DAYS = 7
 MAX_XLSX_ARCHIVE_ENTRIES = 10000
 MAX_XLSX_UNCOMPRESSED_BYTES = 192 * 1024 * 1024
 # Technical safeguards for the read-only inventory parser, not business row limits.

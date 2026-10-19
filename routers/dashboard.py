@@ -2,13 +2,19 @@
 
 from collections import Counter
 from dataclasses import dataclass, field
-from datetime import datetime, timedelta
+from datetime import date, datetime, timedelta
 from pathlib import Path
 from typing import Any, Callable, Dict, List, Optional, Sequence, Tuple
 
 from fastapi import APIRouter, Body, HTTPException
 
 from core.integrity import FileBusyError, FileTransactionError
+from domains.history_insights import PENDING_CATEGORIES, PINNED_BASELINE_ID, compare_updates
+from domains.inventory_comparison import (
+    filter_curitiba_hostname_location_mismatches,
+    filter_sebrae_owned_unmatched_items,
+)
+from domains.ticket_reporting import normalize_ticket_snapshot, ticket_attention
 from domains.usage_metrics import InvalidManualMinutesError, UsageMetricsCorruptionError
 
 ATTENTION_FIELDS = (
@@ -23,6 +29,7 @@ ATTENTION_FIELDS = (
 TOP_CITIES = None  # lista todas as cidades; o painel limita a altura com rolagem
 ENDPOINT_ABSENCE_CATEGORIES = frozenset({"notebook", "macbook"})
 DEFAULT_STALE_BASE_DAYS = 7
+DEFAULT_STALE_TICKET_DAYS = 7
 # A base file modified this long after the newest history event was replaced outside the import flow.
 OUT_OF_FLOW_TOLERANCE = timedelta(minutes=10)
 
@@ -45,6 +52,10 @@ class DashboardServices:
     get_comparison_history: Optional[Callable[[], Sequence[Dict[str, Any]]]] = None
     get_details_file: Optional[Callable[[], Optional[Path]]] = None
     stale_base_days: int = DEFAULT_STALE_BASE_DAYS
+    # Stale tickets and new divergences alerts (docs/operacao/alertas-os-divergencias.md).
+    get_ticket_report: Optional[Callable[[], Optional[Dict[str, Any]]]] = None
+    stale_ticket_days: int = DEFAULT_STALE_TICKET_DAYS
+    display_comparison: Optional[Callable[[Dict[str, Any]], Dict[str, Any]]] = None
     now: Callable[[], datetime] = field(default=_local_now)
 
 
@@ -131,6 +142,7 @@ def build_dashboard(services: DashboardServices) -> Dict[str, Any]:
             ],
         }
 
+    history = _comparison_history(services)
     return {
         "base_importada": len(equipment) > 0,
         "total_equipamentos": len(equipment),
@@ -145,7 +157,9 @@ def build_dashboard(services: DashboardServices) -> Dict[str, Any]:
         "arquivo_origem": stats.get("arquivo_origem") or "",
         "ultima_comparacao": latest,
         "uso_30_dias": _usage_summary(services),
-        "base_desatualizada": _stale_base_summary(services),
+        "base_desatualizada": _stale_base_summary(services, history),
+        "os_paradas": _stale_tickets_summary(services),
+        "divergencias_novas": _new_divergences_summary(services, history),
     }
 
 
@@ -242,18 +256,22 @@ def stale_base_status(
     return result
 
 
-def _stale_base_summary(services: DashboardServices) -> Optional[Dict[str, Any]]:
+def _comparison_history(services: DashboardServices) -> Optional[Sequence[Any]]:
+    """Read the comparison history once per panel; ``None`` when it is missing or unreadable."""
+    if services.get_comparison_history is None:
+        return None
+    try:
+        return services.get_comparison_history()
+    except Exception:
+        return None
+
+
+def _stale_base_summary(services: DashboardServices, history: Optional[Sequence[Any]]) -> Optional[Dict[str, Any]]:
     if services.get_details_file is None:
         return None
-    history: Sequence[Any] = []
-    if services.get_comparison_history is not None:
-        try:
-            history = services.get_comparison_history()
-        except Exception:
-            # An unreadable history falls back to the file date.
-            history = []
     try:
-        return stale_base_status(history, services.get_details_file(), services.now(), services.stale_base_days)
+        # An unreadable history falls back to the file date.
+        return stale_base_status(history or [], services.get_details_file(), services.now(), services.stale_base_days)
     except Exception:
         # The alert is optional; the inventory summary must still load.
         return {
@@ -263,6 +281,114 @@ def _stale_base_summary(services: DashboardServices) -> Optional[Dict[str, Any]]
             "ultima_atualizacao": "",
             "origem_data": "",
         }
+
+
+def stale_tickets_status(
+    report: Optional[Dict[str, Any]],
+    today: date,
+    limit_days: int = DEFAULT_STALE_TICKET_DAYS,
+) -> Dict[str, Any]:
+    """Count open tickets of the current OS import whose newest Oracle update is ``limit_days`` or older."""
+    result: Dict[str, Any] = {
+        "estado": "sem_dados",
+        "limite_dias": limit_days,
+        "total": 0,
+        "maior_dias_sem_atualizacao": None,
+        "importado_em": "",
+    }
+    tickets_value: Any = report.get("chamados") if isinstance(report, dict) else None
+    if not isinstance(report, dict) or not isinstance(tickets_value, list) or not tickets_value:
+        return result
+    tickets = normalize_ticket_snapshot({"chamados": tickets_value})["chamados"]
+    ages: List[int] = []
+    for ticket in tickets:
+        if not isinstance(ticket, dict):
+            continue
+        # Same open/closed and date rules as the ticket tracking screen; undated tickets are not counted.
+        age = ticket_attention(ticket, stale_days=limit_days, today=today)["dias_sem_atualizacao"]
+        if isinstance(age, int) and age >= limit_days:
+            ages.append(age)
+    result.update({
+        "estado": "paradas" if ages else "em_dia",
+        "total": len(ages),
+        "maior_dias_sem_atualizacao": max(ages) if ages else None,
+        "importado_em": str(report.get("atualizado_em") or ""),
+    })
+    return result
+
+
+def _stale_tickets_summary(services: DashboardServices) -> Optional[Dict[str, Any]]:
+    if services.get_ticket_report is None:
+        return None
+    try:
+        return stale_tickets_status(services.get_ticket_report(), services.now().date(), services.stale_ticket_days)
+    except Exception:
+        # The alert is optional; the inventory summary must still load.
+        return {
+            "estado": "indisponivel",
+            "limite_dias": services.stale_ticket_days,
+            "total": 0,
+            "maior_dias_sem_atualizacao": None,
+            "importado_em": "",
+        }
+
+
+def _without_owner_exceptions(event: Dict[str, Any]) -> Dict[str, Any]:
+    """Reapply the Sebrae and Curitiba PRNOTE rules on top of the display view, as the monthly report does."""
+    comparison = event.get("comparacao")
+    if not isinstance(comparison, dict):
+        return event
+    filtered = dict(comparison)
+    for key in ("ausentes_no_endpoint", "ausentes_em_detalhes"):
+        if isinstance(comparison.get(key), list):
+            filtered[key] = filter_sebrae_owned_unmatched_items(comparison[key])
+    if isinstance(comparison.get("divergencias_local"), list):
+        filtered["divergencias_local"] = filter_curitiba_hostname_location_mismatches(comparison["divergencias_local"])
+    return {**event, "comparacao": filtered}
+
+
+def new_divergences_status(
+    history: Sequence[Any],
+    display: Callable[[Dict[str, Any]], Dict[str, Any]],
+) -> Dict[str, Any]:
+    """Divergence rows of the newest inventory update that were not in the previous one."""
+    result: Dict[str, Any] = {"estado": "sem_comparacao", "total": 0, "por_secao": [], "anterior": None, "atual": None}
+    updates: List[Tuple[datetime, Dict[str, Any]]] = []
+    for event in history:
+        if not isinstance(event, dict) or _is_restoration(event) or event.get("id") == PINNED_BASELINE_ID:
+            continue
+        moment = _parse_event_time(event.get("horario"))
+        if moment is not None:
+            updates.append((moment, event))
+    if len(updates) < 2:
+        return result
+    updates.sort(key=lambda pair: pair[0])
+    previous, current = (_without_owner_exceptions(display(event)) for _, event in updates[-2:])
+    new_rows = compare_updates(previous, current)["mudancas"]["novos"]
+    by_section: Counter = Counter(str(row.get("secao") or "") for row in new_rows)
+    # Sections follow the history order; two categories share the ambiguity section.
+    sections = list(dict.fromkeys(PENDING_CATEGORIES.values()))
+    result.update({
+        "estado": "novas" if new_rows else "sem_novas",
+        "total": len(new_rows),
+        "por_secao": [{"secao": section, "total": by_section[section]} for section in sections if by_section[section]],
+        "anterior": {"id": previous.get("id"), "horario": previous.get("horario")},
+        "atual": {"id": current.get("id"), "horario": current.get("horario")},
+    })
+    return result
+
+
+def _new_divergences_summary(services: DashboardServices, history: Optional[Sequence[Any]]) -> Optional[Dict[str, Any]]:
+    if services.get_comparison_history is None or services.display_comparison is None:
+        return None
+    unavailable: Dict[str, Any] = {"estado": "indisponivel", "total": 0, "por_secao": [], "anterior": None, "atual": None}
+    if history is None:
+        return unavailable
+    try:
+        return new_divergences_status(history, services.display_comparison)
+    except Exception:
+        # The alert is optional; the inventory summary must still load.
+        return unavailable
 
 
 @dataclass(frozen=True)
