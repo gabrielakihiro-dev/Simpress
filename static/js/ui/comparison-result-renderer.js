@@ -214,7 +214,8 @@
   function linhasSemAcesso(semAcesso7DiasOrdenados, { renderizarCampoAnotacao }) {
     return semAcesso7DiasOrdenados.map(item => `
         <tr class="text-slate-300" ${atributosLinhaComparacao("sem_acesso_7_dias", item)}>
-          <td class="px-3 py-2 font-mono text-white whitespace-nowrap">${escapeHtml(item.computador || "—")}</td>
+          <td class="px-3 py-2 font-mono text-white whitespace-nowrap">${escapeHtml(item.computador || "—")}${item.hostname_sumiu_endpoint ? `
+            <span class="block font-sans text-[10px] text-amber-300 whitespace-normal" data-hostname-sumiu="true">Hostname sumiu do Endpoint${item.hostname_origem === "endpoint_anterior" ? " (hostname do Endpoint anterior)" : item.hostname_origem === "simpress" ? " (hostname mantido da Simpress)" : ""}</span>` : ""}</td>
           <td class="px-3 py-2 font-mono whitespace-nowrap">${escapeHtml(item.serie || "—")}</td>
           <td class="px-3 py-2 whitespace-nowrap">${escapeHtml(item.ultima_verificacao ? formatarHorarioHistorico(item.ultima_verificacao) : "—")}</td>
           <td class="px-3 py-2">${Number(item.dias_sem_verificacao || 0).toLocaleString("pt-BR")}</td>
