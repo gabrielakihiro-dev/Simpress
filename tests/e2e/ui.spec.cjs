@@ -779,3 +779,41 @@ test("stale base alert shows the last update date and opens the base update", as
     await request.get("/__fixture_base_desatualizada?estado=atualizada");
   }
 });
+
+test("stale tickets and new divergences alerts show counts and open their screens", async ({ page, request }) => {
+  const tickets = page.locator("#alerta-os-paradas");
+  const divergences = page.locator("#alerta-divergencias-novas");
+  await expect(tickets).toBeHidden();
+  await expect(divergences).toBeHidden();
+  try {
+    await request.get("/__fixture_alertas_painel?estado=visiveis");
+    await page.reload();
+    await expect(tickets.getByRole("heading", { name: "OS paradas" })).toBeVisible();
+    await expect(tickets.locator("#alerta-os-paradas-texto")).toHaveText(
+      "3 chamados abertos estão sem atualização há 7 dias ou mais. O mais antigo está parado há 21 dias."
+    );
+    await expect(divergences.getByRole("heading", { name: "Divergências novas" })).toBeVisible();
+    await expect(divergences.locator("#alerta-divergencias-novas-texto")).toHaveText(
+      "A comparação de 18/10/2026 às 09:00 trouxe 5 linhas de divergência que não estavam na de 11/10/2026 às 08:00: 3 em Localidade divergente e 2 em Séries sem local definido."
+    );
+    await auditAccessibility(page, "#alerta-os-paradas");
+    await auditAccessibility(page, "#alerta-divergencias-novas");
+
+    await tickets.getByRole("button", { name: "Ver chamados" }).click();
+    await expect(page.locator("#modal-acompanhamento-chamados")).toBeVisible();
+    await page.keyboard.press("Escape");
+    await expect(page.locator("#modal-acompanhamento-chamados")).toBeHidden();
+
+    await divergences.getByRole("button", { name: "Ver evolução" }).click();
+    await expect(page.locator("#modal-evolucao-atualizacoes")).toBeVisible();
+    await page.keyboard.press("Escape");
+    await expect(page.locator("#modal-evolucao-atualizacoes")).toBeHidden();
+
+    await request.get("/__fixture_alertas_painel?estado=ocultos");
+    await page.reload();
+    await expect(tickets).toBeHidden();
+    await expect(divergences).toBeHidden();
+  } finally {
+    await request.get("/__fixture_alertas_painel?estado=ocultos");
+  }
+});

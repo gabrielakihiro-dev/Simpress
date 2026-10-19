@@ -109,6 +109,28 @@ BASE_FRESHNESS = {
 }
 base_freshness_state = "atualizada"
 
+# Stale tickets and new divergences alerts: hidden by default; e2e turns them on per test.
+PANEL_ALERTS = {
+    "ocultos": {
+        "os_paradas": {"estado": "em_dia", "limite_dias": 7, "total": 0,
+                       "maior_dias_sem_atualizacao": None, "importado_em": "2026-10-18T09:00:00-03:00"},
+        "divergencias_novas": {"estado": "sem_novas", "total": 0, "por_secao": [],
+                               "anterior": None, "atual": None},
+    },
+    "visiveis": {
+        "os_paradas": {"estado": "paradas", "limite_dias": 7, "total": 3,
+                       "maior_dias_sem_atualizacao": 21, "importado_em": "2026-10-18T09:00:00-03:00"},
+        "divergencias_novas": {
+            "estado": "novas", "total": 5,
+            "por_secao": [{"secao": "Localidade divergente", "total": 3},
+                          {"secao": "Séries sem local definido", "total": 2}],
+            "anterior": {"id": "anterior", "horario": "2026-10-11T08:00:00-03:00"},
+            "atual": {"id": "atual", "horario": "2026-10-18T09:00:00-03:00"},
+        },
+    },
+}
+panel_alerts_state = "ocultos"
+
 
 def dashboard_payload():
     return {
@@ -120,6 +142,7 @@ def dashboard_payload():
         "arquivo_origem": "simpress-demo.xlsx", "ultima_comparacao": None,
         "uso_30_dias": usage_summary(),
         "base_desatualizada": BASE_FRESHNESS[base_freshness_state],
+        **PANEL_ALERTS[panel_alerts_state],
     }
 
 
@@ -139,7 +162,7 @@ class Handler(BaseHTTPRequestHandler):
             pass  # Expected when testing cancelled searches.
 
     def do_GET(self):
-        global base_freshness_state
+        global base_freshness_state, panel_alerts_state
         url = urlsplit(self.path)
         path = unquote(url.path)
         if path == "/" or path.startswith("/static/"):
@@ -164,6 +187,10 @@ class Handler(BaseHTTPRequestHandler):
             requested = parse_qs(url.query).get("estado", ["atualizada"])[0]
             base_freshness_state = requested if requested in BASE_FRESHNESS else "atualizada"
             self.send({"estado": base_freshness_state})
+        elif path == "/__fixture_alertas_painel":
+            requested = parse_qs(url.query).get("estado", ["ocultos"])[0]
+            panel_alerts_state = requested if requested in PANEL_ALERTS else "ocultos"
+            self.send({"estado": panel_alerts_state})
         elif path == "/__fixture_state":
             self.send({"annotation": DEMO_ANNOTATION})
         elif path == "/api/unidades":
