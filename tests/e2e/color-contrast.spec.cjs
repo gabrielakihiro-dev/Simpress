@@ -10,8 +10,14 @@ async function contrastViolations(page, scope) {
   })));
 }
 
+async function openSidebarForTabs(page) {
+  const menu = page.locator("#btn-sidebar-open");
+  const shell = page.locator("#simpress-app-shell");
+  if (await menu.isVisible() && await shell.getAttribute("data-sidebar-open") !== "true") await menu.click();
+}
+
 for (const theme of ["dark", "light"]) {
-  test(`home and Transporte keep AA text contrast in the ${theme} theme`, async ({ page }) => {
+  test(`home, Transporte and Resumo keep AA text contrast in the ${theme} theme`, async ({ page }) => {
     await page.goto("/");
     await page.locator("html").evaluate((root, value) => { root.dataset.theme = value; }, theme);
 
@@ -23,5 +29,11 @@ for (const theme of ["dark", "light"]) {
     await page.locator("#tab-retirada-entrega").click();
     await expect(page.locator("#tab-panel-retirada-entrega")).toBeVisible();
     expect(await contrastViolations(page, "#tab-panel-retirada-entrega")).toEqual([]);
+
+    await openSidebarForTabs(page);
+    await page.locator("#tab-resumo").click();
+    await expect(page.locator("#tab-panel-resumo")).toBeVisible();
+    await expect(page.locator("#uso-30-dias")).toBeVisible();
+    expect(await contrastViolations(page, "#tab-panel-resumo")).toEqual([]);
   });
 }
