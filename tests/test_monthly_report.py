@@ -35,7 +35,12 @@ from domains.monthly_report import (
     tickets_section,
     usage_section,
 )
-from routers.monthly_report import MonthlyReportServices, create_monthly_report_router
+from routers.monthly_report import (
+    MonthlyReportServices,
+    create_monthly_report_router,
+    generate_previous_month_report,
+    previous_report_month,
+)
 
 TODAY = date(2026, 10, 17)
 OCTOBER = parse_report_month("2026-10", TODAY)
@@ -399,6 +404,66 @@ class MonthlyReportRouteTests(unittest.TestCase):
         with self.assertLogs("routers.monthly_report", level="WARNING"):
             response = self.client(broken_metrics).get("/api/relatorio-mensal", params={"mes": "2026-10"})
         self.assertEqual(response.status_code, 200)
+
+
+class AutomaticMonthlyReportTests(unittest.TestCase):
+    def setUp(self):
+        self.tmp = tempfile.TemporaryDirectory()
+        self.root = Path(self.tmp.name)
+        self.reports_dir = self.root / "data" / "relatorios_mensais"
+        self.ticket_path = self.root / "historico_chamados.json"
+        self.ticket_path.write_text(json.dumps(TICKET_REPORT), encoding="utf-8")
+        self.equipment = list(EQUIPMENT)
+        self.today = TODAY
+
+    def tearDown(self):
+        self.tmp.cleanup()
+
+    def generate(self):
+        services = MonthlyReportServices(
+            inventory_snapshot=lambda: (self.equipment, dict(STATS)),
+            load_comparison_history=lambda: HISTORY,
+            comparison_history_for_display=comparison_history_for_display,
+            ticket_report_path=lambda: self.ticket_path,
+            read_usage_metrics=lambda: USAGE,
+            today=lambda: self.today,
+            now=lambda: datetime(2026, 10, 17, 9, 30),
+        )
+        return generate_previous_month_report(services, self.reports_dir, self.root)
+
+    def test_previous_month_crosses_the_year(self):
+        self.assertEqual(previous_report_month(date(2026, 10, 1)).key, "2026-09")
+        self.assertEqual(previous_report_month(date(2027, 1, 31)).key, "2026-12")
+
+    def test_saves_last_month_once_and_never_replaces_it(self):
+        saved = self.generate()
+        self.assertEqual(saved, self.reports_dir / "Relatorio-mensal-2026-09.xlsx")
+        workbook = openpyxl.load_workbook(saved)
+        self.assertEqual(workbook["Resumo"]["A1"].value, "Relatório mensal — setembro de 2026")
+        content = saved.read_bytes()
+
+        self.equipment = [EQUIPMENT[0]]
+        self.assertIsNone(self.generate())
+        self.assertEqual(saved.read_bytes(), content)
+        self.assertEqual(sorted(path.name for path in self.reports_dir.glob("*.xlsx")), ["Relatorio-mensal-2026-09.xlsx"])
+        self.assertFalse(any((self.root / ".transactions").iterdir()))
+
+    def test_new_month_adds_its_own_file(self):
+        self.generate()
+        self.today = date(2026, 11, 1)
+        self.assertEqual(self.generate().name, "Relatorio-mensal-2026-10.xlsx")
+        self.assertEqual(len(list(self.reports_dir.glob("*.xlsx"))), 2)
+
+    def test_waits_for_the_official_base_and_unreadable_tickets(self):
+        self.equipment = []
+        with self.assertLogs("routers.monthly_report", level="INFO"):
+            self.assertIsNone(self.generate())
+        self.assertFalse(self.reports_dir.exists())
+
+        self.equipment = list(EQUIPMENT)
+        self.ticket_path.write_text("{", encoding="utf-8")
+        self.assertIsNone(self.generate())
+        self.assertFalse(self.reports_dir.exists())
 
 
 if __name__ == "__main__":
