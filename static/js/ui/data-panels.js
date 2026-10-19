@@ -231,7 +231,7 @@
     let lastFetch = 0;
     let requestSerial = 0;
     let cityFilter = "";
-    let panelExpanded = false;
+    let panelExpanded = true;
 
     function ensurePanel() {
       if (panel) return panel;
