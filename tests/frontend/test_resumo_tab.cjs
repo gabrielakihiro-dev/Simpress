@@ -38,3 +38,13 @@ test("panel scripts target the Resumo tab", () => {
   assert.match(transferFormJs, /tab-resumo/);
   assert.match(transferFormJs, /alvo === "transferencia"/, "quick actions and serial summary belong to Transporte only");
 });
+
+test("opening a data tab retries the panel when it is not filled yet", () => {
+  assert.match(dataPanelsJs, /refresh\(!panel \|\| panel\.hidden\)/);
+});
+
+test("tablist label covers all tabs and the first Resumo card has no top gap", () => {
+  assert.match(appHtml, /role="tablist" aria-label="Navegação principal"/);
+  const css = fs.readFileSync(path.join(root, "static", "styles", "ux-refinements.css"), "utf8");
+  assert.match(css, /#resumo-cards > :first-child \{ margin-top: 0; \}/);
+});

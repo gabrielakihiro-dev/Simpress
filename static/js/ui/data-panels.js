@@ -421,7 +421,8 @@
     // The cards are in the Resumo tab; Home keeps refreshing too, for the sidebar divergence badge.
     const abasComDados = ["tab-home", "tab-resumo"].map(id => doc.getElementById(id)).filter(Boolean);
     const abaComDadosAtiva = () => abasComDados.some(tab => tab.getAttribute("aria-selected") === "true");
-    const abasObserver = new win.MutationObserver(() => { if (abaComDadosAtiva()) refresh(false); });
+    // Se o painel ainda não foi preenchido (ex.: falha anterior), abrir a aba tenta de novo sem esperar o intervalo mínimo.
+    const abasObserver = new win.MutationObserver(() => { if (abaComDadosAtiva()) refresh(!panel || panel.hidden); });
     abasComDados.forEach(tab => abasObserver.observe(tab, { attributes: true, attributeFilter: ["aria-selected"] }));
 
     ensurePanel();
