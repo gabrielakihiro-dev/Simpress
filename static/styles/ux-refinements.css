@@ -485,6 +485,8 @@ html[data-ux-density="compact"] .comparison-desktop-table td {
   color: var(--ux-text);
 }
 .stale-base-alert[hidden] { display: none; }
+/* Alertas empilhados (base, OS paradas, divergências novas) ficam mais próximos entre si. */
+.stale-base-alert:has(~ .stale-base-alert:not([hidden])) { margin-bottom: var(--ux-space-3); }
 .stale-base-alert[data-enter="true"] { animation: usage-card-enter var(--motion-normal) var(--motion-ease); }
 .stale-base-alert-icon { flex: none; width: 1.25rem; height: 1.25rem; color: var(--ux-warning-fg); }
 .stale-base-alert-copy { flex: 1 1 auto; min-width: 0; }

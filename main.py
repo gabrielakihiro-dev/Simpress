@@ -65,6 +65,7 @@ from core.config import (
     MONTHLY_REPORT_FIRST_CHECK_SECONDS,
     MONTHLY_REPORTS_DIR,
     STALE_BASE_ALERT_DAYS,
+    STALE_TICKET_ALERT_DAYS,
     STATIC_DIR,
     STATE_DIR,
     TEMPLATE_FILE,
@@ -2125,6 +2126,14 @@ def _dashboard_comparison_events() -> List[Dict[str, Any]]:
     return eventos
 
 
+def _dashboard_ticket_report() -> Optional[Dict[str, Any]]:
+    # Read-only; a missing file hides the stale tickets alert and an unreadable one makes it unavailable.
+    if not TICKET_REPORT_FILE.exists():
+        return None
+    data = json.loads(TICKET_REPORT_FILE.read_text(encoding="utf-8"))
+    return data if isinstance(data, dict) else None
+
+
 dashboard_router, _dashboard_exports = create_dashboard_router(DashboardServices(
     get_equipment=_dashboard_equipment_snapshot,
     get_stats=_get_stats_snapshot,
@@ -2136,6 +2145,9 @@ dashboard_router, _dashboard_exports = create_dashboard_router(DashboardServices
     get_comparison_history=lambda: load_comparison_history(),
     get_details_file=lambda: DETAILS_UPLOAD_FILE,
     stale_base_days=STALE_BASE_ALERT_DAYS,
+    get_ticket_report=_dashboard_ticket_report,
+    stale_ticket_days=STALE_TICKET_ALERT_DAYS,
+    display_comparison=comparison_history_for_display,
 ))
 obter_painel = _dashboard_exports.obter_painel
 app.include_router(dashboard_router)
