@@ -1,0 +1,26 @@
+{
+  "hooks": {
+    "PreToolUse": [
+      {
+        "matcher": "Edit|Write|MultiEdit|NotebookEdit",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "node 'C:\\Users\\Gabriel\\Desktop\\Simpress\\.codex\\hooks\\protect-operational-data.cjs'"
+          }
+        ]
+      }
+    ],
+    "PostToolUse": [
+      {
+        "matcher": "Edit|Write|MultiEdit",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "node 'C:\\Users\\Gabriel\\Desktop\\Simpress\\.codex\\hooks\\check-js-syntax.cjs'"
+          }
+        ]
+      }
+    ]
+  }
+}

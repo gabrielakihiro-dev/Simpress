@@ -54,27 +54,38 @@
     }, true);
   });
 
+  // Abas de primeiro nível: Home, Transporte e Resumo (nessa ordem na barra lateral).
+  const ABAS_PRINCIPAIS = Object.freeze({
+    home: Object.freeze({ tab: "tab-home", painel: "tab-panel-home" }),
+    transferencia: Object.freeze({ tab: "tab-retirada-entrega", painel: "tab-panel-retirada-entrega" }),
+    resumo: Object.freeze({ tab: "tab-resumo", painel: "tab-panel-resumo" }),
+  });
+
   function ativarAbaTransferencia(aba) {
-    const homeAtiva = aba === "home";
-    const tabHome = document.getElementById("tab-home");
-    const tabTransferencia = document.getElementById("tab-retirada-entrega");
-    const painelHome = document.getElementById("tab-panel-home");
-    const painelTransferencia = document.getElementById("tab-panel-retirada-entrega");
+    const alvo = ABAS_PRINCIPAIS[aba] ? aba : "transferencia";
+    const abas = Object.entries(ABAS_PRINCIPAIS).map(([nome, ids]) => ({
+      nome,
+      tab: document.getElementById(ids.tab),
+      painel: document.getElementById(ids.painel),
+    }));
+    const home = abas.find(item => item.nome === "home");
+    const transferencia = abas.find(item => item.nome === "transferencia");
+    if (!home.tab || !transferencia.tab || !home.painel || !transferencia.painel) return;
 
-    if (!tabHome || !tabTransferencia || !painelHome || !painelTransferencia) return;
-
-    const mudou = painelHome.hidden === homeAtiva;
-    painelHome.hidden = !homeAtiva;
-    painelTransferencia.hidden = homeAtiva;
-    tabHome.setAttribute("aria-selected", String(homeAtiva));
-    tabTransferencia.setAttribute("aria-selected", String(!homeAtiva));
-    tabHome.tabIndex = homeAtiva ? 0 : -1;
-    tabTransferencia.tabIndex = homeAtiva ? -1 : 0;
-    tabHome.classList.toggle("is-active", homeAtiva);
-    tabTransferencia.classList.toggle("is-active", !homeAtiva);
-    document.body.classList.toggle("has-quick-actions", !homeAtiva);
-    if (!homeAtiva) app.atualizarResumoSerieTransferencia(appState.currentEquipamento);
-    if (mudou) motion?.reveal(homeAtiva ? painelHome : painelTransferencia, "page");
+    const destino = abas.find(item => item.nome === alvo);
+    const mudou = Boolean(destino.painel?.hidden);
+    abas.forEach(({ nome, tab, painel }) => {
+      const ativa = nome === alvo;
+      if (painel) painel.hidden = !ativa;
+      if (tab) {
+        tab.setAttribute("aria-selected", String(ativa));
+        tab.tabIndex = ativa ? 0 : -1;
+        tab.classList.toggle("is-active", ativa);
+      }
+    });
+    document.body.classList.toggle("has-quick-actions", alvo === "transferencia");
+    if (alvo === "transferencia") app.atualizarResumoSerieTransferencia(appState.currentEquipamento);
+    if (mudou && destino.painel) motion?.reveal(destino.painel, "page");
   }
 
   function abrirAbaTransporteDoEquipamento() {
