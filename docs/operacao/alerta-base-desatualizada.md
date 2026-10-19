@@ -1,6 +1,6 @@
 # Alerta "Base desatualizada" no painel inicial
 
-Especificação do único alerta do painel inicial (Home). Os outros alertas discutidos na Trilha C (equipamento sem acesso, OS parada, divergência nova) ficam fora deste escopo.
+Especificação do alerta de base desatualizada do painel inicial (Home). Os alertas "OS paradas" e "Divergências novas" seguem este padrão e estão em [alertas-os-divergencias.md](alertas-os-divergencias.md); o de equipamento sem acesso fica fora deste escopo.
 
 ## Objetivo
 

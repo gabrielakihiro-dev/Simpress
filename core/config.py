@@ -27,6 +27,10 @@ if not AUTOMATIC_TICKET_INBOX_DIR.is_absolute():
     AUTOMATIC_TICKET_INBOX_DIR = BASE_DIR / AUTOMATIC_TICKET_INBOX_DIR
 AUTOMATIC_TICKET_INBOX_DIR = AUTOMATIC_TICKET_INBOX_DIR.resolve(strict=False)
 AUTOMATIC_TICKET_IMPORT_POLL_SECONDS = 10
+# Last month's contract report is saved here once (docs/operacao/relatorio-mensal-automatico.md).
+MONTHLY_REPORTS_DIR = DATA_DIR / "relatorios_mensais"
+MONTHLY_REPORT_FIRST_CHECK_SECONDS = 30
+MONTHLY_REPORT_CHECK_SECONDS = 3600
 TEMPLATE_FILE = INPUT_DIR / "(MODELO) - TRANSFERENCIA SIMPRESS.xlsx"
 DETAILS_UPLOAD_FILE = INPUT_DIR / "EquipamentosDetalhes_atual.xlsx"
 ENDPOINT_UPLOAD_FILE = INPUT_DIR / "InvAllComputersSummary_atual.xlsx"
@@ -41,6 +45,8 @@ MAX_CONCURRENT_WORKBOOK_PARSERS = 1
 HISTORY_RETENTION_DAYS = 60
 # Home alert: the official EquipamentosDetalhes base older than this many days (docs/operacao/alerta-base-desatualizada.md).
 STALE_BASE_ALERT_DAYS = 7
+# Home alert: open tickets without an Oracle update for this many days (docs/operacao/alertas-os-divergencias.md).
+STALE_TICKET_ALERT_DAYS = 7
 MAX_XLSX_ARCHIVE_ENTRIES = 10000
 MAX_XLSX_UNCOMPRESSED_BYTES = 192 * 1024 * 1024
 # Technical safeguards for the read-only inventory parser, not business row limits.

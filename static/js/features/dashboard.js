@@ -562,6 +562,87 @@
     });
   }
 
+  // ---------- Alertas de OS paradas e divergências novas (docs/operacao/alertas-os-divergencias.md) ----------
+  function mostrarAlertaPainel(card, state, message) {
+    const text = card.querySelector(".stale-base-alert-text");
+    if (text) text.textContent = message;
+    card.dataset.state = state;
+    if (card.hidden) {
+      card.hidden = false;
+      card.dataset.enter = "true";
+    }
+  }
+
+  function ocultarAlertaPainel(card, state) {
+    card.hidden = true;
+    card.dataset.state = state || "hidden";
+  }
+
+  function textoOsParadas(info) {
+    const total = Number(info.total);
+    const limit = Number(info.limite_dias);
+    const oldest = Number(info.maior_dias_sem_atualizacao);
+    const subject = total === 1 ? "1 chamado aberto está" : `${total} chamados abertos estão`;
+    const age = Number.isFinite(oldest) && oldest > 0
+      ? ` O mais antigo está parado há ${oldest} ${pluralize(oldest, "dia")}.`
+      : "";
+    return `${subject} sem atualização há ${limit} ${pluralize(limit, "dia")} ou mais.${age}`;
+  }
+
+  function renderizarAlertaOsParadas(info) {
+    const card = document.getElementById("alerta-os-paradas");
+    if (!card) return;
+    const state = info && typeof info === "object" ? info.estado : null;
+    if (state !== "paradas" || !(Number(info.total) > 0)) {
+      ocultarAlertaPainel(card, state);
+      return;
+    }
+    mostrarAlertaPainel(card, state, textoOsParadas(info));
+  }
+
+  function juntarLista(items) {
+    return items.length > 1 ? `${items.slice(0, -1).join(", ")} e ${items[items.length - 1]}` : items.join("");
+  }
+
+  function textoDivergenciasNovas(info) {
+    const total = Number(info.total);
+    const current = formatarDataHora(info.atual?.horario);
+    const previous = formatarDataHora(info.anterior?.horario);
+    const sections = (Array.isArray(info.por_secao) ? info.por_secao : [])
+      .filter(item => Number(item?.total) > 0)
+      .map(item => `${Number(item.total)} em ${item.secao}`);
+    const rows = total === 1
+      ? "1 linha de divergência que não estava"
+      : `${total} linhas de divergência que não estavam`;
+    const detail = sections.length ? `: ${juntarLista(sections)}` : "";
+    const comparison = current ? `de ${current}` : "mais recente";
+    const before = previous ? `de ${previous}` : "anterior";
+    return `A comparação ${comparison} trouxe ${rows} na ${before}${detail}.`;
+  }
+
+  function renderizarAlertaDivergenciasNovas(info) {
+    const card = document.getElementById("alerta-divergencias-novas");
+    if (!card) return;
+    const state = info && typeof info === "object" ? info.estado : null;
+    if (state !== "novas" || !(Number(info.total) > 0)) {
+      ocultarAlertaPainel(card, state);
+      return;
+    }
+    mostrarAlertaPainel(card, state, textoDivergenciasNovas(info));
+  }
+
+  function inicializarAlertasOsDivergencias() {
+    document.addEventListener("simpress:painel-atualizado", event => {
+      renderizarAlertaOsParadas(event.detail?.os_paradas);
+      renderizarAlertaDivergenciasNovas(event.detail?.divergencias_novas);
+    });
+    ["alerta-os-paradas", "alerta-divergencias-novas"].forEach(id => {
+      document.getElementById(id)?.addEventListener("animationend", event => {
+        delete event.currentTarget.dataset.enter;
+      });
+    });
+  }
+
   function atualizarIndicadoresPosSalvamento() {
     // Atualiza os indicadores sem atrasar o fechamento do formulário após salvar.
     void Promise.allSettled([
@@ -574,5 +655,6 @@
     carregarEstatisticas, carregarProntidao, atualizarIndicadoresPosSalvamento,
     inicializarUsoUltimos30Dias, renderizarUsoUltimos30Dias,
     inicializarAlertaBaseDesatualizada, renderizarAlertaBaseDesatualizada,
+    inicializarAlertasOsDivergencias, renderizarAlertaOsParadas, renderizarAlertaDivergenciasNovas,
   };
 });
