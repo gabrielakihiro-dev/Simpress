@@ -8,10 +8,15 @@ O inicializador mostra a seção da versão nova antes de perguntar se você que
 
 ## [Não lançado]
 
-Proposta: publicar estas mudanças como a primeira versão, **v1.0.0** (a data será definida quando a versão for criada).
+## [1.0.0] - 2026-10-19
+
+Primeira versão publicada do Simpress.
 
 ### Adicionado
 
+- **Aba Resumo:** o **Resumo do parque** e o **Uso nos últimos 30 dias** ficam numa aba própria, aberta já maximizada.
+- **Alertas no painel inicial:** avisos de **Base desatualizada**, de **OS paradas** (chamados abertos sem atualização há 7 dias ou mais) e de **Divergências novas** desde a comparação anterior, cada um com um botão que leva à tela onde o caso é tratado.
+- **Relatório mensal automático:** no começo de cada mês, o servidor guarda sozinho o relatório do mês anterior em `data/relatorios_mensais/`, sem substituir um relatório já salvo.
 - **Relatório mensal:** o botão **Relatório mensal**, em **Históricos e Análises**, baixa uma planilha do mês com o inventário oficial por tipo e por unidade, a última comparação do mês, as OS e os pedidos abertos, concluídos e pendentes, e o uso do sistema no mês.
 - **Usuário logado informado à mão:** quando o Endpoint não traz o usuário de um equipamento, você pode digitá-lo no cartão do equipamento (**Salvar usuário**, **Editar**, **Limpar**). O usuário do Endpoint sempre prevalece, e a mudança fica no **Histórico de alterações**, com opção de desfazer.
 - **Busca por usuário:** a pesquisa também encontra equipamentos pelo nome do usuário logado.
@@ -24,6 +29,7 @@ Proposta: publicar estas mudanças como a primeira versão, **v1.0.0** (a data s
 ### Alterado
 
 - **Só versões testadas:** a atualização com um clique oferece apenas versões publicadas (com número, como `v1.0.0`) e aprovadas nos testes automáticos, e não qualquer alteração recente.
+- **Destinos recentes removidos:** a tela de entrega não guarda mais o histórico de destinos recentes.
 - **Mensagens de erro mais claras:** quando uma planilha ou um formulário é recusado, a tela explica o motivo em vez de mostrar um erro genérico.
 
 ### Interno
