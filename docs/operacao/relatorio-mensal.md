@@ -5,7 +5,8 @@ Objetivo: entregar ao gestor do contrato 16467 uma planilha com o retrato do mê
 ## Formato
 
 - XLSX gerado com `openpyxl` (sem biblioteca de PDF). Nome do arquivo: `Relatorio-mensal-AAAA-MM.xlsx`.
-- Gerado sob demanda por `GET /api/relatorio-mensal?mes=AAAA-MM`; nada é gravado em `data/`.
+- Gerado sob demanda por `GET /api/relatorio-mensal?mes=AAAA-MM`; o download não grava nada em `data/`.
+- O servidor também salva automaticamente o relatório do mês anterior em `data/relatorios_mensais/`, uma vez por mês (ver `relatorio-mensal-automatico.md`).
 - Textos vindos das planilhas entram como texto literal (proteção contra fórmulas).
 - A exportação conta como `exportacoes` em `metricas_uso.json`, como as demais exportações.
 
