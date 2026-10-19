@@ -109,6 +109,7 @@
     app.inicializarArquivosAtualizacaoPlanilhas();
     app.inicializarUsoUltimos30Dias();
     app.inicializarAlertaBaseDesatualizada();
+    app.inicializarAlertasOsDivergencias();
   }
 
   if (document.readyState === "interactive" || document.readyState === "complete") {
