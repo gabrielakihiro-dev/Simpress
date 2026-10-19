@@ -425,7 +425,12 @@ def build_history_export_workbook(
 
         for index, item in enumerate(no_recent_verification):
             no_access_rows.append((
-                timestamp, event_type_label, item.get("computador"), item.get("serie"),
+                timestamp, event_type_label,
+                (
+                    f"{item.get('computador')} (hostname sumiu do Endpoint)"
+                    if item.get("hostname_sumiu_endpoint") else item.get("computador")
+                ),
+                item.get("serie"),
                 _export_datetime(item.get("ultima_verificacao")), item.get("dias_sem_verificacao"),
                 item.get("linha_endpoint"), _export_note(comparison, "sem_acesso_7_dias", index, item),
             ))
