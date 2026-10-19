@@ -11,9 +11,9 @@ import threading
 import uuid
 from datetime import datetime, timezone
 from pathlib import Path
-from typing import Any, Callable, Dict, List, Optional, Iterable
+from typing import Any, Callable, ContextManager, Dict, List, Optional, Iterable
 
-from core.integrity import FileBusyError
+from core.integrity import AtomicFileTransaction, FileBusyError
 
 logger = logging.getLogger(__name__)
 
@@ -298,8 +298,11 @@ def annotation_export_text(record: Dict[str, Any]) -> str:
     return f"[CONFLITO DE ANOTAÇÃO — versões preservadas]\n{alternatives}"
 
 
-def sync_history_annotation(record, *, directory, outbox, transaction_root,
-                            transaction_factory, publisher=save_history_annotation) -> bool:
+def sync_history_annotation(
+    record: Dict[str, Any], *, directory: Path, outbox: Path, transaction_root: Path,
+    transaction_factory: Callable[[Path, List[Path]], ContextManager[AtomicFileTransaction]],
+    publisher: Callable[..., Dict[str, Any]] = save_history_annotation,
+) -> bool:
     """Acknowledge the exact immutable revision, then remove only its own pending file."""
     values = annotation_record_values(record)
     expected = annotation_revision(record)

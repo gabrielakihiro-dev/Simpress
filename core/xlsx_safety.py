@@ -289,8 +289,8 @@ def validate_xlsx_archive(archive: zipfile.ZipFile) -> None:
     if sum(entry.file_size for entry in entries) > MAX_XLSX_UNCOMPRESSED_BYTES:
         raise XlsxLimitExceeded(
             "O conteúdo descompactado da planilha excede o limite de "
-            f"{MAX_XLSX_UNCOMPRESSED_BYTES // (1024 * 1024)} MB (cerca de 140 mil linhas na "
-            "exportação completa de 50 colunas). Divida a planilha ou remova abas que não são usadas."
+            f"{MAX_XLSX_UNCOMPRESSED_BYTES // (1024 * 1024)} MB (cerca de {MAX_XLSX_WORKSHEET_ROWS // 1000} mil linhas "
+            "na exportação completa de 50 colunas). Divida a planilha ou remova abas que não são usadas."
         )
 
     names = {entry.filename for entry in entries}

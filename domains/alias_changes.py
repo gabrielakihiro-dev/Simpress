@@ -220,7 +220,7 @@ def apply_alias_change(
                 if local_now != str(expected_current_local or "").strip():
                     raise DomainConflictError("O apelido salvo mudou depois deste registro; nenhuma alteração foi aplicada.")
 
-            def update_overrides(data):
+            def update_overrides(data: Any) -> Dict[str, Any]:
                 aliases = dict(services.validate_json_object(data, "apelidos"))
                 matching_keys = [
                     key for key in aliases
@@ -241,7 +241,7 @@ def apply_alias_change(
             transaction.update_json(services.modified_aliases_file(), update_overrides, {})
 
             if history_will_change:
-                def update_history(history):
+                def update_history(history: Any) -> List[Dict[str, Any]]:
                     history = services.validate_json_history(history, "apelidos")
                     updated = list(history)
                     if remove_history_event_id:

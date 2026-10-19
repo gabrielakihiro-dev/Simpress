@@ -10,6 +10,7 @@ import unicodedata
 import zipfile
 import zlib
 from pathlib import Path, PurePosixPath
+from typing import Any, BinaryIO, Mapping, Optional, Union
 
 from openpyxl.cell.cell import MergedCell
 
@@ -67,12 +68,12 @@ def unpack_simpress_zip(data: bytes, limit: int) -> tuple[bytes, str]:
         raise DomainValidationError("Não foi possível ler o ZIP da Simpress.") from error
 
 
-def _normalize(value):
+def _normalize(value: Any) -> str:
     text = unicodedata.normalize("NFKD", str(value or ""))
     return re.sub(r"[^A-Z0-9]", "", text.encode("ascii", "ignore").decode().upper())
 
 
-def validate_local_model(source, kind: str) -> None:
+def validate_local_model(source: Union[Path, BinaryIO], kind: str) -> None:
     """Use the same selected sheet and writable fields as the generators."""
     wb = load_workbook_safely(
         source, allow_threaded_comments=True,
@@ -148,7 +149,7 @@ def _read_origin_contact_file(path: Path) -> tuple[dict, bool]:
     return stored, False
 
 
-def load_origin_contact(path: Path, environment=None) -> dict:
+def load_origin_contact(path: Path, environment: Optional[Mapping[str, str]] = None) -> dict:
     """Resolve each origin contact field: environment variable, then local file, then empty."""
     env = os.environ if environment is None else environment
     stored, invalid_file = _read_origin_contact_file(path)
