@@ -282,7 +282,31 @@
         </tr>`);
   }
 
-  function linhasAmbiguidades(ambiguidades, registrosAmbiguos, { renderizarCampoAnotacao }) {
+  // With several Endpoint rows for one serial, lists each hostname with its last successful check.
+  // The oldest one gets a button that discards it so the remaining hostname is the one exported.
+  function celulaVerificacaoAmbigua(item, permitirRemocao) {
+    const registros = Array.isArray(item.registros_endpoint) ? item.registros_endpoint : [];
+    if (registros.length < 2) {
+      return escapeHtml(item.ultima_verificacao ? formatarHorarioHistorico(item.ultima_verificacao) : "—");
+    }
+    const classeBotao = "px-2 py-1 rounded-md border text-[10px] font-semibold";
+    return `<ul class="space-y-1.5">${registros.map(registro => {
+      const hostname = registro.computador || "";
+      const horario = registro.ultima_verificacao ? formatarHorarioHistorico(registro.ultima_verificacao) : "—";
+      const acoes = permitirRemocao && registro.mais_antigo === true
+        ? `<button type="button" data-hostname-remove class="${classeBotao} bg-rose-500/10 hover:bg-rose-500/20 border-rose-500/25 text-rose-200" aria-label="${escapeHtml(`Remover o hostname mais antigo ${hostname}, série ${registro.serie || "sem série"}`)}">Remover mais antigo</button>
+            <span hidden data-hostname-removed class="text-[10px] text-emerald-300">Removido; vale o outro hostname</span>
+            <button type="button" hidden data-hostname-restore class="${classeBotao} bg-slate-500/10 hover:bg-slate-500/20 border-slate-500/25 text-slate-200" aria-label="${escapeHtml(`Desfazer a remoção do hostname ${hostname}`)}">Desfazer</button>`
+        : "";
+      return `<li class="flex flex-wrap items-center gap-x-2 gap-y-1" data-hostname-item data-hostname-serie="${escapeHtml(registro.serie || "")}" data-hostname-nome="${escapeHtml(hostname)}">
+          <span class="font-mono text-slate-200">${escapeHtml(hostname || "—")}</span>
+          <span class="whitespace-nowrap">${escapeHtml(horario)}</span>
+          ${acoes}
+        </li>`;
+    }).join("")}</ul>`;
+  }
+
+  function linhasAmbiguidades(ambiguidades, registrosAmbiguos, { renderizarCampoAnotacao, permitirAnotacoes }) {
     return [
       ...ambiguidades.map(item => ({
         ...item,
@@ -307,6 +331,7 @@
           <td class="px-3 py-2 text-slate-300">${escapeHtml(item.tipo || "Ambiguidade")}</td>
           <td class="px-3 py-2 font-mono">${escapeHtml(item.chave || "—")}</td>
           <td class="px-3 py-2">${escapeHtml(item.fontes || "—")}</td>
+          <td class="px-3 py-2 ${Array.isArray(item.registros_endpoint) && item.registros_endpoint.length > 1 ? "" : "whitespace-nowrap"}">${celulaVerificacaoAmbigua(item, permitirAnotacoes === true)}</td>
           <td class="px-3 py-2">${escapeHtml(item.mensagem || "")}</td>
           ${renderizarCampoAnotacao(item, `${item.tipo || "ambiguidade"}: ${item.chave || "sem identificador"}`)}
         </tr>`);
@@ -438,7 +463,7 @@
         </section>
         <section class="space-y-2" data-history-filter-section>
           <div>${tituloSecaoComparacao("Duplicidades e correspondências ambíguas", "rose", SECOES_CARTOES_RESUMO.correspondencias_ambiguas.id)}<p class="text-[11px] text-slate-500">Séries ou hostnames repetidos, ou que não identificam um único equipamento.</p></div>
-          ${renderizarTabelaComparacao(["Ocorrência", "Série ou hostname/Apelido", "Fontes", "Tratamento", ...annotationHeaders], ambiguityRows, "Nenhuma duplicidade ou correspondência ambígua encontrada.", "correspondencias_ambiguas")}
+          ${renderizarTabelaComparacao(["Ocorrência", "Série ou hostname/Apelido", "Fontes", "Última verificação com êxito", "Tratamento", ...annotationHeaders], ambiguityRows, "Nenhuma duplicidade ou correspondência ambígua encontrada.", "correspondencias_ambiguas")}
         </section>
         <section class="space-y-2" data-history-filter-section>
           <div>${tituloSecaoComparacao("Séries sem local definido", "amber", SECOES_CARTOES_RESUMO.series_sem_mapeamento.id)}<p class="text-[11px] text-slate-500">Prefixos de série sem local cadastrado, com a quantidade de equipamentos e exemplos.</p></div>

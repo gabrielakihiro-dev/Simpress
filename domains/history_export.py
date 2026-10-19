@@ -458,6 +458,7 @@ def build_history_export_workbook(
             ambiguity_rows.append((
                 timestamp, item.get("tipo") or "Ambiguidade",
                 item.get("chave"), "; ".join(sources),
+                _export_datetime(item.get("ultima_verificacao")),
                 _history_section_text(item.get("mensagem"), bare_sources=True),
                 note,
             ))
@@ -477,7 +478,8 @@ def build_history_export_workbook(
             note = "\n".join(value for value in notes if value)
             ambiguity_rows.append((
                 timestamp, "Presença ambígua", record_key,
-                source_summary, _history_section_text(item.get("motivo"), bare_sources=True), note,
+                source_summary, _export_datetime(item.get("ultima_verificacao")),
+                _history_section_text(item.get("motivo"), bare_sources=True), note,
             ))
 
     detail_total = sum(category_counts.values())
@@ -536,9 +538,9 @@ def build_history_export_workbook(
         workbook, "Ambiguidades", "Duplicidades e correspondências ambíguas",
         "Presenças ambíguas e correspondências sem identificação única.",
         ["Data e hora", "Ocorrência", "Série ou hostname/Apelido",
-         "Fontes", "Tratamento", "Anotação"],
+         "Fontes", "Última verificação com êxito", "Tratamento", "Anotação"],
         ambiguity_rows, "tblHistoricoAmbiguidades",
-        [20, 27, 48, 34, 66, 42],
+        [20, 27, 48, 34, 26, 66, 42],
     )
 
     output = BytesIO()

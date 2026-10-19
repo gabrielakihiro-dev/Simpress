@@ -32,6 +32,7 @@
       ? renderer.conteudoAnotacoesSincronizadas(comparison, colunas)
       : renderer.conteudoResultadoComparacao(comparison, listas, colunas);
     conectarAcoesApelidosManuais(comparison, listas.divergenciasApelidosManuais);
+    conectarRemocaoHostnames();
     conectarAnotacoesComparacao(comparison);
     conectarFiltrosHistoricoComparacao(content);
     conectarCartoesResumoComparacao();
@@ -51,6 +52,69 @@
         if (item) resolverDivergenciaApelidoManual(comparison, item, button.dataset.manualAliasAction, button);
       });
     });
+  }
+
+  const chaveHostname = (serie, hostname) =>
+    `${String(serie || "").replace(/[^A-Z0-9]/gi, "").toUpperCase()}|${String(hostname || "").replace(/[^A-Z0-9]/gi, "").toUpperCase()}`;
+
+  // The same hostname can be listed in the desktop table and in its mobile card; every copy is kept in step.
+  function mostrarEstadoHostname(chave, removido) {
+    document.querySelectorAll("#comparacao-planilhas-conteudo [data-hostname-item]").forEach(item => {
+      if (chaveHostname(item.dataset.hostnameSerie, item.dataset.hostnameNome) !== chave) return;
+      const remover = item.querySelector("[data-hostname-remove]");
+      const aviso = item.querySelector("[data-hostname-removed]");
+      const restaurar = item.querySelector("[data-hostname-restore]");
+      if (remover) remover.hidden = removido;
+      if (aviso) aviso.hidden = !removido;
+      if (restaurar) restaurar.hidden = !removido;
+      item.classList.toggle("opacity-60", removido);
+    });
+  }
+
+  // Discards the oldest duplicated Endpoint hostname (or undoes it). Only the local list of discarded
+  // pairs changes; the remaining hostname is the one the alias base and the next exports use.
+  function conectarRemocaoHostnames() {
+    const botoes = document.querySelectorAll(
+      "#comparacao-planilhas-conteudo [data-hostname-remove], #comparacao-planilhas-conteudo [data-hostname-restore]"
+    );
+    if (!botoes.length) return;
+    const alterar = async (botao, restaurar) => {
+      const item = botao.closest("[data-hostname-item]");
+      const serie = item?.dataset.hostnameSerie || "";
+      const hostname = item?.dataset.hostnameNome || "";
+      if (!restaurar && !(await app.confirmarAcao({
+        titulo: "Remover hostname mais antigo?",
+        mensagem: `Remover ${hostname} (série ${serie || "sem série"})? A planilha do Endpoint não é alterada; o outro hostname passa a valer na base e nas próximas exportações. Dá para desfazer.`,
+        confirmar: "Remover hostname",
+      }))) return;
+      botao.disabled = true;
+      botao.setAttribute("aria-busy", "true");
+      try {
+        const data = await app.apiFetch(
+          `/api/endpoint/hostnames-removidos${restaurar ? "/restaurar" : ""}`,
+          {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ serie, hostname }),
+            errorMessage: restaurar ? "Não foi possível desfazer a remoção." : "Não foi possível remover o hostname.",
+          }
+        );
+        mostrarEstadoHostname(chaveHostname(serie, hostname), !restaurar);
+        app.atualizarIndicadoresPosSalvamento();
+        app.showToast(data.mensagem || (restaurar ? "Hostname restaurado." : "Hostname removido."), "success");
+      } catch (error) {
+        console.error("Erro ao alterar hostname duplicado do Endpoint:", error);
+        app.showToast(error.message || "Não foi possível concluir a operação.", "error");
+      } finally {
+        botao.disabled = false;
+        botao.removeAttribute("aria-busy");
+      }
+    };
+    botoes.forEach(botao => botao.addEventListener("click", () => alterar(botao, botao.hasAttribute("data-hostname-restore"))));
+    // Rows removed earlier open already marked, so a second click is never offered.
+    app.apiFetch("/api/endpoint/hostnames-removidos", { errorMessage: "Não foi possível consultar os hostnames removidos." })
+      .then(data => (data?.removidos || []).forEach(entry => mostrarEstadoHostname(chaveHostname(entry.serie, entry.hostname), true)))
+      .catch(error => console.error("Erro ao consultar hostnames removidos:", error));
   }
 
   // Autosaves every annotation field; a row listed in more than one section keeps its copies in sync.

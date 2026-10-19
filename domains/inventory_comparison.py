@@ -5,7 +5,7 @@ import math
 import re
 import unicodedata
 from datetime import date, datetime, time, timedelta
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, FrozenSet, List, Optional, Tuple
 
 PINNED_COMPARISON_EVENT_ID = "e1f66787b2aa49a0bdbc848521ca1fc4"
 
@@ -62,6 +62,33 @@ def _upload_verification_value(record: Dict[str, Any]) -> Any:
         "LASTSUCCESSFULCHECKIN",
         "LASTSUCCESSFULCHECKINDATE",
     )
+
+def _removable_oldest_nodes(
+    endpoint_records: List[Dict[str, Any]],
+    verified_by_node: Dict[tuple, Optional[datetime]],
+) -> set:
+    """Nodes whose Endpoint row is the single oldest of a same-serial duplicate group.
+
+    Only groups where every row has a last verification and a distinct hostname
+    qualify, so discarding the oldest hostname always leaves a different one.
+    """
+    groups: Dict[str, List[Dict[str, Any]]] = {}
+    for record in endpoint_records:
+        if record["serial_key"]:
+            groups.setdefault(record["serial_key"], []).append(record)
+    oldest = set()
+    for group in groups.values():
+        if len(group) < 2:
+            continue
+        hostname_keys = [normalize_reference_value(record["computador"]) for record in group]
+        times = [verified_by_node[record["node"]] for record in group]
+        if not all(hostname_keys) or len(set(hostname_keys)) != len(group) or any(t is None for t in times):
+            continue
+        earliest = min(times)
+        if times.count(earliest) == 1:
+            oldest.add(group[times.index(earliest)]["node"])
+    return oldest
+
 
 def _parse_verification_datetime(value: Any, reference_timezone: Any) -> Optional[datetime]:
     parsed: Optional[datetime]
@@ -732,8 +759,14 @@ def compare_uploaded_workbooks(
     details_table: Dict[str, Any],
     uploaded_names: Dict[str, str],
     as_of: Optional[datetime] = None,
+    removed_endpoint_hostnames: FrozenSet[Tuple[str, str]] = frozenset(),
 ) -> Dict[str, Any]:
-    """Compares Endpoint and EquipamentosDetalhes without silently selecting duplicate matches."""
+    """Compares Endpoint and EquipamentosDetalhes without silently selecting duplicate matches.
+
+    ``removed_endpoint_hostnames`` lists normalized (serial, hostname) pairs the user
+    discarded from the Endpoint duplicates; those rows are left out of the comparison
+    (the spreadsheet itself is not changed) but still count in ``total_endpoint``.
+    """
     source_tables = {
         "endpoint": endpoint_table,
         "detalhes": details_table,
@@ -742,6 +775,13 @@ def compare_uploaded_workbooks(
         role: _comparison_source_records(table, role)
         for role, table in source_tables.items()
     }
+    total_endpoint = len(source_records["endpoint"])
+    if removed_endpoint_hostnames:
+        source_records["endpoint"] = [
+            record for record in source_records["endpoint"]
+            if (record["serial_key"], normalize_reference_value(record["computador"]))
+            not in removed_endpoint_hostnames
+        ]
     as_of = as_of or datetime.now().astimezone()
     if as_of.tzinfo is None:
         as_of = as_of.astimezone()
@@ -1049,10 +1089,35 @@ def compare_uploaded_workbooks(
             missing_by_source[role].append(item)
 
         if "ambíguo" in source_status.values():
-            ambiguous_records.append({
+            verified_by_node = {
+                record["node"]: _parse_verification_datetime(record.get("ultima_verificacao"), as_of.tzinfo)
+                for record in endpoint_records
+            }
+            verified_times = [verified for verified in verified_by_node.values() if verified is not None]
+            ambiguous_record = {
                 **entity,
+                "ultima_verificacao": (
+                    max(verified_times).isoformat(timespec="minutes") if verified_times else None
+                ),
                 "motivo": "Há registros duplicados ou uma alternativa de hostname/Apelido que não é única.",
-            })
+            }
+            if len(endpoint_records) > 1:
+                oldest_nodes = _removable_oldest_nodes(endpoint_records, verified_by_node)
+                ambiguous_record["registros_endpoint"] = [
+                    {
+                        "serie": record["serie"],
+                        "computador": record["computador"],
+                        "ultima_verificacao": (
+                            verified_by_node[record["node"]].isoformat(timespec="minutes")
+                            if verified_by_node[record["node"]] is not None
+                            else None
+                        ),
+                        "linha_endpoint": record["row_number"],
+                        "mais_antigo": record["node"] in oldest_nodes,
+                    }
+                    for record in endpoint_records
+                ]
+            ambiguous_records.append(ambiguous_record)
 
     location_mismatches = []
     for entity, records_by_source, source_status, expected_location in entities:
@@ -1115,7 +1180,7 @@ def compare_uploaded_workbooks(
         unmapped_series.setdefault(series_code, []).append(computer_name)
 
     return {
-        "total_endpoint": len(source_records["endpoint"]),
+        "total_endpoint": total_endpoint,
         "total_detalhes": len(details_table["records"]),
         "ausentes_no_endpoint": missing_by_source["endpoint"],
         "ausentes_em_detalhes": missing_by_source["detalhes"],
