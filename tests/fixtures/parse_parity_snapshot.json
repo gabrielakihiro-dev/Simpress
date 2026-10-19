@@ -1,0 +1,5227 @@
+{
+ "arquivo_local": {
+  "aba": "EquipamentosDetalhes",
+  "comparacao": {
+   "arquivos_enviados": {
+    "detalhes": "EquipamentosDetalhes.xlsx",
+    "endpoint": "InvAllComputersSummary.xlsx"
+   },
+   "ausentes_em_detalhes": [
+    {
+     "ausente_em": [
+      "EquipamentosDetalhes"
+     ],
+     "computador": "PRNOTEXYZ01",
+     "fonte_ausente": "EquipamentosDetalhes",
+     "fontes": {
+      "EquipamentosDetalhes": "ausente",
+      "no endpoint": "presente"
+     },
+     "local_previsto": "Sem mapeamento de local",
+     "serie": "BRJ700ENDP",
+     "usuario": ""
+    },
+    {
+     "ausente_em": [
+      "EquipamentosDetalhes"
+     ],
+     "computador": "PRNOTEBKPLON1",
+     "fonte_ausente": "EquipamentosDetalhes",
+     "fontes": {
+      "EquipamentosDetalhes": "ausente",
+      "no endpoint": "presente"
+     },
+     "local_previsto": "Londrina",
+     "serie": "BRJ700ENDQ",
+     "usuario": ""
+    },
+    {
+     "ausente_em": [
+      "EquipamentosDetalhes"
+     ],
+     "computador": "PRNOTEUMU01",
+     "fonte_ausente": "EquipamentosDetalhes",
+     "fontes": {
+      "EquipamentosDetalhes": "ausente",
+      "no endpoint": "presente"
+     },
+     "local_previsto": "Umuarama",
+     "serie": "BRJ600HOSX",
+     "usuario": ""
+    }
+   ],
+   "ausentes_no_endpoint": [
+    {
+     "ausente_em": [
+      "no endpoint"
+     ],
+     "computador": "PRNOTEMAR01",
+     "fonte_ausente": "no endpoint",
+     "fontes": {
+      "EquipamentosDetalhes": "presente",
+      "no endpoint": "ausente"
+     },
+     "local_previsto": "Sem mapeamento de local",
+     "serie": "SXA9988776",
+     "usuario": ""
+    },
+    {
+     "ausente_em": [
+      "no endpoint"
+     ],
+     "computador": "PRNOTETOL01",
+     "fonte_ausente": "no endpoint",
+     "fontes": {
+      "EquipamentosDetalhes": "presente",
+      "no endpoint": "ausente"
+     },
+     "local_previsto": "Sem mapeamento de local",
+     "serie": "BRJ400ONLY",
+     "usuario": ""
+    },
+    {
+     "ausente_em": [
+      "no endpoint"
+     ],
+     "computador": "IMPRESSORA-MTZ",
+     "fonte_ausente": "no endpoint",
+     "fontes": {
+      "EquipamentosDetalhes": "presente",
+      "no endpoint": "ausente"
+     },
+     "local_previsto": "Sem mapeamento de local",
+     "serie": "CN12345678",
+     "usuario": ""
+    }
+   ],
+   "correspondencias_ambiguas": [
+    {
+     "chave": "FVFAMB001",
+     "fontes": [
+      {
+       "fonte": "EquipamentosDetalhes",
+       "quantidade": 2
+      }
+     ],
+     "mensagem": "A série aparece em mais de uma linha na mesma fonte; esses registros foram agrupados como ambíguos.",
+     "tipo": "Número de série duplicado"
+    },
+    {
+     "chave": "BRJ300DUP1",
+     "fontes": [
+      {
+       "fonte": "EquipamentosDetalhes",
+       "quantidade": 2
+      }
+     ],
+     "mensagem": "A série aparece em mais de uma linha na mesma fonte; esses registros foram agrupados como ambíguos.",
+     "tipo": "Número de série duplicado"
+    },
+    {
+     "chave": "PRNOTEUMU01",
+     "fontes": [
+      {
+       "fonte": "Endpoint",
+       "quantidade": 2
+      }
+     ],
+     "mensagem": "O hostname/Apelido não é único nesta fonte e não foi usado para escolher uma linha.",
+     "tipo": "Hostname/Apelido duplicado"
+    },
+    {
+     "chave": "PRNOTEUMU01",
+     "fontes": [
+      {
+       "fonte": "Endpoint",
+       "quantidade": 2
+      },
+      {
+       "fonte": "EquipamentosDetalhes",
+       "quantidade": 1
+      }
+     ],
+     "mensagem": "As séries prevalecem sobre o hostname/Apelido; 1 combinações têm séries divergentes. Nenhum registro foi unido; exemplos: Endpoint [BRJ600HOST, BRJ600HOSX]; EquipamentosDetalhes [BRJ600HOST].",
+     "tipo": "Série divergente para o mesmo hostname/Apelido"
+    }
+   ],
+   "divergencias_local": [
+    {
+     "computador": "PRNOTELON02",
+     "local_detalhes": "Maringá",
+     "local_previsto": "Londrina",
+     "serie": "BRJ100AAA2"
+    }
+   ],
+   "registros_ambiguos": [
+    {
+     "ausente_em": [],
+     "computador": "PRMACAMB01 / PRMACAMB02",
+     "fontes": {
+      "EquipamentosDetalhes": "ambíguo",
+      "no endpoint": "presente"
+     },
+     "local_previsto": "Sem mapeamento de local",
+     "motivo": "Há registros duplicados ou uma alternativa de hostname/Apelido que não é única.",
+     "serie": "FVFAMB001 / SFVFAMB001",
+     "usuario": "sebrae\\fabi"
+    },
+    {
+     "ausente_em": [],
+     "computador": "PRNOTECAS01 / PRNOTECAS02",
+     "fontes": {
+      "EquipamentosDetalhes": "ambíguo",
+      "no endpoint": "presente"
+     },
+     "local_previsto": "Cascavel",
+     "motivo": "Há registros duplicados ou uma alternativa de hostname/Apelido que não é única.",
+     "serie": "BRJ300DUP1",
+     "usuario": ""
+    }
+   ],
+   "sem_acesso_7_dias": [
+    {
+     "computador": "PRNOTELON02",
+     "dias_sem_verificacao": 14,
+     "linha_endpoint": 3,
+     "serie": "BRJ100AAA2",
+     "ultima_verificacao": "2026-10-01T08:00-03:00"
+    },
+    {
+     "computador": "PRNOTESJP01",
+     "dias_sem_verificacao": 14,
+     "linha_endpoint": 4,
+     "serie": "BRJ200SJP1",
+     "ultima_verificacao": "2026-10-01T10:00-03:00"
+    },
+    {
+     "computador": "PRNOTEXYZ01",
+     "dias_sem_verificacao": 44,
+     "linha_endpoint": 17,
+     "serie": "BRJ700ENDP",
+     "ultima_verificacao": "2026-09-01T07:15-03:00"
+    }
+   ],
+   "series_sem_mapeamento": [
+    {
+     "exemplos": [
+      "PRNOTEXYZ01"
+     ],
+     "quantidade": 1,
+     "serie": "XYZ"
+    }
+   ],
+   "total_detalhes": 21,
+   "total_endpoint": 20
+  },
+  "headers": [
+   "Número de Série",
+   "Apelido",
+   "Modelo",
+   "Cidade",
+   "CNPJ de Instalação",
+   "Tipo",
+   "Campo 07",
+   "Campo 08",
+   "Campo 09",
+   "Campo 10",
+   "Campo 11",
+   "Campo 12",
+   "Campo 13",
+   "Campo 14",
+   "Campo 15",
+   "Campo 16",
+   "Campo 17",
+   "Campo 18",
+   "Campo 19",
+   "Campo 20",
+   "Campo 21",
+   "Campo 22",
+   "Campo 23",
+   "Campo 24",
+   "Campo 25",
+   "Campo 26",
+   "Campo 27",
+   "Campo 28",
+   "Campo 29",
+   "Campo 30",
+   "Campo 31",
+   "Campo 32",
+   "Campo 33",
+   "Campo 34",
+   "Campo 35",
+   "Campo 36",
+   "Campo 37",
+   "Campo 38",
+   "Campo 39",
+   "Campo 40",
+   "Campo 41",
+   "Campo 42",
+   "Campo 43",
+   "Campo 44",
+   "Campo 45",
+   "Campo 46",
+   "Campo 47",
+   "Campo 48",
+   "Campo 49",
+   "Campo 50"
+  ],
+  "records": [
+   {
+    "Apelido": "PRNOTELON01",
+    "CNPJ de Instalação": "08.123.456/0001-90",
+    "Campo 07": 7,
+    "Campo 08": 0.8,
+    "Campo 09": {
+     "__datetime__": "2026-01-10T00:00:00"
+    },
+    "Campo 10": "",
+    "Campo 11": "valor 0-11",
+    "Campo 12": 12,
+    "Campo 13": 1.3,
+    "Campo 14": {
+     "__datetime__": "2026-01-15T00:00:00"
+    },
+    "Campo 15": "",
+    "Campo 16": "valor 0-16",
+    "Campo 17": 17,
+    "Campo 18": 1.8,
+    "Campo 19": {
+     "__datetime__": "2026-01-20T00:00:00"
+    },
+    "Campo 20": "",
+    "Campo 21": "valor 0-21",
+    "Campo 22": 22,
+    "Campo 23": 2.3,
+    "Campo 24": {
+     "__datetime__": "2026-01-25T00:00:00"
+    },
+    "Campo 25": "",
+    "Campo 26": "valor 0-26",
+    "Campo 27": 27,
+    "Campo 28": 2.8,
+    "Campo 29": {
+     "__datetime__": "2026-01-02T00:00:00"
+    },
+    "Campo 30": "",
+    "Campo 31": "valor 0-31",
+    "Campo 32": 32,
+    "Campo 33": 3.3,
+    "Campo 34": {
+     "__datetime__": "2026-01-07T00:00:00"
+    },
+    "Campo 35": "",
+    "Campo 36": "valor 0-36",
+    "Campo 37": 37,
+    "Campo 38": 3.8,
+    "Campo 39": {
+     "__datetime__": "2026-01-12T00:00:00"
+    },
+    "Campo 40": "",
+    "Campo 41": "valor 0-41",
+    "Campo 42": 42,
+    "Campo 43": 4.3,
+    "Campo 44": {
+     "__datetime__": "2026-01-17T00:00:00"
+    },
+    "Campo 45": "",
+    "Campo 46": "valor 0-46",
+    "Campo 47": 47,
+    "Campo 48": 4.8,
+    "Campo 49": {
+     "__datetime__": "2026-01-22T00:00:00"
+    },
+    "Campo 50": "",
+    "Cidade": "Londrina",
+    "Modelo": "ProBook 440",
+    "Número de Série": "BRJ100AAA1",
+    "Tipo": "Notebook"
+   },
+   {
+    "Apelido": "PRNOTELON02",
+    "CNPJ de Instalação": "08.123.456/0001-90",
+    "Campo 07": 1.7,
+    "Campo 08": {
+     "__datetime__": "2026-02-09T00:00:00"
+    },
+    "Campo 09": "",
+    "Campo 10": "valor 1-10",
+    "Campo 11": 111,
+    "Campo 12": 2.2,
+    "Campo 13": {
+     "__datetime__": "2026-02-14T00:00:00"
+    },
+    "Campo 14": "",
+    "Campo 15": "valor 1-15",
+    "Campo 16": 116,
+    "Campo 17": 2.7,
+    "Campo 18": {
+     "__datetime__": "2026-02-19T00:00:00"
+    },
+    "Campo 19": "",
+    "Campo 20": "valor 1-20",
+    "Campo 21": 121,
+    "Campo 22": 3.2,
+    "Campo 23": {
+     "__datetime__": "2026-02-24T00:00:00"
+    },
+    "Campo 24": "",
+    "Campo 25": "valor 1-25",
+    "Campo 26": 126,
+    "Campo 27": 3.7,
+    "Campo 28": {
+     "__datetime__": "2026-02-01T00:00:00"
+    },
+    "Campo 29": "",
+    "Campo 30": "valor 1-30",
+    "Campo 31": 131,
+    "Campo 32": 4.2,
+    "Campo 33": {
+     "__datetime__": "2026-02-06T00:00:00"
+    },
+    "Campo 34": "",
+    "Campo 35": "valor 1-35",
+    "Campo 36": 136,
+    "Campo 37": 4.7,
+    "Campo 38": {
+     "__datetime__": "2026-02-11T00:00:00"
+    },
+    "Campo 39": "",
+    "Campo 40": "valor 1-40",
+    "Campo 41": 141,
+    "Campo 42": 5.2,
+    "Campo 43": {
+     "__datetime__": "2026-02-16T00:00:00"
+    },
+    "Campo 44": "",
+    "Campo 45": "valor 1-45",
+    "Campo 46": 146,
+    "Campo 47": 5.7,
+    "Campo 48": {
+     "__datetime__": "2026-02-21T00:00:00"
+    },
+    "Campo 49": "",
+    "Campo 50": "valor 1-50",
+    "Cidade": "Maringá",
+    "Modelo": "ProBook 440",
+    "Número de Série": "BRJ100AAA2",
+    "Tipo": "Notebook"
+   },
+   {
+    "Apelido": "PRNOTESJP01",
+    "CNPJ de Instalação": "08.123.456/0001-90",
+    "Campo 07": {
+     "__datetime__": "2026-03-08T00:00:00"
+    },
+    "Campo 08": "",
+    "Campo 09": "valor 2-9",
+    "Campo 10": 210,
+    "Campo 11": 3.1,
+    "Campo 12": {
+     "__datetime__": "2026-03-13T00:00:00"
+    },
+    "Campo 13": "",
+    "Campo 14": "valor 2-14",
+    "Campo 15": 215,
+    "Campo 16": 3.6,
+    "Campo 17": {
+     "__datetime__": "2026-03-18T00:00:00"
+    },
+    "Campo 18": "",
+    "Campo 19": "valor 2-19",
+    "Campo 20": 220,
+    "Campo 21": 4.1,
+    "Campo 22": {
+     "__datetime__": "2026-03-23T00:00:00"
+    },
+    "Campo 23": "",
+    "Campo 24": "valor 2-24",
+    "Campo 25": 225,
+    "Campo 26": 4.6,
+    "Campo 27": {
+     "__datetime__": "2026-03-28T00:00:00"
+    },
+    "Campo 28": "",
+    "Campo 29": "valor 2-29",
+    "Campo 30": 230,
+    "Campo 31": 5.1,
+    "Campo 32": {
+     "__datetime__": "2026-03-05T00:00:00"
+    },
+    "Campo 33": "",
+    "Campo 34": "valor 2-34",
+    "Campo 35": 235,
+    "Campo 36": 5.6,
+    "Campo 37": {
+     "__datetime__": "2026-03-10T00:00:00"
+    },
+    "Campo 38": "",
+    "Campo 39": "valor 2-39",
+    "Campo 40": 240,
+    "Campo 41": 6.1,
+    "Campo 42": {
+     "__datetime__": "2026-03-15T00:00:00"
+    },
+    "Campo 43": "",
+    "Campo 44": "valor 2-44",
+    "Campo 45": 245,
+    "Campo 46": 6.6,
+    "Campo 47": {
+     "__datetime__": "2026-03-20T00:00:00"
+    },
+    "Campo 48": "",
+    "Campo 49": "valor 2-49",
+    "Campo 50": 250,
+    "Cidade": "São José dos Pinhais",
+    "Modelo": "ProBook 440",
+    "Número de Série": "BRJ200SJP1",
+    "Tipo": "Notebook"
+   },
+   {
+    "Apelido": "PRNOTERL01",
+    "CNPJ de Instalação": "08.123.456/0001-90",
+    "Campo 07": "",
+    "Campo 08": "valor 3-8",
+    "Campo 09": 309,
+    "Campo 10": 4,
+    "Campo 11": {
+     "__datetime__": "2026-04-12T00:00:00"
+    },
+    "Campo 12": "",
+    "Campo 13": "valor 3-13",
+    "Campo 14": 314,
+    "Campo 15": 4.5,
+    "Campo 16": {
+     "__datetime__": "2026-04-17T00:00:00"
+    },
+    "Campo 17": "",
+    "Campo 18": "valor 3-18",
+    "Campo 19": 319,
+    "Campo 20": 5,
+    "Campo 21": {
+     "__datetime__": "2026-04-22T00:00:00"
+    },
+    "Campo 22": "",
+    "Campo 23": "valor 3-23",
+    "Campo 24": 324,
+    "Campo 25": 5.5,
+    "Campo 26": {
+     "__datetime__": "2026-04-27T00:00:00"
+    },
+    "Campo 27": "",
+    "Campo 28": "valor 3-28",
+    "Campo 29": 329,
+    "Campo 30": 6,
+    "Campo 31": {
+     "__datetime__": "2026-04-04T00:00:00"
+    },
+    "Campo 32": "",
+    "Campo 33": "valor 3-33",
+    "Campo 34": 334,
+    "Campo 35": 6.5,
+    "Campo 36": {
+     "__datetime__": "2026-04-09T00:00:00"
+    },
+    "Campo 37": "",
+    "Campo 38": "valor 3-38",
+    "Campo 39": 339,
+    "Campo 40": 7,
+    "Campo 41": {
+     "__datetime__": "2026-04-14T00:00:00"
+    },
+    "Campo 42": "",
+    "Campo 43": "valor 3-43",
+    "Campo 44": 344,
+    "Campo 45": 7.5,
+    "Campo 46": {
+     "__datetime__": "2026-04-19T00:00:00"
+    },
+    "Campo 47": "",
+    "Campo 48": "valor 3-48",
+    "Campo 49": 349,
+    "Campo 50": 8,
+    "Cidade": "Colombo",
+    "Modelo": "ProBook 440",
+    "Número de Série": "BRJ200RL01",
+    "Tipo": "Notebook"
+   },
+   {
+    "Apelido": "PRNOTEARC01",
+    "CNPJ de Instalação": "08.123.456/0001-90",
+    "Campo 07": "valor 4-7",
+    "Campo 08": 408,
+    "Campo 09": 4.9,
+    "Campo 10": {
+     "__datetime__": "2026-05-11T00:00:00"
+    },
+    "Campo 11": "",
+    "Campo 12": "valor 4-12",
+    "Campo 13": 413,
+    "Campo 14": 5.4,
+    "Campo 15": {
+     "__datetime__": "2026-05-16T00:00:00"
+    },
+    "Campo 16": "",
+    "Campo 17": "valor 4-17",
+    "Campo 18": 418,
+    "Campo 19": 5.9,
+    "Campo 20": {
+     "__datetime__": "2026-05-21T00:00:00"
+    },
+    "Campo 21": "",
+    "Campo 22": "valor 4-22",
+    "Campo 23": 423,
+    "Campo 24": 6.4,
+    "Campo 25": {
+     "__datetime__": "2026-05-26T00:00:00"
+    },
+    "Campo 26": "",
+    "Campo 27": "valor 4-27",
+    "Campo 28": 428,
+    "Campo 29": 6.9,
+    "Campo 30": {
+     "__datetime__": "2026-05-03T00:00:00"
+    },
+    "Campo 31": "",
+    "Campo 32": "valor 4-32",
+    "Campo 33": 433,
+    "Campo 34": 7.4,
+    "Campo 35": {
+     "__datetime__": "2026-05-08T00:00:00"
+    },
+    "Campo 36": "",
+    "Campo 37": "valor 4-37",
+    "Campo 38": 438,
+    "Campo 39": 7.9,
+    "Campo 40": {
+     "__datetime__": "2026-05-13T00:00:00"
+    },
+    "Campo 41": "",
+    "Campo 42": "valor 4-42",
+    "Campo 43": 443,
+    "Campo 44": 8.4,
+    "Campo 45": {
+     "__datetime__": "2026-05-18T00:00:00"
+    },
+    "Campo 46": "",
+    "Campo 47": "valor 4-47",
+    "Campo 48": 448,
+    "Campo 49": 8.9,
+    "Campo 50": {
+     "__datetime__": "2026-05-23T00:00:00"
+    },
+    "Cidade": "Araucária",
+    "Modelo": "ProBook 440",
+    "Número de Série": "BRJ200ARC1",
+    "Tipo": "Notebook"
+   },
+   {
+    "Apelido": "PRMACMTZ01",
+    "CNPJ de Instalação": "08.123.456/0001-90",
+    "Campo 07": 507,
+    "Campo 08": 5.8,
+    "Campo 09": {
+     "__datetime__": "2026-06-10T00:00:00"
+    },
+    "Campo 10": "",
+    "Campo 11": "valor 5-11",
+    "Campo 12": 512,
+    "Campo 13": 6.3,
+    "Campo 14": {
+     "__datetime__": "2026-06-15T00:00:00"
+    },
+    "Campo 15": "",
+    "Campo 16": "valor 5-16",
+    "Campo 17": 517,
+    "Campo 18": 6.8,
+    "Campo 19": {
+     "__datetime__": "2026-06-20T00:00:00"
+    },
+    "Campo 20": "",
+    "Campo 21": "valor 5-21",
+    "Campo 22": 522,
+    "Campo 23": 7.3,
+    "Campo 24": {
+     "__datetime__": "2026-06-25T00:00:00"
+    },
+    "Campo 25": "",
+    "Campo 26": "valor 5-26",
+    "Campo 27": 527,
+    "Campo 28": 7.8,
+    "Campo 29": {
+     "__datetime__": "2026-06-02T00:00:00"
+    },
+    "Campo 30": "",
+    "Campo 31": "valor 5-31",
+    "Campo 32": 532,
+    "Campo 33": 8.3,
+    "Campo 34": {
+     "__datetime__": "2026-06-07T00:00:00"
+    },
+    "Campo 35": "",
+    "Campo 36": "valor 5-36",
+    "Campo 37": 537,
+    "Campo 38": 8.8,
+    "Campo 39": {
+     "__datetime__": "2026-06-12T00:00:00"
+    },
+    "Campo 40": "",
+    "Campo 41": "valor 5-41",
+    "Campo 42": 542,
+    "Campo 43": 9.3,
+    "Campo 44": {
+     "__datetime__": "2026-06-17T00:00:00"
+    },
+    "Campo 45": "",
+    "Campo 46": "valor 5-46",
+    "Campo 47": 547,
+    "Campo 48": 9.8,
+    "Campo 49": {
+     "__datetime__": "2026-06-22T00:00:00"
+    },
+    "Campo 50": "",
+    "Cidade": "Curitiba",
+    "Modelo": "MacBook Air",
+    "Número de Série": "SCMVXKV7YCM",
+    "Tipo": "Notebook"
+   },
+   {
+    "Apelido": "PRMACMTZ02",
+    "CNPJ de Instalação": "08.123.456/0001-90",
+    "Campo 07": 6.7,
+    "Campo 08": {
+     "__datetime__": "2026-07-09T00:00:00"
+    },
+    "Campo 09": "",
+    "Campo 10": "valor 6-10",
+    "Campo 11": 611,
+    "Campo 12": 7.2,
+    "Campo 13": {
+     "__datetime__": "2026-07-14T00:00:00"
+    },
+    "Campo 14": "",
+    "Campo 15": "valor 6-15",
+    "Campo 16": 616,
+    "Campo 17": 7.7,
+    "Campo 18": {
+     "__datetime__": "2026-07-19T00:00:00"
+    },
+    "Campo 19": "",
+    "Campo 20": "valor 6-20",
+    "Campo 21": 621,
+    "Campo 22": 8.2,
+    "Campo 23": {
+     "__datetime__": "2026-07-24T00:00:00"
+    },
+    "Campo 24": "",
+    "Campo 25": "valor 6-25",
+    "Campo 26": 626,
+    "Campo 27": 8.7,
+    "Campo 28": {
+     "__datetime__": "2026-07-01T00:00:00"
+    },
+    "Campo 29": "",
+    "Campo 30": "valor 6-30",
+    "Campo 31": 631,
+    "Campo 32": 9.2,
+    "Campo 33": {
+     "__datetime__": "2026-07-06T00:00:00"
+    },
+    "Campo 34": "",
+    "Campo 35": "valor 6-35",
+    "Campo 36": 636,
+    "Campo 37": 9.7,
+    "Campo 38": {
+     "__datetime__": "2026-07-11T00:00:00"
+    },
+    "Campo 39": "",
+    "Campo 40": "valor 6-40",
+    "Campo 41": 641,
+    "Campo 42": 10.2,
+    "Campo 43": {
+     "__datetime__": "2026-07-16T00:00:00"
+    },
+    "Campo 44": "",
+    "Campo 45": "valor 6-45",
+    "Campo 46": 646,
+    "Campo 47": 10.7,
+    "Campo 48": {
+     "__datetime__": "2026-07-21T00:00:00"
+    },
+    "Campo 49": "",
+    "Campo 50": "valor 6-50",
+    "Cidade": "Curitiba",
+    "Modelo": "MacBook Pro",
+    "Número de Série": "SC02XYZ123",
+    "Tipo": "Notebook"
+   },
+   {
+    "Apelido": "PRMACAMB01",
+    "CNPJ de Instalação": "08.123.456/0001-90",
+    "Campo 07": {
+     "__datetime__": "2026-08-08T00:00:00"
+    },
+    "Campo 08": "",
+    "Campo 09": "valor 7-9",
+    "Campo 10": 710,
+    "Campo 11": 8.1,
+    "Campo 12": {
+     "__datetime__": "2026-08-13T00:00:00"
+    },
+    "Campo 13": "",
+    "Campo 14": "valor 7-14",
+    "Campo 15": 715,
+    "Campo 16": 8.6,
+    "Campo 17": {
+     "__datetime__": "2026-08-18T00:00:00"
+    },
+    "Campo 18": "",
+    "Campo 19": "valor 7-19",
+    "Campo 20": 720,
+    "Campo 21": 9.1,
+    "Campo 22": {
+     "__datetime__": "2026-08-23T00:00:00"
+    },
+    "Campo 23": "",
+    "Campo 24": "valor 7-24",
+    "Campo 25": 725,
+    "Campo 26": 9.6,
+    "Campo 27": {
+     "__datetime__": "2026-08-28T00:00:00"
+    },
+    "Campo 28": "",
+    "Campo 29": "valor 7-29",
+    "Campo 30": 730,
+    "Campo 31": 10.1,
+    "Campo 32": {
+     "__datetime__": "2026-08-05T00:00:00"
+    },
+    "Campo 33": "",
+    "Campo 34": "valor 7-34",
+    "Campo 35": 735,
+    "Campo 36": 10.6,
+    "Campo 37": {
+     "__datetime__": "2026-08-10T00:00:00"
+    },
+    "Campo 38": "",
+    "Campo 39": "valor 7-39",
+    "Campo 40": 740,
+    "Campo 41": 11.1,
+    "Campo 42": {
+     "__datetime__": "2026-08-15T00:00:00"
+    },
+    "Campo 43": "",
+    "Campo 44": "valor 7-44",
+    "Campo 45": 745,
+    "Campo 46": 11.6,
+    "Campo 47": {
+     "__datetime__": "2026-08-20T00:00:00"
+    },
+    "Campo 48": "",
+    "Campo 49": "valor 7-49",
+    "Campo 50": 750,
+    "Cidade": "Curitiba",
+    "Modelo": "MacBook Air",
+    "Número de Série": "SFVFAMB001",
+    "Tipo": "Notebook"
+   },
+   {
+    "Apelido": "PRMACAMB02",
+    "CNPJ de Instalação": "08.123.456/0001-90",
+    "Campo 07": "",
+    "Campo 08": "valor 8-8",
+    "Campo 09": 809,
+    "Campo 10": 9,
+    "Campo 11": {
+     "__datetime__": "2026-09-12T00:00:00"
+    },
+    "Campo 12": "",
+    "Campo 13": "valor 8-13",
+    "Campo 14": 814,
+    "Campo 15": 9.5,
+    "Campo 16": {
+     "__datetime__": "2026-09-17T00:00:00"
+    },
+    "Campo 17": "",
+    "Campo 18": "valor 8-18",
+    "Campo 19": 819,
+    "Campo 20": 10,
+    "Campo 21": {
+     "__datetime__": "2026-09-22T00:00:00"
+    },
+    "Campo 22": "",
+    "Campo 23": "valor 8-23",
+    "Campo 24": 824,
+    "Campo 25": 10.5,
+    "Campo 26": {
+     "__datetime__": "2026-09-27T00:00:00"
+    },
+    "Campo 27": "",
+    "Campo 28": "valor 8-28",
+    "Campo 29": 829,
+    "Campo 30": 11,
+    "Campo 31": {
+     "__datetime__": "2026-09-04T00:00:00"
+    },
+    "Campo 32": "",
+    "Campo 33": "valor 8-33",
+    "Campo 34": 834,
+    "Campo 35": 11.5,
+    "Campo 36": {
+     "__datetime__": "2026-09-09T00:00:00"
+    },
+    "Campo 37": "",
+    "Campo 38": "valor 8-38",
+    "Campo 39": 839,
+    "Campo 40": 12,
+    "Campo 41": {
+     "__datetime__": "2026-09-14T00:00:00"
+    },
+    "Campo 42": "",
+    "Campo 43": "valor 8-43",
+    "Campo 44": 844,
+    "Campo 45": 12.5,
+    "Campo 46": {
+     "__datetime__": "2026-09-19T00:00:00"
+    },
+    "Campo 47": "",
+    "Campo 48": "valor 8-48",
+    "Campo 49": 849,
+    "Campo 50": 13,
+    "Cidade": "Curitiba",
+    "Modelo": "MacBook Air",
+    "Número de Série": "SFVFAMB001",
+    "Tipo": "Notebook"
+   },
+   {
+    "Apelido": "PRNOTEMAR01",
+    "CNPJ de Instalação": "08.123.456/0001-90",
+    "Campo 07": "valor 9-7",
+    "Campo 08": 908,
+    "Campo 09": 9.9,
+    "Campo 10": {
+     "__datetime__": "2026-10-11T00:00:00"
+    },
+    "Campo 11": "",
+    "Campo 12": "valor 9-12",
+    "Campo 13": 913,
+    "Campo 14": 10.4,
+    "Campo 15": {
+     "__datetime__": "2026-10-16T00:00:00"
+    },
+    "Campo 16": "",
+    "Campo 17": "valor 9-17",
+    "Campo 18": 918,
+    "Campo 19": 10.9,
+    "Campo 20": {
+     "__datetime__": "2026-10-21T00:00:00"
+    },
+    "Campo 21": "",
+    "Campo 22": "valor 9-22",
+    "Campo 23": 923,
+    "Campo 24": 11.4,
+    "Campo 25": {
+     "__datetime__": "2026-10-26T00:00:00"
+    },
+    "Campo 26": "",
+    "Campo 27": "valor 9-27",
+    "Campo 28": 928,
+    "Campo 29": 11.9,
+    "Campo 30": {
+     "__datetime__": "2026-10-03T00:00:00"
+    },
+    "Campo 31": "",
+    "Campo 32": "valor 9-32",
+    "Campo 33": 933,
+    "Campo 34": 12.4,
+    "Campo 35": {
+     "__datetime__": "2026-10-08T00:00:00"
+    },
+    "Campo 36": "",
+    "Campo 37": "valor 9-37",
+    "Campo 38": 938,
+    "Campo 39": 12.9,
+    "Campo 40": {
+     "__datetime__": "2026-10-13T00:00:00"
+    },
+    "Campo 41": "",
+    "Campo 42": "valor 9-42",
+    "Campo 43": 943,
+    "Campo 44": 13.4,
+    "Campo 45": {
+     "__datetime__": "2026-10-18T00:00:00"
+    },
+    "Campo 46": "",
+    "Campo 47": "valor 9-47",
+    "Campo 48": 948,
+    "Campo 49": 13.9,
+    "Campo 50": {
+     "__datetime__": "2026-10-23T00:00:00"
+    },
+    "Cidade": "Maringá",
+    "Modelo": "ThinkPad",
+    "Número de Série": "SXA9988776",
+    "Tipo": "Notebook"
+   },
+   {
+    "Apelido": "",
+    "CNPJ de Instalação": "",
+    "Campo 07": "",
+    "Campo 08": "",
+    "Campo 09": "",
+    "Campo 10": "",
+    "Campo 11": "   ",
+    "Campo 12": "",
+    "Campo 13": "",
+    "Campo 14": "",
+    "Campo 15": "",
+    "Campo 16": "",
+    "Campo 17": "",
+    "Campo 18": "",
+    "Campo 19": "",
+    "Campo 20": "",
+    "Campo 21": "",
+    "Campo 22": "",
+    "Campo 23": "",
+    "Campo 24": "",
+    "Campo 25": "",
+    "Campo 26": "",
+    "Campo 27": "",
+    "Campo 28": "",
+    "Campo 29": "",
+    "Campo 30": "",
+    "Campo 31": "",
+    "Campo 32": "",
+    "Campo 33": "",
+    "Campo 34": "",
+    "Campo 35": "",
+    "Campo 36": "",
+    "Campo 37": "",
+    "Campo 38": "",
+    "Campo 39": "",
+    "Campo 40": "",
+    "Campo 41": "",
+    "Campo 42": "",
+    "Campo 43": "",
+    "Campo 44": "",
+    "Campo 45": "",
+    "Campo 46": "",
+    "Campo 47": "",
+    "Campo 48": "",
+    "Campo 49": "",
+    "Campo 50": "",
+    "Cidade": "",
+    "Modelo": "",
+    "Número de Série": "",
+    "Tipo": ""
+   },
+   {
+    "Apelido": "PRNOTECAS01",
+    "CNPJ de Instalação": "08.123.456/0001-90",
+    "Campo 07": 1007,
+    "Campo 08": 10.8,
+    "Campo 09": {
+     "__datetime__": "2026-11-10T00:00:00"
+    },
+    "Campo 10": "",
+    "Campo 11": "valor 10-11",
+    "Campo 12": 1012,
+    "Campo 13": 11.3,
+    "Campo 14": {
+     "__datetime__": "2026-11-15T00:00:00"
+    },
+    "Campo 15": "",
+    "Campo 16": "valor 10-16",
+    "Campo 17": 1017,
+    "Campo 18": 11.8,
+    "Campo 19": {
+     "__datetime__": "2026-11-20T00:00:00"
+    },
+    "Campo 20": "",
+    "Campo 21": "valor 10-21",
+    "Campo 22": 1022,
+    "Campo 23": 12.3,
+    "Campo 24": {
+     "__datetime__": "2026-11-25T00:00:00"
+    },
+    "Campo 25": "",
+    "Campo 26": "valor 10-26",
+    "Campo 27": 1027,
+    "Campo 28": 12.8,
+    "Campo 29": {
+     "__datetime__": "2026-11-02T00:00:00"
+    },
+    "Campo 30": "",
+    "Campo 31": "valor 10-31",
+    "Campo 32": 1032,
+    "Campo 33": 13.3,
+    "Campo 34": {
+     "__datetime__": "2026-11-07T00:00:00"
+    },
+    "Campo 35": "",
+    "Campo 36": "valor 10-36",
+    "Campo 37": 1037,
+    "Campo 38": 13.8,
+    "Campo 39": {
+     "__datetime__": "2026-11-12T00:00:00"
+    },
+    "Campo 40": "",
+    "Campo 41": "valor 10-41",
+    "Campo 42": 1042,
+    "Campo 43": 14.3,
+    "Campo 44": {
+     "__datetime__": "2026-11-17T00:00:00"
+    },
+    "Campo 45": "",
+    "Campo 46": "valor 10-46",
+    "Campo 47": 1047,
+    "Campo 48": 14.8,
+    "Campo 49": {
+     "__datetime__": "2026-11-22T00:00:00"
+    },
+    "Campo 50": "",
+    "Cidade": "Cascavel",
+    "Modelo": "ProBook 440",
+    "Número de Série": "BRJ300DUP1",
+    "Tipo": "Notebook"
+   },
+   {
+    "Apelido": "PRNOTECAS02",
+    "CNPJ de Instalação": "08.123.456/0001-90",
+    "Campo 07": 11.7,
+    "Campo 08": {
+     "__datetime__": "2026-12-09T00:00:00"
+    },
+    "Campo 09": "",
+    "Campo 10": "valor 11-10",
+    "Campo 11": 1111,
+    "Campo 12": 12.2,
+    "Campo 13": {
+     "__datetime__": "2026-12-14T00:00:00"
+    },
+    "Campo 14": "",
+    "Campo 15": "valor 11-15",
+    "Campo 16": 1116,
+    "Campo 17": 12.7,
+    "Campo 18": {
+     "__datetime__": "2026-12-19T00:00:00"
+    },
+    "Campo 19": "",
+    "Campo 20": "valor 11-20",
+    "Campo 21": 1121,
+    "Campo 22": 13.2,
+    "Campo 23": {
+     "__datetime__": "2026-12-24T00:00:00"
+    },
+    "Campo 24": "",
+    "Campo 25": "valor 11-25",
+    "Campo 26": 1126,
+    "Campo 27": 13.7,
+    "Campo 28": {
+     "__datetime__": "2026-12-01T00:00:00"
+    },
+    "Campo 29": "",
+    "Campo 30": "valor 11-30",
+    "Campo 31": 1131,
+    "Campo 32": 14.2,
+    "Campo 33": {
+     "__datetime__": "2026-12-06T00:00:00"
+    },
+    "Campo 34": "",
+    "Campo 35": "valor 11-35",
+    "Campo 36": 1136,
+    "Campo 37": 14.7,
+    "Campo 38": {
+     "__datetime__": "2026-12-11T00:00:00"
+    },
+    "Campo 39": "",
+    "Campo 40": "valor 11-40",
+    "Campo 41": 1141,
+    "Campo 42": 15.2,
+    "Campo 43": {
+     "__datetime__": "2026-12-16T00:00:00"
+    },
+    "Campo 44": "",
+    "Campo 45": "valor 11-45",
+    "Campo 46": 1146,
+    "Campo 47": 15.7,
+    "Campo 48": {
+     "__datetime__": "2026-12-21T00:00:00"
+    },
+    "Campo 49": "",
+    "Campo 50": "valor 11-50",
+    "Cidade": "Cascavel",
+    "Modelo": "ProBook 440",
+    "Número de Série": "BRJ300DUP1",
+    "Tipo": "Notebook"
+   },
+   {
+    "Apelido": "PRNOTEFOZ01",
+    "CNPJ de Instalação": "",
+    "Campo 07": {
+     "__datetime__": "2026-01-08T00:00:00"
+    },
+    "Campo 08": "",
+    "Campo 09": "valor 12-9",
+    "Campo 10": 1210,
+    "Campo 11": 13.1,
+    "Campo 12": {
+     "__datetime__": "2026-01-13T00:00:00"
+    },
+    "Campo 13": "",
+    "Campo 14": "valor 12-14",
+    "Campo 15": 1215,
+    "Campo 16": 13.6,
+    "Campo 17": {
+     "__datetime__": "2026-01-18T00:00:00"
+    },
+    "Campo 18": "",
+    "Campo 19": "valor 12-19",
+    "Campo 20": 1220,
+    "Campo 21": 14.1,
+    "Campo 22": {
+     "__datetime__": "2026-01-23T00:00:00"
+    },
+    "Campo 23": "",
+    "Campo 24": "valor 12-24",
+    "Campo 25": 1225,
+    "Campo 26": 14.6,
+    "Campo 27": {
+     "__datetime__": "2026-01-28T00:00:00"
+    },
+    "Campo 28": "",
+    "Campo 29": "valor 12-29",
+    "Campo 30": 1230,
+    "Campo 31": 15.1,
+    "Campo 32": {
+     "__datetime__": "2026-01-05T00:00:00"
+    },
+    "Campo 33": "",
+    "Campo 34": "valor 12-34",
+    "Campo 35": 1235,
+    "Campo 36": 15.6,
+    "Campo 37": {
+     "__datetime__": "2026-01-10T00:00:00"
+    },
+    "Campo 38": "",
+    "Campo 39": "valor 12-39",
+    "Campo 40": 1240,
+    "Campo 41": 16.1,
+    "Campo 42": {
+     "__datetime__": "2026-01-15T00:00:00"
+    },
+    "Campo 43": "",
+    "Campo 44": "valor 12-44",
+    "Campo 45": 1245,
+    "Campo 46": 16.6,
+    "Campo 47": {
+     "__datetime__": "2026-01-20T00:00:00"
+    },
+    "Campo 48": "",
+    "Campo 49": "valor 12-49",
+    "Campo 50": 1250,
+    "Cidade": "Foz do Iguaçu",
+    "Modelo": "ProBook 440",
+    "Número de Série": "",
+    "Tipo": "Notebook"
+   },
+   {
+    "Apelido": "  PRNOTEPG01  ",
+    "CNPJ de Instalação": "",
+    "Campo 07": "",
+    "Campo 08": "valor 13-8",
+    "Campo 09": 1309,
+    "Campo 10": 14,
+    "Campo 11": {
+     "__datetime__": "2026-02-12T00:00:00"
+    },
+    "Campo 12": "",
+    "Campo 13": "valor 13-13",
+    "Campo 14": 1314,
+    "Campo 15": 14.5,
+    "Campo 16": {
+     "__datetime__": "2026-02-17T00:00:00"
+    },
+    "Campo 17": "",
+    "Campo 18": "valor 13-18",
+    "Campo 19": 1319,
+    "Campo 20": 15,
+    "Campo 21": {
+     "__datetime__": "2026-02-22T00:00:00"
+    },
+    "Campo 22": "",
+    "Campo 23": "valor 13-23",
+    "Campo 24": 1324,
+    "Campo 25": 15.5,
+    "Campo 26": {
+     "__datetime__": "2026-02-27T00:00:00"
+    },
+    "Campo 27": "",
+    "Campo 28": "valor 13-28",
+    "Campo 29": 1329,
+    "Campo 30": 16,
+    "Campo 31": {
+     "__datetime__": "2026-02-04T00:00:00"
+    },
+    "Campo 32": "",
+    "Campo 33": "valor 13-33",
+    "Campo 34": 1334,
+    "Campo 35": 16.5,
+    "Campo 36": {
+     "__datetime__": "2026-02-09T00:00:00"
+    },
+    "Campo 37": "",
+    "Campo 38": "valor 13-38",
+    "Campo 39": 1339,
+    "Campo 40": 17,
+    "Campo 41": {
+     "__datetime__": "2026-02-14T00:00:00"
+    },
+    "Campo 42": "",
+    "Campo 43": "valor 13-43",
+    "Campo 44": 1344,
+    "Campo 45": 17.5,
+    "Campo 46": {
+     "__datetime__": "2026-02-19T00:00:00"
+    },
+    "Campo 47": "",
+    "Campo 48": "valor 13-48",
+    "Campo 49": 1349,
+    "Campo 50": 18,
+    "Cidade": "Ponta Grossa",
+    "Modelo": "ProBook 440",
+    "Número de Série": "",
+    "Tipo": "Notebook"
+   },
+   {
+    "Apelido": "PRNOTETOL01",
+    "CNPJ de Instalação": "08.123.456/0001-90",
+    "Campo 07": "valor 14-7",
+    "Campo 08": 1408,
+    "Campo 09": 14.9,
+    "Campo 10": {
+     "__datetime__": "2026-03-11T00:00:00"
+    },
+    "Campo 11": "",
+    "Campo 12": "valor 14-12",
+    "Campo 13": 1413,
+    "Campo 14": 15.4,
+    "Campo 15": {
+     "__datetime__": "2026-03-16T00:00:00"
+    },
+    "Campo 16": "",
+    "Campo 17": "valor 14-17",
+    "Campo 18": 1418,
+    "Campo 19": 15.9,
+    "Campo 20": {
+     "__datetime__": "2026-03-21T00:00:00"
+    },
+    "Campo 21": "",
+    "Campo 22": "valor 14-22",
+    "Campo 23": 1423,
+    "Campo 24": 16.4,
+    "Campo 25": {
+     "__datetime__": "2026-03-26T00:00:00"
+    },
+    "Campo 26": "",
+    "Campo 27": "valor 14-27",
+    "Campo 28": 1428,
+    "Campo 29": 16.9,
+    "Campo 30": {
+     "__datetime__": "2026-03-03T00:00:00"
+    },
+    "Campo 31": "",
+    "Campo 32": "valor 14-32",
+    "Campo 33": 1433,
+    "Campo 34": 17.4,
+    "Campo 35": {
+     "__datetime__": "2026-03-08T00:00:00"
+    },
+    "Campo 36": "",
+    "Campo 37": "valor 14-37",
+    "Campo 38": 1438,
+    "Campo 39": 17.9,
+    "Campo 40": {
+     "__datetime__": "2026-03-13T00:00:00"
+    },
+    "Campo 41": "",
+    "Campo 42": "valor 14-42",
+    "Campo 43": 1443,
+    "Campo 44": 18.4,
+    "Campo 45": {
+     "__datetime__": "2026-03-18T00:00:00"
+    },
+    "Campo 46": "",
+    "Campo 47": "valor 14-47",
+    "Campo 48": 1448,
+    "Campo 49": 18.9,
+    "Campo 50": {
+     "__datetime__": "2026-03-23T00:00:00"
+    },
+    "Cidade": "Toledo",
+    "Modelo": "ProBook 440",
+    "Número de Série": "BRJ400ONLY",
+    "Tipo": "Notebook"
+   },
+   {
+    "Apelido": "PRNOTEGPV01",
+    "CNPJ de Instalação": "08.123.456/0001-90",
+    "Campo 07": 1507,
+    "Campo 08": 15.8,
+    "Campo 09": {
+     "__datetime__": "2026-04-10T00:00:00"
+    },
+    "Campo 10": "",
+    "Campo 11": "valor 15-11",
+    "Campo 12": 1512,
+    "Campo 13": 16.3,
+    "Campo 14": {
+     "__datetime__": "2026-04-15T00:00:00"
+    },
+    "Campo 15": "",
+    "Campo 16": "valor 15-16",
+    "Campo 17": 1517,
+    "Campo 18": 16.8,
+    "Campo 19": {
+     "__datetime__": "2026-04-20T00:00:00"
+    },
+    "Campo 20": "",
+    "Campo 21": "valor 15-21",
+    "Campo 22": 1522,
+    "Campo 23": 17.3,
+    "Campo 24": {
+     "__datetime__": "2026-04-25T00:00:00"
+    },
+    "Campo 25": "",
+    "Campo 26": "valor 15-26",
+    "Campo 27": 1527,
+    "Campo 28": 17.8,
+    "Campo 29": {
+     "__datetime__": "2026-04-02T00:00:00"
+    },
+    "Campo 30": "",
+    "Campo 31": "valor 15-31",
+    "Campo 32": 1532,
+    "Campo 33": 18.3,
+    "Campo 34": {
+     "__datetime__": "2026-04-07T00:00:00"
+    },
+    "Campo 35": "",
+    "Campo 36": "valor 15-36",
+    "Campo 37": 1537,
+    "Campo 38": 18.8,
+    "Campo 39": {
+     "__datetime__": "2026-04-12T00:00:00"
+    },
+    "Campo 40": "",
+    "Campo 41": "valor 15-41",
+    "Campo 42": 1542,
+    "Campo 43": 19.3,
+    "Campo 44": {
+     "__datetime__": "2026-04-17T00:00:00"
+    },
+    "Campo 45": "",
+    "Campo 46": "valor 15-46",
+    "Campo 47": 1547,
+    "Campo 48": 19.8,
+    "Campo 49": {
+     "__datetime__": "2026-04-22T00:00:00"
+    },
+    "Campo 50": "",
+    "Cidade": "Guarapuava",
+    "Modelo": "ProBook 440",
+    "Número de Série": 123456789,
+    "Tipo": "Notebook"
+   },
+   {
+    "Apelido": "PRNOTEIRA01",
+    "CNPJ de Instalação": "08.123.456/0001-90",
+    "Campo 07": 16.7,
+    "Campo 08": {
+     "__datetime__": "2026-05-09T00:00:00"
+    },
+    "Campo 09": "",
+    "Campo 10": "valor 16-10",
+    "Campo 11": 1611,
+    "Campo 12": 17.2,
+    "Campo 13": {
+     "__datetime__": "2026-05-14T00:00:00"
+    },
+    "Campo 14": "",
+    "Campo 15": "valor 16-15",
+    "Campo 16": 1616,
+    "Campo 17": 17.7,
+    "Campo 18": {
+     "__datetime__": "2026-05-19T00:00:00"
+    },
+    "Campo 19": "",
+    "Campo 20": "valor 16-20",
+    "Campo 21": 1621,
+    "Campo 22": 18.2,
+    "Campo 23": {
+     "__datetime__": "2026-05-24T00:00:00"
+    },
+    "Campo 24": "",
+    "Campo 25": "valor 16-25",
+    "Campo 26": 1626,
+    "Campo 27": 18.7,
+    "Campo 28": {
+     "__datetime__": "2026-05-01T00:00:00"
+    },
+    "Campo 29": "",
+    "Campo 30": "valor 16-30",
+    "Campo 31": 1631,
+    "Campo 32": 19.2,
+    "Campo 33": {
+     "__datetime__": "2026-05-06T00:00:00"
+    },
+    "Campo 34": "",
+    "Campo 35": "valor 16-35",
+    "Campo 36": 1636,
+    "Campo 37": 19.7,
+    "Campo 38": {
+     "__datetime__": "2026-05-11T00:00:00"
+    },
+    "Campo 39": "",
+    "Campo 40": "valor 16-40",
+    "Campo 41": 1641,
+    "Campo 42": 20.2,
+    "Campo 43": {
+     "__datetime__": "2026-05-16T00:00:00"
+    },
+    "Campo 44": "",
+    "Campo 45": "valor 16-45",
+    "Campo 46": 1646,
+    "Campo 47": 20.7,
+    "Campo 48": {
+     "__datetime__": "2026-05-21T00:00:00"
+    },
+    "Campo 49": "",
+    "Campo 50": "valor 16-50",
+    "Cidade": "Irati",
+    "Modelo": "ProBook 440",
+    "Número de Série": "brj-500-low",
+    "Tipo": "Notebook"
+   },
+   {
+    "Apelido": "IMPRESSORA-MTZ",
+    "CNPJ de Instalação": "08.123.456/0001-90",
+    "Campo 07": {
+     "__datetime__": "2026-06-08T00:00:00"
+    },
+    "Campo 08": "",
+    "Campo 09": "valor 17-9",
+    "Campo 10": 1710,
+    "Campo 11": 18.1,
+    "Campo 12": {
+     "__datetime__": "2026-06-13T00:00:00"
+    },
+    "Campo 13": "",
+    "Campo 14": "valor 17-14",
+    "Campo 15": 1715,
+    "Campo 16": 18.6,
+    "Campo 17": {
+     "__datetime__": "2026-06-18T00:00:00"
+    },
+    "Campo 18": "",
+    "Campo 19": "valor 17-19",
+    "Campo 20": 1720,
+    "Campo 21": 19.1,
+    "Campo 22": {
+     "__datetime__": "2026-06-23T00:00:00"
+    },
+    "Campo 23": "",
+    "Campo 24": "valor 17-24",
+    "Campo 25": 1725,
+    "Campo 26": 19.6,
+    "Campo 27": {
+     "__datetime__": "2026-06-28T00:00:00"
+    },
+    "Campo 28": "",
+    "Campo 29": "valor 17-29",
+    "Campo 30": 1730,
+    "Campo 31": 20.1,
+    "Campo 32": {
+     "__datetime__": "2026-06-05T00:00:00"
+    },
+    "Campo 33": "",
+    "Campo 34": "valor 17-34",
+    "Campo 35": 1735,
+    "Campo 36": 20.6,
+    "Campo 37": {
+     "__datetime__": "2026-06-10T00:00:00"
+    },
+    "Campo 38": "",
+    "Campo 39": "valor 17-39",
+    "Campo 40": 1740,
+    "Campo 41": 21.1,
+    "Campo 42": {
+     "__datetime__": "2026-06-15T00:00:00"
+    },
+    "Campo 43": "",
+    "Campo 44": "valor 17-44",
+    "Campo 45": 1745,
+    "Campo 46": 21.6,
+    "Campo 47": {
+     "__datetime__": "2026-06-20T00:00:00"
+    },
+    "Campo 48": "",
+    "Campo 49": "valor 17-49",
+    "Campo 50": 1750,
+    "Cidade": "Curitiba",
+    "Modelo": "LaserJet",
+    "Número de Série": "CN12345678",
+    "Tipo": "Impressora"
+   },
+   {
+    "Apelido": "PRNOTEUMU01",
+    "CNPJ de Instalação": "08.123.456/0001-90",
+    "Campo 07": "",
+    "Campo 08": "valor 18-8",
+    "Campo 09": 1809,
+    "Campo 10": 19,
+    "Campo 11": {
+     "__datetime__": "2026-07-12T00:00:00"
+    },
+    "Campo 12": "",
+    "Campo 13": "valor 18-13",
+    "Campo 14": 1814,
+    "Campo 15": 19.5,
+    "Campo 16": {
+     "__datetime__": "2026-07-17T00:00:00"
+    },
+    "Campo 17": "",
+    "Campo 18": "valor 18-18",
+    "Campo 19": 1819,
+    "Campo 20": 20,
+    "Campo 21": {
+     "__datetime__": "2026-07-22T00:00:00"
+    },
+    "Campo 22": "",
+    "Campo 23": "valor 18-23",
+    "Campo 24": 1824,
+    "Campo 25": 20.5,
+    "Campo 26": {
+     "__datetime__": "2026-07-27T00:00:00"
+    },
+    "Campo 27": "",
+    "Campo 28": "valor 18-28",
+    "Campo 29": 1829,
+    "Campo 30": 21,
+    "Campo 31": {
+     "__datetime__": "2026-07-04T00:00:00"
+    },
+    "Campo 32": "",
+    "Campo 33": "valor 18-33",
+    "Campo 34": 1834,
+    "Campo 35": 21.5,
+    "Campo 36": {
+     "__datetime__": "2026-07-09T00:00:00"
+    },
+    "Campo 37": "",
+    "Campo 38": "valor 18-38",
+    "Campo 39": 1839,
+    "Campo 40": 22,
+    "Campo 41": {
+     "__datetime__": "2026-07-14T00:00:00"
+    },
+    "Campo 42": "",
+    "Campo 43": "valor 18-43",
+    "Campo 44": 1844,
+    "Campo 45": 22.5,
+    "Campo 46": {
+     "__datetime__": "2026-07-19T00:00:00"
+    },
+    "Campo 47": "",
+    "Campo 48": "valor 18-48",
+    "Campo 49": 1849,
+    "Campo 50": 23,
+    "Cidade": "Umuarama",
+    "Modelo": "ProBook 440",
+    "Número de Série": "BRJ600HOST",
+    "Tipo": "Notebook"
+   },
+   {
+    "Apelido": "",
+    "CNPJ de Instalação": "",
+    "Campo 07": "sobra",
+    "Campo 08": "",
+    "Campo 09": "",
+    "Campo 10": "",
+    "Campo 11": "",
+    "Campo 12": "",
+    "Campo 13": "",
+    "Campo 14": "",
+    "Campo 15": "",
+    "Campo 16": "",
+    "Campo 17": "",
+    "Campo 18": "",
+    "Campo 19": "",
+    "Campo 20": "",
+    "Campo 21": "",
+    "Campo 22": "",
+    "Campo 23": "",
+    "Campo 24": "",
+    "Campo 25": "",
+    "Campo 26": "",
+    "Campo 27": "",
+    "Campo 28": "",
+    "Campo 29": "",
+    "Campo 30": "",
+    "Campo 31": "",
+    "Campo 32": "",
+    "Campo 33": "",
+    "Campo 34": "",
+    "Campo 35": "",
+    "Campo 36": "",
+    "Campo 37": "",
+    "Campo 38": "",
+    "Campo 39": "",
+    "Campo 40": "",
+    "Campo 41": "",
+    "Campo 42": "",
+    "Campo 43": "",
+    "Campo 44": "",
+    "Campo 45": "",
+    "Campo 46": "",
+    "Campo 47": "",
+    "Campo 48": "",
+    "Campo 49": "",
+    "Campo 50": "",
+    "Cidade": "",
+    "Modelo": "",
+    "Número de Série": "",
+    "Tipo": ""
+   }
+  ]
+ },
+ "upload": {
+  "comparacao": {
+   "arquivos_enviados": {
+    "detalhes": "EquipamentosDetalhes.xlsx",
+    "endpoint": "InvAllComputersSummary.xlsx"
+   },
+   "ausentes_em_detalhes": [
+    {
+     "ausente_em": [
+      "EquipamentosDetalhes"
+     ],
+     "computador": "PRNOTEXYZ01",
+     "fonte_ausente": "EquipamentosDetalhes",
+     "fontes": {
+      "EquipamentosDetalhes": "ausente",
+      "no endpoint": "presente"
+     },
+     "local_previsto": "Sem mapeamento de local",
+     "serie": "BRJ700ENDP",
+     "usuario": ""
+    },
+    {
+     "ausente_em": [
+      "EquipamentosDetalhes"
+     ],
+     "computador": "PRNOTEBKPLON1",
+     "fonte_ausente": "EquipamentosDetalhes",
+     "fontes": {
+      "EquipamentosDetalhes": "ausente",
+      "no endpoint": "presente"
+     },
+     "local_previsto": "Londrina",
+     "serie": "BRJ700ENDQ",
+     "usuario": ""
+    },
+    {
+     "ausente_em": [
+      "EquipamentosDetalhes"
+     ],
+     "computador": "PRNOTEUMU01",
+     "fonte_ausente": "EquipamentosDetalhes",
+     "fontes": {
+      "EquipamentosDetalhes": "ausente",
+      "no endpoint": "presente"
+     },
+     "local_previsto": "Umuarama",
+     "serie": "BRJ600HOSX",
+     "usuario": ""
+    }
+   ],
+   "ausentes_no_endpoint": [
+    {
+     "ausente_em": [
+      "no endpoint"
+     ],
+     "computador": "PRNOTEMAR01",
+     "fonte_ausente": "no endpoint",
+     "fontes": {
+      "EquipamentosDetalhes": "presente",
+      "no endpoint": "ausente"
+     },
+     "local_previsto": "Sem mapeamento de local",
+     "serie": "SXA9988776",
+     "usuario": ""
+    },
+    {
+     "ausente_em": [
+      "no endpoint"
+     ],
+     "computador": "PRNOTETOL01",
+     "fonte_ausente": "no endpoint",
+     "fontes": {
+      "EquipamentosDetalhes": "presente",
+      "no endpoint": "ausente"
+     },
+     "local_previsto": "Sem mapeamento de local",
+     "serie": "BRJ400ONLY",
+     "usuario": ""
+    },
+    {
+     "ausente_em": [
+      "no endpoint"
+     ],
+     "computador": "IMPRESSORA-MTZ",
+     "fonte_ausente": "no endpoint",
+     "fontes": {
+      "EquipamentosDetalhes": "presente",
+      "no endpoint": "ausente"
+     },
+     "local_previsto": "Sem mapeamento de local",
+     "serie": "CN12345678",
+     "usuario": ""
+    }
+   ],
+   "correspondencias_ambiguas": [
+    {
+     "chave": "FVFAMB001",
+     "fontes": [
+      {
+       "fonte": "EquipamentosDetalhes",
+       "quantidade": 2
+      }
+     ],
+     "mensagem": "A série aparece em mais de uma linha na mesma fonte; esses registros foram agrupados como ambíguos.",
+     "tipo": "Número de série duplicado"
+    },
+    {
+     "chave": "BRJ300DUP1",
+     "fontes": [
+      {
+       "fonte": "EquipamentosDetalhes",
+       "quantidade": 2
+      }
+     ],
+     "mensagem": "A série aparece em mais de uma linha na mesma fonte; esses registros foram agrupados como ambíguos.",
+     "tipo": "Número de série duplicado"
+    },
+    {
+     "chave": "PRNOTEUMU01",
+     "fontes": [
+      {
+       "fonte": "Endpoint",
+       "quantidade": 2
+      }
+     ],
+     "mensagem": "O hostname/Apelido não é único nesta fonte e não foi usado para escolher uma linha.",
+     "tipo": "Hostname/Apelido duplicado"
+    },
+    {
+     "chave": "PRNOTEUMU01",
+     "fontes": [
+      {
+       "fonte": "Endpoint",
+       "quantidade": 2
+      },
+      {
+       "fonte": "EquipamentosDetalhes",
+       "quantidade": 1
+      }
+     ],
+     "mensagem": "As séries prevalecem sobre o hostname/Apelido; 1 combinações têm séries divergentes. Nenhum registro foi unido; exemplos: Endpoint [BRJ600HOST, BRJ600HOSX]; EquipamentosDetalhes [BRJ600HOST].",
+     "tipo": "Série divergente para o mesmo hostname/Apelido"
+    }
+   ],
+   "divergencias_local": [
+    {
+     "computador": "PRNOTELON02",
+     "local_detalhes": "Maringá",
+     "local_previsto": "Londrina",
+     "serie": "BRJ100AAA2"
+    }
+   ],
+   "registros_ambiguos": [
+    {
+     "ausente_em": [],
+     "computador": "PRMACAMB01 / PRMACAMB02",
+     "fontes": {
+      "EquipamentosDetalhes": "ambíguo",
+      "no endpoint": "presente"
+     },
+     "local_previsto": "Sem mapeamento de local",
+     "motivo": "Há registros duplicados ou uma alternativa de hostname/Apelido que não é única.",
+     "serie": "FVFAMB001 / SFVFAMB001",
+     "usuario": "sebrae\\fabi"
+    },
+    {
+     "ausente_em": [],
+     "computador": "PRNOTECAS01 / PRNOTECAS02",
+     "fontes": {
+      "EquipamentosDetalhes": "ambíguo",
+      "no endpoint": "presente"
+     },
+     "local_previsto": "Cascavel",
+     "motivo": "Há registros duplicados ou uma alternativa de hostname/Apelido que não é única.",
+     "serie": "BRJ300DUP1",
+     "usuario": ""
+    }
+   ],
+   "sem_acesso_7_dias": [
+    {
+     "computador": "PRNOTELON02",
+     "dias_sem_verificacao": 14,
+     "linha_endpoint": 3,
+     "serie": "BRJ100AAA2",
+     "ultima_verificacao": "2026-10-01T08:00-03:00"
+    },
+    {
+     "computador": "PRNOTESJP01",
+     "dias_sem_verificacao": 14,
+     "linha_endpoint": 4,
+     "serie": "BRJ200SJP1",
+     "ultima_verificacao": "2026-10-01T10:00-03:00"
+    },
+    {
+     "computador": "PRNOTEXYZ01",
+     "dias_sem_verificacao": 44,
+     "linha_endpoint": 17,
+     "serie": "BRJ700ENDP",
+     "ultima_verificacao": "2026-09-01T07:15-03:00"
+    }
+   ],
+   "series_sem_mapeamento": [
+    {
+     "exemplos": [
+      "PRNOTEXYZ01"
+     ],
+     "quantidade": 1,
+     "serie": "XYZ"
+    }
+   ],
+   "total_detalhes": 20,
+   "total_endpoint": 20
+  },
+  "selecionada_detalhes": {
+   "column_count": 50,
+   "headers": [
+    "APELIDO",
+    "CAMPO07",
+    "CAMPO08",
+    "CAMPO09",
+    "CAMPO10",
+    "CAMPO11",
+    "CAMPO12",
+    "CAMPO13",
+    "CAMPO14",
+    "CAMPO15",
+    "CAMPO16",
+    "CAMPO17",
+    "CAMPO18",
+    "CAMPO19",
+    "CAMPO20",
+    "CAMPO21",
+    "CAMPO22",
+    "CAMPO23",
+    "CAMPO24",
+    "CAMPO25",
+    "CAMPO26",
+    "CAMPO27",
+    "CAMPO28",
+    "CAMPO29",
+    "CAMPO30",
+    "CAMPO31",
+    "CAMPO32",
+    "CAMPO33",
+    "CAMPO34",
+    "CAMPO35",
+    "CAMPO36",
+    "CAMPO37",
+    "CAMPO38",
+    "CAMPO39",
+    "CAMPO40",
+    "CAMPO41",
+    "CAMPO42",
+    "CAMPO43",
+    "CAMPO44",
+    "CAMPO45",
+    "CAMPO46",
+    "CAMPO47",
+    "CAMPO48",
+    "CAMPO49",
+    "CAMPO50",
+    "CIDADE",
+    "CNPJDEINSTALACAO",
+    "MODELO",
+    "NUMERODESERIE",
+    "TIPO"
+   ],
+   "populated_rows": 17,
+   "records": [
+    {
+     "APELIDO": "PRNOTELON01",
+     "CAMPO07": 7,
+     "CAMPO08": 0.8,
+     "CAMPO09": {
+      "__datetime__": "2026-01-10T00:00:00"
+     },
+     "CAMPO10": null,
+     "CAMPO11": "valor 0-11",
+     "CAMPO12": 12,
+     "CAMPO13": 1.3,
+     "CAMPO14": {
+      "__datetime__": "2026-01-15T00:00:00"
+     },
+     "CAMPO15": null,
+     "CAMPO16": "valor 0-16",
+     "CAMPO17": 17,
+     "CAMPO18": 1.8,
+     "CAMPO19": {
+      "__datetime__": "2026-01-20T00:00:00"
+     },
+     "CAMPO20": null,
+     "CAMPO21": "valor 0-21",
+     "CAMPO22": 22,
+     "CAMPO23": 2.3,
+     "CAMPO24": {
+      "__datetime__": "2026-01-25T00:00:00"
+     },
+     "CAMPO25": null,
+     "CAMPO26": "valor 0-26",
+     "CAMPO27": 27,
+     "CAMPO28": 2.8,
+     "CAMPO29": {
+      "__datetime__": "2026-01-02T00:00:00"
+     },
+     "CAMPO30": null,
+     "CAMPO31": "valor 0-31",
+     "CAMPO32": 32,
+     "CAMPO33": 3.3,
+     "CAMPO34": {
+      "__datetime__": "2026-01-07T00:00:00"
+     },
+     "CAMPO35": null,
+     "CAMPO36": "valor 0-36",
+     "CAMPO37": 37,
+     "CAMPO38": 3.8,
+     "CAMPO39": {
+      "__datetime__": "2026-01-12T00:00:00"
+     },
+     "CAMPO40": null,
+     "CAMPO41": "valor 0-41",
+     "CAMPO42": 42,
+     "CAMPO43": 4.3,
+     "CAMPO44": {
+      "__datetime__": "2026-01-17T00:00:00"
+     },
+     "CAMPO45": null,
+     "CAMPO46": "valor 0-46",
+     "CAMPO47": 47,
+     "CAMPO48": 4.8,
+     "CAMPO49": {
+      "__datetime__": "2026-01-22T00:00:00"
+     },
+     "CAMPO50": null,
+     "CIDADE": "Londrina",
+     "CNPJDEINSTALACAO": "08.123.456/0001-90",
+     "MODELO": "ProBook 440",
+     "NUMERODESERIE": "BRJ100AAA1",
+     "TIPO": "Notebook",
+     "__excel_row_number__": 2
+    },
+    {
+     "APELIDO": "PRNOTELON02",
+     "CAMPO07": 1.7,
+     "CAMPO08": {
+      "__datetime__": "2026-02-09T00:00:00"
+     },
+     "CAMPO09": null,
+     "CAMPO10": "valor 1-10",
+     "CAMPO11": 111,
+     "CAMPO12": 2.2,
+     "CAMPO13": {
+      "__datetime__": "2026-02-14T00:00:00"
+     },
+     "CAMPO14": null,
+     "CAMPO15": "valor 1-15",
+     "CAMPO16": 116,
+     "CAMPO17": 2.7,
+     "CAMPO18": {
+      "__datetime__": "2026-02-19T00:00:00"
+     },
+     "CAMPO19": null,
+     "CAMPO20": "valor 1-20",
+     "CAMPO21": 121,
+     "CAMPO22": 3.2,
+     "CAMPO23": {
+      "__datetime__": "2026-02-24T00:00:00"
+     },
+     "CAMPO24": null,
+     "CAMPO25": "valor 1-25",
+     "CAMPO26": 126,
+     "CAMPO27": 3.7,
+     "CAMPO28": {
+      "__datetime__": "2026-02-01T00:00:00"
+     },
+     "CAMPO29": null,
+     "CAMPO30": "valor 1-30",
+     "CAMPO31": 131,
+     "CAMPO32": 4.2,
+     "CAMPO33": {
+      "__datetime__": "2026-02-06T00:00:00"
+     },
+     "CAMPO34": null,
+     "CAMPO35": "valor 1-35",
+     "CAMPO36": 136,
+     "CAMPO37": 4.7,
+     "CAMPO38": {
+      "__datetime__": "2026-02-11T00:00:00"
+     },
+     "CAMPO39": null,
+     "CAMPO40": "valor 1-40",
+     "CAMPO41": 141,
+     "CAMPO42": 5.2,
+     "CAMPO43": {
+      "__datetime__": "2026-02-16T00:00:00"
+     },
+     "CAMPO44": null,
+     "CAMPO45": "valor 1-45",
+     "CAMPO46": 146,
+     "CAMPO47": 5.7,
+     "CAMPO48": {
+      "__datetime__": "2026-02-21T00:00:00"
+     },
+     "CAMPO49": null,
+     "CAMPO50": "valor 1-50",
+     "CIDADE": "Maringá",
+     "CNPJDEINSTALACAO": "08.123.456/0001-90",
+     "MODELO": "ProBook 440",
+     "NUMERODESERIE": "BRJ100AAA2",
+     "TIPO": "Notebook",
+     "__excel_row_number__": 3
+    },
+    {
+     "APELIDO": "PRNOTESJP01",
+     "CAMPO07": {
+      "__datetime__": "2026-03-08T00:00:00"
+     },
+     "CAMPO08": null,
+     "CAMPO09": "valor 2-9",
+     "CAMPO10": 210,
+     "CAMPO11": 3.1,
+     "CAMPO12": {
+      "__datetime__": "2026-03-13T00:00:00"
+     },
+     "CAMPO13": null,
+     "CAMPO14": "valor 2-14",
+     "CAMPO15": 215,
+     "CAMPO16": 3.6,
+     "CAMPO17": {
+      "__datetime__": "2026-03-18T00:00:00"
+     },
+     "CAMPO18": null,
+     "CAMPO19": "valor 2-19",
+     "CAMPO20": 220,
+     "CAMPO21": 4.1,
+     "CAMPO22": {
+      "__datetime__": "2026-03-23T00:00:00"
+     },
+     "CAMPO23": null,
+     "CAMPO24": "valor 2-24",
+     "CAMPO25": 225,
+     "CAMPO26": 4.6,
+     "CAMPO27": {
+      "__datetime__": "2026-03-28T00:00:00"
+     },
+     "CAMPO28": null,
+     "CAMPO29": "valor 2-29",
+     "CAMPO30": 230,
+     "CAMPO31": 5.1,
+     "CAMPO32": {
+      "__datetime__": "2026-03-05T00:00:00"
+     },
+     "CAMPO33": null,
+     "CAMPO34": "valor 2-34",
+     "CAMPO35": 235,
+     "CAMPO36": 5.6,
+     "CAMPO37": {
+      "__datetime__": "2026-03-10T00:00:00"
+     },
+     "CAMPO38": null,
+     "CAMPO39": "valor 2-39",
+     "CAMPO40": 240,
+     "CAMPO41": 6.1,
+     "CAMPO42": {
+      "__datetime__": "2026-03-15T00:00:00"
+     },
+     "CAMPO43": null,
+     "CAMPO44": "valor 2-44",
+     "CAMPO45": 245,
+     "CAMPO46": 6.6,
+     "CAMPO47": {
+      "__datetime__": "2026-03-20T00:00:00"
+     },
+     "CAMPO48": null,
+     "CAMPO49": "valor 2-49",
+     "CAMPO50": 250,
+     "CIDADE": "São José dos Pinhais",
+     "CNPJDEINSTALACAO": "08.123.456/0001-90",
+     "MODELO": "ProBook 440",
+     "NUMERODESERIE": "BRJ200SJP1",
+     "TIPO": "Notebook",
+     "__excel_row_number__": 4
+    },
+    {
+     "APELIDO": "PRNOTERL01",
+     "CAMPO07": null,
+     "CAMPO08": "valor 3-8",
+     "CAMPO09": 309,
+     "CAMPO10": 4,
+     "CAMPO11": {
+      "__datetime__": "2026-04-12T00:00:00"
+     },
+     "CAMPO12": null,
+     "CAMPO13": "valor 3-13",
+     "CAMPO14": 314,
+     "CAMPO15": 4.5,
+     "CAMPO16": {
+      "__datetime__": "2026-04-17T00:00:00"
+     },
+     "CAMPO17": null,
+     "CAMPO18": "valor 3-18",
+     "CAMPO19": 319,
+     "CAMPO20": 5,
+     "CAMPO21": {
+      "__datetime__": "2026-04-22T00:00:00"
+     },
+     "CAMPO22": null,
+     "CAMPO23": "valor 3-23",
+     "CAMPO24": 324,
+     "CAMPO25": 5.5,
+     "CAMPO26": {
+      "__datetime__": "2026-04-27T00:00:00"
+     },
+     "CAMPO27": null,
+     "CAMPO28": "valor 3-28",
+     "CAMPO29": 329,
+     "CAMPO30": 6,
+     "CAMPO31": {
+      "__datetime__": "2026-04-04T00:00:00"
+     },
+     "CAMPO32": null,
+     "CAMPO33": "valor 3-33",
+     "CAMPO34": 334,
+     "CAMPO35": 6.5,
+     "CAMPO36": {
+      "__datetime__": "2026-04-09T00:00:00"
+     },
+     "CAMPO37": null,
+     "CAMPO38": "valor 3-38",
+     "CAMPO39": 339,
+     "CAMPO40": 7,
+     "CAMPO41": {
+      "__datetime__": "2026-04-14T00:00:00"
+     },
+     "CAMPO42": null,
+     "CAMPO43": "valor 3-43",
+     "CAMPO44": 344,
+     "CAMPO45": 7.5,
+     "CAMPO46": {
+      "__datetime__": "2026-04-19T00:00:00"
+     },
+     "CAMPO47": null,
+     "CAMPO48": "valor 3-48",
+     "CAMPO49": 349,
+     "CAMPO50": 8,
+     "CIDADE": "Colombo",
+     "CNPJDEINSTALACAO": "08.123.456/0001-90",
+     "MODELO": "ProBook 440",
+     "NUMERODESERIE": "BRJ200RL01",
+     "TIPO": "Notebook",
+     "__excel_row_number__": 5
+    },
+    {
+     "APELIDO": "PRNOTEARC01",
+     "CAMPO07": "valor 4-7",
+     "CAMPO08": 408,
+     "CAMPO09": 4.9,
+     "CAMPO10": {
+      "__datetime__": "2026-05-11T00:00:00"
+     },
+     "CAMPO11": null,
+     "CAMPO12": "valor 4-12",
+     "CAMPO13": 413,
+     "CAMPO14": 5.4,
+     "CAMPO15": {
+      "__datetime__": "2026-05-16T00:00:00"
+     },
+     "CAMPO16": null,
+     "CAMPO17": "valor 4-17",
+     "CAMPO18": 418,
+     "CAMPO19": 5.9,
+     "CAMPO20": {
+      "__datetime__": "2026-05-21T00:00:00"
+     },
+     "CAMPO21": null,
+     "CAMPO22": "valor 4-22",
+     "CAMPO23": 423,
+     "CAMPO24": 6.4,
+     "CAMPO25": {
+      "__datetime__": "2026-05-26T00:00:00"
+     },
+     "CAMPO26": null,
+     "CAMPO27": "valor 4-27",
+     "CAMPO28": 428,
+     "CAMPO29": 6.9,
+     "CAMPO30": {
+      "__datetime__": "2026-05-03T00:00:00"
+     },
+     "CAMPO31": null,
+     "CAMPO32": "valor 4-32",
+     "CAMPO33": 433,
+     "CAMPO34": 7.4,
+     "CAMPO35": {
+      "__datetime__": "2026-05-08T00:00:00"
+     },
+     "CAMPO36": null,
+     "CAMPO37": "valor 4-37",
+     "CAMPO38": 438,
+     "CAMPO39": 7.9,
+     "CAMPO40": {
+      "__datetime__": "2026-05-13T00:00:00"
+     },
+     "CAMPO41": null,
+     "CAMPO42": "valor 4-42",
+     "CAMPO43": 443,
+     "CAMPO44": 8.4,
+     "CAMPO45": {
+      "__datetime__": "2026-05-18T00:00:00"
+     },
+     "CAMPO46": null,
+     "CAMPO47": "valor 4-47",
+     "CAMPO48": 448,
+     "CAMPO49": 8.9,
+     "CAMPO50": {
+      "__datetime__": "2026-05-23T00:00:00"
+     },
+     "CIDADE": "Araucária",
+     "CNPJDEINSTALACAO": "08.123.456/0001-90",
+     "MODELO": "ProBook 440",
+     "NUMERODESERIE": "BRJ200ARC1",
+     "TIPO": "Notebook",
+     "__excel_row_number__": 6
+    },
+    {
+     "APELIDO": "PRMACMTZ01",
+     "CAMPO07": 507,
+     "CAMPO08": 5.8,
+     "CAMPO09": {
+      "__datetime__": "2026-06-10T00:00:00"
+     },
+     "CAMPO10": null,
+     "CAMPO11": "valor 5-11",
+     "CAMPO12": 512,
+     "CAMPO13": 6.3,
+     "CAMPO14": {
+      "__datetime__": "2026-06-15T00:00:00"
+     },
+     "CAMPO15": null,
+     "CAMPO16": "valor 5-16",
+     "CAMPO17": 517,
+     "CAMPO18": 6.8,
+     "CAMPO19": {
+      "__datetime__": "2026-06-20T00:00:00"
+     },
+     "CAMPO20": null,
+     "CAMPO21": "valor 5-21",
+     "CAMPO22": 522,
+     "CAMPO23": 7.3,
+     "CAMPO24": {
+      "__datetime__": "2026-06-25T00:00:00"
+     },
+     "CAMPO25": null,
+     "CAMPO26": "valor 5-26",
+     "CAMPO27": 527,
+     "CAMPO28": 7.8,
+     "CAMPO29": {
+      "__datetime__": "2026-06-02T00:00:00"
+     },
+     "CAMPO30": null,
+     "CAMPO31": "valor 5-31",
+     "CAMPO32": 532,
+     "CAMPO33": 8.3,
+     "CAMPO34": {
+      "__datetime__": "2026-06-07T00:00:00"
+     },
+     "CAMPO35": null,
+     "CAMPO36": "valor 5-36",
+     "CAMPO37": 537,
+     "CAMPO38": 8.8,
+     "CAMPO39": {
+      "__datetime__": "2026-06-12T00:00:00"
+     },
+     "CAMPO40": null,
+     "CAMPO41": "valor 5-41",
+     "CAMPO42": 542,
+     "CAMPO43": 9.3,
+     "CAMPO44": {
+      "__datetime__": "2026-06-17T00:00:00"
+     },
+     "CAMPO45": null,
+     "CAMPO46": "valor 5-46",
+     "CAMPO47": 547,
+     "CAMPO48": 9.8,
+     "CAMPO49": {
+      "__datetime__": "2026-06-22T00:00:00"
+     },
+     "CAMPO50": null,
+     "CIDADE": "Curitiba",
+     "CNPJDEINSTALACAO": "08.123.456/0001-90",
+     "MODELO": "MacBook Air",
+     "NUMERODESERIE": "SCMVXKV7YCM",
+     "TIPO": "Notebook",
+     "__excel_row_number__": 8
+    },
+    {
+     "APELIDO": "PRMACMTZ02",
+     "CAMPO07": 6.7,
+     "CAMPO08": {
+      "__datetime__": "2026-07-09T00:00:00"
+     },
+     "CAMPO09": null,
+     "CAMPO10": "valor 6-10",
+     "CAMPO11": 611,
+     "CAMPO12": 7.2,
+     "CAMPO13": {
+      "__datetime__": "2026-07-14T00:00:00"
+     },
+     "CAMPO14": null,
+     "CAMPO15": "valor 6-15",
+     "CAMPO16": 616,
+     "CAMPO17": 7.7,
+     "CAMPO18": {
+      "__datetime__": "2026-07-19T00:00:00"
+     },
+     "CAMPO19": null,
+     "CAMPO20": "valor 6-20",
+     "CAMPO21": 621,
+     "CAMPO22": 8.2,
+     "CAMPO23": {
+      "__datetime__": "2026-07-24T00:00:00"
+     },
+     "CAMPO24": null,
+     "CAMPO25": "valor 6-25",
+     "CAMPO26": 626,
+     "CAMPO27": 8.7,
+     "CAMPO28": {
+      "__datetime__": "2026-07-01T00:00:00"
+     },
+     "CAMPO29": null,
+     "CAMPO30": "valor 6-30",
+     "CAMPO31": 631,
+     "CAMPO32": 9.2,
+     "CAMPO33": {
+      "__datetime__": "2026-07-06T00:00:00"
+     },
+     "CAMPO34": null,
+     "CAMPO35": "valor 6-35",
+     "CAMPO36": 636,
+     "CAMPO37": 9.7,
+     "CAMPO38": {
+      "__datetime__": "2026-07-11T00:00:00"
+     },
+     "CAMPO39": null,
+     "CAMPO40": "valor 6-40",
+     "CAMPO41": 641,
+     "CAMPO42": 10.2,
+     "CAMPO43": {
+      "__datetime__": "2026-07-16T00:00:00"
+     },
+     "CAMPO44": null,
+     "CAMPO45": "valor 6-45",
+     "CAMPO46": 646,
+     "CAMPO47": 10.7,
+     "CAMPO48": {
+      "__datetime__": "2026-07-21T00:00:00"
+     },
+     "CAMPO49": null,
+     "CAMPO50": "valor 6-50",
+     "CIDADE": "Curitiba",
+     "CNPJDEINSTALACAO": "08.123.456/0001-90",
+     "MODELO": "MacBook Pro",
+     "NUMERODESERIE": "SC02XYZ123",
+     "TIPO": "Notebook",
+     "__excel_row_number__": 9
+    },
+    {
+     "APELIDO": "PRMACAMB01",
+     "CAMPO07": {
+      "__datetime__": "2026-08-08T00:00:00"
+     },
+     "CAMPO08": null,
+     "CAMPO09": "valor 7-9",
+     "CAMPO10": 710,
+     "CAMPO11": 8.1,
+     "CAMPO12": {
+      "__datetime__": "2026-08-13T00:00:00"
+     },
+     "CAMPO13": null,
+     "CAMPO14": "valor 7-14",
+     "CAMPO15": 715,
+     "CAMPO16": 8.6,
+     "CAMPO17": {
+      "__datetime__": "2026-08-18T00:00:00"
+     },
+     "CAMPO18": null,
+     "CAMPO19": "valor 7-19",
+     "CAMPO20": 720,
+     "CAMPO21": 9.1,
+     "CAMPO22": {
+      "__datetime__": "2026-08-23T00:00:00"
+     },
+     "CAMPO23": null,
+     "CAMPO24": "valor 7-24",
+     "CAMPO25": 725,
+     "CAMPO26": 9.6,
+     "CAMPO27": {
+      "__datetime__": "2026-08-28T00:00:00"
+     },
+     "CAMPO28": null,
+     "CAMPO29": "valor 7-29",
+     "CAMPO30": 730,
+     "CAMPO31": 10.1,
+     "CAMPO32": {
+      "__datetime__": "2026-08-05T00:00:00"
+     },
+     "CAMPO33": null,
+     "CAMPO34": "valor 7-34",
+     "CAMPO35": 735,
+     "CAMPO36": 10.6,
+     "CAMPO37": {
+      "__datetime__": "2026-08-10T00:00:00"
+     },
+     "CAMPO38": null,
+     "CAMPO39": "valor 7-39",
+     "CAMPO40": 740,
+     "CAMPO41": 11.1,
+     "CAMPO42": {
+      "__datetime__": "2026-08-15T00:00:00"
+     },
+     "CAMPO43": null,
+     "CAMPO44": "valor 7-44",
+     "CAMPO45": 745,
+     "CAMPO46": 11.6,
+     "CAMPO47": {
+      "__datetime__": "2026-08-20T00:00:00"
+     },
+     "CAMPO48": null,
+     "CAMPO49": "valor 7-49",
+     "CAMPO50": 750,
+     "CIDADE": "Curitiba",
+     "CNPJDEINSTALACAO": "08.123.456/0001-90",
+     "MODELO": "MacBook Air",
+     "NUMERODESERIE": "SFVFAMB001",
+     "TIPO": "Notebook",
+     "__excel_row_number__": 10
+    },
+    {
+     "APELIDO": "PRMACAMB02",
+     "CAMPO07": null,
+     "CAMPO08": "valor 8-8",
+     "CAMPO09": 809,
+     "CAMPO10": 9,
+     "CAMPO11": {
+      "__datetime__": "2026-09-12T00:00:00"
+     },
+     "CAMPO12": null,
+     "CAMPO13": "valor 8-13",
+     "CAMPO14": 814,
+     "CAMPO15": 9.5,
+     "CAMPO16": {
+      "__datetime__": "2026-09-17T00:00:00"
+     },
+     "CAMPO17": null,
+     "CAMPO18": "valor 8-18",
+     "CAMPO19": 819,
+     "CAMPO20": 10,
+     "CAMPO21": {
+      "__datetime__": "2026-09-22T00:00:00"
+     },
+     "CAMPO22": null,
+     "CAMPO23": "valor 8-23",
+     "CAMPO24": 824,
+     "CAMPO25": 10.5,
+     "CAMPO26": {
+      "__datetime__": "2026-09-27T00:00:00"
+     },
+     "CAMPO27": null,
+     "CAMPO28": "valor 8-28",
+     "CAMPO29": 829,
+     "CAMPO30": 11,
+     "CAMPO31": {
+      "__datetime__": "2026-09-04T00:00:00"
+     },
+     "CAMPO32": null,
+     "CAMPO33": "valor 8-33",
+     "CAMPO34": 834,
+     "CAMPO35": 11.5,
+     "CAMPO36": {
+      "__datetime__": "2026-09-09T00:00:00"
+     },
+     "CAMPO37": null,
+     "CAMPO38": "valor 8-38",
+     "CAMPO39": 839,
+     "CAMPO40": 12,
+     "CAMPO41": {
+      "__datetime__": "2026-09-14T00:00:00"
+     },
+     "CAMPO42": null,
+     "CAMPO43": "valor 8-43",
+     "CAMPO44": 844,
+     "CAMPO45": 12.5,
+     "CAMPO46": {
+      "__datetime__": "2026-09-19T00:00:00"
+     },
+     "CAMPO47": null,
+     "CAMPO48": "valor 8-48",
+     "CAMPO49": 849,
+     "CAMPO50": 13,
+     "CIDADE": "Curitiba",
+     "CNPJDEINSTALACAO": "08.123.456/0001-90",
+     "MODELO": "MacBook Air",
+     "NUMERODESERIE": "SFVFAMB001",
+     "TIPO": "Notebook",
+     "__excel_row_number__": 11
+    },
+    {
+     "APELIDO": "PRNOTEMAR01",
+     "CAMPO07": "valor 9-7",
+     "CAMPO08": 908,
+     "CAMPO09": 9.9,
+     "CAMPO10": {
+      "__datetime__": "2026-10-11T00:00:00"
+     },
+     "CAMPO11": null,
+     "CAMPO12": "valor 9-12",
+     "CAMPO13": 913,
+     "CAMPO14": 10.4,
+     "CAMPO15": {
+      "__datetime__": "2026-10-16T00:00:00"
+     },
+     "CAMPO16": null,
+     "CAMPO17": "valor 9-17",
+     "CAMPO18": 918,
+     "CAMPO19": 10.9,
+     "CAMPO20": {
+      "__datetime__": "2026-10-21T00:00:00"
+     },
+     "CAMPO21": null,
+     "CAMPO22": "valor 9-22",
+     "CAMPO23": 923,
+     "CAMPO24": 11.4,
+     "CAMPO25": {
+      "__datetime__": "2026-10-26T00:00:00"
+     },
+     "CAMPO26": null,
+     "CAMPO27": "valor 9-27",
+     "CAMPO28": 928,
+     "CAMPO29": 11.9,
+     "CAMPO30": {
+      "__datetime__": "2026-10-03T00:00:00"
+     },
+     "CAMPO31": null,
+     "CAMPO32": "valor 9-32",
+     "CAMPO33": 933,
+     "CAMPO34": 12.4,
+     "CAMPO35": {
+      "__datetime__": "2026-10-08T00:00:00"
+     },
+     "CAMPO36": null,
+     "CAMPO37": "valor 9-37",
+     "CAMPO38": 938,
+     "CAMPO39": 12.9,
+     "CAMPO40": {
+      "__datetime__": "2026-10-13T00:00:00"
+     },
+     "CAMPO41": null,
+     "CAMPO42": "valor 9-42",
+     "CAMPO43": 943,
+     "CAMPO44": 13.4,
+     "CAMPO45": {
+      "__datetime__": "2026-10-18T00:00:00"
+     },
+     "CAMPO46": null,
+     "CAMPO47": "valor 9-47",
+     "CAMPO48": 948,
+     "CAMPO49": 13.9,
+     "CAMPO50": {
+      "__datetime__": "2026-10-23T00:00:00"
+     },
+     "CIDADE": "Maringá",
+     "CNPJDEINSTALACAO": "08.123.456/0001-90",
+     "MODELO": "ThinkPad",
+     "NUMERODESERIE": "SXA9988776",
+     "TIPO": "Notebook",
+     "__excel_row_number__": 12
+    },
+    {
+     "APELIDO": "PRNOTECAS01",
+     "CAMPO07": 1007,
+     "CAMPO08": 10.8,
+     "CAMPO09": {
+      "__datetime__": "2026-11-10T00:00:00"
+     },
+     "CAMPO10": null,
+     "CAMPO11": "valor 10-11",
+     "CAMPO12": 1012,
+     "CAMPO13": 11.3,
+     "CAMPO14": {
+      "__datetime__": "2026-11-15T00:00:00"
+     },
+     "CAMPO15": null,
+     "CAMPO16": "valor 10-16",
+     "CAMPO17": 1017,
+     "CAMPO18": 11.8,
+     "CAMPO19": {
+      "__datetime__": "2026-11-20T00:00:00"
+     },
+     "CAMPO20": null,
+     "CAMPO21": "valor 10-21",
+     "CAMPO22": 1022,
+     "CAMPO23": 12.3,
+     "CAMPO24": {
+      "__datetime__": "2026-11-25T00:00:00"
+     },
+     "CAMPO25": null,
+     "CAMPO26": "valor 10-26",
+     "CAMPO27": 1027,
+     "CAMPO28": 12.8,
+     "CAMPO29": {
+      "__datetime__": "2026-11-02T00:00:00"
+     },
+     "CAMPO30": null,
+     "CAMPO31": "valor 10-31",
+     "CAMPO32": 1032,
+     "CAMPO33": 13.3,
+     "CAMPO34": {
+      "__datetime__": "2026-11-07T00:00:00"
+     },
+     "CAMPO35": null,
+     "CAMPO36": "valor 10-36",
+     "CAMPO37": 1037,
+     "CAMPO38": 13.8,
+     "CAMPO39": {
+      "__datetime__": "2026-11-12T00:00:00"
+     },
+     "CAMPO40": null,
+     "CAMPO41": "valor 10-41",
+     "CAMPO42": 1042,
+     "CAMPO43": 14.3,
+     "CAMPO44": {
+      "__datetime__": "2026-11-17T00:00:00"
+     },
+     "CAMPO45": null,
+     "CAMPO46": "valor 10-46",
+     "CAMPO47": 1047,
+     "CAMPO48": 14.8,
+     "CAMPO49": {
+      "__datetime__": "2026-11-22T00:00:00"
+     },
+     "CAMPO50": null,
+     "CIDADE": "Cascavel",
+     "CNPJDEINSTALACAO": "08.123.456/0001-90",
+     "MODELO": "ProBook 440",
+     "NUMERODESERIE": "BRJ300DUP1",
+     "TIPO": "Notebook",
+     "__excel_row_number__": 14
+    },
+    {
+     "APELIDO": "PRNOTECAS02",
+     "CAMPO07": 11.7,
+     "CAMPO08": {
+      "__datetime__": "2026-12-09T00:00:00"
+     },
+     "CAMPO09": null,
+     "CAMPO10": "valor 11-10",
+     "CAMPO11": 1111,
+     "CAMPO12": 12.2,
+     "CAMPO13": {
+      "__datetime__": "2026-12-14T00:00:00"
+     },
+     "CAMPO14": null,
+     "CAMPO15": "valor 11-15",
+     "CAMPO16": 1116,
+     "CAMPO17": 12.7,
+     "CAMPO18": {
+      "__datetime__": "2026-12-19T00:00:00"
+     },
+     "CAMPO19": null,
+     "CAMPO20": "valor 11-20",
+     "CAMPO21": 1121,
+     "CAMPO22": 13.2,
+     "CAMPO23": {
+      "__datetime__": "2026-12-24T00:00:00"
+     },
+     "CAMPO24": null,
+     "CAMPO25": "valor 11-25",
+     "CAMPO26": 1126,
+     "CAMPO27": 13.7,
+     "CAMPO28": {
+      "__datetime__": "2026-12-01T00:00:00"
+     },
+     "CAMPO29": null,
+     "CAMPO30": "valor 11-30",
+     "CAMPO31": 1131,
+     "CAMPO32": 14.2,
+     "CAMPO33": {
+      "__datetime__": "2026-12-06T00:00:00"
+     },
+     "CAMPO34": null,
+     "CAMPO35": "valor 11-35",
+     "CAMPO36": 1136,
+     "CAMPO37": 14.7,
+     "CAMPO38": {
+      "__datetime__": "2026-12-11T00:00:00"
+     },
+     "CAMPO39": null,
+     "CAMPO40": "valor 11-40",
+     "CAMPO41": 1141,
+     "CAMPO42": 15.2,
+     "CAMPO43": {
+      "__datetime__": "2026-12-16T00:00:00"
+     },
+     "CAMPO44": null,
+     "CAMPO45": "valor 11-45",
+     "CAMPO46": 1146,
+     "CAMPO47": 15.7,
+     "CAMPO48": {
+      "__datetime__": "2026-12-21T00:00:00"
+     },
+     "CAMPO49": null,
+     "CAMPO50": "valor 11-50",
+     "CIDADE": "Cascavel",
+     "CNPJDEINSTALACAO": "08.123.456/0001-90",
+     "MODELO": "ProBook 440",
+     "NUMERODESERIE": "BRJ300DUP1",
+     "TIPO": "Notebook",
+     "__excel_row_number__": 15
+    },
+    {
+     "APELIDO": "PRNOTEFOZ01",
+     "CAMPO07": {
+      "__datetime__": "2026-01-08T00:00:00"
+     },
+     "CAMPO08": null,
+     "CAMPO09": "valor 12-9",
+     "CAMPO10": 1210,
+     "CAMPO11": 13.1,
+     "CAMPO12": {
+      "__datetime__": "2026-01-13T00:00:00"
+     },
+     "CAMPO13": null,
+     "CAMPO14": "valor 12-14",
+     "CAMPO15": 1215,
+     "CAMPO16": 13.6,
+     "CAMPO17": {
+      "__datetime__": "2026-01-18T00:00:00"
+     },
+     "CAMPO18": null,
+     "CAMPO19": "valor 12-19",
+     "CAMPO20": 1220,
+     "CAMPO21": 14.1,
+     "CAMPO22": {
+      "__datetime__": "2026-01-23T00:00:00"
+     },
+     "CAMPO23": null,
+     "CAMPO24": "valor 12-24",
+     "CAMPO25": 1225,
+     "CAMPO26": 14.6,
+     "CAMPO27": {
+      "__datetime__": "2026-01-28T00:00:00"
+     },
+     "CAMPO28": null,
+     "CAMPO29": "valor 12-29",
+     "CAMPO30": 1230,
+     "CAMPO31": 15.1,
+     "CAMPO32": {
+      "__datetime__": "2026-01-05T00:00:00"
+     },
+     "CAMPO33": null,
+     "CAMPO34": "valor 12-34",
+     "CAMPO35": 1235,
+     "CAMPO36": 15.6,
+     "CAMPO37": {
+      "__datetime__": "2026-01-10T00:00:00"
+     },
+     "CAMPO38": null,
+     "CAMPO39": "valor 12-39",
+     "CAMPO40": 1240,
+     "CAMPO41": 16.1,
+     "CAMPO42": {
+      "__datetime__": "2026-01-15T00:00:00"
+     },
+     "CAMPO43": null,
+     "CAMPO44": "valor 12-44",
+     "CAMPO45": 1245,
+     "CAMPO46": 16.6,
+     "CAMPO47": {
+      "__datetime__": "2026-01-20T00:00:00"
+     },
+     "CAMPO48": null,
+     "CAMPO49": "valor 12-49",
+     "CAMPO50": 1250,
+     "CIDADE": "Foz do Iguaçu",
+     "CNPJDEINSTALACAO": null,
+     "MODELO": "ProBook 440",
+     "NUMERODESERIE": null,
+     "TIPO": "Notebook",
+     "__excel_row_number__": 16
+    },
+    {
+     "APELIDO": "  PRNOTEPG01  ",
+     "CAMPO07": null,
+     "CAMPO08": "valor 13-8",
+     "CAMPO09": 1309,
+     "CAMPO10": 14,
+     "CAMPO11": {
+      "__datetime__": "2026-02-12T00:00:00"
+     },
+     "CAMPO12": null,
+     "CAMPO13": "valor 13-13",
+     "CAMPO14": 1314,
+     "CAMPO15": 14.5,
+     "CAMPO16": {
+      "__datetime__": "2026-02-17T00:00:00"
+     },
+     "CAMPO17": null,
+     "CAMPO18": "valor 13-18",
+     "CAMPO19": 1319,
+     "CAMPO20": 15,
+     "CAMPO21": {
+      "__datetime__": "2026-02-22T00:00:00"
+     },
+     "CAMPO22": null,
+     "CAMPO23": "valor 13-23",
+     "CAMPO24": 1324,
+     "CAMPO25": 15.5,
+     "CAMPO26": {
+      "__datetime__": "2026-02-27T00:00:00"
+     },
+     "CAMPO27": null,
+     "CAMPO28": "valor 13-28",
+     "CAMPO29": 1329,
+     "CAMPO30": 16,
+     "CAMPO31": {
+      "__datetime__": "2026-02-04T00:00:00"
+     },
+     "CAMPO32": null,
+     "CAMPO33": "valor 13-33",
+     "CAMPO34": 1334,
+     "CAMPO35": 16.5,
+     "CAMPO36": {
+      "__datetime__": "2026-02-09T00:00:00"
+     },
+     "CAMPO37": null,
+     "CAMPO38": "valor 13-38",
+     "CAMPO39": 1339,
+     "CAMPO40": 17,
+     "CAMPO41": {
+      "__datetime__": "2026-02-14T00:00:00"
+     },
+     "CAMPO42": null,
+     "CAMPO43": "valor 13-43",
+     "CAMPO44": 1344,
+     "CAMPO45": 17.5,
+     "CAMPO46": {
+      "__datetime__": "2026-02-19T00:00:00"
+     },
+     "CAMPO47": null,
+     "CAMPO48": "valor 13-48",
+     "CAMPO49": 1349,
+     "CAMPO50": 18,
+     "CIDADE": "Ponta Grossa",
+     "CNPJDEINSTALACAO": null,
+     "MODELO": "ProBook 440",
+     "NUMERODESERIE": null,
+     "TIPO": "Notebook",
+     "__excel_row_number__": 17
+    },
+    {
+     "APELIDO": "PRNOTETOL01",
+     "CAMPO07": "valor 14-7",
+     "CAMPO08": 1408,
+     "CAMPO09": 14.9,
+     "CAMPO10": {
+      "__datetime__": "2026-03-11T00:00:00"
+     },
+     "CAMPO11": null,
+     "CAMPO12": "valor 14-12",
+     "CAMPO13": 1413,
+     "CAMPO14": 15.4,
+     "CAMPO15": {
+      "__datetime__": "2026-03-16T00:00:00"
+     },
+     "CAMPO16": null,
+     "CAMPO17": "valor 14-17",
+     "CAMPO18": 1418,
+     "CAMPO19": 15.9,
+     "CAMPO20": {
+      "__datetime__": "2026-03-21T00:00:00"
+     },
+     "CAMPO21": null,
+     "CAMPO22": "valor 14-22",
+     "CAMPO23": 1423,
+     "CAMPO24": 16.4,
+     "CAMPO25": {
+      "__datetime__": "2026-03-26T00:00:00"
+     },
+     "CAMPO26": null,
+     "CAMPO27": "valor 14-27",
+     "CAMPO28": 1428,
+     "CAMPO29": 16.9,
+     "CAMPO30": {
+      "__datetime__": "2026-03-03T00:00:00"
+     },
+     "CAMPO31": null,
+     "CAMPO32": "valor 14-32",
+     "CAMPO33": 1433,
+     "CAMPO34": 17.4,
+     "CAMPO35": {
+      "__datetime__": "2026-03-08T00:00:00"
+     },
+     "CAMPO36": null,
+     "CAMPO37": "valor 14-37",
+     "CAMPO38": 1438,
+     "CAMPO39": 17.9,
+     "CAMPO40": {
+      "__datetime__": "2026-03-13T00:00:00"
+     },
+     "CAMPO41": null,
+     "CAMPO42": "valor 14-42",
+     "CAMPO43": 1443,
+     "CAMPO44": 18.4,
+     "CAMPO45": {
+      "__datetime__": "2026-03-18T00:00:00"
+     },
+     "CAMPO46": null,
+     "CAMPO47": "valor 14-47",
+     "CAMPO48": 1448,
+     "CAMPO49": 18.9,
+     "CAMPO50": {
+      "__datetime__": "2026-03-23T00:00:00"
+     },
+     "CIDADE": "Toledo",
+     "CNPJDEINSTALACAO": "08.123.456/0001-90",
+     "MODELO": "ProBook 440",
+     "NUMERODESERIE": "BRJ400ONLY",
+     "TIPO": "Notebook",
+     "__excel_row_number__": 18
+    },
+    {
+     "APELIDO": "PRNOTEGPV01",
+     "CAMPO07": 1507,
+     "CAMPO08": 15.8,
+     "CAMPO09": {
+      "__datetime__": "2026-04-10T00:00:00"
+     },
+     "CAMPO10": null,
+     "CAMPO11": "valor 15-11",
+     "CAMPO12": 1512,
+     "CAMPO13": 16.3,
+     "CAMPO14": {
+      "__datetime__": "2026-04-15T00:00:00"
+     },
+     "CAMPO15": null,
+     "CAMPO16": "valor 15-16",
+     "CAMPO17": 1517,
+     "CAMPO18": 16.8,
+     "CAMPO19": {
+      "__datetime__": "2026-04-20T00:00:00"
+     },
+     "CAMPO20": null,
+     "CAMPO21": "valor 15-21",
+     "CAMPO22": 1522,
+     "CAMPO23": 17.3,
+     "CAMPO24": {
+      "__datetime__": "2026-04-25T00:00:00"
+     },
+     "CAMPO25": null,
+     "CAMPO26": "valor 15-26",
+     "CAMPO27": 1527,
+     "CAMPO28": 17.8,
+     "CAMPO29": {
+      "__datetime__": "2026-04-02T00:00:00"
+     },
+     "CAMPO30": null,
+     "CAMPO31": "valor 15-31",
+     "CAMPO32": 1532,
+     "CAMPO33": 18.3,
+     "CAMPO34": {
+      "__datetime__": "2026-04-07T00:00:00"
+     },
+     "CAMPO35": null,
+     "CAMPO36": "valor 15-36",
+     "CAMPO37": 1537,
+     "CAMPO38": 18.8,
+     "CAMPO39": {
+      "__datetime__": "2026-04-12T00:00:00"
+     },
+     "CAMPO40": null,
+     "CAMPO41": "valor 15-41",
+     "CAMPO42": 1542,
+     "CAMPO43": 19.3,
+     "CAMPO44": {
+      "__datetime__": "2026-04-17T00:00:00"
+     },
+     "CAMPO45": null,
+     "CAMPO46": "valor 15-46",
+     "CAMPO47": 1547,
+     "CAMPO48": 19.8,
+     "CAMPO49": {
+      "__datetime__": "2026-04-22T00:00:00"
+     },
+     "CAMPO50": null,
+     "CIDADE": "Guarapuava",
+     "CNPJDEINSTALACAO": "08.123.456/0001-90",
+     "MODELO": "ProBook 440",
+     "NUMERODESERIE": 123456789,
+     "TIPO": "Notebook",
+     "__excel_row_number__": 19
+    },
+    {
+     "APELIDO": "PRNOTEIRA01",
+     "CAMPO07": 16.7,
+     "CAMPO08": {
+      "__datetime__": "2026-05-09T00:00:00"
+     },
+     "CAMPO09": null,
+     "CAMPO10": "valor 16-10",
+     "CAMPO11": 1611,
+     "CAMPO12": 17.2,
+     "CAMPO13": {
+      "__datetime__": "2026-05-14T00:00:00"
+     },
+     "CAMPO14": null,
+     "CAMPO15": "valor 16-15",
+     "CAMPO16": 1616,
+     "CAMPO17": 17.7,
+     "CAMPO18": {
+      "__datetime__": "2026-05-19T00:00:00"
+     },
+     "CAMPO19": null,
+     "CAMPO20": "valor 16-20",
+     "CAMPO21": 1621,
+     "CAMPO22": 18.2,
+     "CAMPO23": {
+      "__datetime__": "2026-05-24T00:00:00"
+     },
+     "CAMPO24": null,
+     "CAMPO25": "valor 16-25",
+     "CAMPO26": 1626,
+     "CAMPO27": 18.7,
+     "CAMPO28": {
+      "__datetime__": "2026-05-01T00:00:00"
+     },
+     "CAMPO29": null,
+     "CAMPO30": "valor 16-30",
+     "CAMPO31": 1631,
+     "CAMPO32": 19.2,
+     "CAMPO33": {
+      "__datetime__": "2026-05-06T00:00:00"
+     },
+     "CAMPO34": null,
+     "CAMPO35": "valor 16-35",
+     "CAMPO36": 1636,
+     "CAMPO37": 19.7,
+     "CAMPO38": {
+      "__datetime__": "2026-05-11T00:00:00"
+     },
+     "CAMPO39": null,
+     "CAMPO40": "valor 16-40",
+     "CAMPO41": 1641,
+     "CAMPO42": 20.2,
+     "CAMPO43": {
+      "__datetime__": "2026-05-16T00:00:00"
+     },
+     "CAMPO44": null,
+     "CAMPO45": "valor 16-45",
+     "CAMPO46": 1646,
+     "CAMPO47": 20.7,
+     "CAMPO48": {
+      "__datetime__": "2026-05-21T00:00:00"
+     },
+     "CAMPO49": null,
+     "CAMPO50": "valor 16-50",
+     "CIDADE": "Irati",
+     "CNPJDEINSTALACAO": "08.123.456/0001-90",
+     "MODELO": "ProBook 440",
+     "NUMERODESERIE": "brj-500-low",
+     "TIPO": "Notebook",
+     "__excel_row_number__": 20
+    },
+    {
+     "APELIDO": "IMPRESSORA-MTZ",
+     "CAMPO07": {
+      "__datetime__": "2026-06-08T00:00:00"
+     },
+     "CAMPO08": null,
+     "CAMPO09": "valor 17-9",
+     "CAMPO10": 1710,
+     "CAMPO11": 18.1,
+     "CAMPO12": {
+      "__datetime__": "2026-06-13T00:00:00"
+     },
+     "CAMPO13": null,
+     "CAMPO14": "valor 17-14",
+     "CAMPO15": 1715,
+     "CAMPO16": 18.6,
+     "CAMPO17": {
+      "__datetime__": "2026-06-18T00:00:00"
+     },
+     "CAMPO18": null,
+     "CAMPO19": "valor 17-19",
+     "CAMPO20": 1720,
+     "CAMPO21": 19.1,
+     "CAMPO22": {
+      "__datetime__": "2026-06-23T00:00:00"
+     },
+     "CAMPO23": null,
+     "CAMPO24": "valor 17-24",
+     "CAMPO25": 1725,
+     "CAMPO26": 19.6,
+     "CAMPO27": {
+      "__datetime__": "2026-06-28T00:00:00"
+     },
+     "CAMPO28": null,
+     "CAMPO29": "valor 17-29",
+     "CAMPO30": 1730,
+     "CAMPO31": 20.1,
+     "CAMPO32": {
+      "__datetime__": "2026-06-05T00:00:00"
+     },
+     "CAMPO33": null,
+     "CAMPO34": "valor 17-34",
+     "CAMPO35": 1735,
+     "CAMPO36": 20.6,
+     "CAMPO37": {
+      "__datetime__": "2026-06-10T00:00:00"
+     },
+     "CAMPO38": null,
+     "CAMPO39": "valor 17-39",
+     "CAMPO40": 1740,
+     "CAMPO41": 21.1,
+     "CAMPO42": {
+      "__datetime__": "2026-06-15T00:00:00"
+     },
+     "CAMPO43": null,
+     "CAMPO44": "valor 17-44",
+     "CAMPO45": 1745,
+     "CAMPO46": 21.6,
+     "CAMPO47": {
+      "__datetime__": "2026-06-20T00:00:00"
+     },
+     "CAMPO48": null,
+     "CAMPO49": "valor 17-49",
+     "CAMPO50": 1750,
+     "CIDADE": "Curitiba",
+     "CNPJDEINSTALACAO": "08.123.456/0001-90",
+     "MODELO": "LaserJet",
+     "NUMERODESERIE": "CN12345678",
+     "TIPO": "Impressora",
+     "__excel_row_number__": 21
+    },
+    {
+     "APELIDO": "PRNOTEUMU01",
+     "CAMPO07": null,
+     "CAMPO08": "valor 18-8",
+     "CAMPO09": 1809,
+     "CAMPO10": 19,
+     "CAMPO11": {
+      "__datetime__": "2026-07-12T00:00:00"
+     },
+     "CAMPO12": null,
+     "CAMPO13": "valor 18-13",
+     "CAMPO14": 1814,
+     "CAMPO15": 19.5,
+     "CAMPO16": {
+      "__datetime__": "2026-07-17T00:00:00"
+     },
+     "CAMPO17": null,
+     "CAMPO18": "valor 18-18",
+     "CAMPO19": 1819,
+     "CAMPO20": 20,
+     "CAMPO21": {
+      "__datetime__": "2026-07-22T00:00:00"
+     },
+     "CAMPO22": null,
+     "CAMPO23": "valor 18-23",
+     "CAMPO24": 1824,
+     "CAMPO25": 20.5,
+     "CAMPO26": {
+      "__datetime__": "2026-07-27T00:00:00"
+     },
+     "CAMPO27": null,
+     "CAMPO28": "valor 18-28",
+     "CAMPO29": 1829,
+     "CAMPO30": 21,
+     "CAMPO31": {
+      "__datetime__": "2026-07-04T00:00:00"
+     },
+     "CAMPO32": null,
+     "CAMPO33": "valor 18-33",
+     "CAMPO34": 1834,
+     "CAMPO35": 21.5,
+     "CAMPO36": {
+      "__datetime__": "2026-07-09T00:00:00"
+     },
+     "CAMPO37": null,
+     "CAMPO38": "valor 18-38",
+     "CAMPO39": 1839,
+     "CAMPO40": 22,
+     "CAMPO41": {
+      "__datetime__": "2026-07-14T00:00:00"
+     },
+     "CAMPO42": null,
+     "CAMPO43": "valor 18-43",
+     "CAMPO44": 1844,
+     "CAMPO45": 22.5,
+     "CAMPO46": {
+      "__datetime__": "2026-07-19T00:00:00"
+     },
+     "CAMPO47": null,
+     "CAMPO48": "valor 18-48",
+     "CAMPO49": 1849,
+     "CAMPO50": 23,
+     "CIDADE": "Umuarama",
+     "CNPJDEINSTALACAO": "08.123.456/0001-90",
+     "MODELO": "ProBook 440",
+     "NUMERODESERIE": "BRJ600HOST",
+     "TIPO": "Notebook",
+     "__excel_row_number__": 22
+    },
+    {
+     "APELIDO": null,
+     "CAMPO07": "sobra",
+     "CAMPO08": null,
+     "CAMPO09": null,
+     "CAMPO10": null,
+     "CAMPO11": null,
+     "CAMPO12": null,
+     "CAMPO13": null,
+     "CAMPO14": null,
+     "CAMPO15": null,
+     "CAMPO16": null,
+     "CAMPO17": null,
+     "CAMPO18": null,
+     "CAMPO19": null,
+     "CAMPO20": null,
+     "CAMPO21": null,
+     "CAMPO22": null,
+     "CAMPO23": null,
+     "CAMPO24": null,
+     "CAMPO25": null,
+     "CAMPO26": null,
+     "CAMPO27": null,
+     "CAMPO28": null,
+     "CAMPO29": null,
+     "CAMPO30": null,
+     "CAMPO31": null,
+     "CAMPO32": null,
+     "CAMPO33": null,
+     "CAMPO34": null,
+     "CAMPO35": null,
+     "CAMPO36": null,
+     "CAMPO37": null,
+     "CAMPO38": null,
+     "CAMPO39": null,
+     "CAMPO40": null,
+     "CAMPO41": null,
+     "CAMPO42": null,
+     "CAMPO43": null,
+     "CAMPO44": null,
+     "CAMPO45": null,
+     "CAMPO46": null,
+     "CAMPO47": null,
+     "CAMPO48": null,
+     "CAMPO49": null,
+     "CAMPO50": null,
+     "CIDADE": null,
+     "CNPJDEINSTALACAO": null,
+     "MODELO": null,
+     "NUMERODESERIE": null,
+     "TIPO": null,
+     "__excel_row_number__": 23
+    }
+   ],
+   "sheet": "EquipamentosDetalhes"
+  },
+  "selecionada_endpoint": {
+   "column_count": 5,
+   "headers": [
+    "NOMEDOCOMPUTADOR",
+    "ROTULODESERVICONUMERODESERIE",
+    "SISTEMAOPERACIONAL",
+    "ULTIMAVERIFICACAOCOMEXITO",
+    "USUARIOSLOGADOS"
+   ],
+   "populated_rows": 21,
+   "records": [
+    {
+     "NOMEDOCOMPUTADOR": "PRNOTELON01",
+     "ROTULODESERVICONUMERODESERIE": "BRJ100AAA1",
+     "SISTEMAOPERACIONAL": "Windows 11",
+     "ULTIMAVERIFICACAOCOMEXITO": {
+      "__datetime__": "2026-10-14T09:30:00"
+     },
+     "USUARIOSLOGADOS": "sebrae\\ana",
+     "__excel_row_number__": 2
+    },
+    {
+     "NOMEDOCOMPUTADOR": "PRNOTELON02",
+     "ROTULODESERVICONUMERODESERIE": "BRJ100AAA2",
+     "SISTEMAOPERACIONAL": "Windows 11",
+     "ULTIMAVERIFICACAOCOMEXITO": {
+      "__datetime__": "2026-10-01T08:00:00"
+     },
+     "USUARIOSLOGADOS": "sebrae\\bia",
+     "__excel_row_number__": 3
+    },
+    {
+     "NOMEDOCOMPUTADOR": "PRNOTESJP01",
+     "ROTULODESERVICONUMERODESERIE": "BRJ200SJP1",
+     "SISTEMAOPERACIONAL": "Windows 11",
+     "ULTIMAVERIFICACAOCOMEXITO": "Oct 1, 2026 10:00 AM",
+     "USUARIOSLOGADOS": null,
+     "__excel_row_number__": 4
+    },
+    {
+     "NOMEDOCOMPUTADOR": "PRNOTERL01",
+     "ROTULODESERVICONUMERODESERIE": "BRJ200RL01",
+     "SISTEMAOPERACIONAL": "Windows 11",
+     "ULTIMAVERIFICACAOCOMEXITO": "08/10/2026 14:00",
+     "USUARIOSLOGADOS": null,
+     "__excel_row_number__": 6
+    },
+    {
+     "NOMEDOCOMPUTADOR": "PRNOTEARC01",
+     "ROTULODESERVICONUMERODESERIE": "BRJ200ARC1",
+     "SISTEMAOPERACIONAL": "Windows 10",
+     "ULTIMAVERIFICACAOCOMEXITO": "2026-10-14T10:00:00Z",
+     "USUARIOSLOGADOS": "sebrae\\caio",
+     "__excel_row_number__": 7
+    },
+    {
+     "NOMEDOCOMPUTADOR": "PRMACMTZ01",
+     "ROTULODESERVICONUMERODESERIE": "CMVXKV7YCM",
+     "SISTEMAOPERACIONAL": "macOS",
+     "ULTIMAVERIFICACAOCOMEXITO": {
+      "__datetime__": "2026-10-13T00:00:00"
+     },
+     "USUARIOSLOGADOS": "sebrae\\dani",
+     "__excel_row_number__": 8
+    },
+    {
+     "NOMEDOCOMPUTADOR": "PRMACMTZ02",
+     "ROTULODESERVICONUMERODESERIE": "C02XYZ123",
+     "SISTEMAOPERACIONAL": "macOS",
+     "ULTIMAVERIFICACAOCOMEXITO": "12 out 2026 09:00",
+     "USUARIOSLOGADOS": "sebrae\\edu",
+     "__excel_row_number__": 9
+    },
+    {
+     "NOMEDOCOMPUTADOR": "PRMACAMB01",
+     "ROTULODESERVICONUMERODESERIE": "FVFAMB001",
+     "SISTEMAOPERACIONAL": "macOS",
+     "ULTIMAVERIFICACAOCOMEXITO": null,
+     "USUARIOSLOGADOS": "sebrae\\fabi",
+     "__excel_row_number__": 10
+    },
+    {
+     "NOMEDOCOMPUTADOR": "PRNOTEMTZ90",
+     "ROTULODESERVICONUMERODESERIE": "BRJ135P5XS",
+     "SISTEMAOPERACIONAL": "Windows 11",
+     "ULTIMAVERIFICACAOCOMEXITO": {
+      "__datetime__": "2026-10-14T00:00:00"
+     },
+     "USUARIOSLOGADOS": "sebrae\\gil",
+     "__excel_row_number__": 11
+    },
+    {
+     "NOMEDOCOMPUTADOR": "PRNOTEMTZ91",
+     "ROTULODESERVICONUMERODESERIE": "BRJ142QKBQ",
+     "SISTEMAOPERACIONAL": "Windows 11",
+     "ULTIMAVERIFICACAOCOMEXITO": null,
+     "USUARIOSLOGADOS": null,
+     "__excel_row_number__": 12
+    },
+    {
+     "NOMEDOCOMPUTADOR": "PRNOTEMTZ92",
+     "ROTULODESERVICONUMERODESERIE": "brj9435vmr",
+     "SISTEMAOPERACIONAL": "Windows 11",
+     "ULTIMAVERIFICACAOCOMEXITO": null,
+     "USUARIOSLOGADOS": null,
+     "__excel_row_number__": 13
+    },
+    {
+     "NOMEDOCOMPUTADOR": "PRNOTECAS01",
+     "ROTULODESERVICONUMERODESERIE": "BRJ300DUP1",
+     "SISTEMAOPERACIONAL": "Windows 11",
+     "ULTIMAVERIFICACAOCOMEXITO": null,
+     "USUARIOSLOGADOS": null,
+     "__excel_row_number__": 14
+    },
+    {
+     "NOMEDOCOMPUTADOR": "PRNOTEFOZ01",
+     "ROTULODESERVICONUMERODESERIE": null,
+     "SISTEMAOPERACIONAL": "Windows 11",
+     "ULTIMAVERIFICACAOCOMEXITO": null,
+     "USUARIOSLOGADOS": null,
+     "__excel_row_number__": 15
+    },
+    {
+     "NOMEDOCOMPUTADOR": "PRNOTEPG01",
+     "ROTULODESERVICONUMERODESERIE": null,
+     "SISTEMAOPERACIONAL": "Windows 11",
+     "ULTIMAVERIFICACAOCOMEXITO": null,
+     "USUARIOSLOGADOS": null,
+     "__excel_row_number__": 16
+    },
+    {
+     "NOMEDOCOMPUTADOR": "PRNOTEXYZ01",
+     "ROTULODESERVICONUMERODESERIE": "BRJ700ENDP",
+     "SISTEMAOPERACIONAL": "Windows 11",
+     "ULTIMAVERIFICACAOCOMEXITO": {
+      "__datetime__": "2026-09-01T07:15:00"
+     },
+     "USUARIOSLOGADOS": null,
+     "__excel_row_number__": 17
+    },
+    {
+     "NOMEDOCOMPUTADOR": "PRNOTEBKPLON1",
+     "ROTULODESERVICONUMERODESERIE": "BRJ700ENDQ",
+     "SISTEMAOPERACIONAL": "Windows 11",
+     "ULTIMAVERIFICACAOCOMEXITO": null,
+     "USUARIOSLOGADOS": null,
+     "__excel_row_number__": 18
+    },
+    {
+     "NOMEDOCOMPUTADOR": "PRNOTEUMU01",
+     "ROTULODESERVICONUMERODESERIE": "BRJ600HOST",
+     "SISTEMAOPERACIONAL": "Windows 11",
+     "ULTIMAVERIFICACAOCOMEXITO": null,
+     "USUARIOSLOGADOS": null,
+     "__excel_row_number__": 19
+    },
+    {
+     "NOMEDOCOMPUTADOR": "PRNOTEUMU01",
+     "ROTULODESERVICONUMERODESERIE": "BRJ600HOSX",
+     "SISTEMAOPERACIONAL": "Windows 11",
+     "ULTIMAVERIFICACAOCOMEXITO": null,
+     "USUARIOSLOGADOS": null,
+     "__excel_row_number__": 20
+    },
+    {
+     "NOMEDOCOMPUTADOR": "PRNOTEGPV01",
+     "ROTULODESERVICONUMERODESERIE": 123456789,
+     "SISTEMAOPERACIONAL": "Windows 11",
+     "ULTIMAVERIFICACAOCOMEXITO": null,
+     "USUARIOSLOGADOS": null,
+     "__excel_row_number__": 21
+    },
+    {
+     "NOMEDOCOMPUTADOR": "PRNOTEIRA01",
+     "ROTULODESERVICONUMERODESERIE": "BRJ500LOW",
+     "SISTEMAOPERACIONAL": "Windows 11",
+     "ULTIMAVERIFICACAOCOMEXITO": null,
+     "USUARIOSLOGADOS": null,
+     "__excel_row_number__": 22
+    },
+    {
+     "NOMEDOCOMPUTADOR": "PRDESKMTZ01",
+     "ROTULODESERVICONUMERODESERIE": "BRJ800DESK",
+     "SISTEMAOPERACIONAL": "Windows 11",
+     "ULTIMAVERIFICACAOCOMEXITO": null,
+     "USUARIOSLOGADOS": null,
+     "__excel_row_number__": 23
+    }
+   ],
+   "sheet": "InvAllComputersSummary"
+  },
+  "tabelas_detalhes": [
+   {
+    "column_count": 2,
+    "headers": [
+     "INDICADOR",
+     "VALOR"
+    ],
+    "records": [
+     {
+      "INDICADOR": "Total",
+      "VALOR": 19,
+      "__excel_row_number__": 2
+     },
+     {
+      "INDICADOR": "Gerado em",
+      "VALOR": {
+       "__datetime__": "2026-10-15T08:00:00"
+      },
+      "__excel_row_number__": 3
+     }
+    ],
+    "sheet": "Resumo"
+   },
+   {
+    "column_count": 50,
+    "headers": [
+     "APELIDO",
+     "CAMPO07",
+     "CAMPO08",
+     "CAMPO09",
+     "CAMPO10",
+     "CAMPO11",
+     "CAMPO12",
+     "CAMPO13",
+     "CAMPO14",
+     "CAMPO15",
+     "CAMPO16",
+     "CAMPO17",
+     "CAMPO18",
+     "CAMPO19",
+     "CAMPO20",
+     "CAMPO21",
+     "CAMPO22",
+     "CAMPO23",
+     "CAMPO24",
+     "CAMPO25",
+     "CAMPO26",
+     "CAMPO27",
+     "CAMPO28",
+     "CAMPO29",
+     "CAMPO30",
+     "CAMPO31",
+     "CAMPO32",
+     "CAMPO33",
+     "CAMPO34",
+     "CAMPO35",
+     "CAMPO36",
+     "CAMPO37",
+     "CAMPO38",
+     "CAMPO39",
+     "CAMPO40",
+     "CAMPO41",
+     "CAMPO42",
+     "CAMPO43",
+     "CAMPO44",
+     "CAMPO45",
+     "CAMPO46",
+     "CAMPO47",
+     "CAMPO48",
+     "CAMPO49",
+     "CAMPO50",
+     "CIDADE",
+     "CNPJDEINSTALACAO",
+     "MODELO",
+     "NUMERODESERIE",
+     "TIPO"
+    ],
+    "populated_rows": 17,
+    "records": [
+     {
+      "APELIDO": "PRNOTELON01",
+      "CAMPO07": 7,
+      "CAMPO08": 0.8,
+      "CAMPO09": {
+       "__datetime__": "2026-01-10T00:00:00"
+      },
+      "CAMPO10": null,
+      "CAMPO11": "valor 0-11",
+      "CAMPO12": 12,
+      "CAMPO13": 1.3,
+      "CAMPO14": {
+       "__datetime__": "2026-01-15T00:00:00"
+      },
+      "CAMPO15": null,
+      "CAMPO16": "valor 0-16",
+      "CAMPO17": 17,
+      "CAMPO18": 1.8,
+      "CAMPO19": {
+       "__datetime__": "2026-01-20T00:00:00"
+      },
+      "CAMPO20": null,
+      "CAMPO21": "valor 0-21",
+      "CAMPO22": 22,
+      "CAMPO23": 2.3,
+      "CAMPO24": {
+       "__datetime__": "2026-01-25T00:00:00"
+      },
+      "CAMPO25": null,
+      "CAMPO26": "valor 0-26",
+      "CAMPO27": 27,
+      "CAMPO28": 2.8,
+      "CAMPO29": {
+       "__datetime__": "2026-01-02T00:00:00"
+      },
+      "CAMPO30": null,
+      "CAMPO31": "valor 0-31",
+      "CAMPO32": 32,
+      "CAMPO33": 3.3,
+      "CAMPO34": {
+       "__datetime__": "2026-01-07T00:00:00"
+      },
+      "CAMPO35": null,
+      "CAMPO36": "valor 0-36",
+      "CAMPO37": 37,
+      "CAMPO38": 3.8,
+      "CAMPO39": {
+       "__datetime__": "2026-01-12T00:00:00"
+      },
+      "CAMPO40": null,
+      "CAMPO41": "valor 0-41",
+      "CAMPO42": 42,
+      "CAMPO43": 4.3,
+      "CAMPO44": {
+       "__datetime__": "2026-01-17T00:00:00"
+      },
+      "CAMPO45": null,
+      "CAMPO46": "valor 0-46",
+      "CAMPO47": 47,
+      "CAMPO48": 4.8,
+      "CAMPO49": {
+       "__datetime__": "2026-01-22T00:00:00"
+      },
+      "CAMPO50": null,
+      "CIDADE": "Londrina",
+      "CNPJDEINSTALACAO": "08.123.456/0001-90",
+      "MODELO": "ProBook 440",
+      "NUMERODESERIE": "BRJ100AAA1",
+      "TIPO": "Notebook",
+      "__excel_row_number__": 2
+     },
+     {
+      "APELIDO": "PRNOTELON02",
+      "CAMPO07": 1.7,
+      "CAMPO08": {
+       "__datetime__": "2026-02-09T00:00:00"
+      },
+      "CAMPO09": null,
+      "CAMPO10": "valor 1-10",
+      "CAMPO11": 111,
+      "CAMPO12": 2.2,
+      "CAMPO13": {
+       "__datetime__": "2026-02-14T00:00:00"
+      },
+      "CAMPO14": null,
+      "CAMPO15": "valor 1-15",
+      "CAMPO16": 116,
+      "CAMPO17": 2.7,
+      "CAMPO18": {
+       "__datetime__": "2026-02-19T00:00:00"
+      },
+      "CAMPO19": null,
+      "CAMPO20": "valor 1-20",
+      "CAMPO21": 121,
+      "CAMPO22": 3.2,
+      "CAMPO23": {
+       "__datetime__": "2026-02-24T00:00:00"
+      },
+      "CAMPO24": null,
+      "CAMPO25": "valor 1-25",
+      "CAMPO26": 126,
+      "CAMPO27": 3.7,
+      "CAMPO28": {
+       "__datetime__": "2026-02-01T00:00:00"
+      },
+      "CAMPO29": null,
+      "CAMPO30": "valor 1-30",
+      "CAMPO31": 131,
+      "CAMPO32": 4.2,
+      "CAMPO33": {
+       "__datetime__": "2026-02-06T00:00:00"
+      },
+      "CAMPO34": null,
+      "CAMPO35": "valor 1-35",
+      "CAMPO36": 136,
+      "CAMPO37": 4.7,
+      "CAMPO38": {
+       "__datetime__": "2026-02-11T00:00:00"
+      },
+      "CAMPO39": null,
+      "CAMPO40": "valor 1-40",
+      "CAMPO41": 141,
+      "CAMPO42": 5.2,
+      "CAMPO43": {
+       "__datetime__": "2026-02-16T00:00:00"
+      },
+      "CAMPO44": null,
+      "CAMPO45": "valor 1-45",
+      "CAMPO46": 146,
+      "CAMPO47": 5.7,
+      "CAMPO48": {
+       "__datetime__": "2026-02-21T00:00:00"
+      },
+      "CAMPO49": null,
+      "CAMPO50": "valor 1-50",
+      "CIDADE": "Maringá",
+      "CNPJDEINSTALACAO": "08.123.456/0001-90",
+      "MODELO": "ProBook 440",
+      "NUMERODESERIE": "BRJ100AAA2",
+      "TIPO": "Notebook",
+      "__excel_row_number__": 3
+     },
+     {
+      "APELIDO": "PRNOTESJP01",
+      "CAMPO07": {
+       "__datetime__": "2026-03-08T00:00:00"
+      },
+      "CAMPO08": null,
+      "CAMPO09": "valor 2-9",
+      "CAMPO10": 210,
+      "CAMPO11": 3.1,
+      "CAMPO12": {
+       "__datetime__": "2026-03-13T00:00:00"
+      },
+      "CAMPO13": null,
+      "CAMPO14": "valor 2-14",
+      "CAMPO15": 215,
+      "CAMPO16": 3.6,
+      "CAMPO17": {
+       "__datetime__": "2026-03-18T00:00:00"
+      },
+      "CAMPO18": null,
+      "CAMPO19": "valor 2-19",
+      "CAMPO20": 220,
+      "CAMPO21": 4.1,
+      "CAMPO22": {
+       "__datetime__": "2026-03-23T00:00:00"
+      },
+      "CAMPO23": null,
+      "CAMPO24": "valor 2-24",
+      "CAMPO25": 225,
+      "CAMPO26": 4.6,
+      "CAMPO27": {
+       "__datetime__": "2026-03-28T00:00:00"
+      },
+      "CAMPO28": null,
+      "CAMPO29": "valor 2-29",
+      "CAMPO30": 230,
+      "CAMPO31": 5.1,
+      "CAMPO32": {
+       "__datetime__": "2026-03-05T00:00:00"
+      },
+      "CAMPO33": null,
+      "CAMPO34": "valor 2-34",
+      "CAMPO35": 235,
+      "CAMPO36": 5.6,
+      "CAMPO37": {
+       "__datetime__": "2026-03-10T00:00:00"
+      },
+      "CAMPO38": null,
+      "CAMPO39": "valor 2-39",
+      "CAMPO40": 240,
+      "CAMPO41": 6.1,
+      "CAMPO42": {
+       "__datetime__": "2026-03-15T00:00:00"
+      },
+      "CAMPO43": null,
+      "CAMPO44": "valor 2-44",
+      "CAMPO45": 245,
+      "CAMPO46": 6.6,
+      "CAMPO47": {
+       "__datetime__": "2026-03-20T00:00:00"
+      },
+      "CAMPO48": null,
+      "CAMPO49": "valor 2-49",
+      "CAMPO50": 250,
+      "CIDADE": "São José dos Pinhais",
+      "CNPJDEINSTALACAO": "08.123.456/0001-90",
+      "MODELO": "ProBook 440",
+      "NUMERODESERIE": "BRJ200SJP1",
+      "TIPO": "Notebook",
+      "__excel_row_number__": 4
+     },
+     {
+      "APELIDO": "PRNOTERL01",
+      "CAMPO07": null,
+      "CAMPO08": "valor 3-8",
+      "CAMPO09": 309,
+      "CAMPO10": 4,
+      "CAMPO11": {
+       "__datetime__": "2026-04-12T00:00:00"
+      },
+      "CAMPO12": null,
+      "CAMPO13": "valor 3-13",
+      "CAMPO14": 314,
+      "CAMPO15": 4.5,
+      "CAMPO16": {
+       "__datetime__": "2026-04-17T00:00:00"
+      },
+      "CAMPO17": null,
+      "CAMPO18": "valor 3-18",
+      "CAMPO19": 319,
+      "CAMPO20": 5,
+      "CAMPO21": {
+       "__datetime__": "2026-04-22T00:00:00"
+      },
+      "CAMPO22": null,
+      "CAMPO23": "valor 3-23",
+      "CAMPO24": 324,
+      "CAMPO25": 5.5,
+      "CAMPO26": {
+       "__datetime__": "2026-04-27T00:00:00"
+      },
+      "CAMPO27": null,
+      "CAMPO28": "valor 3-28",
+      "CAMPO29": 329,
+      "CAMPO30": 6,
+      "CAMPO31": {
+       "__datetime__": "2026-04-04T00:00:00"
+      },
+      "CAMPO32": null,
+      "CAMPO33": "valor 3-33",
+      "CAMPO34": 334,
+      "CAMPO35": 6.5,
+      "CAMPO36": {
+       "__datetime__": "2026-04-09T00:00:00"
+      },
+      "CAMPO37": null,
+      "CAMPO38": "valor 3-38",
+      "CAMPO39": 339,
+      "CAMPO40": 7,
+      "CAMPO41": {
+       "__datetime__": "2026-04-14T00:00:00"
+      },
+      "CAMPO42": null,
+      "CAMPO43": "valor 3-43",
+      "CAMPO44": 344,
+      "CAMPO45": 7.5,
+      "CAMPO46": {
+       "__datetime__": "2026-04-19T00:00:00"
+      },
+      "CAMPO47": null,
+      "CAMPO48": "valor 3-48",
+      "CAMPO49": 349,
+      "CAMPO50": 8,
+      "CIDADE": "Colombo",
+      "CNPJDEINSTALACAO": "08.123.456/0001-90",
+      "MODELO": "ProBook 440",
+      "NUMERODESERIE": "BRJ200RL01",
+      "TIPO": "Notebook",
+      "__excel_row_number__": 5
+     },
+     {
+      "APELIDO": "PRNOTEARC01",
+      "CAMPO07": "valor 4-7",
+      "CAMPO08": 408,
+      "CAMPO09": 4.9,
+      "CAMPO10": {
+       "__datetime__": "2026-05-11T00:00:00"
+      },
+      "CAMPO11": null,
+      "CAMPO12": "valor 4-12",
+      "CAMPO13": 413,
+      "CAMPO14": 5.4,
+      "CAMPO15": {
+       "__datetime__": "2026-05-16T00:00:00"
+      },
+      "CAMPO16": null,
+      "CAMPO17": "valor 4-17",
+      "CAMPO18": 418,
+      "CAMPO19": 5.9,
+      "CAMPO20": {
+       "__datetime__": "2026-05-21T00:00:00"
+      },
+      "CAMPO21": null,
+      "CAMPO22": "valor 4-22",
+      "CAMPO23": 423,
+      "CAMPO24": 6.4,
+      "CAMPO25": {
+       "__datetime__": "2026-05-26T00:00:00"
+      },
+      "CAMPO26": null,
+      "CAMPO27": "valor 4-27",
+      "CAMPO28": 428,
+      "CAMPO29": 6.9,
+      "CAMPO30": {
+       "__datetime__": "2026-05-03T00:00:00"
+      },
+      "CAMPO31": null,
+      "CAMPO32": "valor 4-32",
+      "CAMPO33": 433,
+      "CAMPO34": 7.4,
+      "CAMPO35": {
+       "__datetime__": "2026-05-08T00:00:00"
+      },
+      "CAMPO36": null,
+      "CAMPO37": "valor 4-37",
+      "CAMPO38": 438,
+      "CAMPO39": 7.9,
+      "CAMPO40": {
+       "__datetime__": "2026-05-13T00:00:00"
+      },
+      "CAMPO41": null,
+      "CAMPO42": "valor 4-42",
+      "CAMPO43": 443,
+      "CAMPO44": 8.4,
+      "CAMPO45": {
+       "__datetime__": "2026-05-18T00:00:00"
+      },
+      "CAMPO46": null,
+      "CAMPO47": "valor 4-47",
+      "CAMPO48": 448,
+      "CAMPO49": 8.9,
+      "CAMPO50": {
+       "__datetime__": "2026-05-23T00:00:00"
+      },
+      "CIDADE": "Araucária",
+      "CNPJDEINSTALACAO": "08.123.456/0001-90",
+      "MODELO": "ProBook 440",
+      "NUMERODESERIE": "BRJ200ARC1",
+      "TIPO": "Notebook",
+      "__excel_row_number__": 6
+     },
+     {
+      "APELIDO": "PRMACMTZ01",
+      "CAMPO07": 507,
+      "CAMPO08": 5.8,
+      "CAMPO09": {
+       "__datetime__": "2026-06-10T00:00:00"
+      },
+      "CAMPO10": null,
+      "CAMPO11": "valor 5-11",
+      "CAMPO12": 512,
+      "CAMPO13": 6.3,
+      "CAMPO14": {
+       "__datetime__": "2026-06-15T00:00:00"
+      },
+      "CAMPO15": null,
+      "CAMPO16": "valor 5-16",
+      "CAMPO17": 517,
+      "CAMPO18": 6.8,
+      "CAMPO19": {
+       "__datetime__": "2026-06-20T00:00:00"
+      },
+      "CAMPO20": null,
+      "CAMPO21": "valor 5-21",
+      "CAMPO22": 522,
+      "CAMPO23": 7.3,
+      "CAMPO24": {
+       "__datetime__": "2026-06-25T00:00:00"
+      },
+      "CAMPO25": null,
+      "CAMPO26": "valor 5-26",
+      "CAMPO27": 527,
+      "CAMPO28": 7.8,
+      "CAMPO29": {
+       "__datetime__": "2026-06-02T00:00:00"
+      },
+      "CAMPO30": null,
+      "CAMPO31": "valor 5-31",
+      "CAMPO32": 532,
+      "CAMPO33": 8.3,
+      "CAMPO34": {
+       "__datetime__": "2026-06-07T00:00:00"
+      },
+      "CAMPO35": null,
+      "CAMPO36": "valor 5-36",
+      "CAMPO37": 537,
+      "CAMPO38": 8.8,
+      "CAMPO39": {
+       "__datetime__": "2026-06-12T00:00:00"
+      },
+      "CAMPO40": null,
+      "CAMPO41": "valor 5-41",
+      "CAMPO42": 542,
+      "CAMPO43": 9.3,
+      "CAMPO44": {
+       "__datetime__": "2026-06-17T00:00:00"
+      },
+      "CAMPO45": null,
+      "CAMPO46": "valor 5-46",
+      "CAMPO47": 547,
+      "CAMPO48": 9.8,
+      "CAMPO49": {
+       "__datetime__": "2026-06-22T00:00:00"
+      },
+      "CAMPO50": null,
+      "CIDADE": "Curitiba",
+      "CNPJDEINSTALACAO": "08.123.456/0001-90",
+      "MODELO": "MacBook Air",
+      "NUMERODESERIE": "SCMVXKV7YCM",
+      "TIPO": "Notebook",
+      "__excel_row_number__": 8
+     },
+     {
+      "APELIDO": "PRMACMTZ02",
+      "CAMPO07": 6.7,
+      "CAMPO08": {
+       "__datetime__": "2026-07-09T00:00:00"
+      },
+      "CAMPO09": null,
+      "CAMPO10": "valor 6-10",
+      "CAMPO11": 611,
+      "CAMPO12": 7.2,
+      "CAMPO13": {
+       "__datetime__": "2026-07-14T00:00:00"
+      },
+      "CAMPO14": null,
+      "CAMPO15": "valor 6-15",
+      "CAMPO16": 616,
+      "CAMPO17": 7.7,
+      "CAMPO18": {
+       "__datetime__": "2026-07-19T00:00:00"
+      },
+      "CAMPO19": null,
+      "CAMPO20": "valor 6-20",
+      "CAMPO21": 621,
+      "CAMPO22": 8.2,
+      "CAMPO23": {
+       "__datetime__": "2026-07-24T00:00:00"
+      },
+      "CAMPO24": null,
+      "CAMPO25": "valor 6-25",
+      "CAMPO26": 626,
+      "CAMPO27": 8.7,
+      "CAMPO28": {
+       "__datetime__": "2026-07-01T00:00:00"
+      },
+      "CAMPO29": null,
+      "CAMPO30": "valor 6-30",
+      "CAMPO31": 631,
+      "CAMPO32": 9.2,
+      "CAMPO33": {
+       "__datetime__": "2026-07-06T00:00:00"
+      },
+      "CAMPO34": null,
+      "CAMPO35": "valor 6-35",
+      "CAMPO36": 636,
+      "CAMPO37": 9.7,
+      "CAMPO38": {
+       "__datetime__": "2026-07-11T00:00:00"
+      },
+      "CAMPO39": null,
+      "CAMPO40": "valor 6-40",
+      "CAMPO41": 641,
+      "CAMPO42": 10.2,
+      "CAMPO43": {
+       "__datetime__": "2026-07-16T00:00:00"
+      },
+      "CAMPO44": null,
+      "CAMPO45": "valor 6-45",
+      "CAMPO46": 646,
+      "CAMPO47": 10.7,
+      "CAMPO48": {
+       "__datetime__": "2026-07-21T00:00:00"
+      },
+      "CAMPO49": null,
+      "CAMPO50": "valor 6-50",
+      "CIDADE": "Curitiba",
+      "CNPJDEINSTALACAO": "08.123.456/0001-90",
+      "MODELO": "MacBook Pro",
+      "NUMERODESERIE": "SC02XYZ123",
+      "TIPO": "Notebook",
+      "__excel_row_number__": 9
+     },
+     {
+      "APELIDO": "PRMACAMB01",
+      "CAMPO07": {
+       "__datetime__": "2026-08-08T00:00:00"
+      },
+      "CAMPO08": null,
+      "CAMPO09": "valor 7-9",
+      "CAMPO10": 710,
+      "CAMPO11": 8.1,
+      "CAMPO12": {
+       "__datetime__": "2026-08-13T00:00:00"
+      },
+      "CAMPO13": null,
+      "CAMPO14": "valor 7-14",
+      "CAMPO15": 715,
+      "CAMPO16": 8.6,
+      "CAMPO17": {
+       "__datetime__": "2026-08-18T00:00:00"
+      },
+      "CAMPO18": null,
+      "CAMPO19": "valor 7-19",
+      "CAMPO20": 720,
+      "CAMPO21": 9.1,
+      "CAMPO22": {
+       "__datetime__": "2026-08-23T00:00:00"
+      },
+      "CAMPO23": null,
+      "CAMPO24": "valor 7-24",
+      "CAMPO25": 725,
+      "CAMPO26": 9.6,
+      "CAMPO27": {
+       "__datetime__": "2026-08-28T00:00:00"
+      },
+      "CAMPO28": null,
+      "CAMPO29": "valor 7-29",
+      "CAMPO30": 730,
+      "CAMPO31": 10.1,
+      "CAMPO32": {
+       "__datetime__": "2026-08-05T00:00:00"
+      },
+      "CAMPO33": null,
+      "CAMPO34": "valor 7-34",
+      "CAMPO35": 735,
+      "CAMPO36": 10.6,
+      "CAMPO37": {
+       "__datetime__": "2026-08-10T00:00:00"
+      },
+      "CAMPO38": null,
+      "CAMPO39": "valor 7-39",
+      "CAMPO40": 740,
+      "CAMPO41": 11.1,
+      "CAMPO42": {
+       "__datetime__": "2026-08-15T00:00:00"
+      },
+      "CAMPO43": null,
+      "CAMPO44": "valor 7-44",
+      "CAMPO45": 745,
+      "CAMPO46": 11.6,
+      "CAMPO47": {
+       "__datetime__": "2026-08-20T00:00:00"
+      },
+      "CAMPO48": null,
+      "CAMPO49": "valor 7-49",
+      "CAMPO50": 750,
+      "CIDADE": "Curitiba",
+      "CNPJDEINSTALACAO": "08.123.456/0001-90",
+      "MODELO": "MacBook Air",
+      "NUMERODESERIE": "SFVFAMB001",
+      "TIPO": "Notebook",
+      "__excel_row_number__": 10
+     },
+     {
+      "APELIDO": "PRMACAMB02",
+      "CAMPO07": null,
+      "CAMPO08": "valor 8-8",
+      "CAMPO09": 809,
+      "CAMPO10": 9,
+      "CAMPO11": {
+       "__datetime__": "2026-09-12T00:00:00"
+      },
+      "CAMPO12": null,
+      "CAMPO13": "valor 8-13",
+      "CAMPO14": 814,
+      "CAMPO15": 9.5,
+      "CAMPO16": {
+       "__datetime__": "2026-09-17T00:00:00"
+      },
+      "CAMPO17": null,
+      "CAMPO18": "valor 8-18",
+      "CAMPO19": 819,
+      "CAMPO20": 10,
+      "CAMPO21": {
+       "__datetime__": "2026-09-22T00:00:00"
+      },
+      "CAMPO22": null,
+      "CAMPO23": "valor 8-23",
+      "CAMPO24": 824,
+      "CAMPO25": 10.5,
+      "CAMPO26": {
+       "__datetime__": "2026-09-27T00:00:00"
+      },
+      "CAMPO27": null,
+      "CAMPO28": "valor 8-28",
+      "CAMPO29": 829,
+      "CAMPO30": 11,
+      "CAMPO31": {
+       "__datetime__": "2026-09-04T00:00:00"
+      },
+      "CAMPO32": null,
+      "CAMPO33": "valor 8-33",
+      "CAMPO34": 834,
+      "CAMPO35": 11.5,
+      "CAMPO36": {
+       "__datetime__": "2026-09-09T00:00:00"
+      },
+      "CAMPO37": null,
+      "CAMPO38": "valor 8-38",
+      "CAMPO39": 839,
+      "CAMPO40": 12,
+      "CAMPO41": {
+       "__datetime__": "2026-09-14T00:00:00"
+      },
+      "CAMPO42": null,
+      "CAMPO43": "valor 8-43",
+      "CAMPO44": 844,
+      "CAMPO45": 12.5,
+      "CAMPO46": {
+       "__datetime__": "2026-09-19T00:00:00"
+      },
+      "CAMPO47": null,
+      "CAMPO48": "valor 8-48",
+      "CAMPO49": 849,
+      "CAMPO50": 13,
+      "CIDADE": "Curitiba",
+      "CNPJDEINSTALACAO": "08.123.456/0001-90",
+      "MODELO": "MacBook Air",
+      "NUMERODESERIE": "SFVFAMB001",
+      "TIPO": "Notebook",
+      "__excel_row_number__": 11
+     },
+     {
+      "APELIDO": "PRNOTEMAR01",
+      "CAMPO07": "valor 9-7",
+      "CAMPO08": 908,
+      "CAMPO09": 9.9,
+      "CAMPO10": {
+       "__datetime__": "2026-10-11T00:00:00"
+      },
+      "CAMPO11": null,
+      "CAMPO12": "valor 9-12",
+      "CAMPO13": 913,
+      "CAMPO14": 10.4,
+      "CAMPO15": {
+       "__datetime__": "2026-10-16T00:00:00"
+      },
+      "CAMPO16": null,
+      "CAMPO17": "valor 9-17",
+      "CAMPO18": 918,
+      "CAMPO19": 10.9,
+      "CAMPO20": {
+       "__datetime__": "2026-10-21T00:00:00"
+      },
+      "CAMPO21": null,
+      "CAMPO22": "valor 9-22",
+      "CAMPO23": 923,
+      "CAMPO24": 11.4,
+      "CAMPO25": {
+       "__datetime__": "2026-10-26T00:00:00"
+      },
+      "CAMPO26": null,
+      "CAMPO27": "valor 9-27",
+      "CAMPO28": 928,
+      "CAMPO29": 11.9,
+      "CAMPO30": {
+       "__datetime__": "2026-10-03T00:00:00"
+      },
+      "CAMPO31": null,
+      "CAMPO32": "valor 9-32",
+      "CAMPO33": 933,
+      "CAMPO34": 12.4,
+      "CAMPO35": {
+       "__datetime__": "2026-10-08T00:00:00"
+      },
+      "CAMPO36": null,
+      "CAMPO37": "valor 9-37",
+      "CAMPO38": 938,
+      "CAMPO39": 12.9,
+      "CAMPO40": {
+       "__datetime__": "2026-10-13T00:00:00"
+      },
+      "CAMPO41": null,
+      "CAMPO42": "valor 9-42",
+      "CAMPO43": 943,
+      "CAMPO44": 13.4,
+      "CAMPO45": {
+       "__datetime__": "2026-10-18T00:00:00"
+      },
+      "CAMPO46": null,
+      "CAMPO47": "valor 9-47",
+      "CAMPO48": 948,
+      "CAMPO49": 13.9,
+      "CAMPO50": {
+       "__datetime__": "2026-10-23T00:00:00"
+      },
+      "CIDADE": "Maringá",
+      "CNPJDEINSTALACAO": "08.123.456/0001-90",
+      "MODELO": "ThinkPad",
+      "NUMERODESERIE": "SXA9988776",
+      "TIPO": "Notebook",
+      "__excel_row_number__": 12
+     },
+     {
+      "APELIDO": "PRNOTECAS01",
+      "CAMPO07": 1007,
+      "CAMPO08": 10.8,
+      "CAMPO09": {
+       "__datetime__": "2026-11-10T00:00:00"
+      },
+      "CAMPO10": null,
+      "CAMPO11": "valor 10-11",
+      "CAMPO12": 1012,
+      "CAMPO13": 11.3,
+      "CAMPO14": {
+       "__datetime__": "2026-11-15T00:00:00"
+      },
+      "CAMPO15": null,
+      "CAMPO16": "valor 10-16",
+      "CAMPO17": 1017,
+      "CAMPO18": 11.8,
+      "CAMPO19": {
+       "__datetime__": "2026-11-20T00:00:00"
+      },
+      "CAMPO20": null,
+      "CAMPO21": "valor 10-21",
+      "CAMPO22": 1022,
+      "CAMPO23": 12.3,
+      "CAMPO24": {
+       "__datetime__": "2026-11-25T00:00:00"
+      },
+      "CAMPO25": null,
+      "CAMPO26": "valor 10-26",
+      "CAMPO27": 1027,
+      "CAMPO28": 12.8,
+      "CAMPO29": {
+       "__datetime__": "2026-11-02T00:00:00"
+      },
+      "CAMPO30": null,
+      "CAMPO31": "valor 10-31",
+      "CAMPO32": 1032,
+      "CAMPO33": 13.3,
+      "CAMPO34": {
+       "__datetime__": "2026-11-07T00:00:00"
+      },
+      "CAMPO35": null,
+      "CAMPO36": "valor 10-36",
+      "CAMPO37": 1037,
+      "CAMPO38": 13.8,
+      "CAMPO39": {
+       "__datetime__": "2026-11-12T00:00:00"
+      },
+      "CAMPO40": null,
+      "CAMPO41": "valor 10-41",
+      "CAMPO42": 1042,
+      "CAMPO43": 14.3,
+      "CAMPO44": {
+       "__datetime__": "2026-11-17T00:00:00"
+      },
+      "CAMPO45": null,
+      "CAMPO46": "valor 10-46",
+      "CAMPO47": 1047,
+      "CAMPO48": 14.8,
+      "CAMPO49": {
+       "__datetime__": "2026-11-22T00:00:00"
+      },
+      "CAMPO50": null,
+      "CIDADE": "Cascavel",
+      "CNPJDEINSTALACAO": "08.123.456/0001-90",
+      "MODELO": "ProBook 440",
+      "NUMERODESERIE": "BRJ300DUP1",
+      "TIPO": "Notebook",
+      "__excel_row_number__": 14
+     },
+     {
+      "APELIDO": "PRNOTECAS02",
+      "CAMPO07": 11.7,
+      "CAMPO08": {
+       "__datetime__": "2026-12-09T00:00:00"
+      },
+      "CAMPO09": null,
+      "CAMPO10": "valor 11-10",
+      "CAMPO11": 1111,
+      "CAMPO12": 12.2,
+      "CAMPO13": {
+       "__datetime__": "2026-12-14T00:00:00"
+      },
+      "CAMPO14": null,
+      "CAMPO15": "valor 11-15",
+      "CAMPO16": 1116,
+      "CAMPO17": 12.7,
+      "CAMPO18": {
+       "__datetime__": "2026-12-19T00:00:00"
+      },
+      "CAMPO19": null,
+      "CAMPO20": "valor 11-20",
+      "CAMPO21": 1121,
+      "CAMPO22": 13.2,
+      "CAMPO23": {
+       "__datetime__": "2026-12-24T00:00:00"
+      },
+      "CAMPO24": null,
+      "CAMPO25": "valor 11-25",
+      "CAMPO26": 1126,
+      "CAMPO27": 13.7,
+      "CAMPO28": {
+       "__datetime__": "2026-12-01T00:00:00"
+      },
+      "CAMPO29": null,
+      "CAMPO30": "valor 11-30",
+      "CAMPO31": 1131,
+      "CAMPO32": 14.2,
+      "CAMPO33": {
+       "__datetime__": "2026-12-06T00:00:00"
+      },
+      "CAMPO34": null,
+      "CAMPO35": "valor 11-35",
+      "CAMPO36": 1136,
+      "CAMPO37": 14.7,
+      "CAMPO38": {
+       "__datetime__": "2026-12-11T00:00:00"
+      },
+      "CAMPO39": null,
+      "CAMPO40": "valor 11-40",
+      "CAMPO41": 1141,
+      "CAMPO42": 15.2,
+      "CAMPO43": {
+       "__datetime__": "2026-12-16T00:00:00"
+      },
+      "CAMPO44": null,
+      "CAMPO45": "valor 11-45",
+      "CAMPO46": 1146,
+      "CAMPO47": 15.7,
+      "CAMPO48": {
+       "__datetime__": "2026-12-21T00:00:00"
+      },
+      "CAMPO49": null,
+      "CAMPO50": "valor 11-50",
+      "CIDADE": "Cascavel",
+      "CNPJDEINSTALACAO": "08.123.456/0001-90",
+      "MODELO": "ProBook 440",
+      "NUMERODESERIE": "BRJ300DUP1",
+      "TIPO": "Notebook",
+      "__excel_row_number__": 15
+     },
+     {
+      "APELIDO": "PRNOTEFOZ01",
+      "CAMPO07": {
+       "__datetime__": "2026-01-08T00:00:00"
+      },
+      "CAMPO08": null,
+      "CAMPO09": "valor 12-9",
+      "CAMPO10": 1210,
+      "CAMPO11": 13.1,
+      "CAMPO12": {
+       "__datetime__": "2026-01-13T00:00:00"
+      },
+      "CAMPO13": null,
+      "CAMPO14": "valor 12-14",
+      "CAMPO15": 1215,
+      "CAMPO16": 13.6,
+      "CAMPO17": {
+       "__datetime__": "2026-01-18T00:00:00"
+      },
+      "CAMPO18": null,
+      "CAMPO19": "valor 12-19",
+      "CAMPO20": 1220,
+      "CAMPO21": 14.1,
+      "CAMPO22": {
+       "__datetime__": "2026-01-23T00:00:00"
+      },
+      "CAMPO23": null,
+      "CAMPO24": "valor 12-24",
+      "CAMPO25": 1225,
+      "CAMPO26": 14.6,
+      "CAMPO27": {
+       "__datetime__": "2026-01-28T00:00:00"
+      },
+      "CAMPO28": null,
+      "CAMPO29": "valor 12-29",
+      "CAMPO30": 1230,
+      "CAMPO31": 15.1,
+      "CAMPO32": {
+       "__datetime__": "2026-01-05T00:00:00"
+      },
+      "CAMPO33": null,
+      "CAMPO34": "valor 12-34",
+      "CAMPO35": 1235,
+      "CAMPO36": 15.6,
+      "CAMPO37": {
+       "__datetime__": "2026-01-10T00:00:00"
+      },
+      "CAMPO38": null,
+      "CAMPO39": "valor 12-39",
+      "CAMPO40": 1240,
+      "CAMPO41": 16.1,
+      "CAMPO42": {
+       "__datetime__": "2026-01-15T00:00:00"
+      },
+      "CAMPO43": null,
+      "CAMPO44": "valor 12-44",
+      "CAMPO45": 1245,
+      "CAMPO46": 16.6,
+      "CAMPO47": {
+       "__datetime__": "2026-01-20T00:00:00"
+      },
+      "CAMPO48": null,
+      "CAMPO49": "valor 12-49",
+      "CAMPO50": 1250,
+      "CIDADE": "Foz do Iguaçu",
+      "CNPJDEINSTALACAO": null,
+      "MODELO": "ProBook 440",
+      "NUMERODESERIE": null,
+      "TIPO": "Notebook",
+      "__excel_row_number__": 16
+     },
+     {
+      "APELIDO": "  PRNOTEPG01  ",
+      "CAMPO07": null,
+      "CAMPO08": "valor 13-8",
+      "CAMPO09": 1309,
+      "CAMPO10": 14,
+      "CAMPO11": {
+       "__datetime__": "2026-02-12T00:00:00"
+      },
+      "CAMPO12": null,
+      "CAMPO13": "valor 13-13",
+      "CAMPO14": 1314,
+      "CAMPO15": 14.5,
+      "CAMPO16": {
+       "__datetime__": "2026-02-17T00:00:00"
+      },
+      "CAMPO17": null,
+      "CAMPO18": "valor 13-18",
+      "CAMPO19": 1319,
+      "CAMPO20": 15,
+      "CAMPO21": {
+       "__datetime__": "2026-02-22T00:00:00"
+      },
+      "CAMPO22": null,
+      "CAMPO23": "valor 13-23",
+      "CAMPO24": 1324,
+      "CAMPO25": 15.5,
+      "CAMPO26": {
+       "__datetime__": "2026-02-27T00:00:00"
+      },
+      "CAMPO27": null,
+      "CAMPO28": "valor 13-28",
+      "CAMPO29": 1329,
+      "CAMPO30": 16,
+      "CAMPO31": {
+       "__datetime__": "2026-02-04T00:00:00"
+      },
+      "CAMPO32": null,
+      "CAMPO33": "valor 13-33",
+      "CAMPO34": 1334,
+      "CAMPO35": 16.5,
+      "CAMPO36": {
+       "__datetime__": "2026-02-09T00:00:00"
+      },
+      "CAMPO37": null,
+      "CAMPO38": "valor 13-38",
+      "CAMPO39": 1339,
+      "CAMPO40": 17,
+      "CAMPO41": {
+       "__datetime__": "2026-02-14T00:00:00"
+      },
+      "CAMPO42": null,
+      "CAMPO43": "valor 13-43",
+      "CAMPO44": 1344,
+      "CAMPO45": 17.5,
+      "CAMPO46": {
+       "__datetime__": "2026-02-19T00:00:00"
+      },
+      "CAMPO47": null,
+      "CAMPO48": "valor 13-48",
+      "CAMPO49": 1349,
+      "CAMPO50": 18,
+      "CIDADE": "Ponta Grossa",
+      "CNPJDEINSTALACAO": null,
+      "MODELO": "ProBook 440",
+      "NUMERODESERIE": null,
+      "TIPO": "Notebook",
+      "__excel_row_number__": 17
+     },
+     {
+      "APELIDO": "PRNOTETOL01",
+      "CAMPO07": "valor 14-7",
+      "CAMPO08": 1408,
+      "CAMPO09": 14.9,
+      "CAMPO10": {
+       "__datetime__": "2026-03-11T00:00:00"
+      },
+      "CAMPO11": null,
+      "CAMPO12": "valor 14-12",
+      "CAMPO13": 1413,
+      "CAMPO14": 15.4,
+      "CAMPO15": {
+       "__datetime__": "2026-03-16T00:00:00"
+      },
+      "CAMPO16": null,
+      "CAMPO17": "valor 14-17",
+      "CAMPO18": 1418,
+      "CAMPO19": 15.9,
+      "CAMPO20": {
+       "__datetime__": "2026-03-21T00:00:00"
+      },
+      "CAMPO21": null,
+      "CAMPO22": "valor 14-22",
+      "CAMPO23": 1423,
+      "CAMPO24": 16.4,
+      "CAMPO25": {
+       "__datetime__": "2026-03-26T00:00:00"
+      },
+      "CAMPO26": null,
+      "CAMPO27": "valor 14-27",
+      "CAMPO28": 1428,
+      "CAMPO29": 16.9,
+      "CAMPO30": {
+       "__datetime__": "2026-03-03T00:00:00"
+      },
+      "CAMPO31": null,
+      "CAMPO32": "valor 14-32",
+      "CAMPO33": 1433,
+      "CAMPO34": 17.4,
+      "CAMPO35": {
+       "__datetime__": "2026-03-08T00:00:00"
+      },
+      "CAMPO36": null,
+      "CAMPO37": "valor 14-37",
+      "CAMPO38": 1438,
+      "CAMPO39": 17.9,
+      "CAMPO40": {
+       "__datetime__": "2026-03-13T00:00:00"
+      },
+      "CAMPO41": null,
+      "CAMPO42": "valor 14-42",
+      "CAMPO43": 1443,
+      "CAMPO44": 18.4,
+      "CAMPO45": {
+       "__datetime__": "2026-03-18T00:00:00"
+      },
+      "CAMPO46": null,
+      "CAMPO47": "valor 14-47",
+      "CAMPO48": 1448,
+      "CAMPO49": 18.9,
+      "CAMPO50": {
+       "__datetime__": "2026-03-23T00:00:00"
+      },
+      "CIDADE": "Toledo",
+      "CNPJDEINSTALACAO": "08.123.456/0001-90",
+      "MODELO": "ProBook 440",
+      "NUMERODESERIE": "BRJ400ONLY",
+      "TIPO": "Notebook",
+      "__excel_row_number__": 18
+     },
+     {
+      "APELIDO": "PRNOTEGPV01",
+      "CAMPO07": 1507,
+      "CAMPO08": 15.8,
+      "CAMPO09": {
+       "__datetime__": "2026-04-10T00:00:00"
+      },
+      "CAMPO10": null,
+      "CAMPO11": "valor 15-11",
+      "CAMPO12": 1512,
+      "CAMPO13": 16.3,
+      "CAMPO14": {
+       "__datetime__": "2026-04-15T00:00:00"
+      },
+      "CAMPO15": null,
+      "CAMPO16": "valor 15-16",
+      "CAMPO17": 1517,
+      "CAMPO18": 16.8,
+      "CAMPO19": {
+       "__datetime__": "2026-04-20T00:00:00"
+      },
+      "CAMPO20": null,
+      "CAMPO21": "valor 15-21",
+      "CAMPO22": 1522,
+      "CAMPO23": 17.3,
+      "CAMPO24": {
+       "__datetime__": "2026-04-25T00:00:00"
+      },
+      "CAMPO25": null,
+      "CAMPO26": "valor 15-26",
+      "CAMPO27": 1527,
+      "CAMPO28": 17.8,
+      "CAMPO29": {
+       "__datetime__": "2026-04-02T00:00:00"
+      },
+      "CAMPO30": null,
+      "CAMPO31": "valor 15-31",
+      "CAMPO32": 1532,
+      "CAMPO33": 18.3,
+      "CAMPO34": {
+       "__datetime__": "2026-04-07T00:00:00"
+      },
+      "CAMPO35": null,
+      "CAMPO36": "valor 15-36",
+      "CAMPO37": 1537,
+      "CAMPO38": 18.8,
+      "CAMPO39": {
+       "__datetime__": "2026-04-12T00:00:00"
+      },
+      "CAMPO40": null,
+      "CAMPO41": "valor 15-41",
+      "CAMPO42": 1542,
+      "CAMPO43": 19.3,
+      "CAMPO44": {
+       "__datetime__": "2026-04-17T00:00:00"
+      },
+      "CAMPO45": null,
+      "CAMPO46": "valor 15-46",
+      "CAMPO47": 1547,
+      "CAMPO48": 19.8,
+      "CAMPO49": {
+       "__datetime__": "2026-04-22T00:00:00"
+      },
+      "CAMPO50": null,
+      "CIDADE": "Guarapuava",
+      "CNPJDEINSTALACAO": "08.123.456/0001-90",
+      "MODELO": "ProBook 440",
+      "NUMERODESERIE": 123456789,
+      "TIPO": "Notebook",
+      "__excel_row_number__": 19
+     },
+     {
+      "APELIDO": "PRNOTEIRA01",
+      "CAMPO07": 16.7,
+      "CAMPO08": {
+       "__datetime__": "2026-05-09T00:00:00"
+      },
+      "CAMPO09": null,
+      "CAMPO10": "valor 16-10",
+      "CAMPO11": 1611,
+      "CAMPO12": 17.2,
+      "CAMPO13": {
+       "__datetime__": "2026-05-14T00:00:00"
+      },
+      "CAMPO14": null,
+      "CAMPO15": "valor 16-15",
+      "CAMPO16": 1616,
+      "CAMPO17": 17.7,
+      "CAMPO18": {
+       "__datetime__": "2026-05-19T00:00:00"
+      },
+      "CAMPO19": null,
+      "CAMPO20": "valor 16-20",
+      "CAMPO21": 1621,
+      "CAMPO22": 18.2,
+      "CAMPO23": {
+       "__datetime__": "2026-05-24T00:00:00"
+      },
+      "CAMPO24": null,
+      "CAMPO25": "valor 16-25",
+      "CAMPO26": 1626,
+      "CAMPO27": 18.7,
+      "CAMPO28": {
+       "__datetime__": "2026-05-01T00:00:00"
+      },
+      "CAMPO29": null,
+      "CAMPO30": "valor 16-30",
+      "CAMPO31": 1631,
+      "CAMPO32": 19.2,
+      "CAMPO33": {
+       "__datetime__": "2026-05-06T00:00:00"
+      },
+      "CAMPO34": null,
+      "CAMPO35": "valor 16-35",
+      "CAMPO36": 1636,
+      "CAMPO37": 19.7,
+      "CAMPO38": {
+       "__datetime__": "2026-05-11T00:00:00"
+      },
+      "CAMPO39": null,
+      "CAMPO40": "valor 16-40",
+      "CAMPO41": 1641,
+      "CAMPO42": 20.2,
+      "CAMPO43": {
+       "__datetime__": "2026-05-16T00:00:00"
+      },
+      "CAMPO44": null,
+      "CAMPO45": "valor 16-45",
+      "CAMPO46": 1646,
+      "CAMPO47": 20.7,
+      "CAMPO48": {
+       "__datetime__": "2026-05-21T00:00:00"
+      },
+      "CAMPO49": null,
+      "CAMPO50": "valor 16-50",
+      "CIDADE": "Irati",
+      "CNPJDEINSTALACAO": "08.123.456/0001-90",
+      "MODELO": "ProBook 440",
+      "NUMERODESERIE": "brj-500-low",
+      "TIPO": "Notebook",
+      "__excel_row_number__": 20
+     },
+     {
+      "APELIDO": "IMPRESSORA-MTZ",
+      "CAMPO07": {
+       "__datetime__": "2026-06-08T00:00:00"
+      },
+      "CAMPO08": null,
+      "CAMPO09": "valor 17-9",
+      "CAMPO10": 1710,
+      "CAMPO11": 18.1,
+      "CAMPO12": {
+       "__datetime__": "2026-06-13T00:00:00"
+      },
+      "CAMPO13": null,
+      "CAMPO14": "valor 17-14",
+      "CAMPO15": 1715,
+      "CAMPO16": 18.6,
+      "CAMPO17": {
+       "__datetime__": "2026-06-18T00:00:00"
+      },
+      "CAMPO18": null,
+      "CAMPO19": "valor 17-19",
+      "CAMPO20": 1720,
+      "CAMPO21": 19.1,
+      "CAMPO22": {
+       "__datetime__": "2026-06-23T00:00:00"
+      },
+      "CAMPO23": null,
+      "CAMPO24": "valor 17-24",
+      "CAMPO25": 1725,
+      "CAMPO26": 19.6,
+      "CAMPO27": {
+       "__datetime__": "2026-06-28T00:00:00"
+      },
+      "CAMPO28": null,
+      "CAMPO29": "valor 17-29",
+      "CAMPO30": 1730,
+      "CAMPO31": 20.1,
+      "CAMPO32": {
+       "__datetime__": "2026-06-05T00:00:00"
+      },
+      "CAMPO33": null,
+      "CAMPO34": "valor 17-34",
+      "CAMPO35": 1735,
+      "CAMPO36": 20.6,
+      "CAMPO37": {
+       "__datetime__": "2026-06-10T00:00:00"
+      },
+      "CAMPO38": null,
+      "CAMPO39": "valor 17-39",
+      "CAMPO40": 1740,
+      "CAMPO41": 21.1,
+      "CAMPO42": {
+       "__datetime__": "2026-06-15T00:00:00"
+      },
+      "CAMPO43": null,
+      "CAMPO44": "valor 17-44",
+      "CAMPO45": 1745,
+      "CAMPO46": 21.6,
+      "CAMPO47": {
+       "__datetime__": "2026-06-20T00:00:00"
+      },
+      "CAMPO48": null,
+      "CAMPO49": "valor 17-49",
+      "CAMPO50": 1750,
+      "CIDADE": "Curitiba",
+      "CNPJDEINSTALACAO": "08.123.456/0001-90",
+      "MODELO": "LaserJet",
+      "NUMERODESERIE": "CN12345678",
+      "TIPO": "Impressora",
+      "__excel_row_number__": 21
+     },
+     {
+      "APELIDO": "PRNOTEUMU01",
+      "CAMPO07": null,
+      "CAMPO08": "valor 18-8",
+      "CAMPO09": 1809,
+      "CAMPO10": 19,
+      "CAMPO11": {
+       "__datetime__": "2026-07-12T00:00:00"
+      },
+      "CAMPO12": null,
+      "CAMPO13": "valor 18-13",
+      "CAMPO14": 1814,
+      "CAMPO15": 19.5,
+      "CAMPO16": {
+       "__datetime__": "2026-07-17T00:00:00"
+      },
+      "CAMPO17": null,
+      "CAMPO18": "valor 18-18",
+      "CAMPO19": 1819,
+      "CAMPO20": 20,
+      "CAMPO21": {
+       "__datetime__": "2026-07-22T00:00:00"
+      },
+      "CAMPO22": null,
+      "CAMPO23": "valor 18-23",
+      "CAMPO24": 1824,
+      "CAMPO25": 20.5,
+      "CAMPO26": {
+       "__datetime__": "2026-07-27T00:00:00"
+      },
+      "CAMPO27": null,
+      "CAMPO28": "valor 18-28",
+      "CAMPO29": 1829,
+      "CAMPO30": 21,
+      "CAMPO31": {
+       "__datetime__": "2026-07-04T00:00:00"
+      },
+      "CAMPO32": null,
+      "CAMPO33": "valor 18-33",
+      "CAMPO34": 1834,
+      "CAMPO35": 21.5,
+      "CAMPO36": {
+       "__datetime__": "2026-07-09T00:00:00"
+      },
+      "CAMPO37": null,
+      "CAMPO38": "valor 18-38",
+      "CAMPO39": 1839,
+      "CAMPO40": 22,
+      "CAMPO41": {
+       "__datetime__": "2026-07-14T00:00:00"
+      },
+      "CAMPO42": null,
+      "CAMPO43": "valor 18-43",
+      "CAMPO44": 1844,
+      "CAMPO45": 22.5,
+      "CAMPO46": {
+       "__datetime__": "2026-07-19T00:00:00"
+      },
+      "CAMPO47": null,
+      "CAMPO48": "valor 18-48",
+      "CAMPO49": 1849,
+      "CAMPO50": 23,
+      "CIDADE": "Umuarama",
+      "CNPJDEINSTALACAO": "08.123.456/0001-90",
+      "MODELO": "ProBook 440",
+      "NUMERODESERIE": "BRJ600HOST",
+      "TIPO": "Notebook",
+      "__excel_row_number__": 22
+     },
+     {
+      "APELIDO": null,
+      "CAMPO07": "sobra",
+      "CAMPO08": null,
+      "CAMPO09": null,
+      "CAMPO10": null,
+      "CAMPO11": null,
+      "CAMPO12": null,
+      "CAMPO13": null,
+      "CAMPO14": null,
+      "CAMPO15": null,
+      "CAMPO16": null,
+      "CAMPO17": null,
+      "CAMPO18": null,
+      "CAMPO19": null,
+      "CAMPO20": null,
+      "CAMPO21": null,
+      "CAMPO22": null,
+      "CAMPO23": null,
+      "CAMPO24": null,
+      "CAMPO25": null,
+      "CAMPO26": null,
+      "CAMPO27": null,
+      "CAMPO28": null,
+      "CAMPO29": null,
+      "CAMPO30": null,
+      "CAMPO31": null,
+      "CAMPO32": null,
+      "CAMPO33": null,
+      "CAMPO34": null,
+      "CAMPO35": null,
+      "CAMPO36": null,
+      "CAMPO37": null,
+      "CAMPO38": null,
+      "CAMPO39": null,
+      "CAMPO40": null,
+      "CAMPO41": null,
+      "CAMPO42": null,
+      "CAMPO43": null,
+      "CAMPO44": null,
+      "CAMPO45": null,
+      "CAMPO46": null,
+      "CAMPO47": null,
+      "CAMPO48": null,
+      "CAMPO49": null,
+      "CAMPO50": null,
+      "CIDADE": null,
+      "CNPJDEINSTALACAO": null,
+      "MODELO": null,
+      "NUMERODESERIE": null,
+      "TIPO": null,
+      "__excel_row_number__": 23
+     }
+    ],
+    "sheet": "EquipamentosDetalhes"
+   }
+  ],
+  "tabelas_endpoint": [
+   {
+    "column_count": 5,
+    "headers": [
+     "NOMEDOCOMPUTADOR",
+     "ROTULODESERVICONUMERODESERIE",
+     "SISTEMAOPERACIONAL",
+     "ULTIMAVERIFICACAOCOMEXITO",
+     "USUARIOSLOGADOS"
+    ],
+    "populated_rows": 21,
+    "records": [
+     {
+      "NOMEDOCOMPUTADOR": "PRNOTELON01",
+      "ROTULODESERVICONUMERODESERIE": "BRJ100AAA1",
+      "SISTEMAOPERACIONAL": "Windows 11",
+      "ULTIMAVERIFICACAOCOMEXITO": {
+       "__datetime__": "2026-10-14T09:30:00"
+      },
+      "USUARIOSLOGADOS": "sebrae\\ana",
+      "__excel_row_number__": 2
+     },
+     {
+      "NOMEDOCOMPUTADOR": "PRNOTELON02",
+      "ROTULODESERVICONUMERODESERIE": "BRJ100AAA2",
+      "SISTEMAOPERACIONAL": "Windows 11",
+      "ULTIMAVERIFICACAOCOMEXITO": {
+       "__datetime__": "2026-10-01T08:00:00"
+      },
+      "USUARIOSLOGADOS": "sebrae\\bia",
+      "__excel_row_number__": 3
+     },
+     {
+      "NOMEDOCOMPUTADOR": "PRNOTESJP01",
+      "ROTULODESERVICONUMERODESERIE": "BRJ200SJP1",
+      "SISTEMAOPERACIONAL": "Windows 11",
+      "ULTIMAVERIFICACAOCOMEXITO": "Oct 1, 2026 10:00 AM",
+      "USUARIOSLOGADOS": null,
+      "__excel_row_number__": 4
+     },
+     {
+      "NOMEDOCOMPUTADOR": "PRNOTERL01",
+      "ROTULODESERVICONUMERODESERIE": "BRJ200RL01",
+      "SISTEMAOPERACIONAL": "Windows 11",
+      "ULTIMAVERIFICACAOCOMEXITO": "08/10/2026 14:00",
+      "USUARIOSLOGADOS": null,
+      "__excel_row_number__": 6
+     },
+     {
+      "NOMEDOCOMPUTADOR": "PRNOTEARC01",
+      "ROTULODESERVICONUMERODESERIE": "BRJ200ARC1",
+      "SISTEMAOPERACIONAL": "Windows 10",
+      "ULTIMAVERIFICACAOCOMEXITO": "2026-10-14T10:00:00Z",
+      "USUARIOSLOGADOS": "sebrae\\caio",
+      "__excel_row_number__": 7
+     },
+     {
+      "NOMEDOCOMPUTADOR": "PRMACMTZ01",
+      "ROTULODESERVICONUMERODESERIE": "CMVXKV7YCM",
+      "SISTEMAOPERACIONAL": "macOS",
+      "ULTIMAVERIFICACAOCOMEXITO": {
+       "__datetime__": "2026-10-13T00:00:00"
+      },
+      "USUARIOSLOGADOS": "sebrae\\dani",
+      "__excel_row_number__": 8
+     },
+     {
+      "NOMEDOCOMPUTADOR": "PRMACMTZ02",
+      "ROTULODESERVICONUMERODESERIE": "C02XYZ123",
+      "SISTEMAOPERACIONAL": "macOS",
+      "ULTIMAVERIFICACAOCOMEXITO": "12 out 2026 09:00",
+      "USUARIOSLOGADOS": "sebrae\\edu",
+      "__excel_row_number__": 9
+     },
+     {
+      "NOMEDOCOMPUTADOR": "PRMACAMB01",
+      "ROTULODESERVICONUMERODESERIE": "FVFAMB001",
+      "SISTEMAOPERACIONAL": "macOS",
+      "ULTIMAVERIFICACAOCOMEXITO": null,
+      "USUARIOSLOGADOS": "sebrae\\fabi",
+      "__excel_row_number__": 10
+     },
+     {
+      "NOMEDOCOMPUTADOR": "PRNOTEMTZ90",
+      "ROTULODESERVICONUMERODESERIE": "BRJ135P5XS",
+      "SISTEMAOPERACIONAL": "Windows 11",
+      "ULTIMAVERIFICACAOCOMEXITO": {
+       "__datetime__": "2026-10-14T00:00:00"
+      },
+      "USUARIOSLOGADOS": "sebrae\\gil",
+      "__excel_row_number__": 11
+     },
+     {
+      "NOMEDOCOMPUTADOR": "PRNOTEMTZ91",
+      "ROTULODESERVICONUMERODESERIE": "BRJ142QKBQ",
+      "SISTEMAOPERACIONAL": "Windows 11",
+      "ULTIMAVERIFICACAOCOMEXITO": null,
+      "USUARIOSLOGADOS": null,
+      "__excel_row_number__": 12
+     },
+     {
+      "NOMEDOCOMPUTADOR": "PRNOTEMTZ92",
+      "ROTULODESERVICONUMERODESERIE": "brj9435vmr",
+      "SISTEMAOPERACIONAL": "Windows 11",
+      "ULTIMAVERIFICACAOCOMEXITO": null,
+      "USUARIOSLOGADOS": null,
+      "__excel_row_number__": 13
+     },
+     {
+      "NOMEDOCOMPUTADOR": "PRNOTECAS01",
+      "ROTULODESERVICONUMERODESERIE": "BRJ300DUP1",
+      "SISTEMAOPERACIONAL": "Windows 11",
+      "ULTIMAVERIFICACAOCOMEXITO": null,
+      "USUARIOSLOGADOS": null,
+      "__excel_row_number__": 14
+     },
+     {
+      "NOMEDOCOMPUTADOR": "PRNOTEFOZ01",
+      "ROTULODESERVICONUMERODESERIE": null,
+      "SISTEMAOPERACIONAL": "Windows 11",
+      "ULTIMAVERIFICACAOCOMEXITO": null,
+      "USUARIOSLOGADOS": null,
+      "__excel_row_number__": 15
+     },
+     {
+      "NOMEDOCOMPUTADOR": "PRNOTEPG01",
+      "ROTULODESERVICONUMERODESERIE": null,
+      "SISTEMAOPERACIONAL": "Windows 11",
+      "ULTIMAVERIFICACAOCOMEXITO": null,
+      "USUARIOSLOGADOS": null,
+      "__excel_row_number__": 16
+     },
+     {
+      "NOMEDOCOMPUTADOR": "PRNOTEXYZ01",
+      "ROTULODESERVICONUMERODESERIE": "BRJ700ENDP",
+      "SISTEMAOPERACIONAL": "Windows 11",
+      "ULTIMAVERIFICACAOCOMEXITO": {
+       "__datetime__": "2026-09-01T07:15:00"
+      },
+      "USUARIOSLOGADOS": null,
+      "__excel_row_number__": 17
+     },
+     {
+      "NOMEDOCOMPUTADOR": "PRNOTEBKPLON1",
+      "ROTULODESERVICONUMERODESERIE": "BRJ700ENDQ",
+      "SISTEMAOPERACIONAL": "Windows 11",
+      "ULTIMAVERIFICACAOCOMEXITO": null,
+      "USUARIOSLOGADOS": null,
+      "__excel_row_number__": 18
+     },
+     {
+      "NOMEDOCOMPUTADOR": "PRNOTEUMU01",
+      "ROTULODESERVICONUMERODESERIE": "BRJ600HOST",
+      "SISTEMAOPERACIONAL": "Windows 11",
+      "ULTIMAVERIFICACAOCOMEXITO": null,
+      "USUARIOSLOGADOS": null,
+      "__excel_row_number__": 19
+     },
+     {
+      "NOMEDOCOMPUTADOR": "PRNOTEUMU01",
+      "ROTULODESERVICONUMERODESERIE": "BRJ600HOSX",
+      "SISTEMAOPERACIONAL": "Windows 11",
+      "ULTIMAVERIFICACAOCOMEXITO": null,
+      "USUARIOSLOGADOS": null,
+      "__excel_row_number__": 20
+     },
+     {
+      "NOMEDOCOMPUTADOR": "PRNOTEGPV01",
+      "ROTULODESERVICONUMERODESERIE": 123456789,
+      "SISTEMAOPERACIONAL": "Windows 11",
+      "ULTIMAVERIFICACAOCOMEXITO": null,
+      "USUARIOSLOGADOS": null,
+      "__excel_row_number__": 21
+     },
+     {
+      "NOMEDOCOMPUTADOR": "PRNOTEIRA01",
+      "ROTULODESERVICONUMERODESERIE": "BRJ500LOW",
+      "SISTEMAOPERACIONAL": "Windows 11",
+      "ULTIMAVERIFICACAOCOMEXITO": null,
+      "USUARIOSLOGADOS": null,
+      "__excel_row_number__": 22
+     },
+     {
+      "NOMEDOCOMPUTADOR": "PRDESKMTZ01",
+      "ROTULODESERVICONUMERODESERIE": "BRJ800DESK",
+      "SISTEMAOPERACIONAL": "Windows 11",
+      "ULTIMAVERIFICACAOCOMEXITO": null,
+      "USUARIOSLOGADOS": null,
+      "__excel_row_number__": 23
+     }
+    ],
+    "sheet": "InvAllComputersSummary"
+   }
+  ]
+ }
+}
