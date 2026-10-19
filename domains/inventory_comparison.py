@@ -81,8 +81,9 @@ def _removable_oldest_nodes(
         if len(group) < 2:
             continue
         hostname_keys = [normalize_reference_value(record["computador"]) for record in group]
-        times = [verified_by_node[record["node"]] for record in group]
-        if not all(hostname_keys) or len(set(hostname_keys)) != len(group) or any(t is None for t in times):
+        optional_times = [verified_by_node[record["node"]] for record in group]
+        times = [moment for moment in optional_times if moment is not None]
+        if not all(hostname_keys) or len(set(hostname_keys)) != len(group) or len(times) != len(group):
             continue
         earliest = min(times)
         if times.count(earliest) == 1:
@@ -1094,7 +1095,7 @@ def compare_uploaded_workbooks(
                 for record in endpoint_records
             }
             verified_times = [verified for verified in verified_by_node.values() if verified is not None]
-            ambiguous_record = {
+            ambiguous_record: Dict[str, Any] = {
                 **entity,
                 "ultima_verificacao": (
                     max(verified_times).isoformat(timespec="minutes") if verified_times else None
@@ -1108,14 +1109,13 @@ def compare_uploaded_workbooks(
                         "serie": record["serie"],
                         "computador": record["computador"],
                         "ultima_verificacao": (
-                            verified_by_node[record["node"]].isoformat(timespec="minutes")
-                            if verified_by_node[record["node"]] is not None
-                            else None
+                            node_verified.isoformat(timespec="minutes") if node_verified is not None else None
                         ),
                         "linha_endpoint": record["row_number"],
                         "mais_antigo": record["node"] in oldest_nodes,
                     }
                     for record in endpoint_records
+                    for node_verified in (verified_by_node[record["node"]],)
                 ]
             ambiguous_records.append(ambiguous_record)
 
