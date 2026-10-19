@@ -83,3 +83,5 @@ Não altere arquivos, dados operacionais, dependências nem o estado do Git. Sep
 - Autorização para commit não autoriza push. Confirme destino e autorização e informe claramente se houve commit, push e sincronização com o remoto.
 - Faça mudanças em etapas, valide antes de publicar e revise o que vai para o commit. Não reescreva histórico nem inclua dados operacionais ou confidenciais.
 - Identifique branches e worktrees reais antes de integrar trabalho. Não use `reset --hard`, `git clean` ou force push sem autorização.
+- Cada agente (Claude Code, Codex e Cursor) trabalha no próprio git worktree e não troca o branch do checkout principal. Antes de cada commit, confira o branch atual com `git branch --show-current`.
+- Ao remover um worktree com junction de `node_modules`, apague o junction com `cmd /c rmdir node_modules` antes de `git worktree remove`, para não apagar o `node_modules` do checkout principal.
