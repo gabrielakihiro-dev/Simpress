@@ -61,6 +61,8 @@ Instale as dependências fixadas pelo projeto:
 .\.venv\Scripts\python.exe -m pip install -r requirements.txt
 ```
 
+Esse arquivo inclui o `playwright` (usado só pela automação do Chrome em `executar_automacao.bat`); não é necessário baixar navegadores, pois a automação usa o Google Chrome instalado. Se o pacote faltar, a rotina avisa em português e mostra esse mesmo comando de instalação.
+
 No VS Code, o interpretador configurado para este workspace é `.venv\Scripts\python.exe`. Se necessário, selecione esse caminho manualmente.
 
 ## Planilhas e arquivos locais

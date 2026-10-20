@@ -22,6 +22,7 @@ O login é sempre feito pelo usuário na janela do Chrome; o script apenas esper
 from __future__ import annotations
 
 import argparse
+import importlib.util
 import json
 import os
 import re
@@ -1066,6 +1067,22 @@ def descrever_erro(erro: Exception) -> str:
     return f"{type(erro).__name__}: {primeira}"
 
 
+COMANDO_INSTALAR_PLAYWRIGHT = r".venv\Scripts\python.exe -m pip install -r requirements.txt"
+
+
+def mensagem_playwright_ausente() -> str:
+    return (
+        "O pacote Python 'playwright' não está instalado neste ambiente, e a automação precisa dele.\n"
+        "Instale as dependências do projeto (na pasta do projeto) e execute a rotina de novo:\n"
+        f"    {COMANDO_INSTALAR_PLAYWRIGHT}\n"
+        "Não é preciso baixar navegadores: a automação usa o Google Chrome instalado."
+    )
+
+
+def playwright_instalado() -> bool:
+    return importlib.util.find_spec("playwright") is not None
+
+
 def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     parser.add_argument("--rotina", choices=["os", "inventarios", "ambas", "login"], default="os")
@@ -1080,6 +1097,9 @@ def main() -> int:
     if str(ROOT) not in sys.path:
         sys.path.insert(0, str(ROOT))
     iniciar_log_execucao(args.rotina)
+    if not playwright_instalado():
+        print(f"\n[ERRO] {mensagem_playwright_ausente()}", flush=True)
+        return 3
     try:
         return executar(args.rotina)
     except TravaOcupada as erro:
