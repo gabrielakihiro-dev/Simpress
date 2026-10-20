@@ -45,6 +45,8 @@ PREVIOUS_EVENT = {
     "restauravel": False,
 }
 DEMO_ANNOTATION = ""
+# Manual logged users saved from the comparison result; fixture memory only.
+FIXTURE_MANUAL_USERS = {}
 TICKET_REPORT = {
     "atualizado_em": "2026-10-09T12:00:00Z",
     "fontes": {
@@ -236,7 +238,9 @@ class Handler(BaseHTTPRequestHandler):
         elif path in ("/api/buscar", "/api/buscar-expandida"):
             params = parse_qs(url.query)
             time.sleep(2)
-            self.send({"items": [EQUIPMENT], "total": 1, "has_more": False,
+            # Fictional logged user, shown beside the hostname in the result row.
+            item = {**EQUIPMENT, "usuarios_logados": "usuario.demo", "usuarios_logados_origem": "endpoint"}
+            self.send({"items": [item], "total": 1, "has_more": False,
                        "filters": {"categories": [], "cities": []}, "query": params.get("q", [""])[0]})
         else:
             self.send({"detail": "Endpoint de teste não encontrado"}, 404)
@@ -285,7 +289,25 @@ class Handler(BaseHTTPRequestHandler):
 
     def do_POST(self):
         global ticket_import_count
-        if urlsplit(self.path).path != "/api/operacoes/chamados/importar":
+        path = urlsplit(self.path).path
+        if path in ("/api/equipamentos/usuarios-logados", "/api/equipamento/atualizar-usuario"):
+            size = int(self.headers.get("Content-Length", "0"))
+            body = json.loads(self.rfile.read(size) or b"{}")
+            if path.endswith("usuarios-logados"):
+                self.send({"usuarios": {
+                    serie: {"usuario": FIXTURE_MANUAL_USERS.get(serie, ""),
+                            "origem": "manual" if FIXTURE_MANUAL_USERS.get(serie) else "",
+                            "serial_cadastro": serie}
+                    for serie in body.get("series", [])
+                }})
+            else:
+                FIXTURE_MANUAL_USERS[body["serial"]] = body.get("usuario", "")
+                self.send({"sucesso": True, "equipamento": {
+                    "serial": body["serial"], "usuarios_logados": body.get("usuario", ""),
+                    "usuarios_logados_origem": "manual" if body.get("usuario") else "",
+                }})
+            return
+        if path != "/api/operacoes/chamados/importar":
             self.send({"detail": "Endpoint de teste não encontrado"}, 404)
             return
         size = int(self.headers.get("Content-Length", "0"))

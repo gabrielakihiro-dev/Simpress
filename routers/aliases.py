@@ -1,7 +1,7 @@
 """Routes for manual equipment aliases and their change history."""
 
 from dataclasses import dataclass
-from typing import Any, Callable, Optional, Tuple
+from typing import Any, Callable, List, Optional, Tuple
 
 from fastapi import APIRouter
 from pydantic import BaseModel, Field, field_validator
@@ -30,6 +30,10 @@ class UsuarioUpdatePayload(BaseModel):
         return validate_equipment_serial(value)
 
 
+class UsuariosConsultaPayload(BaseModel):
+    series: List[str] = Field(default_factory=list, max_length=5000, description="Séries cujos usuários logados serão consultados")
+
+
 class ApelidoUndoPayload(BaseModel):
     evento_id: str = Field(..., description="ID do evento de apelido que deve ser desfeito")
 
@@ -44,6 +48,7 @@ class AliasRouteExports:
     excluir_evento_historico_apelido: Callable[..., Any]
     desfazer_alteracao_apelido: Callable[..., Any]
     atualizar_usuario: Callable[..., Any]
+    consultar_usuarios_logados: Callable[..., Any]
 
 
 def create_alias_router(
@@ -93,6 +98,11 @@ def create_alias_router(
         """Salva (ou limpa) o usuário logado manual de um equipamento sem usuário no Endpoint."""
         return user_changes.update_manual_user(services, payload.serial, payload.usuario)
 
+    @router.post("/api/equipamentos/usuarios-logados")
+    def consultar_usuarios_logados(payload: UsuariosConsultaPayload):
+        """Usuário logado de cada série, com a mesma regra da pesquisa (Endpoint, senão manual)."""
+        return user_changes.logged_users_for_series(services, payload.series)
+
     return router, AliasRouteExports(
         get_apelidos_modificados=get_apelidos_modificados,
         atualizar_apelido=atualizar_apelido,
@@ -100,4 +110,5 @@ def create_alias_router(
         excluir_evento_historico_apelido=excluir_evento_historico_apelido,
         desfazer_alteracao_apelido=desfazer_alteracao_apelido,
         atualizar_usuario=atualizar_usuario,
+        consultar_usuarios_logados=consultar_usuarios_logados,
     )

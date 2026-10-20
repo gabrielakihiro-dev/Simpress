@@ -21,7 +21,7 @@ from typing import Any, Callable, ContextManager, Dict, List, Optional, Tuple, T
 from core.errors import DomainConflictError, DomainError
 from core.integrity import AtomicFileTransaction, FileBusyError, FileTransactionError, WorkbookSafetyError
 from domains import inventory_state
-from domains.effective_alias import with_manual_alias_marker
+from domains.effective_alias import with_details_serials, with_manual_alias_marker
 from domains.inventory_comparison import normalize_reference_value
 from domains.inventory_state import STATE_LOCK
 
@@ -260,7 +260,7 @@ def apply_alias_change(
             updated_equipment["_apelido_manual_override"] = not drop_override
             services.apply_effective_alias(
                 updated_equipment,
-                services.read_endpoint_alias_index(),
+                with_details_serials(services.read_endpoint_alias_index(), next_equipment_cache),
                 details_duplicate=updated_equipment.get("invall_alias_status") == "serie_detalhes_duplicada",
             )
             next_equipment_cache[target_serial] = updated_equipment

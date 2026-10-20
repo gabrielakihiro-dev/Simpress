@@ -36,6 +36,9 @@
     .replace(/\bno endpoint\b/gi, "Endpoint");
   const atributosLinhaComparacao = (categoria, item) => `data-comparison-category="${escapeHtml(categoria)}" data-comparison-item-id="${escapeHtml(item?.anotacao_id || "")}" data-comparison-serial="${escapeHtml(item?.serie || "")}" data-comparison-hostname="${escapeHtml(item?.computador || item?.hostname || item?.apelido || "")}"`;
 
+  // Placeholder filled after rendering with the logged user of the serial (Endpoint, or manual when empty).
+  const marcadorUsuarioLogado = context.loggedUserMarkers.marcador;
+
   function renderizarTabelaComparacao(headers, rows, emptyMessage, filterCategory = "") {
     const wrapFilterGroup = markup => filterCategory
       ? `<div class="history-filter-group space-y-2" data-history-filter-group="${escapeHtml(filterCategory)}">${markup}</div>`
@@ -192,7 +195,7 @@
   function linhasAusentes(items, categoria, { renderizarCampoAnotacao }) {
     return items.map(item => `
         <tr class="text-slate-300" ${atributosLinhaComparacao(categoria, item)}>
-          <td class="px-3 py-2 font-mono text-white whitespace-nowrap">${escapeHtml(item.computador)}</td>
+          <td class="px-3 py-2 font-mono text-white whitespace-nowrap">${escapeHtml(item.computador)}${marcadorUsuarioLogado(item.serie)}</td>
           <td class="px-3 py-2 font-mono whitespace-nowrap">${escapeHtml(item.serie || "—")}</td>
           <td class="px-3 py-2">${escapeHtml(item.local_previsto || "—")}</td>
           <td class="px-3 py-2 text-amber-300">${escapeHtml((Array.isArray(item.ausente_em) ? item.ausente_em : [item.ausente_em || item.fonte_ausente]).filter(Boolean).map(formatarFonteAusencia).join(", "))}</td>
@@ -203,7 +206,7 @@
   function linhasLocalidadeDivergente(divergenciasLocal, { renderizarCampoAnotacao }) {
     return divergenciasLocal.map(item => `
         <tr class="text-slate-300" ${atributosLinhaComparacao("divergencias_local", item)}>
-          <td class="px-3 py-2 font-mono text-white whitespace-nowrap">${escapeHtml(item.computador)}</td>
+          <td class="px-3 py-2 font-mono text-white whitespace-nowrap">${escapeHtml(item.computador)}${marcadorUsuarioLogado(item.serie)}</td>
           <td class="px-3 py-2 font-mono whitespace-nowrap">${escapeHtml(item.serie || "—")}</td>
           <td class="px-3 py-2">${escapeHtml(item.local_previsto)}</td>
           <td class="px-3 py-2">${escapeHtml(item.local_detalhes || "—")}</td>
@@ -215,7 +218,7 @@
     return semAcesso7DiasOrdenados.map(item => `
         <tr class="text-slate-300" ${atributosLinhaComparacao("sem_acesso_7_dias", item)}>
           <td class="px-3 py-2 font-mono text-white whitespace-nowrap">${escapeHtml(item.computador || "—")}${item.hostname_sumiu_endpoint ? `
-            <span class="block font-sans text-[10px] text-amber-300 whitespace-normal" data-hostname-sumiu="true">Hostname sumiu do Endpoint${item.hostname_origem === "endpoint_anterior" ? " (hostname do Endpoint anterior)" : item.hostname_origem === "simpress" ? " (hostname mantido da Simpress)" : ""}</span>` : ""}</td>
+            <span class="block font-sans text-[10px] text-amber-300 whitespace-normal" data-hostname-sumiu="true">Hostname sumiu do Endpoint${item.hostname_origem === "endpoint_anterior" ? " (hostname do Endpoint anterior)" : item.hostname_origem === "simpress" ? " (hostname mantido da Simpress)" : ""}</span>` : ""}${marcadorUsuarioLogado(item.serie)}</td>
           <td class="px-3 py-2 font-mono whitespace-nowrap">${escapeHtml(item.serie || "—")}</td>
           <td class="px-3 py-2 whitespace-nowrap">${escapeHtml(item.ultima_verificacao ? formatarHorarioHistorico(item.ultima_verificacao) : "—")}</td>
           <td class="px-3 py-2">${Number(item.dias_sem_verificacao || 0).toLocaleString("pt-BR")}</td>
@@ -239,7 +242,7 @@
     return apelidosSemAtualizacao.map(item => `
         <tr class="text-slate-300" ${atributosLinhaComparacao("apelidos_sem_atualizacao", item)}>
           <td class="px-3 py-2 font-mono text-white whitespace-nowrap">${escapeHtml(item.serie || "(vazia)")}</td>
-          <td class="px-3 py-2 font-mono">${escapeHtml(item.computador || "—")}</td>
+          <td class="px-3 py-2 font-mono">${escapeHtml(item.computador || "—")}${marcadorUsuarioLogado(item.serie)}</td>
           <td class="px-3 py-2 text-slate-300">${escapeHtml(formatarMotivoRevisao(item.motivo))}</td>
           ${renderizarCampoAnotacao(item, (item.computador ? `o hostname ${item.computador}, série ` : "a série ") + (item.serie || "vazia"))}
         </tr>`);
@@ -444,7 +447,7 @@
           ${renderizarTabelaComparacao(["Série", "Apelido manual", "na Simpress", "no endpoint", "Situação", "Ação"], manualAliasRows, "Nenhuma divergência entre apelidos manuais e as planilhas enviadas.", "divergencias_apelidos_manuais")}
         </section>
         <section class="space-y-2" data-history-filter-section>
-          <div>${tituloSecaoComparacao("Sem acesso há 7 dias ou mais", "amber")}<p class="text-[11px] text-slate-500">Notebooks cuja última verificação com êxito ocorreu há 7 dias ou mais, contados a partir desta atualização.</p><p class="text-[11px] text-slate-400">Atualização usada como referência: ${comparison.horario_comparacao ? `<time datetime="${escapeHtml(comparison.horario_comparacao)}">${escapeHtml(formatarHorarioHistorico(comparison.horario_comparacao))}</time>` : "data e hora indisponíveis"}.</p></div>
+          <div>${tituloSecaoComparacao("Sem acesso há 7 dias ou mais", "amber")}<p class="text-[11px] text-slate-500">Notebooks cuja última verificação com êxito ocorreu há 7 dias ou mais, contados a partir desta atualização.</p><p class="text-[11px] text-slate-500">Para remover computadores com hostname duplicado (o mais antigo) ou sem uso há muito tempo, acesse o <a href="https://centralendpoint.pr.sebrae.com.br/webclient#/uems/agent/som/computers" target="_blank" rel="noopener noreferrer" data-endpoint-computers-link class="text-sky-400 underline hover:text-sky-300">Endpoint Central (Computadores)</a>.</p><p class="text-[11px] text-slate-400">Atualização usada como referência: ${comparison.horario_comparacao ? `<time datetime="${escapeHtml(comparison.horario_comparacao)}">${escapeHtml(formatarHorarioHistorico(comparison.horario_comparacao))}</time>` : "data e hora indisponíveis"}.</p></div>
           ${renderizarTabelaComparacao(["Hostname/Apelido", "Série", "Última verificação com êxito", "Dias sem verificação", "Linha no endpoint", ...annotationHeaders], semAcessoRows, "Nenhum notebook está há 7 dias ou mais sem verificação com êxito.", "sem_acesso_7_dias")}
         </section>
         <section class="space-y-2" data-history-filter-section>

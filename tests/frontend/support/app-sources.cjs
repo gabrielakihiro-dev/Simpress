@@ -27,6 +27,7 @@ function appScripts() {
     || file === "js/shared/history-format.js"
     || file === "js/ui/comparison-result-renderer.js"
     || file === "js/ui/equipment-search-renderers.js"
+    || file === "js/ui/logged-user-markers.js"
     || file === "app.js";
   return appScriptFiles().filter(isApplicationSource).map(file => ({
     file: `static/${file}`,

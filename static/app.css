@@ -604,6 +604,13 @@
     }
     @keyframes equipment-user-in { from { opacity: 0; transform: translateY(-2px); } to { opacity: 1; transform: none; } }
     @media (prefers-reduced-motion: reduce) { .equipment-user-form { animation: none; } }
+    /* Usuário logado em cada linha do resultado da atualização de planilhas. */
+    .logged-user { display: block; margin-top: 0.2rem; color: var(--text-muted); font-family: inherit; font-size: 0.6875rem; font-weight: 400; white-space: normal; }
+    .logged-user:empty { display: none; }
+    .logged-user-row { display: inline-flex; flex-wrap: wrap; align-items: center; gap: 0.25rem 0.4rem; }
+    .logged-user-form { display: flex; flex-wrap: wrap; align-items: center; gap: 0.3rem; margin-top: 0.2rem; animation: equipment-user-in 200ms ease-out; }
+    .logged-user-form .equipment-user-input { min-width: 8rem; flex: 1 1 8rem; max-width: 14rem; font-family: inherit; }
+    @media (prefers-reduced-motion: reduce) { .logged-user-form { animation: none; } }
     .equipment-location {
       display: flex; flex-direction: column; align-items: flex-start; gap: 0.2rem; min-width: 0; padding: 0.75rem 1rem;
       border: 1px solid var(--ux-success-border); border-radius: 0.6rem; font-size: 0.75rem;
@@ -858,7 +865,7 @@
       .autocomplete-row { flex-wrap: wrap; align-items: flex-start; }
       .autocomplete-row > div:first-child { flex-wrap: wrap; }
       .autocomplete-row .ml-2 { margin-left: 0; }
-      .autocomplete-alias { display: inline-flex; white-space: normal; overflow-wrap: anywhere; }
+      .autocomplete-alias, .autocomplete-user { display: inline-flex; white-space: normal; overflow-wrap: anywhere; }
       .modal-panel {
         width: 100%;
         max-height: calc(100vh - 1rem - env(safe-area-inset-top) - env(safe-area-inset-bottom));
