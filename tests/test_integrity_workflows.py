@@ -263,6 +263,7 @@ class WorkflowIntegrityTests(unittest.TestCase):
         self.stack = ExitStack()
         self.stack.enter_context(patch.object(main, "BASE_DIR", self.root))
         self.stack.enter_context(patch.object(main, "STATE_DIR", self.state_dir))
+        self.stack.enter_context(patch.object(main, "MANUAL_USERS_FILE", self.state_dir / "usuarios_manuais" / "usuarios_manuais.json"))
         self.stack.enter_context(patch.object(main, "INPUT_DIR", self.input_dir))
         self.stack.enter_context(patch.object(main, "DETAILS_UPLOAD_FILE", self.details))
         self.stack.enter_context(patch.object(main, "ENDPOINT_UPLOAD_FILE", self.endpoint))

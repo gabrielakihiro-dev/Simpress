@@ -83,7 +83,14 @@ class AtomicTransactionTests(unittest.TestCase):
 
         thread = threading.Thread(target=acquire_transaction_after_failure)
         thread.start()
-        thread.join(2)
+        # The lock still has a 0.5 s acquisition deadline. Filesystem setup and
+        # journal cleanup can take longer on a busy Windows/OneDrive host.
+        # Always finish the worker before the fixture directory is removed.
+        try:
+            thread.join(15)
+        finally:
+            if thread.is_alive():
+                thread.join(15)
 
         self.assertFalse(thread.is_alive(), "the next transaction stayed blocked after failed entry")
         self.assertTrue(acquired.is_set(), f"the next transaction could not acquire the locks: {errors}")

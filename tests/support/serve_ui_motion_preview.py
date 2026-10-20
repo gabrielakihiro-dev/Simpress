@@ -6,6 +6,7 @@ FALHA returns 503. History annotations are stored only in fixture memory.
 
 import json
 import mimetypes
+import os
 import sys
 import time
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
@@ -83,27 +84,6 @@ def origin_contact_config():
             "contato_origem_arquivo_invalido": False}
 
 
-USAGE_METRICS = ("transferencias", "comparacoes", "exportacoes", "os_conciliadas", "buscas")
-USAGE_TOTALS = {"transferencias": 12, "comparacoes": 4, "exportacoes": 7, "os_conciliadas": 86, "buscas": 143}
-USAGE_MINUTES = {metric: None for metric in USAGE_METRICS}
-
-
-def usage_summary():
-    configured = {metric: value for metric, value in USAGE_MINUTES.items() if value is not None}
-    minutes = sum(USAGE_TOTALS[metric] * value for metric, value in configured.items())
-    return {
-        "periodo": {"inicio": "2026-09-18", "fim": "2026-10-17", "dias": 30},
-        "totais": dict(USAGE_TOTALS),
-        "por_dia": [],
-        "registro_desde": "2026-10-01",
-        "tempos_minutos": dict(USAGE_MINUTES),
-        "tempos_configurados": bool(configured),
-        "minutos_economizados": round(minutes, 1),
-        "horas_economizadas": round(minutes / 60, 1),
-        "disponivel": True,
-    }
-
-
 # Stale base alert: fresh by default so other tests keep the Home layout; e2e switches it per test.
 BASE_FRESHNESS = {
     "atualizada": {"estado": "atualizada", "limite_dias": 7, "dias_sem_atualizacao": 2,
@@ -146,7 +126,6 @@ def dashboard_payload():
         "cidades_por_categoria": {"notebook": [{"cidade": "Curitiba", "total": 1}]},
         "total_cidades": 1, "sem_cidade": 0, "ultima_atualizacao": "08/10/2026 09:00",
         "arquivo_origem": "simpress-demo.xlsx", "ultima_comparacao": None,
-        "uso_30_dias": usage_summary(),
         "base_desatualizada": BASE_FRESHNESS[base_freshness_state],
         **PANEL_ALERTS[panel_alerts_state],
     }
@@ -235,13 +214,39 @@ class Handler(BaseHTTPRequestHandler):
             self.send({"estado": panel_alerts_state})
         elif path == "/__fixture_automacao":
             AUTOMATION_HISTORY[:] = AUTOMATION_BASE_HISTORY
+            count = int(parse_qs(url.query).get("quantidade", ["0"])[0])
+            if count:
+                AUTOMATION_HISTORY[:] = [
+                    {**AUTOMATION_BASE_HISTORY[index % 2], "id": f"demo-{index}",
+                     "inicio": f"2026-10-{20 if index < 8 else 19}T{23 - index:02d}:00:00-03:00"}
+                    for index in range(min(count, 20))
+                ]
             globals()["automation_run"] = None
             self.send({"estado": "livre"})
         elif path == "/api/automacao/estado":
             offset = parse_qs(url.query).get("offset", ["0"])[0]
             self.send(automation_state(int(offset) if offset.isdigit() else 0))
         elif path == "/api/automacao/historico":
-            self.send({"execucoes": AUTOMATION_HISTORY})
+            query = parse_qs(url.query)
+            entries = [entry for entry in AUTOMATION_HISTORY
+                       if (not query.get("data_inicio") or entry["inicio"][:10] >= query["data_inicio"][0])
+                       and (not query.get("data_fim") or entry["inicio"][:10] <= query["data_fim"][0])
+                       and (not query.get("rotina") or entry["rotina"] == query["rotina"][0])
+                       and (not query.get("status") or entry["status"] == query["status"][0])]
+            limit = max(1, min(int(query.get("limite", ["5"])[0]), 50))
+            pages = max(1, (len(entries) + limit - 1) // limit)
+            page = max(1, min(int(query.get("pagina", ["1"])[0]), pages))
+            self.send({"execucoes": entries[(page - 1) * limit:page * limit], "total": len(entries),
+                       "pagina": page, "paginas": pages, "limite": limit})
+        elif path.startswith("/api/automacao/execucoes/") and path.endswith("/log"):
+            identifier = path.split("/")[-2]
+            entry = next((item for item in AUTOMATION_HISTORY if item["id"] == identifier), None)
+            if entry is None:
+                self.send({"detail": "Execução não encontrada."}, 404)
+            else:
+                limit = min(500, int(parse_qs(url.query).get("linhas", ["200"])[0]))
+                self.send({"execucao": entry, "arquivo": entry["log"], "linhas":
+                           [f"Histórico {identifier} · linha {i} <script>texto</script>" for i in range(600 - limit, 600)], "limitado": True})
         elif path == "/__fixture_state":
             self.send({"annotation": DEMO_ANNOTATION})
         elif path == "/api/unidades":
@@ -317,20 +322,6 @@ class Handler(BaseHTTPRequestHandler):
                 return
             origin_contact.update({key: str(payload[key]).strip() for key in DEFAULT_ORIGIN_CONTACT})
             self.send(origin_contact_config())
-            return
-        if path == "/api/painel/tempos-manuais":
-            size = int(self.headers.get("Content-Length", "0"))
-            try:
-                minutes = json.loads(self.rfile.read(size)).get("tempos_minutos")
-            except (ValueError, AttributeError):
-                minutes = None
-            if not isinstance(minutes, dict):
-                self.send({"detail": "Informe os tempos por tarefa."}, 422)
-                return
-            for metric in USAGE_METRICS:
-                value = minutes.get(metric)
-                USAGE_MINUTES[metric] = value if isinstance(value, (int, float)) and 0 <= value <= 480 else None
-            self.send(usage_summary())
             return
         if path != f"/api/historico-comparacoes/{DEMO_EVENT_ID}/anotacoes/{DEMO_ANNOTATION_ID}":
             self.send({"detail": "Endpoint de teste não encontrado"}, 404)
@@ -412,5 +403,6 @@ class UIFixtureServer(ThreadingHTTPServer):
 
 
 if __name__ == "__main__":
-    print("UI fixture: http://127.0.0.1:8765/ — LENTO / FALHA", flush=True)
-    UIFixtureServer(("127.0.0.1", 8765), Handler).serve_forever()
+    port = int(os.environ.get("SIMPRESS_UI_FIXTURE_PORT", "8765"))
+    print(f"UI fixture: http://127.0.0.1:{port}/ — LENTO / FALHA", flush=True)
+    UIFixtureServer(("127.0.0.1", port), Handler).serve_forever()
