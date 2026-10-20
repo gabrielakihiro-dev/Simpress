@@ -240,8 +240,13 @@ class Handler(BaseHTTPRequestHandler):
             time.sleep(2)
             # Fictional logged user, shown beside the hostname in the result row.
             item = {**EQUIPMENT, "usuarios_logados": "usuario.demo", "usuarios_logados_origem": "endpoint"}
+            if params.get("usuario", [""])[0] == "sem":
+                # "Sem usuário" filter: a fictional equipment with neither an Endpoint nor a manual user.
+                item = {**EQUIPMENT, "serial": "DEMO-SEM-USUARIO", "apelido": "PRNOTEDEMO02",
+                        "usuarios_logados": "", "usuarios_logados_origem": ""}
             self.send({"items": [item], "total": 1, "has_more": False,
-                       "filters": {"categories": [], "cities": []}, "query": params.get("q", [""])[0]})
+                       "filters": {"categories": [], "cities": [], "users": {"sem": 1, "com": 1}},
+                       "query": params.get("q", [""])[0]})
         else:
             self.send({"detail": "Endpoint de teste não encontrado"}, 404)
 

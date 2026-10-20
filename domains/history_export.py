@@ -95,6 +95,39 @@ def _export_note(
     return _export_text(annotations.get(f"{category}:{index}"))
 
 
+_USER_ORIGIN_LABELS = {"endpoint": "Endpoint", "manual": "Manual"}
+_USER_SECTIONS = (
+    "apelidos_atualizados", "apelidos_sem_atualizacao", "divergencias_apelidos_manuais",
+    "ausentes_no_endpoint", "ausentes_em_detalhes", "sem_acesso_7_dias", "divergencias_local",
+)
+
+
+def history_export_series(display_events: Sequence[Dict[str, Any]]) -> List[str]:
+    """Series of the exported rows that get a logged-user column, in first-seen order."""
+    series: Dict[str, None] = {}
+    for event in display_events:
+        comparison = event.get("comparacao") if isinstance(event, dict) else None
+        if not isinstance(comparison, dict):
+            continue
+        for key in _USER_SECTIONS:
+            for item in _export_rows(comparison, key):
+                serie = str(item.get("serie") or "").strip()
+                if serie:
+                    series.setdefault(serie, None)
+    return list(series)
+
+
+def _export_user(logged_users: Mapping[str, Any], serie: Any) -> Tuple[str, str]:
+    """Current logged user of a series and its source (``Endpoint`` or ``Manual``), blank when unknown."""
+    info = logged_users.get(str(serie or "").strip())
+    if not isinstance(info, Mapping):
+        return "", ""
+    user = _export_text(info.get("usuario")).strip()
+    if not user:
+        return "", ""
+    return user, _USER_ORIGIN_LABELS.get(str(info.get("origem") or ""), "")
+
+
 def _style_export_title(ws: Worksheet, title: str, subtitle: str, last_column: int) -> None:
     ws.merge_cells(start_row=1, start_column=1, end_row=1, end_column=last_column)
     title_cell = ws.cell(row=1, column=1, value=title)
@@ -280,9 +313,18 @@ def _write_export_summary_sheet(
 def build_history_export_workbook(
     display_events: List[Dict[str, Any]],
     selected_date: date,
+    logged_users: Optional[Mapping[str, Any]] = None,
 ) -> Tuple[BytesIO, str]:
-    """Build the history workbook for one day; returns the rewound stream and its filename."""
+    """Build the history workbook for one day; returns the rewound stream and its filename.
+
+    ``logged_users`` maps a series to its current ``{usuario, origem}`` (the Home rule); the
+    rows with a series show it in the "Usuário logado" and "Origem do usuário" columns.
+    """
     display_events = sorted(display_events, key=_export_event_timestamp)
+    users_by_series: Mapping[str, Any] = logged_users or {}
+
+    def user_cells(serie: Any) -> Tuple[str, str]:
+        return _export_user(users_by_series, serie)
 
     event_counts = {"atualizacao": 0, "restauracao": 0}
     category_counts = {
@@ -378,13 +420,15 @@ def build_history_export_workbook(
                 item.get("apelido_equipamentos_detalhes"),
                 item.get("apelido_novo") or item.get("apelido_invall"),
                 _export_datetime(item.get("horario")), "Concluído", "",
-                _comparison_source_text_for_display(_export_text(item.get("arquivos_origem"))), "",
+                _comparison_source_text_for_display(_export_text(item.get("arquivos_origem"))),
+                *user_cells(item.get("serie")), "",
             ))
         for index, item in enumerate(alias_reviews):
             alias_rows.append((
                 timestamp, event_type_label, "Para conferência",
                 item.get("serie"), item.get("computador"), "", "", "", None,
                 "Pendente", _history_section_text(item.get("motivo") or "Conferir associação."), "",
+                *user_cells(item.get("serie")),
                 _export_note(comparison, "apelidos_sem_atualizacao", index, item),
             ))
         manual_status = {
@@ -401,7 +445,8 @@ def build_history_export_workbook(
                 item.get("apelido_equipamentos_detalhes"), item.get("apelido_invall"),
                 _export_datetime(item.get("horario_resolucao")),
                 manual_status.get(resolution, _export_text(resolution)),
-                "Diferença entre apelido manual e as planilhas de origem.", "", "",
+                "Diferença entre apelido manual e as planilhas de origem.", "",
+                *user_cells(item.get("serie")), "",
             ))
 
         for category, items, note_category in (
@@ -420,6 +465,7 @@ def build_history_export_workbook(
                         ) if source
                     ),
                     item.get("computador"), item.get("serie"), item.get("local_previsto"),
+                    *user_cells(item.get("serie")),
                     _export_note(comparison, note_category, index, item),
                 ))
 
@@ -432,19 +478,21 @@ def build_history_export_workbook(
                 ),
                 item.get("serie"),
                 _export_datetime(item.get("ultima_verificacao")), item.get("dias_sem_verificacao"),
-                item.get("linha_endpoint"), _export_note(comparison, "sem_acesso_7_dias", index, item),
+                item.get("linha_endpoint"), *user_cells(item.get("serie")),
+                _export_note(comparison, "sem_acesso_7_dias", index, item),
             ))
 
         for index, item in enumerate(local_divergences):
             location_rows.append((
                 timestamp, "Localidade divergente", item.get("computador"),
                 item.get("serie"), item.get("local_previsto"), item.get("local_detalhes"),
-                None, "", _export_note(comparison, "divergencias_local", index, item),
+                None, "", *user_cells(item.get("serie")),
+                _export_note(comparison, "divergencias_local", index, item),
             ))
         for index, item in enumerate(unmapped_series):
             location_rows.append((
                 timestamp, "Série sem local definido", "", item.get("serie"),
-                "", "", item.get("quantidade"), _export_text(item.get("exemplos")),
+                "", "", item.get("quantidade"), _export_text(item.get("exemplos")), "", "",
                 _export_note(comparison, "series_sem_mapeamento", index, item),
             ))
 
@@ -511,33 +559,33 @@ def build_history_export_workbook(
         "Atualizações, linhas que precisam de conferência e divergências manuais registradas.",
         ["Data e hora", "Operação", "Categoria", "Série", "Hostname no Endpoint",
          "Apelido anterior/manual", "Apelido na Simpress", "Apelido no endpoint/novo", "Horário da alteração",
-         "Situação", "Motivo", "Arquivos de origem", "Anotação"],
+         "Situação", "Motivo", "Arquivos de origem", "Usuário logado", "Origem do usuário", "Anotação"],
         alias_rows, "tblHistoricoApelidos",
-        [20, 16, 24, 18, 28, 30, 30, 32, 20, 29, 56, 36, 42],
+        [20, 16, 24, 18, 28, 30, 30, 32, 20, 29, 56, 36, 28, 18, 42],
     )
     _write_export_table_sheet(
         workbook, "Ausências", "Equipamentos ausentes por fonte",
         "Registros sem correspondência segura no endpoint ou na Simpress.",
         ["Data e hora", "Categoria", "Ausente em", "Hostname/Apelido", "Série",
-         "Local previsto", "Anotação"],
+         "Local previsto", "Usuário logado", "Origem do usuário", "Anotação"],
         absence_rows, "tblHistoricoAusencias",
-        [20, 24, 22, 32, 18, 28, 42],
+        [20, 24, 22, 32, 18, 28, 28, 18, 42],
     )
     _write_export_table_sheet(
         workbook, "Sem acesso", "Notebooks sem verificação recente",
         "Notebooks cuja última verificação com êxito ocorreu há pelo menos 7 dias.",
         ["Data e hora", "Operação", "Hostname/Apelido", "Série", "Última verificação com êxito",
-         "Dias sem verificação", "Linha no endpoint", "Anotação"],
+         "Dias sem verificação", "Linha no endpoint", "Usuário logado", "Origem do usuário", "Anotação"],
         no_access_rows, "tblHistoricoSemAcesso",
-        [20, 16, 32, 20, 26, 20, 16, 42],
+        [20, 16, 32, 20, 26, 20, 16, 28, 18, 42],
     )
     _write_export_table_sheet(
         workbook, "Localidades", "Divergências e séries sem local",
         "Diferenças de localidade e prefixos sem regra cadastrada.",
         ["Data e hora", "Categoria", "Computador", "Série", "Local previsto",
-         "Local na Simpress", "Quantidade", "Exemplos", "Anotação"],
+         "Local na Simpress", "Quantidade", "Exemplos", "Usuário logado", "Origem do usuário", "Anotação"],
         location_rows, "tblHistoricoLocalidades",
-        [20, 28, 30, 18, 28, 28, 14, 54, 42],
+        [20, 28, 30, 18, 28, 28, 14, 54, 28, 18, 42],
     )
     _write_export_table_sheet(
         workbook, "Ambiguidades", "Duplicidades e correspondências ambíguas",

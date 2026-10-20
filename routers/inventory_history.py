@@ -9,7 +9,7 @@ from pathlib import Path
 from typing import Any, Callable, Dict, List, Optional, Tuple
 
 from domains import history_restore
-from domains.history_export import _history_display_files, build_history_export_workbook
+from domains.history_export import _history_display_files, build_history_export_workbook, history_export_series
 from domains.history_restore import HistoryRestoreError, comparison_event_type
 from domains.history_annotations import (
     AnnotationReadError, resolve_history_annotations,
@@ -91,6 +91,8 @@ class InventoryHistoryServices:
     transaction_root: Callable[[], Path]
     upload_backups_directory: Callable[[], Path]
     validate_uploaded_workbook: Callable[[bytes, str], Dict[str, Any]]
+    # Current logged user per series (``{serie: {usuario, origem}}``) for the history export.
+    logged_users_for_series: Optional[Callable[[List[str]], Dict[str, Any]]] = None
 
 
 @dataclass(frozen=True)
@@ -438,7 +440,15 @@ def create_inventory_history_router(services: InventoryHistoryServices) -> Tuple
                 display_events.append(event_view)
         if not display_events:
             raise HTTPException(status_code=404, detail="Não há registros de planilhas na data selecionada.")
-        output, filename = build_history_export_workbook(display_events, selected_date)
+        series = history_export_series(display_events)
+        logged_users: Dict[str, Any] = {}
+        lookup_users = getattr(services, "logged_users_for_series", None)
+        if series and lookup_users is not None:
+            try:
+                logged_users = lookup_users(series)
+            except Exception:  # The user columns are informative; the export still works without them.
+                logger.exception("Não foi possível consultar os usuários logados para a exportação do histórico.")
+        output, filename = build_history_export_workbook(display_events, selected_date, logged_users)
         return StreamingResponse(
             output,
             media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",

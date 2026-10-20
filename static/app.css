@@ -332,6 +332,9 @@
     .home-search-card #btn-buscar-serial.home-search-button {
       min-height: 4.25rem; padding: 1.125rem 1.75rem; gap: 0.7rem; font-size: 1rem; line-height: 1.4;
     }
+    /* Shortcut to the full search listing only the equipment without a logged user. */
+    .home-search-card .home-search-no-user { margin-top: 0.75rem; gap: 0.4rem; font-size: 0.8125rem; }
+    .full-search-clear { grid-column: 1 / -1; }
     /* "/" hint for the search shortcut: desktop only, gone while typing or when the clear button shows. */
     .home-search-shortcut {
       position: absolute; top: 50%; right: 1rem; transform: translateY(-50%); pointer-events: none;

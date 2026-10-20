@@ -236,6 +236,10 @@
             <span>Buscar equipamento</span>
           </button>
         </form>
+        <button type="button" id="btn-listar-sem-usuario" data-on-click="abrirEquipamentosSemUsuario" class="home-search-no-user btn btn-tertiary">
+          <i data-lucide="user" class="w-4 h-4" aria-hidden="true"></i>
+          <span>Equipamentos sem usuário</span>
+        </button>
 
         <!-- Autocomplete Suggestions Dropdown -->
         <div
@@ -1747,7 +1751,7 @@ Horário disponível para atendimento:</textarea>
           </button>
         </div>
       </div>
-      <div class="grid grid-cols-1 sm:grid-cols-2 gap-3 py-3 border-b border-slate-800 shrink-0">
+      <div class="grid grid-cols-1 sm:grid-cols-3 gap-3 py-3 border-b border-slate-800 shrink-0">
         <label for="filtro-pesquisa-categoria" class="text-xs text-slate-300">
           Categoria
           <select id="filtro-pesquisa-categoria" data-on-change="alterarFiltrosPesquisaCompleta" class="mt-1 w-full rounded-lg glass-input bg-slate-950 px-3 py-2 text-sm text-white focus:outline-none">
@@ -1764,7 +1768,15 @@ Horário disponível para atendimento:</textarea>
             <option value="">Todas as cidades</option>
           </select>
         </label>
-        <button type="button" id="btn-limpar-filtros-pesquisa" data-on-click="limparFiltrosPesquisaCompleta" class="hidden sm:col-span-2 justify-self-end text-xs text-cyan-300 hover:text-white transition">
+        <label for="filtro-pesquisa-usuario" class="text-xs text-slate-300">
+          Usuário
+          <select id="filtro-pesquisa-usuario" data-on-change="alterarFiltrosPesquisaCompleta" class="mt-1 w-full rounded-lg glass-input bg-slate-950 px-3 py-2 text-sm text-white focus:outline-none">
+            <option value="">Todos os usuários</option>
+            <option value="sem">Sem usuário</option>
+            <option value="com">Com usuário</option>
+          </select>
+        </label>
+        <button type="button" id="btn-limpar-filtros-pesquisa" data-on-click="limparFiltrosPesquisaCompleta" class="hidden full-search-clear justify-self-end text-xs text-cyan-300 hover:text-white transition">
           Limpar filtros
         </button>
       </div>
