@@ -7,6 +7,23 @@
   const { app, appState } = context;
   const { escapeHtml } = context.dom;
 
+  // "2026-10-20T09:15:00-03:00" -> "20/10/2026", read as written so the time zone never shifts the day.
+  const dataInformada = valor => {
+    const partes = /^(\d{4})-(\d{2})-(\d{2})/.exec(String(valor || "").trim());
+    return partes ? `${partes[3]}/${partes[2]}/${partes[1]}` : "";
+  };
+  // Manual users saved before the date was recorded have none.
+  const tituloManual = informadoEm => {
+    const data = dataInformada(informadoEm);
+    return data ? `Informado manualmente em ${data}` : "Informado manualmente (data não registrada)";
+  };
+  // A series repeated in the Endpoint: its users are shown, none is chosen as the logged user.
+  const textoAmbiguo = candidatos => {
+    const lista = (Array.isArray(candidatos) ? candidatos : []).map(item => String(item || "").trim()).filter(Boolean);
+    return lista.length ? `Endpoint ambíguo: ${lista.join(" / ")}` : "";
+  };
+  const TITULO_AMBIGUO = "A série aparece em mais de uma linha do Endpoint; nenhum usuário foi escolhido automaticamente.";
+
   // Empty placeholder filled by conectar(); a row without a series gets none. `sugestao` is a manual user
   // archived when the Endpoint informed one: it only pre-fills the field, and nothing is saved until confirmed.
   const marcador = (serie, { sugestao = "" } = {}) => String(serie || "").trim()
@@ -29,20 +46,30 @@
       marcadores().filter(item => item.dataset.loggedUserSerie === serie).forEach(item => {
         const usuario = String(info.usuario || "").trim();
         const editavel = Boolean(info.serial_cadastro);
+        const manual = info.origem === "manual";
+        const ambiguo = textoAmbiguo(info.candidatos);
+        const avisoAmbiguo = ambiguo
+          ? `<span class="logged-user-ambiguous" data-logged-user-ambiguous title="${escapeHtml(TITULO_AMBIGUO)}">${escapeHtml(ambiguo)}</span>`
+          : "";
         if (usuario) {
-          item.innerHTML = `<span class="logged-user-row"><span data-logged-user-value>Usuário: ${escapeHtml(usuario)}${info.origem === "manual" ? " (M)" : ""}</span>${info.origem === "manual" && editavel
+          const titulo = manual ? tituloManual(info.informado_em) : "";
+          item.innerHTML = `<span class="logged-user-row"><span data-logged-user-value${titulo ? ` title="${escapeHtml(titulo)}"` : ""}>Usuário: ${escapeHtml(usuario)}${manual
+            ? ` (M)<span class="sr-only">, ${escapeHtml(titulo.toLowerCase())}</span>`
+            : ""}</span>${manual && editavel
             ? `<button type="button" class="btn btn-tertiary equipment-user-button" data-logged-user-edit title="Alterar o usuário informado manualmente">Editar</button>`
-            : ""}</span>`;
+            : ""}</span>${avisoAmbiguo}`;
         } else if (editavel) {
           const sugestao = String(item.dataset.loggedUserSugestao || "").trim();
-          item.innerHTML = `${sugestao
+          item.innerHTML = `${avisoAmbiguo}${sugestao
             ? `<span class="logged-user-hint" data-logged-user-archived>Manual arquivado: ${escapeHtml(sugestao)}. Confirme para restaurar.</span>`
             : ""}${formularioUsuario(serie, sugestao, sugestao ? "Restaurar manual" : "Salvar usuário")}`;
+        } else if (ambiguo) {
+          item.innerHTML = avisoAmbiguo;
         } else {
           item.textContent = "Sem usuário no Endpoint";
         }
         item.querySelector("[data-logged-user-edit]")?.addEventListener("click", () => {
-          item.innerHTML = formularioUsuario(serie, usuario);
+          item.innerHTML = avisoAmbiguo + formularioUsuario(serie, usuario);
           conectarFormulario(item, serie);
           item.querySelector("input")?.select();
         });
@@ -82,7 +109,13 @@
           const equipamento = data.equipamento || {};
           // Every copy of the same equipment (desktop table, mobile card, other sections) shows the new user.
           Object.keys(usuarios).filter(chave => usuarios[chave]?.serial_cadastro === serialCadastro).forEach(chave => {
-            usuarios[chave] = { ...usuarios[chave], usuario: equipamento.usuarios_logados || "", origem: equipamento.usuarios_logados_origem || "" };
+            usuarios[chave] = {
+              ...usuarios[chave],
+              usuario: equipamento.usuarios_logados || "",
+              origem: equipamento.usuarios_logados_origem || "",
+              informado_em: equipamento.usuarios_logados_informado_em || "",
+              candidatos: equipamento.usuarios_logados_candidatos || usuarios[chave]?.candidatos || [],
+            };
             mostrar(chave);
           });
           if (appState.currentEquipamento && appState.currentEquipamento.serial === equipamento.serial) {
@@ -112,5 +145,5 @@
       .catch(error => console.error("Erro ao consultar usuários logados:", error));
   }
 
-  return { marcador, conectar };
+  return { marcador, conectar, tituloManual, textoAmbiguo, TITULO_AMBIGUO };
 });
