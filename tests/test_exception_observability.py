@@ -30,6 +30,7 @@ class ExceptionObservabilityTests(unittest.TestCase):
         self.root = Path(self.enterContext(tempfile.TemporaryDirectory()))
         self.file = self.root / "fixture.xlsx"
         self.file.write_bytes(b"synthetic workbook")
+        self.enterContext(patch.object(main, "MANUAL_USERS_FILE", self.root / "usuarios_manuais.json"))
 
     def assert_safe_log(self, captured, *context):
         text = "\n".join(captured.output)

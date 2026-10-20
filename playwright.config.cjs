@@ -1,4 +1,5 @@
 const { defineConfig } = require("@playwright/test");
+const fixtureUrl = `http://127.0.0.1:${process.env.SIMPRESS_UI_FIXTURE_PORT || "8765"}`;
 
 const fixturePython = process.env.PYTHON
   ? `"${process.env.PYTHON}"`
@@ -16,7 +17,7 @@ module.exports = defineConfig({
   reporter: [["list"], ["html", { outputFolder: "playwright-report", open: "never" }]],
   outputDir: "test-results",
   use: {
-    baseURL: "http://127.0.0.1:8765",
+    baseURL: fixtureUrl,
     headless: true,
     trace: "retain-on-failure",
     screenshot: "only-on-failure",
@@ -40,8 +41,8 @@ module.exports = defineConfig({
   ],
   webServer: {
     command: `${fixturePython} -B tests/support/serve_ui_motion_preview.py`,
-    url: "http://127.0.0.1:8765/",
+    url: `${fixtureUrl}/`,
     reuseExistingServer: false,
-    timeout: 30_000,
+    timeout: 60_000,
   },
 });

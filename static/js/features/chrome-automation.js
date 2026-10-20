@@ -21,7 +21,7 @@
   });
   const POLL_ATIVO_MS = 1500;
   const POLL_LIVRE_MS = 5000;
-  const MAX_LINHAS = 2000;
+  const MAX_LINHAS = 500;
 
   const estado = {
     offset: 0,
@@ -32,6 +32,10 @@
     // null until the first state arrives, so the history loads once even with no runs.
     ultimaExecucaoId: null,
     acompanharFim: false,
+    linhasAoVivo: [], logHistorico: null, execucaoSelecionada: "",
+    consultaLog: 0, consultaHistorico: 0, consultaOpcoes: 0,
+    pagina: 1, paginas: 1, limite: 5, filtros: {},
+    logPagina: 1, logPaginas: 1, ampliado: "",
   };
 
   function painel() {
@@ -102,19 +106,150 @@
 
   function acrescentarLinhas(log) {
     const area = document.getElementById("automacao-log");
-    const arquivo = document.getElementById("automacao-log-arquivo");
     if (!area || !log) return;
-    if (log.reiniciado || log.arquivo !== estado.arquivo) area.textContent = "";
+    if (log.reiniciado || log.arquivo !== estado.arquivo) estado.linhasAoVivo = [];
     estado.arquivo = log.arquivo || "";
     estado.offset = Number(log.offset) || 0;
-    if (arquivo) arquivo.textContent = estado.arquivo ? `Arquivo: ${estado.arquivo}` : "Nenhuma execução registrada ainda.";
     const linhas = Array.isArray(log.linhas) ? log.linhas : [];
-    if (!linhas.length) return;
+    estado.linhasAoVivo = estado.linhasAoVivo.concat(linhas).slice(-MAX_LINHAS);
+    if (!estado.execucaoSelecionada) mostrarLogAutomacao();
+  }
+
+  function valor(id) { return document.getElementById(id)?.value || ""; }
+
+  function mostrarLogAutomacao() {
+    const area = document.getElementById("automacao-log");
+    if (!area) return;
+    const historico = Boolean(estado.execucaoSelecionada);
+    const limite = Number(valor("automacao-log-limite")) || 200;
+    const dados = estado.logHistorico;
+    const linhas = historico ? (dados?.linhas || []) : estado.linhasAoVivo;
+    const arquivo = historico ? (dados?.arquivo || "") : estado.arquivo;
     const noFim = area.scrollHeight - area.scrollTop - area.clientHeight < 24;
-    const atual = area.textContent ? area.textContent.split("\n") : [];
-    const todas = atual.concat(linhas).slice(-MAX_LINHAS);
-    area.textContent = todas.join("\n");
-    if (noFim) area.scrollTop = area.scrollHeight;
+    const texto = linhas.slice(-limite).join("\n");
+    area.setAttribute("aria-live", historico ? "off" : "polite");
+    if (area.textContent !== texto) area.textContent = texto;
+    if (!historico && noFim) area.scrollTop = area.scrollHeight;
+    const arquivoElemento = document.getElementById("automacao-log-arquivo");
+    const arquivoTexto = arquivo ? `Arquivo: ${arquivo}` : "Nenhum log disponível.";
+    if (arquivoElemento.textContent !== arquivoTexto) arquivoElemento.textContent = arquivoTexto;
+    const resumo = dados?.execucao;
+    const modoTexto = historico
+      ? `Histórico · ${resumo ? `${ROTINAS[resumo.rotina] || resumo.rotina} · ${formatarHora(resumo.inicio)}` : "Consultando execução"} · últimas ${Math.min(limite, linhas.length)} linhas${dados?.limitado ? " (trecho final)" : ""}`
+      : `Ao vivo · últimas ${Math.min(limite, linhas.length)} linhas`;
+    const modo = document.getElementById("automacao-log-modo");
+    // Do not announce the same status again on every polling response.
+    if (modo.textContent !== modoTexto) modo.textContent = modoTexto;
+    document.getElementById("automacao-log-ao-vivo").hidden = !historico;
+  }
+
+  function alterarLimiteLogAutomacao() { mostrarLogAutomacao(); }
+
+  async function selecionarLogAutomacao(id) {
+    if (!id) return;
+    const consulta = ++estado.consultaLog;
+    estado.execucaoSelecionada = id;
+    estado.logHistorico = null;
+    mostrarLogAutomacao();
+    try {
+      const dados = await app.apiFetch(`/api/automacao/execucoes/${encodeURIComponent(id)}/log?linhas=500`, {errorMessage: "Não foi possível abrir o log selecionado."});
+      if (consulta !== estado.consultaLog) return;
+      estado.logHistorico = dados;
+      mostrarLogAutomacao();
+    } catch (err) {
+      if (consulta !== estado.consultaLog) return;
+      document.getElementById("automacao-log").textContent = err.message;
+      document.getElementById("automacao-log-modo").textContent = "Histórico · erro ao consultar";
+    }
+  }
+
+  function voltarAoVivoAutomacao() {
+    ++estado.consultaLog;
+    estado.execucaoSelecionada = "";
+    estado.logHistorico = null;
+    document.getElementById("automacao-log-execucao").value = "";
+    mostrarLogAutomacao();
+    atualizarEstadoAutomacao();
+  }
+
+  async function consultarExecucoesLog() {
+    const consulta = ++estado.consultaOpcoes;
+    const select = document.getElementById("automacao-log-execucao");
+    const data = valor("automacao-log-data");
+    select.replaceChildren(new Option(data ? "Carregando execuções…" : "Selecione uma data", ""));
+    select.disabled = true;
+    document.getElementById("automacao-log-paginas").hidden = true;
+    if (!data) return;
+    try {
+      const params = new URLSearchParams({limite: "20", pagina: String(estado.logPagina), data_inicio: data, data_fim: data});
+      const dados = await app.apiFetch(`/api/automacao/historico?${params}`, {errorMessage: "Não foi possível listar as execuções desta data."});
+      if (consulta !== estado.consultaOpcoes) return;
+      const execucoes = dados.execucoes || [];
+      select.replaceChildren(new Option(execucoes.length ? "Selecione uma execução" : "Nenhuma execução nesta data", ""));
+      execucoes.forEach(item => select.add(new Option(`${formatarHora(item.inicio)} · ${ROTINAS[item.rotina] || item.rotina} · ${STATUS[item.status] || item.status}`, item.id)));
+      select.disabled = !execucoes.length;
+      if (execucoes.some(item => item.id === estado.execucaoSelecionada)) select.value = estado.execucaoSelecionada;
+      estado.logPagina = dados.pagina || 1;
+      estado.logPaginas = dados.paginas || 1;
+      document.getElementById("automacao-log-paginas").hidden = estado.logPaginas <= 1;
+      document.getElementById("automacao-log-pagina").textContent = `${estado.logPagina} de ${estado.logPaginas}`;
+      document.getElementById("automacao-log-anterior").disabled = estado.logPagina >= estado.logPaginas;
+      document.getElementById("automacao-log-proxima").disabled = estado.logPagina <= 1;
+    } catch (err) {
+      if (consulta !== estado.consultaOpcoes) return;
+      select.replaceChildren(new Option(err.message, ""));
+    }
+  }
+
+  function carregarExecucoesLogAutomacao() { estado.logPagina = 1; return consultarExecucoesLog(); }
+  function mudarPaginaLogAutomacao(direcao) {
+    estado.logPagina = Math.max(1, Math.min(estado.logPaginas, estado.logPagina - Number(direcao)));
+    return consultarExecucoesLog();
+  }
+
+  async function abrirLogExecucaoAutomacao(id, inicio) {
+    const data = new Date(inicio);
+    if (!Number.isNaN(data.getTime())) document.getElementById("automacao-log-data").value = `${data.getFullYear()}-${String(data.getMonth() + 1).padStart(2, "0")}-${String(data.getDate()).padStart(2, "0")}`;
+    if (document.getElementById("automacao-andamento-conteudo").hidden) recolherPainelAutomacao("andamento");
+    document.getElementById("automacao-log-filtros").open = true;
+    await Promise.all([selecionarLogAutomacao(id), carregarExecucoesLogAutomacao()]);
+    document.getElementById("automacao-andamento-painel").scrollIntoView({block: "start"});
+    document.getElementById("automacao-log").focus({preventScroll: true});
+  }
+
+  function recolherPainelAutomacao(nome) {
+    if (!["andamento", "historico"].includes(nome)) return;
+    const conteudo = document.getElementById(`automacao-${nome}-conteudo`);
+    const botao = document.querySelector(`[aria-controls="${conteudo.id}"]`);
+    if (estado.ampliado === nome) ampliarPainelAutomacao(nome);
+    conteudo.hidden = !conteudo.hidden;
+    botao.setAttribute("aria-expanded", String(!conteudo.hidden));
+    botao.textContent = conteudo.hidden ? "Expandir" : "Recolher";
+    botao.setAttribute("aria-label", `${conteudo.hidden ? "Expandir" : "Recolher"} ${nome === "andamento" ? "Andamento" : "Últimas execuções"}`);
+  }
+
+  function ampliarPainelAutomacao(nome) {
+    if (!["andamento", "historico"].includes(nome)) return;
+    const estavaAmpliado = estado.ampliado === nome;
+    if (estado.ampliado) {
+      const anterior = document.getElementById(`automacao-${estado.ampliado}-painel`);
+      anterior.classList.remove("automation-card--expanded");
+      const botao = anterior.querySelector('[aria-pressed]');
+      botao.setAttribute("aria-pressed", "false");
+      botao.textContent = "Ampliar";
+      botao.setAttribute("aria-label", `Ampliar ${estado.ampliado === "andamento" ? "Andamento" : "Últimas execuções"}`);
+      estado.ampliado = "";
+    }
+    if (estavaAmpliado) return;
+    if (document.getElementById(`automacao-${nome}-conteudo`).hidden) recolherPainelAutomacao(nome);
+    const card = document.getElementById(`automacao-${nome}-painel`);
+    card.classList.add("automation-card--expanded");
+    const botao = card.querySelector('[aria-pressed]');
+    botao.setAttribute("aria-pressed", "true");
+    botao.textContent = "Restaurar";
+    botao.setAttribute("aria-label", `Restaurar ${nome === "andamento" ? "Andamento" : "Últimas execuções"}`);
+    estado.ampliado = nome;
+    card.scrollIntoView({block: "start"});
   }
 
   function celula(rotulo, conteudo) {
@@ -129,14 +264,14 @@
     const host = document.getElementById("automacao-historico");
     if (!host) return;
     if (!execucoes.length) {
-      host.replaceChildren(dom.createTextElement("p", "ux-home-note", "Nenhuma execução registrada ainda."));
+      host.replaceChildren(dom.createTextElement("p", "ux-home-note", "Nenhuma execução encontrada para os filtros selecionados."));
       return;
     }
     const tabela = document.createElement("table");
     tabela.className = "automation-history-table";
     const cabecalho = document.createElement("thead");
     const linhaCabecalho = document.createElement("tr");
-    ["Rotina", "Início", "Duração", "Status", "Lotes", "Capturas"].forEach(texto => {
+    ["Rotina", "Início", "Duração", "Status", "Lotes", "Capturas", "Log"].forEach(texto => {
       const th = dom.createTextElement("th", "", texto);
       th.scope = "col";
       linhaCabecalho.appendChild(th);
@@ -167,6 +302,11 @@
         capturas.appendChild(link);
       });
       if (!capturas.childNodes.length) capturas.textContent = "—";
+      const verLog = dom.createTextElement("button", "btn btn-secondary", "Ver log");
+      verLog.type = "button";
+      verLog.dataset.onClick = "abrirLogExecucaoAutomacao";
+      verLog.dataset.args = JSON.stringify([execucao.id, execucao.inicio]);
+      verLog.setAttribute("aria-label", `Ver log de ${ROTINAS[execucao.rotina] || execucao.rotina} em ${formatarHora(execucao.inicio)}`);
       linha.append(
         celula("Rotina", rotina),
         celula("Início", formatarHora(execucao.inicio) || "—"),
@@ -174,6 +314,7 @@
         celula("Status", statusBloco),
         celula("Lotes", lotes),
         celula("Capturas", capturas),
+        celula("Log", verLog),
       );
       corpo.appendChild(linha);
     });
@@ -182,16 +323,60 @@
   }
 
   async function carregarHistoricoAutomacao() {
+    const consulta = ++estado.consultaHistorico;
     try {
-      const dados = await app.apiFetch("/api/automacao/historico?limite=15", {
+      const params = new URLSearchParams({limite: String(estado.limite), pagina: String(estado.pagina), ...estado.filtros});
+      const dados = await app.apiFetch(`/api/automacao/historico?${params}`, {
         errorMessage: "Não foi possível carregar o histórico da automação.",
       });
+      if (consulta !== estado.consultaHistorico) return;
       renderizarHistorico(Array.isArray(dados.execucoes) ? dados.execucoes : []);
+      estado.pagina = dados.pagina || 1;
+      estado.paginas = dados.paginas || 1;
+      document.getElementById("automacao-historico-pagina").textContent = `Página ${estado.pagina} de ${estado.paginas}`;
+      document.getElementById("automacao-historico-anterior").disabled = estado.pagina <= 1;
+      document.getElementById("automacao-historico-proxima").disabled = estado.pagina >= estado.paginas;
+      const filtros = estado.filtros;
+      const resumo = [`${dados.total ?? dados.execucoes?.length ?? 0} execuções`];
+      if (filtros.data_inicio) resumo.push(`de ${filtros.data_inicio.split("-").reverse().join("/")}`);
+      if (filtros.data_fim) resumo.push(`até ${filtros.data_fim.split("-").reverse().join("/")}`);
+      if (filtros.rotina) resumo.push(ROTINAS[filtros.rotina]);
+      if (filtros.status) resumo.push(STATUS[filtros.status]);
+      document.getElementById("automacao-historico-resumo").textContent = resumo.join(" · ");
     } catch (err) {
+      if (consulta !== estado.consultaHistorico) return;
       console.error("Erro ao carregar o histórico da automação:", err);
       const host = document.getElementById("automacao-historico");
       if (host) host.replaceChildren(dom.createTextElement("p", "ux-home-note", err.message));
+      document.getElementById("automacao-historico-resumo").textContent = "Não foi possível atualizar a consulta.";
+      document.getElementById("automacao-historico-anterior").disabled = true;
+      document.getElementById("automacao-historico-proxima").disabled = true;
     }
+  }
+
+  function filtrarHistoricoAutomacao() {
+    const inicio = valor("automacao-historico-inicio");
+    const fim = valor("automacao-historico-fim");
+    if (inicio && fim && inicio > fim) {
+      document.getElementById("automacao-historico-resumo").textContent = "A data inicial deve ser anterior ou igual à data final.";
+      document.getElementById("automacao-historico-fim").focus();
+      return;
+    }
+    estado.filtros = Object.fromEntries(Object.entries({data_inicio: inicio, data_fim: fim,
+      rotina: valor("automacao-historico-rotina"), status: valor("automacao-historico-status")}).filter(([, v]) => v));
+    estado.limite = Number(valor("automacao-historico-limite")) || 5;
+    estado.pagina = 1;
+    return carregarHistoricoAutomacao();
+  }
+
+  function limparFiltrosAutomacao() {
+    ["inicio", "fim", "rotina", "status"].forEach(campo => { document.getElementById(`automacao-historico-${campo}`).value = ""; });
+    return filtrarHistoricoAutomacao();
+  }
+
+  function mudarPaginaHistoricoAutomacao(direcao) {
+    estado.pagina = Math.max(1, Math.min(estado.paginas, estado.pagina + Number(direcao)));
+    return carregarHistoricoAutomacao();
   }
 
   function agendar() {
@@ -295,6 +480,12 @@
     document.addEventListener("visibilitychange", () => {
       if (painelVisivel()) atualizarEstadoAutomacao();
     });
+    document.addEventListener("keydown", event => {
+      if (event.key !== "Escape" || !estado.ampliado || !painelVisivel()) return;
+      const card = document.getElementById(`automacao-${estado.ampliado}-painel`);
+      ampliarPainelAutomacao(estado.ampliado);
+      card.querySelector('[aria-pressed]').focus();
+    });
     if (painelVisivel()) atualizarEstadoAutomacao();
   }
 
@@ -304,5 +495,9 @@
     cancelarRotinaAutomacao,
     atualizarEstadoAutomacao,
     carregarHistoricoAutomacao,
+    filtrarHistoricoAutomacao, limparFiltrosAutomacao, mudarPaginaHistoricoAutomacao,
+    carregarExecucoesLogAutomacao, mudarPaginaLogAutomacao, selecionarLogAutomacao,
+    abrirLogExecucaoAutomacao, voltarAoVivoAutomacao, alterarLimiteLogAutomacao,
+    recolherPainelAutomacao, ampliarPainelAutomacao,
   };
 });
