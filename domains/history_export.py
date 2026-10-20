@@ -61,7 +61,7 @@ _USER_CHANGE_LABELS = {
 }
 
 
-def _export_user(user: Any, origin: Any) -> str:
+def _export_change_user(user: Any, origin: Any) -> str:
     text = _export_text(user).strip()
     return f"{text} (M)" if text and origin == "manual" else text
 
@@ -402,8 +402,8 @@ def build_history_export_workbook(
                 timestamp, event_type_label,
                 _USER_CHANGE_LABELS.get(str(item.get("tipo") or ""), _export_text(item.get("tipo"))),
                 item.get("serie"), item.get("computador"),
-                _export_user(item.get("usuario_anterior"), item.get("origem_anterior")),
-                _export_user(item.get("usuario_novo"), item.get("origem_nova")),
+                _export_change_user(item.get("usuario_anterior"), item.get("origem_anterior")),
+                _export_change_user(item.get("usuario_novo"), item.get("origem_nova")),
                 _history_section_text(item.get("motivo")),
                 _export_note(comparison, "mudancas_usuarios", index, item),
             ))
