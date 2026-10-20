@@ -332,6 +332,9 @@
     .home-search-card #btn-buscar-serial.home-search-button {
       min-height: 4.25rem; padding: 1.125rem 1.75rem; gap: 0.7rem; font-size: 1rem; line-height: 1.4;
     }
+    /* Shortcut to the full search listing only the equipment without a logged user. */
+    .home-search-card .home-search-no-user { margin-top: 0.75rem; gap: 0.4rem; font-size: 0.8125rem; }
+    .full-search-clear { grid-column: 1 / -1; }
     /* "/" hint for the search shortcut: desktop only, gone while typing or when the clear button shows. */
     .home-search-shortcut {
       position: absolute; top: 50%; right: 1rem; transform: translateY(-50%); pointer-events: none;
@@ -608,6 +611,11 @@
     .logged-user { display: block; margin-top: 0.2rem; color: var(--text-muted); font-family: inherit; font-size: 0.6875rem; font-weight: 400; white-space: normal; }
     .logged-user:empty { display: none; }
     .logged-user-row { display: inline-flex; flex-wrap: wrap; align-items: center; gap: 0.25rem 0.4rem; }
+    .logged-user-hint { display: block; color: var(--ux-warning-fg); }
+    /* Série repetida no Endpoint: candidatos exibidos sem escolha automática. */
+    .logged-user-ambiguous { display: block; color: var(--ux-warning-fg); overflow-wrap: anywhere; cursor: help; }
+    .equipment-detail.equipment-user-ambiguous { color: var(--ux-warning-fg); }
+    [data-logged-user-value][title] { cursor: help; }
     .logged-user-form { display: flex; flex-wrap: wrap; align-items: center; gap: 0.3rem; margin-top: 0.2rem; animation: equipment-user-in 200ms ease-out; }
     .logged-user-form .equipment-user-input { min-width: 8rem; flex: 1 1 8rem; max-width: 14rem; font-family: inherit; }
     @media (prefers-reduced-motion: reduce) { .logged-user-form { animation: none; } }

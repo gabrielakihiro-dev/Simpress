@@ -62,7 +62,11 @@ def build_search_index(
             normalize(alias),
             normalize(city),
             normalize(category_label),
-            normalize(item.get("usuarios_logados") or ""),
+            # Ambiguous Endpoint candidates are searchable too, although none is the logged user.
+            normalize(" ".join([
+                str(item.get("usuarios_logados") or ""),
+                *(str(user) for user in item.get("usuarios_logados_candidatos") or []),
+            ])),
         )
         result = {
             "serial": serial,
@@ -74,6 +78,8 @@ def build_search_index(
             "retirada_cnpj": str(item.get("retirada_cnpj") or ""),
             "usuarios_logados": str(item.get("usuarios_logados") or ""),
             "usuarios_logados_origem": str(item.get("usuarios_logados_origem") or ""),
+            "usuarios_logados_informado_em": str(item.get("usuarios_logados_informado_em") or ""),
+            "usuarios_logados_candidatos": [str(user) for user in item.get("usuarios_logados_candidatos") or []],
             "invall_alias_status": item.get("invall_alias_status"),
             "invall_alias_detail": item.get("invall_alias_detail"),
         }

@@ -782,6 +782,9 @@ def read_endpoint_alias_index() -> Dict[str, Any]:
         # Um arquivo manual ilegível não pode impedir o carregamento do inventário.
         logger.warning("Usuários manuais ignorados: %s", error)
         index["manual_users"] = {}
+    index["manual_user_dates"] = user_changes.manual_user_dates_by_serial(
+        index["manual_users"], user_changes.read_manual_user_dates(MANUAL_USERS_FILE),
+    )
     return index
 
 
@@ -1929,6 +1932,7 @@ _inventory_update_services = InventoryUpdateServices(
     external_errors=(HTTPException,),
     alias_history_file=lambda: ALIAS_HISTORY_FILE,
     removed_endpoint_hostnames=lambda: removed_endpoint_hostname_keys(),
+    manual_users_file=lambda: MANUAL_USERS_FILE,
 )
 
 
@@ -2035,6 +2039,11 @@ def _buscar_equipamentos_por_termo(q: str) -> List[Dict[str, Any]]:
     return search_normalized_equipment_index(current_index, term)
 
 
+def _listar_equipamentos_indexados() -> List[Dict[str, Any]]:
+    """Todos os equipamentos da base na ordem do índice de busca."""
+    return [entry[2] for entry in inventory_state.current_search_index(_inventory_state_services)]
+
+
 def _get_stats_snapshot() -> Dict[str, Any]:
     export_counts = count_export_changes()
     export_status = get_export_status()
@@ -2097,6 +2106,7 @@ equipment_search_router, _equipment_search_exports = create_equipment_search_rou
     normalize=_normalizar_termo_busca,
     categories=_CATEGORIAS_EQUIPAMENTO,
     get_stats=_get_stats_snapshot,
+    list_all=_listar_equipamentos_indexados,
 ))
 buscar_seriais = _equipment_search_exports.buscar_seriais
 buscar_seriais_expandida = _equipment_search_exports.buscar_seriais_expandida
@@ -2245,6 +2255,7 @@ inventory_history_router, _inventory_history_exports = create_inventory_history_
     transaction_root=lambda: TRANSACTION_ROOT,
     upload_backups_directory=lambda: UPLOAD_BACKUPS_DIR,
     validate_uploaded_workbook=lambda *args, **kwargs: validate_uploaded_workbook(*args, **kwargs),
+    logged_users_for_series=lambda series: user_changes.logged_users_for_series(_alias_change_services, series)["usuarios"],
 ))
 flush_pending_history_annotations = _inventory_history_exports.flush_pending_history_annotations
 migrate_legacy_history_annotations = _inventory_history_exports.migrate_legacy_history_annotations

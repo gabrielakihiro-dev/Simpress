@@ -115,8 +115,16 @@
     const formulario = document.getElementById("form-usuario-manual");
     const usuario = String(eq?.usuarios_logados || "").trim();
     const manual = eq?.usuarios_logados_origem === "manual";
-    texto.textContent = usuario ? `Usuários logados: ${usuario}${manual ? " (M)" : ""}` : "";
-    texto.classList.toggle("hidden", !usuario);
+    // Série repetida no Endpoint: mostra os candidatos sem escolher um; o manual continua possível.
+    const marcadores = context.loggedUserMarkers;
+    const ambiguo = marcadores?.textoAmbiguo?.(eq?.usuarios_logados_candidatos) || "";
+    const titulo = [manual ? marcadores?.tituloManual?.(eq?.usuarios_logados_informado_em) : "", ambiguo ? marcadores?.TITULO_AMBIGUO : ""]
+      .filter(Boolean).join(". ");
+    texto.textContent = [usuario ? `Usuários logados: ${usuario}${manual ? " (M)" : ""}` : "", ambiguo].filter(Boolean).join(" · ");
+    if (titulo) texto.title = titulo;
+    else texto.removeAttribute("title");
+    texto.classList.toggle("equipment-user-ambiguous", Boolean(ambiguo) && !usuario);
+    texto.classList.toggle("hidden", !usuario && !ambiguo);
     acoes.classList.toggle("hidden", !manual);
     // Sem usuário no Endpoint nem manual: mostra o campo para digitar.
     formulario.classList.toggle("hidden", Boolean(usuario) || !eq?.serial);

@@ -6,6 +6,9 @@
 })(typeof window !== "undefined" ? window : globalThis, function createEquipmentSearchRenderers(context) {
   "use strict";
   const { escapeHtml, highlightMatch } = context.dom;
+  // Read when rendering: app.js sets context.loggedUserMarkers after this module loads.
+  const tituloManual = informadoEm => context.loggedUserMarkers?.tituloManual?.(informadoEm) || "Usuário logado informado manualmente";
+  const textoAmbiguo = candidatos => context.loggedUserMarkers?.textoAmbiguo?.(candidatos) || "";
 
   function conteudoLinhaResultado(item, currentQuery) {
     let tipoIcon = "laptop";
@@ -43,9 +46,15 @@
               </span>
             ` : ""}
             ${String(item.usuarios_logados || "").trim() ? `
-              <span class="autocomplete-user inline-flex items-center gap-1 text-[11px] px-2 py-0.5 rounded-md bg-slate-900/90 text-slate-200 border border-slate-600/60 shrink-0" title="${item.usuarios_logados_origem === "manual" ? "Usuário logado informado manualmente" : "Usuário logado no Endpoint"}">
+              <span class="autocomplete-user inline-flex items-center gap-1 text-[11px] px-2 py-0.5 rounded-md bg-slate-900/90 text-slate-200 border border-slate-600/60 shrink-0" title="${escapeHtml(item.usuarios_logados_origem === "manual" ? tituloManual(item.usuarios_logados_informado_em) : "Usuário logado no Endpoint")}">
                 <i data-lucide="user" class="w-2.5 h-2.5 text-slate-400" aria-hidden="true"></i>
                 <span>${highlightMatch(String(item.usuarios_logados).trim(), currentQuery)}${item.usuarios_logados_origem === "manual" ? " (M)" : ""}</span>
+              </span>
+            ` : ""}
+            ${textoAmbiguo(item.usuarios_logados_candidatos) ? `
+              <span class="autocomplete-user autocomplete-user-ambiguous inline-flex items-center gap-1 text-[11px] px-2 py-0.5 rounded-md text-amber-300 bg-amber-500/10 border border-amber-500/25 shrink-0" title="${escapeHtml(context.loggedUserMarkers?.TITULO_AMBIGUO || "")}">
+                <i data-lucide="alert-triangle" class="w-2.5 h-2.5 text-amber-400" aria-hidden="true"></i>
+                <span>${highlightMatch(textoAmbiguo(item.usuarios_logados_candidatos), currentQuery)}</span>
               </span>
             ` : ""}
             ${item.invall_alias_status && item.invall_alias_status !== "aplicado" ? `
@@ -89,6 +98,7 @@
       item.modelo,
       item.apelido,
       item.usuarios_logados ? `usuário ${String(item.usuarios_logados).trim()}` : "",
+      textoAmbiguo(item.usuarios_logados_candidatos),
       item.retirada_cidade,
     ].filter(Boolean).join(", "));
     row.dataset.resultIndex = String(index);

@@ -47,6 +47,10 @@ PREVIOUS_EVENT = {
 DEMO_ANNOTATION = ""
 # Manual logged users saved from the comparison result; fixture memory only.
 FIXTURE_MANUAL_USERS = {}
+FIXTURE_MANUAL_DATE = "2026-10-20T09:00:00-03:00"
+FIXTURE_MANUAL_DATES = {}
+# Fictional series repeated in the Endpoint: its users are listed, none is chosen.
+FIXTURE_AMBIGUOUS_USERS = {"DEMO-SN-001": ["usuario.a", "usuario.b"]}
 TICKET_REPORT = {
     "atualizado_em": "2026-10-09T12:00:00Z",
     "fontes": {
@@ -238,10 +242,22 @@ class Handler(BaseHTTPRequestHandler):
         elif path in ("/api/buscar", "/api/buscar-expandida"):
             params = parse_qs(url.query)
             time.sleep(2)
-            # Fictional logged user, shown beside the hostname in the result row.
+            # Fictional logged user, shown beside the hostname in the result row; "manual" and
+            # "ambiguo" in the query show a manual user with its date and ambiguous Endpoint users.
+            term = params.get("q", [""])[0].lower()
             item = {**EQUIPMENT, "usuarios_logados": "usuario.demo", "usuarios_logados_origem": "endpoint"}
+            if "manual" in term:
+                item.update(usuarios_logados_origem="manual", usuarios_logados_informado_em=FIXTURE_MANUAL_DATE)
+            if "ambiguo" in term:
+                item.update(usuarios_logados="", usuarios_logados_origem="",
+                            usuarios_logados_candidatos=["usuario.a", "usuario.b"])
+            if params.get("usuario", [""])[0] == "sem":
+                # "Sem usuário" filter: a fictional equipment with neither an Endpoint nor a manual user.
+                item = {**EQUIPMENT, "serial": "DEMO-SEM-USUARIO", "apelido": "PRNOTEDEMO02",
+                        "usuarios_logados": "", "usuarios_logados_origem": ""}
             self.send({"items": [item], "total": 1, "has_more": False,
-                       "filters": {"categories": [], "cities": []}, "query": params.get("q", [""])[0]})
+                       "filters": {"categories": [], "cities": [], "users": {"sem": 1, "com": 1}},
+                       "query": params.get("q", [""])[0]})
         else:
             self.send({"detail": "Endpoint de teste não encontrado"}, 404)
 
@@ -297,14 +313,19 @@ class Handler(BaseHTTPRequestHandler):
                 self.send({"usuarios": {
                     serie: {"usuario": FIXTURE_MANUAL_USERS.get(serie, ""),
                             "origem": "manual" if FIXTURE_MANUAL_USERS.get(serie) else "",
-                            "serial_cadastro": serie}
+                            "serial_cadastro": serie,
+                            "informado_em": FIXTURE_MANUAL_DATES.get(serie, "") if FIXTURE_MANUAL_USERS.get(serie) else "",
+                            "candidatos": FIXTURE_AMBIGUOUS_USERS.get(serie, [])}
                     for serie in body.get("series", [])
                 }})
             else:
                 FIXTURE_MANUAL_USERS[body["serial"]] = body.get("usuario", "")
+                FIXTURE_MANUAL_DATES[body["serial"]] = FIXTURE_MANUAL_DATE
                 self.send({"sucesso": True, "equipamento": {
                     "serial": body["serial"], "usuarios_logados": body.get("usuario", ""),
                     "usuarios_logados_origem": "manual" if body.get("usuario") else "",
+                    "usuarios_logados_informado_em": FIXTURE_MANUAL_DATE if body.get("usuario") else "",
+                    "usuarios_logados_candidatos": FIXTURE_AMBIGUOUS_USERS.get(body["serial"], []),
                 }})
             return
         if path != "/api/operacoes/chamados/importar":
