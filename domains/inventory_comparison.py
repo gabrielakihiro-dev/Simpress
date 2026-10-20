@@ -664,6 +664,12 @@ def comparison_history_for_display(evento: Dict[str, Any]) -> Dict[str, Any]:
         comparison_view["series_sem_mapeamento"] = display_annotatable_items(
             "series_sem_mapeamento", unmapped_series
         )
+    user_changes = comparison.get("mudancas_usuarios")
+    if isinstance(user_changes, list):
+        comparison_view["mudancas_usuarios"] = display_annotatable_items("mudancas_usuarios", user_changes)
+        summary_user_changes = len(comparison_view["mudancas_usuarios"])
+    else:
+        summary_user_changes = None
     for field in ("apelidos_atualizados", "divergencias_apelidos_manuais"):
         items = comparison.get(field)
         if isinstance(items, list):
@@ -706,6 +712,8 @@ def comparison_history_for_display(evento: Dict[str, Any]) -> Dict[str, Any]:
             1 for item in manual_alias_divergences
             if isinstance(item, dict) and item.get("resolucao", "pendente") == "pendente"
         )
+    if summary_user_changes is not None:
+        summary["mudancas_usuarios"] = summary_user_changes
     event_view["resumo"] = summary
     uploaded_files = evento.get("arquivos_enviados")
     if isinstance(uploaded_files, dict):

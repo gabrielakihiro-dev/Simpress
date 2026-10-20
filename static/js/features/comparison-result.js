@@ -215,6 +215,7 @@
       correspondencias_ambiguas: "Duplicidades e correspondências ambíguas",
       divergencias_apelidos_manuais: "Apelidos manuais divergentes",
       series_sem_mapeamento: "Séries sem local definido",
+      mudancas_usuarios: "Mudanças de usuário logado",
     };
     const searchInput = filterBar.querySelector("[data-history-filter-search]");
     const categorySelect = filterBar.querySelector("[data-history-filter-category]");

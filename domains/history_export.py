@@ -53,6 +53,19 @@ def _history_section_text(value: Any, *, bare_sources: bool = False) -> str:
     return re.sub(r"\bno endpoint\b", "no Endpoint", text, flags=re.IGNORECASE)
 
 
+_USER_CHANGE_LABELS = {
+    "novo_endpoint": "Usuário novo no Endpoint",
+    "alterado_endpoint": "Usuário alterado no Endpoint",
+    "removido_endpoint": "Usuário removido do Endpoint",
+    "manual_voltou": "Manual voltou a valer",
+}
+
+
+def _export_user(user: Any, origin: Any) -> str:
+    text = _export_text(user).strip()
+    return f"{text} (M)" if text and origin == "manual" else text
+
+
 def _export_datetime(value: Any) -> Optional[datetime]:
     if isinstance(value, datetime):
         parsed = value
@@ -295,6 +308,7 @@ def build_history_export_workbook(
         "Divergências de localidade": 0,
         "Duplicidades e ambiguidades": 0,
         "Séries sem local definido": 0,
+        "Mudanças de usuário": 0,
     }
     history_rows = []
     alias_rows = []
@@ -302,6 +316,7 @@ def build_history_export_workbook(
     no_access_rows = []
     location_rows = []
     ambiguity_rows = []
+    user_rows = []
 
     for order, event in enumerate(display_events, start=1):
         comparison = event.get("comparacao")
@@ -338,6 +353,18 @@ def build_history_export_workbook(
         category_counts["Divergências de localidade"] += len(local_divergences)
         category_counts["Duplicidades e ambiguidades"] += ambiguity_count
         category_counts["Séries sem local definido"] += len(unmapped_series)
+        user_changes = _export_rows(comparison, "mudancas_usuarios")
+        category_counts["Mudanças de usuário"] += len(user_changes)
+        for index, item in enumerate(user_changes):
+            user_rows.append((
+                timestamp, event_type_label,
+                _USER_CHANGE_LABELS.get(str(item.get("tipo") or ""), _export_text(item.get("tipo"))),
+                item.get("serie"), item.get("computador"),
+                _export_user(item.get("usuario_anterior"), item.get("origem_anterior")),
+                _export_user(item.get("usuario_novo"), item.get("origem_nova")),
+                _history_section_text(item.get("motivo")),
+                _export_note(comparison, "mudancas_usuarios", index, item),
+            ))
 
         files_uploaded = event.get("arquivos_enviados")
         if not isinstance(files_uploaded, dict):
@@ -546,6 +573,15 @@ def build_history_export_workbook(
          "Fontes", "Última verificação com êxito", "Tratamento", "Anotação"],
         ambiguity_rows, "tblHistoricoAmbiguidades",
         [20, 27, 48, 34, 26, 66, 42],
+    )
+
+    _write_export_table_sheet(
+        workbook, "Usuários", "Mudanças de usuário logado",
+        "Usuários novos, alterados ou removidos no Endpoint e usuários manuais que voltaram a valer.",
+        ["Data e hora", "Operação", "Mudança", "Série", "Hostname/Apelido",
+         "Usuário anterior", "Usuário novo", "Motivo", "Anotação"],
+        user_rows, "tblHistoricoUsuarios",
+        [20, 16, 30, 18, 28, 28, 28, 66, 42],
     )
 
     output = BytesIO()
