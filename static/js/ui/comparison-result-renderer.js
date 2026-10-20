@@ -26,6 +26,14 @@
     series_sem_mapeamento: "Séries sem local definido",
     apelidos_sem_atualizacao: "Linhas mantidas para conferência",
     divergencias_apelidos_manuais: "Apelidos manuais divergentes",
+    mudancas_usuarios: "Mudanças de usuário logado",
+  };
+  // Kind of logged-user change in the update summary -> visible label and text color.
+  const TIPOS_MUDANCA_USUARIO = {
+    novo_endpoint: { rotulo: "Usuário novo no Endpoint", classe: "text-emerald-300" },
+    alterado_endpoint: { rotulo: "Usuário alterado no Endpoint", classe: "text-cyan-300" },
+    removido_endpoint: { rotulo: "Usuário removido do Endpoint", classe: "text-amber-300" },
+    manual_voltou: { rotulo: "Manual voltou a valer", classe: "text-rose-300" },
   };
   const formatarMotivoRevisao = motivo => formatarNomeFonteHistorico(motivo || "Conferir associação.")
     .replace(/\bno endpoint\b/gi, "no Endpoint");
@@ -125,6 +133,7 @@
       apelidosAtualizados: comparison.apelidos_atualizados || [],
       apelidosSemAtualizacao: comparison.apelidos_sem_atualizacao || [],
       divergenciasApelidosManuais: comparison.divergencias_apelidos_manuais || [],
+      mudancasUsuarios: comparison.mudancas_usuarios || [],
     };
   }
 
@@ -276,6 +285,25 @@
     });
   }
 
+  function linhasMudancasUsuarios(mudancasUsuarios, { renderizarCampoAnotacao }) {
+    const usuario = (nome, origem) => nome
+      ? `${escapeHtml(nome)}${origem === "manual" ? " (M)" : ""}`
+      : '<span class="text-slate-500">(vazio)</span>';
+    return mudancasUsuarios.map(item => {
+      const tipo = TIPOS_MUDANCA_USUARIO[item.tipo] || { rotulo: "Mudança de usuário", classe: "text-slate-300" };
+      return `
+        <tr class="text-slate-300" data-user-change="${escapeHtml(item.tipo || "")}" ${atributosLinhaComparacao("mudancas_usuarios", item)}>
+          <td class="px-3 py-2 font-semibold ${tipo.classe}">${escapeHtml(tipo.rotulo)}</td>
+          <td class="px-3 py-2 font-mono text-white whitespace-nowrap">${escapeHtml(item.serie || "—")}${marcadorUsuarioLogado(item.serie, { sugestao: item.usuario_manual_arquivado })}</td>
+          <td class="px-3 py-2 font-mono">${escapeHtml(item.computador || "—")}</td>
+          <td class="px-3 py-2">${usuario(item.usuario_anterior, item.origem_anterior)}</td>
+          <td class="px-3 py-2">${usuario(item.usuario_novo, item.origem_nova)}</td>
+          <td class="px-3 py-2 text-slate-300">${escapeHtml(String(item.motivo || "").replace(/\bno endpoint\b/gi, "no Endpoint"))}</td>
+          ${renderizarCampoAnotacao(item, `${tipo.rotulo}, série ${item.serie || "vazia"}`)}
+        </tr>`;
+    });
+  }
+
   function linhasSeriesSemMapa(seriesSemMapa, { renderizarCampoAnotacao }) {
     return seriesSemMapa.map(item => `
         <tr class="text-slate-300" ${atributosLinhaComparacao("series_sem_mapeamento", item)}>
@@ -368,6 +396,7 @@
     apelidos_atualizados: { id: "comparacao-secao-apelidos-atualizados", titulo: "Apelidos/hostnames atualizados — no endpoint" },
     apelidos_sem_atualizacao: { id: "comparacao-secao-linhas-conferencia", titulo: "Linhas mantidas para conferência" },
     divergencias_apelidos_manuais: { id: "comparacao-secao-apelidos-manuais", titulo: "Divergências com apelidos alterados manualmente" },
+    mudancas_usuarios: { id: "comparacao-secao-mudancas-usuarios", titulo: "Mudanças de usuário logado" },
   };
 
   function tituloSecaoComparacao(titulo, tom, idSecao = "") {
@@ -402,7 +431,7 @@
   function conteudoResultadoComparacao(comparison, listas, colunas) {
     const {
       ausentesEndpoint, ausentesDetalhes, divergenciasLocal, seriesSemMapa, semAcesso7DiasOrdenados, ambiguidades,
-      registrosAmbiguos, apelidosAtualizados, apelidosSemAtualizacao, divergenciasApelidosManuais,
+      registrosAmbiguos, apelidosAtualizados, apelidosSemAtualizacao, divergenciasApelidosManuais, mudancasUsuarios,
     } = listas;
     const { permitirAnotacoes, annotationHeaders, aliasReviewHeaders } = colunas;
     const barra = barraFiltrosHistorico(comparison);
@@ -413,6 +442,20 @@
     const locationRows = linhasLocalidadeDivergente(divergenciasLocal, colunas);
     const ambiguityRows = linhasAmbiguidades(ambiguidades, registrosAmbiguos, colunas);
     const unmappedRows = linhasSeriesSemMapa(seriesSemMapa, colunas);
+    const userChangeRows = linhasMudancasUsuarios(mudancasUsuarios, colunas);
+    const contarMudancas = tipo => mudancasUsuarios.filter(item => item.tipo === tipo).length;
+    // Results saved before the user summary existed have no list; the section is shown only when it exists.
+    const secaoMudancasUsuarios = Array.isArray(comparison.mudancas_usuarios) ? `
+        <section class="space-y-2" data-history-filter-section data-user-change-summary>
+          <div>${tituloSecaoComparacao("Mudanças de usuário logado", "emerald", SECOES_CARTOES_RESUMO.mudancas_usuarios.id)}<p class="text-[11px] text-slate-500">Usuários logados que mudaram nesta atualização, comparando o Endpoint anterior com o novo. Quando o Endpoint passa a informar o usuário, o usuário manual (M) é arquivado no histórico de alterações e não volta sozinho.</p>
+            <p class="text-[11px] text-slate-400" data-user-change-counts>${[
+              ["Novos no Endpoint", contarMudancas("novo_endpoint")],
+              ["Alterados", contarMudancas("alterado_endpoint")],
+              ["Removidos do Endpoint", contarMudancas("removido_endpoint")],
+              ["Manuais que voltaram a valer", contarMudancas("manual_voltou")],
+            ].map(([rotulo, total]) => `${rotulo}: ${total.toLocaleString("pt-BR")}`).join(" · ")}</p></div>
+          ${renderizarTabelaComparacao(["Mudança", "Série", "Hostname/Apelido", "Usuário anterior", "Usuário novo", "Motivo", ...annotationHeaders], userChangeRows, "Nenhum usuário logado mudou nesta atualização.", "mudancas_usuarios")}
+        </section>` : "";
     return `
         ${barra}
         ${comparison.historico_salvo === false
@@ -433,7 +476,9 @@
           ${cartaoMetricaComparacao("Apelidos/hostnames atualizados", apelidosAtualizados.length, "emerald", "", "apelidos_atualizados")}
           ${cartaoMetricaComparacao("Apelidos para conferência", apelidosSemAtualizacao.length, "amber", "", "apelidos_sem_atualizacao")}
           ${cartaoMetricaComparacao("Divergências manuais pendentes", divergenciasApelidosManuais.filter(item => !item.resolucao || item.resolucao === "pendente").length, "rose", "comparacao-divergencias-manuais-pendentes", "divergencias_apelidos_manuais")}
+          ${secaoMudancasUsuarios ? cartaoMetricaComparacao("Mudanças de usuário", mudancasUsuarios.length, "emerald", "", "mudancas_usuarios") : ""}
         </div>
+        ${secaoMudancasUsuarios}
         <section class="space-y-2" data-history-filter-section>
           <div>${tituloSecaoComparacao("Apelidos/hostnames atualizados — no endpoint", "emerald", SECOES_CARTOES_RESUMO.apelidos_atualizados.id)}<p class="text-[11px] text-slate-500">Equipamentos cujo apelido ou hostname mudou nesta atualização, com o valor anterior e o novo, identificados pela série.</p></div>
           ${renderizarTabelaComparacao(["Série", "Apelido anterior", "Novo apelido / hostname", "Horário", "Arquivos de origem"], aliasUpdateRows, "Nenhum apelido ou hostname mudou nesta atualização.")}
