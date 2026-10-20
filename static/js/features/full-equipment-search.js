@@ -183,7 +183,7 @@
       if (page.total === 0) {
         status.textContent = pesquisaCompletaState.query
           ? "Nenhum equipamento encontrado para esse termo."
-          : "Todos os equipamentos da base têm usuário.";
+          : "Nenhum equipamento a listar: notebooks sem usuário e demais equipamentos (exceto fones e micro computador).";
       } else if (page.has_more) {
         status.textContent = `Exibindo ${pesquisaCompletaState.offset} de ${page.total} ${pluralize(page.total, "resultado")}.`;
       } else {
