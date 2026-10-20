@@ -9,6 +9,10 @@ Referência oficial (consultar quando o procedimento mudar): https://app.notion.
 
 Gatilho: o usuário diz "Executar" ou "exportar planilhas" neste contexto. Para OS/chamados, use a skill `rotina-os-chamados`.
 
+## Execução automática (Playwright)
+
+`executar_automacao.bat` → opção 2 (ou `.\.venv\Scripts\python.exe scripts\automacao_rotinas_chrome.py --rotina inventarios`) faz todos os passos abaixo num Chrome de automação próprio (perfil `~\.chrome-automation`, porta local 9333, que fica aberto para manter os logins). O UX de inventários é `https://ux.simpress.com.br/MeusEquipamentos/Index` (gera `EquipamentosDetalhes*.zip`); `equipamentos/acompanhamento` é o Acompanhamento de pedidos da rotina de OS. Na tela de login do UX a rotina clica em "Acesso Time Simpress"; se não entrar, pede o login. Falhas deixam a aba aberta e uma captura em `data\logs\automacao_chrome`. A opção 3 roda OS e inventários em sequência; a opção 4 só abre as abas para login.
+
 ## Regras
 
 - O login é sempre do usuário. Se aparecer login ou 2FA, deixe a aba aberta, peça só essa autenticação e retome após "pronto". Nunca peça senhas ou códigos no chat nem altere permissões do Chrome.
@@ -26,7 +30,7 @@ Gatilho: o usuário diz "Executar" ou "exportar planilhas" neste contexto. Para 
    $inicioInventarios = (Get-Date).ToString("o")
    ```
 2. Abra em abas **novas** do Chrome (mesmo com abas já abertas; podem ser em paralelo):
-   - UX: https://ux.simpress.com.br/equipamentos/acompanhamento
+   - UX: https://ux.simpress.com.br/MeusEquipamentos/Index
    - Endpoint: https://centralendpoint.pr.sebrae.com.br/webclient#/uems/inventory/computers
 3. **UX Simpress**:
    1. Abra o seletor **Contrato/Nome** e clique, dentro da lista, em `16467 - SERV DE APOIO AS MICRO E PEQ EMP DO PARANA SEBRAE PR`. Não clique fora. Pesquise apenas na busca interna do seletor.

@@ -9,6 +9,7 @@ import json
 import shutil
 import sys
 import tempfile
+import time
 import zipfile
 from datetime import datetime
 from pathlib import Path
@@ -62,6 +63,18 @@ def recent_workbook(downloads: Path, prefix: str, since: datetime):
     }
 
 
+def publish_staging(staging: Path, target: Path, attempts: int = 10, delay_seconds: float = 0.5) -> None:
+    """Move the staged batch into place, waiting briefly while OneDrive or antivirus holds the new folder."""
+    for attempt in range(attempts):
+        try:
+            staging.rename(target)
+            return
+        except PermissionError:
+            if attempt == attempts - 1:
+                raise
+            time.sleep(delay_seconds)
+
+
 def prepare(downloads: Path, since: datetime, inbox: Path) -> dict:
     if since.tzinfo is None:
         raise ValueError("Informe --since com fuso horário, por exemplo 2026-10-10T23:03:59-03:00.")
@@ -88,7 +101,7 @@ def prepare(downloads: Path, since: datetime, inbox: Path) -> dict:
             "lote_id": batch_id, "inicio_execucao": since.isoformat(),
             "fontes": {role: value[2] for role, value in pair.items()},
         }, ensure_ascii=False, indent=2), encoding="utf-8")
-        staging.rename(pending / batch_id)
+        publish_staging(staging, pending / batch_id)
     finally:
         if staging.exists():
             if staging.resolve().parent != inbox.resolve() or not staging.name.startswith(".preparando-"):
