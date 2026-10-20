@@ -82,6 +82,7 @@ __pycache__/
 /data/state/historico_chamados.json
 /data/state/apelidos_modificados.json
 /data/state/historico_comparacoes.json
+/data/state/automacao_chrome.cancelar
 /data/state/entrada_automatica/*
 !/data/state/entrada_automatica/README.md
 !/data/state/entrada_automatica/modelo_lote/

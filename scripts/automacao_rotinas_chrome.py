@@ -57,10 +57,65 @@ ENDPOINT_URL = "https://centralendpoint.pr.sebrae.com.br/webclient#/uems/invento
 LOGIN_TIMEOUT_S = 10 * 60
 CARREGAMENTO_MS = 90_000
 DOWNLOAD_MS = 5 * 60_000
+# Sinal de cancelamento: o painel local (ou ``--cancelar``) cria o arquivo e a rotina para no próximo ponto de espera.
+CANCELAR_ARQUIVO = ROOT / "data" / "state" / "automacao_chrome.cancelar"
+_inicio_execucao = 0.0
 
 
 class RotinaErro(RuntimeError):
     """Falha de uma etapa que interrompe a rotina sem repetir cliques."""
+
+
+class RotinaCancelada(BaseException):
+    """Pedido de cancelamento; deriva de BaseException para não ser engolido por ``except Exception``."""
+
+
+def pedir_cancelamento() -> None:
+    CANCELAR_ARQUIVO.parent.mkdir(parents=True, exist_ok=True)
+    CANCELAR_ARQUIVO.write_text(agora_iso(), encoding="utf-8")
+
+
+def apagar_sinal_cancelamento() -> None:
+    try:
+        CANCELAR_ARQUIVO.unlink(missing_ok=True)
+    except OSError:
+        pass
+
+
+def iniciar_controle_cancelamento() -> None:
+    """Descarta um sinal deixado por execução anterior; só pedidos feitos depois do início valem."""
+    global _inicio_execucao
+    _inicio_execucao = time.time()
+    apagar_sinal_cancelamento()
+
+
+def cancelamento_pedido() -> bool:
+    try:
+        # Folga de 2 s: o relógio de arquivos do Windows é mais grosso que time.time().
+        return CANCELAR_ARQUIVO.stat().st_mtime >= _inicio_execucao - 2
+    except OSError:
+        return False
+
+
+def verificar_cancelamento(detalhe: str = "") -> None:
+    if cancelamento_pedido():
+        raise RotinaCancelada(detalhe)
+
+
+def aguardar_estado(locator, state: str, timeout_ms: int | None = None) -> None:
+    """``locator.wait_for`` em fatias de 1 s, conferindo o pedido de cancelamento entre elas."""
+    from playwright.sync_api import TimeoutError as PlaywrightTimeout
+
+    limite = time.time() + (CARREGAMENTO_MS if timeout_ms is None else timeout_ms) / 1000
+    while True:
+        verificar_cancelamento()
+        restante = int((limite - time.time()) * 1000)
+        try:
+            locator.wait_for(state=state, timeout=max(1, min(1000, restante)))
+            return
+        except PlaywrightTimeout:
+            if restante <= 1000:
+                raise
 
 
 def log(origem: str, mensagem: str) -> None:
@@ -170,6 +225,7 @@ def esperar_visivel(locator, timeout_ms: int) -> bool:
 
 
 def nova_aba(context: "BrowserContext", url: str, origem: str) -> "Page":
+    verificar_cancelamento()
     page = context.new_page()
     log(origem, f"Abrindo {url}")
     page.goto(url, wait_until="domcontentloaded", timeout=CARREGAMENTO_MS)
@@ -190,6 +246,7 @@ def aguardar_login(
     limite = time.time() + 15
     tentou_entrar = False
     while time.time() < limite:  # dá tempo para redirecionamentos de SSO
+        verificar_cancelamento()
         if logado(page):
             log(origem, "Sessão ativa.")
             return
@@ -201,9 +258,10 @@ def aguardar_login(
         log(origem, "O acesso com a conta conectada não concluiu o login.")
     page.bring_to_front()
     log(origem, "AÇÃO NECESSÁRIA: faça o login na janela do Chrome de automação.")
-    log(origem, "A rotina continua sozinha assim que o login terminar (Ctrl+C cancela).")
+    log(origem, "A rotina continua sozinha assim que o login terminar (Ctrl+C ou --cancelar interrompe).")
     limite = time.time() + LOGIN_TIMEOUT_S
     while time.time() < limite:
+        verificar_cancelamento()
         if logado(page):
             log(origem, "Login detectado; continuando.")
             page.wait_for_timeout(2000)
@@ -235,9 +293,17 @@ def salvar_download(download: "Download", origem: str) -> Path:
 
 def exportar_com_download(page: "Page", origem: str, clicar: Callable[[], None]) -> Path:
     """Clica uma única vez na exportação e grava o arquivo recebido."""
-    with page.expect_download(timeout=DOWNLOAD_MS) as info:
-        clicar()
-    return salvar_download(info.value, origem)
+    verificar_cancelamento()
+    recebidos: list["Download"] = []
+    page.once("download", recebidos.append)
+    clicar()
+    limite = time.time() + DOWNLOAD_MS / 1000
+    while not recebidos:  # espera em fatias para atender a um pedido de cancelamento
+        if time.time() >= limite:
+            raise RotinaErro(f"O download não começou em {DOWNLOAD_MS // 60_000} minutos.")
+        verificar_cancelamento()
+        page.wait_for_timeout(500)
+    return salvar_download(recebidos[0], origem)
 
 
 def registrar_erro(page: "Page | None", origem: str) -> None:
@@ -337,7 +403,7 @@ def exportar_oracle(context: "BrowserContext") -> Path:
         log("Oracle", "Pesquisando...")
         page.get_by_role("button", name="Pesquisar", exact=True).filter(visible=True).first.click()
         total = page.get_by_text(re.compile(r"Registros:\s*Total")).filter(visible=True).first
-        total.wait_for(state="visible", timeout=CARREGAMENTO_MS)
+        aguardar_estado(total, "visible")
         log("Oracle", f"Pesquisa concluída ({total.inner_text().strip()}).")
 
         log("Oracle", "Exportando: ⋮ > Exportar > Excel...")
@@ -400,14 +466,12 @@ def abrir_ux(context: "BrowserContext", url: str) -> "Page":
 
 def aguardar_ux_livre(page: "Page") -> None:
     """Espera sumir o aviso "Aguarde..." que o UX mostra enquanto carrega."""
-    page.get_by_text("Aguarde...", exact=True).filter(visible=True).first.wait_for(
-        state="hidden", timeout=CARREGAMENTO_MS
-    )
+    aguardar_estado(page.get_by_text("Aguarde...", exact=True).filter(visible=True).first, "hidden")
 
 
 def selecionar_contrato_ux(page: "Page") -> None:
     campo = page.locator("#CodigosContratosFiltro").first
-    campo.wait_for(state="visible", timeout=CARREGAMENTO_MS)
+    aguardar_estado(campo, "visible")
     aguardar_ux_livre(page)
     log("UX Simpress", f"Selecionando o contrato {CONTRATO_NOME}...")
     campo.click()
@@ -432,6 +496,7 @@ def selecionar_contrato_ux(page: "Page") -> None:
     page.locator("h1, h2").filter(visible=True).first.click()
     limite = time.time() + 60
     while time.time() < limite and (campo.get_attribute("data-valor") or "") != CONTRATO:
+        verificar_cancelamento()
         page.wait_for_timeout(500)
     aguardar_ux_livre(page)
     valor = campo.input_value().strip()
@@ -448,7 +513,7 @@ def exportar_ux_pedidos(context: "BrowserContext") -> Path:
         selecionar_contrato_ux(page)
         page.get_by_role("button", name="Buscar", exact=True).filter(visible=True).first.click()
         resumo = page.get_by_text(re.compile(r"\d+\s+pedidos?\s+encontrados?")).filter(visible=True).first
-        resumo.wait_for(state="visible", timeout=CARREGAMENTO_MS)
+        aguardar_estado(resumo, "visible")
         log("UX Simpress", f"Busca concluída: {resumo.inner_text().strip()}.")
         contratos = page.locator("strong", has_text=re.compile(r"^\s*Contrato:\s*$")).locator("xpath=..")
         textos = [t.replace("Contrato:", "").strip() for t in contratos.all_inner_texts()]
@@ -476,7 +541,7 @@ def exportar_ux_equipamentos(context: "BrowserContext") -> Path:
         selecionar_contrato_ux(page)
         page.locator("#buscar").click()
         exportar = page.locator("#ExportarDropdown").filter(visible=True).first
-        exportar.wait_for(state="visible", timeout=CARREGAMENTO_MS)
+        aguardar_estado(exportar, "visible")
         log("UX Simpress", "Busca concluída; exportando: Baixar detalhes > Excel...")
         exportar.click()
         excel = page.locator("#ExportarXlsx").filter(visible=True).first
@@ -510,13 +575,13 @@ def exportar_endpoint(context: "BrowserContext") -> Path:
 
         log("Endpoint Central", "Selecionando 'Todos os computadores'...")
         todos = page.locator('input[type="radio"][value="InvAllComputersSummary"]').first
-        todos.wait_for(state="attached", timeout=CARREGAMENTO_MS)
+        aguardar_estado(todos, "attached")
         if not todos.is_checked():
             todos.check(force=True)
         if not todos.is_checked():
             raise RotinaErro("'Todos os computadores' não ficou selecionado.")
         exportar = page.locator("#InvAllComputersSummary-export").filter(visible=True).first
-        exportar.wait_for(state="visible", timeout=CARREGAMENTO_MS)
+        aguardar_estado(exportar, "visible")
 
         log("Endpoint Central", "Exportando: Exportar > XLSX + declaração de privacidade...")
         exportar.click()
@@ -583,12 +648,17 @@ def confirmar_lote(inbox: Path, lote_id: str, timeout_s: int = 180) -> dict:
                     dados = json.loads(arquivo.read_text(encoding="utf-8"))
                     dados["pasta"] = str(candidato)
                     return dados
+        # O lote já foi publicado: o cancelamento só para de esperar; a importação segue sozinha.
+        verificar_cancelamento(
+            f"O lote {lote_id} já estava em pendentes e a importação continua; confira o _resultado.json em {inbox}."
+        )
         time.sleep(2)
     raise RotinaErro(f"O lote {lote_id} não foi processado em {timeout_s} s; confira {inbox}.")
 
 
 def importar(nome: str, script_preparo: str, script_fila: str, inbox: Path, inicio: str) -> int:
     print(f"\n--- Importando {nome} pela pasta local ---", flush=True)
+    verificar_cancelamento()  # último ponto antes de publicar o lote; depois disso a importação vai até o fim
     lote = preparar_lote(script_preparo, inicio)
     if lote["estado"] == "pendentes":
         processar_fila(script_fila)
@@ -643,6 +713,7 @@ def rodar_rotina_inventarios(context: "BrowserContext") -> int:
 
 def abrir_para_login(context: "BrowserContext") -> int:
     for url in (ORACLE_URL, UX_PEDIDOS_URL, ENDPOINT_URL):
+        verificar_cancelamento()
         context.new_page().goto(url, wait_until="domcontentloaded", timeout=CARREGAMENTO_MS)
     print(
         "\nAbas do Oracle, UX Simpress e Endpoint Central abertas no Chrome de automação.\n"
@@ -666,6 +737,7 @@ def executar(rotina: str) -> int:
                 return rodar_rotina_inventarios(context)
             codigos = []
             for etapa in (rodar_rotina_os, rodar_rotina_inventarios):
+                verificar_cancelamento()
                 try:
                     codigos.append(etapa(context))
                 except Exception as erro:  # a falha de uma rotina não impede a outra
@@ -688,11 +760,24 @@ def descrever_erro(erro: Exception) -> str:
 def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     parser.add_argument("--rotina", choices=["os", "inventarios", "ambas", "login"], default="os")
+    parser.add_argument(
+        "--cancelar", action="store_true", help="pede o cancelamento da rotina em andamento (o Chrome continua aberto) e sai"
+    )
     args = parser.parse_args()
+    if args.cancelar:
+        pedir_cancelamento()
+        print(f"Pedido de cancelamento registrado em {CANCELAR_ARQUIVO}.", flush=True)
+        return 0
     if str(ROOT) not in sys.path:
         sys.path.insert(0, str(ROOT))
+    iniciar_controle_cancelamento()
     try:
         return executar(args.rotina)
+    except RotinaCancelada as cancelamento:
+        apagar_sinal_cancelamento()
+        detalhe = str(cancelamento)
+        print("\n[CANCELADO] Rotina cancelada pelo usuário." + (f" {detalhe}" if detalhe else ""), flush=True)
+        return 130
     except KeyboardInterrupt:
         print("\n[CANCELADO] Rotina interrompida pelo usuário; nenhum lote foi importado depois disso.", flush=True)
         return 130
