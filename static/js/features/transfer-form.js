@@ -54,11 +54,12 @@
     }, true);
   });
 
-  // Abas de primeiro nível: Home, Transporte e Resumo (nessa ordem na barra lateral).
+  // Abas de primeiro nível: Home, Transporte, Resumo e Automação (nessa ordem na barra lateral).
   const ABAS_PRINCIPAIS = Object.freeze({
     home: Object.freeze({ tab: "tab-home", painel: "tab-panel-home" }),
     transferencia: Object.freeze({ tab: "tab-retirada-entrega", painel: "tab-panel-retirada-entrega" }),
     resumo: Object.freeze({ tab: "tab-resumo", painel: "tab-panel-resumo" }),
+    automacao: Object.freeze({ tab: "tab-automacao", painel: "tab-panel-automacao" }),
   });
 
   function ativarAbaTransferencia(aba) {
