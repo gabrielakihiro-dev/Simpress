@@ -118,6 +118,38 @@ def aguardar_estado(locator, state: str, timeout_ms: int | None = None) -> None:
                 raise
 
 
+def acionar_quando_pronto(
+    acao,
+    descricao: str,
+    timeout_ms: int | None = None,
+    confirmar=None,
+    intervalo_s: float = 1.0,
+) -> None:
+    """Repete ``acao`` até funcionar (e ``confirmar()``, se houver, ser verdadeiro).
+
+    Serve para telas que já mostram o elemento no DOM enquanto ainda exibem o esqueleto de
+    carregamento: o clique falha ou não tem efeito até a tela ficar pronta. Confere o pedido de
+    cancelamento a cada tentativa e, esgotado o prazo, levanta ``RotinaErro`` com a descrição.
+    """
+    limite = time.time() + (CARREGAMENTO_MS if timeout_ms is None else timeout_ms) / 1000
+    ultimo_erro = ""
+    while True:
+        verificar_cancelamento()
+        if confirmar is not None and confirmar():
+            return
+        try:
+            acao()
+            if confirmar is None or confirmar():
+                return
+            ultimo_erro = "a ação não teve efeito"
+        except Exception as erro:
+            ultimo_erro = str(erro).strip().splitlines()[0] if str(erro).strip() else type(erro).__name__
+        if time.time() >= limite:
+            segundos = (CARREGAMENTO_MS if timeout_ms is None else timeout_ms) // 1000
+            raise RotinaErro(f"{descricao}: a tela não ficou pronta em {segundos} s ({ultimo_erro}).")
+        time.sleep(intervalo_s)
+
+
 def log(origem: str, mensagem: str) -> None:
     print(f"[{datetime.now():%H:%M:%S}] [{origem}] {mensagem}", flush=True)
 
@@ -731,17 +763,11 @@ def exportar_endpoint(context: "BrowserContext") -> Path:
         todos = page.locator('input[type="radio"][value="InvAllComputersSummary"]').first
         aguardar_estado(todos, "attached")
         # O radio existe no DOM antes de a tela terminar de carregar (esqueleto), mas ainda não é clicável.
-        limite = time.time() + CARREGAMENTO_MS / 1000
-        while not todos.is_checked():
-            verificar_cancelamento()
-            try:
-                todos.check(force=True, timeout=2000)
-            except Exception:
-                if time.time() >= limite:
-                    raise
-                time.sleep(1)
-        if not todos.is_checked():
-            raise RotinaErro("'Todos os computadores' não ficou selecionado.")
+        acionar_quando_pronto(
+            lambda: todos.check(force=True, timeout=2000),
+            "'Todos os computadores' não ficou selecionado",
+            confirmar=todos.is_checked,
+        )
         exportar = page.locator("#InvAllComputersSummary-export").filter(visible=True).first
         aguardar_estado(exportar, "visible")
 
