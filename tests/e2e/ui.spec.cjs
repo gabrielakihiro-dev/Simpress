@@ -387,6 +387,75 @@ test("inventory evolution compares two saved updates and shows their row annotat
   await auditAccessibility(page, "#modal-evolucao-atualizacoes");
 });
 
+test("inventory evolution prioritizes categories, filters rows and opens the matching result heading", async ({ page }) => {
+  const evolution = {
+    anterior: { id: "fixture-previous", horario: "2026-10-07T09:00:00-03:00" },
+    atual: { id: "fixture-current", horario: "2026-10-08T09:00:00-03:00" },
+    contagens: { novos: 1, resolvidos: 1, continuam: 1 },
+    mudancas: {
+      novos: [{
+        categoria: "apelidos_sem_atualizacao",
+        secao: "Linhas mantidas para conferência",
+        evento_id: "fixture-event-001",
+        item: { computador: "NOVO-HOST", serie: "NOVO-SN" },
+      }],
+      resolvidos: [{
+        categoria: "apelidos_sem_atualizacao",
+        secao: "Linhas mantidas para conferência",
+        evento_id: "fixture-event-001",
+        item: { computador: "RESOLVIDO-HOST", serie: "RESOLVIDO-SN" },
+      }],
+      continuam: [{
+        categoria: "apelidos_sem_atualizacao",
+        secao: "Linhas mantidas para conferência",
+        evento_id: "fixture-event-001",
+        item: { computador: "ATIVO-HOST", serie: "ATIVO-SN" },
+      }],
+    },
+  };
+  await page.route(/\/api\/operacoes\/evolucao\?/, route => route.fulfill({ json: evolution }));
+  await openAnalysisMenu(page);
+  await page.getByRole("button", { name: "Evolução das atualizações" }).click();
+
+  const dialog = page.locator("#modal-evolucao-atualizacoes");
+  const result = dialog.locator("#resultado-evolucao-atualizacoes");
+  await expect(dialog).toBeVisible();
+  await expect(result.locator(".grid > div > p:first-child")).toHaveText([
+    "Novos",
+    "Deixaram de aparecer",
+    "Continuam",
+  ]);
+  await expect(result.locator("[data-evolution-group] > h4")).toHaveText([
+    "Novos",
+    "Deixaram de aparecer",
+    "Continuam",
+  ]);
+
+  const search = dialog.getByLabel("Buscar por hostname, série, seção ou anotação");
+  const category = dialog.getByLabel("Categoria");
+  const rows = result.locator("[data-evolution-row]");
+  await search.fill("ativo-sn");
+  await expect(result.locator("[data-evolution-row]:visible")).toHaveCount(1);
+  await expect(result.locator("[data-evolution-row]:visible")).toContainText("ATIVO-HOST");
+  await expect(dialog.locator("#filtro-evolucao-status")).toHaveText("1 de 3 ocorrências");
+  await dialog.getByRole("button", { name: "Limpar filtros" }).click();
+  await expect(search).toHaveValue("");
+  await expect(result.locator("[data-evolution-row]:visible")).toHaveCount(3);
+
+  await category.selectOption("resolvidos");
+  await expect(result.locator("[data-evolution-row]:visible")).toHaveCount(1);
+  await expect(result.locator('[data-evolution-row][data-evolution-category="resolvidos"]:visible')).toContainText("RESOLVIDO-SN");
+  await auditAccessibility(page, "#modal-evolucao-atualizacoes");
+
+  await result.locator('[data-evolution-category="resolvidos"] [data-evolution-event]').click();
+  const comparison = page.locator("#modal-comparacao-planilhas");
+  const heading = comparison.locator("#comparacao-secao-linhas-conferencia");
+  await expect(dialog).toBeHidden();
+  await expect(comparison).toBeVisible();
+  await expect(heading).toBeFocused();
+  await expect(heading).toBeInViewport();
+});
+
 test("ticket tracking imports both workbooks and relates each serial to its OS", async ({ page }, testInfo) => {
   await page.setViewportSize({ width: testInfo.project.name === "mobile" ? 390 : 1366, height: 640 });
   await openSidebarIfNeeded(page);
