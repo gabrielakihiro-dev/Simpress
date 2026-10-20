@@ -16,6 +16,7 @@ from core.errors import DomainConflictError, DomainError
 from core.integrity import FileBusyError, FileTransactionError, WorkbookSafetyError
 from domains import inventory_state
 from domains.alias_changes import AliasChangeServices
+from domains.effective_alias import endpoint_user_for_serial, mac_endpoint_serial_key, with_details_serials
 from domains.inventory_comparison import normalize_reference_value
 from domains.inventory_state import STATE_LOCK
 
@@ -152,8 +153,8 @@ def apply_user_change(
             if equipment is None:
                 raise DomainError(f"Equipamento com serial '{target_serial}' não encontrado na base de dados.", status_code=404)
 
-            endpoint_index = services.read_endpoint_alias_index()
-            if new_user and endpoint_index.get("users", {}).get(serial_key):
+            endpoint_index = with_details_serials(services.read_endpoint_alias_index(), next_equipment_cache)
+            if new_user and endpoint_user_for_serial(endpoint_index, serial_key):
                 raise DomainConflictError("O Endpoint já informa o usuário deste equipamento; o cadastro manual não é necessário.")
 
             stored = dict(services.validate_json_object(_load_users(services), "usuários manuais"))
@@ -231,6 +232,43 @@ def apply_user_change(
 
 def update_manual_user(services: AliasChangeServices, serial: str, usuario: str) -> Dict[str, Any]:
     return apply_user_change(services, serial, usuario)
+
+
+def logged_users_for_series(services: AliasChangeServices, series: List[str]) -> Dict[str, Any]:
+    """Logged user of each serial with the Home rule: the Endpoint user wins, the manual one fills the gap.
+
+    ``serial_cadastro`` is set only for serials in the current EquipamentosDetalhes base, the
+    only ones that accept a manual user. A MacBook listed by its Endpoint serial (``CXC9F072K1``)
+    is matched to its Simpress serial with the leading ``S`` (``SCXC9F072K1``). Serials outside
+    the base fall back to the Endpoint user.
+    """
+    wanted = {str(serie or "").strip(): normalize_reference_value(serie) for serie in series}
+    wanted = {serie: key for serie, key in wanted.items() if serie and key}
+    wanted_keys = set(wanted.values()) | {f"S{key}" for key in wanted.values()}
+    by_key: Dict[str, List[Dict[str, Any]]] = {}
+    with STATE_LOCK:
+        details_serials = list(inventory_state.equipamentos_cache)
+        for serial, equipment in inventory_state.equipamentos_cache.items():
+            key = normalize_reference_value(serial)
+            if key in wanted_keys:
+                by_key.setdefault(key, []).append({
+                    "serial": str(equipment.get("serial") or serial),
+                    "usuario": str(equipment.get("usuarios_logados") or "").strip(),
+                    "origem": str(equipment.get("usuarios_logados_origem") or ""),
+                })
+    endpoint_index = with_details_serials(services.read_endpoint_alias_index(), details_serials)
+    result: Dict[str, Any] = {}
+    for serie, key in wanted.items():
+        matches = by_key.get(key, [])
+        if not matches and mac_endpoint_serial_key(endpoint_index, f"S{key}") == key:
+            matches = by_key.get(f"S{key}", [])
+        if len(matches) == 1:
+            match = matches[0]
+            result[serie] = {"usuario": match["usuario"], "origem": match["origem"] if match["usuario"] else "", "serial_cadastro": match["serial"]}
+            continue
+        usuario = endpoint_user_for_serial(endpoint_index, key).strip()
+        result[serie] = {"usuario": usuario, "origem": "endpoint" if usuario else "", "serial_cadastro": None}
+    return {"usuarios": result}
 
 
 def _find_user_event(services: AliasChangeServices, evento_id: str) -> Dict[str, Any]:

@@ -28,7 +28,7 @@ from typing import Any, Callable, Dict, Iterable, List, Optional, Set, Tuple
 from core.config import SUPPORTED_CONTRACT, SUPPORTED_CONTRACT_LEGAL_NAME
 from core.integrity import FileBusyError
 from core.xlsx_safety import WORKBOOK_READ_ERRORS
-from domains.effective_alias import manual_aliases_by_serial
+from domains.effective_alias import manual_aliases_by_serial, with_details_serials
 from domains.equipment_search import EquipmentSearchIndexEntry
 from domains.inventory_comparison import is_missing_cell_value, normalize_reference_value
 from domains.uploaded_workbooks import (
@@ -486,7 +486,8 @@ def load_database_unlocked(services: InventoryStateServices, publish: bool = Tru
     # Apelidos manuais persistem por série e prevalecem sobre o hostname da InvAll.
     mod_apelidos = services.load_modified_apelidos()
     manual_aliases = manual_aliases_by_serial(mod_apelidos)
-    endpoint_index = services.read_endpoint_alias_index()
+    # The new base decides whether a MacBook "S" serial matches its Endpoint serial unambiguously.
+    endpoint_index = with_details_serials(services.read_endpoint_alias_index(), details_serial_counts)
     for serial_key, equipment in new_equipamentos_cache.items():
         equipment["_revisao"] = services.equipment_revision(
             equipment.get("serial"),

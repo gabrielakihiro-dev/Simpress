@@ -33,6 +33,8 @@
       : renderer.conteudoResultadoComparacao(comparison, listas, colunas);
     conectarAcoesApelidosManuais(comparison, listas.divergenciasApelidosManuais);
     conectarRemocaoHostnames();
+    // Logged user under each hostname, with the Home rule.
+    context.loggedUserMarkers.conectar(content);
     conectarAnotacoesComparacao(comparison);
     conectarFiltrosHistoricoComparacao(content);
     conectarCartoesResumoComparacao();

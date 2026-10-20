@@ -42,6 +42,12 @@
                 <span>${escapeHtml(item.apelido)}</span>
               </span>
             ` : ""}
+            ${String(item.usuarios_logados || "").trim() ? `
+              <span class="autocomplete-user inline-flex items-center gap-1 text-[11px] px-2 py-0.5 rounded-md bg-slate-900/90 text-slate-200 border border-slate-600/60 shrink-0" title="${item.usuarios_logados_origem === "manual" ? "Usuário logado informado manualmente" : "Usuário logado no Endpoint"}">
+                <i data-lucide="user" class="w-2.5 h-2.5 text-slate-400" aria-hidden="true"></i>
+                <span>${highlightMatch(String(item.usuarios_logados).trim(), currentQuery)}${item.usuarios_logados_origem === "manual" ? " (M)" : ""}</span>
+              </span>
+            ` : ""}
             ${item.invall_alias_status && item.invall_alias_status !== "aplicado" ? `
               <span class="text-[10px] text-amber-200 shrink-0" title="${escapeHtml(item.invall_alias_detail || "Conferir associação com a InvAll")}">Conferir InvAll</span>
             ` : ""}
@@ -82,6 +88,7 @@
       item.tipo,
       item.modelo,
       item.apelido,
+      item.usuarios_logados ? `usuário ${String(item.usuarios_logados).trim()}` : "",
       item.retirada_cidade,
     ].filter(Boolean).join(", "));
     row.dataset.resultIndex = String(index);

@@ -278,6 +278,44 @@ def manual_aliases_by_serial(overrides: Dict[str, str]) -> Dict[str, str]:
     }
 
 
+def mac_endpoint_serial_key(index: Dict[str, Any], serial_key: str) -> str:
+    """Endpoint serial of a Simpress MacBook serial written with a leading ``S``.
+
+    ``SCXC9F072K1`` in EquipamentosDetalhes is ``CXC9F072K1`` in the Endpoint when that
+    serial has a unique ``PRMAC`` hostname there. When the Simpress base also lists the
+    serial without ``S`` (``index["details_serials"]``), the match is ambiguous and none is made.
+    """
+    if len(serial_key) < 2 or not serial_key.startswith("S"):
+        return ""
+    base = serial_key[1:]
+    if not normalize_reference_value(index.get("unique", {}).get(base, "")).startswith("PRMAC"):
+        return ""
+    if base in (index.get("details_serials") or ()):
+        return ""
+    return base
+
+
+def with_details_serials(index: Dict[str, Any], details_serials: Iterable[Any]) -> Dict[str, Any]:
+    """Copy of ``index`` that knows the Simpress base serials, for the MacBook ``S`` equivalence."""
+    enriched = dict(index)
+    enriched["details_serials"] = {key for serial in details_serials if (key := normalize_reference_value(serial))}
+    return enriched
+
+
+def endpoint_user_for_serial(index: Dict[str, Any], serial_key: str) -> str:
+    """Endpoint user of one normalized serial, with the MacBook ``S`` equivalence as a fallback."""
+    users = index.get("users", {})
+    if users.get(serial_key):
+        return str(users[serial_key])
+    known = (
+        serial_key in index.get("unique", {})
+        or serial_key in index.get("duplicates", {})
+        or serial_key in index.get("blank_hostnames", {})
+    )
+    base = "" if known else mac_endpoint_serial_key(index, serial_key)
+    return str(users.get(base, "") or "") if base else ""
+
+
 def apply_effective_alias(
     equipment: Dict[str, Any],
     endpoint_index: Dict[str, Any],
@@ -289,7 +327,7 @@ def apply_effective_alias(
     local_alias = str(equipment.get("_apelido_local", equipment.get("_apelido_base", "")) or "").strip()
     manual_override = bool(equipment.get("_apelido_manual_override"))
     equipment["apelido"] = local_alias
-    endpoint_user = endpoint_index.get("users", {}).get(serial_key, "")
+    endpoint_user = endpoint_user_for_serial(endpoint_index, serial_key)
     manual_user = str(endpoint_index.get("manual_users", {}).get(serial_key, "") or "").strip()
     # O usuário do Endpoint sempre prevalece; o manual só preenche a lacuna.
     equipment["usuarios_logados"] = endpoint_user or manual_user
