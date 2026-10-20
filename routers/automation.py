@@ -5,6 +5,7 @@ imported through the local inbox folders, never uploaded through HTTP.
 """
 
 from dataclasses import dataclass
+from datetime import date
 from typing import Callable, Literal
 
 from fastapi import APIRouter, Query
@@ -48,9 +49,20 @@ def create_automation_router(services: AutomationRouteServices) -> APIRouter:
         return JSONResponse(services.runner().state(offset, arquivo), headers={"Cache-Control": "no-store"})
 
     @router.get("/api/automacao/historico")
-    def historico_automacao(limite: int = Query(15, ge=1, le=50)):
+    def historico_automacao(
+        limite: int = Query(15, ge=1, le=50), pagina: int = Query(1, ge=1),
+        data_inicio: date | None = None, data_fim: date | None = None,
+        rotina: Literal["os", "inventarios", "ambas", "login"] | None = None,
+        status: Literal["em_andamento", "concluido", "falha", "cancelado", "ocupada", "interrompido"] | None = None,
+    ):
         """Últimas execuções com status, lotes e capturas de erro."""
-        return {"execucoes": services.runner().history(limite)}
+        result = services.runner().history_page(limite, pagina, start=data_inicio, end=data_fim, routine=rotina, status=status)
+        return JSONResponse(result, headers={"Cache-Control": "no-store"})
+
+    @router.get("/api/automacao/execucoes/{execucao_id}/log")
+    def log_execucao_automacao(execucao_id: str, linhas: int = Query(200, ge=1, le=500)):
+        result = services.runner().execution_log(execucao_id, linhas)
+        return JSONResponse(result, headers={"Cache-Control": "no-store"})
 
     @router.get("/api/automacao/capturas/{nome}")
     def captura_automacao(nome: str):

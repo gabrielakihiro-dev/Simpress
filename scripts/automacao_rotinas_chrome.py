@@ -440,15 +440,23 @@ def exportar_com_download(page: "Page", origem: str, clicar: Callable[[], None])
     """Clica uma única vez na exportação e grava o arquivo recebido."""
     verificar_cancelamento()
     recebidos: list["Download"] = []
-    page.once("download", recebidos.append)
-    clicar()
-    limite = time.time() + DOWNLOAD_MS / 1000
-    while not recebidos:  # espera em fatias para atender a um pedido de cancelamento
-        if time.time() >= limite:
-            raise RotinaErro(f"O download não começou em {DOWNLOAD_MS // 60_000} minutos.")
-        verificar_cancelamento()
-        page.wait_for_timeout(500)
-    return salvar_download(recebidos[0], origem)
+
+    def receber_download(download: "Download") -> None:
+        # Playwright guarda atributos no callback; list.append não os aceita.
+        recebidos.append(download)
+
+    page.once("download", receber_download)
+    try:
+        clicar()
+        limite = time.time() + DOWNLOAD_MS / 1000
+        while not recebidos:  # espera em fatias para atender a um pedido de cancelamento
+            if time.time() >= limite:
+                raise RotinaErro(f"O download não começou em {DOWNLOAD_MS // 60_000} minutos.")
+            verificar_cancelamento()
+            page.wait_for_timeout(500)
+        return salvar_download(recebidos[0], origem)
+    finally:
+        page.remove_listener("download", receber_download)
 
 
 def registrar_erro(page: "Page | None", origem: str) -> None:

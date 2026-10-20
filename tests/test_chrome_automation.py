@@ -9,7 +9,7 @@ import tempfile
 import threading
 import unittest
 from contextlib import redirect_stdout
-from datetime import datetime
+from datetime import date, datetime
 from pathlib import Path
 from types import SimpleNamespace
 from unittest.mock import patch
@@ -322,6 +322,60 @@ class ChromeAutomationRunnerTests(unittest.TestCase):
         self.assertTrue(restarted["reiniciado"])
         self.assertEqual(restarted["linhas"], ["linha 1", "linha 2"])
 
+    def _history_fixture(self, harness):
+        harness.contract.log_dir.mkdir(parents=True, exist_ok=True)
+        for day in (18, 19, 20):
+            stem = f"202610{day}_080000_os"
+            (harness.contract.log_dir / f"{stem}.json").write_text(json.dumps({
+                "rotina": "os", "inicio": f"2026-10-{day}T08:00:00-03:00", "status": "concluido",
+                "log": f"{stem}.log",
+            }), encoding="utf-8")
+            (harness.contract.log_dir / f"{stem}.log").write_text("primeira\nsegunda\nterceira\n", encoding="utf-8")
+
+    def test_history_filters_inclusive_dates_before_paging_and_clamps_pages(self):
+        harness = self.harness()
+        self._history_fixture(harness)
+        result = harness.runner.history_page(1, 2, start=date(2026, 10, 19), end=date(2026, 10, 20), routine="os", status="concluido")
+        self.assertEqual((result["total"], result["pagina"], result["paginas"]), (2, 2, 2))
+        self.assertEqual(result["execucoes"][0]["id"], "20261019_080000_os")
+        self.assertEqual(harness.runner.history_page(5, 30, status="falha")["pagina"], 1)
+        self.assertEqual(harness.runner.history_page(5, routine="login")["total"], 0)
+        with self.assertRaises(DomainError):
+            harness.runner.history_page(start=date(2026, 10, 20), end=date(2026, 10, 19))
+
+    def test_execution_log_reads_only_selected_record_and_limits_lines(self):
+        harness = self.harness()
+        self._history_fixture(harness)
+        result = harness.runner.execution_log("20261019_080000_os", 2)
+        self.assertEqual(result["linhas"], ["segunda", "terceira"])
+        self.assertTrue(result["limitado"])
+        self.assertEqual(result["execucao"]["id"], "20261019_080000_os")
+        for identifier in ("missing", "../secret", "C:secret"):
+            with self.assertRaises(DomainError):
+                harness.runner.execution_log(identifier)
+        record = harness.contract.log_dir / "20261019_080000_os.json"
+        data = json.loads(record.read_text(encoding="utf-8"))
+        # Script records are normalized to a basename, but cannot choose files
+        # outside the log directory or non-log files.
+        data["log"] = "secret.json"
+        record.write_text(json.dumps(data), encoding="utf-8")
+        with self.assertRaises(DomainError):
+            harness.runner.execution_log("20261019_080000_os")
+
+    def test_execution_log_rejects_external_symlink(self):
+        harness = self.harness()
+        self._history_fixture(harness)
+        log = harness.contract.log_dir / "20261019_080000_os.log"
+        outside = self.root / "secret.log"
+        outside.write_text("outside", encoding="utf-8")
+        log.unlink()
+        try:
+            log.symlink_to(outside)
+        except OSError:
+            self.skipTest("Creating symlinks is unavailable on this host")
+        with self.assertRaises(DomainError):
+            harness.runner.execution_log("20261019_080000_os")
+
 
 class FakeRunner:
     def __init__(self):
@@ -341,6 +395,12 @@ class FakeRunner:
 
     def history(self, limit=15):
         return [{"limite": limit}]
+
+    def history_page(self, limit, page, **filters):
+        return {"execucoes": self.history(limit), "pagina": page, "paginas": 1, "total": 1, "limite": limit}
+
+    def execution_log(self, identifier, lines):
+        return {"arquivo": "a.log", "linhas": [identifier], "limite": lines}
 
     def capture_path(self, name):
         return None
@@ -381,8 +441,14 @@ class AutomationRouteTests(unittest.TestCase):
         self.assertEqual(state.json(), {"estado": "livre", "offset": 12, "arquivo": "a.site.log"})
         self.assertEqual(state.headers["cache-control"], "no-store")
         self.assertEqual(self.client.get("/api/automacao/estado", params={"offset": -1}).status_code, 422)
-        self.assertEqual(self.client.get("/api/automacao/historico", params={"limite": 5}).json(), {"execucoes": [{"limite": 5}]})
+        history = self.client.get("/api/automacao/historico", params={"limite": 5})
+        self.assertEqual(history.json()["execucoes"], [{"limite": 5}])
+        self.assertEqual(history.headers["cache-control"], "no-store")
         self.assertEqual(self.client.get("/api/automacao/historico", params={"limite": 51}).status_code, 422)
+        for params in ({"pagina": 0}, {"data_inicio": "wrong"}, {"rotina": "other"}, {"status": "other"}):
+            self.assertEqual(self.client.get("/api/automacao/historico", params=params).status_code, 422)
+        self.assertEqual(self.client.get("/api/automacao/execucoes/demo/log?linhas=2").json()["linhas"], ["demo"])
+        self.assertEqual(self.client.get("/api/automacao/execucoes/demo/log?linhas=501").status_code, 422)
         self.assertEqual(self.client.post("/api/automacao/cancelar").status_code, 202)
         self.assertEqual(self.runner.cancelled, 1)
         self.assertEqual(self.client.get("/api/automacao/capturas/x.png").status_code, 404)
@@ -392,7 +458,7 @@ class AutomationRouteTests(unittest.TestCase):
         self.assertEqual(self.client.post("/api/automacao/executar", json={"rotina": "os"}, headers=evil).status_code, 403)
         self.assertEqual(self.client.post("/api/automacao/cancelar", headers=evil).status_code, 403)
         cross_site = {"Sec-Fetch-Site": "cross-site"}
-        for path in ("/api/automacao/estado", "/api/automacao/historico", "/api/automacao/capturas/x.png"):
+        for path in ("/api/automacao/estado", "/api/automacao/historico", "/api/automacao/capturas/x.png", "/api/automacao/execucoes/demo/log"):
             with self.subTest(path=path):
                 self.assertEqual(self.client.get(path, headers=cross_site).status_code, 403)
         remote = TestClient(main.app, base_url=self.origin, client=("192.0.2.10", 1234))

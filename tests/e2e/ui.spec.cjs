@@ -387,7 +387,78 @@ test("inventory evolution compares two saved updates and shows their row annotat
   await auditAccessibility(page, "#modal-evolucao-atualizacoes");
 });
 
+test("inventory evolution prioritizes categories, filters rows and opens the matching result heading", async ({ page }) => {
+  const evolution = {
+    anterior: { id: "fixture-previous", horario: "2026-10-07T09:00:00-03:00" },
+    atual: { id: "fixture-current", horario: "2026-10-08T09:00:00-03:00" },
+    contagens: { novos: 1, resolvidos: 1, continuam: 1 },
+    mudancas: {
+      novos: [{
+        categoria: "apelidos_sem_atualizacao",
+        secao: "Linhas mantidas para conferência",
+        evento_id: "fixture-event-001",
+        item: { computador: "NOVO-HOST", serie: "NOVO-SN" },
+      }],
+      resolvidos: [{
+        categoria: "apelidos_sem_atualizacao",
+        secao: "Linhas mantidas para conferência",
+        evento_id: "fixture-event-001",
+        item: { computador: "RESOLVIDO-HOST", serie: "RESOLVIDO-SN" },
+      }],
+      continuam: [{
+        categoria: "apelidos_sem_atualizacao",
+        secao: "Linhas mantidas para conferência",
+        evento_id: "fixture-event-001",
+        item: { computador: "ATIVO-HOST", serie: "ATIVO-SN" },
+      }],
+    },
+  };
+  await page.route(/\/api\/operacoes\/evolucao\?/, route => route.fulfill({ json: evolution }));
+  await openAnalysisMenu(page);
+  await page.getByRole("button", { name: "Evolução das atualizações" }).click();
+
+  const dialog = page.locator("#modal-evolucao-atualizacoes");
+  const result = dialog.locator("#resultado-evolucao-atualizacoes");
+  await expect(dialog).toBeVisible();
+  await expect(result.locator(".grid > div > p:first-child")).toHaveText([
+    "Novos",
+    "Deixaram de aparecer",
+    "Continuam",
+  ]);
+  await expect(result.locator("[data-evolution-group] > h4")).toHaveText([
+    "Novos",
+    "Deixaram de aparecer",
+    "Continuam",
+  ]);
+
+  const search = dialog.getByLabel("Buscar por hostname, série, seção ou anotação");
+  const category = dialog.getByLabel("Categoria");
+  const rows = result.locator("[data-evolution-row]");
+  await search.fill("ativo-sn");
+  await expect(result.locator("[data-evolution-row]:visible")).toHaveCount(1);
+  await expect(result.locator("[data-evolution-row]:visible")).toContainText("ATIVO-HOST");
+  await expect(dialog.locator("#filtro-evolucao-status")).toHaveText("1 de 3 ocorrências");
+  await dialog.getByRole("button", { name: "Limpar filtros" }).click();
+  await expect(search).toHaveValue("");
+  await expect(result.locator("[data-evolution-row]:visible")).toHaveCount(3);
+
+  await category.selectOption("resolvidos");
+  await expect(result.locator("[data-evolution-row]:visible")).toHaveCount(1);
+  await expect(result.locator('[data-evolution-row][data-evolution-category="resolvidos"]:visible')).toContainText("RESOLVIDO-SN");
+  await auditAccessibility(page, "#modal-evolucao-atualizacoes");
+
+  await result.locator('[data-evolution-category="resolvidos"] [data-evolution-event]').click();
+  const comparison = page.locator("#modal-comparacao-planilhas");
+  const heading = comparison.locator("#comparacao-secao-linhas-conferencia");
+  await expect(dialog).toBeHidden();
+  await expect(comparison).toBeVisible();
+  await expect(heading).toBeFocused();
+  await expect(heading).toBeInViewport();
+});
+
 test("ticket tracking imports both workbooks and relates each serial to its OS", async ({ page }, testInfo) => {
+  // The complete import flow includes two Axe scans and the native file chooser.
+  test.slow();
   await page.setViewportSize({ width: testInfo.project.name === "mobile" ? 390 : 1366, height: 640 });
   await openSidebarIfNeeded(page);
   await page.getByRole("button", { name: "Acompanhamento de Chamados", exact: true }).click();
@@ -745,29 +816,10 @@ test("@profile UI route transitions retain responsive frame pacing", async ({ pa
     .toBeLessThan(250);
 });
 
-test("usage card shows 30-day counts and estimates hours from the configured minutes", async ({ page }) => {
+test("Resumo tab does not show the removed usage panel", async ({ page }) => {
   await openSidebarIfNeeded(page);
   await page.locator("#tab-resumo").click();
-  const card = page.locator("#uso-30-dias");
-  await expect(card).toBeVisible();
-  await expect(card.getByRole("heading", { name: "Uso nos últimos 30 dias" })).toBeVisible();
-  await expect(card.locator('[data-usage-metric="transferencias"] [data-usage-value]')).toHaveText("12");
-  await expect(card.locator('[data-usage-metric="buscas"] [data-usage-value]')).toHaveText("143");
-
-  await card.locator("#uso-30-dias-tempos > summary").click();
-  const transfers = card.getByLabel("Transferências geradas");
-  await transfers.fill("999");
-  await card.getByRole("button", { name: "Salvar tempos" }).click();
-  await expect(card.locator("#uso-30-dias-status")).toHaveText("Use de 0 a 480 minutos.");
-  await expect(transfers).toHaveAttribute("aria-invalid", "true");
-
-  await transfers.fill("15");
-  for (const label of ["Comparações feitas", "Exportações", "OS conciliadas", "Buscas"]) await card.getByLabel(label).fill("");
-  await card.getByRole("button", { name: "Salvar tempos" }).click();
-  await expect(card.locator("#uso-30-dias-status")).toHaveText("Tempos salvos.");
-  await expect(card.locator("#uso-30-dias-horas")).toHaveText("Horas economizadas (estimativa): 3 h");
-  await expect(transfers).not.toHaveAttribute("aria-invalid", "true");
-  await auditAccessibility(page, "#uso-30-dias");
+  await expect(page.getByRole("heading", { name: "Uso nos últimos 30 dias" })).toHaveCount(0);
 });
 
 test("Resumo tab switches panels, keeps ARIA state and supports arrow keys", async ({ page }) => {
@@ -791,7 +843,6 @@ test("Resumo tab switches panels, keeps ARIA state and supports arrow keys", asy
   await page.locator(tabs.resumo).click();
   await expectOnly("resumo");
   await expect(page.locator("#ux-home-panel")).toBeVisible();
-  await expect(page.locator("#uso-30-dias")).toBeVisible();
 
   await openSidebarIfNeeded(page);
   await page.locator(tabs.transporte).click();
@@ -815,19 +866,6 @@ test("Resumo tab switches panels, keeps ARIA state and supports arrow keys", asy
   await expectOnly("home");
   await page.keyboard.press("End");
   await expectOnly("automacao");
-});
-
-test("usage card shows stat cards in two columns on narrow screens", async ({ page }) => {
-  await page.setViewportSize({ width: 390, height: 844 });
-  await openSidebarIfNeeded(page);
-  await page.locator("#tab-resumo").click();
-  const grid = page.locator("#uso-30-dias-lista");
-  await expect(grid).toBeVisible();
-  const columns = await grid.evaluate(el => getComputedStyle(el).gridTemplateColumns.split(" ").length);
-  expect(columns).toBe(2);
-  await expect(grid.locator("[data-usage-metric]")).toHaveCount(5);
-  const overflow = await page.evaluate(() => document.documentElement.scrollWidth - document.documentElement.clientWidth);
-  expect(overflow).toBeLessThanOrEqual(0);
 });
 
 test("stale base alert shows the last update date and opens the base update", async ({ page, request }) => {

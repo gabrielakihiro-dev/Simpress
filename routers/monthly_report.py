@@ -33,7 +33,6 @@ class MonthlyReportServices:
     load_comparison_history: Callable[[], List[Dict[str, Any]]]
     comparison_history_for_display: Callable[[Dict[str, Any]], Dict[str, Any]]
     ticket_report_path: Callable[[], Path]
-    read_usage_metrics: Callable[[], Dict[str, Any]]
     today: Callable[[], date] = date.today
     now: Callable[[], datetime] = datetime.now
 
@@ -54,12 +53,6 @@ def _build_workbook(services: MonthlyReportServices, month: ReportMonth) -> Tupl
     equipment, stats = services.inventory_snapshot()
     if not equipment:
         raise DomainBusyError("A base oficial EquipamentosDetalhes não está carregada.")
-    try:
-        usage = services.read_usage_metrics()
-    except (OSError, ValueError) as error:
-        # Unreadable metrics never block the report; the usage block shows zeros.
-        logger.warning("Métricas de uso ilegíveis no relatório mensal (erro=%s).", type(error).__name__)
-        usage = {}
     report = build_monthly_report(
         month,
         equipment=equipment,
@@ -67,7 +60,6 @@ def _build_workbook(services: MonthlyReportServices, month: ReportMonth) -> Tupl
         comparison_history=services.load_comparison_history(),
         comparison_display=services.comparison_history_for_display,
         ticket_report=_read_ticket_report(services.ticket_report_path()),
-        usage_store=usage,
         generated_at=services.now(),
     )
     return build_monthly_report_workbook(report)

@@ -17,7 +17,7 @@ import subprocess
 import sys
 import threading
 from dataclasses import dataclass, field
-from datetime import datetime
+from datetime import date, datetime
 from pathlib import Path
 from typing import Any, Callable, Dict, List, Optional, Protocol
 from urllib.parse import quote
@@ -546,7 +546,7 @@ class ChromeAutomationRunner:
                 batches.append({"id": str(value), "status": ""})
         return batches
 
-    def history(self, limit: int = 15) -> List[Dict[str, Any]]:
+    def history(self, limit: Optional[int] = 15) -> List[Dict[str, Any]]:
         if not self.contract.log_dir.is_dir():
             return []
         site = []
@@ -599,3 +599,55 @@ class ChromeAutomationRunner:
                 "log": str(entry.get("log") or ""),
             })
         return result
+
+    def history_page(
+        self, limit: int = 5, page: int = 1, *, start: Optional[date] = None,
+        end: Optional[date] = None, routine: Optional[str] = None, status: Optional[str] = None,
+    ) -> Dict[str, Any]:
+        if start and end and start > end:
+            raise DomainError("A data inicial deve ser anterior ou igual à data final.", status_code=422)
+        entries = []
+        for entry in self.history(None):
+            timestamp = _parse_time(entry["inicio"])
+            local_day = timestamp.astimezone().date() if timestamp else None
+            if (start or end) and local_day is None:
+                continue
+            if local_day and ((start and local_day < start) or (end and local_day > end)):
+                continue
+            if routine and entry["rotina"] != routine:
+                continue
+            if status and entry["status"] != status:
+                continue
+            entries.append(entry)
+        limit = max(1, min(limit, 50))
+        pages = max(1, (len(entries) + limit - 1) // limit)
+        page = max(1, min(page, pages))
+        offset = (page - 1) * limit
+        return {"execucoes": entries[offset:offset + limit], "total": len(entries),
+                "pagina": page, "paginas": pages, "limite": limit}
+
+    def execution_log(self, identifier: str, lines: int = 200) -> Dict[str, Any]:
+        entry = next((item for item in self.history(None) if item["id"] == identifier), None)
+        if entry is None:
+            raise DomainError("Execução não encontrada.", status_code=404)
+        directory = self.contract.log_dir.resolve(strict=False)
+        name = str(entry["log"])
+        path = (directory / name).resolve(strict=False)
+        if Path(name).name != name or path.parent != directory or path.suffix != ".log" or not path.is_file():
+            raise DomainError("Log desta execução não está disponível.", status_code=404)
+        try:
+            with path.open("rb") as handle:
+                handle.seek(0, os.SEEK_END)
+                size = handle.tell()
+                start = max(0, size - MAX_LOG_CHUNK_BYTES)
+                handle.seek(start)
+                raw = handle.read(MAX_LOG_CHUNK_BYTES)
+                if start:
+                    raw = raw.partition(b"\n")[2]
+                text = raw.decode("utf-8", errors="replace")
+        except OSError:
+            raise DomainError("Não foi possível ler o log desta execução.", status_code=503) from None
+        content = text.splitlines()
+        limit = max(1, min(lines, 500))
+        return {"execucao": entry, "arquivo": name, "linhas": content[-limit:],
+                "limitado": size > MAX_LOG_CHUNK_BYTES or len(content) > limit}

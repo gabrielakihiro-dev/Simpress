@@ -31,6 +31,13 @@
     content.innerHTML = comparison.somente_anotacoes_sincronizadas
       ? renderer.conteudoAnotacoesSincronizadas(comparison, colunas)
       : renderer.conteudoResultadoComparacao(comparison, listas, colunas);
+    const navigationHeading = navigationTarget?.section
+      ? encontrarTituloSecaoComparacao(content, navigationTarget.section)
+      : null;
+    if (navigationHeading) {
+      navigationHeading.setAttribute("data-comparison-navigation-heading", "");
+      if (!navigationHeading.hasAttribute("tabindex")) navigationHeading.setAttribute("tabindex", "-1");
+    }
     conectarAcoesApelidosManuais(comparison, listas.divergenciasApelidosManuais);
     conectarRemocaoHostnames();
     conectarDecisoesPendenciasUsuario();
@@ -41,7 +48,7 @@
     conectarCartoesResumoComparacao();
     app.abrirModalAcessivel(
       "modal-comparacao-planilhas",
-      '[aria-label="Fechar resultado"]',
+      navigationHeading ? "[data-comparison-navigation-heading]" : '[aria-label="Fechar resultado"]',
       "fecharModalComparacaoPlanilhas",
       comparison.contexto_historico === true ? "btn-historico-comparacoes" : "btn-atualizar-planilhas",
     );
@@ -369,12 +376,32 @@
     return String(value || "").normalize("NFKD").replace(/[\u0300-\u036f]/g, "").replace(/[^A-Z0-9]/gi, "").toUpperCase();
   }
 
+  function encontrarGrupoSecaoComparacao(content, sectionKey) {
+    const target = String(sectionKey || "").trim();
+    const normalizedTarget = normalizarIdentificadorLinhaComparacao(target);
+    return [...content.querySelectorAll("[data-history-filter-group]")].find(candidate => {
+      if (!candidate.getClientRects().length) return false;
+      if (candidate.dataset.historyFilterGroup === target) return true;
+      const section = candidate.closest("[data-history-filter-section]");
+      const headings = [candidate.querySelector("h5"), section?.querySelector("h4")]
+        .filter(Boolean)
+        .map(heading => normalizarIdentificadorLinhaComparacao(heading.textContent));
+      return headings.includes(normalizedTarget);
+    });
+  }
+
+  function encontrarTituloSecaoComparacao(content, sectionKey) {
+    const group = encontrarGrupoSecaoComparacao(content, sectionKey);
+    if (!group) return null;
+    const section = group.closest("[data-history-filter-section]");
+    return group.querySelector("h5") || section?.querySelector("h4") || group.querySelector("h4");
+  }
+
   function navegarParaLinhaComparacao(target) {
     const content = document.getElementById("comparacao-planilhas-conteudo");
     if (!content) return;
     if (target?.section) {
-      const group = [...content.querySelectorAll("[data-history-filter-group]")]
-        .find(candidate => candidate.dataset.historyFilterGroup === target.section && candidate.getClientRects().length > 0);
+      const group = encontrarGrupoSecaoComparacao(content, target.section);
       if (!group) return;
       const reduced = window.matchMedia?.("(prefers-reduced-motion: reduce)").matches;
       // Include the section title when the section holds only this group, and stop well below the sticky filter bar.
@@ -383,6 +410,11 @@
       const bar = content.querySelector("[data-history-filter-bar]");
       anchor.style.scrollMarginTop = `${(bar ? bar.offsetHeight : 0) + 32}px`;
       anchor.scrollIntoView({ behavior: reduced ? "auto" : "smooth", block: "start" });
+      const heading = (section || group.closest("[data-history-filter-section]") || group).querySelector("h4");
+      if (heading) {
+        if (!heading.hasAttribute("tabindex")) heading.setAttribute("tabindex", "-1");
+        heading.focus({ preventScroll: true });
+      }
       motion?.reveal(group);
       return;
     }

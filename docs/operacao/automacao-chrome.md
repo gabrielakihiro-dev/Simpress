@@ -45,7 +45,7 @@ Com o servidor ativo, as inboxes do próprio servidor também processam os lotes
 | `POST /api/automacao/executar` | JSON `{rotina}`; só `os`, `inventarios`, `ambas`, `login`. | 202 com o mesmo corpo do estado. | 409 `Já há uma rotina em andamento: <rotina> desde <hora>.`; 422 rotina fora da lista; 503 script ausente ou falha ao iniciar. |
 | `POST /api/automacao/cancelar` | Sem corpo. | 202 `{metodo: "sinal"\|"processo", mensagem, estado}`. | 409 nenhuma rotina em andamento, ou execução de fora do site sem `--cancelar`. |
 | `GET /api/automacao/estado?offset=N` | `offset` em bytes do log (0 = início). | `{estado: "livre"\|"em_andamento", rotina, inicio, origem, pid, cancelamento_pedido, aguardando_login, login_origem, log: {arquivo, offset, linhas, reiniciado}, ultima}`. | 422 offset negativo. |
-| `GET /api/automacao/historico?limite=N` | `limite` de 1 a 50 (padrão 15). | `{execucoes: [{id, rotina, origem, inicio, fim, status, codigo, mensagem, lotes, capturas: [{nome, url}]}]}`, mais recentes primeiro. | 422 limite fora da faixa. |
+| `GET /api/automacao/historico` | `limite` de 1 a 50 (padrão 15), `pagina`, `data_inicio`, `data_fim`, `rotina` e `status`. | `{execucoes: [{id, rotina, origem, inicio, fim, status, codigo, mensagem, lotes, capturas: [{nome, url}]}]}`, mais recentes primeiro. | 422 limite fora da faixa. |
 | `GET /api/automacao/capturas/{nome}` | Nome de um `.png` da pasta de logs (sem caminho). | Imagem PNG. | 404 nome inválido ou inexistente. |
 
 - `log.linhas` traz até 64 KB por chamada e só linhas completas; `offset` é o próximo ponto de leitura. Se o arquivo mudou (outra execução) ou encolheu, `reiniciado: true` e a leitura recomeça do zero.
@@ -58,7 +58,7 @@ Com o servidor ativo, as inboxes do próprio servidor também processam os lotes
 - Cartão **Rotinas**: botões `Rotina de OS`, `Inventários`, `Ambas`, `Abrir Chrome para login` e `Cancelar`. Com uma rotina em andamento, os quatro primeiros ficam desabilitados e só `Cancelar` fica ativo; livre, `Cancelar` fica desabilitado. Texto curto lembrando que os logins são feitos na janela do Chrome de automação e que a importação é pelas pastas locais.
 - **Estado atual** (`role="status"`): `Livre` ou `Em andamento`, com rotina, horário de início e origem (`pelo site` ou `fora do site`). Durante o cancelamento: `Cancelamento pedido…`.
 - **Aviso de login** (`#automacao-aviso-login`, `role="alert"`): visível só enquanto a rotina espera login: `Faça o login no Chrome de automação (<sistema>). A rotina continua sozinha depois do login.`
-- **Andamento**: área de log monoespaçada (`role="log"`, `aria-live="polite"`) com as linhas novas a cada 1,5 s enquanto houver execução e a cada 5 s quando livre; rolagem automática só quando o usuário já está no fim. Até 2.000 linhas na tela.
+- **Andamento**: área de log monoespaçada (`role="log"`, `aria-live="polite"`) com as linhas novas a cada 1,5 s enquanto houver execução e a cada 5 s quando livre; rolagem automática só quando o usuário já está no fim. Até 500 linhas em memória, com 200 linhas visíveis por padrão (opções 100/200/500).
 - **Últimas execuções**: tabela `Rotina | Início | Duração | Status | Lotes | Capturas` no desktop; no celular, cada execução vira um cartão com os mesmos dados. As capturas abrem em aba nova pelo link `/api/automacao/capturas/<nome>`.
 - Erros da API aparecem em toast; o 409 mostra a mensagem do servidor.
 - Temas claro e escuro pelos tokens existentes; no celular, botões em duas colunas, 16 px de margem e sem rolagem horizontal; animações respeitam `prefers-reduced-motion`.
@@ -77,3 +77,9 @@ Com o servidor ativo, as inboxes do próprio servidor também processam os lotes
 
 - Conferir em `ScriptContract` os nomes reais da trava, do sinal, da pasta de logs, dos códigos `2`/`130` e das frases de login.
 - Com o log do script em arquivo, a captura do stdout (`.site.log`) pode continuar (é a fonte das linhas ao vivo) ou ser trocada pela leitura do `.log` do script.
+
+## Consulta compacta de logs e execuções
+
+Últimas execuções mostra cinco linhas por página (opções 5/10/20), total e navegação. Filtros recolhíveis por período inclusivo, rotina e status preservam a consulta aplicada. Cada linha oferece Ver log. O Andamento permite escolher uma data e uma execução, mantendo o log histórico separado do polling ao vivo; Voltar ao vivo restaura a execução atual. Os dois painéis permitem recolher, ampliar a área útil e restaurar com Escape. A ampliação mantém os outros controles acessíveis pela navegação da página. Nenhum desses controles apaga registros.
+
+Detalhes e análise de melhorias: [especificação](automacao-historico-especificacao.md). GET /api/automacao/historico agora inclui paginação e filtros; GET /api/automacao/execucoes/{execucao_id}/log consulta somente um log conhecido, com até 500 linhas e 64 KB. Arquivos removidos pela retenção já existente podem ficar indisponíveis; os resumos disponíveis continuam consultáveis.
