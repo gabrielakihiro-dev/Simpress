@@ -1,11 +1,14 @@
 """Manual logged-in user: fill the gap when the Endpoint has no user for a serial.
 
 The manual user is kept per serial in a local JSON file and only applies while the
-Endpoint reports no user. Every change is recorded in the alias history (``tipo``
-``usuario``) so it can be undone, and warnings raised when a new Endpoint file drops
-a user or hostname are stored there as ``aviso_endpoint`` events.
+Endpoint reports no user. When it was informed goes to a sibling file
+(``usuarios_manuais_datas.json``), so the users file keeps its ``serial -> text`` shape;
+users saved before that file existed simply have no date. Every change is recorded in
+the alias history (``tipo`` ``usuario``) so it can be undone, and warnings raised when
+a new Endpoint file drops a user or hostname are stored there as ``aviso_endpoint`` events.
 """
 
+import json
 import uuid
 from copy import deepcopy
 from datetime import datetime
@@ -16,13 +19,23 @@ from core.errors import DomainConflictError, DomainError
 from core.integrity import FileBusyError, FileTransactionError, WorkbookSafetyError
 from domains import inventory_state
 from domains.alias_changes import AliasChangeServices
-from domains.effective_alias import endpoint_user_for_serial, mac_endpoint_serial_key, with_details_serials
+from domains.effective_alias import (
+    endpoint_user_candidates,
+    endpoint_user_for_serial,
+    mac_endpoint_serial_key,
+    with_details_serials,
+)
 from domains.inventory_comparison import normalize_reference_value
 from domains.inventory_state import STATE_LOCK
 
 MAX_USER_LENGTH = 160
+MANUAL_USER_DATES_FILENAME = "usuarios_manuais_datas.json"
 USER_EVENT_TYPE = "usuario"
 WARNING_EVENT_TYPE = "aviso_endpoint"
+# A manual user hidden by an Endpoint user is moved out of the manual file into the alias
+# history with this action, so it never comes back on its own when the Endpoint empties.
+ARCHIVED_BY_ENDPOINT_ACTION = "arquivado_endpoint"
+USER_CHANGE_ORDER = ("novo_endpoint", "alterado_endpoint", "removido_endpoint", "manual_voltou")
 
 
 def _now() -> str:
@@ -38,6 +51,37 @@ def manual_users_by_serial(stored: Dict[str, Any]) -> Dict[str, str]:
         if serial_key and text:
             by_serial.setdefault(serial_key, set()).add(text)
     return {key: next(iter(values)) for key, values in by_serial.items() if len(values) == 1}
+
+
+def manual_user_dates_file(users_file: Path) -> Path:
+    return users_file.with_name(MANUAL_USER_DATES_FILENAME)
+
+
+def read_manual_user_dates(users_file: Path) -> Dict[str, Any]:
+    """Stored ``serial -> {usuario, informado_em}``; a missing or unreadable file only hides the dates."""
+    path = manual_user_dates_file(users_file)
+    try:
+        value = json.loads(path.read_text(encoding="utf-8")) if path.exists() else {}
+    except (OSError, UnicodeError, ValueError):
+        return {}
+    return value if isinstance(value, dict) else {}
+
+
+def manual_user_dates_by_serial(users: Dict[str, str], stored_dates: Dict[str, Any]) -> Dict[str, str]:
+    """When each current manual user was informed.
+
+    ``users`` comes from ``manual_users_by_serial``. A date counts only while it was recorded
+    for that same user, so a user edited outside the app never shows someone else's date.
+    """
+    dates: Dict[str, str] = {}
+    for serial, entry in stored_dates.items():
+        serial_key = normalize_reference_value(serial)
+        if not isinstance(entry, dict) or serial_key not in users:
+            continue
+        informed_at = str(entry.get("informado_em") or "").strip()
+        if informed_at and str(entry.get("usuario") or "").strip() == users[serial_key]:
+            dates[serial_key] = max(informed_at, dates.get(serial_key, ""))
+    return dates
 
 
 def build_user_change_entry(
@@ -94,6 +138,139 @@ def build_endpoint_warning_entries(
     return entries
 
 
+def _equipment_label(equipment: Dict[str, Any]) -> str:
+    return equipment.get("modelo") or equipment.get("tipo") or "Equipamento"
+
+
+def _equipment_by_serial_key(cache: Dict[str, Dict[str, Any]]) -> Dict[str, Dict[str, Any]]:
+    """One equipment per normalized serial; serials repeated in the Simpress base are left out."""
+    grouped: Dict[str, List[Dict[str, Any]]] = {}
+    for serial, equipment in cache.items():
+        key = normalize_reference_value(equipment.get("serial") or serial)
+        if key and equipment.get("invall_alias_status") != "serie_detalhes_duplicada":
+            grouped.setdefault(key, []).append(equipment)
+    return {key: items[0] for key, items in grouped.items() if len(items) == 1}
+
+
+def manual_users_overridden_by_endpoint(
+    equipment_cache: Dict[str, Dict[str, Any]],
+    manual_users: Dict[str, str],
+) -> Dict[str, Dict[str, str]]:
+    """Manual users hidden because the Endpoint now reports a user, keyed by normalized serial."""
+    overridden: Dict[str, Dict[str, str]] = {}
+    for key, equipment in _equipment_by_serial_key(equipment_cache).items():
+        manual = manual_users.get(key, "")
+        if manual and equipment.get("usuarios_logados_origem") == "endpoint":
+            overridden[key] = {
+                "serial": str(equipment.get("serial") or key).strip(),
+                "equipamento": _equipment_label(equipment),
+                "usuario_manual": manual,
+                "usuario_endpoint": str(equipment.get("usuarios_logados") or "").strip(),
+            }
+    return overridden
+
+
+def build_archived_manual_user_entries(overridden: Dict[str, Dict[str, str]]) -> List[Dict[str, Any]]:
+    """History events that keep each archived manual user; undoing one restores it."""
+    entries = []
+    for key in sorted(overridden):
+        item = overridden[key]
+        entry = build_user_change_entry(
+            item["serial"], item["equipamento"], item["usuario_manual"], "", ARCHIVED_BY_ENDPOINT_ACTION,
+        )
+        entry["usuario_endpoint"] = item["usuario_endpoint"]
+        entries.append(entry)
+    return entries
+
+
+def without_manual_users(stored: Any, serial_keys: set) -> Dict[str, Any]:
+    """Manual users file without the given serials (every key spelling is removed)."""
+    if not isinstance(stored, dict):
+        raise RuntimeError("O cadastro de usuários manuais não contém um objeto válido.")
+    return {serial: user for serial, user in stored.items() if normalize_reference_value(serial) not in serial_keys}
+
+
+def archived_manual_users(history: List[Any]) -> Dict[str, str]:
+    """Manual user archived by the Endpoint, per serial, while no later user change replaced it."""
+    latest: Dict[str, Dict[str, Any]] = {}
+    for item in history:
+        if isinstance(item, dict) and item.get("tipo") == USER_EVENT_TYPE:
+            key = normalize_reference_value(item.get("serial"))
+            if key:
+                latest[key] = item
+    return {
+        key: str(event.get("usuario_anterior") or "")
+        for key, event in latest.items()
+        if event.get("acao") == ARCHIVED_BY_ENDPOINT_ACTION and str(event.get("usuario_anterior") or "").strip()
+    }
+
+
+def logged_user_changes(
+    previous_cache: Dict[str, Dict[str, Any]],
+    current_cache: Dict[str, Dict[str, Any]],
+    endpoint_index: Dict[str, Any],
+    overridden: Dict[str, Dict[str, str]],
+    archived: Dict[str, str],
+) -> List[Dict[str, str]]:
+    """Logged-user changes between the base before and after an update, for its result.
+
+    Only serials present in both loads are compared, so equipment that just entered or left
+    the Simpress base is not listed. ``overridden`` holds the manual users archived by this
+    update and ``archived`` the ones archived earlier, shown when the Endpoint user goes away.
+    """
+    before = _equipment_by_serial_key(previous_cache)
+    duplicates = endpoint_index.get("duplicates", {})
+    rows: List[Dict[str, str]] = []
+    for key, equipment in _equipment_by_serial_key(current_cache).items():
+        previous = before.get(key)
+        if previous is None:
+            continue
+        old_user = str(previous.get("usuarios_logados") or "").strip()
+        old_origin = str(previous.get("usuarios_logados_origem") or "") if old_user else ""
+        new_user = str(equipment.get("usuarios_logados") or "").strip()
+        new_origin = str(equipment.get("usuarios_logados_origem") or "") if new_user else ""
+        manual_archived = ""
+        if new_origin == "endpoint":
+            if old_origin != "endpoint":
+                change = "novo_endpoint"
+                manual_archived = overridden.get(key, {}).get("usuario_manual", "")
+                reason = "Usuário novo vindo do Endpoint." + (
+                    f" O usuário manual {manual_archived} foi arquivado." if manual_archived else ""
+                )
+            elif old_user != new_user:
+                change, reason = "alterado_endpoint", "Usuário alterado no Endpoint."
+            else:
+                continue
+        elif old_origin == "endpoint":
+            if new_origin == "manual":
+                change = "manual_voltou"
+                reason = "Usuário removido do Endpoint; o usuário manual voltou a valer. Confirme ou altere o usuário manual."
+            else:
+                change, reason = "removido_endpoint", "Usuário removido do Endpoint."
+                if key in duplicates:
+                    reason += " A série está duplicada no Endpoint; nenhum usuário foi escolhido."
+                manual_archived = archived.get(key, "")
+                if manual_archived:
+                    reason += f" Usuário manual arquivado: {manual_archived}; salve-o novamente para restaurar."
+        else:
+            continue
+        row = {
+            "serie": str(equipment.get("serial") or key).strip(),
+            "computador": str(equipment.get("apelido") or "").strip(),
+            "tipo": change,
+            "usuario_anterior": old_user,
+            "origem_anterior": old_origin,
+            "usuario_novo": new_user,
+            "origem_nova": new_origin,
+            "motivo": reason,
+        }
+        if manual_archived:
+            row["usuario_manual_arquivado"] = manual_archived
+        rows.append(row)
+    rows.sort(key=lambda row: (USER_CHANGE_ORDER.index(row["tipo"]), row["serie"]))
+    return rows
+
+
 def _locate_equipment(serial: str) -> Dict[str, Any]:
     with STATE_LOCK:
         equipment = inventory_state.equipamentos_cache.get(serial)
@@ -142,8 +319,10 @@ def apply_user_change(
     serial_key = normalize_reference_value(target_serial)
 
     try:
+        users_file = _users_file(services)
+        dates_file = manual_user_dates_file(users_file)
         with services.atomic_file_transaction(
-            services.transaction_root(), [_users_file(services), services.alias_history_file()]
+            services.transaction_root(), [users_file, dates_file, services.alias_history_file()]
         ) as transaction:
             with STATE_LOCK:
                 next_equipment_cache = deepcopy(inventory_state.equipamentos_cache)
@@ -159,6 +338,14 @@ def apply_user_change(
 
             stored = dict(services.validate_json_object(_load_users(services), "usuários manuais"))
             previous_user = manual_users_by_serial(stored).get(serial_key, "")
+            # Saving the same user again keeps the date it was first informed.
+            informed_at = (
+                manual_user_dates_by_serial(
+                    {serial_key: previous_user}, read_manual_user_dates(users_file),
+                ).get(serial_key, "")
+                if previous_user and previous_user == new_user
+                else ""
+            ) or _now()
             if expected_current is not None and previous_user != expected_current:
                 raise DomainConflictError("O usuário salvo mudou depois deste registro; nenhuma alteração foi aplicada.")
 
@@ -170,7 +357,17 @@ def apply_user_change(
                     users[target_serial] = new_user
                 return users
 
-            transaction.update_json(_users_file(services), update_users, {})
+            transaction.update_json(users_file, update_users, {})
+
+            def update_dates(data: Any) -> Dict[str, Any]:
+                dates = dict(data) if isinstance(data, dict) else {}
+                for key in [k for k in dates if normalize_reference_value(k) == serial_key]:
+                    dates.pop(key, None)
+                if new_user:
+                    dates[target_serial] = {"usuario": new_user, "informado_em": informed_at}
+                return dates
+
+            transaction.update_json(dates_file, update_dates, {})
 
             history_changes = (previous_user != new_user and record_history) or bool(remove_history_event_id)
             if history_changes:
@@ -202,6 +399,7 @@ def apply_user_change(
             manual_now = {serial_key: new_user} if new_user else {}
             index_for_equipment = dict(endpoint_index)
             index_for_equipment["manual_users"] = manual_now
+            index_for_equipment["manual_user_dates"] = {serial_key: informed_at} if new_user else {}
             updated = dict(equipment)
             services.apply_effective_alias(
                 updated,
@@ -255,6 +453,8 @@ def logged_users_for_series(services: AliasChangeServices, series: List[str]) ->
                     "serial": str(equipment.get("serial") or serial),
                     "usuario": str(equipment.get("usuarios_logados") or "").strip(),
                     "origem": str(equipment.get("usuarios_logados_origem") or ""),
+                    "informado_em": str(equipment.get("usuarios_logados_informado_em") or ""),
+                    "candidatos": list(equipment.get("usuarios_logados_candidatos") or []),
                 })
     endpoint_index = with_details_serials(services.read_endpoint_alias_index(), details_serials)
     result: Dict[str, Any] = {}
@@ -264,10 +464,23 @@ def logged_users_for_series(services: AliasChangeServices, series: List[str]) ->
             matches = by_key.get(f"S{key}", [])
         if len(matches) == 1:
             match = matches[0]
-            result[serie] = {"usuario": match["usuario"], "origem": match["origem"] if match["usuario"] else "", "serial_cadastro": match["serial"]}
+            origem = match["origem"] if match["usuario"] else ""
+            result[serie] = {
+                "usuario": match["usuario"],
+                "origem": origem,
+                "serial_cadastro": match["serial"],
+                "informado_em": match["informado_em"] if origem == "manual" else "",
+                "candidatos": match["candidatos"],
+            }
             continue
         usuario = endpoint_user_for_serial(endpoint_index, key).strip()
-        result[serie] = {"usuario": usuario, "origem": "endpoint" if usuario else "", "serial_cadastro": None}
+        result[serie] = {
+            "usuario": usuario,
+            "origem": "endpoint" if usuario else "",
+            "serial_cadastro": None,
+            "informado_em": "",
+            "candidatos": endpoint_user_candidates(endpoint_index, key),
+        }
     return {"usuarios": result}
 
 

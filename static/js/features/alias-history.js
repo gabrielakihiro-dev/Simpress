@@ -196,7 +196,9 @@
     } else {
       acao.textContent = evento.acao === "desfazer"
         ? (categoria === "usuario" ? "Reversão de usuário" : "Reversão de apelido")
-        : "Alteração";
+        : evento.acao === "arquivado_endpoint"
+          ? `Manual arquivado: o Endpoint informou ${evento.usuario_endpoint || "outro usuário"}`
+          : "Alteração";
     }
     linha.appendChild(acao);
 

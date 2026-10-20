@@ -20,7 +20,13 @@ from domains.effective_alias import (
     endpoint_loss_warnings,
 )
 from domains.equipment_search import build_search_index, search_index
-from domains.user_changes import build_endpoint_warning_entries
+from domains.user_changes import (
+    archived_manual_users,
+    build_endpoint_warning_entries,
+    logged_user_changes,
+    manual_user_dates_by_serial,
+    manual_users_overridden_by_endpoint,
+)
 import test_integrity_workflows as base
 from test_integrity_workflows import _details_bytes, make_details, make_model
 
@@ -75,6 +81,49 @@ class UserPrecedenceTests(unittest.TestCase):
         apply_effective_alias(equipment, index)
         self.assertEqual(equipment["usuarios_logados"], "")
 
+    def test_manual_user_carries_the_date_it_was_informed(self):
+        index = endpoint_index(("SN-1", "HOST-1", ""), ("SN-2", "HOST-2", "ana"))
+        index["manual_users"] = {"SN1": "joao", "SN2": "pedro"}
+        index["manual_user_dates"] = {"SN1": "2026-10-20T09:15:00-03:00", "SN2": "2026-10-19T08:00:00-03:00"}
+        manual, endpoint = {"serial": "SN-1"}, {"serial": "SN-2"}
+        apply_effective_alias(manual, index)
+        apply_effective_alias(endpoint, index)
+        self.assertEqual(manual["usuarios_logados_informado_em"], "2026-10-20T09:15:00-03:00")
+        # The Endpoint user wins, so the manual date is not shown.
+        self.assertEqual(endpoint["usuarios_logados_informado_em"], "")
+
+    def test_dates_count_only_for_the_same_current_user(self):
+        stored = {
+            "SN-1": {"usuario": "joao", "informado_em": "2026-10-20T09:15:00-03:00"},
+            "SN-2": {"usuario": "antigo", "informado_em": "2026-10-01T09:15:00-03:00"},
+            "SN-3": {"usuario": "ana", "informado_em": "2026-10-02T09:15:00-03:00"},
+            "SN-4": "texto solto",
+        }
+        users = {"SN1": "joao", "SN2": "novo", "SN4": "bia"}
+        self.assertEqual(manual_user_dates_by_serial(users, stored), {"SN1": "2026-10-20T09:15:00-03:00"})
+
+    def test_duplicated_endpoint_serial_lists_candidates_without_choosing_one(self):
+        index = endpoint_index(
+            ("SN-1", "HOST-A", "joao"), ("SN-1", "HOST-B", "maria"), ("SN-1", "HOST-C", "JOAO"),
+            ("SN-2", "HOST-2", "ana"), ("SN-3", "HOST-3", ""), ("SN-3", "HOST-4", "N/A"),
+        )
+        self.assertEqual(index["ambiguous_users"], {"SN1": ["joao", "maria"]})
+        ambiguous, unique, blank = {"serial": "SN-1"}, {"serial": "SN-2"}, {"serial": "SN-3"}
+        for equipment in (ambiguous, unique, blank):
+            apply_effective_alias(equipment, index)
+        self.assertEqual((ambiguous["usuarios_logados"], ambiguous["usuarios_logados_origem"]), ("", ""))
+        self.assertEqual(ambiguous["usuarios_logados_candidatos"], ["joao", "maria"])
+        self.assertEqual(unique["usuarios_logados_candidatos"], [])
+        self.assertEqual(blank["usuarios_logados_candidatos"], [])
+
+    def test_manual_user_fills_an_ambiguous_serial_and_keeps_the_candidates(self):
+        index = endpoint_index(("SN-1", "HOST-A", "joao"), ("SN-1", "HOST-B", "maria"))
+        index["manual_users"] = {"SN1": "pedro"}
+        equipment = {"serial": "SN-1"}
+        apply_effective_alias(equipment, index)
+        self.assertEqual((equipment["usuarios_logados"], equipment["usuarios_logados_origem"]), ("pedro", "manual"))
+        self.assertEqual(equipment["usuarios_logados_candidatos"], ["joao", "maria"])
+
 
 class UserSearchTests(unittest.TestCase):
     def test_search_finds_equipment_by_logged_user_after_serial_and_alias_matches(self):
@@ -86,6 +135,13 @@ class UserSearchTests(unittest.TestCase):
         self.assertEqual([r["serial"] for r in search_index(index, "valmeida")], ["SN-A"])
         self.assertEqual([r["serial"] for r in search_index(index, "fvalmeida")], ["SN-A"])
         self.assertEqual(search_index(index, "ninguem"), [])
+
+    def test_ambiguous_endpoint_candidates_are_searchable_and_public(self):
+        cache = {"SN-A": {"serial": "SN-A", "modelo": "X", "tipo": "Notebook", "apelido": "H1",
+                          "usuarios_logados": "", "usuarios_logados_candidatos": ["joao", "maria"]}}
+        found = search_index(build_search_index(cache), "maria")
+        self.assertEqual([r["serial"] for r in found], ["SN-A"])
+        self.assertEqual(found[0]["usuarios_logados_candidatos"], ["joao", "maria"])
 
 
 class EndpointLossWarningTests(unittest.TestCase):
@@ -115,6 +171,69 @@ class EndpointLossWarningTests(unittest.TestCase):
         self.assertEqual(len(build_endpoint_warning_entries(warnings, {}, first, "outro")), 1)
 
 
+def equipment(serial, user="", origin="", alias=""):
+    return {"serial": serial, "apelido": alias, "usuarios_logados": user, "usuarios_logados_origem": origin if user else ""}
+
+
+class UserChangeSummaryTests(unittest.TestCase):
+    def test_lists_new_changed_removed_and_returning_manual_users(self):
+        before = {
+            "SN-1": equipment("SN-1", "joao", "manual"),
+            "SN-2": equipment("SN-2", "ana", "endpoint"),
+            "SN-3": equipment("SN-3", "bia", "endpoint"),
+            "SN-4": equipment("SN-4", "cris", "endpoint"),
+            "SN-5": equipment("SN-5", "duda", "endpoint"),
+        }
+        after = {
+            "SN-1": equipment("SN-1", "carla", "endpoint", "HOST-1"),
+            "SN-2": equipment("SN-2", "ana2", "endpoint"),
+            "SN-3": equipment("SN-3"),
+            "SN-4": equipment("SN-4", "velho", "manual"),
+            "SN-5": equipment("SN-5", "duda", "endpoint"),
+            "SN-6": equipment("SN-6", "nova", "endpoint"),
+        }
+        overridden = {"SN1": {"usuario_manual": "joao"}}
+        rows = logged_user_changes(before, after, {"duplicates": {}}, overridden, {"SN3": "manual-antigo"})
+        self.assertEqual([(r["tipo"], r["serie"]) for r in rows], [
+            ("novo_endpoint", "SN-1"), ("alterado_endpoint", "SN-2"),
+            ("removido_endpoint", "SN-3"), ("manual_voltou", "SN-4"),
+        ])
+        novo, alterado, removido, voltou = rows
+        self.assertEqual((novo["usuario_anterior"], novo["origem_anterior"], novo["usuario_novo"]), ("joao", "manual", "carla"))
+        self.assertEqual(novo["usuario_manual_arquivado"], "joao")
+        self.assertIn("arquivado", novo["motivo"])
+        self.assertEqual((alterado["usuario_anterior"], alterado["usuario_novo"]), ("ana", "ana2"))
+        self.assertEqual((removido["usuario_novo"], removido["usuario_manual_arquivado"]), ("", "manual-antigo"))
+        self.assertEqual((voltou["usuario_novo"], voltou["origem_nova"]), ("velho", "manual"))
+        self.assertNotIn("usuario_manual_arquivado", voltou)
+
+    def test_removal_without_manual_and_duplicated_endpoint_serial(self):
+        before = {"SN-1": equipment("SN-1", "ana", "endpoint")}
+        rows = logged_user_changes(before, {"SN-1": equipment("SN-1")}, {"duplicates": {"SN1": []}}, {}, {})
+        self.assertEqual(len(rows), 1)
+        self.assertNotIn("usuario_manual_arquivado", rows[0])
+        self.assertIn("duplicada no Endpoint", rows[0]["motivo"])
+
+    def test_only_manual_users_hidden_by_the_endpoint_are_archived(self):
+        cache = {
+            "SN-1": equipment("SN-1", "carla", "endpoint"),
+            "SN-2": equipment("SN-2", "joao", "manual"),
+            "SCXC9F072K1": equipment("SCXC9F072K1", "DDrodrigues", "endpoint"),
+        }
+        found = manual_users_overridden_by_endpoint(cache, {"SN1": "joao", "SN2": "joao", "SCXC9F072K1": "mac"})
+        self.assertEqual(set(found), {"SN1", "SCXC9F072K1"})
+        self.assertEqual(found["SCXC9F072K1"]["usuario_endpoint"], "DDrodrigues")
+
+    def test_archived_manual_user_is_forgotten_after_a_later_user_change(self):
+        history = [
+            {"tipo": "usuario", "serial": "SN-1", "acao": "arquivado_endpoint", "usuario_anterior": "joao"},
+            {"tipo": "usuario", "serial": "SN-2", "acao": "arquivado_endpoint", "usuario_anterior": "bia"},
+            {"tipo": "usuario", "serial": "SN-2", "acao": "alteracao", "usuario_anterior": "", "usuario_novo": "x"},
+            {"tipo": "aviso_endpoint", "serial": "SN-1", "acao": "aviso"},
+        ]
+        self.assertEqual(archived_manual_users(history), {"SN1": "joao"})
+
+
 class ManualUserWorkflowTests(unittest.TestCase):
     def setUp(self):
         self.temp_context = tempfile.TemporaryDirectory(prefix=".manual-user-test-", dir=base.PROJECT_ROOT)
@@ -128,6 +247,7 @@ class ManualUserWorkflowTests(unittest.TestCase):
         self.model = self.input_dir / "modelo-ficticio.xlsx"
         self.overrides = self.root / "apelidos_modificados.json"
         self.manual_users = self.root / "usuarios_manuais.json"
+        self.manual_dates = self.root / "usuarios_manuais_datas.json"
         self.history = self.root / "historico_alteracoes.json"
         self.comparison_history = self.root / "historico_comparacoes.json"
         self.stack = ExitStack()
@@ -175,17 +295,23 @@ class ManualUserWorkflowTests(unittest.TestCase):
         self.assertEqual(saved["equipamento"]["usuarios_logados"], "joao")
         self.assertEqual(saved["equipamento"]["usuarios_logados_origem"], "manual")
         self.assertEqual(json.loads(self.manual_users.read_text(encoding="utf-8")), {"SN-1": "joao"})
+        informed_at = saved["equipamento"]["usuarios_logados_informado_em"]
+        self.assertRegex(informed_at, r"^\d{4}-\d{2}-\d{2}T")
+        self.assertEqual(json.loads(self.manual_dates.read_text(encoding="utf-8")),
+                         {"SN-1": {"usuario": "joao", "informado_em": informed_at}})
         event = json.loads(self.history.read_text(encoding="utf-8"))[-1]
         self.assertEqual((event["tipo"], event["usuario_anterior"], event["usuario_novo"]), ("usuario", "", "joao"))
 
         # Sobrevive a uma nova carga da base e entra na busca.
         self.assertTrue(main.load_database())
         self.assertEqual(inventory_state.equipamentos_cache["SN-1"]["usuarios_logados"], "joao")
+        self.assertEqual(inventory_state.equipamentos_cache["SN-1"]["usuarios_logados_informado_em"], informed_at)
         self.assertEqual([r["serial"] for r in search_index(inventory_state.equipment_search_index, "JOAO")], ["SN-1"])
 
         undone = main.desfazer_alteracao_apelido(main.ApelidoUndoPayload(evento_id=event["id"]))
         self.assertEqual(undone["equipamento"]["usuarios_logados"], "")
         self.assertEqual(json.loads(self.manual_users.read_text(encoding="utf-8")), {})
+        self.assertEqual(json.loads(self.manual_dates.read_text(encoding="utf-8")), {})
         self.assertEqual(json.loads(self.history.read_text(encoding="utf-8"))[-1]["acao"], "desfazer")
 
     def test_lookup_for_comparison_rows_follows_the_home_rule(self):
@@ -194,13 +320,54 @@ class ManualUserWorkflowTests(unittest.TestCase):
         def lookup():
             return main.consultar_usuarios_logados(UsuariosConsultaPayload(series=["SN-1", "sn2", "SN-9", ""]))["usuarios"]
 
+        empty = {"informado_em": "", "candidatos": []}
         self.assertEqual(lookup(), {
-            "SN-1": {"usuario": "", "origem": "", "serial_cadastro": "SN-1"},
-            "sn2": {"usuario": "ana", "origem": "endpoint", "serial_cadastro": "SN-2"},
-            "SN-9": {"usuario": "", "origem": "", "serial_cadastro": None},
+            "SN-1": {"usuario": "", "origem": "", "serial_cadastro": "SN-1", **empty},
+            "sn2": {"usuario": "ana", "origem": "endpoint", "serial_cadastro": "SN-2", **empty},
+            "SN-9": {"usuario": "", "origem": "", "serial_cadastro": None, **empty},
         })
+        saved = self._save("SN-1", "joao")
+        informed_at = saved["equipamento"]["usuarios_logados_informado_em"]
+        self.assertEqual(lookup()["SN-1"], {
+            "usuario": "joao", "origem": "manual", "serial_cadastro": "SN-1", "informado_em": informed_at, "candidatos": [],
+        })
+
+    def test_legacy_manual_user_without_date_still_applies(self):
+        self.manual_users.write_text(json.dumps({"SN-1": "legado"}), encoding="utf-8")
+        self.assertTrue(main.load_database())
+        equipment = inventory_state.equipamentos_cache["SN-1"]
+        self.assertEqual((equipment["usuarios_logados"], equipment["usuarios_logados_origem"]), ("legado", "manual"))
+        self.assertEqual(equipment["usuarios_logados_informado_em"], "")
+
+    def test_saving_the_same_user_again_keeps_the_first_date(self):
         self._save("SN-1", "joao")
-        self.assertEqual(lookup()["SN-1"], {"usuario": "joao", "origem": "manual", "serial_cadastro": "SN-1"})
+        stored = json.loads(self.manual_dates.read_text(encoding="utf-8"))
+        stored["SN-1"]["informado_em"] = "2026-01-02T03:04:05-03:00"
+        self.manual_dates.write_text(json.dumps(stored), encoding="utf-8")
+        again = self._save("SN-1", "joao")
+        self.assertEqual(again["equipamento"]["usuarios_logados_informado_em"], "2026-01-02T03:04:05-03:00")
+        changed = self._save("SN-1", "maria")
+        self.assertNotEqual(changed["equipamento"]["usuarios_logados_informado_em"], "2026-01-02T03:04:05-03:00")
+
+    def test_duplicated_endpoint_serial_shows_candidates_and_accepts_a_manual_user(self):
+        from routers.aliases import UsuariosConsultaPayload
+
+        make_endpoint_with_users(self.endpoint, [
+            ("SN-1", "HOST-1", "joao"), ("SN-1", "HOST-1B", "maria"), ("SN-2", "HOST-2", "ana"),
+            ("SN-8", "HOST-8", "carla"), ("SN-8", "HOST-8B", "davi"),
+        ])
+        self.assertTrue(main.load_database())
+        found = main.consultar_usuarios_logados(UsuariosConsultaPayload(series=["SN-1", "SN-8"]))["usuarios"]
+        self.assertEqual(found["SN-1"], {
+            "usuario": "", "origem": "", "serial_cadastro": "SN-1", "informado_em": "", "candidatos": ["joao", "maria"],
+        })
+        # Outside the Simpress base the candidates still come from the Endpoint, with no manual field.
+        self.assertEqual(found["SN-8"]["candidatos"], ["carla", "davi"])
+        self.assertIsNone(found["SN-8"]["serial_cadastro"])
+
+        saved = self._save("SN-1", "pedro")
+        self.assertEqual(saved["equipamento"]["usuarios_logados"], "pedro")
+        self.assertEqual(saved["equipamento"]["usuarios_logados_candidatos"], ["joao", "maria"])
 
     def test_macbook_user_is_found_by_either_serial_and_cannot_be_replaced(self):
         from routers.aliases import UsuariosConsultaPayload
@@ -213,7 +380,9 @@ class ManualUserWorkflowTests(unittest.TestCase):
         self.assertTrue(main.load_database())
         self.assertEqual(inventory_state.equipamentos_cache["SCXC9F072K1"]["usuarios_logados"], "DDrodrigues")
         found = main.consultar_usuarios_logados(UsuariosConsultaPayload(series=["SCXC9F072K1", "CXC9F072K1"]))["usuarios"]
-        expected = {"usuario": "DDrodrigues", "origem": "endpoint", "serial_cadastro": "SCXC9F072K1"}
+        expected = {
+            "usuario": "DDrodrigues", "origem": "endpoint", "serial_cadastro": "SCXC9F072K1", "informado_em": "", "candidatos": [],
+        }
         self.assertEqual(found, {"SCXC9F072K1": expected, "CXC9F072K1": expected})
         with self.assertRaises(DomainError) as raised:
             self._save("SCXC9F072K1", "outro")
@@ -244,6 +413,99 @@ class ManualUserWorkflowTests(unittest.TestCase):
         self._save("SN-1", "joao")
         undone = main.desfazer_alteracao_apelido(main.ApelidoUndoPayload(evento_id=alias_event["id"]))
         self.assertEqual(undone["equipamento"]["usuarios_logados"], "joao")
+
+    def _submit(self, endpoint_rows, details_rows=None):
+        from starlette.datastructures import UploadFile
+        import asyncio
+        import uuid
+
+        path = self.endpoint.with_name(f"novo-{uuid.uuid4().hex}.xlsx")
+        make_endpoint_with_users(path, endpoint_rows)
+        details_bytes = _details_bytes(details_rows or [
+            ("SN-1", "ALIAS-1", "Modelo A", "Maringá", "Notebook", "87000000"),
+            ("SN-2", "ALIAS-2", "Modelo B", "Maringá", "Notebook", "87000000"),
+        ])
+        return asyncio.run(main.update_inventory_files(
+            UploadFile(filename="InvAll.xlsx", file=io.BytesIO(path.read_bytes())),
+            UploadFile(filename="Detalhes.xlsx", file=io.BytesIO(details_bytes)),
+            services=main._inventory_update_services,
+            idempotency_key=uuid.uuid4().hex,
+        ))["comparacao"]
+
+    def _user_events(self):
+        return [e for e in json.loads(self.history.read_text(encoding="utf-8")) if e["tipo"] == "usuario"]
+
+    def test_endpoint_user_archives_the_manual_one_and_it_does_not_come_back_alone(self):
+        self._save("SN-1", "joao")
+        result = self._submit([("SN-1", "HOST-1", "carla"), ("SN-2", "HOST-2", "ana")])
+        self.assertEqual(json.loads(self.manual_users.read_text(encoding="utf-8")), {})
+        archived = self._user_events()[-1]
+        self.assertEqual(
+            (archived["acao"], archived["usuario_anterior"], archived["usuario_novo"], archived["usuario_endpoint"]),
+            ("arquivado_endpoint", "joao", "", "carla"),
+        )
+        [row] = result["mudancas_usuarios"]
+        self.assertEqual((row["tipo"], row["serie"], row["usuario_anterior"], row["usuario_novo"]), ("novo_endpoint", "SN-1", "joao", "carla"))
+        self.assertEqual(row["usuario_manual_arquivado"], "joao")
+        self.assertTrue(row["anotacao_id"])
+        saved = json.loads(self.comparison_history.read_text(encoding="utf-8"))[-1]
+        self.assertEqual(saved["resumo"]["mudancas_usuarios"], 1)
+        self.assertEqual(saved["comparacao"]["mudancas_usuarios"][0]["tipo"], "novo_endpoint")
+
+        # Endpoint esvazia: o manual antigo não reaparece sozinho, só é sugerido para restauração.
+        result = self._submit([("SN-1", "HOST-1", ""), ("SN-2", "HOST-2", "ana")])
+        self.assertEqual(inventory_state.equipamentos_cache["SN-1"]["usuarios_logados"], "")
+        [row] = result["mudancas_usuarios"]
+        self.assertEqual((row["tipo"], row["usuario_anterior"], row["usuario_novo"]), ("removido_endpoint", "carla", ""))
+        self.assertEqual(row["usuario_manual_arquivado"], "joao")
+
+        # Desfazer o arquivamento no histórico de alterações devolve o manual.
+        undone = main.desfazer_alteracao_apelido(main.ApelidoUndoPayload(evento_id=archived["id"]))
+        self.assertEqual((undone["equipamento"]["usuarios_logados"], undone["equipamento"]["usuarios_logados_origem"]), ("joao", "manual"))
+
+    def test_undoing_the_archive_is_refused_while_the_endpoint_has_a_user(self):
+        self._save("SN-1", "joao")
+        self._submit([("SN-1", "HOST-1", "carla"), ("SN-2", "HOST-2", "ana")])
+        with self.assertRaises(DomainError) as raised:
+            main.desfazer_alteracao_apelido(main.ApelidoUndoPayload(evento_id=self._user_events()[-1]["id"]))
+        self.assertEqual(raised.exception.status_code, 409)
+
+    def test_summary_lists_changed_and_removed_endpoint_users_without_manual(self):
+        result = self._submit([("SN-1", "HOST-1", ""), ("SN-2", "HOST-2", "bia")])
+        self.assertEqual([(r["tipo"], r["usuario_anterior"], r["usuario_novo"]) for r in result["mudancas_usuarios"]], [
+            ("alterado_endpoint", "ana", "bia"),
+        ])
+        result = self._submit([("SN-1", "HOST-1", ""), ("SN-2", "HOST-2", "")])
+        [row] = result["mudancas_usuarios"]
+        self.assertEqual((row["tipo"], row["serie"], row["usuario_anterior"]), ("removido_endpoint", "SN-2", "bia"))
+        self.assertNotIn("usuario_manual_arquivado", row)
+        self.assertEqual(self._user_events(), [])
+        # O mesmo arquivo de novo não gera mudanças.
+        self.assertEqual(self._submit([("SN-1", "HOST-1", ""), ("SN-2", "HOST-2", "")])["mudancas_usuarios"], [])
+
+    def test_hidden_legacy_manual_user_is_flagged_when_it_comes_back(self):
+        # Manual gravado antes do arquivamento existir, escondido pelo usuário do Endpoint.
+        self.manual_users.write_text(json.dumps({"SN-2": "velho"}), encoding="utf-8")
+        self.assertTrue(main.load_database())
+        result = self._submit([("SN-1", "HOST-1", ""), ("SN-2", "HOST-2", "")])
+        [row] = result["mudancas_usuarios"]
+        self.assertEqual((row["tipo"], row["usuario_novo"], row["origem_nova"]), ("manual_voltou", "velho", "manual"))
+
+    def test_macbook_manual_user_is_archived_when_the_endpoint_serial_without_s_gets_a_user(self):
+        details = [
+            ("SN-1", "ALIAS-1", "Modelo A", "Maringá", "Notebook", "87000000"),
+            ("SCXC9F072K1", "PRMACUMC005", "MacBook Air", "Maringá", "Notebook", "87000000"),
+        ]
+        make_details(self.details, details)
+        make_endpoint_with_users(self.endpoint, [("SN-1", "HOST-1", ""), ("CXC9F072K1", "PRMACUMC005", "")])
+        self.assertTrue(main.load_database())
+        self._save("SCXC9F072K1", "mac-manual")
+        result = self._submit([("SN-1", "HOST-1", ""), ("CXC9F072K1", "PRMACUMC005", "DDrodrigues")], details)
+        self.assertEqual(json.loads(self.manual_users.read_text(encoding="utf-8")), {})
+        [row] = result["mudancas_usuarios"]
+        self.assertEqual((row["tipo"], row["serie"], row["usuario_novo"], row["usuario_manual_arquivado"]),
+                         ("novo_endpoint", "SCXC9F072K1", "DDrodrigues", "mac-manual"))
+        self.assertEqual(self._user_events()[-1]["serial"], "SCXC9F072K1")
 
     def test_new_endpoint_file_without_user_or_host_leaves_a_warning_once(self):
         new_endpoint = io.BytesIO()

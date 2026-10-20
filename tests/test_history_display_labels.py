@@ -146,5 +146,19 @@ process.stdout.write(JSON.stringify(result));
         self.assertEqual(event, original)
 
 
+    def test_user_changes_export_previous_and_new_user_with_manual_marker(self):
+        event = {"comparacao": {"mudancas_usuarios": [{
+            "tipo": "manual_voltou", "serie": "S1", "computador": "PRNOTE01",
+            "usuario_anterior": "ana.endpoint", "origem_anterior": "endpoint",
+            "usuario_novo": "ana.manual", "origem_nova": "manual",
+        }]}}
+        output, _ = build_history_export_workbook([event], date(2026, 10, 17))
+        workbook = openpyxl.load_workbook(output)
+        values = [cell.value for cell in workbook["Usuários"][5]]
+        workbook.close()
+        self.assertIn("Manual voltou a valer", values)
+        self.assertIn("ana.endpoint", values)
+        self.assertIn("ana.manual (M)", values)
+
 if __name__ == "__main__":
     unittest.main()

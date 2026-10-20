@@ -141,6 +141,19 @@ test("search displays an announced skeleton, then the fictional result", async (
   await expect(equipmentCard.locator("#badge-apelido")).toHaveText("DEMO-001");
 });
 
+test("Home lists the fictional equipment without a logged user", async ({ page }) => {
+  test.setTimeout(30_000);
+  await page.getByRole("button", { name: "Equipamentos sem usuário" }).click();
+  const dialog = page.locator("#modal-pesquisa-completa");
+  await expect(dialog).toBeVisible();
+  await expect(dialog.locator("#pesquisa-completa-termo")).toHaveText("Todos os equipamentos");
+  await expect(dialog.locator("#pesquisa-completa-lista")).toContainText("DEMO-SEM-USUARIO", { timeout: 15_000 });
+  await expect(dialog.getByLabel("Usuário")).toHaveValue("sem");
+  await expect(dialog.locator("#filtro-pesquisa-usuario option:checked")).toHaveText("Sem usuário (1)");
+  // Only the new filter: the result rows have a known low-contrast "Selecionar" hint (separate fix).
+  await auditAccessibility(page, 'label[for="filtro-pesquisa-usuario"]');
+});
+
 test("search shortcuts focus Home search except while typing or with a dialog open", async ({ page }, testInfo) => {
   const input = page.locator("#input-serial");
   const homeTab = page.locator("#tab-home");
@@ -481,6 +494,9 @@ test("ticket tracking imports both workbooks and relates each serial to its OS",
   await expect(ticketCard).toContainText("OS Simpress");
   await expect(ticketCard).toContainText("OS Oracle");
   await expect(ticketCard).toContainText("Pedido");
+  // Série repetida no Endpoint (fixture): candidatos visíveis e o campo manual continua disponível.
+  await expect(ticketCard.locator("[data-logged-user-ambiguous]")).toHaveText("Endpoint ambíguo: usuario.a / usuario.b");
+  await expect(ticketCard.locator("[data-logged-user-form]")).toBeVisible();
   const ticketDetails = ticketCard.locator('details[data-ticket-section="details"]');
   await expect(ticketDetails).toBeVisible();
   await expect(ticketDetails).not.toHaveAttribute("open", "");
