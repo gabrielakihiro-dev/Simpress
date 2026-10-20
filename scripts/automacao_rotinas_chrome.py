@@ -225,7 +225,9 @@ _EXECUCAO: ExecucaoLog | None = None
 
 def limpar_logs_antigos(pasta: Path, manter: int = LOGS_MANTIDOS) -> None:
     """Mantém os ``manter`` logs mais recentes (e seus .json); capturas .png não são tocadas."""
-    for antigo in sorted(pasta.glob("*.log"), reverse=True)[manter:]:
+    # Os .site.log/.site.json são da tela Automação do site, que limpa os próprios registros.
+    proprios = [log for log in pasta.glob("*.log") if not log.name.endswith(".site.log")]
+    for antigo in sorted(proprios, reverse=True)[manter:]:
         for arquivo in (antigo, antigo.with_suffix(".json")):
             try:
                 arquivo.unlink(missing_ok=True)
