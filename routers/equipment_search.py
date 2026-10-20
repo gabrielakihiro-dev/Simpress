@@ -3,7 +3,7 @@
 from dataclasses import dataclass
 from typing import Any, Callable, Dict, List, Optional, Sequence, Tuple
 
-from fastapi import APIRouter, Query
+from fastapi import APIRouter, HTTPException, Query
 
 
 @dataclass(frozen=True)
@@ -12,6 +12,11 @@ class EquipmentSearchServices:
     normalize: Callable[[Any], str]
     categories: Sequence[Dict[str, Any]]
     get_stats: Callable[[], Dict[str, Any]]
+    # Every equipment of the base, in index order; lists the ones without a user without a term.
+    list_all: Optional[Callable[[], List[Dict[str, Any]]]] = None
+
+
+USER_FILTERS = ("sem", "com")
 
 
 @dataclass(frozen=True)
@@ -33,16 +38,30 @@ def create_equipment_search_router(services: EquipmentSearchServices) -> Tuple[A
 
     @router.get("/api/buscar-expandida")
     def buscar_seriais_expandida(
-        q: str = Query(..., min_length=2),
+        q: str = Query("", max_length=200),
         offset: int = Query(0, ge=0),
         limit: int = Query(50, ge=1, le=100),
         categoria: Optional[str] = Query(None, max_length=40),
         tipo: Optional[str] = Query(None, max_length=80),
         cidade: Optional[str] = Query(None, max_length=120),
+        usuario: Optional[str] = Query(None, max_length=10),
         include_filters: bool = False,
     ):
-        """Retorna resultados paginados, filtros e total de correspondências."""
-        all_results = services.search(q)
+        """Retorna resultados paginados, filtros e total de correspondências.
+
+        ``usuario=sem`` mantém só os equipamentos sem usuário (nem do Endpoint nem manual) e,
+        sem termo, lista todos os da base; ``usuario=com`` mantém os que têm usuário.
+        """
+        user_filter = str(usuario or "").strip().lower()
+        if user_filter not in USER_FILTERS:
+            user_filter = ""
+        list_without_term = not q.strip() and user_filter == "sem" and services.list_all is not None
+        if not list_without_term and len(q) < 2:
+            raise HTTPException(status_code=422, detail="Digite ao menos 2 caracteres para pesquisar.")
+        all_results = services.list_all() if list_without_term and services.list_all else services.search(q)
+
+        def has_user(item: Dict[str, Any]) -> bool:
+            return bool(str(item.get("usuarios_logados") or "").strip())
 
         def filter_options(key: str) -> List[str]:
             options: Dict[str, str] = {}
@@ -64,6 +83,7 @@ def create_equipment_search_router(services: EquipmentSearchServices) -> Tuple[A
             if (not normalized_category or item.get("categoria") == normalized_category.lower())
             and (not normalized_type or services.normalize(item.get("tipo")) == normalized_type)
             and (not normalized_city or services.normalize(item.get("retirada_cidade")) == normalized_city)
+            and (not user_filter or has_user(item) == (user_filter == "com"))
         ]
         page = results[offset:offset + limit]
         response = {
@@ -85,6 +105,10 @@ def create_equipment_search_router(services: EquipmentSearchServices) -> Tuple[A
                 ],
                 "types": filter_options("tipo"),
                 "cities": filter_options("retirada_cidade"),
+                "users": {
+                    "sem": sum(1 for item in all_results if not has_user(item)),
+                    "com": sum(1 for item in all_results if has_user(item)),
+                },
             }
         return response
 

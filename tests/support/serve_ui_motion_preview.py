@@ -251,8 +251,13 @@ class Handler(BaseHTTPRequestHandler):
             if "ambiguo" in term:
                 item.update(usuarios_logados="", usuarios_logados_origem="",
                             usuarios_logados_candidatos=["usuario.a", "usuario.b"])
+            if params.get("usuario", [""])[0] == "sem":
+                # "Sem usuário" filter: a fictional equipment with neither an Endpoint nor a manual user.
+                item = {**EQUIPMENT, "serial": "DEMO-SEM-USUARIO", "apelido": "PRNOTEDEMO02",
+                        "usuarios_logados": "", "usuarios_logados_origem": ""}
             self.send({"items": [item], "total": 1, "has_more": False,
-                       "filters": {"categories": [], "cities": []}, "query": params.get("q", [""])[0]})
+                       "filters": {"categories": [], "cities": [], "users": {"sem": 1, "com": 1}},
+                       "query": params.get("q", [""])[0]})
         else:
             self.send({"detail": "Endpoint de teste não encontrado"}, 404)
 
