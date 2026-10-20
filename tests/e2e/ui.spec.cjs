@@ -481,6 +481,9 @@ test("ticket tracking imports both workbooks and relates each serial to its OS",
   await expect(ticketCard).toContainText("OS Simpress");
   await expect(ticketCard).toContainText("OS Oracle");
   await expect(ticketCard).toContainText("Pedido");
+  // Série repetida no Endpoint (fixture): candidatos visíveis e o campo manual continua disponível.
+  await expect(ticketCard.locator("[data-logged-user-ambiguous]")).toHaveText("Endpoint ambíguo: usuario.a / usuario.b");
+  await expect(ticketCard.locator("[data-logged-user-form]")).toBeVisible();
   const ticketDetails = ticketCard.locator('details[data-ticket-section="details"]');
   await expect(ticketDetails).toBeVisible();
   await expect(ticketDetails).not.toHaveAttribute("open", "");

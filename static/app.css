@@ -608,6 +608,10 @@
     .logged-user { display: block; margin-top: 0.2rem; color: var(--text-muted); font-family: inherit; font-size: 0.6875rem; font-weight: 400; white-space: normal; }
     .logged-user:empty { display: none; }
     .logged-user-row { display: inline-flex; flex-wrap: wrap; align-items: center; gap: 0.25rem 0.4rem; }
+    /* Série repetida no Endpoint: candidatos exibidos sem escolha automática. */
+    .logged-user-ambiguous { display: block; color: var(--ux-warning-fg); overflow-wrap: anywhere; cursor: help; }
+    .equipment-detail.equipment-user-ambiguous { color: var(--ux-warning-fg); }
+    [data-logged-user-value][title] { cursor: help; }
     .logged-user-form { display: flex; flex-wrap: wrap; align-items: center; gap: 0.3rem; margin-top: 0.2rem; animation: equipment-user-in 200ms ease-out; }
     .logged-user-form .equipment-user-input { min-width: 8rem; flex: 1 1 8rem; max-width: 14rem; font-family: inherit; }
     @media (prefers-reduced-motion: reduce) { .logged-user-form { animation: none; } }

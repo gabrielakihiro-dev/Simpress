@@ -20,7 +20,7 @@ from domains.effective_alias import (
     endpoint_loss_warnings,
 )
 from domains.equipment_search import build_search_index, search_index
-from domains.user_changes import build_endpoint_warning_entries
+from domains.user_changes import build_endpoint_warning_entries, manual_user_dates_by_serial
 import test_integrity_workflows as base
 from test_integrity_workflows import _details_bytes, make_details, make_model
 
@@ -75,6 +75,49 @@ class UserPrecedenceTests(unittest.TestCase):
         apply_effective_alias(equipment, index)
         self.assertEqual(equipment["usuarios_logados"], "")
 
+    def test_manual_user_carries_the_date_it_was_informed(self):
+        index = endpoint_index(("SN-1", "HOST-1", ""), ("SN-2", "HOST-2", "ana"))
+        index["manual_users"] = {"SN1": "joao", "SN2": "pedro"}
+        index["manual_user_dates"] = {"SN1": "2026-10-20T09:15:00-03:00", "SN2": "2026-10-19T08:00:00-03:00"}
+        manual, endpoint = {"serial": "SN-1"}, {"serial": "SN-2"}
+        apply_effective_alias(manual, index)
+        apply_effective_alias(endpoint, index)
+        self.assertEqual(manual["usuarios_logados_informado_em"], "2026-10-20T09:15:00-03:00")
+        # The Endpoint user wins, so the manual date is not shown.
+        self.assertEqual(endpoint["usuarios_logados_informado_em"], "")
+
+    def test_dates_count_only_for_the_same_current_user(self):
+        stored = {
+            "SN-1": {"usuario": "joao", "informado_em": "2026-10-20T09:15:00-03:00"},
+            "SN-2": {"usuario": "antigo", "informado_em": "2026-10-01T09:15:00-03:00"},
+            "SN-3": {"usuario": "ana", "informado_em": "2026-10-02T09:15:00-03:00"},
+            "SN-4": "texto solto",
+        }
+        users = {"SN1": "joao", "SN2": "novo", "SN4": "bia"}
+        self.assertEqual(manual_user_dates_by_serial(users, stored), {"SN1": "2026-10-20T09:15:00-03:00"})
+
+    def test_duplicated_endpoint_serial_lists_candidates_without_choosing_one(self):
+        index = endpoint_index(
+            ("SN-1", "HOST-A", "joao"), ("SN-1", "HOST-B", "maria"), ("SN-1", "HOST-C", "JOAO"),
+            ("SN-2", "HOST-2", "ana"), ("SN-3", "HOST-3", ""), ("SN-3", "HOST-4", "N/A"),
+        )
+        self.assertEqual(index["ambiguous_users"], {"SN1": ["joao", "maria"]})
+        ambiguous, unique, blank = {"serial": "SN-1"}, {"serial": "SN-2"}, {"serial": "SN-3"}
+        for equipment in (ambiguous, unique, blank):
+            apply_effective_alias(equipment, index)
+        self.assertEqual((ambiguous["usuarios_logados"], ambiguous["usuarios_logados_origem"]), ("", ""))
+        self.assertEqual(ambiguous["usuarios_logados_candidatos"], ["joao", "maria"])
+        self.assertEqual(unique["usuarios_logados_candidatos"], [])
+        self.assertEqual(blank["usuarios_logados_candidatos"], [])
+
+    def test_manual_user_fills_an_ambiguous_serial_and_keeps_the_candidates(self):
+        index = endpoint_index(("SN-1", "HOST-A", "joao"), ("SN-1", "HOST-B", "maria"))
+        index["manual_users"] = {"SN1": "pedro"}
+        equipment = {"serial": "SN-1"}
+        apply_effective_alias(equipment, index)
+        self.assertEqual((equipment["usuarios_logados"], equipment["usuarios_logados_origem"]), ("pedro", "manual"))
+        self.assertEqual(equipment["usuarios_logados_candidatos"], ["joao", "maria"])
+
 
 class UserSearchTests(unittest.TestCase):
     def test_search_finds_equipment_by_logged_user_after_serial_and_alias_matches(self):
@@ -86,6 +129,13 @@ class UserSearchTests(unittest.TestCase):
         self.assertEqual([r["serial"] for r in search_index(index, "valmeida")], ["SN-A"])
         self.assertEqual([r["serial"] for r in search_index(index, "fvalmeida")], ["SN-A"])
         self.assertEqual(search_index(index, "ninguem"), [])
+
+    def test_ambiguous_endpoint_candidates_are_searchable_and_public(self):
+        cache = {"SN-A": {"serial": "SN-A", "modelo": "X", "tipo": "Notebook", "apelido": "H1",
+                          "usuarios_logados": "", "usuarios_logados_candidatos": ["joao", "maria"]}}
+        found = search_index(build_search_index(cache), "maria")
+        self.assertEqual([r["serial"] for r in found], ["SN-A"])
+        self.assertEqual(found[0]["usuarios_logados_candidatos"], ["joao", "maria"])
 
 
 class EndpointLossWarningTests(unittest.TestCase):
@@ -128,6 +178,7 @@ class ManualUserWorkflowTests(unittest.TestCase):
         self.model = self.input_dir / "modelo-ficticio.xlsx"
         self.overrides = self.root / "apelidos_modificados.json"
         self.manual_users = self.root / "usuarios_manuais.json"
+        self.manual_dates = self.root / "usuarios_manuais_datas.json"
         self.history = self.root / "historico_alteracoes.json"
         self.comparison_history = self.root / "historico_comparacoes.json"
         self.stack = ExitStack()
@@ -175,17 +226,23 @@ class ManualUserWorkflowTests(unittest.TestCase):
         self.assertEqual(saved["equipamento"]["usuarios_logados"], "joao")
         self.assertEqual(saved["equipamento"]["usuarios_logados_origem"], "manual")
         self.assertEqual(json.loads(self.manual_users.read_text(encoding="utf-8")), {"SN-1": "joao"})
+        informed_at = saved["equipamento"]["usuarios_logados_informado_em"]
+        self.assertRegex(informed_at, r"^\d{4}-\d{2}-\d{2}T")
+        self.assertEqual(json.loads(self.manual_dates.read_text(encoding="utf-8")),
+                         {"SN-1": {"usuario": "joao", "informado_em": informed_at}})
         event = json.loads(self.history.read_text(encoding="utf-8"))[-1]
         self.assertEqual((event["tipo"], event["usuario_anterior"], event["usuario_novo"]), ("usuario", "", "joao"))
 
         # Sobrevive a uma nova carga da base e entra na busca.
         self.assertTrue(main.load_database())
         self.assertEqual(inventory_state.equipamentos_cache["SN-1"]["usuarios_logados"], "joao")
+        self.assertEqual(inventory_state.equipamentos_cache["SN-1"]["usuarios_logados_informado_em"], informed_at)
         self.assertEqual([r["serial"] for r in search_index(inventory_state.equipment_search_index, "JOAO")], ["SN-1"])
 
         undone = main.desfazer_alteracao_apelido(main.ApelidoUndoPayload(evento_id=event["id"]))
         self.assertEqual(undone["equipamento"]["usuarios_logados"], "")
         self.assertEqual(json.loads(self.manual_users.read_text(encoding="utf-8")), {})
+        self.assertEqual(json.loads(self.manual_dates.read_text(encoding="utf-8")), {})
         self.assertEqual(json.loads(self.history.read_text(encoding="utf-8"))[-1]["acao"], "desfazer")
 
     def test_lookup_for_comparison_rows_follows_the_home_rule(self):
@@ -194,13 +251,54 @@ class ManualUserWorkflowTests(unittest.TestCase):
         def lookup():
             return main.consultar_usuarios_logados(UsuariosConsultaPayload(series=["SN-1", "sn2", "SN-9", ""]))["usuarios"]
 
+        empty = {"informado_em": "", "candidatos": []}
         self.assertEqual(lookup(), {
-            "SN-1": {"usuario": "", "origem": "", "serial_cadastro": "SN-1"},
-            "sn2": {"usuario": "ana", "origem": "endpoint", "serial_cadastro": "SN-2"},
-            "SN-9": {"usuario": "", "origem": "", "serial_cadastro": None},
+            "SN-1": {"usuario": "", "origem": "", "serial_cadastro": "SN-1", **empty},
+            "sn2": {"usuario": "ana", "origem": "endpoint", "serial_cadastro": "SN-2", **empty},
+            "SN-9": {"usuario": "", "origem": "", "serial_cadastro": None, **empty},
         })
+        saved = self._save("SN-1", "joao")
+        informed_at = saved["equipamento"]["usuarios_logados_informado_em"]
+        self.assertEqual(lookup()["SN-1"], {
+            "usuario": "joao", "origem": "manual", "serial_cadastro": "SN-1", "informado_em": informed_at, "candidatos": [],
+        })
+
+    def test_legacy_manual_user_without_date_still_applies(self):
+        self.manual_users.write_text(json.dumps({"SN-1": "legado"}), encoding="utf-8")
+        self.assertTrue(main.load_database())
+        equipment = inventory_state.equipamentos_cache["SN-1"]
+        self.assertEqual((equipment["usuarios_logados"], equipment["usuarios_logados_origem"]), ("legado", "manual"))
+        self.assertEqual(equipment["usuarios_logados_informado_em"], "")
+
+    def test_saving_the_same_user_again_keeps_the_first_date(self):
         self._save("SN-1", "joao")
-        self.assertEqual(lookup()["SN-1"], {"usuario": "joao", "origem": "manual", "serial_cadastro": "SN-1"})
+        stored = json.loads(self.manual_dates.read_text(encoding="utf-8"))
+        stored["SN-1"]["informado_em"] = "2026-01-02T03:04:05-03:00"
+        self.manual_dates.write_text(json.dumps(stored), encoding="utf-8")
+        again = self._save("SN-1", "joao")
+        self.assertEqual(again["equipamento"]["usuarios_logados_informado_em"], "2026-01-02T03:04:05-03:00")
+        changed = self._save("SN-1", "maria")
+        self.assertNotEqual(changed["equipamento"]["usuarios_logados_informado_em"], "2026-01-02T03:04:05-03:00")
+
+    def test_duplicated_endpoint_serial_shows_candidates_and_accepts_a_manual_user(self):
+        from routers.aliases import UsuariosConsultaPayload
+
+        make_endpoint_with_users(self.endpoint, [
+            ("SN-1", "HOST-1", "joao"), ("SN-1", "HOST-1B", "maria"), ("SN-2", "HOST-2", "ana"),
+            ("SN-8", "HOST-8", "carla"), ("SN-8", "HOST-8B", "davi"),
+        ])
+        self.assertTrue(main.load_database())
+        found = main.consultar_usuarios_logados(UsuariosConsultaPayload(series=["SN-1", "SN-8"]))["usuarios"]
+        self.assertEqual(found["SN-1"], {
+            "usuario": "", "origem": "", "serial_cadastro": "SN-1", "informado_em": "", "candidatos": ["joao", "maria"],
+        })
+        # Outside the Simpress base the candidates still come from the Endpoint, with no manual field.
+        self.assertEqual(found["SN-8"]["candidatos"], ["carla", "davi"])
+        self.assertIsNone(found["SN-8"]["serial_cadastro"])
+
+        saved = self._save("SN-1", "pedro")
+        self.assertEqual(saved["equipamento"]["usuarios_logados"], "pedro")
+        self.assertEqual(saved["equipamento"]["usuarios_logados_candidatos"], ["joao", "maria"])
 
     def test_macbook_user_is_found_by_either_serial_and_cannot_be_replaced(self):
         from routers.aliases import UsuariosConsultaPayload
@@ -213,7 +311,9 @@ class ManualUserWorkflowTests(unittest.TestCase):
         self.assertTrue(main.load_database())
         self.assertEqual(inventory_state.equipamentos_cache["SCXC9F072K1"]["usuarios_logados"], "DDrodrigues")
         found = main.consultar_usuarios_logados(UsuariosConsultaPayload(series=["SCXC9F072K1", "CXC9F072K1"]))["usuarios"]
-        expected = {"usuario": "DDrodrigues", "origem": "endpoint", "serial_cadastro": "SCXC9F072K1"}
+        expected = {
+            "usuario": "DDrodrigues", "origem": "endpoint", "serial_cadastro": "SCXC9F072K1", "informado_em": "", "candidatos": [],
+        }
         self.assertEqual(found, {"SCXC9F072K1": expected, "CXC9F072K1": expected})
         with self.assertRaises(DomainError) as raised:
             self._save("SCXC9F072K1", "outro")
