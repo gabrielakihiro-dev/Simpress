@@ -1013,31 +1013,33 @@ def abrir_para_login(context: "BrowserContext") -> int:
 
 
 def executar(rotina: str) -> int:
-    from playwright.sync_api import sync_playwright
+    # A trava vem antes do Playwright: uma execução bloqueada responde mesmo sem ele instalado.
+    with trava_execucao(rotina):
+        from playwright.sync_api import sync_playwright
 
-    with trava_execucao(rotina), sync_playwright() as p:
-        # Só depois da trava: uma execução bloqueada não pode apagar o pedido feito para a que está rodando.
-        iniciar_controle_cancelamento()
-        browser, context = conectar(p)
-        try:
-            if rotina == "login":
-                return abrir_para_login(context)
-            if rotina == "os":
-                return com_aviso("OS", rodar_rotina_os, context)
-            if rotina == "inventarios":
-                return com_aviso("inventários", rodar_rotina_inventarios, context)
-            codigos = []
-            for nome, etapa in (("OS", rodar_rotina_os), ("inventários", rodar_rotina_inventarios)):
-                verificar_cancelamento()
-                try:
-                    codigos.append(com_aviso(nome, etapa, context))
-                except Exception as erro:  # a falha de uma rotina não impede a outra
-                    print(f"\n[FALHA] {descrever_erro(erro)}", flush=True)
-                    codigos.append(1)
-            return 0 if all(c == 0 for c in codigos) else 1
-        finally:
-            # Só desconecta: o Chrome continua aberto e mantém os logins.
-            browser.close()
+        with sync_playwright() as p:
+            # Só depois da trava: uma execução bloqueada não pode apagar o pedido feito para a que está rodando.
+            iniciar_controle_cancelamento()
+            browser, context = conectar(p)
+            try:
+                if rotina == "login":
+                    return abrir_para_login(context)
+                if rotina == "os":
+                    return com_aviso("OS", rodar_rotina_os, context)
+                if rotina == "inventarios":
+                    return com_aviso("inventários", rodar_rotina_inventarios, context)
+                codigos = []
+                for nome, etapa in (("OS", rodar_rotina_os), ("inventários", rodar_rotina_inventarios)):
+                    verificar_cancelamento()
+                    try:
+                        codigos.append(com_aviso(nome, etapa, context))
+                    except Exception as erro:  # a falha de uma rotina não impede a outra
+                        print(f"\n[FALHA] {descrever_erro(erro)}", flush=True)
+                        codigos.append(1)
+                return 0 if all(c == 0 for c in codigos) else 1
+            finally:
+                # Só desconecta: o Chrome continua aberto e mantém os logins.
+                browser.close()
 
 
 def descrever_erro(erro: Exception) -> str:
