@@ -30,6 +30,8 @@
   };
   // Kind of logged-user change in the update summary -> visible label and text color.
   const TIPOS_MUDANCA_USUARIO = {
+    substituicao_pendente: { rotulo: "Substituição do usuário manual — aguardando decisão", classe: "text-amber-300" },
+    ausente_pendente: { rotulo: "Usuário sumiu do Endpoint — aguardando confirmação", classe: "text-amber-300" },
     novo_endpoint: { rotulo: "Usuário novo no Endpoint", classe: "text-emerald-300" },
     alterado_endpoint: { rotulo: "Usuário alterado no Endpoint", classe: "text-cyan-300" },
     removido_endpoint: { rotulo: "Usuário removido do Endpoint", classe: "text-amber-300" },
@@ -285,6 +287,28 @@
     });
   }
 
+  // Decisions that leave the current user in place until the person answers; the labels follow the hold type.
+  const ACOES_PENDENCIA_USUARIO = {
+    substituicao_manual: [
+      { decisao: "permitir", rotulo: "Permitir substituição", classe: "bg-emerald-500/10 hover:bg-emerald-500/20 border-emerald-500/25 text-emerald-200" },
+      { decisao: "recusar", rotulo: "Manter usuário manual", classe: "bg-slate-500/10 hover:bg-slate-500/20 border-slate-500/25 text-slate-200" },
+    ],
+    usuario_ausente: [
+      { decisao: "remover", rotulo: "Confirmar remoção", classe: "bg-rose-500/10 hover:bg-rose-500/20 border-rose-500/25 text-rose-200" },
+      { decisao: "manter", rotulo: "Manter usuário", classe: "bg-emerald-500/10 hover:bg-emerald-500/20 border-emerald-500/25 text-emerald-200" },
+    ],
+  };
+
+  function acoesPendenciaUsuario(item) {
+    const acoes = ACOES_PENDENCIA_USUARIO[item.pendencia_tipo];
+    if (!acoes || !item.pendencia_id) return "";
+    const classeBotao = "px-2 py-1 rounded-md border text-[10px] font-semibold";
+    return `<div class="mt-2 flex flex-wrap items-center gap-1.5" data-user-hold="${escapeHtml(item.pendencia_id)}">
+            ${acoes.map(acao => `<button type="button" data-user-hold-action="${acao.decisao}" class="${classeBotao} ${acao.classe}" aria-label="${escapeHtml(`${acao.rotulo}: série ${item.serie || "sem série"}`)}">${escapeHtml(acao.rotulo)}</button>`).join("")}
+            <span hidden data-user-hold-status role="status" class="text-[10px] text-emerald-300"></span>
+          </div>`;
+  }
+
   function linhasMudancasUsuarios(mudancasUsuarios, { renderizarCampoAnotacao }) {
     const usuario = (nome, origem) => nome
       ? `${escapeHtml(nome)}${origem === "manual" ? " (M)" : ""}`
@@ -298,7 +322,7 @@
           <td class="px-3 py-2 font-mono">${escapeHtml(item.computador || "—")}</td>
           <td class="px-3 py-2">${usuario(item.usuario_anterior, item.origem_anterior)}</td>
           <td class="px-3 py-2">${usuario(item.usuario_novo, item.origem_nova)}</td>
-          <td class="px-3 py-2 text-slate-300">${escapeHtml(String(item.motivo || "").replace(/\bno endpoint\b/gi, "no Endpoint"))}</td>
+          <td class="px-3 py-2 text-slate-300">${escapeHtml(String(item.motivo || "").replace(/\bno endpoint\b/gi, "no Endpoint"))}${acoesPendenciaUsuario(item)}</td>
           ${renderizarCampoAnotacao(item, `${tipo.rotulo}, série ${item.serie || "vazia"}`)}
         </tr>`;
     });
@@ -449,7 +473,7 @@
     // Results saved before the user summary existed have no list; the section is shown only when it exists.
     const secaoMudancasUsuarios = Array.isArray(comparison.mudancas_usuarios) ? `
         <section class="space-y-2" data-history-filter-section data-user-change-summary>
-          <div>${tituloSecaoComparacao("Mudanças de usuário logado", "emerald", SECOES_CARTOES_RESUMO.mudancas_usuarios.id)}<p class="text-[11px] text-slate-500">Usuários logados que mudaram nesta atualização, comparando o Endpoint anterior com o novo. Quando o Endpoint passa a informar o usuário, o usuário manual (M) é arquivado no histórico de alterações e não volta sozinho.</p>
+          <div>${tituloSecaoComparacao("Mudanças de usuário logado", "emerald", SECOES_CARTOES_RESUMO.mudancas_usuarios.id)}<p class="text-[11px] text-slate-500">Usuários logados que mudaram nesta atualização, comparando o Endpoint anterior com o novo. Quando o Endpoint passa a informar um usuário onde há um usuário manual (M), ou deixa de informar um usuário que já existia, nada muda sozinho: o usuário atual continua valendo até você decidir. Troca de um usuário do Endpoint por outro é aplicada automaticamente.</p>
             <p class="text-[11px] text-slate-400" data-user-change-counts>${[
               ["Novos no Endpoint", contarMudancas("novo_endpoint")],
               ["Alterados", contarMudancas("alterado_endpoint")],

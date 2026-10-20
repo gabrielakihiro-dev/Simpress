@@ -6,7 +6,7 @@ from typing import Any, Callable, List, Optional, Tuple
 from fastapi import APIRouter
 from pydantic import BaseModel, Field, field_validator
 
-from domains import alias_changes, user_changes
+from domains import alias_changes, user_changes, user_holds
 from domains.alias_changes import AliasChangeServices, validate_equipment_serial
 
 
@@ -32,6 +32,10 @@ class UsuarioUpdatePayload(BaseModel):
 
 class UsuariosConsultaPayload(BaseModel):
     series: List[str] = Field(default_factory=list, max_length=5000, description="Séries cujos usuários logados serão consultados")
+
+
+class PendenciaUsuarioPayload(BaseModel):
+    decisao: str = Field(..., pattern="^(permitir|recusar|remover|manter)$", description="Decisão sobre a pendência de usuário")
 
 
 class ApelidoUndoPayload(BaseModel):
@@ -102,6 +106,16 @@ def create_alias_router(
     def consultar_usuarios_logados(payload: UsuariosConsultaPayload):
         """Usuário logado de cada série, com a mesma regra da pesquisa (Endpoint, senão manual)."""
         return user_changes.logged_users_for_series(services, payload.series)
+
+    @router.get("/api/usuarios/pendencias")
+    def listar_pendencias_usuarios():
+        """Pendências de usuário logado ainda sem decisão (e as já decididas que continuam valendo)."""
+        return user_holds.list_holds(services)
+
+    @router.post("/api/usuarios/pendencias/{pendencia_id}/decidir")
+    def decidir_pendencia_usuario(pendencia_id: str, payload: PendenciaUsuarioPayload):
+        """Permite/recusa a troca do usuário manual ou confirma/mantém o usuário que sumiu do Endpoint."""
+        return user_holds.resolve_hold(services, pendencia_id, payload.decisao)
 
     return router, AliasRouteExports(
         get_apelidos_modificados=get_apelidos_modificados,

@@ -35,7 +35,10 @@ WARNING_EVENT_TYPE = "aviso_endpoint"
 # A manual user hidden by an Endpoint user is moved out of the manual file into the alias
 # history with this action, so it never comes back on its own when the Endpoint empties.
 ARCHIVED_BY_ENDPOINT_ACTION = "arquivado_endpoint"
-USER_CHANGE_ORDER = ("novo_endpoint", "alterado_endpoint", "removido_endpoint", "manual_voltou")
+USER_CHANGE_ORDER = (
+    "substituicao_pendente", "ausente_pendente",
+    "novo_endpoint", "alterado_endpoint", "removido_endpoint", "manual_voltou",
+)
 
 
 def _now() -> str:
@@ -333,7 +336,10 @@ def apply_user_change(
                 raise DomainError(f"Equipamento com serial '{target_serial}' não encontrado na base de dados.", status_code=404)
 
             endpoint_index = with_details_serials(services.read_endpoint_alias_index(), next_equipment_cache)
-            if new_user and endpoint_user_for_serial(endpoint_index, serial_key):
+            held = str(equipment.get("usuarios_logados_origem") or "") == "manual" and bool(
+                endpoint_user_for_serial(endpoint_index, serial_key)
+            )
+            if new_user and endpoint_user_for_serial(endpoint_index, serial_key) and not held:
                 raise DomainConflictError("O Endpoint já informa o usuário deste equipamento; o cadastro manual não é necessário.")
 
             stored = dict(services.validate_json_object(_load_users(services), "usuários manuais"))
@@ -455,6 +461,7 @@ def logged_users_for_series(services: AliasChangeServices, series: List[str]) ->
                     "origem": str(equipment.get("usuarios_logados_origem") or ""),
                     "informado_em": str(equipment.get("usuarios_logados_informado_em") or ""),
                     "candidatos": list(equipment.get("usuarios_logados_candidatos") or []),
+                    "pendencia": str(equipment.get("usuarios_logados_pendencia") or ""),
                 })
     endpoint_index = with_details_serials(services.read_endpoint_alias_index(), details_serials)
     result: Dict[str, Any] = {}
@@ -472,6 +479,8 @@ def logged_users_for_series(services: AliasChangeServices, series: List[str]) ->
                 "informado_em": match["informado_em"] if origem == "manual" else "",
                 "candidatos": match["candidatos"],
             }
+            if match["pendencia"]:
+                result[serie]["pendencia"] = match["pendencia"]
             continue
         usuario = endpoint_user_for_serial(endpoint_index, key).strip()
         result[serie] = {
