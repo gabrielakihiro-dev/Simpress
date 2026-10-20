@@ -23,6 +23,7 @@ echo =======================================================================
 echo.
 echo  O Chrome de automacao usa perfil proprio e a porta local 9333.
 echo  Ele fica aberto entre as execucoes para manter os logins.
+echo  Durante uma rotina, Ctrl+C cancela sem fechar o Chrome.
 echo.
 echo   [1] Executar Rotina de OS (Oracle Service Cloud + UX Simpress)
 echo   [2] Executar Rotina de Inventarios (UX Simpress + Endpoint Central)
