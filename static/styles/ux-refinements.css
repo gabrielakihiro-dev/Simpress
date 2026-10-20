@@ -537,6 +537,24 @@ html[data-ux-density="compact"] .comparison-desktop-table td {
 .automation-log:empty::before { content: "Sem linhas para mostrar."; color: var(--ux-text-muted); }
 .automation-log:focus-visible { outline: 2px solid var(--ux-accent); outline-offset: 2px; }
 .automation-refresh { flex: none; }
+.automation-panel-actions, .automation-log-toolbar, .automation-pagination, .automation-log-pages { display: flex; flex-wrap: wrap; align-items: center; gap: var(--ux-space-2); }
+.automation-panel-actions .btn { min-height: 2.75rem; }
+.automation-card :is(.usage-card-header, .panel-card-header) { display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: var(--ux-space-3); margin-bottom: var(--ux-space-4); }
+.automation-filters { margin-bottom: var(--ux-space-3); border-bottom: 1px solid var(--ux-border); padding-bottom: var(--ux-space-3); }
+.automation-filters summary { cursor: pointer; color: var(--ux-text); font-size: .85rem; min-height: 2.75rem; align-content: center; width: fit-content; }
+.automation-filter-fields { display: grid; grid-template-columns: repeat(auto-fit, minmax(10rem, 1fr)); gap: var(--ux-space-3); margin: var(--ux-space-3) 0; }
+.automation-card label { display: grid; gap: var(--ux-space-1); color: var(--ux-text-muted); font-size: .8rem; min-width: 0; }
+.automation-card input, .automation-card select { color: var(--ux-text); background: var(--ux-surface-subtle); border: 1px solid var(--ux-border-strong); border-radius: var(--ux-radius-sm); padding: .5rem; min-height: 2.75rem; min-width: 0; max-width: 100%; font: inherit; }
+.automation-card select option { background: var(--ux-surface-subtle); color: var(--ux-text); }
+.automation-card summary:focus-visible, .automation-card input:focus-visible, .automation-card select:focus-visible { outline: 2px solid var(--ux-accent); outline-offset: 2px; }
+.automation-filter-wide { grid-column: span 2; }
+.automation-log-toolbar, .automation-pagination { justify-content: space-between; margin: var(--ux-space-3) 0; }
+.automation-log-toolbar label, .automation-pagination label { display: flex; align-items: center; gap: var(--ux-space-2); }
+.automation-history { max-height: 30rem; overflow-y: auto; }
+.automation-card { scroll-margin-top: 5rem; }
+.automation-card--expanded { min-height: calc(100dvh - 7rem); }
+.automation-card--expanded .automation-log, .automation-card--expanded .automation-history { height: 62dvh; max-height: 62dvh; }
+.automation-card [hidden] { display: none; }
 .automation-history { overflow-x: auto; }
 .automation-history-table { width: 100%; border-collapse: collapse; font-size: 0.82rem; }
 .automation-history-table th { padding: var(--ux-space-2) var(--ux-space-3); border-bottom: 1px solid var(--ux-border-strong); color: var(--ux-text-muted); font-size: 0.75rem; font-weight: 600; text-align: left; white-space: nowrap; }
@@ -567,6 +585,13 @@ html[data-ux-density="compact"] .comparison-desktop-table td {
   .automation-log { height: 16rem; }
   /* Tabela vira cartões: cada execução mantém os mesmos dados e links. */
   .automation-history { overflow-x: visible; }
+  .automation-filter-fields { grid-template-columns: 1fr; }
+  .automation-filter-wide { grid-column: auto; }
+  .automation-pagination { align-items: start; }
+  .automation-pagination > .automation-panel-actions { width: 100%; justify-content: space-between; }
+  .automation-card :is(.usage-card-header, .panel-card-header) > .automation-panel-actions { width: 100%; }
+  .automation-card :is(.usage-card-header, .panel-card-header) > .automation-panel-actions .btn { flex: 1 1 auto; }
+  .automation-history { overflow-y: auto; max-height: 32rem; }
   .automation-history-table thead { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
   .automation-history-table, .automation-history-table tbody, .automation-history-table tr, .automation-history-table td { display: block; }
   .automation-history-table tr { margin-bottom: var(--ux-space-3); padding: var(--ux-space-2) var(--ux-space-3); border: 1px solid var(--ux-border); border-radius: var(--ux-radius-lg); background: var(--ux-surface-subtle); }

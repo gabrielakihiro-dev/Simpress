@@ -68,7 +68,7 @@ def process_import(root_name, ready, output, label, batch):
         with patch("routers.operations.reconcile_ticket_workbooks", side_effect=parsed_report), \
                 patch("routers.operations.AtomicFileTransaction", RacingTransaction):
             result = import_version(make_router(root), label, batch)
-        output.put(result if isinstance(result, dict) else {"error": result.status_code})
+        output.put(result if isinstance(result, dict) else {"error": result.status_code, "detail": result.detail})
     except Exception as error:
         output.put({"exception": repr(error)})
 

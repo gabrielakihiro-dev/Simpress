@@ -6,6 +6,7 @@ FALHA returns 503. History annotations are stored only in fixture memory.
 
 import json
 import mimetypes
+import os
 import sys
 import time
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
@@ -235,13 +236,39 @@ class Handler(BaseHTTPRequestHandler):
             self.send({"estado": panel_alerts_state})
         elif path == "/__fixture_automacao":
             AUTOMATION_HISTORY[:] = AUTOMATION_BASE_HISTORY
+            count = int(parse_qs(url.query).get("quantidade", ["0"])[0])
+            if count:
+                AUTOMATION_HISTORY[:] = [
+                    {**AUTOMATION_BASE_HISTORY[index % 2], "id": f"demo-{index}",
+                     "inicio": f"2026-10-{20 if index < 8 else 19}T{23 - index:02d}:00:00-03:00"}
+                    for index in range(min(count, 20))
+                ]
             globals()["automation_run"] = None
             self.send({"estado": "livre"})
         elif path == "/api/automacao/estado":
             offset = parse_qs(url.query).get("offset", ["0"])[0]
             self.send(automation_state(int(offset) if offset.isdigit() else 0))
         elif path == "/api/automacao/historico":
-            self.send({"execucoes": AUTOMATION_HISTORY})
+            query = parse_qs(url.query)
+            entries = [entry for entry in AUTOMATION_HISTORY
+                       if (not query.get("data_inicio") or entry["inicio"][:10] >= query["data_inicio"][0])
+                       and (not query.get("data_fim") or entry["inicio"][:10] <= query["data_fim"][0])
+                       and (not query.get("rotina") or entry["rotina"] == query["rotina"][0])
+                       and (not query.get("status") or entry["status"] == query["status"][0])]
+            limit = max(1, min(int(query.get("limite", ["5"])[0]), 50))
+            pages = max(1, (len(entries) + limit - 1) // limit)
+            page = max(1, min(int(query.get("pagina", ["1"])[0]), pages))
+            self.send({"execucoes": entries[(page - 1) * limit:page * limit], "total": len(entries),
+                       "pagina": page, "paginas": pages, "limite": limit})
+        elif path.startswith("/api/automacao/execucoes/") and path.endswith("/log"):
+            identifier = path.split("/")[-2]
+            entry = next((item for item in AUTOMATION_HISTORY if item["id"] == identifier), None)
+            if entry is None:
+                self.send({"detail": "Execução não encontrada."}, 404)
+            else:
+                limit = min(500, int(parse_qs(url.query).get("linhas", ["200"])[0]))
+                self.send({"execucao": entry, "arquivo": entry["log"], "linhas":
+                           [f"Histórico {identifier} · linha {i} <script>texto</script>" for i in range(600 - limit, 600)], "limitado": True})
         elif path == "/__fixture_state":
             self.send({"annotation": DEMO_ANNOTATION})
         elif path == "/api/unidades":
@@ -412,5 +439,6 @@ class UIFixtureServer(ThreadingHTTPServer):
 
 
 if __name__ == "__main__":
-    print("UI fixture: http://127.0.0.1:8765/ — LENTO / FALHA", flush=True)
-    UIFixtureServer(("127.0.0.1", 8765), Handler).serve_forever()
+    port = int(os.environ.get("SIMPRESS_UI_FIXTURE_PORT", "8765"))
+    print(f"UI fixture: http://127.0.0.1:{port}/ — LENTO / FALHA", flush=True)
+    UIFixtureServer(("127.0.0.1", port), Handler).serve_forever()

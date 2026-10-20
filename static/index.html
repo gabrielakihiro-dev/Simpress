@@ -1128,24 +1128,68 @@ Horário disponível para atendimento:</textarea>
         <p class="ux-home-note automation-note">Os logins são feitos por você, na janela do Chrome de automação. Os arquivos exportados são importados pelas pastas locais de entrada, como no <code>executar_automacao.bat</code>.</p>
       </section>
 
-      <section class="automation-card glass-card" aria-labelledby="automacao-andamento-titulo">
+      <section id="automacao-andamento-painel" class="automation-card glass-card" aria-labelledby="automacao-andamento-titulo">
         <div class="usage-card-header">
           <h2 id="automacao-andamento-titulo" class="ux-home-title">Andamento</h2>
-          <p id="automacao-log-arquivo" class="ux-home-note automation-log-file"></p>
+          <div class="automation-panel-actions">
+            <button type="button" class="btn btn-secondary" data-on-click="recolherPainelAutomacao" data-args='["andamento"]' aria-expanded="true" aria-controls="automacao-andamento-conteudo" aria-label="Recolher Andamento">Recolher</button>
+            <button type="button" class="btn btn-secondary" data-on-click="ampliarPainelAutomacao" data-args='["andamento"]' aria-pressed="false" aria-label="Ampliar Andamento">Ampliar</button>
+          </div>
         </div>
-        <pre id="automacao-log" class="automation-log" role="log" aria-live="polite" aria-labelledby="automacao-andamento-titulo" tabindex="0"></pre>
+        <div id="automacao-andamento-conteudo">
+          <details class="automation-filters" id="automacao-log-filtros">
+            <summary>Consultar execuções por data</summary>
+            <div class="automation-filter-fields">
+              <label>Data do log<input type="date" id="automacao-log-data" data-on-change="carregarExecucoesLogAutomacao"></label>
+              <label class="automation-filter-wide">Execução<select id="automacao-log-execucao" data-on-change="selecionarLogAutomacao" data-args='["$value"]'><option value="">Selecione uma data</option></select></label>
+            </div>
+            <div class="automation-log-pages" id="automacao-log-paginas" hidden>
+              <button type="button" class="btn btn-secondary" id="automacao-log-anterior" data-on-click="mudarPaginaLogAutomacao" data-args='[-1]'>Execuções anteriores</button>
+              <span class="ux-home-note" id="automacao-log-pagina"></span>
+              <button type="button" class="btn btn-secondary" id="automacao-log-proxima" data-on-click="mudarPaginaLogAutomacao" data-args='[1]'>Próximas execuções</button>
+            </div>
+          </details>
+          <div class="automation-log-toolbar">
+            <p id="automacao-log-modo" class="ux-home-note" role="status">Ao vivo · execução mais recente</p>
+            <label>Linhas do log<select id="automacao-log-limite" data-on-change="alterarLimiteLogAutomacao"><option value="100">100</option><option value="200" selected>200</option><option value="500">500</option></select></label>
+            <button type="button" id="automacao-log-ao-vivo" class="btn btn-secondary" data-on-click="voltarAoVivoAutomacao" hidden>Voltar ao vivo</button>
+          </div>
+          <p id="automacao-log-arquivo" class="ux-home-note automation-log-file"></p>
+          <pre id="automacao-log" class="automation-log" role="log" aria-live="polite" aria-labelledby="automacao-andamento-titulo" tabindex="0"></pre>
+        </div>
       </section>
 
-      <section class="automation-card glass-card" aria-labelledby="automacao-historico-titulo">
+      <section id="automacao-historico-painel" class="automation-card glass-card" aria-labelledby="automacao-historico-titulo">
         <div class="usage-card-header">
           <h2 id="automacao-historico-titulo" class="ux-home-title">Últimas execuções</h2>
+          <div class="automation-panel-actions">
           <button type="button" id="btn-automacao-historico" data-on-click="carregarHistoricoAutomacao" class="btn btn-secondary automation-refresh" title="Atualizar a lista de execuções">
             <i data-lucide="refresh-cw" class="w-4 h-4" aria-hidden="true"></i>
             <span>Atualizar</span>
           </button>
+          <button type="button" class="btn btn-secondary" data-on-click="recolherPainelAutomacao" data-args='["historico"]' aria-expanded="true" aria-controls="automacao-historico-conteudo" aria-label="Recolher Últimas execuções">Recolher</button>
+          <button type="button" class="btn btn-secondary" data-on-click="ampliarPainelAutomacao" data-args='["historico"]' aria-pressed="false" aria-label="Ampliar Últimas execuções">Ampliar</button>
+          </div>
         </div>
+        <div id="automacao-historico-conteudo">
+          <details class="automation-filters" id="automacao-historico-filtros">
+            <summary>Filtros de execuções</summary>
+            <div class="automation-filter-fields">
+              <label>De<input type="date" id="automacao-historico-inicio"></label>
+              <label>Até<input type="date" id="automacao-historico-fim"></label>
+              <label>Rotina<select id="automacao-historico-rotina"><option value="">Todas</option><option value="os">Rotina de OS</option><option value="inventarios">Inventários</option><option value="ambas">Ambas</option><option value="login">Abrir Chrome para login</option></select></label>
+              <label>Status<select id="automacao-historico-status"><option value="">Todos</option><option value="concluido">Concluído</option><option value="falha">Falha</option><option value="cancelado">Cancelado</option><option value="em_andamento">Em andamento</option><option value="ocupada">Ocupada</option><option value="interrompido">Interrompido</option></select></label>
+            </div>
+            <div class="automation-panel-actions"><button type="button" class="btn btn-secondary-accent" data-on-click="filtrarHistoricoAutomacao">Aplicar filtros</button><button type="button" class="btn btn-secondary" data-on-click="limparFiltrosAutomacao">Limpar filtros</button></div>
+          </details>
+          <p id="automacao-historico-resumo" class="ux-home-note" role="status"></p>
         <div id="automacao-historico" class="automation-history">
           <p class="ux-home-note">Carregando…</p>
+        </div>
+          <nav class="automation-pagination" aria-label="Páginas das execuções">
+            <label>Execuções por página<select id="automacao-historico-limite" data-on-change="filtrarHistoricoAutomacao"><option value="5" selected>5</option><option value="10">10</option><option value="20">20</option></select></label>
+            <div class="automation-panel-actions"><button type="button" id="automacao-historico-anterior" class="btn btn-secondary" data-on-click="mudarPaginaHistoricoAutomacao" data-args='[-1]'>Anterior</button><span id="automacao-historico-pagina" class="ux-home-note"></span><button type="button" id="automacao-historico-proxima" class="btn btn-secondary" data-on-click="mudarPaginaHistoricoAutomacao" data-args='[1]'>Próxima</button></div>
+          </nav>
         </div>
       </section>
     </div>
