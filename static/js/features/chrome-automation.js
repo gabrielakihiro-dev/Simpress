@@ -36,7 +36,34 @@
     consultaLog: 0, consultaHistorico: 0, consultaOpcoes: 0,
     pagina: 1, paginas: 1, limite: 5, filtros: {},
     logPagina: 1, logPaginas: 1, ampliado: "",
+    avisouServidorAntigo: false,
   };
+
+  const AVISO_SERVIDOR_ANTIGO = "Servidor desatualizado: reinicie o Simpress (feche a janela do servidor e abra iniciar_servidor.bat).";
+
+  // A 404 on /api/automacao/* with FastAPI's default body means the route is missing: an old server answered.
+  async function consultarAutomacao(url, opcoes) {
+    try {
+      return await app.apiFetch(url, opcoes);
+    } catch (err) {
+      if (err && err.status === 404 && (err.detail === undefined || err.detail === "Not Found")) {
+        const aviso = new Error(AVISO_SERVIDOR_ANTIGO);
+        aviso.status = 404;
+        aviso.servidorDesatualizado = true;
+        throw aviso;
+      }
+      throw err;
+    }
+  }
+
+  // The outdated-server notice is shown once; repeated failures stay silent in the UI.
+  function avisarErro(err) {
+    if (err?.servidorDesatualizado) {
+      if (estado.avisouServidorAntigo) return;
+      estado.avisouServidorAntigo = true;
+    }
+    app.showToast(err.message, "error");
+  }
 
   function painel() {
     return document.getElementById("tab-panel-automacao");
@@ -152,7 +179,7 @@
     estado.logHistorico = null;
     mostrarLogAutomacao();
     try {
-      const dados = await app.apiFetch(`/api/automacao/execucoes/${encodeURIComponent(id)}/log?linhas=500`, {errorMessage: "Não foi possível abrir o log selecionado."});
+      const dados = await consultarAutomacao(`/api/automacao/execucoes/${encodeURIComponent(id)}/log?linhas=500`, {errorMessage: "Não foi possível abrir o log selecionado."});
       if (consulta !== estado.consultaLog) return;
       estado.logHistorico = dados;
       mostrarLogAutomacao();
@@ -182,7 +209,7 @@
     if (!data) return;
     try {
       const params = new URLSearchParams({limite: "20", pagina: String(estado.logPagina), data_inicio: data, data_fim: data});
-      const dados = await app.apiFetch(`/api/automacao/historico?${params}`, {errorMessage: "Não foi possível listar as execuções desta data."});
+      const dados = await consultarAutomacao(`/api/automacao/historico?${params}`, {errorMessage: "Não foi possível listar as execuções desta data."});
       if (consulta !== estado.consultaOpcoes) return;
       const execucoes = dados.execucoes || [];
       select.replaceChildren(new Option(execucoes.length ? "Selecione uma execução" : "Nenhuma execução nesta data", ""));
@@ -326,7 +353,7 @@
     const consulta = ++estado.consultaHistorico;
     try {
       const params = new URLSearchParams({limite: String(estado.limite), pagina: String(estado.pagina), ...estado.filtros});
-      const dados = await app.apiFetch(`/api/automacao/historico?${params}`, {
+      const dados = await consultarAutomacao(`/api/automacao/historico?${params}`, {
         errorMessage: "Não foi possível carregar o histórico da automação.",
       });
       if (consulta !== estado.consultaHistorico) return;
@@ -410,7 +437,7 @@
     window.clearTimeout(estado.timer);
     try {
       const params = new URLSearchParams({ offset: String(estado.offset), arquivo: estado.arquivo });
-      const dados = await app.apiFetch(`/api/automacao/estado?${params}`, {
+      const dados = await consultarAutomacao(`/api/automacao/estado?${params}`, {
         errorMessage: "Não foi possível consultar a automação.",
       });
       aplicarEstado(dados);
@@ -428,7 +455,7 @@
     const botao = document.querySelector(`[data-automacao-rotina="${rotina}"]`);
     botao?.setAttribute("aria-busy", "true");
     try {
-      const dados = await app.apiFetch("/api/automacao/executar", {
+      const dados = await consultarAutomacao("/api/automacao/executar", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ rotina }),
@@ -439,7 +466,7 @@
       aplicarEstado(dados);
     } catch (err) {
       console.error("Erro ao iniciar a automação:", err);
-      app.showToast(err.message, "error");
+      avisarErro(err);
     } finally {
       estado.ocupado = false;
       botao?.removeAttribute("aria-busy");
@@ -453,7 +480,7 @@
     estado.ocupado = true;
     atualizarBotoes();
     try {
-      const dados = await app.apiFetch("/api/automacao/cancelar", {
+      const dados = await consultarAutomacao("/api/automacao/cancelar", {
         method: "POST",
         errorMessage: "Não foi possível cancelar a rotina.",
       });
@@ -461,7 +488,7 @@
       if (dados.estado) aplicarEstado(dados.estado);
     } catch (err) {
       console.error("Erro ao cancelar a automação:", err);
-      app.showToast(err.message, "error");
+      avisarErro(err);
     } finally {
       estado.ocupado = false;
       atualizarBotoes();
