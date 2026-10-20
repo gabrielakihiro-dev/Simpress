@@ -122,6 +122,15 @@ def log(origem: str, mensagem: str) -> None:
     print(f"[{datetime.now():%H:%M:%S}] [{origem}] {mensagem}", flush=True)
 
 
+def avisar(titulo: str, mensagem: str) -> None:
+    """Aviso do Windows (melhor esforço; ``SIMPRESS_AVISOS=0`` desliga)."""
+    try:
+        from scripts.avisos_windows import notificar
+    except ImportError:
+        from avisos_windows import notificar  # type: ignore[no-redef]
+    notificar(titulo, mensagem, log=lambda texto: log("Aviso do Windows", texto))
+
+
 def agora_iso() -> str:
     return datetime.now().astimezone().isoformat(timespec="seconds")
 
@@ -391,6 +400,7 @@ def aguardar_login(
         log(origem, "O acesso com a conta conectada não concluiu o login.")
     page.bring_to_front()
     log(origem, "AÇÃO NECESSÁRIA: faça o login na janela do Chrome de automação.")
+    avisar(f"Simpress: login necessário no {origem}", "Faça o login na janela do Chrome de automação; a rotina continua sozinha.")
     log(origem, "A rotina continua sozinha assim que o login terminar (Ctrl+C ou --cancelar interrompe).")
     limite = time.time() + LOGIN_TIMEOUT_S
     while time.time() < limite:
@@ -803,6 +813,8 @@ def importar(nome: str, script_preparo: str, script_fila: str, inbox: Path, inic
         processar_fila(script_fila)
     resultado = confirmar_lote(inbox, lote["lote_id"])
     registrar_lote(lote["lote_id"])
+    if resultado.get("status") == "concluido":
+        LOTES_CONFIRMADOS.append(lote["lote_id"])
     log("Importação", f"status={resultado.get('status')} | {resultado.get('detalhe', '')}")
     log("Importação", f"Recibo: {resultado['pasta']}\\_resultado.json")
     return 0 if resultado.get("status") == "concluido" else 1
@@ -929,6 +941,24 @@ class trava_execucao:
 # Rotinas
 # --------------------------------------------------------------------------
 
+LOTES_CONFIRMADOS: list[str] = []
+
+
+def com_aviso(nome: str, rotina: Callable[["BrowserContext"], int], context: "BrowserContext") -> int:
+    """Roda a rotina e avisa no Windows o fim, com os lotes confirmados ou o erro."""
+    LOTES_CONFIRMADOS.clear()
+    try:
+        codigo = rotina(context)
+    except Exception as erro:
+        avisar(f"Simpress: rotina de {nome} falhou", descrever_erro(erro))
+        raise
+    if codigo == 0:
+        avisar(f"Simpress: rotina de {nome} concluída", "Lotes confirmados: " + (", ".join(LOTES_CONFIRMADOS) or "nenhum"))
+    else:
+        avisar(f"Simpress: rotina de {nome} não concluída", "O lote não foi confirmado; confira o log e o _resultado.json.")
+    return codigo
+
+
 def conectar(p):
     garantir_chrome()
     browser = p.chromium.connect_over_cdp(CDP_URL)
@@ -991,14 +1021,14 @@ def executar(rotina: str) -> int:
             if rotina == "login":
                 return abrir_para_login(context)
             if rotina == "os":
-                return rodar_rotina_os(context)
+                return com_aviso("OS", rodar_rotina_os, context)
             if rotina == "inventarios":
-                return rodar_rotina_inventarios(context)
+                return com_aviso("inventários", rodar_rotina_inventarios, context)
             codigos = []
-            for etapa in (rodar_rotina_os, rodar_rotina_inventarios):
+            for nome, etapa in (("OS", rodar_rotina_os), ("inventários", rodar_rotina_inventarios)):
                 verificar_cancelamento()
                 try:
-                    codigos.append(etapa(context))
+                    codigos.append(com_aviso(nome, etapa, context))
                 except Exception as erro:  # a falha de uma rotina não impede a outra
                     print(f"\n[FALHA] {descrever_erro(erro)}", flush=True)
                     codigos.append(1)
