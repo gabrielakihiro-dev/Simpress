@@ -74,7 +74,7 @@ test("without a term the user filter cannot switch away from the without-user li
   const { feature, requests, toasts, el } = setup(pageWith([]));
   feature.abrirEquipamentosSemUsuario();
   await flush();
-  assert.equal(el("pesquisa-completa-status").textContent, "Todos os equipamentos da base têm usuário.");
+  assert.equal(el("pesquisa-completa-status").textContent, "Nenhum equipamento a listar: notebooks sem usuário e demais equipamentos (exceto fones e micro computador).");
 
   el("filtro-pesquisa-usuario").value = "com";
   feature.alterarFiltrosPesquisaCompleta();

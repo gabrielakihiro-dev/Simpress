@@ -82,6 +82,7 @@ __pycache__/
 /data/state/historico_chamados.json
 /data/state/apelidos_modificados.json
 /data/state/historico_comparacoes.json
+/data/state/automacao_chrome.cancelar
 /data/state/entrada_automatica/*
 !/data/state/entrada_automatica/README.md
 !/data/state/entrada_automatica/modelo_lote/
@@ -131,6 +132,7 @@ __pycache__/
 # Local server logs and inventory update receipts are runtime state.
 /data/logs/
 /data/state/inventory_update_idempotency.json
+/data/state/automacao_chrome.lock
 # Manually entered logged users (personal data) and local usage metrics.
 /data/state/usuarios_manuais/
 /data/state/metricas_uso.json

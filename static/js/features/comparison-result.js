@@ -33,6 +33,7 @@
       : renderer.conteudoResultadoComparacao(comparison, listas, colunas);
     conectarAcoesApelidosManuais(comparison, listas.divergenciasApelidosManuais);
     conectarRemocaoHostnames();
+    conectarDecisoesPendenciasUsuario();
     // Logged user under each hostname, with the Home rule.
     context.loggedUserMarkers.conectar(content);
     conectarAnotacoesComparacao(comparison);
@@ -117,6 +118,68 @@
     app.apiFetch("/api/endpoint/hostnames-removidos", { errorMessage: "Não foi possível consultar os hostnames removidos." })
       .then(data => (data?.removidos || []).forEach(entry => mostrarEstadoHostname(chaveHostname(entry.serie, entry.hostname), true)))
       .catch(error => console.error("Erro ao consultar hostnames removidos:", error));
+  }
+
+  const TEXTOS_DECISAO_PENDENCIA = {
+    permitir: { titulo: "Permitir a substituição?", mensagem: "O usuário do Endpoint passa a valer e o usuário manual é arquivado no histórico de alterações (dá para desfazer lá).", confirmar: "Permitir substituição", resultado: "Substituição permitida" },
+    recusar: { titulo: "Manter o usuário manual?", mensagem: "O usuário manual continua valendo e este usuário do Endpoint não será perguntado de novo. Se o Endpoint informar outro usuário, você será avisado.", confirmar: "Manter usuário manual", resultado: "Usuário manual mantido", destrutiva: false },
+    remover: { titulo: "Confirmar a remoção do usuário?", mensagem: "Confirma que o usuário realmente deixou de existir? Ele deixa de aparecer na base; um usuário manual arquivado antes volta a valer, se houver.", confirmar: "Confirmar remoção", resultado: "Usuário removido" },
+    manter: { titulo: "Manter o usuário?", mensagem: "O usuário continua valendo mesmo sem constar no Endpoint e não será perguntado de novo enquanto o Endpoint não informar outro.", confirmar: "Manter usuário", resultado: "Usuário mantido", destrutiva: false },
+  };
+
+  function mostrarEstadoPendenciaUsuario(id, resultado) {
+    document.querySelectorAll("#comparacao-planilhas-conteudo [data-user-hold]").forEach(bloco => {
+      if (bloco.dataset.userHold !== id) return;
+      bloco.querySelectorAll("[data-user-hold-action]").forEach(botao => { botao.hidden = true; });
+      const status = bloco.querySelector("[data-user-hold-status]");
+      if (status) {
+        status.textContent = resultado;
+        status.hidden = false;
+      }
+    });
+  }
+
+  // Decides a pending logged-user hold. Nothing changed until now: the current user kept applying.
+  function conectarDecisoesPendenciasUsuario() {
+    const botoes = document.querySelectorAll("#comparacao-planilhas-conteudo [data-user-hold-action]");
+    if (!botoes.length) return;
+    botoes.forEach(botao => botao.addEventListener("click", async () => {
+      const id = botao.closest("[data-user-hold]")?.dataset.userHold || "";
+      const decisao = botao.dataset.userHoldAction;
+      const texto = TEXTOS_DECISAO_PENDENCIA[decisao];
+      if (!id || !texto) return;
+      if (!(await app.confirmarAcao({
+        titulo: texto.titulo, mensagem: texto.mensagem, confirmar: texto.confirmar, destrutiva: texto.destrutiva !== false,
+      }))) return;
+      botao.disabled = true;
+      botao.setAttribute("aria-busy", "true");
+      try {
+        const data = await app.apiFetch(`/api/usuarios/pendencias/${encodeURIComponent(id)}/decidir`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ decisao }),
+          errorMessage: "Não foi possível registrar a decisão.",
+        });
+        mostrarEstadoPendenciaUsuario(id, texto.resultado);
+        app.atualizarIndicadoresPosSalvamento();
+        app.showToast(data.mensagem || `${texto.resultado}.`, "success");
+      } catch (error) {
+        console.error("Erro ao decidir pendência de usuário:", error);
+        app.showToast(error.message || "Não foi possível concluir a operação.", "error");
+      } finally {
+        botao.disabled = false;
+        botao.removeAttribute("aria-busy");
+      }
+    }));
+    // Holds decided earlier (here or in another window) open already answered.
+    app.apiFetch("/api/usuarios/pendencias", { errorMessage: "Não foi possível consultar as pendências de usuário." })
+      .then(data => {
+        const aguardando = new Set((data?.pendencias || []).filter(item => item.estado === "pendente").map(item => item.id));
+        document.querySelectorAll("#comparacao-planilhas-conteudo [data-user-hold]").forEach(bloco => {
+          if (!aguardando.has(bloco.dataset.userHold)) mostrarEstadoPendenciaUsuario(bloco.dataset.userHold, "Decisão já registrada");
+        });
+      })
+      .catch(error => console.error("Erro ao consultar pendências de usuário:", error));
   }
 
   // Autosaves every annotation field; a row listed in more than one section keeps its copies in sync.
@@ -428,6 +491,12 @@
     document.querySelectorAll("#comparacao-planilhas-conteudo [data-comparison-section-target]").forEach(button => {
       button.addEventListener("click", () => irParaSecaoComparacao(button.dataset.comparisonSectionTarget));
     });
+    document.querySelectorAll("#comparacao-planilhas-conteudo [data-user-change-details]").forEach(details => {
+      const rotulo = details.querySelector("[data-user-change-toggle-label]");
+      details.addEventListener("toggle", () => {
+        if (rotulo) rotulo.textContent = details.open ? "Minimizar lista de usuários alterados" : "Expandir lista de usuários alterados";
+      });
+    });
   }
 
   // Scrolls the result dialog to a section title and focuses it. A section hidden by the history
@@ -439,6 +508,8 @@
     const oculta = () => Boolean(heading.closest("[hidden]"));
     if (oculta()) limparFiltrosHistoricoComparacao(content);
     if (oculta()) return false;
+    const recolhida = heading.closest("section")?.querySelector("details[data-user-change-details]:not([open])");
+    if (recolhida) recolhida.open = true;
     const reduced = window.matchMedia?.("(prefers-reduced-motion: reduce)").matches;
     const bar = content.querySelector("[data-history-filter-bar]");
     heading.style.scrollMarginTop = `${(bar ? bar.offsetHeight : 0) + 16}px`;

@@ -31,6 +31,7 @@ import "./js/features/ticket-tracking.js";
 import "./js/features/equipment-editor.js";
 import "./js/features/alias-history.js";
 import "./js/features/monthly-report.js";
+import "./js/features/chrome-automation.js";
 import "./app.js";
 import "./js/ui/sidebar-navigation.js";
 import "./js/ui/ux-enhancements.js";

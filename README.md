@@ -4,7 +4,7 @@ Aplicação web local para consultar equipamentos, preparar transferências Simp
 
 ## Recursos
 
-- Busca por número de série, código de barras, apelido/hostname, modelo ou cidade. A busca completa pode ser filtrada por categoria e cidade.
+- Busca por número de série, apelido/hostname, modelo ou cidade. A busca completa pode ser filtrada por categoria e cidade.
 - Geração e download da planilha oficial de transferência a partir do modelo local.
 - Acompanhamento de Chamados que relaciona as séries e as OS das exportações Simpress e Oracle, com conferência de divergências.
 - Importação automática desse par de planilhas por lotes em pastas locais, com validação, histórico, proteção contra reimportação e recibos de processamento.
@@ -161,7 +161,7 @@ Na inicialização, o terminal e a aplicação mostram quais arquivos locais est
 
 ### Pesquisar equipamento
 
-Na aba **Home**, pesquise por série, código de barras, apelido/hostname, modelo ou cidade. Pressione `Enter` ou clique em **Buscar Equipamento**. A lista rápida mostra até 15 resultados; **Mostrar mais** abre a pesquisa completa, que apresenta o total e carrega até 50 resultados por vez com **Carregar mais**.
+Na aba **Home**, pesquise por série, apelido/hostname, modelo ou cidade. Pressione `Enter` ou clique em **Buscar Equipamento**. A lista rápida mostra até 15 resultados; **Mostrar mais** abre a pesquisa completa, que apresenta o total e carrega até 50 resultados por vez com **Carregar mais**.
 
 Na pesquisa completa, combine os filtros de categoria e cidade. As categorias são **Notebooks**, **MacBooks**, **Monitores** e **Fones**. A classificação considera o tipo e o modelo da planilha; por exemplo, monitores também são identificados pelo modelo e MacBooks aparecem separados dos outros notebooks.
 
