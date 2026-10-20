@@ -97,5 +97,77 @@ class ChromeAutomationHelpersTests(unittest.TestCase):
         self.assertEqual(automacao.descrever_erro(automacao.RotinaErro("Login não concluído")), "Login não concluído")
 
 
+class ExecucaoUnicaTests(unittest.TestCase):
+    def setUp(self):
+        self.temp_context = tempfile.TemporaryDirectory(prefix=".automacao-trava-test-")
+        self.trava = Path(self.temp_context.name) / "state" / "automacao_chrome.lock"
+        patcher = patch.object(automacao, "TRAVA_PATH", self.trava)
+        patcher.start()
+        self.addCleanup(patcher.stop)
+
+    def tearDown(self):
+        self.temp_context.cleanup()
+
+    def _gravar(self, pid: int, rotina: str = "os", inicio: str = "2026-10-20T09:05:00-03:00") -> None:
+        self.trava.parent.mkdir(parents=True, exist_ok=True)
+        self.trava.write_text(json.dumps({"pid": pid, "rotina": rotina, "inicio": inicio}), encoding="utf-8")
+
+    def test_trava_livre_is_acquired_and_released(self):
+        self.assertIsNone(automacao.ler_trava())
+        with automacao.trava_execucao("login"):
+            estado = automacao.ler_trava()
+            self.assertEqual(estado["pid"], automacao.os.getpid())
+            self.assertEqual(estado["rotina"], "login")
+        self.assertFalse(self.trava.exists())
+        self.assertIsNone(automacao.ler_trava())
+
+    def test_trava_ocupada_by_live_pid_blocks_with_clear_message(self):
+        self._gravar(4242, rotina="inventarios")
+        with patch.object(automacao, "pid_vivo", lambda pid: True):
+            self.assertEqual(automacao.ler_trava()["rotina"], "inventarios")
+            with self.assertRaises(automacao.TravaOcupada) as ctx:
+                automacao.adquirir_trava("os")
+        self.assertEqual(
+            str(ctx.exception), "Já existe uma rotina em andamento (rotina inventarios, PID 4242, desde 09:05)"
+        )
+        self.assertEqual(json.loads(self.trava.read_text(encoding="utf-8"))["pid"], 4242)
+
+    def test_trava_orfa_is_taken_over(self):
+        self._gravar(4242)
+        with patch.object(automacao, "pid_vivo", lambda pid: pid == automacao.os.getpid()):
+            self.assertIsNone(automacao.ler_trava())
+            automacao.adquirir_trava("ambas")
+            self.assertEqual(automacao.ler_trava()["rotina"], "ambas")
+        automacao.liberar_trava()
+        self.assertFalse(self.trava.exists())
+
+    def test_trava_is_released_on_exception_and_ctrl_c(self):
+        for erro in (RuntimeError("falhou"), KeyboardInterrupt()):
+            with self.assertRaises(type(erro)), automacao.trava_execucao("os"):
+                self.assertTrue(self.trava.exists())
+                raise erro
+            self.assertFalse(self.trava.exists())
+
+    def test_liberar_trava_keeps_lock_of_other_process(self):
+        self._gravar(4242)
+        automacao.liberar_trava()
+        self.assertTrue(self.trava.exists())
+
+    def test_main_returns_2_when_another_run_is_alive(self):
+        self._gravar(4242, rotina="os")
+        with (
+            patch.object(automacao, "pid_vivo", lambda pid: True),
+            patch.object(automacao.sys, "argv", ["automacao", "--rotina", "login"]),
+            patch("builtins.print") as impresso,
+        ):
+            self.assertEqual(automacao.main(), 2)
+        self.assertIn("Já existe uma rotina em andamento (rotina os, PID 4242", impresso.call_args[0][0])
+
+    def test_pid_vivo_detects_current_and_missing_processes(self):
+        self.assertTrue(automacao.pid_vivo(automacao.os.getpid()))
+        self.assertFalse(automacao.pid_vivo(0))
+        self.assertFalse(automacao.pid_vivo(2_000_000_000))
+
+
 if __name__ == "__main__":
     unittest.main()

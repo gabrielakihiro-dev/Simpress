@@ -13,6 +13,8 @@ Gatilho: **"Executar OS Simpress"** executa o fluxo completo, do Oracle até a c
 
 `executar_automacao.bat` → opção 1 (ou `.\.venv\Scripts\python.exe scripts\automacao_rotinas_chrome.py --rotina os`) faz todos os passos abaixo num Chrome de automação próprio (perfil `~\.chrome-automation`, porta local 9333, que fica aberto para manter os logins): Oracle (usa a Gestão de Solicitações que já estiver na tela; senão abre pelo Menu; se o Menu falhar, recarrega e abre pelo Menu de novo), UX (clica em "Acesso Time Simpress" na tela de login; se não entrar, pede o login), downloads capturados pelo Playwright, lote e confirmação do `_resultado.json`. Falhas deixam a aba aberta e uma captura em `data\logs\automacao_chrome`. O passo a passo abaixo continua valendo para execução manual.
 
+Só uma execução por vez: a trava `data\state\automacao_chrome.lock` (PID, rotina e início; vale também para a opção de login) faz a segunda sair com código 2 e "Já existe uma rotina em andamento (...)"; trava de PID que não existe mais é retomada.
+
 ## Regras
 
 - O login é sempre do usuário (o Oracle redireciona para SSO Microsoft; faça o login antes e diga "pronto"). Não digite credenciais nem altere permissões do Chrome.
