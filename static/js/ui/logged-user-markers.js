@@ -7,9 +7,12 @@
   const { app, appState } = context;
   const { escapeHtml } = context.dom;
 
-  // Empty placeholder filled by conectar(); a row without a series gets none.
-  const marcador = serie => String(serie || "").trim()
-    ? `<span class="logged-user" data-logged-user data-logged-user-serie="${escapeHtml(String(serie).trim())}"></span>`
+  // Empty placeholder filled by conectar(); a row without a series gets none. `sugestao` is a manual user
+  // archived when the Endpoint informed one: it only pre-fills the field, and nothing is saved until confirmed.
+  const marcador = (serie, { sugestao = "" } = {}) => String(serie || "").trim()
+    ? `<span class="logged-user" data-logged-user data-logged-user-serie="${escapeHtml(String(serie).trim())}"${String(sugestao || "").trim()
+      ? ` data-logged-user-sugestao="${escapeHtml(String(sugestao).trim())}"`
+      : ""}></span>`
     : "";
 
   // The Endpoint user wins and a manual user (M) fills the gap. Equipment in the Simpress base without a
@@ -31,7 +34,10 @@
             ? `<button type="button" class="btn btn-tertiary equipment-user-button" data-logged-user-edit title="Alterar o usuário informado manualmente">Editar</button>`
             : ""}</span>`;
         } else if (editavel) {
-          item.innerHTML = formularioUsuario(serie, "");
+          const sugestao = String(item.dataset.loggedUserSugestao || "").trim();
+          item.innerHTML = `${sugestao
+            ? `<span class="logged-user-hint" data-logged-user-archived>Manual arquivado: ${escapeHtml(sugestao)}. Confirme para restaurar.</span>`
+            : ""}${formularioUsuario(serie, sugestao, sugestao ? "Restaurar manual" : "Salvar usuário")}`;
         } else {
           item.textContent = "Sem usuário no Endpoint";
         }
@@ -44,10 +50,10 @@
       });
     };
 
-    const formularioUsuario = (serie, valor) => `
+    const formularioUsuario = (serie, valor, rotuloBotao = "Salvar usuário") => `
       <form class="logged-user-form" data-logged-user-form autocomplete="off">
         <input type="text" maxlength="160" class="equipment-user-input" value="${escapeHtml(valor)}" placeholder="Digite o usuário" aria-label="${escapeHtml(`Usuário logado da série ${serie}`)}">
-        <button type="submit" class="btn btn-secondary equipment-user-button">Salvar usuário</button>
+        <button type="submit" class="btn btn-secondary equipment-user-button">${escapeHtml(rotuloBotao)}</button>
       </form>`;
 
     const conectarFormulario = (item, serie) => {

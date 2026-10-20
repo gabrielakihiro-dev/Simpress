@@ -54,6 +54,7 @@ _ANNOTATABLE_COMPARISON_CATEGORIES = (
     "correspondencias_ambiguas",
     "registros_ambiguos",
     "series_sem_mapeamento",
+    "mudancas_usuarios",
 )
 logger = logging.getLogger(__name__)
 
@@ -356,6 +357,7 @@ def create_inventory_history_router(services: InventoryHistoryServices) -> Tuple
             "registros_ambiguos",
             "divergencias_apelidos_manuais",
             "series_sem_mapeamento",
+            "mudancas_usuarios",
         )
         result = {"total_endpoint": comparison.get("total_endpoint", 0)}
         for category in categories:
