@@ -322,7 +322,7 @@
       return escapeHtml(item.ultima_verificacao ? formatarHorarioHistorico(item.ultima_verificacao) : "—");
     }
     const classeBotao = "px-2 py-1 rounded-md border text-[10px] font-semibold";
-    return `<ul class="space-y-1.5">${registros.map(registro => {
+    return `<ul class="space-y-3 min-w-[15rem]">${registros.map(registro => {
       const hostname = registro.computador || "";
       const horario = registro.ultima_verificacao ? formatarHorarioHistorico(registro.ultima_verificacao) : "—";
       const acoes = permitirRemocao && registro.mais_antigo === true
@@ -330,10 +330,12 @@
             <span hidden data-hostname-removed class="text-[10px] text-emerald-300">Removido; vale o outro hostname</span>
             <button type="button" hidden data-hostname-restore class="${classeBotao} bg-slate-500/10 hover:bg-slate-500/20 border-slate-500/25 text-slate-200" aria-label="${escapeHtml(`Desfazer a remoção do hostname ${hostname}`)}">Desfazer</button>`
         : "";
-      return `<li class="flex flex-wrap items-center gap-x-2 gap-y-1" data-hostname-item data-hostname-serie="${escapeHtml(registro.serie || "")}" data-hostname-nome="${escapeHtml(hostname)}">
-          <span class="font-mono text-slate-200">${escapeHtml(hostname || "—")}</span>
-          <span class="whitespace-nowrap">${escapeHtml(horario)}</span>
-          ${acoes}
+      return `<li class="flex flex-col gap-1" data-hostname-item data-hostname-serie="${escapeHtml(registro.serie || "")}" data-hostname-nome="${escapeHtml(hostname)}">
+          <span class="font-mono text-slate-200 break-all">${escapeHtml(hostname || "—")}</span>
+          <span class="flex flex-wrap items-center gap-x-2 gap-y-1">
+            <span class="whitespace-nowrap text-slate-400">${escapeHtml(horario)}</span>
+            ${acoes}
+          </span>
         </li>`;
     }).join("")}</ul>`;
   }
@@ -454,7 +456,12 @@
               ["Removidos do Endpoint", contarMudancas("removido_endpoint")],
               ["Manuais que voltaram a valer", contarMudancas("manual_voltou")],
             ].map(([rotulo, total]) => `${rotulo}: ${total.toLocaleString("pt-BR")}`).join(" · ")}</p></div>
-          ${renderizarTabelaComparacao(["Mudança", "Série", "Hostname/Apelido", "Usuário anterior", "Usuário novo", "Motivo", ...annotationHeaders], userChangeRows, "Nenhum usuário logado mudou nesta atualização.", "mudancas_usuarios")}
+          <details open class="space-y-2" data-user-change-details>
+            <summary class="cursor-pointer select-none text-[11px] font-semibold text-slate-300 hover:text-white">
+              <span data-user-change-toggle-label>Minimizar lista de usuários alterados</span>
+            </summary>
+            ${renderizarTabelaComparacao(["Mudança", "Série", "Hostname/Apelido", "Usuário anterior", "Usuário novo", "Motivo", ...annotationHeaders], userChangeRows, "Nenhum usuário logado mudou nesta atualização.", "mudancas_usuarios")}
+          </details>
         </section>` : "";
     return `
         ${barra}

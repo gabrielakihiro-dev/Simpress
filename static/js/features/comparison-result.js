@@ -428,6 +428,12 @@
     document.querySelectorAll("#comparacao-planilhas-conteudo [data-comparison-section-target]").forEach(button => {
       button.addEventListener("click", () => irParaSecaoComparacao(button.dataset.comparisonSectionTarget));
     });
+    document.querySelectorAll("#comparacao-planilhas-conteudo [data-user-change-details]").forEach(details => {
+      const rotulo = details.querySelector("[data-user-change-toggle-label]");
+      details.addEventListener("toggle", () => {
+        if (rotulo) rotulo.textContent = details.open ? "Minimizar lista de usuários alterados" : "Expandir lista de usuários alterados";
+      });
+    });
   }
 
   // Scrolls the result dialog to a section title and focuses it. A section hidden by the history
@@ -439,6 +445,8 @@
     const oculta = () => Boolean(heading.closest("[hidden]"));
     if (oculta()) limparFiltrosHistoricoComparacao(content);
     if (oculta()) return false;
+    const recolhida = heading.closest("section")?.querySelector("details[data-user-change-details]:not([open])");
+    if (recolhida) recolhida.open = true;
     const reduced = window.matchMedia?.("(prefers-reduced-motion: reduce)").matches;
     const bar = content.querySelector("[data-history-filter-bar]");
     heading.style.scrollMarginTop = `${(bar ? bar.offsetHeight : 0) + 16}px`;
