@@ -457,6 +457,8 @@ test("inventory evolution prioritizes categories, filters rows and opens the mat
 });
 
 test("ticket tracking imports both workbooks and relates each serial to its OS", async ({ page }, testInfo) => {
+  // The complete import flow includes two Axe scans and the native file chooser.
+  test.slow();
   await page.setViewportSize({ width: testInfo.project.name === "mobile" ? 390 : 1366, height: 640 });
   await openSidebarIfNeeded(page);
   await page.getByRole("button", { name: "Acompanhamento de Chamados", exact: true }).click();
@@ -814,29 +816,10 @@ test("@profile UI route transitions retain responsive frame pacing", async ({ pa
     .toBeLessThan(250);
 });
 
-test("usage card shows 30-day counts and estimates hours from the configured minutes", async ({ page }) => {
+test("Resumo tab does not show the removed usage panel", async ({ page }) => {
   await openSidebarIfNeeded(page);
   await page.locator("#tab-resumo").click();
-  const card = page.locator("#uso-30-dias");
-  await expect(card).toBeVisible();
-  await expect(card.getByRole("heading", { name: "Uso nos últimos 30 dias" })).toBeVisible();
-  await expect(card.locator('[data-usage-metric="transferencias"] [data-usage-value]')).toHaveText("12");
-  await expect(card.locator('[data-usage-metric="buscas"] [data-usage-value]')).toHaveText("143");
-
-  await card.locator("#uso-30-dias-tempos > summary").click();
-  const transfers = card.getByLabel("Transferências geradas");
-  await transfers.fill("999");
-  await card.getByRole("button", { name: "Salvar tempos" }).click();
-  await expect(card.locator("#uso-30-dias-status")).toHaveText("Use de 0 a 480 minutos.");
-  await expect(transfers).toHaveAttribute("aria-invalid", "true");
-
-  await transfers.fill("15");
-  for (const label of ["Comparações feitas", "Exportações", "OS conciliadas", "Buscas"]) await card.getByLabel(label).fill("");
-  await card.getByRole("button", { name: "Salvar tempos" }).click();
-  await expect(card.locator("#uso-30-dias-status")).toHaveText("Tempos salvos.");
-  await expect(card.locator("#uso-30-dias-horas")).toHaveText("Horas economizadas (estimativa): 3 h");
-  await expect(transfers).not.toHaveAttribute("aria-invalid", "true");
-  await auditAccessibility(page, "#uso-30-dias");
+  await expect(page.getByRole("heading", { name: "Uso nos últimos 30 dias" })).toHaveCount(0);
 });
 
 test("Resumo tab switches panels, keeps ARIA state and supports arrow keys", async ({ page }) => {
@@ -860,7 +843,6 @@ test("Resumo tab switches panels, keeps ARIA state and supports arrow keys", asy
   await page.locator(tabs.resumo).click();
   await expectOnly("resumo");
   await expect(page.locator("#ux-home-panel")).toBeVisible();
-  await expect(page.locator("#uso-30-dias")).toBeVisible();
 
   await openSidebarIfNeeded(page);
   await page.locator(tabs.transporte).click();
@@ -884,19 +866,6 @@ test("Resumo tab switches panels, keeps ARIA state and supports arrow keys", asy
   await expectOnly("home");
   await page.keyboard.press("End");
   await expectOnly("automacao");
-});
-
-test("usage card shows stat cards in two columns on narrow screens", async ({ page }) => {
-  await page.setViewportSize({ width: 390, height: 844 });
-  await openSidebarIfNeeded(page);
-  await page.locator("#tab-resumo").click();
-  const grid = page.locator("#uso-30-dias-lista");
-  await expect(grid).toBeVisible();
-  const columns = await grid.evaluate(el => getComputedStyle(el).gridTemplateColumns.split(" ").length);
-  expect(columns).toBe(2);
-  await expect(grid.locator("[data-usage-metric]")).toHaveCount(5);
-  const overflow = await page.evaluate(() => document.documentElement.scrollWidth - document.documentElement.clientWidth);
-  expect(overflow).toBeLessThanOrEqual(0);
 });
 
 test("stale base alert shows the last update date and opens the base update", async ({ page, request }) => {

@@ -110,7 +110,6 @@
     app.carregarContagemHistoricoApelidos();
     app.carregarContagemHistoricoComparacoes();
     app.inicializarArquivosAtualizacaoPlanilhas();
-    app.inicializarUsoUltimos30Dias();
     app.inicializarAlertaBaseDesatualizada();
     app.inicializarAlertasOsDivergencias();
     app.inicializarAutomacao();

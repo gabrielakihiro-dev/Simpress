@@ -70,7 +70,6 @@ def create_operations_router(
     local_annotation_outbox_directory: Optional[Callable[[], Path]] = None,
     history_annotations_sync_enabled: Optional[Callable[[], bool]] = None,
     load_history_annotation_records: Optional[Callable[..., List[Dict[str, Any]]]] = None,
-    record_ticket_reconciliation: Optional[Callable[[Dict[str, Any]], Any]] = None,
 ):
     router = APIRouter()
 
@@ -545,8 +544,6 @@ def create_operations_router(
 
         for record in annotation_records:
             sync_ticket_annotation(record)
-        if record_ticket_reconciliation is not None:
-            record_ticket_reconciliation(parsed_report)
         displayed_report = normalize_ticket_snapshot(report)
         response = {key: value for key, value in displayed_report.items() if key not in {"historico", "importacoes_automaticas"}}
         response["historico"] = [

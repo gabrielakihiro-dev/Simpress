@@ -180,7 +180,6 @@ from domains.uploaded_workbooks import (
     validate_unambiguous_workbook_headers,
 )
 from domains.inventory_update import InventoryUpdateServices
-from domains.usage_metrics import UsageMetricsMiddleware, UsageMetricsStore
 from domains.inventory_update import preview_inventory_files
 from domains.inventory_update import update_inventory_files
 from domains.equipment_search import (
@@ -1020,10 +1019,6 @@ async def domain_error_handler(_request: Request, error: DomainError) -> JSONRes
     return JSONResponse({"detail": error.detail}, status_code=error.status_code)
 
 app.add_middleware(InventoryUpdateMiddleware)
-
-# Daily counts only (no serials, hostnames or terms); see docs/operacao/metricas-uso.md.
-usage_metrics = UsageMetricsStore(lambda: STATE_DIR / "metricas_uso.json", lambda: TRANSACTION_ROOT)
-app.add_middleware(UsageMetricsMiddleware, store=usage_metrics)
 
 
 SERVER_PORT = int(os.environ.get("SIMPRESS_PORT", "8000"))
@@ -1964,7 +1959,6 @@ async def _import_automatic_inventory_batch(
         )
     except HTTPException as error:
         raise _as_domain_error(error) from error
-    await asyncio.to_thread(usage_metrics.record_comparison, result)
     try:
         await asyncio.to_thread(prune_expired_histories)
     except Exception:
@@ -1998,7 +1992,6 @@ async def atualizar_planilhas(
         endpoint_file, details_file, services=_inventory_update_services,
         idempotency_key=idempotency_key.get(), preview_token=preview_token,
     )
-    await asyncio.to_thread(usage_metrics.record_comparison, result)
     try:
         await asyncio.to_thread(prune_expired_histories)
     except Exception:
@@ -2195,8 +2188,6 @@ dashboard_router, _dashboard_exports = create_dashboard_router(DashboardServices
     get_comparison_events=_dashboard_comparison_events,
     categories=_CATEGORIAS_EQUIPAMENTO,
     categorize=_categoria_equipamento,
-    get_usage_summary=usage_metrics.summary,
-    set_manual_minutes=usage_metrics.set_manual_minutes,
     get_comparison_history=lambda: load_comparison_history(),
     get_details_file=lambda: DETAILS_UPLOAD_FILE,
     stale_base_days=STALE_BASE_ALERT_DAYS,
@@ -2289,7 +2280,6 @@ operations_router = create_operations_router(
     local_annotation_outbox_directory=lambda: LOCAL_HISTORY_ANNOTATION_OUTBOX_DIR,
     history_annotations_sync_enabled=lambda: HISTORY_ANNOTATIONS_SYNC_ENABLED,
     load_history_annotation_records=lambda directory, **kwargs: load_history_annotations(directory, **kwargs),
-    record_ticket_reconciliation=usage_metrics.record_ticket_reconciliation,
 )
 app.include_router(operations_router)
 
@@ -2304,7 +2294,6 @@ _monthly_report_services = MonthlyReportServices(
     load_comparison_history=load_comparison_history,
     comparison_history_for_display=comparison_history_for_display,
     ticket_report_path=lambda: TICKET_REPORT_FILE,
-    read_usage_metrics=usage_metrics.read,
 )
 app.include_router(create_monthly_report_router(_monthly_report_services))
 

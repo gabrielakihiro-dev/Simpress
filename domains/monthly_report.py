@@ -31,19 +31,11 @@ from domains.ticket_reporting import (
     ticket_report_snapshots,
     ticket_stage_date,
 )
-from domains.usage_metrics import METRICS, summarize
 
 MONTH_NAMES = (
     "janeiro", "fevereiro", "março", "abril", "maio", "junho",
     "julho", "agosto", "setembro", "outubro", "novembro", "dezembro",
 )
-USAGE_LABELS = {
-    "transferencias": "Transferências geradas",
-    "comparacoes": "Comparações feitas",
-    "exportacoes": "Exportações",
-    "os_conciliadas": "OS conciliadas",
-    "buscas": "Buscas",
-}
 SECTION_ENDPOINT = "Sem correspondência — no endpoint"
 SECTION_SIMPRESS = "Sem correspondência — na Simpress"
 SECTION_LOCATION = "Localidade divergente"
@@ -282,19 +274,6 @@ def tickets_section(report: Mapping[str, Any], month: ReportMonth) -> Dict[str, 
     }
 
 
-# Usage -------------------------------------------------------------------
-
-def usage_section(store: Mapping[str, Any], month: ReportMonth) -> Dict[str, Any]:
-    summary = summarize(store, month.end, (month.end - month.start).days + 1)
-    return {
-        "totais": summary["totais"],
-        "por_dia": summary["por_dia"],
-        "registro_desde": summary["registro_desde"],
-        "tempos_configurados": summary["tempos_configurados"],
-        "horas_economizadas": summary["horas_economizadas"],
-    }
-
-
 # Report ------------------------------------------------------------------
 
 def build_monthly_report(
@@ -305,7 +284,6 @@ def build_monthly_report(
     comparison_history: Sequence[Any],
     comparison_display: Callable[[Dict[str, Any]], Dict[str, Any]],
     ticket_report: Mapping[str, Any],
-    usage_store: Mapping[str, Any],
     generated_at: datetime,
 ) -> Dict[str, Any]:
     return {
@@ -314,7 +292,6 @@ def build_monthly_report(
         "inventario": inventory_section(equipment, stats),
         "comparacao": comparison_section(comparison_history, month, comparison_display),
         "os": tickets_section(ticket_report, month),
-        "uso": usage_section(usage_store, month),
     }
 
 
@@ -334,7 +311,6 @@ def summary_rows(report: Mapping[str, Any]) -> List[Tuple[str, str, Any, str]]:
     inventory = report["inventario"]
     comparison = report["comparacao"]
     tickets = report["os"]
-    usage = report["uso"]
     base = f"Base oficial EquipamentosDetalhes ({inventory['arquivo_origem'] or 'arquivo não informado'})"
     oracle, simpress = tickets["oracle"], tickets["simpress"]
     rows: List[Tuple[str, str, Any, str]] = [
@@ -360,16 +336,6 @@ def summary_rows(report: Mapping[str, Any]) -> List[Tuple[str, str, Any, str]]:
         ("OS do mês", "Encerrados sem data", oracle["encerradas_sem_data"] + simpress["encerradas_sem_data"],
          "Status encerrado sem data de conclusão ou entrega; fora das contagens do mês."),
     ]
-    rows.extend(
-        ("Uso no mês", USAGE_LABELS[metric], usage["totais"][metric], "data/state/metricas_uso.json")
-        for metric in METRICS
-    )
-    rows.append((
-        "Uso no mês", "Horas economizadas (estimativa)",
-        usage["horas_economizadas"] if usage["tempos_configurados"] else "Tempos manuais não informados",
-        "Σ(total × minutos informados) / 60.",
-    ))
-    rows.append(("Uso no mês", "Registrado desde", _date_text(usage["registro_desde"]) or NO_RECORDS, "Primeiro dia com registro."))
     return rows
 
 
@@ -461,12 +427,6 @@ def build_monthly_report_workbook(report: Mapping[str, Any]) -> Tuple[BytesIO, s
         ((record["fonte"], record["identificador"], record["serie"], record["status"],
           _date_text(record["criacao"]), _date_text(record["conclusao"]), "; ".join(record["situacao"]))
          for record in tickets["linhas"]),
-    )
-    _table(
-        workbook.create_sheet("Uso por dia"),
-        ("Data", *(USAGE_LABELS[metric] for metric in METRICS)),
-        ((_date_text(date.fromisoformat(row["data"])), *(row[metric] for metric in METRICS))
-         for row in report["uso"]["por_dia"]),
     )
     output = BytesIO()
     workbook.save(output)

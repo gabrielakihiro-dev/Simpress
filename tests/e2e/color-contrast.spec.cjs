@@ -18,6 +18,8 @@ async function openSidebarForTabs(page) {
 
 for (const theme of ["dark", "light"]) {
   test(`home, Transporte, Resumo and Automação keep AA text contrast in the ${theme} theme`, async ({ page }) => {
+    // Four Axe scans create auxiliary pages; allow their measured Windows setup cost.
+    test.slow();
     await page.goto("/");
     await page.locator("html").evaluate((root, value) => { root.dataset.theme = value; }, theme);
 
@@ -33,7 +35,6 @@ for (const theme of ["dark", "light"]) {
     await openSidebarForTabs(page);
     await page.locator("#tab-resumo").click();
     await expect(page.locator("#tab-panel-resumo")).toBeVisible();
-    await expect(page.locator("#uso-30-dias")).toBeVisible();
     expect(await contrastViolations(page, "#tab-panel-resumo")).toEqual([]);
 
     await openSidebarForTabs(page);
