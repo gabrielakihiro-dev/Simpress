@@ -29,15 +29,18 @@ from domains.history_annotations import (
     effective_history_annotation, history_annotation_row_fingerprint,
     load_effective_history_annotations, same_annotation_revision,
 )
-from domains.effective_alias import endpoint_loss_warnings
+from domains.effective_alias import apply_effective_alias, endpoint_loss_warnings, with_details_serials
 from domains.local_setup import unpack_simpress_zip
+from domains.user_holds import hold_change_rows, holds_file, plan_holds, read_holds
 from domains.user_changes import (
     archived_manual_users,
     build_archived_manual_user_entries,
     build_endpoint_warning_entries,
     logged_user_changes,
+    manual_user_dates_by_serial,
     manual_users_by_serial,
     manual_users_overridden_by_endpoint,
+    read_manual_user_dates,
     without_manual_users,
 )
 
@@ -610,6 +613,7 @@ def _commit_inventory_files(
     )
     if manual_users_file is not None:
         transaction_targets.append(manual_users_file)
+        transaction_targets.append(holds_file(manual_users_file))
     with _transaction_with_backup_cleanup(
         services.inventory_state_transaction(transaction_targets),
         backup_dir,
@@ -700,16 +704,51 @@ def _commit_inventory_files(
             # A manual user hidden by an Endpoint user leaves the manual file and is kept in the
             # alias history, so it cannot come back silently if the Endpoint user disappears later.
             overridden: Dict[str, Dict[str, str]] = {}
-            if manual_users_file is not None and manual_users_file.is_file():
-                try:
-                    stored_users = json.loads(manual_users_file.read_text(encoding="utf-8"))
-                except (OSError, ValueError):
-                    # An unreadable manual file is already ignored by the load; it stays untouched.
-                    stored_users = None
-                if isinstance(stored_users, dict):
-                    overridden = manual_users_overridden_by_endpoint(
-                        prepared_state["equipamentos_cache"], manual_users_by_serial(stored_users),
-                    )
+            created_holds: List[Dict[str, Any]] = []
+            if manual_users_file is not None:
+                stored_users = None
+                if manual_users_file.is_file():
+                    try:
+                        stored_users = json.loads(manual_users_file.read_text(encoding="utf-8"))
+                    except (OSError, ValueError):
+                        # An unreadable manual file is already ignored by the load; it stays untouched.
+                        stored_users = None
+                manual_now = manual_users_by_serial(stored_users) if isinstance(stored_users, dict) else {}
+                holds_path = holds_file(manual_users_file)
+                existing_holds = read_holds(manual_users_file)
+                # Um usuário manual ou um usuário do Endpoint que sumiu nunca muda sozinho: vira pendência
+                # e o usuário atual continua valendo até a decisão (ver domains/user_holds.py).
+                next_holds, created_holds = plan_holds(
+                    previous_equipment,
+                    prepared_state["equipamentos_cache"],
+                    with_details_serials(endpoint_index, prepared_state["equipamentos_cache"]),
+                    manual_now,
+                    existing_holds,
+                )
+                if next_holds != existing_holds:
+                    transaction.update_json(holds_path, lambda data: {
+                        entry["serial"]: entry for entry in next_holds.values()
+                    }, {})
+                refreshed_index = dict(endpoint_index)
+                refreshed_index["manual_users"] = manual_now
+                refreshed_index["manual_user_dates"] = manual_user_dates_by_serial(
+                    manual_now, read_manual_user_dates(manual_users_file),
+                )
+                refreshed_index["user_holds"] = next_holds
+                refreshed_index = with_details_serials(refreshed_index, prepared_state["equipamentos_cache"])
+                for cached in prepared_state["equipamentos_cache"].values():
+                    cached_key = services.normalize_reference_value(cached.get("serial"))
+                    if cached_key in next_holds or cached_key in existing_holds:
+                        apply_effective_alias(
+                            cached, refreshed_index,
+                            details_duplicate=cached.get("invall_alias_status") == "serie_detalhes_duplicada",
+                        )
+                # Um usuário mantido por uma pendência "ausente" não vem do Endpoint atual: o manual fica intacto.
+                overridden = manual_users_overridden_by_endpoint(
+                    prepared_state["equipamentos_cache"],
+                    {key: user for key, user in manual_now.items()
+                     if next_holds.get(key, {}).get("tipo") != "usuario_ausente"},
+                )
             if overridden and manual_users_file is not None:
                 transaction.update_json(
                     manual_users_file, lambda data: without_manual_users(data, set(overridden)), {},
@@ -722,7 +761,7 @@ def _commit_inventory_files(
             except (OSError, ValueError):
                 earlier_history = []
             if previous_endpoint_index.get("available") and endpoint_index.get("available"):
-                user_changes = logged_user_changes(
+                user_changes = hold_change_rows(created_holds) + logged_user_changes(
                     previous_equipment,
                     prepared_state["equipamentos_cache"],
                     endpoint_index,
