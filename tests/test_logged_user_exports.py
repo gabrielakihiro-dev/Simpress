@@ -130,6 +130,11 @@ ITEMS = [
     {"serial": "BRJ002", "modelo": "Notebook", "tipo": "Notebook", "categoria": "notebook", "retirada_cidade": "Curitiba", "usuarios_logados": "", "usuarios_logados_origem": ""},
     {"serial": "BRJ003", "modelo": "Monitor", "tipo": "Monitor", "categoria": "monitor", "retirada_cidade": "Londrina", "usuarios_logados": "joao", "usuarios_logados_origem": "manual"},
     {"serial": "XYZ004", "modelo": "Monitor", "tipo": "Monitor", "categoria": "monitor", "retirada_cidade": "Londrina", "usuarios_logados": " ", "usuarios_logados_origem": ""},
+    {"serial": "HS005", "modelo": "POLY-B8225", "tipo": "Headsets", "categoria": "fone", "retirada_cidade": "Curitiba", "usuarios_logados": "", "usuarios_logados_origem": ""},
+    {"serial": "MC006", "modelo": "HP P24A G5", "tipo": "Micro Computador", "categoria": "", "retirada_cidade": "Curitiba", "usuarios_logados": "", "usuarios_logados_origem": ""},
+    {"serial": "MAC007", "modelo": "MACBOOK PRO 14", "tipo": "Notebook", "categoria": "macbook", "retirada_cidade": "Curitiba", "usuarios_logados": "bia", "usuarios_logados_origem": "endpoint"},
+    {"serial": "MAC008", "modelo": "MACBOOK PRO 14", "tipo": "Notebook", "categoria": "macbook", "retirada_cidade": "Curitiba", "usuarios_logados": "", "usuarios_logados_origem": ""},
+    {"serial": "OUT009", "modelo": "Outro", "tipo": "Impressora", "categoria": "", "retirada_cidade": "Curitiba", "usuarios_logados": "", "usuarios_logados_origem": ""},
 ]
 
 
@@ -152,10 +157,19 @@ def _search_route():
 
 
 class FullSearchUserFilterTests(unittest.TestCase):
-    def test_without_user_filter_lists_the_whole_base_without_a_term(self):
+    def test_listing_without_a_term_has_notebooks_without_user_and_other_equipment(self):
         page = _search_route()(usuario="sem")
-        self.assertEqual([item["serial"] for item in page["items"]], ["BRJ002", "XYZ004"])
-        self.assertEqual(page["filters"]["users"], {"sem": 2, "com": 2})
+        # No notebook with a user, no fones, no Micro Computador/monitor.
+        self.assertEqual([item["serial"] for item in page["items"]], ["BRJ002", "MAC008", "OUT009"])
+        self.assertEqual(page["total"], 3)
+        self.assertEqual(page["filters"]["users"], {"sem": 3, "com": 0})
+        self.assertEqual([entry["value"] for entry in page["filters"]["categories"]], ["notebook", "macbook"])
+        self.assertEqual([entry["count"] for entry in page["filters"]["categories"]], [1, 1])
+
+    def test_term_search_still_finds_fones_and_monitors(self):
+        call = _search_route()
+        self.assertEqual([item["serial"] for item in call("HS", "sem")["items"]], ["HS005"])
+        self.assertEqual([item["serial"] for item in call("MC", None)["items"]], ["MC006"])
 
     def test_user_filter_combines_with_the_term_and_category(self):
         call = _search_route()
