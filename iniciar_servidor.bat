@@ -69,6 +69,7 @@ if not exist "%CLEANER%" goto missing_cleaner
 
 cd /d "%PROJECT_DIR%"
 call :select_server_port
+if errorlevel 11 goto outdated_running
 if errorlevel 10 goto already_running
 if errorlevel 1 goto port_selection_failed
 
@@ -78,6 +79,7 @@ if errorlevel 1 goto migration_failed
 if errorlevel 1 goto cleanup_failed
 
 call :select_server_port
+if errorlevel 11 goto outdated_running
 if errorlevel 10 goto already_running
 if errorlevel 1 goto port_selection_failed
 
@@ -145,6 +147,14 @@ echo Abrindo a instancia existente sem iniciar uma segunda copia.
 start "" "http://127.0.0.1:%SIMPRESS_PORT%"
 exit /b 0
 
+:outdated_running
+echo.
+echo ERRO: ja existe um servidor Simpress DESATUALIZADO na porta %SIMPRESS_PORT%.
+echo Nenhuma segunda copia foi iniciada. Feche a janela desse servidor (ou encerre o
+echo processo indicado acima) e execute este inicializador novamente.
+pause
+exit /b 1
+
 :port_selection_failed
 echo.
 echo ERRO: nao foi possivel encontrar uma porta local livre entre 8000 e 8099.
@@ -176,6 +186,7 @@ for /f "usebackq tokens=1,2 delims=:" %%A in ("%PORT_RESULT_FILE%") do (
     set "SIMPRESS_PORT=%%B"
 )
 del /q "%PORT_RESULT_FILE%" > nul 2>&1
+if /i "%SERVER_ACTION%"=="OUTDATED" exit /b 11
 if /i "%SERVER_ACTION%"=="RUNNING" exit /b 10
 if /i "%SERVER_ACTION%"=="PORT" exit /b 0
 exit /b 1
