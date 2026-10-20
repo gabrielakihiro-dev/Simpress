@@ -60,6 +60,8 @@
     inventoryOperationKey: () => globalThis.crypto?.randomUUID?.()
       || `${Date.now().toString(36)}-${Math.random().toString(36).slice(2)}`,
   };
+  // Logged user next to a series, shared by the Histórico de Planilhas rows and the ticket cards.
+  context.loggedUserMarkers = window.SimpressLoggedUserMarkers(context);
 
   const publishedBy = new Map();
   function publish(actions, source) {
