@@ -260,6 +260,85 @@
     return td;
   }
 
+  function descricaoCaptura(execucao) {
+    const rotina = ROTINAS[execucao.rotina] || execucao.rotina || "Automação";
+    const hora = formatarHora(execucao.inicio);
+    const base = `Captura de tela da falha em ${rotina}${hora ? ` às ${hora}` : ""}`;
+    return execucao.mensagem ? `${base}: ${execucao.mensagem}` : base;
+  }
+
+  function criarCapturaHistorico(execucao, captura) {
+    const descricao = descricaoCaptura(execucao);
+    const item = document.createElement("span");
+    item.className = "automation-capture";
+    const miniatura = document.createElement("button");
+    miniatura.type = "button";
+    miniatura.className = "automation-capture-thumb";
+    miniatura.setAttribute("aria-haspopup", "dialog");
+    miniatura.setAttribute("aria-label", `Ampliar captura ${captura.nome}`);
+    const imagem = document.createElement("img");
+    imagem.src = captura.url;
+    imagem.alt = descricao;
+    imagem.loading = "lazy";
+    imagem.decoding = "async";
+    imagem.addEventListener("error", () => {
+      miniatura.replaceChildren(dom.createTextElement("span", "automation-capture-missing", "Captura indisponível"));
+      miniatura.disabled = true;
+    }, { once: true });
+    miniatura.appendChild(imagem);
+    miniatura.addEventListener("click", () => abrirCapturaAutomacao(captura, descricao, execucao.mensagem, miniatura));
+    const link = dom.createTextElement("a", "automation-history-link", captura.nome);
+    link.href = captura.url;
+    link.target = "_blank";
+    link.rel = "noopener noreferrer";
+    item.append(miniatura, link);
+    return item;
+  }
+
+  function abrirCapturaAutomacao(captura, descricao, mensagem, origem) {
+    let dialogo = document.getElementById("automacao-captura-dialogo");
+    if (!dialogo) {
+      dialogo = document.createElement("dialog");
+      dialogo.id = "automacao-captura-dialogo";
+      dialogo.className = "automation-capture-dialog";
+      dialogo.setAttribute("aria-labelledby", "automacao-captura-titulo");
+      const titulo = dom.createTextElement("h3", "automation-capture-title", "");
+      titulo.id = "automacao-captura-titulo";
+      const fechar = dom.createTextElement("button", "btn btn-secondary", "Fechar");
+      fechar.type = "button";
+      fechar.id = "automacao-captura-fechar";
+      fechar.addEventListener("click", () => dialogo.close());
+      const cabecalho = document.createElement("div");
+      cabecalho.className = "automation-capture-header";
+      cabecalho.append(titulo, fechar);
+      const imagem = document.createElement("img");
+      imagem.id = "automacao-captura-imagem";
+      imagem.className = "automation-capture-full";
+      const mensagemEl = dom.createTextElement("p", "automation-capture-message", "");
+      mensagemEl.id = "automacao-captura-mensagem";
+      dialogo.append(cabecalho, imagem, mensagemEl);
+      // Clicking the backdrop (the dialog element itself) closes it, like Escape.
+      dialogo.addEventListener("click", event => { if (event.target === dialogo) dialogo.close(); });
+      dialogo.addEventListener("close", () => {
+        const anterior = dialogo._origem;
+        dialogo._origem = null;
+        if (anterior && anterior.isConnected) anterior.focus();
+      });
+      document.body.appendChild(dialogo);
+    }
+    dialogo._origem = origem || null;
+    document.getElementById("automacao-captura-titulo").textContent = captura.nome;
+    const imagem = document.getElementById("automacao-captura-imagem");
+    imagem.src = captura.url;
+    imagem.alt = descricao;
+    const mensagemEl = document.getElementById("automacao-captura-mensagem");
+    mensagemEl.textContent = mensagem || "";
+    mensagemEl.hidden = !mensagem;
+    if (typeof dialogo.showModal === "function") dialogo.showModal();
+    else dialogo.setAttribute("open", "");
+    document.getElementById("automacao-captura-fechar").focus();
+  }
+
   function renderizarHistorico(execucoes) {
     const host = document.getElementById("automacao-historico");
     if (!host) return;
@@ -294,13 +373,7 @@
       const lotes = (execucao.lotes || []).map(lote => `${lote.id}${lote.status ? ` (${lote.status})` : ""}`).join(", ") || "—";
       const capturas = document.createElement("span");
       capturas.className = "automation-history-captures";
-      (execucao.capturas || []).forEach(captura => {
-        const link = dom.createTextElement("a", "automation-history-link", captura.nome);
-        link.href = captura.url;
-        link.target = "_blank";
-        link.rel = "noopener noreferrer";
-        capturas.appendChild(link);
-      });
+      (execucao.capturas || []).forEach(captura => capturas.appendChild(criarCapturaHistorico(execucao, captura)));
       if (!capturas.childNodes.length) capturas.textContent = "—";
       const verLog = dom.createTextElement("button", "btn btn-secondary", "Ver log");
       verLog.type = "button";
@@ -482,6 +555,7 @@
     });
     document.addEventListener("keydown", event => {
       if (event.key !== "Escape" || !estado.ampliado || !painelVisivel()) return;
+      if (document.querySelector("dialog[open]")) return; // The capture viewer closes first.
       const card = document.getElementById(`automacao-${estado.ampliado}-painel`);
       ampliarPainelAutomacao(estado.ampliado);
       card.querySelector('[aria-pressed]').focus();
