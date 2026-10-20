@@ -25,6 +25,7 @@
     "equipmentEditor",
     "aliasHistory",
     "monthlyReport",
+    "chromeAutomation",
   ]);
 
   // State shared by more than one feature. Each feature keeps the rest of its state private.
@@ -112,6 +113,7 @@
     app.inicializarUsoUltimos30Dias();
     app.inicializarAlertaBaseDesatualizada();
     app.inicializarAlertasOsDivergencias();
+    app.inicializarAutomacao();
   }
 
   if (document.readyState === "interactive" || document.readyState === "complete") {
