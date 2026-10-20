@@ -363,5 +363,22 @@ class ExecutionLogTests(unittest.TestCase):
         self.assertIn(caminho.name, logs)
 
 
+class PlaywrightAusenteTests(unittest.TestCase):
+    def test_mensagem_traz_o_comando_exato_de_instalacao(self):
+        mensagem = automacao.mensagem_playwright_ausente()
+        self.assertIn("playwright", mensagem)
+        self.assertIn(r".venv\Scripts\python.exe -m pip install -r requirements.txt", mensagem)
+
+    def test_main_sai_com_codigo_3_sem_traceback_quando_falta_o_pacote(self):
+        saida = io.StringIO()
+        with patch.object(sys, "argv", ["automacao_rotinas_chrome.py", "--rotina", "login"]),                 patch.object(automacao, "iniciar_log_execucao"),                 patch.object(automacao, "playwright_instalado", return_value=False),                 patch.object(automacao, "executar") as executar,                 redirect_stdout(saida):
+            codigo = automacao.main()
+        self.assertEqual(codigo, 3)
+        executar.assert_not_called()
+        self.assertIn("[ERRO]", saida.getvalue())
+        self.assertIn("pip install -r requirements.txt", saida.getvalue())
+        self.assertNotIn("Traceback", saida.getvalue())
+
+
 if __name__ == "__main__":
     unittest.main()
