@@ -753,6 +753,17 @@ def endpoint_logado(page: "Page") -> bool:
     )
 
 
+def selecionar_todos_computadores(page: "Page") -> None:
+    todos = page.locator('input[type="radio"][value="InvAllComputersSummary"]').first
+    aguardar_estado(todos, "attached")
+    # O radio existe no DOM antes de a tela terminar de carregar (esqueleto), mas ainda não é clicável.
+    acionar_quando_pronto(
+        lambda: todos.check(force=True, timeout=2000),
+        "'Todos os computadores' não ficou selecionado",
+        confirmar=todos.is_checked,
+    )
+
+
 def exportar_endpoint(context: "BrowserContext") -> Path:
     page = nova_aba(context, ENDPOINT_URL, "Endpoint Central")
     try:
@@ -761,14 +772,7 @@ def exportar_endpoint(context: "BrowserContext") -> Path:
             page.goto(ENDPOINT_URL, wait_until="domcontentloaded", timeout=CARREGAMENTO_MS)
 
         log("Endpoint Central", "Selecionando 'Todos os computadores'...")
-        todos = page.locator('input[type="radio"][value="InvAllComputersSummary"]').first
-        aguardar_estado(todos, "attached")
-        # O radio existe no DOM antes de a tela terminar de carregar (esqueleto), mas ainda não é clicável.
-        acionar_quando_pronto(
-            lambda: todos.check(force=True, timeout=2000),
-            "'Todos os computadores' não ficou selecionado",
-            confirmar=todos.is_checked,
-        )
+        selecionar_todos_computadores(page)
         exportar = page.locator("#InvAllComputersSummary-export").filter(visible=True).first
         aguardar_estado(exportar, "visible")
 
