@@ -17,6 +17,10 @@ class EquipmentSearchServices:
 
 
 USER_FILTERS = ("sem", "com")
+NOTEBOOK_CATEGORIES = ("notebook", "macbook")
+# Fones and "Micro Computador" (the monitors) stay out of the listing without a term.
+LISTING_EXCLUDED_CATEGORIES = ("fone", "monitor")
+LISTING_EXCLUDED_TYPE = "MICRO COMPUTADOR"
 
 
 @dataclass(frozen=True)
@@ -49,8 +53,9 @@ def create_equipment_search_router(services: EquipmentSearchServices) -> Tuple[A
     ):
         """Retorna resultados paginados, filtros e total de correspondências.
 
-        ``usuario=sem`` mantém só os equipamentos sem usuário (nem do Endpoint nem manual) e,
-        sem termo, lista todos os da base; ``usuario=com`` mantém os que têm usuário.
+        ``usuario=sem`` mantém só os equipamentos sem usuário (nem do Endpoint nem manual);
+        ``usuario=com`` mantém os que têm usuário. Sem termo, ``usuario=sem`` lista os notebooks
+        sem usuário e os demais equipamentos da base, exceto fones e micro computador (monitor).
         """
         user_filter = str(usuario or "").strip().lower()
         if user_filter not in USER_FILTERS:
@@ -58,10 +63,21 @@ def create_equipment_search_router(services: EquipmentSearchServices) -> Tuple[A
         list_without_term = not q.strip() and user_filter == "sem" and services.list_all is not None
         if not list_without_term and len(q) < 2:
             raise HTTPException(status_code=422, detail="Digite ao menos 2 caracteres para pesquisar.")
-        all_results = services.list_all() if list_without_term and services.list_all else services.search(q)
 
         def has_user(item: Dict[str, Any]) -> bool:
             return bool(str(item.get("usuarios_logados") or "").strip())
+
+        def in_listing(item: Dict[str, Any]) -> bool:
+            if item.get("categoria") in LISTING_EXCLUDED_CATEGORIES:
+                return False
+            if services.normalize(item.get("tipo")) == LISTING_EXCLUDED_TYPE:
+                return False
+            return item.get("categoria") not in NOTEBOOK_CATEGORIES or not has_user(item)
+
+        if list_without_term and services.list_all:
+            all_results = [item for item in services.list_all() if in_listing(item)]
+        else:
+            all_results = services.search(q)
 
         def filter_options(key: str) -> List[str]:
             options: Dict[str, str] = {}
@@ -83,7 +99,7 @@ def create_equipment_search_router(services: EquipmentSearchServices) -> Tuple[A
             if (not normalized_category or item.get("categoria") == normalized_category.lower())
             and (not normalized_type or services.normalize(item.get("tipo")) == normalized_type)
             and (not normalized_city or services.normalize(item.get("retirada_cidade")) == normalized_city)
-            and (not user_filter or has_user(item) == (user_filter == "com"))
+            and (list_without_term or not user_filter or has_user(item) == (user_filter == "com"))
         ]
         page = results[offset:offset + limit]
         response = {
@@ -94,20 +110,24 @@ def create_equipment_search_router(services: EquipmentSearchServices) -> Tuple[A
             "has_more": offset + len(page) < len(results),
         }
         if include_filters:
-            category_counts = {entry["value"]: 0 for entry in services.categories}
+            listed_categories = [
+                entry for entry in services.categories
+                if not (list_without_term and entry["value"] in LISTING_EXCLUDED_CATEGORIES)
+            ]
+            category_counts = {entry["value"]: 0 for entry in listed_categories}
             for item in all_results:
                 if item.get("categoria") in category_counts:
                     category_counts[item["categoria"]] += 1
             response["filters"] = {
                 "categories": [
                     {**entry, "count": category_counts[entry["value"]]}
-                    for entry in services.categories
+                    for entry in listed_categories
                 ],
                 "types": filter_options("tipo"),
                 "cities": filter_options("retirada_cidade"),
                 "users": {
-                    "sem": sum(1 for item in all_results if not has_user(item)),
-                    "com": sum(1 for item in all_results if has_user(item)),
+                    "sem": len(all_results) if list_without_term else sum(1 for item in all_results if not has_user(item)),
+                    "com": 0 if list_without_term else sum(1 for item in all_results if has_user(item)),
                 },
             }
         return response

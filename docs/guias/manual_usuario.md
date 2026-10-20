@@ -72,7 +72,7 @@ Menu lateral:
 - **Nova transferência** — limpa o formulário para começar outra.
 - **Ferramentas:** **Acompanhamento de Chamados**, **Atualizar planilhas**, **Exportar Excel** e, em **Históricos e Análises**, **Histórico planilhas**, **Evolução das atualizações**, **Histórico de alterações** e **Catálogo de unidades**.
 
-Para pesquisar: na **Home**, digite série, código de barras, apelido/hostname, modelo ou cidade e pressione `Enter` (ou clique em **Buscar Equipamento**). A lista rápida mostra até 15 resultados; **Mostrar mais** abre a pesquisa completa, com filtros de categoria (**Notebooks**, **MacBooks**, **Monitores**, **Fones**) e cidade.
+Para pesquisar: na **Home**, digite série, apelido/hostname, modelo ou cidade e pressione `Enter` (ou clique em **Buscar Equipamento**). A lista rápida mostra até 15 resultados; **Mostrar mais** abre a pesquisa completa, com filtros de categoria (**Notebooks**, **MacBooks**, **Monitores**, **Fones**) e cidade.
 
 ## 4. Atualizar a base EquipamentosDetalhes
 

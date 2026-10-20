@@ -435,63 +435,109 @@ class ManualUserWorkflowTests(unittest.TestCase):
     def _user_events(self):
         return [e for e in json.loads(self.history.read_text(encoding="utf-8")) if e["tipo"] == "usuario"]
 
-    def test_endpoint_user_archives_the_manual_one_and_it_does_not_come_back_alone(self):
+    def _resolve(self, row, decision):
+        from domains import user_holds
+        return user_holds.resolve_hold(main._alias_change_services, row["pendencia_id"], decision)
+
+    def test_endpoint_user_over_manual_waits_for_a_decision_before_archiving_it(self):
         self._save("SN-1", "joao")
         result = self._submit([("SN-1", "HOST-1", "carla"), ("SN-2", "HOST-2", "ana")])
+        # Nada muda sozinho: o manual continua valendo e fica no arquivo.
+        self.assertEqual(json.loads(self.manual_users.read_text(encoding="utf-8")), {"SN-1": "joao"})
+        self.assertEqual(self._user_events()[-1]["acao"], "alteracao")
+        cached = inventory_state.equipamentos_cache["SN-1"]
+        self.assertEqual((cached["usuarios_logados"], cached["usuarios_logados_origem"], cached["usuarios_logados_pendencia"]),
+                         ("joao", "manual", "substituicao_pendente"))
+        [row] = result["mudancas_usuarios"]
+        self.assertEqual((row["tipo"], row["serie"], row["usuario_anterior"], row["usuario_novo"]),
+                         ("substituicao_pendente", "SN-1", "joao", "carla"))
+        self.assertTrue(row["anotacao_id"])
+        saved = json.loads(self.comparison_history.read_text(encoding="utf-8"))[-1]
+        self.assertEqual(saved["resumo"]["mudancas_usuarios"], 1)
+        # O mesmo Endpoint de novo não pergunta outra vez.
+        self.assertEqual(self._submit([("SN-1", "HOST-1", "carla"), ("SN-2", "HOST-2", "ana")])["mudancas_usuarios"], [])
+
+        # Permitir: o usuário manual é arquivado e o do Endpoint passa a valer.
+        resolved = self._resolve(row, "permitir")
+        self.assertEqual((resolved["equipamento"]["usuarios_logados"], resolved["equipamento"]["usuarios_logados_origem"]), ("carla", "endpoint"))
         self.assertEqual(json.loads(self.manual_users.read_text(encoding="utf-8")), {})
         archived = self._user_events()[-1]
         self.assertEqual(
             (archived["acao"], archived["usuario_anterior"], archived["usuario_novo"], archived["usuario_endpoint"]),
             ("arquivado_endpoint", "joao", "", "carla"),
         )
-        [row] = result["mudancas_usuarios"]
-        self.assertEqual((row["tipo"], row["serie"], row["usuario_anterior"], row["usuario_novo"]), ("novo_endpoint", "SN-1", "joao", "carla"))
-        self.assertEqual(row["usuario_manual_arquivado"], "joao")
-        self.assertTrue(row["anotacao_id"])
-        saved = json.loads(self.comparison_history.read_text(encoding="utf-8"))[-1]
-        self.assertEqual(saved["resumo"]["mudancas_usuarios"], 1)
-        self.assertEqual(saved["comparacao"]["mudancas_usuarios"][0]["tipo"], "novo_endpoint")
+        with self.assertRaises(DomainError):
+            self._resolve(row, "permitir")
 
-        # Endpoint esvazia: o manual antigo não reaparece sozinho, só é sugerido para restauração.
+        # Endpoint esvazia: o usuário atual continua valendo até a confirmação.
         result = self._submit([("SN-1", "HOST-1", ""), ("SN-2", "HOST-2", "ana")])
-        self.assertEqual(inventory_state.equipamentos_cache["SN-1"]["usuarios_logados"], "")
-        [row] = result["mudancas_usuarios"]
-        self.assertEqual((row["tipo"], row["usuario_anterior"], row["usuario_novo"]), ("removido_endpoint", "carla", ""))
-        self.assertEqual(row["usuario_manual_arquivado"], "joao")
+        [gone] = result["mudancas_usuarios"]
+        self.assertEqual((gone["tipo"], gone["usuario_anterior"], gone["usuario_novo"]), ("ausente_pendente", "carla", ""))
+        self.assertEqual(inventory_state.equipamentos_cache["SN-1"]["usuarios_logados"], "carla")
+        self.assertEqual(self._resolve(gone, "remover")["equipamento"]["usuarios_logados"], "")
 
         # Desfazer o arquivamento no histórico de alterações devolve o manual.
         undone = main.desfazer_alteracao_apelido(main.ApelidoUndoPayload(evento_id=archived["id"]))
         self.assertEqual((undone["equipamento"]["usuarios_logados"], undone["equipamento"]["usuarios_logados_origem"]), ("joao", "manual"))
 
+    def test_refusing_the_replacement_keeps_the_manual_user_and_remembers_the_endpoint_user(self):
+        self._save("SN-1", "joao")
+        [row] = self._submit([("SN-1", "HOST-1", "carla"), ("SN-2", "HOST-2", "ana")])["mudancas_usuarios"]
+        refused = self._resolve(row, "recusar")
+        self.assertEqual((refused["equipamento"]["usuarios_logados"], refused["equipamento"]["usuarios_logados_pendencia"]), ("joao", ""))
+        with self.assertRaises(DomainError):
+            self._resolve(row, "recusar")
+        self.assertEqual(json.loads(self.manual_users.read_text(encoding="utf-8")), {"SN-1": "joao"})
+        # O mesmo usuário do Endpoint não é perguntado de novo, mas outro usuário volta a perguntar.
+        self.assertEqual(self._submit([("SN-1", "HOST-1", "carla"), ("SN-2", "HOST-2", "ana")])["mudancas_usuarios"], [])
+        self.assertEqual(inventory_state.equipamentos_cache["SN-1"]["usuarios_logados"], "joao")
+        [again] = self._submit([("SN-1", "HOST-1", "davi"), ("SN-2", "HOST-2", "ana")])["mudancas_usuarios"]
+        self.assertEqual((again["tipo"], again["usuario_novo"]), ("substituicao_pendente", "davi"))
+
+    def test_user_missing_from_the_endpoint_can_be_kept_and_is_not_asked_again(self):
+        [row] = self._submit([("SN-1", "HOST-1", ""), ("SN-2", "HOST-2", "")])["mudancas_usuarios"]
+        self.assertEqual((row["tipo"], row["usuario_anterior"]), ("ausente_pendente", "ana"))
+        kept = self._resolve(row, "manter")
+        self.assertEqual((kept["equipamento"]["usuarios_logados"], kept["equipamento"]["usuarios_logados_pendencia"]), ("ana", ""))
+        self.assertEqual(self._submit([("SN-1", "HOST-1", ""), ("SN-2", "HOST-2", "")])["mudancas_usuarios"], [])
+        self.assertEqual(inventory_state.equipamentos_cache["SN-2"]["usuarios_logados"], "ana")
+        # Quando o Endpoint volta a informar um usuário, ele vale normalmente.
+        [changed] = self._submit([("SN-1", "HOST-1", ""), ("SN-2", "HOST-2", "bia")])["mudancas_usuarios"]
+        self.assertEqual((changed["tipo"], changed["usuario_anterior"], changed["usuario_novo"]), ("alterado_endpoint", "ana", "bia"))
+
     def test_undoing_the_archive_is_refused_while_the_endpoint_has_a_user(self):
         self._save("SN-1", "joao")
-        self._submit([("SN-1", "HOST-1", "carla"), ("SN-2", "HOST-2", "ana")])
+        [row] = self._submit([("SN-1", "HOST-1", "carla"), ("SN-2", "HOST-2", "ana")])["mudancas_usuarios"]
+        self._resolve(row, "permitir")
         with self.assertRaises(DomainError) as raised:
             main.desfazer_alteracao_apelido(main.ApelidoUndoPayload(evento_id=self._user_events()[-1]["id"]))
         self.assertEqual(raised.exception.status_code, 409)
 
-    def test_summary_lists_changed_and_removed_endpoint_users_without_manual(self):
+    def test_summary_lists_changed_endpoint_users_and_holds_the_removed_ones(self):
         result = self._submit([("SN-1", "HOST-1", ""), ("SN-2", "HOST-2", "bia")])
         self.assertEqual([(r["tipo"], r["usuario_anterior"], r["usuario_novo"]) for r in result["mudancas_usuarios"]], [
             ("alterado_endpoint", "ana", "bia"),
         ])
         result = self._submit([("SN-1", "HOST-1", ""), ("SN-2", "HOST-2", "")])
         [row] = result["mudancas_usuarios"]
-        self.assertEqual((row["tipo"], row["serie"], row["usuario_anterior"]), ("removido_endpoint", "SN-2", "bia"))
+        self.assertEqual((row["tipo"], row["serie"], row["usuario_anterior"]), ("ausente_pendente", "SN-2", "bia"))
         self.assertNotIn("usuario_manual_arquivado", row)
+        self.assertEqual(inventory_state.equipamentos_cache["SN-2"]["usuarios_logados"], "bia")
         self.assertEqual(self._user_events(), [])
-        # O mesmo arquivo de novo não gera mudanças.
+        # O mesmo arquivo de novo não gera mudanças nem repete a pergunta.
         self.assertEqual(self._submit([("SN-1", "HOST-1", ""), ("SN-2", "HOST-2", "")])["mudancas_usuarios"], [])
 
-    def test_hidden_legacy_manual_user_is_flagged_when_it_comes_back(self):
+    def test_hidden_legacy_manual_user_comes_back_only_after_the_removal_is_confirmed(self):
         # Manual gravado antes do arquivamento existir, escondido pelo usuário do Endpoint.
         self.manual_users.write_text(json.dumps({"SN-2": "velho"}), encoding="utf-8")
         self.assertTrue(main.load_database())
-        result = self._submit([("SN-1", "HOST-1", ""), ("SN-2", "HOST-2", "")])
-        [row] = result["mudancas_usuarios"]
-        self.assertEqual((row["tipo"], row["usuario_novo"], row["origem_nova"]), ("manual_voltou", "velho", "manual"))
+        [row] = self._submit([("SN-1", "HOST-1", ""), ("SN-2", "HOST-2", "")])["mudancas_usuarios"]
+        self.assertEqual((row["tipo"], row["usuario_anterior"]), ("ausente_pendente", "ana"))
+        self.assertEqual(inventory_state.equipamentos_cache["SN-2"]["usuarios_logados"], "ana")
+        back = self._resolve(row, "remover")["equipamento"]
+        self.assertEqual((back["usuarios_logados"], back["usuarios_logados_origem"]), ("velho", "manual"))
 
-    def test_macbook_manual_user_is_archived_when_the_endpoint_serial_without_s_gets_a_user(self):
+    def test_macbook_manual_user_waits_for_a_decision_when_the_endpoint_serial_without_s_gets_a_user(self):
         details = [
             ("SN-1", "ALIAS-1", "Modelo A", "Maringá", "Notebook", "87000000"),
             ("SCXC9F072K1", "PRMACUMC005", "MacBook Air", "Maringá", "Notebook", "87000000"),
@@ -501,10 +547,11 @@ class ManualUserWorkflowTests(unittest.TestCase):
         self.assertTrue(main.load_database())
         self._save("SCXC9F072K1", "mac-manual")
         result = self._submit([("SN-1", "HOST-1", ""), ("CXC9F072K1", "PRMACUMC005", "DDrodrigues")], details)
-        self.assertEqual(json.loads(self.manual_users.read_text(encoding="utf-8")), {})
+        self.assertEqual(json.loads(self.manual_users.read_text(encoding="utf-8")), {"SCXC9F072K1": "mac-manual"})
         [row] = result["mudancas_usuarios"]
-        self.assertEqual((row["tipo"], row["serie"], row["usuario_novo"], row["usuario_manual_arquivado"]),
-                         ("novo_endpoint", "SCXC9F072K1", "DDrodrigues", "mac-manual"))
+        self.assertEqual((row["tipo"], row["serie"], row["usuario_novo"]), ("substituicao_pendente", "SCXC9F072K1", "DDrodrigues"))
+        self._resolve(row, "permitir")
+        self.assertEqual(json.loads(self.manual_users.read_text(encoding="utf-8")), {})
         self.assertEqual(self._user_events()[-1]["serial"], "SCXC9F072K1")
 
     def test_new_endpoint_file_without_user_or_host_leaves_a_warning_once(self):

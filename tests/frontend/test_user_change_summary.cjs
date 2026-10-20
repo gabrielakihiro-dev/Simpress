@@ -82,3 +82,19 @@ test("an archived manual user pre-fills the field with a restore button and is n
   assert.match(item.innerHTML, /value="velho"/);
   assert.match(item.innerHTML, />Restaurar manual</);
 });
+
+test("pending logged-user holds list their decision buttons and never apply anything themselves", () => {
+  const html = renderizar({
+    evento_id: "evt",
+    historico_salvo: true,
+    mudancas_usuarios: [
+      { tipo: "substituicao_pendente", serie: "SN-1", usuario_anterior: "joao", origem_anterior: "manual", usuario_novo: "carla", origem_nova: "endpoint", motivo: "O Endpoint passou a informar carla.", pendencia_id: "h1", pendencia_tipo: "substituicao_manual", anotacao_id: "p1" },
+      { tipo: "ausente_pendente", serie: "SN-2", usuario_anterior: "ana", origem_anterior: "endpoint", usuario_novo: "", origem_nova: "", motivo: "O Endpoint deixou de informar ana.", pendencia_id: "h2", pendencia_tipo: "usuario_ausente", anotacao_id: "p2" },
+    ],
+  });
+  assert.match(html, /Substituição do usuário manual — aguardando decisão/);
+  assert.match(html, /Usuário sumiu do Endpoint — aguardando confirmação/);
+  assert.match(html, /data-user-hold="h1"[\s\S]*data-user-hold-action="permitir"[\s\S]*data-user-hold-action="recusar"/);
+  assert.match(html, /data-user-hold="h2"[\s\S]*data-user-hold-action="remover"[\s\S]*data-user-hold-action="manter"/);
+  assert.equal((html.match(/data-user-hold-status role="status"/g) || []).length, 2);
+});

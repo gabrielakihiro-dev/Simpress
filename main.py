@@ -153,7 +153,7 @@ from domains.history_annotations import (
     save_history_annotation,
 )
 from domains import effective_alias
-from domains import alias_changes, equipment_export, inventory_state, user_changes
+from domains import alias_changes, equipment_export, inventory_state, user_changes, user_holds
 from domains.alias_changes import (
     compare_equipment_aliases,
     snapshot_equipment_aliases,
@@ -195,6 +195,8 @@ from routers.system import SystemRouteServices, create_system_router
 from routers.units import UnidadePayload, UnitRouteServices, create_units_router
 from routers.aliases import ApelidoUndoPayload, ApelidoUpdatePayload, UsuarioUpdatePayload, create_alias_router
 from routers.endpoint_removals import create_endpoint_removals_router
+from routers.automation import AutomationRouteServices, create_automation_router
+from domains.chrome_automation import ChromeAutomationRunner, default_contract
 from domains import endpoint_removals
 from core.inventory_requests import (
     InventoryUpdateMiddleware,
@@ -785,6 +787,7 @@ def read_endpoint_alias_index() -> Dict[str, Any]:
     index["manual_user_dates"] = user_changes.manual_user_dates_by_serial(
         index["manual_users"], user_changes.read_manual_user_dates(MANUAL_USERS_FILE),
     )
+    index["user_holds"] = user_holds.read_holds(MANUAL_USERS_FILE)
     return index
 
 
@@ -2304,6 +2307,21 @@ _monthly_report_services = MonthlyReportServices(
     read_usage_metrics=usage_metrics.read,
 )
 app.include_router(create_monthly_report_router(_monthly_report_services))
+
+_chrome_automation_runner: Optional[ChromeAutomationRunner] = None
+_chrome_automation_runner_lock = threading.Lock()
+
+
+def get_chrome_automation_runner() -> ChromeAutomationRunner:
+    """Created on first use, so importing the app never touches the automation logs."""
+    global _chrome_automation_runner
+    with _chrome_automation_runner_lock:
+        if _chrome_automation_runner is None:
+            _chrome_automation_runner = ChromeAutomationRunner(default_contract(BASE_DIR, STATE_DIR, LOG_DIR))
+        return _chrome_automation_runner
+
+
+app.include_router(create_automation_router(AutomationRouteServices(runner=get_chrome_automation_runner)))
 
 
 def _generate_previous_month_report_best_effort() -> None:
