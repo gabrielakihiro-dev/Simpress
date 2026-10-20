@@ -131,6 +131,7 @@ __pycache__/
 # Local server logs and inventory update receipts are runtime state.
 /data/logs/
 /data/state/inventory_update_idempotency.json
+/data/state/automacao_chrome.lock
 # Monthly contract reports saved automatically contain operational data.
 /data/relatorios_mensais/
 

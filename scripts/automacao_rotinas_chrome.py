@@ -599,6 +599,123 @@ def importar(nome: str, script_preparo: str, script_fila: str, inbox: Path, inic
 
 
 # --------------------------------------------------------------------------
+# Trava de execução única (o .bat e o site disputam o mesmo Chrome)
+# --------------------------------------------------------------------------
+
+TRAVA_PATH = ROOT / "data" / "state" / "automacao_chrome.lock"
+# Trava vazia ou ilegível mais nova que isso pode estar sendo gravada agora.
+TRAVA_GRAVACAO_S = 10
+
+
+class TravaOcupada(RuntimeError):
+    """Outra execução viva já controla o Chrome de automação."""
+
+
+def pid_vivo(pid: int) -> bool:
+    if pid <= 0:
+        return False
+    if os.name == "nt":
+        import ctypes
+
+        kernel32 = ctypes.WinDLL("kernel32", use_last_error=True)  # type: ignore[attr-defined]
+        handle = kernel32.OpenProcess(0x1000, False, pid)  # PROCESS_QUERY_LIMITED_INFORMATION
+        if not handle:
+            return ctypes.get_last_error() == 5  # ERROR_ACCESS_DENIED: existe, mas é de outro usuário
+        try:
+            codigo = ctypes.c_ulong()
+            if kernel32.GetExitCodeProcess(handle, ctypes.byref(codigo)):
+                return codigo.value == 259  # STILL_ACTIVE
+            return True
+        finally:
+            kernel32.CloseHandle(handle)
+    try:
+        os.kill(pid, 0)
+    except ProcessLookupError:
+        return False
+    except PermissionError:
+        return True
+    return True
+
+
+def _ler_arquivo_trava() -> dict | None:
+    try:
+        dados = json.loads(TRAVA_PATH.read_text(encoding="utf-8"))
+    except FileNotFoundError:
+        return None
+    except (OSError, ValueError):
+        dados = None
+    if isinstance(dados, dict) and isinstance(dados.get("pid"), int):
+        return dados
+    try:
+        recente = time.time() - TRAVA_PATH.stat().st_mtime < TRAVA_GRAVACAO_S
+    except FileNotFoundError:
+        return None
+    # Conteúdo incompleto: trata como em gravação (ocupada) só enquanto for recente.
+    return {"pid": -1, "rotina": "?", "inicio": ""} if recente else {"pid": 0}
+
+
+def ler_trava() -> dict | None:
+    """Estado da execução em andamento ({pid, rotina, inicio}) ou None se livre ou órfã."""
+    dados = _ler_arquivo_trava()
+    if dados is None:
+        return None
+    if dados["pid"] == -1 or pid_vivo(dados["pid"]):
+        return dados
+    return None
+
+
+def descrever_trava(dados: dict) -> str:
+    try:
+        desde = datetime.fromisoformat(str(dados.get("inicio"))).strftime("%H:%M")
+    except ValueError:
+        desde = "?"
+    pid = dados.get("pid") if dados.get("pid", -1) > 0 else "?"
+    return f"Já existe uma rotina em andamento (rotina {dados.get('rotina', '?')}, PID {pid}, desde {desde})"
+
+
+def adquirir_trava(rotina: str) -> None:
+    TRAVA_PATH.parent.mkdir(parents=True, exist_ok=True)
+    for _ in range(3):
+        try:
+            fd = os.open(TRAVA_PATH, os.O_CREAT | os.O_EXCL | os.O_WRONLY)
+        except FileExistsError:
+            ocupada = ler_trava()
+            if ocupada is not None:
+                raise TravaOcupada(descrever_trava(ocupada)) from None
+            try:  # órfã: o PID gravado não existe mais
+                TRAVA_PATH.unlink()
+            except FileNotFoundError:
+                pass
+            continue
+        with os.fdopen(fd, "w", encoding="utf-8") as arquivo:
+            json.dump({"pid": os.getpid(), "rotina": rotina, "inicio": agora_iso()}, arquivo)
+        return
+    raise TravaOcupada("Não foi possível obter a trava da automação; tente de novo em instantes.")
+
+
+def liberar_trava() -> None:
+    dados = _ler_arquivo_trava()
+    if dados is not None and dados.get("pid") == os.getpid():
+        try:
+            TRAVA_PATH.unlink()
+        except FileNotFoundError:
+            pass
+
+
+class trava_execucao:
+    """Mantém a trava durante o bloco e a libera em erro ou Ctrl+C."""
+
+    def __init__(self, rotina: str) -> None:
+        self.rotina = rotina
+
+    def __enter__(self) -> None:
+        adquirir_trava(self.rotina)
+
+    def __exit__(self, *_exc) -> None:
+        liberar_trava()
+
+
+# --------------------------------------------------------------------------
 # Rotinas
 # --------------------------------------------------------------------------
 
@@ -655,7 +772,7 @@ def abrir_para_login(context: "BrowserContext") -> int:
 def executar(rotina: str) -> int:
     from playwright.sync_api import sync_playwright
 
-    with sync_playwright() as p:
+    with trava_execucao(rotina), sync_playwright() as p:
         browser, context = conectar(p)
         try:
             if rotina == "login":
@@ -693,6 +810,9 @@ def main() -> int:
         sys.path.insert(0, str(ROOT))
     try:
         return executar(args.rotina)
+    except TravaOcupada as erro:
+        print(f"\n[BLOQUEADO] {erro}", flush=True)
+        return 2
     except KeyboardInterrupt:
         print("\n[CANCELADO] Rotina interrompida pelo usuário; nenhum lote foi importado depois disso.", flush=True)
         return 130

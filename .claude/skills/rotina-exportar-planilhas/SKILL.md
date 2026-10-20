@@ -13,6 +13,8 @@ Gatilho: o usuário diz "Executar" ou "exportar planilhas" neste contexto. Para 
 
 `executar_automacao.bat` → opção 2 (ou `.\.venv\Scripts\python.exe scripts\automacao_rotinas_chrome.py --rotina inventarios`) faz todos os passos abaixo num Chrome de automação próprio (perfil `~\.chrome-automation`, porta local 9333, que fica aberto para manter os logins). O UX de inventários é `https://ux.simpress.com.br/MeusEquipamentos/Index` (gera `EquipamentosDetalhes*.zip`); `equipamentos/acompanhamento` é o Acompanhamento de pedidos da rotina de OS. Na tela de login do UX a rotina clica em "Acesso Time Simpress"; se não entrar, pede o login. Falhas deixam a aba aberta e uma captura em `data\logs\automacao_chrome`. A opção 3 roda OS e inventários em sequência; a opção 4 só abre as abas para login.
 
+Só uma execução por vez: a trava `data\state\automacao_chrome.lock` (PID, rotina e início; vale também para a opção de login) faz a segunda sair com código 2 e "Já existe uma rotina em andamento (...)"; trava de PID que não existe mais é retomada.
+
 ## Regras
 
 - O login é sempre do usuário. Se aparecer login ou 2FA, deixe a aba aberta, peça só essa autenticação e retome após "pronto". Nunca peça senhas ou códigos no chat nem altere permissões do Chrome.
