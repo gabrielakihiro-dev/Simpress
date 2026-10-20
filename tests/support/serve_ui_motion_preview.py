@@ -152,6 +152,42 @@ def dashboard_payload():
     }
 
 
+# Automação tab: fictional runs only; nothing starts a process. e2e resets it per test.
+AUTOMATION_BASE_HISTORY = [
+    {"id": "20261020_080000_inventarios", "rotina": "inventarios", "origem": "site",
+     "inicio": "2026-10-20T08:00:00-03:00", "fim": "2026-10-20T08:06:30-03:00", "status": "concluido", "codigo": 0,
+     "mensagem": "", "lotes": [{"id": "lote-demo-001", "status": "concluido"}], "capturas": [], "log": "demo.site.log"},
+    {"id": "20261019_170000_os", "rotina": "os", "origem": "externo",
+     "inicio": "2026-10-19T17:00:00-03:00", "fim": "2026-10-19T17:02:10-03:00", "status": "falha", "codigo": 1,
+     "mensagem": "Login não concluído em 10 minutos.", "lotes": [],
+     "capturas": [{"nome": "20261019_170210_Oracle.png", "url": "/api/automacao/capturas/20261019_170210_Oracle.png"}],
+     "log": "demo.log"},
+]
+AUTOMATION_HISTORY = list(AUTOMATION_BASE_HISTORY)
+AUTOMATION_LINES = [
+    "[08:00:01] [Chrome] Reaproveitando o Chrome de automação na porta 9333.",
+    "[08:00:02] [Oracle] Abrindo https://simpress.custhelp.com/AgentWeb/",
+    "[08:00:20] [Oracle] AÇÃO NECESSÁRIA: faça o login na janela do Chrome de automação.",
+]
+automation_run = None
+
+
+def automation_state(offset=0):
+    lines = AUTOMATION_LINES if automation_run else []
+    start = offset if 0 <= offset <= len(lines) else 0
+    return {
+        "estado": "em_andamento" if automation_run else "livre",
+        "rotina": automation_run["rotina"] if automation_run else "",
+        "inicio": automation_run["inicio"] if automation_run else "",
+        "origem": "site" if automation_run else "", "pid": 4242 if automation_run else None,
+        "cancelamento_pedido": False,
+        "aguardando_login": bool(automation_run), "login_origem": "Oracle" if automation_run else "",
+        "log": {"arquivo": "fixture.site.log" if automation_run else "", "offset": len(lines),
+                "linhas": lines[start:], "reiniciado": start != offset},
+        "ultima": AUTOMATION_HISTORY[0] if AUTOMATION_HISTORY else None,
+    }
+
+
 class Handler(BaseHTTPRequestHandler):
     def send(self, body, status=200, content_type="application/json; charset=utf-8"):
         payload = body if isinstance(body, bytes) else json.dumps(body, ensure_ascii=False).encode()
@@ -197,6 +233,15 @@ class Handler(BaseHTTPRequestHandler):
             requested = parse_qs(url.query).get("estado", ["ocultos"])[0]
             panel_alerts_state = requested if requested in PANEL_ALERTS else "ocultos"
             self.send({"estado": panel_alerts_state})
+        elif path == "/__fixture_automacao":
+            AUTOMATION_HISTORY[:] = AUTOMATION_BASE_HISTORY
+            globals()["automation_run"] = None
+            self.send({"estado": "livre"})
+        elif path == "/api/automacao/estado":
+            offset = parse_qs(url.query).get("offset", ["0"])[0]
+            self.send(automation_state(int(offset) if offset.isdigit() else 0))
+        elif path == "/api/automacao/historico":
+            self.send({"execucoes": AUTOMATION_HISTORY})
         elif path == "/__fixture_state":
             self.send({"annotation": DEMO_ANNOTATION})
         elif path == "/api/unidades":
@@ -327,6 +372,29 @@ class Handler(BaseHTTPRequestHandler):
                     "usuarios_logados_informado_em": FIXTURE_MANUAL_DATE if body.get("usuario") else "",
                     "usuarios_logados_candidatos": FIXTURE_AMBIGUOUS_USERS.get(body["serial"], []),
                 }})
+            return
+        if path == "/api/automacao/executar":
+            size = int(self.headers.get("Content-Length", "0"))
+            rotina = json.loads(self.rfile.read(size) or b"{}").get("rotina")
+            if rotina not in ("os", "inventarios", "ambas", "login"):
+                self.send({"detail": "Rotina inválida."}, 422)
+            elif automation_run:
+                self.send({"detail": "Já há uma rotina em andamento: Rotina de OS desde 08:00. Aguarde terminar ou cancele."}, 409)
+            else:
+                globals()["automation_run"] = {"rotina": rotina, "inicio": "2026-10-20T08:00:00-03:00"}
+                self.send(automation_state(), 202)
+            return
+        if path == "/api/automacao/cancelar":
+            if not automation_run:
+                self.send({"detail": "Nenhuma rotina em andamento para cancelar."}, 409)
+                return
+            AUTOMATION_HISTORY.insert(0, {
+                "id": "20261020_080000_fixture", "rotina": automation_run["rotina"], "origem": "site",
+                "inicio": automation_run["inicio"], "fim": "2026-10-20T08:01:00-03:00", "status": "cancelado",
+                "codigo": 1, "mensagem": "", "lotes": [], "capturas": [], "log": "fixture.site.log"})
+            globals()["automation_run"] = None
+            self.send({"metodo": "processo", "mensagem": "Rotina encerrada. O Chrome de automação continua aberto.",
+                       "estado": automation_state()}, 202)
             return
         if path != "/api/operacoes/chamados/importar":
             self.send({"detail": "Endpoint de teste não encontrado"}, 404)

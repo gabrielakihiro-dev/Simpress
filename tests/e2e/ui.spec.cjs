@@ -771,8 +771,11 @@ test("usage card shows 30-day counts and estimates hours from the configured min
 });
 
 test("Resumo tab switches panels, keeps ARIA state and supports arrow keys", async ({ page }) => {
-  const tabs = { home: "#tab-home", transporte: "#tab-retirada-entrega", resumo: "#tab-resumo" };
-  const panels = { home: "#tab-panel-home", transporte: "#tab-panel-retirada-entrega", resumo: "#tab-panel-resumo" };
+  const tabs = { home: "#tab-home", transporte: "#tab-retirada-entrega", resumo: "#tab-resumo", automacao: "#tab-automacao" };
+  const panels = {
+    home: "#tab-panel-home", transporte: "#tab-panel-retirada-entrega",
+    resumo: "#tab-panel-resumo", automacao: "#tab-panel-automacao",
+  };
   async function expectOnly(ativa) {
     for (const nome of Object.keys(tabs)) {
       const selecionada = nome === ativa;
@@ -798,7 +801,7 @@ test("Resumo tab switches panels, keeps ARIA state and supports arrow keys", asy
   await page.locator(tabs.home).click();
   await expectOnly("home");
 
-  // Setas: Home -> Transporte -> Resumo -> (volta) Home; End vai para Resumo.
+  // Setas: Home -> Transporte -> Resumo -> Automação -> (volta) Home; End vai para Automação.
   // No celular o menu lateral fecha ao escolher uma aba e o foco sai da lista, então só o desktop encadeia teclas.
   if (await page.locator("#btn-sidebar-open").isVisible()) return;
   await page.locator(tabs.home).focus();
@@ -807,9 +810,11 @@ test("Resumo tab switches panels, keeps ARIA state and supports arrow keys", asy
   await page.keyboard.press("ArrowDown");
   await expectOnly("resumo");
   await page.keyboard.press("ArrowDown");
+  await expectOnly("automacao");
+  await page.keyboard.press("ArrowDown");
   await expectOnly("home");
   await page.keyboard.press("End");
-  await expectOnly("resumo");
+  await expectOnly("automacao");
 });
 
 test("usage card shows stat cards in two columns on narrow screens", async ({ page }) => {

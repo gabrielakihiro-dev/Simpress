@@ -17,7 +17,7 @@ async function openSidebarForTabs(page) {
 }
 
 for (const theme of ["dark", "light"]) {
-  test(`home, Transporte and Resumo keep AA text contrast in the ${theme} theme`, async ({ page }) => {
+  test(`home, Transporte, Resumo and Automação keep AA text contrast in the ${theme} theme`, async ({ page }) => {
     await page.goto("/");
     await page.locator("html").evaluate((root, value) => { root.dataset.theme = value; }, theme);
 
@@ -35,5 +35,10 @@ for (const theme of ["dark", "light"]) {
     await expect(page.locator("#tab-panel-resumo")).toBeVisible();
     await expect(page.locator("#uso-30-dias")).toBeVisible();
     expect(await contrastViolations(page, "#tab-panel-resumo")).toEqual([]);
+
+    await openSidebarForTabs(page);
+    await page.locator("#tab-automacao").click();
+    await expect(page.locator("#tab-panel-automacao .automation-history-table")).toBeVisible();
+    expect(await contrastViolations(page, "#tab-panel-automacao")).toEqual([]);
   });
 }

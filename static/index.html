@@ -64,6 +64,10 @@
             <i data-lucide="layout-dashboard" class="w-4 h-4" aria-hidden="true"></i>
             <span>Resumo</span>
           </button>
+          <button type="button" id="tab-automacao" class="app-tab" role="tab" aria-selected="false" aria-controls="tab-panel-automacao" tabindex="-1" data-on-click="ativarAbaTransferencia" data-args='["automacao"]' aria-label="Automação" title="Automação">
+            <i data-lucide="terminal" class="w-4 h-4" aria-hidden="true"></i>
+            <span>Automação</span>
+          </button>
         </nav>
 
         <div class="sidebar-divider" aria-hidden="true"></div>
@@ -1072,6 +1076,77 @@ Horário disponível para atendimento:</textarea>
             </div>
           </form>
         </details>
+      </section>
+    </div>
+
+    </section>
+
+    <section id="tab-panel-automacao" class="app-tab-panel" role="tabpanel" aria-labelledby="tab-automacao" tabindex="0" hidden>
+
+    <!-- AUTOMAÇÃO: rotinas do Chrome de automação (docs/operacao/automacao-chrome.md) -->
+    <div id="automacao-cards" class="automation-page">
+      <section id="automacao-aviso-login" class="stale-base-alert automation-login-alert" role="alert" aria-labelledby="automacao-aviso-login-titulo" hidden>
+        <i data-lucide="user-check" class="stale-base-alert-icon" aria-hidden="true"></i>
+        <div class="stale-base-alert-copy">
+          <h2 id="automacao-aviso-login-titulo" class="stale-base-alert-title">Login necessário no Chrome</h2>
+          <p id="automacao-aviso-login-texto" class="stale-base-alert-text"></p>
+        </div>
+      </section>
+
+      <section class="automation-card glass-card" aria-labelledby="automacao-titulo">
+        <div class="usage-card-header">
+          <h2 id="automacao-titulo" class="ux-home-title">Automação do Chrome</h2>
+          <p class="ux-home-note">Chrome de automação · perfil próprio · porta 9333</p>
+        </div>
+        <div id="automacao-estado" class="automation-status" role="status" aria-live="polite" aria-atomic="true" data-state="livre">
+          <span class="automation-status-dot" aria-hidden="true"></span>
+          <strong id="automacao-estado-titulo" class="automation-status-title">Livre</strong>
+          <span id="automacao-estado-detalhe" class="automation-status-detail">Verificando…</span>
+        </div>
+        <div class="automation-actions" role="group" aria-label="Rotinas da automação">
+          <button type="button" id="btn-automacao-os" data-automacao-rotina="os" data-on-click="iniciarRotinaAutomacao" data-args='["os"]' class="btn btn-secondary-accent automation-action" title="Oracle Service Cloud + UX Simpress (Acompanhamento de pedidos)">
+            <i data-lucide="clipboard-list" class="w-4 h-4" aria-hidden="true"></i>
+            <span>Rotina de OS</span>
+          </button>
+          <button type="button" id="btn-automacao-inventarios" data-automacao-rotina="inventarios" data-on-click="iniciarRotinaAutomacao" data-args='["inventarios"]' class="btn btn-secondary-accent automation-action" title="UX Simpress (Meus equipamentos) + Endpoint Central">
+            <i data-lucide="laptop" class="w-4 h-4" aria-hidden="true"></i>
+            <span>Inventários</span>
+          </button>
+          <button type="button" id="btn-automacao-ambas" data-automacao-rotina="ambas" data-on-click="iniciarRotinaAutomacao" data-args='["ambas"]' class="btn btn-secondary-accent automation-action" title="Rotina de OS e, em seguida, a de inventários">
+            <i data-lucide="layers" class="w-4 h-4" aria-hidden="true"></i>
+            <span>Ambas</span>
+          </button>
+          <button type="button" id="btn-automacao-login" data-automacao-rotina="login" data-on-click="iniciarRotinaAutomacao" data-args='["login"]' class="btn btn-secondary automation-action" title="Abre as abas do Oracle, UX Simpress e Endpoint Central para você fazer os logins">
+            <i data-lucide="user-check" class="w-4 h-4" aria-hidden="true"></i>
+            <span>Abrir Chrome para login</span>
+          </button>
+          <button type="button" id="btn-automacao-cancelar" data-on-click="cancelarRotinaAutomacao" class="btn btn-secondary automation-action automation-action--cancel" title="Para a rotina em andamento; o Chrome continua aberto" disabled>
+            <i data-lucide="x" class="w-4 h-4" aria-hidden="true"></i>
+            <span>Cancelar</span>
+          </button>
+        </div>
+        <p class="ux-home-note automation-note">Os logins são feitos por você, na janela do Chrome de automação. Os arquivos exportados são importados pelas pastas locais de entrada, como no <code>executar_automacao.bat</code>.</p>
+      </section>
+
+      <section class="automation-card glass-card" aria-labelledby="automacao-andamento-titulo">
+        <div class="usage-card-header">
+          <h2 id="automacao-andamento-titulo" class="ux-home-title">Andamento</h2>
+          <p id="automacao-log-arquivo" class="ux-home-note automation-log-file"></p>
+        </div>
+        <pre id="automacao-log" class="automation-log" role="log" aria-live="polite" aria-labelledby="automacao-andamento-titulo" tabindex="0"></pre>
+      </section>
+
+      <section class="automation-card glass-card" aria-labelledby="automacao-historico-titulo">
+        <div class="usage-card-header">
+          <h2 id="automacao-historico-titulo" class="ux-home-title">Últimas execuções</h2>
+          <button type="button" id="btn-automacao-historico" data-on-click="carregarHistoricoAutomacao" class="btn btn-secondary automation-refresh" title="Atualizar a lista de execuções">
+            <i data-lucide="refresh-cw" class="w-4 h-4" aria-hidden="true"></i>
+            <span>Atualizar</span>
+          </button>
+        </div>
+        <div id="automacao-historico" class="automation-history">
+          <p class="ux-home-note">Carregando…</p>
+        </div>
       </section>
     </div>
 
