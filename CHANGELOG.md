@@ -10,6 +10,7 @@ O inicializador mostra a seção da versão nova antes de perguntar se você que
 
 ### Adicionado
 
+- **Pendências de usuário logado:** quando um novo InvAll informa usuário onde há um usuário manual, ou deixa de informar um usuário que já existia, nada muda sozinho. O usuário atual continua valendo e a pendência aparece em **Mudanças de usuário logado** (e marcada na pesquisa) com os botões **Permitir substituição / Manter usuário manual** ou **Confirmar remoção / Manter usuário**. A decisão fica gravada e a mesma situação não é perguntada de novo. A troca de um usuário do Endpoint por outro, sem usuário manual, continua aplicada automaticamente.
 - **Equipamentos sem usuário:** o botão **Equipamentos sem usuário**, abaixo da pesquisa da Home, lista os equipamentos da base Simpress sem usuário do Endpoint nem manual. A janela de resultados ganhou o filtro **Usuário** (**Sem usuário** e **Com usuário**), que também vale para qualquer pesquisa.
 - **Usuário na exportação do histórico:** a planilha do **Histórico de Planilhas** traz as colunas **Usuário logado** e **Origem do usuário** (Endpoint ou Manual) nas abas Apelidos, Ausências, Sem acesso e Localidades. A exportação de EquipamentosDetalhes continua no formato do modelo, sem coluna nova.
 

@@ -54,6 +54,8 @@ def _history_section_text(value: Any, *, bare_sources: bool = False) -> str:
 
 
 _USER_CHANGE_LABELS = {
+    "substituicao_pendente": "Substituição do usuário manual pendente de decisão",
+    "ausente_pendente": "Usuário sumiu do Endpoint — pendente de confirmação",
     "novo_endpoint": "Usuário novo no Endpoint",
     "alterado_endpoint": "Usuário alterado no Endpoint",
     "removido_endpoint": "Usuário removido do Endpoint",

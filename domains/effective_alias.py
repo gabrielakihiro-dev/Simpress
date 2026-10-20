@@ -352,13 +352,28 @@ def apply_effective_alias(
     endpoint_user = endpoint_user_for_serial(endpoint_index, serial_key)
     manual_user = str(endpoint_index.get("manual_users", {}).get(serial_key, "") or "").strip()
     # O usuário do Endpoint sempre prevalece; o manual só preenche a lacuna.
-    equipment["usuarios_logados"] = endpoint_user or manual_user
-    equipment["usuarios_logados_origem"] = (
-        "endpoint" if endpoint_user else "manual" if manual_user else ""
-    )
+    logged_user = endpoint_user or manual_user
+    logged_origin = "endpoint" if endpoint_user else "manual" if manual_user else ""
+    pending_kind = ""
+    # Uma pendência de usuário (ver domains/user_holds.py) mantém o usuário atual até a decisão.
+    hold = endpoint_index.get("user_holds", {}).get(serial_key)
+    if hold:
+        awaiting = hold.get("estado") == "pendente"
+        if (
+            hold.get("tipo") == "substituicao_manual" and endpoint_user and manual_user
+            and endpoint_user.strip().casefold() == str(hold.get("usuario_endpoint") or "").strip().casefold()
+        ):
+            logged_user, logged_origin = manual_user, "manual"
+            pending_kind = "substituicao_pendente" if awaiting else ""
+        elif hold.get("tipo") == "usuario_ausente" and not endpoint_user:
+            logged_user, logged_origin = str(hold.get("usuario_atual") or "").strip(), "endpoint"
+            pending_kind = "ausente_pendente" if awaiting else ""
+    equipment["usuarios_logados"] = logged_user
+    equipment["usuarios_logados_origem"] = logged_origin
+    equipment["usuarios_logados_pendencia"] = pending_kind
     equipment["usuarios_logados_informado_em"] = (
         str(endpoint_index.get("manual_user_dates", {}).get(serial_key, "") or "")
-        if manual_user and not endpoint_user
+        if logged_origin == "manual"
         else ""
     )
     equipment["usuarios_logados_candidatos"] = endpoint_user_candidates(endpoint_index, serial_key)

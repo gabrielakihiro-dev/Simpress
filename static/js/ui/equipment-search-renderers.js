@@ -49,6 +49,7 @@
               <span class="autocomplete-user inline-flex items-center gap-1 text-[11px] px-2 py-0.5 rounded-md bg-slate-900/90 text-slate-200 border border-slate-600/60 shrink-0" title="${escapeHtml(item.usuarios_logados_origem === "manual" ? tituloManual(item.usuarios_logados_informado_em) : "Usuário logado no Endpoint")}">
                 <i data-lucide="user" class="w-2.5 h-2.5 text-slate-400" aria-hidden="true"></i>
                 <span>${highlightMatch(String(item.usuarios_logados).trim(), currentQuery)}${item.usuarios_logados_origem === "manual" ? " (M)" : ""}</span>
+                ${item.usuarios_logados_pendencia ? '<span class="text-amber-300" data-user-pending>· aguardando decisão</span>' : ""}
               </span>
             ` : ""}
             ${textoAmbiguo(item.usuarios_logados_candidatos) ? `

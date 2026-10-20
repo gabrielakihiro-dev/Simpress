@@ -153,7 +153,7 @@ from domains.history_annotations import (
     save_history_annotation,
 )
 from domains import effective_alias
-from domains import alias_changes, equipment_export, inventory_state, user_changes
+from domains import alias_changes, equipment_export, inventory_state, user_changes, user_holds
 from domains.alias_changes import (
     compare_equipment_aliases,
     snapshot_equipment_aliases,
@@ -785,6 +785,7 @@ def read_endpoint_alias_index() -> Dict[str, Any]:
     index["manual_user_dates"] = user_changes.manual_user_dates_by_serial(
         index["manual_users"], user_changes.read_manual_user_dates(MANUAL_USERS_FILE),
     )
+    index["user_holds"] = user_holds.read_holds(MANUAL_USERS_FILE)
     return index
 
 
