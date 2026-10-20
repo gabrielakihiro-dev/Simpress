@@ -41,7 +41,10 @@ class EffectiveAliasServices:
 
 
 def unavailable_endpoint_alias_index() -> Dict[str, Any]:
-    return {"available": False, "unique": {}, "duplicates": {}, "blank_serials": [], "blank_hostnames": {}, "users": {}}
+    return {
+        "available": False, "unique": {}, "duplicates": {}, "blank_serials": [], "blank_hostnames": {},
+        "users": {}, "ambiguous_users": {},
+    }
 
 
 def build_endpoint_alias_index(
@@ -97,10 +100,22 @@ def build_endpoint_alias_index(
         for serial_key, values in users_by_serial.items()
         if len(values) == 1 and values[0]
     }
+    # A serial repeated in the Endpoint gets no user; its distinct users are kept only to be shown.
+    ambiguous_users: Dict[str, List[str]] = {}
+    for serial_key, values in users_by_serial.items():
+        if len(values) < 2:
+            continue
+        candidates: Dict[str, str] = {}
+        for value in values:
+            if value:
+                candidates.setdefault(value.casefold(), value)
+        if candidates:
+            ambiguous_users[serial_key] = list(candidates.values())
 
     return {
         "available": True,
         "users": users,
+        "ambiguous_users": ambiguous_users,
         "unique": unique,
         "duplicates": duplicates,
         "blank_serials": blank_serials,
@@ -316,6 +331,13 @@ def endpoint_user_for_serial(index: Dict[str, Any], serial_key: str) -> str:
     return str(users.get(base, "") or "") if base else ""
 
 
+def endpoint_user_candidates(index: Dict[str, Any], serial_key: str) -> List[str]:
+    """Users of a serial repeated in the Endpoint; none of them is chosen automatically."""
+    if endpoint_user_for_serial(index, serial_key):
+        return []
+    return [str(user) for user in index.get("ambiguous_users", {}).get(serial_key, [])]
+
+
 def apply_effective_alias(
     equipment: Dict[str, Any],
     endpoint_index: Dict[str, Any],
@@ -334,6 +356,12 @@ def apply_effective_alias(
     equipment["usuarios_logados_origem"] = (
         "endpoint" if endpoint_user else "manual" if manual_user else ""
     )
+    equipment["usuarios_logados_informado_em"] = (
+        str(endpoint_index.get("manual_user_dates", {}).get(serial_key, "") or "")
+        if manual_user and not endpoint_user
+        else ""
+    )
+    equipment["usuarios_logados_candidatos"] = endpoint_user_candidates(endpoint_index, serial_key)
 
     if not endpoint_index.get("available"):
         equipment["invall_alias_status"] = "indisponivel"
