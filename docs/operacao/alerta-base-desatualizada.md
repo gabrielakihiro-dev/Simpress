@@ -54,7 +54,7 @@ O botão abre o modal "Atualizar planilhas" (`abrirModalAtualizarPlanilhas`), o 
 
 ## Interface
 
-- O cartão `#alerta-base-desatualizada` fica no topo da aba Home e segue o padrão do cartão "Uso nos últimos 30 dias": nasce `hidden`, é preenchido pelo evento `simpress:painel-atualizado` e entra com animação de 220 ms (`--motion-normal`), desligada com `prefers-reduced-motion`.
+- O cartão `#alerta-base-desatualizada` fica no topo da aba Home e nasce `hidden`, é preenchido pelo evento `simpress:painel-atualizado` e entra com animação de 220 ms (`--motion-normal`), desligada com `prefers-reduced-motion`.
 - Usa os tokens `--ux-warning-*`, que existem nos temas claro e escuro. No celular, o botão ocupa a largura toda e tem pelo menos 48 px de altura.
 - `role="status"` para que leitores de tela anunciem o aviso quando ele aparecer.
 

@@ -18,16 +18,15 @@ test("Resumo tab sits right below Transporte in the navigation", () => {
   assert.match(appHtml, /id="tab-resumo"[^>]*data-args='\["resumo"\]'/);
 });
 
-test("Resumo panel holds both cards and Home no longer does", () => {
-  const homePanel = appHtml.indexOf('id="tab-panel-home"');
+test("Resumo panel keeps the inventory summary and removes the usage panel", () => {
   const transferPanel = appHtml.indexOf('id="tab-panel-retirada-entrega"');
   const resumoPanel = appHtml.indexOf('id="tab-panel-resumo"');
   const cards = appHtml.indexOf('id="resumo-cards"');
-  const usage = appHtml.indexOf('id="uso-30-dias"');
+  const automacaoPanel = appHtml.indexOf('id="tab-panel-automacao"');
 
   assert.ok(resumoPanel > transferPanel, "Resumo panel must come after the Transporte panel");
-  assert.ok(cards > resumoPanel && usage > cards, "usage card must be inside #resumo-cards in the Resumo panel");
-  assert.ok(!(usage > homePanel && usage < transferPanel), "usage card must not remain inside the Home panel");
+  assert.ok(cards > resumoPanel && cards < automacaoPanel, "inventory summary stays inside the Resumo panel");
+  assert.doesNotMatch(appHtml, /Uso nos últimos 30 dias|id="uso-30-dias"/);
   assert.match(appHtml.slice(resumoPanel, resumoPanel + 200), /hidden>/, "Resumo panel starts hidden");
 });
 

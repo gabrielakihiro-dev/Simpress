@@ -1,6 +1,6 @@
 # Relatório mensal do contrato
 
-Objetivo: entregar ao gestor do contrato 16467 uma planilha com o retrato do mês escolhido (inventário, última comparação, OS e uso do sistema), montada somente com dados que o Simpress já guarda localmente.
+Objetivo: entregar ao gestor do contrato 16467 uma planilha com o retrato do mês escolhido (inventário, última comparação e OS), montada somente com dados que o Simpress já guarda localmente.
 
 ## Formato
 
@@ -8,7 +8,6 @@ Objetivo: entregar ao gestor do contrato 16467 uma planilha com o retrato do mê
 - Gerado sob demanda por `GET /api/relatorio-mensal?mes=AAAA-MM`; o download não grava nada em `data/`.
 - O servidor também salva automaticamente o relatório do mês anterior em `data/relatorios_mensais/`, uma vez por mês (ver `relatorio-mensal-automatico.md`).
 - Textos vindos das planilhas entram como texto literal (proteção contra fórmulas).
-- A exportação conta como `exportacoes` em `metricas_uso.json`, como as demais exportações.
 
 ## Abas e origem de cada número
 
@@ -34,9 +33,6 @@ Cabeçalho: título `Relatório mensal — <mês> de <ano>`, contrato `16467 - S
 | OS do mês | Pedidos Simpress entregues no mês | Pedidos cuja etapa `Pedido entregue` tem data no mês. |
 | OS do mês | Pedidos Simpress em andamento no fim do mês | Pedidos feitos até o fim do mês e sem entrega até essa data. Pedido com status de entregue ou cancelado sem data não conta como em andamento. |
 | OS do mês | Encerrados sem data | OS ou pedidos encerrados sem data de conclusão/entrega; ficam fora das contagens de conclusão do mês. |
-| Uso no mês | Transferências geradas, Comparações feitas, Exportações, OS conciliadas, Buscas | Soma dos dias do mês em `data/state/metricas_uso.json`. |
-| Uso no mês | Horas economizadas (estimativa) | Σ(total × minutos configurados) / 60, somente quando há tempos configurados. |
-| Uso no mês | Registrado desde | Primeiro dia com registro em `metricas_uso.json`. |
 
 As OS vêm de `data/state/historico_chamados.json` (importado pela pasta `entrada_chamados` ou pela tela de chamados). São consideradas todas as importações guardadas no histórico; quando a mesma OS aparece em mais de uma, vale a versão da importação mais recente.
 
@@ -46,7 +42,6 @@ As OS vêm de `data/state/historico_chamados.json` (importado pela pasta `entrad
 - `Inventário por unidade`: `Cidade | Endereço | Equipamentos`.
 - `Comparação`: uma linha por pendência da última comparação: `Seção | Hostname | Série | Local previsto | Local na Simpress`. Seções: `Sem correspondência — no endpoint`, `Sem correspondência — na Simpress`, `Localidade divergente`.
 - `OS do mês`: `Fonte | OS/Pedido | Série | Status | Criação | Conclusão | Situação no mês` (`Aberta no mês`, `Concluída no mês`, `Pendente no fim do mês`, combinadas por `; `). Só entram as OS e pedidos com alguma situação no mês.
-- `Uso por dia`: `Data` e as cinco métricas, um dia por linha.
 
 ## Regras
 
@@ -71,12 +66,10 @@ As OS vêm de `data/state/historico_chamados.json` (importado pela pasta `entrad
 3. Séries do Sebrae não aparecem em `Sem correspondência — na Simpress`; hostnames `PRNOTESJP`, `PRNOTERL` e `PRNOTEARC` não aparecem em `Localidade divergente`.
 4. A comparação usada é a mais recente até o fim do mês; comparações posteriores ao mês são ignoradas.
 5. OS abertas, concluídas e pendentes seguem as datas descritas acima; OS repetidas em várias importações contam uma vez.
-6. O uso do mês soma exatamente os dias do mês em `metricas_uso.json`.
-7. `mes` inválido ou futuro responde 422; o botão mostra `Planilha Exportada com Sucesso!` após o download.
-8. `npm run verify` e `npm run test:ui:e2e` passam; nenhum dado real entra no Git.
+6. `mes` inválido ou futuro responde 422; o botão mostra `Planilha Exportada com Sucesso!` após o download.
+7. `npm run verify` e `npm run test:ui:e2e` passam; nenhum dado real entra no Git.
 
 ## Limitações
 
 - O inventário não é histórico: um relatório de um mês antigo mostra a base atual.
 - As OS dependem das importações feitas; uma OS que nunca apareceu numa importação não é contada.
-- O uso só existe a partir do dia em que as métricas começaram a ser registradas.

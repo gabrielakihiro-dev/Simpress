@@ -1043,40 +1043,8 @@ Horário disponível para atendimento:</textarea>
 
     <section id="tab-panel-resumo" class="app-tab-panel" role="tabpanel" aria-labelledby="tab-resumo" tabindex="0" hidden>
 
-    <!-- RESUMO: Resumo do parque (preenchido pelo painel da base) e Uso nos últimos 30 dias -->
+    <!-- RESUMO: Resumo do parque (preenchido pelo painel da base) -->
     <div id="resumo-cards">
-      <!-- USO NOS ÚLTIMOS 30 DIAS (contagens locais em data/state/metricas_uso.json; oculto até o painel responder) -->
-      <section id="uso-30-dias" class="usage-card glass-card" aria-labelledby="uso-30-dias-titulo" data-state="loading" hidden>
-        <div class="usage-card-header">
-          <h2 id="uso-30-dias-titulo" class="ux-home-title">Uso nos últimos 30 dias</h2>
-          <p id="uso-30-dias-periodo" class="ux-home-note"></p>
-        </div>
-        <ul id="uso-30-dias-lista" class="usage-card-grid" aria-label="Tarefas realizadas nos últimos 30 dias">
-          <li class="ux-stat usage-stat" data-usage-metric="transferencias"><span class="ux-stat-value" data-usage-value>0</span><span class="ux-stat-label">Transferências geradas</span></li>
-          <li class="ux-stat usage-stat" data-usage-metric="comparacoes"><span class="ux-stat-value" data-usage-value>0</span><span class="ux-stat-label">Comparações feitas</span></li>
-          <li class="ux-stat usage-stat" data-usage-metric="exportacoes"><span class="ux-stat-value" data-usage-value>0</span><span class="ux-stat-label">Exportações</span></li>
-          <li class="ux-stat usage-stat" data-usage-metric="os_conciliadas"><span class="ux-stat-value" data-usage-value>0</span><span class="ux-stat-label">OS conciliadas</span></li>
-          <li class="ux-stat usage-stat" data-usage-metric="buscas"><span class="ux-stat-value" data-usage-value>0</span><span class="ux-stat-label">Buscas</span></li>
-        </ul>
-        <p id="uso-30-dias-horas" class="usage-card-hours"></p>
-        <details id="uso-30-dias-tempos" class="usage-card-settings">
-          <summary class="usage-card-settings-summary">Tempo manual por tarefa</summary>
-          <form id="uso-30-dias-form" class="usage-card-form" novalidate>
-            <p id="uso-30-dias-ajuda" class="ux-home-note">Minutos que cada tarefa levaria sem o Simpress (0 a 480). Deixe em branco para não estimar.</p>
-            <div class="usage-card-fields">
-              <label class="usage-card-field" for="uso-tempo-transferencias"><span>Transferências geradas</span><input id="uso-tempo-transferencias" name="transferencias" type="number" min="0" max="480" step="0.5" inputmode="decimal" class="glass-input" aria-describedby="uso-30-dias-ajuda"></label>
-              <label class="usage-card-field" for="uso-tempo-comparacoes"><span>Comparações feitas</span><input id="uso-tempo-comparacoes" name="comparacoes" type="number" min="0" max="480" step="0.5" inputmode="decimal" class="glass-input" aria-describedby="uso-30-dias-ajuda"></label>
-              <label class="usage-card-field" for="uso-tempo-exportacoes"><span>Exportações</span><input id="uso-tempo-exportacoes" name="exportacoes" type="number" min="0" max="480" step="0.5" inputmode="decimal" class="glass-input" aria-describedby="uso-30-dias-ajuda"></label>
-              <label class="usage-card-field" for="uso-tempo-os_conciliadas"><span>OS conciliadas</span><input id="uso-tempo-os_conciliadas" name="os_conciliadas" type="number" min="0" max="480" step="0.5" inputmode="decimal" class="glass-input" aria-describedby="uso-30-dias-ajuda"></label>
-              <label class="usage-card-field" for="uso-tempo-buscas"><span>Buscas</span><input id="uso-tempo-buscas" name="buscas" type="number" min="0" max="480" step="0.5" inputmode="decimal" class="glass-input" aria-describedby="uso-30-dias-ajuda"></label>
-            </div>
-            <div class="usage-card-actions">
-              <button type="submit" id="btn-salvar-tempos-uso" class="btn btn-secondary">Salvar tempos</button>
-              <p id="uso-30-dias-status" class="ux-home-note" role="status" aria-live="polite"></p>
-            </div>
-          </form>
-        </details>
-      </section>
     </div>
 
     </section>
@@ -1094,7 +1062,7 @@ Horário disponível para atendimento:</textarea>
       </section>
 
       <section class="automation-card glass-card" aria-labelledby="automacao-titulo">
-        <div class="usage-card-header">
+        <div class="panel-card-header">
           <h2 id="automacao-titulo" class="ux-home-title">Automação do Chrome</h2>
           <p class="ux-home-note">Chrome de automação · perfil próprio · porta 9333</p>
         </div>
@@ -1129,7 +1097,7 @@ Horário disponível para atendimento:</textarea>
       </section>
 
       <section id="automacao-andamento-painel" class="automation-card glass-card" aria-labelledby="automacao-andamento-titulo">
-        <div class="usage-card-header">
+        <div class="panel-card-header">
           <h2 id="automacao-andamento-titulo" class="ux-home-title">Andamento</h2>
           <div class="automation-panel-actions">
             <button type="button" class="btn btn-secondary" data-on-click="recolherPainelAutomacao" data-args='["andamento"]' aria-expanded="true" aria-controls="automacao-andamento-conteudo" aria-label="Recolher Andamento">Recolher</button>
@@ -1160,7 +1128,7 @@ Horário disponível para atendimento:</textarea>
       </section>
 
       <section id="automacao-historico-painel" class="automation-card glass-card" aria-labelledby="automacao-historico-titulo">
-        <div class="usage-card-header">
+        <div class="panel-card-header">
           <h2 id="automacao-historico-titulo" class="ux-home-title">Últimas execuções</h2>
           <div class="automation-panel-actions">
           <button type="button" id="btn-automacao-historico" data-on-click="carregarHistoricoAutomacao" class="btn btn-secondary automation-refresh" title="Atualizar a lista de execuções">

@@ -33,7 +33,6 @@ from domains.monthly_report import (
     parse_report_month,
     summary_rows,
     tickets_section,
-    usage_section,
 )
 from routers.monthly_report import (
     MonthlyReportServices,
@@ -146,22 +145,10 @@ TICKET_REPORT = {
     "chamados": OCTOBER_TICKETS,
     "historico": [SEPTEMBER_SNAPSHOT],
 }
-USAGE = {
-    "versao": 1,
-    "dias": {
-        "2026-09-30": {"transferencias": 5},
-        "2026-10-01": {"transferencias": 2, "buscas": 3},
-        "2026-10-31": {"exportacoes": 1},
-        "2026-11-01": {"comparacoes": 4},
-    },
-    "tempos_minutos": {"transferencias": 15},
-}
-
-
 def build(month=OCTOBER, display=comparison_history_for_display, **overrides):
     arguments = {
         "equipment": EQUIPMENT, "stats": STATS, "comparison_history": HISTORY,
-        "comparison_display": display, "ticket_report": TICKET_REPORT, "usage_store": USAGE,
+        "comparison_display": display, "ticket_report": TICKET_REPORT,
         "generated_at": datetime(2026, 10, 17, 9, 30),
     }
     arguments.update(overrides)
@@ -258,23 +245,6 @@ class TicketSectionTests(unittest.TestCase):
         self.assertEqual((section["linhas"], section["importacoes"]), ([], 0))
 
 
-class UsageSectionTests(unittest.TestCase):
-    def test_sums_exactly_the_days_of_the_month(self):
-        section = usage_section(USAGE, OCTOBER)
-        self.assertEqual(section["totais"], {
-            "transferencias": 2, "comparacoes": 0, "exportacoes": 1, "os_conciliadas": 0, "buscas": 3,
-        })
-        self.assertEqual(len(section["por_dia"]), 31)
-        self.assertEqual(section["por_dia"][0]["data"], "2026-10-01")
-        self.assertEqual(section["horas_economizadas"], 0.5)
-        self.assertEqual(section["registro_desde"], "2026-09-30")
-
-    def test_missing_metrics_file_reports_zeros(self):
-        section = usage_section({}, OCTOBER)
-        self.assertEqual(sum(section["totais"].values()), 0)
-        self.assertFalse(section["tempos_configurados"])
-
-
 class WorkbookTests(unittest.TestCase):
     def workbook(self, report):
         output, filename = build_monthly_report_workbook(report)
@@ -287,7 +257,7 @@ class WorkbookTests(unittest.TestCase):
         workbook, filename = self.workbook(build())
         self.assertEqual(filename, "Relatorio-mensal-2026-10.xlsx")
         self.assertEqual(workbook.sheetnames, [
-            "Resumo", "Inventário por tipo", "Inventário por unidade", "Comparação", "OS do mês", "Uso por dia",
+            "Resumo", "Inventário por tipo", "Inventário por unidade", "Comparação", "OS do mês",
         ])
         values = self.summary_values(workbook)
         self.assertEqual(values["Relatório mensal — outubro de 2026"], None)
@@ -303,8 +273,7 @@ class WorkbookTests(unittest.TestCase):
         self.assertEqual(values["OS Oracle abertas no mês"], 1)
         self.assertEqual(values["OS Oracle pendentes no fim do mês"], 1)
         self.assertEqual(values["Pedidos Simpress entregues no mês"], 1)
-        self.assertEqual(values["Transferências geradas"], 2)
-        self.assertEqual(values["Horas economizadas (estimativa)"], 0.5)
+        self.assertNotIn("Transferências geradas", values)
         self.assertTrue(any("16467" in str(cell.value) for cell in workbook["Resumo"]["A"]))
 
     def test_approved_source_labels_and_no_raw_source_names(self):
@@ -323,8 +292,6 @@ class WorkbookTests(unittest.TestCase):
         self.assertEqual(sum(row[1] for row in by_type), 4)
         sections = [row[0] for row in workbook["Comparação"].iter_rows(min_row=2, values_only=True)]
         self.assertEqual(sections, [SECTION_ENDPOINT, SECTION_SIMPRESS, SECTION_LOCATION])
-        usage_rows = list(workbook["Uso por dia"].iter_rows(min_row=2, values_only=True))
-        self.assertEqual((len(usage_rows), usage_rows[0][0]), (31, "01/10/2026"))
 
     def test_spreadsheet_text_never_becomes_a_formula(self):
         hostile = [equipment("SN-FIC-900", "=HYPERLINK(\"x\")", "Curitiba", "+cmd")]
@@ -334,7 +301,7 @@ class WorkbookTests(unittest.TestCase):
 
     def test_empty_month_still_generates_with_zeros(self):
         report = build(
-            month=parse_report_month("2026-08", TODAY), comparison_history=[], ticket_report={}, usage_store={},
+            month=parse_report_month("2026-08", TODAY), comparison_history=[], ticket_report={},
         )
         rows = summary_rows(report)
         self.assertIn(("Última comparação", "Data da comparação", "Sem registros no mês",
@@ -353,7 +320,7 @@ class MonthlyReportRouteTests(unittest.TestCase):
     def tearDown(self):
         self.tmp.cleanup()
 
-    def client(self, usage_reader=lambda: USAGE):
+    def client(self):
         app = FastAPI()
 
         @app.exception_handler(DomainError)
@@ -365,7 +332,6 @@ class MonthlyReportRouteTests(unittest.TestCase):
             load_comparison_history=lambda: HISTORY,
             comparison_history_for_display=comparison_history_for_display,
             ticket_report_path=lambda: self.ticket_path,
-            read_usage_metrics=usage_reader,
             today=lambda: TODAY,
             now=lambda: datetime(2026, 10, 17, 9, 30),
         )))
@@ -395,14 +361,9 @@ class MonthlyReportRouteTests(unittest.TestCase):
         self.ticket_path.write_text("{", encoding="utf-8")
         self.assertEqual(self.client().get("/api/relatorio-mensal", params={"mes": "2026-10"}).status_code, 503)
 
-    def test_missing_ticket_history_and_unreadable_metrics_still_generate(self):
+    def test_missing_ticket_history_still_generates(self):
         self.ticket_path.unlink()
-
-        def broken_metrics():
-            raise ValueError("arquivo inválido")
-
-        with self.assertLogs("routers.monthly_report", level="WARNING"):
-            response = self.client(broken_metrics).get("/api/relatorio-mensal", params={"mes": "2026-10"})
+        response = self.client().get("/api/relatorio-mensal", params={"mes": "2026-10"})
         self.assertEqual(response.status_code, 200)
 
 
@@ -425,7 +386,6 @@ class AutomaticMonthlyReportTests(unittest.TestCase):
             load_comparison_history=lambda: HISTORY,
             comparison_history_for_display=comparison_history_for_display,
             ticket_report_path=lambda: self.ticket_path,
-            read_usage_metrics=lambda: USAGE,
             today=lambda: self.today,
             now=lambda: datetime(2026, 10, 17, 9, 30),
         )
