@@ -343,6 +343,16 @@ class ExecutionLogTests(unittest.TestCase):
         self.assertEqual(len(list(self.pasta.glob("*.json"))), 3)
         self.assertEqual(len(list(self.pasta.glob("*.png"))), 5)
 
+    def test_retention_leaves_site_logs_alone(self):
+        self.pasta.mkdir(parents=True)
+        site = self.pasta / "20250101_120000_os.site.log"
+        site.write_text("x", encoding="utf-8")
+        for indice in range(3):
+            (self.pasta / f"2026010{indice}_120000_os.log").write_text("x", encoding="utf-8")
+        automacao.limpar_logs_antigos(self.pasta, manter=3)
+        self.assertTrue(site.exists())
+        self.assertEqual(len(list(self.pasta.glob("*.log"))), 4)
+
     def test_start_applies_retention_of_100_logs(self):
         self.pasta.mkdir(parents=True)
         for indice in range(105):
