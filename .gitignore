@@ -131,6 +131,9 @@ __pycache__/
 # Local server logs and inventory update receipts are runtime state.
 /data/logs/
 /data/state/inventory_update_idempotency.json
+# Manually entered logged users (personal data) and local usage metrics.
+/data/state/usuarios_manuais/
+/data/state/metricas_uso.json
 # Monthly contract reports saved automatically contain operational data.
 /data/relatorios_mensais/
 
