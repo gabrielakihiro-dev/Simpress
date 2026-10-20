@@ -11,7 +11,7 @@ Gatilho: **"Executar OS Simpress"** executa o fluxo completo, do Oracle até a c
 
 ## Execução automática (Playwright)
 
-`executar_automacao.bat` → opção 1 (ou `.\.venv\Scripts\python.exe scripts\automacao_rotinas_chrome.py --rotina os`) faz todos os passos abaixo num Chrome de automação próprio (perfil `~\.chrome-automation`, porta local 9333, que fica aberto para manter os logins): Oracle (usa a Gestão de Solicitações que já estiver na tela; senão abre pelo Menu; se o Menu falhar, recarrega e abre pelo Menu de novo), UX (clica em "Acesso Time Simpress" na tela de login; se não entrar, pede o login), downloads capturados pelo Playwright, lote e confirmação do `_resultado.json`. Falhas deixam a aba aberta e uma captura em `data\logs\automacao_chrome`. O passo a passo abaixo continua valendo para execução manual.
+`executar_automacao.bat` → opção 1 (ou `.\.venv\Scripts\python.exe scripts\automacao_rotinas_chrome.py --rotina os`) faz todos os passos abaixo num Chrome de automação próprio (perfil `~\.chrome-automation`, porta local 9333, que fica aberto para manter os logins): Oracle (usa a Gestão de Solicitações que já estiver na tela; senão abre pelo Menu; se o Menu falhar, recarrega e abre pelo Menu de novo), UX (clica em "Acesso Time Simpress" na tela de login; se não entrar, pede o login), downloads capturados pelo Playwright, lote e confirmação do `_resultado.json`. Falhas deixam a aba aberta e uma captura em `data\logs\automacao_chrome`. Ao pedir login e ao terminar (sucesso, com os lotes confirmados, ou falha, com o erro curto) a rotina mostra um aviso do Windows (`scripts\avisos_windows.py`, melhor esforço; `SIMPRESS_AVISOS=0` desliga). O passo a passo abaixo continua valendo para execução manual.
 
 ## Regras
 

@@ -11,6 +11,9 @@ class ChromeAutomationHelpersTests(unittest.TestCase):
     def setUp(self):
         self.temp_context = tempfile.TemporaryDirectory(prefix=".automacao-chrome-test-")
         self.root = Path(self.temp_context.name)
+        avisos = patch.object(automacao, "avisar")  # nenhum toast real nos testes
+        self.avisar = avisos.start()
+        self.addCleanup(avisos.stop)
 
     def tearDown(self):
         self.temp_context.cleanup()
@@ -75,6 +78,8 @@ class ChromeAutomationHelpersTests(unittest.TestCase):
         self.assertEqual(len(cliques), 1)
         self.assertTrue(any("conta conectada não concluiu" in m for m in mensagens))
         self.assertTrue(any("AÇÃO NECESSÁRIA" in m for m in mensagens))
+        self.avisar.assert_called_once()
+        self.assertIn("UX Simpress", self.avisar.call_args.args[0])
 
     def test_aguardar_login_returns_when_sso_logs_in(self):
         page, relogio = self._pagina_falsa()
