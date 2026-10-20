@@ -1929,6 +1929,7 @@ _inventory_update_services = InventoryUpdateServices(
     external_errors=(HTTPException,),
     alias_history_file=lambda: ALIAS_HISTORY_FILE,
     removed_endpoint_hostnames=lambda: removed_endpoint_hostname_keys(),
+    manual_users_file=lambda: MANUAL_USERS_FILE,
 )
 
 

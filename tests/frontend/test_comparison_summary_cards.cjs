@@ -37,6 +37,7 @@ const COMPARACAO_COMPLETA = {
   apelidos_atualizados: [{ serie: "SER-E", apelido_anterior: "A", apelido_novo: "B" }],
   apelidos_sem_atualizacao: [{ serie: "SER-F", hostname_endpoint: "PRNOTE-F", motivo: "Conferir" }],
   divergencias_apelidos_manuais: [{ serie: "SER-G", apelido_manual: "M" }],
+  mudancas_usuarios: [{ tipo: "novo_endpoint", serie: "SER-H", usuario_novo: "ana", origem_nova: "endpoint" }],
 };
 
 // Card label -> visible title of the section it must reach.
@@ -49,12 +50,13 @@ const SECAO_ESPERADA = {
   "Apelidos/hostnames atualizados": "Apelidos/hostnames atualizados — no endpoint",
   "Apelidos para conferência": "Linhas mantidas para conferência",
   "Divergências manuais pendentes": "Divergências com apelidos alterados manualmente",
+  "Mudanças de usuário": "Mudanças de usuário logado",
 };
 
 test("summary cards with rows jump to the title of their own section", () => {
   const html = renderizar(COMPARACAO_COMPLETA);
   const encontrados = cartoes(html);
-  assert.equal(encontrados.length, 9);
+  assert.equal(encontrados.length, 10);
 
   for (const cartao of encontrados) {
     const esperado = SECAO_ESPERADA[cartao.rotulo];

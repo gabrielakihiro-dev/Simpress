@@ -23,6 +23,10 @@ from domains.inventory_state import STATE_LOCK
 MAX_USER_LENGTH = 160
 USER_EVENT_TYPE = "usuario"
 WARNING_EVENT_TYPE = "aviso_endpoint"
+# A manual user hidden by an Endpoint user is moved out of the manual file into the alias
+# history with this action, so it never comes back on its own when the Endpoint empties.
+ARCHIVED_BY_ENDPOINT_ACTION = "arquivado_endpoint"
+USER_CHANGE_ORDER = ("novo_endpoint", "alterado_endpoint", "removido_endpoint", "manual_voltou")
 
 
 def _now() -> str:
@@ -92,6 +96,139 @@ def build_endpoint_warning_entries(
             "acao": "aviso",
         })
     return entries
+
+
+def _equipment_label(equipment: Dict[str, Any]) -> str:
+    return equipment.get("modelo") or equipment.get("tipo") or "Equipamento"
+
+
+def _equipment_by_serial_key(cache: Dict[str, Dict[str, Any]]) -> Dict[str, Dict[str, Any]]:
+    """One equipment per normalized serial; serials repeated in the Simpress base are left out."""
+    grouped: Dict[str, List[Dict[str, Any]]] = {}
+    for serial, equipment in cache.items():
+        key = normalize_reference_value(equipment.get("serial") or serial)
+        if key and equipment.get("invall_alias_status") != "serie_detalhes_duplicada":
+            grouped.setdefault(key, []).append(equipment)
+    return {key: items[0] for key, items in grouped.items() if len(items) == 1}
+
+
+def manual_users_overridden_by_endpoint(
+    equipment_cache: Dict[str, Dict[str, Any]],
+    manual_users: Dict[str, str],
+) -> Dict[str, Dict[str, str]]:
+    """Manual users hidden because the Endpoint now reports a user, keyed by normalized serial."""
+    overridden: Dict[str, Dict[str, str]] = {}
+    for key, equipment in _equipment_by_serial_key(equipment_cache).items():
+        manual = manual_users.get(key, "")
+        if manual and equipment.get("usuarios_logados_origem") == "endpoint":
+            overridden[key] = {
+                "serial": str(equipment.get("serial") or key).strip(),
+                "equipamento": _equipment_label(equipment),
+                "usuario_manual": manual,
+                "usuario_endpoint": str(equipment.get("usuarios_logados") or "").strip(),
+            }
+    return overridden
+
+
+def build_archived_manual_user_entries(overridden: Dict[str, Dict[str, str]]) -> List[Dict[str, Any]]:
+    """History events that keep each archived manual user; undoing one restores it."""
+    entries = []
+    for key in sorted(overridden):
+        item = overridden[key]
+        entry = build_user_change_entry(
+            item["serial"], item["equipamento"], item["usuario_manual"], "", ARCHIVED_BY_ENDPOINT_ACTION,
+        )
+        entry["usuario_endpoint"] = item["usuario_endpoint"]
+        entries.append(entry)
+    return entries
+
+
+def without_manual_users(stored: Any, serial_keys: set) -> Dict[str, Any]:
+    """Manual users file without the given serials (every key spelling is removed)."""
+    if not isinstance(stored, dict):
+        raise RuntimeError("O cadastro de usuários manuais não contém um objeto válido.")
+    return {serial: user for serial, user in stored.items() if normalize_reference_value(serial) not in serial_keys}
+
+
+def archived_manual_users(history: List[Any]) -> Dict[str, str]:
+    """Manual user archived by the Endpoint, per serial, while no later user change replaced it."""
+    latest: Dict[str, Dict[str, Any]] = {}
+    for item in history:
+        if isinstance(item, dict) and item.get("tipo") == USER_EVENT_TYPE:
+            key = normalize_reference_value(item.get("serial"))
+            if key:
+                latest[key] = item
+    return {
+        key: str(event.get("usuario_anterior") or "")
+        for key, event in latest.items()
+        if event.get("acao") == ARCHIVED_BY_ENDPOINT_ACTION and str(event.get("usuario_anterior") or "").strip()
+    }
+
+
+def logged_user_changes(
+    previous_cache: Dict[str, Dict[str, Any]],
+    current_cache: Dict[str, Dict[str, Any]],
+    endpoint_index: Dict[str, Any],
+    overridden: Dict[str, Dict[str, str]],
+    archived: Dict[str, str],
+) -> List[Dict[str, str]]:
+    """Logged-user changes between the base before and after an update, for its result.
+
+    Only serials present in both loads are compared, so equipment that just entered or left
+    the Simpress base is not listed. ``overridden`` holds the manual users archived by this
+    update and ``archived`` the ones archived earlier, shown when the Endpoint user goes away.
+    """
+    before = _equipment_by_serial_key(previous_cache)
+    duplicates = endpoint_index.get("duplicates", {})
+    rows: List[Dict[str, str]] = []
+    for key, equipment in _equipment_by_serial_key(current_cache).items():
+        previous = before.get(key)
+        if previous is None:
+            continue
+        old_user = str(previous.get("usuarios_logados") or "").strip()
+        old_origin = str(previous.get("usuarios_logados_origem") or "") if old_user else ""
+        new_user = str(equipment.get("usuarios_logados") or "").strip()
+        new_origin = str(equipment.get("usuarios_logados_origem") or "") if new_user else ""
+        manual_archived = ""
+        if new_origin == "endpoint":
+            if old_origin != "endpoint":
+                change = "novo_endpoint"
+                manual_archived = overridden.get(key, {}).get("usuario_manual", "")
+                reason = "Usuário novo vindo do Endpoint." + (
+                    f" O usuário manual {manual_archived} foi arquivado." if manual_archived else ""
+                )
+            elif old_user != new_user:
+                change, reason = "alterado_endpoint", "Usuário alterado no Endpoint."
+            else:
+                continue
+        elif old_origin == "endpoint":
+            if new_origin == "manual":
+                change = "manual_voltou"
+                reason = "Usuário removido do Endpoint; o usuário manual voltou a valer. Confirme ou altere o usuário manual."
+            else:
+                change, reason = "removido_endpoint", "Usuário removido do Endpoint."
+                if key in duplicates:
+                    reason += " A série está duplicada no Endpoint; nenhum usuário foi escolhido."
+                manual_archived = archived.get(key, "")
+                if manual_archived:
+                    reason += f" Usuário manual arquivado: {manual_archived}; salve-o novamente para restaurar."
+        else:
+            continue
+        row = {
+            "serie": str(equipment.get("serial") or key).strip(),
+            "computador": str(equipment.get("apelido") or "").strip(),
+            "tipo": change,
+            "usuario_anterior": old_user,
+            "origem_anterior": old_origin,
+            "usuario_novo": new_user,
+            "origem_nova": new_origin,
+            "motivo": reason,
+        }
+        if manual_archived:
+            row["usuario_manual_arquivado"] = manual_archived
+        rows.append(row)
+    rows.sort(key=lambda row: (USER_CHANGE_ORDER.index(row["tipo"]), row["serie"]))
+    return rows
 
 
 def _locate_equipment(serial: str) -> Dict[str, Any]:
