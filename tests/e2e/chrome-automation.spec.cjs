@@ -96,7 +96,7 @@ test("Automação pages and filters executions without growing the history", asy
 
 test("Automação consults a bounded historical log and keeps it through live polling", async ({ page, request }) => {
   const panel = await openAutomation(page, request);
-  await panel.locator("#automacao-historico tbody tr").nth(1).getByRole("button").click();
+  await panel.locator("#automacao-historico tbody tr").nth(1).getByRole("button", {name: "Ver log", exact: false}).click();
   const log = panel.getByRole("log");
   await expect(log).toContainText("Histórico 20261019_170000_os");
   await expect(panel.getByLabel("Data do log", {exact: true})).toHaveValue("2026-10-19");
@@ -167,7 +167,7 @@ test("Automação ignores a late historical response after returning to live mod
     await route.fulfill({json: {execucao: {rotina: "os", inicio: "2026-10-19T17:00:00-03:00"}, arquivo: "old.log", linhas: ["LATE HISTORICAL RESPONSE"]}});
   });
   try {
-    await panel.locator("#automacao-historico tbody tr").nth(1).getByRole("button").click();
+    await panel.locator("#automacao-historico tbody tr").nth(1).getByRole("button", {name: "Ver log", exact: false}).click();
     await waiting;
     await panel.getByRole("button", {name: "Voltar ao vivo", exact: true}).click();
     const response = page.waitForResponse(item => item.url().includes("/execucoes/20261019_170000_os/log?"));
@@ -192,10 +192,41 @@ test("Automação history lists status, batches and capture links, and passes th
   const capture = rows.nth(1).getByRole("link", { name: "20261019_170210_Oracle.png" });
   await expect(capture).toHaveAttribute("href", "/api/automacao/capturas/20261019_170210_Oracle.png");
   await expect(capture).toHaveAttribute("target", "_blank");
+  await expect(rows.nth(1).locator(".automation-capture-thumb img")).toHaveCount(1);
 
   const overflow = await page.evaluate(() => document.documentElement.scrollWidth - document.documentElement.clientWidth);
   expect(overflow).toBeLessThanOrEqual(0);
   const results = await new AxeBuilder({ page }).include("#tab-panel-automacao")
     .withTags(["wcag2a", "wcag2aa", "wcag21a", "wcag21aa", "wcag22aa"]).analyze();
   expect(results.violations.map(violation => violation.id)).toEqual([]);
+});
+
+test("Automação shows the failure screenshot as a thumbnail that opens enlarged and returns focus", async ({ page, request }, testInfo) => {
+  const panel = await openAutomation(page, request);
+  const row = panel.locator("#automacao-historico tbody tr").nth(1);
+  const thumb = row.getByRole("button", { name: "Ampliar captura 20261019_170210_Oracle.png" });
+  await expect(thumb).toBeVisible();
+  await expect(row).toContainText("Login não concluído em 10 minutos.");
+  const image = thumb.locator("img");
+  await expect(image).toHaveAttribute("alt", /Captura de tela da falha em Rotina de OS.*Login não concluído em 10 minutos\./);
+  await expect.poll(() => image.evaluate(el => el.complete && el.naturalWidth)).toBeGreaterThan(0);
+
+  for (const theme of ["light", "dark"]) {
+    await page.locator("html").evaluate((el, value) => { el.dataset.theme = value; }, theme);
+    await thumb.focus();
+    await page.keyboard.press("Enter");
+    const dialog = page.getByRole("dialog", { name: "20261019_170210_Oracle.png" });
+    await expect(dialog).toBeVisible();
+    await expect(dialog.getByRole("img")).toHaveAttribute("alt", /Captura de tela da falha/);
+    await expect(dialog).toContainText("Login não concluído em 10 minutos.");
+    await expect(dialog.getByRole("button", { name: "Fechar", exact: true })).toBeFocused();
+    const audit = await new AxeBuilder({ page }).include("#automacao-captura-dialogo")
+      .withTags(["wcag2a", "wcag2aa", "wcag21aa", "wcag22aa"]).analyze();
+    expect(audit.violations.map(item => item.id)).toEqual([]);
+    await page.screenshot({path: `logs/prints-automacao/depois-captura-${testInfo.project.name}-${theme}.png`});
+    expect(await page.evaluate(() => document.documentElement.scrollWidth - document.documentElement.clientWidth)).toBeLessThanOrEqual(0);
+    await page.keyboard.press("Escape");
+    await expect(dialog).toBeHidden();
+    await expect(thumb).toBeFocused();
+  }
 });
