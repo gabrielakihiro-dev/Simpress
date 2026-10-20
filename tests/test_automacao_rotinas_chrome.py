@@ -1,6 +1,8 @@
+import io
 import json
 import tempfile
 import unittest
+from contextlib import redirect_stdout
 from pathlib import Path
 from unittest.mock import patch
 
@@ -158,6 +160,7 @@ class ExecucaoUnicaTests(unittest.TestCase):
         with (
             patch.object(automacao, "pid_vivo", lambda pid: True),
             patch.object(automacao.sys, "argv", ["automacao", "--rotina", "login"]),
+            patch.object(automacao, "iniciar_log_execucao"),
             patch("builtins.print") as impresso,
         ):
             self.assertEqual(automacao.main(), 2)
@@ -167,6 +170,109 @@ class ExecucaoUnicaTests(unittest.TestCase):
         self.assertTrue(automacao.pid_vivo(automacao.os.getpid()))
         self.assertFalse(automacao.pid_vivo(0))
         self.assertFalse(automacao.pid_vivo(2_000_000_000))
+
+class ExecutionLogTests(unittest.TestCase):
+    def setUp(self):
+        self.temp_context = tempfile.TemporaryDirectory(prefix=".automacao-chrome-log-test-")
+        self.pasta = Path(self.temp_context.name) / "automacao_chrome"
+        self.patcher = patch.object(automacao, "ERROS_DIR", self.pasta)
+        self.patcher.start()
+
+    def tearDown(self):
+        automacao.finalizar_log_execucao(1)  # garante sys.stdout restaurado se um teste falhar no meio
+        self.patcher.stop()
+        self.temp_context.cleanup()
+
+    def _executar(self, codigo: int, corpo=None) -> tuple[str, Path, dict]:
+        console = io.StringIO()
+        with redirect_stdout(console):
+            caminho = automacao.iniciar_log_execucao("os")
+            self.assertEqual(automacao.caminho_log_atual(), caminho)
+            automacao.log("Oracle", "Pesquisando…")
+            if corpo:
+                corpo()
+            self.assertEqual(automacao.finalizar_log_execucao(codigo), codigo)
+        self.assertIsNone(automacao.caminho_log_atual())
+        resumo = json.loads(caminho.with_suffix(".json").read_text(encoding="utf-8"))
+        return console.getvalue(), caminho, resumo
+
+    def test_log_mirrors_console_in_utf8_and_summarizes_success(self):
+        def corpo():
+            print("\n=== ROTINA DE OS SIMPRESS ===", flush=True)
+            automacao.registrar_lote("OS_20261020")
+            automacao.registrar_captura(self.pasta / "x_Oracle.png")
+            self.assertEqual(
+                json.loads(automacao.caminho_log_atual().with_suffix(".json").read_text(encoding="utf-8"))["status"],
+                "em_andamento",
+            )
+
+        console, caminho, resumo = self._executar(0, corpo)
+        self.assertRegex(caminho.name, r"^\d{8}_\d{6}_os\.log$")
+        self.assertEqual(caminho.parent, self.pasta)
+        texto = caminho.read_text(encoding="utf-8")
+        self.assertTrue(texto.startswith(console))
+        self.assertNotIn("Status:", console)
+        self.assertIn("[Oracle] Pesquisando…", texto)
+        self.assertIn("[Execução] Status: concluído (código 0)", texto)
+        self.assertEqual(resumo["rotina"], "os")
+        self.assertEqual((resumo["status"], resumo["codigo"]), ("concluido", 0))
+        self.assertEqual(resumo["lotes"], ["OS_20261020"])
+        self.assertEqual(resumo["capturas"], [str(self.pasta / "x_Oracle.png")])
+        self.assertTrue(resumo["inicio"] and resumo["fim"])
+
+    def test_summary_reports_failure_message(self):
+        _, caminho, resumo = self._executar(1, lambda: print("\n[FALHA] Login não concluído em 10 minutos.", flush=True))
+        self.assertEqual((resumo["status"], resumo["codigo"]), ("falha", 1))
+        self.assertEqual(resumo["mensagem"], "Login não concluído em 10 minutos.")
+        self.assertIn("Status: falha (código 1): Login não concluído em 10 minutos.", caminho.read_text(encoding="utf-8"))
+
+    def test_summary_reports_cancellation(self):
+        _, caminho, resumo = self._executar(130, lambda: print("\n[CANCELADO] Rotina interrompida.", flush=True))
+        self.assertEqual((resumo["status"], resumo["codigo"]), ("cancelado", 130))
+        self.assertIn("Status: cancelado (código 130)", caminho.read_text(encoding="utf-8"))
+
+    def test_processar_fila_output_reaches_the_log(self):
+        class ProcessoFalso:
+            returncode = 0
+            stdout = ["Lote OS_1 processado\r\n", "Histórico atualizado\n"]
+
+            def __enter__(self):
+                return self
+
+            def __exit__(self, *args):
+                return False
+
+        def corpo():
+            with patch.object(automacao.subprocess, "Popen", lambda *a, **k: ProcessoFalso()):
+                automacao.processar_fila("process_ticket_inbox.py")
+
+        console, caminho, _ = self._executar(0, corpo)
+        self.assertIn("Lote OS_1 processado\nHistórico atualizado\n", console)
+        self.assertIn("Lote OS_1 processado\nHistórico atualizado\n", caminho.read_text(encoding="utf-8"))
+
+    def test_retention_keeps_most_recent_logs_and_screenshots(self):
+        self.pasta.mkdir(parents=True)
+        for indice in range(5):
+            base = self.pasta / f"2026010{indice}_120000_os"
+            base.with_suffix(".log").write_text("x", encoding="utf-8")
+            base.with_suffix(".json").write_text("{}", encoding="utf-8")
+            base.with_suffix(".png").write_bytes(b"png")
+        automacao.limpar_logs_antigos(self.pasta, manter=3)
+        self.assertEqual(
+            sorted(p.name for p in self.pasta.glob("*.log")),
+            ["20260102_120000_os.log", "20260103_120000_os.log", "20260104_120000_os.log"],
+        )
+        self.assertEqual(len(list(self.pasta.glob("*.json"))), 3)
+        self.assertEqual(len(list(self.pasta.glob("*.png"))), 5)
+
+    def test_start_applies_retention_of_100_logs(self):
+        self.pasta.mkdir(parents=True)
+        for indice in range(105):
+            (self.pasta / f"2025{indice:04d}_000000_os.log").write_text("x", encoding="utf-8")
+        _, caminho, _ = self._executar(0)
+        logs = sorted(p.name for p in self.pasta.glob("*.log"))
+        self.assertEqual(len(logs), automacao.LOGS_MANTIDOS)
+        self.assertIn(caminho.name, logs)
 
 
 if __name__ == "__main__":
