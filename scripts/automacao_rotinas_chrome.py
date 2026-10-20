@@ -72,6 +72,139 @@ def agora_iso() -> str:
 
 
 # --------------------------------------------------------------------------
+# Log por execução (data/logs/automacao_chrome/<AAAAMMDD_HHMMSS>_<rotina>.log + .json)
+# --------------------------------------------------------------------------
+
+LOGS_MANTIDOS = 100
+
+
+class _Espelho:
+    """Repete no arquivo de log tudo o que vai para o console, com flush a cada escrita."""
+
+    def __init__(self, console, execucao: "ExecucaoLog") -> None:
+        self.console = console
+        self.execucao = execucao
+        self.pendente = ""
+
+    def write(self, texto: str) -> int:
+        self.console.write(texto)
+        self.execucao.gravar(texto)
+        self.pendente += texto
+        *linhas, self.pendente = self.pendente.split("\n")
+        for linha in linhas:
+            if linha.startswith("[FALHA] "):
+                self.execucao.falhas.append(linha[len("[FALHA] "):].strip())
+        return len(texto)
+
+    def flush(self) -> None:
+        self.console.flush()
+
+    def __getattr__(self, nome: str):
+        return getattr(self.console, nome)
+
+
+class ExecucaoLog:
+    def __init__(self, rotina: str, pasta: Path) -> None:
+        pasta.mkdir(parents=True, exist_ok=True)
+        self.rotina = rotina
+        self.caminho = nome_livre(pasta, f"{datetime.now():%Y%m%d_%H%M%S}_{rotina}.log")
+        self.resumo_caminho = self.caminho.with_suffix(".json")
+        self.inicio = agora_iso()
+        self.lotes: list[str] = []
+        self.capturas: list[str] = []
+        self.falhas: list[str] = []
+        self.arquivo = self.caminho.open("w", encoding="utf-8", newline="\n")
+        self.originais = (sys.stdout, sys.stderr)
+        sys.stdout = _Espelho(sys.stdout, self)  # type: ignore[assignment]
+        sys.stderr = _Espelho(sys.stderr, self)  # type: ignore[assignment]
+        self.salvar_resumo("em_andamento", None, None)
+
+    def gravar(self, texto: str) -> None:
+        if not self.arquivo.closed:
+            self.arquivo.write(texto)
+            self.arquivo.flush()
+
+    def salvar_resumo(self, status: str, codigo: int | None, fim: str | None, mensagem: str = "") -> None:
+        resumo = {
+            "rotina": self.rotina,
+            "inicio": self.inicio,
+            "fim": fim,
+            "status": status,
+            "codigo": codigo,
+            "mensagem": mensagem,
+            "log": str(self.caminho),
+            "lotes": self.lotes,
+            "capturas": self.capturas,
+        }
+        temporario = self.resumo_caminho.with_suffix(".json.tmp")
+        temporario.write_text(json.dumps(resumo, ensure_ascii=False, indent=2), encoding="utf-8")
+        temporario.replace(self.resumo_caminho)
+
+    def finalizar(self, codigo: int) -> None:
+        sys.stdout, sys.stderr = self.originais
+        if codigo == 0:
+            status, mensagem = "concluido", ""
+        elif codigo == 130:
+            status, mensagem = "cancelado", "Rotina interrompida pelo usuário."
+        else:
+            status = "falha"
+            mensagem = " | ".join(self.falhas) or f"A rotina terminou com código {codigo}."
+        rotulos = {"concluido": "concluído", "cancelado": "cancelado", "falha": "falha"}
+        linha = f"[{datetime.now():%H:%M:%S}] [Execução] Status: {rotulos[status]} (código {codigo})"
+        self.gravar(f"\n{linha}" + (f": {mensagem}" if status == "falha" else "") + "\n")
+        self.arquivo.close()
+        self.salvar_resumo(status, codigo, agora_iso(), mensagem)
+
+
+_EXECUCAO: ExecucaoLog | None = None
+
+
+def limpar_logs_antigos(pasta: Path, manter: int = LOGS_MANTIDOS) -> None:
+    """Mantém os ``manter`` logs mais recentes (e seus .json); capturas .png não são tocadas."""
+    for antigo in sorted(pasta.glob("*.log"), reverse=True)[manter:]:
+        for arquivo in (antigo, antigo.with_suffix(".json")):
+            try:
+                arquivo.unlink(missing_ok=True)
+            except OSError:
+                pass
+
+
+def iniciar_log_execucao(rotina: str) -> Path:
+    global _EXECUCAO
+    if _EXECUCAO is not None:
+        return _EXECUCAO.caminho
+    _EXECUCAO = ExecucaoLog(rotina, ERROS_DIR)
+    limpar_logs_antigos(ERROS_DIR)
+    return _EXECUCAO.caminho
+
+
+def finalizar_log_execucao(codigo: int) -> int:
+    """Grava a linha de status e o resumo JSON; devolve o próprio código para o ``SystemExit``."""
+    global _EXECUCAO
+    if _EXECUCAO is not None:
+        execucao, _EXECUCAO = _EXECUCAO, None
+        execucao.finalizar(codigo)
+    return codigo
+
+
+def caminho_log_atual() -> Path | None:
+    """Caminho do log da execução em andamento (``None`` fora de uma execução)."""
+    return _EXECUCAO.caminho if _EXECUCAO is not None else None
+
+
+def registrar_lote(lote_id: str) -> None:
+    if _EXECUCAO is not None:
+        _EXECUCAO.lotes.append(lote_id)
+        _EXECUCAO.salvar_resumo("em_andamento", None, None)
+
+
+def registrar_captura(caminho: Path) -> None:
+    if _EXECUCAO is not None:
+        _EXECUCAO.capturas.append(str(caminho))
+        _EXECUCAO.salvar_resumo("em_andamento", None, None)
+
+
+# --------------------------------------------------------------------------
 # Chrome de automação (porta própria, perfil próprio, sobrevive ao script)
 # --------------------------------------------------------------------------
 
@@ -247,6 +380,7 @@ def registrar_erro(page: "Page | None", origem: str) -> None:
         ERROS_DIR.mkdir(parents=True, exist_ok=True)
         caminho = ERROS_DIR / f"{datetime.now():%Y%m%d_%H%M%S}_{origem.replace(' ', '_')}.png"
         page.screenshot(path=str(caminho))
+        registrar_captura(caminho)
         log(origem, f"Captura da tela no erro: {caminho}")
     except Exception:
         pass
@@ -560,11 +694,16 @@ def preparar_lote(script: str, inicio: str) -> dict:
 
 
 def processar_fila(script: str) -> None:
-    resultado = subprocess.run(
-        [sys.executable, str(ROOT / "scripts" / script)], cwd=str(ROOT), env=ambiente_utf8(), check=False
-    )
-    if resultado.returncode != 0:
-        log("Importação", f"{script} terminou com código {resultado.returncode}; conferindo o resultado do lote.")
+    # A saída do processamento passa pelo print para chegar também ao log da execução.
+    with subprocess.Popen(
+        [sys.executable, str(ROOT / "scripts" / script)],
+        cwd=str(ROOT), env=ambiente_utf8(), stdout=subprocess.PIPE, stderr=subprocess.STDOUT,
+        text=True, encoding="utf-8", errors="replace",
+    ) as processo:
+        for linha in processo.stdout or []:
+            print(linha.rstrip("\r\n"), flush=True)
+    if processo.returncode != 0:
+        log("Importação", f"{script} terminou com código {processo.returncode}; conferindo o resultado do lote.")
 
 
 def confirmar_lote(inbox: Path, lote_id: str, timeout_s: int = 180) -> dict:
@@ -593,6 +732,7 @@ def importar(nome: str, script_preparo: str, script_fila: str, inbox: Path, inic
     if lote["estado"] == "pendentes":
         processar_fila(script_fila)
     resultado = confirmar_lote(inbox, lote["lote_id"])
+    registrar_lote(lote["lote_id"])
     log("Importação", f"status={resultado.get('status')} | {resultado.get('detalhe', '')}")
     log("Importação", f"Recibo: {resultado['pasta']}\\_resultado.json")
     return 0 if resultado.get("status") == "concluido" else 1
@@ -691,6 +831,7 @@ def main() -> int:
     args = parser.parse_args()
     if str(ROOT) not in sys.path:
         sys.path.insert(0, str(ROOT))
+    iniciar_log_execucao(args.rotina)
     try:
         return executar(args.rotina)
     except KeyboardInterrupt:
@@ -702,4 +843,4 @@ def main() -> int:
 
 
 if __name__ == "__main__":
-    raise SystemExit(main())
+    raise SystemExit(finalizar_log_execucao(main()))
