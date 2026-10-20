@@ -3,11 +3,14 @@ const test = require("node:test");
 const createDomUtils = require("../../static/js/shared/dom-utils.js");
 const historyFormat = require("../../static/js/shared/history-format.js");
 const createComparisonResultRenderer = require("../../static/js/ui/comparison-result-renderer.js");
+const createLoggedUserMarkers = require("../../static/js/ui/logged-user-markers.js");
 
+const dom = createDomUtils({ createElement: () => ({ setAttribute() {} }) });
 const renderer = createComparisonResultRenderer({
   app: { atributosVersaoAnotacao: () => "" },
-  dom: createDomUtils({ createElement: () => ({ setAttribute() {} }) }),
+  dom,
   historyFormat,
+  loggedUserMarkers: createLoggedUserMarkers({ dom }),
 });
 
 // The table renderer derives mobile cards through <template>; this markup check only needs the desktop rows.

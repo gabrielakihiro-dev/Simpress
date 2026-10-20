@@ -59,6 +59,22 @@ class UserPrecedenceTests(unittest.TestCase):
         apply_effective_alias(equipment, endpoint_index(("SN-3", "HOST-3", "N/A")))
         self.assertEqual((equipment["usuarios_logados"], equipment["usuarios_logados_origem"]), ("", ""))
 
+    def test_macbook_with_leading_s_gets_the_endpoint_user_of_its_serial(self):
+        index = endpoint_index(("CXC9F072K1", "PRMACUMC005", "DDrodrigues"), ("CXC9F072K2", "PRNOTE01", "ana"))
+        mac, notebook = {"serial": "SCXC9F072K1"}, {"serial": "SCXC9F072K2"}
+        apply_effective_alias(mac, index)
+        apply_effective_alias(notebook, index)
+        self.assertEqual((mac["usuarios_logados"], mac["usuarios_logados_origem"]), ("DDrodrigues", "endpoint"))
+        # Only PRMAC hostnames take the "S" equivalence.
+        self.assertEqual(notebook["usuarios_logados"], "")
+
+    def test_macbook_equivalence_is_skipped_when_the_simpress_base_has_both_serials(self):
+        index = endpoint_index(("CXC9F072K1", "PRMACUMC005", "DDrodrigues"))
+        index["details_serials"] = {"SCXC9F072K1", "CXC9F072K1"}
+        equipment = {"serial": "SCXC9F072K1"}
+        apply_effective_alias(equipment, index)
+        self.assertEqual(equipment["usuarios_logados"], "")
+
 
 class UserSearchTests(unittest.TestCase):
     def test_search_finds_equipment_by_logged_user_after_serial_and_alias_matches(self):
@@ -171,6 +187,37 @@ class ManualUserWorkflowTests(unittest.TestCase):
         self.assertEqual(undone["equipamento"]["usuarios_logados"], "")
         self.assertEqual(json.loads(self.manual_users.read_text(encoding="utf-8")), {})
         self.assertEqual(json.loads(self.history.read_text(encoding="utf-8"))[-1]["acao"], "desfazer")
+
+    def test_lookup_for_comparison_rows_follows_the_home_rule(self):
+        from routers.aliases import UsuariosConsultaPayload
+
+        def lookup():
+            return main.consultar_usuarios_logados(UsuariosConsultaPayload(series=["SN-1", "sn2", "SN-9", ""]))["usuarios"]
+
+        self.assertEqual(lookup(), {
+            "SN-1": {"usuario": "", "origem": "", "serial_cadastro": "SN-1"},
+            "sn2": {"usuario": "ana", "origem": "endpoint", "serial_cadastro": "SN-2"},
+            "SN-9": {"usuario": "", "origem": "", "serial_cadastro": None},
+        })
+        self._save("SN-1", "joao")
+        self.assertEqual(lookup()["SN-1"], {"usuario": "joao", "origem": "manual", "serial_cadastro": "SN-1"})
+
+    def test_macbook_user_is_found_by_either_serial_and_cannot_be_replaced(self):
+        from routers.aliases import UsuariosConsultaPayload
+
+        make_details(self.details, [
+            ("SN-1", "ALIAS-1", "Modelo A", "Maringá", "Notebook", "87000000"),
+            ("SCXC9F072K1", "PRMACUMC005", "MacBook Air", "Maringá", "Notebook", "87000000"),
+        ])
+        make_endpoint_with_users(self.endpoint, [("SN-1", "HOST-1", ""), ("CXC9F072K1", "PRMACUMC005", "DDrodrigues")])
+        self.assertTrue(main.load_database())
+        self.assertEqual(inventory_state.equipamentos_cache["SCXC9F072K1"]["usuarios_logados"], "DDrodrigues")
+        found = main.consultar_usuarios_logados(UsuariosConsultaPayload(series=["SCXC9F072K1", "CXC9F072K1"]))["usuarios"]
+        expected = {"usuario": "DDrodrigues", "origem": "endpoint", "serial_cadastro": "SCXC9F072K1"}
+        self.assertEqual(found, {"SCXC9F072K1": expected, "CXC9F072K1": expected})
+        with self.assertRaises(DomainError) as raised:
+            self._save("SCXC9F072K1", "outro")
+        self.assertEqual(raised.exception.status_code, 409)
 
     def test_clearing_records_history_and_endpoint_user_is_protected(self):
         self._save("SN-1", "joao")

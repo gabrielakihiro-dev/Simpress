@@ -1742,6 +1742,7 @@ get_historico_apelidos = _alias_exports.get_historico_apelidos
 excluir_evento_historico_apelido = _alias_exports.excluir_evento_historico_apelido
 desfazer_alteracao_apelido = _alias_exports.desfazer_alteracao_apelido
 atualizar_usuario = _alias_exports.atualizar_usuario
+consultar_usuarios_logados = _alias_exports.consultar_usuarios_logados
 
 _endpoint_removal_services = endpoint_removals.EndpointRemovalServices(
     removals_file=lambda: REMOVED_ENDPOINT_HOSTNAMES_FILE,
