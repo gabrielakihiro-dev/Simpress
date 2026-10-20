@@ -11,6 +11,11 @@
     usuario_removido: "Usuário logado removido no Endpoint",
     hostname_removido: "Hostname removido no Endpoint",
   };
+  const EVENTOS_POR_PAGINA = 25;
+  let eventosHistorico = [];
+  let ultimaPorCampoHistorico = new Map();
+  let paginaHistorico = 1;
+  let filtrosHistoricoConectados = false;
 
   function categoriaEvento(evento) {
     if (evento.tipo === "endereco" || evento.tipo === "usuario" || evento.tipo === "aviso_endpoint") return evento.tipo;
@@ -42,6 +47,7 @@
 
   async function abrirModalHistoricoApelidos() {
     app.abrirModalAcessivel("modal-historico-apelidos", '[aria-label="Fechar histórico"]', "fecharModalHistoricoApelidos", "btn-historico-apelidos");
+    conectarFiltrosHistorico();
     await carregarHistoricoApelidos();
   }
 
@@ -76,22 +82,10 @@
 
       const eventos = Array.isArray(data.eventos) ? data.eventos : [];
       definirTotalHistoricoApelidos(eventos.length);
-
-      lista.replaceChildren();
-      if (eventos.length === 0) {
-        const vazio = document.createElement("p");
-        vazio.className = "text-sm text-slate-400 text-center py-8";
-        vazio.setAttribute("role", "status");
-        vazio.setAttribute("aria-live", "polite");
-        vazio.textContent = "Nenhuma alteração registrada ainda. O histórico começa a partir desta atualização; alterações anteriores não têm horário recuperável.";
-        lista.appendChild(vazio);
-        return;
-      }
-
-      const ultimaPorCampo = ultimoRegistroPorCampo(eventos);
-      const { scroller, corpo } = criarTabelaHistoricoApelidos();
-      eventos.forEach(evento => corpo.appendChild(criarLinhaHistoricoApelido(evento, ultimaPorCampo)));
-      lista.appendChild(scroller);
+      eventosHistorico = eventos;
+      ultimaPorCampoHistorico = ultimoRegistroPorCampo(eventosHistorico);
+      paginaHistorico = 1;
+      renderizarHistoricoApelidos();
     } catch (err) {
       console.error("Erro ao carregar histórico de apelidos:", err);
       lista.replaceChildren();
@@ -101,10 +95,140 @@
       erro.setAttribute("aria-live", "assertive");
       erro.textContent = err.message || "Não foi possível carregar o histórico.";
       lista.appendChild(erro);
+      document.getElementById("resultado-filtros-historico-apelidos").textContent = "Não foi possível carregar os registros.";
+      document.getElementById("paginacao-historico-apelidos").hidden = true;
     } finally {
       stopLoading();
       lista.removeAttribute("aria-busy");
     }
+  }
+
+  function conectarFiltrosHistorico() {
+    if (filtrosHistoricoConectados) return;
+    const busca = document.getElementById("busca-historico-apelidos");
+    const tipo = document.getElementById("tipo-historico-apelidos");
+    const apenasAcoes = document.getElementById("apenas-acoes-historico-apelidos");
+    const limpar = document.getElementById("limpar-filtros-historico-apelidos");
+    const anterior = document.getElementById("pagina-anterior-historico-apelidos");
+    const proxima = document.getElementById("proxima-pagina-historico-apelidos");
+    if (!busca || !tipo || !apenasAcoes || !limpar || !anterior || !proxima) return;
+
+    const aplicarFiltros = () => {
+      paginaHistorico = 1;
+      renderizarHistoricoApelidos();
+    };
+    busca.addEventListener("input", aplicarFiltros);
+    tipo.addEventListener("change", aplicarFiltros);
+    apenasAcoes.addEventListener("change", aplicarFiltros);
+    limpar.addEventListener("click", () => {
+      busca.value = "";
+      tipo.value = "todos";
+      apenasAcoes.checked = false;
+      aplicarFiltros();
+      busca.focus();
+    });
+    anterior.addEventListener("click", () => {
+      if (paginaHistorico <= 1) return;
+      paginaHistorico -= 1;
+      renderizarHistoricoApelidos();
+    });
+    proxima.addEventListener("click", () => {
+      const totalPaginas = Math.ceil(filtrarEventosHistorico().length / EVENTOS_POR_PAGINA);
+      if (paginaHistorico >= totalPaginas) return;
+      paginaHistorico += 1;
+      renderizarHistoricoApelidos();
+    });
+    filtrosHistoricoConectados = true;
+  }
+
+  function normalizarBuscaHistorico(valor) {
+    return String(valor || "")
+      .normalize("NFD")
+      .replace(/[\u0300-\u036f]/g, "")
+      .toLocaleLowerCase("pt-BR")
+      .trim();
+  }
+
+  function rotuloCategoriaHistorico(categoria) {
+    return categoria === "endereco" ? "Endereço de instalação"
+      : categoria === "aviso_endpoint" ? "Aviso do Endpoint"
+        : categoria === "usuario" ? "Usuário logado" : "Apelido / hostname";
+  }
+
+  function eventoTemAcaoDisponivel(evento) {
+    const serial = String(evento.serial || "").toUpperCase();
+    if (!serial) return false;
+    const categoria = categoriaEvento(evento);
+    if (categoria === "endereco") return false;
+    const tipoCampo = categoria === "aviso_endpoint" ? `aviso:${evento.id}` : categoria;
+    return ultimaPorCampoHistorico.get(`${serial}:${tipoCampo}`) === evento.id;
+  }
+
+  function filtrarEventosHistorico() {
+    const busca = normalizarBuscaHistorico(document.getElementById("busca-historico-apelidos")?.value);
+    const tipo = document.getElementById("tipo-historico-apelidos")?.value || "todos";
+    const apenasAcoes = Boolean(document.getElementById("apenas-acoes-historico-apelidos")?.checked);
+    const termos = busca ? busca.split(/\s+/).filter(Boolean) : [];
+
+    return eventosHistorico.filter(evento => {
+      const categoria = categoriaEvento(evento);
+      if (tipo !== "todos" && categoria !== tipo) return false;
+      if (apenasAcoes && !eventoTemAcaoDisponivel(evento)) return false;
+      if (!termos.length) return true;
+
+      const textoEvento = normalizarBuscaHistorico([
+        evento.serial,
+        evento.equipamento,
+        evento.acao,
+        evento.usuario_endpoint,
+        evento.motivo ? MOTIVOS_AVISO[evento.motivo] : "",
+        rotuloCategoriaHistorico(categoria),
+        formatarHorarioHistorico(evento.horario),
+        formatarValorHistorico(evento, true),
+        formatarValorHistorico(evento, false),
+      ].join(" "));
+      return termos.every(termo => textoEvento.includes(termo));
+    });
+  }
+
+  function renderizarHistoricoApelidos() {
+    const lista = document.getElementById("lista-historico-apelidos");
+    if (!lista) return;
+    const eventos = filtrarEventosHistorico();
+    const totalPaginas = Math.max(1, Math.ceil(eventos.length / EVENTOS_POR_PAGINA));
+    paginaHistorico = Math.min(Math.max(paginaHistorico, 1), totalPaginas);
+    const inicio = (paginaHistorico - 1) * EVENTOS_POR_PAGINA;
+    const eventosDaPagina = eventos.slice(inicio, inicio + EVENTOS_POR_PAGINA);
+    const resultado = document.getElementById("resultado-filtros-historico-apelidos");
+    const paginacao = document.getElementById("paginacao-historico-apelidos");
+    const paginaAtual = document.getElementById("pagina-atual-historico-apelidos");
+    const botaoAnterior = document.getElementById("pagina-anterior-historico-apelidos");
+    const botaoProxima = document.getElementById("proxima-pagina-historico-apelidos");
+
+    if (eventos.length === 0) {
+      const vazio = document.createElement("p");
+      vazio.className = "alias-history-empty";
+      vazio.setAttribute("role", "status");
+      vazio.setAttribute("aria-live", "polite");
+      vazio.textContent = eventosHistorico.length === 0
+        ? "Nenhuma alteração registrada ainda. O histórico começa a partir desta atualização; alterações anteriores não têm horário recuperável."
+        : "Nenhum registro combina com os filtros. Ajuste a busca ou limpe os filtros.";
+      lista.replaceChildren(vazio);
+      resultado.textContent = eventosHistorico.length === 0 ? "0 registros" : "Nenhum registro encontrado";
+      paginacao.hidden = true;
+      return;
+    }
+
+    const { scroller, corpo } = criarTabelaHistoricoApelidos();
+    eventosDaPagina.forEach(evento => corpo.appendChild(criarLinhaHistoricoApelido(evento, ultimaPorCampoHistorico)));
+    lista.replaceChildren(scroller);
+    resultado.textContent = eventos.length === eventosHistorico.length
+      ? `Exibindo ${inicio + 1}–${inicio + eventosDaPagina.length} de ${eventosHistorico.length} registros`
+      : `${eventos.length} de ${eventosHistorico.length} registros · exibindo ${inicio + 1}–${inicio + eventosDaPagina.length}`;
+    paginacao.hidden = eventos.length <= EVENTOS_POR_PAGINA;
+    paginaAtual.textContent = `Página ${paginaHistorico} de ${totalPaginas}`;
+    botaoAnterior.disabled = paginaHistorico <= 1;
+    botaoProxima.disabled = paginaHistorico >= totalPaginas;
   }
 
   // Only the latest record of each equipment field can be undone or restored.
@@ -129,22 +253,22 @@
     scroller.setAttribute("aria-label", "Tabela do histórico de alterações");
     scroller.tabIndex = 0;
     const tabela = document.createElement("table");
-    tabela.className = "w-full min-w-[1100px] text-left text-xs";
+    tabela.className = "alias-history-table";
     tabela.setAttribute("aria-label", "Histórico de alterações manuais de apelidos e usuários, avisos do Endpoint e registros antigos de endereço");
     tabela.innerHTML = `
-          <thead class="sticky top-0 bg-slate-950 text-slate-400 uppercase tracking-wide">
+          <thead>
             <tr>
-              <th scope="col" class="px-3 py-2.5 font-semibold">Data e hora</th>
-              <th scope="col" class="px-3 py-2.5 font-semibold">Equipamento</th>
-              <th scope="col" class="px-3 py-2.5 font-semibold">Campo</th>
-              <th scope="col" class="px-3 py-2.5 font-semibold">Valor anterior</th>
-              <th scope="col" class="px-3 py-2.5 font-semibold">Valor novo</th>
-              <th scope="col" class="px-3 py-2.5 font-semibold">Ação</th>
-              <th scope="col" class="px-3 py-2.5 font-semibold">Desfazer</th>
-              <th scope="col" class="px-3 py-2.5 font-semibold">Excluir registro</th>
+              <th scope="col">Data e hora</th>
+              <th scope="col">Equipamento</th>
+              <th scope="col">Campo</th>
+              <th scope="col">Valor anterior</th>
+              <th scope="col">Valor novo</th>
+              <th scope="col">Ação</th>
+              <th scope="col">Desfazer</th>
+              <th scope="col">Excluir registro</th>
             </tr>
           </thead>
-          <tbody class="divide-y divide-slate-800"></tbody>
+          <tbody></tbody>
         `;
     scroller.appendChild(tabela);
     return { scroller, corpo: tabela.querySelector("tbody") };
@@ -159,40 +283,49 @@
     const ehUltimoCampo = ultimaPorCampo.get(chaveCampo) === evento.id;
     const ehUltima = !ehEndereco && !ehAviso && ehUltimoCampo;
     const linha = document.createElement("tr");
-    linha.className = ehAviso ? "hover:bg-slate-800/40 history-warning-row" : "hover:bg-slate-800/40";
+    linha.className = ehAviso ? "alias-history-row history-warning-row" : "alias-history-row";
 
     const equipamento = document.createElement("td");
-    equipamento.className = "px-3 py-3 text-slate-200";
-    equipamento.textContent = `${evento.equipamento || "Equipamento"} · Série ${serial || "não informada"}`;
+    equipamento.className = "alias-history-equipment";
+    equipamento.dataset.label = "Equipamento";
+    const equipamentoTexto = document.createElement("span");
+    equipamentoTexto.className = "alias-history-equipment-name";
+    equipamentoTexto.textContent = `${evento.equipamento || "Equipamento"} · Série ${serial || "não informada"}`;
+    equipamento.appendChild(equipamentoTexto);
     linha.appendChild(equipamento);
 
     const celulaHorario = document.createElement("td");
-    celulaHorario.className = "px-3 py-3 text-slate-400 whitespace-nowrap";
+    celulaHorario.className = "alias-history-date";
+    celulaHorario.dataset.label = "Data e hora";
     celulaHorario.textContent = formatarHorarioHistorico(evento.horario);
     linha.insertBefore(celulaHorario, equipamento);
 
     const campo = document.createElement("td");
-    campo.className = "px-3 py-3 text-slate-300";
-    campo.textContent = ehEndereco ? "Endereço de instalação"
-      : ehAviso ? "Aviso do Endpoint"
-        : categoria === "usuario" ? "Usuário logado" : "Apelido / hostname";
+    campo.className = "alias-history-field-cell";
+    campo.dataset.label = "Campo";
+    const seloCampo = document.createElement("span");
+    seloCampo.className = `alias-history-field-badge alias-history-field-badge--${categoria}`;
+    seloCampo.textContent = rotuloCategoriaHistorico(categoria);
+    campo.appendChild(seloCampo);
     linha.appendChild(campo);
 
     const anterior = document.createElement("td");
-    anterior.className = "px-3 py-3 text-slate-300 font-mono whitespace-pre-line";
+    anterior.className = "alias-history-value alias-history-value--previous";
+    anterior.dataset.label = "Valor anterior";
     anterior.textContent = formatarValorHistorico(evento, true);
     linha.appendChild(anterior);
 
     const novo = document.createElement("td");
-    novo.className = "px-3 py-3 text-cyan-300 font-mono whitespace-pre-line";
+    novo.className = "alias-history-value alias-history-value--new";
+    novo.dataset.label = "Valor novo";
     novo.textContent = formatarValorHistorico(evento, false);
     linha.appendChild(novo);
 
     const acao = document.createElement("td");
-    acao.className = "px-3 py-3 text-slate-400";
+    acao.className = ehAviso ? "alias-history-action alias-history-action--warning" : "alias-history-action";
+    acao.dataset.label = "Ação";
     if (ehAviso) {
       acao.textContent = `⚠ ${MOTIVOS_AVISO[evento.motivo] || "Dado removido no Endpoint"}`;
-      acao.className = "px-3 py-3 text-amber-300";
     } else {
       acao.textContent = evento.acao === "desfazer"
         ? (categoria === "usuario" ? "Reversão de usuário" : "Reversão de apelido")
@@ -209,31 +342,32 @@
 
   function criarCelulaDesfazer(evento, ehEndereco, ehUltima) {
     const celulaDesfazer = document.createElement("td");
-    celulaDesfazer.className = "px-3 py-3";
+    celulaDesfazer.className = "alias-history-controls-cell";
+    celulaDesfazer.dataset.label = "Desfazer";
     if (!ehEndereco) {
       const botao = document.createElement("button");
       botao.type = "button";
       botao.textContent = ehUltima ? "Desfazer" : "Anterior";
       botao.disabled = !ehUltima;
       botao.title = ehUltima ? (evento.tipo === "usuario" ? "Restaurar o usuário anterior" : "Restaurar o apelido anterior") : "Só a alteração mais recente deste equipamento pode ser desfeita";
-      botao.className = ehUltima
-        ? "px-2.5 py-1 rounded-md bg-rose-500/10 hover:bg-rose-500/20 text-rose-300 border border-rose-500/30 transition"
-        : "px-2.5 py-1 rounded-md bg-slate-800 text-slate-500 border border-slate-700 cursor-not-allowed";
+      botao.className = `alias-history-action-button${ehUltima ? "" : " is-disabled"}`;
+      botao.setAttribute("aria-label", `${ehUltima ? "Desfazer" : "Alteração anterior indisponível"} · série ${evento.serial || "não informada"}`);
       botao.addEventListener("click", () => desfazerAlteracaoApelido(evento, botao));
       celulaDesfazer.appendChild(botao);
     } else {
       celulaDesfazer.textContent = "—";
-      celulaDesfazer.className += " text-slate-600";
+      celulaDesfazer.className += " alias-history-unavailable";
     }
     return celulaDesfazer;
   }
 
   function criarCelulaExcluir(evento, ehEndereco, ehUltimoCampo, ehAviso) {
     const celulaExcluir = document.createElement("td");
-    celulaExcluir.className = "px-3 py-3";
+    celulaExcluir.className = "alias-history-controls-cell";
+    celulaExcluir.dataset.label = "Excluir registro";
     if (ehEndereco) {
       celulaExcluir.textContent = "—";
-      celulaExcluir.className += " text-slate-600";
+      celulaExcluir.className += " alias-history-unavailable";
     } else {
       const botaoExcluir = document.createElement("button");
       botaoExcluir.type = "button";
@@ -244,9 +378,8 @@
         : ehUltimoCampo
         ? "Salvar o valor anterior no equipamento e remover este registro"
         : "Só o registro mais recente deste campo pode ser restaurado e excluído";
-      botaoExcluir.className = ehUltimoCampo
-        ? "px-2.5 py-1 rounded-md bg-rose-500/10 hover:bg-rose-500/20 text-rose-300 border border-rose-500/30 transition"
-        : "px-2.5 py-1 rounded-md bg-slate-800 text-slate-500 border border-slate-700 cursor-not-allowed";
+      botaoExcluir.className = `alias-history-action-button${ehUltimoCampo ? "" : " is-disabled"}`;
+      botaoExcluir.setAttribute("aria-label", `${ehAviso ? "Excluir aviso" : ehUltimoCampo ? "Restaurar e excluir" : "Registro anterior indisponível"} · série ${evento.serial || "não informada"}`);
       botaoExcluir.addEventListener("click", () => excluirRegistroHistorico(evento, botaoExcluir));
       celulaExcluir.appendChild(botaoExcluir);
     }
