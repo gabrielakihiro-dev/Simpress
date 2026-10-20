@@ -83,6 +83,8 @@ def build_search_index(
             "invall_alias_status": item.get("invall_alias_status"),
             "invall_alias_detail": item.get("invall_alias_detail"),
         }
+        if item.get("usuarios_logados_pendencia"):
+            result["usuarios_logados_pendencia"] = str(item["usuarios_logados_pendencia"])
         indexed.append((index, searchable_values, result))
     return tuple(indexed)
 
