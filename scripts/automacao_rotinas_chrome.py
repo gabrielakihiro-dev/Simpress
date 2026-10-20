@@ -764,6 +764,44 @@ def selecionar_todos_computadores(page: "Page") -> None:
     )
 
 
+ENDPOINT_CABECALHOS = ("Nome do computador", "Rótulo de serviço/Número de série")
+
+
+def validar_xlsx_endpoint(arquivo: Path, total_tela: int | None = None) -> int:
+    """Confere cabeçalho e contagem do XLSX do Endpoint antes da importação; devolve as linhas de dados."""
+    from openpyxl import load_workbook
+
+    try:
+        planilha = load_workbook(arquivo, read_only=True, data_only=True)
+    except Exception as erro:
+        raise RotinaErro(f"Não foi possível abrir o XLSX do Endpoint: {erro}") from erro
+    try:
+        linhas = planilha.active.iter_rows(values_only=True)
+        cabecalho = next(linhas, None) or ()
+        normalizado = {str(c).strip().casefold() for c in cabecalho if c is not None}
+        faltando = [c for c in ENDPOINT_CABECALHOS if c.casefold() not in normalizado]
+        if faltando:
+            raise RotinaErro(f"O XLSX do Endpoint não tem as colunas esperadas: {faltando}.")
+        total = sum(1 for linha in linhas if any(c not in (None, "") for c in linha))
+    finally:
+        planilha.close()
+    if total == 0:
+        raise RotinaErro("O XLSX do Endpoint não tem linhas de dados.")
+    if total_tela is not None and abs(total - total_tela) > max(5, total_tela // 10):
+        raise RotinaErro(
+            f"O XLSX do Endpoint tem {total} linhas, mas a tela mostra {total_tela}: modo de exportação possivelmente errado."
+        )
+    log("Endpoint Central", f"XLSX conferido: {total} linhas de dados" + (f" (tela: {total_tela})." if total_tela is not None else "."))
+    return total
+
+
+def confirmar_modo_todos(page: "Page") -> None:
+    todos = page.locator('input[type="radio"][value="InvAllComputersSummary"]').first
+    verificados = page.locator('input[type="radio"][value="InvComputersSummary"]').first
+    if not todos.is_checked() or (verificados.count() and verificados.is_checked()):
+        raise RotinaErro("O modo 'Todos os computadores' não está ativo (ou 'Computadores verificados' continua marcado).")
+
+
 def exportar_endpoint(context: "BrowserContext") -> Path:
     page = nova_aba(context, ENDPOINT_URL, "Endpoint Central")
     try:
@@ -773,6 +811,7 @@ def exportar_endpoint(context: "BrowserContext") -> Path:
 
         log("Endpoint Central", "Selecionando 'Todos os computadores'...")
         selecionar_todos_computadores(page)
+        confirmar_modo_todos(page)
         exportar = page.locator("#InvAllComputersSummary-export").filter(visible=True).first
         aguardar_estado(exportar, "visible")
 
@@ -790,6 +829,7 @@ def exportar_endpoint(context: "BrowserContext") -> Path:
         arquivo = exportar_com_download(
             page, "Endpoint Central", page.locator("#export_option_submit").filter(visible=True).first.click
         )
+        validar_xlsx_endpoint(arquivo)
     except Exception:
         registrar_erro(page, "Endpoint Central")
         raise
