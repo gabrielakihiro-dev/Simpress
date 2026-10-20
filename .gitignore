@@ -133,6 +133,9 @@ __pycache__/
 /data/logs/
 /data/state/inventory_update_idempotency.json
 /data/state/automacao_chrome.lock
+# Manually entered logged users (personal data) and local usage metrics.
+/data/state/usuarios_manuais/
+/data/state/metricas_uso.json
 # Monthly contract reports saved automatically contain operational data.
 /data/relatorios_mensais/
 
