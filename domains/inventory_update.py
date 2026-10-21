@@ -543,14 +543,38 @@ async def update_inventory_files(
             await upload.close()
 
 
-def _commit_inventory_files(
+@dataclass(frozen=True)
+class _InventoryCommitPlan:
+    """Paths and request facts resolved before the inventory transaction starts."""
+
+    input_directory: Path
+    comparison_history_file: Path
+    inventory_idempotency_file: Path
+    target_files: Dict[str, Path]
+    backup_sources: Dict[str, Optional[Path]]
+    request_sha256: Optional[str]
+    backup_dir: Path
+    backup_targets: Dict[str, Path]
+    uploaded_names: Dict[str, Any]
+
+
+@dataclass(frozen=True)
+class _PreviousInventoryState:
+    """Inventory facts read under the transaction lock before any file is replaced."""
+
+    equipment: Dict[str, Dict[str, Any]]
+    aliases: Dict[str, Dict[str, str]]
+    endpoint_index: Dict[str, Any]
+    manual_alias_sources: List[Dict[str, Any]]
+    manual_divergences: List[Dict[str, Any]]
+
+
+def _plan_inventory_commit(
     staged: Dict[str, Any],
     services: InventoryUpdateServices,
-    automatic_import_id: Optional[str] = None,
-    idempotency_key: Optional[str] = None,
-    preview_token: Optional[str] = None,
-) -> Dict[str, Any]:
-    """Validate, compare, replace, reload, and journal inventories in a worker thread."""
+    idempotency_key: Optional[str],
+) -> _InventoryCommitPlan:
+    """Resolve destinations, backup sources and this attempt's backup directory."""
     input_directory = services.input_directory()
     endpoint_upload_file = services.endpoint_upload_file()
     details_upload_file = services.details_upload_file()
@@ -575,11 +599,28 @@ def _commit_inventory_files(
         role: backup_dir / role / target_path.name
         for role, target_path in target_files.items()
     }
+    return _InventoryCommitPlan(
+        input_directory=input_directory,
+        comparison_history_file=comparison_history_file,
+        inventory_idempotency_file=inventory_idempotency_file,
+        target_files=target_files,
+        backup_sources=backup_sources,
+        request_sha256=request_sha256,
+        backup_dir=backup_dir,
+        backup_targets=backup_targets,
+        uploaded_names={
+            "endpoint": staged["endpoint"]["name"],
+            "detalhes": staged["detalhes"]["name"],
+        },
+    )
 
-    uploaded_names = {
-        "endpoint": staged["endpoint"]["name"],
-        "detalhes": staged["detalhes"]["name"],
-    }
+
+def _compare_staged_inventories(
+    staged: Dict[str, Any],
+    services: InventoryUpdateServices,
+    uploaded_names: Dict[str, Any],
+) -> Tuple[Dict[str, Any], datetime]:
+    """Compare the uploads while the previous Endpoint is still the one on disk."""
     comparison_time = datetime.now().astimezone()
     comparison_options: Dict[str, Any] = {"as_of": comparison_time}
     if services.removed_endpoint_hostnames is not None:
@@ -596,14 +637,22 @@ def _commit_inventory_files(
         uploaded_names,
         **comparison_options,
     )
+    return comparison, comparison_time
 
+
+def _inventory_transaction_targets(
+    plan: _InventoryCommitPlan,
+    services: InventoryUpdateServices,
+    idempotency_key: Optional[str],
+) -> Tuple[List[Path], Optional[Path], Optional[Path]]:
+    """List every file the transaction locks, plus the optional user-history files."""
     transaction_targets = [
-        *target_files.values(),
-        *(path for path in backup_sources.values() if path is not None),
-        comparison_history_file,
+        *plan.target_files.values(),
+        *(path for path in plan.backup_sources.values() if path is not None),
+        plan.comparison_history_file,
     ]
     if idempotency_key is not None:
-        transaction_targets.append(inventory_idempotency_file)
+        transaction_targets.append(plan.inventory_idempotency_file)
     alias_history_file = services.alias_history_file() if services.alias_history_file is not None else None
     if alias_history_file is not None:
         transaction_targets.append(alias_history_file)
@@ -615,355 +664,625 @@ def _commit_inventory_files(
     if manual_users_file is not None:
         transaction_targets.append(manual_users_file)
         transaction_targets.append(holds_file(manual_users_file))
+    return transaction_targets, alias_history_file, manual_users_file
+
+
+def _replay_confirmed_inventory_update(
+    plan: _InventoryCommitPlan,
+    services: InventoryUpdateServices,
+    idempotency_key: str,
+) -> Optional[Dict[str, Any]]:
+    """Return the stored result of an already confirmed request, or None for a new one."""
+    inventory_idempotency_file = plan.inventory_idempotency_file
+    receipt_store = (
+        json.loads(inventory_idempotency_file.read_text(encoding="utf-8"))
+        if inventory_idempotency_file.exists()
+        else {"version": 1, "records": []}
+    )
+    prior_receipt = _find_inventory_idempotency_receipt(receipt_store, idempotency_key)
+    if prior_receipt is None:
+        return None
+    if prior_receipt["request_sha256"] != plan.request_sha256:
+        raise DomainConflictError(
+            detail="A Idempotency-Key já foi confirmada com outro conteúdo.",
+        )
+    replay_state = services.load_database(transaction_locked=True, publish=False)
+    if not isinstance(replay_state, dict):
+        raise RuntimeError("O inventário confirmado não pôde ser recarregado antes da repetição.")
+    services.publish_database_state(replay_state)
+    replayed_result: Dict[str, Any] = deepcopy(prior_receipt["result"])
+    return replayed_result
+
+
+def _verify_inventory_preview(
+    plan: _InventoryCommitPlan,
+    staged: Dict[str, Any],
+    services: InventoryUpdateServices,
+    preview_token: str,
+) -> None:
+    """Reject the confirmation when the uploads or the active base changed after the preview."""
+    current_bytes = {
+        role: path.read_bytes() if path is not None and path.is_file() else b""
+        for role, path in plan.backup_sources.items()
+    }
+    if not services.verify_inventory_preview_token(preview_token, staged, current_bytes):
+        raise DomainConflictError(
+            detail="A prévia expirou ou os arquivos/base mudaram. Gere uma nova prévia antes de confirmar.",
+        )
+
+
+def _capture_previous_inventory_state(
+    staged: Dict[str, Any],
+    services: InventoryUpdateServices,
+) -> _PreviousInventoryState:
+    """Snapshot equipment, aliases and manual alias sources before the replacement."""
+    previous_equipment = services.get_equipment_snapshot()
+    previous_aliases = services.snapshot_equipment_aliases(previous_equipment)
+    previous_endpoint_index = services.read_endpoint_alias_index()
+    manual_overrides = services.load_modified_apelidos()
+    manual_alias_sources = services.manual_alias_source_snapshots(
+        manual_overrides,
+        staged["endpoint"]["table"],
+        staged["detalhes"]["table"],
+    )
+    manual_divergences = [
+        item for item in manual_alias_sources
+        if item["diverge_detalhes"] or item["diverge_invall"]
+    ]
+    return _PreviousInventoryState(
+        equipment=previous_equipment,
+        aliases=previous_aliases,
+        endpoint_index=previous_endpoint_index,
+        manual_alias_sources=manual_alias_sources,
+        manual_divergences=manual_divergences,
+    )
+
+
+def _stage_previous_inventory_backups(
+    transaction: Any,
+    plan: _InventoryCommitPlan,
+) -> Tuple[Dict[str, bool], Dict[str, bool]]:
+    """Stage byte-identical backups of the current files; report which ones were missing."""
+    missing_backup_files: Dict[str, bool] = {}
+    invalid_backup_files = {"endpoint": False, "detalhes": False}
+    for role in plan.target_files:
+        source_path = plan.backup_sources[role]
+        if source_path is None or not source_path.is_file():
+            missing_backup_files[role] = True
+            continue
+        missing_backup_files[role] = False
+        backup_bytes = source_path.read_bytes()
+
+        def validate_backup(path: Path, expected_bytes: bytes = backup_bytes) -> None:
+            if path.read_bytes() != expected_bytes:
+                raise RuntimeError("A cópia de segurança não corresponde ao arquivo de origem.")
+
+        transaction.stage_bytes(plan.backup_targets[role], backup_bytes, validate_backup)
+    return missing_backup_files, invalid_backup_files
+
+
+def _stage_uploaded_inventories(
+    transaction: Any,
+    plan: _InventoryCommitPlan,
+    staged: Dict[str, Any],
+    services: InventoryUpdateServices,
+) -> None:
+    """Stage the validated uploads over the active inventory files."""
+    for role, target_path in plan.target_files.items():
+        upload_bytes = staged[role]["bytes"]
+
+        def validate_staged_upload(
+            path: Path, current_role: str = role, expected_bytes: bytes = upload_bytes
+        ) -> None:
+            candidate_bytes = path.read_bytes()
+            if candidate_bytes != expected_bytes:
+                raise WorkbookSafetyError("O arquivo preparado difere do inventário validado.")
+            services.validate_uploaded_workbook(candidate_bytes, current_role)
+
+        transaction.stage_bytes(target_path, upload_bytes, validate_staged_upload)
+
+
+def _apply_inventory_replacement(transaction: Any, services: InventoryUpdateServices) -> Dict[str, Any]:
+    """Apply the staged files and load the new state without publishing it yet."""
+    transaction.apply()
+    prepared_state = services.load_database(transaction_locked=True, publish=False)
+    if not isinstance(prepared_state, dict):
+        raise RuntimeError("As planilhas enviadas não puderam ser carregadas pelo site.")
+    return prepared_state
+
+
+def _use_held_manual_users_when_file_missing(
+    prepared_state: Dict[str, Any],
+    endpoint_index: Dict[str, Any],
+    existing_holds: Dict[str, Dict[str, Any]],
+    manual_now: Dict[str, str],
+) -> None:
+    """Fall back to the users kept by manual holds; stop if a pending decision would be lost."""
+    fallback_manual_users = {
+        key: str(hold["usuario_atual"]).strip()
+        for key, hold in existing_holds.items()
+        if hold.get("tipo") == "substituicao_manual"
+    }
+    manual_now.update(fallback_manual_users)
+    endpoint_with_details = with_details_serials(
+        endpoint_index, prepared_state["equipamentos_cache"],
+    )
+    for key, hold in existing_holds.items():
+        if (
+            hold.get("tipo") == "substituicao_manual"
+            and hold.get("estado") == "pendente"
+            and not endpoint_user_for_serial(endpoint_with_details, key).strip()
+        ):
+            raise DomainBusyError(
+                "O cadastro manual está ausente e há uma decisão pendente sem usuário atual no Endpoint; "
+                "a atualização foi interrompida para preservar a decisão."
+            )
+    if fallback_manual_users:
+        endpoint_index["manual_users_file_missing"] = True
+        endpoint_index["manual_users"] = dict(manual_now)
+
+
+def _apply_held_aliases(
+    services: InventoryUpdateServices,
+    prepared_state: Dict[str, Any],
+    endpoint_index: Dict[str, Any],
+    manual_now: Dict[str, str],
+    manual_users_file: Path,
+    next_holds: Dict[str, Dict[str, Any]],
+    existing_holds: Dict[str, Dict[str, Any]],
+) -> None:
+    """Recompute the effective alias of every cached equipment touched by a hold."""
+    refreshed_index = dict(endpoint_index)
+    refreshed_index["manual_users"] = manual_now
+    refreshed_index["manual_user_dates"] = manual_user_dates_by_serial(
+        manual_now, read_manual_user_dates(manual_users_file),
+    )
+    refreshed_index["user_holds"] = next_holds
+    refreshed_index = with_details_serials(refreshed_index, prepared_state["equipamentos_cache"])
+    for cached in prepared_state["equipamentos_cache"].values():
+        cached_key = services.normalize_reference_value(cached.get("serial"))
+        if cached_key in next_holds or cached_key in existing_holds:
+            apply_effective_alias(
+                cached, refreshed_index,
+                details_duplicate=cached.get("invall_alias_status") == "serie_detalhes_duplicada",
+            )
+
+
+def _plan_manual_user_holds(
+    transaction: Any,
+    services: InventoryUpdateServices,
+    prepared_state: Dict[str, Any],
+    previous_equipment: Dict[str, Dict[str, Any]],
+    endpoint_index: Dict[str, Any],
+    manual_users_file: Path,
+) -> Tuple[Dict[str, Dict[str, str]], List[Dict[str, Any]], bool]:
+    """Journal user holds; return overridden manual users, created holds and file absence."""
+    stored_users = read_manual_users(manual_users_file)
+    manual_now = manual_users_by_serial(stored_users or {})
+    holds_path = holds_file(manual_users_file)
+    existing_holds = read_holds(manual_users_file)
+    manual_users_missing = stored_users is None
+    if manual_users_missing:
+        _use_held_manual_users_when_file_missing(
+            prepared_state, endpoint_index, existing_holds, manual_now,
+        )
+    # Um usuário manual ou um usuário do Endpoint que sumiu nunca muda sozinho: vira pendência
+    # e o usuário atual continua valendo até a decisão (ver domains/user_holds.py).
+    next_holds, created_holds = plan_holds(
+        previous_equipment,
+        prepared_state["equipamentos_cache"],
+        with_details_serials(endpoint_index, prepared_state["equipamentos_cache"]),
+        manual_now,
+        existing_holds,
+    )
+    if next_holds != existing_holds:
+        transaction.update_json(holds_path, lambda data: {
+            entry["serial"]: entry for entry in next_holds.values()
+        }, {})
+    _apply_held_aliases(
+        services, prepared_state, endpoint_index, manual_now, manual_users_file, next_holds, existing_holds,
+    )
+    # Um usuário mantido por uma pendência "ausente" não vem do Endpoint atual: o manual fica intacto.
+    overridden = manual_users_overridden_by_endpoint(
+        prepared_state["equipamentos_cache"],
+        {key: user for key, user in manual_now.items()
+         if next_holds.get(key, {}).get("tipo") != "usuario_ausente"},
+    )
+    return overridden, created_holds, manual_users_missing
+
+
+def _read_alias_history(alias_history_file: Path) -> Any:
+    """Read the alias history; an unreadable file only hides archived manual users."""
+    try:
+        return (
+            json.loads(alias_history_file.read_text(encoding="utf-8"))
+            if alias_history_file.is_file() else []
+        )
+    except (OSError, ValueError):
+        return []
+
+
+def _journal_endpoint_warnings(
+    transaction: Any,
+    services: InventoryUpdateServices,
+    staged: Dict[str, Any],
+    prepared_state: Dict[str, Any],
+    alias_history_file: Path,
+    loss_warnings: List[Dict[str, str]],
+    overridden: Dict[str, Dict[str, str]],
+) -> None:
+    """Append vanished Endpoint users/hostnames and archived manual users to the alias history."""
+    equipment_by_key = {
+        services.normalize_reference_value(item.get("serial")): item
+        for item in prepared_state["equipamentos_cache"].values()
+    }
+    source_label = hashlib.sha256(staged["endpoint"]["bytes"]).hexdigest()[:16]
+
+    def append_endpoint_warnings(history: Any) -> List[Any]:
+        if not isinstance(history, list):
+            raise RuntimeError("O histórico de alterações não contém uma lista válida.")
+        return [
+            *history,
+            *build_endpoint_warning_entries(loss_warnings, equipment_by_key, history, source_label),
+            *build_archived_manual_user_entries(overridden),
+        ]
+
+    transaction.update_json(alias_history_file, append_endpoint_warnings, [])
+
+
+def _reconcile_endpoint_users(
+    transaction: Any,
+    services: InventoryUpdateServices,
+    staged: Dict[str, Any],
+    prepared_state: Dict[str, Any],
+    previous: _PreviousInventoryState,
+    endpoint_index: Dict[str, Any],
+    alias_history_file: Path,
+    manual_users_file: Optional[Path],
+) -> List[Dict[str, str]]:
+    """Journal user holds and Endpoint warnings; return the logged-user changes of this update."""
+    user_changes: List[Dict[str, str]] = []
+    loss_warnings = endpoint_loss_warnings(previous.endpoint_index, endpoint_index)
+    # A manual user hidden by an Endpoint user leaves the manual file and is kept in the
+    # alias history, so it cannot come back silently if the Endpoint user disappears later.
+    overridden: Dict[str, Dict[str, str]] = {}
+    created_holds: List[Dict[str, Any]] = []
+    manual_users_missing = False
+    if manual_users_file is not None:
+        overridden, created_holds, manual_users_missing = _plan_manual_user_holds(
+            transaction, services, prepared_state, previous.equipment, endpoint_index, manual_users_file,
+        )
+    if overridden and manual_users_file is not None and not manual_users_missing:
+        transaction.update_json(
+            manual_users_file, lambda data: without_manual_users(data, set(overridden)), {},
+        )
+    earlier_history = _read_alias_history(alias_history_file)
+    if previous.endpoint_index.get("available") and endpoint_index.get("available"):
+        user_changes = hold_change_rows(created_holds) + logged_user_changes(
+            previous.equipment,
+            prepared_state["equipamentos_cache"],
+            endpoint_index,
+            overridden,
+            archived_manual_users(earlier_history if isinstance(earlier_history, list) else []),
+        )
+    if loss_warnings or overridden:
+        _journal_endpoint_warnings(
+            transaction, services, staged, prepared_state, alias_history_file, loss_warnings, overridden,
+        )
+    return user_changes
+
+
+def _detail_serial_index(
+    staged: Dict[str, Any],
+    services: InventoryUpdateServices,
+) -> Tuple[set[str], set[str]]:
+    """Normalized Simpress serials of the upload and the ones that appear more than once."""
+    detail_serial_counts: Dict[str, int] = {}
+    for record in staged["detalhes"]["table"].get("records", []):
+        serial_key = services.normalize_reference_value(services.upload_serial_value(record, "detalhes"))
+        if serial_key:
+            detail_serial_counts[serial_key] = detail_serial_counts.get(serial_key, 0) + 1
+    detail_serials = set(detail_serial_counts)
+    detail_duplicates = {
+        serial_key for serial_key, count in detail_serial_counts.items() if count > 1
+    }
+    return detail_serials, detail_duplicates
+
+
+def _attach_alias_review(
+    comparison: Dict[str, Any],
+    comparison_time: datetime,
+    services: InventoryUpdateServices,
+    staged: Dict[str, Any],
+    uploaded_names: Dict[str, Any],
+    previous_aliases: Dict[str, Dict[str, str]],
+    prepared_state: Dict[str, Any],
+    endpoint_index: Dict[str, Any],
+) -> None:
+    """Record the comparison time, the updated aliases and the aliases left for review."""
+    detail_serials, detail_duplicates = _detail_serial_index(staged, services)
+    comparison["horario_comparacao"] = comparison_time.isoformat(timespec="seconds")
+    comparison["apelidos_atualizados"] = services.compare_equipment_aliases(
+        previous_aliases,
+        services.snapshot_equipment_aliases(prepared_state["equipamentos_cache"]),
+    )
+    for change in comparison["apelidos_atualizados"]:
+        change["arquivos_origem"] = dict(uploaded_names)
+        change["horario"] = comparison["horario_comparacao"]
+    comparison["apelidos_sem_atualizacao"] = services.endpoint_alias_review_items(
+        endpoint_index, detail_serials, detail_duplicates
+    )
+    for record in staged["detalhes"]["table"].get("records", []):
+        alias_without_serial = services.upload_alias_value(record, "detalhes")
+        if alias_without_serial and not services.normalize_reference_value(
+            services.upload_serial_value(record, "detalhes")
+        ):
+            comparison["apelidos_sem_atualizacao"].append({
+                "serie": "",
+                "computador": alias_without_serial,
+                "motivo": "Número de série vazio na Simpress; nenhum hostname foi associado.",
+            })
+
+
+def _attach_commit_metadata(
+    comparison: Dict[str, Any],
+    plan: _InventoryCommitPlan,
+    previous: _PreviousInventoryState,
+    user_changes: List[Dict[str, str]],
+    missing_backup_files: Dict[str, bool],
+    invalid_backup_files: Dict[str, bool],
+    prepared_state: Dict[str, Any],
+) -> None:
+    """Record manual alias sources, user changes, backup details and the loaded totals."""
+    comparison["divergencias_apelidos_manuais"] = previous.manual_divergences
+    comparison["mudancas_usuarios"] = user_changes
+    comparison["fontes_apelidos_manuais"] = previous.manual_alias_sources
+    comparison["backup_diretorio"] = str(plan.backup_dir.relative_to(plan.input_directory))
+    comparison["backup_arquivos_ausentes"] = missing_backup_files
+    comparison["backup_arquivos_invalidos"] = invalid_backup_files
+    comparison["total_equipamentos_carregados"] = prepared_state["stats_cache"].get("total_equipamentos", 0)
+    comparison["ultima_atualizacao"] = prepared_state["stats_cache"].get("ultima_atualizacao", "")
+    comparison["arquivos_enviados"] = plan.uploaded_names
+    comparison["historico_salvo"] = True
+
+
+def _comparison_summary(
+    comparison: Dict[str, Any],
+    manual_divergences: List[Dict[str, Any]],
+    user_changes: List[Dict[str, str]],
+) -> Dict[str, Any]:
+    """Per-section counts stored with the history event."""
+    return {
+        "total_endpoint": comparison.get("total_endpoint", 0),
+        "ausentes_no_endpoint": len(comparison.get("ausentes_no_endpoint", [])),
+        "ausentes_em_detalhes": len(comparison.get("ausentes_em_detalhes", [])),
+        "sem_acesso_7_dias": len(comparison.get("sem_acesso_7_dias", [])),
+        "divergencias_local": len(comparison.get("divergencias_local", [])),
+        "correspondencias_ambiguas": len(comparison.get("correspondencias_ambiguas", [])),
+        "series_sem_mapeamento": len(comparison.get("series_sem_mapeamento", [])),
+        "apelidos_atualizados": len(comparison.get("apelidos_atualizados", [])),
+        "apelidos_sem_atualizacao": len(comparison.get("apelidos_sem_atualizacao", [])),
+        "divergencias_apelidos_manuais": len(manual_divergences),
+        "mudancas_usuarios": len(user_changes),
+    }
+
+
+def _build_history_entry(
+    comparison: Dict[str, Any],
+    event_id: str,
+    uploaded_names: Dict[str, Any],
+    summary: Dict[str, Any],
+    automatic_import_id: Optional[str],
+) -> Dict[str, Any]:
+    """History event that carries the complete comparison of this update."""
+    history_entry = {
+        "id": event_id,
+        "horario": comparison["horario_comparacao"],
+        "arquivos_enviados": uploaded_names,
+        "resumo": summary,
+        "comparacao": comparison,
+    }
+    if automatic_import_id:
+        history_entry["importacao_automatica_id"] = str(automatic_import_id)
+    return history_entry
+
+
+def _stage_inherited_annotations(
+    transaction: Any,
+    pending_annotation_records: List[Tuple[Path, Dict[str, Any]]],
+) -> None:
+    """Stage each inherited annotation revision; an existing different revision aborts."""
+    for target, record in pending_annotation_records:
+        if target.exists():
+            existing = json.loads(target.read_text(encoding="utf-8"))
+            if not same_annotation_revision(existing, record):
+                raise RuntimeError("A revisão pendente já existe com outro conteúdo; arquivo preservado.")
+            continue
+        payload = json.dumps(record, ensure_ascii=False, indent=2).encode("utf-8")
+
+        def validate_annotation(path: Path, expected: Dict[str, Any] = record) -> None:
+            actual = json.loads(path.read_text(encoding="utf-8"))
+            if not same_annotation_revision(actual, expected):
+                raise RuntimeError("A anotação preparada não corresponde à revisão herdada.")
+
+        transaction.stage_bytes(target, payload, validate_annotation)
+
+
+def _journal_comparison_history(
+    transaction: Any,
+    services: InventoryUpdateServices,
+    comparison_history_file: Path,
+    history_entry: Dict[str, Any],
+    manual_alias_sources: List[Dict[str, Any]],
+) -> List[Dict[str, str]]:
+    """Append the event, supersede refreshed manual divergences and inherit matching notes."""
+    event_id = history_entry["id"]
+    comparison = history_entry["comparacao"]
+    copied_annotations: list[Dict[str, str]] = []
+    pending_annotation_records: list[tuple[Path, Dict[str, Any]]] = []
+
+    def append_update(history: Any) -> List[Any]:
+        if not isinstance(history, list):
+            raise RuntimeError("O histórico de planilhas não contém uma lista válida.")
+        updated = deepcopy(history)
+        refreshed_serials = {
+            services.normalize_reference_value(item.get("serie"))
+            for item in manual_alias_sources
+            if item.get("detalhes_encontrado") or item.get("invall_encontrado")
+        }
+        for previous_event in updated:
+            if not isinstance(previous_event, dict):
+                continue
+            previous_comparison = previous_event.get("comparacao")
+            previous_divergences = (
+                previous_comparison.get("divergencias_apelidos_manuais")
+                if isinstance(previous_comparison, dict) else None
+            )
+            for previous_divergence in previous_divergences or []:
+                if (
+                    isinstance(previous_divergence, dict)
+                    and previous_divergence.get("resolucao", "pendente") == "pendente"
+                    and services.normalize_reference_value(previous_divergence.get("serie")) in refreshed_serials
+                ):
+                    previous_divergence["resolucao"] = "substituida"
+                    previous_divergence["horario_resolucao"] = comparison["horario_comparacao"]
+        copied_annotations[:] = _copy_matching_history_annotations(services, updated, history_entry)
+        for copied_annotation in copied_annotations:
+            record = services.build_history_annotation_record(
+                event_id=event_id,
+                event_time=history_entry["horario"],
+                item_id=copied_annotation["item_id"],
+                serie=copied_annotation["serie"],
+                computador=copied_annotation["computador"],
+                motivo=copied_annotation["motivo"],
+                anotacao=copied_annotation["anotacao"],
+                categoria=copied_annotation["categoria"],
+                linha_hash=copied_annotation["linha_hash"],
+            )
+            target = services.history_annotation_record_path(
+                services.local_annotation_outbox_directory(),
+                record["evento_id"], record["item_id"], record["revisao_id"],
+            )
+            # The transaction-wide lock remains held; lock the discovered
+            # destination before staging it into the journal.
+            transaction.add_target(target)
+            pending_annotation_records.append((target, record))
+        updated.append(history_entry)
+        return updated
+
+    transaction.update_json(comparison_history_file, append_update, [])
+    _stage_inherited_annotations(transaction, pending_annotation_records)
+    return copied_annotations
+
+
+def _build_commit_response(
+    services: InventoryUpdateServices,
+    history_entry: Dict[str, Any],
+    copied_annotations: List[Dict[str, str]],
+    prepared_state: Dict[str, Any],
+) -> Dict[str, Any]:
+    """Response shown after the update, with the history labels applied."""
+    historical_view = services.comparison_history_for_display(history_entry)
+    historical_comparison = dict(historical_view.get("comparacao") or {})
+    historical_comparison["evento_id"] = history_entry["id"]
+    historical_comparison["historico_salvo"] = True
+    historical_comparison["anotacoes_herdadas_enfileiradas"] = len(copied_annotations)
+    historical_comparison["sincronizacao_anotacoes"] = (
+        "pendente" if copied_annotations else "nao_aplicavel"
+    )
+    return {
+        "sucesso": True,
+        "comparacao": historical_comparison,
+        "anotacoes_herdadas_enfileiradas": len(copied_annotations),
+        "sincronizacao_anotacoes": "pendente" if copied_annotations else "nao_aplicavel",
+        "stats": deepcopy(prepared_state["stats_cache"]),
+        "historico_salvo": True,
+    }
+
+
+def _journal_idempotency_receipt(
+    transaction: Any,
+    plan: _InventoryCommitPlan,
+    idempotency_key: str,
+    response: Dict[str, Any],
+) -> None:
+    """Journal the confirmation so a retry with the same key replays this response."""
+    transaction.update_json(
+        plan.inventory_idempotency_file,
+        lambda current: _append_inventory_idempotency_receipt(
+            current,
+            idempotency_key,
+            str(plan.request_sha256),
+            response,
+        ),
+        {"version": 1, "records": []},
+    )
+
+
+def _commit_inventory_files(
+    staged: Dict[str, Any],
+    services: InventoryUpdateServices,
+    automatic_import_id: Optional[str] = None,
+    idempotency_key: Optional[str] = None,
+    preview_token: Optional[str] = None,
+) -> Dict[str, Any]:
+    """Validate, compare, replace, reload, and journal inventories in a worker thread."""
+    plan = _plan_inventory_commit(staged, services, idempotency_key)
+    comparison, comparison_time = _compare_staged_inventories(staged, services, plan.uploaded_names)
+    transaction_targets, alias_history_file, manual_users_file = _inventory_transaction_targets(
+        plan, services, idempotency_key,
+    )
     with _transaction_with_backup_cleanup(
         services.inventory_state_transaction(transaction_targets),
-        backup_dir,
-        backup_targets,
+        plan.backup_dir,
+        plan.backup_targets,
     ) as transaction:
         if idempotency_key is not None:
-            receipt_store = (
-                json.loads(inventory_idempotency_file.read_text(encoding="utf-8"))
-                if inventory_idempotency_file.exists()
-                else {"version": 1, "records": []}
-            )
-            prior_receipt = _find_inventory_idempotency_receipt(receipt_store, idempotency_key)
-            if prior_receipt is not None:
-                if prior_receipt["request_sha256"] != request_sha256:
-                    raise DomainConflictError(
-                        detail="A Idempotency-Key já foi confirmada com outro conteúdo.",
-                    )
-                replay_state = services.load_database(transaction_locked=True, publish=False)
-                if not isinstance(replay_state, dict):
-                    raise RuntimeError("O inventário confirmado não pôde ser recarregado antes da repetição.")
-                services.publish_database_state(replay_state)
-                return deepcopy(prior_receipt["result"])
+            replayed = _replay_confirmed_inventory_update(plan, services, idempotency_key)
+            if replayed is not None:
+                return replayed
 
         if preview_token is not None:
-            current_bytes = {
-                role: path.read_bytes() if path is not None and path.is_file() else b""
-                for role, path in backup_sources.items()
-            }
-            if not services.verify_inventory_preview_token(preview_token, staged, current_bytes):
-                raise DomainConflictError(
-                    detail="A prévia expirou ou os arquivos/base mudaram. Gere uma nova prévia antes de confirmar.",
-                )
+            _verify_inventory_preview(plan, staged, services, preview_token)
 
-        for backup_target in backup_targets.values():
+        for backup_target in plan.backup_targets.values():
             transaction.add_target(backup_target)
 
-        previous_equipment = services.get_equipment_snapshot()
-        previous_aliases = services.snapshot_equipment_aliases(previous_equipment)
-        previous_endpoint_index = services.read_endpoint_alias_index()
-        manual_overrides = services.load_modified_apelidos()
-        manual_alias_sources = services.manual_alias_source_snapshots(
-            manual_overrides,
-            staged["endpoint"]["table"],
-            staged["detalhes"]["table"],
-        )
-        manual_divergences = [
-            item for item in manual_alias_sources
-            if item["diverge_detalhes"] or item["diverge_invall"]
-        ]
-        missing_backup_files = {}
-        invalid_backup_files = {"endpoint": False, "detalhes": False}
-        for role in target_files:
-            source_path = backup_sources[role]
-            if source_path is None or not source_path.is_file():
-                missing_backup_files[role] = True
-                continue
-            missing_backup_files[role] = False
-            backup_bytes = source_path.read_bytes()
-
-            def validate_backup(path: Path, expected_bytes: bytes = backup_bytes) -> None:
-                if path.read_bytes() != expected_bytes:
-                    raise RuntimeError("A cópia de segurança não corresponde ao arquivo de origem.")
-
-            transaction.stage_bytes(backup_targets[role], backup_bytes, validate_backup)
-
-        for role, target_path in target_files.items():
-            upload_bytes = staged[role]["bytes"]
-
-            def validate_staged_upload(
-                path: Path, current_role: str = role, expected_bytes: bytes = upload_bytes
-            ) -> None:
-                candidate_bytes = path.read_bytes()
-                if candidate_bytes != expected_bytes:
-                    raise WorkbookSafetyError("O arquivo preparado difere do inventário validado.")
-                services.validate_uploaded_workbook(candidate_bytes, current_role)
-
-            transaction.stage_bytes(target_path, upload_bytes, validate_staged_upload)
-
-        transaction.apply()
-        prepared_state = services.load_database(transaction_locked=True, publish=False)
-        if not isinstance(prepared_state, dict):
-            raise RuntimeError("As planilhas enviadas não puderam ser carregadas pelo site.")
+        previous = _capture_previous_inventory_state(staged, services)
+        missing_backup_files, invalid_backup_files = _stage_previous_inventory_backups(transaction, plan)
+        _stage_uploaded_inventories(transaction, plan, staged, services)
+        prepared_state = _apply_inventory_replacement(transaction, services)
 
         endpoint_index = services.read_endpoint_alias_index()
         user_changes: List[Dict[str, str]] = []
         if alias_history_file is not None:
-            loss_warnings = endpoint_loss_warnings(previous_endpoint_index, endpoint_index)
-            # A manual user hidden by an Endpoint user leaves the manual file and is kept in the
-            # alias history, so it cannot come back silently if the Endpoint user disappears later.
-            overridden: Dict[str, Dict[str, str]] = {}
-            created_holds: List[Dict[str, Any]] = []
-            manual_users_missing = False
-            if manual_users_file is not None:
-                stored_users = read_manual_users(manual_users_file)
-                manual_now = manual_users_by_serial(stored_users or {})
-                holds_path = holds_file(manual_users_file)
-                existing_holds = read_holds(manual_users_file)
-                manual_users_missing = stored_users is None
-                if manual_users_missing:
-                    fallback_manual_users = {
-                        key: str(hold["usuario_atual"]).strip()
-                        for key, hold in existing_holds.items()
-                        if hold.get("tipo") == "substituicao_manual"
-                    }
-                    manual_now.update(fallback_manual_users)
-                    endpoint_with_details = with_details_serials(
-                        endpoint_index, prepared_state["equipamentos_cache"],
-                    )
-                    for key, hold in existing_holds.items():
-                        if (
-                            hold.get("tipo") == "substituicao_manual"
-                            and hold.get("estado") == "pendente"
-                            and not endpoint_user_for_serial(endpoint_with_details, key).strip()
-                        ):
-                            raise DomainBusyError(
-                                "O cadastro manual está ausente e há uma decisão pendente sem usuário atual no Endpoint; "
-                                "a atualização foi interrompida para preservar a decisão."
-                            )
-                    if fallback_manual_users:
-                        endpoint_index["manual_users_file_missing"] = True
-                        endpoint_index["manual_users"] = dict(manual_now)
-                # Um usuário manual ou um usuário do Endpoint que sumiu nunca muda sozinho: vira pendência
-                # e o usuário atual continua valendo até a decisão (ver domains/user_holds.py).
-                next_holds, created_holds = plan_holds(
-                    previous_equipment,
-                    prepared_state["equipamentos_cache"],
-                    with_details_serials(endpoint_index, prepared_state["equipamentos_cache"]),
-                    manual_now,
-                    existing_holds,
-                )
-                if next_holds != existing_holds:
-                    transaction.update_json(holds_path, lambda data: {
-                        entry["serial"]: entry for entry in next_holds.values()
-                    }, {})
-                refreshed_index = dict(endpoint_index)
-                refreshed_index["manual_users"] = manual_now
-                refreshed_index["manual_user_dates"] = manual_user_dates_by_serial(
-                    manual_now, read_manual_user_dates(manual_users_file),
-                )
-                refreshed_index["user_holds"] = next_holds
-                refreshed_index = with_details_serials(refreshed_index, prepared_state["equipamentos_cache"])
-                for cached in prepared_state["equipamentos_cache"].values():
-                    cached_key = services.normalize_reference_value(cached.get("serial"))
-                    if cached_key in next_holds or cached_key in existing_holds:
-                        apply_effective_alias(
-                            cached, refreshed_index,
-                            details_duplicate=cached.get("invall_alias_status") == "serie_detalhes_duplicada",
-                        )
-                # Um usuário mantido por uma pendência "ausente" não vem do Endpoint atual: o manual fica intacto.
-                overridden = manual_users_overridden_by_endpoint(
-                    prepared_state["equipamentos_cache"],
-                    {key: user for key, user in manual_now.items()
-                     if next_holds.get(key, {}).get("tipo") != "usuario_ausente"},
-                )
-            if overridden and manual_users_file is not None and not manual_users_missing:
-                transaction.update_json(
-                    manual_users_file, lambda data: without_manual_users(data, set(overridden)), {},
-                )
-            try:
-                earlier_history = (
-                    json.loads(alias_history_file.read_text(encoding="utf-8"))
-                    if alias_history_file.is_file() else []
-                )
-            except (OSError, ValueError):
-                earlier_history = []
-            if previous_endpoint_index.get("available") and endpoint_index.get("available"):
-                user_changes = hold_change_rows(created_holds) + logged_user_changes(
-                    previous_equipment,
-                    prepared_state["equipamentos_cache"],
-                    endpoint_index,
-                    overridden,
-                    archived_manual_users(earlier_history if isinstance(earlier_history, list) else []),
-                )
-            if loss_warnings or overridden:
-                equipment_by_key = {
-                    services.normalize_reference_value(item.get("serial")): item
-                    for item in prepared_state["equipamentos_cache"].values()
-                }
-                source_label = hashlib.sha256(staged["endpoint"]["bytes"]).hexdigest()[:16]
-
-                def append_endpoint_warnings(history: Any) -> List[Any]:
-                    if not isinstance(history, list):
-                        raise RuntimeError("O histórico de alterações não contém uma lista válida.")
-                    return [
-                        *history,
-                        *build_endpoint_warning_entries(loss_warnings, equipment_by_key, history, source_label),
-                        *build_archived_manual_user_entries(overridden),
-                    ]
-
-                transaction.update_json(alias_history_file, append_endpoint_warnings, [])
-        detail_serial_counts: Dict[str, int] = {}
-        for record in staged["detalhes"]["table"].get("records", []):
-            serial_key = services.normalize_reference_value(services.upload_serial_value(record, "detalhes"))
-            if serial_key:
-                detail_serial_counts[serial_key] = detail_serial_counts.get(serial_key, 0) + 1
-        detail_serials = set(detail_serial_counts)
-        detail_duplicates = {
-            serial_key for serial_key, count in detail_serial_counts.items() if count > 1
-        }
-        comparison["horario_comparacao"] = comparison_time.isoformat(timespec="seconds")
-        comparison["apelidos_atualizados"] = services.compare_equipment_aliases(
-            previous_aliases,
-            services.snapshot_equipment_aliases(prepared_state["equipamentos_cache"]),
+            user_changes = _reconcile_endpoint_users(
+                transaction, services, staged, prepared_state, previous,
+                endpoint_index, alias_history_file, manual_users_file,
+            )
+        _attach_alias_review(
+            comparison, comparison_time, services, staged, plan.uploaded_names,
+            previous.aliases, prepared_state, endpoint_index,
         )
-        for change in comparison["apelidos_atualizados"]:
-            change["arquivos_origem"] = dict(uploaded_names)
-            change["horario"] = comparison["horario_comparacao"]
-        comparison["apelidos_sem_atualizacao"] = services.endpoint_alias_review_items(
-            endpoint_index, detail_serials, detail_duplicates
+        _attach_commit_metadata(
+            comparison, plan, previous, user_changes,
+            missing_backup_files, invalid_backup_files, prepared_state,
         )
-        for record in staged["detalhes"]["table"].get("records", []):
-            alias_without_serial = services.upload_alias_value(record, "detalhes")
-            if alias_without_serial and not services.normalize_reference_value(
-                services.upload_serial_value(record, "detalhes")
-            ):
-                comparison["apelidos_sem_atualizacao"].append({
-                    "serie": "",
-                    "computador": alias_without_serial,
-                    "motivo": "Número de série vazio na Simpress; nenhum hostname foi associado.",
-                })
-        comparison["divergencias_apelidos_manuais"] = manual_divergences
-        comparison["mudancas_usuarios"] = user_changes
-        comparison["fontes_apelidos_manuais"] = manual_alias_sources
-        comparison["backup_diretorio"] = str(backup_dir.relative_to(input_directory))
-        comparison["backup_arquivos_ausentes"] = missing_backup_files
-        comparison["backup_arquivos_invalidos"] = invalid_backup_files
-        comparison["total_equipamentos_carregados"] = prepared_state["stats_cache"].get("total_equipamentos", 0)
-        comparison["ultima_atualizacao"] = prepared_state["stats_cache"].get("ultima_atualizacao", "")
-        comparison["arquivos_enviados"] = uploaded_names
-        comparison["historico_salvo"] = True
         event_id = uuid.uuid4().hex
         comparison["evento_id"] = event_id
-        summary = {
-            "total_endpoint": comparison.get("total_endpoint", 0),
-            "ausentes_no_endpoint": len(comparison.get("ausentes_no_endpoint", [])),
-            "ausentes_em_detalhes": len(comparison.get("ausentes_em_detalhes", [])),
-            "sem_acesso_7_dias": len(comparison.get("sem_acesso_7_dias", [])),
-            "divergencias_local": len(comparison.get("divergencias_local", [])),
-            "correspondencias_ambiguas": len(comparison.get("correspondencias_ambiguas", [])),
-            "series_sem_mapeamento": len(comparison.get("series_sem_mapeamento", [])),
-            "apelidos_atualizados": len(comparison.get("apelidos_atualizados", [])),
-            "apelidos_sem_atualizacao": len(comparison.get("apelidos_sem_atualizacao", [])),
-            "divergencias_apelidos_manuais": len(manual_divergences),
-            "mudancas_usuarios": len(user_changes),
-        }
-        history_entry = {
-            "id": event_id,
-            "horario": comparison["horario_comparacao"],
-            "arquivos_enviados": uploaded_names,
-            "resumo": summary,
-            "comparacao": comparison,
-        }
-        if automatic_import_id:
-            history_entry["importacao_automatica_id"] = str(automatic_import_id)
-        copied_annotations: list[Dict[str, str]] = []
-        pending_annotation_records: list[tuple[Path, Dict[str, Any]]] = []
-
-        def append_update(history: Any) -> List[Any]:
-            if not isinstance(history, list):
-                raise RuntimeError("O histórico de planilhas não contém uma lista válida.")
-            updated = deepcopy(history)
-            refreshed_serials = {
-                services.normalize_reference_value(item.get("serie"))
-                for item in manual_alias_sources
-                if item.get("detalhes_encontrado") or item.get("invall_encontrado")
-            }
-            for previous_event in updated:
-                if not isinstance(previous_event, dict):
-                    continue
-                previous_comparison = previous_event.get("comparacao")
-                previous_divergences = (
-                    previous_comparison.get("divergencias_apelidos_manuais")
-                    if isinstance(previous_comparison, dict) else None
-                )
-                for previous_divergence in previous_divergences or []:
-                    if (
-                        isinstance(previous_divergence, dict)
-                        and previous_divergence.get("resolucao", "pendente") == "pendente"
-                        and services.normalize_reference_value(previous_divergence.get("serie")) in refreshed_serials
-                    ):
-                        previous_divergence["resolucao"] = "substituida"
-                        previous_divergence["horario_resolucao"] = comparison["horario_comparacao"]
-            copied_annotations[:] = _copy_matching_history_annotations(services, updated, history_entry)
-            for copied_annotation in copied_annotations:
-                record = services.build_history_annotation_record(
-                    event_id=event_id,
-                    event_time=history_entry["horario"],
-                    item_id=copied_annotation["item_id"],
-                    serie=copied_annotation["serie"],
-                    computador=copied_annotation["computador"],
-                    motivo=copied_annotation["motivo"],
-                    anotacao=copied_annotation["anotacao"],
-                    categoria=copied_annotation["categoria"],
-                    linha_hash=copied_annotation["linha_hash"],
-                )
-                target = services.history_annotation_record_path(
-                    services.local_annotation_outbox_directory(),
-                    record["evento_id"], record["item_id"], record["revisao_id"],
-                )
-                # The transaction-wide lock remains held; lock the discovered
-                # destination before staging it into the journal.
-                transaction.add_target(target)
-                pending_annotation_records.append((target, record))
-            updated.append(history_entry)
-            return updated
-
-        transaction.update_json(comparison_history_file, append_update, [])
-        for target, record in pending_annotation_records:
-            if target.exists():
-                existing = json.loads(target.read_text(encoding="utf-8"))
-                if not same_annotation_revision(existing, record):
-                    raise RuntimeError("A revisão pendente já existe com outro conteúdo; arquivo preservado.")
-                continue
-            payload = json.dumps(record, ensure_ascii=False, indent=2).encode("utf-8")
-
-            def validate_annotation(path: Path, expected: Dict[str, Any] = record) -> None:
-                actual = json.loads(path.read_text(encoding="utf-8"))
-                if not same_annotation_revision(actual, expected):
-                    raise RuntimeError("A anotação preparada não corresponde à revisão herdada.")
-
-            transaction.stage_bytes(target, payload, validate_annotation)
-
-        historical_view = services.comparison_history_for_display(history_entry)
-        historical_comparison = dict(historical_view.get("comparacao") or {})
-        historical_comparison["evento_id"] = event_id
-        historical_comparison["historico_salvo"] = True
-        historical_comparison["anotacoes_herdadas_enfileiradas"] = len(copied_annotations)
-        historical_comparison["sincronizacao_anotacoes"] = (
-            "pendente" if copied_annotations else "nao_aplicavel"
+        history_entry = _build_history_entry(
+            comparison,
+            event_id,
+            plan.uploaded_names,
+            _comparison_summary(comparison, previous.manual_divergences, user_changes),
+            automatic_import_id,
         )
-        response = {
-            "sucesso": True,
-            "comparacao": historical_comparison,
-            "anotacoes_herdadas_enfileiradas": len(copied_annotations),
-            "sincronizacao_anotacoes": "pendente" if copied_annotations else "nao_aplicavel",
-            "stats": deepcopy(prepared_state["stats_cache"]),
-            "historico_salvo": True,
-        }
+        copied_annotations = _journal_comparison_history(
+            transaction, services, plan.comparison_history_file, history_entry, previous.manual_alias_sources,
+        )
+        response = _build_commit_response(services, history_entry, copied_annotations, prepared_state)
         if idempotency_key is not None:
-            transaction.update_json(
-                inventory_idempotency_file,
-                lambda current: _append_inventory_idempotency_receipt(
-                    current,
-                    idempotency_key,
-                    str(request_sha256),
-                    response,
-                ),
-                {"version": 1, "records": []},
-            )
+            _journal_idempotency_receipt(transaction, plan, idempotency_key, response)
         transaction.commit()
         services.publish_database_state(prepared_state)
     return response

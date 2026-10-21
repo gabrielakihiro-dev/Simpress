@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-import io
 import sys
 import time
 from pathlib import Path
@@ -15,27 +14,11 @@ if str(ROOT) not in sys.path:
 def main() -> int:
     import main as application
     from domains.ticket_inbox import AutomaticTicketInbox
-    from starlette.datastructures import UploadFile
-
-
-    endpoint = next((
-        route.endpoint
-        for route in application.operations_router.routes
-        if getattr(route, "path", None) == "/api/operacoes/chamados/importar"
-        and "POST" in getattr(route, "methods", set())
-    ), None)
-    if endpoint is None:
-        print("A função de importação de chamados não está registrada.")
-        return 2
 
     def import_batch(batch_id: str, simpress_name: str, simpress_bytes: bytes, oracle_name: str, oracle_bytes: bytes):
         print(f"Importando lote {batch_id} pelo processamento local...", flush=True)
-        simpress_upload = UploadFile(filename=simpress_name, file=io.BytesIO(simpress_bytes))
-        oracle_upload = UploadFile(filename=oracle_name, file=io.BytesIO(oracle_bytes))
-        result = endpoint(
-            simpress_file=simpress_upload,
-            oracle_file=oracle_upload,
-            automatic_import_id=batch_id,
+        result = application._import_automatic_ticket_batch(
+            batch_id, simpress_name, simpress_bytes, oracle_name, oracle_bytes,
         )
         print(f"Importação salva: {result.get('resumo', {}).get('series_total', 0)} séries.", flush=True)
         return result

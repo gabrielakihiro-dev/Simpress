@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 // Verificação única do projeto: executa as mesmas checagens do CI (job "verify").
 // Uso: npm run verify   (ou: node scripts/verify.cjs)
-// O Python usado é, nesta ordem: $PYTHON, .venv do projeto ou "python" do PATH.
+// O Python usado é, nesta ordem: $PYTHON, .venv do projeto (ou do checkout principal, em worktrees) ou "python" do PATH.
 "use strict";
 
 const fs = require("node:fs");
@@ -10,13 +10,49 @@ const { spawnSync } = require("node:child_process");
 
 const ROOT = path.resolve(__dirname, "..");
 
+// Em um git worktree recém-criado não há .venv nem node_modules; nesse caso usa os do checkout
+// principal (pai do diretório .git comum). Não procura fora do repositório principal.
+function mainCheckoutRoot() {
+  const result = spawnSync("git", ["rev-parse", "--path-format=absolute", "--git-common-dir"], {
+    cwd: ROOT,
+    encoding: "utf8",
+  });
+  if (result.error || result.status !== 0) return null;
+  const commonDir = result.stdout.trim();
+  if (!commonDir || path.basename(commonDir) !== ".git") return null;
+  const mainRoot = path.resolve(commonDir, "..");
+  return mainRoot === ROOT ? null : mainRoot;
+}
+
+// Primeiro candidato existente em ROOT; senão, o equivalente no checkout principal.
+function findInRootOrMain(relativeCandidates) {
+  const roots = [ROOT];
+  const mainRoot = mainCheckoutRoot();
+  if (mainRoot) roots.push(mainRoot);
+  for (const root of roots) {
+    for (const relative of relativeCandidates) {
+      const candidate = path.join(root, ...relative);
+      if (fs.existsSync(candidate)) return candidate;
+    }
+  }
+  return null;
+}
+
 function resolvePython() {
   if (process.env.PYTHON) return process.env.PYTHON;
-  const candidates = [
-    path.join(ROOT, ".venv", "Scripts", "python.exe"),
-    path.join(ROOT, ".venv", "bin", "python"),
-  ];
-  return candidates.find((candidate) => fs.existsSync(candidate)) || "python";
+  return (
+    findInRootOrMain([
+      [".venv", "Scripts", "python.exe"],
+      [".venv", "bin", "python"],
+    ]) || "python"
+  );
+}
+
+function resolveTsc() {
+  return (
+    findInRootOrMain([["node_modules", "typescript", "bin", "tsc"]]) ||
+    path.join(ROOT, "node_modules", "typescript", "bin", "tsc")
+  );
 }
 
 // Lista arquivos com a extensão indicada, em ordem estável, ignorando as pastas excluídas.
@@ -94,7 +130,7 @@ function buildSteps(python) {
     {
       name: "Tipos JavaScript (TypeScript gradual)",
       command: process.execPath,
-      args: [path.join(ROOT, "node_modules/typescript/bin/tsc"), "--project", "tsconfig.ui.json"],
+      args: [resolveTsc(), "--project", "tsconfig.ui.json"],
     },
     { name: "Sintaxe Python (compileall)", command: python, args: ["-m", "compileall", "-q", ...PYTHON_COMPILE_TARGETS] },
     {
@@ -120,6 +156,8 @@ function buildSteps(python) {
 
 function main() {
   const python = resolvePython();
+  console.log(`Python: ${python}`);
+  console.log(`tsc: ${resolveTsc()}`);
   const summary = [];
   for (const step of buildSteps(python)) {
     console.log(`\n=== ${step.name} ===`);
@@ -142,4 +180,4 @@ function main() {
 
 if (require.main === module) main();
 
-module.exports = { buildSteps, javascriptFilesToCheck, listFiles };
+module.exports = { buildSteps, javascriptFilesToCheck, listFiles, resolvePython, resolveTsc };

@@ -1,0 +1,4 @@
+# Dependências de desenvolvimento e verificação (npm run verify / CI): runtime + testes + tipos.
+-r requirements.txt
+httpx==0.28.1
+mypy==2.4.0

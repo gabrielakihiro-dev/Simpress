@@ -12,7 +12,7 @@ from domains import history_restore
 from domains.history_export import _history_display_files, build_history_export_workbook, history_export_series
 from domains.history_restore import HistoryRestoreError, comparison_event_type
 from domains.history_annotations import (
-    AnnotationReadError, resolve_history_annotations,
+    MAX_ANNOTATION_LENGTH, AnnotationReadError, resolve_history_annotations,
     annotation_record_values, annotation_view, same_annotation_revision,
     effective_history_annotation, load_effective_history_annotations,
     sync_history_annotation, reuse_annotation_revision,
@@ -35,7 +35,7 @@ class ManualAliasConflictResolutionPayload(BaseModel):
 
 
 class ComparisonAnnotationPayload(BaseModel):
-    anotacao: str = Field(..., max_length=2000)
+    anotacao: str = Field(..., max_length=MAX_ANNOTATION_LENGTH)
     revisao_id: Optional[str] = Field(None, pattern=r"^[a-f0-9]{32}$")
     base_revisoes: List[str] = Field(default_factory=list, max_length=100)
     resolver_conflito: bool = False

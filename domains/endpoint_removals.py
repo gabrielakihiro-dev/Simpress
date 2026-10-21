@@ -98,6 +98,18 @@ def _write(services: EndpointRemovalServices, update: Callable[[List[Dict[str, A
         raise DomainError(f"Não foi possível salvar a remoção: {error}") from error
 
 
+def _remaining_rows(rows: List[Dict[str, Any]], key: Tuple[str, str], stored: RemovalKeys) -> List[Dict[str, Any]]:
+    """Linhas da série que continuam após a remoção; recusa deixar a série sem hostname."""
+    remaining = [
+        row for row in rows
+        if normalize_reference_value(row.get("hostname")) != key[1]
+        and removal_key(key[0], row.get("hostname")) not in stored
+    ]
+    if not remaining:
+        raise DomainConflictError("Ao menos um hostname da série precisa permanecer.")
+    return remaining
+
+
 def remove_endpoint_hostname(services: EndpointRemovalServices, serie: str, hostname: str) -> Dict[str, Any]:
     """Descarta uma linha duplicada do Endpoint; ao menos uma linha da série permanece."""
     serie = _clean(serie, "a série", MAX_SERIAL_LENGTH)
@@ -110,13 +122,16 @@ def remove_endpoint_hostname(services: EndpointRemovalServices, serie: str, host
         raise DomainConflictError(
             "Esse hostname não está mais duplicado no Endpoint ativo; atualize o histórico e confira."
         )
-    remaining = [row for row in rows if normalize_reference_value(row.get("hostname")) != key[1]]
-    if not remaining:
-        raise DomainConflictError("Ao menos um hostname da série precisa permanecer.")
+    remaining = _remaining_rows(rows, key, frozenset())
 
     def add(entries: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
-        if key in removal_keys(entries):
+        # O índice foi lido fora da trava: outra remoção da mesma série pode ter sido
+        # gravada depois dele. Refaz a conta com a lista atual, dentro da transação.
+        nonlocal remaining
+        stored = removal_keys(entries)
+        if key in stored:
             return entries
+        remaining = _remaining_rows(rows, key, stored)
         return [*entries, {"serie": serie, "hostname": hostname, "removido_em": _now()}]
 
     _write(services, add)
