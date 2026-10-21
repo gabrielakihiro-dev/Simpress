@@ -267,6 +267,10 @@ def resolve_hold(services: AliasChangeServices, hold_id: str, decision: str) -> 
         with services.atomic_file_transaction(
             services.transaction_root(), [users_file, dates_file, pending_file, services.alias_history_file()]
         ) as transaction:
+            # Another request can resolve or replace the decision while this one waits
+            # for the file locks. Never apply the pre-lock copy to the newer state.
+            if read_holds(users_file).get(serial_key) != hold:
+                raise DomainConflictError("Esta pendência mudou; atualize o histórico e confira antes de decidir.")
             with STATE_LOCK:
                 next_equipment_cache = deepcopy(inventory_state.equipamentos_cache)
                 next_unit_cache = deepcopy(inventory_state.unidades_cache)
@@ -279,6 +283,18 @@ def resolve_hold(services: AliasChangeServices, hold_id: str, decision: str) -> 
             endpoint_index = with_details_serials(services.read_endpoint_alias_index(), next_equipment_cache)
             if endpoint_index.get("manual_users_file_missing"):
                 manual_now.update(endpoint_index.get("manual_users", {}))
+            if not endpoint_index.get("available"):
+                raise DomainBusyError("O Endpoint está indisponível; nenhuma decisão foi aplicada.")
+            endpoint_user = endpoint_user_for_serial(endpoint_index, serial_key)
+            if hold["tipo"] == HOLD_REPLACE_MANUAL:
+                users_changed = (
+                    not _same_user(manual_now.get(serial_key), hold["usuario_atual"])
+                    or not _same_user(endpoint_user, hold["usuario_endpoint"])
+                )
+            else:
+                users_changed = bool(endpoint_user.strip())
+            if users_changed:
+                raise DomainConflictError("Os usuários desta pendência mudaram; atualize o histórico antes de decidir.")
             archive_manual = hold["tipo"] == HOLD_REPLACE_MANUAL and decision == "permitir"
             if archive_manual:
                 archived_user = manual_now.get(serial_key, "")

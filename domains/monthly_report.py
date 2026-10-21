@@ -247,7 +247,7 @@ def _simpress_orders_in_snapshot(
 
         if "pedidos_detalhados" in simpress:
             details = simpress.get("pedidos_detalhados")
-            if not isinstance(details, list):
+            if not isinstance(details, list) or (not details and _string_values(simpress.get("pedidos"))):
                 insufficient.append(_insufficient_order(
                     snapshot, serial, _string_values(simpress.get("pedidos")),
                     "O registro novo não contém uma lista válida de pedidos detalhados.",
@@ -257,7 +257,8 @@ def _simpress_orders_in_snapshot(
             for item in details:
                 if not isinstance(item, dict):
                     insufficient.append(_insufficient_order(
-                        snapshot, serial, [], "Há um pedido detalhado em formato inválido.",
+                        snapshot, serial, _string_values(simpress.get("pedidos")),
+                        "Há um pedido detalhado em formato inválido.",
                     ))
         else:
             # Legacy snapshots stored parallel lists on the current series. Only a single
@@ -407,10 +408,20 @@ def tickets_section(report: Mapping[str, Any], month: ReportMonth) -> Dict[str, 
 
         snapshot_orders, snapshot_insufficient = _simpress_orders_in_snapshot(snapshot)
         insufficient.extend(snapshot_insufficient)
+        # An explicitly incomplete newer observation must supersede older counts too.
+        # Otherwise the report counts a stale order while listing it as insufficient.
+        blocked_orders = {
+            _key(identifier)
+            for item in snapshot_insufficient
+            for identifier in item["identificadores"]
+        }
+        for key in blocked_orders:
+            simpress.pop(key, None)
         # A snapshot map already combines equipment rows. Reassignment here makes the
         # latest import authoritative when the same request appears again.
         for key, record in snapshot_orders.items():
-            simpress[key] = record
+            if key not in blocked_orders:
+                simpress[key] = record
 
     def count(records: Mapping[str, Dict[str, Any]], source: str) -> Dict[str, int]:
         counts = {"abertas": 0, "concluidas": 0, "pendentes": 0, "encerradas_sem_data": 0}

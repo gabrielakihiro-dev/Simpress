@@ -555,6 +555,58 @@ class ManualUserWorkflowTests(unittest.TestCase):
         [again] = self._submit([("SN-1", "HOST-1", "davi"), ("SN-2", "HOST-2", "ana")])["mudancas_usuarios"]
         self.assertEqual((again["tipo"], again["usuario_novo"]), ("substituicao_pendente", "davi"))
 
+    def test_decision_rechecks_the_hold_after_acquiring_transaction_locks(self):
+        from domains.user_holds import holds_file
+
+        self._save("SN-1", "joao")
+        [row] = self._submit([("SN-1", "HOST-1", "carla"), ("SN-2", "HOST-2", "ana")])["mudancas_usuarios"]
+        pending = holds_file(self.manual_users)
+        original_holds = json.loads(pending.read_text(encoding="utf-8"))
+        [key] = original_holds
+        original_transaction = main.AtomicFileTransaction
+        before = {path: path.read_bytes() for path in (self.manual_users, self.manual_dates, self.history)}
+        cache_before = copy.deepcopy(inventory_state.equipamentos_cache)
+
+        for change in ("removed", "decided", "replaced", "changed_same_id"):
+            with self.subTest(change=change):
+                pending.write_text(json.dumps(original_holds), encoding="utf-8")
+                concurrent = copy.deepcopy(original_holds)
+                if change == "removed":
+                    concurrent.clear()
+                elif change == "decided":
+                    concurrent[key]["estado"] = "recusada"
+                elif change == "replaced":
+                    concurrent[key]["id"] = "new-pending-decision"
+                else:
+                    concurrent[key]["usuario_endpoint"] = "davi"
+
+                def interleaved_transaction(root, targets):
+                    pending.write_text(json.dumps(concurrent), encoding="utf-8")
+                    return original_transaction(root, targets)
+
+                with patch.object(main, "AtomicFileTransaction", side_effect=interleaved_transaction):
+                    with self.assertRaises(DomainError) as raised:
+                        self._resolve(row, "permitir")
+                self.assertEqual(raised.exception.status_code, 409)
+                self.assertEqual(json.loads(pending.read_text(encoding="utf-8")), concurrent)
+                self.assertEqual({path: path.read_bytes() for path in before}, before)
+                self.assertEqual(inventory_state.equipamentos_cache, cache_before)
+
+    def test_decision_rejects_changed_users_even_if_the_hold_id_is_unchanged(self):
+        self._save("SN-1", "joao")
+        [row] = self._submit([("SN-1", "HOST-1", "carla"), ("SN-2", "HOST-2", "ana")])["mudancas_usuarios"]
+        for source in ("manual", "endpoint"):
+            with self.subTest(source=source):
+                self.manual_users.write_text(json.dumps({"SN-1": "maria" if source == "manual" else "joao"}), encoding="utf-8")
+                make_endpoint_with_users(self.endpoint, [
+                    ("SN-1", "HOST-1", "davi" if source == "endpoint" else "carla"), ("SN-2", "HOST-2", "ana"),
+                ])
+                before = {path: path.read_bytes() for path in (self.manual_users, self.manual_dates, self.history)}
+                with self.assertRaises(DomainError) as raised:
+                    self._resolve(row, "permitir")
+                self.assertEqual(raised.exception.status_code, 409)
+                self.assertEqual({path: path.read_bytes() for path in before}, before)
+
     def test_refused_replacement_survives_missing_manual_file_and_same_endpoint_update(self):
         from domains.user_holds import holds_file
 
