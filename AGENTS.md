@@ -69,6 +69,8 @@ O Simpress roda somente localmente: servidor FastAPI e dados em `data/`, com as 
 - Neste projeto, prefira `rtk <comando>` nos comandos Bash que tenham wrapper compatível, por exemplo `rtk git status`, `rtk git diff`, `rtk rg` e `rtk pytest`, para condensar saídas e registrar a economia.
 - A integração `rtk hook codex` já está registrada globalmente em `~/.codex/hooks.json`. Preserve os hooks locais do projeto e não registre o mesmo matcher `Bash` em `.codex/hooks.json` enquanto a entrada global existir: o Codex carrega hooks de ambos os escopos. Em clones sem a integração global, use `rtk init --codex`, preservando hooks existentes.
 - Se `rtk` não estiver disponível, o comando não tiver wrapper compatível ou a saída condensada estiver incompleta ou ambígua, use o comando original e confira a saída integral quando ela for necessária para a decisão.
+- `rtk rg` exige o ripgrep instalado e no PATH; sem ele a busca falha com "program not found". O `instalar_primeira_vez.bat` o instala pelo `winget` (`BurntSushi.ripgrep.MSVC`); depois, abra um terminal novo. Enquanto isso, use `rtk grep -rn`.
+- Não rode `rtk ls -R` (nem listagem recursiva) na raiz ou em `.claude`: as pastas de worktrees em `.claude/worktrees` somam dezenas de milhares de entradas e a execução estoura o tempo limite. Limite a listagem a pastas específicas e use `-L`/profundidade quando houver.
 - Para informar a economia deste projeto, consulte `rtk gain --project --format json` na raiz e reporte apenas os valores registrados. Não converta tokens ou bytes economizados diretamente em dinheiro.
 
 ## Interface

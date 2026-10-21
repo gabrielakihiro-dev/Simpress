@@ -35,7 +35,7 @@ cd Simpress
 
 ### Primeira vez em uma máquina nova
 
-Execute `instalar_primeira_vez.bat` (duplo clique ou `.\instalar_primeira_vez.bat`). Ele instala o Python 3.12 pelo `winget` se faltar, cria `.venv`, instala as dependências fixadas (inclusive o Playwright), baixa o Chromium do Playwright, confere o Google Chrome usado pela automação (`executar_automacao.bat`) e verifica as pastas de `data/`. Se o Node.js estiver instalado, também roda `npm ci` e baixa o Chromium dos testes de interface (`npm run test:ui:e2e`); sem Node.js, o servidor e a automação funcionam normalmente. Requer internet, pode ser repetido com segurança e, ao final, oferece iniciar o servidor. No uso diário, abra apenas `iniciar_servidor.bat`.
+Execute `instalar_primeira_vez.bat` (duplo clique ou `.\instalar_primeira_vez.bat`). Ele instala o Python 3.12 pelo `winget` se faltar, cria `.venv`, instala as dependências fixadas (inclusive o Playwright), baixa o Chromium do Playwright, confere o Google Chrome usado pela automação (`executar_automacao.bat`) e verifica as pastas de `data/`. Instala também o ripgrep (`rg`) pelo `winget`, se faltar, usado pelo `rtk rg` dos agentes (opcional; abra um terminal novo depois). Se o Node.js estiver instalado, também roda `npm ci` e baixa o Chromium dos testes de interface (`npm run test:ui:e2e`); sem Node.js, o servidor e a automação funcionam normalmente. Requer internet, pode ser repetido com segurança e, ao final, oferece iniciar o servidor. No uso diário, abra apenas `iniciar_servidor.bat`.
 
 ### Inicializador do servidor
 
