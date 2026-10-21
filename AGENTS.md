@@ -74,6 +74,8 @@ O Simpress roda somente localmente: servidor FastAPI e dados em `data/`, com as 
 - `rtk rg` exige o ripgrep instalado e no PATH; sem ele a busca falha com "program not found". O `instalar_primeira_vez.bat` o instala pelo `winget` (`BurntSushi.ripgrep.MSVC`); depois, abra um terminal novo. Enquanto isso, use `rtk grep -rn`.
 - Não rode `rtk ls -R` (nem listagem recursiva) na raiz ou em `.claude`: as pastas de worktrees em `.claude/worktrees` somam dezenas de milhares de entradas e a execução estoura o tempo limite. Limite a listagem a pastas específicas e use `-L`/profundidade quando houver.
 - Para informar a economia deste projeto, consulte `rtk gain --project --format json` na raiz e reporte apenas os valores registrados. Não converta tokens ou bytes economizados diretamente em dinheiro.
+- No início de cada novo chat neste repositório, execute uma vez `rtk gain --project --format json` na raiz e reporte somente os valores registrados.
+- Execute `npm run test:rtk:codex` após alterações na integração ou configuração do RTK; o teste valida a reescrita dos comandos, as métricas e sua persistência em um novo runtime.
 
 ## Interface
 
