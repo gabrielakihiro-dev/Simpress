@@ -332,6 +332,30 @@ Se uma cópia antiga estiver ausente ou inválida, confira manualmente os arquiv
 
 ## Desenvolvimento
 
+### RTK automático no Codex (Windows)
+
+Após instalar RTK e o Codex CLI, configure uma única vez nesta máquina:
+
+```powershell
+npm.cmd run setup:rtk:codex
+```
+
+O configurador atualiza apenas a integração global do RTK: habilita hooks, confia no hash atual do comando exato `rtk hook codex`, preserva os outros hooks e instruções e permite gravar em `%LOCALAPPDATA%\rtk`. Também instala uma regra global para o agente usar `rtk` automaticamente em comandos compatíveis, inclusive dentro de `functions.exec`. Isso cobre a [limitação relatada na ponte de execução do desktop](https://github.com/rtk-ai/rtk/issues/4489). O Codex exige [confiança na definição do hook](https://learn.chatgpt.com/docs/hooks#review-and-trust-hooks); apenas criar `hooks.json` não o ativa.
+
+Abra um novo chat após configurar. Não é necessário repetir a configuração nem pedir para executar RTK em cada conversa. A regra vale para comandos compatíveis e mantém o comando original como alternativa quando necessário. A configuração da máquina permanece fora do Git.
+
+O configurador também define `shell_environment_policy.set.CLAUDE_CONFIG_DIR` quando ausente: o RTK consulta esse diretório mesmo no modo Codex, e usuários isolados do sandbox legado podem não ter uma pasta de usuário registrada. Valores personalizados são preservados. Se houver “acesso negado” ao executar os binários instalados pelo `winget`, confira a permissão de leitura e execução do grupo `CodexSandboxUsers` nas pastas específicas do RTK e ripgrep. Esse ajuste de ACL é local e não é feito pelo configurador.
+
+Para conferir a configuração sem alterá-la e testar comandos curtos/longos em sandbox, incluindo a persistência das métricas em outro runtime:
+
+```powershell
+node scripts/configure_rtk_codex.cjs --check
+npm.cmd run test:rtk:codex
+rtk gain --project --format json
+```
+
+Esses diagnósticos carregam o runtime local do Codex; não iniciam agentes nem consultam um modelo. As contagens do RTK são estimativas de tokens de saídas do terminal. A execução do configurador exige autorização para alterar os arquivos globais em `~/.codex/`.
+
 ### Reconstruir os arquivos da interface
 
 Os arquivos distribuídos em `static/vendor` são servidos localmente. Depois de alterar fontes, ícones ou estilos utilitários, reconstrua-os com Node.js e npm:

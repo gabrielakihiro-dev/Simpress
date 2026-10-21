@@ -3,6 +3,8 @@
   "private": true,
   "license": "UNLICENSED",
   "scripts": {
+    "setup:rtk:codex": "node scripts/configure_rtk_codex.cjs",
+    "test:rtk:codex": "node scripts/configure_rtk_codex.cjs --test",
     "verify": "node scripts/verify.cjs",
     "test:ui:e2e": "playwright test",
     "profile:ui": "playwright test --project=desktop-profile",
