@@ -828,6 +828,55 @@ class WorkflowIntegrityTests(unittest.TestCase):
         self.assertNotIn("SN-ANTIGO", inventory_state.equipamentos_cache)
         self.assertEqual(main.get_primary_equipment_file().resolve(), self.details.resolve())
 
+    def test_official_equipment_source_wins_over_a_newer_archived_copy(self):
+        archived = self.input_dir / "EquipamentosDetalhes_arquivo_antigo.xlsx"
+        make_details(self.details, [
+            ("SN-OFICIAL", "HOST-OFICIAL", "Modelo oficial", "Maringá", "Notebook", "87000000"),
+        ])
+        make_details(archived, [
+            ("SN-ARQUIVO", "HOST-ARQUIVO", "Modelo antigo", "Ponta Grossa", "Notebook", "84000000"),
+        ])
+        timestamp = time.time()
+        os.utime(self.details, (timestamp - 120, timestamp - 120))
+        os.utime(archived, (timestamp, timestamp))
+
+        self.assertEqual(main.get_details_files()[0].resolve(), self.details.resolve())
+        self.assertEqual(main.get_primary_equipment_file().resolve(), self.details.resolve())
+        self.assertTrue(main.load_database())
+        self.assertIn("SN-OFICIAL", inventory_state.equipamentos_cache)
+        self.assertNotIn("SN-ARQUIVO", inventory_state.equipamentos_cache)
+
+    def test_archived_details_without_official_source_keep_first_access_ready(self):
+        archived = self.input_dir / "EquipamentosDetalhes_arquivo_antigo.xlsx"
+        make_details(archived, [
+            ("SN-ARQUIVO", "HOST-ARQUIVO", "Modelo antigo", "Ponta Grossa", "Notebook", "84000000"),
+        ])
+
+        self.assertIsNone(main.get_primary_equipment_file())
+        self.assertFalse(main.load_database())
+        self.assertNotIn("SN-ARQUIVO", inventory_state.equipamentos_cache)
+        report = main.get_startup_readiness()
+        active_status = report["files"]["inventario_equipamentos"]
+        self.assertFalse(active_status["available"])
+        self.assertEqual(active_status["state"], "awaiting_import")
+        self.assertEqual(active_status["file"], self.details.name)
+        self.assertEqual(report["functions"]["comparacao_atualizacao_inventarios"]["state"], "awaiting_import")
+
+    def test_invalid_official_details_never_fall_back_to_a_valid_archived_copy(self):
+        archived = self.input_dir / "EquipamentosDetalhes_arquivo_antigo.xlsx"
+        self.details.write_bytes("XLSX oficial inválido".encode("utf-8"))
+        make_details(archived, [
+            ("SN-ARQUIVO", "HOST-ARQUIVO", "Modelo antigo", "Ponta Grossa", "Notebook", "84000000"),
+        ])
+
+        self.assertIsNone(main.get_primary_equipment_file())
+        self.assertFalse(main.load_database())
+        self.assertNotIn("SN-ARQUIVO", inventory_state.equipamentos_cache)
+        active_status = main.get_startup_readiness()["files"]["inventario_equipamentos"]
+        self.assertFalse(active_status["available"])
+        self.assertEqual(active_status["state"], "invalid")
+        self.assertEqual(active_status["file"], self.details.name)
+
     def test_equipment_edit_changes_only_loaded_source_and_keeps_other_active_records(self):
         archived = self.input_dir / "EquipamentosDetalhes_arquivo_antigo.xlsx"
         make_details(self.details, [
@@ -1041,14 +1090,13 @@ class WorkflowIntegrityTests(unittest.TestCase):
         self.assertEqual(self.details.read_bytes(), before)
         self.assertEqual(inventory_state.equipamentos_cache, cache_before)
 
-    def test_equipment_edit_refuses_a_new_active_source_after_cache_load(self):
+    def test_equipment_edit_keeps_official_source_when_newer_archive_appears(self):
         make_details(self.details, [
             ("SN-CACHE", "ALIAS-CACHE", "Modelo A", "Maringá", "Notebook", "87000000"),
         ])
         make_endpoint(self.endpoint, [("OUTRA-SERIE", "HOST-OUTRO")])
         make_model(self.model)
         self.assertTrue(main.load_database())
-        cache_before = copy.deepcopy(inventory_state.equipamentos_cache)
         source_before = self.details.read_bytes()
 
         newer_source = self.input_dir / "EquipamentosDetalhes_mais_novo.xlsx"
@@ -1059,17 +1107,17 @@ class WorkflowIntegrityTests(unittest.TestCase):
         os.utime(newer_source, (timestamp, timestamp))
         newer_before = newer_source.read_bytes()
 
-        with self.assertRaises(main.HTTPException) as raised:
-            main.salvar_equipamento(main.EquipamentoUpdatePayload(
-                serial="SN-CACHE", modelo="Modelo alterado", tipo="Notebook",
-                revisao=main.get_equipamento("SN-CACHE")["revisao"],
-            ))
+        result = main.salvar_equipamento(main.EquipamentoUpdatePayload(
+            serial="SN-CACHE", modelo="Modelo alterado", tipo="Notebook",
+            revisao=main.get_equipamento("SN-CACHE")["revisao"],
+        ))
 
-        self.assertEqual(raised.exception.status_code, 409)
-        self.assertIn("base ativa mudou", raised.exception.detail)
-        self.assertEqual(self.details.read_bytes(), source_before)
+        self.assertTrue(result["sucesso"])
+        self.assertEqual(main.get_primary_equipment_file().resolve(), self.details.resolve())
+        self.assertNotEqual(self.details.read_bytes(), source_before)
         self.assertEqual(newer_source.read_bytes(), newer_before)
-        self.assertEqual(inventory_state.equipamentos_cache, cache_before)
+        self.assertEqual(main.get_equipamento("SN-CACHE")["modelo"], "Modelo alterado")
+        self.assertNotIn("SN-NOVO", inventory_state.equipamentos_cache)
 
     def test_equipment_edit_failure_preserves_workbook_and_cache(self):
         make_details(self.details, [
@@ -2048,7 +2096,7 @@ class WorkflowIntegrityTests(unittest.TestCase):
         self.assertEqual(keys[0], "key-1")
         self.assertEqual(keys[-1], f"key-{inventory_update.MAX_INVENTORY_IDEMPOTENCY_RECEIPTS}")
 
-    def test_inventory_update_migrates_a_recognized_alternate_details_filename(self):
+    def test_inventory_update_keeps_legacy_details_inactive_until_official_upload(self):
         alternate = self.input_dir / "EquipamentosDetalhes-exportado.xlsx"
         make_details(alternate, [
             ("SN-ALT", "HOST-ANTIGO", "Modelo antigo", "Maringá", "Notebook", "87000000"),
@@ -2060,8 +2108,12 @@ class WorkflowIntegrityTests(unittest.TestCase):
         alternate_before = alternate.read_bytes()
         make_endpoint(self.endpoint, [("SN-ALT", "HOST-ANTIGO")])
         make_model(self.model)
-        self.assertTrue(main.load_database())
-        self.assertEqual(main.get_primary_equipment_file(), alternate)
+        self.assertFalse(main.load_database())
+        self.assertIsNone(main.get_primary_equipment_file())
+        self.assertEqual(
+            main.get_startup_readiness()["files"]["inventario_equipamentos"]["state"],
+            "awaiting_import",
+        )
 
         result = asyncio.run(main.atualizar_planilhas(
             UploadFile(filename="InvAll_nova.xlsx", file=io.BytesIO(_endpoint_bytes([("SN-ALT", "HOST-NOVO")]))),
@@ -2078,7 +2130,7 @@ class WorkflowIntegrityTests(unittest.TestCase):
         history = json.loads(self.comparison_history.read_text(encoding="utf-8"))
         backup_dir = self.input_dir / history[-1]["comparacao"]["backup_diretorio"]
         restored_name = backup_dir / "detalhes" / self.details.name
-        self.assertEqual(restored_name.read_bytes(), alternate_before)
+        self.assertFalse(restored_name.exists())
 
         repeated = asyncio.run(main.atualizar_planilhas(
             UploadFile(filename="InvAll_repetida.xlsx", file=io.BytesIO(_endpoint_bytes([("SN-ALT", "HOST-NOVO")]))),
@@ -3295,7 +3347,7 @@ class WorkflowIntegrityTests(unittest.TestCase):
         self.assertEqual(saved["Parque"]["B2"].value, "HOST-NOVO")
         saved.close()
 
-    def test_manual_alias_rejects_changed_active_source_without_mutating_state(self):
+    def test_manual_alias_keeps_official_source_when_alternate_copy_appears(self):
         make_details(
             self.details,
             [("SN-1", "HOST-ORIGINAL", "Modelo A", "Maringá", "Notebook", "87000000")],
@@ -3304,8 +3356,8 @@ class WorkflowIntegrityTests(unittest.TestCase):
         self.overrides.write_text("{}", encoding="utf-8")
         self.manual_history.write_text("[]", encoding="utf-8")
         self.assertTrue(main.load_database())
-        cached_before = copy.deepcopy(inventory_state.equipamentos_cache)
-        original_source = Path(cached_before["SN-1"]["_source_file"]).resolve()
+        cached_equipment = inventory_state.equipamentos_cache["SN-1"]
+        original_source = Path(cached_equipment["_source_file"]).resolve()
 
         older_mtime = time.time_ns() - 10_000_000_000
         os.utime(self.details, ns=(older_mtime, older_mtime))
@@ -3319,17 +3371,18 @@ class WorkflowIntegrityTests(unittest.TestCase):
         overrides_before = self.overrides.read_bytes()
         history_before = self.manual_history.read_bytes()
 
-        self.assertEqual(main.get_primary_equipment_file().resolve(), replacement_source.resolve())
+        self.assertEqual(main.get_primary_equipment_file().resolve(), self.details.resolve())
         self.assertEqual(original_source, self.details.resolve())
-        with self.assertRaises(DomainError) as raised:
-            main.atualizar_apelido(main.ApelidoUpdatePayload(serial="SN-1", apelido="HOST-MANUAL"))
+        result = main.atualizar_apelido(main.ApelidoUpdatePayload(serial="SN-1", apelido="HOST-MANUAL"))
 
-        self.assertEqual(raised.exception.status_code, 409)
+        self.assertTrue(result["salvo_no_disco"])
+        self.assertEqual(result["equipamento"]["apelido"], "HOST-MANUAL (M)")
+        self.assertEqual(main.get_primary_equipment_file().resolve(), self.details.resolve())
         self.assertEqual(replacement_source.read_bytes(), replacement_before)
         self.assertEqual(self.details.read_bytes(), original_before)
-        self.assertEqual(self.overrides.read_bytes(), overrides_before)
-        self.assertEqual(self.manual_history.read_bytes(), history_before)
-        self.assertEqual(inventory_state.equipamentos_cache, cached_before)
+        self.assertNotEqual(self.overrides.read_bytes(), overrides_before)
+        self.assertNotEqual(self.manual_history.read_bytes(), history_before)
+        self.assertEqual(inventory_state.equipamentos_cache["SN-1"]["apelido"], "HOST-MANUAL (M)")
 
     def test_manual_alias_can_be_removed_after_inventory_refresh_with_hostname_table(self):
         details_headers = ["NumeroSerie", "Hostname", "Modelo", "Cidade", "Tipo", "CEP"]

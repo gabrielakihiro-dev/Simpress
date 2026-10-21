@@ -21,7 +21,7 @@ from datetime import datetime
 from pathlib import Path
 from typing import Any, Dict, List, Optional, Tuple, Type
 
-from core.errors import DomainConflictError, DomainError
+from core.errors import DomainBusyError, DomainConflictError, DomainError
 from core.integrity import FileBusyError, FileTransactionError, WorkbookSafetyError
 from domains import inventory_state
 from domains.alias_changes import AliasChangeServices
@@ -66,31 +66,66 @@ def holds_file(users_file: Path) -> Path:
 
 
 def normalize_holds(stored: Any) -> Dict[str, Dict[str, Any]]:
-    """Valid holds keyed by normalized serial; malformed entries are dropped."""
+    """Validate the complete decision file and return active holds keyed by serial."""
     if not isinstance(stored, dict):
-        return {}
+        raise DomainBusyError("O arquivo local de decisões de usuário tem formato inválido; a atualização foi interrompida.")
     holds: Dict[str, Dict[str, Any]] = {}
     for serial, entry in stored.items():
         key = normalize_reference_value(serial)
-        if not key or not isinstance(entry, dict):
-            continue
+        if not key or not isinstance(entry, dict) or key in holds:
+            raise DomainBusyError("O arquivo local de decisões de usuário tem registros inválidos; a atualização foi interrompida.")
         kind, state = entry.get("tipo"), entry.get("estado")
-        if kind not in ACTIVE_STATES or state not in ACTIVE_STATES[kind] or not str(entry.get("id") or "").strip():
-            continue
-        if not str(entry.get("usuario_atual") or "").strip():
-            continue
+        hold_id = entry.get("id")
+        hold_serial = entry.get("serial")
+        current_user = entry.get("usuario_atual")
+        endpoint_user = entry.get("usuario_endpoint", "")
+        if not isinstance(kind, str) or kind not in ACTIVE_STATES:
+            raise DomainBusyError("O arquivo local de decisões de usuário tem registros inválidos; a atualização foi interrompida.")
+        if not isinstance(state, str) or state not in ACTIVE_STATES[kind]:
+            raise DomainBusyError("O arquivo local de decisões de usuário tem registros inválidos; a atualização foi interrompida.")
+        if (
+            not isinstance(hold_id, str) or not hold_id.strip()
+            or not isinstance(hold_serial, str)
+            or normalize_reference_value(hold_serial) != key
+            or not isinstance(current_user, str) or not current_user.strip()
+            or not isinstance(endpoint_user, str)
+            or (kind == HOLD_REPLACE_MANUAL and not endpoint_user.strip())
+            or (kind == HOLD_USER_MISSING and endpoint_user.strip())
+        ):
+            raise DomainBusyError("O arquivo local de decisões de usuário tem registros inválidos; a atualização foi interrompida.")
         holds[key] = entry
     return holds
 
 
 def read_holds(users_file: Path) -> Dict[str, Dict[str, Any]]:
-    """Active holds; a missing or unreadable file means none, so loading the inventory never fails."""
+    """Return no holds only when the file is genuinely absent; reject unreadable state."""
     path = holds_file(users_file)
     try:
-        value = json.loads(path.read_text(encoding="utf-8")) if path.exists() else {}
-    except (OSError, UnicodeError, ValueError):
+        raw = path.read_text(encoding="utf-8")
+    except FileNotFoundError:
         return {}
+    except (OSError, UnicodeError) as error:
+        raise DomainBusyError(
+            "O arquivo local de decisões de usuário está indisponível; a atualização foi interrompida."
+        ) from error
+    try:
+        value = json.loads(raw)
+    except (json.JSONDecodeError, UnicodeError) as error:
+        raise DomainBusyError(
+            "O arquivo local de decisões de usuário está ilegível; a atualização foi interrompida."
+        ) from error
     return normalize_holds(value)
+
+
+def manual_users_from_holds(holds: Dict[str, Dict[str, Any]]) -> Dict[str, str]:
+    """Recover the current manual user only from an active substitution decision."""
+    return {
+        serial: str(hold["usuario_atual"]).strip()
+        for serial, hold in holds.items()
+        if hold.get("tipo") == HOLD_REPLACE_MANUAL
+        and hold.get("estado") in ACTIVE_STATES[HOLD_REPLACE_MANUAL]
+        and str(hold.get("usuario_atual") or "").strip()
+    }
 
 
 def _same_user(first: Any, second: Any) -> bool:
@@ -132,6 +167,13 @@ def plan_holds(
         else:
             previous = before.get(key)
             if hold and hold.get("tipo") == HOLD_USER_MISSING:
+                new_hold = hold
+            elif (
+                hold and hold.get("tipo") == HOLD_REPLACE_MANUAL
+                and endpoint_index.get("manual_users_file_missing")
+                and hold.get("estado") == "recusada"
+            ):
+                # The refusal is the only trusted copy when the manual-users file is absent.
                 new_hold = hold
             elif previous is not None:
                 old_user = str(previous.get("usuarios_logados") or "").strip()
@@ -234,10 +276,14 @@ def resolve_hold(services: AliasChangeServices, hold_id: str, decision: str) -> 
                 raise DomainError(f"Equipamento com serial '{serial}' não encontrado na base de dados.", status_code=404)
             stored_users = dict(services.validate_json_object(_load_users(services), "usuários manuais"))
             manual_now = manual_users_by_serial(stored_users)
+            endpoint_index = with_details_serials(services.read_endpoint_alias_index(), next_equipment_cache)
+            if endpoint_index.get("manual_users_file_missing"):
+                manual_now.update(endpoint_index.get("manual_users", {}))
             archive_manual = hold["tipo"] == HOLD_REPLACE_MANUAL and decision == "permitir"
             if archive_manual:
                 archived_user = manual_now.get(serial_key, "")
-                transaction.update_json(users_file, lambda data: without_manual_users(data, {serial_key}), {})
+                if not endpoint_index.get("manual_users_file_missing"):
+                    transaction.update_json(users_file, lambda data: without_manual_users(data, {serial_key}), {})
                 transaction.update_json(
                     dates_file,
                     lambda data: {k: v for k, v in (data if isinstance(data, dict) else {}).items()
@@ -267,11 +313,13 @@ def resolve_hold(services: AliasChangeServices, hold_id: str, decision: str) -> 
 
             transaction.update_json(pending_file, update_holds, {})
             holds_after = {serial_key: {**hold, "estado": new_state}} if keep_entry else {}
-            endpoint_index = with_details_serials(services.read_endpoint_alias_index(), next_equipment_cache)
             index = dict(endpoint_index)
             index["manual_users"] = manual_now
             index["manual_user_dates"] = manual_user_dates_by_serial(manual_now, read_manual_user_dates(users_file))
             index["user_holds"] = holds_after
+            index["manual_users_file_missing"] = bool(
+                endpoint_index.get("manual_users_file_missing") and manual_now
+            )
             updated = dict(equipment)
             services.apply_effective_alias(
                 updated, index, details_duplicate=updated.get("invall_alias_status") == "serie_detalhes_duplicada",
