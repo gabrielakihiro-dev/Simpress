@@ -73,6 +73,14 @@ Com o servidor ativo, as inboxes do próprio servidor também processam os lotes
 6. Pedidos com `Origin` ou `Sec-Fetch-Site` de outro site recebem 403 nas rotas novas.
 7. `npm run verify` e `npm run test:ui:e2e` passam; nenhuma rotina real de OS ou inventários é executada nos testes.
 
+## Janela pequena e downloads
+
+Vale igual para o painel e para o `executar_automacao.bat`, porque os dois rodam o mesmo `scripts/automacao_rotinas_chrome.py`.
+
+- **Janela pequena:** se a área da aba for menor que 1440×720 px (`TELA_MINIMA`), a rotina desenha a página nesse tamanho, sem redimensionar a janela. Assim os sites mantêm o layout de desktop (menus, saudação "Olá," e botões de exportação). O ajuste é desfeito enquanto a rotina espera o login, para o usuário ver a tela no tamanho real, e some quando a rotina termina, mesmo após erro. A sessão do UX conta como ativa quando a saudação existe na página, mesmo oculta.
+- **Download vazio:** se outra conexão à porta 9333 trocar o destino dos downloads, o Chrome grava o arquivo direto na pasta dele e o Playwright recebe 0 bytes ou nenhum aviso. A rotina confere o arquivo (não vazio; XLSX/ZIP com assinatura de ZIP) e, nesses casos, usa a cópia gravada pelo Chrome a partir do clique, sem repetir a exportação. O arquivo vazio é apagado, e um arquivo inválido com conteúdo é renomeado para `.invalido`. A preparação dos lotes também ignora downloads de 0 bytes.
+- **Testes:** `tests/test_automacao_telas_browser.py` roda as exportações reais do UX e do Endpoint contra uma bancada local, num Chrome iniciado como o de automação, em janelas pequenas, médias e grandes. `SIMPRESS_TESTE_TODAS_TELAS=1` roda as 15 resoluções (de 500×400 a 3840×2160, com escalas de 125%, 150% e 200%), e `SIMPRESS_TESTE_COM_JANELA=1` mostra o Chrome em vez do modo headless.
+
 ## Ajustes depois de integrar os branches da automação
 
 - Conferir em `ScriptContract` os nomes reais da trava, do sinal, da pasta de logs, dos códigos `2`/`130` e das frases de login.

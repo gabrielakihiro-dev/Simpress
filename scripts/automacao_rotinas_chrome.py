@@ -26,10 +26,12 @@ import importlib.util
 import json
 import os
 import re
+import shutil
 import subprocess
 import sys
 import time
 import urllib.request
+import zipfile
 from datetime import datetime
 from pathlib import Path
 from typing import TYPE_CHECKING, Callable
@@ -58,6 +60,10 @@ ENDPOINT_URL = "https://centralendpoint.pr.sebrae.com.br/webclient#/uems/invento
 LOGIN_TIMEOUT_S = 10 * 60
 CARREGAMENTO_MS = 90_000
 DOWNLOAD_MS = 5 * 60_000
+# Espera pela cópia que o próprio Chrome grava quando o Playwright recebe o download vazio.
+COPIA_CHROME_S = 60
+# Menor área (CSS px) em que os sites mantêm o layout de desktop usado pela rotina.
+TELA_MINIMA = (1440, 720)
 # Sinal de cancelamento: o painel local (ou ``--cancelar``) cria o arquivo e a rotina para no próximo ponto de espera.
 CANCELAR_ARQUIVO = ROOT / "data" / "state" / "automacao_chrome.cancelar"
 _inicio_execucao = 0.0
@@ -401,11 +407,70 @@ def esperar_visivel(locator, timeout_ms: int) -> bool:
         return False
 
 
+def presente(locator) -> bool:
+    """Existe no DOM, mesmo oculto (por exemplo, num menu recolhido de tela estreita)."""
+    try:
+        return locator.count() > 0
+    except Exception:
+        return False
+
+
+# Abas desenhadas em TELA_MINIMA: a sessão CDP guardada mantém a emulação viva.
+_telas_ajustadas: dict = {}
+
+
+def tamanho_emulado(largura: int, altura: int) -> tuple[int, int] | None:
+    """Tamanho a emular para a área atual da aba, ou None se ela já comporta o layout de desktop."""
+    if largura >= TELA_MINIMA[0] and altura >= TELA_MINIMA[1]:
+        return None
+    return max(largura, TELA_MINIMA[0]), max(altura, TELA_MINIMA[1])
+
+
+def garantir_tela_minima(page: "Page", origem: str) -> None:
+    """Com a janela do Chrome pequena, desenha a aba em TELA_MINIMA sem redimensionar a janela.
+
+    Os sites escondem menus e saudações em telas estreitas e a rotina deixaria de achá-los.
+    A emulação vale só enquanto a sessão CDP existir: some ao liberar a aba, ao fechá-la ou
+    quando a rotina termina, mesmo após erro.
+    """
+    try:
+        if page in _telas_ajustadas or page.is_closed():
+            return
+        largura, altura = page.evaluate("() => [window.innerWidth, window.innerHeight]")
+        tamanho = tamanho_emulado(int(largura), int(altura))
+        if tamanho is None:
+            return
+        sessao = page.context.new_cdp_session(page)
+        sessao.send(
+            "Emulation.setDeviceMetricsOverride",
+            {"width": tamanho[0], "height": tamanho[1], "deviceScaleFactor": 0, "mobile": False},
+        )
+    except Exception as erro:
+        log(origem, f"Não foi possível ajustar o tamanho da página ({descrever_erro(erro)}); seguindo com o da janela.")
+        return
+    _telas_ajustadas[page] = sessao
+    page.once("close", lambda *_: _telas_ajustadas.pop(page, None))
+    log(origem, f"Janela pequena ({largura}x{altura}); a página será desenhada em {tamanho[0]}x{tamanho[1]}.")
+
+
+def liberar_tela_minima(page: "Page") -> None:
+    """Volta a aba ao tamanho real da janela (por exemplo, para o usuário fazer o login)."""
+    sessao = _telas_ajustadas.pop(page, None)
+    if sessao is None:
+        return
+    try:
+        sessao.send("Emulation.clearDeviceMetricsOverride")
+        sessao.detach()
+    except Exception:
+        pass
+
+
 def nova_aba(context: "BrowserContext", url: str, origem: str) -> "Page":
     verificar_cancelamento()
     page = context.new_page()
     log(origem, f"Abrindo {url}")
     page.goto(url, wait_until="domcontentloaded", timeout=CARREGAMENTO_MS)
+    garantir_tela_minima(page, origem)
     return page
 
 
@@ -426,6 +491,7 @@ def aguardar_login(
         verificar_cancelamento()
         if logado(page):
             log(origem, "Sessão ativa.")
+            garantir_tela_minima(page, origem)
             return
         if entrar is not None and not tentou_entrar and entrar(page):
             tentou_entrar = True
@@ -433,6 +499,7 @@ def aguardar_login(
         page.wait_for_timeout(1000)
     if tentou_entrar:
         log(origem, "O acesso com a conta conectada não concluiu o login.")
+    liberar_tela_minima(page)  # o login aparece no tamanho real da janela
     page.bring_to_front()
     log(origem, "AÇÃO NECESSÁRIA: faça o login na janela do Chrome de automação.")
     avisar(f"Simpress: login necessário no {origem}", "Faça o login na janela do Chrome de automação; a rotina continua sozinha.")
@@ -443,6 +510,7 @@ def aguardar_login(
         if logado(page):
             log(origem, "Login detectado; continuando.")
             page.wait_for_timeout(2000)
+            garantir_tela_minima(page, origem)
             return
         page.wait_for_timeout(2000)
     raise RotinaErro(f"Login não concluído em {LOGIN_TIMEOUT_S // 60} minutos.")
@@ -458,20 +526,130 @@ def nome_livre(pasta: Path, nome: str) -> Path:
     return destino
 
 
-def salvar_download(download: "Download", origem: str) -> Path:
+def arquivo_valido(arquivo: Path) -> bool:
+    """Não vazio e, para XLSX/ZIP, com a assinatura de ZIP (o XLSX também é um ZIP)."""
+    try:
+        if arquivo.stat().st_size == 0:
+            return False
+    except OSError:
+        return False
+    return arquivo.suffix.lower() not in (".xlsx", ".zip") or zipfile.is_zipfile(arquivo)
+
+
+def pastas_download_chrome() -> list[Path]:
+    """Pastas onde o próprio Chrome de automação pode ter gravado o arquivo."""
+    pastas = [DOWNLOADS_DIR]
+    try:
+        preferencias = json.loads((CHROME_PROFILE_DIR / "Default" / "Preferences").read_text(encoding="utf-8"))
+        padrao = (preferencias.get("download") or {}).get("default_directory")
+        if padrao:
+            pastas.append(Path(padrao))
+    except (OSError, ValueError, AttributeError):
+        pass
+    pastas.append(Path.home() / "Downloads")
+    unicas: list[Path] = []
+    for pasta in pastas:
+        if pasta not in unicas:
+            unicas.append(pasta)
+    return unicas
+
+
+def padrao_do_nome(nome: str) -> "re.Pattern[str]":
+    """'nome.ext' e as variações 'nome (N).ext' que o Chrome cria quando o nome já existe."""
+    sugerido = Path(nome)
+    return re.compile(re.escape(sugerido.stem) + r"(?: \(\d+\))?" + re.escape(sugerido.suffix), re.IGNORECASE)
+
+
+def padrao_do_prefixo(prefixo: str) -> "re.Pattern[str]":
+    """Exportação esperada pelo início do nome (expressão regular), em XLSX ou ZIP."""
+    return re.compile(f"(?:{prefixo})" + r".*\.(?:xlsx|zip)", re.IGNORECASE)
+
+
+def copia_do_chrome(padrao: "re.Pattern[str]", desde: float, ignorar: Path | None = None) -> Path | None:
+    """Arquivo válido mais recente que o próprio Chrome gravou com esse nome a partir de ``desde``."""
+    achados: list[tuple[float, Path]] = []
+    for pasta in pastas_download_chrome():
+        try:
+            arquivos = list(pasta.iterdir())
+        except OSError:
+            continue
+        for arquivo in arquivos:
+            if arquivo == ignorar or not padrao.fullmatch(arquivo.name):
+                continue
+            try:
+                modificado = arquivo.stat().st_mtime
+            except OSError:
+                continue
+            if modificado >= desde - 1 and arquivo_valido(arquivo):
+                achados.append((modificado, arquivo))
+    return max(achados)[1] if achados else None
+
+
+def usar_copia_do_chrome(copia: Path, origem: str) -> Path:
+    """Traz para DOWNLOADS_DIR (onde a importação procura) o arquivo que o Chrome gravou em outra pasta."""
+    if copia.parent != DOWNLOADS_DIR:
+        DOWNLOADS_DIR.mkdir(parents=True, exist_ok=True)
+        destino = nome_livre(DOWNLOADS_DIR, copia.name)
+        shutil.copy2(copia, destino)
+        copia = destino
+    log(origem, f"Arquivo salvo (cópia do Chrome): {copia.name} ({copia.stat().st_size:,} bytes)".replace(",", "."))
+    return copia
+
+
+def salvar_download(download: "Download", origem: str, desde: float | None = None) -> Path:
+    """Grava o download e confere o conteúdo.
+
+    Se outra conexão ao Chrome (porta 9333) trocar o comportamento de download, o Chrome grava o
+    arquivo direto na pasta dele e o Playwright entrega uma cópia vazia: nesse caso usa a cópia do Chrome.
+    """
     falha = download.failure()
     if falha:
         raise RotinaErro(f"Download falhou: {falha}")
+    desde = time.time() - DOWNLOAD_MS / 1000 if desde is None else desde
     DOWNLOADS_DIR.mkdir(parents=True, exist_ok=True)
-    destino = nome_livre(DOWNLOADS_DIR, download.suggested_filename)
-    download.save_as(destino)
-    log(origem, f"Arquivo salvo: {destino.name} ({destino.stat().st_size:,} bytes)".replace(",", "."))
-    return destino
+    nome = download.suggested_filename
+    destino = nome_livre(DOWNLOADS_DIR, nome)
+    try:
+        download.save_as(destino)
+    except Exception as erro:
+        log(origem, f"O Playwright não conseguiu gravar o download ({descrever_erro(erro)}).")
+    if arquivo_valido(destino):
+        log(origem, f"Arquivo salvo: {destino.name} ({destino.stat().st_size:,} bytes)".replace(",", "."))
+        return destino
+
+    tamanho = destino.stat().st_size if destino.exists() else 0
+    log(origem, f"O arquivo recebido veio inválido ({tamanho} bytes); procurando a cópia gravada pelo próprio Chrome...")
+    # A cópia inválida sai do caminho: a importação escolhe o download mais recente pelo nome.
+    if destino.exists():
+        if tamanho == 0:
+            destino.unlink()
+        else:
+            destino.replace(nome_livre(destino.parent, destino.name + ".invalido"))
+    padrao = padrao_do_nome(nome)
+    limite = time.time() + COPIA_CHROME_S
+    copia = copia_do_chrome(padrao, desde, destino)
+    while copia is None and time.time() < limite:
+        verificar_cancelamento()
+        time.sleep(1)
+        copia = copia_do_chrome(padrao, desde, destino)
+    if copia is None:
+        raise RotinaErro(
+            f"O download de {nome} chegou vazio e o Chrome não gravou uma cópia válida em "
+            f"{', '.join(str(p) for p in pastas_download_chrome())}."
+        )
+    return usar_copia_do_chrome(copia, origem)
 
 
-def exportar_com_download(page: "Page", origem: str, clicar: Callable[[], None]) -> Path:
-    """Clica uma única vez na exportação e grava o arquivo recebido."""
+def exportar_com_download(page: "Page", origem: str, clicar: Callable[[], None], prefixo: str | None = None) -> Path:
+    """Clica uma única vez na exportação e grava o arquivo recebido.
+
+    Com ``prefixo`` (início esperado do nome), também aceita o arquivo que o próprio Chrome gravar
+    quando o aviso de download não chega ao Playwright (outra conexão à porta 9333 trocou o destino).
+    """
     verificar_cancelamento()
+    garantir_tela_minima(page, origem)
+    desde = time.time()
+    padrao = padrao_do_prefixo(prefixo) if prefixo else None
     recebidos: list["Download"] = []
 
     def receber_download(download: "Download") -> None:
@@ -487,7 +665,11 @@ def exportar_com_download(page: "Page", origem: str, clicar: Callable[[], None])
                 raise RotinaErro(f"O download não começou em {DOWNLOAD_MS // 60_000} minutos.")
             verificar_cancelamento()
             page.wait_for_timeout(500)
-        return salvar_download(recebidos[0], origem)
+            copia = copia_do_chrome(padrao, desde) if padrao is not None and not recebidos else None
+            if copia is not None:
+                log(origem, "O aviso de download não chegou ao Playwright; usando o arquivo gravado pelo Chrome.")
+                return usar_copia_do_chrome(copia, origem)
+        return salvar_download(recebidos[0], origem, desde)
     finally:
         page.remove_listener("download", receber_download)
 
@@ -602,7 +784,7 @@ def exportar_oracle(context: "BrowserContext") -> Path:
         if not visivel(excel):
             submenu.click()
         excel.first.wait_for(state="visible", timeout=10000)
-        arquivo = exportar_com_download(page, "Oracle", excel.first.click)
+        arquivo = exportar_com_download(page, "Oracle", excel.first.click, r"Gest[ãa]o de Solicita[çc][õo]es")
     except Exception:
         registrar_erro(page, "Oracle")
         raise
@@ -615,8 +797,9 @@ def exportar_oracle(context: "BrowserContext") -> Path:
 # --------------------------------------------------------------------------
 
 def ux_logado(page: "Page") -> bool:
+    # "Olá, <nome>" fica num menu recolhido em janelas estreitas: basta existir na página.
     url = page.url.lower()
-    return "ux.simpress.com.br" in url and "autenticacao" not in url and "login" not in url and visivel(
+    return "ux.simpress.com.br" in url and "autenticacao" not in url and "login" not in url and presente(
         page.get_by_text(re.compile(r"^\s*Olá,", re.IGNORECASE))
     )
 
@@ -713,7 +896,7 @@ def exportar_ux_pedidos(context: "BrowserContext") -> Path:
         page.get_by_role("button", name="Baixar detalhes").filter(visible=True).first.click()
         excel = page.locator('a.export-option[data-extensao="xlsx"]').filter(visible=True).first
         excel.wait_for(state="visible", timeout=10000)
-        arquivo = exportar_com_download(page, "UX Simpress", excel.click)
+        arquivo = exportar_com_download(page, "UX Simpress", excel.click, r"Acompanhamento[_ ]de[_ ]pedidos")
     except Exception:
         registrar_erro(page, "UX Simpress")
         raise
@@ -733,7 +916,7 @@ def exportar_ux_equipamentos(context: "BrowserContext") -> Path:
         exportar.click()
         excel = page.locator("#ExportarXlsx").filter(visible=True).first
         excel.wait_for(state="visible", timeout=10000)
-        arquivo = exportar_com_download(page, "UX Simpress", excel.click)
+        arquivo = exportar_com_download(page, "UX Simpress", excel.click, "EquipamentosDetalhes")
     except Exception:
         registrar_erro(page, "UX Simpress")
         raise
@@ -827,7 +1010,8 @@ def exportar_endpoint(context: "BrowserContext") -> Path:
         if not (xlsx.first.is_checked() and consentimento.first.is_checked()):
             raise RotinaErro("Formato XLSX ou declaração de privacidade não ficaram marcados.")
         arquivo = exportar_com_download(
-            page, "Endpoint Central", page.locator("#export_option_submit").filter(visible=True).first.click
+            page, "Endpoint Central", page.locator("#export_option_submit").filter(visible=True).first.click,
+            "InvAllComputersSummary",
         )
         validar_xlsx_endpoint(arquivo)
     except Exception:
