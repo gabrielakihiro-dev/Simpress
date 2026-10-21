@@ -33,6 +33,12 @@ git clone https://github.com/gabrielakihiro-dev/Simpress.git
 cd Simpress
 ```
 
+### Primeira vez em uma máquina nova
+
+Execute `instalar_primeira_vez.bat` (duplo clique ou `.\instalar_primeira_vez.bat`). Ele instala o Python 3.12 pelo `winget` se faltar, cria `.venv`, instala as dependências fixadas (inclusive o Playwright), baixa o Chromium do Playwright, confere o Google Chrome usado pela automação (`executar_automacao.bat`) e verifica as pastas de `data/`. Se o Node.js estiver instalado, também roda `npm ci` e baixa o Chromium dos testes de interface (`npm run test:ui:e2e`); sem Node.js, o servidor e a automação funcionam normalmente. Requer internet, pode ser repetido com segurança e, ao final, oferece iniciar o servidor. No uso diário, abra apenas `iniciar_servidor.bat`.
+
+### Inicializador do servidor
+
 O inicializador `iniciar_servidor.bat` prepara automaticamente o ambiente na primeira execução: cria `.venv` e instala as dependências fixadas. Isso requer Python 3.12 ou superior e conexão com a internet na primeira instalação. Nas próximas inicializações, a instalação só se repete quando os arquivos de dependências mudarem.
 
 Se o `pip` estiver ausente na `.venv`, o inicializador tenta recuperá-lo automaticamente com `ensurepip` e reinstala as dependências. A recuperação do `pip` usa os arquivos incluídos no Python; a instalação das dependências requer internet.
