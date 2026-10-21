@@ -176,30 +176,11 @@
       <button type="button" id="btn-alerta-base-atualizar" data-on-click="abrirModalAtualizarPlanilhas" class="btn btn-secondary stale-base-alert-action">Atualizar base</button>
     </section>
 
-    <!-- ALERTAS DE OS PARADAS E DIVERGÊNCIAS NOVAS (docs/operacao/alertas-os-divergencias.md; ocultos até o painel responder) -->
-    <section id="alerta-os-paradas" class="stale-base-alert" role="status" aria-labelledby="alerta-os-paradas-titulo" data-state="loading" hidden>
-      <i data-lucide="file-clock" class="stale-base-alert-icon" aria-hidden="true"></i>
-      <div class="stale-base-alert-copy">
-        <h2 id="alerta-os-paradas-titulo" class="stale-base-alert-title">OS paradas</h2>
-        <p id="alerta-os-paradas-texto" class="stale-base-alert-text"></p>
-      </div>
-      <button type="button" id="btn-alerta-os-paradas" data-on-click="abrirAcompanhamentoChamados" class="btn btn-secondary stale-base-alert-action">Ver chamados</button>
-    </section>
-
-    <section id="alerta-divergencias-novas" class="stale-base-alert" role="status" aria-labelledby="alerta-divergencias-novas-titulo" data-state="loading" hidden>
-      <i data-lucide="alert-circle" class="stale-base-alert-icon" aria-hidden="true"></i>
-      <div class="stale-base-alert-copy">
-        <h2 id="alerta-divergencias-novas-titulo" class="stale-base-alert-title">Divergências novas</h2>
-        <p id="alerta-divergencias-novas-texto" class="stale-base-alert-text"></p>
-      </div>
-      <button type="button" id="btn-alerta-divergencias-novas" data-on-click="abrirEvolucaoAtualizacoes" class="btn btn-secondary stale-base-alert-action">Ver evolução</button>
-    </section>
-
     <!-- 1. BUSCA DE EQUIPAMENTO POR NÚMERO DE SÉRIE -->
     <section class="glass-card home-search-card rounded-2xl p-6 sm:p-8 relative z-50">
 
       <div class="relative">
-        <label for="input-serial" class="home-search-label font-bold text-white">Pesquise por série, apelido, modelo ou cidade</label>
+        <label for="input-serial" class="home-search-label font-bold text-white">Pesquise por série, apelido, modelo, cidade ou nome do usuário</label>
         <form data-on-submit="buscarSerial" class="flex flex-col sm:flex-row gap-4">
           <div class="relative flex-1">
             <input
@@ -207,7 +188,7 @@
               id="input-serial"
               aria-keyshortcuts="/ Control+K Meta+K"
               role="combobox"
-              aria-label="Série, apelido, modelo ou cidade do equipamento"
+              aria-label="Série, apelido, modelo, cidade ou nome do usuário do equipamento"
               aria-autocomplete="list"
               aria-controls="autocomplete-list"
               aria-expanded="false"
@@ -535,6 +516,25 @@ Horário disponível para atendimento:</textarea>
           </div>
         </section>
       </div>
+    </section>
+
+    <!-- ALERTAS DE OS PARADAS E DIVERGÊNCIAS NOVAS (docs/operacao/alertas-os-divergencias.md; ocultos até o painel responder) -->
+    <section id="alerta-os-paradas" class="stale-base-alert" role="status" aria-labelledby="alerta-os-paradas-titulo" data-state="loading" hidden>
+      <i data-lucide="file-clock" class="stale-base-alert-icon" aria-hidden="true"></i>
+      <div class="stale-base-alert-copy">
+        <h2 id="alerta-os-paradas-titulo" class="stale-base-alert-title">OS paradas</h2>
+        <p id="alerta-os-paradas-texto" class="stale-base-alert-text"></p>
+      </div>
+      <button type="button" id="btn-alerta-os-paradas" data-on-click="abrirAcompanhamentoChamados" class="btn btn-secondary stale-base-alert-action">Ver chamados</button>
+    </section>
+
+    <section id="alerta-divergencias-novas" class="stale-base-alert" role="status" aria-labelledby="alerta-divergencias-novas-titulo" data-state="loading" hidden>
+      <i data-lucide="alert-circle" class="stale-base-alert-icon" aria-hidden="true"></i>
+      <div class="stale-base-alert-copy">
+        <h2 id="alerta-divergencias-novas-titulo" class="stale-base-alert-title">Divergências novas</h2>
+        <p id="alerta-divergencias-novas-texto" class="stale-base-alert-text"></p>
+      </div>
+      <button type="button" id="btn-alerta-divergencias-novas" data-on-click="abrirEvolucaoAtualizacoes" class="btn btn-secondary stale-base-alert-action">Ver evolução</button>
     </section>
 
     <!-- PESQUISAS RECENTES (localStorage do navegador; oculta enquanto vazia) -->
