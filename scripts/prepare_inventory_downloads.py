@@ -26,6 +26,8 @@ def recent_workbook(downloads: Path, prefix: str, since: datetime):
         and path.name.casefold().startswith(prefix.casefold())
         and path.suffix.lower() in (".xlsx", ".zip")
         and path.stat().st_mtime >= since.timestamp()
+        # Download vazio (0 bytes) nunca é o arquivo exportado; não deixa ele vencer o válido.
+        and path.stat().st_size > 0
     ]
     if not candidates:
         raise ValueError(f"Nenhum download recente de {prefix} encontrado; o par não foi publicado.")
