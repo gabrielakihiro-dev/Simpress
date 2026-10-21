@@ -29,7 +29,7 @@ from domains.history_annotations import (
     effective_history_annotation, history_annotation_row_fingerprint,
     load_effective_history_annotations, same_annotation_revision,
 )
-from domains.effective_alias import apply_effective_alias, endpoint_loss_warnings, with_details_serials
+from domains.effective_alias import apply_effective_alias, endpoint_loss_warnings, endpoint_user_for_serial, with_details_serials
 from domains.local_setup import unpack_simpress_zip
 from domains.user_holds import hold_change_rows, holds_file, plan_holds, read_holds
 from domains.user_changes import (
@@ -41,6 +41,7 @@ from domains.user_changes import (
     manual_users_by_serial,
     manual_users_overridden_by_endpoint,
     read_manual_user_dates,
+    read_manual_users,
     without_manual_users,
 )
 
@@ -705,17 +706,36 @@ def _commit_inventory_files(
             # alias history, so it cannot come back silently if the Endpoint user disappears later.
             overridden: Dict[str, Dict[str, str]] = {}
             created_holds: List[Dict[str, Any]] = []
+            manual_users_missing = False
             if manual_users_file is not None:
-                stored_users = None
-                if manual_users_file.is_file():
-                    try:
-                        stored_users = json.loads(manual_users_file.read_text(encoding="utf-8"))
-                    except (OSError, ValueError):
-                        # An unreadable manual file is already ignored by the load; it stays untouched.
-                        stored_users = None
-                manual_now = manual_users_by_serial(stored_users) if isinstance(stored_users, dict) else {}
+                stored_users = read_manual_users(manual_users_file)
+                manual_now = manual_users_by_serial(stored_users or {})
                 holds_path = holds_file(manual_users_file)
                 existing_holds = read_holds(manual_users_file)
+                manual_users_missing = stored_users is None
+                if manual_users_missing:
+                    fallback_manual_users = {
+                        key: str(hold["usuario_atual"]).strip()
+                        for key, hold in existing_holds.items()
+                        if hold.get("tipo") == "substituicao_manual"
+                    }
+                    manual_now.update(fallback_manual_users)
+                    endpoint_with_details = with_details_serials(
+                        endpoint_index, prepared_state["equipamentos_cache"],
+                    )
+                    for key, hold in existing_holds.items():
+                        if (
+                            hold.get("tipo") == "substituicao_manual"
+                            and hold.get("estado") == "pendente"
+                            and not endpoint_user_for_serial(endpoint_with_details, key).strip()
+                        ):
+                            raise DomainBusyError(
+                                "O cadastro manual está ausente e há uma decisão pendente sem usuário atual no Endpoint; "
+                                "a atualização foi interrompida para preservar a decisão."
+                            )
+                    if fallback_manual_users:
+                        endpoint_index["manual_users_file_missing"] = True
+                        endpoint_index["manual_users"] = dict(manual_now)
                 # Um usuário manual ou um usuário do Endpoint que sumiu nunca muda sozinho: vira pendência
                 # e o usuário atual continua valendo até a decisão (ver domains/user_holds.py).
                 next_holds, created_holds = plan_holds(
@@ -749,7 +769,7 @@ def _commit_inventory_files(
                     {key: user for key, user in manual_now.items()
                      if next_holds.get(key, {}).get("tipo") != "usuario_ausente"},
                 )
-            if overridden and manual_users_file is not None:
+            if overridden and manual_users_file is not None and not manual_users_missing:
                 transaction.update_json(
                     manual_users_file, lambda data: without_manual_users(data, set(overridden)), {},
                 )

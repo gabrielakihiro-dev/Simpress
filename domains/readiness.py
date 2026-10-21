@@ -184,11 +184,10 @@ def build_readiness_report(services: ReadinessServices) -> Dict[str, Any]:
     logger = services.logger
     ticket_report_status = services.check_startup_ticket_report(services.ticket_report_file())
     try:
-        details_candidates = services.get_details_files()
+        services.get_details_files()
         details_directory_readable = True
     except OSError as error:
         logger.warning("Falha ao listar inventários (papel=detalhes, erro=%s).", type(error).__name__)
-        details_candidates = []
         details_directory_readable = False
     try:
         active_details = services.get_primary_equipment_file()
@@ -202,23 +201,32 @@ def build_readiness_report(services: ReadinessServices) -> Dict[str, Any]:
         base_loaded, units_loaded = services.loaded_state()
         if details_status["available"] and not base_loaded:
             details_status.update(available=False, reason="inventário não carregado; importe o par Simpress e Endpoint")
-    elif details_candidates:
-        details_status = {
-            "available": False,
-            "file": details_candidates[0].name,
-            "reason": "nenhum inventário contém aba e cabeçalhos válidos",
-        }
     elif not details_directory_readable:
         details_status = {
             "available": False,
             "file": services.details_upload_file().name,
             "reason": "não foi possível ler a pasta de inventários",
         }
-    else:
+    elif not services.details_upload_file().exists():
         details_status = {
             "available": False,
             "file": services.details_upload_file().name,
             "reason": "ausente",
+            "state": "awaiting_import",
+        }
+    elif not services.details_upload_file().is_file():
+        details_status = {
+            "available": False,
+            "file": services.details_upload_file().name,
+            "reason": "caminho do inventário oficial inválido",
+            "state": "invalid",
+        }
+    else:
+        details_status = {
+            "available": False,
+            "file": services.details_upload_file().name,
+            "reason": "inventário oficial inválido ou sem cabeçalhos de equipamentos",
+            "state": "invalid",
         }
 
     try:

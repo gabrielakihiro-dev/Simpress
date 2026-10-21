@@ -276,7 +276,7 @@
     const historyDate = String(comparison.horario_comparacao || "").slice(0, 10);
     try {
       await app.baixarHistoricoComparacoesExcel(historyDate);
-      app.showToast("Histórico do dia exportado automaticamente.", "success");
+      app.showToast("Planilha Exportada com Sucesso!", "success");
     } catch (error) {
       console.warn("A atualização foi concluída, mas a exportação automática falhou:", error);
       app.showToast(

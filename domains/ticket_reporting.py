@@ -191,7 +191,7 @@ def _latest_simpress_identifier(values: Sequence[Any]) -> str:
 
 
 def normalize_ticket_snapshot(snapshot: Dict[str, Any]) -> Dict[str, Any]:
-    """Project legacy reports with current Simpress pedido and OS IDs without changing stored data."""
+    """Project snapshots for the current-ticket screen without rewriting or exposing raw order details."""
     normalized = deepcopy(snapshot)
     tickets = normalized.get("chamados")
     if not isinstance(tickets, list):
@@ -205,6 +205,9 @@ def normalize_ticket_snapshot(snapshot: Dict[str, Any]) -> Dict[str, Any]:
         if not isinstance(simpress, dict):
             simpress = {}
             ticket["simpress"] = simpress
+        # The screen highlights the current request. Monthly reporting reads the raw snapshot
+        # before this projection and uses the separate order-level records.
+        simpress.pop("pedidos_detalhados", None)
         orders = simpress.get("ordens_servico")
         orders_changed = False
         if isinstance(orders, list):

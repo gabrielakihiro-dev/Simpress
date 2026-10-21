@@ -269,7 +269,7 @@ class MaintenanceContractTests(unittest.TestCase):
         script = _frontend_script()
         self.assertEqual(
             script.count('showToast("Planilha Exportada com Sucesso!", "success");'),
-            3,
+            7,
         )
 
     def test_tailwind_build_only_scans_fixed_local_assets(self):

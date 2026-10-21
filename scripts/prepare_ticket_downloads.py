@@ -17,6 +17,7 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT))
 from core.config import AUTOMATIC_TICKET_INBOX_DIR, MAX_UPLOAD_BYTES, format_size_limit
+from core.local_paths import is_link_or_junction
 
 
 def get_default_downloads() -> Path:
@@ -99,6 +100,68 @@ def publish_staging(staging: Path, target: Path, attempts: int = 10, delay_secon
             time.sleep(delay_seconds)
 
 
+def _origin_record(since: datetime, pair: dict) -> dict:
+    return {
+        "inicio_execucao": since.isoformat(),
+        "fontes": {role: value[2] for role, value in pair.items()},
+    }
+
+
+def _file_sha256(path: Path) -> str:
+    digest = hashlib.sha256()
+    with path.open("rb") as source:
+        for chunk in iter(lambda: source.read(1024 * 1024), b""):
+            digest.update(chunk)
+    return digest.hexdigest()
+
+
+def _matches_origin(batch_dir: Path, batch_tag: str, origin_record: dict, pair: dict) -> bool:
+    if is_link_or_junction(batch_dir) or not batch_dir.is_dir():
+        return False
+    try:
+        origin = json.loads((batch_dir / "_origem.json").read_text(encoding="utf-8"))
+    except (OSError, UnicodeError, ValueError):
+        return False
+    if not (
+        isinstance(origin, dict)
+        and origin.get("lote_id") == batch_tag
+        and origin.get("inicio_execucao") == origin_record["inicio_execucao"]
+        and origin.get("fontes") == origin_record["fontes"]
+    ):
+        return False
+    for role, (name, _payload, source) in pair.items():
+        role_dir = batch_dir / role
+        path = role_dir / name
+        if is_link_or_junction(role_dir) or not role_dir.is_dir():
+            return False
+        if is_link_or_junction(path) or not path.is_file():
+            return False
+        try:
+            if _file_sha256(path) != source.get("sha256"):
+                return False
+        except OSError:
+            return False
+    return True
+
+
+def _find_batch(inbox: Path, base_tag: str, origin_record: dict, pair: dict) -> tuple[str, Path | None, str | None]:
+    statuses = ("pendentes", "processando", "processadas", "falhas")
+    sequence = 1
+    while True:
+        batch_tag = base_tag if sequence == 1 else f"{base_tag}_{sequence:02d}"
+        existing = [
+            (status, inbox / status / batch_tag)
+            for status in statuses
+            if (inbox / status / batch_tag).exists() or (inbox / status / batch_tag).is_symlink()
+        ]
+        if not existing:
+            return batch_tag, None, None
+        for status, batch_dir in existing:
+            if _matches_origin(batch_dir, batch_tag, origin_record, pair):
+                return batch_tag, batch_dir, status
+        sequence += 1
+
+
 def prepare(downloads: Path, since: datetime, inbox: Path) -> dict:
     if since.tzinfo is None:
         raise ValueError("Informe --since com fuso horário, por exemplo 2026-10-20T12:00:00-03:00.")
@@ -111,11 +174,11 @@ def prepare(downloads: Path, since: datetime, inbox: Path) -> dict:
         "simpress": recent_workbook(downloads, ux_prefixes, since),
     }
 
-    batch_tag = f"OS_{since.strftime('%Y%m%d_%H%M')}"
-    for status in ("pendentes", "processando", "processadas", "falhas"):
-        existing = inbox / status / batch_tag
-        if existing.exists():
-            return {"lote_id": batch_tag, "pasta": str(existing), "estado": status, "reutilizado": True}
+    base_tag = f"OS_{since.strftime('%Y%m%d_%H%M')}"
+    origin_record = _origin_record(since, pair)
+    batch_tag, existing, status = _find_batch(inbox, base_tag, origin_record, pair)
+    if existing is not None:
+        return {"lote_id": batch_tag, "pasta": str(existing), "estado": status, "reutilizado": True}
 
     inbox.mkdir(parents=True, exist_ok=True)
     pending = inbox / "pendentes"
@@ -139,13 +202,19 @@ def prepare(downloads: Path, since: datetime, inbox: Path) -> dict:
                     old_f.unlink()
             (dest_dir / name).write_bytes(payload)
 
-        (staging / "_origem.json").write_text(json.dumps({
-            "lote_id": batch_tag,
-            "inicio_execucao": since.isoformat(),
-            "fontes": {role: value[2] for role, value in pair.items()},
-        }, ensure_ascii=False, indent=2), encoding="utf-8")
-
-        publish_staging(staging, pending / batch_tag)
+        while True:
+            (staging / "_origem.json").write_text(json.dumps({
+                "lote_id": batch_tag,
+                **origin_record,
+            }, ensure_ascii=False, indent=2), encoding="utf-8")
+            try:
+                publish_staging(staging, pending / batch_tag)
+                break
+            except FileExistsError:
+                # Another preparation may have claimed the candidate after our scan.
+                batch_tag, existing, status = _find_batch(inbox, base_tag, origin_record, pair)
+                if existing is not None:
+                    return {"lote_id": batch_tag, "pasta": str(existing), "estado": status, "reutilizado": True}
     finally:
         if staging.exists():
             if staging.resolve().parent != inbox.resolve() or not staging.name.startswith(".preparando-"):

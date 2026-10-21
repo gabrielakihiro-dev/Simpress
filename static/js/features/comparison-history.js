@@ -544,7 +544,7 @@
 
     try {
       await app.baixarHistoricoComparacoesExcel(data);
-      app.showToast("Histórico exportado com sucesso!", "success");
+      app.showToast("Planilha Exportada com Sucesso!", "success");
     } catch (err) {
       console.error("Erro ao exportar histórico de planilhas:", err);
       app.showToast(err.message || "Não foi possível exportar o histórico selecionado.", "error");
@@ -574,7 +574,7 @@
 
     try {
       await app.baixarHistoricoComparacoesExcel(data);
-      app.showToast("Resultado exportado com sucesso!", "success");
+      app.showToast("Planilha Exportada com Sucesso!", "success");
     } catch (err) {
       console.error("Erro ao exportar resultado da atualização das planilhas:", err);
       app.showToast(err.message || "Não foi possível exportar o resultado.", "error");
