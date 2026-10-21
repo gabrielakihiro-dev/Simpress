@@ -128,7 +128,7 @@ test("search displays an announced skeleton, then the fictional result", async (
     new URL(response.url()).pathname === "/api/buscar-expandida", { timeout: 20_000 });
   const equipmentResponsePromise = page.waitForResponse(response =>
     new URL(response.url()).pathname === "/api/equipamento/LENTO", { timeout: 20_000 });
-  await page.getByRole("combobox", { name: "Série, apelido, modelo ou cidade do equipamento" }).fill("LENTO");
+  await page.getByRole("combobox", { name: "Série, apelido, modelo, cidade ou nome do usuário do equipamento" }).fill("LENTO");
   const autocompleteResponse = await autocompleteResponsePromise;
   expect(autocompleteResponse.status()).toBe(200);
   await page.keyboard.press("Escape");
@@ -240,7 +240,7 @@ test("failed search restores the controls and exposes a recoverable error", asyn
     const url = new URL(response.url());
     return url.pathname === "/api/equipamento/FALHA";
   }, { timeout: 30_000 });
-  await page.getByRole("combobox", { name: "Série, apelido, modelo ou cidade do equipamento" }).fill("FALHA");
+  await page.getByRole("combobox", { name: "Série, apelido, modelo, cidade ou nome do usuário do equipamento" }).fill("FALHA");
   await search.click();
   expect((await failedLookup).status()).toBe(503);
   await errorAlertVisible;

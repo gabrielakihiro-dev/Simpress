@@ -463,6 +463,31 @@ html[data-ux-density="compact"] .comparison-desktop-table td {
   .stale-base-alert[data-enter="true"] { animation: none; }
 }
 
+/* Home: avisos secundários em linha única e discreta, para a busca continuar sendo o foco. */
+#alerta-os-paradas, #alerta-divergencias-novas {
+  flex-wrap: wrap;
+  gap: var(--ux-space-1) var(--ux-space-3);
+  margin: var(--ux-space-3) 0 0;
+  padding: var(--ux-space-2) var(--ux-space-3);
+  border-radius: var(--ux-radius-lg);
+}
+#alerta-os-paradas + #alerta-divergencias-novas { margin-top: var(--ux-space-2); }
+#alerta-os-paradas .stale-base-alert-icon, #alerta-divergencias-novas .stale-base-alert-icon { width: 1rem; height: 1rem; }
+#alerta-os-paradas .stale-base-alert-copy, #alerta-divergencias-novas .stale-base-alert-copy {
+  display: flex; flex-wrap: wrap; align-items: baseline; gap: 0 var(--ux-space-2);
+}
+#alerta-os-paradas .stale-base-alert-title, #alerta-divergencias-novas .stale-base-alert-title { font-size: 0.8125rem; }
+#alerta-os-paradas .stale-base-alert-text, #alerta-divergencias-novas .stale-base-alert-text {
+  margin: 0; font-size: 0.8125rem; color: var(--ux-text-muted, inherit); opacity: 0.85;
+}
+#alerta-os-paradas .stale-base-alert-action, #alerta-divergencias-novas .stale-base-alert-action {
+  min-height: 0; padding: 0.25rem 0.625rem; font-size: 0.75rem;
+}
+@media (max-width: 40rem) {
+  #alerta-os-paradas, #alerta-divergencias-novas { padding: var(--ux-space-2) var(--ux-space-3); }
+  #alerta-os-paradas .stale-base-alert-action, #alerta-divergencias-novas .stale-base-alert-action { width: 100%; min-height: 40px; }
+}
+
 /* Automação: rotinas do Chrome de automação (docs/operacao/automacao-chrome.md) */
 .automation-page { display: grid; gap: var(--ux-space-5); }
 .automation-page > .stale-base-alert { margin-bottom: 0; }
@@ -586,4 +611,17 @@ html[data-ux-density="compact"] .comparison-desktop-table td {
   .automation-status, .automation-status[data-state="em_andamento"] .automation-status-dot { transition: none; animation: none; }
   .automation-capture-thumb, .automation-capture-dialog { transition: none; transform: none; }
   .automation-capture-thumb:hover { transform: none; }
+}
+
+/* Quiet readiness strip: when every file is available it recedes to a muted one-liner so the search leads the Home.
+   Warning, error and open states keep the regular panel look. */
+#readiness-panel[data-state="ready"]:not([open]) {
+  border-color: transparent; background: transparent; box-shadow: none;
+}
+#readiness-panel[data-state="ready"]:not([open]) > .readiness-panel-summary {
+  min-height: 1.5rem; padding-block: 0.1rem;
+}
+#readiness-panel[data-state="ready"]:not([open]) .readiness-title { color: var(--text-muted); font-weight: 500; }
+@media (max-width: 640px) {
+  #readiness-panel[data-state="ready"]:not([open]) > .readiness-panel-summary { min-height: 2.75rem; }
 }
