@@ -64,6 +64,13 @@ Quando o usuário disser "Executar" ou "exportar planilhas", siga a skill `.clau
 
 O Simpress roda somente localmente: servidor FastAPI e dados em `data/`, com as anotações do histórico sincronizadas pela pasta compartilhada já configurada. Não há backend remoto nem Supabase. Qualquer proposta de migração para um serviço externo deve começar por uma análise que não altere código nem dados.
 
+## Rust Token Killer (RTK) no Codex
+
+- Neste projeto, prefira `rtk <comando>` nos comandos Bash que tenham wrapper compatível, por exemplo `rtk git status`, `rtk git diff`, `rtk rg` e `rtk pytest`, para condensar saídas e registrar a economia.
+- A integração `rtk hook codex` já está registrada globalmente em `~/.codex/hooks.json`. Preserve os hooks locais do projeto e não registre o mesmo matcher `Bash` em `.codex/hooks.json` enquanto a entrada global existir: o Codex carrega hooks de ambos os escopos. Em clones sem a integração global, use `rtk init --codex`, preservando hooks existentes.
+- Se `rtk` não estiver disponível, o comando não tiver wrapper compatível ou a saída condensada estiver incompleta ou ambígua, use o comando original e confira a saída integral quando ela for necessária para a decisão.
+- Para informar a economia deste projeto, consulte `rtk gain --project --format json` na raiz e reporte apenas os valores registrados. Não converta tokens ou bytes economizados diretamente em dinheiro.
+
 ## Interface
 
 - Para novas telas, atualize ou escreva a especificação antes de implementar e use as referências visuais fornecidas. Se o usuário disser "Exclua o JavaScript por enquanto", mantenha a tela em HTML/CSS.
