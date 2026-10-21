@@ -523,7 +523,7 @@
       link.click();
       link.remove();
       window.setTimeout(() => window.URL.revokeObjectURL(url), 1000);
-      app.showToast("Excel dos chamados filtrados exportado.", "success");
+      app.showToast("Planilha Exportada com Sucesso!", "success");
     } catch (error) {
       app.showToast(error.message || "Não foi possível exportar os chamados filtrados.", "error");
     } finally {
