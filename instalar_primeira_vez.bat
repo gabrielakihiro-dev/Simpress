@@ -119,17 +119,17 @@ echo.
 rem ---------------------------------------------------------------
 rem 5/5 Ferramentas opcionais para desenvolvimento: ripgrep e Node.js (nunca bloqueiam)
 rem ---------------------------------------------------------------
-echo [5/5] Conferindo ferramentas opcionais ^(ripgrep e Node.js; so para desenvolvimento^)...
+echo [5/5] Conferindo ferramentas opcionais ^(ripgrep, RTK e Node.js; so para desenvolvimento^)...
 where rg >nul 2>nul
 if not errorlevel 1 (
     echo   OK: ripgrep ^(rg^) encontrado.
-    goto checar_node
+    goto checar_rtk
 )
 where winget >nul 2>nul
 if errorlevel 1 (
     echo   ripgrep ^(rg^) nao encontrado e o winget nao esta disponivel. O "rtk rg" dos agentes precisa dele:
     echo   instale em https://github.com/BurntSushi/ripgrep/releases ou use "rtk grep -rn" enquanto isso.
-    goto checar_node
+    goto checar_rtk
 )
 echo   ripgrep ^(rg^) nao encontrado; instalando pelo winget ^(usado pelo "rtk rg" dos agentes^)...
 winget install -e --id BurntSushi.ripgrep.MSVC --scope user --accept-package-agreements --accept-source-agreements
@@ -137,6 +137,33 @@ if errorlevel 1 (
     echo   [AVISO] Nao foi possivel instalar o ripgrep; o servidor nao e afetado. Use "rtk grep -rn" no lugar de "rtk rg".
 ) else (
     echo   OK: ripgrep instalado. Abra um terminal novo para ele entrar no PATH.
+)
+
+:checar_rtk
+where rtk >nul 2>nul
+if errorlevel 1 goto instalar_rtk
+rtk gain >nul 2>nul
+if errorlevel 1 (
+    echo   [AVISO] Existe um "rtk" no PATH, mas nao e o Rust Token Killer ^("rtk gain" falhou^).
+    echo           Pode ser outro pacote de mesmo nome; desinstale-o antes de instalar o RTK de rtk-ai.
+) else (
+    echo   OK: RTK ^(Rust Token Killer^) encontrado.
+)
+goto checar_node
+
+:instalar_rtk
+where winget >nul 2>nul
+if errorlevel 1 (
+    echo   RTK nao encontrado e o winget nao esta disponivel. Baixe o binario em https://github.com/rtk-ai/rtk/releases ^(opcional^).
+    goto checar_node
+)
+echo   RTK ^(Rust Token Killer^) nao encontrado; instalando pelo winget ^(reduz o consumo de tokens dos agentes^)...
+winget install -e --id rtk-ai.rtk --accept-package-agreements --accept-source-agreements
+if errorlevel 1 (
+    echo   [AVISO] Nao foi possivel instalar o RTK; o servidor nao e afetado.
+) else (
+    echo   OK: RTK instalado. Abra um terminal novo e rode "rtk gain" para confirmar.
+    echo   Para ativar o hook do Claude Code, rode uma vez: rtk init -g ^(altera ~/.claude/settings.json; nao e feito aqui^).
 )
 
 :checar_node
