@@ -117,9 +117,29 @@ if exist "%MIGRATOR%" (
 echo.
 
 rem ---------------------------------------------------------------
-rem 5/5 Node.js: so para os testes de interface (opcional, nao bloqueia)
+rem 5/5 Ferramentas opcionais para desenvolvimento: ripgrep e Node.js (nunca bloqueiam)
 rem ---------------------------------------------------------------
-echo [5/5] Conferindo o Node.js ^(opcional: apenas para testes de interface^)...
+echo [5/5] Conferindo ferramentas opcionais ^(ripgrep e Node.js; so para desenvolvimento^)...
+where rg >nul 2>nul
+if not errorlevel 1 (
+    echo   OK: ripgrep ^(rg^) encontrado.
+    goto checar_node
+)
+where winget >nul 2>nul
+if errorlevel 1 (
+    echo   ripgrep ^(rg^) nao encontrado e o winget nao esta disponivel. O "rtk rg" dos agentes precisa dele:
+    echo   instale em https://github.com/BurntSushi/ripgrep/releases ou use "rtk grep -rn" enquanto isso.
+    goto checar_node
+)
+echo   ripgrep ^(rg^) nao encontrado; instalando pelo winget ^(usado pelo "rtk rg" dos agentes^)...
+winget install -e --id BurntSushi.ripgrep.MSVC --scope user --accept-package-agreements --accept-source-agreements
+if errorlevel 1 (
+    echo   [AVISO] Nao foi possivel instalar o ripgrep; o servidor nao e afetado. Use "rtk grep -rn" no lugar de "rtk rg".
+) else (
+    echo   OK: ripgrep instalado. Abra um terminal novo para ele entrar no PATH.
+)
+
+:checar_node
 where npm >nul 2>nul
 if errorlevel 1 (
     echo   Node.js nao encontrado. O servidor e a automacao funcionam sem ele.
