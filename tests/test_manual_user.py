@@ -12,7 +12,7 @@ from unittest.mock import patch
 import openpyxl
 
 import main
-from core.errors import DomainError
+from core.errors import DomainBusyError, DomainError
 from domains import inventory_state
 from domains.effective_alias import (
     apply_effective_alias,
@@ -232,6 +232,67 @@ class UserChangeSummaryTests(unittest.TestCase):
             {"tipo": "aviso_endpoint", "serial": "SN-1", "acao": "aviso"},
         ]
         self.assertEqual(archived_manual_users(history), {"SN1": "joao"})
+
+
+class UserDecisionFileReadTests(unittest.TestCase):
+    def setUp(self):
+        self.temp_context = tempfile.TemporaryDirectory(prefix="simpress-decision-files-")
+        self.root = Path(self.temp_context.name)
+        self.users_file = self.root / "usuarios_manuais.json"
+
+    def tearDown(self):
+        self.temp_context.cleanup()
+
+    def assert_unavailable(self, callback):
+        with self.assertRaises(DomainBusyError) as raised:
+            callback()
+        self.assertEqual(raised.exception.status_code, 503)
+
+    def test_manual_user_file_distinguishes_absent_from_valid_empty_and_zero_length(self):
+        from domains.user_changes import read_manual_users
+
+        self.assertIsNone(read_manual_users(self.users_file))
+        self.users_file.write_text("{}", encoding="utf-8")
+        self.assertEqual(read_manual_users(self.users_file), {})
+        self.users_file.write_text("", encoding="utf-8")
+        self.assert_unavailable(lambda: read_manual_users(self.users_file))
+
+    def test_manual_user_file_rejects_corrupt_json_invalid_shape_and_permission_error(self):
+        from domains.user_changes import read_manual_users
+
+        self.users_file.write_text("{", encoding="utf-8")
+        self.assert_unavailable(lambda: read_manual_users(self.users_file))
+        self.users_file.write_text("[]", encoding="utf-8")
+        self.assert_unavailable(lambda: read_manual_users(self.users_file))
+        with patch.object(Path, "read_text", side_effect=PermissionError("synthetic denied")):
+            self.assert_unavailable(lambda: read_manual_users(self.users_file))
+
+    def test_hold_file_distinguishes_absent_and_rejects_empty_corrupt_and_permission_error(self):
+        from domains.user_holds import holds_file, read_holds
+
+        path = holds_file(self.users_file)
+        self.assertEqual(read_holds(self.users_file), {})
+        path.write_text("", encoding="utf-8")
+        self.assert_unavailable(lambda: read_holds(self.users_file))
+        path.write_text("{", encoding="utf-8")
+        self.assert_unavailable(lambda: read_holds(self.users_file))
+        with patch.object(Path, "read_text", side_effect=PermissionError("synthetic denied")):
+            self.assert_unavailable(lambda: read_holds(self.users_file))
+
+    def test_valid_refused_hold_is_retained_as_trusted_user_state(self):
+        from domains.user_holds import HOLD_REPLACE_MANUAL, manual_users_from_holds, read_holds, holds_file
+
+        hold = {
+            "id": "synthetic-hold-id", "tipo": HOLD_REPLACE_MANUAL, "estado": "recusada",
+            "serial": "SN-1", "usuario_atual": "joao", "usuario_endpoint": "carla",
+            "equipamento": "Notebook", "computador": "HOST-1", "criado_em": "2026-10-20T10:00:00-03:00",
+        }
+        holds_file(self.users_file).write_text(json.dumps({"SN-1": hold}), encoding="utf-8")
+        loaded = read_holds(self.users_file)
+        self.assertEqual(loaded["SN1"]["estado"], "recusada")
+        self.assertEqual(manual_users_from_holds(loaded), {"SN1": "joao"})
+        holds_file(self.users_file).write_text(json.dumps({"SN-1": {"tipo": HOLD_REPLACE_MANUAL}}), encoding="utf-8")
+        self.assert_unavailable(lambda: read_holds(self.users_file))
 
 
 class ManualUserWorkflowTests(unittest.TestCase):
@@ -493,6 +554,77 @@ class ManualUserWorkflowTests(unittest.TestCase):
         self.assertEqual(inventory_state.equipamentos_cache["SN-1"]["usuarios_logados"], "joao")
         [again] = self._submit([("SN-1", "HOST-1", "davi"), ("SN-2", "HOST-2", "ana")])["mudancas_usuarios"]
         self.assertEqual((again["tipo"], again["usuario_novo"]), ("substituicao_pendente", "davi"))
+
+    def test_refused_replacement_survives_missing_manual_file_and_same_endpoint_update(self):
+        from domains.user_holds import holds_file
+
+        self._save("SN-1", "joao")
+        [row] = self._submit([("SN-1", "HOST-1", "carla"), ("SN-2", "HOST-2", "ana")])["mudancas_usuarios"]
+        self._resolve(row, "recusar")
+        self.manual_users.unlink()
+
+        self.assertTrue(main.load_database())
+        cached = inventory_state.equipamentos_cache["SN-1"]
+        self.assertEqual((cached["usuarios_logados"], cached["usuarios_logados_origem"]), ("joao", "manual"))
+        result = self._submit([("SN-1", "HOST-1", "carla"), ("SN-2", "HOST-2", "ana")])
+        self.assertEqual(result["mudancas_usuarios"], [])
+        cached = inventory_state.equipamentos_cache["SN-1"]
+        self.assertEqual((cached["usuarios_logados"], cached["usuarios_logados_origem"]), ("joao", "manual"))
+        self.assertFalse(self.manual_users.exists())
+        [saved_hold] = json.loads(holds_file(self.manual_users).read_text(encoding="utf-8")).values()
+        self.assertEqual(saved_hold["estado"], "recusada")
+
+    def test_corrupt_manual_user_file_aborts_update_and_restores_synthetic_inputs(self):
+        original_endpoint = self.endpoint.read_bytes()
+        original_details = self.details.read_bytes()
+        self.manual_users.write_text("{", encoding="utf-8")
+
+        with self.assertRaises(DomainBusyError) as raised:
+            self._submit([("SN-1", "HOST-1", "carla"), ("SN-2", "HOST-2", "bia")])
+
+        self.assertEqual(raised.exception.status_code, 503)
+        self.assertEqual(self.endpoint.read_bytes(), original_endpoint)
+        self.assertEqual(self.details.read_bytes(), original_details)
+        self.assertEqual(self.manual_users.read_text(encoding="utf-8"), "{")
+
+    def test_missing_manual_file_blocks_removing_the_endpoint_user_of_a_pending_hold(self):
+        from domains.user_holds import holds_file
+
+        self._save("SN-1", "joao")
+        [row] = self._submit([("SN-1", "HOST-1", "carla"), ("SN-2", "HOST-2", "ana")])["mudancas_usuarios"]
+        self.manual_users.unlink()
+        self.assertTrue(main.load_database())
+        original_endpoint = self.endpoint.read_bytes()
+        original_details = self.details.read_bytes()
+
+        with self.assertRaises(DomainBusyError) as raised:
+            self._submit([("SN-1", "HOST-1", ""), ("SN-2", "HOST-2", "ana")])
+
+        self.assertEqual(raised.exception.status_code, 503)
+        self.assertEqual(self.endpoint.read_bytes(), original_endpoint)
+        self.assertEqual(self.details.read_bytes(), original_details)
+        self.assertFalse(self.manual_users.exists())
+        [saved_hold] = json.loads(holds_file(self.manual_users).read_text(encoding="utf-8")).values()
+        self.assertEqual(saved_hold["estado"], "pendente")
+        self.assertEqual(row["pendencia_id"], saved_hold["id"])
+
+    def test_resolving_one_missing_file_hold_preserves_other_manual_holds(self):
+        make_endpoint_with_users(self.endpoint, [("SN-1", "HOST-1", ""), ("SN-2", "HOST-2", "")])
+        self.assertTrue(main.load_database())
+        self._save("SN-1", "joao")
+        self._save("SN-2", "maria")
+        rows = self._submit([("SN-1", "HOST-1", "carla"), ("SN-2", "HOST-2", "davi")])["mudancas_usuarios"]
+        first = next(row for row in rows if row["serie"] == "SN-1")
+        self.manual_users.unlink()
+
+        self._resolve(first, "permitir")
+        self.assertFalse(self.manual_users.exists())
+        self.assertTrue(main.load_database())
+        first_equipment = inventory_state.equipamentos_cache["SN-1"]
+        second_equipment = inventory_state.equipamentos_cache["SN-2"]
+        self.assertEqual((first_equipment["usuarios_logados"], first_equipment["usuarios_logados_origem"]), ("carla", "endpoint"))
+        self.assertEqual((second_equipment["usuarios_logados"], second_equipment["usuarios_logados_origem"],
+                          second_equipment["usuarios_logados_pendencia"]), ("maria", "manual", "substituicao_pendente"))
 
     def test_user_missing_from_the_endpoint_can_be_kept_and_is_not_asked_again(self):
         [row] = self._submit([("SN-1", "HOST-1", ""), ("SN-2", "HOST-2", "")])["mudancas_usuarios"]

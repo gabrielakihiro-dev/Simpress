@@ -34,7 +34,7 @@ from core.integrity import (
     stage_workbook_update,
     workbook_snapshot,
 )
-from core.errors import DomainError
+from core.errors import DomainBusyError, DomainError
 from core.config import (
     ALIAS_HISTORY_FILE,
     AUTOMATIC_INVENTORY_IMPORT_POLL_SECONDS,
@@ -303,11 +303,14 @@ def removed_endpoint_hostname_keys() -> frozenset:
         return frozenset()
 
 
-def load_manual_users() -> Dict[str, str]:
+def read_manual_users_state() -> Optional[Dict[str, str]]:
+    """Return None only for a missing file; invalid or unreadable content remains an error."""
     with MODIFIED_APELIDOS_LOCK:
-        if not MANUAL_USERS_FILE.exists():
-            return {}
-        return _read_json_object(MANUAL_USERS_FILE, "usuários manuais")
+        return user_changes.read_manual_users(MANUAL_USERS_FILE)
+
+
+def load_manual_users() -> Dict[str, str]:
+    return read_manual_users_state() or {}
 
 def load_alias_history() -> List[Dict[str, Any]]:
     with ALIAS_HISTORY_LOCK:
@@ -418,29 +421,30 @@ _workbook_reader_services = uploaded_workbooks.WorkbookReaderServices(
 
 
 def get_details_files() -> List[Path]:
-    """Lista arquivos EquipamentosDetalhes enviados ou mantidos na pasta de entrada."""
+    """Lista a fonte oficial primeiro e, depois, as cópias legadas da pasta."""
     if not INPUT_DIR.is_dir():
         return []
+    files = [
+        path for path in INPUT_DIR.glob("EquipamentosDetalhes*.xlsx")
+        if path.is_file() and not path.name.startswith("~$")
+    ]
+    canonical_file = DETAILS_UPLOAD_FILE
     return sorted(
-        (
-            path for path in INPUT_DIR.glob("EquipamentosDetalhes*.xlsx")
-            if path.is_file() and not path.name.startswith("~$")
+        files,
+        key=lambda path: (
+            path != canonical_file,
+            -path.stat().st_mtime_ns,
+            path.name.casefold(),
         ),
-        key=lambda path: path.stat().st_mtime,
-        reverse=True,
     )
 
 
 def get_primary_equipment_file() -> Optional[Path]:
-    """Retorna o EquipamentosDetalhes válido mais recente, fonte única do cadastro.
-
-    Um candidato ilegível interrompe a busca com FileBusyError em vez de deixar
-    um arquivo mais antigo assumir a base ativa.
-    """
-    return next(
-        (path for path in get_details_files() if find_details_sheet(path) is not None),
-        None,
-    )
+    """Retorna somente a fonte oficial, sem substituir ausências por cópias antigas."""
+    canonical_file = DETAILS_UPLOAD_FILE
+    if not canonical_file.is_file():
+        return None
+    return canonical_file if find_details_sheet(canonical_file) is not None else None
 
 
 def _check_startup_xlsx(path: Optional[Path]) -> Dict[str, Any]:
@@ -777,16 +781,19 @@ def load_endpoint_aliases() -> Dict[str, str]:
 def read_endpoint_alias_index() -> Dict[str, Any]:
     """Retorna associações unívocas e linhas que precisam de conferência."""
     index = effective_alias.read_endpoint_alias_index(_effective_alias_services, removed_endpoint_hostname_keys())
-    try:
-        index["manual_users"] = user_changes.manual_users_by_serial(load_manual_users())
-    except LocalJsonCorruptionError as error:
-        # Um arquivo manual ilegível não pode impedir o carregamento do inventário.
-        logger.warning("Usuários manuais ignorados: %s", error)
-        index["manual_users"] = {}
+    stored_users = read_manual_users_state()
+    holds = user_holds.read_holds(MANUAL_USERS_FILE)
+    manual_users = user_changes.manual_users_by_serial(stored_users or {})
+    manual_users_missing = stored_users is None
+    if manual_users_missing:
+        manual_users.update(user_holds.manual_users_from_holds(holds))
+    index["manual_users"] = manual_users
     index["manual_user_dates"] = user_changes.manual_user_dates_by_serial(
-        index["manual_users"], user_changes.read_manual_user_dates(MANUAL_USERS_FILE),
+        manual_users, user_changes.read_manual_user_dates(MANUAL_USERS_FILE),
     )
-    index["user_holds"] = user_holds.read_holds(MANUAL_USERS_FILE)
+    index["user_holds"] = holds
+    if manual_users_missing and user_holds.manual_users_from_holds(holds):
+        index["manual_users_file_missing"] = True
     return index
 
 
@@ -920,7 +927,7 @@ def reload_database_if_changed_externally() -> bool:
     logger.info("Planilhas ou configurações alteradas fora do site; recarregando a base.")
     try:
         return bool(load_database())
-    except (FileBusyError, LocalJsonCorruptionError) as error:
+    except (FileBusyError, LocalJsonCorruptionError, DomainBusyError) as error:
         logger.warning("Recarga adiada (%s); nova tentativa no próximo ciclo.", type(error).__name__)
         return False
 

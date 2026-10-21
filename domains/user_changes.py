@@ -15,7 +15,7 @@ from datetime import datetime
 from pathlib import Path
 from typing import Any, Dict, List, Optional, Tuple, Type
 
-from core.errors import DomainConflictError, DomainError
+from core.errors import DomainBusyError, DomainConflictError, DomainError
 from core.integrity import FileBusyError, FileTransactionError, WorkbookSafetyError
 from domains import inventory_state
 from domains.alias_changes import AliasChangeServices
@@ -54,6 +54,32 @@ def manual_users_by_serial(stored: Dict[str, Any]) -> Dict[str, str]:
         if serial_key and text:
             by_serial.setdefault(serial_key, set()).add(text)
     return {key: next(iter(values)) for key, values in by_serial.items() if len(values) == 1}
+
+
+def read_manual_users(users_file: Path) -> Optional[Dict[str, str]]:
+    """Read the manual-user decision file; only a genuinely missing file is absent."""
+    try:
+        raw = users_file.read_text(encoding="utf-8")
+    except FileNotFoundError:
+        return None
+    except (OSError, UnicodeError) as error:
+        raise DomainBusyError(
+            "O cadastro manual de usuários está indisponível; nenhuma decisão foi aplicada."
+        ) from error
+    try:
+        value = json.loads(raw)
+    except (json.JSONDecodeError, UnicodeError) as error:
+        raise DomainBusyError(
+            "O cadastro manual de usuários está ilegível; nenhuma decisão foi aplicada."
+        ) from error
+    if not isinstance(value, dict) or any(
+        not isinstance(serial, str) or not isinstance(user, str)
+        for serial, user in value.items()
+    ):
+        raise DomainBusyError(
+            "O cadastro manual de usuários tem formato inválido; nenhuma decisão foi aplicada."
+        )
+    return value
 
 
 def manual_user_dates_file(users_file: Path) -> Path:
@@ -344,6 +370,8 @@ def apply_user_change(
 
             stored = dict(services.validate_json_object(_load_users(services), "usuários manuais"))
             previous_user = manual_users_by_serial(stored).get(serial_key, "")
+            if endpoint_index.get("manual_users_file_missing"):
+                previous_user = str(endpoint_index.get("manual_users", {}).get(serial_key, previous_user) or "")
             # Saving the same user again keeps the date it was first informed.
             informed_at = (
                 manual_user_dates_by_serial(
@@ -357,6 +385,11 @@ def apply_user_change(
 
             def update_users(data: Any) -> Dict[str, Any]:
                 users = dict(services.validate_json_object(data, "usuários manuais"))
+                if endpoint_index.get("manual_users_file_missing"):
+                    for held_key, held_user in endpoint_index.get("manual_users", {}).items():
+                        held = endpoint_index.get("user_holds", {}).get(held_key)
+                        if held_key != serial_key and held and held.get("tipo") == "substituicao_manual":
+                            users.setdefault(str(held.get("serial") or held_key), held_user)
                 for key in [k for k in users if normalize_reference_value(k) == serial_key]:
                     users.pop(key, None)
                 if new_user:
@@ -406,6 +439,7 @@ def apply_user_change(
             index_for_equipment = dict(endpoint_index)
             index_for_equipment["manual_users"] = manual_now
             index_for_equipment["manual_user_dates"] = {serial_key: informed_at} if new_user else {}
+            index_for_equipment["manual_users_file_missing"] = False
             updated = dict(equipment)
             services.apply_effective_alias(
                 updated,
