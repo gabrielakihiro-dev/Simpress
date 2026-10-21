@@ -16,6 +16,7 @@ from domains.ticket_reporting import (
     build_ticket_workbook,
     compare_ticket_snapshots,
     filter_ticket_records,
+    normalize_ticket_snapshot,
     ticket_attention,
     ticket_relation_alerts,
     ticket_relation_provenance,
@@ -547,6 +548,28 @@ class TicketReportingTests(unittest.TestCase):
         unsafe_workbook = openpyxl.load_workbook(BytesIO(unsafe_content), data_only=False)
         self.assertEqual(unsafe_workbook["Chamados"].cell(2, 1).value, "'=1+1")
         self.assertEqual(unsafe_workbook["Chamados"].cell(2, 1).data_type, "s")
+
+    def test_current_screen_projection_keeps_latest_request_and_hides_raw_order_details(self):
+        raw = {
+            "id": "snapshot-1",
+            "chamados": [{
+                "serie": "SN-1",
+                "simpress": {
+                    "pedidos": ["100", "200"],
+                    "pedidos_detalhados": [
+                        {"identificador": "100", "datas_pedido": ["01/09/2026"]},
+                        {"identificador": "200", "datas_pedido": ["01/10/2026"]},
+                    ],
+                },
+            }],
+        }
+
+        displayed = normalize_ticket_snapshot(raw)
+
+        self.assertEqual(displayed["chamados"][0]["simpress"]["pedidos"], ["200"])
+        self.assertNotIn("pedidos_detalhados", displayed["chamados"][0]["simpress"])
+        self.assertEqual(len(raw["chamados"][0]["simpress"]["pedidos_detalhados"]), 2)
+        self.assertEqual(raw["chamados"][0]["simpress"]["pedidos"], ["100", "200"])
 
     def test_snapshot_retention_keeps_only_the_50_most_recent_versions(self):
         history = [

@@ -34,14 +34,15 @@ Cabeçalho: título `Relatório mensal — <mês> de <ano>`, contrato `16467 - S
 | OS do mês | Pedidos Simpress em andamento no fim do mês | Pedidos feitos até o fim do mês e sem entrega até essa data. Pedido com status de entregue ou cancelado sem data não conta como em andamento. |
 | OS do mês | Encerrados sem data | OS ou pedidos encerrados sem data de conclusão/entrega; ficam fora das contagens de conclusão do mês. |
 
-As OS vêm de `data/state/historico_chamados.json` (importado pela pasta `entrada_chamados` ou pela tela de chamados). São consideradas todas as importações guardadas no histórico; quando a mesma OS aparece em mais de uma, vale a versão da importação mais recente.
+As OS e os pedidos vêm de `data/state/historico_chamados.json` (importado pela pasta `entrada_chamados` ou pela tela de chamados). São consideradas todas as importações guardadas no histórico; quando a mesma OS ou pedido aparece em mais de uma, vale a versão mais recente. O relatório agrupa o pedido Simpress pelo identificador, mesmo quando ele aparece associado a mais de uma série na mesma importação. Cada nova importação preserva os dados detalhados por pedido; a tela de acompanhamento continua destacando somente o pedido atual da série.
 
 ### Abas de detalhe
 
 - `Inventário por tipo`: `Tipo | Equipamentos`, do maior para o menor; tipo vazio aparece como `Sem tipo`.
 - `Inventário por unidade`: `Cidade | Endereço | Equipamentos`.
 - `Comparação`: uma linha por pendência da última comparação: `Seção | Hostname | Série | Local previsto | Local na Simpress`. Seções: `Sem correspondência — no endpoint`, `Sem correspondência — na Simpress`, `Localidade divergente`.
-- `OS do mês`: `Fonte | OS/Pedido | Série | Status | Criação | Conclusão | Situação no mês` (`Aberta no mês`, `Concluída no mês`, `Pendente no fim do mês`, combinadas por `; `). Só entram as OS e pedidos com alguma situação no mês.
+- `OS do mês`: `Fonte | OS/Pedido | Série | Status | Criação | Conclusão | Situação no mês` (`Aberta no mês`, `Concluída no mês`, `Pendente no fim do mês`, combinadas por `; `). Um pedido aparece uma vez; a coluna Série reúne as séries associadas a ele na importação mais recente. Só entram as OS e pedidos com alguma situação no mês.
+- `OS sem dados`: registros que não podem ser posicionados ou associados com segurança a um pedido, com identificadores candidatos, série, motivo e importação de origem. Eles ficam fora das contagens mensais.
 
 ## Regras
 
@@ -65,11 +66,14 @@ As OS vêm de `data/state/historico_chamados.json` (importado pela pasta `entrad
 2. A soma de `Inventário por tipo` e a de `Inventário por unidade` são iguais ao total.
 3. Séries do Sebrae não aparecem em `Sem correspondência — na Simpress`; hostnames `PRNOTESJP`, `PRNOTERL` e `PRNOTEARC` não aparecem em `Localidade divergente`.
 4. A comparação usada é a mais recente até o fim do mês; comparações posteriores ao mês são ignoradas.
-5. OS abertas, concluídas e pendentes seguem as datas descritas acima; OS repetidas em várias importações contam uma vez.
-6. `mes` inválido ou futuro responde 422; o botão mostra `Planilha Exportada com Sucesso!` após o download.
-7. `npm run verify` e `npm run test:ui:e2e` passam; nenhum dado real entra no Git.
+5. OS abertas, concluídas e pendentes seguem as datas descritas acima; pedidos repetidos por série, por equipamento ou em várias importações contam uma vez e usam o estado mais recente.
+6. Pedidos legados sem vínculo individual entre identificador, data e status aparecem em `OS sem dados` e não são atribuídos por inferência; a tela de chamados continua mostrando somente o pedido atual.
+7. `mes` inválido ou futuro responde 422; o botão mostra `Planilha Exportada com Sucesso!` após o download.
+8. `npm run verify` e `npm run test:ui:e2e` passam; nenhum dado real entra no Git.
 
 ## Limitações
 
 - O inventário não é histórico: um relatório de um mês antigo mostra a base atual.
-- As OS dependem das importações feitas; uma OS que nunca apareceu numa importação não é contada.
+- As OS e os pedidos dependem das importações feitas; um identificador que nunca apareceu numa importação não é contado.
+- Snapshots novos preservam uma linha detalhada para cada pedido e série. Pedidos repetidos entre equipamentos da mesma importação são consolidados por identificador; pedidos repetidos entre importações usam o estado da importação mais recente.
+- Snapshots legados com um único pedido identificável podem ser usados quando as datas permitem associá-lo sem ambiguidade. Quando houver vários pedidos em listas paralelas sem vínculo individual, o relatório não combina listas por posição: registra a ocorrência em `OS sem dados` e não a inclui nas contagens. Datas inválidas, conflitantes ou ausentes também são sinalizadas quando impedem determinar o mês; status encerrado sem data de conclusão continua fora das contagens de conclusão e aparece no indicador `Encerrados sem data` quando há data do pedido conhecida.

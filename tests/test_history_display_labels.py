@@ -49,21 +49,33 @@ class HistoryDisplayLabelTests(unittest.TestCase):
             ("Planilha Simpress EquipamentosDetalhes_atual.xlsx", "Planilha na Simpress Simpress_atual.xlsx"),
             ("Dados DA SIMPRESS e PELO ENDPOINT", "Dados DA Simpress e PELO Endpoint"),
         ]
+        frontend = subprocess.run(
+            ["node", "-e", "const fs=require('node:fs');const f=require('./static/js/shared/history-format.js');const values=JSON.parse(fs.readFileSync(0,'utf8'));process.stdout.write(JSON.stringify(values.map(f.formatarNomeFonteHistorico)));"],
+            input=json.dumps([raw for raw, _ in cases]),
+            cwd=Path(__file__).resolve().parents[1], capture_output=True,
+            text=True, encoding="utf-8", check=True,
+        )
+        self.assertEqual(
+            json.loads(frontend.stdout),
+            [_comparison_source_text_for_display(raw) for raw, _ in cases],
+        )
         for raw, expected in cases:
             with self.subTest(raw=raw):
                 event = {
-                    "id": PINNED_COMPARISON_EVENT_ID,
+                    "id": "event_InvAll_EquipamentosDetalhes_20261017",
                     "horario": PINNED_COMPARISON_EVENT_TIME,
                     "arquivos_enviados": {"detalhes": raw},
-                    "comparacao": {"apelidos_sem_atualizacao": [{"serie": "S1", "motivo": raw}]},
+                    "comparacao": {"apelidos_sem_atualizacao": [{"serie": "", "motivo": raw}]},
                 }
                 original = deepcopy(event)
                 self.assertEqual(_comparison_source_text_for_display(raw), expected)
                 self.assertEqual(_comparison_source_text_for_display(expected), expected)
                 displayed = comparison_history_for_display(event)
+                self.assertEqual(displayed["id"], event["id"])
                 self.assertEqual(displayed["comparacao"]["apelidos_sem_atualizacao"][0]["motivo"], expected)
                 output, _ = build_history_export_workbook([displayed], date(2026, 10, 17))
                 workbook = openpyxl.load_workbook(output)
+                self.assertEqual(workbook["Histórico"].cell(5, 4).value, event["id"])
                 self.assertEqual(workbook["Histórico"].cell(5, 6).value, expected)
                 workbook.close()
                 self.assertEqual(event, original)
