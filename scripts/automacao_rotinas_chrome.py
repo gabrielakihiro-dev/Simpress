@@ -371,6 +371,9 @@ def garantir_chrome() -> None:
             "--no-first-run",
             "--no-default-browser-check",
             "--start-maximized",
+            # Sem isto o Chrome descarta os cookies de sessão ao fechar e o Endpoint Central pede
+            # o login de novo; com a restauração da última sessão eles ficam no perfil.
+            "--restore-last-session",
             "about:blank",
         ],
         stdin=subprocess.DEVNULL,
