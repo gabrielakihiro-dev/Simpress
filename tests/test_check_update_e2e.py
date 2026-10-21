@@ -19,7 +19,7 @@ import unittest
 from pathlib import Path
 
 from scripts.check_update import EXIT_CONTINUE, EXIT_LAUNCHER_CHANGED
-from tests.test_check_update import _make_writable_and_retry, commit_file, git
+from tests.test_check_update import _make_writable_and_retry, commit_file, git, short_temporary_root
 
 PROJECT_ROOT = Path(__file__).resolve().parents[1]
 UPDATER = PROJECT_ROOT / "scripts" / "check_update.py"
@@ -34,7 +34,7 @@ _TRACED_COMMAND = re.compile(r"trace: (?:built-in|exec|run_command): (?:git )?(.
 @unittest.skipUnless(shutil.which("git"), "Git não está instalado")
 class LauncherUpdateEndToEndTests(unittest.TestCase):
     def setUp(self):
-        self.temporary_directory = tempfile.TemporaryDirectory(prefix=".check-update-e2e-")
+        self.temporary_directory = tempfile.TemporaryDirectory(prefix=".check-update-e2e-", dir=short_temporary_root())
         base = Path(self.temporary_directory.name)
         self.real_tags = git(PROJECT_ROOT, "tag", "--list")
         self.trace = base / "git-trace.log"
