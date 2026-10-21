@@ -351,12 +351,21 @@ def apply_effective_alias(
     equipment["apelido"] = local_alias
     endpoint_user = endpoint_user_for_serial(endpoint_index, serial_key)
     manual_user = str(endpoint_index.get("manual_users", {}).get(serial_key, "") or "").strip()
+    # A substituição pendente/recusada também registra o usuário manual confiável quando
+    # o arquivo manual está legitimamente ausente.
+    hold = endpoint_index.get("user_holds", {}).get(serial_key)
+    if (
+        not manual_user
+        and endpoint_index.get("manual_users_file_missing")
+        and hold
+        and hold.get("tipo") == "substituicao_manual"
+    ):
+        manual_user = str(hold.get("usuario_atual") or "").strip()
     # O usuário do Endpoint sempre prevalece; o manual só preenche a lacuna.
     logged_user = endpoint_user or manual_user
     logged_origin = "endpoint" if endpoint_user else "manual" if manual_user else ""
     pending_kind = ""
     # Uma pendência de usuário (ver domains/user_holds.py) mantém o usuário atual até a decisão.
-    hold = endpoint_index.get("user_holds", {}).get(serial_key)
     if hold:
         awaiting = hold.get("estado") == "pendente"
         if (

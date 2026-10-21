@@ -114,6 +114,21 @@ def ticket(serial, oracle_items=(), simpress=None):
     return {"serie": serial, "relacao": "somente_oracle", "oracle": list(oracle_items), "simpress": simpress or {}}
 
 
+def detailed_order(identifier, opened="", status="", delivered=""):
+    stages = [
+        {"chave": "data_pedido", "rotulo": "Data do pedido", "data": opened},
+        {"chave": "entregue", "rotulo": "Pedido entregue", "data": delivered},
+    ]
+    return {
+        "identificador": identifier,
+        "status": [status] if status else [],
+        "status_incompleto": not bool(status),
+        "datas_pedido": [opened] if opened else [],
+        "etapas_pedido": stages,
+        "associacao_incompleta": False,
+    }
+
+
 SEPTEMBER_SNAPSHOT = {
     "id": "snap-1",
     "atualizado_em": "2026-09-25T10:00:00-03:00",
@@ -239,6 +254,86 @@ class TicketSectionTests(unittest.TestCase):
         self.assertEqual(len(rows), 1)
         self.assertIn("Concluído", rows[0]["status"])
 
+    def test_simpress_orders_are_counted_per_request_across_months_imports_and_equipment(self):
+        september = {
+            "id": "snap-setembro", "atualizado_em": "2026-09-30T18:00:00",
+            "chamados": [{"serie": "SN-FIC-A", "simpress": {
+                "pedidos": ["P-100"],
+                "pedidos_detalhados": [detailed_order("P-100", "30/09/2026", "Em separação")],
+            }}],
+        }
+        current = {
+            "id": "snap-outubro", "atualizado_em": "2026-10-10T18:00:00",
+            "chamados": [
+                {"serie": "SN-FIC-A", "simpress": {"pedidos": ["P-200"], "pedidos_detalhados": [
+                    detailed_order("P-100", "30/09/2026", "Pedido entregue", "02/10/2026"),
+                    detailed_order("P-200", "05/10/2026", "Em separação"),
+                ]}},
+                {"serie": "SN-FIC-B", "simpress": {"pedidos": ["P-200"], "pedidos_detalhados": [
+                    detailed_order("P-200", "05/10/2026", "Em separação"),
+                ]}},
+            ],
+        }
+        report = {
+            "snapshot_id": current["id"], "atualizado_em": current["atualizado_em"],
+            "chamados": current["chamados"], "historico": [september, current],
+        }
+
+        september_section = tickets_section(report, SEPTEMBER)
+        self.assertEqual(september_section["simpress"], {
+            "abertas": 1, "concluidas": 0, "pendentes": 1, "encerradas_sem_data": 0,
+        })
+        october_section = tickets_section(report, OCTOBER)
+        self.assertEqual(october_section["simpress"], {
+            "abertas": 1, "concluidas": 1, "pendentes": 1, "encerradas_sem_data": 0,
+        })
+        rows = [line for line in october_section["linhas"] if line["fonte"] == "Simpress"]
+        self.assertEqual({line["identificador"] for line in rows}, {"P-100", "P-200"})
+        self.assertEqual(sum(line["identificador"] == "P-200" for line in rows), 1)
+        self.assertEqual(next(line["serie"] for line in rows if line["identificador"] == "P-200"), "SN-FIC-A, SN-FIC-B")
+        p100 = next(line for line in rows if line["identificador"] == "P-100")
+        self.assertEqual(p100["situacao"], [CLOSED])
+        self.assertEqual(october_section["dados_insuficientes"], [])
+
+    def test_missing_dates_do_not_infer_a_month_and_closed_without_delivery_is_flagged(self):
+        report = {
+            "snapshot_id": "snap-datas", "atualizado_em": "2026-10-12T18:00:00",
+            "chamados": [
+                {"serie": "SN-FIC-C", "simpress": {"pedidos": ["P-CANCEL"], "pedidos_detalhados": [
+                    detailed_order("P-CANCEL", "20/09/2026", "Cancelado"),
+                ]}},
+                {"serie": "SN-FIC-D", "simpress": {"pedidos": ["P-SEM-DATA"], "pedidos_detalhados": [
+                    detailed_order("P-SEM-DATA", "", "Cancelado"),
+                ]}},
+            ],
+        }
+        september_section = tickets_section(report, SEPTEMBER)
+        self.assertEqual(september_section["simpress"]["abertas"], 1)
+        self.assertEqual(september_section["simpress"]["encerradas_sem_data"], 1)
+        october_section = tickets_section(report, OCTOBER)
+        self.assertEqual(october_section["simpress"]["abertas"], 0)
+        self.assertEqual(october_section["simpress"]["concluidas"], 0)
+        self.assertEqual(october_section["simpress"]["pendentes"], 0)
+        self.assertEqual(october_section["simpress"]["encerradas_sem_data"], 1)
+        self.assertEqual([item["identificadores"] for item in october_section["dados_insuficientes"]], [["P-SEM-DATA"]])
+
+    def test_legacy_multi_order_snapshot_is_reported_without_guessing_date_associations(self):
+        legacy = {
+            "snapshot_id": "legado-1", "atualizado_em": "2026-10-12T18:00:00",
+            "chamados": [{"serie": "SN-FIC-LEGADO", "simpress": {
+                "pedidos": ["P-LEG-1", "P-LEG-2"],
+                "datas_pedido": ["02/10/2026", "10/10/2026"],
+                "status": ["Em separação", "Pedido entregue"],
+            }}],
+        }
+        section = tickets_section(legacy, OCTOBER)
+        self.assertEqual(section["simpress"], {
+            "abertas": 0, "concluidas": 0, "pendentes": 0, "encerradas_sem_data": 0,
+        })
+        self.assertEqual(len(section["dados_insuficientes"]), 1)
+        self.assertEqual(section["dados_insuficientes"][0]["identificadores"], ["P-LEG-1", "P-LEG-2"])
+        self.assertIn("legada", section["dados_insuficientes"][0]["motivo"])
+
     def test_empty_ticket_history_reports_zeros(self):
         section = tickets_section({}, OCTOBER)
         self.assertEqual(section["oracle"], {"abertas": 0, "concluidas": 0, "pendentes": 0, "encerradas_sem_data": 0})
@@ -257,7 +352,7 @@ class WorkbookTests(unittest.TestCase):
         workbook, filename = self.workbook(build())
         self.assertEqual(filename, "Relatorio-mensal-2026-10.xlsx")
         self.assertEqual(workbook.sheetnames, [
-            "Resumo", "Inventário por tipo", "Inventário por unidade", "Comparação", "OS do mês",
+            "Resumo", "Inventário por tipo", "Inventário por unidade", "Comparação", "OS do mês", "OS sem dados",
         ])
         values = self.summary_values(workbook)
         self.assertEqual(values["Relatório mensal — outubro de 2026"], None)
@@ -298,6 +393,22 @@ class WorkbookTests(unittest.TestCase):
         workbook, _ = self.workbook(build(equipment=hostile))
         values = [cell for row in workbook["Inventário por tipo"].iter_rows(values_only=True) for cell in row]
         self.assertIn("'=HYPERLINK(\"x\")", values)
+
+    def test_legacy_insufficient_rows_are_visible_in_workbook(self):
+        legacy = {
+            "snapshot_id": "legado-1", "atualizado_em": "2026-10-12T18:00:00",
+            "chamados": [{"serie": "SN-FIC-LEGADO", "simpress": {
+                "pedidos": ["P-LEG-1", "P-LEG-2"],
+                "datas_pedido": ["02/10/2026", "10/10/2026"],
+                "status": ["Em separação", "Pedido entregue"],
+            }}],
+        }
+        workbook, _ = self.workbook(build(ticket_report=legacy))
+        values = self.summary_values(workbook)
+        self.assertEqual(values["Ocorrências sem dados por pedido"], 1)
+        rows = list(workbook["OS sem dados"].iter_rows(min_row=2, values_only=True))
+        self.assertEqual(rows[0][1], "SN-FIC-LEGADO")
+        self.assertEqual(rows[0][2], "P-LEG-1, P-LEG-2")
 
     def test_empty_month_still_generates_with_zeros(self):
         report = build(

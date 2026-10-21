@@ -27,9 +27,7 @@ from domains.inventory_comparison import (
 from domains.ticket_reporting import (
     _is_closed,
     _parse_date,
-    normalize_ticket_snapshot,
     ticket_report_snapshots,
-    ticket_stage_date,
 )
 
 MONTH_NAMES = (
@@ -181,10 +179,188 @@ def _key(value: Any) -> str:
     return re.sub(r"\s+", "", str(value or "")).upper()
 
 
-def _latest_date(values: Any) -> Optional[date]:
-    candidates = values if isinstance(values, list) else [values]
-    parsed = [found for found in (_parse_date(value) for value in candidates) if found is not None]
-    return max(parsed) if parsed else None
+def _string_values(value: Any) -> List[str]:
+    candidates = value if isinstance(value, (list, tuple)) else [value]
+    result: List[str] = []
+    for candidate in candidates:
+        text = str(candidate or "").strip()
+        if text and text not in result:
+            result.append(text)
+    return result
+
+
+def _stage_dates(value: Any, stage_key: str) -> List[str]:
+    stages = value if isinstance(value, list) else []
+    return [
+        str(stage.get("data") or "").strip()
+        for stage in stages
+        if isinstance(stage, dict) and stage.get("chave") == stage_key and str(stage.get("data") or "").strip()
+    ]
+
+
+def _date_values(values: Iterable[Any]) -> Tuple[List[date], List[str]]:
+    parsed: List[date] = []
+    invalid: List[str] = []
+    for value in values:
+        text = str(value or "").strip()
+        if not text:
+            continue
+        found = _parse_date(text)
+        if found is None:
+            if text not in invalid:
+                invalid.append(text)
+        elif found not in parsed:
+            parsed.append(found)
+    return parsed, invalid
+
+
+def _insufficient_order(
+    snapshot: Mapping[str, Any], serial: str, identifiers: Sequence[str], reason: str,
+) -> Dict[str, Any]:
+    return {
+        "fonte": "Simpress",
+        "serie": serial,
+        "identificadores": list(identifiers),
+        "motivo": reason,
+        "importacao": str(snapshot.get("id") or ""),
+        "atualizado_em": str(snapshot.get("atualizado_em") or ""),
+    }
+
+
+def _simpress_orders_in_snapshot(
+    snapshot: Mapping[str, Any],
+) -> Tuple[Dict[str, Dict[str, Any]], List[Dict[str, Any]]]:
+    """Build one record per order in one import before cross-import latest-version deduplication."""
+    grouped: Dict[str, Dict[str, Any]] = {}
+    insufficient: List[Dict[str, Any]] = []
+    tickets = snapshot.get("chamados")
+    if not isinstance(tickets, list):
+        return grouped, insufficient
+
+    for ticket in tickets:
+        if not isinstance(ticket, dict):
+            continue
+        serial = str(ticket.get("serie") or "").strip()
+        simpress = ticket.get("simpress")
+        if not isinstance(simpress, dict):
+            continue
+
+        if "pedidos_detalhados" in simpress:
+            details = simpress.get("pedidos_detalhados")
+            if not isinstance(details, list):
+                insufficient.append(_insufficient_order(
+                    snapshot, serial, _string_values(simpress.get("pedidos")),
+                    "O registro novo não contém uma lista válida de pedidos detalhados.",
+                ))
+                continue
+            order_details = [(item, False) for item in details if isinstance(item, dict)]
+            for item in details:
+                if not isinstance(item, dict):
+                    insufficient.append(_insufficient_order(
+                        snapshot, serial, [], "Há um pedido detalhado em formato inválido.",
+                    ))
+        else:
+            # Legacy snapshots stored parallel lists on the current series. Only a single
+            # distinct order can be associated without guessing which date/status belongs to it.
+            identifiers = _string_values(simpress.get("pedidos"))
+            has_order_data = any(simpress.get(field) for field in (
+                "datas_pedido", "status", "etapas_pedido", "pedido_em_andamento",
+            ))
+            if len(identifiers) != 1:
+                if identifiers or has_order_data:
+                    insufficient.append(_insufficient_order(
+                        snapshot, serial, identifiers,
+                        "Importação legada sem vínculo individual entre cada pedido, data e status.",
+                    ))
+                continue
+            order_details = [({
+                "identificador": identifiers[0],
+                "status": simpress.get("status"),
+                "datas_pedido": simpress.get("datas_pedido"),
+                "etapas_pedido": simpress.get("etapas_pedido"),
+                "associacao_incompleta": False,
+                "status_incompleto": not bool(_string_values(simpress.get("status"))),
+            }, True)]
+
+        for detail, legacy in order_details:
+            identifier = str(detail.get("identificador") or detail.get("pedido") or "").strip()
+            key = _key(identifier)
+            if not key:
+                insufficient.append(_insufficient_order(
+                    snapshot, serial, [], "Registro de pedido sem identificador individual.",
+                ))
+                continue
+            record = grouped.setdefault(key, {
+                "fonte": "Simpress",
+                "identificador": identifier,
+                "series": [],
+                "status_values": [],
+                "created_values": [],
+                "created_invalid": [],
+                "delivery_values": [],
+                "delivery_invalid": [],
+                "associacao_incompleta": False,
+                "status_incompleto": False,
+                "legado": False,
+            })
+            if serial and serial not in record["series"]:
+                record["series"].append(serial)
+            for status in _string_values(detail.get("status")):
+                if status not in record["status_values"]:
+                    record["status_values"].append(status)
+
+            created_values: List[Any] = []
+            created_values.extend(_string_values(detail.get("data_pedido")))
+            created_values.extend(_string_values(detail.get("datas_pedido")))
+            created_values.extend(_stage_dates(detail.get("etapas_pedido"), "data_pedido"))
+            created_dates, created_invalid = _date_values(created_values)
+            record["created_values"].extend(value for value in created_dates if value not in record["created_values"])
+            record["created_invalid"].extend(value for value in created_invalid if value not in record["created_invalid"])
+
+            delivery_values = _stage_dates(detail.get("etapas_pedido"), "entregue")
+            delivery_values.extend(_string_values(detail.get("data_entrega")))
+            delivery_dates, delivery_invalid = _date_values(delivery_values)
+            record["delivery_values"].extend(value for value in delivery_dates if value not in record["delivery_values"])
+            record["delivery_invalid"].extend(value for value in delivery_invalid if value not in record["delivery_invalid"])
+            record["associacao_incompleta"] = record["associacao_incompleta"] or bool(detail.get("associacao_incompleta"))
+            record["status_incompleto"] = record["status_incompleto"] or bool(detail.get("status_incompleto"))
+            record["legado"] = record["legado"] or legacy
+
+    for record in grouped.values():
+        created_values = record["created_values"]
+        record["criacao"] = created_values[0] if len(created_values) == 1 else None
+        record["conclusao"] = max(record["delivery_values"]) if record["delivery_values"] else None
+        record["status"] = ", ".join(record["status_values"])
+        record["serie"] = ", ".join(record["series"])
+        statuses = [value.casefold() for value in record["status_values"]]
+        record["encerrada"] = bool(statuses) and all(
+            any(token in status for token in _SIMPRESS_FINISHED_TOKENS)
+            for status in statuses
+        )
+        record["snapshot_id"] = str(snapshot.get("id") or "")
+        record["atualizado_em"] = str(snapshot.get("atualizado_em") or "")
+    return grouped, insufficient
+
+
+def _simpress_insufficient_reason(record: Mapping[str, Any], month: ReportMonth) -> str:
+    if record.get("associacao_incompleta"):
+        return "Uma linha associa vários pedidos; datas e status não podem ser atribuídos com segurança."
+    if record.get("created_invalid"):
+        return "A data do pedido é inválida e não pode ser posicionada no mês."
+    created_values = record.get("created_values")
+    if isinstance(created_values, list) and len(created_values) > 1:
+        return "A importação contém datas de pedido divergentes para o mesmo identificador."
+    if record.get("delivery_invalid") and not record.get("delivery_values"):
+        return "A data de entrega está inválida e não pode ser posicionada no mês."
+    created = record.get("criacao")
+    completed = record.get("conclusao")
+    if created is None and completed is None:
+        return "Não há data do pedido nem data de entrega para posicionar este registro no mês."
+    if record.get("status_incompleto") and completed is None and (created is None or created <= month.end):
+        return "Há equipamento sem status neste pedido; não é possível confirmar se ele seguia em andamento."
+    if not record.get("status") and completed is None and (created is None or created <= month.end):
+        return "O status não foi registrado e não é possível confirmar se o pedido seguia em andamento."
+    return ""
 
 
 def _month_situation(month: ReportMonth, opened: Optional[date], closed: Optional[date], finished: bool) -> List[str]:
@@ -202,10 +378,11 @@ def _month_situation(month: ReportMonth, opened: Optional[date], closed: Optiona
 
 
 def tickets_section(report: Mapping[str, Any], month: ReportMonth) -> Dict[str, Any]:
-    """Oracle OS and Simpress orders by date; the newest import wins for a repeated identifier."""
+    """Count each Oracle OS and Simpress pedido once; newer imports replace older order state."""
     oracle: Dict[str, Dict[str, Any]] = {}
     simpress: Dict[str, Dict[str, Any]] = {}
-    snapshots = [normalize_ticket_snapshot(item) for item in ticket_report_snapshots(dict(report))]
+    insufficient: List[Dict[str, Any]] = []
+    snapshots = ticket_report_snapshots(dict(report))
     for snapshot in snapshots:
         for ticket in snapshot.get("chamados") or []:
             if not isinstance(ticket, dict):
@@ -227,28 +404,28 @@ def tickets_section(report: Mapping[str, Any], month: ReportMonth) -> Dict[str, 
                     "conclusao": _parse_date(item.get("data_conclusao")),
                     "encerrada": _is_closed(item),
                 }
-            data = ticket.get("simpress")
-            if not isinstance(data, dict) or not (data.get("pedidos") or data.get("datas_pedido")):
-                continue
-            orders = data.get("pedidos") if isinstance(data.get("pedidos"), list) else []
-            identifier = str(orders[-1] if orders else "").strip()
-            opened = _parse_date(ticket_stage_date(ticket, "data_pedido")) or _latest_date(data.get("datas_pedido"))
-            key = _key(identifier) or f"{_key(serial)}|{opened or ''}"
-            statuses = [str(value) for value in data.get("status") or [] if value]
-            status_text = " ".join(statuses).casefold()
-            simpress[key] = {
-                "fonte": "Simpress",
-                "identificador": identifier,
-                "serie": serial,
-                "status": ", ".join(statuses),
-                "criacao": opened,
-                "conclusao": _parse_date(ticket_stage_date(ticket, "entregue")),
-                "encerrada": any(token in status_text for token in _SIMPRESS_FINISHED_TOKENS),
-            }
 
-    def count(records: Mapping[str, Dict[str, Any]]) -> Dict[str, int]:
+        snapshot_orders, snapshot_insufficient = _simpress_orders_in_snapshot(snapshot)
+        insufficient.extend(snapshot_insufficient)
+        # A snapshot map already combines equipment rows. Reassignment here makes the
+        # latest import authoritative when the same request appears again.
+        for key, record in snapshot_orders.items():
+            simpress[key] = record
+
+    def count(records: Mapping[str, Dict[str, Any]], source: str) -> Dict[str, int]:
         counts = {"abertas": 0, "concluidas": 0, "pendentes": 0, "encerradas_sem_data": 0}
-        for record in records.values():
+        for key, record in records.items():
+            reason = _simpress_insufficient_reason(record, month) if source == "Simpress" else ""
+            if reason:
+                insufficient.append({
+                    "fonte": source,
+                    "serie": ", ".join(record.get("series") or [str(record.get("serie") or "")]),
+                    "identificadores": [str(record.get("identificador") or "")],
+                    "motivo": reason,
+                    "importacao": str(record.get("snapshot_id") or ""),
+                    "atualizado_em": str(record.get("atualizado_em") or ""),
+                })
+                continue
             record["situacao"] = _month_situation(month, record["criacao"], record["conclusao"], record["encerrada"])
             counts["abertas"] += OPENED in record["situacao"]
             counts["concluidas"] += CLOSED in record["situacao"]
@@ -259,16 +436,21 @@ def tickets_section(report: Mapping[str, Any], month: ReportMonth) -> Dict[str, 
             )
         return counts
 
-    oracle_counts = count(oracle)
-    simpress_counts = count(simpress)
+    oracle_counts = count(oracle, "Oracle")
+    simpress_counts = count(simpress, "Simpress")
     detail = sorted(
-        (record for record in [*oracle.values(), *simpress.values()] if record["situacao"]),
+        (record for record in [*oracle.values(), *simpress.values()] if record.get("situacao")),
         key=lambda record: (record["fonte"], record["criacao"] or date.min, record["identificador"]),
     )
+    insufficient.sort(key=lambda item: (
+        str(item.get("fonte") or ""), str(item.get("serie") or ""),
+        str(item.get("identificadores") or []), str(item.get("importacao") or ""),
+    ))
     return {
         "oracle": oracle_counts,
         "simpress": simpress_counts,
         "linhas": detail,
+        "dados_insuficientes": insufficient,
         "importacoes": len(snapshots),
         "ultima_importacao": str(report.get("atualizado_em") or ""),
     }
@@ -335,6 +517,8 @@ def summary_rows(report: Mapping[str, Any]) -> List[Tuple[str, str, Any, str]]:
         ("OS do mês", "Pedidos Simpress em andamento no fim do mês", simpress["pendentes"], "Feitos até o fim do mês e sem entrega até ele."),
         ("OS do mês", "Encerrados sem data", oracle["encerradas_sem_data"] + simpress["encerradas_sem_data"],
          "Status encerrado sem data de conclusão ou entrega; fora das contagens do mês."),
+        ("OS do mês", "Ocorrências sem dados por pedido", len(tickets["dados_insuficientes"]),
+         "Importações sem vínculo individual ou datas/status suficientes; não entram nas contagens do mês."),
     ]
     return rows
 
@@ -427,6 +611,14 @@ def build_monthly_report_workbook(report: Mapping[str, Any]) -> Tuple[BytesIO, s
         ((record["fonte"], record["identificador"], record["serie"], record["status"],
           _date_text(record["criacao"]), _date_text(record["conclusao"]), "; ".join(record["situacao"]))
          for record in tickets["linhas"]),
+    )
+    _table(
+        workbook.create_sheet("OS sem dados"),
+        ("Fonte", "Série", "OS/Pedidos possíveis", "Motivo", "Importação", "Data da importação"),
+        ((item["fonte"], item["serie"], ", ".join(item["identificadores"]), item["motivo"],
+          item["importacao"], item["atualizado_em"])
+         for item in tickets["dados_insuficientes"]),
+        "Sem dados insuficientes.",
     )
     output = BytesIO()
     workbook.save(output)

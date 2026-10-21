@@ -16,6 +16,7 @@ from openpyxl import Workbook
 from starlette.datastructures import UploadFile
 
 from domains.history_insights import compare_updates, latest_update, pending_rows
+from domains.monthly_report import ReportMonth, tickets_section
 from domains.ticket_reconciliation import ORACLE_FIELDS, TicketWorkbookError, _source_table
 from domains.ticket_reporting import build_ticket_workbook
 from routers.operations import TicketTimelineAnnotationPayload, create_operations_router
@@ -870,6 +871,46 @@ class TicketImportRouteTests(unittest.TestCase):
             )
             self.assertEqual(response.headers["content-type"], "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet")
             self.assertIn("Acompanhamento_de_Chamados_", response.headers["content-disposition"])
+
+    def test_import_persists_order_level_rows_and_keeps_current_screen_projection(self):
+        with tempfile.TemporaryDirectory() as directory:
+            path = Path(directory) / "tickets.json"
+            router = create_operations_router(
+                load_comparison_history=lambda: [],
+                comparison_history_for_display=lambda event: event,
+                ticket_report_path=lambda: path,
+                transaction_root=lambda: Path(directory),
+            )
+            simpress = self.workbook_bytes([
+                ["NumeroPedido", "NumeroSerie", "OrdemServico", "StatusAtual", "DataPedido", "Entregue"],
+                [100, "SN-FIC-A", 1001, "Em separação", date(2026, 9, 30), None],
+                [200, "SN-FIC-A", 2002, "Em separação", date(2026, 10, 5), None],
+                [200, "SN-FIC-B", 2002, "Em separação", date(2026, 10, 5), None],
+            ])
+            oracle = self.workbook_bytes([
+                ["Solicitação", "ID OS Corporate", "Número de Série"],
+                ["REQ-200", 2002, "SN-FIC-A"],
+            ])
+            response = route_handler(router, "/api/operacoes/chamados/importar", "POST")(
+                simpress_file=UploadFile(filename="pedidos.xlsx", file=BytesIO(simpress)),
+                oracle_file=UploadFile(filename="solicitacoes.xlsx", file=BytesIO(oracle)),
+            )
+
+            displayed = {item["serie"]: item for item in response["chamados"]}
+            self.assertEqual(displayed["SN-FIC-A"]["simpress"]["pedidos"], ["200"])
+            self.assertNotIn("pedidos_detalhados", displayed["SN-FIC-A"]["simpress"])
+
+            raw = json.loads(path.read_text(encoding="utf-8"))
+            saved = {item["serie"]: item for item in raw["historico"][-1]["chamados"]}
+            self.assertEqual(
+                [item["identificador"] for item in saved["SN-FIC-A"]["simpress"]["pedidos_detalhados"]],
+                ["100", "200"],
+            )
+            monthly = tickets_section(raw, ReportMonth(2026, 10))
+            rows = [item for item in monthly["linhas"] if item["fonte"] == "Simpress"]
+            self.assertEqual({item["identificador"] for item in rows}, {"100", "200"})
+            self.assertEqual(sum(item["identificador"] == "200" for item in rows), 1)
+            self.assertEqual(next(item["serie"] for item in rows if item["identificador"] == "200"), "SN-FIC-A, SN-FIC-B")
 
     def test_legacy_reports_show_only_latest_simpress_pedido_and_os_without_rewriting_raw_data(self):
         with tempfile.TemporaryDirectory(dir=PROJECT_ROOT) as directory:
