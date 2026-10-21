@@ -2,7 +2,7 @@
 
 import unittest
 from pathlib import Path
-from unittest.mock import Mock, patch
+from unittest.mock import ANY, Mock, patch
 
 from scripts import automacao_rotinas_chrome as automacao
 
@@ -41,7 +41,7 @@ class DownloadCallbackTests(unittest.TestCase):
         result = automacao.exportar_com_download(self.page, "Oracle", click)
         self.assertEqual(result, self.saved_path)
         click.assert_called_once_with()
-        self.save.assert_called_once_with(self.download, "Oracle")
+        self.save.assert_called_once_with(self.download, "Oracle", ANY)
         self.assert_no_listener()
 
     def test_download_waits_without_repeating_export(self):
@@ -50,7 +50,7 @@ class DownloadCallbackTests(unittest.TestCase):
         automacao.exportar_com_download(self.page, "UX", click)
         click.assert_called_once_with()
         self.page.wait_for_timeout.assert_called_once_with(500)
-        self.save.assert_called_once_with(self.download, "UX")
+        self.save.assert_called_once_with(self.download, "UX", ANY)
         self.assert_no_listener()
 
     def test_click_failure_removes_listener_and_does_not_save(self):

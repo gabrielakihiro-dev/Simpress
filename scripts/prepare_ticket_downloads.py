@@ -33,7 +33,9 @@ def recent_workbook(downloads: Path, prefixes: list[str], since: datetime):
             continue
         name_cf = path.name.casefold()
         if any(name_cf.startswith(p.casefold()) for p in prefixes):
-            if path.suffix.lower() in (".xlsx", ".zip") and path.stat().st_mtime >= since.timestamp():
+            stat = path.stat()
+            # Download vazio (0 bytes) nunca é o arquivo exportado; não deixa ele vencer o válido.
+            if path.suffix.lower() in (".xlsx", ".zip") and stat.st_mtime >= since.timestamp() and stat.st_size > 0:
                 candidates.append(path)
 
     if not candidates:
