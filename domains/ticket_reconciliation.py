@@ -393,6 +393,62 @@ def _build_order_stages(records: Sequence[Dict[str, Any]]) -> Dict[str, Any]:
     }
 
 
+def _group_simpress_order_details(records: Sequence[Dict[str, Any]], serial: str) -> List[Dict[str, Any]]:
+    """Keep one auditable record per order, including orders hidden by the current-screen projection."""
+    grouped: Dict[str, Dict[str, Any]] = OrderedDict()
+    for record in records:
+        orders = _split_order_services(record.get("pedido", ""))
+        distinct_orders: Dict[str, str] = OrderedDict()
+        for order in orders:
+            distinct_orders.setdefault(_identifier_key(order), order)
+        for key, order in distinct_orders.items():
+            if not key:
+                continue
+            item = grouped.setdefault(key, {
+                "identificador": order,
+                "records": [],
+                "associacao_incompleta": False,
+            })
+            item["records"].append(record)
+            if len(distinct_orders) > 1:
+                item["associacao_incompleta"] = True
+
+    details: List[Dict[str, Any]] = []
+    for item in grouped.values():
+        order_records = item["records"]
+
+        def values(field: str) -> List[str]:
+            result: List[str] = []
+            for record in order_records:
+                value = str(record.get(field, "") or "").strip()
+                if value and value not in result:
+                    result.append(value)
+            return result
+
+        details.append({
+            "identificador": item["identificador"],
+            "serie": serial,
+            "ordens_servico": [
+                order for record in order_records
+                for order in _split_order_services(record.get("ordem_servico", ""))
+                if order
+            ],
+            "ordens_venda": [
+                order for record in order_records
+                for order in _split_order_services(record.get("ordem_venda", ""))
+                if order
+            ],
+            "chamados_cliente": values("chamado_cliente"),
+            "status": values("status"),
+            "status_incompleto": any(not str(record.get("status") or "").strip() for record in order_records),
+            "datas_pedido": values("data_pedido"),
+            "previsoes_entrega": values("previsao_entrega"),
+            "etapas_pedido": _build_order_stages(order_records)["etapas_pedido"],
+            "associacao_incompleta": item["associacao_incompleta"],
+        })
+    return details
+
+
 def _group_simpress(records: Iterable[Dict[str, Any]]) -> Dict[str, Dict[str, Any]]:
     source_rows: Dict[str, Dict[str, Any]] = OrderedDict()
     for record in records:
@@ -450,6 +506,7 @@ def _group_simpress(records: Iterable[Dict[str, Any]]) -> Dict[str, Dict[str, An
             "serie": source_group["serie"], "pedidos": [], "ordens_venda": [], "ordens_servico": [], "chamados_cliente": [],
             "status": [], "datas_pedido": [], "modelos": [], "descricoes_produto": [],
             "previsoes_entrega": [], "cidades_entrega": [], "enderecos_entrega": [], "pedido_em_andamento": False,
+            "pedidos_detalhados": _group_simpress_order_details(source_records, source_group["serie"]),
         }
         for record in current_records:
             row_os = _split_order_services(record.get("ordem_servico", ""))

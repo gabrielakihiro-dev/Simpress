@@ -9,13 +9,32 @@
 
   /** @param {unknown} valor @returns {string} */
   function formatarNomeFonteHistorico(valor) {
-    return String(valor || "")
-      .replace(/\b(?:na|no|da|do|à|ao|pela|pelo|a|o)\s*InvAll/gi, "no endpoint")
-      .replace(/InvAll/gi, "no endpoint")
-      .replace(/\b(?:em|de|da|do|na|no|a|à|pela|pelo)\s*EquipamentosDetalhes/gi, "na Simpress")
-      .replace(/EquipamentosDetalhes/gi, "na Simpress")
-      .replace(/(?<![\w.-])(?:no\s+)?Endpoint(?![\w.-])/gi, "no endpoint")
-      .replace(/\b(?:na\s+)?Simpress\b/gi, "na Simpress");
+    const text = String(valor || "");
+    return text.replace(
+      /(?<![\p{L}\p{M}\p{N}])((?:de|da|do|das|dos|na|no|pela|pelo|em|à|ao|a|o)\s+)?(EquipamentosDetalhes|InvAll|Simpress|Endpoint)([\p{L}\p{M}\p{N}_.-]*(?: \(\d+\))?\.[a-z0-9]{1,10}(?=$|[^\p{L}\p{M}\p{N}_]))?(?![\p{L}\p{M}\p{N}_-]|\.[\p{L}\p{M}\p{N}_])/giu,
+      (match, preposition = "", source = "", filename = "", offset = 0) => {
+        // Keep this display-only normalization in parity with
+        // domains.inventory_comparison._comparison_source_text_for_display.
+        const sourceLower = source.toLowerCase();
+        const isSimpress = sourceLower === "simpress" || sourceLower === "equipamentosdetalhes";
+        const isLegacySource = sourceLower === "invall" || sourceLower === "equipamentosdetalhes";
+        const visibleSource = isSimpress ? "Simpress" : "Endpoint";
+
+        if (filename) {
+          return `${preposition}${isLegacySource ? visibleSource : source}${filename}`;
+        }
+        if (!preposition && offset > 0 && "_.-".includes(text[offset - 1])) {
+          return match;
+        }
+        if (isLegacySource) {
+          return isSimpress ? "na Simpress" : "no endpoint";
+        }
+        if (preposition) {
+          return `${preposition}${!isSimpress && preposition.trim().toLowerCase() === "no" ? "endpoint" : visibleSource}`;
+        }
+        return isSimpress ? "na Simpress" : "no endpoint";
+      },
+    );
   }
 
   /** @param {any} horario @returns {any} */
