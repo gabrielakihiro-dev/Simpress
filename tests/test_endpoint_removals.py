@@ -1,6 +1,7 @@
 """Remoção do hostname mais antigo nas duplicidades do Endpoint."""
 
 import copy
+import dataclasses
 import json
 import tempfile
 import unittest
@@ -210,6 +211,24 @@ class RemovalWorkflowTests(unittest.TestCase):
             [item["hostname"] for item in json.loads(self.removed.read_text(encoding="utf-8"))],
             ["HOST-OLD"],
         )
+
+    def test_concurrent_removals_of_the_same_series_keep_one_hostname(self):
+        # Duas requisições leem o índice antes de qualquer gravação (corrida intercalada).
+        stale_index = main.read_endpoint_alias_index()
+        self.assertEqual(len(stale_index["duplicates"]["SN1"]), 2)
+        stale = dataclasses.replace(self.services, read_endpoint_alias_index=lambda: copy.deepcopy(stale_index))
+
+        first = endpoint_removals.remove_endpoint_hostname(stale, "SN-1", "HOST-OLD")
+        self.assertEqual(first["mantidos"], ["HOST-NEW"])
+
+        with self.assertRaises(DomainConflictError) as raised:
+            endpoint_removals.remove_endpoint_hostname(stale, "SN-1", "HOST-NEW")
+        self.assertEqual(raised.exception.detail, "Ao menos um hostname da série precisa permanecer.")
+        self.assertEqual(
+            [item["hostname"] for item in json.loads(self.removed.read_text(encoding="utf-8"))],
+            ["HOST-OLD"],
+        )
+        self.assertEqual(main.load_endpoint_aliases(), {"SN1": "HOST-NEW"})
 
     def test_listing_returns_the_stored_pairs(self):
         endpoint_removals.remove_endpoint_hostname(self.services, "SN-1", "HOST-OLD")

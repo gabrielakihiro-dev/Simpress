@@ -145,6 +145,7 @@ from domains.ticket_inbox import (
     AutomaticTicketInbox,
     automatic_ticket_import_worker as run_automatic_ticket_import_worker,
 )
+from domains.ticket_import import TicketImportServices, TicketWorkbookSource, import_ticket_workbooks
 from domains.history_annotations import (
     build_history_annotation_record,
     history_annotation_row_fingerprint,
@@ -894,20 +895,37 @@ async def lifespan(app: FastAPI):
     await asyncio.to_thread(prepare_local_state)
     background_tasks: List[asyncio.Task] = []
     try:
-        background_tasks.extend((
-            asyncio.create_task(_history_annotation_sync_worker()),
-            asyncio.create_task(_automatic_inventory_import_worker()),
-            asyncio.create_task(_automatic_ticket_import_worker()),
-            asyncio.create_task(_external_change_reload_worker()),
-            asyncio.create_task(_monthly_report_worker()),
-        ))
+        for worker in (
+            _history_annotation_sync_worker,
+            _automatic_inventory_import_worker,
+            _automatic_ticket_import_worker,
+            _external_change_reload_worker,
+            _monthly_report_worker,
+        ):
+            task = asyncio.create_task(worker(), name=worker.__name__)
+            task.add_done_callback(_log_background_task_failure)
+            background_tasks.append(task)
         yield
     finally:
         for task in background_tasks:
             task.cancel()
+        # Failures were already logged by the done callback; cancellation is the expected end.
         await asyncio.gather(
             *background_tasks,
             return_exceptions=True,
+        )
+
+
+def _log_background_task_failure(task: "asyncio.Task[Any]") -> None:
+    """A worker runs until shutdown; record the error that stopped one, even mid-run."""
+    if task.cancelled():
+        return
+    error = task.exception()
+    if error is not None:
+        logger.error(
+            "A tarefa de fundo %s foi encerrada por uma falha inesperada.",
+            task.get_name(),
+            exc_info=(type(error), error, error.__traceback__),
         )
 
 
@@ -970,34 +988,30 @@ async def _automatic_inventory_import_worker() -> None:
     )
 
 
-async def _automatic_ticket_import_worker() -> None:
-    endpoint = next((
-        route.endpoint
-        for route in operations_router.routes
-        if getattr(route, "path", None) == "/api/operacoes/chamados/importar"
-        and "POST" in getattr(route, "methods", set())
-    ), None)
-    if endpoint is None:
-        raise RuntimeError("A rota de importação de chamados não está registrada.")
+def _import_automatic_ticket_batch(
+    batch_id: str, simpress_name: str, simpress_bytes: bytes, oracle_name: str, oracle_bytes: bytes,
+) -> Dict[str, Any]:
+    """Import an inbox batch through the same service as the HTTP upload."""
+    try:
+        _raise_if_transaction_recovery_blocked()
+    except HTTPException as error:
+        raise _as_domain_error(error) from error
+    # TicketImportError is a DomainError: 409/503 keep the batch pending, others archive it as failed.
+    return import_ticket_workbooks(
+        _ticket_import_services,
+        TicketWorkbookSource.from_bytes(simpress_name, simpress_bytes),
+        TicketWorkbookSource.from_bytes(oracle_name, oracle_bytes),
+        batch_id,
+    )
 
-    def import_batch(batch_id: str, simpress_name: str, simpress_bytes: bytes, oracle_name: str, oracle_bytes: bytes):
-        try:
-            _raise_if_transaction_recovery_blocked()
-            simpress_upload = StarletteUploadFile(filename=simpress_name, file=io.BytesIO(simpress_bytes))
-            oracle_upload = StarletteUploadFile(filename=oracle_name, file=io.BytesIO(oracle_bytes))
-            return endpoint(
-                simpress_file=simpress_upload,
-                oracle_file=oracle_upload,
-                automatic_import_id=batch_id,
-            )
-        except HTTPException as error:
-            raise _as_domain_error(error) from error
+
+async def _automatic_ticket_import_worker() -> None:
 
     inbox = AutomaticTicketInbox(
         root=AUTOMATIC_TICKET_INBOX_DIR,
         report_path=TICKET_REPORT_FILE,
         max_upload_bytes=MAX_TICKET_WORKBOOK_BYTES,
-        import_batch=import_batch,
+        import_batch=_import_automatic_ticket_batch,
     )
     logger.info("Entrada automática de chamados ativa em %s.", AUTOMATIC_TICKET_INBOX_DIR)
     await run_automatic_ticket_import_worker(
@@ -2278,6 +2292,15 @@ restaurar_comparacao_historica = _inventory_history_exports.restaurar_comparacao
 visualizar_restauracao_comparacao = _inventory_history_exports.visualizar_restauracao_comparacao
 app.include_router(inventory_history_router)
 
+# One import service for the HTTP upload and the automatic inbox (data/state/entrada_chamados).
+_ticket_import_services = TicketImportServices(
+    ticket_report_path=lambda: TICKET_REPORT_FILE,
+    transaction_root=lambda: TRANSACTION_ROOT,
+    annotation_directory=lambda: HISTORY_ANNOTATIONS_DIR,
+    annotation_outbox_directory=lambda: LOCAL_HISTORY_ANNOTATION_OUTBOX_DIR,
+    load_annotation_records=lambda directory, **kwargs: load_history_annotations(directory, **kwargs),
+)
+
 operations_router = create_operations_router(
     load_comparison_history=load_comparison_history,
     comparison_history_for_display=_inventory_history_exports.history_annotation_view,
@@ -2287,6 +2310,7 @@ operations_router = create_operations_router(
     local_annotation_outbox_directory=lambda: LOCAL_HISTORY_ANNOTATION_OUTBOX_DIR,
     history_annotations_sync_enabled=lambda: HISTORY_ANNOTATIONS_SYNC_ENABLED,
     load_history_annotation_records=lambda directory, **kwargs: load_history_annotations(directory, **kwargs),
+    ticket_import_services=_ticket_import_services,
 )
 app.include_router(operations_router)
 
@@ -2322,9 +2346,9 @@ app.include_router(create_automation_router(AutomationRouteServices(runner=get_c
 
 def _generate_previous_month_report_best_effort() -> None:
     """Save last month's report when missing; failures wait for the next check."""
-    if get_transaction_recovery_block() is not None:
-        return
     try:
+        if get_transaction_recovery_block() is not None:
+            return
         generate_previous_month_report(_monthly_report_services, MONTHLY_REPORTS_DIR, TRANSACTION_ROOT)
     except Exception as error:
         logger.warning("O relatório mensal automático não pôde ser gerado agora (erro=%s); nova tentativa em breve.", type(error).__name__)
@@ -2362,10 +2386,11 @@ if __name__ == "__main__":
         equipment_source: Path | str | None = get_primary_equipment_file()
     except FileBusyError:
         equipment_source = "INDISPONÍVEL no momento (arquivo em uso)"
-    print(f"[INFO] Diretório do projeto: {BASE_DIR}")
-    print(f"[INFO] Modelo de transferência: {TEMPLATE_FILE} ({'OK' if TEMPLATE_FILE.is_file() else 'AUSENTE'})")
-    print(f"[INFO] Fonte EquipamentosDetalhes: {equipment_source or 'AUSENTE'}")
-    print(f"[INFO] Porta local: {SERVER_PORT}")
-    print(f"[INFO] Log local: {log_file}")
+    # Startup diagnostics go to the console and to the local log file, with timestamps.
+    logger.info("Diretório do projeto: %s", BASE_DIR)
+    logger.info("Modelo de transferência: %s (%s)", TEMPLATE_FILE, "OK" if TEMPLATE_FILE.is_file() else "AUSENTE")
+    logger.info("Fonte EquipamentosDetalhes: %s", equipment_source or "AUSENTE")
+    logger.info("Porta local: %s", SERVER_PORT)
+    logger.info("Log local: %s", log_file)
     # Access lines would carry ?q= searches (serials, hostnames) to the console.
     uvicorn.run(app, host="127.0.0.1", port=SERVER_PORT, proxy_headers=False, access_log=False)

@@ -25,6 +25,7 @@ GIT_IDENTITY = [
     "-c", "tag.gpgsign=false",
     "-c", "core.hooksPath=",
 ]
+MAX_TEMPORARY_ROOT_LENGTH = 60
 CHANGELOG_TEMPLATE = """# Changelog
 
 ## [Não lançado]
@@ -35,14 +36,39 @@ CHANGELOG_TEMPLATE = """# Changelog
 """
 
 
+def short_temporary_root():
+    """Base curta para os repositórios de teste.
+
+    Com TEMP em caminho longo (sandbox, worktrees), o Git do Windows falha com "Filename too long"
+    ao criar o repositório bare, mesmo com core.longpaths. Devolve None quando o TEMP já é curto.
+    """
+    if len(tempfile.gettempdir()) <= MAX_TEMPORARY_ROOT_LENGTH:
+        return None
+    local_app_data = os.environ.get("LOCALAPPDATA", "")
+    candidate = Path(local_app_data) / "Temp"
+    if local_app_data and len(str(candidate)) <= MAX_TEMPORARY_ROOT_LENGTH and candidate.is_dir():
+        return str(candidate)
+    return None
+
+
 def git(cwd, *args):
-    return subprocess.run(
+    # encoding explícito: no Windows, text=True decodifica em cp1252 e esconde a mensagem real do Git.
+    result = subprocess.run(
         ["git", *GIT_IDENTITY, *args],
         cwd=str(cwd),
-        check=True,
         capture_output=True,
         text=True,
-    ).stdout.strip()
+        encoding="utf-8",
+        errors="replace",
+    )
+    if result.returncode != 0:
+        detalhes = "\n".join([
+            f"git {' '.join(args)} falhou em {cwd} (código {result.returncode})",
+            f"stdout: {result.stdout}",
+            f"stderr: {result.stderr}",
+        ])
+        raise AssertionError(detalhes)
+    return result.stdout.strip()
 
 
 def _make_writable_and_retry(function, path, _error):
@@ -63,7 +89,7 @@ class CheckUpdateWithRealRepositoriesTests(unittest.TestCase):
     """Simulates the operator checkout against a local bare origin; no network involved."""
 
     def setUp(self):
-        self.temporary_directory = tempfile.TemporaryDirectory(prefix=".check-update-test-")
+        self.temporary_directory = tempfile.TemporaryDirectory(prefix=".check-update-test-", dir=short_temporary_root())
         base = Path(self.temporary_directory.name)
         self.origin = base / "origin.git"
         self.publisher = base / "publisher"
