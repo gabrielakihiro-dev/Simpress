@@ -1,6 +1,6 @@
 # Prompt: continuar a verificação de usuários (Sistema > Usuários no Endpoint Central)
 
-Use este prompt numa máquina **sem o Netskope** (o DLP do notebook corporativo bloqueia o envio ao Claude do conteúdo do Endpoint Central). Cole o bloco abaixo no Claude Code, no Codex ou no Antigravity, num worktree novo criado a partir do branch `claude/antigravity-automation-inventory-d6199f` (ou da `main`, se ele já tiver sido integrado).
+Use este prompt numa máquina **sem o Netskope** (o DLP do notebook corporativo bloqueia o envio ao Claude do conteúdo do Endpoint Central). Cole o bloco abaixo no Claude Code, no Codex ou no Antigravity, num worktree novo criado a partir do branch `claude/verificar-usuarios-endpoint` (ou da `main`, se ele já tiver sido integrado).
 
 ```
 Contexto do projeto
@@ -11,7 +11,7 @@ No teste ao vivo de 21/10/2026, a rotina parou na 1ª pendência com "[FALHA] A 
 - Suspeita: campo.fill() troca o valor do input sem disparar o que o componente Ember usa para guardar o texto do filtro, e o Enter pesquisa com o valor antigo/vazio. Compare fill() com click() + type(delay) + Enter, e com limpar via Ctrl+A/Backspace.
 - Outra hipótese: o filtro aplicado antes da grade terminar de carregar (spinner .page-loader-wrapper/.spinner).
 - Corrija aplicar_filtro em scripts/verificar_usuarios_endpoint.py, mantendo a confirmação (valor no campo + linhas que contêm o valor, ou grade vazia confirmada) e o RotinaErro quando não confirmar.
-- Teste com: SIMPRESS_PORT=8050 python scripts/automacao_rotinas_chrome.py --rotina usuarios (servidor de teste; ver "Regras"). Resultado esperado para a série BRJ0000TST: "manter".
+- Teste com: SIMPRESS_PORT=8050 python scripts/automacao_rotinas_chrome.py --rotina usuarios (servidor de teste; ver "Regras"). Na 1ª pendência da cópia de teste, o usuário esperado aparece em "Usuários logados": o resultado esperado é "manter".
 - Depois, teste o botão "Verificar usuários" na aba Automação do servidor de teste.
 
 O que já existe (no branch)
