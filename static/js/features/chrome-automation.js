@@ -36,7 +36,34 @@
     consultaLog: 0, consultaHistorico: 0, consultaOpcoes: 0,
     pagina: 1, paginas: 1, limite: 5, filtros: {},
     logPagina: 1, logPaginas: 1, ampliado: "",
+    avisouServidorAntigo: false,
   };
+
+  const AVISO_SERVIDOR_ANTIGO = "Servidor desatualizado: reinicie o Simpress (feche a janela do servidor e abra iniciar_servidor.bat).";
+
+  // A 404 on /api/automacao/* with FastAPI's default body means the route is missing: an old server answered.
+  async function consultarAutomacao(url, opcoes) {
+    try {
+      return await app.apiFetch(url, opcoes);
+    } catch (err) {
+      if (err && err.status === 404 && (err.detail === undefined || err.detail === "Not Found")) {
+        const aviso = new Error(AVISO_SERVIDOR_ANTIGO);
+        aviso.status = 404;
+        aviso.servidorDesatualizado = true;
+        throw aviso;
+      }
+      throw err;
+    }
+  }
+
+  // The outdated-server notice is shown once; repeated failures stay silent in the UI.
+  function avisarErro(err) {
+    if (err?.servidorDesatualizado) {
+      if (estado.avisouServidorAntigo) return;
+      estado.avisouServidorAntigo = true;
+    }
+    app.showToast(err.message, "error");
+  }
 
   function painel() {
     return document.getElementById("tab-panel-automacao");
@@ -152,7 +179,7 @@
     estado.logHistorico = null;
     mostrarLogAutomacao();
     try {
-      const dados = await app.apiFetch(`/api/automacao/execucoes/${encodeURIComponent(id)}/log?linhas=500`, {errorMessage: "Não foi possível abrir o log selecionado."});
+      const dados = await consultarAutomacao(`/api/automacao/execucoes/${encodeURIComponent(id)}/log?linhas=500`, {errorMessage: "Não foi possível abrir o log selecionado."});
       if (consulta !== estado.consultaLog) return;
       estado.logHistorico = dados;
       mostrarLogAutomacao();
@@ -182,7 +209,7 @@
     if (!data) return;
     try {
       const params = new URLSearchParams({limite: "20", pagina: String(estado.logPagina), data_inicio: data, data_fim: data});
-      const dados = await app.apiFetch(`/api/automacao/historico?${params}`, {errorMessage: "Não foi possível listar as execuções desta data."});
+      const dados = await consultarAutomacao(`/api/automacao/historico?${params}`, {errorMessage: "Não foi possível listar as execuções desta data."});
       if (consulta !== estado.consultaOpcoes) return;
       const execucoes = dados.execucoes || [];
       select.replaceChildren(new Option(execucoes.length ? "Selecione uma execução" : "Nenhuma execução nesta data", ""));
@@ -260,6 +287,85 @@
     return td;
   }
 
+  function descricaoCaptura(execucao) {
+    const rotina = ROTINAS[execucao.rotina] || execucao.rotina || "Automação";
+    const hora = formatarHora(execucao.inicio);
+    const base = `Captura de tela da falha em ${rotina}${hora ? ` às ${hora}` : ""}`;
+    return execucao.mensagem ? `${base}: ${execucao.mensagem}` : base;
+  }
+
+  function criarCapturaHistorico(execucao, captura) {
+    const descricao = descricaoCaptura(execucao);
+    const item = document.createElement("span");
+    item.className = "automation-capture";
+    const miniatura = document.createElement("button");
+    miniatura.type = "button";
+    miniatura.className = "automation-capture-thumb";
+    miniatura.setAttribute("aria-haspopup", "dialog");
+    miniatura.setAttribute("aria-label", `Ampliar captura ${captura.nome}`);
+    const imagem = document.createElement("img");
+    imagem.src = captura.url;
+    imagem.alt = descricao;
+    imagem.loading = "lazy";
+    imagem.decoding = "async";
+    imagem.addEventListener("error", () => {
+      miniatura.replaceChildren(dom.createTextElement("span", "automation-capture-missing", "Captura indisponível"));
+      miniatura.disabled = true;
+    }, { once: true });
+    miniatura.appendChild(imagem);
+    miniatura.addEventListener("click", () => abrirCapturaAutomacao(captura, descricao, execucao.mensagem, miniatura));
+    const link = dom.createTextElement("a", "automation-history-link", captura.nome);
+    link.href = captura.url;
+    link.target = "_blank";
+    link.rel = "noopener noreferrer";
+    item.append(miniatura, link);
+    return item;
+  }
+
+  function abrirCapturaAutomacao(captura, descricao, mensagem, origem) {
+    let dialogo = document.getElementById("automacao-captura-dialogo");
+    if (!dialogo) {
+      dialogo = document.createElement("dialog");
+      dialogo.id = "automacao-captura-dialogo";
+      dialogo.className = "automation-capture-dialog";
+      dialogo.setAttribute("aria-labelledby", "automacao-captura-titulo");
+      const titulo = dom.createTextElement("h3", "automation-capture-title", "");
+      titulo.id = "automacao-captura-titulo";
+      const fechar = dom.createTextElement("button", "btn btn-secondary", "Fechar");
+      fechar.type = "button";
+      fechar.id = "automacao-captura-fechar";
+      fechar.addEventListener("click", () => dialogo.close());
+      const cabecalho = document.createElement("div");
+      cabecalho.className = "automation-capture-header";
+      cabecalho.append(titulo, fechar);
+      const imagem = document.createElement("img");
+      imagem.id = "automacao-captura-imagem";
+      imagem.className = "automation-capture-full";
+      const mensagemEl = dom.createTextElement("p", "automation-capture-message", "");
+      mensagemEl.id = "automacao-captura-mensagem";
+      dialogo.append(cabecalho, imagem, mensagemEl);
+      // Clicking the backdrop (the dialog element itself) closes it, like Escape.
+      dialogo.addEventListener("click", event => { if (event.target === dialogo) dialogo.close(); });
+      dialogo.addEventListener("close", () => {
+        const anterior = dialogo._origem;
+        dialogo._origem = null;
+        if (anterior && anterior.isConnected) anterior.focus();
+      });
+      document.body.appendChild(dialogo);
+    }
+    dialogo._origem = origem || null;
+    document.getElementById("automacao-captura-titulo").textContent = captura.nome;
+    const imagem = document.getElementById("automacao-captura-imagem");
+    imagem.src = captura.url;
+    imagem.alt = descricao;
+    const mensagemEl = document.getElementById("automacao-captura-mensagem");
+    mensagemEl.textContent = mensagem || "";
+    mensagemEl.hidden = !mensagem;
+    if (typeof dialogo.showModal === "function") dialogo.showModal();
+    else dialogo.setAttribute("open", "");
+    document.getElementById("automacao-captura-fechar").focus();
+  }
+
   function renderizarHistorico(execucoes) {
     const host = document.getElementById("automacao-historico");
     if (!host) return;
@@ -294,13 +400,7 @@
       const lotes = (execucao.lotes || []).map(lote => `${lote.id}${lote.status ? ` (${lote.status})` : ""}`).join(", ") || "—";
       const capturas = document.createElement("span");
       capturas.className = "automation-history-captures";
-      (execucao.capturas || []).forEach(captura => {
-        const link = dom.createTextElement("a", "automation-history-link", captura.nome);
-        link.href = captura.url;
-        link.target = "_blank";
-        link.rel = "noopener noreferrer";
-        capturas.appendChild(link);
-      });
+      (execucao.capturas || []).forEach(captura => capturas.appendChild(criarCapturaHistorico(execucao, captura)));
       if (!capturas.childNodes.length) capturas.textContent = "—";
       const verLog = dom.createTextElement("button", "btn btn-secondary", "Ver log");
       verLog.type = "button";
@@ -326,7 +426,7 @@
     const consulta = ++estado.consultaHistorico;
     try {
       const params = new URLSearchParams({limite: String(estado.limite), pagina: String(estado.pagina), ...estado.filtros});
-      const dados = await app.apiFetch(`/api/automacao/historico?${params}`, {
+      const dados = await consultarAutomacao(`/api/automacao/historico?${params}`, {
         errorMessage: "Não foi possível carregar o histórico da automação.",
       });
       if (consulta !== estado.consultaHistorico) return;
@@ -410,7 +510,7 @@
     window.clearTimeout(estado.timer);
     try {
       const params = new URLSearchParams({ offset: String(estado.offset), arquivo: estado.arquivo });
-      const dados = await app.apiFetch(`/api/automacao/estado?${params}`, {
+      const dados = await consultarAutomacao(`/api/automacao/estado?${params}`, {
         errorMessage: "Não foi possível consultar a automação.",
       });
       aplicarEstado(dados);
@@ -428,7 +528,7 @@
     const botao = document.querySelector(`[data-automacao-rotina="${rotina}"]`);
     botao?.setAttribute("aria-busy", "true");
     try {
-      const dados = await app.apiFetch("/api/automacao/executar", {
+      const dados = await consultarAutomacao("/api/automacao/executar", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ rotina }),
@@ -439,7 +539,7 @@
       aplicarEstado(dados);
     } catch (err) {
       console.error("Erro ao iniciar a automação:", err);
-      app.showToast(err.message, "error");
+      avisarErro(err);
     } finally {
       estado.ocupado = false;
       botao?.removeAttribute("aria-busy");
@@ -453,7 +553,7 @@
     estado.ocupado = true;
     atualizarBotoes();
     try {
-      const dados = await app.apiFetch("/api/automacao/cancelar", {
+      const dados = await consultarAutomacao("/api/automacao/cancelar", {
         method: "POST",
         errorMessage: "Não foi possível cancelar a rotina.",
       });
@@ -461,7 +561,7 @@
       if (dados.estado) aplicarEstado(dados.estado);
     } catch (err) {
       console.error("Erro ao cancelar a automação:", err);
-      app.showToast(err.message, "error");
+      avisarErro(err);
     } finally {
       estado.ocupado = false;
       atualizarBotoes();
@@ -482,6 +582,7 @@
     });
     document.addEventListener("keydown", event => {
       if (event.key !== "Escape" || !estado.ampliado || !painelVisivel()) return;
+      if (document.querySelector("dialog[open]")) return; // The capture viewer closes first.
       const card = document.getElementById(`automacao-${estado.ampliado}-painel`);
       ampliarPainelAutomacao(estado.ampliado);
       card.querySelector('[aria-pressed]').focus();
