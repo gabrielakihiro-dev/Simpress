@@ -1080,6 +1080,10 @@ Horário disponível para atendimento:</textarea>
             <i data-lucide="laptop" class="w-4 h-4" aria-hidden="true"></i>
             <span>Inventários</span>
           </button>
+          <button type="button" id="btn-automacao-usuarios" data-automacao-rotina="usuarios" data-on-click="iniciarRotinaAutomacao" data-args='["usuarios"]' class="btn btn-secondary-accent automation-action" title="Confere no Endpoint Central as pendências de usuário e as resolve automaticamente">
+            <i data-lucide="users" class="w-4 h-4" aria-hidden="true"></i>
+            <span>Verificar usuários</span>
+          </button>
           <button type="button" id="btn-automacao-ambas" data-automacao-rotina="ambas" data-on-click="iniciarRotinaAutomacao" data-args='["ambas"]' class="btn btn-secondary-accent automation-action" title="Rotina de OS e, em seguida, a de inventários">
             <i data-lucide="layers" class="w-4 h-4" aria-hidden="true"></i>
             <span>Ambas</span>
@@ -1145,7 +1149,7 @@ Horário disponível para atendimento:</textarea>
             <div class="automation-filter-fields">
               <label>De<input type="date" id="automacao-historico-inicio"></label>
               <label>Até<input type="date" id="automacao-historico-fim"></label>
-              <label>Rotina<select id="automacao-historico-rotina"><option value="">Todas</option><option value="os">Rotina de OS</option><option value="inventarios">Inventários</option><option value="ambas">Ambas</option><option value="login">Abrir Chrome para login</option></select></label>
+              <label>Rotina<select id="automacao-historico-rotina"><option value="">Todas</option><option value="os">Rotina de OS</option><option value="inventarios">Inventários</option><option value="ambas">Ambas</option><option value="usuarios">Verificar usuários</option><option value="login">Abrir Chrome para login</option></select></label>
               <label>Status<select id="automacao-historico-status"><option value="">Todos</option><option value="concluido">Concluído</option><option value="falha">Falha</option><option value="cancelado">Cancelado</option><option value="em_andamento">Em andamento</option><option value="ocupada">Ocupada</option><option value="interrompido">Interrompido</option></select></label>
             </div>
             <div class="automation-panel-actions"><button type="button" class="btn btn-secondary-accent" data-on-click="filtrarHistoricoAutomacao">Aplicar filtros</button><button type="button" class="btn btn-secondary" data-on-click="limparFiltrosAutomacao">Limpar filtros</button></div>

@@ -240,6 +240,7 @@ def list_holds(services: AliasChangeServices) -> Dict[str, Any]:
         {
             "id": hold["id"], "serie": hold["serial"], "tipo": hold["tipo"], "estado": hold["estado"],
             "usuario_atual": hold["usuario_atual"], "usuario_endpoint": hold.get("usuario_endpoint", ""),
+            "computador": str(hold.get("computador") or "").strip(),
         }
         for hold in holds.values()
     ]}

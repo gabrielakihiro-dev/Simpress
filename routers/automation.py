@@ -19,7 +19,7 @@ from domains.chrome_automation import ChromeAutomationRunner
 class RotinaPayload(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
-    rotina: Literal["os", "inventarios", "ambas", "login"]
+    rotina: Literal["os", "inventarios", "ambas", "login", "usuarios"]
 
 
 @dataclass(frozen=True)
@@ -52,7 +52,7 @@ def create_automation_router(services: AutomationRouteServices) -> APIRouter:
     def historico_automacao(
         limite: int = Query(15, ge=1, le=50), pagina: int = Query(1, ge=1),
         data_inicio: date | None = None, data_fim: date | None = None,
-        rotina: Literal["os", "inventarios", "ambas", "login"] | None = None,
+        rotina: Literal["os", "inventarios", "ambas", "login", "usuarios"] | None = None,
         status: Literal["em_andamento", "concluido", "falha", "cancelado", "ocupada", "interrompido"] | None = None,
     ):
         """Últimas execuções com status, lotes e capturas de erro."""

@@ -10,6 +10,7 @@
     inventarios: "Inventários",
     ambas: "Ambas as rotinas",
     login: "Abrir Chrome para login",
+    usuarios: "Verificar usuários",
   });
   const STATUS = Object.freeze({
     em_andamento: "Em andamento",

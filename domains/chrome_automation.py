@@ -26,12 +26,13 @@ from core.errors import DomainBusyError, DomainConflictError, DomainError
 
 logger = logging.getLogger(__name__)
 
-ROUTINES = ("os", "inventarios", "ambas", "login")
+ROUTINES = ("os", "inventarios", "ambas", "login", "usuarios")
 ROUTINE_LABELS = {
     "os": "Rotina de OS",
     "inventarios": "Inventários",
     "ambas": "Ambas as rotinas",
     "login": "Abrir Chrome para login",
+    "usuarios": "Verificar usuários",
 }
 MAX_LOG_CHUNK_BYTES = 64 * 1024
 LOGIN_SCAN_BYTES = 256 * 1024
