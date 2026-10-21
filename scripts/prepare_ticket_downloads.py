@@ -146,19 +146,29 @@ def _matches_origin(batch_dir: Path, batch_tag: str, origin_record: dict, pair: 
 
 def _find_batch(inbox: Path, base_tag: str, origin_record: dict, pair: dict) -> tuple[str, Path | None, str | None]:
     statuses = ("pendentes", "processando", "processadas", "falhas")
+    existing: dict[str, list[tuple[str, Path]]] = {}
+    for status in statuses:
+        status_dir = inbox / status
+        if not status_dir.is_dir():
+            continue
+        for batch_dir in status_dir.iterdir():
+            tag = batch_dir.name
+            suffix = tag.removeprefix(f"{base_tag}_")
+            if tag == base_tag or (tag.startswith(f"{base_tag}_") and suffix.isascii() and suffix.isdigit()):
+                existing.setdefault(tag, []).append((status, batch_dir))
+
+    # A previously occupied ID can disappear while a suffixed batch still exists.
+    # Look for matching provenance in every batch before allocating the first gap.
+    for batch_tag in sorted(existing):
+        for status, batch_dir in existing[batch_tag]:
+            if _matches_origin(batch_dir, batch_tag, origin_record, pair):
+                return batch_tag, batch_dir, status
+
     sequence = 1
     while True:
         batch_tag = base_tag if sequence == 1 else f"{base_tag}_{sequence:02d}"
-        existing = [
-            (status, inbox / status / batch_tag)
-            for status in statuses
-            if (inbox / status / batch_tag).exists() or (inbox / status / batch_tag).is_symlink()
-        ]
-        if not existing:
+        if batch_tag not in existing:
             return batch_tag, None, None
-        for status, batch_dir in existing:
-            if _matches_origin(batch_dir, batch_tag, origin_record, pair):
-                return batch_tag, batch_dir, status
         sequence += 1
 
 

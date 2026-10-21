@@ -339,6 +339,60 @@ class TicketSectionTests(unittest.TestCase):
         self.assertEqual(section["oracle"], {"abertas": 0, "concluidas": 0, "pendentes": 0, "encerradas_sem_data": 0})
         self.assertEqual((section["linhas"], section["importacoes"]), ([], 0))
 
+    def test_latest_ambiguous_import_does_not_keep_counting_old_order_data(self):
+        from copy import deepcopy
+
+        report = {
+            "snapshot_id": "latest-incomplete", "atualizado_em": "2026-10-12T18:00:00",
+            "historico": [{
+                "id": "older-valid", "atualizado_em": "2026-10-01T18:00:00",
+                "chamados": [ticket("SN-FIC-A", simpress={"pedidos_detalhados": [
+                    detailed_order("P-100", "01/10/2026", "Em separação"),
+                ]})],
+            }],
+            "chamados": [ticket("SN-FIC-A", simpress={
+                "pedidos": ["P-100", "P-200"], "datas_pedido": ["01/10/2026", "05/10/2026"],
+                "status": ["Em separação", "Pedido entregue"],
+            })],
+        }
+        original = deepcopy(report)
+        section = tickets_section(report, OCTOBER)
+        self.assertEqual(section["simpress"], {"abertas": 0, "concluidas": 0, "pendentes": 0, "encerradas_sem_data": 0})
+        self.assertEqual(section["linhas"], [])
+        self.assertEqual(section["dados_insuficientes"][0]["importacao"], "latest-incomplete")
+        self.assertEqual(report, original)
+
+    def test_empty_order_details_are_insufficient_instead_of_reusing_an_old_snapshot(self):
+        report = {
+            "snapshot_id": "empty-details", "atualizado_em": "2026-10-12T18:00:00",
+            "historico": [{
+                "id": "older-valid", "atualizado_em": "2026-10-01T18:00:00",
+                "chamados": [ticket("SN-FIC-A", simpress={"pedidos_detalhados": [
+                    detailed_order("P-100", "01/10/2026", "Em separação"),
+                ]})],
+            }],
+            "chamados": [ticket("SN-FIC-A", simpress={"pedidos": ["P-100"], "pedidos_detalhados": []})],
+        }
+        section = tickets_section(report, OCTOBER)
+        self.assertEqual(section["simpress"]["abertas"], 0)
+        self.assertEqual(section["simpress"]["pendentes"], 0)
+        self.assertEqual(section["dados_insuficientes"][0]["identificadores"], ["P-100"])
+
+    def test_later_valid_import_can_count_an_order_again_after_insufficient_data(self):
+        report = {
+            "snapshot_id": "repaired", "atualizado_em": "2026-10-15T18:00:00",
+            "historico": [{
+                "id": "incomplete", "atualizado_em": "2026-10-12T18:00:00",
+                "chamados": [ticket("SN-FIC-A", simpress={"pedidos": ["P-100"], "pedidos_detalhados": []})],
+            }],
+            "chamados": [ticket("SN-FIC-A", simpress={"pedidos_detalhados": [
+                detailed_order("P-100", "01/10/2026", "Pedido entregue", "14/10/2026"),
+            ]})],
+        }
+        section = tickets_section(report, OCTOBER)
+        self.assertEqual(section["simpress"], {"abertas": 1, "concluidas": 1, "pendentes": 0, "encerradas_sem_data": 0})
+        self.assertEqual([line["identificador"] for line in section["linhas"]], ["P-100"])
+
 
 class WorkbookTests(unittest.TestCase):
     def workbook(self, report):

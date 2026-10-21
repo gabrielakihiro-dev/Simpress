@@ -12,6 +12,7 @@ import unittest
 import zipfile
 from datetime import datetime, timezone
 from pathlib import Path
+from unittest.mock import patch
 
 from scripts import prepare_ticket_downloads
 
@@ -84,13 +85,14 @@ class PrepareTicketDownloadsTests(unittest.TestCase):
         downloads = self.make_downloads("changed-existing")
         first = prepare_ticket_downloads.prepare(downloads, self.since, self.inbox)
         original = Path(first["pasta"]) / "oracle" / "Gestão de Solicitações (1).xlsx"
-        original.write_bytes(bytes_xlsx("alterado depois da preparação"))
+        changed_payload = bytes_xlsx("alterado depois da preparação")
+        original.write_bytes(changed_payload)
 
         replay = prepare_ticket_downloads.prepare(downloads, self.since, self.inbox)
 
         self.assertEqual(replay["lote_id"], f"{first['lote_id']}_02")
         self.assertFalse(replay["reutilizado"])
-        self.assertEqual(original.read_bytes(), bytes_xlsx("alterado depois da preparação"))
+        self.assertEqual(original.read_bytes(), changed_payload)
         self.assertNotEqual(
             (Path(replay["pasta"]) / "oracle" / "Gestão de Solicitações (1).xlsx").read_bytes(),
             original.read_bytes(),
@@ -108,6 +110,52 @@ class PrepareTicketDownloadsTests(unittest.TestCase):
         self.assertEqual(result["lote_id"], f"{base_tag}_02")
         self.assertEqual(sentinel.read_text(encoding="utf-8"), "preservar")
         self.assertTrue(legacy.is_dir())
+
+    def test_replay_encontra_lote_com_sufixo_mesmo_apos_liberar_o_id_base(self) -> None:
+        first = prepare_ticket_downloads.prepare(self.make_downloads("first"), self.since, self.inbox)
+        downloads = self.make_downloads("second")
+        second = prepare_ticket_downloads.prepare(downloads, self.since, self.inbox)
+        Path(first["pasta"]).rename(self.root / "lote-preservado-fora-da-fila")
+
+        replay = prepare_ticket_downloads.prepare(downloads, self.since, self.inbox)
+
+        self.assertEqual(replay["lote_id"], second["lote_id"])
+        self.assertTrue(replay["reutilizado"])
+        self.assertEqual(list((self.inbox / "pendentes").iterdir()), [Path(second["pasta"])])
+
+    def test_publicacao_concorrente_do_mesmo_lote_reutiliza_o_lote_publicado(self) -> None:
+        downloads = self.make_downloads("concurrent")
+
+        def publish_first(staging, target):
+            shutil.copytree(staging, target)
+            raise FileExistsError("Outro preparador publicou o lote antes do rename.")
+
+        with patch.object(prepare_ticket_downloads, "publish_staging", side_effect=publish_first):
+            result = prepare_ticket_downloads.prepare(downloads, self.since, self.inbox)
+
+        self.assertTrue(result["reutilizado"])
+        self.assertTrue((Path(result["pasta"]) / "_origem.json").is_file())
+        self.assertEqual(list(self.inbox.glob(".preparando-*")), [])
+
+    def test_publicacao_concorrente_de_outro_lote_preserva_o_existente(self) -> None:
+        original_publish = prepare_ticket_downloads.publish_staging
+        occupied = []
+
+        def publish_other_first(staging, target):
+            if not occupied:
+                target.mkdir()
+                (target / "preservar.txt").write_text("lote de outra execução", encoding="utf-8")
+                occupied.append(target)
+                raise FileExistsError("Outro lote ocupou este ID.")
+            original_publish(staging, target)
+
+        with patch.object(prepare_ticket_downloads, "publish_staging", side_effect=publish_other_first):
+            result = prepare_ticket_downloads.prepare(self.make_downloads("race"), self.since, self.inbox)
+
+        self.assertFalse(result["reutilizado"])
+        self.assertEqual(result["lote_id"], f"{occupied[0].name}_02")
+        self.assertEqual((occupied[0] / "preservar.txt").read_text(encoding="utf-8"), "lote de outra execução")
+        self.assertEqual(list(self.inbox.glob(".preparando-*")), [])
 
     def test_fonte_ausente_nao_cria_lote_nem_altera_lote_existente(self) -> None:
         base_tag = f"OS_{self.since.strftime('%Y%m%d_%H%M')}"
