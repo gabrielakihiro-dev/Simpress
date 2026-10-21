@@ -22,6 +22,7 @@ O login é sempre feito pelo usuário na janela do Chrome; o script apenas esper
 from __future__ import annotations
 
 import argparse
+import importlib.util
 import json
 import os
 import re
@@ -116,6 +117,38 @@ def aguardar_estado(locator, state: str, timeout_ms: int | None = None) -> None:
         except PlaywrightTimeout:
             if restante <= 1000:
                 raise
+
+
+def acionar_quando_pronto(
+    acao,
+    descricao: str,
+    timeout_ms: int | None = None,
+    confirmar=None,
+    intervalo_s: float = 1.0,
+) -> None:
+    """Repete ``acao`` até funcionar (e ``confirmar()``, se houver, ser verdadeiro).
+
+    Serve para telas que já mostram o elemento no DOM enquanto ainda exibem o esqueleto de
+    carregamento: o clique falha ou não tem efeito até a tela ficar pronta. Confere o pedido de
+    cancelamento a cada tentativa e, esgotado o prazo, levanta ``RotinaErro`` com a descrição.
+    """
+    limite = time.time() + (CARREGAMENTO_MS if timeout_ms is None else timeout_ms) / 1000
+    ultimo_erro = ""
+    while True:
+        verificar_cancelamento()
+        if confirmar is not None and confirmar():
+            return
+        try:
+            acao()
+            if confirmar is None or confirmar():
+                return
+            ultimo_erro = "a ação não teve efeito"
+        except Exception as erro:
+            ultimo_erro = str(erro).strip().splitlines()[0] if str(erro).strip() else type(erro).__name__
+        if time.time() >= limite:
+            segundos = (CARREGAMENTO_MS if timeout_ms is None else timeout_ms) // 1000
+            raise RotinaErro(f"{descricao}: a tela não ficou pronta em {segundos} s ({ultimo_erro}).")
+        time.sleep(intervalo_s)
 
 
 def log(origem: str, mensagem: str) -> None:
@@ -720,6 +753,55 @@ def endpoint_logado(page: "Page") -> bool:
     )
 
 
+def selecionar_todos_computadores(page: "Page") -> None:
+    todos = page.locator('input[type="radio"][value="InvAllComputersSummary"]').first
+    aguardar_estado(todos, "attached")
+    # O radio existe no DOM antes de a tela terminar de carregar (esqueleto), mas ainda não é clicável.
+    acionar_quando_pronto(
+        lambda: todos.check(force=True, timeout=2000),
+        "'Todos os computadores' não ficou selecionado",
+        confirmar=todos.is_checked,
+    )
+
+
+ENDPOINT_CABECALHOS = ("Nome do computador", "Rótulo de serviço/Número de série")
+
+
+def validar_xlsx_endpoint(arquivo: Path, total_tela: int | None = None) -> int:
+    """Confere cabeçalho e contagem do XLSX do Endpoint antes da importação; devolve as linhas de dados."""
+    from openpyxl import load_workbook
+
+    try:
+        planilha = load_workbook(arquivo, read_only=True, data_only=True)
+    except Exception as erro:
+        raise RotinaErro(f"Não foi possível abrir o XLSX do Endpoint: {erro}") from erro
+    try:
+        linhas = planilha.active.iter_rows(values_only=True)
+        cabecalho = next(linhas, None) or ()
+        normalizado = {str(c).strip().casefold() for c in cabecalho if c is not None}
+        faltando = [c for c in ENDPOINT_CABECALHOS if c.casefold() not in normalizado]
+        if faltando:
+            raise RotinaErro(f"O XLSX do Endpoint não tem as colunas esperadas: {faltando}.")
+        total = sum(1 for linha in linhas if any(c not in (None, "") for c in linha))
+    finally:
+        planilha.close()
+    if total == 0:
+        raise RotinaErro("O XLSX do Endpoint não tem linhas de dados.")
+    if total_tela is not None and abs(total - total_tela) > max(5, total_tela // 10):
+        raise RotinaErro(
+            f"O XLSX do Endpoint tem {total} linhas, mas a tela mostra {total_tela}: modo de exportação possivelmente errado."
+        )
+    log("Endpoint Central", f"XLSX conferido: {total} linhas de dados" + (f" (tela: {total_tela})." if total_tela is not None else "."))
+    return total
+
+
+def confirmar_modo_todos(page: "Page") -> None:
+    todos = page.locator('input[type="radio"][value="InvAllComputersSummary"]').first
+    verificados = page.locator('input[type="radio"][value="InvComputersSummary"]').first
+    if not todos.is_checked() or (verificados.count() and verificados.is_checked()):
+        raise RotinaErro("O modo 'Todos os computadores' não está ativo (ou 'Computadores verificados' continua marcado).")
+
+
 def exportar_endpoint(context: "BrowserContext") -> Path:
     page = nova_aba(context, ENDPOINT_URL, "Endpoint Central")
     try:
@@ -728,20 +810,8 @@ def exportar_endpoint(context: "BrowserContext") -> Path:
             page.goto(ENDPOINT_URL, wait_until="domcontentloaded", timeout=CARREGAMENTO_MS)
 
         log("Endpoint Central", "Selecionando 'Todos os computadores'...")
-        todos = page.locator('input[type="radio"][value="InvAllComputersSummary"]').first
-        aguardar_estado(todos, "attached")
-        # O radio existe no DOM antes de a tela terminar de carregar (esqueleto), mas ainda não é clicável.
-        limite = time.time() + CARREGAMENTO_MS / 1000
-        while not todos.is_checked():
-            verificar_cancelamento()
-            try:
-                todos.check(force=True, timeout=2000)
-            except Exception:
-                if time.time() >= limite:
-                    raise
-                time.sleep(1)
-        if not todos.is_checked():
-            raise RotinaErro("'Todos os computadores' não ficou selecionado.")
+        selecionar_todos_computadores(page)
+        confirmar_modo_todos(page)
         exportar = page.locator("#InvAllComputersSummary-export").filter(visible=True).first
         aguardar_estado(exportar, "visible")
 
@@ -759,6 +829,7 @@ def exportar_endpoint(context: "BrowserContext") -> Path:
         arquivo = exportar_com_download(
             page, "Endpoint Central", page.locator("#export_option_submit").filter(visible=True).first.click
         )
+        validar_xlsx_endpoint(arquivo)
     except Exception:
         registrar_erro(page, "Endpoint Central")
         raise
@@ -1066,6 +1137,22 @@ def descrever_erro(erro: Exception) -> str:
     return f"{type(erro).__name__}: {primeira}"
 
 
+COMANDO_INSTALAR_PLAYWRIGHT = r".venv\Scripts\python.exe -m pip install -r requirements.txt"
+
+
+def mensagem_playwright_ausente() -> str:
+    return (
+        "O pacote Python 'playwright' não está instalado neste ambiente, e a automação precisa dele.\n"
+        "Instale as dependências do projeto (na pasta do projeto) e execute a rotina de novo:\n"
+        f"    {COMANDO_INSTALAR_PLAYWRIGHT}\n"
+        "Não é preciso baixar navegadores: a automação usa o Google Chrome instalado."
+    )
+
+
+def playwright_instalado() -> bool:
+    return importlib.util.find_spec("playwright") is not None
+
+
 def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     parser.add_argument("--rotina", choices=["os", "inventarios", "ambas", "login"], default="os")
@@ -1080,6 +1167,9 @@ def main() -> int:
     if str(ROOT) not in sys.path:
         sys.path.insert(0, str(ROOT))
     iniciar_log_execucao(args.rotina)
+    if not playwright_instalado():
+        print(f"\n[ERRO] {mensagem_playwright_ausente()}", flush=True)
+        return 3
     try:
         return executar(args.rotina)
     except TravaOcupada as erro:

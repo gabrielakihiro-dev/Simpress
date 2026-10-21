@@ -7,8 +7,10 @@ FALHA returns 503. History annotations are stored only in fixture memory.
 import json
 import mimetypes
 import os
+import struct
 import sys
 import time
+import zlib
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 from urllib.parse import parse_qs, unquote, urlsplit
@@ -151,6 +153,41 @@ AUTOMATION_LINES = [
 automation_run = None
 
 
+PNG_SIGNATURE = bytes([137, 80, 78, 71, 13, 10, 26, 10])
+
+
+def fixture_capture_png(width=640, height=400):
+    """Fictional failure screenshot (a login form mock-up) so the preview needs no files from data/."""
+    rows = []
+    for y in range(height):
+        row = bytearray([0])
+        for x in range(width):
+            color = (241, 245, 249)
+            if y < 36:
+                color = (30, 41, 59)
+            elif 120 <= y < 150 and 160 <= x < 480:
+                color = (255, 255, 255) if y not in (120, 149) and x not in (160, 479) else (148, 163, 184)
+            elif 170 <= y < 200 and 160 <= x < 480:
+                color = (255, 255, 255) if y not in (170, 199) and x not in (160, 479) else (148, 163, 184)
+            elif 230 <= y < 262 and 160 <= x < 320:
+                color = (2, 132, 199)
+            elif 290 <= y < 320 and 160 <= x < 480:
+                color = (254, 226, 226)
+            row += bytes(color)
+        rows.append(bytes(row))
+
+    def chunk(kind, data):
+        body = kind + data
+        return struct.pack(">I", len(data)) + body + struct.pack(">I", zlib.crc32(body) & 0xFFFFFFFF)
+
+    header = struct.pack(">IIBBBBB", width, height, 8, 2, 0, 0, 0)
+    return (PNG_SIGNATURE + chunk(b"IHDR", header)
+            + chunk(b"IDAT", zlib.compress(b"".join(rows))) + chunk(b"IEND", b""))
+
+
+FIXTURE_CAPTURE = fixture_capture_png()
+
+
 def automation_state(offset=0):
     lines = AUTOMATION_LINES if automation_run else []
     start = offset if 0 <= offset <= len(lines) else 0
@@ -238,6 +275,8 @@ class Handler(BaseHTTPRequestHandler):
             page = max(1, min(int(query.get("pagina", ["1"])[0]), pages))
             self.send({"execucoes": entries[(page - 1) * limit:page * limit], "total": len(entries),
                        "pagina": page, "paginas": pages, "limite": limit})
+        elif path.startswith("/api/automacao/capturas/"):
+            self.send(FIXTURE_CAPTURE, content_type="image/png")
         elif path.startswith("/api/automacao/execucoes/") and path.endswith("/log"):
             identifier = path.split("/")[-2]
             entry = next((item for item in AUTOMATION_HISTORY if item["id"] == identifier), None)

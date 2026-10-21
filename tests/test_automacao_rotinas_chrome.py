@@ -176,6 +176,37 @@ class ChromeAutomationHelpersTests(unittest.TestCase):
         self.assertEqual(automacao.descrever_erro(erro), "TimeoutError: Locator.click: Timeout 30000ms exceeded.")
         self.assertEqual(automacao.descrever_erro(automacao.RotinaErro("Login não concluído")), "Login não concluído")
 
+    def test_acionar_quando_pronto_repete_ate_a_tela_sair_do_esqueleto(self):
+        class Falso:
+            chamadas = 0
+            marcado = False
+
+            def check(self):
+                Falso.chamadas += 1
+                if Falso.chamadas < 3:
+                    raise RuntimeError("esqueleto de carregamento")
+                Falso.marcado = True
+
+        falso = Falso()
+        automacao.acionar_quando_pronto(falso.check, "radio", timeout_ms=5000, confirmar=lambda: Falso.marcado, intervalo_s=0)
+        self.assertEqual(Falso.chamadas, 3)
+
+    def test_acionar_quando_pronto_esgota_com_erro_claro(self):
+        def falha():
+            raise RuntimeError("não clicável")
+
+        with self.assertRaises(automacao.RotinaErro) as contexto:
+            automacao.acionar_quando_pronto(falha, "Radio X", timeout_ms=30, intervalo_s=0.01)
+        self.assertIn("Radio X", str(contexto.exception))
+        self.assertIn("não clicável", str(contexto.exception))
+
+    def test_acionar_quando_pronto_respeita_cancelamento(self):
+        self.sinal.write_text("x")
+        chamadas = []
+        with self.assertRaises(automacao.RotinaCancelada):
+            automacao.acionar_quando_pronto(lambda: chamadas.append(1), "radio", timeout_ms=5000, intervalo_s=0)
+        self.assertEqual(chamadas, [])
+
 
 class ExecucaoUnicaTests(unittest.TestCase):
     def setUp(self):
@@ -361,6 +392,23 @@ class ExecutionLogTests(unittest.TestCase):
         logs = sorted(p.name for p in self.pasta.glob("*.log"))
         self.assertEqual(len(logs), automacao.LOGS_MANTIDOS)
         self.assertIn(caminho.name, logs)
+
+
+class PlaywrightAusenteTests(unittest.TestCase):
+    def test_mensagem_traz_o_comando_exato_de_instalacao(self):
+        mensagem = automacao.mensagem_playwright_ausente()
+        self.assertIn("playwright", mensagem)
+        self.assertIn(r".venv\Scripts\python.exe -m pip install -r requirements.txt", mensagem)
+
+    def test_main_sai_com_codigo_3_sem_traceback_quando_falta_o_pacote(self):
+        saida = io.StringIO()
+        with patch.object(sys, "argv", ["automacao_rotinas_chrome.py", "--rotina", "login"]),                 patch.object(automacao, "iniciar_log_execucao"),                 patch.object(automacao, "playwright_instalado", return_value=False),                 patch.object(automacao, "executar") as executar,                 redirect_stdout(saida):
+            codigo = automacao.main()
+        self.assertEqual(codigo, 3)
+        executar.assert_not_called()
+        self.assertIn("[ERRO]", saida.getvalue())
+        self.assertIn("pip install -r requirements.txt", saida.getvalue())
+        self.assertNotIn("Traceback", saida.getvalue())
 
 
 if __name__ == "__main__":
