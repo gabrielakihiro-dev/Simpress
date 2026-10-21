@@ -36,7 +36,15 @@ set "BOOTSTRAP_PREFIX="
 goto bootstrap_environment
 
 :bootstrap_using_python_launcher
+rem Prefere 3.12/3.13 (ha pacotes prontos para as dependencias fixadas); so entao usa o py -3 padrao.
+rem Codigos negativos (py sem o runtime) nao passam em "if errorlevel 1"; compara com 0.
 set "BOOTSTRAP_LAUNCHER=py"
+set "BOOTSTRAP_PREFIX=-3.12"
+py -3.12 -c "import sys" >nul 2>nul
+if "%errorlevel%"=="0" goto bootstrap_environment
+set "BOOTSTRAP_PREFIX=-3.13"
+py -3.13 -c "import sys" >nul 2>nul
+if "%errorlevel%"=="0" goto bootstrap_environment
 set "BOOTSTRAP_PREFIX=-3"
 goto bootstrap_environment
 
