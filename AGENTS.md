@@ -93,6 +93,10 @@ O Simpress roda somente localmente: servidor FastAPI e dados em `data/`, com as 
 
 Não altere arquivos, dados operacionais, dependências nem o estado do Git. Separe falhas confirmadas de melhorias e informe evidências, impacto, gravidade, certeza, áreas revisadas e limitações. Detalhes na skill `.claude/skills/auditoria-somente-leitura`.
 
+## Idioma das respostas do ponytail
+
+Ao executar qualquer comando ou skill do ponytail (`/ponytail`, `ponytail-review`, `ponytail-audit`, `ponytail-debt`, `ponytail-gain`, `ponytail-help`), escreva a resposta inteira em português, inclusive títulos e rótulos do relatório (por exemplo, "O que esta mudança faz", "Corrigir antes", "Deveria corrigir", "Opcional", "Veredito"). Mantenha em inglês só código, comandos, caminhos e mensagens de erro.
+
 ## Verificação
 
 - Antes de concluir uma mudança, rode `npm run verify` (ou `node scripts/verify.cjs`). Ele executa as mesmas checagens do CI: testes Python, `node --test`, `node --check`, `compileall`, `mypy` gradual e busca de credenciais. Usa o Python da `.venv` quando existir; para outro interpretador, defina `PYTHON`.
