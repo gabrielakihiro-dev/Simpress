@@ -1275,11 +1275,10 @@ def rodar_rotina_inventarios(context: "BrowserContext") -> int:
 
 
 def rodar_rotina_sebrae(context: "BrowserContext") -> int:
-    # Fases B e C (docs/operacao/sincronizar-chamados-sebrae.md): ainda sem leitura do SoftExpert nem gravação no Dashboard.
-    raise RotinaErro(
-        "A sincronização de chamados Sebrae ainda não foi implementada (leitura do SoftExpert e gravação no Dashboard). "
-        "Nada foi lido nem alterado."
-    )
+    # Leitura (sebrae_softexpert), gravação (sebrae_excel) e decisão (domains/sebrae_orquestracao) em sebrae_rotina.
+    from scripts import sebrae_rotina
+
+    return sebrae_rotina.executar(context, sys.modules[__name__])
 
 
 def abrir_para_login(context: "BrowserContext") -> int:
@@ -1311,7 +1310,8 @@ def executar(rotina: str) -> int:
                 if rotina == "inventarios":
                     return com_aviso("inventários", rodar_rotina_inventarios, context)
                 if rotina == "sebrae":
-                    return com_aviso("chamados Sebrae", rodar_rotina_sebrae, context)
+                    # Sem com_aviso: o aviso do Windows sai do resultado e só quando algo muda (sem repetição).
+                    return rodar_rotina_sebrae(context)
                 codigos = []
                 for nome, etapa in (("OS", rodar_rotina_os), ("inventários", rodar_rotina_inventarios)):
                     verificar_cancelamento()
