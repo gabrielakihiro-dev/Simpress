@@ -70,6 +70,7 @@ O Simpress roda somente localmente: servidor FastAPI e dados em `data/`, com as 
 
 ## Rust Token Killer (RTK) no Codex
 
+- O usuário autoriza o uso do wrapper RTK nos comandos de terminal compatíveis deste projeto, inclusive em novos chats; não é necessário pedir autorização novamente.
 - Use automaticamente `rtk <comando>` nos comandos de terminal que tenham wrapper compatível, sem esperar solicitação do usuário, por exemplo `rtk git status`, `rtk git diff`, `rtk rg` e `rtk pytest`. Isso inclui PowerShell e `tools.exec_command` dentro de `functions.exec`: coloque o prefixo no comando interno, pois a ponte pode não aplicar o hook nativo. Não duplique o prefixo em comandos que já usam RTK.
 - A integração `rtk hook codex` já está registrada globalmente em `~/.codex/hooks.json`. Preserve os hooks locais do projeto e não registre o mesmo matcher `Bash` em `.codex/hooks.json` enquanto a entrada global existir: o Codex carrega hooks de ambos os escopos. Em clones sem a integração global, use `rtk init --codex`, preservando hooks existentes.
 - Para configurar esta máquina uma única vez para novos chats, rode `npm run setup:rtk:codex`. O configurador preserva as demais regras, habilita hooks, aprova somente a definição exata `rtk hook codex` informada pelo Codex, confere a raiz de métricas e instala instruções globais para `functions.exec`. Abra um novo chat após configurar. `npm run test:rtk:codex` verifica confiança, reescrita, comandos curtos/longos em sandbox e persistência das métricas em um novo runtime. A configuração global não é versionada.
