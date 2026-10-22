@@ -176,30 +176,11 @@
       <button type="button" id="btn-alerta-base-atualizar" data-on-click="abrirModalAtualizarPlanilhas" class="btn btn-secondary stale-base-alert-action">Atualizar base</button>
     </section>
 
-    <!-- ALERTAS DE OS PARADAS E DIVERGÊNCIAS NOVAS (docs/operacao/alertas-os-divergencias.md; ocultos até o painel responder) -->
-    <section id="alerta-os-paradas" class="stale-base-alert" role="status" aria-labelledby="alerta-os-paradas-titulo" data-state="loading" hidden>
-      <i data-lucide="file-clock" class="stale-base-alert-icon" aria-hidden="true"></i>
-      <div class="stale-base-alert-copy">
-        <h2 id="alerta-os-paradas-titulo" class="stale-base-alert-title">OS paradas</h2>
-        <p id="alerta-os-paradas-texto" class="stale-base-alert-text"></p>
-      </div>
-      <button type="button" id="btn-alerta-os-paradas" data-on-click="abrirAcompanhamentoChamados" class="btn btn-secondary stale-base-alert-action">Ver chamados</button>
-    </section>
-
-    <section id="alerta-divergencias-novas" class="stale-base-alert" role="status" aria-labelledby="alerta-divergencias-novas-titulo" data-state="loading" hidden>
-      <i data-lucide="alert-circle" class="stale-base-alert-icon" aria-hidden="true"></i>
-      <div class="stale-base-alert-copy">
-        <h2 id="alerta-divergencias-novas-titulo" class="stale-base-alert-title">Divergências novas</h2>
-        <p id="alerta-divergencias-novas-texto" class="stale-base-alert-text"></p>
-      </div>
-      <button type="button" id="btn-alerta-divergencias-novas" data-on-click="abrirEvolucaoAtualizacoes" class="btn btn-secondary stale-base-alert-action">Ver evolução</button>
-    </section>
-
     <!-- 1. BUSCA DE EQUIPAMENTO POR NÚMERO DE SÉRIE -->
     <section class="glass-card home-search-card rounded-2xl p-6 sm:p-8 relative z-50">
 
       <div class="relative">
-        <label for="input-serial" class="home-search-label font-bold text-white">Pesquise por série, apelido, modelo ou cidade</label>
+        <label for="input-serial" class="home-search-label font-bold text-white">Pesquise por série, apelido, modelo, cidade ou nome do usuário</label>
         <form data-on-submit="buscarSerial" class="flex flex-col sm:flex-row gap-4">
           <div class="relative flex-1">
             <input
@@ -207,7 +188,7 @@
               id="input-serial"
               aria-keyshortcuts="/ Control+K Meta+K"
               role="combobox"
-              aria-label="Série, apelido, modelo ou cidade do equipamento"
+              aria-label="Série, apelido, modelo, cidade ou nome do usuário do equipamento"
               aria-autocomplete="list"
               aria-controls="autocomplete-list"
               aria-expanded="false"
@@ -535,6 +516,25 @@ Horário disponível para atendimento:</textarea>
           </div>
         </section>
       </div>
+    </section>
+
+    <!-- ALERTAS DE OS PARADAS E DIVERGÊNCIAS NOVAS (docs/operacao/alertas-os-divergencias.md; ocultos até o painel responder) -->
+    <section id="alerta-os-paradas" class="stale-base-alert" role="status" aria-labelledby="alerta-os-paradas-titulo" data-state="loading" hidden>
+      <i data-lucide="file-clock" class="stale-base-alert-icon" aria-hidden="true"></i>
+      <div class="stale-base-alert-copy">
+        <h2 id="alerta-os-paradas-titulo" class="stale-base-alert-title">OS paradas</h2>
+        <p id="alerta-os-paradas-texto" class="stale-base-alert-text"></p>
+      </div>
+      <button type="button" id="btn-alerta-os-paradas" data-on-click="abrirAcompanhamentoChamados" class="btn btn-secondary stale-base-alert-action">Ver chamados</button>
+    </section>
+
+    <section id="alerta-divergencias-novas" class="stale-base-alert" role="status" aria-labelledby="alerta-divergencias-novas-titulo" data-state="loading" hidden>
+      <i data-lucide="alert-circle" class="stale-base-alert-icon" aria-hidden="true"></i>
+      <div class="stale-base-alert-copy">
+        <h2 id="alerta-divergencias-novas-titulo" class="stale-base-alert-title">Divergências novas</h2>
+        <p id="alerta-divergencias-novas-texto" class="stale-base-alert-text"></p>
+      </div>
+      <button type="button" id="btn-alerta-divergencias-novas" data-on-click="abrirEvolucaoAtualizacoes" class="btn btn-secondary stale-base-alert-action">Ver evolução</button>
     </section>
 
     <!-- PESQUISAS RECENTES (localStorage do navegador; oculta enquanto vazia) -->
@@ -1100,6 +1100,53 @@ Horário disponível para atendimento:</textarea>
         <p class="ux-home-note automation-note">Os logins são feitos por você, na janela do Chrome de automação. Os arquivos exportados são importados pelas pastas locais de entrada, como no <code>executar_automacao.bat</code>.</p>
       </section>
 
+      <section id="sebrae-painel" class="automation-card glass-card sebrae-card" aria-labelledby="sebrae-titulo">
+        <div class="panel-card-header">
+          <h2 id="sebrae-titulo" class="ux-home-title">Sincronizar chamados Sebrae</h2>
+          <p class="ux-home-note">SoftExpert → Dashboard Operacional_SEBRAE</p>
+        </div>
+        <p id="sebrae-regra" class="ux-home-note sebrae-rule">Roda de segunda a sexta, das 09h15 às 17h45, a cada 30 minutos. O computador precisa estar ligado e o servidor local da Simpress em execução.</p>
+        <div id="sebrae-estado" class="automation-status" role="status" aria-live="polite" aria-atomic="true" data-state="pausado">
+          <span class="automation-status-dot" aria-hidden="true"></span>
+          <strong id="sebrae-estado-titulo" class="automation-status-title">Agendamento pausado</strong>
+          <span id="sebrae-estado-detalhe" class="automation-status-detail">Verificando…</span>
+        </div>
+        <p id="sebrae-login-aviso" class="sebrae-login-notice" role="status" hidden>
+          <i data-lucide="user-check" class="w-4 h-4" aria-hidden="true"></i>
+          <span>Login necessário: faça o login no Chrome de automação (SoftExpert ou Excel Online) e execute de novo.</span>
+        </p>
+        <dl class="sebrae-facts">
+          <div><dt>Agendamento</dt><dd id="sebrae-agendamento">—</dd></div>
+          <div><dt>Última execução</dt><dd id="sebrae-ultima">—</dd></div>
+          <div><dt>Próxima execução</dt><dd id="sebrae-proxima">—</dd></div>
+        </dl>
+        <dl class="sebrae-counters">
+          <div class="sebrae-counter"><dt>Incluídos</dt><dd id="sebrae-incluidos">—</dd></div>
+          <div class="sebrae-counter"><dt>Ignorados por duplicidade</dt><dd id="sebrae-ignorados">—</dd></div>
+          <div class="sebrae-counter"><dt>Mantidos pendentes</dt><dd id="sebrae-pendentes">—</dd></div>
+        </dl>
+        <div class="automation-actions" role="group" aria-label="Sincronização dos chamados Sebrae">
+          <button type="button" id="btn-sebrae-executar" data-automacao-rotina="sebrae" data-on-click="iniciarRotinaAutomacao" data-args='["sebrae"]' class="btn btn-secondary-accent automation-action" title="Lê os chamados do SoftExpert e inclui os novos no Dashboard agora">
+            <i data-lucide="refresh-cw" class="w-4 h-4" aria-hidden="true"></i>
+            <span>Executar agora</span>
+          </button>
+          <button type="button" id="btn-sebrae-agendamento" data-on-click="alternarAgendamentoSebrae" class="btn btn-secondary automation-action" title="Liga ou pausa a execução automática de segunda a sexta">
+            <i data-lucide="history" class="w-4 h-4" aria-hidden="true"></i>
+            <span>Ativar agendamento</span>
+          </button>
+          <button type="button" id="btn-sebrae-cancelar" data-on-click="cancelarRotinaAutomacao" class="btn btn-secondary automation-action automation-action--cancel" title="Para a sincronização em andamento; o Chrome continua aberto" disabled>
+            <i data-lucide="x" class="w-4 h-4" aria-hidden="true"></i>
+            <span>Cancelar sincronização</span>
+          </button>
+        </div>
+        <p id="sebrae-agendamento-aviso" class="ux-home-note automation-note" role="status" hidden></p>
+        <h3 id="sebrae-pendencias-titulo" class="sebrae-subtitle">Pendências</h3>
+        <div id="sebrae-pendencias" class="sebrae-pendencias">
+          <p class="ux-home-note">Nenhuma pendência.</p>
+        </div>
+        <p class="ux-home-note automation-note">Os logs e os motivos de falha ficam em Andamento e em Últimas execuções (filtro de rotina <em>Sincronizar chamados Sebrae</em>). O login é sempre feito por você, no Chrome de automação.</p>
+      </section>
+
       <section id="automacao-andamento-painel" class="automation-card glass-card" aria-labelledby="automacao-andamento-titulo">
         <div class="panel-card-header">
           <h2 id="automacao-andamento-titulo" class="ux-home-title">Andamento</h2>
@@ -1149,7 +1196,7 @@ Horário disponível para atendimento:</textarea>
             <div class="automation-filter-fields">
               <label>De<input type="date" id="automacao-historico-inicio"></label>
               <label>Até<input type="date" id="automacao-historico-fim"></label>
-              <label>Rotina<select id="automacao-historico-rotina"><option value="">Todas</option><option value="os">Rotina de OS</option><option value="inventarios">Inventários</option><option value="usuarios">Verificar usuários</option><option value="ambas">Ambas</option><option value="login">Abrir Chrome para login</option></select></label>
+              <label>Rotina<select id="automacao-historico-rotina"><option value="">Todas</option><option value="os">Rotina de OS</option><option value="inventarios">Inventários</option><option value="usuarios">Verificar usuários</option><option value="ambas">Ambas</option><option value="login">Abrir Chrome para login</option><option value="sebrae">Sincronizar chamados Sebrae</option></select></label>
               <label>Status<select id="automacao-historico-status"><option value="">Todos</option><option value="concluido">Concluído</option><option value="falha">Falha</option><option value="cancelado">Cancelado</option><option value="em_andamento">Em andamento</option><option value="ocupada">Ocupada</option><option value="interrompido">Interrompido</option></select></label>
             </div>
             <div class="automation-panel-actions"><button type="button" class="btn btn-secondary-accent" data-on-click="filtrarHistoricoAutomacao">Aplicar filtros</button><button type="button" class="btn btn-secondary" data-on-click="limparFiltrosAutomacao">Limpar filtros</button></div>

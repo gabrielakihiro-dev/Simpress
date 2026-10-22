@@ -458,6 +458,41 @@ class InventoryComparisonTests(unittest.TestCase):
         self.assertIn("Endpoint 2", raised.exception.detail)
         self.assertIn("seleção automática foi cancelada", raised.exception.detail)
 
+    def _vanished_hostname_items(self, details_rows):
+        reference = datetime(2026, 10, 19, 12, 0, tzinfo=timezone(timedelta(hours=-3)))
+        stale = (reference - timedelta(days=70)).isoformat()
+        endpoint = [{"SERIAL": "CMVXKV7YCM", "NOMEDOCOMPUTADOR": "", "ULTIMAVERIFICACAOCOMEXITO": stale}]
+        details = [
+            {"SERIAL": serial, "APELIDO": alias, "CIDADE": "Curitiba"} for serial, alias in details_rows
+        ]
+        result = main.compare_uploaded_workbooks(
+            source_table(endpoint), source_table(details), {}, as_of=reference,
+        )
+        return result["sem_acesso_7_dias"]
+
+    def test_vanished_hostname_s_prefix_matches_unique_macbook(self):
+        items = self._vanished_hostname_items([("SCMVXKV7YCM", "PRMAC-ANA01")])
+
+        self.assertEqual([item["computador"] for item in items], ["PRMAC-ANA01"])
+        self.assertEqual(items[0]["hostname_origem"], "simpress")
+        self.assertEqual(items[0]["serie"], "CMVXKV7YCM")
+
+    def test_vanished_hostname_s_prefix_does_not_choose_ambiguous_macbook(self):
+        two_variants = self._vanished_hostname_items([
+            ("SCMVXKV7YCM", "PRMAC-ANA01"), ("SCMVXKV7YCM", "PRMAC-ANA02"),
+        ])
+        exact_and_variant = self._vanished_hostname_items([
+            ("CMVXKV7YCM", "PRMAC-ANA01"), ("SCMVXKV7YCM", "PRMAC-ANA02"),
+        ])
+
+        self.assertEqual(two_variants, [])
+        self.assertEqual(exact_and_variant, [])
+
+    def test_vanished_hostname_s_prefix_ignores_non_macbook_series(self):
+        items = self._vanished_hostname_items([("SCMVXKV7YCM", "PRNOTERL01")])
+
+        self.assertEqual(items, [])
+
 
 if __name__ == "__main__":
     unittest.main()
