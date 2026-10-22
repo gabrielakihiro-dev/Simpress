@@ -26,10 +26,11 @@ from core.errors import DomainBusyError, DomainConflictError, DomainError
 
 logger = logging.getLogger(__name__)
 
-ROUTINES = ("os", "inventarios", "ambas", "login", "sebrae")
+ROUTINES = ("os", "inventarios", "usuarios", "ambas", "login", "sebrae")
 ROUTINE_LABELS = {
     "os": "Rotina de OS",
     "inventarios": "Inventários",
+    "usuarios": "Verificar usuários",
     "ambas": "Ambas as rotinas",
     "login": "Abrir Chrome para login",
     "sebrae": "Sincronizar chamados Sebrae",
