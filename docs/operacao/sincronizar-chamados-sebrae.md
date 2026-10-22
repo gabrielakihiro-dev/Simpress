@@ -2,7 +2,7 @@
 
 Objetivo: levar os chamados novos do SoftExpert do Sebrae para a aba `CHAMADOS` do Dashboard Operacional_SEBRAE (Excel no SharePoint), de segunda a sexta, a cada 30 minutos, pela tela **Automação** da Simpress. A rotina é uma execução do mesmo `scripts/automacao_rotinas_chrome.py` (`--rotina sebrae`), com a mesma trava, cancelamento, logs e histórico das rotinas de OS e inventários. Funciona sem este chat e sem as Automações do Codex.
 
-Status por fase (ver "Entrega em fases"): **Fase A** (especificação, regras puras, estado, agendador, API) está implementada; a leitura do SoftExpert (Fase B), a gravação no Excel (Fase C) e a interface (Fase D) ainda não.
+Status por fase (ver "Entrega em fases"): **Fase A** (especificação, regras puras, estado, agendador, API) e a parte pura da **Fase E** (`domains/sebrae_orquestracao.py`: fluxo completo, estado e avisos, testado com adaptadores falsos) estão implementadas; a leitura do SoftExpert (Fase B), a gravação no Excel (Fase C), a interface (Fase D) e a execução controlada real (roteiro em `sebrae-fase-e-execucao.md`) ainda não foram integradas.
 
 ## Princípios
 
@@ -57,6 +57,19 @@ Nenhuma outra coluna é preenchida; fórmulas, formatação, filtros, validaçõ
 
 Um chamado pendente não é gravado e não é tentado de novo a cada execução com aviso novo: a pendência fica no estado com o motivo e uma impressão digital. Só gera aviso quando o conjunto de pendências muda.
 
+## Orquestração (`domains/sebrae_orquestracao.py`)
+
+`sincronizar(softexpert, dashboard, caminho_estado, cancelado=…, log=…)` executa os passos 2 a 8 do fluxo contra dois `Protocol`s (`LeitorSoftExpert`: `listar_numeros`, `ler_chamado`; `DashboardSebrae`: `ler_coluna_c`, `gravar_linha`), sem navegador. Detalhes que valem para os adaptadores:
+
+- Antes de cada gravação a coluna C é relida; se o número apareceu, o chamado é ignorado. Depois da execução a coluna C é relida de novo: linha ausente sai da contagem de incluídos (pendência `ausente_na_releitura_final`); número repetido vira falha `duplicidade_apos_gravacao`.
+- Só conta como incluído o `ResultadoGravacao` com as sete colunas confirmadas e `salvo`. Gravação parcial grava `gravacao_parcial` com `campos_confirmados`/`campos_pendentes` em `detalhes`, para a execução e mantém a contagem anterior.
+- O cancelamento é consultado entre chamados, nunca dentro da gravação de uma linha. Sessão expirada = `LoginNecessarioErro(sistema)`; cancelamento dentro de um adaptador = `CancelamentoSolicitado` (`BaseException`).
+- Dashboard com coluna C vazia interrompe a execução (`dashboard_sem_numeros_na_coluna_c`): evita tratar todo chamado como novo se a leitura falhar. Três chamados ilegíveis em sequência também interrompem.
+- Chamados pendentes por classificação continuam na lista do SoftExpert e são lidos de novo a cada execução (o conteúdo pode mudar); o que não se repete é o aviso.
+- Textos de falha guardam só a etapa e o tipo da exceção, nunca o conteúdo da página ou do chamado. O log de progresso também não traz descrição nem nome de usuário.
+- O aviso do Windows sai do resultado (`ResultadoOrquestracao.aviso`), não do `com_aviso`, que avisaria a cada execução. A linha de base de `ultimo_aviso` ignora inclusões; ela é zerada quando nada fica pendente, para que o mesmo problema ao voltar seja novo.
+- `detalhes` é uma lista de `{numero, resultado: incluido|ignorado|pendente, motivo?, …}`; `situacao` ∈ `concluida`, `cancelada`, `login_necessario`, `falha`, `interrompida`. O estado ainda guarda `login_sistema` quando o login é necessário.
+
 ## Estado e arquivos (todos fora do Git)
 
 | Arquivo | Dono | Conteúdo |
@@ -104,7 +117,8 @@ Novo cartão **Sincronizar chamados Sebrae** na tela Automação: Executar agora
 - **B — Leitura do SoftExpert** (`scripts/sebrae_softexpert.py`), com bancada local de HTML para lista paginada, janela PHP, confirmação e descrição tardia.
 - **C — Excel Online** (`scripts/sebrae_excel.py`): começa por um levantamento com a sessão autenticada (leitura da coluna C com linhas ocultas, linha livre, digitação sem autoformatação); documentar o resultado aqui antes de implementar.
 - **D — Interface**, avisos e testes de tela.
-- **E — Execução controlada real** com os sistemas autenticados, conferência no Dashboard e só então `ROTINA_PRONTA = True` e ativação do agendamento.
+- **E — Orquestração e execução controlada real.** `domains/sebrae_orquestracao.py` (fluxo, estado, avisos) já existe; falta ligar os adaptadores de B e C em `rodar_rotina_sebrae` e executar o roteiro `sebrae-fase-e-execucao.md`.
+- **E (execução) — Execução controlada real** com os sistemas autenticados, conferência no Dashboard e só então `ROTINA_PRONTA = True` e ativação do agendamento.
 
 ## Limitações conhecidas
 
