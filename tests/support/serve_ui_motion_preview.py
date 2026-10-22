@@ -152,6 +152,37 @@ AUTOMATION_LINES = [
 ]
 automation_run = None
 
+# Sincronizar chamados Sebrae: fictional summary; the PUT never persists anything outside this process.
+SEBRAE_PENDENCIAS = [
+    {"numero": "UTIC-2026-1253", "motivo": "Alerta automático do Endpoint; aguardando a classificação do usuário."},
+    {"numero": "UTIC-2026-1177", "motivo": "Alerta automático do Endpoint; aguardando a classificação do usuário."},
+    {"numero": "UTIC-2026-0412", "motivo": "sem_indicios_de_tipo"},
+]
+SEBRAE_ULTIMA = {
+    "inicio": "2026-10-20T16:45:02-03:00", "fim": "2026-10-20T16:49:40-03:00", "situacao": "concluido",
+    "incluidos": 2, "ignorados": 31, "pendentes": 3, "detalhes": "",
+}
+SEBRAE_SCENARIOS = ("padrao", "vazio", "pronta", "login")
+sebrae_state = {"scenario": "padrao", "ativo": False}
+
+
+def sebrae_summary():
+    scenario, ativo = sebrae_state["scenario"], sebrae_state["ativo"]
+    pronta = scenario == "pronta"
+    return {
+        "agendamento": {
+            "ativo": ativo and pronta, "pronta": pronta,
+            "horario": "segunda a sexta, das 09h15 às 17h45, a cada 30 minutos", "fuso": "America/Sao_Paulo",
+            "proxima_execucao": "2026-10-21T10:15:00-03:00" if ativo and pronta else None,
+            "ultimo_disparo": {"horario": "2026-10-21T09:45:00-03:00", "resultado": "pulado: ocupada", "em": "2026-10-21T09:45:03-03:00"}
+            if ativo and pronta else None,
+            "aviso": "O computador precisa estar ligado e o servidor local da Simpress em execução.",
+        },
+        "ultima_execucao": None if scenario == "vazio" else SEBRAE_ULTIMA,
+        "pendencias": [] if scenario == "vazio" else SEBRAE_PENDENCIAS,
+        "login_necessario": scenario == "login",
+    }
+
 
 PNG_SIGNATURE = bytes([137, 80, 78, 71, 13, 10, 26, 10])
 
@@ -259,7 +290,11 @@ class Handler(BaseHTTPRequestHandler):
                     for index in range(min(count, 20))
                 ]
             globals()["automation_run"] = None
+            scenario = parse_qs(url.query).get("sebrae", ["padrao"])[0]
+            sebrae_state.update(scenario=scenario if scenario in SEBRAE_SCENARIOS else "padrao", ativo=False)
             self.send({"estado": "livre"})
+        elif path == "/api/automacao/sebrae/resumo":
+            self.send(sebrae_summary())
         elif path == "/api/automacao/estado":
             offset = parse_qs(url.query).get("offset", ["0"])[0]
             self.send(automation_state(int(offset) if offset.isdigit() else 0))
@@ -353,6 +388,16 @@ class Handler(BaseHTTPRequestHandler):
     def do_PUT(self):
         global DEMO_ANNOTATION
         path = urlsplit(self.path).path
+        if path == "/api/automacao/sebrae/agendamento":
+            size = int(self.headers.get("Content-Length", "0"))
+            ativo = bool(json.loads(self.rfile.read(size) or b"{}").get("ativo"))
+            if ativo and sebrae_state["scenario"] != "pronta":
+                self.send({"detail": "A sincronização ainda não está completa (leitura do SoftExpert e gravação no Dashboard). "
+                                     "O agendamento só pode ser ativado depois da execução controlada."}, 409)
+            else:
+                sebrae_state["ativo"] = ativo
+                self.send(sebrae_summary())
+            return
         if path == "/api/config/transferencia/contato-origem":
             size = int(self.headers.get("Content-Length", "0"))
             payload = json.loads(self.rfile.read(size) or b"{}")
@@ -406,7 +451,7 @@ class Handler(BaseHTTPRequestHandler):
         if path == "/api/automacao/executar":
             size = int(self.headers.get("Content-Length", "0"))
             rotina = json.loads(self.rfile.read(size) or b"{}").get("rotina")
-            if rotina not in ("os", "inventarios", "ambas", "login"):
+            if rotina not in ("os", "inventarios", "ambas", "login", "sebrae"):
                 self.send({"detail": "Rotina inválida."}, 422)
             elif automation_run:
                 self.send({"detail": "Já há uma rotina em andamento: Rotina de OS desde 08:00. Aguarde terminar ou cancele."}, 409)
