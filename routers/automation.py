@@ -14,17 +14,27 @@ from pydantic import BaseModel, ConfigDict
 
 from core.errors import DomainError
 from domains.chrome_automation import ChromeAutomationRunner
+from domains.sebrae_agendamento import AgendadorSebrae
+
+RotinaNome = Literal["os", "inventarios", "ambas", "login", "sebrae"]
+
+
+class AgendamentoPayload(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    ativo: bool
 
 
 class RotinaPayload(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
-    rotina: Literal["os", "inventarios", "ambas", "login"]
+    rotina: RotinaNome
 
 
 @dataclass(frozen=True)
 class AutomationRouteServices:
     runner: Callable[[], ChromeAutomationRunner]
+    sebrae: Callable[[], AgendadorSebrae]
 
 
 def create_automation_router(services: AutomationRouteServices) -> APIRouter:
@@ -52,7 +62,7 @@ def create_automation_router(services: AutomationRouteServices) -> APIRouter:
     def historico_automacao(
         limite: int = Query(15, ge=1, le=50), pagina: int = Query(1, ge=1),
         data_inicio: date | None = None, data_fim: date | None = None,
-        rotina: Literal["os", "inventarios", "ambas", "login"] | None = None,
+        rotina: RotinaNome | None = None,
         status: Literal["em_andamento", "concluido", "falha", "cancelado", "ocupada", "interrompido"] | None = None,
     ):
         """Últimas execuções com status, lotes e capturas de erro."""
@@ -63,6 +73,16 @@ def create_automation_router(services: AutomationRouteServices) -> APIRouter:
     def log_execucao_automacao(execucao_id: str, linhas: int = Query(200, ge=1, le=500)):
         result = services.runner().execution_log(execucao_id, linhas)
         return JSONResponse(result, headers={"Cache-Control": "no-store"})
+
+    @router.get("/api/automacao/sebrae/resumo")
+    def resumo_sebrae():
+        """Agendamento, última e próxima execução, contadores e pendências da sincronização Sebrae."""
+        return JSONResponse(services.sebrae().resumo(), headers={"Cache-Control": "no-store"})
+
+    @router.put("/api/automacao/sebrae/agendamento")
+    def agendamento_sebrae(payload: AgendamentoPayload):
+        """Ativa ou pausa o agendamento de segunda a sexta; 409 ao ativar antes de a rotina estar completa."""
+        return JSONResponse(services.sebrae().definir_ativo(payload.ativo), headers={"Cache-Control": "no-store"})
 
     @router.get("/api/automacao/capturas/{nome}")
     def captura_automacao(nome: str):

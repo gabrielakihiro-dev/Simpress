@@ -197,6 +197,7 @@ from routers.aliases import ApelidoUndoPayload, ApelidoUpdatePayload, UsuarioUpd
 from routers.endpoint_removals import create_endpoint_removals_router
 from routers.automation import AutomationRouteServices, create_automation_router
 from domains.chrome_automation import ChromeAutomationRunner, default_contract
+from domains.sebrae_agendamento import AgendadorSebrae, caminhos_padrao as sebrae_caminhos_padrao
 from domains import endpoint_removals
 from core.inventory_requests import (
     InventoryUpdateMiddleware,
@@ -2341,7 +2342,35 @@ def get_chrome_automation_runner() -> ChromeAutomationRunner:
         return _chrome_automation_runner
 
 
-app.include_router(create_automation_router(AutomationRouteServices(runner=get_chrome_automation_runner)))
+_sebrae_scheduler: Optional[AgendadorSebrae] = None
+_sebrae_scheduler_lock = threading.Lock()
+SEBRAE_SCHEDULER_CHECK_SECONDS = 20
+
+
+def get_sebrae_scheduler() -> AgendadorSebrae:
+    """Weekday schedule of the Sebrae ticket sync; it starts the routine through the shared runner."""
+    global _sebrae_scheduler
+    with _sebrae_scheduler_lock:
+        if _sebrae_scheduler is None:
+            _sebrae_scheduler = AgendadorSebrae(
+                sebrae_caminhos_padrao(STATE_DIR), lambda rotina: get_chrome_automation_runner().start(rotina)
+            )
+        return _sebrae_scheduler
+
+
+app.include_router(create_automation_router(AutomationRouteServices(
+    runner=get_chrome_automation_runner, sebrae=get_sebrae_scheduler,
+)))
+
+
+async def _sebrae_scheduler_worker() -> None:
+    # Missed starts are never made up: each tick only looks at the start whose 5-minute window is open now.
+    while True:
+        try:
+            await asyncio.to_thread(get_sebrae_scheduler().verificar)
+        except Exception as error:
+            logger.warning("A verificação do agendamento Sebrae falhou (erro=%s).", type(error).__name__)
+        await asyncio.sleep(SEBRAE_SCHEDULER_CHECK_SECONDS)
 
 
 def _generate_previous_month_report_best_effort() -> None:
