@@ -23,7 +23,7 @@ UF = "PR"
 FORMATO_DATA = "%d/%m/%Y %H:%M"
 
 # Dashboard columns the routine fills; nothing else is ever written.
-COLUNAS_GRAVADAS = ("C", "F", "G", "I", "N", "P", "Q")
+COLUNAS_GRAVADAS = ("C", "F", "G", "H", "M", "O", "P")
 
 # Automatic Endpoint alerts the user has not classified yet; they stay pending and are never written.
 PENDENCIAS_DEFINIDAS: Dict[str, str] = {
@@ -191,7 +191,7 @@ def interpretar_data(texto: Any) -> Optional[datetime]:
 
 
 def formatar_data_abertura(data: datetime) -> str:
-    """Dashboard format of column Q: ``dd/MM/yyyy HH:mm``."""
+    """Dashboard format of column P: ``dd/MM/yyyy HH:mm``."""
     return data.strftime(FORMATO_DATA)
 
 
@@ -224,10 +224,10 @@ def decidir(chamado: ChamadoSoftExpert) -> Decisao:
         "C": numero,
         "F": descricao,
         "G": iniciador,
-        "I": tipo,
-        "N": UNIDADE,
-        "P": UF,
-        "Q": formatar_data_abertura(data),
+        "H": tipo,
+        "M": UNIDADE,
+        "O": UF,
+        "P": formatar_data_abertura(data),
     }
     return Decisao(numero, ACAO_INCLUIR, "", tipo, linha)
 

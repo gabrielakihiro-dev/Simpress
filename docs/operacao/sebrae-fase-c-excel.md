@@ -26,14 +26,14 @@ Linhas ocultas manualmente são copiadas junto com a seleção; só as linhas fi
 ## Linha preparada e disponível
 
 - Ponto de partida: a linha seguinte à **última com qualquer valor** na coluna C (o histórico antigo nunca é preenchido nem reaproveitado).
-- Candidata, até `LIMITE_BUSCA_LINHAS` (40) abaixo: C, F, G, I, N, P e Q vazias e sem fórmula, linha não oculta, e **fórmula presente em cada coluna de `colunas_formula`**. Quais são essas colunas só se sabe com o Dashboard aberto (V5); o parâmetro é obrigatório no construtor.
+- Candidata, até `LIMITE_BUSCA_LINHAS` (40) abaixo: C, F, G, H, M, O e P vazias e sem fórmula, linha não oculta, e **fórmula presente em cada coluna de `colunas_formula`**. Quais são essas colunas só se sabe com o Dashboard aberto (V5); o parâmetro é obrigatório no construtor.
 - A leitura que escolhe a linha é a última antes da primeira escrita. Antes de **cada** célula, ela é lida de novo: se alguém a ocupou, a gravação para como `parcial` e nada é sobrescrito.
 
 ## Digitação sem autoformatação
 
 - Caixa de Nome → célula (a seleção é conferida: se o endereço não bate, nada é digitado), `F2`, `keyboard.insert_text` (sem teclas), `Delete` (remove a sugestão de preenchimento automático) e `Enter`.
 - Textos que começam com `=`, `+`, `-`, `@` ou que parecem número/data (`00123`, `12/05`) recebem o apóstrofo de texto; a releitura aceita a célula com ou sem o apóstrofo exibido.
-- **Q** não recebe prefixo: `dd/MM/yyyy HH:mm` precisa virar data/hora. A releitura compara datas (`21/10/2026 09:15:00` equivale a `21/10/2026 09:15`). Se a célula ficar como texto (locale do Excel diferente) é preciso detectar em V6.
+- **P** não recebe prefixo: `dd/MM/yyyy HH:mm` precisa virar data/hora. A releitura compara datas (`21/10/2026 09:15:00` equivale a `21/10/2026 09:15`). Se a célula ficar como texto (locale do Excel diferente) é preciso detectar em V6.
 - Quebras de linha da descrição (F): preservadas com `Alt+Enter`. Se V7 falhar, use `quebras_como_espaco=True`.
 
 ## Gravação, releitura e diário
@@ -44,7 +44,7 @@ Ordem de `gravar_chamado(linha)`:
 2. `garantir_sessao`: login Microsoft/SharePoint ou aviso de sessão expirada → `sessao_expirada` (pendência de login; nunca "concluído"); confere o título do arquivo e a aba `CHAMADOS`.
 3. Se o diário tem uma intenção aberta para o número, relê o Dashboard e **retoma** (ver abaixo).
 4. Relê a coluna C inteira; número presente → `duplicado`, nada é gravado.
-5. Escolhe a linha, registra a intenção no diário e escreve **C primeiro**, depois F, G, I, N, P, Q; cada célula é conferida vazia antes e relida depois.
+5. Escolhe a linha, registra a intenção no diário e escreve **C primeiro**, depois F, G, H, M, O, P; cada célula é conferida vazia antes e relida depois.
 6. Relê as sete colunas e compara com o extraído → `divergente` se diferir.
 7. Espera o indicador **Salvo** estável → `nao_salvo` se não aparecer.
 8. Só então `gravado` (`incluido = True`) e o diário fecha a intenção.
@@ -73,7 +73,7 @@ Executar com o usuário, **numa cópia do Dashboard** (ou na aba `CHAMADOS` fora
 | V3 | Filtro ativo | Com um filtro aplicado, repetir V1 | Contagem menor que `N` (comprova que o invariante detecta linhas filtradas) |
 | V4 | Exibição temporária | Exibir → Exibições de Folha → Nova; copiar; Sair; Excluir | Todas as linhas aparecem, o filtro compartilhado não muda, e o fluxo de saída é confiável. Se não for: PARAR e decidir (ex.: usuário remove o filtro, ou integração oficial) |
 | V5 | Linha livre | Procurar a primeira linha com C vazia; ler a barra de fórmulas das colunas de fórmula | Fórmula começa com `=`; lista de colunas definida; linha filtrada/oculta é detectável |
-| V6 | Digitação e Q | Em uma linha de teste: `F2` + `insert_text` + `Delete` + `Enter` para texto, `=X`, `00123`, `PR` (com autocompletar) e `21/10/2026 09:15` | Valor igual ao enviado; Q vira data/hora (formato de número da célula = data); descobrir como `celula_e_data` lê isso |
+| V6 | Digitação e P | Em uma linha de teste: `F2` + `insert_text` + `Delete` + `Enter` para texto, `=X`, `00123`, `PR` (com autocompletar) e `21/10/2026 09:15` | Valor igual ao enviado; P vira data/hora (formato de número da célula = data); descobrir como `celula_e_data` lê isso |
 | V7 | Quebra de linha | Descrição com 3 linhas via `Alt+Enter` | A barra mostra `\n`; senão usar `quebras_como_espaco` |
 | V8 | Indicador Salvo | Gravar uma célula e observar "Salvando…" → "Salvo" | Texto/seletor do indicador; tempo típico |
 | V9 | Sessão expirada | Observar a tela de login e o aviso de sessão expirada | URL/texto que `url_de_login` e `texto_de_sessao_expirada` precisam reconhecer |

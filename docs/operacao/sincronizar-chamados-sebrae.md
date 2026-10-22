@@ -40,10 +40,10 @@ Status por fase (ver "Entrega em fases"): **Fase A** (especificação, regras pu
 | C | Chamado | Número completo, ex. `UTIC-2026-0094` |
 | F | Descrição | Descrição original do problema no formulário (ou o título, se não houver) |
 | G | Nome do Usuário | Campo **Iniciador** |
-| I | Tipo do Chamado | `INCIDENTE` ou `SOLICITAÇÃO` |
-| N | Unidade | `Sebrae` |
-| P | UF | `PR` |
-| Q | Data de abertura | Campo **Habilitada em**, formato `dd/MM/yyyy HH:mm` |
+| H | Tipo do Chamado | `INCIDENTE` ou `SOLICITAÇÃO` |
+| M | Unidade | `Sebrae` |
+| O | UF | `PR` |
+| P | Data de abertura | Campo **Habilitada em**, formato `dd/MM/yyyy HH:mm` |
 
 Nenhuma outra coluna é preenchida; fórmulas, formatação, filtros, validações e dados anteriores são preservados. Filtros só são removidos de forma temporária e restaurados ao final.
 
@@ -107,7 +107,7 @@ Novo cartão **Sincronizar chamados Sebrae** na tela Automação: Executar agora
 3. `UTIC-2026-0094`, `27371 / UTIC-2026-0094` e `utic-2026-0094` contam como o mesmo número; zeros à esquerda são preservados; número já presente ⇒ chamado inteiro ignorado.
 4. Chamados em `PENDENCIAS_DEFINIDAS` nunca são incluídos.
 5. Classificação ambígua ⇒ pendente com motivo, nunca gravado.
-6. Nenhuma linha existente é alterada; só C, F, G, I, N, P e Q de uma linha livre; cada inclusão só conta depois da releitura das sete colunas e do salvamento confirmado.
+6. Nenhuma linha existente é alterada; só C, F, G, H, M, O e P de uma linha livre; cada inclusão só conta depois da releitura das sete colunas e do salvamento confirmado.
 7. Sessão expirada, queda de conexão ou cancelamento não marcam a sincronização como concluída; gravação parcial registra os campos confirmados e os pendentes.
 8. Sem pendência nova ou chamado novo, nenhum aviso é emitido.
 9. `npm run verify` e `npm run test:ui:e2e` passam; nenhum teste altera chamados ou planilhas reais.
