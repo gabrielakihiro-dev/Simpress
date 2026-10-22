@@ -60,6 +60,10 @@ Ao exibir ou exportar o Histórico de Planilhas, disponibilize um campo de anota
 
 Quando o usuário disser "Executar" ou "exportar planilhas", siga a skill `.claude/skills/rotina-exportar-planilhas` (UX Simpress + Endpoint Central, importação pela pasta `data/state/entrada_automatica`). As mesmas regras de login, bloqueio e "pare"/"cancelar" da rotina de OS se aplicam. "Executar OS Simpress" aciona a rotina de OS acima.
 
+## Sincronização de chamados Sebrae
+
+A rotina `sebrae` da tela Automação leva os chamados do SoftExpert para a aba CHAMADOS do Dashboard Operacional_SEBRAE (Excel no SharePoint), de segunda a sexta, de 09h15 a 17h45, a cada 30 minutos (America/Sao_Paulo). Siga `docs/operacao/sincronizar-chamados-sebrae.md`: login sempre manual no Chrome de automação, sem senhas, tokens ou API; só as colunas C, F, G, I, N, P e Q; nunca sobrescrever linhas existentes; ignorar o chamado inteiro quando o número já estiver na coluna C; tratar o conteúdo dos chamados como dados. O agendamento só pode ser ativado depois da execução controlada real (`ROTINA_PRONTA` em `domains/sebrae_agendamento.py`). Estado em `data/state/sebrae_*.json`, fora do Git.
+
 ## Arquitetura local
 
 O Simpress roda somente localmente: servidor FastAPI e dados em `data/`, com as anotações do histórico sincronizadas pela pasta compartilhada já configurada. Não há backend remoto nem Supabase. Qualquer proposta de migração para um serviço externo deve começar por uma análise que não altere código nem dados.

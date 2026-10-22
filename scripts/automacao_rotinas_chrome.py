@@ -1274,6 +1274,14 @@ def rodar_rotina_inventarios(context: "BrowserContext") -> int:
     return codigo
 
 
+def rodar_rotina_sebrae(context: "BrowserContext") -> int:
+    # Fases B e C (docs/operacao/sincronizar-chamados-sebrae.md): ainda sem leitura do SoftExpert nem gravação no Dashboard.
+    raise RotinaErro(
+        "A sincronização de chamados Sebrae ainda não foi implementada (leitura do SoftExpert e gravação no Dashboard). "
+        "Nada foi lido nem alterado."
+    )
+
+
 def abrir_para_login(context: "BrowserContext") -> int:
     for url in (ORACLE_URL, UX_PEDIDOS_URL, ENDPOINT_URL):
         verificar_cancelamento()
@@ -1302,6 +1310,8 @@ def executar(rotina: str) -> int:
                     return com_aviso("OS", rodar_rotina_os, context)
                 if rotina == "inventarios":
                     return com_aviso("inventários", rodar_rotina_inventarios, context)
+                if rotina == "sebrae":
+                    return com_aviso("chamados Sebrae", rodar_rotina_sebrae, context)
                 codigos = []
                 for nome, etapa in (("OS", rodar_rotina_os), ("inventários", rodar_rotina_inventarios)):
                     verificar_cancelamento()
@@ -1342,7 +1352,7 @@ def playwright_instalado() -> bool:
 
 def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
-    parser.add_argument("--rotina", choices=["os", "inventarios", "ambas", "login"], default="os")
+    parser.add_argument("--rotina", choices=["os", "inventarios", "ambas", "login", "sebrae"], default="os")
     parser.add_argument(
         "--cancelar", action="store_true", help="pede o cancelamento da rotina em andamento (o Chrome continua aberto) e sai"
     )
