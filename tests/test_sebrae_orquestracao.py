@@ -469,6 +469,43 @@ class GravacaoTests(Base):
         self.assertEqual(self.ler_estado()["pendencias"], {"UTIC-2026-0102": "gravacao_nao_confirmada"})
         self.assertNotIn("UTIC-2026-0103", softexpert.lidos)
 
+    def test_a_writer_that_names_the_reason_keeps_it_in_the_pending_item_and_the_failure(self):
+        dashboard = DashboardFalso()
+        dashboard.resultado_forcado["UTIC-2026-0101"] = ResultadoGravacao(
+            "UTIC-2026-0101", ("C", "F", "G", "I", "N", "P", "Q"), False, erro="nao_salvo"
+        )
+        resultado = self.rodar(self.lista_com(chamado("UTIC-2026-0101")), dashboard)
+        self.assertEqual(resultado.resumo.falha, "falha_gravacao: gravacao_nao_salvo")
+        self.assertEqual(self.ler_estado()["pendencias"], {"UTIC-2026-0101": "gravacao_nao_salvo"})
+
+    def test_a_writer_that_reports_a_duplicate_counts_it_as_ignored_and_goes_on(self):
+        dashboard = DashboardFalso()
+        dashboard.resultado_forcado["UTIC-2026-0101"] = ResultadoGravacao("UTIC-2026-0101", (), False, duplicado=True)
+        resultado = self.rodar(self.lista_com(chamado("UTIC-2026-0101"), chamado("UTIC-2026-0102")), dashboard)
+        self.assertEqual(resultado.situacao, orq.SITUACAO_CONCLUIDA)
+        self.assertEqual((resultado.resumo.incluidos, resultado.resumo.ignorados), (1, 31))
+        self.assertEqual(self.ler_estado()["pendencias"], {})
+
+    def test_a_writer_that_rejects_the_row_leaves_the_ticket_pending_and_goes_on(self):
+        dashboard = DashboardFalso()
+        dashboard.resultado_forcado["UTIC-2026-0101"] = ResultadoGravacao(
+            "UTIC-2026-0101", (), False, motivo_pendente="gravacao_invalido"
+        )
+        resultado = self.rodar(self.lista_com(chamado("UTIC-2026-0101"), chamado("UTIC-2026-0102")), dashboard)
+        self.assertEqual(resultado.situacao, orq.SITUACAO_CONCLUIDA)
+        self.assertEqual(resultado.resumo.incluidos, 1)
+        self.assertEqual(self.ler_estado()["pendencias"], {"UTIC-2026-0101": "gravacao_invalido"})
+
+    def test_a_ticket_unavailable_for_a_known_reason_is_pending_without_counting_as_a_streak_failure(self):
+        novos = [chamado(f"UTIC-2026-01{n:02d}") for n in range(1, 6)]
+        softexpert = self.lista_com(*novos)
+        for n in range(1, 5):
+            softexpert.erros[f"UTIC-2026-01{n:02d}"] = orq.ChamadoIndisponivelErro("numero_nao_confere")
+        resultado = self.rodar(softexpert, DashboardFalso())
+        self.assertEqual(resultado.situacao, orq.SITUACAO_CONCLUIDA)
+        self.assertEqual(resultado.resumo.incluidos, 1)
+        self.assertEqual(set(self.ler_estado()["pendencias"].values()), {"numero_nao_confere"})
+
     def test_a_result_for_another_ticket_is_not_trusted(self):
         dashboard = DashboardFalso()
         dashboard.resultado_forcado["UTIC-2026-0101"] = ResultadoGravacao("UTIC-2026-0999", tuple(COLUNAS_GRAVADAS), True)

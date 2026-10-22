@@ -2,7 +2,7 @@
 
 Objetivo: levar os chamados novos do SoftExpert do Sebrae para a aba `CHAMADOS` do Dashboard Operacional_SEBRAE (Excel no SharePoint), de segunda a sexta, a cada 30 minutos, pela tela **Automação** da Simpress. A rotina é uma execução do mesmo `scripts/automacao_rotinas_chrome.py` (`--rotina sebrae`), com a mesma trava, cancelamento, logs e histórico das rotinas de OS e inventários. Funciona sem este chat e sem as Automações do Codex.
 
-Status por fase (ver "Entrega em fases"): **Fase A** (especificação, regras puras, estado, agendador, API) e a parte pura da **Fase E** (`domains/sebrae_orquestracao.py`: fluxo completo, estado e avisos, testado com adaptadores falsos) estão implementadas; a leitura do SoftExpert (Fase B), a gravação no Excel (Fase C), a interface (Fase D) e a execução controlada real (roteiro em `sebrae-fase-e-execucao.md`) ainda não foram integradas.
+Status por fase (ver "Entrega em fases"): **Fase A** (especificação, regras puras, estado, agendador, API) e a parte pura da **Fase E** (`domains/sebrae_orquestracao.py`: fluxo completo, estado e avisos, testado com adaptadores falsos) estão implementadas; a leitura do SoftExpert (B), o Excel (C) e a interface (D) estão ligados à orquestração por `scripts/sebrae_rotina.py`, mas seletores do SoftExpert e do Excel Online ainda não foram validados com sessão real. Falta o levantamento da Fase C e a execução controlada real (roteiro em `sebrae-fase-e-execucao.md`); `ROTINA_PRONTA` continua `False`.
 
 ## Princípios
 
@@ -75,6 +75,7 @@ Um chamado pendente não é gravado e não é tentado de novo a cada execução 
 | Arquivo | Dono | Conteúdo |
 | --- | --- | --- |
 | `data/state/sebrae_agendamento.json` | Servidor | `ativo`, `ultimo_slot_disparado`, `ultimo_disparo` (`slot`, `resultado`, `em`), `atualizado_em` |
+| `data/state/sebrae_config.json` | Usuário | `dashboard_url`, `colunas_formula`, `quebras_como_espaco` (ver `sebrae-fase-e-execucao.md`) |
 | `data/state/sebrae_chamados_estado.json` | Script | `ultima_execucao` (`inicio`, `fim`, `situacao`, `incluidos`, `ignorados`, `pendentes`, `detalhes`), `pendencias` (número → motivo), `login_necessario`, `ultimo_aviso` (impressão digital) |
 | `data/logs/automacao_chrome/*_sebrae.log/.json` | Script e site | Log e resumo da execução, como nas outras rotinas |
 
@@ -117,7 +118,7 @@ Novo cartão **Sincronizar chamados Sebrae** na tela Automação: Executar agora
 - **B — Leitura do SoftExpert** (`scripts/sebrae_softexpert.py`), com bancada local de HTML para lista paginada, janela PHP, confirmação e descrição tardia.
 - **C — Excel Online** (`scripts/sebrae_excel.py`): começa por um levantamento com a sessão autenticada (leitura da coluna C com linhas ocultas, linha livre, digitação sem autoformatação); documentar o resultado aqui antes de implementar.
 - **D — Interface**, avisos e testes de tela.
-- **E — Orquestração e execução controlada real.** `domains/sebrae_orquestracao.py` (fluxo, estado, avisos) já existe; falta ligar os adaptadores de B e C em `rodar_rotina_sebrae` e executar o roteiro `sebrae-fase-e-execucao.md`.
+- **E — Orquestração e execução controlada real.** `domains/sebrae_orquestracao.py` (fluxo, estado, avisos) já existe e está ligada a B e C por `scripts/sebrae_rotina.py` (exige `data/state/sebrae_config.json`); falta executar o roteiro `sebrae-fase-e-execucao.md`.
 - **E (execução) — Execução controlada real** com os sistemas autenticados, conferência no Dashboard e só então `ROTINA_PRONTA = True` e ativação do agendamento.
 
 ## Limitações conhecidas

@@ -81,6 +81,14 @@ class LoginNecessarioErro(Exception):
         self.sistema = sistema
 
 
+class ChamadoIndisponivelErro(Exception):
+    """One ticket could not be read for a known reason (``motivo``); it becomes pending and the run goes on."""
+
+    def __init__(self, motivo: str) -> None:
+        super().__init__(motivo)
+        self.motivo = motivo
+
+
 class CancelamentoSolicitado(BaseException):
     """Cancellation request; a ``BaseException`` so a broad ``except Exception`` never swallows it."""
 
@@ -93,6 +101,10 @@ class ResultadoGravacao:
     confirmados: Tuple[str, ...]
     salvo: bool
     erro: str = ""
+    # Not written because the ticket already sits in the Dashboard (someone else added it): counted as ignored.
+    duplicado: bool = False
+    # Not written and nothing left in the Dashboard (e.g. invalid row): the ticket stays pending, the run goes on.
+    motivo_pendente: str = ""
 
     @property
     def completo(self) -> bool:
@@ -326,6 +338,10 @@ def _fluxo(
             chamado = softexpert.ler_chamado(numero)
         except (LoginNecessarioErro, CancelamentoSolicitado):
             raise
+        except ChamadoIndisponivelErro as erro:
+            execucao.pendente(numero, erro.motivo)
+            log(f"{numero}: pendente ({erro.motivo}).")
+            continue
         except Exception as erro:
             falhas_seguidas += 1
             execucao.pendente(numero, MOTIVO_FALHA_LEITURA, erro=type(erro).__name__)
@@ -389,6 +405,15 @@ def _tratar_chamado(
         execucao.pendente(numero, MOTIVO_GRAVACAO_NAO_CONFIRMADA)
         execucao.situacao, execucao.falha = SITUACAO_FALHA, f"{FALHA_GRAVACAO}: resultado_de_outro_chamado"
         raise _Parar()
+    if gravacao.duplicado:
+        execucao.ignorados.append(numero)
+        execucao.detalhe(numero, RESULTADO_IGNORADO, "duplicado")
+        log(f"{numero}: já está no Dashboard; ignorado.")
+        return
+    if gravacao.motivo_pendente:
+        execucao.pendente(numero, gravacao.motivo_pendente)
+        log(f"{numero}: pendente ({gravacao.motivo_pendente}).")
+        return
     if gravacao.completo:
         execucao.incluidos.append(numero)
         execucao.pendencias.pop(numero, None)
@@ -399,14 +424,15 @@ def _tratar_chamado(
     # Partial write: record exactly which cells were confirmed, and stop writing.
     confirmados = [coluna for coluna in COLUNAS_GRAVADAS if coluna in gravacao.confirmados]
     faltantes = [coluna for coluna in COLUNAS_GRAVADAS if coluna not in gravacao.confirmados]
+    motivo = f"gravacao_{gravacao.erro}" if gravacao.erro else MOTIVO_GRAVACAO_PARCIAL
     execucao.pendente(
         numero,
-        MOTIVO_GRAVACAO_PARCIAL,
+        motivo,
         campos_confirmados=confirmados,
         campos_pendentes=faltantes,
         salvo=gravacao.salvo,
     )
-    execucao.situacao, execucao.falha = SITUACAO_FALHA, f"{FALHA_GRAVACAO}: {MOTIVO_GRAVACAO_PARCIAL}"
+    execucao.situacao, execucao.falha = SITUACAO_FALHA, f"{FALHA_GRAVACAO}: {motivo}"
     log(f"{numero}: gravação parcial (confirmadas: {', '.join(confirmados) or 'nenhuma'}).")
     raise _Parar()
 

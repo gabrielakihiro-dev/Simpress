@@ -10,21 +10,40 @@ Roteiro para a primeira execução de verdade de `--rotina sebrae`, com os siste
 | --- | --- | --- |
 | Regras puras | `domains/sebrae_chamados.py` | Pronto (Fase A) |
 | Orquestração, estado e avisos | `domains/sebrae_orquestracao.py` | Pronto, testado com adaptadores falsos |
-| Leitura do SoftExpert | `scripts/sebrae_softexpert.py` | Fase B (em andamento em outro branch) |
-| Gravação no Excel Online | `scripts/sebrae_excel.py` | Fase C (ainda não existe) |
-| Ligação em `rodar_rotina_sebrae` | `scripts/automacao_rotinas_chrome.py` | **Pendente** até B e C existirem |
+| Leitura do SoftExpert | `scripts/sebrae_softexpert.py` | Fase B: testada em bancada local; **seletores reais não validados** |
+| Gravação no Excel Online | `scripts/sebrae_excel.py` | Fase C: regras testadas com grade falsa; **Playwright nunca executado no Excel real** (roteiro V0–V10 em `sebrae-fase-c-excel.md`) |
+| Ligação | `scripts/sebrae_rotina.py`, chamada por `rodar_rotina_sebrae` | Pronta, testada com módulos e grade falsos |
 
-A execução real só pode começar quando a última linha estiver feita e `npm run verify` passar.
+A execução real só pode começar com `npm run verify` passando e a configuração abaixo preenchida.
 
-## Contrato dos adaptadores (o que B e C precisam entregar)
+## Como a ligação funciona
 
-`sincronizar(softexpert, dashboard, caminho_estado, cancelado=..., log=...)` espera:
+`rodar_rotina_sebrae` → `sebrae_rotina.executar` → `domains.sebrae_orquestracao.sincronizar`, com `LeitorSoftExpertReal` (Fase B) e `DashboardReal` (Fase C):
 
-- `softexpert.listar_numeros() -> Iterable[str]` e `softexpert.ler_chamado(numero) -> ChamadoSoftExpert`.
-- `dashboard.ler_coluna_c() -> Iterable[Any]`: a coluna C inteira, com linhas ocultas.
-- `dashboard.gravar_linha(linha) -> ResultadoGravacao(numero, confirmados, salvo)`: grava só C, F, G, I, N, P e Q em linha livre, relê as sete células e confirma o salvamento. Nunca sobrescreve.
-- Sessão expirada → `LoginNecessarioErro("SoftExpert" | "SharePoint")`. Cancelamento dentro do adaptador → `CancelamentoSolicitado` (a ligação traduz `RotinaCancelada`).
-- `com_aviso` não deve envolver a rotina: o aviso do Windows sai do resultado da orquestração, só quando algo muda.
+- As duas abas (SoftExpert e Dashboard) abrem na primeira leitura; fecham no fim, exceto quando o usuário precisa fazer login.
+- Antes de ler a coluna C, a retomada do diário do Excel (`recuperar_pendencias`) conclui qualquer gravação deixada pela metade; se não puder, a execução para.
+- A coluna C é lida pela leitura validada do Excel (`_ler_validada`): ela recusa a leitura se faltarem linhas (filtros), em vez de arriscar duplicidade.
+- Resultados da camada Excel → orquestração: `gravado`/`recuperado` = incluído; `duplicado` = ignorado; `invalido`/`abandonado` = pendente (`gravacao_<situação>`) e segue; `parcial`, `divergente`, `nao_salvo`, `leitura_incompleta`, `filtro_nao_restaurado`, `sem_linha_preparada`, `interrompido` = pendência `gravacao_<situação>` e a execução para; `sessao_expirada` = login necessário (SharePoint).
+- SoftExpert: sessão expirada espera um novo login e relê o chamado uma vez; se cair de novo, login necessário. `numero_nao_confere` e `nao_encontrado_na_lista` viram pendência com esse motivo. Qualquer outro erro conta para as 3 falhas seguidas que interrompem a execução.
+- O aviso do Windows sai só do resultado da orquestração (não do `com_aviso`).
+
+## Configuração obrigatória: `data/state/sebrae_config.json`
+
+Fora do Git, sem segredos. Sem este arquivo a rotina falha antes de abrir qualquer aba.
+
+```json
+{
+  "dashboard_url": "https://<tenant>.sharepoint.com/.../Operacional_SEBRAE.xlsx",
+  "colunas_formula": ["A", "R"],
+  "quebras_como_espaco": false
+}
+```
+
+- `dashboard_url`: endereço https do arquivo (nunca a tela de login). O usuário informa.
+- `colunas_formula`: colunas, fora C, F, G, I, N, P e Q, que a linha preparada já traz com fórmula, definidas na verificação V5 do levantamento da Fase C. `[]` desliga a conferência e deve ser uma decisão explícita do usuário.
+- `quebras_como_espaco`: `true` se a verificação V7 mostrar que `Alt+Enter` não preserva a quebra.
+
+O levantamento V0–V10 da Fase C (feito com o usuário, numa cópia do Dashboard) vem **antes** desta execução: seletores e leitura da coluna C do Excel Online ainda são hipóteses.
 
 ## Pré-requisitos
 
@@ -32,7 +51,8 @@ A execução real só pode começar quando a última linha estiver feita e `npm 
 2. Nenhuma outra rotina em andamento (trava livre). Não anexe nada à porta 9333 durante a execução.
 3. Backup: o usuário faz uma cópia do Dashboard (ou confirma que o histórico de versões do SharePoint está ativo) antes da primeira execução.
 4. Anotar o estado inicial: quantidade de linhas com dados na aba `CHAMADOS` (esperado: 30 chamados) e os números da coluna C.
-5. `data/state/sebrae_chamados_estado.json` pode existir de testes; a execução o sobrescreve com o resultado real.
+5. `data/state/sebrae_config.json` preenchido (acima) e o levantamento V0–V10 da Fase C concluído.
+6. `data/state/sebrae_chamados_estado.json` pode existir de testes; a execução o sobrescreve com o resultado real.
 
 ## Execução
 
