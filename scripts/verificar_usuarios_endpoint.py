@@ -2,7 +2,8 @@
 
 Para cada pendência ainda sem decisão (``GET /api/usuarios/pendencias``), pesquisa o computador na
 grade "Todos os computadores" do Endpoint (série, série sem o ``S`` de MacBook e hostname) e lê o
-usuário. Quando "Usuários logados" está vazio, abre o detalhe do computador e lê Sistema > Usuários.
+usuário. Quando "Usuários logados" está vazio, abre o detalhe do computador e lê o "Usuário do último logon"
+de Sistema > Usuários, que é a base; a tabela de Sistema > Usuários só entra quando o último logon não serve.
 A decisão sai por ``POST /api/usuarios/pendencias/{id}/decidir`` e a anotação da linha de "Mudanças de
 usuário logado" por ``PUT /api/historico-comparacoes/{evento}/anotacoes/{anotacao_id}``.
 
@@ -35,6 +36,9 @@ ORIGEM = "Verificar usuários"
 USUARIOS_INVALIDOS = frozenset({
     "", "na", "n/a", "--", "-", "administrador", "convidado", "defaultaccount", "wdagutilityaccount", "root",
 })
+# Contas técnicas que nunca são o usuário da máquina, mesmo quando aparecem em Sistema > Usuários.
+USUARIOS_IGNORADOS = frozenset({"uiflowservice"})
+PREFIXOS_USUARIO_IGNORADO = ("codexsandbox", "default")
 # Cabeçalhos aceitos para a coluna do nome na tabela de Sistema > Usuários, em ordem de preferência.
 CABECALHOS_USUARIO_SISTEMA = ("nome do usuario", "nome de usuario", "usuario", "nome")
 COLUNA_SERIE = "numero de serie"
@@ -75,6 +79,8 @@ JS_LER_USUARIOS_SISTEMA = """
   const norm = s => s.normalize('NFD').replace(/[\\u0300-\\u036f]/g, '').toLowerCase().trim();
   const cabecalhos = [...document.querySelectorAll('.ember-table-header-cell, th')].filter(visivel);
   const carregando = [...document.querySelectorAll('.page-loader-wrapper, .spinner')].some(visivel);
+  const corpo = document.body ? document.body.innerText : '';
+  const ultimo = ((corpo.match(/Usu.rio do .ltimo logon\\s*:\\s*([^\\n\\r]+)/i) || [])[1] || '').trim();
   for (const alvo of prioridade) {
     const cab = cabecalhos.find(el => norm(texto(el)) === alvo);
     if (!cab) continue;
@@ -97,9 +103,9 @@ JS_LER_USUARIOS_SISTEMA = """
           return celula ? texto(celula) : '';
         });
     }
-    return {cabecalho: alvo, nomes, carregando, vazia: /Nenhum dado dispon[ií]vel|No data/i.test(texto(recipiente))};
+    return {cabecalho: alvo, nomes, ultimo, carregando, vazia: /Nenhum dado dispon[ií]vel|No data/i.test(texto(recipiente))};
   }
-  return {cabecalho: '', nomes: [], carregando, vazia: false};
+  return {cabecalho: '', nomes: [], ultimo, carregando, vazia: false};
 }
 """
 
@@ -127,8 +133,18 @@ def normalizar_usuario(texto: Any) -> str:
     return valor.split("@", 1)[0].strip()
 
 
+def usuario_ignorado(nome: Any) -> bool:
+    """Contas do Codex, ``Default*`` e UI Flow Service: não contam como usuário da máquina."""
+    chave = re.sub(r"\s+", "", normalizar_usuario(nome))
+    return chave in USUARIOS_IGNORADOS or chave.startswith(PREFIXOS_USUARIO_IGNORADO)
+
+
 def usuario_valido(nome: Any) -> bool:
-    return normalizar_usuario(nome) not in USUARIOS_INVALIDOS and normalizar(nome) not in USUARIOS_INVALIDOS
+    return (
+        normalizar_usuario(nome) not in USUARIOS_INVALIDOS
+        and normalizar(nome) not in USUARIOS_INVALIDOS
+        and not usuario_ignorado(nome)
+    )
 
 
 def escolher_usuario_lista(texto: Any) -> str:
@@ -139,8 +155,10 @@ def escolher_usuario_lista(texto: Any) -> str:
     return ""
 
 
-def escolher_usuario_sistema(nomes: list[str]) -> str:
-    """Primeira linha válida de Sistema > Usuários, de cima para baixo."""
+def escolher_usuario_sistema(nomes: list[str], ultimo_logon: str = "") -> str:
+    """Base do Sistema: o usuário do último logon; sem um válido, a primeira linha válida de Sistema > Usuários."""
+    if usuario_valido(ultimo_logon):
+        return str(ultimo_logon).strip()
     for nome in nomes:
         if usuario_valido(nome):
             return str(nome).strip()
@@ -330,21 +348,37 @@ def _valor_do_campo(page: "Page", cabecalho: dict) -> str:
     return campo.input_value() if campo else ""
 
 
-def _abrir_campo_filtro(page: "Page", automacao: ModuleType, cabecalho: dict) -> "Locator":
-    """Abre a barra de pesquisa pela lupa da barra de ferramentas (única da tela) e devolve a caixa da coluna."""
+def _abrir_campo_filtro(page: "Page", automacao: ModuleType, coluna: str) -> "Locator":
+    """Abre a barra de pesquisa pela lupa da barra de ferramentas (única da tela) e devolve a caixa da coluna.
+
+    O cabeçalho é lido só depois de a barra abrir: ao aparecer, ela pode deslocar as colunas, e uma posição
+    lida antes levaria o valor para a caixa da coluna vizinha (por exemplo, número de série em Usuários logados)."""
     if not _caixas_de_filtro(page).count():
         page.locator("button[id$='_searchButton']").filter(visible=True).first.click()
         automacao.aguardar_estado(_caixas_de_filtro(page).first, "visible", 15000)
+    cabecalho = achar_cabecalho(ler_grade(page), coluna)
+    if cabecalho is None:
+        raise automacao.RotinaErro(f"A coluna '{coluna}' não está visível na grade do Endpoint.")
     campo = _localizar_campo(page, cabecalho)
     if campo is None:
         # Coluna fora da área visível: rola até o cabeçalho e relê a posição dele (a grade deslocou).
         page.locator(".ember-table-header-cell").filter(has_text=cabecalho["texto"]).first.scroll_into_view_if_needed()
         page.wait_for_timeout(300)
-        atual = next((c for c in ler_grade(page)["cabecalhos"] if c["texto"] == cabecalho["texto"]), None)
+        atual = achar_cabecalho(ler_grade(page), coluna)
         campo = _localizar_campo(page, atual) if atual else None
     if campo is None:
-        raise automacao.RotinaErro(f"A caixa de filtro da coluna '{cabecalho['texto']}' não foi encontrada.")
+        raise automacao.RotinaErro(f"A caixa de filtro da coluna '{coluna}' não foi encontrada.")
     return campo
+
+
+def _limpar_caixas_preenchidas(page: "Page") -> None:
+    """Esvazia as caixas da barra de pesquisa que ficaram com texto após uma tentativa sem confirmação,
+    para que o valor não continue filtrando outra coluna nas pesquisas seguintes."""
+    caixas = _caixas_de_filtro(page)
+    for i in range(caixas.count()):
+        caixa = caixas.nth(i)
+        if caixa.input_value():
+            _digitar(caixa, "")
 
 
 def _digitar(campo: "Locator", valor: str) -> None:
@@ -381,11 +415,7 @@ def aplicar_filtro(page: "Page", automacao: ModuleType, coluna: str, valor: str)
     (ou grade vazia confirmada). Sem confirmação levanta ``RotinaErro``; nada é decidido."""
     alvo = normalizar(valor)
     for tentativa in (1, 2):
-        grade = ler_grade(page)
-        cabecalho = achar_cabecalho(grade, coluna)
-        if cabecalho is None:
-            raise automacao.RotinaErro(f"A coluna '{coluna}' não está visível na grade do Endpoint.")
-        campo = _abrir_campo_filtro(page, automacao, cabecalho)
+        campo = _abrir_campo_filtro(page, automacao, coluna)
         _digitar(campo, valor)
 
         def confirmada(g: dict) -> bool:
@@ -401,6 +431,7 @@ def aplicar_filtro(page: "Page", automacao: ModuleType, coluna: str, valor: str)
         if confirmado is not None:
             return confirmado
         automacao.log(ORIGEM, f"[AVISO] Filtro '{coluna}' não confirmado (tentativa {tentativa}/2).")
+        _limpar_caixas_preenchidas(page)
     raise automacao.RotinaErro(
         f"A grade do Endpoint não confirmou o filtro da coluna '{coluna}' em {2 * CONFIRMACAO_FILTRO_S} s."
     )
@@ -408,10 +439,7 @@ def aplicar_filtro(page: "Page", automacao: ModuleType, coluna: str, valor: str)
 
 def limpar_filtro(page: "Page", automacao: ModuleType, coluna: str) -> None:
     """Remove o filtro da coluna; com um filtro antigo ativo, a próxima pesquisa cruzaria os dois."""
-    cabecalho = achar_cabecalho(ler_grade(page), coluna)
-    if cabecalho is None:
-        raise automacao.RotinaErro(f"A coluna '{coluna}' não está visível para limpar o filtro.")
-    campo = _abrir_campo_filtro(page, automacao, cabecalho)
+    campo = _abrir_campo_filtro(page, automacao, coluna)
     _digitar(campo, "")
     if _aguardar_grade_estavel(page, automacao, lambda g: bool(g["linhas"]) and (achar_cabecalho(g, coluna) is not None) and _valor_do_campo(page, achar_cabecalho(g, coluna)) == "", CONFIRMACAO_FILTRO_S) is None:
         raise automacao.RotinaErro(f"A grade do Endpoint não confirmou a limpeza do filtro '{coluna}'.")
@@ -475,8 +503,8 @@ def abrir_aba(page: "Page", automacao: ModuleType, nome: str) -> None:
     alvo.click()
 
 
-def ler_usuarios_sistema(page: "Page", automacao: ModuleType) -> list[str]:
-    """Nomes de Sistema > Usuários, de cima para baixo, depois de a tabela carregar e ficar estável."""
+def ler_usuarios_sistema(page: "Page", automacao: ModuleType) -> dict[str, Any]:
+    """Nomes de Sistema > Usuários, de cima para baixo, e o usuário do último logon, depois de a tabela carregar e ficar estável."""
     fim = time.time() + automacao.CARREGAMENTO_MS / 1000
     anterior = None
     while time.time() < fim:
@@ -484,9 +512,10 @@ def ler_usuarios_sistema(page: "Page", automacao: ModuleType) -> list[str]:
         leitura = page.evaluate(JS_LER_USUARIOS_SISTEMA, list(CABECALHOS_USUARIO_SISTEMA))
         confirmada = bool(leitura["cabecalho"]) and not leitura["carregando"] and (bool(leitura["nomes"]) or leitura["vazia"])
         if confirmada:
-            if anterior == leitura["nomes"]:
-                return [n for n in leitura["nomes"] if n]
-            anterior = leitura["nomes"]
+            atual = (leitura["nomes"], leitura["ultimo"])
+            if anterior == atual:
+                return {"nomes": [n for n in leitura["nomes"] if n], "ultimo_logon": leitura["ultimo"]}
+            anterior = atual
         else:
             anterior = None
         time.sleep(0.8)
@@ -506,7 +535,7 @@ def consultar_usuarios_sistema(page: "Page", automacao: ModuleType, linha: dict)
         )
         abrir_aba(page, automacao, "Sistema")
         abrir_aba(page, automacao, "Usuários")
-        return {"nomes": ler_usuarios_sistema(page, automacao)}
+        return ler_usuarios_sistema(page, automacao)
     finally:
         restaurar_grade(page, automacao)
 
@@ -535,7 +564,8 @@ def processar_pendencia(page: "Page", automacao: ModuleType, pendencia: dict) ->
         fonte = "Usuários logados"
         consultado = False
         if not usuario and resultado["extra"] is not None:
-            usuario, fonte, consultado = escolher_usuario_sistema(resultado["extra"]["nomes"]), "Sistema", True
+            sistema = resultado["extra"]
+            usuario, fonte, consultado = escolher_usuario_sistema(sistema["nomes"], sistema["ultimo_logon"]), "Sistema", True
         veredito = avaliar_decisao(pendencia, True, usuario, fonte, sistema_consultado=consultado or bool(usuario))
     if veredito.aviso:
         automacao.log(ORIGEM, f"[AVISO] {serie}: {veredito.aviso}.")

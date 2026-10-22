@@ -7,6 +7,8 @@ from scripts import automacao_rotinas_chrome as automacao
 from scripts import verificar_usuarios_endpoint as rotina
 
 COLUNAS = (("Nome do computador", 0, 100), ("Rótulo de serviço/Número de série", 100, 200), ("Usuários logados", 200, 300))
+# Ao abrir a barra de pesquisa, a grade reorganiza as colunas: série e usuários trocam de lugar.
+COLUNAS_DESLOCADAS = (("Nome do computador", 0, 100), ("Rótulo de serviço/Número de série", 200, 300), ("Usuários logados", 100, 200))
 
 
 class Elemento:
@@ -45,7 +47,7 @@ class CampoFiltro(Elemento):
         self.indice = indice
 
     def bounding_box(self):
-        _, x0, x1 = COLUNAS[self.indice]
+        _, x0, x1 = self.pagina.colunas[self.indice]
         return {"x": x0 + 5, "y": 0, "width": x1 - x0 - 10, "height": 20}
 
     def press(self, tecla):
@@ -93,17 +95,23 @@ class LupaPesquisa(Elemento):
 
     def click(self):
         self.pagina.barra_aberta = True
+        if self.pagina.deslocar_ao_abrir:
+            self.pagina.colunas = COLUNAS_DESLOCADAS
 
 
 class PaginaEndpoint:
     """Endpoint falso: grade filtrável por coluna, detalhe do computador e Sistema > Usuários.
 
-    ``surda`` simula o Enter que não aplica o filtro (valor não registrado pelo componente)."""
+    ``surda`` simula o Enter que não aplica o filtro (valor não registrado pelo componente).
+    ``deslocar_ao_abrir`` simula a grade que muda de layout quando a barra de pesquisa abre."""
 
-    def __init__(self, computadores, usuarios_sistema=None, surda=False, aba_ausente=None):
+    def __init__(
+        self, computadores, usuarios_sistema=None, surda=False, aba_ausente=None, deslocar_ao_abrir=False, ultimos_logon=None,
+    ):
         self.computadores = computadores
         self.usuarios_sistema = usuarios_sistema or {}
-        self.surda, self.aba_ausente = surda, aba_ausente
+        self.ultimos_logon = ultimos_logon or {}
+        self.surda, self.aba_ausente, self.deslocar_ao_abrir = surda, aba_ausente, deslocar_ao_abrir
         self.visitas, self.historico_abas = [], []
         self.url = automacao.ENDPOINT_URL
         self.reiniciar()
@@ -111,6 +119,7 @@ class PaginaEndpoint:
     def reiniciar(self):
         self.filtros, self.buffers, self.selecionado = {}, {}, False
         self.barra_aberta = False
+        self.colunas = COLUNAS
         self.detalhe, self.abas = None, []
 
     @property
@@ -150,7 +159,7 @@ class PaginaEndpoint:
         if js == rotina.JS_LER_GRADE:
             linhas = [
                 [
-                    {"texto": c[campo], "x0": COLUNAS[i][1], "x1": COLUNAS[i][2], "href": c["href"] if i == 0 else ""}
+                    {"texto": c[campo], "x0": self.colunas[i][1], "x1": self.colunas[i][2], "href": c["href"] if i == 0 else ""}
                     for i, campo in enumerate(("nome", "serie", "usuarios"))
                 ]
                 for c in self._visiveis()
@@ -158,13 +167,14 @@ class PaginaEndpoint:
             if self.detalhe:
                 return {"cabecalhos": [], "linhas": [], "carregando": False, "vazia": False}
             return {
-                "cabecalhos": [{"texto": t, "x0": x0, "x1": x1} for t, x0, x1 in COLUNAS],
+                "cabecalhos": [{"texto": t, "x0": x0, "x1": x1} for t, x0, x1 in self.colunas],
                 "linhas": linhas, "carregando": False, "vazia": not linhas,
             }
         if self.detalhe and self.abas[-2:] == ["Sistema", "Usuários"]:
             nomes = self.usuarios_sistema.get(self.detalhe["nome"], [])
-            return {"cabecalho": "nome do usuario", "nomes": nomes, "carregando": False, "vazia": not nomes}
-        return {"cabecalho": "", "nomes": [], "carregando": False, "vazia": False}
+            ultimo = self.ultimos_logon.get(self.detalhe["nome"], "")
+            return {"cabecalho": "nome do usuario", "nomes": nomes, "ultimo": ultimo, "carregando": False, "vazia": not nomes}
+        return {"cabecalho": "", "nomes": [], "ultimo": "", "carregando": False, "vazia": False}
 
 
 def computador(nome, serie, usuarios="", href=None):
@@ -217,6 +227,16 @@ class DecisaoTest(unittest.TestCase):
         self.assertEqual(rotina.escolher_usuario_sistema(["", "root", "Convidado", "WDAGUtilityAccount", "davi", "ana"]), "davi")
         self.assertEqual(rotina.escolher_usuario_sistema(["Administrador", "DefaultAccount", "N/A"]), "")
 
+    def test_contas_tecnicas_e_codex_nao_contam_como_usuario(self):
+        for nome in ("CodexSandboxOffline", "CodexSandboxOnline", "Default User", "UI Flow Service", "UIFlowService"):
+            self.assertFalse(rotina.usuario_valido(nome), nome)
+        self.assertEqual(rotina.escolher_usuario_sistema(["CodexSandboxOffline", "Default", "UI Flow Service", "davi"]), "davi")
+
+    def test_ultimo_logon_e_a_base_do_sistema(self):
+        self.assertEqual(rotina.escolher_usuario_sistema(["davi"], "MRamos"), "MRamos")
+        self.assertEqual(rotina.escolher_usuario_sistema(["davi"], "CodexSandboxOffline"), "davi")
+        self.assertEqual(rotina.escolher_usuario_sistema([], ""), "")
+
     def test_serie_sem_s_so_para_serie_com_s(self):
         self.assertEqual(rotina.serie_sem_s("SCMVXKV7YCM"), "CMVXKV7YCM")
         self.assertEqual(rotina.serie_sem_s("BRJ123"), "BRJ123"[0:0] or "")
@@ -228,6 +248,19 @@ class GradeTest(AmbienteBase):
         pagina = PaginaEndpoint([computador("H1", "AAA1"), computador("H2", "BBB2")])
         grade = rotina.aplicar_filtro(pagina, automacao, "numero de serie", "AAA1")
         self.assertEqual([l[0]["texto"] for l in grade["linhas"]], ["H1"])
+
+    def test_valor_nao_vai_para_a_coluna_vizinha_quando_a_barra_desloca_a_grade(self):
+        pagina = PaginaEndpoint([computador("H1", "AAA1", "ana"), computador("H2", "BBB2", "ana")], deslocar_ao_abrir=True)
+        grade = rotina.aplicar_filtro(pagina, automacao, "numero de serie", "AAA1")
+        self.assertEqual(pagina.filtros, {1: "AAA1"})
+        self.assertEqual([l[0]["texto"] for l in grade["linhas"]], ["H1"])
+
+    def test_tentativa_sem_confirmacao_esvazia_as_caixas(self):
+        pagina = PaginaEndpoint([computador("H1", "AAA1"), computador("H2", "BBB2")], surda=True)
+        with patch.object(rotina, "CONFIRMACAO_FILTRO_S", 0.05):
+            with self.assertRaises(automacao.RotinaErro):
+                rotina.aplicar_filtro(pagina, automacao, "numero de serie", "AAA1")
+        self.assertFalse(any(pagina.buffers.values()))
 
     def test_grade_vazia_confirmada(self):
         pagina = PaginaEndpoint([computador("H1", "AAA1")])
@@ -292,6 +325,16 @@ class SistemaTest(AmbienteBase):
         self.assertEqual(pagina.abas_clicadas, ["Sistema", "Usuários"])
         self.assertEqual(pagina.visitas[-1], automacao.ENDPOINT_URL)
         self.assertIn("Sistema confirma o usuário carla", self._anotacoes()[0])
+
+    def test_ultimo_logon_decide_mesmo_com_contas_tecnicas_na_tabela(self):
+        pagina = PaginaEndpoint(
+            [computador("HOST-1", "BRJ5512FFS", "")],
+            {"HOST-1": ["CodexSandboxOffline", "Default", "UI Flow Service"]},
+            ultimos_logon={"HOST-1": "MRamos"},
+        )
+        rotina.processar_pendencia(pagina, automacao, pendencia(serie="BRJ5512FFS", atual="MRamos"))
+        self.assertEqual(self._decisoes(), ["manter"])
+        self.assertIn("Sistema confirma o usuário MRamos", self._anotacoes()[0])
 
     def test_outro_usuario_no_sistema_deixa_pendente_so_anota(self):
         pagina = PaginaEndpoint([computador("HOST-1", "BRJ0000TST", "--")], {"HOST-1": ["davi"]})
