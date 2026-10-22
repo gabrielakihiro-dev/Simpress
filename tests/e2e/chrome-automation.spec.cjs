@@ -4,8 +4,8 @@ const AxeBuilder = require("@axe-core/playwright").default;
 test.setTimeout(60000);
 
 // The fixture answers the Automação routes with fictional runs; no process or Chrome is started.
-async function openAutomation(page, request, count = 0) {
-  await request.get(`/__fixture_automacao?quantidade=${count}`);
+async function openAutomation(page, request, count = 0, sebrae = "padrao") {
+  await request.get(`/__fixture_automacao?quantidade=${count}&sebrae=${sebrae}`);
   await page.goto("/");
   const sidebarButton = page.locator("#btn-sidebar-open");
   const shell = page.locator("#simpress-app-shell");
@@ -23,7 +23,7 @@ async function openAutomation(page, request, count = 0) {
 test("Automação starts a routine, shows the login warning and the live log, then cancels", async ({ page, request }) => {
   const panel = await openAutomation(page, request);
   const status = panel.locator("#automacao-estado");
-  const cancel = panel.getByRole("button", { name: "Cancelar" });
+  const cancel = panel.getByRole("button", { name: "Cancelar", exact: true });
   await expect(status).toContainText("Livre");
   await expect(status).toContainText("Última execução: Inventários, Concluído");
   await expect(cancel).toBeDisabled();
@@ -228,5 +228,89 @@ test("Automação shows the failure screenshot as a thumbnail that opens enlarge
     await page.keyboard.press("Escape");
     await expect(dialog).toBeHidden();
     await expect(thumb).toBeFocused();
+  }
+});
+
+test("Sincronizar chamados Sebrae shows the summary, counters and pending items with reasons", async ({ page, request }) => {
+  const panel = await openAutomation(page, request);
+  const card = panel.locator("#sebrae-painel");
+  await expect(card.getByRole("heading", { name: "Sincronizar chamados Sebrae", level: 2 })).toBeVisible();
+  await expect(card).toContainText("Roda de segunda a sexta, das 09h15 às 17h45, a cada 30 minutos. O computador precisa estar ligado e o servidor local da Simpress em execução.");
+  await expect(card.locator("#sebrae-estado")).toContainText("Agendamento pausado");
+  await expect(card.locator("#sebrae-ultima")).toContainText("Concluída em");
+  await expect(card.locator("#sebrae-incluidos")).toHaveText("2");
+  await expect(card.locator("#sebrae-ignorados")).toHaveText("31");
+  await expect(card.locator("#sebrae-pendentes")).toHaveText("3");
+  await expect(card.locator("#sebrae-agendamento-aviso")).toContainText("ainda não pode ser ativado");
+  await expect(card.locator("#sebrae-login-aviso")).toBeHidden();
+  const rows = card.locator("#sebrae-pendencias tbody tr");
+  await expect(rows).toHaveCount(3);
+  await expect(rows.nth(0)).toContainText("UTIC-2026-1253");
+  await expect(rows.nth(0)).toContainText("Alerta automático do Endpoint");
+  await expect(rows.nth(2)).toContainText("Sem indícios de incidente ou de solicitação.");
+  await expect(panel.locator("#automacao-historico-rotina option[value=sebrae]")).toHaveText("Sincronizar chamados Sebrae");
+});
+
+test("Sincronizar chamados Sebrae explains the 409 when the routine is not complete yet", async ({ page, request }) => {
+  const panel = await openAutomation(page, request);
+  const toggle = panel.getByRole("button", { name: "Ativar agendamento", exact: true });
+  const sent = page.waitForRequest(req => req.url().endsWith("/api/automacao/sebrae/agendamento") && req.method() === "PUT");
+  await toggle.click();
+  expect((await sent).postDataJSON()).toEqual({ ativo: true });
+  await expect(page.locator("#toast-container")).toContainText("A sincronização ainda não está completa");
+  await expect(toggle).toBeEnabled();
+  await expect(panel.locator("#sebrae-estado")).toContainText("Agendamento pausado");
+});
+
+test("Sincronizar chamados Sebrae turns the schedule on and off when the routine is ready", async ({ page, request }) => {
+  const panel = await openAutomation(page, request, 0, "pronta");
+  const card = panel.locator("#sebrae-painel");
+  await expect(card.locator("#sebrae-agendamento-aviso")).toBeHidden();
+  await card.getByRole("button", { name: "Ativar agendamento", exact: true }).click();
+  await expect(card.locator("#sebrae-estado")).toContainText("Agendamento ativo");
+  await expect(card.locator("#sebrae-proxima")).toContainText("10:15");
+  await expect(card.locator("#sebrae-agendamento-aviso")).toContainText("pulado: ocupada");
+  await expect(page.locator("#toast-container")).toContainText("Agendamento ativado");
+  await card.getByRole("button", { name: "Pausar agendamento", exact: true }).click();
+  await expect(card.locator("#sebrae-estado")).toContainText("Agendamento pausado");
+  await expect(card.locator("#sebrae-proxima")).toHaveText("—");
+});
+
+test("Sincronizar chamados Sebrae runs now and cancels only its own run", async ({ page, request }) => {
+  const panel = await openAutomation(page, request);
+  const card = panel.locator("#sebrae-painel");
+  const cancel = card.getByRole("button", { name: "Cancelar sincronização", exact: true });
+  await expect(cancel).toBeDisabled();
+  const started = page.waitForRequest(req => req.url().endsWith("/api/automacao/executar") && req.method() === "POST");
+  await card.getByRole("button", { name: "Executar agora", exact: true }).click();
+  expect((await started).postDataJSON()).toEqual({ rotina: "sebrae" });
+  await expect(card.locator("#sebrae-estado")).toContainText("Sincronizando");
+  await expect(card.getByRole("button", { name: "Executar agora", exact: true })).toBeDisabled();
+  await expect(cancel).toBeEnabled();
+  await cancel.click();
+  await expect(card.locator("#sebrae-estado")).toContainText("Agendamento pausado");
+  await expect(cancel).toBeDisabled();
+  await expect(panel.locator("#automacao-historico tbody tr").first()).toContainText("Sincronizar chamados Sebrae");
+});
+
+test("Sincronizar chamados Sebrae shows the login warning and passes the audit in both themes", async ({ page, request }, testInfo) => {
+  const panel = await openAutomation(page, request, 0, "login");
+  const card = panel.locator("#sebrae-painel");
+  await expect(card.locator("#sebrae-login-aviso")).toBeVisible();
+  await expect(card.locator("#sebrae-login-aviso")).toContainText("Login necessário");
+  for (const theme of ["light", "dark"]) {
+    await page.locator("html").evaluate((el, value) => { el.dataset.theme = value; }, theme);
+    const audit = await new AxeBuilder({ page }).include("#sebrae-painel")
+      .withTags(["wcag2a", "wcag2aa", "wcag21aa", "wcag22aa"]).analyze();
+    expect(audit.violations.map(item => item.id)).toEqual([]);
+    await card.scrollIntoViewIfNeeded();
+    await card.screenshot({ path: `logs/prints-automacao/depois-sebrae-${testInfo.project.name}-${theme}.png` });
+    expect(await page.evaluate(() => document.documentElement.scrollWidth - document.documentElement.clientWidth)).toBeLessThanOrEqual(0);
+  }
+  if (testInfo.project.name === "mobile") {
+    // On small screens the pending table becomes cards: header hidden, one block per row with the same data.
+    const row = card.locator("#sebrae-pendencias tbody tr").first();
+    expect(await row.evaluate(el => getComputedStyle(el).display)).toBe("block");
+    expect(await row.locator("td").first().evaluate(el => getComputedStyle(el, "::before").content)).toContain("Chamado");
   }
 });
