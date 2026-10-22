@@ -348,6 +348,24 @@ class SistemaTest(AmbienteBase):
         [texto] = self._anotacoes()
         self.assertTrue(texto.startswith("nota do usuário\n[Verificação automática"))
 
+    def test_anotacao_busca_em_historico_antigo_e_usa_o_mais_recente(self):
+        eventos = [{"id": f"ev{n}"} for n in range(1, 31)]
+        detalhes = {e["id"]: {"evento": {"comparacao": {"mudancas_usuarios": []}}} for e in eventos}
+        antigo = dict(self.linha, anotacao_id="antigo")
+        recente = dict(self.linha, anotacao_id="recente")
+        detalhes["ev25"]["evento"]["comparacao"]["mudancas_usuarios"] = [recente]
+        detalhes["ev30"]["evento"]["comparacao"]["mudancas_usuarios"] = [antigo]
+
+        def api(_automacao, metodo, caminho, corpo=None):
+            self.chamadas.append((metodo, caminho, corpo))
+            if caminho == "/api/historico-comparacoes":
+                return {"eventos": eventos}
+            return detalhes.get(caminho.rsplit("/", 1)[-1], {})
+
+        with patch.object(rotina, "chamar_api", api):
+            achado = rotina.localizar_linha_anotacao(automacao, "p1")
+        self.assertEqual((achado["evento_id"], achado["linha"]["anotacao_id"]), ("ev25", "recente"))
+
     def test_rotina_deixa_a_aba_filtrada_pelo_hostname_da_ultima(self):
         pagina = PaginaEndpoint([computador("HOST-1", "BRJ0000TST", "carla")])
         pagina.close = Mock()
