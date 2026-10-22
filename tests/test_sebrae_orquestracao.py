@@ -132,8 +132,8 @@ class FluxoCompletoTests(Base):
         self.assertEqual((resultado.resumo.incluidos, resultado.resumo.ignorados, resultado.resumo.pendentes), (2, 30, 0))
         self.assertEqual(resultado.codigo_saida, 0)
         self.assertEqual([linha["C"] for linha in dashboard.linhas], ["UTIC-2026-0101", "UTIC-2026-0102"])
-        self.assertEqual(dashboard.linhas[0]["I"], "INCIDENTE")
-        self.assertEqual(dashboard.linhas[1]["I"], "SOLICITAÇÃO")
+        self.assertEqual(dashboard.linhas[0]["H"], "INCIDENTE")
+        self.assertEqual(dashboard.linhas[1]["H"], "SOLICITAÇÃO")
         self.assertEqual(dashboard.coluna_c[:30], EXISTENTES)
         # The 30 duplicates were never opened.
         self.assertEqual(softexpert.lidos, ["UTIC-2026-0101", "UTIC-2026-0102"])
@@ -144,9 +144,9 @@ class FluxoCompletoTests(Base):
         self.assertEqual(len(dashboard.chamadas_gravar), 1)
         linha = dashboard.chamadas_gravar[0]
         self.assertEqual(sorted(linha), sorted(COLUNAS_GRAVADAS))
-        self.assertEqual(linha["N"], "Sebrae")
-        self.assertEqual(linha["P"], "PR")
-        self.assertEqual(linha["Q"], "21/10/2026 10:30")
+        self.assertEqual(linha["M"], "Sebrae")
+        self.assertEqual(linha["O"], "PR")
+        self.assertEqual(linha["P"], "21/10/2026 10:30")
         self.assertEqual(linha["G"], "Maria Souza")
 
     def test_a_number_already_in_column_c_is_ignored_whole_even_inside_composite_values(self):
@@ -469,7 +469,7 @@ class GravacaoTests(Base):
         parcial = [d for d in self.ler_estado()["ultima_execucao"]["detalhes"] if d["numero"] == "UTIC-2026-0102"][0]
         self.assertEqual(parcial["motivo"], "gravacao_parcial")
         self.assertEqual(parcial["campos_confirmados"], ["C", "F", "G"])
-        self.assertEqual(parcial["campos_pendentes"], ["I", "N", "P", "Q"])
+        self.assertEqual(parcial["campos_pendentes"], ["H", "M", "O", "P"])
         self.assertFalse(parcial["salvo"])
         self.assertEqual(self.ler_estado()["pendencias"], {"UTIC-2026-0102": "gravacao_parcial"})
 
@@ -494,7 +494,7 @@ class GravacaoTests(Base):
     def test_a_writer_that_names_the_reason_keeps_it_in_the_pending_item_and_the_failure(self):
         dashboard = DashboardFalso()
         dashboard.resultado_forcado["UTIC-2026-0101"] = ResultadoGravacao(
-            "UTIC-2026-0101", ("C", "F", "G", "I", "N", "P", "Q"), False, erro="nao_salvo"
+            "UTIC-2026-0101", ("C", "F", "G", "H", "M", "O", "P"), False, erro="nao_salvo"
         )
         resultado = self.rodar(self.lista_com(chamado("UTIC-2026-0101")), dashboard)
         self.assertEqual(resultado.resumo.falha, "falha_gravacao: gravacao_nao_salvo")

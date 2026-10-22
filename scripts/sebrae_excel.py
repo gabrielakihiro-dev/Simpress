@@ -6,7 +6,7 @@ Online, sem API, Graph nem tokens (docs/operacao/sebrae-fase-c-excel.md).
 Duas camadas:
 
 - ``AdaptadorExcel`` (classe abstrata): contém TODAS as regras de segurança (releitura da coluna C
-  antes de gravar, linha preparada e livre, só as colunas C, F, G, I, N, P e Q, nunca sobrescrever,
+  antes de gravar, linha preparada e livre, só as colunas C, F, G, H, M, O e P, nunca sobrescrever,
   releitura das sete colunas, confirmação de "Salvo", diário de intenção). Depende apenas de
   primitivas pequenas (``ler_coluna_c``, ``ler_celulas``, ``escrever_celula``, ``aguardar_salvo``).
 - ``ExcelOnlinePlaywright``: implementa as primitivas com o Chrome de automação. Os seletores e a
@@ -187,8 +187,8 @@ _PARECE_NUMERO_OU_DATA = re.compile(r"[\d\s.,:/\-+%$()]+")
 
 def texto_para_digitar(coluna: str, valor: str) -> str:
     """Evita a autoformatação do Excel: ``=``, ``+``, ``-``, ``@`` e textos que parecem número ou data ganham
-    o apóstrofo de texto. A coluna Q é digitada sem prefixo, pois precisa virar data/hora de verdade."""
-    if coluna == "Q" or not valor:
+    o apóstrofo de texto. A coluna P é digitada sem prefixo, pois precisa virar data/hora de verdade."""
+    if coluna == "P" or not valor:
         return valor
     if valor[0] in "=+-@" or _PARECE_NUMERO_OU_DATA.fullmatch(valor):
         return "'" + valor
@@ -198,7 +198,7 @@ def texto_para_digitar(coluna: str, valor: str) -> str:
 def valores_equivalentes(coluna: str, esperado: str, lido: Any) -> bool:
     """Compara o que foi extraído com o que a célula mostra na barra de fórmulas."""
     lido_texto = _normalizar_leitura(lido)
-    if coluna == "Q":
+    if coluna == "P":
         data_esperada, data_lida = interpretar_data(esperado), interpretar_data(lido_texto)
         if data_esperada is not None and data_lida is not None:
             return data_esperada == data_lida
@@ -429,12 +429,12 @@ class AdaptadorExcel(ABC):
         for coluna in ("F", "G"):
             if not valores[coluna]:
                 raise ValueError(f"Coluna {coluna} vazia.")
-        if valores["I"] not in (TIPO_INCIDENTE, TIPO_SOLICITACAO):
-            raise ValueError(f"Tipo inválido: {valores['I']!r}.")
-        if valores["N"] != UNIDADE or valores["P"] != UF:
+        if valores["H"] not in (TIPO_INCIDENTE, TIPO_SOLICITACAO):
+            raise ValueError(f"Tipo inválido: {valores['H']!r}.")
+        if valores["M"] != UNIDADE or valores["O"] != UF:
             raise ValueError(f"Unidade e UF devem ser {UNIDADE!r} e {UF!r}.")
-        data = interpretar_data(valores["Q"])
-        if data is None or data.strftime(FORMATO_DATA) != valores["Q"]:
+        data = interpretar_data(valores["P"])
+        if data is None or data.strftime(FORMATO_DATA) != valores["P"]:
             raise ValueError("Data de abertura fora do formato dd/MM/yyyy HH:mm.")
         for coluna, valor in valores.items():
             if len(valor) > LIMITE_CARACTERES_CELULA:
@@ -559,7 +559,7 @@ class AdaptadorExcel(ABC):
             lido = self.ler_celulas(linha, (coluna,)).celulas[coluna]
             if not valores_equivalentes(coluna, valores[coluna], lido.valor):
                 return resultado(DIVERGENTE, f"{endereco(coluna, linha)} ficou com conteúdo diferente do extraído; corrija na planilha.")
-            if coluna == "Q" and self.celula_e_data(linha, coluna) is False:
+            if coluna == "P" and self.celula_e_data(linha, coluna) is False:
                 return resultado(DIVERGENTE, f"{endereco(coluna, linha)} foi gravada como texto, não como data/hora.")
             confirmados.append(coluna)
             pendentes.remove(coluna)

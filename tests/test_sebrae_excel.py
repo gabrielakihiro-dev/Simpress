@@ -21,10 +21,10 @@ LINHA_VALIDA = {
     "C": "UTIC-2026-0200",
     "F": "Impressora não imprime no setor financeiro",
     "G": "Maria da Silva",
-    "I": "INCIDENTE",
-    "N": "Sebrae",
-    "P": "PR",
-    "Q": "21/10/2026 09:15",
+    "H": "INCIDENTE",
+    "M": "Sebrae",
+    "O": "PR",
+    "P": "21/10/2026 09:15",
 }
 
 
@@ -57,7 +57,7 @@ class GradeFalsa(AdaptadorExcel):
         self.celulas[(7, "C")] = "27371 / UTIC-2026-0094"
         for linha in range(2, LINHAS_TOTAIS + 1):
             self.celulas[(linha, "A")] = "=LIN()"
-            self.celulas[(linha, "R")] = "=SE(Q2<>\"\";1;0)"
+            self.celulas[(linha, "R")] = "=SE(P2<>\"\";1;0)"
 
     # -- primitivas --
     def garantir_sessao(self) -> None:
@@ -133,7 +133,7 @@ class GravacaoFelizTests(BaseGrade):
         self.assertTrue(resultado.incluido)
         self.assertEqual(resultado.linha, 12)
         self.assertEqual(resultado.pendentes, ())
-        self.assertEqual([coluna for _l, coluna, _v in self.grade.escritas], ["C", "F", "G", "I", "N", "P", "Q"])
+        self.assertEqual([coluna for _l, coluna, _v in self.grade.escritas], ["C", "F", "G", "H", "M", "O", "P"])
         self.assertSoColunasGravadas(self.grade)
         depois = self.grade.alvo()
         mudou = {chave for chave in depois if depois[chave] != antes.get(chave)}
@@ -160,7 +160,7 @@ class GravacaoFelizTests(BaseGrade):
         self.grade.data_como_texto = True
         resultado = self.grade.gravar_chamado(linha_valida())
         self.assertEqual(resultado.situacao, xl.DIVERGENTE)
-        self.assertIn("Q", resultado.pendentes)
+        self.assertIn("P", resultado.pendentes)
         self.assertFalse(resultado.incluido)
 
 
@@ -259,7 +259,7 @@ class EdicaoSimultaneaTests(BaseGrade):
         resultado = self.grade.gravar_chamado(linha_valida())
         self.assertEqual(resultado.situacao, xl.PARCIAL)
         self.assertEqual(resultado.confirmados, ("C", "F"))
-        self.assertEqual(resultado.pendentes, ("G", "I", "N", "P", "Q"))
+        self.assertEqual(resultado.pendentes, ("G", "H", "M", "O", "P"))
         self.assertEqual(self.grade.celulas[(12, "G")], "Outro Nome")
         self.assertEqual(self.diario.intencao("UTIC-2026-0200")["estado"], xl.PARCIAL)
         self.assertTrue(resultado.interrompe_execucao)
@@ -279,7 +279,7 @@ class QuedaERetomadaTests(BaseGrade):
         resultado = self.grade.gravar_chamado(linha_valida())
         self.assertEqual(resultado.situacao, xl.INTERROMPIDO)
         self.assertEqual(resultado.confirmados, ("C", "F"))
-        self.assertEqual(resultado.pendentes, ("G", "I", "N", "P", "Q"))
+        self.assertEqual(resultado.pendentes, ("G", "H", "M", "O", "P"))
         self.assertFalse(resultado.incluido)
         self.assertIn("rede caiu", resultado.detalhe)
         self.assertIn("UTIC-2026-0200", self.diario.abertas())
@@ -291,7 +291,7 @@ class QuedaERetomadaTests(BaseGrade):
         self.assertEqual(resultado.situacao, xl.RECUPERADO)
         self.assertTrue(resultado.incluido)
         self.assertEqual(resultado.linha, 12)
-        self.assertEqual([coluna for _l, coluna, _v in novo.escritas], ["G", "I", "N", "P", "Q"])
+        self.assertEqual([coluna for _l, coluna, _v in novo.escritas], ["G", "H", "M", "O", "P"])
         self.assertEqual(novo.diario.abertas(), {})
         self.assertFalse(novo.linha_ocupada(13))
 
@@ -350,17 +350,17 @@ class QuedaERetomadaTests(BaseGrade):
 
 class ReleituraESalvoTests(BaseGrade):
     def test_autoformatacao_na_celula_e_divergencia_imediata(self) -> None:
-        self.grade.corromper = {"I": "Incidente"}
+        self.grade.corromper = {"H": "Incidente"}
         resultado = self.grade.gravar_chamado(linha_valida())
         self.assertEqual(resultado.situacao, xl.DIVERGENTE)
         self.assertEqual(resultado.confirmados, ("C", "F", "G"))
-        self.assertEqual(resultado.pendentes[0], "I")
+        self.assertEqual(resultado.pendentes[0], "H")
         self.assertFalse(resultado.incluido)
         self.assertIn("UTIC-2026-0200", self.diario.abertas())
 
     def test_alteracao_posterior_detectada_na_releitura_final(self) -> None:
         def depois(linha: int, coluna: str, grade: GradeFalsa) -> None:
-            if coluna == "Q":
+            if coluna == "P":
                 grade.celulas[(linha, "G")] = "Alterado por outro"
 
         self.grade.depois_de_escrever = depois
@@ -388,12 +388,12 @@ class ReleituraESalvoTests(BaseGrade):
         self.assertEqual(xl.texto_para_digitar("G", "00123"), "'00123")
         self.assertEqual(xl.texto_para_digitar("F", "12/05"), "'12/05")
         self.assertEqual(xl.texto_para_digitar("F", "Impressora parou"), "Impressora parou")
-        self.assertEqual(xl.texto_para_digitar("Q", "21/10/2026 09:15"), "21/10/2026 09:15")
+        self.assertEqual(xl.texto_para_digitar("P", "21/10/2026 09:15"), "21/10/2026 09:15")
         self.assertTrue(xl.valores_equivalentes("F", "=SOMA(A1)", "'=SOMA(A1)"))
 
     def test_data_equivalente_ignora_segundos_e_formato_de_entrada(self) -> None:
-        self.assertTrue(xl.valores_equivalentes("Q", "21/10/2026 09:15", "21/10/2026 09:15:00"))
-        self.assertFalse(xl.valores_equivalentes("Q", "21/10/2026 09:15", "21/10/2026 09:16:00"))
+        self.assertTrue(xl.valores_equivalentes("P", "21/10/2026 09:15", "21/10/2026 09:15:00"))
+        self.assertFalse(xl.valores_equivalentes("P", "21/10/2026 09:15", "21/10/2026 09:16:00"))
 
 
 class SessaoTests(BaseGrade):
@@ -410,7 +410,7 @@ class SessaoTests(BaseGrade):
         resultado = self.grade.gravar_chamado(linha_valida())
         self.assertEqual(resultado.situacao, xl.SESSAO_EXPIRADA)
         self.assertEqual(resultado.confirmados, ("C", "F", "G"))
-        self.assertEqual(resultado.pendentes, ("I", "N", "P", "Q"))
+        self.assertEqual(resultado.pendentes, ("H", "M", "O", "P"))
         self.assertFalse(resultado.incluido)
 
     def test_deteccao_de_login_pela_url_e_pelo_texto(self) -> None:
@@ -425,13 +425,13 @@ class SessaoTests(BaseGrade):
 class ValidacaoTests(BaseGrade):
     def test_linhas_invalidas_nao_tocam_o_dashboard(self) -> None:
         casos = [
-            {k: v for k, v in LINHA_VALIDA.items() if k != "Q"},
+            {k: v for k, v in LINHA_VALIDA.items() if k != "P"},
             {**LINHA_VALIDA, "X": "1"},
-            linha_valida(N="Outro"),
-            linha_valida(P="SC"),
-            linha_valida(I="OUTRO"),
-            linha_valida(Q="2026-10-21 09:15"),
-            linha_valida(Q="31/02/2026 09:15"),
+            linha_valida(M="Outro"),
+            linha_valida(O="SC"),
+            linha_valida(H="OUTRO"),
+            linha_valida(P="2026-10-21 09:15"),
+            linha_valida(P="31/02/2026 09:15"),
             linha_valida(C="27371 / UTIC-2026-0094"),
             linha_valida(G="   "),
             linha_valida(F="x" * (xl.LIMITE_CARACTERES_CELULA + 1)),
@@ -484,7 +484,7 @@ class LeituraDaColunaTests(unittest.TestCase):
         self.assertLess(cobertas, 30)
 
     def test_enderecos(self) -> None:
-        self.assertEqual(xl.endereco("Q", 12), "Q12")
+        self.assertEqual(xl.endereco("P", 12), "P12")
 
 
 class PlaywrightLeituraTests(unittest.TestCase):

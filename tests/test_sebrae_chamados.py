@@ -117,10 +117,10 @@ class DecisionTests(unittest.TestCase):
             "C": "UTIC-2026-0094",
             "F": "O notebook não conecta na rede do escritório desde ontem.",
             "G": "Maria da Silva",
-            "I": "INCIDENTE",
-            "N": "Sebrae",
-            "P": "PR",
-            "Q": "21/10/2026 09:12",
+            "H": "INCIDENTE",
+            "M": "Sebrae",
+            "O": "PR",
+            "P": "21/10/2026 09:12",
         })
 
     def test_missing_description_uses_the_original_title(self):
@@ -131,7 +131,7 @@ class DecisionTests(unittest.TestCase):
     def test_date_is_reformatted_to_the_dashboard_format(self):
         for entrada in ("21/10/2026 09:12:45", "21/10/2026, 09:12", "2026-10-21 09:12:00", "21/10/2026   09:12"):
             with self.subTest(entrada=entrada):
-                self.assertEqual(decidir(chamado(habilitada_em=entrada)).linha["Q"], "21/10/2026 09:12")
+                self.assertEqual(decidir(chamado(habilitada_em=entrada)).linha["P"], "21/10/2026 09:12")
         self.assertEqual(formatar_data_abertura(regras.interpretar_data("05/01/2026 07:05")), "05/01/2026 07:05")
 
     def test_known_pending_numbers_are_never_included(self):
