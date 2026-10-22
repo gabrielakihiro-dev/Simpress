@@ -84,6 +84,7 @@ __pycache__/
 /data/state/historico_comparacoes.json
 /data/state/automacao_chrome.cancelar
 /data/state/sebrae_agendamento.json
+/data/state/sebrae_config.json
 /data/state/sebrae_chamados_estado.json
 /data/state/entrada_automatica/*
 !/data/state/entrada_automatica/README.md
