@@ -11,6 +11,8 @@ Rotinas:
   lote em ``data/state/entrada_chamados``.
 - ``inventarios``: UX (Meus equipamentos) + Endpoint Central (Todos os
   computadores), lote em ``data/state/entrada_automatica``.
+- ``usuarios``: confere no Endpoint Central as pendências de usuário logado
+  (``scripts/verificar_usuarios_endpoint.py``); também roda no fim de ``inventarios`` e ``ambas``.
 - ``ambas``: as duas, em sequência.
 - ``login``: só abre as abas para o usuário fazer login.
 
@@ -1268,7 +1270,26 @@ def rodar_rotina_inventarios(context: "BrowserContext") -> int:
         AUTOMATIC_INVENTORY_INBOX_DIR, inicio,
     )
     print("\n[SUCESSO] Rotina de inventários concluída." if codigo == 0 else "\n[FALHA] Rotina de inventários não foi concluída.")
+    if codigo == 0:
+        verificar_usuarios_apos_inventarios(context)
     return codigo
+
+
+def rodar_rotina_usuarios(context: "BrowserContext") -> int:
+    from scripts import verificar_usuarios_endpoint
+
+    print(f"\n=== VERIFICAR USUÁRIOS (início {agora_iso()}) ===", flush=True)
+    codigo = verificar_usuarios_endpoint.verificar_usuarios_endpoint(context, sys.modules[__name__])
+    print("\n[SUCESSO] Verificação de usuários concluída.", flush=True)
+    return codigo
+
+
+def verificar_usuarios_apos_inventarios(context: "BrowserContext") -> None:
+    """Fim de Inventários/Ambas: falha da verificação não desfaz a importação já confirmada."""
+    try:
+        rodar_rotina_usuarios(context)
+    except Exception as erro:
+        print(f"\n[AVISO] Verificação de usuários não concluída: {descrever_erro(erro)}", flush=True)
 
 
 def abrir_para_login(context: "BrowserContext") -> int:
@@ -1299,6 +1320,8 @@ def executar(rotina: str) -> int:
                     return com_aviso("OS", rodar_rotina_os, context)
                 if rotina == "inventarios":
                     return com_aviso("inventários", rodar_rotina_inventarios, context)
+                if rotina == "usuarios":
+                    return com_aviso("usuários", rodar_rotina_usuarios, context)
                 codigos = []
                 for nome, etapa in (("OS", rodar_rotina_os), ("inventários", rodar_rotina_inventarios)):
                     verificar_cancelamento()
@@ -1339,7 +1362,7 @@ def playwright_instalado() -> bool:
 
 def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
-    parser.add_argument("--rotina", choices=["os", "inventarios", "ambas", "login"], default="os")
+    parser.add_argument("--rotina", choices=["os", "inventarios", "usuarios", "ambas", "login"], default="os")
     parser.add_argument(
         "--cancelar", action="store_true", help="pede o cancelamento da rotina em andamento (o Chrome continua aberto) e sai"
     )

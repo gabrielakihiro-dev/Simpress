@@ -8,6 +8,7 @@
   const ROTINAS = Object.freeze({
     os: "Rotina de OS",
     inventarios: "Inventários",
+    usuarios: "Verificar usuários",
     ambas: "Ambas as rotinas",
     login: "Abrir Chrome para login",
   });
