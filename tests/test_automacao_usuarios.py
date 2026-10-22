@@ -38,61 +38,61 @@ class Elemento:
 
 
 class CampoFiltro(Elemento):
-    def __init__(self, pagina):
-        super().__init__(pagina)
+    """Caixa de filtro de uma coluna da barra de pesquisa."""
 
-    def count(self):
-        return 1 if self.pagina.campo_aberto else 0
-
-    def press(self, tecla):
-        if tecla == "Control+A":
-            self.pagina.selecionado = True
-        elif tecla == "Backspace":
-            self.pagina.buffer = "" if self.pagina.selecionado else self.pagina.buffer[:-1]
-            self.pagina.selecionado = False
-        elif tecla == "Enter" and not self.pagina.surda:
-            self.pagina.filtros[self.pagina.coluna_aberta] = self.pagina.buffer
-
-    def press_sequentially(self, texto, delay=0):
-        self.pagina.buffer += texto
-
-    def input_value(self):
-        return self.pagina.buffer
-
-
-class Lupa(Elemento):
     def __init__(self, pagina, indice):
         super().__init__(pagina)
         self.indice = indice
 
     def bounding_box(self):
         _, x0, x1 = COLUNAS[self.indice]
-        return {"x": x1 - 20, "y": 0, "width": 10, "height": 10}
-
-    def click(self):
-        p = self.pagina
-        p.campo_aberto, p.coluna_aberta = True, self.indice
-        p.buffer = p.filtros.get(self.indice, "")
-
-
-class Lupas:
-    def __init__(self, pagina):
-        self.pagina = pagina
-
-    def count(self):
-        return len(COLUNAS)
-
-    def nth(self, i):
-        return Lupa(self.pagina, i)
-
-
-class Teclado:
-    def __init__(self, pagina):
-        self.pagina = pagina
+        return {"x": x0 + 5, "y": 0, "width": x1 - x0 - 10, "height": 20}
 
     def press(self, tecla):
-        if tecla == "Escape":
-            self.pagina.campo_aberto = False
+        p = self.pagina
+        if tecla == "Control+A":
+            p.selecionado = True
+        elif tecla == "Backspace":
+            atual = p.buffers.get(self.indice, "")
+            p.buffers[self.indice] = "" if p.selecionado else atual[:-1]
+            p.selecionado = False
+        elif tecla == "Enter" and not p.surda:
+            p.filtros[self.indice] = p.buffers.get(self.indice, "")
+
+    def press_sequentially(self, texto, delay=0):
+        self.pagina.buffers[self.indice] = self.pagina.buffers.get(self.indice, "") + texto
+
+    def input_value(self):
+        return self.pagina.buffers.get(self.indice, "")
+
+
+class Caixas:
+    """``input.search-text-box``: sem caixas até a lupa da barra de ferramentas abrir a pesquisa."""
+
+    def __init__(self, pagina):
+        self.pagina = pagina
+
+    def filter(self, **_):
+        return self
+
+    @property
+    def first(self):
+        return Elemento(self.pagina, existe=self.pagina.barra_aberta)
+
+    def count(self):
+        return len(COLUNAS) if self.pagina.barra_aberta else 0
+
+    def nth(self, i):
+        return CampoFiltro(self.pagina, i)
+
+
+class LupaPesquisa(Elemento):
+    @property
+    def first(self):
+        return self
+
+    def click(self):
+        self.pagina.barra_aberta = True
 
 
 class PaginaEndpoint:
@@ -104,14 +104,13 @@ class PaginaEndpoint:
         self.computadores = computadores
         self.usuarios_sistema = usuarios_sistema or {}
         self.surda, self.aba_ausente = surda, aba_ausente
-        self.keyboard = Teclado(self)
         self.visitas, self.historico_abas = [], []
         self.url = automacao.ENDPOINT_URL
         self.reiniciar()
 
     def reiniciar(self):
-        self.filtros, self.buffer, self.selecionado = {}, "", False
-        self.campo_aberto, self.coluna_aberta = False, None
+        self.filtros, self.buffers, self.selecionado = {}, {}, False
+        self.barra_aberta = False
         self.detalhe, self.abas = None, []
 
     @property
@@ -125,9 +124,9 @@ class PaginaEndpoint:
 
     def locator(self, seletor):
         if "search-text-box" in seletor:
-            return CampoFiltro(self)
+            return Caixas(self)
         if "_searchButton" in seletor:
-            return Lupas(self)
+            return LupaPesquisa(self)
         href = seletor.split('href="')[1].rstrip('"]')
         return Elemento(self, lambda: self._abrir_detalhe(href))
 

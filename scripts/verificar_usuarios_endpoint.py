@@ -309,30 +309,39 @@ def restaurar_grade(page: "Page", automacao: ModuleType) -> None:
     preparar_grade(page, automacao)
 
 
-def _campo_filtro(page: "Page") -> "Locator":
-    return page.locator("input.search-text-box").filter(visible=True).first
+def _caixas_de_filtro(page: "Page") -> "Locator":
+    return page.locator("input.search-text-box").filter(visible=True)
 
 
-def _valor_do_campo(page: "Page") -> str:
-    campo = _campo_filtro(page)
-    return campo.input_value() if campo.count() else ""
+def _localizar_campo(page: "Page", cabecalho: dict) -> "Locator | None":
+    """Caixa de filtro sob o cabeçalho (a barra de pesquisa tem uma caixa por coluna, alinhada pela posição x)."""
+    caixas = _caixas_de_filtro(page)
+    for i in range(caixas.count()):
+        caixa = caixas.nth(i).bounding_box()
+        if caixa and cabecalho["x0"] <= caixa["x"] + caixa["width"] / 2 <= cabecalho["x1"]:
+            return caixas.nth(i)
+    return None
+
+
+def _valor_do_campo(page: "Page", cabecalho: dict) -> str:
+    campo = _localizar_campo(page, cabecalho)
+    return campo.input_value() if campo else ""
 
 
 def _abrir_campo_filtro(page: "Page", automacao: ModuleType, cabecalho: dict) -> "Locator":
-    """Abre o filtro da coluna pela lupa do cabeçalho (associada pela posição x)."""
-    if _campo_filtro(page).count():
-        # Um filtro de outra coluna aberto: Esc o fecha antes de abrir o desta.
-        page.keyboard.press("Escape")
-    lupas = page.locator("button[id$='_searchButton']")
-    for i in range(lupas.count()):
-        caixa = lupas.nth(i).bounding_box()
-        if caixa and cabecalho["x0"] <= caixa["x"] + caixa["width"] / 2 <= cabecalho["x1"]:
-            lupas.nth(i).click()
-            break
-    else:
-        raise automacao.RotinaErro(f"A lupa do filtro da coluna '{cabecalho['texto']}' não foi encontrada.")
-    campo = _campo_filtro(page)
-    automacao.aguardar_estado(campo, "visible", 15000)
+    """Abre a barra de pesquisa pela lupa da barra de ferramentas (única da tela) e devolve a caixa da coluna."""
+    if not _caixas_de_filtro(page).count():
+        page.locator("button[id$='_searchButton']").filter(visible=True).first.click()
+        automacao.aguardar_estado(_caixas_de_filtro(page).first, "visible", 15000)
+    campo = _localizar_campo(page, cabecalho)
+    if campo is None:
+        # Coluna fora da área visível: rola até o cabeçalho e relê a posição dele (a grade deslocou).
+        page.locator(".ember-table-header-cell").filter(has_text=cabecalho["texto"]).first.scroll_into_view_if_needed()
+        page.wait_for_timeout(300)
+        atual = next((c for c in ler_grade(page)["cabecalhos"] if c["texto"] == cabecalho["texto"]), None)
+        campo = _localizar_campo(page, atual) if atual else None
+    if campo is None:
+        raise automacao.RotinaErro(f"A caixa de filtro da coluna '{cabecalho['texto']}' não foi encontrada.")
     return campo
 
 
@@ -378,9 +387,10 @@ def aplicar_filtro(page: "Page", automacao: ModuleType, coluna: str, valor: str)
         _digitar(campo, valor)
 
         def confirmada(g: dict) -> bool:
-            if _valor_do_campo(page) != valor:
-                return False
+            # A grade rola na horizontal ao focar uma coluna fora da tela: posições relidas a cada leitura.
             cab = achar_cabecalho(g, coluna)
+            if cab is None or _valor_do_campo(page, cab) != valor:
+                return False
             if g["linhas"]:
                 return all(alvo in normalizar(valor_da_coluna(linha, cab)) for linha in g["linhas"])
             return g["vazia"]
@@ -401,7 +411,7 @@ def limpar_filtro(page: "Page", automacao: ModuleType, coluna: str) -> None:
         raise automacao.RotinaErro(f"A coluna '{coluna}' não está visível para limpar o filtro.")
     campo = _abrir_campo_filtro(page, automacao, cabecalho)
     _digitar(campo, "")
-    if _aguardar_grade_estavel(page, automacao, lambda g: _valor_do_campo(page) == "" and bool(g["linhas"]), CONFIRMACAO_FILTRO_S) is None:
+    if _aguardar_grade_estavel(page, automacao, lambda g: bool(g["linhas"]) and (achar_cabecalho(g, coluna) is not None) and _valor_do_campo(page, achar_cabecalho(g, coluna)) == "", CONFIRMACAO_FILTRO_S) is None:
         raise automacao.RotinaErro(f"A grade do Endpoint não confirmou a limpeza do filtro '{coluna}'.")
 
 
