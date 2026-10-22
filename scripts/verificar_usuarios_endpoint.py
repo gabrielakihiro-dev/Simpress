@@ -274,7 +274,7 @@ def montar_anotacao(atual: str, nova: str) -> str:
 def anotar(automacao: ModuleType, pendencia: dict, texto: str) -> bool:
     achado = localizar_linha_anotacao(automacao, pendencia["id"])
     if achado is None:
-        automacao.log(ORIGEM, f"[AVISO] Linha de anotação não encontrada para {pendencia['serie']}; anotação não gravada.")
+        automacao.log(ORIGEM, f"[AVISO] Anotação de {pendencia['serie']} não gravada: nenhum histórico guardado tem a linha desta pendência.")
         return False
     linha = achado["linha"]
     corpo: dict[str, Any] = {"anotacao": montar_anotacao(str(linha.get("anotacao") or ""), texto)}

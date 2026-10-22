@@ -442,6 +442,20 @@ class SistemaTest(AmbienteBase):
             achado = rotina.localizar_linha_anotacao(automacao, "p1")
         self.assertEqual((achado["evento_id"], achado["linha"]["anotacao_id"]), ("ev25", "recente"))
 
+    def test_anotacao_sem_linha_no_historico_avisa_e_nao_grava(self):
+        def api(_automacao, metodo, caminho, corpo=None):
+            self.chamadas.append((metodo, caminho, corpo))
+            if caminho == "/api/historico-comparacoes":
+                return {"eventos": [{"id": "ev1"}]}
+            return {"evento": {"comparacao": {"mudancas_usuarios": []}}}
+
+        with patch.object(rotina, "chamar_api", api):
+            gravou = rotina.anotar(automacao, {"id": "p1", "serie": "BRJ0000TST"}, "texto")
+        self.assertFalse(gravou)
+        self.assertFalse([c for c in self.chamadas if c[0] == "PUT"])
+        avisos = [c.args[1] for c in automacao.log.call_args_list if "[AVISO]" in c.args[1]]
+        self.assertTrue(any("BRJ0000TST" in a and "não gravada" in a for a in avisos))
+
     def test_rotina_deixa_a_aba_filtrada_pelo_hostname_da_ultima(self):
         pagina = PaginaEndpoint([computador("HOST-1", "BRJ0000TST", "carla")])
         pagina.close = Mock()
