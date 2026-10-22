@@ -170,6 +170,9 @@ class PaginaEndpoint:
                 "cabecalhos": [{"texto": t, "x0": x0, "x1": x1} for t, x0, x1 in self.colunas],
                 "linhas": linhas, "carregando": False, "vazia": not linhas,
             }
+        if js == rotina.JS_LER_ULTIMO_LOGON:
+            ultimo = self.ultimos_logon.get(self.detalhe["nome"], "") if self.detalhe else ""
+            return {"presente": bool(ultimo), "ultimo": ultimo, "carregando": False}
         if self.detalhe and self.abas[-2:] == ["Sistema", "Usuários"]:
             nomes = self.usuarios_sistema.get(self.detalhe["nome"], [])
             ultimo = self.ultimos_logon.get(self.detalhe["nome"], "")
@@ -188,8 +191,7 @@ def pendencia(tipo="usuario_ausente", serie="BRJ0000TST", atual="carla", endpoin
 
 class AmbienteBase(unittest.TestCase):
     def setUp(self):
-        for alvo in ("sleep",):
-            patcher = patch.object(rotina.time, alvo, lambda *_: None)
+        for patcher in (patch.object(rotina.time, "sleep", lambda *_: None), patch.object(rotina, "ESPERA_ULTIMO_LOGON_S", 0.02)):
             patcher.start()
             self.addCleanup(patcher.stop)
         for nome in ("log", "registrar_erro", "selecionar_todos_computadores", "confirmar_modo_todos"):
@@ -202,8 +204,9 @@ class DecisaoTest(unittest.TestCase):
     def test_tabela_de_decisao_usuario_ausente(self):
         p = pendencia("usuario_ausente", atual="carla")
         self.assertEqual(rotina.avaliar_decisao(p, True, "CARLA").decisao, "manter")
-        self.assertIsNone(rotina.avaliar_decisao(p, True, "davi").decisao)
-        sem = rotina.avaliar_decisao(p, True, "", "Sistema", True)
+        diferente = rotina.avaliar_decisao(p, True, "davi")
+        self.assertEqual((diferente.decisao, diferente.aplicar_usuario), ("remover", "davi"))
+        sem = rotina.avaliar_decisao(p, True, "", "Sistema")
         self.assertEqual((sem.decisao, bool(sem.aviso)), ("remover", True))
         ausente = rotina.avaliar_decisao(p, False, "")
         self.assertEqual((ausente.decisao, bool(ausente.aviso)), ("remover", True))
@@ -211,19 +214,18 @@ class DecisaoTest(unittest.TestCase):
     def test_tabela_de_decisao_substituicao_manual(self):
         p = pendencia("substituicao_manual", atual="carla", endpoint="davi")
         self.assertEqual(rotina.avaliar_decisao(p, True, "DOM\\davi").decisao, "permitir")
-        self.assertIsNone(rotina.avaliar_decisao(p, True, "carla").decisao)
-        sem = rotina.avaliar_decisao(p, True, "", "Sistema", True)
+        igual_ao_manual = rotina.avaliar_decisao(p, True, "carla")
+        self.assertEqual((igual_ao_manual.decisao, igual_ao_manual.aplicar_usuario), ("recusar", ""))
+        outro = rotina.avaliar_decisao(p, True, "bia")
+        self.assertEqual((outro.decisao, outro.aplicar_usuario), ("recusar", "bia"))
+        sem = rotina.avaliar_decisao(p, True, "", "Sistema")
         self.assertEqual((sem.decisao, bool(sem.aviso)), ("recusar", True))
         self.assertEqual(rotina.avaliar_decisao(p, False, "").decisao, "recusar")
 
-    def test_sem_consultar_sistema_fica_pendente_e_anota(self):
-        r = rotina.avaliar_decisao(pendencia(), True, "", sistema_consultado=False)
-        self.assertIsNone(r.decisao)
-        self.assertIn("Sistema > Usuários não consultado", r.anotacao)
-
     def test_escolha_de_usuarios(self):
-        self.assertEqual(rotina.escolher_usuario_lista("NA, Administrador, ana, bia"), "ana")
-        self.assertEqual(rotina.escolher_usuario_lista("--"), "")
+        self.assertEqual(rotina.limpar_usuario_logon("MRamos Horário da última inicialização : out 22, 2026 12:21 PM"), "MRamos")
+        self.assertEqual(rotina.limpar_usuario_logon("Horário da última inicialização : out 22"), "")
+        self.assertEqual(rotina.escolher_usuario_sistema(["Horário da última inicialização : out 22", "ana"]), "ana")
         self.assertEqual(rotina.escolher_usuario_sistema(["", "root", "Convidado", "WDAGUtilityAccount", "davi", "ana"]), "davi")
         self.assertEqual(rotina.escolher_usuario_sistema(["Administrador", "DefaultAccount", "N/A"]), "")
 
@@ -334,13 +336,43 @@ class SistemaTest(AmbienteBase):
         )
         rotina.processar_pendencia(pagina, automacao, pendencia(serie="BRJ5512FFS", atual="MRamos"))
         self.assertEqual(self._decisoes(), ["manter"])
-        self.assertIn("Sistema confirma o usuário MRamos", self._anotacoes()[0])
+        self.assertEqual(pagina.abas_clicadas, [])
+        self.assertIn("Último logon confirma o usuário MRamos", self._anotacoes()[0])
 
-    def test_outro_usuario_no_sistema_deixa_pendente_so_anota(self):
-        pagina = PaginaEndpoint([computador("HOST-1", "BRJ0000TST", "--")], {"HOST-1": ["davi"]})
+    def test_ultimo_logon_com_horario_colado_ao_nome_confirma(self):
+        pagina = PaginaEndpoint(
+            [computador("HOST-1", "BRJ5512FFS", "")],
+            ultimos_logon={"HOST-1": "MRamos Horário da última inicialização : out 22, 2026 12:21 PM"},
+        )
+        rotina.processar_pendencia(pagina, automacao, pendencia(serie="BRJ5512FFS", atual="MRamos"))
+        self.assertEqual(self._decisoes(), ["manter"])
+
+    def test_ultimo_logon_diferente_aplica_o_novo_usuario(self):
+        pagina = PaginaEndpoint([computador("HOST-1", "BRJ0000TST", "")], ultimos_logon={"HOST-1": "davi"})
         rotina.processar_pendencia(pagina, automacao, pendencia(atual="carla"))
-        self.assertEqual(self._decisoes(), [])
+        self.assertEqual(self._decisoes(), ["remover"])
+        self.assertIn(("POST", "/api/equipamento/atualizar-usuario", {"serial": "BRJ0000TST", "usuario": "davi"}), self.chamadas)
         self.assertIn("outro usuário (davi)", self._anotacoes()[0])
+
+    def test_substituicao_manual_com_ultimo_logon_novo_recusa_e_grava(self):
+        pagina = PaginaEndpoint([computador("HOST-1", "BRJ0000TST", "")], ultimos_logon={"HOST-1": "bia"})
+        rotina.processar_pendencia(pagina, automacao, pendencia("substituicao_manual", atual="carla", endpoint="davi"))
+        self.assertEqual(self._decisoes(), ["recusar"])
+        self.assertIn(("POST", "/api/equipamento/atualizar-usuario", {"serial": "BRJ0000TST", "usuario": "bia"}), self.chamadas)
+
+    def test_falha_ao_gravar_o_novo_usuario_vai_para_a_anotacao(self):
+        pagina = PaginaEndpoint([computador("HOST-1", "BRJ0000TST", "")], ultimos_logon={"HOST-1": "davi"})
+        with patch.object(rotina, "aplicar_usuario", return_value=False):
+            rotina.processar_pendencia(pagina, automacao, pendencia(atual="carla"))
+        self.assertIn("Não foi possível gravar o novo usuário", self._anotacoes()[0])
+
+    def test_ultimo_logon_tecnico_cai_para_sistema(self):
+        pagina = PaginaEndpoint(
+            [computador("HOST-1", "BRJ0000TST", "")], {"HOST-1": ["carla"]}, ultimos_logon={"HOST-1": "CodexSandboxOffline"},
+        )
+        rotina.processar_pendencia(pagina, automacao, pendencia(atual="carla"))
+        self.assertEqual(self._decisoes(), ["manter"])
+        self.assertEqual(pagina.abas_clicadas, ["Sistema", "Usuários"])
 
     def test_so_contas_internas_remove_com_aviso(self):
         pagina = PaginaEndpoint(
@@ -356,11 +388,11 @@ class SistemaTest(AmbienteBase):
         rotina.processar_pendencia(pagina, automacao, pendencia("substituicao_manual", "carla", "davi"))
         self.assertEqual(self._decisoes(), ["recusar"])
 
-    def test_usuario_logado_da_grade_nao_abre_detalhe(self):
-        pagina = PaginaEndpoint([computador("HOST-1", "BRJ0000TST", "Administrador, carla")])
+    def test_usuarios_logados_da_grade_nao_decide(self):
+        pagina = PaginaEndpoint([computador("HOST-1", "BRJ0000TST", "carla")], {"HOST-1": ["davi"]})
         rotina.processar_pendencia(pagina, automacao, pendencia(atual="carla"))
-        self.assertEqual(self._decisoes(), ["manter"])
-        self.assertEqual(pagina.abas_clicadas, [])
+        self.assertEqual(pagina.abas_clicadas, ["Sistema", "Usuários"])
+        self.assertEqual(self._decisoes(), ["remover"])
 
     def test_computador_nao_encontrado_remove_com_aviso(self):
         pagina = PaginaEndpoint([computador("OUTRO", "ZZZ")])
@@ -378,7 +410,8 @@ class SistemaTest(AmbienteBase):
     def test_tabela_que_nao_carrega_nao_decide(self):
         pagina = PaginaEndpoint([computador("HOST-1", "BRJ0000TST", "")])
         pagina.evaluate = lambda js, *a, _o=pagina.evaluate: (
-            {"cabecalho": "", "nomes": [], "carregando": True, "vazia": False} if js != rotina.JS_LER_GRADE else _o(js, *a)
+            _o(js, *a) if js in (rotina.JS_LER_GRADE, rotina.JS_LER_ULTIMO_LOGON)
+            else {"cabecalho": "", "nomes": [], "carregando": True, "vazia": False}
         )
         with patch.object(automacao, "CARREGAMENTO_MS", 50), self.assertRaises(automacao.RotinaErro):
             rotina.processar_pendencia(pagina, automacao, pendencia())
@@ -408,6 +441,20 @@ class SistemaTest(AmbienteBase):
         with patch.object(rotina, "chamar_api", api):
             achado = rotina.localizar_linha_anotacao(automacao, "p1")
         self.assertEqual((achado["evento_id"], achado["linha"]["anotacao_id"]), ("ev25", "recente"))
+
+    def test_anotacao_sem_linha_no_historico_avisa_e_nao_grava(self):
+        def api(_automacao, metodo, caminho, corpo=None):
+            self.chamadas.append((metodo, caminho, corpo))
+            if caminho == "/api/historico-comparacoes":
+                return {"eventos": [{"id": "ev1"}]}
+            return {"evento": {"comparacao": {"mudancas_usuarios": []}}}
+
+        with patch.object(rotina, "chamar_api", api):
+            gravou = rotina.anotar(automacao, {"id": "p1", "serie": "BRJ0000TST"}, "texto")
+        self.assertFalse(gravou)
+        self.assertFalse([c for c in self.chamadas if c[0] == "PUT"])
+        avisos = [c.args[1] for c in automacao.log.call_args_list if "[AVISO]" in c.args[1]]
+        self.assertTrue(any("BRJ0000TST" in a and "não gravada" in a for a in avisos))
 
     def test_rotina_deixa_a_aba_filtrada_pelo_hostname_da_ultima(self):
         pagina = PaginaEndpoint([computador("HOST-1", "BRJ0000TST", "carla")])
