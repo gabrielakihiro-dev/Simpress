@@ -7,6 +7,8 @@ from scripts import automacao_rotinas_chrome as automacao
 from scripts import verificar_usuarios_endpoint as rotina
 
 COLUNAS = (("Nome do computador", 0, 100), ("Rótulo de serviço/Número de série", 100, 200), ("Usuários logados", 200, 300))
+# Ao abrir a barra de pesquisa, a grade reorganiza as colunas: série e usuários trocam de lugar.
+COLUNAS_DESLOCADAS = (("Nome do computador", 0, 100), ("Rótulo de serviço/Número de série", 200, 300), ("Usuários logados", 100, 200))
 
 
 class Elemento:
@@ -45,7 +47,7 @@ class CampoFiltro(Elemento):
         self.indice = indice
 
     def bounding_box(self):
-        _, x0, x1 = COLUNAS[self.indice]
+        _, x0, x1 = self.pagina.colunas[self.indice]
         return {"x": x0 + 5, "y": 0, "width": x1 - x0 - 10, "height": 20}
 
     def press(self, tecla):
@@ -93,17 +95,20 @@ class LupaPesquisa(Elemento):
 
     def click(self):
         self.pagina.barra_aberta = True
+        if self.pagina.deslocar_ao_abrir:
+            self.pagina.colunas = COLUNAS_DESLOCADAS
 
 
 class PaginaEndpoint:
     """Endpoint falso: grade filtrável por coluna, detalhe do computador e Sistema > Usuários.
 
-    ``surda`` simula o Enter que não aplica o filtro (valor não registrado pelo componente)."""
+    ``surda`` simula o Enter que não aplica o filtro (valor não registrado pelo componente).
+    ``deslocar_ao_abrir`` simula a grade que muda de layout quando a barra de pesquisa abre."""
 
-    def __init__(self, computadores, usuarios_sistema=None, surda=False, aba_ausente=None):
+    def __init__(self, computadores, usuarios_sistema=None, surda=False, aba_ausente=None, deslocar_ao_abrir=False):
         self.computadores = computadores
         self.usuarios_sistema = usuarios_sistema or {}
-        self.surda, self.aba_ausente = surda, aba_ausente
+        self.surda, self.aba_ausente, self.deslocar_ao_abrir = surda, aba_ausente, deslocar_ao_abrir
         self.visitas, self.historico_abas = [], []
         self.url = automacao.ENDPOINT_URL
         self.reiniciar()
@@ -111,6 +116,7 @@ class PaginaEndpoint:
     def reiniciar(self):
         self.filtros, self.buffers, self.selecionado = {}, {}, False
         self.barra_aberta = False
+        self.colunas = COLUNAS
         self.detalhe, self.abas = None, []
 
     @property
@@ -150,7 +156,7 @@ class PaginaEndpoint:
         if js == rotina.JS_LER_GRADE:
             linhas = [
                 [
-                    {"texto": c[campo], "x0": COLUNAS[i][1], "x1": COLUNAS[i][2], "href": c["href"] if i == 0 else ""}
+                    {"texto": c[campo], "x0": self.colunas[i][1], "x1": self.colunas[i][2], "href": c["href"] if i == 0 else ""}
                     for i, campo in enumerate(("nome", "serie", "usuarios"))
                 ]
                 for c in self._visiveis()
@@ -158,7 +164,7 @@ class PaginaEndpoint:
             if self.detalhe:
                 return {"cabecalhos": [], "linhas": [], "carregando": False, "vazia": False}
             return {
-                "cabecalhos": [{"texto": t, "x0": x0, "x1": x1} for t, x0, x1 in COLUNAS],
+                "cabecalhos": [{"texto": t, "x0": x0, "x1": x1} for t, x0, x1 in self.colunas],
                 "linhas": linhas, "carregando": False, "vazia": not linhas,
             }
         if self.detalhe and self.abas[-2:] == ["Sistema", "Usuários"]:
@@ -228,6 +234,19 @@ class GradeTest(AmbienteBase):
         pagina = PaginaEndpoint([computador("H1", "AAA1"), computador("H2", "BBB2")])
         grade = rotina.aplicar_filtro(pagina, automacao, "numero de serie", "AAA1")
         self.assertEqual([l[0]["texto"] for l in grade["linhas"]], ["H1"])
+
+    def test_valor_nao_vai_para_a_coluna_vizinha_quando_a_barra_desloca_a_grade(self):
+        pagina = PaginaEndpoint([computador("H1", "AAA1", "ana"), computador("H2", "BBB2", "ana")], deslocar_ao_abrir=True)
+        grade = rotina.aplicar_filtro(pagina, automacao, "numero de serie", "AAA1")
+        self.assertEqual(pagina.filtros, {1: "AAA1"})
+        self.assertEqual([l[0]["texto"] for l in grade["linhas"]], ["H1"])
+
+    def test_tentativa_sem_confirmacao_esvazia_as_caixas(self):
+        pagina = PaginaEndpoint([computador("H1", "AAA1"), computador("H2", "BBB2")], surda=True)
+        with patch.object(rotina, "CONFIRMACAO_FILTRO_S", 0.05):
+            with self.assertRaises(automacao.RotinaErro):
+                rotina.aplicar_filtro(pagina, automacao, "numero de serie", "AAA1")
+        self.assertFalse(any(pagina.buffers.values()))
 
     def test_grade_vazia_confirmada(self):
         pagina = PaginaEndpoint([computador("H1", "AAA1")])
