@@ -800,7 +800,14 @@ def _vanished_hostname_stale_items(
         verified_at = _parse_verification_datetime(_upload_verification_value(row), as_of.tzinfo)
         if verified_at is None or verified_at > stale_threshold:
             continue
-        candidates = details_aliases.get(serial_key) or details_aliases.get(f"S{serial_key}") or []
+        candidates = list(details_aliases.get(serial_key) or [])
+        # Equivalência da série com `S` inicial vale só para MacBook (hostname PRMAC na Simpress);
+        # se a série sem `S` também existir na Simpress, a correspondência é ambígua.
+        mac_candidates = [
+            hostname for hostname in details_aliases.get(f"S{serial_key}", [])
+            if normalize_reference_value(hostname).startswith("PRMAC")
+        ]
+        candidates.extend(mac_candidates)
         previous_hostname = previous_hostnames.get(serial_key, "")
         if previous_hostname:
             known_hostname, origin = previous_hostname, "endpoint_anterior"
@@ -826,23 +833,20 @@ def _vanished_hostname_stale_items(
     return items
 
 
-def compare_uploaded_workbooks(
+# Nó da comparação: (fonte, índice do registro naquela fonte).
+_ComparisonNode = Tuple[str, int]
+# Entidade comparada: (item exibido, registros por fonte, situação por fonte, local previsto).
+_ComparisonEntity = Tuple[
+    Dict[str, Any], Dict[str, List[Dict[str, Any]]], Dict[str, str], Optional[str]
+]
+
+
+def _comparison_records_by_source(
     endpoint_table: Dict[str, Any],
     details_table: Dict[str, Any],
-    uploaded_names: Dict[str, str],
-    as_of: Optional[datetime] = None,
-    removed_endpoint_hostnames: FrozenSet[Tuple[str, str]] = frozenset(),
-    previous_endpoint_hostnames: Optional[Dict[str, str]] = None,
-) -> Dict[str, Any]:
-    """Compares Endpoint and EquipamentosDetalhes without silently selecting duplicate matches.
-
-    ``previous_endpoint_hostnames`` maps normalized serials to the unique hostnames of the
-    previous Endpoint file; it only labels Endpoint rows whose hostname disappeared.
-
-    ``removed_endpoint_hostnames`` lists normalized (serial, hostname) pairs the user
-    discarded from the Endpoint duplicates; those rows are left out of the comparison
-    (the spreadsheet itself is not changed) but still count in ``total_endpoint``.
-    """
+    removed_endpoint_hostnames: FrozenSet[Tuple[str, str]],
+) -> Tuple[Dict[str, List[Dict[str, Any]]], int]:
+    """Reads both sources; Endpoint rows the user discarded leave the comparison but stay in the total."""
     source_tables = {
         "endpoint": endpoint_table,
         "detalhes": details_table,
@@ -858,11 +862,18 @@ def compare_uploaded_workbooks(
             if (record["serial_key"], normalize_reference_value(record["computador"]))
             not in removed_endpoint_hostnames
         ]
+    return source_records, total_endpoint
+
+
+def _comparison_reference_time(as_of: Optional[datetime]) -> datetime:
     as_of = as_of or datetime.now().astimezone()
     if as_of.tzinfo is None:
         as_of = as_of.astimezone()
-    stale_threshold = as_of - timedelta(days=7)
+    return as_of
 
+
+def _align_macbook_details_serials(source_records: Dict[str, List[Dict[str, Any]]]) -> None:
+    """Matches a Simpress serial with a leading `S` to the MacBook (PRMAC) serial in the Endpoint."""
     endpoint_mac_serials = {
         record["serial_key"]
         for record in source_records["endpoint"]
@@ -874,31 +885,48 @@ def compare_uploaded_workbooks(
         if serial_key.startswith("S") and serial_key[1:] in endpoint_mac_serials:
             record["serial_key"] = serial_key[1:]
 
-    nodes: Dict[tuple, Dict[str, Any]] = {}
-    parent: Dict[tuple, tuple] = {}
-    rank: Dict[tuple, int] = {}
-    component_serials: Dict[tuple, set] = {}
+
+def _comparison_nodes(
+    source_records: Dict[str, List[Dict[str, Any]]],
+) -> Dict[_ComparisonNode, Dict[str, Any]]:
+    nodes: Dict[_ComparisonNode, Dict[str, Any]] = {}
     for role in COMPARISON_SOURCE_LABELS:
         for index, record in enumerate(source_records[role]):
             node = (role, index)
             record["node"] = node
             nodes[node] = record
-            parent[node] = node
-            rank[node] = 0
-            component_serials[node] = {record["serial_key"]} if record["serial_key"] else set()
+    return nodes
 
-    def find(node: tuple) -> tuple:
-        if parent[node] != node:
-            parent[node] = find(parent[node])
-        return parent[node]
 
-    def union(left: tuple, right: tuple, allow_conflicting_serials: bool = False) -> bool:
-        root_left = find(left)
-        root_right = find(right)
+class _SerialUnionFind:
+    """Groups comparison nodes; by default, components with different serials are never joined."""
+
+    def __init__(self, nodes: Dict[_ComparisonNode, Dict[str, Any]]) -> None:
+        self.parent: Dict[_ComparisonNode, _ComparisonNode] = {}
+        self.rank: Dict[_ComparisonNode, int] = {}
+        self.component_serials: Dict[_ComparisonNode, set] = {}
+        for node, record in nodes.items():
+            self.parent[node] = node
+            self.rank[node] = 0
+            self.component_serials[node] = {record["serial_key"]} if record["serial_key"] else set()
+
+    def find(self, node: _ComparisonNode) -> _ComparisonNode:
+        if self.parent[node] != node:
+            self.parent[node] = self.find(self.parent[node])
+        return self.parent[node]
+
+    def union(
+        self,
+        left: _ComparisonNode,
+        right: _ComparisonNode,
+        allow_conflicting_serials: bool = False,
+    ) -> bool:
+        root_left = self.find(left)
+        root_right = self.find(right)
         if root_left == root_right:
             return True
-        serials_left = component_serials[root_left]
-        serials_right = component_serials[root_right]
+        serials_left = self.component_serials[root_left]
+        serials_right = self.component_serials[root_right]
         if (
             not allow_conflicting_serials
             and serials_left
@@ -906,19 +934,24 @@ def compare_uploaded_workbooks(
             and serials_left != serials_right
         ):
             return False
-        if rank[root_left] < rank[root_right]:
+        if self.rank[root_left] < self.rank[root_right]:
             root_left, root_right = root_right, root_left
-        parent[root_right] = root_left
-        component_serials[root_left] = serials_left | serials_right
-        component_serials.pop(root_right, None)
-        if rank[root_left] == rank[root_right]:
-            rank[root_left] += 1
+        self.parent[root_right] = root_left
+        self.component_serials[root_left] = serials_left | serials_right
+        self.component_serials.pop(root_right, None)
+        if self.rank[root_left] == self.rank[root_right]:
+            self.rank[root_left] += 1
         return True
 
-    issues: List[Dict[str, Any]] = []
-    issue_keys = set()
 
-    def add_issue(issue: Dict[str, Any]) -> None:
+class _ComparisonIssues:
+    """Collects ambiguity issues in order, ignoring repeats of the same type, key and sources."""
+
+    def __init__(self) -> None:
+        self.items: List[Dict[str, Any]] = []
+        self._keys: set = set()
+
+    def add(self, issue: Dict[str, Any]) -> None:
         key = (
             issue.get("tipo"),
             normalize_reference_value(issue.get("chave")),
@@ -927,49 +960,75 @@ def compare_uploaded_workbooks(
                 for source in issue.get("fontes", [])
             ),
         )
-        if key not in issue_keys:
-            issue_keys.add(key)
-            issues.append(issue)
+        if key not in self._keys:
+            self._keys.add(key)
+            self.items.append(issue)
 
-    serial_buckets: Dict[str, List[tuple]] = {}
-    alias_buckets: Dict[str, List[tuple]] = {}
+
+def _nodes_by_key(
+    nodes: Dict[_ComparisonNode, Dict[str, Any]],
+    field: str,
+) -> Dict[str, List[_ComparisonNode]]:
+    """Indexes nodes by a normalized key (``serial_key`` or ``alias_key``), skipping blanks."""
+    buckets: Dict[str, List[_ComparisonNode]] = {}
     for node, record in nodes.items():
-        if record["serial_key"]:
-            serial_buckets.setdefault(record["serial_key"], []).append(node)
-        if record["alias_key"]:
-            alias_buckets.setdefault(record["alias_key"], []).append(node)
+        if record[field]:
+            buckets.setdefault(record[field], []).append(node)
+    return buckets
 
+
+def _nodes_by_source(bucket: List[_ComparisonNode]) -> Dict[str, List[_ComparisonNode]]:
+    by_source: Dict[str, List[_ComparisonNode]] = {}
+    for node in bucket:
+        by_source.setdefault(node[0], []).append(node)
+    return by_source
+
+
+def _duplicate_sources(by_source: Dict[str, List[_ComparisonNode]]) -> List[Dict[str, Any]]:
+    return [
+        {"fonte": COMPARISON_AMBIGUITY_SOURCE_LABELS[role], "quantidade": len(source_nodes)}
+        for role, source_nodes in by_source.items()
+        if len(source_nodes) > 1
+    ]
+
+
+def _link_serial_buckets(
+    serial_buckets: Dict[str, List[_ComparisonNode]],
+    nodes: Dict[_ComparisonNode, Dict[str, Any]],
+    union_find: _SerialUnionFind,
+    issues: _ComparisonIssues,
+) -> None:
+    """Joins every row with the same serial; duplicates inside one source become an issue."""
     for serial_key, bucket in serial_buckets.items():
-        by_source: Dict[str, List[tuple]] = {}
-        for node in bucket:
-            by_source.setdefault(node[0], []).append(node)
-        duplicate_sources = [
-            {"fonte": COMPARISON_AMBIGUITY_SOURCE_LABELS[role], "quantidade": len(source_nodes)}
-            for role, source_nodes in by_source.items()
-            if len(source_nodes) > 1
-        ]
+        duplicate_sources = _duplicate_sources(_nodes_by_source(bucket))
         if duplicate_sources:
-            add_issue({
+            issues.add({
                 "tipo": "Número de série duplicado",
                 "chave": nodes[bucket[0]]["serie"] or serial_key,
                 "fontes": duplicate_sources,
                 "mensagem": "A série aparece em mais de uma linha na mesma fonte; esses registros foram agrupados como ambíguos.",
             })
         for node in bucket[1:]:
-            union(bucket[0], node)
+            union_find.union(bucket[0], node)
 
-    ambiguous_roles_by_node: Dict[tuple, set] = {node: set() for node in nodes}
+
+def _link_alias_buckets(
+    alias_buckets: Dict[str, List[_ComparisonNode]],
+    nodes: Dict[_ComparisonNode, Dict[str, Any]],
+    union_find: _SerialUnionFind,
+    issues: _ComparisonIssues,
+) -> Dict[_ComparisonNode, set]:
+    """Joins rows of different sources by hostname/Apelido only when the match is unique.
+
+    Returns, for each node, the sources in which a non-unique hostname/Apelido alternative
+    makes its correspondence ambiguous.
+    """
+    ambiguous_roles_by_node: Dict[_ComparisonNode, set] = {node: set() for node in nodes}
     for alias_key, bucket in alias_buckets.items():
-        by_source = {}
-        for node in bucket:
-            by_source.setdefault(node[0], []).append(node)
-        duplicate_sources = [
-            {"fonte": COMPARISON_AMBIGUITY_SOURCE_LABELS[role], "quantidade": len(source_nodes)}
-            for role, source_nodes in by_source.items()
-            if len(source_nodes) > 1
-        ]
+        by_source = _nodes_by_source(bucket)
+        duplicate_sources = _duplicate_sources(by_source)
         if duplicate_sources:
-            add_issue({
+            issues.add({
                 "tipo": "Hostname/Apelido duplicado",
                 "chave": nodes[bucket[0]]["computador"] or alias_key,
                 "fontes": duplicate_sources,
@@ -982,127 +1041,280 @@ def compare_uploaded_workbooks(
                 left_nodes = by_source[left_role]
                 right_nodes = by_source[right_role]
                 if len(left_nodes) != 1 or len(right_nodes) != 1:
-                    serial_counts_by_role: Dict[str, Dict[str, int]] = {}
-                    serial_examples_by_role: Dict[str, Dict[str, str]] = {}
-                    blank_counts_by_role: Dict[str, int] = {}
-                    for role, role_nodes in ((left_role, left_nodes), (right_role, right_nodes)):
-                        serial_counts: Dict[str, int] = {}
-                        serial_examples: Dict[str, str] = {}
-                        blank_count = 0
-                        for node in role_nodes:
-                            record = nodes[node]
-                            serial_key = record["serial_key"]
-                            if not serial_key:
-                                blank_count += 1
-                                continue
-                            serial_counts[serial_key] = serial_counts.get(serial_key, 0) + 1
-                            serial_display = str(record["serie"] or "").strip()
-                            previous_example = serial_examples.get(serial_key)
-                            if previous_example is None or (serial_display.casefold(), serial_display) < (
-                                previous_example.casefold(), previous_example
-                            ):
-                                serial_examples[serial_key] = serial_display
-                        serial_counts_by_role[role] = serial_counts
-                        serial_examples_by_role[role] = serial_examples
-                        blank_counts_by_role[role] = blank_count
-
-                    left_serial_counts = serial_counts_by_role[left_role]
-                    right_serial_counts = serial_counts_by_role[right_role]
-                    divergent_pair_count = (
-                        sum(left_serial_counts.values()) * sum(right_serial_counts.values())
-                        - sum(
-                            left_count * right_serial_counts.get(serial_key, 0)
-                            for serial_key, left_count in left_serial_counts.items()
-                        )
+                    _flag_non_unique_alias_pair(
+                        alias_key, by_source, left_role, right_role, nodes, issues, ambiguous_roles_by_node
                     )
-                    if divergent_pair_count:
-                        sources = []
-                        example_labels = []
-                        for role in (left_role, right_role):
-                            examples = [
-                                serial_examples_by_role[role][serial_key]
-                                for serial_key in sorted(serial_examples_by_role[role])[:3]
-                            ]
-                            sources.append({
-                                "fonte": COMPARISON_AMBIGUITY_SOURCE_LABELS[role],
-                                "quantidade": len(by_source[role]),
-                            })
-                            if examples:
-                                example_labels.append(
-                                    f"{COMPARISON_AMBIGUITY_SOURCE_LABELS[role]} [{', '.join(examples)}]"
-                                )
-                        examples_text = "; exemplos: " + "; ".join(example_labels) if example_labels else ""
-                        add_issue({
-                            "tipo": "Série divergente para o mesmo hostname/Apelido",
-                            "chave": nodes[left_nodes[0]]["computador"] or alias_key,
-                            "fontes": sources,
-                            "mensagem": (
-                                "As séries prevalecem sobre o hostname/Apelido; "
-                                f"{divergent_pair_count} combinações têm séries divergentes. "
-                                f"Nenhum registro foi unido{examples_text}."
-                            ),
-                        })
-
-                    if blank_counts_by_role[left_role]:
-                        for left_node in left_nodes:
-                            if not nodes[left_node]["serial_key"]:
-                                ambiguous_roles_by_node[left_node].add(right_role)
-                        for right_node in right_nodes:
-                            ambiguous_roles_by_node[right_node].add(left_role)
-                    if blank_counts_by_role[right_role]:
-                        for right_node in right_nodes:
-                            if not nodes[right_node]["serial_key"]:
-                                ambiguous_roles_by_node[right_node].add(left_role)
-                        for left_node in left_nodes:
-                            ambiguous_roles_by_node[left_node].add(right_role)
                     continue
+                _link_unique_alias_pair(
+                    alias_key,
+                    (left_role, left_nodes[0]),
+                    (right_role, right_nodes[0]),
+                    nodes,
+                    union_find,
+                    issues,
+                    ambiguous_roles_by_node,
+                )
+    return ambiguous_roles_by_node
 
-                left_node = left_nodes[0]
-                right_node = right_nodes[0]
-                left_serial = nodes[left_node]["serial_key"]
-                right_serial = nodes[right_node]["serial_key"]
-                if alias_key.startswith("PRMAC"):
-                    union(left_node, right_node, allow_conflicting_serials=True)
-                    continue
-                if left_serial and right_serial and left_serial != right_serial:
-                    add_issue({
-                        "tipo": "Série divergente para o mesmo hostname/Apelido",
-                        "chave": nodes[left_node]["computador"] or alias_key,
-                        "fontes": [
-                            {"fonte": COMPARISON_AMBIGUITY_SOURCE_LABELS[left_role], "serie": nodes[left_node]["serie"]},
-                            {"fonte": COMPARISON_AMBIGUITY_SOURCE_LABELS[right_role], "serie": nodes[right_node]["serie"]},
-                        ],
-                        "mensagem": "As séries prevalecem sobre o hostname/Apelido; os registros não foram unidos.",
-                    })
-                    continue
-                if not union(left_node, right_node):
-                    add_issue({
-                        "tipo": "Correspondência ambígua por hostname/Apelido",
-                        "chave": nodes[left_node]["computador"] or alias_key,
-                        "fontes": [
-                            {"fonte": COMPARISON_AMBIGUITY_SOURCE_LABELS[left_role], "serie": nodes[left_node]["serie"]},
-                            {"fonte": COMPARISON_AMBIGUITY_SOURCE_LABELS[right_role], "serie": nodes[right_node]["serie"]},
-                        ],
-                        "mensagem": "O hostname/Apelido levaria a séries incompatíveis; nenhum registro foi escolhido.",
-                    })
-                    if not left_serial:
-                        ambiguous_roles_by_node[left_node].add(right_role)
-                    if not right_serial:
-                        ambiguous_roles_by_node[right_node].add(left_role)
 
-    components: Dict[tuple, List[tuple]] = {}
+def _alias_role_serials(
+    role_nodes: List[_ComparisonNode],
+    nodes: Dict[_ComparisonNode, Dict[str, Any]],
+) -> Tuple[Dict[str, int], Dict[str, str], int]:
+    """Counts serials of one source's rows for a hostname/Apelido: counts, smallest example, blanks."""
+    serial_counts: Dict[str, int] = {}
+    serial_examples: Dict[str, str] = {}
+    blank_count = 0
+    for node in role_nodes:
+        record = nodes[node]
+        serial_key = record["serial_key"]
+        if not serial_key:
+            blank_count += 1
+            continue
+        serial_counts[serial_key] = serial_counts.get(serial_key, 0) + 1
+        serial_display = str(record["serie"] or "").strip()
+        previous_example = serial_examples.get(serial_key)
+        if previous_example is None or (serial_display.casefold(), serial_display) < (
+            previous_example.casefold(), previous_example
+        ):
+            serial_examples[serial_key] = serial_display
+    return serial_counts, serial_examples, blank_count
+
+
+def _flag_non_unique_alias_pair(
+    alias_key: str,
+    by_source: Dict[str, List[_ComparisonNode]],
+    left_role: str,
+    right_role: str,
+    nodes: Dict[_ComparisonNode, Dict[str, Any]],
+    issues: _ComparisonIssues,
+    ambiguous_roles_by_node: Dict[_ComparisonNode, set],
+) -> None:
+    """Reports divergent serials for a repeated hostname/Apelido and marks blank-serial ambiguity."""
+    left_nodes = by_source[left_role]
+    right_nodes = by_source[right_role]
+    serial_counts_by_role: Dict[str, Dict[str, int]] = {}
+    serial_examples_by_role: Dict[str, Dict[str, str]] = {}
+    blank_counts_by_role: Dict[str, int] = {}
+    for role, role_nodes in ((left_role, left_nodes), (right_role, right_nodes)):
+        (
+            serial_counts_by_role[role],
+            serial_examples_by_role[role],
+            blank_counts_by_role[role],
+        ) = _alias_role_serials(role_nodes, nodes)
+
+    left_serial_counts = serial_counts_by_role[left_role]
+    right_serial_counts = serial_counts_by_role[right_role]
+    divergent_pair_count = (
+        sum(left_serial_counts.values()) * sum(right_serial_counts.values())
+        - sum(
+            left_count * right_serial_counts.get(serial_key, 0)
+            for serial_key, left_count in left_serial_counts.items()
+        )
+    )
+    if divergent_pair_count:
+        sources = []
+        example_labels = []
+        for role in (left_role, right_role):
+            examples = [
+                serial_examples_by_role[role][serial_key]
+                for serial_key in sorted(serial_examples_by_role[role])[:3]
+            ]
+            sources.append({
+                "fonte": COMPARISON_AMBIGUITY_SOURCE_LABELS[role],
+                "quantidade": len(by_source[role]),
+            })
+            if examples:
+                example_labels.append(
+                    f"{COMPARISON_AMBIGUITY_SOURCE_LABELS[role]} [{', '.join(examples)}]"
+                )
+        examples_text = "; exemplos: " + "; ".join(example_labels) if example_labels else ""
+        issues.add({
+            "tipo": "Série divergente para o mesmo hostname/Apelido",
+            "chave": nodes[left_nodes[0]]["computador"] or alias_key,
+            "fontes": sources,
+            "mensagem": (
+                "As séries prevalecem sobre o hostname/Apelido; "
+                f"{divergent_pair_count} combinações têm séries divergentes. "
+                f"Nenhum registro foi unido{examples_text}."
+            ),
+        })
+
+    if blank_counts_by_role[left_role]:
+        for left_node in left_nodes:
+            if not nodes[left_node]["serial_key"]:
+                ambiguous_roles_by_node[left_node].add(right_role)
+        for right_node in right_nodes:
+            ambiguous_roles_by_node[right_node].add(left_role)
+    if blank_counts_by_role[right_role]:
+        for right_node in right_nodes:
+            if not nodes[right_node]["serial_key"]:
+                ambiguous_roles_by_node[right_node].add(left_role)
+        for left_node in left_nodes:
+            ambiguous_roles_by_node[left_node].add(right_role)
+
+
+def _link_unique_alias_pair(
+    alias_key: str,
+    left: Tuple[str, _ComparisonNode],
+    right: Tuple[str, _ComparisonNode],
+    nodes: Dict[_ComparisonNode, Dict[str, Any]],
+    union_find: _SerialUnionFind,
+    issues: _ComparisonIssues,
+    ambiguous_roles_by_node: Dict[_ComparisonNode, set],
+) -> None:
+    """Joins a one-to-one hostname/Apelido match unless the serials say otherwise (PRMAC always joins)."""
+    left_role, left_node = left
+    right_role, right_node = right
+    left_serial = nodes[left_node]["serial_key"]
+    right_serial = nodes[right_node]["serial_key"]
+    if alias_key.startswith("PRMAC"):
+        union_find.union(left_node, right_node, allow_conflicting_serials=True)
+        return
+    if left_serial and right_serial and left_serial != right_serial:
+        issues.add({
+            "tipo": "Série divergente para o mesmo hostname/Apelido",
+            "chave": nodes[left_node]["computador"] or alias_key,
+            "fontes": [
+                {"fonte": COMPARISON_AMBIGUITY_SOURCE_LABELS[left_role], "serie": nodes[left_node]["serie"]},
+                {"fonte": COMPARISON_AMBIGUITY_SOURCE_LABELS[right_role], "serie": nodes[right_node]["serie"]},
+            ],
+            "mensagem": "As séries prevalecem sobre o hostname/Apelido; os registros não foram unidos.",
+        })
+        return
+    if not union_find.union(left_node, right_node):
+        issues.add({
+            "tipo": "Correspondência ambígua por hostname/Apelido",
+            "chave": nodes[left_node]["computador"] or alias_key,
+            "fontes": [
+                {"fonte": COMPARISON_AMBIGUITY_SOURCE_LABELS[left_role], "serie": nodes[left_node]["serie"]},
+                {"fonte": COMPARISON_AMBIGUITY_SOURCE_LABELS[right_role], "serie": nodes[right_node]["serie"]},
+            ],
+            "mensagem": "O hostname/Apelido levaria a séries incompatíveis; nenhum registro foi escolhido.",
+        })
+        if not left_serial:
+            ambiguous_roles_by_node[left_node].add(right_role)
+        if not right_serial:
+            ambiguous_roles_by_node[right_node].add(left_role)
+
+
+def _comparison_components(
+    nodes: Dict[_ComparisonNode, Dict[str, Any]],
+    union_find: _SerialUnionFind,
+) -> Dict[_ComparisonNode, List[_ComparisonNode]]:
+    components: Dict[_ComparisonNode, List[_ComparisonNode]] = {}
     for node in nodes:
-        components.setdefault(find(node), []).append(node)
+        components.setdefault(union_find.find(node), []).append(node)
+    return components
 
-    def distinct_values(records: List[Dict[str, Any]], field: str) -> List[str]:
-        values = []
-        for record in records:
-            value = str(record.get(field) or "").strip()
-            if value and value not in values:
-                values.append(value)
-        return values
 
-    entities = []
+def _distinct_values(records: List[Dict[str, Any]], field: str) -> List[str]:
+    values: List[str] = []
+    for record in records:
+        value = str(record.get(field) or "").strip()
+        if value and value not in values:
+            values.append(value)
+    return values
+
+
+def _component_source_status(
+    records_by_source: Dict[str, List[Dict[str, Any]]],
+    ambiguous_source_roles: set,
+) -> Dict[str, str]:
+    source_status = {}
+    for role in COMPARISON_SOURCE_LABELS:
+        count = len(records_by_source[role])
+        if count > 1:
+            source_status[role] = "ambíguo"
+        elif count == 1:
+            source_status[role] = "presente"
+        elif role in ambiguous_source_roles:
+            source_status[role] = "ambíguo"
+        else:
+            source_status[role] = "ausente"
+    return source_status
+
+
+def _comparison_entity(
+    records_by_source: Dict[str, List[Dict[str, Any]]],
+    source_status: Dict[str, str],
+) -> Tuple[Dict[str, Any], Optional[str]]:
+    """Builds the displayed item of a component and its expected location (from Endpoint hostnames)."""
+    all_records = [record for role in COMPARISON_SOURCE_LABELS for record in records_by_source[role]]
+    names = _distinct_values(all_records, "computador")
+    serials = _distinct_values(all_records, "serie")
+    endpoint_records = records_by_source["endpoint"]
+    expected_locations = list(dict.fromkeys(
+        location_for_computer_name(record["computador"])
+        for record in endpoint_records
+        if location_for_computer_name(record["computador"])
+    ))
+    expected_location = expected_locations[0] if len(expected_locations) == 1 else None
+    entity = {
+        "computador": " / ".join(names) if names else "Sem hostname/Apelido",
+        "serie": " / ".join(serials),
+        "usuario": " / ".join(_distinct_values(endpoint_records, "usuario")),
+        "local_previsto": expected_location or "Sem mapeamento de local",
+        "fontes": {
+            COMPARISON_SOURCE_LABELS[role]: source_status[role]
+            for role in COMPARISON_SOURCE_LABELS
+        },
+        "ausente_em": [
+            COMPARISON_SOURCE_LABELS[role]
+            for role, status in source_status.items()
+            if status == "ausente"
+        ],
+    }
+    return entity, expected_location
+
+
+def _ambiguous_comparison_record(
+    entity: Dict[str, Any],
+    endpoint_records: List[Dict[str, Any]],
+    as_of: datetime,
+) -> Dict[str, Any]:
+    """Ambiguous item with the latest Endpoint verification and, for duplicates, each Endpoint row."""
+    verified_by_node = {
+        record["node"]: _parse_verification_datetime(record.get("ultima_verificacao"), as_of.tzinfo)
+        for record in endpoint_records
+    }
+    verified_times = [verified for verified in verified_by_node.values() if verified is not None]
+    ambiguous_record: Dict[str, Any] = {
+        **entity,
+        "ultima_verificacao": (
+            max(verified_times).isoformat(timespec="minutes") if verified_times else None
+        ),
+        "motivo": "Há registros duplicados ou uma alternativa de hostname/Apelido que não é única.",
+    }
+    if len(endpoint_records) > 1:
+        oldest_nodes = _removable_oldest_nodes(endpoint_records, verified_by_node)
+        ambiguous_record["registros_endpoint"] = [
+            {
+                "serie": record["serie"],
+                "computador": record["computador"],
+                "ultima_verificacao": (
+                    node_verified.isoformat(timespec="minutes") if node_verified is not None else None
+                ),
+                "linha_endpoint": record["row_number"],
+                "mais_antigo": record["node"] in oldest_nodes,
+            }
+            for record in endpoint_records
+            for node_verified in (verified_by_node[record["node"]],)
+        ]
+    return ambiguous_record
+
+
+def _classify_comparison_components(
+    components: Dict[_ComparisonNode, List[_ComparisonNode]],
+    nodes: Dict[_ComparisonNode, Dict[str, Any]],
+    ambiguous_roles_by_node: Dict[_ComparisonNode, set],
+    as_of: datetime,
+) -> Tuple[List[_ComparisonEntity], Dict[str, List[Dict[str, Any]]], List[Dict[str, Any]]]:
+    """Classifies each component as present, missing or ambiguous in each source.
+
+    Sebrae-owned notebooks never count as missing.
+    """
+    entities: List[_ComparisonEntity] = []
     missing_by_source: Dict[str, List[Dict[str, Any]]] = {
         role: [] for role in COMPARISON_SOURCE_LABELS
     }
@@ -1114,47 +1326,12 @@ def compare_uploaded_workbooks(
         for node in component_nodes:
             records_by_source[node[0]].append(nodes[node])
 
-        ambiguous_source_roles = set()
+        ambiguous_source_roles: set = set()
         for node in component_nodes:
             ambiguous_source_roles.update(ambiguous_roles_by_node[node])
 
-        source_status = {}
-        for role in COMPARISON_SOURCE_LABELS:
-            count = len(records_by_source[role])
-            if count > 1:
-                source_status[role] = "ambíguo"
-            elif count == 1:
-                source_status[role] = "presente"
-            elif role in ambiguous_source_roles:
-                source_status[role] = "ambíguo"
-            else:
-                source_status[role] = "ausente"
-
-        all_records = [record for role in COMPARISON_SOURCE_LABELS for record in records_by_source[role]]
-        names = distinct_values(all_records, "computador")
-        serials = distinct_values(all_records, "serie")
-        endpoint_records = records_by_source["endpoint"]
-        expected_locations = list(dict.fromkeys(
-            location_for_computer_name(record["computador"])
-            for record in endpoint_records
-            if location_for_computer_name(record["computador"])
-        ))
-        expected_location = expected_locations[0] if len(expected_locations) == 1 else None
-        entity = {
-            "computador": " / ".join(names) if names else "Sem hostname/Apelido",
-            "serie": " / ".join(serials),
-            "usuario": " / ".join(distinct_values(endpoint_records, "usuario")),
-            "local_previsto": expected_location or "Sem mapeamento de local",
-            "fontes": {
-                COMPARISON_SOURCE_LABELS[role]: source_status[role]
-                for role in COMPARISON_SOURCE_LABELS
-            },
-            "ausente_em": [
-                COMPARISON_SOURCE_LABELS[role]
-                for role, status in source_status.items()
-                if status == "ausente"
-            ],
-        }
+        source_status = _component_source_status(records_by_source, ambiguous_source_roles)
+        entity, expected_location = _comparison_entity(records_by_source, source_status)
         entities.append((entity, records_by_source, source_status, expected_location))
 
         for role, status in source_status.items():
@@ -1165,35 +1342,17 @@ def compare_uploaded_workbooks(
             missing_by_source[role].append(item)
 
         if "ambíguo" in source_status.values():
-            verified_by_node = {
-                record["node"]: _parse_verification_datetime(record.get("ultima_verificacao"), as_of.tzinfo)
-                for record in endpoint_records
-            }
-            verified_times = [verified for verified in verified_by_node.values() if verified is not None]
-            ambiguous_record: Dict[str, Any] = {
-                **entity,
-                "ultima_verificacao": (
-                    max(verified_times).isoformat(timespec="minutes") if verified_times else None
-                ),
-                "motivo": "Há registros duplicados ou uma alternativa de hostname/Apelido que não é única.",
-            }
-            if len(endpoint_records) > 1:
-                oldest_nodes = _removable_oldest_nodes(endpoint_records, verified_by_node)
-                ambiguous_record["registros_endpoint"] = [
-                    {
-                        "serie": record["serie"],
-                        "computador": record["computador"],
-                        "ultima_verificacao": (
-                            node_verified.isoformat(timespec="minutes") if node_verified is not None else None
-                        ),
-                        "linha_endpoint": record["row_number"],
-                        "mais_antigo": record["node"] in oldest_nodes,
-                    }
-                    for record in endpoint_records
-                    for node_verified in (verified_by_node[record["node"]],)
-                ]
-            ambiguous_records.append(ambiguous_record)
+            ambiguous_records.append(
+                _ambiguous_comparison_record(entity, records_by_source["endpoint"], as_of)
+            )
+    return entities, missing_by_source, ambiguous_records
 
+
+def _location_mismatches(entities: List[_ComparisonEntity]) -> List[Dict[str, Any]]:
+    """Single Endpoint rows whose hostname location differs from the Simpress city.
+
+    Curitiba hostname prefixes and PRNOTETI in Curitiba UTIC are not divergences.
+    """
     location_mismatches = []
     for entity, records_by_source, source_status, expected_location in entities:
         endpoint_records = records_by_source["endpoint"]
@@ -1225,35 +1384,102 @@ def compare_uploaded_workbooks(
                     "local_previsto": expected_location,
                     **location_values,
                 })
+    return location_mismatches
 
+
+def _stale_verification_item(
+    record: Dict[str, Any],
+    as_of: datetime,
+    stale_threshold: datetime,
+) -> Optional[Dict[str, Any]]:
+    verified_at = _parse_verification_datetime(record.get("ultima_verificacao"), as_of.tzinfo)
+    if verified_at is None or verified_at > stale_threshold:
+        return None
+    return {
+        "computador": record["computador"],
+        "serie": record["serie"],
+        "ultima_verificacao": verified_at.isoformat(timespec="minutes"),
+        "dias_sem_verificacao": max(7, (as_of - verified_at).days),
+        "linha_endpoint": record["row_number"],
+    }
+
+
+def _unmapped_series_code(computer_name: str) -> Optional[str]:
+    """Series code of a PRNOTE hostname without a mapped location; None when it is mapped."""
+    if not computer_name.upper().startswith("PRNOTE") or location_for_computer_name(computer_name):
+        return None
+    suffix = computer_name.upper()[len("PRNOTE"):]
+    if suffix.startswith("BACKUP"):
+        suffix = suffix[len("BACKUP"):]
+    elif suffix.startswith("BKP"):
+        suffix = suffix[3:]
+    elif suffix.startswith("BK"):
+        suffix = suffix[2:]
+    return next(
+        (prefix for prefix in sorted(SERIE_LOCAL_MAP, key=len, reverse=True) if suffix.startswith(prefix)),
+        suffix.rstrip("0123456789-_") or suffix,
+    )
+
+
+def _endpoint_stale_and_unmapped(
+    endpoint_records: List[Dict[str, Any]],
+    as_of: datetime,
+    stale_threshold: datetime,
+) -> Tuple[List[Dict[str, Any]], Dict[str, List[str]]]:
+    """Endpoint rows without access for 7+ days and hostnames grouped by unmapped series code."""
     unmapped_series: Dict[str, List[str]] = {}
     no_recent_verification = []
-    for record in source_records["endpoint"]:
-        computer_name = record["computador"]
-        verified_at = _parse_verification_datetime(record.get("ultima_verificacao"), as_of.tzinfo)
-        if verified_at is not None and verified_at <= stale_threshold:
-            no_recent_verification.append({
-                "computador": computer_name,
-                "serie": record["serie"],
-                "ultima_verificacao": verified_at.isoformat(timespec="minutes"),
-                "dias_sem_verificacao": max(7, (as_of - verified_at).days),
-                "linha_endpoint": record["row_number"],
-            })
-        if not computer_name.upper().startswith("PRNOTE") or location_for_computer_name(computer_name):
-            continue
-        suffix = computer_name.upper()[len("PRNOTE"):]
-        if suffix.startswith("BACKUP"):
-            suffix = suffix[len("BACKUP"):]
-        elif suffix.startswith("BKP"):
-            suffix = suffix[3:]
-        elif suffix.startswith("BK"):
-            suffix = suffix[2:]
-        series_code = next(
-            (prefix for prefix in sorted(SERIE_LOCAL_MAP, key=len, reverse=True) if suffix.startswith(prefix)),
-            suffix.rstrip("0123456789-_") or suffix,
-        )
-        unmapped_series.setdefault(series_code, []).append(computer_name)
+    for record in endpoint_records:
+        stale_item = _stale_verification_item(record, as_of, stale_threshold)
+        if stale_item is not None:
+            no_recent_verification.append(stale_item)
+        series_code = _unmapped_series_code(record["computador"])
+        if series_code is not None:
+            unmapped_series.setdefault(series_code, []).append(record["computador"])
+    return no_recent_verification, unmapped_series
 
+
+def compare_uploaded_workbooks(
+    endpoint_table: Dict[str, Any],
+    details_table: Dict[str, Any],
+    uploaded_names: Dict[str, str],
+    as_of: Optional[datetime] = None,
+    removed_endpoint_hostnames: FrozenSet[Tuple[str, str]] = frozenset(),
+    previous_endpoint_hostnames: Optional[Dict[str, str]] = None,
+) -> Dict[str, Any]:
+    """Compares Endpoint and EquipamentosDetalhes without silently selecting duplicate matches.
+
+    ``previous_endpoint_hostnames`` maps normalized serials to the unique hostnames of the
+    previous Endpoint file; it only labels Endpoint rows whose hostname disappeared.
+
+    ``removed_endpoint_hostnames`` lists normalized (serial, hostname) pairs the user
+    discarded from the Endpoint duplicates; those rows are left out of the comparison
+    (the spreadsheet itself is not changed) but still count in ``total_endpoint``.
+    """
+    source_records, total_endpoint = _comparison_records_by_source(
+        endpoint_table, details_table, removed_endpoint_hostnames
+    )
+    as_of = _comparison_reference_time(as_of)
+    stale_threshold = as_of - timedelta(days=7)
+
+    _align_macbook_details_serials(source_records)
+
+    nodes = _comparison_nodes(source_records)
+    union_find = _SerialUnionFind(nodes)
+    issues = _ComparisonIssues()
+    _link_serial_buckets(_nodes_by_key(nodes, "serial_key"), nodes, union_find, issues)
+    ambiguous_roles_by_node = _link_alias_buckets(
+        _nodes_by_key(nodes, "alias_key"), nodes, union_find, issues
+    )
+
+    entities, missing_by_source, ambiguous_records = _classify_comparison_components(
+        _comparison_components(nodes, union_find), nodes, ambiguous_roles_by_node, as_of
+    )
+
+    location_mismatches = _location_mismatches(entities)
+    no_recent_verification, unmapped_series = _endpoint_stale_and_unmapped(
+        source_records["endpoint"], as_of, stale_threshold
+    )
     no_recent_verification.extend(_vanished_hostname_stale_items(
         endpoint_table,
         source_records,
@@ -1268,7 +1494,7 @@ def compare_uploaded_workbooks(
         "ausentes_no_endpoint": missing_by_source["endpoint"],
         "ausentes_em_detalhes": missing_by_source["detalhes"],
         "sem_acesso_7_dias": no_recent_verification,
-        "correspondencias_ambiguas": issues,
+        "correspondencias_ambiguas": issues.items,
         "registros_ambiguos": ambiguous_records,
         "divergencias_local": location_mismatches,
         "series_sem_mapeamento": [

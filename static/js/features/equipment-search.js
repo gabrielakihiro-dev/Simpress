@@ -345,7 +345,7 @@
     if (!serial) {
       app.invalidarBuscasEquipamento();
       app.limparSelecaoEquipamento();
-      app.showToast("Digite uma série, apelido, modelo ou cidade", "warning");
+      app.showToast("Digite uma série, apelido, modelo, cidade ou nome do usuário", "warning");
       serialInput.focus();
       return;
     }

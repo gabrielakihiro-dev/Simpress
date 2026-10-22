@@ -6,33 +6,34 @@ import logging
 from io import BytesIO
 from pathlib import Path
 from typing import Any, Callable, Dict, List, Optional, Sequence
-from uuid import uuid4
 
 from fastapi import APIRouter, File, HTTPException, UploadFile
 from fastapi.responses import StreamingResponse
 from pydantic import BaseModel, Field
 
-from core.config import format_size_limit
 from core.logging_setup import redact_reference
+from domains import ticket_import
 from domains.history_insights import compare_updates, is_restoration, latest_update, pending_rows
 from domains.history_annotations import (
     MAX_ANNOTATION_LENGTH,
-    AnnotationReadError,
     reuse_annotation_revision,
     annotation_view,
-    resolve_history_annotations,
     same_annotation_revision,
     sync_history_annotation,
     build_history_annotation_record,
     history_annotation_record_path,
-    history_annotation_row_fingerprint,
     load_history_annotations,
-    save_history_annotation,
 )
-from domains.ticket_reconciliation import TicketWorkbookError, reconcile_ticket_workbooks
-from domains.local_setup import unpack_simpress_zip
+from domains.ticket_import import (
+    MAX_TICKET_WORKBOOK_BYTES,  # Re-exported: the upload limit is part of this route's contract.
+    TICKET_TIMELINE_ANNOTATION_REASON,
+    TicketImportError,
+    TicketImportServices,
+    TicketWorkbookSource,
+    ticket_annotation_row_hash,
+)
+from domains.ticket_reconciliation import reconcile_ticket_workbooks
 from domains.ticket_reporting import (
-    MAX_TICKET_SNAPSHOTS,
     TICKET_TIMELINE_ANNOTATION_CATEGORY,
     TICKET_SNAPSHOT_FIELDS,
     TicketTimelineIndex,
@@ -46,10 +47,8 @@ from domains.ticket_reporting import (
     ticket_snapshot_metadata,
 )
 from core.integrity import AtomicFileTransaction, FileBusyError, FileTransactionError
-from core.xlsx_safety import XlsxLimitExceeded, XlsxPackageError
 
 
-MAX_TICKET_WORKBOOK_BYTES = 60 * 1024 * 1024
 logger = logging.getLogger(__name__)
 
 
@@ -70,7 +69,9 @@ def create_operations_router(
     local_annotation_outbox_directory: Optional[Callable[[], Path]] = None,
     history_annotations_sync_enabled: Optional[Callable[[], bool]] = None,
     load_history_annotation_records: Optional[Callable[..., List[Dict[str, Any]]]] = None,
+    ticket_import_services: Optional[TicketImportServices] = None,
 ):
+    """Build the operations routes; ``ticket_import_services`` shares the import with the inbox."""
     router = APIRouter()
 
     @router.get("/api/operacoes/pendencias")
@@ -124,33 +125,29 @@ def create_operations_router(
     def displayed_ticket_snapshots(report: Dict[str, Any]) -> List[Dict[str, Any]]:
         return [normalize_ticket_snapshot(item) for item in ticket_report_snapshots(report)]
 
-    def annotation_directory() -> Path:
-        return history_annotations_directory() if history_annotations_directory else ticket_report_path().parent / "anotacoes_historico"
-
-    def annotation_outbox_directory() -> Path:
-        return local_annotation_outbox_directory() if local_annotation_outbox_directory else ticket_report_path().parent / "anotacoes_historico_pendentes"
-
-    def read_annotation_directory(directory: Path, strict: bool = False) -> List[Dict[str, Any]]:
-        reader = load_history_annotation_records or load_history_annotations
-        return reader(directory, strict=True) if strict else reader(directory)
+    services = ticket_import_services or TicketImportServices(
+        ticket_report_path=ticket_report_path,
+        transaction_root=transaction_root,
+        annotation_directory=lambda: (
+            history_annotations_directory() if history_annotations_directory
+            else ticket_report_path().parent / "anotacoes_historico"
+        ),
+        annotation_outbox_directory=lambda: (
+            local_annotation_outbox_directory() if local_annotation_outbox_directory
+            else ticket_report_path().parent / "anotacoes_historico_pendentes"
+        ),
+        load_annotation_records=load_history_annotation_records or load_history_annotations,
+        # Late-bound: this module's collaborators stay replaceable, as they were before the extraction.
+        reconcile_workbooks=lambda *args, **kwargs: reconcile_ticket_workbooks(*args, **kwargs),
+        transaction_factory=lambda root, targets: AtomicFileTransaction(root, targets),
+        publish_annotation=lambda *args, **kwargs: sync_history_annotation(*args, **kwargs),
+        now=lambda: datetime.now(),
+    )
+    annotation_directory = services.annotation_directory
+    annotation_outbox_directory = services.annotation_outbox_directory
 
     def latest_ticket_annotations(strict: bool = False) -> Dict[tuple[str, str], Dict[str, Any]]:
-        return resolve_history_annotations(
-            record
-            for directory in (annotation_directory(), annotation_outbox_directory())
-            for record in read_annotation_directory(directory, strict)
-            if record.get("categoria") == TICKET_TIMELINE_ANNOTATION_CATEGORY
-        )
-
-    def _ticket_annotation_event(
-        snapshot: Dict[str, Any], serial: str, index: Optional[TicketTimelineIndex] = None,
-    ) -> Optional[Dict[str, Any]]:
-        timeline_index = index if index is not None else build_ticket_timeline_index([snapshot])
-        return timeline_index.event_for_snapshot(snapshot, serial)
-
-    def _ticket_annotation_row_hash(event: Dict[str, Any]) -> str:
-        row = {"serie": event.get("serie", ""), **(event.get("estado") or {})}
-        return history_annotation_row_fingerprint(TICKET_TIMELINE_ANNOTATION_CATEGORY, row)
+        return ticket_import.latest_ticket_annotations(services, strict)
 
     def _ticket_timeline_with_annotations(
         snapshots: Sequence[Dict[str, Any]], serial: str,
@@ -165,69 +162,8 @@ def create_operations_router(
             event.update(annotation_view(record) if record else {"anotacao": "", "anotacao_revisoes": []})
         return events
 
-    def prepare_ticket_timeline_annotations(
-        previous_snapshots: Sequence[Dict[str, Any]], current_snapshot: Dict[str, Any],
-    ) -> List[Dict[str, Any]]:
-        """Prepare independent revisions from the predecessors read under the import lock."""
-        # An unreadable revision must abort (409) rather than skip an existing note.
-        stored = latest_ticket_annotations(strict=True)
-        all_records = list(stored.values())
-        records = []
-        timeline_index = build_ticket_timeline_index([*previous_snapshots, current_snapshot])
-        series = sorted({
-            str(ticket.get("serie") or "").strip()
-            for ticket in current_snapshot.get("chamados", [])
-            if isinstance(ticket, dict) and str(ticket.get("serie") or "").strip()
-        })
-        for serial in series:
-            current_event = _ticket_annotation_event(current_snapshot, serial, timeline_index)
-            if current_event is None:
-                continue
-            row_hash = _ticket_annotation_row_hash(current_event)
-            previous_match: Optional[Dict[str, Any]] = None
-            for prior_snapshot in previous_snapshots:
-                prior_event = _ticket_annotation_event(prior_snapshot, serial, timeline_index)
-                if prior_event and _ticket_annotation_row_hash(prior_event) == row_hash:
-                    previous_match = prior_event
-
-            if previous_match is not None:
-                prior_record = stored.get((previous_match["snapshot_id"], previous_match["item_id"]))
-                # A more recent local row without a note blocks reuse of an older note.
-                annotation = str(prior_record.get("anotacao") or "") if prior_record else ""
-            else:
-                matching = [
-                    record for record in all_records
-                    if record.get("categoria") == TICKET_TIMELINE_ANNOTATION_CATEGORY
-                    and record.get("linha_hash") == row_hash
-                    and str(record.get("evento_id") or "") != current_event["snapshot_id"]
-                    and str(record.get("horario") or "") < str(current_event.get("atualizado_em") or "")
-                ]
-                if matching:
-                    latest_time = max(str(record.get("horario") or "") for record in matching)
-                    latest = [record for record in matching if str(record.get("horario") or "") == latest_time]
-                    unique_notes = {str(record.get("anotacao") or "") for record in latest}
-                    annotation = next(iter(unique_notes)) if len(unique_notes) == 1 else ""
-                else:
-                    annotation = ""
-
-            records.append(build_history_annotation_record(
-                event_id=current_event["snapshot_id"], event_time=current_event.get("atualizado_em", ""),
-                item_id=current_event["item_id"], serie=serial, computador="",
-                motivo="Linha do tempo do acompanhamento de chamados", anotacao=annotation,
-                categoria=TICKET_TIMELINE_ANNOTATION_CATEGORY, linha_hash=row_hash,
-            ))
-        return records
-
     def sync_ticket_annotation(record: Dict[str, Any]) -> bool:
-        try:
-            return sync_history_annotation(
-                record, directory=annotation_directory(), outbox=annotation_outbox_directory(),
-                transaction_root=transaction_root(), transaction_factory=AtomicFileTransaction,
-                publisher=save_history_annotation,
-            )
-        except Exception:
-            logger.exception("Anotação do chamado %s salva e aguardando sincronização.", redact_reference(record.get("serie")))
-            return False
+        return ticket_import.sync_ticket_annotation(services, record)
 
     def _persist_ticket_annotation(
         *, event_id: str, item_id: str, serial: str, event_time: str, row_hash: str, annotation: str,
@@ -239,7 +175,7 @@ def create_operations_router(
             "item_id": item_id,
             "serie": serial,
             "computador": "",
-            "motivo": "Linha do tempo do acompanhamento de chamados",
+            "motivo": TICKET_TIMELINE_ANNOTATION_REASON,
             "anotacao": annotation,
             "categoria": TICKET_TIMELINE_ANNOTATION_CATEGORY,
             "linha_hash": row_hash,
@@ -378,7 +314,7 @@ def create_operations_router(
             item_id=item_id,
             serial=str(event.get("serie") or ""),
             event_time=str(event.get("atualizado_em") or ""),
-            row_hash=_ticket_annotation_row_hash(event),
+            row_hash=ticket_annotation_row_hash(event),
             annotation=payload.anotacao,
             revision_id=payload.revisao_id, base_revisions=payload.base_revisoes,
         )
@@ -449,107 +385,14 @@ def create_operations_router(
         oracle_file: UploadFile = File(...),
         automatic_import_id: Optional[str] = None,
     ):
-        def read_source(upload: UploadFile, source_label: str, *, allow_zip: bool = False):
-            raw_name = upload.filename or ""
-            filename = raw_name.replace("\\", "/").rsplit("/", 1)[-1].strip()
-            is_zip = allow_zip and filename.lower().endswith(".zip")
-            if not filename.lower().endswith(".xlsx") and not is_zip:
-                accepted = ".xlsx ou .zip com uma planilha .xlsx" if allow_zip else ".xlsx"
-                raise HTTPException(status_code=400, detail=f"Selecione um arquivo {accepted} para a fonte {source_label}.")
-            content = upload.file.read(MAX_TICKET_WORKBOOK_BYTES + 1)
-            if len(content) > MAX_TICKET_WORKBOOK_BYTES:
-                raise HTTPException(status_code=413, detail=f"O arquivo {source_label} excede o limite de {format_size_limit(MAX_TICKET_WORKBOOK_BYTES)}.")
-            if not content:
-                raise HTTPException(status_code=400, detail=f"O arquivo da fonte {source_label} está vazio.")
-            if is_zip:
-                content, _ = unpack_simpress_zip(content, MAX_TICKET_WORKBOOK_BYTES)
-            return content, filename[:200]
-
-        simpress_bytes, simpress_filename = read_source(simpress_file, "Simpress", allow_zip=True)
-        oracle_bytes, oracle_filename = read_source(oracle_file, "Oracle")
         try:
-            parsed_report = reconcile_ticket_workbooks(
-                simpress_bytes,
-                oracle_bytes,
-                simpress_filename=simpress_filename,
-                oracle_filename=oracle_filename,
+            return ticket_import.import_ticket_workbooks(
+                services,
+                TicketWorkbookSource(simpress_file.filename, simpress_file.file.read),
+                TicketWorkbookSource(oracle_file.filename, oracle_file.file.read),
+                automatic_import_id,
             )
-        except XlsxLimitExceeded as error:
-            raise HTTPException(status_code=413, detail=str(error)) from None
-        except XlsxPackageError:
-            raise HTTPException(status_code=400, detail="Um dos arquivos não é um XLSX válido.") from None
-        except TicketWorkbookError as error:
-            raise HTTPException(status_code=422, detail=str(error)) from None
-
-        path = ticket_report_path()
-        annotation_records: List[Dict[str, Any]] = []
-        pending_annotations: List[tuple[Path, Dict[str, Any]]] = []
-
-        def append_import(current: Any) -> Dict[str, Any]:
-            nonlocal annotation_records
-            if not isinstance(current, dict) or not isinstance(current.get("chamados"), list):
-                raise HTTPException(status_code=503, detail="O acompanhamento de chamados está inválido.")
-            receipts = current.get("importacoes_automaticas", [])
-            automatic_imports = list(receipts) if isinstance(receipts, list) else []
-            if automatic_import_id and any(
-                isinstance(item, dict) and item.get("lote_id") == automatic_import_id
-                for item in automatic_imports
-            ):
-                raise HTTPException(status_code=409, detail="Este lote já consta no histórico de chamados.")
-
-            updated = dict(parsed_report)
-            updated["atualizado_em"] = datetime.now().astimezone().isoformat(timespec="seconds")
-            snapshot = {"id": str(uuid4()), **{field: updated.get(field) for field in TICKET_SNAPSHOT_FIELDS}}
-            history = ticket_report_snapshots(current)
-            annotation_records = prepare_ticket_timeline_annotations(
-                [normalize_ticket_snapshot(item) for item in history], normalize_ticket_snapshot(snapshot),
-            )
-            # Discover every outbox target before staging. Revisions and the report commit together,
-            # so a following import can inherit notes even while shared publication is still pending.
-            for record in annotation_records:
-                pending_path = history_annotation_record_path(
-                    annotation_outbox_directory(), record["evento_id"], record["item_id"], record["revisao_id"],
-                )
-                transaction.add_target(pending_path)
-                pending_annotations.append((pending_path, record))
-
-            # The lock serializes commits: list position, never a wall clock, defines version order.
-            updated["snapshot_id"] = snapshot["id"]
-            updated["historico"] = (history + [snapshot])[-MAX_TICKET_SNAPSHOTS:]
-            if automatic_import_id:
-                automatic_imports.append({
-                    "lote_id": automatic_import_id, "snapshot_id": snapshot["id"],
-                    "atualizado_em": snapshot["atualizado_em"],
-                })
-            updated["importacoes_automaticas"] = automatic_imports
-            return updated
-
-        try:
-            with AtomicFileTransaction(transaction_root(), [path]) as transaction:
-                report = transaction.update_json(path, append_import, {"chamados": [], "historico": []})
-                for pending_path, record in pending_annotations:
-                    transaction.stage_bytes(
-                        pending_path, json.dumps(record, ensure_ascii=False, indent=2).encode("utf-8"),
-                        lambda staged: json.loads(staged.read_text(encoding="utf-8")),
-                    )
-                transaction.commit()
-        except AnnotationReadError as error:
-            raise HTTPException(status_code=409, detail=str(error)) from None
-        except FileBusyError:
-            raise HTTPException(status_code=409, detail="O acompanhamento está sendo atualizado por outra operação local.") from None
-        except (OSError, FileTransactionError) as error:
-            if isinstance(error.__cause__, (OSError, UnicodeError, json.JSONDecodeError)):
-                raise HTTPException(status_code=503, detail="O acompanhamento de chamados não pôde ser lido.") from None
-            raise HTTPException(status_code=500, detail="Não foi possível salvar o acompanhamento de chamados.") from None
-
-        for record in annotation_records:
-            sync_ticket_annotation(record)
-        displayed_report = normalize_ticket_snapshot(report)
-        response = {key: value for key, value in displayed_report.items() if key not in {"historico", "importacoes_automaticas"}}
-        response["historico"] = [
-            ticket_snapshot_metadata(item)
-            for item in reversed(displayed_ticket_snapshots(report))
-        ]
-        return response
+        except TicketImportError as error:
+            raise HTTPException(status_code=error.status_code, detail=error.detail) from None
 
     return router

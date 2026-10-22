@@ -1,5 +1,6 @@
 """Read-only summary used by the Home dashboard panel."""
 
+import logging
 from collections import Counter
 from dataclasses import dataclass, field
 from datetime import date, datetime, timedelta
@@ -14,6 +15,8 @@ from domains.inventory_comparison import (
     filter_sebrae_owned_unmatched_items,
 )
 from domains.ticket_reporting import normalize_ticket_snapshot, ticket_attention
+
+logger = logging.getLogger(__name__)
 
 ATTENTION_FIELDS = (
     ("divergencias_local", "Divergências com a base local"),
@@ -113,6 +116,7 @@ def build_dashboard(services: DashboardServices) -> Dict[str, Any]:
     try:
         events = list(services.get_comparison_events())
     except Exception:
+        logger.exception("Falha ao ler os eventos de comparação do painel; exibindo sem a última comparação.")
         events = []
     if events and isinstance(events[0], dict):
         event = events[0]
@@ -247,6 +251,7 @@ def _comparison_history(services: DashboardServices) -> Optional[Sequence[Any]]:
     try:
         return services.get_comparison_history()
     except Exception:
+        logger.exception("Falha ao ler o histórico de comparações do painel.")
         return None
 
 
@@ -258,6 +263,7 @@ def _stale_base_summary(services: DashboardServices, history: Optional[Sequence[
         return stale_base_status(history or [], services.get_details_file(), services.now(), services.stale_base_days)
     except Exception:
         # The alert is optional; the inventory summary must still load.
+        logger.exception("Falha ao calcular o alerta de base desatualizada.")
         return {
             "estado": "indisponivel",
             "limite_dias": services.stale_base_days,
@@ -308,6 +314,7 @@ def _stale_tickets_summary(services: DashboardServices) -> Optional[Dict[str, An
         return stale_tickets_status(services.get_ticket_report(), services.now().date(), services.stale_ticket_days)
     except Exception:
         # The alert is optional; the inventory summary must still load.
+        logger.exception("Falha ao calcular o alerta de OS paradas.")
         return {
             "estado": "indisponivel",
             "limite_dias": services.stale_ticket_days,
@@ -372,6 +379,7 @@ def _new_divergences_summary(services: DashboardServices, history: Optional[Sequ
         return new_divergences_status(history, services.display_comparison)
     except Exception:
         # The alert is optional; the inventory summary must still load.
+        logger.exception("Falha ao calcular o alerta de divergências novas.")
         return unavailable
 
 
