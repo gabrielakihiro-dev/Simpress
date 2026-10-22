@@ -50,6 +50,7 @@ NOME_PROXIMA = re.compile(r"^\s*(pr[óo]xima( p[áa]gina)?|next)\s*$", re.IGNORE
 # Tela de login / sessão expirada.
 SEL_CAMPO_SENHA = "input[type='password']"
 TRECHOS_URL_LOGIN = ("/login", "/signin", "/sso", "login.microsoftonline.com")
+NOME_SSO = re.compile(r"^\s*SSO\s*$", re.IGNORECASE)
 
 # Ações sobre o chamado.
 NOME_EXECUTAR = re.compile(r"^\s*Executar\s*$", re.IGNORECASE)
@@ -285,9 +286,36 @@ def _aguardar_sem_carregamento(page: "Page", timeout_ms: int) -> None:
 # Login e lista
 # ---------------------------------------------------------------------------------------------
 
-def garantir_login(page: "Page") -> None:
-    """Espera a sessão do usuário (fluxo existente: aviso "AÇÃO NECESSÁRIA: faça o login…"); sem credenciais."""
-    _rotinas().aguardar_login(page, ORIGEM, softexpert_logado)
+def _entrar_com_sso(page: "Page") -> bool:
+    """Aciona uma vez o SSO visível na tela de login do SoftExpert; nunca informa credenciais."""
+    host_esperado = (urlparse(SOFTEXPERT_URL).hostname or "").lower()
+    if page.is_closed() or (urlparse(page.url).hostname or "").lower() != host_esperado or not tela_de_login(page):
+        return False
+
+    for frame in page.frames:
+        candidatos = (
+            frame.get_by_role("button", name=NOME_SSO),
+            frame.get_by_role("link", name=NOME_SSO),
+            frame.get_by_text("SSO", exact=True),
+        )
+        for candidato in candidatos:
+            try:
+                if candidato.count() != 1 or not _visivel(candidato):
+                    continue
+            except Exception:
+                continue
+            try:
+                clicar(candidato, "entrar com SSO")
+            except Exception as erro:
+                # The shared login waiter gives the user the manual fallback; do not click twice.
+                _rotinas().log(ORIGEM, f"Não foi possível acionar o SSO ({type(erro).__name__}); aguardando login manual.")
+            return True
+    return False
+
+
+def garantir_login(page: "Page", *, permitir_sso: bool = False) -> None:
+    """Aguarda login manual ou, na retomada autorizada, tenta uma vez o SSO do SoftExpert."""
+    _rotinas().aguardar_login(page, ORIGEM, softexpert_logado, entrar=_entrar_com_sso if permitir_sso else None)
 
 
 def abrir_softexpert(context: "BrowserContext") -> "Page":
@@ -665,7 +693,7 @@ def extrair_chamados(
             except SessaoExpirada:
                 _log(f"{numero}: sessão expirada; aguardando novo login.")
                 page.goto(SOFTEXPERT_URL, wait_until="domcontentloaded", timeout=_rotinas().CARREGAMENTO_MS)
-                garantir_login(page)
+                garantir_login(page, permitir_sso=True)
                 resultado[numero] = extrair_chamado(context, page, numero)
         except (ChamadoNaoConfere, ChamadoNaoEncontrado) as erro:
             _log(f"{numero}: {erro}")

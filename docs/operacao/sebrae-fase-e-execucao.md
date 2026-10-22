@@ -24,7 +24,7 @@ A execução real só pode começar com `npm run verify` passando e a configura�
 - Antes de ler a coluna C, a retomada do diário do Excel (`recuperar_pendencias`) conclui qualquer gravação deixada pela metade; se não puder, a execução para.
 - A coluna C é lida pela leitura validada do Excel (`_ler_validada`): ela recusa a leitura se faltarem linhas (filtros), em vez de arriscar duplicidade.
 - Resultados da camada Excel → orquestração: `gravado`/`recuperado` = incluído; `duplicado` = ignorado; `invalido`/`abandonado` = pendente (`gravacao_<situação>`) e segue; `parcial`, `divergente`, `nao_salvo`, `leitura_incompleta`, `filtro_nao_restaurado`, `sem_linha_preparada`, `interrompido` = pendência `gravacao_<situação>` e a execução para; `sessao_expirada` = login necessário (SharePoint).
-- SoftExpert: sessão expirada espera um novo login e relê o chamado uma vez; se cair de novo, login necessário. `numero_nao_confere` e `nao_encontrado_na_lista` viram pendência com esse motivo. Qualquer outro erro conta para as 3 falhas seguidas que interrompem a execução.
+- SoftExpert: sessão expirada tenta uma vez o botão `SSO` da própria tela e relê o chamado; se não recuperar, pede login manual. `numero_nao_confere` e `nao_encontrado_na_lista` viram pendência com esse motivo. Erros de leitura comuns contam para as 3 falhas seguidas; `confirmacao_inesperada` registra a pendência e interrompe imediatamente, pois a tela pode estar num estado desconhecido. O login do SharePoint continua manual.
 - O aviso do Windows sai só do resultado da orquestração (não do `com_aviso`).
 
 ## Configuração obrigatória: `data/state/sebrae_config.json`

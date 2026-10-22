@@ -52,6 +52,7 @@ RESULTADO_IGNORADO = "ignorado"
 RESULTADO_PENDENTE = "pendente"
 
 MOTIVO_FALHA_LEITURA = "falha_ao_ler_chamado"
+MOTIVO_CONFIRMACAO_INESPERADA = "confirmacao_inesperada"
 MOTIVO_GRAVACAO_PARCIAL = "gravacao_parcial"
 MOTIVO_GRAVACAO_NAO_CONFIRMADA = "gravacao_nao_confirmada"
 MOTIVO_AUSENTE_NA_RELEITURA = "ausente_na_releitura_final"
@@ -343,6 +344,12 @@ def _fluxo(
             log(f"{numero}: pendente ({erro.motivo}).")
             continue
         except Exception as erro:
+            motivo = getattr(erro, "motivo", "")
+            if motivo == MOTIVO_CONFIRMACAO_INESPERADA:
+                execucao.pendente(numero, motivo, erro=type(erro).__name__)
+                execucao.situacao, execucao.falha = SITUACAO_FALHA, motivo
+                log(f"{numero}: leitura interrompida ({motivo}).")
+                raise _Parar() from erro
             falhas_seguidas += 1
             execucao.pendente(numero, MOTIVO_FALHA_LEITURA, erro=type(erro).__name__)
             log(f"{numero}: leitura falhou ({type(erro).__name__}).")

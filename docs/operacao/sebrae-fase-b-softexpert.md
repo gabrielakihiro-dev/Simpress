@@ -10,7 +10,7 @@ Todas as funções recebem o `context`/`page` do Playwright já conectado ao Chr
 | --- | --- |
 | `abrir_softexpert(context)` | Abre `https://sebraepr.softexpert.app/softexpert/workspace?page=taskCenter` em aba nova, espera o login (se faltar) e a lista carregar. Devolve a aba. |
 | `softexpert_logado(page)` / `tela_de_login(page)` | Sessão ativa = host do SoftExpert, sem campo de senha/URL de login e com a lista visível. |
-| `garantir_login(page)` | Usa `aguardar_login` da rotina (mensagem `AÇÃO NECESSÁRIA: faça o login na janela do Chrome de automação.`, aviso do Windows, cancelamento). Não digita credenciais. |
+| `garantir_login(page)` | No primeiro acesso, usa `aguardar_login` da rotina e deixa o login manual. Após uma sessão já ativa expirar, pode clicar uma vez no botão `SSO` visível no domínio do SoftExpert; se não concluir, pede login manual. Não digita credenciais. |
 | `listar_chamados(page)` / `coletar_numeros(page)` | Percorre **toda** a lista (botão "Próxima" até desabilitar, ou rolagem até três voltas sem número novo) e devolve `ItemLista(numero, texto)` / só os números `UTIC-AAAA-N`, sem repetidos. Lista que não termina (`MAX_RODADAS_LISTA`) é falha, nunca resultado parcial. |
 | `extrair_chamado(context, page, numero)` | Executar → Registro de Chamados, captura da janela PHP, confirmação "Sim", conferência de número e título, espera dos campos condicionais, releitura de campos vazios. Devolve `ChamadoSoftExpert` (descrição, iniciador, "Habilitada em", título). |
 | `extrair_chamados(context, page, numeros)` | Vários chamados, um por vez; `ChamadoNaoConfere` e `ChamadoNaoEncontrado` ficam no resultado (o chamador os registra como pendência com `erro.motivo`); `SessaoExpirada` espera novo login e refaz o chamado uma vez. Confere o cancelamento entre chamados. |
@@ -28,9 +28,10 @@ Erros (`SoftExpertErro` deriva de `RotinaErro` do runner, mesmo se o runner for 
 
 ## Garantias de somente leitura
 
-- O único clique que grava algo no SoftExpert é o **Sim** da confirmação de associar o chamado, dado uma única vez e só se o texto da pergunta falar de associar/vincular/assumir. Outra pergunta, ou a mesma voltando depois do Sim, interrompe com `confirmacao_inesperada` sem clicar.
+- O único clique que grava algo no SoftExpert é o **Sim** da confirmação de associar o chamado, dado uma única vez e só se o texto da pergunta falar de associar/vincular/assumir. Outra pergunta, ou a mesma voltando depois do Sim, interrompe com `confirmacao_inesperada` sem clicar; esse motivo encerra a execução inteira imediatamente, sem tentar outros chamados.
 - `clicar()` recusa qualquer botão ou item de menu cujo rótulo case com `ROTULOS_PROIBIDOS` (finalizar, enviar, salvar, concluir, encerrar, reatribuir, atribuir, aprovar, reprovar, registrar atendimento, excluir, descartar…). Os únicos cliques da rotina são: linha da lista, Próxima, Executar, Registro de Chamados e Sim.
 - O formulário nunca é preenchido nem enviado; a janela PHP é fechada sem salvar. Conteúdo lido (descrição, título) é dado: não é interpretado e não vai para o log (só números de chamado).
+- Na recuperação de uma sessão expirada, o botão `SSO` só é acionado uma vez quando a tela de login do próprio SoftExpert mostra exatamente esse botão. A rotina espera a sessão; se o SSO não concluir, pede login manual. Nenhum dado de autenticação é armazenado.
 - Sem senhas, tokens, cookies ou API: o login é do usuário, na janela do Chrome de automação.
 
 ## O que foi presumido (a validar com a sessão logada)
