@@ -1298,6 +1298,13 @@ def rodar_rotina_usuarios(context: "BrowserContext") -> int:
     return codigo
 
 
+def rodar_rotina_sebrae(context: "BrowserContext") -> int:
+    # Leitura (sebrae_softexpert), gravação (sebrae_excel) e decisão (domains/sebrae_orquestracao) em sebrae_rotina.
+    from scripts import sebrae_rotina
+
+    return sebrae_rotina.executar(context, sys.modules[__name__])
+
+
 def abrir_para_login(context: "BrowserContext") -> int:
     for url in (ORACLE_URL, UX_PEDIDOS_URL, ENDPOINT_URL):
         verificar_cancelamento()
@@ -1328,6 +1335,9 @@ def executar(rotina: str) -> int:
                     return com_aviso("inventários", rodar_rotina_inventarios, context)
                 if rotina == "usuarios":
                     return com_aviso("usuários", rodar_rotina_usuarios, context)
+                if rotina == "sebrae":
+                    # Sem com_aviso: o aviso do Windows sai do resultado e só quando algo muda (sem repetição).
+                    return rodar_rotina_sebrae(context)
                 codigos = []
                 for nome, etapa in (("OS", rodar_rotina_os), ("inventários", rodar_rotina_inventarios)):
                     verificar_cancelamento()
@@ -1368,7 +1378,7 @@ def playwright_instalado() -> bool:
 
 def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
-    parser.add_argument("--rotina", choices=["os", "inventarios", "ambas", "login", "usuarios"], default="os")
+    parser.add_argument("--rotina", choices=["os", "inventarios", "ambas", "login", "usuarios", "sebrae"], default="os")
     parser.add_argument(
         "--cancelar", action="store_true", help="pede o cancelamento da rotina em andamento (o Chrome continua aberto) e sai"
     )
