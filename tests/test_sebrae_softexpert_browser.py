@@ -52,9 +52,21 @@ PAGINA_LISTA = """<!doctype html><html lang="pt-br"><head><meta charset="utf-8">
 <li role="menuitem" class="proibido">Reatribuir</li><li role="menuitem" class="proibido">Finalizar workflow</li></ul></div>
 <script>
 const D = %(dados)s;
-const corpo = document.getElementById('corpo'), area = document.getElementById('area');
+const area = document.getElementById('area');
+// Layout "cartoes": como a Central de tarefas real (cartões soltos, sem tabela nem role=grid).
+if (D.layout === 'cartoes') area.innerHTML = '';
+const corpo = D.layout === 'cartoes' ? area : document.getElementById('corpo');
 let selecionada = null, pagina = 0, carregados = 0;
 const linha = (i) => {
+  if (D.layout === 'cartoes') {
+    const card = document.createElement('div');
+    card.setAttribute('data-test-selector', 'rctCardBase');
+    card.style.padding = '28px 8px';
+    card.innerHTML = '<div data-test-selector="task-title"><span>Execução de atividade</span><div></div></div>'
+      + '<div data-test-selector="task-main-extra-info">Atividade</div>';
+    card.querySelector('div > div').textContent = i.numero + ' - ' + i.titulo;
+    return card;
+  }
   const tr = document.createElement('tr');
   tr.innerHTML = '<td></td><td></td>';
   tr.children[0].textContent = i.numero; tr.children[1].textContent = i.titulo;
@@ -167,6 +179,7 @@ class Bancada:
         self.logado = True
         self.logado_janela = True
         self.modo_lista = "paginas"
+        self.layout = "tabela"
         self.abertura = "popup"
         self.tamanho = 5
         self.chamados: list[dict] = []
@@ -202,7 +215,7 @@ def criar_servidor(bancada: Bancada) -> ThreadingHTTPServer:
                 itens = [{"numero": c["numero"], "titulo": c["titulo"]} for c in bancada.chamados]
                 dados = {
                     "modo": bancada.modo_lista, "abertura": bancada.abertura,
-                    "tamanho": bancada.tamanho, "itens": itens,
+                    "tamanho": bancada.tamanho, "itens": itens, "layout": bancada.layout,
                 }
                 return self.responder(PAGINA_LISTA % {"estilo": ESTILO, "dados": json.dumps(dados)})
             if caminho == "/softexpert/php/registro.php":
@@ -466,6 +479,20 @@ class SoftExpertNaBancadaTests(unittest.TestCase):
         self.bancada.chamados = [chamado(i) for i in range(1, 36)]
         page = self.abrir_lista()
         self.assertEqual(se.coletar_numeros(page), [f"UTIC-2026-{i:04d}" for i in range(1, 36)])
+
+    def test_lista_em_cartoes_com_rolagem_ignora_tarefas_fora_do_padrao_utic(self):
+        # Layout observado na Central de tarefas real (leitura assistida): 35 cartões carregados por rolagem,
+        # dois deles "PRT-…" (outro processo), que não são chamados UTIC.
+        self.bancada.layout = "cartoes"
+        self.bancada.modo_lista = "rolagem"
+        self.bancada.tamanho = 8
+        self.bancada.chamados = [chamado(i) for i in range(1, 34)]
+        for posicao, numero in ((0, "PRT-000054/26"), (1, "PRT-000053/26")):
+            self.bancada.chamados.insert(posicao, {**chamado(900 + posicao), "numero": numero})
+        page = self.abrir_lista()
+        self.assertEqual(se.coletar_numeros(page), [f"UTIC-2026-{i:04d}" for i in range(1, 34)])
+        self.assertEqual(page.locator(se.SEL_LINHA).count(), 35)
+        self.assertSemEscrita()
 
     def test_lista_vazia_declarada_devolve_vazio(self):
         page = self.abrir_lista()

@@ -47,7 +47,6 @@ COLUNA_USUARIOS = "usuarios logados"
 HREF_DETALHE = re.compile(r"^#/uems/inventory/computers/[A-Za-z0-9_-]+$")
 URL_DETALHE = re.compile(r"#/uems/inventory/computers/[A-Za-z0-9_-]+(/|$)")
 LIMITE_ANOTACAO = 2000
-EVENTOS_CONSULTADOS = 20
 CONFIRMACAO_FILTRO_S = 25
 ATRASO_DIGITACAO_MS = 40
 
@@ -236,9 +235,12 @@ def listar_pendencias(automacao: ModuleType) -> list[dict]:
 
 
 def localizar_linha_anotacao(automacao: ModuleType, pendencia_id: str) -> dict | None:
-    """Linha de "Mudanças de usuário logado" da pendência: evento, ``anotacao_id`` e anotação atual."""
+    """Linha de "Mudanças de usuário logado" da pendência: evento, ``anotacao_id`` e anotação atual.
+
+    Percorre os históricos do mais recente ao mais antigo, sem limite, e fica com a primeira ocorrência.
+    """
     eventos = chamar_api(automacao, "GET", "/api/historico-comparacoes").get("eventos", [])
-    for evento in eventos[:EVENTOS_CONSULTADOS]:
+    for evento in eventos:
         try:
             detalhe = chamar_api(automacao, "GET", f"/api/historico-comparacoes/{evento['id']}")
         except ErroApi:
