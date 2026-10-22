@@ -238,8 +238,8 @@ def list_holds(services: AliasChangeServices) -> Dict[str, Any]:
     holds = read_holds(_users_file(services))
     return {"pendencias": [
         {
-            "id": hold["id"], "serie": hold["serial"], "tipo": hold["tipo"], "estado": hold["estado"],
-            "usuario_atual": hold["usuario_atual"], "usuario_endpoint": hold.get("usuario_endpoint", ""),
+            "id": hold["id"], "serie": hold["serial"], "computador": hold.get("computador", ""),
+            "tipo": hold["tipo"], "estado": hold["estado"], "usuario_atual": hold["usuario_atual"], "usuario_endpoint": hold.get("usuario_endpoint", ""),
         }
         for hold in holds.values()
     ]}

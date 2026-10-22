@@ -8,6 +8,7 @@
   const ROTINAS = Object.freeze({
     os: "Rotina de OS",
     inventarios: "Inventários",
+    usuarios: "Verificar usuários",
     ambas: "Ambas as rotinas",
     login: "Abrir Chrome para login",
     sebrae: "Sincronizar chamados Sebrae",
@@ -513,7 +514,10 @@
   function formatarDiaHora(iso) {
     const data = iso ? new Date(iso) : null;
     if (!data || Number.isNaN(data.getTime())) return "";
-    return data.toLocaleString("pt-BR", { weekday: "short", day: "2-digit", month: "2-digit", hour: "2-digit", minute: "2-digit" });
+    // O agendamento segue o horário de Brasília (America/Sao_Paulo), qualquer que seja o fuso do navegador.
+    return data.toLocaleString("pt-BR", {
+      weekday: "short", day: "2-digit", month: "2-digit", hour: "2-digit", minute: "2-digit", timeZone: "America/Sao_Paulo",
+    });
   }
 
   function contarChamados(total) {
