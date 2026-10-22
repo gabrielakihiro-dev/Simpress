@@ -451,7 +451,7 @@ class Handler(BaseHTTPRequestHandler):
         if path == "/api/automacao/executar":
             size = int(self.headers.get("Content-Length", "0"))
             rotina = json.loads(self.rfile.read(size) or b"{}").get("rotina")
-            if rotina not in ("os", "inventarios", "ambas", "login", "sebrae"):
+            if rotina not in ("os", "inventarios", "usuarios", "ambas", "login", "sebrae"):
                 self.send({"detail": "Rotina inválida."}, 422)
             elif automation_run:
                 self.send({"detail": "Já há uma rotina em andamento: Rotina de OS desde 08:00. Aguarde terminar ou cancele."}, 409)
