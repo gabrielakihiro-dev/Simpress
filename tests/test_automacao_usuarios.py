@@ -105,9 +105,12 @@ class PaginaEndpoint:
     ``surda`` simula o Enter que não aplica o filtro (valor não registrado pelo componente).
     ``deslocar_ao_abrir`` simula a grade que muda de layout quando a barra de pesquisa abre."""
 
-    def __init__(self, computadores, usuarios_sistema=None, surda=False, aba_ausente=None, deslocar_ao_abrir=False):
+    def __init__(
+        self, computadores, usuarios_sistema=None, surda=False, aba_ausente=None, deslocar_ao_abrir=False, ultimos_logon=None,
+    ):
         self.computadores = computadores
         self.usuarios_sistema = usuarios_sistema or {}
+        self.ultimos_logon = ultimos_logon or {}
         self.surda, self.aba_ausente, self.deslocar_ao_abrir = surda, aba_ausente, deslocar_ao_abrir
         self.visitas, self.historico_abas = [], []
         self.url = automacao.ENDPOINT_URL
@@ -169,8 +172,9 @@ class PaginaEndpoint:
             }
         if self.detalhe and self.abas[-2:] == ["Sistema", "Usuários"]:
             nomes = self.usuarios_sistema.get(self.detalhe["nome"], [])
-            return {"cabecalho": "nome do usuario", "nomes": nomes, "carregando": False, "vazia": not nomes}
-        return {"cabecalho": "", "nomes": [], "carregando": False, "vazia": False}
+            ultimo = self.ultimos_logon.get(self.detalhe["nome"], "")
+            return {"cabecalho": "nome do usuario", "nomes": nomes, "ultimo": ultimo, "carregando": False, "vazia": not nomes}
+        return {"cabecalho": "", "nomes": [], "ultimo": "", "carregando": False, "vazia": False}
 
 
 def computador(nome, serie, usuarios="", href=None):
@@ -222,6 +226,16 @@ class DecisaoTest(unittest.TestCase):
         self.assertEqual(rotina.escolher_usuario_lista("--"), "")
         self.assertEqual(rotina.escolher_usuario_sistema(["", "root", "Convidado", "WDAGUtilityAccount", "davi", "ana"]), "davi")
         self.assertEqual(rotina.escolher_usuario_sistema(["Administrador", "DefaultAccount", "N/A"]), "")
+
+    def test_contas_tecnicas_e_codex_nao_contam_como_usuario(self):
+        for nome in ("CodexSandboxOffline", "CodexSandboxOnline", "Default User", "UI Flow Service", "UIFlowService"):
+            self.assertFalse(rotina.usuario_valido(nome), nome)
+        self.assertEqual(rotina.escolher_usuario_sistema(["CodexSandboxOffline", "Default", "UI Flow Service", "davi"]), "davi")
+
+    def test_ultimo_logon_e_a_base_do_sistema(self):
+        self.assertEqual(rotina.escolher_usuario_sistema(["davi"], "MRamos"), "MRamos")
+        self.assertEqual(rotina.escolher_usuario_sistema(["davi"], "CodexSandboxOffline"), "davi")
+        self.assertEqual(rotina.escolher_usuario_sistema([], ""), "")
 
     def test_serie_sem_s_so_para_serie_com_s(self):
         self.assertEqual(rotina.serie_sem_s("SCMVXKV7YCM"), "CMVXKV7YCM")
@@ -311,6 +325,16 @@ class SistemaTest(AmbienteBase):
         self.assertEqual(pagina.abas_clicadas, ["Sistema", "Usuários"])
         self.assertEqual(pagina.visitas[-1], automacao.ENDPOINT_URL)
         self.assertIn("Sistema confirma o usuário carla", self._anotacoes()[0])
+
+    def test_ultimo_logon_decide_mesmo_com_contas_tecnicas_na_tabela(self):
+        pagina = PaginaEndpoint(
+            [computador("HOST-1", "BRJ5512FFS", "")],
+            {"HOST-1": ["CodexSandboxOffline", "Default", "UI Flow Service"]},
+            ultimos_logon={"HOST-1": "MRamos"},
+        )
+        rotina.processar_pendencia(pagina, automacao, pendencia(serie="BRJ5512FFS", atual="MRamos"))
+        self.assertEqual(self._decisoes(), ["manter"])
+        self.assertIn("Sistema confirma o usuário MRamos", self._anotacoes()[0])
 
     def test_outro_usuario_no_sistema_deixa_pendente_so_anota(self):
         pagina = PaginaEndpoint([computador("HOST-1", "BRJ0000TST", "--")], {"HOST-1": ["davi"]})
