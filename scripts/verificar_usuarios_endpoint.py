@@ -109,14 +109,27 @@ JS_LER_USUARIOS_SISTEMA = """
 }
 """
 
+JS_LER_ULTIMO_LOGON = """
+() => {
+  const corpo = document.body ? document.body.innerText : '';
+  const achou = corpo.match(/Usu.rio do .ltimo logon\\s*:\\s*([^\\n\\r]*)/i);
+  const carregando = [...document.querySelectorAll('.page-loader-wrapper, .spinner')].some(el => el.getClientRects().length > 0);
+  return {presente: Boolean(achou), ultimo: achou ? achou[1].trim() : '', carregando};
+}
+"""
+ESPERA_ULTIMO_LOGON_S = 15
+
 
 @dataclass(frozen=True)
 class Decisao:
-    """Resultado de ``avaliar_decisao``: ``decisao`` None deixa a pendência aberta (só anota)."""
+    """Resultado de ``avaliar_decisao``: ``decisao`` None deixa a pendência aberta (só anota).
+
+    ``aplicar_usuario`` é o usuário novo a gravar depois da decisão (o Endpoint informa outro usuário)."""
 
     decisao: str | None
     anotacao: str
     aviso: str = ""
+    aplicar_usuario: str = ""
 
 
 def normalizar(texto: Any) -> str:
@@ -147,21 +160,17 @@ def usuario_valido(nome: Any) -> bool:
     )
 
 
-def escolher_usuario_lista(texto: Any) -> str:
-    """Primeiro nome válido de "Usuários logados" (vários nomes separados por vírgula)."""
-    for nome in re.split(r"[,;]", str(texto or "")):
-        if usuario_valido(nome):
-            return nome.strip()
-    return ""
+def limpar_usuario_logon(texto: Any) -> str:
+    """Tira o "Horário da última inicialização..." que o Endpoint mostra colado ao nome."""
+    return re.split(r"hor.rio da .ltima", str(texto or ""), maxsplit=1, flags=re.IGNORECASE)[0].strip()
 
 
 def escolher_usuario_sistema(nomes: list[str], ultimo_logon: str = "") -> str:
     """Base do Sistema: o usuário do último logon; sem um válido, a primeira linha válida de Sistema > Usuários."""
-    if usuario_valido(ultimo_logon):
-        return str(ultimo_logon).strip()
-    for nome in nomes:
+    for nome in (ultimo_logon, *nomes):
+        nome = limpar_usuario_logon(nome)
         if usuario_valido(nome):
-            return str(nome).strip()
+            return nome
     return ""
 
 
@@ -171,9 +180,7 @@ def serie_sem_s(serie: str) -> str:
     return serie[1:] if len(serie) > 1 and serie[0].upper() == "S" else ""
 
 
-def avaliar_decisao(
-    pendencia: dict, achou: bool, usuario: str, fonte: str = "Usuários logados", sistema_consultado: bool = True,
-) -> Decisao:
+def avaliar_decisao(pendencia: dict, achou: bool, usuario: str, fonte: str = "Último logon") -> Decisao:
     """Tabela de decisão: o que fazer com a pendência dado o que o Endpoint mostrou."""
     ausente = pendencia.get("tipo") == "usuario_ausente"
     quando_sem_usuario = "remover" if ausente else "recusar"
@@ -184,15 +191,19 @@ def avaliar_decisao(
             "Computador não encontrado no Endpoint (série e hostname)",
         )
     if not usuario:
-        if not sistema_consultado:
-            return Decisao(None, "Sistema > Usuários não consultado.")
         return Decisao(
-            quando_sem_usuario, "Sem usuário válido em Sistema > Usuários.",
-            "Sem usuário válido em Sistema > Usuários",
+            quando_sem_usuario, "Sem usuário válido no último logon nem em Sistema > Usuários.",
+            "Sem usuário válido no último logon nem em Sistema > Usuários",
         )
     if normalizar_usuario(usuario) == normalizar_usuario(esperado):
         return Decisao("manter" if ausente else "permitir", f"{fonte} confirma o usuário {usuario}.")
-    return Decisao(None, f"{fonte} informa outro usuário ({usuario}); a pendência continua aberta para decisão manual.")
+    atual = pendencia.get("usuario_atual")
+    if normalizar_usuario(usuario) == normalizar_usuario(atual):
+        return Decisao("recusar", f"{fonte} confirma o usuário {usuario}, que já está cadastrado.")
+    return Decisao(
+        quando_sem_usuario, f"{fonte} informa outro usuário ({usuario}); ele passa a ser o usuário logado no lugar de {atual or 'vazio'}.",
+        aplicar_usuario=usuario,
+    )
 
 
 # --------------------------------------------------------------------------
@@ -282,6 +293,16 @@ def decidir(automacao: ModuleType, pendencia: dict, decisao: str) -> bool:
         chamar_api(automacao, "POST", f"/api/usuarios/pendencias/{pendencia['id']}/decidir", {"decisao": decisao})
     except ErroApi as erro:
         automacao.log(ORIGEM, f"[AVISO] O servidor não aplicou '{decisao}' em {pendencia['serie']} ({erro}).")
+        return False
+    return True
+
+
+def aplicar_usuario(automacao: ModuleType, pendencia: dict, usuario: str) -> bool:
+    """Grava o usuário informado pelo Endpoint como usuário logado manual da série (depois da decisão)."""
+    try:
+        chamar_api(automacao, "POST", "/api/equipamento/atualizar-usuario", {"serial": pendencia["serie"], "usuario": usuario})
+    except ErroApi as erro:
+        automacao.log(ORIGEM, f"[AVISO] O servidor não gravou o usuário {usuario} em {pendencia['serie']} ({erro}).")
         return False
     return True
 
@@ -522,20 +543,47 @@ def ler_usuarios_sistema(page: "Page", automacao: ModuleType) -> dict[str, Any]:
     raise automacao.RotinaErro("A tabela de Sistema > Usuários não carregou; nenhuma decisão foi tomada.")
 
 
-def consultar_usuarios_sistema(page: "Page", automacao: ModuleType, linha: dict) -> dict:
-    """Abre o detalhe do computador (link do nome), lê Sistema > Usuários e volta à grade."""
+def ler_ultimo_logon(page: "Page", automacao: ModuleType) -> str:
+    """"Usuário do último logon" do detalhe do computador; vazio se o campo não aparece ou não tem usuário válido."""
+    fim = time.time() + ESPERA_ULTIMO_LOGON_S
+    anterior = None
+    while time.time() < fim:
+        automacao.verificar_cancelamento()
+        leitura = page.evaluate(JS_LER_ULTIMO_LOGON)
+        if leitura["presente"] and not leitura["carregando"]:
+            atual = limpar_usuario_logon(leitura["ultimo"])
+            if anterior == atual:
+                return atual if usuario_valido(atual) else ""
+            anterior = atual
+        else:
+            anterior = None
+        time.sleep(0.8)
+    return ""
+
+
+def consultar_detalhe(page: "Page", automacao: ModuleType, linha: dict) -> dict:
+    """Abre o detalhe do computador (link do nome) e lê o último logon; só sem ele lê Sistema > Usuários. Volta à grade.
+
+    Devolve ``{"fonte": "Último logon"|"Sistema", "usuario": str}``; ``usuario`` vazio quando nenhuma fonte tem usuário válido.
+    """
     href = str(linha.get("href") or "")
+    nome = linha.get("nome") or linha.get("valor")
     if not HREF_DETALHE.match(href):
-        raise automacao.RotinaErro(f"O link do detalhe de {linha.get('nome') or linha.get('valor')} não foi identificado.")
+        raise automacao.RotinaErro(f"O link do detalhe de {nome} não foi identificado.")
     try:
-        automacao.log(ORIGEM, f"Lendo Sistema > Usuários de {linha.get('nome') or linha.get('valor')}...")
+        automacao.log(ORIGEM, f"Lendo o último logon de {nome}...")
         page.locator(f'a.anchor-text[href="{href}"]').first.click()
         automacao.acionar_quando_pronto(
             lambda: None, "O detalhe do computador não abriu", confirmar=lambda: bool(URL_DETALHE.search(page.url)),
         )
+        ultimo = ler_ultimo_logon(page, automacao)
+        if ultimo:
+            return {"fonte": "Último logon", "usuario": ultimo}
+        automacao.log(ORIGEM, f"Sem último logon válido em {nome}; lendo Sistema > Usuários...")
         abrir_aba(page, automacao, "Sistema")
         abrir_aba(page, automacao, "Usuários")
-        return ler_usuarios_sistema(page, automacao)
+        sistema = ler_usuarios_sistema(page, automacao)
+        return {"fonte": "Sistema", "usuario": escolher_usuario_sistema(sistema["nomes"], sistema["ultimo_logon"])}
     finally:
         restaurar_grade(page, automacao)
 
@@ -549,28 +597,23 @@ def processar_pendencia(page: "Page", automacao: ModuleType, pendencia: dict) ->
     serie, hostname = str(pendencia["serie"]), str(pendencia.get("computador") or "")
     automacao.log(ORIGEM, f"Pendência {serie} ({hostname or 'sem hostname'}): pesquisando no Endpoint...")
 
-    def ao_encontrar(pg: "Page", linha: dict) -> dict | None:
-        if escolher_usuario_lista(linha["usuarios"]):
-            return None
-        return consultar_usuarios_sistema(pg, automacao, linha)
-
-    resultado = pesquisar_computador_endpoint(page, automacao, serie, hostname, ao_encontrar)
+    resultado = pesquisar_computador_endpoint(
+        page, automacao, serie, hostname, lambda pg, linha: consultar_detalhe(pg, automacao, linha),
+    )
     if resultado["estado"] == "ambiguo":
         veredito = Decisao(None, "Mais de um computador corresponde no Endpoint; a pendência continua aberta.")
     elif resultado["estado"] == "ausente":
         veredito = avaliar_decisao(pendencia, achou=False, usuario="")
     else:
-        usuario = escolher_usuario_lista(resultado["linha"]["usuarios"])
-        fonte = "Usuários logados"
-        consultado = False
-        if not usuario and resultado["extra"] is not None:
-            sistema = resultado["extra"]
-            usuario, fonte, consultado = escolher_usuario_sistema(sistema["nomes"], sistema["ultimo_logon"]), "Sistema", True
-        veredito = avaliar_decisao(pendencia, True, usuario, fonte, sistema_consultado=consultado or bool(usuario))
+        consulta = resultado["extra"]
+        veredito = avaliar_decisao(pendencia, True, consulta["usuario"], consulta["fonte"])
     if veredito.aviso:
         automacao.log(ORIGEM, f"[AVISO] {serie}: {veredito.aviso}.")
     aplicada = veredito.decisao is not None and decidir(automacao, pendencia, veredito.decisao)
-    anotar(automacao, pendencia, veredito.anotacao)
+    anotacao = veredito.anotacao
+    if aplicada and veredito.aplicar_usuario and not aplicar_usuario(automacao, pendencia, veredito.aplicar_usuario):
+        anotacao += " Não foi possível gravar o novo usuário; grave-o manualmente."
+    anotar(automacao, pendencia, anotacao)
     automacao.log(ORIGEM, f"{serie}: {veredito.decisao if aplicada else 'pendente'} - {veredito.anotacao}")
     return "decidida" if aplicada else "anotada"
 
