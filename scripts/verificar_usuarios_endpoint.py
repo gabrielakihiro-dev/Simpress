@@ -328,21 +328,37 @@ def _valor_do_campo(page: "Page", cabecalho: dict) -> str:
     return campo.input_value() if campo else ""
 
 
-def _abrir_campo_filtro(page: "Page", automacao: ModuleType, cabecalho: dict) -> "Locator":
-    """Abre a barra de pesquisa pela lupa da barra de ferramentas (única da tela) e devolve a caixa da coluna."""
+def _abrir_campo_filtro(page: "Page", automacao: ModuleType, coluna: str) -> "Locator":
+    """Abre a barra de pesquisa pela lupa da barra de ferramentas (única da tela) e devolve a caixa da coluna.
+
+    O cabeçalho é lido só depois de a barra abrir: ao aparecer, ela pode deslocar as colunas, e uma posição
+    lida antes levaria o valor para a caixa da coluna vizinha (por exemplo, número de série em Usuários logados)."""
     if not _caixas_de_filtro(page).count():
         page.locator("button[id$='_searchButton']").filter(visible=True).first.click()
         automacao.aguardar_estado(_caixas_de_filtro(page).first, "visible", 15000)
+    cabecalho = achar_cabecalho(ler_grade(page), coluna)
+    if cabecalho is None:
+        raise automacao.RotinaErro(f"A coluna '{coluna}' não está visível na grade do Endpoint.")
     campo = _localizar_campo(page, cabecalho)
     if campo is None:
         # Coluna fora da área visível: rola até o cabeçalho e relê a posição dele (a grade deslocou).
         page.locator(".ember-table-header-cell").filter(has_text=cabecalho["texto"]).first.scroll_into_view_if_needed()
         page.wait_for_timeout(300)
-        atual = next((c for c in ler_grade(page)["cabecalhos"] if c["texto"] == cabecalho["texto"]), None)
+        atual = achar_cabecalho(ler_grade(page), coluna)
         campo = _localizar_campo(page, atual) if atual else None
     if campo is None:
-        raise automacao.RotinaErro(f"A caixa de filtro da coluna '{cabecalho['texto']}' não foi encontrada.")
+        raise automacao.RotinaErro(f"A caixa de filtro da coluna '{coluna}' não foi encontrada.")
     return campo
+
+
+def _limpar_caixas_preenchidas(page: "Page") -> None:
+    """Esvazia as caixas da barra de pesquisa que ficaram com texto após uma tentativa sem confirmação,
+    para que o valor não continue filtrando outra coluna nas pesquisas seguintes."""
+    caixas = _caixas_de_filtro(page)
+    for i in range(caixas.count()):
+        caixa = caixas.nth(i)
+        if caixa.input_value():
+            _digitar(caixa, "")
 
 
 def _digitar(campo: "Locator", valor: str) -> None:
@@ -379,11 +395,7 @@ def aplicar_filtro(page: "Page", automacao: ModuleType, coluna: str, valor: str)
     (ou grade vazia confirmada). Sem confirmação levanta ``RotinaErro``; nada é decidido."""
     alvo = normalizar(valor)
     for tentativa in (1, 2):
-        grade = ler_grade(page)
-        cabecalho = achar_cabecalho(grade, coluna)
-        if cabecalho is None:
-            raise automacao.RotinaErro(f"A coluna '{coluna}' não está visível na grade do Endpoint.")
-        campo = _abrir_campo_filtro(page, automacao, cabecalho)
+        campo = _abrir_campo_filtro(page, automacao, coluna)
         _digitar(campo, valor)
 
         def confirmada(g: dict) -> bool:
@@ -399,6 +411,7 @@ def aplicar_filtro(page: "Page", automacao: ModuleType, coluna: str, valor: str)
         if confirmado is not None:
             return confirmado
         automacao.log(ORIGEM, f"[AVISO] Filtro '{coluna}' não confirmado (tentativa {tentativa}/2).")
+        _limpar_caixas_preenchidas(page)
     raise automacao.RotinaErro(
         f"A grade do Endpoint não confirmou o filtro da coluna '{coluna}' em {2 * CONFIRMACAO_FILTRO_S} s."
     )
@@ -406,10 +419,7 @@ def aplicar_filtro(page: "Page", automacao: ModuleType, coluna: str, valor: str)
 
 def limpar_filtro(page: "Page", automacao: ModuleType, coluna: str) -> None:
     """Remove o filtro da coluna; com um filtro antigo ativo, a próxima pesquisa cruzaria os dois."""
-    cabecalho = achar_cabecalho(ler_grade(page), coluna)
-    if cabecalho is None:
-        raise automacao.RotinaErro(f"A coluna '{coluna}' não está visível para limpar o filtro.")
-    campo = _abrir_campo_filtro(page, automacao, cabecalho)
+    campo = _abrir_campo_filtro(page, automacao, coluna)
     _digitar(campo, "")
     if _aguardar_grade_estavel(page, automacao, lambda g: bool(g["linhas"]) and (achar_cabecalho(g, coluna) is not None) and _valor_do_campo(page, achar_cabecalho(g, coluna)) == "", CONFIRMACAO_FILTRO_S) is None:
         raise automacao.RotinaErro(f"A grade do Endpoint não confirmou a limpeza do filtro '{coluna}'.")
