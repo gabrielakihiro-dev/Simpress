@@ -39,9 +39,11 @@ SOFTEXPERT_URL = "https://sebraepr.softexpert.app/softexpert/workspace?page=task
 # PRESUNÇÃO validada só na bancada local; ajuste depois de uma sessão assistida (ver o doc da fase).
 # ---------------------------------------------------------------------------------------------
 
-# Lista da central de tarefas.
-SEL_LISTA = "[role='grid'], [role='treegrid'], table.task-list, #taskCenterList"
-SEL_LINHA = "tbody tr, [role='row']:has([role='gridcell'])"
+# Lista da central de tarefas. Os cartões `rctCardBase` foram confirmados na tela real em leitura assistida
+# (22/10/2026): um cartão por tarefa, carregados por rolagem em lotes (8 -> 29 -> 35), com `task-title`
+# dentro; os demais seletores são hipóteses da bancada.
+SEL_LISTA = "[data-test-selector='rctCardBase'], [role='grid'], [role='treegrid'], table.task-list, #taskCenterList"
+SEL_LINHA = "[data-test-selector='rctCardBase'], tbody tr, [role='row']:has([role='gridcell'])"
 SEL_CARREGANDO = ".carregando, .loading, .spinner, [aria-busy='true']"
 SEL_LISTA_VAZIA = ".sem-registros, .empty-list, [data-empty='true']"
 TEXTO_LISTA_VAZIA = re.compile(r"nenhum (registro|resultado|item|tarefa)", re.IGNORECASE)
