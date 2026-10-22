@@ -91,8 +91,9 @@ class ModuloSoftExpertFalso:
             return item  # type: ignore[no-any-return]
         return self.chamados[numero]
 
-    def garantir_login(self, page: Any) -> None:
+    def garantir_login(self, page: Any, *, permitir_sso: bool = False) -> None:
         self.relogins += 1
+        self.permitiu_sso = permitir_sso
 
 
 def rotinas_falsas(cancelado: bool = False) -> SimpleNamespace:
@@ -191,6 +192,7 @@ class LeitorSoftExpertTests(unittest.TestCase):
         lido = self.leitor(modulo).ler_chamado("UTIC-2026-0001")
         self.assertEqual(lido.numero, "UTIC-2026-0001")
         self.assertEqual(modulo.relogins, 1)
+        self.assertTrue(modulo.permitiu_sso)
 
     def test_a_second_expiry_is_a_login_request(self):
         modulo = ModuloSoftExpertFalso()

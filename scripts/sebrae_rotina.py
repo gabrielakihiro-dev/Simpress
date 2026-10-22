@@ -139,7 +139,7 @@ class LeitorSoftExpertReal:
                 # Same as extrair_chamados: wait for a new login once, then read the ticket again.
                 self.log(f"{numero}: sessão expirada; aguardando novo login.")
                 pagina.goto(self.modulo.SOFTEXPERT_URL, wait_until="domcontentloaded", timeout=self.rotinas.CARREGAMENTO_MS)
-                self.modulo.garantir_login(pagina)
+                self.modulo.garantir_login(pagina, permitir_sso=True)
                 try:
                     return self._extrair(pagina, numero)
                 except self.modulo.SessaoExpirada:

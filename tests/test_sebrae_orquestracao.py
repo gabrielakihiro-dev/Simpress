@@ -29,6 +29,12 @@ def chamado(numero: str, descricao: str = INCIDENTE, **campos: str) -> ChamadoSo
     return ChamadoSoftExpert(numero=numero, **dados)
 
 
+class ErroComMotivo(RuntimeError):
+    def __init__(self, motivo: str) -> None:
+        super().__init__("texto da confirmação não deve ser registrado")
+        self.motivo = motivo
+
+
 class SoftExpertFalso:
     def __init__(self, chamados: Iterable[ChamadoSoftExpert], listados: Optional[List[str]] = None) -> None:
         self.chamados: Dict[str, ChamadoSoftExpert] = {item.numero: item for item in chamados}
@@ -300,6 +306,22 @@ class ConcorrenciaETriagemTests(Base):
         self.assertEqual(resultado.resumo.falha, orq.FALHA_LEITURAS_SEGUIDAS)
         self.assertEqual(resultado.resumo.incluidos, 1)
         self.assertNotIn("UTIC-2026-0105", softexpert.lidos)
+
+    def test_an_unexpected_soft_expert_confirmation_stops_immediately(self):
+        novos = [chamado(f"UTIC-2026-01{n:02d}") for n in range(1, 4)]
+        softexpert = self.lista_com(*novos)
+        softexpert.erros["UTIC-2026-0101"] = ErroComMotivo(orq.MOTIVO_CONFIRMACAO_INESPERADA)
+
+        resultado = self.rodar(softexpert, DashboardFalso())
+
+        self.assertEqual(resultado.situacao, orq.SITUACAO_FALHA)
+        self.assertEqual(resultado.resumo.falha, orq.MOTIVO_CONFIRMACAO_INESPERADA)
+        self.assertEqual(resultado.resumo.incluidos, 0)
+        self.assertEqual(softexpert.lidos, ["UTIC-2026-0101"])
+        self.assertEqual(
+            self.ler_estado()["pendencias"],
+            {"UTIC-2026-0101": orq.MOTIVO_CONFIRMACAO_INESPERADA},
+        )
 
     def test_a_successful_read_resets_the_failure_streak(self):
         novos = [chamado(f"UTIC-2026-01{n:02d}") for n in range(1, 7)]

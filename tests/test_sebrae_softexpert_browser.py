@@ -100,8 +100,9 @@ document.querySelectorAll('.proibido').forEach((el) => el.addEventListener('clic
 
 PAGINA_LOGIN = """<!doctype html><html lang="pt-br"><head><meta charset="utf-8"><title>Entrar</title></head><body>
 <form onsubmit="return false"><h1>SoftExpert</h1><input type="text" placeholder="Usuário">
-<input type="password" placeholder="Senha"><button>Entrar</button></form>
+<input type="password" placeholder="Senha"><button>Entrar</button><button id="sso" type="button">SSO</button></form>
 <script>
+document.getElementById('sso').addEventListener('click', () => fetch('/api/sso?chave=%(chave)s', {method: 'POST'}));
 setInterval(async () => {
   const e = await (await fetch('/api/estado')).json();
   if (e.%(chave)s) location.reload();
@@ -172,6 +173,7 @@ class Bancada:
         self.associados: list[str] = []
         self.abertos: list[str] = []
         self.proibidos: list[str] = []
+        self.sso_clicks: list[str] = []
 
     def por_numero(self, numero: str) -> dict:
         return next(c for c in self.chamados if c["numero"] == numero)
@@ -231,6 +233,13 @@ def criar_servidor(bancada: Bancada) -> ThreadingHTTPServer:
                 bancada.abertos.append(consulta["numero"])
             elif caminho == "/api/proibido":
                 bancada.proibidos.append(consulta["acao"])
+            elif caminho == "/api/sso":
+                chave = consulta.get("chave", "")
+                bancada.sso_clicks.append(chave)
+                if chave == "logado":
+                    bancada.logado = True
+                elif chave == "logado_janela":
+                    bancada.logado_janela = True
             self.responder("{}", "application/json")
 
         def log_message(self, *_args):
@@ -343,6 +352,12 @@ class RegrasPurasTests(unittest.TestCase):
             se.garantir_login(MagicMock())
         self.assertEqual(aguardar.call_args.args[1], "SoftExpert")
         self.assertIs(aguardar.call_args.args[2], se.softexpert_logado)
+        self.assertIsNone(aguardar.call_args.kwargs["entrar"])
+
+    def test_garantir_login_habilita_sso_somente_quando_autorizado_para_retomada(self):
+        with patch.object(automacao, "aguardar_login") as aguardar:
+            se.garantir_login(MagicMock(), permitir_sso=True)
+        self.assertIs(aguardar.call_args.kwargs["entrar"], se._entrar_com_sso)
 
     def test_erros_derivam_de_rotina_erro_do_runner(self):
         for classe in (se.SoftExpertErro, se.SessaoExpirada, se.ChamadoNaoConfere, se.ChamadoNaoEncontrado):
@@ -473,6 +488,16 @@ class SoftExpertNaBancadaTests(unittest.TestCase):
         self.assertTrue(se.softexpert_logado(page))
         self.assertEqual(se.coletar_numeros(page), ["UTIC-2026-0001"])
 
+    def test_retomada_de_sessao_clica_no_sso_uma_vez(self):
+        self.bancada.logado = False
+        page = self.context.new_page()
+        page.goto(self.url, wait_until="domcontentloaded")
+
+        se.garantir_login(page, permitir_sso=True)
+
+        self.assertTrue(se.softexpert_logado(page))
+        self.assertEqual(self.bancada.sso_clicks, ["logado"])
+
     def test_sessao_expirada_na_janela_do_chamado_nao_deixa_janela_aberta(self):
         self.bancada.chamados = [chamado(1)]
         self.bancada.logado_janela = False
@@ -488,12 +513,16 @@ class SoftExpertNaBancadaTests(unittest.TestCase):
         self.bancada.logado_janela = False
         page = self.abrir_lista()
 
-        def login_do_usuario(aba):
+        sso_permitido = []
+
+        def login_do_usuario(aba, *, permitir_sso=False):
+            sso_permitido.append(permitir_sso)
             self.bancada.logado_janela = True
 
         with patch.object(se, "garantir_login", login_do_usuario):
             resultado = se.extrair_chamados(self.context, page, ["UTIC-2026-0001", "UTIC-2026-0002"])
         self.assertTrue(all(isinstance(r, ChamadoSoftExpert) for r in resultado.values()), resultado)
+        self.assertEqual(sso_permitido, [True])
         self.assertEqual(self.abas_do_registro(), [])
 
     # ------------------------------------------------------------------ extração
