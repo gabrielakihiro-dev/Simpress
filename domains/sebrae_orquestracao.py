@@ -31,6 +31,7 @@ from domains.sebrae_chamados import (
     ACAO_INCLUIR,
     COLUNAS_GRAVADAS,
     ChamadoSoftExpert,
+    Decisao,
     ResumoExecucao,
     decidir,
     deve_avisar,
@@ -243,18 +244,22 @@ def sincronizar(
     agora: Callable[[], datetime] = lambda: datetime.now(FUSO),
     log: Callable[[str], None] = lambda texto: None,
     permitir_dashboard_vazio: bool = False,
+    observar: Optional[Callable[[ChamadoSoftExpert, Decisao], None]] = None,
 ) -> ResultadoOrquestracao:
     """Runs one synchronization, persists the state and decides whether to notify.
 
     Expected problems (login, cancellation, an adapter error) never raise: they become the situation of
     the result, with the counts reached so far. Only a ``BaseException`` such as Ctrl+C propagates, after
     the state of the interrupted run is written.
+
+    ``observar`` (shadow mode) sees each ticket read and its decision; it never changes what is written, and
+    its errors are only logged.
     """
     inicio = agora()
     anterior = ler_estado(caminho_estado)
     execucao = _Execucao()
     try:
-        _fluxo(softexpert, dashboard, execucao, cancelado, log, permitir_dashboard_vazio)
+        _fluxo(softexpert, dashboard, execucao, cancelado, log, permitir_dashboard_vazio, observar)
     except _Parar:
         pass
     except CancelamentoSolicitado:
@@ -288,6 +293,7 @@ def _fluxo(
     cancelado: Callable[[], bool],
     log: Callable[[str], None],
     permitir_dashboard_vazio: bool,
+    observar: Optional[Callable[[ChamadoSoftExpert, Decisao], None]] = None,
 ) -> None:
     def verificar_cancelamento() -> None:
         if cancelado():
@@ -358,6 +364,13 @@ def _fluxo(
                 raise _Parar() from erro
             continue
         falhas_seguidas = 0
+        if observar is not None:
+            try:
+                decisao_observada = decidir(chamado)
+                if decisao_observada.numero == numero:  # never record another ticket's form under this number
+                    observar(chamado, decisao_observada)
+            except Exception as erro:  # the shadow mode must never stop or change the routine
+                log(f"{numero}: modo sombra falhou ({type(erro).__name__}).")
         _tratar_chamado(numero, chamado, dashboard, execucao, log)
 
 

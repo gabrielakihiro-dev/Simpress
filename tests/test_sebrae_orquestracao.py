@@ -242,6 +242,36 @@ class FluxoCompletoTests(Base):
         self.assertFalse(resumo["login_necessario"])
 
 
+class ModoSombraTests(Base):
+    def test_the_observer_sees_every_ticket_read_and_never_changes_what_is_written(self):
+        vistos: List[tuple] = []
+        softexpert = self.lista_com(chamado("UTIC-2026-0101"), chamado("UTIC-2026-0102", "Bom dia"))
+        dashboard = DashboardFalso()
+        resultado = self.rodar(softexpert, dashboard, observar=lambda c, d: vistos.append((c.numero, d.tipo, d.motivo)))
+        self.assertEqual(vistos, [("UTIC-2026-0101", "INCIDENTE", ""), ("UTIC-2026-0102", "", "sem_indicios_de_tipo")])
+        self.assertEqual([linha["C"] for linha in dashboard.linhas], ["UTIC-2026-0101"])
+        self.assertEqual(resultado.resumo.pendentes, 1)
+
+    def test_an_observer_failure_is_logged_and_the_routine_goes_on(self):
+        def falhar(_c: ChamadoSoftExpert, _d: Any) -> None:
+            raise RuntimeError("texto do chamado")
+
+        mensagens: List[str] = []
+        dashboard = DashboardFalso()
+        resultado = self.rodar(self.lista_com(chamado("UTIC-2026-0101")), dashboard, observar=falhar, log=mensagens.append)
+        self.assertEqual(resultado.situacao, orq.SITUACAO_CONCLUIDA)
+        self.assertEqual(resultado.resumo.incluidos, 1)
+        self.assertIn("UTIC-2026-0101: modo sombra falhou (RuntimeError).", mensagens)
+        self.assertFalse(any("texto do chamado" in m for m in mensagens))
+
+    def test_another_tickets_form_is_not_observed(self):
+        vistos: List[str] = []
+        softexpert = self.lista_com(chamado("UTIC-2026-0101"))
+        softexpert.chamados["UTIC-2026-0101"] = chamado("UTIC-2026-0999")
+        self.rodar(softexpert, DashboardFalso(), observar=lambda c, d: vistos.append(d.numero))
+        self.assertEqual(vistos, [])
+
+
 class ConcorrenciaETriagemTests(Base):
     def test_a_ticket_that_shows_up_while_the_run_is_going_is_ignored_and_not_written(self):
         softexpert = self.lista_com(chamado("UTIC-2026-0101"), chamado("UTIC-2026-0102"))
