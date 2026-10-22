@@ -38,7 +38,7 @@ Erros (`SoftExpertErro` deriva de `RotinaErro` do runner, mesmo se o runner for 
 
 Tudo isto está no bloco `SELETORES` no topo do módulo; foi testado só na bancada.
 
-1. **Lista**: contêiner `[role=grid]`/`table.task-list`/`#taskCenterList`; linhas `tbody tr` ou `[role=row]` com `[role=gridcell]`; indicador de carregamento `.carregando/.loading/.spinner/[aria-busy]`; lista vazia com texto "Nenhum registro/resultado…".
+1. **Lista** (cartões `rctCardBase` confirmados na tela real; o restante segue como hipótese): contêiner `[role=grid]`/`table.task-list`/`#taskCenterList`; linhas `tbody tr` ou `[role=row]` com `[role=gridcell]`; indicador de carregamento `.carregando/.loading/.spinner/[aria-busy]`; lista vazia com texto "Nenhum registro/resultado…".
 2. **Identificador**: o primeiro `UTIC-AAAA-N` do texto da linha é o número do chamado (um título que cite outro número não o substitui).
 3. **Paginação/rolagem**: botão ou link chamado "Próxima"/"Próxima página"; sem ele, a lista rola dentro do contêiner (ou da janela) e carrega lotes. Não há leitura de "total de registros" para conferir a contagem.
 4. **Seleção e menu**: clicar na linha a seleciona e habilita o botão **Executar** (canto inferior direito); o menu mostra o item **Registro de Chamados**.
@@ -47,9 +47,20 @@ Tudo isto está no bloco `SELETORES` no topo do módulo; foi testado só na banc
 7. **Login**: campo `input[type=password]` visível, ou URL com `/login`, `/signin`, `/sso` ou `login.microsoftonline.com`.
 8. **Título**: o título do formulário precisa aparecer na linha da lista (a lista pode abreviá-lo com reticências).
 
+## Leitura assistida da lista real (22/10/2026, somente leitura)
+
+Feita pela extensão Claude in Chrome no Chrome do usuário (não no Chrome de automação), sem clicar em nada que altere estado: só abrir a URL, ler texto/DOM e rolar a lista.
+
+- **Sessão**: a URL da central abriu em `/softexpert/login?page=taskCenter` (sessão expirada) com os botões `SSO` e `Usuário e senha`. Poucos segundos depois, o próprio SoftExpert concluiu o acesso e abriu `workspace?page=taskCenter` ("Central de tarefas"); o clique no `SSO` falhou porque o botão já tinha sumido, então **nenhum clique foi dado**. Ou seja, a retomada pode terminar sozinha; o código já espera a lista aparecer depois de acionar o SSO.
+- **Lista (aba Execução, 35 tarefas)**: cada tarefa é um cartão `[data-test-selector="rctCardBase"]` com `task-title` (texto "Execução de atividade" + "NÚMERO - título"), `task-main-extra-info`, `task-deadline` e `task-extra-infos` (Habilitada em). Não há `role=grid`, `<table>` nem botão "Próxima": os cartões vão sendo carregados por rolagem do contêiner (um `div` com `overflow-y:auto`), em lotes: 8 cartões iniciais, 29 e depois 35 (a altura rolável passou de 1216 para 3892 e 4694 px). Depois de rolar até o fim, o DOM tinha 35 cartões, sem virtualização.
+- **Conteúdo**: 33 chamados `UTIC-AAAA-N` e 2 tarefas `PRT-NNNNNN/AA` ("UTIC - Registrar Protocolo"), que não são chamados e ficam fora pelo padrão UTIC. `UTIC-2026-1253` e `UTIC-2026-1177` aparecem na lista. "Habilitada em" pode vir como "Ontem, 13:20:02" em vez de data completa; a hora completa deve vir do formulário.
+- **Outros seletores vistos**: `taskCenterRefreshButton`, `GeneralSearchInput`, `rctAddFilterBtn`, `rctEmptyState-InfoMessage` (o elemento existe no DOM mesmo com a lista cheia, por isso não foi usado como aviso de lista vazia).
+- **Aplicado no código**: `SEL_LISTA` e `SEL_LINHA` passam a incluir o cartão `rctCardBase`; a bancada ganhou o layout em cartões e um teste com 35 cartões em lotes de 8, 2 tarefas `PRT` e 33 chamados.
+- **Continua não validado**: botão **Executar** e menu **Registro de Chamados** (inclusive onde ficam nos cartões, que têm dois botões sem rótulo no canto direito), janela PHP, confirmação de associar, rótulos reais dos campos do formulário e o indicador de carregamento. Tudo isso exige abrir um chamado, o que não foi feito nesta leitura.
+
 ## Sessão assistida necessária (com o usuário logado)
 
-Não foi feito: nenhuma tela real do SoftExpert foi acessada. Para fechar a fase:
+A lista real foi lida (seção acima). Falta o restante: abrir um chamado já conhecido. Para fechar a fase:
 
 1. Com o usuário logado no Chrome de automação, abrir a central de tarefas e anotar o HTML da lista (contêiner, linha, paginação ou rolagem, indicador de carregamento) e da coluna que traz o número.
 2. Escolher **um chamado já conhecido** e acompanhar manualmente Executar → Registro de Chamados: se abre janela PHP ou iframe, se há confirmação (modal ou nativa) e o texto exato, e os rótulos reais dos campos. Não finalizar, não registrar atendimento.
