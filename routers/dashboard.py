@@ -1,7 +1,9 @@
 """Read-only summary used by the Home dashboard panel."""
 
 import logging
+import threading
 from collections import Counter
+from copy import deepcopy
 from dataclasses import dataclass, field
 from datetime import date, datetime, timedelta
 from pathlib import Path
@@ -55,6 +57,14 @@ class DashboardServices:
     stale_ticket_days: int = DEFAULT_STALE_TICKET_DAYS
     display_comparison: Optional[Callable[[Dict[str, Any]], Dict[str, Any]]] = None
     now: Callable[[], datetime] = field(default=_local_now)
+    # Stat identity of the history file; when given, the new divergences alert is reused while it matches.
+    get_comparison_history_signature: Optional[Callable[[], Optional[tuple]]] = None
+
+
+# Reapplying the display rules to the two newest events dominated the panel time; the result
+# depends only on the history content, so it is kept per history file signature.
+_NEW_DIVERGENCES_CACHE: Optional[Tuple[tuple, Dict[str, Any]]] = None
+_NEW_DIVERGENCES_CACHE_LOCK = threading.Lock()
 
 
 def _count(value: Any) -> int:
@@ -141,6 +151,7 @@ def build_dashboard(services: DashboardServices) -> Dict[str, Any]:
             ],
         }
 
+    history_signature = _history_signature(services)
     history = _comparison_history(services)
     return {
         "base_importada": len(equipment) > 0,
@@ -157,7 +168,7 @@ def build_dashboard(services: DashboardServices) -> Dict[str, Any]:
         "ultima_comparacao": latest,
         "base_desatualizada": _stale_base_summary(services, history),
         "os_paradas": _stale_tickets_summary(services),
-        "divergencias_novas": _new_divergences_summary(services, history),
+        "divergencias_novas": _new_divergences_summary(services, history, history_signature),
     }
 
 
@@ -369,18 +380,41 @@ def new_divergences_status(
     return result
 
 
-def _new_divergences_summary(services: DashboardServices, history: Optional[Sequence[Any]]) -> Optional[Dict[str, Any]]:
+def _history_signature(services: DashboardServices) -> Optional[tuple]:
+    if services.get_comparison_history_signature is None:
+        return None
+    try:
+        return services.get_comparison_history_signature()
+    except Exception:
+        return None
+
+
+def _new_divergences_summary(
+    services: DashboardServices,
+    history: Optional[Sequence[Any]],
+    signature: Optional[tuple] = None,
+) -> Optional[Dict[str, Any]]:
+    global _NEW_DIVERGENCES_CACHE
     if services.get_comparison_history is None or services.display_comparison is None:
         return None
     unavailable: Dict[str, Any] = {"estado": "indisponivel", "total": 0, "por_secao": [], "anterior": None, "atual": None}
     if history is None:
         return unavailable
+    with _NEW_DIVERGENCES_CACHE_LOCK:
+        cached = _NEW_DIVERGENCES_CACHE
+    if signature is not None and cached is not None and cached[0] == signature:
+        return deepcopy(cached[1])
     try:
-        return new_divergences_status(history, services.display_comparison)
+        result = new_divergences_status(history, services.display_comparison)
     except Exception:
         # The alert is optional; the inventory summary must still load.
         logger.exception("Falha ao calcular o alerta de divergências novas.")
         return unavailable
+    # The history read between the two stats may be a half-written file; cache only a stable one.
+    if signature is not None and signature == _history_signature(services):
+        with _NEW_DIVERGENCES_CACHE_LOCK:
+            _NEW_DIVERGENCES_CACHE = (signature, deepcopy(result))
+    return result
 
 
 @dataclass(frozen=True)

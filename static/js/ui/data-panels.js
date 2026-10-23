@@ -782,13 +782,16 @@
       if (!force && Date.now() - lastFetch < REFRESH_MIN_MS) return;
       lastFetch = Date.now();
       const serial = ++requestSerial;
+      const ticketSerialAtStart = ticketSummaryRequestSerial;
       try {
         const response = await win.fetch(ENDPOINT, { headers: { Accept: "application/json" } });
         if (!response.ok) throw new Error(String(response.status));
         const data = await response.json();
         if (serial !== requestSerial) return;
         renderPanel(data);
-        if (doc.getElementById("tab-resumo")?.getAttribute("aria-selected") === "true") refreshTicketSummary(true);
+        // An OS load started after this request already reflects data at least as new; repeating it only doubles the wait.
+        if (ticketSerialAtStart === ticketSummaryRequestSerial
+          && doc.getElementById("tab-resumo")?.getAttribute("aria-selected") === "true") refreshTicketSummary(true);
         renderBadge(divergenceTotal(data.ultima_comparacao));
         // Other Home cards (usage in the last 30 days) render from the same response.
         doc.dispatchEvent(new win.CustomEvent("simpress:painel-atualizado", { detail: data }));

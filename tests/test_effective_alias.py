@@ -177,6 +177,33 @@ class EndpointAliasIndexTests(unittest.TestCase):
             )
             self.assertFalse(effective_alias.read_endpoint_alias_index(missing)["available"])
 
+    def test_unchanged_endpoint_is_parsed_once_and_changes_are_read_again(self):
+        with tempfile.TemporaryDirectory() as directory:
+            endpoint_file = Path(directory) / "InvAll.xlsx"
+            endpoint_file.write_bytes(b"fixture-1")
+            reads = []
+
+            def parse(file_bytes, role):
+                reads.append(file_bytes)
+                return {"records": [{"SERIAL": "S1", "NOMEDOCOMPUTADOR": file_bytes.decode()}]}
+
+            services = effective_alias.EffectiveAliasServices(
+                endpoint_upload_file=lambda: endpoint_file,
+                validate_uploaded_workbook=parse,
+                logger=logging.getLogger("tests.effective_alias"),
+            )
+            first = effective_alias.read_endpoint_alias_index(services)
+            first["unique"]["S1"] = "CHANGED-BY-CALLER"
+            removed = frozenset({("S1", effective_alias.normalize_reference_value("fixture-1"))})
+            second = effective_alias.read_endpoint_alias_index(services, removed)
+            self.assertEqual(len(reads), 1)
+            self.assertEqual(second["unique"], {}, "removed hostnames still apply to cached rows")
+            self.assertEqual(effective_alias.read_endpoint_alias_index(services)["unique"], {"S1": "fixture-1"})
+
+            endpoint_file.write_bytes(b"fixture-22")
+            self.assertEqual(effective_alias.read_endpoint_alias_index(services)["unique"], {"S1": "fixture-22"})
+            self.assertEqual(len(reads), 2)
+
 
 if __name__ == "__main__":
     unittest.main()
