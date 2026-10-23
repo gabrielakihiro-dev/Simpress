@@ -14,6 +14,8 @@ from domains.sebrae_chamados import (
     extrair_numeros,
     formatar_data_abertura,
     impressao_digital,
+    mascarar_cpfs,
+    detalhes_atendimento_do_chamado,
     numeros_do_dashboard,
     triagem,
 )
@@ -24,7 +26,7 @@ def chamado(**campos):
         "numero": "UTIC-2026-0094",
         "titulo": "Notebook sem acesso à rede",
         "descricao": "O notebook não conecta na rede do escritório desde ontem.",
-        "iniciador": "  Maria   da Silva ",
+        "solicitante": "  Maria   da Silva ",
         "habilitada_em": "21/10/2026 09:12",
     }
     base.update(campos)
@@ -107,16 +109,37 @@ class ClassificationTests(unittest.TestCase):
         self.assertEqual(motivo, "sem_indicios_de_tipo")
 
 
+class CpfMaskingTests(unittest.TestCase):
+    def test_masks_punctuated_and_unpunctuated_valid_cpfs(self):
+        texto = "CPF 123.456.789-09 e outro 52998224725"
+        self.assertEqual(mascarar_cpfs(texto), "CPF ***.***.***-** e outro ***.***.***-**")
+
+    def test_masks_invalid_digits_when_format_or_cpf_label_is_explicit(self):
+        texto = "CPF 12345678900; 123.456.789-00"
+        self.assertEqual(mascarar_cpfs(texto), "CPF ***.***.***-**; ***.***.***-**")
+
+    def test_text_without_cpf_is_preserved(self):
+        texto = "Notebook UTIC-2026-0094 não conecta; patrimônio 12345678."
+        self.assertEqual(mascarar_cpfs(texto), texto)
+
+    def test_similar_but_invalid_or_longer_numbers_are_preserved(self):
+        for texto in ("Referência 12345678900", "Código 123456789090", "UTIC-2026-12345678901"):
+            with self.subTest(texto=texto):
+                self.assertEqual(mascarar_cpfs(texto), texto)
+
+
 class DecisionTests(unittest.TestCase):
-    def test_complete_ticket_builds_exactly_the_seven_columns(self):
+    def test_complete_ticket_builds_exactly_the_nine_columns(self):
         decisao = decidir(chamado())
         self.assertEqual(decisao.acao, ACAO_INCLUIR)
         self.assertEqual(decisao.tipo, "INCIDENTE")
         self.assertEqual(set(decisao.linha), set(regras.COLUNAS_GRAVADAS))
         self.assertEqual(dict(decisao.linha), {
             "C": "UTIC-2026-0094",
-            "F": "O notebook não conecta na rede do escritório desde ontem.",
-            "G": "Maria da Silva",
+            "D": "Em Aberto",
+            "F": "",
+            "G": "O notebook não conecta na rede do escritório desde ontem.",
+            "H": "Maria da Silva",
             "I": "INCIDENTE",
             "N": "Sebrae",
             "P": "PR",
@@ -126,7 +149,58 @@ class DecisionTests(unittest.TestCase):
     def test_missing_description_uses_the_original_title(self):
         decisao = decidir(chamado(descricao="   ", titulo="Notebook não liga"))
         self.assertEqual(decisao.acao, ACAO_INCLUIR)
-        self.assertEqual(decisao.linha["F"], "Notebook não liga")
+        self.assertEqual(decisao.linha["G"], "Notebook não liga")
+
+    def test_title_fallback_is_masked_too(self):
+        decisao = decidir(chamado(descricao="   ", titulo="Notebook não liga. CPF 123.456.789-09"))
+        self.assertEqual(decisao.linha["G"], "Notebook não liga. CPF ***.***.***-**")
+
+    def test_atendimento_integral_fica_separado_da_descricao_do_registro(self):
+        item = chamado(
+            titulo="Remoção do usuário",
+            descricao="Remoção do usuário",
+            detalhes_atendimento_realizado="Backup concluído",
+        )
+        decisao = decidir(item)
+        self.assertEqual(decisao.linha["F"], "Backup concluído")
+        self.assertEqual(decisao.linha["G"], "Remoção do usuário")
+        self.assertEqual(detalhes_atendimento_do_chamado(item), "Backup concluído")
+
+    def test_atendimento_pode_ficar_vazio_quando_nao_houver_registro_concluido(self):
+        decisao = decidir(chamado(detalhes_atendimento_realizado=""))
+        self.assertEqual(decisao.acao, ACAO_INCLUIR)
+        self.assertEqual(decisao.linha["F"], "")
+        self.assertEqual(decisao.linha["G"], "O notebook não conecta na rede do escritório desde ontem.")
+
+    def test_atendimento_e_registrado_mesmo_com_descricao_longa(self):
+        descricao = "Impressora não funciona. " + ("A falha continua desde o início do expediente. " * 2)
+        item = chamado(descricao=descricao, detalhes_atendimento_realizado="Não anexar")
+        self.assertEqual(decidir(item).linha["F"], "Não anexar")
+        self.assertEqual(decidir(item).linha["G"], descricao.strip())
+
+    def test_atendimento_e_usado_na_classificacao_sem_ser_juntado_a_descricao(self):
+        item = chamado(
+            titulo="Assunto",
+            descricao="Relato breve",
+            detalhes_atendimento_realizado="Notebook não liga",
+        )
+        self.assertEqual(decidir(item).linha["I"], "INCIDENTE")
+        self.assertEqual(decidir(item).linha["G"], "Relato breve")
+        self.assertEqual(decidir(item).linha["F"], "Notebook não liga")
+
+    def test_cpfs_in_attendance_and_description_are_masked_separately(self):
+        item = chamado(
+            titulo="Remoção de usuário",
+            descricao="Remoção de usuário",
+            detalhes_atendimento_realizado="CPF 529.982.247-25 removido do acesso",
+            solicitante="Maria da Silva (CPF 123.456.789-09)",
+        )
+        self.assertEqual(
+            decidir(item).linha["F"],
+            "CPF ***.***.***-** removido do acesso",
+        )
+        self.assertEqual(decidir(item).linha["G"], "Remoção de usuário")
+        self.assertEqual(decidir(item).linha["H"], "Maria da Silva (CPF ***.***.***-**)")
 
     def test_date_is_reformatted_to_the_dashboard_format(self):
         for entrada in ("21/10/2026 09:12:45", "21/10/2026, 09:12", "2026-10-21 09:12:00", "21/10/2026   09:12"):
@@ -142,7 +216,7 @@ class DecisionTests(unittest.TestCase):
 
     def test_missing_data_leaves_the_ticket_pending_with_a_reason(self):
         casos = {
-            "sem_iniciador": chamado(iniciador="  "),
+            "sem_solicitante": chamado(solicitante="  "),
             "sem_data_de_abertura": chamado(habilitada_em=""),
             "data_de_abertura_invalida": chamado(habilitada_em="ontem de manhã"),
             "sem_indicios_de_tipo": chamado(descricao="Olá", titulo="Assunto"),

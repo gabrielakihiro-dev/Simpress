@@ -54,6 +54,7 @@ FIXTURE_MANUAL_DATE = "2026-10-20T09:00:00-03:00"
 FIXTURE_MANUAL_DATES = {}
 # Fictional series repeated in the Endpoint: its users are listed, none is chosen.
 FIXTURE_AMBIGUOUS_USERS = {"DEMO-SN-001": ["usuario.a", "usuario.b"]}
+FIXTURE_TICKET_OS_LINKS = {}
 TICKET_REPORT = {
     "atualizado_em": "2026-10-09T12:00:00Z",
     "fontes": {
@@ -345,6 +346,8 @@ class Handler(BaseHTTPRequestHandler):
                            "continuam": [], "resolvidos": []}})
         elif path == "/api/operacoes/chamados":
             self.send(TICKET_REPORT)
+        elif path == "/api/operacoes/chamados/vinculos-os":
+            self.send({"vinculos": list(FIXTURE_TICKET_OS_LINKS.values())})
         elif path == "/__ticket_import_state":
             self.send({"imports": ticket_import_count})
         elif path == f"/api/historico-comparacoes/{DEMO_EVENT_ID}":
@@ -388,6 +391,18 @@ class Handler(BaseHTTPRequestHandler):
     def do_PUT(self):
         global DEMO_ANNOTATION
         path = urlsplit(self.path).path
+        if path == "/api/operacoes/chamados/vinculos-os":
+            size = int(self.headers.get("Content-Length", "0"))
+            payload = json.loads(self.rfile.read(size) or b"{}")
+            key = (payload.get("fonte"), str(payload.get("serie") or "").upper(),
+                   "".join(str(payload.get("os") or "").upper().split()))
+            if payload.get("numero"):
+                vinculo = {**payload, "chamado": f"UTIC-{payload['ano']}-{payload['numero']}"}
+                FIXTURE_TICKET_OS_LINKS[key] = vinculo
+            else:
+                vinculo = FIXTURE_TICKET_OS_LINKS.pop(key, None)
+            self.send({"vinculo": vinculo})
+            return
         if path == "/api/automacao/sebrae/agendamento":
             size = int(self.headers.get("Content-Length", "0"))
             ativo = bool(json.loads(self.rfile.read(size) or b"{}").get("ativo"))
@@ -435,7 +450,11 @@ class Handler(BaseHTTPRequestHandler):
                             "origem": "manual" if FIXTURE_MANUAL_USERS.get(serie) else "",
                             "serial_cadastro": serie,
                             "informado_em": FIXTURE_MANUAL_DATES.get(serie, "") if FIXTURE_MANUAL_USERS.get(serie) else "",
-                            "candidatos": FIXTURE_AMBIGUOUS_USERS.get(serie, [])}
+                            "candidatos": FIXTURE_AMBIGUOUS_USERS.get(serie, []),
+                            "hostname": "" if serie in FIXTURE_AMBIGUOUS_USERS else "PRNOTEDEMO01",
+                            "hostname_ambiguo": serie in FIXTURE_AMBIGUOUS_USERS,
+                            "hostname_candidatos": (["PRNOTEDEMO-A", "PRNOTEDEMO-B"]
+                                                     if serie in FIXTURE_AMBIGUOUS_USERS else [])}
                     for serie in body.get("series", [])
                 }})
             else:

@@ -2312,6 +2312,7 @@ operations_router = create_operations_router(
     history_annotations_sync_enabled=lambda: HISTORY_ANNOTATIONS_SYNC_ENABLED,
     load_history_annotation_records=lambda directory, **kwargs: load_history_annotations(directory, **kwargs),
     ticket_import_services=_ticket_import_services,
+    ticket_os_links_file=lambda: STATE_DIR / "os_chamados_vinculos.json",
 )
 app.include_router(operations_router)
 

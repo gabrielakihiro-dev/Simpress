@@ -37,6 +37,11 @@ DETAILS_INSTALLATION_CNPJ_HEADER_ALIASES = (
 )
 DETAILS_REQUIRED_HEADERS = frozenset({"MODELO", "CIDADE"})
 DETAILS_COMPLETE_SOURCE_COLUMN_COUNT = 50
+ENDPOINT_AUTOMATIC_EXPORT_REQUIRED_HEADERS = (
+    "Nome do computador",
+    "Rótulo de serviço/Número de série",
+    "Usuário do último logon",
+)
 
 
 @dataclass(frozen=True)

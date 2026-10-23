@@ -9,8 +9,8 @@ final re-read of column C -> ``ResumoExecucao`` -> atomic state file -> notifica
 
 Rules this module enforces on top of ``domains.sebrae_chamados``:
 - a number already in column C is ignored whole, also when it appears while the run is going (concurrent edit);
-- only the seven columns of ``COLUNAS_GRAVADAS`` are ever handed to the writer, and only for ``incluir``;
-- a ticket counts as included only when the writer confirms all seven cells and the save;
+- only the nine columns of ``COLUNAS_GRAVADAS`` are ever handed to the writer, and only for ``incluir``;
+- a ticket counts as included only when the writer confirms all nine cells and the save;
 - a partial failure (login, cancellation, error) keeps the counts of what was already confirmed;
 - ticket content is data: it is never logged here, and failure texts carry only a stage and an exception type.
 """
@@ -129,7 +129,7 @@ class DashboardSebrae(Protocol):
         ...
 
     def gravar_linha(self, linha: Mapping[str, str]) -> ResultadoGravacao:
-        """Writes the seven cells on a free prepared row, re-reads them, confirms the save. Never overwrites."""
+        """Writes the nine cells on a free prepared row, re-reads them, confirms the save. Never overwrites."""
         ...
 
 

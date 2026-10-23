@@ -111,7 +111,7 @@ def rotinas_falsas(cancelado: bool = False) -> SimpleNamespace:
 
 
 class TraducaoDeGravacaoTests(unittest.TestCase):
-    def test_a_confirmed_row_is_an_inclusion_with_the_seven_columns(self):
+    def test_a_confirmed_row_is_an_inclusion_with_the_nine_columns(self):
         r = rotina.traduzir_gravacao(xl.ResultadoGravacao("UTIC-2026-0200", xl.GRAVADO, 12, tuple(COLUNAS_GRAVADAS)))
         self.assertTrue(r.completo)
         r = rotina.traduzir_gravacao(xl.ResultadoGravacao("UTIC-2026-0200", xl.RECUPERADO, 12))
@@ -129,9 +129,9 @@ class TraducaoDeGravacaoTests(unittest.TestCase):
             xl.PARCIAL, xl.DIVERGENTE, xl.NAO_SALVO, xl.LEITURA_INCOMPLETA,
             xl.FILTRO_NAO_RESTAURADO, xl.SEM_LINHA, xl.INTERROMPIDO,
         ):
-            r = rotina.traduzir_gravacao(xl.ResultadoGravacao("UTIC-2026-0200", situacao, 12, ("C", "F")))
+            r = rotina.traduzir_gravacao(xl.ResultadoGravacao("UTIC-2026-0200", situacao, 12, ("C", "D", "F")))
             self.assertFalse(r.completo, situacao)
-            self.assertEqual((r.confirmados, r.erro, r.salvo), (("C", "F"), situacao, False))
+            self.assertEqual((r.confirmados, r.erro, r.salvo), (("C", "D", "F"), situacao, False))
 
     def test_expired_session_becomes_a_login_request(self):
         with self.assertRaises(orq.LoginNecessarioErro) as ctx:
@@ -242,7 +242,7 @@ class DashboardRealTests(unittest.TestCase):
             self.dashboard().ler_coluna_c()
         self.assertEqual(ctx.exception.sistema, "SharePoint")
 
-    def test_writes_only_the_seven_columns_and_reports_the_inclusion(self):
+    def test_writes_only_the_nine_columns_and_reports_the_inclusion(self):
         r = self.dashboard().gravar_linha(linha_valida())
         self.assertTrue(r.completo)
         self.assertEqual([c for _l, c, _v in self.grade.escritas], list(COLUNAS_GRAVADAS))
@@ -294,13 +294,21 @@ class ConfiguracaoTests(unittest.TestCase):
         self.caminho.write_text(json.dumps(dados), encoding="utf-8")
 
     def test_valid_file(self):
-        self.escrever({"dashboard_url": "https://sebrae.sharepoint.com/x/Operacional_SEBRAE.xlsx", "colunas_formula": ["A", "R"]})
+        self.escrever({
+            "dashboard_url": "https://sebrae.sharepoint.com/x/Operacional_SEBRAE.xlsx",
+            "colunas_formula": ["A", "R", "U", "V", "W"],
+        })
         cfg = rotina.carregar_configuracao(self.caminho)
-        self.assertEqual((cfg.colunas_formula, cfg.quebras_como_espaco), (("A", "R"), False))
+        self.assertEqual((cfg.colunas_formula, cfg.quebras_como_espaco), (("A", "R", "U", "V", "W"), False))
 
     def test_empty_formula_list_is_an_explicit_choice(self):
         self.escrever({"dashboard_url": "https://sebrae.sharepoint.com/x", "colunas_formula": []})
         self.assertEqual(rotina.carregar_configuracao(self.caminho).colunas_formula, ())
+
+    def test_nonempty_formula_list_must_include_every_confirmed_dashboard_formula(self):
+        self.escrever({"dashboard_url": "https://sebrae.sharepoint.com/x", "colunas_formula": ["R", "U", "W"]})
+        with self.assertRaisesRegex(rotina.ConfiguracaoSebraeErro, "R, U, V, W"):
+            rotina.carregar_configuracao(self.caminho)
 
     def test_missing_file_asks_for_the_setup(self):
         with self.assertRaisesRegex(rotina.ConfiguracaoSebraeErro, "Falta sebrae_config.json"):
@@ -336,7 +344,11 @@ class ExecutarTests(unittest.TestCase):
         self.estado = base / "sebrae_chamados_estado.json"
         self.config = base / "sebrae_config.json"
         self.config.write_text(
-            json.dumps({"dashboard_url": "https://sebrae.sharepoint.com/x", "colunas_formula": ["A", "R"]}), encoding="utf-8"
+            json.dumps({
+                "dashboard_url": "https://sebrae.sharepoint.com/x",
+                "colunas_formula": ["A", "R", "U", "V", "W"],
+            }),
+            encoding="utf-8",
         )
         self.grade = GradeFalsa(xl.DiarioGravacao(base / "diario.json"))
         self.modulo = ModuloSoftExpertFalso(self.EXISTENTES + ["UTIC-2026-0200", "UTIC-2026-1253"])

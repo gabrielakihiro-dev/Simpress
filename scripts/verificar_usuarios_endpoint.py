@@ -1,9 +1,10 @@
 """Rotina "Verificar usuários": confere no Endpoint Central as pendências de usuário logado.
 
 Para cada pendência ainda sem decisão (``GET /api/usuarios/pendencias``), pesquisa o computador na
-grade "Todos os computadores" do Endpoint (série, série sem o ``S`` de MacBook e hostname) e lê o
-usuário. Quando "Usuários logados" está vazio, abre o detalhe do computador e lê o "Usuário do último logon"
-de Sistema > Usuários, que é a base; a tabela de Sistema > Usuários só entra quando o último logon não serve.
+grade "Todos os computadores" do Endpoint (MacBooks pelo número de série em Domínio; demais computadores
+pelo rótulo/número de série; hostname como alternativa). Prioriza "Usuário do último logon" no detalhe;
+se não for válido, usa um único usuário válido da coluna "Usuários logados". Com vários usuários válidos,
+mantém a pendência aberta; sem nenhum, consulta Sistema > Usuários.
 A decisão sai por ``POST /api/usuarios/pendencias/{id}/decidir`` e a anotação da linha de "Mudanças de
 usuário logado" por ``PUT /api/historico-comparacoes/{evento}/anotacoes/{anotacao_id}``.
 
@@ -44,6 +45,7 @@ CABECALHOS_USUARIO_SISTEMA = ("nome do usuario", "nome de usuario", "usuario", "
 COLUNA_SERIE = "numero de serie"
 COLUNA_NOME = "nome do computador"
 COLUNA_USUARIOS = "usuarios logados"
+COLUNA_DOMINIO = "dominio"
 HREF_DETALHE = re.compile(r"^#/uems/inventory/computers/[A-Za-z0-9_-]+$")
 URL_DETALHE = re.compile(r"#/uems/inventory/computers/[A-Za-z0-9_-]+(/|$)")
 LIMITE_ANOTACAO = 2000
@@ -174,6 +176,18 @@ def escolher_usuario_sistema(nomes: list[str], ultimo_logon: str = "") -> str:
     return ""
 
 
+def escolher_usuario_grade(texto: Any) -> tuple[str, bool]:
+    """Resolve a grade only when it has one distinct valid account; multiple accounts are ambiguous."""
+    candidatos: dict[str, str] = {}
+    for parte in str(texto or "").split(","):
+        nome = limpar_usuario_logon(parte)
+        if usuario_valido(nome):
+            candidatos.setdefault(normalizar_usuario(nome), nome)
+    if len(candidatos) == 1:
+        return next(iter(candidatos.values())), False
+    return "", len(candidatos) > 1
+
+
 def serie_sem_s(serie: str) -> str:
     """Série de MacBook no Endpoint: a de EquipamentosDetalhes sem o ``S`` inicial."""
     serie = str(serie or "").strip()
@@ -192,8 +206,9 @@ def avaliar_decisao(pendencia: dict, achou: bool, usuario: str, fonte: str = "Ú
         )
     if not usuario:
         return Decisao(
-            quando_sem_usuario, "Sem usuário válido no último logon nem em Sistema > Usuários.",
-            "Sem usuário válido no último logon nem em Sistema > Usuários",
+            quando_sem_usuario,
+            "Sem usuário válido no último logon, na grade Usuários logados nem em Sistema > Usuários.",
+            "Sem usuário válido no último logon, na grade Usuários logados nem em Sistema > Usuários",
         )
     if normalizar_usuario(usuario) == normalizar_usuario(esperado):
         return Decisao("manter" if ausente else "permitir", f"{fonte} confirma o usuário {usuario}.")
@@ -470,14 +485,18 @@ def pesquisar_computador_endpoint(
     page: "Page", automacao: ModuleType, serie: str, hostname: str,
     ao_encontrar: Callable[["Page", dict], dict | None] | None = None,
 ) -> dict:
-    """Série, depois série sem ``S`` (MacBook) e por fim hostname, sempre com correspondência exata.
+    """Pesquisa séries exatas; para MacBooks consulta Domínio, onde o Endpoint guarda a série.
 
     Devolve ``{"estado": "unico"|"ambiguo"|"ausente", "linha", "extra"}``. Com um único resultado chama
     ``ao_encontrar(page, linha)`` com o filtro aplicado; se ele devolver algo, a grade já foi restaurada.
     """
-    tentativas = [(COLUNA_SERIE, serie)]
-    if serie_sem_s(serie):
-        tentativas.append((COLUNA_SERIE, serie_sem_s(serie)))
+    if normalizar(hostname).startswith("prmac"):
+        tentativas = [(COLUNA_DOMINIO, serie)]
+        serie_endpoint = serie_sem_s(serie)
+        if serie_endpoint:
+            tentativas.append((COLUNA_DOMINIO, serie_endpoint))
+    else:
+        tentativas = [(COLUNA_SERIE, serie)]
     if hostname.strip():
         tentativas.append((COLUNA_NOME, hostname.strip()))
     for coluna, valor in tentativas:
@@ -562,9 +581,9 @@ def ler_ultimo_logon(page: "Page", automacao: ModuleType) -> str:
 
 
 def consultar_detalhe(page: "Page", automacao: ModuleType, linha: dict) -> dict:
-    """Abre o detalhe do computador (link do nome) e lê o último logon; só sem ele lê Sistema > Usuários. Volta à grade.
+    """Prioriza último logon, depois a grade; Sistema > Usuários é o terceiro recurso. Volta à grade.
 
-    Devolve ``{"fonte": "Último logon"|"Sistema", "usuario": str}``; ``usuario`` vazio quando nenhuma fonte tem usuário válido.
+    Devolve fonte/usuário e ``ambiguo=True`` quando a grade tem mais de uma conta válida.
     """
     href = str(linha.get("href") or "")
     nome = linha.get("nome") or linha.get("valor")
@@ -579,7 +598,16 @@ def consultar_detalhe(page: "Page", automacao: ModuleType, linha: dict) -> dict:
         ultimo = ler_ultimo_logon(page, automacao)
         if ultimo:
             return {"fonte": "Último logon", "usuario": ultimo}
-        automacao.log(ORIGEM, f"Sem último logon válido em {nome}; lendo Sistema > Usuários...")
+        usuario_grade, ambiguo = escolher_usuario_grade(linha.get("usuarios", ""))
+        if ambiguo:
+            return {
+                "fonte": "Usuários logados",
+                "usuario": "",
+                "ambiguo": True,
+            }
+        if usuario_grade:
+            return {"fonte": "Usuários logados", "usuario": usuario_grade}
+        automacao.log(ORIGEM, f"Sem usuário válido no último logon nem na grade de {nome}; lendo Sistema > Usuários...")
         abrir_aba(page, automacao, "Sistema")
         abrir_aba(page, automacao, "Usuários")
         sistema = ler_usuarios_sistema(page, automacao)
@@ -606,7 +634,13 @@ def processar_pendencia(page: "Page", automacao: ModuleType, pendencia: dict) ->
         veredito = avaliar_decisao(pendencia, achou=False, usuario="")
     else:
         consulta = resultado["extra"]
-        veredito = avaliar_decisao(pendencia, True, consulta["usuario"], consulta["fonte"])
+        if consulta.get("ambiguo"):
+            veredito = Decisao(
+                None,
+                "Mais de um usuário válido na coluna Usuários logados; a pendência continua aberta.",
+            )
+        else:
+            veredito = avaliar_decisao(pendencia, True, consulta["usuario"], consulta["fonte"])
     if veredito.aviso:
         automacao.log(ORIGEM, f"[AVISO] {serie}: {veredito.aviso}.")
     aplicada = veredito.decisao is not None and decidir(automacao, pendencia, veredito.decisao)

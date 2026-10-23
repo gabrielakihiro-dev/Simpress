@@ -34,6 +34,30 @@ def _record_value(record: Dict[str, Any], *keys: str) -> Any:
             return value
     return ""
 
+
+def endpoint_user_value(record: Dict[str, Any]) -> str:
+    """Resolve the Endpoint user, preferring last logon and preserving the fallback cell verbatim."""
+    last_logon = _record_value(
+        record,
+        "USUARIODOULTIMOLOGON",
+        "LASTLOGONUSER",
+        "LASTLOGGEDONUSER",
+    )
+    if normalize_reference_value(last_logon) not in {"", "NA"}:
+        return str(last_logon).strip()
+
+    logged_users = _record_value(
+        record,
+        "USUARIOSLOGADOS",
+        "USUARIOLOGADO",
+        "LOGGEDINUSERS",
+        "USUARIO",
+    )
+    if normalize_reference_value(logged_users) in {"", "NA"}:
+        return ""
+    return str(logged_users).strip()
+
+
 def _upload_serial_value(record: Dict[str, Any], role: str) -> Any:
     if role == "endpoint":
         return _record_value(
@@ -211,7 +235,7 @@ def _comparison_source_records(table: Dict[str, Any], role: str) -> List[Dict[st
     endpoint_name_headers = ("NOMEDOCOMPUTADOR", "COMPUTERNAME", "HOSTNAME")
     equipment_alias_headers = ("APELIDO", "HOSTNAME", "NOMEDOCOMPUTADOR", "COMPUTERNAME")
     location_headers = ("CIDADE", "LOCAL", "LOCALIDADE", "LOCATION")
-    user_headers = ("USUARIOSLOGADOS", "LOGGEDINUSERS", "USUARIO")
+    user_headers = ("USUARIOSLOGADOS", "USUARIOLOGADO", "LOGGEDINUSERS", "USUARIO")
 
     records = []
     for fallback_row_number, row in enumerate(table.get("records", []), start=2):
@@ -243,7 +267,11 @@ def _comparison_source_records(table: Dict[str, Any], role: str) -> List[Dict[st
             "computador": computer_name,
             "alias_key": normalize_reference_value(alias_value),
             "local": location_value,
-            "usuario": str(_record_value(row, *user_headers) or "").strip(),
+            "usuario": (
+                endpoint_user_value(row)
+                if role == "endpoint"
+                else str(_record_value(row, *user_headers) or "").strip()
+            ),
             "ultima_verificacao": _upload_verification_value(row) if role == "endpoint" else None,
             "row": row,
         })

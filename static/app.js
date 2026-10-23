@@ -40,6 +40,8 @@
     historicoAcompanhamentoChamados: [],
     // Triage indicator chosen as a list filter ("ativos", "atrasados", "sem_data", "em_dia" or empty).
     filtroTriagemChamados: "",
+    // One OS selected from Resumo; it narrows the ticket card to its source, serial and order.
+    filtroChamadoSelecionado: null,
     previaPlanilhasAtual: null,
   };
 

@@ -23,7 +23,8 @@ UF = "PR"
 FORMATO_DATA = "%d/%m/%Y %H:%M"
 
 # Dashboard columns the routine fills; nothing else is ever written.
-COLUNAS_GRAVADAS = ("C", "F", "G", "I", "N", "P", "Q")
+COLUNAS_GRAVADAS = ("C", "D", "F", "G", "H", "I", "N", "P", "Q")
+STATUS_EM_ABERTO = "Em Aberto"
 
 # Automatic Endpoint alerts the user has not classified yet; they stay pending and are never written.
 PENDENCIAS_DEFINIDAS: Dict[str, str] = {
@@ -38,12 +39,13 @@ ACAO_PENDENTE = "pendente"
 MOTIVO_DUPLICADO = "duplicado"
 MOTIVO_SEM_TIPO = "sem_indicios_de_tipo"
 MOTIVO_TIPO_CONFLITANTE = "indicios_conflitantes"
-MOTIVO_SEM_INICIADOR = "sem_iniciador"
+MOTIVO_SEM_SOLICITANTE = "sem_solicitante"
 MOTIVO_SEM_DATA = "sem_data_de_abertura"
 MOTIVO_DATA_INVALIDA = "data_de_abertura_invalida"
 MOTIVO_SEM_TEXTO = "sem_descricao_nem_titulo"
 
 NUMERO_UTIC = re.compile(r"(?<![A-Za-z0-9])UTIC-(\d{4})-(\d+)(?!\d)", re.IGNORECASE)
+_CPF = re.compile(r"(?<!\d)(?:CPF\b\s*[:#-]?\s*)?(\d{3}\.\d{3}\.\d{3}-\d{2}|\d{11})(?!\d)", re.IGNORECASE)
 
 # Evidence of an existing failure versus a request; matched on accent-free lowercase text.
 _INDICIOS_INCIDENTE = (
@@ -167,8 +169,9 @@ class ChamadoSoftExpert:
     numero: str
     titulo: str = ""
     descricao: str = ""
-    iniciador: str = ""
+    solicitante: str = ""
     habilitada_em: str = ""
+    detalhes_atendimento_realizado: str = ""
 
 
 @dataclass(frozen=True)
@@ -195,13 +198,41 @@ def formatar_data_abertura(data: datetime) -> str:
     return data.strftime(FORMATO_DATA)
 
 
+def mascarar_cpfs(texto: str) -> str:
+    """Mascara CPFs pontuados ou identificados pelo rótulo; números puros exigem dígitos válidos."""
+    def substituir(match: re.Match[str]) -> str:
+        token = match.group(1)
+        prefixo = match.group(0)[: match.start(1) - match.start()]
+        if "." in token or prefixo:
+            return f"{prefixo}***.***.***-**"
+        digitos = token
+        if len(set(digitos)) == 1:
+            return match.group(0)
+        primeiro = (sum(int(digitos[i]) * (10 - i) for i in range(9)) * 10) % 11
+        primeiro = 0 if primeiro == 10 else primeiro
+        segundo = (sum(int(digitos[i]) * (11 - i) for i in range(10)) * 10) % 11
+        segundo = 0 if segundo == 10 else segundo
+        if int(digitos[9]) != primeiro or int(digitos[10]) != segundo:
+            return match.group(0)
+        return "***.***.***-**"
+
+    return _CPF.sub(substituir, texto)
+
+
 def descricao_do_chamado(chamado: ChamadoSoftExpert) -> str:
-    """The original description; the original title when the form has none."""
-    return (chamado.descricao or "").strip() or (chamado.titulo or "").strip()
+    """Descrição do Registro; usa o título quando estiver vazia e mascara CPFs."""
+    registro = (chamado.descricao or "").strip()
+    titulo = (chamado.titulo or "").strip()
+    return mascarar_cpfs(registro or titulo)
+
+
+def detalhes_atendimento_do_chamado(chamado: ChamadoSoftExpert) -> str:
+    """Texto integral do atendimento realizado, sem juntar a descrição do Registro."""
+    return mascarar_cpfs((chamado.detalhes_atendimento_realizado or "").strip())
 
 
 def decidir(chamado: ChamadoSoftExpert) -> Decisao:
-    """Include (with the seven-column row) or leave pending with a recorded reason."""
+    """Include (with the nine-column row) or leave pending with a recorded reason."""
     try:
         numero = chave_do_numero(chamado.numero)
     except ValueError:
@@ -209,12 +240,13 @@ def decidir(chamado: ChamadoSoftExpert) -> Decisao:
     if numero in PENDENCIAS_DEFINIDAS:
         return Decisao(numero, ACAO_PENDENTE, PENDENCIAS_DEFINIDAS[numero])
     descricao = descricao_do_chamado(chamado)
-    tipo, motivo = classificar(chamado.descricao, chamado.titulo)
+    atendimento = detalhes_atendimento_do_chamado(chamado)
+    tipo, motivo = classificar(f"{descricao}\n{atendimento}", chamado.titulo)
     if tipo is None:
         return Decisao(numero, ACAO_PENDENTE, motivo)
-    iniciador = " ".join((chamado.iniciador or "").split())
-    if not iniciador:
-        return Decisao(numero, ACAO_PENDENTE, MOTIVO_SEM_INICIADOR)
+    solicitante = mascarar_cpfs(" ".join((chamado.solicitante or "").split()))
+    if not solicitante:
+        return Decisao(numero, ACAO_PENDENTE, MOTIVO_SEM_SOLICITANTE)
     if not str(chamado.habilitada_em or "").strip():
         return Decisao(numero, ACAO_PENDENTE, MOTIVO_SEM_DATA)
     data = interpretar_data(chamado.habilitada_em)
@@ -222,8 +254,10 @@ def decidir(chamado: ChamadoSoftExpert) -> Decisao:
         return Decisao(numero, ACAO_PENDENTE, MOTIVO_DATA_INVALIDA)
     linha = {
         "C": numero,
-        "F": descricao,
-        "G": iniciador,
+        "D": STATUS_EM_ABERTO,
+        "F": atendimento,
+        "G": descricao,
+        "H": solicitante,
         "I": tipo,
         "N": UNIDADE,
         "P": UF,

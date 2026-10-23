@@ -17,6 +17,37 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT))
 from core.config import AUTOMATIC_INVENTORY_INBOX_DIR, MAX_UPLOAD_BYTES, format_size_limit
+from domains.uploaded_workbooks import (
+    ENDPOINT_AUTOMATIC_EXPORT_REQUIRED_HEADERS,
+    normalize_workbook_header,
+)
+
+
+def validate_endpoint_export(payload: bytes, name: str) -> None:
+    """Require the user last-logon column before an automatic batch is published."""
+    from openpyxl import load_workbook
+
+    workbook = None
+    try:
+        workbook = load_workbook(io.BytesIO(payload), read_only=True, data_only=True)
+        headers = next(workbook.active.iter_rows(min_row=1, max_row=1, values_only=True), ())
+    except Exception as error:
+        raise ValueError(f"Não foi possível validar o cabeçalho do XLSX do Endpoint {name}: {error}") from error
+    finally:
+        if workbook is not None:
+            workbook.close()
+
+    normalized_headers = {normalize_workbook_header(header) for header in headers if header is not None}
+    missing = [
+        header for header in ENDPOINT_AUTOMATIC_EXPORT_REQUIRED_HEADERS
+        if normalize_workbook_header(header) not in normalized_headers
+    ]
+    if missing:
+        missing_labels = ", ".join(f"'{header}'" for header in missing)
+        raise ValueError(
+            f"O XLSX do Endpoint {name} não contém as colunas obrigatórias {missing_labels}; "
+            "o lote não foi publicado."
+        )
 
 
 def recent_workbook(downloads: Path, prefix: str, since: datetime):
@@ -84,6 +115,7 @@ def prepare(downloads: Path, since: datetime, inbox: Path) -> dict:
         "endpoint": recent_workbook(downloads, "InvAllComputersSummary", since),
         "simpress": recent_workbook(downloads, "EquipamentosDetalhes", since),
     }
+    validate_endpoint_export(pair["endpoint"][1], pair["endpoint"][0])
     fingerprint = hashlib.sha256((since.isoformat() + "|" + "|".join(
         value[2]["sha256"] for value in pair.values())).encode()).hexdigest()[:16]
     batch_id = f"downloads_{since.strftime('%Y%m%d_%H%M%S')}_{fingerprint}"

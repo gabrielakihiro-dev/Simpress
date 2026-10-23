@@ -3,7 +3,7 @@
 ``rodar_rotina_sebrae`` (scripts/automacao_rotinas_chrome.py) chama ``executar``. Aqui ficam só os adaptadores
 entre os módulos do navegador e os ``Protocol``s de ``domains/sebrae_orquestracao.py``: traduzem exceções
 (sessão expirada, cancelamento, chamado indisponível) e resultados de gravação, e abrem as abas. As regras
-de decisão, estado e aviso estão em ``domains``; a segurança da gravação (linha livre, releitura das sete
+de decisão, estado e aviso estão em ``domains``; a segurança da gravação (linha livre, releitura das nove
 colunas, "Salvo", diário) está em ``scripts/sebrae_excel.py``. Ver docs/operacao/sincronizar-chamados-sebrae.md.
 
 As utilidades do runner (log, cancelamento, abas, login, aviso) entram por ``rotinas`` (o módulo do runner em
@@ -58,6 +58,7 @@ class Configuracao:
 
 
 _COLUNA = re.compile(r"^[A-Z]{1,3}$")
+COLUNAS_FORMULA_CONFIRMADAS = ("R", "U", "V", "W")
 
 
 def carregar_configuracao(caminho: Path = CONFIG_ARQUIVO) -> Configuracao:
@@ -84,8 +85,17 @@ def carregar_configuracao(caminho: Path = CONFIG_ARQUIVO) -> Configuracao:
     colunas = dados.get("colunas_formula")
     if not isinstance(colunas, list) or not all(isinstance(c, str) and _COLUNA.match(c) for c in colunas):
         raise ConfiguracaoSebraeErro("colunas_formula deve ser uma lista de letras de coluna (use [] para nenhuma).")
+    if colunas and not set(COLUNAS_FORMULA_CONFIRMADAS).issubset(colunas):
+        esperadas = ", ".join(COLUNAS_FORMULA_CONFIRMADAS)
+        raise ConfiguracaoSebraeErro(
+            f"colunas_formula deve incluir as fórmulas confirmadas em {esperadas}, "
+            "ou [] para desativar explicitamente a conferência."
+        )
     return Configuracao(
-        url, tuple(colunas), bool(dados.get("quebras_como_espaco", False)), dados.get("modo_sombra") is True
+        url,
+        tuple(colunas),
+        bool(dados.get("quebras_como_espaco", False)),
+        dados.get("modo_sombra") is True,
     )
 
 
@@ -310,6 +320,8 @@ def executar(
         f"Situação: {resultado.situacao}. Incluídos: {resumo.incluidos}; ignorados: {resumo.ignorados}; "
         f"pendentes: {resumo.pendentes}."
     )
+    if resumo.falha:
+        log(f"Motivo: {resumo.falha}.")  # stage and exception type only; never page content
     if resultado.situacao == orq.SITUACAO_CANCELADA:
         raise rotinas.RotinaCancelada("Os chamados já incluídos foram mantidos.")
     print(
