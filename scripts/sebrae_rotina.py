@@ -300,6 +300,8 @@ def executar(
         f"Situação: {resultado.situacao}. Incluídos: {resumo.incluidos}; ignorados: {resumo.ignorados}; "
         f"pendentes: {resumo.pendentes}."
     )
+    if resumo.falha:
+        log(f"Motivo: {resumo.falha}.")  # stage and exception type only; never page content
     if resultado.situacao == orq.SITUACAO_CANCELADA:
         raise rotinas.RotinaCancelada("Os chamados já incluídos foram mantidos.")
     print(
