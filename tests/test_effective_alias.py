@@ -56,6 +56,27 @@ class EffectiveAliasPrecedenceTests(unittest.TestCase):
         self.assertEqual(item["usuarios_logados"], "ana")
         self.assertEqual(item["invall_alias_status"], "aplicado")
 
+    def test_endpoint_user_index_prefers_last_logon_and_falls_back_for_legacy_rows(self):
+        index = endpoint_index([
+            {
+                "SERIAL": "S1", "NOMEDOCOMPUTADOR": "PRNOTE-1",
+                "USUARIODOULTIMOLOGON": "ultimo.logon", "USUARIOSLOGADOS": "usuario.grade",
+            },
+            {
+                "SERIAL": "S2", "NOMEDOCOMPUTADOR": "PRNOTE-2",
+                "USUARIODOULTIMOLOGON": "N/A", "USUARIOLOGADO": "usuario.legado",
+            },
+            {"SERIAL": "S3", "NOMEDOCOMPUTADOR": "PRNOTE-3", "USUARIOSLOGADOS": "usuario.antigo"},
+        ])
+        equipamentos = [equipment(serial) for serial in ("S1", "S2", "S3")]
+
+        for item in equipamentos:
+            self.apply(item, index)
+
+        self.assertEqual([item["usuarios_logados"] for item in equipamentos], [
+            "ultimo.logon", "usuario.legado", "usuario.antigo",
+        ])
+
     def test_simpress_alias_is_kept_without_a_unique_endpoint_hostname(self):
         index = endpoint_index([
             {"SERIAL": "DUP", "NOMEDOCOMPUTADOR": "HOST-A"},

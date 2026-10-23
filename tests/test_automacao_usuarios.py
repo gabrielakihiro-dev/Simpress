@@ -229,6 +229,11 @@ class DecisaoTest(unittest.TestCase):
         self.assertEqual(rotina.escolher_usuario_sistema(["", "root", "Convidado", "WDAGUtilityAccount", "davi", "ana"]), "davi")
         self.assertEqual(rotina.escolher_usuario_sistema(["Administrador", "DefaultAccount", "N/A"]), "")
 
+    def test_grade_aceita_um_usuario_valido_e_marca_varios_como_ambiguos(self):
+        self.assertEqual(rotina.escolher_usuario_grade("NA, DOM\\carla, carla"), ("DOM\\carla", False))
+        self.assertEqual(rotina.escolher_usuario_grade("Administrador, CodexSandboxOffline"), ("", False))
+        self.assertEqual(rotina.escolher_usuario_grade("carla, davi"), ("", True))
+
     def test_contas_tecnicas_e_codex_nao_contam_como_usuario(self):
         for nome in ("CodexSandboxOffline", "CodexSandboxOnline", "Default User", "UI Flow Service", "UIFlowService"):
             self.assertFalse(rotina.usuario_valido(nome), nome)
@@ -330,7 +335,7 @@ class SistemaTest(AmbienteBase):
 
     def test_ultimo_logon_decide_mesmo_com_contas_tecnicas_na_tabela(self):
         pagina = PaginaEndpoint(
-            [computador("HOST-1", "BRJ5512FFS", "")],
+            [computador("HOST-1", "BRJ5512FFS", "outro.usuario")],
             {"HOST-1": ["CodexSandboxOffline", "Default", "UI Flow Service"]},
             ultimos_logon={"HOST-1": "MRamos"},
         )
@@ -388,11 +393,23 @@ class SistemaTest(AmbienteBase):
         rotina.processar_pendencia(pagina, automacao, pendencia("substituicao_manual", "carla", "davi"))
         self.assertEqual(self._decisoes(), ["recusar"])
 
-    def test_usuarios_logados_da_grade_nao_decide(self):
+    def test_usuarios_logados_da_grade_com_usuario_unico_decide_antes_de_sistema(self):
         pagina = PaginaEndpoint([computador("HOST-1", "BRJ0000TST", "carla")], {"HOST-1": ["davi"]})
         rotina.processar_pendencia(pagina, automacao, pendencia(atual="carla"))
-        self.assertEqual(pagina.abas_clicadas, ["Sistema", "Usuários"])
-        self.assertEqual(self._decisoes(), ["remover"])
+        self.assertEqual(pagina.abas_clicadas, [])
+        self.assertEqual(self._decisoes(), ["manter"])
+        self.assertIn("Usuários logados confirma o usuário carla", self._anotacoes()[0])
+
+    def test_grade_com_varios_usuarios_validos_mantem_pendencia_aberta(self):
+        pagina = PaginaEndpoint(
+            [computador("HOST-1", "BRJ0000TST", "carla, davi")],
+            {"HOST-1": ["carla"]},
+            ultimos_logon={"HOST-1": "CodexSandboxOffline"},
+        )
+        rotina.processar_pendencia(pagina, automacao, pendencia(atual="carla"))
+        self.assertEqual(self._decisoes(), [])
+        self.assertEqual(pagina.abas_clicadas, [])
+        self.assertIn("Mais de um usuário válido", self._anotacoes()[0])
 
     def test_computador_nao_encontrado_remove_com_aviso(self):
         pagina = PaginaEndpoint([computador("OUTRO", "ZZZ")])
