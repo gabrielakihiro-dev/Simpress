@@ -21,6 +21,7 @@ def run() -> bool:
     with tempfile.TemporaryDirectory(
         prefix=".simpress-test-",
         dir=PROJECT_ROOT,
+        ignore_cleanup_errors=True,
     ) as temporary_root:
         tempfile.tempdir = temporary_root
         from core import integrity
