@@ -28,7 +28,7 @@ Status por fase (ver "Entrega em fases"): **Fase A** (especificação, regras pu
 2. **Dashboard:** lê a coluna C de **toda** a área de dados da aba `CHAMADOS`, inclusive linhas ocultas por filtro, e extrai os números `UTIC-AAAA-NNNN` (também dentro de valores compostos como `27371 / UTIC-2026-0094`), preservando zeros à esquerda. Nada de limites fixos de linha ou de quantidade histórica.
 3. **SoftExpert** (`https://sebraepr.softexpert.app/softexpert/workspace?page=taskCenter`): percorre a lista inteira (paginação e rolagem) e coleta os números.
 4. **Triagem** (`triagem`): número já na coluna C → ignorado por duplicidade (a linha inteira é preservada); número em `PENDENCIAS_DEFINIDAS` (hoje `UTIC-2026-1253` e `UTIC-2026-1177`, alertas automáticos do Endpoint) → pendente, sem abrir o chamado; os demais seguem para extração.
-5. **Extração** de cada chamado novo: botão **Executar** (canto inferior direito) → **Registro de Chamados**. O formulário pode abrir em janela PHP separada, capturada pelo Chrome de automação; confere número e título antes de ler. Se pedir para associar o chamado ao usuário, responde **Sim**. Espera o formulário e os campos condicionais; se a descrição vier vazia, relê após o carregamento antes de concluir que não existe. Sem descrição, usa o título original. Lê Iniciador e *Habilitada em*.
+5. **Extração** de cada chamado novo: botão **Executar** (canto inferior direito) → **Registro de Chamados**. O formulário pode abrir em janela PHP separada, capturada pelo Chrome de automação; confere número e título antes de ler. Se pedir para associar o chamado ao usuário, responde **Sim**. Espera o formulário e os campos condicionais; se a descrição vier vazia, relê após o carregamento antes de concluir que não existe. Sem descrição, usa o título original. Lê Solicitante e *Habilitada em*. Não use Iniciador como substituto; sem Solicitante, deixe o chamado pendente.
 6. **Decisão** (`decidir`): classifica o tipo e monta a linha. Dados insuficientes ou ambíguos → pendente com motivo.
 7. **Gravação** (por chamado): relê a coluna C imediatamente antes (edição simultânea), escreve só as colunas abaixo numa linha preparada e livre, relê as sete células, compara com o extraído e confirma que o arquivo foi salvo. Só então o chamado conta como incluído.
 8. Resumo (`sebrae_chamados_estado.json`), avisos só quando algo mudou e fim da execução.
@@ -39,7 +39,7 @@ Status por fase (ver "Entrega em fases"): **Fase A** (especificação, regras pu
 | --- | --- | --- |
 | C | Chamado | Número completo, ex. `UTIC-2026-0094` |
 | F | Descrição | Descrição original do problema no formulário (ou o título, se não houver) |
-| G | Nome do Usuário | Campo **Iniciador** |
+| G | Nome do Usuário | Campo **Solicitante** |
 | H | Tipo do Chamado | `INCIDENTE` ou `SOLICITAÇÃO` |
 | M | Unidade | `Sebrae` |
 | O | UF | `PR` |
