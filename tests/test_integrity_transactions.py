@@ -196,6 +196,36 @@ class AtomicTransactionTests(unittest.TestCase):
         self.assertEqual(second.read_bytes(), b"second-before")
         self.assertEqual(list((self.root / ".transactions").iterdir()), [])
 
+    def test_conflicting_journal_only_blocks_transactions_on_its_own_paths(self):
+        stuck = self.root / "stuck.xlsx"
+        other = self.root / "other.xlsx"
+        stuck.write_bytes(b"stuck-before")
+        other.write_bytes(b"other-before")
+
+        interrupted = integrity.AtomicFileTransaction(self.root, [stuck])
+        interrupted.__enter__()
+        interrupted.stage_bytes(stuck, b"stuck-after")
+        interrupted.apply()
+        interrupted.close_after_interruption()
+        stuck.write_bytes(b"edited-by-someone-else")
+
+        with integrity.AtomicFileTransaction(self.root, [other]) as transaction:
+            transaction.stage_bytes(other, b"other-after")
+            transaction.commit()
+        self.assertEqual(other.read_bytes(), b"other-after")
+
+        with self.assertRaises(integrity.TransactionConflictError):
+            with integrity.AtomicFileTransaction(self.root, [stuck]):
+                pass
+        with self.assertRaises(integrity.TransactionConflictError):
+            with integrity.AtomicFileTransaction(self.root, [other]) as transaction:
+                transaction.add_target(stuck)
+
+        self.assertEqual(stuck.read_bytes(), b"edited-by-someone-else")
+        self.assertTrue(interrupted.manifest_path.exists())
+        with self.assertRaises(integrity.TransactionConflictError):
+            integrity.recover_pending_transactions(self.root)
+
     def test_concurrent_transactions_on_one_destination_are_serialized(self):
         target = self.root / "shared.json"
         target.write_bytes(b"initial")

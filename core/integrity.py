@@ -18,7 +18,7 @@ import warnings
 import zipfile
 from contextlib import ExitStack, contextmanager
 from pathlib import Path
-from typing import Any, Callable, Dict, Iterable, Iterator, Literal, Optional
+from typing import Any, Callable, Dict, Iterable, Iterator, Literal, Optional, Set
 from xml.etree import ElementTree as ET
 from xml.sax.saxutils import escape
 
@@ -407,13 +407,39 @@ def _cleanup_staged_files(root: Path, entries: Iterable[Dict[str, Any]]) -> None
             logger.warning("%s %s", relative, type(error).__name__)
 
 
-def _recover_pending_locked(root: Path) -> None:
+def _journal_targets(root: Path, transaction_dir: Path) -> Optional[Set[str]]:
+    """Canonical targets of a journal, or None when its manifest cannot prove which files it covers."""
+    try:
+        manifest = json.loads((transaction_dir / "manifest.json").read_text(encoding="utf-8"))
+        return {_canonical(_safe_target(root, entry["target"])) for entry in manifest["entries"]}
+    except (OSError, ValueError, LookupError, TypeError, FileTransactionError):
+        return None
+
+
+def _recover_pending_locked(root: Path, targets: Optional[Iterable[Path]] = None) -> Set[str]:
+    """Recover pending journals; with `targets`, an unrecoverable journal only blocks overlapping targets.
+
+    Returns the canonical paths of the journals left pending, so the caller keeps refusing them.
+    """
     transaction_root = root / ".transactions"
+    wanted = None if targets is None else {_canonical(item) for item in targets}
+    blocked: Set[str] = set()
     if not transaction_root.is_dir():
-        return
+        return blocked
     for transaction_dir in sorted(transaction_root.iterdir()):
-        if transaction_dir.is_dir():
+        if not transaction_dir.is_dir():
+            continue
+        try:
             _recover_transaction(root, transaction_dir)
+        except TransactionConflictError as error:
+            if wanted is None:
+                raise
+            covered = _journal_targets(root, transaction_dir)
+            if covered is None or covered & wanted:
+                raise
+            logger.warning("Transação pendente isolada em '%s': %s", transaction_dir.name, error)
+            blocked |= covered
+    return blocked
 
 
 def recover_pending_transactions(root: Path) -> None:
@@ -437,6 +463,7 @@ class AtomicFileTransaction:
         self.manifest_path = self.transaction_dir / "manifest.json"
         self.manifest: Dict[str, Any] = {"version": 1, "phase": "prepared", "entries": []}
         self._stack = ExitStack()
+        self._blocked: Set[str] = set()
         self._entered = False
         self._committed = False
         self._closed = False
@@ -446,7 +473,7 @@ class AtomicFileTransaction:
         try:
             self.root.mkdir(parents=True, exist_ok=True)
             self._stack.enter_context(lock_paths([self.root / ".atomic-transactions"]))
-            _recover_pending_locked(self.root)
+            self._blocked = _recover_pending_locked(self.root, self.targets)
             if self.targets:
                 self._stack.enter_context(lock_paths(self.targets))
             self.transaction_dir.mkdir(parents=True, exist_ok=False)
@@ -474,6 +501,10 @@ class AtomicFileTransaction:
         resolved = Path(target).resolve(strict=False)
         if resolved in self.targets:
             return
+        if _canonical(resolved) in self._blocked:
+            raise TransactionConflictError(
+                f"'{resolved.name}' tem uma gravação pendente que precisa de conferência manual em '.transactions'."
+            )
         self._stack.enter_context(lock_paths([resolved]))
         self.targets.append(resolved)
 
