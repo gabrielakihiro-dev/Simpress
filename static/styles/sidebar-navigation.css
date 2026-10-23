@@ -506,18 +506,9 @@ body.sidebar-drawer-open {
   min-width: 0;
 }
 
-.header-context > span {
-  color: var(--header-context-label);
-  font-size: 0.61rem;
-  font-weight: 750;
-  letter-spacing: 0.1em;
-  line-height: 1.2;
-  text-transform: uppercase;
-}
-
 .header-context > strong {
   color: var(--header-context-title);
-  font-size: 0.86rem;
+  font-size: 1.05rem;
   font-weight: 650;
   line-height: 1.25;
 }

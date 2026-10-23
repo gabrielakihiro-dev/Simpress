@@ -135,6 +135,12 @@
     return "both";
   }
 
+  function dismissInfoTips(doc) {
+    const open = [...doc.querySelectorAll(".info-tip:hover, .info-tip:focus-within")];
+    open.forEach(tip => tip.setAttribute("data-tip-dismissed", ""));
+    return open.length;
+  }
+
   function install(win) {
     const doc = win.document;
     const html = doc?.documentElement;
@@ -371,6 +377,17 @@
     // Fires only after the reset was confirmed and applied, so a cancelled dialog keeps the validation state.
     doc.addEventListener("simpress:form-reset", () => { setTouched(false); scheduleRefresh(); });
 
+    // Info tips: Esc hides the open tip until the pointer or focus leaves it (WCAG 1.4.13).
+    doc.addEventListener("keydown", event => {
+      if (event.key === "Escape") dismissInfoTips(doc);
+    }, true);
+    const resetTip = event => {
+      const tip = event.target?.closest?.(".info-tip");
+      if (tip && !tip.contains(event.relatedTarget)) tip.removeAttribute("data-tip-dismissed");
+    };
+    doc.addEventListener("mouseout", resetTip, true);
+    doc.addEventListener("focusout", resetTip, true);
+
     doc.addEventListener("keydown", event => {
       const target = event.target;
       const typing = Boolean(target) && (/^(INPUT|TEXTAREA|SELECT)$/.test(String(target.tagName || "")) || target.isContentEditable === true);
@@ -489,6 +506,7 @@
     pushRecent,
     copyStateFor,
     overflowState,
+    dismissInfoTips,
     install,
   });
 });

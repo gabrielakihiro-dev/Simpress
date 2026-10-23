@@ -737,11 +737,6 @@
     }
     .ticket-template-preview { margin-top: 0.75rem; }
     .ticket-template-preview[hidden] { display: none; }
-    .ticket-template-help {
-      margin: 0.5rem 0 0;
-      color: var(--text-muted);
-      font-size: 0.6875rem;
-    }
     .ticket-template-view {
       display: inline-flex;
       flex: none;
@@ -1151,7 +1146,6 @@ html[data-theme="light"] .history-filter-search-label input::placeholder { color
 }
 .alias-history-header { border-color: var(--border-subtle); }
 .alias-history-title { color: var(--text); flex-wrap: wrap; }
-.alias-history-description { max-width: 72rem; color: var(--text-muted); line-height: 1.5; }
 .alias-history-close { flex: none; }
 .alias-history-total {
   white-space: nowrap;
@@ -1396,7 +1390,6 @@ html[data-theme="light"] .history-filter-search-label input::placeholder { color
   .alias-history-panel { padding: 1rem; }
   .alias-history-header { gap: 0.5rem; padding-bottom: 0.8rem; }
   .alias-history-title { gap: 0.35rem; font-size: 0.93rem; }
-  .alias-history-description { font-size: 0.69rem; }
   .alias-history-toolbar { padding: 0.7rem; }
   .alias-history-filters { grid-template-columns: minmax(0, 1fr); gap: 0.65rem; }
   .alias-history-action-filter { grid-column: auto; min-height: 2.25rem; }
