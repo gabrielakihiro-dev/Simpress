@@ -84,6 +84,9 @@ __pycache__/
 /data/state/historico_comparacoes.json
 /data/state/automacao_chrome.cancelar
 /data/state/sebrae_agendamento.json
+/data/state/usuarios_entra_pr.json
+/data/state/nomes_pessoas_manuais.json
+/data/state/entrada_usuarios_entra/
 /data/state/sebrae_config.json
 /data/state/sebrae_chamados_estado.json
 /data/state/entrada_automatica/*

@@ -47,6 +47,9 @@ from core.config import (
     DATA_DIR,
     DETAILS_UPLOAD_FILE,
     ENDPOINT_UPLOAD_FILE,
+    ENTRA_USERS_FILE,
+    MANUAL_PERSON_NAMES_FILE,
+    ENTRA_INBOX_DIR,
     EXPORT_MODEL_FILE,
     HISTORY_ANNOTATIONS_DIR,
     HISTORY_ANNOTATIONS_SYNC_ENABLED,
@@ -123,7 +126,7 @@ from domains.inventory_comparison import (
     _uploaded_aliases_by_serial,
     comparison_annotation_item_id,
     compare_uploaded_workbooks,
-    comparison_history_for_display,
+    comparison_history_for_display as _comparison_history_for_display,
     comparison_review_item_id,
     filter_curitiba_hostname_location_mismatches,
     filter_sebrae_owned_unmatched_items,
@@ -154,7 +157,9 @@ from domains.history_annotations import (
     save_history_annotation,
 )
 from domains import effective_alias
-from domains import alias_changes, equipment_export, inventory_state, user_changes, user_holds
+from domains import alias_changes, equipment_export, inventory_state, user_changes, user_holds, entra_users
+from domains.entra_inbox import EntraInbox
+from routers.entra_users import EntraUserServices, create_entra_users_router
 from domains.alias_changes import (
     compare_equipment_aliases,
     snapshot_equipment_aliases,
@@ -227,6 +232,30 @@ COMPARISON_HISTORY_LOCK = threading.RLock()
 UPLOAD_ADMISSION = threading.BoundedSemaphore(MAX_CONCURRENT_UPLOAD_REQUESTS)
 WORKBOOK_PARSE_ADMISSION = threading.BoundedSemaphore(MAX_CONCURRENT_WORKBOOK_PARSERS)
 logger = logging.getLogger(__name__)
+
+
+def comparison_history_for_display(evento: Dict[str, Any]) -> Dict[str, Any]:
+    """Resolve present-day Entra names on a copy, never in stored history."""
+    view = _comparison_history_for_display(evento)
+    comparison = view.get("comparacao")
+    if not isinstance(comparison, dict):
+        return view
+    rows = comparison.get("mudancas_usuarios")
+    if isinstance(rows, list) and rows:
+        try:
+            directory = entra_users.read_directory(ENTRA_USERS_FILE)
+        except (OSError, ValueError):
+            logger.warning("Cadastro do Entra ilegível; histórico exibido sem nomes de pessoas.", exc_info=True)
+            directory = {"users": {}}
+        comparison["mudancas_usuarios"] = [
+            {
+                **row,
+                "nome_pessoa_anterior": entra_users.resolve_name(row.get("usuario_anterior"), "", directory, {})[0],
+                "nome_pessoa_novo": entra_users.resolve_name(row.get("usuario_novo"), "", directory, {})[0],
+            } if isinstance(row, dict) else row
+            for row in rows
+        ]
+    return view
 
 
 class LocalJsonCorruptionError(ValueError):
@@ -503,6 +532,7 @@ def _readiness_signature() -> Tuple[Any, ...]:
         DETAILS_UPLOAD_FILE,
         ENDPOINT_UPLOAD_FILE,
         EXPORT_MODEL_FILE,
+        ENTRA_USERS_FILE,
         MODIFIED_APELIDOS_FILE,
         CUSTOM_UNIDADES_FILE,
         ALIAS_HISTORY_FILE,
@@ -555,6 +585,7 @@ _readiness_services = readiness.ReadinessServices(
     refresh_export_status=lambda: _refresh_export_status_for_readiness(),
     get_transaction_recovery_block=lambda: get_transaction_recovery_block(),
     logger=logger,
+    entra_names_file=lambda: ENTRA_USERS_FILE,
 )
 
 
@@ -794,6 +825,9 @@ def read_endpoint_alias_index() -> Dict[str, Any]:
         manual_users, user_changes.read_manual_user_dates(MANUAL_USERS_FILE),
     )
     index["user_holds"] = holds
+    index["entra_directory"], index["manual_person_names"] = entra_users.read_names_safe(
+        ENTRA_USERS_FILE, MANUAL_PERSON_NAMES_FILE,
+    )
     if manual_users_missing and user_holds.manual_users_from_holds(holds):
         index["manual_users_file_missing"] = True
     return index
@@ -900,6 +934,7 @@ async def lifespan(app: FastAPI):
             _history_annotation_sync_worker,
             _automatic_inventory_import_worker,
             _automatic_ticket_import_worker,
+            _automatic_entra_import_worker,
             _external_change_reload_worker,
             _monthly_report_worker,
         ):
@@ -1019,6 +1054,16 @@ async def _automatic_ticket_import_worker() -> None:
         inbox,
         poll_interval_seconds=AUTOMATIC_TICKET_IMPORT_POLL_SECONDS,
     )
+
+
+async def _automatic_entra_import_worker() -> None:
+    inbox = EntraInbox(ENTRA_INBOX_DIR, _import_entra_bytes)
+    while True:
+        try:
+            await asyncio.to_thread(inbox.process_once)
+        except Exception:
+            logger.exception("Falha ao verificar a pasta de usuários Entra.")
+        await asyncio.sleep(10)
 
 
 # Interactive docs expose the API contract to any local process; developers opt in.
@@ -1255,6 +1300,8 @@ _inventory_state_services = inventory_state.InventoryStateServices(
         REMOVED_ENDPOINT_HOSTNAMES_FILE,
         CUSTOM_UNIDADES_FILE,
         EXPORT_MODEL_FILE,
+        ENTRA_USERS_FILE,
+        MANUAL_PERSON_NAMES_FILE,
     ),
     logger=logger,
 )
@@ -1754,6 +1801,7 @@ _alias_change_services = alias_changes.AliasChangeServices(
     external_errors=(HTTPException,),
     manual_users_file=lambda: MANUAL_USERS_FILE,
     load_manual_users=lambda: load_manual_users(),
+    read_entra_directory=lambda: entra_users.read_directory(ENTRA_USERS_FILE),
 )
 
 # Registered directly on the app, before /api/equipamento/{serial}, so the fixed
@@ -2137,6 +2185,11 @@ app.include_router(transfer_router)
 transfer_history_router, _transfer_history_exports = create_transfer_history_router(TransferHistoryServices(
     history_file=lambda: TRANSFER_HISTORY_FILE,
     transaction_root=lambda: TRANSACTION_ROOT,
+    person_names=lambda series: {
+        serie: str(info.get("nome_pessoa") or "")
+        for serie, info in user_changes.logged_users_for_series(_alias_change_services, series)["usuarios"].items()
+        if isinstance(info, dict)
+    },
 ))
 listar_historico_transferencias = _transfer_history_exports.listar_historico_transferencias
 registrar_historico_transferencia = _transfer_history_exports.registrar_historico_transferencia
@@ -2315,6 +2368,82 @@ operations_router = create_operations_router(
     ticket_os_links_file=lambda: STATE_DIR / "os_chamados_vinculos.json",
 )
 app.include_router(operations_router)
+
+
+def _refresh_after_entra_change() -> bool:
+    try:
+        return bool(load_database())
+    except Exception:
+        logger.exception("Nomes Entra salvos; recarga da base adiada.")
+        return False
+
+
+def _import_entra_bytes(content: bytes) -> Dict[str, Any]:
+    result = entra_users.import_csv(content, ENTRA_USERS_FILE)
+    result["base_atualizada"] = _refresh_after_entra_change()
+    return result
+
+
+def _entra_status() -> Dict[str, Any]:
+    directory = entra_users.read_directory(ENTRA_USERS_FILE)
+    return {
+        "updated_at": directory.get("updated_at", ""),
+        "source_rows": directory.get("source_rows", 0),
+        "filtered_rows": directory.get("filtered_rows", 0),
+        "logins_ignorados": directory.get("logins_ignorados", 0),
+        "users": len(directory.get("users", {})),
+    }
+
+
+def _export_entra_xlsx() -> bytes:
+    if not ENTRA_USERS_FILE.exists():
+        raise ValueError("Importe um CSV do Entra primeiro.")
+    return entra_users.export_xlsx(entra_users.read_directory(ENTRA_USERS_FILE))
+
+
+def _save_person_name(serial: str, login_atual: str, nome: str) -> Dict[str, Any]:
+    key = normalize_reference_value(serial)
+    with STATE_LOCK:
+        cache_key, equipment = next(
+            ((current, item) for current, item in inventory_state.equipamentos_cache.items()
+             if normalize_reference_value(current) == key), (None, None),
+        )
+        if equipment is None:
+            raise HTTPException(status_code=404, detail="Série não encontrada na base oficial.")
+        if not equipment.get("nome_pessoa_editavel"):
+            raise HTTPException(status_code=409, detail="O nome deste equipamento já vem do Entra ou não admite edição manual.")
+        current_login = str(equipment.get("usuarios_logados") or "").strip()
+        if not entra_users.login_key(current_login):
+            raise HTTPException(status_code=409, detail="O equipamento não tem um login válido para vincular o nome.")
+        if current_login != login_atual:
+            raise HTTPException(status_code=409, detail="O usuário logado mudou. Atualize o equipamento antes de salvar o nome.")
+        current_serial = str(equipment.get("serial") or serial)
+    try:
+        entra_users.save_manual_name(MANUAL_PERSON_NAMES_FILE, current_serial, current_login, nome)
+    except ValueError as error:
+        raise HTTPException(status_code=422, detail=str(error)) from error
+    refreshed = _refresh_after_entra_change()
+    if refreshed:
+        with STATE_LOCK:
+            updated = inventory_state.equipamentos_cache.get(cache_key)
+        return {"equipamento": _public_equipment(updated or equipment), "base_atualizada": True}
+    # Recarga falhou: o nome já está gravado; reflete-o na cópia devolvida até a próxima carga.
+    saved_name = nome.strip()
+    stale = _public_equipment(equipment)
+    stale.update(
+        nome_pessoa=saved_name,
+        nome_pessoa_origem="manual" if saved_name else "",
+        nome_pessoa_editavel=True,
+    )
+    return {"equipamento": stale, "base_atualizada": False}
+
+
+app.include_router(create_entra_users_router(EntraUserServices(
+    import_csv=_import_entra_bytes,
+    status=_entra_status,
+    export_xlsx=_export_entra_xlsx,
+    save_manual_name=_save_person_name,
+)))
 
 
 def _monthly_report_inventory() -> Tuple[List[Dict[str, Any]], Dict[str, Any]]:

@@ -301,6 +301,11 @@ class UserDecisionFileReadTests(unittest.TestCase):
         self.assert_unavailable(lambda: read_holds(self.users_file))
 
 
+def no_name(editable):
+    """Entra fields of a lookup entry when no Entra or manual name is known."""
+    return {"nome_pessoa": "", "nome_pessoa_origem": "", "nome_pessoa_editavel": editable}
+
+
 class ManualUserWorkflowTests(unittest.TestCase):
     def setUp(self):
         self.temp_context = tempfile.TemporaryDirectory(prefix=".manual-user-test-", dir=base.PROJECT_ROOT)
@@ -327,6 +332,8 @@ class ManualUserWorkflowTests(unittest.TestCase):
             ("HISTORY_ANNOTATIONS_DIR", self.root / "shared"),
             ("LOCAL_HISTORY_ANNOTATION_OUTBOX_DIR", self.root / "pending"),
             ("CUSTOM_UNIDADES_FILE", self.root / "unidades_custom.json"), ("TRANSACTION_ROOT", self.root),
+            ("ENTRA_USERS_FILE", self.state_dir / "usuarios_entra_pr.json"),
+            ("MANUAL_PERSON_NAMES_FILE", self.state_dir / "nomes_pessoas_manuais.json"),
         ):
             self.stack.enter_context(patch.object(main, name, value))
         self.old_state = (
@@ -389,15 +396,15 @@ class ManualUserWorkflowTests(unittest.TestCase):
 
         empty = {"informado_em": "", "candidatos": [], "hostname_ambiguo": False, "hostname_candidatos": []}
         self.assertEqual(lookup(), {
-            "SN-1": {"usuario": "", "origem": "", "serial_cadastro": "SN-1", "hostname": "HOST-1", **empty},
-            "sn2": {"usuario": "ana", "origem": "endpoint", "serial_cadastro": "SN-2", "hostname": "HOST-2", **empty},
-            "SN-9": {"usuario": "", "origem": "", "serial_cadastro": None, "hostname": "", **empty},
+            "SN-1": {"usuario": "", "origem": "", "serial_cadastro": "SN-1", "hostname": "HOST-1", **empty, **no_name(False)},
+            "sn2": {"usuario": "ana", "origem": "endpoint", "serial_cadastro": "SN-2", "hostname": "HOST-2", **empty, **no_name(True)},
+            "SN-9": {"usuario": "", "origem": "", "serial_cadastro": None, "hostname": "", **empty, **no_name(False)},
         })
         saved = self._save("SN-1", "joao")
         informed_at = saved["equipamento"]["usuarios_logados_informado_em"]
         self.assertEqual(lookup()["SN-1"], {
             "usuario": "joao", "origem": "manual", "serial_cadastro": "SN-1", "informado_em": informed_at, "candidatos": [],
-            "hostname": "HOST-1", "hostname_ambiguo": False, "hostname_candidatos": [],
+            "hostname": "HOST-1", "hostname_ambiguo": False, "hostname_candidatos": [], **no_name(True),
         })
 
     def test_legacy_manual_user_without_date_still_applies(self):
@@ -428,7 +435,7 @@ class ManualUserWorkflowTests(unittest.TestCase):
         found = main.consultar_usuarios_logados(UsuariosConsultaPayload(series=["SN-1", "SN-8"]))["usuarios"]
         self.assertEqual(found["SN-1"], {
             "usuario": "", "origem": "", "serial_cadastro": "SN-1", "informado_em": "", "candidatos": ["joao", "maria"],
-            "hostname": "", "hostname_ambiguo": True, "hostname_candidatos": ["HOST-1", "HOST-1B"],
+            "hostname": "", "hostname_ambiguo": True, "hostname_candidatos": ["HOST-1", "HOST-1B"], **no_name(False),
         })
         # Outside the Simpress base the candidates still come from the Endpoint, with no manual field.
         self.assertEqual(found["SN-8"]["candidatos"], ["carla", "davi"])
@@ -453,7 +460,7 @@ class ManualUserWorkflowTests(unittest.TestCase):
         found = main.consultar_usuarios_logados(UsuariosConsultaPayload(series=["SCXC9F072K1", "CXC9F072K1"]))["usuarios"]
         expected = {
             "usuario": "DDrodrigues", "origem": "endpoint", "serial_cadastro": "SCXC9F072K1", "informado_em": "", "candidatos": [],
-            "hostname": "PRMACUMC005", "hostname_ambiguo": False, "hostname_candidatos": [],
+            "hostname": "PRMACUMC005", "hostname_ambiguo": False, "hostname_candidatos": [], **no_name(True),
         }
         self.assertEqual(found, {"SCXC9F072K1": expected, "CXC9F072K1": expected})
         with self.assertRaises(DomainError) as raised:

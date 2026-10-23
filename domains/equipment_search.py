@@ -65,6 +65,7 @@ def build_search_index(
             # Ambiguous Endpoint candidates are searchable too, although none is the logged user.
             normalize(" ".join([
                 str(item.get("usuarios_logados") or ""),
+                str(item.get("nome_pessoa") or ""),
                 *(str(user) for user in item.get("usuarios_logados_candidatos") or []),
             ])),
         )
@@ -77,6 +78,9 @@ def build_search_index(
             "retirada_cidade": city,
             "retirada_cnpj": str(item.get("retirada_cnpj") or ""),
             "usuarios_logados": str(item.get("usuarios_logados") or ""),
+            "nome_pessoa": str(item.get("nome_pessoa") or ""),
+            "nome_pessoa_origem": str(item.get("nome_pessoa_origem") or ""),
+            "nome_pessoa_editavel": bool(item.get("nome_pessoa_editavel")),
             "usuarios_logados_origem": str(item.get("usuarios_logados_origem") or ""),
             "usuarios_logados_informado_em": str(item.get("usuarios_logados_informado_em") or ""),
             "usuarios_logados_candidatos": [str(user) for user in item.get("usuarios_logados_candidatos") or []],

@@ -24,6 +24,7 @@
     modelo_exportacao: "Modelo de exportação",
     catalogos_locais: "Catálogos e históricos locais",
     historico_chamados: "Histórico do acompanhamento de chamados",
+    nomes_entra: "Nomes do Microsoft Entra",
   };
   const INVENTORY_FILE_LABELS = {
     inventario_equipamentos: "Base ativa",
@@ -112,6 +113,7 @@
       adicionarGrupoInventarios(content, report);
       adicionarGrupoAcompanhamentoChamados(content, report);
       if (report.files.modelo_exportacao) adicionarGrupoModeloExportacao(content, report.files.modelo_exportacao);
+      if (report.files.nomes_entra) adicionarGrupoNomesEntra(content, report.files.nomes_entra);
       details.replaceChildren(content);
       // Later refreshes after saves update in place; only the first render cascades in.
       if (!details.dataset.revealed) {
@@ -138,6 +140,8 @@
       "modelo_exportacao",
       "historico_chamados",
     ];
+    // Older servers and mocked reports have no Entra entry; it only counts when reported.
+    if (report.files.nomes_entra) readinessFileKeys.push("nomes_entra");
     const readinessFiles = readinessFileKeys.map(key => report.files[key]).filter(Boolean);
     const availableCount = readinessFiles.filter(status => status.available === true).length;
     const totalCount = readinessFileKeys.length;
@@ -291,6 +295,28 @@
           label: "Importar",
           ariaLabel: "Importar modelo de exportação",
           onClick: () => app.abrirImportacaoModelo("exportacao"),
+        },
+      }
+    );
+  }
+
+  function adicionarGrupoNomesEntra(content, entraStatus) {
+    adicionarGrupoProntidao(
+      content,
+      "Nomes do Microsoft Entra",
+      [["nomes_entra", entraStatus]],
+      READINESS_FILE_LABELS,
+      "file",
+      {
+        actionOnly: true,
+        description: "Nomes exibidos junto ao login do usuário.",
+        countLabel: entraStatus.available ? "Disponível" : entraStatus.state === "invalid" ? "Inválido" : "Pendente",
+        countState: entraStatus.state,
+        showItemState: false,
+        groupAction: {
+          label: "Importar",
+          ariaLabel: "Importar CSV com os nomes do Microsoft Entra",
+          onClick: app.abrirModalAtualizarPlanilhas,
         },
       }
     );

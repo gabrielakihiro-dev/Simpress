@@ -63,9 +63,11 @@ _USER_CHANGE_LABELS = {
 }
 
 
-def _export_change_user(user: Any, origin: Any) -> str:
+def _export_change_user(user: Any, origin: Any, name: Any = "") -> str:
     text = _export_text(user).strip()
-    return f"{text} (M)" if text and origin == "manual" else text
+    text = f"{text} (M)" if text and origin == "manual" else text
+    person = _export_text(name).strip()
+    return f"{text} — {person}" if text and person else text
 
 
 def _export_datetime(value: Any) -> Optional[datetime]:
@@ -140,7 +142,8 @@ def _export_user(logged_users: Mapping[str, Any], serie: Any) -> Tuple[str, str]
     user = _export_text(info.get("usuario")).strip()
     if not user:
         return "", ""
-    return user, _USER_ORIGIN_LABELS.get(str(info.get("origem") or ""), "")
+    person = _export_text(info.get("nome_pessoa")).strip()
+    return (f"{user} — {person}" if person else user), _USER_ORIGIN_LABELS.get(str(info.get("origem") or ""), "")
 
 
 def _style_export_title(ws: Worksheet, title: str, subtitle: str, last_column: int) -> None:
@@ -404,8 +407,8 @@ def build_history_export_workbook(
                 timestamp, event_type_label,
                 _USER_CHANGE_LABELS.get(str(item.get("tipo") or ""), _export_text(item.get("tipo"))),
                 item.get("serie"), item.get("computador"),
-                _export_change_user(item.get("usuario_anterior"), item.get("origem_anterior")),
-                _export_change_user(item.get("usuario_novo"), item.get("origem_nova")),
+                _export_change_user(item.get("usuario_anterior"), item.get("origem_anterior"), item.get("nome_pessoa_anterior")),
+                _export_change_user(item.get("usuario_novo"), item.get("origem_nova"), item.get("nome_pessoa_novo")),
                 _history_section_text(item.get("motivo")),
                 _export_note(comparison, "mudancas_usuarios", index, item),
             ))

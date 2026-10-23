@@ -310,8 +310,8 @@
   }
 
   function linhasMudancasUsuarios(mudancasUsuarios, { renderizarCampoAnotacao }) {
-    const usuario = (nome, origem) => nome
-      ? `${escapeHtml(nome)}${origem === "manual" ? " (M)" : ""}`
+    const usuario = (nome, origem, pessoa) => nome
+      ? `${escapeHtml(nome)}${origem === "manual" ? " (M)" : ""}${pessoa ? `<span class="block text-[11px] text-slate-400" data-person-name>${escapeHtml(pessoa)}</span>` : ""}`
       : '<span class="text-slate-500">(vazio)</span>';
     return mudancasUsuarios.map(item => {
       const tipo = TIPOS_MUDANCA_USUARIO[item.tipo] || { rotulo: "Mudança de usuário", classe: "text-slate-300" };
@@ -320,8 +320,8 @@
           <td class="px-3 py-2 font-semibold ${tipo.classe}">${escapeHtml(tipo.rotulo)}</td>
           <td class="px-3 py-2 font-mono text-white whitespace-nowrap">${escapeHtml(item.serie || "—")}${marcadorUsuarioLogado(item.serie, { sugestao: item.usuario_manual_arquivado })}</td>
           <td class="px-3 py-2 font-mono">${escapeHtml(item.computador || "—")}</td>
-          <td class="px-3 py-2">${usuario(item.usuario_anterior, item.origem_anterior)}</td>
-          <td class="px-3 py-2">${usuario(item.usuario_novo, item.origem_nova)}</td>
+          <td class="px-3 py-2">${usuario(item.usuario_anterior, item.origem_anterior, item.nome_pessoa_anterior)}</td>
+          <td class="px-3 py-2">${usuario(item.usuario_novo, item.origem_nova, item.nome_pessoa_novo)}</td>
           <td class="px-3 py-2 text-slate-300">${escapeHtml(String(item.motivo || "").replace(/\bno endpoint\b/gi, "no Endpoint"))}${acoesPendenciaUsuario(item)}</td>
           ${renderizarCampoAnotacao(item, `${tipo.rotulo}, série ${item.serie || "vazia"}`)}
         </tr>`;

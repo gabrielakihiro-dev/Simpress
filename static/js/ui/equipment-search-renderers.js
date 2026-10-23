@@ -52,6 +52,11 @@
                 ${item.usuarios_logados_pendencia ? '<span class="text-amber-300" data-user-pending>· aguardando decisão</span>' : ""}
               </span>
             ` : ""}
+            ${String(item.nome_pessoa || "").trim() ? `
+              <span class="autocomplete-user inline-flex items-center gap-1 text-[11px] px-2 py-0.5 rounded-md bg-slate-900/90 text-slate-200 border border-slate-600/60 min-w-0" title="Nome da pessoa${item.nome_pessoa_origem === "manual" ? " informado manualmente" : " no Entra"}">
+                <span class="truncate">${highlightMatch(String(item.nome_pessoa).trim(), currentQuery)}${item.nome_pessoa_origem === "manual" ? " (manual)" : ""}</span>
+              </span>
+            ` : ""}
             ${textoAmbiguo(item.usuarios_logados_candidatos) ? `
               <span class="autocomplete-user autocomplete-user-ambiguous inline-flex items-center gap-1 text-[11px] px-2 py-0.5 rounded-md text-amber-300 bg-amber-500/10 border border-amber-500/25 shrink-0" title="${escapeHtml(context.loggedUserMarkers?.TITULO_AMBIGUO || "")}">
                 <i data-lucide="alert-triangle" class="w-2.5 h-2.5 text-amber-400" aria-hidden="true"></i>
@@ -99,6 +104,7 @@
       item.modelo,
       item.apelido,
       item.usuarios_logados ? `usuário ${String(item.usuarios_logados).trim()}` : "",
+      item.nome_pessoa ? `nome ${String(item.nome_pessoa).trim()}` : "",
       textoAmbiguo(item.usuarios_logados_candidatos),
       item.retirada_cidade,
     ].filter(Boolean).join(", "));
