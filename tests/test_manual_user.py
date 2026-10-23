@@ -381,16 +381,17 @@ class ManualUserWorkflowTests(unittest.TestCase):
         def lookup():
             return main.consultar_usuarios_logados(UsuariosConsultaPayload(series=["SN-1", "sn2", "SN-9", ""]))["usuarios"]
 
-        empty = {"informado_em": "", "candidatos": []}
+        empty = {"informado_em": "", "candidatos": [], "hostname_ambiguo": False, "hostname_candidatos": []}
         self.assertEqual(lookup(), {
-            "SN-1": {"usuario": "", "origem": "", "serial_cadastro": "SN-1", **empty},
-            "sn2": {"usuario": "ana", "origem": "endpoint", "serial_cadastro": "SN-2", **empty},
-            "SN-9": {"usuario": "", "origem": "", "serial_cadastro": None, **empty},
+            "SN-1": {"usuario": "", "origem": "", "serial_cadastro": "SN-1", "hostname": "HOST-1", **empty},
+            "sn2": {"usuario": "ana", "origem": "endpoint", "serial_cadastro": "SN-2", "hostname": "HOST-2", **empty},
+            "SN-9": {"usuario": "", "origem": "", "serial_cadastro": None, "hostname": "", **empty},
         })
         saved = self._save("SN-1", "joao")
         informed_at = saved["equipamento"]["usuarios_logados_informado_em"]
         self.assertEqual(lookup()["SN-1"], {
             "usuario": "joao", "origem": "manual", "serial_cadastro": "SN-1", "informado_em": informed_at, "candidatos": [],
+            "hostname": "HOST-1", "hostname_ambiguo": False, "hostname_candidatos": [],
         })
 
     def test_legacy_manual_user_without_date_still_applies(self):
@@ -421,10 +422,13 @@ class ManualUserWorkflowTests(unittest.TestCase):
         found = main.consultar_usuarios_logados(UsuariosConsultaPayload(series=["SN-1", "SN-8"]))["usuarios"]
         self.assertEqual(found["SN-1"], {
             "usuario": "", "origem": "", "serial_cadastro": "SN-1", "informado_em": "", "candidatos": ["joao", "maria"],
+            "hostname": "", "hostname_ambiguo": True, "hostname_candidatos": ["HOST-1", "HOST-1B"],
         })
         # Outside the Simpress base the candidates still come from the Endpoint, with no manual field.
         self.assertEqual(found["SN-8"]["candidatos"], ["carla", "davi"])
         self.assertIsNone(found["SN-8"]["serial_cadastro"])
+        self.assertTrue(found["SN-8"]["hostname_ambiguo"])
+        self.assertEqual(found["SN-8"]["hostname_candidatos"], ["HOST-8", "HOST-8B"])
 
         saved = self._save("SN-1", "pedro")
         self.assertEqual(saved["equipamento"]["usuarios_logados"], "pedro")
@@ -443,11 +447,24 @@ class ManualUserWorkflowTests(unittest.TestCase):
         found = main.consultar_usuarios_logados(UsuariosConsultaPayload(series=["SCXC9F072K1", "CXC9F072K1"]))["usuarios"]
         expected = {
             "usuario": "DDrodrigues", "origem": "endpoint", "serial_cadastro": "SCXC9F072K1", "informado_em": "", "candidatos": [],
+            "hostname": "PRMACUMC005", "hostname_ambiguo": False, "hostname_candidatos": [],
         }
         self.assertEqual(found, {"SCXC9F072K1": expected, "CXC9F072K1": expected})
         with self.assertRaises(DomainError) as raised:
             self._save("SCXC9F072K1", "outro")
         self.assertEqual(raised.exception.status_code, 409)
+
+        make_endpoint_with_users(self.endpoint, [
+            ("SN-1", "HOST-1", ""),
+            ("CXC9F072K1", "PRMACUMC005", "DDrodrigues"),
+            ("CXC9F072K1", "PRMACUMC006", "maria"),
+        ])
+        self.assertTrue(main.load_database())
+        ambiguous = main.consultar_usuarios_logados(UsuariosConsultaPayload(series=["SCXC9F072K1"]))["usuarios"]["SCXC9F072K1"]
+        self.assertEqual(ambiguous["usuario"], "")
+        self.assertEqual(ambiguous["candidatos"], ["DDrodrigues", "maria"])
+        self.assertTrue(ambiguous["hostname_ambiguo"])
+        self.assertEqual(ambiguous["hostname_candidatos"], ["PRMACUMC005", "PRMACUMC006"])
 
     def test_clearing_records_history_and_endpoint_user_is_protected(self):
         self._save("SN-1", "joao")
