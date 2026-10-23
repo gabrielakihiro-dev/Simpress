@@ -1,10 +1,10 @@
 """Rotina "Verificar usuários": confere no Endpoint Central as pendências de usuário logado.
 
 Para cada pendência ainda sem decisão (``GET /api/usuarios/pendencias``), pesquisa o computador na
-grade "Todos os computadores" do Endpoint (série, série sem S de MacBook e hostname). Prioriza
-"Usuário do último logon" no detalhe; se não for válido, usa um único usuário válido da coluna
-"Usuários logados". Com vários usuários válidos, mantém a pendência aberta; sem nenhum, consulta
-Sistema > Usuários.
+grade "Todos os computadores" do Endpoint (MacBooks pelo número de série em Domínio; demais computadores
+pelo rótulo/número de série; hostname como alternativa). Prioriza "Usuário do último logon" no detalhe;
+se não for válido, usa um único usuário válido da coluna "Usuários logados". Com vários usuários válidos,
+mantém a pendência aberta; sem nenhum, consulta Sistema > Usuários.
 A decisão sai por ``POST /api/usuarios/pendencias/{id}/decidir`` e a anotação da linha de "Mudanças de
 usuário logado" por ``PUT /api/historico-comparacoes/{evento}/anotacoes/{anotacao_id}``.
 
@@ -45,6 +45,7 @@ CABECALHOS_USUARIO_SISTEMA = ("nome do usuario", "nome de usuario", "usuario", "
 COLUNA_SERIE = "numero de serie"
 COLUNA_NOME = "nome do computador"
 COLUNA_USUARIOS = "usuarios logados"
+COLUNA_DOMINIO = "dominio"
 HREF_DETALHE = re.compile(r"^#/uems/inventory/computers/[A-Za-z0-9_-]+$")
 URL_DETALHE = re.compile(r"#/uems/inventory/computers/[A-Za-z0-9_-]+(/|$)")
 LIMITE_ANOTACAO = 2000
@@ -484,14 +485,18 @@ def pesquisar_computador_endpoint(
     page: "Page", automacao: ModuleType, serie: str, hostname: str,
     ao_encontrar: Callable[["Page", dict], dict | None] | None = None,
 ) -> dict:
-    """Pesquisa a série, a série sem S para MacBooks e o hostname, sempre por correspondência exata.
+    """Pesquisa séries exatas; para MacBooks consulta Domínio, onde o Endpoint guarda a série.
 
     Devolve ``{"estado": "unico"|"ambiguo"|"ausente", "linha", "extra"}``. Com um único resultado chama
     ``ao_encontrar(page, linha)`` com o filtro aplicado; se ele devolver algo, a grade já foi restaurada.
     """
-    tentativas = [(COLUNA_SERIE, serie)]
-    if serie_sem_s(serie):
-        tentativas.append((COLUNA_SERIE, serie_sem_s(serie)))
+    if normalizar(hostname).startswith("prmac"):
+        tentativas = [(COLUNA_DOMINIO, serie)]
+        serie_endpoint = serie_sem_s(serie)
+        if serie_endpoint:
+            tentativas.append((COLUNA_DOMINIO, serie_endpoint))
+    else:
+        tentativas = [(COLUNA_SERIE, serie)]
     if hostname.strip():
         tentativas.append((COLUNA_NOME, hostname.strip()))
     for coluna, valor in tentativas:
