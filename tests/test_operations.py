@@ -11,6 +11,7 @@ from unittest.mock import patch
 
 from fastapi import HTTPException
 import openpyxl
+from pydantic import ValidationError
 from openpyxl.utils import column_index_from_string
 from openpyxl import Workbook
 from starlette.datastructures import UploadFile
@@ -19,7 +20,7 @@ from domains.history_insights import compare_updates, latest_update, pending_row
 from domains.monthly_report import ReportMonth, tickets_section
 from domains.ticket_reconciliation import ORACLE_FIELDS, TicketWorkbookError, _source_table
 from domains.ticket_reporting import build_ticket_workbook
-from routers.operations import TicketTimelineAnnotationPayload, create_operations_router
+from routers.operations import TicketOsLinkPayload, TicketTimelineAnnotationPayload, create_operations_router
 
 PROJECT_ROOT = Path(__file__).resolve().parents[1]
 
@@ -83,6 +84,62 @@ class HistoryInsightTests(unittest.TestCase):
         self.assertEqual(pending["evento"]["id"], "after")
         self.assertEqual(len(pending["pendencias"]), 2)
         self.assertEqual(evolution["contagens"], {"novos": 1, "continuam": 1, "resolvidos": 0})
+
+
+class TicketOsLinkRouteTests(unittest.TestCase):
+    def test_manual_ticket_number_accepts_only_the_numeric_suffix(self):
+        payload = TicketOsLinkPayload(
+            fonte="oracle", serie="SN-1", os="7285070", ano=2026, numero="1116",
+        )
+        self.assertEqual(payload.numero, "1116")
+        with self.assertRaises(ValidationError):
+            TicketOsLinkPayload(
+                fonte="oracle", serie="SN-1", os="7285070", ano=2026, numero="UTIC-2026-1116",
+            )
+
+    def test_manual_ticket_links_are_persisted_by_source_serial_and_order(self):
+        with tempfile.TemporaryDirectory(dir=PROJECT_ROOT) as directory:
+            root = Path(directory)
+            link_path = root / "data" / "state" / "os_chamados_vinculos.json"
+
+            def make_router():
+                return create_operations_router(
+                    load_comparison_history=lambda: [],
+                    comparison_history_for_display=lambda event: event,
+                    ticket_report_path=lambda: root / "tickets.json",
+                    transaction_root=lambda: root,
+                    ticket_os_links_file=lambda: link_path,
+                )
+
+            get_links = route_handler(make_router(), "/api/operacoes/chamados/vinculos-os", "GET")
+            save_link = route_handler(make_router(), "/api/operacoes/chamados/vinculos-os", "PUT")
+            self.assertEqual(get_links(), {"vinculos": []})
+
+            simpress_link = TicketOsLinkPayload(
+                fonte="simpress", serie="SN-1", os="7285070", ano=2026, numero="1116",
+            )
+            oracle_link = TicketOsLinkPayload(
+                fonte="oracle", serie="SN-1", os="7285070", ano=2026, numero="1117",
+            )
+            self.assertEqual(save_link(simpress_link)["vinculo"]["chamado"], "UTIC-2026-1116")
+            self.assertEqual(save_link(oracle_link)["vinculo"]["chamado"], "UTIC-2026-1117")
+
+            # A new route instance still reads the local state, and source keeps same-number OS entries distinct.
+            persisted = route_handler(make_router(), "/api/operacoes/chamados/vinculos-os", "GET")()
+            self.assertEqual({item["fonte"]: item["chamado"] for item in persisted["vinculos"]}, {
+                "simpress": "UTIC-2026-1116", "oracle": "UTIC-2026-1117",
+            })
+
+            save_link(TicketOsLinkPayload(
+                fonte="simpress", serie="SN-1", os="7285070", ano=2027, numero="42",
+            ))
+            self.assertEqual(route_handler(make_router(), "/api/operacoes/chamados/vinculos-os", "GET")()["vinculos"][0]["chamado"], "UTIC-2027-42")
+            save_link(TicketOsLinkPayload(
+                fonte="simpress", serie="SN-1", os="7285070", ano=2027, numero="",
+            ))
+            self.assertEqual(route_handler(make_router(), "/api/operacoes/chamados/vinculos-os", "GET")()["vinculos"], [
+                {"fonte": "oracle", "serie": "SN-1", "os": "7285070", "ano": 2026, "numero": "1117", "chamado": "UTIC-2026-1117"},
+            ])
 
 
 class TicketImportRouteTests(unittest.TestCase):

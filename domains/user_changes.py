@@ -503,15 +503,48 @@ def logged_users_for_series(services: AliasChangeServices, series: List[str]) ->
         matches = by_key.get(key, [])
         if not matches and mac_endpoint_serial_key(endpoint_index, f"S{key}") == key:
             matches = by_key.get(f"S{key}", [])
+        hostname_key = key
+        ambiguous_mac_key = ""
+        if (
+            hostname_key not in endpoint_index.get("unique", {})
+            and hostname_key not in endpoint_index.get("duplicates", {})
+            and (mac_key := mac_endpoint_serial_key(endpoint_index, hostname_key))
+        ):
+            hostname_key = mac_key
+        elif (
+            hostname_key.startswith("S")
+            and hostname_key[1:] in endpoint_index.get("duplicates", {})
+            and any(
+                normalize_reference_value(item.get("hostname", "")).startswith("PRMAC")
+                for item in endpoint_index["duplicates"][hostname_key[1:]]
+            )
+        ):
+            # The Mac serial equivalence is safe only for one Endpoint match. Keep
+            # duplicate candidates visible without selecting a hostname or user.
+            hostname_key = hostname_key[1:]
+            ambiguous_mac_key = hostname_key
+        hostname_rows = endpoint_index.get("duplicates", {}).get(hostname_key, [])
+        hostname_candidates = list(dict.fromkeys(
+            str(item.get("hostname") or "").strip() for item in hostname_rows
+            if str(item.get("hostname") or "").strip()
+        ))
+        hostname_ambiguous = len(hostname_rows) > 1 or len(matches) > 1
+        hostname = "" if hostname_ambiguous else str(endpoint_index.get("unique", {}).get(hostname_key) or "").strip()
         if len(matches) == 1:
             match = matches[0]
             origem = match["origem"] if match["usuario"] else ""
+            user_candidates = match["candidatos"]
+            if ambiguous_mac_key and not user_candidates:
+                user_candidates = endpoint_user_candidates(endpoint_index, ambiguous_mac_key)
             result[serie] = {
                 "usuario": match["usuario"],
                 "origem": origem,
                 "serial_cadastro": match["serial"],
                 "informado_em": match["informado_em"] if origem == "manual" else "",
-                "candidatos": match["candidatos"],
+                "candidatos": user_candidates,
+                "hostname": hostname,
+                "hostname_ambiguo": hostname_ambiguous,
+                "hostname_candidatos": hostname_candidates,
             }
             if match["pendencia"]:
                 result[serie]["pendencia"] = match["pendencia"]
@@ -522,7 +555,10 @@ def logged_users_for_series(services: AliasChangeServices, series: List[str]) ->
             "origem": "endpoint" if usuario else "",
             "serial_cadastro": None,
             "informado_em": "",
-            "candidatos": endpoint_user_candidates(endpoint_index, key),
+            "candidatos": endpoint_user_candidates(endpoint_index, ambiguous_mac_key or key),
+            "hostname": hostname,
+            "hostname_ambiguo": hostname_ambiguous,
+            "hostname_candidatos": hostname_candidates,
         }
     return {"usuarios": result}
 

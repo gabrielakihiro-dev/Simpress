@@ -204,6 +204,7 @@ class MaintenanceContractTests(unittest.TestCase):
             "/api/operacoes/pendencias": {"get"},
             "/api/operacoes/evolucao": {"get"},
             "/api/operacoes/chamados": {"get"},
+            "/api/operacoes/chamados/vinculos-os": {"get", "put"},
             "/api/operacoes/chamados/historico": {"get"},
             "/api/operacoes/chamados/historico/antigas": {"delete"},
             "/api/operacoes/chamados/snapshot/{snapshot_id}": {"get"},

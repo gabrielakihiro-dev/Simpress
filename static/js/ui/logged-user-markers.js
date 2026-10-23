@@ -123,6 +123,8 @@
             app.atualizarUsuarioLogadoCard?.(appState.currentEquipamento);
           }
           app.showToast("Usuário salvo e registrado no histórico de alterações.", "success");
+          const EventConstructor = document.defaultView?.CustomEvent;
+          if (EventConstructor) document.dispatchEvent(new EventConstructor("simpress:usuarios-equipamento-atualizados"));
         } catch (error) {
           console.error("Erro ao salvar usuário logado:", error);
           app.showToast(error.message || "Falha ao salvar o usuário.", "error");
