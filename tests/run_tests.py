@@ -1,8 +1,10 @@
 """Run tests without loading or recovering local Simpress data at import time."""
 
 import importlib
+import shutil
 import sys
 import tempfile
+import time
 import unittest
 from pathlib import Path
 from unittest.mock import patch
@@ -17,7 +19,16 @@ FIXTURE_ONLY_MODULES = (
 )
 
 
+def _remove_stale_temp_roots(max_age_seconds: int = 3600) -> None:
+    """Drop roots left by interrupted runs; recent ones may belong to a parallel run."""
+    cutoff = time.time() - max_age_seconds
+    for stale in PROJECT_ROOT.glob(".simpress-test-*"):
+        if stale.is_dir() and not stale.is_symlink() and stale.stat().st_mtime < cutoff:
+            shutil.rmtree(stale, ignore_errors=True)
+
+
 def run() -> bool:
+    _remove_stale_temp_roots()
     with tempfile.TemporaryDirectory(
         prefix=".simpress-test-",
         dir=PROJECT_ROOT,
