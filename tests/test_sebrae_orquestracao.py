@@ -138,7 +138,7 @@ class FluxoCompletoTests(Base):
         # The 30 duplicates were never opened.
         self.assertEqual(softexpert.lidos, ["UTIC-2026-0101", "UTIC-2026-0102"])
 
-    def test_only_the_seven_columns_are_ever_handed_to_the_writer(self):
+    def test_only_the_eight_columns_are_ever_handed_to_the_writer(self):
         dashboard = DashboardFalso()
         self.rodar(self.lista_com(chamado("UTIC-2026-0101")), dashboard)
         self.assertEqual(len(dashboard.chamadas_gravar), 1)
@@ -148,6 +148,7 @@ class FluxoCompletoTests(Base):
         self.assertEqual(linha["O"], "PR")
         self.assertEqual(linha["P"], "21/10/2026 10:30")
         self.assertEqual(linha["G"], "Maria Souza")
+        self.assertEqual(linha["D"], "Em Aberto")
 
     def test_a_number_already_in_column_c_is_ignored_whole_even_inside_composite_values(self):
         dashboard = DashboardFalso(["27371 / UTIC-2026-0094", "utic-2026-0095"])
@@ -459,7 +460,7 @@ class GravacaoTests(Base):
     def test_a_partial_write_records_confirmed_and_missing_cells_and_stops_writing(self):
         softexpert = self.lista_com(chamado("UTIC-2026-0101"), chamado("UTIC-2026-0102"), chamado("UTIC-2026-0103"))
         dashboard = DashboardFalso()
-        dashboard.resultado_forcado["UTIC-2026-0102"] = ResultadoGravacao("UTIC-2026-0102", ("C", "F", "G"), False)
+        dashboard.resultado_forcado["UTIC-2026-0102"] = ResultadoGravacao("UTIC-2026-0102", ("C", "D", "F"), False)
         resultado = self.rodar(softexpert, dashboard)
         self.assertEqual(resultado.situacao, orq.SITUACAO_FALHA)
         self.assertEqual(resultado.resumo.incluidos, 1)
@@ -468,12 +469,12 @@ class GravacaoTests(Base):
         self.assertNotIn("UTIC-2026-0103", softexpert.lidos)
         parcial = [d for d in self.ler_estado()["ultima_execucao"]["detalhes"] if d["numero"] == "UTIC-2026-0102"][0]
         self.assertEqual(parcial["motivo"], "gravacao_parcial")
-        self.assertEqual(parcial["campos_confirmados"], ["C", "F", "G"])
-        self.assertEqual(parcial["campos_pendentes"], ["H", "M", "O", "P"])
+        self.assertEqual(parcial["campos_confirmados"], ["C", "D", "F"])
+        self.assertEqual(parcial["campos_pendentes"], ["G", "H", "M", "O", "P"])
         self.assertFalse(parcial["salvo"])
         self.assertEqual(self.ler_estado()["pendencias"], {"UTIC-2026-0102": "gravacao_parcial"})
 
-    def test_all_seven_cells_without_a_confirmed_save_is_not_an_inclusion(self):
+    def test_all_eight_cells_without_a_confirmed_save_is_not_an_inclusion(self):
         dashboard = DashboardFalso()
         dashboard.resultado_forcado["UTIC-2026-0101"] = ResultadoGravacao("UTIC-2026-0101", tuple(COLUNAS_GRAVADAS), False)
         resultado = self.rodar(self.lista_com(chamado("UTIC-2026-0101")), dashboard)

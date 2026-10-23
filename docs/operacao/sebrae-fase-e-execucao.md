@@ -40,7 +40,7 @@ Fora do Git, sem segredos. Sem este arquivo a rotina falha antes de abrir qualqu
 ```
 
 - `dashboard_url`: endereço https do arquivo (nunca a tela de login). O usuário informa.
-- `colunas_formula`: colunas, fora C, F, G, H, M, O e P, que a linha preparada já traz com fórmula, definidas na verificação V5 do levantamento da Fase C. `[]` desliga a conferência e deve ser uma decisão explícita do usuário.
+- `colunas_formula`: colunas, fora C, D, F, G, H, M, O e P, que a linha preparada já traz com fórmula, definidas na verificação V5 do levantamento da Fase C. `[]` desliga a conferência e deve ser uma decisão explícita do usuário.
 - `quebras_como_espaco`: `true` se a verificação V7 mostrar que `Alt+Enter` não preserva a quebra.
 
 O levantamento V0–V10 da Fase C (feito com o usuário, numa cópia do Dashboard) vem **antes** desta execução: seletores e leitura da coluna C do Excel Online ainda são hipóteses.
@@ -66,7 +66,7 @@ Com o usuário, no Dashboard:
 
 1. As 30 linhas anteriores estão **idênticas** (valores, fórmulas, formatação, filtros).
 2. Nenhum número aparece duas vezes na coluna C.
-3. Cada linha nova tem exatamente as colunas C, F, G, H, M (`Sebrae`), O (`PR`) e P (`dd/MM/yyyy HH:mm`) e mais nada; F é a descrição original do problema (ou o título, se não havia), G é o Solicitante, H é `INCIDENTE` ou `SOLICITAÇÃO` coerente com o texto, P é o *Habilitada em* do chamado.
+3. Cada linha nova tem exatamente as colunas C, D (`Em Aberto`), F, G, H, M (`Sebrae`), O (`PR`) e P (`dd/MM/yyyy HH:mm`) e mais nada; F é a descrição original do problema (ou o título, se não havia), G é o Solicitante, H é `INCIDENTE` ou `SOLICITAÇÃO` coerente com o texto, P é o *Habilitada em* do chamado.
 4. `UTIC-2026-1253` e `UTIC-2026-1177` **não** foram gravados e aparecem como pendências no estado (`pendencias`) e em `GET /api/automacao/sebrae/resumo`.
 5. Os contadores do estado batem com o que se vê: `incluidos` = linhas novas, `ignorados` = chamados da lista que já estavam na coluna C, `pendentes` = pendências.
 6. Um chamado pendente por classificação ambígua (se houver) tem motivo legível e nenhuma linha.

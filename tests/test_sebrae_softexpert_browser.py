@@ -126,6 +126,7 @@ PAGINA_REGISTRO = """<!doctype html><html lang="pt-br"><head><meta charset="utf-
 <div id="car" class="carregando">Carregando...</div>
 <div id="dlg" role="dialog" class="oculto"><p>Deseja associar este chamado ao seu usuário?</p>
 <button id="sim">Sim</button><button id="nao">Não</button></div>
+<nav id="workflow-secoes" class="oculto"><button type="button" id="atendimento-ti">Atendimento - Chamados TI</button></nav>
 <form id="formulario" class="oculto">
 <div><label for="f_numero">Número do chamado</label><input id="f_numero" readonly></div>
 <div><label for="f_titulo">Título</label><input id="f_titulo" readonly></div>
@@ -133,6 +134,9 @@ PAGINA_REGISTRO = """<!doctype html><html lang="pt-br"><head><meta charset="utf-
 <div><label for="f_iniciador">Iniciador</label><input id="f_iniciador" readonly></div>
 <div><label for="f_habilitada">Habilitada em</label><input id="f_habilitada" readonly></div>
 <div><label for="f_descricao">Descrição</label><textarea id="f_descricao" readonly></textarea></div>
+<section id="secao-atendimento" class="oculto">
+<label for="f_detalhes_atendimento">Detalhes do Atendimento Realizado</label><textarea id="f_detalhes_atendimento" readonly></textarea>
+</section>
 <button type="button" id="enviar">Enviar</button>
 </form>
 <script>
@@ -141,10 +145,16 @@ const $ = (id) => document.getElementById(id);
 const associar = () => fetch('/api/associar?numero=' + D.numero, {method: 'POST'});
 const mostrar = () => {
   $('formulario').classList.remove('oculto');
+  $('workflow-secoes').classList.remove('oculto');
   $('f_numero').value = D.numero_form; $('f_titulo').value = D.titulo_form;
   $('f_solicitante').value = D.solicitante; $('f_iniciador').value = D.iniciador; $('f_habilitada').value = D.habilitada_em;
   if (D.descricao) setTimeout(() => { $('f_descricao').value = D.descricao; }, D.atraso);
 };
+$('atendimento-ti').addEventListener('click', () => {
+  fetch('/api/consultou_atendimento?numero=' + D.numero, {method: 'POST'});
+  $('f_detalhes_atendimento').value = D.detalhes_atendimento_realizado || '';
+  $('secao-atendimento').classList.remove('oculto');
+});
 $('enviar').addEventListener('click', () => fetch('/api/proibido?acao=Enviar', {method: 'POST'}));
 $('sim').addEventListener('click', async () => { await associar(); $('dlg').classList.add('oculto'); mostrar(); });
 setTimeout(() => {
@@ -164,6 +174,7 @@ def chamado(indice: int, **extra) -> dict:
         "iniciador": "João iniciador",
         "habilitada_em": "20/10/2026 09:15",
         "descricao": f"A impressora do setor {indice} não imprime desde cedo.",
+        "detalhes_atendimento_realizado": "",
         "atraso": 0,
         "confirmacao": "modal",
     }
@@ -187,6 +198,7 @@ class Bancada:
         self.chamados: list[dict] = []
         self.associados: list[str] = []
         self.abertos: list[str] = []
+        self.consultas_atendimento: list[str] = []
         self.proibidos: list[str] = []
         self.sso_clicks: list[str] = []
 
@@ -228,6 +240,7 @@ def criar_servidor(bancada: Bancada) -> ThreadingHTTPServer:
                     "numero": c["numero"], "numero_form": c.get("numero_form", c["numero"]),
                     "titulo_form": c.get("titulo_form", c["titulo"]), "solicitante": c["solicitante"], "iniciador": c["iniciador"],
                     "habilitada_em": c["habilitada_em"], "descricao": c["descricao"],
+                    "detalhes_atendimento_realizado": c.get("detalhes_atendimento_realizado", ""),
                     "atraso": c["atraso"], "confirmacao": c["confirmacao"],
                 }
                 return self.responder(PAGINA_REGISTRO % {"estilo": ESTILO, "dados": json.dumps(dados)})
@@ -246,6 +259,8 @@ def criar_servidor(bancada: Bancada) -> ThreadingHTTPServer:
                 bancada.associados.append(consulta["numero"])
             elif caminho == "/api/abrir":
                 bancada.abertos.append(consulta["numero"])
+            elif caminho == "/api/consultou_atendimento":
+                bancada.consultas_atendimento.append(consulta["numero"])
             elif caminho == "/api/proibido":
                 bancada.proibidos.append(consulta["acao"])
             elif caminho == "/api/sso":
@@ -361,6 +376,51 @@ class RegrasPurasTests(unittest.TestCase):
             botao.first.get_attribute.return_value = ""
             se.clicar(botao, "teste")
             botao.first.click.assert_called_once()
+
+    def test_detalhes_do_atendimento_ja_visiveis_sao_lidos_sem_navegar(self):
+        page = MagicMock()
+        page.is_closed.return_value = False
+        page.frames = [MagicMock()]
+        with patch.object(se, "_ler_campo", return_value="Detalhe consultado") as ler:
+            valor = se._ler_detalhes_atendimento(page, "UTIC-2026-0001")
+        self.assertEqual(valor, "Detalhe consultado")
+        ler.assert_called_once_with(page, "detalhes_atendimento_realizado")
+        page.frames[0].get_by_role.assert_not_called()
+
+    def test_detalhes_do_atendimento_abrem_a_secao_visivel_uma_vez(self):
+        page = MagicMock()
+        page.is_closed.return_value = False
+        frame = MagicMock()
+        page.frames = [frame]
+        secao = MagicMock()
+        secao.filter.return_value = secao
+        secao.count.return_value = 1
+        secao.first = secao
+        secao.inner_text.return_value = "Atendimento - Chamados TI"
+        secao.get_attribute.return_value = None
+        frame.get_by_role.side_effect = [secao, MagicMock(), MagicMock()]
+        with (
+            patch.object(se, "_ler_campo", side_effect=("", "Detalhe consultado")),
+            patch.object(se, "_aguardar_estavel") as aguardar,
+        ):
+            valor = se._ler_detalhes_atendimento(page, "UTIC-2026-0001")
+        self.assertEqual(valor, "Detalhe consultado")
+        secao.click.assert_called_once_with(timeout=15_000)
+        aguardar.assert_called_once_with(page)
+
+    def test_detalhes_do_atendimento_indisponiveis_geram_falha_clara(self):
+        page = MagicMock()
+        page.is_closed.return_value = False
+        frame = MagicMock()
+        page.frames = [frame]
+        secao = MagicMock()
+        secao.filter.return_value = secao
+        secao.count.return_value = 0
+        frame.get_by_role.return_value = secao
+        frame.get_by_text.return_value = secao
+        with patch.object(se, "_ler_campo", return_value=""):
+            with self.assertRaisesRegex(se.SoftExpertErro, "Atendimento - Chamados TI"):
+                se._ler_detalhes_atendimento(page, "UTIC-2026-0001")
 
     def test_garantir_login_usa_o_fluxo_existente_sem_credenciais(self):
         with patch.object(automacao, "aguardar_login") as aguardar:
@@ -612,6 +672,49 @@ class SoftExpertNaBancadaTests(unittest.TestCase):
         self.assertEqual(lido.descricao, "")
         self.assertEqual(descricao_do_chamado(lido), "Impressora 1 não imprime")
         self.assertEqual(self.abas_do_registro(), [])
+
+    def test_descricao_curta_consulta_atendimento_e_prioriza_o_registro(self):
+        self.bancada.chamados = [chamado(
+            1,
+            descricao="Remoção do usuário",
+            detalhes_atendimento_realizado="Removido usuário DANIELE e passado o backup completo para Alan.",
+        )]
+        page = self.abrir_lista()
+
+        lido = se.extrair_chamado(self.context, page, "UTIC-2026-0001")
+
+        self.assertEqual(
+            lido.descricao,
+            "Remoção do usuário",
+        )
+        self.assertEqual(
+            lido.detalhes_atendimento_realizado,
+            "Removido usuário DANIELE e passado o backup completo para Alan.",
+        )
+        self.assertEqual(self.bancada.consultas_atendimento, ["UTIC-2026-0001"])
+        self.assertEqual(descricao_do_chamado(lido),
+                         "Remoção do usuário\n-----\nRemovido usuário DANIELE e passado o backup completo para Alan.")
+        self.assertEqual(self.abas_do_registro(), [])
+
+    def test_descricao_suficiente_nao_abre_atendimento_ti(self):
+        descricao = "A " + ("impressora do setor não imprime desde o início do expediente. " * 3)
+        self.bancada.chamados = [chamado(1, descricao=descricao, detalhes_atendimento_realizado="Complemento irrelevante")]
+        page = self.abrir_lista()
+
+        lido = se.extrair_chamado(self.context, page, "UTIC-2026-0001")
+
+        self.assertEqual(lido.detalhes_atendimento_realizado, "")
+        self.assertEqual(self.bancada.consultas_atendimento, [])
+        self.assertEqual(descricao_do_chamado(lido), descricao)
+
+    def test_descricao_curta_sem_detalhe_mantem_texto_sem_separador(self):
+        self.bancada.chamados = [chamado(1, descricao="Solicitação de acesso")]
+        page = self.abrir_lista()
+
+        lido = se.extrair_chamado(self.context, page, "UTIC-2026-0001")
+
+        self.assertEqual(self.bancada.consultas_atendimento, ["UTIC-2026-0001"])
+        self.assertEqual(descricao_do_chamado(lido), "Solicitação de acesso")
 
     def test_titulo_do_formulario_diferente_da_lista_nao_confere(self):
         self.bancada.chamados = [chamado(1, titulo_form="Solicitação de acesso à rede")]

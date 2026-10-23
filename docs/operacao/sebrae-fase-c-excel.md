@@ -26,7 +26,7 @@ Linhas ocultas manualmente são copiadas junto com a seleção; só as linhas fi
 ## Linha preparada e disponível
 
 - Ponto de partida: a linha seguinte à **última com qualquer valor** na coluna C (o histórico antigo nunca é preenchido nem reaproveitado).
-- Candidata, até `LIMITE_BUSCA_LINHAS` (40) abaixo: C, F, G, H, M, O e P vazias e sem fórmula, linha não oculta, e **fórmula presente em cada coluna de `colunas_formula`**. Quais são essas colunas só se sabe com o Dashboard aberto (V5); o parâmetro é obrigatório no construtor.
+- Candidata, até `LIMITE_BUSCA_LINHAS` (40) abaixo: C, D, F, G, H, M, O e P vazias e sem fórmula, linha não oculta, e **fórmula presente em cada coluna de `colunas_formula`**. Quais são essas colunas só se sabe com o Dashboard aberto (V5); o parâmetro é obrigatório no construtor.
 - A leitura que escolhe a linha é a última antes da primeira escrita. Antes de **cada** célula, ela é lida de novo: se alguém a ocupou, a gravação para como `parcial` e nada é sobrescrito.
 
 ## Digitação sem autoformatação
@@ -40,12 +40,12 @@ Linhas ocultas manualmente são copiadas junto com a seleção; só as linhas fi
 
 Ordem de `gravar_chamado(linha)`:
 
-1. Valida as sete colunas (formato, `Sebrae`, `PR`, data, tamanho).
+1. Valida as oito colunas (D igual a `Em Aberto`, formato, `Sebrae`, `PR`, data, tamanho).
 2. `garantir_sessao`: login Microsoft/SharePoint ou aviso de sessão expirada → `sessao_expirada` (pendência de login; nunca "concluído"); confere o título do arquivo e a aba `CHAMADOS`.
 3. Se o diário tem uma intenção aberta para o número, relê o Dashboard e **retoma** (ver abaixo).
 4. Relê a coluna C inteira; número presente → `duplicado`, nada é gravado.
-5. Escolhe a linha, registra a intenção no diário e escreve **C primeiro**, depois F, G, H, M, O, P; cada célula é conferida vazia antes e relida depois.
-6. Relê as sete colunas e compara com o extraído → `divergente` se diferir.
+5. Escolhe a linha, registra a intenção no diário e escreve **C primeiro**, depois D, F, G, H, M, O, P; cada célula é conferida vazia antes e relida depois.
+6. Relê as oito colunas e compara com o extraído → `divergente` se diferir.
 7. Espera o indicador **Salvo** estável → `nao_salvo` se não aparecer.
 8. Só então `gravado` (`incluido = True`) e o diário fecha a intenção.
 
@@ -55,7 +55,7 @@ Situações: `gravado`, `recuperado`, `duplicado`, `invalido`, `abandonado` (seg
 
 **Retomada** (`recuperar_pendencias()` no início da execução, ou o próprio `gravar_chamado` do mesmo número): após queda, cancelamento ou `nao_salvo`, a execução seguinte relê o Dashboard antes de qualquer escrita:
 
-- número na coluna C **na linha da intenção** → compara as sete células; só as **vazias** são completadas; célula com conteúdo diferente → `divergente`, nada é sobrescrito;
+- número na coluna C **na linha da intenção** → compara as oito células; só as **vazias** são completadas; célula com conteúdo diferente → `divergente`, nada é sobrescrito;
 - número em **outra** linha → `duplicado`, intenção encerrada;
 - número em lugar nenhum → linha vazia: `abandonada`, e o chamado segue o fluxo normal; linha ocupada por outra pessoa: intenção encerrada e linha preservada.
 
