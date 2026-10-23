@@ -7,6 +7,7 @@ applied only when the serial appears exactly once in both sources.
 
 import logging
 import re
+import threading
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any, Callable, Dict, FrozenSet, Iterable, List, Optional, Set, Tuple
@@ -18,6 +19,7 @@ from domains.inventory_comparison import (
     endpoint_user_value,
     normalize_reference_value,
 )
+from domains.readiness import file_signature
 
 logger = logging.getLogger(__name__)
 _last_alias_conflicts = 0
@@ -42,6 +44,12 @@ class EffectiveAliasServices:
     endpoint_upload_file: Callable[[], Path]
     validate_uploaded_workbook: Callable[[bytes, str], Dict[str, Any]]
     logger: logging.Logger
+
+
+# Parsed InvAll rows, reused while the file signature matches: reparsing the workbook took
+# ~0.7 s on every logged-user lookup. build_endpoint_alias_index only reads the records.
+_endpoint_records_cache: Optional[Tuple[EffectiveAliasServices, Tuple[Any, ...], List[Dict[str, Any]]]] = None
+_endpoint_records_lock = threading.Lock()
 
 
 def unavailable_endpoint_alias_index() -> Dict[str, Any]:
@@ -130,9 +138,16 @@ def read_endpoint_alias_index(
     removed: FrozenSet[Tuple[str, str]] = frozenset(),
 ) -> Dict[str, Any]:
     """Retorna associações unívocas e linhas que precisam de conferência."""
+    global _endpoint_records_cache
     endpoint_file = services.endpoint_upload_file()
     if not endpoint_file.is_file():
         return unavailable_endpoint_alias_index()
+
+    signature = file_signature([endpoint_file])
+    with _endpoint_records_lock:
+        cached = _endpoint_records_cache
+    if cached is not None and cached[0] is services and cached[1] == signature:
+        return build_endpoint_alias_index(cached[2], removed)
 
     try:
         table = services.validate_uploaded_workbook(endpoint_file.read_bytes(), "endpoint")
@@ -143,7 +158,12 @@ def read_endpoint_alias_index(
         )
         return unavailable_endpoint_alias_index()
 
-    return build_endpoint_alias_index(table.get("records", []), removed)
+    records = table.get("records", [])
+    # A write between the two stats may have been read halfway; cache only a stable file.
+    if signature == file_signature([endpoint_file]):
+        with _endpoint_records_lock:
+            _endpoint_records_cache = (services, signature, records)
+    return build_endpoint_alias_index(records, removed)
 
 
 def endpoint_loss_warnings(

@@ -441,12 +441,31 @@ def get_details_files() -> List[Path]:
     )
 
 
+# find_details_sheet opens the workbook (~0.2 s); the panel and stats ask on every refresh,
+# so its answer is kept while the file signature matches.
+_PRIMARY_SHEET_CACHE: Optional[Tuple[Tuple[Any, ...], bool]] = None
+_PRIMARY_SHEET_CACHE_LOCK = threading.Lock()
+
+
 def get_primary_equipment_file() -> Optional[Path]:
     """Retorna somente a fonte oficial, sem substituir ausências por cópias antigas."""
+    global _PRIMARY_SHEET_CACHE
     canonical_file = DETAILS_UPLOAD_FILE
     if not canonical_file.is_file():
         return None
-    return canonical_file if find_details_sheet(canonical_file) is not None else None
+    signature = readiness.file_signature([canonical_file])
+    with _PRIMARY_SHEET_CACHE_LOCK:
+        cached = _PRIMARY_SHEET_CACHE
+    if cached is not None and cached[0] == signature:
+        # A locked or still-syncing file stays FileBusyError, as find_details_sheet would report.
+        _ensure_workbook_readable(canonical_file)
+        return canonical_file if cached[1] else None
+    valid = find_details_sheet(canonical_file) is not None
+    # A write between the two stats may have been read halfway; cache only a stable file.
+    if signature == readiness.file_signature([canonical_file]):
+        with _PRIMARY_SHEET_CACHE_LOCK:
+            _PRIMARY_SHEET_CACHE = (signature, valid)
+    return canonical_file if valid else None
 
 
 def _check_startup_xlsx(path: Optional[Path]) -> Dict[str, Any]:
@@ -2211,6 +2230,7 @@ dashboard_router, _dashboard_exports = create_dashboard_router(DashboardServices
     categories=_CATEGORIAS_EQUIPAMENTO,
     categorize=_categoria_equipamento,
     get_comparison_history=lambda: load_comparison_history(),
+    get_comparison_history_signature=lambda: _comparison_history_signature(),
     get_details_file=lambda: DETAILS_UPLOAD_FILE,
     stale_base_days=STALE_BASE_ALERT_DAYS,
     get_ticket_report=_dashboard_ticket_report,

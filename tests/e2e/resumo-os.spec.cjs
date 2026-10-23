@@ -162,6 +162,26 @@ test("Resumo associa OS aos chamados UTIC com prefixo anual e preserva dados do 
     .toContainText("Solicito suporte técnico.");
 });
 
+test("Resumo carrega as OS uma vez quando o painel responde depois da abertura", async ({ page }) => {
+  let reportRequests = 0;
+  await installSummaryRoutes(page, {
+    onReportRequest: async route => {
+      reportRequests += 1;
+      await route.fulfill({ json: reportWith() });
+    },
+  });
+  // A slow panel keeps "Resumo do parque" hidden, so opening the tab requests it again.
+  await page.route("**/api/painel", async route => {
+    await new Promise(resolve => setTimeout(resolve, 1500));
+    await route.fallback();
+  });
+  await page.goto("/");
+  await selectSummary(page);
+  await expect(page.locator("#ux-home-panel")).toBeVisible({ timeout: 10000 });
+  await page.waitForTimeout(800);
+  expect(reportRequests).toBe(1);
+});
+
 test("Resumo atualiza após mudanças e ignora respostas antigas", async ({ page }) => {
   let report = reportWith(["7285070"]);
   let reportRequests = 0;
