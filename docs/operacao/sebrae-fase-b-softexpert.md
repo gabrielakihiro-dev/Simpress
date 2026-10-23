@@ -12,7 +12,7 @@ Todas as funções recebem o `context`/`page` do Playwright já conectado ao Chr
 | `softexpert_logado(page)` / `tela_de_login(page)` | Sessão ativa = host do SoftExpert, sem campo de senha/URL de login e com a lista visível. |
 | `garantir_login(page)` | No primeiro acesso, usa `aguardar_login` da rotina e deixa o login manual. Após uma sessão já ativa expirar, pode clicar uma vez no botão `SSO` visível no domínio do SoftExpert; se não concluir, pede login manual. Não digita credenciais. |
 | `listar_chamados(page)` / `coletar_numeros(page)` | Percorre **toda** a lista (botão "Próxima" até desabilitar, ou rolagem até três voltas sem número novo) e devolve `ItemLista(numero, texto)` / só os números `UTIC-AAAA-N`, sem repetidos. Lista que não termina (`MAX_RODADAS_LISTA`) é falha, nunca resultado parcial. |
-| `extrair_chamado(context, page, numero)` | Executar → Registro de Chamados, captura da janela PHP, confirmação "Sim", conferência de número e título, espera dos campos condicionais, releitura de campos vazios. Devolve `ChamadoSoftExpert` (descrição, iniciador, "Habilitada em", título). |
+| `extrair_chamado(context, page, numero)` | Executar → Registro de Chamados, captura da janela PHP, confirmação "Sim", conferência de número e título, espera dos campos condicionais, releitura de campos vazios. Devolve `ChamadoSoftExpert` (descrição, solicitante, "Habilitada em", título). |
 | `extrair_chamados(context, page, numeros)` | Vários chamados, um por vez; `ChamadoNaoConfere` e `ChamadoNaoEncontrado` ficam no resultado (o chamador os registra como pendência com `erro.motivo`); `SessaoExpirada` espera novo login e refaz o chamado uma vez. Confere o cancelamento entre chamados. |
 
 Uso previsto pela Fase E:
@@ -42,7 +42,7 @@ Tudo isto está no bloco `SELETORES` no topo do módulo; foi testado só na banc
 2. **Identificador**: o primeiro `UTIC-AAAA-N` do texto da linha é o número do chamado (um título que cite outro número não o substitui).
 3. **Paginação/rolagem**: botão ou link chamado "Próxima"/"Próxima página"; sem ele, a lista rola dentro do contêiner (ou da janela) e carrega lotes. Não há leitura de "total de registros" para conferir a contagem.
 4. **Seleção e menu**: clicar na linha a seleciona e habilita o botão **Executar** (canto inferior direito); o menu mostra o item **Registro de Chamados**.
-5. **Formulário**: `form#formulario`/`form[name=formulario]`/`.form-chamado`, em janela PHP nova (`context.on("page")`) ou na própria aba, inclusive dentro de iframes. Campos lidos pelo rótulo (`label for`, célula/irmão seguinte): *Número do chamado*, *Título*, *Descrição*, *Iniciador*, *Habilitada em* (variações em `ROTULOS_CAMPOS`).
+5. **Formulário**: `form#formulario`/`form[name=formulario]`/`.form-chamado`, em janela PHP nova (`context.on("page")`) ou na própria aba, inclusive dentro de iframes. Campos lidos pelo rótulo (`label for`, célula/irmão seguinte): *Número do chamado*, *Título*, *Descrição*, *Solicitante*, *Habilitada em* (variações em `ROTULOS_CAMPOS`). Não use *Iniciador* como fallback para *Solicitante*.
 6. **Confirmação**: modal (`[role=dialog]` com botão "Sim") ou `window.confirm`, com texto contendo "associar/vincular/assumir".
 7. **Login**: campo `input[type=password]` visível, ou URL com `/login`, `/signin`, `/sso` ou `login.microsoftonline.com`.
 8. **Título**: o título do formulário precisa aparecer na linha da lista (a lista pode abreviá-lo com reticências).
@@ -64,7 +64,7 @@ A lista real foi lida (seção acima). Falta o restante: abrir um chamado já co
 
 1. Com o usuário logado no Chrome de automação, abrir a central de tarefas e anotar o HTML da lista (contêiner, linha, paginação ou rolagem, indicador de carregamento) e da coluna que traz o número.
 2. Escolher **um chamado já conhecido** e acompanhar manualmente Executar → Registro de Chamados: se abre janela PHP ou iframe, se há confirmação (modal ou nativa) e o texto exato, e os rótulos reais dos campos. Não finalizar, não registrar atendimento.
-3. Ajustar as constantes do bloco `SELETORES` (e `ROTULOS_CAMPOS`) e repetir a leitura desse chamado conferindo número, título, descrição, iniciador e "Habilitada em".
+3. Ajustar as constantes do bloco `SELETORES` (e `ROTULOS_CAMPOS`) e repetir a leitura desse chamado conferindo número, título, descrição, solicitante e "Habilitada em".
 4. Conferir se campos condicionais mudam a descrição depois de alguma seleção (a rotina só relê, nunca altera campos) e se `RELEITURAS_CAMPOS`/`ESPERA_RELEITURA_MS` bastam.
 5. Conferir a contagem da lista com o total que a tela informar, se existir (candidato a verificação extra).
 

@@ -69,7 +69,7 @@ ROTULOS_CAMPOS: Dict[str, tuple] = {
     "numero": ("Número do chamado", "Número", "Nº do chamado", "Chamado", "Identificador"),
     "titulo": ("Título", "Titulo", "Assunto"),
     "descricao": ("Descrição", "Descrição do problema", "Descrição do chamado", "Detalhamento"),
-    "iniciador": ("Iniciador", "Solicitante"),
+    "solicitante": ("Solicitante",),
     "habilitada_em": ("Habilitada em", "Habilitado em"),
 }
 
@@ -642,7 +642,7 @@ def _extrair_uma_vez(context: "BrowserContext", page: "Page", numero: str) -> Ch
         formulario = _abrir_formulario(context, page, linha, numero)
         _aguardar_estavel(formulario)
         titulo = _conferir(formulario, numero, item.texto)
-        campos = {chave: _ler_campo(formulario, chave) for chave in ("descricao", "iniciador", "habilitada_em")}
+        campos = {chave: _ler_campo(formulario, chave) for chave in ("descricao", "solicitante", "habilitada_em")}
         for tentativa in range(1, RELEITURAS_CAMPOS + 1):
             if all(campos.values()):
                 break
@@ -656,7 +656,7 @@ def _extrair_uma_vez(context: "BrowserContext", page: "Page", numero: str) -> Ch
             numero=chave_do_numero(numero),
             titulo=titulo,
             descricao=campos["descricao"],
-            iniciador=campos["iniciador"],
+            solicitante=campos["solicitante"],
             habilitada_em=campos["habilitada_em"],
         )
     finally:

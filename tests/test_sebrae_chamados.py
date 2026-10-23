@@ -24,7 +24,7 @@ def chamado(**campos):
         "numero": "UTIC-2026-0094",
         "titulo": "Notebook sem acesso à rede",
         "descricao": "O notebook não conecta na rede do escritório desde ontem.",
-        "iniciador": "  Maria   da Silva ",
+        "solicitante": "  Maria   da Silva ",
         "habilitada_em": "21/10/2026 09:12",
     }
     base.update(campos)
@@ -142,7 +142,7 @@ class DecisionTests(unittest.TestCase):
 
     def test_missing_data_leaves_the_ticket_pending_with_a_reason(self):
         casos = {
-            "sem_iniciador": chamado(iniciador="  "),
+            "sem_solicitante": chamado(solicitante="  "),
             "sem_data_de_abertura": chamado(habilitada_em=""),
             "data_de_abertura_invalida": chamado(habilitada_em="ontem de manhã"),
             "sem_indicios_de_tipo": chamado(descricao="Olá", titulo="Assunto"),

@@ -129,6 +129,7 @@ PAGINA_REGISTRO = """<!doctype html><html lang="pt-br"><head><meta charset="utf-
 <form id="formulario" class="oculto">
 <div><label for="f_numero">Número do chamado</label><input id="f_numero" readonly></div>
 <div><label for="f_titulo">Título</label><input id="f_titulo" readonly></div>
+<div><label for="f_solicitante">Solicitante</label><input id="f_solicitante" readonly></div>
 <div><label for="f_iniciador">Iniciador</label><input id="f_iniciador" readonly></div>
 <div><label for="f_habilitada">Habilitada em</label><input id="f_habilitada" readonly></div>
 <div><label for="f_descricao">Descrição</label><textarea id="f_descricao" readonly></textarea></div>
@@ -141,7 +142,7 @@ const associar = () => fetch('/api/associar?numero=' + D.numero, {method: 'POST'
 const mostrar = () => {
   $('formulario').classList.remove('oculto');
   $('f_numero').value = D.numero_form; $('f_titulo').value = D.titulo_form;
-  $('f_iniciador').value = D.iniciador; $('f_habilitada').value = D.habilitada_em;
+  $('f_solicitante').value = D.solicitante; $('f_iniciador').value = D.iniciador; $('f_habilitada').value = D.habilitada_em;
   if (D.descricao) setTimeout(() => { $('f_descricao').value = D.descricao; }, D.atraso);
 };
 $('enviar').addEventListener('click', () => fetch('/api/proibido?acao=Enviar', {method: 'POST'}));
@@ -159,7 +160,8 @@ def chamado(indice: int, **extra) -> dict:
     dados = {
         "numero": f"UTIC-2026-{indice:04d}",
         "titulo": f"Impressora {indice} não imprime",
-        "iniciador": "Maria de Souza",
+        "solicitante": "Maria solicitante",
+        "iniciador": "João iniciador",
         "habilitada_em": "20/10/2026 09:15",
         "descricao": f"A impressora do setor {indice} não imprime desde cedo.",
         "atraso": 0,
@@ -224,7 +226,7 @@ def criar_servidor(bancada: Bancada) -> ThreadingHTTPServer:
                 c = bancada.por_numero(self.consulta()["numero"])
                 dados = {
                     "numero": c["numero"], "numero_form": c.get("numero_form", c["numero"]),
-                    "titulo_form": c.get("titulo_form", c["titulo"]), "iniciador": c["iniciador"],
+                    "titulo_form": c.get("titulo_form", c["titulo"]), "solicitante": c["solicitante"], "iniciador": c["iniciador"],
                     "habilitada_em": c["habilitada_em"], "descricao": c["descricao"],
                     "atraso": c["atraso"], "confirmacao": c["confirmacao"],
                 }
@@ -563,7 +565,7 @@ class SoftExpertNaBancadaTests(unittest.TestCase):
             ChamadoSoftExpert(
                 numero="UTIC-2026-0007", titulo="Impressora 7 não imprime",
                 descricao="A impressora do setor 7 não imprime desde cedo.",
-                iniciador="Maria de Souza", habilitada_em="20/10/2026 09:15",
+                solicitante="Maria solicitante", habilitada_em="20/10/2026 09:15",
             ),
         )
         self.assertEqual(self.bancada.associados, ["UTIC-2026-0007"])  # Sim uma única vez
@@ -578,7 +580,7 @@ class SoftExpertNaBancadaTests(unittest.TestCase):
         page = self.abrir_lista()
         lido = se.extrair_chamado(self.context, page, "UTIC-2026-0002")
         self.assertEqual(lido.numero, "UTIC-2026-0002")
-        self.assertEqual(lido.iniciador, "Maria de Souza")
+        self.assertEqual(lido.solicitante, "Maria solicitante")
         self.assertTrue(se.softexpert_logado(page), "a aba deve voltar para a central de tarefas")
         self.assertSemEscrita()
 

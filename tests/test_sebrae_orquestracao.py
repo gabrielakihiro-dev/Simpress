@@ -24,7 +24,7 @@ SOLICITACAO = "Solicito acesso ao sistema financeiro."
 
 
 def chamado(numero: str, descricao: str = INCIDENTE, **campos: str) -> ChamadoSoftExpert:
-    dados = {"titulo": "Título", "descricao": descricao, "iniciador": "Maria Souza", "habilitada_em": "21/10/2026 10:30"}
+    dados = {"titulo": "Título", "descricao": descricao, "solicitante": "Maria Souza", "habilitada_em": "21/10/2026 10:30"}
     dados.update(campos)
     return ChamadoSoftExpert(numero=numero, **dados)
 
@@ -187,7 +187,7 @@ class FluxoCompletoTests(Base):
         softexpert = self.lista_com(
             chamado("UTIC-2026-0101", "Bom dia"),
             chamado("UTIC-2026-0102", "O sistema não abre e preciso de acesso novo"),
-            chamado("UTIC-2026-0103", iniciador=""),
+            chamado("UTIC-2026-0103", solicitante=""),
             chamado("UTIC-2026-0104", habilitada_em=""),
         )
         dashboard = DashboardFalso()
@@ -199,7 +199,7 @@ class FluxoCompletoTests(Base):
             {
                 "UTIC-2026-0101": "sem_indicios_de_tipo",
                 "UTIC-2026-0102": "indicios_conflitantes",
-                "UTIC-2026-0103": "sem_iniciador",
+                "UTIC-2026-0103": "sem_solicitante",
                 "UTIC-2026-0104": "sem_data_de_abertura",
             },
         )
@@ -333,7 +333,7 @@ class ConcorrenciaETriagemTests(Base):
 
     def test_the_progress_log_never_carries_ticket_text(self):
         linhas: List[str] = []
-        softexpert = self.lista_com(chamado("UTIC-2026-0101", "SEGREDO-NA-DESCRICAO não funciona", iniciador="NOME-SECRETO"))
+        softexpert = self.lista_com(chamado("UTIC-2026-0101", "SEGREDO-NA-DESCRICAO não funciona", solicitante="NOME-SECRETO"))
         self.rodar(softexpert, DashboardFalso(), log=linhas.append)
         self.assertTrue(linhas)
         texto = "\n".join(linhas)

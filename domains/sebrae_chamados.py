@@ -38,7 +38,7 @@ ACAO_PENDENTE = "pendente"
 MOTIVO_DUPLICADO = "duplicado"
 MOTIVO_SEM_TIPO = "sem_indicios_de_tipo"
 MOTIVO_TIPO_CONFLITANTE = "indicios_conflitantes"
-MOTIVO_SEM_INICIADOR = "sem_iniciador"
+MOTIVO_SEM_SOLICITANTE = "sem_solicitante"
 MOTIVO_SEM_DATA = "sem_data_de_abertura"
 MOTIVO_DATA_INVALIDA = "data_de_abertura_invalida"
 MOTIVO_SEM_TEXTO = "sem_descricao_nem_titulo"
@@ -167,7 +167,7 @@ class ChamadoSoftExpert:
     numero: str
     titulo: str = ""
     descricao: str = ""
-    iniciador: str = ""
+    solicitante: str = ""
     habilitada_em: str = ""
 
 
@@ -212,9 +212,9 @@ def decidir(chamado: ChamadoSoftExpert) -> Decisao:
     tipo, motivo = classificar(chamado.descricao, chamado.titulo)
     if tipo is None:
         return Decisao(numero, ACAO_PENDENTE, motivo)
-    iniciador = " ".join((chamado.iniciador or "").split())
-    if not iniciador:
-        return Decisao(numero, ACAO_PENDENTE, MOTIVO_SEM_INICIADOR)
+    solicitante = " ".join((chamado.solicitante or "").split())
+    if not solicitante:
+        return Decisao(numero, ACAO_PENDENTE, MOTIVO_SEM_SOLICITANTE)
     if not str(chamado.habilitada_em or "").strip():
         return Decisao(numero, ACAO_PENDENTE, MOTIVO_SEM_DATA)
     data = interpretar_data(chamado.habilitada_em)
@@ -223,7 +223,7 @@ def decidir(chamado: ChamadoSoftExpert) -> Decisao:
     linha = {
         "C": numero,
         "F": descricao,
-        "G": iniciador,
+        "G": solicitante,
         "H": tipo,
         "M": UNIDADE,
         "O": UF,

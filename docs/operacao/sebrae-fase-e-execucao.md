@@ -66,7 +66,7 @@ Com o usuário, no Dashboard:
 
 1. As 30 linhas anteriores estão **idênticas** (valores, fórmulas, formatação, filtros).
 2. Nenhum número aparece duas vezes na coluna C.
-3. Cada linha nova tem exatamente as colunas C, F, G, H, M (`Sebrae`), O (`PR`) e P (`dd/MM/yyyy HH:mm`) e mais nada; F é a descrição original do problema (ou o título, se não havia), G é o Iniciador, H é `INCIDENTE` ou `SOLICITAÇÃO` coerente com o texto, P é o *Habilitada em* do chamado.
+3. Cada linha nova tem exatamente as colunas C, F, G, H, M (`Sebrae`), O (`PR`) e P (`dd/MM/yyyy HH:mm`) e mais nada; F é a descrição original do problema (ou o título, se não havia), G é o Solicitante, H é `INCIDENTE` ou `SOLICITAÇÃO` coerente com o texto, P é o *Habilitada em* do chamado.
 4. `UTIC-2026-1253` e `UTIC-2026-1177` **não** foram gravados e aparecem como pendências no estado (`pendencias`) e em `GET /api/automacao/sebrae/resumo`.
 5. Os contadores do estado batem com o que se vê: `incluidos` = linhas novas, `ignorados` = chamados da lista que já estavam na coluna C, `pendentes` = pendências.
 6. Um chamado pendente por classificação ambígua (se houver) tem motivo legível e nenhuma linha.

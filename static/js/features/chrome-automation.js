@@ -35,6 +35,7 @@
     sem_indicios_de_tipo: "Sem indícios de incidente ou de solicitação.",
     indicios_conflitantes: "Indícios de incidente e de solicitação ao mesmo tempo.",
     sem_iniciador: "Chamado sem Iniciador.",
+    sem_solicitante: "Chamado sem Solicitante.",
     sem_data_de_abertura: "Chamado sem data de abertura (Habilitada em).",
     data_de_abertura_invalida: "Data de abertura (Habilitada em) inválida.",
     sem_descricao_nem_titulo: "Chamado sem descrição nem título.",
