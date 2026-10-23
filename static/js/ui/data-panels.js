@@ -411,6 +411,25 @@
       return JSON.stringify([record.fonte, serialKey(record.serie), orderKey(record.os)]);
     }
 
+    function ticketSummarySourceLabel(sources) {
+      const selected = Array.isArray(sources) ? sources : [sources];
+      const labels = [];
+      if (selected.includes("oracle")) labels.push("Oracle");
+      if (selected.includes("simpress")) labels.push("Simpress");
+      return labels.join(" + ") || "Fonte não informada";
+    }
+
+    function renderTicketSummaryOrderButton(record, label = record.os) {
+      const button = el("button", "ticket-summary-order ticket-summary-order-link", label);
+      const sources = Array.isArray(record.fontes) ? record.fontes : [record.fonte];
+      button.type = "button";
+      button.setAttribute("aria-label", "Abrir acompanhamento de chamados: " + ticketSummarySourceLabel(sources)
+        + ", série " + record.serie + ", OS " + record.os);
+      button.setAttribute("data-on-click", "abrirChamadoDaOs");
+      button.setAttribute("data-args", JSON.stringify([sources, record.serie, record.os]));
+      return button;
+    }
+
     function collectTicketOsRows(report) {
       const rows = [];
       (Array.isArray(report?.chamados) ? report.chamados : []).forEach(ticket => {
@@ -460,6 +479,35 @@
       return rows.sort(compareOrder);
     }
 
+    function groupTicketOsRows(rows) {
+      const groups = new Map();
+      rows.forEach(record => {
+        const key = serialKey(record.serie) || String(record.serie).trim().toUpperCase();
+        if (!groups.has(key)) groups.set(key, { serie: record.serie, ordens: [] });
+        const group = groups.get(key);
+        let order = group.ordens.find(item => orderKey(item.os) === orderKey(record.os));
+        if (!order) {
+          order = { serie: record.serie, os: record.os, fontes: [], descricao: "" };
+          group.ordens.push(order);
+        }
+        if (!order.fontes.includes(record.fonte)) order.fontes.push(record.fonte);
+        if (record.fonte === "oracle" && record.descricao) {
+          const descriptions = order.descricao ? order.descricao.split("\n") : [];
+          if (!descriptions.includes(record.descricao)) descriptions.push(record.descricao);
+          order.descricao = descriptions.join("\n");
+        }
+      });
+      const result = [...groups.values()];
+      result.forEach(group => {
+        group.ordens.forEach(order => {
+          order.fontes = ["oracle", "simpress"].filter(source => order.fontes.includes(source));
+        });
+        group.fontes = ["oracle", "simpress"].filter(source =>
+          group.ordens.some(order => order.fontes.includes(source)));
+      });
+      return result;
+    }
+
     function ticketUserLabel(user) {
       if (!user) return "Não informado";
       const candidates = Array.isArray(user.candidatos) ? user.candidatos.filter(Boolean) : [];
@@ -474,7 +522,50 @@
       return String(user.hostname || "Não informado");
     }
 
-    function renderTicketOsLinkEditor(parent, record, saved, canSave, statusMessage) {
+    function renderTicketSummaryOrders(record) {
+      const list = el("div", "ticket-summary-orders");
+      record.ordens.forEach(order => {
+        const item = el("div", "ticket-summary-order-item");
+        item.append(renderTicketSummaryOrderButton(order),
+          el("span", "ticket-summary-order-sources", ticketSummarySourceLabel(order.fontes)));
+        list.append(item);
+      });
+      return list;
+    }
+
+    function renderTicketSummaryDescriptions(record) {
+      const descriptions = record.ordens.filter(order => order.fontes.includes("oracle"));
+      const list = el("div", "ticket-summary-descriptions");
+      if (!descriptions.length) {
+        list.append(el("span", "ticket-summary-description", "Descrição não informada"));
+        return list;
+      }
+      descriptions.forEach(order => {
+        const item = el("div", "ticket-summary-description-entry");
+        item.append(el("strong", "ticket-summary-description-label", "OS " + order.os + " · Oracle"),
+          el("p", "ticket-summary-description", order.descricao || "Descrição não informada"));
+        list.append(item);
+      });
+      return list;
+    }
+
+    function renderTicketOsLinkEditors(record, links, canSave, statusMessage) {
+      const list = el("div", "ticket-os-link-editors");
+      record.ordens.forEach(order => {
+        order.fontes.forEach(source => {
+          const sourceRecord = { fonte: source, serie: record.serie, os: order.os };
+          const item = el("div", "ticket-os-link-entry");
+          item.append(el("span", "ticket-os-link-entry-label",
+            ticketSummarySourceLabel([source]) + " · OS " + order.os));
+          item.append(renderTicketOsLinkEditor(sourceRecord,
+            links.get(ticketOsLinkKey(sourceRecord)), canSave, statusMessage));
+          list.append(item);
+        });
+      });
+      return list;
+    }
+
+    function renderTicketOsLinkEditor(record, saved, canSave, statusMessage) {
       const editor = el("div", "ticket-os-link-editor");
       if (!canSave) {
         editor.append(el("span", "ticket-os-link-value", saved?.chamado || "Não informado"));
@@ -492,8 +583,9 @@
       input.maxLength = 24;
       input.autocomplete = "off";
       input.value = saved?.numero || "";
-      input.placeholder = "1116";
-      input.setAttribute("aria-label", `Número do chamado para OS ${record.os}, série ${record.serie}`);
+      input.placeholder = "0000";
+      input.setAttribute("aria-label", "Número do chamado para OS " + record.os
+        + ", série " + record.serie + ", fonte " + ticketSummarySourceLabel([record.fonte]));
       const save = el("button", "btn btn-secondary ticket-os-link-save", saved ? "Atualizar" : "Salvar");
       save.type = "submit";
       controls.append(prefix, input, save);
@@ -547,7 +639,11 @@
         section.append(content);
         return;
       }
-      status.textContent = userFailure ? "OS carregadas; dados de usuário e hostname estão indisponíveis." : `${records.length} ${records.length === 1 ? "OS encontrada" : "OS encontradas"} na importação atual.`;
+      const orderCount = records.reduce((total, record) => total + record.ordens.length, 0);
+      status.textContent = userFailure
+        ? orderCount + " OS agrupadas por série; dados de usuário e hostname estão indisponíveis."
+        : orderCount + " OS agrupadas em " + records.length + (records.length === 1 ? " série" : " séries")
+          + " na importação atual.";
       const tableWrap = el("div", "ticket-summary-table-wrap");
       const table = el("table", "ticket-summary-table");
       table.append(el("caption", "sr-only", "Ordens de serviço associadas a equipamentos"));
@@ -564,17 +660,22 @@
       const mobileCards = el("div", "ticket-summary-mobile");
       records.forEach(record => {
         const user = users[record.serie];
-        const saved = links.get(ticketOsLinkKey(record));
-        const values = [record.fonte === "simpress" ? "Simpress" : "Oracle", record.serie, record.os,
+        const values = [ticketSummarySourceLabel(record.fontes), record.serie, "",
           userFailure ? "Indisponível" : ticketUserLabel(user), userFailure ? "Indisponível" : ticketHostnameLabel(user),
-          saved?.chamado || "Não informado", record.descricao || "Descrição não informada"];
+          "", ""];
         const row = doc.createElement("tr");
         values.forEach((value, index) => {
           const cell = el("td", "", value);
           cell.setAttribute("data-label", ["Fonte", "Série", "OS", "Usuário", "Hostname", "Chamado", "Descrição"][index]);
           if (index === 5) {
             cell.textContent = "";
-            cell.append(renderTicketOsLinkEditor(cell, record, saved, canSave, status));
+            cell.append(renderTicketOsLinkEditors(record, links, canSave, status));
+          } else if (index === 2) {
+            cell.textContent = "";
+            cell.append(renderTicketSummaryOrders(record));
+          } else if (index === 6) {
+            cell.textContent = "";
+            cell.append(renderTicketSummaryDescriptions(record));
           }
           row.append(cell);
         });
@@ -582,9 +683,10 @@
 
         const card = el("article", "ticket-summary-card");
         const cardHead = el("div", "ticket-summary-card-head");
-        cardHead.append(el("span", "ticket-summary-source", record.fonte === "simpress" ? "Simpress" : "Oracle"),
-          el("strong", "ticket-summary-order", `OS ${record.os}`));
+        cardHead.append(el("span", "ticket-summary-source", ticketSummarySourceLabel(record.fontes)),
+          el("span", "ticket-summary-order-count", record.ordens.length + " OS"));
         card.append(cardHead);
+        card.append(renderTicketSummaryOrders(record));
         const identifiers = el("dl", "ticket-summary-identifiers");
         [["Série", record.serie], ["Usuário", userFailure ? "Indisponível" : ticketUserLabel(user)],
           ["Hostname", userFailure ? "Indisponível" : ticketHostnameLabel(user)]].forEach(([label, value]) => {
@@ -593,9 +695,9 @@
         card.append(identifiers);
         const link = el("div", "ticket-summary-card-link");
         link.append(el("span", "ticket-summary-field-label", "Chamado"),
-          renderTicketOsLinkEditor(link, record, saved, canSave, status));
+          renderTicketOsLinkEditors(record, links, canSave, status));
         card.append(link);
-        const description = el("p", "ticket-summary-description", record.descricao || "Descrição não informada");
+        const description = renderTicketSummaryDescriptions(record);
         description.setAttribute("data-label", "Descrição do chamado");
         card.append(description);
         mobileCards.append(card);
@@ -622,7 +724,7 @@
           osSummaryRequest("/api/operacoes/chamados"),
           osSummaryRequest("/api/operacoes/chamados/vinculos-os"),
         ]);
-        const records = collectTicketOsRows(report);
+        const records = groupTicketOsRows(collectTicketOsRows(report));
         let users = {};
         let userFailure = false;
         if (records.length) {
