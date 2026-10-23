@@ -235,7 +235,8 @@ test("Sincronizar chamados Sebrae shows the summary, counters and pending items 
   const panel = await openAutomation(page, request);
   const card = panel.locator("#sebrae-painel");
   await expect(card.getByRole("heading", { name: "Sincronizar chamados Sebrae", level: 2 })).toBeVisible();
-  await expect(card).toContainText("Roda de segunda a sexta, das 09h15 às 17h45, a cada 30 minutos. O computador precisa estar ligado e o servidor local da Simpress em execução.");
+  await expect(card.locator("#sebrae-regra")).toHaveAttribute("role", "tooltip");
+  await expect(card.locator("#sebrae-regra")).toContainText("Roda de segunda a sexta, das 09h15 às 17h45, a cada 30 minutos, com o computador ligado e o servidor local da Simpress em execução.");
   await expect(card.locator("#sebrae-estado")).toContainText("Agendamento pausado");
   await expect(card.locator("#sebrae-ultima")).toContainText("Concluída em");
   await expect(card.locator("#sebrae-incluidos")).toHaveText("2");

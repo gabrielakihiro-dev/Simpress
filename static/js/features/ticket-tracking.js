@@ -218,19 +218,15 @@
     const selectedOrder = appState.filtroChamadoSelecionado;
     const selectedSources = fontesDoFiltroOs(selectedOrder);
     const sourceDescription = selectedSources.map(source => source === "simpress" ? "Simpress" : "Oracle").join(" + ");
-    const countDescription = selectedOrder
-      ? "Filtro: " + sourceDescription + " · OS " + selectedOrder.os
-      : "OS da maior para a menor, sem OS no final";
-    document.getElementById("contagem-acompanhamento-chamados").textContent = `Exibindo ${records.length} de ${Array.isArray(data.chamados) ? data.chamados.length : 0} séries · ${countDescription}`;
+    const countDescription = selectedOrder ? " · Filtro: " + sourceDescription + " · OS " + selectedOrder.os : "";
+    document.getElementById("contagem-acompanhamento-chamados").textContent = `${records.length} de ${Array.isArray(data.chamados) ? data.chamados.length : 0} séries${countDescription}`;
     renderizarTriagemChamados(data.chamados);
     const exportButton = document.getElementById("btn-exportar-acompanhamento-chamados");
     const selectedSnapshotId = document.getElementById("versao-acompanhamento-chamados").value;
     exportButton.disabled = !selectedSnapshotId || data.snapshot_id !== selectedSnapshotId
       || !Array.isArray(data.chamados) || data.chamados.length === 0;
     if (!Array.isArray(data.chamados) || data.chamados.length === 0) {
-      list.innerHTML = data.atualizado_em
-        ? '<p class="py-8 text-center text-sm text-slate-400" role="status">Importação concluída. Nenhum chamado encontrado nas planilhas.</p>'
-        : '<p class="py-8 text-center text-sm text-slate-400" role="status">Importe as duas planilhas para relacionar as séries com as OS.</p>';
+      list.innerHTML = '<p class="py-8 text-center text-sm text-slate-400" role="status">Nenhum chamado para exibir.</p>';
       return;
     }
     if (records.length === 0) {
@@ -359,11 +355,11 @@
       ["em_dia", "Atualizados <3 dias", "Atualizados há menos de 3 dias", "text-emerald-200"],
     ];
     const inactive = allRecords.length - counts.ativos;
-    const explanation = `${counts.ativos} ${counts.ativos === 1 ? "ativo" : "ativos"} de ${allRecords.length} ${allRecords.length === 1 ? "série" : "séries"}${inactive ? ` · ${inactive} sem chamado aberto no Oracle (encerrados ou sem registro)` : ""}`;
+    const explanation = `${counts.ativos} ${counts.ativos === 1 ? "ativo" : "ativos"} de ${allRecords.length} ${allRecords.length === 1 ? "série" : "séries"}${inactive ? ` · ${inactive} sem chamado aberto no Oracle` : ""}`;
     triageTarget.innerHTML = `<div class="ticket-triage rounded-lg border border-slate-800 bg-slate-950/40 px-2 py-1.5"><div class="mb-1.5 flex flex-wrap items-baseline justify-between gap-x-3"><h4 class="text-[11px] font-semibold text-slate-200">Triagem diária</h4><p class="text-[11px] text-slate-400" data-ticket-triage-explanation>${escapeHtml(explanation)}</p></div><div class="grid grid-cols-2 gap-1.5 sm:grid-cols-4" role="group" aria-label="Filtrar chamados pela triagem diária">${triageCards.map(([key, shortLabel, label, color]) => {
       const pressed = selected === key;
       return `<button type="button" class="ticket-triage-filter rounded-md border border-slate-800 bg-slate-900/70 px-2 py-1 text-left" data-ticket-triage-filter="${key}" data-on-click="filtrarTriagemChamados" data-args='["${key}"]' aria-pressed="${pressed}" aria-label="${escapeHtml(`${label}: ${counts[key]}`)}" title="${escapeHtml(pressed ? "Mostrar todos os chamados" : `Mostrar somente: ${label}`)}"><span class="block text-[11px] text-slate-400">${shortLabel}</span><span class="block text-sm font-semibold ${color}">${counts[key]}</span></button>`;
-    }).join("")}</div><p class="mt-1.5 text-[11px] text-slate-400">Atenção: 3+ dias ou sem data · selecione um indicador para filtrar a lista.</p></div>`;
+    }).join("")}</div></div>`;
     if (focused) triageTarget.querySelector?.(`[data-ticket-triage-filter="${focused}"]`)?.focus();
   }
 

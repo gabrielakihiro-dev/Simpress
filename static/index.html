@@ -132,8 +132,7 @@
             <i data-lucide="menu" aria-hidden="true"></i>
           </button>
           <div class="header-context" aria-label="Aplicação Simpress para o SEBRAE Paraná">
-            <span>Simpress <span aria-hidden="true">·</span> SEBRAE/PR</span>
-            <strong>Gestão de equipamentos</strong>
+            <strong id="header-page-title">Home</strong>
           </div>
           <div class="header-base-summary hidden md:flex items-center gap-3 text-xs text-fg-muted bg-surface-sunken px-3.5 py-2 rounded-lg border border-line" aria-label="Resumo da base">
             <span class="inline-flex items-center gap-1.5"><span id="stat-base-dot" class="h-1.5 w-1.5 rounded-full bg-emerald-400" aria-hidden="true"></span>Base: <strong class="text-fg" id="stat-equipamentos">Carregando…</strong> <span id="stat-equipamentos-rotulo">equipamentos</span></span>
@@ -180,7 +179,7 @@
     <section class="glass-card home-search-card rounded-2xl p-6 sm:p-8 relative z-50">
 
       <div class="relative">
-        <label for="input-serial" class="home-search-label font-bold text-white">Pesquise por série, apelido, modelo, cidade ou nome do usuário</label>
+        <label for="input-serial" class="home-search-label font-bold text-white">Pesquisar equipamento</label>
         <form data-on-submit="buscarSerial" class="flex flex-col sm:flex-row gap-4">
           <div class="relative flex-1">
             <input
@@ -194,7 +193,7 @@
               aria-expanded="false"
               aria-haspopup="listbox"
               autocomplete="off"
-              placeholder="Ex.: BRJ1234 ou Curitiba"
+              placeholder="Série, apelido, modelo, cidade ou usuário"
               class="home-search-input w-full rounded-xl glass-input text-white font-mono tracking-wider placeholder:text-slate-500 placeholder:font-sans focus:outline-none uppercase"
               data-on-input="handleSerialInput" data-args='["$value"]'
               data-on-keydown="handleSerialKeydown" data-args='["$event"]'
@@ -240,19 +239,12 @@
               <span class="w-2 h-2 rounded-full bg-cyan-400 animate-pulse"></span>
               <span class="font-bold tracking-wider uppercase text-[11px] text-cyan-300 flex items-center gap-1.5">
                 <i data-lucide="layers" class="w-3.5 h-3.5 text-cyan-400"></i>
-                Resultados Encontrados no Parque
+                Resultados
               </span>
             </div>
             <div class="flex items-center space-x-3">
               <span id="autocomplete-count" role="status" aria-live="polite" aria-atomic="true" class="px-2.5 py-0.5 rounded-full bg-cyan-500/20 text-cyan-300 border border-cyan-500/30 font-mono text-[11px] font-bold">
                 0 itens
-              </span>
-              <span class="hidden sm:inline-flex items-center text-[10px] text-slate-400 space-x-1">
-                <span>Navegar:</span>
-                <kbd class="px-1 py-0.5 bg-slate-800 border border-slate-700 rounded text-slate-300 font-mono text-[9px]">↑</kbd>
-                <kbd class="px-1 py-0.5 bg-slate-800 border border-slate-700 rounded text-slate-300 font-mono text-[9px]">↓</kbd>
-                <span class="ml-1">Selecionar:</span>
-                <kbd class="px-1 py-0.5 bg-slate-800 border border-slate-700 rounded text-slate-300 font-mono text-[9px]">Enter</kbd>
               </span>
             </div>
           </div>
@@ -273,10 +265,9 @@
             class="px-4 py-2 border-t border-slate-800 text-[11px] text-slate-400 flex items-center justify-between select-none"
           >
             <span class="flex items-center gap-1.5">
-              <i data-lucide="sparkles" class="w-3.5 h-3.5 text-cyan-400"></i>
-              <span>Clique no equipamento ou use <kbd class="px-1.5 py-0.5 bg-slate-800 border border-slate-700 rounded text-slate-300 font-mono text-[9px]">Enter</kbd> para preenchimento imediato</span>
+              <span><kbd class="px-1 py-0.5 bg-slate-800 border border-slate-700 rounded text-slate-300 font-mono text-[9px]">↑↓</kbd> navegar <kbd class="px-1.5 py-0.5 bg-slate-800 border border-slate-700 rounded text-slate-300 font-mono text-[9px]">Enter</kbd> selecionar</span>
             </span>
-            <span class="text-[10px] text-slate-500 font-mono hidden sm:inline"><kbd class="px-1 py-0.5 bg-slate-800 border border-slate-700 rounded text-slate-400 text-[9px]">ESC</kbd> para fechar</span>
+            <span class="text-[10px] text-slate-500 font-mono hidden sm:inline"><kbd class="px-1 py-0.5 bg-slate-800 border border-slate-700 rounded text-slate-400 text-[9px]">Esc</kbd> fechar</span>
           </div>
         </div>
       </div>
@@ -387,7 +378,7 @@
               title="Editar dados cadastrais deste equipamento"
             >
               <i data-lucide="edit-3" aria-hidden="true"></i>
-              <span>Editar dados e endereço</span>
+              <span>Editar</span>
             </button>
           </div>
           <div id="ticket-templates-content" hidden>
@@ -396,7 +387,6 @@
                 <h4 id="ticket-templates-title" class="text-sm font-bold text-white">Textos prontos para chamados manuais</h4>
                 <p class="text-xs text-slate-400 mt-1">Série pesquisada: <strong id="ticket-templates-serial" class="font-mono text-cyan-200">—</strong></p>
               </div>
-              <p class="text-xs text-slate-400">Revise os campos e copie o texto para o chamado.</p>
             </div>
 
             <div class="ticket-template-grid">
@@ -431,7 +421,6 @@ Data de Instalação:
 Horário da Instalação:
 
 Lembrando que é necessário o correto preenchimento do termo e anexá-lo ao chamado no fechamento.</textarea>
-                <p class="ticket-template-help">Você pode preencher os dados em aberto antes de copiar.</p>
               </div>
             </article>
 
@@ -459,7 +448,6 @@ Horário de funcionamento:
 
 Produto HP: 18H24AA_AC4_2 (Recebimento Santana) ou 18H24AA#AC4
 Modelo: 230 Wireless Mouse and Keyboard Combo</textarea>
-                <p class="ticket-template-help">Você pode preencher os dados em aberto antes de copiar.</p>
               </div>
             </article>
 
@@ -484,7 +472,6 @@ Descrição do Problema:
 
 Nome do(a) colaborador(a):
 Horário disponível para atendimento:</textarea>
-                <p class="ticket-template-help">Você pode preencher os dados em aberto antes de copiar.</p>
               </div>
             </article>
 
@@ -509,7 +496,6 @@ Descrição:
 
 Nome do(a) colaborador(a):
 Horário disponível para atendimento:</textarea>
-                <p class="ticket-template-help">Você pode preencher os dados em aberto antes de copiar.</p>
               </div>
             </article>
             </div>
@@ -571,7 +557,7 @@ Horário disponível para atendimento:</textarea>
             </span>
           </div>
           <p id="transfer-equipment-description" class="transfer-equipment-description" role="status" aria-live="polite">
-            Nenhum equipamento selecionado. Pesquise na Home para preencher a série.
+            Nenhum equipamento selecionado.
           </p>
           <p id="transfer-equipment-users" class="transfer-equipment-description hidden"></p>
         </div>
@@ -612,10 +598,10 @@ Horário disponível para atendimento:</textarea>
               <i data-lucide="box" class="w-5 h-5"></i>
             </div>
             <div>
-              <h2 class="text-base font-bold text-white">
+              <h2 class="text-base font-bold text-white flex items-center gap-1">
                 <span>1. Dados de Retirada</span>
+                <span class="info-tip"><button type="button" class="info-tip-trigger" aria-label="Sobre os dados de retirada" aria-describedby="tip-retirada"><i data-lucide="info" aria-hidden="true"></i></button><span id="tip-retirada" role="tooltip" class="info-tip-text">Local onde a transportadora fará a coleta.</span></span>
               </h2>
-              <p class="text-xs text-slate-400">Local onde a transportadora fará a coleta</p>
             </div>
           </div>
 
@@ -646,7 +632,7 @@ Horário disponível para atendimento:</textarea>
               rows="2"
               readonly
               class="w-full px-3.5 py-2 rounded-lg glass-input text-sm text-slate-100 focus:outline-none"
-              placeholder="Pesquise um número de série para preencher automaticamente o endereço..."
+              placeholder="Preenchido pela série pesquisada"
             ></textarea>
           </div>
 
@@ -714,7 +700,7 @@ Horário disponível para atendimento:</textarea>
               <button type="button" id="btn-configurar-contato-origem" class="btn btn-secondary btn-chip mt-2" aria-haspopup="dialog" aria-controls="modal-contato-origem" data-on-click="abrirConfiguracaoContatoOrigem">Configurar contato de origem</button>
             </div>
             <div class="mb-3">
-              <label class="block text-[11px] text-slate-400 mb-1" for="retirada-representante">Representante Regional (seleção automática pela cidade):</label>
+              <label class="block text-[11px] text-slate-400 mb-1" for="retirada-representante">Representante regional (automático pela cidade):</label>
               <select
                 id="retirada-representante"
                 data-on-change="handleRepresentanteRegionalChange" data-args='["retirada", "$value"]'
@@ -783,10 +769,11 @@ Horário disponível para atendimento:</textarea>
               <i data-lucide="truck" class="w-5 h-5"></i>
             </div>
             <div>
-              <h2 class="text-base font-bold text-white">
+              <h2 class="text-base font-bold text-white flex items-center gap-1">
                 <span>2. Dados de Entrega</span>
+                <span class="info-tip"><button type="button" class="info-tip-trigger" aria-label="Sobre os dados de entrega" aria-describedby="tip-entrega"><i data-lucide="info" aria-hidden="true"></i></button><span id="tip-entrega" role="tooltip" class="info-tip-text">Unidade SEBRAE e destinatário final.</span></span>
               </h2>
-              <p class="text-xs text-slate-400">Unidade SEBRAE e destinatário final</p>
+
             </div>
           </div>
         </div>
@@ -862,7 +849,7 @@ Horário disponível para atendimento:</textarea>
               rows="2"
               readonly
               class="w-full px-3.5 py-2 rounded-lg glass-input text-sm text-slate-100 focus:outline-none"
-              placeholder="Selecione uma unidade acima para carregar o endereço completo..."
+              placeholder="Preenchido pela unidade selecionada"
             ></textarea>
           </div>
 
@@ -878,7 +865,7 @@ Horário disponível para atendimento:</textarea>
             <div class="space-y-3">
               <div>
                 <label class="block text-[11px] font-semibold text-slate-300 mb-1" for="entrega-representante">
-                  Representante Regional (seleção automática pela cidade):
+                  Representante regional (automático pela cidade):
                 </label>
                 <select
                   id="entrega-representante"
@@ -967,7 +954,7 @@ Horário disponível para atendimento:</textarea>
               <label for="entrega-obs" class="block text-xs font-semibold text-slate-300">
                 Observações: <span class="required-mark" aria-hidden="true">*</span>
               </label>
-              <span class="text-[10px] text-slate-400">Cel. B37 na planilha</span>
+              <span class="info-tip info-tip--end"><button type="button" class="info-tip-trigger" aria-label="Sobre as observações" aria-describedby="tip-entrega-obs"><i data-lucide="info" aria-hidden="true"></i></button><span id="tip-entrega-obs" role="tooltip" class="info-tip-text">Vai para a célula B37 da planilha.</span></span>
             </div>
             <textarea
               id="entrega-obs"
@@ -997,7 +984,6 @@ Horário disponível para atendimento:</textarea>
           <div class="w-2.5 h-2.5 rounded-full bg-brand-400" id="status-indicator" aria-hidden="true"></div>
           <div id="status-summary" role="status" aria-live="polite" aria-atomic="true">
             <span class="text-slate-300 font-medium">Pronto para emissão.</span>
-            <span class="hidden md:inline text-slate-500">Verifique os dados antes de gerar a planilha oficial Simpress.</span>
           </div>
         </div>
 
@@ -1063,8 +1049,10 @@ Horário disponível para atendimento:</textarea>
 
       <section class="automation-card glass-card" aria-labelledby="automacao-titulo">
         <div class="panel-card-header">
-          <h2 id="automacao-titulo" class="ux-home-title">Automação do Chrome</h2>
-          <p class="ux-home-note">Chrome de automação · perfil próprio · porta 9333</p>
+          <div class="flex items-center gap-1">
+            <h2 id="automacao-titulo" class="ux-home-title">Automação do Chrome</h2>
+            <span class="info-tip"><button type="button" class="info-tip-trigger" aria-label="Sobre a automação do Chrome" aria-describedby="tip-automacao-chrome"><i data-lucide="info" aria-hidden="true"></i></button><span id="tip-automacao-chrome" role="tooltip" class="info-tip-text">Chrome de automação com perfil próprio, porta 9333. Os logins são feitos por você nessa janela; os arquivos exportados são importados pelas pastas locais de entrada, como no executar_automacao.bat.</span></span>
+          </div>
         </div>
         <div id="automacao-estado" class="automation-status" role="status" aria-live="polite" aria-atomic="true" data-state="livre">
           <span class="automation-status-dot" aria-hidden="true"></span>
@@ -1088,24 +1076,25 @@ Horário disponível para atendimento:</textarea>
             <i data-lucide="layers" class="w-4 h-4" aria-hidden="true"></i>
             <span>Ambas</span>
           </button>
-          <button type="button" id="btn-automacao-login" data-automacao-rotina="login" data-on-click="iniciarRotinaAutomacao" data-args='["login"]' class="btn btn-secondary automation-action" title="Abre as abas do Oracle, UX Simpress e Endpoint Central para você fazer os logins">
+          <button type="button" id="btn-automacao-login" data-automacao-rotina="login" data-on-click="iniciarRotinaAutomacao" data-args='["login"]' class="btn btn-tertiary automation-action" title="Abre as abas do Oracle, UX Simpress e Endpoint Central para você fazer os logins">
             <i data-lucide="user-check" class="w-4 h-4" aria-hidden="true"></i>
             <span>Abrir Chrome para login</span>
           </button>
-          <button type="button" id="btn-automacao-cancelar" data-on-click="cancelarRotinaAutomacao" class="btn btn-secondary automation-action automation-action--cancel" title="Para a rotina em andamento; o Chrome continua aberto" disabled>
+          <button type="button" id="btn-automacao-cancelar" data-on-click="cancelarRotinaAutomacao" class="btn btn-tertiary automation-action automation-action--cancel" title="Para a rotina em andamento; o Chrome continua aberto" disabled>
             <i data-lucide="x" class="w-4 h-4" aria-hidden="true"></i>
             <span>Cancelar</span>
           </button>
         </div>
-        <p class="ux-home-note automation-note">Os logins são feitos por você, na janela do Chrome de automação. Os arquivos exportados são importados pelas pastas locais de entrada, como no <code>executar_automacao.bat</code>.</p>
       </section>
 
       <section id="sebrae-painel" class="automation-card glass-card sebrae-card" aria-labelledby="sebrae-titulo">
         <div class="panel-card-header">
-          <h2 id="sebrae-titulo" class="ux-home-title">Sincronizar chamados Sebrae</h2>
+          <div class="flex items-center gap-1">
+            <h2 id="sebrae-titulo" class="ux-home-title">Sincronizar chamados Sebrae</h2>
+            <span class="info-tip"><button type="button" class="info-tip-trigger" aria-label="Sobre a sincronização Sebrae" aria-describedby="sebrae-regra"><i data-lucide="info" aria-hidden="true"></i></button><span id="sebrae-regra" role="tooltip" class="info-tip-text">Roda de segunda a sexta, das 09h15 às 17h45, a cada 30 minutos, com o computador ligado e o servidor local da Simpress em execução. Logs e motivos de falha ficam em Andamento e em Últimas execuções. O login é sempre feito por você, no Chrome de automação.</span></span>
+          </div>
           <p class="ux-home-note">SoftExpert → Dashboard Operacional_SEBRAE</p>
         </div>
-        <p id="sebrae-regra" class="ux-home-note sebrae-rule">Roda de segunda a sexta, das 09h15 às 17h45, a cada 30 minutos. O computador precisa estar ligado e o servidor local da Simpress em execução.</p>
         <div id="sebrae-estado" class="automation-status" role="status" aria-live="polite" aria-atomic="true" data-state="pausado">
           <span class="automation-status-dot" aria-hidden="true"></span>
           <strong id="sebrae-estado-titulo" class="automation-status-title">Agendamento pausado</strong>
@@ -1134,7 +1123,7 @@ Horário disponível para atendimento:</textarea>
             <i data-lucide="history" class="w-4 h-4" aria-hidden="true"></i>
             <span>Ativar agendamento</span>
           </button>
-          <button type="button" id="btn-sebrae-cancelar" data-on-click="cancelarRotinaAutomacao" class="btn btn-secondary automation-action automation-action--cancel" title="Para a sincronização em andamento; o Chrome continua aberto" disabled>
+          <button type="button" id="btn-sebrae-cancelar" data-on-click="cancelarRotinaAutomacao" class="btn btn-tertiary automation-action automation-action--cancel" title="Para a sincronização em andamento; o Chrome continua aberto" disabled>
             <i data-lucide="x" class="w-4 h-4" aria-hidden="true"></i>
             <span>Cancelar sincronização</span>
           </button>
@@ -1144,7 +1133,6 @@ Horário disponível para atendimento:</textarea>
         <div id="sebrae-pendencias" class="sebrae-pendencias">
           <p class="ux-home-note">Nenhuma pendência.</p>
         </div>
-        <p class="ux-home-note automation-note">Os logs e os motivos de falha ficam em Andamento e em Últimas execuções (filtro de rotina <em>Sincronizar chamados Sebrae</em>). O login é sempre feito por você, no Chrome de automação.</p>
       </section>
 
       <section id="automacao-andamento-painel" class="automation-card glass-card" aria-labelledby="automacao-andamento-titulo">
@@ -1483,8 +1471,8 @@ Horário disponível para atendimento:</textarea>
             <i data-lucide="history" class="w-4 h-4 text-violet-400"></i>
             Histórico de alterações
             <span id="total-historico-apelidos" class="px-2 py-0.5 rounded-full text-[10px] font-semibold alias-history-total">0 registros</span>
+            <span class="info-tip"><button type="button" class="info-tip-trigger" aria-label="Sobre o histórico de alterações" aria-describedby="tip-historico-apelidos"><i data-lucide="info" aria-hidden="true"></i></button><span id="tip-historico-apelidos" role="tooltip" class="info-tip-text">Alterações de apelido, usuário, endereço e avisos do Endpoint. Ações disponíveis aparecem ao lado de cada registro.</span></span>
           </h3>
-          <p class="text-xs text-slate-400 mt-1 alias-history-description">Consulte alterações de apelido, usuário, endereço e avisos do Endpoint. Ações disponíveis aparecem ao lado de cada registro.</p>
         </div>
         <button type="button" data-on-click="fecharModalHistoricoApelidos" class="text-slate-400 hover:text-white p-1 rounded-lg hover:bg-slate-800 transition alias-history-close" aria-label="Fechar histórico">
           <i data-lucide="x" class="w-5 h-5"></i>
@@ -1796,7 +1784,7 @@ Horário disponível para atendimento:</textarea>
   <!-- EVOLUÇÃO DAS PENDÊNCIAS ENTRE DUAS ATUALIZAÇÕES -->
   <div id="modal-evolucao-atualizacoes" class="modal-overlay fixed inset-0 bg-slate-950/85 backdrop-blur-md hidden flex items-center justify-center p-4">
     <div class="modal-panel bg-surface-overlay border border-cyan-500/30 rounded-2xl max-w-5xl w-full p-6 shadow-2xl flex flex-col max-h-[92vh] overflow-hidden">
-      <div class="flex items-start justify-between gap-4 pb-4 border-b border-slate-800 shrink-0"><div><h3 class="text-base font-bold text-white">Evolução das atualizações</h3><p class="text-xs text-slate-400 mt-1">Veja quantos casos surgiram, continuaram ou deixaram de aparecer.</p></div><button type="button" data-on-click="fecharEvolucaoAtualizacoes" class="text-slate-400 hover:text-white p-1 rounded-lg hover:bg-slate-800" aria-label="Fechar evolução das atualizações"><i data-lucide="x" class="w-5 h-5"></i></button></div>
+      <div class="flex items-start justify-between gap-4 pb-4 border-b border-slate-800 shrink-0"><div class="flex items-center gap-1"><h3 class="text-base font-bold text-white">Evolução das atualizações</h3><span class="info-tip"><button type="button" class="info-tip-trigger" aria-label="Sobre a evolução das atualizações" aria-describedby="tip-evolucao"><i data-lucide="info" aria-hidden="true"></i></button><span id="tip-evolucao" role="tooltip" class="info-tip-text">Quantos casos surgiram, continuaram ou deixaram de aparecer entre duas atualizações.</span></span></div><button type="button" data-on-click="fecharEvolucaoAtualizacoes" class="text-slate-400 hover:text-white p-1 rounded-lg hover:bg-slate-800" aria-label="Fechar evolução das atualizações"><i data-lucide="x" class="w-5 h-5"></i></button></div>
       <form id="form-evolucao-atualizacoes" class="grid grid-cols-1 md:grid-cols-[1fr_1fr_auto] gap-2 py-3 shrink-0"><label class="text-xs text-slate-300">Atualização anterior<select id="evolucao-anterior" required class="mt-1 block w-full rounded-lg border border-slate-700 bg-slate-950 px-3 py-2 text-sm text-white"></select></label><label class="text-xs text-slate-300">Atualização atual<select id="evolucao-atual" required class="mt-1 block w-full rounded-lg border border-slate-700 bg-slate-950 px-3 py-2 text-sm text-white"></select></label><button type="submit" class="self-end rounded-lg bg-cyan-500/15 border border-cyan-400/30 px-4 py-2 text-sm text-cyan-100">Comparar</button></form>
       <div class="grid grid-cols-1 md:grid-cols-[1fr_1fr_auto] gap-2 py-3 shrink-0" aria-label="Filtros da evolução">
         <label for="filtro-evolucao-busca" class="text-xs text-slate-300">Buscar por hostname, série, seção ou anotação<input id="filtro-evolucao-busca" type="search" autocomplete="off" placeholder="Digite um termo para localizar um caso" class="mt-1 block w-full rounded-lg border border-slate-700 bg-slate-950 px-3 py-2 text-sm text-white placeholder:text-slate-500"></label>
@@ -1812,7 +1800,7 @@ Horário disponível para atendimento:</textarea>
   <!-- ACOMPANHAMENTO DE CHAMADOS -->
   <div id="modal-acompanhamento-chamados" class="modal-overlay fixed inset-0 bg-slate-950/85 backdrop-blur-md hidden flex items-center justify-center p-4">
     <div class="modal-panel bg-surface-overlay border border-cyan-500/30 rounded-2xl max-w-5xl w-full p-5 sm:p-6 shadow-2xl flex flex-col max-h-[92vh] overflow-hidden">
-      <div class="ticket-modal-header flex items-start justify-between gap-4 pb-4 border-b border-slate-800 shrink-0"><div class="min-w-0"><h3 class="text-base font-bold text-white">Acompanhamento de Chamados</h3><p class="text-xs text-slate-400 mt-1">OS da Simpress e do Oracle relacionadas pelo número de série.</p></div><div class="ticket-header-actions"><a href="https://simpress.custhelp.com/AgentWeb/" target="_blank" rel="noopener noreferrer" class="ticket-agent-link ticket-agent-link--oracle" aria-label="Abrir portal Oracle AgentWeb" title="Abrir portal Oracle AgentWeb"><i data-lucide="link" aria-hidden="true"></i><span>Oracle</span></a><a href="https://ux.simpress.com.br/equipamentos/acompanhamento" target="_blank" rel="noopener noreferrer" class="ticket-agent-link ticket-agent-link--simpress" aria-label="Abrir acompanhamento de chamados Simpress" title="Abrir acompanhamento de chamados Simpress"><i data-lucide="link" aria-hidden="true"></i><span>Simpress</span></a><button type="button" data-on-click="fecharAcompanhamentoChamados" class="text-slate-400 hover:text-white p-1 rounded-lg hover:bg-slate-800" aria-label="Fechar acompanhamento de chamados"><i data-lucide="x" class="w-5 h-5"></i></button></div></div>
+      <div class="ticket-modal-header flex items-start justify-between gap-4 pb-4 border-b border-slate-800 shrink-0"><div class="min-w-0 flex items-center gap-1"><h3 class="text-base font-bold text-white">Acompanhamento de Chamados</h3><span class="info-tip"><button type="button" class="info-tip-trigger" aria-label="Sobre o acompanhamento de chamados" aria-describedby="tip-acompanhamento-chamados"><i data-lucide="info" aria-hidden="true"></i></button><span id="tip-acompanhamento-chamados" role="tooltip" class="info-tip-text">OS da Simpress e do Oracle relacionadas pelo número de série. A lista vai da maior OS para a menor; séries sem OS ficam no final. Atenção para 3+ dias ou sem data: selecione um indicador da triagem para filtrar.</span></span></div><div class="ticket-header-actions"><a href="https://simpress.custhelp.com/AgentWeb/" target="_blank" rel="noopener noreferrer" class="ticket-agent-link ticket-agent-link--oracle" aria-label="Abrir portal Oracle AgentWeb" title="Abrir portal Oracle AgentWeb"><i data-lucide="link" aria-hidden="true"></i><span>Oracle</span></a><a href="https://ux.simpress.com.br/equipamentos/acompanhamento" target="_blank" rel="noopener noreferrer" class="ticket-agent-link ticket-agent-link--simpress" aria-label="Abrir acompanhamento de chamados Simpress" title="Abrir acompanhamento de chamados Simpress"><i data-lucide="link" aria-hidden="true"></i><span>Simpress</span></a><button type="button" data-on-click="fecharAcompanhamentoChamados" class="text-slate-400 hover:text-white p-1 rounded-lg hover:bg-slate-800" aria-label="Fechar acompanhamento de chamados"><i data-lucide="x" class="w-5 h-5"></i></button></div></div>
       <div id="conteudo-acompanhamento-chamados" role="region" aria-label="Conteúdo do acompanhamento de chamados" tabindex="0" class="min-h-0 flex-1 overflow-y-auto overscroll-contain focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-cyan-400/60">
       <div class="space-y-3 py-3">
         <details id="painel-dados-acompanhamento-chamados" class="ticket-disclosure rounded-lg border border-slate-800 bg-slate-950/50 px-3 py-2">

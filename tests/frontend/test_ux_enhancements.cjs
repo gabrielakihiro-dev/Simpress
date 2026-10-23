@@ -130,3 +130,24 @@ test("refinement layer defines both themes and respects reduced motion", () => {
   assert.match(uxCss, /@media \(prefers-reduced-motion: reduce\)/);
   assert.doesNotMatch(uxCss, /@import|https?:\/\//, "the layer must stay offline");
 });
+
+test("dismissInfoTips marks only the tips that are open", () => {
+  const marked = [];
+  const tip = { setAttribute: name => marked.push(name) };
+  const doc = { querySelectorAll: selector => (selector.includes(":hover") ? [tip] : []) };
+  assert.equal(ux.dismissInfoTips(doc), 1);
+  assert.deepEqual(marked, ["data-tip-dismissed"]);
+  assert.equal(ux.dismissInfoTips({ querySelectorAll: () => [] }), 0);
+});
+
+test("every info tip trigger points to a tooltip with text", () => {
+  const triggers = [...appHtml.matchAll(/<button[^>]*class="info-tip-trigger"[^>]*>/g)].map(match => match[0]);
+  assert.ok(triggers.length > 0, "index.html should use info tips");
+  for (const trigger of triggers) {
+    assert.match(trigger, /aria-label="[^"]+"/);
+    const id = trigger.match(/aria-describedby="([^"]+)"/)?.[1];
+    assert.ok(id, `info tip without aria-describedby: ${trigger}`);
+    assert.match(appHtml, new RegExp(`<span id="${id}" role="tooltip" class="info-tip-text">[^<]*\\S[^<]*</span>`));
+  }
+  assert.match(uxCss, /\.info-tip:is\(:hover, :focus-within\):not\(\[data-tip-dismissed\]\) \.info-tip-text/);
+});
