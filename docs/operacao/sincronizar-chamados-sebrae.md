@@ -12,6 +12,8 @@ Status por fase (ver "Entrega em fases"): **Fase A** (especificação, regras pu
 - Antes de gravar, mascare CPFs como `***.***.***-**` em todo texto enviado ao Dashboard, inclusive `Detalhes do Atendimento Realizado`, descrição/título de fallback e `Solicitante` (colunas F, G e H). Aplique a máscara antes de gravar e antes de registrar valores no diário local. Reconheça CPFs pontuados, sequências identificadas pelo rótulo `CPF` e números sem pontuação com dígitos verificadores válidos; preserve outros números e não registre dados pessoais nos logs.
 - **Só leitura no SoftExpert**, exceto a associação do chamado ao usuário (botão **Sim** da confirmação). Não finaliza workflow, não registra atendimento, não reatribui.
 - **Nunca sobrescreve** uma linha existente do Dashboard.
+- Em preenchimentos retroativos explicitamente autorizados da coluna F, preserve por completo as linhas cujo status em D seja `FINALIZADO`, inclusive quando F estiver vazia. Para os demais status, só preencha F vazia e mantenha qualquer valor já existente; não altere outros campos sem autorização específica.
+- Em correções manuais solicitadas, mantenha todas as linhas de dados da aba com altura uniforme de 20 px, sem AutoFit nem quebra de texto; o conteúdo integral pode ficar cortado na visualização.
 
 ## Horário e agendamento
 
@@ -110,7 +112,7 @@ Novo cartão **Sincronizar chamados Sebrae** na tela Automação: Executar agora
 3. `UTIC-2026-0094`, `27371 / UTIC-2026-0094` e `utic-2026-0094` contam como o mesmo número; zeros à esquerda são preservados; número já presente ⇒ chamado inteiro ignorado.
 4. Chamados em `PENDENCIAS_DEFINIDAS` nunca são incluídos.
 5. Classificação ambígua ⇒ pendente com motivo, nunca gravado.
-6. A sincronização normal não altera linha existente; escreve só C, D, F, G, H, I, N, P e Q de uma linha livre, com D igual a `Em Aberto`; cada inclusão só conta depois da releitura das nove colunas e do salvamento confirmado. Uma correção ou preenchimento retroativo só pode editar os campos antigos que o usuário indicar explicitamente.
+6. A sincronização normal não altera linha existente; escreve só C, D, F, G, H, I, N, P e Q de uma linha livre, com D igual a `Em Aberto`; cada inclusão só conta depois da releitura das nove colunas e do salvamento confirmado. Uma correção ou preenchimento retroativo só pode editar os campos antigos que o usuário indicar explicitamente. Em qualquer correção de F, linhas com D=`FINALIZADO` permanecem intactas, mesmo quando F está vazia; nos demais status, F existente também não é substituída sem autorização explícita.
 7. Sessão expirada, queda de conexão ou cancelamento não marcam a sincronização como concluída; gravação parcial registra os campos confirmados e os pendentes.
 8. Sem pendência nova ou chamado novo, nenhum aviso é emitido.
 9. `npm run verify` e `npm run test:ui:e2e` passam; nenhum teste altera chamados ou planilhas reais.
