@@ -75,7 +75,7 @@ def process_import(root_name, ready, output, label, batch):
 
 class TicketImportConcurrencyTests(unittest.TestCase):
     def setUp(self):
-        temporary = tempfile.TemporaryDirectory(dir=ROOT, prefix=".ticket-import-test-")
+        temporary = tempfile.TemporaryDirectory(prefix="ticket-import-test-")
         self.addCleanup(temporary.cleanup)
         self.root = Path(temporary.name)
         self.router = make_router(self.root)
