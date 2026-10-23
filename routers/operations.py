@@ -191,6 +191,9 @@ def create_operations_router(
         data = read_ticket_os_links(path)
         return {"vinculos": list(data["vinculos"].values())}
 
+    def validate_staged_ticket_os_links(staged: Path) -> None:
+        read_ticket_os_links(staged)
+
     @router.put("/api/operacoes/chamados/vinculos-os")
     def save_ticket_os_link(payload: TicketOsLinkPayload):
         path = ticket_os_links_file() if ticket_os_links_file else ticket_report_path().parent / "os_chamados_vinculos.json"
@@ -218,7 +221,7 @@ def create_operations_router(
                 transaction.stage_bytes(
                     path,
                     encoded,
-                    lambda staged: read_ticket_os_links(staged),
+                    validate_staged_ticket_os_links,
                 )
                 transaction.commit()
         except HTTPException:

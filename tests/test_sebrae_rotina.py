@@ -111,7 +111,7 @@ def rotinas_falsas(cancelado: bool = False) -> SimpleNamespace:
 
 
 class TraducaoDeGravacaoTests(unittest.TestCase):
-    def test_a_confirmed_row_is_an_inclusion_with_the_eight_columns(self):
+    def test_a_confirmed_row_is_an_inclusion_with_the_nine_columns(self):
         r = rotina.traduzir_gravacao(xl.ResultadoGravacao("UTIC-2026-0200", xl.GRAVADO, 12, tuple(COLUNAS_GRAVADAS)))
         self.assertTrue(r.completo)
         r = rotina.traduzir_gravacao(xl.ResultadoGravacao("UTIC-2026-0200", xl.RECUPERADO, 12))
@@ -242,7 +242,7 @@ class DashboardRealTests(unittest.TestCase):
             self.dashboard().ler_coluna_c()
         self.assertEqual(ctx.exception.sistema, "SharePoint")
 
-    def test_writes_only_the_eight_columns_and_reports_the_inclusion(self):
+    def test_writes_only_the_nine_columns_and_reports_the_inclusion(self):
         r = self.dashboard().gravar_linha(linha_valida())
         self.assertTrue(r.completo)
         self.assertEqual([c for _l, c, _v in self.grade.escritas], list(COLUNAS_GRAVADAS))

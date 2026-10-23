@@ -135,6 +135,7 @@ PAGINA_REGISTRO = """<!doctype html><html lang="pt-br"><head><meta charset="utf-
 <div><label for="f_habilitada">Habilitada em</label><input id="f_habilitada" readonly></div>
 <div><label for="f_descricao">Descrição</label><textarea id="f_descricao" readonly></textarea></div>
 <section id="secao-atendimento" class="oculto">
+<label for="f_detalhes_edicao">Detalhes do Atendimento Realizado</label><textarea id="f_detalhes_edicao"></textarea>
 <label for="f_detalhes_atendimento">Detalhes do Atendimento Realizado</label><textarea id="f_detalhes_atendimento" readonly></textarea>
 </section>
 <button type="button" id="enviar">Enviar</button>
@@ -148,6 +149,7 @@ const mostrar = () => {
   $('workflow-secoes').classList.remove('oculto');
   $('f_numero').value = D.numero_form; $('f_titulo').value = D.titulo_form;
   $('f_solicitante').value = D.solicitante; $('f_iniciador').value = D.iniciador; $('f_habilitada').value = D.habilitada_em;
+  $('f_detalhes_edicao').value = D.detalhes_atendimento_editavel || '';
   if (D.descricao) setTimeout(() => { $('f_descricao').value = D.descricao; }, D.atraso);
 };
 $('atendimento-ti').addEventListener('click', () => {
@@ -175,6 +177,7 @@ def chamado(indice: int, **extra) -> dict:
         "habilitada_em": "20/10/2026 09:15",
         "descricao": f"A impressora do setor {indice} não imprime desde cedo.",
         "detalhes_atendimento_realizado": "",
+        "detalhes_atendimento_editavel": "Rascunho da atividade atual que não deve ser exportado",
         "atraso": 0,
         "confirmacao": "modal",
     }
@@ -241,6 +244,7 @@ def criar_servidor(bancada: Bancada) -> ThreadingHTTPServer:
                     "titulo_form": c.get("titulo_form", c["titulo"]), "solicitante": c["solicitante"], "iniciador": c["iniciador"],
                     "habilitada_em": c["habilitada_em"], "descricao": c["descricao"],
                     "detalhes_atendimento_realizado": c.get("detalhes_atendimento_realizado", ""),
+                    "detalhes_atendimento_editavel": c.get("detalhes_atendimento_editavel", ""),
                     "atraso": c["atraso"], "confirmacao": c["confirmacao"],
                 }
                 return self.responder(PAGINA_REGISTRO % {"estilo": ESTILO, "dados": json.dumps(dados)})
@@ -381,10 +385,10 @@ class RegrasPurasTests(unittest.TestCase):
         page = MagicMock()
         page.is_closed.return_value = False
         page.frames = [MagicMock()]
-        with patch.object(se, "_ler_campo", return_value="Detalhe consultado") as ler:
+        with patch.object(se, "_ler_detalhes_atendimento_visiveis", return_value="Detalhe consultado") as ler:
             valor = se._ler_detalhes_atendimento(page, "UTIC-2026-0001")
         self.assertEqual(valor, "Detalhe consultado")
-        ler.assert_called_once_with(page, "detalhes_atendimento_realizado")
+        ler.assert_called_once_with(page)
         page.frames[0].get_by_role.assert_not_called()
 
     def test_detalhes_do_atendimento_abrem_a_secao_visivel_uma_vez(self):
@@ -400,7 +404,7 @@ class RegrasPurasTests(unittest.TestCase):
         secao.get_attribute.return_value = None
         frame.get_by_role.side_effect = [secao, MagicMock(), MagicMock()]
         with (
-            patch.object(se, "_ler_campo", side_effect=("", "Detalhe consultado")),
+            patch.object(se, "_ler_detalhes_atendimento_visiveis", side_effect=("", "Detalhe consultado")),
             patch.object(se, "_aguardar_estavel") as aguardar,
         ):
             valor = se._ler_detalhes_atendimento(page, "UTIC-2026-0001")
@@ -418,7 +422,7 @@ class RegrasPurasTests(unittest.TestCase):
         secao.count.return_value = 0
         frame.get_by_role.return_value = secao
         frame.get_by_text.return_value = secao
-        with patch.object(se, "_ler_campo", return_value=""):
+        with patch.object(se, "_ler_detalhes_atendimento_visiveis", return_value=""):
             with self.assertRaisesRegex(se.SoftExpertErro, "Atendimento - Chamados TI"):
                 se._ler_detalhes_atendimento(page, "UTIC-2026-0001")
 
@@ -673,7 +677,7 @@ class SoftExpertNaBancadaTests(unittest.TestCase):
         self.assertEqual(descricao_do_chamado(lido), "Impressora 1 não imprime")
         self.assertEqual(self.abas_do_registro(), [])
 
-    def test_descricao_curta_consulta_atendimento_e_prioriza_o_registro(self):
+    def test_consulta_sempre_atendimento_e_mantem_os_textos_separados(self):
         self.bancada.chamados = [chamado(
             1,
             descricao="Remoção do usuário",
@@ -692,20 +696,34 @@ class SoftExpertNaBancadaTests(unittest.TestCase):
             "Removido usuário DANIELE e passado o backup completo para Alan.",
         )
         self.assertEqual(self.bancada.consultas_atendimento, ["UTIC-2026-0001"])
-        self.assertEqual(descricao_do_chamado(lido),
-                         "Remoção do usuário\n-----\nRemovido usuário DANIELE e passado o backup completo para Alan.")
+        self.assertEqual(descricao_do_chamado(lido), "Remoção do usuário")
         self.assertEqual(self.abas_do_registro(), [])
 
-    def test_descricao_suficiente_nao_abre_atendimento_ti(self):
+    def test_descricao_longa_tambem_le_atendimento_ti(self):
         descricao = "A " + ("impressora do setor não imprime desde o início do expediente. " * 3)
         self.bancada.chamados = [chamado(1, descricao=descricao, detalhes_atendimento_realizado="Complemento irrelevante")]
         page = self.abrir_lista()
 
         lido = se.extrair_chamado(self.context, page, "UTIC-2026-0001")
 
-        self.assertEqual(lido.detalhes_atendimento_realizado, "")
-        self.assertEqual(self.bancada.consultas_atendimento, [])
-        self.assertEqual(descricao_do_chamado(lido), descricao)
+        self.assertEqual(lido.detalhes_atendimento_realizado, "Complemento irrelevante")
+        self.assertEqual(self.bancada.consultas_atendimento, ["UTIC-2026-0001"])
+        self.assertEqual(descricao_do_chamado(lido), descricao.strip())
+
+    def test_prioriza_atendimento_concluido_somente_leitura_sobre_rascunho_editavel(self):
+        self.bancada.chamados = [chamado(
+            1,
+            descricao="Remoção do usuário",
+            detalhes_atendimento_realizado="Texto concluído",
+            detalhes_atendimento_editavel="Rascunho diferente",
+        )]
+        page = self.abrir_lista()
+
+        lido = se.extrair_chamado(self.context, page, "UTIC-2026-0001")
+
+        self.assertEqual(lido.detalhes_atendimento_realizado, "Texto concluído")
+        self.assertEqual(self.bancada.consultas_atendimento, ["UTIC-2026-0001"])
+        self.assertEqual(self.abas_do_registro(), [])
 
     def test_descricao_curta_sem_detalhe_mantem_texto_sem_separador(self):
         self.bancada.chamados = [chamado(1, descricao="Solicitação de acesso")]

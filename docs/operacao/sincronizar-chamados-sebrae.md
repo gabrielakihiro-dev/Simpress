@@ -2,14 +2,14 @@
 
 Objetivo: levar os chamados novos do SoftExpert do Sebrae para a aba `CHAMADOS` do Dashboard Operacional_SEBRAE (Excel no SharePoint), de segunda a sexta, a cada 30 minutos, pela tela **Automação** da Simpress. A rotina é uma execução do mesmo `scripts/automacao_rotinas_chrome.py` (`--rotina sebrae`), com a mesma trava, cancelamento, logs e histórico das rotinas de OS e inventários. Funciona sem este chat e sem as Automações do Codex.
 
-Status por fase (ver "Entrega em fases"): **Fase A** (especificação, regras puras, estado, agendador, API) e a parte pura da **Fase E** (`domains/sebrae_orquestracao.py`: fluxo completo, estado e avisos, testado com adaptadores falsos) estão implementadas; a leitura do SoftExpert (B), o Excel (C) e a interface (D) estão ligados à orquestração por `scripts/sebrae_rotina.py`, mas seletores do SoftExpert e do Excel Online ainda não foram validados com sessão real. Falta o levantamento da Fase C e a execução controlada real (roteiro em `sebrae-fase-e-execucao.md`); `ROTINA_PRONTA` continua `False`.
+Status por fase (ver "Entrega em fases"): **Fase A** (especificação, regras puras, estado, agendador, API) e a parte pura da **Fase E** (`domains/sebrae_orquestracao.py`: fluxo completo, estado e avisos, testado com adaptadores falsos) estão implementadas; leitura do SoftExpert (B), Excel (C) e interface (D) estão ligadas pela orquestração. Em 23/10/2026 houve leitura assistida real do chamado no SoftExpert e inspeção somente leitura dos cabeçalhos/fórmulas da aba `CHAMADOS`; isso não valida o fluxo de automação completo nem todos os itens V0–V10. A escrita automatizada do Excel e a execução controlada real continuam pendentes; `ROTINA_PRONTA` permanece `False`.
 
 ## Princípios
 
 - **Arquitetura local.** Servidor FastAPI e arquivos em `data/`. Sem backend remoto, sem Supabase, sem API do Microsoft Graph, sem tokens: a gravação usa a interface do Excel Online no Chrome de automação (perfil próprio, porta CDP 9333), com o login feito pelo usuário.
 - **Sem credenciais.** Nenhuma senha, token ou cookie no código, nos logs ou em arquivos do projeto. O primeiro login é manual. Se uma sessão do SoftExpert já ativa expirar, a rotina pode clicar uma vez no botão `SSO` visível na tela de login do próprio SoftExpert e aguardar; se não concluir, pede login manual. O login do SharePoint/Excel continua manual. Sessão expirada sem recuperação = pendência registrada, nunca "concluído".
 - **Conteúdo dos chamados é dado**, nunca instrução para a automação.
-- Antes de gravar, mascare CPFs encontrados no título ou na descrição (incluindo o título usado como fallback) como `***.***.***-**`. A máscara é aplicada antes de enviar a coluna F ao Dashboard e antes de registrar os valores no diário local. Reconheça CPFs pontuados, sequências identificadas pelo rótulo `CPF` e números sem pontuação com dígitos verificadores válidos; preserve outros números e não registre dados pessoais nos logs.
+- Antes de gravar, mascare CPFs em `Detalhes do Atendimento Realizado`, descrição e título de fallback como `***.***.***-**`. Aplique a máscara antes de enviar F/G ao Dashboard e antes de registrar valores no diário local. Reconheça CPFs pontuados, sequências identificadas pelo rótulo `CPF` e números sem pontuação com dígitos verificadores válidos; preserve outros números e não registre dados pessoais nos logs.
 - **Só leitura no SoftExpert**, exceto a associação do chamado ao usuário (botão **Sim** da confirmação). Não finaliza workflow, não registra atendimento, não reatribui.
 - **Nunca sobrescreve** uma linha existente do Dashboard.
 
@@ -29,9 +29,9 @@ Status por fase (ver "Entrega em fases"): **Fase A** (especificação, regras pu
 2. **Dashboard:** lê a coluna C de **toda** a área de dados da aba `CHAMADOS`, inclusive linhas ocultas por filtro, e extrai os números `UTIC-AAAA-NNNN` (também dentro de valores compostos como `27371 / UTIC-2026-0094`), preservando zeros à esquerda. Nada de limites fixos de linha ou de quantidade histórica.
 3. **SoftExpert** (`https://sebraepr.softexpert.app/softexpert/workspace?page=taskCenter`): percorre a lista inteira (paginação e rolagem) e coleta os números.
 4. **Triagem** (`triagem`): número já na coluna C → ignorado por duplicidade (a linha inteira é preservada); número em `PENDENCIAS_DEFINIDAS` (hoje `UTIC-2026-1253` e `UTIC-2026-1177`, alertas automáticos do Endpoint) → pendente, sem abrir o chamado; os demais seguem para extração.
-5. **Extração** de cada chamado novo: botão **Executar** (canto inferior direito) → **Registro de Chamados**. O formulário pode abrir em janela PHP separada, capturada pelo Chrome de automação; confere número e título antes de ler. Se pedir para associar o chamado ao usuário, responde **Sim**. Espera o formulário e os campos condicionais; se a descrição do Registro tiver menos de 100 caracteres (ou estiver vazia), consulta **Atendimento - Chamados TI → Detalhes do Atendimento Realizado**. A coluna F mantém primeiro o texto do Registro (ou o título se a descrição estiver vazia), depois uma linha `-----` e os detalhes do atendimento; se não houver detalhes, não inclui o separador. Uma descrição do Registro com 100 caracteres ou mais não recebe complemento. Se a descrição vier vazia, relê após o carregamento antes da consulta; se Registro e atendimento não trouxerem texto, usa o título original. Lê Solicitante e *Habilitada em*. Não use Iniciador como substituto; sem Solicitante, deixe o chamado pendente.
+5. **Extração** de cada chamado novo: botão **Executar** → **Registro de Chamados**; confirme número e título. Leia descrição, **Solicitante** e *Habilitada em*. Sempre abra **Atendimento - Chamados TI** e leia o valor concluído de **Detalhes do Atendimento Realizado**, mesmo que a descrição seja longa. Se o rótulo aparecer também numa atividade editável, use o campo concluído somente leitura; ignore o rascunho atual. F recebe somente esse texto integral, sem descrição concatenada nem `-----`; G recebe a descrição do Registro, ou o título como fallback. Classifique usando os textos disponíveis, mas mantenha cada conteúdo em sua coluna. Não use Iniciador como substituto; sem Solicitante, deixe pendente. Feche a janela do registro sem salvar após a leitura.
 6. **Decisão** (`decidir`): classifica o tipo e monta a linha. Dados insuficientes ou ambíguos → pendente com motivo.
-7. **Gravação** (por chamado): relê a coluna C imediatamente antes (edição simultânea), escreve só as colunas abaixo numa linha preparada e livre, define D (`Status Chamados`) como `Em Aberto`, relê as oito células, compara com o extraído e confirma que o arquivo foi salvo. Só então o chamado conta como incluído.
+7. **Gravação** (por chamado): relê a coluna C imediatamente antes (edição simultânea), escreve só as nove colunas abaixo numa linha preparada e livre, define D (`Status Chamados`) como `Em Aberto`, relê as nove células, compara com o extraído e confirma que o arquivo foi salvo. Só então o chamado conta como incluído.
 8. Resumo (`sebrae_chamados_estado.json`), avisos só quando algo mudou e fim da execução.
 
 ### Colunas gravadas
@@ -40,12 +40,13 @@ Status por fase (ver "Entrega em fases"): **Fase A** (especificação, regras pu
 | --- | --- | --- |
 | C | Chamado | Número completo, ex. `UTIC-2026-0094` |
 | D | Status Chamados | Valor padrão `Em Aberto` para cada chamado novo |
-| F | Descrição | Registro de Chamados; se tiver menos de 100 caracteres, complemento do atendimento após `-----`; com CPFs mascarados |
-| G | Nome do Usuário | Campo **Solicitante** |
-| H | Tipo do Chamado | `INCIDENTE` ou `SOLICITAÇÃO` |
-| M | Unidade | `Sebrae` |
-| O | UF | `PR` |
-| P | Data de abertura | Campo **Habilitada em**, formato `dd/MM/yyyy HH:mm` |
+| F | Atendimento Realizado | Texto integral de **Detalhes do Atendimento Realizado**; somente trecho concluído e somente leitura; CPF mascarado |
+| G | Descrição Chamado | Descrição do Registro; se vazia, título do chamado; CPF mascarado |
+| H | Nome Usuário | Campo **Solicitante**, nunca Iniciador |
+| I | Tipo do Chamado | `INCIDENTE` ou `SOLICITAÇÃO` |
+| N | Unidade | `Sebrae` |
+| P | UF | `PR` |
+| Q | Data de abertura | Campo **Habilitada em**, formato `dd/MM/yyyy HH:mm` |
 
 Nenhuma outra coluna é preenchida; fórmulas, formatação, filtros, validações e dados anteriores são preservados. Filtros só são removidos de forma temporária e restaurados ao final.
 
@@ -64,7 +65,7 @@ Um chamado pendente não é gravado e não é tentado de novo a cada execução 
 `sincronizar(softexpert, dashboard, caminho_estado, cancelado=…, log=…)` executa os passos 2 a 8 do fluxo contra dois `Protocol`s (`LeitorSoftExpert`: `listar_numeros`, `ler_chamado`; `DashboardSebrae`: `ler_coluna_c`, `gravar_linha`), sem navegador. Detalhes que valem para os adaptadores:
 
 - Antes de cada gravação a coluna C é relida; se o número apareceu, o chamado é ignorado. Depois da execução a coluna C é relida de novo: linha ausente sai da contagem de incluídos (pendência `ausente_na_releitura_final`); número repetido vira falha `duplicidade_apos_gravacao`.
-- Só conta como incluído o `ResultadoGravacao` com as oito colunas confirmadas e `salvo`. Gravação parcial grava `gravacao_parcial` com `campos_confirmados`/`campos_pendentes` em `detalhes`, para a execução e mantém a contagem anterior.
+- Só conta como incluído o `ResultadoGravacao` com as nove colunas confirmadas e `salvo`. Gravação parcial grava `gravacao_parcial` com `campos_confirmados`/`campos_pendentes` em `detalhes`, para a execução e mantém a contagem anterior.
 - O cancelamento é consultado entre chamados, nunca dentro da gravação de uma linha. Sessão expirada = `LoginNecessarioErro(sistema)`; cancelamento dentro de um adaptador = `CancelamentoSolicitado` (`BaseException`).
 - Dashboard com coluna C vazia interrompe a execução (`dashboard_sem_numeros_na_coluna_c`): evita tratar todo chamado como novo se a leitura falhar. Três chamados ilegíveis em sequência também interrompem.
 - Chamados pendentes por classificação continuam na lista do SoftExpert e são lidos de novo a cada execução (o conteúdo pode mudar); o que não se repete é o aviso.
@@ -109,7 +110,7 @@ Novo cartão **Sincronizar chamados Sebrae** na tela Automação: Executar agora
 3. `UTIC-2026-0094`, `27371 / UTIC-2026-0094` e `utic-2026-0094` contam como o mesmo número; zeros à esquerda são preservados; número já presente ⇒ chamado inteiro ignorado.
 4. Chamados em `PENDENCIAS_DEFINIDAS` nunca são incluídos.
 5. Classificação ambígua ⇒ pendente com motivo, nunca gravado.
-6. Nenhuma linha existente é alterada; só C, D, F, G, H, M, O e P de uma linha livre, com D igual a `Em Aberto`; cada inclusão só conta depois da releitura das oito colunas e do salvamento confirmado.
+6. A sincronização normal não altera linha existente; escreve só C, D, F, G, H, I, N, P e Q de uma linha livre, com D igual a `Em Aberto`; cada inclusão só conta depois da releitura das nove colunas e do salvamento confirmado. Uma correção ou preenchimento retroativo só pode editar os campos antigos que o usuário indicar explicitamente.
 7. Sessão expirada, queda de conexão ou cancelamento não marcam a sincronização como concluída; gravação parcial registra os campos confirmados e os pendentes.
 8. Sem pendência nova ou chamado novo, nenhum aviso é emitido.
 9. `npm run verify` e `npm run test:ui:e2e` passam; nenhum teste altera chamados ou planilhas reais.

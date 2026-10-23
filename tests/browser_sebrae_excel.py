@@ -8,7 +8,7 @@ import tempfile
 import unittest
 from unittest.mock import patch
 
-from playwright.sync_api import sync_playwright, TimeoutError as PlaywrightTimeout
+from playwright.sync_api import sync_playwright
 from scripts import sebrae_excel as xl
 
 
@@ -35,6 +35,7 @@ class ExcelBrowserTests(unittest.TestCase):
             else:
                 route.abort()
         self.context.route("**/*", serve)
+        self.context.grant_permissions(["clipboard-read", "clipboard-write"], origin="https://excel.example")
         self.page = self.context.new_page()
         self.page.goto("https://dashboard.example/")
         self.frame = self.page.frames[1]
@@ -62,8 +63,14 @@ class ExcelBrowserTests(unittest.TestCase):
         self.assertEqual(self.frame.evaluate("() => document.activeElement.id"), "gridKeyboardContentEditable_textElement")
         self.assertEqual(self.excel._ultima_linha_usada(), 5)
 
+    def test_padroniza_e_confirma_altura_da_linha_sem_autofit(self):
+        self.excel.padronizar_altura_linha(12)
+        self.assertEqual(self.frame.evaluate("() => fixture.rowHeight"), 14.25)
+        self.assertIn("height:14.25", self.state()["events"])
+        self.assertTrue(self.frame.locator("#rowHeightDialog").is_hidden())
+
     def test_rejects_stale_formula_bar_when_hidden_cell_cannot_be_selected(self):
-        with self.assertRaises(PlaywrightTimeout):
+        with self.assertRaises(xl.ExcelErro):
             self.excel._ir_para("C3")
         self.assertEqual(self.state()["writes"], [])
 
