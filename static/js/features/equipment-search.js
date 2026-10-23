@@ -43,8 +43,7 @@
     if (indicator) indicator.className = "w-2.5 h-2.5 rounded-full bg-brand-400";
     const summary = document.getElementById("status-summary");
     if (summary) summary.replaceChildren(
-      createTextElement("span", "text-slate-300 font-medium", "Pronto para emissão."),
-      createTextElement("span", "text-slate-500", " Verifique os dados antes de gerar a planilha oficial Simpress.")
+      createTextElement("span", "text-slate-300 font-medium", "Pronto para emissão.")
     );
   }
 

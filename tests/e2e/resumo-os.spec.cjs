@@ -75,7 +75,7 @@ async function selectSummary(page) {
   }
   await page.locator("#tab-resumo").click();
   await expect(page.locator("#resumo-os-equipamento")).toBeVisible();
-  await expect(page.locator("#resumo-os-equipamento")).toContainText("OS agrupadas");
+  await expect(page.locator("#resumo-os-equipamento")).toContainText(" OS · ");
 }
 
 async function openSummary(page) {
@@ -117,7 +117,7 @@ test("Resumo associa OS aos chamados UTIC com prefixo anual e preserva dados do 
     await expect(section).toContainText("Descrição não informada");
   }
 
-  await expect(section).toContainText("4 OS agrupadas em 2 séries");
+  await expect(section).toContainText("4 OS · 2 séries");
   const orderContainer = seriesGroup.locator(".ticket-os-link-entry")
     .filter({ hasText: "Oracle · OS 7285070" });
   const prefix = orderContainer.locator(".ticket-os-link-prefix");

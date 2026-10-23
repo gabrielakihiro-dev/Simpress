@@ -642,8 +642,7 @@
       const orderCount = records.reduce((total, record) => total + record.ordens.length, 0);
       status.textContent = userFailure
         ? orderCount + " OS agrupadas por série; dados de usuário e hostname estão indisponíveis."
-        : orderCount + " OS agrupadas em " + records.length + (records.length === 1 ? " série" : " séries")
-          + " na importação atual.";
+        : orderCount + " OS · " + records.length + (records.length === 1 ? " série" : " séries");
       const tableWrap = el("div", "ticket-summary-table-wrap");
       const table = el("table", "ticket-summary-table");
       table.append(el("caption", "sr-only", "Ordens de serviço associadas a equipamentos"));
