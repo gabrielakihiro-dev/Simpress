@@ -21,9 +21,12 @@ TIPO_SOLICITACAO = "SOLICITAÇÃO"
 UNIDADE = "Sebrae"
 UF = "PR"
 FORMATO_DATA = "%d/%m/%Y %H:%M"
+TAMANHO_DESCRICAO_CURTA = 100
+SEPARADOR_ATENDIMENTO = "-----"
 
 # Dashboard columns the routine fills; nothing else is ever written.
-COLUNAS_GRAVADAS = ("C", "F", "G", "H", "M", "O", "P")
+COLUNAS_GRAVADAS = ("C", "D", "F", "G", "H", "M", "O", "P")
+STATUS_EM_ABERTO = "Em Aberto"
 
 # Automatic Endpoint alerts the user has not classified yet; they stay pending and are never written.
 PENDENCIAS_DEFINIDAS: Dict[str, str] = {
@@ -44,6 +47,7 @@ MOTIVO_DATA_INVALIDA = "data_de_abertura_invalida"
 MOTIVO_SEM_TEXTO = "sem_descricao_nem_titulo"
 
 NUMERO_UTIC = re.compile(r"(?<![A-Za-z0-9])UTIC-(\d{4})-(\d+)(?!\d)", re.IGNORECASE)
+_CPF = re.compile(r"(?<!\d)(?:CPF\b\s*[:#-]?\s*)?(\d{3}\.\d{3}\.\d{3}-\d{2}|\d{11})(?!\d)", re.IGNORECASE)
 
 # Evidence of an existing failure versus a request; matched on accent-free lowercase text.
 _INDICIOS_INCIDENTE = (
@@ -169,6 +173,7 @@ class ChamadoSoftExpert:
     descricao: str = ""
     solicitante: str = ""
     habilitada_em: str = ""
+    detalhes_atendimento_realizado: str = ""
 
 
 @dataclass(frozen=True)
@@ -195,13 +200,47 @@ def formatar_data_abertura(data: datetime) -> str:
     return data.strftime(FORMATO_DATA)
 
 
+def mascarar_cpfs(texto: str) -> str:
+    """Mascara CPFs pontuados ou identificados pelo rótulo; números puros exigem dígitos válidos."""
+    def substituir(match: re.Match[str]) -> str:
+        token = match.group(1)
+        prefixo = match.group(0)[: match.start(1) - match.start()]
+        if "." in token or prefixo:
+            return f"{prefixo}***.***.***-**"
+        digitos = token
+        if len(set(digitos)) == 1:
+            return match.group(0)
+        primeiro = (sum(int(digitos[i]) * (10 - i) for i in range(9)) * 10) % 11
+        primeiro = 0 if primeiro == 10 else primeiro
+        segundo = (sum(int(digitos[i]) * (11 - i) for i in range(10)) * 10) % 11
+        segundo = 0 if segundo == 10 else segundo
+        if int(digitos[9]) != primeiro or int(digitos[10]) != segundo:
+            return match.group(0)
+        return "***.***.***-**"
+
+    return _CPF.sub(substituir, texto)
+
+
+def descricao_tem_pouca_informacao(descricao: str) -> bool:
+    """Trata descrições vazias ou com menos de 100 caracteres como curtas."""
+    return len(str(descricao or "").strip()) < TAMANHO_DESCRICAO_CURTA
+
+
 def descricao_do_chamado(chamado: ChamadoSoftExpert) -> str:
-    """The original description; the original title when the form has none."""
-    return (chamado.descricao or "").strip() or (chamado.titulo or "").strip()
+    """Prioriza o Registro e complementa descrições curtas com o atendimento realizado."""
+    registro = (chamado.descricao or "").strip()
+    titulo = (chamado.titulo or "").strip()
+    atendimento = (chamado.detalhes_atendimento_realizado or "").strip()
+    principal = registro or titulo
+    if atendimento and descricao_tem_pouca_informacao(registro):
+        descricao = f"{principal}\n{SEPARADOR_ATENDIMENTO}\n{atendimento}" if principal else atendimento
+    else:
+        descricao = principal
+    return mascarar_cpfs(descricao)
 
 
 def decidir(chamado: ChamadoSoftExpert) -> Decisao:
-    """Include (with the seven-column row) or leave pending with a recorded reason."""
+    """Include (with the eight-column row) or leave pending with a recorded reason."""
     try:
         numero = chave_do_numero(chamado.numero)
     except ValueError:
@@ -209,7 +248,7 @@ def decidir(chamado: ChamadoSoftExpert) -> Decisao:
     if numero in PENDENCIAS_DEFINIDAS:
         return Decisao(numero, ACAO_PENDENTE, PENDENCIAS_DEFINIDAS[numero])
     descricao = descricao_do_chamado(chamado)
-    tipo, motivo = classificar(chamado.descricao, chamado.titulo)
+    tipo, motivo = classificar(descricao, chamado.titulo)
     if tipo is None:
         return Decisao(numero, ACAO_PENDENTE, motivo)
     solicitante = " ".join((chamado.solicitante or "").split())
@@ -222,6 +261,7 @@ def decidir(chamado: ChamadoSoftExpert) -> Decisao:
         return Decisao(numero, ACAO_PENDENTE, MOTIVO_DATA_INVALIDA)
     linha = {
         "C": numero,
+        "D": STATUS_EM_ABERTO,
         "F": descricao,
         "G": solicitante,
         "H": tipo,

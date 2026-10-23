@@ -3,7 +3,7 @@
 ``rodar_rotina_sebrae`` (scripts/automacao_rotinas_chrome.py) chama ``executar``. Aqui ficam só os adaptadores
 entre os módulos do navegador e os ``Protocol``s de ``domains/sebrae_orquestracao.py``: traduzem exceções
 (sessão expirada, cancelamento, chamado indisponível) e resultados de gravação, e abrem as abas. As regras
-de decisão, estado e aviso estão em ``domains``; a segurança da gravação (linha livre, releitura das sete
+de decisão, estado e aviso estão em ``domains``; a segurança da gravação (linha livre, releitura das oito
 colunas, "Salvo", diário) está em ``scripts/sebrae_excel.py``. Ver docs/operacao/sincronizar-chamados-sebrae.md.
 
 As utilidades do runner (log, cancelamento, abas, login, aviso) entram por ``rotinas`` (o módulo do runner em

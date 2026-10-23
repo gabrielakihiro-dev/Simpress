@@ -14,6 +14,8 @@ from domains.sebrae_chamados import (
     extrair_numeros,
     formatar_data_abertura,
     impressao_digital,
+    mascarar_cpfs,
+    descricao_tem_pouca_informacao,
     numeros_do_dashboard,
     triagem,
 )
@@ -107,14 +109,41 @@ class ClassificationTests(unittest.TestCase):
         self.assertEqual(motivo, "sem_indicios_de_tipo")
 
 
+class CpfMaskingTests(unittest.TestCase):
+    def test_masks_punctuated_and_unpunctuated_valid_cpfs(self):
+        texto = "CPF 123.456.789-09 e outro 52998224725"
+        self.assertEqual(mascarar_cpfs(texto), "CPF ***.***.***-** e outro ***.***.***-**")
+
+    def test_masks_invalid_digits_when_format_or_cpf_label_is_explicit(self):
+        texto = "CPF 12345678900; 123.456.789-00"
+        self.assertEqual(mascarar_cpfs(texto), "CPF ***.***.***-**; ***.***.***-**")
+
+    def test_text_without_cpf_is_preserved(self):
+        texto = "Notebook UTIC-2026-0094 não conecta; patrimônio 12345678."
+        self.assertEqual(mascarar_cpfs(texto), texto)
+
+    def test_similar_but_invalid_or_longer_numbers_are_preserved(self):
+        for texto in ("Referência 12345678900", "Código 123456789090", "UTIC-2026-12345678901"):
+            with self.subTest(texto=texto):
+                self.assertEqual(mascarar_cpfs(texto), texto)
+
+
+class DescricaoAtendimentoTests(unittest.TestCase):
+    def test_consulta_complemento_abaixo_de_100_caracteres(self):
+        self.assertTrue(descricao_tem_pouca_informacao(""))
+        self.assertTrue(descricao_tem_pouca_informacao("x" * 99))
+        self.assertFalse(descricao_tem_pouca_informacao("x" * 100))
+        self.assertFalse(descricao_tem_pouca_informacao("x " * 51))
+
 class DecisionTests(unittest.TestCase):
-    def test_complete_ticket_builds_exactly_the_seven_columns(self):
+    def test_complete_ticket_builds_exactly_the_eight_columns(self):
         decisao = decidir(chamado())
         self.assertEqual(decisao.acao, ACAO_INCLUIR)
         self.assertEqual(decisao.tipo, "INCIDENTE")
         self.assertEqual(set(decisao.linha), set(regras.COLUNAS_GRAVADAS))
         self.assertEqual(dict(decisao.linha), {
             "C": "UTIC-2026-0094",
+            "D": "Em Aberto",
             "F": "O notebook não conecta na rede do escritório desde ontem.",
             "G": "Maria da Silva",
             "H": "INCIDENTE",
@@ -127,6 +156,43 @@ class DecisionTests(unittest.TestCase):
         decisao = decidir(chamado(descricao="   ", titulo="Notebook não liga"))
         self.assertEqual(decisao.acao, ACAO_INCLUIR)
         self.assertEqual(decisao.linha["F"], "Notebook não liga")
+
+    def test_title_fallback_is_masked_too(self):
+        decisao = decidir(chamado(descricao="   ", titulo="Notebook não liga. CPF 123.456.789-09"))
+        self.assertEqual(decisao.linha["F"], "Notebook não liga. CPF ***.***.***-**")
+
+    def test_atendimento_complements_short_description_after_record(self):
+        item = chamado(
+            titulo="Remoção do usuário",
+            descricao="Remoção do usuário",
+            detalhes_atendimento_realizado="Backup concluído",
+        )
+        decisao = decidir(item)
+        self.assertEqual(decisao.linha["F"], "Remoção do usuário\n-----\nBackup concluído")
+
+    def test_atendimento_is_not_appended_to_a_sufficient_description(self):
+        descricao = "Impressora não funciona. " + ("A falha continua desde o início do expediente. " * 2)
+        item = chamado(descricao=descricao, detalhes_atendimento_realizado="Não anexar")
+        self.assertEqual(decidir(item).linha["F"], descricao.strip())
+
+    def test_atendimento_details_can_provide_classification_evidence(self):
+        item = chamado(
+            titulo="Assunto",
+            descricao="Relato breve",
+            detalhes_atendimento_realizado="Notebook não liga",
+        )
+        self.assertEqual(decidir(item).linha["H"], "INCIDENTE")
+
+    def test_cpfs_in_the_attendance_detail_are_masked(self):
+        item = chamado(
+            titulo="Remoção de usuário",
+            descricao="Remoção de usuário",
+            detalhes_atendimento_realizado="CPF 529.982.247-25 removido do acesso",
+        )
+        self.assertEqual(
+            decidir(item).linha["F"],
+            "Remoção de usuário\n-----\nCPF ***.***.***-** removido do acesso",
+        )
 
     def test_date_is_reformatted_to_the_dashboard_format(self):
         for entrada in ("21/10/2026 09:12:45", "21/10/2026, 09:12", "2026-10-21 09:12:00", "21/10/2026   09:12"):

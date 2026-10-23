@@ -6,8 +6,8 @@ Online, sem API, Graph nem tokens (docs/operacao/sebrae-fase-c-excel.md).
 Duas camadas:
 
 - ``AdaptadorExcel`` (classe abstrata): contém TODAS as regras de segurança (releitura da coluna C
-  antes de gravar, linha preparada e livre, só as colunas C, F, G, H, M, O e P, nunca sobrescrever,
-  releitura das sete colunas, confirmação de "Salvo", diário de intenção). Depende apenas de
+  antes de gravar, linha preparada e livre, só as colunas C, D, F, G, H, M, O e P, nunca sobrescrever,
+  releitura das oito colunas, confirmação de "Salvo", diário de intenção). Depende apenas de
   primitivas pequenas (``ler_coluna_c``, ``ler_celulas``, ``escrever_celula``, ``aguardar_salvo``).
 - ``ExcelOnlinePlaywright``: implementa as primitivas com o Chrome de automação. Os seletores e a
   leitura da grade ainda dependem da sessão assistida descrita no documento da fase.
@@ -37,6 +37,7 @@ from core.integrity import atomic_write_json  # noqa: E402
 from domains.sebrae_chamados import (  # noqa: E402
     COLUNAS_GRAVADAS,
     FORMATO_DATA,
+    STATUS_EM_ABERTO,
     TIPO_INCIDENTE,
     TIPO_SOLICITACAO,
     UF,
@@ -44,6 +45,7 @@ from domains.sebrae_chamados import (  # noqa: E402
     chave_do_numero,
     extrair_numeros,
     interpretar_data,
+    mascarar_cpfs,
     numeros_do_dashboard,
 )
 
@@ -146,7 +148,7 @@ class ResultadoGravacao:
 
     @property
     def incluido(self) -> bool:
-        """Só conta como incluído depois da releitura das sete colunas e do "Salvo" confirmado."""
+        """Só conta como incluído depois da releitura das oito colunas e do "Salvo" confirmado."""
         return self.situacao in _SITUACOES_INCLUIDAS
 
     @property
@@ -415,7 +417,7 @@ class AdaptadorExcel(ABC):
         )
 
     def proxima_linha_livre(self, leitura: Optional[LeituraColunaC] = None) -> int:
-        """Primeira linha abaixo da última com dado na coluna C com as sete células vazias e as fórmulas presentes."""
+        """Primeira linha abaixo da última com dado na coluna C com as oito células vazias e as fórmulas presentes."""
         return self._procurar_linha(leitura or self._ler_validada())[0]
 
     # -- gravação -------------------------------------------------------------------------------
@@ -426,9 +428,12 @@ class AdaptadorExcel(ABC):
         numero = chave_do_numero(str(linha["C"]).strip())
         valores = {coluna: normalizar_valor(coluna, linha[coluna], self.quebras_como_espaco) for coluna in COLUNAS_GRAVADAS}
         valores["C"] = numero
+        valores["F"] = mascarar_cpfs(valores["F"])
         for coluna in ("F", "G"):
             if not valores[coluna]:
                 raise ValueError(f"Coluna {coluna} vazia.")
+        if valores["D"] != STATUS_EM_ABERTO:
+            raise ValueError(f"Coluna D deve ser {STATUS_EM_ABERTO!r}.")
         if valores["H"] not in (TIPO_INCIDENTE, TIPO_SOLICITACAO):
             raise ValueError(f"Tipo inválido: {valores['H']!r}.")
         if valores["M"] != UNIDADE or valores["O"] != UF:
@@ -473,7 +478,11 @@ class AdaptadorExcel(ABC):
         """Relê o Dashboard e conclui as intenções abertas no diário (use no início da execução)."""
         resultados: List[ResultadoGravacao] = []
         for numero, intencao in self.diario.abertas().items():
-            resultado = self.gravar_chamado(intencao["valores"], somente_retomar=True)
+            valores = dict(intencao["valores"])
+            # Intenções abertas de versões anteriores não registravam a coluna D.
+            if set(valores) == set(COLUNAS_GRAVADAS) - {"D"}:
+                valores["D"] = STATUS_EM_ABERTO
+            resultado = self.gravar_chamado(valores, somente_retomar=True)
             resultados.append(resultado)
             if resultado.interrompe_execucao:
                 break
