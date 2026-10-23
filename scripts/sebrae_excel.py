@@ -433,7 +433,7 @@ class AdaptadorExcel(ABC):
         numero = chave_do_numero(str(linha["C"]).strip())
         valores = {coluna: normalizar_valor(coluna, linha[coluna], self.quebras_como_espaco) for coluna in COLUNAS_GRAVADAS}
         valores["C"] = numero
-        for coluna in ("F", "G"):
+        for coluna in ("F", "G", "H"):
             valores[coluna] = mascarar_cpfs(valores[coluna])
         if not valores["G"]:
             raise ValueError("Coluna G vazia.")

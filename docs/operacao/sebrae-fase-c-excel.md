@@ -27,7 +27,7 @@ Parte da rotina **Sincronizar chamados Sebrae** (`docs/operacao/sincronizar-cham
 | P | UF | `PR` |
 | Q | DATA ABERTURA | `Habilitada em`, como data/hora |
 
-As fórmulas em R, U (`DIAS ABERTOS`), V (`AGING`) e W (`HR CONSUMIDA`) foram observadas em uma linha preenchida. O usuário também informou fórmulas a partir de Y; a célula Y verificada estava vazia, então a estrutura além da tabela visível não foi mapeada. Nunca escrever nessas colunas. A conferência completa de fórmulas da linha preparada continua pendente no levantamento V0–V10.
+Na inspeção somente leitura de 23/10/2026, a linha preparada 332 tinha fórmulas em R, U (`DIAS ABERTOS`), V (`AGING`) e W (`HR CONSUMIDA`). A configuração local `data/state/sebrae_config.json` já lista essas quatro colunas. Na linha 332, nenhuma fórmula foi encontrada de Y a AZ; colunas depois de AZ não foram verificadas. Nunca escrever fora das colunas autorizadas. A conferência completa da estrutura continua pendente no levantamento V0–V10.
 
 ## Como a leitura funciona (hipótese a validar)
 

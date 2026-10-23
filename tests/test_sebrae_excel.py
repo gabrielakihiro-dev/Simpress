@@ -154,19 +154,25 @@ class GravacaoFelizTests(BaseGrade):
 
     def test_cpfs_sao_mascarados_antes_de_gravar_no_dashboard(self) -> None:
         resultado = self.grade.gravar_chamado(linha_valida(
-            F="Atendimento. CPF 529.982.247-25", G="Notebook sem acesso. CPF 12345678900"
+            F="Atendimento. CPF 529.982.247-25",
+            G="Notebook sem acesso. CPF 12345678900",
+            H="Maria da Silva (CPF 123.456.789-09)",
         ))
         self.assertEqual(resultado.situacao, xl.GRAVADO)
         self.assertEqual(self.grade.celulas[(12, "F")], "Atendimento. CPF ***.***.***-**")
         self.assertEqual(self.grade.celulas[(12, "G")], "Notebook sem acesso. CPF ***.***.***-**")
+        self.assertEqual(self.grade.celulas[(12, "H")], "Maria da Silva (CPF ***.***.***-**)")
 
     def test_cpf_e_mascarado_antes_de_persistir_no_diario(self) -> None:
         self.grade.falha_na_escrita = (1, RuntimeError("interrupção após a coluna C"))
-        resultado = self.grade.gravar_chamado(linha_valida(F="Atendimento. CPF 52998224725"))
+        resultado = self.grade.gravar_chamado(linha_valida(
+            F="Atendimento. CPF 52998224725", H="Maria da Silva CPF 123.456.789-09"
+        ))
         self.assertEqual(resultado.situacao, xl.INTERROMPIDO)
         intencao = self.diario.intencao("UTIC-2026-0200")
         self.assertIsNotNone(intencao)
         self.assertEqual(intencao["valores"]["F"], "Atendimento. CPF ***.***.***-**")
+        self.assertEqual(intencao["valores"]["H"], "Maria da Silva CPF ***.***.***-**")
 
     def test_segundo_envio_do_mesmo_chamado_e_duplicado(self) -> None:
         self.grade.gravar_chamado(linha_valida())

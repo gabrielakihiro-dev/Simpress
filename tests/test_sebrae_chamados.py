@@ -193,12 +193,14 @@ class DecisionTests(unittest.TestCase):
             titulo="Remoção de usuário",
             descricao="Remoção de usuário",
             detalhes_atendimento_realizado="CPF 529.982.247-25 removido do acesso",
+            solicitante="Maria da Silva (CPF 123.456.789-09)",
         )
         self.assertEqual(
             decidir(item).linha["F"],
             "CPF ***.***.***-** removido do acesso",
         )
         self.assertEqual(decidir(item).linha["G"], "Remoção de usuário")
+        self.assertEqual(decidir(item).linha["H"], "Maria da Silva (CPF ***.***.***-**)")
 
     def test_date_is_reformatted_to_the_dashboard_format(self):
         for entrada in ("21/10/2026 09:12:45", "21/10/2026, 09:12", "2026-10-21 09:12:00", "21/10/2026   09:12"):
