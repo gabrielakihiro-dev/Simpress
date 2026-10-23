@@ -28,7 +28,8 @@
     }
     if (evento.tipo === "usuario") {
       const usuario = anterior ? evento.usuario_anterior : evento.usuario_novo;
-      return usuario || "(vazio)";
+      const pessoa = anterior ? evento.nome_pessoa_anterior : evento.nome_pessoa_novo;
+      return usuario ? (pessoa ? `${usuario} — ${pessoa}` : usuario) : "(vazio)";
     }
     if (evento.tipo !== "endereco") {
       const apelido = anterior ? evento.apelido_anterior : evento.apelido_novo;

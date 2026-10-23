@@ -33,6 +33,7 @@ FILE_LABELS = {
     "modelo_exportacao": "Modelo de exportação",
     "catalogos_locais": "Catálogos e históricos locais",
     "historico_chamados": "Histórico do acompanhamento de chamados",
+    "nomes_entra": "Nomes do Microsoft Entra",
 }
 
 FUNCTION_LABELS = {
@@ -82,6 +83,8 @@ class ReadinessServices:
     refresh_export_status: Callable[[], Dict[str, Any]]
     get_transaction_recovery_block: Callable[[], Optional[str]]
     logger: logging.Logger
+    # Optional: the Entra names enrich the display but no function depends on them.
+    entra_names_file: Optional[Callable[[], Path]] = None
 
 
 def check_startup_xlsx(path: Optional[Path], validate: Callable[[Any], Any] = validate_xlsx) -> Dict[str, Any]:
@@ -179,6 +182,21 @@ def check_startup_ticket_report(path: Optional[Path]) -> Dict[str, Any]:
     return {"available": True, "file": path.name, "reason": "OK"}
 
 
+def check_startup_entra_names(path: Path) -> Dict[str, Any]:
+    """Check the imported Entra directory without exposing names or logins."""
+    if not path.exists():
+        return {"available": False, "file": path.name, "reason": "aguardando a primeira importação",
+                "state": "awaiting_import"}
+    try:
+        directory = json.loads(path.read_text(encoding="utf-8"))
+    except (OSError, UnicodeError, json.JSONDecodeError):
+        return {"available": False, "file": path.name, "reason": "cadastro inacessível ou JSON inválido",
+                "state": "invalid"}
+    if not isinstance(directory, dict) or not isinstance(directory.get("users"), dict):
+        return {"available": False, "file": path.name, "reason": "estrutura do cadastro inválida", "state": "invalid"}
+    return {"available": True, "file": path.name, "reason": "OK", "state": "ready"}
+
+
 def build_readiness_report(services: ReadinessServices) -> Dict[str, Any]:
     """Map essential local files to the application functions that need them."""
     logger = services.logger
@@ -248,6 +266,8 @@ def build_readiness_report(services: ReadinessServices) -> Dict[str, Any]:
         "catalogos_locais": local_state_status,
         "historico_chamados": ticket_report_status,
     }
+    if services.entra_names_file is not None:
+        files["nomes_entra"] = check_startup_entra_names(services.entra_names_file())
     if files["modelo_exportacao"]["available"] and details_status["available"]:
         export_status = services.refresh_export_status()
         if not export_status["available"]:
@@ -333,6 +353,8 @@ def readiness_log_lines(report: Dict[str, Any]) -> List[str]:
             state = "JSON válido" if status["reason"] == "OK" else status["reason"]
         elif key == "catalogos_locais":
             state = "catálogos e históricos disponíveis"
+        elif key == "nomes_entra":
+            state = "JSON válido"
         else:
             state = "PACOTE XLSX válido"
         filename = status["file"] or "arquivo não localizado"

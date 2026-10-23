@@ -129,6 +129,42 @@
     // Sem usuário no Endpoint nem manual: mostra o campo para digitar.
     formulario.classList.toggle("hidden", Boolean(usuario) || !eq?.serial);
     if (!usuario) document.getElementById("input-usuario-manual").value = "";
+    const nome = String(eq?.nome_pessoa || "").trim();
+    const nomeTexto = document.getElementById("card-nome-pessoa");
+    const nomeForm = document.getElementById("form-nome-pessoa");
+    nomeTexto.textContent = nome ? `Nome da pessoa: ${nome}${eq?.nome_pessoa_origem === "manual" ? " (manual)" : ""}` : "";
+    nomeTexto.classList.toggle("hidden", !nome);
+    nomeForm.classList.toggle("hidden", !eq?.nome_pessoa_editavel);
+    document.getElementById("input-nome-pessoa").value = eq?.nome_pessoa_origem === "manual" ? nome : "";
+  }
+
+  async function salvarNomePessoa() {
+    const equipment = appState.currentEquipamento;
+    if (!equipment?.serial) return;
+    const button = document.getElementById("btn-salvar-nome-pessoa");
+    const nome = document.getElementById("input-nome-pessoa").value.trim();
+    button.disabled = true;
+    button.setAttribute("aria-busy", "true");
+    try {
+      const result = await app.apiFetch("/api/equipamento/nome-pessoa", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ serial: equipment.serial, login_atual: equipment.usuarios_logados || "", nome }),
+        errorMessage: "Não foi possível salvar o nome da pessoa.",
+      });
+      if (appState.currentEquipamento?.serial === equipment.serial) {
+        app.definirEquipamentoAtual(result.equipamento);
+        atualizarUsuarioLogadoCard(result.equipamento);
+      }
+      if (result.base_atualizada === false) app.showToast("Nome salvo; a base será atualizada na próxima carga.", "warning");
+      else app.showToast(nome ? "Nome da pessoa salvo." : "Nome manual removido.", "success");
+      document.dispatchEvent(new CustomEvent("simpress:usuarios-equipamento-atualizados"));
+    } catch (error) {
+      app.showToast(error.message, "error");
+    } finally {
+      button.disabled = false;
+      button.removeAttribute("aria-busy");
+    }
   }
 
   function editarUsuarioLogado() {
@@ -280,6 +316,6 @@
   return {
     abrirModalEditarEquipamento, cadastrarNovoSerialPesquisado, fecharModalEditarEquipamento, abrirModalEditarApelido,
     fecharModalEditarApelido, salvarApelido, salvarDadosEquipamento,
-    atualizarUsuarioLogadoCard, editarUsuarioLogado, salvarUsuarioLogado, limparUsuarioLogado,
+    atualizarUsuarioLogadoCard, editarUsuarioLogado, salvarUsuarioLogado, limparUsuarioLogado, salvarNomePessoa,
   };
 });

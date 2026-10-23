@@ -26,7 +26,8 @@
     const users = document.getElementById("transfer-equipment-users");
     if (users) {
       const logged = String(equipment?.usuarios_logados || "").trim();
-      users.textContent = selected && logged ? `Usuários logados: ${logged}` : "";
+      const nome = String(equipment?.nome_pessoa || "").trim();
+      users.textContent = selected ? [logged ? `Usuários logados: ${logged}` : "", nome ? `Nome: ${nome}` : ""].filter(Boolean).join(" · ") : "";
       users.classList.toggle("hidden", !users.textContent);
     }
   }

@@ -408,6 +408,21 @@ def apply_effective_alias(
         else ""
     )
     equipment["usuarios_logados_candidatos"] = endpoint_user_candidates(endpoint_index, serial_key)
+    from domains.entra_users import login_key, resolve_name
+
+    person_name, name_origin = resolve_name(
+        logged_user, serial_key,
+        endpoint_index.get("entra_directory", {}),
+        endpoint_index.get("manual_person_names", {}),
+    )
+    equipment["nome_pessoa"] = person_name
+    equipment["nome_pessoa_origem"] = name_origin
+    equipment["nome_pessoa_editavel"] = bool(login_key(logged_user)) and (
+        not person_name or name_origin == "manual"
+    ) and not details_duplicate and (
+        "NOTEBOOK" in str(equipment.get("tipo") or "").upper()
+        or "MACBOOK" in str(equipment.get("modelo") or "").upper()
+    )
 
     if not endpoint_index.get("available"):
         equipment["invall_alias_status"] = "indisponivel"

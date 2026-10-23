@@ -50,6 +50,8 @@ class AliasChangeServices:
     # Manual logged-in user (see domains/user_changes.py); optional so older wiring keeps working.
     manual_users_file: Optional[Callable[[], Path]] = None
     load_manual_users: Optional[Callable[[], Dict[str, str]]] = None
+    # Reads only the Entra directory; without it the listing falls back to the full Endpoint index.
+    read_entra_directory: Optional[Callable[[], Dict[str, Any]]] = None
 
 
 def _is_alias_event(item: Dict[str, Any]) -> bool:
@@ -310,7 +312,32 @@ def update_manual_alias(services: AliasChangeServices, serial: str, apelido: str
 
 def alias_history_listing(services: AliasChangeServices) -> Dict[str, Any]:
     historico = services.load_alias_history()
-    return {"total": len(historico), "eventos": list(reversed(historico))}
+    return {"total": len(historico), "eventos": _with_person_names(services, list(reversed(historico)))}
+
+
+def _with_person_names(services: AliasChangeServices, events: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
+    """Resolve current Entra names on copies of user events; the stored history is untouched."""
+    if not any(item.get("tipo") == "usuario" for item in events):
+        return events
+    from domains.entra_users import resolve_name
+    try:
+        read_directory = getattr(services, "read_entra_directory", None)
+        if read_directory is not None:
+            directory = read_directory()
+        else:
+            directory = services.read_endpoint_alias_index().get("entra_directory") or {}
+    except Exception:
+        return events
+    result = []
+    for item in events:
+        if item.get("tipo") == "usuario":
+            item = {
+                **item,
+                "nome_pessoa_anterior": resolve_name(item.get("usuario_anterior"), "", directory, {})[0],
+                "nome_pessoa_novo": resolve_name(item.get("usuario_novo"), "", directory, {})[0],
+            }
+        result.append(item)
+    return result
 
 
 def restore_alias_history_event(services: AliasChangeServices, evento_id: str) -> Dict[str, Any]:
