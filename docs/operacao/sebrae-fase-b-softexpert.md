@@ -12,7 +12,7 @@ Todas as funções recebem o `context`/`page` do Playwright já conectado ao Chr
 | `softexpert_logado(page)` / `tela_de_login(page)` | Sessão ativa = host do SoftExpert, sem campo de senha/URL de login e com a lista visível. |
 | `garantir_login(page)` | No primeiro acesso, usa `aguardar_login` da rotina e deixa o login manual. Após uma sessão já ativa expirar, pode clicar uma vez no botão `SSO` visível no domínio do SoftExpert; se não concluir, pede login manual. Não digita credenciais. |
 | `listar_chamados(page)` / `coletar_numeros(page)` | Percorre **toda** a lista (botão "Próxima" até desabilitar, ou rolagem até três voltas sem número novo) e devolve `ItemLista(numero, texto)` / só os números `UTIC-AAAA-N`, sem repetidos. Lista que não termina (`MAX_RODADAS_LISTA`) é falha, nunca resultado parcial. |
-| `extrair_chamado(context, page, numero)` | Executar → Registro de Chamados, captura da janela PHP, confirmação "Sim", conferência de número e título, espera dos campos condicionais, releitura de campos vazios. Para descrição do Registro abaixo de 100 caracteres, consulta Atendimento - Chamados TI e lê "Detalhes do Atendimento Realizado". Devolve `ChamadoSoftExpert` com descrição, solicitante, "Habilitada em", título e detalhe do atendimento. |
+| `extrair_chamado(context, page, numero)` | Executar → Registro de Chamados, captura da janela PHP, confirmação "Sim", conferência de número e título, espera dos campos condicionais e releitura de campos vazios. Sempre consulta Atendimento - Chamados TI e lê o detalhe concluído. Devolve `ChamadoSoftExpert` com descrição, solicitante, "Habilitada em", título e detalhe. |
 | `extrair_chamados(context, page, numeros)` | Vários chamados, um por vez; `ChamadoNaoConfere` e `ChamadoNaoEncontrado` ficam no resultado (o chamador os registra como pendência com `erro.motivo`); `SessaoExpirada` espera novo login e refaz o chamado uma vez. Confere o cancelamento entre chamados. |
 
 Uso previsto pela Fase E:
@@ -29,8 +29,8 @@ Erros (`SoftExpertErro` deriva de `RotinaErro` do runner, mesmo se o runner for 
 ## Garantias de somente leitura
 
 - O único clique que grava algo no SoftExpert é o **Sim** da confirmação de associar o chamado, dado uma única vez e só se o texto da pergunta falar de associar/vincular/assumir. Outra pergunta, ou a mesma voltando depois do Sim, interrompe com `confirmacao_inesperada` sem clicar; esse motivo encerra a execução inteira imediatamente, sem tentar outros chamados.
-- `clicar()` recusa qualquer botão ou item de menu cujo rótulo case com `ROTULOS_PROIBIDOS` (finalizar, enviar, salvar, concluir, encerrar, reatribuir, atribuir, aprovar, reprovar, registrar atendimento, excluir, descartar…). Os únicos cliques da rotina são: linha da lista, Próxima, Executar, Registro de Chamados, Atendimento - Chamados TI (só quando a descrição tem menos de 100 caracteres) e Sim.
-- O formulário nunca é preenchido nem enviado; a janela PHP é fechada sem salvar. Quando a descrição do Registro tem menos de 100 caracteres, a rotina abre somente a seção "Atendimento - Chamados TI" e lê "Detalhes do Atendimento Realizado"; não clica em ações de atendimento. O conteúdo lido (descrição, título e detalhe) é dado: não é interpretado como instrução e não vai para o log (só números de chamado).
+- `clicar()` recusa qualquer botão ou item de menu cujo rótulo case com `ROTULOS_PROIBIDOS` (finalizar, enviar, salvar, concluir, encerrar, reatribuir, atribuir, aprovar, reprovar, registrar atendimento, excluir, descartar…). Os cliques de leitura incluem: linha da lista, Próxima quando existir, Executar, Registro de Chamados, Atendimento - Chamados TI e Sim apenas na confirmação prevista de associação.
+- O formulário nunca é preenchido nem enviado; a janela PHP é fechada sem salvar. A rotina sempre abre Atendimento - Chamados TI e lê "Detalhes do Atendimento Realizado" concluído, mesmo se a descrição for longa. Quando há um controle editável com o mesmo rótulo, usa o valor somente leitura e ignora o rascunho. O conteúdo lido (descrição, título e detalhe) é dado: não é interpretado como instrução e não vai para o log (só números de chamado).
 - Na recuperação de uma sessão expirada, o botão `SSO` só é acionado uma vez quando a tela de login do próprio SoftExpert mostra exatamente esse botão. A rotina espera a sessão; se o SSO não concluir, pede login manual. Nenhum dado de autenticação é armazenado.
 - Sem senhas, tokens, cookies ou API: o login é do usuário, na janela do Chrome de automação.
 
@@ -58,13 +58,15 @@ Feita pela extensão Claude in Chrome no Chrome do usuário (não no Chrome de a
 - **Aplicado no código**: `SEL_LISTA` e `SEL_LINHA` passam a incluir o cartão `rctCardBase`; a bancada ganhou o layout em cartões e um teste com 35 cartões em lotes de 8, 2 tarefas `PRT` e 33 chamados.
 - **Continua não validado**: botão **Executar** e menu **Registro de Chamados** (inclusive onde ficam nos cartões, que têm dois botões sem rótulo no canto direito), janela PHP, confirmação de associar, rótulos reais dos campos do formulário e o indicador de carregamento. Tudo isso exige abrir um chamado, o que não foi feito nesta leitura.
 
-## Sessão assistida necessária (com o usuário logado)
+## Leitura assistida da ficha real (23/10/2026)
 
-A lista real foi lida (seção acima). Falta o restante: abrir um chamado já conhecido. Para fechar a fase:
+Uma ficha de workflow foi conferida em sessão autenticada, sem alterar o SoftExpert. A leitura identificou separadamente "Iniciador" e "Solicitante", confirmou a seção "Atendimento - Chamados TI" e o campo concluído "Detalhes do Atendimento Realizado"; havia também um campo editável com o mesmo rótulo. A rotina deve preferir o campo concluído somente leitura e fechar a janela após a análise.
+
+Ainda é necessário validar com a rotina automatizada os seletores e a sequência completa. Para fechar a fase:
 
 1. Com o usuário logado no Chrome de automação, abrir a central de tarefas e anotar o HTML da lista (contêiner, linha, paginação ou rolagem, indicador de carregamento) e da coluna que traz o número.
 2. Escolher **um chamado já conhecido** e acompanhar manualmente Executar → Registro de Chamados: se abre janela PHP ou iframe, se há confirmação (modal ou nativa) e o texto exato, e os rótulos reais dos campos. Não finalizar, não registrar atendimento.
-3. Ajustar as constantes do bloco `SELETORES` (e `ROTULOS_CAMPOS`) e repetir a leitura desse chamado conferindo número, título, descrição, solicitante e "Habilitada em".
+3. Ajustar as constantes do bloco `SELETORES` (e `ROTULOS_CAMPOS`) e repetir a leitura desse chamado conferindo número, título, descrição, solicitante, "Habilitada em" e detalhe somente leitura.
 4. Conferir se campos condicionais mudam a descrição depois de alguma seleção (a rotina só relê, nunca altera campos) e se `RELEITURAS_CAMPOS`/`ESPERA_RELEITURA_MS` bastam.
 5. Conferir a contagem da lista com o total que a tela informar, se existir (candidato a verificação extra).
 

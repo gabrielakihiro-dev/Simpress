@@ -15,7 +15,7 @@ from domains.sebrae_chamados import (
     formatar_data_abertura,
     impressao_digital,
     mascarar_cpfs,
-    descricao_tem_pouca_informacao,
+    detalhes_atendimento_do_chamado,
     numeros_do_dashboard,
     triagem,
 )
@@ -128,15 +128,8 @@ class CpfMaskingTests(unittest.TestCase):
                 self.assertEqual(mascarar_cpfs(texto), texto)
 
 
-class DescricaoAtendimentoTests(unittest.TestCase):
-    def test_consulta_complemento_abaixo_de_100_caracteres(self):
-        self.assertTrue(descricao_tem_pouca_informacao(""))
-        self.assertTrue(descricao_tem_pouca_informacao("x" * 99))
-        self.assertFalse(descricao_tem_pouca_informacao("x" * 100))
-        self.assertFalse(descricao_tem_pouca_informacao("x " * 51))
-
 class DecisionTests(unittest.TestCase):
-    def test_complete_ticket_builds_exactly_the_eight_columns(self):
+    def test_complete_ticket_builds_exactly_the_nine_columns(self):
         decisao = decidir(chamado())
         self.assertEqual(decisao.acao, ACAO_INCLUIR)
         self.assertEqual(decisao.tipo, "INCIDENTE")
@@ -144,46 +137,58 @@ class DecisionTests(unittest.TestCase):
         self.assertEqual(dict(decisao.linha), {
             "C": "UTIC-2026-0094",
             "D": "Em Aberto",
-            "F": "O notebook não conecta na rede do escritório desde ontem.",
-            "G": "Maria da Silva",
-            "H": "INCIDENTE",
-            "M": "Sebrae",
-            "O": "PR",
-            "P": "21/10/2026 09:12",
+            "F": "",
+            "G": "O notebook não conecta na rede do escritório desde ontem.",
+            "H": "Maria da Silva",
+            "I": "INCIDENTE",
+            "N": "Sebrae",
+            "P": "PR",
+            "Q": "21/10/2026 09:12",
         })
 
     def test_missing_description_uses_the_original_title(self):
         decisao = decidir(chamado(descricao="   ", titulo="Notebook não liga"))
         self.assertEqual(decisao.acao, ACAO_INCLUIR)
-        self.assertEqual(decisao.linha["F"], "Notebook não liga")
+        self.assertEqual(decisao.linha["G"], "Notebook não liga")
 
     def test_title_fallback_is_masked_too(self):
         decisao = decidir(chamado(descricao="   ", titulo="Notebook não liga. CPF 123.456.789-09"))
-        self.assertEqual(decisao.linha["F"], "Notebook não liga. CPF ***.***.***-**")
+        self.assertEqual(decisao.linha["G"], "Notebook não liga. CPF ***.***.***-**")
 
-    def test_atendimento_complements_short_description_after_record(self):
+    def test_atendimento_integral_fica_separado_da_descricao_do_registro(self):
         item = chamado(
             titulo="Remoção do usuário",
             descricao="Remoção do usuário",
             detalhes_atendimento_realizado="Backup concluído",
         )
         decisao = decidir(item)
-        self.assertEqual(decisao.linha["F"], "Remoção do usuário\n-----\nBackup concluído")
+        self.assertEqual(decisao.linha["F"], "Backup concluído")
+        self.assertEqual(decisao.linha["G"], "Remoção do usuário")
+        self.assertEqual(detalhes_atendimento_do_chamado(item), "Backup concluído")
 
-    def test_atendimento_is_not_appended_to_a_sufficient_description(self):
+    def test_atendimento_pode_ficar_vazio_quando_nao_houver_registro_concluido(self):
+        decisao = decidir(chamado(detalhes_atendimento_realizado=""))
+        self.assertEqual(decisao.acao, ACAO_INCLUIR)
+        self.assertEqual(decisao.linha["F"], "")
+        self.assertEqual(decisao.linha["G"], "O notebook não conecta na rede do escritório desde ontem.")
+
+    def test_atendimento_e_registrado_mesmo_com_descricao_longa(self):
         descricao = "Impressora não funciona. " + ("A falha continua desde o início do expediente. " * 2)
         item = chamado(descricao=descricao, detalhes_atendimento_realizado="Não anexar")
-        self.assertEqual(decidir(item).linha["F"], descricao.strip())
+        self.assertEqual(decidir(item).linha["F"], "Não anexar")
+        self.assertEqual(decidir(item).linha["G"], descricao.strip())
 
-    def test_atendimento_details_can_provide_classification_evidence(self):
+    def test_atendimento_e_usado_na_classificacao_sem_ser_juntado_a_descricao(self):
         item = chamado(
             titulo="Assunto",
             descricao="Relato breve",
             detalhes_atendimento_realizado="Notebook não liga",
         )
-        self.assertEqual(decidir(item).linha["H"], "INCIDENTE")
+        self.assertEqual(decidir(item).linha["I"], "INCIDENTE")
+        self.assertEqual(decidir(item).linha["G"], "Relato breve")
+        self.assertEqual(decidir(item).linha["F"], "Notebook não liga")
 
-    def test_cpfs_in_the_attendance_detail_are_masked(self):
+    def test_cpfs_in_attendance_and_description_are_masked_separately(self):
         item = chamado(
             titulo="Remoção de usuário",
             descricao="Remoção de usuário",
@@ -191,13 +196,14 @@ class DecisionTests(unittest.TestCase):
         )
         self.assertEqual(
             decidir(item).linha["F"],
-            "Remoção de usuário\n-----\nCPF ***.***.***-** removido do acesso",
+            "CPF ***.***.***-** removido do acesso",
         )
+        self.assertEqual(decidir(item).linha["G"], "Remoção de usuário")
 
     def test_date_is_reformatted_to_the_dashboard_format(self):
         for entrada in ("21/10/2026 09:12:45", "21/10/2026, 09:12", "2026-10-21 09:12:00", "21/10/2026   09:12"):
             with self.subTest(entrada=entrada):
-                self.assertEqual(decidir(chamado(habilitada_em=entrada)).linha["P"], "21/10/2026 09:12")
+                self.assertEqual(decidir(chamado(habilitada_em=entrada)).linha["Q"], "21/10/2026 09:12")
         self.assertEqual(formatar_data_abertura(regras.interpretar_data("05/01/2026 07:05")), "05/01/2026 07:05")
 
     def test_known_pending_numbers_are_never_included(self):

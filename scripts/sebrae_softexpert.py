@@ -6,7 +6,7 @@ Recebe um ``context``/``page`` do Playwright já conectado ao Chrome de automaç
 2. percorre a lista inteira (paginação ou rolagem) coletando os números ``UTIC-AAAA-N``;
 3. para cada chamado novo (a lista vem do chamador, depois da triagem contra o Dashboard) abre
    Executar > Registro de Chamados, confere número e título e devolve um ``ChamadoSoftExpert``;
-   descrições com menos de 100 caracteres também consultam Atendimento - Chamados TI.
+   sempre consulta Atendimento - Chamados TI para ler o texto concluído de atendimento.
 
 Somente leitura: o único clique que altera algo no SoftExpert é o **Sim** da confirmação de associar
 o chamado ao usuário. Nunca finaliza workflow, registra atendimento nem reatribui; ``clicar`` recusa
@@ -30,7 +30,6 @@ from urllib.parse import urlparse
 from domains.sebrae_chamados import (
     ChamadoSoftExpert,
     chave_do_numero,
-    descricao_tem_pouca_informacao,
     extrair_numeros,
 )
 
@@ -135,6 +134,58 @@ LER_CAMPO_JS = """
     }
   }
   return '';
+}
+"""
+
+# Mesmo rótulo pode aparecer no atendimento concluído e na atividade editável atual.
+# Só aceita valores de controles read-only/desabilitados ou texto estático, nunca o campo editável.
+LER_DETALHES_ATENDIMENTO_JS = """
+(rotulos) => {
+  const norm = (t) => (t || '').normalize('NFD').replace(/[\\u0300-\\u036f]/g, '')
+    .replace(/\\s+/g, ' ').replace(/[\\s:*]+$/g, '').trim().toLowerCase();
+  const visivel = (el) => !!el && el.getClientRects().length > 0;
+  const campoDe = (el) => el && (el.matches('input,textarea,select') ? el : el.querySelector('input,textarea,select'));
+  const valorDe = (el) => {
+    if (!el) return '';
+    const campo = campoDe(el);
+    if (campo) {
+      if (campo.tagName === 'SELECT') return Array.from(campo.selectedOptions).map((o) => o.text).join(' ').trim();
+      return (campo.value || '').trim();
+    }
+    return (el.innerText || el.textContent || '').trim();
+  };
+  const rotulosNormalizados = rotulos.map(norm);
+  const elementos = Array.from(document.querySelectorAll('label,th,td,dt,span,div,strong,b,p'))
+    .filter((el) => visivel(el) && (el.tagName === 'LABEL' || el.children.length === 0));
+  const somenteLeitura = [];
+  const textoEstatico = [];
+  for (const el of elementos) {
+    if (!rotulosNormalizados.includes(norm(el.innerText))) continue;
+    const relacionados = [];
+    if (el.control) relacionados.push(el.control);
+    const id = el.getAttribute('for');
+    if (id) {
+      const associado = document.getElementById(id);
+      if (associado && !relacionados.includes(associado)) relacionados.push(associado);
+    }
+    if (el.nextElementSibling) relacionados.push(el.nextElementSibling);
+    for (const relacionado of relacionados) {
+      const campo = campoDe(relacionado);
+      if (campo) {
+        const imutavel = campo.disabled || campo.readOnly || campo.getAttribute('aria-readonly') === 'true' ||
+          campo.getAttribute('aria-disabled') === 'true';
+        if (imutavel) {
+          const valor = valorDe(campo);
+          if (valor && norm(valor) !== norm(el.innerText)) somenteLeitura.push(valor);
+        }
+        continue;
+      }
+      if (relacionado.matches && relacionado.matches('input,textarea,select,button')) continue;
+      const valor = valorDe(relacionado);
+      if (valor && norm(valor) !== norm(el.innerText)) textoEstatico.push(valor);
+    }
+  }
+  return somenteLeitura[0] || textoEstatico[0] || '';
 }
 """
 
@@ -469,9 +520,20 @@ def _ler_campo(page: "Page", chave: str) -> str:
     return ""
 
 
+def _ler_detalhes_atendimento_visiveis(page: "Page") -> str:
+    for frame in _frames(page):
+        try:
+            valor = frame.evaluate(LER_DETALHES_ATENDIMENTO_JS, list(ROTULOS_CAMPOS["detalhes_atendimento_realizado"]))
+        except Exception:
+            continue  # frame em navegação
+        if valor and str(valor).strip():
+            return str(valor).strip()
+    return ""
+
+
 def _ler_detalhes_atendimento(page: "Page", numero: str) -> str:
     """Abre a seção somente leitura de Atendimento TI e lê seus detalhes."""
-    valor = _ler_campo(page, "detalhes_atendimento_realizado")
+    valor = _ler_detalhes_atendimento_visiveis(page)
     if valor:
         return valor
 
@@ -489,7 +551,7 @@ def _ler_detalhes_atendimento(page: "Page", numero: str) -> str:
                     continue
                 clicar(visiveis, "Atendimento - Chamados TI")
                 _aguardar_estavel(page)
-                return _ler_campo(page, "detalhes_atendimento_realizado")
+                return _ler_detalhes_atendimento_visiveis(page)
             except SoftExpertErro:
                 raise
             except Exception:
@@ -691,10 +753,8 @@ def _extrair_uma_vez(context: "BrowserContext", page: "Page", numero: str) -> Ch
             campos = {chave: _ler_campo(formulario, chave) or campos[chave] for chave in campos}
             # Depois de uma releitura o título/número ainda precisam ser os do chamado escolhido.
             _conferir(formulario, numero, item.texto)
-        detalhes_atendimento = ""
-        if descricao_tem_pouca_informacao(campos["descricao"]):
-            _log(f"{numero}: consultando Atendimento - Chamados TI para complementar a descrição curta.")
-            detalhes_atendimento = _ler_detalhes_atendimento(formulario, numero)
+        _log(f"{numero}: consultando Atendimento - Chamados TI para ler os detalhes concluídos.")
+        detalhes_atendimento = _ler_detalhes_atendimento(formulario, numero)
         return ChamadoSoftExpert(
             numero=chave_do_numero(numero),
             titulo=titulo,

@@ -5,13 +5,21 @@
 <div role="toolbar">
   <button role="tab" aria-selected="true">Home</button>
   <button role="tab">View</button>
+  <button id="sheetView">Sheet View</button>
   <button aria-label="Saved Click the cloud icon to view file location" id="SaveStatusButton"></button>
   <button id="clipboard">Clipboard</button>
   <button id="sort">Sort &amp; Filter</button>
   <button id="undo">Undo</button>
+  <button id="format" aria-label="Format">Format</button>
   <input id="NamedSheetViewSelect-input" aria-label="Sheet View" value="Default">
   <button id="NamedSheetViewCreate">New Sheet View</button>
   <button id="NamedSheetViewExit">Exit View</button>
+</div>
+<div role="menu" id="formatMenu" hidden><button id="rowHeight">Row Height...</button></div>
+<div role="menu" id="sheetViewMenu" hidden><button role="menuitem" id="createView">New</button></div>
+<div role="dialog" id="rowHeightDialog" hidden>
+  <label for="SizeInput">Value</label><input id="SizeInput" value="14.25">
+  <button id="heightOk">OK</button><button id="heightCancel">Cancel</button>
 </div>
 <input id="FormulaBar-NameBox-input" role="combobox" aria-label="‎Name Box‎" value="C5">
 <div id="formulaBarTextDivId_textElement" role="textbox" aria-label="formula bar"></div>
@@ -33,18 +41,19 @@
 <script>
 const byId = id => document.getElementById(id);
 const fixture = window.fixture = {
-  filtered: true, view: "Default", selected: "C5", failUndo: false,
+  filtered: true, view: "Default", selected: "C5", failUndo: false, rowHeight: 14.25,
   ignoreSelection: false, events: [], writes: [],
   cells: {C1:"CHAMADO", C2:"UTIC-2026-0002", C3:"27371 / UTIC-2026-0094", C5:"UTIC-2026-0005"}
 };
 function render() {
   byId("NamedSheetViewSelect-input").value = fixture.view;
+  byId("NamedSheetViewExit").hidden = fixture.view === "Default";
   byId("filters").innerHTML = fixture.filtered ? '<button aria-label="Filters applied">Filters applied</button>' : "";
   const tab = document.querySelector('[role=main] [role=tab][aria-label*="CHAMADOS"]');
   tab.setAttribute("aria-label", fixture.view === "Default" ? "Worksheet CHAMADOS" : "Sheet CHAMADOS is in sheet view Temporary View");
 }
 function select(target) {
-  byId("FormulaBar-NameBox-input").value = target.split(":")[0];
+  byId("FormulaBar-NameBox-input").value = target;
   if (fixture.ignoreSelection || (fixture.filtered && target === "C3")) return;
   fixture.selected = target;
   byId("formulaBarTextDivId_textElement").textContent = fixture.cells[target.split(":")[0]] || "";
@@ -59,6 +68,10 @@ byId("FormulaBar-NameBox-input").addEventListener("keydown", e => {
   }
 });
 byId("gridKeyboardContentEditable_textElement").addEventListener("keydown", e => {
+  if (e.ctrlKey && e.key === "End") {
+    e.preventDefault();
+    setTimeout(() => select("C5"), 45);
+  }
   if (e.ctrlKey && e.key === "ArrowUp") {
     e.preventDefault();
     setTimeout(() => select("C5"), 45);
@@ -71,6 +84,19 @@ document.querySelectorAll('[role=main] [role=tab]').forEach(tab => {
 });
 byId("clipboard").onclick = () => byId("clipboardMenu").hidden = false;
 byId("sort").onclick = () => byId("sortMenu").hidden = false;
+byId("format").onclick = () => byId("formatMenu").hidden = false;
+byId("sheetView").onclick = () => byId("sheetViewMenu").hidden = false;
+byId("rowHeight").onclick = () => {
+  byId("formatMenu").hidden = true;
+  byId("SizeInput").value = String(fixture.rowHeight);
+  byId("rowHeightDialog").hidden = false;
+};
+byId("heightOk").onclick = () => {
+  fixture.rowHeight = Number(byId("SizeInput").value);
+  fixture.events.push("height:" + fixture.rowHeight);
+  byId("rowHeightDialog").hidden = true;
+};
+byId("heightCancel").onclick = () => byId("rowHeightDialog").hidden = true;
 byId("copy").onclick = async () => {
   fixture.events.push("copy");
   const range = fixture.selected.match(/^C(\d+):C(\d+)$/);
@@ -84,6 +110,10 @@ byId("copy").onclick = async () => {
 };
 byId("NamedSheetViewCreate").onclick = () => {
   fixture.events.push("new"); fixture.view = "Temporary View"; render();
+};
+byId("createView").onclick = () => {
+  byId("sheetViewMenu").hidden = true;
+  byId("NamedSheetViewCreate").click();
 };
 byId("clear").onclick = () => {
   if (fixture.view !== "Temporary View") throw new Error("tentativa de limpar filtro compartilhado");

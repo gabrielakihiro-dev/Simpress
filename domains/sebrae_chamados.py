@@ -21,11 +21,9 @@ TIPO_SOLICITACAO = "SOLICITAÇÃO"
 UNIDADE = "Sebrae"
 UF = "PR"
 FORMATO_DATA = "%d/%m/%Y %H:%M"
-TAMANHO_DESCRICAO_CURTA = 100
-SEPARADOR_ATENDIMENTO = "-----"
 
 # Dashboard columns the routine fills; nothing else is ever written.
-COLUNAS_GRAVADAS = ("C", "D", "F", "G", "H", "M", "O", "P")
+COLUNAS_GRAVADAS = ("C", "D", "F", "G", "H", "I", "N", "P", "Q")
 STATUS_EM_ABERTO = "Em Aberto"
 
 # Automatic Endpoint alerts the user has not classified yet; they stay pending and are never written.
@@ -196,7 +194,7 @@ def interpretar_data(texto: Any) -> Optional[datetime]:
 
 
 def formatar_data_abertura(data: datetime) -> str:
-    """Dashboard format of column P: ``dd/MM/yyyy HH:mm``."""
+    """Dashboard format of column Q: ``dd/MM/yyyy HH:mm``."""
     return data.strftime(FORMATO_DATA)
 
 
@@ -221,26 +219,20 @@ def mascarar_cpfs(texto: str) -> str:
     return _CPF.sub(substituir, texto)
 
 
-def descricao_tem_pouca_informacao(descricao: str) -> bool:
-    """Trata descrições vazias ou com menos de 100 caracteres como curtas."""
-    return len(str(descricao or "").strip()) < TAMANHO_DESCRICAO_CURTA
-
-
 def descricao_do_chamado(chamado: ChamadoSoftExpert) -> str:
-    """Prioriza o Registro e complementa descrições curtas com o atendimento realizado."""
+    """Descrição do Registro; usa o título quando estiver vazia e mascara CPFs."""
     registro = (chamado.descricao or "").strip()
     titulo = (chamado.titulo or "").strip()
-    atendimento = (chamado.detalhes_atendimento_realizado or "").strip()
-    principal = registro or titulo
-    if atendimento and descricao_tem_pouca_informacao(registro):
-        descricao = f"{principal}\n{SEPARADOR_ATENDIMENTO}\n{atendimento}" if principal else atendimento
-    else:
-        descricao = principal
-    return mascarar_cpfs(descricao)
+    return mascarar_cpfs(registro or titulo)
+
+
+def detalhes_atendimento_do_chamado(chamado: ChamadoSoftExpert) -> str:
+    """Texto integral do atendimento realizado, sem juntar a descrição do Registro."""
+    return mascarar_cpfs((chamado.detalhes_atendimento_realizado or "").strip())
 
 
 def decidir(chamado: ChamadoSoftExpert) -> Decisao:
-    """Include (with the eight-column row) or leave pending with a recorded reason."""
+    """Include (with the nine-column row) or leave pending with a recorded reason."""
     try:
         numero = chave_do_numero(chamado.numero)
     except ValueError:
@@ -248,7 +240,8 @@ def decidir(chamado: ChamadoSoftExpert) -> Decisao:
     if numero in PENDENCIAS_DEFINIDAS:
         return Decisao(numero, ACAO_PENDENTE, PENDENCIAS_DEFINIDAS[numero])
     descricao = descricao_do_chamado(chamado)
-    tipo, motivo = classificar(descricao, chamado.titulo)
+    atendimento = detalhes_atendimento_do_chamado(chamado)
+    tipo, motivo = classificar(f"{descricao}\n{atendimento}", chamado.titulo)
     if tipo is None:
         return Decisao(numero, ACAO_PENDENTE, motivo)
     solicitante = " ".join((chamado.solicitante or "").split())
@@ -262,12 +255,13 @@ def decidir(chamado: ChamadoSoftExpert) -> Decisao:
     linha = {
         "C": numero,
         "D": STATUS_EM_ABERTO,
-        "F": descricao,
-        "G": solicitante,
-        "H": tipo,
-        "M": UNIDADE,
-        "O": UF,
-        "P": formatar_data_abertura(data),
+        "F": atendimento,
+        "G": descricao,
+        "H": solicitante,
+        "I": tipo,
+        "N": UNIDADE,
+        "P": UF,
+        "Q": formatar_data_abertura(data),
     }
     return Decisao(numero, ACAO_INCLUIR, "", tipo, linha)
 

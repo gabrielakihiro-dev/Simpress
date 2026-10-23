@@ -6,8 +6,8 @@ Online, sem API, Graph nem tokens (docs/operacao/sebrae-fase-c-excel.md).
 Duas camadas:
 
 - ``AdaptadorExcel`` (classe abstrata): contém TODAS as regras de segurança (releitura da coluna C
-  antes de gravar, linha preparada e livre, só as colunas C, D, F, G, H, M, O e P, nunca sobrescrever,
-  releitura das oito colunas, confirmação de "Salvo", diário de intenção). Depende apenas de
+  antes de gravar, linha preparada e livre, só as colunas C, D, F, G, H, I, N, P e Q, nunca sobrescrever,
+  releitura das nove colunas, confirmação de "Salvo", diário de intenção). Depende apenas de
   primitivas pequenas (``ler_coluna_c``, ``ler_celulas``, ``escrever_celula``, ``aguardar_salvo``).
 - ``ExcelOnlinePlaywright``: implementa as primitivas com o Chrome de automação. Os seletores e a
   leitura da grade ainda dependem da sessão assistida descrita no documento da fase.
@@ -60,6 +60,7 @@ LIMITE_BUSCA_LINHAS = 40
 # O Excel limita a célula a 32.767 caracteres; acima de 32.000 o chamado fica pendente em vez de truncado.
 LIMITE_CARACTERES_CELULA = 32_000
 HISTORICO_DIARIO = 100
+ALTURA_LINHA_PADRAO_PT = 14.25  # Altura observada no Dashboard em 23/10/2026.
 
 # Resultados de ``gravar_chamado``.
 GRAVADO = "gravado"
@@ -148,7 +149,7 @@ class ResultadoGravacao:
 
     @property
     def incluido(self) -> bool:
-        """Só conta como incluído depois da releitura das oito colunas e do "Salvo" confirmado."""
+        """Só conta como incluído depois da releitura das nove colunas e do "Salvo" confirmado."""
         return self.situacao in _SITUACOES_INCLUIDAS
 
     @property
@@ -174,7 +175,7 @@ def _normalizar_quebras(texto: str) -> str:
 def normalizar_valor(coluna: str, valor: Any, quebras_como_espaco: bool = False) -> str:
     """Texto como será gravado: só a descrição (F) pode ter quebras de linha."""
     texto = _normalizar_quebras(str(valor or ""))
-    if coluna == "F" and not quebras_como_espaco:
+    if coluna in ("F", "G") and not quebras_como_espaco:
         return "\n".join(" ".join(linha.split()) for linha in texto.strip().split("\n"))
     return " ".join(texto.split())
 
@@ -189,8 +190,8 @@ _PARECE_NUMERO_OU_DATA = re.compile(r"[\d\s.,:/\-+%$()]+")
 
 def texto_para_digitar(coluna: str, valor: str) -> str:
     """Evita a autoformatação do Excel: ``=``, ``+``, ``-``, ``@`` e textos que parecem número ou data ganham
-    o apóstrofo de texto. A coluna P é digitada sem prefixo, pois precisa virar data/hora de verdade."""
-    if coluna == "P" or not valor:
+    o apóstrofo de texto. A coluna Q é digitada sem prefixo, pois precisa virar data/hora de verdade."""
+    if coluna == "Q" or not valor:
         return valor
     if valor[0] in "=+-@" or _PARECE_NUMERO_OU_DATA.fullmatch(valor):
         return "'" + valor
@@ -200,7 +201,7 @@ def texto_para_digitar(coluna: str, valor: str) -> str:
 def valores_equivalentes(coluna: str, esperado: str, lido: Any) -> bool:
     """Compara o que foi extraído com o que a célula mostra na barra de fórmulas."""
     lido_texto = _normalizar_leitura(lido)
-    if coluna == "P":
+    if coluna == "Q":
         data_esperada, data_lida = interpretar_data(esperado), interpretar_data(lido_texto)
         if data_esperada is not None and data_lida is not None:
             return data_esperada == data_lida
@@ -366,6 +367,10 @@ class AdaptadorExcel(ABC):
     def aguardar_salvo(self, timeout_s: float) -> bool:
         """Verdadeiro quando o indicador mostra "Salvo" de forma estável."""
 
+    def padronizar_altura_linha(self, linha: int) -> None:
+        """Normaliza somente a altura da linha escrita; adaptadores em memória podem ignorar layout."""
+        return None
+
     def celula_e_data(self, linha: int, coluna: str) -> Optional[bool]:
         """``None`` quando a implementação não sabe; ``False`` indica que a data foi gravada como texto."""
         return None
@@ -417,7 +422,7 @@ class AdaptadorExcel(ABC):
         )
 
     def proxima_linha_livre(self, leitura: Optional[LeituraColunaC] = None) -> int:
-        """Primeira linha abaixo da última com dado na coluna C com as oito células vazias e as fórmulas presentes."""
+        """Primeira linha abaixo da última com dado na coluna C com as nove células vazias e fórmulas presentes."""
         return self._procurar_linha(leitura or self._ler_validada())[0]
 
     # -- gravação -------------------------------------------------------------------------------
@@ -428,18 +433,18 @@ class AdaptadorExcel(ABC):
         numero = chave_do_numero(str(linha["C"]).strip())
         valores = {coluna: normalizar_valor(coluna, linha[coluna], self.quebras_como_espaco) for coluna in COLUNAS_GRAVADAS}
         valores["C"] = numero
-        valores["F"] = mascarar_cpfs(valores["F"])
         for coluna in ("F", "G"):
-            if not valores[coluna]:
-                raise ValueError(f"Coluna {coluna} vazia.")
+            valores[coluna] = mascarar_cpfs(valores[coluna])
+        if not valores["G"]:
+            raise ValueError("Coluna G vazia.")
         if valores["D"] != STATUS_EM_ABERTO:
             raise ValueError(f"Coluna D deve ser {STATUS_EM_ABERTO!r}.")
-        if valores["H"] not in (TIPO_INCIDENTE, TIPO_SOLICITACAO):
-            raise ValueError(f"Tipo inválido: {valores['H']!r}.")
-        if valores["M"] != UNIDADE or valores["O"] != UF:
+        if valores["I"] not in (TIPO_INCIDENTE, TIPO_SOLICITACAO):
+            raise ValueError(f"Tipo inválido: {valores['I']!r}.")
+        if valores["N"] != UNIDADE or valores["P"] != UF:
             raise ValueError(f"Unidade e UF devem ser {UNIDADE!r} e {UF!r}.")
-        data = interpretar_data(valores["P"])
-        if data is None or data.strftime(FORMATO_DATA) != valores["P"]:
+        data = interpretar_data(valores["Q"])
+        if data is None or data.strftime(FORMATO_DATA) != valores["Q"]:
             raise ValueError("Data de abertura fora do formato dd/MM/yyyy HH:mm.")
         for coluna, valor in valores.items():
             if len(valor) > LIMITE_CARACTERES_CELULA:
@@ -568,12 +573,13 @@ class AdaptadorExcel(ABC):
             lido = self.ler_celulas(linha, (coluna,)).celulas[coluna]
             if not valores_equivalentes(coluna, valores[coluna], lido.valor):
                 return resultado(DIVERGENTE, f"{endereco(coluna, linha)} ficou com conteúdo diferente do extraído; corrija na planilha.")
-            if coluna == "P" and self.celula_e_data(linha, coluna) is False:
+            if coluna == "Q" and self.celula_e_data(linha, coluna) is False:
                 return resultado(DIVERGENTE, f"{endereco(coluna, linha)} foi gravada como texto, não como data/hora.")
             confirmados.append(coluna)
             pendentes.remove(coluna)
             self.diario.atualizar(numero, confirmados=list(confirmados), pendentes=list(pendentes))
 
+        self.padronizar_altura_linha(linha)
         final = self.ler_celulas(linha, COLUNAS_GRAVADAS)
         diferentes = [c for c in COLUNAS_GRAVADAS if not valores_equivalentes(c, valores[c], final.celulas[c].valor)]
         if diferentes:
@@ -592,12 +598,13 @@ class Seletores:
     """Candidatos de seletor do Excel Online (pt-BR e en-US). NÃO validados: dependem da sessão assistida (V0)."""
 
     caixa_nome = 'input[aria-label="Caixa de Nome"], input[aria-label="Name Box"], #FormulaBar-NameBox-input'
+    selecao = '[id*="readoutElement"]'
     barra_formula = (
         '#formulaBarTextDivId_textElement, [aria-label="Barra de Fórmulas"], [aria-label="Formula Bar"], '
         '[id*="formulaBar"][role="textbox"]'
     )
-    aba_ativa = '[role="tab"][aria-selected="true"]'
-    salvo = re.compile(r"^\s*(Salvo|Saved)\b", re.IGNORECASE)
+    aba_ativa = '[role="tab"][aria-selected="true"][aria-label*="Worksheet"], [role="tab"][aria-selected="true"][aria-label*="Planilha"]'
+    salvo = re.compile(r"^\s*(Salvo\b|Saved\b|Last saved:)", re.IGNORECASE)
     salvando = re.compile(r"Salvando|Saving", re.IGNORECASE)
     sair_exibicao = re.compile(r"^(Sair|Exit)\b", re.IGNORECASE)
 
@@ -623,6 +630,8 @@ class ExcelOnlinePlaywright(AdaptadorExcel):
         self.arquivo_esperado = arquivo_esperado
         self._log = log or (lambda texto: print(f"[Excel] {texto}", flush=True))
         self._permissoes_dadas = False
+        self._exibicao_temporaria_criada = False
+        self._filtros_limpos_na_exibicao = False
 
     # -- infraestrutura -----------------------------------------------------------------------
 
@@ -655,10 +664,27 @@ class ExcelOnlinePlaywright(AdaptadorExcel):
         self.page.keyboard.press("Control+A")
         self.page.keyboard.type(alvo)
         self.page.keyboard.press("Enter")
-        if ":" not in alvo:
-            atual = (caixa.input_value() or "").replace("$", "").upper()
-            if atual != alvo.upper():
-                raise ExcelErro(f"A seleção foi para {atual or '?'} em vez de {alvo}; nada foi digitado.")
+        atual = (caixa.input_value() or "").replace("$", "").upper()
+        if atual != alvo.upper():
+            raise ExcelErro(f"A seleção foi para {atual or '?'} em vez de {alvo}; nada foi digitado.")
+        esperado = alvo.replace("$", "").upper()
+        padrao = re.compile(rf"(?<![A-Z0-9]){re.escape(esperado)}(?![A-Z0-9])")
+        limite = time.time() + 5
+        while time.time() < limite:
+            leitura = app.locator(Seletores.selecao)
+            for indice in range(leitura.count()):
+                elemento = leitura.nth(indice)
+                texto = " ".join(
+                    (
+                        elemento.get_attribute("aria-label") or "",
+                        elemento.get_attribute("title") or "",
+                        elemento.inner_text(timeout=500) or "",
+                    )
+                ).upper()
+                if padrao.search(texto):
+                    return
+            time.sleep(0.1)
+        raise ExcelErro(f"A caixa de nome indicou {alvo}, mas a grade não confirmou essa seleção; nada foi digitado.")
 
     def _texto_da_barra(self) -> str:
         barra = self._app().locator(Seletores.barra_formula).filter(visible=True).first
@@ -666,7 +692,9 @@ class ExcelOnlinePlaywright(AdaptadorExcel):
 
     def _aba_selecionada(self) -> str:
         try:
-            return (self._app().locator(Seletores.aba_ativa).first.inner_text(timeout=3000) or "").strip()
+            aba = self._app().locator(Seletores.aba_ativa).first
+            descricao = aba.get_attribute("aria-label") or aba.inner_text(timeout=3000)
+            return re.sub(r"^(Worksheet|Planilha)\s+", "", (descricao or "").strip(), flags=re.IGNORECASE)
         except Exception:
             return ""
 
@@ -703,7 +731,8 @@ class ExcelOnlinePlaywright(AdaptadorExcel):
             raise ExcelErro(f"A aba aberta ({titulo!r}) não parece ser o Dashboard ({self.arquivo_esperado}); nada foi lido nem gravado.")
         self._conceder_area_de_transferencia()
         if self._aba_selecionada().lower() != self.aba.lower():
-            self._app().get_by_role("tab", name=self.aba, exact=True).click()
+            nome_aba = re.compile(rf"^(Worksheet|Planilha)\s+{re.escape(self.aba)}$", re.IGNORECASE)
+            self._app().get_by_role("tab", name=nome_aba).click()
             if self._aba_selecionada().lower() != self.aba.lower():
                 raise ExcelErro(f"A aba {self.aba} não pôde ser selecionada.")
 
@@ -711,21 +740,31 @@ class ExcelOnlinePlaywright(AdaptadorExcel):
         self._ir_para("A1")
         self.page.keyboard.press("Control+End")
         caixa = self._app().locator(Seletores.caixa_nome).filter(visible=True).first
-        correspondencia = re.fullmatch(r"\$?[A-Z]+\$?(\d+)", (caixa.input_value() or "").strip().upper())
-        if not correspondencia:
-            raise LeituraIncompletaErro("Não foi possível descobrir a última linha usada (Ctrl+End).")
-        return int(correspondencia.group(1))
+        limite = time.time() + 5
+        while time.time() < limite:
+            correspondencia = re.fullmatch(r"\$?[A-Z]+\$?(\d+)", (caixa.input_value() or "").strip().upper())
+            if correspondencia:
+                linha = int(correspondencia.group(1))
+                if linha > 1:
+                    return linha
+            time.sleep(0.1)
+        raise LeituraIncompletaErro("Não foi possível descobrir a última linha usada (Ctrl+End).")
 
     def _copiar_intervalo(self, intervalo: str) -> str:
         self._ir_para(intervalo)
         app = self._app()
         sentinela = f"__simpress_{time.time_ns()}__"
-        app.evaluate("(texto) => navigator.clipboard.writeText(texto)", sentinela)
-        self.page.keyboard.press("Control+C")
+        self.page.evaluate("(texto) => navigator.clipboard.writeText(texto)", sentinela)
+        try:
+            app.get_by_role("button", name=re.compile(r"^(Clipboard|Área de transferência)$", re.IGNORECASE)).click(timeout=1500)
+            app.get_by_role("menuitem", name=re.compile(r"^(Copy|Copiar)(\s+Ctrl\+C)?$", re.IGNORECASE)).click(timeout=1500)
+        except Exception:
+            self.page.keyboard.press("Control+C")
         limite = time.time() + 6
         while time.time() < limite:
-            texto = app.evaluate("() => navigator.clipboard.readText()")
+            texto = self.page.evaluate("() => navigator.clipboard.readText()")
             if texto and texto != sentinela:
+                self._log(f"Cópia da faixa {intervalo} concluída.")
                 return str(texto)
             time.sleep(0.4)
         raise LeituraIncompletaErro("A cópia da coluna C não chegou à área de transferência.")
@@ -734,14 +773,36 @@ class ExcelOnlinePlaywright(AdaptadorExcel):
         return self._copiar_intervalo(f"C1:C{ultima_linha}")
 
     def _abrir_exibicao_temporaria(self) -> None:
-        """Exibição de folha pessoal (sem filtros), que não altera o filtro compartilhado. A confirmar em V4."""
+        """Cria uma exibição temporária, limpa nela o filtro e mantém a exibição padrão intocada."""
         app = self._app()
         try:
+            if not self._filtro_ativo():
+                raise LeituraIncompletaErro("A leitura ficou incompleta sem um filtro ativo que possa ser isolado.")
             app.get_by_role("tab", name=re.compile(r"^(Exibir|View)$", re.IGNORECASE)).click(timeout=5000)
+            nome_exibicao = app.locator("#NamedSheetViewSelect-input").filter(visible=True).first
+            if not nome_exibicao.count():
+                raise LeituraIncompletaErro("Não consegui confirmar qual exibição do Excel está ativa; a leitura foi interrompida.")
+            nome = (nome_exibicao.input_value(timeout=1500) or "").strip().casefold()
+            if nome and nome not in ("default", "padrão"):
+                raise LeituraIncompletaErro("Já existe uma exibição pessoal ativa; não vou substituí-la.")
             app.get_by_role("button", name=re.compile(r"Exibi[cç][õo]es? de Planilha|Sheet View", re.IGNORECASE)).first.click(timeout=5000)
             app.get_by_role("menuitem", name=re.compile(r"^(Nova|New)", re.IGNORECASE)).first.click(timeout=5000)
+            self._exibicao_temporaria_criada = True
+            app.get_by_role("button", name=re.compile(r"^(Classificar e Filtrar|Sort & Filter)$", re.IGNORECASE)).click(timeout=5000)
+            app.get_by_role("menuitem", name=re.compile(r"^(Limpar|Clear)$", re.IGNORECASE)).click(timeout=5000)
+            self._filtros_limpos_na_exibicao = True
+            if self._filtro_ativo():
+                raise LeituraIncompletaErro("O filtro continuou ativo na exibição temporária; a leitura foi interrompida.")
+        except LeituraIncompletaErro:
+            raise
         except Exception as erro:
             raise LeituraIncompletaErro(f"A exibição temporária sem filtro não pôde ser aberta ({erro}). Nada foi gravado.") from erro
+
+    def _filtro_ativo(self) -> bool:
+        try:
+            return self._app().get_by_role("button", name=re.compile(r"^(Filters applied|Filtros aplicados)$", re.IGNORECASE)).filter(visible=True).count() > 0
+        except Exception:
+            return False
 
     def _exibicao_padrao_ativa(self) -> bool:
         try:
@@ -750,18 +811,33 @@ class ExcelOnlinePlaywright(AdaptadorExcel):
             return False
 
     def _fechar_exibicao_temporaria(self) -> None:
+        if not self._exibicao_temporaria_criada:
+            return
         app = self._app()
         try:
+            if self._filtros_limpos_na_exibicao:
+                app.get_by_role("button", name=re.compile(r"^(Undo|Desfazer)$", re.IGNORECASE)).click(timeout=5000)
+                if not self._filtro_ativo():
+                    raise FiltroNaoRestauradoErro("Não consegui restaurar o filtro na exibição temporária; deixei-a aberta para inspeção.")
+                self._filtros_limpos_na_exibicao = False
             app.get_by_role("button", name=Seletores.sair_exibicao).filter(visible=True).first.click(timeout=5000)
+            descartar = app.get_by_role("button", name=re.compile(r"^(Don't Keep|Não manter)$", re.IGNORECASE)).filter(visible=True)
+            if descartar.count():
+                descartar.click(timeout=5000)
+        except FiltroNaoRestauradoErro:
+            raise
         except Exception:
             pass
         if not self._exibicao_padrao_ativa():
             raise FiltroNaoRestauradoErro("A exibição temporária continua aberta; saia dela manualmente na aba CHAMADOS.")
+        self._exibicao_temporaria_criada = False
 
     def ler_coluna_c(self) -> LeituraColunaC:
         self.garantir_sessao()
         ultima = self._ultima_linha_usada()
         valores, cobertas = valores_da_coluna(self._copiar_coluna_c(ultima))
+        ultima_atual = self._ultima_linha_usada()
+        ultima = max(ultima, ultima_atual)
         if cobertas >= ultima:
             return LeituraColunaC(valores, cobertas, ultima)
         self._log(f"A cópia trouxe {cobertas} de {ultima} linhas (filtro ativo); relendo numa exibição temporária sem filtro.")
@@ -798,14 +874,43 @@ class ExcelOnlinePlaywright(AdaptadorExcel):
         self.page.keyboard.press("Delete")
         self.page.keyboard.press("Enter")
 
+    def _abrir_dialogo_altura_linha(self) -> "Frame":
+        app = self._app()
+        app.get_by_role("button", name=re.compile(r"^Format$", re.IGNORECASE)).click(timeout=5000)
+        app.get_by_text(re.compile(r"^(Row Height|Altura da Linha)\.\.\.$", re.IGNORECASE), exact=True).click(timeout=5000)
+        campo = app.locator("#SizeInput").filter(visible=True).first
+        campo.wait_for(state="visible", timeout=5000)
+        return app
+
+    def padronizar_altura_linha(self, linha: int) -> None:
+        """Aplica e relê a altura comum observada no Dashboard, sem AutoFit ou quebra de texto."""
+        self._ir_para(f"{linha}:{linha}")
+        app = self._abrir_dialogo_altura_linha()
+        campo = app.locator("#SizeInput").filter(visible=True).first
+        campo.fill(str(ALTURA_LINHA_PADRAO_PT))
+        app.get_by_role("button", name=re.compile(r"^(OK|Confirmar)$", re.IGNORECASE)).click(timeout=5000)
+
+        self._ir_para(f"{linha}:{linha}")
+        app = self._abrir_dialogo_altura_linha()
+        campo = app.locator("#SizeInput").filter(visible=True).first
+        altura_lida = (campo.input_value() or "").replace(",", ".").strip()
+        try:
+            correta = float(altura_lida) == ALTURA_LINHA_PADRAO_PT
+        except ValueError:
+            correta = False
+        app.get_by_role("button", name=re.compile(r"^(Cancel|Cancelar)$", re.IGNORECASE)).click(timeout=5000)
+        if not correta:
+            raise ExcelErro(f"A linha {linha} ficou com altura {altura_lida or '?'} pt, não {ALTURA_LINHA_PADRAO_PT} pt.")
+
     def aguardar_salvo(self, timeout_s: float) -> bool:
         limite = time.time() + timeout_s
-        time.sleep(1.0)
         estaveis = 0
         while time.time() < limite:
             salvo = salvando = False
             for frame in self._frames():
                 try:
+                    salvo = salvo or frame.get_by_role("button", name=Seletores.salvo).filter(visible=True).count() > 0
+                    salvando = salvando or frame.get_by_role("button", name=Seletores.salvando).filter(visible=True).count() > 0
                     salvo = salvo or frame.get_by_text(Seletores.salvo).filter(visible=True).count() > 0
                     salvando = salvando or frame.get_by_text(Seletores.salvando).filter(visible=True).count() > 0
                 except Exception:
@@ -813,5 +918,5 @@ class ExcelOnlinePlaywright(AdaptadorExcel):
             estaveis = estaveis + 1 if salvo and not salvando else 0
             if estaveis >= 2:
                 return True
-            time.sleep(1.0)
+            time.sleep(0.25)
         return False
