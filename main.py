@@ -2408,7 +2408,7 @@ def _save_person_name(serial: str, login_atual: str, nome: str) -> Dict[str, Any
             ((current, item) for current, item in inventory_state.equipamentos_cache.items()
              if normalize_reference_value(current) == key), (None, None),
         )
-        if equipment is None:
+        if cache_key is None or equipment is None:
             raise HTTPException(status_code=404, detail="Série não encontrada na base oficial.")
         if not equipment.get("nome_pessoa_editavel"):
             raise HTTPException(status_code=409, detail="O nome deste equipamento já vem do Entra ou não admite edição manual.")
