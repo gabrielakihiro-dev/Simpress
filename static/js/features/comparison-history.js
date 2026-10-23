@@ -295,7 +295,7 @@
         vazio.className = "text-sm text-slate-400 text-center py-8";
         vazio.setAttribute("role", "status");
         vazio.setAttribute("aria-live", "polite");
-        vazio.textContent = "Nenhuma atualização de planilhas registrada no histórico.";
+        vazio.textContent = "Nenhum histórico ainda.";
         lista.appendChild(vazio);
         return;
       }
@@ -410,9 +410,17 @@
   }
 
   function criarMetricasHistoricoComparacao(metricas) {
+    // Zeroed counters are noise in a long history; only the non-zero ones are shown.
+    const visiveis = metricas.filter(({ valor }) => Number(valor || 0) !== 0);
+    if (!visiveis.length) {
+      const vazio = document.createElement("p");
+      vazio.className = "text-xs text-slate-400";
+      vazio.textContent = "Nenhuma alteração ou pendência.";
+      return vazio;
+    }
     const grade = document.createElement("dl");
     grade.className = "grid grid-cols-2 sm:grid-cols-4 gap-2";
-    metricas.forEach(({ rotulo, valor, tom = "amber" }) => {
+    visiveis.forEach(({ rotulo, valor, tom = "amber" }) => {
       const numero = Number(valor || 0);
       const classes = classesMetricaHistorico(numero, tom);
       const chip = document.createElement("div");

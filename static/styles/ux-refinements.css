@@ -390,7 +390,6 @@ html[data-ux-density="compact"] .comparison-desktop-table td {
   flex-direction: column;
   gap: 0.15rem;
   padding: var(--ux-space-3) var(--ux-space-4);
-  border: 1px solid var(--ux-border);
   border-radius: var(--ux-radius-lg);
   background: var(--ux-surface-subtle);
 }
@@ -512,7 +511,6 @@ html[data-ux-density="compact"] .comparison-desktop-table td {
 .automation-action--cancel:not(:disabled) { border-color: var(--ux-critical-border); color: var(--ux-critical-fg); }
 .automation-action--cancel:not(:disabled):hover { background: var(--ux-critical-bg); }
 .automation-note { margin-top: var(--ux-space-4); }
-.automation-note code { font-family: var(--ux-font-mono); font-size: 0.8em; }
 .automation-log-file { font-family: var(--ux-font-mono); font-size: 0.75rem; overflow-wrap: anywhere; }
 .automation-log {
   height: 22rem; margin: 0; padding: var(--ux-space-3) var(--ux-space-4); overflow: auto;
@@ -586,7 +584,6 @@ html[data-ux-density="compact"] .comparison-desktop-table td {
 .automation-status-badge[data-status="interrompido"] { border-color: var(--ux-warning-border); background: var(--ux-warning-bg); color: var(--ux-warning-fg); }
 .automation-status-badge[data-status="falha"] { border-color: var(--ux-critical-border); background: var(--ux-critical-bg); color: var(--ux-critical-fg); }
 /* Sincronizar chamados Sebrae (docs/operacao/sebrae-fase-d-ui.md) */
-.sebrae-rule { margin: 0 0 var(--ux-space-4); max-width: 60ch; }
 .automation-status[data-state="pausado"] .automation-status-dot { background: var(--ux-text-muted); }
 .automation-status[data-state="aguardando"] { border-color: var(--ux-warning-border); background: var(--ux-warning-bg); }
 .automation-status[data-state="aguardando"] .automation-status-dot { background: var(--ux-warning-fg); }
@@ -603,7 +600,7 @@ html[data-ux-density="compact"] .comparison-desktop-table td {
 .sebrae-facts dd { margin: var(--ux-space-1) 0 0; color: var(--ux-text); font-size: 0.875rem; overflow-wrap: anywhere; }
 .sebrae-counter {
   display: grid; gap: var(--ux-space-1); align-content: space-between; padding: var(--ux-space-3) var(--ux-space-4);
-  border: 1px solid var(--ux-border); border-radius: var(--ux-radius-lg); background: var(--ux-surface-subtle);
+  border-radius: var(--ux-radius-lg); background: var(--ux-surface-subtle);
 }
 .sebrae-counter dd { margin: 0; color: var(--ux-text); font-size: 1.5rem; font-weight: 700; line-height: 1.2; font-variant-numeric: tabular-nums; }
 .sebrae-card .automation-actions { margin-bottom: 0; }
@@ -671,7 +668,7 @@ html[data-ux-density="compact"] .comparison-desktop-table td {
   color: var(--text);
 }
 .ticket-summary-status { min-height: 1.25rem; }
-.ticket-summary-table-wrap { overflow-x: auto; border: 1px solid var(--border-strong); border-radius: var(--ux-radius-md); }
+.ticket-summary-table-wrap { overflow-x: auto; border-radius: var(--ux-radius-md); }
 .ticket-summary-table { width: 100%; border-collapse: collapse; font-size: 0.8rem; }
 .ticket-summary-table th {
   padding: 0.65rem;
@@ -734,3 +731,70 @@ html[data-ux-density="compact"] .comparison-desktop-table td {
   .ticket-os-link-editor { min-width: 0; }
   .ticket-os-link-editors { min-width: 0; }
 }
+
+/* ---------- Info tip: helper text moved off-screen behind an ⓘ button ---------- */
+/* Shown on hover or keyboard focus; Esc sets data-tip-dismissed (WCAG 1.4.13). */
+.info-tip {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  vertical-align: middle;
+}
+.info-tip-trigger {
+  display: inline-grid;
+  place-items: center;
+  width: 1.5rem;
+  height: 1.5rem;
+  border-radius: var(--ux-radius-pill);
+  color: var(--ux-text-muted);
+  background: transparent;
+  transition: color var(--motion-fast) var(--motion-ease), background-color var(--motion-fast) var(--motion-ease);
+}
+.info-tip-trigger svg { width: 0.95rem; height: 0.95rem; }
+.info-tip-trigger:hover,
+.info-tip-trigger:focus-visible { color: var(--ux-accent); background: var(--ux-neutral-bg); }
+.info-tip-text {
+  position: absolute;
+  inset-block-start: calc(100% + 0.4rem);
+  inset-inline-start: -0.5rem;
+  z-index: 60;
+  width: max-content;
+  max-width: min(20rem, calc(100vw - 2rem));
+  padding: 0.55rem 0.75rem;
+  border: 1px solid var(--ux-border-strong);
+  border-radius: var(--ux-radius-md);
+  background: var(--ux-surface-1);
+  box-shadow: var(--ux-shadow-2);
+  color: var(--ux-text);
+  font-size: 0.75rem;
+  font-weight: 450;
+  line-height: 1.45;
+  text-align: start;
+  white-space: normal;
+  opacity: 0;
+  visibility: hidden;
+  transform: translateY(-2px);
+  transition: opacity var(--motion-fast) var(--motion-ease), transform var(--motion-fast) var(--motion-ease), visibility var(--motion-fast);
+  pointer-events: none;
+}
+.info-tip--end .info-tip-text { inset-inline-start: auto; inset-inline-end: -0.5rem; }
+/* Phones: span the viewport so the bubble never overflows or widens the page. */
+@media (max-width: 640px) {
+  .info-tip-text,
+  .info-tip--end .info-tip-text {
+    position: fixed;
+    inset-block-start: auto;
+    inset-inline: 1rem;
+    width: auto;
+    max-width: none;
+  }
+}
+.info-tip:is(:hover, :focus-within):not([data-tip-dismissed]) .info-tip-text {
+  opacity: 1;
+  visibility: visible;
+  transform: none;
+  pointer-events: auto;
+}
+
+/* ---------- Minimal chrome: readiness only on Home unless something is pending ---------- */
+#main-content:has(#tab-panel-home[hidden]) #readiness-panel[data-state="ready"] { display: none; }

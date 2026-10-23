@@ -21,7 +21,7 @@
     if (description) {
       description.textContent = selected
         ? [equipment.modelo, equipment.tipo].filter(Boolean).join(" · ") || "Equipamento pesquisado e selecionado."
-        : "Nenhum equipamento selecionado. Pesquise na Home para preencher a série.";
+        : "Nenhum equipamento selecionado.";
     }
     const users = document.getElementById("transfer-equipment-users");
     if (users) {
@@ -56,10 +56,10 @@
 
   // Abas de primeiro nível: Home, Transporte, Resumo e Automação (nessa ordem na barra lateral).
   const ABAS_PRINCIPAIS = Object.freeze({
-    home: Object.freeze({ tab: "tab-home", painel: "tab-panel-home" }),
-    transferencia: Object.freeze({ tab: "tab-retirada-entrega", painel: "tab-panel-retirada-entrega" }),
-    resumo: Object.freeze({ tab: "tab-resumo", painel: "tab-panel-resumo" }),
-    automacao: Object.freeze({ tab: "tab-automacao", painel: "tab-panel-automacao" }),
+    home: Object.freeze({ tab: "tab-home", painel: "tab-panel-home", titulo: "Home" }),
+    transferencia: Object.freeze({ tab: "tab-retirada-entrega", painel: "tab-panel-retirada-entrega", titulo: "Transporte" }),
+    resumo: Object.freeze({ tab: "tab-resumo", painel: "tab-panel-resumo", titulo: "Resumo" }),
+    automacao: Object.freeze({ tab: "tab-automacao", painel: "tab-panel-automacao", titulo: "Automação" }),
   });
 
   function ativarAbaTransferencia(aba) {
@@ -84,6 +84,8 @@
         tab.classList.toggle("is-active", ativa);
       }
     });
+    const titulo = document.getElementById("header-page-title");
+    if (titulo) titulo.textContent = ABAS_PRINCIPAIS[alvo].titulo;
     document.body.classList.toggle("has-quick-actions", alvo === "transferencia");
     if (alvo === "transferencia") app.atualizarResumoSerieTransferencia(appState.currentEquipamento);
     if (mudou && destino.painel) motion?.reveal(destino.painel, "page");
@@ -625,7 +627,6 @@
     document.getElementById("status-indicator").className = "w-2.5 h-2.5 rounded-full bg-brand-400";
     document.getElementById("status-summary").innerHTML = `
         <span class="text-slate-300 font-medium">Pronto para emissão.</span>
-        <span class="hidden md:inline text-slate-500">Verifique os dados antes de gerar a planilha oficial Simpress.</span>
       `;
 
     app.showToast("Formulário limpo. Pronto para uma nova busca.", "info");

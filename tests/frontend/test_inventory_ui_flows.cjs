@@ -1384,7 +1384,7 @@ test("sorts ticket cards by descending OS and leaves tickets without an OS at th
   const serials = [...harness.element("lista-acompanhamento-chamados").innerHTML.matchAll(/data-ticket-serial="([^"]+)"/g)]
     .map(match => match[1]);
   assert.deepEqual(serials, ["SN-7279287", "SN-7279280", "SN-7265402", "SN-SEM-OS"]);
-  assert.match(harness.element("contagem-acompanhamento-chamados").textContent, /OS da maior para a menor, sem OS no final/);
+  assert.match(harness.element("contagem-acompanhamento-chamados").textContent, /^4 de 4 séries$/);
 });
 
 test("keeps the three-day attention rule and removes advanced ticket filters", () => {
@@ -1420,6 +1420,10 @@ test("keeps the three-day attention rule and removes advanced ticket filters", (
   };
   harness.run("SimpressApp.state.acompanhamentoChamadosAtual = ticketTestReport");
   harness.run("renderizarAcompanhamentoChamados()");
+
+  harness.run("SimpressApp.state.acompanhamentoChamadosAtual = { chamados: [] }; renderizarAcompanhamentoChamados()");
+  assert.match(harness.element("lista-acompanhamento-chamados").innerHTML, /Nenhum chamado para exibir\./);
+  harness.run("SimpressApp.state.acompanhamentoChamadosAtual = ticketTestReport");
 
   harness.element("somente-atencao-chamados").checked = true;
   harness.run("renderizarAcompanhamentoChamados()");
@@ -1501,7 +1505,7 @@ test("filters tickets by daily triage indicator while counting the whole import"
   assert.match(button("ativos"), /aria-pressed="false"/);
   assert.match(cards(), /SN-ATRASADA/);
   assert.doesNotMatch(cards(), /SN-FRESCA|SN-SEM-DATA|SN-FECHADA|SN-SOMENTE-SIMPRESS/);
-  assert.match(harness.element("contagem-acompanhamento-chamados").textContent, /Exibindo 1 de 5 séries/);
+  assert.match(harness.element("contagem-acompanhamento-chamados").textContent, /^1 de 5 séries/);
   assert.match(button("ativos"), /aria-label="Chamados ativos: 3"/, "counts ignore the active filter");
 
   harness.run('filtrarTriagemChamados("ativos")');
