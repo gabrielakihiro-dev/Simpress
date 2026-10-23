@@ -155,7 +155,11 @@
           item.entrega_contato || "—", item.entrega_obs || "—",
         ];
         const row = el("tr");
-        cells.forEach((text, index) => row.appendChild(el("td", index === 1 ? "px-3 py-2 font-mono whitespace-nowrap" : "px-3 py-2", text)));
+        cells.forEach((text, index) => {
+          const cell = el("td", index === 1 ? "px-3 py-2 font-mono whitespace-nowrap" : "px-3 py-2", text);
+          if (index === 1 && item.nome_pessoa) cell.appendChild(el("span", "block font-sans text-[11px] text-slate-400", item.nome_pessoa));
+          row.appendChild(cell);
+        });
         const actions = el("td", "px-3 py-2");
         const group = el("div", "flex flex-wrap gap-2");
         group.append(
@@ -170,7 +174,7 @@
         card.setAttribute("role", "listitem");
         card.appendChild(el("h5", "comparison-mobile-card-title", `${item.serial} · ${formatDateTime(item.criado_em)}`));
         const fields = el("dl", "comparison-mobile-card-fields");
-        [["Origem → Destino", cells[2]], ["Destinatário", cells[3]], ["Observações", cells[4]]].forEach(([label, value]) => {
+        [["Origem → Destino", cells[2]], ["Destinatário", cells[3]], ["Observações", cells[4]], ...(item.nome_pessoa ? [["Pessoa", item.nome_pessoa]] : [])].forEach(([label, value]) => {
           const field = el("div", "comparison-mobile-card-field");
           field.append(el("dt", "", label), el("dd", "", value));
           fields.appendChild(field);

@@ -19,6 +19,7 @@
     "fullEquipmentSearch",
     "unitsCatalog",
     "inventoryUpload",
+    "entraUsers",
     "comparisonResult",
     "comparisonHistory",
     "ticketTracking",
@@ -112,6 +113,7 @@
     app.carregarContagemHistoricoApelidos();
     app.carregarContagemHistoricoComparacoes();
     app.inicializarArquivosAtualizacaoPlanilhas();
+    app.carregarEstadoEntra();
     app.inicializarAlertaBaseDesatualizada();
     app.inicializarAlertasOsDivergencias();
     app.inicializarAutomacao();

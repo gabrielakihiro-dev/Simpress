@@ -75,6 +75,7 @@ class ReadinessWithoutGlobalLockTests(unittest.TestCase):
                     patch.object(main, "ENDPOINT_UPLOAD_FILE", root / "endpoint.xlsx"),
                     patch.object(main, "EXPORT_MODEL_FILE", root / "export.xlsx"),
                     patch.object(main, "TICKET_REPORT_FILE", root / "chamados.json"),
+                    patch.object(main, "ENTRA_USERS_FILE", root / "entra.json"),
                     patch.object(main, "MODIFIED_APELIDOS_FILE", root / "apelidos.json"),
                     patch.object(main, "CUSTOM_UNIDADES_FILE", root / "unidades.json"),
                     patch.object(main, "ALIAS_HISTORY_FILE", root / "aliases.json"),
@@ -87,6 +88,33 @@ class ReadinessWithoutGlobalLockTests(unittest.TestCase):
                 holder.join(10)
         self.assertEqual(report["backend"], "files")
         self.assertFalse(report["functions"]["consulta_equipamentos"]["available"])
+        self.assertEqual(report["files"]["nomes_entra"]["state"], "awaiting_import")
+        self.assertNotIn("nomes_entra", {name for needs in readiness.FUNCTION_REQUIREMENTS.values() for name in needs})
+
+
+class EntraNamesReadinessTests(unittest.TestCase):
+    def check(self, content=None):
+        with tempfile.TemporaryDirectory() as directory:
+            path = Path(directory) / "usuarios_entra.json"
+            if content is not None:
+                path.write_text(content, encoding="utf-8")
+            return readiness.check_startup_entra_names(path)
+
+    def test_missing_file_awaits_first_import(self):
+        status = self.check()
+        self.assertFalse(status["available"])
+        self.assertEqual(status["state"], "awaiting_import")
+
+    def test_valid_directory_is_ready_without_exposing_names(self):
+        status = self.check('{"users": {"ana.lima": "Ana Lima"}}')
+        self.assertEqual(status, {"available": True, "file": "usuarios_entra.json", "reason": "OK", "state": "ready"})
+
+    def test_corrupt_or_malformed_directory_is_invalid(self):
+        for content in ("{nao e json", "[]", '{"users": []}'):
+            with self.subTest(content=content):
+                status = self.check(content)
+                self.assertFalse(status["available"])
+                self.assertEqual(status["state"], "invalid")
 
 
 if __name__ == "__main__":

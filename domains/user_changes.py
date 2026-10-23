@@ -492,6 +492,9 @@ def logged_users_for_series(services: AliasChangeServices, series: List[str]) ->
                 by_key.setdefault(key, []).append({
                     "serial": str(equipment.get("serial") or serial),
                     "usuario": str(equipment.get("usuarios_logados") or "").strip(),
+                    "nome_pessoa": str(equipment.get("nome_pessoa") or "").strip(),
+                    "nome_pessoa_origem": str(equipment.get("nome_pessoa_origem") or ""),
+                    "nome_pessoa_editavel": bool(equipment.get("nome_pessoa_editavel")),
                     "origem": str(equipment.get("usuarios_logados_origem") or ""),
                     "informado_em": str(equipment.get("usuarios_logados_informado_em") or ""),
                     "candidatos": list(equipment.get("usuarios_logados_candidatos") or []),
@@ -538,6 +541,9 @@ def logged_users_for_series(services: AliasChangeServices, series: List[str]) ->
                 user_candidates = endpoint_user_candidates(endpoint_index, ambiguous_mac_key)
             result[serie] = {
                 "usuario": match["usuario"],
+                "nome_pessoa": match["nome_pessoa"],
+                "nome_pessoa_origem": match["nome_pessoa_origem"],
+                "nome_pessoa_editavel": match["nome_pessoa_editavel"],
                 "origem": origem,
                 "serial_cadastro": match["serial"],
                 "informado_em": match["informado_em"] if origem == "manual" else "",
@@ -550,8 +556,15 @@ def logged_users_for_series(services: AliasChangeServices, series: List[str]) ->
                 result[serie]["pendencia"] = match["pendencia"]
             continue
         usuario = endpoint_user_for_serial(endpoint_index, key).strip()
+        from domains.entra_users import resolve_name
+        nome_pessoa, nome_pessoa_origem = resolve_name(
+            usuario, key, endpoint_index.get("entra_directory", {}), {},
+        )
         result[serie] = {
             "usuario": usuario,
+            "nome_pessoa": nome_pessoa,
+            "nome_pessoa_origem": nome_pessoa_origem,
+            "nome_pessoa_editavel": False,
             "origem": "endpoint" if usuario else "",
             "serial_cadastro": None,
             "informado_em": "",
