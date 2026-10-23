@@ -207,9 +207,21 @@
       ? `Atualizado ${formatarHorarioHistorico(data.atualizado_em)}`
       : hasTickets ? "Versão selecionada" : "Nenhuma importação";
     renderizarResumoChamados(data);
+    const EventConstructor = document.defaultView?.CustomEvent;
+    if (EventConstructor) {
+      document.dispatchEvent(new EventConstructor("simpress:chamados-atualizados", {
+        detail: { snapshot_id: data.snapshot_id || "" },
+      }));
+    }
 
     const records = filtrarChamados(data.chamados);
-    document.getElementById("contagem-acompanhamento-chamados").textContent = `Exibindo ${records.length} de ${Array.isArray(data.chamados) ? data.chamados.length : 0} séries · OS da maior para a menor, sem OS no final`;
+    const selectedOrder = appState.filtroChamadoSelecionado;
+    const selectedSources = fontesDoFiltroOs(selectedOrder);
+    const sourceDescription = selectedSources.map(source => source === "simpress" ? "Simpress" : "Oracle").join(" + ");
+    const countDescription = selectedOrder
+      ? "Filtro: " + sourceDescription + " · OS " + selectedOrder.os
+      : "OS da maior para a menor, sem OS no final";
+    document.getElementById("contagem-acompanhamento-chamados").textContent = `Exibindo ${records.length} de ${Array.isArray(data.chamados) ? data.chamados.length : 0} séries · ${countDescription}`;
     renderizarTriagemChamados(data.chamados);
     const exportButton = document.getElementById("btn-exportar-acompanhamento-chamados");
     const selectedSnapshotId = document.getElementById("versao-acompanhamento-chamados").value;
@@ -258,15 +270,51 @@
   function filtrarChamados(chamados) {
     const filters = obterFiltrosChamados();
     const query = normalizarFiltroChamados(filters.search);
+    const selectedOrder = appState.filtroChamadoSelecionado;
     const records = (Array.isArray(chamados) ? chamados : []).filter(record => {
-      const attention = classificarAtencaoChamado(record);
+      if (selectedOrder && !correspondeAoFiltroOsSelecionado(record, selectedOrder)) return false;
+      const selectedRecord = selectedOrder
+        ? {
+          ...record,
+          oracle: fontesDoFiltroOs(selectedOrder).includes("oracle")
+            ? (Array.isArray(record?.oracle) ? record.oracle : [])
+              .filter(ticket => normalizarOrdemServico(ticket?.ordem_servico) === normalizarOrdemServico(selectedOrder.os))
+            : [],
+        }
+        : record;
+      const attention = classificarAtencaoChamado(selectedRecord);
       if (filters.attention_only && !attention.em_atencao) return false;
-      if (!correspondeTriagemChamado(record, appState.filtroTriagemChamados)) return false;
+      if (!correspondeTriagemChamado(selectedRecord, appState.filtroTriagemChamados)) return false;
       const searchable = normalizarFiltroChamados(valoresChamado(record).join(" "));
       return !query || searchable.includes(query);
     });
     records.sort(compararChamadosPorOrdemServicoDecrescente);
     return records;
+  }
+
+  function normalizarOrdemServico(value) {
+    return String(value || "").trim().replace(/\s+/g, "").toUpperCase();
+  }
+
+  function fontesDoFiltroOs(selectedOrder) {
+    const sources = Array.isArray(selectedOrder?.fontes)
+      ? selectedOrder.fontes : selectedOrder?.fonte ? [selectedOrder.fonte] : [];
+    return [...new Set(sources.map(source => String(source || "").trim().toLowerCase())
+      .filter(source => source === "oracle" || source === "simpress"))];
+  }
+
+  function correspondeAoFiltroOsSelecionado(record, selectedOrder) {
+    if (normalizarFiltroChamados(record?.serie) !== normalizarFiltroChamados(selectedOrder?.serie)) return false;
+    const target = normalizarOrdemServico(selectedOrder.os);
+    if (!target) return false;
+    const sources = fontesDoFiltroOs(selectedOrder);
+    const oracleMatches = sources.includes("oracle")
+      && (Array.isArray(record?.oracle) ? record.oracle : [])
+        .some(ticket => normalizarOrdemServico(ticket?.ordem_servico) === target);
+    const simpressMatches = sources.includes("simpress")
+      && (Array.isArray(record?.simpress?.ordens_servico) ? record.simpress.ordens_servico : [])
+        .some(order => normalizarOrdemServico(order) === target);
+    return oracleMatches || simpressMatches;
   }
 
   // Daily triage groups: only series with an open Oracle ticket count as active.
@@ -321,15 +369,28 @@
 
   function renderizarCartaoChamado(record, snapshotId, expandedSections) {
     const [relationLabel, relationClass] = RELACOES_CHAMADO[record.relacao] || RELACOES_CHAMADO.sem_os;
-    const attention = classificarAtencaoChamado(record);
+    const selectedOrder = appState.filtroChamadoSelecionado
+      && normalizarFiltroChamados(record.serie) === normalizarFiltroChamados(appState.filtroChamadoSelecionado.serie)
+      ? appState.filtroChamadoSelecionado : null;
+    const selectedOsKey = selectedOrder ? normalizarOrdemServico(selectedOrder.os) : "";
+    const selectedSources = fontesDoFiltroOs(selectedOrder);
     const simpress = record.simpress || {};
     const ordensVenda = Array.isArray(simpress.ordens_venda) ? simpress.ordens_venda : [];
-    const ordensSimpress = Array.isArray(simpress.ordens_servico) ? simpress.ordens_servico : [];
+    const allOrdensSimpress = Array.isArray(simpress.ordens_servico) ? simpress.ordens_servico : [];
+    const ordensSimpress = selectedOrder
+      ? selectedSources.includes("simpress")
+        ? allOrdensSimpress.filter(order => normalizarOrdemServico(order) === selectedOsKey) : []
+      : allOrdensSimpress;
     const currentSimpressOrder = [...ordensSimpress].filter(Boolean).sort(compararOrdensServicoDecrescente)[0] || "";
     const chamadosCliente = chamadosClienteInformados(simpress.chamados_cliente);
     const enderecosEntrega = Array.isArray(simpress.enderecos_entrega) ? simpress.enderecos_entrega : [];
     const mostrarEnderecoEntrega = simpress.pedido_em_andamento && enderecosEntrega.some(Boolean);
-    const oracle = Array.isArray(record.oracle) ? record.oracle : [];
+    const allOracle = Array.isArray(record.oracle) ? record.oracle : [];
+    const oracle = selectedOrder
+      ? selectedSources.includes("oracle")
+        ? allOracle.filter(ticket => normalizarOrdemServico(ticket?.ordem_servico) === selectedOsKey) : []
+      : allOracle;
+    const attention = classificarAtencaoChamado(selectedOrder ? { ...record, oracle } : record);
     const orderedOracle = [...oracle].sort((left, right) => compararOrdensServicoDecrescente(left.ordem_servico, right.ordem_servico));
     const currentOracle = orderedOracle[0] || {};
     const hasActiveOracle = orderedOracle.some(ticket => !idadeAtualizacaoChamado(ticket).encerrado);
@@ -339,14 +400,14 @@
         : "Sem data de atualização"
       : currentOracle.ordem_servico ? "Chamado encerrado" : "Sem registro Oracle";
     const oracleRows = orderedOracle.length
-      ? orderedOracle.map(ticket => renderizarSolicitacaoOracle(ticket)).join("")
+      ? orderedOracle.map(ticket => renderizarSolicitacaoOracle(ticket, Boolean(selectedOrder))).join("")
       : '<p class="text-xs text-slate-500">Sem registro correspondente no Oracle.</p>';
     const attentionClass = attention.em_atencao ? "border-amber-400/20 bg-amber-500/5 text-amber-200" : "border-slate-700 bg-slate-900 text-slate-400";
     const attentionLabel = attention.em_atencao ? attention.motivo : hasActiveOracle ? "Em dia" : currentOracle.ordem_servico ? "Encerrado" : "Em acompanhamento";
     const cityLabels = cidadesDoChamado(record);
     const providerLabels = atendimentosDoChamado(record).filter(provider => provider !== "Não informado");
     const oracleStatus = [currentOracle.status, currentOracle.sub_status].filter(Boolean).join(" · ") || "Não informado";
-    const openDetails = expandedSections.has(chaveSecaoCartao(record.serie, "details")) ? " open" : "";
+    const openDetails = selectedOrder || expandedSections.has(chaveSecaoCartao(record.serie, "details")) ? " open" : "";
     // Empty fields stay out of the card; the relation badge already says which source is missing.
     const temValor = values => Array.isArray(values) && values.some(Boolean);
     const identificador = (label, value, classes) => `<div class="ticket-card-identifier border ${classes}"><span>${label}</span>${value ? `<strong>${value}</strong>` : '<strong class="is-empty">Sem OS</strong>'}</div>`;
@@ -399,7 +460,7 @@
         </article>`;
   }
 
-  function renderizarSolicitacaoOracle(ticket) {
+  function renderizarSolicitacaoOracle(ticket, expandDescription = false) {
     const updateAge = idadeAtualizacaoChamado(ticket);
     const ageClass = updateAge.encerrado ? "text-slate-500" : updateAge.dias === null || updateAge.dias >= 3 ? "text-amber-200" : "text-emerald-200";
     const oracleAddress = [ticket.logradouro, ticket.numero_endereco, ticket.bairro, ticket.cidade]
@@ -422,7 +483,7 @@
           ${linha("text-slate-400", [["Atendimento por", ticket.nome_filial]])}
           ${linha("text-slate-400", [["Entregas", ticket.status_entregas], ["Atividades", ticket.status_atividades], ["Atualizado", ticket.ultima_atualizacao && formatarHorarioHistorico(ticket.ultima_atualizacao)]])}
           <p class="mt-1 text-[11px] font-medium ${ageClass}">${escapeHtml(updateAge.rotulo)}</p>
-          ${String(ticket.descricao || "").trim() ? `<details class="ticket-oracle-description"><summary class="text-xs"><span class="shrink-0 font-semibold src-oracle-text">Descrição do chamado</span><span class="ticket-oracle-description-preview">${escapeHtml(resumirDescricaoChamado(ticket.descricao))}</span><span class="ticket-oracle-description-toggle ticket-oracle-description-expand">⌄ Expandir</span><span class="ticket-oracle-description-toggle ticket-oracle-description-collapse">⌃ Recolher</span></summary><div class="ticket-oracle-description-content">${escapeHtml(String(ticket.descricao).trim())}</div></details>` : ""}
+          ${String(ticket.descricao || "").trim() ? `<details class="ticket-oracle-description"${expandDescription ? " open" : ""}><summary class="text-xs"><span class="shrink-0 font-semibold src-oracle-text">Descrição do chamado</span><span class="ticket-oracle-description-preview">${escapeHtml(resumirDescricaoChamado(ticket.descricao))}</span><span class="ticket-oracle-description-toggle ticket-oracle-description-expand">⌄ Expandir</span><span class="ticket-oracle-description-toggle ticket-oracle-description-collapse">⌃ Recolher</span></summary><div class="ticket-oracle-description-content">${escapeHtml(String(ticket.descricao).trim())}</div></details>` : ""}
         </div>`;
   }
 
@@ -430,7 +491,23 @@
     document.getElementById("filtro-acompanhamento-chamados").value = "";
     document.getElementById("somente-atencao-chamados").checked = false;
     appState.filtroTriagemChamados = "";
+    appState.filtroChamadoSelecionado = null;
     app.renderizarAcompanhamentoChamados();
+  }
+
+  function abrirChamadoDaOs(fontes, serie, os) {
+    const selectedSources = (Array.isArray(fontes) ? fontes : [fontes])
+      .map(source => String(source || "").trim().toLowerCase())
+      .filter(source => source === "oracle" || source === "simpress");
+    const uniqueSources = [...new Set(selectedSources)];
+    const selectedOrder = {
+      fonte: uniqueSources.length === 1 ? uniqueSources[0] : "ambas",
+      fontes: uniqueSources,
+      serie: String(serie || "").trim(),
+      os: String(os || "").trim(),
+    };
+    if (!uniqueSources.length || !selectedOrder.serie || !selectedOrder.os) return;
+    app.abrirAcompanhamentoChamados(false, selectedOrder);
   }
 
   async function selecionarVersaoChamados() {
@@ -573,6 +650,8 @@
       payload.append("simpress_file", simpressInput.files[0]);
       payload.append("oracle_file", oracleInput.files[0]);
       const data = await app.apiFetch("/api/operacoes/chamados/importar", { method: "POST", body: payload, errorMessage: "Não foi possível importar as planilhas." });
+      if (appState.filtroChamadoSelecionado) document.getElementById("filtro-acompanhamento-chamados").value = "";
+      appState.filtroChamadoSelecionado = null;
       ticketSnapshotRequestGate.invalidate();
       ticketEvolutionRequestGate.invalidate();
       appState.acompanhamentoChamadosAtual = data;
@@ -596,8 +675,20 @@
     }
   }
 
-  function abrirAcompanhamentoChamados(importar = false) {
-    app.abrirModalAcessivel("modal-acompanhamento-chamados", importar ? '#arquivo-chamados-simpress' : '[aria-label="Fechar acompanhamento de chamados"]', "fecharAcompanhamentoChamados", "btn-acompanhamento-chamados");
+  function abrirAcompanhamentoChamados(importar = false, selectedOrder = null) {
+    const search = document.getElementById("filtro-acompanhamento-chamados");
+    if (selectedOrder) {
+      appState.filtroChamadoSelecionado = selectedOrder;
+      search.value = selectedOrder.os;
+      document.getElementById("somente-atencao-chamados").checked = false;
+      appState.filtroTriagemChamados = "";
+    } else if (appState.filtroChamadoSelecionado) {
+      if (search.value === appState.filtroChamadoSelecionado.os) search.value = "";
+      appState.filtroChamadoSelecionado = null;
+    }
+    const initialFocus = importar ? '#arquivo-chamados-simpress'
+      : selectedOrder ? '#filtro-acompanhamento-chamados' : '[aria-label="Fechar acompanhamento de chamados"]';
+    app.abrirModalAcessivel("modal-acompanhamento-chamados", initialFocus, "fecharAcompanhamentoChamados", "btn-acompanhamento-chamados");
     const form = document.getElementById("form-importar-acompanhamento-chamados");
     if (!form.dataset.bound) {
       form.addEventListener("submit", app.importarPlanilhasChamados);
@@ -615,7 +706,10 @@
       });
       ["filtro-acompanhamento-chamados", "somente-atencao-chamados"].forEach(id => {
         const control = document.getElementById(id);
-        control.addEventListener(id === "filtro-acompanhamento-chamados" ? "input" : "change", app.renderizarAcompanhamentoChamados);
+        control.addEventListener(id === "filtro-acompanhamento-chamados" ? "input" : "change", () => {
+          if (id === "filtro-acompanhamento-chamados") appState.filtroChamadoSelecionado = null;
+          app.renderizarAcompanhamentoChamados();
+        });
       });
       form.dataset.bound = "true";
     }
@@ -627,6 +721,6 @@
     carregarEvolucaoChamados, renderizarLinhaDoTempoChamado, conectarAnotacoesLinhaDoTempo,
     carregarLinhaDoTempoChamado, renderizarAcompanhamentoChamados, filtrarTriagemChamados, limparFiltrosAcompanhamentoChamados,
     selecionarVersaoChamados, excluirImportacoesAntigasChamados, exportarAcompanhamentoChamados,
-    carregarAcompanhamentoChamados, importarPlanilhasChamados, abrirAcompanhamentoChamados,
+    carregarAcompanhamentoChamados, importarPlanilhasChamados, abrirAcompanhamentoChamados, abrirChamadoDaOs,
   };
 });

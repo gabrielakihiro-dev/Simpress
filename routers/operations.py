@@ -1,15 +1,16 @@
 """Operational views over saved comparison history and service tickets."""
 
 import json
+import re
 from datetime import datetime
 import logging
 from io import BytesIO
 from pathlib import Path
-from typing import Any, Callable, Dict, List, Optional, Sequence
+from typing import Any, Callable, Dict, List, Literal, Optional, Sequence
 
 from fastapi import APIRouter, File, HTTPException, UploadFile
 from fastapi.responses import StreamingResponse
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, field_validator
 
 from core.logging_setup import redact_reference
 from domains import ticket_import
@@ -32,6 +33,7 @@ from domains.ticket_import import (
     TicketWorkbookSource,
     ticket_annotation_row_hash,
 )
+from domains.inventory_comparison import normalize_reference_value
 from domains.ticket_reconciliation import reconcile_ticket_workbooks
 from domains.ticket_reporting import (
     TICKET_TIMELINE_ANNOTATION_CATEGORY,
@@ -59,6 +61,22 @@ class TicketTimelineAnnotationPayload(BaseModel):
     resolver_conflito: bool = False
 
 
+class TicketOsLinkPayload(BaseModel):
+    fonte: Literal["simpress", "oracle"]
+    serie: str = Field(..., min_length=1, max_length=128)
+    os: str = Field(..., min_length=1, max_length=160)
+    ano: int = Field(..., ge=2000, le=9999)
+    numero: str = Field("", max_length=24, pattern=r"^\d*$")
+
+    @field_validator("serie", "os")
+    @classmethod
+    def trim_identifier(cls, value: str) -> str:
+        normalized = value.strip()
+        if not normalized:
+            raise ValueError("Informe a série e o número da OS.")
+        return normalized
+
+
 def create_operations_router(
     *,
     load_comparison_history: Callable[[], List[Dict[str, Any]]],
@@ -70,6 +88,7 @@ def create_operations_router(
     history_annotations_sync_enabled: Optional[Callable[[], bool]] = None,
     load_history_annotation_records: Optional[Callable[..., List[Dict[str, Any]]]] = None,
     ticket_import_services: Optional[TicketImportServices] = None,
+    ticket_os_links_file: Optional[Callable[[], Path]] = None,
 ):
     """Build the operations routes; ``ticket_import_services`` shares the import with the inbox."""
     router = APIRouter()
@@ -121,6 +140,98 @@ def create_operations_router(
         if not isinstance(data, dict) or not isinstance(data.get("chamados"), list):
             raise HTTPException(status_code=503, detail="O acompanhamento de chamados está inválido.")
         return data
+
+    def ticket_os_link_key(fonte: str, serie: str, ordem_servico: str) -> str:
+        ordem_key = re.sub(r"\s+", "", str(ordem_servico or "")).upper()
+        return json.dumps(
+            [fonte, normalize_reference_value(serie), ordem_key],
+            ensure_ascii=False, separators=(",", ":"),
+        )
+
+    def read_ticket_os_links(path: Path) -> Dict[str, Any]:
+        if not path.exists():
+            return {"version": 1, "vinculos": {}}
+        try:
+            data = json.loads(path.read_text(encoding="utf-8"))
+        except (OSError, UnicodeError, json.JSONDecodeError):
+            raise HTTPException(status_code=503, detail="Os vínculos manuais de OS não puderam ser lidos.") from None
+        if not isinstance(data, dict) or data.get("version") != 1 or not isinstance(data.get("vinculos"), dict):
+            raise HTTPException(status_code=503, detail="Os vínculos manuais de OS estão inválidos.")
+        links = data["vinculos"]
+        for key, link in links.items():
+            if not isinstance(key, str) or not isinstance(link, dict):
+                raise HTTPException(status_code=503, detail="Os vínculos manuais de OS estão inválidos.")
+            try:
+                fonte = link["fonte"]
+                serie = link["serie"]
+                ordem = link["os"]
+                ano = int(link["ano"])
+                numero = link["numero"]
+                expected_key = ticket_os_link_key(fonte, serie, ordem)
+                valid = (
+                    fonte in {"simpress", "oracle"}
+                    and bool(str(serie).strip()) and bool(str(ordem).strip())
+                    and 2000 <= ano <= 9999
+                    and isinstance(numero, str) and re.fullmatch(r"\d{1,24}", numero)
+                    and key == expected_key
+                )
+            except (KeyError, TypeError, ValueError):
+                valid = False
+                numero = ""
+                ano = 0
+            if not valid:
+                raise HTTPException(status_code=503, detail="Os vínculos manuais de OS estão inválidos.")
+            link["ano"] = ano
+            link["chamado"] = f"UTIC-{ano}-{numero}"
+        return data
+
+    @router.get("/api/operacoes/chamados/vinculos-os")
+    def get_ticket_os_links():
+        path = ticket_os_links_file() if ticket_os_links_file else ticket_report_path().parent / "os_chamados_vinculos.json"
+        data = read_ticket_os_links(path)
+        return {"vinculos": list(data["vinculos"].values())}
+
+    def validate_staged_ticket_os_links(staged: Path) -> None:
+        read_ticket_os_links(staged)
+
+    @router.put("/api/operacoes/chamados/vinculos-os")
+    def save_ticket_os_link(payload: TicketOsLinkPayload):
+        path = ticket_os_links_file() if ticket_os_links_file else ticket_report_path().parent / "os_chamados_vinculos.json"
+        key = ticket_os_link_key(payload.fonte, payload.serie, payload.os)
+        try:
+            path.parent.mkdir(parents=True, exist_ok=True)
+            with AtomicFileTransaction(transaction_root(), [path]) as transaction:
+                state = read_ticket_os_links(path)
+                links = dict(state["vinculos"])
+                saved = None
+                if payload.numero:
+                    saved = {
+                        "fonte": payload.fonte,
+                        "serie": payload.serie,
+                        "os": payload.os,
+                        "ano": payload.ano,
+                        "numero": payload.numero,
+                        "chamado": f"UTIC-{payload.ano}-{payload.numero}",
+                    }
+                    links[key] = saved
+                else:
+                    links.pop(key, None)
+                updated = {"version": 1, "vinculos": links}
+                encoded = json.dumps(updated, ensure_ascii=False, indent=2).encode("utf-8")
+                transaction.stage_bytes(
+                    path,
+                    encoded,
+                    validate_staged_ticket_os_links,
+                )
+                transaction.commit()
+        except HTTPException:
+            raise
+        except FileBusyError:
+            raise HTTPException(status_code=409, detail="Os vínculos de OS estão sendo atualizados por outra operação local.") from None
+        except (OSError, FileTransactionError):
+            logger.exception("Não foi possível salvar o vínculo manual da OS %s.", redact_reference(payload.os))
+            raise HTTPException(status_code=503, detail="Não foi possível salvar o vínculo manual da OS.") from None
+        return {"vinculo": saved}
 
     def displayed_ticket_snapshots(report: Dict[str, Any]) -> List[Dict[str, Any]]:
         return [normalize_ticket_snapshot(item) for item in ticket_report_snapshots(report)]

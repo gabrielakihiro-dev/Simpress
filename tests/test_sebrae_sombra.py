@@ -13,7 +13,7 @@ from scripts import sebrae_sombra as sombra
 
 
 def chamado(numero: str, descricao: str) -> ChamadoSoftExpert:
-    return ChamadoSoftExpert(numero=numero, titulo="", descricao=descricao, iniciador="Maria", habilitada_em="21/10/2026 10:30")
+    return ChamadoSoftExpert(numero=numero, titulo="", descricao=descricao, solicitante="Maria", habilitada_em="21/10/2026 10:30")
 
 
 class ObservadorTest(unittest.TestCase):

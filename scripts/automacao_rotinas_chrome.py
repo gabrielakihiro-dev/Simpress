@@ -952,12 +952,17 @@ def selecionar_todos_computadores(page: "Page") -> None:
     )
 
 
-ENDPOINT_CABECALHOS = ("Nome do computador", "Rótulo de serviço/Número de série")
+ENDPOINT_CABECALHOS = (
+    "Nome do computador",
+    "Rótulo de serviço/Número de série",
+    "Usuário do último logon",
+)
 
 
 def validar_xlsx_endpoint(arquivo: Path, total_tela: int | None = None) -> int:
     """Confere cabeçalho e contagem do XLSX do Endpoint antes da importação; devolve as linhas de dados."""
     from openpyxl import load_workbook
+    from domains.uploaded_workbooks import normalize_workbook_header
 
     try:
         planilha = load_workbook(arquivo, read_only=True, data_only=True)
@@ -966,8 +971,11 @@ def validar_xlsx_endpoint(arquivo: Path, total_tela: int | None = None) -> int:
     try:
         linhas = planilha.active.iter_rows(values_only=True)
         cabecalho = next(linhas, None) or ()
-        normalizado = {str(c).strip().casefold() for c in cabecalho if c is not None}
-        faltando = [c for c in ENDPOINT_CABECALHOS if c.casefold() not in normalizado]
+        normalizado = {normalize_workbook_header(c) for c in cabecalho if c is not None}
+        faltando = [
+            c for c in ENDPOINT_CABECALHOS
+            if normalize_workbook_header(c) not in normalizado
+        ]
         if faltando:
             raise RotinaErro(f"O XLSX do Endpoint não tem as colunas esperadas: {faltando}.")
         total = sum(1 for linha in linhas if any(c not in (None, "") for c in linha))

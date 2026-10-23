@@ -6,9 +6,15 @@ from unittest.mock import Mock, patch
 from scripts import automacao_rotinas_chrome as automacao
 from scripts import verificar_usuarios_endpoint as rotina
 
-COLUNAS = (("Nome do computador", 0, 100), ("Rótulo de serviço/Número de série", 100, 200), ("Usuários logados", 200, 300))
+COLUNAS = (
+    ("Nome do computador", 0, 100), ("Rótulo de serviço/Número de série", 100, 200),
+    ("Usuários logados", 200, 300), ("Domínio", 300, 400),
+)
 # Ao abrir a barra de pesquisa, a grade reorganiza as colunas: série e usuários trocam de lugar.
-COLUNAS_DESLOCADAS = (("Nome do computador", 0, 100), ("Rótulo de serviço/Número de série", 200, 300), ("Usuários logados", 100, 200))
+COLUNAS_DESLOCADAS = (
+    ("Nome do computador", 0, 100), ("Rótulo de serviço/Número de série", 200, 300),
+    ("Usuários logados", 100, 200), ("Domínio", 300, 400),
+)
 
 
 class Elemento:
@@ -59,7 +65,10 @@ class CampoFiltro(Elemento):
             p.buffers[self.indice] = "" if p.selecionado else atual[:-1]
             p.selecionado = False
         elif tecla == "Enter" and not p.surda:
-            p.filtros[self.indice] = p.buffers.get(self.indice, "")
+            valor = p.buffers.get(self.indice, "")
+            p.filtros[self.indice] = valor
+            if valor:
+                p.buscas.append((p.colunas[self.indice][0], valor))
 
     def press_sequentially(self, texto, delay=0):
         self.pagina.buffers[self.indice] = self.pagina.buffers.get(self.indice, "") + texto
@@ -118,6 +127,7 @@ class PaginaEndpoint:
 
     def reiniciar(self):
         self.filtros, self.buffers, self.selecionado = {}, {}, False
+        self.buscas = []
         self.barra_aberta = False
         self.colunas = COLUNAS
         self.detalhe, self.abas = None, []
@@ -150,7 +160,7 @@ class PaginaEndpoint:
     def _visiveis(self):
         saida = []
         for c in self.computadores:
-            valores = (c["nome"], c["serie"], c["usuarios"])
+            valores = (c["nome"], c["serie"], c["usuarios"], c["dominio"])
             if all(texto.casefold() in valores[i].casefold() for i, texto in self.filtros.items() if texto):
                 saida.append(c)
         return saida
@@ -160,7 +170,7 @@ class PaginaEndpoint:
             linhas = [
                 [
                     {"texto": c[campo], "x0": self.colunas[i][1], "x1": self.colunas[i][2], "href": c["href"] if i == 0 else ""}
-                    for i, campo in enumerate(("nome", "serie", "usuarios"))
+                    for i, campo in enumerate(("nome", "serie", "usuarios", "dominio"))
                 ]
                 for c in self._visiveis()
             ]
@@ -180,8 +190,11 @@ class PaginaEndpoint:
         return {"cabecalho": "", "nomes": [], "ultimo": "", "carregando": False, "vazia": False}
 
 
-def computador(nome, serie, usuarios="", href=None):
-    return {"nome": nome, "serie": serie, "usuarios": usuarios, "href": href or f"#/uems/inventory/computers/{abs(hash(nome)) % 9999}"}
+def computador(nome, serie, usuarios="", href=None, dominio=""):
+    return {
+        "nome": nome, "serie": serie, "usuarios": usuarios, "dominio": dominio,
+        "href": href or f"#/uems/inventory/computers/{abs(hash(nome)) % 9999}",
+    }
 
 
 def pendencia(tipo="usuario_ausente", serie="BRJ0000TST", atual="carla", endpoint="", computador_="HOST-1"):
@@ -229,6 +242,11 @@ class DecisaoTest(unittest.TestCase):
         self.assertEqual(rotina.escolher_usuario_sistema(["", "root", "Convidado", "WDAGUtilityAccount", "davi", "ana"]), "davi")
         self.assertEqual(rotina.escolher_usuario_sistema(["Administrador", "DefaultAccount", "N/A"]), "")
 
+    def test_grade_aceita_um_usuario_valido_e_marca_varios_como_ambiguos(self):
+        self.assertEqual(rotina.escolher_usuario_grade("NA, DOM\\carla, carla"), ("DOM\\carla", False))
+        self.assertEqual(rotina.escolher_usuario_grade("Administrador, CodexSandboxOffline"), ("", False))
+        self.assertEqual(rotina.escolher_usuario_grade("carla, davi"), ("", True))
+
     def test_contas_tecnicas_e_codex_nao_contam_como_usuario(self):
         for nome in ("CodexSandboxOffline", "CodexSandboxOnline", "Default User", "UI Flow Service", "UIFlowService"):
             self.assertFalse(rotina.usuario_valido(nome), nome)
@@ -275,10 +293,28 @@ class GradeTest(AmbienteBase):
             with self.assertRaises(automacao.RotinaErro):
                 rotina.aplicar_filtro(pagina, automacao, "numero de serie", "AAA1")
 
-    def test_busca_por_serie_sem_s_e_limpa_o_filtro(self):
-        pagina = PaginaEndpoint([computador("MAC", "CMVXKV7YCM", "ana")])
-        r = rotina.pesquisar_computador_endpoint(pagina, automacao, "SCMVXKV7YCM", "")
+    def test_busca_por_serie_exata_para_computador_comum(self):
+        serie = "SF2GFWGVG72"
+        pagina = PaginaEndpoint([computador("HOST-1", serie, "ana")])
+        r = rotina.pesquisar_computador_endpoint(pagina, automacao, serie, "HOST-1")
         self.assertEqual((r["estado"], r["linha"]["usuarios"]), ("unico", "ana"))
+        self.assertEqual(pagina.buscas, [("Rótulo de serviço/Número de série", serie)])
+        self.assertFalse(any(pagina.filtros.values()))
+
+    def test_busca_mac_consulta_serial_na_coluna_dominio(self):
+        pagina = PaginaEndpoint([
+            computador("PRMACUMC010", "PRMACUMC010", "ana", dominio="F2GFWGVG72"),
+        ])
+        r = rotina.pesquisar_computador_endpoint(pagina, automacao, "SF2GFWGVG72", "PRMACUMC010")
+        self.assertEqual((r["estado"], r["linha"]["usuarios"]), ("unico", "ana"))
+        self.assertEqual(pagina.buscas, [("Domínio", "SF2GFWGVG72"), ("Domínio", "F2GFWGVG72")])
+        self.assertFalse(any(pagina.filtros.values()))
+
+    def test_busca_exata_nao_remove_s_em_computador_comum(self):
+        pagina = PaginaEndpoint([computador("HOST-1", "F2GFWGVG72", "ana")])
+        r = rotina.pesquisar_computador_endpoint(pagina, automacao, "SF2GFWGVG72", "")
+        self.assertEqual(r["estado"], "ausente")
+        self.assertEqual(pagina.buscas, [("Rótulo de serviço/Número de série", "SF2GFWGVG72")])
         self.assertFalse(any(pagina.filtros.values()))
 
     def test_busca_por_hostname_quando_a_serie_nao_existe(self):
@@ -330,7 +366,7 @@ class SistemaTest(AmbienteBase):
 
     def test_ultimo_logon_decide_mesmo_com_contas_tecnicas_na_tabela(self):
         pagina = PaginaEndpoint(
-            [computador("HOST-1", "BRJ5512FFS", "")],
+            [computador("HOST-1", "BRJ5512FFS", "outro.usuario")],
             {"HOST-1": ["CodexSandboxOffline", "Default", "UI Flow Service"]},
             ultimos_logon={"HOST-1": "MRamos"},
         )
@@ -388,11 +424,23 @@ class SistemaTest(AmbienteBase):
         rotina.processar_pendencia(pagina, automacao, pendencia("substituicao_manual", "carla", "davi"))
         self.assertEqual(self._decisoes(), ["recusar"])
 
-    def test_usuarios_logados_da_grade_nao_decide(self):
+    def test_usuarios_logados_da_grade_com_usuario_unico_decide_antes_de_sistema(self):
         pagina = PaginaEndpoint([computador("HOST-1", "BRJ0000TST", "carla")], {"HOST-1": ["davi"]})
         rotina.processar_pendencia(pagina, automacao, pendencia(atual="carla"))
-        self.assertEqual(pagina.abas_clicadas, ["Sistema", "Usuários"])
-        self.assertEqual(self._decisoes(), ["remover"])
+        self.assertEqual(pagina.abas_clicadas, [])
+        self.assertEqual(self._decisoes(), ["manter"])
+        self.assertIn("Usuários logados confirma o usuário carla", self._anotacoes()[0])
+
+    def test_grade_com_varios_usuarios_validos_mantem_pendencia_aberta(self):
+        pagina = PaginaEndpoint(
+            [computador("HOST-1", "BRJ0000TST", "carla, davi")],
+            {"HOST-1": ["carla"]},
+            ultimos_logon={"HOST-1": "CodexSandboxOffline"},
+        )
+        rotina.processar_pendencia(pagina, automacao, pendencia(atual="carla"))
+        self.assertEqual(self._decisoes(), [])
+        self.assertEqual(pagina.abas_clicadas, [])
+        self.assertIn("Mais de um usuário válido", self._anotacoes()[0])
 
     def test_computador_nao_encontrado_remove_com_aviso(self):
         pagina = PaginaEndpoint([computador("OUTRO", "ZZZ")])

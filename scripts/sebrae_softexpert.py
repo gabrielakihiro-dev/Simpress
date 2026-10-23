@@ -5,7 +5,8 @@ Recebe um ``context``/``page`` do Playwright já conectado ao Chrome de automaç
 1. abre a central de tarefas em aba nova e espera o login do usuário (nunca digita credenciais);
 2. percorre a lista inteira (paginação ou rolagem) coletando os números ``UTIC-AAAA-N``;
 3. para cada chamado novo (a lista vem do chamador, depois da triagem contra o Dashboard) abre
-   Executar > Registro de Chamados, confere número e título e devolve um ``ChamadoSoftExpert``.
+   Executar > Registro de Chamados, confere número e título e devolve um ``ChamadoSoftExpert``;
+   sempre consulta Atendimento - Chamados TI para ler o texto concluído de atendimento.
 
 Somente leitura: o único clique que altera algo no SoftExpert é o **Sim** da confirmação de associar
 o chamado ao usuário. Nunca finaliza workflow, registra atendimento nem reatribui; ``clicar`` recusa
@@ -26,7 +27,11 @@ from pathlib import Path
 from typing import TYPE_CHECKING, Any, Callable, Dict, List, Optional
 from urllib.parse import urlparse
 
-from domains.sebrae_chamados import ChamadoSoftExpert, chave_do_numero, extrair_numeros
+from domains.sebrae_chamados import (
+    ChamadoSoftExpert,
+    chave_do_numero,
+    extrair_numeros,
+)
 
 if TYPE_CHECKING:
     from playwright.sync_api import BrowserContext, Frame, Locator, Page
@@ -57,6 +62,7 @@ NOME_SSO = re.compile(r"^\s*SSO\s*$", re.IGNORECASE)
 # Ações sobre o chamado.
 NOME_EXECUTAR = re.compile(r"^\s*Executar\s*$", re.IGNORECASE)
 NOME_REGISTRO = re.compile(r"Registro de Chamados", re.IGNORECASE)
+NOME_ATENDIMENTO_TI = re.compile(r"^\s*Atendimento\s*[-–—]\s*Chamados TI\s*$", re.IGNORECASE)
 SEL_DIALOGO = "[role='dialog'], [role='alertdialog'], dialog[open], .modal.show"
 NOME_SIM = re.compile(r"^\s*Sim\s*$", re.IGNORECASE)
 # Só responde "Sim" a uma pergunta que fale de associar o chamado ao usuário; qualquer outra pára a rotina.
@@ -69,8 +75,9 @@ ROTULOS_CAMPOS: Dict[str, tuple] = {
     "numero": ("Número do chamado", "Número", "Nº do chamado", "Chamado", "Identificador"),
     "titulo": ("Título", "Titulo", "Assunto"),
     "descricao": ("Descrição", "Descrição do problema", "Descrição do chamado", "Detalhamento"),
-    "iniciador": ("Iniciador", "Solicitante"),
+    "solicitante": ("Solicitante",),
     "habilitada_em": ("Habilitada em", "Habilitado em"),
+    "detalhes_atendimento_realizado": ("Detalhes do Atendimento Realizado",),
 }
 
 # Botões que gravam ou encerram algo no SoftExpert: nunca são clicados.
@@ -127,6 +134,58 @@ LER_CAMPO_JS = """
     }
   }
   return '';
+}
+"""
+
+# Mesmo rótulo pode aparecer no atendimento concluído e na atividade editável atual.
+# Só aceita valores de controles read-only/desabilitados ou texto estático, nunca o campo editável.
+LER_DETALHES_ATENDIMENTO_JS = """
+(rotulos) => {
+  const norm = (t) => (t || '').normalize('NFD').replace(/[\\u0300-\\u036f]/g, '')
+    .replace(/\\s+/g, ' ').replace(/[\\s:*]+$/g, '').trim().toLowerCase();
+  const visivel = (el) => !!el && el.getClientRects().length > 0;
+  const campoDe = (el) => el && (el.matches('input,textarea,select') ? el : el.querySelector('input,textarea,select'));
+  const valorDe = (el) => {
+    if (!el) return '';
+    const campo = campoDe(el);
+    if (campo) {
+      if (campo.tagName === 'SELECT') return Array.from(campo.selectedOptions).map((o) => o.text).join(' ').trim();
+      return (campo.value || '').trim();
+    }
+    return (el.innerText || el.textContent || '').trim();
+  };
+  const rotulosNormalizados = rotulos.map(norm);
+  const elementos = Array.from(document.querySelectorAll('label,th,td,dt,span,div,strong,b,p'))
+    .filter((el) => visivel(el) && (el.tagName === 'LABEL' || el.children.length === 0));
+  const somenteLeitura = [];
+  const textoEstatico = [];
+  for (const el of elementos) {
+    if (!rotulosNormalizados.includes(norm(el.innerText))) continue;
+    const relacionados = [];
+    if (el.control) relacionados.push(el.control);
+    const id = el.getAttribute('for');
+    if (id) {
+      const associado = document.getElementById(id);
+      if (associado && !relacionados.includes(associado)) relacionados.push(associado);
+    }
+    if (el.nextElementSibling) relacionados.push(el.nextElementSibling);
+    for (const relacionado of relacionados) {
+      const campo = campoDe(relacionado);
+      if (campo) {
+        const imutavel = campo.disabled || campo.readOnly || campo.getAttribute('aria-readonly') === 'true' ||
+          campo.getAttribute('aria-disabled') === 'true';
+        if (imutavel) {
+          const valor = valorDe(campo);
+          if (valor && norm(valor) !== norm(el.innerText)) somenteLeitura.push(valor);
+        }
+        continue;
+      }
+      if (relacionado.matches && relacionado.matches('input,textarea,select,button')) continue;
+      const valor = valorDe(relacionado);
+      if (valor && norm(valor) !== norm(el.innerText)) textoEstatico.push(valor);
+    }
+  }
+  return somenteLeitura[0] || textoEstatico[0] || '';
 }
 """
 
@@ -461,6 +520,48 @@ def _ler_campo(page: "Page", chave: str) -> str:
     return ""
 
 
+def _ler_detalhes_atendimento_visiveis(page: "Page") -> str:
+    for frame in _frames(page):
+        try:
+            valor = frame.evaluate(LER_DETALHES_ATENDIMENTO_JS, list(ROTULOS_CAMPOS["detalhes_atendimento_realizado"]))
+        except Exception:
+            continue  # frame em navegação
+        if valor and str(valor).strip():
+            return str(valor).strip()
+    return ""
+
+
+def _ler_detalhes_atendimento(page: "Page", numero: str) -> str:
+    """Abre a seção somente leitura de Atendimento TI e lê seus detalhes."""
+    valor = _ler_detalhes_atendimento_visiveis(page)
+    if valor:
+        return valor
+
+    for frame in _frames(page):
+        candidatos = (
+            frame.get_by_role("tab", name=NOME_ATENDIMENTO_TI),
+            frame.get_by_role("link", name=NOME_ATENDIMENTO_TI),
+            frame.get_by_role("button", name=NOME_ATENDIMENTO_TI),
+            frame.get_by_text(NOME_ATENDIMENTO_TI, exact=True),
+        )
+        for candidato in candidatos:
+            try:
+                visiveis = candidato.filter(visible=True)
+                if visiveis.count() != 1:
+                    continue
+                clicar(visiveis, "Atendimento - Chamados TI")
+                _aguardar_estavel(page)
+                return _ler_detalhes_atendimento_visiveis(page)
+            except SoftExpertErro:
+                raise
+            except Exception:
+                continue
+
+    raise SoftExpertErro(
+        f"{numero}: a seção Atendimento - Chamados TI não ficou disponível para consultar os detalhes."
+    )
+
+
 def _formulario_visivel(page: "Page") -> bool:
     return any(_visivel(frame.locator(SEL_FORMULARIO)) for frame in _frames(page))
 
@@ -642,7 +743,7 @@ def _extrair_uma_vez(context: "BrowserContext", page: "Page", numero: str) -> Ch
         formulario = _abrir_formulario(context, page, linha, numero)
         _aguardar_estavel(formulario)
         titulo = _conferir(formulario, numero, item.texto)
-        campos = {chave: _ler_campo(formulario, chave) for chave in ("descricao", "iniciador", "habilitada_em")}
+        campos = {chave: _ler_campo(formulario, chave) for chave in ("descricao", "solicitante", "habilitada_em")}
         for tentativa in range(1, RELEITURAS_CAMPOS + 1):
             if all(campos.values()):
                 break
@@ -652,12 +753,15 @@ def _extrair_uma_vez(context: "BrowserContext", page: "Page", numero: str) -> Ch
             campos = {chave: _ler_campo(formulario, chave) or campos[chave] for chave in campos}
             # Depois de uma releitura o título/número ainda precisam ser os do chamado escolhido.
             _conferir(formulario, numero, item.texto)
+        _log(f"{numero}: consultando Atendimento - Chamados TI para ler os detalhes concluídos.")
+        detalhes_atendimento = _ler_detalhes_atendimento(formulario, numero)
         return ChamadoSoftExpert(
             numero=chave_do_numero(numero),
             titulo=titulo,
             descricao=campos["descricao"],
-            iniciador=campos["iniciador"],
+            solicitante=campos["solicitante"],
             habilitada_em=campos["habilitada_em"],
+            detalhes_atendimento_realizado=detalhes_atendimento,
         )
     finally:
         _fechar_formulario(context, page, formulario)

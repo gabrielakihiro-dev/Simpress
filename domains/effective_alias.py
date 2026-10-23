@@ -13,7 +13,11 @@ from typing import Any, Callable, Dict, FrozenSet, Iterable, List, Optional, Set
 
 from core.errors import DomainError
 
-from domains.inventory_comparison import _record_value, normalize_reference_value
+from domains.inventory_comparison import (
+    _record_value,
+    endpoint_user_value,
+    normalize_reference_value,
+)
 
 logger = logging.getLogger(__name__)
 _last_alias_conflicts = 0
@@ -72,9 +76,7 @@ def build_endpoint_alias_index(
         hostname = str(
             _record_value(record, "NOMEDOCOMPUTADOR", "COMPUTERNAME", "HOSTNAME", "APELIDO") or ""
         ).strip()
-        logged_users = str(_record_value(record, "USUARIOSLOGADOS", "USUARIOLOGADO") or "").strip()
-        if normalize_reference_value(logged_users) == "NA":
-            logged_users = ""
+        logged_users = endpoint_user_value(record)
         if serial_key and hostname and (serial_key, normalize_reference_value(hostname)) in removed:
             continue
         row = {"serie": str(serial or "").strip(), "hostname": hostname}

@@ -16,11 +16,13 @@ from scripts.sebrae_excel import (
 )
 
 LINHAS_TOTAIS = 30
-COLUNAS_FORMULA = ("A", "R")
+COLUNAS_FORMULA = ("R", "U", "V", "W")
 LINHA_VALIDA = {
     "C": "UTIC-2026-0200",
-    "F": "Impressora não imprime no setor financeiro",
-    "G": "Maria da Silva",
+    "D": "Em Aberto",
+    "F": "Atendimento concluído",
+    "G": "Impressora não imprime no setor financeiro",
+    "H": "Maria da Silva",
     "I": "INCIDENTE",
     "N": "Sebrae",
     "P": "PR",
@@ -33,13 +35,14 @@ def linha_valida(**alteracoes: str) -> Dict[str, str]:
 
 
 class GradeFalsa(AdaptadorExcel):
-    """Planilha em memória: linhas 2-11 com chamados (4 e 5 ocultas por filtro) e 12-30 preparadas (fórmulas em A e R)."""
+    """Planilha em memória: linhas 2-11 com chamados (4 e 5 ocultas por filtro) e 12-30 preparadas (fórmulas em R, U, V e W)."""
 
     def __init__(self, diario: DiarioGravacao, **opcoes: object) -> None:
         super().__init__(colunas_formula=COLUNAS_FORMULA, diario=diario, espera_salvo_s=0.0, **opcoes)  # type: ignore[arg-type]
         self.celulas: Dict[Tuple[int, str], str] = {}
         self.ocultas: Set[int] = {4, 5}
         self.escritas: List[Tuple[int, str, str]] = []
+        self.alturas_padronizadas: List[Tuple[int, float]] = []
         self.leituras_c = 0
         self.salvo = True
         self.sessao_expirada = False
@@ -53,11 +56,13 @@ class GradeFalsa(AdaptadorExcel):
         self.celulas[(1, "C")] = "Chamado"
         for linha in range(2, 12):
             self.celulas[(linha, "C")] = f"UTIC-2026-{linha:04d}"
-            self.celulas[(linha, "F")] = f"Descrição {linha}"
+            self.celulas[(linha, "G")] = f"Descrição {linha}"
         self.celulas[(7, "C")] = "27371 / UTIC-2026-0094"
         for linha in range(2, LINHAS_TOTAIS + 1):
-            self.celulas[(linha, "A")] = "=LIN()"
-            self.celulas[(linha, "R")] = "=SE(Q2<>\"\";1;0)"
+            self.celulas[(linha, "R")] = '=TEXTO([@[DT ENCERRAMENTO]];"mmm/aa")'
+            self.celulas[(linha, "U")] = '=NETWORKDAYS([@[DATA ABERTURA]];TODAY())'
+            self.celulas[(linha, "V")] = '=IF([@[DIAS ABERTOS]]<=2;"0 a 2 Dias";"Mais de 2 Dias")'
+            self.celulas[(linha, "W")] = '=[@[DT ENCERRAMENTO]]-[@[DATA ABERTURA]]'
 
     # -- primitivas --
     def garantir_sessao(self) -> None:
@@ -95,6 +100,9 @@ class GradeFalsa(AdaptadorExcel):
     def aguardar_salvo(self, timeout_s: float) -> bool:
         return self.salvo
 
+    def padronizar_altura_linha(self, linha: int) -> None:
+        self.alturas_padronizadas.append((linha, xl.ALTURA_LINHA_PADRAO_PT))
+
     def celula_e_data(self, linha: int, coluna: str) -> Optional[bool]:
         return False if self.data_como_texto else None
 
@@ -126,14 +134,15 @@ class BaseGrade(unittest.TestCase):
 
 
 class GravacaoFelizTests(BaseGrade):
-    def test_grava_na_primeira_linha_preparada_e_so_nas_sete_colunas(self) -> None:
+    def test_grava_na_primeira_linha_preparada_e_so_nas_nove_colunas(self) -> None:
         antes = dict(self.grade.alvo())
         resultado = self.grade.gravar_chamado(linha_valida())
         self.assertEqual(resultado.situacao, xl.GRAVADO)
         self.assertTrue(resultado.incluido)
         self.assertEqual(resultado.linha, 12)
         self.assertEqual(resultado.pendentes, ())
-        self.assertEqual([coluna for _l, coluna, _v in self.grade.escritas], ["C", "F", "G", "I", "N", "P", "Q"])
+        self.assertEqual([coluna for _l, coluna, _v in self.grade.escritas], list(xl.COLUNAS_GRAVADAS))
+        self.assertEqual(self.grade.alturas_padronizadas, [(12, 14.25)])
         self.assertSoColunasGravadas(self.grade)
         depois = self.grade.alvo()
         mudou = {chave for chave in depois if depois[chave] != antes.get(chave)}
@@ -142,6 +151,28 @@ class GravacaoFelizTests(BaseGrade):
             self.assertEqual(depois[chave], valor)
         self.assertEqual(self.diario.abertas(), {})
         self.assertEqual(self.diario.caminho.exists(), True)
+
+    def test_cpfs_sao_mascarados_antes_de_gravar_no_dashboard(self) -> None:
+        resultado = self.grade.gravar_chamado(linha_valida(
+            F="Atendimento. CPF 529.982.247-25",
+            G="Notebook sem acesso. CPF 12345678900",
+            H="Maria da Silva (CPF 123.456.789-09)",
+        ))
+        self.assertEqual(resultado.situacao, xl.GRAVADO)
+        self.assertEqual(self.grade.celulas[(12, "F")], "Atendimento. CPF ***.***.***-**")
+        self.assertEqual(self.grade.celulas[(12, "G")], "Notebook sem acesso. CPF ***.***.***-**")
+        self.assertEqual(self.grade.celulas[(12, "H")], "Maria da Silva (CPF ***.***.***-**)")
+
+    def test_cpf_e_mascarado_antes_de_persistir_no_diario(self) -> None:
+        self.grade.falha_na_escrita = (1, RuntimeError("interrupção após a coluna C"))
+        resultado = self.grade.gravar_chamado(linha_valida(
+            F="Atendimento. CPF 52998224725", H="Maria da Silva CPF 123.456.789-09"
+        ))
+        self.assertEqual(resultado.situacao, xl.INTERROMPIDO)
+        intencao = self.diario.intencao("UTIC-2026-0200")
+        self.assertIsNotNone(intencao)
+        self.assertEqual(intencao["valores"]["F"], "Atendimento. CPF ***.***.***-**")
+        self.assertEqual(intencao["valores"]["H"], "Maria da Silva CPF ***.***.***-**")
 
     def test_segundo_envio_do_mesmo_chamado_e_duplicado(self) -> None:
         self.grade.gravar_chamado(linha_valida())
@@ -216,7 +247,8 @@ class LinhaDisponivelTests(BaseGrade):
 
     def test_linha_sem_formulas_nao_esta_preparada(self) -> None:
         for linha in range(12, LINHAS_TOTAIS + 1):
-            del self.grade.celulas[(linha, "R")]
+            for coluna in COLUNAS_FORMULA:
+                del self.grade.celulas[(linha, coluna)]
         resultado = self.grade.gravar_chamado(linha_valida())
         self.assertEqual(resultado.situacao, xl.SEM_LINHA)
         self.assertEqual(self.grade.escritas, [])
@@ -258,8 +290,8 @@ class EdicaoSimultaneaTests(BaseGrade):
         self.grade.ao_ler_linha = outra_pessoa
         resultado = self.grade.gravar_chamado(linha_valida())
         self.assertEqual(resultado.situacao, xl.PARCIAL)
-        self.assertEqual(resultado.confirmados, ("C", "F"))
-        self.assertEqual(resultado.pendentes, ("G", "I", "N", "P", "Q"))
+        self.assertEqual(resultado.confirmados, ("C", "D", "F"))
+        self.assertEqual(resultado.pendentes, ("G", "H", "I", "N", "P", "Q"))
         self.assertEqual(self.grade.celulas[(12, "G")], "Outro Nome")
         self.assertEqual(self.diario.intencao("UTIC-2026-0200")["estado"], xl.PARCIAL)
         self.assertTrue(resultado.interrompe_execucao)
@@ -278,8 +310,8 @@ class QuedaERetomadaTests(BaseGrade):
         self.grade.falha_na_escrita = (2, ConnectionError("rede caiu"))
         resultado = self.grade.gravar_chamado(linha_valida())
         self.assertEqual(resultado.situacao, xl.INTERROMPIDO)
-        self.assertEqual(resultado.confirmados, ("C", "F"))
-        self.assertEqual(resultado.pendentes, ("G", "I", "N", "P", "Q"))
+        self.assertEqual(resultado.confirmados, ("C", "D"))
+        self.assertEqual(resultado.pendentes, ("F", "G", "H", "I", "N", "P", "Q"))
         self.assertFalse(resultado.incluido)
         self.assertIn("rede caiu", resultado.detalhe)
         self.assertIn("UTIC-2026-0200", self.diario.abertas())
@@ -291,7 +323,7 @@ class QuedaERetomadaTests(BaseGrade):
         self.assertEqual(resultado.situacao, xl.RECUPERADO)
         self.assertTrue(resultado.incluido)
         self.assertEqual(resultado.linha, 12)
-        self.assertEqual([coluna for _l, coluna, _v in novo.escritas], ["G", "I", "N", "P", "Q"])
+        self.assertEqual([coluna for _l, coluna, _v in novo.escritas], ["F", "G", "H", "I", "N", "P", "Q"])
         self.assertEqual(novo.diario.abertas(), {})
         self.assertFalse(novo.linha_ocupada(13))
 
@@ -301,6 +333,19 @@ class QuedaERetomadaTests(BaseGrade):
         resultados = novo.recuperar_pendencias()
         self.assertEqual([r.situacao for r in resultados], [xl.RECUPERADO])
         self.assertEqual(novo.recuperar_pendencias(), [])
+
+    def test_retoma_diario_antigo_sem_status_em_aberto(self) -> None:
+        self.grade.falha_na_escrita = (1, ConnectionError("rede caiu"))
+        self.grade.gravar_chamado(linha_valida())
+        antiga = dict(self.diario.intencao("UTIC-2026-0200")["valores"])
+        antiga.pop("D")
+        self.diario.atualizar("UTIC-2026-0200", valores=antiga)
+        self.grade.falha_na_escrita = None
+
+        resultado = self.novo_motor().recuperar_pendencias()[0]
+
+        self.assertEqual(resultado.situacao, xl.RECUPERADO)
+        self.assertEqual(self.grade.celulas[(12, "D")], "Em Aberto")
 
     def test_queda_antes_de_escrever_algo_e_abandonada_e_regrava_do_zero(self) -> None:
         self.grade.falha_na_escrita = (0, ConnectionError("rede caiu"))
@@ -353,7 +398,7 @@ class ReleituraESalvoTests(BaseGrade):
         self.grade.corromper = {"I": "Incidente"}
         resultado = self.grade.gravar_chamado(linha_valida())
         self.assertEqual(resultado.situacao, xl.DIVERGENTE)
-        self.assertEqual(resultado.confirmados, ("C", "F", "G"))
+        self.assertEqual(resultado.confirmados, ("C", "D", "F", "G", "H"))
         self.assertEqual(resultado.pendentes[0], "I")
         self.assertFalse(resultado.incluido)
         self.assertIn("UTIC-2026-0200", self.diario.abertas())
@@ -409,8 +454,8 @@ class SessaoTests(BaseGrade):
         self.grade.falha_na_escrita = (3, xl.SessaoExpiradaErro("login pedido"))
         resultado = self.grade.gravar_chamado(linha_valida())
         self.assertEqual(resultado.situacao, xl.SESSAO_EXPIRADA)
-        self.assertEqual(resultado.confirmados, ("C", "F", "G"))
-        self.assertEqual(resultado.pendentes, ("I", "N", "P", "Q"))
+        self.assertEqual(resultado.confirmados, ("C", "D", "F"))
+        self.assertEqual(resultado.pendentes, ("G", "H", "I", "N", "P", "Q"))
         self.assertFalse(resultado.incluido)
 
     def test_deteccao_de_login_pela_url_e_pelo_texto(self) -> None:
@@ -429,6 +474,7 @@ class ValidacaoTests(BaseGrade):
             {**LINHA_VALIDA, "X": "1"},
             linha_valida(N="Outro"),
             linha_valida(P="SC"),
+            linha_valida(D="Em Atendimento"),
             linha_valida(I="OUTRO"),
             linha_valida(Q="2026-10-21 09:15"),
             linha_valida(Q="31/02/2026 09:15"),
@@ -447,7 +493,8 @@ class ValidacaoTests(BaseGrade):
     def test_quebras_de_linha_da_descricao_sao_preservadas_ou_viram_espaco(self) -> None:
         self.assertEqual(xl.normalizar_valor("F", "linha 1\r\n  linha   2 "), "linha 1\nlinha 2")
         self.assertEqual(xl.normalizar_valor("F", "linha 1\nlinha 2", quebras_como_espaco=True), "linha 1 linha 2")
-        self.assertEqual(xl.normalizar_valor("G", "Maria\n da  Silva"), "Maria da Silva")
+        self.assertEqual(xl.normalizar_valor("G", "linha 1\r\n  linha   2 "), "linha 1\nlinha 2")
+        self.assertEqual(xl.normalizar_valor("H", "Maria\n da  Silva"), "Maria da Silva")
         resultado = self.grade.gravar_chamado(linha_valida(F="Primeira\nSegunda"))
         self.assertEqual(resultado.situacao, xl.GRAVADO)
         self.assertEqual(self.grade.celulas[(12, "F")], "Primeira\nSegunda")
@@ -492,7 +539,7 @@ class PlaywrightLeituraTests(unittest.TestCase):
 
     class Sem(ExcelOnlinePlaywright):
         def __init__(self, copias: List[str], falha_ao_fechar: bool = False, erro_na_copia: bool = False) -> None:
-            super().__init__(page=None, colunas_formula=("A",), log=lambda texto: None)  # type: ignore[arg-type]
+            super().__init__(page=None, colunas_formula=COLUNAS_FORMULA, log=lambda texto: None)  # type: ignore[arg-type]
             self.copias = list(copias)
             self.eventos: List[str] = []
             self.falha_ao_fechar = falha_ao_fechar

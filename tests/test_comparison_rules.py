@@ -16,6 +16,31 @@ def source_table(records, sheet="Inventario"):
 
 
 class InventoryComparisonTests(unittest.TestCase):
+    def test_endpoint_comparison_prioritizes_last_logon_and_keeps_legacy_fallback(self):
+        rows = main._comparison_source_records(source_table([
+            {
+                "NOMEDOCOMPUTADOR": "PRNOTE-LAST",
+                "SERIAL": "SN-LAST",
+                "USUARIODOULTIMOLOGON": "ultimo.logon",
+                "USUARIOSLOGADOS": "usuario.grade",
+            },
+            {
+                "NOMEDOCOMPUTADOR": "PRNOTE-EMPTY",
+                "SERIAL": "SN-EMPTY",
+                "USUARIODOULTIMOLOGON": "N/A",
+                "USUARIOLOGADO": "usuario.legado",
+            },
+            {
+                "NOMEDOCOMPUTADOR": "PRNOTE-OLD",
+                "SERIAL": "SN-OLD",
+                "USUARIOSLOGADOS": "usuario.arquivo.antigo",
+            },
+        ]), "endpoint")
+
+        self.assertEqual([row["usuario"] for row in rows], [
+            "ultimo.logon", "usuario.legado", "usuario.arquivo.antigo",
+        ])
+
     def test_stale_access_includes_exactly_seven_days_and_uses_current_category(self):
         reference = datetime(2026, 10, 12, 15, 30, tzinfo=timezone(timedelta(hours=-3)))
         ages = {

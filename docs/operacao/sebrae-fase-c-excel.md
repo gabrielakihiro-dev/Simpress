@@ -7,10 +7,27 @@ Parte da rotina **Sincronizar chamados Sebrae** (`docs/operacao/sincronizar-cham
 | Item | Estado |
 | --- | --- |
 | Regras de gravação (`AdaptadorExcel`), diário, validações, testes com grade falsa | Implementado e testado em memória |
-| Implementação Playwright (`ExcelOnlinePlaywright`) | Escrita, **nunca executada contra o Excel real**: seletores e a leitura da coluna C são hipóteses |
-| Levantamento com o Excel autenticado | **Pendente — precisa de sessão assistida com o usuário** (roteiro abaixo) |
+| Implementação Playwright (`ExcelOnlinePlaywright`) | Escrita e testes em grade falsa; ainda **não executada para gravar no Excel real** |
+| Inspeção assistida real (23/10/2026) | Confirmou a aba `CHAMADOS`, cabeçalhos F/G/H/I/N/P/Q, filtro ativo e fórmulas em R, U, V e W de uma linha visível. Foi somente leitura; filtro permaneceu ativo |
+| Levantamento completo V0–V10 | **Pendente**; a inspeção anterior não cobre os testes de cópia, filtro, seleção de linha, digitação, salvamento e concorrência |
 
-**Conclusão provisória sobre a leitura da coluna C:** é viável *se* as verificações V1 a V4 passarem. O desenho não confia em suposições: toda leitura é rejeitada quando o número de linhas copiadas é menor que a última linha usada (Ctrl+End). Se V1 ou V3 falharem, a rotina **não grava** (risco de duplicidade) e a decisão volta ao usuário (por exemplo, integração oficial autorizada pela TI). Nada disso foi executado no Excel real nesta fase.
+**Conclusão provisória sobre a leitura da coluna C:** continua dependendo das verificações V1 a V4. O desenho rejeita leitura com menos linhas copiadas do que o limite indicado por Ctrl+End. A inspeção de outubro não executou a rotina Playwright nem validou essa completude. Se V1 ou V3 falharem, a rotina **não grava** (risco de duplicidade) e a decisão volta ao usuário.
+
+### Estrutura observada em 23/10/2026
+
+| Coluna | Cabeçalho observado | Uso da rotina |
+| --- | --- | --- |
+| C | CHAMADO | Número e deduplicação |
+| D | STATUS CHAMADOS | Valor padrão `Em Aberto` |
+| F | Atendimento Realizado | Texto integral de `Detalhes do Atendimento Realizado`, sem concatenar descrição |
+| G | Descrição Chamado | Descrição do Registro; título como fallback |
+| H | Nome Usuário | Campo `Solicitante`, nunca `Iniciador` |
+| I | TIPO DO CHAMADO | `INCIDENTE` ou `SOLICITAÇÃO` |
+| N | UNIDADE | `Sebrae` |
+| P | UF | `PR` |
+| Q | DATA ABERTURA | `Habilitada em`, como data/hora |
+
+Na inspeção somente leitura de 23/10/2026, a linha preparada 332 tinha fórmulas em R, U (`DIAS ABERTOS`), V (`AGING`) e W (`HR CONSUMIDA`). A configuração local `data/state/sebrae_config.json` já lista essas quatro colunas. Na linha 332, nenhuma fórmula foi encontrada de Y a AZ; colunas depois de AZ não foram verificadas. Nunca escrever fora das colunas autorizadas. A conferência completa da estrutura continua pendente no levantamento V0–V10.
 
 ## Como a leitura funciona (hipótese a validar)
 
@@ -26,7 +43,7 @@ Linhas ocultas manualmente são copiadas junto com a seleção; só as linhas fi
 ## Linha preparada e disponível
 
 - Ponto de partida: a linha seguinte à **última com qualquer valor** na coluna C (o histórico antigo nunca é preenchido nem reaproveitado).
-- Candidata, até `LIMITE_BUSCA_LINHAS` (40) abaixo: C, F, G, I, N, P e Q vazias e sem fórmula, linha não oculta, e **fórmula presente em cada coluna de `colunas_formula`**. Quais são essas colunas só se sabe com o Dashboard aberto (V5); o parâmetro é obrigatório no construtor.
+- Candidata, até `LIMITE_BUSCA_LINHAS` (40) abaixo: C, D, F, G, H, I, N, P e Q vazias e sem fórmula, linha não oculta, e **fórmula presente em cada coluna de `colunas_formula`**. O conjunto observado em R/W não encerra a verificação de todas as fórmulas informadas pelo usuário.
 - A leitura que escolhe a linha é a última antes da primeira escrita. Antes de **cada** célula, ela é lida de novo: se alguém a ocupou, a gravação para como `parcial` e nada é sobrescrito.
 
 ## Digitação sem autoformatação
@@ -34,20 +51,21 @@ Linhas ocultas manualmente são copiadas junto com a seleção; só as linhas fi
 - Caixa de Nome → célula (a seleção é conferida: se o endereço não bate, nada é digitado), `F2`, `keyboard.insert_text` (sem teclas), `Delete` (remove a sugestão de preenchimento automático) e `Enter`.
 - Textos que começam com `=`, `+`, `-`, `@` ou que parecem número/data (`00123`, `12/05`) recebem o apóstrofo de texto; a releitura aceita a célula com ou sem o apóstrofo exibido.
 - **Q** não recebe prefixo: `dd/MM/yyyy HH:mm` precisa virar data/hora. A releitura compara datas (`21/10/2026 09:15:00` equivale a `21/10/2026 09:15`). Se a célula ficar como texto (locale do Excel diferente) é preciso detectar em V6.
-- Quebras de linha da descrição (F): preservadas com `Alt+Enter`. Se V7 falhar, use `quebras_como_espaco=True`.
+- Quebras de linha de F e G: preservadas com `Alt+Enter`. Se V7 falhar, use `quebras_como_espaco=True`.
 
 ## Gravação, releitura e diário
 
 Ordem de `gravar_chamado(linha)`:
 
-1. Valida as sete colunas (formato, `Sebrae`, `PR`, data, tamanho).
+1. Valida as nove colunas (D igual a `Em Aberto`, tipo, `Sebrae`, `PR`, data, tamanho; F pode ficar vazia se não houver atendimento concluído).
 2. `garantir_sessao`: login Microsoft/SharePoint ou aviso de sessão expirada → `sessao_expirada` (pendência de login; nunca "concluído"); confere o título do arquivo e a aba `CHAMADOS`.
 3. Se o diário tem uma intenção aberta para o número, relê o Dashboard e **retoma** (ver abaixo).
 4. Relê a coluna C inteira; número presente → `duplicado`, nada é gravado.
-5. Escolhe a linha, registra a intenção no diário e escreve **C primeiro**, depois F, G, I, N, P, Q; cada célula é conferida vazia antes e relida depois.
-6. Relê as sete colunas e compara com o extraído → `divergente` se diferir.
-7. Espera o indicador **Salvo** estável → `nao_salvo` se não aparecer.
-8. Só então `gravado` (`incluido = True`) e o diário fecha a intenção.
+5. Escolhe a linha, registra a intenção no diário e escreve **C primeiro**, depois D, F, G, H, I, N, P, Q; cada célula é conferida vazia antes e relida depois.
+6. Define a altura da linha em 14,25 pontos (padrão confirmado em 23/10/2026), sem AutoFit nem quebra de texto, e relê o valor no diálogo de altura.
+7. Relê as nove colunas e compara com o extraído → `divergente` se diferir.
+8. Espera o indicador **Salvo** estável → `nao_salvo` se não aparecer.
+9. Só então `gravado` (`incluido = True`) e o diário fecha a intenção.
 
 Situações: `gravado`, `recuperado`, `duplicado`, `invalido`, `abandonado` (seguem a execução) e `parcial`, `divergente`, `nao_salvo`, `sessao_expirada`, `leitura_incompleta`, `filtro_nao_restaurado`, `sem_linha_preparada`, `interrompido` (`interrompe_execucao = True`: a Fase E para e avisa).
 
@@ -55,7 +73,7 @@ Situações: `gravado`, `recuperado`, `duplicado`, `invalido`, `abandonado` (seg
 
 **Retomada** (`recuperar_pendencias()` no início da execução, ou o próprio `gravar_chamado` do mesmo número): após queda, cancelamento ou `nao_salvo`, a execução seguinte relê o Dashboard antes de qualquer escrita:
 
-- número na coluna C **na linha da intenção** → compara as sete células; só as **vazias** são completadas; célula com conteúdo diferente → `divergente`, nada é sobrescrito;
+- número na coluna C **na linha da intenção** → compara as nove células; só as **vazias** são completadas; célula com conteúdo diferente → `divergente`, nada é sobrescrito;
 - número em **outra** linha → `duplicado`, intenção encerrada;
 - número em lugar nenhum → linha vazia: `abandonada`, e o chamado segue o fluxo normal; linha ocupada por outra pessoa: intenção encerrada e linha preservada.
 
@@ -74,7 +92,7 @@ Executar com o usuário, **numa cópia do Dashboard** (ou na aba `CHAMADOS` fora
 | V4 | Exibição temporária | Exibir → Exibições de Folha → Nova; copiar; Sair; Excluir | Todas as linhas aparecem, o filtro compartilhado não muda, e o fluxo de saída é confiável. Se não for: PARAR e decidir (ex.: usuário remove o filtro, ou integração oficial) |
 | V5 | Linha livre | Procurar a primeira linha com C vazia; ler a barra de fórmulas das colunas de fórmula | Fórmula começa com `=`; lista de colunas definida; linha filtrada/oculta é detectável |
 | V6 | Digitação e Q | Em uma linha de teste: `F2` + `insert_text` + `Delete` + `Enter` para texto, `=X`, `00123`, `PR` (com autocompletar) e `21/10/2026 09:15` | Valor igual ao enviado; Q vira data/hora (formato de número da célula = data); descobrir como `celula_e_data` lê isso |
-| V7 | Quebra de linha | Descrição com 3 linhas via `Alt+Enter` | A barra mostra `\n`; senão usar `quebras_como_espaco` |
+| V7 | Quebra de linha | Texto de F e de G com 3 linhas via `Alt+Enter` | A barra mostra `\n`; senão usar `quebras_como_espaco` |
 | V8 | Indicador Salvo | Gravar uma célula e observar "Salvando…" → "Salvo" | Texto/seletor do indicador; tempo típico |
 | V9 | Sessão expirada | Observar a tela de login e o aviso de sessão expirada | URL/texto que `url_de_login` e `texto_de_sessao_expirada` precisam reconhecer |
 | V10 | Edição simultânea | Segundo usuário/abas editando a mesma linha | Presença de diálogos de conflito/"alguém está editando" |
