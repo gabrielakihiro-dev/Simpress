@@ -294,13 +294,21 @@ class ConfiguracaoTests(unittest.TestCase):
         self.caminho.write_text(json.dumps(dados), encoding="utf-8")
 
     def test_valid_file(self):
-        self.escrever({"dashboard_url": "https://sebrae.sharepoint.com/x/Operacional_SEBRAE.xlsx", "colunas_formula": ["A", "R"]})
+        self.escrever({
+            "dashboard_url": "https://sebrae.sharepoint.com/x/Operacional_SEBRAE.xlsx",
+            "colunas_formula": ["A", "R", "U", "V", "W"],
+        })
         cfg = rotina.carregar_configuracao(self.caminho)
-        self.assertEqual((cfg.colunas_formula, cfg.quebras_como_espaco), (("A", "R"), False))
+        self.assertEqual((cfg.colunas_formula, cfg.quebras_como_espaco), (("A", "R", "U", "V", "W"), False))
 
     def test_empty_formula_list_is_an_explicit_choice(self):
         self.escrever({"dashboard_url": "https://sebrae.sharepoint.com/x", "colunas_formula": []})
         self.assertEqual(rotina.carregar_configuracao(self.caminho).colunas_formula, ())
+
+    def test_nonempty_formula_list_must_include_every_confirmed_dashboard_formula(self):
+        self.escrever({"dashboard_url": "https://sebrae.sharepoint.com/x", "colunas_formula": ["R", "U", "W"]})
+        with self.assertRaisesRegex(rotina.ConfiguracaoSebraeErro, "R, U, V, W"):
+            rotina.carregar_configuracao(self.caminho)
 
     def test_missing_file_asks_for_the_setup(self):
         with self.assertRaisesRegex(rotina.ConfiguracaoSebraeErro, "Falta sebrae_config.json"):
@@ -336,7 +344,11 @@ class ExecutarTests(unittest.TestCase):
         self.estado = base / "sebrae_chamados_estado.json"
         self.config = base / "sebrae_config.json"
         self.config.write_text(
-            json.dumps({"dashboard_url": "https://sebrae.sharepoint.com/x", "colunas_formula": ["A", "R"]}), encoding="utf-8"
+            json.dumps({
+                "dashboard_url": "https://sebrae.sharepoint.com/x",
+                "colunas_formula": ["A", "R", "U", "V", "W"],
+            }),
+            encoding="utf-8",
         )
         self.grade = GradeFalsa(xl.DiarioGravacao(base / "diario.json"))
         self.modulo = ModuloSoftExpertFalso(self.EXISTENTES + ["UTIC-2026-0200", "UTIC-2026-1253"])

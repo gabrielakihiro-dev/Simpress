@@ -40,7 +40,7 @@ Fora do Git, sem segredos. Sem este arquivo a rotina falha antes de abrir qualqu
 ```
 
 - `dashboard_url`: endereço https do arquivo (nunca a tela de login). O usuário informa.
-- `colunas_formula`: colunas fora C, D, F, G, H, I, N, P e Q que a linha preparada já traz com fórmula. R, U, V e W foram observadas na planilha real; o levantamento V5 ainda deve confirmar todas as colunas aplicáveis. `[]` desliga a conferência e exige decisão explícita do usuário.
+- `colunas_formula`: colunas fora C, D, F, G, H, I, N, P e Q que a linha preparada já traz com fórmula. R, U, V e W foram confirmadas na linha preparada 332; a configuração local atual inclui todas. Y:AZ não tinham fórmulas nessa linha e colunas depois de AZ não foram verificadas. O levantamento V5 ainda deve confirmar a estrutura completa antes da rotina real. `[]` desliga a conferência e exige decisão explícita do usuário.
 - `quebras_como_espaco`: `true` se a verificação V7 mostrar que `Alt+Enter` não preserva a quebra.
 
 O levantamento V0–V10 da Fase C (feito com o usuário, numa cópia do Dashboard) vem **antes** desta execução: seletores e leitura da coluna C do Excel Online ainda são hipóteses.

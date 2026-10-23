@@ -244,7 +244,7 @@ def decidir(chamado: ChamadoSoftExpert) -> Decisao:
     tipo, motivo = classificar(f"{descricao}\n{atendimento}", chamado.titulo)
     if tipo is None:
         return Decisao(numero, ACAO_PENDENTE, motivo)
-    solicitante = " ".join((chamado.solicitante or "").split())
+    solicitante = mascarar_cpfs(" ".join((chamado.solicitante or "").split()))
     if not solicitante:
         return Decisao(numero, ACAO_PENDENTE, MOTIVO_SEM_SOLICITANTE)
     if not str(chamado.habilitada_em or "").strip():

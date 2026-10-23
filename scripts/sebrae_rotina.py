@@ -57,6 +57,7 @@ class Configuracao:
 
 
 _COLUNA = re.compile(r"^[A-Z]{1,3}$")
+COLUNAS_FORMULA_CONFIRMADAS = ("R", "U", "V", "W")
 
 
 def carregar_configuracao(caminho: Path = CONFIG_ARQUIVO) -> Configuracao:
@@ -83,6 +84,12 @@ def carregar_configuracao(caminho: Path = CONFIG_ARQUIVO) -> Configuracao:
     colunas = dados.get("colunas_formula")
     if not isinstance(colunas, list) or not all(isinstance(c, str) and _COLUNA.match(c) for c in colunas):
         raise ConfiguracaoSebraeErro("colunas_formula deve ser uma lista de letras de coluna (use [] para nenhuma).")
+    if colunas and not set(COLUNAS_FORMULA_CONFIRMADAS).issubset(colunas):
+        esperadas = ", ".join(COLUNAS_FORMULA_CONFIRMADAS)
+        raise ConfiguracaoSebraeErro(
+            f"colunas_formula deve incluir as fórmulas confirmadas em {esperadas}, "
+            "ou [] para desativar explicitamente a conferência."
+        )
     return Configuracao(url, tuple(colunas), bool(dados.get("quebras_como_espaco", False)))
 
 
