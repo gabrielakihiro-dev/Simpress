@@ -1,0 +1,106 @@
+<!doctype html>
+<meta charset="utf-8">
+<style>#formulaBarTextDivId_textElement {min-height:24px; min-width:200px;}</style>
+<!-- Dados fictícios. Estrutura dos controles observados no Excel Online. -->
+<div role="toolbar">
+  <button role="tab" aria-selected="true">Home</button>
+  <button role="tab">View</button>
+  <button aria-label="Saved Click the cloud icon to view file location" id="SaveStatusButton"></button>
+  <button id="clipboard">Clipboard</button>
+  <button id="sort">Sort &amp; Filter</button>
+  <button id="undo">Undo</button>
+  <input id="NamedSheetViewSelect-input" aria-label="Sheet View" value="Default">
+  <button id="NamedSheetViewCreate">New Sheet View</button>
+  <button id="NamedSheetViewExit">Exit View</button>
+</div>
+<input id="FormulaBar-NameBox-input" role="combobox" aria-label="‎Name Box‎" value="C5">
+<div id="formulaBarTextDivId_textElement" role="textbox" aria-label="formula bar"></div>
+<div role="main">
+  <div id="gridKeyboardContentEditable_textElement" contenteditable="true" role="textbox" aria-label="grid"></div>
+  <div id="fixture_readoutElement1" role="button" style="width:0;height:0"></div>
+  <div role="tablist">
+    <a role="tab" aria-label="Worksheet LISTAS" aria-selected="false">LISTAS</a>
+    <a role="tab" aria-label="Worksheet CHAMADOS" aria-selected="true">CHAMADOS</a>
+  </div>
+</div>
+<div id="filters"></div>
+<div role="menu" id="clipboardMenu" hidden><button role="menuitem" id="copy">Copy Ctrl+C</button></div>
+<div role="menu" id="sortMenu" hidden><button role="menuitem" id="clear">Clear</button></div>
+<div id="WACDialogPanel" hidden>
+  Do you want to keep this view?
+  <button id="WACDialogSecondaryButton">Don't Keep</button>
+</div>
+<script>
+const byId = id => document.getElementById(id);
+const fixture = window.fixture = {
+  filtered: true, view: "Default", selected: "C5", failUndo: false,
+  ignoreSelection: false, events: [], writes: [],
+  cells: {C1:"CHAMADO", C2:"UTIC-2026-0002", C3:"27371 / UTIC-2026-0094", C5:"UTIC-2026-0005"}
+};
+function render() {
+  byId("NamedSheetViewSelect-input").value = fixture.view;
+  byId("filters").innerHTML = fixture.filtered ? '<button aria-label="Filters applied">Filters applied</button>' : "";
+  const tab = document.querySelector('[role=main] [role=tab][aria-label*="CHAMADOS"]');
+  tab.setAttribute("aria-label", fixture.view === "Default" ? "Worksheet CHAMADOS" : "Sheet CHAMADOS is in sheet view Temporary View");
+}
+function select(target) {
+  byId("FormulaBar-NameBox-input").value = target.split(":")[0];
+  if (fixture.ignoreSelection || (fixture.filtered && target === "C3")) return;
+  fixture.selected = target;
+  byId("formulaBarTextDivId_textElement").textContent = fixture.cells[target.split(":")[0]] || "";
+  byId("fixture_readoutElement1").setAttribute("aria-label", "Selected range " + target);
+  byId("gridKeyboardContentEditable_textElement").focus();
+}
+byId("FormulaBar-NameBox-input").addEventListener("keydown", e => {
+  if (e.key === "Enter") {
+    e.preventDefault();
+    const target = e.target.value;
+    setTimeout(() => select(target), 45);
+  }
+});
+byId("gridKeyboardContentEditable_textElement").addEventListener("keydown", e => {
+  if (e.ctrlKey && e.key === "ArrowUp") {
+    e.preventDefault();
+    setTimeout(() => select("C5"), 45);
+  }
+});
+document.querySelectorAll('[role=main] [role=tab]').forEach(tab => {
+  tab.addEventListener("click", () => {
+    document.querySelectorAll('[role=main] [role=tab]').forEach(t => t.setAttribute("aria-selected", String(t === tab)));
+  });
+});
+byId("clipboard").onclick = () => byId("clipboardMenu").hidden = false;
+byId("sort").onclick = () => byId("sortMenu").hidden = false;
+byId("copy").onclick = async () => {
+  fixture.events.push("copy");
+  const range = fixture.selected.match(/^C(\d+):C(\d+)$/);
+  if (!range) throw new Error("intervalo não selecionado");
+  const rows = [];
+  for (let i=Number(range[1]); i<=Number(range[2]); i++) {
+    if (!fixture.filtered || i !== 3) rows.push(fixture.cells["C"+i] || "");
+  }
+  await navigator.clipboard.writeText(rows.join("\n") + "\n");
+  byId("clipboardMenu").hidden = true;
+};
+byId("NamedSheetViewCreate").onclick = () => {
+  fixture.events.push("new"); fixture.view = "Temporary View"; render();
+};
+byId("clear").onclick = () => {
+  if (fixture.view !== "Temporary View") throw new Error("tentativa de limpar filtro compartilhado");
+  fixture.events.push("clear"); fixture.filtered = false; byId("sortMenu").hidden = true; render();
+};
+byId("undo").onclick = () => {
+  fixture.events.push("undo");
+  if (!fixture.failUndo) fixture.filtered = true;
+  render();
+};
+byId("NamedSheetViewExit").onclick = () => {
+  fixture.events.push("exit");
+  byId("WACDialogPanel").hidden = false;
+};
+byId("WACDialogSecondaryButton").onclick = () => {
+  // Descartar a exibição sem reverter Clear não restaura o filtro, como no teste real.
+  fixture.events.push("discard"); fixture.view = "Default"; byId("WACDialogPanel").hidden = true; render();
+};
+render(); select("C5");
+</script>
