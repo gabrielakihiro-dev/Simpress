@@ -43,8 +43,9 @@ Log por execução: `data\logs\automacao_chrome\<AAAAMMDD_HHMMSS>_<rotina>.log` 
 4. **Endpoint Central**:
    1. Selecione **Todos os computadores** e confirme a marcação.
    2. Botão de exportação à direita da tabela → **XLSX**.
-   3. Marque a declaração "Eu entendo que o relatório exportado pode divulgar a identidade pessoal de um indivíduo." (se o checkbox estiver oculto, clique no texto e confirme a marcação).
-   4. **Exportar**, uma vez.
+   3. A exportação automática precisa conter `Usuário do último logon`, além do nome do computador e do número de série/rótulo de serviço. O preparador valida esses cabeçalhos antes de publicar o lote; se faltar qualquer um, interrompe com erro e não publica.
+   4. Marque a declaração "Eu entendo que o relatório exportado pode divulgar a identidade pessoal de um indivíduo." (se o checkbox estiver oculto, clique no texto e confirme a marcação).
+   5. **Exportar**, uma vez.
 5. **Preparar o par** (só depois dos dois cliques; uma única conferência de Downloads, autorizada para esta rotina). Use apenas arquivos posteriores a `$inicioInventarios`: Endpoint = `InvAllComputersSummary*.xlsx`/ZIP; UX = `EquipamentosDetalhes*.xlsx`/ZIP.
    ```powershell
    & .\.venv\Scripts\python.exe scripts\prepare_inventory_downloads.py --since $inicioInventarios
@@ -54,6 +55,8 @@ Log por execução: `data\logs\automacao_chrome\<AAAAMMDD_HHMMSS>_<rotina>.log` 
    ```powershell
    & .\.venv\Scripts\python.exe scripts\process_inventory_inbox.py
    ```
+   Na importação, `Usuário do último logon` prevalece sobre `Usuários logados`. Se estiver vazio ou indicar ausência, use `Usuários logados`/`UsuarioLogado`; arquivos antigos importados manualmente, sem a coluna de último logon, continuam compatíveis.
+   Na verificação automatizada de mudanças de usuário, leia o último logon primeiro. Sem valor válido, use a grade: uma conta válida decide, várias contas válidas mantêm a pendência aberta, e nenhuma conta válida leva a Sistema > Usuários.
 7. **Confirmar** (a contagem do comando sozinha não comprova sucesso):
    - `processadas\<lote>\_resultado.json` com `status: concluido`;
    - evento com o mesmo `importacao_automatica_id` no histórico;

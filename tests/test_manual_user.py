@@ -43,9 +43,15 @@ def make_endpoint_with_users(path: Path, rows):
     workbook = openpyxl.Workbook()
     worksheet = workbook.active
     worksheet.title = "InvAllComputersSummary"
-    worksheet.append(["ROTULODESERVICONUMERODESERIE", "NOMEDOCOMPUTADOR", "USUARIOSLOGADOS"])
+    headers = ["ROTULODESERVICONUMERODESERIE", "NOMEDOCOMPUTADOR", "USUARIOSLOGADOS"]
+    if any(len(row) > 3 for row in rows):
+        headers.append("USUARIODOULTIMOLOGON")
+    worksheet.append(headers)
     for row in rows:
-        worksheet.append(list(row))
+        values = list(row[:3])
+        if len(headers) > 3:
+            values.append(row[3] if len(row) > 3 else "")
+        worksheet.append(values)
     workbook.save(path)
     workbook.close()
 
@@ -727,6 +733,26 @@ class ManualUserWorkflowTests(unittest.TestCase):
         self.assertEqual(self._user_events(), [])
         # O mesmo arquivo de novo não gera mudanças nem repete a pergunta.
         self.assertEqual(self._submit([("SN-1", "HOST-1", ""), ("SN-2", "HOST-2", "")])["mudancas_usuarios"], [])
+
+    def test_last_logon_is_shared_by_the_application_and_user_change_comparison(self):
+        result = self._submit([
+            ("SN-1", "HOST-1", "usuario.grade", "usuario.ultimo_logon"),
+            ("SN-2", "HOST-2", "ana", ""),
+        ])
+
+        [change] = [row for row in result["mudancas_usuarios"] if row["serie"] == "SN-1"]
+        self.assertEqual(change["usuario_novo"], "usuario.ultimo_logon")
+        self.assertEqual(inventory_state.equipamentos_cache["SN-1"]["usuarios_logados"], "usuario.ultimo_logon")
+
+    def test_manual_legacy_workbook_without_last_logon_still_uses_logged_users(self):
+        result = self._submit([
+            ("SN-1", "HOST-1", "usuario.legado"),
+            ("SN-2", "HOST-2", "ana"),
+        ])
+
+        [change] = [row for row in result["mudancas_usuarios"] if row["serie"] == "SN-1"]
+        self.assertEqual(change["usuario_novo"], "usuario.legado")
+        self.assertEqual(inventory_state.equipamentos_cache["SN-1"]["usuarios_logados"], "usuario.legado")
 
     def test_hidden_legacy_manual_user_comes_back_only_after_the_removal_is_confirmed(self):
         # Manual gravado antes do arquivamento existir, escondido pelo usuário do Endpoint.
