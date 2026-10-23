@@ -70,17 +70,9 @@ O Simpress roda somente localmente: servidor FastAPI e dados em `data/`, com as 
 
 ## Rust Token Killer (RTK) no Codex
 
-- O usuário autoriza o uso do wrapper RTK nos comandos de terminal compatíveis deste projeto, inclusive em novos chats; não é necessário pedir autorização novamente.
-- Use automaticamente `rtk <comando>` nos comandos de terminal que tenham wrapper compatível, sem esperar solicitação do usuário, por exemplo `rtk git status`, `rtk git diff`, `rtk rg` e `rtk pytest`. Isso inclui PowerShell e `tools.exec_command` dentro de `functions.exec`: coloque o prefixo no comando interno, pois a ponte pode não aplicar o hook nativo. Não duplique o prefixo em comandos que já usam RTK.
-- A integração `rtk hook codex` já está registrada globalmente em `~/.codex/hooks.json`. Preserve os hooks locais do projeto e não registre o mesmo matcher `Bash` em `.codex/hooks.json` enquanto a entrada global existir: o Codex carrega hooks de ambos os escopos. Em clones sem a integração global, use `rtk init --codex`, preservando hooks existentes.
-- Para configurar esta máquina uma única vez para novos chats, rode `npm run setup:rtk:codex`. O configurador preserva as demais regras, habilita hooks, aprova somente a definição exata `rtk hook codex` informada pelo Codex, confere a raiz de métricas e instala instruções globais para `functions.exec`. Abra um novo chat após configurar. `npm run test:rtk:codex` verifica confiança, reescrita, comandos curtos/longos em sandbox e persistência das métricas em um novo runtime. A configuração global não é versionada.
-- Ao preparar um novo clone do Simpress, confira se `~/.codex/config.toml` inclui `C:\Users\Gabriel\AppData\Local\rtk` em `sandbox_workspace_write.writable_roots`; acrescente essa raiz somente se estiver ausente, preservando as demais e sem duplicar a tabela. Depois de alterar a configuração global, inicie uma nova sessão/sandbox do Codex. No clone, rode `rtk git status` e consulte `rtk gain --project --format json`; reporte apenas os valores registrados. Essa configuração é local da máquina e não deve ser copiada para o clone.
-- Se `rtk` não estiver disponível, o comando não tiver wrapper compatível ou a saída condensada estiver incompleta ou ambígua, use o comando original e confira a saída integral quando ela for necessária para a decisão.
-- `rtk rg` exige o ripgrep instalado e no PATH; sem ele a busca falha com "program not found". O `instalar_primeira_vez.bat` o instala pelo `winget` (`BurntSushi.ripgrep.MSVC`); depois, abra um terminal novo. Enquanto isso, use `rtk grep -rn`.
-- Não rode `rtk ls -R` (nem listagem recursiva) na raiz ou em `.claude`: as pastas de worktrees em `.claude/worktrees` somam dezenas de milhares de entradas e a execução estoura o tempo limite. Limite a listagem a pastas específicas e use `-L`/profundidade quando houver.
-- Para informar a economia deste projeto, consulte `rtk gain --project --format json` na raiz e reporte apenas os valores registrados. Não converta tokens ou bytes economizados diretamente em dinheiro.
-- No início de cada novo chat neste repositório, execute uma vez `rtk gain --project --format json` na raiz e reporte somente os valores registrados.
-- Execute `npm run test:rtk:codex` após alterações na integração ou configuração do RTK; o teste valida a reescrita dos comandos, as métricas e sua persistência em um novo runtime.
+- O usuário autoriza o RTK neste projeto: use `rtk <comando>` nos comandos de terminal com wrapper compatível (por exemplo `rtk git status`, `rtk pytest`), sem duplicar o prefixo. Se `rtk` faltar ou a saída condensada for ambígua, use o comando original.
+- Não rode listagem recursiva (`rtk ls -R`) na raiz ou em `.claude`: `.claude/worktrees` tem dezenas de milhares de entradas.
+- Configuração da máquina, hooks, métricas (`rtk gain --project --format json`) e testes: `docs/operacao/rtk-codex.md`.
 
 ## Interface
 
