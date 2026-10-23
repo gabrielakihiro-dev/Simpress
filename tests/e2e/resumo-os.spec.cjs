@@ -75,7 +75,7 @@ async function selectSummary(page) {
   }
   await page.locator("#tab-resumo").click();
   await expect(page.locator("#resumo-os-equipamento")).toBeVisible();
-  await expect(page.locator("#resumo-os-equipamento")).toContainText("OS encontradas");
+  await expect(page.locator("#resumo-os-equipamento")).toContainText("OS agrupadas");
 }
 
 async function openSummary(page) {
@@ -92,8 +92,11 @@ test("Resumo associa OS aos chamados UTIC com prefixo anual e preserva dados do 
   const section = page.locator("#resumo-os-equipamento");
   await expect(section).toContainText("7285072");
   const mobile = await page.locator(".ticket-summary-mobile").isVisible();
+  const seriesGroup = mobile
+    ? page.locator(".ticket-summary-card").filter({ hasText: "DEMO-SN-001" })
+    : page.locator(".ticket-summary-table tbody tr").filter({ hasText: "DEMO-SN-001" });
   if (mobile) {
-    await expect(page.locator(".ticket-summary-card")).toHaveCount(5);
+    await expect(page.locator(".ticket-summary-card")).toHaveCount(2);
     await expect(section).toContainText("usuario.demo");
     await expect(section).toContainText("PRNOTEDEMO01");
     await expect(section).toContainText("Ambíguo: alice / bob");
@@ -103,7 +106,7 @@ test("Resumo associa OS aos chamados UTIC com prefixo anual e preserva dados do 
     await expect(section.locator("img")).toHaveCount(0);
     await expect(section).toContainText("Descrição não informada");
   } else {
-    await expect(page.locator(".ticket-summary-table tbody tr")).toHaveCount(5);
+    await expect(page.locator(".ticket-summary-table tbody tr")).toHaveCount(2);
     await expect(section).toContainText("usuario.demo");
     await expect(section).toContainText("PRNOTEDEMO01");
     await expect(section).toContainText("Ambíguo: alice / bob");
@@ -114,15 +117,15 @@ test("Resumo associa OS aos chamados UTIC com prefixo anual e preserva dados do 
     await expect(section).toContainText("Descrição não informada");
   }
 
-  const orderContainer = mobile
-    ? page.locator(".ticket-summary-card").filter({ hasText: "Oracle" }).filter({ hasText: "OS 7285070" })
-    : page.locator(".ticket-summary-table tbody tr").filter({ hasText: "Oracle" }).filter({ hasText: "7285070" });
+  await expect(section).toContainText("4 OS agrupadas em 2 séries");
+  const orderContainer = seriesGroup.locator(".ticket-os-link-entry")
+    .filter({ hasText: "Oracle · OS 7285070" });
   const prefix = orderContainer.locator(".ticket-os-link-prefix");
   const input = orderContainer.locator("input.ticket-os-link-input");
   const year = new Date().getFullYear();
   await expect(prefix).toHaveText(`UTIC-${year}-`);
   await expect(input).toHaveAttribute("inputmode", "numeric");
-  await expect(input).toHaveAttribute("placeholder", "1116");
+  await expect(input).toHaveAttribute("placeholder", "0000");
   await input.fill("1116");
   await orderContainer.getByRole("button", { name: "Salvar" }).click();
   await expect(section.locator(".ticket-summary-status")).toHaveText(`Vínculo salvo: UTIC-${year}-1116.`);
@@ -131,11 +134,32 @@ test("Resumo associa OS aos chamados UTIC com prefixo anual e preserva dados do 
 
   await page.reload();
   await selectSummary(page);
-  const linkedOrder = mobile
-    ? page.locator(".ticket-summary-card").filter({ hasText: "Oracle" }).filter({ hasText: "OS 7285070" })
-    : page.locator(".ticket-summary-table tbody tr").filter({ hasText: "Oracle" }).filter({ hasText: "7285070" });
+  const reloadedSeriesGroup = mobile
+    ? page.locator(".ticket-summary-card").filter({ hasText: "DEMO-SN-001" })
+    : page.locator(".ticket-summary-table tbody tr").filter({ hasText: "DEMO-SN-001" });
+  const linkedOrder = reloadedSeriesGroup.locator(".ticket-os-link-entry")
+    .filter({ hasText: "Oracle · OS 7285070" });
   await expect(linkedOrder.locator(".ticket-os-link-prefix")).toHaveText(`UTIC-${year}-`);
   await expect(linkedOrder.locator("input")).toHaveValue("1116");
+
+  await reloadedSeriesGroup.getByRole("button", {
+    name: "Abrir acompanhamento de chamados: Oracle + Simpress, série DEMO-SN-001, OS 7285070",
+  }).click();
+  const dialog = page.locator("#modal-acompanhamento-chamados");
+  await expect(dialog).toBeVisible();
+  await expect(dialog.locator("#filtro-acompanhamento-chamados")).toHaveValue("7285070");
+  const ticketCards = dialog.locator("#lista-acompanhamento-chamados article[data-ticket-serial]");
+  await expect(ticketCards).toHaveCount(1);
+  const selectedTicket = ticketCards.first();
+  await expect(selectedTicket).toHaveAttribute("data-ticket-serial", "DEMO-SN-001");
+  await expect(selectedTicket.locator(".ticket-card-identifiers")).toContainText("7285070");
+  await expect(selectedTicket.locator(".ticket-card-identifiers")).not.toContainText("7285071");
+  await expect(selectedTicket.locator(".ticket-card-identifiers")).not.toContainText("7285072");
+  await expect(selectedTicket).not.toContainText("REQ-3");
+  await expect(selectedTicket.locator('details[data-ticket-section="details"]')).toHaveAttribute("open", "");
+  await expect(selectedTicket.locator(".ticket-oracle-description").first()).toHaveAttribute("open", "");
+  await expect(selectedTicket.locator(".ticket-oracle-description-content").first())
+    .toContainText("Solicito suporte técnico.");
 });
 
 test("Resumo atualiza após mudanças e ignora respostas antigas", async ({ page }) => {
