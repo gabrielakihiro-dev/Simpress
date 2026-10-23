@@ -207,9 +207,12 @@
       ? `Atualizado ${formatarHorarioHistorico(data.atualizado_em)}`
       : hasTickets ? "Versão selecionada" : "Nenhuma importação";
     renderizarResumoChamados(data);
-    document.dispatchEvent(new document.defaultView.CustomEvent("simpress:chamados-atualizados", {
-      detail: { snapshot_id: data.snapshot_id || "" },
-    }));
+    const EventConstructor = document.defaultView?.CustomEvent;
+    if (EventConstructor) {
+      document.dispatchEvent(new EventConstructor("simpress:chamados-atualizados", {
+        detail: { snapshot_id: data.snapshot_id || "" },
+      }));
+    }
 
     const records = filtrarChamados(data.chamados);
     document.getElementById("contagem-acompanhamento-chamados").textContent = `Exibindo ${records.length} de ${Array.isArray(data.chamados) ? data.chamados.length : 0} séries · OS da maior para a menor, sem OS no final`;
