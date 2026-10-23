@@ -325,6 +325,14 @@
                 <input id="input-usuario-manual" type="text" maxlength="160" class="equipment-user-input" placeholder="Digite o usuário">
                 <button type="submit" id="btn-salvar-usuario-manual" class="btn btn-secondary equipment-user-button">Salvar usuário</button>
               </form>
+              <div class="equipment-user">
+                <p id="card-nome-pessoa" class="hidden equipment-detail"></p>
+              </div>
+              <form id="form-nome-pessoa" class="hidden equipment-user-form" data-on-submit="salvarNomePessoa" autocomplete="off">
+                <label for="input-nome-pessoa" class="equipment-user-label">Nome da pessoa (quando não encontrado no Entra)</label>
+                <input id="input-nome-pessoa" type="text" maxlength="300" class="equipment-user-input" placeholder="Digite o nome da pessoa">
+                <button type="submit" id="btn-salvar-nome-pessoa" class="btn btn-secondary equipment-user-button">Salvar nome</button>
+              </form>
             </div>
           </div>
 
@@ -1645,6 +1653,18 @@ Horário disponível para atendimento:</textarea>
           <a href="https://centralendpoint.pr.sebrae.com.br/webclient#/uems/inventory/computers" target="_blank" rel="noopener noreferrer" class="spreadsheet-source-link spreadsheet-source-link--endpoint" aria-label="Abrir inventário de computadores do Endpoint Central" title="Abrir inventário de computadores do Endpoint Central"><i data-lucide="link" aria-hidden="true"></i><span>Endpoint</span></a>
           <a href="https://ux.simpress.com.br/MeusEquipamentos/Index" target="_blank" rel="noopener noreferrer" class="spreadsheet-source-link spreadsheet-source-link--simpress" aria-label="Abrir Meus Equipamentos da Simpress" title="Abrir Meus Equipamentos da Simpress"><i data-lucide="link" aria-hidden="true"></i><span>Simpress</span></a>
         </div>
+        <section class="rounded-xl border border-cyan-500/20 bg-cyan-500/5 p-4" aria-labelledby="entra-import-title">
+          <h4 id="entra-import-title" class="text-sm font-semibold text-cyan-100">Nomes do Microsoft Entra</h4>
+          <p class="mt-1 text-[11px] text-slate-400">Importe o CSV exportado do Entra. Somente contas @pr.sebrae.com.br serão usadas; os inventários abaixo não serão alterados.</p>
+          <form class="mt-3 flex flex-wrap items-end gap-2" data-on-submit="importarNomesEntra">
+            <label for="entra-csv-file" class="min-w-0 flex-1 text-xs text-slate-300">Arquivo CSV
+              <input id="entra-csv-file" type="file" accept=".csv,text/csv" class="mt-1 block w-full min-w-0 text-xs text-slate-300" />
+            </label>
+            <button type="submit" id="btn-importar-nomes-entra" class="btn btn-secondary equipment-user-button">Importar nomes</button>
+            <button type="button" id="btn-exportar-nomes-entra" data-on-click="exportarNomesEntra" class="btn btn-tertiary equipment-user-button" disabled>Baixar XLSX compacto</button>
+          </form>
+          <p id="entra-import-status" class="mt-2 text-xs text-slate-400" role="status" aria-live="polite">Consultando cadastro…</p>
+        </section>
         <p id="upload-impacto-aviso" class="text-xs rounded-lg px-3 py-2 bg-amber-500/10 border border-amber-500/25 text-amber-200">Ao confirmar, as duas bases ativas serão substituídas pelos arquivos selecionados. Séries ausentes de cada arquivo novo serão removidas daquela fonte; confira as contagens por fonte antes de confirmar.</p>
         <label class="block bg-slate-950/60 border border-slate-800 rounded-xl p-4">
           <span class="block text-sm text-white font-semibold">1. Endpoint</span>

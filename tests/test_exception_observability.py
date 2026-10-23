@@ -31,6 +31,8 @@ class ExceptionObservabilityTests(unittest.TestCase):
         self.file = self.root / "fixture.xlsx"
         self.file.write_bytes(b"synthetic workbook")
         self.enterContext(patch.object(main, "MANUAL_USERS_FILE", self.root / "usuarios_manuais.json"))
+        self.enterContext(patch.object(main, "ENTRA_USERS_FILE", self.root / "usuarios_entra_pr.json"))
+        self.enterContext(patch.object(main, "MANUAL_PERSON_NAMES_FILE", self.root / "nomes_pessoas_manuais.json"))
 
     def assert_safe_log(self, captured, *context):
         text = "\n".join(captured.output)
@@ -133,7 +135,7 @@ class ExceptionObservabilityTests(unittest.TestCase):
             self.assertLogs(main.logger, level="WARNING") as log,
         ):
             result = main.read_endpoint_alias_index()
-        self.assertEqual(result, {"available": False, "unique": {}, "duplicates": {}, "blank_serials": [], "blank_hostnames": {}, "users": {}, "ambiguous_users": {}, "manual_users": {}, "manual_user_dates": {}, "user_holds": {}})
+        self.assertEqual(result, {"available": False, "unique": {}, "duplicates": {}, "blank_serials": [], "blank_hostnames": {}, "users": {}, "ambiguous_users": {}, "manual_users": {}, "manual_user_dates": {}, "user_holds": {}, "entra_directory": {"version": 1, "users": {}, "source_rows": 0, "filtered_rows": 0, "updated_at": ""}, "manual_person_names": {}})
         self.assert_safe_log(log, self.file.name, "papel=endpoint", "DomainValidationError")
 
     def test_inventory_read_failure_keeps_published_cache_and_logs(self):

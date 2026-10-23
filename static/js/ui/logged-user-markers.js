@@ -68,6 +68,9 @@
         } else {
           item.textContent = "Sem usuário no Endpoint";
         }
+        if (String(info.nome_pessoa || "").trim()) {
+          item.insertAdjacentHTML("beforeend", `<span class="logged-user-row" data-person-name>Nome: ${escapeHtml(String(info.nome_pessoa).trim())}${info.nome_pessoa_origem === "manual" ? " (manual)" : ""}</span>`);
+        }
         item.querySelector("[data-logged-user-edit]")?.addEventListener("click", () => {
           item.innerHTML = avisoAmbiguo + formularioUsuario(serie, usuario);
           conectarFormulario(item, serie);
@@ -112,6 +115,8 @@
             usuarios[chave] = {
               ...usuarios[chave],
               usuario: equipamento.usuarios_logados || "",
+              nome_pessoa: equipamento.nome_pessoa || "",
+              nome_pessoa_origem: equipamento.nome_pessoa_origem || "",
               origem: equipamento.usuarios_logados_origem || "",
               informado_em: equipamento.usuarios_logados_informado_em || "",
               candidatos: equipamento.usuarios_logados_candidatos || usuarios[chave]?.candidatos || [],

@@ -23,6 +23,7 @@ import "./js/features/equipment-search.js";
 import "./js/features/full-equipment-search.js";
 import "./js/features/units-catalog.js";
 import "./js/features/inventory-upload.js";
+import "./js/features/entra-users.js";
 import "./js/ui/logged-user-markers.js";
 import "./js/ui/comparison-result-renderer.js";
 import "./js/features/comparison-result.js";

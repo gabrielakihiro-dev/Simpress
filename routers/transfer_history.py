@@ -6,7 +6,7 @@ from pathlib import Path
 import json
 import threading
 import unicodedata
-from typing import Any, Callable, Dict, List, Tuple
+from typing import Any, Callable, Dict, List, Optional, Tuple
 from uuid import uuid4
 
 from fastapi import APIRouter, HTTPException, Query
@@ -26,6 +26,8 @@ class TransferHistoryCorruptionError(ValueError):
 class TransferHistoryServices:
     history_file: Callable[[], Path]
     transaction_root: Callable[[], Path]
+    # Current person name per serial, resolved at query time; never stored in the history.
+    person_names: Optional[Callable[[List[str]], Dict[str, str]]] = None
 
 
 def _validate_history(value: Any) -> List[Dict[str, Any]]:
@@ -90,7 +92,17 @@ def create_transfer_history_router(services: TransferHistoryServices) -> Tuple[A
                 if term in " ".join(_fold(item.get(field)) for field in SEARCH_FIELDS)
             ]
         newest_first = list(reversed(history))
-        return {"total": len(newest_first), "itens": newest_first[:limite]}
+        items = [dict(item) for item in newest_first[:limite]]
+        if services.person_names is not None and items:
+            try:
+                names = services.person_names(sorted({str(item.get("serial") or "") for item in items} - {""}))
+            except Exception:
+                names = {}
+            for item in items:
+                name = names.get(str(item.get("serial") or ""))
+                if name:
+                    item["nome_pessoa"] = name
+        return {"total": len(newest_first), "itens": items}
 
     @router.post("/api/historico-transferencias", status_code=201)
     def registrar_historico_transferencia(payload: TransferenciaPayload):
