@@ -82,7 +82,7 @@ Não altere arquivos, dados operacionais, dependências nem o estado do Git. Sep
 
 ## Explicações para leigo
 
-O usuário é leigo em back-end e front-end. Em toda análise, auditoria, revisão ou instrução sobre o código, e sempre que sugerir um comando, termo técnico ou próximo passo:
+O usuário é leigo em back-end e front-end, mas conhece Git: em comandos Git, seja sucinto e dispense a explicação básica, mantendo o que o comando altera e o destino quando houver risco (push, force, reset). Em toda análise, auditoria, revisão ou instrução sobre o código, e sempre que sugerir um comando, termo técnico ou próximo passo:
 
 - Explique em português simples, sem presumir conhecimento prévio, e defina cada termo técnico na primeira vez que aparecer (ex.: "XSS: quando um texto digitado vira código que o navegador executa").
 - Dê pelo menos um exemplo concreto por item, com situação do dia a dia ou do próprio projeto (ex.: "se alguém digitar X na planilha, a tela faz Y").

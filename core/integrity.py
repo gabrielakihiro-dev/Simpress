@@ -54,6 +54,8 @@ class WorkbookSafetyError(FileTransactionError):
 _PROCESS_LOCKS: Dict[str, threading.RLock] = {}
 logger = logging.getLogger(__name__)
 _PROCESS_LOCKS_GUARD = threading.Lock()
+# canonical path -> [nesting depth, OS lock handle]; guarded by that path's RLock
+_OS_LOCK_HOLDS: Dict[str, list] = {}
 _REPLACE_ATTEMPTS = 4
 _RETRY_DELAYS = (0.1, 0.25, 0.5)
 # OneDrive and antivirus scanners can hold a just-written file for 1-3 s, so a
@@ -138,7 +140,7 @@ def lock_paths(paths: Iterable[Path], timeout: float = 15.0) -> Iterator[None]:
     ordered = sorted({_canonical(Path(path)): Path(path).resolve(strict=False) for path in paths}.items())
     deadline = time.monotonic() + timeout
     acquired_threads = []
-    handles = []
+    entered = []
     try:
         for key, _ in ordered:
             with _PROCESS_LOCKS_GUARD:
@@ -148,21 +150,34 @@ def lock_paths(paths: Iterable[Path], timeout: float = 15.0) -> Iterator[None]:
                 raise FileBusyError("A planilha ou configuração está ocupada por outra operação local.")
             acquired_threads.append(process_lock)
 
-        for _, target in ordered:
-            target.parent.mkdir(parents=True, exist_ok=True)
-            lock_path = _lockfile(target)
-            handle = open(lock_path, "a+b")
-            handles.append(handle)
-            _acquire_os_lock(handle, deadline, target.name)
+        for key, target in ordered:
+            # The path's RLock is held, so only this thread touches the hold. Windows byte
+            # locks are per handle: a nested entry must reuse the handle, not relock.
+            hold = _OS_LOCK_HOLDS.get(key)
+            if hold is None:
+                target.parent.mkdir(parents=True, exist_ok=True)
+                handle = open(_lockfile(target), "a+b")
+                try:
+                    _acquire_os_lock(handle, deadline, target.name)
+                except BaseException:
+                    handle.close()
+                    raise
+                hold = _OS_LOCK_HOLDS[key] = [0, handle]
+            hold[0] += 1
+            entered.append(key)
 
         yield
     finally:
-        for handle in reversed(handles):
-            try:
-                _release_os_lock(handle)
-            except OSError:
-                pass
-            handle.close()
+        for key in reversed(entered):
+            hold = _OS_LOCK_HOLDS[key]
+            hold[0] -= 1
+            if hold[0] == 0:
+                del _OS_LOCK_HOLDS[key]
+                try:
+                    _release_os_lock(hold[1])
+                except OSError:
+                    pass
+                hold[1].close()
         for process_lock in reversed(acquired_threads):
             process_lock.release()
 

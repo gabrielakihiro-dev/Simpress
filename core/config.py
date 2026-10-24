@@ -41,6 +41,8 @@ MAX_UPLOAD_BYTES = 60 * 1024 * 1024
 MAX_UPLOAD_REQUEST_BYTES = 2 * MAX_UPLOAD_BYTES + 1024 * 1024
 MAX_API_REQUEST_BYTES = 1024 * 1024
 MAX_CONCURRENT_UPLOAD_REQUESTS = 1
+# Max idle gap between request body chunks; frees the single upload slot from stalled clients.
+REQUEST_BODY_IDLE_TIMEOUT_SECONDS = 30.0
 MAX_CONCURRENT_WORKBOOK_PARSERS = 1
 HISTORY_RETENTION_DAYS = 60
 # Home alert: the official EquipamentosDetalhes base older than this many days (docs/operacao/alerta-base-desatualizada.md).

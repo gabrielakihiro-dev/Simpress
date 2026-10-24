@@ -164,6 +164,48 @@ class LocalRequestSecurityTests(unittest.TestCase):
                     with self.subTest(declared_size=declared_size, size=size):
                         self.assertEqual(asyncio.run(invoke(size, declared_size)), expected)
 
+    def _upload_with_chunks(self, chunk_delays, *, path="/api/operacoes/chamados/importar"):
+        """Run an upload whose chunks arrive after the given delays; returns the status."""
+        messages = []
+        chunks = iter(chunk_delays)
+
+        async def endpoint(scope, receive, send):
+            while True:
+                message = await receive()
+                if not message.get("more_body", False):
+                    break
+            await ok_endpoint(scope, receive, send)
+
+        async def receive():
+            delay = next(chunks)
+            if delay is None:
+                await asyncio.Event().wait()
+            await asyncio.sleep(delay)
+            return {"type": "http.request", "body": b"x", "more_body": chunks.__length_hint__() > 0}
+
+        async def send(message):
+            messages.append(message)
+
+        scope = {"type": "http", "path": path, "method": "POST", "client": ("127.0.0.1", 1234),
+                 "headers": [(b"host", f"localhost:{main.SERVER_PORT}".encode())]}
+        asyncio.run(main.LocalRequestSafetyMiddleware(endpoint)(scope, receive, send))
+        return next(m["status"] for m in messages if m["type"] == "http.response.start")
+
+    def test_stalled_upload_body_answers_408_and_frees_the_upload_slot(self):
+        with patch.object(local_requests, "REQUEST_BODY_IDLE_TIMEOUT_SECONDS", 0.05):
+            self.assertEqual(self._upload_with_chunks([None]), 408)
+        self.assertTrue(main.UPLOAD_ADMISSION.acquire(blocking=False))
+        main.UPLOAD_ADMISSION.release()
+
+    def test_slow_upload_within_the_idle_deadline_still_succeeds(self):
+        with patch.object(local_requests, "REQUEST_BODY_IDLE_TIMEOUT_SECONDS", 0.2):
+            # Total time (0.36 s) exceeds the deadline; each gap (0.12 s) does not.
+            self.assertEqual(self._upload_with_chunks([0.12, 0.12, 0.12]), 200)
+
+    def test_size_limit_still_answers_413_with_idle_deadline_active(self):
+        with patch.object(main, "MAX_API_REQUEST_BYTES", 1):
+            self.assertEqual(self._upload_with_chunks([0, 0, 0], path="/api/stats"), 413)
+
     def test_api_rejects_requests_that_the_browser_marks_as_cross_site(self):
         for value, expected in ((b"cross-site", 403), (b"same-site", 403), (b"Cross-Site", 403),
                                 (b"same-origin", 200), (b"none", 200)):
