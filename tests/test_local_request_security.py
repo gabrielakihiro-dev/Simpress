@@ -95,6 +95,75 @@ class LocalRequestSecurityTests(unittest.TestCase):
         _, headers, _ = run_endpoint(framed)
         self.assertEqual(headers[b"x-frame-options"], b"SAMEORIGIN")
 
+    def test_entra_csv_upload_has_file_limit_without_raising_general_api_limit(self):
+        headers = [(b"content-length", str(main.MAX_API_REQUEST_BYTES + 1).encode("ascii"))]
+        status, reached = run_boundary(
+            ("127.0.0.1", 1234), headers=headers,
+            path="/api/usuarios-entra/importar", method="POST",
+        )
+        self.assertEqual(status, 200)
+        self.assertTrue(reached)
+
+        status, reached = run_boundary(
+            ("127.0.0.1", 1234), headers=headers,
+            path="/api/stats", method="POST",
+        )
+        self.assertEqual(status, 413)
+        self.assertFalse(reached)
+
+    def test_entra_csv_upload_rejects_content_length_above_its_limit(self):
+        limit = main.entra_users.MAX_CSV_BYTES + main.MAX_API_REQUEST_BYTES
+        for size, expected in ((limit, (200, True)), (limit + 1, (413, False))):
+            with self.subTest(size=size):
+                self.assertEqual(
+                    run_boundary(
+                        ("127.0.0.1", 1234),
+                        headers=[(b"content-length", str(size).encode("ascii"))],
+                        path="/api/usuarios-entra/importar", method="POST",
+                    ),
+                    expected,
+                )
+
+    def test_entra_csv_stream_enforces_limit_without_trusting_content_length(self):
+        async def invoke(size, declared_size):
+            messages = []
+            consumed = []
+            chunks = iter((b"x" * 1024, b"x" * (size - 1024)))
+
+            async def endpoint(scope, receive, send):
+                while True:
+                    message = await receive()
+                    consumed.append(len(message["body"]))
+                    if not message.get("more_body", False):
+                        break
+                await ok_endpoint(scope, receive, send)
+
+            async def receive():
+                chunk = next(chunks)
+                return {"type": "http.request", "body": chunk,
+                        "more_body": len(consumed) == 0}
+
+            async def send(message):
+                messages.append(message)
+
+            headers = [(b"host", f"localhost:{main.SERVER_PORT}".encode())]
+            if declared_size is not None:
+                headers.append((b"content-length", str(declared_size).encode("ascii")))
+            scope = {"type": "http", "path": "/api/usuarios-entra/importar",
+                     "method": "POST", "client": ("127.0.0.1", 1234), "headers": headers}
+            await main.LocalRequestSafetyMiddleware(endpoint)(scope, receive, send)
+            status = next(message["status"] for message in messages
+                          if message["type"] == "http.response.start")
+            return status, sum(consumed)
+
+        # Smaller limits exercise the same boundary without allocating a 60 MiB CSV.
+        with (patch.object(main.entra_users, "MAX_CSV_BYTES", 1024),
+              patch.object(main, "MAX_API_REQUEST_BYTES", 1024)):
+            for declared_size in (None, 100):
+                for size, expected in ((2048, (200, 2048)), (2049, (413, 1024))):
+                    with self.subTest(declared_size=declared_size, size=size):
+                        self.assertEqual(asyncio.run(invoke(size, declared_size)), expected)
+
     def test_api_rejects_requests_that_the_browser_marks_as_cross_site(self):
         for value, expected in ((b"cross-site", 403), (b"same-site", 403), (b"Cross-Site", 403),
                                 (b"same-origin", 200), (b"none", 200)):

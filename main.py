@@ -1121,6 +1121,7 @@ _local_request_safety_services = LocalRequestSafetyServices(
         upload_bytes=MAX_UPLOAD_BYTES,
         ticket_workbook_bytes=MAX_TICKET_WORKBOOK_BYTES,
         api_request_bytes=MAX_API_REQUEST_BYTES,
+        entra_csv_request_bytes=entra_users.MAX_CSV_BYTES + MAX_API_REQUEST_BYTES,
     ),
     upload_admission=lambda: UPLOAD_ADMISSION,
     idempotent_upload_wait_seconds=lambda: IDEMPOTENT_UPLOAD_ADMISSION_WAIT_SECONDS,
