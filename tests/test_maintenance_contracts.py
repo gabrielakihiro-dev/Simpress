@@ -700,10 +700,10 @@ class MaintenanceContractTests(unittest.TestCase):
             "carregarEstatisticas()",
             "carregarUnidades()",
             "carregarHistoricoComparacoes()",
-            "carregarContagemHistoricoComparacoes()",
         ):
             with self.subTest(refresh=refresh):
                 self.assertIn(refresh, restore)
+        self.assertNotIn("carregarContagemHistoricoComparacoes()", restore)
 
     def test_dialog_overlays_stack_above_the_header_and_keep_keyboard_trapping(self):
         html = (app_config.STATIC_DIR / "index.html").read_text(encoding="utf-8")

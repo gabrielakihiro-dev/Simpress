@@ -63,6 +63,30 @@ class FrontendAssetTests(unittest.TestCase):
         self.assertEqual(cached.status_code, 304)
         self.assertEqual(cached.headers["cache-control"], "no-cache")
 
+    def test_versioned_assets_are_immutable_and_invalid_versions_revalidate(self):
+        html = self.client.get("/").text
+        versioned_css_url = re.search(r'href="([^"]+)"', html).group(1)
+        response = self.client.get(versioned_css_url)
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.headers["cache-control"], "public, max-age=31536000, immutable")
+
+        cached = self.client.get(versioned_css_url, headers={"If-None-Match": response.headers["etag"]})
+        self.assertEqual(cached.status_code, 304)
+        self.assertEqual(cached.headers["cache-control"], "public, max-age=31536000, immutable")
+        head = self.client.head(versioned_css_url)
+        self.assertEqual(head.status_code, 200)
+        self.assertEqual(head.headers["cache-control"], "public, max-age=31536000, immutable")
+
+        invalid = self.client.get("/static/app.css?v=changed")
+        self.assertEqual(invalid.headers["cache-control"], "no-cache")
+        missing = self.client.get("/static/missing.css?v=0123456789abcdef")
+        self.assertEqual(missing.status_code, 404)
+        self.assertEqual(missing.headers["cache-control"], "no-cache")
+
+        rejected = self.client.post(versioned_css_url)
+        self.assertEqual(rejected.status_code, 405)
+        self.assertEqual(rejected.headers["cache-control"], "no-cache")
+
     def test_pages_forbid_inline_scripts_through_content_security_policy(self):
         policy = self.client.get("/").headers["content-security-policy"]
         self.assertEqual(policy, CONTENT_SECURITY_POLICY)
