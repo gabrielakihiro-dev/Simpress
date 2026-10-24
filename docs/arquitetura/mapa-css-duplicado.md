@@ -24,10 +24,10 @@ Risco = chance de mudar a aparência ao mexer. Todos os itens exigem prints clar
 |---|---------|------|----------------|-------|----------|
 | 1 | `.header-inner` (e a versão `@media (max-width: 640px)`) | `app.css:186` e `:847` vs `styles/sidebar-navigation.css:491` e `:781` | Duas definições de layout do cabeçalho (grid vs flex), com `min-height` e `padding` diferentes. Vence `sidebar-navigation.css`. | Médio (cabeçalho aparece em todas as telas) | Manter só a de `sidebar-navigation.css`; apagar a de `app.css` depois de conferir o mobile. |
 | 2 | `.header-base-summary` | `app.css:269` vs `sidebar-navigation.css:526` | A segunda desfaz `grid-column`, `grid-row`, `justify-self` da primeira. Existem só para serem anuladas. | Médio | Mesmo pacote do item 1: apagar o original em `app.css` e a anulação. |
-| 3 | `.site-header` | `app.css:191` vs `sidebar-navigation.css:503` | `z-index` repetido com o mesmo valor. | Baixo | Remover a repetição de `sidebar-navigation.css:503`. |
-| 4 | `.alias-history-page-button` | `app.css:1197` e `app.css:1323` | Mesma regra duas vezes no arquivo; `min-height` 2,65rem é sobrescrito por 2,4rem. | Baixo | Fundir em uma regra. |
-| 5 | `.alias-history-table tbody` / `td` (`@media 1200px`) | `app.css:1348-1349` | Duas regras adjacentes, propriedades diferentes. | Baixo | Fundir (só legibilidade). |
-| 6 | `.automation-history-table td` (`@media 40rem`) | `ux-refinements.css:677` e `:679` | `display: block` e depois `display: grid` no mesmo seletor; vale o último. | Baixo | Remover `td` da regra do `:677`. |
+| 3 ✅ removido | `.site-header` | `app.css:191` vs `sidebar-navigation.css:503` | `z-index` repetido com o mesmo valor. | Baixo | Remover a repetição de `sidebar-navigation.css:503`. |
+| 4 ⏸ mantido | `.alias-history-page-button` | `app.css:1197` e `app.css:1323` | Mesma regra duas vezes no arquivo; `min-height` 2,65rem é sobrescrito por 2,4rem. | Baixo | Fundir em uma regra. |
+| 5 ⏸ mantido | `.alias-history-table tbody` / `td` (`@media 1200px`) | `app.css:1348-1349` | Duas regras adjacentes, propriedades diferentes. | Baixo | Fundir (só legibilidade). |
+| 6 ✅ removido | `.automation-history-table td` (`@media 40rem`) | `ux-refinements.css:677` e `:679` | `display: block` e depois `display: grid` no mesmo seletor; vale o último. | Baixo | Remover `td` da regra do `:677`. |
 | 7 | `html[data-theme="light"]` | `tokens.css:363` e `theme.css:7` | Tokens do tema claro divididos em dois arquivos (propriedades diferentes). | Baixo | Só mover para um lugar; não mexer sem teste dos dois temas. |
 | 8 | `:root` | `app.css:107`, `tokens.css:13`, `sidebar-navigation.css:2` | Variáveis/`color-scheme` espalhadas em três lugares. | Baixo | Centralizar em `tokens.css`. |
 | 9 | `#readiness-panel:not([open]) > .readiness-panel-summary` (mobile) | `app.css:966` e `ux-refinements.css:709` | Propriedades diferentes, complementares. | Baixo | Deixar como está ou juntar. |
@@ -45,6 +45,21 @@ Nenhuma deve ser removida de forma mecânica (regra do `AGENTS.md`).
 2. **`app.css:1265-1289` (8 declarações), classes `.alias-history-*` (cores e `vertical-align`).** Sem justificativa em comentário. Provável causa: vencer estilos de tabela/Tailwind carregados antes. Candidato a revisão: descobrir quem a regra está vencendo, aumentar a especificidade do seletor (ex.: `.alias-history-table .alias-history-date`) e só então tirar o `!important`. Risco médio: o histórico de apelidos tem teste e2e (`tests/e2e/alias-history.spec.cjs`) e deve ser rodado.
 
 Se não fizer: nada quebra, só fica mais difícil sobrescrever essas cores no futuro. Se fizer: o CSS fica previsível, desde que verificado nos dois temas.
+
+## Limpeza aplicada (branch `claude/css-limpeza-baixo-risco-item7`)
+
+Só dois itens provadamente sem efeito foram removidos:
+
+- **Item 3:** apagado `.site-header { z-index: var(--z-header); }` de `sidebar-navigation.css`; `app.css` já define exatamente o mesmo valor.
+- **Item 6:** em `ux-refinements.css`, tirado `.automation-history-table td` da lista de `display: block`; a regra seguinte (mesma `@media`, mesma especificidade) já o trocava por `display: grid`.
+
+Mantidos de propósito:
+
+- **Item 5:** tirar `tbody` da lista com `td` e `tr` também removeria o `width: 100%` do `tbody`; então não é idêntico.
+- **Item 4:** fundir exigiria checar as regras entre as linhas 1197 e 1323; só ganho de leitura.
+- **Itens 1 e 2 (risco médio) e `!important`:** não tocados.
+
+Verificação: prints antes/depois do cabeçalho, do histórico de apelidos e da tabela de Automação, desktop (1366x900) e mobile (390x844), tema claro e escuro (12 pares), mais estilos computados dos elementos afetados. 11 pares ficaram idênticos byte a byte; o 12º (Home, mobile, claro) difere só porque a captura pegou a transição do tema (ruído, repetível com o mesmo código).
 
 ## Ordem sugerida
 
