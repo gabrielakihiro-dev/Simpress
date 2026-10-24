@@ -49,7 +49,10 @@ class InboxSeenTests(unittest.TestCase):
         self.inbox.process_once()
         self.inbox.process_once()
         self.assertEqual(victim.read_text(encoding="utf-8"), "intacto")
-        self.assertEqual(self.calls, [])
+        self.assertEqual(self.calls, [b"conteudo"])
+        result = self.root / "processadas" / folder.name / "_resultado.json"
+        self.assertFalse(result.is_symlink())
+        self.assertIn('"concluido"', result.read_text(encoding="utf-8"))
 
     def test_failed_batch_result_is_written_atomically(self):
         folder = self.batch()
