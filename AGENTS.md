@@ -80,6 +80,17 @@ O Simpress roda somente localmente: servidor FastAPI e dados em `data/`, com as 
 
 Não altere arquivos, dados operacionais, dependências nem o estado do Git. Separe falhas confirmadas de melhorias e informe evidências, impacto, gravidade, certeza, áreas revisadas e limitações. Detalhes na skill `.claude/skills/auditoria-somente-leitura`.
 
+## Explicações para leigo
+
+O usuário é leigo em back-end e front-end. Em toda análise, auditoria, revisão ou instrução sobre o código, e sempre que sugerir um comando, termo técnico ou próximo passo:
+
+- Explique em português simples, sem presumir conhecimento prévio, e defina cada termo técnico na primeira vez que aparecer (ex.: "XSS: quando um texto digitado vira código que o navegador executa").
+- Dê pelo menos um exemplo concreto por item, com situação do dia a dia ou do próprio projeto (ex.: "se alguém digitar X na planilha, a tela faz Y").
+- Para cada comando, diga o que ele faz, se altera algo (arquivos, dados, Git) e como saber se deu certo.
+- Para cada recomendação, diga o que acontece se não for feita e o que muda se for feita.
+- Comece pelo resumo em linguagem simples; deixe o detalhe técnico (arquivo, linha, código) depois, para consulta.
+- Não troque precisão por simplicidade: mantenha caminhos, comandos e mensagens de erro exatos dentro de blocos de código.
+
 ## Idioma das respostas do ponytail
 
 Ao executar qualquer comando ou skill do ponytail (`/ponytail`, `ponytail-review`, `ponytail-audit`, `ponytail-debt`, `ponytail-gain`, `ponytail-help`), escreva a resposta inteira em português, inclusive títulos e rótulos do relatório (por exemplo, "O que esta mudança faz", "Corrigir antes", "Deveria corrigir", "Opcional", "Veredito"). Mantenha em inglês só código, comandos, caminhos e mensagens de erro.
