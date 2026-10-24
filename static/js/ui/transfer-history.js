@@ -239,6 +239,8 @@
       requestSerial += 1;
       win.fecharModalAcessivel(MODAL_ID);
     };
+    // These actions are not feature actions, so data-on-* needs them on the dispatcher's closed list.
+    win.SimpressActionDispatcher?.allow(["abrirModalHistoricoTransferencias", "fecharModalHistoricoTransferencias"]);
 
     byId("filtro-historico-transferencias")?.addEventListener("input", () => {
       win.clearTimeout(searchTimer);
