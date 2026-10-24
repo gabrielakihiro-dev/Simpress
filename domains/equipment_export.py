@@ -136,6 +136,191 @@ def get_export_aliases(
     return merge_export_aliases(endpoint_aliases, services.load_modified_apelidos())
 
 
+def _normalized_record(record: Dict[str, Any]) -> Dict[str, Any]:
+    return {
+        normalize_reference_value(header): value
+        for header, value in record.items()
+        if not str(header).startswith("__") and normalize_reference_value(header)
+    }
+
+
+def _record_value(record: Dict[str, Any], aliases: Tuple[str, ...]) -> Any:
+    values = _normalized_record(record)
+    return next((values[key] for key in map(normalize_reference_value, aliases) if key in values), None)
+
+
+def _same_workbook_value(left: Any, right: Any) -> bool:
+    if isinstance(left, str) and isinstance(right, str):
+        return left.strip().casefold() == right.strip().casefold()
+    return left == right
+
+
+def _model_row_matches_record(headers: List[Any], cells: Any, record: Dict[str, Any]) -> bool:
+    """Confirm a same-position replacement by comparing every shared, stable field."""
+    source = _normalized_record(record)
+    mutable_headers = {
+        *(normalize_reference_value(value) for value in DETAILS_SERIAL_HEADER_ALIASES),
+        *(normalize_reference_value(value) for value in DETAILS_ALIAS_HEADER_ALIASES),
+        normalize_reference_value("IDCLIENTE"),
+    }
+    compared = 0
+    for index, header in enumerate(headers):
+        key = normalize_reference_value(header)
+        if not key or key in mutable_headers or key not in source:
+            continue
+        current_value = source[key]
+        if current_value is None or current_value == "":
+            continue
+        cell = cells[index] if index < len(cells) else None
+        if cell is None or cell.data_type == "f" or not _same_workbook_value(cell.value, current_value):
+            return False
+        compared += 1
+    return compared >= 2
+
+
+def _model_row_matches_source(headers: List[Any], cells: Any, source: Dict[str, Any]) -> bool:
+    record = {header: value for header, value in source.get("values", {}).items()}
+    return _model_row_matches_record(headers, cells, record)
+
+
+def _current_inventory_rows(
+    worksheet: Any,
+    headers: List[Any],
+    serial_column: int,
+    alias_column: int,
+    id_column: Optional[int],
+) -> Tuple[Dict[str, List[Dict[str, Any]]], Dict[int, Dict[str, Any]]]:
+    by_serial: Dict[str, List[Dict[str, Any]]] = {}
+    by_row: Dict[int, Dict[str, Any]] = {}
+    for row_number, cells in enumerate(worksheet.iter_rows(min_row=2), start=2):
+        serial = cells[serial_column].value if serial_column < len(cells) else None
+        serial_key = normalize_reference_value(serial)
+        if not serial_key:
+            continue
+        row = {
+            "serial": serial,
+            "serial_key": serial_key,
+            "apelido": cells[alias_column].value if alias_column < len(cells) else None,
+            "id_cliente": cells[id_column].value if id_column is not None and id_column < len(cells) else None,
+            "values": {
+                normalize_reference_value(header): cells[index].value
+                for index, header in enumerate(headers)
+                if index < len(cells) and normalize_reference_value(header)
+            },
+        }
+        by_row[row_number] = row
+        by_serial.setdefault(serial_key, []).append(row)
+    return by_serial, by_row
+
+
+def _match_current_row(
+    headers: List[Any],
+    cells: Any,
+    serial_key: str,
+    row_number: int,
+    current_by_serial: Dict[str, List[Dict[str, Any]]],
+    current_by_row: Dict[int, Dict[str, Any]],
+) -> Optional[Dict[str, Any]]:
+    candidates = current_by_serial.get(serial_key, [])
+    if len(candidates) == 1:
+        return candidates[0]
+    if candidates:
+        return None
+    row_candidate = current_by_row.get(row_number)
+    if (
+        row_candidate is not None
+        and len(current_by_serial.get(row_candidate["serial_key"], [])) == 1
+        and _model_row_matches_source(headers, cells, row_candidate)
+    ):
+        return row_candidate
+    return None
+
+
+def prepare_export_model_alias_sync(
+    services: EquipmentExportServices,
+    details_records: List[Dict[str, Any]],
+    endpoint_index: Dict[str, Any],
+) -> Optional[bytes]:
+    """Update only serials and aliases in the imported model, preserving its layout."""
+    model_file = services.export_model_file()
+    if not model_file.is_file():
+        return None
+
+    workbook = load_workbook_safely(model_file, allow_threaded_comments=True)
+    try:
+        sheet_name = next(
+            (name for name in workbook.sheetnames if "parque" in name.lower() or "equipamento" in name.lower()),
+            workbook.sheetnames[0],
+        )
+        worksheet = workbook[sheet_name]
+        headers = [cell.value for cell in next(worksheet.iter_rows(max_row=1), ())]
+        serial_column = find_workbook_header_column(headers, DETAILS_SERIAL_HEADER_ALIASES)
+        alias_column = find_workbook_header_column(headers, ("APELIDO",))
+        if serial_column is None or alias_column is None:
+            return None
+
+        records_by_serial: Dict[str, List[Dict[str, Any]]] = {}
+        records_by_row: Dict[int, Dict[str, Any]] = {}
+        for record in details_records:
+            serial = _record_value(record, DETAILS_SERIAL_HEADER_ALIASES)
+            serial_key = normalize_reference_value(serial)
+            if not serial_key:
+                continue
+            records_by_serial.setdefault(serial_key, []).append(record)
+            row_number = record.get("__excel_row_number__")
+            if isinstance(row_number, int) and not isinstance(row_number, bool):
+                records_by_row[row_number] = record
+
+        aliases = get_export_aliases(services, endpoint_index)
+        expected_values: Dict[tuple, Any] = {}
+        for row_number in range(2, worksheet.max_row + 1):
+            serial_cell = worksheet.cell(row_number, serial_column + 1)
+            alias_cell = worksheet.cell(row_number, alias_column + 1)
+            if serial_cell.data_type == "f" or alias_cell.data_type == "f":
+                continue
+            serial_key = normalize_reference_value(serial_cell.value)
+            candidates = records_by_serial.get(serial_key, [])
+            matched_record: Optional[Dict[str, Any]] = candidates[0] if len(candidates) == 1 else None
+            if not candidates:
+                row_record = records_by_row.get(row_number)
+                if row_record is not None:
+                    row_serial = normalize_reference_value(
+                        _record_value(row_record, DETAILS_SERIAL_HEADER_ALIASES)
+                    )
+                    if len(records_by_serial.get(row_serial, [])) == 1 and _model_row_matches_record(
+                        headers,
+                        tuple(worksheet.cell(row_number, column + 1) for column in range(len(headers))),
+                        row_record,
+                    ):
+                        matched_record = row_record
+            if matched_record is None:
+                continue
+
+            current_serial = _record_value(matched_record, DETAILS_SERIAL_HEADER_ALIASES)
+            current_serial_key = normalize_reference_value(current_serial)
+            current_alias = _record_value(matched_record, DETAILS_ALIAS_HEADER_ALIASES)
+            updated_alias = aliases.get(current_serial_key, current_alias)
+            if serial_key != current_serial_key:
+                expected_values[(worksheet.title, serial_cell.coordinate)] = current_serial
+            if updated_alias is None:
+                updated_alias = ""
+            if alias_cell.value != updated_alias:
+                expected_values[(worksheet.title, alias_cell.coordinate)] = updated_alias
+
+        if not expected_values:
+            return None
+        snapshot = workbook_snapshot(workbook)
+        return serialize_workbook_validated(
+            model_file,
+            workbook,
+            snapshot,
+            expected_values,
+            allow_threaded_comments=True,
+        )
+    finally:
+        workbook.close()
+
+
 @dataclass(frozen=True)
 class ExportStatus:
     """Whether the export can run, with the reason shown when it cannot."""
@@ -249,44 +434,47 @@ def count_export_changes_with_status(
             if current_serial_col is None or current_alias_col is None:
                 return empty_counts.copy(), ExportStatus(False, "A base ativa não contém as colunas de série e apelido."), True
 
-            current_rows: Dict[str, Dict[str, Any]] = {}
-            for cells in current_ws.iter_rows(min_row=2, values_only=True):
-                serial_key = normalize_reference_value(
-                    cells[current_serial_col] if current_serial_col < len(cells) else None
-                )
-                if not serial_key:
-                    continue
-                if serial_key in current_rows:
-                    return empty_counts.copy(), ExportStatus(False, "A base ativa contém séries duplicadas; a exportação exige revisão."), True
-                current_rows[serial_key] = {
-                    "apelido": cells[current_alias_col] if current_alias_col < len(cells) else None,
-                    "id_cliente": cells[current_id_col] if current_id_col is not None and current_id_col < len(cells) else None,
-                }
+            current_by_serial, current_by_row = _current_inventory_rows(
+                current_ws,
+                current_headers,
+                current_serial_col,
+                current_alias_col,
+                current_id_col,
+            )
+            if any(len(rows) > 1 for rows in current_by_serial.values()):
+                return empty_counts.copy(), ExportStatus(False, "A base ativa contém séries duplicadas; a exportação exige revisão."), True
 
             model_rows = []
             model_serial_counts: Dict[str, int] = {}
-            for cells in model_ws.iter_rows(min_row=2):
+            for row_number, cells in enumerate(model_ws.iter_rows(min_row=2), start=2):
                 serial_key = normalize_reference_value(
                     cells[model_serial_col].value if model_serial_col < len(cells) else None
                 )
                 if not serial_key:
                     continue
                 model_serial_counts[serial_key] = model_serial_counts.get(serial_key, 0) + 1
-                model_rows.append((serial_key, cells))
-            if set(model_serial_counts) != set(current_rows):
-                return empty_counts.copy(), ExportStatus(False, "O modelo e a base ativa não contêm o mesmo conjunto de séries."), True
+                model_rows.append((serial_key, row_number, cells))
 
             effective_endpoint_index = endpoint_index if endpoint_index is not None else services.read_endpoint_alias_index()
             aliases = get_export_aliases(services, effective_endpoint_index)
             alias_count = 0
             id_cliente_count = 0
-            for serial_key, cells in model_rows:
+            for serial_key, row_number, cells in model_rows:
                 if model_serial_counts.get(serial_key) != 1:
                     continue
-                current = current_rows[serial_key]
+                current = _match_current_row(
+                    model_headers,
+                    cells,
+                    serial_key,
+                    row_number,
+                    current_by_serial,
+                    current_by_row,
+                )
+                if current is None:
+                    continue
                 alias_cell = cells[model_alias_col] if model_alias_col < len(cells) else None
                 if alias_cell is not None and alias_cell.data_type != "f":
-                    updated_alias = aliases.get(serial_key, current["apelido"])
+                    updated_alias = aliases.get(current["serial_key"], current["apelido"])
                     if updated_alias is None:
                         updated_alias = ""
                     if alias_cell.value != updated_alias:
@@ -426,17 +614,15 @@ def build_equipment_export(services: EquipmentExportServices) -> EquipmentExport
             current_alias_col = current_alias_col_index + 1
             current_id_cliente_col_index = find_workbook_header_column(current_headers, ("IDCLIENTE",))
             current_id_cliente_col = current_id_cliente_col_index + 1 if current_id_cliente_col_index is not None else None
-            current_rows = {}
-            for cells in current_ws.iter_rows(min_row=2, values_only=True):
-                serial_key = normalize_reference_value(cells[current_serial_col - 1])
-                if not serial_key:
-                    continue
-                if serial_key in current_rows:
-                    raise DomainConflictError("A base atual contém séries duplicadas; confira antes de exportar.")
-                current_rows[serial_key] = {
-                    "apelido": cells[current_alias_col - 1],
-                    "id_cliente": cells[current_id_cliente_col - 1] if current_id_cliente_col else None,
-                }
+            current_by_serial, current_by_row = _current_inventory_rows(
+                current_ws,
+                current_headers,
+                current_serial_col_index,
+                current_alias_col_index,
+                current_id_cliente_col_index,
+            )
+            if any(len(rows) > 1 for rows in current_by_serial.values()):
+                raise DomainConflictError("A base atual contém séries duplicadas; confira antes de exportar.")
 
             endpoint_index = services.read_endpoint_alias_index()
             aliases = get_export_aliases(services, endpoint_index)
@@ -446,15 +632,13 @@ def build_equipment_export(services: EquipmentExportServices) -> EquipmentExport
                 if serial_key:
                     serial_counts[serial_key] = serial_counts.get(serial_key, 0) + 1
 
-            if set(serial_counts) != set(current_rows):
-                raise DomainConflictError("As séries da base atual diferem das linhas do modelo de exportação. Atualize o modelo antes de exportar.")
-
             expected_values = {}
             alias_update_count = 0
             id_cliente_update_count = 0
             skipped_duplicate_rows = set()
             skipped_formula_rows = 0
             skipped_formula_serials = set()
+            skipped_unmatched_rows = set()
             for row in range(2, ws.max_row + 1):
                 serial_key = normalize_reference_value(ws.cell(row=row, column=serial_col).value)
                 if not serial_key:
@@ -463,14 +647,33 @@ def build_equipment_export(services: EquipmentExportServices) -> EquipmentExport
                     skipped_duplicate_rows.add(serial_key)
                     continue
 
+                current = _match_current_row(
+                    headers=header_row,
+                    cells=tuple(ws.cell(row=row, column=column + 1) for column in range(len(header_row))),
+                    serial_key=serial_key,
+                    row_number=row,
+                    current_by_serial=current_by_serial,
+                    current_by_row=current_by_row,
+                )
+                if current is None:
+                    skipped_unmatched_rows.add(serial_key)
+                    continue
+
                 formula_skipped = False
+                serial_cell = ws.cell(row=row, column=serial_col)
+                if (
+                    serial_cell.data_type != "f"
+                    and serial_key != current["serial_key"]
+                ):
+                    serial_cell.value = current["serial"]
+                    expected_values[(ws.title, serial_cell.coordinate)] = current["serial"]
                 alias_cell = ws.cell(row=row, column=apelido_col)
                 if alias_cell.data_type == "f":
                     formula_skipped = True
                 else:
                     updated_alias = aliases.get(
-                        serial_key,
-                        current_rows[serial_key]["apelido"],
+                        current["serial_key"],
+                        current["apelido"],
                     )
                     if updated_alias is None:
                         updated_alias = ""
@@ -484,7 +687,7 @@ def build_equipment_export(services: EquipmentExportServices) -> EquipmentExport
                     if id_cliente_cell.data_type == "f":
                         formula_skipped = True
                     else:
-                        updated_id_cliente = current_rows[serial_key]["id_cliente"]
+                        updated_id_cliente = current["id_cliente"]
                         if updated_id_cliente is None:
                             updated_id_cliente = ""
                         if id_cliente_cell.value != updated_id_cliente:
@@ -496,8 +699,11 @@ def build_equipment_export(services: EquipmentExportServices) -> EquipmentExport
                     skipped_formula_rows += 1
                     skipped_formula_serials.add(serial_key)
 
-            review_items = endpoint_alias_review_items(endpoint_index, set(serial_counts))
-            pending_review_count = len(review_items) + len(skipped_duplicate_rows) + skipped_formula_rows
+            review_items = endpoint_alias_review_items(endpoint_index, set(current_by_serial))
+            pending_review_count = (
+                len(review_items) + len(skipped_duplicate_rows) + skipped_formula_rows
+                + len(skipped_unmatched_rows)
+            )
             review_summary = [
                 {
                     "motivo": "Registros do Endpoint que exigem conferência",
@@ -516,6 +722,11 @@ def build_equipment_export(services: EquipmentExportServices) -> EquipmentExport
                     "motivo": "Linhas protegidas por fórmulas",
                     "total": skipped_formula_rows,
                     "series": sorted(skipped_formula_serials)[:10],
+                },
+                {
+                    "motivo": "Linhas sem correspondência segura na base atual",
+                    "total": len(skipped_unmatched_rows),
+                    "series": sorted(skipped_unmatched_rows)[:10],
                 },
             ]
             review_summary = [item for item in review_summary if item["total"]]
