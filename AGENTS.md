@@ -106,6 +106,7 @@ Ao executar qualquer comando ou skill do ponytail (`/ponytail`, `ponytail-review
 ## Git
 
 - Autorização para commit não autoriza push. Confirme destino e autorização e informe claramente se houve commit, push e sincronização com o remoto.
+- Depois de abrir ou atualizar um PR, verifique sempre a CI e informe o resultado (aprovada, falhou ou pendente). Se não for possível ler a CI (por exemplo, `gh` sem login), diga isso explicitamente em vez de supor que passou.
 - Faça mudanças em etapas, valide antes de publicar e revise o que vai para o commit. Não reescreva histórico nem inclua dados operacionais ou confidenciais.
 - Identifique branches e worktrees reais antes de integrar trabalho. Não use `reset --hard`, `git clean` ou force push sem autorização.
 - Cada agente (Claude Code, Codex e Cursor) trabalha no próprio git worktree e não troca o branch do checkout principal. Antes de cada commit, confira o branch atual com `git branch --show-current`.

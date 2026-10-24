@@ -18,6 +18,7 @@ import sys
 import time
 import unicodedata
 import urllib.request
+from urllib.parse import urlsplit
 from collections import Counter
 from dataclasses import dataclass
 from pathlib import Path
@@ -137,7 +138,7 @@ def ler_planilha(caminho: Path, aba: str) -> List[tuple[Any, Any, Any]]:
 
 # A primeira chamada carrega o modelo na GPU e já passou de 120 s nesta máquina.
 def chamador_ollama(url: str, timeout: float = 300.0) -> Chamador:
-    if not url.startswith(("http://localhost", "http://127.0.0.1")):
+    if urlsplit(url).hostname not in {"localhost", "127.0.0.1", "::1"}:
         raise ValueError("O modelo precisa rodar localmente (localhost ou 127.0.0.1).")
 
     def chamar(corpo: Dict[str, Any]) -> str:

@@ -16,7 +16,7 @@ from fastapi.responses import JSONResponse
 from starlette.types import ASGIApp, Message, Receive, Scope, Send
 
 from core.integrity import FileBusyError
-from core.inventory_requests import IDEMPOTENCY_KEY_PATTERN
+from core.inventory_requests import IDEMPOTENCY_KEY_ERROR, IDEMPOTENCY_KEY_PATTERN
 from security.network import is_direct_loopback_request
 
 logger = logging.getLogger(__name__)
@@ -264,7 +264,7 @@ class LocalRequestSafetyMiddleware:
             ):
                 response = JSONResponse(
                     status_code=422,
-                    content={"detail": "Idempotency-Key deve conter de 1 a 128 letras, números, ponto, hífen, dois-pontos ou sublinhado."},
+                    content={"detail": IDEMPOTENCY_KEY_ERROR},
                 )
                 await response(scope, receive, send)
                 return

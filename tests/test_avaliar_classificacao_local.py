@@ -51,6 +51,10 @@ class RespostaTest(unittest.TestCase):
         self.assertFalse(corpo["think"])
         with self.assertRaises(ValueError):
             av.chamador_ollama("https://api.exemplo.com")
+        for url in ("http://localhost.exemplo.com", "http://127.0.0.1.exemplo.com", "http://localhost@exemplo.com"):
+            with self.subTest(url=url), self.assertRaises(ValueError):
+                av.chamador_ollama(url)
+        av.chamador_ollama("http://localhost:11434")
 
 
 class AvaliacaoTest(unittest.TestCase):
