@@ -15,6 +15,7 @@ from urllib.parse import urlsplit
 from fastapi.responses import JSONResponse
 from starlette.types import ASGIApp, Message, Receive, Scope, Send
 
+from core.config import REQUEST_BODY_IDLE_TIMEOUT_SECONDS
 from core.integrity import FileBusyError
 from core.inventory_requests import IDEMPOTENCY_KEY_PATTERN
 from security.network import is_direct_loopback_request
@@ -34,6 +35,10 @@ ALLOWED_API_FETCH_SITES = frozenset({b"same-origin", b"none"})
 
 
 class RequestBodyTooLarge(Exception):
+    pass
+
+
+class RequestBodyTimeout(Exception):
     pass
 
 
@@ -299,17 +304,35 @@ class LocalRequestSafetyMiddleware:
                 response_started = True
             await send(message)
 
+        body_complete = False
+
         async def limited_receive() -> Message:
-            nonlocal request_size
-            message = await receive()
-            if body_limit is not None and message["type"] == "http.request":
+            nonlocal request_size, body_complete
+            if body_limit is None or body_complete:
+                # After the body ends receive() only waits for disconnect, which may legitimately idle.
+                return await receive()
+            try:
+                message = await asyncio.wait_for(receive(), REQUEST_BODY_IDLE_TIMEOUT_SECONDS)
+            except asyncio.TimeoutError:
+                raise RequestBodyTimeout() from None
+            if message["type"] == "http.request":
                 request_size += len(message.get("body", b""))
                 if request_size > body_limit:
                     raise RequestBodyTooLarge()
+                body_complete = not message.get("more_body", False)
             return message
 
         try:
             await self.app(scope, limited_receive, safe_send)
+        except RequestBodyTimeout:
+            if response_started:
+                return
+            response = JSONResponse(
+                status_code=408,
+                content={"detail": "O envio do corpo da solicitação demorou demais."},
+                headers={"Connection": "close"},
+            )
+            await response(scope, receive, send)
         except RequestBodyTooLarge:
             if response_started:
                 return
