@@ -90,6 +90,7 @@ O usuário é leigo em back-end e front-end. Em toda análise, auditoria, revis�
 - Para cada recomendação, diga o que acontece se não for feita e o que muda se for feita.
 - Comece pelo resumo em linguagem simples; deixe o detalhe técnico (arquivo, linha, código) depois, para consulta.
 - Não troque precisão por simplicidade: mantenha caminhos, comandos e mensagens de erro exatos dentro de blocos de código.
+- Depois de executar correções ou qualquer alteração pedida, explique o que foi feito: o que mudou (arquivo e trecho), por quê, o efeito prático com um exemplo, o que foi verificado e o que não foi.
 
 ## Idioma das respostas do ponytail
 
