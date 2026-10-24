@@ -896,14 +896,33 @@ test("stale base alert shows the last update date and opens the base update", as
   }
 });
 
-test("stale tickets and new divergences alerts show counts and open their screens", async ({ page, request }) => {
-  const tickets = page.locator("#alerta-os-paradas");
-  const divergences = page.locator("#alerta-divergencias-novas");
-  await expect(tickets).toBeHidden();
-  await expect(divergences).toBeHidden();
+test("stale tickets and new divergences appear in the notification center", async ({ page, request }) => {
+  const home = page.locator("#tab-panel-home");
+  const trigger = page.locator("#btn-notificacoes");
+  const badge = page.locator("#badge-notificacoes");
+  const panel = page.locator("#notification-center-panel");
+  const tickets = panel.locator("#alerta-os-paradas");
+  const divergences = panel.locator("#alerta-divergencias-novas");
+  const base = home.locator("#alerta-base-desatualizada");
+  await request.get("/__fixture_alertas_painel?estado=ocultos");
+  await request.get("/__fixture_base_desatualizada?estado=atualizada");
+  await page.reload();
+  await expect(home.locator("#alerta-os-paradas, #alerta-divergencias-novas")).toHaveCount(0);
+  await expect(trigger).toHaveAccessibleName("Notificações, nenhum aviso ativo");
+  await expect(badge).toBeHidden();
+  await expect(base).toBeHidden();
   try {
-    await request.get("/__fixture_alertas_painel?estado=visiveis");
+    await request.get("/__fixture_base_desatualizada?estado=desatualizada");
     await page.reload();
+    await expect(base).toBeVisible();
+    await expect(home.locator("#alerta-os-paradas, #alerta-divergencias-novas")).toHaveCount(0);
+
+    await request.get("/__fixture_alertas_painel?estado=visiveis");
+    await trigger.click();
+    await expect(panel).toBeVisible();
+    await expect(trigger).toHaveAttribute("aria-expanded", "true");
+    await expect(badge).toHaveText("2");
+    await expect(trigger).toHaveAccessibleName("Notificações, 2 avisos ativos");
     await expect(tickets.getByRole("heading", { name: "OS paradas" })).toBeVisible();
     await expect(tickets.locator("#alerta-os-paradas-texto")).toHaveText(
       "3 chamados abertos estão sem atualização há 7 dias ou mais. O mais antigo está parado há 21 dias."
@@ -912,24 +931,49 @@ test("stale tickets and new divergences alerts show counts and open their screen
     await expect(divergences.locator("#alerta-divergencias-novas-texto")).toHaveText(
       "A comparação de 18/10/2026 às 09:00 trouxe 5 linhas de divergência que não estavam na de 11/10/2026 às 08:00: 3 em Localidade divergente e 2 em Séries sem local definido."
     );
-    await auditAccessibility(page, "#alerta-os-paradas");
-    await auditAccessibility(page, "#alerta-divergencias-novas");
+    await auditAccessibility(page, "#notification-center-panel");
 
+    await page.keyboard.press("Escape");
+    await expect(panel).toBeHidden();
+    await expect(trigger).toBeFocused();
+
+    await trigger.click();
     await tickets.getByRole("button", { name: "Ver chamados" }).click();
+    await expect(panel).toBeHidden();
     await expect(page.locator("#modal-acompanhamento-chamados")).toBeVisible();
     await page.keyboard.press("Escape");
     await expect(page.locator("#modal-acompanhamento-chamados")).toBeHidden();
+    await expect(trigger).toBeFocused();
 
+    await trigger.click();
     await divergences.getByRole("button", { name: "Ver evolução" }).click();
+    await expect(panel).toBeHidden();
     await expect(page.locator("#modal-evolucao-atualizacoes")).toBeVisible();
     await page.keyboard.press("Escape");
     await expect(page.locator("#modal-evolucao-atualizacoes")).toBeHidden();
+    await expect(trigger).toBeFocused();
 
+    await request.get("/__fixture_alertas_painel?estado=somente_os");
+    await trigger.click();
+    await expect(badge).toHaveText("1");
+    await expect(trigger).toHaveAccessibleName("Notificações, 1 aviso ativo");
+    await expect(tickets).toBeVisible();
+    await expect(divergences).toBeHidden();
+
+    await page.locator("#header-page-title").click();
+    await expect(panel).toBeHidden();
     await request.get("/__fixture_alertas_painel?estado=ocultos");
-    await page.reload();
+    await trigger.click();
+    await expect(panel).toBeVisible();
+    await expect(badge).toBeHidden();
+    await expect(panel.locator("#notification-center-summary")).toHaveText("Nenhum aviso ativo.");
     await expect(tickets).toBeHidden();
     await expect(divergences).toBeHidden();
+    await page.locator("#header-page-title").click();
+    await expect(panel).toBeHidden();
+    await expect(base).toBeVisible();
   } finally {
     await request.get("/__fixture_alertas_painel?estado=ocultos");
+    await request.get("/__fixture_base_desatualizada?estado=atualizada");
   }
 });
