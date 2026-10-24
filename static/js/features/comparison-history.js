@@ -661,7 +661,6 @@
         app.carregarEstatisticas(),
         app.carregarUnidades(),
         app.carregarHistoricoComparacoes(),
-        app.carregarContagemHistoricoComparacoes(),
       ]);
       document.querySelector('#modal-historico-comparacoes [aria-label="Fechar histórico de planilhas"]')
         ?.focus({ preventScroll: true });
