@@ -462,7 +462,54 @@ html[data-ux-density="compact"] .comparison-desktop-table td {
   .stale-base-alert[data-enter="true"] { animation: none; }
 }
 
-/* Home: avisos secundários em linha única e discreta, para a busca continuar sendo o foco. */
+/* Central de notificações no cabeçalho. */
+.notification-center-trigger { position: relative; }
+.notification-center-trigger > svg { width: 1.1rem; height: 1.1rem; }
+.notification-center-badge {
+  position: absolute;
+  top: -0.3rem;
+  right: -0.3rem;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 1.15rem;
+  height: 1.15rem;
+  padding: 0 0.25rem;
+  border: 1px solid var(--ux-warning-border);
+  border-radius: var(--ux-radius-pill);
+  background: var(--ux-warning-bg);
+  color: var(--ux-warning-fg);
+  font-size: 0.65rem;
+  font-weight: 800;
+  line-height: 1;
+}
+.notification-center-badge[hidden] { display: none; }
+.notification-center-panel {
+  position: absolute;
+  top: calc(100% + var(--ux-space-2));
+  right: 0;
+  z-index: var(--z-popover);
+  width: min(28rem, calc(100vw - 2rem));
+  max-height: min(72dvh, 36rem);
+  overflow-y: auto;
+  padding: var(--ux-space-4);
+  border: 1px solid var(--ux-border-strong);
+  border-radius: var(--ux-radius-xl);
+  background: var(--surface-overlay);
+  color: var(--ux-text);
+  box-shadow: var(--ux-shadow-3);
+}
+.notification-center-panel[hidden] { display: none; }
+.notification-center-header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: var(--ux-space-2);
+  padding-bottom: var(--ux-space-3);
+  border-bottom: 1px solid var(--ux-border);
+}
+.notification-center-header h2 { margin: 0; color: var(--ux-text); font-size: 0.95rem; font-weight: 750; }
+.notification-center-header p { margin: 0; color: var(--ux-text-muted); font-size: 0.72rem; text-align: right; }
 #alerta-os-paradas, #alerta-divergencias-novas {
   flex-wrap: wrap;
   gap: var(--ux-space-1) var(--ux-space-3);
@@ -484,7 +531,10 @@ html[data-ux-density="compact"] .comparison-desktop-table td {
 }
 @media (max-width: 40rem) {
   #alerta-os-paradas, #alerta-divergencias-novas { padding: var(--ux-space-2) var(--ux-space-3); }
-  #alerta-os-paradas .stale-base-alert-action, #alerta-divergencias-novas .stale-base-alert-action { width: 100%; min-height: 40px; }
+  #alerta-os-paradas .stale-base-alert-action, #alerta-divergencias-novas .stale-base-alert-action { width: 100%; min-height: 48px; }
+  .notification-center-panel { padding: var(--ux-space-3); }
+  .notification-center-header { flex-wrap: wrap; }
+  .notification-center-header p { text-align: left; }
 }
 
 /* Automação: rotinas do Chrome de automação (docs/operacao/automacao-chrome.md) */
