@@ -54,6 +54,7 @@ class Configuracao:
     dashboard_url: str
     colunas_formula: Tuple[str, ...]
     quebras_como_espaco: bool = False
+    modo_sombra: bool = False  # o modelo local só sugere o tipo; ver scripts/sebrae_sombra.py
 
 
 _COLUNA = re.compile(r"^[A-Z]{1,3}$")
@@ -90,7 +91,12 @@ def carregar_configuracao(caminho: Path = CONFIG_ARQUIVO) -> Configuracao:
             f"colunas_formula deve incluir as fórmulas confirmadas em {esperadas}, "
             "ou [] para desativar explicitamente a conferência."
         )
-    return Configuracao(url, tuple(colunas), bool(dados.get("quebras_como_espaco", False)))
+    return Configuracao(
+        url,
+        tuple(colunas),
+        bool(dados.get("quebras_como_espaco", False)),
+        dados.get("modo_sombra") is True,
+    )
 
 
 @contextmanager
@@ -284,6 +290,12 @@ def executar(
 
     softexpert = softexpert or LeitorSoftExpertReal(context, rotinas, log=log)
     dashboard = dashboard or DashboardReal(context, rotinas, configuracao, log=log)
+    observar = None
+    if configuracao.modo_sombra:
+        from scripts import sebrae_sombra
+
+        observar = sebrae_sombra.criar_observador()
+        log("Modo sombra ligado: sugestões do modelo local vão só para o caderno local.")
     resultado: Optional[orq.ResultadoOrquestracao] = None
     try:
         resultado = orq.sincronizar(
@@ -292,6 +304,7 @@ def executar(
             caminho_estado or caminhos_padrao(STATE_DIR).estado_chamados,
             cancelado=rotinas.cancelamento_pedido,
             log=log,
+            observar=observar,
         )
     finally:
         if resultado is None or resultado.situacao != orq.SITUACAO_LOGIN:
