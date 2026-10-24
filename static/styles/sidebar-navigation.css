@@ -500,6 +500,16 @@ body.sidebar-drawer-open {
   padding: 0.7rem clamp(1rem, 2.3vw, 2rem);
 }
 
+.site-header { z-index: var(--z-header); }
+
+.header-tools {
+  position: relative;
+  display: flex;
+  align-items: center;
+  flex: 0 0 auto;
+  gap: 0.65rem;
+}
+
 .header-context {
   display: grid;
   gap: 0.15rem;
@@ -788,7 +798,7 @@ body.sidebar-drawer-open {
     max-width: 100%;
   }
 
-  .header-inner > #theme-toggle {
+  .header-inner > .header-tools {
     grid-column: 3;
     grid-row: 1;
     justify-self: end;

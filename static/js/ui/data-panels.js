@@ -777,6 +777,93 @@
       summary.setAttribute("aria-label", `${SUMMARY_LABEL}, ${label}`);
     }
 
+    // ----- header notification center -----
+    const notificationButton = doc.getElementById("btn-notificacoes");
+    const notificationBadge = doc.getElementById("badge-notificacoes");
+    const notificationPanel = doc.getElementById("notification-center-panel");
+    const notificationSummary = doc.getElementById("notification-center-summary");
+    let hasNotificationData = false;
+
+    function atualizarResumoNotificacoes(text) {
+      if (notificationSummary && notificationSummary.textContent !== text) notificationSummary.textContent = text;
+    }
+
+    function renderizarNotificacoes(data) {
+      const osParadas = data?.os_paradas;
+      const divergenciasNovas = data?.divergencias_novas;
+      const total = Number(osParadas?.estado === "paradas" && Number(osParadas.total) > 0)
+        + Number(divergenciasNovas?.estado === "novas" && Number(divergenciasNovas.total) > 0);
+      const label = total
+        ? `Notificações, ${pluralize(total, "aviso ativo", "avisos ativos")}`
+        : "Notificações, nenhum aviso ativo";
+
+      if (notificationBadge) {
+        notificationBadge.textContent = String(total);
+        notificationBadge.hidden = total === 0;
+      }
+      if (notificationButton) {
+        notificationButton.setAttribute("aria-label", label);
+        notificationButton.title = label;
+      }
+      if (notificationPanel) {
+        notificationPanel.dataset.state = "ready";
+        notificationPanel.setAttribute("aria-busy", "false");
+      }
+      atualizarResumoNotificacoes(total ? `${pluralize(total, "aviso ativo", "avisos ativos")}.` : "Nenhum aviso ativo.");
+      hasNotificationData = true;
+    }
+
+    function renderizarFalhaNotificacoes() {
+      if (notificationPanel) {
+        notificationPanel.dataset.state = "error";
+        notificationPanel.setAttribute("aria-busy", "false");
+      }
+      if (!hasNotificationData) {
+        if (notificationBadge) notificationBadge.hidden = true;
+        notificationButton?.setAttribute("aria-label", "Notificações, atualização indisponível");
+        if (notificationButton) notificationButton.title = "Notificações, atualização indisponível";
+        atualizarResumoNotificacoes("Não foi possível atualizar os avisos. Tente novamente.");
+        return;
+      }
+      atualizarResumoNotificacoes("Atualização indisponível; exibindo os últimos avisos recebidos.");
+    }
+
+    function fecharCentralNotificacoes() {
+      if (!notificationPanel || !notificationButton) return;
+      notificationPanel.hidden = true;
+      notificationButton.setAttribute("aria-expanded", "false");
+    }
+
+    if (notificationButton && notificationPanel) {
+      notificationButton.addEventListener("click", () => {
+        const abrir = notificationPanel.hidden;
+        notificationPanel.hidden = !abrir;
+        notificationButton.setAttribute("aria-expanded", String(abrir));
+        if (!abrir) return;
+        notificationPanel.dataset.state = "loading";
+        notificationPanel.setAttribute("aria-busy", "true");
+        doc.dispatchEvent(new win.Event("simpress:atualizar-notificacoes"));
+      });
+
+      notificationPanel.addEventListener("click", event => {
+        if (!event.target?.closest?.(".stale-base-alert-action")) return;
+        fecharCentralNotificacoes();
+        notificationButton.focus();
+      });
+
+      doc.addEventListener("click", event => {
+        if (notificationPanel.hidden || notificationPanel.contains(event.target) || notificationButton.contains(event.target)) return;
+        fecharCentralNotificacoes();
+      });
+
+      doc.addEventListener("keydown", event => {
+        if (event.key !== "Escape" || notificationPanel.hidden) return;
+        event.preventDefault();
+        fecharCentralNotificacoes();
+        notificationButton.focus();
+      });
+    }
+
     async function refresh(force) {
       if (!force && Date.now() - lastFetch < REFRESH_MIN_MS) return;
       lastFetch = Date.now();
@@ -792,14 +879,21 @@
         if (ticketSerialAtStart === ticketSummaryRequestSerial
           && doc.getElementById("tab-resumo")?.getAttribute("aria-selected") === "true") refreshTicketSummary(true);
         renderBadge(divergenceTotal(data.ultima_comparacao));
+        renderizarNotificacoes(data);
         // Other Home cards (usage in the last 30 days) render from the same response.
         doc.dispatchEvent(new win.CustomEvent("simpress:painel-atualizado", { detail: data }));
       } catch (error) {
         // The dashboard is optional; never disturb the main flow.
-        if (serial === requestSerial) { if (panel) panel.hidden = true; renderBadge(0); }
+        if (serial === requestSerial) {
+          if (panel) panel.hidden = true;
+          renderBadge(0);
+          renderizarFalhaNotificacoes();
+        }
         win.console?.warn?.("Painel indisponível:", error?.message || error);
       }
     }
+
+    doc.addEventListener("simpress:atualizar-notificacoes", () => refresh(true));
 
     new win.MutationObserver(scanTables).observe(doc.body, { childList: true, subtree: true });
     scanTables();
