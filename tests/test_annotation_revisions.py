@@ -31,7 +31,7 @@ ROOT = Path(__file__).resolve().parents[1]
 
 class AnnotationRevisionTests(unittest.TestCase):
     def setUp(self):
-        self.temporary = tempfile.TemporaryDirectory(dir=ROOT, prefix=".annotation-test-")
+        self.temporary = tempfile.TemporaryDirectory(dir=tempfile.gettempdir(), prefix=".annotation-test-")
         self.addCleanup(self.temporary.cleanup)
         self.root = Path(self.temporary.name)
         self.shared = self.root / "shared"

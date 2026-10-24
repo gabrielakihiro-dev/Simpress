@@ -13,7 +13,7 @@ class BootstrapEnvironmentTests(unittest.TestCase):
     def setUp(self):
         self.temporary_directory = tempfile.TemporaryDirectory(
             prefix=".bootstrap-test-",
-            dir=PROJECT_ROOT,
+            dir=tempfile.gettempdir(),
         )
         self.project_root = Path(self.temporary_directory.name)
         (self.project_root / "requirements.txt").write_text("fastapi==1.2.3\n", encoding="utf-8")
