@@ -9,6 +9,7 @@ from starlette.types import ASGIApp, Receive, Scope, Send
 
 idempotency_key: ContextVar[str | None] = ContextVar("simpress_idempotency_key", default=None)
 IDEMPOTENCY_KEY_PATTERN = re.compile(r"[A-Za-z0-9._:-]{1,128}\Z")
+IDEMPOTENCY_KEY_ERROR = "Idempotency-Key deve conter de 1 a 128 letras, números, ponto, hífen, dois-pontos ou sublinhado."
 
 
 class InventoryUpdateMiddleware:
@@ -27,7 +28,7 @@ class InventoryUpdateMiddleware:
         key = values[0].decode("latin-1") if values else None
         if key is not None and not IDEMPOTENCY_KEY_PATTERN.fullmatch(key):
             await JSONResponse({
-                "detail": "Idempotency-Key deve conter de 1 a 128 letras, números, ponto, hífen, dois-pontos ou sublinhado."
+                "detail": IDEMPOTENCY_KEY_ERROR
             }, status_code=422)(scope, receive, send)
             return
         token = idempotency_key.set(key)
