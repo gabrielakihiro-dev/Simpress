@@ -142,9 +142,16 @@ class ExportStatus:
 
     available: bool
     reason: str
+    retryable: bool = False
 
     def as_dict(self) -> Dict[str, Any]:
         return {"available": self.available, "reason": self.reason}
+
+    def readiness_dict(self) -> Dict[str, Any]:
+        return {
+            **self.as_dict(),
+            "state": "ready" if self.available else "unavailable" if self.retryable else "invalid",
+        }
 
 
 @dataclass(frozen=True)
@@ -200,19 +207,18 @@ def export_files_signature(services: EquipmentExportServices) -> tuple:
     return tuple(signature)
 
 
-def count_export_changes(
+def count_export_changes_with_status(
     services: EquipmentExportServices,
     locked: bool = False,
     endpoint_index: Optional[Dict[str, Any]] = None,
-) -> Dict[str, int]:
-    """Count writable alias and IdCliente cells that export would change."""
+) -> Tuple[Dict[str, int], Dict[str, Any]]:
+    """Count export changes and return the status from the same check."""
     empty_counts = {"apelidos": 0, "id_clientes": 0, "total": 0}
 
-    def count() -> Dict[str, int]:
+    def count() -> Tuple[Dict[str, int], ExportStatus, bool]:
         source_file = services.get_parque_file()
         if source_file is None or not source_file.is_file() or not services.export_model_file().is_file():
-            _set_export_status(False, "A base ativa ou o modelo de exportação está ausente.")
-            return empty_counts.copy()
+            return empty_counts.copy(), ExportStatus(False, "A base ativa ou o modelo de exportação está ausente."), True
 
         model_wb = None
         current_wb = None
@@ -229,13 +235,11 @@ def count_export_changes(
             model_alias_col = find_workbook_header_column(model_headers, ("APELIDO",))
             model_id_col = find_workbook_header_column(model_headers, ("IDCLIENTE",))
             if model_serial_col is None or model_alias_col is None:
-                _set_export_status(False, "O modelo de exportação não contém as colunas obrigatórias.")
-                return empty_counts.copy()
+                return empty_counts.copy(), ExportStatus(False, "O modelo de exportação não contém as colunas obrigatórias."), True
 
             current_sheet_name = services.find_details_sheet(source_file)
             if current_sheet_name is None:
-                _set_export_status(False, "A base ativa não contém uma aba de inventário compatível.")
-                return empty_counts.copy()
+                return empty_counts.copy(), ExportStatus(False, "A base ativa não contém uma aba de inventário compatível."), True
             current_wb = openpyxl.load_workbook(source_file, read_only=True, data_only=False)
             current_ws = current_wb[current_sheet_name]
             current_headers = [cell.value for cell in next(current_ws.iter_rows(max_row=1), ())]
@@ -243,8 +247,7 @@ def count_export_changes(
             current_alias_col = find_workbook_header_column(current_headers, DETAILS_ALIAS_HEADER_ALIASES)
             current_id_col = find_workbook_header_column(current_headers, ("IDCLIENTE",))
             if current_serial_col is None or current_alias_col is None:
-                _set_export_status(False, "A base ativa não contém as colunas de série e apelido.")
-                return empty_counts.copy()
+                return empty_counts.copy(), ExportStatus(False, "A base ativa não contém as colunas de série e apelido."), True
 
             current_rows: Dict[str, Dict[str, Any]] = {}
             for cells in current_ws.iter_rows(min_row=2, values_only=True):
@@ -254,8 +257,7 @@ def count_export_changes(
                 if not serial_key:
                     continue
                 if serial_key in current_rows:
-                    _set_export_status(False, "A base ativa contém séries duplicadas; a exportação exige revisão.")
-                    return empty_counts.copy()
+                    return empty_counts.copy(), ExportStatus(False, "A base ativa contém séries duplicadas; a exportação exige revisão."), True
                 current_rows[serial_key] = {
                     "apelido": cells[current_alias_col] if current_alias_col < len(cells) else None,
                     "id_cliente": cells[current_id_col] if current_id_col is not None and current_id_col < len(cells) else None,
@@ -272,8 +274,7 @@ def count_export_changes(
                 model_serial_counts[serial_key] = model_serial_counts.get(serial_key, 0) + 1
                 model_rows.append((serial_key, cells))
             if set(model_serial_counts) != set(current_rows):
-                _set_export_status(False, "O modelo e a base ativa não contêm o mesmo conjunto de séries.")
-                return empty_counts.copy()
+                return empty_counts.copy(), ExportStatus(False, "O modelo e a base ativa não contêm o mesmo conjunto de séries."), True
 
             effective_endpoint_index = endpoint_index if endpoint_index is not None else services.read_endpoint_alias_index()
             aliases = get_export_aliases(services, effective_endpoint_index)
@@ -300,50 +301,67 @@ def count_export_changes(
                         if id_cell.value != updated_id:
                             id_cliente_count += 1
 
-            _set_export_status(True, "OK")
             return {
                 "apelidos": alias_count,
                 "id_clientes": id_cliente_count,
                 "total": alias_count + id_cliente_count,
-            }
+            }, ExportStatus(True, "OK"), True
         except Exception as error:
             services.logger.warning("Contagem de exportação indisponível (%s).", type(error).__name__)
-            _set_export_status(False, "Não foi possível conferir o modelo e a base de exportação.")
-            return empty_counts.copy()
+            return empty_counts.copy(), ExportStatus(
+                False,
+                "Não foi possível conferir o modelo e a base de exportação.",
+                retryable=True,
+            ), False
         finally:
             if model_wb is not None:
                 model_wb.close()
             if current_wb is not None:
                 current_wb.close()
 
-    def count_with_cache() -> Dict[str, int]:
+    def count_with_cache() -> Tuple[Dict[str, int], ExportStatus]:
         if endpoint_index is not None:
-            return count()
+            values, status, _ = count()
+            _set_export_status(status.available, status.reason)
+            return values, status
         key = export_files_signature(services)
         with _EXPORT_COUNTS_LOCK:
             cached = _EXPORT_COUNTS_CACHE.get(key)
             if cached is not None:
                 _set_export_status(cached.status.available, cached.status.reason)
-                return {name: cached.counts[name] for name in empty_counts}
-        values = count()
-        status = _current_export_status()
-        with _EXPORT_COUNTS_LOCK:
-            _EXPORT_COUNTS_CACHE.clear()
-            _EXPORT_COUNTS_CACHE[key] = CachedExportCounts(counts=dict(values), status=status)
-        return values
+                return {name: cached.counts[name] for name in empty_counts}, cached.status
+        values, status, cacheable = count()
+        _set_export_status(status.available, status.reason)
+        if cacheable:
+            with _EXPORT_COUNTS_LOCK:
+                _EXPORT_COUNTS_CACHE.clear()
+                _EXPORT_COUNTS_CACHE[key] = CachedExportCounts(counts=dict(values), status=status)
+        return values, status
 
     if locked:
-        return count_with_cache()
-    with services.lock_paths([services.transaction_root() / ".atomic-transactions"], timeout=services.read_lock_timeout()):
-        detail_files = services.get_details_files()
-        with services.lock_paths([
-            *detail_files,
-            services.endpoint_upload_file(),
-            services.modified_aliases_file(),
-            *_removed_hostnames_paths(services),
-            services.export_model_file(),
-        ], timeout=services.read_lock_timeout()):
-            return count_with_cache()
+        values, status = count_with_cache()
+    else:
+        with services.lock_paths([services.transaction_root() / ".atomic-transactions"], timeout=services.read_lock_timeout()):
+            detail_files = services.get_details_files()
+            with services.lock_paths([
+                *detail_files,
+                services.endpoint_upload_file(),
+                services.modified_aliases_file(),
+                *_removed_hostnames_paths(services),
+                services.export_model_file(),
+            ], timeout=services.read_lock_timeout()):
+                values, status = count_with_cache()
+    return values, status.readiness_dict()
+
+
+def count_export_changes(
+    services: EquipmentExportServices,
+    locked: bool = False,
+    endpoint_index: Optional[Dict[str, Any]] = None,
+) -> Dict[str, int]:
+    """Count writable alias and IdCliente cells that export would change."""
+    counts, _ = count_export_changes_with_status(services, locked, endpoint_index)
+    return counts
 
 
 def build_equipment_export(services: EquipmentExportServices) -> EquipmentExport:
