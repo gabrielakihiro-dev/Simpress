@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import json
 import logging
+import os
 from pathlib import Path
 from typing import Any, Callable
 
@@ -102,5 +103,9 @@ class EntraInbox:
         if target.exists():
             logger.warning("Lote Entra %s preservado: destino já existe.", batch.name)
             return
-        (batch / RESULT_NAME).write_text(json.dumps(result, ensure_ascii=False, indent=2), encoding="utf-8")
+        # os.replace swaps a planted _resultado.json link itself instead of writing through it.
+        temporary = batch / f".{RESULT_NAME}.tmp"
+        temporary.unlink(missing_ok=True)
+        temporary.write_text(json.dumps(result, ensure_ascii=False, indent=2), encoding="utf-8")
+        os.replace(temporary, batch / RESULT_NAME)
         batch.rename(target)

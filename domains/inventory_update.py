@@ -24,6 +24,7 @@ from core.integrity import (
 )
 from core.async_workers import await_worker_completion
 from core.config import format_size_limit
+from core.inventory_requests import IDEMPOTENCY_KEY_ERROR, IDEMPOTENCY_KEY_PATTERN
 
 from domains.history_annotations import (
     effective_history_annotation, history_annotation_row_fingerprint,
@@ -129,7 +130,6 @@ _ANNOTATABLE_COMPARISON_CATEGORIES = (
 # Keep the most recent confirmed writes. Once an entry is evicted, a retry is
 # treated as a new operation; the bounded receipt file cannot grow indefinitely.
 MAX_INVENTORY_IDEMPOTENCY_RECEIPTS = 256
-_IDEMPOTENCY_KEY_PATTERN = re.compile(r"[A-Za-z0-9._:-]{1,128}\Z")
 
 
 def _inventory_request_sha256(staged: Dict[str, Any]) -> str:
@@ -158,7 +158,7 @@ def _validated_inventory_idempotency_store(value: Any) -> Dict[str, Any]:
         if (
             not isinstance(record, dict)
             or not isinstance(record.get("key"), str)
-            or not _IDEMPOTENCY_KEY_PATTERN.fullmatch(record["key"])
+            or not IDEMPOTENCY_KEY_PATTERN.fullmatch(record["key"])
             or record["key"] in seen_keys
             or not isinstance(record.get("request_sha256"), str)
             or not re.fullmatch(r"[a-f0-9]{64}", record["request_sha256"])
@@ -503,10 +503,10 @@ async def update_inventory_files(
     passthrough_errors: Tuple[Type[BaseException], ...] = (DomainError, *services.external_errors)
 
     try:
-        if idempotency_key is not None and not _IDEMPOTENCY_KEY_PATTERN.fullmatch(idempotency_key):
+        if idempotency_key is not None and not IDEMPOTENCY_KEY_PATTERN.fullmatch(idempotency_key):
             raise DomainValidationError(
                 status_code=422,
-                detail="Idempotency-Key deve conter de 1 a 128 letras, números, ponto, hífen, dois-pontos ou sublinhado.",
+                detail=IDEMPOTENCY_KEY_ERROR,
             )
 
         staged = {
