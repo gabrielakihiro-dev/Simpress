@@ -60,8 +60,8 @@ test("home has no WCAG 2.2 A/AA axe violations", async ({ page }) => {
 test("home preserves typography and spacing around hidden panels", async ({ page }) => {
   await expect(page.locator("#input-serial")).toHaveCSS("font-family", /JetBrains Mono Variable/);
   await expect(page.locator("#btn-buscar-serial")).toHaveCSS("font-weight", "700");
-  await expect(page.locator("#readiness-panel")).toHaveCSS("margin-bottom", "0px");
-  await expect(page.locator("#tab-panel-home")).toHaveCSS("margin-top", "24px");
+  await expect(page.locator("#readiness-panel")).toHaveCSS("margin-bottom", "24px");
+  await expect(page.locator("#tab-panel-home")).toHaveCSS("margin-top", "0px");
   await expect(page.locator("#tab-panel-home")).toHaveCSS("margin-bottom", "0px");
 });
 

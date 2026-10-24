@@ -905,7 +905,7 @@
       .quick-actions-buttons > button { min-height: 44px; min-width: 0; padding: 0.4rem; font-size: 0.6875rem; line-height: 1.15; }
     }
     .readiness-panel {
-      max-width: 72rem; margin-inline: auto;
+      max-width: 72rem; margin-inline: auto; margin-bottom: 1.5rem;
       border-color: var(--border); background: var(--surface-sunken);
       box-shadow: var(--focus-shadow, none); backdrop-filter: none; overflow: hidden;
     }
@@ -962,14 +962,10 @@
     .monthly-report-dialog #status-relatorio-mensal[data-state="error"] { color: var(--danger); }
     @media (max-width: 640px) {
       .readiness-panel-summary { min-height: 2.75rem; }
-      /* Closed on phones: one line with the short summary; the full sentence stays for screen readers. */
+      /* On phones, keep the closed summary on one line. */
       #readiness-panel:not([open]) > .readiness-panel-summary { align-items: center; }
       .readiness-panel:not([open]) .readiness-summary-copy { flex-wrap: nowrap; }
       .readiness-panel:not([open]) .readiness-title { flex: none; }
-      .readiness-panel:not([open]) .readiness-status {
-        position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap;
-      }
-      .readiness-panel:not([open]) .readiness-status-short { display: block; min-width: 0; overflow: hidden; text-overflow: ellipsis; }
       .readiness-details-content { grid-template-columns: minmax(0, 1fr); }
       .readiness-expanded-content { padding-right: 0.65rem; padding-left: 0.65rem; }
       .readiness-item { gap: 0.3rem 0.45rem; padding: 0.5rem; }
