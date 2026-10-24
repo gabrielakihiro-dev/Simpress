@@ -29,7 +29,13 @@ from domains.history_annotations import (
     effective_history_annotation, history_annotation_row_fingerprint,
     load_effective_history_annotations, same_annotation_revision,
 )
-from domains.effective_alias import apply_effective_alias, endpoint_loss_warnings, endpoint_user_for_serial, with_details_serials
+from domains.effective_alias import (
+    apply_effective_alias,
+    build_endpoint_alias_index,
+    endpoint_loss_warnings,
+    endpoint_user_for_serial,
+    with_details_serials,
+)
 from domains.local_setup import unpack_simpress_zip
 from domains.user_holds import hold_change_rows, holds_file, plan_holds, read_holds
 from domains.user_changes import (
@@ -100,6 +106,12 @@ class InventoryUpdateServices:
     removed_endpoint_hostnames: Optional[Callable[[], Any]] = None
     # Manual users file; with alias_history_file, manual users hidden by an Endpoint user are archived.
     manual_users_file: Optional[Callable[[], Path]] = None
+    # The imported export model is a layout reference; paired inventory imports update its aliases.
+    export_model_file: Optional[Callable[[], Path]] = None
+    prepare_export_model_sync: Optional[
+        Callable[[List[Dict[str, Any]], Dict[str, Any]], Optional[bytes]]
+    ] = None
+    validate_export_model_sync: Optional[Callable[[bytes], Any]] = None
 
 
 _ANNOTATABLE_COMPARISON_CATEGORIES = (
@@ -556,6 +568,7 @@ class _InventoryCommitPlan:
     backup_dir: Path
     backup_targets: Dict[str, Path]
     uploaded_names: Dict[str, Any]
+    export_model_file: Optional[Path]
 
 
 @dataclass(frozen=True)
@@ -599,6 +612,13 @@ def _plan_inventory_commit(
         role: backup_dir / role / target_path.name
         for role, target_path in target_files.items()
     }
+    export_model_file = services.export_model_file() if services.export_model_file is not None else None
+    if (
+        export_model_file is not None
+        and export_model_file.is_file()
+        and services.prepare_export_model_sync is not None
+    ):
+        backup_targets["modelo_exportacao"] = backup_dir / "modelos" / export_model_file.name
     return _InventoryCommitPlan(
         input_directory=input_directory,
         comparison_history_file=comparison_history_file,
@@ -612,6 +632,7 @@ def _plan_inventory_commit(
             "endpoint": staged["endpoint"]["name"],
             "detalhes": staged["detalhes"]["name"],
         },
+        export_model_file=export_model_file,
     )
 
 
@@ -651,6 +672,8 @@ def _inventory_transaction_targets(
         *(path for path in plan.backup_sources.values() if path is not None),
         plan.comparison_history_file,
     ]
+    if plan.export_model_file is not None:
+        transaction_targets.append(plan.export_model_file)
     if idempotency_key is not None:
         transaction_targets.append(plan.inventory_idempotency_file)
     alias_history_file = services.alias_history_file() if services.alias_history_file is not None else None
@@ -780,6 +803,57 @@ def _stage_uploaded_inventories(
             services.validate_uploaded_workbook(candidate_bytes, current_role)
 
         transaction.stage_bytes(target_path, upload_bytes, validate_staged_upload)
+
+
+def _stage_export_model_sync(
+    transaction: Any,
+    plan: _InventoryCommitPlan,
+    staged: Dict[str, Any],
+    services: InventoryUpdateServices,
+) -> None:
+    """Stage a backed-up, alias-only model refresh with the paired inventory files."""
+    model_file = plan.export_model_file
+    if (
+        model_file is None
+        or not model_file.is_file()
+        or services.prepare_export_model_sync is None
+    ):
+        return
+
+    removed_hostnames = (
+        services.removed_endpoint_hostnames()
+        if services.removed_endpoint_hostnames is not None
+        else frozenset()
+    )
+    endpoint_index = build_endpoint_alias_index(
+        staged["endpoint"]["table"]["records"],
+        removed_hostnames or frozenset(),
+    )
+    details_records = staged["detalhes"]["table"]["records"]
+    model_bytes = services.prepare_export_model_sync(details_records, endpoint_index)
+    if model_bytes is None:
+        return
+
+    original_bytes = model_file.read_bytes()
+    if model_bytes == original_bytes:
+        return
+    backup_target = plan.backup_targets.get("modelo_exportacao")
+    if backup_target is None:
+        raise RuntimeError("O backup do modelo de exportação não foi preparado.")
+    transaction.add_target(backup_target)
+
+    def validate_backup(path: Path) -> None:
+        if path.read_bytes() != original_bytes:
+            raise RuntimeError("O backup do modelo de exportação não corresponde ao original.")
+
+    def validate_model(path: Path) -> None:
+        if path.read_bytes() != model_bytes:
+            raise WorkbookSafetyError("O modelo preparado difere do conteúdo validado.")
+        if services.validate_export_model_sync is not None:
+            services.validate_export_model_sync(model_bytes)
+
+    transaction.stage_bytes(backup_target, original_bytes, validate_backup)
+    transaction.stage_bytes(model_file, model_bytes, validate_model)
 
 
 def _apply_inventory_replacement(transaction: Any, services: InventoryUpdateServices) -> Dict[str, Any]:
@@ -1245,12 +1319,13 @@ def _commit_inventory_files(
         if preview_token is not None:
             _verify_inventory_preview(plan, staged, services, preview_token)
 
-        for backup_target in plan.backup_targets.values():
-            transaction.add_target(backup_target)
+        for role in plan.target_files:
+            transaction.add_target(plan.backup_targets[role])
 
         previous = _capture_previous_inventory_state(staged, services)
         missing_backup_files, invalid_backup_files = _stage_previous_inventory_backups(transaction, plan)
         _stage_uploaded_inventories(transaction, plan, staged, services)
+        _stage_export_model_sync(transaction, plan, staged, services)
         prepared_state = _apply_inventory_replacement(transaction, services)
 
         endpoint_index = services.read_endpoint_alias_index()

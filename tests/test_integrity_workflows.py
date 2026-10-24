@@ -322,6 +322,46 @@ class WorkflowIntegrityTests(unittest.TestCase):
         self.manual_history.write_text("[]", encoding="utf-8")
         self.assertTrue(main.load_database())
 
+    def test_paired_inventory_update_refreshes_model_series_and_alias_with_backup(self):
+        make_details(self.details, [
+            ("SN-OLD", "ALIAS-OLD", "Modelo A", "Maringá", "Notebook", "87000000"),
+        ])
+        make_endpoint(self.endpoint, [("SN-OLD", "HOST-OLD")])
+        workbook = openpyxl.Workbook()
+        worksheet = workbook.active
+        worksheet.title = "Parque"
+        worksheet.append(["NumeroSerie", "Apelido", "Modelo", "Cidade", "Tipo", "CEP"])
+        worksheet.append(["SN-OLD", "ALIAS-ANTIGO", "Modelo A", "Maringá", "Notebook", "87000000"])
+        worksheet["B2"].fill = PatternFill("solid", fgColor="17365D")
+        worksheet.freeze_panes = "A2"
+        workbook.create_sheet("Metadados")["A1"] = "preservar"
+        workbook.save(self.model)
+        workbook.close()
+        previous_model = self.model.read_bytes()
+        self.comparison_history.write_text("[]", encoding="utf-8")
+        self.manual_history.write_text("[]", encoding="utf-8")
+        self.assertTrue(main.load_database())
+
+        self._submit_inventory_update(
+            _endpoint_bytes([("SN-NEW", "HOST-NEW")]),
+            _details_bytes([("SN-NEW", "ALIAS-SIM", "Modelo A", "Maringá", "Notebook", "87000000")]),
+            "export-model-sync",
+        )
+
+        updated = openpyxl.load_workbook(self.model, data_only=False)
+        self.assertEqual(updated["Parque"]["A2"].value, "SN-NEW")
+        self.assertEqual(updated["Parque"]["B2"].value, "HOST-NEW")
+        self.assertEqual(updated["Parque"]["C2"].value, "Modelo A")
+        self.assertEqual(updated["Parque"]["D2"].value, "Maringá")
+        self.assertEqual(updated["Parque"]["B2"].fill.fgColor.rgb, "0017365D")
+        self.assertEqual(updated["Parque"].freeze_panes, "A2")
+        self.assertEqual(updated["Metadados"]["A1"].value, "preservar")
+        updated.close()
+
+        backups = list(self.backups.glob("*/modelos/modelo-ficticio.xlsx"))
+        self.assertEqual(len(backups), 1)
+        self.assertEqual(backups[0].read_bytes(), previous_model)
+
     def test_partial_equipment_search_does_not_return_an_arbitrary_exact_lookup(self):
         inventory_state.equipamentos_cache = {
             "SERIE-ABC-001": {"serial": "SERIE-ABC-001", "modelo": "MODELO A"},
@@ -1352,11 +1392,15 @@ class WorkflowIntegrityTests(unittest.TestCase):
 
         make_details(self.details, [
             ("S-1", "LOCAL-ATUAL", "Modelo atual", "Maringá", "Notebook", "87000000"),
-            ("S-3", "NOVO", "Modelo novo", "Curitiba", "Notebook", "80000000"),
+            ("S-3", "NOVO", "Modelo dois", "Curitiba", "Notebook", "80000000"),
         ])
-        with self.assertRaises(DomainError) as raised:
-            main.exportar_equipamentos()
-        self.assertEqual(raised.exception.status_code, 409)
+        _, export_status = main.count_export_changes_with_status()
+        self.assertTrue(export_status["available"])
+        response = main.exportar_equipamentos()
+        output = openpyxl.load_workbook(io.BytesIO(asyncio.run(_collect_stream(response))))
+        self.assertEqual(output["Parque"]["A3"].value, "S-3")
+        self.assertEqual(output["Parque"]["B3"].value, "NOVO")
+        output.close()
         self.assertEqual(self.model.read_bytes(), source_before)
 
     def test_export_normalizes_blue_alias_and_idcliente_headers_without_changing_model(self):

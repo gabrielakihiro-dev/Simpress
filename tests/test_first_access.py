@@ -177,15 +177,15 @@ class FirstAccessTests(unittest.TestCase):
         self.assertEqual(target.read_bytes(), data)
         self.assertEqual(self.template.read_bytes(), original)
 
-    def test_export_rejects_wrong_serial_set_and_rolls_back(self):
+    def test_export_model_keeps_layout_valid_when_serial_set_differs(self):
         self.import_pair()
         valid = workbook_bytes([["NumeroSerie", "Apelido"], ["S-1", "HOST-OLD"]])
         self.import_model("exportacao", valid)
         self.assertTrue(main.get_startup_readiness()["functions"]["exportacao_equipamentos"]["available"])
-        with self.assertRaises(main.HTTPException) as caught:
-            self.import_model("exportacao", workbook_bytes([["NumeroSerie", "Apelido"], ["OUTRA", "HOST"]]))
-        self.assertEqual(caught.exception.status_code, 400)
-        self.assertEqual(self.model.read_bytes(), valid)
+        replacement = workbook_bytes([["NumeroSerie", "Apelido"], ["OUTRA", "HOST"]])
+        result = self.import_model("exportacao", replacement)
+        self.assertTrue(result["sucesso"])
+        self.assertEqual(self.model.read_bytes(), replacement)
         self.assertTrue(main.get_startup_readiness()["functions"]["exportacao_equipamentos"]["available"])
 
     def test_export_can_be_configured_before_inventory(self):

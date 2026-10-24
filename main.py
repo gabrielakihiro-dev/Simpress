@@ -2028,6 +2028,13 @@ _inventory_update_services = InventoryUpdateServices(
     alias_history_file=lambda: ALIAS_HISTORY_FILE,
     removed_endpoint_hostnames=lambda: removed_endpoint_hostname_keys(),
     manual_users_file=lambda: MANUAL_USERS_FILE,
+    export_model_file=lambda: EXPORT_MODEL_FILE,
+    prepare_export_model_sync=lambda records, endpoint_index: equipment_export.prepare_export_model_alias_sync(
+        _equipment_export_services,
+        records,
+        endpoint_index,
+    ),
+    validate_export_model_sync=lambda data: validate_local_model(io.BytesIO(data), "exportacao"),
 )
 
 
