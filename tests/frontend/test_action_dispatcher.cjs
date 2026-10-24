@@ -2,8 +2,10 @@ const assert = require("node:assert/strict");
 const fs = require("node:fs");
 const path = require("node:path");
 const test = require("node:test");
-const { dispatch } = require("../../static/js/ui/action-dispatcher.js");
+const { allow, dispatch } = require("../../static/js/ui/action-dispatcher.js");
 const { appScriptFiles } = require("./support/app-sources.cjs");
+
+allow(["ativarAba", "filtrar", "teclas", "carregar", "buscar", "fechar", "salvar", "inner", "outer"]);
 
 function element(attrs = {}, parentElement = null) {
   return {

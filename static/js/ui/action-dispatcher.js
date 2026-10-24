@@ -1,12 +1,15 @@
 // Declarative event wiring that replaces inline on* attributes, so the page runs under a
 // Content-Security-Policy without 'unsafe-inline' scripts.
 //
-//   data-on-click="nomeDaFuncao"          calls window.nomeDaFuncao()
+//   data-on-click="nomeDaAcao"            calls window.nomeDaAcao(), only if the name was registered with allow()
 //   data-args='["home", "$value"]'         JSON arguments; "$event", "$this" and "$value" are resolved
 //   data-on-self-only                      runs only when the event target is the element itself
 //   data-click-target="element-id"         forwards the click to another element (e.g. a hidden file input)
 //
 // Handlers run from the innermost element outwards, like bubbling inline handlers.
+// Closed list: static/app.js registers the feature actions through allow(); any other name
+// (alert, constructor...) only logs a warning. The function itself is still read from the scope
+// at event time, so actions replaced on window (tests, enhancements) keep working.
 (function (root, factory) {
   const api = factory();
   if (typeof module === "object" && module.exports) module.exports = api;
@@ -21,6 +24,12 @@
     $this: (_event, element) => element,
     $value: (_event, element) => element.value,
   });
+
+  const allowed = new Set();
+
+  function allow(names) {
+    for (const name of names) allowed.add(name);
+  }
 
   function parseArgs(element) {
     const raw = element.getAttribute("data-args");
@@ -40,7 +49,7 @@
   function runHandler(element, event, type, scope) {
     if (element.hasAttribute("data-on-self-only") && event.target !== element) return;
     const name = element.getAttribute(`data-on-${type}`);
-    const handler = name && scope[name];
+    const handler = name && allowed.has(name) ? scope[name] : undefined;
     if (typeof handler !== "function") {
       scope.console?.warn?.(`Ação "${name}" não encontrada para o evento ${type}.`);
       return;
@@ -68,5 +77,5 @@
     EVENTS.forEach(type => doc.addEventListener(type, event => dispatch(event, scope), NON_BUBBLING.has(type)));
   }
 
-  return { EVENTS, dispatch, install, resolveArgs };
+  return { EVENTS, allow, dispatch, install, resolveArgs };
 });
