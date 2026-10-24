@@ -25,11 +25,13 @@ from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 from unittest.mock import MagicMock, patch
 
+from core.local_paths import is_link_or_junction
 from domains.sebrae_chamados import ACAO_INCLUIR, ChamadoSoftExpert, decidir, descricao_do_chamado
 from scripts import automacao_rotinas_chrome as automacao
 from scripts import sebrae_softexpert as se
 
 PLAYWRIGHT_AVAILABLE = importlib.util.find_spec("playwright") is not None
+TEMP_ROOT = Path(__file__).resolve().parents[1] / "TEMP"
 
 ESTILO = """
 body{font-family:sans-serif;margin:0}
@@ -452,9 +454,12 @@ class SoftExpertNaBancadaTests(unittest.TestCase):
         executavel = localizar_navegador()
         if executavel is None:
             raise unittest.SkipTest("Nem o Google Chrome nem o Chromium do Playwright foram encontrados.")
+        if is_link_or_junction(TEMP_ROOT):
+            raise RuntimeError("A pasta TEMP do projeto não pode ser um link ou junção.")
+        TEMP_ROOT.mkdir(exist_ok=True)
+        cls.pasta = Path(tempfile.mkdtemp(prefix=".bancada-softexpert-", dir=TEMP_ROOT))
         cls.bancada = Bancada()
         cls.servidor = criar_servidor(cls.bancada)
-        cls.pasta = Path(tempfile.mkdtemp(prefix=".bancada-softexpert-"))
         cls.chrome = ChromeDaBancada(executavel, cls.pasta)
         cls.url = f"http://127.0.0.1:{cls.servidor.server_address[1]}/softexpert/workspace?page=taskCenter"
 
