@@ -2,8 +2,9 @@
  * Bootstrap: builds the shared context, creates the feature modules in static/js/features/,
  * publishes their actions on the page scope and starts the page once the DOM is ready.
  *
- * Actions live on window because data-on-* attributes (static/js/ui/action-dispatcher.js),
- * modal close handlers (static/js/ui/accessible-dialogs.js) and the enhancement scripts
+ * Actions live on window because data-on-* attributes (static/js/ui/action-dispatcher.js, which
+ * runs only the feature actions registered below), modal close handlers
+ * (static/js/ui/accessible-dialogs.js) and the enhancement scripts
  * resolve them there. Features call each other through `app` as well, so an action that is
  * replaced on window (tests, enhancements) takes effect everywhere.
  */
@@ -85,7 +86,10 @@
   FEATURE_ORDER.forEach(name => {
     const createFeature = window.SimpressFeatures?.[name];
     if (typeof createFeature !== "function") throw new Error(`O módulo "${name}" não foi carregado.`);
-    publish(createFeature(context), name);
+    const actions = createFeature(context);
+    publish(actions, name);
+    // Closed list for data-on-*: only feature actions, never the shared helpers published above.
+    window.SimpressActionDispatcher?.allow(Object.keys(actions));
     if (name === "shell") {
       context.motion?.installFeedback();
       window.HistoryAnnotationAutosave.installPendingNavigationGuard(window);

@@ -3,60 +3,12 @@ const fs = require("node:fs");
 const path = require("node:path");
 const test = require("node:test");
 const vm = require("node:vm");
-const { appScriptFiles, appScripts, staticDir } = require("./support/app-sources.cjs");
+const { appScriptFiles, staticDir } = require("./support/app-sources.cjs");
+const { bootPage } = require("./support/boot-page.cjs");
 
 const indexHtml = fs.readFileSync(path.join(staticDir, "index.html"), "utf8");
 const bootstrapSource = fs.readFileSync(path.join(staticDir, "app.js"), "utf8");
 const featureFiles = appScriptFiles().filter(file => file.startsWith("js/features/"));
-
-function fakeElement() {
-  return {
-    value: "", textContent: "", innerHTML: "", dataset: {}, style: {}, children: [],
-    classList: { add() {}, remove() {}, toggle() {}, contains: () => false },
-    setAttribute() {}, removeAttribute() {}, getAttribute: () => null, hasAttribute: () => false,
-    addEventListener() {}, appendChild(child) { return child; }, replaceChildren() {}, querySelector: () => null,
-    querySelectorAll: () => [], focus() {}, closest: () => null,
-  };
-}
-
-function bootPage() {
-  const elements = new Map();
-  const document = {
-    readyState: "loading",
-    body: fakeElement(),
-    addEventListener() {},
-    getElementById(id) {
-      if (!elements.has(id)) elements.set(id, fakeElement());
-      return elements.get(id);
-    },
-    createElement: () => fakeElement(),
-    querySelector: () => null,
-    querySelectorAll: () => [],
-  };
-  const window = {
-    document,
-    SimpressDomUtils: require("../../static/js/shared/dom-utils.js"),
-    SimpressTransferUtils: require("../../static/js/shared/transfer-utils.js"),
-    SimpressCatalogSearch: require("../../static/js/shared/catalog-search-utils.js"),
-    SimpressFormDraftGuard: require("../../static/js/shared/form-draft-guard.js"),
-    HistoryAnnotationAutosave: require("../../static/js/shared/history-annotation-autosave.js"),
-    SimpressAccessibleDialogs: require("../../static/js/ui/accessible-dialogs.js"),
-    SimpressNotifications: require("../../static/js/ui/ui-notifications.js"),
-    matchMedia: () => ({ matches: false }),
-    addEventListener() {},
-  };
-  const context = vm.createContext({
-    document, window, console, setTimeout, clearTimeout, URLSearchParams,
-    requestAnimationFrame: () => 0,
-    MutationObserver: class { observe() {} disconnect() {} },
-    HTMLElement: function HTMLElement() {},
-    lucide: { createIcons() {} },
-  });
-  const before = new Set(Object.keys(context));
-  for (const { file, source } of appScripts()) vm.runInContext(source, context, { filename: file });
-  const published = Object.keys(context).filter(name => !before.has(name));
-  return { context, window, published };
-}
 
 // Actions the dispatcher resolves: data-on-* in the page and in markup the features render.
 function declaredActions() {
