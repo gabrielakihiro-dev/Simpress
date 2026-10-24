@@ -10,7 +10,7 @@ PROJECT_ROOT = Path(__file__).resolve().parents[1]
 
 class LocalDataMigrationTests(unittest.TestCase):
     def setUp(self):
-        self.temp_context = tempfile.TemporaryDirectory(prefix=".data-migration-test-", dir=PROJECT_ROOT)
+        self.temp_context = tempfile.TemporaryDirectory(prefix=".data-migration-test-", dir=tempfile.gettempdir())
         self.root = Path(self.temp_context.name)
 
     def tearDown(self):

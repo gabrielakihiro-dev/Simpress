@@ -244,7 +244,7 @@ def _add_threaded_comment_parts(source: Path) -> Path:
 
 class WorkflowIntegrityTests(unittest.TestCase):
     def setUp(self):
-        self.temp_context = tempfile.TemporaryDirectory(prefix=".workflow-test-", dir=PROJECT_ROOT)
+        self.temp_context = tempfile.TemporaryDirectory(prefix=".workflow-test-", dir=tempfile.gettempdir())
         self.root = Path(self.temp_context.name)
         self.input_dir = self.root / "planilhas_entrada"
         self.input_dir.mkdir()
@@ -698,7 +698,7 @@ class WorkflowIntegrityTests(unittest.TestCase):
         make_details(self.details, [("SERIE-ATUAL", "ALIAS-ATUAL", "Modelo A", "Maringá", "Notebook", "87000000")])
         make_endpoint(self.endpoint, [("SERIE-ATUAL", "ALIAS-ATUAL")])
         before = {path: path.read_bytes() for path in (self.details, self.endpoint)}
-        with tempfile.TemporaryDirectory(prefix=".reduced-export-test-", dir=PROJECT_ROOT) as directory:
+        with tempfile.TemporaryDirectory(prefix=".reduced-export-test-", dir=tempfile.gettempdir()) as directory:
             reduced_path = Path(directory) / "exportacao-reduzida.xlsx"
             make_details(
                 reduced_path,
@@ -3787,14 +3787,14 @@ async def _collect_stream(response):
 
 
 def _endpoint_bytes(rows):
-    with tempfile.TemporaryDirectory(prefix=".upload-bytes-test-", dir=PROJECT_ROOT) as directory:
+    with tempfile.TemporaryDirectory(prefix=".upload-bytes-test-", dir=tempfile.gettempdir()) as directory:
         path = Path(directory) / "endpoint-ficticio.xlsx"
         make_endpoint(path, rows)
         return path.read_bytes()
 
 
 def _details_bytes(rows):
-    with tempfile.TemporaryDirectory(prefix=".upload-bytes-test-", dir=PROJECT_ROOT) as directory:
+    with tempfile.TemporaryDirectory(prefix=".upload-bytes-test-", dir=tempfile.gettempdir()) as directory:
         path = Path(directory) / "detalhes-ficticio.xlsx"
         headers = complete_details_headers(
             ["NumeroSerie", "Apelido", "Modelo", "Cidade", "Tipo", "CEP"]

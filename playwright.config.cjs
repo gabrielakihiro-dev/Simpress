@@ -14,8 +14,8 @@ module.exports = defineConfig({
   retries: process.env.CI ? 2 : 0,
   timeout: 20_000,
   expect: { timeout: 5_000 },
-  reporter: [["list"], ["html", { outputFolder: "playwright-report", open: "never" }]],
-  outputDir: "test-results",
+  reporter: [["list"], ["html", { outputFolder: "TEMP/playwright-report", open: "never" }]],
+  outputDir: "TEMP/test-results",
   use: {
     baseURL: fixtureUrl,
     headless: true,

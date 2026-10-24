@@ -98,7 +98,7 @@ class TicketOsLinkRouteTests(unittest.TestCase):
             )
 
     def test_manual_ticket_links_are_persisted_by_source_serial_and_order(self):
-        with tempfile.TemporaryDirectory(dir=PROJECT_ROOT) as directory:
+        with tempfile.TemporaryDirectory(dir=tempfile.gettempdir()) as directory:
             root = Path(directory)
             link_path = root / "data" / "state" / "os_chamados_vinculos.json"
 
@@ -166,7 +166,7 @@ class TicketImportRouteTests(unittest.TestCase):
         return output.getvalue()
 
     def test_import_reconciles_sources_and_persists_latest_report(self):
-        with tempfile.TemporaryDirectory(dir=PROJECT_ROOT) as directory:
+        with tempfile.TemporaryDirectory(dir=tempfile.gettempdir()) as directory:
             path = Path(directory) / "state" / "tickets.json"
             router = create_operations_router(
                 load_comparison_history=lambda: [],
@@ -217,7 +217,7 @@ class TicketImportRouteTests(unittest.TestCase):
             self.assertEqual(persisted["atualizado_em"], report["atualizado_em"])
 
     def test_import_keeps_highest_simpress_os_even_when_its_order_date_is_older(self):
-        with tempfile.TemporaryDirectory(dir=PROJECT_ROOT) as directory:
+        with tempfile.TemporaryDirectory(dir=tempfile.gettempdir()) as directory:
             router = create_operations_router(
                 load_comparison_history=lambda: [],
                 comparison_history_for_display=lambda event: event,
@@ -250,7 +250,7 @@ class TicketImportRouteTests(unittest.TestCase):
             self.assertEqual(ticket["ordens_servico_conferidas"], ["7134662"])
 
     def test_import_keeps_highest_pedido_attached_to_the_latest_simpress_os(self):
-        with tempfile.TemporaryDirectory(dir=PROJECT_ROOT) as directory:
+        with tempfile.TemporaryDirectory(dir=tempfile.gettempdir()) as directory:
             router = create_operations_router(
                 load_comparison_history=lambda: [],
                 comparison_history_for_display=lambda event: event,
@@ -279,7 +279,7 @@ class TicketImportRouteTests(unittest.TestCase):
             self.assertEqual(ticket["simpress"]["status"], ["Pedido atual"])
 
     def test_import_includes_simpress_product_city_and_only_active_delivery_addresses(self):
-        with tempfile.TemporaryDirectory(dir=PROJECT_ROOT) as directory:
+        with tempfile.TemporaryDirectory(dir=tempfile.gettempdir()) as directory:
             router = create_operations_router(
                 load_comparison_history=lambda: [],
                 comparison_history_for_display=lambda event: event,
@@ -334,7 +334,7 @@ class TicketImportRouteTests(unittest.TestCase):
             self.assertEqual(by_serial["SN-CANCELADO"]["previsoes_entrega"], [])
 
     def test_import_exposes_each_order_stage_date_separately_in_process_order(self):
-        with tempfile.TemporaryDirectory(dir=PROJECT_ROOT) as directory:
+        with tempfile.TemporaryDirectory(dir=tempfile.gettempdir()) as directory:
             router = create_operations_router(
                 load_comparison_history=lambda: [],
                 comparison_history_for_display=lambda event: event,
@@ -379,7 +379,7 @@ class TicketImportRouteTests(unittest.TestCase):
             )
 
     def test_import_reads_the_stock_check_stage_from_the_real_export_header(self):
-        with tempfile.TemporaryDirectory(dir=PROJECT_ROOT) as directory:
+        with tempfile.TemporaryDirectory(dir=tempfile.gettempdir()) as directory:
             router = create_operations_router(
                 load_comparison_history=lambda: [],
                 comparison_history_for_display=lambda event: event,
@@ -401,7 +401,7 @@ class TicketImportRouteTests(unittest.TestCase):
             self.assertEqual(stages["verificado_estoque"], "09/10/2026")
 
     def test_import_maps_each_stage_to_its_fixed_column_of_the_real_export(self):
-        with tempfile.TemporaryDirectory(dir=PROJECT_ROOT) as directory:
+        with tempfile.TemporaryDirectory(dir=tempfile.gettempdir()) as directory:
             router = create_operations_router(
                 load_comparison_history=lambda: [],
                 comparison_history_for_display=lambda event: event,
@@ -439,7 +439,7 @@ class TicketImportRouteTests(unittest.TestCase):
             )
 
     def test_import_reads_the_delivery_date_and_makes_delivered_the_current_stage(self):
-        with tempfile.TemporaryDirectory(dir=PROJECT_ROOT) as directory:
+        with tempfile.TemporaryDirectory(dir=tempfile.gettempdir()) as directory:
             router = create_operations_router(
                 load_comparison_history=lambda: [],
                 comparison_history_for_display=lambda event: event,
@@ -463,7 +463,7 @@ class TicketImportRouteTests(unittest.TestCase):
             self.assertEqual(simpress_data["etapa_atual"]["rotulo"], "Pedido entregue")
 
     def test_import_without_stage_columns_still_works_and_marks_them_absent(self):
-        with tempfile.TemporaryDirectory(dir=PROJECT_ROOT) as directory:
+        with tempfile.TemporaryDirectory(dir=tempfile.gettempdir()) as directory:
             router = create_operations_router(
                 load_comparison_history=lambda: [],
                 comparison_history_for_display=lambda event: event,
@@ -493,7 +493,7 @@ class TicketImportRouteTests(unittest.TestCase):
             self.assertIsNone(simpress_data["proxima_etapa"])
 
     def test_import_keeps_the_sales_order_attached_to_the_latest_simpress_order(self):
-        with tempfile.TemporaryDirectory(dir=PROJECT_ROOT) as directory:
+        with tempfile.TemporaryDirectory(dir=tempfile.gettempdir()) as directory:
             router = create_operations_router(
                 load_comparison_history=lambda: [],
                 comparison_history_for_display=lambda event: event,
@@ -521,7 +521,7 @@ class TicketImportRouteTests(unittest.TestCase):
             self.assertEqual(ticket["simpress"]["ordens_venda"], ["OV_15799764"])
 
     def test_import_uses_highest_numeric_order_service_when_dates_are_missing(self):
-        with tempfile.TemporaryDirectory(dir=PROJECT_ROOT) as directory:
+        with tempfile.TemporaryDirectory(dir=tempfile.gettempdir()) as directory:
             router = create_operations_router(
                 load_comparison_history=lambda: [],
                 comparison_history_for_display=lambda event: event,
@@ -551,7 +551,7 @@ class TicketImportRouteTests(unittest.TestCase):
             self.assertEqual(ticket["ordens_servico_conferidas"], ["7232035"])
 
     def test_ticket_timeline_annotations_follow_exact_rows_with_independent_import_ids(self):
-        with tempfile.TemporaryDirectory(dir=PROJECT_ROOT) as directory:
+        with tempfile.TemporaryDirectory(dir=tempfile.gettempdir()) as directory:
             root = Path(directory)
             shared = root / "shared-annotations"
             outbox = root / "annotation-outbox"
@@ -620,7 +620,7 @@ class TicketImportRouteTests(unittest.TestCase):
             self.assertEqual(fourth_events[-1]["anotacao"], "")
 
     def test_ticket_import_flags_duplicate_rows_and_ambiguous_source_relations(self):
-        with tempfile.TemporaryDirectory(dir=PROJECT_ROOT) as directory:
+        with tempfile.TemporaryDirectory(dir=tempfile.gettempdir()) as directory:
             router = create_operations_router(
                 load_comparison_history=lambda: [],
                 comparison_history_for_display=lambda event: event,
@@ -655,7 +655,7 @@ class TicketImportRouteTests(unittest.TestCase):
             self.assertTrue(ticket["revisao_relacao"])
 
     def test_export_keeps_attention_rule_fixed_at_three_days(self):
-        with tempfile.TemporaryDirectory(dir=PROJECT_ROOT) as directory:
+        with tempfile.TemporaryDirectory(dir=tempfile.gettempdir()) as directory:
             path = Path(directory) / "tickets.json"
             today = date.today()
             tickets = []
@@ -694,7 +694,7 @@ class TicketImportRouteTests(unittest.TestCase):
             self.assertEqual(response.headers["content-type"], "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet")
 
     def test_import_rejects_non_xlsx_and_missing_source_columns(self):
-        with tempfile.TemporaryDirectory(dir=PROJECT_ROOT) as directory:
+        with tempfile.TemporaryDirectory(dir=tempfile.gettempdir()) as directory:
             router = create_operations_router(
                 load_comparison_history=lambda: [],
                 comparison_history_for_display=lambda event: event,
@@ -722,7 +722,7 @@ class TicketImportRouteTests(unittest.TestCase):
             self.assertEqual(missing_columns.exception.status_code, 422)
 
     def test_import_accepts_simpress_zip_with_one_xlsx_member(self):
-        with tempfile.TemporaryDirectory(dir=PROJECT_ROOT) as directory:
+        with tempfile.TemporaryDirectory(dir=tempfile.gettempdir()) as directory:
             router = create_operations_router(
                 load_comparison_history=lambda: [],
                 comparison_history_for_display=lambda event: event,
@@ -842,7 +842,7 @@ class TicketImportRouteTests(unittest.TestCase):
             )
 
     def test_ambiguous_import_is_rejected_before_report_or_receipt_changes(self):
-        with tempfile.TemporaryDirectory(dir=PROJECT_ROOT) as directory:
+        with tempfile.TemporaryDirectory(dir=tempfile.gettempdir()) as directory:
             path = Path(directory) / "state" / "tickets.json"
             path.parent.mkdir(parents=True)
             original = {
@@ -884,7 +884,7 @@ class TicketImportRouteTests(unittest.TestCase):
                     self.assertEqual(path.read_bytes(), original_bytes)
 
     def test_import_history_snapshot_comparison_and_filtered_excel_export(self):
-        with tempfile.TemporaryDirectory(dir=PROJECT_ROOT) as directory:
+        with tempfile.TemporaryDirectory(dir=tempfile.gettempdir()) as directory:
             path = Path(directory) / "state" / "tickets.json"
             router = create_operations_router(
                 load_comparison_history=lambda: [],
@@ -970,7 +970,7 @@ class TicketImportRouteTests(unittest.TestCase):
             self.assertEqual(next(item["serie"] for item in rows if item["identificador"] == "200"), "SN-FIC-A, SN-FIC-B")
 
     def test_legacy_reports_show_only_latest_simpress_pedido_and_os_without_rewriting_raw_data(self):
-        with tempfile.TemporaryDirectory(dir=PROJECT_ROOT) as directory:
+        with tempfile.TemporaryDirectory(dir=tempfile.gettempdir()) as directory:
             path = Path(directory) / "tickets.json"
             router = create_operations_router(
                 load_comparison_history=lambda: [],

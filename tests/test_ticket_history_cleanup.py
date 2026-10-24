@@ -22,7 +22,7 @@ def route_handler(router, path, method):
 
 class TicketHistoryCleanupTests(unittest.TestCase):
     def test_deletes_all_old_imports_and_keeps_the_latest_active_snapshot(self):
-        with tempfile.TemporaryDirectory(dir=PROJECT_ROOT) as directory:
+        with tempfile.TemporaryDirectory(dir=tempfile.gettempdir()) as directory:
             path = Path(directory) / "tickets.json"
             snapshots = [
                 {
@@ -73,7 +73,7 @@ class TicketHistoryCleanupTests(unittest.TestCase):
             self.assertEqual(delete_old()["removidas"], 0)
 
     def test_does_not_delete_the_only_import(self):
-        with tempfile.TemporaryDirectory(dir=PROJECT_ROOT) as directory:
+        with tempfile.TemporaryDirectory(dir=tempfile.gettempdir()) as directory:
             path = Path(directory) / "tickets.json"
             latest = {
                 "id": "only", "snapshot_id": "only", "atualizado_em": "2026-10-10T12:00:00",

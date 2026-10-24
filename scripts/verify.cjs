@@ -137,7 +137,7 @@ function buildSteps(python) {
       name: "Tipos (mypy gradual)",
       command: python,
       args: [
-        "-m", "mypy", "--explicit-package-bases", "--platform", "win32",
+        "-m", "mypy", "--cache-dir", "TEMP/.mypy_cache", "--explicit-package-bases", "--platform", "win32",
         "--ignore-missing-imports", "--check-untyped-defs", ...MYPY_TARGETS,
       ],
     },
@@ -145,7 +145,7 @@ function buildSteps(python) {
       name: "Tipos (mypy estrito: core, domains e security)",
       command: python,
       args: [
-        "-m", "mypy", "--explicit-package-bases", "--platform", "win32",
+        "-m", "mypy", "--cache-dir", "TEMP/.mypy_cache", "--explicit-package-bases", "--platform", "win32",
         "--ignore-missing-imports", "--check-untyped-defs", "--disallow-untyped-defs",
         ...MYPY_STRICT_TARGETS,
       ],
@@ -155,6 +155,13 @@ function buildSteps(python) {
 }
 
 function main() {
+  const tempRoot = path.join(ROOT, "TEMP");
+  fs.mkdirSync(tempRoot, { recursive: true });
+  if (!fs.statSync(tempRoot).isDirectory() || path.relative(tempRoot, fs.realpathSync(tempRoot))) {
+    console.error("A pasta TEMP do projeto não pode ser um link ou junção.");
+    return 1;
+  }
+  process.env.PYTHONPYCACHEPREFIX = path.join(tempRoot, "__pycache__");
   const python = resolvePython();
   console.log(`Python: ${python}`);
   console.log(`tsc: ${resolveTsc()}`);

@@ -32,7 +32,7 @@ def sheet_xml(data: bytes) -> str:
 
 class FormulaTextCellTests(unittest.TestCase):
     def setUp(self):
-        self.root = Path(self.enterContext(tempfile.TemporaryDirectory(prefix=".formula-test-", dir=PROJECT_ROOT)))
+        self.root = Path(self.enterContext(tempfile.TemporaryDirectory(prefix=".formula-test-", dir=tempfile.gettempdir())))
         self.source = self.root / "modelo.xlsx"
         workbook = Workbook()
         sheet = workbook.active

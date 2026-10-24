@@ -785,7 +785,7 @@ class MaintenanceContractTests(unittest.TestCase):
 
     def test_application_startup_reports_readiness_without_workbook_values(self):
 
-        with tempfile.TemporaryDirectory(prefix=".startup-test-", dir=PROJECT_ROOT) as temp_dir:
+        with tempfile.TemporaryDirectory(prefix=".startup-test-", dir=tempfile.gettempdir()) as temp_dir:
             root = Path(temp_dir)
             input_dir = root / "data" / "planilhas_entrada"
             state_dir = root / "data" / "state"

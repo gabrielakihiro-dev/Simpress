@@ -16,7 +16,7 @@ PROJECT_ROOT = Path(__file__).resolve().parents[1]
 
 class LocalTemporaryCleanupTests(unittest.TestCase):
     def setUp(self):
-        self.temp_context = tempfile.TemporaryDirectory(prefix=".temp-cleanup-test-", dir=PROJECT_ROOT)
+        self.temp_context = tempfile.TemporaryDirectory(prefix=".temp-cleanup-test-", dir=tempfile.gettempdir())
         self.root = Path(self.temp_context.name)
         self.history_dir = self.root / "data" / "state" / "historico_comparacoes"
         self.history_dir.mkdir(parents=True)
