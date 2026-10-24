@@ -1,6 +1,6 @@
 # Alerta "Base desatualizada" no painel inicial
 
-Especificação do alerta de base desatualizada do painel inicial (Home). Os alertas "OS paradas" e "Divergências novas" seguem este padrão e estão em [alertas-os-divergencias.md](alertas-os-divergencias.md); o de equipamento sem acesso fica fora deste escopo.
+Especificação do alerta de base desatualizada do painel inicial (Home). Os alertas "OS paradas" e "Divergências novas" aparecem na central de notificações do cabeçalho, descrita em [alertas-os-divergencias.md](alertas-os-divergencias.md); o alerta de base continua no Home.
 
 ## Objetivo
 

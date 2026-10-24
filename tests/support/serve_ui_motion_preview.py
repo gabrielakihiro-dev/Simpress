@@ -117,6 +117,12 @@ PANEL_ALERTS = {
             "atual": {"id": "atual", "horario": "2026-10-18T09:00:00-03:00"},
         },
     },
+    "somente_os": {
+        "os_paradas": {"estado": "paradas", "limite_dias": 7, "total": 3,
+                       "maior_dias_sem_atualizacao": 21, "importado_em": "2026-10-18T09:00:00-03:00"},
+        "divergencias_novas": {"estado": "sem_novas", "total": 0, "por_secao": [],
+                               "anterior": None, "atual": None},
+    },
 }
 panel_alerts_state = "ocultos"
 

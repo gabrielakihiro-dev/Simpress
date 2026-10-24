@@ -141,9 +141,37 @@
             <span aria-hidden="true" class="text-slate-700">|</span>
             <span>Contrato: <strong class="text-fg">16467</strong></span>
           </div>
-          <button type="button" id="theme-toggle" class="theme-toggle-button" aria-label="Ativar modo claro" title="Ativar modo claro">
-            <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="lucide lucide-sun" aria-hidden="true" focusable="false"><circle cx="12" cy="12" r="4"></circle><path d="M12 2v2"></path><path d="M12 20v2"></path><path d="m4.93 4.93 1.42 1.42"></path><path d="m17.65 17.65 1.42 1.42"></path><path d="M2 12h2"></path><path d="M20 12h2"></path><path d="m6.34 17.66-1.42 1.42"></path><path d="m19.07 4.93-1.42 1.42"></path></svg>
-          </button>
+          <div class="header-tools">
+            <button type="button" id="btn-notificacoes" class="theme-toggle-button notification-center-trigger" aria-label="Notificações" aria-controls="notification-center-panel" aria-expanded="false" title="Notificações">
+              <i data-lucide="bell" aria-hidden="true"></i>
+              <span id="badge-notificacoes" class="notification-center-badge" aria-hidden="true" hidden>0</span>
+            </button>
+            <section id="notification-center-panel" class="notification-center-panel" role="region" aria-labelledby="notification-center-title" aria-busy="true" hidden>
+              <div class="notification-center-header">
+                <h2 id="notification-center-title">Notificações</h2>
+                <p id="notification-center-summary" role="status" aria-live="polite" aria-atomic="true">Verificando os avisos…</p>
+              </div>
+              <section id="alerta-os-paradas" class="stale-base-alert" role="status" aria-labelledby="alerta-os-paradas-titulo" data-state="loading" hidden>
+                <i data-lucide="file-clock" class="stale-base-alert-icon" aria-hidden="true"></i>
+                <div class="stale-base-alert-copy">
+                  <h2 id="alerta-os-paradas-titulo" class="stale-base-alert-title">OS paradas</h2>
+                  <p id="alerta-os-paradas-texto" class="stale-base-alert-text"></p>
+                </div>
+                <button type="button" id="btn-alerta-os-paradas" data-on-click="abrirAcompanhamentoChamados" class="btn btn-secondary stale-base-alert-action">Ver chamados</button>
+              </section>
+              <section id="alerta-divergencias-novas" class="stale-base-alert" role="status" aria-labelledby="alerta-divergencias-novas-titulo" data-state="loading" hidden>
+                <i data-lucide="alert-circle" class="stale-base-alert-icon" aria-hidden="true"></i>
+                <div class="stale-base-alert-copy">
+                  <h2 id="alerta-divergencias-novas-titulo" class="stale-base-alert-title">Divergências novas</h2>
+                  <p id="alerta-divergencias-novas-texto" class="stale-base-alert-text"></p>
+                </div>
+                <button type="button" id="btn-alerta-divergencias-novas" data-on-click="abrirEvolucaoAtualizacoes" class="btn btn-secondary stale-base-alert-action">Ver evolução</button>
+              </section>
+            </section>
+            <button type="button" id="theme-toggle" class="theme-toggle-button" aria-label="Ativar modo claro" title="Ativar modo claro">
+              <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="lucide lucide-sun" aria-hidden="true" focusable="false"><circle cx="12" cy="12" r="4"></circle><path d="M12 2v2"></path><path d="M12 20v2"></path><path d="m4.93 4.93 1.42 1.42"></path><path d="m17.65 17.65 1.42 1.42"></path><path d="M2 12h2"></path><path d="M20 12h2"></path><path d="m6.34 17.66-1.42 1.42"></path><path d="m19.07 4.93-1.42 1.42"></path></svg>
+            </button>
+          </div>
         </div>
       </header>
 
@@ -510,25 +538,6 @@ Horário disponível para atendimento:</textarea>
           </div>
         </section>
       </div>
-    </section>
-
-    <!-- ALERTAS DE OS PARADAS E DIVERGÊNCIAS NOVAS (docs/operacao/alertas-os-divergencias.md; ocultos até o painel responder) -->
-    <section id="alerta-os-paradas" class="stale-base-alert" role="status" aria-labelledby="alerta-os-paradas-titulo" data-state="loading" hidden>
-      <i data-lucide="file-clock" class="stale-base-alert-icon" aria-hidden="true"></i>
-      <div class="stale-base-alert-copy">
-        <h2 id="alerta-os-paradas-titulo" class="stale-base-alert-title">OS paradas</h2>
-        <p id="alerta-os-paradas-texto" class="stale-base-alert-text"></p>
-      </div>
-      <button type="button" id="btn-alerta-os-paradas" data-on-click="abrirAcompanhamentoChamados" class="btn btn-secondary stale-base-alert-action">Ver chamados</button>
-    </section>
-
-    <section id="alerta-divergencias-novas" class="stale-base-alert" role="status" aria-labelledby="alerta-divergencias-novas-titulo" data-state="loading" hidden>
-      <i data-lucide="alert-circle" class="stale-base-alert-icon" aria-hidden="true"></i>
-      <div class="stale-base-alert-copy">
-        <h2 id="alerta-divergencias-novas-titulo" class="stale-base-alert-title">Divergências novas</h2>
-        <p id="alerta-divergencias-novas-texto" class="stale-base-alert-text"></p>
-      </div>
-      <button type="button" id="btn-alerta-divergencias-novas" data-on-click="abrirEvolucaoAtualizacoes" class="btn btn-secondary stale-base-alert-action">Ver evolução</button>
     </section>
 
     <!-- PESQUISAS RECENTES (localStorage do navegador; oculta enquanto vazia) -->

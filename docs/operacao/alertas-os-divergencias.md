@@ -1,6 +1,6 @@
-# Alertas "OS paradas" e "Divergências novas" no painel inicial
+# Central de notificações: "OS paradas" e "Divergências novas"
 
-Estende o painel inicial (Home) com dois alertas da Trilha C, no mesmo padrão do alerta "Base desatualizada" ([alerta-base-desatualizada.md](alerta-base-desatualizada.md)): cartão no topo da Home, oculto até o painel responder, preenchido pelo evento `simpress:painel-atualizado`, com um botão que abre a tela onde o caso é tratado. Nenhum dos dois grava nada: os históricos de OS e de planilhas são apenas lidos.
+Exibe dois alertas da Trilha C no painel aberto pelo sino do cabeçalho. O alerta "Base desatualizada" continua no Home ([especificação](alerta-base-desatualizada.md)). Os cartões são preenchidos com os dados de `GET /api/painel`; cada um tem um botão que abre a tela onde o caso é tratado. Nenhum dos dois grava nada: os históricos de OS e de planilhas são apenas lidos.
 
 ## 1. OS paradas
 
@@ -21,7 +21,7 @@ Avisar quando há chamados abertos sem atualização há 7 dias ou mais, para qu
 
 - Aparece quando há pelo menos um chamado parado.
 - Some quando não há chamados parados, quando não há acompanhamento importado ou quando o arquivo não pode ser lido (o resto do painel continua carregando).
-- O painel é recarregado ao voltar para a aba Home ou recarregar a página; uma nova importação de OS atualiza o alerta na próxima resposta de `/api/painel`.
+- O alerta é atualizado na carga inicial e ao abrir o sino, além das atualizações normais do painel. Uma importação de OS aparece na próxima resposta de `/api/painel`.
 
 ### Texto
 
@@ -68,7 +68,7 @@ Mostrar quantas linhas de divergência apareceram na comparação de planilhas m
 
 - Aparece quando a comparação mais recente tem pelo menos uma linha nova.
 - Some quando não há linhas novas, quando há menos de duas atualizações no histórico ou quando o histórico não pode ser lido.
-- Some ou muda na próxima resposta de `/api/painel` depois de uma nova atualização de planilhas.
+- Some ou muda na próxima resposta de `/api/painel` depois de uma nova atualização de planilhas; abrir o sino solicita uma resposta atualizada.
 
 ### Texto
 
@@ -95,8 +95,9 @@ As seções aparecem na ordem do histórico, só as que têm linhas novas, com o
 
 ## Interface
 
-- Cartões `#alerta-os-paradas` e `#alerta-divergencias-novas`, logo abaixo de `#alerta-base-desatualizada`, com as mesmas classes (`stale-base-alert*`), tokens `--ux-warning-*` (temas claro e escuro), `role="status"`, animação de entrada de 220 ms desligada em movimento reduzido e botão com largura total e 48 px de altura no celular.
-- IDs, ARIA e `data-*` existentes não mudam.
+- Botão `#btn-notificacoes` no cabeçalho abre `#notification-center-panel`, com contador de 0 a 2 alertas ativos. O painel é atualizado ao abrir, fecha com `Escape` ou clique fora e não mantém estado de leitura, dispensa ou histórico.
+- Os cartões `#alerta-os-paradas` e `#alerta-divergencias-novas` ficam no painel do sino, preservam classes (`stale-base-alert*`), IDs, ARIA, `data-*`, ações, tokens `--ux-warning-*` e animação de entrada de 220 ms desligada em movimento reduzido. No celular, os botões têm no mínimo 48 px de altura.
+- Os toasts de operações continuam independentes e temporários.
 
 ## Critérios de aceite
 
@@ -105,6 +106,7 @@ As seções aparecem na ordem do histórico, só as que têm linhas novas, com o
 3. Com linhas novas entre as duas atualizações mais recentes, o painel mostra "Divergências novas" com o total, as datas e as seções; restaurações e a linha de base fixada são ignoradas.
 4. Séries do Sebrae e PRNOTE* em Curitiba nunca contam como divergência nova.
 5. Com menos de duas atualizações, sem linhas novas ou com histórico ilegível, o cartão de divergências fica oculto.
-6. Os botões abrem "Acompanhamento de chamados" e "Evolução das atualizações".
-7. Nenhum histórico é regravado.
-8. Funciona nos temas claro e escuro, no desktop e no celular; testes em Python cobrem as regras e um teste e2e cobre a exibição e os botões.
+6. Os botões abrem "Acompanhamento de chamados" e "Evolução das atualizações"; o sino fecha com `Escape` ou clique fora e devolve o foco ao ser fechado por teclado.
+7. Os avisos não aparecem no Home; "Base desatualizada" permanece no Home.
+8. Nenhum histórico é regravado e o contador mostra a quantidade de avisos ativos, não a quantidade de chamados ou linhas divergentes.
+9. Funciona nos temas claro e escuro, no desktop e no celular; testes em Python cobrem as regras e testes e2e cobrem a lista, o contador, os botões e o fechamento.
