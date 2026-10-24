@@ -132,10 +132,31 @@
     const nome = String(eq?.nome_pessoa || "").trim();
     const nomeTexto = document.getElementById("card-nome-pessoa");
     const nomeForm = document.getElementById("form-nome-pessoa");
+    const nomeEditarButton = document.getElementById("btn-editar-nome-pessoa");
     nomeTexto.textContent = nome ? `Nome da pessoa: ${nome}${eq?.nome_pessoa_origem === "manual" ? " (manual)" : ""}` : "";
     nomeTexto.classList.toggle("hidden", !nome);
-    nomeForm.classList.toggle("hidden", !eq?.nome_pessoa_editavel);
+    nomeForm.classList.toggle("hidden", !eq?.nome_pessoa_editavel || Boolean(nome));
+    nomeEditarButton?.classList.toggle("hidden", !eq?.nome_pessoa_editavel || !nome);
+    if (nomeEditarButton) {
+      nomeEditarButton.textContent = "Editar nome";
+      nomeEditarButton.setAttribute("aria-expanded", "false");
+    }
     document.getElementById("input-nome-pessoa").value = eq?.nome_pessoa_origem === "manual" ? nome : "";
+  }
+
+  function editarNomePessoa() {
+    const formulario = document.getElementById("form-nome-pessoa");
+    const campo = document.getElementById("input-nome-pessoa");
+    const button = document.getElementById("btn-editar-nome-pessoa");
+    const abrir = formulario.classList.contains("hidden");
+    formulario.classList.toggle("hidden", !abrir);
+    button.textContent = abrir ? "Cancelar edição" : "Editar nome";
+    button.setAttribute("aria-expanded", String(abrir));
+    if (abrir) campo.focus();
+    else {
+      const equipment = appState.currentEquipamento;
+      campo.value = equipment?.nome_pessoa_origem === "manual" ? String(equipment.nome_pessoa || "").trim() : "";
+    }
   }
 
   async function salvarNomePessoa() {
@@ -316,6 +337,6 @@
   return {
     abrirModalEditarEquipamento, cadastrarNovoSerialPesquisado, fecharModalEditarEquipamento, abrirModalEditarApelido,
     fecharModalEditarApelido, salvarApelido, salvarDadosEquipamento,
-    atualizarUsuarioLogadoCard, editarUsuarioLogado, salvarUsuarioLogado, limparUsuarioLogado, salvarNomePessoa,
+    atualizarUsuarioLogadoCard, editarUsuarioLogado, salvarUsuarioLogado, limparUsuarioLogado, salvarNomePessoa, editarNomePessoa,
   };
 });
