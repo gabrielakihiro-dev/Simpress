@@ -16,7 +16,7 @@ class AutomaticInventoryInboxTests(unittest.TestCase):
     def setUp(self):
         self.temporary = tempfile.TemporaryDirectory(
             prefix="inventory-inbox-",
-            dir=Path(__file__).resolve().parents[1],
+            dir=tempfile.gettempdir(),
         )
         self.root = Path(self.temporary.name) / "entrada"
         self.history = []

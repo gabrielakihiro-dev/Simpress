@@ -19,7 +19,7 @@ PROJECT_ROOT = Path(__file__).resolve().parents[1]
 
 class AtomicTransactionTests(unittest.TestCase):
     def setUp(self):
-        self.temp_context = tempfile.TemporaryDirectory(prefix=".integrity-test-", dir=PROJECT_ROOT)
+        self.temp_context = tempfile.TemporaryDirectory(prefix=".integrity-test-", dir=tempfile.gettempdir())
         self.root = Path(self.temp_context.name)
 
     def tearDown(self):

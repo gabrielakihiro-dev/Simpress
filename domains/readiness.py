@@ -150,7 +150,13 @@ def check_ready_workbook(
             services.validate_uploaded_workbook(path.read_bytes(), role)
         status.update(available=True, reason="OK", state="ready")
         cache.put(key, status)
-    except (DomainError, FileBusyError, WorkbookSafetyError, *WORKBOOK_READ_ERRORS) as error:
+    except (FileBusyError, OSError) as error:
+        services.logger.warning(
+            "Falha temporária ao verificar prontidão da planilha (arquivo=%s, papel=%s, erro=%s).",
+            path.name, role, type(error).__name__,
+        )
+        status.update(reason=str(getattr(error, "detail", error)) or "arquivo temporariamente indisponível", state="unavailable")
+    except (DomainError, WorkbookSafetyError, *WORKBOOK_READ_ERRORS) as error:
         services.logger.warning(
             "Falha ao verificar prontidão da planilha (arquivo=%s, papel=%s, erro=%s).",
             path.name, role, type(error).__name__,
@@ -271,7 +277,11 @@ def build_readiness_report(services: ReadinessServices) -> Dict[str, Any]:
     if files["modelo_exportacao"]["available"] and details_status["available"]:
         export_status = services.refresh_export_status()
         if not export_status["available"]:
-            files["modelo_exportacao"].update(available=False, state="invalid", reason=export_status["reason"])
+            files["modelo_exportacao"].update(
+                available=False,
+                state=export_status.get("state", "invalid"),
+                reason=export_status["reason"],
+            )
     for status in files.values():
         status.setdefault("state", "ready" if status["available"] else
                           "awaiting_import" if status["reason"] == "ausente" else "invalid")
@@ -285,6 +295,7 @@ def build_readiness_report(services: ReadinessServices) -> Dict[str, Any]:
             )),
             "state": "ready" if all(files[key]["available"] for key in required_files)
                 else "invalid" if any(files[key]["state"] == "invalid" for key in required_files)
+                else "unavailable" if any(files[key]["state"] == "unavailable" for key in required_files)
                 else "awaiting_import",
         }
         for name, required_files in FUNCTION_REQUIREMENTS.items()

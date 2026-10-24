@@ -244,7 +244,7 @@ def _add_threaded_comment_parts(source: Path) -> Path:
 
 class WorkflowIntegrityTests(unittest.TestCase):
     def setUp(self):
-        self.temp_context = tempfile.TemporaryDirectory(prefix=".workflow-test-", dir=PROJECT_ROOT)
+        self.temp_context = tempfile.TemporaryDirectory(prefix=".workflow-test-", dir=tempfile.gettempdir())
         self.root = Path(self.temp_context.name)
         self.input_dir = self.root / "planilhas_entrada"
         self.input_dir.mkdir()
@@ -698,7 +698,7 @@ class WorkflowIntegrityTests(unittest.TestCase):
         make_details(self.details, [("SERIE-ATUAL", "ALIAS-ATUAL", "Modelo A", "Maringá", "Notebook", "87000000")])
         make_endpoint(self.endpoint, [("SERIE-ATUAL", "ALIAS-ATUAL")])
         before = {path: path.read_bytes() for path in (self.details, self.endpoint)}
-        with tempfile.TemporaryDirectory(prefix=".reduced-export-test-", dir=PROJECT_ROOT) as directory:
+        with tempfile.TemporaryDirectory(prefix=".reduced-export-test-", dir=tempfile.gettempdir()) as directory:
             reduced_path = Path(directory) / "exportacao-reduzida.xlsx"
             make_details(
                 reduced_path,
@@ -3761,8 +3761,10 @@ class WorkflowIntegrityTests(unittest.TestCase):
     def test_export_statistics_keep_unavailable_distinct_from_zero_changes(self):
         with (
             patch.object(inventory_state, "stats_cache", {"total_equipamentos": 12}),
-            patch.object(main, "count_export_changes", return_value={"apelidos": 0, "id_clientes": 0, "total": 0}),
-            patch.object(main, "get_export_status", return_value={"available": False, "reason": "modelo ausente"}),
+            patch.object(main, "count_export_changes_with_status", return_value=(
+                {"apelidos": 0, "id_clientes": 0, "total": 0},
+                {"available": False, "reason": "modelo ausente", "state": "invalid"},
+            )),
         ):
             unavailable = main.get_stats()
         self.assertFalse(unavailable["exportacao_disponivel"])
@@ -3771,8 +3773,10 @@ class WorkflowIntegrityTests(unittest.TestCase):
 
         with (
             patch.object(inventory_state, "stats_cache", {"total_equipamentos": 12}),
-            patch.object(main, "count_export_changes", return_value={"apelidos": 0, "id_clientes": 0, "total": 0}),
-            patch.object(main, "get_export_status", return_value={"available": True, "reason": "OK"}),
+            patch.object(main, "count_export_changes_with_status", return_value=(
+                {"apelidos": 0, "id_clientes": 0, "total": 0},
+                {"available": True, "reason": "OK", "state": "ready"},
+            )),
         ):
             available = main.get_stats()
         self.assertTrue(available["exportacao_disponivel"])
@@ -3783,14 +3787,14 @@ async def _collect_stream(response):
 
 
 def _endpoint_bytes(rows):
-    with tempfile.TemporaryDirectory(prefix=".upload-bytes-test-", dir=PROJECT_ROOT) as directory:
+    with tempfile.TemporaryDirectory(prefix=".upload-bytes-test-", dir=tempfile.gettempdir()) as directory:
         path = Path(directory) / "endpoint-ficticio.xlsx"
         make_endpoint(path, rows)
         return path.read_bytes()
 
 
 def _details_bytes(rows):
-    with tempfile.TemporaryDirectory(prefix=".upload-bytes-test-", dir=PROJECT_ROOT) as directory:
+    with tempfile.TemporaryDirectory(prefix=".upload-bytes-test-", dir=tempfile.gettempdir()) as directory:
         path = Path(directory) / "detalhes-ficticio.xlsx"
         headers = complete_details_headers(
             ["NumeroSerie", "Apelido", "Modelo", "Cidade", "Tipo", "CEP"]

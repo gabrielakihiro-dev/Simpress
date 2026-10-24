@@ -10,7 +10,7 @@ from core import integrity
 
 class StagedTemporaryCleanupTests(unittest.TestCase):
     def setUp(self):
-        temporary = tempfile.TemporaryDirectory(dir=Path(__file__).resolve().parents[1])
+        temporary = tempfile.TemporaryDirectory(dir=tempfile.gettempdir())
         self.addCleanup(temporary.cleanup)
         self.root = Path(temporary.name)
         self.target = self.root / "historico_comparacoes.json"

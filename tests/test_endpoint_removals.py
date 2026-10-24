@@ -124,7 +124,7 @@ class ComparisonTests(unittest.TestCase):
 
 class RemovalWorkflowTests(unittest.TestCase):
     def setUp(self):
-        self.temp_context = tempfile.TemporaryDirectory(prefix=".endpoint-removal-test-", dir=base.PROJECT_ROOT)
+        self.temp_context = tempfile.TemporaryDirectory(prefix=".endpoint-removal-test-", dir=tempfile.gettempdir())
         self.root = Path(self.temp_context.name)
         self.input_dir = self.root / "planilhas_entrada"
         self.input_dir.mkdir()

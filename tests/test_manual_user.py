@@ -308,7 +308,7 @@ def no_name(editable):
 
 class ManualUserWorkflowTests(unittest.TestCase):
     def setUp(self):
-        self.temp_context = tempfile.TemporaryDirectory(prefix=".manual-user-test-", dir=base.PROJECT_ROOT)
+        self.temp_context = tempfile.TemporaryDirectory(prefix=".manual-user-test-", dir=tempfile.gettempdir())
         self.root = Path(self.temp_context.name)
         self.input_dir = self.root / "planilhas_entrada"
         self.input_dir.mkdir()
