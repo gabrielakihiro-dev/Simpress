@@ -150,6 +150,8 @@
       <!-- MAIN CONTAINER -->
       <main id="main-content" tabindex="-1" class="flex-1 w-full space-y-6">
 
+    <section id="tab-panel-home" class="app-tab-panel" role="tabpanel" aria-labelledby="tab-home" tabindex="0">
+
     <details id="readiness-panel" class="readiness-panel glass-card rounded-xl" data-state="loading" aria-labelledby="readiness-title" aria-busy="true">
       <summary class="readiness-panel-summary" aria-controls="readiness-content">
         <span class="readiness-summary-copy">
@@ -162,8 +164,6 @@
         <div id="readiness-details-content" class="readiness-details-content"></div>
       </div>
     </details>
-
-    <section id="tab-panel-home" class="app-tab-panel" role="tabpanel" aria-labelledby="tab-home" tabindex="0">
 
     <!-- ALERTA DE BASE DESATUALIZADA (docs/operacao/alerta-base-desatualizada.md; oculto até o painel responder) -->
     <section id="alerta-base-desatualizada" class="stale-base-alert" role="status" aria-labelledby="alerta-base-desatualizada-titulo" data-state="loading" hidden>

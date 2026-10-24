@@ -101,8 +101,8 @@
       const writeBlock = report.gravacao_bloqueada?.available === false ? report.gravacao_bloqueada : null;
       panel.dataset.state = counts.allAvailable && !writeBlock ? "ready" : "warning";
       if (!panel.dataset.initialized) {
-        // On phones the panel would push the search below the fold; it opens on demand there.
-        panel.open = !telaEstreita() && (!counts.allAvailable || Boolean(writeBlock));
+        // Start with a compact summary on every screen; keep later user toggles across refreshes.
+        panel.open = false;
         panel.dataset.initialized = "true";
       }
       summary.textContent = resumoProntidao(counts, writeBlock);
@@ -148,11 +148,7 @@
     return { availableCount, totalCount, allAvailable: totalCount > 0 && availableCount === totalCount };
   }
 
-  function telaEstreita() {
-    return typeof globalThis.matchMedia === "function" && globalThis.matchMedia("(max-width: 640px)").matches;
-  }
-
-  // One-line summary shown on phones while the panel is closed; the full sentence stays the live status.
+  // Compact summary shown while the panel is closed; the full sentence stays the live status.
   function definirResumoCurto(text) {
     const shortSummary = document.getElementById("readiness-summary-short");
     if (shortSummary) shortSummary.textContent = text;

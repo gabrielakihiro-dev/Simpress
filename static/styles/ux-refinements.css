@@ -643,17 +643,20 @@ html[data-ux-density="compact"] .comparison-desktop-table td {
   .automation-capture-thumb:hover { transform: none; }
 }
 
-/* Quiet readiness strip: when every file is available it recedes to a muted one-liner so the search leads the Home.
-   Warning, error and open states keep the regular panel look. */
-#readiness-panel[data-state="ready"]:not([open]) {
+/* Closed readiness stays a quiet, compact disclosure so the search leads the Home. */
+#readiness-panel:not([open]) {
   border-color: transparent; background: transparent; box-shadow: none;
 }
-#readiness-panel[data-state="ready"]:not([open]) > .readiness-panel-summary {
+#readiness-panel:not([open]) > .readiness-panel-summary {
   min-height: 1.5rem; padding-block: 0.1rem;
 }
-#readiness-panel[data-state="ready"]:not([open]) .readiness-title { color: var(--text-muted); font-weight: 500; }
+#readiness-panel:not([open]) .readiness-title { color: var(--text-muted); font-weight: 500; }
+#readiness-panel:not([open]) .readiness-status {
+  position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap;
+}
+#readiness-panel:not([open]) .readiness-status-short { display: block; min-width: 0; overflow: hidden; text-overflow: ellipsis; }
 @media (max-width: 640px) {
-  #readiness-panel[data-state="ready"]:not([open]) > .readiness-panel-summary { min-height: 2.75rem; }
+  #readiness-panel:not([open]) > .readiness-panel-summary { min-height: 2.75rem; }
 }
 
 /* Read-only view of current service orders, with manual UTIC links per source, series and OS. */
