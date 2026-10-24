@@ -301,13 +301,16 @@ class GradeTest(AmbienteBase):
         self.assertEqual(pagina.buscas, [("Rótulo de serviço/Número de série", serie)])
         self.assertFalse(any(pagina.filtros.values()))
 
-    def test_busca_mac_consulta_serial_na_coluna_dominio(self):
+    def test_busca_mac_consulta_rotulo_numero_serie(self):
         pagina = PaginaEndpoint([
-            computador("PRMACUMC010", "PRMACUMC010", "ana", dominio="F2GFWGVG72"),
+            computador("PRMACUMC010", "CMVXKV7YCM", "ana", dominio="SF2GFWGVG72"),
         ])
-        r = rotina.pesquisar_computador_endpoint(pagina, automacao, "SF2GFWGVG72", "PRMACUMC010")
+        r = rotina.pesquisar_computador_endpoint(pagina, automacao, "SCMVXKV7YCM", "PRMACUMC010")
         self.assertEqual((r["estado"], r["linha"]["usuarios"]), ("unico", "ana"))
-        self.assertEqual(pagina.buscas, [("Domínio", "SF2GFWGVG72"), ("Domínio", "F2GFWGVG72")])
+        self.assertEqual(pagina.buscas, [
+            ("Rótulo de serviço/Número de série", "SCMVXKV7YCM"),
+            ("Rótulo de serviço/Número de série", "CMVXKV7YCM"),
+        ])
         self.assertFalse(any(pagina.filtros.values()))
 
     def test_busca_exata_nao_remove_s_em_computador_comum(self):
