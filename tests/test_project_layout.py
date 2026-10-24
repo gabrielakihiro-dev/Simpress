@@ -48,7 +48,11 @@ class ProjectLayoutTests(unittest.TestCase):
                     served = client.get(url)
                     self.assertEqual(served.status_code, 200, url)
                     self.assertEqual(served.content, asset.read_bytes(), url)
-                    self.assertEqual(served.headers["cache-control"], "no-cache", url)
+                    self.assertEqual(
+                        served.headers["cache-control"],
+                        "public, max-age=31536000, immutable",
+                        url,
+                    )
 
     def test_tailwind_source_paths_resolve_after_reorganization(self):
         source = STATIC_DIR / "styles/tailwind.input.css"

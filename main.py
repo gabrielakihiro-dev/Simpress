@@ -536,8 +536,8 @@ def _validate_local_state_for_readiness() -> None:
 
 def _refresh_export_status_for_readiness() -> Dict[str, Any]:
     # Readiness reads without the transaction lock; files are replaced atomically.
-    count_export_changes(locked=True)
-    return get_export_status()
+    _, status = count_export_changes_with_status(locked=True)
+    return status
 
 
 def _readiness_signature() -> Tuple[Any, ...]:
@@ -908,6 +908,13 @@ def count_export_changes(
 ) -> Dict[str, int]:
     """Count writable alias and IdCliente cells that export would change."""
     return equipment_export.count_export_changes(_equipment_export_services, locked, endpoint_index)
+
+
+def count_export_changes_with_status(
+    locked: bool = False,
+    endpoint_index: Optional[Dict[str, Any]] = None,
+) -> Tuple[Dict[str, int], Dict[str, Any]]:
+    return equipment_export.count_export_changes_with_status(_equipment_export_services, locked, endpoint_index)
 
 
 def get_equipamentos_template_file() -> Optional[Path]:
@@ -2131,8 +2138,7 @@ def _listar_equipamentos_indexados() -> List[Dict[str, Any]]:
 
 
 def _get_stats_snapshot() -> Dict[str, Any]:
-    export_counts = count_export_changes()
-    export_status = get_export_status()
+    export_counts, export_status = count_export_changes_with_status()
     with STATE_LOCK:
         stats_snapshot = deepcopy(inventory_state.stats_cache)
         equipment_count = len(inventory_state.equipamentos_cache)
@@ -2297,8 +2303,7 @@ app.include_router(dashboard_router)
 
 def _check_imported_export():
     if get_primary_equipment_file() is not None:
-        count_export_changes(locked=True)
-        status = get_export_status()
+        _, status = count_export_changes_with_status(locked=True)
         return None if status["available"] else status["reason"]
     return None  # A model can be configured before the first inventory pair.
 
