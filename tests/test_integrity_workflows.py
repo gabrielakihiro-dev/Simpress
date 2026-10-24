@@ -3761,8 +3761,10 @@ class WorkflowIntegrityTests(unittest.TestCase):
     def test_export_statistics_keep_unavailable_distinct_from_zero_changes(self):
         with (
             patch.object(inventory_state, "stats_cache", {"total_equipamentos": 12}),
-            patch.object(main, "count_export_changes", return_value={"apelidos": 0, "id_clientes": 0, "total": 0}),
-            patch.object(main, "get_export_status", return_value={"available": False, "reason": "modelo ausente"}),
+            patch.object(main, "count_export_changes_with_status", return_value=(
+                {"apelidos": 0, "id_clientes": 0, "total": 0},
+                {"available": False, "reason": "modelo ausente", "state": "invalid"},
+            )),
         ):
             unavailable = main.get_stats()
         self.assertFalse(unavailable["exportacao_disponivel"])
@@ -3771,8 +3773,10 @@ class WorkflowIntegrityTests(unittest.TestCase):
 
         with (
             patch.object(inventory_state, "stats_cache", {"total_equipamentos": 12}),
-            patch.object(main, "count_export_changes", return_value={"apelidos": 0, "id_clientes": 0, "total": 0}),
-            patch.object(main, "get_export_status", return_value={"available": True, "reason": "OK"}),
+            patch.object(main, "count_export_changes_with_status", return_value=(
+                {"apelidos": 0, "id_clientes": 0, "total": 0},
+                {"available": True, "reason": "OK", "state": "ready"},
+            )),
         ):
             available = main.get_stats()
         self.assertTrue(available["exportacao_disponivel"])
