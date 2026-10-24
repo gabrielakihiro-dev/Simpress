@@ -39,14 +39,12 @@ test("first access centralizes the inventory import and keeps calls separate", a
   const panel = page.locator("#readiness-panel");
   await expect(panel).toHaveAttribute("aria-busy", "false", { timeout: 20_000 });
   await expect(page.locator("#readiness-summary")).toContainText("Nenhum dos 6 arquivos está disponível");
-  if (page.viewportSize().width <= 640) {
-    // Phones start closed with a one-line summary, so the search stays above the fold.
-    await expect(panel).not.toHaveAttribute("open", "");
-    await expect(page.locator("#readiness-summary-short")).toBeVisible();
-    await expect(page.locator("#readiness-summary-short")).toHaveText("6 pendentes");
-    expect((await page.locator(".readiness-panel-summary").boundingBox()).height).toBeLessThanOrEqual(48);
-    await panel.locator(":scope > summary").click();
-  }
+  // The panel starts as a compact disclosure on every screen.
+  await expect(panel).not.toHaveAttribute("open", "");
+  await expect(page.locator("#readiness-summary-short")).toBeVisible();
+  await expect(page.locator("#readiness-summary-short")).toHaveText("6 pendentes");
+  expect((await page.locator(".readiness-panel-summary").boundingBox()).height).toBeLessThanOrEqual(48);
+  await panel.locator(":scope > summary").click();
   await expect(panel).toHaveAttribute("open", "");
   await expect(page.locator("#readiness-summary-short")).toBeHidden();
   await expect(panel.getByRole("button", { name: /Importar/ })).toHaveCount(4);
@@ -115,7 +113,7 @@ test("model import handles failure and refreshes availability after success", as
   });
   await page.goto("/");
   await expect(page.locator("#readiness-panel")).toHaveAttribute("aria-busy", "false");
-  if (page.viewportSize().width <= 640) await page.locator("#readiness-panel > summary").click();
+  await page.locator("#readiness-panel > summary").click();
   const exportModelGroup = page.locator(".readiness-group").filter({
     has: page.getByRole("heading", { name: "Modelo de exportação" }),
   });
