@@ -57,7 +57,7 @@ class LockedFiles:
 
 class AnnotationLoaderTests(unittest.TestCase):
     def setUp(self):
-        temporary = tempfile.TemporaryDirectory(dir=ROOT, prefix=".annotation-read-test-")
+        temporary = tempfile.TemporaryDirectory(dir=tempfile.gettempdir(), prefix=".annotation-read-test-")
         self.addCleanup(temporary.cleanup)
         self.root = Path(temporary.name)
         self.shared = self.root / "shared"
@@ -126,7 +126,7 @@ class AnnotationLoaderTests(unittest.TestCase):
 
 class InventoryInheritanceReadErrorTests(unittest.TestCase):
     def setUp(self):
-        temporary = tempfile.TemporaryDirectory(dir=ROOT, prefix=".annotation-read-test-")
+        temporary = tempfile.TemporaryDirectory(dir=tempfile.gettempdir(), prefix=".annotation-read-test-")
         self.addCleanup(temporary.cleanup)
         self.root = Path(temporary.name)
         self.shared = self.root / "shared"
@@ -163,7 +163,7 @@ class InventoryInheritanceReadErrorTests(unittest.TestCase):
 
 class LegacyMigrationReadErrorTests(unittest.TestCase):
     def setUp(self):
-        temporary = tempfile.TemporaryDirectory(dir=ROOT, prefix=".annotation-read-test-")
+        temporary = tempfile.TemporaryDirectory(dir=tempfile.gettempdir(), prefix=".annotation-read-test-")
         self.addCleanup(temporary.cleanup)
         self.root = Path(temporary.name)
         self.shared = self.root / "shared"
@@ -225,7 +225,7 @@ def parsed_report(simpress_bytes, _oracle_bytes, **_kwargs):
 
 class TicketInheritanceReadErrorTests(unittest.TestCase):
     def setUp(self):
-        temporary = tempfile.TemporaryDirectory(dir=ROOT, prefix=".annotation-read-test-")
+        temporary = tempfile.TemporaryDirectory(dir=tempfile.gettempdir(), prefix=".annotation-read-test-")
         self.addCleanup(temporary.cleanup)
         self.root = Path(temporary.name)
         self.router = create_operations_router(

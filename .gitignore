@@ -126,6 +126,8 @@ __pycache__/
 /test-results/
 /.npm-cache/
 /.simpress-test-*/
+/.bancada-softexpert-*/
+/TEMP/
 
 # Local database backups contain operational data and must stay outside Git.
 /Backup_Banco/

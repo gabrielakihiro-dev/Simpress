@@ -68,17 +68,12 @@ A rotina `sebrae` da tela Automação leva chamados do SoftExpert à aba CHAMADO
 
 O Simpress roda somente localmente: servidor FastAPI e dados em `data/`, com as anotações do histórico sincronizadas pela pasta compartilhada já configurada. Não há backend remoto nem Supabase. Qualquer proposta de migração para um serviço externo deve começar por uma análise que não altere código nem dados.
 
-## Rust Token Killer (RTK) no Codex
-
-- O usuário autoriza o RTK neste projeto: use `rtk <comando>` nos comandos de terminal com wrapper compatível (por exemplo `rtk git status`, `rtk pytest`), sem duplicar o prefixo. Se `rtk` faltar ou a saída condensada for ambígua, use o comando original.
-- Não rode listagem recursiva (`rtk ls -R`) na raiz ou em `.claude`: `.claude/worktrees` tem dezenas de milhares de entradas.
-- Configuração da máquina, hooks, métricas (`rtk gain --project --format json`) e testes: `docs/operacao/rtk-codex.md`.
-
 ## Interface
 
 - Para novas telas, atualize ou escreva a especificação antes de implementar e use as referências visuais fornecidas. Se o usuário disser "Exclua o JavaScript por enquanto", mantenha a tela em HTML/CSS.
 - Preserve IDs, atributos ARIA e `data-*`, manipuladores, regras de negócio, acessibilidade, responsividade e os temas claro e escuro. Faça ajustes visuais pontuais e revisáveis em vez de substituir o design.
 - Não remova `!important` mecanicamente; corrija a causa e preserve os usos justificados.
+- Para capturas do `ui-fixture`, se o Chromium compatível com o Playwright local estiver ausente, instale-o com `node node_modules/playwright/cli.js install chromium`. Quando o cache padrão do sandbox não persistir entre chamadas, use `.claude/prints/<assunto>/pw-browsers` como `PLAYWRIGHT_BROWSERS_PATH` na instalação e na captura.
 - Detalhes na skill `.claude/skills/ajuste-visual-ui`.
 
 ## Auditorias somente leitura
