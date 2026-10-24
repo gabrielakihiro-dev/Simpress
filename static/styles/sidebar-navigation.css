@@ -500,8 +500,6 @@ body.sidebar-drawer-open {
   padding: 0.7rem clamp(1rem, 2.3vw, 2rem);
 }
 
-.site-header { z-index: var(--z-header); }
-
 .header-tools {
   position: relative;
   display: flex;
