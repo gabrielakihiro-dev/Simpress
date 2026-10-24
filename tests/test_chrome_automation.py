@@ -118,6 +118,19 @@ class ChromeAutomationRunnerTests(unittest.TestCase):
         self.addCleanup(temporary.cleanup)
         self.root = Path(temporary.name)
 
+    def test_stored_log_path_cannot_leave_log_dir(self):
+        harness = self.harness()
+        harness.runner.start("os")
+        record = next(harness.contract.log_dir.glob("*.site.json"))
+        data = json.loads(record.read_text(encoding="utf-8"))
+        data["log"] = "../../segredo.txt"
+        record.write_text(json.dumps(data), encoding="utf-8")
+
+        harness.alive_pids.add(data["pid"])
+        adopted = harness.build(watch=False)
+        self.assertEqual(adopted._current.log_path.parent, harness.contract.log_dir)
+        harness.finish(0)
+
     def harness(self, **kwargs):
         return RunnerHarness(self.root, **kwargs)
 

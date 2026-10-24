@@ -260,7 +260,7 @@ class ChromeAutomationRunner:
             if not record or record.get("status") != "em_andamento":
                 continue
             pid = int(record.get("pid") or 0)
-            log_path = self.contract.log_dir / str(record.get("log") or "")
+            log_path = self.contract.log_dir / Path(str(record.get("log") or "")).name
             if self._current is None and self._is_alive(pid):
                 self._current = _Run(str(record.get("rotina")), str(record.get("inicio")), pid, log_path, path, None)
                 continue
@@ -495,7 +495,7 @@ class ChromeAutomationRunner:
         elif active is not None:
             log_path = self._external_log(active)
         elif last and last.get("log"):
-            log_path = self.contract.log_dir / str(last["log"])
+            log_path = self.contract.log_dir / Path(str(last["log"])).name
         else:
             log_path = None
         if log_path is not None and arquivo and arquivo != log_path.name:
