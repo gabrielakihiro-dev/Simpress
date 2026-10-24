@@ -101,9 +101,20 @@ test("a busca escapa o nome da pessoa (com e sem consulta), marca (manual) e omi
 });
 
 function elementoFalso() {
+  const classes = new Set();
   return {
     value: "", textContent: "", disabled: false, attrs: {},
-    classList: { toggle() {}, add() {}, remove() {} },
+    classList: {
+      toggle(nome, force) {
+        const ativo = force === undefined ? !classes.has(nome) : Boolean(force);
+        if (ativo) classes.add(nome);
+        else classes.delete(nome);
+      },
+      add(nome) { classes.add(nome); },
+      remove(nome) { classes.delete(nome); },
+      contains(nome) { return classes.has(nome); },
+    },
+    focus() { this.focused = true; },
     setAttribute(nome, valor) { this.attrs[nome] = valor; },
     removeAttribute(nome) { delete this.attrs[nome]; },
   };
@@ -156,6 +167,46 @@ async function salvarNome({ apiFetch, atual }) {
   await chamada;
   return { botao, ocupado, toasts, aplicados, eventos, elementos };
 }
+
+test("o campo de nome fica oculto quando já existe nome e pode ser aberto para edição manual", () => {
+  try {
+    const { elementos } = instalarDocumento();
+    const equipamento = {
+      serial: "AAA111", usuarios_logados: "ana.lima", nome_pessoa: "Ana Lima",
+      nome_pessoa_origem: "manual", nome_pessoa_editavel: true,
+    };
+    const editor = createEquipmentEditor({ app: {}, appState: { currentEquipamento: equipamento } });
+    const formulario = document.getElementById("form-nome-pessoa");
+    const editar = document.getElementById("btn-editar-nome-pessoa");
+    const campo = document.getElementById("input-nome-pessoa");
+
+    editor.atualizarUsuarioLogadoCard(equipamento);
+    assert.equal(formulario.classList.contains("hidden"), true);
+    assert.equal(editar.classList.contains("hidden"), false);
+
+    editor.editarNomePessoa();
+    assert.equal(formulario.classList.contains("hidden"), false);
+    assert.equal(editar.textContent, "Cancelar edição");
+    assert.equal(editar.attrs["aria-expanded"], "true");
+    assert.equal(campo.focused, true);
+
+    campo.value = "Outro nome";
+    editor.editarNomePessoa();
+    assert.equal(formulario.classList.contains("hidden"), true);
+    assert.equal(editar.textContent, "Editar nome");
+    assert.equal(campo.value, "Ana Lima");
+
+    editor.atualizarUsuarioLogadoCard({ ...equipamento, nome_pessoa: "" });
+    assert.equal(formulario.classList.contains("hidden"), false);
+    assert.equal(editar.classList.contains("hidden"), true);
+
+    editor.atualizarUsuarioLogadoCard({ ...equipamento, nome_pessoa_origem: "entra", nome_pessoa_editavel: false });
+    assert.equal(formulario.classList.contains("hidden"), true);
+    assert.equal(editar.classList.contains("hidden"), true);
+  } finally {
+    delete globalThis.document;
+  }
+});
 
 test("salvarNomePessoa aplica o equipamento devolvido e avisa quando a base ainda não recarregou", async () => {
   const atual = { serial: "AAA111", usuarios_logados: "ana.lima" };
