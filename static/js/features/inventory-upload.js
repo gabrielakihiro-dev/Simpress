@@ -188,7 +188,12 @@
     controles.forEach(controle => { controle.disabled = true; });
     button.setAttribute("aria-busy", "true");
     modal.setAttribute("aria-busy", "true");
-    button.innerHTML = `<i data-lucide="loader-2" class="w-3.5 h-3.5 animate-spin"></i><span>${mensagem}</span>`;
+    const spinner = document.createElement("i");
+    spinner.setAttribute("data-lucide", "loader-2");
+    spinner.className = "w-3.5 h-3.5 animate-spin";
+    const texto = document.createElement("span");
+    texto.textContent = mensagem;
+    button.replaceChildren(spinner, texto);
     lucide.createIcons({ root: button });
     return () => {
       controles.forEach(controle => { controle.disabled = false; });
