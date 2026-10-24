@@ -7,9 +7,10 @@ import zlib
 from pathlib import Path
 
 # Pages wire events through data-on-* attributes (static/js/ui/action-dispatcher.js),
-# so scripts never need 'unsafe-inline'. Inline styles stay allowed for Tailwind and JS layout.
+# so scripts never need 'unsafe-inline'. Styles come from CSS files only (no style= in the HTML);
+# JS sets layout through the CSSOM (el.style.x), which style-src does not block.
 CONTENT_SECURITY_POLICY = (
-    "default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data:; "
+    "default-src 'self'; script-src 'self'; style-src 'self'; img-src 'self'; "
     "font-src 'self'; connect-src 'self'; object-src 'none'; base-uri 'none'; "
     "frame-ancestors 'none'; form-action 'self'"
 )

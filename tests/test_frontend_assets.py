@@ -94,6 +94,15 @@ class FrontendAssetTests(unittest.TestCase):
         self.assertEqual(script_src.strip(), "script-src 'self'")
         self.assertIn("frame-ancestors 'none'", policy)
 
+    def test_content_security_policy_forbids_inline_styles_and_data_images(self):
+        policy = self.client.get("/").headers["content-security-policy"]
+        directives = {part.split()[0]: part.split()[1:] for part in policy.split(";") if part.strip()}
+        self.assertEqual(directives["style-src"], ["'self'"])
+        self.assertEqual(directives["img-src"], ["'self'"])
+        html = (Path(__file__).resolve().parents[1] / "static" / "index.html").read_text(encoding="utf-8")
+        self.assertNotRegex(html, r"(?i)<[^>]+\sstyle\s*=")
+        self.assertNotIn("<style", html.lower())
+
     def test_real_pages_have_no_inline_scripts_or_event_handler_attributes(self):
         static_dir = Path(__file__).resolve().parents[1] / "static"
         for name in ("index.html",):

@@ -868,3 +868,11 @@ html[data-ux-density="compact"] .comparison-desktop-table td {
 
 /* ---------- Minimal chrome: readiness only on Home unless something is pending ---------- */
 #main-content:has(#tab-panel-home[hidden]) #readiness-panel[data-state="ready"] { display: none; }
+
+/* Seta do seletor de unidade (antes era style= inline, que a CSP estrita bloqueia). */
+#select-unidade-destino {
+  background-image: url("/static/chevron-down.svg");
+  background-position: right 0.75rem center;
+  background-size: 1.25rem;
+  background-repeat: no-repeat;
+}
