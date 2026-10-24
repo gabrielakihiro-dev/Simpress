@@ -117,6 +117,17 @@ test("Resumo associa OS aos chamados UTIC com prefixo anual e preserva dados do 
     await expect(section).toContainText("Descrição não informada");
   }
 
+  const summaryDescriptionEntry = seriesGroup.locator(".ticket-summary-description-entry")
+    .filter({ hasText: "Solicito suporte técnico." });
+  await expect(summaryDescriptionEntry).toHaveCount(1);
+  await expect(summaryDescriptionEntry).not.toContainText("OS 7285070 · Oracle");
+  await expect(seriesGroup.locator(".ticket-summary-description-label")).toHaveCount(0);
+  if (!mobile) {
+    const serialFont = await seriesGroup.locator("td:nth-child(2)").evaluate(element => getComputedStyle(element).fontFamily);
+    const userFont = await seriesGroup.locator("td:nth-child(4)").evaluate(element => getComputedStyle(element).fontFamily);
+    expect(serialFont).toBe(userFont);
+  }
+
   await expect(section).toContainText("4 OS · 2 séries");
   const orderContainer = seriesGroup.locator(".ticket-os-link-entry")
     .filter({ hasText: "Oracle · OS 7285070" });

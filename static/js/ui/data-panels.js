@@ -542,8 +542,7 @@
       }
       descriptions.forEach(order => {
         const item = el("div", "ticket-summary-description-entry");
-        item.append(el("strong", "ticket-summary-description-label", "OS " + order.os + " · Oracle"),
-          el("p", "ticket-summary-description", order.descricao || "Descrição não informada"));
+        item.append(el("p", "ticket-summary-description", order.descricao || "Descrição não informada"));
         list.append(item);
       });
       return list;
