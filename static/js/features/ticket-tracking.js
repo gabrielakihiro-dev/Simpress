@@ -360,11 +360,13 @@
       const pressed = selected === key;
       return `<button type="button" class="ticket-triage-filter rounded-md border border-slate-800 bg-slate-900/70 px-2 py-1 text-left" data-ticket-triage-filter="${key}" data-on-click="filtrarTriagemChamados" data-args='["${key}"]' aria-pressed="${pressed}" aria-label="${escapeHtml(`${label}: ${counts[key]}`)}" title="${escapeHtml(pressed ? "Mostrar todos os chamados" : `Mostrar somente: ${label}`)}"><span class="block text-[11px] text-slate-400">${shortLabel}</span><span class="block text-sm font-semibold ${color}">${counts[key]}</span></button>`;
     }).join("")}</div></div>`;
-    if (focused) triageTarget.querySelector?.(`[data-ticket-triage-filter="${focused}"]`)?.focus();
+    const escapeSelector = typeof globalThis.CSS?.escape === "function" ? globalThis.CSS.escape : value => value.replace(/["\\]/g, "\\$&");
+    if (focused) triageTarget.querySelector?.(`[data-ticket-triage-filter="${escapeSelector(focused)}"]`)?.focus();
   }
 
   function renderizarCartaoChamado(record, snapshotId, expandedSections) {
-    const [relationLabel, relationClass] = RELACOES_CHAMADO[record.relacao] || RELACOES_CHAMADO.sem_os;
+    // Own keys only: an API value like "constructor" must not resolve to an inherited Object function.
+    const [relationLabel, relationClass] = Object.hasOwn(RELACOES_CHAMADO, record.relacao) ? RELACOES_CHAMADO[record.relacao] : RELACOES_CHAMADO.sem_os;
     const selectedOrder = appState.filtroChamadoSelecionado
       && normalizarFiltroChamados(record.serie) === normalizarFiltroChamados(appState.filtroChamadoSelecionado.serie)
       ? appState.filtroChamadoSelecionado : null;
