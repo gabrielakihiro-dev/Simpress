@@ -4,14 +4,14 @@ import threading
 import unittest
 from contextlib import redirect_stdout
 from pathlib import Path
-from unittest.mock import patch
+from unittest.mock import Mock, patch
 
 from domains import readiness
 
 with patch("openpyxl.load_workbook", side_effect=RuntimeError("testes não acessam planilhas locais")):
     with redirect_stdout(io.StringIO()):
         import main
-from core.integrity import lock_paths
+from core.integrity import FileBusyError, lock_paths
 
 
 class ReadinessReportCacheTests(unittest.TestCase):
@@ -49,6 +49,25 @@ class ReadinessReportCacheTests(unittest.TestCase):
             path.write_text('{"a": 1}', encoding="utf-8")
             replaced = readiness.file_signature([path, None])
         self.assertEqual(len({missing, created, replaced}), 3)
+
+
+class ReadyWorkbookTransientErrorTests(unittest.TestCase):
+    def test_file_busy_is_reported_as_temporarily_unavailable(self):
+        with tempfile.TemporaryDirectory(dir=tempfile.gettempdir()) as directory:
+            path = Path(directory) / "modelo.xlsx"
+            path.write_bytes(b"fixture")
+            services = readiness.ReadyWorkbookServices(
+                validate_local_model=Mock(side_effect=FileBusyError("arquivo ocupado")),
+                validate_uploaded_workbook=lambda *_args: None,
+                max_upload_bytes=lambda: 1024,
+                logger=main.logger,
+            )
+            status = readiness.check_ready_workbook(
+                path, "exportacao", services, readiness.ReadyWorkbookCache()
+            )
+
+        self.assertFalse(status["available"])
+        self.assertEqual(status["state"], "unavailable")
 
 
 class ReadinessWithoutGlobalLockTests(unittest.TestCase):
