@@ -28,7 +28,8 @@
 .cockpit-tool-heading p { margin: 0; color: var(--cockpit-text-subtle); font-size: 10px; }
 .cockpit-tool-heading h1 { margin: 1px 0; color: var(--cockpit-text); font-size: 16px; font-weight: 650; }
 .cockpit-tool-heading span { color: var(--cockpit-text-muted); font-size: 11px; }
-.cockpit-tool-panel { min-height: 0; flex: 1; overflow: auto; }
+.cockpit-tool-panel { display: flex; min-height: 0; flex: 1; flex-direction: column; overflow: auto; }
+.cockpit-tool-panel > :not(.cockpit-tool-split):not(.cockpit-monthly-layout) { flex-shrink: 0; }
 
 .cockpit-tool-kpis {
   display: grid;
@@ -113,7 +114,7 @@
 .cockpit-tool-split {
   display: grid;
   min-height: 0;
-  height: calc(100% - 112px);
+  flex: 1; min-height: 240px;
   grid-template-columns: minmax(520px, 1fr) minmax(380px, 420px);
 }
 
@@ -128,14 +129,15 @@
 .cockpit-comparison-row {
   display: grid;
   min-width: 870px;
-  grid-template-columns: minmax(100px, 1.1fr) minmax(140px, 1.5fr) repeat(4, minmax(110px, 1.2fr)) minmax(100px, 0.9fr);
+  --comparison-columns: minmax(100px, 1.1fr) minmax(140px, 1.5fr) repeat(4, minmax(110px, 1.2fr)) minmax(100px, 0.9fr);
+  grid-template-columns: var(--comparison-columns);
   align-items: center;
   gap: 8px;
 }
 .cockpit-comparison-columns { padding: 8px 12px; border-bottom: 1px solid var(--cockpit-border); color: var(--cockpit-text-subtle); font-size: 9px; font-weight: 650; }
 .cockpit-comparison-columns span,
 .cockpit-comparison-row > span { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.cockpit-tool-list-button.cockpit-comparison-row { width: max-content; min-width: 870px; grid-template-columns: inherit; padding: 8px 12px; }
+.cockpit-tool-list-button.cockpit-comparison-row { width: 100%; min-width: 870px; grid-template-columns: var(--comparison-columns); padding: 8px 12px; }
 .cockpit-comparison-row strong { color: var(--cockpit-text); font-size: 10px; }
 .cockpit-comparison-row > span { color: var(--cockpit-text); font-size: 10px; }
 .cockpit-comparison-row .cockpit-tool-badge { color: var(--cockpit-accent-text); }
@@ -211,7 +213,7 @@
 .cockpit-tool-detail-list li span { color: var(--cockpit-text-muted); }
 .cockpit-tool-report-section .cockpit-tool-empty { padding: 6px 0; font-size: 11px; }
 
-.cockpit-monthly-layout { display: grid; min-height: 0; height: calc(100% - 112px); grid-template-columns: minmax(700px, 1fr) minmax(360px, 420px); }
+.cockpit-monthly-layout { display: grid; min-height: 0; flex: 1; min-height: 240px; grid-template-columns: minmax(700px, 1fr) minmax(360px, 420px); }
 .cockpit-monthly-layout > .cockpit-tool-detail { border-right: 1px solid var(--cockpit-border); }
 .cockpit-monthly-preview { min-width: 0; min-height: 0; overflow: auto; padding: 14px; background: var(--cockpit-surface); }
 .cockpit-monthly-preview h2 { margin: 0 0 10px; color: var(--cockpit-text); font-size: 13px; }

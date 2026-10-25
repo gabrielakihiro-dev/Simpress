@@ -96,7 +96,7 @@ data-on-keydown="handleSerialKeydown" data-args='["$event"]'
 <details id="readiness-panel" class="cockpit-chip readiness-panel" data-state="loading" aria-labelledby="readiness-title" aria-busy="true">
 <summary class="cockpit-chip__trigger" aria-controls="readiness-content">
 <span id="stat-base-dot" class="cockpit-chip__dot dot-ok" aria-hidden="true"></span>
-<span id="readiness-summary-short" class="cockpit-chip__label" role="status" aria-live="polite" aria-atomic="true">Base 2 h</span>
+<span id="readiness-summary-short" class="cockpit-chip__label" role="status" aria-live="polite" aria-atomic="true">Verificando…</span>
 <span id="readiness-title" class="sr-only">Disponibilidade das funções</span>
 </summary>
 <div id="readiness-content" class="cockpit-chip__panel readiness-expanded-content">
@@ -261,12 +261,12 @@ data-on-keydown="handleSerialKeydown" data-args='["$event"]'
               <i id="equip-icon" data-lucide="laptop"></i>
             </div>
             <div class="min-w-0">
-              <strong id="card-serial" class="cockpit-home-serial">5CG6051BVN</strong>
+              <strong id="card-serial" class="cockpit-home-serial">—</strong>
               <div class="cockpit-home-tags">
-                <span id="badge-apelido" class="cockpit-home-tag cockpit-home-tag--accent">PRNOTEDIREX007</span>
+                <span id="badge-apelido" class="cockpit-home-tag cockpit-home-tag--accent">Sem apelido</span>
                 <span id="badge-tipo" class="cockpit-home-tag cockpit-home-tag--neutral">Notebook</span>
               </div>
-              <h3 id="card-modelo" class="cockpit-home-model">HP EB 6 G1I</h3>
+              <h3 id="card-modelo" class="cockpit-home-model">Equipamento</h3>
               <p id="badge-apelido-status" class="hidden cockpit-home-alias-status" role="status" aria-live="polite"></p>
             </div>
           </div>
@@ -345,17 +345,17 @@ data-on-keydown="handleSerialKeydown" data-args='["$event"]'
 
         <!-- Chamados manuais (pílulas + preview) -->
         <section class="cockpit-home-tickets" aria-labelledby="ticket-templates-title">
-          <div class="cockpit-home-ticket-pills" role="tablist" aria-label="Modelos de chamado">
-            <button type="button" class="cockpit-home-ticket-pill is-active" role="tab" aria-selected="true" data-on-click="alternarChamadosManuais" data-args='["deslocamento"]' id="pill-chamado-deslocamento">
+          <div class="cockpit-home-ticket-pills" role="tablist" aria-label="Modelos de chamado" data-on-keydown="controlarAbasTransferencia" data-args='["$event"]' >
+            <button type="button" class="cockpit-home-ticket-pill is-active" role="tab" aria-selected="true" data-on-click="alternarChamadosManuais" data-args='["deslocamento"]' id="pill-chamado-deslocamento" aria-controls="visualizacao-chamado-deslocamento" tabindex="0">
               <span class="dot-ok" aria-hidden="true"></span> Deslocamento
             </button>
-            <button type="button" class="cockpit-home-ticket-pill" role="tab" aria-selected="false" data-on-click="alternarChamadosManuais" data-args='["teclado-mouse"]' id="pill-chamado-teclado-mouse">
+            <button type="button" class="cockpit-home-ticket-pill" role="tab" aria-selected="false" data-on-click="alternarChamadosManuais" data-args='["teclado-mouse"]' id="pill-chamado-teclado-mouse" aria-controls="visualizacao-chamado-teclado-mouse" tabindex="-1">
               <span class="dot-warn" aria-hidden="true"></span> Kit teclado + mouse
             </button>
-            <button type="button" class="cockpit-home-ticket-pill" role="tab" aria-selected="false" data-on-click="alternarChamadosManuais" data-args='["mau-funcionamento"]' id="pill-chamado-mau-funcionamento">
+            <button type="button" class="cockpit-home-ticket-pill" role="tab" aria-selected="false" data-on-click="alternarChamadosManuais" data-args='["mau-funcionamento"]' id="pill-chamado-mau-funcionamento" aria-controls="visualizacao-chamado-mau-funcionamento" tabindex="-1">
               <span class="dot-warn" aria-hidden="true"></span> Mau funcionamento
             </button>
-            <button type="button" class="cockpit-home-ticket-pill" role="tab" aria-selected="false" data-on-click="alternarChamadosManuais" data-args='["uso-inadequado"]' id="pill-chamado-uso-inadequado">
+            <button type="button" class="cockpit-home-ticket-pill" role="tab" aria-selected="false" data-on-click="alternarChamadosManuais" data-args='["uso-inadequado"]' id="pill-chamado-uso-inadequado" aria-controls="visualizacao-chamado-uso-inadequado" tabindex="-1">
               <span class="dot-warn" aria-hidden="true"></span> Uso inadequado
             </button>
           </div>
@@ -376,7 +376,7 @@ data-on-keydown="handleSerialKeydown" data-args='["$event"]'
             </div>
 
             <!-- Previews dos modelos (IDs preservados) -->
-            <div id="visualizacao-chamado-deslocamento" class="cockpit-home-ticket-preview">
+            <div id="visualizacao-chamado-deslocamento" role="tabpanel" aria-labelledby="pill-chamado-deslocamento" class="cockpit-home-ticket-preview">
               <textarea id="texto-chamado-deslocamento" class="cockpit-home-ticket-textarea" spellcheck="true">Prezados,
 
 Solicito o deslocamento de um técnico à unidade do Sebrae para realizar a sanitização e configuração de um notebook para novo usuário.
@@ -392,7 +392,7 @@ Horário da Instalação:
 
 Lembrando que é necessário o correto preenchimento do termo e anexá-lo ao chamado no fechamento.</textarea>
             </div>
-            <div id="visualizacao-chamado-teclado-mouse" class="cockpit-home-ticket-preview" hidden>
+            <div id="visualizacao-chamado-teclado-mouse" role="tabpanel" aria-labelledby="pill-chamado-teclado-mouse" class="cockpit-home-ticket-preview" hidden>
               <textarea id="texto-chamado-teclado-mouse" class="cockpit-home-ticket-textarea" spellcheck="true">Olá, solicito um novo kit de teclado + mouse, pois [descrever o motivo da solicitação].
 
 Nome do(a) Colaborador(a):
@@ -401,7 +401,7 @@ Horário de funcionamento:
 Produto HP: 18H24AA_AC4_2 (Recebimento Santana) ou 18H24AA#AC4
 Modelo: 230 Wireless Mouse and Keyboard Combo</textarea>
             </div>
-            <div id="visualizacao-chamado-mau-funcionamento" class="cockpit-home-ticket-preview" hidden>
+            <div id="visualizacao-chamado-mau-funcionamento" role="tabpanel" aria-labelledby="pill-chamado-mau-funcionamento" class="cockpit-home-ticket-preview" hidden>
               <textarea id="texto-chamado-mau-funcionamento" class="cockpit-home-ticket-textarea" spellcheck="true">Prezados,
 Solicito o envio de um técnico para avaliar o mau funcionamento do equipamento [identificação]. Peço que verifique a causa do problema, realize o diagnóstico e informe as providências necessárias.
 
@@ -410,7 +410,7 @@ Descrição do Problema:
 Nome do(a) colaborador(a):
 Horário disponível para atendimento:</textarea>
             </div>
-            <div id="visualizacao-chamado-uso-inadequado" class="cockpit-home-ticket-preview" hidden>
+            <div id="visualizacao-chamado-uso-inadequado" role="tabpanel" aria-labelledby="pill-chamado-uso-inadequado" class="cockpit-home-ticket-preview" hidden>
               <textarea id="texto-chamado-uso-inadequado" class="cockpit-home-ticket-textarea" spellcheck="true">Prezados,
 Solicito o envio de um técnico para avaliar o equipamento após relato de possível uso inadequado pelo(a) colaborador(a). Peço que registre as condições encontradas, avalie a causa do problema e informe as providências recomendadas.
 

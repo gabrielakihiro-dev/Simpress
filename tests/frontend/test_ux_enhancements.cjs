@@ -205,3 +205,12 @@ test("light theme keeps secondary text and the search count badge above 4.5:1 on
   assert.match(light, /--text-subtle: #5b6b80;/);
   assert.match(appHtml, /id="pesquisa-completa-contagem" class="[^"]*\btext-cyan-200\b/);
 });
+
+
+test("Home letter shortcuts respect typing and command modifiers", () => {
+  assert.equal(ux.shortcutAction({ key: "t" }), "equipment-transport");
+  assert.equal(ux.shortcutAction({ key: "E" }), "equipment-edit");
+  assert.equal(ux.shortcutAction({ key: "c" }), "copy-ticket");
+  assert.equal(ux.shortcutAction({ key: "e" }, { typing: true }), null);
+  assert.equal(ux.shortcutAction({ key: "c", ctrlKey: true }), null);
+});

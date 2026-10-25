@@ -64,6 +64,7 @@
   });
 
   function ativarAbaTransferencia(aba) {
+    app.fecharPainelCockpit?.(false);
     const alvo = ABAS_PRINCIPAIS[aba] ? aba : "transferencia";
     const abas = Object.entries(ABAS_PRINCIPAIS).map(([nome, ids]) => ({
       nome,
@@ -109,7 +110,8 @@
   }
 
   function controlarAbasTransferencia(event) {
-    const tabs = Array.from(event.currentTarget.querySelectorAll('[role="tab"]'));
+    const tablist = event.target.closest('[role="tablist"]') || event.currentTarget;
+    const tabs = Array.from(tablist.querySelectorAll('[role="tab"]'));
     const currentIndex = tabs.indexOf(event.target.closest('[role="tab"]'));
     if (currentIndex < 0 || !tabs.length) return;
 
@@ -205,6 +207,17 @@
   }
 
   function recolherVisualizacoesModelosChamado() {
+    const pill = document.querySelector('.cockpit-home-ticket-pill[aria-selected="true"]');
+    let selectedType = "";
+    try {
+      selectedType = JSON.parse(pill?.dataset?.args || "[]")[0] || "";
+    } catch (error) {
+      selectedType = "";
+    }
+    if (pill && selectedType) {
+      app.alternarChamadosManuais(selectedType);
+      return;
+    }
     const conteudoChamados = document.getElementById("ticket-templates-content");
     const botaoChamados = document.getElementById("btn-toggle-ticket-templates");
     const rotuloBotaoChamados = botaoChamados?.querySelector("span");
@@ -222,7 +235,31 @@
     });
   }
 
-  function alternarChamadosManuais() {
+  function alternarChamadosManuais(tipo) {
+    const pills = document.querySelectorAll(".cockpit-home-ticket-pill");
+    if (pills.length) {
+      const selected = tipo || "deslocamento";
+      const content = document.getElementById("ticket-templates-content");
+      content.hidden = false;
+      pills.forEach(pill => {
+        let pillType = "";
+        try {
+          pillType = JSON.parse(pill.dataset.args || "[]")[0] || "";
+        } catch (error) {
+          pillType = "";
+        }
+        const active = pillType === selected;
+        pill.setAttribute("aria-selected", String(active));
+        pill.classList.toggle("is-active", active);
+        pill.tabIndex = active ? 0 : -1;
+      });
+      document.querySelectorAll(".cockpit-home-ticket-preview").forEach(preview => {
+        preview.hidden = preview.id !== `visualizacao-chamado-${selected}`;
+      });
+      document.getElementById("btn-copiar-chamado-atual").dataset.args = JSON.stringify([`texto-chamado-${selected}`]);
+      document.getElementById("btn-toggle-ticket-templates")?.setAttribute("aria-expanded", "true");
+      return;
+    }
     const conteudo = document.getElementById("ticket-templates-content");
     const botao = document.getElementById("btn-toggle-ticket-templates");
     const rotulo = botao?.querySelector("span");

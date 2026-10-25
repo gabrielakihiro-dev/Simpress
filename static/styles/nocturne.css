@@ -7,7 +7,7 @@
   --cockpit-field: #23263a;
   --cockpit-text: #e9e9ed;
   --cockpit-text-muted: #9a9dad;
-  --cockpit-text-subtle: #767a8c;
+  --cockpit-text-subtle: #969bad;
   --cockpit-neutral-200: #dcdde4;
   --cockpit-neutral-300: #c3c5d0;
   --cockpit-neutral-600: #5a5e70;
@@ -41,7 +41,7 @@ html[data-theme="light"] {
   --cockpit-field: #f9f9fc;
   --cockpit-text: #23232f;
   --cockpit-text-muted: #656777;
-  --cockpit-text-subtle: #77798a;
+  --cockpit-text-subtle: #656777;
   --cockpit-neutral-200: #454756;
   --cockpit-neutral-300: #575a69;
   --cockpit-neutral-600: #a1a3b0;

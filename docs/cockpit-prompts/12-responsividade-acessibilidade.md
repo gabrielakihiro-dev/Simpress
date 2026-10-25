@@ -33,3 +33,6 @@ Verifique:
 - A interface não anima quando movimento reduzido está ativo.
 
 Rode `npm run verify` e `npm run test:ui:e2e`; corrija falhas atribuíveis a esta etapa. Revise `git diff --check` e os arquivos preparados. Faça commit local somente se autorizado; não faça push sem autorização.
+
+
+A largura mínima pertence ao shell da aplicação. O documento mantém a largura da janela e o `body` permite rolagem horizontal; assim o navegador não amplia automaticamente sua área de layout em dispositivos de toque, e abas e ferramentas continuam clicáveis.

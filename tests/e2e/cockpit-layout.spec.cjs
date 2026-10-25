@@ -61,13 +61,19 @@ test("Resumo uses the latest comparison and opens its series in Home", async ({ 
   }
 });
 
-test("Cockpit has no horizontal page overflow at the supported mobile viewport", async ({ page }) => {
+test("Cockpit keeps its full 1200px workspace reachable in narrow windows", async ({ page }) => {
   await page.setViewportSize({ width: 390, height: 844 });
   await page.goto("/");
 
   const dimensions = await page.evaluate(() => ({
     viewport: document.documentElement.clientWidth,
     document: document.documentElement.scrollWidth,
+    workspace: document.getElementById("simpress-app-shell").scrollWidth,
+    body: document.body.scrollWidth,
   }));
   expect(dimensions.document).toBeLessThanOrEqual(dimensions.viewport);
+  expect(dimensions.workspace).toBeGreaterThanOrEqual(1200);
+  expect(dimensions.body).toBeGreaterThanOrEqual(dimensions.workspace);
+  await page.locator("#cockpit-tools-trigger").click();
+  await expect(page.locator("#btn-relatorio-mensal")).toBeVisible();
 });

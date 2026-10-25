@@ -43,18 +43,18 @@ test("first access centralizes the inventory import and keeps calls separate", a
   await expect(panel).not.toHaveAttribute("open", "");
   await expect(page.locator("#readiness-summary-short")).toBeVisible();
   await expect(page.locator("#readiness-summary-short")).toHaveText("6 pendentes");
-  expect((await page.locator(".readiness-panel-summary").boundingBox()).height).toBeLessThanOrEqual(48);
+  expect((await page.locator("#readiness-panel > summary").boundingBox()).height).toBeLessThanOrEqual(48);
   await panel.locator(":scope > summary").click();
   await expect(panel).toHaveAttribute("open", "");
-  await expect(page.locator("#readiness-summary-short")).toBeHidden();
+  await expect(page.locator("#readiness-summary-short")).toBeVisible();
   await expect(panel.getByRole("button", { name: /Importar/ })).toHaveCount(4);
   await expect(panel).not.toContainText("Catálogos e históricos locais");
   await expect(panel.getByRole("heading", { name: "Ações com inventário" })).toHaveCount(0);
   await expect(panel.getByRole("heading", { name: "Modelo de exportação" })).toBeVisible();
   await expect(panel.locator("#readiness-details-content")).toBeVisible();
   await expect(panel.getByRole("heading", { name: "Acompanhamento de chamados" })).toBeVisible();
-  await expect(page.locator(".readiness-panel-summary")).toHaveCSS("display", "flex");
-  await expect(page.locator("#readiness-title")).toHaveCSS("font-size", "12px");
+  await expect(page.locator("#readiness-panel > summary")).toHaveCSS("display", "flex");
+  await expect(panel).toHaveAccessibleName("Disponibilidade das funções");
   await expect(page.locator(".readiness-details-content")).toHaveCSS("display", "grid");
   const audit = await new AxeBuilder({ page }).include("#readiness-panel")
     .withTags(["wcag2a", "wcag2aa", "wcag21aa", "wcag22aa"]).analyze();

@@ -158,7 +158,9 @@
   }
 
   function renderEmpty(target, message) {
-    target.replaceChildren(element("p", "cockpit-tool-empty", message));
+    const node = element("p", "cockpit-tool-empty", message);
+    if (target.getAttribute("role") === "list") node.setAttribute("role", "listitem");
+    target.replaceChildren(node);
   }
 
   function renderKpis(target, entries) {
@@ -180,7 +182,9 @@
 
   function renderError(target, error, fallback) {
     const message = error?.message || fallback;
-    target.replaceChildren(element("p", "cockpit-tool-error", message));
+    const node = element("p", "cockpit-tool-error", message);
+    if (target.getAttribute("role") === "list") node.setAttribute("role", "listitem");
+    target.replaceChildren(node);
   }
 
   function relationText(record) { return relationLabels[record?.relacao] || String(record?.relacao || "Relação indisponível"); }
@@ -319,10 +323,10 @@
     const metrics = comparisonMetrics(event);
     const equalPercent = Number.isFinite(metrics.iguais) && Number.isFinite(metrics.simpress) && metrics.simpress > 0
       && metrics.iguais <= metrics.simpress
-      ? `${new Intl.NumberFormat("pt-BR", { maximumFractionDigits: 1 }).format((metrics.iguais / metrics.simpress) * 100)}% do total Simpress`
+      ? `${new Intl.NumberFormat("pt-BR", { maximumFractionDigits: 1 }).format((metrics.iguais / metrics.simpress) * 100)}% com correspondência na Simpress`
       : "Percentual indisponível";
     renderKpis(byId("cockpit-comparison-kpis"), [
-      ["Simpress", metrics.simpress], ["Endpoint Central", metrics.endpoint], ["Iguais", metrics.iguais, equalPercent],
+      ["Simpress", metrics.simpress], ["Endpoint Central", metrics.endpoint], ["Correspondentes", metrics.iguais, equalPercent],
       ["Divergentes", `L ${displayCount(metrics.divergenciaLocal)} · U ${displayCount(metrics.divergenciaUsuario)}`, "Localidade · Usuário"],
       ["Sem correspondência", `S ${displayCount(metrics.soSimpress)} · E ${displayCount(metrics.soEndpoint)}`, "Só Simpress · Só Endpoint"],
     ]);
@@ -383,7 +387,7 @@
         simpressMissing ? "Não encontrado" : row.local_detalhes || "—",
         endpointMissing ? "Não encontrado" : row.local_previsto || "—",
         simpressMissing ? "Não encontrado" : row.usuario_detalhes || "—",
-        endpointMissing ? "Não encontrado" : row.usuario_endpoint || "—",
+        endpointMissing ? "Não encontrado" : row.usuario_endpoint || row.usuario || "—",
         row.categoria,
       ];
       values.forEach((value, index) => {
@@ -419,6 +423,8 @@
       byId("cockpit-comparison-export").disabled = true;
       return renderEmpty(target, "Selecione uma comparação salva.");
     }
+    byId("cockpit-comparison-export").textContent = "Exportar dia";
+    byId("cockpit-comparison-export").title = "Inclui todas as atualizações da data desta comparação.";
     byId("cockpit-comparison-export").disabled = !/^\d{4}-\d{2}-\d{2}$/.test(String(event.horario || "").slice(0, 10))
       || typeof app.exportarResultadoComparacaoPlanilhas !== "function";
     const rows = comparisonRows(event, selectedComparisonFilter);
@@ -442,7 +448,7 @@
     const endpointMissing = row.categoria === "Só Simpress";
     const compareFields = [
       ["Local", simpressMissing ? "Não encontrado" : row.local_detalhes || "—", endpointMissing ? "Não encontrado" : row.local_previsto || "—", row.categoria === "Localidade"],
-      ["Usuário", simpressMissing ? "Não encontrado" : row.usuario_detalhes || "—", endpointMissing ? "Não encontrado" : row.usuario_endpoint || "—", row.categoria === "Usuário"],
+      ["Usuário", simpressMissing ? "Não encontrado" : row.usuario_detalhes || "—", endpointMissing ? "Não encontrado" : row.usuario_endpoint || row.usuario || "—", row.categoria === "Usuário"],
     ];
     compareFields.forEach(([label, simpressValue, endpointValue, divergent]) => {
       const row = element("div", "cockpit-comparison-matrix-row");
@@ -525,12 +531,18 @@
   async function loadComparisonDetail(eventId) {
     const request = ++comparisonDetailRequest;
     const target = byId("cockpit-comparison-detail");
+    selectedComparison = null;
+    renderComparisonKpis(null);
+    renderComparisonFilters(null);
+    byId("cockpit-comparison-export").disabled = true;
+    renderEmpty(byId("cockpit-comparison-list"), "Carregando comparação…");
     if (!eventId) {
       selectedComparison = null;
       renderComparisonKpis(null);
       renderComparisonFilters(null);
       renderComparisonList();
-      return renderEmpty(target, "Esta anotação sincronizada não inclui o conteúdo da comparação.");
+      updateComparisonStatus();
+      return renderEmpty(target, "Não há comparação de inventários disponível neste histórico.");
     }
     renderEmpty(target, "Carregando comparação…");
     try {
@@ -544,7 +556,10 @@
       renderComparisonDetail(selectedComparison);
       updateComparisonStatus();
     } catch (error) {
-      if (request === comparisonDetailRequest && activeTool === "comparacao") renderError(target, error, "Não foi possível abrir a comparação.");
+      if (request !== comparisonDetailRequest || activeTool !== "comparacao") return;
+      renderError(target, error, "Não foi possível abrir a comparação.");
+      renderError(byId("cockpit-comparison-list"), error, "Não foi possível abrir a comparação.");
+      byId("cockpit-comparison-status").textContent = error.message || "Não foi possível abrir a comparação.";
     }
   }
 
@@ -552,10 +567,19 @@
     const request = ++comparisonRequest;
     const status = byId("cockpit-comparison-status");
     status.textContent = "Carregando histórico local…";
+    comparisonDetailRequest += 1;
+    selectedComparison = null;
+    byId("cockpit-comparison-export").disabled = true;
+    byId("cockpit-comparison-event").disabled = true;
+    renderComparisonKpis(null);
+    renderComparisonFilters(null);
+    renderEmpty(byId("cockpit-comparison-list"), "Carregando histórico local…");
+    renderEmpty(byId("cockpit-comparison-detail"), "Carregando histórico local…");
     try {
       const data = await apiFetch("/api/historico-comparacoes", { errorMessage: "Não foi possível carregar o histórico de comparações." });
       if (request !== comparisonRequest || activeTool !== "comparacao") return;
-      comparisonEvents = Array.isArray(data.eventos) ? data.eventos : [];
+      comparisonEvents = (Array.isArray(data.eventos) ? data.eventos : [])
+        .filter(event => event.id && event.tipo !== "restauracao" && !event.somente_anotacoes_sincronizadas);
       selectedComparisonId = comparisonEvents.some(event => String(event.id) === selectedComparisonId)
         ? selectedComparisonId : String(comparisonEvents[0]?.id || "");
       status.textContent = `${comparisonEvents.length} ${comparisonEvents.length === 1 ? "registro" : "registros"}`;
@@ -728,7 +752,7 @@
     const type = byId("cockpit-alias-type").value;
     const cutoff = selectedAliasPeriod === "7dias" ? Date.now() - (7 * 24 * 60 * 60 * 1000) : null;
     return aliasEvents.filter(event => {
-      if (type !== "todos" && event.tipo !== type) return false;
+      if (type !== "todos" && (event.tipo || "apelido") !== type) return false;
       if (cutoff !== null) {
         const timestamp = Date.parse(event.horario || "");
         if (!Number.isFinite(timestamp) || timestamp < cutoff) return false;
@@ -908,6 +932,9 @@
   async function loadMonthlyReport(month) {
     const current = ++monthlyRequest;
     const target = byId("cockpit-monthly-details");
+    byId("cockpit-monthly-preview").textContent = "";
+    byId("cockpit-monthly-kpis").replaceChildren();
+    byId("cockpit-monthly-copy").disabled = true;
     renderMonthlyPeriods(month);
     byId("cockpit-monthly-status").textContent = "Carregando dados do relatório…";
     renderEmpty(target, "Carregando relatório mensal local…");
@@ -915,8 +942,9 @@
       const report = await apiFetch(`/api/relatorio-mensal/dados?mes=${encodeURIComponent(month)}`, { errorMessage: "Não foi possível carregar o relatório mensal." });
       if (current !== monthlyRequest || activeTool !== "relatorio") return;
       renderMonthly(report);
+      byId("cockpit-monthly-copy").disabled = false;
     } catch (error) {
-      if (current !== monthlyRequest) return;
+      if (current !== monthlyRequest || activeTool !== "relatorio") return;
       byId("cockpit-monthly-status").textContent = error.message || "Falha ao carregar o relatório.";
       renderError(target, error, "Falha ao carregar o relatório.");
       byId("cockpit-monthly-preview").textContent = "";
@@ -984,12 +1012,8 @@
     byId("cockpit-monthly-month").addEventListener("change", event => loadMonthlyReport(event.currentTarget.value));
     byId("cockpit-monthly-copy").addEventListener("click", copyMonthlyPreview);
     byId("cockpit-monthly-export").addEventListener("click", exportMonthlyWorkbook);
-    document.addEventListener("click", event => {
-      const tab = event.target?.closest?.('.cockpit-bar__tabs [data-on-click="ativarAbaTransferencia"]');
-      if (tab && !root.hidden) closePanel(false);
-    }, true);
     document.addEventListener("keydown", event => {
-      if (event.key !== "Escape" || root.hidden) return;
+      if (event.key !== "Escape" || event.defaultPrevented || root.hidden) return;
       const modal = document.querySelector('[data-accessible-modal="true"]:not(.hidden)');
       if (!modal) { event.preventDefault(); closePanel(); }
     });
@@ -1003,6 +1027,7 @@
     byId("main-content").hidden = false;
     byId("cockpit-tools-dropdown").open = false;
     activeTool = "";
+    delete byId("cockpit-tools-dropdown").dataset.activeTool;
     if (restoreFocus && returnTarget?.isConnected) returnTarget.focus();
     else if (restoreFocus) byId("main-content").focus();
     returnTarget = null;
@@ -1017,8 +1042,9 @@
     const root = byId("cockpit-tool-panels");
     if (!root) return;
     const activeElement = document.activeElement;
-    if (activeElement?.id?.startsWith("btn-") && activeElement.closest("#cockpit-tools-menu")) returnTarget = activeElement;
+    if (!activeTool) returnTarget = byId("cockpit-tools-trigger") || activeElement;
     activeTool = tool;
+    byId("cockpit-tools-dropdown").dataset.activeTool = tool;
     byId("main-content").hidden = true;
     const skipLink = document.querySelector(".skip-link");
     if (skipLink) {
@@ -1045,7 +1071,7 @@
 
   return {
     abrirPainelCockpit: openPanel,
-    fecharPainelCockpit: () => closePanel(),
+    fecharPainelCockpit: closePanel,
     filterTicketRecords,
     comparisonMetrics,
     comparisonRows,

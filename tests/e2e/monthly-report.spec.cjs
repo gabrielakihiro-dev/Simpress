@@ -78,12 +78,32 @@ test("the Cockpit report panel fits the screen and passes axe in both themes", a
     await page.locator("html").evaluate((root, value) => { root.dataset.theme = value; }, theme);
     const box = await panel.boundingBox();
     const viewport = page.viewportSize();
-    expect(box.x).toBeGreaterThanOrEqual(0);
-    expect(box.x + box.width).toBeLessThanOrEqual(viewport.width);
+    expect(box.width).toBeGreaterThan(0);
+    expect(box.width).toBeLessThanOrEqual(Math.max(1200, viewport.width));
     expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true);
     const audit = await new AxeBuilder({ page }).include('[data-cockpit-tool-panel="relatorio"]').analyze();
     expect(audit.violations.map(violation => violation.id), theme).toEqual([]);
   }
   await page.keyboard.press("Escape");
   await expect(page.locator("#cockpit-tool-panels")).toBeHidden();
+});
+
+
+test("changing month clears the previous preview until the new response arrives", async ({ page }) => {
+  let release;
+  await page.route("**/api/relatorio-mensal/dados**", async route => {
+    const month = new URL(route.request().url()).searchParams.get("mes");
+    if (month === "2026-09") await new Promise(resolve => { release = resolve; });
+    await route.fulfill({ json: monthlyReport(month) });
+  });
+  await page.goto("/");
+  await openMonthlyReport(page);
+  await expect(page.locator("#cockpit-monthly-copy")).toBeEnabled();
+  await page.locator("#cockpit-monthly-month").fill("2026-09");
+  await expect(page.locator("#cockpit-monthly-copy")).toBeDisabled();
+  await expect(page.locator("#cockpit-monthly-preview")).toBeEmpty();
+  await expect.poll(() => typeof release).toBe("function");
+  release();
+  await expect(page.locator("#cockpit-monthly-preview")).toContainText("setembro de 2026");
+  await expect(page.locator("#cockpit-monthly-copy")).toBeEnabled();
 });

@@ -25,15 +25,10 @@ function fixtureHistory() {
 }
 
 async function openHistory(page) {
-  const sidebarButton = page.locator("#btn-sidebar-open");
-  const shell = page.locator("#simpress-app-shell");
-  if (await sidebarButton.isVisible() && await shell.getAttribute("data-sidebar-open") !== "true") {
-    await sidebarButton.click();
-    await expect(shell).toHaveAttribute("data-sidebar-open", "true");
-  }
-  const menu = page.locator('.header-action-group[data-action-group="analysis"]');
-  if (!(await menu.evaluate(element => element.open))) await menu.locator("> summary").click();
+  const menu = page.locator("#cockpit-tools-dropdown");
+  if (!(await menu.evaluate(element => element.open))) await page.locator("#cockpit-tools-trigger").click();
   await page.locator("#btn-historico-apelidos").click();
+  await page.locator("#cockpit-alias-legacy").click();
   const dialog = page.getByRole("dialog", { name: "Histórico de alterações" });
   await expect(dialog).toBeVisible();
   await expect(page.locator(".alias-history-row")).toHaveCount(25);

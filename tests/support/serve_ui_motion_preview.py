@@ -300,6 +300,16 @@ class Handler(BaseHTTPRequestHandler):
             payload = versioned_html(STATIC).encode("utf-8") if path == "/" else target.read_bytes()
             content_type = mimetypes.guess_type(target.name)[0] or "application/octet-stream"
             self.send(payload, content_type=content_type)
+        elif path == "/api/relatorio-mensal/dados":
+            month = parse_qs(url.query).get("mes", ["2026-10"])[0]
+            self.send({
+                "mes": {"key": month, "label": month, "parcial": month == "2026-10", "data_corte": "2026-10-25"},
+                "gerado_em": "2026-10-25T09:00:00-03:00",
+                "inventario": {"total": 1, "unidades": 1, "por_tipo": [["Notebook", 1]], "por_unidade": [["Curitiba", "Endereço fictício", 1]]},
+                "comparacao": {"atualizacoes_no_mes": 1, "contagens": {}, "linhas": []},
+                "os": {"oracle": {"abertas": 1, "concluidas": 0, "pendentes": 1},
+                       "simpress": {"abertas": 1, "concluidas": 0, "pendentes": 1}, "linhas": [], "dados_insuficientes": []},
+            })
         elif path == "/api/stats":
             self.send({"total_equipamentos": 1, "total_unidades": 0, "exportacao_disponivel": False})
         elif path == "/api/painel":
