@@ -24,7 +24,7 @@ Use os prompts em ordem, com o repositório Simpress aberto. Cada arquivo cobre 
 - O Cockpit pode reorganizar e recolher componentes, mas não remover rotinas, integrações, controles, regras de negócio, dados, IDs ou contratos usados pela aplicação.
 - Preserve temas claro e escuro, navegação por teclado, atributos ARIA e `data-*`, e suporte a movimento reduzido.
 - Os painéis de Ferramentas usam a mesma composição: faixa de KPIs, filtros em pílulas, tabela densa à esquerda e detalhe lateral de 380–420px. A barra principal mantém só quatro abas, sem dicas de atalho visíveis; as quatro ferramentas ficam nos nove pontos com F5–F8.
-- Mantenha `min-width:1200px` no app; abaixo disso, a rolagem horizontal da página é parte do layout Cockpit atualizado e deve deixar todo o conteúdo acessível.
+- O Cockpit se adapta de 320px a 2560px sem rolagem horizontal da página e não usa `min-width:1200px`; faixas e composição em `14-responsividade-todas-resolucoes.md`.
 - Se encontrar IDs duplicados ou requisitos que contradizem o código, investigue e resolva o conflito preservando o ID usado pela funcionalidade existente; atualize consumidores e testes do controle novo.
 - Faça uma etapa por vez. Rode `npm run verify` e `npm run test:ui:e2e` depois de cada etapa antes de iniciar a próxima.
 - Revise o diff e prepare commits locais por etapa somente quando o usuário tiver autorizado commit. Nunca faça push sem autorização explícita.

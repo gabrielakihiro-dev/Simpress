@@ -153,8 +153,8 @@ Os dados vêm do acompanhamento de chamados (API existente, `/api/operacoes/cham
 
 ### Responsividade
 
-- Mantenha `min-width:1200px` no app conforme o prompt Cockpit atualizado; em viewports menores, a rolagem horizontal preserva o split-view completo.
-- Mantenha a lista e o detalhe lado a lado conforme o split-view; abaixo de 1200px, a página rola horizontalmente sem cortar ações e dados.
+- Não use `min-width:1200px`: a Home se adapta de 320px a 2560px sem rolagem horizontal da página (faixas e composição no prompt 14).
+- Amplo (1200px ou mais): lista de 360px e detalhe lado a lado, idênticos ao artefato. Médio: lista com `clamp()`. Compacto: uma coluna com navegação lista → detalhe e botão "Voltar". Nenhuma ação ou dado é cortado.
 - Trunque textos longos apenas quando o valor completo continuar disponível por foco, título ou detalhe.
 - Barras com pílulas devem quebrar linha (`flex-wrap: wrap`) sem criar overflow.
 
