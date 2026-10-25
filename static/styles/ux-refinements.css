@@ -18,7 +18,7 @@
   border-radius: var(--ux-radius-pill);
   background: var(--ux-neutral-bg);
   color: var(--ux-neutral-fg);
-  font-size: 0.7rem;
+  font-size: 0.75rem;
   font-weight: 650;
   line-height: 1.3;
   white-space: nowrap;
@@ -74,7 +74,7 @@ button[data-copy-state="warning"], button[data-copy-state="error"] { animation: 
 [role="group"][aria-label^="Copiar dados"] > button {
   min-height: 2rem;
   padding-inline: 0.6rem;
-  font-size: 0.6875rem;
+  font-size: 0.75rem;
   border-radius: var(--ux-radius-sm);
 }
 
@@ -92,7 +92,7 @@ button[data-copy-state="warning"], button[data-copy-state="error"] { animation: 
   gap: 0.35rem;
   margin: 0.35rem 0 0;
   color: var(--ux-critical-fg);
-  font-size: 0.72rem;
+  font-size: 0.75rem;
   font-weight: 600;
   line-height: 1.35;
 }
@@ -108,7 +108,7 @@ button[data-copy-state="warning"], button[data-copy-state="error"] { animation: 
   border-radius: 50%;
   background: var(--ux-critical-fg);
   color: var(--ux-surface-0);
-  font-size: 0.65rem;
+  font-size: 0.75rem;
   font-weight: 800;
   line-height: 1;
 }
@@ -131,7 +131,7 @@ button[data-copy-state="warning"], button[data-copy-state="error"] { animation: 
   margin-top: 0.5rem;
 }
 .ux-recent[hidden] { display: none; }
-.ux-recent-label { color: var(--ux-text-muted); font-size: 0.7rem; font-weight: 600; }
+.ux-recent-label { color: var(--ux-text-muted); font-size: 0.75rem; font-weight: 600; }
 .ux-recent-chip {
   min-height: 1.75rem;
   max-width: 100%;
@@ -140,7 +140,7 @@ button[data-copy-state="warning"], button[data-copy-state="error"] { animation: 
   border-radius: var(--ux-radius-pill);
   background: var(--ux-pending-bg);
   color: var(--ux-pending-fg);
-  font-size: 0.7rem;
+  font-size: 0.75rem;
   font-weight: 600;
   line-height: 1.3;
   overflow-wrap: anywhere;
@@ -161,7 +161,7 @@ button[data-copy-state="warning"], button[data-copy-state="error"] { animation: 
   border-radius: var(--ux-radius-pill);
   background: var(--ux-warning-bg);
   color: var(--ux-warning-fg);
-  font-size: 0.72rem;
+  font-size: 0.75rem;
   font-weight: 700;
   line-height: 1.2;
   white-space: nowrap;
@@ -184,7 +184,7 @@ button[data-copy-state="warning"], button[data-copy-state="error"] { animation: 
   background: currentColor;
   font-variant-numeric: tabular-nums;
 }
-.ux-pending-chip-count > span { color: var(--ux-surface-0); font-size: 0.68rem; }
+.ux-pending-chip-count > span { color: var(--ux-surface-0); font-size: 0.75rem; }
 @media (pointer: coarse) { .ux-pending-chip { min-height: 44px; } }
 @media (min-width: 768px) { #btn-gerar-planilha { white-space: nowrap; } }
 
@@ -333,7 +333,7 @@ html[data-ux-density="compact"] .comparison-desktop-table td {
   border-radius: var(--ux-radius-pill);
   background: var(--ux-critical-bg);
   color: var(--ux-critical-fg);
-  font-size: 0.7rem;
+  font-size: 0.75rem;
   font-weight: 700;
   line-height: 1.15rem;
   text-align: center;
@@ -479,7 +479,7 @@ html[data-ux-density="compact"] .comparison-desktop-table td {
   border-radius: var(--ux-radius-pill);
   background: var(--ux-warning-bg);
   color: var(--ux-warning-fg);
-  font-size: 0.65rem;
+  font-size: 0.75rem;
   font-weight: 800;
   line-height: 1;
 }
@@ -509,7 +509,7 @@ html[data-ux-density="compact"] .comparison-desktop-table td {
   border-bottom: 1px solid var(--ux-border);
 }
 .notification-center-header h2 { margin: 0; color: var(--ux-text); font-size: 0.95rem; font-weight: 750; }
-.notification-center-header p { margin: 0; color: var(--ux-text-muted); font-size: 0.72rem; text-align: right; }
+.notification-center-header p { margin: 0; color: var(--ux-text-muted); font-size: 0.75rem; text-align: right; }
 #alerta-os-paradas, #alerta-divergencias-novas {
   flex-wrap: wrap;
   gap: var(--ux-space-1) var(--ux-space-3);
@@ -594,9 +594,9 @@ html[data-ux-density="compact"] .comparison-desktop-table td {
 .automation-history-table th { padding: var(--ux-space-2) var(--ux-space-3); border-bottom: 1px solid var(--ux-border-strong); color: var(--ux-text-muted); font-size: 0.75rem; font-weight: 600; text-align: left; white-space: nowrap; }
 .automation-history-table td { padding: var(--ux-space-2) var(--ux-space-3); border-bottom: 1px solid var(--ux-border); color: var(--ux-text); vertical-align: top; }
 .automation-history-table tbody tr:last-child td { border-bottom: 0; }
-.automation-history-origin { color: var(--ux-text-muted); }
+.automation-history-origin { font-size: 0.75rem; color: var(--ux-text-muted); }
 .automation-history-status { display: grid; gap: var(--ux-space-1); justify-items: start; }
-.automation-history-message { max-width: 28rem; color: var(--ux-text-muted); overflow-wrap: anywhere; }
+.automation-history-message { max-width: 28rem; font-size: 0.75rem; color: var(--ux-text-muted); overflow-wrap: anywhere; }
 .automation-history-captures { display: flex; flex-wrap: wrap; gap: var(--ux-space-1) var(--ux-space-2); }
 .automation-history-link { color: var(--accent-text); text-decoration: underline; text-underline-offset: 2px; overflow-wrap: anywhere; }
 .automation-history-link:focus-visible { outline: 2px solid var(--ux-accent); outline-offset: 2px; border-radius: var(--ux-radius-sm); }
@@ -727,7 +727,7 @@ html[data-ux-density="compact"] .comparison-desktop-table td {
   padding: 0.65rem;
   background: var(--ux-table-head-bg);
   color: var(--text-muted);
-  font-size: 0.7rem;
+  font-size: 0.75rem;
   font-weight: 700;
   text-align: left;
   white-space: nowrap;
@@ -750,11 +750,11 @@ html[data-ux-density="compact"] .comparison-desktop-table td {
 .ticket-os-link-entry { display: grid; gap: 0.2rem; padding-bottom: 0.55rem; border-bottom: 1px solid var(--border); }
 .ticket-os-link-entry:last-child { padding-bottom: 0; border-bottom: 0; }
 .ticket-os-link-entry .ticket-os-link-editor { min-width: 0; }
-.ticket-os-link-entry-label, .ticket-summary-order-sources, .ticket-summary-order-count { color: var(--text-muted); font-size: 0.68rem; font-weight: 600; }
+.ticket-os-link-entry-label, .ticket-summary-order-sources, .ticket-summary-order-count { color: var(--text-muted); font-size: 0.75rem; font-weight: 600; }
 .ticket-summary-order-item { display: flex; flex-wrap: wrap; align-items: center; gap: 0.4rem; }
 .ticket-summary-order-sources { font-family: inherit; }
 .ticket-summary-description-entry { min-width: 0; }
-.ticket-os-link-label, .ticket-summary-field-label { display: block; margin-bottom: 0.3rem; color: var(--text-muted); font-size: 0.68rem; font-weight: 650; }
+.ticket-os-link-label, .ticket-summary-field-label { display: block; margin-bottom: 0.3rem; color: var(--text-muted); font-size: 0.75rem; font-weight: 650; }
 .ticket-os-link-controls { display: flex; flex-wrap: wrap; align-items: center; gap: 0.35rem; }
 .ticket-os-link-prefix { color: var(--text-muted); font-family: var(--font-mono, ui-monospace, monospace); font-size: 0.78rem; white-space: nowrap; }
 .ticket-os-link-input {
@@ -769,11 +769,11 @@ html[data-ux-density="compact"] .comparison-desktop-table td {
   font-variant-numeric: tabular-nums;
 }
 .ticket-os-link-input:focus-visible { outline: 2px solid var(--focus-color); outline-offset: 2px; }
-.ticket-os-link-save, .ticket-os-link-remove { min-height: 2.15rem; padding: 0.35rem 0.55rem; font-size: 0.72rem; }
+.ticket-os-link-save, .ticket-os-link-remove { min-height: 2.15rem; padding: 0.35rem 0.55rem; font-size: 0.75rem; }
 .ticket-summary-mobile { display: none; }
 .ticket-summary-card { display: grid; gap: var(--ux-space-3); padding: var(--ux-space-4); border: 1px solid var(--border-strong); border-radius: var(--ux-radius-md); background: var(--surface-sunken); }
 .ticket-summary-card-head { display: flex; flex-wrap: wrap; justify-content: space-between; align-items: center; gap: var(--ux-space-2); }
-.ticket-summary-source { color: var(--text); font-size: 0.72rem; font-weight: 700; text-transform: uppercase; }
+.ticket-summary-source { color: var(--text); font-size: 0.75rem; font-weight: 700; text-transform: uppercase; }
 .ticket-summary-order { color: var(--text); font-family: var(--font-mono, ui-monospace, monospace); font-size: 0.9rem; }
 .ticket-summary-order-link {
   display: inline-flex;
