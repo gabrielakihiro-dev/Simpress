@@ -115,13 +115,13 @@ test("the compact bar keeps status behind an accessible toggle that Esc closes",
   await expect(page.locator("#cockpit-bar-status")).toBeHidden();
 });
 
-test("the wide bar has no status toggle and keeps the 340px search", async ({ page }) => {
+test("the wide bar has no status toggle and keeps the 240px search", async ({ page }) => {
   await page.setViewportSize({ width: 1440, height: 900 });
   await page.goto("/");
   await expect(page.locator("#cockpit-bar-status-toggle")).toBeHidden();
   await expect(page.locator("#cockpit-bar-status")).toBeVisible();
   const box = await page.locator(".cockpit-bar__search").boundingBox();
-  expect(Math.round(box.width)).toBe(340);
+  expect(Math.round(box.width)).toBe(240);
   expect(Math.round((await page.locator(".cockpit-bar").boundingBox()).height)).toBe(48);
 });
 
