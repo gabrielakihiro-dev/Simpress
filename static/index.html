@@ -12,6 +12,7 @@
   <link rel="stylesheet" href="/static/vendor/tailwind-4.3.3.css">
   <link rel="stylesheet" href="/static/styles/tokens.css">
   <link rel="stylesheet" href="/static/styles/nocturne.css">
+  <link rel="stylesheet" href="/static/styles/cockpit-shell.css">
   <script src="/static/vendor/lucide-1.48.0-subset.js"></script>
   <link rel="stylesheet" href="/static/app.css">
   <!-- Component and theme layers follow app.css; refinements stay last by design. -->
@@ -24,157 +25,150 @@
 
   <a class="skip-link" href="#main-content">Pular para o conteúdo principal</a>
 
-  <div id="simpress-app-shell" class="simpress-app-shell" data-sidebar-collapsed="false" data-sidebar-open="false">
-    <div id="sidebar-backdrop" class="sidebar-backdrop" aria-hidden="true"></div>
-
-    <aside id="app-sidebar" class="app-sidebar" aria-label="Navegação principal">
-      <div class="sidebar-header">
-        <div class="sidebar-brand" aria-label="Simpress, gestão de equipamentos">
-          <span class="sidebar-brand-mark" aria-hidden="true">S</span>
-          <span class="sidebar-brand-copy">
-            <strong>Simpress</strong>
-            <small>Gestão de equipamentos</small>
-          </span>
-        </div>
-        <button type="button" id="btn-sidebar-toggle" class="sidebar-icon-button sidebar-collapse-button" aria-label="Recolher menu lateral" aria-controls="app-sidebar" aria-expanded="true" title="Recolher menu lateral">
-          <i data-lucide="chevron-left" class="sidebar-collapse-icon" aria-hidden="true"></i>
-        </button>
-      </div>
-
-      <div class="sidebar-scroll-area">
-        <div class="sidebar-primary-action">
-          <div class="header-primary-actions">
-            <button type="button" data-on-click="resetarFormulario" id="btn-nova-transferencia" aria-label="Nova transferência" class="header-primary-icon-button sidebar-new-transfer btn-primary flex items-center justify-center rounded-lg" title="Nova transferência">
-              <i data-lucide="rotate-ccw" class="w-4 h-4" aria-hidden="true"></i>
-              <span class="sidebar-item-label">Nova transferência</span>
-            </button>
-          </div>
-        </div>
-
-        <p class="sidebar-section-title">Navegação</p>
-        <nav class="app-tabs sidebar-tabs" role="tablist" aria-label="Navegação principal" data-on-keydown="controlarAbasTransferencia" data-args='["$event"]'>
-          <button type="button" id="tab-home" class="app-tab is-active" role="tab" aria-selected="true" aria-controls="tab-panel-home" tabindex="0" data-on-click="ativarAbaTransferencia" data-args='["home"]' aria-label="Home" title="Home">
-            <i data-lucide="home" class="w-4 h-4" aria-hidden="true"></i>
-            <span>Home</span>
-          </button>
-          <button type="button" id="tab-retirada-entrega" class="app-tab" role="tab" aria-selected="false" aria-controls="tab-panel-retirada-entrega" tabindex="-1" data-on-click="ativarAbaTransferencia" data-args='["transferencia"]' aria-label="Transporte" title="Transporte">
-            <i data-lucide="truck" class="w-4 h-4" aria-hidden="true"></i>
-            <span>Transporte</span>
-          </button>
-          <button type="button" id="tab-resumo" class="app-tab" role="tab" aria-selected="false" aria-controls="tab-panel-resumo" tabindex="-1" data-on-click="ativarAbaTransferencia" data-args='["resumo"]' aria-label="Resumo" title="Resumo">
-            <i data-lucide="layout-dashboard" class="w-4 h-4" aria-hidden="true"></i>
-            <span>Resumo</span>
-          </button>
-          <button type="button" id="tab-automacao" class="app-tab" role="tab" aria-selected="false" aria-controls="tab-panel-automacao" tabindex="-1" data-on-click="ativarAbaTransferencia" data-args='["automacao"]' aria-label="Automação" title="Automação">
-            <i data-lucide="terminal" class="w-4 h-4" aria-hidden="true"></i>
-            <span>Automação</span>
-          </button>
-        </nav>
-
-        <div class="sidebar-divider" aria-hidden="true"></div>
-        <p class="sidebar-section-title">Ferramentas</p>
-
-        <nav class="header-actions sidebar-actions" aria-label="Ferramentas do sistema">
-          <div class="header-secondary-panel" role="group" aria-label="Ações do sistema">
-            <button type="button" data-on-click="abrirAcompanhamentoChamados" id="btn-acompanhamento-chamados" data-sidebar-page class="header-action-item header-action-item--large flex items-center gap-2" title="Relacionar séries, OS e status nos arquivos da Simpress e do Oracle">
-              <i data-lucide="clipboard-list" class="header-action-icon" aria-hidden="true"></i>
-              <span class="sidebar-item-label">Acompanhamento de Chamados</span>
-            </button>
-            <details class="header-action-group" data-action-group="analysis">
-              <summary aria-label="Abrir históricos e análises" aria-controls="header-action-group-analysis" title="Históricos e Análises">
-                <i data-lucide="chart-no-axes-combined" class="header-action-group-icon" aria-hidden="true"></i>
-                <span class="sidebar-item-label">Históricos e Análises</span>
-                <i data-lucide="chevron-down" class="header-action-group-chevron" aria-hidden="true"></i>
-              </summary>
-              <div id="header-action-group-analysis" class="header-action-group-items" role="group" aria-label="Atualização, exportação, análises, históricos e catálogo de unidades">
-                <p class="sidebar-subgroup-title" aria-hidden="true">Ações</p>
-                <button type="button" data-on-click="abrirModalAtualizarPlanilhas" id="btn-atualizar-planilhas" data-sidebar-page class="header-action-item flex items-center gap-2" title="Comparar os arquivos e atualizar as bases do site">
-                  <i data-lucide="upload" class="header-action-icon" aria-hidden="true"></i>
-                  <span class="sidebar-item-label">Atualizar planilhas</span>
-                </button>
-                <button type="button" data-on-click="exportarEquipamentosAtualizados" id="btn-exportar-equipamentos" aria-label="Exportar planilha Excel com apelidos e IdCliente atualizados" aria-labelledby="label-exportar-equipamentos" class="header-action-item hidden flex items-center gap-2" title="Baixar a planilha com apelidos e IdCliente atualizados">
-                  <i data-lucide="download" class="header-action-icon" aria-hidden="true"></i>
-                  <span id="label-exportar-equipamentos" class="sidebar-item-label">Exportar Excel</span>
-                </button>
-                <button type="button" data-on-click="abrirRelatorioMensal" id="btn-relatorio-mensal" data-sidebar-page aria-haspopup="dialog" aria-controls="modal-relatorio-mensal" class="header-action-item flex items-center gap-2" title="Baixar o relatório mensal do contrato em Excel">
-                  <i data-lucide="file-spreadsheet" class="header-action-icon" aria-hidden="true"></i>
-                  <span class="sidebar-item-label">Relatório mensal</span>
-                </button>
-                <p class="sidebar-subgroup-title" aria-hidden="true">Consultas</p>
-                <button type="button" data-on-click="abrirModalHistoricoComparacoes" id="btn-historico-comparacoes" data-sidebar-page aria-label="Histórico de atualizações e comparação de planilhas" aria-labelledby="label-historico-comparacoes badge-total-historico-comparacoes" class="header-action-item flex items-center gap-2" title="Consultar comparações e alterações de apelido feitas pela atualização das planilhas">
-                  <i data-lucide="file-clock" class="header-action-icon" aria-hidden="true"></i>
-                  <span id="label-historico-comparacoes" class="sidebar-item-label">Histórico planilhas</span>
-                  <span id="badge-total-historico-comparacoes" class="header-action-count" aria-label="0 registros">0</span>
-                </button>
-                <button type="button" data-on-click="abrirEvolucaoAtualizacoes" id="btn-evolucao-atualizacoes" data-sidebar-page class="header-action-item flex items-center gap-2" title="Comparar pendências entre duas atualizações">
-                  <i data-lucide="activity" class="header-action-icon" aria-hidden="true"></i>
-                  <span class="sidebar-item-label">Evolução das atualizações</span>
-                </button>
-                <button type="button" data-on-click="abrirModalHistoricoApelidos" id="btn-historico-apelidos" data-sidebar-page aria-label="Histórico de alterações manuais" aria-labelledby="label-historico-apelidos" class="header-action-item flex items-center gap-2" title="Consultar histórico de alterações manuais">
-                  <i data-lucide="user-pen" class="header-action-icon" aria-hidden="true"></i>
-                  <span id="label-historico-apelidos" class="sidebar-item-label">Histórico de alterações</span>
-                </button>
-                <button type="button" data-on-click="abrirModalGerenciarUnidades" id="btn-catalogo-unidades" data-sidebar-page aria-label="Catálogo de unidades SEBRAE" aria-labelledby="label-catalogo-unidades" class="header-action-item flex items-center gap-2" title="Consultar e gerenciar o catálogo de unidades SEBRAE">
-                  <i data-lucide="map-pin" class="header-action-icon" aria-hidden="true"></i>
-                  <span id="label-catalogo-unidades" class="sidebar-item-label">Catálogo de unidades</span>
-                </button>
-              </div>
-            </details>
-          </div>
-        </nav>
-      </div>
-
-    </aside>
-
-    <div class="app-workspace">
-      <header class="site-header border-b border-line-quiet/80 bg-surface/80 backdrop-blur-md sticky top-0">
-        <div class="header-inner">
-          <button type="button" id="btn-sidebar-open" class="sidebar-icon-button sidebar-mobile-open" aria-label="Abrir menu de navegação" aria-controls="app-sidebar" aria-expanded="false" title="Abrir menu de navegação">
-            <i data-lucide="menu" aria-hidden="true"></i>
-          </button>
-          <div class="header-context" aria-label="Aplicação Simpress para o SEBRAE Paraná">
-            <strong id="header-page-title">Home</strong>
-          </div>
-          <div class="header-base-summary hidden md:flex items-center gap-3 text-xs text-fg-muted bg-surface-sunken px-3.5 py-2 rounded-lg border border-line" aria-label="Resumo da base">
-            <span class="inline-flex items-center gap-1.5"><span id="stat-base-dot" class="h-1.5 w-1.5 rounded-full bg-emerald-400" aria-hidden="true"></span>Base: <strong class="text-fg" id="stat-equipamentos">Carregando…</strong> <span id="stat-equipamentos-rotulo">equipamentos</span></span>
-            <span aria-hidden="true" class="text-line-control">|</span>
-            <span>Regionais: <strong class="text-fg" id="stat-unidades">Carregando…</strong></span>
-            <span aria-hidden="true" class="text-line-control">|</span>
-            <span>Contrato: <strong class="text-fg">16467</strong></span>
-          </div>
-          <div class="header-tools">
-            <button type="button" id="btn-notificacoes" class="theme-toggle-button notification-center-trigger" aria-label="Notificações" aria-controls="notification-center-panel" aria-expanded="false" title="Notificações">
-              <i data-lucide="bell" aria-hidden="true"></i>
-              <span id="badge-notificacoes" class="notification-center-badge" aria-hidden="true" hidden>0</span>
-            </button>
-            <section id="notification-center-panel" class="notification-center-panel" role="region" aria-labelledby="notification-center-title" aria-busy="true" hidden>
-              <div class="notification-center-header">
-                <h2 id="notification-center-title">Notificações</h2>
-                <p id="notification-center-summary" role="status" aria-live="polite" aria-atomic="true">Verificando os avisos…</p>
-              </div>
-              <section id="alerta-os-paradas" class="stale-base-alert" role="status" aria-labelledby="alerta-os-paradas-titulo" data-state="loading" hidden>
-                <i data-lucide="file-clock" class="stale-base-alert-icon" aria-hidden="true"></i>
-                <div class="stale-base-alert-copy">
-                  <h2 id="alerta-os-paradas-titulo" class="stale-base-alert-title">OS paradas</h2>
-                  <p id="alerta-os-paradas-texto" class="stale-base-alert-text"></p>
-                </div>
-                <button type="button" id="btn-alerta-os-paradas" data-on-click="abrirAcompanhamentoChamados" class="btn btn-secondary stale-base-alert-action">Ver chamados</button>
-              </section>
-              <section id="alerta-divergencias-novas" class="stale-base-alert" role="status" aria-labelledby="alerta-divergencias-novas-titulo" data-state="loading" hidden>
-                <i data-lucide="alert-circle" class="stale-base-alert-icon" aria-hidden="true"></i>
-                <div class="stale-base-alert-copy">
-                  <h2 id="alerta-divergencias-novas-titulo" class="stale-base-alert-title">Divergências novas</h2>
-                  <p id="alerta-divergencias-novas-texto" class="stale-base-alert-text"></p>
-                </div>
-                <button type="button" id="btn-alerta-divergencias-novas" data-on-click="abrirEvolucaoAtualizacoes" class="btn btn-secondary stale-base-alert-action">Ver evolução</button>
-              </section>
-            </section>
-            <button type="button" id="theme-toggle" class="theme-toggle-button" aria-label="Ativar modo claro" title="Ativar modo claro">
-              <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="lucide lucide-sun" aria-hidden="true" focusable="false"><circle cx="12" cy="12" r="4"></circle><path d="M12 2v2"></path><path d="M12 20v2"></path><path d="m4.93 4.93 1.42 1.42"></path><path d="m17.65 17.65 1.42 1.42"></path><path d="M2 12h2"></path><path d="M20 12h2"></path><path d="m6.34 17.66-1.42 1.42"></path><path d="m19.07 4.93-1.42 1.42"></path></svg>
-            </button>
-          </div>
-        </div>
-      </header>
+  <div id="simpress-app-shell" class="simpress-app-shell cockpit-shell">
+<header class="cockpit-bar" role="banner">
+<div class="cockpit-bar__brand" aria-label="Simpress, gestão de equipamentos">
+<span class="cockpit-bar__brand-mark" aria-hidden="true">S</span>
+<strong class="cockpit-bar__brand-name">Simpress</strong>
+</div>
+<nav class="cockpit-bar__tabs app-tabs" role="tablist" aria-label="Navegação principal" data-on-keydown="controlarAbasTransferencia" data-args='["$event"]'>
+<button type="button" id="tab-home" class="cockpit-tab app-tab is-active" role="tab" aria-selected="true" aria-controls="tab-panel-home" tabindex="0" data-on-click="ativarAbaTransferencia" data-args='["home"]' aria-label="Home" title="Home (F1)">
+<i data-lucide="home" class="w-4 h-4" aria-hidden="true"></i>
+<span>Home</span>
+<kbd class="cockpit-tab__shortcut" aria-hidden="true">F1</kbd>
+</button>
+<button type="button" id="tab-retirada-entrega" class="cockpit-tab app-tab" role="tab" aria-selected="false" aria-controls="tab-panel-retirada-entrega" tabindex="-1" data-on-click="ativarAbaTransferencia" data-args='["transferencia"]' aria-label="Transporte" title="Transporte (F2)">
+<i data-lucide="truck" class="w-4 h-4" aria-hidden="true"></i>
+<span>Transporte</span>
+<kbd class="cockpit-tab__shortcut" aria-hidden="true">F2</kbd>
+</button>
+<button type="button" id="tab-resumo" class="cockpit-tab app-tab" role="tab" aria-selected="false" aria-controls="tab-panel-resumo" tabindex="-1" data-on-click="ativarAbaTransferencia" data-args='["resumo"]' aria-label="Resumo" title="Resumo (F3)">
+<i data-lucide="layout-dashboard" class="w-4 h-4" aria-hidden="true"></i>
+<span>Resumo</span>
+<kbd class="cockpit-tab__shortcut" aria-hidden="true">F3</kbd>
+</button>
+<button type="button" id="tab-automacao" class="cockpit-tab app-tab" role="tab" aria-selected="false" aria-controls="tab-panel-automacao" tabindex="-1" data-on-click="ativarAbaTransferencia" data-args='["automacao"]' aria-label="Automação" title="Automação (F4)">
+<i data-lucide="terminal" class="w-4 h-4" aria-hidden="true"></i>
+<span>Automação</span>
+<kbd class="cockpit-tab__shortcut" aria-hidden="true">F4</kbd>
+</button>
+</nav>
+<div class="cockpit-bar__spacer" aria-hidden="true"></div>
+<div class="cockpit-bar__search">
+<input
+type="text"
+id="input-serial"
+aria-keyshortcuts="/ Control+K Meta+K"
+role="combobox"
+aria-label="Série, apelido, modelo, cidade ou nome do usuário do equipamento"
+aria-autocomplete="list"
+aria-controls="autocomplete-list"
+aria-expanded="false"
+aria-haspopup="listbox"
+autocomplete="off"
+placeholder="Série, apelido, cidade ou usuário"
+class="cockpit-search-input"
+data-on-input="handleSerialInput" data-args='["$value"]'
+data-on-keydown="handleSerialKeydown" data-args='["$event"]'
+/>
+<kbd class="cockpit-search-shortcut" aria-hidden="true" title="Atalho: Ctrl+K">Ctrl K</kbd>
+</div>
+<div class="cockpit-bar__chips">
+<details id="readiness-panel" class="cockpit-chip readiness-panel" data-state="loading" aria-labelledby="readiness-title" aria-busy="true">
+<summary class="cockpit-chip__trigger" aria-controls="readiness-content">
+<span id="stat-base-dot" class="cockpit-chip__dot dot-ok" aria-hidden="true"></span>
+<span id="readiness-summary-short" class="cockpit-chip__label" role="status" aria-live="polite" aria-atomic="true">Base 2 h</span>
+<span id="readiness-title" class="sr-only">Disponibilidade das funções</span>
+</summary>
+<div id="readiness-content" class="cockpit-chip__panel readiness-expanded-content">
+<dl class="readiness-grid">
+<div class="readiness-item"><dt>Equipamentos</dt><dd><strong id="stat-equipamentos">Carregando…</strong> <span id="stat-equipamentos-rotulo">equipamentos</span></dd></div>
+<div class="readiness-item"><dt>Regionais</dt><dd><strong id="stat-unidades">Carregando…</strong></dd></div>
+<div class="readiness-item"><dt>Contrato</dt><dd><strong>16467</strong></dd></div>
+</dl>
+</div>
+</details>
+<span id="automacao-estado" class="cockpit-chip cockpit-chip--neutral" data-state="idle" aria-live="polite">
+<span class="cockpit-chip__dot" aria-hidden="true"></span>
+<span id="automacao-estado-titulo" class="cockpit-chip__label">Chrome livre</span>
+</span>
+</div>
+<div class="cockpit-bar__tools">
+<details class="cockpit-tools-dropdown">
+<summary class="cockpit-tools-dropdown__trigger" aria-label="Ferramentas do sistema" title="Ferramentas">
+<i data-lucide="wrench" aria-hidden="true"></i>
+<span>Ferramentas</span>
+<i data-lucide="chevron-down" class="cockpit-tools-dropdown__chevron" aria-hidden="true"></i>
+</summary>
+<div class="cockpit-tools-dropdown__menu" role="menu">
+<button type="button" data-on-click="resetarFormulario" id="btn-nova-transferencia" class="cockpit-tools-dropdown__item" role="menuitem">
+<i data-lucide="rotate-ccw" aria-hidden="true"></i><span>Nova transferência</span>
+</button>
+<div class="cockpit-tools-dropdown__divider" role="separator"></div>
+<button type="button" data-on-click="abrirAcompanhamentoChamados" id="btn-acompanhamento-chamados" class="cockpit-tools-dropdown__item" role="menuitem">
+<i data-lucide="clipboard-list" aria-hidden="true"></i><span>Acompanhamento de Chamados</span>
+</button>
+<button type="button" data-on-click="abrirModalAtualizarPlanilhas" id="btn-atualizar-planilhas" class="cockpit-tools-dropdown__item" role="menuitem">
+<i data-lucide="upload" aria-hidden="true"></i><span>Atualizar planilhas</span>
+</button>
+<button type="button" data-on-click="exportarEquipamentosAtualizados" id="btn-exportar-equipamentos" aria-label="Exportar planilha Excel com apelidos e IdCliente atualizados" aria-labelledby="label-exportar-equipamentos" class="cockpit-tools-dropdown__item hidden" role="menuitem">
+<i data-lucide="download" aria-hidden="true"></i><span id="label-exportar-equipamentos">Exportar Excel</span>
+</button>
+<button type="button" data-on-click="abrirRelatorioMensal" id="btn-relatorio-mensal" class="cockpit-tools-dropdown__item" role="menuitem">
+<i data-lucide="file-spreadsheet" aria-hidden="true"></i><span>Relatório mensal</span>
+</button>
+<div class="cockpit-tools-dropdown__divider" role="separator"></div>
+<button type="button" data-on-click="abrirModalHistoricoComparacoes" id="btn-historico-comparacoes" class="cockpit-tools-dropdown__item" role="menuitem">
+<i data-lucide="file-clock" aria-hidden="true"></i><span>Histórico planilhas</span>
+<span id="badge-total-historico-comparacoes" class="cockpit-tools-dropdown__badge" aria-label="0 registros">0</span>
+</button>
+<button type="button" data-on-click="abrirEvolucaoAtualizacoes" id="btn-evolucao-atualizacoes" class="cockpit-tools-dropdown__item" role="menuitem">
+<i data-lucide="activity" aria-hidden="true"></i><span>Evolução das atualizações</span>
+</button>
+<button type="button" data-on-click="abrirModalHistoricoApelidos" id="btn-historico-apelidos" class="cockpit-tools-dropdown__item" role="menuitem">
+<i data-lucide="user-pen" aria-hidden="true"></i><span>Histórico de alterações</span>
+</button>
+<button type="button" data-on-click="abrirModalGerenciarUnidades" id="btn-catalogo-unidades" class="cockpit-tools-dropdown__item" role="menuitem">
+<i data-lucide="map-pin" aria-hidden="true"></i><span>Catálogo de unidades</span>
+</button>
+</div>
+</details>
+</div>
+<div class="cockpit-bar__actions">
+<button type="button" id="btn-notificacoes" class="cockpit-action-button" aria-label="Notificações" aria-controls="notification-center-panel" aria-expanded="false" title="Notificações">
+<i data-lucide="bell" aria-hidden="true"></i>
+<span id="badge-notificacoes" class="cockpit-notification-badge" aria-hidden="true" hidden>0</span>
+</button>
+<button type="button" id="theme-toggle" class="cockpit-action-button" aria-label="Ativar modo claro" title="Ativar modo claro">
+<svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="lucide lucide-sun" aria-hidden="true" focusable="false"><circle cx="12" cy="12" r="4"></circle><path d="M12 2v2"></path><path d="M12 20v2"></path><path d="m4.93 4.93 1.42 1.42"></path><path d="m17.65 17.65 1.42 1.42"></path><path d="M2 12h2"></path><path d="M20 12h2"></path><path d="m6.34 17.66-1.42-1.42"></path><path d="m19.07 4.93-1.42-1.42"></path></svg>
+</button>
+</div>
+<strong id="header-page-title" class="sr-only">Home</strong>
+</header>
+<!-- Notification center panel (preserved from original) -->
+<section id="notification-center-panel" class="notification-center-panel" role="region" aria-labelledby="notification-center-title" aria-busy="true" hidden>
+<div class="notification-center-header">
+<h2 id="notification-center-title">Notificações</h2>
+<p id="notification-center-summary" role="status" aria-live="polite" aria-atomic="true">Verificando os avisos…</p>
+</div>
+<section id="alerta-os-paradas" class="stale-base-alert" role="status" aria-labelledby="alerta-os-paradas-titulo" data-state="loading" hidden>
+<i data-lucide="file-clock" class="stale-base-alert-icon" aria-hidden="true"></i>
+<div class="stale-base-alert-copy">
+<h2 id="alerta-os-paradas-titulo" class="stale-base-alert-title">OS paradas</h2>
+<p id="alerta-os-paradas-texto" class="stale-base-alert-text"></p>
+</div>
+<button type="button" id="btn-alerta-os-paradas" data-on-click="abrirAcompanhamentoChamados" class="btn btn-secondary stale-base-alert-action">Ver chamados</button>
+</section>
+<section id="alerta-divergencias-novas" class="stale-base-alert" role="status" aria-labelledby="alerta-divergencias-novas-titulo" data-state="loading" hidden>
+<i data-lucide="alert-circle" class="stale-base-alert-icon" aria-hidden="true"></i>
+<div class="stale-base-alert-copy">
+<h2 id="alerta-divergencias-novas-titulo" class="stale-base-alert-title">Divergências novas</h2>
+<p id="alerta-divergencias-novas-texto" class="stale-base-alert-text"></p>
+</div>
+<button type="button" id="btn-alerta-divergencias-novas" data-on-click="abrirEvolucaoAtualizacoes" class="btn btn-secondary stale-base-alert-action">Ver evolução</button>
+</section>
+</section>
+<div class="app-workspace cockpit-workspace">
 
       <!-- MAIN CONTAINER -->
       <main id="main-content" tabindex="-1" class="flex-1 w-full space-y-6">

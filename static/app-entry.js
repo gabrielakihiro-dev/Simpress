@@ -34,7 +34,6 @@ import "./js/features/alias-history.js";
 import "./js/features/monthly-report.js";
 import "./js/features/chrome-automation.js";
 import "./app.js";
-import "./js/ui/sidebar-navigation.js";
 import "./js/ui/ux-enhancements.js";
 import "./js/ui/transfer-history.js";
 import "./js/ui/data-panels.js";
