@@ -43,7 +43,7 @@
     if (indicator) indicator.className = "w-2.5 h-2.5 rounded-full bg-brand-400";
     const summary = document.getElementById("status-summary");
     if (summary) summary.replaceChildren(
-      createTextElement("span", "text-slate-300 font-medium", "Pronto para emissão.")
+      createTextElement("span", "text-fg-tertiary font-medium", "Pronto para emissão.")
     );
     summary?.firstElementChild?.setAttribute("data-ux-ready-status", "");
   }
@@ -244,11 +244,11 @@
       moreResults.classList.add("hidden");
       emptyState.innerHTML = `
           <div class="px-6 py-8 text-center flex flex-col items-center justify-center space-y-2 select-none">
-            <div class="w-10 h-10 rounded-xl bg-slate-900 border border-slate-800 flex items-center justify-center text-slate-500 mb-1">
+            <div class="w-10 h-10 rounded-xl bg-surface-overlay border border-line-quiet flex items-center justify-center text-fg-muted mb-1">
               <i data-lucide="search-x" class="w-5 h-5" aria-hidden="true"></i>
             </div>
-            <p class="text-sm font-semibold text-slate-200" role="status" aria-live="polite">Nenhum equipamento localizado</p>
-            <p class="text-xs text-slate-500 max-w-sm">Nenhum registro com o termo <span class="font-mono text-cyan-400 font-bold">"${escapeHtml(currentQuery)}"</span> foi encontrado no inventário do SEBRAE/PR.</p>
+            <p class="text-sm font-semibold text-fg-secondary" role="status" aria-live="polite">Nenhum equipamento localizado</p>
+            <p class="text-xs text-fg-muted max-w-sm">Nenhum registro com o termo <span class="font-mono text-cyan-400 font-bold">"${escapeHtml(currentQuery)}"</span> foi encontrado no inventário do SEBRAE/PR.</p>
             <button type="button" data-on-click="cadastrarNovoSerialPesquisado" class="mt-2 inline-flex items-center gap-1.5 px-3.5 py-2 rounded-lg bg-emerald-700 hover:bg-emerald-800 text-white text-xs font-bold transition shadow-lg">
               <i data-lucide="plus-circle" class="w-3.5 h-3.5" aria-hidden="true"></i>
               <span>Cadastrar "${escapeHtml(currentQuery)}" como Novo Equipamento</span>
@@ -516,7 +516,7 @@
     const statusSummary = document.getElementById("status-summary");
     statusSummary.replaceChildren(
       createTextElement("span", "text-emerald-300 font-medium", "Equipamento " + String(eq.serial ?? "") + " (" + String(eq.modelo ?? "") + ") carregado."),
-      createTextElement("span", "text-slate-400", " Selecione a Unidade de Destino e preencha o destinatário.")
+      createTextElement("span", "text-fg-subtle", " Selecione a Unidade de Destino e preencha o destinatário.")
     );
   }
 
