@@ -33,8 +33,8 @@
   display: flex;
   align-items: center;
   height: 48px;
-  padding: 0 12px;
-  gap: 8px;
+  padding: 0 14px;
+  gap: 6px;
   background: var(--color-surface);
   border-bottom: 1px solid var(--color-neutral-800);
   position: sticky;
@@ -54,20 +54,23 @@
   align-items: center;
   gap: 8px;
   flex-shrink: 0;
+  padding-right: 14px;
+  margin-right: 4px;
+  border-right: 1px solid var(--color-neutral-800);
 }
 
 .cockpit-bar__brand-mark {
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  width: 20px;
-  height: 20px;
+  width: 18px;
+  height: 18px;
   color: var(--color-accent);
   flex: 0 0 auto;
 }
 
 .cockpit-bar__brand-name {
-  font-size: 14px;
+  font-size: 13px;
   font-weight: 600;
   color: var(--color-text);
 }
@@ -76,8 +79,14 @@
 .cockpit-bar__tabs {
   display: flex;
   align-items: center;
-  gap: 2px;
+  gap: 6px;
   flex-shrink: 0;
+}
+
+/* button { min-height: 2.5rem } global do app.css não vale na barra (artefato: 32px). */
+.cockpit-bar button,
+.cockpit-bar summary {
+  min-height: 0;
 }
 
 .cockpit-tab {
@@ -85,15 +94,21 @@
   align-items: center;
   gap: 6px;
   height: 32px;
-  padding: 0 10px;
+  padding: 0 8px;
   border-radius: var(--radius-sm);
   border: none;
   background: transparent;
   color: var(--color-neutral-400);
   font-size: 13px;
+  font-weight: 500;
   cursor: pointer;
   transition: background 150ms ease, color 150ms ease;
   white-space: nowrap;
+}
+
+.cockpit-tab svg {
+  width: 15px;
+  height: 15px;
 }
 
 .cockpit-tab:hover {
@@ -135,15 +150,16 @@
   height: 32px;
   padding: 0 12px;
   padding-right: 56px;
-  background: var(--color-neutral-900);
-  border: 1px solid var(--color-neutral-800);
+  background: var(--color-bg);
+  border: 0;
+  box-shadow: var(--shadow-sm);
   border-radius: var(--radius-sm);
   color: var(--color-text);
-  font-size: 13px;
+  font-size: 12.5px;
 }
 
 .cockpit-search-input:focus {
-  border-color: var(--color-accent);
+  box-shadow: 0 0 0 1px var(--color-accent);
   outline: none;
 }
 
@@ -154,9 +170,9 @@
   transform: translateY(-50%);
   font-size: 10px;
   color: var(--color-neutral-500);
-  background: var(--color-neutral-800);
-  padding: 2px 6px;
-  border-radius: 3px;
+  font-family: 'JetBrains Mono', ui-monospace, monospace;
+  background: transparent;
+  padding: 0;
   pointer-events: none;
 }
 
@@ -164,7 +180,7 @@
 .cockpit-bar__chips {
   display: flex;
   align-items: center;
-  gap: 8px;
+  gap: 6px;
   flex-shrink: 0;
 }
 
@@ -172,12 +188,12 @@
   display: inline-flex;
   align-items: center;
   gap: 6px;
-  height: 28px;
-  padding: 0 10px;
-  border-radius: 14px;
-  background: var(--color-neutral-900);
-  border: 1px solid var(--color-neutral-800);
-  font-size: 12px;
+  height: 26px;
+  padding: 0 9px;
+  border-radius: var(--radius-sm);
+  background: var(--color-bg);
+  border: 0;
+  font-size: 11.5px;
   color: var(--color-neutral-300);
   white-space: nowrap;
 }
@@ -195,8 +211,8 @@
 }
 
 .cockpit-chip__dot {
-  width: 7px;
-  height: 7px;
+  width: 6px;
+  height: 6px;
   border-radius: 50%;
   flex-shrink: 0;
 }
@@ -213,7 +229,7 @@
   min-width: 200px;
   padding: 12px;
   background: var(--color-surface);
-  border: 1px solid var(--color-neutral-800);
+  border: 0;
   border-radius: var(--radius-md);
   box-shadow: var(--shadow-lg);
 }
@@ -289,8 +305,8 @@
 
 .cockpit-tools-dots {
   display: block;
-  width: 18px;
-  height: 18px;
+  width: 17px;
+  height: 17px;
   background-image: radial-gradient(circle, currentColor 1.2px, transparent 1.5px);
   background-size: 6px 6px;
 }
@@ -304,8 +320,8 @@
   width: 240px;
   flex-direction: column;
   padding: 6px;
-  background: var(--color-surface);
-  border: 1px solid var(--color-neutral-800);
+  background: var(--color-neutral-900);
+  border: 0;
   border-radius: var(--radius-md);
   box-shadow: var(--shadow-lg);
 }
@@ -367,7 +383,7 @@
 .cockpit-bar__actions {
   display: flex;
   align-items: center;
-  gap: 4px;
+  gap: 6px;
   flex-shrink: 0;
 }
 
@@ -393,16 +409,16 @@
 
 .cockpit-notification-badge {
   position: absolute;
-  top: 2px;
-  right: 2px;
-  min-width: 16px;
-  height: 16px;
+  top: 1px;
+  right: 0;
+  min-width: 15px;
+  height: 15px;
   padding: 0 4px;
   border-radius: 8px;
   background: var(--err-dot);
   color: #fff;
   font-size: 10px;
-  font-weight: 600;
+  font-weight: 500;
   display: flex;
   align-items: center;
   justify-content: center;
@@ -432,26 +448,34 @@
   --color-accent-100: var(--cockpit-accent-text);
   --color-accent-700: var(--cockpit-accent-strong);
   --color-accent-900: var(--cockpit-accent-soft);
+  --color-accent-200: var(--cockpit-accent-200);
+  --color-accent-300: var(--cockpit-accent-300);
+  --color-accent-600: var(--cockpit-accent-600);
+  --color-accent-800: var(--cockpit-accent-800);
+  --color-neutral-100: var(--cockpit-neutral-100);
   --color-neutral-200: var(--cockpit-neutral-200);
   --color-neutral-300: var(--cockpit-neutral-300);
-  --color-neutral-400: var(--cockpit-text-muted);
-  --color-neutral-500: var(--cockpit-text-subtle);
+  --color-neutral-400: var(--cockpit-neutral-400);
+  --color-neutral-500: var(--cockpit-neutral-500);
   --color-neutral-600: var(--cockpit-neutral-600);
-  --color-neutral-800: var(--cockpit-border);
-  --color-neutral-900: var(--cockpit-border-soft);
+  --color-neutral-700: var(--cockpit-neutral-700);
+  --color-neutral-800: var(--cockpit-neutral-800);
+  --color-neutral-900: var(--cockpit-neutral-900);
+  --color-divider: var(--cockpit-divider);
   --ok-fg: var(--cockpit-ok-fg);
   --ok-bg: var(--cockpit-ok-bg);
-  --ok-dot: var(--cockpit-ok-fg);
+  --ok-dot: var(--cockpit-ok-dot);
   --warn-fg: var(--cockpit-warn-fg);
   --warn-bg: var(--cockpit-warn-bg);
-  --warn-dot: var(--cockpit-warn-fg);
+  --warn-dot: var(--cockpit-warn-dot);
   --err-fg: var(--cockpit-err-fg);
   --err-bg: var(--cockpit-err-bg);
-  --err-dot: var(--cockpit-err-fg);
+  --err-dot: var(--cockpit-err-dot);
   --radius-sm: var(--cockpit-radius-sm);
   --radius-md: var(--cockpit-radius-md);
   --radius-lg: var(--cockpit-radius-lg);
   --shadow-sm: var(--cockpit-shadow-sm);
+  --shadow-md: var(--cockpit-shadow-md);
   --shadow-lg: var(--cockpit-shadow-lg);
   min-height: 100dvh;
   background: var(--cockpit-bg);
@@ -492,9 +516,10 @@
   min-width: 120px;
   height: 32px;
   flex: 0 1 240px;
-  border: 1px solid var(--cockpit-border);
+  border: 0;
   border-radius: var(--cockpit-radius-sm);
-  background: var(--cockpit-surface-sunken);
+  background: var(--color-bg);
+  box-shadow: var(--shadow-sm);
 }
 
 .cockpit-shell .cockpit-search-icon {
@@ -506,6 +531,11 @@
   pointer-events: none;
 }
 
+.cockpit-shell .cockpit-bar__search #input-serial.cockpit-search-input {
+  background-color: transparent;
+  box-shadow: none;
+}
+
 .cockpit-shell .cockpit-search-input {
   width: 100%;
   min-width: 0;
@@ -515,7 +545,7 @@
   border-radius: inherit;
   background: transparent;
   color: var(--cockpit-text);
-  font-size: 13px;
+  font-size: 12.5px;
   outline: none;
 }
 
@@ -693,6 +723,51 @@
   .cockpit-bar__brand { display: none; }
   .cockpit-bar__tabs { grid-column: 1 / 3; }
 }
+
+/* ── Fase 6: botões e tags idênticos ao artefato (.btn 14px/500, 30px; primário e secundário em contorno) ── */
+.cockpit-shell .btn {
+  gap: 6px;
+  min-height: 0;
+  padding: 5.6px 10.08px;
+  border-radius: var(--radius-md);
+  font-size: 14px;
+  font-weight: 500;
+  line-height: 1.2;
+}
+.cockpit-shell .btn svg { width: 14px; height: 14px; }
+.cockpit-shell .btn:disabled { opacity: 0.45; cursor: not-allowed; }
+.cockpit-shell .btn-primary,
+.cockpit-shell .btn-secondary-accent {
+  border: 1px solid var(--color-accent);
+  background: transparent;
+  color: var(--color-accent);
+}
+.cockpit-shell .btn-primary:hover:not(:disabled),
+.cockpit-shell .btn-secondary-accent:hover:not(:disabled) {
+  border-color: var(--color-accent);
+  background: color-mix(in srgb, var(--color-accent) 12%, transparent);
+}
+.cockpit-shell .btn-primary:active:not(:disabled),
+.cockpit-shell .btn-secondary-accent:active:not(:disabled) { background: color-mix(in srgb, var(--color-accent) 22%, transparent); }
+.cockpit-shell .btn-secondary {
+  border-color: var(--color-divider);
+  background: transparent;
+  color: var(--color-text);
+}
+.cockpit-shell .btn-secondary:hover:not(:disabled) {
+  border-color: var(--color-divider);
+  background: color-mix(in srgb, var(--color-text) 7%, transparent);
+}
+.cockpit-shell .btn-secondary:active:not(:disabled) { background: color-mix(in srgb, var(--color-text) 14%, transparent); }
+.cockpit-shell .btn-tertiary {
+  background: transparent;
+  color: var(--color-accent);
+  padding-inline: var(--space-1, 2.8px);
+}
+.cockpit-shell .btn-tertiary:hover:not(:disabled) { background: color-mix(in srgb, var(--color-accent) 10%, transparent); color: var(--color-accent); }
+.cockpit-shell .btn-tertiary:active:not(:disabled) { background: color-mix(in srgb, var(--color-accent) 18%, transparent); }
+.cockpit-shell .btn-icon { width: 36px; height: 36px; min-width: 0; padding: 0; }
+.cockpit-shell .btn-sm { height: 26px; min-height: 0; padding: 0 10px; font-size: 12px; }
 
 /* ── Fase 5: toque, campos no compacto e telas largas ── */
 /* Toque: alvos de 44px só com ponteiro grosso (celular/tablet); mouse mantém as medidas do artefato. */
