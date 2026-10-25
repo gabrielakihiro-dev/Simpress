@@ -265,13 +265,13 @@
           >
             <div class="flex items-center space-x-2">
               <span class="w-2 h-2 rounded-full bg-cyan-400 animate-pulse"></span>
-              <span class="font-bold tracking-wider uppercase text-[11px] text-cyan-300 flex items-center gap-1.5">
+              <span class="font-bold tracking-wider uppercase text-xs text-cyan-300 flex items-center gap-1.5">
                 <i data-lucide="layers" class="w-3.5 h-3.5 text-cyan-400"></i>
                 Resultados
               </span>
             </div>
             <div class="flex items-center space-x-3">
-              <span id="autocomplete-count" role="status" aria-live="polite" aria-atomic="true" class="px-2.5 py-0.5 rounded-full bg-cyan-500/20 text-cyan-300 border border-cyan-500/30 font-mono text-[11px] font-bold">
+              <span id="autocomplete-count" role="status" aria-live="polite" aria-atomic="true" class="px-2.5 py-0.5 rounded-full bg-cyan-500/20 text-cyan-300 border border-cyan-500/30 font-mono text-xs font-bold">
                 0 itens
               </span>
             </div>
@@ -290,12 +290,12 @@
           <!-- Footer Tips -->
           <div
             id="autocomplete-footer"
-            class="px-4 py-2 border-t border-slate-800 text-[11px] text-slate-400 flex items-center justify-between select-none"
+            class="px-4 py-2 border-t border-slate-800 text-xs text-slate-400 flex items-center justify-between select-none"
           >
             <span class="flex items-center gap-1.5">
-              <span><kbd class="px-1 py-0.5 bg-slate-800 border border-slate-700 rounded text-slate-300 font-mono text-[9px]">↑↓</kbd> navegar <kbd class="px-1.5 py-0.5 bg-slate-800 border border-slate-700 rounded text-slate-300 font-mono text-[9px]">Enter</kbd> selecionar</span>
+              <span><kbd class="px-1 py-0.5 bg-slate-800 border border-slate-700 rounded text-slate-300 font-mono text-xs">↑↓</kbd> navegar <kbd class="px-1.5 py-0.5 bg-slate-800 border border-slate-700 rounded text-slate-300 font-mono text-xs">Enter</kbd> selecionar</span>
             </span>
-            <span class="text-[10px] text-slate-500 font-mono hidden sm:inline"><kbd class="px-1 py-0.5 bg-slate-800 border border-slate-700 rounded text-slate-400 text-[9px]">Esc</kbd> fechar</span>
+            <span class="text-xs text-slate-500 font-mono hidden sm:inline"><kbd class="px-1 py-0.5 bg-slate-800 border border-slate-700 rounded text-slate-400 text-xs">Esc</kbd> fechar</span>
           </div>
         </div>
       </div>
@@ -657,7 +657,7 @@ Horário disponível para atendimento:</textarea>
           <!-- Grade de Horários e Almoço -->
           <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
             <div class="sm:col-span-2">
-              <label for="retirada-horario" class="block text-[11px] font-semibold text-slate-300 mb-1">Expediente:</label>
+              <label for="retirada-horario" class="block text-xs font-semibold text-slate-300 mb-1">Expediente:</label>
               <input
                 type="text"
                 id="retirada-horario"
@@ -666,7 +666,7 @@ Horário disponível para atendimento:</textarea>
               />
             </div>
             <div>
-              <label for="retirada-almoco" class="block text-[11px] font-semibold text-slate-300 mb-1">Almoço:</label>
+              <label for="retirada-almoco" class="block text-xs font-semibold text-slate-300 mb-1">Almoço:</label>
               <input
                 type="text"
                 id="retirada-almoco"
@@ -675,7 +675,7 @@ Horário disponível para atendimento:</textarea>
               />
             </div>
             <div>
-              <label for="retirada-pausa-duracao" class="block text-[11px] font-semibold text-slate-300 mb-1">Duração Pausa:</label>
+              <label for="retirada-pausa-duracao" class="block text-xs font-semibold text-slate-300 mb-1">Duração Pausa:</label>
               <input
                 type="text"
                 id="retirada-pausa-duracao"
@@ -688,7 +688,7 @@ Horário disponível para atendimento:</textarea>
           <!-- Acesso & Voltagem -->
           <div class="grid grid-cols-1 sm:grid-cols-3 gap-3">
             <div class="sm:col-span-2">
-              <label for="retirada-tipo-acesso" class="block text-[11px] font-semibold text-slate-300 mb-1">Tipo de Acesso:</label>
+              <label for="retirada-tipo-acesso" class="block text-xs font-semibold text-slate-300 mb-1">Tipo de Acesso:</label>
               <input
                 type="text"
                 id="retirada-tipo-acesso"
@@ -697,7 +697,7 @@ Horário disponível para atendimento:</textarea>
               />
             </div>
             <div>
-              <label for="retirada-voltagem" class="block text-[11px] font-semibold text-slate-300 mb-1">Voltagem:</label>
+              <label for="retirada-voltagem" class="block text-xs font-semibold text-slate-300 mb-1">Voltagem:</label>
               <input
                 type="text"
                 id="retirada-voltagem"
@@ -718,7 +718,7 @@ Horário disponível para atendimento:</textarea>
               <button type="button" id="btn-configurar-contato-origem" class="btn btn-secondary btn-chip mt-2" aria-haspopup="dialog" aria-controls="modal-contato-origem" data-on-click="abrirConfiguracaoContatoOrigem">Configurar contato de origem</button>
             </div>
             <div class="mb-3">
-              <label class="block text-[11px] text-slate-400 mb-1" for="retirada-representante">Representante regional (automático pela cidade):</label>
+              <label class="block text-xs text-slate-400 mb-1" for="retirada-representante">Representante regional (automático pela cidade):</label>
               <select
                 id="retirada-representante"
                 data-on-change="handleRepresentanteRegionalChange" data-args='["retirada", "$value"]'
@@ -728,7 +728,7 @@ Horário disponível para atendimento:</textarea>
             </div>
             <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
               <div class="sm:col-span-2">
-                <label for="retirada-contato" class="block text-[11px] text-slate-400 mb-1">Nome: <span class="required-mark" aria-hidden="true">*</span></label>
+                <label for="retirada-contato" class="block text-xs text-slate-400 mb-1">Nome: <span class="required-mark" aria-hidden="true">*</span></label>
                 <input
                   type="text"
                   id="retirada-contato"
@@ -738,7 +738,7 @@ Horário disponível para atendimento:</textarea>
                 />
               </div>
               <div>
-                <label for="retirada-email" class="block text-[11px] text-slate-400 mb-1">E-mail: <span class="required-mark" aria-hidden="true">*</span></label>
+                <label for="retirada-email" class="block text-xs text-slate-400 mb-1">E-mail: <span class="required-mark" aria-hidden="true">*</span></label>
                 <input
                   type="email"
                   id="retirada-email"
@@ -748,7 +748,7 @@ Horário disponível para atendimento:</textarea>
                 />
               </div>
               <div>
-                <label for="retirada-telefone" class="block text-[11px] text-slate-400 mb-1">Celular: <span class="required-mark" aria-hidden="true">*</span></label>
+                <label for="retirada-telefone" class="block text-xs text-slate-400 mb-1">Celular: <span class="required-mark" aria-hidden="true">*</span></label>
                 <input
                   type="text"
                   id="retirada-telefone"
@@ -764,7 +764,7 @@ Horário disponível para atendimento:</textarea>
 
           <!-- Observações Retirada -->
           <div>
-            <label for="retirada-obs" class="block text-[11px] font-semibold text-slate-400 mb-1">Observações: <span class="required-mark" aria-hidden="true">*</span></label>
+            <label for="retirada-obs" class="block text-xs font-semibold text-slate-400 mb-1">Observações: <span class="required-mark" aria-hidden="true">*</span></label>
             <input
               type="text"
               id="retirada-obs"
@@ -804,7 +804,7 @@ Horário disponível para atendimento:</textarea>
                 <i aria-hidden="true" data-lucide="map-pin" class="w-3.5 h-3.5"></i>
                 Selecione a Unidade:
               </span>
-              <span id="filiais-count" class="text-[10px] text-slate-400">30 filiais catalogadas</span>
+              <span id="filiais-count" class="text-xs text-slate-400">30 filiais catalogadas</span>
             </label>
             <div class="relative">
               <select
@@ -872,16 +872,16 @@ Horário disponível para atendimento:</textarea>
 
           <!-- Dados do Destinatário (Colaborador / Contato) -->
           <div class="pt-2 border-t border-slate-800">
-            <h4 class="text-xs font-semibold text-slate-300 uppercase tracking-wider mb-2 flex items-center justify-between">
+            <h4 class="text-xs font-semibold text-slate-300 uppercase tracking-wider mb-2 flex flex-wrap items-center justify-between gap-x-3">
               <span class="flex items-center gap-1.5">
                 <i aria-hidden="true" data-lucide="user" class="w-3.5 h-3.5"></i>
                 Dados do Destinatário no SEBRAE
               </span>
-              <span class="text-[10px] text-slate-400 font-normal"><span class="required-mark" aria-hidden="true">*</span> Obrigatório para entrega</span>
+              <span class="text-xs text-slate-400 font-normal tracking-normal"><span class="required-mark" aria-hidden="true">*</span> Obrigatório para entrega</span>
             </h4>
             <div class="space-y-3">
               <div>
-                <label class="block text-[11px] font-semibold text-slate-300 mb-1" for="entrega-representante">
+                <label class="block text-xs font-semibold text-slate-300 mb-1" for="entrega-representante">
                   Representante regional (automático pela cidade):
                 </label>
                 <select
@@ -892,7 +892,7 @@ Horário disponível para atendimento:</textarea>
                 ></select>
               </div>
               <div>
-                <label for="entrega-contato" class="block text-[11px] font-semibold text-slate-300 mb-1">
+                <label for="entrega-contato" class="block text-xs font-semibold text-slate-300 mb-1">
                   Nome do Destinatário ou Representante: <span class="required-mark" aria-hidden="true">*</span>
                 </label>
                 <input
@@ -906,7 +906,7 @@ Horário disponível para atendimento:</textarea>
 
               <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
                 <div>
-                  <label for="entrega-email" class="block text-[11px] text-slate-300 mb-1">E-mail do Destinatário: <span class="required-mark" aria-hidden="true">*</span></label>
+                  <label for="entrega-email" class="block text-xs text-slate-300 mb-1">E-mail do Destinatário: <span class="required-mark" aria-hidden="true">*</span></label>
                   <input
                     type="email"
                     id="entrega-email"
@@ -916,7 +916,7 @@ Horário disponível para atendimento:</textarea>
                   />
                 </div>
                 <div>
-                  <label for="entrega-telefone" class="block text-[11px] text-slate-300 mb-1">Celular: <span class="required-mark" aria-hidden="true">*</span></label>
+                  <label for="entrega-telefone" class="block text-xs text-slate-300 mb-1">Celular: <span class="required-mark" aria-hidden="true">*</span></label>
                   <input
                     type="text"
                     id="entrega-telefone"
@@ -934,7 +934,7 @@ Horário disponível para atendimento:</textarea>
           <!-- Grade de Horários e Almoço Entrega -->
           <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
             <div class="sm:col-span-2">
-              <label for="entrega-horario" class="block text-[11px] font-semibold text-slate-300 mb-1">Expediente: <span class="required-mark" aria-hidden="true">*</span></label>
+              <label for="entrega-horario" class="block text-xs font-semibold text-slate-300 mb-1">Expediente: <span class="required-mark" aria-hidden="true">*</span></label>
               <input
                 type="text"
                 id="entrega-horario"
@@ -944,7 +944,7 @@ Horário disponível para atendimento:</textarea>
               />
             </div>
             <div>
-              <label for="entrega-almoco" class="block text-[11px] font-semibold text-slate-300 mb-1">Almoço: <span class="required-mark" aria-hidden="true">*</span></label>
+              <label for="entrega-almoco" class="block text-xs font-semibold text-slate-300 mb-1">Almoço: <span class="required-mark" aria-hidden="true">*</span></label>
               <input
                 type="text"
                 id="entrega-almoco"
@@ -954,7 +954,7 @@ Horário disponível para atendimento:</textarea>
               />
             </div>
             <div>
-              <label for="entrega-pausa-duracao" class="block text-[11px] font-semibold text-slate-300 mb-1">Duração Pausa: <span id="entrega-pausa-obrigatorio" class="required-mark" aria-hidden="true">*</span></label>
+              <label for="entrega-pausa-duracao" class="block text-xs font-semibold text-slate-300 mb-1">Duração Pausa: <span id="entrega-pausa-obrigatorio" class="required-mark" aria-hidden="true">*</span></label>
               <input
                 type="text"
                 id="entrega-pausa-duracao"
@@ -1249,7 +1249,7 @@ Horário disponível para atendimento:</textarea>
       </div>
 
       <div class="pt-4 border-t border-slate-800 flex justify-between items-center">
-        <span class="text-[11px] text-slate-400">Pronto para colar em chamados Jira, GLPI ou Teams.</span>
+        <span class="text-xs text-slate-400">Pronto para colar em chamados Jira, GLPI ou Teams.</span>
         <div class="flex space-x-2">
           <button
             data-on-click="copiarTextoDoModal"
@@ -1290,7 +1290,7 @@ Horário disponível para atendimento:</textarea>
       </div>
       <div id="lista-historico-transferencias" class="overflow-y-auto flex-1 min-h-0 py-3" aria-label="Transferências geradas"></div>
       <div class="pt-3 border-t border-slate-800 flex items-center justify-between gap-3 shrink-0">
-        <span class="text-[11px] text-slate-400">Guardado somente neste computador. "Duplicar destino" não altera o equipamento selecionado.</span>
+        <span class="text-xs text-slate-400">Guardado somente neste computador. "Duplicar destino" não altera o equipamento selecionado.</span>
         <button type="button" data-on-click="fecharModalHistoricoTransferencias" class="px-4 py-2 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-300 text-xs transition">Fechar</button>
       </div>
     </div>
@@ -1339,7 +1339,7 @@ Horário disponível para atendimento:</textarea>
       </div>
 
       <div class="pt-4 border-t border-slate-800 flex flex-wrap justify-between items-center gap-3">
-        <span class="text-[11px] text-slate-400">Confira os endereços e copie o texto para sua solicitação.</span>
+        <span class="text-xs text-slate-400">Confira os endereços e copie o texto para sua solicitação.</span>
         <div class="flex space-x-2">
           <button
             type="button"
@@ -1417,7 +1417,7 @@ Horário disponível para atendimento:</textarea>
             <div id="edit-apelido-field">
               <label class="block text-slate-300 font-semibold mb-1">Apelido / Hostname:</label>
               <input type="text" id="edit-apelido" placeholder="Ex: PRNOTEDIREX007" class="w-full px-3 py-2 rounded-lg glass-input text-slate-200 font-mono focus:outline-none" />
-              <p class="text-[10px] text-slate-500 mt-1">Para equipamentos existentes, altere o apelido pelo botão próprio no cartão.</p>
+              <p class="text-xs text-slate-500 mt-1">Para equipamentos existentes, altere o apelido pelo botão próprio no cartão.</p>
             </div>
             <div class="sm:col-span-2">
               <label class="block text-slate-300 font-semibold mb-1">Id Cliente / Observação de Uso:</label>
@@ -1426,7 +1426,7 @@ Horário disponível para atendimento:</textarea>
           </div>
         </div>
 
-        <p class="rounded-lg border border-slate-800 bg-slate-950/50 px-3 py-2 text-[11px] text-slate-400" role="note">
+        <p class="rounded-lg border border-slate-800 bg-slate-950/50 px-3 py-2 text-xs text-slate-400" role="note">
           Endereço, cidade, UF, CEP e CNPJ são carregados automaticamente da planilha da Simpress ao atualizar as planilhas.
         </p>
 
@@ -1434,7 +1434,7 @@ Horário disponível para atendimento:</textarea>
 
       <!-- Modal Footer -->
       <div class="pt-4 border-t border-slate-800 flex justify-between items-center shrink-0">
-        <span class="text-[11px] text-slate-400">Grava no arquivo Excel físico e atualiza a tela na hora.</span>
+        <span class="text-xs text-slate-400">Grava no arquivo Excel físico e atualiza a tela na hora.</span>
         <div class="flex space-x-2">
           <button
             type="button"
@@ -1471,7 +1471,7 @@ Horário disponível para atendimento:</textarea>
       </div>
       <label for="edit-apelido-isolado" class="block text-xs text-slate-300 font-semibold mb-1">Novo apelido / hostname</label>
       <input type="text" id="edit-apelido-isolado" class="w-full px-3 py-2.5 rounded-lg glass-input text-white font-mono focus:outline-none" autocomplete="off" />
-      <p id="apelido-serial-contexto" class="text-[11px] text-slate-500 font-mono mt-2"></p>
+      <p id="apelido-serial-contexto" class="text-xs text-slate-500 font-mono mt-2"></p>
       <div class="flex justify-end gap-2 mt-6 pt-4 border-t border-slate-800">
         <button type="button" data-on-click="fecharModalEditarApelido" class="px-4 py-2 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-300 text-xs transition">Cancelar</button>
         <button type="button" id="btn-salvar-apelido" data-on-click="salvarApelido" class="px-4 py-2 rounded-lg bg-sky-700 hover:bg-sky-800 text-white font-bold text-xs transition">Salvar apelido</button>
@@ -1487,7 +1487,7 @@ Horário disponível para atendimento:</textarea>
           <h3 class="text-base font-bold text-white flex items-center gap-2 alias-history-title">
             <i data-lucide="history" class="w-4 h-4 text-violet-400"></i>
             Histórico de alterações
-            <span id="total-historico-apelidos" class="px-2 py-0.5 rounded-full text-[10px] font-semibold alias-history-total">0 registros</span>
+            <span id="total-historico-apelidos" class="px-2 py-0.5 rounded-full text-xs font-semibold alias-history-total">0 registros</span>
             <span class="info-tip"><button type="button" class="info-tip-trigger" aria-label="Sobre o histórico de alterações" aria-describedby="tip-historico-apelidos"><i data-lucide="info" aria-hidden="true"></i></button><span id="tip-historico-apelidos" role="tooltip" class="info-tip-text">Alterações de apelido, usuário, endereço e avisos do Endpoint. Ações disponíveis aparecem ao lado de cada registro.</span></span>
           </h3>
         </div>
@@ -1646,19 +1646,19 @@ Horário disponível para atendimento:</textarea>
 
       <div class="overflow-y-auto py-4 space-y-4">
         <div class="spreadsheet-source-shortcuts" role="group" aria-label="Acessar sistemas de origem das planilhas">
-          <span class="text-[11px] font-medium text-slate-400">Abrir sistemas:</span>
+          <span class="text-xs font-medium text-slate-400">Abrir sistemas:</span>
           <a href="https://centralendpoint.pr.sebrae.com.br/webclient#/uems/inventory/computers" target="_blank" rel="noopener noreferrer" class="spreadsheet-source-link spreadsheet-source-link--endpoint" aria-label="Abrir inventário de computadores do Endpoint Central" title="Abrir inventário de computadores do Endpoint Central"><i data-lucide="link" aria-hidden="true"></i><span>Endpoint</span></a>
           <a href="https://ux.simpress.com.br/MeusEquipamentos/Index" target="_blank" rel="noopener noreferrer" class="spreadsheet-source-link spreadsheet-source-link--simpress" aria-label="Abrir Meus Equipamentos da Simpress" title="Abrir Meus Equipamentos da Simpress"><i data-lucide="link" aria-hidden="true"></i><span>Simpress</span></a>
         </div>
         <section class="rounded-xl border border-cyan-500/20 bg-cyan-500/5 p-4" aria-labelledby="entra-import-title">
           <h4 id="entra-import-title" class="text-sm font-semibold text-cyan-100">Nomes do Microsoft Entra</h4>
-          <p class="mt-1 text-[11px] text-slate-400">Importe o CSV exportado do Entra. Somente contas @pr.sebrae.com.br serão usadas; os inventários abaixo não serão alterados.</p>
+          <p class="mt-1 text-xs text-slate-400">Importe o CSV exportado do Entra. Somente contas @pr.sebrae.com.br serão usadas; os inventários abaixo não serão alterados.</p>
           <form class="mt-3 flex flex-wrap items-end gap-2" data-on-submit="importarNomesEntra">
             <label for="entra-csv-file" class="min-w-0 flex-1 text-xs text-slate-300">Arquivo CSV
               <input id="entra-csv-file" type="file" accept=".csv,text/csv" aria-describedby="entra-csv-name" class="peer sr-only" />
               <span class="mt-1 flex min-w-0 items-center gap-3 rounded-lg peer-focus-visible:ring-2 peer-focus-visible:ring-cyan-400/60">
                 <span aria-hidden="true" class="shrink-0 cursor-pointer rounded-lg bg-sky-500/15 px-3 py-2 text-xs font-semibold text-sky-300 transition-colors hover:bg-sky-500/25 hover:text-sky-200">Escolher arquivo</span>
-                <span id="entra-csv-name" class="min-w-0 truncate text-[11px] text-slate-400" aria-live="polite">Nenhum arquivo selecionado</span>
+                <span id="entra-csv-name" class="min-w-0 truncate text-xs text-slate-400" aria-live="polite">Nenhum arquivo selecionado</span>
               </span>
             </label>
             <button type="submit" id="btn-importar-nomes-entra" class="btn btn-secondary equipment-user-button">Importar nomes</button>
@@ -1669,30 +1669,30 @@ Horário disponível para atendimento:</textarea>
         <p id="upload-impacto-aviso" class="text-xs rounded-lg px-3 py-2 bg-amber-500/10 border border-amber-500/25 text-amber-200">Ao confirmar, as duas bases ativas serão substituídas pelos arquivos selecionados. Séries ausentes de cada arquivo novo serão removidas daquela fonte; confira as contagens por fonte antes de confirmar.</p>
         <label class="block bg-slate-950/60 border border-slate-800 rounded-xl p-4">
           <span class="block text-sm text-white font-semibold">1. Endpoint</span>
-          <span class="block text-[11px] text-slate-400 mt-1">Precisa ter nome do computador e rótulo de serviço/número de série.</span>
+          <span class="block text-xs text-slate-400 mt-1">Precisa ter nome do computador e rótulo de serviço/número de série.</span>
           <input id="upload-endpoint-file" type="file" accept=".xlsx,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" aria-describedby="upload-endpoint-name" class="peer sr-only" />
           <span class="mt-3 flex min-w-0 items-center gap-3 rounded-lg peer-focus-visible:ring-2 peer-focus-visible:ring-cyan-400/60">
             <span aria-hidden="true" class="shrink-0 cursor-pointer rounded-lg bg-sky-500/15 px-3 py-2 text-xs font-semibold text-sky-300 transition-colors hover:bg-sky-500/25 hover:text-sky-200">Escolher arquivo</span>
-            <span id="upload-endpoint-name" class="min-w-0 truncate text-[11px] text-slate-400" aria-live="polite">Nenhum arquivo selecionado</span>
+            <span id="upload-endpoint-name" class="min-w-0 truncate text-xs text-slate-400" aria-live="polite">Nenhum arquivo selecionado</span>
           </span>
         </label>
 
         <label class="block bg-slate-950/60 border border-slate-800 rounded-xl p-4">
           <span class="block text-sm text-white font-semibold">2. Simpress</span>
-          <span class="block text-[11px] text-slate-400 mt-1">Exporte o inventário completo de 50 colunas, incluindo o CNPJ de instalação. Aceita .xlsx ou o ZIP original com uma única planilha .xlsx.</span>
+          <span class="block text-xs text-slate-400 mt-1">Exporte o inventário completo de 50 colunas, incluindo o CNPJ de instalação. Aceita .xlsx ou o ZIP original com uma única planilha .xlsx.</span>
           <input id="upload-details-file" type="file" accept=".xlsx,.zip,application/zip,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" aria-describedby="upload-details-name" class="peer sr-only" />
           <span class="mt-3 flex min-w-0 items-center gap-3 rounded-lg peer-focus-visible:ring-2 peer-focus-visible:ring-cyan-400/60">
             <span aria-hidden="true" class="shrink-0 cursor-pointer rounded-lg bg-sky-500/15 px-3 py-2 text-xs font-semibold text-sky-300 transition-colors hover:bg-sky-500/25 hover:text-sky-200">Escolher arquivo</span>
-            <span id="upload-details-name" class="min-w-0 truncate text-[11px] text-slate-400" aria-live="polite">Nenhum arquivo selecionado</span>
+            <span id="upload-details-name" class="min-w-0 truncate text-xs text-slate-400" aria-live="polite">Nenhum arquivo selecionado</span>
           </span>
         </label>
 
-        <p class="text-[11px] text-slate-500">Envie sempre os dois inventários, inclusive no primeiro acesso. Cada arquivo e a planilha extraída do ZIP podem ter até 60 MB. Endereço e localidade são sincronizados com a Simpress. Apelidos manuais prevalecem, e divergências aparecem no histórico.</p>
+        <p class="text-xs text-slate-500">Envie sempre os dois inventários, inclusive no primeiro acesso. Cada arquivo e a planilha extraída do ZIP podem ter até 60 MB. Endereço e localidade são sincronizados com a Simpress. Apelidos manuais prevalecem, e divergências aparecem no histórico.</p>
         <label class="flex items-start gap-3 rounded-xl border border-cyan-500/20 bg-cyan-500/5 p-3 text-xs text-slate-300">
           <input id="auto-export-history-after-update" type="checkbox" class="mt-0.5 h-4 w-4 shrink-0 accent-cyan-400" />
           <span>
             <span class="block font-semibold text-cyan-100">Baixar o Histórico de Planilhas automaticamente</span>
-            <span class="mt-1 block text-[11px] text-slate-400">Após cada atualização, exporta os registros e as anotações do dia. Esta preferência fica salva neste navegador.</span>
+            <span class="mt-1 block text-xs text-slate-400">Após cada atualização, exporta os registros e as anotações do dia. Esta preferência fica salva neste navegador.</span>
           </span>
         </label>
         <p id="upload-planilhas-preview" class="hidden text-xs rounded-lg px-3 py-2" role="status" aria-live="polite" aria-atomic="true"></p>
@@ -1746,15 +1746,15 @@ Horário disponível para atendimento:</textarea>
       <p id="contato-origem-ambiente" class="hidden">Campos bloqueados vêm das variáveis de ambiente <code>SIMPRESS_TRANSFER_ORIGIN_*</code> e têm prioridade sobre o arquivo.</p>
       <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
         <div class="sm:col-span-2">
-          <label for="contato-origem-nome" class="block text-[11px] text-slate-400 mb-1">Nome: <span class="required-mark" aria-hidden="true">*</span></label>
+          <label for="contato-origem-nome" class="block text-xs text-slate-400 mb-1">Nome: <span class="required-mark" aria-hidden="true">*</span></label>
           <input type="text" id="contato-origem-nome" maxlength="160" required autocomplete="name" class="w-full px-3 py-2 rounded-lg glass-input text-xs text-slate-200 focus:outline-none" />
         </div>
         <div>
-          <label for="contato-origem-email" class="block text-[11px] text-slate-400 mb-1">E-mail: <span class="required-mark" aria-hidden="true">*</span></label>
+          <label for="contato-origem-email" class="block text-xs text-slate-400 mb-1">E-mail: <span class="required-mark" aria-hidden="true">*</span></label>
           <input type="email" id="contato-origem-email" maxlength="254" required autocomplete="email" class="w-full px-3 py-2 rounded-lg glass-input text-xs text-slate-200 focus:outline-none" />
         </div>
         <div>
-          <label for="contato-origem-telefone" class="block text-[11px] text-slate-400 mb-1">Celular: <span class="required-mark" aria-hidden="true">*</span></label>
+          <label for="contato-origem-telefone" class="block text-xs text-slate-400 mb-1">Celular: <span class="required-mark" aria-hidden="true">*</span></label>
           <input type="text" id="contato-origem-telefone" maxlength="64" required inputmode="tel" autocomplete="tel" placeholder="(00) 9xxxx-xxxx" class="w-full px-3 py-2 rounded-lg glass-input text-xs text-slate-200 focus:outline-none font-mono" />
         </div>
       </div>
@@ -1775,7 +1775,7 @@ Horário disponível para atendimento:</textarea>
       <form id="form-relatorio-mensal" class="monthly-report-form" aria-labelledby="titulo-relatorio-mensal" novalidate data-on-submit="exportarRelatorioMensal">
         <p id="relatorio-mensal-descricao">Planilha para o gestor do contrato com o inventário da base oficial na Simpress, a última comparação do mês, as OS abertas, concluídas e pendentes e o uso do sistema no mês.</p>
         <div>
-          <label for="relatorio-mensal-mes" class="block text-[11px] text-slate-400 mb-1">Mês: <span class="required-mark" aria-hidden="true">*</span></label>
+          <label for="relatorio-mensal-mes" class="block text-xs text-slate-400 mb-1">Mês: <span class="required-mark" aria-hidden="true">*</span></label>
           <input type="month" id="relatorio-mensal-mes" name="mes" required min="2000-01" aria-describedby="relatorio-mensal-descricao" class="w-full px-3 py-2 rounded-lg glass-input text-xs text-slate-200 focus:outline-none" />
         </div>
         <p id="status-relatorio-mensal" role="status" aria-live="polite" aria-atomic="true"></p>
@@ -1824,7 +1824,7 @@ Horário disponível para atendimento:</textarea>
         <label for="filtro-evolucao-categoria" class="text-xs text-slate-300">Categoria<select id="filtro-evolucao-categoria" class="mt-1 block w-full rounded-lg border border-slate-700 bg-slate-950 px-3 py-2 text-sm text-white"><option value="">Todas as categorias</option><option value="novos">Novos</option><option value="resolvidos">Deixaram de aparecer</option><option value="continuam">Continuam</option></select></label>
         <button type="button" id="btn-limpar-filtros-evolucao" class="self-end rounded-lg border border-slate-700 px-4 py-2 text-xs text-slate-300 hover:bg-slate-800">Limpar filtros</button>
       </div>
-      <p id="filtro-evolucao-status" class="shrink-0 text-[11px] text-slate-400" role="status" aria-live="polite" aria-atomic="true"></p>
+      <p id="filtro-evolucao-status" class="shrink-0 text-xs text-slate-400" role="status" aria-live="polite" aria-atomic="true"></p>
       <div id="resultado-evolucao-atualizacoes" aria-label="Resultado da comparação entre atualizações" aria-live="polite" class="overflow-auto flex-1 space-y-3"></div>
       <div class="pt-3 border-t border-slate-800 flex justify-end shrink-0"><button type="button" data-on-click="fecharEvolucaoAtualizacoes" class="px-4 py-2 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-300 text-xs">Fechar</button></div>
     </div>
@@ -1839,7 +1839,7 @@ Horário disponível para atendimento:</textarea>
         <details id="painel-dados-acompanhamento-chamados" class="ticket-disclosure rounded-lg border border-slate-800 bg-slate-950/50 px-3 py-2">
           <summary class="ticket-disclosure-summary flex min-h-9 items-center justify-between gap-3 text-xs font-semibold text-slate-200">
             <span>Importação e histórico</span>
-            <span id="versao-atual-acompanhamento-chamados" class="min-w-0 truncate text-right text-[11px] font-normal text-slate-500">Nenhuma importação</span>
+            <span id="versao-atual-acompanhamento-chamados" class="min-w-0 truncate text-right text-xs font-normal text-slate-500">Nenhuma importação</span>
           </summary>
           <div class="space-y-3 pt-3">
             <form id="form-importar-acompanhamento-chamados" class="grid grid-cols-1 gap-3 border-b border-slate-800 pb-3 md:grid-cols-[1fr_1fr_auto] md:items-end">
@@ -1848,7 +1848,7 @@ Horário disponível para atendimento:</textarea>
                 <input id="arquivo-chamados-simpress" name="simpress_file" type="file" accept=".xlsx,.zip,application/zip,application/x-zip-compressed,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" aria-describedby="arquivo-chamados-simpress-ajuda nome-arquivo-chamados-simpress" tabindex="-1" aria-hidden="true" class="sr-only">
                 <div class="mt-1 flex min-h-[54px] w-full min-w-0 items-center gap-3 rounded-lg border border-slate-700 bg-slate-950 px-2 py-1.5">
                   <button id="btn-escolher-arquivo-chamados-simpress" type="button" aria-label="Escolher arquivo do Acompanhamento de Pedidos da Simpress" aria-controls="arquivo-chamados-simpress" class="shrink-0 rounded-md bg-slate-800 px-3 py-2 text-xs font-semibold text-slate-200 transition-colors hover:bg-slate-700 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-cyan-400/60">Escolher arquivo</button>
-                  <span id="nome-arquivo-chamados-simpress" class="min-w-0 truncate text-[11px] text-slate-400" aria-live="polite">Nenhum arquivo selecionado</span>
+                  <span id="nome-arquivo-chamados-simpress" class="min-w-0 truncate text-xs text-slate-400" aria-live="polite">Nenhum arquivo selecionado</span>
                 </div>
               </div>
               <div class="min-w-0">
@@ -1856,12 +1856,12 @@ Horário disponível para atendimento:</textarea>
                 <input id="arquivo-chamados-oracle" name="oracle_file" type="file" accept=".xlsx,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" aria-describedby="nome-arquivo-chamados-oracle" tabindex="-1" aria-hidden="true" required class="sr-only">
                 <div class="mt-1 flex min-h-[54px] w-full min-w-0 items-center gap-3 rounded-lg border border-slate-700 bg-slate-950 px-2 py-1.5">
                   <button id="btn-escolher-arquivo-chamados-oracle" type="button" aria-label="Escolher arquivo do Oracle - Gestão de Solicitações" aria-controls="arquivo-chamados-oracle" class="shrink-0 rounded-md bg-slate-800 px-3 py-2 text-xs font-semibold text-slate-200 transition-colors hover:bg-slate-700 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-cyan-400/60">Escolher arquivo</button>
-                  <span id="nome-arquivo-chamados-oracle" class="min-w-0 truncate text-[11px] text-slate-400" aria-live="polite">Nenhum arquivo selecionado</span>
+                  <span id="nome-arquivo-chamados-oracle" class="min-w-0 truncate text-xs text-slate-400" aria-live="polite">Nenhum arquivo selecionado</span>
                 </div>
               </div>
               <button id="btn-importar-acompanhamento-chamados" type="submit" class="rounded-lg border border-cyan-400/30 bg-cyan-500/15 px-4 py-2.5 text-xs font-semibold text-cyan-100 hover:bg-cyan-500/25 md:mb-2">Importar planilhas</button>
-              <p id="arquivo-chamados-simpress-ajuda" class="text-[11px] text-slate-500 md:col-span-3">Cada arquivo pode ter até 60 MB. Simpress aceita .xlsx ou ZIP com uma única planilha .xlsx.</p>
-              <p id="status-importacao-chamados" class="text-[11px] text-slate-400 md:col-span-3" role="status" aria-live="polite"></p>
+              <p id="arquivo-chamados-simpress-ajuda" class="text-xs text-slate-500 md:col-span-3">Cada arquivo pode ter até 60 MB. Simpress aceita .xlsx ou ZIP com uma única planilha .xlsx.</p>
+              <p id="status-importacao-chamados" class="text-xs text-slate-400 md:col-span-3" role="status" aria-live="polite"></p>
             </form>
             <div id="resumo-acompanhamento-chamados" class="shrink-0"></div>
             <div class="grid grid-cols-1 gap-2 md:grid-cols-[minmax(0,1fr)_auto]">
@@ -1882,7 +1882,7 @@ Horário disponível para atendimento:</textarea>
         </div>
       </div>
       <div id="triagem-diaria-acompanhamento-chamados" class="shrink-0 pb-2"></div>
-      <p id="contagem-acompanhamento-chamados" class="shrink-0 text-[11px] text-slate-500" role="status" aria-live="polite"></p>
+      <p id="contagem-acompanhamento-chamados" class="shrink-0 text-xs text-slate-500" role="status" aria-live="polite"></p>
       <div id="lista-acompanhamento-chamados" aria-live="polite" class="space-y-3 py-2"></div>
       </div>
       <div class="pt-3 border-t border-slate-800 flex justify-end shrink-0"><button type="button" data-on-click="fecharAcompanhamentoChamados" class="px-4 py-2 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-300 text-xs">Fechar</button></div>
