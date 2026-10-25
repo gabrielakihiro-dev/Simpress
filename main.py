@@ -2108,7 +2108,7 @@ async def atualizar_planilhas(
 async def atualizar_planilhas_endpoint(
     endpoint_file: UploadFile = File(...),
     details_file: UploadFile = File(...),
-    preview_token: Optional[str] = Form(None, min_length=66, max_length=90),
+    preview_token: str = Form(..., min_length=66, max_length=90),
 ):
     return await atualizar_planilhas(endpoint_file, details_file, preview_token=preview_token)
 
