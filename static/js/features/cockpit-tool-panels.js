@@ -284,7 +284,8 @@
         const button = element("button", "cockpit-tool-list-button");
         button.type = "button";
         button.setAttribute("aria-pressed", String(record.serie === selectedTicketSerial));
-        button.append(element("strong", "cockpit-tool-mono", record.serie || "Série sem identificação"));
+        const serieText = record.serie || "Série sem identificação";
+        button.append(Object.assign(element("strong", "cockpit-tool-mono", serieText), { title: serieText }));
         button.append(element("span", `cockpit-tool-badge cockpit-tool-badge--${relationTones[record.relacao] || "neutral"}`, relationText(record)));
         button.append(element("small", "", `Oracle ${oracle.length} · Simpress ${simpress.length}`));
         button.addEventListener("click", () => { selectedTicketSerial = String(record.serie || ""); renderTickets(); });
@@ -392,7 +393,10 @@
       ];
       values.forEach((value, index) => {
         const cell = element(index === 0 ? "strong" : "span", index === 0 ? "cockpit-tool-mono" : "", value);
-        cell.setAttribute("aria-label", `${["Série", "Modelo", "Local · Simpress", "Local · Endpoint", "Usuário · Simpress", "Usuário · Endpoint", "Resultado"][index]}: ${value}`);
+        const columnLabel = ["Série", "Modelo", "Local · Simpress", "Local · Endpoint", "Usuário · Simpress", "Usuário · Endpoint", "Resultado"][index];
+        cell.setAttribute("aria-label", `${columnLabel}: ${value}`);
+        cell.dataset.label = columnLabel;
+        cell.title = value;
         if (index === 6) cell.classList.add("cockpit-tool-badge", `cockpit-tool-badge--${comparisonTones[row.categoria] || "neutral"}`);
         button.append(cell);
       });
@@ -793,7 +797,7 @@
       const button = element("button", "cockpit-tool-list-button");
       button.type = "button";
       button.setAttribute("aria-pressed", String(String(event.id || "") === selectedAliasId));
-      button.append(element("strong", "", event.serial || "Série indisponível"));
+      button.append(Object.assign(element("strong", "", event.serial || "Série indisponível"), { title: event.serial || "Série indisponível" }));
       button.append(element("span", "cockpit-tool-badge", aliasTypeLabel(event.tipo)));
       button.append(element("small", "", `${event.horario || "Data indisponível"} · ${event.tipo === "aviso_endpoint"
         ? event.motivo || "Aviso do Endpoint" : `${aliasValue(event, true) || "(vazio)"} → ${aliasValue(event) || "(vazio)"}`}`));

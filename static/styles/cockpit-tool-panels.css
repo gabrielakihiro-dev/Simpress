@@ -1,3 +1,4 @@
+/* Faixas: compacto <= 767.98px | médio 768px–1199.98px | amplo >= 1200px (idêntico ao artefato). */
 /* Dedicated tool workspaces opened from the Cockpit's nine-dot menu. */
 .cockpit-shell .cockpit-tool-panels[hidden],
 .cockpit-shell .cockpit-tool-panel[hidden] { display: none; }
@@ -5,7 +6,7 @@
 
 .cockpit-shell .cockpit-tool-panels {
   display: flex;
-  height: calc(100dvh - 48px);
+  height: calc(100dvh - var(--cockpit-bar-h, 48px));
   min-height: 0;
   flex-direction: column;
   overflow: hidden;
@@ -219,10 +220,42 @@
 .cockpit-monthly-preview h2 { margin: 0 0 10px; color: var(--cockpit-text); font-size: 13px; }
 .cockpit-monthly-preview pre { margin: 0; color: var(--cockpit-text); font: 11px/1.65 "JetBrains Mono", ui-monospace, monospace; white-space: pre-wrap; overflow-wrap: anywhere; }
 
-@media (max-width: 760px) {
-  .cockpit-tool-split { grid-template-columns: minmax(520px, 1fr) minmax(380px, 420px); }
-  .cockpit-monthly-layout { grid-template-columns: minmax(700px, 1fr) minmax(360px, 420px); }
-  .cockpit-tool-list { border-right: 1px solid var(--cockpit-border); }
+/* Médio e compacto: o detalhe desce para baixo da lista e o painel inteiro rola. */
+@media (max-width: 1199.98px) {
+  .cockpit-tool-split,
+  .cockpit-monthly-layout { display: block; flex: none; min-height: 0; }
+  .cockpit-tool-list { overflow: visible; border-right: 0; border-bottom: 1px solid var(--cockpit-border); }
+  #cockpit-comparison-list { overflow-x: visible; }
+  .cockpit-monthly-layout > .cockpit-tool-detail { border-right: 0; border-bottom: 1px solid var(--cockpit-border); }
+  .cockpit-tool-detail,
+  .cockpit-monthly-preview { overflow: visible; }
+  .cockpit-comparison-columns,
+  .cockpit-comparison-row,
+  .cockpit-tool-list-button.cockpit-comparison-row { min-width: 0; }
+  .cockpit-tool-filter-note { margin-left: 0; }
+}
+
+/* Compacto: cada linha da Comparação vira card (rótulo via data-label + valor). */
+@media (max-width: 767.98px) {
+  .cockpit-tool-header { flex-wrap: wrap; gap: 8px; }
+  .cockpit-tool-toolbar > label { min-width: 0; flex: 1 1 100%; }
+  .cockpit-comparison-columns { display: none; }
+  .cockpit-tool-list-button.cockpit-comparison-row { display: block; padding: 0; }
+  .cockpit-comparison-row > strong,
+  .cockpit-comparison-row > span {
+    display: grid;
+    grid-template-columns: minmax(84px, 0.8fr) minmax(0, 1.4fr);
+    gap: 8px;
+    padding: 5px 12px;
+    overflow: visible;
+    white-space: normal;
+    overflow-wrap: anywhere;
+  }
+  .cockpit-comparison-row > .cockpit-tool-badge { max-width: none; border-radius: 0; }
+  .cockpit-comparison-row > strong::before,
+  .cockpit-comparison-row > span::before { content: attr(data-label); color: var(--cockpit-text-subtle); font-size: 9px; font-weight: 400; }
+  .cockpit-tool-fields { grid-template-columns: minmax(0, 1fr); }
+  .cockpit-tool-fields dt { padding-bottom: 0; border-bottom: 0; }
 }
 
 @media (prefers-reduced-motion: reduce) {

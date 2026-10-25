@@ -54,7 +54,9 @@ test("comparison fields stay in columns and survive an empty history refresh", a
   const row = page.locator(".cockpit-comparison-row").first();
   await expect(row).toContainText("LENTO");
   const cells = await row.locator(":scope > *").evaluateAll(nodes => nodes.map(node => node.getBoundingClientRect().y));
-  expect(Math.max(...cells) - Math.min(...cells)).toBeLessThan(5);
+  // Compacto (< 768px): a linha vira card e os campos empilham; a partir de 768px ficam em colunas.
+  if (page.viewportSize().width >= 768) expect(Math.max(...cells) - Math.min(...cells)).toBeLessThan(5);
+  else expect(Math.max(...cells)).toBeGreaterThan(Math.min(...cells));
   await page.route("**/api/historico-comparacoes", route => route.fulfill({ json: { eventos: [] } }));
   await page.locator("#cockpit-comparison-refresh").click();
   await expect(page.locator("#cockpit-comparison-export")).toBeDisabled();
