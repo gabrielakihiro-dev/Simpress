@@ -422,6 +422,22 @@
       menu.open = false;
       byId("cockpit-tools-trigger")?.focus();
     }, true);
+    // Compact bar: chips and status live behind a toggle (aria-expanded) that Esc or an outside click closes.
+    const statusToggle = byId("cockpit-bar-status-toggle");
+    const statusPanel = byId("cockpit-bar-status");
+    const setStatusOpen = open => {
+      statusToggle?.setAttribute("aria-expanded", String(open));
+      statusPanel?.classList.toggle("is-open", open);
+    };
+    statusToggle?.addEventListener("click", () => setStatusOpen(statusToggle.getAttribute("aria-expanded") !== "true"));
+    doc.addEventListener("click", event => {
+      if (statusToggle && !statusToggle.contains(event.target) && !statusPanel?.contains(event.target)) setStatusOpen(false);
+    });
+    doc.addEventListener("keydown", event => {
+      if (event.key !== "Escape" || statusToggle?.getAttribute("aria-expanded") !== "true") return;
+      setStatusOpen(false);
+      statusToggle.focus();
+    });
     const resetTip = event => {
       const tip = event.target?.closest?.(".info-tip");
       if (tip && !tip.contains(event.relatedTarget)) tip.removeAttribute("data-tip-dismissed");

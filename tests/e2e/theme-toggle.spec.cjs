@@ -1,6 +1,6 @@
 const { test, expect } = require("@playwright/test");
 
-test("the Cockpit tools remain reachable in narrow windows in both themes", async ({ page }) => {
+test("the Cockpit tools remain reachable in narrow windows without horizontal scrolling in both themes", async ({ page }) => {
   await page.goto("/");
   for (const theme of ["dark", "light"]) {
     await page.locator("html").evaluate((root, value) => { root.dataset.theme = value; }, theme);
@@ -12,7 +12,7 @@ test("the Cockpit tools remain reachable in narrow windows in both themes", asyn
       await expect(page.locator("#cockpit-tools-trigger")).toBeFocused();
       await expect(page.locator("#cockpit-tools-dropdown")).not.toHaveAttribute("open", "");
       const widths = await page.evaluate(() => ({ viewport: document.documentElement.clientWidth, body: document.body.scrollWidth }));
-      expect(widths.body).toBeGreaterThanOrEqual(Math.max(1200, widths.viewport));
+      expect(widths.body).toBeLessThanOrEqual(widths.viewport);
     }
   }
 });

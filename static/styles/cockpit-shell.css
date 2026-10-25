@@ -1,19 +1,20 @@
-/* Cockpit shell — barra superior 48px */
-html:has(> .cockpit-shell-body) { width: 100%; overflow-x: auto; }
+/* Cockpit shell — barra superior 48px
+ * Faixas responsivas (iguais em todos os CSS do Cockpit; @media não aceita variáveis):
+ *   compacto: @media (max-width: 767.98px)
+ *   médio:    @media (min-width: 768px) and (max-width: 1199.98px)
+ *   amplo:    @media (min-width: 1200px)  -> idêntico ao artefato do Cockpit
+ */
 .cockpit-shell-body {
   width: 100%;
   min-width: 0;
-  overflow-x: auto;
 }
 
-/* Fixed overlays follow the phone viewport even while the Cockpit shell scrolls horizontally. */
+.cockpit-shell { --cockpit-bar-h: 48px; }
+
+/* Fixed overlays follow the phone viewport. */
 .cockpit-shell-body > .modal-overlay {
   width: 100dvw;
   height: 100dvh;
-}
-
-#simpress-app-shell.cockpit-shell {
-  min-width: 1200px;
 }
 
 .cockpit-bar {
@@ -112,11 +113,13 @@ html:has(> .cockpit-shell-body) { width: 100%; overflow-x: auto; }
 /* Search */
 .cockpit-bar__search {
   position: relative;
-  flex-shrink: 0;
+  flex: 1 1 340px;
+  min-width: 0;
+  max-width: 340px;
 }
 
 .cockpit-search-input {
-  width: 340px;
+  width: 100%;
   height: 32px;
   padding: 0 12px;
   padding-right: 56px;
@@ -608,3 +611,73 @@ html:has(> .cockpit-shell-body) { width: 100%; overflow-x: auto; }
 .cockpit-shell .cockpit-tools-dropdown__item.hidden,
 .cockpit-shell .cockpit-home-inline-actions.hidden { display: none; }
 .cockpit-shell [hidden] { display: none !important; }
+
+/* ── Barra responsiva ── */
+.cockpit-bar__status-toggle { display: none; }
+
+@media (min-width: 768px) and (max-width: 1199.98px) {
+  .cockpit-bar { gap: 6px; padding: 0 8px; }
+  .cockpit-bar__brand-name { display: none; }
+  .cockpit-bar__spacer { display: none; }
+  .cockpit-bar__chips { flex-shrink: 1; min-width: 0; gap: 6px; }
+  .cockpit-bar__chips .cockpit-chip { max-width: 140px; padding: 0 8px; }
+  .cockpit-chip__label { overflow: hidden; text-overflow: ellipsis; }
+  .cockpit-search-shortcut { display: none; }
+}
+
+@media (min-width: 768px) and (max-width: 1023.98px) {
+  .cockpit-tab span { display: none; }
+  .cockpit-tab { width: 32px; padding: 0; justify-content: center; }
+  .cockpit-bar__chips .cockpit-chip { max-width: 96px; }
+}
+
+@media (max-width: 767.98px) {
+  .cockpit-shell { --cockpit-bar-h: 92px; }
+  .cockpit-bar {
+    display: grid;
+    grid-template-columns: auto minmax(0, 1fr) auto auto auto;
+    grid-template-rows: 48px 44px;
+    align-items: center;
+    height: var(--cockpit-bar-h);
+    padding: 0 8px;
+    gap: 0 4px;
+  }
+  .cockpit-bar__brand { grid-row: 1; grid-column: 1; }
+  .cockpit-bar__brand-name,
+  .cockpit-bar__spacer,
+  .cockpit-search-shortcut,
+  .cockpit-tab span { display: none; }
+  .cockpit-bar__tabs { grid-row: 1; grid-column: 2; min-width: 0; }
+  .cockpit-tab { width: 32px; padding: 0; justify-content: center; }
+  .cockpit-bar__search { grid-row: 2; grid-column: 1 / -1; max-width: none; }
+  .cockpit-bar__status-toggle { display: inline-flex; grid-row: 1; }
+  .cockpit-bar__status-toggle { grid-column: 3; }
+  .cockpit-bar__tools { grid-row: 1; grid-column: 4; }
+  .cockpit-bar__actions { grid-row: 1; grid-column: 5; }
+  .cockpit-bar__chips {
+    display: none;
+    position: absolute;
+    top: 100%;
+    right: 8px;
+    z-index: 60;
+    flex-direction: column;
+    align-items: stretch;
+    padding: 8px;
+    background: var(--color-surface);
+    border: 1px solid var(--color-neutral-800);
+    border-radius: var(--radius-md);
+    box-shadow: var(--shadow-lg);
+  }
+  .cockpit-bar__chips.is-open { display: flex; }
+  .cockpit-chip__panel { position: static; border: 0; box-shadow: none; padding: 8px 0 0; }
+  .cockpit-bar__chips { width: min(360px, calc(100vw - 16px)); max-height: calc(100dvh - var(--cockpit-bar-h) - 16px); overflow-y: auto; }
+  .cockpit-bar__chips #readiness-panel { display: block; height: auto; min-height: 28px; padding: 0 10px; }
+  .cockpit-bar__chips #readiness-panel > summary { display: flex; align-items: center; gap: 6px; height: 26px; }
+  .cockpit-tools-dropdown__menu { max-width: calc(100vw - 16px); }
+  .cockpit-shell #autocomplete-box { top: calc(100% + 6px); }
+}
+
+@media (max-width: 359.98px) {
+  .cockpit-bar__brand { display: none; }
+  .cockpit-bar__tabs { grid-column: 1 / 3; }
+}

@@ -245,3 +245,14 @@ body.has-quick-actions { padding-bottom: 0; }
   .cockpit-shell .cockpit-summary-kpi,
   .cockpit-shell .cockpit-automation-event { transition: none; }
 }
+
+/* Fase 2: sem a largura mínima de 1200px, a Automação empilha (ajuste completo na fase 3). */
+@media (max-width: 1199.98px) {
+  .cockpit-shell #automacao-cards {
+    height: auto;
+    grid-template-columns: minmax(0, 1fr);
+    grid-template-rows: none;
+    grid-template-areas: "alert" "controls" "sebrae" "console" "history";
+    overflow: visible;
+  }
+}

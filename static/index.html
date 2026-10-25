@@ -30,7 +30,7 @@
 
   <div id="simpress-app-shell" class="simpress-app-shell cockpit-shell">
 <header class="cockpit-bar" role="banner">
-<div class="cockpit-bar__brand" aria-label="Simpress, gestão de equipamentos">
+<div class="cockpit-bar__brand" role="group" aria-label="Simpress, gestão de equipamentos">
 <i data-lucide="box" class="cockpit-bar__brand-mark" aria-hidden="true"></i>
 <strong class="cockpit-bar__brand-name">Simpress</strong>
 </div>
@@ -93,7 +93,10 @@ data-on-keydown="handleSerialKeydown" data-args='["$event"]'
   </div>
 </div>
 </form>
-<div class="cockpit-bar__chips">
+<button type="button" id="cockpit-bar-status-toggle" class="cockpit-action-button cockpit-bar__status-toggle" aria-label="Status do sistema" aria-controls="cockpit-bar-status" aria-expanded="false" title="Status do sistema">
+<span class="cockpit-tools-dots" aria-hidden="true"></span>
+</button>
+<div id="cockpit-bar-status" class="cockpit-bar__chips">
 <details id="readiness-panel" class="cockpit-chip readiness-panel" data-state="loading" aria-labelledby="readiness-title" aria-busy="true">
 <summary class="cockpit-chip__trigger" aria-controls="readiness-content">
 <span id="stat-base-dot" class="cockpit-chip__dot dot-ok" aria-hidden="true"></span>
@@ -237,6 +240,8 @@ data-on-keydown="handleSerialKeydown" data-args='["$event"]'
 
     <!-- COLUNA DIREITA: Detalhe do equipamento -->
     <section class="cockpit-home-detail" aria-label="Detalhes do equipamento selecionado">
+
+      <button type="button" id="btn-home-voltar-lista" class="cockpit-home-back btn btn-secondary" data-on-click="voltarListaHome">Voltar</button>
 
       <section id="alerta-base-desatualizada" class="stale-base-alert" role="status" aria-labelledby="alerta-base-desatualizada-titulo" data-state="loading" hidden>
         <i data-lucide="alert-triangle" class="stale-base-alert-icon" aria-hidden="true"></i>
@@ -1261,8 +1266,8 @@ Horário disponível para atendimento:</textarea>
           </div>
           <div id="cockpit-monthly-kpis" class="cockpit-tool-kpis" role="group" aria-label="Indicadores do relatório"></div>
           <div class="cockpit-monthly-layout">
-            <div id="cockpit-monthly-details" class="cockpit-tool-detail" aria-label="Detalhamento do mês"></div>
-            <aside class="cockpit-monthly-preview"><h2>Prévia para a gestão</h2><pre id="cockpit-monthly-preview" aria-live="polite"></pre></aside>
+            <div id="cockpit-monthly-details" class="cockpit-tool-detail" tabindex="0" role="region" aria-label="Detalhamento do mês"></div>
+            <aside class="cockpit-monthly-preview" tabindex="0" aria-label="Prévia do relatório"><h2>Prévia para a gestão</h2><pre id="cockpit-monthly-preview" aria-live="polite"></pre></aside>
           </div>
         </section>
       </section>

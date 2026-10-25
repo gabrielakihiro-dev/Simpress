@@ -59,7 +59,7 @@ test("home has no WCAG 2.2 A/AA axe violations", async ({ page }) => {
 });
 
 test("Cockpit keeps compact typography and a single tools disclosure", async ({ page }, testInfo) => {
-  await expect(page.locator(".cockpit-bar")).toHaveCSS("height", "48px");
+  await expect(page.locator(".cockpit-bar")).toHaveCSS("height", testInfo.project.name === "mobile" ? "92px" : "48px");
   const searchFontSize = testInfo.project.name === "mobile" ? "16px" : "13px";
   await expect(page.locator("#input-serial")).toHaveCSS("font-size", searchFontSize);
   await expect(page.locator("#card-equipamento")).toBeHidden();
@@ -127,7 +127,7 @@ test("search shortcuts focus Home search except while typing or with a dialog op
   const homeTab = page.locator("#tab-home");
   await expect(input).toHaveAttribute("aria-keyshortcuts", "/ Control+K Meta+K");
   const hint = page.locator(".cockpit-search-shortcut");
-  await expect(hint).toBeVisible();
+  if (testInfo.project.name !== "mobile") await expect(hint).toBeVisible();
   await expect(hint).toHaveText("Ctrl+K");
 
   await openSidebarIfNeeded(page);
@@ -189,6 +189,8 @@ test("recent lookups reopen the result and can be cleared", async ({ page }) => 
   await expect(recentSection.locator(".home-recent-serial")).toHaveText(["LENTO", "OUTRO"]);
   await auditAccessibility(page, "#home-recentes");
 
+  const backToList = page.locator("#btn-home-voltar-lista");
+  if (await backToList.isVisible()) await backToList.click();
   await recentSection.getByRole("button", { name: "Limpar pesquisas recentes" }).click();
   await expect(recentSection).toBeHidden();
   await expect(page.locator("#input-serial")).toBeFocused();

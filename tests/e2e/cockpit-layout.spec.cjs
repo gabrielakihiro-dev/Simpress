@@ -61,19 +61,78 @@ test("Resumo uses the latest comparison and opens its series in Home", async ({ 
   }
 });
 
-test("Cockpit keeps its full 1200px workspace reachable in narrow windows", async ({ page }) => {
+function overflowingRight(page, rootSelector) {
+  return page.evaluate(selector => {
+    const limit = document.documentElement.clientWidth + 1;
+    return [...document.querySelectorAll(`${selector}, ${selector} *`)]
+      .filter(el => {
+        const rect = el.getBoundingClientRect();
+        if (!rect.width || !rect.height || el.closest("[hidden], .hidden, .sr-only")) return false;
+        const style = getComputedStyle(el);
+        return style.visibility !== "hidden" && rect.right > limit;
+      })
+      .map(el => `${el.tagName.toLowerCase()}#${el.id}.${String(el.className).split(" ")[0]}`);
+  }, rootSelector);
+}
+
+for (const width of [320, 390, 768, 1024, 1200, 1440, 1920]) {
+  test(`Cockpit bar and Home fit a ${width}px window without horizontal scrolling`, async ({ page }) => {
+    await page.setViewportSize({ width, height: 800 });
+    await page.goto("/");
+
+    const dimensions = await page.evaluate(() => ({
+      viewport: document.documentElement.clientWidth,
+      document: document.documentElement.scrollWidth,
+      body: document.body.scrollWidth,
+    }));
+    expect(dimensions.document).toBeLessThanOrEqual(dimensions.viewport);
+    expect(dimensions.body).toBeLessThanOrEqual(dimensions.viewport);
+    await expect(page.locator(".cockpit-bar")).toBeVisible();
+    for (const id of ["tab-home", "tab-retirada-entrega", "tab-resumo", "tab-automacao", "cockpit-tools-trigger", "input-serial"]) {
+      await expect(page.locator(`#${id}`)).toBeVisible();
+    }
+    expect(await overflowingRight(page, ".cockpit-bar")).toEqual([]);
+    expect(await overflowingRight(page, "#tab-panel-home")).toEqual([]);
+    await page.locator("#cockpit-tools-trigger").click();
+    await expect(page.locator("#btn-relatorio-mensal")).toBeVisible();
+    expect(await overflowingRight(page, ".cockpit-bar")).toEqual([]);
+  });
+}
+
+test("the compact bar keeps status behind an accessible toggle that Esc closes", async ({ page }) => {
   await page.setViewportSize({ width: 390, height: 844 });
   await page.goto("/");
+  const toggle = page.locator("#cockpit-bar-status-toggle");
+  await expect(toggle).toBeVisible();
+  await expect(toggle).toHaveAttribute("aria-expanded", "false");
+  await expect(page.locator("#cockpit-bar-status")).toBeHidden();
+  await toggle.click();
+  await expect(toggle).toHaveAttribute("aria-expanded", "true");
+  await expect(page.locator("#cockpit-automation-shell-status")).toBeVisible();
+  await page.keyboard.press("Escape");
+  await expect(toggle).toHaveAttribute("aria-expanded", "false");
+  await expect(toggle).toBeFocused();
+  await expect(page.locator("#cockpit-bar-status")).toBeHidden();
+});
 
-  const dimensions = await page.evaluate(() => ({
-    viewport: document.documentElement.clientWidth,
-    document: document.documentElement.scrollWidth,
-    workspace: document.getElementById("simpress-app-shell").scrollWidth,
-    body: document.body.scrollWidth,
-  }));
-  expect(dimensions.document).toBeLessThanOrEqual(dimensions.viewport);
-  expect(dimensions.workspace).toBeGreaterThanOrEqual(1200);
-  expect(dimensions.body).toBeGreaterThanOrEqual(dimensions.workspace);
-  await page.locator("#cockpit-tools-trigger").click();
-  await expect(page.locator("#btn-relatorio-mensal")).toBeVisible();
+test("the wide bar has no status toggle and keeps the 340px search", async ({ page }) => {
+  await page.setViewportSize({ width: 1440, height: 900 });
+  await page.goto("/");
+  await expect(page.locator("#cockpit-bar-status-toggle")).toBeHidden();
+  await expect(page.locator("#cockpit-bar-status")).toBeVisible();
+  const box = await page.locator(".cockpit-bar__search").boundingBox();
+  expect(Math.round(box.width)).toBe(340);
+  expect(Math.round((await page.locator(".cockpit-bar").boundingBox()).height)).toBe(48);
+});
+
+test("compact Home goes list -> detail -> back", async ({ page }) => {
+  await page.setViewportSize({ width: 390, height: 844 });
+  await page.goto("/");
+  await expect(page.locator("#btn-home-voltar-lista")).toBeHidden();
+  await page.locator("#home-equipment-list [role=option]").first().click();
+  await expect(page.locator(".cockpit-home-detail")).toBeVisible();
+  await expect(page.locator(".cockpit-home-list")).toBeHidden();
+  await page.locator("#btn-home-voltar-lista").click();
+  await expect(page.locator(".cockpit-home-list")).toBeVisible();
+  await expect(page.locator("#btn-home-voltar-lista")).toBeHidden();
 });
