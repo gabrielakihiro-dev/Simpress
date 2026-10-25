@@ -60,6 +60,7 @@ class FakeElement {
   click() { this.clicked = true; }
   remove() { this.isConnected = false; }
   replaceChildren(...children) { this.children = children.flatMap(child => child.isDocumentFragment ? child.children : [child]); }
+  append(...children) { children.forEach(child => this.appendChild(child)); }
   appendChild(child) {
     if (child.isDocumentFragment) this.children.push(...child.children);
     else this.children.push(child);

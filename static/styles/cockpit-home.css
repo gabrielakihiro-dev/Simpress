@@ -106,6 +106,10 @@
 }
 
 .cockpit-home-autocomplete-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
   padding: 6px 10px;
   font-size: 11px;
   font-weight: 600;
@@ -113,9 +117,74 @@
   border-bottom: 1px solid var(--color-neutral-800);
 }
 
+.cockpit-home-autocomplete-hint {
+  font-weight: 400;
+  color: var(--color-neutral-500, var(--color-neutral-400));
+}
+
 .cockpit-home-autocomplete-list {
   max-height: 260px;
   overflow-y: auto;
+}
+
+.cockpit-home-autocomplete .cockpit-autocomplete-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 8px 12px;
+  min-width: 0;
+  cursor: pointer;
+  border-bottom: 1px solid var(--color-neutral-800);
+}
+
+.cockpit-home-autocomplete .cockpit-autocomplete-row:last-child {
+  border-bottom: 0;
+}
+
+.cockpit-home-autocomplete .cockpit-autocomplete-row:hover,
+.cockpit-home-autocomplete .cockpit-autocomplete-row.active {
+  background: var(--color-neutral-800);
+}
+
+.cockpit-home-autocomplete .autocomplete-dot {
+  flex: 0 0 7px;
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+}
+
+.cockpit-home-autocomplete .autocomplete-dot--ok { background: var(--cockpit-ok-fg); }
+.cockpit-home-autocomplete .autocomplete-dot--warn { background: var(--cockpit-warn-fg); }
+
+.cockpit-home-autocomplete .autocomplete-row-main {
+  display: flex;
+  flex: 1 1 auto;
+  flex-direction: column;
+  min-width: 0;
+}
+
+.cockpit-home-autocomplete .autocomplete-row-serial {
+  font-family: var(--ux-font-mono, ui-monospace, monospace);
+  font-size: 13px;
+  font-weight: 700;
+  color: var(--color-text);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.cockpit-home-autocomplete .autocomplete-row-detail {
+  overflow: hidden;
+  font-size: 12px;
+  color: var(--color-neutral-400);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.cockpit-home-autocomplete .autocomplete-row-city {
+  flex: 0 0 auto;
+  font-size: 12px;
+  color: var(--color-neutral-400);
 }
 
 .cockpit-home-autocomplete-more {
@@ -738,4 +807,105 @@
 .cockpit-home-item:focus-visible,
 .cockpit-home-pill:focus-visible {
   outline-offset: -2px;
+}
+
+/* Chamados abertos ao lado dos modelos de chamado (300px fixos) */
+.cockpit-home-bottom {
+  display: flex;
+  gap: 16px;
+  align-items: flex-start;
+  min-width: 0;
+}
+
+.cockpit-home-bottom > .cockpit-home-tickets {
+  flex: 1 1 auto;
+  min-width: 0;
+}
+
+.cockpit-home-open-tickets {
+  flex: 0 0 300px;
+  width: 300px;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  padding: 12px;
+  border: 1px solid var(--cockpit-border-soft);
+  border-radius: 6px;
+  background: var(--cockpit-surface);
+}
+
+.cockpit-home-open-tickets-header {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.cockpit-home-open-tickets-header h4 {
+  margin: 0;
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--cockpit-text);
+}
+
+.cockpit-home-open-tickets-count {
+  font-size: 12px;
+  color: var(--cockpit-text-muted);
+}
+
+.cockpit-home-open-tickets-list {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.cockpit-home-open-ticket {
+  padding: 8px 10px;
+  border: 1px solid var(--cockpit-border-soft);
+  border-radius: 6px;
+  background: var(--cockpit-bg);
+}
+
+.cockpit-home-open-ticket-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.cockpit-home-open-ticket-number {
+  font-family: var(--ux-font-mono, ui-monospace, monospace);
+  font-size: 13px;
+  color: var(--cockpit-text);
+}
+
+.cockpit-home-open-ticket-status {
+  font-size: 11px;
+  padding: 1px 8px;
+  border-radius: 999px;
+  background: var(--cockpit-accent-soft);
+  color: var(--cockpit-accent);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  max-width: 180px;
+}
+
+.cockpit-home-open-ticket-type,
+.cockpit-home-open-ticket-unit,
+.cockpit-home-open-ticket-age {
+  margin: 4px 0 0;
+  font-size: 12px;
+  color: var(--cockpit-text-muted);
+}
+
+.cockpit-home-open-tickets-empty {
+  margin: 0;
+  padding: 12px 4px;
+  font-size: 12px;
+  color: var(--cockpit-text-muted);
+  text-align: center;
 }

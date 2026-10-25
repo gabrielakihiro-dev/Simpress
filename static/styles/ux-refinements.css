@@ -485,9 +485,10 @@ html[data-ux-density="compact"] .comparison-desktop-table td {
 }
 .notification-center-badge[hidden] { display: none; }
 .notification-center-panel {
-  position: absolute;
-  top: calc(100% + var(--ux-space-2));
-  right: 0;
+  /* O painel é irmão de .cockpit-bar (48px, sticky), não filho do sino. */
+  position: fixed;
+  top: calc(48px + var(--ux-space-2));
+  right: 16px;
   z-index: var(--z-popover);
   width: min(28rem, calc(100vw - 2rem));
   max-height: min(72dvh, 36rem);
@@ -520,9 +521,14 @@ html[data-ux-density="compact"] .comparison-desktop-table td {
 #alerta-os-paradas + #alerta-divergencias-novas { margin-top: var(--ux-space-2); }
 #alerta-os-paradas .stale-base-alert-icon, #alerta-divergencias-novas .stale-base-alert-icon { width: 1rem; height: 1rem; }
 #alerta-os-paradas .stale-base-alert-copy, #alerta-divergencias-novas .stale-base-alert-copy {
-  display: flex; flex-wrap: wrap; align-items: baseline; gap: 0 var(--ux-space-2);
+  display: flex; flex-direction: column; gap: 2px;
 }
-#alerta-os-paradas .stale-base-alert-title, #alerta-divergencias-novas .stale-base-alert-title { font-size: 0.8125rem; }
+#alerta-os-paradas::before, #alerta-divergencias-novas::before {
+  content: ""; flex: none; align-self: center; width: 8px; height: 8px; border-radius: 50%; background: var(--ux-warning-fg);
+}
+#alerta-divergencias-novas::before { background: var(--ux-critical-fg); }
+#alerta-os-paradas .stale-base-alert-icon, #alerta-divergencias-novas .stale-base-alert-icon { display: none; }
+#alerta-os-paradas .stale-base-alert-title, #alerta-divergencias-novas .stale-base-alert-title { font-size: 0.8125rem; color: var(--ux-text); }
 #alerta-os-paradas .stale-base-alert-text, #alerta-divergencias-novas .stale-base-alert-text {
   margin: 0; font-size: 0.8125rem; color: var(--ux-text-muted, inherit); opacity: 0.85;
 }

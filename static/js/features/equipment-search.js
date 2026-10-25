@@ -273,7 +273,7 @@
             </button>
           </div>
         `;
-      countEl.textContent = "0 encontrados";
+      countEl.textContent = "Equipamentos · 0";
       moreResultsLabel.textContent = "Mostrar mais";
       moreResults.querySelector("button")?.removeAttribute("aria-label");
       autocompleteItemsList = [];
@@ -292,8 +292,8 @@
     list.classList.remove("hidden");
     emptyState.classList.add("hidden");
     countEl.textContent = hasMore
-      ? `${items.length} de ${total}`
-      : `${total} ${total === 1 ? "item" : "itens"}`;
+      ? `Equipamentos · ${items.length} de ${total}`
+      : `Equipamentos · ${total}`;
     moreResults.classList.toggle("hidden", !hasMore);
     const remainingResults = Math.max(0, Number(total) - items.length);
     moreResultsLabel.textContent = `Mostrar mais (${remainingResults})`;
@@ -515,6 +515,7 @@
     aliasStatus.classList.toggle("hidden", !aliasStatus.textContent);
     document.getElementById("card-id-cliente").textContent = eq.idCliente ? `Id Cliente: ${eq.idCliente}` : "";
     app.atualizarUsuarioLogadoCard(eq);
+    app.atualizarChamadosAbertosHome(eq.serial);
     document.getElementById("card-localizacao").textContent = app.formatarLocalAtual(eq);
     document.getElementById("card-cnpj-atual").textContent = `CNPJ: ${eq.retirada_cnpj || 'Não especificado'}`;
 
