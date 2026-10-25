@@ -17,6 +17,7 @@ import "./js/features/ticket-rules.js";
 import "./js/features/app-shell.js";
 import "./js/features/dashboard.js";
 import "./js/features/cockpit-summary.js";
+import "./js/features/cockpit-tool-panels.js";
 import "./js/features/regional-contacts.js";
 import "./js/features/transfer-form.js";
 import "./js/ui/equipment-search-renderers.js";

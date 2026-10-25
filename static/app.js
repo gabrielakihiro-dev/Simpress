@@ -15,6 +15,7 @@
     "shell",
     "dashboard",
     "cockpitSummary",
+    "cockpitToolPanels",
     "regionalContacts",
     "transferForm",
     "equipmentSearch",

@@ -496,12 +496,13 @@ test("keeps old ticket imports when the deletion confirmation is cancelled", asy
 test("groups secondary actions under cockpit tools dropdown", () => {
   assert.doesNotMatch(appHtml, /header-action-item--primary|sidebar-related-links|header-action-group/);
   assert.match(appHtml, /<details class="cockpit-tools-dropdown" id="cockpit-tools-dropdown">/);
-  assert.match(appHtml, /data-on-click="abrirAcompanhamentoChamados"/);
+  assert.match(appHtml, /<button[^>]*data-on-click="abrirPainelCockpit"[^>]*data-args='\["chamados"\]'[^>]*id="btn-acompanhamento-chamados"/);
+  assert.match(appHtml, /<button[^>]*data-on-click="abrirPainelCockpit"[^>]*data-args='\["apelidos"\]'[^>]*id="btn-historico-apelidos"/);
+  assert.match(appHtml, /<button[^>]*data-on-click="abrirPainelCockpit"[^>]*data-args='\["relatorio"\]'[^>]*id="btn-relatorio-mensal"/);
   assert.match(appHtml, /data-on-click="abrirModalAtualizarPlanilhas"/);
-  assert.match(appHtml, /data-on-click="abrirRelatorioMensal"/);
   assert.match(appHtml, /data-on-click="abrirModalHistoricoComparacoes"/);
   assert.match(appHtml, /data-on-click="abrirEvolucaoAtualizacoes"/);
-  assert.match(appHtml, /data-on-click="abrirModalHistoricoApelidos"/);
+  assert.doesNotMatch(appHtml, /id="btn-relatorio-mensal"[^>]*data-on-click="abrirRelatorioMensal"/);
   assert.match(appHtml, /data-on-click="abrirModalGerenciarUnidades"/);
   assert.match(appHtml, /id="badge-total-historico-comparacoes"[^>]*>0<\/span>/);
   assert.doesNotMatch(appHtml, /Acompanhamento de transportes/);
