@@ -49,6 +49,9 @@ test("pending list honors the conditional lunch-break duration and keeps gate or
   assert.equal(ux.shortPendingLabel(0), "Campos completos");
   assert.equal(ux.shortPendingLabel(1), "pendente");
   assert.equal(ux.shortPendingLabel(4), "pendentes");
+  assert.equal(ux.describeReadiness(0), "Pronto para emissão.");
+  assert.equal(ux.describeReadiness(1), "Falta 1 campo obrigatório.");
+  assert.equal(ux.describeReadiness(4), "Faltam 4 campos obrigatórios.");
 });
 
 test("copy triggers are recognized only on copy buttons", () => {
@@ -150,4 +153,21 @@ test("every info tip trigger points to a tooltip with text", () => {
     assert.match(appHtml, new RegExp(`<span id="${id}" role="tooltip" class="info-tip-text">[^<]*\\S[^<]*</span>`));
   }
   assert.match(uxCss, /\.info-tip:is\(:hover, :focus-within\):not\(\[data-tip-dismissed\]\) \.info-tip-text/);
+});
+
+test("bottom-bar status follows the pending chip in every place that writes the default text", () => {
+  const sources = {
+    "index.html": appHtml,
+    "transfer-form.js": fs.readFileSync(path.join(staticDir, "js", "features", "transfer-form.js"), "utf8"),
+    "equipment-search.js": fs.readFileSync(path.join(staticDir, "js", "features", "equipment-search.js"), "utf8"),
+  };
+  assert.match(sources["index.html"], /data-ux-ready-status>Pronto para emissão\./);
+  assert.match(sources["transfer-form.js"], /data-ux-ready-status>Pronto para emissão\./);
+  assert.match(sources["equipment-search.js"], /firstElementChild\?\.setAttribute\("data-ux-ready-status"/);
+});
+
+test("light theme keeps secondary text and the search count badge above 4.5:1 on tinted backgrounds", () => {
+  const light = tokensCss.slice(tokensCss.indexOf('[data-theme="light"]'));
+  assert.match(light, /--text-subtle: #5b6b80;/);
+  assert.match(appHtml, /id="pesquisa-completa-contagem" class="[^"]*\btext-cyan-200\b/);
 });

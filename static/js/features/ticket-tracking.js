@@ -84,7 +84,7 @@
       ...changed.slice(0, 8).map(row => `<li><strong>${escapeHtml(row.serie)}:</strong> ${row.campos.map(field => escapeHtml(field.campo)).join(", ")}</li>`),
       ...absent.slice(0, 5).map(serial => `<li><strong>Não consta na planilha atual:</strong> ${escapeHtml(serial)}</li>`),
     ];
-    target.innerHTML = `<p class="font-semibold text-white">Comparação com a versão anterior · ${Number(counts.novos) || 0} novas · ${Number(counts.alterados) || 0} alteradas · ${Number(counts.iguais) || 0} sem mudança · ${Number(counts.ausentes_arquivo) || 0} ausentes</p><p class="mt-1 text-[11px] text-amber-200">${escapeHtml(data.aviso_ausentes || "Ausência na planilha não confirma resolução.")}</p>${details.length ? `<ul class="mt-2 list-disc space-y-1 pl-5 text-[11px] text-slate-300">${details.join("")}</ul>` : ""}`;
+    target.innerHTML = `<p class="font-semibold text-white">Comparação com a versão anterior · ${Number(counts.novos) || 0} novas · ${Number(counts.alterados) || 0} alteradas · ${Number(counts.iguais) || 0} sem mudança · ${Number(counts.ausentes_arquivo) || 0} ausentes</p><p class="mt-1 text-xs text-amber-200">${escapeHtml(data.aviso_ausentes || "Ausência na planilha não confirma resolução.")}</p>${details.length ? `<ul class="mt-2 list-disc space-y-1 pl-5 text-xs text-slate-300">${details.join("")}</ul>` : ""}`;
   }
 
   async function carregarEvolucaoChamados(snapshotId) {
@@ -129,10 +129,10 @@
       const values = fields.map(([key, label]) => [label, formatValue(state[key])]).filter(([, value]) => value);
       const changes = Array.isArray(event.mudancas) ? event.mudancas : [];
       return `<article class="rounded-lg border border-slate-800 bg-slate-950/70 p-3" data-ticket-timeline-event="${escapeHtml(event.item_id || "")}">
-          <div class="flex flex-wrap items-center justify-between gap-2"><strong class="text-xs text-white">${escapeHtml(event.tipo || "Atualização")}</strong><time class="text-[11px] text-slate-400">${escapeHtml(formatarHorarioHistorico(event.atualizado_em))}</time></div>
-          <dl class="mt-2 grid grid-cols-1 gap-x-4 gap-y-1 sm:grid-cols-2">${values.map(([label, value]) => `<div class="min-w-0 text-[11px]"><dt class="inline font-semibold text-slate-400">${label}: </dt><dd class="inline break-words text-slate-200">${escapeHtml(value)}</dd></div>`).join("")}</dl>
-          <div class="mt-2 text-[11px] text-slate-300"><span class="font-semibold text-cyan-200">Mudanças:</span> ${changes.length ? changes.map(change => `${escapeHtml(change.campo)}${change.anterior?.length ? ` (${escapeHtml(formatValue(change.anterior))} → ` : " ("}${escapeHtml(formatValue(change.atual))})`).join(" · ") : "sem alterações nos campos acompanhados"}</div>
-          <label class="mt-3 block text-[11px] text-slate-400">Próxima ação ou o que já foi feito<textarea data-ticket-timeline-annotation ${app.atributosVersaoAnotacao(event)} data-event-id="${escapeHtml(event.snapshot_id || "")}" data-annotation-id="${escapeHtml(event.item_id || "")}" rows="2" maxlength="2000" class="mt-1 w-full rounded-lg border border-slate-700 bg-slate-900 px-2.5 py-2 text-xs text-white placeholder:text-slate-500 focus:border-cyan-400 focus:outline-none" placeholder="Ex.: cobrar atualização do parceiro, OS concluída...">${escapeHtml(event.anotacao || "")}</textarea><span class="mt-1 block text-[11px] text-slate-500" data-annotation-status aria-live="polite">${event.anotacao ? "Anotação salva" : ""}</span><button type="button" class="mt-1 rounded-md border border-rose-400/40 px-2 py-1 text-[11px] text-rose-200 hover:bg-rose-500/10" data-annotation-retry hidden aria-label="Tentar novamente a sincronização desta anotação">Tentar sincronizar novamente</button></label>
+          <div class="flex flex-wrap items-center justify-between gap-2"><strong class="text-xs text-white">${escapeHtml(event.tipo || "Atualização")}</strong><time class="text-xs text-slate-400">${escapeHtml(formatarHorarioHistorico(event.atualizado_em))}</time></div>
+          <dl class="mt-2 grid grid-cols-1 gap-x-4 gap-y-1 sm:grid-cols-2">${values.map(([label, value]) => `<div class="min-w-0 text-xs"><dt class="inline font-semibold text-slate-400">${label}: </dt><dd class="inline break-words text-slate-200">${escapeHtml(value)}</dd></div>`).join("")}</dl>
+          <div class="mt-2 text-xs text-slate-300"><span class="font-semibold text-cyan-200">Mudanças:</span> ${changes.length ? changes.map(change => `${escapeHtml(change.campo)}${change.anterior?.length ? ` (${escapeHtml(formatValue(change.anterior))} → ` : " ("}${escapeHtml(formatValue(change.atual))})`).join(" · ") : "sem alterações nos campos acompanhados"}</div>
+          <label class="mt-3 block text-xs text-slate-400">Próxima ação ou o que já foi feito<textarea data-ticket-timeline-annotation ${app.atributosVersaoAnotacao(event)} data-event-id="${escapeHtml(event.snapshot_id || "")}" data-annotation-id="${escapeHtml(event.item_id || "")}" rows="2" maxlength="2000" class="mt-1 w-full rounded-lg border border-slate-700 bg-slate-900 px-2.5 py-2 text-xs text-white placeholder:text-slate-500 focus:border-cyan-400 focus:outline-none" placeholder="Ex.: cobrar atualização do parceiro, OS concluída...">${escapeHtml(event.anotacao || "")}</textarea><span class="mt-1 block text-xs text-slate-500" data-annotation-status aria-live="polite">${event.anotacao ? "Anotação salva" : ""}</span><button type="button" class="mt-1 rounded-md border border-rose-400/40 px-2 py-1 text-xs text-rose-200 hover:bg-rose-500/10" data-annotation-retry hidden aria-label="Tentar novamente a sincronização desta anotação">Tentar sincronizar novamente</button></label>
         </article>`;
     }).join("")}</div>`;
   }
@@ -258,8 +258,8 @@
       ["Só no Oracle", summary.somente_oracle],
       ["Sem OS", summary.sem_os],
     ];
-    summaryTarget.innerHTML = `<div class="grid grid-cols-2 gap-2 sm:grid-cols-3 lg:grid-cols-6">${summaryCards.map(([label, count]) => `<div class="rounded-md border border-slate-800 bg-slate-900/70 px-2.5 py-1.5"><p class="text-[11px] text-slate-400">${label}</p><p class="mt-0.5 text-sm font-semibold text-white">${Number(count) || 0}</p></div>`).join("")}</div>
-        <p class="mt-2 break-words text-[11px] text-slate-500">Simpress: ${escapeHtml(sources.simpress?.arquivo || "aguardando importação")} · Oracle: ${escapeHtml(sources.oracle?.arquivo || "aguardando importação")}</p>`;
+    summaryTarget.innerHTML = `<div class="grid grid-cols-2 gap-2 sm:grid-cols-3 lg:grid-cols-6">${summaryCards.map(([label, count]) => `<div class="rounded-md border border-slate-800 bg-slate-900/70 px-2.5 py-1.5"><p class="text-xs text-slate-400">${label}</p><p class="mt-0.5 text-sm font-semibold text-white">${Number(count) || 0}</p></div>`).join("")}</div>
+        <p class="mt-2 break-words text-xs text-slate-500">Simpress: ${escapeHtml(sources.simpress?.arquivo || "aguardando importação")} · Oracle: ${escapeHtml(sources.oracle?.arquivo || "aguardando importação")}</p>`;
   }
 
   // Search and the attention filter, ordered by service order (highest first, without one last).
@@ -356,9 +356,9 @@
     ];
     const inactive = allRecords.length - counts.ativos;
     const explanation = `${counts.ativos} ${counts.ativos === 1 ? "ativo" : "ativos"} de ${allRecords.length} ${allRecords.length === 1 ? "série" : "séries"}${inactive ? ` · ${inactive} sem chamado aberto no Oracle` : ""}`;
-    triageTarget.innerHTML = `<div class="ticket-triage rounded-lg border border-slate-800 bg-slate-950/40 px-2 py-1.5"><div class="mb-1.5 flex flex-wrap items-baseline justify-between gap-x-3"><h4 class="text-[11px] font-semibold text-slate-200">Triagem diária</h4><p class="text-[11px] text-slate-400" data-ticket-triage-explanation>${escapeHtml(explanation)}</p></div><div class="grid grid-cols-2 gap-1.5 sm:grid-cols-4" role="group" aria-label="Filtrar chamados pela triagem diária">${triageCards.map(([key, shortLabel, label, color]) => {
+    triageTarget.innerHTML = `<div class="ticket-triage rounded-lg border border-slate-800 bg-slate-950/40 px-2 py-1.5"><div class="mb-1.5 flex flex-wrap items-baseline justify-between gap-x-3"><h4 class="text-xs font-semibold text-slate-200">Triagem diária</h4><p class="text-xs text-slate-400" data-ticket-triage-explanation>${escapeHtml(explanation)}</p></div><div class="grid grid-cols-2 gap-1.5 sm:grid-cols-4" role="group" aria-label="Filtrar chamados pela triagem diária">${triageCards.map(([key, shortLabel, label, color]) => {
       const pressed = selected === key;
-      return `<button type="button" class="ticket-triage-filter rounded-md border border-slate-800 bg-slate-900/70 px-2 py-1 text-left" data-ticket-triage-filter="${key}" data-on-click="filtrarTriagemChamados" data-args='["${key}"]' aria-pressed="${pressed}" aria-label="${escapeHtml(`${label}: ${counts[key]}`)}" title="${escapeHtml(pressed ? "Mostrar todos os chamados" : `Mostrar somente: ${label}`)}"><span class="block text-[11px] text-slate-400">${shortLabel}</span><span class="block text-sm font-semibold ${color}">${counts[key]}</span></button>`;
+      return `<button type="button" class="ticket-triage-filter rounded-md border border-slate-800 bg-slate-900/70 px-2 py-1 text-left" data-ticket-triage-filter="${key}" data-on-click="filtrarTriagemChamados" data-args='["${key}"]' aria-pressed="${pressed}" aria-label="${escapeHtml(`${label}: ${counts[key]}`)}" title="${escapeHtml(pressed ? "Mostrar todos os chamados" : `Mostrar somente: ${label}`)}"><span class="block text-xs text-slate-400">${shortLabel}</span><span class="block text-sm font-semibold ${color}">${counts[key]}</span></button>`;
     }).join("")}</div></div>`;
     const escapeSelector = typeof globalThis.CSS?.escape === "function" ? globalThis.CSS.escape : value => value.replace(/["\\]/g, "\\$&");
     if (focused) triageTarget.querySelector?.(`[data-ticket-triage-filter="${escapeSelector(focused)}"]`)?.focus();
@@ -432,29 +432,29 @@
     return `<article class="ticket-card rounded-xl border border-slate-800 bg-slate-950/70 p-3 sm:p-3.5" data-ticket-serial="${escapeHtml(record.serie)}">
           <div class="flex flex-wrap items-start justify-between gap-2">
             <div class="min-w-0"><h4 class="break-all font-mono text-sm font-semibold text-white">${escapeHtml(record.serie)}</h4>${context.loggedUserMarkers.marcador(record.serie)}</div>
-            <div class="flex flex-wrap items-center gap-1.5"><span class="rounded-full border px-2 py-1 text-[11px] font-semibold ${relationClass}">${relationLabel}</span><span class="rounded-full border px-2 py-1 text-[11px] ${attentionClass}" title="${escapeHtml(updateAgeSummary)}">${escapeHtml(attentionLabel)}</span></div>
+            <div class="flex flex-wrap items-center gap-1.5"><span class="rounded-full border px-2 py-1 text-xs font-semibold ${relationClass}">${relationLabel}</span><span class="rounded-full border px-2 py-1 text-xs ${attentionClass}" title="${escapeHtml(updateAgeSummary)}">${escapeHtml(attentionLabel)}</span></div>
           </div>
           <div class="ticket-card-identifiers mt-2 grid grid-cols-1 gap-1.5 sm:grid-cols-2">
             ${identificador("OS Simpress", currentSimpressOrder ? formatarOrdensServico([currentSimpressOrder]) : "", "src-simpress-soft")}
             ${identificador("OS Oracle", currentOracle.ordem_servico ? escapeHtml(currentOracle.ordem_servico) : "", "src-oracle-soft")}
           </div>
           ${renderizarResumoProcessoPedido(simpress)}
-          ${metaPedido ? `<div class="ticket-card-meta mt-2 flex flex-wrap items-center gap-x-3 gap-y-1 text-[11px] text-slate-300">${metaPedido}</div>` : ""}
+          ${metaPedido ? `<div class="ticket-card-meta mt-2 flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-slate-300">${metaPedido}</div>` : ""}
           ${statusLinhas ? `<div class="ticket-card-status mt-2 grid grid-cols-1 gap-1.5 sm:grid-cols-2">${statusLinhas}</div>` : ""}
-          ${triagem ? `<div class="ticket-card-triage mt-1.5 flex flex-wrap items-center gap-x-3 gap-y-1 text-[11px] text-slate-400">${triagem}</div>` : ""}
+          ${triagem ? `<div class="ticket-card-triage mt-1.5 flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-slate-400">${triagem}</div>` : ""}
           <details class="ticket-disclosure mt-3 rounded-lg border border-slate-800 bg-slate-900/40 px-3 py-1.5" data-ticket-section="details"${openDetails}>
             <summary class="ticket-disclosure-summary cursor-pointer text-xs font-semibold text-slate-200">Detalhes do chamado</summary>
             <div class="ticket-detail-grid">
               <section class="ticket-detail-section">
-                <h5 class="text-[11px] font-semibold uppercase tracking-wide src-simpress-text">Simpress</h5>
+                <h5 class="text-xs font-semibold uppercase tracking-wide src-simpress-text">Simpress</h5>
                 ${detalhesSimpress}
               </section>
               <section class="ticket-detail-section">
-                <h5 class="text-[11px] font-semibold uppercase tracking-wide src-oracle-text">Oracle · solicitações e OS</h5>${oracleRows}
+                <h5 class="text-xs font-semibold uppercase tracking-wide src-oracle-text">Oracle · solicitações e OS</h5>${oracleRows}
               </section>
             </div>
           </details>
-          <details class="ticket-disclosure mt-2 rounded-lg border border-cyan-400/20 bg-slate-900/50 px-3 py-1.5" data-ticket-section="timeline" data-ticket-timeline data-timeline-serial="${escapeHtml(record.serie)}" data-snapshot-id="${escapeHtml(snapshotId || "")}" data-on-toggle="carregarLinhaDoTempoChamado" data-args='["$this"]'><summary class="ticket-disclosure-summary cursor-pointer text-xs font-semibold text-cyan-100">Linha do tempo e anotações</summary><div data-ticket-timeline-body><p class="py-2 text-[11px] text-slate-400">Abra para ver as mudanças desta série em cada importação e registrar a próxima ação.</p></div></details>
+          <details class="ticket-disclosure mt-2 rounded-lg border border-cyan-400/20 bg-slate-900/50 px-3 py-1.5" data-ticket-section="timeline" data-ticket-timeline data-timeline-serial="${escapeHtml(record.serie)}" data-snapshot-id="${escapeHtml(snapshotId || "")}" data-on-toggle="carregarLinhaDoTempoChamado" data-args='["$this"]'><summary class="ticket-disclosure-summary cursor-pointer text-xs font-semibold text-cyan-100">Linha do tempo e anotações</summary><div data-ticket-timeline-body><p class="py-2 text-xs text-slate-400">Abra para ver as mudanças desta série em cada importação e registrar a próxima ação.</p></div></details>
         </article>`;
   }
 
@@ -469,18 +469,18 @@
     const linha = (color, fields) => {
       const parts = fields.filter(([, value]) => String(value || "").trim())
         .map(([label, value]) => label === "Atualizado" ? `Atualizado ${escapeHtml(value)}` : `${label}: ${escapeHtml(value)}`);
-      return parts.length ? `<p class="mt-1 text-[11px] ${color}">${parts.join(" · ")}</p>` : "";
+      return parts.length ? `<p class="mt-1 text-xs ${color}">${parts.join(" · ")}</p>` : "";
     };
     // The current OS is already highlighted at the top of the card, so each request lists it as plain text.
     return `<div class="ticket-oracle-request">
           <p class="flex flex-wrap items-baseline gap-x-3 text-xs"><span class="font-semibold text-white">Solicitação ${escapeHtml(ticket.solicitacao || "não informada")}</span><span class="text-slate-400">OS <span class="font-mono text-slate-200">${escapeHtml(ticket.ordem_servico || "não informada")}</span></span></p>
           <p class="mt-1 text-xs text-slate-300">${escapeHtml(ticket.status || "Status não informado")}${ticket.sub_status ? ` · ${escapeHtml(ticket.sub_status)}` : ""}</p>
           ${linha("text-slate-400", [["Fila", ticket.fila], ["Fase", ticket.fase_atendimento]])}
-          ${oracleAddress ? `<p class="mt-1 break-words text-[11px] text-slate-400">Endereço: ${escapeHtml(oracleAddress)}</p>` : ""}
+          ${oracleAddress ? `<p class="mt-1 break-words text-xs text-slate-400">Endereço: ${escapeHtml(oracleAddress)}</p>` : ""}
           ${linha("text-slate-400", [["Atendido pela inibição", ticket.atendido_pela_inibicao]])}
           ${linha("text-slate-400", [["Atendimento por", ticket.nome_filial]])}
           ${linha("text-slate-400", [["Entregas", ticket.status_entregas], ["Atividades", ticket.status_atividades], ["Atualizado", ticket.ultima_atualizacao && formatarHorarioHistorico(ticket.ultima_atualizacao)]])}
-          <p class="mt-1 text-[11px] font-medium ${ageClass}">${escapeHtml(updateAge.rotulo)}</p>
+          <p class="mt-1 text-xs font-medium ${ageClass}">${escapeHtml(updateAge.rotulo)}</p>
           ${String(ticket.descricao || "").trim() ? `<details class="ticket-oracle-description"${expandDescription ? " open" : ""}><summary class="text-xs"><span class="shrink-0 font-semibold src-oracle-text">Descrição do chamado</span><span class="ticket-oracle-description-preview">${escapeHtml(resumirDescricaoChamado(ticket.descricao))}</span><span class="ticket-oracle-description-toggle ticket-oracle-description-expand">⌄ Expandir</span><span class="ticket-oracle-description-toggle ticket-oracle-description-collapse">⌃ Recolher</span></summary><div class="ticket-oracle-description-content">${escapeHtml(String(ticket.descricao).trim())}</div></details>` : ""}
         </div>`;
   }
