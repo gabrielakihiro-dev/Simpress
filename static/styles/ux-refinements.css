@@ -191,7 +191,7 @@ button[data-copy-state="warning"], button[data-copy-state="error"] { animation: 
 /* Light theme: pre-existing axe color-contrast failures in the delivery card. */
 html[data-theme="light"] .transfer-form-grid h2 > .text-emerald-300 { color: #065f46; }
 html[data-theme="light"] .transfer-form-grid .glass-card-header .text-emerald-400 { color: #047857; }
-html[data-theme="light"] .transfer-form-grid button.text-slate-400 { color: #334155; }
+html[data-theme="light"] .transfer-form-grid button.text-fg-subtle { color: #334155; }
 
 /* ---------- 7. Dense data tables ---------- */
 .accessible-table-wrap table { font-variant-numeric: tabular-nums; }
