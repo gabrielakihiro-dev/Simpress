@@ -70,7 +70,7 @@ test("keeps the sidebar action groups neutral", () => {
 
 test("places the ticket action in cockpit tools dropdown without legacy sidebar classes", () => {
   assert.doesNotMatch(indexHtml, /header-action-group|header-action-item--large|data-action-group="analysis"/);
-  assert.match(indexHtml, /<details class="cockpit-tools-dropdown">/);
+  assert.match(indexHtml, /<details class="cockpit-tools-dropdown" id="cockpit-tools-dropdown">/);
   const ticketAction = indexHtml.indexOf('data-on-click="abrirAcompanhamentoChamados"');
   assert.ok(ticketAction > -1);
   const ticketActionEnd = indexHtml.indexOf("</button>", ticketAction);

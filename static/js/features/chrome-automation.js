@@ -45,6 +45,7 @@
   const POLL_ATIVO_MS = 1500;
   const POLL_LIVRE_MS = 5000;
   const MAX_LINHAS = 500;
+  const MAX_EVENTOS = 200;
 
   const estado = {
     offset: 0,
@@ -137,6 +138,15 @@
     const detalhe = document.getElementById("automacao-estado-detalhe");
     if (!caixa || !titulo || !detalhe) return;
     const ativo = dados.estado === "em_andamento";
+    const estadoShell = document.getElementById("cockpit-automation-shell-status");
+    const tituloShell = document.getElementById("cockpit-automation-shell-title");
+    if (estadoShell && tituloShell) {
+      estadoShell.dataset.state = ativo ? "occupied" : "idle";
+      tituloShell.textContent = ativo ? "Chrome ocupado" : "Chrome livre";
+      estadoShell.title = ativo ? `${ROTINAS[dados.rotina] || dados.rotina || "Rotina"} em andamento.` : "Chrome livre para uma nova rotina.";
+    }
+    const aoVivo = document.getElementById("cockpit-automation-live");
+    if (aoVivo) aoVivo.hidden = !ativo || Boolean(estado.execucaoSelecionada);
     caixa.dataset.state = ativo ? (dados.cancelamento_pedido ? "cancelando" : "em_andamento") : "livre";
     if (ativo) {
       const rotina = ROTINAS[dados.rotina] || dados.rotina || "Rotina";
@@ -175,6 +185,94 @@
 
   function valor(id) { return document.getElementById(id)?.value || ""; }
 
+  function classificarEventoAutomacao(mensagem) {
+    const texto = mensagem.toLocaleLowerCase("pt-BR");
+    const percentual = texto.match(/(?:^|\s)(\d{1,3}%)(?=\s|$)/)?.[1];
+    if (/\b(falha|falhou|erro|error|exception|não conclu[ií]d[oa]|nao conclu[ií]d[oa])\b/.test(texto)) {
+      return { estado: "error", icone: "✕", status: "Falha" };
+    }
+    if (/ação necessária|acao necessaria|aguardando|pendente|login necessário|login necessario/.test(texto)) {
+      return { estado: "waiting", icone: "◌", status: "Aguardando" };
+    }
+    if (percentual || /exportando|importando|comparando|em andamento|processando|carregando/.test(texto)) {
+      return { estado: "active", icone: "◌", status: percentual || "Em andamento" };
+    }
+    if (/conclu[ií]d[oa]|finalizad[oa]|válid[oa]|valid[oa]|confirmad[oa]|iniciad[oa]|\bok\b/.test(texto)) {
+      return { estado: "success", icone: "✓", status: "OK" };
+    }
+    return { estado: "info", icone: "·", status: "Info" };
+  }
+
+  function renderizarEventosAutomacao() {
+    const lista = document.getElementById("cockpit-automation-events");
+    const area = document.getElementById("automacao-log");
+    if (!lista || !area) return;
+
+    const aoVivo = document.getElementById("cockpit-automation-live");
+    if (aoVivo) aoVivo.hidden = !estado.emAndamento || Boolean(estado.execucaoSelecionada);
+    const linhas = area.textContent.split(/\r?\n/).filter(linha => linha.trim()).slice(-MAX_EVENTOS);
+    const fragmento = document.createDocumentFragment();
+    if (!linhas.length) {
+      const item = document.createElement("li");
+      const hora = document.createElement("span");
+      const icone = document.createElement("span");
+      const conteudo = document.createElement("span");
+      const titulo = document.createElement("span");
+      const status = document.createElement("span");
+      item.className = "cockpit-automation-event";
+      item.dataset.state = "waiting";
+      hora.className = "cockpit-automation-event-time";
+      hora.textContent = "—";
+      icone.className = "cockpit-automation-event-icon";
+      icone.setAttribute("aria-hidden", "true");
+      icone.textContent = "◌";
+      conteudo.className = "cockpit-automation-event-message";
+      titulo.className = "cockpit-automation-event-title";
+      titulo.textContent = "Aguardando atividade do Chrome.";
+      conteudo.append(titulo);
+      status.className = "cockpit-automation-event-status";
+      status.textContent = "Aguardando";
+      item.append(hora, icone, conteudo, status);
+      fragmento.append(item);
+    } else {
+      linhas.forEach(linha => {
+        const partes = linha.match(/^\s*(?:\[(\d{2}:\d{2}:\d{2})\]\s*)?(?:\[([^\]\r\n]+)\]\s*)?(.*)$/);
+        const horario = partes?.[1] || "—";
+        const componente = partes?.[2] || "";
+        const mensagem = partes?.[3] || linha;
+        const classificacao = classificarEventoAutomacao(mensagem);
+        const item = document.createElement("li");
+        const hora = document.createElement("span");
+        const icone = document.createElement("span");
+        const conteudo = document.createElement("span");
+        const titulo = document.createElement("span");
+        const status = document.createElement("span");
+        item.className = "cockpit-automation-event";
+        item.dataset.state = classificacao.estado;
+        hora.className = "cockpit-automation-event-time";
+        hora.textContent = horario;
+        icone.className = "cockpit-automation-event-icon";
+        icone.setAttribute("aria-hidden", "true");
+        icone.textContent = classificacao.icone;
+        conteudo.className = "cockpit-automation-event-message";
+        titulo.className = "cockpit-automation-event-title";
+        titulo.textContent = componente || mensagem;
+        conteudo.append(titulo);
+        if (componente && mensagem) {
+          const detalhe = document.createElement("span");
+          detalhe.className = "cockpit-automation-event-detail";
+          detalhe.textContent = mensagem;
+          conteudo.append(detalhe);
+        }
+        status.className = "cockpit-automation-event-status";
+        status.textContent = classificacao.status;
+        item.append(hora, icone, conteudo, status);
+        fragmento.append(item);
+      });
+    }
+    lista.replaceChildren(fragmento);
+  }
+
   function mostrarLogAutomacao() {
     const area = document.getElementById("automacao-log");
     if (!area) return;
@@ -187,6 +285,7 @@
     const texto = linhas.slice(-limite).join("\n");
     area.setAttribute("aria-live", historico ? "off" : "polite");
     if (area.textContent !== texto) area.textContent = texto;
+    renderizarEventosAutomacao();
     if (!historico && noFim) area.scrollTop = area.scrollHeight;
     const arquivoElemento = document.getElementById("automacao-log-arquivo");
     const arquivoTexto = arquivo ? `Arquivo: ${arquivo}` : "Nenhum log disponível.";
@@ -214,9 +313,12 @@
       if (consulta !== estado.consultaLog) return;
       estado.logHistorico = dados;
       mostrarLogAutomacao();
+      const logCompleto = document.querySelector(".cockpit-automation-log-full");
+      if (logCompleto) logCompleto.open = true;
     } catch (err) {
       if (consulta !== estado.consultaLog) return;
       document.getElementById("automacao-log").textContent = err.message;
+      renderizarEventosAutomacao();
       document.getElementById("automacao-log-modo").textContent = "Histórico · erro ao consultar";
     }
   }

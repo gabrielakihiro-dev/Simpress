@@ -1504,6 +1504,13 @@ def compare_uploaded_workbooks(
         _comparison_components(nodes, union_find), nodes, ambiguous_roles_by_node, as_of
     )
 
+    synchronized_count = sum(
+        1
+        for _entity, _records_by_source, source_status, _expected_location in entities
+        if source_status.get("endpoint") == "presente"
+        and source_status.get("detalhes") == "presente"
+    )
+
     location_mismatches = _location_mismatches(entities)
     no_recent_verification, unmapped_series = _endpoint_stale_and_unmapped(
         source_records["endpoint"], as_of, stale_threshold
@@ -1519,6 +1526,7 @@ def compare_uploaded_workbooks(
     return {
         "total_endpoint": total_endpoint,
         "total_detalhes": len(details_table["records"]),
+        "equipamentos_sincronizados": synchronized_count,
         "ausentes_no_endpoint": missing_by_source["endpoint"],
         "ausentes_em_detalhes": missing_by_source["detalhes"],
         "sem_acesso_7_dias": no_recent_verification,

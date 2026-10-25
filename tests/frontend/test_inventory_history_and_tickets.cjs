@@ -495,7 +495,7 @@ test("keeps old ticket imports when the deletion confirmation is cancelled", asy
 
 test("groups secondary actions under cockpit tools dropdown", () => {
   assert.doesNotMatch(appHtml, /header-action-item--primary|sidebar-related-links|header-action-group/);
-  assert.match(appHtml, /<details class="cockpit-tools-dropdown">/);
+  assert.match(appHtml, /<details class="cockpit-tools-dropdown" id="cockpit-tools-dropdown">/);
   assert.match(appHtml, /data-on-click="abrirAcompanhamentoChamados"/);
   assert.match(appHtml, /data-on-click="abrirModalAtualizarPlanilhas"/);
   assert.match(appHtml, /data-on-click="abrirRelatorioMensal"/);

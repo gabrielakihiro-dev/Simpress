@@ -97,6 +97,21 @@ BASE_FRESHNESS = {
                  "ultima_atualizacao": "", "origem_data": ""},
 }
 base_freshness_state = "atualizada"
+cockpit_comparison_enabled = False
+COCKPIT_COMPARISON_ID = "fixture-cockpit-comparison"
+COCKPIT_COMPARISON_EVENT = {
+    "id": COCKPIT_COMPARISON_ID,
+    "horario": "2026-10-24T12:00:00-03:00",
+    "tipo": "atualizacao",
+    "resumo": {"sem_acesso_7_dias": 1, "divergencias_local": 1, "ausentes_no_endpoint": 0, "ausentes_em_detalhes": 0},
+    "comparacao": {
+        "total_endpoint": 1, "total_detalhes": 1, "equipamentos_sincronizados": 0,
+        "sem_acesso_7_dias": [{"serie": "LENTO", "computador": "DEMO-HOST-001", "dias_sem_verificacao": 9}],
+        "divergencias_local": [{"serie": "LENTO", "computador": "DEMO-HOST-001", "local_previsto": "Curitiba", "local_detalhes": "Londrina"}],
+        "ausentes_no_endpoint": [], "ausentes_em_detalhes": [],
+        "correspondencias_ambiguas": [], "registros_ambiguos": [],
+    },
+}
 
 # Stale tickets and new divergences alerts: hidden by default; e2e turns them on per test.
 PANEL_ALERTS = {
@@ -134,7 +149,9 @@ def dashboard_payload():
         "sem_categoria": 0, "cidades_principais": [{"cidade": "Curitiba", "total": 1}],
         "cidades_por_categoria": {"notebook": [{"cidade": "Curitiba", "total": 1}]},
         "total_cidades": 1, "sem_cidade": 0, "ultima_atualizacao": "08/10/2026 09:00",
-        "arquivo_origem": "simpress-demo.xlsx", "ultima_comparacao": None,
+        "arquivo_origem": "simpress-demo.xlsx",
+        "ultima_comparacao": {"id": COCKPIT_COMPARISON_ID, "horario": COCKPIT_COMPARISON_EVENT["horario"]}
+        if cockpit_comparison_enabled else None,
         "base_desatualizada": BASE_FRESHNESS[base_freshness_state],
         **PANEL_ALERTS[panel_alerts_state],
     }
@@ -150,6 +167,9 @@ AUTOMATION_BASE_HISTORY = [
      "mensagem": "Login não concluído em 10 minutos.", "lotes": [],
      "capturas": [{"nome": "20261019_170210_Oracle.png", "url": "/api/automacao/capturas/20261019_170210_Oracle.png"}],
      "log": "demo.log"},
+    {"id": "20261018_091500_sebrae", "rotina": "sebrae", "origem": "site",
+     "inicio": "2026-10-18T09:15:00-03:00", "fim": "2026-10-18T09:18:00-03:00", "status": "concluido", "codigo": 0,
+     "mensagem": "", "lotes": [], "capturas": [], "log": "demo_sebrae.log"},
 ]
 AUTOMATION_HISTORY = list(AUTOMATION_BASE_HISTORY)
 AUTOMATION_LINES = [
@@ -157,7 +177,13 @@ AUTOMATION_LINES = [
     "[08:00:02] [Oracle] Abrindo https://simpress.custhelp.com/AgentWeb/",
     "[08:00:20] [Oracle] AÇÃO NECESSÁRIA: faça o login na janela do Chrome de automação.",
 ]
+SEBRAE_AUTOMATION_LINES = [
+    "=== SINCRONIZAR CHAMADOS SEBRAE ===",
+    "[09:00:01] [SoftExpert] Leitura em andamento.",
+    "[09:00:02] [Dashboard Operacional_SEBRAE] Gravação em andamento.",
+]
 automation_run = None
+automation_last_sebrae = False
 
 # Sincronizar chamados Sebrae: fictional summary; the PUT never persists anything outside this process.
 SEBRAE_PENDENCIAS = [
@@ -227,8 +253,9 @@ FIXTURE_CAPTURE = fixture_capture_png()
 
 
 def automation_state(offset=0):
-    lines = AUTOMATION_LINES if automation_run else []
+    lines = SEBRAE_AUTOMATION_LINES if automation_run and automation_run["rotina"] == "sebrae" else AUTOMATION_LINES if automation_run else []
     start = offset if 0 <= offset <= len(lines) else 0
+    latest = next((entry for entry in AUTOMATION_HISTORY if entry["rotina"] == "sebrae"), None) if automation_last_sebrae else (AUTOMATION_HISTORY[0] if AUTOMATION_HISTORY else None)
     return {
         "estado": "em_andamento" if automation_run else "livre",
         "rotina": automation_run["rotina"] if automation_run else "",
@@ -236,9 +263,9 @@ def automation_state(offset=0):
         "origem": "site" if automation_run else "", "pid": 4242 if automation_run else None,
         "cancelamento_pedido": False,
         "aguardando_login": bool(automation_run), "login_origem": "Oracle" if automation_run else "",
-        "log": {"arquivo": "fixture.site.log" if automation_run else "", "offset": len(lines),
+        "log": {"arquivo": "fixture_sebrae.site.log" if automation_run and automation_run["rotina"] == "sebrae" else "fixture.site.log" if automation_run else "", "offset": len(lines),
                 "linhas": lines[start:], "reiniciado": start != offset},
-        "ultima": AUTOMATION_HISTORY[0] if AUTOMATION_HISTORY else None,
+        "ultima": latest,
     }
 
 
@@ -258,7 +285,7 @@ class Handler(BaseHTTPRequestHandler):
             pass  # Expected when testing cancelled searches.
 
     def do_GET(self):
-        global base_freshness_state, panel_alerts_state
+        global base_freshness_state, panel_alerts_state, cockpit_comparison_enabled
         url = urlsplit(self.path)
         path = unquote(url.path)
         if path == "/" or path.startswith("/static/"):
@@ -279,6 +306,9 @@ class Handler(BaseHTTPRequestHandler):
             self.send(dashboard_payload())
         elif path == "/api/prontidao":
             self.send({"functions": {"consulta_equipamentos": {"available": True}}, "files": {}})
+        elif path == "/__fixture_cockpit":
+            cockpit_comparison_enabled = parse_qs(url.query).get("comparacao", ["0"])[0] == "1"
+            self.send({"comparacao": cockpit_comparison_enabled})
         elif path == "/__fixture_base_desatualizada":
             requested = parse_qs(url.query).get("estado", ["atualizada"])[0]
             base_freshness_state = requested if requested in BASE_FRESHNESS else "atualizada"
@@ -296,8 +326,17 @@ class Handler(BaseHTTPRequestHandler):
                      "inicio": f"2026-10-{20 if index < 8 else 19}T{23 - index:02d}:00:00-03:00"}
                     for index in range(min(count, 20))
                 ]
+                AUTOMATION_HISTORY.append(AUTOMATION_BASE_HISTORY[2])
+            query = parse_qs(url.query)
             globals()["automation_run"] = None
-            scenario = parse_qs(url.query).get("sebrae", ["padrao"])[0]
+            globals()["automation_last_sebrae"] = query.get("ultimo_sebrae", ["0"])[0] == "1"
+            rotina_ativa = query.get("run", [""])[0]
+            if rotina_ativa in ("os", "inventarios", "usuarios", "ambas", "login", "sebrae"):
+                globals()["automation_run"] = {
+                    "rotina": rotina_ativa,
+                    "inicio": "2026-10-24T09:00:00-03:00",
+                }
+            scenario = query.get("sebrae", ["padrao"])[0]
             sebrae_state.update(scenario=scenario if scenario in SEBRAE_SCENARIOS else "padrao", ativo=False)
             self.send({"estado": "livre"})
         elif path == "/api/automacao/sebrae/resumo":
@@ -311,6 +350,7 @@ class Handler(BaseHTTPRequestHandler):
                        if (not query.get("data_inicio") or entry["inicio"][:10] >= query["data_inicio"][0])
                        and (not query.get("data_fim") or entry["inicio"][:10] <= query["data_fim"][0])
                        and (not query.get("rotina") or entry["rotina"] == query["rotina"][0])
+                       and (not query.get("ocultar_rotina") or entry["rotina"] != query["ocultar_rotina"][0])
                        and (not query.get("status") or entry["status"] == query["status"][0])]
             limit = max(1, min(int(query.get("limite", ["5"])[0]), 50))
             pages = max(1, (len(entries) + limit - 1) // limit)
@@ -361,6 +401,8 @@ class Handler(BaseHTTPRequestHandler):
             comparison["apelidos_sem_atualizacao"][0]["anotacao"] = DEMO_ANNOTATION
             event = {**DEMO_EVENT, "comparacao": comparison}
             self.send({"evento": event})
+        elif path == f"/api/historico-comparacoes/{COCKPIT_COMPARISON_ID}":
+            self.send({"evento": json.loads(json.dumps(COCKPIT_COMPARISON_EVENT))})
         elif path == f"/api/historico-comparacoes/{PREVIOUS_EVENT_ID}":
             self.send({"evento": {**PREVIOUS_EVENT, "comparacao": {}}})
         elif path == "/api/historico-alteracoes":
@@ -375,6 +417,23 @@ class Handler(BaseHTTPRequestHandler):
         elif path in ("/api/buscar", "/api/buscar-expandida"):
             params = parse_qs(url.query)
             time.sleep(2)
+            if path == "/api/buscar-expandida" and params.get("listar_todos", [""])[0] == "true":
+                equipment = {**EQUIPMENT, "usuarios_logados": "usuario.demo", "usuarios_logados_origem": "endpoint"}
+                if params.get("usuario", [""])[0] == "sem":
+                    equipment = None
+                term = params.get("q", [""])[0].strip().lower()
+                requested_serials = {value.strip().upper() for value in params.get("serie", []) if value.strip()}
+                all_items = [equipment] if equipment and (not term or term in json.dumps(equipment, ensure_ascii=False).lower()) else []
+                if requested_serials:
+                    all_items = [item for item in all_items if item["serial"].upper() in requested_serials]
+                offset = max(0, int(params.get("offset", ["0"])[0]))
+                limit = max(1, min(int(params.get("limit", ["50"])[0]), 100))
+                self.send({
+                    "items": all_items[offset:offset + limit], "total": len(all_items),
+                    "offset": offset, "limit": limit, "has_more": offset + limit < len(all_items),
+                    "filters": {"categories": [], "cities": ["Curitiba"], "users": {"sem": 0, "com": 1}},
+                })
+                return
             # Fictional logged user, shown beside the hostname in the result row; "manual" and
             # "ambiguo" in the query show a manual user with its date and ambiguous Endpoint users.
             term = params.get("q", [""])[0].lower()

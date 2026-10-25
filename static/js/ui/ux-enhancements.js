@@ -79,13 +79,22 @@
     if (command && !event.shiftKey && key.toLowerCase() === "k") return "search";
     if (key === "/" && !command && !typing) return "search";
     if (command && key === "Enter" && transferVisible) return "generate";
-    if (!command && !typing) {
-      if (key === "F1") return "tab-home";
-      if (key === "F2") return "tab-transferencia";
-      if (key === "F3") return "tab-resumo";
-      if (key === "F4") return "tab-automacao";
-    }
-    return null;
+    if (command || event.shiftKey || typing) return null;
+    return ({
+      F1: "tab-home",
+      F2: "tab-transferencia",
+      F3: "tab-resumo",
+      F4: "tab-automacao",
+      F5: "tool-chamados",
+      F6: "tool-comparacao",
+      F7: "tool-apelidos",
+      F8: "tool-relatorio",
+    })[key] || null;
+  }
+
+  function shouldCloseCockpitToolsMenu(menu, target) {
+    if (!menu?.open) return false;
+    return !menu.contains(target) || Boolean(target?.closest?.(".cockpit-tools-dropdown__item"));
   }
 
   function pushRecent(list, value, limit = RECENT_LIMIT) {
@@ -401,6 +410,18 @@
     doc.addEventListener("keydown", event => {
       if (event.key === "Escape") dismissInfoTips(doc);
     }, true);
+    doc.addEventListener("click", event => {
+      const menu = doc.querySelector(".cockpit-tools-dropdown[open]");
+      if (shouldCloseCockpitToolsMenu(menu, event.target)) menu.open = false;
+    }, true);
+    doc.addEventListener("keydown", event => {
+      if (event.key !== "Escape") return;
+      const menu = doc.querySelector(".cockpit-tools-dropdown[open]");
+      if (!menu) return;
+      event.preventDefault();
+      menu.open = false;
+      byId("cockpit-tools-trigger")?.focus();
+    }, true);
     const resetTip = event => {
       const tip = event.target?.closest?.(".info-tip");
       if (tip && !tip.contains(event.relatedTarget)) tip.removeAttribute("data-tip-dismissed");
@@ -436,6 +457,17 @@
       } else if (action === "tab-automacao") {
         event.preventDefault();
         if (typeof win.ativarAbaTransferencia === "function") win.ativarAbaTransferencia("automacao");
+      } else if (action.startsWith("tool-")) {
+        const buttonIds = {
+          "tool-chamados": "btn-acompanhamento-chamados",
+          "tool-comparacao": "btn-cockpit-comparacao",
+          "tool-apelidos": "btn-historico-apelidos",
+          "tool-relatorio": "btn-relatorio-mensal",
+        };
+        const button = byId(buttonIds[action]);
+        if (!button) return;
+        event.preventDefault();
+        button.click();
       } else if (action === "generate") {
         const button = byId("btn-gerar-planilha");
         if (!button || button.disabled) return;
@@ -536,6 +568,7 @@
     phoneProblem,
     formatPhone,
     shortcutAction,
+    shouldCloseCockpitToolsMenu,
     pushRecent,
     copyStateFor,
     overflowState,

@@ -14,6 +14,7 @@
   const FEATURE_ORDER = Object.freeze([
     "shell",
     "dashboard",
+    "cockpitSummary",
     "regionalContacts",
     "transferForm",
     "equipmentSearch",
@@ -107,6 +108,7 @@
     app.associarRotulosAcessiveis();
     app.inicializarMascarasTelefone();
     app.inicializarExportacaoAutomaticaHistorico();
+    app.inicializarListaHome();
     const almocoEntrega = document.getElementById("entrega-almoco");
     almocoEntrega?.addEventListener("input", app.atualizarObrigatoriedadeDuracaoPausaEntrega);
     almocoEntrega?.addEventListener("change", app.atualizarObrigatoriedadeDuracaoPausaEntrega);

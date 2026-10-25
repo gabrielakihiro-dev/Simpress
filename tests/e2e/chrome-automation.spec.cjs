@@ -4,20 +4,51 @@ const AxeBuilder = require("@axe-core/playwright").default;
 test.setTimeout(60000);
 
 // The fixture answers the Automação routes with fictional runs; no process or Chrome is started.
-async function openAutomation(page, request, count = 0, sebrae = "padrao") {
-  await request.get(`/__fixture_automacao?quantidade=${count}&sebrae=${sebrae}`);
+async function openAutomation(page, request, count = 0, sebrae = "padrao", run = "") {
+  await request.get(`/__fixture_automacao?quantidade=${count}&sebrae=${sebrae}&run=${run}`);
   await page.goto("/");
-  const sidebarButton = page.locator("#btn-sidebar-open");
-  const shell = page.locator("#simpress-app-shell");
-  if (await sidebarButton.isVisible() && await shell.getAttribute("data-sidebar-open") !== "true") {
-    await sidebarButton.click();
-    await expect(shell).toHaveAttribute("data-sidebar-open", "true");
-  }
   await page.locator("#tab-automacao").click();
   const panel = page.locator("#tab-panel-automacao");
   await expect(panel).toBeVisible();
   await expect(page.locator("#tab-automacao")).toHaveAttribute("aria-selected", "true");
   return panel;
+}
+
+test("Automação transforma as linhas do log ativo em eventos seguros e atualiza o indicador ao vivo", async ({ page, request }) => {
+  const panel = await openAutomation(page, request, 0, "padrao", "os");
+  const events = panel.locator("#cockpit-automation-events");
+  const stateResponse = await request.get("/api/automacao/estado?offset=0&arquivo=");
+  const state = await stateResponse.json();
+
+  expect(state.estado).toBe("em_andamento");
+  expect(state.log.linhas).toHaveLength(3);
+  await expect(page.locator("#automacao-estado")).toHaveCount(1);
+  await expect(page.locator("#automacao-estado-titulo")).toHaveCount(1);
+  await expect(panel.locator("#automacao-estado")).toContainText("Em andamento");
+  await expect(page.locator("#cockpit-automation-shell-title")).toHaveText("Chrome ocupado");
+  await expect(panel.locator("#automacao-log")).toContainText("Reaproveitando o Chrome de automação na porta 9333.");
+  await expect(events).toContainText("Reaproveitando o Chrome de automação na porta 9333.");
+  await expect(events).toContainText("Abrindo https://simpress.custhelp.com/AgentWeb/");
+  await expect(events).toContainText("AÇÃO NECESSÁRIA: faça o login");
+  await expect(events.locator(".cockpit-automation-event")).toHaveCount(3);
+  await expect(events.locator('[data-state="waiting"]')).toHaveCount(1);
+  await expect(panel.locator("#cockpit-automation-live")).toBeVisible();
+  await expect(panel.locator("#automacao-log")).toContainText("AÇÃO NECESSÁRIA: faça o login");
+});
+
+test("Automação deixa as últimas execuções visíveis ao abrir a aba", async ({ page, request }) => {
+  const panel = await openAutomation(page, request);
+
+  await expect(panel.locator("#automacao-historico-conteudo")).toBeVisible();
+  await expect(panel.locator("#automacao-historico tbody tr")).toHaveCount(3);
+  await expect(panel.getByRole("button", { name: "Recolher Últimas execuções", exact: true })).toBeVisible();
+});
+
+async function abrirPainelSebrae(panel) {
+  const summary = panel.locator(".cockpit-sebrae-details > summary");
+  await expect(summary).toBeVisible();
+  if (await panel.locator(".cockpit-sebrae-details").evaluate(element => !element.open)) await summary.click();
+  return panel.locator("#sebrae-painel");
 }
 
 test("Automação starts a routine, shows the login warning and the live log, then cancels", async ({ page, request }) => {
@@ -36,10 +67,11 @@ test("Automação starts a routine, shows the login warning and the live log, th
   await expect(status).toContainText("Em andamento");
   await expect(status).toContainText("Rotina de OS");
   await expect(status).toContainText("pelo site");
+  await expect(page.locator("#cockpit-automation-shell-title")).toHaveText("Chrome ocupado");
   const warning = panel.getByRole("alert");
   await expect(warning).toBeVisible();
   await expect(warning).toContainText("Faça o login no Chrome de automação (Oracle).");
-  await expect(panel.getByRole("log")).toContainText("AÇÃO NECESSÁRIA: faça o login");
+  await expect(panel.locator("#cockpit-automation-events")).toContainText("AÇÃO NECESSÁRIA: faça o login");
   for (const name of ["Rotina de OS", "Inventários", "Ambas", "Abrir Chrome para login"]) {
     await expect(panel.getByRole("button", { name, exact: true })).toBeDisabled();
   }
@@ -48,6 +80,7 @@ test("Automação starts a routine, shows the login warning and the live log, th
   await cancel.click();
   await expect(page.locator("#toast-container")).toContainText("O Chrome de automação continua aberto.");
   await expect(status).toContainText("Livre");
+  await expect(page.locator("#cockpit-automation-shell-title")).toHaveText("Chrome livre");
   await expect(warning).toBeHidden();
   await expect(panel.getByRole("button", { name: "Inventários", exact: true })).toBeEnabled();
   await expect(cancel).toBeDisabled();
@@ -97,11 +130,14 @@ test("Automação pages and filters executions without growing the history", asy
 test("Automação consults a bounded historical log and keeps it through live polling", async ({ page, request }) => {
   const panel = await openAutomation(page, request);
   await panel.locator("#automacao-historico tbody tr").nth(1).getByRole("button", {name: "Ver log", exact: false}).click();
-  const log = panel.getByRole("log");
+  const log = panel.locator("#automacao-log");
+  const events = panel.locator("#cockpit-automation-events");
   await expect(log).toContainText("Histórico 20261019_170000_os");
   await expect(panel.getByLabel("Data do log", {exact: true})).toHaveValue("2026-10-19");
   await expect(log).toHaveAttribute("aria-live", "off");
   await expect(log).toContainText("<script>texto</script>");
+  await expect(events).toContainText("<script>texto</script>");
+  await expect(events.locator("script")).toHaveCount(0);
   await expect.poll(async () => (await log.innerText()).split("\n").length).toBe(200);
   await panel.getByRole("combobox", {name: "Linhas do log", exact: true}).selectOption("100");
   await expect.poll(async () => (await log.innerText()).split("\n").length).toBe(100);
@@ -174,7 +210,7 @@ test("Automação ignores a late historical response after returning to live mod
     release();
     await response;
     await expect(panel.locator("#automacao-log-modo")).toContainText("Ao vivo");
-    await expect(panel.getByRole("log")).not.toContainText("LATE HISTORICAL RESPONSE");
+    await expect(panel.locator("#automacao-log")).not.toContainText("LATE HISTORICAL RESPONSE");
   } finally { release(); }
 });
 
@@ -233,7 +269,7 @@ test("Automação shows the failure screenshot as a thumbnail that opens enlarge
 
 test("Sincronizar chamados Sebrae shows the summary, counters and pending items with reasons", async ({ page, request }) => {
   const panel = await openAutomation(page, request);
-  const card = panel.locator("#sebrae-painel");
+  const card = await abrirPainelSebrae(panel);
   await expect(card.getByRole("heading", { name: "Sincronizar chamados Sebrae", level: 2 })).toBeVisible();
   await expect(card.locator("#sebrae-regra")).toHaveAttribute("role", "tooltip");
   await expect(card.locator("#sebrae-regra")).toContainText("Roda de segunda a sexta, das 09h15 às 17h45, a cada 30 minutos, com o computador ligado e o servidor local da Simpress em execução.");
@@ -254,6 +290,7 @@ test("Sincronizar chamados Sebrae shows the summary, counters and pending items 
 
 test("Sincronizar chamados Sebrae explains the 409 when the routine is not complete yet", async ({ page, request }) => {
   const panel = await openAutomation(page, request);
+  await abrirPainelSebrae(panel);
   const toggle = panel.getByRole("button", { name: "Ativar agendamento", exact: true });
   const sent = page.waitForRequest(req => req.url().endsWith("/api/automacao/sebrae/agendamento") && req.method() === "PUT");
   await toggle.click();
@@ -265,7 +302,7 @@ test("Sincronizar chamados Sebrae explains the 409 when the routine is not compl
 
 test("Sincronizar chamados Sebrae turns the schedule on and off when the routine is ready", async ({ page, request }) => {
   const panel = await openAutomation(page, request, 0, "pronta");
-  const card = panel.locator("#sebrae-painel");
+  const card = await abrirPainelSebrae(panel);
   await expect(card.locator("#sebrae-agendamento-aviso")).toBeHidden();
   await card.getByRole("button", { name: "Ativar agendamento", exact: true }).click();
   await expect(card.locator("#sebrae-estado")).toContainText("Agendamento ativo");
@@ -279,7 +316,7 @@ test("Sincronizar chamados Sebrae turns the schedule on and off when the routine
 
 test("Sincronizar chamados Sebrae runs now and cancels only its own run", async ({ page, request }) => {
   const panel = await openAutomation(page, request);
-  const card = panel.locator("#sebrae-painel");
+  const card = await abrirPainelSebrae(panel);
   const cancel = card.getByRole("button", { name: "Cancelar sincronização", exact: true });
   await expect(cancel).toBeDisabled();
   const started = page.waitForRequest(req => req.url().endsWith("/api/automacao/executar") && req.method() === "POST");
@@ -296,7 +333,7 @@ test("Sincronizar chamados Sebrae runs now and cancels only its own run", async 
 
 test("Sincronizar chamados Sebrae shows the login warning and passes the audit in both themes", async ({ page, request }, testInfo) => {
   const panel = await openAutomation(page, request, 0, "login");
-  const card = panel.locator("#sebrae-painel");
+  const card = await abrirPainelSebrae(panel);
   await expect(card.locator("#sebrae-login-aviso")).toBeVisible();
   await expect(card.locator("#sebrae-login-aviso")).toContainText("Login necessário");
   for (const theme of ["light", "dark"]) {
