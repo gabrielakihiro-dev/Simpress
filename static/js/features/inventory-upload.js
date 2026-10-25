@@ -174,7 +174,7 @@
     }
     const preview = document.getElementById("upload-planilhas-preview");
     preview.textContent = linhas.join("\n");
-    preview.className = "text-xs rounded-lg px-3 py-2 bg-slate-950 border border-slate-700 text-slate-200 whitespace-pre-line";
+    preview.className = "text-xs rounded-lg px-3 py-2 bg-surface border border-line-control text-fg-secondary whitespace-pre-line";
     preview.setAttribute("role", "status");
     preview.setAttribute("aria-live", "polite");
     preview.setAttribute("aria-atomic", "true");
