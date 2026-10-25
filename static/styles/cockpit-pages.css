@@ -255,12 +255,12 @@ body.has-quick-actions { padding-bottom: 0; }
   .cockpit-shell .cockpit-summary-body { display: block; }
   .cockpit-shell .cockpit-summary-regions { border-left: 0; border-top: 1px solid var(--cockpit-border); }
   .cockpit-shell #automacao-cards {
-    height: auto;
     grid-template-columns: minmax(0, 1fr);
     grid-template-rows: none;
     grid-template-areas: "alert" "controls" "sebrae" "console" "history";
-    overflow: visible;
+    align-content: start;
   }
+  .cockpit-shell #cockpit-automation-events { flex: none; overflow: visible; }
 }
 
 @media (max-width: 767.98px) {
