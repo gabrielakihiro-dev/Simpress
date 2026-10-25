@@ -10,7 +10,7 @@ Toda thread adquire locks nesta ordem. Ela pode pular níveis, mas nunca voltar 
 | :--- | :--- | :--- | :--- |
 | 1 | Global `.atomic-transactions` | `AtomicFileTransaction.__enter__`, `recover_pending_transactions`, `load_database()` (`core/integrity.py`, `main.py`) | `lock_paths([root / ".atomic-transactions"])` |
 | 2 | Locks de arquivo | `lock_paths(...)`: `RLock` por caminho e `.<arquivo>.lock` do sistema operacional | Uma única chamada com todos os caminhos, em ordem canônica. Fora de transação, só leitura (prévia, modelo de transferência) |
-| 3 | Locks Python (folha) | `STATE_LOCK`, `ALIAS_HISTORY_LOCK`, `COMPARISON_HISTORY_LOCK`, `MODIFIED_APELIDOS_LOCK`, `_READINESS_VALIDATION_LOCK` e o lock de `ReadinessReportCache` (`domains/readiness.py`), `_TRANSACTION_RECOVERY_BLOCK_LOCK`, `_EXPORT_STATUS_LOCK`, `_EXPORT_COUNTS_LOCK` (`main.py`); `_PATH_CACHE_LOCK` (`core/xlsx_safety.py`); `_equipment_search_index_lock` (`persistence/postgres.py`) | `with LOCK:` em volta de memória ou de uma única leitura de arquivo |
+| 3 | Locks Python (folha) | `STATE_LOCK`, `ALIAS_HISTORY_LOCK`, `COMPARISON_HISTORY_LOCK`, `MODIFIED_APELIDOS_LOCK`, `_READINESS_VALIDATION_LOCK` e o lock de `ReadinessReportCache` (`domains/readiness.py`), `_TRANSACTION_RECOVERY_BLOCK_LOCK`, `_EXPORT_STATUS_LOCK`, `_EXPORT_COUNTS_LOCK` (`main.py`); `_LOCK` (`routers/transfer_history.py`, só na leitura do GET); `_PATH_CACHE_LOCK` (`core/xlsx_safety.py`); `_equipment_search_index_lock` (`persistence/postgres.py`) | `with LOCK:` em volta de memória ou de uma única leitura de arquivo |
 
 `AtomicFileTransaction.add_target` pega mais locks de arquivo depois dos primeiros. Isso é seguro porque só acontece com o lock global preso, que serializa todas as transações.
 
@@ -27,6 +27,7 @@ Toda thread adquire locks nesta ordem. Ela pode pular níveis, mas nunca voltar 
 | :--- | :--- | :--- |
 | `prune_expired_histories` (`main.py`) | Segurava `ALIAS_HISTORY_LOCK` e `COMPARISON_HISTORY_LOCK` e depois pedia o lock global. Quem já segurava o global e chamava `load_alias_history()` (alteração de apelido) esperava até 15 s, e a retenção falhava com `FileBusyError` | Abre a transação sem lock Python |
 | Salvar anotação (`PUT /api/historico-comparacoes/{evento_id}/anotacoes/{item_id}`) | `comparison_history_lock` em volta da transação | Só a transação |
+| Registrar transferência (`POST /api/historico-transferencias`) | `_LOCK` em volta de `AtomicFileTransaction` | Só a transação |
 | Excluir evento (`DELETE /api/historico-comparacoes/{evento_id}`) | `comparison_history_lock` em volta da transação; o `FileBusyError` virava HTTP 500 | Só a transação |
 
 O campo `comparison_history_lock` saiu de `InventoryHistoryServices`, porque ficou sem uso. As rotas, os DTOs e as respostas HTTP não mudaram.

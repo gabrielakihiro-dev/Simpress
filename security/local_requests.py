@@ -228,7 +228,7 @@ class LocalRequestSafetyMiddleware:
             else limits.upload_bytes + 1024 * 1024 if is_model_upload
             else 2 * limits.ticket_workbook_bytes + 1024 * 1024 if is_ticket_upload
             else limits.entra_csv_request_bytes if is_entra_upload
-            else limits.api_request_bytes if path.startswith("/api/") and scope.get("method") in {"POST", "PUT", "PATCH"}
+            else limits.api_request_bytes if path.startswith("/api/")
             else None
         )
         if body_limit is not None:
