@@ -88,7 +88,7 @@ function overflowingRight(page, rootSelector) {
   }, rootSelector);
 }
 
-for (const width of [320, 390, 768, 1024, 1200, 1440, 1920]) {
+for (const width of [320, 390, 768, 1024, 1200, 1440, 1920, 2560]) {
   test(`Cockpit bar and Home fit a ${width}px window without horizontal scrolling`, async ({ page }) => {
     await page.setViewportSize({ width, height: 800 });
     await page.goto("/");
@@ -150,7 +150,7 @@ test("compact Home goes list -> detail -> back", async ({ page }) => {
   await expect(page.locator("#btn-home-voltar-lista")).toBeHidden();
 });
 
-for (const width of [320, 390, 768, 1024, 1200, 1440, 1920]) {
+for (const width of [320, 390, 768, 1024, 1200, 1440, 1920, 2560]) {
   test(`Transporte, Resumo e Automação fit a ${width}px window without horizontal scrolling`, async ({ page }) => {
     await page.setViewportSize({ width, height: 800 });
     await page.goto("/");
@@ -179,7 +179,7 @@ const toolComparison = {
 };
 const toolButtons = [["#btn-acompanhamento-chamados", "chamados", "F5"], ["#btn-cockpit-comparacao", "comparacao", "F6"], ["#btn-historico-apelidos", "apelidos", "F7"], ["#btn-relatorio-mensal", "relatorio", "F8"]];
 
-for (const width of [320, 390, 768, 1024, 1200, 1440, 1920]) {
+for (const width of [320, 390, 768, 1024, 1200, 1440, 1920, 2560]) {
   test(`tool panels fit a ${width}px window and keep the F5–F8 shortcuts`, async ({ page }) => {
     test.setTimeout(60_000);
     await page.route("**/api/historico-comparacoes", route => route.fulfill({ json: { eventos: [toolComparison] } }));
@@ -235,3 +235,95 @@ test("a real modal stays reachable on a short compact screen", async ({ page }) 
   expect(box.y).toBeGreaterThanOrEqual(0);
   expect(box.y + box.height).toBeLessThanOrEqual(421);
 });
+
+test("at 1920px and wider the shell stays centered at 1920px; below that it fills the window", async ({ page }) => {
+  for (const [width, expected] of [[1919, 1919], [1920, 1920], [2560, 1920]]) {
+    await page.setViewportSize({ width, height: 900 });
+    await page.goto("/");
+    const box = await page.locator("#simpress-app-shell").boundingBox();
+    expect(Math.round(box.width)).toBe(expected);
+    expect(Math.round(box.x)).toBe(Math.round((width - expected) / 2));
+  }
+});
+
+test("compact fields use 16px so iOS does not zoom on focus", async ({ page, isMobile }) => {
+  await page.setViewportSize({ width: 390, height: 844 });
+  await page.goto("/");
+  expect(await page.locator("#input-serial").evaluate(el => getComputedStyle(el).fontSize)).toBe("16px");
+  test.skip(isMobile, "o perfil móvel emula viewport de celular e ignora o redimensionamento largo");
+  await page.setViewportSize({ width: 1440, height: 900 });
+  expect(await page.locator("#input-serial").evaluate(el => getComputedStyle(el).fontSize)).toBe("13px");
+});
+
+test.describe("touch targets", () => {
+  test.use({ hasTouch: true });
+  for (const width of [320, 360, 375, 390, 768, 1024, 1366]) {
+    test(`bar and Home controls are at least 44px with a coarse pointer at ${width}px`, async ({ page }) => {
+      await page.setViewportSize({ width, height: 800 });
+      await page.goto("/");
+      expect(await page.evaluate(() => matchMedia("(pointer: coarse)").matches)).toBe(true);
+      // Abaixo de 375px os botões da barra não cabem com 44px de largura; a altura de 44px vale sempre.
+      const small = await page.evaluate(narrow => [...document.querySelectorAll(
+        ".cockpit-bar button, .cockpit-bar summary, .cockpit-bar input, .cockpit-bar [role=tab], #tab-panel-home button, #tab-panel-home input, #tab-panel-home select")]
+        .filter(el => {
+          const r = el.getBoundingClientRect();
+          return r.width && !el.closest("[hidden], .hidden") && (r.height < 43.5 || (r.width < 43.5 && !(narrow && el.closest(".cockpit-bar") && !el.matches("input"))));
+        })
+        .map(el => `${el.id || el.className}:${Math.round(el.getBoundingClientRect().width)}x${Math.round(el.getBoundingClientRect().height)}`), width < 375);
+      expect(small).toEqual([]);
+      // Nenhum controle principal da barra pode ficar coberto por outro (as abas invadiam o botão de status).
+      const covered = await page.evaluate(() => [...document.querySelectorAll(
+        ".cockpit-bar [role=tab], #cockpit-bar-status-toggle, #cockpit-tools-trigger, #btn-notificacoes, #theme-toggle, .cockpit-bar__search input")]
+        .filter(el => {
+          const r = el.getBoundingClientRect();
+          if (!r.width) return false;
+          const top = document.elementFromPoint(r.left + r.width / 2, r.top + r.height / 2);
+          return !(top && (el === top || el.contains(top)));
+        }).map(el => el.id || el.className));
+      expect(covered).toEqual([]);
+      expect(await overflowingRight(page, ".cockpit-bar")).toEqual([]);
+    });
+  }
+});
+
+// Telas baixas: nada fica preso atrás de overflow:hidden e cada controle chega à janela por rolagem.
+function unreachableControls(page, rootSelector) {
+  return page.evaluate(root => {
+    const lost = [];
+    const bar = document.querySelector(".cockpit-bar").getBoundingClientRect().bottom;
+    for (const el of document.querySelectorAll(`${root} :is(button, a[href], input, select, textarea, summary)`)) {
+      if (el.closest("[hidden], .hidden, [inert]") || !el.getClientRects().length || getComputedStyle(el).visibility === "hidden") continue;
+      // Conteúdo de <details> recolhido só aparece ao abrir; o próprio <summary> continua alcançável.
+      if ([...document.querySelectorAll("details:not([open])")].some(d => d.contains(el) && !d.querySelector(":scope > summary")?.contains(el))) continue;
+      const name = el.id || String(el.className).split(" ")[0] || el.tagName;
+      for (let a = el.parentElement; a && a !== document.documentElement; a = a.parentElement) {
+        const cs = getComputedStyle(a);
+        const r = el.getBoundingClientRect();
+        const ar = a.getBoundingClientRect();
+        if (/(hidden|clip)/.test(cs.overflowY) && (r.bottom > ar.bottom + 1 || r.top < ar.top - 1)) { lost.push(`${name} cortado por ${a.id || a.className}`); break; }
+      }
+      el.scrollIntoView({ block: "center", behavior: "instant" });
+      const r = el.getBoundingClientRect();
+      if (r.top < bar - 1 || r.bottom > innerHeight + 1) lost.push(`${name} fora da janela após rolar`);
+    }
+    return lost;
+  }, rootSelector);
+}
+
+for (const [width, height] of [[844, 390], [1024, 500]]) {
+  test(`Home and Automação stay reachable in a short ${width}x${height} window`, async ({ page }) => {
+    await page.setViewportSize({ width, height });
+    await page.goto("/");
+    await expect(page.locator("#home-equipment-list [role=option]")).toHaveCount(1);
+    await page.locator("#home-equipment-list [role=option]").first().click();
+    expect(await unreachableControls(page, "#tab-panel-home")).toEqual([]);
+    expect(await overflowingRight(page, "#tab-panel-home")).toEqual([]);
+
+    await page.locator("#tab-automacao").click();
+    await expect(page.locator("#tab-panel-automacao")).toBeVisible();
+    expect(await unreachableControls(page, "#tab-panel-automacao")).toEqual([]);
+    expect(await overflowingRight(page, "#tab-panel-automacao")).toEqual([]);
+    const dims = await page.evaluate(() => ({ d: document.documentElement.scrollWidth, v: document.documentElement.clientWidth }));
+    expect(dims.d).toBeLessThanOrEqual(dims.v);
+  });
+}
