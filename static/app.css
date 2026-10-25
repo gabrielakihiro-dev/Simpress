@@ -980,7 +980,7 @@
     }
     .glass-input:focus-visible { outline-offset: 2px; }
     /* Tab panels are focusable containers: a quiet ring instead of the bold control outline. */
-    .app-tab-panel:focus-visible { outline: 2px solid var(--border-strong); outline-offset: 6px; border-radius: 1.25rem; }
+    .app-tab-panel:focus-visible { outline: 2px solid var(--focus-color, #7dd3fc); outline-offset: 6px; border-radius: 1.25rem; }
     @media (prefers-reduced-motion: reduce) {
       html { scroll-behavior: auto; }
     }
@@ -1029,7 +1029,7 @@ html[data-theme="light"] #autocomplete-footer { color: var(--ux-text-muted); }
 html[data-theme="light"] #autocomplete-list { background: var(--search-popover-bg); }
 html[data-theme="light"] #autocomplete-more-results { border-color: var(--border-strong); }
 
-html[data-theme="light"] .app-tab-panel:focus-visible { outline-color: var(--border-strong); }
+html[data-theme="light"] .app-tab-panel:focus-visible { outline-color: var(--focus-color); }
 
 /* ---------- History filters (Histórico de Planilhas) ---------- */
 .history-filter-bar {
@@ -1405,4 +1405,10 @@ html[data-theme="light"] .history-filter-search-label input::placeholder { color
   .alias-history-clear,
   .alias-history-page-button,
   .alias-history-action-button { transition: none; }
+}
+
+/* Same chevron file on every dropdown; #select-unidade-destino has its own rule in ux-refinements.css. */
+html select.glass-input:not([multiple]), html .automation-card select, html select.ux-city-filter {
+  appearance: none; background-image: url("/static/chevron-down.svg"); background-repeat: no-repeat;
+  background-position: right 0.75rem center; background-size: 1.1rem; padding-right: 2.25rem;
 }

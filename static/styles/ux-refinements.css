@@ -738,9 +738,9 @@ html[data-ux-density="compact"] .comparison-desktop-table td {
 .ticket-summary-table th:nth-child(2), .ticket-summary-table td:nth-child(2) { width: 10%; }
 .ticket-summary-table th:nth-child(3), .ticket-summary-table td:nth-child(3) { width: 9%; }
 .ticket-summary-table th:nth-child(4), .ticket-summary-table td:nth-child(4) { width: 9%; }
-.ticket-summary-table th:nth-child(5), .ticket-summary-table td:nth-child(5) { width: 11%; }
+.ticket-summary-table th:nth-child(5), .ticket-summary-table td:nth-child(5) { width: 14%; }
 .ticket-summary-table th:nth-child(6), .ticket-summary-table td:nth-child(6) { width: 27%; }
-.ticket-summary-table th:nth-child(7), .ticket-summary-table td:nth-child(7) { width: 25%; }
+.ticket-summary-table th:nth-child(7), .ticket-summary-table td:nth-child(7) { width: 22%; }
 .ticket-summary-table td:nth-child(3) { font-family: var(--font-mono, ui-monospace, monospace); }
 .ticket-summary-table td:nth-child(2) { white-space: nowrap; }
 .ticket-summary-table td:nth-child(3) { white-space: normal; }

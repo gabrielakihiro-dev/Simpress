@@ -132,7 +132,7 @@
     document.getElementById("retirada-cnpj").value = sede?.cnpj || "";
     document.getElementById("retirada-endereco").value = "R Caeté, 150 - SEDE - Prado Velho - Curitiba/PR - CEP 80220-300";
     app.preencherRepresentanteRegional("retirada", "Curitiba");
-    app.showToast("Origem alterada para SEDE Prado Velho (Curitiba)!", "info");
+    app.showToast("Origem alterada para SEDE Prado Velho (Curitiba).", "info");
   }
 
   // Handle Unidade de Destino Selection
@@ -238,14 +238,14 @@
     const serialInput = document.getElementById("input-serial");
     const serialVal = transferUtils.serialForTransfer(appState.currentEquipamento, serialInput.value);
     if (!serialVal) {
-      app.showToast("Busque e selecione o equipamento correto antes de gerar a transferência.", "warning");
+      app.showToast("Pesquise e selecione o equipamento correto antes de gerar a transferência.", "warning");
       serialInput.focus();
       return null;
     }
 
     const entregaContato = document.getElementById("entrega-contato").value.trim();
     if (!entregaContato) {
-      app.showToast("Por favor, informe o Nome do Destinatário no SEBRAE.", "warning");
+      app.showToast("Preencha o campo obrigatório “Nome do destinatário”.", "warning");
       document.getElementById("entrega-contato").focus();
       return null;
     }
@@ -353,7 +353,7 @@
   function copiarTextoDoModal() {
     const texto = document.getElementById("textarea-resumo-preview").value;
     navigator.clipboard.writeText(texto).then(() => {
-      app.showToast("Resumo copiado para a área de transferência!", "success");
+      app.showToast("Resumo copiado para a área de transferência.", "success");
     }).catch(err => {
       app.showToast("Erro ao copiar texto: " + err, "error");
     });
@@ -404,7 +404,7 @@
       await app.copiarTextoParaAreaTransferencia(serial);
       app.showToast(`Série ${serial} copiada para a área de transferência.`, "success");
     } catch (err) {
-      app.showToast("Não foi possível copiar a série. Tente novamente pelo navegador.", "error");
+      app.showToast("Não foi possível copiar a série. Selecione o texto e copie com Ctrl+C.", "error");
     }
   }
 
@@ -478,7 +478,7 @@
       await app.copiarTextoParaAreaTransferencia(texto);
       app.showToast("Texto da solicitação copiado para a área de transferência.", "success");
     } catch (err) {
-      app.showToast("Não foi possível copiar o texto. Tente novamente pelo navegador.", "error");
+      app.showToast("Não foi possível copiar o texto. Selecione-o e copie com Ctrl+C.", "error");
     }
   }
 
@@ -627,7 +627,7 @@
     // Reset status indicator
     document.getElementById("status-indicator").className = "w-2.5 h-2.5 rounded-full bg-brand-400";
     document.getElementById("status-summary").innerHTML = `
-        <span class="text-slate-300 font-medium">Pronto para emissão.</span>
+        <span class="text-slate-300 font-medium" data-ux-ready-status>Pronto para emissão.</span>
       `;
 
     app.showToast("Formulário limpo. Pronto para uma nova busca.", "info");

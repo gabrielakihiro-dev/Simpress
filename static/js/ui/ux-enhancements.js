@@ -108,6 +108,12 @@
     return count === 1 ? "1 campo pendente" : `${count} campos pendentes`;
   }
 
+  // Bottom-bar status shown while no equipment message replaces it: it must agree with the pending chip.
+  function describeReadiness(count) {
+    if (count <= 0) return "Pronto para emissão.";
+    return count === 1 ? "Falta 1 campo obrigatório." : `Faltam ${count} campos obrigatórios.`;
+  }
+
   // Visible chip text: the count badge already shows the number, so "4" + "pendentes" reads "4 pendentes".
   function shortPendingLabel(count) {
     if (count <= 0) return "Campos completos";
@@ -300,6 +306,11 @@
       chip.dataset.status = count ? "pending" : "success";
       chip.querySelector("[data-ux-count]").textContent = count ? String(count) : "✓";
       chip.querySelector("[data-ux-label]").textContent = shortPendingLabel(count);
+      const readyStatus = byId("status-summary")?.querySelector("[data-ux-ready-status]");
+      if (readyStatus) {
+        const readyText = describeReadiness(count);
+        if (readyStatus.textContent !== readyText) readyStatus.textContent = readyText;
+      }
       if (count) {
         const shortText = `${count} ${shortPendingLabel(count)}`;
         chip.removeAttribute("aria-disabled");
@@ -376,6 +387,9 @@
     }, true);
     // Fires only after the reset was confirmed and applied, so a cancelled dialog keeps the validation state.
     doc.addEventListener("simpress:form-reset", () => { setTouched(false); scheduleRefresh(); });
+    // Other modules swap the status text (clear selection, reset); recompute it when they do.
+    const statusSummary = byId("status-summary");
+    if (statusSummary && win.MutationObserver) new win.MutationObserver(scheduleRefresh).observe(statusSummary, { childList: true });
 
     // Info tips: Esc hides the open tip until the pointer or focus leaves it (WCAG 1.4.13).
     doc.addEventListener("keydown", event => {
@@ -498,6 +512,7 @@
     isFieldActive,
     listPendingFields,
     describePending,
+    describeReadiness,
     shortPendingLabel,
     isCopyTrigger,
     phoneProblem,
