@@ -53,6 +53,14 @@ test("Resumo uses the latest comparison and opens its series in Home", async ({ 
     await expect(page.locator("#cockpit-summary-rows tr")).toHaveCount(0);
     await expect(page.locator("#cockpit-summary-status")).toContainText("lista detalhada não é armazenada");
 
+    // Compacto: as linhas viram cards rotulados (data-label) e o cabeçalho da tabela some.
+    await page.setViewportSize({ width: 390, height: 844 });
+    await page.locator('#cockpit-summary-kpis [data-metric="divergencias_local"]').click();
+    const cells = page.locator("#cockpit-summary-rows tr").first().locator("td");
+    await expect(cells.first()).toHaveAttribute("data-label", "Série");
+    await expect(cells.last()).toHaveAttribute("data-label", "Ação");
+    await expect(page.locator(".cockpit-summary-table thead")).toBeHidden();
+
     await page.locator('#cockpit-summary-kpis [data-metric="sem_acesso_7_dias"]').click();
     await expect(page.locator("#cockpit-summary-table-title")).toHaveText("Sem acesso há 7+ dias · 1");
     await expect(page.locator("#cockpit-summary-rows")).toContainText("9 dias");
@@ -69,7 +77,12 @@ function overflowingRight(page, rootSelector) {
         const rect = el.getBoundingClientRect();
         if (!rect.width || !rect.height || el.closest("[hidden], .hidden, .sr-only")) return false;
         const style = getComputedStyle(el);
-        return style.visibility !== "hidden" && rect.right > limit;
+        if (style.visibility === "hidden" || rect.right <= limit) return false;
+        // Conteúdo dentro de um contêiner com rolagem horizontal própria (ex.: tabela do histórico) não estoura a página.
+        for (let p = el.parentElement; p && p !== document.body; p = p.parentElement) {
+          if (/(auto|scroll)/.test(getComputedStyle(p).overflowX) && p.getBoundingClientRect().right <= limit) return false;
+        }
+        return true;
       })
       .map(el => `${el.tagName.toLowerCase()}#${el.id}.${String(el.className).split(" ")[0]}`);
   }, rootSelector);
@@ -136,3 +149,22 @@ test("compact Home goes list -> detail -> back", async ({ page }) => {
   await expect(page.locator(".cockpit-home-list")).toBeVisible();
   await expect(page.locator("#btn-home-voltar-lista")).toBeHidden();
 });
+
+for (const width of [320, 390, 768, 1024, 1200, 1440, 1920]) {
+  test(`Transporte, Resumo e Automação fit a ${width}px window without horizontal scrolling`, async ({ page }) => {
+    await page.setViewportSize({ width, height: 800 });
+    await page.goto("/");
+    for (const [tab, panel] of [["tab-retirada-entrega", "tab-panel-retirada-entrega"], ["tab-resumo", "tab-panel-resumo"], ["tab-automacao", "tab-panel-automacao"]]) {
+      await page.locator(`#${tab}`).click();
+      await expect(page.locator(`#${panel}`)).toBeVisible();
+      const dimensions = await page.evaluate(() => ({
+        viewport: document.documentElement.clientWidth,
+        document: document.documentElement.scrollWidth,
+        body: document.body.scrollWidth,
+      }));
+      expect(dimensions.document, panel).toBeLessThanOrEqual(dimensions.viewport);
+      expect(dimensions.body, panel).toBeLessThanOrEqual(dimensions.viewport);
+      expect(await overflowingRight(page, `#${panel}`), panel).toEqual([]);
+    }
+  });
+}

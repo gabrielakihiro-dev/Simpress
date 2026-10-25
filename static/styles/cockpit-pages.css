@@ -1,3 +1,4 @@
+/* Faixas: compacto <= 767.98px | médio 768px–1199.98px | amplo >= 1200px (idêntico ao artefato). */
 /* Page compositions for the approved Cockpit; all existing form fields and actions stay intact. */
 .cockpit-shell #tab-panel-retirada-entrega,
 .cockpit-shell #tab-panel-resumo,
@@ -10,8 +11,8 @@
 
 .cockpit-shell .cockpit-transport-layout {
   display: grid;
-  grid-template-columns: minmax(0, 1fr) minmax(310px, 26vw);
-  height: calc(100dvh - 48px);
+  grid-template-columns: minmax(0, 1fr) 400px;
+  height: calc(100dvh - var(--cockpit-bar-h, 48px));
   min-height: 0;
   overflow: hidden;
 }
@@ -130,13 +131,13 @@ body.has-quick-actions { padding-bottom: 0; }
 /* Compact operational summary: counts are populated from the local dashboard/history APIs. */
 .cockpit-shell .cockpit-summary {
   display: flex;
-  min-height: calc(100dvh - 48px);
+  min-height: calc(100dvh - var(--cockpit-bar-h, 48px));
   flex-direction: column;
 }
 
 .cockpit-shell .cockpit-summary-kpis {
   display: grid;
-  grid-template-columns: repeat(5, minmax(0, 1fr));
+  grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
   border-bottom: 1px solid var(--cockpit-border);
 }
 
@@ -164,7 +165,7 @@ body.has-quick-actions { padding-bottom: 0; }
 .cockpit-shell .cockpit-summary-kpi[data-tone="warn"] .cockpit-summary-kpi-value { color: var(--cockpit-warn-fg); }
 .cockpit-shell .cockpit-summary-kpi[data-tone="error"] .cockpit-summary-kpi-value { color: var(--cockpit-err-fg); }
 
-.cockpit-shell .cockpit-summary-body { display: grid; grid-template-columns: minmax(0, 1fr) minmax(260px, 22vw); min-height: 0; flex: 1; }
+.cockpit-shell .cockpit-summary-body { display: grid; grid-template-columns: minmax(0, 1fr) 340px; min-height: 0; flex: 1; }
 .cockpit-shell .cockpit-summary-results { min-width: 0; overflow: auto; padding: 14px; }
 .cockpit-shell .cockpit-summary-heading { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 10px; margin-bottom: 8px; }
 .cockpit-shell .cockpit-summary-heading h2 { margin: 0; color: var(--cockpit-text); font-size: 14px; }
@@ -190,9 +191,9 @@ body.has-quick-actions { padding-bottom: 0; }
 
 /* Automation layout mirrors the reference without hiding the scheduled Sebrae flow. */
 .cockpit-shell #automacao-cards {
-  height: calc(100dvh - 48px);
+  height: calc(100dvh - var(--cockpit-bar-h, 48px));
   min-height: 0;
-  grid-template-columns: minmax(0, 1fr) minmax(330px, 32vw);
+  grid-template-columns: minmax(0, 1fr) 560px;
   grid-template-rows: auto auto auto minmax(0, 1fr);
   grid-template-areas: "alert alert" "controls console" "sebrae console" "history console";
   gap: 8px;
@@ -246,8 +247,13 @@ body.has-quick-actions { padding-bottom: 0; }
   .cockpit-shell .cockpit-automation-event { transition: none; }
 }
 
-/* Fase 2: sem a largura mínima de 1200px, a Automação empilha (ajuste completo na fase 3). */
+/* Fase 3: abaixo de 1200px as colunas laterais descem e a página rola em vez de cortar. */
 @media (max-width: 1199.98px) {
+  .cockpit-shell .cockpit-transport-layout { display: block; height: auto; overflow: visible; }
+  .cockpit-shell .cockpit-transport-fields { overflow: visible; }
+  .cockpit-shell .cockpit-transport-preview { border-left: 0; border-top: 1px solid var(--cockpit-border); }
+  .cockpit-shell .cockpit-summary-body { display: block; }
+  .cockpit-shell .cockpit-summary-regions { border-left: 0; border-top: 1px solid var(--cockpit-border); }
   .cockpit-shell #automacao-cards {
     height: auto;
     grid-template-columns: minmax(0, 1fr);
@@ -255,4 +261,17 @@ body.has-quick-actions { padding-bottom: 0; }
     grid-template-areas: "alert" "controls" "sebrae" "console" "history";
     overflow: visible;
   }
+}
+
+@media (max-width: 767.98px) {
+  .cockpit-shell .transfer-form-grid { grid-template-columns: minmax(0, 1fr); }
+  .cockpit-shell .cockpit-summary-table thead { display: none; }
+  .cockpit-shell .cockpit-summary-table,
+  .cockpit-shell .cockpit-summary-table tbody,
+  .cockpit-shell .cockpit-summary-table tr,
+  .cockpit-shell .cockpit-summary-table td { display: block; }
+  .cockpit-shell .cockpit-summary-table tr { margin-bottom: 8px; border: 1px solid var(--cockpit-border); border-radius: var(--cockpit-radius-md); background: var(--cockpit-surface); }
+  .cockpit-shell .cockpit-summary-table td { display: grid; grid-template-columns: minmax(84px, 0.8fr) minmax(0, 1.4fr); gap: 8px; overflow-wrap: anywhere; }
+  .cockpit-shell .cockpit-summary-table td:last-child { border-bottom: 0; }
+  .cockpit-shell .cockpit-summary-table td::before { content: attr(data-label); color: var(--cockpit-text-subtle); font-size: 10px; }
 }
