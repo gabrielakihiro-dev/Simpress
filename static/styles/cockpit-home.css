@@ -769,7 +769,7 @@
 
 .cockpit-home-detail {
   min-height: 0;
-  padding: 16px;
+  padding: 16px 20px;
   background: var(--cockpit-bg);
 }
 
@@ -815,7 +815,7 @@
 .cockpit-home-bottom {
   display: flex;
   gap: 16px;
-  align-items: flex-start;
+  align-items: stretch;
   min-width: 0;
 }
 
