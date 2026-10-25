@@ -1,8 +1,10 @@
-/* Cockpit Home — split-view (lista esquerda + detalhe direita) */
+/* Cockpit Home — split-view (lista esquerda + detalhe direita)
+ * Faixas: compacto <= 767.98px | médio 768px–1199.98px | amplo >= 1200px (idêntico ao artefato).
+ */
 
 .cockpit-home-split {
   display: flex;
-  height: calc(100vh - 48px);
+  height: calc(100dvh - var(--cockpit-bar-h, 48px));
   overflow: hidden;
 }
 
@@ -614,8 +616,8 @@
 /* Cockpit refinements: real-data list and the approved 1200px split-view. */
 .cockpit-home-split {
   width: 100%;
-  min-width: 1200px;
-  height: calc(100dvh - 48px);
+  min-width: 0;
+  height: calc(100dvh - var(--cockpit-bar-h, 48px));
   overflow: hidden;
 }
 
@@ -908,4 +910,36 @@
   font-size: 12px;
   color: var(--cockpit-text-muted);
   text-align: center;
+}
+
+/* ── Home responsiva ── */
+.cockpit-home-back { display: none; }
+
+@media (min-width: 768px) and (max-width: 1199.98px) {
+  .cockpit-home-list { width: clamp(260px, 30vw, 360px); min-width: 0; flex: 0 0 clamp(260px, 30vw, 360px); }
+  .cockpit-home-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .cockpit-home-card-header { flex-wrap: wrap; }
+  .cockpit-home-bottom { flex-direction: column; align-items: stretch; }
+  .cockpit-home-open-tickets { flex: 0 0 auto; width: auto; }
+}
+
+@media (max-width: 767.98px) {
+  /* Uma coluna: a lista vem acima do detalhe (alertas e modelos); ao selecionar, só o detalhe com "Voltar"; a página rola (sem overflow:hidden escondendo conteúdo). */
+  .cockpit-home-split { display: block; height: auto; min-height: calc(100dvh - var(--cockpit-bar-h, 48px)); overflow: visible; }
+  .cockpit-home-list { width: auto; min-width: 0; border-right: 0; overflow: visible; }
+  .cockpit-home-items { overflow: visible; }
+  .cockpit-home-detail { overflow: visible; padding: 12px; }
+  .cockpit-home-split[data-home-view="detail"] .cockpit-home-list { display: none; }
+  .cockpit-home-split[data-home-view="detail"] .cockpit-home-back { display: inline-flex; margin-bottom: 8px; }
+  .cockpit-home-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .cockpit-home-card-header,
+  .cockpit-home-ticket-toolbar { flex-wrap: wrap; }
+  .cockpit-home-card-actions,
+  .cockpit-home-ticket-toolbar-actions { flex-wrap: wrap; }
+  .cockpit-home-bottom { flex-direction: column; align-items: stretch; }
+  .cockpit-home-open-tickets { flex: 0 0 auto; width: auto; }
+}
+
+@media (max-width: 479.98px) {
+  .cockpit-home-grid { grid-template-columns: minmax(0, 1fr); }
 }

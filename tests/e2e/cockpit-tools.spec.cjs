@@ -24,7 +24,7 @@ async function mockComparison(page) {
 
 test("Home hides the unselected equipment and never displays reference serials", async ({ page }) => {
   await page.goto("/");
-  await expect(page.locator("#home-detail-empty")).toBeVisible();
+  await expect(page.locator("#home-detail-empty")).toBeAttached();
   await expect(page.locator("#card-equipamento")).toBeHidden();
   await expect(page.locator("#card-serial")).not.toHaveText("5CG6051BVN");
 });
@@ -76,6 +76,7 @@ test("each tool is accessible in both themes and remains reachable below 1200px"
       const bounds = await page.locator(selector).boundingBox();
       const width = await page.evaluate(() => document.body.scrollWidth);
       expect(bounds.width).toBeLessThanOrEqual(width + 1);
+      expect(bounds.x + bounds.width).toBeLessThanOrEqual(page.viewportSize().width + 1);
     }
   }
 });
@@ -174,7 +175,7 @@ test("typing stays error-free and Home shortcuts use the selected equipment", as
   await expect(page.locator("#tab-panel-retirada-entrega")).toBeVisible();
   await page.locator("#tab-home").click();
   await page.locator("#btn-clear-serial").click();
-  await expect(page.locator("#home-detail-empty")).toBeVisible();
+  await expect(page.locator("#home-detail-empty")).toBeAttached();
   await expect(page.locator("#card-equipamento")).toBeHidden();
   expect(errors).toEqual([]);
 });

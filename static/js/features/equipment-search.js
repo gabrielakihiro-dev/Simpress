@@ -41,11 +41,24 @@
     }
   }
 
+  // Em telas compactas a Home mostra a lista ou o detalhe (CSS lê data-home-view).
+  function definirVisaoHome(view) {
+    document.getElementById("tab-panel-home")?.setAttribute("data-home-view", view);
+  }
+
+  function voltarListaHome() {
+    definirVisaoHome("list");
+    const list = document.getElementById("home-equipment-list");
+    const target = list?.querySelector?.(".cockpit-home-item.is-selected") || list;
+    target?.focus?.();
+  }
+
   function limparSelecaoEquipamento() {
     app.definirEquipamentoAtual(null);
     appState.retiradaCidadeSelecionada = "";
     document.getElementById("card-equipamento")?.classList.add("hidden");
     document.getElementById("home-detail-empty")?.classList.remove("hidden");
+    definirVisaoHome("list");
     document.getElementById("retirada-cnpj").value = "";
     document.getElementById("retirada-endereco").value = "";
     document.getElementById("retirada-obs").value = "";
@@ -500,6 +513,7 @@
     const emptyState = document.getElementById("home-detail-empty");
     if (emptyState) emptyState.classList.add("hidden");
     card.classList.remove("hidden");
+    definirVisaoHome("detail");
     motion?.reveal(card);
 
     document.getElementById("card-serial").textContent = eq.serial;
@@ -881,6 +895,6 @@
     invalidarDadosEquipamentoAposRestauracao, atualizarSelecaoAposSubstituirInventarios, handleSerialInput,
     handleSerialKeydown, selecionarItemAutocomplete, fecharAutocomplete,
     limparSerial, buscarSerial, exibirEquipamento, formatarLocalAtual, abrirPesquisaRecente, limparPesquisasRecentes,
-    renderHomeList, highlightHomeListItem, filtrarListaHome, carregarMaisItensHome, carregarListaHome, inicializarListaHome,
+    voltarListaHome, renderHomeList, highlightHomeListItem, filtrarListaHome, carregarMaisItensHome, carregarListaHome, inicializarListaHome,
   };
 });
