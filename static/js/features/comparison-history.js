@@ -193,22 +193,22 @@
             : "";
           return "<li data-evolution-row data-evolution-category=\"" + key + "\" data-evolution-target-section=\""
             + escapeHtml(row.categoria || "") + "\" data-evolution-search=\""
-            + escapeHtml(label) + "\" class=\"rounded-lg border border-slate-800 bg-slate-950/70 p-3 text-xs text-slate-200\">"
+            + escapeHtml(label) + "\" class=\"rounded-lg border border-line-quiet bg-surface/70 p-3 text-xs text-fg-secondary\">"
             + "<span data-evolution-section class=\"font-medium\">" + escapeHtml(row.secao || "Seção não informada") + "</span> · "
             + escapeHtml(identity + serial) + openResult
             + app.renderizarAnotacaoOperacional(item, identity + serial) + "</li>";
         }).join("") + "</ul>"
-        : "<p data-evolution-empty class=\"rounded-lg border border-slate-800 bg-slate-950/50 p-3 text-xs text-slate-500\">Nenhum caso nesta categoria.</p>";
-      return "<section data-evolution-group=\"" + key + "\"><h4 class=\"mb-2 text-sm font-semibold text-slate-200\">"
+        : "<p data-evolution-empty class=\"rounded-lg border border-line-quiet bg-surface/50 p-3 text-xs text-fg-muted\">Nenhum caso nesta categoria.</p>";
+      return "<section data-evolution-group=\"" + key + "\"><h4 class=\"mb-2 text-sm font-semibold text-fg-secondary\">"
         + labels[key] + "</h4>" + content + "</section>";
     }).join("");
 
-    target.innerHTML = "<p class=\"text-xs text-slate-400\">De "
+    target.innerHTML = "<p class=\"text-xs text-fg-subtle\">De "
       + escapeHtml(formatarHorarioHistorico(data.anterior?.horario)) + " para "
       + escapeHtml(formatarHorarioHistorico(data.atual?.horario)) + "</p>"
       + "<div class=\"grid grid-cols-1 sm:grid-cols-3 gap-2\">" + cards + "</div>"
       + sections
-      + "<p data-evolution-no-results hidden class=\"rounded-lg border border-slate-800 bg-slate-950/50 p-3 text-xs text-slate-500\">Nenhum caso corresponde aos filtros selecionados.</p>";
+      + "<p data-evolution-no-results hidden class=\"rounded-lg border border-line-quiet bg-surface/50 p-3 text-xs text-fg-muted\">Nenhum caso corresponde aos filtros selecionados.</p>";
 
     target.querySelectorAll("[data-evolution-event]").forEach(button => {
       button.addEventListener("click", async () => {
@@ -280,7 +280,7 @@
   async function carregarHistoricoComparacoes() {
     const lista = document.getElementById("lista-historico-comparacoes");
     lista.setAttribute("aria-busy", "true");
-    lista.innerHTML = '<p class="text-sm text-slate-400 text-center py-8" role="status" aria-live="polite">Carregando histórico...</p>';
+    lista.innerHTML = '<p class="text-sm text-fg-subtle text-center py-8" role="status" aria-live="polite">Carregando histórico...</p>';
     const stopLoading = motion?.startLoading(lista, "Carregando histórico…") || (() => {});
 
     try {
@@ -292,7 +292,7 @@
       lista.replaceChildren();
       if (eventos.length === 0) {
         const vazio = document.createElement("p");
-        vazio.className = "text-sm text-slate-400 text-center py-8";
+        vazio.className = "text-sm text-fg-subtle text-center py-8";
         vazio.setAttribute("role", "status");
         vazio.setAttribute("aria-live", "polite");
         vazio.textContent = "Nenhum histórico ainda.";
@@ -349,10 +349,10 @@
       const grupo = document.createElement("section");
       grupo.className = "space-y-2";
       const titulo = document.createElement("h4");
-      titulo.className = "flex items-center gap-2 px-1 text-xs font-semibold uppercase tracking-wide text-slate-400";
+      titulo.className = "flex items-center gap-2 px-1 text-xs font-semibold uppercase tracking-wide text-fg-subtle";
       titulo.textContent = rotuloDiaHistorico(chave);
       const quantidade = document.createElement("span");
-      quantidade.className = "font-normal normal-case tracking-normal text-slate-500";
+      quantidade.className = "font-normal normal-case tracking-normal text-fg-muted";
       quantidade.textContent = `· ${eventosDoDia.length} ${eventosDoDia.length === 1 ? "registro" : "registros"}`;
       titulo.appendChild(quantidade);
       grupo.setAttribute("aria-label", `Atualizações de ${titulo.firstChild.textContent}`);
@@ -364,7 +364,7 @@
 
   function criarCartaoHistoricoComparacao(evento) {
     const card = document.createElement("article");
-    card.className = "rounded-xl border border-slate-800 bg-slate-950/70 p-4 space-y-3";
+    card.className = "rounded-xl border border-line-quiet bg-surface/70 p-4 space-y-3";
     card.append(...criarResumoHistoricoComparacao(evento), criarAcoesHistoricoComparacao(evento));
     return card;
   }
@@ -372,7 +372,7 @@
   function criarCabecalhoHistoricoComparacao(evento) {
     const restauracao = evento.tipo === "restauracao";
     const [tipo, cores] = evento.somente_anotacoes_sincronizadas
-      ? ["Anotações sincronizadas", "border-slate-600/60 bg-slate-800/60 text-slate-300"]
+      ? ["Anotações sincronizadas", "border-line-firm/60 bg-surface-control/60 text-fg-tertiary"]
       : restauracao
         ? ["Restauração", "border-amber-500/30 bg-amber-500/10 text-amber-200"]
         : ["Atualização", "border-cyan-500/30 bg-cyan-500/10 text-cyan-200"];
@@ -398,10 +398,10 @@
     [["Endpoint", arquivos.endpoint], ["Simpress", arquivos.detalhes]].forEach(([fonte, arquivo]) => {
       const nome = formatarNomeFonteHistorico(arquivo || "—");
       const rotulo = document.createElement("dt");
-      rotulo.className = "text-slate-500";
+      rotulo.className = "text-fg-muted";
       rotulo.textContent = fonte;
       const valor = document.createElement("dd");
-      valor.className = "min-w-0 truncate text-slate-300";
+      valor.className = "min-w-0 truncate text-fg-tertiary";
       valor.textContent = nome;
       valor.title = nome;
       lista.append(rotulo, valor);
@@ -414,7 +414,7 @@
     const visiveis = metricas.filter(({ valor }) => Number(valor || 0) !== 0);
     if (!visiveis.length) {
       const vazio = document.createElement("p");
-      vazio.className = "text-xs text-slate-400";
+      vazio.className = "text-xs text-fg-subtle";
       vazio.textContent = "Nenhuma alteração ou pendência.";
       return vazio;
     }
@@ -426,7 +426,7 @@
       const chip = document.createElement("div");
       chip.className = `flex flex-col-reverse rounded-lg px-3 py-2 ${classes.cartao}`;
       const nome = document.createElement("dt");
-      nome.className = "text-xs leading-tight text-slate-400";
+      nome.className = "text-xs leading-tight text-fg-subtle";
       nome.textContent = rotulo;
       const quantidade = document.createElement("dd");
       quantidade.className = `text-base font-semibold ${classes.numero}`;
@@ -443,13 +443,13 @@
 
     if (evento.somente_anotacoes_sincronizadas) {
       const aviso = document.createElement("p");
-      aviso.className = "text-xs text-slate-400";
+      aviso.className = "text-xs text-fg-subtle";
       aviso.textContent = "As anotações podem ser consultadas e editadas neste notebook.";
       partes.push(aviso);
     } else if (evento.tipo === "restauracao") {
       const restauracaoDe = evento.restauracao_de || {};
       const origem = document.createElement("p");
-      origem.className = "text-xs text-slate-400";
+      origem.className = "text-xs text-fg-subtle";
       origem.textContent = `Restauração do conjunto anterior a ${formatarHorarioHistorico(restauracaoDe.horario)}`;
       partes.push(origem, criarMetricasHistoricoComparacao([
         { rotulo: "Restaurados – Endpoint", valor: resumo.total_endpoint_restaurado, tom: null },
@@ -472,7 +472,7 @@
   function criarAcoesHistoricoComparacao(evento) {
     const restauracao = evento.tipo === "restauracao";
     const acoes = document.createElement("div");
-    acoes.className = "flex flex-col sm:flex-row sm:flex-wrap sm:justify-end gap-2 border-t border-slate-800/80 pt-3";
+    acoes.className = "flex flex-col sm:flex-row sm:flex-wrap sm:justify-end gap-2 border-t border-line-quiet/80 pt-3";
 
     if (!restauracao) {
       const consultar = document.createElement("button");

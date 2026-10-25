@@ -65,7 +65,7 @@ test("imports Simpress and Oracle files and displays the serial-to-OS reconcilia
   // The current Oracle OS is highlighted only once, at the top of the card.
   assert.doesNotMatch(ticketCards, /text-lg font-bold leading-none text-violet-100/);
   assert.equal((ticketCards.match(/<strong>7285070<\/strong>/g) || []).length, 2);
-  assert.match(ticketCards, /class="ticket-oracle-request"[\s\S]*Solicitação REQ-1[\s\S]*OS <span class="font-mono text-slate-200">7285070/);
+  assert.match(ticketCards, /class="ticket-oracle-request"[\s\S]*Solicitação REQ-1[\s\S]*OS <span class="font-mono text-fg-secondary">7285070/);
   assert.doesNotMatch(ticketCards, /<section class="[^"]*rounded-lg border/);
   assert.match(ticketCards, /class="ticket-card-identifier border src-simpress-soft"/);
   assert.match(ticketCards, /class="ticket-card-identifier border src-oracle-soft"/);

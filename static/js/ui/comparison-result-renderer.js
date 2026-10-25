@@ -54,7 +54,7 @@
       ? `<div class="history-filter-group space-y-2" data-history-filter-group="${escapeHtml(filterCategory)}">${markup}</div>`
       : markup;
     if (!rows.length) {
-      return wrapFilterGroup(`<p class="text-sm text-slate-400 text-center py-5" role="status" aria-live="polite">${escapeHtml(emptyMessage)}</p>`);
+      return wrapFilterGroup(`<p class="text-sm text-fg-subtle text-center py-5" role="status" aria-live="polite">${escapeHtml(emptyMessage)}</p>`);
     }
     const tableLabel = `Tabela de ${headers.join(", ")}`;
     const mobileCards = rows.map((row, index) => {
@@ -101,11 +101,11 @@
           </article>`;
     }).join("");
     return wrapFilterGroup(`
-        <div class="accessible-table-wrap comparison-desktop-table rounded-lg border border-slate-800" role="region" aria-label="${escapeHtml(tableLabel)}" tabindex="0">
+        <div class="accessible-table-wrap comparison-desktop-table rounded-lg border border-line-quiet" role="region" aria-label="${escapeHtml(tableLabel)}" tabindex="0">
           <p class="comparison-table-scroll-hint px-3 pt-2">Role a tabela horizontalmente para consultar todas as colunas.</p>
           <table class="min-w-full text-left text-sm" aria-label="${escapeHtml(tableLabel)}">
-            <thead class="bg-slate-950 text-slate-300"><tr>${headers.map(header => `<th scope="col" class="px-3 py-2.5 font-semibold whitespace-nowrap">${escapeHtml(header)}</th>`).join("")}</tr></thead>
-            <tbody class="divide-y divide-slate-800">${rows.join("")}</tbody>
+            <thead class="bg-surface text-fg-tertiary"><tr>${headers.map(header => `<th scope="col" class="px-3 py-2.5 font-semibold whitespace-nowrap">${escapeHtml(header)}</th>`).join("")}</tr></thead>
+            <tbody class="divide-y divide-line-quiet">${rows.join("")}</tbody>
           </table>
         </div>
         <div class="comparison-mobile-list" role="list" aria-label="${escapeHtml(`${tableLabel} em cartões`)}">${mobileCards}</div>`);
@@ -161,8 +161,8 @@
       return `
         <td class="px-3 py-2 min-w-[240px] align-top">
           ${anotacoes.map((anotacao, index) => `
-            <div class="${index ? "mt-2 border-t border-slate-700 pt-2" : ""}">
-              ${index ? '<p class="mb-1 text-xs text-slate-400">Anotação anterior</p>' : ""}
+            <div class="${index ? "mt-2 border-t border-line-control pt-2" : ""}">
+              ${index ? '<p class="mb-1 text-xs text-fg-subtle">Anotação anterior</p>' : ""}
               <textarea data-comparison-annotation ${app.atributosVersaoAnotacao(anotacao)} data-annotation-id="${escapeHtml(anotacao.anotacao_id || "")}" rows="2" maxlength="2000" class="annotation-field w-full min-w-[220px]" aria-label="${index ? "Anotação anterior para" : "Anotações para"} ${escapeHtml(contexto)}, neste resultado" placeholder="Escreva uma anotação...">${escapeHtml(anotacao.anotacao || "")}</textarea>
               <div class="mt-1">
                 <p class="annotation-status${anotacao.anotacao ? " is-saved" : ""}" data-annotation-status aria-live="polite">${anotacao.anotacao ? "Salvo automaticamente" : ""}</p>
@@ -205,7 +205,7 @@
   // Row builders: one <tr> per item; renderizarTabelaComparacao derives the mobile cards from them.
   function linhasAusentes(items, categoria, { renderizarCampoAnotacao }) {
     return items.map(item => `
-        <tr class="text-slate-300" ${atributosLinhaComparacao(categoria, item)}>
+        <tr class="text-fg-tertiary" ${atributosLinhaComparacao(categoria, item)}>
           <td class="px-3 py-2 font-mono text-white whitespace-nowrap">${escapeHtml(item.computador)}${marcadorUsuarioLogado(item.serie)}</td>
           <td class="px-3 py-2 font-mono whitespace-nowrap">${escapeHtml(item.serie || "—")}</td>
           <td class="px-3 py-2">${escapeHtml(item.local_previsto || "—")}</td>
@@ -216,7 +216,7 @@
 
   function linhasLocalidadeDivergente(divergenciasLocal, { renderizarCampoAnotacao }) {
     return divergenciasLocal.map(item => `
-        <tr class="text-slate-300" ${atributosLinhaComparacao("divergencias_local", item)}>
+        <tr class="text-fg-tertiary" ${atributosLinhaComparacao("divergencias_local", item)}>
           <td class="px-3 py-2 font-mono text-white whitespace-nowrap">${escapeHtml(item.computador)}${marcadorUsuarioLogado(item.serie)}</td>
           <td class="px-3 py-2 font-mono whitespace-nowrap">${escapeHtml(item.serie || "—")}</td>
           <td class="px-3 py-2">${escapeHtml(item.local_previsto)}</td>
@@ -227,7 +227,7 @@
 
   function linhasSemAcesso(semAcesso7DiasOrdenados, { renderizarCampoAnotacao }) {
     return semAcesso7DiasOrdenados.map(item => `
-        <tr class="text-slate-300" ${atributosLinhaComparacao("sem_acesso_7_dias", item)}>
+        <tr class="text-fg-tertiary" ${atributosLinhaComparacao("sem_acesso_7_dias", item)}>
           <td class="px-3 py-2 font-mono text-white whitespace-nowrap">${escapeHtml(item.computador || "—")}${item.hostname_sumiu_endpoint ? `
             <span class="block font-sans text-xs text-amber-300 whitespace-normal" data-hostname-sumiu="true">Hostname sumiu do Endpoint${item.hostname_origem === "endpoint_anterior" ? " (hostname do Endpoint anterior)" : item.hostname_origem === "simpress" ? " (hostname mantido da Simpress)" : ""}</span>` : ""}${marcadorUsuarioLogado(item.serie)}</td>
           <td class="px-3 py-2 font-mono whitespace-nowrap">${escapeHtml(item.serie || "—")}</td>
@@ -240,7 +240,7 @@
 
   function linhasApelidosAtualizados(apelidosAtualizados) {
     return apelidosAtualizados.map(item => `
-        <tr class="text-slate-300">
+        <tr class="text-fg-tertiary">
           <td class="px-3 py-2 font-mono text-white whitespace-nowrap">${escapeHtml(item.serie || "—")}</td>
           <td class="px-3 py-2 font-mono">${escapeHtml(item.apelido_anterior || "(vazio)")}</td>
           <td class="px-3 py-2 font-mono text-emerald-200">${escapeHtml(item.apelido_novo || "(vazio)")}</td>
@@ -251,10 +251,10 @@
 
   function linhasApelidosConferencia(apelidosSemAtualizacao, { renderizarCampoAnotacao }) {
     return apelidosSemAtualizacao.map(item => `
-        <tr class="text-slate-300" ${atributosLinhaComparacao("apelidos_sem_atualizacao", item)}>
+        <tr class="text-fg-tertiary" ${atributosLinhaComparacao("apelidos_sem_atualizacao", item)}>
           <td class="px-3 py-2 font-mono text-white whitespace-nowrap">${escapeHtml(item.serie || "(vazia)")}</td>
           <td class="px-3 py-2 font-mono">${escapeHtml(item.computador || "—")}${marcadorUsuarioLogado(item.serie)}</td>
-          <td class="px-3 py-2 text-slate-300">${escapeHtml(formatarMotivoRevisao(item.motivo))}</td>
+          <td class="px-3 py-2 text-fg-tertiary">${escapeHtml(formatarMotivoRevisao(item.motivo))}</td>
           ${renderizarCampoAnotacao(item, (item.computador ? `o hostname ${item.computador}, série ` : "a série ") + (item.serie || "vazia"))}
         </tr>`);
   }
@@ -274,9 +274,9 @@
               <button type="button" data-manual-alias-action="manter" data-manual-alias-index="${index}" class="px-2 py-1 rounded-md bg-emerald-500/10 hover:bg-emerald-500/20 border border-emerald-500/25 text-emerald-200 text-xs font-semibold">Manter manual</button>
               <button type="button" data-manual-alias-action="excluir" data-manual-alias-index="${index}" class="px-2 py-1 rounded-md bg-rose-500/10 hover:bg-rose-500/20 border border-rose-500/25 text-rose-200 text-xs font-semibold">Excluir manual</button>
             </div>`
-        : `<span class="text-xs text-slate-500">${resolvida ? "Concluído" : "Histórico indisponível"}</span>`;
+        : `<span class="text-xs text-fg-muted">${resolvida ? "Concluído" : "Histórico indisponível"}</span>`;
       return `
-          <tr class="text-slate-300" data-manual-alias-row="${index}" ${atributosLinhaComparacao("divergencias_apelidos_manuais", item)}>
+          <tr class="text-fg-tertiary" data-manual-alias-row="${index}" ${atributosLinhaComparacao("divergencias_apelidos_manuais", item)}>
             <td class="px-3 py-2 font-mono text-white whitespace-nowrap">${escapeHtml(item.serie || "—")}</td>
             <td class="px-3 py-2 font-mono text-cyan-200">${escapeHtml(item.apelido_manual || "(vazio)")}</td>
             <td class="px-3 py-2 font-mono">${escapeHtml(item.apelido_equipamentos_detalhes || (item.detalhes_encontrado ? "(vazio)" : "Série ausente"))}</td>
@@ -291,7 +291,7 @@
   const ACOES_PENDENCIA_USUARIO = {
     substituicao_manual: [
       { decisao: "permitir", rotulo: "Permitir substituição", classe: "bg-emerald-500/10 hover:bg-emerald-500/20 border-emerald-500/25 text-emerald-200" },
-      { decisao: "recusar", rotulo: "Manter usuário manual", classe: "bg-slate-500/10 hover:bg-slate-500/20 border-slate-500/25 text-slate-200" },
+      { decisao: "recusar", rotulo: "Manter usuário manual", classe: "bg-fg-weak/10 hover:bg-fg-weak/20 border-fg-weak/25 text-fg-secondary" },
     ],
     usuario_ausente: [
       { decisao: "remover", rotulo: "Confirmar remoção", classe: "bg-rose-500/10 hover:bg-rose-500/20 border-rose-500/25 text-rose-200" },
@@ -311,18 +311,18 @@
 
   function linhasMudancasUsuarios(mudancasUsuarios, { renderizarCampoAnotacao }) {
     const usuario = (nome, origem, pessoa) => nome
-      ? `${escapeHtml(nome)}${origem === "manual" ? " (M)" : ""}${pessoa ? `<span class="block text-xs text-slate-400" data-person-name>${escapeHtml(pessoa)}</span>` : ""}`
-      : '<span class="text-slate-500">(vazio)</span>';
+      ? `${escapeHtml(nome)}${origem === "manual" ? " (M)" : ""}${pessoa ? `<span class="block text-xs text-fg-subtle" data-person-name>${escapeHtml(pessoa)}</span>` : ""}`
+      : '<span class="text-fg-muted">(vazio)</span>';
     return mudancasUsuarios.map(item => {
-      const tipo = TIPOS_MUDANCA_USUARIO[item.tipo] || { rotulo: "Mudança de usuário", classe: "text-slate-300" };
+      const tipo = TIPOS_MUDANCA_USUARIO[item.tipo] || { rotulo: "Mudança de usuário", classe: "text-fg-tertiary" };
       return `
-        <tr class="text-slate-300" data-user-change="${escapeHtml(item.tipo || "")}" ${atributosLinhaComparacao("mudancas_usuarios", item)}>
+        <tr class="text-fg-tertiary" data-user-change="${escapeHtml(item.tipo || "")}" ${atributosLinhaComparacao("mudancas_usuarios", item)}>
           <td class="px-3 py-2 font-semibold ${tipo.classe}">${escapeHtml(tipo.rotulo)}</td>
           <td class="px-3 py-2 font-mono text-white whitespace-nowrap">${escapeHtml(item.serie || "—")}${marcadorUsuarioLogado(item.serie, { sugestao: item.usuario_manual_arquivado })}</td>
           <td class="px-3 py-2 font-mono">${escapeHtml(item.computador || "—")}</td>
           <td class="px-3 py-2">${usuario(item.usuario_anterior, item.origem_anterior, item.nome_pessoa_anterior)}</td>
           <td class="px-3 py-2">${usuario(item.usuario_novo, item.origem_nova, item.nome_pessoa_novo)}</td>
-          <td class="px-3 py-2 text-slate-300">${escapeHtml(String(item.motivo || "").replace(/\bno endpoint\b/gi, "no Endpoint"))}${acoesPendenciaUsuario(item)}</td>
+          <td class="px-3 py-2 text-fg-tertiary">${escapeHtml(String(item.motivo || "").replace(/\bno endpoint\b/gi, "no Endpoint"))}${acoesPendenciaUsuario(item)}</td>
           ${renderizarCampoAnotacao(item, `${tipo.rotulo}, série ${item.serie || "vazia"}`)}
         </tr>`;
     });
@@ -330,7 +330,7 @@
 
   function linhasSeriesSemMapa(seriesSemMapa, { renderizarCampoAnotacao }) {
     return seriesSemMapa.map(item => `
-        <tr class="text-slate-300" ${atributosLinhaComparacao("series_sem_mapeamento", item)}>
+        <tr class="text-fg-tertiary" ${atributosLinhaComparacao("series_sem_mapeamento", item)}>
           <td class="px-3 py-2 font-mono text-white">${escapeHtml(item.serie)}</td>
           <td class="px-3 py-2">${Number(item.quantidade || 0)}</td>
           <td class="px-3 py-2 font-mono">${escapeHtml((item.exemplos || []).join(", "))}</td>
@@ -352,12 +352,12 @@
       const acoes = permitirRemocao && registro.mais_antigo === true
         ? `<button type="button" data-hostname-remove class="${classeBotao} bg-rose-500/10 hover:bg-rose-500/20 border-rose-500/25 text-rose-200" aria-label="${escapeHtml(`Remover o hostname mais antigo ${hostname}, série ${registro.serie || "sem série"}`)}">Remover mais antigo</button>
             <span hidden data-hostname-removed class="text-xs text-emerald-300">Removido; vale o outro hostname</span>
-            <button type="button" hidden data-hostname-restore class="${classeBotao} bg-slate-500/10 hover:bg-slate-500/20 border-slate-500/25 text-slate-200" aria-label="${escapeHtml(`Desfazer a remoção do hostname ${hostname}`)}">Desfazer</button>`
+            <button type="button" hidden data-hostname-restore class="${classeBotao} bg-fg-weak/10 hover:bg-fg-weak/20 border-fg-weak/25 text-fg-secondary" aria-label="${escapeHtml(`Desfazer a remoção do hostname ${hostname}`)}">Desfazer</button>`
         : "";
       return `<li class="flex flex-col gap-1" data-hostname-item data-hostname-serie="${escapeHtml(registro.serie || "")}" data-hostname-nome="${escapeHtml(hostname)}">
-          <span class="font-mono text-slate-200 break-all">${escapeHtml(hostname || "—")}</span>
+          <span class="font-mono text-fg-secondary break-all">${escapeHtml(hostname || "—")}</span>
           <span class="flex flex-wrap items-center gap-x-2 gap-y-1">
-            <span class="whitespace-nowrap text-slate-400">${escapeHtml(horario)}</span>
+            <span class="whitespace-nowrap text-fg-subtle">${escapeHtml(horario)}</span>
             ${acoes}
           </span>
         </li>`;
@@ -385,8 +385,8 @@
         mensagem: formatarFonteAmbigua(item.motivo || ""),
       })),
     ].map(item => `
-        <tr class="text-slate-300" ${atributosLinhaComparacao(item.__categoriaPendencia, item)}>
-          <td class="px-3 py-2 text-slate-300">${escapeHtml(item.tipo || "Ambiguidade")}</td>
+        <tr class="text-fg-tertiary" ${atributosLinhaComparacao(item.__categoriaPendencia, item)}>
+          <td class="px-3 py-2 text-fg-tertiary">${escapeHtml(item.tipo || "Ambiguidade")}</td>
           <td class="px-3 py-2 font-mono">${escapeHtml(item.chave || "—")}</td>
           <td class="px-3 py-2">${escapeHtml(item.fontes || "—")}</td>
           <td class="px-3 py-2 ${Array.isArray(item.registros_endpoint) && item.registros_endpoint.length > 1 ? "" : "whitespace-nowrap"}">${celulaVerificacaoAmbigua(item, permitirAnotacoes === true)}</td>
@@ -402,15 +402,15 @@
         .filter(Boolean)
         .join(" · ") || "Linha sem identificador";
       return `
-          <tr class="text-slate-300" ${atributosLinhaComparacao(item.categoria, item)}>
-            <td class="px-3 py-2 text-slate-300">${escapeHtml(CATEGORIAS_ANOTACOES_SINCRONIZADAS[item.categoria] || "Histórico de planilhas")}</td>
+          <tr class="text-fg-tertiary" ${atributosLinhaComparacao(item.categoria, item)}>
+            <td class="px-3 py-2 text-fg-tertiary">${escapeHtml(CATEGORIAS_ANOTACOES_SINCRONIZADAS[item.categoria] || "Histórico de planilhas")}</td>
             <td class="px-3 py-2">${escapeHtml(identificador)}</td>
             ${renderizarCampoAnotacao(item, `${CATEGORIAS_ANOTACOES_SINCRONIZADAS[item.categoria] || "a linha"}, ${identificador}`)}
           </tr>`;
     });
   }
 
-  const PONTOS_SECAO = { amber: "bg-amber-400", rose: "bg-rose-400", emerald: "bg-emerald-400", neutro: "bg-slate-500" };
+  const PONTOS_SECAO = { amber: "bg-amber-400", rose: "bg-rose-400", emerald: "bg-emerald-400", neutro: "bg-fg-weak" };
 
   // Summary card -> section title it jumps to. The title id is stable because only one result is open at a time.
   const SECOES_CARTOES_RESUMO = {
@@ -434,7 +434,7 @@
   function cartaoMetricaComparacao(rotulo, valor, tom, idNumero = "", chaveSecao = "") {
     const classes = classesMetricaHistorico(valor, tom);
     const numero = Number(valor || 0);
-    const conteudo = `<p class="text-xs uppercase tracking-wide text-slate-400">${escapeHtml(rotulo)}</p><p${idNumero ? ` id="${idNumero}"` : ""} class="text-xl font-bold mt-1 ${classes.numero}">${numero.toLocaleString("pt-BR")}</p>`;
+    const conteudo = `<p class="text-xs uppercase tracking-wide text-fg-subtle">${escapeHtml(rotulo)}</p><p${idNumero ? ` id="${idNumero}"` : ""} class="text-xl font-bold mt-1 ${classes.numero}">${numero.toLocaleString("pt-BR")}</p>`;
     const secao = SECOES_CARTOES_RESUMO[chaveSecao];
     if (!secao || numero <= 0) {
       return `<div class="rounded-xl p-3 ${classes.cartao}" data-metric-tone="${tom || ""}">${conteudo}</div>`;
@@ -449,7 +449,7 @@
           ${barra}
           <p class="notice notice-info">Este clone contém as anotações sincronizadas. O resultado original e os arquivos da comparação não estão armazenados neste dispositivo.</p>
           <section class="space-y-2" data-history-filter-section>
-            <div>${tituloSecaoComparacao("Anotações sincronizadas", "neutro")}<p class="text-xs text-slate-500">Anotações feitas nas linhas desta atualização, com a seção e a linha a que pertencem.</p></div>
+            <div>${tituloSecaoComparacao("Anotações sincronizadas", "neutro")}<p class="text-xs text-fg-muted">Anotações feitas nas linhas desta atualização, com a seção e a linha a que pertencem.</p></div>
             ${renderizarTabelaComparacao(["Seção", "Linha", "Anotações"], anotacoesSincronizadasRows, "Nenhuma anotação sincronizada neste resultado.", "anotacoes_sincronizadas")}
           </section>`;
   }
@@ -473,15 +473,15 @@
     // Results saved before the user summary existed have no list; the section is shown only when it exists.
     const secaoMudancasUsuarios = Array.isArray(comparison.mudancas_usuarios) ? `
         <section class="space-y-2" data-history-filter-section data-user-change-summary>
-          <div>${tituloSecaoComparacao("Mudanças de usuário logado", "emerald", SECOES_CARTOES_RESUMO.mudancas_usuarios.id)}<p class="text-xs text-slate-500">Usuários logados que mudaram nesta atualização, comparando o Endpoint anterior com o novo. Quando o Endpoint passa a informar um usuário onde há um usuário manual (M), ou deixa de informar um usuário que já existia, nada muda sozinho: o usuário atual continua valendo até você decidir. Troca de um usuário do Endpoint por outro é aplicada automaticamente.</p>
-            <p class="text-xs text-slate-400" data-user-change-counts>${[
+          <div>${tituloSecaoComparacao("Mudanças de usuário logado", "emerald", SECOES_CARTOES_RESUMO.mudancas_usuarios.id)}<p class="text-xs text-fg-muted">Usuários logados que mudaram nesta atualização, comparando o Endpoint anterior com o novo. Quando o Endpoint passa a informar um usuário onde há um usuário manual (M), ou deixa de informar um usuário que já existia, nada muda sozinho: o usuário atual continua valendo até você decidir. Troca de um usuário do Endpoint por outro é aplicada automaticamente.</p>
+            <p class="text-xs text-fg-subtle" data-user-change-counts>${[
               ["Novos no Endpoint", contarMudancas("novo_endpoint")],
               ["Alterados", contarMudancas("alterado_endpoint")],
               ["Removidos do Endpoint", contarMudancas("removido_endpoint")],
               ["Manuais que voltaram a valer", contarMudancas("manual_voltou")],
             ].map(([rotulo, total]) => `${rotulo}: ${total.toLocaleString("pt-BR")}`).join(" · ")}</p></div>
           <details open class="space-y-2" data-user-change-details>
-            <summary class="cursor-pointer select-none text-xs font-semibold text-slate-300 hover:text-white">
+            <summary class="cursor-pointer select-none text-xs font-semibold text-fg-tertiary hover:text-white">
               <span data-user-change-toggle-label>Minimizar lista de usuários alterados</span>
             </summary>
             ${renderizarTabelaComparacao(["Mudança", "Série", "Hostname/Apelido", "Usuário anterior", "Usuário novo", "Motivo", ...annotationHeaders], userChangeRows, "Nenhum usuário logado mudou nesta atualização.", "mudancas_usuarios")}
@@ -511,45 +511,45 @@
         </div>
         ${secaoMudancasUsuarios}
         <section class="space-y-2" data-history-filter-section>
-          <div>${tituloSecaoComparacao("Apelidos/hostnames atualizados — no endpoint", "emerald", SECOES_CARTOES_RESUMO.apelidos_atualizados.id)}<p class="text-xs text-slate-500">Equipamentos cujo apelido ou hostname mudou nesta atualização, com o valor anterior e o novo, identificados pela série.</p></div>
+          <div>${tituloSecaoComparacao("Apelidos/hostnames atualizados — no endpoint", "emerald", SECOES_CARTOES_RESUMO.apelidos_atualizados.id)}<p class="text-xs text-fg-muted">Equipamentos cujo apelido ou hostname mudou nesta atualização, com o valor anterior e o novo, identificados pela série.</p></div>
           ${renderizarTabelaComparacao(["Série", "Apelido anterior", "Novo apelido / hostname", "Horário", "Arquivos de origem"], aliasUpdateRows, "Nenhum apelido ou hostname mudou nesta atualização.")}
         </section>
         <section class="space-y-2" data-history-filter-section>
-          <div>${tituloSecaoComparacao("Linhas mantidas para conferência", "amber", SECOES_CARTOES_RESUMO.apelidos_sem_atualizacao.id)}<p class="text-xs text-slate-500">Série(s) vazia(s) não é escolhida automaticamente; o apelido atual fica preservado.${permitirAnotacoes ? " As anotações continuam vinculadas a esta linha e atualização. Em novas atualizações, são reaplicadas somente quando os dados correspondem exatamente na mesma seção e a anotação mais recente não está vazia ou em conflito." : ""}</p></div>
+          <div>${tituloSecaoComparacao("Linhas mantidas para conferência", "amber", SECOES_CARTOES_RESUMO.apelidos_sem_atualizacao.id)}<p class="text-xs text-fg-muted">Série(s) vazia(s) não é escolhida automaticamente; o apelido atual fica preservado.${permitirAnotacoes ? " As anotações continuam vinculadas a esta linha e atualização. Em novas atualizações, são reaplicadas somente quando os dados correspondem exatamente na mesma seção e a anotação mais recente não está vazia ou em conflito." : ""}</p></div>
           ${renderizarTabelaComparacao(aliasReviewHeaders, aliasReviewRows, "Nenhuma linha de apelido precisa de conferência.", "apelidos_sem_atualizacao")}
         </section>
         <section class="space-y-2" data-history-filter-section>
-          <div>${tituloSecaoComparacao("Divergências com apelidos alterados manualmente", "rose", SECOES_CARTOES_RESUMO.divergencias_apelidos_manuais.id)}<p class="text-xs text-slate-500">Apelidos marcados com (M), definidos manualmente, que constam nas planilhas enviadas. O apelido (M) continua valendo sobre as planilhas até você decidir. Escolha “Manter manual” para confirmar a identificação (M) ou “Excluir manual” para voltar ao valor das planilhas.</p></div>
+          <div>${tituloSecaoComparacao("Divergências com apelidos alterados manualmente", "rose", SECOES_CARTOES_RESUMO.divergencias_apelidos_manuais.id)}<p class="text-xs text-fg-muted">Apelidos marcados com (M), definidos manualmente, que constam nas planilhas enviadas. O apelido (M) continua valendo sobre as planilhas até você decidir. Escolha “Manter manual” para confirmar a identificação (M) ou “Excluir manual” para voltar ao valor das planilhas.</p></div>
           ${renderizarTabelaComparacao(["Série", "Apelido manual", "na Simpress", "no endpoint", "Situação", "Ação"], manualAliasRows, "Nenhuma divergência entre apelidos manuais e as planilhas enviadas.", "divergencias_apelidos_manuais")}
         </section>
         <section class="space-y-2" data-history-filter-section>
-          <div>${tituloSecaoComparacao("Sem acesso há 7 dias ou mais", "amber")}<p class="text-xs text-slate-500">Notebooks cuja última verificação com êxito ocorreu há 7 dias ou mais, contados a partir desta atualização.</p><p class="text-xs text-slate-500">Para remover computadores com hostname duplicado (o mais antigo) ou sem uso há muito tempo, acesse o <a href="https://centralendpoint.pr.sebrae.com.br/webclient#/uems/agent/som/computers" target="_blank" rel="noopener noreferrer" data-endpoint-computers-link class="text-sky-400 underline hover:text-sky-300">Endpoint Central (Computadores)</a>.</p><p class="text-xs text-slate-400">Atualização usada como referência: ${comparison.horario_comparacao ? `<time datetime="${escapeHtml(comparison.horario_comparacao)}">${escapeHtml(formatarHorarioHistorico(comparison.horario_comparacao))}</time>` : "data e hora indisponíveis"}.</p></div>
+          <div>${tituloSecaoComparacao("Sem acesso há 7 dias ou mais", "amber")}<p class="text-xs text-fg-muted">Notebooks cuja última verificação com êxito ocorreu há 7 dias ou mais, contados a partir desta atualização.</p><p class="text-xs text-fg-muted">Para remover computadores com hostname duplicado (o mais antigo) ou sem uso há muito tempo, acesse o <a href="https://centralendpoint.pr.sebrae.com.br/webclient#/uems/agent/som/computers" target="_blank" rel="noopener noreferrer" data-endpoint-computers-link class="text-sky-400 underline hover:text-sky-300">Endpoint Central (Computadores)</a>.</p><p class="text-xs text-fg-subtle">Atualização usada como referência: ${comparison.horario_comparacao ? `<time datetime="${escapeHtml(comparison.horario_comparacao)}">${escapeHtml(formatarHorarioHistorico(comparison.horario_comparacao))}</time>` : "data e hora indisponíveis"}.</p></div>
           ${renderizarTabelaComparacao(["Hostname/Apelido", "Série", "Última verificação com êxito", "Dias sem verificação", "Linha no endpoint", ...annotationHeaders], semAcessoRows, "Nenhum notebook está há 7 dias ou mais sem verificação com êxito.", "sem_acesso_7_dias")}
         </section>
         <section class="space-y-2" data-history-filter-section>
-          <div>${tituloSecaoComparacao("Equipamentos sem correspondência por fonte", "amber")}<p class="text-xs text-slate-500">Equipamentos que não foram encontrados de forma segura em uma das fontes: Endpoint ou Simpress. Cada lista indica a fonte onde falta o registro.</p></div>
+          <div>${tituloSecaoComparacao("Equipamentos sem correspondência por fonte", "amber")}<p class="text-xs text-fg-muted">Equipamentos que não foram encontrados de forma segura em uma das fontes: Endpoint ou Simpress. Cada lista indica a fonte onde falta o registro.</p></div>
           <div class="history-filter-group space-y-2" data-history-filter-group="ausentes_no_endpoint">
-            <h5 id="${SECOES_CARTOES_RESUMO.ausentes_no_endpoint.id}" tabindex="-1" class="text-xs font-semibold text-slate-300">Sem correspondência — Endpoint (${ausentesEndpoint.length})</h5>
+            <h5 id="${SECOES_CARTOES_RESUMO.ausentes_no_endpoint.id}" tabindex="-1" class="text-xs font-semibold text-fg-tertiary">Sem correspondência — Endpoint (${ausentesEndpoint.length})</h5>
             ${renderizarTabelaComparacao(["Hostname/Apelido", "Série", "Local previsto", "Sem correspondência em", ...annotationHeaders], linhasAusentes(ausentesEndpoint, "ausentes_no_endpoint", colunas), "Todos os equipamentos têm correspondência segura com Endpoint.")}
           </div>
           <div class="history-filter-group space-y-2" data-history-filter-group="ausentes_em_detalhes">
-            <h5 id="${SECOES_CARTOES_RESUMO.ausentes_em_detalhes.id}" tabindex="-1" class="text-xs font-semibold text-slate-300">Sem correspondência — Simpress (${ausentesDetalhes.length})</h5>
+            <h5 id="${SECOES_CARTOES_RESUMO.ausentes_em_detalhes.id}" tabindex="-1" class="text-xs font-semibold text-fg-tertiary">Sem correspondência — Simpress (${ausentesDetalhes.length})</h5>
             ${renderizarTabelaComparacao(["Hostname/Apelido", "Série", "Local previsto", "Sem correspondência em", ...annotationHeaders], linhasAusentes(ausentesDetalhes, "ausentes_em_detalhes", colunas), "Todos os equipamentos têm correspondência segura com Simpress.")}
           </div>
         </section>
         <section class="space-y-2" data-history-filter-section>
-          <div>${tituloSecaoComparacao("Localidade divergente", "amber", SECOES_CARTOES_RESUMO.divergencias_local.id)}<p class="text-xs text-slate-500">Equipamentos cujo local cadastrado na Simpress é diferente do local previsto pelo prefixo da série.</p></div>
+          <div>${tituloSecaoComparacao("Localidade divergente", "amber", SECOES_CARTOES_RESUMO.divergencias_local.id)}<p class="text-xs text-fg-muted">Equipamentos cujo local cadastrado na Simpress é diferente do local previsto pelo prefixo da série.</p></div>
           ${renderizarTabelaComparacao(["Computador", "Série", "Local previsto", "Local na Simpress", ...annotationHeaders], locationRows, "Nenhuma divergência de localidade encontrada.", "divergencias_local")}
         </section>
         <section class="space-y-2" data-history-filter-section>
-          <div>${tituloSecaoComparacao("Duplicidades e correspondências ambíguas", "rose", SECOES_CARTOES_RESUMO.correspondencias_ambiguas.id)}<p class="text-xs text-slate-500">Séries ou hostnames repetidos, ou que não identificam um único equipamento.</p></div>
+          <div>${tituloSecaoComparacao("Duplicidades e correspondências ambíguas", "rose", SECOES_CARTOES_RESUMO.correspondencias_ambiguas.id)}<p class="text-xs text-fg-muted">Séries ou hostnames repetidos, ou que não identificam um único equipamento.</p></div>
           ${renderizarTabelaComparacao(["Ocorrência", "Série ou hostname/Apelido", "Fontes", "Última verificação com êxito", "Tratamento", ...annotationHeaders], ambiguityRows, "Nenhuma duplicidade ou correspondência ambígua encontrada.", "correspondencias_ambiguas")}
         </section>
         <section class="space-y-2" data-history-filter-section>
-          <div>${tituloSecaoComparacao("Séries sem local definido", "amber", SECOES_CARTOES_RESUMO.series_sem_mapeamento.id)}<p class="text-xs text-slate-500">Prefixos de série sem local cadastrado, com a quantidade de equipamentos e exemplos.</p></div>
+          <div>${tituloSecaoComparacao("Séries sem local definido", "amber", SECOES_CARTOES_RESUMO.series_sem_mapeamento.id)}<p class="text-xs text-fg-muted">Prefixos de série sem local cadastrado, com a quantidade de equipamentos e exemplos.</p></div>
           ${renderizarTabelaComparacao(["Série", "Quantidade", "Exemplos", ...annotationHeaders], unmappedRows, "Todas as séries têm mapeamento de localidade.", "series_sem_mapeamento")}
         </section>
-        <p class="text-xs text-slate-400">Equipamentos carregados na Simpress: ${Number(comparison.total_equipamentos_carregados || 0).toLocaleString("pt-BR")}. Backup das versões anteriores: <span class="font-mono">data/planilhas_entrada/${escapeHtml(comparison.backup_diretorio || "_backups")}</span>.</p>
+        <p class="text-xs text-fg-subtle">Equipamentos carregados na Simpress: ${Number(comparison.total_equipamentos_carregados || 0).toLocaleString("pt-BR")}. Backup das versões anteriores: <span class="font-mono">data/planilhas_entrada/${escapeHtml(comparison.backup_diretorio || "_backups")}</span>.</p>
       `;
   }
 
