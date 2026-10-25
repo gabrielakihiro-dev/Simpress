@@ -495,7 +495,7 @@
       });
       actionAreas.forEach(actionArea => {
         const concluido = document.createElement("span");
-        concluido.className = "text-xs text-slate-500";
+        concluido.className = "text-xs text-fg-muted";
         concluido.textContent = "Concluído";
         actionArea.replaceWith(concluido);
       });
@@ -581,7 +581,7 @@
   function renderizarAnotacaoOperacional(item, contexto) {
     const itemId = String(item?.anotacao_id || "");
     if (!itemId) return "";
-    return `<label class="block min-w-[220px] text-xs text-slate-400">Anotação sobre ${escapeHtml(contexto)}
+    return `<label class="block min-w-[220px] text-xs text-fg-subtle">Anotação sobre ${escapeHtml(contexto)}
         <textarea data-operational-annotation ${app.atributosVersaoAnotacao(item)} data-annotation-id="${escapeHtml(itemId)}" rows="2" maxlength="2000" class="annotation-field mt-1 w-full" placeholder="Escreva uma anotação...">${escapeHtml(item.anotacao || "")}</textarea>
         <span class="annotation-status mt-1${item.anotacao ? " is-saved" : ""}" data-annotation-status aria-live="polite">${item.anotacao ? "Salvo automaticamente" : ""}</span>
         <button type="button" class="annotation-retry mt-1" data-annotation-retry hidden aria-label="Tentar novamente a sincronização desta anotação">Tentar sincronizar novamente</button>

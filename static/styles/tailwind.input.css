@@ -26,6 +26,17 @@
   --color-surface-overlay: var(--surface-overlay);
   --color-fg: var(--text);
   --color-fg-muted: var(--text-muted);
+  --color-fg-strong: var(--text-strong);
+  --color-fg-emphasis: var(--text-emphasis);
+  --color-fg-secondary: var(--text-secondary);
+  --color-fg-tertiary: var(--text-tertiary);
+  --color-fg-subtle: var(--text-subtle);
+  --color-fg-weak: var(--text-weak);
+  --color-surface-control: var(--surface-control);
+  --color-surface-control-hover: var(--surface-control-hover);
+  --color-line-quiet: var(--border-quiet);
+  --color-line-control: var(--border-control);
+  --color-line-firm: var(--border-firm);
   --color-line: var(--border);
   --color-line-subtle: var(--border-subtle);
   --color-line-strong: var(--border-strong);
