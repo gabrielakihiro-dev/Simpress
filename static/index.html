@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<html lang="pt-BR" class="h-full bg-slate-900 text-slate-100" data-theme="dark">
+<html lang="pt-BR" class="h-full bg-surface-overlay text-fg-emphasis" data-theme="dark">
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
@@ -19,7 +19,7 @@
   <link rel="stylesheet" href="/static/styles/theme.css">
   <link rel="stylesheet" href="/static/styles/ux-refinements.css">
 </head>
-<body class="min-h-full bg-gradient-to-br from-slate-950 via-slate-900 to-slate-950 text-slate-100 font-sans selection:bg-brand-500 selection:text-white">
+<body class="min-h-full bg-gradient-to-br from-surface via-surface-overlay to-surface text-fg-emphasis font-sans selection:bg-brand-500 selection:text-white">
 
   <a class="skip-link" href="#main-content">Pular para o conteúdo principal</a>
 
@@ -126,7 +126,7 @@
     </aside>
 
     <div class="app-workspace">
-      <header class="site-header border-b border-slate-800/80 bg-slate-950/80 backdrop-blur-md sticky top-0">
+      <header class="site-header border-b border-line-quiet/80 bg-surface/80 backdrop-blur-md sticky top-0">
         <div class="header-inner">
           <button type="button" id="btn-sidebar-open" class="sidebar-icon-button sidebar-mobile-open" aria-label="Abrir menu de navegação" aria-controls="app-sidebar" aria-expanded="false" title="Abrir menu de navegação">
             <i data-lucide="menu" aria-hidden="true"></i>
@@ -136,9 +136,9 @@
           </div>
           <div class="header-base-summary hidden md:flex items-center gap-3 text-xs text-fg-muted bg-surface-sunken px-3.5 py-2 rounded-lg border border-line" aria-label="Resumo da base">
             <span class="inline-flex items-center gap-1.5"><span id="stat-base-dot" class="h-1.5 w-1.5 rounded-full bg-emerald-400" aria-hidden="true"></span>Base: <strong class="text-fg" id="stat-equipamentos">Carregando…</strong> <span id="stat-equipamentos-rotulo">equipamentos</span></span>
-            <span aria-hidden="true" class="text-slate-700">|</span>
+            <span aria-hidden="true" class="text-line-control">|</span>
             <span>Regionais: <strong class="text-fg" id="stat-unidades">Carregando…</strong></span>
-            <span aria-hidden="true" class="text-slate-700">|</span>
+            <span aria-hidden="true" class="text-line-control">|</span>
             <span>Contrato: <strong class="text-fg">16467</strong></span>
           </div>
           <div class="header-tools">
@@ -222,7 +222,7 @@
               aria-haspopup="listbox"
               autocomplete="off"
               placeholder="Série, apelido, modelo, cidade ou usuário"
-              class="home-search-input w-full rounded-xl glass-input text-white font-mono tracking-wider placeholder:text-slate-500 placeholder:font-sans focus:outline-none uppercase"
+              class="home-search-input w-full rounded-xl glass-input text-white font-mono tracking-wider placeholder:text-fg-weak placeholder:font-sans focus:outline-none uppercase"
               data-on-input="handleSerialInput" data-args='["$value"]'
               data-on-keydown="handleSerialKeydown" data-args='["$event"]'
             />
@@ -232,7 +232,7 @@
               aria-label="Limpar pesquisa"
               title="Limpar pesquisa"
               data-on-click="limparSerial"
-              class="hidden absolute inset-y-0 right-0 pr-3.5 flex items-center text-slate-400 hover:text-white transition-colors"
+              class="hidden absolute inset-y-0 right-0 pr-3.5 flex items-center text-fg-subtle hover:text-white transition-colors"
             >
               <i data-lucide="x" class="w-5 h-5"></i>
             </button>
@@ -261,7 +261,7 @@
           <!-- Header -->
           <div
             id="autocomplete-header"
-            class="sticky top-0 px-4 py-3 border-b border-slate-800 text-xs font-semibold flex justify-between items-center z-10 select-none"
+            class="sticky top-0 px-4 py-3 border-b border-line-quiet text-xs font-semibold flex justify-between items-center z-10 select-none"
           >
             <div class="flex items-center space-x-2">
               <span class="w-2 h-2 rounded-full bg-cyan-400 animate-pulse"></span>
@@ -278,9 +278,9 @@
           </div>
 
           <!-- Items List Container -->
-          <div id="autocomplete-list" role="listbox" aria-label="Equipamentos encontrados" class="divide-y divide-slate-800/80 max-h-96 overflow-y-auto"></div>
+          <div id="autocomplete-list" role="listbox" aria-label="Equipamentos encontrados" class="divide-y divide-line-quiet/80 max-h-96 overflow-y-auto"></div>
           <div id="autocomplete-empty-state" class="hidden" role="region" aria-label="Resultado da busca" aria-live="polite"></div>
-          <div id="autocomplete-more-results" class="hidden px-4 py-2 border-t border-slate-800">
+          <div id="autocomplete-more-results" class="hidden px-4 py-2 border-t border-line-quiet">
             <button type="button" data-on-click="abrirPesquisaCompleta" class="autocomplete-more-button w-full inline-flex items-center justify-center gap-2 px-3 py-2 rounded-xl transition">
               <i data-lucide="list-checks" class="w-4 h-4" aria-hidden="true"></i>
               <span data-autocomplete-more-label>Mostrar mais</span>
@@ -290,12 +290,12 @@
           <!-- Footer Tips -->
           <div
             id="autocomplete-footer"
-            class="px-4 py-2 border-t border-slate-800 text-xs text-slate-400 flex items-center justify-between select-none"
+            class="px-4 py-2 border-t border-line-quiet text-xs text-fg-subtle flex items-center justify-between select-none"
           >
             <span class="flex items-center gap-1.5">
-              <span><kbd class="px-1 py-0.5 bg-slate-800 border border-slate-700 rounded text-slate-300 font-mono text-xs">↑↓</kbd> navegar <kbd class="px-1.5 py-0.5 bg-slate-800 border border-slate-700 rounded text-slate-300 font-mono text-xs">Enter</kbd> selecionar</span>
+              <span><kbd class="px-1 py-0.5 bg-surface-control border border-line-control rounded text-fg-tertiary font-mono text-xs">↑↓</kbd> navegar <kbd class="px-1.5 py-0.5 bg-surface-control border border-line-control rounded text-fg-tertiary font-mono text-xs">Enter</kbd> selecionar</span>
             </span>
-            <span class="text-xs text-slate-500 font-mono hidden sm:inline"><kbd class="px-1 py-0.5 bg-slate-800 border border-slate-700 rounded text-slate-400 text-xs">Esc</kbd> fechar</span>
+            <span class="text-xs text-fg-muted font-mono hidden sm:inline"><kbd class="px-1 py-0.5 bg-surface-control border border-line-control rounded text-fg-subtle text-xs">Esc</kbd> fechar</span>
           </div>
         </div>
       </div>
@@ -422,7 +422,7 @@
             <div class="ticket-templates-heading">
               <div>
                 <h4 id="ticket-templates-title" class="text-sm font-bold text-white">Textos prontos para chamados manuais</h4>
-                <p class="text-xs text-slate-400 mt-1">Série pesquisada: <strong id="ticket-templates-serial" class="font-mono text-cyan-200">—</strong></p>
+                <p class="text-xs text-fg-subtle mt-1">Série pesquisada: <strong id="ticket-templates-serial" class="font-mono text-cyan-200">—</strong></p>
               </div>
             </div>
 
