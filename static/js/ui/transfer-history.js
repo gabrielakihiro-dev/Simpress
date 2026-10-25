@@ -79,7 +79,7 @@
 
     function showMessage(text, role) {
       const list = byId("lista-historico-transferencias");
-      const message = el("p", "text-sm text-center py-8 " + (role === "alert" ? "text-rose-300" : "text-slate-400"), text);
+      const message = el("p", "text-sm text-center py-8 " + (role === "alert" ? "text-rose-300" : "text-fg-subtle"), text);
       message.setAttribute("role", role);
       list.replaceChildren(message);
     }
@@ -130,13 +130,13 @@
     function renderRows(items) {
       const list = byId("lista-historico-transferencias");
       const columns = ["Data e hora", "Série", "Origem → Destino", "Destinatário", "Observações", "Ações"];
-      const wrap = el("div", "accessible-table-wrap comparison-desktop-table rounded-lg border border-slate-800");
+      const wrap = el("div", "accessible-table-wrap comparison-desktop-table rounded-lg border border-line-quiet");
       wrap.setAttribute("role", "region");
       wrap.setAttribute("aria-label", "Tabela de transferências geradas");
       wrap.tabIndex = 0;
       const table = el("table", "min-w-full text-left text-sm");
       table.setAttribute("aria-label", "Transferências geradas");
-      const head = el("thead", "bg-slate-950 text-slate-300");
+      const head = el("thead", "bg-surface text-fg-tertiary");
       const headRow = el("tr");
       columns.forEach(name => {
         const th = el("th", "px-3 py-2.5 font-semibold whitespace-nowrap", name);
@@ -144,7 +144,7 @@
         headRow.appendChild(th);
       });
       head.appendChild(headRow);
-      const body = el("tbody", "divide-y divide-slate-800");
+      const body = el("tbody", "divide-y divide-line-quiet");
       const cards = el("div", "comparison-mobile-list");
       cards.setAttribute("role", "list");
       cards.setAttribute("aria-label", "Transferências geradas em cartões");
@@ -157,7 +157,7 @@
         const row = el("tr");
         cells.forEach((text, index) => {
           const cell = el("td", index === 1 ? "px-3 py-2 font-mono whitespace-nowrap" : "px-3 py-2", text);
-          if (index === 1 && item.nome_pessoa) cell.appendChild(el("span", "block font-sans text-xs text-slate-400", item.nome_pessoa));
+          if (index === 1 && item.nome_pessoa) cell.appendChild(el("span", "block font-sans text-xs text-fg-subtle", item.nome_pessoa));
           row.appendChild(cell);
         });
         const actions = el("td", "px-3 py-2");
@@ -196,7 +196,7 @@
     async function load() {
       const ticket = ++requestSerial;
       const term = String(byId("filtro-historico-transferencias")?.value || "").trim();
-      const loading = el("p", "text-sm text-center py-8 text-slate-400", "Carregando histórico…");
+      const loading = el("p", "text-sm text-center py-8 text-fg-subtle", "Carregando histórico…");
       loading.setAttribute("role", "status");
       byId("lista-historico-transferencias").replaceChildren(loading);
       setStatus("Carregando histórico…");

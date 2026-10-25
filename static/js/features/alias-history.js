@@ -75,7 +75,7 @@
   async function carregarHistoricoApelidos() {
     const lista = document.getElementById("lista-historico-apelidos");
     lista.setAttribute("aria-busy", "true");
-    lista.innerHTML = '<p class="text-sm text-slate-400 text-center py-8" role="status" aria-live="polite">Carregando histórico...</p>';
+    lista.innerHTML = '<p class="text-sm text-fg-subtle text-center py-8" role="status" aria-live="polite">Carregando histórico...</p>';
     const stopLoading = motion?.startLoading(lista, "Carregando histórico…") || (() => {});
 
     try {

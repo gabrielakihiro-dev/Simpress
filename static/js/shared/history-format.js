@@ -76,8 +76,8 @@
   function classesMetricaHistorico(valor, tom) {
     const ativo = Number(valor || 0) > 0;
     return {
-      cartao: `border border-slate-800 border-l-2 bg-slate-900/40 ${ativo && ACENTOS_METRICA[tom] ? ACENTOS_METRICA[tom] : "border-l-slate-800"}`,
-      numero: ativo ? "text-white" : "text-slate-500",
+      cartao: `border border-line-quiet border-l-2 bg-surface-overlay/40 ${ativo && ACENTOS_METRICA[tom] ? ACENTOS_METRICA[tom] : "border-l-line-quiet"}`,
+      numero: ativo ? "text-white" : "text-fg-muted",
     };
   }
 

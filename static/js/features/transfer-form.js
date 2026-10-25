@@ -627,7 +627,7 @@
     // Reset status indicator
     document.getElementById("status-indicator").className = "w-2.5 h-2.5 rounded-full bg-brand-400";
     document.getElementById("status-summary").innerHTML = `
-        <span class="text-slate-300 font-medium" data-ux-ready-status>Pronto para emissão.</span>
+        <span class="text-fg-tertiary font-medium" data-ux-ready-status>Pronto para emissão.</span>
       `;
 
     app.showToast("Formulário limpo. Pronto para uma nova busca.", "info");

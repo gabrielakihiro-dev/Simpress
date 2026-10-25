@@ -94,7 +94,7 @@
 
   /* ---------- Semantic tokens ----------
    * Components use these instead of Tailwind palette colors, so the light theme
-   * no longer depends on remapping --color-slate-* (see theme.css). They are also
+   * no longer depends on remapping --color-slate-*. They are also
    * exposed as utilities (bg-surface-raised, text-text-muted, border-border…) in
    * tailwind.input.css for markup that moves off the slate scale. */
   --surface: #020617;
@@ -119,6 +119,17 @@
   --text-subtle: #94a3b8;
   --text-count: #94a3b8;
   --text-faint: #64748b; /* same value in both themes */
+  /* Neutral ramp for markup that left the Tailwind slate scale. Dark values are the slate
+   * oklch literals, so the screen is unchanged; the light values replace the old theme.css remap. */
+  --text-emphasis: oklch(96.8% 0.007 247.896);
+  --text-secondary: oklch(92.9% 0.013 255.508);
+  --text-tertiary: oklch(86.9% 0.022 252.894);
+  --text-weak: oklch(55.4% 0.046 257.417);
+  --surface-control: oklch(27.9% 0.041 260.031);
+  --surface-control-hover: oklch(37.2% 0.044 257.287);
+  --border-quiet: oklch(27.9% 0.041 260.031);
+  --border-control: oklch(37.2% 0.044 257.287);
+  --border-firm: oklch(44.6% 0.043 257.281);
   --accent-ring: rgba(56, 169, 247, 0.2);
   --accent-solid: var(--primary);
   --accent-solid-hover: var(--primary-hover);
@@ -416,6 +427,15 @@ html[data-theme="light"] {
   --text-heading: #1e293b;
   --text-body: #334155;
   --text-subtle: #5b6b80;
+  --text-emphasis: #1e293b;
+  --text-secondary: #334155;
+  --text-tertiary: #475569;
+  --text-weak: #5b6b80;
+  --surface-control: #e2e8f0;
+  --surface-control-hover: #cbd5e1;
+  --border-quiet: #e2e8f0;
+  --border-control: #cbd5e1;
+  --border-firm: #94a3b8;
   --text-count: #475569;
   --border: #dbe4ef;
   --border-subtle: #e2e8f0;

@@ -185,14 +185,14 @@
         text.textContent = candidate.anotacao || "(Anotação vazia)";
         const choose = doc.createElement("button");
         choose.type = "button";
-        choose.className = "rounded border border-slate-600 px-2 py-1";
+        choose.className = "rounded border border-line-firm px-2 py-1";
         choose.textContent = "Usar esta versão";
         choose.addEventListener("click", () => { textarea.value = candidate.anotacao; });
         conflictPanel.append(text, choose);
       }
       const compose = doc.createElement("button");
       compose.type = "button";
-      compose.className = "rounded border border-slate-600 px-2 py-1";
+      compose.className = "rounded border border-line-firm px-2 py-1";
       compose.textContent = "Editar texto para resolução";
       compose.addEventListener("click", () => { textarea.readOnly = false; textarea.focus(); });
       const resolve = doc.createElement("button");
@@ -384,7 +384,7 @@
       dirty = true;
       setPending(true);
       persistDraft(textarea.value);
-      setStatus("Pendente de salvamento...", "text-slate-400");
+      setStatus("Pendente de salvamento...", "text-fg-subtle");
       scheduleSave(500);
     };
     const onBlur = () => scheduleSave(0);

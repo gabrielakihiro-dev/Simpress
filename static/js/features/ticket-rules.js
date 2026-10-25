@@ -113,7 +113,7 @@
       return `<li class="ticket-stage is-${estado}"><span class="ticket-stage-mark" aria-hidden="true">${marcador}</span><span class="ticket-stage-text"><span class="ticket-stage-label">${escapeHtml(etapa.rotulo)}</span> - <span class="ticket-stage-date">${escapeHtml(texto)}</span></span></li>`;
     });
     // The summary above already shows the forecast and current stage, so the full list starts closed.
-    return `<details class="ticket-disclosure ticket-stages-disclosure mt-1.5" data-ticket-section="stages"><summary class="ticket-disclosure-summary cursor-pointer text-xs font-semibold text-slate-300">Etapas do pedido</summary><ol class="ticket-stages" aria-label="Etapas do pedido">${itens.join("")}</ol></details>`;
+    return `<details class="ticket-disclosure ticket-stages-disclosure mt-1.5" data-ticket-section="stages"><summary class="ticket-disclosure-summary cursor-pointer text-xs font-semibold text-fg-tertiary">Etapas do pedido</summary><ol class="ticket-stages" aria-label="Etapas do pedido">${itens.join("")}</ol></details>`;
   }
 
   function resumirDescricaoChamado(value, limit = 150) {
