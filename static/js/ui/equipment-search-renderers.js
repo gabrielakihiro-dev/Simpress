@@ -40,31 +40,31 @@
               ${escapeHtml(item.modelo || "Sem modelo especificado")}
             </span>
             ${item.apelido ? `
-              <span class="autocomplete-alias inline-flex items-center gap-1 text-[11px] font-mono px-2 py-0.5 rounded-md bg-slate-900/90 text-cyan-300 border border-cyan-500/30 shrink-0" title="Apelido / Hostname">
+              <span class="autocomplete-alias inline-flex items-center gap-1 text-xs font-mono px-2 py-0.5 rounded-md bg-slate-900/90 text-cyan-300 border border-cyan-500/30 shrink-0" title="Apelido / Hostname">
                 <i data-lucide="terminal" class="w-2.5 h-2.5 text-cyan-400" aria-hidden="true"></i>
                 <span>${escapeHtml(item.apelido)}</span>
               </span>
             ` : ""}
             ${String(item.usuarios_logados || "").trim() ? `
-              <span class="autocomplete-user inline-flex items-center gap-1 text-[11px] px-2 py-0.5 rounded-md bg-slate-900/90 text-slate-200 border border-slate-600/60 shrink-0" title="${escapeHtml(item.usuarios_logados_origem === "manual" ? tituloManual(item.usuarios_logados_informado_em) : "Usuário logado no Endpoint")}">
+              <span class="autocomplete-user inline-flex items-center gap-1 text-xs px-2 py-0.5 rounded-md bg-slate-900/90 text-slate-200 border border-slate-600/60 shrink-0" title="${escapeHtml(item.usuarios_logados_origem === "manual" ? tituloManual(item.usuarios_logados_informado_em) : "Usuário logado no Endpoint")}">
                 <i data-lucide="user" class="w-2.5 h-2.5 text-slate-400" aria-hidden="true"></i>
                 <span>${highlightMatch(String(item.usuarios_logados).trim(), currentQuery)}${item.usuarios_logados_origem === "manual" ? " (M)" : ""}</span>
                 ${item.usuarios_logados_pendencia ? '<span class="text-amber-300" data-user-pending>· aguardando decisão</span>' : ""}
               </span>
             ` : ""}
             ${String(item.nome_pessoa || "").trim() ? `
-              <span class="autocomplete-user inline-flex items-center gap-1 text-[11px] px-2 py-0.5 rounded-md bg-slate-900/90 text-slate-200 border border-slate-600/60 min-w-0" title="Nome da pessoa${item.nome_pessoa_origem === "manual" ? " informado manualmente" : " no Entra"}">
+              <span class="autocomplete-user inline-flex items-center gap-1 text-xs px-2 py-0.5 rounded-md bg-slate-900/90 text-slate-200 border border-slate-600/60 min-w-0" title="Nome da pessoa${item.nome_pessoa_origem === "manual" ? " informado manualmente" : " no Entra"}">
                 <span class="truncate">${highlightMatch(String(item.nome_pessoa).trim(), currentQuery)}${item.nome_pessoa_origem === "manual" ? " (manual)" : ""}</span>
               </span>
             ` : ""}
             ${textoAmbiguo(item.usuarios_logados_candidatos) ? `
-              <span class="autocomplete-user autocomplete-user-ambiguous inline-flex items-center gap-1 text-[11px] px-2 py-0.5 rounded-md text-amber-300 bg-amber-500/10 border border-amber-500/25 shrink-0" title="${escapeHtml(context.loggedUserMarkers?.TITULO_AMBIGUO || "")}">
+              <span class="autocomplete-user autocomplete-user-ambiguous inline-flex items-center gap-1 text-xs px-2 py-0.5 rounded-md text-amber-300 bg-amber-500/10 border border-amber-500/25 shrink-0" title="${escapeHtml(context.loggedUserMarkers?.TITULO_AMBIGUO || "")}">
                 <i data-lucide="alert-triangle" class="w-2.5 h-2.5 text-amber-400" aria-hidden="true"></i>
                 <span>${highlightMatch(textoAmbiguo(item.usuarios_logados_candidatos), currentQuery)}</span>
               </span>
             ` : ""}
             ${item.invall_alias_status && item.invall_alias_status !== "aplicado" ? `
-              <span class="text-[10px] text-amber-200 shrink-0" title="${escapeHtml(item.invall_alias_detail || "Conferir associação com a InvAll")}">Conferir InvAll</span>
+              <span class="text-xs text-amber-200 shrink-0" title="${escapeHtml(item.invall_alias_detail || "Conferir associação com a InvAll")}">Conferir InvAll</span>
             ` : ""}
           </div>
         </div>
@@ -74,8 +74,8 @@
             <span>${escapeHtml(item.retirada_cidade || "PR")}</span>
           </div>
           <div class="hidden sm:flex items-center text-xs text-slate-400 group-hover:text-cyan-300 transition-colors ml-1 font-mono">
-            <span class="text-[11px] mr-1 hidden lg:inline opacity-70">Selecionar</span>
-            <kbd class="px-1.5 py-0.5 text-[10px] bg-slate-900 border border-slate-700 rounded text-slate-300 shadow-sm">↵</kbd>
+            <span class="text-xs mr-1 hidden lg:inline opacity-70">Selecionar</span>
+            <kbd class="px-1.5 py-0.5 text-xs bg-slate-900 border border-slate-700 rounded text-slate-300 shadow-sm">↵</kbd>
           </div>
         </div>
       `;

@@ -349,7 +349,7 @@
       const grupo = document.createElement("section");
       grupo.className = "space-y-2";
       const titulo = document.createElement("h4");
-      titulo.className = "flex items-center gap-2 px-1 text-[11px] font-semibold uppercase tracking-wide text-slate-400";
+      titulo.className = "flex items-center gap-2 px-1 text-xs font-semibold uppercase tracking-wide text-slate-400";
       titulo.textContent = rotuloDiaHistorico(chave);
       const quantidade = document.createElement("span");
       quantidade.className = "font-normal normal-case tracking-normal text-slate-500";
@@ -383,7 +383,7 @@
     dataHora.className = "text-sm font-semibold text-white";
     dataHora.textContent = formatarHorarioHistorico(evento.horario);
     const selo = document.createElement("span");
-    selo.className = `shrink-0 rounded-full border px-2.5 py-0.5 text-[11px] font-medium ${cores}`;
+    selo.className = `shrink-0 rounded-full border px-2.5 py-0.5 text-xs font-medium ${cores}`;
     selo.textContent = tipo;
     cabecalho.append(dataHora, selo);
     return cabecalho;
@@ -426,7 +426,7 @@
       const chip = document.createElement("div");
       chip.className = `flex flex-col-reverse rounded-lg px-3 py-2 ${classes.cartao}`;
       const nome = document.createElement("dt");
-      nome.className = "text-[11px] leading-tight text-slate-400";
+      nome.className = "text-xs leading-tight text-slate-400";
       nome.textContent = rotulo;
       const quantidade = document.createElement("dd");
       quantidade.className = `text-base font-semibold ${classes.numero}`;

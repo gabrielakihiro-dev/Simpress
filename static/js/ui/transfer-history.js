@@ -157,7 +157,7 @@
         const row = el("tr");
         cells.forEach((text, index) => {
           const cell = el("td", index === 1 ? "px-3 py-2 font-mono whitespace-nowrap" : "px-3 py-2", text);
-          if (index === 1 && item.nome_pessoa) cell.appendChild(el("span", "block font-sans text-[11px] text-slate-400", item.nome_pessoa));
+          if (index === 1 && item.nome_pessoa) cell.appendChild(el("span", "block font-sans text-xs text-slate-400", item.nome_pessoa));
           row.appendChild(cell);
         });
         const actions = el("td", "px-3 py-2");
