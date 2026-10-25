@@ -110,14 +110,14 @@ def create_transfer_history_router(services: TransferHistoryServices) -> Tuple[A
         record = build_record(payload)
         path = services.history_file()
         try:
-            with _LOCK:
-                with AtomicFileTransaction(services.transaction_root(), [path]) as transaction:
-                    transaction.update_json(
-                        path,
-                        lambda history: [*_validate_history(history), record][-MAX_HISTORY_RECORDS:],
-                        [],
-                    )
-                    transaction.commit()
+            # The transaction already serializes writers; no Python lock may wrap it.
+            with AtomicFileTransaction(services.transaction_root(), [path]) as transaction:
+                transaction.update_json(
+                    path,
+                    lambda history: [*_validate_history(history), record][-MAX_HISTORY_RECORDS:],
+                    [],
+                )
+                transaction.commit()
         except TransferHistoryCorruptionError as error:
             raise HTTPException(status_code=503, detail=str(error)) from error
         except FileBusyError as error:
