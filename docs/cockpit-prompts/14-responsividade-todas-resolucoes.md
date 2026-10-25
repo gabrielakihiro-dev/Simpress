@@ -27,13 +27,13 @@ O layout fica **exatamente idêntico** ao artefato do Cockpit (https://claude.ai
 - barra superior: 48px
 - lista da Home: 360px
 - painel "Chamados abertos": 300px
-- busca da barra: `clamp(220px, 23vw, 340px)` (o 427px de um diagnóstico veio de zoom do Windows; não usar)
+- busca da barra: `flex: 0 1 240px; min-width: 120px` (valor do artefato original; antes constava `clamp(220px, 23vw, 340px)`, que difere do artefato; o 427px de um diagnóstico veio de zoom do Windows)
 
 ## Composição por tela e faixa
 
 ### Barra superior
 - **Amplo:** logo, abas (Home, Transporte, Resumo, Automação), busca, chips e status, notificações, ferramentas (nove pontos) e tema, numa linha de 48px.
-- **Médio:** mesma linha; a busca encolhe (`flex: 1 1 auto; min-width: 0; max-width: 340px`) e chips/status ficam compactos, sem passar da borda.
+- **Médio:** mesma linha; a busca encolhe (`flex: 0 1 240px; min-width: 120px` (como no artefato)) e chips/status ficam compactos, sem passar da borda.
 - **Compacto:** abas e busca na linha; chips e status vão para um menu acessível (botão com `aria-expanded` e `aria-controls`, fecha com Esc). `#notification-center-panel` e `#cockpit-tools-trigger` continuam funcionando; nenhuma ação se perde.
 
 ### Home
