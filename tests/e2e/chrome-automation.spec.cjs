@@ -97,7 +97,7 @@ test("Automação pages and filters executions without growing the history", asy
   await panel.getByRole("button", {name: "Próxima", exact: true}).click();
   await expect(panel.locator("#automacao-historico-pagina")).toHaveText("Página 2 de 3");
   await panel.getByRole("button", {name: "Próxima", exact: true}).click();
-  await expect(rows).toHaveCount(2);
+  await expect(rows).toHaveCount(3);
   await panel.getByRole("combobox", {name: "Execuções por página", exact: true}).selectOption("10");
   await expect(rows).toHaveCount(10);
   await panel.locator("#automacao-historico-filtros summary").click();
@@ -218,7 +218,7 @@ test("Automação history lists status, batches and capture links, and passes th
   const panel = await openAutomation(page, request);
   const history = panel.locator("#automacao-historico");
   const rows = history.locator("tbody tr");
-  await expect(rows).toHaveCount(2);
+  await expect(rows).toHaveCount(3);
   await expect(rows.nth(0)).toContainText("Concluído");
   await expect(rows.nth(0)).toContainText("lote-demo-001");
   await expect(rows.nth(0)).toContainText("6 min 30 s");

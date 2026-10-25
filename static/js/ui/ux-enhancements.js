@@ -89,7 +89,7 @@
       F6: "tool-comparacao",
       F7: "tool-apelidos",
       F8: "tool-relatorio",
-    })[key] || null;
+    })[key] || ({ t: "equipment-transport", e: "equipment-edit", c: "copy-ticket" })[key.toLowerCase()] || null;
   }
 
   function shouldCloseCockpitToolsMenu(menu, target) {
@@ -436,7 +436,7 @@
       const action = shortcutAction(event, {
         typing,
         modalOpen: Boolean(doc.querySelector('[data-accessible-modal="true"]:not(.hidden):not([data-motion-closing="true"])')),
-        transferVisible: Boolean(panel) && !panel.hidden,
+        transferVisible: Boolean(panel) && !panel.hidden && !byId("main-content")?.hidden,
       });
       if (action === "search") {
         const input = byId("input-serial");
@@ -457,7 +457,15 @@
       } else if (action === "tab-automacao") {
         event.preventDefault();
         if (typeof win.ativarAbaTransferencia === "function") win.ativarAbaTransferencia("automacao");
-      } else if (action.startsWith("tool-")) {
+      } else if (action?.startsWith("equipment-") || action === "copy-ticket") {
+        if (!win.SimpressApp?.state.currentEquipamento || byId("main-content")?.hidden || byId("tab-panel-home")?.hidden) return;
+        const button = action === "equipment-transport" ? byId("btn-ir-para-transporte")
+          : action === "copy-ticket" ? byId("btn-copiar-chamado-atual")
+            : doc.querySelector('#card-equipamento [data-on-click="abrirModalEditarEquipamento"]');
+        if (!button || button.disabled) return;
+        event.preventDefault();
+        button.click();
+      } else if (action?.startsWith("tool-")) {
         const buttonIds = {
           "tool-chamados": "btn-acompanhamento-chamados",
           "tool-comparacao": "btn-cockpit-comparacao",

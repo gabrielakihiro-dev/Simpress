@@ -45,6 +45,7 @@
     app.definirEquipamentoAtual(null);
     appState.retiradaCidadeSelecionada = "";
     document.getElementById("card-equipamento")?.classList.add("hidden");
+    document.getElementById("home-detail-empty")?.classList.remove("hidden");
     document.getElementById("retirada-cnpj").value = "";
     document.getElementById("retirada-endereco").value = "";
     document.getElementById("retirada-obs").value = "";

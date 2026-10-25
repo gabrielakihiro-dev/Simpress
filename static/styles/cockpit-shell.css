@@ -1,7 +1,15 @@
 /* Cockpit shell — barra superior 48px */
+html:has(> .cockpit-shell-body) { width: 100%; overflow-x: auto; }
 .cockpit-shell-body {
-  min-width: 1200px;
+  width: 100%;
+  min-width: 0;
   overflow-x: auto;
+}
+
+/* Fixed overlays follow the phone viewport even while the Cockpit shell scrolls horizontally. */
+.cockpit-shell-body > .modal-overlay {
+  width: 100dvw;
+  height: 100dvh;
 }
 
 #simpress-app-shell.cockpit-shell {
@@ -257,7 +265,8 @@
   color: var(--color-text);
 }
 
-.cockpit-tools-dropdown[open] > .cockpit-tools-dropdown__trigger {
+.cockpit-tools-dropdown[open] > .cockpit-tools-dropdown__trigger,
+.cockpit-tools-dropdown[data-active-tool] > .cockpit-tools-dropdown__trigger {
   background: var(--color-accent-900);
   color: var(--color-accent-100);
   box-shadow: inset 0 0 0 1px var(--color-accent-700);
@@ -496,8 +505,9 @@
 }
 
 .cockpit-shell .cockpit-search-input:focus-visible {
-  outline: none;
-  box-shadow: inset 0 0 0 1px var(--cockpit-accent);
+  outline: 2px solid var(--cockpit-accent);
+  outline-offset: -2px;
+  box-shadow: none;
 }
 
 .cockpit-shell .cockpit-search-shortcut {
@@ -590,3 +600,11 @@
 .cockpit-shell [aria-disabled="true"] {
   cursor: not-allowed;
 }
+
+/* Visibility contracts must win over component display rules and vendor layers. */
+.cockpit-shell .cockpit-home-card.hidden,
+.cockpit-shell .cockpit-home-empty.hidden,
+.cockpit-shell .cockpit-search-clear.hidden,
+.cockpit-shell .cockpit-tools-dropdown__item.hidden,
+.cockpit-shell .cockpit-home-inline-actions.hidden { display: none; }
+.cockpit-shell [hidden] { display: none !important; }

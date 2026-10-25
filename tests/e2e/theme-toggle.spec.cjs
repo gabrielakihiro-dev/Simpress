@@ -1,32 +1,18 @@
 const { test, expect } = require("@playwright/test");
 
-test("header summary and sidebar switch at 767/768 pixels in both themes", async ({ page }) => {
+test("the Cockpit tools remain reachable in narrow windows in both themes", async ({ page }) => {
   await page.goto("/");
   for (const theme of ["dark", "light"]) {
     await page.locator("html").evaluate((root, value) => { root.dataset.theme = value; }, theme);
-    for (const width of [767, 768, 767]) {
+    for (const width of [390, 767, 768, 1200]) {
       await page.setViewportSize({ width, height: 1024 });
-      await page.locator(".app-workspace").evaluate(async workspace => {
-        await Promise.all(workspace.getAnimations().map(animation => animation.finished.catch(() => undefined)));
-      });
-      const summary = page.locator(".header-base-summary");
-      const menu = page.locator("#btn-sidebar-open");
-      if (width === 767) {
-        await expect(summary).toBeHidden();
-        await expect(menu).toBeVisible();
-        await menu.click();
-        await expect(page.locator("#simpress-app-shell")).toHaveAttribute("data-sidebar-open", "true");
-        await expect(page.locator("#btn-nova-transferencia")).toBeVisible();
-        await page.keyboard.press("Escape");
-        await expect(page.locator("#simpress-app-shell")).toHaveAttribute("data-sidebar-open", "false");
-      } else {
-        await expect(summary).toBeVisible();
-        await expect(menu).toBeHidden();
-        await expect(page.locator("#btn-nova-transferencia")).toBeVisible();
-      }
-      await expect.poll(() => page.evaluate(
-        () => document.documentElement.scrollWidth <= document.documentElement.clientWidth + 1,
-      )).toBe(true);
+      await page.locator("#cockpit-tools-trigger").click();
+      await expect(page.locator("#btn-nova-transferencia")).toBeVisible();
+      await page.keyboard.press("Escape");
+      await expect(page.locator("#cockpit-tools-trigger")).toBeFocused();
+      await expect(page.locator("#cockpit-tools-dropdown")).not.toHaveAttribute("open", "");
+      const widths = await page.evaluate(() => ({ viewport: document.documentElement.clientWidth, body: document.body.scrollWidth }));
+      expect(widths.body).toBeGreaterThanOrEqual(Math.max(1200, widths.viewport));
     }
   }
 });
