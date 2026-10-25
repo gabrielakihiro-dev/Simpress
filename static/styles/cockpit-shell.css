@@ -693,3 +693,37 @@
   .cockpit-bar__brand { display: none; }
   .cockpit-bar__tabs { grid-column: 1 / 3; }
 }
+
+/* ── Fase 5: toque, campos no compacto e telas largas ── */
+/* Toque: alvos de 44px só com ponteiro grosso (celular/tablet); mouse mantém as medidas do artefato. */
+@media (pointer: coarse) {
+  .cockpit-shell-body :is(button, .btn, [role="button"], [role="tab"], [role="option"], summary, select, .cockpit-tools-dropdown__item),
+  .cockpit-shell-body input:not([type="checkbox"], [type="radio"], [type="range"], [type="hidden"]) { min-height: 44px; }
+  /* Borda vira sombra interna para o campo ter os 44px inteiros sem crescer a linha da barra. */
+  .cockpit-shell .cockpit-bar__search { height: 44px; border-width: 0; box-shadow: inset 0 0 0 1px var(--cockpit-border); }
+  .cockpit-bar :is(.cockpit-search-submit, .cockpit-search-clear) { min-width: 44px; }
+}
+/* Largura de 44px nos botões da barra só a partir de 375px; abaixo disso (320px) não cabem e se cobririam (altura de 44px continua). */
+@media (pointer: coarse) and (min-width: 375px) {
+  .cockpit-bar :is(.cockpit-tab, .cockpit-bar__status-toggle, #cockpit-tools-trigger, .cockpit-bar__tools > button, .cockpit-bar__actions button) { min-width: 44px; }
+}
+/* No compacto os 44px de largura só cabem com margem e vão da barra reduzidos (4px e 2px). */
+@media (pointer: coarse) and (min-width: 375px) and (max-width: 767.98px) {
+  .cockpit-bar { padding: 0 4px; gap: 0 2px; }
+}
+
+/* Compacto: 16px nos campos evita o zoom automático do iOS ao focar. */
+@media (max-width: 767.98px) {
+  .cockpit-shell-body :is(input:not([type="checkbox"], [type="radio"], [type="range"], [type="hidden"]), select, textarea) { font-size: 16px !important; }
+}
+
+/* 1920px ou mais: largura útil limitada e centralizada (até 2560px nada estica). */
+@media (min-width: 1920px) {
+  #simpress-app-shell.cockpit-shell { max-width: 1920px; margin-inline: auto; }
+}
+
+/* Telas baixas e estreitas (ex.: celular em paisagem): a regra antiga de app.css soma 40px acima do painel e empurra o fim para fora da janela. */
+@media (max-width: 900px) and (max-height: 500px) {
+  .cockpit-shell #main-content { padding-top: 0; }
+  .cockpit-shell #main-content > * + * { margin-top: 0; }
+}
