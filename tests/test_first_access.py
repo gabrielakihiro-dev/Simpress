@@ -106,10 +106,14 @@ class FirstAccessTests(unittest.TestCase):
         if zipped:
             data = archive_bytes([("pasta/EquipamentosDetalhes.xlsx", data)])
         if client is not None:
-            response = client.post("/api/planilhas/atualizar", files={
+            files = {
                 "endpoint_file": ("endpoint.xlsx", endpoint.read_bytes()),
                 "details_file": ("simpress.zip" if zipped else "simpress.xlsx", data),
-            })
+            }
+            preview = client.post("/api/planilhas/previsualizar", files=files)
+            self.assertEqual(preview.status_code, 200, preview.text)
+            response = client.post("/api/planilhas/atualizar", files=files,
+                                   data={"preview_token": preview.json()["preview_token"]})
             self.assertEqual(response.status_code, 200, response.text)
             return response.json()
         return asyncio.run(main.atualizar_planilhas(
@@ -290,7 +294,7 @@ class FirstAccessTests(unittest.TestCase):
                             response = client.post(route, files={
                                 "endpoint_file": ("endpoint.xlsx", before[self.endpoint]),
                                 "details_file": (name, payload),
-                            })
+                            }, data={"preview_token": "a" * 66} if route.endswith("atualizar") else None)
                             self.assertEqual(response.status_code, 400, response.text)
                             if name.endswith(".zip"):
                                 self.assertEqual(response.json()["detail"], "Não foi possível ler o ZIP da Simpress.")
@@ -356,6 +360,11 @@ class FirstAccessTests(unittest.TestCase):
             self.assertEqual(client.get("/").status_code, 200)
             self.assertEqual(client.get("/api/stats").json()["total_equipamentos"], 0)
             self.assertEqual(client.post("/api/planilhas/atualizar", files={
+                "details_file": ("simpress.xlsx", b"empty"),
+            }).status_code, 422)
+            # The UI route requires the preview token; omitting it no longer skips the freshness check.
+            self.assertEqual(client.post("/api/planilhas/atualizar", files={
+                "endpoint_file": ("endpoint.xlsx", b"empty"),
                 "details_file": ("simpress.xlsx", b"empty"),
             }).status_code, 422)
             self.assertEqual(client.post("/api/modelos/desconhecido/importar", files={

@@ -111,6 +111,15 @@ class LocalRequestSecurityTests(unittest.TestCase):
         self.assertEqual(status, 413)
         self.assertFalse(reached)
 
+    def test_api_body_limit_applies_to_every_method_including_delete(self):
+        headers = [(b"content-length", str(main.MAX_API_REQUEST_BYTES + 1).encode("ascii"))]
+        for method in ("POST", "PUT", "PATCH", "DELETE"):
+            with self.subTest(method=method):
+                self.assertEqual(
+                    run_boundary(("127.0.0.1", 1234), headers=headers, path="/api/stats", method=method),
+                    (413, False),
+                )
+
     def test_entra_csv_upload_rejects_content_length_above_its_limit(self):
         limit = main.entra_users.MAX_CSV_BYTES + main.MAX_API_REQUEST_BYTES
         for size, expected in ((limit, (200, True)), (limit + 1, (413, False))):
