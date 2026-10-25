@@ -8,7 +8,7 @@
 
   function abrirModalEditarEquipamento() {
     if (!appState.currentEquipamento) {
-      app.showToast("Localize um equipamento antes de editar.", "warning");
+      app.showToast("Pesquise um equipamento antes de editar.", "warning");
       return;
     }
 
@@ -51,7 +51,7 @@
 
   function abrirModalEditarApelido() {
     if (!appState.currentEquipamento) {
-      app.showToast("Localize um equipamento antes de editar o apelido.", "warning");
+      app.showToast("Pesquise um equipamento antes de editar o apelido.", "warning");
       return;
     }
 
@@ -67,7 +67,7 @@
 
   async function salvarApelido() {
     if (!appState.currentEquipamento) {
-      app.showToast("Localize um equipamento antes de editar o apelido.", "warning");
+      app.showToast("Pesquise um equipamento antes de editar o apelido.", "warning");
       app.fecharModalEditarApelido();
       return;
     }
@@ -201,7 +201,7 @@
 
   async function enviarUsuarioLogado(usuario, mensagemSucesso) {
     if (!appState.currentEquipamento) {
-      app.showToast("Localize um equipamento antes de informar o usuário.", "warning");
+      app.showToast("Pesquise um equipamento antes de informar o usuário.", "warning");
       return;
     }
     const serial = appState.currentEquipamento.serial;

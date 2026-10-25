@@ -36,6 +36,10 @@
   ];
 
   function inicializarArquivosAtualizacaoPlanilhas() {
+    const entraInput = document.getElementById("entra-csv-file");
+    entraInput?.addEventListener("change", () => {
+      document.getElementById("entra-csv-name").textContent = entraInput.files?.[0]?.name || "Nenhum arquivo selecionado";
+    });
     ARQUIVOS_ATUALIZACAO_PLANILHAS.forEach(([inputId, nameId]) => {
       const input = document.getElementById(inputId);
       input?.addEventListener("change", () => {

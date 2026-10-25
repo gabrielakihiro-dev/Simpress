@@ -17,7 +17,7 @@
   function abrirPesquisaCompleta() {
     const query = (document.getElementById("input-serial").value || "").trim();
     if (query.length < 2) {
-      app.showToast("Digite ao menos 2 caracteres para pesquisar", "warning");
+      app.showToast("Digite ao menos 2 caracteres para pesquisar.", "warning");
       return;
     }
     iniciarPesquisaCompleta(query, "");

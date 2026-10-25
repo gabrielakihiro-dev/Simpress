@@ -41,7 +41,7 @@
       }
     } catch (err) {
       console.error("Falha ao carregar unidades:", err);
-      app.showToast("Erro ao carregar catálogo de unidades SEBRAE", "error");
+      app.showToast("Não foi possível carregar o catálogo de unidades. Recarregue a página e tente de novo.", "error");
     }
   }
 

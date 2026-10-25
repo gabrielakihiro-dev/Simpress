@@ -538,7 +538,7 @@
     const button = document.getElementById("btn-exportar-historico-comparacoes");
     const data = select?.value || "";
     if (!data) {
-      app.showToast("Não há uma data do histórico disponível para exportar.", "warning");
+      app.showToast("Este resultado não tem uma data de histórico para exportar.", "warning");
       return;
     }
 
