@@ -625,36 +625,38 @@
   width: 360px;
   min-width: 360px;
   flex: 0 0 360px;
-  border-right-color: var(--cockpit-border-soft);
+  border-right-color: var(--cockpit-border);
   background: var(--cockpit-bg);
 }
 
 .cockpit-home-filters {
-  gap: 5px;
-  padding: 12px 12px 9px;
+  gap: 4px;
+  padding: 10px 12px;
   border-bottom-color: var(--cockpit-border-soft);
 }
 
 .cockpit-home-pill {
-  min-height: 28px;
-  padding: 4px 9px;
-  border-color: transparent;
+  min-height: 0;
+  height: 24px;
+  gap: 3px;
+  padding: 0 9px;
+  border: 0;
   color: var(--cockpit-text-muted);
-  font-size: 12px;
+  font-size: 11.5px;
+  font-weight: 400;
 }
 
 .cockpit-home-pill span {
   color: inherit;
+  opacity: .7;
   font-variant-numeric: tabular-nums;
 }
 
 .cockpit-home-pill:hover:not(:disabled) {
-  border-color: var(--cockpit-border);
   background: var(--cockpit-surface);
 }
 
 .cockpit-home-pill.is-active {
-  border-color: transparent;
   background: var(--cockpit-accent-soft);
   color: var(--cockpit-accent-text);
 }
@@ -676,13 +678,14 @@
 
 .cockpit-home-item {
   display: grid;
-  grid-template-columns: 7px minmax(0, 1fr) auto;
+  grid-template-columns: 8px minmax(0, 1fr) auto;
   grid-template-rows: auto auto;
-  gap: 2px 8px;
+  gap: 0 10px;
   align-items: center;
-  padding: 8px 10px 8px 12px;
+  padding: 9px 12px;
+  line-height: 1.35;
   border-bottom: 1px solid var(--cockpit-border-soft);
-  border-left-width: 2px;
+  border-left-width: 0;
 }
 
 .cockpit-home-item:hover,
@@ -691,8 +694,8 @@
 }
 
 .cockpit-home-item.is-selected {
-  border-left-color: var(--cockpit-accent);
-  background: var(--cockpit-accent-soft);
+  background: var(--cockpit-surface);
+  box-shadow: inset 2px 0 0 var(--cockpit-accent);
 }
 
 .cockpit-home-item-dot {
@@ -701,14 +704,15 @@
   align-self: center;
 }
 
-.cockpit-home-item-dot--ok { background: var(--cockpit-ok-fg); }
-.cockpit-home-item-dot--warn { background: var(--cockpit-warn-fg); }
-.cockpit-home-item-dot--err { background: var(--cockpit-err-fg); }
+.cockpit-home-item-dot--ok { background: var(--cockpit-ok-dot); }
+.cockpit-home-item-dot--warn { background: var(--cockpit-warn-dot); }
+.cockpit-home-item-dot--err { background: var(--cockpit-err-dot); }
 
 .cockpit-home-item-serial {
   grid-column: 2;
   grid-row: 1;
-  font-size: 12px;
+  font-size: 12.5px;
+  font-weight: 400;
 }
 
 .cockpit-home-item-city {
@@ -718,12 +722,14 @@
   overflow: hidden;
   text-overflow: ellipsis;
   text-align: right;
+  font-size: 11.5px;
+  color: var(--color-neutral-300);
 }
 
 .cockpit-home-item-info {
   grid-column: 2;
   grid-row: 2;
-  font-size: 11px;
+  font-size: 11.5px;
 }
 
 .cockpit-home-item-status {
@@ -733,9 +739,9 @@
   overflow: hidden;
   text-overflow: ellipsis;
   text-align: right;
-  font-size: 10px;
-  font-weight: 500;
-  padding: 1px 0;
+  font-size: 11px;
+  font-weight: 400;
+  padding: 0;
 }
 
 .cockpit-home-item-status--ok { color: var(--cockpit-ok-fg); }
@@ -911,6 +917,151 @@
   color: var(--cockpit-text-muted);
   text-align: center;
 }
+
+/* ── Fase 6: detalhe da Home idêntico ao artefato ── */
+.cockpit-home-card { gap: 14px; min-height: 100%; }
+.cockpit-home-card-header { align-items: center; gap: 10px; flex-wrap: wrap; }
+.cockpit-home-icon { display: none; }
+.cockpit-home-card-title,
+.cockpit-home-card-title > .min-w-0,
+.cockpit-home-tags { display: contents; }
+.cockpit-home-serial { font-size: 18px; font-weight: 500; letter-spacing: 0; line-height: 1.55; }
+.cockpit-home-tag {
+  padding: 3px 10px;
+  border-radius: calc(var(--radius-md) * 0.75);
+  font-size: 11px;
+  font-weight: 400;
+  letter-spacing: 0.02em;
+}
+.cockpit-home-tag--accent {
+  border: 1px solid var(--color-accent);
+  background: transparent;
+  color: var(--color-accent);
+}
+.cockpit-home-tag--neutral { background: var(--color-neutral-800); color: var(--color-neutral-100); }
+.cockpit-home-model { margin: 0; font-size: 13px; font-weight: 400; color: var(--color-neutral-300); }
+.cockpit-home-card-actions { margin-left: auto; gap: 10px; }
+.cockpit-home-kbd {
+  margin: 0;
+  padding: 0;
+  border: 0;
+  background: none;
+  color: inherit;
+  font-family: ui-monospace, monospace;
+  font-size: 10px;
+  font-weight: 400;
+  opacity: 0.7;
+}
+
+.cockpit-home-grid {
+  gap: 0;
+  border: 0;
+  border-radius: var(--radius-md);
+  overflow: visible;
+  background: var(--color-surface);
+  box-shadow: var(--shadow-sm);
+}
+.cockpit-home-cell {
+  padding: 10px 12px;
+  border-right: 1px solid var(--color-neutral-900);
+  border-bottom: 1px solid var(--color-neutral-900);
+  background: transparent;
+  line-height: 1.35;
+}
+.cockpit-home-cell dt { font-size: 11px; color: var(--color-neutral-500); }
+.cockpit-home-cell dd { font-size: 13px; min-width: 0; }
+.cockpit-home-cell dd > :not(button):not(.hidden) {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.cockpit-home-copy-btn,
+.cockpit-home-edit-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 24px;
+  height: 24px;
+  min-height: 0;
+  padding: 0;
+  border-radius: var(--radius-md);
+  color: var(--color-accent);
+}
+.cockpit-home-copy-btn.hidden,
+.cockpit-home-edit-btn.hidden { display: none; }
+.cockpit-home-copy-btn svg,
+.cockpit-home-edit-btn svg { width: 13px; height: 13px; }
+.cockpit-home-copy-btn:hover,
+.cockpit-home-edit-btn:hover { background: color-mix(in srgb, var(--color-accent) 10%, transparent); color: var(--color-accent); }
+.cockpit-home-copy-btn:active,
+.cockpit-home-edit-btn:active { background: color-mix(in srgb, var(--color-accent) 18%, transparent); }
+.cockpit-shell .cockpit-home-inline-form input {
+  flex: 1;
+  min-width: 0;
+  height: 30px;
+  min-height: 0;
+  padding: 0 10px;
+  border: 1px solid var(--color-divider);
+  border-radius: var(--radius-md);
+  font-size: 12.5px;
+}
+
+/* Modelos de chamado e Chamados abertos */
+.cockpit-home-bottom { flex: 1; gap: 14px; }
+.cockpit-home-tickets {
+  gap: 0;
+  margin-top: 0;
+  border-radius: var(--radius-md);
+  background: var(--color-surface);
+  box-shadow: var(--shadow-sm);
+}
+.cockpit-home-ticket-pill {
+  height: 26px;
+  min-height: 0;
+  padding: 0 10px;
+  gap: 6px;
+  border: 0;
+  border-radius: var(--radius-sm);
+  background: transparent;
+  color: var(--color-neutral-300);
+  font-size: 12px;
+  font-weight: 400;
+}
+.cockpit-home-ticket-pill:hover { background: color-mix(in srgb, var(--color-text) 7%, transparent); color: var(--color-text); border-color: transparent; }
+.cockpit-home-ticket-pill.is-active { background: var(--color-accent-900); color: var(--color-accent-100); border-color: transparent; }
+.cockpit-home-ticket-textarea {
+  min-height: 150px;
+  padding: 12px 14px;
+  resize: none;
+  font-family: inherit;
+  font-size: 12.5px;
+  line-height: 1.65;
+  color: var(--color-neutral-200);
+}
+.cockpit-home-open-tickets {
+  gap: 0;
+  padding: 0;
+  border: 0;
+  border-radius: var(--radius-md);
+  background: var(--color-surface);
+  box-shadow: var(--shadow-sm);
+}
+.cockpit-home-open-tickets-header { align-items: center; padding: 10px 12px; border-bottom: 1px solid var(--color-neutral-900); }
+.cockpit-home-open-tickets-header h4 { flex: 1; font-size: 13px; font-weight: 500; line-height: 1.55; }
+.cockpit-home-open-tickets-count { font-size: 11.5px; color: var(--color-neutral-500); }
+.cockpit-home-open-tickets-list { gap: 0; }
+.cockpit-home-open-ticket {
+  padding: 8px 12px;
+  border: 0;
+  border-bottom: 1px solid var(--color-neutral-900);
+  border-radius: 0;
+  background: transparent;
+  line-height: 1.35;
+}
+.cockpit-home-open-ticket-number { font-size: 11px; color: var(--color-neutral-500); font-weight: 400; }
+.cockpit-home-open-ticket-age { font-size: 11px; color: var(--color-neutral-500); }
+.cockpit-home-open-ticket-status { height: 20px; padding: 0 7px; border-radius: var(--radius-sm); font-size: 11px; line-height: 20px; }
 
 /* ── Home responsiva ── */
 .cockpit-home-back { display: none; }
