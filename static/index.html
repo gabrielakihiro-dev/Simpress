@@ -11,6 +11,7 @@
   <link rel="stylesheet" href="/static/vendor/fonts.css">
   <link rel="stylesheet" href="/static/vendor/tailwind-4.3.3.css">
   <link rel="stylesheet" href="/static/styles/tokens.css">
+  <link rel="stylesheet" href="/static/styles/nocturne.css">
   <script src="/static/vendor/lucide-1.48.0-subset.js"></script>
   <link rel="stylesheet" href="/static/app.css">
   <!-- Component and theme layers follow app.css; refinements stay last by design. -->
@@ -1076,79 +1077,40 @@ Horário disponível para atendimento:</textarea>
           <strong id="automacao-estado-titulo" class="automation-status-title">Livre</strong>
           <span id="automacao-estado-detalhe" class="automation-status-detail">Verificando…</span>
         </div>
-        <div class="automation-actions" role="group" aria-label="Rotinas da automação">
-          <button type="button" id="btn-automacao-os" data-automacao-rotina="os" data-on-click="iniciarRotinaAutomacao" data-args='["os"]' class="btn btn-secondary-accent automation-action" title="Oracle Service Cloud + UX Simpress (Acompanhamento de pedidos)">
-            <i data-lucide="clipboard-list" class="w-4 h-4" aria-hidden="true"></i>
-            <span>Rotina de OS</span>
-          </button>
-          <button type="button" id="btn-automacao-inventarios" data-automacao-rotina="inventarios" data-on-click="iniciarRotinaAutomacao" data-args='["inventarios"]' class="btn btn-secondary-accent automation-action" title="UX Simpress (Meus equipamentos) + Endpoint Central">
-            <i data-lucide="laptop" class="w-4 h-4" aria-hidden="true"></i>
-            <span>Inventários</span>
-          </button>
-          <button type="button" id="btn-automacao-usuarios" data-automacao-rotina="usuarios" data-on-click="iniciarRotinaAutomacao" data-args='["usuarios"]' class="btn btn-secondary-accent automation-action" title="Confere no Endpoint Central as pendências de usuário logado">
-            <i data-lucide="users" class="w-4 h-4" aria-hidden="true"></i>
-            <span>Verificar usuários</span>
-          </button>
-          <button type="button" id="btn-automacao-ambas" data-automacao-rotina="ambas" data-on-click="iniciarRotinaAutomacao" data-args='["ambas"]' class="btn btn-secondary-accent automation-action" title="Rotina de OS e, em seguida, a de inventários">
-            <i data-lucide="layers" class="w-4 h-4" aria-hidden="true"></i>
-            <span>Ambas</span>
-          </button>
-          <button type="button" id="btn-automacao-login" data-automacao-rotina="login" data-on-click="iniciarRotinaAutomacao" data-args='["login"]' class="btn btn-tertiary automation-action" title="Abre as abas do Oracle, UX Simpress e Endpoint Central para você fazer os logins">
-            <i data-lucide="user-check" class="w-4 h-4" aria-hidden="true"></i>
-            <span>Abrir Chrome para login</span>
-          </button>
-          <button type="button" id="btn-automacao-cancelar" data-on-click="cancelarRotinaAutomacao" class="btn btn-tertiary automation-action automation-action--cancel" title="Para a rotina em andamento; o Chrome continua aberto" disabled>
-            <i data-lucide="x" class="w-4 h-4" aria-hidden="true"></i>
-            <span>Cancelar</span>
-          </button>
-        </div>
-      </section>
-
-      <section id="sebrae-painel" class="automation-card glass-card sebrae-card" aria-labelledby="sebrae-titulo">
-        <div class="panel-card-header">
-          <div class="flex items-center gap-1">
-            <h2 id="sebrae-titulo" class="ux-home-title">Sincronizar chamados Sebrae</h2>
-            <span class="info-tip"><button type="button" class="info-tip-trigger" aria-label="Sobre a sincronização Sebrae" aria-describedby="sebrae-regra"><i data-lucide="info" aria-hidden="true"></i></button><span id="sebrae-regra" role="tooltip" class="info-tip-text">Roda de segunda a sexta, das 09h15 às 17h45, a cada 30 minutos, com o computador ligado e o servidor local da Simpress em execução. Logs e motivos de falha ficam em Andamento e em Últimas execuções. O login é sempre feito por você, no Chrome de automação.</span></span>
+        <div class="automation-action-layout">
+          <div class="automation-actions automation-actions--primary" role="group" aria-label="Rotinas principais">
+            <button type="button" id="btn-automacao-os" data-automacao-rotina="os" data-on-click="iniciarRotinaAutomacao" data-args='["os"]' class="btn btn-secondary-accent automation-action" title="Oracle Service Cloud + UX Simpress (Acompanhamento de pedidos)">
+              <i data-lucide="clipboard-list" class="w-4 h-4" aria-hidden="true"></i>
+              <span>Rotina de OS</span>
+            </button>
+            <button type="button" id="btn-automacao-inventarios" data-automacao-rotina="inventarios" data-on-click="iniciarRotinaAutomacao" data-args='["inventarios"]' class="btn btn-secondary-accent automation-action" title="UX Simpress (Meus equipamentos) + Endpoint Central">
+              <i data-lucide="laptop" class="w-4 h-4" aria-hidden="true"></i>
+              <span>Inventários</span>
+            </button>
+            <button type="button" id="btn-automacao-ambas" data-automacao-rotina="ambas" data-on-click="iniciarRotinaAutomacao" data-args='["ambas"]' class="btn btn-secondary-accent automation-action" title="Rotina de OS e, em seguida, a de inventários">
+              <i data-lucide="layers" class="w-4 h-4" aria-hidden="true"></i>
+              <span>Ambas</span>
+            </button>
           </div>
-          <p class="ux-home-note">SoftExpert → Dashboard Operacional_SEBRAE</p>
-        </div>
-        <div id="sebrae-estado" class="automation-status" role="status" aria-live="polite" aria-atomic="true" data-state="pausado">
-          <span class="automation-status-dot" aria-hidden="true"></span>
-          <strong id="sebrae-estado-titulo" class="automation-status-title">Agendamento pausado</strong>
-          <span id="sebrae-estado-detalhe" class="automation-status-detail">Verificando…</span>
-        </div>
-        <p id="sebrae-login-aviso" class="sebrae-login-notice" role="status" hidden>
-          <i data-lucide="user-check" class="w-4 h-4" aria-hidden="true"></i>
-          <span>Login necessário: faça o login no Chrome de automação (SoftExpert ou Excel Online) e execute de novo.</span>
-        </p>
-        <dl class="sebrae-facts">
-          <div><dt>Agendamento</dt><dd id="sebrae-agendamento">—</dd></div>
-          <div><dt>Última execução</dt><dd id="sebrae-ultima">—</dd></div>
-          <div><dt>Próxima execução</dt><dd id="sebrae-proxima">—</dd></div>
-        </dl>
-        <dl class="sebrae-counters">
-          <div class="sebrae-counter"><dt>Incluídos</dt><dd id="sebrae-incluidos">—</dd></div>
-          <div class="sebrae-counter"><dt>Ignorados por duplicidade</dt><dd id="sebrae-ignorados">—</dd></div>
-          <div class="sebrae-counter"><dt>Mantidos pendentes</dt><dd id="sebrae-pendentes">—</dd></div>
-        </dl>
-        <div class="automation-actions" role="group" aria-label="Sincronização dos chamados Sebrae">
-          <button type="button" id="btn-sebrae-executar" data-automacao-rotina="sebrae" data-on-click="iniciarRotinaAutomacao" data-args='["sebrae"]' class="btn btn-secondary-accent automation-action" title="Lê os chamados do SoftExpert e inclui os novos no Dashboard agora">
-            <i data-lucide="refresh-cw" class="w-4 h-4" aria-hidden="true"></i>
-            <span>Executar agora</span>
-          </button>
-          <button type="button" id="btn-sebrae-agendamento" data-on-click="alternarAgendamentoSebrae" class="btn btn-secondary automation-action" title="Liga ou pausa a execução automática de segunda a sexta">
-            <i data-lucide="history" class="w-4 h-4" aria-hidden="true"></i>
-            <span>Ativar agendamento</span>
-          </button>
-          <button type="button" id="btn-sebrae-cancelar" data-on-click="cancelarRotinaAutomacao" class="btn btn-tertiary automation-action automation-action--cancel" title="Para a sincronização em andamento; o Chrome continua aberto" disabled>
-            <i data-lucide="x" class="w-4 h-4" aria-hidden="true"></i>
-            <span>Cancelar sincronização</span>
-          </button>
-        </div>
-        <p id="sebrae-agendamento-aviso" class="ux-home-note automation-note" role="status" hidden></p>
-        <h3 id="sebrae-pendencias-titulo" class="sebrae-subtitle">Pendências</h3>
-        <div id="sebrae-pendencias" class="sebrae-pendencias">
-          <p class="ux-home-note">Nenhuma pendência.</p>
+          <div class="automation-action-support">
+            <div class="automation-action-independent" role="group" aria-label="Verificação manual de usuários">
+              <span class="automation-action-caption">Verificação manual</span>
+              <button type="button" id="btn-automacao-usuarios" data-automacao-rotina="usuarios" data-on-click="iniciarRotinaAutomacao" data-args='["usuarios"]' class="btn btn-secondary-accent automation-action" title="Confere no Endpoint Central as pendências de usuário logado">
+                <i data-lucide="users" class="w-4 h-4" aria-hidden="true"></i>
+                <span>Verificar usuários</span>
+              </button>
+            </div>
+            <div class="automation-actions automation-actions--utility" role="group" aria-label="Controles do Chrome">
+              <button type="button" id="btn-automacao-login" data-automacao-rotina="login" data-on-click="iniciarRotinaAutomacao" data-args='["login"]' class="btn btn-tertiary automation-action" title="Abre as abas do Oracle, UX Simpress e Endpoint Central para você fazer os logins">
+                <i data-lucide="user-check" class="w-4 h-4" aria-hidden="true"></i>
+                <span>Abrir Chrome para login</span>
+              </button>
+              <button type="button" id="btn-automacao-cancelar" data-on-click="cancelarRotinaAutomacao" class="btn btn-tertiary automation-action automation-action--cancel" title="Para a rotina em andamento; o Chrome continua aberto" disabled>
+                <i data-lucide="x" class="w-4 h-4" aria-hidden="true"></i>
+                <span>Cancelar</span>
+              </button>
+            </div>
+          </div>
         </div>
       </section>
 
@@ -1191,17 +1153,17 @@ Horário disponível para atendimento:</textarea>
             <i data-lucide="refresh-cw" class="w-4 h-4" aria-hidden="true"></i>
             <span>Atualizar</span>
           </button>
-          <button type="button" class="btn btn-secondary" data-on-click="recolherPainelAutomacao" data-args='["historico"]' aria-expanded="true" aria-controls="automacao-historico-conteudo" aria-label="Recolher Últimas execuções">Recolher</button>
+          <button type="button" class="btn btn-secondary" data-on-click="recolherPainelAutomacao" data-args='["historico"]' aria-expanded="false" aria-controls="automacao-historico-conteudo" aria-label="Expandir Últimas execuções">Expandir</button>
           <button type="button" class="btn btn-secondary" data-on-click="ampliarPainelAutomacao" data-args='["historico"]' aria-pressed="false" aria-label="Ampliar Últimas execuções">Ampliar</button>
           </div>
         </div>
-        <div id="automacao-historico-conteudo">
+        <div id="automacao-historico-conteudo" hidden>
           <details class="automation-filters" id="automacao-historico-filtros">
             <summary>Filtros de execuções</summary>
             <div class="automation-filter-fields">
               <label>De<input type="date" id="automacao-historico-inicio"></label>
               <label>Até<input type="date" id="automacao-historico-fim"></label>
-              <label>Rotina<select id="automacao-historico-rotina"><option value="">Todas</option><option value="os">Rotina de OS</option><option value="inventarios">Inventários</option><option value="usuarios">Verificar usuários</option><option value="ambas">Ambas</option><option value="login">Abrir Chrome para login</option><option value="sebrae">Sincronizar chamados Sebrae</option></select></label>
+              <label>Rotina<select id="automacao-historico-rotina"><option value="">Todas</option><option value="os">Rotina de OS</option><option value="inventarios">Inventários</option><option value="usuarios">Verificar usuários</option><option value="ambas">Ambas</option><option value="login">Abrir Chrome para login</option></select></label>
               <label>Status<select id="automacao-historico-status"><option value="">Todos</option><option value="concluido">Concluído</option><option value="falha">Falha</option><option value="cancelado">Cancelado</option><option value="em_andamento">Em andamento</option><option value="ocupada">Ocupada</option><option value="interrompido">Interrompido</option></select></label>
             </div>
             <div class="automation-panel-actions"><button type="button" class="btn btn-secondary-accent" data-on-click="filtrarHistoricoAutomacao">Aplicar filtros</button><button type="button" class="btn btn-secondary" data-on-click="limparFiltrosAutomacao">Limpar filtros</button></div>
@@ -1658,7 +1620,7 @@ Horário disponível para atendimento:</textarea>
               <input id="entra-csv-file" type="file" accept=".csv,text/csv" aria-describedby="entra-csv-name" class="peer sr-only" />
               <span class="mt-1 flex min-w-0 items-center gap-3 rounded-lg peer-focus-visible:ring-2 peer-focus-visible:ring-cyan-400/60">
                 <span aria-hidden="true" class="shrink-0 cursor-pointer rounded-lg bg-sky-500/15 px-3 py-2 text-xs font-semibold text-sky-300 transition-colors hover:bg-sky-500/25 hover:text-sky-200">Escolher arquivo</span>
-                <span id="entra-csv-name" class="min-w-0 truncate text-xs text-fg-subtle" aria-live="polite">Nenhum arquivo selecionado</span>
+                <span id="entra-csv-name" class="min-w-0 truncate text-[11px] text-fg-subtle" aria-live="polite">Nenhum arquivo selecionado</span>
               </span>
             </label>
             <button type="submit" id="btn-importar-nomes-entra" class="btn btn-secondary equipment-user-button">Importar nomes</button>
@@ -1673,7 +1635,7 @@ Horário disponível para atendimento:</textarea>
           <input id="upload-endpoint-file" type="file" accept=".xlsx,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" aria-describedby="upload-endpoint-name" class="peer sr-only" />
           <span class="mt-3 flex min-w-0 items-center gap-3 rounded-lg peer-focus-visible:ring-2 peer-focus-visible:ring-cyan-400/60">
             <span aria-hidden="true" class="shrink-0 cursor-pointer rounded-lg bg-sky-500/15 px-3 py-2 text-xs font-semibold text-sky-300 transition-colors hover:bg-sky-500/25 hover:text-sky-200">Escolher arquivo</span>
-            <span id="upload-endpoint-name" class="min-w-0 truncate text-xs text-fg-subtle" aria-live="polite">Nenhum arquivo selecionado</span>
+            <span id="upload-endpoint-name" class="min-w-0 truncate text-[11px] text-fg-subtle" aria-live="polite">Nenhum arquivo selecionado</span>
           </span>
         </label>
 
@@ -1683,7 +1645,7 @@ Horário disponível para atendimento:</textarea>
           <input id="upload-details-file" type="file" accept=".xlsx,.zip,application/zip,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" aria-describedby="upload-details-name" class="peer sr-only" />
           <span class="mt-3 flex min-w-0 items-center gap-3 rounded-lg peer-focus-visible:ring-2 peer-focus-visible:ring-cyan-400/60">
             <span aria-hidden="true" class="shrink-0 cursor-pointer rounded-lg bg-sky-500/15 px-3 py-2 text-xs font-semibold text-sky-300 transition-colors hover:bg-sky-500/25 hover:text-sky-200">Escolher arquivo</span>
-            <span id="upload-details-name" class="min-w-0 truncate text-xs text-fg-subtle" aria-live="polite">Nenhum arquivo selecionado</span>
+            <span id="upload-details-name" class="min-w-0 truncate text-[11px] text-fg-subtle" aria-live="polite">Nenhum arquivo selecionado</span>
           </span>
         </label>
 
