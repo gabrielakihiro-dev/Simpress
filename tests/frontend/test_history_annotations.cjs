@@ -68,14 +68,13 @@ test("keeps the sidebar action groups neutral", () => {
   assert.doesNotMatch(appCss, /header-action-group\[data-action-group="(analysis|equipment)"\] > summary/);
 });
 
-test("places the ticket action before the analysis group without a color of its own", () => {
-  const exportButton = indexHtml.indexOf('id="btn-exportar-equipamentos"');
+test("places the ticket action in cockpit tools dropdown without legacy sidebar classes", () => {
+  assert.doesNotMatch(indexHtml, /header-action-group|header-action-item--large|data-action-group="analysis"/);
+  assert.match(indexHtml, /<details class="cockpit-tools-dropdown">/);
   const ticketAction = indexHtml.indexOf('data-on-click="abrirAcompanhamentoChamados"');
+  assert.ok(ticketAction > -1);
   const ticketActionEnd = indexHtml.indexOf("</button>", ticketAction);
-  const analysisGroup = indexHtml.indexOf('data-action-group="analysis"');
-  assert.ok(ticketAction < analysisGroup);
-  assert.ok(analysisGroup < exportButton);
   const ticketMarkup = indexHtml.slice(ticketAction, ticketActionEnd);
-  assert.match(ticketMarkup, /header-action-item--large/);
+  assert.match(ticketMarkup, /cockpit-tools-dropdown__item/);
   assert.doesNotMatch(ticketMarkup, /--orange|<br>/);
 });

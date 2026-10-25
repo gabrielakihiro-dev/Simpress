@@ -79,6 +79,12 @@
     if (command && !event.shiftKey && key.toLowerCase() === "k") return "search";
     if (key === "/" && !command && !typing) return "search";
     if (command && key === "Enter" && transferVisible) return "generate";
+    if (!command && !typing) {
+      if (key === "F1") return "tab-home";
+      if (key === "F2") return "tab-transferencia";
+      if (key === "F3") return "tab-resumo";
+      if (key === "F4") return "tab-automacao";
+    }
     return null;
   }
 
@@ -418,6 +424,18 @@
         if (typeof win.ativarAbaTransferencia === "function") win.ativarAbaTransferencia("home");
         input.focus();
         input.select?.();
+      } else if (action === "tab-home") {
+        event.preventDefault();
+        if (typeof win.ativarAbaTransferencia === "function") win.ativarAbaTransferencia("home");
+      } else if (action === "tab-transferencia") {
+        event.preventDefault();
+        if (typeof win.ativarAbaTransferencia === "function") win.ativarAbaTransferencia("transferencia");
+      } else if (action === "tab-resumo") {
+        event.preventDefault();
+        if (typeof win.ativarAbaTransferencia === "function") win.ativarAbaTransferencia("resumo");
+      } else if (action === "tab-automacao") {
+        event.preventDefault();
+        if (typeof win.ativarAbaTransferencia === "function") win.ativarAbaTransferencia("automacao");
       } else if (action === "generate") {
         const button = byId("btn-gerar-planilha");
         if (!button || button.disabled) return;
