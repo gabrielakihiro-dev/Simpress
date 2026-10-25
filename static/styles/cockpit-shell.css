@@ -113,8 +113,8 @@
 /* Search */
 .cockpit-bar__search {
   position: relative;
-  flex: 1 1 340px;
-  min-width: 0;
+  flex: 0 1 240px;
+  min-width: 120px;
   max-width: 340px;
 }
 
@@ -477,9 +477,9 @@
   display: flex;
   align-items: center;
   width: clamp(220px, 23vw, 340px);
-  min-width: 0;
+  min-width: 120px;
   height: 32px;
-  flex: 1 1 280px;
+  flex: 0 1 240px;
   border: 1px solid var(--cockpit-border);
   border-radius: var(--cockpit-radius-sm);
   background: var(--cockpit-surface-sunken);
