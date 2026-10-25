@@ -1332,6 +1332,7 @@ html[data-theme="light"] .history-filter-search-label input::placeholder { color
 }
 .alias-history-footer { border-color: var(--border-subtle); }
 
+/* Mantido em 1200px: a tabela exige 1200px de conteúdo (decisão da Fase 4). */
 @media (max-width: 1200px) {
   .alias-history-panel { width: 100%; height: min(92vh, 60rem); max-height: min(92vh, 60rem); }
   .alias-history-filters { grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); }

@@ -17,6 +17,18 @@
   height: 100dvh;
 }
 
+/* Modais: respeitam as áreas seguras; abaixo de 1200px ou em telas baixas o painel rola por dentro (no amplo nada muda). */
+.cockpit-shell-body .modal-overlay {
+  overflow-y: auto;
+  padding: max(1rem, env(safe-area-inset-top)) max(1rem, env(safe-area-inset-right)) max(1rem, env(safe-area-inset-bottom)) max(1rem, env(safe-area-inset-left));
+}
+@media (max-width: 1199.98px), (max-height: 600px) {
+  .cockpit-shell-body .modal-overlay > .modal-panel {
+    max-height: calc(100dvh - 2rem - env(safe-area-inset-top) - env(safe-area-inset-bottom));
+    overflow-y: auto;
+  }
+}
+
 .cockpit-bar {
   display: flex;
   align-items: center;
