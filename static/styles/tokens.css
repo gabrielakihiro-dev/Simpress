@@ -94,7 +94,7 @@
 
   /* ---------- Semantic tokens ----------
    * Components use these instead of Tailwind palette colors, so the light theme
-   * no longer depends on remapping --color-slate-* (see theme.css). They are also
+   * no longer depends on remapping --color-slate-*. They are also
    * exposed as utilities (bg-surface-raised, text-text-muted, border-border…) in
    * tailwind.input.css for markup that moves off the slate scale. */
   --surface: #020617;
