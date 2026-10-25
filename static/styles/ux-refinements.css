@@ -674,7 +674,7 @@ html[data-ux-density="compact"] .comparison-desktop-table td {
   .automation-card :is(.usage-card-header, .panel-card-header) > .automation-panel-actions .btn { flex: 1 1 auto; }
   .automation-history { overflow-y: auto; max-height: 32rem; }
   .automation-history-table thead { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
-  .automation-history-table, .automation-history-table tbody, .automation-history-table tr, .automation-history-table td { display: block; }
+  .automation-history-table, .automation-history-table tbody, .automation-history-table tr { display: block; }
   .automation-history-table tr { margin-bottom: var(--ux-space-3); padding: var(--ux-space-2) var(--ux-space-3); border: 1px solid var(--ux-border); border-radius: var(--ux-radius-lg); background: var(--ux-surface-subtle); }
   .automation-history-table td { display: grid; grid-template-columns: 6rem minmax(0, 1fr); gap: var(--ux-space-2); padding: var(--ux-space-1) 0; border-bottom: 0; }
   .automation-history-table td::before { content: attr(data-label); color: var(--ux-text-muted); font-size: 0.75rem; font-weight: 600; }
