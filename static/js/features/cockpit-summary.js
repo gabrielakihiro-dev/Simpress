@@ -141,8 +141,10 @@
     const date = String(item?.ultima_verificacao || item?.data_ultimo_acesso || "").trim();
     return date || "—";
   }
+  const columnLabels = ["Série", "Modelo / Host", "Simpress", "Endpoint Central", "Último acesso", "Situação", "Ação"];
   function cell(row, text, status) {
     const td = document.createElement("td");
+    td.dataset.label = columnLabels[row.children.length];
     td.textContent = String(text || "—");
     if (status) td.dataset.status = status;
     row.appendChild(td);
@@ -190,6 +192,7 @@
           : labels[item.__section] || labels[selectedMetric];
       cell(tr, statusText, state);
       const actionCell = document.createElement("td");
+      actionCell.dataset.label = columnLabels[6];
       const open = document.createElement("button");
       open.type = "button";
       open.className = "btn btn-tertiary btn-sm";
