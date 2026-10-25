@@ -22,6 +22,7 @@
   <link rel="stylesheet" href="/static/styles/cockpit-shell.css">
   <link rel="stylesheet" href="/static/styles/cockpit-home.css">
   <link rel="stylesheet" href="/static/styles/cockpit-pages.css">
+  <link rel="stylesheet" href="/static/styles/cockpit-tool-panels.css">
 </head>
 <body class="min-h-full bg-surface text-fg-emphasis font-sans selection:bg-brand-500 selection:text-white cockpit-shell-body">
 
@@ -121,16 +122,16 @@ data-on-keydown="handleSerialKeydown" data-args='["$event"]'
 </summary>
 <div id="cockpit-tools-menu" class="cockpit-tools-dropdown__menu" role="menu" aria-label="Ferramentas">
 <div class="cockpit-tools-dropdown__title" role="presentation">Ferramentas</div>
-<button type="button" data-on-click="abrirAcompanhamentoChamados" id="btn-acompanhamento-chamados" class="cockpit-tools-dropdown__item cockpit-tools-dropdown__item--primary" role="menuitem">
+<button type="button" data-on-click="abrirPainelCockpit" data-args='["chamados"]' id="btn-acompanhamento-chamados" class="cockpit-tools-dropdown__item cockpit-tools-dropdown__item--primary" role="menuitem">
 <i data-lucide="clipboard-list" aria-hidden="true"></i><span>Chamados</span><kbd aria-hidden="true">F5</kbd>
 </button>
-<button type="button" data-on-click="abrirModalHistoricoComparacoes" id="btn-cockpit-comparacao" class="cockpit-tools-dropdown__item cockpit-tools-dropdown__item--primary" role="menuitem">
+<button type="button" data-on-click="abrirPainelCockpit" data-args='["comparacao"]' id="btn-cockpit-comparacao" class="cockpit-tools-dropdown__item cockpit-tools-dropdown__item--primary" role="menuitem">
 <i data-lucide="layout-dashboard" aria-hidden="true"></i><span>Comparação</span><kbd aria-hidden="true">F6</kbd>
 </button>
-<button type="button" data-on-click="abrirModalHistoricoApelidos" id="btn-historico-apelidos" class="cockpit-tools-dropdown__item cockpit-tools-dropdown__item--primary" role="menuitem">
+<button type="button" data-on-click="abrirPainelCockpit" data-args='["apelidos"]' id="btn-historico-apelidos" class="cockpit-tools-dropdown__item cockpit-tools-dropdown__item--primary" role="menuitem">
 <i data-lucide="history" aria-hidden="true"></i><span>Histórico de apelidos</span><kbd aria-hidden="true">F7</kbd>
 </button>
-<button type="button" data-on-click="abrirRelatorioMensal" id="btn-relatorio-mensal" class="cockpit-tools-dropdown__item cockpit-tools-dropdown__item--primary" role="menuitem">
+<button type="button" data-on-click="abrirPainelCockpit" data-args='["relatorio"]' id="btn-relatorio-mensal" class="cockpit-tools-dropdown__item cockpit-tools-dropdown__item--primary" role="menuitem">
 <i data-lucide="file-spreadsheet" aria-hidden="true"></i><span>Relatório mensal</span><kbd aria-hidden="true">F8</kbd>
 </button>
 <div class="cockpit-tools-dropdown__divider" role="separator"></div>
@@ -1171,6 +1172,88 @@ Horário disponível para atendimento:</textarea>
     </section>
 
       </main>
+      <section id="cockpit-tool-panels" class="cockpit-tool-panels" aria-labelledby="cockpit-tool-title" tabindex="-1" hidden>
+        <header class="cockpit-tool-header">
+          <div class="cockpit-tool-heading">
+            <p>Ferramentas do Cockpit</p>
+            <h1 id="cockpit-tool-title" tabindex="-1">Chamados</h1>
+            <span id="cockpit-tool-subtitle" role="status" aria-live="polite"></span>
+          </div>
+          <button type="button" class="btn btn-secondary" data-on-click="fecharPainelCockpit" aria-label="Voltar para a tela principal">Voltar</button>
+        </header>
+
+        <section class="cockpit-tool-panel" data-cockpit-tool-panel="chamados" aria-labelledby="cockpit-tickets-heading" hidden>
+          <h2 id="cockpit-tickets-heading" class="sr-only">Acompanhamento de chamados por série</h2>
+          <div id="cockpit-tickets-kpis" class="cockpit-tool-kpis" role="group" aria-label="Resumo do acompanhamento"></div>
+          <div class="cockpit-tool-toolbar">
+            <label>Buscar série ou OS<input id="cockpit-tickets-search" type="search" autocomplete="off" placeholder="Série, ordem ou usuário"></label>
+            <label>Relação<select id="cockpit-tickets-relation"><option value="todos">Todas</option><option value="divergente">Divergentes</option><option value="conferida">Conferidas</option><option value="somente_simpress">Só Simpress</option><option value="somente_oracle">Só Oracle</option><option value="sem_os">Sem OS</option></select></label>
+            <button type="button" id="cockpit-tickets-refresh" class="btn btn-secondary">Atualizar</button>
+            <button type="button" id="cockpit-tickets-manage" class="btn btn-secondary-accent">Importar e gerenciar</button>
+          </div>
+          <div class="cockpit-tool-split">
+            <div class="cockpit-tool-list" id="cockpit-tickets-list" role="list" aria-label="Séries com chamados" aria-live="polite"></div>
+            <aside class="cockpit-tool-detail" id="cockpit-tickets-detail" aria-label="Detalhes da série selecionada"></aside>
+          </div>
+        </section>
+
+        <section class="cockpit-tool-panel" data-cockpit-tool-panel="comparacao" aria-labelledby="cockpit-comparison-heading" hidden>
+          <h2 id="cockpit-comparison-heading" class="sr-only">Comparação de inventários</h2>
+          <div id="cockpit-comparison-kpis" class="cockpit-tool-kpis" role="group" aria-label="Indicadores da comparação selecionada"></div>
+          <div class="cockpit-tool-toolbar">
+            <p id="cockpit-comparison-status" role="status" aria-live="polite">Carregando histórico…</p>
+            <label>Comparação<select id="cockpit-comparison-event"></select></label>
+            <button type="button" id="cockpit-comparison-new" class="btn btn-secondary">Nova comparação</button>
+            <button type="button" id="cockpit-comparison-export" class="btn btn-secondary-accent" disabled>Exportar</button>
+            <button type="button" id="cockpit-comparison-refresh" class="btn btn-secondary">Atualizar histórico</button>
+            <button type="button" id="cockpit-comparison-legacy" class="btn btn-secondary-accent">Histórico e ações completas</button>
+          </div>
+          <div id="cockpit-comparison-filters" class="cockpit-tool-filter-bar" role="group" aria-label="Filtrar resultados da comparação"></div>
+          <div class="cockpit-tool-split">
+            <div class="cockpit-tool-list" id="cockpit-comparison-list" role="list" aria-label="Registros da comparação selecionada"></div>
+            <aside class="cockpit-tool-detail" id="cockpit-comparison-detail" aria-label="Detalhes da comparação selecionada"><p>Selecione uma comparação salva.</p></aside>
+          </div>
+        </section>
+
+        <section class="cockpit-tool-panel" data-cockpit-tool-panel="apelidos" aria-labelledby="cockpit-alias-heading" hidden>
+          <h2 id="cockpit-alias-heading" class="sr-only">Histórico de apelidos e alterações</h2>
+          <div id="cockpit-alias-kpis" class="cockpit-tool-kpis" role="group" aria-label="Resumo do histórico"></div>
+          <div class="cockpit-tool-toolbar">
+            <label>Buscar no histórico<input id="cockpit-alias-search" type="search" autocomplete="off" placeholder="Série, usuário ou alteração"></label>
+            <label>Tipo<select id="cockpit-alias-type"><option value="todos">Todos</option><option value="apelido">Apelido</option><option value="usuario">Usuário</option><option value="endereco">Endereço</option><option value="aviso_endpoint">Avisos do Endpoint</option></select></label>
+            <button type="button" id="cockpit-alias-refresh" class="btn btn-secondary">Atualizar histórico</button>
+            <button type="button" id="cockpit-alias-export" class="btn btn-secondary-accent">Exportar CSV</button>
+            <button type="button" id="cockpit-alias-legacy" class="btn btn-secondary">Abrir ações completas</button>
+          </div>
+          <div id="cockpit-alias-filters" class="cockpit-tool-filter-bar" role="group" aria-label="Filtrar histórico por período e classificação">
+            <button type="button" class="cockpit-tool-filter-chip" data-alias-period="todos" aria-pressed="true">Todas <span id="cockpit-alias-count-all">0</span></button>
+            <button type="button" class="cockpit-tool-filter-chip" data-alias-period="7dias" aria-pressed="false">Últimos 7 dias <span id="cockpit-alias-count-7days">0</span></button>
+            <button type="button" class="cockpit-tool-filter-chip" disabled aria-describedby="cockpit-alias-data-note">Fora do padrão —</button>
+            <button type="button" class="cockpit-tool-filter-chip" disabled aria-describedby="cockpit-alias-data-note">Duplicados —</button>
+            <p id="cockpit-alias-data-note" class="cockpit-tool-filter-note">O projeto não dispõe de regra e fonte confiável para essas duas classificações.</p>
+          </div>
+          <div class="cockpit-tool-split">
+            <div class="cockpit-tool-list" id="cockpit-alias-list" role="list" aria-label="Alterações registradas"></div>
+            <aside class="cockpit-tool-detail" id="cockpit-alias-detail" aria-label="Detalhes da alteração selecionada"><p>Selecione uma alteração.</p></aside>
+          </div>
+        </section>
+
+        <section class="cockpit-tool-panel" data-cockpit-tool-panel="relatorio" aria-labelledby="cockpit-monthly-heading" hidden>
+          <h2 id="cockpit-monthly-heading" class="sr-only">Relatório mensal de operações</h2>
+          <div id="cockpit-monthly-periods" class="cockpit-tool-filter-bar" role="group" aria-label="Meses recentes"></div>
+          <div class="cockpit-tool-toolbar">
+            <label>Mês do relatório<input id="cockpit-monthly-month" type="month"></label>
+            <button type="button" id="cockpit-monthly-copy" class="btn btn-secondary">Copiar resumo</button>
+            <button type="button" id="cockpit-monthly-export" class="btn btn-secondary-accent">Exportar planilha</button>
+            <p id="cockpit-monthly-status" role="status" aria-live="polite">Selecione um mês para carregar o relatório.</p>
+          </div>
+          <div id="cockpit-monthly-kpis" class="cockpit-tool-kpis" role="group" aria-label="Indicadores do relatório"></div>
+          <div class="cockpit-monthly-layout">
+            <div id="cockpit-monthly-details" class="cockpit-tool-detail" aria-label="Detalhamento do mês"></div>
+            <aside class="cockpit-monthly-preview"><h2>Prévia para a gestão</h2><pre id="cockpit-monthly-preview" aria-live="polite"></pre></aside>
+          </div>
+        </section>
+      </section>
     </div>
   </div>
 

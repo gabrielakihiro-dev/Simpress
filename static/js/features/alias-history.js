@@ -395,7 +395,7 @@
       mensagem: `Desfazer a alteração da série ${evento.serial} e restaurar ${ehUsuario ? "o usuário" : "o apelido"} ${apelidoAnterior}?`,
       confirmar: "Desfazer",
       destrutiva: false,
-    }))) return;
+    }))) return false;
 
     const textoOriginal = botao.textContent;
     botao.disabled = true;
@@ -418,12 +418,29 @@
       app.showToast(ehUsuario
         ? "Usuário restaurado. A reversão foi registrada no histórico."
         : "Apelido restaurado. A reversão foi registrada no histórico.", "success");
+      return true;
     } catch (err) {
       console.error("Erro ao desfazer alteração de apelido:", err);
       app.showToast(err.message || "Não foi possível desfazer a alteração.", "error");
       botao.disabled = false;
       botao.textContent = textoOriginal;
+      return false;
     }
+  }
+
+  async function desfazerEventoHistoricoApelidos(evento, botao) {
+    const tipo = evento?.tipo || "apelido";
+    if (!["apelido", "usuario"].includes(tipo)) {
+      app.showToast("Este tipo de registro não pode ser restaurado por aqui.", "warning");
+      return false;
+    }
+    await carregarHistoricoApelidos();
+    const atual = eventosHistorico.find(item => item.id === evento.id);
+    if (!atual || !eventoTemAcaoDisponivel(atual)) {
+      app.showToast("Só o registro mais recente desse campo pode ser restaurado. Atualize o histórico.", "warning");
+      return false;
+    }
+    return desfazerAlteracaoApelido(atual, botao);
   }
 
   async function excluirRegistroHistorico(evento, botao) {
@@ -462,5 +479,6 @@
 
   return {
     abrirModalHistoricoApelidos, fecharModalHistoricoApelidos, carregarContagemHistoricoApelidos,
+    desfazerEventoHistoricoApelidos,
   };
 });

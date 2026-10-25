@@ -2,18 +2,12 @@ const { test, expect } = require("@playwright/test");
 const AxeBuilder = require("@axe-core/playwright").default;
 
 async function openMonthlyReport(page) {
-  const sidebarButton = page.locator("#btn-sidebar-open");
-  const shell = page.locator("#simpress-app-shell");
-  if (await sidebarButton.isVisible() && await shell.getAttribute("data-sidebar-open") !== "true") {
-    await sidebarButton.click();
-    await expect(shell).toHaveAttribute("data-sidebar-open", "true");
-  }
-  const group = page.locator('.header-action-group[data-action-group="analysis"]');
-  if (!(await group.evaluate(element => element.open))) await group.locator("> summary").click();
+  await page.locator("#cockpit-tools-trigger").click();
   await page.locator("#btn-relatorio-mensal").click();
-  const dialog = page.getByRole("dialog", { name: "Relatório mensal" });
-  await expect(dialog).toBeVisible();
-  return dialog;
+  const panel = page.locator('[data-cockpit-tool-panel="relatorio"]');
+  await expect(panel).toBeVisible();
+  await expect(page.locator("#cockpit-tool-title")).toBeFocused();
+  return panel;
 }
 
 function currentMonth() {
@@ -21,10 +15,27 @@ function currentMonth() {
   return `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}`;
 }
 
-test("the monthly report downloads the chosen month and confirms with the approved text", async ({ page }) => {
-  const requested = [];
-  await page.route("**/api/relatorio-mensal**", async route => {
-    requested.push(new URL(route.request().url()).searchParams.get("mes"));
+function monthlyReport(month) {
+  return {
+    mes: { key: month, label: month === "2026-09" ? "setembro de 2026" : "outubro de 2026", parcial: month === currentMonth(), data_corte: "2026-10-25" },
+    gerado_em: "2026-10-25T09:00:00-03:00",
+    inventario: { total: 1284, unidades: 30, por_tipo: [["Notebook", 1200]], por_unidade: [["Curitiba Sede", "Prado Velho", 412], ["Londrina", "Centro", 168]] },
+    comparacao: { atualizacoes_no_mes: 2, contagens: { "Sem correspondência — no endpoint": 23, "Sem correspondência — na Simpress": 15, "Localidade divergente": 18 }, linhas: [] },
+    os: { oracle: { abertas: 3, concluidas: 2, pendentes: 1 }, simpress: { abertas: 4, concluidas: 3, pendentes: 1 }, linhas: [], dados_insuficientes: [] },
+  };
+}
+
+test("the Cockpit report loads the selected month and keeps the existing XLSX download", async ({ page }) => {
+  const requestedData = [];
+  const requestedWorkbook = [];
+  await page.route(/\/api\/relatorio-mensal\/dados(?:\?|$)/, async route => {
+    const month = new URL(route.request().url()).searchParams.get("mes");
+    requestedData.push(month);
+    await route.fulfill({ status: 200, json: monthlyReport(month) });
+  });
+  await page.route(/\/api\/relatorio-mensal\?/, async route => {
+    const month = new URL(route.request().url()).searchParams.get("mes");
+    requestedWorkbook.push(month);
     await route.fulfill({
       status: 200,
       contentType: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
@@ -35,44 +46,44 @@ test("the monthly report downloads the chosen month and confirms with the approv
   await page.goto("/");
   await openMonthlyReport(page);
 
-  const month = page.locator("#relatorio-mensal-mes");
-  await expect(month).toBeFocused();
+  const month = page.locator("#cockpit-monthly-month");
   await expect(month).toHaveValue(currentMonth());
   await expect(month).toHaveAttribute("max", currentMonth());
+  await expect(page.locator("#cockpit-monthly-preview")).toContainText("Transportes solicitados: indisponível");
 
   await month.fill("2026-09");
+  await expect(page.locator("#cockpit-monthly-status")).toContainText("Mês encerrado");
   const download = page.waitForEvent("download");
-  await page.locator("#btn-exportar-relatorio-mensal").click();
+  await page.locator("#cockpit-monthly-export").click();
   expect((await download).suggestedFilename()).toBe("Relatorio-mensal-2026-09.xlsx");
-  expect(requested).toEqual(["2026-09"]);
+  expect(requestedData).toContain("2026-09");
+  expect(requestedWorkbook).toEqual(["2026-09"]);
   await expect(page.locator("#toast-container")).toContainText("Planilha Exportada com Sucesso!");
-  await expect(page.locator("#status-relatorio-mensal")).toHaveText("");
 });
 
-test("the monthly report shows API errors in the dialog", async ({ page }) => {
-  await page.route("**/api/relatorio-mensal**", route => route.fulfill({
+test("the Cockpit report shows local API errors in its status region", async ({ page }) => {
+  await page.route("**/api/relatorio-mensal/dados**", route => route.fulfill({
     status: 503, json: { detail: "A base oficial EquipamentosDetalhes não está carregada." },
   }));
   await page.goto("/");
   await openMonthlyReport(page);
-  await page.locator("#btn-exportar-relatorio-mensal").click();
-  await expect(page.locator("#status-relatorio-mensal")).toHaveText("A base oficial EquipamentosDetalhes não está carregada.");
-  await expect(page.locator("#btn-exportar-relatorio-mensal")).toBeEnabled();
+  await expect(page.locator("#cockpit-monthly-status")).toHaveText("A base oficial EquipamentosDetalhes não está carregada.");
+  await expect(page.locator("#cockpit-monthly-export")).toBeEnabled();
 });
 
-test("the monthly report dialog fits the screen and passes axe in both themes", async ({ page }) => {
+test("the Cockpit report panel fits the screen and passes axe in both themes", async ({ page }) => {
   await page.goto("/");
-  const dialog = await openMonthlyReport(page);
+  const panel = await openMonthlyReport(page);
   for (const theme of ["dark", "light"]) {
     await page.locator("html").evaluate((root, value) => { root.dataset.theme = value; }, theme);
-    const box = await dialog.boundingBox();
+    const box = await panel.boundingBox();
     const viewport = page.viewportSize();
-    expect(box.x).toBeGreaterThanOrEqual(15);
-    expect(box.x + box.width).toBeLessThanOrEqual(viewport.width - 15);
+    expect(box.x).toBeGreaterThanOrEqual(0);
+    expect(box.x + box.width).toBeLessThanOrEqual(viewport.width);
     expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true);
-    const audit = await new AxeBuilder({ page }).include("#modal-relatorio-mensal").analyze();
+    const audit = await new AxeBuilder({ page }).include('[data-cockpit-tool-panel="relatorio"]').analyze();
     expect(audit.violations.map(violation => violation.id), theme).toEqual([]);
   }
   await page.keyboard.press("Escape");
-  await expect(dialog).toBeHidden();
+  await expect(page.locator("#cockpit-tool-panels")).toBeHidden();
 });

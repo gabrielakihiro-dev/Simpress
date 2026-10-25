@@ -9,6 +9,7 @@ from pathlib import Path
 from typing import Any, Callable, Dict, List, Optional, Tuple
 
 from fastapi import APIRouter, Query
+from fastapi.encoders import jsonable_encoder
 from fastapi.responses import StreamingResponse
 
 import openpyxl
@@ -49,11 +50,11 @@ def _read_ticket_report(path: Path) -> Dict[str, Any]:
     return data
 
 
-def _build_workbook(services: MonthlyReportServices, month: ReportMonth) -> Tuple[BytesIO, str]:
+def _build_report(services: MonthlyReportServices, month: ReportMonth) -> Dict[str, Any]:
     equipment, stats = services.inventory_snapshot()
     if not equipment:
         raise DomainBusyError("A base oficial EquipamentosDetalhes não está carregada.")
-    report = build_monthly_report(
+    return build_monthly_report(
         month,
         equipment=equipment,
         stats=stats,
@@ -62,7 +63,10 @@ def _build_workbook(services: MonthlyReportServices, month: ReportMonth) -> Tupl
         ticket_report=_read_ticket_report(services.ticket_report_path()),
         generated_at=services.now(),
     )
-    return build_monthly_report_workbook(report)
+
+
+def _build_workbook(services: MonthlyReportServices, month: ReportMonth) -> Tuple[BytesIO, str]:
+    return build_monthly_report_workbook(_build_report(services, month))
 
 
 def previous_report_month(today: date) -> ReportMonth:
@@ -108,6 +112,16 @@ def generate_previous_month_report(
 
 def create_monthly_report_router(services: MonthlyReportServices) -> APIRouter:
     router = APIRouter()
+
+    @router.get("/api/relatorio-mensal/dados")
+    def dados_relatorio_mensal(mes: str = Query(..., max_length=7)) -> Dict[str, Any]:
+        month = parse_report_month(mes, services.today())
+        report = _build_report(services, month)
+        report["mes"] = {
+            "year": month.year, "month": month.month, "key": month.key, "label": month.label,
+            "parcial": month.is_partial, "data_corte": month.end.isoformat(),
+        }
+        return jsonable_encoder(report)
 
     @router.get("/api/relatorio-mensal")
     def exportar_relatorio_mensal(mes: str = Query(..., max_length=7)) -> StreamingResponse:
