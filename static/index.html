@@ -608,7 +608,7 @@ Horário disponível para atendimento:</textarea>
       <!-- ========================================== -->
       <!-- COLUNA ESQUERDA: RETIRADA (ORIGEM)        -->
       <!-- ========================================== -->
-      <section class="glass-card rounded-2xl overflow-hidden shadow-xl flex flex-col border border-slate-800">
+      <section class="glass-card rounded-2xl overflow-hidden shadow-xl flex flex-col border border-line-quiet">
         <!-- Header Origem -->
         <div class="glass-card-header p-5 flex items-center justify-between">
           <div class="flex items-center space-x-3">
@@ -628,28 +628,28 @@ Horário disponível para atendimento:</textarea>
         <div class="p-6 space-y-4 flex-1">
           <!-- CNPJ Retirada -->
           <div>
-            <label for="retirada-cnpj" class="block text-xs font-semibold text-slate-300 mb-1">
+            <label for="retirada-cnpj" class="block text-xs font-semibold text-fg-tertiary mb-1">
               CNPJ:
             </label>
             <input
               type="text"
               id="retirada-cnpj"
               readonly
-              class="w-full px-3.5 py-2.5 rounded-lg glass-input text-sm text-slate-100 focus:outline-none"
+              class="w-full px-3.5 py-2.5 rounded-lg glass-input text-sm text-fg-emphasis focus:outline-none"
               placeholder="CNPJ da instalação / filial"
             />
           </div>
 
           <!-- Endereço Completo Retirada -->
           <div>
-            <label for="retirada-endereco" class="block text-xs font-semibold text-slate-300 mb-1">
+            <label for="retirada-endereco" class="block text-xs font-semibold text-fg-tertiary mb-1">
               Endereço:
             </label>
             <textarea
               id="retirada-endereco"
               rows="2"
               readonly
-              class="w-full px-3.5 py-2 rounded-lg glass-input text-sm text-slate-100 focus:outline-none"
+              class="w-full px-3.5 py-2 rounded-lg glass-input text-sm text-fg-emphasis focus:outline-none"
               placeholder="Preenchido pela série pesquisada"
             ></textarea>
           </div>
@@ -657,30 +657,30 @@ Horário disponível para atendimento:</textarea>
           <!-- Grade de Horários e Almoço -->
           <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
             <div class="sm:col-span-2">
-              <label for="retirada-horario" class="block text-xs font-semibold text-slate-300 mb-1">Expediente:</label>
+              <label for="retirada-horario" class="block text-xs font-semibold text-fg-tertiary mb-1">Expediente:</label>
               <input
                 type="text"
                 id="retirada-horario"
                 value="09:00:00 às 18:00:00"
-                class="w-full px-3 py-2 rounded-lg glass-input text-xs text-slate-200 focus:outline-none"
+                class="w-full px-3 py-2 rounded-lg glass-input text-xs text-fg-secondary focus:outline-none"
               />
             </div>
             <div>
-              <label for="retirada-almoco" class="block text-xs font-semibold text-slate-300 mb-1">Almoço:</label>
+              <label for="retirada-almoco" class="block text-xs font-semibold text-fg-tertiary mb-1">Almoço:</label>
               <input
                 type="text"
                 id="retirada-almoco"
                 value="12:00:00"
-                class="w-full px-3 py-2 rounded-lg glass-input text-xs text-slate-200 focus:outline-none"
+                class="w-full px-3 py-2 rounded-lg glass-input text-xs text-fg-secondary focus:outline-none"
               />
             </div>
             <div>
-              <label for="retirada-pausa-duracao" class="block text-xs font-semibold text-slate-300 mb-1">Duração Pausa:</label>
+              <label for="retirada-pausa-duracao" class="block text-xs font-semibold text-fg-tertiary mb-1">Duração Pausa:</label>
               <input
                 type="text"
                 id="retirada-pausa-duracao"
                 value="1h12"
-                class="w-full px-3 py-2 rounded-lg glass-input text-xs text-slate-200 focus:outline-none"
+                class="w-full px-3 py-2 rounded-lg glass-input text-xs text-fg-secondary focus:outline-none"
               />
             </div>
           </div>
@@ -688,28 +688,28 @@ Horário disponível para atendimento:</textarea>
           <!-- Acesso & Voltagem -->
           <div class="grid grid-cols-1 sm:grid-cols-3 gap-3">
             <div class="sm:col-span-2">
-              <label for="retirada-tipo-acesso" class="block text-xs font-semibold text-slate-300 mb-1">Tipo de Acesso:</label>
+              <label for="retirada-tipo-acesso" class="block text-xs font-semibold text-fg-tertiary mb-1">Tipo de Acesso:</label>
               <input
                 type="text"
                 id="retirada-tipo-acesso"
                 value="Elevador / Rampa / Térreo"
-                class="w-full px-3 py-2 rounded-lg glass-input text-xs text-slate-200 focus:outline-none"
+                class="w-full px-3 py-2 rounded-lg glass-input text-xs text-fg-secondary focus:outline-none"
               />
             </div>
             <div>
-              <label for="retirada-voltagem" class="block text-xs font-semibold text-slate-300 mb-1">Voltagem:</label>
+              <label for="retirada-voltagem" class="block text-xs font-semibold text-fg-tertiary mb-1">Voltagem:</label>
               <input
                 type="text"
                 id="retirada-voltagem"
                 value="Bivolt"
-                class="w-full px-3 py-2 rounded-lg glass-input text-xs text-slate-200 focus:outline-none"
+                class="w-full px-3 py-2 rounded-lg glass-input text-xs text-fg-secondary focus:outline-none"
               />
             </div>
           </div>
 
           <!-- Contato Suporte Retirada -->
-          <div class="pt-2 border-t border-slate-800">
-            <h4 class="text-xs font-semibold text-slate-400 uppercase tracking-wider mb-2 flex items-center gap-1.5">
+          <div class="pt-2 border-t border-line-quiet">
+            <h4 class="text-xs font-semibold text-fg-subtle uppercase tracking-wider mb-2 flex items-center gap-1.5">
               <i aria-hidden="true" data-lucide="user-check" class="w-3.5 h-3.5"></i>
               Contato no Ponto de Retirada / Representante Regional
             </h4>
@@ -718,42 +718,42 @@ Horário disponível para atendimento:</textarea>
               <button type="button" id="btn-configurar-contato-origem" class="btn btn-secondary btn-chip mt-2" aria-haspopup="dialog" aria-controls="modal-contato-origem" data-on-click="abrirConfiguracaoContatoOrigem">Configurar contato de origem</button>
             </div>
             <div class="mb-3">
-              <label class="block text-xs text-slate-400 mb-1" for="retirada-representante">Representante regional (automático pela cidade):</label>
+              <label class="block text-xs text-fg-subtle mb-1" for="retirada-representante">Representante regional (automático pela cidade):</label>
               <select
                 id="retirada-representante"
                 data-on-change="handleRepresentanteRegionalChange" data-args='["retirada", "$value"]'
-                class="w-full px-3 py-2 rounded-lg glass-input text-xs text-slate-200 focus:outline-none"
+                class="w-full px-3 py-2 rounded-lg glass-input text-xs text-fg-secondary focus:outline-none"
                 aria-label="Representante regional do ponto de retirada"
               ></select>
             </div>
             <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
               <div class="sm:col-span-2">
-                <label for="retirada-contato" class="block text-xs text-slate-400 mb-1">Nome: <span class="required-mark" aria-hidden="true">*</span></label>
+                <label for="retirada-contato" class="block text-xs text-fg-subtle mb-1">Nome: <span class="required-mark" aria-hidden="true">*</span></label>
                 <input
                   type="text"
                   id="retirada-contato"
                   required
-                  class="w-full px-3 py-2 rounded-lg glass-input text-xs text-slate-200 focus:outline-none"
+                  class="w-full px-3 py-2 rounded-lg glass-input text-xs text-fg-secondary focus:outline-none"
                   autocomplete="name"
                 />
               </div>
               <div>
-                <label for="retirada-email" class="block text-xs text-slate-400 mb-1">E-mail: <span class="required-mark" aria-hidden="true">*</span></label>
+                <label for="retirada-email" class="block text-xs text-fg-subtle mb-1">E-mail: <span class="required-mark" aria-hidden="true">*</span></label>
                 <input
                   type="email"
                   id="retirada-email"
                   required
-                  class="w-full px-3 py-2 rounded-lg glass-input text-xs text-slate-200 focus:outline-none"
+                  class="w-full px-3 py-2 rounded-lg glass-input text-xs text-fg-secondary focus:outline-none"
                   autocomplete="email"
                 />
               </div>
               <div>
-                <label for="retirada-telefone" class="block text-xs text-slate-400 mb-1">Celular: <span class="required-mark" aria-hidden="true">*</span></label>
+                <label for="retirada-telefone" class="block text-xs text-fg-subtle mb-1">Celular: <span class="required-mark" aria-hidden="true">*</span></label>
                 <input
                   type="text"
                   id="retirada-telefone"
                   required
-                  class="w-full px-3 py-2 rounded-lg glass-input text-xs text-slate-200 focus:outline-none font-mono"
+                  class="w-full px-3 py-2 rounded-lg glass-input text-xs text-fg-secondary focus:outline-none font-mono"
                   inputmode="tel"
                   autocomplete="tel"
                   placeholder="(00) 9xxxx-xxxx"
@@ -764,12 +764,12 @@ Horário disponível para atendimento:</textarea>
 
           <!-- Observações Retirada -->
           <div>
-            <label for="retirada-obs" class="block text-xs font-semibold text-slate-400 mb-1">Observações: <span class="required-mark" aria-hidden="true">*</span></label>
+            <label for="retirada-obs" class="block text-xs font-semibold text-fg-subtle mb-1">Observações: <span class="required-mark" aria-hidden="true">*</span></label>
             <input
               type="text"
               id="retirada-obs"
               required
-              class="w-full px-3 py-2 rounded-lg glass-input text-xs text-slate-200 focus:outline-none"
+              class="w-full px-3 py-2 rounded-lg glass-input text-xs text-fg-secondary focus:outline-none"
               placeholder="Ex: Notebook + kit na mochila"
             />
           </div>
@@ -779,7 +779,7 @@ Horário disponível para atendimento:</textarea>
       <!-- ========================================== -->
       <!-- COLUNA DIREITA: ENTREGA (DESTINO)         -->
       <!-- ========================================== -->
-      <section class="glass-card rounded-2xl overflow-hidden shadow-xl flex flex-col border border-slate-800">
+      <section class="glass-card rounded-2xl overflow-hidden shadow-xl flex flex-col border border-line-quiet">
         <!-- Header Destino -->
         <div class="glass-card-header p-5 flex items-center justify-between">
           <div class="flex items-center space-x-3">
@@ -799,18 +799,18 @@ Horário disponível para atendimento:</textarea>
         <div class="p-6 space-y-4 flex-1">
           <!-- BUSCA RÁPIDA DE UNIDADE SEBRAE (DROPDOWN / AUTOCOMPLETE) -->
           <div>
-            <label for="select-unidade-destino" class="block text-xs font-semibold text-slate-300 mb-1 flex items-center justify-between">
+            <label for="select-unidade-destino" class="block text-xs font-semibold text-fg-tertiary mb-1 flex items-center justify-between">
               <span class="flex items-center gap-1.5">
                 <i aria-hidden="true" data-lucide="map-pin" class="w-3.5 h-3.5"></i>
                 Selecione a Unidade:
               </span>
-              <span id="filiais-count" class="text-xs text-slate-400">30 filiais catalogadas</span>
+              <span id="filiais-count" class="text-xs text-fg-subtle">30 filiais catalogadas</span>
             </label>
             <div class="relative">
               <select
                 id="select-unidade-destino"
                 data-on-change="handleUnidadeDestinoChange" data-args='["$value"]'
-                class="w-full px-3.5 py-2.5 rounded-lg glass-input text-sm text-slate-100 focus:outline-none cursor-pointer appearance-none bg-no-repeat pr-10"
+                class="w-full px-3.5 py-2.5 rounded-lg glass-input text-sm text-fg-emphasis focus:outline-none cursor-pointer appearance-none bg-no-repeat pr-10"
               >
                 <option value="">-- Escolha a Cidade ou Regional de Destino --</option>
               </select>
@@ -820,14 +820,14 @@ Horário disponível para atendimento:</textarea>
 
           <!-- CNPJ Entrega -->
           <div>
-            <label for="entrega-cnpj" class="block text-xs font-semibold text-slate-300 mb-1">
+            <label for="entrega-cnpj" class="block text-xs font-semibold text-fg-tertiary mb-1">
               CNPJ:
             </label>
             <input
               type="text"
               id="entrega-cnpj"
               readonly
-              class="w-full px-3.5 py-2.5 rounded-lg glass-input text-sm text-slate-100 focus:outline-none"
+              class="w-full px-3.5 py-2.5 rounded-lg glass-input text-sm text-fg-emphasis focus:outline-none"
               placeholder="CNPJ da instalação / filial"
             />
             <div class="mt-2 flex flex-wrap items-center gap-1.5" role="group" aria-label="Copiar dados de faturamento e instalação da entrega">
@@ -858,70 +858,70 @@ Horário disponível para atendimento:</textarea>
 
           <!-- Endereço Completo Entrega -->
           <div>
-            <label for="entrega-endereco" class="block text-xs font-semibold text-slate-300 mb-1">
+            <label for="entrega-endereco" class="block text-xs font-semibold text-fg-tertiary mb-1">
               Endereço:
             </label>
             <textarea
               id="entrega-endereco"
               rows="2"
               readonly
-              class="w-full px-3.5 py-2 rounded-lg glass-input text-sm text-slate-100 focus:outline-none"
+              class="w-full px-3.5 py-2 rounded-lg glass-input text-sm text-fg-emphasis focus:outline-none"
               placeholder="Preenchido pela unidade selecionada"
             ></textarea>
           </div>
 
           <!-- Dados do Destinatário (Colaborador / Contato) -->
-          <div class="pt-2 border-t border-slate-800">
-            <h4 class="text-xs font-semibold text-slate-300 uppercase tracking-wider mb-2 flex flex-wrap items-center justify-between gap-x-3">
+          <div class="pt-2 border-t border-line-quiet">
+            <h4 class="text-xs font-semibold text-fg-tertiary uppercase tracking-wider mb-2 flex flex-wrap items-center justify-between gap-x-3">
               <span class="flex items-center gap-1.5">
                 <i aria-hidden="true" data-lucide="user" class="w-3.5 h-3.5"></i>
                 Dados do Destinatário no SEBRAE
               </span>
-              <span class="text-xs text-slate-400 font-normal tracking-normal"><span class="required-mark" aria-hidden="true">*</span> Obrigatório para entrega</span>
+              <span class="text-xs text-fg-subtle font-normal tracking-normal"><span class="required-mark" aria-hidden="true">*</span> Obrigatório para entrega</span>
             </h4>
             <div class="space-y-3">
               <div>
-                <label class="block text-xs font-semibold text-slate-300 mb-1" for="entrega-representante">
+                <label class="block text-xs font-semibold text-fg-tertiary mb-1" for="entrega-representante">
                   Representante regional (automático pela cidade):
                 </label>
                 <select
                   id="entrega-representante"
                   data-on-change="handleRepresentanteRegionalChange" data-args='["entrega", "$value"]'
-                  class="w-full px-3 py-2 rounded-lg glass-input text-xs text-slate-100 focus:outline-none"
+                  class="w-full px-3 py-2 rounded-lg glass-input text-xs text-fg-emphasis focus:outline-none"
                   aria-label="Representante regional da unidade de entrega"
                 ></select>
               </div>
               <div>
-                <label for="entrega-contato" class="block text-xs font-semibold text-slate-300 mb-1">
+                <label for="entrega-contato" class="block text-xs font-semibold text-fg-tertiary mb-1">
                   Nome do Destinatário ou Representante: <span class="required-mark" aria-hidden="true">*</span>
                 </label>
                 <input
                   type="text"
                   id="entrega-contato"
                   required
-                  class="w-full px-3 py-2 rounded-lg glass-input text-xs text-slate-100 focus:outline-none"
+                  class="w-full px-3 py-2 rounded-lg glass-input text-xs text-fg-emphasis focus:outline-none"
                   placeholder="Nome do destinatário"
                 />
               </div>
 
               <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
                 <div>
-                  <label for="entrega-email" class="block text-xs text-slate-300 mb-1">E-mail do Destinatário: <span class="required-mark" aria-hidden="true">*</span></label>
+                  <label for="entrega-email" class="block text-xs text-fg-tertiary mb-1">E-mail do Destinatário: <span class="required-mark" aria-hidden="true">*</span></label>
                   <input
                     type="email"
                     id="entrega-email"
                     required
-                    class="w-full px-3 py-2 rounded-lg glass-input text-xs text-slate-100 focus:outline-none"
+                    class="w-full px-3 py-2 rounded-lg glass-input text-xs text-fg-emphasis focus:outline-none"
                     placeholder="nome@pr.sebrae.com.br"
                   />
                 </div>
                 <div>
-                  <label for="entrega-telefone" class="block text-xs text-slate-300 mb-1">Celular: <span class="required-mark" aria-hidden="true">*</span></label>
+                  <label for="entrega-telefone" class="block text-xs text-fg-tertiary mb-1">Celular: <span class="required-mark" aria-hidden="true">*</span></label>
                   <input
                     type="text"
                     id="entrega-telefone"
                     required
-                    class="w-full px-3 py-2 rounded-lg glass-input text-xs text-slate-100 focus:outline-none font-mono"
+                    class="w-full px-3 py-2 rounded-lg glass-input text-xs text-fg-emphasis focus:outline-none font-mono"
                     inputmode="tel"
                     autocomplete="tel"
                     placeholder="(00) 9xxxx-xxxx"
@@ -934,33 +934,33 @@ Horário disponível para atendimento:</textarea>
           <!-- Grade de Horários e Almoço Entrega -->
           <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
             <div class="sm:col-span-2">
-              <label for="entrega-horario" class="block text-xs font-semibold text-slate-300 mb-1">Expediente: <span class="required-mark" aria-hidden="true">*</span></label>
+              <label for="entrega-horario" class="block text-xs font-semibold text-fg-tertiary mb-1">Expediente: <span class="required-mark" aria-hidden="true">*</span></label>
               <input
                 type="text"
                 id="entrega-horario"
                 required
                 value="09:00:00 às 18:00:00"
-                class="w-full px-3 py-2 rounded-lg glass-input text-xs text-slate-200 focus:outline-none"
+                class="w-full px-3 py-2 rounded-lg glass-input text-xs text-fg-secondary focus:outline-none"
               />
             </div>
             <div>
-              <label for="entrega-almoco" class="block text-xs font-semibold text-slate-300 mb-1">Almoço: <span class="required-mark" aria-hidden="true">*</span></label>
+              <label for="entrega-almoco" class="block text-xs font-semibold text-fg-tertiary mb-1">Almoço: <span class="required-mark" aria-hidden="true">*</span></label>
               <input
                 type="text"
                 id="entrega-almoco"
                 required
                 value="12:00:00"
-                class="w-full px-3 py-2 rounded-lg glass-input text-xs text-slate-200 focus:outline-none"
+                class="w-full px-3 py-2 rounded-lg glass-input text-xs text-fg-secondary focus:outline-none"
               />
             </div>
             <div>
-              <label for="entrega-pausa-duracao" class="block text-xs font-semibold text-slate-300 mb-1">Duração Pausa: <span id="entrega-pausa-obrigatorio" class="required-mark" aria-hidden="true">*</span></label>
+              <label for="entrega-pausa-duracao" class="block text-xs font-semibold text-fg-tertiary mb-1">Duração Pausa: <span id="entrega-pausa-obrigatorio" class="required-mark" aria-hidden="true">*</span></label>
               <input
                 type="text"
                 id="entrega-pausa-duracao"
                 required
                 value="1h"
-                class="w-full px-3 py-2 rounded-lg glass-input text-xs text-slate-200 focus:outline-none"
+                class="w-full px-3 py-2 rounded-lg glass-input text-xs text-fg-secondary focus:outline-none"
               />
             </div>
           </div>
@@ -968,7 +968,7 @@ Horário disponível para atendimento:</textarea>
           <!-- Observação do Chamado / Entrega -->
           <div>
             <div class="flex items-center justify-between mb-1">
-              <label for="entrega-obs" class="block text-xs font-semibold text-slate-300">
+              <label for="entrega-obs" class="block text-xs font-semibold text-fg-tertiary">
                 Observações: <span class="required-mark" aria-hidden="true">*</span>
               </label>
               <span class="info-tip info-tip--end"><button type="button" class="info-tip-trigger" aria-label="Sobre as observações" aria-describedby="tip-entrega-obs"><i data-lucide="info" aria-hidden="true"></i></button><span id="tip-entrega-obs" role="tooltip" class="info-tip-text">Vai para a célula B37 da planilha.</span></span>
@@ -977,7 +977,7 @@ Horário disponível para atendimento:</textarea>
               id="entrega-obs"
               required
               rows="2"
-              class="w-full px-3.5 py-2 rounded-lg glass-input text-xs text-slate-100 focus:outline-none"
+              class="w-full px-3.5 py-2 rounded-lg glass-input text-xs text-fg-emphasis focus:outline-none"
               placeholder="Ex: Equipamento para nova contratação / Substituição preventiva..."
             ></textarea>
             <!-- Chips de observação rápida -->
@@ -995,12 +995,12 @@ Horário disponível para atendimento:</textarea>
     <!-- ========================================== -->
     <!-- BARRA INFERIOR FIXA DE AÇÕES RÁPIDAS      -->
     <!-- ========================================== -->
-    <aside aria-label="Painel de Ações Rápidas" class="quick-actions fixed bottom-0 inset-x-0 bg-slate-950/90 backdrop-blur-xl border-t border-slate-800/90 shadow-2xl">
+    <aside aria-label="Painel de Ações Rápidas" class="quick-actions fixed bottom-0 inset-x-0 bg-surface/90 backdrop-blur-xl border-t border-line-quiet/90 shadow-2xl">
       <div class="quick-actions-inner mx-auto flex flex-col sm:flex-row items-center justify-between gap-4">
-        <div class="quick-actions-status flex items-center space-x-3 text-xs text-slate-400">
+        <div class="quick-actions-status flex items-center space-x-3 text-xs text-fg-subtle">
           <div class="w-2.5 h-2.5 rounded-full bg-brand-400" id="status-indicator" aria-hidden="true"></div>
           <div id="status-summary" role="status" aria-live="polite" aria-atomic="true">
-            <span class="text-slate-300 font-medium" data-ux-ready-status>Pronto para emissão.</span>
+            <span class="text-fg-tertiary font-medium" data-ux-ready-status>Pronto para emissão.</span>
           </div>
         </div>
 
