@@ -41,7 +41,7 @@
       }
     } catch (err) {
       console.error("Falha ao carregar unidades:", err);
-      app.showToast("Erro ao carregar catálogo de unidades SEBRAE", "error");
+      app.showToast("Não foi possível carregar o catálogo de unidades. Recarregue a página e tente de novo.", "error");
     }
   }
 
@@ -95,14 +95,14 @@
           <div class="min-w-0 flex-1">
             <div class="unit-list-identity flex items-center gap-2">
               <span class="font-bold text-white text-sm">${escapeHtml(u.cidade)}</span>
-              ${u.is_sede ? '<span class="px-2 py-0.5 rounded-full text-[10px] font-bold bg-amber-500/20 text-amber-300 border border-amber-500/30">SEDE</span>' : ''}
-              <span class="unit-list-cnpj text-slate-400 font-mono text-[11px]">${escapeHtml(u.cnpj)}</span>
+              ${u.is_sede ? '<span class="px-2 py-0.5 rounded-full text-xs font-bold bg-amber-500/20 text-amber-300 border border-amber-500/30">SEDE</span>' : ''}
+              <span class="unit-list-cnpj text-slate-400 font-mono text-xs">${escapeHtml(u.cnpj)}</span>
               <button type="button" data-copy-field="CNPJ" class="p-1 rounded-md text-slate-400 hover:text-amber-200 hover:bg-slate-800 transition" title="Copiar CNPJ" aria-label="Copiar CNPJ">
                 <i data-lucide="copy" class="w-3.5 h-3.5" aria-hidden="true"></i>
               </button>
             </div>
             <p class="unit-list-address text-slate-300 mt-0.5 truncate">${escapeHtml(u.endereco)}</p>
-            <div class="text-slate-500 font-mono text-[11px]">
+            <div class="text-slate-500 font-mono text-xs">
               <div class="flex items-center gap-1.5">
                 <span>CEP: ${escapeHtml(u.cep)}</span>
                 <button type="button" data-copy-field="CEP" class="p-1 rounded-md text-slate-400 hover:text-amber-200 hover:bg-slate-800 transition" title="Copiar CEP" aria-label="Copiar CEP">

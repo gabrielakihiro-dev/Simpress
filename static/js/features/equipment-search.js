@@ -45,6 +45,7 @@
     if (summary) summary.replaceChildren(
       createTextElement("span", "text-slate-300 font-medium", "Pronto para emissão.")
     );
+    summary?.firstElementChild?.setAttribute("data-ux-ready-status", "");
   }
 
   function invalidarBuscasEquipamento() {
@@ -408,7 +409,7 @@
       app.definirEquipamentoAtual(data);
       app.exibirEquipamento(data);
       if (recentStore) renderizarPesquisasRecentes(recentStore.add(data));
-      app.showToast(`Equipamento ${data.serial} localizado com sucesso!`, "success");
+      app.showToast(`Equipamento ${data.serial} localizado.`, "success");
 
     } catch (err) {
       if (err.name !== "AbortError" && equipmentLookupRequestGate.isCurrent(request.id)) {
