@@ -80,7 +80,8 @@ data-on-keydown="handleSerialKeydown" data-args='["$event"]'
 </button>
 <div id="autocomplete-box" class="hidden cockpit-home-autocomplete" role="listbox" aria-label="Equipamentos encontrados">
   <div id="autocomplete-header" class="cockpit-home-autocomplete-header">
-    <span id="autocomplete-count" role="status" aria-live="polite" aria-atomic="true">0 itens</span>
+    <span id="autocomplete-count" role="status" aria-live="polite" aria-atomic="true">Equipamentos · 0</span>
+    <span class="cockpit-home-autocomplete-hint">Esc fecha</span>
   </div>
   <div id="autocomplete-list" aria-label="Sugestões de equipamentos" class="cockpit-home-autocomplete-list"></div>
   <div id="autocomplete-empty-state" class="hidden" role="region" aria-label="Resultado da busca" aria-live="polite"></div>
@@ -171,7 +172,7 @@ data-on-keydown="handleSerialKeydown" data-args='["$event"]'
 <!-- Notification center panel (preserved from original) -->
 <section id="notification-center-panel" class="notification-center-panel" role="region" aria-labelledby="notification-center-title" aria-busy="true" hidden>
 <div class="notification-center-header">
-<h2 id="notification-center-title">Notificações</h2>
+<h2 id="notification-center-title">Pendências</h2>
 <p id="notification-center-summary" role="status" aria-live="polite" aria-atomic="true">Verificando os avisos…</p>
 </div>
 <section id="alerta-os-paradas" class="stale-base-alert" role="status" aria-labelledby="alerta-os-paradas-titulo" data-state="loading" hidden>
@@ -344,6 +345,7 @@ data-on-keydown="handleSerialKeydown" data-args='["$event"]'
         <p id="card-cnpj-atual" class="hidden"></p>
 
         <!-- Chamados manuais (pílulas + preview) -->
+        <div class="cockpit-home-bottom">
         <section class="cockpit-home-tickets" aria-labelledby="ticket-templates-title">
           <div class="cockpit-home-ticket-pills" role="tablist" aria-label="Modelos de chamado" data-on-keydown="controlarAbasTransferencia" data-args='["$event"]' >
             <button type="button" class="cockpit-home-ticket-pill is-active" role="tab" aria-selected="true" data-on-click="alternarChamadosManuais" data-args='["deslocamento"]' id="pill-chamado-deslocamento" aria-controls="visualizacao-chamado-deslocamento" tabindex="0">
@@ -424,6 +426,16 @@ Horário disponível para atendimento:</textarea>
           <!-- Toggle legado preservado (oculto visualmente, ID mantido) -->
           <button type="button" id="btn-toggle-ticket-templates" class="hidden" aria-expanded="true" aria-controls="ticket-templates-content" data-on-click="alternarChamadosManuais"></button>
         </section>
+
+        <!-- Chamados abertos da série selecionada (dados de acompanhamento de chamados) -->
+        <aside class="cockpit-home-open-tickets" aria-labelledby="home-open-tickets-title">
+          <header class="cockpit-home-open-tickets-header">
+            <h4 id="home-open-tickets-title">Chamados abertos</h4>
+            <span id="home-open-tickets-count" class="cockpit-home-open-tickets-count" role="status" aria-live="polite"></span>
+          </header>
+          <div id="home-open-tickets-body" class="cockpit-home-open-tickets-body" aria-busy="false"></div>
+        </aside>
+        </div>
       </div>
     </section>
 

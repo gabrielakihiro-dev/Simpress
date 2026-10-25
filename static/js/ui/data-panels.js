@@ -781,6 +781,7 @@
     const notificationBadge = doc.getElementById("badge-notificacoes");
     const notificationPanel = doc.getElementById("notification-center-panel");
     const notificationSummary = doc.getElementById("notification-center-summary");
+    const notificationTitle = doc.getElementById("notification-center-title");
     let hasNotificationData = false;
 
     function atualizarResumoNotificacoes(text) {
@@ -800,6 +801,7 @@
         notificationBadge.textContent = String(total);
         notificationBadge.hidden = total === 0;
       }
+      if (notificationTitle) notificationTitle.textContent = `Pendências · ${total}`;
       if (notificationButton) {
         notificationButton.setAttribute("aria-label", label);
         notificationButton.title = label;

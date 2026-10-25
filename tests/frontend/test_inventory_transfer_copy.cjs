@@ -54,7 +54,8 @@ test("equipment search fills pickup CNPJ and selected delivery unit fills its in
   harness.context.workflowSearchItem = equipment;
 
   await harness.run("selecionarItemAutocomplete(workflowSearchItem)");
-  assert.deepEqual(calls, [`/api/equipamento/${equipment.serial}`]);
+  // Home also reads the open tickets of the selected series (Chamados abertos).
+  assert.deepEqual(calls, [`/api/equipamento/${equipment.serial}`, "/api/operacoes/chamados"]);
   assert.equal(
     harness.element("retirada-cnpj").value,
     equipment.retirada_cnpj,

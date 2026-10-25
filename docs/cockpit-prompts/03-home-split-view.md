@@ -147,7 +147,7 @@ Lista compacta com:
 - ID mono · tempo aberto
 - Badge de status: Sem resposta = erro, Aguardando técnico = alerta, Em atendimento = info, Concluído = ok
 
-Os dados vêm do acompanhamento de chamados (API existente). Se não houver dados, mostre "Nenhum chamado aberto".
+Os dados vêm do acompanhamento de chamados (API existente, `/api/operacoes/chamados`, sempre a importação mais recente, mesmo que outra versão esteja aberta no painel Chamados). Mostre só os chamados Oracle da série selecionada que não estão encerrados, do número de OS maior para o menor. Se não houver dados, mostre "Nenhum chamado aberto para esta série."
 
 ---
 

@@ -81,15 +81,33 @@
       `;
   }
 
+  function conteudoLinhaAutocomplete(item, currentQuery) {
+    const serial = String(item.serial || "").trim();
+    const usuario = String(item.usuarios_logados || "").trim();
+    const usuarioTexto = usuario
+      ? `${usuario}${item.usuarios_logados_origem === "manual" ? " (M)" : ""}`
+      : textoAmbiguo(item.usuarios_logados_candidatos);
+    const detalhe = [item.modelo, usuarioTexto].filter(Boolean).join(" · ");
+    const dotClass = usuario ? "autocomplete-dot--ok" : "autocomplete-dot--warn";
+    return `
+        <span class="autocomplete-dot ${dotClass}" aria-hidden="true"></span>
+        <div class="autocomplete-row-main">
+          <span class="autocomplete-row-serial">${highlightMatch(serial, currentQuery)}</span>
+          <span class="autocomplete-row-detail" title="${escapeHtml(detalhe)}">${escapeHtml(detalhe)}</span>
+        </div>
+        <span class="autocomplete-row-city">${escapeHtml(item.retirada_cidade || "PR")}</span>
+      `;
+  }
+
   function criarLinhaAutocomplete(item, index, currentQuery, { onSelect, onHighlight }) {
     const row = document.createElement("div");
     row.id = `autocomplete-option-${index}`;
     row.setAttribute("role", "option");
     row.setAttribute("aria-selected", "false");
-    row.className = "autocomplete-row group px-4 py-2.5 cursor-pointer flex items-center justify-between gap-3";
+    row.className = "autocomplete-row cockpit-autocomplete-row";
     row.onclick = onSelect;
     row.onmouseenter = onHighlight;
-    row.innerHTML = conteudoLinhaResultado(item, currentQuery);
+    row.innerHTML = conteudoLinhaAutocomplete(item, currentQuery);
     return row;
   }
 
