@@ -6,13 +6,12 @@
   <script src="/static/js/shared/theme-preference.js"></script>
   <title>Simpress | Automação de Transferência de Equipamentos - SEBRAE/PR</title>
   <link rel="icon" type="image/svg+xml" href="/static/favicon.svg">
-  
+
   <!-- CSS order is intentional: vendor utilities, design tokens, app styles, then focused refinements. -->
   <link rel="stylesheet" href="/static/vendor/fonts.css">
   <link rel="stylesheet" href="/static/vendor/tailwind-4.3.3.css">
   <link rel="stylesheet" href="/static/styles/tokens.css">
   <link rel="stylesheet" href="/static/styles/nocturne.css">
-  <link rel="stylesheet" href="/static/styles/cockpit-shell.css">
   <script src="/static/vendor/lucide-1.48.0-subset.js"></script>
   <link rel="stylesheet" href="/static/app.css">
   <!-- Component and theme layers follow app.css; refinements stay last by design. -->
@@ -20,41 +19,41 @@
   <link rel="stylesheet" href="/static/styles/sidebar-navigation.css">
   <link rel="stylesheet" href="/static/styles/theme.css">
   <link rel="stylesheet" href="/static/styles/ux-refinements.css">
+  <link rel="stylesheet" href="/static/styles/cockpit-shell.css">
+  <link rel="stylesheet" href="/static/styles/cockpit-home.css">
+  <link rel="stylesheet" href="/static/styles/cockpit-pages.css">
 </head>
-<body class="min-h-full bg-gradient-to-br from-surface via-surface-overlay to-surface text-fg-emphasis font-sans selection:bg-brand-500 selection:text-white">
+<body class="min-h-full bg-surface text-fg-emphasis font-sans selection:bg-brand-500 selection:text-white cockpit-shell-body">
 
   <a class="skip-link" href="#main-content">Pular para o conteúdo principal</a>
 
   <div id="simpress-app-shell" class="simpress-app-shell cockpit-shell">
 <header class="cockpit-bar" role="banner">
 <div class="cockpit-bar__brand" aria-label="Simpress, gestão de equipamentos">
-<span class="cockpit-bar__brand-mark" aria-hidden="true">S</span>
+<i data-lucide="box" class="cockpit-bar__brand-mark" aria-hidden="true"></i>
 <strong class="cockpit-bar__brand-name">Simpress</strong>
 </div>
 <nav class="cockpit-bar__tabs app-tabs" role="tablist" aria-label="Navegação principal" data-on-keydown="controlarAbasTransferencia" data-args='["$event"]'>
 <button type="button" id="tab-home" class="cockpit-tab app-tab is-active" role="tab" aria-selected="true" aria-controls="tab-panel-home" tabindex="0" data-on-click="ativarAbaTransferencia" data-args='["home"]' aria-label="Home" title="Home (F1)">
 <i data-lucide="home" class="w-4 h-4" aria-hidden="true"></i>
 <span>Home</span>
-<kbd class="cockpit-tab__shortcut" aria-hidden="true">F1</kbd>
 </button>
 <button type="button" id="tab-retirada-entrega" class="cockpit-tab app-tab" role="tab" aria-selected="false" aria-controls="tab-panel-retirada-entrega" tabindex="-1" data-on-click="ativarAbaTransferencia" data-args='["transferencia"]' aria-label="Transporte" title="Transporte (F2)">
 <i data-lucide="truck" class="w-4 h-4" aria-hidden="true"></i>
 <span>Transporte</span>
-<kbd class="cockpit-tab__shortcut" aria-hidden="true">F2</kbd>
 </button>
 <button type="button" id="tab-resumo" class="cockpit-tab app-tab" role="tab" aria-selected="false" aria-controls="tab-panel-resumo" tabindex="-1" data-on-click="ativarAbaTransferencia" data-args='["resumo"]' aria-label="Resumo" title="Resumo (F3)">
 <i data-lucide="layout-dashboard" class="w-4 h-4" aria-hidden="true"></i>
 <span>Resumo</span>
-<kbd class="cockpit-tab__shortcut" aria-hidden="true">F3</kbd>
 </button>
 <button type="button" id="tab-automacao" class="cockpit-tab app-tab" role="tab" aria-selected="false" aria-controls="tab-panel-automacao" tabindex="-1" data-on-click="ativarAbaTransferencia" data-args='["automacao"]' aria-label="Automação" title="Automação (F4)">
 <i data-lucide="terminal" class="w-4 h-4" aria-hidden="true"></i>
 <span>Automação</span>
-<kbd class="cockpit-tab__shortcut" aria-hidden="true">F4</kbd>
 </button>
 </nav>
 <div class="cockpit-bar__spacer" aria-hidden="true"></div>
-<div class="cockpit-bar__search">
+<form class="cockpit-bar__search" role="search" data-on-submit="buscarSerial">
+<i data-lucide="search" class="cockpit-search-icon" aria-hidden="true"></i>
 <input
 type="text"
 id="input-serial"
@@ -71,8 +70,27 @@ class="cockpit-search-input"
 data-on-input="handleSerialInput" data-args='["$value"]'
 data-on-keydown="handleSerialKeydown" data-args='["$event"]'
 />
-<kbd class="cockpit-search-shortcut" aria-hidden="true" title="Atalho: Ctrl+K">Ctrl K</kbd>
+<kbd class="cockpit-search-shortcut" aria-hidden="true" title="Atalho: Ctrl+K">Ctrl+K</kbd>
+<button type="button" id="btn-clear-serial" class="cockpit-search-clear hidden" aria-label="Limpar pesquisa" title="Limpar pesquisa" data-on-click="limparSerial">
+<i data-lucide="x" aria-hidden="true"></i>
+</button>
+<button type="submit" id="btn-buscar-serial" class="cockpit-search-submit" aria-label="Buscar Equipamento" title="Buscar Equipamento">
+<i data-lucide="arrow-right" aria-hidden="true"></i><span class="sr-only">Buscar Equipamento</span>
+</button>
+<div id="autocomplete-box" class="hidden cockpit-home-autocomplete" role="listbox" aria-label="Equipamentos encontrados">
+  <div id="autocomplete-header" class="cockpit-home-autocomplete-header">
+    <span id="autocomplete-count" role="status" aria-live="polite" aria-atomic="true">0 itens</span>
+  </div>
+  <div id="autocomplete-list" aria-label="Sugestões de equipamentos" class="cockpit-home-autocomplete-list"></div>
+  <div id="autocomplete-empty-state" class="hidden" role="region" aria-label="Resultado da busca" aria-live="polite"></div>
+  <div id="autocomplete-more-results" class="hidden cockpit-home-autocomplete-more">
+    <button type="button" data-on-click="abrirPesquisaCompleta" class="autocomplete-more-button">
+      <i data-lucide="list-checks" class="w-4 h-4" aria-hidden="true"></i>
+      <span data-autocomplete-more-label>Mostrar mais</span>
+    </button>
+  </div>
 </div>
+</form>
 <div class="cockpit-bar__chips">
 <details id="readiness-panel" class="cockpit-chip readiness-panel" data-state="loading" aria-labelledby="readiness-title" aria-busy="true">
 <summary class="cockpit-chip__trigger" aria-controls="readiness-content">
@@ -81,32 +99,43 @@ data-on-keydown="handleSerialKeydown" data-args='["$event"]'
 <span id="readiness-title" class="sr-only">Disponibilidade das funções</span>
 </summary>
 <div id="readiness-content" class="cockpit-chip__panel readiness-expanded-content">
+<span id="readiness-summary" class="sr-only" role="status" aria-live="polite" aria-atomic="true">Verificando os arquivos locais…</span>
 <dl class="readiness-grid">
 <div class="readiness-item"><dt>Equipamentos</dt><dd><strong id="stat-equipamentos">Carregando…</strong> <span id="stat-equipamentos-rotulo">equipamentos</span></dd></div>
 <div class="readiness-item"><dt>Regionais</dt><dd><strong id="stat-unidades">Carregando…</strong></dd></div>
 <div class="readiness-item"><dt>Contrato</dt><dd><strong>16467</strong></dd></div>
 </dl>
+<div id="readiness-details-content" class="readiness-details-content"></div>
 </div>
 </details>
-<span id="automacao-estado" class="cockpit-chip cockpit-chip--neutral" data-state="idle" aria-live="polite">
+<span id="cockpit-automation-shell-status" class="cockpit-chip cockpit-chip--neutral" data-state="idle" aria-live="polite" aria-atomic="true">
 <span class="cockpit-chip__dot" aria-hidden="true"></span>
-<span id="automacao-estado-titulo" class="cockpit-chip__label">Chrome livre</span>
+<span id="cockpit-automation-shell-title" class="cockpit-chip__label">Chrome livre</span>
 </span>
 </div>
 <div class="cockpit-bar__tools">
-<details class="cockpit-tools-dropdown">
-<summary class="cockpit-tools-dropdown__trigger" aria-label="Ferramentas do sistema" title="Ferramentas">
-<i data-lucide="wrench" aria-hidden="true"></i>
-<span>Ferramentas</span>
-<i data-lucide="chevron-down" class="cockpit-tools-dropdown__chevron" aria-hidden="true"></i>
+<details class="cockpit-tools-dropdown" id="cockpit-tools-dropdown">
+<summary id="cockpit-tools-trigger" class="cockpit-tools-dropdown__trigger" aria-label="Ferramentas" aria-controls="cockpit-tools-menu" title="Ferramentas">
+<span class="cockpit-tools-dots" aria-hidden="true"></span>
+<span class="sr-only">Ferramentas</span>
 </summary>
-<div class="cockpit-tools-dropdown__menu" role="menu">
-<button type="button" data-on-click="resetarFormulario" id="btn-nova-transferencia" class="cockpit-tools-dropdown__item" role="menuitem">
-<i data-lucide="rotate-ccw" aria-hidden="true"></i><span>Nova transferência</span>
+<div id="cockpit-tools-menu" class="cockpit-tools-dropdown__menu" role="menu" aria-label="Ferramentas">
+<div class="cockpit-tools-dropdown__title" role="presentation">Ferramentas</div>
+<button type="button" data-on-click="abrirAcompanhamentoChamados" id="btn-acompanhamento-chamados" class="cockpit-tools-dropdown__item cockpit-tools-dropdown__item--primary" role="menuitem">
+<i data-lucide="clipboard-list" aria-hidden="true"></i><span>Chamados</span><kbd aria-hidden="true">F5</kbd>
+</button>
+<button type="button" data-on-click="abrirModalHistoricoComparacoes" id="btn-cockpit-comparacao" class="cockpit-tools-dropdown__item cockpit-tools-dropdown__item--primary" role="menuitem">
+<i data-lucide="layout-dashboard" aria-hidden="true"></i><span>Comparação</span><kbd aria-hidden="true">F6</kbd>
+</button>
+<button type="button" data-on-click="abrirModalHistoricoApelidos" id="btn-historico-apelidos" class="cockpit-tools-dropdown__item cockpit-tools-dropdown__item--primary" role="menuitem">
+<i data-lucide="history" aria-hidden="true"></i><span>Histórico de apelidos</span><kbd aria-hidden="true">F7</kbd>
+</button>
+<button type="button" data-on-click="abrirRelatorioMensal" id="btn-relatorio-mensal" class="cockpit-tools-dropdown__item cockpit-tools-dropdown__item--primary" role="menuitem">
+<i data-lucide="file-spreadsheet" aria-hidden="true"></i><span>Relatório mensal</span><kbd aria-hidden="true">F8</kbd>
 </button>
 <div class="cockpit-tools-dropdown__divider" role="separator"></div>
-<button type="button" data-on-click="abrirAcompanhamentoChamados" id="btn-acompanhamento-chamados" class="cockpit-tools-dropdown__item" role="menuitem">
-<i data-lucide="clipboard-list" aria-hidden="true"></i><span>Acompanhamento de Chamados</span>
+<button type="button" data-on-click="resetarFormulario" id="btn-nova-transferencia" class="cockpit-tools-dropdown__item" role="menuitem">
+<i data-lucide="rotate-ccw" aria-hidden="true"></i><span>Nova transferência</span>
 </button>
 <button type="button" data-on-click="abrirModalAtualizarPlanilhas" id="btn-atualizar-planilhas" class="cockpit-tools-dropdown__item" role="menuitem">
 <i data-lucide="upload" aria-hidden="true"></i><span>Atualizar planilhas</span>
@@ -114,19 +143,12 @@ data-on-keydown="handleSerialKeydown" data-args='["$event"]'
 <button type="button" data-on-click="exportarEquipamentosAtualizados" id="btn-exportar-equipamentos" aria-label="Exportar planilha Excel com apelidos e IdCliente atualizados" aria-labelledby="label-exportar-equipamentos" class="cockpit-tools-dropdown__item hidden" role="menuitem">
 <i data-lucide="download" aria-hidden="true"></i><span id="label-exportar-equipamentos">Exportar Excel</span>
 </button>
-<button type="button" data-on-click="abrirRelatorioMensal" id="btn-relatorio-mensal" class="cockpit-tools-dropdown__item" role="menuitem">
-<i data-lucide="file-spreadsheet" aria-hidden="true"></i><span>Relatório mensal</span>
-</button>
-<div class="cockpit-tools-dropdown__divider" role="separator"></div>
 <button type="button" data-on-click="abrirModalHistoricoComparacoes" id="btn-historico-comparacoes" class="cockpit-tools-dropdown__item" role="menuitem">
 <i data-lucide="file-clock" aria-hidden="true"></i><span>Histórico planilhas</span>
 <span id="badge-total-historico-comparacoes" class="cockpit-tools-dropdown__badge" aria-label="0 registros">0</span>
 </button>
 <button type="button" data-on-click="abrirEvolucaoAtualizacoes" id="btn-evolucao-atualizacoes" class="cockpit-tools-dropdown__item" role="menuitem">
 <i data-lucide="activity" aria-hidden="true"></i><span>Evolução das atualizações</span>
-</button>
-<button type="button" data-on-click="abrirModalHistoricoApelidos" id="btn-historico-apelidos" class="cockpit-tools-dropdown__item" role="menuitem">
-<i data-lucide="user-pen" aria-hidden="true"></i><span>Histórico de alterações</span>
 </button>
 <button type="button" data-on-click="abrirModalGerenciarUnidades" id="btn-catalogo-unidades" class="cockpit-tools-dropdown__item" role="menuitem">
 <i data-lucide="map-pin" aria-hidden="true"></i><span>Catálogo de unidades</span>
@@ -173,273 +195,188 @@ data-on-keydown="handleSerialKeydown" data-args='["$event"]'
       <!-- MAIN CONTAINER -->
       <main id="main-content" tabindex="-1" class="flex-1 w-full space-y-6">
 
-    <section id="tab-panel-home" class="app-tab-panel" role="tabpanel" aria-labelledby="tab-home" tabindex="0">
+    <section id="tab-panel-home" class="app-tab-panel cockpit-home-split" role="tabpanel" aria-labelledby="tab-home" tabindex="0">
 
-    <details id="readiness-panel" class="readiness-panel glass-card rounded-xl" data-state="loading" aria-labelledby="readiness-title" aria-busy="true">
-      <summary class="readiness-panel-summary" aria-controls="readiness-content">
-        <span class="readiness-summary-copy">
-          <span id="readiness-title" class="readiness-title">Disponibilidade das funções</span>
-          <span id="readiness-summary" class="readiness-status" role="status" aria-live="polite" aria-atomic="true">Verificando os arquivos locais…</span>
-          <span id="readiness-summary-short" class="readiness-status-short" aria-hidden="true">Verificando…</span>
-        </span>
-      </summary>
-      <div id="readiness-content" class="readiness-expanded-content">
-        <div id="readiness-details-content" class="readiness-details-content"></div>
+    <!-- COLUNA ESQUERDA: Lista de equipamentos (360px) -->
+    <aside class="cockpit-home-list" aria-label="Lista de equipamentos">
+      <!-- Filtros compactos -->
+      <div class="cockpit-home-filters" role="group" aria-label="Filtros da lista de equipamentos">
+        <button type="button" class="cockpit-home-pill is-active" data-filter="todos" data-on-click="filtrarListaHome" data-args='["todos"]' aria-pressed="true">Todos <span id="home-filter-total">—</span></button>
+        <button type="button" class="cockpit-home-pill" data-filter="sem-usuario" data-on-click="filtrarListaHome" data-args='["sem-usuario"]' aria-pressed="false">Sem usuário <span id="home-filter-sem-usuario">—</span></button>
+        <button type="button" class="cockpit-home-pill" data-filter="7-dias" data-on-click="filtrarListaHome" data-args='["7-dias"]' aria-pressed="false" disabled>7+ dias <span id="home-filter-7-dias">—</span></button>
+        <button type="button" class="cockpit-home-pill" data-filter="divergentes" data-on-click="filtrarListaHome" data-args='["divergentes"]' aria-pressed="false" disabled>Divergentes <span id="home-filter-divergentes">—</span></button>
       </div>
-    </details>
 
-    <!-- ALERTA DE BASE DESATUALIZADA (docs/operacao/alerta-base-desatualizada.md; oculto até o painel responder) -->
-    <section id="alerta-base-desatualizada" class="stale-base-alert" role="status" aria-labelledby="alerta-base-desatualizada-titulo" data-state="loading" hidden>
-      <i data-lucide="alert-triangle" class="stale-base-alert-icon" aria-hidden="true"></i>
-      <div class="stale-base-alert-copy">
-        <h2 id="alerta-base-desatualizada-titulo" class="stale-base-alert-title">Base desatualizada</h2>
-        <p id="alerta-base-desatualizada-texto" class="stale-base-alert-text"></p>
-      </div>
-      <button type="button" id="btn-alerta-base-atualizar" data-on-click="abrirModalAtualizarPlanilhas" class="btn btn-secondary stale-base-alert-action">Atualizar base</button>
-    </section>
-
-    <!-- 1. BUSCA DE EQUIPAMENTO POR NÚMERO DE SÉRIE -->
-    <section class="glass-card home-search-card rounded-2xl p-6 sm:p-8 relative z-50">
-
-      <div class="relative">
-        <label for="input-serial" class="home-search-label font-bold text-white">Pesquisar equipamento</label>
-        <form data-on-submit="buscarSerial" class="flex flex-col sm:flex-row gap-4">
-          <div class="relative flex-1">
-            <input
-              type="text"
-              id="input-serial"
-              aria-keyshortcuts="/ Control+K Meta+K"
-              role="combobox"
-              aria-label="Série, apelido, modelo, cidade ou nome do usuário do equipamento"
-              aria-autocomplete="list"
-              aria-controls="autocomplete-list"
-              aria-expanded="false"
-              aria-haspopup="listbox"
-              autocomplete="off"
-              placeholder="Série, apelido, modelo, cidade ou usuário"
-              class="home-search-input w-full rounded-xl glass-input text-white font-mono tracking-wider placeholder:text-fg-weak placeholder:font-sans focus:outline-none uppercase"
-              data-on-input="handleSerialInput" data-args='["$value"]'
-              data-on-keydown="handleSerialKeydown" data-args='["$event"]'
-            />
-            <button
-              type="button"
-              id="btn-clear-serial"
-              aria-label="Limpar pesquisa"
-              title="Limpar pesquisa"
-              data-on-click="limparSerial"
-              class="hidden absolute inset-y-0 right-0 pr-3.5 flex items-center text-fg-subtle hover:text-white transition-colors"
-            >
-              <i data-lucide="x" class="w-5 h-5"></i>
-            </button>
-            <kbd class="home-search-shortcut" aria-hidden="true" title="Atalho: / ou Ctrl+K">/</kbd>
-          </div>
-
-          <button
-            type="submit"
-            id="btn-buscar-serial"
-            class="home-search-button bg-brand-600 hover:bg-brand-700 text-white font-bold rounded-xl transition-all duration-200 flex items-center justify-center shadow-lg shadow-brand-600/30 shrink-0"
-          >
-            <i data-lucide="search" class="w-5 h-5"></i>
-            <span>Buscar equipamento</span>
-          </button>
-        </form>
-        <button type="button" id="btn-listar-sem-usuario" data-on-click="abrirEquipamentosSemUsuario" class="home-search-no-user btn btn-tertiary">
-          <i data-lucide="user" class="w-4 h-4" aria-hidden="true"></i>
-          <span>Equipamentos sem usuário</span>
+      <div class="cockpit-home-list-search">
+        <button type="button" id="btn-listar-sem-usuario" data-on-click="abrirEquipamentosSemUsuario" class="cockpit-home-no-user-btn btn btn-tertiary" aria-label="Equipamentos sem usuário">
+          <i data-lucide="user" class="w-3.5 h-3.5" aria-hidden="true"></i>
+          <span>Lista sem usuário</span>
         </button>
-
-        <!-- Autocomplete Suggestions Dropdown -->
-        <div
-          id="autocomplete-box"
-          class="hidden absolute top-full left-0 right-0 mt-2.5 rounded-2xl overflow-hidden"
-        >
-          <!-- Header -->
-          <div
-            id="autocomplete-header"
-            class="sticky top-0 px-4 py-3 border-b border-line-quiet text-xs font-semibold flex justify-between items-center z-10 select-none"
-          >
-            <div class="flex items-center space-x-2">
-              <span class="w-2 h-2 rounded-full bg-cyan-400 animate-pulse"></span>
-              <span class="font-bold tracking-wider uppercase text-xs text-cyan-300 flex items-center gap-1.5">
-                <i data-lucide="layers" class="w-3.5 h-3.5 text-cyan-400"></i>
-                Resultados
-              </span>
-            </div>
-            <div class="flex items-center space-x-3">
-              <span id="autocomplete-count" role="status" aria-live="polite" aria-atomic="true" class="px-2.5 py-0.5 rounded-full bg-cyan-500/20 text-cyan-300 border border-cyan-500/30 font-mono text-xs font-bold">
-                0 itens
-              </span>
-            </div>
-          </div>
-
-          <!-- Items List Container -->
-          <div id="autocomplete-list" role="listbox" aria-label="Equipamentos encontrados" class="divide-y divide-line-quiet/80 max-h-96 overflow-y-auto"></div>
-          <div id="autocomplete-empty-state" class="hidden" role="region" aria-label="Resultado da busca" aria-live="polite"></div>
-          <div id="autocomplete-more-results" class="hidden px-4 py-2 border-t border-line-quiet">
-            <button type="button" data-on-click="abrirPesquisaCompleta" class="autocomplete-more-button w-full inline-flex items-center justify-center gap-2 px-3 py-2 rounded-xl transition">
-              <i data-lucide="list-checks" class="w-4 h-4" aria-hidden="true"></i>
-              <span data-autocomplete-more-label>Mostrar mais</span>
-            </button>
-          </div>
-
-          <!-- Footer Tips -->
-          <div
-            id="autocomplete-footer"
-            class="px-4 py-2 border-t border-line-quiet text-xs text-fg-subtle flex items-center justify-between select-none"
-          >
-            <span class="flex items-center gap-1.5">
-              <span><kbd class="px-1 py-0.5 bg-surface-control border border-line-control rounded text-fg-tertiary font-mono text-xs">↑↓</kbd> navegar <kbd class="px-1.5 py-0.5 bg-surface-control border border-line-control rounded text-fg-tertiary font-mono text-xs">Enter</kbd> selecionar</span>
-            </span>
-            <span class="text-xs text-fg-muted font-mono hidden sm:inline"><kbd class="px-1 py-0.5 bg-surface-control border border-line-control rounded text-fg-subtle text-xs">Esc</kbd> fechar</span>
-          </div>
-        </div>
       </div>
 
-      <!-- CARD: EQUIPAMENTO ENCONTRADO -->
+      <!-- Lista de itens -->
       <div id="equipment-loading" class="ui-equipment-loading"></div>
-      <div id="card-equipamento" role="region" aria-label="Dados do equipamento localizado" class="hidden equipment-card">
-        <div class="equipment-card-main">
-          <div class="equipment-identity">
-            <div id="equip-icon-box" class="equipment-icon" aria-hidden="true">
+      <ul id="home-equipment-list" class="cockpit-home-items" role="listbox" aria-label="Equipamentos" tabindex="0" aria-busy="true"></ul>
+      <p id="home-list-empty" class="cockpit-home-list-empty" role="status" hidden>Nenhum equipamento encontrado.</p>
+      <div class="cockpit-home-list-footer">
+        <span id="home-list-count" role="status" aria-live="polite" aria-atomic="true">Carregando equipamentos…</span>
+        <button type="button" id="btn-home-list-more" class="btn btn-tertiary" data-on-click="carregarMaisItensHome" hidden>Carregar mais</button>
+      </div>
+
+      <!-- Pesquisas recentes (integrado na coluna esquerda) -->
+      <section id="home-recentes" class="cockpit-home-recentes" aria-labelledby="home-recentes-titulo" hidden>
+        <div class="cockpit-home-recentes-header">
+          <h2 id="home-recentes-titulo">Recentes</h2>
+          <button type="button" id="btn-limpar-recentes" class="btn btn-tertiary" data-on-click="limparPesquisasRecentes" aria-label="Limpar pesquisas recentes">Limpar</button>
+        </div>
+        <ul id="home-recentes-lista" class="cockpit-home-recentes-list"></ul>
+      </section>
+    </aside>
+
+    <!-- COLUNA DIREITA: Detalhe do equipamento -->
+    <section class="cockpit-home-detail" aria-label="Detalhes do equipamento selecionado">
+
+      <section id="alerta-base-desatualizada" class="stale-base-alert" role="status" aria-labelledby="alerta-base-desatualizada-titulo" data-state="loading" hidden>
+        <i data-lucide="alert-triangle" class="stale-base-alert-icon" aria-hidden="true"></i>
+        <div class="stale-base-alert-copy">
+          <h2 id="alerta-base-desatualizada-titulo" class="stale-base-alert-title">Base desatualizada</h2>
+          <p id="alerta-base-desatualizada-texto" class="stale-base-alert-text"></p>
+        </div>
+        <button type="button" id="btn-alerta-base-atualizar" data-on-click="abrirModalAtualizarPlanilhas" class="btn btn-secondary stale-base-alert-action">Atualizar base</button>
+      </section>
+
+      <!-- Estado vazio: nenhum equipamento selecionado -->
+      <div id="home-detail-empty" class="cockpit-home-empty">
+        <i data-lucide="monitor" class="w-12 h-12 text-fg-muted mb-3" aria-hidden="true"></i>
+        <p class="text-fg-subtle">Selecione um equipamento na lista para ver os detalhes.</p>
+      </div>
+
+      <!-- Card de equipamento (detalhe) -->
+      <div id="card-equipamento" role="region" aria-label="Dados do equipamento localizado" class="hidden cockpit-home-card">
+        <!-- Cabeçalho do detalhe -->
+        <header class="cockpit-home-card-header">
+          <div class="cockpit-home-card-title">
+            <div id="equip-icon-box" class="cockpit-home-icon" aria-hidden="true">
               <i id="equip-icon" data-lucide="laptop"></i>
             </div>
             <div class="min-w-0">
-              <div class="equipment-meta">
-                <span id="badge-tipo" class="equipment-type-chip">Notebook</span>
-                <span class="equipment-meta-item">
-                  <span class="equipment-meta-label">Série</span>
-                  <strong id="card-serial" class="equipment-meta-value equipment-meta-value-accent">5CG6051BVN</strong>
-                </span>
-                <span class="equipment-meta-item">
-                  <span class="equipment-meta-label">Apelido</span>
-                  <span id="badge-apelido" class="equipment-meta-value">PRNOTEDIREX007</span>
-                  <button
-                    type="button"
-                    data-on-click="abrirModalEditarApelido"
-                    class="btn btn-tertiary btn-icon equipment-alias-edit"
-                    aria-label="Editar apelido"
-                    title="Alterar somente o apelido deste equipamento"
-                  >
-                    <i data-lucide="pencil" aria-hidden="true"></i>
-                  </button>
-                </span>
+              <strong id="card-serial" class="cockpit-home-serial">5CG6051BVN</strong>
+              <div class="cockpit-home-tags">
+                <span id="badge-apelido" class="cockpit-home-tag cockpit-home-tag--accent">PRNOTEDIREX007</span>
+                <span id="badge-tipo" class="cockpit-home-tag cockpit-home-tag--neutral">Notebook</span>
               </div>
-              <p id="badge-apelido-status" class="hidden equipment-alias-status" role="status" aria-live="polite"></p>
-              <h3 id="card-modelo" class="equipment-model">HP EB 6 G1I</h3>
-              <p id="card-id-cliente" class="equipment-detail">Id Cliente: Note diretoria Tipo 2</p>
-              <div class="equipment-user">
-                <p id="card-usuarios-logados" class="hidden equipment-detail"></p>
-                <span id="card-usuario-manual-acoes" class="hidden equipment-user-actions">
-                  <button type="button" data-on-click="editarUsuarioLogado" class="btn btn-tertiary equipment-user-button" title="Alterar o usuário informado manualmente">Editar</button>
-                  <button type="button" data-on-click="limparUsuarioLogado" class="btn btn-tertiary equipment-user-button" title="Remover o usuário informado manualmente">Limpar</button>
-                </span>
-              </div>
-              <form id="form-usuario-manual" class="hidden equipment-user-form" data-on-submit="salvarUsuarioLogado" autocomplete="off">
-                <label for="input-usuario-manual" class="equipment-user-label">Usuário logado (vazio no Endpoint)</label>
-                <input id="input-usuario-manual" type="text" maxlength="160" class="equipment-user-input" placeholder="Digite o usuário">
-                <button type="submit" id="btn-salvar-usuario-manual" class="btn btn-secondary equipment-user-button">Salvar usuário</button>
-              </form>
-              <div class="equipment-user">
-                <p id="card-nome-pessoa" class="hidden equipment-detail"></p>
-                <button type="button" id="btn-editar-nome-pessoa" class="hidden btn btn-tertiary equipment-user-button" data-on-click="editarNomePessoa" aria-expanded="false" aria-controls="form-nome-pessoa">Editar nome</button>
-              </div>
-              <form id="form-nome-pessoa" class="hidden equipment-user-form" data-on-submit="salvarNomePessoa" autocomplete="off">
-                <label for="input-nome-pessoa" class="equipment-user-label">Nome da pessoa (quando não encontrado no Entra)</label>
-                <input id="input-nome-pessoa" type="text" maxlength="300" class="equipment-user-input" placeholder="Digite o nome da pessoa">
-                <button type="submit" id="btn-salvar-nome-pessoa" class="btn btn-secondary equipment-user-button">Salvar nome</button>
-              </form>
+              <h3 id="card-modelo" class="cockpit-home-model">HP EB 6 G1I</h3>
+              <p id="badge-apelido-status" class="hidden cockpit-home-alias-status" role="status" aria-live="polite"></p>
             </div>
           </div>
-
-          <!-- Local Atual do Equipamento -->
-          <div class="equipment-location">
-            <span class="equipment-location-label">
-              <i data-lucide="map-pin" aria-hidden="true"></i>
-              Local atual no parque
-            </span>
-            <span id="card-localizacao" class="equipment-location-address">Curitiba - R Caeté, 150 - SEDE - Prado Velho</span>
-            <span id="card-cnpj-atual" class="equipment-location-cnpj">CNPJ: Não especificado</span>
-            <div class="equipment-copy-actions" role="group" aria-label="Copiar dados da localidade de retirada">
-              <button
-                type="button"
-                data-on-click="copiarDadoLocalAtual" data-args='["cep"]'
-                class="btn btn-tertiary"
-                title="Copiar o CEP da localidade de retirada"
-                aria-label="Copiar CEP da localidade de retirada"
-              >
-                <i data-lucide="copy" aria-hidden="true"></i>
-                <span>CEP</span>
-              </button>
-              <button
-                type="button"
-                data-on-click="copiarDadoLocalAtual" data-args='["faturamento"]'
-                class="btn btn-tertiary"
-                title="Copiar o CNPJ de faturamento padrão"
-                aria-label="Copiar CNPJ de faturamento"
-              >
-                <i data-lucide="copy" aria-hidden="true"></i>
-                <span>CNPJ Fat.</span>
-              </button>
-              <button
-                type="button"
-                data-on-click="copiarDadoLocalAtual" data-args='["instalacao"]'
-                class="btn btn-tertiary"
-                title="Copiar o CNPJ de instalação da localidade de retirada"
-                aria-label="Copiar CNPJ de instalação da localidade de retirada"
-              >
-                <i data-lucide="copy" aria-hidden="true"></i>
-                <span>CNPJ Inst.</span>
-              </button>
-            </div>
-          </div>
-        </div>
-
-        <section class="ticket-templates" aria-labelledby="ticket-templates-title">
-          <div class="ticket-templates-toggle-row">
-            <button type="button" id="btn-ir-para-transporte" class="btn btn-secondary-accent" data-on-click="abrirAbaTransporteDoEquipamento" title="Abrir a aba Transporte com o equipamento selecionado">
+          <div class="cockpit-home-card-actions">
+            <button type="button" id="btn-ir-para-transporte" class="btn btn-primary" data-on-click="abrirAbaTransporteDoEquipamento" title="Abrir a aba Transporte com o equipamento selecionado (T)">
               <i data-lucide="truck" aria-hidden="true"></i>
-              <span>Ir para Transporte</span>
+              <span>Transporte</span>
+              <kbd class="cockpit-home-kbd" aria-hidden="true">T</kbd>
             </button>
-            <button type="button" id="btn-toggle-ticket-templates" class="btn btn-secondary" aria-expanded="false" aria-controls="ticket-templates-content" data-on-click="alternarChamadosManuais">
-              <span>Mostrar textos para chamados</span>
-            </button>
-            <button
-              type="button"
-              data-on-click="abrirModalEditarEquipamento"
-              class="btn btn-secondary equipment-edit-button"
-              title="Editar dados cadastrais deste equipamento"
-            >
+            <button type="button" data-on-click="abrirModalEditarEquipamento" class="btn btn-secondary" title="Editar dados cadastrais deste equipamento (E)">
               <i data-lucide="edit-3" aria-hidden="true"></i>
               <span>Editar</span>
+              <kbd class="cockpit-home-kbd" aria-hidden="true">E</kbd>
+            </button>
+            <button type="button" data-on-click="abrirModalHistoricoApelidos" class="btn btn-tertiary btn-icon" aria-label="Histórico de apelidos" title="Histórico de alterações">
+              <i data-lucide="history" aria-hidden="true"></i>
             </button>
           </div>
-          <div id="ticket-templates-content" hidden>
-            <div class="ticket-templates-heading">
-              <div>
-                <h4 id="ticket-templates-title" class="text-sm font-bold text-white">Textos prontos para chamados manuais</h4>
-                <p class="text-xs text-fg-subtle mt-1">Série pesquisada: <strong id="ticket-templates-serial" class="font-mono text-cyan-200">—</strong></p>
+        </header>
+
+        <!-- Grade de dados 4×2 -->
+        <dl class="cockpit-home-grid">
+          <div class="cockpit-home-cell">
+            <dt>Série</dt>
+            <dd><span id="grid-serial" class="mono">—</span><button type="button" data-on-click="copiarSerieAtual" class="cockpit-home-copy-btn" aria-label="Copiar série"><i data-lucide="copy" class="w-3 h-3" aria-hidden="true"></i></button></dd>
+          </div>
+          <div class="cockpit-home-cell">
+            <dt>Apelido</dt>
+            <dd><span id="grid-apelido">—</span><button type="button" data-on-click="abrirModalEditarApelido" class="cockpit-home-edit-btn" aria-label="Editar apelido"><i data-lucide="pencil" class="w-3 h-3" aria-hidden="true"></i></button></dd>
+          </div>
+          <div class="cockpit-home-cell">
+            <dt>Usuário</dt>
+            <dd>
+              <span id="card-usuarios-logados" class="hidden">—</span>
+              <span id="card-usuario-manual-acoes" class="hidden cockpit-home-inline-actions">
+                <button type="button" data-on-click="editarUsuarioLogado" class="cockpit-home-edit-btn" aria-label="Editar usuário"><i data-lucide="pencil" class="w-3 h-3" aria-hidden="true"></i></button>
+                <button type="button" data-on-click="limparUsuarioLogado" class="cockpit-home-edit-btn" aria-label="Limpar usuário"><i data-lucide="x" class="w-3 h-3" aria-hidden="true"></i></button>
+              </span>
+              <form id="form-usuario-manual" class="hidden cockpit-home-inline-form" data-on-submit="salvarUsuarioLogado" autocomplete="off">
+                <input id="input-usuario-manual" type="text" maxlength="160" placeholder="Usuário">
+                <button type="submit" id="btn-salvar-usuario-manual" class="btn btn-primary btn-sm">Salvar</button>
+              </form>
+            </dd>
+          </div>
+          <div class="cockpit-home-cell">
+            <dt>Login</dt>
+            <dd>
+              <span id="card-nome-pessoa" class="hidden">—</span>
+              <button type="button" id="btn-editar-nome-pessoa" class="hidden cockpit-home-edit-btn" data-on-click="editarNomePessoa" aria-expanded="false" aria-controls="form-nome-pessoa" aria-label="Editar nome"><i data-lucide="pencil" class="w-3 h-3" aria-hidden="true"></i></button>
+              <form id="form-nome-pessoa" class="hidden cockpit-home-inline-form" data-on-submit="salvarNomePessoa" autocomplete="off">
+                <input id="input-nome-pessoa" type="text" maxlength="300" placeholder="Nome da pessoa">
+                <button type="submit" id="btn-salvar-nome-pessoa" class="btn btn-primary btn-sm">Salvar</button>
+              </form>
+            </dd>
+          </div>
+          <div class="cockpit-home-cell">
+            <dt>Local atual</dt>
+            <dd><span id="card-localizacao">—</span></dd>
+          </div>
+          <div class="cockpit-home-cell">
+            <dt>CEP</dt>
+            <dd><span id="grid-cep" class="mono">—</span><button type="button" data-on-click="copiarDadoLocalAtual" data-args='["cep"]' class="cockpit-home-copy-btn" aria-label="Copiar CEP"><i data-lucide="copy" class="w-3 h-3" aria-hidden="true"></i></button></dd>
+          </div>
+          <div class="cockpit-home-cell">
+            <dt>CNPJ faturamento</dt>
+            <dd><span id="grid-cnpj-fat" class="mono">—</span><button type="button" data-on-click="copiarDadoLocalAtual" data-args='["faturamento"]' class="cockpit-home-copy-btn" aria-label="Copiar CNPJ de faturamento"><i data-lucide="copy" class="w-3 h-3" aria-hidden="true"></i></button></dd>
+          </div>
+          <div class="cockpit-home-cell">
+            <dt>CNPJ instalação</dt>
+            <dd><span id="grid-cnpj-inst" class="mono">—</span><button type="button" data-on-click="copiarDadoLocalAtual" data-args='["instalacao"]' class="cockpit-home-copy-btn" aria-label="Copiar CNPJ de instalação"><i data-lucide="copy" class="w-3 h-3" aria-hidden="true"></i></button></dd>
+          </div>
+        </dl>
+
+        <p id="card-id-cliente" class="hidden cockpit-home-client-id"></p>
+        <p id="card-cnpj-atual" class="hidden"></p>
+
+        <!-- Chamados manuais (pílulas + preview) -->
+        <section class="cockpit-home-tickets" aria-labelledby="ticket-templates-title">
+          <div class="cockpit-home-ticket-pills" role="tablist" aria-label="Modelos de chamado">
+            <button type="button" class="cockpit-home-ticket-pill is-active" role="tab" aria-selected="true" data-on-click="alternarChamadosManuais" data-args='["deslocamento"]' id="pill-chamado-deslocamento">
+              <span class="dot-ok" aria-hidden="true"></span> Deslocamento
+            </button>
+            <button type="button" class="cockpit-home-ticket-pill" role="tab" aria-selected="false" data-on-click="alternarChamadosManuais" data-args='["teclado-mouse"]' id="pill-chamado-teclado-mouse">
+              <span class="dot-warn" aria-hidden="true"></span> Kit teclado + mouse
+            </button>
+            <button type="button" class="cockpit-home-ticket-pill" role="tab" aria-selected="false" data-on-click="alternarChamadosManuais" data-args='["mau-funcionamento"]' id="pill-chamado-mau-funcionamento">
+              <span class="dot-warn" aria-hidden="true"></span> Mau funcionamento
+            </button>
+            <button type="button" class="cockpit-home-ticket-pill" role="tab" aria-selected="false" data-on-click="alternarChamadosManuais" data-args='["uso-inadequado"]' id="pill-chamado-uso-inadequado">
+              <span class="dot-warn" aria-hidden="true"></span> Uso inadequado
+            </button>
+          </div>
+
+          <div id="ticket-templates-content">
+            <div class="cockpit-home-ticket-toolbar">
+              <h4 id="ticket-templates-title" class="sr-only">Textos prontos para chamados manuais</h4>
+              <span class="cockpit-home-ticket-serial">Série: <strong id="ticket-templates-serial" class="mono">—</strong></span>
+              <div class="cockpit-home-ticket-toolbar-actions">
+                <a class="btn btn-tertiary btn-sm ticket-template-link" href="https://ux.simpress.com.br/ng/gerar-ticket/consulta" target="_blank" rel="noopener noreferrer" aria-label="Abrir portal Simpress">
+                  <i data-lucide="external-link" class="w-3.5 h-3.5" aria-hidden="true"></i> Portal
+                </a>
+                <button type="button" class="btn btn-secondary btn-sm" data-on-click="copiarModeloChamado" data-args='["texto-chamado-deslocamento"]' id="btn-copiar-chamado-atual">
+                  <i data-lucide="copy" class="w-3.5 h-3.5" aria-hidden="true"></i> Copiar
+                  <kbd class="cockpit-home-kbd" aria-hidden="true">C</kbd>
+                </button>
               </div>
             </div>
 
-            <div class="ticket-template-grid">
-            <article class="ticket-template-card">
-              <div class="ticket-template-card-header">
-                <h5 class="ticket-template-title">
-                  Deslocamento de Notebook
-                  <span class="ticket-template-title-detail">(Transporte)</span>
-                </h5>
-                <div class="ticket-template-actions">
-                  <button type="button" class="ticket-template-view ticket-template-toggle" aria-controls="visualizacao-chamado-deslocamento" aria-expanded="false" data-on-click="alternarVisualizacaoModelo" data-args='["$this"]'><span>Mostrar Texto</span></button>
-                  <button type="button" class="ticket-template-copy" data-on-click="copiarModeloChamado" data-args='["texto-chamado-deslocamento"]'>
-                    <i data-lucide="copy" class="w-3.5 h-3.5" aria-hidden="true"></i>
-                    <span>Copiar</span>
-                  </button>
-                  <a class="ticket-template-view ticket-template-link" href="https://ux.simpress.com.br/ng/gerar-ticket/consulta" target="_blank" rel="noopener noreferrer"><span>Link</span><i data-lucide="arrow-up-right" class="w-3.5 h-3.5" aria-hidden="true"></i></a>
-                </div>
-              </div>
-              <div id="visualizacao-chamado-deslocamento" class="ticket-template-preview" hidden>
-                <label class="ticket-template-label" for="texto-chamado-deslocamento">Texto para solicitação de deslocamento técnico</label>
-                <textarea id="texto-chamado-deslocamento" class="ticket-template-textarea" spellcheck="true">Prezados,
+            <!-- Previews dos modelos (IDs preservados) -->
+            <div id="visualizacao-chamado-deslocamento" class="cockpit-home-ticket-preview">
+              <textarea id="texto-chamado-deslocamento" class="cockpit-home-ticket-textarea" spellcheck="true">Prezados,
 
 Solicito o deslocamento de um técnico à unidade do Sebrae para realizar a sanitização e configuração de um notebook para novo usuário.
 
@@ -453,101 +390,48 @@ Data de Instalação:
 Horário da Instalação:
 
 Lembrando que é necessário o correto preenchimento do termo e anexá-lo ao chamado no fechamento.</textarea>
-              </div>
-            </article>
-
-            <article class="ticket-template-card">
-              <div class="ticket-template-card-header">
-                <h5 class="ticket-template-title">
-                  Solicitação de kit
-                  <span class="ticket-template-title-detail">(Teclado + Mouse)</span>
-                </h5>
-                <div class="ticket-template-actions">
-                  <button type="button" class="ticket-template-view ticket-template-toggle" aria-controls="visualizacao-chamado-teclado-mouse" aria-expanded="false" data-on-click="alternarVisualizacaoModelo" data-args='["$this"]'><span>Mostrar Texto</span></button>
-                  <button type="button" class="ticket-template-copy" data-on-click="copiarModeloChamado" data-args='["texto-chamado-teclado-mouse"]'>
-                    <i data-lucide="copy" class="w-3.5 h-3.5" aria-hidden="true"></i>
-                    <span>Copiar</span>
-                  </button>
-                  <a class="ticket-template-view ticket-template-link" href="https://ux.simpress.com.br/ng/solicitar-atendimento/equipamentos/1" target="_blank" rel="noopener noreferrer"><span>Link</span><i data-lucide="arrow-up-right" class="w-3.5 h-3.5" aria-hidden="true"></i></a>
-                </div>
-              </div>
-              <div id="visualizacao-chamado-teclado-mouse" class="ticket-template-preview" hidden>
-                <label class="ticket-template-label" for="texto-chamado-teclado-mouse">Texto para solicitação de kit de teclado e mouse</label>
-                <textarea id="texto-chamado-teclado-mouse" class="ticket-template-textarea" spellcheck="true">Olá, solicito um novo kit de teclado + mouse, pois [descrever o motivo da solicitação].
+            </div>
+            <div id="visualizacao-chamado-teclado-mouse" class="cockpit-home-ticket-preview" hidden>
+              <textarea id="texto-chamado-teclado-mouse" class="cockpit-home-ticket-textarea" spellcheck="true">Olá, solicito um novo kit de teclado + mouse, pois [descrever o motivo da solicitação].
 
 Nome do(a) Colaborador(a):
 Horário de funcionamento:
 
 Produto HP: 18H24AA_AC4_2 (Recebimento Santana) ou 18H24AA#AC4
 Modelo: 230 Wireless Mouse and Keyboard Combo</textarea>
-              </div>
-            </article>
-
-            <article class="ticket-template-card">
-              <div class="ticket-template-card-header">
-                <h5 class="ticket-template-title">Mau funcionamento<span class="ticket-template-title-detail">(Defeitos)</span></h5>
-                <div class="ticket-template-actions">
-                  <button type="button" class="ticket-template-view ticket-template-toggle" aria-controls="visualizacao-chamado-mau-funcionamento" aria-expanded="false" data-on-click="alternarVisualizacaoModelo" data-args='["$this"]'><span>Mostrar Texto</span></button>
-                  <button type="button" class="ticket-template-copy" data-on-click="copiarModeloChamado" data-args='["texto-chamado-mau-funcionamento"]'>
-                    <i data-lucide="copy" class="w-3.5 h-3.5" aria-hidden="true"></i>
-                    <span>Copiar</span>
-                  </button>
-                  <a class="ticket-template-view ticket-template-link" href="https://ux.simpress.com.br/ng/solicitar-atendimento/equipamentos/1" target="_blank" rel="noopener noreferrer"><span>Link</span><i data-lucide="arrow-up-right" class="w-3.5 h-3.5" aria-hidden="true"></i></a>
-                </div>
-              </div>
-              <div id="visualizacao-chamado-mau-funcionamento" class="ticket-template-preview" hidden>
-                <label class="ticket-template-label" for="texto-chamado-mau-funcionamento">Texto para avaliação de mau funcionamento</label>
-                <textarea id="texto-chamado-mau-funcionamento" class="ticket-template-textarea" spellcheck="true">Prezados,
+            </div>
+            <div id="visualizacao-chamado-mau-funcionamento" class="cockpit-home-ticket-preview" hidden>
+              <textarea id="texto-chamado-mau-funcionamento" class="cockpit-home-ticket-textarea" spellcheck="true">Prezados,
 Solicito o envio de um técnico para avaliar o mau funcionamento do equipamento [identificação]. Peço que verifique a causa do problema, realize o diagnóstico e informe as providências necessárias.
 
 Descrição do Problema:
 
 Nome do(a) colaborador(a):
 Horário disponível para atendimento:</textarea>
-              </div>
-            </article>
-
-            <article class="ticket-template-card">
-              <div class="ticket-template-card-header">
-                <h5 class="ticket-template-title">Uso inadequado<span class="ticket-template-title-detail">(Laudo técnico)</span></h5>
-                <div class="ticket-template-actions">
-                  <button type="button" class="ticket-template-view ticket-template-toggle" aria-controls="visualizacao-chamado-uso-inadequado" aria-expanded="false" data-on-click="alternarVisualizacaoModelo" data-args='["$this"]'><span>Mostrar Texto</span></button>
-                  <button type="button" class="ticket-template-copy" data-on-click="copiarModeloChamado" data-args='["texto-chamado-uso-inadequado"]'>
-                    <i data-lucide="copy" class="w-3.5 h-3.5" aria-hidden="true"></i>
-                    <span>Copiar</span>
-                  </button>
-                  <a class="ticket-template-view ticket-template-link" href="https://ux.simpress.com.br/ng/solicitar-atendimento/equipamentos/1" target="_blank" rel="noopener noreferrer"><span>Link</span><i data-lucide="arrow-up-right" class="w-3.5 h-3.5" aria-hidden="true"></i></a>
-                </div>
-              </div>
-              <div id="visualizacao-chamado-uso-inadequado" class="ticket-template-preview" hidden>
-                <label class="ticket-template-label" for="texto-chamado-uso-inadequado">Texto para avaliação de possível uso inadequado</label>
-                <textarea id="texto-chamado-uso-inadequado" class="ticket-template-textarea" spellcheck="true">Prezados,
+            </div>
+            <div id="visualizacao-chamado-uso-inadequado" class="cockpit-home-ticket-preview" hidden>
+              <textarea id="texto-chamado-uso-inadequado" class="cockpit-home-ticket-textarea" spellcheck="true">Prezados,
 Solicito o envio de um técnico para avaliar o equipamento após relato de possível uso inadequado pelo(a) colaborador(a). Peço que registre as condições encontradas, avalie a causa do problema e informe as providências recomendadas.
 
 Descrição:
 
 Nome do(a) colaborador(a):
 Horário disponível para atendimento:</textarea>
-              </div>
-            </article>
             </div>
           </div>
+
+          <!-- Toggle legado preservado (oculto visualmente, ID mantido) -->
+          <button type="button" id="btn-toggle-ticket-templates" class="hidden" aria-expanded="true" aria-controls="ticket-templates-content" data-on-click="alternarChamadosManuais"></button>
         </section>
       </div>
-    </section>
-
-    <!-- PESQUISAS RECENTES (localStorage do navegador; oculta enquanto vazia) -->
-    <section id="home-recentes" class="home-recent glass-card rounded-2xl" aria-labelledby="home-recentes-titulo" hidden>
-      <div class="home-recent-header">
-        <h2 id="home-recentes-titulo" class="home-recent-title">Pesquisas recentes</h2>
-        <button type="button" id="btn-limpar-recentes" class="btn btn-tertiary" data-on-click="limparPesquisasRecentes" aria-label="Limpar pesquisas recentes">Limpar</button>
-      </div>
-      <ul id="home-recentes-lista" class="home-recent-list"></ul>
     </section>
 
     </section>
 
     <section id="tab-panel-retirada-entrega" class="app-tab-panel" role="tabpanel" aria-labelledby="tab-retirada-entrega" tabindex="0" hidden>
+
+    <div class="cockpit-transport-layout">
+    <div class="cockpit-transport-fields">
 
     <section id="transfer-equipment-banner" class="transfer-equipment-banner" data-state="empty" aria-labelledby="transfer-equipment-title">
       <div class="transfer-equipment-header">
@@ -987,10 +871,26 @@ Horário disponível para atendimento:</textarea>
 
     </div>
 
-    <!-- ========================================== -->
-    <!-- BARRA INFERIOR FIXA DE AÇÕES RÁPIDAS      -->
-    <!-- ========================================== -->
-    <aside aria-label="Painel de Ações Rápidas" class="quick-actions fixed bottom-0 inset-x-0 bg-surface/90 backdrop-blur-xl border-t border-line-quiet/90 shadow-2xl">
+    </div>
+
+    <aside class="cockpit-transport-preview" aria-labelledby="cockpit-transport-preview-title">
+      <header class="cockpit-transport-preview-header">
+        <h2 id="cockpit-transport-preview-title">Pré-visualização</h2>
+        <span id="cockpit-transport-preview-state" role="status" aria-live="polite">Aguardando equipamento</span>
+      </header>
+      <dl class="cockpit-transport-preview-list">
+        <div><dt>Equipamento</dt><dd id="cockpit-preview-equipment">—</dd></div>
+        <div><dt>Retirada</dt><dd id="cockpit-preview-pickup">—</dd></div>
+        <div><dt>CNPJ retirada</dt><dd id="cockpit-preview-pickup-cnpj">—</dd></div>
+        <div><dt>Contato</dt><dd id="cockpit-preview-contact">—</dd></div>
+        <div><dt>Horário</dt><dd id="cockpit-preview-hours">—</dd></div>
+        <div><dt>Entrega</dt><dd id="cockpit-preview-delivery">—</dd></div>
+        <div><dt>Destinatário</dt><dd id="cockpit-preview-recipient">—</dd></div>
+        <div><dt>Observações</dt><dd id="cockpit-preview-notes">—</dd></div>
+      </dl>
+
+    <!-- Ações do Transporte: os handlers existentes continuam associados aos mesmos IDs. -->
+    <aside aria-label="Painel de Ações Rápidas" class="quick-actions">
       <div class="quick-actions-inner mx-auto flex flex-col sm:flex-row items-center justify-between gap-4">
         <div class="quick-actions-status flex items-center space-x-3 text-xs text-fg-subtle">
           <div class="w-2.5 h-2.5 rounded-full bg-brand-400" id="status-indicator" aria-hidden="true"></div>
@@ -1010,6 +910,11 @@ Horário disponível para atendimento:</textarea>
           >
             <i data-lucide="file-spreadsheet" class="w-4 h-4"></i>
             <span>Gerar Planilha</span>
+          </button>
+
+          <button type="button" id="btn-copiar-resumo-cockpit" data-on-click="copiarResumoCockpit" class="btn btn-secondary">
+            <i data-lucide="copy" aria-hidden="true"></i>
+            <span>Copiar texto</span>
           </button>
 
           <button
@@ -1036,13 +941,44 @@ Horário disponível para atendimento:</textarea>
         </div>
       </div>
     </aside>
+    </aside>
+    </div>
 
     </section>
 
     <section id="tab-panel-resumo" class="app-tab-panel" role="tabpanel" aria-labelledby="tab-resumo" tabindex="0" hidden>
 
-    <!-- RESUMO: Resumo do parque (preenchido pelo painel da base) -->
-    <div id="resumo-cards">
+    <div id="resumo-cards" class="cockpit-summary" data-state="loading" aria-busy="true">
+      <div id="cockpit-summary-kpis" class="cockpit-summary-kpis" role="group" aria-label="Indicadores do inventário"></div>
+      <div class="cockpit-summary-body">
+        <section class="cockpit-summary-results" aria-labelledby="cockpit-summary-table-title">
+          <div class="cockpit-summary-heading">
+            <h2 id="cockpit-summary-table-title">Ocorrências da última comparação</h2>
+            <div class="cockpit-summary-actions">
+              <span id="cockpit-summary-count" role="status" aria-live="polite">Carregando…</span>
+              <button type="button" id="btn-cockpit-summary-export" class="btn btn-secondary btn-sm" data-on-click="exportarResumoCockpit" disabled>
+                <i data-lucide="download" aria-hidden="true"></i><span>Exportar</span>
+              </button>
+            </div>
+          </div>
+          <p id="cockpit-summary-status" class="cockpit-summary-empty" role="status" aria-live="polite">Carregando dados da base local…</p>
+          <div class="cockpit-summary-table-wrap">
+            <table class="cockpit-summary-table">
+              <thead><tr><th>SÉRIE</th><th>MODELO / HOST</th><th>SIMPRESS</th><th>ENDPOINT CENTRAL</th><th>ÚLTIMO ACESSO</th><th>SITUAÇÃO</th><th>AÇÃO</th></tr></thead>
+              <tbody id="cockpit-summary-rows"></tbody>
+            </table>
+          </div>
+          <nav id="cockpit-summary-pagination" class="cockpit-summary-pagination" aria-label="Paginação dos equipamentos do Resumo" hidden>
+            <button type="button" id="cockpit-summary-previous" class="btn btn-secondary btn-sm">Anterior</button>
+            <span id="cockpit-summary-page" aria-live="polite"></span>
+            <button type="button" id="cockpit-summary-next" class="btn btn-secondary btn-sm">Próxima</button>
+          </nav>
+        </section>
+        <aside class="cockpit-summary-regions" aria-labelledby="cockpit-summary-regions-title">
+          <h2 id="cockpit-summary-regions-title">Ativos por regional</h2>
+          <div id="cockpit-summary-region-list" aria-live="polite"></div>
+        </aside>
+      </div>
     </div>
 
     </section>
@@ -1062,7 +998,7 @@ Horário disponível para atendimento:</textarea>
       <section class="automation-card glass-card" aria-labelledby="automacao-titulo">
         <div class="panel-card-header">
           <div class="flex items-center gap-1">
-            <h2 id="automacao-titulo" class="ux-home-title">Automação do Chrome</h2>
+            <h2 id="automacao-titulo" class="ux-home-title">Chrome · porta 9333</h2>
             <span class="info-tip"><button type="button" class="info-tip-trigger" aria-label="Sobre a automação do Chrome" aria-describedby="tip-automacao-chrome"><i data-lucide="info" aria-hidden="true"></i></button><span id="tip-automacao-chrome" role="tooltip" class="info-tip-text">Chrome de automação com perfil próprio, porta 9333. Os logins são feitos por você nessa janela; os arquivos exportados são importados pelas pastas locais de entrada, como no executar_automacao.bat.</span></span>
           </div>
         </div>
@@ -1099,18 +1035,66 @@ Horário disponível para atendimento:</textarea>
                 <i data-lucide="user-check" class="w-4 h-4" aria-hidden="true"></i>
                 <span>Abrir Chrome para login</span>
               </button>
-              <button type="button" id="btn-automacao-cancelar" data-on-click="cancelarRotinaAutomacao" class="btn btn-tertiary automation-action automation-action--cancel" title="Para a rotina em andamento; o Chrome continua aberto" disabled>
-                <i data-lucide="x" class="w-4 h-4" aria-hidden="true"></i>
-                <span>Cancelar</span>
-              </button>
             </div>
           </div>
         </div>
       </section>
 
+      <details class="cockpit-sebrae-details">
+        <summary>Sincronização de chamados Sebrae</summary>
+        <section id="sebrae-painel" class="automation-card glass-card sebrae-card" aria-labelledby="sebrae-titulo">
+                <div class="panel-card-header">
+                  <div class="flex items-center gap-1">
+                    <h2 id="sebrae-titulo" class="ux-home-title">Sincronizar chamados Sebrae</h2>
+                    <span class="info-tip"><button type="button" class="info-tip-trigger" aria-label="Sobre a sincronização Sebrae" aria-describedby="sebrae-regra"><i data-lucide="info" aria-hidden="true"></i></button><span id="sebrae-regra" role="tooltip" class="info-tip-text">Roda de segunda a sexta, das 09h15 às 17h45, a cada 30 minutos, com o computador ligado e o servidor local da Simpress em execução. Logs e motivos de falha ficam em Andamento e em Últimas execuções. O login é sempre feito por você, no Chrome de automação.</span></span>
+                  </div>
+                  <p class="ux-home-note">SoftExpert → Dashboard Operacional_SEBRAE</p>
+                </div>
+                <div id="sebrae-estado" class="automation-status" role="status" aria-live="polite" aria-atomic="true" data-state="pausado">
+                  <span class="automation-status-dot" aria-hidden="true"></span>
+                  <strong id="sebrae-estado-titulo" class="automation-status-title">Agendamento pausado</strong>
+                  <span id="sebrae-estado-detalhe" class="automation-status-detail">Verificando…</span>
+                </div>
+                <p id="sebrae-login-aviso" class="sebrae-login-notice" role="status" hidden>
+                  <i data-lucide="user-check" class="w-4 h-4" aria-hidden="true"></i>
+                  <span>Login necessário: faça o login no Chrome de automação (SoftExpert ou Excel Online) e execute de novo.</span>
+                </p>
+                <dl class="sebrae-facts">
+                  <div><dt>Agendamento</dt><dd id="sebrae-agendamento">—</dd></div>
+                  <div><dt>Última execução</dt><dd id="sebrae-ultima">—</dd></div>
+                  <div><dt>Próxima execução</dt><dd id="sebrae-proxima">—</dd></div>
+                </dl>
+                <dl class="sebrae-counters">
+                  <div class="sebrae-counter"><dt>Incluídos</dt><dd id="sebrae-incluidos">—</dd></div>
+                  <div class="sebrae-counter"><dt>Ignorados por duplicidade</dt><dd id="sebrae-ignorados">—</dd></div>
+                  <div class="sebrae-counter"><dt>Mantidos pendentes</dt><dd id="sebrae-pendentes">—</dd></div>
+                </dl>
+                <div class="automation-actions" role="group" aria-label="Sincronização dos chamados Sebrae">
+                  <button type="button" id="btn-sebrae-executar" data-automacao-rotina="sebrae" data-on-click="iniciarRotinaAutomacao" data-args='["sebrae"]' class="btn btn-secondary-accent automation-action" title="Lê os chamados do SoftExpert e inclui os novos no Dashboard agora">
+                    <i data-lucide="refresh-cw" class="w-4 h-4" aria-hidden="true"></i>
+                    <span>Executar agora</span>
+                  </button>
+                  <button type="button" id="btn-sebrae-agendamento" data-on-click="alternarAgendamentoSebrae" class="btn btn-secondary automation-action" title="Liga ou pausa a execução automática de segunda a sexta">
+                    <i data-lucide="history" class="w-4 h-4" aria-hidden="true"></i>
+                    <span>Ativar agendamento</span>
+                  </button>
+                  <button type="button" id="btn-sebrae-cancelar" data-on-click="cancelarRotinaAutomacao" class="btn btn-tertiary automation-action automation-action--cancel" title="Para a sincronização em andamento; o Chrome continua aberto" disabled>
+                    <i data-lucide="x" class="w-4 h-4" aria-hidden="true"></i>
+                    <span>Cancelar sincronização</span>
+                  </button>
+                </div>
+                <p id="sebrae-agendamento-aviso" class="ux-home-note automation-note" role="status" hidden></p>
+                <h3 id="sebrae-pendencias-titulo" class="sebrae-subtitle">Pendências</h3>
+                <div id="sebrae-pendencias" class="sebrae-pendencias">
+                  <p class="ux-home-note">Nenhuma pendência.</p>
+                </div>
+              </section>
+      </details>
+
       <section id="automacao-andamento-painel" class="automation-card glass-card" aria-labelledby="automacao-andamento-titulo">
         <div class="panel-card-header">
-          <h2 id="automacao-andamento-titulo" class="ux-home-title">Andamento</h2>
+          <h2 id="automacao-andamento-titulo" class="ux-home-title">Console de atividades</h2>
+          <span id="cockpit-automation-live" class="cockpit-automation-live" hidden>ao vivo</span>
           <div class="automation-panel-actions">
             <button type="button" class="btn btn-secondary" data-on-click="recolherPainelAutomacao" data-args='["andamento"]' aria-expanded="true" aria-controls="automacao-andamento-conteudo" aria-label="Recolher Andamento">Recolher</button>
             <button type="button" class="btn btn-secondary" data-on-click="ampliarPainelAutomacao" data-args='["andamento"]' aria-pressed="false" aria-label="Ampliar Andamento">Ampliar</button>
@@ -1134,8 +1118,18 @@ Horário disponível para atendimento:</textarea>
             <label>Linhas do log<select id="automacao-log-limite" data-on-change="alterarLimiteLogAutomacao"><option value="100">100</option><option value="200" selected>200</option><option value="500">500</option></select></label>
             <button type="button" id="automacao-log-ao-vivo" class="btn btn-secondary" data-on-click="voltarAoVivoAutomacao" hidden>Voltar ao vivo</button>
           </div>
-          <p id="automacao-log-arquivo" class="ux-home-note automation-log-file"></p>
-          <pre id="automacao-log" class="automation-log" role="log" aria-live="polite" aria-labelledby="automacao-andamento-titulo" tabindex="0"></pre>
+          <ol id="cockpit-automation-events" class="cockpit-automation-events" role="list" aria-live="polite" aria-relevant="additions text" aria-label="Eventos da execução"><li class="cockpit-automation-event"><span class="cockpit-automation-event-time">—</span><span class="cockpit-automation-event-icon" aria-hidden="true">◌</span><span class="cockpit-automation-event-message">Aguardando atividade do Chrome.</span><span class="cockpit-automation-event-status">Aguardando</span></li></ol>
+          <details class="cockpit-automation-log-full">
+            <summary>Log completo</summary>
+            <p id="automacao-log-arquivo" class="ux-home-note automation-log-file"></p>
+            <pre id="automacao-log" class="automation-log" role="log" aria-live="polite" aria-labelledby="automacao-andamento-titulo" tabindex="0"></pre>
+          </details>
+          <footer class="cockpit-automation-footer">
+            <span>Cancelar execução</span>
+            <button type="button" id="btn-automacao-cancelar" data-on-click="cancelarRotinaAutomacao" class="btn btn-tertiary automation-action automation-action--cancel" title="Para a rotina em andamento; o Chrome continua aberto" disabled>
+              <i data-lucide="x" class="w-4 h-4" aria-hidden="true"></i><span>Cancelar</span>
+            </button>
+          </footer>
         </div>
       </section>
 
@@ -1147,17 +1141,17 @@ Horário disponível para atendimento:</textarea>
             <i data-lucide="refresh-cw" class="w-4 h-4" aria-hidden="true"></i>
             <span>Atualizar</span>
           </button>
-          <button type="button" class="btn btn-secondary" data-on-click="recolherPainelAutomacao" data-args='["historico"]' aria-expanded="false" aria-controls="automacao-historico-conteudo" aria-label="Expandir Últimas execuções">Expandir</button>
+          <button type="button" class="btn btn-secondary" data-on-click="recolherPainelAutomacao" data-args='["historico"]' aria-expanded="true" aria-controls="automacao-historico-conteudo" aria-label="Recolher Últimas execuções">Recolher</button>
           <button type="button" class="btn btn-secondary" data-on-click="ampliarPainelAutomacao" data-args='["historico"]' aria-pressed="false" aria-label="Ampliar Últimas execuções">Ampliar</button>
           </div>
         </div>
-        <div id="automacao-historico-conteudo" hidden>
+        <div id="automacao-historico-conteudo">
           <details class="automation-filters" id="automacao-historico-filtros">
             <summary>Filtros de execuções</summary>
             <div class="automation-filter-fields">
               <label>De<input type="date" id="automacao-historico-inicio"></label>
               <label>Até<input type="date" id="automacao-historico-fim"></label>
-              <label>Rotina<select id="automacao-historico-rotina"><option value="">Todas</option><option value="os">Rotina de OS</option><option value="inventarios">Inventários</option><option value="usuarios">Verificar usuários</option><option value="ambas">Ambas</option><option value="login">Abrir Chrome para login</option></select></label>
+              <label>Rotina<select id="automacao-historico-rotina"><option value="">Todas</option><option value="os">Rotina de OS</option><option value="inventarios">Inventários</option><option value="usuarios">Verificar usuários</option><option value="ambas">Ambas</option><option value="login">Abrir Chrome para login</option><option value="sebrae">Sincronizar chamados Sebrae</option></select></label>
               <label>Status<select id="automacao-historico-status"><option value="">Todos</option><option value="concluido">Concluído</option><option value="falha">Falha</option><option value="cancelado">Cancelado</option><option value="em_andamento">Em andamento</option><option value="ocupada">Ocupada</option><option value="interrompido">Interrompido</option></select></label>
             </div>
             <div class="automation-panel-actions"><button type="button" class="btn btn-secondary-accent" data-on-click="filtrarHistoricoAutomacao">Aplicar filtros</button><button type="button" class="btn btn-secondary" data-on-click="limparFiltrosAutomacao">Limpar filtros</button></div>
@@ -1343,7 +1337,7 @@ Horário disponível para atendimento:</textarea>
 
       <!-- Modal Body (Form) -->
       <div class="py-4 overflow-y-auto flex-1 space-y-4 pr-1">
-        
+
         <!-- Bloco 1: Identificação do Hardware -->
         <div class="bg-surface/60 p-4 rounded-xl border border-line-quiet/80 space-y-3">
           <h4 class="text-xs font-bold text-brand-400 uppercase tracking-wider flex items-center gap-1.5">

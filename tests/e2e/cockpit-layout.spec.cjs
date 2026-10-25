@@ -1,0 +1,73 @@
+const { test, expect } = require("@playwright/test");
+
+test("Cockpit keeps one global search and one complete readiness disclosure", async ({ page }) => {
+  await page.goto("/");
+
+  await expect(page.locator(".cockpit-bar__search #input-serial")).toHaveCount(1);
+  await expect(page.locator("#btn-buscar-serial")).toBeVisible();
+  for (const id of [
+    "readiness-panel",
+    "readiness-title",
+    "readiness-summary",
+    "readiness-summary-short",
+    "readiness-details-content",
+  ]) {
+    await expect(page.locator(`#${id}`)).toHaveCount(1);
+  }
+});
+
+test("Home loads the real first page and derives its total from the API", async ({ page }) => {
+  const listRequest = page.waitForRequest(request =>
+    new URL(request.url()).pathname === "/api/buscar-expandida"
+      && new URL(request.url()).searchParams.get("listar_todos") === "true");
+  await page.goto("/");
+
+  const request = await listRequest;
+  expect(new URL(request.url()).searchParams.get("limit")).toBe("50");
+  await expect(page.locator("#home-filter-total")).toHaveText("1");
+  await expect(page.locator("#home-equipment-list [role=option]")).toHaveCount(1);
+  await expect(page.locator("#home-equipment-list")).toContainText("LENTO");
+});
+
+test("Resumo uses the latest comparison and opens its series in Home", async ({ page, request }) => {
+  await request.get("/__fixture_cockpit?comparacao=1");
+  try {
+    await page.goto("/");
+    await page.locator("#tab-resumo").click();
+
+    const locality = page.locator('#cockpit-summary-kpis [data-metric="divergencias_local"]');
+    await expect(locality.locator(".cockpit-summary-kpi-value")).toHaveText("1");
+    await expect(page.locator("#cockpit-summary-rows tr")).toHaveCount(1);
+    await expect(page.locator("#cockpit-summary-rows")).toContainText("LENTO");
+    await expect(page.locator("#cockpit-summary-rows tr").first().locator("td").nth(2)).toHaveText("Londrina");
+    await expect(page.locator("#cockpit-summary-rows tr").first().locator("td").nth(3)).toHaveText("Curitiba");
+    await expect(page.locator("#cockpit-summary-region-list")).toContainText("Curitiba");
+
+    await page.locator('#cockpit-summary-kpis [data-metric="total"]').click();
+    await expect(page.locator("#cockpit-summary-rows tr")).toHaveCount(1);
+    await expect(page.locator("#cockpit-summary-rows")).toContainText("Na base local");
+    await expect(page.locator("#cockpit-summary-count")).toHaveText("Mostrando 1–1 de 1");
+
+    await page.locator('#cockpit-summary-kpis [data-metric="sincronizados"]').click();
+    await expect(page.locator('#cockpit-summary-kpis [data-metric="sincronizados"] .cockpit-summary-kpi-value')).toHaveText("0");
+    await expect(page.locator("#cockpit-summary-rows tr")).toHaveCount(0);
+    await expect(page.locator("#cockpit-summary-status")).toContainText("lista detalhada não é armazenada");
+
+    await page.locator('#cockpit-summary-kpis [data-metric="sem_acesso_7_dias"]').click();
+    await expect(page.locator("#cockpit-summary-table-title")).toHaveText("Sem acesso há 7+ dias · 1");
+    await expect(page.locator("#cockpit-summary-rows")).toContainText("9 dias");
+  } finally {
+    await request.get("/__fixture_cockpit?comparacao=0");
+  }
+});
+
+test("Cockpit has no horizontal page overflow at the supported mobile viewport", async ({ page }) => {
+  await page.setViewportSize({ width: 390, height: 844 });
+  await page.goto("/");
+
+  const dimensions = await page.evaluate(() => ({
+    viewport: document.documentElement.clientWidth,
+    document: document.documentElement.scrollWidth,
+  }));
+  expect(dimensions.document).toBeLessThanOrEqual(dimensions.viewport);
+});

@@ -152,6 +152,7 @@
      "serie": "BRJ100AAA2"
     }
    ],
+   "equipamentos_sincronizados": 12,
    "registros_ambiguos": [
     {
      "ausente_em": [],
@@ -1848,6 +1849,7 @@
      "serie": "BRJ100AAA2"
     }
    ],
+   "equipamentos_sincronizados": 12,
    "registros_ambiguos": [
     {
      "ausente_em": [],

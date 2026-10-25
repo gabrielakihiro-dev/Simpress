@@ -10,6 +10,7 @@ const { appSource } = require("./support/app-sources.cjs");
 const appScript = appSource();
 const appHtml = fs.readFileSync(path.join(staticDir, "index.html"), "utf8");
 const appEntry = fs.readFileSync(path.join(staticDir, "app-entry.js"), "utf8");
+const cockpitCss = fs.readFileSync(path.join(staticDir, "styles", "cockpit-shell.css"), "utf8");
 const uxCss = fs.readFileSync(path.join(staticDir, "styles", "ux-refinements.css"), "utf8");
 const tokensCss = fs.readFileSync(path.join(staticDir, "styles", "tokens.css"), "utf8");
 
@@ -80,6 +81,32 @@ test("horizontal overflow state drives the table edge fade", () => {
   assert.equal(ux.overflowState(400, 500, 900), "start");
 });
 
+test("function keys map to the four main tabs and four Cockpit tools", () => {
+  const actions = ["F1", "F2", "F3", "F4", "F5", "F6", "F7", "F8"]
+    .map(key => ux.shortcutAction({ key }));
+  assert.deepEqual(actions, [
+    "tab-home", "tab-transferencia", "tab-resumo", "tab-automacao",
+    "tool-chamados", "tool-comparacao", "tool-apelidos", "tool-relatorio",
+  ]);
+});
+
+test("modified function keys, typing and open dialogs keep their normal behavior", () => {
+  assert.equal(ux.shortcutAction({ key: "F5", ctrlKey: true }), null);
+  assert.equal(ux.shortcutAction({ key: "F6", shiftKey: true }), null);
+  assert.equal(ux.shortcutAction({ key: "F7" }, { typing: true }), null);
+  assert.equal(ux.shortcutAction({ key: "F8" }, { modalOpen: true }), null);
+});
+
+test("tools menu closes for outside clicks and item selection, not its trigger", () => {
+  const trigger = { closest: () => null };
+  const item = { closest: selector => selector === ".cockpit-tools-dropdown__item" ? item : null };
+  const insideMenu = target => ({ open: true, contains: candidate => candidate === target });
+  assert.equal(ux.shouldCloseCockpitToolsMenu(insideMenu(trigger), trigger), false);
+  assert.equal(ux.shouldCloseCockpitToolsMenu(insideMenu(item), item), true);
+  assert.equal(ux.shouldCloseCockpitToolsMenu({ open: true, contains: () => false }, {}), true);
+  assert.equal(ux.shouldCloseCockpitToolsMenu({ open: false, contains: () => false }, {}), false);
+});
+
 test("notifications dispatch simpress:notify without changing the toast", () => {
   const events = [];
   const appended = [];
@@ -114,13 +141,20 @@ test("index loads the refinement layer last and links every transfer label", () 
   assert.ok(app > 0 && enhancements > app, "ux-enhancements.js must load after app.js");
 
   const start = appHtml.indexOf('id="tab-panel-retirada-entrega"');
-  const end = appHtml.indexOf('<aside aria-label="Painel de Ações Rápidas"');
+  const end = appHtml.indexOf('id="tab-panel-resumo"', start);
   const transferPanel = appHtml.slice(start, end);
   const unlinked = transferPanel.match(/<label\b(?![^>]*\bfor=)[^>]*>/g) || [];
   assert.deepEqual(unlinked, []);
   for (const [, id] of transferPanel.matchAll(/<label\b[^>]*\bfor="([^"]+)"/g)) {
     assert.match(appHtml, new RegExp(`id="${id}"`), `label points to a missing control: ${id}`);
   }
+});
+
+test("Cockpit centers readiness and reserves space between Ctrl+K and the clear button", () => {
+  assert.match(appHtml, /title="Atalho: Ctrl\+K">Ctrl\+K<\/kbd>/);
+  assert.match(cockpitCss, /\.cockpit-shell #readiness-panel\s*\{[^}]*align-self:\s*center;[^}]*margin:\s*0;/s);
+  assert.match(cockpitCss, /\.cockpit-shell \.cockpit-search-input\s*\{[^}]*padding:\s*0 120px 0 32px;/s);
+  assert.match(cockpitCss, /\.cockpit-shell \.cockpit-search-shortcut\s*\{[^}]*right:\s*68px;/s);
 });
 
 test("refinement layer defines both themes and respects reduced motion", () => {

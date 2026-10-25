@@ -16,6 +16,27 @@ def source_table(records, sheet="Inventario"):
 
 
 class InventoryComparisonTests(unittest.TestCase):
+    def test_synchronized_count_includes_only_unambiguous_entities_present_in_both_sources(self):
+        endpoint = source_table([
+            {"NOMEDOCOMPUTADOR": "PRNOTECWB01", "ROTULODESERVICONUMERODESERIE": "SN-MATCH"},
+            {"NOMEDOCOMPUTADOR": "PRNOTECWB02", "ROTULODESERVICONUMERODESERIE": "SN-ENDPOINT"},
+            {"NOMEDOCOMPUTADOR": "PRNOTECWB03", "ROTULODESERVICONUMERODESERIE": "SN-DUP"},
+        ])
+        details = source_table([
+            {"NUMEROSERIE": "SN-MATCH", "APELIDO": "PRNOTECWB01", "CIDADE": "Curitiba"},
+            {"NUMEROSERIE": "SN-DETAILS", "APELIDO": "PRNOTECWB04", "CIDADE": "Curitiba"},
+            {"NUMEROSERIE": "SN-DUP", "APELIDO": "PRNOTECWB03", "CIDADE": "Curitiba"},
+            {"NUMEROSERIE": "SN-DUP", "APELIDO": "PRNOTECWB03-ALT", "CIDADE": "Curitiba"},
+        ])
+
+        result = main.compare_uploaded_workbooks(endpoint, details, {})
+
+        self.assertEqual(result["equipamentos_sincronizados"], 1)
+        self.assertEqual(result["total_detalhes"], 4)
+        self.assertEqual(result["ausentes_no_endpoint"][0]["serie"], "SN-DETAILS")
+        self.assertEqual(result["ausentes_em_detalhes"][0]["serie"], "SN-ENDPOINT")
+        self.assertTrue(any(item["serie"] == "SN-DUP" for item in result["registros_ambiguos"]))
+
     def test_endpoint_comparison_prioritizes_last_logon_and_keeps_legacy_fallback(self):
         rows = main._comparison_source_records(source_table([
             {

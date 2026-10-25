@@ -72,6 +72,7 @@ O Simpress roda somente localmente: servidor FastAPI e dados em `data/`, com as 
 
 - Para novas telas, atualize ou escreva a especificação antes de implementar e use as referências visuais fornecidas. Se o usuário disser "Exclua o JavaScript por enquanto", mantenha a tela em HTML/CSS.
 - Preserve IDs, atributos ARIA e `data-*`, manipuladores, regras de negócio, acessibilidade, responsividade e os temas claro e escuro. Faça ajustes visuais pontuais e revisáveis em vez de substituir o design.
+- Em um redesign Cockpit aprovado pelo usuário, a composição e a posição dos componentes existentes podem mudar para seguir as referências. Essa autorização visual não remove rotinas, dados, integrações, regras de negócio ou controles existentes. Mantenha os contratos de interface e adapte o mesmo layout aos temas claro/escuro e a telas menores; use somente dados reais já fornecidos pela aplicação e deixe acessível, mesmo que recolhido, qualquer fluxo sem equivalente visível na referência.
 - Não remova `!important` mecanicamente; corrija a causa e preserve os usos justificados.
 - Para capturas do `ui-fixture`, se o Chromium compatível com o Playwright local estiver ausente, instale-o com `node node_modules/playwright/cli.js install chromium`. Quando o cache padrão do sandbox não persistir entre chamadas, use `.claude/prints/<assunto>/pw-browsers` como `PLAYWRIGHT_BROWSERS_PATH` na instalação e na captura.
 - Detalhes na skill `.claude/skills/ajuste-visual-ui`.

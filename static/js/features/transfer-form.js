@@ -89,6 +89,7 @@
     if (titulo) titulo.textContent = ABAS_PRINCIPAIS[alvo].titulo;
     document.body.classList.toggle("has-quick-actions", alvo === "transferencia");
     if (alvo === "transferencia") app.atualizarResumoSerieTransferencia(appState.currentEquipamento);
+    if (alvo === "resumo" && mudou) void app.carregarResumoCockpit?.();
     if (mudou && destino.painel) motion?.reveal(destino.painel, "page");
   }
 
@@ -334,6 +335,58 @@
 • Voltagem: Bivolt
 • Tipo de Acesso: Elevador / Rampa / Térreo
 ======================================================================`;
+  }
+
+  function atualizarPreviaTransporteCockpit() {
+    const root = document.querySelector(".cockpit-transport-layout");
+    if (!root) return;
+    const value = id => {
+      const element = document.getElementById(id);
+      const raw = element && "value" in element ? element.value : element?.textContent;
+      return String(raw || "").trim() || "—";
+    };
+    const set = (id, text) => {
+      const target = document.getElementById(id);
+      if (target) target.textContent = text;
+    };
+    const equipamento = appState.currentEquipamento;
+    const unidade = document.getElementById("select-unidade-destino");
+    const destino = unidade?.selectedOptions?.[0]?.textContent?.trim();
+    const serial = equipamento?.serial || value("transfer-serial");
+    const modelo = equipamento?.modelo || value("card-modelo");
+    const apelido = equipamento?.apelido || "";
+    set("cockpit-preview-equipment", [serial, modelo, apelido].filter(item => item && item !== "—").join(" · ") || "—");
+    set("cockpit-preview-pickup", appState.retiradaCidadeSelecionada || value("retirada-endereco"));
+    set("cockpit-preview-pickup-cnpj", value("retirada-cnpj"));
+    set("cockpit-preview-contact", [value("retirada-contato"), value("retirada-telefone")].filter(item => item !== "—").join(" · ") || "—");
+    set("cockpit-preview-hours", [value("retirada-horario"), `almoço ${value("retirada-almoco")}`].filter(item => item !== "—").join(" · ") || "—");
+    set("cockpit-preview-delivery", value("entrega-endereco") !== "—" ? value("entrega-endereco") : (unidade?.value ? destino : "—"));
+    set("cockpit-preview-recipient", [value("entrega-contato"), value("entrega-telefone")].filter(item => item !== "—").join(" · ") || "—");
+    set("cockpit-preview-notes", value("entrega-obs"));
+    const state = document.getElementById("cockpit-transport-preview-state");
+    if (state) {
+      state.textContent = equipamento ? (unidade?.value ? "Prévia atualizada" : "Selecione a entrega") : "Aguardando equipamento";
+      state.dataset.state = equipamento ? (unidade?.value ? "ready" : "pending") : "empty";
+    }
+  }
+
+  async function copiarResumoCockpit() {
+    const payload = construirPayload();
+    if (!payload) return;
+    try {
+      await app.copiarTextoParaAreaTransferencia(gerarTextoResumo(payload));
+      app.showToast("Resumo copiado para a área de transferência.", "success");
+    } catch (error) {
+      app.showToast("Não foi possível copiar o resumo. Abra o texto para Transporte e tente novamente.", "error");
+    }
+  }
+
+  const transportPreviewRoot = document.querySelector(".cockpit-transport-layout");
+  if (transportPreviewRoot && !transportPreviewRoot.dataset.previewBound) {
+    transportPreviewRoot.dataset.previewBound = "true";
+    transportPreviewRoot.addEventListener("input", atualizarPreviaTransporteCockpit);
+    transportPreviewRoot.addEventListener("change", atualizarPreviaTransporteCockpit);
+    atualizarPreviaTransporteCockpit();
   }
 
   // Modal Preview Handlers
@@ -653,6 +706,7 @@
     atualizarEstadoCopiaCnpjEntrega, handleUnidadeDestinoChange, selecionarUnidadePorCidade, adicionarObsChamado,
     copiarModeloChamado, alternarVisualizacaoModelo, recolherVisualizacoesModelosChamado, alternarChamadosManuais,
     abrirModalPreview, fecharModalPreview, copiarTextoDoModal, gerarTextoSolicitacaoTransporte,
+    atualizarPreviaTransporteCockpit, copiarResumoCockpit,
     fecharModalTextoTransporte, copiarSerieAtual, copiarDadoLocalAtual, copiarDadoEntrega,
     copiarTextoSolicitacaoTransporte, validarCamposObrigatoriosPlanilha, gerarPlanilhaExcel, resetarFormulario,
   };
