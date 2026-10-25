@@ -3,6 +3,7 @@
 import json
 import tempfile
 import unittest
+from unittest.mock import patch
 from pathlib import Path
 
 from fastapi import FastAPI
@@ -42,6 +43,19 @@ class TransferHistoryRouteTests(unittest.TestCase):
 
     def post(self, **changes):
         return self.client.post("/api/historico-transferencias", json={**VALID_PAYLOAD, **changes})
+
+    def test_python_lock_is_not_held_while_the_transaction_is_open(self):
+        real = transfer_history.AtomicFileTransaction
+        held = []
+
+        class Spy(real):
+            def __enter__(self):
+                held.append(transfer_history._LOCK.locked())
+                return super().__enter__()
+
+        with patch.object(transfer_history, "AtomicFileTransaction", Spy):
+            self.assertEqual(self.post().status_code, 201)
+        self.assertEqual(held, [False])
 
     def test_missing_file_lists_as_empty(self):
         response = self.client.get("/api/historico-transferencias")
