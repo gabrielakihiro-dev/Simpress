@@ -138,6 +138,10 @@ for (const width of [320, 390, 768, 1024, 1200, 1440, 1920, 2560]) {
       expect(dimensions.document, tool).toBeLessThanOrEqual(dimensions.viewport);
       expect(dimensions.body, tool).toBeLessThanOrEqual(dimensions.viewport);
       expect(await overflowingRight(page, "#cockpit-tool-panels"), tool).toEqual([]);
+      await page.keyboard.press("Escape");
+      await expect(panel).toBeHidden();
+      await page.keyboard.press(key);
+      await expect(panel, `${key} abre ${tool}`).toBeVisible();
     }
   });
 }
