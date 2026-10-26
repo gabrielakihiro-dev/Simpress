@@ -117,3 +117,23 @@ Fonte: `artefato.html` (Nocturne, só escuro). Medido a 1440px (amplo, onde o ap
 | Resumo, Automação, painéis de ferramenta, modais, notificações | ver artefato | — | herdam tokens e botões novos | **não** revisados linha a linha |
 
 Limites: não foi feita a comparação lado a lado automática do iframe do artefato (domínio cruzado: só imagem); Resumo, Automação, painéis, modais e notificações receberam apenas tokens e botões, sem medição individual.
+
+### Tipografia (Fase 6, `getComputedStyle` a 1440px, escuro e claro iguais)
+
+Famílias: o artefato usa `"Inter", system-ui, sans-serif` e `'JetBrains Mono', ui-monospace, monospace`. O app agora usa as mesmas pilhas. Como o artefato só carrega `"Inter"` e `"JetBrains Mono Variable"`, o `'JetBrains Mono'` dele cai em `ui-monospace`; o app copia a pilha literal, então renderiza igual a ele. `document.fonts` confirma `Inter` (alias novo em `nocturne.css`, mesmos arquivos locais) e `Inter Variable` carregadas.
+
+| Componente | Artefato | App agora (família · tamanho · peso · entrelinha · espaçamento) |
+| --- | --- | --- |
+| Aba da barra | 13px/500 | Inter · 13px · 500 · 18.85px · normal |
+| Busca | 12.5px | Inter · 12.5px · 400 · 18.1px · normal |
+| Série do detalhe | mono 18px/500 | mono · 18px · 500 · 27.9px · normal |
+| Tags do detalhe | 11px, 0.02em | Inter · 11px · 400 · 15.95px · 0.22px |
+| Modelo | 13px | Inter · 13px · 400 · 1.45 · normal |
+| Rótulo da grade | 11px | Inter · 11px · 400 · 14.85px · normal |
+| Valor / valor mono | 13px | 13px (Inter / mono) |
+| Pílulas de modelo | 12px | Inter · 12px · 400 |
+| Textarea de modelo | 12.5px | Inter · 12.5px · 400 · 20.6px |
+| Títulos h1–h5 | 500, entrelinha 1.12, -0.015em | regra base no shell (`:where`, não vence regras de componente) |
+| Cabeçalho de tabela (Resumo) | 11px, 0.08em, caixa alta | 11px · 0.08em · caixa alta |
+
+Diferenças restantes: o resto das áreas (Resumo, Automação, painéis, modais) não teve cada texto auditado; filtros da lista medem 11.5px/24px e botões 14px/500, iguais ao artefato.

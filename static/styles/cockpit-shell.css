@@ -477,10 +477,12 @@
   --shadow-sm: var(--cockpit-shadow-sm);
   --shadow-md: var(--cockpit-shadow-md);
   --shadow-lg: var(--cockpit-shadow-lg);
+  --ux-font-mono: 'JetBrains Mono', ui-monospace, monospace;
+  --font-mono: 'JetBrains Mono', ui-monospace, monospace;
   min-height: 100dvh;
   background: var(--cockpit-bg);
   color: var(--cockpit-text);
-  font-family: "Inter", ui-sans-serif, system-ui, sans-serif;
+  font-family: "Inter", system-ui, sans-serif;
   font-size: 13px;
   line-height: 1.45;
 }
@@ -789,6 +791,10 @@
   font-weight: 400;
   color: var(--color-neutral-500);
 }
+
+/* Fase 6: títulos do artefato (peso 500, entrelinha 1.12, -0.015em); ficam abaixo de qualquer regra de componente */
+.cockpit-shell :where(h1, h2, h3, h4, h5) { font-weight: 500; line-height: 1.12; letter-spacing: -0.015em; }
+.cockpit-shell :where(h6) { font-weight: 500; line-height: 1.12; letter-spacing: 0.08em; text-transform: uppercase; }
 
 /* ── Fase 5: toque, campos no compacto e telas largas ── */
 /* Toque: alvos de 44px só com ponteiro grosso (celular/tablet); mouse mantém as medidas do artefato. */

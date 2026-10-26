@@ -74,7 +74,7 @@
   height: 30px;
   padding: 0 8px;
   font-size: 12px;
-  font-family: var(--ux-font-mono, ui-monospace, monospace);
+  font-family: var(--ux-font-mono);
   background: var(--color-neutral-900);
   border: 1px solid var(--color-neutral-800);
   border-radius: var(--radius-sm);
@@ -166,7 +166,7 @@
 }
 
 .cockpit-home-autocomplete .autocomplete-row-serial {
-  font-family: var(--ux-font-mono, ui-monospace, monospace);
+  font-family: var(--ux-font-mono);
   font-size: 13px;
   font-weight: 700;
   color: var(--color-text);
@@ -230,7 +230,7 @@
 }
 
 .cockpit-home-item-serial {
-  font-family: var(--ux-font-mono, ui-monospace, monospace);
+  font-family: var(--ux-font-mono);
   font-size: 12px;
   font-weight: 600;
   color: var(--color-text);
@@ -352,7 +352,7 @@
 }
 
 .cockpit-home-serial {
-  font-family: var(--ux-font-mono, ui-monospace, monospace);
+  font-family: var(--ux-font-mono);
   font-size: 18px;
   font-weight: 700;
   color: var(--color-text);
@@ -409,7 +409,7 @@
   margin-left: 4px;
   padding: 1px 4px;
   font-size: 10px;
-  font-family: var(--ux-font-mono, ui-monospace, monospace);
+  font-family: var(--ux-font-mono);
   color: var(--color-neutral-500);
   background: var(--color-neutral-900);
   border: 1px solid var(--color-neutral-800);
@@ -453,7 +453,7 @@
 }
 
 .cockpit-home-cell dd .mono {
-  font-family: var(--ux-font-mono, ui-monospace, monospace);
+  font-family: var(--ux-font-mono);
 }
 
 .cockpit-home-copy-btn,
@@ -575,7 +575,7 @@
   color: var(--color-text);
   font-size: 12px;
   line-height: 1.6;
-  font-family: var(--ux-font-mono, ui-monospace, monospace);
+  font-family: var(--ux-font-mono);
   padding: 0;
 }
 
@@ -885,7 +885,7 @@
 }
 
 .cockpit-home-open-ticket-number {
-  font-family: var(--ux-font-mono, ui-monospace, monospace);
+  font-family: var(--ux-font-mono);
   font-size: 13px;
   color: var(--cockpit-text);
 }
@@ -939,7 +939,7 @@
   color: var(--color-accent);
 }
 .cockpit-home-tag--neutral { background: var(--color-neutral-800); color: var(--color-neutral-100); }
-.cockpit-home-model { margin: 0; font-size: 13px; font-weight: 400; color: var(--color-neutral-300); }
+.cockpit-home-model { margin: 0; font-size: 13px; font-weight: 400; line-height: 1.45; letter-spacing: 0; color: var(--color-neutral-300); }
 .cockpit-home-card-actions { margin-left: auto; gap: 10px; }
 .cockpit-home-kbd {
   margin: 0;
@@ -947,7 +947,7 @@
   border: 0;
   background: none;
   color: inherit;
-  font-family: ui-monospace, monospace;
+  font-family: var(--ux-font-mono);
   font-size: 10px;
   font-weight: 400;
   opacity: 0.7;
