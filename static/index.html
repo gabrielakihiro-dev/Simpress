@@ -171,13 +171,13 @@
         <div class="ck-sino__lista">
           <section id="alerta-os-paradas" class="ck-aviso" data-gravidade="urgente" role="status" aria-labelledby="alerta-os-paradas-titulo" data-state="loading" hidden>
             <span class="ck-aviso__icone"><svg class="ck-ico" aria-hidden="true" focusable="false"><use href="#i-erro"></use></svg></span>
-            <div class="ck-aviso__topo"><h3 id="alerta-os-paradas-titulo" class="ck-aviso__titulo">OS paradas</h3></div>
+            <div class="ck-aviso__topo"><span class="ck-badge" data-status="erro">Urgente</span><h3 id="alerta-os-paradas-titulo" class="ck-aviso__titulo">OS paradas</h3></div>
             <p id="alerta-os-paradas-texto" class="ck-aviso__texto"></p>
             <button type="button" id="btn-alerta-os-paradas" data-on-click="abrirAcompanhamentoChamados" class="ck-btn ck-btn--primario ck-btn--sm ck-aviso__acao">Ver chamados<svg class="ck-ico ck-ico--sm" aria-hidden="true" focusable="false"><use href="#i-arrow-right"></use></svg></button>
           </section>
           <section id="alerta-divergencias-novas" class="ck-aviso" data-gravidade="atencao" role="status" aria-labelledby="alerta-divergencias-novas-titulo" data-state="loading" hidden>
             <span class="ck-aviso__icone"><svg class="ck-ico" aria-hidden="true" focusable="false"><use href="#i-alerta"></use></svg></span>
-            <div class="ck-aviso__topo"><h3 id="alerta-divergencias-novas-titulo" class="ck-aviso__titulo">Divergências novas</h3></div>
+            <div class="ck-aviso__topo"><span class="ck-badge" data-status="alerta">Atenção</span><h3 id="alerta-divergencias-novas-titulo" class="ck-aviso__titulo">Divergências novas</h3></div>
             <p id="alerta-divergencias-novas-texto" class="ck-aviso__texto"></p>
             <button type="button" id="btn-alerta-divergencias-novas" data-on-click="abrirPainelCockpit" data-args='["evolucao"]' class="ck-btn ck-btn--secundario ck-btn--sm ck-aviso__acao">Ver evolução</button>
           </section>

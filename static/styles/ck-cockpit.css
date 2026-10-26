@@ -784,32 +784,17 @@ details.ck-chip { position: relative; padding: 0; }
 #cockpit-summary-status:empty { display: none; }
 #cockpit-summary-pagination[hidden] { display: none; }
 
-/* Região 3D: OS por equipamento (dentro do Transporte). Escopo por id para vencer o legado .ticket-summary-* (removido na sessão 8). */
-#resumo-os-equipamento.ck-os { display: block; margin: 0; padding: 0; border: 1px solid var(--cor-borda-suave); border-radius: var(--raio-md); background: var(--cor-superficie); box-shadow: var(--sombra-sm); color: var(--cor-texto); }
-#resumo-os-equipamento .ck-os__vinculo { margin: 0; min-height: 0; }
-#resumo-os-equipamento .ck-os__corpo { padding: 4px 12px 12px; }
-#resumo-os-equipamento .ticket-summary-table-wrap { overflow: visible; }
-#resumo-os-equipamento .ticket-summary-table { table-layout: fixed; width: 100%; font-size: var(--fs-md); }
-#resumo-os-equipamento .ticket-summary-table th, #resumo-os-equipamento .ticket-summary-table td { width: auto; min-width: 0; padding: 8px 10px; border-top: 0; border-bottom: 1px solid var(--cor-borda-suave); background: transparent; vertical-align: top; text-align: left; white-space: normal; overflow-wrap: anywhere; font-family: inherit; font-size: inherit; color: var(--cor-texto); }
-#resumo-os-equipamento .ticket-summary-table th { border-bottom-color: var(--cor-borda); font-size: var(--fs-xs); font-weight: var(--peso-medio); color: var(--cor-texto-sutil); text-transform: none; letter-spacing: 0; }
-#resumo-os-equipamento .ticket-summary-table td:nth-child(3) { font-family: var(--fonte-mono); }
-#resumo-os-equipamento .ticket-summary-table tbody tr:nth-child(even) { background: transparent; }
-#resumo-os-equipamento .ticket-summary-table tbody tr:hover { background: var(--cor-superficie-funda); }
-#resumo-os-equipamento .ticket-summary-table tbody tr[data-vinculo="selecionado"], #resumo-os-equipamento .ticket-summary-card[data-vinculo="selecionado"] { background: var(--cor-destaque-fundo); box-shadow: inset 2px 0 0 var(--cor-destaque); }
-#resumo-os-equipamento .ticket-summary-card { gap: 8px; padding: 12px; border: 1px solid var(--cor-borda-suave); border-radius: var(--raio-md); background: var(--cor-superficie); box-shadow: none; }
-#resumo-os-equipamento .ticket-os-link-editor { min-width: 0; }
-#resumo-os-equipamento .ticket-os-link-prefix { font-family: var(--fonte-mono); font-size: var(--fs-ui); color: var(--cor-texto-mudo); }
-#resumo-os-equipamento .ticket-os-link-input { width: 5.5rem; }
-#resumo-os-equipamento .ticket-os-link-entry { border-bottom-color: var(--cor-borda-suave); }
-#resumo-os-equipamento .ticket-os-link-entry-label, #resumo-os-equipamento .ticket-summary-order-sources, #resumo-os-equipamento .ticket-summary-order-count, #resumo-os-equipamento .ticket-os-link-label, #resumo-os-equipamento .ticket-summary-field-label { color: var(--cor-texto-sutil); font-size: var(--fs-xs); }
-#resumo-os-equipamento .ticket-summary-description { font-size: var(--fs-md); line-height: 1.5; color: var(--cor-texto); }
-#resumo-os-equipamento .ticket-summary-table td:last-child { min-width: 0; }
-#resumo-os-equipamento .ck-descricao__texto { white-space: pre-line; }
-@media (max-width: 1199.98px) {
-  #resumo-os-equipamento.ck-os { margin: 0; }
-  #resumo-os-equipamento .ticket-summary-table-wrap { display: none; }
-  #resumo-os-equipamento .ticket-summary-mobile { display: grid; gap: 8px; }
-}
+/* Região 3D: OS por equipamento (dentro do Transporte). Layout do Cockpit v2: .ck-tabela--cards vira cards abaixo de 1200px; só o que a v2 não cobre fica aqui. */
+#resumo-os-equipamento.ck-os { margin: 0; }
+#resumo-os-equipamento .ck-os__vinculo { min-height: 0; }
+#resumo-os-equipamento .ck-os__corpo { overflow-x: clip; }
+#resumo-os-equipamento .ck-tabela td { font-size: var(--fs-md); color: var(--cor-texto); }
+#resumo-os-equipamento .ck-tag { align-self: flex-start; }
+#resumo-os-equipamento .ticket-summary-order-link { font-size: inherit; text-align: left; overflow-wrap: anywhere; }
+#resumo-os-equipamento .ticket-os-link-controls { flex-wrap: wrap; align-items: center; }
+#resumo-os-equipamento .ticket-os-link-prefix { font-family: var(--fonte-mono); font-size: var(--fs-ui); color: var(--cor-texto-mudo); white-space: nowrap; }
+#resumo-os-equipamento .ticket-os-link-input { flex: 0 0 5.5rem; width: 5.5rem; min-width: 0; font-family: var(--fonte-mono); }
+#resumo-os-equipamento .ck-descricao__texto { white-space: pre-line; overflow-wrap: anywhere; }
 
 /* Região 3F: Automação. Seletores com id vencem as regras legadas de cockpit-pages.css (#automacao-cards em grid de áreas). */
 .cockpit-shell #automacao-cards.ck-auto { display: grid; height: auto; min-height: 100%; grid-template-columns: minmax(0, 1fr) var(--largura-console); grid-template-rows: none; grid-template-areas: none; gap: 0; padding: 0; overflow: visible; }
