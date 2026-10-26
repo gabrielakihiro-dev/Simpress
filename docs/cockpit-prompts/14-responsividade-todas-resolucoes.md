@@ -270,3 +270,4 @@ Base: `git archive 044fdcc` servido pelo `ui-fixture` na porta 8822; atual: `fea
 | Erros de console | 0 | 0 | igual |
 | Modal Editar (`e`) e exportação pelo botão | o roteiro não conseguiu acionar | o roteiro não conseguiu acionar | igual nas duas versões; limite do roteiro, cobertos pela suíte e2e |
 | Exportações e anotações | — | suíte e2e | ver resultado da suíte |
+Suíte e2e completa (`npm run test:ui:e2e`, porta 8824): 238 passed, 1 skipped, 0 failed. `npm run verify`: tudo OK (273 testes JavaScript, mypy, compileall, busca de credenciais).
