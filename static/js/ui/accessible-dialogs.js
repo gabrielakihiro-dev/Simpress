@@ -130,7 +130,7 @@
       .filter(item => !item.classList.contains("hidden") && item.dataset.motionClosing !== "true");
     const modal = openModals[openModals.length - 1];
     if (!modal) {
-      if (event.key === "Escape") {
+      if (event.key === "Escape" && !document.querySelector(".ck-veu:not([hidden])")) {
         const disclosure = [...document.querySelectorAll("details[open]")].pop();
         if (disclosure) {
           disclosure.open = false;

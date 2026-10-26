@@ -81,21 +81,25 @@
       const metric = values[key];
       const button = document.createElement("button");
       button.type = "button";
-      button.className = "cockpit-summary-kpi";
+      button.className = "ck-kpi";
       button.dataset.metric = key;
       button.dataset.tone = tones[key];
       button.setAttribute("aria-pressed", String(selectedMetric === key));
       button.addEventListener("click", () => selecionarMetricaResumo(key));
       const label = document.createElement("span");
-      label.className = "cockpit-summary-kpi-label";
+      label.className = "ck-kpi__rotulo";
       label.textContent = labels[key];
       const value = document.createElement("strong");
-      value.className = "cockpit-summary-kpi-value";
+      value.className = "ck-kpi__valor";
       value.textContent = metric.value === null ? "—" : metric.value.toLocaleString("pt-BR");
       const note = document.createElement("span");
-      note.className = "cockpit-summary-kpi-note";
+      note.className = "ck-kpi__sub";
+      note.dataset.status = { ok: "ok", warn: "alerta", error: "erro" }[tones[key]] || "";
       note.textContent = metric.note;
-      button.append(label, value, note);
+      const linha = document.createElement("span");
+      linha.className = "ck-kpi__linha";
+      linha.appendChild(value);
+      button.append(label, linha, note);
       content.appendChild(button);
     });
     target.replaceChildren(content);
@@ -115,20 +119,20 @@
     const content = document.createDocumentFragment();
     cities.forEach(city => {
       const row = document.createElement("div");
-      row.className = "cockpit-summary-region";
+      row.className = "ck-barra";
       const name = document.createElement("span");
-      name.className = "cockpit-summary-region-name";
+      name.className = "ck-barra__nome";
       name.textContent = city.name;
       name.title = city.name;
       const track = document.createElement("span");
-      track.className = "cockpit-summary-region-track";
+      track.className = "ck-barra__trilho";
       track.setAttribute("aria-hidden", "true");
       const bar = document.createElement("span");
-      bar.className = "cockpit-summary-region-bar";
+      bar.className = "ck-barra__cheio";
       bar.style.width = `${Math.max(2, (city.total / maximum) * 100)}%`;
       track.appendChild(bar);
       const count = document.createElement("span");
-      count.className = "cockpit-summary-region-count";
+      count.className = "ck-barra__valor";
       count.textContent = city.total.toLocaleString("pt-BR");
       row.append(name, track, count);
       content.appendChild(row);
@@ -141,9 +145,11 @@
     const date = String(item?.ultima_verificacao || item?.data_ultimo_acesso || "").trim();
     return date || "—";
   }
+  const columnLabels = ["Série", "Modelo / host", "Simpress", "Endpoint Central", "Último acesso", "Situação", "Ação"];
   function cell(row, text, status) {
     const td = document.createElement("td");
     td.textContent = String(text || "—");
+    td.dataset.label = columnLabels[row.children.length] || "";
     if (status) td.dataset.status = status;
     row.appendChild(td);
     return td;
@@ -190,9 +196,10 @@
           : labels[item.__section] || labels[selectedMetric];
       cell(tr, statusText, state);
       const actionCell = document.createElement("td");
+      actionCell.dataset.label = columnLabels[6];
       const open = document.createElement("button");
       open.type = "button";
-      open.className = "btn btn-tertiary btn-sm";
+      open.className = "ck-btn ck-btn--fantasma ck-btn--sm";
       open.textContent = "Abrir";
       open.disabled = !currentSerial || currentSerial.includes("/");
       open.title = open.disabled ? "A série está ausente ou tem mais de uma correspondência." : `Abrir ${currentSerial} na Home`;
@@ -240,7 +247,7 @@
   function selecionarMetricaResumo(metric) {
     if (!Object.hasOwn(labels, metric)) return;
     selectedMetric = metric;
-    document.querySelectorAll(".cockpit-summary-kpi[data-metric]").forEach(button => {
+    document.querySelectorAll(".ck-kpi[data-metric]").forEach(button => {
       button.setAttribute("aria-pressed", String(button.dataset.metric === metric));
     });
     if (metric === "total") void carregarPaginaInventarioResumo(0);

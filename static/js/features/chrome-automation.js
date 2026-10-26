@@ -203,6 +203,25 @@
     return { estado: "info", icone: "·", status: "Info" };
   }
 
+  function criarEventoAutomacao(horario, origem, mensagem, classificacao) {
+    const item = document.createElement("li");
+    item.className = "ck-log__linha";
+    item.dataset.state = classificacao.estado;
+    const campos = [["ck-log__hora", horario], ["ck-log__origem", origem], ["ck-log__msg", mensagem]];
+    campos.forEach(([classe, texto]) => {
+      const campo = document.createElement("span");
+      campo.className = classe;
+      campo.textContent = texto;
+      item.append(campo);
+    });
+    const nivel = document.createElement("span");
+    nivel.className = "ck-nivel";
+    nivel.dataset.status = {error: "erro", waiting: "alerta", active: "info", success: "ok"}[classificacao.estado] || "info";
+    nivel.textContent = classificacao.status;
+    item.append(nivel);
+    return item;
+  }
+
   function renderizarEventosAutomacao() {
     const lista = document.getElementById("cockpit-automation-events");
     const area = document.getElementById("automacao-log");
@@ -213,61 +232,12 @@
     const linhas = area.textContent.split(/\r?\n/).filter(linha => linha.trim()).slice(-MAX_EVENTOS);
     const fragmento = document.createDocumentFragment();
     if (!linhas.length) {
-      const item = document.createElement("li");
-      const hora = document.createElement("span");
-      const icone = document.createElement("span");
-      const conteudo = document.createElement("span");
-      const titulo = document.createElement("span");
-      const status = document.createElement("span");
-      item.className = "cockpit-automation-event";
-      item.dataset.state = "waiting";
-      hora.className = "cockpit-automation-event-time";
-      hora.textContent = "—";
-      icone.className = "cockpit-automation-event-icon";
-      icone.setAttribute("aria-hidden", "true");
-      icone.textContent = "◌";
-      conteudo.className = "cockpit-automation-event-message";
-      titulo.className = "cockpit-automation-event-title";
-      titulo.textContent = "Aguardando atividade do Chrome.";
-      conteudo.append(titulo);
-      status.className = "cockpit-automation-event-status";
-      status.textContent = "Aguardando";
-      item.append(hora, icone, conteudo, status);
-      fragmento.append(item);
+      fragmento.append(criarEventoAutomacao("—", "", "Aguardando atividade do Chrome.", {estado: "waiting", status: "Aguardando"}));
     } else {
       linhas.forEach(linha => {
         const partes = linha.match(/^\s*(?:\[(\d{2}:\d{2}:\d{2})\]\s*)?(?:\[([^\]\r\n]+)\]\s*)?(.*)$/);
-        const horario = partes?.[1] || "—";
-        const componente = partes?.[2] || "";
         const mensagem = partes?.[3] || linha;
-        const classificacao = classificarEventoAutomacao(mensagem);
-        const item = document.createElement("li");
-        const hora = document.createElement("span");
-        const icone = document.createElement("span");
-        const conteudo = document.createElement("span");
-        const titulo = document.createElement("span");
-        const status = document.createElement("span");
-        item.className = "cockpit-automation-event";
-        item.dataset.state = classificacao.estado;
-        hora.className = "cockpit-automation-event-time";
-        hora.textContent = horario;
-        icone.className = "cockpit-automation-event-icon";
-        icone.setAttribute("aria-hidden", "true");
-        icone.textContent = classificacao.icone;
-        conteudo.className = "cockpit-automation-event-message";
-        titulo.className = "cockpit-automation-event-title";
-        titulo.textContent = componente || mensagem;
-        conteudo.append(titulo);
-        if (componente && mensagem) {
-          const detalhe = document.createElement("span");
-          detalhe.className = "cockpit-automation-event-detail";
-          detalhe.textContent = mensagem;
-          conteudo.append(detalhe);
-        }
-        status.className = "cockpit-automation-event-status";
-        status.textContent = classificacao.status;
-        item.append(hora, icone, conteudo, status);
-        fragmento.append(item);
+        fragmento.append(criarEventoAutomacao(partes?.[1] || "—", partes?.[2] || "", mensagem, classificarEventoAutomacao(mensagem)));
       });
     }
     lista.replaceChildren(fragmento);
@@ -313,8 +283,6 @@
       if (consulta !== estado.consultaLog) return;
       estado.logHistorico = dados;
       mostrarLogAutomacao();
-      const logCompleto = document.querySelector(".cockpit-automation-log-full");
-      if (logCompleto) logCompleto.open = true;
     } catch (err) {
       if (consulta !== estado.consultaLog) return;
       document.getElementById("automacao-log").textContent = err.message;
@@ -503,11 +471,11 @@
     const host = document.getElementById("automacao-historico");
     if (!host) return;
     if (!execucoes.length) {
-      host.replaceChildren(dom.createTextElement("p", "ux-home-note", "Nenhuma execução encontrada para os filtros selecionados."));
+      host.replaceChildren(dom.createTextElement("p", "ck-lista__vazio", "Nenhuma execução encontrada para os filtros selecionados."));
       return;
     }
     const tabela = document.createElement("table");
-    tabela.className = "automation-history-table";
+    tabela.className = "ck-tabela ck-tabela--cards";
     const cabecalho = document.createElement("thead");
     const linhaCabecalho = document.createElement("tr");
     ["Rotina", "Início", "Duração", "Status", "Lotes", "Capturas", "Log"].forEach(texto => {
@@ -521,8 +489,8 @@
       const linha = document.createElement("tr");
       const rotina = dom.createTextElement("span", "", ROTINAS[execucao.rotina] || execucao.rotina);
       if (execucao.origem === "externo") rotina.appendChild(dom.createTextElement("small", "automation-history-origin", " fora do site"));
-      const status = dom.createTextElement("span", "automation-status-badge", STATUS[execucao.status] || execucao.status || "—");
-      status.dataset.status = execucao.status || "";
+      const status = dom.createTextElement("span", "ck-status", STATUS[execucao.status] || execucao.status || "—");
+      status.dataset.status = {concluido: "ok", falha: "erro", cancelado: "alerta", interrompido: "alerta", ocupada: "alerta", em_andamento: "info"}[execucao.status] || "";
       if (execucao.mensagem) status.title = execucao.mensagem;
       const statusBloco = document.createElement("span");
       statusBloco.className = "automation-history-status";
@@ -535,7 +503,7 @@
       capturas.className = "automation-history-captures";
       (execucao.capturas || []).forEach(captura => capturas.appendChild(criarCapturaHistorico(execucao, captura)));
       if (!capturas.childNodes.length) capturas.textContent = "—";
-      const verLog = dom.createTextElement("button", "btn btn-secondary", "Ver log");
+      const verLog = dom.createTextElement("button", "ck-btn ck-btn--secundario ck-btn--sm", "Ver log");
       verLog.type = "button";
       verLog.dataset.onClick = "abrirLogExecucaoAutomacao";
       verLog.dataset.args = JSON.stringify([execucao.id, execucao.inicio]);
@@ -580,7 +548,7 @@
       if (consulta !== estado.consultaHistorico) return;
       console.error("Erro ao carregar o histórico da automação:", err);
       const host = document.getElementById("automacao-historico");
-      if (host) host.replaceChildren(dom.createTextElement("p", "ux-home-note", err.message));
+      if (host) host.replaceChildren(dom.createTextElement("p", "ck-lista__vazio", err.message));
       document.getElementById("automacao-historico-resumo").textContent = "Não foi possível atualizar a consulta.";
       document.getElementById("automacao-historico-anterior").disabled = true;
       document.getElementById("automacao-historico-proxima").disabled = true;
@@ -699,11 +667,11 @@
     const host = document.getElementById("sebrae-pendencias");
     if (!host) return;
     if (!pendencias.length) {
-      host.replaceChildren(dom.createTextElement("p", "ux-home-note", "Nenhuma pendência."));
+      host.replaceChildren(dom.createTextElement("p", "ck-lista__vazio", "Nenhuma pendência."));
       return;
     }
     const tabela = document.createElement("table");
-    tabela.className = "automation-history-table sebrae-pendencias-tabela";
+    tabela.className = "ck-tabela ck-tabela--cards sebrae-pendencias-tabela";
     tabela.setAttribute("aria-labelledby", "sebrae-pendencias-titulo");
     const cabecalho = document.createElement("thead");
     const linhaCabecalho = document.createElement("tr");

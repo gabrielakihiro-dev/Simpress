@@ -36,7 +36,7 @@ test("Resumo uses the latest comparison and opens its series in Home", async ({ 
     await page.locator("#tab-resumo").click();
 
     const locality = page.locator('#cockpit-summary-kpis [data-metric="divergencias_local"]');
-    await expect(locality.locator(".cockpit-summary-kpi-value")).toHaveText("1");
+    await expect(locality.locator(".ck-kpi__valor")).toHaveText("1");
     await expect(page.locator("#cockpit-summary-rows tr")).toHaveCount(1);
     await expect(page.locator("#cockpit-summary-rows")).toContainText("LENTO");
     await expect(page.locator("#cockpit-summary-rows tr").first().locator("td").nth(2)).toHaveText("Londrina");
@@ -49,7 +49,7 @@ test("Resumo uses the latest comparison and opens its series in Home", async ({ 
     await expect(page.locator("#cockpit-summary-count")).toHaveText("Mostrando 1–1 de 1");
 
     await page.locator('#cockpit-summary-kpis [data-metric="sincronizados"]').click();
-    await expect(page.locator('#cockpit-summary-kpis [data-metric="sincronizados"] .cockpit-summary-kpi-value')).toHaveText("0");
+    await expect(page.locator('#cockpit-summary-kpis [data-metric="sincronizados"] .ck-kpi__valor')).toHaveText("0");
     await expect(page.locator("#cockpit-summary-rows tr")).toHaveCount(0);
     await expect(page.locator("#cockpit-summary-status")).toContainText("lista detalhada não é armazenada");
 
