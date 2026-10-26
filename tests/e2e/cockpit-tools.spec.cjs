@@ -168,8 +168,12 @@ test("typing stays error-free and Home shortcuts use the selected equipment", as
   await page.locator("#home-equipment-list [role=option]").first().click();
   await expect(page.locator("#card-serial")).toHaveText("LENTO");
   await page.keyboard.press("e");
-  await expect(page.locator("#modal-editar-equipamento")).toBeVisible();
+  // v2: a tecla E liga a edição cadastral em linha (sem modal); Esc cancela.
+  await expect(page.locator("#btn-editar-equipamento")).toHaveAttribute("aria-pressed", "true");
+  await expect(page.locator("#modal-editar-equipamento")).toBeHidden();
+  await expect(page.locator("input[data-campo-edicao]").first()).toBeFocused();
   await page.keyboard.press("Escape");
+  await expect(page.locator("#btn-editar-equipamento")).toHaveAttribute("aria-pressed", "false");
   await page.evaluate(() => { window.copiarTextoParaAreaTransferencia = async text => { window.reviewCopiedText = text; }; });
   await page.keyboard.press("c");
   await expect.poll(() => page.evaluate(() => window.reviewCopiedText)).toContain("Prezados");

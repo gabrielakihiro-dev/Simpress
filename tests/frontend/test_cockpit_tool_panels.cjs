@@ -97,3 +97,71 @@ test("monthlyChartBars scales bars to the largest real count", () => {
   assert.deepEqual(bars.map(bar => bar.height), [100, 50, 0, 0]);
   assert.deepEqual(panels.monthlyChartBars().map(bar => bar.height), [0, 0, 0, 0]);
 });
+
+// DOM falso permissivo: qualquer propriedade desconhecida vira função/objeto inerte; só o que o roteamento lê é real.
+function criarAmbientePaineis() {
+  const elementos = new Map();
+  const ouvintes = [];
+  const novo = id => new Proxy({ id, hidden: true, open: false, dataset: {}, textContent: "", value: "", children: [], attrs: {} }, {
+    get(alvo, chave) {
+      if (chave in alvo) return alvo[chave];
+      if (chave === "isConnected") return true;
+      if (chave === "classList") return { add() {}, remove() {}, toggle() {}, contains: () => false };
+      if (chave === "setAttribute") return (n, v) => { alvo.attrs[n] = v; };
+      if (chave === "getAttribute") return n => alvo.attrs[n] ?? null;
+      if (chave === "focus") return () => { global.document.activeElement = elementos.get(id); };
+      if (chave === "querySelector" || chave === "closest") return () => null;
+      if (chave === "querySelectorAll") return () => [];
+      return () => {};
+    },
+    set(alvo, chave, valor) { alvo[chave] = valor; return true; },
+  });
+  global.document = {
+    activeElement: null,
+    getElementById: id => { if (!elementos.has(id)) elementos.set(id, novo(id)); return elementos.get(id); },
+    querySelector: () => null,
+    querySelectorAll: () => [],
+    addEventListener: (tipo, fn) => ouvintes.push([tipo, fn]),
+    createElement: () => novo("novo"),
+  };
+  const app = { apiFetch: async () => ({}), showToast() {} };
+  const api = createCockpitToolPanels({ app, appState: {} });
+  const el = id => document.getElementById(id);
+  const esc = () => { let prevenido = false; ouvintes.filter(([t]) => t === "keydown").forEach(([, fn]) => fn({ key: "Escape", defaultPrevented: false, preventDefault() { prevenido = true; } })); return prevenido; };
+  return { api, el, esc };
+}
+
+test("Voltar retorna ao painel anterior e, sem anterior, fecha para a tela principal", async () => {
+  const { api, el } = criarAmbientePaineis();
+  try {
+    await api.abrirPainelCockpit("planilhas");
+    await api.abrirPainelCockpit("historico-planilhas");
+    assert.equal(el("cockpit-tools-dropdown").dataset.activeTool, "historico-planilhas");
+    await api.fecharPainelCockpit();
+    assert.equal(el("cockpit-tools-dropdown").dataset.activeTool, "planilhas");
+    assert.equal(el("cockpit-tool-panels").hidden, false);
+    await api.fecharPainelCockpit();
+    assert.equal(el("cockpit-tool-panels").hidden, true);
+    assert.equal(el("main-content").hidden, false);
+    assert.equal(el("cockpit-tools-dropdown").dataset.activeTool, undefined);
+  } finally { delete global.document; }
+});
+
+test("Esc fecha o painel aberto e é ignorado com o painel fechado", async () => {
+  const { api, el, esc } = criarAmbientePaineis();
+  try {
+    await api.abrirPainelCockpit("unidades");
+    assert.equal(esc(), true);
+    assert.equal(el("cockpit-tool-panels").hidden, true);
+    assert.equal(el("main-content").hidden, false);
+    assert.equal(esc(), false);
+  } finally { delete global.document; }
+});
+
+test("abrir uma ferramenta desconhecida não mostra o painel", async () => {
+  const { api, el } = criarAmbientePaineis();
+  try {
+    await api.abrirPainelCockpit("inexistente");
+    assert.equal(el("cockpit-tool-panels").hidden, true);
+  } finally { delete global.document; }
+});
