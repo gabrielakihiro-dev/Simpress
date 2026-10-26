@@ -83,12 +83,6 @@
     return Number(value || 0).toLocaleString("pt-BR");
   }
 
-  function formatMoment(iso) {
-    const date = new Date(iso);
-    if (!iso || Number.isNaN(date.getTime())) return "";
-    return date.toLocaleString("pt-BR", { dateStyle: "short", timeStyle: "short" });
-  }
-
   function pluralize(count, singular, plural) {
     return `${formatNumber(count)} ${count === 1 ? singular : plural}`;
   }
@@ -226,152 +220,65 @@
       doc.querySelectorAll(".comparison-desktop-table table:not([data-ux-table])").forEach(enhanceTable);
     }
 
-    // ----- Home panel -----
-    let panel = null;
+    // ----- Transporte (OS por equipamento) -----
+    const transporteAtivo = () => doc.getElementById("tab-retirada-entrega")?.getAttribute("aria-selected") === "true";
     let lastFetch = 0;
     let requestSerial = 0;
-    let cityFilter = "";
-    let panelExpanded = true;
     let ticketSummaryRequestSerial = 0;
 
-    function ensurePanel() {
-      if (panel) return panel;
-      // Lives in the Resumo tab, above the usage card.
-      const host = doc.getElementById("resumo-cards");
-      if (!host) return null;
-      panel = el("section", "ux-home-panel glass-card");
-      panel.id = "ux-home-panel";
-      panel.setAttribute("aria-labelledby", "ux-home-panel-title");
-      panel.hidden = true;
-      host.prepend(panel);
-      return panel;
+    // A seção mora na aba Transporte; o escopo e a busca só escondem linhas já renderizadas.
+    const osFiltro = { escopo: "todas", busca: "" };
+    const textoOs = value => String(value || "").normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase();
+
+    function equipamentoTransporte() {
+      const serie = String(doc.getElementById("transfer-serial")?.textContent || "").trim().toUpperCase();
+      const apelido = String(doc.getElementById("transfer-alias")?.textContent || "").trim();
+      return { serie, apelido };
     }
 
-    function stat(label, value, extra) {
-      const box = el("div", "ux-stat");
-      box.append(el("span", "ux-stat-value", formatNumber(value)), el("span", "ux-stat-label", label));
-      if (extra) box.append(el("span", "ux-stat-extra", extra));
-      return box;
-    }
-
-    function renderPanel(data) {
-      const host = ensurePanel();
-      if (!host) return;
-      host.replaceChildren();
-      const title = el("h2", "ux-home-title", "Resumo do parque");
-      title.id = "ux-home-panel-title";
-      const header = el("div", "ux-home-header");
-      header.append(title);
-      host.append(header);
-      if (!data.base_importada) {
-        host.append(el("p", "ux-home-empty", "Nenhuma base importada ainda. Use “Atualizar planilhas” para carregar os equipamentos."));
-        host.hidden = false;
-        ensureTicketSummary();
-        return;
+    function aplicarFiltroOs() {
+      const section = doc.getElementById("resumo-os-equipamento");
+      if (!section) return;
+      const { serie, apelido } = equipamentoTransporte();
+      const itens = [...section.querySelectorAll("tbody tr[data-serial], .ticket-summary-card[data-serial]")];
+      const termo = textoOs(osFiltro.busca.trim());
+      const doEquipamento = item => Boolean(serie) && item.dataset.serial === serie;
+      itens.forEach(item => {
+        if (doEquipamento(item)) item.setAttribute("data-vinculo", "selecionado");
+        else item.removeAttribute("data-vinculo");
+        const visivel = (osFiltro.escopo !== "equipamento" || doEquipamento(item))
+          && (!termo || textoOs(item.textContent).includes(termo));
+        item.hidden = !visivel;
+      });
+      const total = itens.filter(item => item.tagName === "TR").reduce((soma, item) => soma + Number(item.dataset.osCount || 0), 0);
+      const doEquip = itens.filter(item => item.tagName === "TR" && doEquipamento(item)).reduce((soma, item) => soma + Number(item.dataset.osCount || 0), 0);
+      const aqui = section.querySelector("#ck-os-escopo-equipamento");
+      const todas = section.querySelector("#ck-os-escopo-todas");
+      if (aqui) {
+        aqui.textContent = "Este equipamento" + (serie ? " · " + doEquip : "");
+        aqui.disabled = !serie;
+        aqui.setAttribute("aria-pressed", String(osFiltro.escopo === "equipamento" && Boolean(serie)));
       }
-      const stats = el("div", "ux-stat-grid");
-      stats.setAttribute("role", "list");
-      stats.append(stat("Equipamentos", data.total_equipamentos), stat("Unidades", data.total_unidades));
-      (data.por_categoria || []).forEach(category => stats.append(stat(category.label, category.total)));
-      stats.querySelectorAll(".ux-stat").forEach(item => item.setAttribute("role", "listitem"));
-      const body = el("div", "ux-home-body");
-      body.id = "ux-home-body";
-      body.hidden = !panelExpanded;
-      body.append(stats);
-
-      const columns = el("div", "ux-home-columns");
-      if ((data.cidades_principais || []).length) {
-        const block = el("div", "ux-home-block");
-        const head = el("div", "ux-city-head");
-        head.append(el("h3", "ux-home-subtitle", "Cidades com mais equipamentos"));
-        const categories = data.por_categoria || [];
-        if (!categories.some(category => category.value === cityFilter)) cityFilter = "";
-        const select = el("select", "ux-city-filter");
-        select.setAttribute("aria-label", "Filtrar cidades por tipo de equipamento");
-        [{ value: "", label: "Todos" }, ...categories].forEach(option => {
-          const node = el("option", "", option.label);
-          node.value = option.value;
-          select.append(node);
-        });
-        select.value = cityFilter;
-        head.append(select);
-        block.append(head);
-        const listHost = el("div", "ux-city-list");
-        const fillList = () => {
-          const cities = cityFilter ? (data.cidades_por_categoria?.[cityFilter] || []) : (data.cidades_principais || []);
-          listHost.replaceChildren();
-          if (!cities.length) {
-            listHost.append(el("p", "ux-home-note", "Nenhum equipamento desse tipo com cidade informada."));
-            return;
-          }
-          const list = el("ul", "ux-bars");
-          const widths = barPercentages(cities);
-          cities.forEach((city, index) => {
-            const row = el("li", "ux-bar-row");
-            const bar = el("span", "ux-bar");
-            bar.setAttribute("aria-hidden", "true");
-            const fill = el("span", "ux-bar-fill");
-            fill.style.width = `${widths[index]}%`;
-            bar.append(fill);
-            row.append(el("span", "ux-bar-label", city.cidade), bar, el("span", "ux-bar-value", formatNumber(city.total)));
-            list.append(row);
-          });
-          listHost.append(list);
-        };
-        select.addEventListener("change", () => { cityFilter = select.value; fillList(); });
-        fillList();
-        block.append(listHost);
-        if (data.sem_cidade > 0) block.append(el("p", "ux-home-note", `${pluralize(data.sem_cidade, "equipamento sem cidade", "equipamentos sem cidade")} na base.`));
-        columns.append(block);
+      if (todas) {
+        todas.textContent = "Todas" + (itens.length ? " · " + total : "");
+        todas.setAttribute("aria-pressed", String(osFiltro.escopo !== "equipamento" || !serie));
       }
-
-      const status = el("div", "ux-home-block");
-      status.append(el("h3", "ux-home-subtitle", "Última atualização"));
-      const when = data.ultima_comparacao?.horario ? formatMoment(data.ultima_comparacao.horario) : data.ultima_atualizacao;
-      status.append(el("p", "ux-home-note", when ? `${when}${data.arquivo_origem ? ` · ${data.arquivo_origem}` : ""}` : "Sem registro de atualização."));
-      const attention = data.ultima_comparacao?.atencao || [];
-      if (attention.length) {
-        const list = el("ul", "ux-attention");
-        attention.forEach(item => {
-          const row = el("li", "ux-attention-row");
-          const eventId = data.ultima_comparacao?.id;
-          if (eventId && typeof win.abrirResultadoHistoricoComparacao === "function") {
-            const button = el("button", "ux-attention-row-button");
-            button.type = "button";
-            button.setAttribute("aria-label", `${item.rotulo}: ${formatNumber(item.total)}. Abrir esta seção no resultado da última atualização.`);
-            button.append(el("span", "", item.rotulo), el("strong", "", formatNumber(item.total)));
-            button.addEventListener("click", () => win.abrirResultadoHistoricoComparacao(eventId, item.campo, button));
-            row.append(button);
-          } else {
-            row.append(el("span", "", item.rotulo), el("strong", "", formatNumber(item.total)));
-          }
-          list.append(row);
-        });
-        status.append(list);
-      } else if (data.ultima_comparacao) {
-        status.append(el("p", "ux-home-note ux-home-note--ok", "Nenhum ponto de atenção na última comparação."));
+      const destaque = section.querySelector("#ck-os-destaque");
+      if (destaque) {
+        destaque.hidden = !serie;
+        const forte = el("strong", "", serie);
+        destaque.replaceChildren(forte, doc.createTextNode((apelido ? " · " + apelido : "") + ", o equipamento desta transferência. As linhas dele aparecem destacadas."));
       }
-      columns.append(status);
-      body.append(columns);
-      const toggle = el("button", "ux-home-toggle");
-      toggle.type = "button";
-      toggle.setAttribute("aria-controls", "ux-home-body");
-      const syncToggle = () => {
-        body.hidden = !panelExpanded;
-        toggle.setAttribute("aria-expanded", String(panelExpanded));
-        toggle.textContent = panelExpanded ? "Minimizar" : "Maximizar";
-        title.classList.toggle("ux-home-title--collapsed", !panelExpanded);
-      };
-      toggle.addEventListener("click", () => { panelExpanded = !panelExpanded; syncToggle(); });
-      syncToggle();
-      header.append(toggle);
-      host.append(body);
-      host.hidden = false;
-      ensureTicketSummary();
+      const link = doc.getElementById("ck-link-os");
+      if (link) {
+        link.hidden = !serie || !doEquip;
+        const texto = doc.getElementById("ck-link-os-texto");
+        if (texto) texto.textContent = doEquip + (doEquip === 1 ? " OS deste equipamento" : " OS deste equipamento");
+      }
     }
 
     function ensureTicketSummary() {
-      const host = doc.getElementById("resumo-cards");
+      const host = doc.getElementById("ck-transp");
       if (!host) return null;
       let section = doc.getElementById("resumo-os-equipamento");
       if (!section) {
@@ -381,11 +288,40 @@
         const head = el("div", "ck-cartao__cab");
         const title = el("h2", "ck-cartao__titulo", "OS por equipamento");
         title.id = "resumo-os-equipamento-title";
-        head.append(title);
-        const status = el("p", "ck-os__vinculo ticket-summary-status", "Abra a aba Resumo para carregar as OS.");
+        const status = el("p", "ck-cartao__meta ticket-summary-status", "Abra a aba Transporte para carregar as OS.");
+        status.id = "ck-os-contagem";
         status.setAttribute("role", "status");
         status.setAttribute("aria-live", "polite");
-        section.append(head, status);
+        const escopo = el("div", "ck-segmentado");
+        escopo.setAttribute("role", "group");
+        escopo.setAttribute("aria-label", "Mostrar OS");
+        [["equipamento", "Este equipamento"], ["todas", "Todas"]].forEach(([chave, texto]) => {
+          const botao = el("button", "ck-segmentado__op", texto);
+          botao.type = "button";
+          botao.id = "ck-os-escopo-" + chave;
+          botao.setAttribute("aria-pressed", String(chave === "todas"));
+          botao.addEventListener("click", () => {
+            osFiltro.escopo = chave;
+            aplicarFiltroOs();
+          });
+          escopo.append(botao);
+        });
+        const busca = el("label", "ck-os__busca");
+        busca.append(el("span", "ck-sr", "Buscar série, OS ou usuário"));
+        const campo = el("input", "ck-entrada ck-entrada--sm");
+        campo.type = "search";
+        campo.id = "ck-os-busca";
+        campo.placeholder = "Série, OS ou usuário";
+        campo.addEventListener("input", () => {
+          osFiltro.busca = campo.value;
+          aplicarFiltroOs();
+        });
+        busca.append(campo);
+        head.append(title, status, el("span", "ck-espaco"), escopo, busca);
+        const destaque = el("p", "ck-os__vinculo");
+        destaque.id = "ck-os-destaque";
+        destaque.hidden = true;
+        section.append(head, destaque);
         host.append(section);
       }
       return section;
@@ -677,9 +613,8 @@
           userFailure ? "Indisponível" : ticketUserLabel(user), userFailure ? "Indisponível" : ticketHostnameLabel(user),
           "", ""];
         const row = doc.createElement("tr");
-        const vinculado = record.ordens.some(order => order.fontes.some(source =>
-          links.get(ticketOsLinkKey({ fonte: source, serie: record.serie, os: order.os }))));
-        if (vinculado) row.setAttribute("data-vinculo", "selecionado");
+        row.dataset.serial = record.serie;
+        row.dataset.osCount = String(record.ordens.length);
         values.forEach((value, index) => {
           const cell = el("td", "", value);
           cell.setAttribute("data-label", ["Fonte", "Série", "OS", "Usuário", "Hostname", "Chamado", "Descrição"][index]);
@@ -698,7 +633,7 @@
         body.append(row);
 
         const card = el("article", "ck-cartao ticket-summary-card");
-        if (vinculado) card.setAttribute("data-vinculo", "selecionado");
+        card.dataset.serial = record.serie;
         const cardHead = el("div", "ticket-summary-card-head");
         cardHead.append(el("span", "ticket-summary-source", ticketSummarySourceLabel(record.fontes)),
           el("span", "ticket-summary-order-count", record.ordens.length + " OS"));
@@ -725,10 +660,11 @@
       section.querySelector(".ticket-summary-content")?.remove();
       section.append(content);
       section.setAttribute("aria-busy", "false");
+      aplicarFiltroOs();
     }
 
     async function refreshTicketSummary(force) {
-      const summaryTab = doc.getElementById("tab-resumo");
+      const summaryTab = doc.getElementById("tab-retirada-entrega");
       if (!force && summaryTab?.getAttribute("aria-selected") !== "true") return;
       const section = ensureTicketSummary();
       if (!section) return;
@@ -765,7 +701,7 @@
         section.querySelector(".ticket-summary-content")?.remove();
         section.setAttribute("aria-busy", "false");
         status.textContent = error.message === "Failed to fetch"
-          ? "Não foi possível carregar as OS. Tente novamente ao abrir a aba Resumo."
+          ? "Não foi possível carregar as OS. Tente novamente ao abrir a aba Transporte."
           : error.message || "Não foi possível carregar as OS.";
       }
     }
@@ -884,111 +820,6 @@
       });
     }
 
-    // Resumo do parque na aba Transporte (Cockpit v2): mesmos dados de /api/painel, IDs próprios (os do Resumo ficam únicos).
-    let parqueFiltro = "";
-    function renderParqueTransporte(data) {
-      const host = doc.getElementById("ck-parque-transporte");
-      if (!host) return;
-      const corpo = host.querySelector(".ck-parque__corpo");
-      const meta = host.querySelector(".ck-cartao__meta");
-      corpo.replaceChildren();
-      if (!data.base_importada) {
-        meta.textContent = "";
-        corpo.append(el("p", "ck-lista__vazio", "Nenhuma base importada ainda. Use “Atualizar planilhas” para carregar os equipamentos."));
-        return;
-      }
-      const when = data.ultima_comparacao?.horario ? formatMoment(data.ultima_comparacao.horario) : data.ultima_atualizacao;
-      meta.textContent = when ? `${when}${data.arquivo_origem ? ` · ${data.arquivo_origem}` : ""}` : "Sem registro de atualização.";
-
-      const base = el("div", "ck-parque__secao");
-      base.append(el("p", "ck-parque__sub", "Base importada"));
-      const numeros = el("dl", "ck-numeros");
-      [["Equipamentos", data.total_equipamentos], ["Unidades", data.total_unidades],
-        ...(data.por_categoria || []).map(c => [c.label, c.total])].forEach(([label, value]) => {
-        const item = el("div", "ck-numero");
-        item.append(el("dt", "", label), el("dd", "", formatNumber(value)));
-        numeros.append(item);
-      });
-      base.append(numeros);
-      corpo.append(base);
-
-      const cidades = el("div", "ck-parque__secao");
-      const categorias = data.por_categoria || [];
-      if (!categorias.some(c => c.value === parqueFiltro)) parqueFiltro = "";
-      const sub = el("div", "ck-parque__sub");
-      const titulo = el("span", "", "Cidades com mais equipamentos");
-      titulo.id = "ck-cidades-titulo";
-      const select = el("select", "ck-entrada ck-entrada--sm");
-      select.setAttribute("aria-label", "Filtrar cidades por tipo de equipamento");
-      [{ value: "", label: "Todos" }, ...categorias].forEach(o => {
-        const opt = el("option", "", o.label);
-        opt.value = o.value;
-        select.append(opt);
-      });
-      select.value = parqueFiltro;
-      sub.append(titulo, select);
-      cidades.append(sub);
-      const lista = el("ul", "ck-barras");
-      lista.setAttribute("aria-labelledby", "ck-cidades-titulo");
-      const ns = "http://www.w3.org/2000/svg";
-      const preencher = () => {
-        lista.replaceChildren();
-        const itens = parqueFiltro ? (data.cidades_por_categoria?.[parqueFiltro] || []) : (data.cidades_principais || []);
-        if (!itens.length) {
-          lista.append(el("li", "ck-lista__vazio", "Nenhum equipamento desse tipo com cidade informada."));
-          return;
-        }
-        const larguras = barPercentages(itens);
-        itens.forEach((cidade, i) => {
-          const li = el("li", "ck-barra");
-          const svg = doc.createElementNS(ns, "svg");
-          svg.setAttribute("viewBox", "0 0 100 6");
-          svg.setAttribute("preserveAspectRatio", "none");
-          svg.setAttribute("aria-hidden", "true");
-          const trilho = doc.createElementNS(ns, "rect");
-          trilho.setAttribute("class", "ck-barra__trilho");
-          trilho.setAttribute("width", "100"); trilho.setAttribute("height", "6"); trilho.setAttribute("rx", "3");
-          const cheio = doc.createElementNS(ns, "rect");
-          cheio.setAttribute("class", "ck-barra__cheio");
-          cheio.setAttribute("width", String(larguras[i])); cheio.setAttribute("height", "6"); cheio.setAttribute("rx", "3");
-          svg.append(trilho, cheio);
-          li.append(el("span", "ck-barra__nome", cidade.cidade), svg, el("span", "ck-barra__valor", formatNumber(cidade.total)));
-          lista.append(li);
-        });
-      };
-      select.addEventListener("change", () => { parqueFiltro = select.value; preencher(); });
-      preencher();
-      cidades.append(lista);
-      if (data.sem_cidade > 0) cidades.append(el("p", "ck-nota", `${pluralize(data.sem_cidade, "equipamento sem cidade", "equipamentos sem cidade")} na base.`));
-      corpo.append(cidades);
-
-      const atencao = el("div", "ck-parque__secao");
-      atencao.append(el("p", "ck-parque__sub", "Pontos de atenção da última comparação"));
-      const itens = data.ultima_comparacao?.atencao || [];
-      if (itens.length) {
-        const ul = el("ul", "ck-atencao");
-        itens.forEach(item => {
-          const li = el("li");
-          const eventId = data.ultima_comparacao?.id;
-          const podeAbrir = eventId && typeof win.abrirResultadoHistoricoComparacao === "function";
-          const node = el(podeAbrir ? "button" : "span", "ck-atencao__item");
-          if (podeAbrir) {
-            node.type = "button";
-            node.setAttribute("aria-label", `${item.rotulo}: ${formatNumber(item.total)}. Abrir esta seção no resultado da última atualização.`);
-            node.addEventListener("click", () => win.abrirResultadoHistoricoComparacao(eventId, item.campo, node));
-          }
-          node.dataset.status = item.total > 0 ? "alerta" : "ok";
-          node.append(el("span", "", ""), el("span", "", item.rotulo), el("strong", "ck-atencao__n", formatNumber(item.total)), el("span", "", ""));
-          li.append(node);
-          ul.append(li);
-        });
-        atencao.append(ul);
-      } else {
-        atencao.append(el("p", "ck-nota", data.ultima_comparacao ? "Nenhum ponto de atenção na última comparação." : "Sem comparação registrada."));
-      }
-      corpo.append(atencao);
-    }
-
     async function refresh(force) {
       if (!force && Date.now() - lastFetch < REFRESH_MIN_MS) return;
       lastFetch = Date.now();
@@ -999,11 +830,10 @@
         if (!response.ok) throw new Error(String(response.status));
         const data = await response.json();
         if (serial !== requestSerial) return;
-        renderPanel(data);
-        renderParqueTransporte(data);
+        ensureTicketSummary();
         // An OS load started after this request already reflects data at least as new; repeating it only doubles the wait.
         if (ticketSerialAtStart === ticketSummaryRequestSerial
-          && doc.getElementById("tab-resumo")?.getAttribute("aria-selected") === "true") refreshTicketSummary(true);
+          && transporteAtivo()) refreshTicketSummary(true);
         renderBadge(divergenceTotal(data.ultima_comparacao));
         renderizarNotificacoes(data);
         // Other Home cards (usage in the last 30 days) render from the same response.
@@ -1011,7 +841,6 @@
       } catch (error) {
         // The dashboard is optional; never disturb the main flow.
         if (serial === requestSerial) {
-          if (panel) panel.hidden = true;
           renderBadge(0);
           renderizarFalhaNotificacoes();
         }
@@ -1030,20 +859,19 @@
     // The cards are in the Resumo tab; Home keeps refreshing too, for the sidebar divergence badge.
     const abasComDados = ["tab-home", "tab-resumo", "tab-retirada-entrega"].map(id => doc.getElementById(id)).filter(Boolean);
     const abaComDadosAtiva = () => abasComDados.some(tab => tab.getAttribute("aria-selected") === "true");
-    const resumoAtivo = () => doc.getElementById("tab-resumo")?.getAttribute("aria-selected") === "true";
     // Se o painel ainda não foi preenchido (ex.: falha anterior), abrir a aba tenta de novo sem esperar o intervalo mínimo.
     const abasObserver = new win.MutationObserver(() => {
-      if (abaComDadosAtiva()) refresh(!panel || panel.hidden);
-      if (resumoAtivo()) refreshTicketSummary(true);
+      if (abaComDadosAtiva()) refresh(false);
+      if (transporteAtivo()) refreshTicketSummary(true);
     });
     abasComDados.forEach(tab => abasObserver.observe(tab, { attributes: true, attributeFilter: ["aria-selected"] }));
 
     doc.addEventListener("simpress:chamados-atualizados", () => refreshTicketSummary(true));
     doc.addEventListener("simpress:usuarios-equipamento-atualizados", () => {
-      if (resumoAtivo()) refreshTicketSummary(true);
+      if (transporteAtivo()) refreshTicketSummary(true);
     });
+    doc.addEventListener("simpress:transporte-equipamento", aplicarFiltroOs);
 
-    ensurePanel();
     ensureTicketSummary();
     refresh(true);
   }

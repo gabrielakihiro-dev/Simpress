@@ -811,7 +811,7 @@ test("Resumo tab switches panels, keeps ARIA state and supports arrow keys", asy
   await openSidebarIfNeeded(page);
   await page.locator(tabs.resumo).click();
   await expectOnly("resumo");
-  await expect(page.locator("#ux-home-panel")).toBeVisible();
+  await expect(page.locator("#resumo-cards")).toBeVisible();
 
   await openSidebarIfNeeded(page);
   await page.locator(tabs.transporte).click();

@@ -12,8 +12,8 @@ test("o botão de verificar usuários está presente na interface com atributos 
   assert.match(indexHtml, /data-automacao-rotina="usuarios"/, "deve ter data-automacao-rotina='usuarios'");
   assert.match(indexHtml, /data-on-click="iniciarRotinaAutomacao"/, "deve ter data-on-click='iniciarRotinaAutomacao'");
   assert.match(indexHtml, /data-args='\["usuarios"\]'/, "deve passar ['usuarios'] nos args");
-  assert.match(indexHtml, /<i data-lucide="users"/, "deve usar o ícone users");
-  assert.match(indexHtml, /<span>Verificar usuários<\/span>/, "deve exibir o rótulo Verificar usuários");
+  assert.match(indexHtml, /<use href="#i-users">/, "deve usar o ícone users");
+  assert.match(indexHtml, /<h2 class="ck-rotina__titulo" id="ck-verificacao-titulo">Verificar usuários<\/h2>/, "deve exibir o rótulo Verificar usuários");
   assert.match(indexHtml, /<option value="usuarios">Verificar usuários<\/option>/, "deve ter opção no filtro de histórico");
 });
 
@@ -27,6 +27,9 @@ test("iniciarRotinaAutomacao('usuarios') envia a rotina usuarios para o endpoint
   const toasts = [];
   const elemento = {
     setAttribute() {},
+    querySelector: () => null,
+    querySelectorAll: () => [],
+    classList: { toggle() {} },
     removeAttribute() {},
     hidden: false,
     textContent: "",

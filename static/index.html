@@ -441,27 +441,28 @@ Horário disponível para atendimento:</textarea>
 
     <section id="tab-panel-retirada-entrega" class="ck-tela ck-tela--transporte" role="tabpanel" aria-labelledby="tab-retirada-entrega" tabindex="0" hidden>
 
-    <div class="ck-transp">
+    <div class="ck-transp" id="ck-transp">
 
-    <section id="ck-parque-transporte" class="ck-cartao ck-parque" aria-labelledby="ck-parque-transporte-titulo">
-          <div class="ck-cartao__cab"><h2 class="ck-cartao__titulo" id="ck-parque-transporte-titulo">Resumo do parque</h2><span class="ck-cartao__meta"></span></div>
-          <div class="ck-parque__corpo"></div>
-        </section>
-
+    <!-- Equipamento selecionado -->
     <section id="transfer-equipment-banner" class="ck-cartao ck-selecionado" data-state="empty" aria-labelledby="transfer-equipment-title">
       <h2 id="transfer-equipment-title" class="sr-only">Equipamento desta transferência</h2>
       <div class="ck-selecionado__id">
         <span class="ck-eq-cab__icone" aria-hidden="true"><svg class="ck-ico" aria-hidden="true" focusable="false"><use href="#i-laptop"></use></svg></span>
         <span class="ck-selecionado__linha" data-show="selected">
           <span id="transfer-serial" class="ck-selecionado__serie" translate="no"></span>
-          <span class="ck-tag ck-tag--destaque"><svg class="ck-ico ck-ico--xs" aria-hidden="true" focusable="false"><use href="#i-check"></use></svg>Selecionado</span>
+          <span id="transfer-alias" class="ck-tag ck-tag--destaque" translate="no" hidden></span>
         </span>
         <p id="transfer-equipment-description" class="ck-selecionado__meta" role="status" aria-live="polite">Nenhum equipamento selecionado.</p>
-        <p id="transfer-equipment-users" class="ck-selecionado__meta hidden"></p>
       </div>
       <div class="ck-selecionado__acoes">
         <button type="button" id="btn-pesquisar-equipamento-home" data-on-click="abrirHomeParaPesquisarEquipamento" class="ck-btn ck-btn--secundario ck-btn--sm" data-show="empty">
           <svg class="ck-ico ck-ico--sm" aria-hidden="true" focusable="false"><use href="#i-search"></use></svg><span>Pesquisar equipamento na Home</span>
+        </button>
+        <a href="#resumo-os-equipamento" id="ck-link-os" class="ck-btn ck-btn--fantasma ck-btn--sm" data-show="selected" hidden>
+          <svg class="ck-ico ck-ico--sm" aria-hidden="true" focusable="false"><use href="#i-link"></use></svg><span id="ck-link-os-texto">OS deste equipamento</span>
+        </a>
+        <button type="button" id="btn-trocar-equipamento" data-on-click="trocarEquipamentoTransporte" class="ck-btn ck-btn--secundario ck-btn--sm" data-show="selected">
+          <svg class="ck-ico ck-ico--sm" aria-hidden="true" focusable="false"><use href="#i-search"></use></svg><span>Trocar equipamento</span>
         </button>
         <button
           type="button"
@@ -488,47 +489,35 @@ Horário disponível para atendimento:</textarea>
       <section class="ck-cartao ck-passo" id="ck-passo-retirada" aria-labelledby="ck-passo-retirada-titulo">
         <div class="ck-passo__cab">
           <span class="ck-passo__num" aria-hidden="true">1</span>
-          <h2 class="ck-passo__titulo" id="ck-passo-retirada-titulo">Dados de Retirada</h2>
-          <span class="ck-cartao__meta">Local da coleta</span>
+          <h2 class="ck-passo__titulo" id="ck-passo-retirada-titulo">Retirada</h2>
+          <span id="ck-passo-retirada-serie" class="ck-cartao__meta ck-mono"></span>
         </div>
         <div class="ck-passo__corpo">
+          <div class="ck-local">
+            <span id="retirada-local-nome" class="ck-local__nome" data-vazio="Aguardando equipamento"></span>
+            <output id="retirada-endereco" class="ck-local__end" data-vazio="Endereço preenchido pela série pesquisada" aria-label="Endereço de retirada"></output>
+            <span class="ck-local__cnpj">CNPJ&nbsp;<output id="retirada-cnpj" data-vazio="—" aria-label="CNPJ de retirada"></output></span>
+          </div>
           <div class="ck-grade">
-            <label class="ck-campo ck-span-3" for="retirada-cnpj"><span class="ck-campo__rotulo">CNPJ</span>
-              <input type="text" id="retirada-cnpj" readonly class="ck-entrada" placeholder="CNPJ da instalação / filial" />
-            </label>
-            <label class="ck-campo ck-span-3" for="retirada-endereco"><span class="ck-campo__rotulo">Endereço</span>
-              <textarea id="retirada-endereco" rows="2" readonly class="ck-entrada" placeholder="Preenchido pela série pesquisada"></textarea>
-            </label>
             <label class="ck-campo" for="retirada-horario"><span class="ck-campo__rotulo">Expediente</span>
               <input type="text" id="retirada-horario" value="09:00:00 às 18:00:00" class="ck-entrada" />
             </label>
             <label class="ck-campo" for="retirada-almoco"><span class="ck-campo__rotulo">Almoço</span>
               <input type="text" id="retirada-almoco" value="12:00:00" class="ck-entrada" />
             </label>
-            <label class="ck-campo" for="retirada-pausa-duracao"><span class="ck-campo__rotulo">Duração Pausa</span>
+            <label class="ck-campo" for="retirada-pausa-duracao"><span class="ck-campo__rotulo">Pausa</span>
               <input type="text" id="retirada-pausa-duracao" value="1h12" class="ck-entrada" />
             </label>
-            <label class="ck-campo ck-span-2" for="retirada-tipo-acesso"><span class="ck-campo__rotulo">Tipo de Acesso</span>
+            <label class="ck-campo ck-span-2" for="retirada-tipo-acesso"><span class="ck-campo__rotulo">Tipo de acesso</span>
               <input type="text" id="retirada-tipo-acesso" value="Elevador / Rampa / Térreo" class="ck-entrada" />
             </label>
             <label class="ck-campo" for="retirada-voltagem"><span class="ck-campo__rotulo">Voltagem</span>
               <input type="text" id="retirada-voltagem" value="Bivolt" class="ck-entrada" />
             </label>
-          </div>
-
-          <p class="ck-passo__sub"><svg class="ck-ico ck-ico--sm" aria-hidden="true" focusable="false"><use href="#i-user-check"></use></svg>Contato no Ponto de Retirada / Representante Regional</p>
-          <div id="aviso-contato-origem" class="ck-nota hidden" data-status="alerta" role="status">
-            <svg class="ck-ico" aria-hidden="true" focusable="false"><use href="#i-alerta"></use></svg>
-            <div>
-              <p id="aviso-contato-origem-texto">Contato de origem não configurado nesta instalação. Preencha nome, e-mail e celular abaixo para esta transferência ou salve um contato padrão.</p>
-              <button type="button" id="btn-configurar-contato-origem" class="ck-btn ck-btn--secundario ck-btn--sm" aria-haspopup="dialog" aria-controls="modal-contato-origem" data-on-click="abrirConfiguracaoContatoOrigem">Configurar contato de origem</button>
-            </div>
-          </div>
-          <div class="ck-grade">
-            <label class="ck-campo ck-span-3" for="retirada-representante"><span class="ck-campo__rotulo">Representante regional (automático pela cidade)</span>
+            <label class="ck-campo ck-span-3" for="retirada-representante"><span class="ck-campo__rotulo">Representante regional</span>
               <select id="retirada-representante" data-on-change="handleRepresentanteRegionalChange" data-args='["retirada", "$value"]' class="ck-entrada" aria-label="Representante regional do ponto de retirada"></select>
             </label>
-            <label class="ck-campo ck-span-3" for="retirada-contato"><span class="ck-campo__rotulo">Nome <span class="required-mark" aria-hidden="true">*</span></span>
+            <label class="ck-campo" for="retirada-contato"><span class="ck-campo__rotulo">Nome <span class="required-mark" aria-hidden="true">*</span></span>
               <input type="text" id="retirada-contato" required class="ck-entrada" autocomplete="name" />
             </label>
             <label class="ck-campo" for="retirada-email"><span class="ck-campo__rotulo">E-mail <span class="required-mark" aria-hidden="true">*</span></span>
@@ -541,6 +530,13 @@ Horário disponível para atendimento:</textarea>
               <input type="text" id="retirada-obs" required class="ck-entrada" placeholder="Ex: Notebook + kit na mochila" />
             </label>
           </div>
+          <div id="aviso-contato-origem" class="ck-nota hidden" data-status="alerta" role="status">
+            <svg class="ck-ico" aria-hidden="true" focusable="false"><use href="#i-alerta"></use></svg>
+            <div>
+              <p id="aviso-contato-origem-texto">Contato de origem não configurado nesta instalação. Preencha nome, e-mail e celular abaixo para esta transferência ou salve um contato padrão.</p>
+              <button type="button" id="btn-configurar-contato-origem" class="ck-btn ck-btn--secundario ck-btn--sm" aria-haspopup="dialog" aria-controls="modal-contato-origem" data-on-click="abrirConfiguracaoContatoOrigem">Configurar contato de origem</button>
+            </div>
+          </div>
         </div>
       </section>
 
@@ -548,41 +544,35 @@ Horário disponível para atendimento:</textarea>
       <section class="ck-cartao ck-passo" id="ck-passo-entrega" aria-labelledby="ck-passo-entrega-titulo">
         <div class="ck-passo__cab">
           <span class="ck-passo__num" aria-hidden="true">2</span>
-          <h2 class="ck-passo__titulo" id="ck-passo-entrega-titulo">Dados de Entrega</h2>
+          <h2 class="ck-passo__titulo" id="ck-passo-entrega-titulo">Entrega</h2>
           <span id="filiais-count" class="ck-cartao__meta">30 filiais catalogadas</span>
         </div>
         <div class="ck-passo__corpo">
-          <div class="ck-grade">
-            <label class="ck-campo ck-span-3" for="select-unidade-destino"><span class="ck-campo__rotulo">Selecione a Unidade</span>
-              <select id="select-unidade-destino" data-on-change="handleUnidadeDestinoChange" data-args='["$value"]' class="ck-entrada">
-                <option value="">-- Escolha a Cidade ou Regional de Destino --</option>
-              </select>
-            </label>
-            <label class="ck-campo ck-span-3" for="entrega-cnpj"><span class="ck-campo__rotulo">CNPJ</span>
-              <input type="text" id="entrega-cnpj" readonly class="ck-entrada" placeholder="CNPJ da instalação / filial" />
-            </label>
+          <div class="ck-unidades" id="entrega-unidades" role="group" aria-label="Unidade de destino" data-grupo="unidade">
+            <select id="select-unidade-destino" data-on-change="handleUnidadeDestinoChange" data-args='["$value"]' class="ck-entrada ck-unidades__mais" aria-label="Outras filiais">
+              <option value="">Outras filiais</option>
+            </select>
           </div>
-          <div class="ck-obs-rapidas" role="group" aria-label="Copiar dados de faturamento e instalação da entrega">
-            <button type="button" data-on-click="copiarDadoEntrega" data-args='["faturamento"]' class="ck-btn ck-btn--secundario ck-btn--sm" title="Copiar o CNPJ de faturamento padrão" aria-label="Copiar CNPJ de faturamento da entrega">
-              <svg class="ck-ico ck-ico--xs" aria-hidden="true" focusable="false"><use href="#i-copy"></use></svg><span>CNPJ Fat.</span>
-            </button>
-            <button type="button" id="btn-copiar-cnpj-instalacao-entrega" disabled data-on-click="copiarDadoEntrega" data-args='["instalacao"]' class="ck-btn ck-btn--secundario ck-btn--sm" title="Copiar o CNPJ de instalação da unidade de destino selecionada" aria-label="Copiar CNPJ de instalação da unidade de destino">
-              <svg class="ck-ico ck-ico--xs" aria-hidden="true" focusable="false"><use href="#i-copy"></use></svg><span>CNPJ Inst.</span>
-            </button>
+          <div class="ck-local">
+            <span id="entrega-local-nome" class="ck-local__nome" data-vazio="Selecione a unidade de destino"></span>
+            <output id="entrega-endereco" class="ck-local__end" data-vazio="Endereço preenchido pela unidade selecionada" aria-label="Endereço de entrega"></output>
+            <span class="ck-local__cnpj">CNPJ&nbsp;<output id="entrega-cnpj" data-vazio="—" aria-label="CNPJ de entrega"></output>
+              <button type="button" id="btn-copiar-cnpj-instalacao-entrega" disabled data-on-click="copiarDadoEntrega" data-args='["instalacao"]' class="ck-btn ck-btn--fantasma ck-btn--mini" title="Copiar o CNPJ de instalação da unidade de destino selecionada" aria-label="Copiar CNPJ de instalação da unidade de destino">
+                <svg class="ck-ico ck-ico--xs" aria-hidden="true" focusable="false"><use href="#i-copy"></use></svg>
+              </button>
+              <button type="button" data-on-click="copiarDadoEntrega" data-args='["faturamento"]' class="ck-btn ck-btn--fantasma ck-btn--sm" title="Copiar o CNPJ de faturamento padrão" aria-label="Copiar CNPJ de faturamento da entrega">
+                <svg class="ck-ico ck-ico--xs" aria-hidden="true" focusable="false"><use href="#i-copy"></use></svg><span>Fat.</span>
+              </button>
+            </span>
           </div>
-          <label class="ck-campo" for="entrega-endereco"><span class="ck-campo__rotulo">Endereço</span>
-            <textarea id="entrega-endereco" rows="2" readonly class="ck-entrada" placeholder="Preenchido pela unidade selecionada"></textarea>
-          </label>
-
-          <p class="ck-passo__sub"><svg class="ck-ico ck-ico--sm" aria-hidden="true" focusable="false"><use href="#i-user"></use></svg>Dados do Destinatário no SEBRAE<span class="ck-passo__sub-obs"><span class="required-mark" aria-hidden="true">*</span> Obrigatório para entrega</span></p>
           <div class="ck-grade">
-            <label class="ck-campo ck-span-3" for="entrega-representante"><span class="ck-campo__rotulo">Representante regional (automático pela cidade)</span>
+            <label class="ck-campo ck-span-3" for="entrega-representante"><span class="ck-campo__rotulo">Representante regional</span>
               <select id="entrega-representante" data-on-change="handleRepresentanteRegionalChange" data-args='["entrega", "$value"]' class="ck-entrada" aria-label="Representante regional da unidade de entrega"></select>
             </label>
-            <label class="ck-campo ck-span-3" for="entrega-contato"><span class="ck-campo__rotulo">Nome do Destinatário ou Representante <span class="required-mark" aria-hidden="true">*</span></span>
+            <label class="ck-campo" for="entrega-contato"><span class="ck-campo__rotulo">Destinatário <span class="required-mark" aria-hidden="true">*</span></span>
               <input type="text" id="entrega-contato" required class="ck-entrada" placeholder="Nome do destinatário" />
             </label>
-            <label class="ck-campo ck-span-2" for="entrega-email"><span class="ck-campo__rotulo">E-mail do Destinatário <span class="required-mark" aria-hidden="true">*</span></span>
+            <label class="ck-campo" for="entrega-email"><span class="ck-campo__rotulo">E-mail <span class="required-mark" aria-hidden="true">*</span></span>
               <input type="email" id="entrega-email" required class="ck-entrada" placeholder="nome@pr.sebrae.com.br" />
             </label>
             <label class="ck-campo" for="entrega-telefone"><span class="ck-campo__rotulo">Celular <span class="required-mark" aria-hidden="true">*</span></span>
@@ -594,17 +584,17 @@ Horário disponível para atendimento:</textarea>
             <label class="ck-campo" for="entrega-almoco"><span class="ck-campo__rotulo">Almoço <span class="required-mark" aria-hidden="true">*</span></span>
               <input type="text" id="entrega-almoco" required value="12:00:00" class="ck-entrada" />
             </label>
-            <label class="ck-campo" for="entrega-pausa-duracao"><span class="ck-campo__rotulo">Duração Pausa <span id="entrega-pausa-obrigatorio" class="required-mark" aria-hidden="true">*</span></span>
+            <label class="ck-campo" for="entrega-pausa-duracao"><span class="ck-campo__rotulo">Pausa <span id="entrega-pausa-obrigatorio" class="required-mark" aria-hidden="true">*</span></span>
               <input type="text" id="entrega-pausa-duracao" required value="1h" class="ck-entrada" />
             </label>
-            <label class="ck-campo ck-span-3" for="entrega-obs"><span class="ck-campo__rotulo">Observações <span class="required-mark" aria-hidden="true">*</span> · vai para a célula B37 da planilha</span>
+            <label class="ck-campo ck-span-3" for="entrega-obs"><span class="ck-campo__rotulo">Observações <span class="required-mark" aria-hidden="true">*</span> · célula B37</span>
               <textarea id="entrega-obs" required rows="2" class="ck-entrada" placeholder="Ex: Equipamento para nova contratação / Substituição preventiva..."></textarea>
             </label>
           </div>
           <div class="ck-obs-rapidas" role="group" aria-label="Observações rápidas">
             <button type="button" data-on-click="adicionarObsChamado" data-args='["Equipamento para colaborador(a) substituição preventiva."]' class="ck-btn ck-btn--secundario ck-btn--sm"><svg class="ck-ico ck-ico--xs" aria-hidden="true" focusable="false"><use href="#i-plus"></use></svg>Substituição</button>
-            <button type="button" data-on-click="adicionarObsChamado" data-args='["Equipamento destinado ao onboarding de novo colaborador(a)."]' class="ck-btn ck-btn--secundario ck-btn--sm"><svg class="ck-ico ck-ico--xs" aria-hidden="true" focusable="false"><use href="#i-plus"></use></svg>Novo Colaborador</button>
-            <button type="button" data-on-click="adicionarObsChamado" data-args='["Equipamento para substituição por lentidão/defeito físico."]' class="ck-btn ck-btn--secundario ck-btn--sm"><svg class="ck-ico ck-ico--xs" aria-hidden="true" focusable="false"><use href="#i-plus"></use></svg>Defeito/Troca</button>
+            <button type="button" data-on-click="adicionarObsChamado" data-args='["Equipamento destinado ao onboarding de novo colaborador(a)."]' class="ck-btn ck-btn--secundario ck-btn--sm"><svg class="ck-ico ck-ico--xs" aria-hidden="true" focusable="false"><use href="#i-plus"></use></svg>Novo colaborador</button>
+            <button type="button" data-on-click="adicionarObsChamado" data-args='["Equipamento para substituição por lentidão/defeito físico."]' class="ck-btn ck-btn--secundario ck-btn--sm"><svg class="ck-ico ck-ico--xs" aria-hidden="true" focusable="false"><use href="#i-plus"></use></svg>Manutenção</button>
           </div>
         </div>
       </section>
@@ -613,18 +603,23 @@ Horário disponível para atendimento:</textarea>
       <aside class="ck-cartao ck-previa" id="ck-previa-transporte" aria-labelledby="cockpit-transport-preview-title">
         <div class="ck-cartao__cab">
           <h2 class="ck-cartao__titulo" id="cockpit-transport-preview-title">Pré-visualização</h2>
+          <span id="cockpit-transport-preview-state" class="ck-sr" data-status="neutro" role="status" aria-live="polite">Aguardando equipamento</span>
           <span class="ck-espaco"></span>
-          <span id="cockpit-transport-preview-state" class="ck-badge" data-status="neutro" role="status" aria-live="polite">Aguardando equipamento</span>
+          <span class="ck-badge" data-status="neutro" id="ck-previa-contagem"><svg class="ck-ico ck-ico--xs" aria-hidden="true" focusable="false"><use href="#i-alerta"></use></svg><span id="ck-previa-contagem-texto">0/0 campos</span></span>
         </div>
-        <p class="ck-previa__contagem" id="ck-previa-contagem">0/0 campos obrigatórios</p>
         <dl class="ck-previa__linhas">
           <dt>Equipamento</dt><dd id="cockpit-preview-equipment">—</dd>
+          <dt>Apelido</dt><dd id="cockpit-preview-alias">—</dd>
           <dt>Retirada</dt><dd id="cockpit-preview-pickup">—</dd>
           <dt>CNPJ retirada</dt><dd id="cockpit-preview-pickup-cnpj">—</dd>
           <dt>Contato</dt><dd id="cockpit-preview-contact">—</dd>
           <dt>Horário</dt><dd id="cockpit-preview-hours">—</dd>
+          <dt>Acesso</dt><dd id="cockpit-preview-access">—</dd>
           <dt>Entrega</dt><dd id="cockpit-preview-delivery">—</dd>
+          <dt>CEP</dt><dd id="cockpit-preview-cep">—</dd>
+          <dt>CNPJ entrega</dt><dd id="cockpit-preview-delivery-cnpj">—</dd>
           <dt>Destinatário</dt><dd id="cockpit-preview-recipient">—</dd>
+          <dt>Horário</dt><dd id="cockpit-preview-delivery-hours">—</dd>
           <dt>Observações</dt><dd id="cockpit-preview-notes">—</dd>
         </dl>
       </aside>
@@ -634,7 +629,7 @@ Horário disponível para atendimento:</textarea>
 
     <!-- Barra de ações fixa: os handlers existentes continuam associados aos mesmos IDs. -->
     <aside aria-label="Painel de Ações Rápidas" class="ck-acoes-barra">
-      <div class="ck-acoes-status">
+      <div class="ck-acoes-status ck-sr">
         <span class="ck-acoes-ponto" id="status-indicator" data-state="ready" aria-hidden="true"></span>
         <div id="status-summary" role="status" aria-live="polite" aria-atomic="true">
           <span class="ck-acoes-pronto" data-ux-ready-status>Pronto para emissão.</span>
@@ -716,7 +711,7 @@ Horário disponível para atendimento:</textarea>
     <div id="automacao-cards" class="ck-auto">
       <div class="ck-auto__principal">
       <section id="automacao-aviso-login" class="ck-aviso ck-aviso--alerta automation-login-alert" role="alert" aria-labelledby="automacao-aviso-login-titulo" hidden>
-        <i data-lucide="user-check" class="ck-ico" aria-hidden="true"></i>
+        <svg class="ck-ico" aria-hidden="true" focusable="false"><use href="#i-user-check"></use></svg>
         <div>
           <h2 id="automacao-aviso-login-titulo" class="ck-secao-titulo">Login necessário no Chrome</h2>
           <p id="automacao-aviso-login-texto" class="ck-cartao__meta"></p>
@@ -724,168 +719,116 @@ Horário disponível para atendimento:</textarea>
       </section>
 
       <section class="ck-cartao ck-chrome" aria-labelledby="automacao-titulo">
-        <h2 id="automacao-titulo" class="ck-chrome__nome"><i data-lucide="globe" class="ck-ico" aria-hidden="true"></i>Chrome · porta 9333</h2>
-        <div id="automacao-estado" class="ck-chrome__estado automation-status" role="status" aria-live="polite" aria-atomic="true" data-state="livre">
-          <span class="automation-status-dot" aria-hidden="true"></span>
-          <strong id="automacao-estado-titulo" class="automation-status-title">Livre</strong>
-          <span id="automacao-estado-detalhe" class="ck-chrome__det automation-status-detail">Verificando…</span>
-        </div>
-        <p class="ck-chrome__det">Chrome de automação com perfil próprio, porta 9333. Os logins são feitos por você nessa janela; os arquivos exportados são importados pelas pastas locais de entrada, como no executar_automacao.bat.</p>
+        <h2 class="ck-chrome__nome" id="automacao-titulo"><svg class="ck-ico ck-ico--lg" aria-hidden="true" focusable="false"><use href="#i-monitor"></use></svg>Chrome · porta 9333</h2>
+        <div id="automacao-estado" role="status" aria-live="polite" aria-atomic="true" data-state="livre"><span class="ck-badge" data-status="ok"><svg class="ck-ico ck-ico--xs" aria-hidden="true" focusable="false"><use href="#i-ok"></use></svg><strong id="automacao-estado-titulo">Livre</strong></span></div>
+        <span class="ck-chrome__det" id="automacao-estado-detalhe">Verificando…</span>
+        <span class="ck-espaco"></span>
+        <button type="button" class="ck-btn ck-btn--fantasma ck-btn--sm" id="btn-automacao-login" data-automacao-rotina="login" data-on-click="iniciarRotinaAutomacao" data-args='["login"]'><svg class="ck-ico ck-ico--sm" aria-hidden="true" focusable="false"><use href="#i-user-check"></use></svg>Abrir Chrome para login</button>
       </section>
 
-      <div class="automation-action-layout">
-        <div class="automation-actions automation-actions--primary ck-rotinas" role="group" aria-label="Rotinas principais">
-          <article class="ck-cartao ck-rotina">
-            <div class="ck-rotina__cab"><span class="ck-rotina__icone"><i data-lucide="clipboard-list" class="ck-ico" aria-hidden="true"></i></span><h3 class="ck-rotina__titulo">Rotina de OS</h3></div>
+      <section aria-labelledby="ck-rotinas-titulo">
+        <h2 class="ck-sr" id="ck-rotinas-titulo">Rotinas principais</h2>
+        <div class="ck-rotinas" role="group" aria-label="Rotinas principais">
+          <article class="ck-cartao ck-rotina" data-rotina="os" data-estado="ocioso">
+            <div class="ck-rotina__cab"><span class="ck-rotina__icone" aria-hidden="true"><svg class="ck-ico" aria-hidden="true" focusable="false"><use href="#i-clipboard"></use></svg></span><h3 class="ck-rotina__titulo" id="ck-rotina-os-titulo">Rotina de OS</h3></div>
             <p class="ck-rotina__desc">Oracle Service Cloud + UX Simpress (Acompanhamento de pedidos).</p>
-            <div class="ck-rotina__rodape"><button type="button" id="btn-automacao-os" data-automacao-rotina="os" data-on-click="iniciarRotinaAutomacao" data-args='["os"]' class="ck-btn ck-btn--primario ck-btn--sm" title="Oracle Service Cloud + UX Simpress (Acompanhamento de pedidos)"><i data-lucide="play" class="ck-ico" aria-hidden="true"></i><span>Rotina de OS</span></button></div>
+            <div class="ck-rotina__rodape"><span class="ck-badge" data-rotina-badge="os"><svg class="ck-ico ck-ico--xs" aria-hidden="true" focusable="false"><use href="#i-clock"></use></svg><span>—</span></span><button type="button" class="ck-btn ck-btn--secundario ck-btn--sm" id="btn-automacao-os" aria-describedby="ck-rotina-os-titulo" data-automacao-rotina="os" data-on-click="iniciarRotinaAutomacao" data-args='["os"]'><svg class="ck-ico ck-ico--xs" aria-hidden="true" focusable="false"><use href="#i-play"></use></svg><span>Executar</span></button></div>
           </article>
-          <article class="ck-cartao ck-rotina">
-            <div class="ck-rotina__cab"><span class="ck-rotina__icone"><i data-lucide="laptop" class="ck-ico" aria-hidden="true"></i></span><h3 class="ck-rotina__titulo">Inventários</h3></div>
+          <article class="ck-cartao ck-rotina" data-rotina="inventarios" data-estado="ocioso">
+            <div class="ck-rotina__cab"><span class="ck-rotina__icone" aria-hidden="true"><svg class="ck-ico" aria-hidden="true" focusable="false"><use href="#i-laptop"></use></svg></span><h3 class="ck-rotina__titulo" id="ck-rotina-inventarios-titulo">Inventários</h3></div>
             <p class="ck-rotina__desc">UX Simpress (Meus equipamentos) + Endpoint Central.</p>
-            <div class="ck-rotina__rodape"><button type="button" id="btn-automacao-inventarios" data-automacao-rotina="inventarios" data-on-click="iniciarRotinaAutomacao" data-args='["inventarios"]' class="ck-btn ck-btn--primario ck-btn--sm" title="UX Simpress (Meus equipamentos) + Endpoint Central"><i data-lucide="play" class="ck-ico" aria-hidden="true"></i><span>Inventários</span></button></div>
+            <div class="ck-rotina__rodape"><span class="ck-badge" data-rotina-badge="inventarios"><svg class="ck-ico ck-ico--xs" aria-hidden="true" focusable="false"><use href="#i-clock"></use></svg><span>—</span></span><button type="button" class="ck-btn ck-btn--secundario ck-btn--sm" id="btn-automacao-inventarios" aria-describedby="ck-rotina-inventarios-titulo" data-automacao-rotina="inventarios" data-on-click="iniciarRotinaAutomacao" data-args='["inventarios"]'><svg class="ck-ico ck-ico--xs" aria-hidden="true" focusable="false"><use href="#i-play"></use></svg><span>Executar</span></button></div>
           </article>
-          <article class="ck-cartao ck-rotina">
-            <div class="ck-rotina__cab"><span class="ck-rotina__icone"><i data-lucide="layers" class="ck-ico" aria-hidden="true"></i></span><h3 class="ck-rotina__titulo">Ambas</h3></div>
+          <article class="ck-cartao ck-rotina" data-rotina="ambas" data-estado="ocioso">
+            <div class="ck-rotina__cab"><span class="ck-rotina__icone" aria-hidden="true"><svg class="ck-ico" aria-hidden="true" focusable="false"><use href="#i-layers"></use></svg></span><h3 class="ck-rotina__titulo" id="ck-rotina-ambas-titulo">Ambas</h3></div>
             <p class="ck-rotina__desc">Rotina de OS e, em seguida, a de inventários.</p>
-            <div class="ck-rotina__rodape"><button type="button" id="btn-automacao-ambas" data-automacao-rotina="ambas" data-on-click="iniciarRotinaAutomacao" data-args='["ambas"]' class="ck-btn ck-btn--primario ck-btn--sm" title="Rotina de OS e, em seguida, a de inventários"><i data-lucide="play" class="ck-ico" aria-hidden="true"></i><span>Ambas</span></button></div>
+            <div class="ck-rotina__rodape"><span class="ck-badge" data-rotina-badge="ambas"><svg class="ck-ico ck-ico--xs" aria-hidden="true" focusable="false"><use href="#i-clock"></use></svg><span>—</span></span><button type="button" class="ck-btn ck-btn--secundario ck-btn--sm" id="btn-automacao-ambas" aria-describedby="ck-rotina-ambas-titulo" data-automacao-rotina="ambas" data-on-click="iniciarRotinaAutomacao" data-args='["ambas"]'><svg class="ck-ico ck-ico--xs" aria-hidden="true" focusable="false"><use href="#i-play"></use></svg><span>Executar</span></button></div>
           </article>
         </div>
-        <div class="automation-action-support">
-          <section class="ck-cartao ck-linha-acao automation-action-independent" role="group" aria-label="Verificação manual de usuários">
-            <span class="ck-linha-acao__texto"><strong class="automation-action-caption">Verificação manual</strong><span>Confere no Endpoint Central as pendências de usuário logado.</span></span>
-            <button type="button" id="btn-automacao-usuarios" data-automacao-rotina="usuarios" data-on-click="iniciarRotinaAutomacao" data-args='["usuarios"]' class="ck-btn ck-btn--secundario ck-btn--sm" title="Confere no Endpoint Central as pendências de usuário logado">
-              <i data-lucide="users" class="ck-ico" aria-hidden="true"></i>
-              <span>Verificar usuários</span>
-            </button>
-          </section>
-          <section class="ck-cartao ck-linha-acao automation-actions automation-actions--utility" role="group" aria-label="Controles do Chrome">
-            <span class="ck-linha-acao__texto"><strong>Chrome de automação</strong><span>Abre as abas do Oracle, UX Simpress e Endpoint Central para você fazer os logins.</span></span>
-            <button type="button" id="btn-automacao-login" data-automacao-rotina="login" data-on-click="iniciarRotinaAutomacao" data-args='["login"]' class="ck-btn ck-btn--secundario ck-btn--sm" title="Abre as abas do Oracle, UX Simpress e Endpoint Central para você fazer os logins">
-              <i data-lucide="user-check" class="ck-ico" aria-hidden="true"></i>
-              <span>Abrir Chrome para login</span>
-            </button>
-          </section>
-        </div>
-      </div>
+      </section>
 
-      <details class="cockpit-sebrae-details ck-sebrae-detalhes" open>
-        <summary class="ck-secao-titulo">Sincronização de chamados Sebrae</summary>
-        <section id="sebrae-painel" class="ck-cartao ck-sebrae sebrae-card" aria-labelledby="sebrae-titulo">
-                <div class="ck-cartao__cab">
-                  <div class="ck-sebrae-titulo"><h2 id="sebrae-titulo" class="ck-cartao__titulo">Sincronizar chamados Sebrae</h2><span class="info-tip"><button type="button" class="info-tip-trigger" aria-label="Sobre a sincronização Sebrae" aria-describedby="sebrae-regra"><i data-lucide="info" aria-hidden="true"></i></button><span id="sebrae-regra" role="tooltip" class="info-tip-text">Roda de segunda a sexta, das 09h15 às 17h45, a cada 30 minutos, com o computador ligado e o servidor local da Simpress em execução. Logs e motivos de falha ficam em Andamento e em Últimas execuções. O login é sempre feito por você, no Chrome de automação.</span></span></div>
-                  <span class="ck-cartao__meta">SoftExpert → Dashboard Operacional_SEBRAE</span>
-                </div>
-                <div id="sebrae-estado" class="ck-chrome__estado automation-status" role="status" aria-live="polite" aria-atomic="true" data-state="pausado">
-                  <span class="automation-status-dot" aria-hidden="true"></span>
-                  <strong id="sebrae-estado-titulo" class="automation-status-title">Agendamento pausado</strong>
-                  <span id="sebrae-estado-detalhe" class="ck-chrome__det automation-status-detail">Verificando…</span>
-                </div>
-                <p id="sebrae-login-aviso" class="ck-aviso ck-aviso--alerta sebrae-login-notice" role="status" hidden>
-                  <i data-lucide="user-check" class="ck-ico" aria-hidden="true"></i>
-                  <span>Login necessário: faça o login no Chrome de automação (SoftExpert ou Excel Online) e execute de novo.</span>
-                </p>
-                <dl class="ck-fatos sebrae-facts">
-                  <div><dt>Agendamento</dt><dd id="sebrae-agendamento">—</dd></div>
-                  <div><dt>Última execução</dt><dd id="sebrae-ultima">—</dd></div>
-                  <div><dt>Próxima execução</dt><dd id="sebrae-proxima">—</dd></div>
-                </dl>
-                <dl class="ck-fatos sebrae-counters">
-                  <div class="sebrae-counter"><dt>Incluídos</dt><dd id="sebrae-incluidos">—</dd></div>
-                  <div class="sebrae-counter"><dt>Ignorados por duplicidade</dt><dd id="sebrae-ignorados">—</dd></div>
-                  <div class="sebrae-counter"><dt>Mantidos pendentes</dt><dd id="sebrae-pendentes">—</dd></div>
-                </dl>
-                <div class="ck-grupo-botoes" role="group" aria-label="Sincronização dos chamados Sebrae">
-                  <button type="button" id="btn-sebrae-executar" data-automacao-rotina="sebrae" data-on-click="iniciarRotinaAutomacao" data-args='["sebrae"]' class="ck-btn ck-btn--primario ck-btn--sm" title="Lê os chamados do SoftExpert e inclui os novos no Dashboard agora">
-                    <i data-lucide="refresh-cw" class="ck-ico" aria-hidden="true"></i>
-                    <span>Executar agora</span>
-                  </button>
-                  <button type="button" id="btn-sebrae-agendamento" data-on-click="alternarAgendamentoSebrae" class="ck-btn ck-btn--secundario ck-btn--sm" title="Liga ou pausa a execução automática de segunda a sexta">
-                    <i data-lucide="history" class="ck-ico" aria-hidden="true"></i>
-                    <span>Ativar agendamento</span>
-                  </button>
-                  <button type="button" id="btn-sebrae-cancelar" data-on-click="cancelarRotinaAutomacao" class="ck-btn ck-btn--perigo ck-btn--sm" title="Para a sincronização em andamento; o Chrome continua aberto" disabled>
-                    <i data-lucide="x" class="ck-ico" aria-hidden="true"></i>
-                    <span>Cancelar sincronização</span>
-                  </button>
-                </div>
-                <p id="sebrae-agendamento-aviso" class="ck-cartao__meta" role="status" hidden></p>
-                <h3 id="sebrae-pendencias-titulo" class="ck-secao-titulo">Pendências</h3>
-                <div id="sebrae-pendencias" class="sebrae-pendencias">
-                  <p class="ck-lista__vazio">Nenhuma pendência.</p>
-                </div>
-              </section>
-      </details>
+      <section class="ck-cartao ck-linha-acao" data-rotina="usuarios" aria-labelledby="ck-verificacao-titulo">
+        <span class="ck-rotina__icone" aria-hidden="true"><svg class="ck-ico" aria-hidden="true" focusable="false"><use href="#i-users"></use></svg></span>
+        <div class="ck-linha-acao__texto"><h2 class="ck-rotina__titulo" id="ck-verificacao-titulo">Verificar usuários</h2><span>Verificação manual · confere no Endpoint Central as pendências de usuário logado.</span></div>
+        <span class="ck-badge" data-rotina-badge="usuarios"><svg class="ck-ico ck-ico--xs" aria-hidden="true" focusable="false"><use href="#i-clock"></use></svg><span>—</span></span>
+        <button type="button" class="ck-btn ck-btn--secundario ck-btn--sm" id="btn-automacao-usuarios" aria-describedby="ck-verificacao-titulo" data-automacao-rotina="usuarios" data-on-click="iniciarRotinaAutomacao" data-args='["usuarios"]'><svg class="ck-ico ck-ico--xs" aria-hidden="true" focusable="false"><use href="#i-play"></use></svg><span>Executar</span></button>
+      </section>
 
-      <section id="automacao-historico-painel" class="ck-cartao" aria-labelledby="automacao-historico-titulo">
-        <div class="ck-cartao__cab">
-          <h2 id="automacao-historico-titulo" class="ck-cartao__titulo">Últimas execuções</h2>
-          <span class="ck-espaco"></span>
-          <button type="button" id="btn-automacao-historico" data-on-click="carregarHistoricoAutomacao" class="ck-btn ck-btn--secundario ck-btn--sm" title="Atualizar a lista de execuções">
-            <i data-lucide="refresh-cw" class="ck-ico" aria-hidden="true"></i>
-            <span>Atualizar</span>
-          </button>
-          <button type="button" class="ck-btn ck-btn--fantasma ck-btn--sm" data-on-click="recolherPainelAutomacao" data-args='["historico"]' aria-expanded="true" aria-controls="automacao-historico-conteudo" aria-label="Recolher Últimas execuções">Recolher</button>
-          <button type="button" class="ck-btn ck-btn--fantasma ck-btn--sm" data-on-click="ampliarPainelAutomacao" data-args='["historico"]' aria-pressed="false" aria-label="Ampliar Últimas execuções">Ampliar</button>
-        </div>
-        <div id="automacao-historico-conteudo">
-          <details class="ck-filtros-detalhes" id="automacao-historico-filtros">
-            <summary>Filtros de execuções</summary>
-            <div class="ck-filtros-linha">
-              <label class="ck-campo">De<input type="date" class="ck-entrada ck-entrada--sm" id="automacao-historico-inicio"></label>
-              <label class="ck-campo">Até<input type="date" class="ck-entrada ck-entrada--sm" id="automacao-historico-fim"></label>
-              <label class="ck-campo">Rotina<select class="ck-entrada ck-entrada--sm" id="automacao-historico-rotina"><option value="">Todas</option><option value="os">Rotina de OS</option><option value="inventarios">Inventários</option><option value="usuarios">Verificar usuários</option><option value="ambas">Ambas</option><option value="login">Abrir Chrome para login</option><option value="sebrae">Sincronizar chamados Sebrae</option></select></label>
-              <label class="ck-campo">Status<select class="ck-entrada ck-entrada--sm" id="automacao-historico-status"><option value="">Todos</option><option value="concluido">Concluído</option><option value="falha">Falha</option><option value="cancelado">Cancelado</option><option value="em_andamento">Em andamento</option><option value="ocupada">Ocupada</option><option value="interrompido">Interrompido</option></select></label>
-              <button type="button" class="ck-btn ck-btn--primario ck-btn--sm" data-on-click="filtrarHistoricoAutomacao">Aplicar filtros</button>
-              <button type="button" class="ck-btn ck-btn--secundario ck-btn--sm" data-on-click="limparFiltrosAutomacao">Limpar filtros</button>
-            </div>
-          </details>
-          <p id="automacao-historico-resumo" class="ck-cartao__meta" role="status"></p>
-          <div id="automacao-historico" class="automation-history">
-            <p class="ck-lista__vazio">Carregando…</p>
+      <section class="ck-cartao" id="sebrae-painel" aria-labelledby="sebrae-titulo">
+        <div class="ck-cartao__cab"><h2 class="ck-cartao__titulo" id="sebrae-titulo">Sincronizar chamados Sebrae</h2><span class="ck-cartao__meta">SoftExpert → Dashboard Operacional_SEBRAE</span><span class="ck-espaco"></span><span class="ck-badge" id="sebrae-estado" role="status" aria-live="polite" data-state="pausado"><svg class="ck-ico ck-ico--xs" aria-hidden="true" focusable="false"><use href="#i-neutro"></use></svg><span id="sebrae-estado-titulo">Agendamento pausado</span></span><span id="sebrae-estado-detalhe" class="ck-sr">Verificando…</span></div>
+        <div class="ck-cartao__corpo ck-det__corpo">
+          <p id="sebrae-login-aviso" class="ck-aviso ck-aviso--alerta sebrae-login-notice" role="status" hidden>
+            <svg class="ck-ico" aria-hidden="true" focusable="false"><use href="#i-user-check"></use></svg>
+            <span>Login necessário: faça o login no Chrome de automação (SoftExpert ou Excel Online) e execute de novo.</span>
+          </p>
+          <dl class="ck-fatos">
+            <div><dt>Agendamento</dt><dd id="sebrae-agendamento">—</dd></div>
+            <div><dt>Última execução</dt><dd id="sebrae-ultima">—</dd></div>
+            <div><dt>Próxima execução</dt><dd id="sebrae-proxima">—</dd></div>
+          </dl>
+          <dl class="ck-fatos">
+            <div><dt>Incluídos</dt><dd id="sebrae-incluidos">—</dd></div>
+            <div><dt>Ignorados por duplicidade</dt><dd id="sebrae-ignorados">—</dd></div>
+            <div><dt>Mantidos pendentes</dt><dd id="sebrae-pendentes">—</dd></div>
+          </dl>
+          <div class="ck-grupo-botoes" role="group" aria-label="Sincronização dos chamados Sebrae">
+            <button type="button" class="ck-btn ck-btn--secundario ck-btn--sm" id="btn-sebrae-executar" data-automacao-rotina="sebrae" data-on-click="iniciarRotinaAutomacao" data-args='["sebrae"]'><svg class="ck-ico ck-ico--xs" aria-hidden="true" focusable="false"><use href="#i-refresh"></use></svg><span>Executar agora</span></button>
+            <button type="button" class="ck-btn ck-btn--secundario ck-btn--sm" id="btn-sebrae-agendamento" data-on-click="alternarAgendamentoSebrae"><svg class="ck-ico ck-ico--xs" aria-hidden="true" focusable="false"><use href="#i-clock"></use></svg><span>Ativar agendamento</span></button>
+            <button type="button" class="ck-btn ck-btn--perigo ck-btn--sm" id="btn-sebrae-cancelar" data-on-click="cancelarRotinaAutomacao" disabled><svg class="ck-ico ck-ico--xs" aria-hidden="true" focusable="false"><use href="#i-x"></use></svg><span>Cancelar sincronização</span></button>
           </div>
-          <nav class="ck-paginacao" aria-label="Páginas das execuções">
-            <label class="ck-paginacao__grupo">Execuções por página<select class="ck-entrada ck-entrada--sm" id="automacao-historico-limite" data-on-change="filtrarHistoricoAutomacao"><option value="5" selected>5</option><option value="10">10</option><option value="20">20</option></select></label>
-            <div class="ck-paginacao__grupo"><button type="button" id="automacao-historico-anterior" class="ck-btn ck-btn--secundario ck-btn--sm" data-on-click="mudarPaginaHistoricoAutomacao" data-args='[-1]'>Anterior</button><span id="automacao-historico-pagina" class="ck-cartao__meta"></span><button type="button" id="automacao-historico-proxima" class="ck-btn ck-btn--secundario ck-btn--sm" data-on-click="mudarPaginaHistoricoAutomacao" data-args='[1]'>Próxima</button></div>
-          </nav>
+          <p id="sebrae-agendamento-aviso" class="ck-cartao__meta" role="status" hidden></p>
+          <div id="sebrae-pendencias"><p class="ck-cartao__meta">Pendências: nenhuma.</p></div>
         </div>
+      </section>
+
+      <section class="ck-cartao" id="automacao-historico-painel" aria-labelledby="automacao-historico-titulo">
+        <div class="ck-cartao__cab"><h2 class="ck-cartao__titulo" id="automacao-historico-titulo">Últimas execuções</h2><span class="ck-cartao__meta" id="automacao-historico-resumo" role="status"></span><span class="ck-espaco"></span><button type="button" class="ck-btn ck-btn--fantasma ck-btn--sm" id="btn-automacao-historico" data-on-click="carregarHistoricoAutomacao"><svg class="ck-ico ck-ico--sm" aria-hidden="true" focusable="false"><use href="#i-refresh"></use></svg>Atualizar</button></div>
+        <div class="ck-filtros-linha" id="automacao-historico-filtros" role="group" aria-label="Filtros de execuções">
+          <label class="ck-campo"><span class="ck-campo__rotulo">De</span><input class="ck-entrada ck-entrada--sm" type="date" id="automacao-historico-inicio"></label>
+          <label class="ck-campo"><span class="ck-campo__rotulo">Até</span><input class="ck-entrada ck-entrada--sm" type="date" id="automacao-historico-fim"></label>
+          <label class="ck-campo"><span class="ck-campo__rotulo">Rotina</span><select class="ck-entrada ck-entrada--sm" id="automacao-historico-rotina"><option value="">Todas</option><option value="os">Rotina de OS</option><option value="inventarios">Inventários</option><option value="usuarios">Verificar usuários</option><option value="ambas">Ambas</option><option value="login">Abrir Chrome para login</option><option value="sebrae">Sincronizar chamados Sebrae</option></select></label>
+          <label class="ck-campo"><span class="ck-campo__rotulo">Status</span><select class="ck-entrada ck-entrada--sm" id="automacao-historico-status"><option value="">Todos</option><option value="concluido">Concluído</option><option value="falha">Falha</option><option value="cancelado">Cancelado</option><option value="em_andamento">Em andamento</option><option value="ocupada">Ocupada</option><option value="interrompido">Interrompido</option></select></label>
+          <button type="button" class="ck-btn ck-btn--primario ck-btn--sm" data-on-click="filtrarHistoricoAutomacao">Aplicar</button>
+          <button type="button" class="ck-btn ck-btn--fantasma ck-btn--sm" data-on-click="limparFiltrosAutomacao">Limpar</button>
+        </div>
+        <div class="ck-cartao__corpo" id="automacao-historico">
+          <p class="ck-lista__vazio">Carregando…</p>
+        </div>
+        <nav class="ck-paginacao" aria-label="Páginas das execuções">
+          <label class="ck-paginacao__grupo">Execuções por página<select class="ck-entrada ck-entrada--sm" id="automacao-historico-limite" data-on-change="filtrarHistoricoAutomacao"><option value="5" selected>5</option><option value="10">10</option><option value="20">20</option></select></label>
+          <div class="ck-paginacao__grupo"><button type="button" class="ck-btn ck-btn--secundario ck-btn--sm" id="automacao-historico-anterior" data-on-click="mudarPaginaHistoricoAutomacao" data-args='[-1]'>Anterior</button><span id="automacao-historico-pagina"></span><button type="button" class="ck-btn ck-btn--secundario ck-btn--sm" id="automacao-historico-proxima" data-on-click="mudarPaginaHistoricoAutomacao" data-args='[1]'>Próxima</button></div>
+        </nav>
       </section>
       </div>
 
-      <section id="automacao-andamento-painel" class="ck-console" aria-labelledby="automacao-andamento-titulo">
+      <section class="ck-console" id="automacao-andamento-painel" aria-labelledby="automacao-andamento-titulo">
         <div class="ck-console__cab">
-          <h2 id="automacao-andamento-titulo" class="ck-console__titulo">Console de atividades</h2>
-          <span id="cockpit-automation-live" class="ck-ao-vivo" hidden><span class="ck-ao-vivo__ponto" aria-hidden="true"></span>ao vivo</span>
+          <h2 class="ck-console__titulo" id="automacao-andamento-titulo">Console de atividades</h2>
+          <span class="ck-ao-vivo" id="cockpit-automation-live" hidden><span class="ck-ao-vivo__ponto" aria-hidden="true"></span>ao vivo</span>
           <span class="ck-espaco"></span>
-          <button type="button" class="ck-btn ck-btn--fantasma ck-btn--sm" data-on-click="recolherPainelAutomacao" data-args='["andamento"]' aria-expanded="true" aria-controls="automacao-andamento-conteudo" aria-label="Recolher Andamento">Recolher</button>
-          <button type="button" class="ck-btn ck-btn--fantasma ck-btn--sm" data-on-click="ampliarPainelAutomacao" data-args='["andamento"]' aria-pressed="false" aria-label="Ampliar Andamento">Ampliar</button>
+          <span class="ck-console__exec" id="automacao-log-modo" role="status">Ao vivo · execução mais recente</span>
         </div>
-        <div id="automacao-andamento-conteudo" class="ck-console__corpo">
-          <div class="ck-console__ferramentas">
-            <details class="ck-consulta" id="automacao-log-filtros">
-              <summary>Consultar execuções por data</summary>
-              <div class="ck-consulta__campos">
-                <label class="ck-campo">Data do log<input type="date" class="ck-entrada ck-entrada--sm" id="automacao-log-data" data-on-change="carregarExecucoesLogAutomacao"></label>
-                <label class="ck-campo">Execução<select class="ck-entrada ck-entrada--sm" id="automacao-log-execucao" data-on-change="selecionarLogAutomacao" data-args='["$value"]'><option value="">Selecione uma data</option></select></label>
-              </div>
-              <div class="ck-paginacao__grupo" id="automacao-log-paginas" hidden>
-                <button type="button" class="ck-btn ck-btn--secundario ck-btn--sm" id="automacao-log-anterior" data-on-click="mudarPaginaLogAutomacao" data-args='[-1]'>Execuções anteriores</button>
-                <span class="ck-cartao__meta" id="automacao-log-pagina"></span>
-                <button type="button" class="ck-btn ck-btn--secundario ck-btn--sm" id="automacao-log-proxima" data-on-click="mudarPaginaLogAutomacao" data-args='[1]'>Próximas execuções</button>
-              </div>
-            </details>
-            <label class="ck-campo ck-console__linhas">Linhas do log<select class="ck-entrada ck-entrada--sm" id="automacao-log-limite" data-on-change="alterarLimiteLogAutomacao"><option value="100">100</option><option value="200" selected>200</option><option value="500">500</option></select></label>
-            <button type="button" id="automacao-log-ao-vivo" class="ck-btn ck-btn--secundario ck-btn--sm" data-on-click="voltarAoVivoAutomacao" hidden>Voltar ao vivo</button>
-          </div>
-          <p id="automacao-log-modo" class="ck-console__exec" role="status">Ao vivo · execução mais recente</p>
-          <ol id="cockpit-automation-events" class="ck-log" role="list" aria-live="polite" aria-relevant="additions text" aria-label="Eventos da execução"><li class="ck-log__linha" data-state="waiting"><span class="ck-log__hora">—</span><span class="ck-log__origem"></span><span class="ck-log__msg">Aguardando atividade do Chrome.</span><span class="ck-nivel" data-status="alerta">Aguardando</span></li></ol>
-          <footer class="ck-console__rodape">
-            <button type="button" id="btn-log-completo" class="ck-btn ck-btn--secundario ck-btn--sm" data-dialogo="ck-dialogo-log" aria-haspopup="dialog">Log completo</button>
-            <span class="ck-espaco"></span>
-            <button type="button" id="btn-automacao-cancelar" data-on-click="cancelarRotinaAutomacao" class="ck-btn ck-btn--perigo ck-btn--sm" title="Para a rotina em andamento; o Chrome continua aberto" disabled>
-              <i data-lucide="x" class="ck-ico" aria-hidden="true"></i><span>Cancelar execução</span>
-            </button>
-          </footer>
+        <div class="ck-console__ferramentas" id="automacao-log-filtros">
+          <fieldset class="ck-consulta">
+            <legend>Consultar execuções por data</legend>
+            <div class="ck-consulta__campos">
+              <label><span class="ck-sr">Data do log</span><input class="ck-entrada ck-entrada--sm" type="date" id="automacao-log-data" data-on-change="carregarExecucoesLogAutomacao"></label>
+              <label><span class="ck-sr">Execução</span><select class="ck-entrada ck-entrada--sm" id="automacao-log-execucao" data-on-change="selecionarLogAutomacao" data-args='["$value"]'><option value="">Selecione uma data</option></select></label>
+            </div>
+            <div class="ck-paginacao__grupo" id="automacao-log-paginas" hidden>
+              <button type="button" class="ck-btn ck-btn--secundario ck-btn--sm" id="automacao-log-anterior" data-on-click="mudarPaginaLogAutomacao" data-args='[-1]'>Execuções anteriores</button>
+              <span class="ck-cartao__meta" id="automacao-log-pagina"></span>
+              <button type="button" class="ck-btn ck-btn--secundario ck-btn--sm" id="automacao-log-proxima" data-on-click="mudarPaginaLogAutomacao" data-args='[1]'>Próximas execuções</button>
+            </div>
+          </fieldset>
+          <label class="ck-campo ck-console__linhas"><span class="ck-campo__rotulo">Linhas do log</span><select class="ck-entrada ck-entrada--sm" id="automacao-log-limite" data-on-change="alterarLimiteLogAutomacao"><option value="100">100</option><option value="200" selected>200</option><option value="500">500</option></select></label>
+          <button type="button" class="ck-btn ck-btn--secundario ck-btn--sm" id="automacao-log-ao-vivo" data-on-click="voltarAoVivoAutomacao" hidden>Voltar ao vivo</button>
+        </div>
+        <ol id="cockpit-automation-events" class="ck-log" role="list" aria-live="polite" aria-relevant="additions text" aria-label="Eventos da execução" tabindex="0"><li class="ck-log__linha" data-state="waiting"><span class="ck-log__hora">—</span><span class="ck-log__origem"></span><span class="ck-log__msg">Aguardando atividade do Chrome.</span><span class="ck-nivel" data-status="alerta">Aguardando</span></li></ol>
+        <div class="ck-console__rodape" id="automacao-andamento-conteudo">
+          <button type="button" class="ck-btn ck-btn--secundario ck-btn--sm" id="btn-log-completo" data-dialogo="ck-dialogo-log" aria-haspopup="dialog"><svg class="ck-ico ck-ico--sm" aria-hidden="true" focusable="false"><use href="#i-text"></use></svg>Log completo</button>
+          <span class="ck-espaco"></span>
+          <button type="button" class="ck-btn ck-btn--perigo ck-btn--sm" id="btn-automacao-cancelar" data-on-click="cancelarRotinaAutomacao" title="Para a rotina em andamento; o Chrome continua aberto" disabled><svg class="ck-ico ck-ico--xs" aria-hidden="true" focusable="false"><use href="#i-stop"></use></svg>Cancelar execução</button>
         </div>
       </section>
     </div>

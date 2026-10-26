@@ -16,20 +16,33 @@
     const serial = String(equipment?.serial || "").trim().toUpperCase();
     const selected = Boolean(serial);
 
+    const apelido = selected ? String(equipment?.apelido || "").trim() : "";
+    const alias = document.getElementById("transfer-alias");
+    const logged = String(equipment?.usuarios_logados || "").trim();
+    const nome = String(equipment?.nome_pessoa || "").trim();
+
     if (serialValue) serialValue.textContent = serial;
+    if (alias) {
+      alias.textContent = apelido;
+      alias.hidden = !apelido;
+    }
+    const retiradaSerie = document.getElementById("ck-passo-retirada-serie");
+    if (retiradaSerie) retiradaSerie.textContent = serial;
     if (banner) banner.dataset.state = selected ? "selected" : "empty";
     if (description) {
       description.textContent = selected
-        ? [equipment.modelo, equipment.tipo].filter(Boolean).join(" · ") || "Equipamento pesquisado e selecionado."
+        ? [equipment.modelo, equipment.tipo, logged ? `Usuários logados: ${logged}` : "", nome ? `Nome: ${nome}` : ""].filter(Boolean).join(" · ") || "Equipamento pesquisado e selecionado."
         : "Nenhum equipamento selecionado.";
     }
-    const users = document.getElementById("transfer-equipment-users");
-    if (users) {
-      const logged = String(equipment?.usuarios_logados || "").trim();
-      const nome = String(equipment?.nome_pessoa || "").trim();
-      users.textContent = selected ? [logged ? `Usuários logados: ${logged}` : "", nome ? `Nome: ${nome}` : ""].filter(Boolean).join(" · ") : "";
-      users.classList.toggle("hidden", !users.textContent);
-    }
+    emitirEventoInterface("simpress:transporte-equipamento", { serial });
+  }
+
+  // "Trocar equipamento": volta à Home com o campo de busca em foco, sem descartar a transferência.
+  function trocarEquipamentoTransporte() {
+    app.ativarAbaTransferencia("home");
+    const input = document.getElementById("input-serial");
+    input?.focus();
+    input?.select?.();
   }
 
   function campoRastreavelTransferencia(target) {
@@ -146,10 +159,19 @@
     if (botao) botao.disabled = !String(unidadeDestino?.cnpj || "").trim();
   }
 
+  function atualizarChipsUnidade() {
+    const selecionada = String(document.getElementById("select-unidade-destino")?.value || "");
+    document.querySelectorAll("#entrega-unidades .ck-unidade").forEach(chip => {
+      chip.setAttribute("aria-pressed", String(Boolean(selecionada) && chip.dataset.unidadeId === selecionada));
+    });
+  }
+
   function handleUnidadeDestinoChange(unitId, notificar = true) {
     app.atualizarEstadoCopiaCnpjEntrega();
+    atualizarChipsUnidade();
     if (!unitId) {
       app.preencherRepresentanteRegional("entrega", "");
+      app.atualizarPreviaTransporteCockpit?.();
       return;
     }
     const unit = appState.unidadesList.find(u => String(u.id) === String(unitId));
@@ -159,6 +181,7 @@
       app.preencherRepresentanteRegional("entrega", unit.cidade || "");
       if (notificar) app.showToast(`Destino definido: ${unit.cidade}`, "info");
     }
+    app.atualizarPreviaTransporteCockpit?.();
   }
 
   function selecionarUnidadePorCidade(cidadeNome) {
@@ -411,20 +434,34 @@
     const unidade = document.getElementById("select-unidade-destino");
     const destino = unidade?.selectedOptions?.[0]?.textContent?.trim();
     const serial = equipamento?.serial || value("transfer-serial");
-    const modelo = equipamento?.modelo || value("card-modelo");
-    const apelido = equipamento?.apelido || "";
-    set("cockpit-preview-equipment", [serial, modelo, apelido].filter(item => item && item !== "—").join(" · ") || "—");
-    set("cockpit-preview-pickup", appState.retiradaCidadeSelecionada || value("retirada-endereco"));
+    const modelo = equipamento ? (equipamento.modelo || value("card-modelo")) : "—";
+    const apelido = String(equipamento?.apelido || "").trim() || "—";
+    const unidadeSelecionada = unidade?.value
+      ? appState.unidadesList.find(unit => String(unit.id) === String(unidade.value))
+      : null;
+    const retiradaLocal = appState.retiradaCidadeSelecionada || "";
+    const entregaLocal = unidadeSelecionada?.cidade || (unidade?.value ? destino : "");
+    set("retirada-local-nome", retiradaLocal);
+    set("entrega-local-nome", entregaLocal);
+    set("cockpit-preview-equipment", [serial, modelo].filter(item => item && item !== "—").join(" · ") || "—");
+    set("cockpit-preview-alias", apelido);
+    set("cockpit-preview-pickup", [retiradaLocal, value("retirada-endereco")].filter(item => item && item !== "—").join(" — ") || "—");
     set("cockpit-preview-pickup-cnpj", value("retirada-cnpj"));
     setParts("cockpit-preview-contact", [["retirada-contato", "Nome"], ["retirada-telefone", "Celular"]]);
     set("cockpit-preview-hours", [value("retirada-horario"), `almoço ${value("retirada-almoco")}`].filter(item => item !== "—").join(" · ") || "—");
-    set("cockpit-preview-delivery", value("entrega-endereco") !== "—" ? value("entrega-endereco") : (unidade?.value ? destino : "—"));
+    set("cockpit-preview-access", [value("retirada-tipo-acesso"), value("retirada-voltagem")].filter(item => item !== "—").join(" · ") || "—");
+    set("cockpit-preview-delivery", [entregaLocal, value("entrega-endereco")].filter(item => item && item !== "—").join(" — ") || "—");
+    set("cockpit-preview-cep", String(unidadeSelecionada?.cep || "").trim() || "—");
+    set("cockpit-preview-delivery-cnpj", value("entrega-cnpj"));
     setParts("cockpit-preview-recipient", [["entrega-contato", "Destinatário"], ["entrega-telefone", "Celular"]]);
+    setParts("cockpit-preview-delivery-hours", [["entrega-horario", "Expediente"], ["entrega-almoco", "Almoço"], ["entrega-pausa-duracao", "Pausa"]]);
     setParts("cockpit-preview-notes", [["entrega-obs", "Observações"]]);
     const required = typeof root.querySelectorAll === "function" ? [...root.querySelectorAll("input[required], textarea[required], select[required]")] : [];
     const filled = required.filter(field => String(field.value || "").trim()).length;
     const count = document.getElementById("ck-previa-contagem");
-    if (count) count.textContent = `${filled}/${required.length} campos obrigatórios`;
+    const countText = document.getElementById("ck-previa-contagem-texto");
+    if (countText) countText.textContent = `${filled}/${required.length} campos`;
+    if (count) count.dataset.status = required.length && filled === required.length ? "ok" : "alerta";
     const state = document.getElementById("cockpit-transport-preview-state");
     if (state) {
       state.textContent = equipamento ? (unidade?.value ? "Prévia atualizada" : "Selecione a entrega") : "Aguardando equipamento";
@@ -739,6 +776,8 @@
     app.atualizarEstadoCopiaCnpjEntrega();
     app.preencherRepresentanteRegional("entrega", "");
     app.preencherRepresentanteRegional("retirada", "");
+    atualizarChipsUnidade();
+    atualizarPreviaTransporteCockpit();
 
     // Reset status indicator
     document.getElementById("status-indicator").dataset.state = "ready";
@@ -766,7 +805,7 @@
   return {
     atualizarResumoSerieTransferencia, ativarAbaTransferencia, abrirAbaTransporteDoEquipamento,
     abrirHomeParaPesquisarEquipamento, controlarAbasTransferencia, forcarSedePradoVelho,
-    atualizarEstadoCopiaCnpjEntrega, handleUnidadeDestinoChange, selecionarUnidadePorCidade, adicionarObsChamado,
+    atualizarEstadoCopiaCnpjEntrega, atualizarChipsUnidade, trocarEquipamentoTransporte, handleUnidadeDestinoChange, selecionarUnidadePorCidade, adicionarObsChamado,
     copiarModeloChamado, alternarVisualizacaoModelo, recolherVisualizacoesModelosChamado, alternarChamadosManuais,
     abrirModalPreview, fecharModalPreview, copiarTextoDoModal, gerarTextoSolicitacaoTransporte,
     atualizarPreviaTransporteCockpit, copiarResumoCockpit,
