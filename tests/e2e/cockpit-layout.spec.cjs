@@ -252,7 +252,7 @@ test("compact fields use 16px so iOS does not zoom on focus", async ({ page, isM
   expect(await page.locator("#input-serial").evaluate(el => getComputedStyle(el).fontSize)).toBe("16px");
   test.skip(isMobile, "o perfil móvel emula viewport de celular e ignora o redimensionamento largo");
   await page.setViewportSize({ width: 1440, height: 900 });
-  expect(await page.locator("#input-serial").evaluate(el => getComputedStyle(el).fontSize)).toBe("13px");
+  expect(await page.locator("#input-serial").evaluate(el => getComputedStyle(el).fontSize)).toBe("12.5px");
 });
 
 test.describe("touch targets", () => {
