@@ -49,7 +49,9 @@ def create_equipment_search_router(services: EquipmentSearchServices) -> Tuple[A
         tipo: Optional[str] = Query(None, max_length=80),
         cidade: Optional[str] = Query(None, max_length=120),
         usuario: Optional[str] = Query(None, max_length=10),
+        serie: Optional[List[str]] = Query(None),
         include_filters: bool = False,
+        listar_todos: bool = False,
     ):
         """Retorna resultados paginados, filtros e total de correspondências.
 
@@ -60,8 +62,11 @@ def create_equipment_search_router(services: EquipmentSearchServices) -> Tuple[A
         user_filter = str(usuario or "").strip().lower()
         if user_filter not in USER_FILTERS:
             user_filter = ""
-        list_without_term = not q.strip() and user_filter == "sem" and services.list_all is not None
-        if not list_without_term and len(q) < 2:
+        list_without_term = not listar_todos and not q.strip() and user_filter == "sem" and services.list_all is not None
+        if listar_todos and services.list_all is None:
+            raise HTTPException(status_code=503, detail="A listagem completa de equipamentos não está disponível.")
+        full_listing = listar_todos and services.list_all is not None
+        if not list_without_term and not full_listing and len(q) < 2:
             raise HTTPException(status_code=422, detail="Digite ao menos 2 caracteres para pesquisar.")
 
         def has_user(item: Dict[str, Any]) -> bool:
@@ -74,7 +79,9 @@ def create_equipment_search_router(services: EquipmentSearchServices) -> Tuple[A
                 return False
             return item.get("categoria") not in NOTEBOOK_CATEGORIES or not has_user(item)
 
-        if list_without_term and services.list_all:
+        if full_listing and not q.strip() and services.list_all:
+            all_results = services.list_all()
+        elif list_without_term and services.list_all:
             all_results = [item for item in services.list_all() if in_listing(item)]
         else:
             all_results = services.search(q)
@@ -94,12 +101,14 @@ def create_equipment_search_router(services: EquipmentSearchServices) -> Tuple[A
             normalized_category = ""
         normalized_type = services.normalize(tipo)
         normalized_city = services.normalize(cidade)
+        normalized_series = {services.normalize(value) for value in serie or [] if services.normalize(value)}
         results = [
             item for item in all_results
             if (not normalized_category or item.get("categoria") == normalized_category.lower())
             and (not normalized_type or services.normalize(item.get("tipo")) == normalized_type)
             and (not normalized_city or services.normalize(item.get("retirada_cidade")) == normalized_city)
             and (list_without_term or not user_filter or has_user(item) == (user_filter == "com"))
+            and (not normalized_series or services.normalize(item.get("serial")) in normalized_series)
         ]
         page = results[offset:offset + limit]
         response = {

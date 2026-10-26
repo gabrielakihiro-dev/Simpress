@@ -1,0 +1,102 @@
+/* Fase 6: família "Inter" do artefato, servida pelos mesmos arquivos locais */
+@font-face { font-family: "Inter"; font-style: normal; font-display: swap; font-weight: 100 900;
+  src: url("/static/vendor/fonts/inter-latin-ext-wght-normal.woff2") format("woff2-variations");
+  unicode-range: U+0100-02BA,U+02BD-02C5,U+02C7-02CC,U+02CE-02D7,U+02DD-02FF,U+0304,U+0308,U+0329,U+1D00-1DBF,U+1E00-1E9F,U+1EF2-1EFF,U+2020,U+20A0-20AB,U+20AD-20C0,U+2113,U+2C60-2C7F,U+A720-A7FF; }
+@font-face { font-family: "Inter"; font-style: normal; font-display: swap; font-weight: 100 900;
+  src: url("/static/vendor/fonts/inter-latin-wght-normal.woff2") format("woff2-variations");
+  unicode-range: U+0000-00FF,U+0131,U+0152-0153,U+02BB-02BC,U+02C6,U+02DA,U+02DC,U+0304,U+0308,U+0329,U+2000-206F,U+20AC,U+2122,U+2191,U+2193,U+2212,U+2215,U+FEFF,U+FFFD; }
+
+/* Nocturne palette tokens for the approved Simpress Cockpit. */
+:root {
+  --cockpit-bg: #161826;
+  --cockpit-surface: #232532;
+  --cockpit-surface-raised: #232532;
+  --cockpit-surface-sunken: #161826;
+  --cockpit-field: #232532;
+  --cockpit-text: #e9e9ed;
+  --cockpit-text-muted: #b2b6ca;
+  --cockpit-text-subtle: #9397ab;
+  --cockpit-neutral-200: #e4e7f5;
+  --cockpit-neutral-300: #cfd3e5;
+  --cockpit-neutral-600: #75798c;
+  --cockpit-border: #3f424d;
+  --cockpit-border-soft: #292b31;
+  --cockpit-accent: #9184d9;
+  --cockpit-accent-strong: #5d5294;
+  --cockpit-accent-soft: #2b2741;
+  --cockpit-accent-text: #f5f4ff;
+  --cockpit-ok-fg: oklch(0.84 0.1 160);
+  --cockpit-ok-bg: oklch(0.33 0.05 160);
+  --cockpit-ok-dot: oklch(0.74 0.13 160);
+  --cockpit-warn-fg: oklch(0.87 0.1 80);
+  --cockpit-warn-bg: oklch(0.35 0.05 80);
+  --cockpit-warn-dot: oklch(0.8 0.13 80);
+  --cockpit-err-fg: oklch(0.84 0.09 22);
+  --cockpit-err-bg: oklch(0.34 0.07 22);
+  --cockpit-err-dot: oklch(0.7 0.16 22);
+  --cockpit-neutral-fg: #cfd3e5;
+  --cockpit-neutral-bg: #292b31;
+  --cockpit-shadow-sm: 0 0 0 1px #3f424d;
+  --cockpit-shadow-md: 0 0 0 1px #595d6c, 0 6px 18px rgb(0 0 0 / 55%);
+  --cockpit-shadow-lg: 0 0 0 1px #9397ab, 0 16px 40px rgb(0 0 0 / 65%);
+  --cockpit-radius-sm: 4px;
+  --cockpit-radius-md: 8px;
+  --cockpit-radius-lg: 14px;
+  --cockpit-control-height: 30px;
+  --cockpit-neutral-100: #f3f5fe;
+  --cockpit-neutral-400: #b2b6ca;
+  --cockpit-neutral-500: #9397ab;
+  --cockpit-neutral-700: #595d6c;
+  --cockpit-neutral-800: #3f424d;
+  --cockpit-neutral-900: #292b31;
+  --cockpit-accent-200: #e7e5fe;
+  --cockpit-accent-300: #d2cefd;
+  --cockpit-accent-600: #796cbf;
+  --cockpit-accent-800: #423a6a;
+  --cockpit-divider: color-mix(in srgb, #e9e9ed 16%, transparent);
+}
+
+html[data-theme="light"] {
+  --cockpit-bg: #f2f3f8;
+  --cockpit-surface: #ffffff;
+  --cockpit-surface-raised: #ffffff;
+  --cockpit-surface-sunken: #f7f7fb;
+  --cockpit-field: #f9f9fc;
+  --cockpit-text: #23232f;
+  --cockpit-text-muted: #656777;
+  --cockpit-text-subtle: #656777;
+  --cockpit-neutral-200: #454756;
+  --cockpit-neutral-300: #575a69;
+  --cockpit-neutral-600: #a1a3b0;
+  --cockpit-neutral-100: #23232f;
+  --cockpit-neutral-400: #656777;
+  --cockpit-neutral-500: #656777;
+  --cockpit-neutral-700: #8a8c9a;
+  --cockpit-neutral-800: #d7d8e2;
+  --cockpit-neutral-900: #e6e6ed;
+  --cockpit-accent-200: #34276f;
+  --cockpit-accent-300: #5947a9;
+  --cockpit-accent-600: #705dc6;
+  --cockpit-accent-800: #d8d2f6;
+  --cockpit-divider: color-mix(in srgb, #23232f 16%, transparent);
+  --cockpit-ok-dot: #087650;
+  --cockpit-warn-dot: #8a5a08;
+  --cockpit-err-dot: #a52d37;
+  --cockpit-border: #d7d8e2;
+  --cockpit-border-soft: #e6e6ed;
+  --cockpit-accent: #705dc6;
+  --cockpit-accent-strong: #5947a9;
+  --cockpit-accent-soft: #edeafb;
+  --cockpit-accent-text: #34276f;
+  --cockpit-ok-fg: #087650;
+  --cockpit-ok-bg: #e5f5ee;
+  --cockpit-warn-fg: #8a5a08;
+  --cockpit-warn-bg: #fff3d7;
+  --cockpit-err-fg: #a52d37;
+  --cockpit-err-bg: #fbe8e9;
+  --cockpit-neutral-fg: #575a69;
+  --cockpit-neutral-bg: #ececf2;
+  --cockpit-shadow-sm: 0 0 0 1px #d7d8e2;
+  --cockpit-shadow-md: 0 0 0 1px #d7d8e2, 0 6px 18px rgb(24 24 38 / 10%);
+  --cockpit-shadow-lg: 0 0 0 1px #d7d8e2, 0 16px 40px rgb(24 24 38 / 16%);
+}

@@ -54,7 +54,8 @@ test("equipment search fills pickup CNPJ and selected delivery unit fills its in
   harness.context.workflowSearchItem = equipment;
 
   await harness.run("selecionarItemAutocomplete(workflowSearchItem)");
-  assert.deepEqual(calls, [`/api/equipamento/${equipment.serial}`]);
+  // Home also reads the open tickets of the selected series (Chamados abertos).
+  assert.deepEqual(calls, [`/api/equipamento/${equipment.serial}`, "/api/operacoes/chamados"]);
   assert.equal(
     harness.element("retirada-cnpj").value,
     equipment.retirada_cnpj,
@@ -123,10 +124,11 @@ test("the empty transfer banner offers a real button that opens Home and focuses
   assert.match(appHtml, /<span id="transfer-serial"/);
   assert.doesNotMatch(appHtml, /<input[^>]*id="transfer-serial"/);
   assert.match(appHtml, /id="btn-copiar-serie"[^>]*aria-label="Copiar série"/);
-  assert.match(appCss, /\.transfer-equipment-banner\[data-state="empty"\] \[data-show="selected"\]/);
-  assert.match(appCss, /\.transfer-equipment-banner\[data-state="selected"\] \[data-show="empty"\] \{ display: none; \}/);
-  const header = appHtml.slice(appHtml.indexOf('class="transfer-equipment-header"'), appHtml.indexOf('class="transfer-equipment-body"'));
-  assert.match(header, /id="btn-historico-transferencias"/);
+  const ckCss = require("node:fs").readFileSync(require("node:path").join(__dirname, "..", "..", "static", "styles", "ck-cockpit.css"), "utf8");
+  assert.match(ckCss, /\.ck-selecionado\[data-state="empty"\] \[data-show="selected"\]/);
+  assert.match(ckCss, /\.ck-selecionado\[data-state="selected"\] \[data-show="empty"\] \{ display: none; \}/);
+  const banner = appHtml.slice(appHtml.indexOf('id="transfer-equipment-banner"'), appHtml.indexOf('class="ck-passos"'));
+  assert.match(banner, /id="btn-historico-transferencias"/);
 
   const harness = createAppHarness(async () => {
     throw new Error("Opening the search must not call the API");

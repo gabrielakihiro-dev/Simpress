@@ -79,7 +79,22 @@
     if (command && !event.shiftKey && key.toLowerCase() === "k") return "search";
     if (key === "/" && !command && !typing) return "search";
     if (command && key === "Enter" && transferVisible) return "generate";
-    return null;
+    if (command || event.shiftKey || typing) return null;
+    return ({
+      F1: "tab-home",
+      F2: "tab-transferencia",
+      F3: "tab-resumo",
+      F4: "tab-automacao",
+      F5: "tool-chamados",
+      F6: "tool-comparacao",
+      F7: "tool-apelidos",
+      F8: "tool-relatorio",
+    })[key] || ({ t: "equipment-transport", e: "equipment-edit", c: "copy-ticket" })[key.toLowerCase()] || null;
+  }
+
+  function shouldCloseCockpitToolsMenu(menu, target) {
+    if (!menu?.open) return false;
+    return !menu.contains(target) || Boolean(target?.closest?.(".ck-menu__item"));
   }
 
   function pushRecent(list, value, limit = RECENT_LIMIT) {
@@ -281,13 +296,14 @@
     function ensureChip() {
       const existing = byId("ux-pending-chip");
       if (existing) return existing;
-      const host = doc.querySelector(".quick-actions-status");
+      const host = doc.querySelector(".ck-acoes-barra");
       if (!host) return null;
       const chip = doc.createElement("button");
       chip.type = "button";
       chip.id = "ux-pending-chip";
-      chip.className = "ux-pending-chip";
-      chip.innerHTML = '<span class="ux-pending-chip-count" aria-hidden="true"><span data-ux-count>0</span></span>'
+      chip.className = "ck-btn ck-btn--fantasma ck-pendentes";
+      chip.innerHTML = '<svg class="ck-ico" aria-hidden="true" focusable="false"><use href="#i-alerta"></use></svg>'
+        + '<span class="ck-pendentes__n" aria-hidden="true"><span data-ux-count>0</span></span>'
         + '<span data-ux-label aria-hidden="true"></span>';
       chip.addEventListener("click", () => {
         const [next] = listPendingFields(byId);
@@ -395,6 +411,25 @@
     doc.addEventListener("keydown", event => {
       if (event.key === "Escape") dismissInfoTips(doc);
     }, true);
+    doc.addEventListener("click", event => {
+      const menu = doc.querySelector(".cockpit-tools-dropdown[open]");
+      if (shouldCloseCockpitToolsMenu(menu, event.target)) menu.open = false;
+    }, true);
+    doc.addEventListener("keydown", event => {
+      if (event.key !== "Escape") return;
+      const menu = doc.querySelector(".cockpit-tools-dropdown[open]");
+      if (!menu) return;
+      event.preventDefault();
+      menu.open = false;
+      byId("cockpit-tools-trigger")?.focus();
+    }, true);
+    doc.addEventListener("keydown", event => {
+      const chip = byId("readiness-panel");
+      if (event.key !== "Escape" || !chip?.open || !chip.contains(event.target)) return;
+      event.preventDefault();
+      chip.open = false;
+      chip.querySelector("summary")?.focus();
+    }, true);
     const resetTip = event => {
       const tip = event.target?.closest?.(".info-tip");
       if (tip && !tip.contains(event.relatedTarget)) tip.removeAttribute("data-tip-dismissed");
@@ -409,7 +444,7 @@
       const action = shortcutAction(event, {
         typing,
         modalOpen: Boolean(doc.querySelector('[data-accessible-modal="true"]:not(.hidden):not([data-motion-closing="true"])')),
-        transferVisible: Boolean(panel) && !panel.hidden,
+        transferVisible: Boolean(panel) && !panel.hidden && !byId("main-content")?.hidden,
       });
       if (action === "search") {
         const input = byId("input-serial");
@@ -418,6 +453,37 @@
         if (typeof win.ativarAbaTransferencia === "function") win.ativarAbaTransferencia("home");
         input.focus();
         input.select?.();
+      } else if (action === "tab-home") {
+        event.preventDefault();
+        if (typeof win.ativarAbaTransferencia === "function") win.ativarAbaTransferencia("home");
+      } else if (action === "tab-transferencia") {
+        event.preventDefault();
+        if (typeof win.ativarAbaTransferencia === "function") win.ativarAbaTransferencia("transferencia");
+      } else if (action === "tab-resumo") {
+        event.preventDefault();
+        if (typeof win.ativarAbaTransferencia === "function") win.ativarAbaTransferencia("resumo");
+      } else if (action === "tab-automacao") {
+        event.preventDefault();
+        if (typeof win.ativarAbaTransferencia === "function") win.ativarAbaTransferencia("automacao");
+      } else if (action?.startsWith("equipment-") || action === "copy-ticket") {
+        if (!win.SimpressApp?.state.currentEquipamento || byId("main-content")?.hidden || byId("tab-panel-home")?.hidden) return;
+        const button = action === "equipment-transport" ? byId("btn-ir-para-transporte")
+          : action === "copy-ticket" ? byId("btn-copiar-chamado-atual")
+            : doc.querySelector('#card-equipamento [data-on-click="abrirModalEditarEquipamento"]');
+        if (!button || button.disabled) return;
+        event.preventDefault();
+        button.click();
+      } else if (action?.startsWith("tool-")) {
+        const buttonIds = {
+          "tool-chamados": "btn-acompanhamento-chamados",
+          "tool-comparacao": "btn-cockpit-comparacao",
+          "tool-apelidos": "btn-historico-apelidos",
+          "tool-relatorio": "btn-relatorio-mensal",
+        };
+        const button = byId(buttonIds[action]);
+        if (!button) return;
+        event.preventDefault();
+        button.click();
       } else if (action === "generate") {
         const button = byId("btn-gerar-planilha");
         if (!button || button.disabled) return;
@@ -518,6 +584,7 @@
     phoneProblem,
     formatPhone,
     shortcutAction,
+    shouldCloseCockpitToolsMenu,
     pushRecent,
     copyStateFor,
     overflowState,

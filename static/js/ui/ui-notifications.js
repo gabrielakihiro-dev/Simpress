@@ -6,12 +6,7 @@
 
   const { document, window, lucide, motion, createIcon } = options;
 
-  const backgrounds = Object.freeze({
-    success: "bg-emerald-950/90 border-emerald-500/50 text-emerald-200",
-    error: "bg-rose-950/90 border-rose-500/50 text-rose-200",
-    warning: "bg-amber-950/90 border-amber-500/50 text-amber-200",
-    info: "bg-brand-950/90 border-brand-500/50 text-brand-200",
-  });
+  const statuses = Object.freeze({ success: "ok", error: "erro", warning: "alerta", info: "info" });
   const icons = Object.freeze({ success: "check-circle", error: "alert-circle", warning: "alert-triangle", info: "info" });
 
   // Lets progressive enhancements (e.g. "Copiado!" on the clicked button) react to the outcome.
@@ -32,9 +27,10 @@
     toast.setAttribute("role", type === "error" ? "alert" : "status");
     toast.setAttribute("aria-live", type === "error" ? "assertive" : "polite");
     toast.setAttribute("aria-atomic", "true");
-    toast.className = `ui-toast flex items-center space-x-3 px-4 py-3 rounded-xl border shadow-xl backdrop-blur-md text-xs font-medium pointer-events-auto ${backgrounds[type] || backgrounds.info}`;
+    toast.className = "ck-toast";
+    toast.dataset.status = statuses[type] || statuses.info;
 
-    const icon = createIcon(icons[type] || icons.info, "w-4 h-4 shrink-0");
+    const icon = createIcon(icons[type] || icons.info, "ck-ico");
     const text = document.createElement("span");
     text.textContent = String(message ?? "");
     toast.replaceChildren(icon, text);

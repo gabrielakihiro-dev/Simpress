@@ -493,30 +493,18 @@ test("keeps old ticket imports when the deletion confirmation is cancelled", asy
   assert.equal(harness.element("btn-excluir-importacoes-antigas-chamados").disabled, false);
 });
 
-test("groups secondary actions under neutral Ações and Consultas headings", () => {
-  assert.doesNotMatch(appHtml, /header-action-item--primary|sidebar-related-links/);
-  assert.match(appHtml, /data-on-click="abrirAcompanhamentoChamados"[\s\S]*?<details class="header-action-group" data-action-group="analysis">/);
-  assert.match(appHtml, /<details class="header-action-group" data-action-group="analysis">/);
-  assert.doesNotMatch(appHtml, /data-action-group="equipment"|Equipamentos e cadastros/);
-
-  const analysisGroup = appHtml.match(/<details class="header-action-group" data-action-group="analysis">([\s\S]*?)<\/details>/)?.[1] || "";
-  assert.match(analysisGroup, /<span class="sidebar-item-label">Históricos e Análises<\/span>/);
-  assert.match(analysisGroup, /<p class="sidebar-subgroup-title" aria-hidden="true">Ações<\/p>\s*<button[^>]*id="btn-atualizar-planilhas"/);
-  assert.match(analysisGroup, /<p class="sidebar-subgroup-title" aria-hidden="true">Consultas<\/p>\s*<button[^>]*id="btn-historico-comparacoes"/);
-  assert.match(analysisGroup, /id="btn-historico-comparacoes"[^>]*aria-labelledby="label-historico-comparacoes badge-total-historico-comparacoes"[\s\S]*?<span id="badge-total-historico-comparacoes" class="header-action-count"[^>]*>0<\/span>\s*<\/button>/);
-  assert.doesNotMatch(analysisGroup.slice(0, analysisGroup.indexOf("</summary>")), /header-action-count/);
-  assert.match(analysisGroup, /aria-label="Atualização, exportação, análises, históricos e catálogo de unidades"/);
-  assert.doesNotMatch(analysisGroup, /data-on-click="abrirCentralPendencias"/);
-  assert.match(analysisGroup, /data-on-click="abrirEvolucaoAtualizacoes"/);
-  assert.match(analysisGroup, /data-on-click="abrirModalHistoricoComparacoes"/);
-  assert.match(analysisGroup, /data-on-click="abrirModalHistoricoApelidos"/);
-  assert.match(analysisGroup, /data-on-click="abrirModalGerenciarUnidades"/);
-  assert.ok(analysisGroup.indexOf('id="btn-atualizar-planilhas"') < analysisGroup.indexOf('id="btn-historico-comparacoes"'));
-  assert.ok(analysisGroup.indexOf('id="btn-atualizar-planilhas"') < analysisGroup.indexOf('id="btn-exportar-equipamentos"'));
-  assert.ok(analysisGroup.indexOf('id="btn-exportar-equipamentos"') < analysisGroup.indexOf('id="btn-historico-comparacoes"'));
-  assert.ok(analysisGroup.indexOf('data-on-click="abrirEvolucaoAtualizacoes"') < analysisGroup.indexOf('id="btn-historico-apelidos"'));
-  assert.ok(analysisGroup.indexOf('id="btn-historico-apelidos"') < analysisGroup.indexOf('label-catalogo-unidades'));
-  assert.match(appHtml, /data-on-click="abrirAcompanhamentoChamados"/);
+test("groups secondary actions under cockpit tools dropdown", () => {
+  assert.doesNotMatch(appHtml, /header-action-item--primary|sidebar-related-links|header-action-group/);
+  assert.match(appHtml, /<details class="ck-ancora cockpit-tools-dropdown" id="cockpit-tools-dropdown">/);
+  assert.match(appHtml, /<button(?=[^>]*data-on-click="abrirPainelCockpit")(?=[^>]*data-args='\["chamados"\]')[^>]*id="btn-acompanhamento-chamados"/);
+  assert.match(appHtml, /<button(?=[^>]*data-on-click="abrirPainelCockpit")(?=[^>]*data-args='\["apelidos"\]')[^>]*id="btn-historico-apelidos"/);
+  assert.match(appHtml, /<button(?=[^>]*data-on-click="abrirPainelCockpit")(?=[^>]*data-args='\["relatorio"\]')[^>]*id="btn-relatorio-mensal"/);
+  assert.match(appHtml, /data-on-click="abrirModalAtualizarPlanilhas"/);
+  assert.match(appHtml, /data-on-click="abrirModalHistoricoComparacoes"/);
+  assert.match(appHtml, /data-on-click="abrirEvolucaoAtualizacoes"/);
+  assert.doesNotMatch(appHtml, /id="btn-relatorio-mensal"[^>]*data-on-click="abrirRelatorioMensal"/);
+  assert.match(appHtml, /data-on-click="abrirModalGerenciarUnidades"/);
+  assert.match(appHtml, /id="badge-total-historico-comparacoes"[^>]*>0<\/span>/);
   assert.doesNotMatch(appHtml, /Acompanhamento de transportes/);
   assert.doesNotMatch(appScript, /\/api\/transferencias/);
 });

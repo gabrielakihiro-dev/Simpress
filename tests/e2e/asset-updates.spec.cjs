@@ -19,9 +19,9 @@ test("updated page avoids legacy asset URLs and styles the transfer banner", asy
   await page.getByRole("tab", { name: "Transporte" }).click();
   await expect(page.locator("#tab-retirada-entrega")).toHaveAttribute("aria-selected", "true");
   await expect(page.locator("#transfer-equipment-banner")).toBeVisible();
-  await expect(page.locator("#transfer-equipment-banner")).toHaveCSS("border-radius", "18px");
+  await expect(page.locator("#transfer-equipment-banner")).toHaveCSS("border-radius", "8px");
   await expect(page.getByRole("button", { name: "Pesquisar equipamento na Home" })).toBeVisible();
   await expect(page.locator("#btn-copiar-serie")).toBeHidden();
-  await expect(page.locator(".transfer-equipment-header #btn-historico-transferencias")).toBeVisible();
+  await expect(page.locator("#transfer-equipment-banner #btn-historico-transferencias")).toBeVisible();
   expect(legacyRequests).toEqual([]);
 });

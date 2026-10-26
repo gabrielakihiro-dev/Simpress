@@ -52,7 +52,7 @@ test("bar widths scale to the largest city", () => {
 test("dashboard module is loaded, offline and touches only the allowed endpoint", () => {
   assert.match(appEntry, /import "\.\/js\/ui\/data-panels\.js";/);
   const source = fs.readFileSync(path.join(staticDir, "js", "ui", "data-panels.js"), "utf8");
-  assert.doesNotMatch(source, /https?:\/\//);
+  assert.doesNotMatch(source, /https?:\/\/(?!www\.w3\.org\/2000\/svg)/); // namespace SVG não é requisição
   assert.doesNotMatch(source, /innerHTML/);
   assert.equal(panels.ENDPOINT, "/api/painel");
 });

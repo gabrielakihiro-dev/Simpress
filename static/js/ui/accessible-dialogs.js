@@ -21,7 +21,8 @@
       || !element.isConnected
       || element.closest(".hidden")
       || element.closest("[inert]")
-      || !element.getClientRects().length) return false;
+      || !element.getClientRects().length
+      || (typeof element.checkVisibility === "function" && !element.checkVisibility())) return false;
     if (typeof window.getComputedStyle !== "function") return true;
     const style = window.getComputedStyle(element);
     return style.visibility !== "hidden" && style.display !== "none";
@@ -115,17 +116,11 @@
       previousFocus.focus({ preventScroll: true });
     } else {
       const fallback = [
+        document.getElementById("cockpit-tools-trigger"),
         document.getElementById("btn-sidebar-open"),
         document.querySelector('.header-action-group[data-action-group="analysis"] > summary'),
         document.getElementById("input-serial"),
-      ].find(candidate => candidate
-        && candidate.isConnected
-        && !candidate.closest(".hidden")
-        && !candidate.closest("[inert]")
-        && (typeof window.getComputedStyle !== "function"
-          || (window.getComputedStyle(candidate).visibility !== "hidden"
-            && window.getComputedStyle(candidate).display !== "none"))
-        && candidate.getClientRects().length);
+      ].find(isConnectedVisibleElement);
       fallback?.focus({ preventScroll: true });
     }
   }
@@ -135,7 +130,7 @@
       .filter(item => !item.classList.contains("hidden") && item.dataset.motionClosing !== "true");
     const modal = openModals[openModals.length - 1];
     if (!modal) {
-      if (event.key === "Escape") {
+      if (event.key === "Escape" && !document.querySelector(".ck-veu:not([hidden])")) {
         const disclosure = [...document.querySelectorAll("details[open]")].pop();
         if (disclosure) {
           disclosure.open = false;

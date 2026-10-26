@@ -52,6 +52,7 @@ class InvalidReportMonthError(DomainValidationError):
 class ReportMonth:
     year: int
     month: int
+    cutoff: Optional[date] = None
 
     @property
     def start(self) -> date:
@@ -59,7 +60,14 @@ class ReportMonth:
 
     @property
     def end(self) -> date:
-        return date(self.year, self.month, calendar.monthrange(self.year, self.month)[1])
+        month_end = date(self.year, self.month, calendar.monthrange(self.year, self.month)[1])
+        if self.cutoff is not None and self.start <= self.cutoff < month_end:
+            return self.cutoff
+        return month_end
+
+    @property
+    def is_partial(self) -> bool:
+        return self.cutoff is not None
 
     @property
     def key(self) -> str:
@@ -81,7 +89,7 @@ def parse_report_month(value: Any, today: date) -> ReportMonth:
     month = ReportMonth(int(match.group(1)), int(match.group(2)))
     if month.start > today.replace(day=1):
         raise InvalidReportMonthError("Selecione o mês atual ou um mês anterior.")
-    return month
+    return ReportMonth(month.year, month.month, cutoff=today) if month.start == today.replace(day=1) else month
 
 
 # Inventory ---------------------------------------------------------------

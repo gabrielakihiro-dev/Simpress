@@ -617,6 +617,7 @@
       const data = await app.apiFetch("/api/operacoes/chamados", { signal: request.signal, errorMessage: "Não foi possível carregar o acompanhamento de chamados." });
       if (!ticketSnapshotRequestGate.isCurrent(request.id)) return;
       appState.acompanhamentoChamadosAtual = data;
+      chamadosRecentesHome = data;
       app.renderizarHistoricoAcompanhamentoChamados(data);
       app.renderizarAcompanhamentoChamados();
       await app.carregarEvolucaoChamados(data.snapshot_id || "");
@@ -653,6 +654,7 @@
       ticketSnapshotRequestGate.invalidate();
       ticketEvolutionRequestGate.invalidate();
       appState.acompanhamentoChamadosAtual = data;
+      chamadosRecentesHome = data;
       app.renderizarHistoricoAcompanhamentoChamados(data);
       simpressInput.value = "";
       document.getElementById("nome-arquivo-chamados-simpress").textContent = "Nenhum arquivo selecionado";
@@ -714,7 +716,67 @@
     app.carregarAcompanhamentoChamados();
   }
 
+  // Home: Oracle tickets still open for the selected series, always from the latest import (not the version picked in Acompanhamento).
+  const homeTicketsRequestGate = transferUtils.createRequestGate();
+  // shortcut: refreshed only by imports made in this tab or by opening Acompanhamento; a folder import needs a page reload.
+  let chamadosRecentesHome = null;
+  function renderizarChamadosAbertosHome(abertos) {
+    const dom = context.dom;
+    const body = document.getElementById("home-open-tickets-body");
+    const count = document.getElementById("home-open-tickets-count");
+    body.setAttribute("aria-busy", "false");
+    count.textContent = abertos.length ? `${abertos.length} ${abertos.length === 1 ? "aberto" : "abertos"}` : "";
+    if (!abertos.length) {
+      body.replaceChildren(dom.createTextElement("p", "ck-abertos__vazio", "Nenhum chamado aberto para esta série."));
+      return;
+    }
+    const list = document.createElement("ul");
+    list.className = "ck-abertos";
+    abertos.forEach(ticket => {
+      const item = document.createElement("li");
+      item.className = "ck-aberto";
+      item.append(
+        dom.createTextElement("strong", "ck-aberto__numero", ticket.solicitacao || "Sem solicitação"),
+        dom.createTextElement("span", "ck-badge", [ticket.status, ticket.sub_status].filter(Boolean).join(" · ") || "Status não informado"),
+        dom.createTextElement("p", "ck-aberto__titulo", ticket.fila || "Fila não informada"),
+        dom.createTextElement("p", "ck-aberto__meta", ticket.nome_filial || ticket.cidade || "Unidade não informada"),
+        dom.createTextElement("p", "ck-aberto__meta", idadeAtualizacaoChamado(ticket).rotulo),
+      );
+      list.append(item);
+    });
+    body.replaceChildren(list);
+  }
+
+  async function atualizarChamadosAbertosHome(serial) {
+    const body = document.getElementById("home-open-tickets-body");
+    if (!body) return;
+    const request = homeTicketsRequestGate.begin();
+    body.setAttribute("aria-busy", "true");
+    body.replaceChildren(context.dom.createTextElement("p", "ck-abertos__vazio", "Carregando chamados…"));
+    document.getElementById("home-open-tickets-count").textContent = "";
+    try {
+      if (!chamadosRecentesHome) {
+        const data = await app.apiFetch("/api/operacoes/chamados", { signal: request.signal, errorMessage: "Não foi possível carregar os chamados." });
+        if (!homeTicketsRequestGate.isCurrent(request.id)) return;
+        chamadosRecentesHome = data;
+      }
+      if (!homeTicketsRequestGate.isCurrent(request.id)) return;
+      const chamados = Array.isArray(chamadosRecentesHome.chamados) ? chamadosRecentesHome.chamados : [];
+      const record = chamados.find(item => normalizarFiltroChamados(item.serie) === normalizarFiltroChamados(serial));
+      const abertos = (record?.oracle || []).filter(ticket => !idadeAtualizacaoChamado(ticket).encerrado)
+        .sort((left, right) => compararOrdensServicoDecrescente(left.ordem_servico, right.ordem_servico));
+      renderizarChamadosAbertosHome(abertos);
+    } catch (error) {
+      if (!homeTicketsRequestGate.isCurrent(request.id)) return;
+      body.setAttribute("aria-busy", "false");
+      const message = context.dom.createTextElement("p", "ck-abertos__vazio", error.message || "Não foi possível carregar os chamados.");
+      message.setAttribute("role", "alert");
+      body.replaceChildren(message);
+    }
+  }
+
   return {
+    atualizarChamadosAbertosHome,
     fecharAcompanhamentoChamados, renderizarHistoricoAcompanhamentoChamados, renderizarEvolucaoChamados,
     carregarEvolucaoChamados, renderizarLinhaDoTempoChamado, conectarAnotacoesLinhaDoTempo,
     carregarLinhaDoTempoChamado, renderizarAcompanhamentoChamados, filtrarTriagemChamados, limparFiltrosAcompanhamentoChamados,

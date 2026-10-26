@@ -59,8 +59,13 @@ class FakeElement {
   }
   click() { this.clicked = true; }
   remove() { this.isConnected = false; }
-  replaceChildren(...children) { this.children = children; }
-  appendChild(child) { this.children.push(child); return child; }
+  replaceChildren(...children) { this.children = children.flatMap(child => child.isDocumentFragment ? child.children : [child]); }
+  append(...children) { children.forEach(child => this.appendChild(child)); }
+  appendChild(child) {
+    if (child.isDocumentFragment) this.children.push(...child.children);
+    else this.children.push(child);
+    return child;
+  }
   querySelector() { return null; }
   focus() { this.focused = true; }
   scrollIntoView(options) { this.scrollIntoViewOptions = options; }
@@ -116,6 +121,11 @@ function createAppHarness(fetchApi, { stubDisplay = true, confirmResult = true, 
       return elements.get(id);
     },
     createElement: tag => tag === "template" ? new FakeTemplate(tag) : new FakeElement(tag),
+    createDocumentFragment() {
+      const fragment = new FakeElement("#document-fragment");
+      fragment.isDocumentFragment = true;
+      return fragment;
+    },
     querySelectorAll: () => [],
     querySelector(selector) {
       effects.focusedSelectors.push(selector);
@@ -156,7 +166,7 @@ function createAppHarness(fetchApi, { stubDisplay = true, confirmResult = true, 
     requestAnimationFrame: callback => callback(0),
     MutationObserver: class { observe() {} disconnect() {} },
     lucide: { createIcons() {} },
-    console: { error() {}, warn() {}, log() {} },
+    console: { error() {}, warn() {}, info() {}, log() {} },
     workflowEffects: effects,
   });
 
