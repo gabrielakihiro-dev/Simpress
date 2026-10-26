@@ -295,7 +295,7 @@
         const button = element("button", "ck-item ck-ferr-botao");
         button.type = "button";
         button.setAttribute("aria-pressed", String(record.serie === selectedTicketSerial));
-        button.append(element("strong", "ck-item__serie", record.serie || "Série sem identificação"));
+        button.append(Object.assign(element("strong", "ck-item__serie", record.serie || "Série sem identificação"), { title: record.serie || "Série sem identificação" }));
         button.append(badge(relationText(record), relationTones[record.relacao]));
         button.append(element("small", "ck-item__sub", `Oracle ${oracle.length} · Simpress ${simpress.length}`));
         button.addEventListener("click", () => { selectedTicketSerial = String(record.serie || ""); renderTickets(); });
@@ -812,7 +812,7 @@
       const button = element("button", "ck-item ck-ferr-botao");
       button.type = "button";
       button.setAttribute("aria-pressed", String(String(event.id || "") === selectedAliasId));
-      button.append(element("strong", "ck-item__serie", event.serial || "Série indisponível"));
+      button.append(Object.assign(element("strong", "ck-item__serie", event.serial || "Série indisponível"), { title: event.serial || "Série indisponível" }));
       button.append(badge(aliasTypeLabel(event.tipo), "info"));
       button.append(element("small", "ck-item__sub", `${event.horario || "Data indisponível"} · ${event.tipo === "aviso_endpoint"
         ? event.motivo || "Aviso do Endpoint" : `${aliasValue(event, true) || "(vazio)"} → ${aliasValue(event) || "(vazio)"}`}`));

@@ -79,7 +79,7 @@ test("the Cockpit report panel fits the screen and passes axe in both themes", a
     const box = await panel.boundingBox();
     const viewport = page.viewportSize();
     expect(box.width).toBeGreaterThan(0);
-    expect(box.width).toBeLessThanOrEqual(Math.max(1200, viewport.width));
+    expect(box.width).toBeLessThanOrEqual(viewport.width);
     expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true);
     const audit = await new AxeBuilder({ page }).include('[data-cockpit-tool-panel="relatorio"]').analyze();
     expect(audit.violations.map(violation => violation.id), theme).toEqual([]);

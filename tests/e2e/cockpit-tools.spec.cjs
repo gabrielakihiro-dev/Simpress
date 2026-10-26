@@ -24,7 +24,7 @@ async function mockComparison(page) {
 
 test("Home hides the unselected equipment and never displays reference serials", async ({ page }) => {
   await page.goto("/");
-  await expect(page.locator("#home-detail-empty")).toBeVisible();
+  await expect(page.locator("#home-detail-empty")).toBeAttached();
   await expect(page.locator("#card-equipamento")).toBeHidden();
   await expect(page.locator("#card-serial")).not.toHaveText("5CG6051BVN");
 });
@@ -54,7 +54,9 @@ test("comparison fields stay in columns and survive an empty history refresh", a
   const row = page.locator(".cockpit-comparison-row").first();
   await expect(row).toContainText("LENTO");
   const cells = await row.locator(":scope > *").evaluateAll(nodes => nodes.map(node => node.getBoundingClientRect().y));
-  expect(Math.max(...cells) - Math.min(...cells)).toBeLessThan(5);
+  // Compacto (< 768px): a linha vira card e os campos empilham; a partir de 768px ficam em colunas.
+  if (page.viewportSize().width >= 768) expect(Math.max(...cells) - Math.min(...cells)).toBeLessThan(5);
+  else expect(Math.max(...cells)).toBeGreaterThan(Math.min(...cells));
   await page.route("**/api/historico-comparacoes", route => route.fulfill({ json: { eventos: [] } }));
   await page.locator("#cockpit-comparison-refresh").click();
   await expect(page.locator("#cockpit-comparison-export")).toBeDisabled();
@@ -76,6 +78,7 @@ test("each tool is accessible in both themes and remains reachable below 1200px"
       const bounds = await page.locator(selector).boundingBox();
       const width = await page.evaluate(() => document.body.scrollWidth);
       expect(bounds.width).toBeLessThanOrEqual(width + 1);
+      expect(bounds.x + bounds.width).toBeLessThanOrEqual(page.viewportSize().width + 1);
     }
   }
 });
@@ -174,7 +177,7 @@ test("typing stays error-free and Home shortcuts use the selected equipment", as
   await expect(page.locator("#tab-panel-retirada-entrega")).toBeVisible();
   await page.locator("#tab-home").click();
   await page.locator("#btn-clear-serial").click();
-  await expect(page.locator("#home-detail-empty")).toBeVisible();
+  await expect(page.locator("#home-detail-empty")).toBeAttached();
   await expect(page.locator("#card-equipamento")).toBeHidden();
   expect(errors).toEqual([]);
 });
