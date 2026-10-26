@@ -485,9 +485,10 @@ html[data-ux-density="compact"] .comparison-desktop-table td {
 }
 .notification-center-badge[hidden] { display: none; }
 .notification-center-panel {
-  position: absolute;
-  top: calc(100% + var(--ux-space-2));
-  right: 0;
+  /* O painel é irmão de .cockpit-bar (48px, sticky), não filho do sino. */
+  position: fixed;
+  top: calc(48px + var(--ux-space-2));
+  right: 16px;
   z-index: var(--z-popover);
   width: min(28rem, calc(100vw - 2rem));
   max-height: min(72dvh, 36rem);
@@ -520,9 +521,14 @@ html[data-ux-density="compact"] .comparison-desktop-table td {
 #alerta-os-paradas + #alerta-divergencias-novas { margin-top: var(--ux-space-2); }
 #alerta-os-paradas .stale-base-alert-icon, #alerta-divergencias-novas .stale-base-alert-icon { width: 1rem; height: 1rem; }
 #alerta-os-paradas .stale-base-alert-copy, #alerta-divergencias-novas .stale-base-alert-copy {
-  display: flex; flex-wrap: wrap; align-items: baseline; gap: 0 var(--ux-space-2);
+  display: flex; flex-direction: column; gap: 2px;
 }
-#alerta-os-paradas .stale-base-alert-title, #alerta-divergencias-novas .stale-base-alert-title { font-size: 0.8125rem; }
+#alerta-os-paradas::before, #alerta-divergencias-novas::before {
+  content: ""; flex: none; align-self: center; width: 8px; height: 8px; border-radius: 50%; background: var(--ux-warning-fg);
+}
+#alerta-divergencias-novas::before { background: var(--ux-critical-fg); }
+#alerta-os-paradas .stale-base-alert-icon, #alerta-divergencias-novas .stale-base-alert-icon { display: none; }
+#alerta-os-paradas .stale-base-alert-title, #alerta-divergencias-novas .stale-base-alert-title { font-size: 0.8125rem; color: var(--ux-text); }
 #alerta-os-paradas .stale-base-alert-text, #alerta-divergencias-novas .stale-base-alert-text {
   margin: 0; font-size: 0.8125rem; color: var(--ux-text-muted, inherit); opacity: 0.85;
 }
@@ -556,6 +562,14 @@ html[data-ux-density="compact"] .comparison-desktop-table td {
 .automation-status[data-state="cancelando"] .automation-status-dot { background: var(--ux-warning-fg); }
 @keyframes automation-pulse { 50% { opacity: 0.35; } }
 .automation-actions { display: flex; flex-wrap: wrap; gap: var(--ux-space-2); }
+.automation-action-layout { display: grid; gap: var(--ux-space-3); }
+.automation-action-support {
+  display: flex; flex-wrap: wrap; align-items: end; gap: var(--ux-space-4);
+  padding-top: var(--ux-space-3); border-top: 1px solid var(--ux-border);
+}
+.automation-action-independent { display: grid; gap: var(--ux-space-1); padding-right: var(--ux-space-4); border-right: 1px solid var(--ux-border); }
+.automation-action-caption { color: var(--ux-text-muted); font-size: .75rem; font-weight: 600; }
+.automation-actions--utility { margin-left: auto; }
 .automation-action { min-height: 2.5rem; }
 .automation-action:disabled { opacity: 0.55; cursor: not-allowed; }
 .automation-action--cancel:not(:disabled) { border-color: var(--ux-critical-border); color: var(--ux-critical-fg); }
@@ -633,36 +647,18 @@ html[data-ux-density="compact"] .comparison-desktop-table td {
 .automation-status-badge[data-status="ocupada"],
 .automation-status-badge[data-status="interrompido"] { border-color: var(--ux-warning-border); background: var(--ux-warning-bg); color: var(--ux-warning-fg); }
 .automation-status-badge[data-status="falha"] { border-color: var(--ux-critical-border); background: var(--ux-critical-bg); color: var(--ux-critical-fg); }
-/* Sincronizar chamados Sebrae (docs/operacao/sebrae-fase-d-ui.md) */
-.automation-status[data-state="pausado"] .automation-status-dot { background: var(--ux-text-muted); }
-.automation-status[data-state="aguardando"] { border-color: var(--ux-warning-border); background: var(--ux-warning-bg); }
-.automation-status[data-state="aguardando"] .automation-status-dot { background: var(--ux-warning-fg); }
-.sebrae-login-notice {
-  display: flex; align-items: center; gap: var(--ux-space-2); margin: 0 0 var(--ux-space-4); padding: var(--ux-space-3) var(--ux-space-4);
-  border: 1px solid var(--ux-warning-border); border-radius: var(--ux-radius-lg); background: var(--ux-warning-bg); color: var(--ux-warning-fg); font-size: 0.85rem;
-}
-.sebrae-login-notice svg { flex: none; }
-.sebrae-facts, .sebrae-counters { display: grid; gap: var(--ux-space-3); margin: 0 0 var(--ux-space-4); }
-.sebrae-facts { grid-template-columns: repeat(auto-fit, minmax(12rem, 1fr)); }
-.sebrae-counters { grid-template-columns: repeat(3, minmax(0, 1fr)); }
-.sebrae-facts > div { min-width: 0; }
-.sebrae-facts dt, .sebrae-counter dt { color: var(--ux-text-muted); font-size: 0.75rem; font-weight: 600; }
-.sebrae-facts dd { margin: var(--ux-space-1) 0 0; color: var(--ux-text); font-size: 0.875rem; overflow-wrap: anywhere; }
-.sebrae-counter {
-  display: grid; gap: var(--ux-space-1); align-content: space-between; padding: var(--ux-space-3) var(--ux-space-4);
-  border-radius: var(--ux-radius-lg); background: var(--ux-surface-subtle);
-}
-.sebrae-counter dd { margin: 0; color: var(--ux-text); font-size: 1.5rem; font-weight: 700; line-height: 1.2; font-variant-numeric: tabular-nums; }
-.sebrae-card .automation-actions { margin-bottom: 0; }
-.sebrae-subtitle { margin: var(--ux-space-5) 0 var(--ux-space-2); color: var(--ux-text); font-size: 0.9rem; font-weight: 600; }
-.sebrae-pendencias { overflow-x: auto; }
-.sebrae-pendencia-numero { font-family: var(--ux-font-mono); font-size: 0.8rem; white-space: nowrap; }
 @media (max-width: 40rem) {
   .automation-page { gap: var(--ux-space-4); }
   .automation-card { padding: var(--ux-space-4); }
   .automation-actions { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); }
   .automation-action { min-height: 48px; }
   .automation-action--cancel { grid-column: 1 / -1; }
+  .automation-action-support { display: grid; gap: var(--ux-space-3); }
+  .automation-action-independent { padding: 0 0 var(--ux-space-3); border-right: 0; border-bottom: 1px solid var(--ux-border); }
+  .automation-action-independent .automation-action { width: 100%; }
+  .automation-actions--primary #btn-automacao-ambas { grid-column: 1 / -1; }
+  .automation-actions--utility { width: 100%; margin-left: 0; }
+  .automation-actions--utility #btn-automacao-login { grid-column: 1 / -1; }
   .automation-log { height: 16rem; }
   /* Tabela vira cartões: cada execução mantém os mesmos dados e links. */
   .automation-history { overflow-x: visible; }
@@ -678,14 +674,6 @@ html[data-ux-density="compact"] .comparison-desktop-table td {
   .automation-history-table tr { margin-bottom: var(--ux-space-3); padding: var(--ux-space-2) var(--ux-space-3); border: 1px solid var(--ux-border); border-radius: var(--ux-radius-lg); background: var(--ux-surface-subtle); }
   .automation-history-table td { display: grid; grid-template-columns: 6rem minmax(0, 1fr); gap: var(--ux-space-2); padding: var(--ux-space-1) 0; border-bottom: 0; }
   .automation-history-table td::before { content: attr(data-label); color: var(--ux-text-muted); font-size: 0.75rem; font-weight: 600; }
-  .sebrae-facts { grid-template-columns: 1fr; gap: var(--ux-space-2); }
-  .sebrae-facts > div { display: grid; grid-template-columns: 8.5rem minmax(0, 1fr); gap: var(--ux-space-2); }
-  .sebrae-facts dd { margin: 0; }
-  .sebrae-counters { grid-template-columns: 1fr; gap: var(--ux-space-2); }
-  .sebrae-counter { grid-template-columns: minmax(0, 1fr) auto; align-items: center; padding: var(--ux-space-2) var(--ux-space-3); }
-  .sebrae-counter dd { font-size: 1.25rem; }
-  .sebrae-pendencias { overflow-x: visible; }
-  .sebrae-pendencia-numero { white-space: normal; overflow-wrap: anywhere; }
 }
 @media (prefers-reduced-motion: reduce) {
   .automation-status, .automation-status[data-state="em_andamento"] .automation-status-dot { transition: none; animation: none; }
@@ -868,11 +856,3 @@ html[data-ux-density="compact"] .comparison-desktop-table td {
 
 /* ---------- Minimal chrome: readiness only on Home unless something is pending ---------- */
 #main-content:has(#tab-panel-home[hidden]) #readiness-panel[data-state="ready"] { display: none; }
-
-/* Seta do seletor de unidade (antes era style= inline, que a CSP estrita bloqueia). */
-#select-unidade-destino {
-  background-image: url("/static/chevron-down.svg");
-  background-position: right 0.75rem center;
-  background-size: 1.25rem;
-  background-repeat: no-repeat;
-}

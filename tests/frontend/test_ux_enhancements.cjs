@@ -80,11 +80,37 @@ test("horizontal overflow state drives the table edge fade", () => {
   assert.equal(ux.overflowState(400, 500, 900), "start");
 });
 
+test("function keys map to the four main tabs and four Cockpit tools", () => {
+  const actions = ["F1", "F2", "F3", "F4", "F5", "F6", "F7", "F8"]
+    .map(key => ux.shortcutAction({ key }));
+  assert.deepEqual(actions, [
+    "tab-home", "tab-transferencia", "tab-resumo", "tab-automacao",
+    "tool-chamados", "tool-comparacao", "tool-apelidos", "tool-relatorio",
+  ]);
+});
+
+test("modified function keys, typing and open dialogs keep their normal behavior", () => {
+  assert.equal(ux.shortcutAction({ key: "F5", ctrlKey: true }), null);
+  assert.equal(ux.shortcutAction({ key: "F6", shiftKey: true }), null);
+  assert.equal(ux.shortcutAction({ key: "F7" }, { typing: true }), null);
+  assert.equal(ux.shortcutAction({ key: "F8" }, { modalOpen: true }), null);
+});
+
+test("tools menu closes for outside clicks and item selection, not its trigger", () => {
+  const trigger = { closest: () => null };
+  const item = { closest: selector => selector === ".ck-menu__item" ? item : null };
+  const insideMenu = target => ({ open: true, contains: candidate => candidate === target });
+  assert.equal(ux.shouldCloseCockpitToolsMenu(insideMenu(trigger), trigger), false);
+  assert.equal(ux.shouldCloseCockpitToolsMenu(insideMenu(item), item), true);
+  assert.equal(ux.shouldCloseCockpitToolsMenu({ open: true, contains: () => false }, {}), true);
+  assert.equal(ux.shouldCloseCockpitToolsMenu({ open: false, contains: () => false }, {}), false);
+});
+
 test("notifications dispatch simpress:notify without changing the toast", () => {
   const events = [];
   const appended = [];
   class FakeCustomEvent { constructor(type, init) { this.type = type; this.detail = init.detail; } }
-  const node = () => ({ setAttribute() {}, replaceChildren() {}, remove() {}, className: "", textContent: "" });
+  const node = () => ({ setAttribute() {}, replaceChildren() {}, remove() {}, className: "", textContent: "", dataset: {} });
   const document = {
     getElementById: () => ({ appendChild: child => appended.push(child) }),
     createElement: node,
@@ -114,13 +140,17 @@ test("index loads the refinement layer last and links every transfer label", () 
   assert.ok(app > 0 && enhancements > app, "ux-enhancements.js must load after app.js");
 
   const start = appHtml.indexOf('id="tab-panel-retirada-entrega"');
-  const end = appHtml.indexOf('<aside aria-label="Painel de Ações Rápidas"');
+  const end = appHtml.indexOf('id="tab-panel-resumo"', start);
   const transferPanel = appHtml.slice(start, end);
   const unlinked = transferPanel.match(/<label\b(?![^>]*\bfor=)[^>]*>/g) || [];
   assert.deepEqual(unlinked, []);
   for (const [, id] of transferPanel.matchAll(/<label\b[^>]*\bfor="([^"]+)"/g)) {
     assert.match(appHtml, new RegExp(`id="${id}"`), `label points to a missing control: ${id}`);
   }
+});
+
+test("Cockpit search shows the Ctrl+K shortcut", () => {
+  assert.match(appHtml, /title="Atalho: Ctrl\+K">Ctrl\+K<\/kbd>/);
 });
 
 test("refinement layer defines both themes and respects reduced motion", () => {
@@ -170,4 +200,13 @@ test("light theme keeps secondary text and the search count badge above 4.5:1 on
   const light = tokensCss.slice(tokensCss.indexOf('[data-theme="light"]'));
   assert.match(light, /--text-subtle: #5b6b80;/);
   assert.match(appHtml, /id="pesquisa-completa-contagem" class="[^"]*\btext-cyan-200\b/);
+});
+
+
+test("Home letter shortcuts respect typing and command modifiers", () => {
+  assert.equal(ux.shortcutAction({ key: "t" }), "equipment-transport");
+  assert.equal(ux.shortcutAction({ key: "E" }), "equipment-edit");
+  assert.equal(ux.shortcutAction({ key: "c" }), "copy-ticket");
+  assert.equal(ux.shortcutAction({ key: "e" }, { typing: true }), null);
+  assert.equal(ux.shortcutAction({ key: "c", ctrlKey: true }), null);
 });

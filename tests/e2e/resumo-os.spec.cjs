@@ -73,7 +73,7 @@ async function selectSummary(page) {
     await sidebarButton.click();
     await expect(shell).toHaveAttribute("data-sidebar-open", "true");
   }
-  await page.locator("#tab-resumo").click();
+  await page.locator("#tab-retirada-entrega").click();
   await expect(page.locator("#resumo-os-equipamento")).toBeVisible();
   await expect(page.locator("#resumo-os-equipamento")).toContainText(" OS · ");
 }
@@ -188,7 +188,7 @@ test("Resumo carrega as OS uma vez quando o painel responde depois da abertura",
   });
   await page.goto("/");
   await selectSummary(page);
-  await expect(page.locator("#ux-home-panel")).toBeVisible({ timeout: 10000 });
+  await expect(page.locator("#resumo-os-equipamento")).toBeVisible({ timeout: 10000 });
   await page.waitForTimeout(800);
   expect(reportRequests).toBe(1);
 });

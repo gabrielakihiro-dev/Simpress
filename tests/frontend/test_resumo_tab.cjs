@@ -31,15 +31,16 @@ test("Resumo panel keeps the inventory summary and removes the usage panel", () 
 });
 
 test("panel scripts target the Resumo tab", () => {
-  assert.match(dataPanelsJs, /getElementById\("resumo-cards"\)/);
-  assert.match(dataPanelsJs, /let panelExpanded = true;/, "Resumo do parque starts maximized");
-  assert.match(dataPanelsJs, /\["tab-home", "tab-resumo"\]/);
+  assert.match(dataPanelsJs, /getElementById\("ck-transp"\)/, "a seção de OS é montada na aba Transporte");
+  assert.doesNotMatch(appHtml, /ck-parque|Resumo do parque/, "Resumo do parque panel is removed from the Resumo tab");
+  assert.doesNotMatch(dataPanelsJs, /ux-home-panel/, "legacy parque panel is gone");
+  assert.match(dataPanelsJs, /\["tab-home", "tab-resumo", "tab-retirada-entrega"\]/);
   assert.match(transferFormJs, /tab-resumo/);
   assert.match(transferFormJs, /alvo === "transferencia"/, "quick actions and serial summary belong to Transporte only");
 });
 
 test("opening a data tab retries the panel when it is not filled yet", () => {
-  assert.match(dataPanelsJs, /refresh\(!panel \|\| panel\.hidden\)/);
+  assert.doesNotMatch(dataPanelsJs, /parqueOk|renderParque/);
 });
 
 test("tablist label covers all tabs and the first Resumo card has no top gap", () => {

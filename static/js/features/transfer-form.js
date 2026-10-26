@@ -16,20 +16,33 @@
     const serial = String(equipment?.serial || "").trim().toUpperCase();
     const selected = Boolean(serial);
 
+    const apelido = selected ? String(equipment?.apelido || "").trim() : "";
+    const alias = document.getElementById("transfer-alias");
+    const logged = String(equipment?.usuarios_logados || "").trim();
+    const nome = String(equipment?.nome_pessoa || "").trim();
+
     if (serialValue) serialValue.textContent = serial;
+    if (alias) {
+      alias.textContent = apelido;
+      alias.hidden = !apelido;
+    }
+    const retiradaSerie = document.getElementById("ck-passo-retirada-serie");
+    if (retiradaSerie) retiradaSerie.textContent = serial;
     if (banner) banner.dataset.state = selected ? "selected" : "empty";
     if (description) {
       description.textContent = selected
-        ? [equipment.modelo, equipment.tipo].filter(Boolean).join(" · ") || "Equipamento pesquisado e selecionado."
+        ? [equipment.modelo, equipment.tipo, logged ? `Usuários logados: ${logged}` : "", nome ? `Nome: ${nome}` : ""].filter(Boolean).join(" · ") || "Equipamento pesquisado e selecionado."
         : "Nenhum equipamento selecionado.";
     }
-    const users = document.getElementById("transfer-equipment-users");
-    if (users) {
-      const logged = String(equipment?.usuarios_logados || "").trim();
-      const nome = String(equipment?.nome_pessoa || "").trim();
-      users.textContent = selected ? [logged ? `Usuários logados: ${logged}` : "", nome ? `Nome: ${nome}` : ""].filter(Boolean).join(" · ") : "";
-      users.classList.toggle("hidden", !users.textContent);
-    }
+    emitirEventoInterface("simpress:transporte-equipamento", { serial });
+  }
+
+  // "Trocar equipamento": volta à Home com o campo de busca em foco, sem descartar a transferência.
+  function trocarEquipamentoTransporte() {
+    app.ativarAbaTransferencia("home");
+    const input = document.getElementById("input-serial");
+    input?.focus();
+    input?.select?.();
   }
 
   function campoRastreavelTransferencia(target) {
@@ -64,6 +77,7 @@
   });
 
   function ativarAbaTransferencia(aba) {
+    app.fecharPainelCockpit?.(false);
     const alvo = ABAS_PRINCIPAIS[aba] ? aba : "transferencia";
     const abas = Object.entries(ABAS_PRINCIPAIS).map(([nome, ids]) => ({
       nome,
@@ -89,6 +103,7 @@
     if (titulo) titulo.textContent = ABAS_PRINCIPAIS[alvo].titulo;
     document.body.classList.toggle("has-quick-actions", alvo === "transferencia");
     if (alvo === "transferencia") app.atualizarResumoSerieTransferencia(appState.currentEquipamento);
+    if (alvo === "resumo" && mudou) void app.carregarResumoCockpit?.();
     if (mudou && destino.painel) motion?.reveal(destino.painel, "page");
   }
 
@@ -108,7 +123,8 @@
   }
 
   function controlarAbasTransferencia(event) {
-    const tabs = Array.from(event.currentTarget.querySelectorAll('[role="tab"]'));
+    const tablist = event.target.closest('[role="tablist"]') || event.currentTarget;
+    const tabs = Array.from(tablist.querySelectorAll('[role="tab"]'));
     const currentIndex = tabs.indexOf(event.target.closest('[role="tab"]'));
     if (currentIndex < 0 || !tabs.length) return;
 
@@ -143,10 +159,19 @@
     if (botao) botao.disabled = !String(unidadeDestino?.cnpj || "").trim();
   }
 
+  function atualizarChipsUnidade() {
+    const selecionada = String(document.getElementById("select-unidade-destino")?.value || "");
+    document.querySelectorAll("#entrega-unidades .ck-unidade").forEach(chip => {
+      chip.setAttribute("aria-pressed", String(Boolean(selecionada) && chip.dataset.unidadeId === selecionada));
+    });
+  }
+
   function handleUnidadeDestinoChange(unitId, notificar = true) {
     app.atualizarEstadoCopiaCnpjEntrega();
+    atualizarChipsUnidade();
     if (!unitId) {
       app.preencherRepresentanteRegional("entrega", "");
+      app.atualizarPreviaTransporteCockpit?.();
       return;
     }
     const unit = appState.unidadesList.find(u => String(u.id) === String(unitId));
@@ -156,6 +181,7 @@
       app.preencherRepresentanteRegional("entrega", unit.cidade || "");
       if (notificar) app.showToast(`Destino definido: ${unit.cidade}`, "info");
     }
+    app.atualizarPreviaTransporteCockpit?.();
   }
 
   function selecionarUnidadePorCidade(cidadeNome) {
@@ -204,6 +230,17 @@
   }
 
   function recolherVisualizacoesModelosChamado() {
+    const pill = document.querySelector('.ck-modelo-aba[aria-selected="true"]');
+    let selectedType = "";
+    try {
+      selectedType = JSON.parse(pill?.dataset?.args || "[]")[0] || "";
+    } catch (error) {
+      selectedType = "";
+    }
+    if (pill && selectedType) {
+      app.alternarChamadosManuais(selectedType);
+      return;
+    }
     const conteudoChamados = document.getElementById("ticket-templates-content");
     const botaoChamados = document.getElementById("btn-toggle-ticket-templates");
     const rotuloBotaoChamados = botaoChamados?.querySelector("span");
@@ -221,7 +258,34 @@
     });
   }
 
-  function alternarChamadosManuais() {
+  function alternarChamadosManuais(tipo) {
+    const pills = document.querySelectorAll(".ck-modelo-aba");
+    if (pills.length) {
+      const selected = tipo || "deslocamento";
+      const content = document.getElementById("ticket-templates-content");
+      content.hidden = false;
+      pills.forEach(pill => {
+        let pillType = "";
+        try {
+          pillType = JSON.parse(pill.dataset.args || "[]")[0] || "";
+        } catch (error) {
+          pillType = "";
+        }
+        const active = pillType === selected;
+        pill.setAttribute("aria-selected", String(active));
+        pill.tabIndex = active ? 0 : -1;
+        // Ponto da aba: cheio = texto sem campo em branco; anel = ainda há [campo] ou "Rótulo:" vazio.
+        const dot = pill.querySelector?.(".ck-prontidao");
+        const text = document.getElementById(`texto-chamado-${pillType}`)?.value;
+        if (dot?.dataset && typeof text === "string") dot.dataset.status = /\[[^\]]*\]|:[ ]*$/m.test(text) ? "alerta" : "ok";
+      });
+      document.querySelectorAll(".ck-chamado__painel").forEach(preview => {
+        preview.hidden = preview.id !== `visualizacao-chamado-${selected}`;
+      });
+      document.getElementById("btn-copiar-chamado-atual").dataset.args = JSON.stringify([`texto-chamado-${selected}`]);
+      document.getElementById("btn-toggle-ticket-templates")?.setAttribute("aria-expanded", "true");
+      return;
+    }
     const conteudo = document.getElementById("ticket-templates-content");
     const botao = document.getElementById("btn-toggle-ticket-templates");
     const rotulo = botao?.querySelector("span");
@@ -334,6 +398,95 @@
 • Voltagem: Bivolt
 • Tipo de Acesso: Elevador / Rampa / Térreo
 ======================================================================`;
+  }
+
+  function atualizarPreviaTransporteCockpit() {
+    const root = document.querySelector(".ck-transp");
+    if (!root) return;
+    const value = id => {
+      const element = document.getElementById(id);
+      const raw = element && "value" in element ? element.value : element?.textContent;
+      return String(raw || "").trim() || "—";
+    };
+    const set = (id, text) => {
+      const target = document.getElementById(id);
+      if (target) target.textContent = text;
+    };
+    // Campo obrigatório vazio aparece como [Rótulo] destacado, em vez de sumir da prévia.
+    const setParts = (id, parts) => {
+      const target = document.getElementById(id);
+      if (!target) return;
+      const nodes = [];
+      parts.forEach(([fieldId, label]) => {
+        const text = value(fieldId);
+        if (nodes.length) nodes.push(" · ");
+        if (text !== "—") nodes.push(text);
+        else {
+          const missing = document.createElement("span");
+          missing.className = "ck-previa__falta";
+          missing.textContent = `[${label}]`;
+          nodes.push(missing);
+        }
+      });
+      target.replaceChildren(...nodes);
+    };
+    const equipamento = appState.currentEquipamento;
+    const unidade = document.getElementById("select-unidade-destino");
+    const destino = unidade?.selectedOptions?.[0]?.textContent?.trim();
+    const serial = equipamento?.serial || value("transfer-serial");
+    const modelo = equipamento ? (equipamento.modelo || value("card-modelo")) : "—";
+    const apelido = String(equipamento?.apelido || "").trim() || "—";
+    const unidadeSelecionada = unidade?.value
+      ? appState.unidadesList.find(unit => String(unit.id) === String(unidade.value))
+      : null;
+    const retiradaLocal = appState.retiradaCidadeSelecionada || "";
+    const entregaLocal = unidadeSelecionada?.cidade || (unidade?.value ? destino : "");
+    set("retirada-local-nome", retiradaLocal);
+    set("entrega-local-nome", entregaLocal);
+    set("cockpit-preview-equipment", [serial, modelo].filter(item => item && item !== "—").join(" · ") || "—");
+    set("cockpit-preview-alias", apelido);
+    set("cockpit-preview-pickup", [retiradaLocal, value("retirada-endereco")].filter(item => item && item !== "—").join(" — ") || "—");
+    set("cockpit-preview-pickup-cnpj", value("retirada-cnpj"));
+    setParts("cockpit-preview-contact", [["retirada-contato", "Nome"], ["retirada-telefone", "Celular"]]);
+    set("cockpit-preview-hours", [value("retirada-horario"), `almoço ${value("retirada-almoco")}`].filter(item => item !== "—").join(" · ") || "—");
+    set("cockpit-preview-access", [value("retirada-tipo-acesso"), value("retirada-voltagem")].filter(item => item !== "—").join(" · ") || "—");
+    set("cockpit-preview-delivery", [entregaLocal, value("entrega-endereco")].filter(item => item && item !== "—").join(" — ") || "—");
+    set("cockpit-preview-cep", String(unidadeSelecionada?.cep || "").trim() || "—");
+    set("cockpit-preview-delivery-cnpj", value("entrega-cnpj"));
+    setParts("cockpit-preview-recipient", [["entrega-contato", "Destinatário"], ["entrega-telefone", "Celular"]]);
+    setParts("cockpit-preview-delivery-hours", [["entrega-horario", "Expediente"], ["entrega-almoco", "Almoço"], ["entrega-pausa-duracao", "Pausa"]]);
+    setParts("cockpit-preview-notes", [["entrega-obs", "Observações"]]);
+    const required = typeof root.querySelectorAll === "function" ? [...root.querySelectorAll("input[required], textarea[required], select[required]")] : [];
+    const filled = required.filter(field => String(field.value || "").trim()).length;
+    const count = document.getElementById("ck-previa-contagem");
+    const countText = document.getElementById("ck-previa-contagem-texto");
+    if (countText) countText.textContent = `${filled}/${required.length} campos`;
+    if (count) count.dataset.status = required.length && filled === required.length ? "ok" : "alerta";
+    const state = document.getElementById("cockpit-transport-preview-state");
+    if (state) {
+      state.textContent = equipamento ? (unidade?.value ? "Prévia atualizada" : "Selecione a entrega") : "Aguardando equipamento";
+      state.dataset.state = equipamento ? (unidade?.value ? "ready" : "pending") : "empty";
+      state.dataset.status = equipamento ? (unidade?.value ? "ok" : "alerta") : "neutro";
+    }
+  }
+
+  async function copiarResumoCockpit() {
+    const payload = construirPayload();
+    if (!payload) return;
+    try {
+      await app.copiarTextoParaAreaTransferencia(gerarTextoResumo(payload));
+      app.showToast("Resumo copiado para a área de transferência.", "success");
+    } catch (error) {
+      app.showToast("Não foi possível copiar o resumo. Abra o texto para Transporte e tente novamente.", "error");
+    }
+  }
+
+  const transportPreviewRoot = document.querySelector(".ck-transp");
+  if (transportPreviewRoot && !transportPreviewRoot.dataset.previewBound) {
+    transportPreviewRoot.dataset.previewBound = "true";
+    transportPreviewRoot.addEventListener("input", atualizarPreviaTransporteCockpit);
+    transportPreviewRoot.addEventListener("change", atualizarPreviaTransporteCockpit);
+    atualizarPreviaTransporteCockpit();
   }
 
   // Modal Preview Handlers
@@ -623,11 +776,13 @@
     app.atualizarEstadoCopiaCnpjEntrega();
     app.preencherRepresentanteRegional("entrega", "");
     app.preencherRepresentanteRegional("retirada", "");
+    atualizarChipsUnidade();
+    atualizarPreviaTransporteCockpit();
 
     // Reset status indicator
-    document.getElementById("status-indicator").className = "w-2.5 h-2.5 rounded-full bg-brand-400";
+    document.getElementById("status-indicator").dataset.state = "ready";
     document.getElementById("status-summary").innerHTML = `
-        <span class="text-fg-tertiary font-medium" data-ux-ready-status>Pronto para emissão.</span>
+        <span class="ck-acoes-pronto" data-ux-ready-status>Pronto para emissão.</span>
       `;
 
     app.showToast("Formulário limpo. Pronto para uma nova busca.", "info");
@@ -650,9 +805,10 @@
   return {
     atualizarResumoSerieTransferencia, ativarAbaTransferencia, abrirAbaTransporteDoEquipamento,
     abrirHomeParaPesquisarEquipamento, controlarAbasTransferencia, forcarSedePradoVelho,
-    atualizarEstadoCopiaCnpjEntrega, handleUnidadeDestinoChange, selecionarUnidadePorCidade, adicionarObsChamado,
+    atualizarEstadoCopiaCnpjEntrega, atualizarChipsUnidade, trocarEquipamentoTransporte, handleUnidadeDestinoChange, selecionarUnidadePorCidade, adicionarObsChamado,
     copiarModeloChamado, alternarVisualizacaoModelo, recolherVisualizacoesModelosChamado, alternarChamadosManuais,
     abrirModalPreview, fecharModalPreview, copiarTextoDoModal, gerarTextoSolicitacaoTransporte,
+    atualizarPreviaTransporteCockpit, copiarResumoCockpit,
     fecharModalTextoTransporte, copiarSerieAtual, copiarDadoLocalAtual, copiarDadoEntrega,
     copiarTextoSolicitacaoTransporte, validarCamposObrigatoriosPlanilha, gerarPlanilhaExcel, resetarFormulario,
   };

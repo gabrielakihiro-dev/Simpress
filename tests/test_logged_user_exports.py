@@ -148,10 +148,10 @@ def _search_route():
     )
     _, exports = create_equipment_search_router(services)
 
-    def call(q="", usuario=None, categoria=None, include_filters=True):
+    def call(q="", usuario=None, categoria=None, include_filters=True, listar_todos=False, offset=0, limit=50, series=None):
         return exports.buscar_seriais_expandida(
-            q=q, offset=0, limit=50, categoria=categoria, tipo=None, cidade=None,
-            usuario=usuario, include_filters=include_filters,
+            q=q, offset=offset, limit=limit, categoria=categoria, tipo=None, cidade=None,
+            usuario=usuario, serie=series, include_filters=include_filters, listar_todos=listar_todos,
         )
     return call
 
@@ -186,6 +186,37 @@ class FullSearchUserFilterTests(unittest.TestCase):
             self.assertEqual(raised.exception.status_code, 422)
         with self.assertRaises(HTTPException):
             call("B", None)
+
+    def test_explicit_full_listing_includes_all_equipment_categories(self):
+        page = _search_route()(listar_todos=True)
+
+        self.assertEqual(page["total"], len(ITEMS))
+        self.assertEqual([item["serial"] for item in page["items"]], [item["serial"] for item in ITEMS])
+        self.assertEqual(page["filters"]["users"], {
+            "sem": sum(not str(item.get("usuarios_logados") or "").strip() for item in ITEMS),
+            "com": sum(bool(str(item.get("usuarios_logados") or "").strip()) for item in ITEMS),
+        })
+
+    def test_explicit_full_listing_applies_user_filter_and_pagination(self):
+        call = _search_route()
+
+        page = call(listar_todos=True, usuario="sem", offset=1, limit=2)
+        expected = [item for item in ITEMS if not str(item.get("usuarios_logados") or "").strip()]
+        self.assertEqual(page["total"], len(expected))
+        self.assertEqual([item["serial"] for item in page["items"]], [item["serial"] for item in expected[1:3]])
+        self.assertEqual(page["has_more"], len(expected) > 3)
+
+    def test_explicit_full_listing_can_filter_by_search_term(self):
+        page = _search_route()(q="BRJ", listar_todos=True)
+
+        self.assertEqual([item["serial"] for item in page["items"]], ["BRJ001", "BRJ002", "BRJ003"])
+        self.assertEqual(page["total"], 3)
+
+    def test_explicit_full_listing_can_filter_to_comparison_series(self):
+        page = _search_route()(listar_todos=True, series=["HS005", "OUT009"])
+
+        self.assertEqual([item["serial"] for item in page["items"]], ["HS005", "OUT009"])
+        self.assertEqual(page["total"], 2)
 
 
 if __name__ == "__main__":

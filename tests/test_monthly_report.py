@@ -172,7 +172,8 @@ def build(month=OCTOBER, display=comparison_history_for_display, **overrides):
 
 class ReportMonthTests(unittest.TestCase):
     def test_accepts_current_and_past_months(self):
-        self.assertEqual((OCTOBER.start, OCTOBER.end), (date(2026, 10, 1), date(2026, 10, 31)))
+        self.assertEqual((OCTOBER.start, OCTOBER.end), (date(2026, 10, 1), TODAY))
+        self.assertTrue(OCTOBER.is_partial)
         self.assertEqual(parse_report_month("2024-02", TODAY).end, date(2024, 2, 29))
         self.assertEqual(OCTOBER.label, "outubro de 2026")
 
@@ -508,6 +509,18 @@ class MonthlyReportRouteTests(unittest.TestCase):
         self.assertIn('filename="Relatorio-mensal-2026-10.xlsx"', response.headers["content-disposition"])
         workbook = openpyxl.load_workbook(BytesIO(response.content))
         self.assertEqual(workbook["Resumo"]["A1"].value, "Relatório mensal — outubro de 2026")
+
+    def test_read_only_data_route_uses_the_same_monthly_report_builder(self):
+        response = self.client().get("/api/relatorio-mensal/dados", params={"mes": "2026-10"})
+        self.assertEqual(response.status_code, 200)
+        report = response.json()
+        self.assertEqual(report["mes"]["key"], "2026-10")
+        self.assertEqual(report["inventario"]["total"], len(EQUIPMENT))
+        self.assertEqual(report["comparacao"]["contagens"][SECTION_ENDPOINT], 1)
+        self.assertEqual(report["os"]["oracle"]["concluidas"], 1)
+        self.assertTrue(report["mes"]["parcial"])
+        self.assertEqual(report["mes"]["data_corte"], TODAY.isoformat())
+        self.assertIn("gerado_em", report)
 
     def test_invalid_or_future_month_is_rejected(self):
         client = self.client()

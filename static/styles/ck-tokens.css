@@ -1,0 +1,187 @@
+/* =====================================================================
+   BLOCO 1 · TOKENS E CSS BASE
+   Onde cabe: static/styles/ck-tokens.css — carregar ANTES de app.css e
+   dos demais estilos do cockpit. Valores literais vindos de
+   static/styles/nocturne.css (tema atual, claro e escuro). Nenhuma cor nova.
+   Breakpoints:
+     compacto  @media (max-width: 767.98px)
+     médio     @media (min-width: 768px) and (max-width: 1199.98px)
+     amplo     @media (min-width: 1200px)
+   ===================================================================== */
+
+/* Tema claro (padrão do :root) */
+:root {
+  color-scheme: light;
+  --cor-fundo: #f2f3f8;
+  --cor-superficie: #ffffff;
+  --cor-superficie-elevada: #ffffff;
+  --cor-superficie-funda: #f7f7fb;
+  --cor-campo: #f9f9fc;
+  --cor-texto: #23232f;
+  --cor-texto-forte: #454756;
+  --cor-texto-suave: #575a69;
+  --cor-texto-mudo: #656777;
+  --cor-texto-sutil: #656777;
+  --cor-texto-apagado: #a1a3b0;
+  --cor-borda: #d7d8e2;
+  --cor-borda-suave: #e6e6ed;
+  --cor-destaque: #705dc6;
+  --cor-destaque-forte: #5947a9;
+  --cor-destaque-fundo: #edeafb;
+  --cor-destaque-texto: #34276f;
+  --cor-ok-texto: #087650;
+  --cor-ok-fundo: #e5f5ee;
+  --cor-alerta-texto: #8a5a08;
+  --cor-alerta-fundo: #fff3d7;
+  --cor-erro-texto: #a52d37;
+  --cor-erro-fundo: #fbe8e9;
+  --cor-neutro-texto: #575a69;
+  --cor-neutro-fundo: #ececf2;
+  --cor-veu: rgb(24 24 38 / 32%);
+  --sombra-sm: 0 1px 2px rgb(24 24 38 / 8%);
+  --sombra-lg: 0 16px 40px rgb(24 24 38 / 16%);
+}
+
+/* Tema escuro */
+[data-theme="dark"] {
+  color-scheme: dark;
+  --cor-fundo: #161826;
+  --cor-superficie: #1d2031;
+  --cor-superficie-elevada: #23263a;
+  --cor-superficie-funda: #161826;
+  --cor-campo: #23263a;
+  --cor-texto: #e9e9ed;
+  --cor-texto-forte: #dcdde4;
+  --cor-texto-suave: #c3c5d0;
+  --cor-texto-mudo: #9a9dad;
+  --cor-texto-sutil: #969bad;
+  --cor-texto-apagado: #5a5e70;
+  --cor-borda: #2f3244;
+  --cor-borda-suave: #23263a;
+  --cor-destaque: #9184d9;
+  --cor-destaque-forte: #7466c0;
+  --cor-destaque-fundo: #2a2550;
+  --cor-destaque-texto: #e8e5fb;
+  --cor-ok-texto: #60d7a5;
+  --cor-ok-fundo: #193d34;
+  --cor-alerta-texto: #f1bd55;
+  --cor-alerta-fundo: #49351a;
+  --cor-erro-texto: #ff797c;
+  --cor-erro-fundo: #4b262d;
+  --cor-neutro-texto: #b7bac8;
+  --cor-neutro-fundo: #30313c;
+  --cor-veu: rgb(0 0 0 / 48%);
+  --sombra-sm: 0 1px 2px rgb(0 0 0 / 28%);
+  --sombra-lg: 0 16px 40px rgb(0 0 0 / 48%);
+}
+
+/* Tokens sem cor (iguais nos dois temas) */
+:root {
+  --fonte-corpo: "Inter Variable", "Inter", system-ui, -apple-system, "Segoe UI", sans-serif;
+  --fonte-mono: "JetBrains Mono Variable", "JetBrains Mono", ui-monospace, "Cascadia Mono", Consolas, monospace;
+  --fs-2xs: 10px;
+  --fs-xs: 11px;
+  --fs-sm: 11.5px;
+  --fs-ui: 12px;
+  --fs-md: 12.5px;
+  --fs-base: 13px;
+  --fs-lg: 15px;
+  --fs-xl: 16px;
+  --fs-2xl: 18px;
+  --fs-kpi: 22px;
+  --peso-regular: 400;
+  --peso-medio: 500;
+  --peso-marca: 600;
+  --raio-sm: 5px;
+  --raio-md: 8px;
+  --raio-lg: 11px;
+  --altura-barra: 48px;
+  --altura-aba: 32px;
+  --altura-controle: 30px;
+  --altura-controle-sm: 26px;
+  --altura-pilula: 24px;
+  --largura-lista-home: 360px;
+  --largura-previa: 380px;
+  --largura-console: 560px;
+  --largura-detalhe: 400px;
+  --largura-menu: 300px;
+  --largura-sino: 360px;
+  --largura-busca: 340px;
+  --largura-sugestoes: 560px;
+  --duracao: 180ms;
+  --duracao-lenta: 260ms;
+  --curva: cubic-bezier(.2, .7, .2, 1);
+}
+
+/* Base */
+*, *::before, *::after { box-sizing: border-box; }
+html { -webkit-text-size-adjust: 100%; }
+html, body { margin: 0; }
+body {
+  background: var(--cor-fundo);
+  color: var(--cor-texto);
+  font: var(--peso-regular) var(--fs-base)/1.45 var(--fonte-corpo);
+  overflow-x: hidden;
+}
+h1, h2, h3, h4, p, ul, ol, dl, dd, figure, fieldset { margin: 0; }
+ul, ol { padding: 0; }
+fieldset { border: 0; padding: 0; min-width: 0; }
+legend { padding: 0; }
+button, input, select, textarea { font: inherit; color: inherit; }
+img, svg { display: block; max-width: 100%; }
+a { color: var(--cor-destaque); text-decoration: none; }
+a:hover { color: var(--cor-destaque-forte); text-decoration: underline; }
+[data-theme="dark"] a:hover { color: var(--cor-destaque-texto); }
+[hidden] { display: none !important; }
+::selection { background: var(--cor-destaque-fundo); color: var(--cor-destaque-texto); }
+:focus-visible { outline: 2px solid var(--cor-destaque); outline-offset: 2px; }
+:focus:not(:focus-visible) { outline: none; }
+
+.ck-ico { width: 16px; height: 16px; flex: none; fill: none; stroke: currentColor; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; }
+.ck-ico--xs { width: 12px; height: 12px; }
+.ck-ico--sm { width: 14px; height: 14px; }
+.ck-ico--md { width: 15px; height: 15px; }
+.ck-ico--lg { width: 18px; height: 18px; }
+.ck-mono { font-family: var(--fonte-mono); }
+.ck-num { font-variant-numeric: tabular-nums; }
+.ck-mudo { color: var(--cor-texto-mudo); }
+.ck-sr { position: absolute !important; width: 1px; height: 1px; padding: 0; margin: -1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; border: 0; }
+.ck-pular { position: absolute; left: 12px; top: -48px; z-index: 100; padding: 8px 12px; border-radius: var(--raio-sm); background: var(--cor-superficie-elevada); color: var(--cor-texto); box-shadow: var(--sombra-lg); }
+.ck-pular:focus { top: 8px; }
+
+@keyframes ck-surgir { from { opacity: 0; transform: translateY(-4px); } to { opacity: 1; transform: none; } }
+@keyframes ck-girar { to { transform: rotate(360deg); } }
+
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after { animation-duration: 1ms !important; animation-iteration-count: 1 !important; transition-duration: 1ms !important; scroll-behavior: auto !important; }
+}
+
+/* Tabela de tokens (valor claro → valor escuro)
+   --cor-fundo               #f2f3f8 → #161826
+   --cor-superficie          #ffffff → #1d2031
+   --cor-superficie-elevada  #ffffff → #23263a
+   --cor-superficie-funda    #f7f7fb → #161826
+   --cor-campo               #f9f9fc → #23263a
+   --cor-texto               #23232f → #e9e9ed
+   --cor-texto-forte         #454756 → #dcdde4
+   --cor-texto-suave         #575a69 → #c3c5d0
+   --cor-texto-mudo          #656777 → #9a9dad
+   --cor-texto-sutil         #656777 → #969bad
+   --cor-texto-apagado       #a1a3b0 → #5a5e70
+   --cor-borda               #d7d8e2 → #2f3244
+   --cor-borda-suave         #e6e6ed → #23263a
+   --cor-destaque            #705dc6 → #9184d9
+   --cor-destaque-forte      #5947a9 → #7466c0
+   --cor-destaque-fundo      #edeafb → #2a2550
+   --cor-destaque-texto      #34276f → #e8e5fb
+   --cor-ok-texto / fundo    #087650 / #e5f5ee → #60d7a5 / #193d34
+   --cor-alerta-texto / fundo #8a5a08 / #fff3d7 → #f1bd55 / #49351a
+   --cor-erro-texto / fundo  #a52d37 / #fbe8e9 → #ff797c / #4b262d
+   --cor-neutro-texto / fundo #575a69 / #ececf2 → #b7bac8 / #30313c
+   --cor-veu                 rgb(24 24 38/32%) → rgb(0 0 0/48%)
+   --sombra-sm               0 1px 2px rgb(24 24 38/8%) → 0 1px 2px rgb(0 0 0/28%)
+   --sombra-lg               0 16px 40px rgb(24 24 38/16%) → 0 16px 40px rgb(0 0 0/48%)
+   Sem cor: fontes Inter Variable / JetBrains Mono Variable · fs 10/11/11.5/12/12.5/13/15/16/18/22px
+   raio 5/8/11px · barra 48px · aba 32px · controle 30px (sm 26px) · pílula 24px
+   lista Home 360px · prévia 380px · console 560px · detalhe 400px · menu 300px
+   sino 360px · busca 340px · sugestões 560px · duração 180ms / 260ms */

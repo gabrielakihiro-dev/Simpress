@@ -183,15 +183,17 @@ test("equipment search rows escape every field, with and without highlighting", 
     invall_alias_status: "pendente", invall_alias_detail: carga("alias_detalhe"), retirada_cidade: carga("cidade"),
   };
   const campos = ["serial", "tipo", "modelo", "apelido", "usuario", "nome_pessoa", "candidato_a", "alias_detalhe", "cidade"];
+  // The autocomplete dropdown shows a compact row (serial, modelo, usuário, cidade); the full search keeps every field.
+  const camposAutocomplete = ["serial", "modelo", "usuario", "cidade"];
   // A query inside the payload makes highlightMatch split the text around the match.
   for (const query of ["", "img", "<img", "#serial", '">']) {
-    for (const [nome, linha] of [
-      ["autocomplete", renderers.criarLinhaAutocomplete(item, 0, query, {})],
-      ["busca completa", renderers.criarLinhaPesquisaCompleta(item, 0, query, () => {})],
+    for (const [nome, linha, camposDaLinha] of [
+      ["autocomplete", renderers.criarLinhaAutocomplete(item, 0, query, {}), camposAutocomplete],
+      ["busca completa", renderers.criarLinhaPesquisaCompleta(item, 0, query, () => {}), campos],
     ]) {
       const contexto = `conteudoLinhaResultado (${nome}, consulta ${JSON.stringify(query)})`;
       afirmarSemHtmlVivo(linha.innerHTML, contexto);
-      if (!query) afirmarCamposEscapados(linha.innerHTML, campos, contexto);
+      if (!query) afirmarCamposEscapados(linha.innerHTML, camposDaLinha, contexto);
     }
   }
 });

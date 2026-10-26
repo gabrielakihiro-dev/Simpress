@@ -81,15 +81,32 @@
       `;
   }
 
+  function conteudoLinhaAutocomplete(item, currentQuery) {
+    const serial = String(item.serial || "").trim();
+    const usuario = String(item.usuarios_logados || "").trim();
+    const usuarioTexto = usuario
+      ? `${usuario}${item.usuarios_logados_origem === "manual" ? " (M)" : ""}`
+      : textoAmbiguo(item.usuarios_logados_candidatos);
+    const detalhe = [item.modelo, usuarioTexto].filter(Boolean).join(" · ");
+    const serialHtml = highlightMatch(serial, currentQuery).replaceAll('class="serial-match"', 'class="ck-ac__prefixo"');
+    const semUsuario = usuarioTexto ? "" : '<span class="ck-status" data-status="info"><svg class="ck-ico ck-ico--xs" aria-hidden="true" focusable="false"><use href="#i-user"></use></svg>Sem usuário</span>';
+    return `
+        <span class="ck-ac__serie">${serialHtml}</span>
+        <span class="ck-ac__local">${escapeHtml(item.retirada_cidade || "PR")}</span>
+        <span class="ck-ac__modelo" title="${escapeHtml(detalhe)}">${escapeHtml(detalhe)}</span>
+        ${semUsuario}
+      `;
+  }
+
   function criarLinhaAutocomplete(item, index, currentQuery, { onSelect, onHighlight }) {
     const row = document.createElement("div");
     row.id = `autocomplete-option-${index}`;
     row.setAttribute("role", "option");
     row.setAttribute("aria-selected", "false");
-    row.className = "autocomplete-row group px-4 py-2.5 cursor-pointer flex items-center justify-between gap-3";
+    row.className = "ck-ac__item autocomplete-row";
     row.onclick = onSelect;
     row.onmouseenter = onHighlight;
-    row.innerHTML = conteudoLinhaResultado(item, currentQuery);
+    row.innerHTML = conteudoLinhaAutocomplete(item, currentQuery);
     return row;
   }
 

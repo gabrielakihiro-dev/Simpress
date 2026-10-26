@@ -45,6 +45,7 @@
   const POLL_ATIVO_MS = 1500;
   const POLL_LIVRE_MS = 5000;
   const MAX_LINHAS = 500;
+  const MAX_EVENTOS = 200;
 
   const estado = {
     offset: 0,
@@ -56,9 +57,10 @@
     ultimaExecucaoId: null,
     acompanharFim: false,
     linhasAoVivo: [], logHistorico: null, execucaoSelecionada: "",
-    consultaLog: 0, consultaHistorico: 0, consultaOpcoes: 0,
+    consultaLog: 0, consultaHistorico: 0, consultaOpcoes: 0, consultaUltimas: 0,
+    ultimasPorRotina: {},
     pagina: 1, paginas: 1, limite: 5, filtros: {},
-    logPagina: 1, logPaginas: 1, ampliado: "",
+    logPagina: 1, logPaginas: 1,
     avisouServidorAntigo: false,
     rotinaAtiva: "",
     // Cartão Sincronizar chamados Sebrae: último resumo da API (null até a primeira resposta).
@@ -111,17 +113,118 @@
     const termino = new Date(fim).getTime();
     if (!Number.isFinite(comeco) || !Number.isFinite(termino) || termino < comeco) return "—";
     const segundos = Math.round((termino - comeco) / 1000);
-    if (segundos < 60) return `${segundos} s`;
     const minutos = Math.floor(segundos / 60);
-    return minutos < 60 ? `${minutos} min ${segundos % 60} s` : `${Math.floor(minutos / 60)} h ${minutos % 60} min`;
+    return minutos < 60 ? `${minutos}m ${segundos % 60}s` : `${Math.floor(minutos / 60)}h ${minutos % 60}m`;
+  }
+
+  function formatarHoraCurta(iso) {
+    const data = iso ? new Date(iso) : null;
+    if (!data || Number.isNaN(data.getTime())) return "";
+    return data.toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit" });
+  }
+
+  // "08:30" (hoje), "ontem 17:45" ou "22/10 16:20"; `dia` é 0 para hoje e 1 para ontem.
+  function descreverQuando(iso) {
+    const data = iso ? new Date(iso) : null;
+    if (!data || Number.isNaN(data.getTime())) return { dia: -1, texto: "" };
+    const meiaNoite = valorData => new Date(valorData.getFullYear(), valorData.getMonth(), valorData.getDate()).getTime();
+    const dia = Math.round((meiaNoite(new Date()) - meiaNoite(data)) / 86400000);
+    const hora = formatarHoraCurta(iso);
+    if (dia === 0) return { dia, texto: hora };
+    if (dia === 1) return { dia, texto: `ontem ${hora}` };
+    return { dia, texto: `${data.toLocaleDateString("pt-BR", { day: "2-digit", month: "2-digit" })} ${hora}` };
+  }
+
+  function rotuloInicio(iso) {
+    const { dia, texto } = descreverQuando(iso);
+    if (dia === 0) return `Hoje ${texto}`;
+    return texto ? texto.charAt(0).toLocaleUpperCase("pt-BR") + texto.slice(1) : "—";
+  }
+
+  function criarIcone(nome, girando = false) {
+    const svg = document.createElementNS("http://www.w3.org/2000/svg", "svg");
+    svg.setAttribute("class", `ck-ico ck-ico--xs${girando ? " ck-girando" : ""}`);
+    svg.setAttribute("aria-hidden", "true");
+    svg.setAttribute("focusable", "false");
+    svg.appendChild(document.createElementNS("http://www.w3.org/2000/svg", "use")).setAttribute("href", `#${nome}`);
+    return svg;
+  }
+
+  function definirIcone(elemento, nome, girando = false) {
+    const svg = elemento?.querySelector("svg");
+    if (!svg) return;
+    svg.querySelector("use")?.setAttribute("href", `#${nome}`);
+    svg.classList.toggle("ck-girando", girando);
+  }
+
+  const ICONE_STATUS = Object.freeze({ ok: "i-ok", erro: "i-erro", alerta: "i-alerta", info: "i-loader", "": "i-neutro" });
+  const STATUS_VISUAL = Object.freeze({
+    concluido: "ok", falha: "erro", cancelado: "", interrompido: "alerta", ocupada: "alerta", em_andamento: "info",
+  });
+
+  // Selo da última execução de cada rotina (cartões e linha "Verificar usuários"); estado.ultimasPorRotina vem do histórico.
+  function renderizarBadgesRotinas() {
+    document.querySelectorAll("[data-rotina-badge]").forEach(badge => {
+      const rotina = badge.dataset.rotinaBadge;
+      const ativo = estado.emAndamento && estado.rotinaAtiva === rotina;
+      const ultima = estado.ultimasPorRotina[rotina];
+      const quando = descreverQuando(ultima?.fim || ultima?.inicio);
+      let status = "";
+      let texto = "Sem execuções";
+      if (ativo) {
+        status = "info";
+        texto = "Em andamento";
+      } else if (ultima && ultima.status === "concluido" && quando.dia === 0) {
+        status = "ok";
+        texto = `Concluído ${quando.texto}`;
+      } else if (ultima && ultima.status === "concluido") {
+        texto = quando.texto.charAt(0).toLocaleUpperCase("pt-BR") + quando.texto.slice(1);
+      } else if (ultima) {
+        status = STATUS_VISUAL[ultima.status] || "";
+        texto = `${STATUS[ultima.status] || ultima.status} ${quando.texto}`.trim();
+      }
+      if (badge.dataset.status !== status) badge.dataset.status = status;
+      definirIcone(badge, ativo ? "i-loader" : (status ? ICONE_STATUS[status] : "i-clock"), ativo);
+      const rotulo = badge.querySelector("span");
+      if (rotulo && rotulo.textContent !== texto) rotulo.textContent = texto;
+      const cartao = badge.closest("[data-rotina]");
+      const situacao = ativo ? "em-andamento" : (status === "ok" ? "concluido" : "ocioso");
+      if (cartao && cartao.dataset.estado !== undefined && cartao.dataset.estado !== situacao) cartao.dataset.estado = situacao;
+    });
+  }
+
+  async function carregarUltimasPorRotina() {
+    const consulta = ++estado.consultaUltimas;
+    await Promise.all(["os", "inventarios", "ambas", "usuarios"].map(async rotina => {
+      try {
+        const params = new URLSearchParams({ limite: "1", pagina: "1", rotina });
+        const dados = await consultarAutomacao(`/api/automacao/historico?${params}`, { errorMessage: "Não foi possível consultar a última execução." });
+        if (consulta === estado.consultaUltimas) estado.ultimasPorRotina[rotina] = dados.execucoes?.[0] || null;
+      } catch (err) {
+        if (consulta === estado.consultaUltimas) estado.ultimasPorRotina[rotina] = null;
+      }
+    }));
+    if (consulta === estado.consultaUltimas) renderizarBadgesRotinas();
   }
 
   function atualizarBotoes() {
-    const bloqueado = estado.emAndamento || estado.ocupado;
     document.querySelectorAll("[data-automacao-rotina]").forEach(botao => {
+      const cartao = botao.closest("[data-rotina]");
+      // A rotina em andamento vira "Acompanhar": o botão fica livre e leva ao console.
+      const acompanhar = Boolean(cartao) && estado.emAndamento && botao.dataset.automacaoRotina === estado.rotinaAtiva;
+      const bloqueado = estado.ocupado || (estado.emAndamento && !acompanhar);
       botao.disabled = bloqueado;
       botao.setAttribute("aria-disabled", String(bloqueado));
+      if (!cartao) return;
+      const repetir = estado.ultimasPorRotina[botao.dataset.automacaoRotina]?.status === "falha";
+      const rotulo = acompanhar ? "Acompanhar" : (repetir ? "Tentar de novo" : "Executar");
+      const texto = botao.querySelector("span");
+      if (texto && texto.textContent !== rotulo) texto.textContent = rotulo;
+      botao.classList.toggle("ck-btn--primario", acompanhar);
+      botao.classList.toggle("ck-btn--secundario", !acompanhar);
+      definirIcone(botao, acompanhar ? "i-text" : (repetir ? "i-refresh" : "i-play"));
     });
+    renderizarBadgesRotinas();
     const cancelar = document.getElementById("btn-automacao-cancelar");
     if (cancelar) cancelar.disabled = !estado.emAndamento || estado.ocupado;
     // O cancelamento do cartão Sebrae só vale quando a rotina em andamento é a dele.
@@ -137,13 +240,25 @@
     const detalhe = document.getElementById("automacao-estado-detalhe");
     if (!caixa || !titulo || !detalhe) return;
     const ativo = dados.estado === "em_andamento";
+    const estadoShell = document.getElementById("cockpit-automation-shell-status");
+    const tituloShell = document.getElementById("cockpit-automation-shell-title");
+    if (estadoShell && tituloShell) {
+      estadoShell.dataset.state = ativo ? "occupied" : "idle";
+      tituloShell.textContent = ativo ? "Chrome ocupado" : "Chrome livre";
+      estadoShell.title = ativo ? `${ROTINAS[dados.rotina] || dados.rotina || "Rotina"} em andamento.` : "Chrome livre para uma nova rotina.";
+    }
+    const aoVivo = document.getElementById("cockpit-automation-live");
+    if (aoVivo) aoVivo.hidden = !ativo || Boolean(estado.execucaoSelecionada);
     caixa.dataset.state = ativo ? (dados.cancelamento_pedido ? "cancelando" : "em_andamento") : "livre";
+    const selo = caixa.querySelector(".ck-badge");
+    const visual = ativo ? (dados.cancelamento_pedido ? "alerta" : "info") : "ok";
+    if (selo) selo.dataset.status = visual;
+    definirIcone(selo, ICONE_STATUS[visual], visual === "info");
     if (ativo) {
       const rotina = ROTINAS[dados.rotina] || dados.rotina || "Rotina";
-      const origem = dados.origem === "externo" ? "fora do site" : "pelo site";
-      const inicio = formatarHora(dados.inicio);
-      titulo.textContent = dados.cancelamento_pedido ? "Cancelamento pedido…" : "Em andamento";
-      detalhe.textContent = `${rotina}${inicio ? `, desde ${inicio}` : ""} (${origem}).`;
+      const inicio = formatarHoraCurta(dados.inicio);
+      titulo.textContent = dados.cancelamento_pedido ? "Cancelando…" : "Ocupado";
+      detalhe.textContent = `${rotina} em andamento${inicio ? ` desde ${inicio}` : ""}`;
     } else {
       titulo.textContent = "Livre";
       const ultima = dados.ultima;
@@ -175,6 +290,64 @@
 
   function valor(id) { return document.getElementById(id)?.value || ""; }
 
+  function classificarEventoAutomacao(mensagem) {
+    const texto = mensagem.toLocaleLowerCase("pt-BR");
+    const percentual = texto.match(/(?:^|\s)(\d{1,3}%)(?=\s|$)/)?.[1];
+    if (/\b(falha|falhou|erro|error|exception|não conclu[ií]d[oa]|nao conclu[ií]d[oa])\b/.test(texto)) {
+      return { estado: "error", icone: "✕", status: "Falha" };
+    }
+    if (/ação necessária|acao necessaria|aguardando|pendente|login necessário|login necessario/.test(texto)) {
+      return { estado: "waiting", icone: "◌", status: "Aguardando" };
+    }
+    if (percentual || /exportando|importando|comparando|em andamento|processando|carregando/.test(texto)) {
+      return { estado: "active", icone: "◌", status: percentual || "Em andamento" };
+    }
+    if (/conclu[ií]d[oa]|finalizad[oa]|válid[oa]|valid[oa]|confirmad[oa]|iniciad[oa]|\bok\b/.test(texto)) {
+      return { estado: "success", icone: "✓", status: "OK" };
+    }
+    return { estado: "info", icone: "·", status: "Info" };
+  }
+
+  function criarEventoAutomacao(horario, origem, mensagem, classificacao) {
+    const item = document.createElement("li");
+    item.className = "ck-log__linha";
+    item.dataset.state = classificacao.estado;
+    const campos = [["ck-log__hora", horario], ["ck-log__origem", origem], ["ck-log__msg", mensagem]];
+    campos.forEach(([classe, texto]) => {
+      const campo = document.createElement("span");
+      campo.className = classe;
+      campo.textContent = texto;
+      item.append(campo);
+    });
+    const nivel = document.createElement("span");
+    nivel.className = "ck-nivel";
+    nivel.dataset.status = {error: "erro", waiting: "alerta", active: "info", success: "ok"}[classificacao.estado] || "info";
+    nivel.textContent = classificacao.status;
+    item.append(nivel);
+    return item;
+  }
+
+  function renderizarEventosAutomacao() {
+    const lista = document.getElementById("cockpit-automation-events");
+    const area = document.getElementById("automacao-log");
+    if (!lista || !area) return;
+
+    const aoVivo = document.getElementById("cockpit-automation-live");
+    if (aoVivo) aoVivo.hidden = !estado.emAndamento || Boolean(estado.execucaoSelecionada);
+    const linhas = area.textContent.split(/\r?\n/).filter(linha => linha.trim()).slice(-MAX_EVENTOS);
+    const fragmento = document.createDocumentFragment();
+    if (!linhas.length) {
+      fragmento.append(criarEventoAutomacao("—", "", "Aguardando atividade do Chrome.", {estado: "waiting", status: "Aguardando"}));
+    } else {
+      linhas.forEach(linha => {
+        const partes = linha.match(/^\s*(?:\[(\d{2}:\d{2}:\d{2})\]\s*)?(?:\[([^\]\r\n]+)\]\s*)?(.*)$/);
+        const mensagem = partes?.[3] || linha;
+        fragmento.append(criarEventoAutomacao(partes?.[1] || "—", partes?.[2] || "", mensagem, classificarEventoAutomacao(mensagem)));
+      });
+    }
+    lista.replaceChildren(fragmento);
+  }
+
   function mostrarLogAutomacao() {
     const area = document.getElementById("automacao-log");
     if (!area) return;
@@ -187,6 +360,7 @@
     const texto = linhas.slice(-limite).join("\n");
     area.setAttribute("aria-live", historico ? "off" : "polite");
     if (area.textContent !== texto) area.textContent = texto;
+    renderizarEventosAutomacao();
     if (!historico && noFim) area.scrollTop = area.scrollHeight;
     const arquivoElemento = document.getElementById("automacao-log-arquivo");
     const arquivoTexto = arquivo ? `Arquivo: ${arquivo}` : "Nenhum log disponível.";
@@ -217,6 +391,7 @@
     } catch (err) {
       if (consulta !== estado.consultaLog) return;
       document.getElementById("automacao-log").textContent = err.message;
+      renderizarEventosAutomacao();
       document.getElementById("automacao-log-modo").textContent = "Histórico · erro ao consultar";
     }
   }
@@ -268,46 +443,9 @@
   async function abrirLogExecucaoAutomacao(id, inicio) {
     const data = new Date(inicio);
     if (!Number.isNaN(data.getTime())) document.getElementById("automacao-log-data").value = `${data.getFullYear()}-${String(data.getMonth() + 1).padStart(2, "0")}-${String(data.getDate()).padStart(2, "0")}`;
-    if (document.getElementById("automacao-andamento-conteudo").hidden) recolherPainelAutomacao("andamento");
-    document.getElementById("automacao-log-filtros").open = true;
     await Promise.all([selecionarLogAutomacao(id), carregarExecucoesLogAutomacao()]);
     document.getElementById("automacao-andamento-painel").scrollIntoView({block: "start"});
-    document.getElementById("automacao-log").focus({preventScroll: true});
-  }
-
-  function recolherPainelAutomacao(nome) {
-    if (!["andamento", "historico"].includes(nome)) return;
-    const conteudo = document.getElementById(`automacao-${nome}-conteudo`);
-    const botao = document.querySelector(`[aria-controls="${conteudo.id}"]`);
-    if (estado.ampliado === nome) ampliarPainelAutomacao(nome);
-    conteudo.hidden = !conteudo.hidden;
-    botao.setAttribute("aria-expanded", String(!conteudo.hidden));
-    botao.textContent = conteudo.hidden ? "Expandir" : "Recolher";
-    botao.setAttribute("aria-label", `${conteudo.hidden ? "Expandir" : "Recolher"} ${nome === "andamento" ? "Andamento" : "Últimas execuções"}`);
-  }
-
-  function ampliarPainelAutomacao(nome) {
-    if (!["andamento", "historico"].includes(nome)) return;
-    const estavaAmpliado = estado.ampliado === nome;
-    if (estado.ampliado) {
-      const anterior = document.getElementById(`automacao-${estado.ampliado}-painel`);
-      anterior.classList.remove("automation-card--expanded");
-      const botao = anterior.querySelector('[aria-pressed]');
-      botao.setAttribute("aria-pressed", "false");
-      botao.textContent = "Ampliar";
-      botao.setAttribute("aria-label", `Ampliar ${estado.ampliado === "andamento" ? "Andamento" : "Últimas execuções"}`);
-      estado.ampliado = "";
-    }
-    if (estavaAmpliado) return;
-    if (document.getElementById(`automacao-${nome}-conteudo`).hidden) recolherPainelAutomacao(nome);
-    const card = document.getElementById(`automacao-${nome}-painel`);
-    card.classList.add("automation-card--expanded");
-    const botao = card.querySelector('[aria-pressed]');
-    botao.setAttribute("aria-pressed", "true");
-    botao.textContent = "Restaurar";
-    botao.setAttribute("aria-label", `Restaurar ${nome === "andamento" ? "Andamento" : "Últimas execuções"}`);
-    estado.ampliado = nome;
-    card.scrollIntoView({block: "start"});
+    document.getElementById("cockpit-automation-events").focus({preventScroll: true});
   }
 
   function celula(rotulo, conteudo) {
@@ -401,14 +539,14 @@
     const host = document.getElementById("automacao-historico");
     if (!host) return;
     if (!execucoes.length) {
-      host.replaceChildren(dom.createTextElement("p", "ux-home-note", "Nenhuma execução encontrada para os filtros selecionados."));
+      host.replaceChildren(dom.createTextElement("p", "ck-lista__vazio", "Nenhuma execução encontrada para os filtros selecionados."));
       return;
     }
     const tabela = document.createElement("table");
-    tabela.className = "automation-history-table";
+    tabela.className = "ck-tabela ck-tabela--cards";
     const cabecalho = document.createElement("thead");
     const linhaCabecalho = document.createElement("tr");
-    ["Rotina", "Início", "Duração", "Status", "Lotes", "Capturas", "Log"].forEach(texto => {
+    ["Rotina", "Início", "Duração", "Status"].forEach(texto => {
       const th = dom.createTextElement("th", "", texto);
       th.scope = "col";
       linhaCabecalho.appendChild(th);
@@ -419,8 +557,13 @@
       const linha = document.createElement("tr");
       const rotina = dom.createTextElement("span", "", ROTINAS[execucao.rotina] || execucao.rotina);
       if (execucao.origem === "externo") rotina.appendChild(dom.createTextElement("small", "automation-history-origin", " fora do site"));
-      const status = dom.createTextElement("span", "automation-status-badge", STATUS[execucao.status] || execucao.status || "—");
-      status.dataset.status = execucao.status || "";
+      const lotes = (execucao.lotes || []).map(lote => `${lote.id}${lote.status ? ` (${lote.status})` : ""}`).join(", ");
+      if (lotes) rotina.title = `Lotes: ${lotes}`;
+      const visual = STATUS_VISUAL[execucao.status] || "";
+      const status = document.createElement("span");
+      status.className = "ck-status";
+      status.dataset.status = visual;
+      status.append(criarIcone(ICONE_STATUS[visual], visual === "info"), STATUS[execucao.status] || execucao.status || "—");
       if (execucao.mensagem) status.title = execucao.mensagem;
       const statusBloco = document.createElement("span");
       statusBloco.className = "automation-history-status";
@@ -428,24 +571,23 @@
       if (execucao.mensagem && execucao.status !== "concluido") {
         statusBloco.appendChild(dom.createTextElement("small", "automation-history-message", execucao.mensagem));
       }
-      const lotes = (execucao.lotes || []).map(lote => `${lote.id}${lote.status ? ` (${lote.status})` : ""}`).join(", ") || "—";
       const capturas = document.createElement("span");
       capturas.className = "automation-history-captures";
       (execucao.capturas || []).forEach(captura => capturas.appendChild(criarCapturaHistorico(execucao, captura)));
-      if (!capturas.childNodes.length) capturas.textContent = "—";
-      const verLog = dom.createTextElement("button", "btn btn-secondary", "Ver log");
+      const verLog = dom.createTextElement("button", "ck-btn ck-btn--secundario ck-btn--sm", "Ver log");
+      verLog.className = "ck-btn ck-btn--fantasma ck-btn--sm";
       verLog.type = "button";
       verLog.dataset.onClick = "abrirLogExecucaoAutomacao";
       verLog.dataset.args = JSON.stringify([execucao.id, execucao.inicio]);
       verLog.setAttribute("aria-label", `Ver log de ${ROTINAS[execucao.rotina] || execucao.rotina} em ${formatarHora(execucao.inicio)}`);
+      statusBloco.append(verLog);
+      if (capturas.childNodes.length) statusBloco.append(capturas);
+      linha.dataset.status = (execucao.status || "").replace("_", "-");
       linha.append(
         celula("Rotina", rotina),
-        celula("Início", formatarHora(execucao.inicio) || "—"),
+        celula("Início", rotuloInicio(execucao.inicio)),
         celula("Duração", execucao.status === "em_andamento" ? "—" : formatarDuracao(execucao.inicio, execucao.fim)),
         celula("Status", statusBloco),
-        celula("Lotes", lotes),
-        celula("Capturas", capturas),
-        celula("Log", verLog),
       );
       corpo.appendChild(linha);
     });
@@ -464,7 +606,7 @@
       renderizarHistorico(Array.isArray(dados.execucoes) ? dados.execucoes : []);
       estado.pagina = dados.pagina || 1;
       estado.paginas = dados.paginas || 1;
-      document.getElementById("automacao-historico-pagina").textContent = `Página ${estado.pagina} de ${estado.paginas}`;
+      document.getElementById("automacao-historico-pagina").textContent = `${estado.pagina} de ${estado.paginas}`;
       document.getElementById("automacao-historico-anterior").disabled = estado.pagina <= 1;
       document.getElementById("automacao-historico-proxima").disabled = estado.pagina >= estado.paginas;
       const filtros = estado.filtros;
@@ -478,7 +620,7 @@
       if (consulta !== estado.consultaHistorico) return;
       console.error("Erro ao carregar o histórico da automação:", err);
       const host = document.getElementById("automacao-historico");
-      if (host) host.replaceChildren(dom.createTextElement("p", "ux-home-note", err.message));
+      if (host) host.replaceChildren(dom.createTextElement("p", "ck-lista__vazio", err.message));
       document.getElementById("automacao-historico-resumo").textContent = "Não foi possível atualizar a consulta.";
       document.getElementById("automacao-historico-anterior").disabled = true;
       document.getElementById("automacao-historico-proxima").disabled = true;
@@ -597,12 +739,12 @@
     const host = document.getElementById("sebrae-pendencias");
     if (!host) return;
     if (!pendencias.length) {
-      host.replaceChildren(dom.createTextElement("p", "ux-home-note", "Nenhuma pendência."));
+      host.replaceChildren(dom.createTextElement("p", "ck-cartao__meta", "Pendências: nenhuma."));
       return;
     }
     const tabela = document.createElement("table");
-    tabela.className = "automation-history-table sebrae-pendencias-tabela";
-    tabela.setAttribute("aria-labelledby", "sebrae-pendencias-titulo");
+    tabela.className = "ck-tabela ck-tabela--cards sebrae-pendencias-tabela";
+    tabela.setAttribute("aria-label", "Pendências");
     const cabecalho = document.createElement("thead");
     const linhaCabecalho = document.createElement("tr");
     ["Chamado", "Motivo"].forEach(texto => {
@@ -631,7 +773,12 @@
 
     const situacao = descreverSituacaoSebrae(resumo);
     const caixa = document.getElementById("sebrae-estado");
-    if (caixa && caixa.dataset.state !== situacao.estado) caixa.dataset.state = situacao.estado;
+    if (caixa && caixa.dataset.state !== situacao.estado) {
+      caixa.dataset.state = situacao.estado;
+      const visual = { em_andamento: "info", aguardando: "alerta", livre: "ok" }[situacao.estado] || "";
+      caixa.dataset.status = visual;
+      definirIcone(caixa, ICONE_STATUS[visual], visual === "info");
+    }
     definirTexto("sebrae-estado-titulo", situacao.titulo);
     definirTexto("sebrae-estado-detalhe", situacao.detalhe);
 
@@ -746,6 +893,7 @@
     if (ultimaId !== estado.ultimaExecucaoId || estavaAtivo !== estado.emAndamento) {
       estado.ultimaExecucaoId = ultimaId;
       carregarHistoricoAutomacao();
+      carregarUltimasPorRotina();
     }
     const sebrae = estado.sebrae;
     if (!sebrae.resumo || ultimaId !== sebrae.ultimaId || estavaAtivo !== estado.emAndamento
@@ -780,8 +928,18 @@
     }
   }
 
+  function acompanharRotinaAutomacao() {
+    const eventos = document.getElementById("cockpit-automation-events");
+    eventos?.scrollIntoView({ block: "nearest" });
+    eventos?.focus({ preventScroll: true });
+  }
+
   async function iniciarRotinaAutomacao(rotina) {
-    if (!ROTINAS[rotina] || estado.ocupado || estado.emAndamento) return;
+    if (!ROTINAS[rotina] || estado.ocupado) return;
+    if (estado.emAndamento) {
+      if (estado.rotinaAtiva === rotina) acompanharRotinaAutomacao();
+      return;
+    }
     estado.ocupado = true;
     atualizarBotoes();
     const botao = document.querySelector(`[data-automacao-rotina="${rotina}"]`);
@@ -839,13 +997,6 @@
     document.addEventListener("visibilitychange", () => {
       if (painelVisivel()) atualizarEstadoAutomacao();
     });
-    document.addEventListener("keydown", event => {
-      if (event.key !== "Escape" || !estado.ampliado || !painelVisivel()) return;
-      if (document.querySelector("dialog[open]")) return; // The capture viewer closes first.
-      const card = document.getElementById(`automacao-${estado.ampliado}-painel`);
-      ampliarPainelAutomacao(estado.ampliado);
-      card.querySelector('[aria-pressed]').focus();
-    });
     if (painelVisivel()) atualizarEstadoAutomacao();
   }
 
@@ -859,6 +1010,5 @@
     filtrarHistoricoAutomacao, limparFiltrosAutomacao, mudarPaginaHistoricoAutomacao,
     carregarExecucoesLogAutomacao, mudarPaginaLogAutomacao, selecionarLogAutomacao,
     abrirLogExecucaoAutomacao, voltarAoVivoAutomacao, alterarLimiteLogAutomacao,
-    recolherPainelAutomacao, ampliarPainelAutomacao,
   };
 });

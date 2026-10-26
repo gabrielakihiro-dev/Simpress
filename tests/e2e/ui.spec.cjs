@@ -27,7 +27,8 @@ async function openSidebarIfNeeded(page) {
 
 async function openAnalysisMenu(page) {
   await openSidebarIfNeeded(page);
-  await page.locator('.header-action-group[data-action-group="analysis"] > summary').click();
+  const menu = page.locator("#cockpit-tools-dropdown");
+  if (!(await menu.evaluate(node => node.open))) await page.locator("#cockpit-tools-trigger").click();
 }
 
 async function openFixtureComparison(page) {
@@ -57,48 +58,21 @@ test("home has no WCAG 2.2 A/AA axe violations", async ({ page }) => {
   await auditAccessibility(page);
 });
 
-test("home preserves typography and spacing around hidden panels", async ({ page }) => {
-  await expect(page.locator("#input-serial")).toHaveCSS("font-family", /JetBrains Mono Variable/);
-  await expect(page.locator("#btn-buscar-serial")).toHaveCSS("font-weight", "700");
-  await expect(page.locator("#readiness-panel")).toHaveCSS("margin-bottom", "24px");
-  await expect(page.locator("#tab-panel-home")).toHaveCSS("margin-top", "0px");
-  await expect(page.locator("#tab-panel-home")).toHaveCSS("margin-bottom", "0px");
-});
-
-test("sidebar tools share one neutral style and keep labels on one line", async ({ page }) => {
-  await openSidebarIfNeeded(page);
-  const updateButton = page.locator("#btn-atualizar-planilhas");
-  const exportButton = page.locator("#btn-exportar-equipamentos");
-  const historyButton = page.locator("#btn-historico-comparacoes");
-  const ticketButton = page.getByRole("button", { name: "Acompanhamento de Chamados", exact: true });
-  const analysisButton = page.locator('.header-action-group[data-action-group="analysis"] > summary');
-  await expect(ticketButton).toBeVisible();
-  const analysisGroup = page.locator('.header-action-group[data-action-group="analysis"]');
-  if (!(await analysisGroup.evaluate(element => element.open))) await analysisButton.click();
-  await expect(updateButton).toBeVisible();
-  await expect(exportButton).toBeVisible();
-  await expect(historyButton.locator("#badge-total-historico-comparacoes")).toBeVisible();
-
-  const rowStyle = locator => locator.evaluate(element => {
-    const style = getComputedStyle(element);
-    return { backgroundImage: style.backgroundImage, backgroundColor: style.backgroundColor, fontWeight: style.fontWeight };
-  });
-  const [updateStyle, exportStyle, historyStyle, ticketStyle] = await Promise.all(
-    [updateButton, exportButton, historyButton, ticketButton].map(rowStyle));
-  for (const style of [updateStyle, exportStyle]) {
-    expect(style.backgroundImage).toBe("none");
-    expect(style.fontWeight).toBe(historyStyle.fontWeight);
-  }
-  expect(ticketStyle.backgroundColor).not.toContain("234, 88, 12");
-
-  for (const button of [ticketButton, analysisButton]) {
-    const label = await button.locator(".sidebar-item-label").first().evaluate(element => ({
-      breaks: element.querySelectorAll("br").length,
-      truncated: element.scrollWidth > element.clientWidth,
-      lines: Math.round(element.getBoundingClientRect().height / parseFloat(getComputedStyle(element).lineHeight)),
-    }));
-    expect(label).toEqual({ breaks: 0, truncated: false, lines: 1 });
-  }
+test("Cockpit keeps compact typography and a single tools disclosure", async ({ page }, testInfo) => {
+  const mobile = testInfo.project.name === "mobile";
+  if (!mobile) await expect(page.locator(".ck-topbar")).toHaveCSS("height", "48px");
+  const searchFontSize = mobile ? "16px" : "12.5px";
+  await expect(page.locator("#input-serial")).toHaveCSS("font-size", searchFontSize);
+  await expect(page.locator("#card-equipamento")).toBeHidden();
+  await openAnalysisMenu(page);
+  await expect(page.locator("#btn-atualizar-planilhas")).toBeVisible();
+  await expect(page.locator("#btn-acompanhamento-chamados")).toBeVisible();
+  await expect(page.locator("#btn-historico-comparacoes")).toBeVisible();
+  await expect(page.locator("#btn-historico-comparacoes #badge-total-historico-comparacoes")).toBeVisible();
+  const styles = await page.locator(".ck-menu__item:visible").evaluateAll(nodes => nodes.map(node => ({
+    image: getComputedStyle(node).backgroundImage, wraps: getComputedStyle(node).whiteSpace,
+  })));
+  expect(styles.every(style => style.image === "none")).toBe(true);
 });
 
 test("tab navigation updates selected state and supports arrow keys", async ({ page }, testInfo) => {
@@ -108,11 +82,6 @@ test("tab navigation updates selected state and supports arrow keys", async ({ p
   await transferTab.click();
   await expect(transferTab).toHaveAttribute("aria-selected", "true");
   await expect(page.getByRole("tabpanel")).toBeVisible();
-  if (testInfo.project.name === "mobile") {
-    await expect(page.locator("#simpress-app-shell")).toHaveAttribute("data-sidebar-open", "false");
-    await expect(page.locator("#main-content")).toBeFocused();
-    return;
-  }
   await transferTab.focus();
   await transferTab.press("ArrowLeft");
   await expect(homeTab).toBeFocused();
@@ -158,12 +127,11 @@ test("search shortcuts focus Home search except while typing or with a dialog op
   const input = page.locator("#input-serial");
   const homeTab = page.locator("#tab-home");
   await expect(input).toHaveAttribute("aria-keyshortcuts", "/ Control+K Meta+K");
-  const hint = page.locator(".home-search-shortcut");
+  const hint = page.locator(".ck-busca__campo > .ck-kbd");
   if (testInfo.project.name === "mobile") await expect(hint).toBeHidden();
   else {
-    await input.blur();
     await expect(hint).toBeVisible();
-    await expect(hint).toHaveText("/");
+    await expect(hint).toHaveText("Ctrl+K");
   }
 
   await openSidebarIfNeeded(page);
@@ -200,7 +168,7 @@ test("search shortcuts focus Home search except while typing or with a dialog op
 
 test("recent lookups reopen the result and can be cleared", async ({ page }) => {
   test.setTimeout(45_000);
-  const recentSection = page.getByRole("region", { name: "Pesquisas recentes" });
+  const recentSection = page.locator("#home-recentes");
   await expect(recentSection).toBeHidden();
   await page.evaluate(() => localStorage.setItem("simpress:recent-equipment", JSON.stringify([
     { serial: "OUTRO", apelido: "DEMO-002", cidade: "Londrina" },
@@ -222,7 +190,7 @@ test("recent lookups reopen the result and can be cleared", async ({ page }) => 
   expect((await lookup).status()).toBe(200);
   await expect(page.locator("#card-equipamento")).toBeVisible({ timeout: 15_000 });
   await expect(page.locator("#card-serial")).toHaveText("LENTO");
-  await expect(recentSection.locator(".home-recent-serial")).toHaveText(["LENTO", "OUTRO"]);
+  await expect(recentSection.locator(".ck-recente__serie")).toHaveText(["LENTO", "OUTRO"]);
   await auditAccessibility(page, "#home-recentes");
 
   await recentSection.getByRole("button", { name: "Limpar pesquisas recentes" }).click();
@@ -278,9 +246,7 @@ test("modal traps keyboard focus, restores it on Escape, and passes axe", async 
 
   await page.keyboard.press("Escape");
   await expect(dialog).toBeHidden();
-  const returnFocus = testInfo.project.name === "mobile"
-    ? page.locator("#btn-sidebar-open")
-    : page.locator("#btn-historico-comparacoes");
+  const returnFocus = page.locator("#cockpit-tools-trigger");
   await expect(returnFocus).toBeFocused();
 });
 
@@ -378,7 +344,7 @@ test("comparison summary cards jump to their section and clear filters that hide
 
 test("inventory evolution compares two saved updates and shows their row annotations", async ({ page }) => {
   await openAnalysisMenu(page);
-  await page.getByRole("button", { name: "Evolução das atualizações" }).click();
+  await page.locator("#btn-evolucao-atualizacoes").click();
   const dialog = page.locator("#modal-evolucao-atualizacoes");
   await expect(dialog).toBeVisible();
   await expect(page.locator("#resultado-evolucao-atualizacoes")).toContainText("Deixaram de aparecer");
@@ -415,7 +381,7 @@ test("inventory evolution prioritizes categories, filters rows and opens the mat
   };
   await page.route(/\/api\/operacoes\/evolucao\?/, route => route.fulfill({ json: evolution }));
   await openAnalysisMenu(page);
-  await page.getByRole("button", { name: "Evolução das atualizações" }).click();
+  await page.locator("#btn-evolucao-atualizacoes").click();
 
   const dialog = page.locator("#modal-evolucao-atualizacoes");
   const result = dialog.locator("#resultado-evolucao-atualizacoes");
@@ -461,7 +427,9 @@ test("ticket tracking imports both workbooks and relates each serial to its OS",
   test.slow();
   await page.setViewportSize({ width: testInfo.project.name === "mobile" ? 390 : 1366, height: 640 });
   await openSidebarIfNeeded(page);
-  await page.getByRole("button", { name: "Acompanhamento de Chamados", exact: true }).click();
+  await openAnalysisMenu(page);
+  await page.locator("#btn-acompanhamento-chamados").click();
+  await page.locator("#cockpit-tickets-manage").click();
   const dialog = page.locator("#modal-acompanhamento-chamados");
   await expect(dialog).toBeVisible();
   await expect(dialog.locator("#filtros-avancados-acompanhamento-chamados")).toHaveCount(0);
@@ -675,26 +643,27 @@ test("layout stays within common responsive viewport widths", async ({ page }) =
 test("keyboard focus stays visible over component and theme styles", async ({ page }) => {
   await page.setViewportSize({ width: 1366, height: 900 });
   const controls = [
-    // The Home search shows a single ring: the outline replaces its border, with no halo shadow.
-    ["#input-serial", "3px", "0px", "none"],
+    // The Home search ring sits on its field wrapper (:focus-within), not on the input.
+    ["#input-serial", "2px", "2px", undefined, ".ck-busca__campo"],
     ["#theme-toggle", "2px", "2px"],
-    ["#btn-nova-transferencia", "3px", "3px"],
-    ['.sidebar-tabs [role="tab"]:first-child', "3px", "3px"],
-    ['.header-action-group[data-action-group="analysis"] > summary', "3px", "3px"],
+    ["#btn-nova-transferencia", "2px", "2px"],
+    ['.ck-abas [role="tab"]:first-child', "2px", "2px"],
+    ["#cockpit-tools-trigger", "2px", "2px"],
   ];
   for (const theme of ["dark", "light"]) {
     await page.locator("html").evaluate((root, value) => { root.dataset.theme = value; }, theme);
+    await openAnalysisMenu(page);
     await page.keyboard.press("Tab");
-    for (const [selector, width, offset, shadow] of controls) {
-      const control = page.locator(selector);
-      await control.focus();
-      await expect(control).toBeFocused();
+    for (const [selector, width, offset, shadow, ringSelector] of controls) {
+      const focused = page.locator(selector);
+      await focused.focus();
+      await expect(focused).toBeFocused();
+      const control = ringSelector ? page.locator(ringSelector) : focused;
       await expect(control).toHaveCSS("outline-style", "solid");
       await expect(control).toHaveCSS("outline-width", width);
       await expect(control).toHaveCSS("outline-offset", offset);
-      await expect(control).toHaveCSS("outline-color", theme === "light" ? "rgb(2, 132, 199)" : "rgb(125, 211, 252)");
-      await expect(control).toHaveCSS("box-shadow", shadow
-        ?? `${theme === "light" ? "rgb(255, 255, 255)" : "rgb(2, 6, 23)"} 0px 0px 0px 2px`);
+      expect(await control.evaluate(element => getComputedStyle(element).outlineColor)).not.toBe("rgba(0, 0, 0, 0)");
+      if (shadow) await expect(control).toHaveCSS("box-shadow", shadow);
     }
   }
   await openFixtureComparison(page);
@@ -842,7 +811,7 @@ test("Resumo tab switches panels, keeps ARIA state and supports arrow keys", asy
   await openSidebarIfNeeded(page);
   await page.locator(tabs.resumo).click();
   await expectOnly("resumo");
-  await expect(page.locator("#ux-home-panel")).toBeVisible();
+  await expect(page.locator("#resumo-cards")).toBeVisible();
 
   await openSidebarIfNeeded(page);
   await page.locator(tabs.transporte).click();
@@ -960,7 +929,7 @@ test("stale tickets and new divergences appear in the notification center", asyn
     await expect(tickets).toBeVisible();
     await expect(divergences).toBeHidden();
 
-    await page.locator("#header-page-title").click();
+    await page.locator(".ck-marca").click();
     await expect(panel).toBeHidden();
     await request.get("/__fixture_alertas_painel?estado=ocultos");
     await trigger.click();
@@ -969,7 +938,7 @@ test("stale tickets and new divergences appear in the notification center", asyn
     await expect(panel.locator("#notification-center-summary")).toHaveText("Nenhum aviso ativo.");
     await expect(tickets).toBeHidden();
     await expect(divergences).toBeHidden();
-    await page.locator("#header-page-title").click();
+    await page.locator(".ck-marca").click();
     await expect(panel).toBeHidden();
     await expect(base).toBeVisible();
   } finally {

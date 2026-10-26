@@ -26,6 +26,11 @@ async function mockReadiness(page, getReport) {
   await page.route("**/api/prontidao", route => route.fulfill({ json: getReport() }));
 }
 
+async function openStatus(page) {
+  const toggle = page.locator("#cockpit-bar-status-toggle");
+  if ((await toggle.isVisible()) && (await toggle.getAttribute("aria-expanded")) !== "true") await toggle.click();
+}
+
 test("first access centralizes the inventory import and keeps calls separate", async ({ page }) => {
   test.setTimeout(45_000);
   const errors = [];
@@ -40,21 +45,23 @@ test("first access centralizes the inventory import and keeps calls separate", a
   await expect(panel).toHaveAttribute("aria-busy", "false", { timeout: 20_000 });
   await expect(page.locator("#readiness-summary")).toContainText("Nenhum dos 6 arquivos está disponível");
   // The panel starts as a compact disclosure on every screen.
+  const statusToggle = page.locator("#cockpit-bar-status-toggle");
+  if (await statusToggle.isVisible()) await statusToggle.click();
   await expect(panel).not.toHaveAttribute("open", "");
   await expect(page.locator("#readiness-summary-short")).toBeVisible();
   await expect(page.locator("#readiness-summary-short")).toHaveText("6 pendentes");
-  expect((await page.locator(".readiness-panel-summary").boundingBox()).height).toBeLessThanOrEqual(48);
+  expect((await page.locator("#readiness-panel > summary").boundingBox()).height).toBeLessThanOrEqual(48);
   await panel.locator(":scope > summary").click();
   await expect(panel).toHaveAttribute("open", "");
-  await expect(page.locator("#readiness-summary-short")).toBeHidden();
+  await expect(page.locator("#readiness-summary-short")).toBeVisible();
   await expect(panel.getByRole("button", { name: /Importar/ })).toHaveCount(4);
   await expect(panel).not.toContainText("Catálogos e históricos locais");
   await expect(panel.getByRole("heading", { name: "Ações com inventário" })).toHaveCount(0);
   await expect(panel.getByRole("heading", { name: "Modelo de exportação" })).toBeVisible();
   await expect(panel.locator("#readiness-details-content")).toBeVisible();
   await expect(panel.getByRole("heading", { name: "Acompanhamento de chamados" })).toBeVisible();
-  await expect(page.locator(".readiness-panel-summary")).toHaveCSS("display", "flex");
-  await expect(page.locator("#readiness-title")).toHaveCSS("font-size", "12px");
+  await expect(page.locator("#readiness-panel > summary")).toHaveCSS("display", "flex");
+  await expect(panel).toHaveAccessibleName("Disponibilidade das funções");
   await expect(page.locator(".readiness-details-content")).toHaveCSS("display", "grid");
   const audit = await new AxeBuilder({ page }).include("#readiness-panel")
     .withTags(["wcag2a", "wcag2aa", "wcag21aa", "wcag22aa"]).analyze();
@@ -70,6 +77,7 @@ test("first access centralizes the inventory import and keeps calls separate", a
   await expect(page.locator("#modal-atualizar-planilhas")).toBeHidden();
 
   await expect(panel.getByRole("button", { name: "Importar modelo — Modelo de transferência", exact: true })).toHaveCount(0);
+  await openStatus(page);
   const ticketGroup = panel.locator(".readiness-group").filter({
     has: page.getByRole("heading", { name: "Acompanhamento de chamados" }),
   });
@@ -79,6 +87,7 @@ test("first access centralizes the inventory import and keeps calls separate", a
   await page.keyboard.press("Escape");
   await expect(page.locator("#modal-acompanhamento-chamados")).toBeHidden();
 
+  await openStatus(page);
   const entraGroup = panel.locator(".readiness-group").filter({
     has: page.getByRole("heading", { name: "Nomes do Microsoft Entra" }),
   });
@@ -95,6 +104,7 @@ test("available local files still show six items and the inventory import", asyn
   const panel = page.locator("#readiness-panel");
   await expect(panel).toHaveAttribute("aria-busy", "false");
   await expect(page.locator("#readiness-summary")).toHaveText("Todos os 6 arquivos estão disponíveis.");
+  await openStatus(page);
   await panel.locator("summary").click();
   await expect(panel.getByRole("button", { name: "Importar/atualizar inventários Simpress e Endpoint" })).toHaveCount(1);
 });
@@ -113,6 +123,7 @@ test("model import handles failure and refreshes availability after success", as
   });
   await page.goto("/");
   await expect(page.locator("#readiness-panel")).toHaveAttribute("aria-busy", "false");
+  await openStatus(page);
   await page.locator("#readiness-panel > summary").click();
   const exportModelGroup = page.locator(".readiness-group").filter({
     has: page.getByRole("heading", { name: "Modelo de exportação" }),
@@ -134,6 +145,7 @@ test("model import handles failure and refreshes availability after success", as
   await expect(page.locator("#status-modelo-local")).toContainText("Modelo importado");
   await page.keyboard.press("Escape");
   await expect(page.locator("#modal-importar-modelo")).toBeHidden();
+  await openStatus(page);
   await expect(page.locator("#readiness-panel").getByRole("button", { name: /Importar/ })).toHaveCount(4);
 });
 
@@ -147,6 +159,7 @@ test("ready setup starts collapsed and uses one disclosure for the availability 
   expect(readinessResponse.status()).toBe(200);
   const panel = page.locator("#readiness-panel");
   await expect(panel).toHaveAttribute("aria-busy", "false", { timeout: 20_000 });
+  await openStatus(page);
   await expect(page.locator("#readiness-summary")).toContainText("Todos os 6 arquivos");
   await expect(panel).not.toHaveAttribute("open", "");
   await panel.locator(":scope > summary").click();
