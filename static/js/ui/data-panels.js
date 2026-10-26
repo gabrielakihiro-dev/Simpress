@@ -375,15 +375,17 @@
       if (!host) return null;
       let section = doc.getElementById("resumo-os-equipamento");
       if (!section) {
-        section = el("section", "ticket-summary-section glass-card");
+        section = el("section", "ck-cartao ck-os ticket-summary-section");
         section.id = "resumo-os-equipamento";
         section.setAttribute("aria-labelledby", "resumo-os-equipamento-title");
-        const title = el("h2", "ux-home-title", "OS por equipamento");
+        const head = el("div", "ck-cartao__cab");
+        const title = el("h2", "ck-cartao__titulo", "OS por equipamento");
         title.id = "resumo-os-equipamento-title";
-        const status = el("p", "ux-home-note ticket-summary-status", "Abra a aba Resumo para carregar as OS.");
+        head.append(title);
+        const status = el("p", "ck-os__vinculo ticket-summary-status", "Abra a aba Resumo para carregar as OS.");
         status.setAttribute("role", "status");
         status.setAttribute("aria-live", "polite");
-        section.append(title, status);
+        section.append(head, status);
         host.append(section);
       }
       return section;
@@ -533,6 +535,7 @@
       return list;
     }
 
+    let ticketDescriptionSeq = 0;
     function renderTicketSummaryDescriptions(record) {
       const descriptions = record.ordens.filter(order => order.fontes.includes("oracle"));
       const list = el("div", "ticket-summary-descriptions");
@@ -541,8 +544,17 @@
         return list;
       }
       descriptions.forEach(order => {
-        const item = el("div", "ticket-summary-description-entry");
-        item.append(el("p", "ticket-summary-description", order.descricao || "Descrição não informada"));
+        const item = el("div", "ck-descricao ticket-summary-description-entry");
+        const text = order.descricao || "Descrição não informada";
+        item.append(el("p", "ck-descricao__texto ticket-summary-description", text));
+        if (text.length > 90 || text.includes("\n")) {
+          item.id = "resumo-os-descricao-" + (++ticketDescriptionSeq);
+          const more = el("button", "ck-link-btn", "Ver mais");
+          more.type = "button";
+          more.setAttribute("data-expandir", item.id);
+          more.setAttribute("aria-expanded", "false");
+          item.append(more);
+        }
         list.append(item);
       });
       return list;
@@ -573,9 +585,9 @@
       const form = el("form", "ticket-os-link-form");
       const year = Number(saved?.ano) || new Date().getFullYear();
       const label = el("label", "ticket-os-link-label", "Número do chamado UTIC");
-      const controls = el("div", "ticket-os-link-controls");
+      const controls = el("div", "ck-utic ticket-os-link-controls");
       const prefix = el("span", "ticket-os-link-prefix", `UTIC-${year}-`);
-      const input = el("input", "ticket-os-link-input");
+      const input = el("input", "ck-entrada ck-entrada--sm ticket-os-link-input");
       input.type = "text";
       input.inputMode = "numeric";
       input.pattern = "[0-9]*";
@@ -585,11 +597,11 @@
       input.placeholder = "0000";
       input.setAttribute("aria-label", "Número do chamado para OS " + record.os
         + ", série " + record.serie + ", fonte " + ticketSummarySourceLabel([record.fonte]));
-      const save = el("button", "btn btn-secondary ticket-os-link-save", saved ? "Atualizar" : "Salvar");
+      const save = el("button", "ck-btn ck-btn--secundario ck-btn--sm ticket-os-link-save", saved ? "Atualizar" : "Salvar");
       save.type = "submit";
       controls.append(prefix, input, save);
       if (saved) {
-        const remove = el("button", "btn btn-tertiary ticket-os-link-remove", "Remover vínculo");
+        const remove = el("button", "ck-btn ck-btn--fantasma ck-btn--sm ticket-os-link-remove", "Remover vínculo");
         remove.type = "button";
         remove.addEventListener("click", () => persistTicketOsLink(record, year, "", input, save, remove, statusMessage));
         controls.append(remove);
@@ -630,7 +642,7 @@
 
     function renderTicketSummary(section, records, users, links, canSave, userFailure) {
       const status = section.querySelector(".ticket-summary-status");
-      const content = el("div", "ticket-summary-content");
+      const content = el("div", "ck-os__corpo ticket-summary-content");
       if (!records.length) {
         status.textContent = "Nenhuma OS vinculada por série na importação atual.";
         section.setAttribute("aria-busy", "false");
@@ -643,7 +655,10 @@
         ? orderCount + " OS agrupadas por série; dados de usuário e hostname estão indisponíveis."
         : orderCount + " OS · " + records.length + (records.length === 1 ? " série" : " séries");
       const tableWrap = el("div", "ticket-summary-table-wrap");
-      const table = el("table", "ticket-summary-table");
+      const table = el("table", "ck-tabela ticket-summary-table");
+      const cols = el("colgroup");
+      ["fonte", "serie", "os", "usuario", "host", "chamado", ""].forEach(name => cols.append(el("col", name ? "ck-col-" + name : "")));
+      table.append(cols);
       table.append(el("caption", "sr-only", "Ordens de serviço associadas a equipamentos"));
       const header = doc.createElement("thead");
       const headRow = doc.createElement("tr");
@@ -662,6 +677,9 @@
           userFailure ? "Indisponível" : ticketUserLabel(user), userFailure ? "Indisponível" : ticketHostnameLabel(user),
           "", ""];
         const row = doc.createElement("tr");
+        const vinculado = record.ordens.some(order => order.fontes.some(source =>
+          links.get(ticketOsLinkKey({ fonte: source, serie: record.serie, os: order.os }))));
+        if (vinculado) row.setAttribute("data-vinculo", "selecionado");
         values.forEach((value, index) => {
           const cell = el("td", "", value);
           cell.setAttribute("data-label", ["Fonte", "Série", "OS", "Usuário", "Hostname", "Chamado", "Descrição"][index]);
@@ -679,7 +697,8 @@
         });
         body.append(row);
 
-        const card = el("article", "ticket-summary-card");
+        const card = el("article", "ck-cartao ticket-summary-card");
+        if (vinculado) card.setAttribute("data-vinculo", "selecionado");
         const cardHead = el("div", "ticket-summary-card-head");
         cardHead.append(el("span", "ticket-summary-source", ticketSummarySourceLabel(record.fontes)),
           el("span", "ticket-summary-order-count", record.ordens.length + " OS"));

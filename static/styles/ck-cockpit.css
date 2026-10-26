@@ -732,3 +732,116 @@ details.ck-chip { position: relative; padding: 0; }
 @media (max-width: 1199.98px) {
   .ck-transp > #ck-parque-transporte { order: 3; }
 }
+
+/* Região 3E: Resumo. Legado (.cockpit-shell .cockpit-summary-*) deixou de casar; aqui só o que o pacote não cobre. */
+#tab-panel-resumo.ck-tela--ferramenta { overflow: visible; }
+#resumo-cards.ck-ferramenta { height: auto; }
+.ck-espaco { flex: 1 1 auto; }
+#resumo-cards .ck-dividido__lista, #resumo-cards .ck-dividido__detalhe { overflow: visible; }
+#resumo-cards .ck-kpi { text-align: left; font: inherit; color: inherit; background: transparent; }
+#resumo-cards .ck-kpi__valor { color: var(--cor-texto); }
+#resumo-cards .ck-kpi[data-tone="ok"] .ck-kpi__valor { color: var(--cor-ok-texto); }
+#resumo-cards .ck-kpi[data-tone="warn"] .ck-kpi__valor { color: var(--cor-alerta-texto); }
+#resumo-cards .ck-kpi[data-tone="error"] .ck-kpi__valor { color: var(--cor-erro-texto); }
+#cockpit-summary-region-list.ck-barras { gap: 7px; }
+#cockpit-summary-region-list .ck-barra__trilho { display: block; height: 6px; overflow: hidden; border-radius: 3px; background: var(--cor-neutro-fundo); }
+#cockpit-summary-region-list .ck-barra__cheio { display: block; height: 100%; border-radius: inherit; background: var(--cor-destaque); }
+#cockpit-summary-rows td:first-child { font-family: var(--fonte-mono); }
+#cockpit-summary-rows [data-status="error"] { color: var(--cor-erro-texto); }
+#cockpit-summary-rows [data-status="warning"] { color: var(--cor-alerta-texto); }
+#cockpit-summary-rows [data-status="ok"] { color: var(--cor-ok-texto); }
+#cockpit-summary-status:empty { display: none; }
+#cockpit-summary-pagination[hidden] { display: none; }
+
+/* Região 3D: OS por equipamento (dentro do Resumo). Escopo por id para vencer o legado .ticket-summary-* (removido na sessão 8). */
+#resumo-os-equipamento.ck-os { display: block; margin: 16px 20px 20px; padding: 0; border: 1px solid var(--cor-borda-suave); border-radius: var(--raio-md); background: var(--cor-superficie); box-shadow: var(--sombra-sm); color: var(--cor-texto); }
+#resumo-os-equipamento .ck-os__vinculo { margin: 0; min-height: 0; }
+#resumo-os-equipamento .ck-os__corpo { padding: 4px 12px 12px; }
+#resumo-os-equipamento .ticket-summary-table-wrap { overflow: visible; }
+#resumo-os-equipamento .ticket-summary-table { table-layout: fixed; width: 100%; font-size: var(--fs-md); }
+#resumo-os-equipamento .ticket-summary-table th, #resumo-os-equipamento .ticket-summary-table td { width: auto; min-width: 0; padding: 8px 10px; border-top: 0; border-bottom: 1px solid var(--cor-borda-suave); background: transparent; vertical-align: top; text-align: left; white-space: normal; overflow-wrap: anywhere; font-family: inherit; font-size: inherit; color: var(--cor-texto); }
+#resumo-os-equipamento .ticket-summary-table th { border-bottom-color: var(--cor-borda); font-size: var(--fs-xs); font-weight: var(--peso-medio); color: var(--cor-texto-sutil); text-transform: none; letter-spacing: 0; }
+#resumo-os-equipamento .ticket-summary-table td:nth-child(3) { font-family: var(--fonte-mono); }
+#resumo-os-equipamento .ticket-summary-table tbody tr:nth-child(even) { background: transparent; }
+#resumo-os-equipamento .ticket-summary-table tbody tr:hover { background: var(--cor-superficie-funda); }
+#resumo-os-equipamento .ticket-summary-table tbody tr[data-vinculo="selecionado"], #resumo-os-equipamento .ticket-summary-card[data-vinculo="selecionado"] { background: var(--cor-destaque-fundo); box-shadow: inset 2px 0 0 var(--cor-destaque); }
+#resumo-os-equipamento .ticket-summary-card { gap: 8px; padding: 12px; border: 1px solid var(--cor-borda-suave); border-radius: var(--raio-md); background: var(--cor-superficie); box-shadow: none; }
+#resumo-os-equipamento .ticket-os-link-editor { min-width: 0; }
+#resumo-os-equipamento .ticket-os-link-prefix { font-family: var(--fonte-mono); font-size: var(--fs-ui); color: var(--cor-texto-mudo); }
+#resumo-os-equipamento .ticket-os-link-input { width: 5.5rem; }
+#resumo-os-equipamento .ticket-os-link-entry { border-bottom-color: var(--cor-borda-suave); }
+#resumo-os-equipamento .ticket-os-link-entry-label, #resumo-os-equipamento .ticket-summary-order-sources, #resumo-os-equipamento .ticket-summary-order-count, #resumo-os-equipamento .ticket-os-link-label, #resumo-os-equipamento .ticket-summary-field-label { color: var(--cor-texto-sutil); font-size: var(--fs-xs); }
+#resumo-os-equipamento .ticket-summary-description { font-size: var(--fs-md); line-height: 1.5; color: var(--cor-texto); }
+#resumo-os-equipamento .ticket-summary-table td:last-child { min-width: 0; }
+#resumo-os-equipamento .ck-descricao__texto { white-space: pre-line; }
+@media (max-width: 1199.98px) {
+  #resumo-os-equipamento.ck-os { margin: 12px; }
+  #resumo-os-equipamento .ticket-summary-table-wrap { display: none; }
+  #resumo-os-equipamento .ticket-summary-mobile { display: grid; gap: 8px; }
+}
+
+/* Região 3F: Automação. Seletores com id vencem as regras legadas de cockpit-pages.css (#automacao-cards em grid de áreas). */
+.cockpit-shell #automacao-cards.ck-auto { display: grid; height: auto; min-height: 100%; grid-template-columns: minmax(0, 1fr) var(--largura-console); grid-template-rows: none; grid-template-areas: none; gap: 0; padding: 0; overflow: visible; }
+.cockpit-shell #automacao-cards > #automacao-andamento-painel.ck-console { grid-area: auto; display: flex; }
+@media (min-width: 1200px) {
+  #automacao-cards > #automacao-andamento-painel.ck-console { position: sticky; top: 0; align-self: start; height: calc(100dvh - var(--altura-barra) - 8px); min-height: 0; overflow: hidden; }
+}
+@media (max-width: 1199.98px) {
+  .cockpit-shell #automacao-cards.ck-auto { grid-template-columns: minmax(0, 1fr); }
+}
+#tab-panel-automacao .ck-espaco { flex: 1 1 auto; }
+#tab-panel-automacao .ck-console__corpo { display: flex; flex-direction: column; flex: 1 1 auto; min-height: 0; }
+#tab-panel-automacao .ck-console__exec { padding: 8px 14px 0; }
+#tab-panel-automacao .ck-console__ferramentas > .ck-consulta { flex: 1 1 260px; }
+#tab-panel-automacao .ck-consulta > summary, #tab-panel-automacao .ck-filtros-detalhes > summary { cursor: pointer; font-size: var(--fs-ui); color: var(--cor-texto-mudo); }
+#tab-panel-automacao .ck-console__linhas { flex: 0 0 96px; }
+#tab-panel-automacao .ck-log__origem:empty::before { content: "—"; color: var(--cor-texto-sutil); }
+#tab-panel-automacao .ck-log__linha { transition: background-color 150ms ease; }
+.ck-console.automation-card--expanded .ck-log { min-height: 62dvh; }
+#automacao-historico-painel.automation-card--expanded #automacao-historico { max-height: none; }
+
+#automacao-cards .ck-chrome { align-items: flex-start; }
+#automacao-cards .ck-chrome__estado { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 8px; margin: 0; }
+#automacao-cards .ck-chrome__det { flex: 1 1 100%; }
+#automacao-cards .ck-chrome__estado .ck-chrome__det { flex: 1 1 auto; }
+#automacao-cards .automation-action-layout { display: grid; gap: 10px; }
+#automacao-cards .ck-rotinas { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 10px; }
+#automacao-cards .automation-action-support { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px; padding: 0; }
+#automacao-cards .ck-linha-acao { margin: 0; padding: 10px 12px; border: 1px solid var(--cor-borda); border-radius: var(--raio-md); }
+#automacao-cards .ck-linha-acao.automation-actions--utility { display: flex; flex-wrap: wrap; margin-left: 0; }
+#automacao-cards .automation-action-caption { color: var(--cor-texto); font-size: var(--fs-base); }
+#automacao-cards .ck-rotina .ck-btn { max-width: 100%; }
+.ck-aviso--alerta { border-color: var(--cor-alerta-texto); background: var(--cor-alerta-fundo); color: var(--cor-alerta-texto); }
+#automacao-cards .ck-aviso--alerta .ck-ico { grid-row: auto; }
+
+.cockpit-shell .ck-sebrae-detalhes { border: 0; background: none; }
+.cockpit-shell .ck-sebrae-detalhes > summary { padding: 0 0 6px; }
+.cockpit-shell .ck-sebrae-detalhes[open] #sebrae-painel { padding: 12px; border: 1px solid var(--cor-borda); box-shadow: none; }
+#sebrae-painel.ck-cartao { display: flex; flex-direction: column; gap: 10px; }
+#sebrae-painel .ck-cartao__cab { padding: 0 0 8px; }
+#sebrae-painel .ck-sebrae-titulo { display: flex; align-items: center; gap: 6px; min-width: 0; }
+#sebrae-painel .sebrae-counters dt { font-size: var(--fs-xs); color: var(--cor-texto-sutil); }
+#sebrae-painel .sebrae-counters dd { font-size: var(--fs-md); font-variant-numeric: tabular-nums; }
+#sebrae-painel .ck-aviso { grid-template-columns: 20px minmax(0, 1fr); align-items: center; }
+
+#automacao-historico-painel .ck-filtros-detalhes { padding: 8px 12px; border-bottom: 1px solid var(--cor-borda-suave); }
+#automacao-historico-painel .ck-filtros-linha { padding: 8px 0 0; border-bottom: 0; }
+#automacao-historico-painel #automacao-historico-resumo { padding: 8px 12px 0; }
+#automacao-historico-painel #automacao-historico { max-height: none; overflow-x: auto; padding: 4px 12px; }
+#automacao-historico-painel .automation-history-origin, #automacao-historico-painel .automation-history-message { font-size: var(--fs-xs); color: var(--cor-texto-mudo); }
+#automacao-historico-painel .automation-history-status { display: grid; gap: 2px; justify-items: start; }
+#automacao-historico-painel .automation-history-captures { display: flex; flex-wrap: wrap; gap: 4px 8px; }
+#automacao-historico-painel .ck-paginacao { border-top: 1px solid var(--cor-borda-suave); }
+#ck-dialogo-log .ck-log-bruto { flex: 1 1 auto; min-height: 160px; }
+#ck-dialogo-log .ck-dialogo__cab .ck-cartao__meta { flex: 0 1 auto; overflow-wrap: anywhere; }
+
+@media (max-width: 1199.98px) {
+  #automacao-cards .ck-console { border-top: 1px solid var(--cor-borda); }
+}
+@media (max-width: 767.98px) {
+  #automacao-cards .ck-rotinas, #automacao-cards .automation-action-support { grid-template-columns: minmax(0, 1fr); }
+  .ck-console__ferramentas > .ck-console__linhas { flex: 1 1 100%; }
+}
+@media (prefers-reduced-motion: reduce) {
+  #tab-panel-automacao .ck-log__linha { transition: none; }
+}

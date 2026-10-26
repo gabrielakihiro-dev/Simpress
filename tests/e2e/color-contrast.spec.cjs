@@ -39,7 +39,7 @@ for (const theme of ["dark", "light"]) {
 
     await openSidebarForTabs(page);
     await page.locator("#tab-automacao").click();
-    await expect(page.locator("#automacao-historico .automation-history-table")).toBeVisible();
+    await expect(page.locator("#automacao-historico .ck-tabela")).toBeVisible();
     expect(await contrastViolations(page, "#tab-panel-automacao")).toEqual([]);
   });
 }

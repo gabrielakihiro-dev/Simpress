@@ -9,9 +9,9 @@ const feature = fs.readFileSync(path.join(root, "static/js/features/chrome-autom
 const styles = fs.readFileSync(path.join(root, "static/styles/ux-refinements.css"), "utf8");
 
 test("Automação keeps its actions grouped and user verification manual", () => {
-  const mainGroup = html.match(/<div class="automation-actions automation-actions--primary"[\s\S]*?<\/div>/)?.[0];
-  const userGroup = html.match(/<div class="automation-action-independent"[\s\S]*?<\/div>/)?.[0];
-  const utilityGroup = html.match(/<div class="automation-actions automation-actions--utility"[\s\S]*?<\/div>/)?.[0];
+  const mainGroup = html.match(/<div class="automation-actions automation-actions--primary[^"]*"[\s\S]*?<\/div>\s*<div class="automation-action-support"/)?.[0];
+  const userGroup = html.match(/<section class="[^"]*automation-action-independent"[\s\S]*?<\/section>/)?.[0];
+  const utilityGroup = html.match(/<section class="[^"]*automation-actions--utility"[\s\S]*?<\/section>/)?.[0];
   assert.ok(mainGroup);
   assert.ok(userGroup);
   assert.ok(utilityGroup);
@@ -32,7 +32,7 @@ test("Automação starts with Andamento and Últimas execuções available", () 
 });
 
 test("A sincronização Sebrae continua disponível na área de Automação", () => {
-  assert.match(html, /<details class="cockpit-sebrae-details">[\s\S]*?id="sebrae-painel"/);
+  assert.match(html, /<details class="cockpit-sebrae-details[^"]*"[^>]*>[\s\S]*?id="sebrae-painel"/);
   assert.match(html, /Sincronizar chamados Sebrae/);
   assert.match(feature, /\/api\/automacao\/sebrae\/resumo/);
   assert.match(feature, /\/api\/automacao\/sebrae\/agendamento/);

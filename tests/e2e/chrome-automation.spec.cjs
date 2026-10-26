@@ -30,7 +30,7 @@ test("Automação transforma as linhas do log ativo em eventos seguros e atualiz
   await expect(events).toContainText("Reaproveitando o Chrome de automação na porta 9333.");
   await expect(events).toContainText("Abrindo https://simpress.custhelp.com/AgentWeb/");
   await expect(events).toContainText("AÇÃO NECESSÁRIA: faça o login");
-  await expect(events.locator(".cockpit-automation-event")).toHaveCount(3);
+  await expect(events.locator(".ck-log__linha")).toHaveCount(3);
   await expect(events.locator('[data-state="waiting"]')).toHaveCount(1);
   await expect(panel.locator("#cockpit-automation-live")).toBeVisible();
   await expect(panel.locator("#automacao-log")).toContainText("AÇÃO NECESSÁRIA: faça o login");
@@ -54,7 +54,7 @@ async function abrirPainelSebrae(panel) {
 test("Automação starts a routine, shows the login warning and the live log, then cancels", async ({ page, request }) => {
   const panel = await openAutomation(page, request);
   const status = panel.locator("#automacao-estado");
-  const cancel = panel.getByRole("button", { name: "Cancelar", exact: true });
+  const cancel = panel.getByRole("button", { name: "Cancelar execução", exact: true });
   await expect(status).toContainText("Livre");
   await expect(status).toContainText("Última execução: Inventários, Concluído");
   await expect(cancel).toBeDisabled();
@@ -348,7 +348,7 @@ test("Sincronizar chamados Sebrae shows the login warning and passes the audit i
   if (testInfo.project.name === "mobile") {
     // On small screens the pending table becomes cards: header hidden, one block per row with the same data.
     const row = card.locator("#sebrae-pendencias tbody tr").first();
-    expect(await row.evaluate(el => getComputedStyle(el).display)).toBe("block");
+    expect(await row.evaluate(el => getComputedStyle(el).display)).toBe("grid");
     expect(await row.locator("td").first().evaluate(el => getComputedStyle(el, "::before").content)).toContain("Chamado");
   }
 });
