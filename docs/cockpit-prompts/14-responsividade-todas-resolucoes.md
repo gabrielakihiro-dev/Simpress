@@ -113,9 +113,9 @@ Fonte: `artefato.html` (Nocturne, só escuro). Medido a 1440px (amplo, onde o ap
 | Botões (`.btn`) | h30, 14px/500, raio md, primário contornado | h36, 12px/600, primário preenchido | h30, 14px/500, contornado em acento; `.btn-sm` h26; `.btn-icon` 36×36 | idêntico |
 | Home: lista | itens, pílulas 24px, estado | diferentes | alinhados | idêntico |
 | Home: detalhe | cabeçalho em uma linha, grade com bordas internas e sombra, copiar 24×24, valores com reticências | ícone 40px, título empilhado, copiar 16×40 | uma linha, grade com bordas internas, copiar 24×24, reticências | idêntico nas medidas; composição de "Modelos de chamado" e "Chamados abertos" aproximada |
-| Transporte: campos | rótulo 11px, campo 30px/12.5px | campo 36–42px/14px | 30px/12.5px, rótulo 11px | campos idênticos; 3 colunas `1fr 1fr 400px` já existentes |
+| Transporte: campos | rótulo 11px, campo 30px/12.5px | campo 36–42px/14px | 30px/12.5px, rótulo 11px | **refutado na Fase 8**: o artefato publicado tem campo de 36px (30px era da fonte local antiga); corrigido para 36px |
 | Resumo | KPIs 22px/500, rótulo 11.5px, cabeçalho 13px/500, tabela 12.5px, regionais 100px · 5px | idêntico em medidas e tipografia | idêntico (tokens) | sem sparkline nos KPIs (dado real não existe) |
-| Automação | títulos 13px/500, botões 28px/12px, tabela 12.5px, console em surface | idêntico em medidas e tipografia | idêntico (tokens) | o app tem mais controles que o artefato (filtros, capturas, Sebrae), mantidos |
+| Automação | títulos 13px/500, botões 28px/12px, tabela 12.5px, console em surface | idêntico em medidas e tipografia | idêntico (tokens) | **refutado na Fase 8**: composição e medidas diferem do artefato publicado (ver tabela da Fase 8) |
 | Painéis de ferramenta, modais, notificações | sem equivalente no artefato | — | estilo atual com os tokens novos | sem equivalente: mantidos |
 
 Limites: comparação feita em tela cheia no navegador embutido (artefato em https://claude.ai/artifact/…, iframe de domínio cruzado, então só por imagem, sem `getComputedStyle`). O artefato é somente escuro: o claro é derivado dos tokens. Capturas do app em `.claude/prints/fase6/`: Home 1440 e 1200 claro/escuro; Resumo e Automação 1440 claro/escuro; Transporte 1440 escuro.
@@ -204,5 +204,53 @@ Medido no `ui-fixture` (porta 8811), Playwright/Chromium, mesmo método do diagn
 ### Comparação com o artefato real via Windows UI Automation (Fase 7, complemento)
 
 - Janela comparada: "Design form project – Claude artifact" (Chrome, 1920x988 físicos, escala 125% = 1536 px CSS). Foram lidas, pela árvore de acessibilidade, as telas Home, Transporte, Resumo e Automação; cada mapa só foi salvo depois de confirmar um texto próprio da tela (Home "Todos", Transporte "Retirada", Resumo "Total de ativos", Automação "Rotina de OS"). A árvore do Chrome atualiza com atraso de alguns segundos depois do clique, então a primeira leitura mostrava a tela anterior. Mapas e capturas ficam em `.claude/prints/responsividade/artefato-uia/`, fora do Git.
-- Medidas do app a 1536x746 contra o artefato (dividindo o artefato por 1,25): barra 48 px nos dois; abas 32 px de altura nos dois; busca 240x32 no app. Diferença confirmada: as abas do app têm ícone antes do texto, o artefato não; largura Home 74 contra 60 px, Transporte 105 contra 91, Resumo 87 contra 73, Automação 108 contra 94 (cerca de 14 px a mais por aba). Não corrigido nesta fase.
+- Medidas do app a 1536x746 contra o artefato (dividindo o artefato por 1,25): barra 48 px nos dois; abas 32 px de altura nos dois; busca 240x32 no app. Largura Home 74 contra 60 px, Transporte 105 contra 91, Resumo 87 contra 73, Automação 108 contra 94 (cerca de 14 px a mais por aba). **Correção da Fase 8:** a causa não é o app ter ícone a mais; o artefato publicado também tem ícone na aba, mas a fonte de ícones Phosphor é bloqueada no artefato, então o ícone não ocupa espaço lá. O app está certo.
 - Não comparadas por esse método: menu Ferramentas aberto, popover do sino e modais.
+
+## Auditoria de fidelidade a 100% (Fase 8)
+
+Fonte de verdade: o artefato publicado (cópia https://claude.ai/artifact/J7JctdkdGsBx8TdmpqYyFe), lido pela árvore de acessibilidade do Windows (UI Automation) e por recortes de tela; depois, `Simpress Cockpit.dc.html` (fonte local). Todos os valores estão em px CSS (físico ÷ 1,25; o retângulo do UIA sai cerca de 1 px físico maior que o elemento). App medido com Playwright/Chromium no `ui-fixture` (porta 8821), 1534×746 e 1200×746, escuro.
+
+**Escala 125%:** nenhum valor do app foi calibrado na escala 125%. O erro real da Fase 6 foi medir a fonte local `Simpress Cockpit.dc.html`, que é mais antiga que o artefato publicado. Por isso as linhas "idêntico" da Fase 6 foram conferidas de novo contra o publicado.
+
+**Fonte local × artefato publicado (divergências):**
+
+- Busca da barra: 340 px na fonte, 241 no publicado.
+- Sino: sem o contador na fonte; com o contador "3" no publicado.
+- Campos do Transporte: 30 px na fonte, 36 no publicado.
+
+**Limites do artefato:** a fonte de ícones Phosphor é bloqueada no artefato, então nenhum ícone aparece nele, nem o do sino. O artefato só tem tema escuro, então o tema claro não tem referência.
+
+| Tela | Componente | Artefato 100% | App | Diferença | Ação | Motivo |
+| --- | --- | --- | --- | --- | --- | --- |
+| Barra | Altura / altura das abas | 48 / 32 | 48 / 32 | — | — | idêntico |
+| Barra | Cor da aba inativa | `neutral-300` | `neutral-400` | mais escura no app | corrigir (feito) | agora rgb(207,211,229), conferido a 1534 e 1200 |
+| Barra | Largura das abas | sem ícone (60–94) | com ícone (74–108) | ~14 px | aceitar | ícone Phosphor bloqueado no artefato; o app está certo |
+| Barra | Busca | 241×32 | 240×32 | 1 px | aceitar | arredondamento do UIA |
+| Barra | Sino: botão | 32×32, `btn-icon btn-ghost`, mesmo estilo do botão Ferramentas | mesma classe do botão Ferramentas (`cockpit-action-button`) | — | aceitar | glifo invisível no artefato; estilo igual ao do vizinho nos dois |
+| Barra | Sino: ícone | invisível (Phosphor bloqueado) | SVG embutido (ca119eb) | não comparável | impossível | não há glifo para comparar; desenho do SVG não confirmado no navegador do usuário |
+| Home | Lista e detalhe | Fase 6 | Fase 6 | — | aceitar | sem diferença nova nas capturas `home3`; ícones aceitos |
+| Transporte | Altura dos campos | 36 (borda 45 px físicos) | 30 | 6 px | corrigir (feito) | agora 36 de 1534 a 320 px, sem rolagem horizontal |
+| Transporte | Fonte do campo / do rótulo | ≈13 / ≈11 | 12.5 / 11 | dentro do erro da medida | aceitar | medido por pixel; o erro é de cerca de 1 px físico |
+| Transporte | Composição | colunas planas, prévia de 400 | cartões com margens e controles a mais; prévia de 400 | estrutura | corrigir — pendente | recomposição: fase própria |
+| Resumo | Faixa de KPIs / coluna da direita | 70 / 340 | 70 / 340 | — | — | idêntico |
+| Resumo | Sparklines | presentes | ausentes | — | aceitar | o app não tem esse dado real |
+| Automação | Botões de rotina | 28 | 34 | 6 px | corrigir — pendente | recomposição: fase própria |
+| Automação | Filtros de data e status | 36 | 34 | 2 px | corrigir — pendente | vêm da regra genérica de formulário; entram na recomposição |
+| Automação | Console | 560 de largura | outra composição | estrutura | corrigir — pendente | recomposição: fase própria |
+| F5 Chamados | Largura do detalhe | 420 | outra largura antes; 420 agora | corrigida | corrigir (feito) | 1534: 1114+420; 1200: 780+420 |
+| F6 Comparação / F7 Apelidos | Largura do detalhe | 380 | outra largura antes; 380 agora | corrigida | corrigir (feito) | 1534: 1154+380; 1200: 820+380 |
+| F8 Relatório | Largura do detalhe | 400 | outra largura antes; 400 agora | corrigida | corrigir (feito) | 1534: 1134+400; 1200: 800+400 |
+| F5–F8 | Cabeçalho "Ferramentas do Cockpit"/Voltar e barra de busca/Relação | não existe | existe | a mais no app | aceitar | mantém o fluxo Voltar (decisão da Fase 6) |
+| F5–F8 | Lista | `<table>` | lista de botões | estrutura | aceitar | contrato de interface existente |
+| F5–F8 | Altura do detalhe | ocupa a altura toda | começa abaixo dos filtros | posição | corrigir — pendente | registrar; mexe na estrutura do painel |
+| F8 | Ordem | KPIs acima das pílulas de mês | KPIs abaixo | ordem | corrigir — pendente | ajuste por CSS `order`, sem mexer no HTML |
+| F8 | Gráficos | presentes | ausentes | — | aceitar | o app não tem esse dado real |
+| Todas | Ícones | invisíveis | visíveis | — | aceitar | Phosphor bloqueado no artefato |
+| Todas | Tema claro | não existe | existe | — | aceitar — sem referência | artefato só escuro |
+| Home | Editar | não aparece | existe | — | aceitar — sem referência | fluxo do app sem equivalente no artefato |
+| Modais, estados vazios | — | sem equivalente no publicado | existem | — | aceitar — sem referência | não há o que medir |
+
+**Conclusão:** a 1200 px ou mais, a barra, a Home, o Resumo e as larguras F5–F8 seguem o artefato publicado. **Transporte e Automação não estão idênticos** na composição; ficam para uma fase própria de recomposição.
+
+**Proposta para o prompt 09 (`09-historico-apelidos.md`, linha 24):** trocar "o detalhe ocupa 380–420px à direita" por "o detalhe ocupa 380px à direita". Essa é a largura medida no artefato publicado para o Histórico de apelidos. Proposta apenas; o prompt 09 não foi alterado.
