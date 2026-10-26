@@ -91,48 +91,37 @@ test("Resumo associa OS aos chamados UTIC com prefixo anual e preserva dados do 
 
   const section = page.locator("#resumo-os-equipamento");
   await expect(section).toContainText("7285072");
-  const mobile = await page.locator(".ticket-summary-mobile").isVisible();
-  const seriesGroup = mobile
-    ? page.locator(".ticket-summary-card").filter({ hasText: "DEMO-SN-001" })
-    : page.locator(".ticket-summary-table tbody tr").filter({ hasText: "DEMO-SN-001" });
-  if (mobile) {
-    await expect(page.locator(".ticket-summary-card")).toHaveCount(2);
-    await expect(section).toContainText("usuario.demo");
-    await expect(section).toContainText("PRNOTEDEMO01");
-    await expect(section).toContainText("Ambíguo: alice / bob");
-    await expect(section).toContainText("Ambíguo: PRNOTEDEMO-A / PRNOTEDEMO-B");
-    await expect(section).toContainText("Solicitação REQ-1: Solicito suporte técnico.");
-    await expect(section).toContainText("Solicitação REQ-2: <img src=x onerror=alert(1)>");
-    await expect(section.locator("img")).toHaveCount(0);
-    await expect(section).toContainText("Descrição não informada");
-  } else {
-    await expect(page.locator(".ticket-summary-table tbody tr")).toHaveCount(2);
-    await expect(section).toContainText("usuario.demo");
-    await expect(section).toContainText("PRNOTEDEMO01");
-    await expect(section).toContainText("Ambíguo: alice / bob");
-    await expect(section).toContainText("Ambíguo: PRNOTEDEMO-A / PRNOTEDEMO-B");
-    await expect(section).toContainText("Solicitação REQ-1: Solicito suporte técnico.");
-    await expect(section).toContainText("Solicitação REQ-2: <img src=x onerror=alert(1)>");
-    await expect(section.locator("img")).toHaveCount(0);
-    await expect(section).toContainText("Descrição não informada");
-  }
+  // v2: uma linha por OS e fonte, na mesma tabela (no mobile o CSS a apresenta como cards).
+  const rows = page.locator("#ck-os-tabela tbody tr");
+  await expect(rows).toHaveCount(5);
+  const seriesGroup = rows.filter({ hasText: "DEMO-SN-001" });
+  await expect(seriesGroup).toHaveCount(4);
+  await expect(section).toContainText("usuario.demo");
+  await expect(section).toContainText("PRNOTEDEMO01");
+  await expect(section).toContainText("Ambíguo: alice / bob");
+  await expect(section).toContainText("Ambíguo: PRNOTEDEMO-A / PRNOTEDEMO-B");
+  await expect(section).toContainText("Solicitação REQ-1: Solicito suporte técnico.");
+  await expect(section).toContainText("Solicitação REQ-2: <img src=x onerror=alert(1)>");
+  await expect(section.locator("img")).toHaveCount(0);
+  await expect(section).toContainText("Descrição não informada");
 
-  const summaryDescriptionEntry = seriesGroup.locator(".ticket-summary-description-entry")
+  const mobile = await page.locator(".ticket-summary-mobile").count() > 0;
+  expect(mobile).toBe(false);
+  const orderRow = source => seriesGroup.filter({ hasText: "7285070" })
+    .filter({ has: page.locator(".ck-tag", { hasText: new RegExp(`^${source}$`) }) });
+  const summaryDescriptionEntry = orderRow("Oracle").locator(".ticket-summary-description-entry")
     .filter({ hasText: "Solicito suporte técnico." });
   await expect(summaryDescriptionEntry).toHaveCount(1);
-  await expect(summaryDescriptionEntry).not.toContainText("OS 7285070 · Oracle");
+  await expect(orderRow("Simpress").locator(".ticket-summary-description")).toHaveText("Descrição não informada");
   await expect(seriesGroup.locator(".ticket-summary-description-label")).toHaveCount(0);
-  if (!mobile) {
-    const serialFont = await seriesGroup.locator("td:nth-child(2)").evaluate(element => getComputedStyle(element).fontFamily);
-    const userFont = await seriesGroup.locator("td:nth-child(4)").evaluate(element => getComputedStyle(element).fontFamily);
-    expect(serialFont).toBe(userFont);
-  }
+  const serialFont = await seriesGroup.first().locator('td[data-label="Série"]').evaluate(element => getComputedStyle(element).fontFamily);
+  const hostFont = await seriesGroup.first().locator('td[data-label="Hostname"]').evaluate(element => getComputedStyle(element).fontFamily);
+  expect(serialFont).toBe(hostFont);
 
   await expect(section).toContainText("4 OS · 2 séries");
-  const orderContainer = seriesGroup.locator(".ticket-os-link-entry")
-    .filter({ hasText: "Oracle · OS 7285070" });
-  const prefix = orderContainer.locator(".ticket-os-link-prefix");
+  const orderContainer = orderRow("Oracle");
   const input = orderContainer.locator("input.ticket-os-link-input");
+  const prefix = orderContainer.locator(".ticket-os-link-prefix");
   const year = new Date().getFullYear();
   await expect(prefix).toHaveText(`UTIC-${year}-`);
   await expect(input).toHaveAttribute("inputmode", "numeric");
@@ -145,16 +134,14 @@ test("Resumo associa OS aos chamados UTIC com prefixo anual e preserva dados do 
 
   await page.reload();
   await selectSummary(page);
-  const reloadedSeriesGroup = mobile
-    ? page.locator(".ticket-summary-card").filter({ hasText: "DEMO-SN-001" })
-    : page.locator(".ticket-summary-table tbody tr").filter({ hasText: "DEMO-SN-001" });
-  const linkedOrder = reloadedSeriesGroup.locator(".ticket-os-link-entry")
-    .filter({ hasText: "Oracle · OS 7285070" });
+  const reloadedSeriesGroup = page.locator("#ck-os-tabela tbody tr").filter({ hasText: "DEMO-SN-001" });
+  const linkedOrder = reloadedSeriesGroup.filter({ hasText: "7285070" })
+    .filter({ has: page.locator(".ck-tag", { hasText: /^Oracle$/ }) });
   await expect(linkedOrder.locator(".ticket-os-link-prefix")).toHaveText(`UTIC-${year}-`);
   await expect(linkedOrder.locator("input")).toHaveValue("1116");
 
-  await reloadedSeriesGroup.getByRole("button", {
-    name: "Abrir acompanhamento de chamados: Oracle + Simpress, série DEMO-SN-001, OS 7285070",
+  await linkedOrder.getByRole("button", {
+    name: "Abrir acompanhamento de chamados: Oracle, série DEMO-SN-001, OS 7285070",
   }).click();
   const dialog = page.locator("#modal-acompanhamento-chamados");
   await expect(dialog).toBeVisible();
