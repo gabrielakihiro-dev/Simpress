@@ -101,3 +101,19 @@ Leitura: o diagnóstico anterior se confirma (138 a 352 em 390px; 127 a 242 em 7
 Causas: `#simpress-app-shell.cockpit-shell { min-width: 1200px }` (`static/styles/cockpit-shell.css`, ~linha 16), `min-width: 1200px` no split da Home (`cockpit-home.css`, ~linha 617), `html:has(> .cockpit-shell-body) { overflow-x: auto }`, e só `cockpit-tool-panels.css` tem `@media` de largura (760px).
 
 Método: Playwright/Chromium contra o `ui-fixture` (porta 8791); contagem por `getBoundingClientRect().right > clientWidth + 1` em todo elemento visível do `body`, fora de `[hidden]`.
+
+## Fidelidade ao artefato (Fase 6)
+
+Fonte: `artefato.html` (Nocturne, só escuro). Medido a 1440px (amplo, onde o app deve ser igual ao artefato) com `getComputedStyle` no `ui-fixture`; o claro mantém a mesma estrutura com os tokens claros. Prints em `.claude/prints/fase6/` (fora do Git).
+
+| Área | Artefato | App antes | App agora | Situação |
+| --- | --- | --- | --- | --- |
+| Tokens (cores, raios, sombras, rampas) | Nocturne | `--cockpit-*` diferentes | alinhados em `nocturne.css` (escuro e claro) | idêntico |
+| Barra superior | 48px, abas 32px/13px/500, busca h32, chips | abas 40px | idêntico às medidas do artefato | idêntico |
+| Botões (`.btn`) | h30, 14px/500, raio md, primário contornado | h36, 12px/600, primário preenchido | h30, 14px/500, contornado em acento; `.btn-sm` h26; `.btn-icon` 36×36 | idêntico |
+| Home: lista | itens, pílulas 24px, estado | diferentes | alinhados | idêntico |
+| Home: detalhe | cabeçalho em uma linha, grade com bordas internas e sombra, copiar 24×24, valores com reticências | ícone 40px, título empilhado, copiar 16×40 | uma linha, grade com bordas internas, copiar 24×24, reticências | idêntico nas medidas; composição de "Modelos de chamado" e "Chamados abertos" aproximada |
+| Transporte: campos | rótulo 11px, campo 30px/12.5px | campo 36–42px/14px | 30px/12.5px, rótulo 11px | campos idênticos; 3 colunas `1fr 1fr 400px` já existentes |
+| Resumo, Automação, painéis de ferramenta, modais, notificações | ver artefato | — | herdam tokens e botões novos | **não** revisados linha a linha |
+
+Limites: não foi feita a comparação lado a lado automática do iframe do artefato (domínio cruzado: só imagem); Resumo, Automação, painéis, modais e notificações receberam apenas tokens e botões, sem medição individual.
