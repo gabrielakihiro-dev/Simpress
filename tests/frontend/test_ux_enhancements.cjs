@@ -111,7 +111,7 @@ test("notifications dispatch simpress:notify without changing the toast", () => 
   const events = [];
   const appended = [];
   class FakeCustomEvent { constructor(type, init) { this.type = type; this.detail = init.detail; } }
-  const node = () => ({ setAttribute() {}, replaceChildren() {}, remove() {}, className: "", textContent: "" });
+  const node = () => ({ setAttribute() {}, replaceChildren() {}, remove() {}, className: "", textContent: "", dataset: {} });
   const document = {
     getElementById: () => ({ appendChild: child => appended.push(child) }),
     createElement: node,
