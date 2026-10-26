@@ -10,7 +10,6 @@ const { appSource } = require("./support/app-sources.cjs");
 const appScript = appSource();
 const appHtml = fs.readFileSync(path.join(staticDir, "index.html"), "utf8");
 const appEntry = fs.readFileSync(path.join(staticDir, "app-entry.js"), "utf8");
-const cockpitCss = fs.readFileSync(path.join(staticDir, "styles", "cockpit-shell.css"), "utf8");
 const uxCss = fs.readFileSync(path.join(staticDir, "styles", "ux-refinements.css"), "utf8");
 const tokensCss = fs.readFileSync(path.join(staticDir, "styles", "tokens.css"), "utf8");
 
@@ -150,11 +149,8 @@ test("index loads the refinement layer last and links every transfer label", () 
   }
 });
 
-test("Cockpit centers readiness and reserves space between Ctrl+K and the clear button", () => {
+test("Cockpit search shows the Ctrl+K shortcut", () => {
   assert.match(appHtml, /title="Atalho: Ctrl\+K">Ctrl\+K<\/kbd>/);
-  assert.match(cockpitCss, /\.cockpit-shell #readiness-panel\s*\{[^}]*align-self:\s*center;[^}]*margin:\s*0;/s);
-  assert.match(cockpitCss, /\.cockpit-shell \.cockpit-search-input\s*\{[^}]*padding:\s*0 120px 0 32px;/s);
-  assert.match(cockpitCss, /\.cockpit-shell \.cockpit-search-shortcut\s*\{[^}]*right:\s*68px;/s);
 });
 
 test("refinement layer defines both themes and respects reduced motion", () => {

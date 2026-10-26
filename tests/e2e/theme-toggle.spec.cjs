@@ -12,7 +12,7 @@ test("the Cockpit tools remain reachable in narrow windows in both themes", asyn
       await expect(page.locator("#cockpit-tools-trigger")).toBeFocused();
       await expect(page.locator("#cockpit-tools-dropdown")).not.toHaveAttribute("open", "");
       const widths = await page.evaluate(() => ({ viewport: document.documentElement.clientWidth, body: document.body.scrollWidth }));
-      expect(widths.body).toBeGreaterThanOrEqual(Math.max(1200, widths.viewport));
+      expect(widths.body).toBeLessThanOrEqual(widths.viewport);
     }
   }
 });

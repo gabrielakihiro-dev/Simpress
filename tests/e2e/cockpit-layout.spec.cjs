@@ -61,19 +61,19 @@ test("Resumo uses the latest comparison and opens its series in Home", async ({ 
   }
 });
 
-test("Cockpit keeps its full 1200px workspace reachable in narrow windows", async ({ page }) => {
-  await page.setViewportSize({ width: 390, height: 844 });
+test("Cockpit never scrolls horizontally in narrow or wide windows", async ({ page }) => {
   await page.goto("/");
-
-  const dimensions = await page.evaluate(() => ({
-    viewport: document.documentElement.clientWidth,
-    document: document.documentElement.scrollWidth,
-    workspace: document.getElementById("simpress-app-shell").scrollWidth,
-    body: document.body.scrollWidth,
-  }));
-  expect(dimensions.document).toBeLessThanOrEqual(dimensions.viewport);
-  expect(dimensions.workspace).toBeGreaterThanOrEqual(1200);
-  expect(dimensions.body).toBeGreaterThanOrEqual(dimensions.workspace);
+  for (const width of [320, 390, 768, 1199, 1200, 1440, 2560]) {
+    await page.setViewportSize({ width, height: 844 });
+    const dimensions = await page.evaluate(() => ({
+      viewport: document.documentElement.clientWidth,
+      document: document.documentElement.scrollWidth,
+      body: document.body.scrollWidth,
+    }));
+    expect(dimensions.document, `document at ${width}px`).toBeLessThanOrEqual(dimensions.viewport);
+    expect(dimensions.body, `body at ${width}px`).toBeLessThanOrEqual(dimensions.viewport);
+  }
+  await page.setViewportSize({ width: 390, height: 844 });
   await page.locator("#cockpit-tools-trigger").click();
   await expect(page.locator("#btn-relatorio-mensal")).toBeVisible();
 });
