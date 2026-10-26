@@ -37,5 +37,6 @@ import "./js/features/monthly-report.js";
 import "./js/features/chrome-automation.js";
 import "./app.js";
 import "./js/ui/ux-enhancements.js";
+import "./js/ui/ck-cockpit-visual.js";
 import "./js/ui/transfer-history.js";
 import "./js/ui/data-panels.js";
