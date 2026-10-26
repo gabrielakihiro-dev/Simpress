@@ -166,3 +166,10 @@ Limite desta comparação: o painel do navegador embutido só renderiza cerca de
 ### Decisão sobre toque e telas muito largas (herdadas da Fase 5)
 
 Ficam. As regras `@media (pointer: coarse)` (alvos de 44px) só valem em aparelhos de toque, e o `max-width: 1920px` só vale a partir de 1920px de largura; nenhuma das duas muda o desktop de mouse entre 1200 e 1919px, onde o app deve ser idêntico ao artefato. O artefato não mostra esses casos, então não há contradição; cobertas por `tests/e2e/cockpit-layout.spec.cjs`.
+
+### Desvios deliberados do artefato por contraste e tema claro (Fase 6)
+
+- Cabeçalho da tabela do Resumo no tema claro usa `--cockpit-text-subtle`: a mistura de 60% do artefato (que é só escuro) dá contraste 4,05:1 no claro e reprova AA.
+- O total do Histórico de apelidos (`#total-historico-apelidos`) saiu dos tokens azuis antigos e usa o accent do Cockpit (4,21:1 no escuro reprovava AA).
+- O fundo dos modais no tema claro usa o texto do Cockpit a 45% (o `neutral-900` do claro é quase branco e viraria um véu claro, não um escurecimento).
+- Verificado com axe (claro e escuro, 1440px) em Resumo/Home, Chamados, Comparação, Histórico de apelidos, Relatório mensal e no modal do histórico: sem violações. A central de notificações e os demais modais ficaram fora do axe.
