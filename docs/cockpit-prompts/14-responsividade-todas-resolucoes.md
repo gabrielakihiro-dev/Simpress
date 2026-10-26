@@ -229,7 +229,7 @@ Fonte de verdade: o artefato publicado (cópia https://claude.ai/artifact/J7Jctd
 | Barra | Busca | 241×32 | 240×32 | 1 px | aceitar | arredondamento do UIA |
 | Barra | Sino: botão | 32×32, `btn-icon btn-ghost`, mesmo estilo do botão Ferramentas | mesma classe do botão Ferramentas (`cockpit-action-button`) | — | aceitar | glifo invisível no artefato; estilo igual ao do vizinho nos dois |
 | Barra | Sino: ícone | invisível (Phosphor bloqueado) | SVG embutido (ca119eb) | não comparável | impossível | não há glifo para comparar; desenho do SVG não confirmado no navegador do usuário |
-| Home | Lista e detalhe | Fase 6 | Fase 6 | — | aceitar | sem diferença nova nas capturas `home3`; ícones aceitos |
+| Home | Lista e detalhe | Fase 6 | Fase 6 | — | aceitar | comparado só por imagem (captura `home3`), sem nova medição contra o publicado; ícones aceitos |
 | Transporte | Altura dos campos | 36 (borda 45 px físicos) | 30 | 6 px | corrigir (feito) | agora 36 de 1534 a 320 px, sem rolagem horizontal |
 | Transporte | Fonte do campo / do rótulo | ≈13 / ≈11 | 12.5 / 11 | dentro do erro da medida | aceitar | medido por pixel; o erro é de cerca de 1 px físico |
 | Transporte | Composição | colunas planas, prévia de 400 | cartões com margens e controles a mais; prévia de 400 | estrutura | corrigir — pendente | recomposição: fase própria |
@@ -249,7 +249,9 @@ Fonte de verdade: o artefato publicado (cópia https://claude.ai/artifact/J7Jctd
 | Todas | Ícones | invisíveis | visíveis | — | aceitar | Phosphor bloqueado no artefato |
 | Todas | Tema claro | não existe | existe | — | aceitar — sem referência | artefato só escuro |
 | Home | Editar | não aparece | existe | — | aceitar — sem referência | fluxo do app sem equivalente no artefato |
-| Modais, estados vazios | — | sem equivalente no publicado | existem | — | aceitar — sem referência | não há o que medir |
+| Barra | Menu Ferramentas | itens 228×34 (UIA 286×43–44 físicos) | 228×34 | — | — | idêntico |
+| Barra | Popover do sino | 340 de largura; itens 329×47 | 340 de largura | itens não comparáveis | aceitar | o fixture não tem alertas, então o app não mostra itens |
+| Modais e estados vazios | Diálogo (440 na fonte local) | não aberto no publicado | existem | — | não comparado | o diálogo e os estados vazios não foram abertos no artefato publicado |
 
 **Conclusão:** a 1200 px ou mais, a barra, a Home, o Resumo e as larguras F5–F8 seguem o artefato publicado. **Transporte e Automação não estão idênticos** na composição; ficam para uma fase própria de recomposição.
 
@@ -261,13 +263,13 @@ Base: `git archive 044fdcc` servido pelo `ui-fixture` na porta 8822; atual: `fea
 
 | Função | Base 044fdcc | Atual | Resultado |
 | --- | --- | --- | --- |
-| Busca (`Ctrl+K` foca `#input-serial`, digitar e limpar) | ok | ok | igual |
+| Busca (`Ctrl+K` foca `#input-serial`, digitar e limpar) | foco ok | foco ok | foco igual; o filtro em si não foi confirmado pelo roteiro (coberto no e2e por "search displays an announced skeleton, then the fictional result") |
 | F1–F4 (abas Home, Transporte, Resumo, Automação) | ok | ok | igual |
 | F5–F8 (Chamados, Comparação, Histórico de apelidos, Relatório mensal) | ok | ok | igual |
-| Notificações (abre o painel, `aria-expanded=true`, fecha com Esc) | ok, ícone SVG 24×24 | ok, ícone SVG 20×20 | mudança visual intencional; função igual |
+| Notificações (abre o painel, `aria-expanded=true`, fecha com Esc) | ok, ícone SVG 24×24 | ok, ícone SVG 20×20 | função igual; o tamanho do ícone mudou em ca119eb (o glifo do artefato usa `font-size:17px`) |
 | Tema (alternar e voltar) | ok | ok | igual |
 | Rolagem horizontal a 320px | 56px | 0 | corrigido pela responsividade |
 | Erros de console | 0 | 0 | igual |
-| Modal Editar (`e`) e exportação pelo botão | o roteiro não conseguiu acionar | o roteiro não conseguiu acionar | igual nas duas versões; limite do roteiro, cobertos pela suíte e2e |
-| Exportações e anotações | — | suíte e2e | ver resultado da suíte |
+| Modal Editar (`e`) e exportação pelo botão | o roteiro não conseguiu acionar | o roteiro não conseguiu acionar | não comparado a 320/768/1440: falhar nas duas versões não prova que funcionam; no e2e, ver "modal traps keyboard focus, restores it on Escape, and passes axe" |
+| Exportações e anotações | — | só na suíte e2e (largura padrão) | cobertas por "the Cockpit report loads the selected month and keeps the existing XLSX download", "ticket export stays bound to the selected snapshot while it loads", "a failed comparison switch cannot export the previously displayed event", "fixture annotation autosaves to the isolated in-memory endpoint" e "comparison history filters rows and autosaves their original annotations"; não comparadas com a base |
 Suíte e2e completa (`npm run test:ui:e2e`, porta 8824): 238 passed, 1 skipped, 0 failed. `npm run verify`: tudo OK (273 testes JavaScript, mypy, compileall, busca de credenciais).
