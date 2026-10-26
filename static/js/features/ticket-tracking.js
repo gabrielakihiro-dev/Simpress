@@ -727,25 +727,20 @@
     body.setAttribute("aria-busy", "false");
     count.textContent = abertos.length ? `${abertos.length} ${abertos.length === 1 ? "aberto" : "abertos"}` : "";
     if (!abertos.length) {
-      body.replaceChildren(dom.createTextElement("p", "cockpit-home-open-tickets-empty", "Nenhum chamado aberto para esta série."));
+      body.replaceChildren(dom.createTextElement("p", "ck-abertos__vazio", "Nenhum chamado aberto para esta série."));
       return;
     }
     const list = document.createElement("ul");
-    list.className = "cockpit-home-open-tickets-list";
+    list.className = "ck-abertos";
     abertos.forEach(ticket => {
       const item = document.createElement("li");
-      item.className = "cockpit-home-open-ticket";
-      const head = document.createElement("div");
-      head.className = "cockpit-home-open-ticket-head";
-      head.append(
-        dom.createTextElement("strong", "cockpit-home-open-ticket-number", ticket.solicitacao || "Sem solicitação"),
-        dom.createTextElement("span", "cockpit-home-open-ticket-status", [ticket.status, ticket.sub_status].filter(Boolean).join(" · ") || "Status não informado"),
-      );
+      item.className = "ck-aberto";
       item.append(
-        head,
-        dom.createTextElement("p", "cockpit-home-open-ticket-type", ticket.fila || "Fila não informada"),
-        dom.createTextElement("p", "cockpit-home-open-ticket-unit", ticket.nome_filial || ticket.cidade || "Unidade não informada"),
-        dom.createTextElement("p", "cockpit-home-open-ticket-age", idadeAtualizacaoChamado(ticket).rotulo),
+        dom.createTextElement("strong", "ck-aberto__numero", ticket.solicitacao || "Sem solicitação"),
+        dom.createTextElement("span", "ck-badge", [ticket.status, ticket.sub_status].filter(Boolean).join(" · ") || "Status não informado"),
+        dom.createTextElement("p", "ck-aberto__titulo", ticket.fila || "Fila não informada"),
+        dom.createTextElement("p", "ck-aberto__meta", ticket.nome_filial || ticket.cidade || "Unidade não informada"),
+        dom.createTextElement("p", "ck-aberto__meta", idadeAtualizacaoChamado(ticket).rotulo),
       );
       list.append(item);
     });
@@ -757,7 +752,7 @@
     if (!body) return;
     const request = homeTicketsRequestGate.begin();
     body.setAttribute("aria-busy", "true");
-    body.replaceChildren(context.dom.createTextElement("p", "cockpit-home-open-tickets-empty", "Carregando chamados…"));
+    body.replaceChildren(context.dom.createTextElement("p", "ck-abertos__vazio", "Carregando chamados…"));
     document.getElementById("home-open-tickets-count").textContent = "";
     try {
       if (!chamadosRecentesHome) {
@@ -774,7 +769,7 @@
     } catch (error) {
       if (!homeTicketsRequestGate.isCurrent(request.id)) return;
       body.setAttribute("aria-busy", "false");
-      const message = context.dom.createTextElement("p", "cockpit-home-open-tickets-empty", error.message || "Não foi possível carregar os chamados.");
+      const message = context.dom.createTextElement("p", "ck-abertos__vazio", error.message || "Não foi possível carregar os chamados.");
       message.setAttribute("role", "alert");
       body.replaceChildren(message);
     }

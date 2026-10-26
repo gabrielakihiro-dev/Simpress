@@ -207,7 +207,7 @@
   }
 
   function recolherVisualizacoesModelosChamado() {
-    const pill = document.querySelector('.cockpit-home-ticket-pill[aria-selected="true"]');
+    const pill = document.querySelector('.ck-modelo-aba[aria-selected="true"]');
     let selectedType = "";
     try {
       selectedType = JSON.parse(pill?.dataset?.args || "[]")[0] || "";
@@ -236,7 +236,7 @@
   }
 
   function alternarChamadosManuais(tipo) {
-    const pills = document.querySelectorAll(".cockpit-home-ticket-pill");
+    const pills = document.querySelectorAll(".ck-modelo-aba");
     if (pills.length) {
       const selected = tipo || "deslocamento";
       const content = document.getElementById("ticket-templates-content");
@@ -250,10 +250,13 @@
         }
         const active = pillType === selected;
         pill.setAttribute("aria-selected", String(active));
-        pill.classList.toggle("is-active", active);
         pill.tabIndex = active ? 0 : -1;
+        // Ponto da aba: cheio = texto sem campo em branco; anel = ainda há [campo] ou "Rótulo:" vazio.
+        const dot = pill.querySelector?.(".ck-prontidao");
+        const text = document.getElementById(`texto-chamado-${pillType}`)?.value;
+        if (dot?.dataset && typeof text === "string") dot.dataset.status = /\[[^\]]*\]|:[ ]*$/m.test(text) ? "alerta" : "ok";
       });
-      document.querySelectorAll(".cockpit-home-ticket-preview").forEach(preview => {
+      document.querySelectorAll(".ck-chamado__painel").forEach(preview => {
         preview.hidden = preview.id !== `visualizacao-chamado-${selected}`;
       });
       document.getElementById("btn-copiar-chamado-atual").dataset.args = JSON.stringify([`texto-chamado-${selected}`]);
