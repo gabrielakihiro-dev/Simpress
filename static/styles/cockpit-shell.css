@@ -692,7 +692,7 @@
   .cockpit-search-shortcut,
   .cockpit-tab span { display: none; }
   .cockpit-bar__tabs { grid-row: 1; grid-column: 2; min-width: 0; }
-  .cockpit-bar__brand { display: none; }
+  .cockpit-bar__brand { padding-right: 0; margin-right: 0; border-right: 0; }
   .cockpit-bar__tabs { gap: 0; }
   .cockpit-tab { width: 32px; padding: 0; justify-content: center; }
   .cockpit-bar__search { grid-row: 2; grid-column: 1 / -1; max-width: none; }
@@ -724,7 +724,7 @@
 }
 
 @media (max-width: 359.98px) {
-  .cockpit-bar__brand { display: none; }
+  .cockpit-bar__brand { padding-right: 0; margin-right: 0; border-right: 0; }
   .cockpit-bar__tabs { grid-column: 1 / 3; }
 }
 
@@ -810,6 +810,10 @@
 /* Largura de 44px nos botões da barra só a partir de 375px; abaixo disso (320px) não cabem e se cobririam (altura de 44px continua). */
 @media (pointer: coarse) and (min-width: 375px) {
   .cockpit-bar :is(.cockpit-tab, .cockpit-bar__status-toggle, #cockpit-tools-trigger, .cockpit-bar__tools > button, .cockpit-bar__actions button) { min-width: 44px; }
+}
+/* Abaixo de 390px a marca sai da barra: com 4 abas de 44px não há largura para ela (mudança só de layout; a aba Home continua levando à Home). */
+@media (max-width: 389.98px) {
+  .cockpit-bar__brand { display: none; }
 }
 /* No compacto os 44px de largura só cabem com margem e vão da barra reduzidos (4px e 2px). */
 @media (pointer: coarse) and (min-width: 375px) and (max-width: 767.98px) {
