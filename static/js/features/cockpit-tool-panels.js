@@ -5,6 +5,7 @@
 })(typeof window !== "undefined" ? window : globalThis, function createCockpitToolPanels(context) {
   "use strict";
   const { app, apiFetch } = context;
+  const toolKeys = { chamados: "F5", comparacao: "F6", apelidos: "F7", relatorio: "F8" };
   const toolInfo = {
     chamados: ["Chamados", "Acompanhamento local de ordens relacionadas por série."],
     comparacao: ["Comparação", "Resultados salvos da comparação entre as bases locais."],
@@ -157,24 +158,32 @@
     return node;
   }
 
+  const badgeStatus = { success: "ok", warning: "alerta", error: "erro" };
+
+  function badge(text, tone = "neutral") {
+    const node = element("span", "ck-badge", text);
+    if (badgeStatus[tone]) node.dataset.status = badgeStatus[tone];
+    return node;
+  }
+
   function renderEmpty(target, message) {
-    const node = element("p", "cockpit-tool-empty", message);
+    const node = element("p", "ck-lista__vazio", message);
     if (target.getAttribute("role") === "list") node.setAttribute("role", "listitem");
     target.replaceChildren(node);
   }
 
   function renderKpis(target, entries) {
     target.replaceChildren(...entries.map(([label, value, note]) => {
-      const card = element("div", "cockpit-tool-kpi");
+      const card = element("div", "ck-kpi");
       const shown = typeof value === "string" ? value : displayCount(value);
-      card.append(element("span", "cockpit-tool-kpi-label", label), element("strong", "cockpit-tool-kpi-value", shown));
-      if (note) card.append(element("small", "cockpit-tool-kpi-note", note));
+      card.append(element("span", "ck-kpi__rotulo", label), element("strong", "ck-kpi__valor", shown));
+      if (note) card.append(element("small", "ck-kpi__sub", note));
       return card;
     }));
   }
 
   function renderDetails(target, entries) {
-    const list = element("dl", "cockpit-tool-fields");
+    const list = element("dl", "ck-det-campos");
     entries.filter(([, value]) => value !== null && value !== undefined && value !== "")
       .forEach(([label, value]) => list.append(element("dt", "", label), element("dd", "", value)));
     target.replaceChildren(list);
@@ -182,7 +191,7 @@
 
   function renderError(target, error, fallback) {
     const message = error?.message || fallback;
-    const node = element("p", "cockpit-tool-error", message);
+    const node = element("p", "ck-nota ck-nota--erro", message);
     if (target.getAttribute("role") === "list") node.setAttribute("role", "listitem");
     target.replaceChildren(node);
   }
@@ -215,8 +224,8 @@
     ];
     const fields = element("div", "");
     renderDetails(fields, details);
-    const note = element("p", "cockpit-tool-note", "Os dados exibidos vêm da última importação local. Este painel não altera chamados.");
-    const timeline = element("section", "cockpit-tool-timeline");
+    const note = element("p", "ck-nota", "Os dados exibidos vêm da última importação local. Este painel não altera chamados.");
+    const timeline = element("section", "ck-det-bloco");
     timeline.append(element("h3", "", "Andamento registrado"));
     target.replaceChildren(fields, note, timeline);
     loadTicketTimeline(record, timeline);
@@ -228,16 +237,18 @@
 
   function renderTicketTimeline(target, events) {
     if (!events.length) return renderEmpty(target, "Não há versões anteriores para esta série.");
-    const list = element("ol", "cockpit-tool-timeline-list");
+    const list = element("ol", "ck-tempo");
     events.forEach(event => {
-      const item = element("li", "cockpit-tool-timeline-item");
-      item.append(element("strong", "", event.tipo || "Atualização"));
-      item.append(element("time", "", event.atualizado_em || "Data indisponível"));
+      const item = element("li", "ck-tempo__item");
+      const body = element("div", "ck-tempo__corpo");
+      item.append(element("span", "ck-tempo__marca"), body);
+      body.append(element("strong", "ck-tempo__titulo", event.tipo || "Atualização"));
+      body.append(element("time", "ck-tempo__meta", event.atualizado_em || "Data indisponível"));
       const changes = Array.isArray(event.mudancas) ? event.mudancas : [];
-      if (changes.length) item.append(element("p", "", changes.map(change =>
+      if (changes.length) body.append(element("p", "ck-tempo__meta", changes.map(change =>
         `${change.campo || "Campo"}: ${timelineValue(change.anterior) || "(vazio)"} → ${timelineValue(change.atual) || "(vazio)"}`,
       ).join(" · ")));
-      if (event.anotacao) item.append(element("p", "cockpit-tool-note", event.anotacao));
+      if (event.anotacao) body.append(element("p", "ck-nota", event.anotacao));
       list.append(item);
     });
     target.replaceChildren(list);
@@ -279,14 +290,14 @@
     else {
       list.replaceChildren(...visible.map(record => {
         const { oracle, simpress } = ticketOrders(record);
-        const item = element("div", "cockpit-tool-list-item");
+        const item = element("div", "ck-ferr-item");
         item.setAttribute("role", "listitem");
-        const button = element("button", "cockpit-tool-list-button");
+        const button = element("button", "ck-item ck-ferr-botao");
         button.type = "button";
         button.setAttribute("aria-pressed", String(record.serie === selectedTicketSerial));
-        button.append(element("strong", "cockpit-tool-mono", record.serie || "Série sem identificação"));
-        button.append(element("span", `cockpit-tool-badge cockpit-tool-badge--${relationTones[record.relacao] || "neutral"}`, relationText(record)));
-        button.append(element("small", "", `Oracle ${oracle.length} · Simpress ${simpress.length}`));
+        button.append(element("strong", "ck-item__serie", record.serie || "Série sem identificação"));
+        button.append(badge(relationText(record), relationTones[record.relacao]));
+        button.append(element("small", "ck-item__sub", `Oracle ${oracle.length} · Simpress ${simpress.length}`));
         button.addEventListener("click", () => { selectedTicketSerial = String(record.serie || ""); renderTickets(); });
         item.append(button);
         return item;
@@ -342,7 +353,7 @@
       return [label, label, uniqueComparisonCount(categoryRows)];
     })];
     target.replaceChildren(...filters.map(([value, label, count]) => {
-      const button = element("button", "cockpit-tool-filter-chip");
+      const button = element("button", "ck-pilula");
       button.type = "button";
       button.setAttribute("aria-pressed", String(selectedComparisonFilter === value));
       button.append(document.createTextNode(`${label} `), element("span", "", displayCount(count)));
@@ -370,14 +381,14 @@
     if (!selectedComparison) return renderEmpty(target, "Selecione uma comparação salva.");
     if (!rows.length) return renderEmpty(target, "Não há registros nesta categoria da comparação.");
     if (!rows.some(row => row.cockpitKey === selectedComparisonRowKey)) selectedComparisonRowKey = rows[0].cockpitKey;
-    const headings = element("div", "cockpit-comparison-columns");
+    const headings = element("div", "ck-ferr-colunas");
     headings.setAttribute("role", "presentation");
     ["Série", "Modelo", "Local · Simpress", "Local · Endpoint", "Usuário · Simpress", "Usuário · Endpoint", "Resultado"]
       .forEach(label => headings.append(element("span", "", label)));
     target.replaceChildren(headings, ...rows.map(row => {
-      const wrapper = element("div", "cockpit-tool-list-item");
+      const wrapper = element("div", "ck-ferr-item");
       wrapper.setAttribute("role", "listitem");
-      const button = element("button", "cockpit-tool-list-button cockpit-comparison-row");
+      const button = element("button", "ck-item ck-ferr-botao cockpit-comparison-row");
       button.type = "button";
       button.setAttribute("aria-pressed", String(row.cockpitKey === selectedComparisonRowKey));
       const simpressMissing = row.categoria === "Só Endpoint";
@@ -391,9 +402,8 @@
         row.categoria,
       ];
       values.forEach((value, index) => {
-        const cell = element(index === 0 ? "strong" : "span", index === 0 ? "cockpit-tool-mono" : "", value);
+        const cell = index === 6 ? badge(value, comparisonTones[row.categoria]) : element(index === 0 ? "strong" : "span", index === 0 ? "ck-item__serie" : "", value);
         cell.setAttribute("aria-label", `${["Série", "Modelo", "Local · Simpress", "Local · Endpoint", "Usuário · Simpress", "Usuário · Endpoint", "Resultado"][index]}: ${value}`);
-        if (index === 6) cell.classList.add("cockpit-tool-badge", `cockpit-tool-badge--${comparisonTones[row.categoria] || "neutral"}`);
         button.append(cell);
       });
       button.setAttribute("aria-label", values.join(" · "));
@@ -431,15 +441,15 @@
     const row = rows.find(item => item.cockpitKey === selectedComparisonRowKey) || rows[0];
     if (!row) return renderEmpty(target, "Selecione um registro da comparação.");
     selectedComparisonRowKey = row.cockpitKey;
-    target.replaceChildren(element("h2", "cockpit-tool-detail-heading", row.serie || "Série indisponível"));
-    target.append(element("p", "cockpit-tool-detail-subheading", `${row.modelo || "Modelo indisponível"} · ${row.categoria}`));
-    const matrix = element("div", "cockpit-comparison-matrix");
+    target.replaceChildren(element("h2", "ck-det__serie", row.serie || "Série indisponível"));
+    target.append(element("p", "ck-det__sub", `${row.modelo || "Modelo indisponível"} · ${row.categoria}`));
+    const matrix = element("div", "ck-ferr-matriz");
     matrix.setAttribute("role", "table");
     matrix.setAttribute("aria-label", "Diferenças entre Simpress e Endpoint Central");
-    const headerRow = element("div", "cockpit-comparison-matrix-row");
+    const headerRow = element("div", "ck-ferr-matriz__linha");
     headerRow.setAttribute("role", "row");
     ["Campo", "Simpress", "Endpoint Central"].forEach(label => {
-      const header = element("strong", "cockpit-comparison-matrix-header", label);
+      const header = element("strong", "ck-comparar__cab", label);
       header.setAttribute("role", "columnheader");
       headerRow.append(header);
     });
@@ -451,12 +461,14 @@
       ["Usuário", simpressMissing ? "Não encontrado" : row.usuario_detalhes || "—", endpointMissing ? "Não encontrado" : row.usuario_endpoint || row.usuario || "—", row.categoria === "Usuário"],
     ];
     compareFields.forEach(([label, simpressValue, endpointValue, divergent]) => {
-      const row = element("div", "cockpit-comparison-matrix-row");
+      const row = element("div", "ck-ferr-matriz__linha");
       row.setAttribute("role", "row");
-      const field = element("span", "cockpit-comparison-matrix-field", label);
+      const field = element("span", "ck-comparar__campo", label);
       field.setAttribute("role", "rowheader");
-      const simpressCell = element("span", `cockpit-comparison-matrix-cell${divergent || simpressMissing ? " is-divergent" : ""}`, simpressValue);
-      const endpointCell = element("span", `cockpit-comparison-matrix-cell${divergent || endpointMissing ? " is-divergent" : ""}`, endpointValue);
+      const simpressCell = element("span", "ck-comparar__valor", simpressValue);
+      const endpointCell = element("span", "ck-comparar__valor", endpointValue);
+      if (divergent || simpressMissing) simpressCell.dataset.status = "erro";
+      if (divergent || endpointMissing) endpointCell.dataset.status = "erro";
       simpressCell.setAttribute("role", "cell");
       endpointCell.setAttribute("role", "cell");
       row.append(field, simpressCell, endpointCell);
@@ -464,13 +476,13 @@
     });
     target.append(matrix);
     renderDetailsInto(target, [["Hostname", row.computador || "—"], ["Comparado em", event.horario || "Data indisponível"]]);
-    const actions = element("div", "cockpit-tool-actions");
-    const openHome = element("button", "btn btn-secondary", "Abrir na Home");
+    const actions = element("div", "ck-det__rodape");
+    const openHome = element("button", "ck-btn ck-btn--secundario ck-btn--sm", "Abrir na Home");
     openHome.type = "button";
     openHome.addEventListener("click", () => { void openSerialInHome(row.serie); });
     actions.append(openHome);
     if (event.id && typeof app.abrirResultadoHistoricoComparacao === "function") {
-      const complete = element("button", "btn btn-secondary-accent", "Abrir comparação completa");
+      const complete = element("button", "ck-btn ck-btn--primario ck-btn--sm", "Abrir comparação completa");
       complete.type = "button";
       complete.addEventListener("click", () => app.abrirResultadoHistoricoComparacao(event.id, "", complete));
       actions.append(complete);
@@ -479,7 +491,7 @@
   }
 
   function renderDetailsInto(target, entries) {
-    const list = element("dl", "cockpit-tool-fields");
+    const list = element("dl", "ck-det-campos");
     entries.forEach(([label, value]) => list.append(element("dt", "", label), element("dd", "", value)));
     target.append(list);
   }
@@ -628,15 +640,15 @@
   function renderAliasCurrent(section, equipment, error = "") {
     section.replaceChildren(element("h3", "", "Cadastro atual"));
     if (equipment === undefined) {
-      section.append(element("p", "cockpit-tool-note", "Carregando os dados atuais do cadastro local…"));
+      section.append(element("p", "ck-nota", "Carregando os dados atuais do cadastro local…"));
       return;
     }
     if (error) {
-      section.append(element("p", "cockpit-tool-note", `Dados atuais indisponíveis: ${error}`));
+      section.append(element("p", "ck-nota", `Dados atuais indisponíveis: ${error}`));
       return;
     }
     if (!equipment) {
-      section.append(element("p", "cockpit-tool-note", "Esta série não foi encontrada na base atual."));
+      section.append(element("p", "ck-nota", "Esta série não foi encontrada na base atual."));
       return;
     }
     renderDetailsInto(section, [
@@ -645,7 +657,7 @@
       ["Apelido atual", equipment.apelido || "Sem apelido"],
     ]);
     if (equipment.apelido) {
-      const copy = element("button", "btn btn-secondary", "Copiar apelido atual");
+      const copy = element("button", "ck-btn ck-btn--secundario ck-btn--sm", "Copiar apelido atual");
       copy.type = "button";
       copy.addEventListener("click", async () => {
         copy.disabled = true;
@@ -656,7 +668,7 @@
           app.showToast(error.message || "Não foi possível copiar o apelido.", "error");
         } finally { copy.disabled = false; }
       });
-      const actions = element("div", "cockpit-tool-actions");
+      const actions = element("div", "ck-det__rodape");
       actions.append(copy);
       section.append(actions);
     }
@@ -694,38 +706,45 @@
       ["Origem", event.origem], ["Motivo", event.motivo],
     ];
     renderDetails(target, fields);
-    const current = element("section", "cockpit-tool-current-record");
+    const current = element("section", "ck-det-bloco");
     renderAliasCurrent(current, undefined);
     target.append(current);
-    const timeline = element("section", "cockpit-tool-timeline");
+    const timeline = element("section", "ck-det-bloco");
     timeline.append(element("h3", "", "Histórico deste equipamento"));
     const events = aliasTimeline(event);
-    if (!events.length) timeline.append(element("p", "cockpit-tool-empty", "Não há outros eventos para esta série."));
+    if (!events.length) timeline.append(element("p", "ck-lista__vazio", "Não há outros eventos para esta série."));
     else {
-      const list = element("ol", "cockpit-tool-timeline-list");
+      const list = element("ol", "ck-tempo");
       events.forEach(item => {
-        const entry = element("li", "");
-        entry.append(
-          element("strong", "", `${aliasTypeLabel(item.tipo)} · ${item.acao || "registro"}`),
-          element("time", "", item.horario || "Data indisponível"),
-          element("span", "", `Autor: ${item.autor || "não informado"} · Origem: ${item.origem || "não informada"}`),
-          element("span", "", item.tipo === "aviso_endpoint"
-            ? `${item.motivo || "Aviso"} · ${item.valor_anterior || "valor não informado"}`
-            : `${aliasValue(item, true) || "(vazio)"} → ${aliasValue(item) || "(vazio)"}`),
+        const entry = element("li", "ck-tempo__item");
+        const body = element("div", "ck-tempo__corpo");
+        const change = element("span", "ck-alteracao");
+        if (item.tipo === "aviso_endpoint") change.textContent = `${item.motivo || "Aviso"} · ${item.valor_anterior || "valor não informado"}`;
+        else change.append(
+          element("span", "ck-alteracao__antes", aliasValue(item, true) || "(vazio)"),
+          document.createTextNode("→"),
+          element("span", "", aliasValue(item) || "(vazio)"),
         );
+        body.append(
+          element("strong", "ck-tempo__titulo", `${aliasTypeLabel(item.tipo)} · ${item.acao || "registro"}`),
+          element("time", "ck-tempo__meta", item.horario || "Data indisponível"),
+          element("span", "ck-tempo__meta", `Autor: ${item.autor || "não informado"} · Origem: ${item.origem || "não informada"}`),
+          change,
+        );
+        entry.append(element("span", "ck-tempo__marca"), body);
         list.append(entry);
       });
       timeline.append(list);
     }
-    const actions = element("div", "cockpit-tool-actions");
+    const actions = element("div", "ck-det__rodape");
     if (event.serial) {
-      const openHome = element("button", "btn btn-secondary", "Abrir na Home");
+      const openHome = element("button", "ck-btn ck-btn--secundario ck-btn--sm", "Abrir na Home");
       openHome.type = "button";
       openHome.addEventListener("click", () => { void openSerialInHome(event.serial); });
       actions.append(openHome);
     }
     if (aliasCanUndo(event) && typeof app.desfazerEventoHistoricoApelidos === "function") {
-      const undo = element("button", "btn btn-secondary-accent", "Restaurar anterior");
+      const undo = element("button", "ck-btn ck-btn--primario ck-btn--sm", "Restaurar anterior");
       undo.type = "button";
       undo.addEventListener("click", async () => {
         undo.disabled = true;
@@ -740,7 +759,7 @@
         : event.tipo === "aviso_endpoint"
           ? "Avisos do Endpoint seguem a ação de remoção do histórico completo; não há restauração deste tipo."
           : "Há uma alteração mais recente para este campo, ou a ação de restauração não está disponível.";
-      actions.append(element("p", "cockpit-tool-note", reason));
+      actions.append(element("p", "ck-nota", reason));
     }
     target.append(timeline);
     if (actions.childElementCount) target.append(actions);
@@ -788,14 +807,14 @@
     const selected = filtered.find(event => String(event.id || "") === selectedAliasId) || filtered[0];
     selectedAliasId = String(selected?.id || "");
     target.replaceChildren(...filtered.map(event => {
-      const row = element("div", "cockpit-tool-list-item");
+      const row = element("div", "ck-ferr-item");
       row.setAttribute("role", "listitem");
-      const button = element("button", "cockpit-tool-list-button");
+      const button = element("button", "ck-item ck-ferr-botao");
       button.type = "button";
       button.setAttribute("aria-pressed", String(String(event.id || "") === selectedAliasId));
-      button.append(element("strong", "", event.serial || "Série indisponível"));
-      button.append(element("span", "cockpit-tool-badge", aliasTypeLabel(event.tipo)));
-      button.append(element("small", "", `${event.horario || "Data indisponível"} · ${event.tipo === "aviso_endpoint"
+      button.append(element("strong", "ck-item__serie", event.serial || "Série indisponível"));
+      button.append(badge(aliasTypeLabel(event.tipo), "info"));
+      button.append(element("small", "ck-item__sub", `${event.horario || "Data indisponível"} · ${event.tipo === "aviso_endpoint"
         ? event.motivo || "Aviso do Endpoint" : `${aliasValue(event, true) || "(vazio)"} → ${aliasValue(event) || "(vazio)"}`}`));
       button.addEventListener("click", () => { selectedAliasId = String(event.id || ""); renderAliases(); });
       row.append(button);
@@ -866,7 +885,7 @@
     const target = byId("cockpit-monthly-periods");
     const current = currentMonth();
     target.replaceChildren(...recentMonthKeys().map(key => {
-      const button = element("button", "cockpit-tool-filter-chip");
+      const button = element("button", "ck-pilula");
       button.type = "button";
       button.setAttribute("aria-pressed", String(key === selectedMonth));
       const label = element("strong", "", monthLabel(key));
@@ -885,15 +904,90 @@
   }
 
   function reportRows(title, rows, labels) {
-    const section = element("section", "cockpit-tool-report-section");
+    const section = element("section", "ck-det-bloco");
     section.append(element("h3", "", title));
     if (!Array.isArray(rows) || !rows.length) {
-      section.append(element("p", "cockpit-tool-empty", "Sem registros neste período."));
+      section.append(element("p", "ck-lista__vazio", "Sem registros neste período."));
       return section;
     }
-    const list = element("ul", "cockpit-tool-detail-list");
+    const list = element("ul", "ck-det-lista");
     rows.forEach(row => list.append(element("li", "", labels(row))));
     section.append(list);
+    return section;
+  }
+
+  // Barras do gráfico: altura proporcional ao maior valor real (0–100); sem valores, fica tudo em 0.
+  function monthlyChartBars(oracle = {}, simpress = {}) {
+    const bars = [
+      ["Oracle", "abertos", oracle.abertas], ["Oracle", "concluidos", oracle.concluidas],
+      ["Simpress", "abertos", simpress.abertas], ["Simpress", "concluidos", simpress.concluidas],
+    ].map(([source, kind, value]) => ({ source, kind, value: Number.isFinite(Number(value)) ? Number(value) : 0 }));
+    const max = Math.max(1, ...bars.map(bar => bar.value));
+    return bars.map(bar => ({ ...bar, height: Math.round((bar.value / max) * 100) }));
+  }
+
+  function monthlyChart(bars) {
+    const section = element("section", "ck-det-bloco ck-rel__largo");
+    section.append(element("h3", "ck-det__titulo", "Ordens do mês"));
+    const legend = element("div", "ck-legenda");
+    [["abertos", "Abertas"], ["concluidos", "Concluídas"]].forEach(([kind, label]) => {
+      const item = element("span", "ck-legenda__item");
+      item.append(element("span", `ck-legenda__cor ck-legenda__cor--${kind}`), document.createTextNode(label));
+      legend.append(item);
+    });
+    const svgNs = "http://www.w3.org/2000/svg";
+    const svg = document.createElementNS(svgNs, "svg");
+    svg.setAttribute("class", "ck-graf");
+    svg.setAttribute("viewBox", "0 0 400 150");
+    svg.setAttribute("preserveAspectRatio", "none");
+    svg.setAttribute("role", "img");
+    svg.setAttribute("aria-label", `Ordens do mês: ${bars.map(bar => `${bar.source} ${bar.kind === "abertos" ? "abertas" : "concluídas"} ${bar.value}`).join(", ")}`);
+    bars.forEach((bar, index) => {
+      const height = Math.max(bar.value > 0 ? 2 : 0, (bar.height / 100) * 140);
+      const rect = document.createElementNS(svgNs, "rect");
+      rect.setAttribute("class", `ck-graf__${bar.kind}`);
+      rect.setAttribute("x", String(index * 100 + 25));
+      rect.setAttribute("y", String(145 - height));
+      rect.setAttribute("width", "50");
+      rect.setAttribute("height", String(height));
+      svg.append(rect);
+    });
+    const base = document.createElementNS(svgNs, "line");
+    base.setAttribute("class", "ck-graf__base");
+    ["x1", "x2"].forEach((attr, index) => base.setAttribute(attr, index ? "400" : "0"));
+    ["y1", "y2"].forEach(attr => base.setAttribute(attr, "145"));
+    svg.append(base);
+    const labels = element("div", "ck-graf__rotulos");
+    bars.forEach(bar => {
+      const label = element("span", "", `${bar.source} · ${bar.kind === "abertos" ? "abertas" : "concluídas"}`);
+      label.prepend(element("strong", "", displayCount(bar.value)));
+      labels.append(label);
+    });
+    section.append(legend, svg, labels);
+    return section;
+  }
+
+  function unitsTable(rows) {
+    const section = element("section", "ck-det-bloco ck-rel__largo");
+    section.append(element("h3", "ck-det__titulo", "Inventário por unidade · base atual"));
+    if (!Array.isArray(rows) || !rows.length) {
+      section.append(element("p", "ck-lista__vazio", "Sem registros neste período."));
+      return section;
+    }
+    const table = element("table", "ck-tabela");
+    const head = element("tr");
+    ["Cidade", "Endereço", "Equipamentos"].forEach((label, index) => head.append(element("th", index === 2 ? "ck-th--dir" : "", label)));
+    const thead = element("thead");
+    thead.append(head);
+    table.append(thead);
+    const body = element("tbody");
+    rows.forEach(row => {
+      const line = element("tr");
+      line.append(element("td", "", row[0]), element("td", "", row[1] || "—"), element("td", "ck-td--dir", displayCount(row[2])));
+      body.append(line);
+    });
+    table.append(body);
+    section.append(table);
     return section;
   }
 
@@ -911,12 +1005,13 @@
     ]);
     const details = byId("cockpit-monthly-details");
     details.replaceChildren(
+      monthlyChart(monthlyChartBars(oracle, simpress)),
       reportRows("Resumo da base atual", [
         ["Equipamentos", inventory.total], ["Unidades", inventory.unidades],
         ["Atualizações no mês", comparison.atualizacoes_no_mes],
       ], row => `${row[0]} · ${displayCount(row[1])}`),
       reportRows("Inventário por tipo", inventory.por_tipo, row => `${row[0]} · ${displayCount(row[1])}`),
-      reportRows("Inventário por unidade · base atual", inventory.por_unidade, row => `${row[0]}${row[1] ? ` · ${row[1]}` : ""} · ${displayCount(row[2])}`),
+      unitsTable(inventory.por_unidade),
       reportRows("Divergências da comparação", comparison.linhas, row => `${row.secao} · ${row.serie || "Série indisponível"} · ${row.hostname || "Hostname indisponível"}`),
       reportRows("Ordens do mês", tickets.linhas, row => `${row.fonte} · ${row.identificador || "Identificador indisponível"} · ${row.serie || "Série indisponível"} · ${(row.situacao || []).join(", ") || "Sem classificação no período"}`),
       reportRows("Registros com dados insuficientes", tickets.dados_insuficientes, row => `${row.fonte} · ${row.serie || "Série indisponível"} · ${(row.identificadores || []).join(", ")} · ${row.motivo || "Motivo indisponível"}`),
@@ -1054,6 +1149,7 @@
     root.hidden = false;
     byId("cockpit-tools-dropdown").open = false;
     byId("cockpit-tool-title").textContent = toolInfo[tool][0];
+    byId("cockpit-tool-kbd").textContent = toolKeys[tool];
     byId("cockpit-tool-subtitle").textContent = toolInfo[tool][1];
     document.querySelectorAll("[data-cockpit-tool-panel]").forEach(panel => { panel.hidden = panel.dataset.cockpitToolPanel !== tool; });
     byId("cockpit-tool-title").focus();
@@ -1077,5 +1173,6 @@
     comparisonRows,
     aliasMetrics,
     monthlyPreviewText,
+    monthlyChartBars,
   };
 });

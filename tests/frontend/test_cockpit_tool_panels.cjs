@@ -5,7 +5,7 @@ const test = require("node:test");
 
 const root = path.resolve(__dirname, "../..");
 const html = fs.readFileSync(path.join(root, "static/index.html"), "utf8");
-const css = fs.readFileSync(path.join(root, "static/styles/cockpit-tool-panels.css"), "utf8");
+const css = fs.readFileSync(path.join(root, "static/styles/ck-cockpit.css"), "utf8");
 const source = fs.readFileSync(path.join(root, "static/js/features/cockpit-tool-panels.js"), "utf8");
 const createCockpitToolPanels = require("../../static/js/features/cockpit-tool-panels.js");
 const panels = createCockpitToolPanels({ app: {}, appState: {} });
@@ -32,7 +32,7 @@ assert.match(html, /id="cockpit-monthly-periods"/);
 });
 
 test("keeps closed tool panels hidden and starts a new comparison through the existing import flow", () => {
-  assert.match(css, /\.cockpit-shell \.cockpit-tool-panels\[hidden\][\s\S]*?display:\s*none/);
+  assert.match(css, /#cockpit-tool-panels\[hidden\][\s\S]*?display:\s*none/);
   const action = source.match(/function openNewComparison\(\) \{([\s\S]*?)\n  \}/)?.[1] || "";
   assert.doesNotMatch(action, /closePanel/);
   assert.match(action, /app\.abrirModalAtualizarPlanilhas\(\)/);
@@ -90,4 +90,10 @@ test("monthly preview uses values returned by the existing report builder and ma
   assert.match(text, /Transportes solicitados: indisponível/);
   assert.match(text, /Alterações de apelido: indisponível/);
   assert.doesNotMatch(text, /Sem registros no mês/);
+});
+
+test("monthlyChartBars scales bars to the largest real count", () => {
+  const bars = panels.monthlyChartBars({ abertas: 4, concluidas: 2 }, { abertas: "x" });
+  assert.deepEqual(bars.map(bar => bar.height), [100, 50, 0, 0]);
+  assert.deepEqual(panels.monthlyChartBars().map(bar => bar.height), [0, 0, 0, 0]);
 });

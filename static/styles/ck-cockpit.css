@@ -845,3 +845,54 @@ details.ck-chip { position: relative; padding: 0; }
 @media (prefers-reduced-motion: reduce) {
   #tab-panel-automacao .ck-log__linha { transition: none; }
 }
+
+/* Regiões 3G/3I: painéis F5–F8 e aviso flutuante. O legado .cockpit-tool-* deixou de casar; aqui só o que o pacote não cobre. */
+#cockpit-tool-panels[hidden], .ck-ferr-painel[hidden] { display: none; }
+#cockpit-tool-panels.ck-ferramenta { height: calc(100dvh - var(--ck-topbar-h, 48px)); min-height: 0; background: var(--cor-fundo); color: var(--cor-texto); }
+#cockpit-tool-panels:focus { outline: none; }
+#cockpit-tool-title { margin: 0; font-size: 16px; font-weight: var(--peso-medio); }
+#cockpit-tool-title:focus-visible { outline: 2px solid var(--cor-destaque); outline-offset: 2px; }
+.ck-ferr-painel { flex: 1; min-height: 0; display: flex; flex-direction: column; overflow: auto; }
+.ck-ferr-painel > :not(.ck-dividido):not(.ck-rel__corpo) { flex: none; }
+.ck-ferr-painel .ck-dividido { min-height: 240px; }
+.ck-ferr-painel .ck-kpi__valor { font-size: 22px; }
+.ck-ferr-painel .ck-barra-ferr .ck-campo { flex: 0 1 220px; }
+.ck-barra-ferr .ck-btn { align-self: flex-end; }
+.ck-ferr-filtros { padding: 8px 20px; border-bottom: 1px solid var(--cor-borda-suave); align-items: center; }
+.ck-ferr-filtros .ck-barra-ferr__nota { flex: 1 1 100%; margin: 0; font-size: var(--fs-xs); color: var(--cor-texto-sutil); }
+#cockpit-monthly-periods .ck-pilula { display: grid; justify-items: start; gap: 1px; height: auto; min-width: 130px; padding: 5px 10px; }
+#cockpit-monthly-periods .ck-pilula strong { font-weight: var(--peso-medio); }
+#cockpit-monthly-periods .ck-pilula small { font-size: var(--fs-xs); color: var(--cor-texto-suave); }
+.ck-ferr-item { border-bottom: 1px solid var(--cor-borda-suave); }
+.ck-ferr-botao { width: 100%; border: 0; background: transparent; color: inherit; font: inherit; text-align: left; align-items: center; }
+.ck-ferr-botao[aria-pressed="true"] { background: var(--cor-superficie); box-shadow: inset 2px 0 0 var(--cor-destaque); }
+.ck-ferr-botao .ck-item__serie { min-width: 0; overflow: hidden; text-overflow: ellipsis; font-size: var(--fs-base); }
+.ck-ferr-botao .ck-item__sub { grid-column: 1 / -1; }
+.ck-ferr-botao .ck-badge { justify-self: end; }
+.ck-ferr-colunas, .cockpit-comparison-row { display: grid; grid-template-columns: minmax(100px, 1.1fr) minmax(140px, 1.5fr) repeat(4, minmax(110px, 1.2fr)) minmax(100px, .9fr); gap: 8px; min-width: 870px; align-items: center; }
+.ck-ferr-colunas { padding: 8px 14px; border-bottom: 1px solid var(--cor-borda); font-size: var(--fs-xs); color: var(--cor-texto-sutil); }
+.cockpit-comparison-row > span, .ck-ferr-colunas > span { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: var(--fs-sm); }
+#cockpit-comparison-list { overflow-x: auto; }
+.ck-det-campos { display: grid; grid-template-columns: minmax(80px, 34%) minmax(0, 1fr); gap: 6px 10px; margin: 0; font-size: var(--fs-md); }
+.ck-det-campos dt { color: var(--cor-texto-sutil); font-size: var(--fs-sm); }
+.ck-det-campos dd { margin: 0; overflow-wrap: anywhere; }
+.ck-det-bloco { display: flex; flex-direction: column; gap: 8px; min-width: 0; }
+.ck-det-bloco h3 { margin: 0; font-size: var(--fs-base); font-weight: var(--peso-medio); }
+.ck-det-lista { margin: 0; padding-left: 16px; font-size: var(--fs-md); overflow-wrap: anywhere; }
+.ck-nota--erro { color: var(--cor-erro-texto); background: var(--cor-erro-fundo); }
+.ck-tempo__corpo { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
+.ck-ferr-matriz { display: grid; border: 1px solid var(--cor-borda-suave); border-radius: var(--raio-md); overflow: hidden; }
+.ck-ferr-matriz__linha { display: grid; grid-template-columns: 84px minmax(0, 1fr) minmax(0, 1fr); gap: 6px 8px; align-items: center; padding: 6px 8px; border-bottom: 1px solid var(--cor-borda-suave); }
+.ck-ferr-matriz__linha:last-child { border-bottom: 0; }
+.ck-ferr-rel .ck-rel__detalhe, .ck-rel__corpo > .ck-rel__detalhe { grid-column: 1 / -1; min-width: 0; display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 14px; align-content: start; }
+.ck-rel__corpo > .ck-det-bloco { grid-column: 1 / -1; padding: 12px; border: 1px solid var(--cor-borda-suave); border-radius: var(--raio-md); background: var(--cor-superficie); }
+.ck-rel__detalhe > .ck-rel__largo { grid-column: 1 / -1; }
+@media (max-width: 767.98px) { .ck-rel__detalhe { grid-template-columns: minmax(0, 1fr); } .ck-ferr-filtros { padding: 8px 12px; } }
+
+/* Aviso flutuante: o contêiner empilha os avisos; cada .ck-toast deixa de ser fixo. */
+.ck-toasts { position: fixed; left: 50%; bottom: 20px; display: flex; flex-direction: column; align-items: center; gap: 8px; width: max-content; max-width: calc(100vw - 24px); transform: translateX(-50%); pointer-events: none; }
+.ck-toasts .ck-toast { position: static; transform: none; animation: none; pointer-events: auto; }
+.ck-toast[data-status="erro"] .ck-ico { color: var(--cor-erro-texto); }
+.ck-toast[data-status="alerta"] .ck-ico { color: var(--cor-alerta-texto); }
+.ck-toast[data-status="info"] .ck-ico { color: var(--cor-destaque-texto); }
+.ck-toast .ck-ico { flex: none; width: 16px; height: 16px; }
