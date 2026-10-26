@@ -631,17 +631,7 @@ details.ck-chip { position: relative; padding: 0; }
   .ck-busca__entrada { font-size: 16px; }
 }
 .ck-menu__item > kbd { display: inline-flex; align-items: center; height: 16px; padding: 0 4px; border: 1px solid var(--cor-borda); border-radius: 3px; font: var(--peso-medio) var(--fs-2xs)/1 var(--fonte-mono); color: var(--cor-texto-sutil); white-space: nowrap; }
-/* O shell legado tem min-width 1200px e rola na horizontal; a barra acompanha a janela. */
-@media (max-width: 1199.98px) { .ck-topbar { position: sticky; left: 0; width: 100dvw; max-width: 100dvw; box-sizing: border-box; } }
 #form-busca-serial .ck-busca__campo > #input-serial.ck-busca__entrada { background: transparent; box-shadow: none; min-height: 0; border-radius: 0; color: var(--cor-texto); }
-
-/* Barra compacta mais alta que 48px: paineis legados descontam a altura real (--ck-topbar-h, definida em ck-cockpit-visual.js). */
-@media (max-width:1199.98px){
-  .cockpit-home-split,
-  .cockpit-shell .cockpit-transport-layout,
-  .cockpit-shell #automacao-cards{height:calc(100dvh - var(--ck-topbar-h,48px))}
-  .cockpit-shell .cockpit-summary{min-height:calc(100dvh - var(--ck-topbar-h,48px))}
-}
 
 /* Região 3B: Home. Visibilidade pelas classes/atributos reais do JS; medidas do pacote ficam nos blocos acima. */
 .ck-lista .ck-ico--sm, .ck-detalhe .ck-ico--sm { width: 14px; height: 14px; }
@@ -917,3 +907,6 @@ details.ck-chip { position: relative; padding: 0; }
 .ck-veu .ck-btn.hidden { display: none; }
 .ck-veu .ck-btn.flex-1 { flex: 1 1 0%; }
 .ck-veu > .ck-dialogo :is([class*="border-line-quiet"]) { border-color: var(--cor-borda-suave); }
+
+/* Anel de foco do Cockpit (2px) sobre a política global de 3px do app.css (`:root :focus-visible`). */
+.simpress-app-shell :focus-visible { outline: 2px solid var(--cor-destaque); outline-offset: 2px; }
