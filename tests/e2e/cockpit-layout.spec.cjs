@@ -3,7 +3,7 @@ const { test, expect } = require("@playwright/test");
 test("Cockpit keeps one global search and one complete readiness disclosure", async ({ page }) => {
   await page.goto("/");
 
-  await expect(page.locator(".cockpit-bar__search #input-serial")).toHaveCount(1);
+  await expect(page.locator(".ck-busca #input-serial")).toHaveCount(1);
   await expect(page.locator("#btn-buscar-serial")).toBeVisible();
   for (const id of [
     "readiness-panel",

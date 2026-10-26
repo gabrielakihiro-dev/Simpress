@@ -601,3 +601,36 @@ button.ck-kpi[aria-pressed="true"] { background: var(--cor-superficie); border-b
 @media (prefers-reduced-motion: reduce) {
   *, *::before, *::after { animation-duration: 0.01ms !important; transition-duration: 0.01ms !important; }
 }
+
+/* Região 3A: barra superior. Visibilidade pelas classes/atributos reais do JS (.hidden, [hidden], <details>). */
+.ck-topbar .hidden, .ck-ac.hidden, .ck-ac .hidden { display: none !important; }
+.ck-aviso[hidden], .ck-contador[hidden], .ck-sino[hidden] { display: none; }
+.ck-ancora > summary, .ck-chip__gatilho { list-style: none; }
+.ck-ancora > summary::-webkit-details-marker, .ck-chip__gatilho::-webkit-details-marker { display: none; }
+.ck-ancora > summary { cursor: pointer; }
+.ck-ancora > summary:focus-visible, .ck-chip__gatilho:focus-visible { outline: 2px solid var(--cor-destaque); outline-offset: 2px; }
+details.ck-chip { position: relative; padding: 0; }
+.ck-chip__gatilho { display: inline-flex; align-items: center; gap: 6px; height: 100%; padding: 0 9px; border-radius: var(--raio-sm); cursor: pointer; }
+.ck-chip__painel { position: absolute; top: calc(100% + 8px); left: 0; z-index: 40; width: 320px; max-width: calc(100vw - 24px); max-height: calc(100vh - 96px); overflow: auto; padding: 12px; background: var(--cor-superficie-elevada); border: 1px solid var(--cor-borda); border-radius: var(--raio-lg); box-shadow: var(--sombra-lg); color: var(--cor-texto); font-size: var(--fs-md); white-space: normal; animation: ck-surgir var(--duracao) var(--curva); }
+.ck-chip__dados { display: grid; gap: 8px; margin: 0 0 8px; }
+.ck-chip__dados > div { display: flex; justify-content: space-between; gap: 12px; font-size: var(--fs-sm); }
+.ck-chip__dados dt { color: var(--cor-texto-mudo); }
+.ck-chip__dados dd { margin: 0; color: var(--cor-texto); }
+#readiness-panel.ck-chip { border: 1px solid var(--cor-borda-suave); background: var(--cor-fundo); box-shadow: none; }
+.ck-chip[data-state="ready"] .ck-chip__ponto, #stat-base-dot[data-state="ready"] { background: var(--cor-ok-texto); }
+.ck-chip[data-state="warning"] .ck-chip__ponto, #stat-base-dot[data-state="empty"] { background: var(--cor-alerta-texto); }
+.ck-chip[data-state="error"] .ck-chip__ponto { background: var(--cor-erro-texto); }
+.ck-chip[data-state="occupied"] .ck-chip__ponto { background: var(--cor-destaque); }
+.ck-sino__resumo { padding: 8px 14px 0; font-size: var(--fs-md); color: var(--cor-texto-suave); }
+.ck-ac__lista { max-height: min(384px, max(120px, calc(var(--autocomplete-available-height, 480px) - 96px))); }
+.ck-ac__vazio { display: flex; flex-direction: column; align-items: center; gap: 6px; padding: 24px 16px; text-align: center; color: var(--cor-texto-mudo); }
+.ck-ac__vazio-titulo { color: var(--cor-texto); font-weight: var(--peso-medio); }
+.ck-ac__vazio-texto { max-width: 36ch; font-size: var(--fs-sm); }
+.ck-ac__vazio-termo { font-family: var(--fonte-mono); color: var(--cor-destaque-texto); }
+@media (max-width: 767.98px) {
+  .ck-busca__entrada { font-size: 16px; }
+}
+.ck-menu__item > kbd { display: inline-flex; align-items: center; height: 16px; padding: 0 4px; border: 1px solid var(--cor-borda); border-radius: 3px; font: var(--peso-medio) var(--fs-2xs)/1 var(--fonte-mono); color: var(--cor-texto-sutil); white-space: nowrap; }
+/* O shell legado tem min-width 1200px e rola na horizontal; a barra acompanha a janela. */
+@media (max-width: 1199.98px) { .ck-topbar { position: sticky; left: 0; width: 100dvw; max-width: 100dvw; box-sizing: border-box; } }
+#form-busca-serial .ck-busca__campo > #input-serial.ck-busca__entrada { background: transparent; box-shadow: none; min-height: 0; border-radius: 0; color: var(--cor-texto); }

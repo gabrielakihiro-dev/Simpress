@@ -88,14 +88,13 @@
       ? `${usuario}${item.usuarios_logados_origem === "manual" ? " (M)" : ""}`
       : textoAmbiguo(item.usuarios_logados_candidatos);
     const detalhe = [item.modelo, usuarioTexto].filter(Boolean).join(" · ");
-    const dotClass = usuario ? "autocomplete-dot--ok" : "autocomplete-dot--warn";
+    const serialHtml = highlightMatch(serial, currentQuery).replaceAll('class="serial-match"', 'class="ck-ac__prefixo"');
+    const semUsuario = usuarioTexto ? "" : '<span class="ck-status" data-status="info"><svg class="ck-ico ck-ico--xs" aria-hidden="true" focusable="false"><use href="#i-user"></use></svg>Sem usuário</span>';
     return `
-        <span class="autocomplete-dot ${dotClass}" aria-hidden="true"></span>
-        <div class="autocomplete-row-main">
-          <span class="autocomplete-row-serial">${highlightMatch(serial, currentQuery)}</span>
-          <span class="autocomplete-row-detail" title="${escapeHtml(detalhe)}">${escapeHtml(detalhe)}</span>
-        </div>
-        <span class="autocomplete-row-city">${escapeHtml(item.retirada_cidade || "PR")}</span>
+        <span class="ck-ac__serie">${serialHtml}</span>
+        <span class="ck-ac__local">${escapeHtml(item.retirada_cidade || "PR")}</span>
+        <span class="ck-ac__modelo" title="${escapeHtml(detalhe)}">${escapeHtml(detalhe)}</span>
+        ${semUsuario}
       `;
   }
 
@@ -104,7 +103,7 @@
     row.id = `autocomplete-option-${index}`;
     row.setAttribute("role", "option");
     row.setAttribute("aria-selected", "false");
-    row.className = "autocomplete-row cockpit-autocomplete-row";
+    row.className = "ck-ac__item autocomplete-row";
     row.onclick = onSelect;
     row.onmouseenter = onHighlight;
     row.innerHTML = conteudoLinhaAutocomplete(item, currentQuery);

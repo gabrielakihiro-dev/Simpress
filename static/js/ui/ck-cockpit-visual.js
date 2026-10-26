@@ -79,6 +79,7 @@
   /* ---- Abas por teclado (setas, Home, End) ---- */
   doc.addEventListener("keydown", function (e) {
     var aba = e.target instanceof Element ? e.target.closest("[role=tab]") : null; if (!aba) return;
+    if (e.defaultPrevented || aba.closest("[role=tablist]").hasAttribute("data-on-keydown")) return;
     if (["ArrowLeft", "ArrowRight", "Home", "End"].indexOf(e.key) < 0) return;
     var lista = $$("[role=tab]", aba.closest("[role=tablist]")), i = lista.indexOf(aba);
     var n = e.key === "Home" ? 0 : e.key === "End" ? lista.length - 1 : (i + (e.key === "ArrowRight" ? 1 : -1) + lista.length) % lista.length;

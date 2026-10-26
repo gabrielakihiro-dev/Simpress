@@ -94,7 +94,7 @@
 
   function shouldCloseCockpitToolsMenu(menu, target) {
     if (!menu?.open) return false;
-    return !menu.contains(target) || Boolean(target?.closest?.(".cockpit-tools-dropdown__item"));
+    return !menu.contains(target) || Boolean(target?.closest?.(".ck-menu__item"));
   }
 
   function pushRecent(list, value, limit = RECENT_LIMIT) {
@@ -421,6 +421,13 @@
       event.preventDefault();
       menu.open = false;
       byId("cockpit-tools-trigger")?.focus();
+    }, true);
+    doc.addEventListener("keydown", event => {
+      const chip = byId("readiness-panel");
+      if (event.key !== "Escape" || !chip?.open || !chip.contains(event.target)) return;
+      event.preventDefault();
+      chip.open = false;
+      chip.querySelector("summary")?.focus();
     }, true);
     const resetTip = event => {
       const tip = event.target?.closest?.(".info-tip");

@@ -70,13 +70,13 @@ test("keeps the sidebar action groups neutral", () => {
 
 test("places the ticket action in cockpit tools dropdown without legacy sidebar classes", () => {
   assert.doesNotMatch(indexHtml, /header-action-group|header-action-item--large|data-action-group="analysis"/);
-  assert.match(indexHtml, /<details class="cockpit-tools-dropdown" id="cockpit-tools-dropdown">/);
+  assert.match(indexHtml, /<details class="ck-ancora cockpit-tools-dropdown" id="cockpit-tools-dropdown">/);
   const ticketId = indexHtml.indexOf('id="btn-acompanhamento-chamados"');
   assert.ok(ticketId > -1);
   const ticketButton = indexHtml.lastIndexOf("<button", ticketId);
   const ticketActionEnd = indexHtml.indexOf("</button>", ticketId);
   const ticketMarkup = indexHtml.slice(ticketButton, ticketActionEnd);
-  assert.match(ticketMarkup, /cockpit-tools-dropdown__item/);
+  assert.match(ticketMarkup, /ck-menu__item/);
   assert.match(ticketMarkup, /data-on-click="abrirPainelCockpit"/);
   assert.match(ticketMarkup, /data-args='\["chamados"\]'/);
   assert.match(ticketMarkup, /<kbd aria-hidden="true">F5<\/kbd>/);

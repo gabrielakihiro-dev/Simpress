@@ -847,7 +847,7 @@
       });
 
       notificationPanel.addEventListener("click", event => {
-        if (!event.target?.closest?.(".stale-base-alert-action")) return;
+        if (!event.target?.closest?.(".ck-aviso__acao, .stale-base-alert-action")) return;
         fecharCentralNotificacoes();
         notificationButton.focus();
       });
