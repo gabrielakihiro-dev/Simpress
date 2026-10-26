@@ -444,521 +444,238 @@ Horário disponível para atendimento:</textarea>
     </div>
     </section>
 
-    <section id="tab-panel-retirada-entrega" class="app-tab-panel" role="tabpanel" aria-labelledby="tab-retirada-entrega" tabindex="0" hidden>
+    <section id="tab-panel-retirada-entrega" class="ck-tela ck-tela--transporte" role="tabpanel" aria-labelledby="tab-retirada-entrega" tabindex="0" hidden>
 
-    <div class="cockpit-transport-layout">
-    <div class="cockpit-transport-fields">
+    <div class="ck-transp">
 
-    <section id="transfer-equipment-banner" class="transfer-equipment-banner" data-state="empty" aria-labelledby="transfer-equipment-title">
-      <div class="transfer-equipment-header">
-        <h2 id="transfer-equipment-title" class="transfer-equipment-title">Equipamento desta transferência</h2>
-        <button type="button" id="btn-historico-transferencias" data-on-click="abrirModalHistoricoTransferencias" class="btn btn-secondary btn-chip" title="Ver as planilhas de transferência já geradas">
-          <i data-lucide="history" aria-hidden="true"></i>
-          <span>Transferências geradas</span>
-        </button>
+    <section id="ck-parque-transporte" class="ck-cartao ck-parque" aria-labelledby="ck-parque-transporte-titulo">
+          <div class="ck-cartao__cab"><h2 class="ck-cartao__titulo" id="ck-parque-transporte-titulo">Resumo do parque</h2><span class="ck-cartao__meta"></span></div>
+          <div class="ck-parque__corpo"></div>
+        </section>
+
+    <section id="transfer-equipment-banner" class="ck-cartao ck-selecionado" data-state="empty" aria-labelledby="transfer-equipment-title">
+      <h2 id="transfer-equipment-title" class="sr-only">Equipamento desta transferência</h2>
+      <div class="ck-selecionado__id">
+        <span class="ck-eq-cab__icone" aria-hidden="true"><svg class="ck-ico" aria-hidden="true" focusable="false"><use href="#i-laptop"></use></svg></span>
+        <span class="ck-selecionado__linha" data-show="selected">
+          <span id="transfer-serial" class="ck-selecionado__serie" translate="no"></span>
+          <span class="ck-tag ck-tag--destaque"><svg class="ck-ico ck-ico--xs" aria-hidden="true" focusable="false"><use href="#i-check"></use></svg>Selecionado</span>
+        </span>
+        <p id="transfer-equipment-description" class="ck-selecionado__meta" role="status" aria-live="polite">Nenhum equipamento selecionado.</p>
+        <p id="transfer-equipment-users" class="ck-selecionado__meta hidden"></p>
       </div>
-      <div class="transfer-equipment-body">
-        <div class="transfer-equipment-icon" aria-hidden="true">
-          <i data-lucide="scan-barcode" class="w-5 h-5"></i>
-        </div>
-        <div class="transfer-equipment-info">
-          <div class="transfer-serial-row" data-show="selected">
-            <span id="transfer-serial" class="transfer-serial-value" translate="no"></span>
-            <span class="transfer-serial-badge">
-              <i data-lucide="check" aria-hidden="true"></i>
-              <span>Selecionado</span>
-            </span>
-          </div>
-          <p id="transfer-equipment-description" class="transfer-equipment-description" role="status" aria-live="polite">
-            Nenhum equipamento selecionado.
-          </p>
-          <p id="transfer-equipment-users" class="transfer-equipment-description hidden"></p>
-        </div>
-        <div class="transfer-equipment-actions">
-          <button type="button" id="btn-pesquisar-equipamento-home" data-on-click="abrirHomeParaPesquisarEquipamento" class="btn btn-secondary" data-show="empty">
-            <i data-lucide="search" aria-hidden="true"></i>
-            <span>Pesquisar equipamento na Home</span>
-          </button>
-          <button
-            type="button"
-            id="btn-copiar-serie"
-            data-on-click="copiarSerieAtual"
-            disabled
-            aria-disabled="true"
-            aria-label="Copiar série"
-            title="Copiar a série do equipamento selecionado"
-            class="btn btn-secondary btn-chip"
-            data-show="selected"
-          >
-            <i data-lucide="copy" aria-hidden="true"></i>
-            <span id="transfer-serial-status">Copiar</span>
-          </button>
-        </div>
+      <div class="ck-selecionado__acoes">
+        <button type="button" id="btn-pesquisar-equipamento-home" data-on-click="abrirHomeParaPesquisarEquipamento" class="ck-btn ck-btn--secundario ck-btn--sm" data-show="empty">
+          <svg class="ck-ico ck-ico--sm" aria-hidden="true" focusable="false"><use href="#i-search"></use></svg><span>Pesquisar equipamento na Home</span>
+        </button>
+        <button
+          type="button"
+          id="btn-copiar-serie"
+          data-on-click="copiarSerieAtual"
+          disabled
+          aria-disabled="true"
+          aria-label="Copiar série"
+          title="Copiar a série do equipamento selecionado"
+          class="ck-btn ck-btn--secundario ck-btn--sm"
+          data-show="selected"
+        >
+          <svg class="ck-ico ck-ico--sm" aria-hidden="true" focusable="false"><use href="#i-copy"></use></svg><span id="transfer-serial-status">Copiar</span>
+        </button>
+        <button type="button" id="btn-historico-transferencias" data-on-click="abrirModalHistoricoTransferencias" class="ck-btn ck-btn--fantasma ck-btn--sm" title="Ver as planilhas de transferência já geradas">
+          <svg class="ck-ico ck-ico--sm" aria-hidden="true" focusable="false"><use href="#i-history"></use></svg><span>Transferências geradas</span>
+        </button>
       </div>
     </section>
 
-    <!-- FORMULÁRIO DE TRANSFERÊNCIA (2 COLUNAS: RETIRADA & ENTREGA) -->
-    <div class="transfer-form-grid grid grid-cols-1 lg:grid-cols-2 gap-8">
+    <div class="ck-passos">
 
-      <!-- ========================================== -->
-      <!-- COLUNA ESQUERDA: RETIRADA (ORIGEM)        -->
-      <!-- ========================================== -->
-      <section class="glass-card rounded-2xl overflow-hidden shadow-xl flex flex-col border border-line-quiet">
-        <!-- Header Origem -->
-        <div class="glass-card-header p-5 flex items-center justify-between">
-          <div class="flex items-center space-x-3">
-            <div class="transfer-card-icon transfer-card-icon-pickup">
-              <i data-lucide="box" class="w-5 h-5"></i>
-            </div>
-            <div>
-              <h2 class="text-base font-bold text-white flex items-center gap-1">
-                <span>1. Dados de Retirada</span>
-                <span class="info-tip"><button type="button" class="info-tip-trigger" aria-label="Sobre os dados de retirada" aria-describedby="tip-retirada"><i data-lucide="info" aria-hidden="true"></i></button><span id="tip-retirada" role="tooltip" class="info-tip-text">Local onde a transportadora fará a coleta.</span></span>
-              </h2>
-            </div>
-          </div>
-
+      <!-- Passo 1 · Retirada (origem) -->
+      <section class="ck-cartao ck-passo" id="ck-passo-retirada" aria-labelledby="ck-passo-retirada-titulo">
+        <div class="ck-passo__cab">
+          <span class="ck-passo__num" aria-hidden="true">1</span>
+          <h2 class="ck-passo__titulo" id="ck-passo-retirada-titulo">Dados de Retirada</h2>
+          <span class="ck-cartao__meta">Local da coleta</span>
         </div>
-
-        <div class="p-6 space-y-4 flex-1">
-          <!-- CNPJ Retirada -->
-          <div>
-            <label for="retirada-cnpj" class="block text-xs font-semibold text-fg-tertiary mb-1">
-              CNPJ:
+        <div class="ck-passo__corpo">
+          <div class="ck-grade">
+            <label class="ck-campo ck-span-3" for="retirada-cnpj"><span class="ck-campo__rotulo">CNPJ</span>
+              <input type="text" id="retirada-cnpj" readonly class="ck-entrada" placeholder="CNPJ da instalação / filial" />
             </label>
-            <input
-              type="text"
-              id="retirada-cnpj"
-              readonly
-              class="w-full px-3.5 py-2.5 rounded-lg glass-input text-sm text-fg-emphasis focus:outline-none"
-              placeholder="CNPJ da instalação / filial"
-            />
-          </div>
-
-          <!-- Endereço Completo Retirada -->
-          <div>
-            <label for="retirada-endereco" class="block text-xs font-semibold text-fg-tertiary mb-1">
-              Endereço:
+            <label class="ck-campo ck-span-3" for="retirada-endereco"><span class="ck-campo__rotulo">Endereço</span>
+              <textarea id="retirada-endereco" rows="2" readonly class="ck-entrada" placeholder="Preenchido pela série pesquisada"></textarea>
             </label>
-            <textarea
-              id="retirada-endereco"
-              rows="2"
-              readonly
-              class="w-full px-3.5 py-2 rounded-lg glass-input text-sm text-fg-emphasis focus:outline-none"
-              placeholder="Preenchido pela série pesquisada"
-            ></textarea>
+            <label class="ck-campo" for="retirada-horario"><span class="ck-campo__rotulo">Expediente</span>
+              <input type="text" id="retirada-horario" value="09:00:00 às 18:00:00" class="ck-entrada" />
+            </label>
+            <label class="ck-campo" for="retirada-almoco"><span class="ck-campo__rotulo">Almoço</span>
+              <input type="text" id="retirada-almoco" value="12:00:00" class="ck-entrada" />
+            </label>
+            <label class="ck-campo" for="retirada-pausa-duracao"><span class="ck-campo__rotulo">Duração Pausa</span>
+              <input type="text" id="retirada-pausa-duracao" value="1h12" class="ck-entrada" />
+            </label>
+            <label class="ck-campo ck-span-2" for="retirada-tipo-acesso"><span class="ck-campo__rotulo">Tipo de Acesso</span>
+              <input type="text" id="retirada-tipo-acesso" value="Elevador / Rampa / Térreo" class="ck-entrada" />
+            </label>
+            <label class="ck-campo" for="retirada-voltagem"><span class="ck-campo__rotulo">Voltagem</span>
+              <input type="text" id="retirada-voltagem" value="Bivolt" class="ck-entrada" />
+            </label>
           </div>
 
-          <!-- Grade de Horários e Almoço -->
-          <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
-            <div class="sm:col-span-2">
-              <label for="retirada-horario" class="block text-xs font-semibold text-fg-tertiary mb-1">Expediente:</label>
-              <input
-                type="text"
-                id="retirada-horario"
-                value="09:00:00 às 18:00:00"
-                class="w-full px-3 py-2 rounded-lg glass-input text-xs text-fg-secondary focus:outline-none"
-              />
-            </div>
+          <p class="ck-passo__sub"><svg class="ck-ico ck-ico--sm" aria-hidden="true" focusable="false"><use href="#i-user-check"></use></svg>Contato no Ponto de Retirada / Representante Regional</p>
+          <div id="aviso-contato-origem" class="ck-nota hidden" data-status="alerta" role="status">
+            <svg class="ck-ico" aria-hidden="true" focusable="false"><use href="#i-alerta"></use></svg>
             <div>
-              <label for="retirada-almoco" class="block text-xs font-semibold text-fg-tertiary mb-1">Almoço:</label>
-              <input
-                type="text"
-                id="retirada-almoco"
-                value="12:00:00"
-                class="w-full px-3 py-2 rounded-lg glass-input text-xs text-fg-secondary focus:outline-none"
-              />
-            </div>
-            <div>
-              <label for="retirada-pausa-duracao" class="block text-xs font-semibold text-fg-tertiary mb-1">Duração Pausa:</label>
-              <input
-                type="text"
-                id="retirada-pausa-duracao"
-                value="1h12"
-                class="w-full px-3 py-2 rounded-lg glass-input text-xs text-fg-secondary focus:outline-none"
-              />
-            </div>
-          </div>
-
-          <!-- Acesso & Voltagem -->
-          <div class="grid grid-cols-1 sm:grid-cols-3 gap-3">
-            <div class="sm:col-span-2">
-              <label for="retirada-tipo-acesso" class="block text-xs font-semibold text-fg-tertiary mb-1">Tipo de Acesso:</label>
-              <input
-                type="text"
-                id="retirada-tipo-acesso"
-                value="Elevador / Rampa / Térreo"
-                class="w-full px-3 py-2 rounded-lg glass-input text-xs text-fg-secondary focus:outline-none"
-              />
-            </div>
-            <div>
-              <label for="retirada-voltagem" class="block text-xs font-semibold text-fg-tertiary mb-1">Voltagem:</label>
-              <input
-                type="text"
-                id="retirada-voltagem"
-                value="Bivolt"
-                class="w-full px-3 py-2 rounded-lg glass-input text-xs text-fg-secondary focus:outline-none"
-              />
-            </div>
-          </div>
-
-          <!-- Contato Suporte Retirada -->
-          <div class="pt-2 border-t border-line-quiet">
-            <h4 class="text-xs font-semibold text-fg-subtle uppercase tracking-wider mb-2 flex items-center gap-1.5">
-              <i aria-hidden="true" data-lucide="user-check" class="w-3.5 h-3.5"></i>
-              Contato no Ponto de Retirada / Representante Regional
-            </h4>
-            <div id="aviso-contato-origem" class="hidden mb-3 text-xs rounded-lg px-3 py-2 bg-amber-500/10 border border-amber-500/25 text-amber-200" role="status">
               <p id="aviso-contato-origem-texto">Contato de origem não configurado nesta instalação. Preencha nome, e-mail e celular abaixo para esta transferência ou salve um contato padrão.</p>
-              <button type="button" id="btn-configurar-contato-origem" class="btn btn-secondary btn-chip mt-2" aria-haspopup="dialog" aria-controls="modal-contato-origem" data-on-click="abrirConfiguracaoContatoOrigem">Configurar contato de origem</button>
-            </div>
-            <div class="mb-3">
-              <label class="block text-xs text-fg-subtle mb-1" for="retirada-representante">Representante regional (automático pela cidade):</label>
-              <select
-                id="retirada-representante"
-                data-on-change="handleRepresentanteRegionalChange" data-args='["retirada", "$value"]'
-                class="w-full px-3 py-2 rounded-lg glass-input text-xs text-fg-secondary focus:outline-none"
-                aria-label="Representante regional do ponto de retirada"
-              ></select>
-            </div>
-            <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
-              <div class="sm:col-span-2">
-                <label for="retirada-contato" class="block text-xs text-fg-subtle mb-1">Nome: <span class="required-mark" aria-hidden="true">*</span></label>
-                <input
-                  type="text"
-                  id="retirada-contato"
-                  required
-                  class="w-full px-3 py-2 rounded-lg glass-input text-xs text-fg-secondary focus:outline-none"
-                  autocomplete="name"
-                />
-              </div>
-              <div>
-                <label for="retirada-email" class="block text-xs text-fg-subtle mb-1">E-mail: <span class="required-mark" aria-hidden="true">*</span></label>
-                <input
-                  type="email"
-                  id="retirada-email"
-                  required
-                  class="w-full px-3 py-2 rounded-lg glass-input text-xs text-fg-secondary focus:outline-none"
-                  autocomplete="email"
-                />
-              </div>
-              <div>
-                <label for="retirada-telefone" class="block text-xs text-fg-subtle mb-1">Celular: <span class="required-mark" aria-hidden="true">*</span></label>
-                <input
-                  type="text"
-                  id="retirada-telefone"
-                  required
-                  class="w-full px-3 py-2 rounded-lg glass-input text-xs text-fg-secondary focus:outline-none font-mono"
-                  inputmode="tel"
-                  autocomplete="tel"
-                  placeholder="(00) 9xxxx-xxxx"
-                />
-              </div>
+              <button type="button" id="btn-configurar-contato-origem" class="ck-btn ck-btn--secundario ck-btn--sm" aria-haspopup="dialog" aria-controls="modal-contato-origem" data-on-click="abrirConfiguracaoContatoOrigem">Configurar contato de origem</button>
             </div>
           </div>
-
-          <!-- Observações Retirada -->
-          <div>
-            <label for="retirada-obs" class="block text-xs font-semibold text-fg-subtle mb-1">Observações: <span class="required-mark" aria-hidden="true">*</span></label>
-            <input
-              type="text"
-              id="retirada-obs"
-              required
-              class="w-full px-3 py-2 rounded-lg glass-input text-xs text-fg-secondary focus:outline-none"
-              placeholder="Ex: Notebook + kit na mochila"
-            />
+          <div class="ck-grade">
+            <label class="ck-campo ck-span-3" for="retirada-representante"><span class="ck-campo__rotulo">Representante regional (automático pela cidade)</span>
+              <select id="retirada-representante" data-on-change="handleRepresentanteRegionalChange" data-args='["retirada", "$value"]' class="ck-entrada" aria-label="Representante regional do ponto de retirada"></select>
+            </label>
+            <label class="ck-campo ck-span-3" for="retirada-contato"><span class="ck-campo__rotulo">Nome <span class="required-mark" aria-hidden="true">*</span></span>
+              <input type="text" id="retirada-contato" required class="ck-entrada" autocomplete="name" />
+            </label>
+            <label class="ck-campo" for="retirada-email"><span class="ck-campo__rotulo">E-mail <span class="required-mark" aria-hidden="true">*</span></span>
+              <input type="email" id="retirada-email" required class="ck-entrada" autocomplete="email" />
+            </label>
+            <label class="ck-campo" for="retirada-telefone"><span class="ck-campo__rotulo">Celular <span class="required-mark" aria-hidden="true">*</span></span>
+              <input type="text" id="retirada-telefone" required class="ck-entrada ck-mono" inputmode="tel" autocomplete="tel" placeholder="(00) 9xxxx-xxxx" />
+            </label>
+            <label class="ck-campo ck-span-3" for="retirada-obs"><span class="ck-campo__rotulo">Observações <span class="required-mark" aria-hidden="true">*</span></span>
+              <input type="text" id="retirada-obs" required class="ck-entrada" placeholder="Ex: Notebook + kit na mochila" />
+            </label>
           </div>
         </div>
       </section>
 
-      <!-- ========================================== -->
-      <!-- COLUNA DIREITA: ENTREGA (DESTINO)         -->
-      <!-- ========================================== -->
-      <section class="glass-card rounded-2xl overflow-hidden shadow-xl flex flex-col border border-line-quiet">
-        <!-- Header Destino -->
-        <div class="glass-card-header p-5 flex items-center justify-between">
-          <div class="flex items-center space-x-3">
-            <div class="transfer-card-icon transfer-card-icon-delivery">
-              <i data-lucide="truck" class="w-5 h-5"></i>
-            </div>
-            <div>
-              <h2 class="text-base font-bold text-white flex items-center gap-1">
-                <span>2. Dados de Entrega</span>
-                <span class="info-tip"><button type="button" class="info-tip-trigger" aria-label="Sobre os dados de entrega" aria-describedby="tip-entrega"><i data-lucide="info" aria-hidden="true"></i></button><span id="tip-entrega" role="tooltip" class="info-tip-text">Unidade SEBRAE e destinatário final.</span></span>
-              </h2>
-
-            </div>
-          </div>
+      <!-- Passo 2 · Entrega (destino) -->
+      <section class="ck-cartao ck-passo" id="ck-passo-entrega" aria-labelledby="ck-passo-entrega-titulo">
+        <div class="ck-passo__cab">
+          <span class="ck-passo__num" aria-hidden="true">2</span>
+          <h2 class="ck-passo__titulo" id="ck-passo-entrega-titulo">Dados de Entrega</h2>
+          <span id="filiais-count" class="ck-cartao__meta">30 filiais catalogadas</span>
         </div>
-
-        <div class="p-6 space-y-4 flex-1">
-          <!-- BUSCA RÁPIDA DE UNIDADE SEBRAE (DROPDOWN / AUTOCOMPLETE) -->
-          <div>
-            <label for="select-unidade-destino" class="block text-xs font-semibold text-fg-tertiary mb-1 flex items-center justify-between">
-              <span class="flex items-center gap-1.5">
-                <i aria-hidden="true" data-lucide="map-pin" class="w-3.5 h-3.5"></i>
-                Selecione a Unidade:
-              </span>
-              <span id="filiais-count" class="text-xs text-fg-subtle">30 filiais catalogadas</span>
-            </label>
-            <div class="relative">
-              <select
-                id="select-unidade-destino"
-                data-on-change="handleUnidadeDestinoChange" data-args='["$value"]'
-                class="w-full px-3.5 py-2.5 rounded-lg glass-input text-sm text-fg-emphasis focus:outline-none cursor-pointer appearance-none bg-no-repeat pr-10"
-              >
+        <div class="ck-passo__corpo">
+          <div class="ck-grade">
+            <label class="ck-campo ck-span-3" for="select-unidade-destino"><span class="ck-campo__rotulo">Selecione a Unidade</span>
+              <select id="select-unidade-destino" data-on-change="handleUnidadeDestinoChange" data-args='["$value"]' class="ck-entrada">
                 <option value="">-- Escolha a Cidade ou Regional de Destino --</option>
               </select>
-            </div>
-
-          </div>
-
-          <!-- CNPJ Entrega -->
-          <div>
-            <label for="entrega-cnpj" class="block text-xs font-semibold text-fg-tertiary mb-1">
-              CNPJ:
             </label>
-            <input
-              type="text"
-              id="entrega-cnpj"
-              readonly
-              class="w-full px-3.5 py-2.5 rounded-lg glass-input text-sm text-fg-emphasis focus:outline-none"
-              placeholder="CNPJ da instalação / filial"
-            />
-            <div class="mt-2 flex flex-wrap items-center gap-1.5" role="group" aria-label="Copiar dados de faturamento e instalação da entrega">
-              <button
-                type="button"
-                data-on-click="copiarDadoEntrega" data-args='["faturamento"]'
-                class="btn btn-secondary btn-chip"
-                title="Copiar o CNPJ de faturamento padrão"
-                aria-label="Copiar CNPJ de faturamento da entrega"
-              >
-                <i data-lucide="copy" aria-hidden="true"></i>
-                <span>CNPJ Fat.</span>
-              </button>
-              <button
-                type="button"
-                id="btn-copiar-cnpj-instalacao-entrega"
-                disabled
-                data-on-click="copiarDadoEntrega" data-args='["instalacao"]'
-                class="btn btn-secondary btn-chip"
-                title="Copiar o CNPJ de instalação da unidade de destino selecionada"
-                aria-label="Copiar CNPJ de instalação da unidade de destino"
-              >
-                <i data-lucide="copy" aria-hidden="true"></i>
-                <span>CNPJ Inst.</span>
-              </button>
-            </div>
-          </div>
-
-          <!-- Endereço Completo Entrega -->
-          <div>
-            <label for="entrega-endereco" class="block text-xs font-semibold text-fg-tertiary mb-1">
-              Endereço:
+            <label class="ck-campo ck-span-3" for="entrega-cnpj"><span class="ck-campo__rotulo">CNPJ</span>
+              <input type="text" id="entrega-cnpj" readonly class="ck-entrada" placeholder="CNPJ da instalação / filial" />
             </label>
-            <textarea
-              id="entrega-endereco"
-              rows="2"
-              readonly
-              class="w-full px-3.5 py-2 rounded-lg glass-input text-sm text-fg-emphasis focus:outline-none"
-              placeholder="Preenchido pela unidade selecionada"
-            ></textarea>
           </div>
-
-          <!-- Dados do Destinatário (Colaborador / Contato) -->
-          <div class="pt-2 border-t border-line-quiet">
-            <h4 class="text-xs font-semibold text-fg-tertiary uppercase tracking-wider mb-2 flex flex-wrap items-center justify-between gap-x-3">
-              <span class="flex items-center gap-1.5">
-                <i aria-hidden="true" data-lucide="user" class="w-3.5 h-3.5"></i>
-                Dados do Destinatário no SEBRAE
-              </span>
-              <span class="text-xs text-fg-subtle font-normal tracking-normal"><span class="required-mark" aria-hidden="true">*</span> Obrigatório para entrega</span>
-            </h4>
-            <div class="space-y-3">
-              <div>
-                <label class="block text-xs font-semibold text-fg-tertiary mb-1" for="entrega-representante">
-                  Representante regional (automático pela cidade):
-                </label>
-                <select
-                  id="entrega-representante"
-                  data-on-change="handleRepresentanteRegionalChange" data-args='["entrega", "$value"]'
-                  class="w-full px-3 py-2 rounded-lg glass-input text-xs text-fg-emphasis focus:outline-none"
-                  aria-label="Representante regional da unidade de entrega"
-                ></select>
-              </div>
-              <div>
-                <label for="entrega-contato" class="block text-xs font-semibold text-fg-tertiary mb-1">
-                  Nome do Destinatário ou Representante: <span class="required-mark" aria-hidden="true">*</span>
-                </label>
-                <input
-                  type="text"
-                  id="entrega-contato"
-                  required
-                  class="w-full px-3 py-2 rounded-lg glass-input text-xs text-fg-emphasis focus:outline-none"
-                  placeholder="Nome do destinatário"
-                />
-              </div>
-
-              <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                <div>
-                  <label for="entrega-email" class="block text-xs text-fg-tertiary mb-1">E-mail do Destinatário: <span class="required-mark" aria-hidden="true">*</span></label>
-                  <input
-                    type="email"
-                    id="entrega-email"
-                    required
-                    class="w-full px-3 py-2 rounded-lg glass-input text-xs text-fg-emphasis focus:outline-none"
-                    placeholder="nome@pr.sebrae.com.br"
-                  />
-                </div>
-                <div>
-                  <label for="entrega-telefone" class="block text-xs text-fg-tertiary mb-1">Celular: <span class="required-mark" aria-hidden="true">*</span></label>
-                  <input
-                    type="text"
-                    id="entrega-telefone"
-                    required
-                    class="w-full px-3 py-2 rounded-lg glass-input text-xs text-fg-emphasis focus:outline-none font-mono"
-                    inputmode="tel"
-                    autocomplete="tel"
-                    placeholder="(00) 9xxxx-xxxx"
-                  />
-                </div>
-              </div>
-            </div>
+          <div class="ck-obs-rapidas" role="group" aria-label="Copiar dados de faturamento e instalação da entrega">
+            <button type="button" data-on-click="copiarDadoEntrega" data-args='["faturamento"]' class="ck-btn ck-btn--secundario ck-btn--sm" title="Copiar o CNPJ de faturamento padrão" aria-label="Copiar CNPJ de faturamento da entrega">
+              <svg class="ck-ico ck-ico--xs" aria-hidden="true" focusable="false"><use href="#i-copy"></use></svg><span>CNPJ Fat.</span>
+            </button>
+            <button type="button" id="btn-copiar-cnpj-instalacao-entrega" disabled data-on-click="copiarDadoEntrega" data-args='["instalacao"]' class="ck-btn ck-btn--secundario ck-btn--sm" title="Copiar o CNPJ de instalação da unidade de destino selecionada" aria-label="Copiar CNPJ de instalação da unidade de destino">
+              <svg class="ck-ico ck-ico--xs" aria-hidden="true" focusable="false"><use href="#i-copy"></use></svg><span>CNPJ Inst.</span>
+            </button>
           </div>
+          <label class="ck-campo" for="entrega-endereco"><span class="ck-campo__rotulo">Endereço</span>
+            <textarea id="entrega-endereco" rows="2" readonly class="ck-entrada" placeholder="Preenchido pela unidade selecionada"></textarea>
+          </label>
 
-          <!-- Grade de Horários e Almoço Entrega -->
-          <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
-            <div class="sm:col-span-2">
-              <label for="entrega-horario" class="block text-xs font-semibold text-fg-tertiary mb-1">Expediente: <span class="required-mark" aria-hidden="true">*</span></label>
-              <input
-                type="text"
-                id="entrega-horario"
-                required
-                value="09:00:00 às 18:00:00"
-                class="w-full px-3 py-2 rounded-lg glass-input text-xs text-fg-secondary focus:outline-none"
-              />
-            </div>
-            <div>
-              <label for="entrega-almoco" class="block text-xs font-semibold text-fg-tertiary mb-1">Almoço: <span class="required-mark" aria-hidden="true">*</span></label>
-              <input
-                type="text"
-                id="entrega-almoco"
-                required
-                value="12:00:00"
-                class="w-full px-3 py-2 rounded-lg glass-input text-xs text-fg-secondary focus:outline-none"
-              />
-            </div>
-            <div>
-              <label for="entrega-pausa-duracao" class="block text-xs font-semibold text-fg-tertiary mb-1">Duração Pausa: <span id="entrega-pausa-obrigatorio" class="required-mark" aria-hidden="true">*</span></label>
-              <input
-                type="text"
-                id="entrega-pausa-duracao"
-                required
-                value="1h"
-                class="w-full px-3 py-2 rounded-lg glass-input text-xs text-fg-secondary focus:outline-none"
-              />
-            </div>
+          <p class="ck-passo__sub"><svg class="ck-ico ck-ico--sm" aria-hidden="true" focusable="false"><use href="#i-user"></use></svg>Dados do Destinatário no SEBRAE<span class="ck-passo__sub-obs"><span class="required-mark" aria-hidden="true">*</span> Obrigatório para entrega</span></p>
+          <div class="ck-grade">
+            <label class="ck-campo ck-span-3" for="entrega-representante"><span class="ck-campo__rotulo">Representante regional (automático pela cidade)</span>
+              <select id="entrega-representante" data-on-change="handleRepresentanteRegionalChange" data-args='["entrega", "$value"]' class="ck-entrada" aria-label="Representante regional da unidade de entrega"></select>
+            </label>
+            <label class="ck-campo ck-span-3" for="entrega-contato"><span class="ck-campo__rotulo">Nome do Destinatário ou Representante <span class="required-mark" aria-hidden="true">*</span></span>
+              <input type="text" id="entrega-contato" required class="ck-entrada" placeholder="Nome do destinatário" />
+            </label>
+            <label class="ck-campo ck-span-2" for="entrega-email"><span class="ck-campo__rotulo">E-mail do Destinatário <span class="required-mark" aria-hidden="true">*</span></span>
+              <input type="email" id="entrega-email" required class="ck-entrada" placeholder="nome@pr.sebrae.com.br" />
+            </label>
+            <label class="ck-campo" for="entrega-telefone"><span class="ck-campo__rotulo">Celular <span class="required-mark" aria-hidden="true">*</span></span>
+              <input type="text" id="entrega-telefone" required class="ck-entrada ck-mono" inputmode="tel" autocomplete="tel" placeholder="(00) 9xxxx-xxxx" />
+            </label>
+            <label class="ck-campo" for="entrega-horario"><span class="ck-campo__rotulo">Expediente <span class="required-mark" aria-hidden="true">*</span></span>
+              <input type="text" id="entrega-horario" required value="09:00:00 às 18:00:00" class="ck-entrada" />
+            </label>
+            <label class="ck-campo" for="entrega-almoco"><span class="ck-campo__rotulo">Almoço <span class="required-mark" aria-hidden="true">*</span></span>
+              <input type="text" id="entrega-almoco" required value="12:00:00" class="ck-entrada" />
+            </label>
+            <label class="ck-campo" for="entrega-pausa-duracao"><span class="ck-campo__rotulo">Duração Pausa <span id="entrega-pausa-obrigatorio" class="required-mark" aria-hidden="true">*</span></span>
+              <input type="text" id="entrega-pausa-duracao" required value="1h" class="ck-entrada" />
+            </label>
+            <label class="ck-campo ck-span-3" for="entrega-obs"><span class="ck-campo__rotulo">Observações <span class="required-mark" aria-hidden="true">*</span> · vai para a célula B37 da planilha</span>
+              <textarea id="entrega-obs" required rows="2" class="ck-entrada" placeholder="Ex: Equipamento para nova contratação / Substituição preventiva..."></textarea>
+            </label>
           </div>
-
-          <!-- Observação do Chamado / Entrega -->
-          <div>
-            <div class="flex items-center justify-between mb-1">
-              <label for="entrega-obs" class="block text-xs font-semibold text-fg-tertiary">
-                Observações: <span class="required-mark" aria-hidden="true">*</span>
-              </label>
-              <span class="info-tip info-tip--end"><button type="button" class="info-tip-trigger" aria-label="Sobre as observações" aria-describedby="tip-entrega-obs"><i data-lucide="info" aria-hidden="true"></i></button><span id="tip-entrega-obs" role="tooltip" class="info-tip-text">Vai para a célula B37 da planilha.</span></span>
-            </div>
-            <textarea
-              id="entrega-obs"
-              required
-              rows="2"
-              class="w-full px-3.5 py-2 rounded-lg glass-input text-xs text-fg-emphasis focus:outline-none"
-              placeholder="Ex: Equipamento para nova contratação / Substituição preventiva..."
-            ></textarea>
-            <!-- Chips de observação rápida -->
-            <div class="flex flex-wrap gap-1.5 mt-1.5">
-              <button type="button" data-on-click="adicionarObsChamado" data-args='["Equipamento para colaborador(a) substituição preventiva."]' class="btn btn-secondary btn-chip">+ Substituição</button>
-              <button type="button" data-on-click="adicionarObsChamado" data-args='["Equipamento destinado ao onboarding de novo colaborador(a)."]' class="btn btn-secondary btn-chip">+ Novo Colaborador</button>
-              <button type="button" data-on-click="adicionarObsChamado" data-args='["Equipamento para substituição por lentidão/defeito físico."]' class="btn btn-secondary btn-chip">+ Defeito/Troca</button>
-            </div>
+          <div class="ck-obs-rapidas" role="group" aria-label="Observações rápidas">
+            <button type="button" data-on-click="adicionarObsChamado" data-args='["Equipamento para colaborador(a) substituição preventiva."]' class="ck-btn ck-btn--secundario ck-btn--sm"><svg class="ck-ico ck-ico--xs" aria-hidden="true" focusable="false"><use href="#i-plus"></use></svg>Substituição</button>
+            <button type="button" data-on-click="adicionarObsChamado" data-args='["Equipamento destinado ao onboarding de novo colaborador(a)."]' class="ck-btn ck-btn--secundario ck-btn--sm"><svg class="ck-ico ck-ico--xs" aria-hidden="true" focusable="false"><use href="#i-plus"></use></svg>Novo Colaborador</button>
+            <button type="button" data-on-click="adicionarObsChamado" data-args='["Equipamento para substituição por lentidão/defeito físico."]' class="ck-btn ck-btn--secundario ck-btn--sm"><svg class="ck-ico ck-ico--xs" aria-hidden="true" focusable="false"><use href="#i-plus"></use></svg>Defeito/Troca</button>
           </div>
         </div>
       </section>
 
-    </div>
-
-    </div>
-
-    <aside class="cockpit-transport-preview" aria-labelledby="cockpit-transport-preview-title">
-      <header class="cockpit-transport-preview-header">
-        <h2 id="cockpit-transport-preview-title">Pré-visualização</h2>
-        <span id="cockpit-transport-preview-state" role="status" aria-live="polite">Aguardando equipamento</span>
-      </header>
-      <dl class="cockpit-transport-preview-list">
-        <div><dt>Equipamento</dt><dd id="cockpit-preview-equipment">—</dd></div>
-        <div><dt>Retirada</dt><dd id="cockpit-preview-pickup">—</dd></div>
-        <div><dt>CNPJ retirada</dt><dd id="cockpit-preview-pickup-cnpj">—</dd></div>
-        <div><dt>Contato</dt><dd id="cockpit-preview-contact">—</dd></div>
-        <div><dt>Horário</dt><dd id="cockpit-preview-hours">—</dd></div>
-        <div><dt>Entrega</dt><dd id="cockpit-preview-delivery">—</dd></div>
-        <div><dt>Destinatário</dt><dd id="cockpit-preview-recipient">—</dd></div>
-        <div><dt>Observações</dt><dd id="cockpit-preview-notes">—</dd></div>
-      </dl>
-
-    <!-- Ações do Transporte: os handlers existentes continuam associados aos mesmos IDs. -->
-    <aside aria-label="Painel de Ações Rápidas" class="quick-actions">
-      <div class="quick-actions-inner mx-auto flex flex-col sm:flex-row items-center justify-between gap-4">
-        <div class="quick-actions-status flex items-center space-x-3 text-xs text-fg-subtle">
-          <div class="w-2.5 h-2.5 rounded-full bg-brand-400" id="status-indicator" aria-hidden="true"></div>
-          <div id="status-summary" role="status" aria-live="polite" aria-atomic="true">
-            <span class="text-fg-tertiary font-medium" data-ux-ready-status>Pronto para emissão.</span>
-          </div>
+      <!-- Pré-visualização ao vivo -->
+      <aside class="ck-cartao ck-previa" id="ck-previa-transporte" aria-labelledby="cockpit-transport-preview-title">
+        <div class="ck-cartao__cab">
+          <h2 class="ck-cartao__titulo" id="cockpit-transport-preview-title">Pré-visualização</h2>
+          <span class="ck-espaco"></span>
+          <span id="cockpit-transport-preview-state" class="ck-badge" data-status="neutro" role="status" aria-live="polite">Aguardando equipamento</span>
         </div>
+        <p class="ck-previa__contagem" id="ck-previa-contagem">0/0 campos obrigatórios</p>
+        <dl class="ck-previa__linhas">
+          <dt>Equipamento</dt><dd id="cockpit-preview-equipment">—</dd>
+          <dt>Retirada</dt><dd id="cockpit-preview-pickup">—</dd>
+          <dt>CNPJ retirada</dt><dd id="cockpit-preview-pickup-cnpj">—</dd>
+          <dt>Contato</dt><dd id="cockpit-preview-contact">—</dd>
+          <dt>Horário</dt><dd id="cockpit-preview-hours">—</dd>
+          <dt>Entrega</dt><dd id="cockpit-preview-delivery">—</dd>
+          <dt>Destinatário</dt><dd id="cockpit-preview-recipient">—</dd>
+          <dt>Observações</dt><dd id="cockpit-preview-notes">—</dd>
+        </dl>
+      </aside>
+    </div>
 
-        <div class="quick-actions-buttons flex flex-wrap sm:flex-nowrap items-center gap-3 w-full sm:w-auto justify-end">
-          <button
-            type="button"
-            id="btn-gerar-planilha"
-            data-on-click="gerarPlanilhaExcel"
-            aria-keyshortcuts="Control+Enter"
-            title="Gerar Planilha (Ctrl+Enter)"
-            class="px-6 py-2.5 rounded-xl bg-gradient-to-r from-emerald-700 to-teal-700 hover:from-emerald-800 hover:to-teal-800 text-white font-bold text-xs sm:text-sm flex items-center space-x-2.5 shadow-glow-emerald transition-all"
-          >
-            <i data-lucide="file-spreadsheet" class="w-4 h-4"></i>
-            <span>Gerar Planilha</span>
-          </button>
+    </div>
 
-          <button type="button" id="btn-copiar-resumo-cockpit" data-on-click="copiarResumoCockpit" class="btn btn-secondary">
-            <i data-lucide="copy" aria-hidden="true"></i>
-            <span>Copiar texto</span>
-          </button>
-
-          <button
-            type="button"
-            data-on-click="gerarTextoSolicitacaoTransporte"
-            class="transport-request-button btn btn-secondary"
-            title="Gerar texto de solicitação de transporte"
-          >
-            <i data-lucide="file-text" aria-hidden="true"></i>
-            <span>Texto para Transporte</span>
-          </button>
-
-          <a
-            href="https://ux.simpress.com.br/ng/gerar-ticket/consulta"
-            target="_blank"
-            rel="noopener noreferrer"
-            aria-label="Abrir chamado no site Simpress (abre em nova aba)"
-            title="Abrir site Simpress para gerar chamado"
-            class="quick-actions-link btn btn-tertiary"
-          >
-            <i data-lucide="link" aria-hidden="true"></i>
-            <span class="quick-actions-link-label">Abrir chamado</span>
-          </a>
+    <!-- Barra de ações fixa: os handlers existentes continuam associados aos mesmos IDs. -->
+    <aside aria-label="Painel de Ações Rápidas" class="ck-acoes-barra">
+      <div class="ck-acoes-status">
+        <span class="ck-acoes-ponto" id="status-indicator" data-state="ready" aria-hidden="true"></span>
+        <div id="status-summary" role="status" aria-live="polite" aria-atomic="true">
+          <span class="ck-acoes-pronto" data-ux-ready-status>Pronto para emissão.</span>
         </div>
       </div>
+
+      <button
+        type="button"
+        id="btn-gerar-planilha"
+        data-on-click="gerarPlanilhaExcel"
+        aria-keyshortcuts="Control+Enter"
+        title="Gerar Planilha (Ctrl+Enter)"
+        class="ck-btn ck-btn--primario"
+      >
+        <svg class="ck-ico" aria-hidden="true" focusable="false"><use href="#i-sheet"></use></svg><span>Gerar Planilha</span>
+      </button>
+
+      <button type="button" id="btn-copiar-resumo-cockpit" data-on-click="copiarResumoCockpit" class="ck-btn ck-btn--secundario">
+        <svg class="ck-ico" aria-hidden="true" focusable="false"><use href="#i-copy"></use></svg><span>Copiar texto</span>
+      </button>
+
+      <button type="button" data-on-click="gerarTextoSolicitacaoTransporte" class="ck-btn ck-btn--secundario" title="Gerar texto de solicitação de transporte">
+        <svg class="ck-ico" aria-hidden="true" focusable="false"><use href="#i-text"></use></svg><span>Texto para Transporte</span>
+      </button>
+
+      <a
+        href="https://ux.simpress.com.br/ng/gerar-ticket/consulta"
+        target="_blank"
+        rel="noopener noreferrer"
+        aria-label="Abrir chamado no site Simpress (abre em nova aba)"
+        title="Abrir site Simpress para gerar chamado"
+        class="ck-btn ck-btn--secundario"
+      >
+        <svg class="ck-ico" aria-hidden="true" focusable="false"><use href="#i-external"></use></svg><span>Abrir chamado</span>
+      </a>
     </aside>
-    </aside>
-    </div>
 
     </section>
 

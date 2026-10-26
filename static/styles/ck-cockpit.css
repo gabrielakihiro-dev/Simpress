@@ -689,3 +689,46 @@ details.ck-chip { position: relative; padding: 0; }
   .ck-lista { overflow: visible; }
   .ck-itens { flex: none; }
 }
+
+/* Regiões 3C/3D: Transporte. Visibilidade pelos atributos reais (data-state/data-show/hidden); medidas do pacote ficam nos blocos acima. */
+.ck-selecionado[data-state="empty"] [data-show="selected"], .ck-selecionado[data-state="selected"] [data-show="empty"] { display: none; }
+.ck-selecionado .hidden, .ck-passos .hidden, .ck-previa .hidden, .ck-acoes-barra .hidden { display: none; }
+.ck-selecionado__linha { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 10px; }
+.ck-passo__sub { margin: 0; font-size: var(--fs-sm); font-weight: var(--peso-medio); color: var(--cor-texto-mudo); }
+.ck-passo__sub-obs { margin-top: 2px; }
+.ck-passo__corpo .required-mark { color: var(--cor-erro-texto); }
+.ck-passo__corpo .ux-field-error { margin: 2px 0 0; font-size: var(--fs-xs); color: var(--cor-erro-texto); }
+.ck-passo__corpo .ux-field-error[hidden] { display: none; }
+.ck-passo__corpo [aria-invalid="true"] { border-color: var(--cor-erro-texto); }
+.ck-previa__cab-meta { display: flex; align-items: center; gap: 8px; }
+.ck-previa__contagem { margin: 0; padding: 8px 14px 0; font-size: var(--fs-xs); color: var(--cor-texto-sutil); font-variant-numeric: tabular-nums; }
+.ck-previa__linhas dd:empty::before { content: "—"; color: var(--cor-texto-sutil); }
+.ck-acoes-status { display: flex; align-items: center; gap: 8px; min-width: 0; margin-right: 8px; font-size: var(--fs-md); color: var(--cor-texto-suave); }
+.ck-acoes-ponto { flex: none; width: 8px; height: 8px; border-radius: 50%; background: var(--cor-texto-sutil); transition: background-color var(--duracao) var(--curva); }
+.ck-acoes-ponto[data-state="ready"] { background: var(--cor-ok-texto); }
+.ck-acoes-ponto[data-state="loaded"] { background: var(--cor-destaque); }
+.ck-acoes-carregado { color: var(--cor-destaque-texto); }
+.ck-acoes-pronto { color: var(--cor-ok-texto); }
+.ck-pendentes__n { display: inline-grid; place-items: center; min-width: 18px; height: 18px; padding: 0 5px; border-radius: 9px; background: var(--cor-alerta-fundo); font-size: var(--fs-xs); font-weight: var(--peso-medio); font-variant-numeric: tabular-nums; }
+#ux-pending-chip[data-status="success"] { color: var(--cor-ok-texto); }
+#ux-pending-chip[hidden] { display: none; }
+#ck-parque-transporte .ck-lista__vazio, #ck-parque-transporte .ck-nota { font-size: var(--fs-md); color: var(--cor-texto-mudo); }
+#ck-parque-transporte .ck-atencao__item { grid-template-columns: minmax(0, 1fr) auto; }
+#ck-parque-transporte .ck-atencao__item[data-status="alerta"] { color: var(--cor-alerta-texto); }
+#ck-parque-transporte span.ck-atencao__item { cursor: default; }
+#ck-parque-transporte .ck-atencao__item > span:first-child:empty, #ck-parque-transporte .ck-atencao__item > span:last-child:empty { display: none; }
+#ck-parque-transporte .ck-atencao__item > span:nth-child(2) { grid-column: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.ck-tela--transporte { min-width: 0; }
+@media (min-width: 1200px) {
+  #tab-panel-retirada-entrega.ck-tela--transporte:not([hidden]) { display: flex; flex-direction: column; min-height: calc(100dvh - var(--ck-topbar-h, 48px)); }
+  .ck-tela--transporte > .ck-transp { flex: 1 1 auto; }
+}
+@media (max-width: 1199.98px) {
+  .ck-acoes-barra { position: sticky; bottom: 0; }
+}
+@media (max-width: 767.98px) {
+  .ck-acoes-status { flex: 1 1 100%; margin-right: 0; }
+}
+@media (max-width: 1199.98px) {
+  .ck-transp > #ck-parque-transporte { order: 3; }
+}

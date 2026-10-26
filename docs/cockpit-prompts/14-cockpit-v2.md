@@ -60,3 +60,11 @@ Não dá para colar o pacote direto:
 
 - `ck-tokens.css` traz `@media (prefers-reduced-motion: reduce) { * { animation-duration: 1ms !important; transition-duration: 1ms !important } }`, que vencia o 0,01 ms legado e quebrava `tests/e2e/ui.spec.cjs` ("reduced-motion preference suppresses CSS motion…"). Correção: o bloco `/* Integração Simpress */` de `ck-cockpit.css` (último stylesheet) reaplica 0,01 ms com `!important`. O conteúdo fiel do pacote não foi editado.
 - Prints "antes" (HEAD limpo) e capturas com os novos CSS/JS ficaram byte a byte idênticos nas 16 combinações (4 telas × desktop/mobile × claro/escuro): os CSS `ck-` não afetam as telas legadas enquanto o HTML não usa essas classes.
+
+### Sessão 4: Transporte (3C) e OS por equipamento (3D)
+
+- 3C entrou: campos reais `retirada-*`/`entrega-*` na grade do pacote (3 colunas 1fr·1fr·380px; 2 em tela compacta), prévia marcando campos faltantes, barra de ações fixa com "N pendentes" (clique foca o primeiro campo inválido) e cartão do equipamento selecionado. A planilha gerada não mudou.
+- Resumo do parque no Transporte (Base importada, Cidades, Pontos de atenção) é uma cópia com IDs `ck-parque-*`, alimentada pelo mesmo `/api/painel`; o bloco da aba Resumo mantém os IDs originais.
+- 3D não entrou no Transporte: a lista real e o chamado UTIC (somente leitura) já vivem, com IDs únicos exigidos por `resumo-os.spec.cjs`, em `#resumo-os-equipamento` na aba Resumo. Duplicar quebraria os IDs. `salvarChamadoOs` não foi criado. A sessão 5 deve vestir esse bloco no estilo Cockpit.
+- Limite conhecido: o shell legado `#simpress-app-shell` mantém `min-width:1200px` (rolagem horizontal interna abaixo disso, igual à Home); fica para a sessão 8.
+- Abaixo de 1200px o Resumo do parque do Transporte vai para o fim da tela (`order: 3`): com o shell legado de 1200px, o emulador mobile só alcança cliques no primeiro trecho da página, e `origin-contact.spec.cjs` (mobile) precisa do botão "Configurar contato de origem" nessa faixa.

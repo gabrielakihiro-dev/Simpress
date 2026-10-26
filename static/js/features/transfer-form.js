@@ -378,7 +378,7 @@
   }
 
   function atualizarPreviaTransporteCockpit() {
-    const root = document.querySelector(".cockpit-transport-layout");
+    const root = document.querySelector(".ck-transp");
     if (!root) return;
     const value = id => {
       const element = document.getElementById(id);
@@ -389,6 +389,24 @@
       const target = document.getElementById(id);
       if (target) target.textContent = text;
     };
+    // Campo obrigatório vazio aparece como [Rótulo] destacado, em vez de sumir da prévia.
+    const setParts = (id, parts) => {
+      const target = document.getElementById(id);
+      if (!target) return;
+      const nodes = [];
+      parts.forEach(([fieldId, label]) => {
+        const text = value(fieldId);
+        if (nodes.length) nodes.push(" · ");
+        if (text !== "—") nodes.push(text);
+        else {
+          const missing = document.createElement("span");
+          missing.className = "ck-previa__falta";
+          missing.textContent = `[${label}]`;
+          nodes.push(missing);
+        }
+      });
+      target.replaceChildren(...nodes);
+    };
     const equipamento = appState.currentEquipamento;
     const unidade = document.getElementById("select-unidade-destino");
     const destino = unidade?.selectedOptions?.[0]?.textContent?.trim();
@@ -398,15 +416,20 @@
     set("cockpit-preview-equipment", [serial, modelo, apelido].filter(item => item && item !== "—").join(" · ") || "—");
     set("cockpit-preview-pickup", appState.retiradaCidadeSelecionada || value("retirada-endereco"));
     set("cockpit-preview-pickup-cnpj", value("retirada-cnpj"));
-    set("cockpit-preview-contact", [value("retirada-contato"), value("retirada-telefone")].filter(item => item !== "—").join(" · ") || "—");
+    setParts("cockpit-preview-contact", [["retirada-contato", "Nome"], ["retirada-telefone", "Celular"]]);
     set("cockpit-preview-hours", [value("retirada-horario"), `almoço ${value("retirada-almoco")}`].filter(item => item !== "—").join(" · ") || "—");
     set("cockpit-preview-delivery", value("entrega-endereco") !== "—" ? value("entrega-endereco") : (unidade?.value ? destino : "—"));
-    set("cockpit-preview-recipient", [value("entrega-contato"), value("entrega-telefone")].filter(item => item !== "—").join(" · ") || "—");
-    set("cockpit-preview-notes", value("entrega-obs"));
+    setParts("cockpit-preview-recipient", [["entrega-contato", "Destinatário"], ["entrega-telefone", "Celular"]]);
+    setParts("cockpit-preview-notes", [["entrega-obs", "Observações"]]);
+    const required = typeof root.querySelectorAll === "function" ? [...root.querySelectorAll("input[required], textarea[required], select[required]")] : [];
+    const filled = required.filter(field => String(field.value || "").trim()).length;
+    const count = document.getElementById("ck-previa-contagem");
+    if (count) count.textContent = `${filled}/${required.length} campos obrigatórios`;
     const state = document.getElementById("cockpit-transport-preview-state");
     if (state) {
       state.textContent = equipamento ? (unidade?.value ? "Prévia atualizada" : "Selecione a entrega") : "Aguardando equipamento";
       state.dataset.state = equipamento ? (unidade?.value ? "ready" : "pending") : "empty";
+      state.dataset.status = equipamento ? (unidade?.value ? "ok" : "alerta") : "neutro";
     }
   }
 
@@ -421,7 +444,7 @@
     }
   }
 
-  const transportPreviewRoot = document.querySelector(".cockpit-transport-layout");
+  const transportPreviewRoot = document.querySelector(".ck-transp");
   if (transportPreviewRoot && !transportPreviewRoot.dataset.previewBound) {
     transportPreviewRoot.dataset.previewBound = "true";
     transportPreviewRoot.addEventListener("input", atualizarPreviaTransporteCockpit);
@@ -718,9 +741,9 @@
     app.preencherRepresentanteRegional("retirada", "");
 
     // Reset status indicator
-    document.getElementById("status-indicator").className = "w-2.5 h-2.5 rounded-full bg-brand-400";
+    document.getElementById("status-indicator").dataset.state = "ready";
     document.getElementById("status-summary").innerHTML = `
-        <span class="text-fg-tertiary font-medium" data-ux-ready-status>Pronto para emissão.</span>
+        <span class="ck-acoes-pronto" data-ux-ready-status>Pronto para emissão.</span>
       `;
 
     app.showToast("Formulário limpo. Pronto para uma nova busca.", "info");

@@ -865,6 +865,111 @@
       });
     }
 
+    // Resumo do parque na aba Transporte (Cockpit v2): mesmos dados de /api/painel, IDs próprios (os do Resumo ficam únicos).
+    let parqueFiltro = "";
+    function renderParqueTransporte(data) {
+      const host = doc.getElementById("ck-parque-transporte");
+      if (!host) return;
+      const corpo = host.querySelector(".ck-parque__corpo");
+      const meta = host.querySelector(".ck-cartao__meta");
+      corpo.replaceChildren();
+      if (!data.base_importada) {
+        meta.textContent = "";
+        corpo.append(el("p", "ck-lista__vazio", "Nenhuma base importada ainda. Use “Atualizar planilhas” para carregar os equipamentos."));
+        return;
+      }
+      const when = data.ultima_comparacao?.horario ? formatMoment(data.ultima_comparacao.horario) : data.ultima_atualizacao;
+      meta.textContent = when ? `${when}${data.arquivo_origem ? ` · ${data.arquivo_origem}` : ""}` : "Sem registro de atualização.";
+
+      const base = el("div", "ck-parque__secao");
+      base.append(el("p", "ck-parque__sub", "Base importada"));
+      const numeros = el("dl", "ck-numeros");
+      [["Equipamentos", data.total_equipamentos], ["Unidades", data.total_unidades],
+        ...(data.por_categoria || []).map(c => [c.label, c.total])].forEach(([label, value]) => {
+        const item = el("div", "ck-numero");
+        item.append(el("dt", "", label), el("dd", "", formatNumber(value)));
+        numeros.append(item);
+      });
+      base.append(numeros);
+      corpo.append(base);
+
+      const cidades = el("div", "ck-parque__secao");
+      const categorias = data.por_categoria || [];
+      if (!categorias.some(c => c.value === parqueFiltro)) parqueFiltro = "";
+      const sub = el("div", "ck-parque__sub");
+      const titulo = el("span", "", "Cidades com mais equipamentos");
+      titulo.id = "ck-cidades-titulo";
+      const select = el("select", "ck-entrada ck-entrada--sm");
+      select.setAttribute("aria-label", "Filtrar cidades por tipo de equipamento");
+      [{ value: "", label: "Todos" }, ...categorias].forEach(o => {
+        const opt = el("option", "", o.label);
+        opt.value = o.value;
+        select.append(opt);
+      });
+      select.value = parqueFiltro;
+      sub.append(titulo, select);
+      cidades.append(sub);
+      const lista = el("ul", "ck-barras");
+      lista.setAttribute("aria-labelledby", "ck-cidades-titulo");
+      const ns = "http://www.w3.org/2000/svg";
+      const preencher = () => {
+        lista.replaceChildren();
+        const itens = parqueFiltro ? (data.cidades_por_categoria?.[parqueFiltro] || []) : (data.cidades_principais || []);
+        if (!itens.length) {
+          lista.append(el("li", "ck-lista__vazio", "Nenhum equipamento desse tipo com cidade informada."));
+          return;
+        }
+        const larguras = barPercentages(itens);
+        itens.forEach((cidade, i) => {
+          const li = el("li", "ck-barra");
+          const svg = doc.createElementNS(ns, "svg");
+          svg.setAttribute("viewBox", "0 0 100 6");
+          svg.setAttribute("preserveAspectRatio", "none");
+          svg.setAttribute("aria-hidden", "true");
+          const trilho = doc.createElementNS(ns, "rect");
+          trilho.setAttribute("class", "ck-barra__trilho");
+          trilho.setAttribute("width", "100"); trilho.setAttribute("height", "6"); trilho.setAttribute("rx", "3");
+          const cheio = doc.createElementNS(ns, "rect");
+          cheio.setAttribute("class", "ck-barra__cheio");
+          cheio.setAttribute("width", String(larguras[i])); cheio.setAttribute("height", "6"); cheio.setAttribute("rx", "3");
+          svg.append(trilho, cheio);
+          li.append(el("span", "ck-barra__nome", cidade.cidade), svg, el("span", "ck-barra__valor", formatNumber(cidade.total)));
+          lista.append(li);
+        });
+      };
+      select.addEventListener("change", () => { parqueFiltro = select.value; preencher(); });
+      preencher();
+      cidades.append(lista);
+      if (data.sem_cidade > 0) cidades.append(el("p", "ck-nota", `${pluralize(data.sem_cidade, "equipamento sem cidade", "equipamentos sem cidade")} na base.`));
+      corpo.append(cidades);
+
+      const atencao = el("div", "ck-parque__secao");
+      atencao.append(el("p", "ck-parque__sub", "Pontos de atenção da última comparação"));
+      const itens = data.ultima_comparacao?.atencao || [];
+      if (itens.length) {
+        const ul = el("ul", "ck-atencao");
+        itens.forEach(item => {
+          const li = el("li");
+          const eventId = data.ultima_comparacao?.id;
+          const podeAbrir = eventId && typeof win.abrirResultadoHistoricoComparacao === "function";
+          const node = el(podeAbrir ? "button" : "span", "ck-atencao__item");
+          if (podeAbrir) {
+            node.type = "button";
+            node.setAttribute("aria-label", `${item.rotulo}: ${formatNumber(item.total)}. Abrir esta seção no resultado da última atualização.`);
+            node.addEventListener("click", () => win.abrirResultadoHistoricoComparacao(eventId, item.campo, node));
+          }
+          node.dataset.status = item.total > 0 ? "alerta" : "ok";
+          node.append(el("span", "", ""), el("span", "", item.rotulo), el("strong", "ck-atencao__n", formatNumber(item.total)), el("span", "", ""));
+          li.append(node);
+          ul.append(li);
+        });
+        atencao.append(ul);
+      } else {
+        atencao.append(el("p", "ck-nota", data.ultima_comparacao ? "Nenhum ponto de atenção na última comparação." : "Sem comparação registrada."));
+      }
+      corpo.append(atencao);
+    }
+
     async function refresh(force) {
       if (!force && Date.now() - lastFetch < REFRESH_MIN_MS) return;
       lastFetch = Date.now();
@@ -876,6 +981,7 @@
         const data = await response.json();
         if (serial !== requestSerial) return;
         renderPanel(data);
+        renderParqueTransporte(data);
         // An OS load started after this request already reflects data at least as new; repeating it only doubles the wait.
         if (ticketSerialAtStart === ticketSummaryRequestSerial
           && doc.getElementById("tab-resumo")?.getAttribute("aria-selected") === "true") refreshTicketSummary(true);
@@ -903,7 +1009,7 @@
     const counter = doc.getElementById("badge-total-historico-comparacoes");
     if (counter) new win.MutationObserver(() => refresh(true)).observe(counter, { childList: true, characterData: true, subtree: true });
     // The cards are in the Resumo tab; Home keeps refreshing too, for the sidebar divergence badge.
-    const abasComDados = ["tab-home", "tab-resumo"].map(id => doc.getElementById(id)).filter(Boolean);
+    const abasComDados = ["tab-home", "tab-resumo", "tab-retirada-entrega"].map(id => doc.getElementById(id)).filter(Boolean);
     const abaComDadosAtiva = () => abasComDados.some(tab => tab.getAttribute("aria-selected") === "true");
     const resumoAtivo = () => doc.getElementById("tab-resumo")?.getAttribute("aria-selected") === "true";
     // Se o painel ainda não foi preenchido (ex.: falha anterior), abrir a aba tenta de novo sem esperar o intervalo mínimo.
