@@ -773,9 +773,9 @@
 .cockpit-shell .btn-icon { width: 36px; height: 36px; min-width: 0; padding: 0; }
 .cockpit-shell .btn-sm { height: 26px; min-height: 0; padding: 0 10px; font-size: 12px; }
 
-/* Fase 6: campos do Transporte com as medidas do artefato (30px, 12.5px, rótulo 11px) */
+/* Fase 6: campos do Transporte com as medidas do artefato (12.5px, rótulo 11px); Fase 8: altura 36px medida no artefato publicado a 100% */
 .cockpit-shell #tab-panel-retirada-entrega :is(input, select):not([type=checkbox], [type=radio], [type=hidden]) {
-  height: 30px;
+  height: 36px;
   min-height: 0;
   padding: 0 10px;
   border-radius: var(--radius-md);
