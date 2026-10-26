@@ -4,6 +4,9 @@
    ck-tokens.css. Todas as classes têm prefixo ck-.
    ===================================================================== */
 
+/* Anel de foco do Cockpit (2px) sobre a política global de 3px do app.css (`:root :focus-visible`); fica antes dos componentes para que os anéis próprios deles prevaleçam. */
+.simpress-app-shell :focus-visible { outline: 2px solid var(--cor-destaque); outline-offset: 2px; }
+
 /* ---------- 2.1 Estrutura do app ---------- */
 .ck-app { display: flex; flex-direction: column; min-height: 100vh; }
 .ck-main { flex: 1; min-height: 0; display: flex; flex-direction: column; }
@@ -907,6 +910,3 @@ details.ck-chip { position: relative; padding: 0; }
 .ck-veu .ck-btn.hidden { display: none; }
 .ck-veu .ck-btn.flex-1 { flex: 1 1 0%; }
 .ck-veu > .ck-dialogo :is([class*="border-line-quiet"]) { border-color: var(--cor-borda-suave); }
-
-/* Anel de foco do Cockpit (2px) sobre a política global de 3px do app.css (`:root :focus-visible`). */
-.simpress-app-shell :focus-visible { outline: 2px solid var(--cor-destaque); outline-offset: 2px; }
