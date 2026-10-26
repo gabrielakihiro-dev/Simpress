@@ -769,6 +769,27 @@
 .cockpit-shell .btn-icon { width: 36px; height: 36px; min-width: 0; padding: 0; }
 .cockpit-shell .btn-sm { height: 26px; min-height: 0; padding: 0 10px; font-size: 12px; }
 
+/* Fase 6: campos do Transporte com as medidas do artefato (30px, 12.5px, rótulo 11px) */
+.cockpit-shell #tab-panel-retirada-entrega :is(input, select):not([type=checkbox], [type=radio], [type=hidden]) {
+  height: 30px;
+  min-height: 0;
+  padding: 0 10px;
+  border-radius: var(--radius-md);
+  font-size: 12.5px;
+}
+.cockpit-shell #tab-panel-retirada-entrega textarea {
+  min-height: 0;
+  padding: 6px 10px;
+  border-radius: var(--radius-md);
+  font-size: 12.5px;
+}
+.cockpit-shell #tab-panel-retirada-entrega label {
+  margin-bottom: 3px;
+  font-size: 11px;
+  font-weight: 400;
+  color: var(--color-neutral-500);
+}
+
 /* ── Fase 5: toque, campos no compacto e telas largas ── */
 /* Toque: alvos de 44px só com ponteiro grosso (celular/tablet); mouse mantém as medidas do artefato. */
 @media (pointer: coarse) {
