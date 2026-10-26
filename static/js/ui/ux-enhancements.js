@@ -469,7 +469,7 @@
         if (!win.SimpressApp?.state.currentEquipamento || byId("main-content")?.hidden || byId("tab-panel-home")?.hidden) return;
         const button = action === "equipment-transport" ? byId("btn-ir-para-transporte")
           : action === "copy-ticket" ? byId("btn-copiar-chamado-atual")
-            : doc.querySelector('#card-equipamento [data-on-click="abrirModalEditarEquipamento"]');
+            : byId("btn-editar-equipamento");
         if (!button || button.disabled) return;
         event.preventDefault();
         button.click();
