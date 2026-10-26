@@ -1268,7 +1268,7 @@
     }
     byId("cockpit-sheets-history-detail-title").textContent = displayDate(event.horario);
     byId("cockpit-sheets-history-detail-sub").textContent = String(event.id);
-    byId("cockpit-sheets-history-detail-tag").replaceChildren(badge("Atualização", event.tipo === "restauracao" ? "warning" : "neutral"));
+    byId("cockpit-sheets-history-detail-tag").replaceChildren(badge(event.tipo === "restauracao" ? "Restauração" : "Atualização", event.tipo === "restauracao" ? "warning" : "neutral"));
     exportButton.disabled = !/^\d{4}-\d{2}-\d{2}$/.test(String(event.horario || "").slice(0, 10)) || typeof app.exportarResultadoComparacaoPlanilhas !== "function";
     renderPares(byId("cockpit-sheets-history-detail-pares"), [["Situação", "Carregando…"]]);
     try {
