@@ -835,3 +835,24 @@
   .cockpit-shell #main-content { padding-top: 0; }
   .cockpit-shell #main-content > * + * { margin-top: 0; }
 }
+
+/* Fase 6: central de notificações e modais com as medidas do artefato (popover 340px, padding 6px, raio sm; diálogo raio lg, título 20px, corpo 14px). */
+.cockpit-shell-body .notification-center-panel {
+  top: 52px;
+  width: min(340px, calc(100vw - 2rem));
+  gap: 2px;
+  padding: 6px;
+  border: 0;
+  border-radius: var(--cockpit-radius-sm);
+  background: var(--cockpit-surface);
+  box-shadow: var(--cockpit-shadow-lg);
+}
+.cockpit-shell-body .notification-center-header { padding: 4px 8px 6px; border-bottom: 0; }
+.cockpit-shell-body .notification-center-header h2 { color: var(--cockpit-neutral-500); font-size: 11px; font-weight: 400; }
+.cockpit-shell-body .notification-center-header p { color: var(--cockpit-neutral-500); font-size: 11px; }
+.cockpit-shell-body .notification-center-panel :is(#alerta-os-paradas, #alerta-divergencias-novas) { margin: 0; padding: 9px 8px; border: 0; border-radius: var(--cockpit-radius-sm); background: transparent; }
+.cockpit-shell-body .notification-center-panel :is(#alerta-os-paradas, #alerta-divergencias-novas) .stale-base-alert-title { font-size: 12.5px; font-weight: 400; }
+.cockpit-shell-body .notification-center-panel :is(#alerta-os-paradas, #alerta-divergencias-novas) .stale-base-alert-text { color: var(--cockpit-neutral-500); font-size: 11.5px; opacity: 1; }
+.cockpit-shell-body .modal-overlay { background: color-mix(in srgb, var(--cockpit-neutral-900) 50%, transparent); }
+.cockpit-shell-body .modal-overlay > .modal-panel { border-radius: var(--cockpit-radius-lg); background: var(--cockpit-surface); box-shadow: var(--cockpit-shadow-lg); }
+.cockpit-shell-body .alias-history-total { border-color: transparent; background: var(--cockpit-accent-soft); color: var(--cockpit-accent-text); }
