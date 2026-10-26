@@ -114,9 +114,11 @@ Fonte: `artefato.html` (Nocturne, só escuro). Medido a 1440px (amplo, onde o ap
 | Home: lista | itens, pílulas 24px, estado | diferentes | alinhados | idêntico |
 | Home: detalhe | cabeçalho em uma linha, grade com bordas internas e sombra, copiar 24×24, valores com reticências | ícone 40px, título empilhado, copiar 16×40 | uma linha, grade com bordas internas, copiar 24×24, reticências | idêntico nas medidas; composição de "Modelos de chamado" e "Chamados abertos" aproximada |
 | Transporte: campos | rótulo 11px, campo 30px/12.5px | campo 36–42px/14px | 30px/12.5px, rótulo 11px | campos idênticos; 3 colunas `1fr 1fr 400px` já existentes |
-| Resumo, Automação, painéis de ferramenta, modais, notificações | ver artefato | — | herdam tokens e botões novos | **não** revisados linha a linha |
+| Resumo | KPIs 22px/500, rótulo 11.5px, cabeçalho 13px/500, tabela 12.5px, regionais 100px · 5px | idêntico em medidas e tipografia | idêntico (tokens) | sem sparkline nos KPIs (dado real não existe) |
+| Automação | títulos 13px/500, botões 28px/12px, tabela 12.5px, console em surface | idêntico em medidas e tipografia | idêntico (tokens) | o app tem mais controles que o artefato (filtros, capturas, Sebrae), mantidos |
+| Painéis de ferramenta, modais, notificações | sem equivalente no artefato | — | estilo atual com os tokens novos | sem equivalente: mantidos |
 
-Limites: não foi feita a comparação lado a lado automática do iframe do artefato (domínio cruzado: só imagem); Resumo, Automação, painéis, modais e notificações receberam apenas tokens e botões, sem medição individual.
+Limites: comparação feita em tela cheia no navegador embutido (artefato em https://claude.ai/artifact/…, iframe de domínio cruzado, então só por imagem, sem `getComputedStyle`). O artefato é somente escuro: o claro é derivado dos tokens. Capturas do app em `.claude/prints/fase6/`: Home 1440 e 1200 claro/escuro; Resumo e Automação 1440 claro/escuro; Transporte 1440 escuro.
 
 ### Tipografia (Fase 6, `getComputedStyle` a 1440px, escuro e claro iguais)
 
@@ -136,10 +138,31 @@ Famílias: o artefato usa `"Inter", system-ui, sans-serif` e `'JetBrains Mono', 
 | Títulos h1–h5 | 500, entrelinha 1.12, -0.015em | regra base no shell (`:where`, não vence regras de componente) |
 | Cabeçalho de tabela (Resumo) | 11px, 0.08em, caixa alta | 11px · 0.08em · caixa alta |
 
-Diferenças restantes: o resto das áreas (Resumo, Automação, painéis, modais) não teve cada texto auditado; filtros da lista medem 11.5px/24px e botões 14px/500, iguais ao artefato.
+Diferenças restantes: painéis, modais e notificações não existem no artefato; filtros da lista medem 11.5px/24px e botões 14px/500, iguais ao artefato.
 
 Ajustes de fechamento da Fase 6:
 
 - Campo de busca da barra: 12.5px (valor do artefato) no amplo; 16px no compacto (anti-zoom do iOS).
 - Barra compacta (≤767px, toque): a marca fica visível a partir de 390px; abaixo de 390px ela sai da barra (4 abas de 44px não deixam largura), mudança deliberada e só de layout.
-- Prova visual: o HTML do artefato aberto por `file://` mostra o template Vue sem renderizar (`{{ ... }}`), então não serve de comparação pixel a pixel. Medidas base do artefato (`getComputedStyle`): corpo Inter, botão 13px/500, campo 12.5px, iguais ao app. Capturas do app em `.claude/prints/fase6/` (1440 e 1200, claro e escuro na Home; demais telas só 1440 escuro).
+- Prova visual: o artefato foi aberto renderizado no navegador embutido e comparado com o app (porta 8803) a 1440px. Medidas base do artefato: corpo Inter, botão 13px/500, campo 12.5px, iguais ao app. Capturas do app em `.claude/prints/fase6/`.
+
+### Painéis, sino, menu e modais (Fase 6, fechamento)
+
+No artefato, Chamados, Comparação, Histórico de apelidos e Relatório mensal são telas inteiras (KPIs, pílulas de 24px, tabela de 12.5px, detalhe lateral de 380–420px em surface), a central de notificações é um popover de 340px, o menu Ferramentas tem 240px e o diálogo tem 440px.
+
+| Área | Artefato | App agora | Situação |
+| --- | --- | --- | --- |
+| KPIs dos painéis | 22px/500, rótulo 11.5px, padding 12×16 | igual (`cockpit-tool-panels.css`) | idêntico |
+| Pílulas de filtro | 24px, 11.5px, raio sm, sem borda | igual | idêntico |
+| Tabela/lista e detalhe | 12.5px, detalhe em surface, linha do tempo com ponto de 9px | igual | idêntico nas medidas; o app usa lista/botões, não `<table>` |
+| Cabeçalho "Ferramentas do Cockpit" e botão Voltar | não existe | mantido com os tokens novos | sem equivalente |
+| Barra de busca/Relação/Atualizar dos painéis | não existe | mantida | sem equivalente |
+| Sino (popover) | 340px, padding 6, raio sm, título 11px | igual; alertas viram itens de 12.5/11.5px | idêntico nas medidas |
+| Menu Ferramentas | 240px, itens 34px, atalho 10.5px | já alinhado na barra | idêntico |
+| Modais | fundo neutral-900 50%, raio lg, surface, sombra lg | igual (fundo, raio, surface, sombra); conteúdo interno de cada modal mantido | parcial: o app tem dezenas de modais com layouts próprios |
+
+Limite desta comparação: o painel do navegador embutido só renderiza cerca de 800×500px do artefato (iframe de outro domínio, sem DOM), então não foi possível um print lado a lado a 1440px; a comparação é por medidas do `artefato.html` e capturas do app em `.claude/prints/fase6/` (Home, notificações, Ferramentas, Chamados e Comparação, 1440px, claro e escuro).
+
+### Decisão sobre toque e telas muito largas (herdadas da Fase 5)
+
+Ficam. As regras `@media (pointer: coarse)` (alvos de 44px) só valem em aparelhos de toque, e o `max-width: 1920px` só vale a partir de 1920px de largura; nenhuma das duas muda o desktop de mouse entre 1200 e 1919px, onde o app deve ser idêntico ao artefato. O artefato não mostra esses casos, então não há contradição; cobertas por `tests/e2e/cockpit-layout.spec.cjs`.
