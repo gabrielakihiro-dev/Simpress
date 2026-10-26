@@ -137,3 +137,9 @@ Famílias: o artefato usa `"Inter", system-ui, sans-serif` e `'JetBrains Mono', 
 | Cabeçalho de tabela (Resumo) | 11px, 0.08em, caixa alta | 11px · 0.08em · caixa alta |
 
 Diferenças restantes: o resto das áreas (Resumo, Automação, painéis, modais) não teve cada texto auditado; filtros da lista medem 11.5px/24px e botões 14px/500, iguais ao artefato.
+
+Ajustes de fechamento da Fase 6:
+
+- Campo de busca da barra: 12.5px (valor do artefato) no amplo; 16px no compacto (anti-zoom do iOS).
+- Barra compacta (≤767px, toque): a marca fica visível a partir de 390px; abaixo de 390px ela sai da barra (4 abas de 44px não deixam largura), mudança deliberada e só de layout.
+- Prova visual: o HTML do artefato aberto por `file://` mostra o template Vue sem renderizar (`{{ ... }}`), então não serve de comparação pixel a pixel. Medidas base do artefato (`getComputedStyle`): corpo Inter, botão 13px/500, campo 12.5px, iguais ao app. Capturas do app em `.claude/prints/fase6/` (1440 e 1200, claro e escuro na Home; demais telas só 1440 escuro).
