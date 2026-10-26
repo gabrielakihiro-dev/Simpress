@@ -9,30 +9,28 @@ const feature = fs.readFileSync(path.join(root, "static/js/features/chrome-autom
 const styles = fs.readFileSync(path.join(root, "static/styles/ux-refinements.css"), "utf8");
 
 test("Automação keeps its actions grouped and user verification manual", () => {
-  const mainGroup = html.match(/<div class="automation-actions automation-actions--primary[^"]*"[\s\S]*?<\/div>\s*<div class="automation-action-support"/)?.[0];
-  const userGroup = html.match(/<section class="[^"]*automation-action-independent"[\s\S]*?<\/section>/)?.[0];
-  const utilityGroup = html.match(/<section class="[^"]*automation-actions--utility"[\s\S]*?<\/section>/)?.[0];
-  assert.ok(mainGroup);
+  const rotinas = html.match(/<div class="ck-rotinas"[\s\S]*?<\/div>\s*<div class="ck-cartao ck-linha-acao"/)?.[0] || html.match(/class="ck-rotinas"[\s\S]{0,4000}/)?.[0];
+  const userGroup = html.match(/<section class="[^"]*ck-linha-acao[^"]*"[^>]*data-rotina="usuarios"[\s\S]*?<\/section>/)?.[0];
+  assert.ok(rotinas);
   assert.ok(userGroup);
-  assert.ok(utilityGroup);
   for (const id of ["btn-automacao-os", "btn-automacao-inventarios", "btn-automacao-ambas"]) {
-    assert.match(mainGroup, new RegExp(`id="${id}"`));
+    assert.match(rotinas, new RegExp(`id="${id}"`));
   }
   assert.match(userGroup, /id="btn-automacao-usuarios"[\s\S]*?data-args='\["usuarios"\]'/);
-  assert.doesNotMatch(mainGroup, /btn-automacao-usuarios/);
-  assert.match(utilityGroup, /id="btn-automacao-login"/);
+  assert.doesNotMatch(rotinas.split('data-rotina="usuarios"')[0], /btn-automacao-usuarios/);
+  assert.match(html, /id="btn-automacao-login"/);
   assert.match(html, /id="btn-automacao-cancelar"/);
-  assert.match(userGroup, /role="group" aria-label="Verificação manual de usuários"/);
 });
 
-test("Automação starts with Andamento and Últimas execuções available", () => {
-  assert.match(html, /id="automacao-andamento-conteudo"(?![^>]*\bhidden\b)/);
-  assert.match(html, /id="automacao-historico-conteudo"(?![^>]*\bhidden\b)/);
-  assert.match(html, /aria-expanded="true" aria-controls="automacao-historico-conteudo" aria-label="Recolher Últimas execuções"/);
+test("Automação mostra o histórico e o console sem painéis recolhíveis", () => {
+  assert.match(html, /id="automacao-andamento-painel"/);
+  assert.match(html, /id="automacao-historico"/);
+  assert.doesNotMatch(html, /Recolher Últimas execuções|Ampliar Andamento/);
+  assert.doesNotMatch(feature, /recolherPainelAutomacao|ampliarPainelAutomacao/);
 });
 
 test("A sincronização Sebrae continua disponível na área de Automação", () => {
-  assert.match(html, /<details class="cockpit-sebrae-details[^"]*"[^>]*>[\s\S]*?id="sebrae-painel"/);
+  assert.match(html, /id="sebrae-painel"/);
   assert.match(html, /Sincronizar chamados Sebrae/);
   assert.match(feature, /\/api\/automacao\/sebrae\/resumo/);
   assert.match(feature, /\/api\/automacao\/sebrae\/agendamento/);

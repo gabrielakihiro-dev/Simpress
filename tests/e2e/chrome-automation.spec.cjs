@@ -24,7 +24,7 @@ test("Automação transforma as linhas do log ativo em eventos seguros e atualiz
   expect(state.log.linhas).toHaveLength(3);
   await expect(page.locator("#automacao-estado")).toHaveCount(1);
   await expect(page.locator("#automacao-estado-titulo")).toHaveCount(1);
-  await expect(panel.locator("#automacao-estado")).toContainText("Em andamento");
+  await expect(panel.locator("#automacao-estado")).toContainText("Ocupado");
   await expect(page.locator("#cockpit-automation-shell-title")).toHaveText("Chrome ocupado");
   await expect(panel.locator("#automacao-log")).toContainText("Reaproveitando o Chrome de automação na porta 9333.");
   await expect(events).toContainText("Reaproveitando o Chrome de automação na porta 9333.");
@@ -39,15 +39,13 @@ test("Automação transforma as linhas do log ativo em eventos seguros e atualiz
 test("Automação deixa as últimas execuções visíveis ao abrir a aba", async ({ page, request }) => {
   const panel = await openAutomation(page, request);
 
-  await expect(panel.locator("#automacao-historico-conteudo")).toBeVisible();
+  await expect(panel.locator("#automacao-historico")).toBeVisible();
   await expect(panel.locator("#automacao-historico tbody tr")).toHaveCount(3);
-  await expect(panel.getByRole("button", { name: "Recolher Últimas execuções", exact: true })).toBeVisible();
+  await expect(panel.locator("#automacao-andamento-painel")).toBeVisible();
 });
 
 async function abrirPainelSebrae(panel) {
-  const summary = panel.locator(".cockpit-sebrae-details > summary");
-  await expect(summary).toBeVisible();
-  if (await panel.locator(".cockpit-sebrae-details").evaluate(element => !element.open)) await summary.click();
+  await expect(panel.locator("#sebrae-painel")).toBeVisible();
   return panel.locator("#sebrae-painel");
 }
 
@@ -55,26 +53,28 @@ test("Automação starts a routine, shows the login warning and the live log, th
   const panel = await openAutomation(page, request);
   const status = panel.locator("#automacao-estado");
   const cancel = panel.getByRole("button", { name: "Cancelar execução", exact: true });
+  const detalhe = panel.locator("#automacao-estado-detalhe");
   await expect(status).toContainText("Livre");
-  await expect(status).toContainText("Última execução: Inventários, Concluído");
+  await expect(detalhe).toContainText("Última execução: Inventários, Concluído");
   await expect(cancel).toBeDisabled();
   await expect(panel.locator("#automacao-aviso-login")).toBeHidden();
 
   const started = page.waitForRequest(req => req.url().endsWith("/api/automacao/executar") && req.method() === "POST");
-  await panel.getByRole("button", { name: "Rotina de OS", exact: true }).click();
+  await panel.locator("#btn-automacao-os").click();
   expect((await started).postDataJSON()).toEqual({ rotina: "os" });
 
-  await expect(status).toContainText("Em andamento");
-  await expect(status).toContainText("Rotina de OS");
-  await expect(status).toContainText("pelo site");
+  await expect(status).toContainText("Ocupado");
+  await expect(detalhe).toContainText("Rotina de OS em andamento");
+  await expect(panel.locator("#btn-automacao-os")).toContainText("Acompanhar");
   await expect(page.locator("#cockpit-automation-shell-title")).toHaveText("Chrome ocupado");
   const warning = panel.getByRole("alert");
   await expect(warning).toBeVisible();
   await expect(warning).toContainText("Faça o login no Chrome de automação (Oracle).");
   await expect(panel.locator("#cockpit-automation-events")).toContainText("AÇÃO NECESSÁRIA: faça o login");
-  for (const name of ["Rotina de OS", "Inventários", "Ambas", "Abrir Chrome para login"]) {
-    await expect(panel.getByRole("button", { name, exact: true })).toBeDisabled();
+  for (const id of ["#btn-automacao-inventarios", "#btn-automacao-ambas", "#btn-automacao-usuarios", "#btn-automacao-login"]) {
+    await expect(panel.locator(id)).toBeDisabled();
   }
+  await expect(panel.locator("#btn-automacao-os")).toBeEnabled();
   await expect(cancel).toBeEnabled();
 
   await cancel.click();
@@ -82,7 +82,7 @@ test("Automação starts a routine, shows the login warning and the live log, th
   await expect(status).toContainText("Livre");
   await expect(page.locator("#cockpit-automation-shell-title")).toHaveText("Chrome livre");
   await expect(warning).toBeHidden();
-  await expect(panel.getByRole("button", { name: "Inventários", exact: true })).toBeEnabled();
+  await expect(panel.locator("#btn-automacao-inventarios")).toBeEnabled();
   await expect(cancel).toBeDisabled();
   const firstRow = panel.locator("#automacao-historico tbody tr").first();
   await expect(firstRow).toContainText("Rotina de OS");
@@ -93,36 +93,33 @@ test("Automação pages and filters executions without growing the history", asy
   const panel = await openAutomation(page, request, 12);
   const rows = panel.locator("#automacao-historico tbody tr");
   await expect(rows).toHaveCount(5);
-  await expect(panel.locator("#automacao-historico-pagina")).toHaveText("Página 1 de 3");
+  await expect(panel.locator("#automacao-historico-pagina")).toHaveText("1 de 3");
   await panel.getByRole("button", {name: "Próxima", exact: true}).click();
-  await expect(panel.locator("#automacao-historico-pagina")).toHaveText("Página 2 de 3");
+  await expect(panel.locator("#automacao-historico-pagina")).toHaveText("2 de 3");
   await panel.getByRole("button", {name: "Próxima", exact: true}).click();
   await expect(rows).toHaveCount(3);
   await panel.getByRole("combobox", {name: "Execuções por página", exact: true}).selectOption("10");
   await expect(rows).toHaveCount(10);
-  await panel.locator("#automacao-historico-filtros summary").click();
   await panel.getByLabel("De", {exact: true}).fill("2026-10-19");
   await panel.getByLabel("Até", {exact: true}).fill("2026-10-19");
-  await panel.getByRole("button", {name: "Aplicar filtros", exact: true}).click();
+  await panel.getByRole("button", {name: "Aplicar", exact: true}).click();
   await expect(rows).toHaveCount(4);
   await expect(panel.locator("#automacao-historico-resumo")).toContainText("4 execuções · de 19/10/2026 · até 19/10/2026");
   await panel.getByRole("combobox", {name: "Status", exact: true}).selectOption("falha");
-  await panel.getByRole("button", {name: "Aplicar filtros", exact: true}).click();
+  await panel.getByRole("button", {name: "Aplicar", exact: true}).click();
   await expect(rows).toHaveCount(2);
-  await panel.locator("#automacao-historico-filtros summary").click();
   await panel.getByRole("button", {name: "Atualizar", exact: true}).click();
   await expect(rows).toHaveCount(2);
   await expect(panel.locator("#automacao-historico-resumo")).toContainText("Falha");
-  await panel.locator("#automacao-historico-filtros summary").click();
   await panel.getByLabel("De", {exact: true}).fill("2026-10-21");
-  await panel.getByRole("button", {name: "Aplicar filtros", exact: true}).click();
+  await panel.getByRole("button", {name: "Aplicar", exact: true}).click();
   await expect(panel.locator("#automacao-historico-resumo")).toContainText("A data inicial deve ser anterior");
   await expect(panel.getByLabel("Até", {exact: true})).toBeFocused();
-  await panel.getByRole("button", {name: "Limpar filtros", exact: true}).click();
+  await panel.getByRole("button", {name: "Limpar", exact: true}).click();
   await expect(rows).toHaveCount(10);
   await panel.getByLabel("De", {exact: true}).fill("2026-01-01");
   await panel.getByLabel("Até", {exact: true}).fill("2026-01-01");
-  await panel.getByRole("button", {name: "Aplicar filtros", exact: true}).click();
+  await panel.getByRole("button", {name: "Aplicar", exact: true}).click();
   await expect(panel.locator("#automacao-historico")).toContainText("Nenhuma execução encontrada");
   await expect(panel.locator("#automacao-historico-proxima")).toBeDisabled();
 });
@@ -153,30 +150,17 @@ test("Automação consults a bounded historical log and keeps it through live po
   await expect(panel.getByRole("combobox", {name: "Execução", exact: true})).toContainText("Nenhuma execução nesta data");
 });
 
-test("Automação collapses and expands panels with keyboard restoration in both themes", async ({ page, request }, testInfo) => {
+test("Automação passes the accessibility audit without horizontal overflow in both themes", async ({ page, request }, testInfo) => {
   const panel = await openAutomation(page, request);
   for (const theme of ["light", "dark"]) {
     await page.locator("html").evaluate((el, value) => { el.dataset.theme = value; }, theme);
-    await panel.getByRole("button", {name: "Recolher Andamento", exact: true}).click();
-    await expect(panel.locator("#automacao-andamento-conteudo")).toBeHidden();
-    await panel.getByRole("button", {name: "Ampliar Andamento", exact: true}).click();
-    await expect(panel.locator("#automacao-andamento-conteudo")).toBeVisible();
-    await expect(panel.getByRole("button", {name: "Restaurar Andamento", exact: true})).toHaveAttribute("aria-pressed", "true");
-    await panel.getByRole("button", {name: "Ampliar Últimas execuções", exact: true}).click();
-    await expect(panel.locator(".automation-card--expanded")).toHaveCount(1);
-    await page.keyboard.press("Escape");
-    await expect(panel.locator(".automation-card--expanded")).toHaveCount(0);
-    await expect(panel.getByRole("button", {name: "Ampliar Últimas execuções", exact: true})).toBeFocused();
-    await panel.locator("#automacao-historico-filtros summary").click();
-    await panel.locator("#automacao-log-filtros summary").click();
     const audit = await new AxeBuilder({ page }).include("#tab-panel-automacao")
       .withTags(["wcag2a", "wcag2aa", "wcag21aa", "wcag22aa"]).analyze();
-    expect(audit.violations.map(item => item.id)).toEqual([]);
+    expect(audit.violations.map(item => `${item.id}: ${item.nodes.map(n => n.target.join(" ")).join(" | ")}`)).toEqual([]);
     await page.screenshot({path: `logs/prints-automacao/depois-automacao-${testInfo.project.name}-${theme}.png`, fullPage: true});
     expect(await page.evaluate(() => document.documentElement.scrollWidth - document.documentElement.clientWidth)).toBeLessThanOrEqual(0);
-    await panel.locator("#automacao-historico-filtros summary").click();
-    await panel.locator("#automacao-log-filtros summary").click();
   }
+  await expect(panel.locator("#automacao-historico")).toBeVisible();
 });
 
 test("Automação shows the 409 message when another run is in progress", async ({ page, request }) => {
@@ -186,9 +170,9 @@ test("Automação shows the 409 message when another run is in progress", async 
     body: JSON.stringify({ detail: "Já há uma rotina em andamento: Inventários desde 07:30. Aguarde terminar ou cancele." }),
   }));
   const panel = await openAutomation(page, request);
-  await panel.getByRole("button", { name: "Ambas" }).click();
+  await panel.locator("#btn-automacao-ambas").click();
   await expect(page.locator("#toast-container")).toContainText("Já há uma rotina em andamento: Inventários desde 07:30.");
-  await expect(panel.getByRole("button", { name: "Ambas" })).toBeEnabled();
+  await expect(panel.locator("#btn-automacao-ambas")).toBeEnabled();
 });
 
 test("Automação ignores a late historical response after returning to live mode", async ({ page, request }) => {
@@ -220,8 +204,8 @@ test("Automação history lists status, batches and capture links, and passes th
   const rows = history.locator("tbody tr");
   await expect(rows).toHaveCount(3);
   await expect(rows.nth(0)).toContainText("Concluído");
-  await expect(rows.nth(0)).toContainText("lote-demo-001");
-  await expect(rows.nth(0)).toContainText("6 min 30 s");
+  await expect(rows.nth(0).locator("td span[title^=\"Lotes:\"]")).toHaveAttribute("title", /lote-demo-001/);
+  await expect(rows.nth(0)).toContainText("6m 30s");
   await expect(rows.nth(1)).toContainText("fora do site");
   await expect(rows.nth(1)).toContainText("Falha");
   await expect(rows.nth(1)).toContainText("Login não concluído em 10 minutos.");
@@ -258,7 +242,7 @@ test("Automação shows the failure screenshot as a thumbnail that opens enlarge
     await expect(dialog.getByRole("button", { name: "Fechar", exact: true })).toBeFocused();
     const audit = await new AxeBuilder({ page }).include("#automacao-captura-dialogo")
       .withTags(["wcag2a", "wcag2aa", "wcag21aa", "wcag22aa"]).analyze();
-    expect(audit.violations.map(item => item.id)).toEqual([]);
+    expect(audit.violations.map(item => `${item.id}: ${item.nodes.map(n => n.target.join(" ")).join(" | ")}`)).toEqual([]);
     await page.screenshot({path: `logs/prints-automacao/depois-captura-${testInfo.project.name}-${theme}.png`});
     expect(await page.evaluate(() => document.documentElement.scrollWidth - document.documentElement.clientWidth)).toBeLessThanOrEqual(0);
     await page.keyboard.press("Escape");
@@ -271,8 +255,6 @@ test("Sincronizar chamados Sebrae shows the summary, counters and pending items 
   const panel = await openAutomation(page, request);
   const card = await abrirPainelSebrae(panel);
   await expect(card.getByRole("heading", { name: "Sincronizar chamados Sebrae", level: 2 })).toBeVisible();
-  await expect(card.locator("#sebrae-regra")).toHaveAttribute("role", "tooltip");
-  await expect(card.locator("#sebrae-regra")).toContainText("Roda de segunda a sexta, das 09h15 às 17h45, a cada 30 minutos, com o computador ligado e o servidor local da Simpress em execução.");
   await expect(card.locator("#sebrae-estado")).toContainText("Agendamento pausado");
   await expect(card.locator("#sebrae-ultima")).toContainText("Concluída em");
   await expect(card.locator("#sebrae-incluidos")).toHaveText("2");
@@ -340,7 +322,7 @@ test("Sincronizar chamados Sebrae shows the login warning and passes the audit i
     await page.locator("html").evaluate((el, value) => { el.dataset.theme = value; }, theme);
     const audit = await new AxeBuilder({ page }).include("#sebrae-painel")
       .withTags(["wcag2a", "wcag2aa", "wcag21aa", "wcag22aa"]).analyze();
-    expect(audit.violations.map(item => item.id)).toEqual([]);
+    expect(audit.violations.map(item => `${item.id}: ${item.nodes.map(n => n.target.join(" ")).join(" | ")}`)).toEqual([]);
     await card.scrollIntoViewIfNeeded();
     await card.screenshot({ path: `logs/prints-automacao/depois-sebrae-${testInfo.project.name}-${theme}.png` });
     expect(await page.evaluate(() => document.documentElement.scrollWidth - document.documentElement.clientWidth)).toBeLessThanOrEqual(0);

@@ -17,6 +17,9 @@ const ALLOWED_MISSING = new Map([
   ["btn-sidebar-open", "botão da sidebar legada, removida no Cockpit v2; accessible-dialogs.js ignora o null"],
   ["ux-sort-status", "região aria-live criada sob demanda por data-panels.js"],
   ["resumo-os-equipamento", "seção criada sob demanda por data-panels.js"],
+  ["ck-os-escopo-equipamento", "botão do escopo criado por data-panels.js dentro da seção de OS"],
+  ["ck-os-escopo-todas", "botão do escopo criado por data-panels.js dentro da seção de OS"],
+  ["ck-os-destaque", "aviso do equipamento criado por data-panels.js dentro da seção de OS"],
   ["badge-divergencias-ux", "criado sob demanda por data-panels.js"],
   ["ux-pending-chip", "criado sob demanda por ux-enhancements.js"],
 ]);

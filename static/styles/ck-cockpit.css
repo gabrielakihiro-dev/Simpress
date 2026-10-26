@@ -369,11 +369,6 @@ button.ck-kpi[aria-pressed="true"] { background: var(--cor-superficie); border-b
 
 /* ---------- 2.11 Transporte e OS por equipamento (telas 3 e 4) ---------- */
 .ck-transp { display: flex; flex-direction: column; gap: 14px; padding: 16px 20px 16px; }
-.ck-parque__corpo { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1.1fr) minmax(0, 1fr); }
-.ck-parque__secao { display: flex; flex-direction: column; gap: 10px; min-width: 0; padding: 12px 14px; border-right: 1px solid var(--cor-borda-suave); }
-.ck-parque__secao:last-child { border-right: 0; }
-.ck-parque__sub { display: flex; align-items: center; justify-content: space-between; gap: 8px; font-size: var(--fs-sm); font-weight: var(--peso-medio); color: var(--cor-texto-mudo); }
-.ck-parque__sub .ck-entrada { width: auto; }
 .ck-numeros { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 10px 12px; }
 .ck-numero { display: flex; flex-direction: column; gap: 1px; min-width: 0; }
 .ck-numero dt { font-size: var(--fs-xs); color: var(--cor-texto-sutil); }
@@ -405,7 +400,7 @@ button.ck-kpi[aria-pressed="true"] { background: var(--cor-superficie); border-b
 .ck-span-2 { grid-column: span 2; }
 .ck-span-3 { grid-column: 1 / -1; }
 .ck-unidades { display: flex; flex-wrap: wrap; gap: 4px; }
-.ck-unidade { height: var(--altura-controle-sm); padding: 0 9px; border: 1px solid var(--cor-borda); border-radius: var(--raio-sm); background: transparent; color: var(--cor-texto-suave); font-size: var(--fs-ui); white-space: nowrap; cursor: pointer; transition: border-color var(--duracao) var(--curva); }
+.ck-unidade { min-height: 0; height: var(--altura-controle-sm); padding: 0 9px; border: 1px solid var(--cor-borda); border-radius: var(--raio-sm); background: transparent; color: var(--cor-texto-suave); font-size: var(--fs-ui); white-space: nowrap; cursor: pointer; transition: border-color var(--duracao) var(--curva); }
 .ck-unidade:hover { border-color: var(--cor-texto-apagado); color: var(--cor-texto); }
 .ck-unidade[aria-pressed="true"] { background: var(--cor-destaque-fundo); border-color: var(--cor-destaque-forte); color: var(--cor-destaque-texto); }
 .ck-unidades__mais { width: auto; height: var(--altura-controle-sm); font-size: var(--fs-ui); }
@@ -434,18 +429,13 @@ button.ck-kpi[aria-pressed="true"] { background: var(--cor-superficie); border-b
 .ck-descricao .ck-link-btn { margin-top: 2px; }
 
 @media (max-width: 1199.98px) {
-  .ck-parque__corpo { grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); }
-  .ck-parque__secao:nth-child(2) { border-right: 0; }
-  .ck-parque__secao:last-child { grid-column: 1 / -1; border-top: 1px solid var(--cor-borda-suave); }
-  .ck-passos { grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); }
+        .ck-passos { grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); }
   .ck-previa { grid-column: 1 / -1; }
 }
 @media (max-width: 767.98px) {
   .ck-transp { padding: 14px 12px; }
-  .ck-parque__corpo, .ck-passos { grid-template-columns: minmax(0, 1fr); }
-  .ck-parque__secao { border-right: 0; border-bottom: 1px solid var(--cor-borda-suave); }
-  .ck-parque__secao:last-child { border-bottom: 0; border-top: 0; }
-  .ck-grade { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .ck-passos { grid-template-columns: minmax(0, 1fr); }
+        .ck-grade { grid-template-columns: repeat(2, minmax(0, 1fr)); }
   .ck-grade .ck-span-2 { grid-column: 1 / -1; }
   .ck-acoes-barra { padding: 10px 12px; }
   .ck-acoes-barra .ck-btn:not(.ck-pendentes) { flex: 1 1 calc(50% - 4px); }
@@ -705,12 +695,6 @@ details.ck-chip { position: relative; padding: 0; }
 .ck-pendentes__n { display: inline-grid; place-items: center; min-width: 18px; height: 18px; padding: 0 5px; border-radius: 9px; background: var(--cor-alerta-fundo); font-size: var(--fs-xs); font-weight: var(--peso-medio); font-variant-numeric: tabular-nums; }
 #ux-pending-chip[data-status="success"] { color: var(--cor-ok-texto); }
 #ux-pending-chip[hidden] { display: none; }
-#ck-parque-transporte .ck-lista__vazio, #ck-parque-transporte .ck-nota { font-size: var(--fs-md); color: var(--cor-texto-mudo); }
-#ck-parque-transporte .ck-atencao__item { grid-template-columns: minmax(0, 1fr) auto; }
-#ck-parque-transporte .ck-atencao__item[data-status="alerta"] { color: var(--cor-alerta-texto); }
-#ck-parque-transporte span.ck-atencao__item { cursor: default; }
-#ck-parque-transporte .ck-atencao__item > span:first-child:empty, #ck-parque-transporte .ck-atencao__item > span:last-child:empty { display: none; }
-#ck-parque-transporte .ck-atencao__item > span:nth-child(2) { grid-column: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .ck-tela--transporte { min-width: 0; }
 @media (min-width: 1200px) {
   #tab-panel-retirada-entrega.ck-tela--transporte:not([hidden]) { display: flex; flex-direction: column; min-height: calc(100dvh - var(--ck-topbar-h, 48px)); }
@@ -721,9 +705,6 @@ details.ck-chip { position: relative; padding: 0; }
 }
 @media (max-width: 767.98px) {
   .ck-acoes-status { flex: 1 1 100%; margin-right: 0; }
-}
-@media (max-width: 1199.98px) {
-  .ck-transp > #ck-parque-transporte { order: 3; }
 }
 
 /* Região 3E: Resumo. Legado (.cockpit-shell .cockpit-summary-*) deixou de casar; aqui só o que o pacote não cobre. */
@@ -746,8 +727,8 @@ details.ck-chip { position: relative; padding: 0; }
 #cockpit-summary-status:empty { display: none; }
 #cockpit-summary-pagination[hidden] { display: none; }
 
-/* Região 3D: OS por equipamento (dentro do Resumo). Escopo por id para vencer o legado .ticket-summary-* (removido na sessão 8). */
-#resumo-os-equipamento.ck-os { display: block; margin: 16px 20px 20px; padding: 0; border: 1px solid var(--cor-borda-suave); border-radius: var(--raio-md); background: var(--cor-superficie); box-shadow: var(--sombra-sm); color: var(--cor-texto); }
+/* Região 3D: OS por equipamento (dentro do Transporte). Escopo por id para vencer o legado .ticket-summary-* (removido na sessão 8). */
+#resumo-os-equipamento.ck-os { display: block; margin: 0; padding: 0; border: 1px solid var(--cor-borda-suave); border-radius: var(--raio-md); background: var(--cor-superficie); box-shadow: var(--sombra-sm); color: var(--cor-texto); }
 #resumo-os-equipamento .ck-os__vinculo { margin: 0; min-height: 0; }
 #resumo-os-equipamento .ck-os__corpo { padding: 4px 12px 12px; }
 #resumo-os-equipamento .ticket-summary-table-wrap { overflow: visible; }
@@ -768,7 +749,7 @@ details.ck-chip { position: relative; padding: 0; }
 #resumo-os-equipamento .ticket-summary-table td:last-child { min-width: 0; }
 #resumo-os-equipamento .ck-descricao__texto { white-space: pre-line; }
 @media (max-width: 1199.98px) {
-  #resumo-os-equipamento.ck-os { margin: 12px; }
+  #resumo-os-equipamento.ck-os { margin: 0; }
   #resumo-os-equipamento .ticket-summary-table-wrap { display: none; }
   #resumo-os-equipamento .ticket-summary-mobile { display: grid; gap: 8px; }
 }
@@ -786,38 +767,17 @@ details.ck-chip { position: relative; padding: 0; }
 #tab-panel-automacao .ck-console__corpo { display: flex; flex-direction: column; flex: 1 1 auto; min-height: 0; }
 #tab-panel-automacao .ck-console__exec { padding: 8px 14px 0; }
 #tab-panel-automacao .ck-console__ferramentas > .ck-consulta { flex: 1 1 260px; }
-#tab-panel-automacao .ck-consulta > summary, #tab-panel-automacao .ck-filtros-detalhes > summary { cursor: pointer; font-size: var(--fs-ui); color: var(--cor-texto-mudo); }
 #tab-panel-automacao .ck-console__linhas { flex: 0 0 96px; }
 #tab-panel-automacao .ck-log__origem:empty::before { content: "—"; color: var(--cor-texto-sutil); }
 #tab-panel-automacao .ck-log__linha { transition: background-color 150ms ease; }
-.ck-console.automation-card--expanded .ck-log { min-height: 62dvh; }
-#automacao-historico-painel.automation-card--expanded #automacao-historico { max-height: none; }
 
-#automacao-cards .ck-chrome { align-items: flex-start; }
-#automacao-cards .ck-chrome__estado { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 8px; margin: 0; }
-#automacao-cards .ck-chrome__det { flex: 1 1 100%; }
-#automacao-cards .ck-chrome__estado .ck-chrome__det { flex: 1 1 auto; }
-#automacao-cards .automation-action-layout { display: grid; gap: 10px; }
 #automacao-cards .ck-rotinas { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 10px; }
-#automacao-cards .automation-action-support { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px; padding: 0; }
-#automacao-cards .ck-linha-acao { margin: 0; padding: 10px 12px; border: 1px solid var(--cor-borda); border-radius: var(--raio-md); }
-#automacao-cards .ck-linha-acao.automation-actions--utility { display: flex; flex-wrap: wrap; margin-left: 0; }
-#automacao-cards .automation-action-caption { color: var(--cor-texto); font-size: var(--fs-base); }
 #automacao-cards .ck-rotina .ck-btn { max-width: 100%; }
 .ck-aviso--alerta { border-color: var(--cor-alerta-texto); background: var(--cor-alerta-fundo); color: var(--cor-alerta-texto); }
 #automacao-cards .ck-aviso--alerta .ck-ico { grid-row: auto; }
 
-.cockpit-shell .ck-sebrae-detalhes { border: 0; background: none; }
-.cockpit-shell .ck-sebrae-detalhes > summary { padding: 0 0 6px; }
-.cockpit-shell .ck-sebrae-detalhes[open] #sebrae-painel { padding: 12px; border: 1px solid var(--cor-borda); box-shadow: none; }
-#sebrae-painel.ck-cartao { display: flex; flex-direction: column; gap: 10px; }
-#sebrae-painel .ck-cartao__cab { padding: 0 0 8px; }
-#sebrae-painel .ck-sebrae-titulo { display: flex; align-items: center; gap: 6px; min-width: 0; }
-#sebrae-painel .sebrae-counters dt { font-size: var(--fs-xs); color: var(--cor-texto-sutil); }
-#sebrae-painel .sebrae-counters dd { font-size: var(--fs-md); font-variant-numeric: tabular-nums; }
 #sebrae-painel .ck-aviso { grid-template-columns: 20px minmax(0, 1fr); align-items: center; }
 
-#automacao-historico-painel .ck-filtros-detalhes { padding: 8px 12px; border-bottom: 1px solid var(--cor-borda-suave); }
 #automacao-historico-painel .ck-filtros-linha { padding: 8px 0 0; border-bottom: 0; }
 #automacao-historico-painel #automacao-historico-resumo { padding: 8px 12px 0; }
 #automacao-historico-painel #automacao-historico { max-height: none; overflow-x: auto; padding: 4px 12px; }
@@ -910,3 +870,14 @@ details.ck-chip { position: relative; padding: 0; }
 .ck-veu .ck-btn.hidden { display: none; }
 .ck-veu .ck-btn.flex-1 { flex: 1 1 0%; }
 .ck-veu > .ck-dialogo :is([class*="border-line-quiet"]) { border-color: var(--cor-borda-suave); }
+/* Os utilitários Tailwind do <html>/<body> (bg-surface*) venceriam o fundo do pacote: reafirma o token. */
+html[data-theme], html[data-theme] body.cockpit-shell-body { background: var(--cor-fundo); }
+
+/* Transporte idêntico ao demo: locais somente leitura (<output>), etiqueta de apelido e escopo da seção de OS. */
+.ck-local output { font: inherit; color: inherit; }
+.ck-local__nome:empty::before, .ck-local__end:empty::before, .ck-local__cnpj output:empty::before { content: attr(data-vazio); color: var(--cor-texto-mudo); font-weight: var(--peso-regular); }
+.ck-selecionado [hidden], #resumo-os-equipamento [hidden] { display: none; }
+.ck-selecionado__meta:empty { display: none; }
+.ck-segmentado__op:disabled { opacity: .5; cursor: default; }
+.ck-local__cnpj { flex-wrap: wrap; }
+.ck-passo__cab { flex-wrap: wrap; }
