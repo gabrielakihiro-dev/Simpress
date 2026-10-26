@@ -692,6 +692,8 @@
   .cockpit-search-shortcut,
   .cockpit-tab span { display: none; }
   .cockpit-bar__tabs { grid-row: 1; grid-column: 2; min-width: 0; }
+  .cockpit-bar__brand { display: none; }
+  .cockpit-bar__tabs { gap: 0; }
   .cockpit-tab { width: 32px; padding: 0; justify-content: center; }
   .cockpit-bar__search { grid-row: 2; grid-column: 1 / -1; max-width: none; }
   .cockpit-bar__status-toggle { display: inline-flex; grid-row: 1; }

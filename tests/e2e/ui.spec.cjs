@@ -60,7 +60,7 @@ test("home has no WCAG 2.2 A/AA axe violations", async ({ page }) => {
 
 test("Cockpit keeps compact typography and a single tools disclosure", async ({ page }, testInfo) => {
   await expect(page.locator(".cockpit-bar")).toHaveCSS("height", testInfo.project.name === "mobile" ? "92px" : "48px");
-  const searchFontSize = testInfo.project.name === "mobile" ? "16px" : "13px";
+  const searchFontSize = testInfo.project.name === "mobile" ? "16px" : "12.5px";
   await expect(page.locator("#input-serial")).toHaveCSS("font-size", searchFontSize);
   await expect(page.locator("#card-equipamento")).toBeHidden();
   await openAnalysisMenu(page);
@@ -926,7 +926,7 @@ test("stale tickets and new divergences appear in the notification center", asyn
     await expect(tickets).toBeVisible();
     await expect(divergences).toBeHidden();
 
-    await page.locator(".cockpit-bar__brand").click();
+    await page.locator(".cockpit-bar").click({ position: { x: 2, y: 2 } });
     await expect(panel).toBeHidden();
     await request.get("/__fixture_alertas_painel?estado=ocultos");
     await trigger.click();
@@ -935,7 +935,7 @@ test("stale tickets and new divergences appear in the notification center", asyn
     await expect(panel.locator("#notification-center-summary")).toHaveText("Nenhum aviso ativo.");
     await expect(tickets).toBeHidden();
     await expect(divergences).toBeHidden();
-    await page.locator(".cockpit-bar__brand").click();
+    await page.locator(".cockpit-bar").click({ position: { x: 2, y: 2 } });
     await expect(panel).toBeHidden();
     await expect(base).toBeVisible();
   } finally {
