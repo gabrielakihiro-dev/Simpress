@@ -896,3 +896,24 @@ details.ck-chip { position: relative; padding: 0; }
 .ck-toast[data-status="alerta"] .ck-ico { color: var(--cor-alerta-texto); }
 .ck-toast[data-status="info"] .ck-ico { color: var(--cor-destaque-texto); }
 .ck-toast .ck-ico { flex: none; width: 16px; height: 16px; }
+
+/* Modais legados (17): casca ck-veu/ck-dialogo; o miolo mantém o HTML e os IDs. */
+.modal-overlay.ck-veu.hidden { display: none; }
+.modal-overlay.ck-veu { z-index: var(--z-overlay, 60); }
+.ck-veu > .ck-dialogo { width: min(760px, 100%); max-width: 760px; height: auto; max-height: min(80vh, 720px); padding: 16px; gap: var(--fs-base); overflow-x: hidden; overflow-y: auto; overscroll-behavior: contain; position: relative; background: var(--cor-superficie); color: var(--cor-texto); border: 1px solid var(--cor-borda); border-radius: var(--raio-lg); box-shadow: var(--sombra-lg); }
+.ck-veu > .ck-dialogo.local-setup-dialog { display: flex; }
+.ck-veu > .ck-dialogo h1, .ck-veu > .ck-dialogo h2, .ck-veu > .ck-dialogo h3 { color: var(--cor-texto); font-size: var(--fs-base); font-weight: var(--peso-medio); }
+.ck-veu > .ck-dialogo p:not([class*="text-"]) { color: var(--cor-texto-suave); }
+.ck-veu > .ck-dialogo :is(input, select, textarea) { background: var(--cor-campo); color: var(--cor-texto); border: 1px solid var(--cor-borda); border-radius: var(--raio-sm); }
+.ck-veu > .ck-dialogo :is(input, select):not([type="checkbox"], [type="radio"], [type="file"]) { min-height: var(--altura-controle); }
+.ck-veu > .ck-dialogo label { color: var(--cor-texto-sutil); font-size: var(--fs-xs); }
+.ck-veu > .ck-dialogo .ck-btn:disabled { opacity: .5; cursor: not-allowed; }
+.ck-veu > .ck-dialogo .confirm-action-ok.ck-btn[data-variant="danger"] { background: var(--cor-erro-fundo); color: var(--cor-erro-texto); border-color: var(--cor-erro-texto); }
+.ck-veu > .ck-dialogo .confirm-action-ok.ck-btn[data-variant="primary"] { background: var(--cor-destaque-fundo); color: var(--cor-destaque-texto); border-color: var(--cor-destaque); }
+.ck-veu > .ck-dialogo .history-modal-scroll { max-height: none; }
+@media (max-width: 767.98px) { .ck-veu { padding: 8px; } .ck-veu > .ck-dialogo { max-height: 80vh; padding: 12px; } }
+@media (prefers-reduced-motion: reduce) { .ck-veu { animation: none; } }
+.ck-veu > .ck-dialogo .alias-history-total { background: var(--cor-destaque-fundo); color: var(--cor-destaque-texto); border-color: var(--cor-destaque); }
+.ck-veu .ck-btn.hidden { display: none; }
+.ck-veu .ck-btn.flex-1 { flex: 1 1 0%; }
+.ck-veu > .ck-dialogo :is([class*="border-line-quiet"]) { border-color: var(--cor-borda-suave); }

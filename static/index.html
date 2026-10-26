@@ -994,14 +994,14 @@ Horário disponível para atendimento:</textarea>
   <!-- ========================================== -->
   <!-- MODAL DE PRÉ-VISUALIZAÇÃO DO RESUMO       -->
   <!-- ========================================== -->
-  <div id="modal-preview" class="modal-overlay fixed inset-0 bg-surface/80 backdrop-blur-sm hidden flex items-center justify-center p-4">
-    <div class="bg-surface-overlay border border-line-control rounded-2xl max-w-2xl w-full p-6 shadow-2xl relative flex flex-col max-h-[90vh]">
+  <div id="modal-preview" class="modal-overlay ck-veu hidden">
+    <div class="ck-dialogo">
       <div class="flex items-center justify-between pb-4 border-b border-line-quiet">
         <div class="flex items-center space-x-2.5">
           <i data-lucide="file-text" class="w-5 h-5 text-brand-400"></i>
           <h3 class="text-base font-bold text-white">Resumo Estruturado da Transferência</h3>
         </div>
-        <button type="button" data-on-click="fecharModalPreview" class="text-fg-subtle hover:text-white transition" aria-label="Fechar resumo">
+        <button type="button" data-on-click="fecharModalPreview" class="ck-btn ck-btn--fantasma ck-btn--icone ck-btn--sm" aria-label="Fechar resumo">
           <i data-lucide="x" class="w-5 h-5" aria-hidden="true"></i>
         </button>
       </div>
@@ -1039,14 +1039,14 @@ Horário disponível para atendimento:</textarea>
   <!-- ========================================== -->
   <!-- MODAL: HISTÓRICO DE TRANSFERÊNCIAS GERADAS -->
   <!-- ========================================== -->
-  <div id="modal-historico-transferencias" class="modal-overlay fixed inset-0 bg-surface/80 backdrop-blur-sm hidden flex items-center justify-center p-4">
-    <div class="bg-surface-overlay border border-line-control rounded-2xl max-w-5xl w-full p-6 shadow-2xl relative flex flex-col max-h-[90vh]">
+  <div id="modal-historico-transferencias" class="modal-overlay ck-veu hidden">
+    <div class="ck-dialogo">
       <div class="flex items-center justify-between pb-4 border-b border-line-quiet">
         <div class="flex items-center space-x-2.5">
           <i data-lucide="history" class="w-5 h-5 text-brand-400" aria-hidden="true"></i>
           <h3 class="text-base font-bold text-white">Transferências geradas</h3>
         </div>
-        <button type="button" data-on-click="fecharModalHistoricoTransferencias" class="text-fg-subtle hover:text-white transition" aria-label="Fechar transferências geradas">
+        <button type="button" data-on-click="fecharModalHistoricoTransferencias" class="ck-btn ck-btn--fantasma ck-btn--icone ck-btn--sm" aria-label="Fechar transferências geradas">
           <i data-lucide="x" class="w-5 h-5" aria-hidden="true"></i>
         </button>
       </div>
@@ -1058,7 +1058,7 @@ Horário disponível para atendimento:</textarea>
       <div id="lista-historico-transferencias" class="overflow-y-auto flex-1 min-h-0 py-3" aria-label="Transferências geradas"></div>
       <div class="pt-3 border-t border-line-quiet flex items-center justify-between gap-3 shrink-0">
         <span class="text-xs text-fg-subtle">Guardado somente neste computador. "Duplicar destino" não altera o equipamento selecionado.</span>
-        <button type="button" data-on-click="fecharModalHistoricoTransferencias" class="px-4 py-2 rounded-lg bg-surface-control hover:bg-surface-control-hover text-fg-tertiary text-xs transition">Fechar</button>
+        <button type="button" data-on-click="fecharModalHistoricoTransferencias" class="ck-btn ck-btn--secundario">Fechar</button>
       </div>
     </div>
   </div>
@@ -1066,16 +1066,16 @@ Horário disponível para atendimento:</textarea>
   <!-- ========================================== -->
   <!-- MODAL DE CONFIRMAÇÃO DE AÇÃO              -->
   <!-- ========================================== -->
-  <div id="modal-confirmar-acao" class="modal-overlay fixed inset-0 bg-surface/80 backdrop-blur-sm hidden flex items-center justify-center p-4">
-    <div class="bg-surface-overlay border border-line-control rounded-2xl max-w-md w-full p-6 shadow-2xl relative flex flex-col max-h-[90vh]">
+  <div id="modal-confirmar-acao" class="modal-overlay ck-veu hidden">
+    <div class="ck-dialogo">
       <div class="flex items-center space-x-2.5 pb-4 border-b border-line-quiet">
         <i data-lucide="alert-triangle" class="w-5 h-5 text-amber-400" aria-hidden="true"></i>
         <h3 id="titulo-confirmar-acao" class="text-base font-bold text-white">Confirmar ação</h3>
       </div>
       <p id="mensagem-confirmar-acao" class="py-4 text-sm leading-relaxed text-fg-tertiary whitespace-pre-line"></p>
       <div class="pt-4 border-t border-line-quiet flex flex-wrap justify-end gap-2">
-        <button type="button" id="btn-confirmar-acao-cancelar" data-on-click="responderConfirmacaoAcao" data-args='[false]' class="px-4 py-2 rounded-lg bg-surface-control hover:bg-surface-control-hover text-fg-secondary text-xs font-semibold transition">Cancelar</button>
-        <button type="button" id="btn-confirmar-acao-ok" data-on-click="responderConfirmacaoAcao" data-args='[true]' data-variant="danger" class="confirm-action-ok px-4 py-2 rounded-lg text-white text-xs font-bold transition">Confirmar</button>
+        <button type="button" id="btn-confirmar-acao-cancelar" data-on-click="responderConfirmacaoAcao" data-args='[false]' class="ck-btn ck-btn--secundario">Cancelar</button>
+        <button type="button" id="btn-confirmar-acao-ok" data-on-click="responderConfirmacaoAcao" data-args='[true]' data-variant="danger" class="confirm-action-ok ck-btn ck-btn--secundario">Confirmar</button>
       </div>
     </div>
   </div>
@@ -1083,14 +1083,14 @@ Horário disponível para atendimento:</textarea>
   <!-- ========================================== -->
   <!-- MODAL DE TEXTO PARA SOLICITAÇÃO DE TRANSPORTE -->
   <!-- ========================================== -->
-  <div id="modal-texto-transporte" class="modal-overlay fixed inset-0 bg-surface/80 backdrop-blur-sm hidden flex items-center justify-center p-4">
-    <div class="bg-surface-overlay border border-line-control rounded-2xl max-w-2xl w-full p-6 shadow-2xl relative flex flex-col max-h-[90vh]">
+  <div id="modal-texto-transporte" class="modal-overlay ck-veu hidden">
+    <div class="ck-dialogo">
       <div class="flex items-center justify-between pb-4 border-b border-line-quiet">
         <div class="flex items-center space-x-2.5">
           <i data-lucide="truck" class="w-5 h-5 text-brand-400"></i>
           <h3 class="text-base font-bold text-white">Solicitação de Transporte</h3>
         </div>
-        <button type="button" data-on-click="fecharModalTextoTransporte" class="text-fg-subtle hover:text-white transition" aria-label="Fechar texto de solicitação">
+        <button type="button" data-on-click="fecharModalTextoTransporte" class="ck-btn ck-btn--fantasma ck-btn--icone ck-btn--sm" aria-label="Fechar texto de solicitação">
           <i data-lucide="x" class="w-5 h-5" aria-hidden="true"></i>
         </button>
       </div>
@@ -1131,8 +1131,8 @@ Horário disponível para atendimento:</textarea>
   <!-- ==================================================== -->
   <!-- MODAL DE ATUALIZAÇÃO / CADASTRO DE EQUIPAMENTO       -->
   <!-- ==================================================== -->
-  <div id="modal-editar-equipamento" class="modal-overlay fixed inset-0 bg-surface/85 backdrop-blur-md hidden flex items-center justify-center p-4">
-    <div class="bg-surface-overlay border border-line-control/80 rounded-2xl max-w-2xl w-full p-6 shadow-2xl relative flex flex-col max-h-[92vh] overflow-hidden">
+  <div id="modal-editar-equipamento" class="modal-overlay ck-veu hidden">
+    <div class="ck-dialogo">
       <!-- Modal Header -->
       <div class="flex items-center justify-between pb-4 border-b border-line-quiet shrink-0">
         <div class="flex items-center space-x-3">
@@ -1147,7 +1147,7 @@ Horário disponível para atendimento:</textarea>
             <p class="text-xs text-fg-subtle">As alterações serão salvas no site e gravadas diretamente na planilha oficial Excel.</p>
           </div>
         </div>
-        <button type="button" data-on-click="fecharModalEditarEquipamento" class="text-fg-subtle hover:text-white p-1 rounded-lg hover:bg-surface-control transition" aria-label="Fechar edição do equipamento">
+        <button type="button" data-on-click="fecharModalEditarEquipamento" class="ck-btn ck-btn--fantasma ck-btn--icone ck-btn--sm" aria-label="Fechar edição do equipamento">
           <i data-lucide="x" class="w-5 h-5" aria-hidden="true"></i>
         </button>
       </div>
@@ -1225,14 +1225,14 @@ Horário disponível para atendimento:</textarea>
   </div>
 
   <!-- MODAL PARA ALTERAR SOMENTE O APELIDO -->
-  <div id="modal-editar-apelido" class="modal-overlay fixed inset-0 bg-surface/85 backdrop-blur-md hidden flex items-center justify-center p-4">
-    <div class="bg-surface-overlay border border-cyan-500/30 rounded-2xl max-w-md w-full p-6 shadow-2xl">
+  <div id="modal-editar-apelido" class="modal-overlay ck-veu hidden">
+    <div class="ck-dialogo">
       <div class="flex items-start justify-between gap-4 mb-5">
         <div>
           <h3 class="text-base font-bold text-white">Editar apelido</h3>
           <p class="text-xs text-fg-subtle mt-1">O apelido manual prevalece nas próximas exportações do Excel.</p>
         </div>
-        <button type="button" data-on-click="fecharModalEditarApelido" class="text-fg-subtle hover:text-white p-1 rounded-lg hover:bg-surface-control transition" aria-label="Fechar">
+        <button type="button" data-on-click="fecharModalEditarApelido" class="ck-btn ck-btn--fantasma ck-btn--icone ck-btn--sm" aria-label="Fechar">
           <i data-lucide="x" class="w-5 h-5"></i>
         </button>
       </div>
@@ -1240,15 +1240,15 @@ Horário disponível para atendimento:</textarea>
       <input type="text" id="edit-apelido-isolado" class="w-full px-3 py-2.5 rounded-lg glass-input text-white font-mono focus:outline-none" autocomplete="off" />
       <p id="apelido-serial-contexto" class="text-xs text-fg-muted font-mono mt-2"></p>
       <div class="flex justify-end gap-2 mt-6 pt-4 border-t border-line-quiet">
-        <button type="button" data-on-click="fecharModalEditarApelido" class="px-4 py-2 rounded-lg bg-surface-control hover:bg-surface-control-hover text-fg-tertiary text-xs transition">Cancelar</button>
-        <button type="button" id="btn-salvar-apelido" data-on-click="salvarApelido" class="px-4 py-2 rounded-lg bg-sky-700 hover:bg-sky-800 text-white font-bold text-xs transition">Salvar apelido</button>
+        <button type="button" data-on-click="fecharModalEditarApelido" class="ck-btn ck-btn--secundario">Cancelar</button>
+        <button type="button" id="btn-salvar-apelido" data-on-click="salvarApelido" class="ck-btn ck-btn--primario">Salvar apelido</button>
       </div>
     </div>
   </div>
 
   <!-- MODAL DO HISTÓRICO DE ALTERAÇÕES DE APELIDO -->
-  <div id="modal-historico-apelidos" class="modal-overlay fixed inset-0 bg-surface/85 backdrop-blur-md hidden flex items-center justify-center p-4">
-    <div class="bg-surface-overlay border border-violet-500/30 rounded-2xl w-full p-6 shadow-2xl flex flex-col max-h-[90vh] alias-history-panel">
+  <div id="modal-historico-apelidos" class="modal-overlay ck-veu hidden">
+    <div class="alias-history-panel ck-dialogo">
       <div class="flex items-start justify-between gap-4 pb-4 border-b border-line-quiet shrink-0 alias-history-header">
         <div>
           <h3 class="text-base font-bold text-white flex items-center gap-2 alias-history-title">
@@ -1258,7 +1258,7 @@ Horário disponível para atendimento:</textarea>
             <span class="info-tip"><button type="button" class="info-tip-trigger" aria-label="Sobre o histórico de alterações" aria-describedby="tip-historico-apelidos"><i data-lucide="info" aria-hidden="true"></i></button><span id="tip-historico-apelidos" role="tooltip" class="info-tip-text">Alterações de apelido, usuário, endereço e avisos do Endpoint. Ações disponíveis aparecem ao lado de cada registro.</span></span>
           </h3>
         </div>
-        <button type="button" data-on-click="fecharModalHistoricoApelidos" class="text-fg-subtle hover:text-white p-1 rounded-lg hover:bg-surface-control transition alias-history-close" aria-label="Fechar histórico">
+        <button type="button" data-on-click="fecharModalHistoricoApelidos" class="alias-history-close ck-btn ck-btn--fantasma ck-btn--icone ck-btn--sm" aria-label="Fechar histórico">
           <i data-lucide="x" class="w-5 h-5"></i>
         </button>
       </div>
@@ -1295,7 +1295,7 @@ Horário disponível para atendimento:</textarea>
         <button type="button" id="proxima-pagina-historico-apelidos" class="alias-history-page-button" aria-controls="lista-historico-apelidos">Próxima</button>
       </nav>
       <div class="pt-3 border-t border-line-quiet flex justify-end shrink-0 alias-history-footer">
-        <button type="button" data-on-click="fecharModalHistoricoApelidos" class="px-4 py-2 rounded-lg bg-surface-control hover:bg-surface-control-hover text-fg-tertiary text-xs transition">Fechar</button>
+        <button type="button" data-on-click="fecharModalHistoricoApelidos" class="ck-btn ck-btn--secundario">Fechar</button>
       </div>
     </div>
   </div>
@@ -1303,8 +1303,8 @@ Horário disponível para atendimento:</textarea>
   <!-- ==================================================== -->
   <!-- MODAL DE GERENCIAMENTO DE REGIONAIS & ENDEREÇOS     -->
   <!-- ==================================================== -->
-  <div id="modal-gerenciar-unidades" class="modal-overlay fixed inset-0 bg-surface/85 backdrop-blur-md hidden flex items-center justify-center p-4">
-    <div class="bg-surface-overlay border border-line-control/80 rounded-2xl max-w-3xl w-full p-6 shadow-2xl relative flex flex-col max-h-[92vh] overflow-hidden">
+  <div id="modal-gerenciar-unidades" class="modal-overlay ck-veu hidden">
+    <div class="ck-dialogo">
       <!-- Header -->
       <div class="flex items-center justify-between pb-4 border-b border-line-quiet shrink-0">
         <div class="flex items-center space-x-3">
@@ -1319,7 +1319,7 @@ Horário disponível para atendimento:</textarea>
             <p class="text-xs text-fg-subtle">Consulte ou cadastre endereços e CNPJs oficiais das filiais.</p>
           </div>
         </div>
-        <button type="button" data-on-click="fecharModalGerenciarUnidades" class="text-fg-subtle hover:text-white p-1 rounded-lg hover:bg-surface-control transition" aria-label="Fechar catálogo de unidades">
+        <button type="button" data-on-click="fecharModalGerenciarUnidades" class="ck-btn ck-btn--fantasma ck-btn--icone ck-btn--sm" aria-label="Fechar catálogo de unidades">
           <i data-lucide="x" class="w-5 h-5" aria-hidden="true"></i>
         </button>
       </div>
@@ -1370,11 +1370,11 @@ Horário disponível para atendimento:</textarea>
             <input type="text" id="form-unidade-cnpj" placeholder="CNPJ da instalação / filial" class="w-full px-2.5 py-1.5 rounded-lg glass-input text-fg-secondary font-mono focus:outline-none" />
           </div>
           <div class="flex items-end gap-2">
-            <button id="btn-salvar-unidade" data-on-click="salvarUnidadeForm" class="flex-1 py-1.5 px-3 rounded-lg bg-emerald-700 hover:bg-emerald-800 text-white font-bold text-xs flex items-center justify-center gap-1 transition">
+            <button id="btn-salvar-unidade" data-on-click="salvarUnidadeForm" class="flex-1 ck-btn ck-btn--primario">
               <i data-lucide="check" class="w-3.5 h-3.5"></i>
               <span>Salvar</span>
             </button>
-            <button data-on-click="toggleFormNovaUnidade" data-args='[false]' class="py-1.5 px-3 rounded-lg bg-surface-control hover:bg-surface-control-hover text-fg-tertiary text-xs transition">
+            <button data-on-click="toggleFormNovaUnidade" data-args='[false]' class="ck-btn ck-btn--secundario">
               Cancelar
             </button>
           </div>
@@ -1388,7 +1388,7 @@ Horário disponível para atendimento:</textarea>
 
       <!-- Footer -->
       <div class="pt-3 border-t border-line-quiet flex justify-end shrink-0">
-        <button data-on-click="fecharModalGerenciarUnidades" class="px-4 py-2 rounded-lg bg-surface-control hover:bg-surface-control-hover text-fg-tertiary text-xs transition">
+        <button data-on-click="fecharModalGerenciarUnidades" class="ck-btn ck-btn--secundario">
           Fechar
         </button>
       </div>
@@ -1396,8 +1396,8 @@ Horário disponível para atendimento:</textarea>
   </div>
 
   <!-- MODAL PARA COMPARAR ENDPOINT E EQUIPAMENTOSDETALHES -->
-  <div id="modal-atualizar-planilhas" class="modal-overlay fixed inset-0 bg-surface/85 backdrop-blur-md hidden flex items-center justify-center p-4">
-    <div class="bg-surface-overlay border border-sky-500/30 rounded-2xl max-w-2xl w-full p-6 shadow-2xl flex flex-col max-h-[92vh] overflow-hidden">
+  <div id="modal-atualizar-planilhas" class="modal-overlay ck-veu hidden">
+    <div class="ck-dialogo">
       <div class="flex items-start justify-between gap-4 pb-4 border-b border-line-quiet shrink-0">
         <div>
           <h3 class="text-base font-bold text-white flex items-center gap-2">
@@ -1406,7 +1406,7 @@ Horário disponível para atendimento:</textarea>
           </h3>
           <p class="text-xs text-fg-subtle mt-1">Envie os dois arquivos para atualizar o cadastro. Endereço e localidade acompanham a Simpress; apelidos alterados manualmente continuam prioritários e divergências aparecem no histórico.</p>
         </div>
-        <button type="button" data-on-click="fecharModalAtualizarPlanilhas" class="text-fg-subtle hover:text-white p-1 rounded-lg hover:bg-surface-control transition" aria-label="Fechar">
+        <button type="button" data-on-click="fecharModalAtualizarPlanilhas" class="ck-btn ck-btn--fantasma ck-btn--icone ck-btn--sm" aria-label="Fechar">
           <i data-lucide="x" class="w-5 h-5"></i>
         </button>
       </div>
@@ -1467,12 +1467,12 @@ Horário disponível para atendimento:</textarea>
       </div>
 
       <div class="pt-4 border-t border-line-quiet flex justify-end gap-2 shrink-0">
-        <button type="button" data-on-click="fecharModalAtualizarPlanilhas" class="px-4 py-2 rounded-lg bg-surface-control hover:bg-surface-control-hover text-fg-tertiary text-xs transition">Cancelar</button>
-        <button type="button" id="btn-previsualizar-planilhas" data-on-click="previsualizarPlanilhas" class="px-5 py-2 rounded-lg bg-sky-700 hover:bg-sky-800 text-white font-bold text-xs flex items-center gap-1.5 transition">
+        <button type="button" data-on-click="fecharModalAtualizarPlanilhas" class="ck-btn ck-btn--secundario">Cancelar</button>
+        <button type="button" id="btn-previsualizar-planilhas" data-on-click="previsualizarPlanilhas" class="ck-btn ck-btn--primario">
           <i data-lucide="refresh-cw" class="w-3.5 h-3.5"></i>
           Pré-visualizar impacto
         </button>
-        <button type="button" id="btn-confirmar-planilhas" data-on-click="enviarPlanilhas" class="hidden px-5 py-2 rounded-lg bg-rose-700 hover:bg-rose-600 text-white font-bold text-xs flex items-center gap-1.5 transition">
+        <button type="button" id="btn-confirmar-planilhas" data-on-click="enviarPlanilhas" class="hidden ck-btn ck-btn--perigo">
           <i data-lucide="check" class="w-3.5 h-3.5"></i>
           Confirmar substituição
         </button>
@@ -1480,8 +1480,8 @@ Horário disponível para atendimento:</textarea>
     </div>
   </div>
 
-  <div id="modal-importar-modelo" class="modal-overlay fixed inset-0 bg-surface/85 backdrop-blur-md hidden flex items-center justify-center p-4">
-    <div class="local-setup-dialog">
+  <div id="modal-importar-modelo" class="modal-overlay ck-veu hidden">
+    <div class="local-setup-dialog ck-dialogo">
       <div class="local-setup-heading">
         <h3 id="titulo-importar-modelo">Importar arquivos</h3>
         <button type="button" class="readiness-import" data-on-click="fecharImportacaoModelo" aria-label="Fechar importação de modelo" title="Fechar">
@@ -1501,8 +1501,8 @@ Horário disponível para atendimento:</textarea>
     </div>
   </div>
 
-  <div id="modal-contato-origem" class="modal-overlay fixed inset-0 bg-surface/85 backdrop-blur-md hidden flex items-center justify-center p-4">
-    <div class="local-setup-dialog">
+  <div id="modal-contato-origem" class="modal-overlay ck-veu hidden">
+    <div class="local-setup-dialog ck-dialogo">
       <div class="local-setup-heading">
         <h3 id="titulo-contato-origem">Contato de origem</h3>
         <button type="button" class="readiness-import" data-on-click="fecharConfiguracaoContatoOrigem" aria-label="Fechar configuração do contato de origem" title="Fechar">
@@ -1531,8 +1531,8 @@ Horário disponível para atendimento:</textarea>
   </div>
 
   <!-- RELATÓRIO MENSAL DO CONTRATO (docs/operacao/relatorio-mensal.md) -->
-  <div id="modal-relatorio-mensal" class="modal-overlay fixed inset-0 bg-surface/85 backdrop-blur-md hidden flex items-center justify-center p-4">
-    <div class="local-setup-dialog monthly-report-dialog">
+  <div id="modal-relatorio-mensal" class="modal-overlay ck-veu hidden">
+    <div class="local-setup-dialog monthly-report-dialog ck-dialogo">
       <div class="local-setup-heading">
         <h3 id="titulo-relatorio-mensal">Relatório mensal</h3>
         <button type="button" class="readiness-import" data-on-click="fecharRelatorioMensal" aria-label="Fechar relatório mensal" title="Fechar">
@@ -1555,8 +1555,8 @@ Horário disponível para atendimento:</textarea>
   </div>
 
   <!-- RESULTADO DA COMPARAÇÃO DAS PLANILHAS -->
-  <div id="modal-comparacao-planilhas" class="modal-overlay fixed inset-0 bg-surface/85 backdrop-blur-md hidden flex items-center justify-center p-4">
-    <div class="modal-panel-fill bg-surface-overlay border border-emerald-500/30 rounded-2xl w-full shadow-2xl flex flex-col overflow-hidden">
+  <div id="modal-comparacao-planilhas" class="modal-overlay ck-veu hidden">
+    <div class="ck-dialogo">
       <div class="flex items-start justify-between gap-4 pb-4 border-b border-line-quiet shrink-0">
         <div>
           <h3 class="text-base font-bold text-white flex items-center gap-2">
@@ -1566,41 +1566,41 @@ Horário disponível para atendimento:</textarea>
           <p id="comparacao-planilhas-fontes" class="text-xs text-fg-subtle mt-1"></p>
         </div>
         <div class="flex shrink-0 items-center gap-1">
-          <button type="button" id="btn-exportar-resultado-comparacao" data-on-click="exportarResultadoComparacaoPlanilhas" class="text-fg-subtle hover:text-white p-1 rounded-lg hover:bg-surface-control transition disabled:cursor-not-allowed disabled:opacity-50" aria-label="Exportar este resultado para Excel" title="Exportar este resultado para Excel (registros e anotações do dia)" disabled>
+          <button type="button" id="btn-exportar-resultado-comparacao" data-on-click="exportarResultadoComparacaoPlanilhas" class="disabled:cursor-not-allowed disabled:opacity-50 ck-btn ck-btn--fantasma ck-btn--icone ck-btn--sm" aria-label="Exportar este resultado para Excel" title="Exportar este resultado para Excel (registros e anotações do dia)" disabled>
             <i data-lucide="download" class="w-5 h-5" aria-hidden="true"></i>
           </button>
-          <button type="button" data-on-click="fecharModalComparacaoPlanilhas" class="text-fg-subtle hover:text-white p-1 rounded-lg hover:bg-surface-control transition" aria-label="Fechar resultado">
+          <button type="button" data-on-click="fecharModalComparacaoPlanilhas" class="ck-btn ck-btn--fantasma ck-btn--icone ck-btn--sm" aria-label="Fechar resultado">
             <i data-lucide="x" class="w-5 h-5"></i>
           </button>
         </div>
       </div>
       <div id="comparacao-planilhas-conteudo" class="history-modal-scroll overflow-y-auto flex-1 min-h-0 py-4 space-y-5"></div>
       <div class="pt-3 border-t border-line-quiet flex justify-end shrink-0">
-        <button type="button" data-on-click="fecharModalComparacaoPlanilhas" class="px-4 py-2 rounded-lg bg-surface-control hover:bg-surface-control-hover text-fg-tertiary text-xs transition">Concluir</button>
+        <button type="button" data-on-click="fecharModalComparacaoPlanilhas" class="ck-btn ck-btn--secundario">Concluir</button>
       </div>
     </div>
   </div>
 
   <!-- EVOLUÇÃO DAS PENDÊNCIAS ENTRE DUAS ATUALIZAÇÕES -->
-  <div id="modal-evolucao-atualizacoes" class="modal-overlay fixed inset-0 bg-surface/85 backdrop-blur-md hidden flex items-center justify-center p-4">
-    <div class="modal-panel bg-surface-overlay border border-cyan-500/30 rounded-2xl max-w-5xl w-full p-6 shadow-2xl flex flex-col max-h-[92vh] overflow-hidden">
-      <div class="flex items-start justify-between gap-4 pb-4 border-b border-line-quiet shrink-0"><div class="flex items-center gap-1"><h3 class="text-base font-bold text-white">Evolução das atualizações</h3><span class="info-tip"><button type="button" class="info-tip-trigger" aria-label="Sobre a evolução das atualizações" aria-describedby="tip-evolucao"><i data-lucide="info" aria-hidden="true"></i></button><span id="tip-evolucao" role="tooltip" class="info-tip-text">Quantos casos surgiram, continuaram ou deixaram de aparecer entre duas atualizações.</span></span></div><button type="button" data-on-click="fecharEvolucaoAtualizacoes" class="text-fg-subtle hover:text-white p-1 rounded-lg hover:bg-surface-control" aria-label="Fechar evolução das atualizações"><i data-lucide="x" class="w-5 h-5"></i></button></div>
-      <form id="form-evolucao-atualizacoes" class="grid grid-cols-1 md:grid-cols-[1fr_1fr_auto] gap-2 py-3 shrink-0"><label class="text-xs text-fg-tertiary">Atualização anterior<select id="evolucao-anterior" required class="mt-1 block w-full rounded-lg border border-line-control bg-surface px-3 py-2 text-sm text-white"></select></label><label class="text-xs text-fg-tertiary">Atualização atual<select id="evolucao-atual" required class="mt-1 block w-full rounded-lg border border-line-control bg-surface px-3 py-2 text-sm text-white"></select></label><button type="submit" class="self-end rounded-lg bg-cyan-500/15 border border-cyan-400/30 px-4 py-2 text-sm text-cyan-100">Comparar</button></form>
+  <div id="modal-evolucao-atualizacoes" class="modal-overlay ck-veu hidden">
+    <div class="modal-panel ck-dialogo">
+      <div class="flex items-start justify-between gap-4 pb-4 border-b border-line-quiet shrink-0"><div class="flex items-center gap-1"><h3 class="text-base font-bold text-white">Evolução das atualizações</h3><span class="info-tip"><button type="button" class="info-tip-trigger" aria-label="Sobre a evolução das atualizações" aria-describedby="tip-evolucao"><i data-lucide="info" aria-hidden="true"></i></button><span id="tip-evolucao" role="tooltip" class="info-tip-text">Quantos casos surgiram, continuaram ou deixaram de aparecer entre duas atualizações.</span></span></div><button type="button" data-on-click="fecharEvolucaoAtualizacoes" class="ck-btn ck-btn--fantasma ck-btn--icone ck-btn--sm" aria-label="Fechar evolução das atualizações"><i data-lucide="x" class="w-5 h-5"></i></button></div>
+      <form id="form-evolucao-atualizacoes" class="grid grid-cols-1 md:grid-cols-[1fr_1fr_auto] gap-2 py-3 shrink-0"><label class="text-xs text-fg-tertiary">Atualização anterior<select id="evolucao-anterior" required class="mt-1 block w-full rounded-lg border border-line-control bg-surface px-3 py-2 text-sm text-white"></select></label><label class="text-xs text-fg-tertiary">Atualização atual<select id="evolucao-atual" required class="mt-1 block w-full rounded-lg border border-line-control bg-surface px-3 py-2 text-sm text-white"></select></label><button type="submit" class="self-end ck-btn ck-btn--primario">Comparar</button></form>
       <div class="grid grid-cols-1 md:grid-cols-[1fr_1fr_auto] gap-2 py-3 shrink-0" aria-label="Filtros da evolução">
         <label for="filtro-evolucao-busca" class="text-xs text-fg-tertiary">Buscar por hostname, série, seção ou anotação<input id="filtro-evolucao-busca" type="search" autocomplete="off" placeholder="Digite um termo para localizar um caso" class="mt-1 block w-full rounded-lg border border-line-control bg-surface px-3 py-2 text-sm text-white placeholder:text-fg-weak"></label>
         <label for="filtro-evolucao-categoria" class="text-xs text-fg-tertiary">Categoria<select id="filtro-evolucao-categoria" class="mt-1 block w-full rounded-lg border border-line-control bg-surface px-3 py-2 text-sm text-white"><option value="">Todas as categorias</option><option value="novos">Novos</option><option value="resolvidos">Deixaram de aparecer</option><option value="continuam">Continuam</option></select></label>
-        <button type="button" id="btn-limpar-filtros-evolucao" class="self-end rounded-lg border border-line-control px-4 py-2 text-xs text-fg-tertiary hover:bg-surface-control">Limpar filtros</button>
+        <button type="button" id="btn-limpar-filtros-evolucao" class="self-end ck-btn ck-btn--secundario">Limpar filtros</button>
       </div>
       <p id="filtro-evolucao-status" class="shrink-0 text-xs text-fg-subtle" role="status" aria-live="polite" aria-atomic="true"></p>
       <div id="resultado-evolucao-atualizacoes" aria-label="Resultado da comparação entre atualizações" aria-live="polite" class="overflow-auto flex-1 space-y-3"></div>
-      <div class="pt-3 border-t border-line-quiet flex justify-end shrink-0"><button type="button" data-on-click="fecharEvolucaoAtualizacoes" class="px-4 py-2 rounded-lg bg-surface-control hover:bg-surface-control-hover text-fg-tertiary text-xs">Fechar</button></div>
+      <div class="pt-3 border-t border-line-quiet flex justify-end shrink-0"><button type="button" data-on-click="fecharEvolucaoAtualizacoes" class="ck-btn ck-btn--secundario">Fechar</button></div>
     </div>
   </div>
 
   <!-- ACOMPANHAMENTO DE CHAMADOS -->
-  <div id="modal-acompanhamento-chamados" class="modal-overlay fixed inset-0 bg-surface/85 backdrop-blur-md hidden flex items-center justify-center p-4">
-    <div class="modal-panel bg-surface-overlay border border-cyan-500/30 rounded-2xl max-w-5xl w-full p-5 sm:p-6 shadow-2xl flex flex-col max-h-[92vh] overflow-hidden">
-      <div class="ticket-modal-header flex items-start justify-between gap-4 pb-4 border-b border-line-quiet shrink-0"><div class="min-w-0 flex items-center gap-1"><h3 class="text-base font-bold text-white">Acompanhamento de Chamados</h3><span class="info-tip"><button type="button" class="info-tip-trigger" aria-label="Sobre o acompanhamento de chamados" aria-describedby="tip-acompanhamento-chamados"><i data-lucide="info" aria-hidden="true"></i></button><span id="tip-acompanhamento-chamados" role="tooltip" class="info-tip-text">OS da Simpress e do Oracle relacionadas pelo número de série. A lista vai da maior OS para a menor; séries sem OS ficam no final. Atenção para 3+ dias ou sem data: selecione um indicador da triagem para filtrar.</span></span></div><div class="ticket-header-actions"><a href="https://simpress.custhelp.com/AgentWeb/" target="_blank" rel="noopener noreferrer" class="ticket-agent-link ticket-agent-link--oracle" aria-label="Abrir portal Oracle AgentWeb" title="Abrir portal Oracle AgentWeb"><i data-lucide="link" aria-hidden="true"></i><span>Oracle</span></a><a href="https://ux.simpress.com.br/equipamentos/acompanhamento" target="_blank" rel="noopener noreferrer" class="ticket-agent-link ticket-agent-link--simpress" aria-label="Abrir acompanhamento de chamados Simpress" title="Abrir acompanhamento de chamados Simpress"><i data-lucide="link" aria-hidden="true"></i><span>Simpress</span></a><button type="button" data-on-click="fecharAcompanhamentoChamados" class="text-fg-subtle hover:text-white p-1 rounded-lg hover:bg-surface-control" aria-label="Fechar acompanhamento de chamados"><i data-lucide="x" class="w-5 h-5"></i></button></div></div>
+  <div id="modal-acompanhamento-chamados" class="modal-overlay ck-veu hidden">
+    <div class="modal-panel ck-dialogo">
+      <div class="ticket-modal-header flex items-start justify-between gap-4 pb-4 border-b border-line-quiet shrink-0"><div class="min-w-0 flex items-center gap-1"><h3 class="text-base font-bold text-white">Acompanhamento de Chamados</h3><span class="info-tip"><button type="button" class="info-tip-trigger" aria-label="Sobre o acompanhamento de chamados" aria-describedby="tip-acompanhamento-chamados"><i data-lucide="info" aria-hidden="true"></i></button><span id="tip-acompanhamento-chamados" role="tooltip" class="info-tip-text">OS da Simpress e do Oracle relacionadas pelo número de série. A lista vai da maior OS para a menor; séries sem OS ficam no final. Atenção para 3+ dias ou sem data: selecione um indicador da triagem para filtrar.</span></span></div><div class="ticket-header-actions"><a href="https://simpress.custhelp.com/AgentWeb/" target="_blank" rel="noopener noreferrer" class="ticket-agent-link ticket-agent-link--oracle" aria-label="Abrir portal Oracle AgentWeb" title="Abrir portal Oracle AgentWeb"><i data-lucide="link" aria-hidden="true"></i><span>Oracle</span></a><a href="https://ux.simpress.com.br/equipamentos/acompanhamento" target="_blank" rel="noopener noreferrer" class="ticket-agent-link ticket-agent-link--simpress" aria-label="Abrir acompanhamento de chamados Simpress" title="Abrir acompanhamento de chamados Simpress"><i data-lucide="link" aria-hidden="true"></i><span>Simpress</span></a><button type="button" data-on-click="fecharAcompanhamentoChamados" class="ck-btn ck-btn--fantasma ck-btn--icone ck-btn--sm" aria-label="Fechar acompanhamento de chamados"><i data-lucide="x" class="w-5 h-5"></i></button></div></div>
       <div id="conteudo-acompanhamento-chamados" role="region" aria-label="Conteúdo do acompanhamento de chamados" tabindex="0" class="min-h-0 flex-1 overflow-y-auto overscroll-contain focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-cyan-400/60">
       <div class="space-y-3 py-3">
         <details id="painel-dados-acompanhamento-chamados" class="ticket-disclosure rounded-lg border border-line-quiet bg-surface/50 px-3 py-2">
@@ -1614,7 +1614,7 @@ Horário disponível para atendimento:</textarea>
                 <label for="arquivo-chamados-simpress" class="block text-xs text-fg-tertiary">Simpress · Acompanhamento de Pedidos</label>
                 <input id="arquivo-chamados-simpress" name="simpress_file" type="file" accept=".xlsx,.zip,application/zip,application/x-zip-compressed,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" aria-describedby="arquivo-chamados-simpress-ajuda nome-arquivo-chamados-simpress" tabindex="-1" aria-hidden="true" class="sr-only">
                 <div class="mt-1 flex min-h-[54px] w-full min-w-0 items-center gap-3 rounded-lg border border-line-control bg-surface px-2 py-1.5">
-                  <button id="btn-escolher-arquivo-chamados-simpress" type="button" aria-label="Escolher arquivo do Acompanhamento de Pedidos da Simpress" aria-controls="arquivo-chamados-simpress" class="shrink-0 rounded-md bg-surface-control px-3 py-2 text-xs font-semibold text-fg-secondary transition-colors hover:bg-surface-control-hover focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-cyan-400/60">Escolher arquivo</button>
+                  <button id="btn-escolher-arquivo-chamados-simpress" type="button" aria-label="Escolher arquivo do Acompanhamento de Pedidos da Simpress" aria-controls="arquivo-chamados-simpress" class="shrink-0 ck-btn ck-btn--secundario">Escolher arquivo</button>
                   <span id="nome-arquivo-chamados-simpress" class="min-w-0 truncate text-xs text-fg-subtle" aria-live="polite">Nenhum arquivo selecionado</span>
                 </div>
               </div>
@@ -1622,18 +1622,18 @@ Horário disponível para atendimento:</textarea>
                 <label for="arquivo-chamados-oracle" class="block text-xs text-fg-tertiary">Oracle · Gestão de Solicitações</label>
                 <input id="arquivo-chamados-oracle" name="oracle_file" type="file" accept=".xlsx,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" aria-describedby="nome-arquivo-chamados-oracle" tabindex="-1" aria-hidden="true" required class="sr-only">
                 <div class="mt-1 flex min-h-[54px] w-full min-w-0 items-center gap-3 rounded-lg border border-line-control bg-surface px-2 py-1.5">
-                  <button id="btn-escolher-arquivo-chamados-oracle" type="button" aria-label="Escolher arquivo do Oracle - Gestão de Solicitações" aria-controls="arquivo-chamados-oracle" class="shrink-0 rounded-md bg-surface-control px-3 py-2 text-xs font-semibold text-fg-secondary transition-colors hover:bg-surface-control-hover focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-cyan-400/60">Escolher arquivo</button>
+                  <button id="btn-escolher-arquivo-chamados-oracle" type="button" aria-label="Escolher arquivo do Oracle - Gestão de Solicitações" aria-controls="arquivo-chamados-oracle" class="shrink-0 ck-btn ck-btn--secundario">Escolher arquivo</button>
                   <span id="nome-arquivo-chamados-oracle" class="min-w-0 truncate text-xs text-fg-subtle" aria-live="polite">Nenhum arquivo selecionado</span>
                 </div>
               </div>
-              <button id="btn-importar-acompanhamento-chamados" type="submit" class="rounded-lg border border-cyan-400/30 bg-cyan-500/15 px-4 py-2.5 text-xs font-semibold text-cyan-100 hover:bg-cyan-500/25 md:mb-2">Importar planilhas</button>
+              <button id="btn-importar-acompanhamento-chamados" type="submit" class="md:mb-2 ck-btn ck-btn--primario">Importar planilhas</button>
               <p id="arquivo-chamados-simpress-ajuda" class="text-xs text-fg-muted md:col-span-3">Cada arquivo pode ter até 60 MB. Simpress aceita .xlsx ou ZIP com uma única planilha .xlsx.</p>
               <p id="status-importacao-chamados" class="text-xs text-fg-subtle md:col-span-3" role="status" aria-live="polite"></p>
             </form>
             <div id="resumo-acompanhamento-chamados" class="shrink-0"></div>
             <div class="grid grid-cols-1 gap-2 md:grid-cols-[minmax(0,1fr)_auto]">
               <label for="versao-acompanhamento-chamados" class="text-xs text-fg-tertiary">Versão das planilhas<select id="versao-acompanhamento-chamados" class="mt-1 block w-full rounded-lg border border-line-control bg-surface px-3 py-2 text-sm text-white" data-on-change="selecionarVersaoChamados"><option value="">Nenhuma importação</option></select></label>
-              <button type="button" id="btn-excluir-importacoes-antigas-chamados" class="self-end rounded-lg border border-rose-400/30 bg-rose-500/10 px-4 py-2 text-xs font-semibold text-rose-200 hover:bg-rose-500/20 disabled:cursor-not-allowed disabled:opacity-50" data-on-click="excluirImportacoesAntigasChamados" disabled>Excluir importações antigas</button>
+              <button type="button" id="btn-excluir-importacoes-antigas-chamados" class="self-end disabled:cursor-not-allowed disabled:opacity-50 ck-btn ck-btn--perigo" data-on-click="excluirImportacoesAntigasChamados" disabled>Excluir importações antigas</button>
               <details class="ticket-disclosure md:col-span-2 rounded-lg border border-line-quiet bg-surface/40 px-3 py-2">
                 <summary class="ticket-disclosure-summary cursor-pointer text-xs font-semibold text-fg-tertiary">Comparação com a importação anterior</summary>
                 <div id="evolucao-acompanhamento-chamados" class="pt-2 text-xs text-fg-tertiary" role="status" aria-live="polite">O histórico de importações aparecerá aqui.</div>
@@ -1644,21 +1644,21 @@ Horário disponível para atendimento:</textarea>
         <div class="ticket-filter-toolbar">
           <label for="filtro-acompanhamento-chamados" class="ticket-filter-search text-xs text-fg-tertiary"><span class="sr-only">Buscar série, pedido, OS ou status</span><input id="filtro-acompanhamento-chamados" type="search" autocomplete="off" class="block w-full rounded-lg border border-line-control bg-surface px-3 py-2 text-sm text-white placeholder:text-fg-weak" placeholder="Buscar série, pedido, OS ou status"></label>
           <label title="Chamados ativos sem data ou com três dias ou mais sem atualização" class="ticket-filter-attention border border-amber-400/20 bg-amber-500/5 text-xs text-amber-100"><input id="somente-atencao-chamados" type="checkbox" class="accent-amber-400">Atenção · 3+ dias</label>
-          <button type="button" id="btn-exportar-acompanhamento-chamados" class="ticket-filter-action ticket-filter-export btn-secondary rounded-lg text-xs font-semibold disabled:cursor-not-allowed disabled:opacity-50" data-on-click="exportarAcompanhamentoChamados" disabled>Exportar Excel</button>
-          <button type="button" class="ticket-filter-action ticket-filter-clear rounded-lg border border-line-control text-xs text-fg-tertiary hover:bg-surface-control" data-on-click="limparFiltrosAcompanhamentoChamados">Limpar filtros</button>
+          <button type="button" id="btn-exportar-acompanhamento-chamados" class="ticket-filter-action ticket-filter-export disabled:cursor-not-allowed disabled:opacity-50 ck-btn ck-btn--secundario" data-on-click="exportarAcompanhamentoChamados" disabled>Exportar Excel</button>
+          <button type="button" class="ticket-filter-action ticket-filter-clear ck-btn ck-btn--secundario" data-on-click="limparFiltrosAcompanhamentoChamados">Limpar filtros</button>
         </div>
       </div>
       <div id="triagem-diaria-acompanhamento-chamados" class="shrink-0 pb-2"></div>
       <p id="contagem-acompanhamento-chamados" class="shrink-0 text-xs text-fg-muted" role="status" aria-live="polite"></p>
       <div id="lista-acompanhamento-chamados" aria-live="polite" class="space-y-3 py-2"></div>
       </div>
-      <div class="pt-3 border-t border-line-quiet flex justify-end shrink-0"><button type="button" data-on-click="fecharAcompanhamentoChamados" class="px-4 py-2 rounded-lg bg-surface-control hover:bg-surface-control-hover text-fg-tertiary text-xs">Fechar</button></div>
+      <div class="pt-3 border-t border-line-quiet flex justify-end shrink-0"><button type="button" data-on-click="fecharAcompanhamentoChamados" class="ck-btn ck-btn--secundario">Fechar</button></div>
     </div>
   </div>
 
   <!-- HISTÓRICO DAS COMPARAÇÕES DE PLANILHAS -->
-  <div id="modal-historico-comparacoes" class="modal-overlay fixed inset-0 bg-surface/85 backdrop-blur-md hidden flex items-center justify-center p-4">
-    <div class="bg-surface-overlay border border-cyan-500/30 rounded-2xl max-w-5xl w-full p-6 shadow-2xl flex flex-col max-h-[92vh] overflow-hidden">
+  <div id="modal-historico-comparacoes" class="modal-overlay ck-veu hidden">
+    <div class="ck-dialogo">
       <div class="flex flex-wrap items-center justify-between gap-4 pb-4 border-b border-line-quiet shrink-0">
         <div>
           <h3 class="text-base font-bold text-white flex items-center gap-2">
@@ -1681,7 +1681,7 @@ Horário disponível para atendimento:</textarea>
               <i data-lucide="download" class="w-4 h-4" aria-hidden="true"></i>
               <span class="hidden sm:inline">Exportar Excel</span>
             </button>
-            <button type="button" data-on-click="fecharModalHistoricoComparacoes" class="text-fg-subtle hover:text-white p-1 rounded-lg hover:bg-surface-control transition" aria-label="Fechar histórico de planilhas">
+            <button type="button" data-on-click="fecharModalHistoricoComparacoes" class="ck-btn ck-btn--fantasma ck-btn--icone ck-btn--sm" aria-label="Fechar histórico de planilhas">
               <i data-lucide="x" class="w-5 h-5"></i>
             </button>
           </div>
@@ -1689,14 +1689,14 @@ Horário disponível para atendimento:</textarea>
       </div>
       <div id="lista-historico-comparacoes" aria-label="Atualizações registradas" class="history-modal-scroll overflow-auto flex-1 min-h-0 py-4 space-y-3"></div>
       <div class="pt-3 border-t border-line-quiet flex justify-end shrink-0">
-        <button type="button" data-on-click="fecharModalHistoricoComparacoes" class="px-4 py-2 rounded-lg bg-surface-control hover:bg-surface-control-hover text-fg-tertiary text-xs transition">Fechar</button>
+        <button type="button" data-on-click="fecharModalHistoricoComparacoes" class="ck-btn ck-btn--secundario">Fechar</button>
       </div>
     </div>
   </div>
 
   <!-- PESQUISA AMPLIADA DE EQUIPAMENTOS -->
-  <div id="modal-pesquisa-completa" class="modal-overlay fixed inset-0 bg-surface/85 backdrop-blur-md hidden flex items-center justify-center p-4" data-on-click="fecharModalPesquisaCompleta" data-on-self-only>
-    <div class="modal-panel bg-surface-overlay border border-cyan-500/30 rounded-2xl max-w-7xl w-full p-6 shadow-2xl flex flex-col max-h-[92vh] overflow-hidden">
+  <div id="modal-pesquisa-completa" class="modal-overlay ck-veu hidden" data-on-click="fecharModalPesquisaCompleta" data-on-self-only>
+    <div class="modal-panel ck-dialogo">
       <div class="flex items-start justify-between gap-4 pb-4 border-b border-line-quiet shrink-0">
         <div class="min-w-0">
           <h3 class="text-base font-bold text-white flex items-center gap-2">
@@ -1707,7 +1707,7 @@ Horário disponível para atendimento:</textarea>
         </div>
         <div class="flex items-center gap-3 shrink-0">
           <span id="pesquisa-completa-contagem" class="px-2.5 py-1 rounded-full bg-cyan-500/15 text-cyan-200 border border-cyan-500/25 text-xs font-semibold" role="status" aria-live="polite">0 resultados</span>
-          <button type="button" id="btn-fechar-pesquisa-completa" data-on-click="fecharModalPesquisaCompleta" class="text-fg-subtle hover:text-white p-1 rounded-lg hover:bg-surface-control transition" aria-label="Fechar resultados da pesquisa">
+          <button type="button" id="btn-fechar-pesquisa-completa" data-on-click="fecharModalPesquisaCompleta" class="ck-btn ck-btn--fantasma ck-btn--icone ck-btn--sm" aria-label="Fechar resultados da pesquisa">
             <i data-lucide="x" class="w-5 h-5" aria-hidden="true"></i>
           </button>
         </div>
@@ -1744,11 +1744,11 @@ Horário disponível para atendimento:</textarea>
       <p id="pesquisa-completa-status" class="text-xs text-fg-subtle py-3 shrink-0" role="status" aria-live="polite">Carregando resultados...</p>
       <div id="pesquisa-completa-lista" class="overflow-y-auto flex-1 min-h-0 py-2 space-y-2" aria-label="Resultados completos da pesquisa"></div>
       <div class="pt-3 border-t border-line-quiet flex items-center justify-between gap-3 shrink-0">
-        <button type="button" id="btn-carregar-mais-pesquisa" data-on-click="carregarMaisResultadosPesquisa" class="hidden inline-flex items-center gap-2 px-4 py-2 rounded-lg bg-sky-700 hover:bg-sky-800 disabled:opacity-50 disabled:cursor-wait text-white text-xs font-semibold transition">
+        <button type="button" id="btn-carregar-mais-pesquisa" data-on-click="carregarMaisResultadosPesquisa" class="hidden disabled:opacity-50 disabled:cursor-wait ck-btn ck-btn--primario">
           <i data-lucide="plus" class="w-4 h-4" aria-hidden="true"></i>
           <span>Carregar mais</span>
         </button>
-        <button type="button" data-on-click="fecharModalPesquisaCompleta" class="ml-auto px-4 py-2 rounded-lg bg-surface-control hover:bg-surface-control-hover text-fg-tertiary text-xs transition">Fechar</button>
+        <button type="button" data-on-click="fecharModalPesquisaCompleta" class="ml-auto ck-btn ck-btn--secundario">Fechar</button>
       </div>
     </div>
   </div>
