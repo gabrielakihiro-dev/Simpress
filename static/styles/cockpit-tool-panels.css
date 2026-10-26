@@ -220,6 +220,51 @@
 .cockpit-monthly-preview h2 { margin: 0 0 10px; color: var(--cockpit-text); font-size: 13px; }
 .cockpit-monthly-preview pre { margin: 0; color: var(--cockpit-text); font: 11px/1.65 var(--ux-font-mono); white-space: pre-wrap; overflow-wrap: anywhere; }
 
+/* Fase 6: painéis idênticos ao artefato (KPIs 22px/500, pílulas 24px/11.5px, tabela 12.5px, detalhe em surface). O cabeçalho do painel não existe no artefato: mantido com os tokens novos. */
+.cockpit-shell .cockpit-tool-kpis { border-bottom-color: var(--cockpit-neutral-800); }
+.cockpit-shell .cockpit-tool-kpi { gap: 2px; min-height: 0; padding: 12px 16px; border-right-color: var(--cockpit-neutral-900); }
+.cockpit-shell .cockpit-tool-kpi-label { color: var(--cockpit-neutral-400); font-size: 11.5px; }
+.cockpit-shell .cockpit-tool-kpi-value { font-size: 22px; font-weight: 500; }
+.cockpit-shell .cockpit-tool-kpi-note { font-size: 11px; }
+.cockpit-shell .cockpit-tool-toolbar { padding: 10px 16px; border-bottom-color: var(--cockpit-neutral-900); }
+.cockpit-shell .cockpit-tool-toolbar .btn { min-height: 28px; height: 28px; padding: 0 10px; font-size: 12px; }
+.cockpit-shell .cockpit-tool-filter-bar { gap: 4px; padding: 10px 16px; border-bottom-color: var(--cockpit-neutral-900); }
+.cockpit-shell .cockpit-tool-filter-chip { min-height: 0; height: 24px; gap: 3px; padding: 0 9px; border: 0; color: var(--cockpit-neutral-400); font-size: 11.5px; }
+.cockpit-shell .cockpit-tool-filter-chip > span { color: inherit; opacity: .7; }
+.cockpit-shell .cockpit-tool-filter-chip:hover:not(:disabled) { background: var(--cockpit-surface); }
+.cockpit-shell .cockpit-tool-filter-chip[aria-pressed="true"] { background: var(--cockpit-accent-soft); color: var(--cockpit-accent-text); }
+.cockpit-shell .cockpit-tool-filter-note { color: var(--cockpit-neutral-500); font-size: 11.5px; }
+.cockpit-shell .cockpit-tool-list { border-right-color: var(--cockpit-neutral-800); }
+.cockpit-shell .cockpit-tool-list-item { border-bottom-color: var(--cockpit-neutral-900); }
+.cockpit-shell .cockpit-tool-list-button { padding: 8px 16px; font-size: 12.5px; }
+.cockpit-shell .cockpit-tool-list-button strong { font-size: 12.5px; font-weight: 400; }
+.cockpit-shell .cockpit-tool-list-button small { color: var(--cockpit-neutral-400); font-size: 11.5px; }
+.cockpit-shell .cockpit-tool-list-button[aria-pressed="true"] { background: var(--cockpit-accent-soft); box-shadow: inset 0 0 0 1px var(--cockpit-accent-800); }
+.cockpit-shell .cockpit-tool-badge { height: 20px; padding: 0 7px; display: inline-flex; align-items: center; border-radius: var(--cockpit-radius-sm); font-size: 11px; }
+.cockpit-shell .cockpit-comparison-columns { padding: 8px 16px; font-size: 11px; font-weight: 500; letter-spacing: .08em; text-transform: uppercase; }
+.cockpit-shell .cockpit-comparison-row > span,
+.cockpit-shell .cockpit-comparison-row strong { font-size: 12.5px; font-weight: 400; }
+.cockpit-shell .cockpit-tool-detail,
+.cockpit-shell .cockpit-monthly-preview { background: var(--cockpit-surface); }
+.cockpit-shell .cockpit-tool-detail { padding: 14px 16px; }
+.cockpit-shell .cockpit-tool-detail-heading { font-size: 16px; font-weight: 500; }
+.cockpit-shell .cockpit-tool-detail-subheading { color: var(--cockpit-neutral-300); font-size: 13px; }
+.cockpit-shell .cockpit-tool-fields dt { color: var(--cockpit-neutral-500); font-size: 11px; }
+.cockpit-shell .cockpit-tool-fields dd { font-size: 13px; }
+.cockpit-shell .cockpit-tool-fields dt,
+.cockpit-shell .cockpit-tool-fields dd,
+.cockpit-shell .cockpit-tool-detail-list li { border-bottom-color: var(--cockpit-neutral-900); }
+.cockpit-shell .cockpit-tool-timeline h3 { font-size: 13px; font-weight: 500; }
+.cockpit-shell .cockpit-tool-timeline-list li { border-left-color: var(--cockpit-neutral-800); }
+.cockpit-shell .cockpit-tool-timeline-list li::before { top: 4px; left: -5px; width: 9px; height: 9px; }
+.cockpit-shell .cockpit-tool-timeline-list strong { font-size: 12.5px; font-weight: 400; }
+.cockpit-shell .cockpit-tool-timeline-list time,
+.cockpit-shell .cockpit-tool-timeline-list span { color: var(--cockpit-neutral-500); font-size: 11.5px; }
+.cockpit-shell .cockpit-tool-actions .btn { height: 32px; }
+.cockpit-shell .cockpit-monthly-layout > .cockpit-tool-detail { border-right-color: var(--cockpit-neutral-800); }
+.cockpit-shell .cockpit-monthly-preview h2 { font-size: 13px; font-weight: 500; }
+.cockpit-shell .cockpit-monthly-preview pre { color: var(--cockpit-neutral-200); font-size: 12px; line-height: 1.6; }
+
 /* Médio e compacto: o detalhe desce para baixo da lista e o painel inteiro rola. */
 @media (max-width: 1199.98px) {
   .cockpit-tool-split,
