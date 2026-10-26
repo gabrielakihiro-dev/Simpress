@@ -104,4 +104,9 @@
     if (abertos.length) { fecharPop(abertos[abertos.length - 1].pop, true); return; }
     var ed = $(".ck-dado--editando"); if (ed) fecharEdicao(ed, true);
   });
+  // A barra compacta quebra em linhas; os paineis legados descontam a altura real dela.
+  var barra = $("#ck-topbar");
+  if (barra && window.ResizeObserver) {
+    new ResizeObserver(function () { doc.documentElement.style.setProperty("--ck-topbar-h", barra.offsetHeight + "px"); }).observe(barra);
+  }
 })();

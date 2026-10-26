@@ -634,3 +634,11 @@ details.ck-chip { position: relative; padding: 0; }
 /* O shell legado tem min-width 1200px e rola na horizontal; a barra acompanha a janela. */
 @media (max-width: 1199.98px) { .ck-topbar { position: sticky; left: 0; width: 100dvw; max-width: 100dvw; box-sizing: border-box; } }
 #form-busca-serial .ck-busca__campo > #input-serial.ck-busca__entrada { background: transparent; box-shadow: none; min-height: 0; border-radius: 0; color: var(--cor-texto); }
+
+/* Barra compacta mais alta que 48px: paineis legados descontam a altura real (--ck-topbar-h, definida em ck-cockpit-visual.js). */
+@media (max-width:1199.98px){
+  .cockpit-home-split,
+  .cockpit-shell .cockpit-transport-layout,
+  .cockpit-shell #automacao-cards{height:calc(100dvh - var(--ck-topbar-h,48px))}
+  .cockpit-shell .cockpit-summary{min-height:calc(100dvh - var(--ck-topbar-h,48px))}
+}
