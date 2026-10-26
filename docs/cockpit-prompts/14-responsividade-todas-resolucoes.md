@@ -173,3 +173,30 @@ Ficam. As regras `@media (pointer: coarse)` (alvos de 44px) só valem em aparelh
 - O total do Histórico de apelidos (`#total-historico-apelidos`) saiu dos tokens azuis antigos e usa o accent do Cockpit (4,21:1 no escuro reprovava AA).
 - O fundo dos modais no tema claro usa o texto do Cockpit a 45% (o `neutral-900` do claro é quase branco e viraria um véu claro, não um escurecimento).
 - Verificado com axe (claro e escuro, 1440px) em Resumo/Home, Chamados, Comparação, Histórico de apelidos, Relatório mensal e no modal do histórico: sem violações. A central de notificações e os demais modais ficaram fora do axe.
+
+## Resultado da responsividade (Fase 7)
+
+Medido no `ui-fixture` (porta 8811), Playwright/Chromium, mesmo método do diagnóstico "antes" (elementos visíveis com borda direita além de `clientWidth + 1`). Prints em `.claude/prints/responsividade/depois-<tela>-<largura>-<light|dark>.png` (80 arquivos, fora do Git). Valores: claro / escuro.
+
+| Tela | 390×844 | 768×1024 | 1024×768 | 1200×800 | 1440×900 |
+| --- | --- | --- | --- | --- | --- |
+| Home | 138 / 142 → 0 / 0 | 127 / 131 → 0 / 0 | 47 / 51 → 0 / 0 | 0 / 0 → 0 / 0 | 0 / 0 → 0 / 0 |
+| Transporte | 348 / 352 → 0 / 0 | 237 / 241 → 0 / 0 | 85 / 89 → 0 / 0 | 0 / 0 → 0 / 0 | 0 / 0 → 0 / 0 |
+| Resumo | 235 / 239 → 0 / 0 | 206 / 210 → 0 / 0 | 87 / 91 → 0 / 0 | 0 / 0 → 0 / 0 | 0 / 0 → 0 / 0 |
+| Automação | 297 / 301 → 2 / 2 (*) | 238 / 242 → 0 / 0 | 77 / 81 → 0 / 0 | 0 / 0 → 0 / 0 | 0 / 0 → 0 / 0 |
+| Painel Chamados | 179 / 183 → 0 / 0 | 159 / 163 → 0 / 0 | 0 / 0 → 0 / 0 | 0 / 0 → 0 / 0 | 0 / 0 → 0 / 0 |
+| Painel Comparação | 164 / 168 → 0 / 0 | 144 / 148 → 0 / 0 | 0 / 0 → 0 / 0 | 0 / 0 → 0 / 0 | 0 / 0 → 0 / 0 |
+| Painel Histórico de apelidos | 156 / 160 → 0 / 0 | 139 / 143 → 0 / 0 | 0 / 0 → 0 / 0 | 0 / 0 → 0 / 0 | 0 / 0 → 0 / 0 |
+| Painel Relatório mensal | 181 / 185 → 0 / 0 | 141 / 145 → 0 / 0 | 0 / 0 → 0 / 0 | 0 / 0 → 0 / 0 | 0 / 0 → 0 / 0 |
+
+(*) Dois `<th>` do cabeçalho da tabela de execuções da Automação a 390px. Em `ux-refinements.css` (~linha 672) o `thead` fica oculto só visualmente (1px, `clip`) quando a tabela vira cards; os `<th>` continuam para leitores de tela e não aparecem. Falso positivo da contagem: `scrollWidth` do `html` e do `body` é igual a `clientWidth`.
+
+### Verificações da Fase 7
+
+- **Rolagem horizontal, 320 a 2560px:** 20 larguras (320, 360, 390, 414, 480, 600, 767, 768, 820, 1024, 1100, 1199, 1200, 1280, 1440, 1600, 1919, 1920, 2200, 2560) × 8 telas × 2 temas = 320 checagens; `scrollWidth <= clientWidth` em `html` e `body` em todas.
+- **Console:** sem erros de JavaScript. Único aviso: `404` em `GET /api/usuarios-entra/estado`, a rota existe no app (`routers/entra_users.py`), mas o `ui-fixture` não registra esse router (limite do fixture, não do app).
+- **Foco por teclado:** 40 `Tab` a partir do topo em 390px e 1440px, nos dois temas; os 38 elementos focados em cada caso têm anel de foco visível (outline ou sombra).
+- **Contraste:** `tests/e2e/color-contrast.spec.cjs` passou (claro e escuro). Suíte e2e completa (`npm run test:ui:e2e`, porta 8812): 238 passed, 1 skipped, 0 failed. `npm run verify`: tudo OK.
+- **Movimento reduzido:** com `prefers-reduced-motion: reduce`, nenhum elemento de Home, Resumo, Automação, Chamados e Comparação tem transição ou animação acima de 1ms.
+- **Comparação com o artefato:** o link https://claude.ai/artifact/DGgv5VBXhu4NrZ9DbxFQhC foi aberto no navegador embutido (renderiza, mas o painel mostra só ~800×600px, iframe de outro domínio: só captura de tela, sem `getComputedStyle`; o artefato é só escuro). Comparado por imagem com `depois-home-1440-dark` e `depois-home-1200-dark`: mesma composição (barra de 48px com marca, 4 abas, busca com Ctrl+K, status e chips, ícones; lista de 360px com filtros em pílulas; detalhe à direita), mesmas cores e tipografia. Diferenças esperadas: o artefato usa dados de exemplo (o fixture tem 1 equipamento) e exibe controles do host ("Entrar", "Compartilhar", selo "Made with Claude Design"). Resumo e Automação foram conferidos nas medidas do `artefato.html` na Fase 6; esta fase não alterou CSS nem HTML, então as medidas são as mesmas. Sem diferença nova no amplo. Pelo link também foi comparada a aba Resumo (captura a ~800×600px) com `depois-resumo-1200-dark`: mesma faixa de 5 KPIs com o quarto selecionado e sublinhado em acento, título "Divergência de localidade" com Regional/Exportar, cabeçalho da tabela em caixa alta e coluna "Ativos por regional" com barras. Diferenças: o artefato tem sparklines nos KPIs e dados de exemplo (já registrado na Fase 6: sem dado real para sparkline); o app mantém blocos que o artefato não tem ("Resumo do parque", "OS por equipamento"). Automação e os painéis de ferramenta não foram reabertos pelo link nesta fase.
+- **Não verificado:** aparelho físico de toque, dados operacionais reais, rotinas Oracle/UX/SoftExpert/Endpoint e CDP 9333 (fora do escopo).
