@@ -203,46 +203,44 @@
       <!-- MAIN CONTAINER -->
       <main id="main-content" tabindex="-1" class="flex-1 w-full space-y-6">
 
-    <section id="tab-panel-home" class="app-tab-panel cockpit-home-split" role="tabpanel" aria-labelledby="tab-home" tabindex="0">
+    <section id="tab-panel-home" class="ck-tela ck-tela--home" role="tabpanel" aria-labelledby="tab-home" tabindex="0">
+    <div class="ck-home">
 
-    <!-- COLUNA ESQUERDA: Lista de equipamentos (360px) -->
-    <aside class="cockpit-home-list" aria-label="Lista de equipamentos">
-      <!-- Filtros compactos -->
-      <div class="cockpit-home-filters" role="group" aria-label="Filtros da lista de equipamentos">
-        <button type="button" class="cockpit-home-pill is-active" data-filter="todos" data-on-click="filtrarListaHome" data-args='["todos"]' aria-pressed="true">Todos <span id="home-filter-total">—</span></button>
-        <button type="button" class="cockpit-home-pill" data-filter="sem-usuario" data-on-click="filtrarListaHome" data-args='["sem-usuario"]' aria-pressed="false">Sem usuário <span id="home-filter-sem-usuario">—</span></button>
-        <button type="button" class="cockpit-home-pill" data-filter="7-dias" data-on-click="filtrarListaHome" data-args='["7-dias"]' aria-pressed="false" disabled>7+ dias <span id="home-filter-7-dias">—</span></button>
-        <button type="button" class="cockpit-home-pill" data-filter="divergentes" data-on-click="filtrarListaHome" data-args='["divergentes"]' aria-pressed="false" disabled>Divergentes <span id="home-filter-divergentes">—</span></button>
+    <!-- COLUNA ESQUERDA: lista de equipamentos -->
+    <aside class="ck-lista" aria-label="Lista de equipamentos">
+      <div class="ck-filtros" role="group" aria-label="Filtros da lista de equipamentos">
+        <button type="button" class="ck-filtro" data-filter="todos" data-on-click="filtrarListaHome" data-args='["todos"]' aria-pressed="true">Todos<span class="ck-filtro__n" id="home-filter-total">—</span></button>
+        <button type="button" class="ck-filtro" data-filter="sem-usuario" data-on-click="filtrarListaHome" data-args='["sem-usuario"]' aria-pressed="false">Sem usuário<span class="ck-filtro__n" id="home-filter-sem-usuario">—</span></button>
+        <button type="button" class="ck-filtro" data-filter="7-dias" data-on-click="filtrarListaHome" data-args='["7-dias"]' aria-pressed="false" disabled>7+ dias<span class="ck-filtro__n" id="home-filter-7-dias">—</span></button>
+        <button type="button" class="ck-filtro" data-filter="divergentes" data-on-click="filtrarListaHome" data-args='["divergentes"]' aria-pressed="false" disabled>Divergentes<span class="ck-filtro__n" id="home-filter-divergentes">—</span></button>
       </div>
 
-      <div class="cockpit-home-list-search">
-        <button type="button" id="btn-listar-sem-usuario" data-on-click="abrirEquipamentosSemUsuario" class="cockpit-home-no-user-btn btn btn-tertiary" aria-label="Equipamentos sem usuário">
-          <i data-lucide="user" class="w-3.5 h-3.5" aria-hidden="true"></i>
+      <div class="ck-lista__acoes">
+        <button type="button" id="btn-listar-sem-usuario" data-on-click="abrirEquipamentosSemUsuario" class="ck-btn ck-btn--fantasma ck-btn--sm" aria-label="Equipamentos sem usuário">
+          <svg class="ck-ico ck-ico--sm" aria-hidden="true" focusable="false"><use href="#i-user"></use></svg>
           <span>Lista sem usuário</span>
         </button>
       </div>
 
-      <!-- Lista de itens -->
       <div id="equipment-loading" class="ui-equipment-loading"></div>
-      <ul id="home-equipment-list" class="cockpit-home-items" role="listbox" aria-label="Equipamentos" tabindex="0" aria-busy="true"></ul>
-      <p id="home-list-empty" class="cockpit-home-list-empty" role="status" hidden>Nenhum equipamento encontrado.</p>
-      <div class="cockpit-home-list-footer">
+      <ul id="home-equipment-list" class="ck-itens" role="listbox" aria-label="Equipamentos" tabindex="0" aria-busy="true"></ul>
+      <p id="home-list-empty" class="ck-lista__vazio" role="status" hidden>Nenhum equipamento encontrado.</p>
+      <div class="ck-lista__rodape">
         <span id="home-list-count" role="status" aria-live="polite" aria-atomic="true">Carregando equipamentos…</span>
-        <button type="button" id="btn-home-list-more" class="btn btn-tertiary" data-on-click="carregarMaisItensHome" hidden>Carregar mais</button>
+        <button type="button" id="btn-home-list-more" class="ck-btn ck-btn--fantasma ck-btn--sm" data-on-click="carregarMaisItensHome" hidden><svg class="ck-ico ck-ico--sm" aria-hidden="true" focusable="false"><use href="#i-chevron-down"></use></svg>Carregar mais</button>
       </div>
 
-      <!-- Pesquisas recentes (integrado na coluna esquerda) -->
-      <section id="home-recentes" class="cockpit-home-recentes" aria-labelledby="home-recentes-titulo" hidden>
-        <div class="cockpit-home-recentes-header">
-          <h2 id="home-recentes-titulo">Recentes</h2>
-          <button type="button" id="btn-limpar-recentes" class="btn btn-tertiary" data-on-click="limparPesquisasRecentes" aria-label="Limpar pesquisas recentes">Limpar</button>
+      <section id="home-recentes" class="ck-recentes" aria-labelledby="home-recentes-titulo" hidden>
+        <div class="ck-recentes__cab">
+          <h2 id="home-recentes-titulo" class="ck-recentes__titulo">Recentes</h2>
+          <button type="button" id="btn-limpar-recentes" class="ck-btn ck-btn--fantasma ck-btn--sm" data-on-click="limparPesquisasRecentes" aria-label="Limpar pesquisas recentes">Limpar</button>
         </div>
-        <ul id="home-recentes-lista" class="cockpit-home-recentes-list"></ul>
+        <ul id="home-recentes-lista" class="ck-recentes__lista"></ul>
       </section>
     </aside>
 
-    <!-- COLUNA DIREITA: Detalhe do equipamento -->
-    <section class="cockpit-home-detail" aria-label="Detalhes do equipamento selecionado">
+    <!-- COLUNA DIREITA: detalhe do equipamento -->
+    <section class="ck-detalhe" aria-label="Detalhes do equipamento selecionado">
 
       <section id="alerta-base-desatualizada" class="stale-base-alert" role="status" aria-labelledby="alerta-base-desatualizada-titulo" data-state="loading" hidden>
         <i data-lucide="alert-triangle" class="stale-base-alert-icon" aria-hidden="true"></i>
@@ -250,142 +248,141 @@
           <h2 id="alerta-base-desatualizada-titulo" class="stale-base-alert-title">Base desatualizada</h2>
           <p id="alerta-base-desatualizada-texto" class="stale-base-alert-text"></p>
         </div>
-        <button type="button" id="btn-alerta-base-atualizar" data-on-click="abrirModalAtualizarPlanilhas" class="btn btn-secondary stale-base-alert-action">Atualizar base</button>
+        <button type="button" id="btn-alerta-base-atualizar" data-on-click="abrirModalAtualizarPlanilhas" class="ck-btn ck-btn--secundario ck-btn--sm stale-base-alert-action">Atualizar base</button>
       </section>
 
-      <!-- Estado vazio: nenhum equipamento selecionado -->
-      <div id="home-detail-empty" class="cockpit-home-empty">
-        <i data-lucide="monitor" class="w-12 h-12 text-fg-muted mb-3" aria-hidden="true"></i>
-        <p class="text-fg-subtle">Selecione um equipamento na lista para ver os detalhes.</p>
+      <div id="home-detail-empty" class="ck-detalhe__vazio">
+        <svg class="ck-ico ck-ico--lg" aria-hidden="true" focusable="false"><use href="#i-monitor"></use></svg>
+        <p>Selecione um equipamento na lista para ver os detalhes.</p>
       </div>
 
-      <!-- Card de equipamento (detalhe) -->
-      <div id="card-equipamento" role="region" aria-label="Dados do equipamento localizado" class="hidden cockpit-home-card">
-        <!-- Cabeçalho do detalhe -->
-        <header class="cockpit-home-card-header">
-          <div class="cockpit-home-card-title">
-            <div id="equip-icon-box" class="cockpit-home-icon" aria-hidden="true">
+      <div id="card-equipamento" role="region" aria-label="Dados do equipamento localizado" class="hidden ck-detalhe__card">
+        <header class="ck-eq-cab">
+          <div class="ck-eq-cab__id">
+            <span id="equip-icon-box" class="ck-eq-cab__icone" aria-hidden="true">
               <i id="equip-icon" data-lucide="laptop"></i>
-            </div>
-            <div class="min-w-0">
-              <strong id="card-serial" class="cockpit-home-serial">—</strong>
-              <div class="cockpit-home-tags">
-                <span id="badge-apelido" class="cockpit-home-tag cockpit-home-tag--accent">Sem apelido</span>
-                <span id="badge-tipo" class="cockpit-home-tag cockpit-home-tag--neutral">Notebook</span>
+            </span>
+            <div class="ck-eq-cab__textos">
+              <div class="ck-eq-cab__linha">
+                <strong id="card-serial" class="ck-eq-cab__serie">—</strong>
+                <span id="badge-apelido" class="ck-tag ck-tag--destaque">Sem apelido</span>
+                <span id="badge-tipo" class="ck-tag ck-tag--neutra">Notebook</span>
               </div>
-              <h3 id="card-modelo" class="cockpit-home-model">Equipamento</h3>
-              <p id="badge-apelido-status" class="hidden cockpit-home-alias-status" role="status" aria-live="polite"></p>
+              <div class="ck-eq-cab__linha">
+                <h2 id="card-modelo" class="ck-eq-cab__modelo">Equipamento</h2>
+              </div>
+              <p id="badge-apelido-status" class="hidden ck-eq-cab__status" role="status" aria-live="polite"></p>
             </div>
           </div>
-          <div class="cockpit-home-card-actions">
-            <button type="button" id="btn-ir-para-transporte" class="btn btn-primary" data-on-click="abrirAbaTransporteDoEquipamento" title="Abrir a aba Transporte com o equipamento selecionado (T)">
-              <i data-lucide="truck" aria-hidden="true"></i>
+          <div class="ck-eq-cab__acoes">
+            <button type="button" id="btn-ir-para-transporte" class="ck-btn ck-btn--primario" data-on-click="abrirAbaTransporteDoEquipamento" title="Abrir a aba Transporte com o equipamento selecionado (T)">
+              <svg class="ck-ico" aria-hidden="true" focusable="false"><use href="#i-truck"></use></svg>
               <span>Transporte</span>
-              <kbd class="cockpit-home-kbd" aria-hidden="true">T</kbd>
+              <kbd class="ck-kbd" aria-hidden="true">T</kbd>
             </button>
-            <button type="button" data-on-click="abrirModalEditarEquipamento" class="btn btn-secondary" title="Editar dados cadastrais deste equipamento (E)">
-              <i data-lucide="edit-3" aria-hidden="true"></i>
+            <button type="button" data-on-click="abrirModalEditarEquipamento" class="ck-btn ck-btn--secundario" title="Editar dados cadastrais deste equipamento (E)">
+              <svg class="ck-ico" aria-hidden="true" focusable="false"><use href="#i-pencil"></use></svg>
               <span>Editar</span>
-              <kbd class="cockpit-home-kbd" aria-hidden="true">E</kbd>
+              <kbd class="ck-kbd" aria-hidden="true">E</kbd>
             </button>
-            <button type="button" data-on-click="abrirModalHistoricoApelidos" class="btn btn-tertiary btn-icon" aria-label="Histórico de apelidos" title="Histórico de alterações">
-              <i data-lucide="history" aria-hidden="true"></i>
+            <button type="button" data-on-click="abrirModalHistoricoApelidos" class="ck-btn ck-btn--icone ck-btn--secundario" aria-label="Histórico de apelidos" title="Histórico de alterações">
+              <svg class="ck-ico" aria-hidden="true" focusable="false"><use href="#i-history"></use></svg>
             </button>
           </div>
         </header>
 
-        <!-- Grade de dados 4×2 -->
-        <dl class="cockpit-home-grid">
-          <div class="cockpit-home-cell">
-            <dt>Série</dt>
-            <dd><span id="grid-serial" class="mono">—</span><button type="button" data-on-click="copiarSerieAtual" class="cockpit-home-copy-btn" aria-label="Copiar série"><i data-lucide="copy" class="w-3 h-3" aria-hidden="true"></i></button></dd>
+        <dl class="ck-dados">
+          <div class="ck-dado">
+            <div class="ck-dado__textos"><dt>Série</dt><dd class="ck-mono" id="grid-serial">—</dd></div>
+            <button type="button" data-on-click="copiarSerieAtual" class="ck-btn ck-btn--fantasma ck-btn--mini" aria-label="Copiar série"><svg class="ck-ico ck-ico--xs" aria-hidden="true" focusable="false"><use href="#i-copy"></use></svg></button>
           </div>
-          <div class="cockpit-home-cell">
-            <dt>Apelido</dt>
-            <dd><span id="grid-apelido">—</span><button type="button" data-on-click="abrirModalEditarApelido" class="cockpit-home-edit-btn" aria-label="Editar apelido"><i data-lucide="pencil" class="w-3 h-3" aria-hidden="true"></i></button></dd>
+          <div class="ck-dado">
+            <div class="ck-dado__textos"><dt>Apelido</dt><dd class="ck-mono" id="grid-apelido">—</dd></div>
+            <button type="button" data-on-click="abrirModalEditarApelido" class="ck-btn ck-btn--fantasma ck-btn--mini" aria-label="Editar apelido"><svg class="ck-ico ck-ico--xs" aria-hidden="true" focusable="false"><use href="#i-pencil"></use></svg></button>
           </div>
-          <div class="cockpit-home-cell">
-            <dt>Usuário</dt>
-            <dd>
-              <span id="card-usuarios-logados" class="hidden">—</span>
-              <span id="card-usuario-manual-acoes" class="hidden cockpit-home-inline-actions">
-                <button type="button" data-on-click="editarUsuarioLogado" class="cockpit-home-edit-btn" aria-label="Editar usuário"><i data-lucide="pencil" class="w-3 h-3" aria-hidden="true"></i></button>
-                <button type="button" data-on-click="limparUsuarioLogado" class="cockpit-home-edit-btn" aria-label="Limpar usuário"><i data-lucide="x" class="w-3 h-3" aria-hidden="true"></i></button>
-              </span>
-              <form id="form-usuario-manual" class="hidden cockpit-home-inline-form" data-on-submit="salvarUsuarioLogado" autocomplete="off">
-                <input id="input-usuario-manual" type="text" maxlength="160" placeholder="Usuário">
-                <button type="submit" id="btn-salvar-usuario-manual" class="btn btn-primary btn-sm">Salvar</button>
-              </form>
-            </dd>
+          <div class="ck-dado" id="ck-dado-usuario">
+            <div class="ck-dado__textos">
+              <dt id="ck-rotulo-usuario">Usuário</dt>
+              <dd>
+                <span id="card-usuarios-logados" class="hidden">—</span>
+                <form id="form-usuario-manual" class="ck-edicao hidden" data-on-submit="salvarUsuarioLogado" autocomplete="off">
+                  <input id="input-usuario-manual" class="ck-entrada ck-entrada--sm" type="text" maxlength="160" placeholder="Usuário" aria-labelledby="ck-rotulo-usuario">
+                  <button type="submit" id="btn-salvar-usuario-manual" class="ck-btn ck-btn--primario ck-btn--sm">Salvar</button>
+                </form>
+              </dd>
+            </div>
+            <span id="card-usuario-manual-acoes" class="hidden ck-dado__acoes">
+              <button type="button" data-on-click="editarUsuarioLogado" class="ck-btn ck-btn--fantasma ck-btn--mini" aria-label="Editar usuário"><svg class="ck-ico ck-ico--xs" aria-hidden="true" focusable="false"><use href="#i-pencil"></use></svg></button>
+              <button type="button" data-on-click="limparUsuarioLogado" class="ck-btn ck-btn--fantasma ck-btn--mini" aria-label="Limpar usuário"><svg class="ck-ico ck-ico--xs" aria-hidden="true" focusable="false"><use href="#i-x"></use></svg></button>
+            </span>
           </div>
-          <div class="cockpit-home-cell">
-            <dt>Login</dt>
-            <dd>
-              <span id="card-nome-pessoa" class="hidden">—</span>
-              <button type="button" id="btn-editar-nome-pessoa" class="hidden cockpit-home-edit-btn" data-on-click="editarNomePessoa" aria-expanded="false" aria-controls="form-nome-pessoa" aria-label="Editar nome"><i data-lucide="pencil" class="w-3 h-3" aria-hidden="true"></i></button>
-              <form id="form-nome-pessoa" class="hidden cockpit-home-inline-form" data-on-submit="salvarNomePessoa" autocomplete="off">
-                <input id="input-nome-pessoa" type="text" maxlength="300" placeholder="Nome da pessoa">
-                <button type="submit" id="btn-salvar-nome-pessoa" class="btn btn-primary btn-sm">Salvar</button>
-              </form>
-            </dd>
+          <div class="ck-dado" id="ck-dado-login">
+            <div class="ck-dado__textos">
+              <dt id="ck-rotulo-login">Login</dt>
+              <dd>
+                <span id="card-nome-pessoa" class="hidden">—</span>
+                <form id="form-nome-pessoa" class="ck-edicao hidden" data-on-submit="salvarNomePessoa" autocomplete="off">
+                  <input id="input-nome-pessoa" class="ck-entrada ck-entrada--sm" type="text" maxlength="300" placeholder="Nome da pessoa" aria-labelledby="ck-rotulo-login">
+                  <button type="submit" id="btn-salvar-nome-pessoa" class="ck-btn ck-btn--primario ck-btn--sm">Salvar</button>
+                </form>
+              </dd>
+            </div>
+            <button type="button" id="btn-editar-nome-pessoa" class="hidden ck-btn ck-btn--fantasma ck-btn--sm" data-on-click="editarNomePessoa" aria-expanded="false" aria-controls="form-nome-pessoa" aria-label="Editar nome">Editar nome</button>
           </div>
-          <div class="cockpit-home-cell">
-            <dt>Local atual</dt>
-            <dd><span id="card-localizacao">—</span></dd>
+          <div class="ck-dado">
+            <div class="ck-dado__textos"><dt>Local atual</dt><dd id="card-localizacao">—</dd></div>
           </div>
-          <div class="cockpit-home-cell">
-            <dt>CEP</dt>
-            <dd><span id="grid-cep" class="mono">—</span><button type="button" data-on-click="copiarDadoLocalAtual" data-args='["cep"]' class="cockpit-home-copy-btn" aria-label="Copiar CEP"><i data-lucide="copy" class="w-3 h-3" aria-hidden="true"></i></button></dd>
+          <div class="ck-dado">
+            <div class="ck-dado__textos"><dt>CEP</dt><dd class="ck-mono" id="grid-cep">—</dd></div>
+            <button type="button" data-on-click="copiarDadoLocalAtual" data-args='["cep"]' class="ck-btn ck-btn--fantasma ck-btn--mini" aria-label="Copiar CEP"><svg class="ck-ico ck-ico--xs" aria-hidden="true" focusable="false"><use href="#i-copy"></use></svg></button>
           </div>
-          <div class="cockpit-home-cell">
-            <dt>CNPJ faturamento</dt>
-            <dd><span id="grid-cnpj-fat" class="mono">—</span><button type="button" data-on-click="copiarDadoLocalAtual" data-args='["faturamento"]' class="cockpit-home-copy-btn" aria-label="Copiar CNPJ de faturamento"><i data-lucide="copy" class="w-3 h-3" aria-hidden="true"></i></button></dd>
+          <div class="ck-dado">
+            <div class="ck-dado__textos"><dt>CNPJ faturamento</dt><dd class="ck-mono" id="grid-cnpj-fat">—</dd></div>
+            <button type="button" data-on-click="copiarDadoLocalAtual" data-args='["faturamento"]' class="ck-btn ck-btn--fantasma ck-btn--mini" aria-label="Copiar CNPJ de faturamento"><svg class="ck-ico ck-ico--xs" aria-hidden="true" focusable="false"><use href="#i-copy"></use></svg></button>
           </div>
-          <div class="cockpit-home-cell">
-            <dt>CNPJ instalação</dt>
-            <dd><span id="grid-cnpj-inst" class="mono">—</span><button type="button" data-on-click="copiarDadoLocalAtual" data-args='["instalacao"]' class="cockpit-home-copy-btn" aria-label="Copiar CNPJ de instalação"><i data-lucide="copy" class="w-3 h-3" aria-hidden="true"></i></button></dd>
+          <div class="ck-dado">
+            <div class="ck-dado__textos"><dt>CNPJ instalação</dt><dd class="ck-mono" id="grid-cnpj-inst">—</dd></div>
+            <button type="button" data-on-click="copiarDadoLocalAtual" data-args='["instalacao"]' class="ck-btn ck-btn--fantasma ck-btn--mini" aria-label="Copiar CNPJ de instalação"><svg class="ck-ico ck-ico--xs" aria-hidden="true" focusable="false"><use href="#i-copy"></use></svg></button>
           </div>
         </dl>
 
-        <p id="card-id-cliente" class="hidden cockpit-home-client-id"></p>
+        <p id="card-id-cliente" class="hidden ck-detalhe__cliente"></p>
         <p id="card-cnpj-atual" class="hidden"></p>
 
-        <!-- Chamados manuais (pílulas + preview) -->
-        <div class="cockpit-home-bottom">
-        <section class="cockpit-home-tickets" aria-labelledby="ticket-templates-title">
-          <div class="cockpit-home-ticket-pills" role="tablist" aria-label="Modelos de chamado" data-on-keydown="controlarAbasTransferencia" data-args='["$event"]' >
-            <button type="button" class="cockpit-home-ticket-pill is-active" role="tab" aria-selected="true" data-on-click="alternarChamadosManuais" data-args='["deslocamento"]' id="pill-chamado-deslocamento" aria-controls="visualizacao-chamado-deslocamento" tabindex="0">
-              <span class="dot-ok" aria-hidden="true"></span> Deslocamento
+        <div class="ck-home-base">
+        <section class="ck-cartao ck-chamado" aria-labelledby="ticket-templates-title">
+          <div class="ck-chamado__abas" role="tablist" aria-label="Modelos de chamado" data-on-keydown="controlarAbasTransferencia" data-args='["$event"]'>
+            <button type="button" class="ck-modelo-aba" role="tab" aria-selected="true" data-on-click="alternarChamadosManuais" data-args='["deslocamento"]' id="pill-chamado-deslocamento" aria-controls="visualizacao-chamado-deslocamento" tabindex="0">
+              <span class="ck-prontidao" data-status="alerta" aria-hidden="true"></span> Deslocamento
             </button>
-            <button type="button" class="cockpit-home-ticket-pill" role="tab" aria-selected="false" data-on-click="alternarChamadosManuais" data-args='["teclado-mouse"]' id="pill-chamado-teclado-mouse" aria-controls="visualizacao-chamado-teclado-mouse" tabindex="-1">
-              <span class="dot-warn" aria-hidden="true"></span> Kit teclado + mouse
+            <button type="button" class="ck-modelo-aba" role="tab" aria-selected="false" data-on-click="alternarChamadosManuais" data-args='["teclado-mouse"]' id="pill-chamado-teclado-mouse" aria-controls="visualizacao-chamado-teclado-mouse" tabindex="-1">
+              <span class="ck-prontidao" data-status="alerta" aria-hidden="true"></span> Kit teclado + mouse
             </button>
-            <button type="button" class="cockpit-home-ticket-pill" role="tab" aria-selected="false" data-on-click="alternarChamadosManuais" data-args='["mau-funcionamento"]' id="pill-chamado-mau-funcionamento" aria-controls="visualizacao-chamado-mau-funcionamento" tabindex="-1">
-              <span class="dot-warn" aria-hidden="true"></span> Mau funcionamento
+            <button type="button" class="ck-modelo-aba" role="tab" aria-selected="false" data-on-click="alternarChamadosManuais" data-args='["mau-funcionamento"]' id="pill-chamado-mau-funcionamento" aria-controls="visualizacao-chamado-mau-funcionamento" tabindex="-1">
+              <span class="ck-prontidao" data-status="alerta" aria-hidden="true"></span> Mau funcionamento
             </button>
-            <button type="button" class="cockpit-home-ticket-pill" role="tab" aria-selected="false" data-on-click="alternarChamadosManuais" data-args='["uso-inadequado"]' id="pill-chamado-uso-inadequado" aria-controls="visualizacao-chamado-uso-inadequado" tabindex="-1">
-              <span class="dot-warn" aria-hidden="true"></span> Uso inadequado
+            <button type="button" class="ck-modelo-aba" role="tab" aria-selected="false" data-on-click="alternarChamadosManuais" data-args='["uso-inadequado"]' id="pill-chamado-uso-inadequado" aria-controls="visualizacao-chamado-uso-inadequado" tabindex="-1">
+              <span class="ck-prontidao" data-status="alerta" aria-hidden="true"></span> Uso inadequado
             </button>
           </div>
 
           <div id="ticket-templates-content">
-            <div class="cockpit-home-ticket-toolbar">
-              <h4 id="ticket-templates-title" class="sr-only">Textos prontos para chamados manuais</h4>
-              <span class="cockpit-home-ticket-serial">Série: <strong id="ticket-templates-serial" class="mono">—</strong></span>
-              <div class="cockpit-home-ticket-toolbar-actions">
-                <a class="btn btn-tertiary btn-sm ticket-template-link" href="https://ux.simpress.com.br/ng/gerar-ticket/consulta" target="_blank" rel="noopener noreferrer" aria-label="Abrir portal Simpress">
-                  <i data-lucide="external-link" class="w-3.5 h-3.5" aria-hidden="true"></i> Portal
+            <div class="ck-chamado__barra">
+              <h2 id="ticket-templates-title" class="ck-sr">Textos prontos para chamados manuais</h2>
+              <p class="ck-chamado__info">Série: <strong id="ticket-templates-serial">—</strong></p>
+              <div class="ck-chamado__acoes">
+                <a class="ck-btn ck-btn--fantasma ck-btn--sm ticket-template-link" href="https://ux.simpress.com.br/ng/gerar-ticket/consulta" target="_blank" rel="noopener noreferrer" aria-label="Abrir portal Simpress">
+                  <svg class="ck-ico ck-ico--sm" aria-hidden="true" focusable="false"><use href="#i-external"></use></svg> Portal
                 </a>
-                <button type="button" class="btn btn-secondary btn-sm" data-on-click="copiarModeloChamado" data-args='["texto-chamado-deslocamento"]' id="btn-copiar-chamado-atual">
-                  <i data-lucide="copy" class="w-3.5 h-3.5" aria-hidden="true"></i> Copiar
-                  <kbd class="cockpit-home-kbd" aria-hidden="true">C</kbd>
+                <button type="button" class="ck-btn ck-btn--primario ck-btn--sm" data-on-click="copiarModeloChamado" data-args='["texto-chamado-deslocamento"]' id="btn-copiar-chamado-atual">
+                  <svg class="ck-ico ck-ico--sm" aria-hidden="true" focusable="false"><use href="#i-copy"></use></svg> Copiar
+                  <kbd class="ck-kbd" aria-hidden="true">C</kbd>
                 </button>
               </div>
             </div>
 
-            <!-- Previews dos modelos (IDs preservados) -->
-            <div id="visualizacao-chamado-deslocamento" role="tabpanel" aria-labelledby="pill-chamado-deslocamento" class="cockpit-home-ticket-preview">
-              <textarea id="texto-chamado-deslocamento" class="cockpit-home-ticket-textarea" spellcheck="true">Prezados,
+            <div id="visualizacao-chamado-deslocamento" role="tabpanel" aria-labelledby="pill-chamado-deslocamento" class="ck-chamado__painel">
+              <textarea id="texto-chamado-deslocamento" class="ck-chamado__texto" spellcheck="true">Prezados,
 
 Solicito o deslocamento de um técnico à unidade do Sebrae para realizar a sanitização e configuração de um notebook para novo usuário.
 
@@ -400,8 +397,8 @@ Horário da Instalação:
 
 Lembrando que é necessário o correto preenchimento do termo e anexá-lo ao chamado no fechamento.</textarea>
             </div>
-            <div id="visualizacao-chamado-teclado-mouse" role="tabpanel" aria-labelledby="pill-chamado-teclado-mouse" class="cockpit-home-ticket-preview" hidden>
-              <textarea id="texto-chamado-teclado-mouse" class="cockpit-home-ticket-textarea" spellcheck="true">Olá, solicito um novo kit de teclado + mouse, pois [descrever o motivo da solicitação].
+            <div id="visualizacao-chamado-teclado-mouse" role="tabpanel" aria-labelledby="pill-chamado-teclado-mouse" class="ck-chamado__painel" hidden>
+              <textarea id="texto-chamado-teclado-mouse" class="ck-chamado__texto" spellcheck="true">Olá, solicito um novo kit de teclado + mouse, pois [descrever o motivo da solicitação].
 
 Nome do(a) Colaborador(a):
 Horário de funcionamento:
@@ -409,8 +406,8 @@ Horário de funcionamento:
 Produto HP: 18H24AA_AC4_2 (Recebimento Santana) ou 18H24AA#AC4
 Modelo: 230 Wireless Mouse and Keyboard Combo</textarea>
             </div>
-            <div id="visualizacao-chamado-mau-funcionamento" role="tabpanel" aria-labelledby="pill-chamado-mau-funcionamento" class="cockpit-home-ticket-preview" hidden>
-              <textarea id="texto-chamado-mau-funcionamento" class="cockpit-home-ticket-textarea" spellcheck="true">Prezados,
+            <div id="visualizacao-chamado-mau-funcionamento" role="tabpanel" aria-labelledby="pill-chamado-mau-funcionamento" class="ck-chamado__painel" hidden>
+              <textarea id="texto-chamado-mau-funcionamento" class="ck-chamado__texto" spellcheck="true">Prezados,
 Solicito o envio de um técnico para avaliar o mau funcionamento do equipamento [identificação]. Peço que verifique a causa do problema, realize o diagnóstico e informe as providências necessárias.
 
 Descrição do Problema:
@@ -418,8 +415,8 @@ Descrição do Problema:
 Nome do(a) colaborador(a):
 Horário disponível para atendimento:</textarea>
             </div>
-            <div id="visualizacao-chamado-uso-inadequado" role="tabpanel" aria-labelledby="pill-chamado-uso-inadequado" class="cockpit-home-ticket-preview" hidden>
-              <textarea id="texto-chamado-uso-inadequado" class="cockpit-home-ticket-textarea" spellcheck="true">Prezados,
+            <div id="visualizacao-chamado-uso-inadequado" role="tabpanel" aria-labelledby="pill-chamado-uso-inadequado" class="ck-chamado__painel" hidden>
+              <textarea id="texto-chamado-uso-inadequado" class="ck-chamado__texto" spellcheck="true">Prezados,
 Solicito o envio de um técnico para avaliar o equipamento após relato de possível uso inadequado pelo(a) colaborador(a). Peço que registre as condições encontradas, avalie a causa do problema e informe as providências recomendadas.
 
 Descrição:
@@ -429,22 +426,22 @@ Horário disponível para atendimento:</textarea>
             </div>
           </div>
 
-          <!-- Toggle legado preservado (oculto visualmente, ID mantido) -->
           <button type="button" id="btn-toggle-ticket-templates" class="hidden" aria-expanded="true" aria-controls="ticket-templates-content" data-on-click="alternarChamadosManuais"></button>
         </section>
 
-        <!-- Chamados abertos da série selecionada (dados de acompanhamento de chamados) -->
-        <aside class="cockpit-home-open-tickets" aria-labelledby="home-open-tickets-title">
-          <header class="cockpit-home-open-tickets-header">
-            <h4 id="home-open-tickets-title">Chamados abertos</h4>
-            <span id="home-open-tickets-count" class="cockpit-home-open-tickets-count" role="status" aria-live="polite"></span>
+        <aside class="ck-cartao" aria-labelledby="home-open-tickets-title">
+          <header class="ck-cartao__cab">
+            <h2 id="home-open-tickets-title" class="ck-cartao__titulo">Chamados abertos</h2>
+            <span class="ck-espaco"></span>
+            <span id="home-open-tickets-count" class="ck-cartao__meta" role="status" aria-live="polite"></span>
           </header>
-          <div id="home-open-tickets-body" class="cockpit-home-open-tickets-body" aria-busy="false"></div>
+          <div id="home-open-tickets-body" aria-busy="false"></div>
         </aside>
         </div>
       </div>
     </section>
 
+    </div>
     </section>
 
     <section id="tab-panel-retirada-entrega" class="app-tab-panel" role="tabpanel" aria-labelledby="tab-retirada-entrega" tabindex="0" hidden>

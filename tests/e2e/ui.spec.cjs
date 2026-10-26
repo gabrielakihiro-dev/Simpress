@@ -190,7 +190,7 @@ test("recent lookups reopen the result and can be cleared", async ({ page }) => 
   expect((await lookup).status()).toBe(200);
   await expect(page.locator("#card-equipamento")).toBeVisible({ timeout: 15_000 });
   await expect(page.locator("#card-serial")).toHaveText("LENTO");
-  await expect(recentSection.locator(".home-recent-serial")).toHaveText(["LENTO", "OUTRO"]);
+  await expect(recentSection.locator(".ck-recente__serie")).toHaveText(["LENTO", "OUTRO"]);
   await auditAccessibility(page, "#home-recentes");
 
   await recentSection.getByRole("button", { name: "Limpar pesquisas recentes" }).click();

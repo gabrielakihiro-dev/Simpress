@@ -642,3 +642,50 @@ details.ck-chip { position: relative; padding: 0; }
   .cockpit-shell #automacao-cards{height:calc(100dvh - var(--ck-topbar-h,48px))}
   .cockpit-shell .cockpit-summary{min-height:calc(100dvh - var(--ck-topbar-h,48px))}
 }
+
+/* Região 3B: Home. Visibilidade pelas classes/atributos reais do JS; medidas do pacote ficam nos blocos acima. */
+.ck-lista .ck-ico--sm, .ck-detalhe .ck-ico--sm { width: 14px; height: 14px; }
+.ck-lista .ck-ico--xs, .ck-detalhe .ck-ico--xs { width: 12px; height: 12px; }
+.ck-detalhe__vazio .ck-ico--lg { width: 32px; height: 32px; }
+.ck-detalhe .hidden, .ck-lista [hidden], .ck-detalhe [hidden] { display: none; }
+#tab-panel-home button, #tab-panel-home .ck-btn { min-height: 0; }
+#tab-panel-home .ck-entrada--sm { height: 26px; min-height: 0; }
+#tab-panel-home .ck-recente { min-height: 24px; }
+.ck-filtro:disabled { opacity: .45; cursor: not-allowed; }
+.ck-filtro:disabled:hover { background: transparent; }
+.ck-filtro:focus-visible, .ck-item:focus-visible, .ck-recente:focus-visible, .ck-modelo-aba:focus-visible, .ck-chamado__texto:focus-visible { outline: 2px solid var(--cor-destaque); outline-offset: 2px; }
+.ck-lista { overflow: hidden; }
+.ck-lista__acoes { display: flex; padding: 6px 12px; border-bottom: 1px solid var(--cor-borda-suave); }
+.ck-lista__vazio { padding: 16px 14px; font-size: var(--fs-md); color: var(--cor-texto-mudo); }
+.ui-equipment-loading:empty { display: none; }
+.ck-itens:focus-visible { outline: 2px solid var(--cor-destaque); outline-offset: -2px; }
+.ck-item { padding: 9px 12px; }
+.ck-item__serie { font-size: 18px; line-height: 1.3; white-space: nowrap; }
+.ck-item__local { align-self: center; overflow: hidden; text-overflow: ellipsis; max-width: 14ch; }
+.ck-item .ck-status { grid-column: 2; grid-row: 2; white-space: nowrap; }
+.ck-recentes { order: 99; }
+.ck-recente { display: inline-flex; align-items: center; flex-wrap: wrap; gap: 2px 8px; height: auto; min-height: 24px; max-width: 100%; padding: 3px 8px; text-align: left; }
+.ck-recente__extra { color: var(--cor-texto-mudo); font-family: var(--fonte-corpo); font-size: var(--fs-xs); }
+.ck-detalhe__vazio { display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 10px; min-height: 240px; padding: 24px; text-align: center; color: var(--cor-texto-mudo); font-size: var(--fs-md); }
+.ck-detalhe__card { display: flex; flex-direction: column; gap: 14px; min-width: 0; }
+.ck-eq-cab__status { font-size: var(--fs-sm); color: var(--cor-texto-mudo); }
+.ck-detalhe__cliente { font-size: var(--fs-sm); color: var(--cor-texto-mudo); }
+.ck-dado dd form.ck-edicao { margin-top: 0; }
+.ck-dado:has(form.ck-edicao:not(.hidden)) { grid-column: span 2; }
+.ck-dado__acoes { display: flex; gap: 2px; flex: none; }
+.ck-modelo-aba, .ck-recente, .ck-btn, .ck-filtro, .ck-item { transition-duration: var(--duracao); }
+.ck-chamado__painel[hidden] { display: none; }
+.ck-chamado__texto { display: block; width: 100%; min-height: 220px; resize: vertical; border: 0; background: transparent; color: var(--cor-texto-forte); font: inherit; font-size: var(--fs-md); line-height: 1.7; white-space: pre-wrap; }
+.ck-aberto__numero { font: var(--peso-medio) var(--fs-md) var(--fonte-mono); }
+.ck-aberto .ck-badge { justify-self: end; max-width: 100%; white-space: normal; height: auto; min-height: 20px; }
+.ck-aberto__meta { grid-column: 1 / -1; }
+.ck-abertos__vazio { padding: 12px; font-size: var(--fs-md); color: var(--cor-texto-mudo); }
+@media (min-width: 1200px) {
+  #tab-panel-home.ck-tela--home { height: calc(100dvh - var(--ck-topbar-h, 48px)); }
+  .ck-itens { overflow-y: auto; }
+}
+@media (max-width: 1199.98px) {
+  #tab-panel-home.ck-tela--home { height: auto; overflow: visible; }
+  .ck-lista { overflow: visible; }
+  .ck-itens { flex: none; }
+}
