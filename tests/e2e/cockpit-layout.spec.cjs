@@ -77,3 +77,79 @@ test("Cockpit never scrolls horizontally in narrow or wide windows", async ({ pa
   await page.locator("#cockpit-tools-trigger").click();
   await expect(page.locator("#btn-relatorio-mensal")).toBeVisible();
 });
+
+function overflowingRight(page, rootSelector) {
+  return page.evaluate(selector => {
+    const limit = document.documentElement.clientWidth + 1;
+    return [...document.querySelectorAll(`${selector}, ${selector} *`)]
+      .filter(el => {
+        const rect = el.getBoundingClientRect();
+        if (!rect.width || !rect.height || rect.right <= limit) return false;
+        if (getComputedStyle(el).visibility === "hidden") return false;
+        // Conteúdo dentro de um contêiner com rolagem horizontal própria não estoura a página.
+        for (let p = el.parentElement; p && p !== document.body; p = p.parentElement) {
+          if (/(auto|scroll)/.test(getComputedStyle(p).overflowX) && p.getBoundingClientRect().right <= limit) return false;
+        }
+        return true;
+      })
+      .map(el => `${el.tagName.toLowerCase()}#${el.id}.${String(el.className).split(" ")[0]}`);
+  }, rootSelector);
+}
+
+for (const width of [320, 390, 768, 1024, 1200, 1440, 1920, 2560]) {
+  test(`every tab fits a ${width}px window without horizontal scrolling`, async ({ page }) => {
+    await page.setViewportSize({ width, height: 800 });
+    await page.goto("/");
+    for (const [tab, panel] of [["tab-home", "tab-panel-home"], ["tab-retirada-entrega", "tab-panel-retirada-entrega"], ["tab-resumo", "tab-panel-resumo"], ["tab-automacao", "tab-panel-automacao"]]) {
+      await page.locator(`#${tab}`).click();
+      await expect(page.locator(`#${panel}`)).toBeVisible();
+      const dimensions = await page.evaluate(() => ({ viewport: document.documentElement.clientWidth, document: document.documentElement.scrollWidth, body: document.body.scrollWidth }));
+      expect(dimensions.document, panel).toBeLessThanOrEqual(dimensions.viewport);
+      expect(dimensions.body, panel).toBeLessThanOrEqual(dimensions.viewport);
+      expect(await overflowingRight(page, `#${panel}`), panel).toEqual([]);
+    }
+  });
+}
+
+const toolComparison = {
+  id: "review-comparison", horario: "2026-10-24T09:00:00-03:00", tipo: "atualizacao",
+  comparacao: {
+    total_detalhes: 2, total_endpoint: 2, equipamentos_sincronizados: 1,
+    divergencias_local: [{ serie: "LENTO", modelo: "Notebook de demonstração", local_detalhes: "Londrina", local_previsto: "Curitiba" }],
+    ausentes_no_endpoint: [], ausentes_em_detalhes: [],
+  },
+};
+const toolButtons = [["#btn-acompanhamento-chamados", "chamados", "F5"], ["#btn-cockpit-comparacao", "comparacao", "F6"], ["#btn-historico-apelidos", "apelidos", "F7"], ["#btn-relatorio-mensal", "relatorio", "F8"]];
+
+for (const width of [320, 390, 768, 1024, 1200, 1440, 1920, 2560]) {
+  test(`tool panels fit a ${width}px window and keep the F5–F8 shortcuts`, async ({ page }) => {
+    test.setTimeout(60_000);
+    await page.route("**/api/historico-comparacoes", route => route.fulfill({ json: { eventos: [toolComparison] } }));
+    await page.route("**/api/historico-comparacoes/review-comparison", route => route.fulfill({ json: { evento: toolComparison } }));
+    await page.setViewportSize({ width, height: 800 });
+    await page.goto("/");
+    for (const [button, tool, key] of toolButtons) {
+      await page.locator("#cockpit-tools-trigger").click();
+      await expect(page.locator(`${button} kbd`)).toHaveText(key);
+      await page.locator(button).click();
+      const panel = page.locator(`[data-cockpit-tool-panel="${tool}"]`);
+      await expect(panel).toBeVisible();
+      const dimensions = await page.evaluate(() => ({ viewport: document.documentElement.clientWidth, document: document.documentElement.scrollWidth, body: document.body.scrollWidth }));
+      expect(dimensions.document, tool).toBeLessThanOrEqual(dimensions.viewport);
+      expect(dimensions.body, tool).toBeLessThanOrEqual(dimensions.viewport);
+      expect(await overflowingRight(page, "#cockpit-tool-panels"), tool).toEqual([]);
+    }
+  });
+}
+
+test("a real modal stays reachable on a short compact screen", async ({ page }) => {
+  await page.route("**/api/historico-alteracoes", route => route.fulfill({ json: { eventos: [], total: 0 } }));
+  await page.setViewportSize({ width: 390, height: 420 });
+  await page.goto("/");
+  await page.locator("#cockpit-tools-trigger").click();
+  await page.locator("#btn-historico-apelidos").click();
+  await page.locator("#cockpit-alias-legacy").click();
+  const dialog = page.getByRole("dialog", { name: "Histórico de alterações" });
+  await expect(dialog).toBeVisible();
+  await expect(page.locator("[aria-label='Fechar histórico']")).toBeInViewport();
+});
