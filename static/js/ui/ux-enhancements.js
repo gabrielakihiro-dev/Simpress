@@ -296,13 +296,14 @@
     function ensureChip() {
       const existing = byId("ux-pending-chip");
       if (existing) return existing;
-      const host = doc.querySelector(".quick-actions-status");
+      const host = doc.querySelector(".ck-acoes-barra");
       if (!host) return null;
       const chip = doc.createElement("button");
       chip.type = "button";
       chip.id = "ux-pending-chip";
-      chip.className = "ux-pending-chip";
-      chip.innerHTML = '<span class="ux-pending-chip-count" aria-hidden="true"><span data-ux-count>0</span></span>'
+      chip.className = "ck-btn ck-btn--fantasma ck-pendentes";
+      chip.innerHTML = '<svg class="ck-ico" aria-hidden="true" focusable="false"><use href="#i-alerta"></use></svg>'
+        + '<span class="ck-pendentes__n" aria-hidden="true"><span data-ux-count>0</span></span>'
         + '<span data-ux-label aria-hidden="true"></span>';
       chip.addEventListener("click", () => {
         const [next] = listPendingFields(byId);

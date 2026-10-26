@@ -55,10 +55,10 @@
     });
     app.preencherRepresentanteRegional("retirada", "");
     const indicator = document.getElementById("status-indicator");
-    if (indicator) indicator.className = "w-2.5 h-2.5 rounded-full bg-brand-400";
+    if (indicator) indicator.dataset.state = "ready";
     const summary = document.getElementById("status-summary");
     if (summary) summary.replaceChildren(
-      createTextElement("span", "text-fg-tertiary font-medium", "Pronto para emissão.")
+      createTextElement("span", "ck-acoes-pronto", "Pronto para emissão.")
     );
     summary?.firstElementChild?.setAttribute("data-ux-ready-status", "");
   }
@@ -545,11 +545,11 @@
     app.preencherRepresentanteRegional("retirada", eq.retirada_cidade || "");
 
     // Update status footer
-    document.getElementById("status-indicator").className = "w-2.5 h-2.5 rounded-full bg-emerald-400";
+    document.getElementById("status-indicator").dataset.state = "loaded";
     const statusSummary = document.getElementById("status-summary");
     statusSummary.replaceChildren(
-      createTextElement("span", "text-emerald-300 font-medium", "Equipamento " + String(eq.serial ?? "") + " (" + String(eq.modelo ?? "") + ") carregado."),
-      createTextElement("span", "text-fg-subtle", " Selecione a Unidade de Destino e preencha o destinatário.")
+      createTextElement("span", "ck-acoes-carregado", "Equipamento " + String(eq.serial ?? "") + " (" + String(eq.modelo ?? "") + ") carregado."),
+      createTextElement("span", "ck-acoes-pronto", " Selecione a Unidade de Destino e preencha o destinatário.")
     );
 
     // Highlight na lista lateral

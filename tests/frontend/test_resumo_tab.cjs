@@ -33,7 +33,7 @@ test("Resumo panel keeps the inventory summary and removes the usage panel", () 
 test("panel scripts target the Resumo tab", () => {
   assert.match(dataPanelsJs, /getElementById\("resumo-cards"\)/);
   assert.match(dataPanelsJs, /let panelExpanded = true;/, "Resumo do parque starts maximized");
-  assert.match(dataPanelsJs, /\["tab-home", "tab-resumo"\]/);
+  assert.match(dataPanelsJs, /\["tab-home", "tab-resumo", "tab-retirada-entrega"\]/);
   assert.match(transferFormJs, /tab-resumo/);
   assert.match(transferFormJs, /alvo === "transferencia"/, "quick actions and serial summary belong to Transporte only");
 });
