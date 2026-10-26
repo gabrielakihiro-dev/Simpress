@@ -518,7 +518,7 @@ button.ck-kpi[aria-pressed="true"] { background: var(--cor-superficie); border-b
   .ck-log__msg { grid-column: 1 / -1; }
 }
 
-/* ---------- 2.13 Telas de ferramentas F5–F8 (telas 6 e 8) ---------- */
+/* ---------- 2.13 Telas de ferramentas F5–F8 e planilhas/catálogo (telas 6 e 8) ---------- */
 .ck-ferramenta { display: flex; flex-direction: column; min-height: 100%; }
 @media (min-width: 1200px) { .ck-ferramenta { height: 100%; } .ck-tela--ferramenta { overflow: hidden; } }
 .ck-ferramenta__cab { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 12px; padding: 12px 20px; border-bottom: 1px solid var(--cor-borda); }
@@ -587,6 +587,63 @@ button.ck-kpi[aria-pressed="true"] { background: var(--cor-superficie); border-b
 .ck-toast { position: fixed; left: 50%; bottom: 20px; z-index: 70; display: flex; align-items: center; gap: 8px; max-width: calc(100vw - 24px); padding: 8px 14px; transform: translateX(-50%); background: var(--cor-superficie-elevada); border: 1px solid var(--cor-borda); border-radius: var(--raio-md); box-shadow: var(--sombra-lg); font-size: var(--fs-md); animation: ck-surgir var(--duracao) var(--curva); }
 .ck-toast .ck-ico { color: var(--cor-ok-texto); }
 
+/* ---------- 2.15 Planilhas e catálogo (re-cockpit v2) ---------- */
+.ck-upload { position: relative; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 6px; min-height: 132px; padding: 16px; border: 1px dashed var(--cor-borda); border-radius: var(--raio-md); background: var(--cor-superficie-funda); color: var(--cor-texto-suave); text-align: center; cursor: pointer; transition: border-color var(--duracao) var(--curva), background var(--duracao) var(--curva); }
+.ck-upload:hover { border-color: var(--cor-destaque); background: var(--cor-destaque-fundo); }
+.ck-upload:focus-within { outline: 2px solid var(--cor-destaque); outline-offset: 2px; }
+.ck-upload input { position: absolute; width: 1px; height: 1px; opacity: 0; }
+.ck-upload__titulo { font-size: var(--fs-md); font-weight: var(--peso-medio); color: var(--cor-texto); }
+.ck-upload__meta { font-size: var(--fs-xs); color: var(--cor-texto-sutil); }
+.ck-dividido__detalhe .ck-grade { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+.ck-graf__rotulos--5 { grid-template-columns: repeat(5, minmax(0, 1fr)); }
+
+/* ---------- 2.16 Home · edição dos dados cadastrais (botão Editar) ---------- */
+.ck-btn[aria-pressed="true"] { border-color: var(--cor-destaque); background: var(--cor-destaque-fundo); color: var(--cor-destaque-texto); }
+.ck-dados--editando .ck-dado > .ck-btn { display: none; }
+.ck-dados--editando { border-color: var(--cor-destaque); }
+.ck-dado__entrada { width: 100%; min-width: 0; }
+.ck-dado--alterado dt { color: var(--cor-destaque-texto); }
+.ck-dado--alterado dt::after { content: " · alterado"; }
+.ck-dados-edicao { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 12px; margin-top: -6px; }
+.ck-dados-edicao[hidden] { display: none; }
+.ck-dados-edicao__info { flex: 1 1 240px; display: flex; align-items: center; gap: 6px; margin: 0; font-size: var(--fs-sm); color: var(--cor-texto-mudo); }
+.ck-dados-edicao__acoes { display: flex; gap: 8px; }
+@media (max-width: 767px) { .ck-dados-edicao__acoes { flex: 1 1 100%; } .ck-dados-edicao__acoes .ck-btn { flex: 1; } }
+
+/* ---------- 2.17 Prontidão da base (chip "pendentes" + painel) ---------- */
+.ck-chip--botao { cursor: pointer; font-family: inherit; transition: border-color var(--duracao) var(--curva), color var(--duracao) var(--curva); }
+.ck-chip--botao:hover, .ck-chip--botao[aria-expanded="true"] { border-color: var(--cor-borda); color: var(--cor-texto); }
+.ck-chip--botao .ck-ico { color: var(--cor-texto-sutil); transition: transform var(--duracao) var(--curva); }
+.ck-chip--botao[aria-expanded="true"] .ck-ico { transform: rotate(180deg); }
+.ck-chip[data-status="alerta"] .ck-chip__ponto { background: var(--cor-alerta-texto); }
+.ck-pront { position: absolute; top: calc(100% + 8px); right: 0; z-index: 40; width: 372px; max-width: calc(100vw - 24px); display: flex; flex-direction: column; background: var(--cor-superficie-elevada); border: 1px solid var(--cor-borda); border-radius: var(--raio-lg); box-shadow: var(--sombra-lg); animation: ck-surgir var(--duracao) var(--curva); overflow: hidden; }
+.ck-pront[hidden] { display: none; }
+.ck-pront__cab { display: flex; align-items: center; justify-content: space-between; gap: 8px; padding: 8px 6px 6px 12px; }
+.ck-pront__cab-textos { display: flex; align-items: baseline; gap: 6px; min-width: 0; }
+.ck-pront__kicker { font-size: var(--fs-xs); color: var(--cor-texto-sutil); }
+.ck-pront__cab-titulo { font-size: var(--fs-sm); font-weight: var(--peso-medio); color: var(--cor-texto); }
+.ck-pront__kicker::after { content: "·"; margin-left: 6px; }
+.ck-pront__resumo { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); margin: 0 10px; border: 1px solid var(--cor-borda-suave); border-radius: var(--raio-md); background: var(--cor-superficie-funda); }
+.ck-pront__par { display: flex; flex-direction: column; gap: 1px; min-width: 0; padding: 6px 8px; }
+.ck-pront__par + .ck-pront__par { border-left: 1px solid var(--cor-borda-suave); }
+.ck-pront__par dt { font-size: var(--fs-xs); color: var(--cor-texto-sutil); }
+.ck-pront__par dd { margin: 0; font-size: var(--fs-sm); font-weight: var(--peso-medio); color: var(--cor-texto); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.ck-pront__lista { list-style: none; margin: 8px 0 0; padding: 4px; border-top: 1px solid var(--cor-borda-suave); }
+.ck-pront__item { display: grid; grid-template-columns: 24px minmax(0, 1fr) auto; align-items: center; gap: 8px; padding: 5px 4px 5px 6px; border-radius: var(--raio-sm); }
+.ck-pront__item:hover { background: var(--cor-neutro-fundo); }
+.ck-pront__ico { display: grid; place-items: center; width: 24px; height: 24px; border-radius: var(--raio-sm); background: var(--cor-neutro-fundo); color: var(--cor-texto-suave); }
+.ck-pront__item[data-status="pendente"] .ck-pront__ico { background: var(--cor-alerta-fundo); color: var(--cor-alerta-texto); }
+.ck-pront__textos { display: flex; flex-direction: column; min-width: 0; }
+.ck-pront__titulo { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.ck-pront__titulo { font-size: var(--fs-sm); color: var(--cor-texto); line-height: 1.35; }
+.ck-pront__meta { font-size: var(--fs-xs); color: var(--cor-texto-mudo); line-height: 1.35; text-wrap: pretty; }
+.ck-pront__estado { color: var(--cor-alerta-texto); }
+.ck-pront__acao { white-space: nowrap; width: 100px; justify-content: center; }
+@media (max-width: 767.98px) {
+  .ck-chips .ck-ancora { position: static; }
+  .ck-chips { position: relative; }
+  .ck-pront { left: 0; right: 0; width: auto; max-width: none; }
+}
 
 /* Integração Simpress */
 

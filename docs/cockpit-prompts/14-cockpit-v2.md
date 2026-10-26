@@ -89,3 +89,39 @@ Não dá para colar o pacote direto:
 - Foco: a regra `.simpress-app-shell :focus-visible` (2px) fica no início de `ck-cockpit.css`, antes dos componentes, para não apagar `.ck-busca__entrada:focus-visible` (sem anel, o campo já tem anel no wrapper) nem o `outline-offset:-2px` de `.ck-itens`.
 - Gancho antigo `.cockpit-shell-body > .modal-overlay` (overlays seguindo a viewport durante rolagem horizontal) ficou sem uso: não há mais rolagem horizontal. Fonte `Inter Variable` existe em `static/vendor/fonts.css`.
 - Limites: Esc/foco testado em um modal real; comparação com `Simpress Cockpit v2.dc.html` não feita.
+
+## v2 (pacote re-cockpit-demo-v2, aplicado em 6 fases)
+
+Pacote: `C:\Users\Gabriel\Downloads\Copy of Design form project (3)\re-cockpit-demo-v2`. Nenhum arquivo é substituído por inteiro: entra só o que a v2 traz de novo (CSS 2.15–2.17, edição cadastral em linha, "Nova transferência" no Transporte e 4 telas). `4-comportamento.js` não entra (conflita com `theme-preference.js`, F1–F8, submit global e `app.showToast`). `.ck-parque` continua fora e o bloco `/* Integração Simpress */` continua por último.
+
+### Decisões do usuário
+
+1. **Local, CEP e CNPJs somente leitura**: não há rota de gravação e os dados vêm da planilha oficial. "Editar" libera só Apelido, Usuário e Login (nome da pessoa).
+2. **4 telas novas com dados reais** no layout v2, cada uma com botão "Fluxo completo" que abre o modal atual (como já é feito em Comparação e Apelidos).
+3. **Popover de Prontidão fora**: entra só o CSS 2.17, que não aparece sozinho.
+
+### Mapa das telas (`#cockpit-tool-panels`, `section[data-cockpit-tool-panel]`)
+
+| Tela (`data-cockpit-tool-panel`) | Fonte real | Handlers |
+|---|---|---|
+| `planilhas` | último evento de `GET /api/historico-comparacoes` (status, KPIs, lista) | área de upload vira botão: `abrirModalAtualizarPlanilhas` (fluxo real: 2 arquivos, prévia, `preview_token`); sem `<input type=file>` próprio |
+| `historico-planilhas` | `GET /api/historico-comparacoes` (lista, KPIs, busca) e `/{id}` (detalhe) | Exportar: handler de exportação existente; "Fluxo completo": `abrirModalHistoricoComparacoes` |
+| `evolucao` | `GET /api/operacoes/evolucao` (par anterior/atual) | "Fluxo completo": `abrirEvolucaoAtualizacoes` |
+| `unidades` | `GET /api/unidades` (nome = `label`/`cidade`) | "Nova unidade", "Editar", "Fluxo completo": `abrirModalGerenciarUnidades` / `toggleFormNovaUnidade`; sem formulário próprio |
+
+- Menu Ferramentas: IDs e `#badge-total-historico-comparacoes` preservados; ações `abrirPainelCockpit` com `data-args` `["planilhas"]`, `["historico-planilhas"]`, `["evolucao"]`, `["unidades"]`. Voltar: `fecharPainelCockpit` (volta à tela anterior).
+- Home, edição em linha: `#btn-editar-equipamento` (`editarDadosCadastrais`), `#form-editar-equipamento` (`salvarDadosCadastrais`), campos `data-campo` = `apelido`, `usuario`, `login`. Rotas existentes: `/api/equipamento/atualizar-apelido`, `/api/equipamento/atualizar-usuario`, `/api/equipamento/nome-pessoa`; só campos alterados. Usuário do Endpoint não é editável.
+- Transporte: `#btn-nova-transferencia` ao lado de `#btn-trocar-equipamento` (`resetarFormulario`).
+- Textos de planilha entram só por `textContent`; sem `style=` (CSP). Barras do gráfico de Evolução com `<rect height>` em SVG.
+
+### Pontos sem fonte real
+
+- Local, CEP, CNPJs: sem rota de gravação (somente leitura).
+- Unidades: `representante`, região e filtro por região não existem em `/api/unidades`; "Usar no Transporte" sem handler.
+- Evolução: sem série histórica; o gráfico mostra só anterior × atual.
+- Atualizar planilhas: o upload de 1 arquivo da v2 não existe; o fluxo real é o modal.
+- `salvarDadosEquipamento` não envia `revisao` (provável 409 ao editar existente): fora desta entrega.
+
+### Fase 1 (esta)
+
+Spec, prints "antes" (`.claude/prints/cockpit-v2/antes-<tela>-<largura>-<tema>.png`), CSS 2.15–2.17 copiados literalmente de `2-componentes-telas.css`, comentário 2.13 atualizado e `fonts.css` antes de `ck-tokens.css` no `<head>`. Sem HTML do body nem JS.
