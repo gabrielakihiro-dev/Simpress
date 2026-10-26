@@ -245,6 +245,165 @@
     return enviarUsuarioLogado("", "Usuário manual removido e registrado no histórico de alterações.");
   }
 
+  // Edição cadastral em linha do Home (Cockpit v2): só Apelido, Usuário e Login; Local, CEP e CNPJs ficam somente leitura.
+  const CAMPOS_CADASTRAIS = {
+    apelido: { maxlength: 160, valor: eq => String(eq.apelido || "").trim(), editavel: () => true },
+    usuario: {
+      maxlength: 160,
+      valor: eq => String(eq.usuarios_logados || "").trim(),
+      editavel: eq => !String(eq.usuarios_logados || "").trim() || eq.usuarios_logados_origem === "manual",
+    },
+    login: { maxlength: 300, valor: eq => String(eq.nome_pessoa || "").trim(), editavel: eq => Boolean(eq.nome_pessoa_editavel) },
+  };
+  const edicaoCadastral = { serial: "", campos: new Map(), salvando: false };
+
+  const formEdicaoCadastral = () => document.getElementById("form-editar-equipamento");
+  const gridCadastral = () => document.getElementById("ck-dados-equipamento");
+
+  function contarAlteracoesCadastrais() {
+    return [...edicaoCadastral.campos.values()].filter(c => c.input.value.trim() !== c.original).length;
+  }
+
+  function atualizarContadorCadastral() {
+    let total = 0;
+    edicaoCadastral.campos.forEach(({ input, original, dado }) => {
+      const alterado = input.value.trim() !== original;
+      dado.classList.toggle("ck-dado--alterado", alterado);
+      if (alterado) total += 1;
+    });
+    const texto = total === 0 ? "nenhuma alteração" : `${total} ${total === 1 ? "alteração" : "alterações"}`;
+    document.getElementById("ck-dados-edicao-texto").textContent = `Editando dados cadastrais · ${texto}`;
+  }
+
+  function restaurarExibicaoCadastral() {
+    edicaoCadastral.campos.forEach(({ input, dd, textoOriginal, ocultos }) => {
+      input.remove();
+      ocultos.forEach(el => el.removeAttribute("hidden"));
+      if (textoOriginal !== null) dd.textContent = textoOriginal;
+    });
+    edicaoCadastral.campos.forEach(({ dado }) => dado.classList.remove("ck-dado--alterado"));
+    edicaoCadastral.campos.clear();
+    edicaoCadastral.serial = "";
+    gridCadastral().classList.remove("ck-dados--editando");
+    formEdicaoCadastral().hidden = true;
+    const botao = document.getElementById("btn-editar-equipamento");
+    botao.setAttribute("aria-pressed", "false");
+  }
+
+  function cancelarDadosCadastrais() {
+    if (!gridCadastral().classList.contains("ck-dados--editando")) return;
+    restaurarExibicaoCadastral();
+    document.getElementById("btn-editar-equipamento").focus();
+  }
+
+  function editarDadosCadastrais() {
+    if (gridCadastral().classList.contains("ck-dados--editando")) {
+      cancelarDadosCadastrais();
+      return;
+    }
+    const eq = appState.currentEquipamento;
+    if (!eq?.serial) {
+      app.showToast("Pesquise um equipamento antes de editar.", "warning");
+      return;
+    }
+    edicaoCadastral.serial = eq.serial;
+    Object.entries(CAMPOS_CADASTRAIS).forEach(([nome, regra]) => {
+      const dd = gridCadastral().querySelector(`dd[data-campo="${nome}"]`);
+      if (!dd || !regra.editavel(eq)) return;
+      const dado = dd.closest(".ck-dado");
+      const original = regra.valor(eq);
+      const input = document.createElement("input");
+      input.type = "text";
+      input.className = "ck-entrada ck-entrada--sm ck-dado__entrada";
+      input.maxLength = regra.maxlength;
+      input.value = original;
+      input.setAttribute("aria-label", dado.querySelector("dt")?.textContent.trim() || nome);
+      input.dataset.campoEdicao = nome;
+      const ocultos = [...dd.children].filter(el => !el.hasAttribute("hidden"));
+      ocultos.forEach(el => el.setAttribute("hidden", ""));
+      // dd só com texto (apelido): guarda o texto para restaurar; os demais escondem os filhos.
+      const textoOriginal = dd.children.length ? null : dd.textContent;
+      if (textoOriginal !== null) dd.textContent = "";
+      dd.appendChild(input);
+      input.addEventListener("input", atualizarContadorCadastral);
+      edicaoCadastral.campos.set(nome, { input, original, dd, dado, textoOriginal, ocultos });
+    });
+    gridCadastral().classList.add("ck-dados--editando");
+    formEdicaoCadastral().hidden = false;
+    document.getElementById("btn-editar-equipamento").setAttribute("aria-pressed", "true");
+    atualizarContadorCadastral();
+    edicaoCadastral.campos.values().next().value?.input.focus();
+  }
+
+  async function salvarDadosCadastrais() {
+    if (edicaoCadastral.salvando || !gridCadastral().classList.contains("ck-dados--editando")) return;
+    const alterados = [...edicaoCadastral.campos].filter(([, c]) => c.input.value.trim() !== c.original);
+    if (!alterados.length) {
+      app.showToast("Nenhuma alteração para salvar.", "info");
+      return;
+    }
+    const serial = edicaoCadastral.serial;
+    // definirEquipamentoAtual incrementa a revisão; por isso ela é renovada após cada aplicação própria.
+    let revisao = appState.equipamentoSelectionRevision;
+    const botao = document.getElementById("btn-salvar-dados-cadastrais");
+    const textoBotao = botao.textContent;
+    edicaoCadastral.salvando = true;
+    botao.disabled = true;
+    botao.setAttribute("aria-busy", "true");
+    botao.textContent = "Salvando...";
+    const salvos = [];
+    let falhas = 0;
+    const aindaSelecionado = () => appState.equipamentoSelectionRevision === revisao
+      && String(appState.currentEquipamento?.serial || "").toUpperCase() === String(serial).toUpperCase();
+    const enviar = (rota, corpo, erro) => app.apiFetch(rota, {
+      method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(corpo), errorMessage: erro,
+    });
+    try {
+      for (const [nome, campo] of alterados) {
+        const valor = campo.input.value.trim();
+        try {
+          let data;
+          if (nome === "apelido") data = await enviar("/api/equipamento/atualizar-apelido", { serial, apelido: valor }, "Falha ao salvar o apelido.");
+          else if (nome === "usuario") data = await enviar("/api/equipamento/atualizar-usuario", { serial, usuario: valor }, "Falha ao salvar o usuário.");
+          else {
+            data = await enviar("/api/equipamento/nome-pessoa",
+              { serial, login_atual: appState.currentEquipamento?.usuarios_logados || "", nome: valor }, "Não foi possível salvar o nome da pessoa.");
+            if (data.base_atualizada === false) app.showToast("Nome salvo; a base será atualizada na próxima carga.", "warning");
+          }
+          salvos.push(nome);
+          campo.original = valor;
+          if (aindaSelecionado()) {
+            app.definirEquipamentoAtual(data.equipamento);
+            revisao = appState.equipamentoSelectionRevision;
+            if (nome === "apelido") document.getElementById("badge-apelido").textContent = appState.currentEquipamento.apelido || "Sem Apelido";
+            app.atualizarIndicadoresPosSalvamento();
+            atualizarUsuarioLogadoCard(appState.currentEquipamento);
+          }
+          if (nome !== "apelido") document.dispatchEvent(new CustomEvent("simpress:usuarios-equipamento-atualizados"));
+        } catch (err) {
+          falhas += 1;
+          console.error("Erro ao salvar dado cadastral:", err);
+          app.showToast(err.message || "Falha ao salvar.", "error");
+        }
+        if (!aindaSelecionado()) break;
+      }
+    } finally {
+      edicaoCadastral.salvando = false;
+      botao.disabled = false;
+      botao.removeAttribute("aria-busy");
+      botao.textContent = textoBotao;
+    }
+    if (salvos.length) {
+      app.showToast("Dados cadastrais salvos.", "success");
+      document.dispatchEvent(new CustomEvent("ck:dados-salvos", { detail: { campos: salvos } }));
+    }
+    if (!falhas || !aindaSelecionado()) {
+      restaurarExibicaoCadastral();
+      const apelido = document.getElementById("grid-apelido");
+      if (aindaSelecionado() && apelido) apelido.textContent = appState.currentEquipamento.apelido || "—";
+    } else atualizarContadorCadastral();
+  }
+
   const CAMPOS_ENTREGA_PRESERVADOS_AO_EDITAR_EQUIPAMENTO = [
     "select-unidade-destino",
     "entrega-cnpj",
@@ -338,5 +497,6 @@
     abrirModalEditarEquipamento, cadastrarNovoSerialPesquisado, fecharModalEditarEquipamento, abrirModalEditarApelido,
     fecharModalEditarApelido, salvarApelido, salvarDadosEquipamento,
     atualizarUsuarioLogadoCard, editarUsuarioLogado, salvarUsuarioLogado, limparUsuarioLogado, salvarNomePessoa, editarNomePessoa,
+    editarDadosCadastrais, salvarDadosCadastrais, cancelarDadosCadastrais,
   };
 });
