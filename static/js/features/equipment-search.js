@@ -261,19 +261,17 @@
       emptyState.classList.remove("hidden");
       moreResults.classList.add("hidden");
       emptyState.innerHTML = `
-          <div class="px-6 py-8 text-center flex flex-col items-center justify-center space-y-2 select-none">
-            <div class="w-10 h-10 rounded-xl bg-surface-overlay border border-line-quiet flex items-center justify-center text-fg-muted mb-1">
-              <i data-lucide="search-x" class="w-5 h-5" aria-hidden="true"></i>
-            </div>
-            <p class="text-sm font-semibold text-fg-secondary" role="status" aria-live="polite">Nenhum equipamento localizado</p>
-            <p class="text-xs text-fg-muted max-w-sm">Nenhum registro com o termo <span class="font-mono text-cyan-400 font-bold">"${escapeHtml(currentQuery)}"</span> foi encontrado no inventário do SEBRAE/PR.</p>
-            <button type="button" data-on-click="cadastrarNovoSerialPesquisado" class="mt-2 inline-flex items-center gap-1.5 px-3.5 py-2 rounded-lg bg-emerald-700 hover:bg-emerald-800 text-white text-xs font-bold transition shadow-lg">
-              <i data-lucide="plus-circle" class="w-3.5 h-3.5" aria-hidden="true"></i>
+          <div class="ck-ac__vazio">
+            <svg class="ck-ico ck-ico--lg" aria-hidden="true" focusable="false"><use href="#i-search"></use></svg>
+            <p class="ck-ac__vazio-titulo" role="status" aria-live="polite">Nenhum equipamento localizado</p>
+            <p class="ck-ac__vazio-texto">Nenhum registro com o termo <strong class="ck-ac__vazio-termo">"${escapeHtml(currentQuery)}"</strong> foi encontrado no inventário do SEBRAE/PR.</p>
+            <button type="button" data-on-click="cadastrarNovoSerialPesquisado" class="ck-btn ck-btn--primario ck-btn--sm">
+              <svg class="ck-ico ck-ico--sm" aria-hidden="true" focusable="false"><use href="#i-plus"></use></svg>
               <span>Cadastrar "${escapeHtml(currentQuery)}" como Novo Equipamento</span>
             </button>
           </div>
         `;
-      countEl.textContent = "Equipamentos · 0";
+      countEl.innerHTML = "<strong>Equipamentos</strong> · 0";
       moreResultsLabel.textContent = "Mostrar mais";
       moreResults.querySelector("button")?.removeAttribute("aria-label");
       autocompleteItemsList = [];
@@ -291,9 +289,9 @@
     list.innerHTML = "";
     list.classList.remove("hidden");
     emptyState.classList.add("hidden");
-    countEl.textContent = hasMore
-      ? `Equipamentos · ${items.length} de ${total}`
-      : `Equipamentos · ${total}`;
+    countEl.innerHTML = hasMore
+      ? `<strong>Equipamentos</strong> · ${items.length} de ${total}`
+      : `<strong>Equipamentos</strong> · ${total}`;
     moreResults.classList.toggle("hidden", !hasMore);
     const remainingResults = Math.max(0, Number(total) - items.length);
     moreResultsLabel.textContent = `Mostrar mais (${remainingResults})`;

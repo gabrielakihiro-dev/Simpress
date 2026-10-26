@@ -458,7 +458,7 @@
 
   // ---------- Alertas de OS paradas e divergências novas (docs/operacao/alertas-os-divergencias.md) ----------
   function mostrarAlertaPainel(card, state, message) {
-    const text = card.querySelector(".stale-base-alert-text");
+    const text = card.querySelector(".ck-aviso__texto, .stale-base-alert-text");
     if (text) text.textContent = message;
     card.dataset.state = state;
     if (card.hidden) {

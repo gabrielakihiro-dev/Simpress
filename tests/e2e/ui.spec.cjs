@@ -59,8 +59,9 @@ test("home has no WCAG 2.2 A/AA axe violations", async ({ page }) => {
 });
 
 test("Cockpit keeps compact typography and a single tools disclosure", async ({ page }, testInfo) => {
-  await expect(page.locator(".cockpit-bar")).toHaveCSS("height", "48px");
-  const searchFontSize = testInfo.project.name === "mobile" ? "16px" : "13px";
+  const mobile = testInfo.project.name === "mobile";
+  if (!mobile) await expect(page.locator(".ck-topbar")).toHaveCSS("height", "48px");
+  const searchFontSize = mobile ? "16px" : "12.5px";
   await expect(page.locator("#input-serial")).toHaveCSS("font-size", searchFontSize);
   await expect(page.locator("#card-equipamento")).toBeHidden();
   await openAnalysisMenu(page);
@@ -68,7 +69,7 @@ test("Cockpit keeps compact typography and a single tools disclosure", async ({ 
   await expect(page.locator("#btn-acompanhamento-chamados")).toBeVisible();
   await expect(page.locator("#btn-historico-comparacoes")).toBeVisible();
   await expect(page.locator("#btn-historico-comparacoes #badge-total-historico-comparacoes")).toBeVisible();
-  const styles = await page.locator(".cockpit-tools-dropdown__item:visible").evaluateAll(nodes => nodes.map(node => ({
+  const styles = await page.locator(".ck-menu__item:visible").evaluateAll(nodes => nodes.map(node => ({
     image: getComputedStyle(node).backgroundImage, wraps: getComputedStyle(node).whiteSpace,
   })));
   expect(styles.every(style => style.image === "none")).toBe(true);
@@ -126,9 +127,12 @@ test("search shortcuts focus Home search except while typing or with a dialog op
   const input = page.locator("#input-serial");
   const homeTab = page.locator("#tab-home");
   await expect(input).toHaveAttribute("aria-keyshortcuts", "/ Control+K Meta+K");
-  const hint = page.locator(".cockpit-search-shortcut");
-  await expect(hint).toBeVisible();
-  await expect(hint).toHaveText("Ctrl+K");
+  const hint = page.locator(".ck-busca__campo > .ck-kbd");
+  if (testInfo.project.name === "mobile") await expect(hint).toBeHidden();
+  else {
+    await expect(hint).toBeVisible();
+    await expect(hint).toHaveText("Ctrl+K");
+  }
 
   await openSidebarIfNeeded(page);
   await page.locator("#tab-retirada-entrega").click();
@@ -639,21 +643,22 @@ test("layout stays within common responsive viewport widths", async ({ page }) =
 test("keyboard focus stays visible over component and theme styles", async ({ page }) => {
   await page.setViewportSize({ width: 1366, height: 900 });
   const controls = [
-    // The Home search shows a single ring: the outline replaces its border, with no halo shadow.
-    ["#input-serial", "2px", "-2px", "none"],
+    // The Home search ring sits on its field wrapper (:focus-within), not on the input.
+    ["#input-serial", "2px", "2px", undefined, ".ck-busca__campo"],
     ["#theme-toggle", "2px", "2px"],
     ["#btn-nova-transferencia", "2px", "2px"],
-    ['.cockpit-bar__tabs [role="tab"]:first-child', "2px", "2px"],
+    ['.ck-abas [role="tab"]:first-child', "2px", "2px"],
     ["#cockpit-tools-trigger", "2px", "2px"],
   ];
   for (const theme of ["dark", "light"]) {
     await page.locator("html").evaluate((root, value) => { root.dataset.theme = value; }, theme);
     await openAnalysisMenu(page);
     await page.keyboard.press("Tab");
-    for (const [selector, width, offset, shadow] of controls) {
-      const control = page.locator(selector);
-      await control.focus();
-      await expect(control).toBeFocused();
+    for (const [selector, width, offset, shadow, ringSelector] of controls) {
+      const focused = page.locator(selector);
+      await focused.focus();
+      await expect(focused).toBeFocused();
+      const control = ringSelector ? page.locator(ringSelector) : focused;
       await expect(control).toHaveCSS("outline-style", "solid");
       await expect(control).toHaveCSS("outline-width", width);
       await expect(control).toHaveCSS("outline-offset", offset);
@@ -924,7 +929,7 @@ test("stale tickets and new divergences appear in the notification center", asyn
     await expect(tickets).toBeVisible();
     await expect(divergences).toBeHidden();
 
-    await page.locator(".cockpit-bar__brand").click();
+    await page.locator(".ck-marca").click();
     await expect(panel).toBeHidden();
     await request.get("/__fixture_alertas_painel?estado=ocultos");
     await trigger.click();
@@ -933,7 +938,7 @@ test("stale tickets and new divergences appear in the notification center", asyn
     await expect(panel.locator("#notification-center-summary")).toHaveText("Nenhum aviso ativo.");
     await expect(tickets).toBeHidden();
     await expect(divergences).toBeHidden();
-    await page.locator(".cockpit-bar__brand").click();
+    await page.locator(".ck-marca").click();
     await expect(panel).toBeHidden();
     await expect(base).toBeVisible();
   } finally {

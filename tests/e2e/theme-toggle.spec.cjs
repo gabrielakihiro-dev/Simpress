@@ -23,11 +23,13 @@ test("the theme icon switches modes and persists the choice", async ({ page }) =
   const root = page.locator("html");
   const lightModeButton = page.getByRole("button", { name: "Ativar modo claro" });
   await expect(root).toHaveAttribute("data-theme", "dark");
-  await expect(lightModeButton.locator("svg")).toHaveClass(/lucide-sun/);
+  await expect(lightModeButton.locator("svg.ck-ico--sol")).toBeVisible();
+  await expect(lightModeButton.locator("svg.ck-ico--lua")).toBeHidden();
   await lightModeButton.click();
   const darkModeButton = page.getByRole("button", { name: "Ativar modo escuro" });
   await expect(root).toHaveAttribute("data-theme", "light");
-  await expect(darkModeButton.locator("svg")).toHaveClass(/lucide-moon/);
+  await expect(darkModeButton.locator("svg.ck-ico--lua")).toBeVisible();
+  await expect(darkModeButton.locator("svg.ck-ico--sol")).toBeHidden();
   await expect.poll(() => page.evaluate(() => localStorage.getItem("simpress:theme"))).toBe("light");
   await page.locator(".app-workspace").evaluate(async workspace => {
     const transitions = workspace.getAnimations();

@@ -99,7 +99,7 @@ test("modified function keys, typing and open dialogs keep their normal behavior
 
 test("tools menu closes for outside clicks and item selection, not its trigger", () => {
   const trigger = { closest: () => null };
-  const item = { closest: selector => selector === ".cockpit-tools-dropdown__item" ? item : null };
+  const item = { closest: selector => selector === ".ck-menu__item" ? item : null };
   const insideMenu = target => ({ open: true, contains: candidate => candidate === target });
   assert.equal(ux.shouldCloseCockpitToolsMenu(insideMenu(trigger), trigger), false);
   assert.equal(ux.shouldCloseCockpitToolsMenu(insideMenu(item), item), true);

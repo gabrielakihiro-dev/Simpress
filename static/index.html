@@ -28,172 +28,176 @@
 </head>
 <body class="min-h-full bg-surface text-fg-emphasis font-sans selection:bg-brand-500 selection:text-white cockpit-shell-body">
 
+  <svg width="0" height="0" class="ck-sr" aria-hidden="true" focusable="false">
+  <symbol id="i-box" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16Z"/><path d="m3.3 7 8.7 5 8.7-5"/><path d="M12 22V12"/></symbol>
+  <symbol id="i-house" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M15 21v-8a1 1 0 0 0-1-1h-4a1 1 0 0 0-1 1v8"/><path d="M3 10a2 2 0 0 1 .709-1.528l7-5.999a2 2 0 0 1 2.582 0l7 5.999A2 2 0 0 1 21 10v9a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/></symbol>
+  <symbol id="i-truck" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 18V6a2 2 0 0 0-2-2H4a2 2 0 0 0-2 2v11a1 1 0 0 0 1 1h2"/><path d="M15 18H9"/><path d="M19 18h2a1 1 0 0 0 1-1v-3.65a1 1 0 0 0-.22-.624l-3.48-4.35A1 1 0 0 0 17.52 8H14"/><circle cx="17" cy="18" r="2"/><circle cx="7" cy="18" r="2"/></symbol>
+  <symbol id="i-chart" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 3v16a2 2 0 0 0 2 2h16"/><path d="M18 17V9"/><path d="M13 17V5"/><path d="M8 17v-3"/></symbol>
+  <symbol id="i-bot" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 8V4H8"/><rect width="16" height="12" x="4" y="8" rx="2"/><path d="M2 14h2"/><path d="M20 14h2"/><path d="M15 13v2"/><path d="M9 13v2"/></symbol>
+  <symbol id="i-search" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.3-4.3"/></symbol>
+  <symbol id="i-grid" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="5" cy="5" r="1"/><circle cx="12" cy="5" r="1"/><circle cx="19" cy="5" r="1"/><circle cx="5" cy="12" r="1"/><circle cx="12" cy="12" r="1"/><circle cx="19" cy="12" r="1"/><circle cx="5" cy="19" r="1"/><circle cx="12" cy="19" r="1"/><circle cx="19" cy="19" r="1"/></symbol>
+  <symbol id="i-bell" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M10.268 21a2 2 0 0 0 3.464 0"/><path d="M3.262 15.326A1 1 0 0 0 4 17h16a1 1 0 0 0 .74-1.673C19.41 13.956 18 12.499 18 8A6 6 0 0 0 6 8c0 4.499-1.411 5.956-2.738 7.326"/></symbol>
+  <symbol id="i-sun" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="4"/><path d="M12 2v2"/><path d="M12 20v2"/><path d="m4.93 4.93 1.42 1.42"/><path d="m17.65 17.65 1.42 1.42"/><path d="M2 12h2"/><path d="M20 12h2"/><path d="m6.34 17.66-1.42-1.42"/><path d="m19.07 4.93-1.42 1.42"/></symbol>
+  <symbol id="i-moon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3a6 6 0 0 0 9 9 9 9 0 1 1-9-9Z"/></symbol>
+  <symbol id="i-copy" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect width="14" height="14" x="8" y="8" rx="2" ry="2"/><path d="M4 16c-1.1 0-2-.9-2-2V4c0-1.1.9-2 2-2h10c1.1 0 2 .9 2 2"/></symbol>
+  <symbol id="i-pencil" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21.174 6.812a1 1 0 0 0-3.986-3.987L3.842 16.174a2 2 0 0 0-.5.83l-1.321 4.352a.5.5 0 0 0 .623.622l4.353-1.32a2 2 0 0 0 .83-.497z"/><path d="m15 5 4 4"/></symbol>
+  <symbol id="i-history" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 12a9 9 0 1 0 9-9 9.75 9.75 0 0 0-6.74 2.74L3 8"/><path d="M3 3v5h5"/><path d="M12 7v5l4 2"/></symbol>
+  <symbol id="i-external" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M15 3h6v6"/><path d="M10 14 21 3"/><path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"/></symbol>
+  <symbol id="i-x" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M18 6 6 18"/><path d="m6 6 12 12"/></symbol>
+  <symbol id="i-check" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6 9 17l-5-5"/></symbol>
+  <symbol id="i-chevron-down" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m6 9 6 6 6-6"/></symbol>
+  <symbol id="i-chevron-right" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m9 18 6-6-6-6"/></symbol>
+  <symbol id="i-arrow-right" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12h14"/><path d="m12 5 7 7-7 7"/></symbol>
+  <symbol id="i-ok" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><path d="m9 12 2 2 4-4"/></symbol>
+  <symbol id="i-alerta" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m21.73 18-8-14a2 2 0 0 0-3.48 0l-8 14A2 2 0 0 0 4 21h16a2 2 0 0 0 1.73-3"/><path d="M12 9v4"/><path d="M12 17h.01"/></symbol>
+  <symbol id="i-erro" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 16h.01"/><path d="M12 8v4"/><path d="M15.312 2a2 2 0 0 1 1.414.586l4.688 4.688A2 2 0 0 1 22 8.688v6.624a2 2 0 0 1-.586 1.414l-4.688 4.688a2 2 0 0 1-1.414.586H8.688a2 2 0 0 1-1.414-.586l-4.688-4.688A2 2 0 0 1 2 15.312V8.688a2 2 0 0 1 .586-1.414l4.688-4.688A2 2 0 0 1 8.688 2z"/></symbol>
+  <symbol id="i-info" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><path d="M12 16v-4"/><path d="M12 8h.01"/></symbol>
+  <symbol id="i-neutro" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><path d="M8 12h8"/></symbol>
+  <symbol id="i-pendente" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9" stroke-dasharray="3 3"/></symbol>
+  <symbol id="i-loader" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 12a9 9 0 1 1-6.219-8.56"/></symbol>
+  <symbol id="i-user" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M19 21v-2a4 4 0 0 0-4-4H9a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></symbol>
+  <symbol id="i-users" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M22 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></symbol>
+  <symbol id="i-user-check" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m16 11 2 2 4-4"/><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/></symbol>
+  <symbol id="i-sheet" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M15 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V7Z"/><path d="M14 2v4a2 2 0 0 0 2 2h4"/><path d="M8 13h2"/><path d="M14 13h2"/><path d="M8 17h2"/><path d="M14 17h2"/></symbol>
+  <symbol id="i-text" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M15 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V7Z"/><path d="M14 2v4a2 2 0 0 0 2 2h4"/><path d="M10 9H8"/><path d="M16 13H8"/><path d="M16 17H8"/></symbol>
+  <symbol id="i-rotate" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 12a9 9 0 1 0 9-9 9.75 9.75 0 0 0-6.74 2.74L3 8"/><path d="M3 3v5h5"/></symbol>
+  <symbol id="i-upload" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><path d="m17 8-5-5-5 5"/><path d="M12 3v12"/></symbol>
+  <symbol id="i-download" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><path d="m7 10 5 5 5-5"/><path d="M12 15V3"/></symbol>
+  <symbol id="i-clock" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><path d="M12 6v6l4 2"/></symbol>
+  <symbol id="i-activity" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M22 12h-2.48a2 2 0 0 0-1.93 1.46l-2.35 8.36a.25.25 0 0 1-.48 0L9.24 2.18a.25.25 0 0 0-.48 0l-2.35 8.36A2 2 0 0 1 4.49 12H2"/></symbol>
+  <symbol id="i-pin" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 10c0 4.993-5.539 10.193-7.399 11.799a1 1 0 0 1-1.202 0C9.539 20.193 4 14.993 4 10a8 8 0 0 1 16 0"/><circle cx="12" cy="10" r="3"/></symbol>
+  <symbol id="i-clipboard" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect width="8" height="4" x="8" y="2" rx="1" ry="1"/><path d="M16 4h2a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h2"/><path d="M12 11h4"/><path d="M12 16h4"/><path d="M8 11h.01"/><path d="M8 16h.01"/></symbol>
+  <symbol id="i-dashboard" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect width="7" height="9" x="3" y="3" rx="1"/><rect width="7" height="5" x="14" y="3" rx="1"/><rect width="7" height="9" x="14" y="12" rx="1"/><rect width="7" height="5" x="3" y="16" rx="1"/></symbol>
+  <symbol id="i-laptop" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M18 5a2 2 0 0 1 2 2v8.526a2 2 0 0 0 .212.897l1.068 2.127a1 1 0 0 1-.9 1.45H3.62a1 1 0 0 1-.9-1.45l1.068-2.127A2 2 0 0 0 4 15.526V7a2 2 0 0 1 2-2z"/><path d="M20.054 15.987H3.946"/></symbol>
+  <symbol id="i-layers" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m12.83 2.18a2 2 0 0 0-1.66 0L2.6 6.08a1 1 0 0 0 0 1.83l8.58 3.91a2 2 0 0 0 1.66 0l8.58-3.9a1 1 0 0 0 0-1.83Z"/><path d="m22 17.65-9.17 4.16a2 2 0 0 1-1.66 0L2 17.65"/><path d="m22 12.65-9.17 4.16a2 2 0 0 1-1.66 0L2 12.65"/></symbol>
+  <symbol id="i-play" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polygon points="6 3 20 12 6 21 6 3"/></symbol>
+  <symbol id="i-refresh" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 12a9 9 0 0 1 9-9 9.75 9.75 0 0 1 6.74 2.74L21 8"/><path d="M21 3v5h-5"/><path d="M21 12a9 9 0 0 1-9 9 9.75 9.75 0 0 1-6.74-2.74L3 16"/><path d="M8 16H3v5"/></symbol>
+  <symbol id="i-stop" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect width="14" height="14" x="5" y="5" rx="2"/></symbol>
+  <symbol id="i-monitor" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect width="20" height="14" x="2" y="3" rx="2"/><path d="M8 21h8"/><path d="M12 17v4"/></symbol>
+  <symbol id="i-plus" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12h14"/><path d="M12 5v14"/></symbol>
+  <symbol id="i-link" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71"/><path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71"/></symbol>
+  <symbol id="i-swap" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M8 3 4 7l4 4"/><path d="M4 7h16"/><path d="m16 21 4-4-4-4"/><path d="M20 17H4"/></symbol>
+  <symbol id="i-arrow-left" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m12 19-7-7 7-7"/><path d="M19 12H5"/></symbol>
+</svg>
+
   <a class="skip-link" href="#main-content">Pular para o conteúdo principal</a>
 
   <div id="simpress-app-shell" class="simpress-app-shell cockpit-shell">
-<header class="cockpit-bar" role="banner">
-<div class="cockpit-bar__brand" aria-label="Simpress, gestão de equipamentos">
-<i data-lucide="box" class="cockpit-bar__brand-mark" aria-hidden="true"></i>
-<strong class="cockpit-bar__brand-name">Simpress</strong>
-</div>
-<nav class="cockpit-bar__tabs app-tabs" role="tablist" aria-label="Navegação principal" data-on-keydown="controlarAbasTransferencia" data-args='["$event"]'>
-<button type="button" id="tab-home" class="cockpit-tab app-tab is-active" role="tab" aria-selected="true" aria-controls="tab-panel-home" tabindex="0" data-on-click="ativarAbaTransferencia" data-args='["home"]' aria-label="Home" title="Home (F1)">
-<i data-lucide="home" class="w-4 h-4" aria-hidden="true"></i>
-<span>Home</span>
-</button>
-<button type="button" id="tab-retirada-entrega" class="cockpit-tab app-tab" role="tab" aria-selected="false" aria-controls="tab-panel-retirada-entrega" tabindex="-1" data-on-click="ativarAbaTransferencia" data-args='["transferencia"]' aria-label="Transporte" title="Transporte (F2)">
-<i data-lucide="truck" class="w-4 h-4" aria-hidden="true"></i>
-<span>Transporte</span>
-</button>
-<button type="button" id="tab-resumo" class="cockpit-tab app-tab" role="tab" aria-selected="false" aria-controls="tab-panel-resumo" tabindex="-1" data-on-click="ativarAbaTransferencia" data-args='["resumo"]' aria-label="Resumo" title="Resumo (F3)">
-<i data-lucide="layout-dashboard" class="w-4 h-4" aria-hidden="true"></i>
-<span>Resumo</span>
-</button>
-<button type="button" id="tab-automacao" class="cockpit-tab app-tab" role="tab" aria-selected="false" aria-controls="tab-panel-automacao" tabindex="-1" data-on-click="ativarAbaTransferencia" data-args='["automacao"]' aria-label="Automação" title="Automação (F4)">
-<i data-lucide="terminal" class="w-4 h-4" aria-hidden="true"></i>
-<span>Automação</span>
-</button>
-</nav>
-<div class="cockpit-bar__spacer" aria-hidden="true"></div>
-<form class="cockpit-bar__search" role="search" data-on-submit="buscarSerial">
-<i data-lucide="search" class="cockpit-search-icon" aria-hidden="true"></i>
-<input
-type="text"
-id="input-serial"
-aria-keyshortcuts="/ Control+K Meta+K"
-role="combobox"
-aria-label="Série, apelido, modelo, cidade ou nome do usuário do equipamento"
-aria-autocomplete="list"
-aria-controls="autocomplete-list"
-aria-expanded="false"
-aria-haspopup="listbox"
-autocomplete="off"
-placeholder="Série, apelido, cidade ou usuário"
-class="cockpit-search-input"
-data-on-input="handleSerialInput" data-args='["$value"]'
-data-on-keydown="handleSerialKeydown" data-args='["$event"]'
-/>
-<kbd class="cockpit-search-shortcut" aria-hidden="true" title="Atalho: Ctrl+K">Ctrl+K</kbd>
-<button type="button" id="btn-clear-serial" class="cockpit-search-clear hidden" aria-label="Limpar pesquisa" title="Limpar pesquisa" data-on-click="limparSerial">
-<i data-lucide="x" aria-hidden="true"></i>
-</button>
-<button type="submit" id="btn-buscar-serial" class="cockpit-search-submit" aria-label="Buscar Equipamento" title="Buscar Equipamento">
-<i data-lucide="arrow-right" aria-hidden="true"></i><span class="sr-only">Buscar Equipamento</span>
-</button>
-<div id="autocomplete-box" class="hidden cockpit-home-autocomplete" role="listbox" aria-label="Equipamentos encontrados">
-  <div id="autocomplete-header" class="cockpit-home-autocomplete-header">
-    <span id="autocomplete-count" role="status" aria-live="polite" aria-atomic="true">Equipamentos · 0</span>
-    <span class="cockpit-home-autocomplete-hint">Esc fecha</span>
+<header class="ck-topbar" id="ck-topbar" role="banner">
+  <div class="ck-marca" id="ck-marca" aria-label="Simpress, gestão de equipamentos"><svg class="ck-ico" aria-hidden="true" focusable="false"><use href="#i-box"></use></svg><span>Simpress</span></div>
+
+  <nav class="ck-abas" id="ck-abas" role="tablist" aria-label="Navegação principal" data-on-keydown="controlarAbasTransferencia" data-args='["$event"]'>
+    <button type="button" id="tab-home" class="ck-aba is-active" role="tab" aria-selected="true" aria-controls="tab-panel-home" tabindex="0" data-on-click="ativarAbaTransferencia" data-args='["home"]' aria-label="Home" title="Home (F1)"><svg class="ck-ico" aria-hidden="true" focusable="false"><use href="#i-house"></use></svg><span>Home</span></button>
+    <button type="button" id="tab-retirada-entrega" class="ck-aba" role="tab" aria-selected="false" aria-controls="tab-panel-retirada-entrega" tabindex="-1" data-on-click="ativarAbaTransferencia" data-args='["transferencia"]' aria-label="Transporte" title="Transporte (F2)"><svg class="ck-ico" aria-hidden="true" focusable="false"><use href="#i-truck"></use></svg><span>Transporte</span></button>
+    <button type="button" id="tab-resumo" class="ck-aba" role="tab" aria-selected="false" aria-controls="tab-panel-resumo" tabindex="-1" data-on-click="ativarAbaTransferencia" data-args='["resumo"]' aria-label="Resumo" title="Resumo (F3)"><svg class="ck-ico" aria-hidden="true" focusable="false"><use href="#i-chart"></use></svg><span>Resumo</span></button>
+    <button type="button" id="tab-automacao" class="ck-aba" role="tab" aria-selected="false" aria-controls="tab-panel-automacao" tabindex="-1" data-on-click="ativarAbaTransferencia" data-args='["automacao"]' aria-label="Automação" title="Automação (F4)"><svg class="ck-ico" aria-hidden="true" focusable="false"><use href="#i-bot"></use></svg><span>Automação</span></button>
+  </nav>
+
+  <span class="ck-topbar__espaco" aria-hidden="true"></span>
+  <span class="ck-topbar__quebra" aria-hidden="true"></span>
+
+  <form class="ck-busca" id="form-busca-serial" role="search" autocomplete="off" data-on-submit="buscarSerial">
+    <div class="ck-busca__campo">
+      <svg class="ck-ico ck-ico--sm" aria-hidden="true" focusable="false"><use href="#i-search"></use></svg>
+      <input type="text" id="input-serial" class="ck-busca__entrada" aria-keyshortcuts="/ Control+K Meta+K" role="combobox" aria-label="Série, apelido, modelo, cidade ou nome do usuário do equipamento" aria-autocomplete="list" aria-controls="autocomplete-list" aria-expanded="false" aria-haspopup="listbox" autocomplete="off" placeholder="Série, apelido, cidade ou usuário" data-on-input="handleSerialInput" data-args='["$value"]' data-on-keydown="handleSerialKeydown" data-args='["$event"]'>
+      <kbd class="ck-kbd" aria-hidden="true" title="Atalho: Ctrl+K">Ctrl+K</kbd>
+      <button type="button" id="btn-clear-serial" class="ck-btn ck-btn--icone ck-btn--fantasma ck-btn--sm hidden" aria-label="Limpar pesquisa" title="Limpar pesquisa" data-on-click="limparSerial"><svg class="ck-ico ck-ico--sm" aria-hidden="true" focusable="false"><use href="#i-x"></use></svg></button>
+      <button type="submit" id="btn-buscar-serial" class="ck-btn ck-btn--icone ck-btn--fantasma ck-btn--sm" aria-label="Buscar Equipamento" title="Buscar Equipamento"><svg class="ck-ico ck-ico--sm" aria-hidden="true" focusable="false"><use href="#i-arrow-right"></use></svg><span class="ck-sr">Buscar Equipamento</span></button>
+    </div>
+    <div id="autocomplete-box" class="ck-ac hidden" role="listbox" aria-label="Equipamentos encontrados">
+      <div id="autocomplete-header" class="ck-ac__cab">
+        <span id="autocomplete-count" role="status" aria-live="polite" aria-atomic="true"><strong>Equipamentos</strong> · 0</span>
+        <span class="ck-ac__dica"><kbd class="ck-kbd">Esc</kbd> fecha</span>
+      </div>
+      <div id="autocomplete-list" class="ck-ac__lista" aria-label="Sugestões de equipamentos"></div>
+      <div id="autocomplete-empty-state" class="hidden" role="region" aria-label="Resultado da busca" aria-live="polite"></div>
+      <div id="autocomplete-more-results" class="ck-ac__rodape hidden">
+        <button type="button" class="ck-btn ck-btn--fantasma ck-btn--sm" data-on-click="abrirPesquisaCompleta"><svg class="ck-ico ck-ico--sm" aria-hidden="true" focusable="false"><use href="#i-chevron-down"></use></svg><span data-autocomplete-more-label>Mostrar mais</span></button>
+        <span class="ck-ac__teclas" aria-hidden="true"><kbd class="ck-kbd">↑</kbd><kbd class="ck-kbd">↓</kbd> navegar · <kbd class="ck-kbd">Enter</kbd> abrir</span>
+      </div>
+    </div>
+  </form>
+
+  <div class="ck-chips" id="ck-chips">
+    <details id="readiness-panel" class="ck-chip" data-state="loading" aria-labelledby="readiness-title" aria-busy="true">
+      <summary class="ck-chip__gatilho" aria-controls="readiness-content">
+        <span id="stat-base-dot" class="ck-chip__ponto" aria-hidden="true"></span>
+        <span id="readiness-summary-short" class="ck-chip__rotulo" role="status" aria-live="polite" aria-atomic="true">Verificando…</span>
+        <span id="readiness-title" class="ck-sr">Disponibilidade das funções</span>
+      </summary>
+      <div id="readiness-content" class="ck-chip__painel">
+        <span id="readiness-summary" class="ck-sr" role="status" aria-live="polite" aria-atomic="true">Verificando os arquivos locais…</span>
+        <dl class="ck-chip__dados">
+          <div><dt>Equipamentos</dt><dd><strong id="stat-equipamentos">Carregando…</strong> <span id="stat-equipamentos-rotulo">equipamentos</span></dd></div>
+          <div><dt>Regionais</dt><dd><strong id="stat-unidades">Carregando…</strong></dd></div>
+          <div><dt>Contrato</dt><dd><strong>16467</strong></dd></div>
+        </dl>
+        <div id="readiness-details-content" class="readiness-details-content"></div>
+      </div>
+    </details>
+    <span id="cockpit-automation-shell-status" class="ck-chip" data-state="idle" aria-live="polite" aria-atomic="true">
+      <span class="ck-chip__ponto" aria-hidden="true"></span>
+      <span id="cockpit-automation-shell-title" class="ck-chip__rotulo">Chrome livre</span>
+    </span>
   </div>
-  <div id="autocomplete-list" aria-label="Sugestões de equipamentos" class="cockpit-home-autocomplete-list"></div>
-  <div id="autocomplete-empty-state" class="hidden" role="region" aria-label="Resultado da busca" aria-live="polite"></div>
-  <div id="autocomplete-more-results" class="hidden cockpit-home-autocomplete-more">
-    <button type="button" data-on-click="abrirPesquisaCompleta" class="autocomplete-more-button">
-      <i data-lucide="list-checks" class="w-4 h-4" aria-hidden="true"></i>
-      <span data-autocomplete-more-label>Mostrar mais</span>
-    </button>
+
+  <div class="ck-topbar__acoes">
+    <details class="ck-ancora cockpit-tools-dropdown" id="cockpit-tools-dropdown">
+      <summary id="cockpit-tools-trigger" class="ck-btn ck-btn--icone ck-btn--fantasma" aria-label="Ferramentas" aria-controls="cockpit-tools-menu" title="Ferramentas"><svg class="ck-ico ck-ico--lg" aria-hidden="true" focusable="false"><use href="#i-grid"></use></svg><span class="ck-sr">Ferramentas</span></summary>
+      <div class="ck-menu" id="cockpit-tools-menu" role="menu" aria-label="Ferramentas">
+        <div class="ck-menu__grupo" role="group" aria-labelledby="ck-menu-g-paineis">
+          <p class="ck-menu__titulo" id="ck-menu-g-paineis">Painéis</p>
+          <button type="button" id="btn-acompanhamento-chamados" class="ck-menu__item" role="menuitem" data-on-click="abrirPainelCockpit" data-args='["chamados"]'><svg class="ck-ico" aria-hidden="true" focusable="false"><use href="#i-clipboard"></use></svg><span class="ck-menu__rotulo">Chamados</span><kbd aria-hidden="true">F5</kbd></button>
+          <button type="button" id="btn-cockpit-comparacao" class="ck-menu__item" role="menuitem" data-on-click="abrirPainelCockpit" data-args='["comparacao"]'><svg class="ck-ico" aria-hidden="true" focusable="false"><use href="#i-dashboard"></use></svg><span class="ck-menu__rotulo">Comparação</span><kbd aria-hidden="true">F6</kbd></button>
+          <button type="button" id="btn-historico-apelidos" class="ck-menu__item" role="menuitem" data-on-click="abrirPainelCockpit" data-args='["apelidos"]'><svg class="ck-ico" aria-hidden="true" focusable="false"><use href="#i-history"></use></svg><span class="ck-menu__rotulo">Histórico de apelidos</span><kbd aria-hidden="true">F7</kbd></button>
+          <button type="button" id="btn-relatorio-mensal" class="ck-menu__item" role="menuitem" data-on-click="abrirPainelCockpit" data-args='["relatorio"]'><svg class="ck-ico" aria-hidden="true" focusable="false"><use href="#i-sheet"></use></svg><span class="ck-menu__rotulo">Relatório mensal</span><kbd aria-hidden="true">F8</kbd></button>
+        </div>
+        <div class="ck-menu__grupo" role="group" aria-labelledby="ck-menu-g-transf">
+          <p class="ck-menu__titulo" id="ck-menu-g-transf">Transferência</p>
+          <button type="button" id="btn-nova-transferencia" class="ck-menu__item" role="menuitem" data-on-click="resetarFormulario"><svg class="ck-ico" aria-hidden="true" focusable="false"><use href="#i-rotate"></use></svg><span class="ck-menu__rotulo">Nova transferência</span></button>
+        </div>
+        <div class="ck-menu__grupo" role="group" aria-labelledby="ck-menu-g-planilhas">
+          <p class="ck-menu__titulo" id="ck-menu-g-planilhas">Planilhas</p>
+          <button type="button" id="btn-atualizar-planilhas" class="ck-menu__item" role="menuitem" data-on-click="abrirModalAtualizarPlanilhas"><svg class="ck-ico" aria-hidden="true" focusable="false"><use href="#i-upload"></use></svg><span class="ck-menu__rotulo">Atualizar planilhas</span></button>
+          <button type="button" id="btn-exportar-equipamentos" class="ck-menu__item hidden" role="menuitem" data-on-click="exportarEquipamentosAtualizados" aria-label="Exportar planilha Excel com apelidos e IdCliente atualizados" aria-labelledby="label-exportar-equipamentos"><svg class="ck-ico" aria-hidden="true" focusable="false"><use href="#i-download"></use></svg><span class="ck-menu__rotulo" id="label-exportar-equipamentos">Exportar Excel</span></button>
+          <button type="button" id="btn-historico-comparacoes" class="ck-menu__item" role="menuitem" data-on-click="abrirModalHistoricoComparacoes"><svg class="ck-ico" aria-hidden="true" focusable="false"><use href="#i-clock"></use></svg><span class="ck-menu__rotulo">Histórico planilhas</span><span id="badge-total-historico-comparacoes" class="ck-badge" aria-label="0 registros">0</span></button>
+        </div>
+        <div class="ck-menu__grupo" role="group" aria-labelledby="ck-menu-g-hist">
+          <p class="ck-menu__titulo" id="ck-menu-g-hist">Histórico e catálogo</p>
+          <button type="button" id="btn-evolucao-atualizacoes" class="ck-menu__item" role="menuitem" data-on-click="abrirEvolucaoAtualizacoes"><svg class="ck-ico" aria-hidden="true" focusable="false"><use href="#i-activity"></use></svg><span class="ck-menu__rotulo">Evolução das atualizações</span></button>
+          <button type="button" id="btn-catalogo-unidades" class="ck-menu__item" role="menuitem" data-on-click="abrirModalGerenciarUnidades"><svg class="ck-ico" aria-hidden="true" focusable="false"><use href="#i-pin"></use></svg><span class="ck-menu__rotulo">Catálogo de unidades</span></button>
+        </div>
+      </div>
+    </details>
+
+    <div class="ck-ancora">
+      <button type="button" id="btn-notificacoes" class="ck-btn ck-btn--icone ck-btn--fantasma" aria-label="Notificações" aria-controls="notification-center-panel" aria-expanded="false" title="Notificações"><svg class="ck-ico ck-ico--lg" aria-hidden="true" focusable="false"><use href="#i-bell"></use></svg><span id="badge-notificacoes" class="ck-contador" aria-hidden="true" hidden>0</span></button>
+      <section id="notification-center-panel" class="ck-sino" role="region" aria-labelledby="notification-center-title" aria-busy="true" hidden>
+        <header class="ck-sino__cab">
+          <h2 id="notification-center-title" class="ck-sino__titulo">Pendências</h2>
+        </header>
+        <p id="notification-center-summary" class="ck-sino__resumo" role="status" aria-live="polite" aria-atomic="true">Verificando os avisos…</p>
+        <div class="ck-sino__lista">
+          <section id="alerta-os-paradas" class="ck-aviso" data-gravidade="urgente" role="status" aria-labelledby="alerta-os-paradas-titulo" data-state="loading" hidden>
+            <span class="ck-aviso__icone"><svg class="ck-ico" aria-hidden="true" focusable="false"><use href="#i-erro"></use></svg></span>
+            <div class="ck-aviso__topo"><h3 id="alerta-os-paradas-titulo" class="ck-aviso__titulo">OS paradas</h3></div>
+            <p id="alerta-os-paradas-texto" class="ck-aviso__texto"></p>
+            <button type="button" id="btn-alerta-os-paradas" data-on-click="abrirAcompanhamentoChamados" class="ck-btn ck-btn--primario ck-btn--sm ck-aviso__acao">Ver chamados<svg class="ck-ico ck-ico--sm" aria-hidden="true" focusable="false"><use href="#i-arrow-right"></use></svg></button>
+          </section>
+          <section id="alerta-divergencias-novas" class="ck-aviso" data-gravidade="atencao" role="status" aria-labelledby="alerta-divergencias-novas-titulo" data-state="loading" hidden>
+            <span class="ck-aviso__icone"><svg class="ck-ico" aria-hidden="true" focusable="false"><use href="#i-alerta"></use></svg></span>
+            <div class="ck-aviso__topo"><h3 id="alerta-divergencias-novas-titulo" class="ck-aviso__titulo">Divergências novas</h3></div>
+            <p id="alerta-divergencias-novas-texto" class="ck-aviso__texto"></p>
+            <button type="button" id="btn-alerta-divergencias-novas" data-on-click="abrirEvolucaoAtualizacoes" class="ck-btn ck-btn--secundario ck-btn--sm ck-aviso__acao">Ver evolução</button>
+          </section>
+        </div>
+      </section>
+    </div>
+
+    <button type="button" id="theme-toggle" class="ck-btn ck-btn--icone ck-btn--fantasma" aria-label="Ativar modo claro" title="Ativar modo claro"><svg class="ck-ico ck-ico--lg ck-ico--sol" aria-hidden="true" focusable="false"><use href="#i-sun"></use></svg><svg class="ck-ico ck-ico--lg ck-ico--lua" aria-hidden="true" focusable="false"><use href="#i-moon"></use></svg></button>
   </div>
-</div>
-</form>
-<div class="cockpit-bar__chips">
-<details id="readiness-panel" class="cockpit-chip readiness-panel" data-state="loading" aria-labelledby="readiness-title" aria-busy="true">
-<summary class="cockpit-chip__trigger" aria-controls="readiness-content">
-<span id="stat-base-dot" class="cockpit-chip__dot dot-ok" aria-hidden="true"></span>
-<span id="readiness-summary-short" class="cockpit-chip__label" role="status" aria-live="polite" aria-atomic="true">Verificando…</span>
-<span id="readiness-title" class="sr-only">Disponibilidade das funções</span>
-</summary>
-<div id="readiness-content" class="cockpit-chip__panel readiness-expanded-content">
-<span id="readiness-summary" class="sr-only" role="status" aria-live="polite" aria-atomic="true">Verificando os arquivos locais…</span>
-<dl class="readiness-grid">
-<div class="readiness-item"><dt>Equipamentos</dt><dd><strong id="stat-equipamentos">Carregando…</strong> <span id="stat-equipamentos-rotulo">equipamentos</span></dd></div>
-<div class="readiness-item"><dt>Regionais</dt><dd><strong id="stat-unidades">Carregando…</strong></dd></div>
-<div class="readiness-item"><dt>Contrato</dt><dd><strong>16467</strong></dd></div>
-</dl>
-<div id="readiness-details-content" class="readiness-details-content"></div>
-</div>
-</details>
-<span id="cockpit-automation-shell-status" class="cockpit-chip cockpit-chip--neutral" data-state="idle" aria-live="polite" aria-atomic="true">
-<span class="cockpit-chip__dot" aria-hidden="true"></span>
-<span id="cockpit-automation-shell-title" class="cockpit-chip__label">Chrome livre</span>
-</span>
-</div>
-<div class="cockpit-bar__tools">
-<details class="cockpit-tools-dropdown" id="cockpit-tools-dropdown">
-<summary id="cockpit-tools-trigger" class="cockpit-tools-dropdown__trigger" aria-label="Ferramentas" aria-controls="cockpit-tools-menu" title="Ferramentas">
-<span class="cockpit-tools-dots" aria-hidden="true"></span>
-<span class="sr-only">Ferramentas</span>
-</summary>
-<div id="cockpit-tools-menu" class="cockpit-tools-dropdown__menu" role="menu" aria-label="Ferramentas">
-<div class="cockpit-tools-dropdown__title" role="presentation">Ferramentas</div>
-<button type="button" data-on-click="abrirPainelCockpit" data-args='["chamados"]' id="btn-acompanhamento-chamados" class="cockpit-tools-dropdown__item cockpit-tools-dropdown__item--primary" role="menuitem">
-<i data-lucide="clipboard-list" aria-hidden="true"></i><span>Chamados</span><kbd aria-hidden="true">F5</kbd>
-</button>
-<button type="button" data-on-click="abrirPainelCockpit" data-args='["comparacao"]' id="btn-cockpit-comparacao" class="cockpit-tools-dropdown__item cockpit-tools-dropdown__item--primary" role="menuitem">
-<i data-lucide="layout-dashboard" aria-hidden="true"></i><span>Comparação</span><kbd aria-hidden="true">F6</kbd>
-</button>
-<button type="button" data-on-click="abrirPainelCockpit" data-args='["apelidos"]' id="btn-historico-apelidos" class="cockpit-tools-dropdown__item cockpit-tools-dropdown__item--primary" role="menuitem">
-<i data-lucide="history" aria-hidden="true"></i><span>Histórico de apelidos</span><kbd aria-hidden="true">F7</kbd>
-</button>
-<button type="button" data-on-click="abrirPainelCockpit" data-args='["relatorio"]' id="btn-relatorio-mensal" class="cockpit-tools-dropdown__item cockpit-tools-dropdown__item--primary" role="menuitem">
-<i data-lucide="file-spreadsheet" aria-hidden="true"></i><span>Relatório mensal</span><kbd aria-hidden="true">F8</kbd>
-</button>
-<div class="cockpit-tools-dropdown__divider" role="separator"></div>
-<button type="button" data-on-click="resetarFormulario" id="btn-nova-transferencia" class="cockpit-tools-dropdown__item" role="menuitem">
-<i data-lucide="rotate-ccw" aria-hidden="true"></i><span>Nova transferência</span>
-</button>
-<button type="button" data-on-click="abrirModalAtualizarPlanilhas" id="btn-atualizar-planilhas" class="cockpit-tools-dropdown__item" role="menuitem">
-<i data-lucide="upload" aria-hidden="true"></i><span>Atualizar planilhas</span>
-</button>
-<button type="button" data-on-click="exportarEquipamentosAtualizados" id="btn-exportar-equipamentos" aria-label="Exportar planilha Excel com apelidos e IdCliente atualizados" aria-labelledby="label-exportar-equipamentos" class="cockpit-tools-dropdown__item hidden" role="menuitem">
-<i data-lucide="download" aria-hidden="true"></i><span id="label-exportar-equipamentos">Exportar Excel</span>
-</button>
-<button type="button" data-on-click="abrirModalHistoricoComparacoes" id="btn-historico-comparacoes" class="cockpit-tools-dropdown__item" role="menuitem">
-<i data-lucide="file-clock" aria-hidden="true"></i><span>Histórico planilhas</span>
-<span id="badge-total-historico-comparacoes" class="cockpit-tools-dropdown__badge" aria-label="0 registros">0</span>
-</button>
-<button type="button" data-on-click="abrirEvolucaoAtualizacoes" id="btn-evolucao-atualizacoes" class="cockpit-tools-dropdown__item" role="menuitem">
-<i data-lucide="activity" aria-hidden="true"></i><span>Evolução das atualizações</span>
-</button>
-<button type="button" data-on-click="abrirModalGerenciarUnidades" id="btn-catalogo-unidades" class="cockpit-tools-dropdown__item" role="menuitem">
-<i data-lucide="map-pin" aria-hidden="true"></i><span>Catálogo de unidades</span>
-</button>
-</div>
-</details>
-</div>
-<div class="cockpit-bar__actions">
-<button type="button" id="btn-notificacoes" class="cockpit-action-button" aria-label="Notificações" aria-controls="notification-center-panel" aria-expanded="false" title="Notificações">
-<i data-lucide="bell" aria-hidden="true"></i>
-<span id="badge-notificacoes" class="cockpit-notification-badge" aria-hidden="true" hidden>0</span>
-</button>
-<button type="button" id="theme-toggle" class="cockpit-action-button" aria-label="Ativar modo claro" title="Ativar modo claro">
-<svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="lucide lucide-sun" aria-hidden="true" focusable="false"><circle cx="12" cy="12" r="4"></circle><path d="M12 2v2"></path><path d="M12 20v2"></path><path d="m4.93 4.93 1.42 1.42"></path><path d="m17.65 17.65 1.42 1.42"></path><path d="M2 12h2"></path><path d="M20 12h2"></path><path d="m6.34 17.66-1.42-1.42"></path><path d="m19.07 4.93-1.42-1.42"></path></svg>
-</button>
-</div>
-<strong id="header-page-title" class="sr-only">Home</strong>
+  <strong id="header-page-title" class="ck-sr">Home</strong>
 </header>
-<!-- Notification center panel (preserved from original) -->
-<section id="notification-center-panel" class="notification-center-panel" role="region" aria-labelledby="notification-center-title" aria-busy="true" hidden>
-<div class="notification-center-header">
-<h2 id="notification-center-title">Pendências</h2>
-<p id="notification-center-summary" role="status" aria-live="polite" aria-atomic="true">Verificando os avisos…</p>
-</div>
-<section id="alerta-os-paradas" class="stale-base-alert" role="status" aria-labelledby="alerta-os-paradas-titulo" data-state="loading" hidden>
-<i data-lucide="file-clock" class="stale-base-alert-icon" aria-hidden="true"></i>
-<div class="stale-base-alert-copy">
-<h2 id="alerta-os-paradas-titulo" class="stale-base-alert-title">OS paradas</h2>
-<p id="alerta-os-paradas-texto" class="stale-base-alert-text"></p>
-</div>
-<button type="button" id="btn-alerta-os-paradas" data-on-click="abrirAcompanhamentoChamados" class="btn btn-secondary stale-base-alert-action">Ver chamados</button>
-</section>
-<section id="alerta-divergencias-novas" class="stale-base-alert" role="status" aria-labelledby="alerta-divergencias-novas-titulo" data-state="loading" hidden>
-<i data-lucide="alert-circle" class="stale-base-alert-icon" aria-hidden="true"></i>
-<div class="stale-base-alert-copy">
-<h2 id="alerta-divergencias-novas-titulo" class="stale-base-alert-title">Divergências novas</h2>
-<p id="alerta-divergencias-novas-texto" class="stale-base-alert-text"></p>
-</div>
-<button type="button" id="btn-alerta-divergencias-novas" data-on-click="abrirEvolucaoAtualizacoes" class="btn btn-secondary stale-base-alert-action">Ver evolução</button>
-</section>
-</section>
 <div class="app-workspace cockpit-workspace">
 
       <!-- MAIN CONTAINER -->
