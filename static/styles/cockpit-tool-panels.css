@@ -164,7 +164,7 @@
 .cockpit-tool-list-button[aria-pressed="true"] { box-shadow: inset 2px 0 var(--cockpit-accent); }
 .cockpit-tool-list-button strong { min-width: 0; overflow: hidden; text-overflow: ellipsis; font-size: 12px; font-weight: 600; }
 .cockpit-tool-list-button small { grid-column: 1 / -1; overflow: hidden; color: var(--cockpit-text-subtle); font-size: 10px; text-overflow: ellipsis; white-space: nowrap; }
-.cockpit-tool-mono { font-family: "JetBrains Mono", ui-monospace, monospace; }
+.cockpit-tool-mono { font-family: var(--ux-font-mono); }
 .cockpit-tool-badge { max-width: 180px; overflow: hidden; padding: 2px 6px; border-radius: 4px; background: var(--cockpit-accent-soft); color: var(--cockpit-accent-text); font-size: 10px; text-overflow: ellipsis; white-space: nowrap; }
 .cockpit-tool-badge--success,
 .cockpit-comparison-row .cockpit-tool-badge--success { background: var(--cockpit-ok-bg); color: var(--cockpit-ok-fg); }
@@ -218,7 +218,7 @@
 .cockpit-monthly-layout > .cockpit-tool-detail { border-right: 1px solid var(--cockpit-border); }
 .cockpit-monthly-preview { min-width: 0; min-height: 0; overflow: auto; padding: 14px; background: var(--cockpit-surface); }
 .cockpit-monthly-preview h2 { margin: 0 0 10px; color: var(--cockpit-text); font-size: 13px; }
-.cockpit-monthly-preview pre { margin: 0; color: var(--cockpit-text); font: 11px/1.65 "JetBrains Mono", ui-monospace, monospace; white-space: pre-wrap; overflow-wrap: anywhere; }
+.cockpit-monthly-preview pre { margin: 0; color: var(--cockpit-text); font: 11px/1.65 var(--ux-font-mono); white-space: pre-wrap; overflow-wrap: anywhere; }
 
 /* Médio e compacto: o detalhe desce para baixo da lista e o painel inteiro rola. */
 @media (max-width: 1199.98px) {
