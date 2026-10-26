@@ -11,6 +11,10 @@
     comparacao: ["Comparação", "Resultados salvos da comparação entre as bases locais."],
     apelidos: ["Histórico de apelidos", "Alterações registradas para equipamentos e usuários."],
     relatorio: ["Relatório mensal", "Consolidação do mês usando os dados locais disponíveis."],
+    planilhas: ["Atualizar planilhas", "Última atualização das bases locais de equipamentos."],
+    "historico-planilhas": ["Histórico planilhas", "Atualizações de planilhas já comparadas e salvas localmente."],
+    evolucao: ["Evolução das atualizações", "Variação entre as duas últimas atualizações de inventário."],
+    unidades: ["Catálogo de unidades", "Unidades Sebrae cadastradas para entrega e retirada."],
   };
   const relationLabels = {
     conferida: "Conferida", divergente: "Divergente", somente_simpress: "Só Simpress",
@@ -20,6 +24,20 @@
   const comparisonTones = { Localidade: "error", Usuário: "warning", "Só Simpress": "error", "Só Endpoint": "error", Igual: "success" };
   let eventsBound = false;
   let activeTool = "";
+  let previousTool = "";
+  let goingBack = false;
+  let sheetsRequest = 0;
+  let sheetsRows = [];
+  let selectedSheetKey = "";
+  let historyEvents = [];
+  let historyRequest = 0;
+  let historyDetailRequest = 0;
+  let selectedHistoryId = "";
+  const historyDetailCache = new Map();
+  let evolutionRequest = 0;
+  let unitsRequest = 0;
+  let unitsList = [];
+  let selectedUnitKey = "";
   let returnTarget = null;
   let ticketData = null;
   let selectedTicketSerial = "";
@@ -521,8 +539,8 @@
     app.abrirModalAtualizarPlanilhas();
   }
 
-  async function exportSelectedComparison() {
-    const eventDate = String(selectedComparison?.horario || "").slice(0, 10);
+  async function exportSelectedComparison(event = selectedComparison) {
+    const eventDate = String(event?.horario || "").slice(0, 10);
     const button = byId("btn-exportar-resultado-comparacao");
     if (!/^\d{4}-\d{2}-\d{2}$/.test(eventDate) || !button || typeof app.exportarResultadoComparacaoPlanilhas !== "function") {
       app.showToast("Este resultado não tem uma data de histórico válida para exportar.", "warning");
@@ -1077,6 +1095,378 @@
     }
   }
 
+  // ---- Telas v2: Atualizar planilhas, Histórico planilhas, Evolução e Unidades ----
+  const svgNs = "http://www.w3.org/2000/svg";
+  const historyFormat = context.historyFormat || globalThis.SimpressHistoryFormat || {};
+
+  function displayDate(value) {
+    return typeof historyFormat.formatarHorarioHistorico === "function" ? historyFormat.formatarHorarioHistorico(value) : String(value || "—");
+  }
+
+  function displaySource(value) {
+    const text = String(value || "");
+    return text && typeof historyFormat.formatarNomeFonteHistorico === "function" ? historyFormat.formatarNomeFonteHistorico(text) : text;
+  }
+
+  function renderPares(target, entries) {
+    target.replaceChildren(...entries.map(([label, value]) => {
+      const pair = element("div", "ck-par");
+      pair.append(element("dt", "", label), element("dd", "", value === null || value === undefined || value === "" ? "—" : value));
+      return pair;
+    }));
+  }
+
+  // Linha de tabela; com onSelect vira selecionável por clique, Enter ou Espaço.
+  function tableRow(cells, { selected = false, onSelect = null } = {}) {
+    const row = element("tr");
+    if (onSelect) {
+      row.tabIndex = 0;
+      row.setAttribute("aria-selected", String(selected));
+      row.addEventListener("click", onSelect);
+      row.addEventListener("keydown", event => {
+        if (event.key !== "Enter" && event.key !== " ") return;
+        event.preventDefault();
+        onSelect();
+      });
+    }
+    cells.forEach(([label, content, className]) => {
+      const cell = element("td", className || "");
+      cell.dataset.label = label;
+      cell.append(content instanceof Node ? content : document.createTextNode(String(content ?? "—")));
+      row.append(cell);
+    });
+    return row;
+  }
+
+  function tableEmpty(body, columns, message) {
+    const cell = element("td", "ck-lista__vazio", message);
+    cell.colSpan = columns;
+    const row = element("tr");
+    row.append(cell);
+    body.replaceChildren(row);
+  }
+
+  async function fetchUpdateEvents() {
+    const data = await apiFetch("/api/historico-comparacoes", { errorMessage: "Não foi possível carregar o histórico de planilhas." });
+    return (Array.isArray(data.eventos) ? data.eventos : []).filter(event => event.id && !event.somente_anotacoes_sincronizadas);
+  }
+
+  function inventoryUpdates(events) { return events.filter(event => event.tipo !== "restauracao"); }
+
+  function eventFiles(event) {
+    const files = event?.arquivos_enviados || event?.comparacao?.arquivos_enviados || {};
+    return { endpoint: displaySource(files.endpoint), detalhes: displaySource(files.detalhes) };
+  }
+
+  function summaryCount(summary, ...keys) {
+    return keys.reduce((total, key) => total + (Number.isFinite(summary?.[key]) ? summary[key] : 0), 0);
+  }
+
+  // Planilhas
+  function renderSheetDetail() {
+    const row = sheetsRows.find(item => item.key === selectedSheetKey);
+    byId("cockpit-sheets-detail-title").textContent = row ? row.label : "—";
+    byId("cockpit-sheets-detail-sub").textContent = row ? (row.file || "Arquivo não informado") : "Selecione uma planilha.";
+    byId("cockpit-sheets-detail-badge").replaceChildren(...(row ? [badge(row.situation, row.file ? "success" : "warning")] : []));
+  }
+
+  function renderSheetRows() {
+    const body = byId("cockpit-sheets-list-body");
+    if (!sheetsRows.length) return tableEmpty(body, 5, "Nenhuma atualização no histórico local.");
+    body.replaceChildren(...sheetsRows.map(row => tableRow([
+      ["Planilha", row.label], ["Arquivo atual", row.file || "—"], ["Linhas", displayCount(row.total), "ck-td--dir"],
+      ["Atualizado", displayDate(row.updatedAt)], ["Situação", badge(row.situation, row.file ? "success" : "warning")],
+    ], { selected: row.key === selectedSheetKey, onSelect: () => { selectedSheetKey = row.key; renderSheetRows(); renderSheetDetail(); } })));
+  }
+
+  async function loadSheets() {
+    const request = ++sheetsRequest;
+    const status = byId("cockpit-sheets-status");
+    status.textContent = "Carregando…";
+    renderKpis(byId("cockpit-sheets-kpis"), []);
+    tableEmpty(byId("cockpit-sheets-list-body"), 5, "Carregando…");
+    try {
+      const events = inventoryUpdates(await fetchUpdateEvents());
+      if (request !== sheetsRequest || activeTool !== "planilhas") return;
+      if (!events.length) {
+        sheetsRows = [];
+        status.textContent = "Nenhuma atualização no histórico local.";
+        renderSheetRows();
+        renderSheetDetail();
+        return;
+      }
+      const data = await apiFetch(`/api/historico-comparacoes/${encodeURIComponent(events[0].id)}`, { errorMessage: "Não foi possível abrir a última atualização." });
+      if (request !== sheetsRequest || activeTool !== "planilhas") return;
+      const latest = data.evento || events[0];
+      const metrics = comparisonMetrics(latest);
+      const files = eventFiles(latest);
+      sheetsRows = [
+        { key: "endpoint", label: "No Endpoint", file: files.endpoint, total: metrics.endpoint },
+        { key: "detalhes", label: "na Simpress", file: files.detalhes, total: metrics.simpress },
+      ].map(row => ({ ...row, updatedAt: latest.horario, situation: row.file ? "Atualizada" : "Sem arquivo" }));
+      if (!sheetsRows.some(row => row.key === selectedSheetKey)) selectedSheetKey = sheetsRows[0].key;
+      renderKpis(byId("cockpit-sheets-kpis"), [
+        ["Última atualização", displayDate(latest.horario)], ["Equipamentos na Simpress", metrics.simpress],
+        ["Equipamentos no Endpoint", metrics.endpoint], ["Atualizações no histórico", events.length],
+      ]);
+      status.textContent = `Última atualização em ${displayDate(latest.horario)}`;
+      renderSheetRows();
+      renderSheetDetail();
+    } catch (error) {
+      if (request !== sheetsRequest || activeTool !== "planilhas") return;
+      status.textContent = error.message || "Não foi possível carregar as planilhas.";
+      tableEmpty(byId("cockpit-sheets-list-body"), 5, status.textContent);
+    }
+  }
+
+  // Histórico planilhas
+  function filteredHistory() {
+    const terms = normalize(byId("cockpit-sheets-history-search").value).split(/\s+/).filter(Boolean);
+    return historyEvents.filter(event => {
+      const files = eventFiles(event);
+      const searchable = normalize([displayDate(event.horario), event.horario, files.endpoint, files.detalhes].join(" "));
+      return terms.every(term => searchable.includes(term));
+    });
+  }
+
+  function renderHistoryRows() {
+    const visible = filteredHistory();
+    const body = byId("cockpit-sheets-history-list-body");
+    if (!visible.some(event => String(event.id) === selectedHistoryId)) selectedHistoryId = String(visible[0]?.id || "");
+    if (!visible.length) {
+      tableEmpty(body, 6, historyEvents.length ? "Nenhum registro corresponde à busca." : "O histórico não contém atualizações.");
+    } else {
+      body.replaceChildren(...visible.map(event => {
+        const summary = event.resumo || {};
+        const files = eventFiles(event);
+        const id = String(event.id);
+        return tableRow([
+          ["Data", displayDate(event.horario)], ["Arquivo", [files.endpoint, files.detalhes].filter(Boolean).join(" · ") || "—"],
+          ["Equipamentos", displayCount(Number.isFinite(summary.total_endpoint) ? summary.total_endpoint : null), "ck-td--dir"],
+          ["Iguais", displayCount(historyDetailCache.get(id)?.iguais ?? null), "ck-td--dir"],
+          ["Divergentes", displayCount(summaryCount(summary, "divergencias_local")), "ck-td--dir"],
+          ["Sem correspondência", displayCount(summaryCount(summary, "ausentes_no_endpoint", "ausentes_em_detalhes")), "ck-td--dir"],
+        ], { selected: id === selectedHistoryId, onSelect: () => { selectedHistoryId = id; renderHistoryRows(); } });
+      }));
+    }
+    byId("cockpit-sheets-history-status").textContent = `${visible.length} ${visible.length === 1 ? "registro" : "registros"}`;
+    void renderHistoryDetail(visible.find(event => String(event.id) === selectedHistoryId));
+  }
+
+  async function renderHistoryDetail(event) {
+    const request = ++historyDetailRequest;
+    const exportButton = byId("cockpit-sheets-history-export");
+    const note = byId("cockpit-sheets-history-detail-nota");
+    note.hidden = true;
+    byId("cockpit-sheets-history-detail-tag").replaceChildren();
+    if (!event) {
+      byId("cockpit-sheets-history-detail-title").textContent = "—";
+      byId("cockpit-sheets-history-detail-sub").textContent = "Selecione um registro.";
+      byId("cockpit-sheets-history-detail-pares").replaceChildren();
+      exportButton.disabled = true;
+      return;
+    }
+    byId("cockpit-sheets-history-detail-title").textContent = displayDate(event.horario);
+    byId("cockpit-sheets-history-detail-sub").textContent = String(event.id);
+    byId("cockpit-sheets-history-detail-tag").replaceChildren(badge("Atualização", event.tipo === "restauracao" ? "warning" : "neutral"));
+    exportButton.disabled = !/^\d{4}-\d{2}-\d{2}$/.test(String(event.horario || "").slice(0, 10)) || typeof app.exportarResultadoComparacaoPlanilhas !== "function";
+    renderPares(byId("cockpit-sheets-history-detail-pares"), [["Situação", "Carregando…"]]);
+    try {
+      const data = await apiFetch(`/api/historico-comparacoes/${encodeURIComponent(event.id)}`, { errorMessage: "Não foi possível abrir este registro." });
+      if (request !== historyDetailRequest || activeTool !== "historico-planilhas") return;
+      const detail = data.evento || event;
+      const metrics = comparisonMetrics(detail);
+      const files = eventFiles(detail);
+      const known = historyDetailCache.has(String(event.id));
+      historyDetailCache.set(String(event.id), metrics);
+      renderPares(byId("cockpit-sheets-history-detail-pares"), [
+        ["No Endpoint", files.endpoint], ["na Simpress", files.detalhes],
+        ["Equipamentos na Simpress", displayCount(metrics.simpress)], ["Equipamentos no Endpoint", displayCount(metrics.endpoint)],
+        ["Iguais", displayCount(metrics.iguais)], ["Divergência de local", displayCount(metrics.divergenciaLocal)],
+        ["Divergência de usuário", displayCount(metrics.divergenciaUsuario)],
+        ["Só Simpress", displayCount(metrics.soSimpress)], ["Só Endpoint", displayCount(metrics.soEndpoint)],
+      ]);
+      if (!known) {
+        const cell = byId("cockpit-sheets-history-list-body").querySelector('tr[aria-selected="true"] td[data-label="Iguais"]');
+        if (cell) cell.textContent = displayCount(metrics.iguais);
+      }
+    } catch (error) {
+      if (request !== historyDetailRequest || activeTool !== "historico-planilhas") return;
+      renderPares(byId("cockpit-sheets-history-detail-pares"), []);
+      byId("cockpit-sheets-history-detail-nota-texto").textContent = error.message || "Não foi possível abrir este registro.";
+      note.hidden = false;
+    }
+  }
+
+  async function loadHistory() {
+    const request = ++historyRequest;
+    const status = byId("cockpit-sheets-history-status");
+    status.textContent = "Carregando…";
+    renderKpis(byId("cockpit-sheets-history-kpis"), []);
+    tableEmpty(byId("cockpit-sheets-history-list-body"), 6, "Carregando…");
+    try {
+      const events = await fetchUpdateEvents();
+      if (request !== historyRequest || activeTool !== "historico-planilhas") return;
+      historyEvents = events;
+      const latest = inventoryUpdates(events)[0];
+      renderKpis(byId("cockpit-sheets-history-kpis"), [
+        ["Registros no histórico", events.length], ["Última atualização", latest ? displayDate(latest.horario) : "—"],
+        ["Divergentes na última", latest ? summaryCount(latest.resumo, "divergencias_local") : null],
+        ["Sem correspondência na última", latest ? summaryCount(latest.resumo, "ausentes_no_endpoint", "ausentes_em_detalhes") : null],
+      ]);
+      renderHistoryRows();
+    } catch (error) {
+      if (request !== historyRequest || activeTool !== "historico-planilhas") return;
+      status.textContent = error.message || "Não foi possível carregar o histórico.";
+      tableEmpty(byId("cockpit-sheets-history-list-body"), 6, status.textContent);
+    }
+  }
+
+  // Evolução
+  function renderEvolutionChart(previous, current) {
+    const svg = byId("cockpit-updates-chart");
+    const sums = event => [summaryCount(event.resumo, "divergencias_local"), summaryCount(event.resumo, "ausentes_no_endpoint", "ausentes_em_detalhes")];
+    const entries = [
+      { kind: "abertos", label: "Anterior · divergentes", value: sums(previous)[0] },
+      { kind: "concluidos", label: "Anterior · sem correspondência", value: sums(previous)[1] },
+      { kind: "abertos", label: "Atual · divergentes", value: sums(current)[0] },
+      { kind: "concluidos", label: "Atual · sem correspondência", value: sums(current)[1] },
+    ];
+    const max = Math.max(1, ...entries.map(entry => entry.value));
+    svg.querySelectorAll("rect").forEach(rect => rect.remove());
+    entries.forEach((entry, index) => {
+      const height = entry.value > 0 ? Math.max(2, Math.round((entry.value / max) * 140)) : 0;
+      const rect = document.createElementNS(svgNs, "rect");
+      rect.setAttribute("class", `ck-graf__${entry.kind}`);
+      rect.setAttribute("x", String(index * 100 + 25));
+      rect.setAttribute("y", String(145 - height));
+      rect.setAttribute("width", "50");
+      rect.setAttribute("height", String(height));
+      svg.append(rect);
+    });
+    svg.setAttribute("aria-label", `Pendências por atualização: ${entries.map(entry => `${entry.label} ${entry.value}`).join(", ")}`);
+    byId("cockpit-updates-chart-labels").replaceChildren(...entries.map(entry => {
+      const label = element("span", "", entry.label);
+      label.prepend(element("strong", "", displayCount(entry.value)));
+      return label;
+    }));
+  }
+
+  function clearEvolution(message) {
+    byId("cockpit-updates-status").textContent = message;
+    renderKpis(byId("cockpit-updates-kpis"), []);
+    tableEmpty(byId("cockpit-updates-table-body"), 5, message);
+    const svg = byId("cockpit-updates-chart");
+    svg.querySelectorAll("rect").forEach(rect => rect.remove());
+    svg.setAttribute("aria-label", "Sem dados para o gráfico.");
+    byId("cockpit-updates-chart-labels").replaceChildren();
+    byId("cockpit-updates-new-list").replaceChildren();
+    byId("cockpit-updates-new-empty").textContent = message;
+    byId("cockpit-updates-new-empty").hidden = false;
+    byId("cockpit-updates-detail-badge").replaceChildren();
+    byId("cockpit-updates-detail-sub").textContent = "";
+  }
+
+  async function loadEvolution() {
+    const request = ++evolutionRequest;
+    clearEvolution("Carregando…");
+    try {
+      const events = inventoryUpdates(await fetchUpdateEvents());
+      if (request !== evolutionRequest || activeTool !== "evolucao") return;
+      if (events.length < 2) return clearEvolution("São necessárias pelo menos duas atualizações para comparar a evolução.");
+      const [current, previous] = events;
+      const query = new URLSearchParams({ anterior: String(previous.id), atual: String(current.id) });
+      const data = await apiFetch(`/api/operacoes/evolucao?${query}`, { errorMessage: "Não foi possível comparar as atualizações." });
+      if (request !== evolutionRequest || activeTool !== "evolucao") return;
+      const counts = data.contagens || {};
+      const fresh = Array.isArray(data.mudancas?.novos) ? data.mudancas.novos : [];
+      byId("cockpit-updates-status").textContent = `${displayDate(previous.horario)} → ${displayDate(current.horario)}`;
+      renderKpis(byId("cockpit-updates-kpis"), [
+        ["Divergências novas", counts.novos], ["Resolvidas", counts.resolvidos], ["Continuam", counts.continuam],
+        ["Atualização atual", displayDate(current.horario)],
+      ]);
+      renderEvolutionChart(previous, current);
+      const equipment = event => displayCount(Number.isFinite(event.resumo?.total_endpoint) ? event.resumo.total_endpoint : null);
+      const diverging = event => displayCount(summaryCount(event.resumo, "divergencias_local"));
+      byId("cockpit-updates-table-body").replaceChildren(
+        tableRow([["Atualização", `Anterior · ${displayDate(previous.horario)}`], ["Equipamentos", equipment(previous), "ck-td--dir"],
+          ["Divergentes", diverging(previous), "ck-td--dir"], ["Resolvidas", "—", "ck-td--dir"], ["Novas", "—", "ck-td--dir"]]),
+        tableRow([["Atualização", `Atual · ${displayDate(current.horario)}`], ["Equipamentos", equipment(current), "ck-td--dir"],
+          ["Divergentes", diverging(current), "ck-td--dir"], ["Resolvidas", displayCount(counts.resolvidos), "ck-td--dir"],
+          ["Novas", displayCount(counts.novos), "ck-td--dir"]]),
+      );
+      byId("cockpit-updates-detail-badge").replaceChildren(badge(`${displayCount(counts.novos)} novas`, fresh.length ? "warning" : "success"));
+      byId("cockpit-updates-detail-sub").textContent = `Entre ${displayDate(previous.horario)} e ${displayDate(current.horario)}`;
+      byId("cockpit-updates-new-list").replaceChildren(...fresh.slice(0, 50).map(change => {
+        const item = element("li", "ck-tempo__item");
+        const body = element("div", "ck-tempo__corpo");
+        const row = change.item || {};
+        body.append(element("strong", "ck-tempo__titulo", row.serie || row.serial || row.computador || "Registro sem série"),
+          element("span", "ck-tempo__meta", [change.categoria, displaySource(change.secao)].filter(Boolean).join(" · ")));
+        item.append(element("span", "ck-tempo__marca"), body);
+        return item;
+      }));
+      const empty = byId("cockpit-updates-new-empty");
+      empty.hidden = fresh.length > 0;
+      empty.textContent = "Nenhuma divergência nova entre as duas atualizações.";
+    } catch (error) {
+      if (request !== evolutionRequest || activeTool !== "evolucao") return;
+      clearEvolution(error.message || "Não foi possível carregar a evolução.");
+    }
+  }
+
+  // Unidades
+  function unitName(unit) { return unit?.label || unit?.cidade || "Unidade sem nome"; }
+
+  function filteredUnits() {
+    const terms = normalize(byId("cockpit-units-search").value).split(/\s+/).filter(Boolean);
+    return unitsList.map((unit, index) => ({ unit, key: String(unit?.id ?? index) })).filter(({ unit }) => {
+      const searchable = normalize([unitName(unit), unit.cidade, unit.cnpj, unit.endereco].join(" "));
+      return terms.every(term => searchable.includes(term));
+    });
+  }
+
+  function renderUnits() {
+    const visible = filteredUnits();
+    const body = byId("cockpit-units-list-body");
+    if (!visible.some(({ key }) => key === selectedUnitKey)) selectedUnitKey = visible[0]?.key || "";
+    if (!visible.length) tableEmpty(body, 3, unitsList.length ? "Nenhuma unidade corresponde à busca." : "O catálogo não contém unidades.");
+    else {
+      body.replaceChildren(...visible.map(({ unit, key }) => tableRow([
+        ["Unidade", unitName(unit)], ["Cidade", unit.cidade || "—"], ["CNPJ", unit.cnpj || "—"],
+      ], { selected: key === selectedUnitKey, onSelect: () => { selectedUnitKey = key; renderUnits(); } })));
+    }
+    byId("cockpit-units-status").textContent = `${visible.length} de ${unitsList.length} ${unitsList.length === 1 ? "unidade" : "unidades"}`;
+    const selected = visible.find(({ key }) => key === selectedUnitKey)?.unit;
+    byId("cockpit-units-detail-title").textContent = selected ? unitName(selected) : "—";
+    byId("cockpit-units-detail-sub").textContent = selected ? ([selected.cidade, selected.uf].filter(Boolean).join("/") || "Cidade não informada") : "Selecione uma unidade.";
+    renderPares(byId("cockpit-units-detail-pares"), selected ? [
+      ["Cidade", selected.cidade], ["UF", selected.uf], ["Endereço", selected.endereco], ["CEP", selected.cep], ["CNPJ", selected.cnpj],
+    ] : []);
+  }
+
+  async function loadUnits() {
+    const request = ++unitsRequest;
+    const status = byId("cockpit-units-status");
+    status.textContent = "Carregando…";
+    renderKpis(byId("cockpit-units-kpis"), []);
+    tableEmpty(byId("cockpit-units-list-body"), 3, "Carregando…");
+    try {
+      const data = await apiFetch("/api/unidades", { errorMessage: "Não foi possível carregar o catálogo de unidades." });
+      if (request !== unitsRequest || activeTool !== "unidades") return;
+      unitsList = Array.isArray(data) ? data : [];
+      renderKpis(byId("cockpit-units-kpis"), [
+        ["Unidades", unitsList.length], ["Cidades", new Set(unitsList.map(unit => normalize(unit.cidade)).filter(Boolean)).size],
+        ["Com CNPJ", unitsList.filter(unit => unit.cnpj).length],
+      ]);
+      renderUnits();
+    } catch (error) {
+      if (request !== unitsRequest || activeTool !== "unidades") return;
+      status.textContent = error.message || "Não foi possível carregar as unidades.";
+      tableEmpty(byId("cockpit-units-list-body"), 3, status.textContent);
+    }
+  }
+
   function ensureEvents() {
     if (eventsBound || typeof document === "undefined") return;
     const root = byId("cockpit-tool-panels");
@@ -1107,6 +1497,13 @@
     byId("cockpit-monthly-month").addEventListener("change", event => loadMonthlyReport(event.currentTarget.value));
     byId("cockpit-monthly-copy").addEventListener("click", copyMonthlyPreview);
     byId("cockpit-monthly-export").addEventListener("click", exportMonthlyWorkbook);
+    byId("cockpit-sheets-refresh").addEventListener("click", loadSheets);
+    byId("cockpit-sheets-history-search").addEventListener("input", renderHistoryRows);
+    byId("cockpit-sheets-history-export").addEventListener("click", () => {
+      void exportSelectedComparison(historyEvents.find(event => String(event.id) === selectedHistoryId));
+    });
+    byId("cockpit-updates-refresh").addEventListener("click", loadEvolution);
+    byId("cockpit-units-search").addEventListener("input", renderUnits);
     document.addEventListener("keydown", event => {
       if (event.key !== "Escape" || event.defaultPrevented || root.hidden) return;
       const modal = document.querySelector('[data-accessible-modal="true"]:not(.hidden)');
@@ -1122,6 +1519,7 @@
     byId("main-content").hidden = false;
     byId("cockpit-tools-dropdown").open = false;
     activeTool = "";
+    previousTool = "";
     delete byId("cockpit-tools-dropdown").dataset.activeTool;
     if (restoreFocus && returnTarget?.isConnected) returnTarget.focus();
     else if (restoreFocus) byId("main-content").focus();
@@ -1138,6 +1536,7 @@
     if (!root) return;
     const activeElement = document.activeElement;
     if (!activeTool) returnTarget = byId("cockpit-tools-trigger") || activeElement;
+    if (activeTool && activeTool !== tool && !goingBack) previousTool = activeTool;
     activeTool = tool;
     byId("cockpit-tools-dropdown").dataset.activeTool = tool;
     byId("main-content").hidden = true;
@@ -1149,7 +1548,8 @@
     root.hidden = false;
     byId("cockpit-tools-dropdown").open = false;
     byId("cockpit-tool-title").textContent = toolInfo[tool][0];
-    byId("cockpit-tool-kbd").textContent = toolKeys[tool];
+    byId("cockpit-tool-kbd").textContent = toolKeys[tool] || "";
+    byId("cockpit-tool-kbd").hidden = !toolKeys[tool];
     byId("cockpit-tool-subtitle").textContent = toolInfo[tool][1];
     document.querySelectorAll("[data-cockpit-tool-panel]").forEach(panel => { panel.hidden = panel.dataset.cockpitToolPanel !== tool; });
     byId("cockpit-tool-title").focus();
@@ -1163,11 +1563,28 @@
       renderMonthlyPeriods(input.value);
       await loadMonthlyReport(input.value);
     }
+    if (tool === "planilhas") await loadSheets();
+    if (tool === "historico-planilhas") await loadHistory();
+    if (tool === "evolucao") await loadEvolution();
+    if (tool === "unidades") await loadUnits();
+  }
+
+  // Voltar: retorna ao painel aberto antes; sem anterior (ou com restoreFocus=false) fecha para a tela principal.
+  function goBack(restoreFocus = true) {
+    const target = previousTool;
+    if (target && restoreFocus !== false) {
+      previousTool = "";
+      goingBack = true;
+      const opened = openPanel(target);
+      goingBack = false;
+      return opened;
+    }
+    return closePanel(restoreFocus);
   }
 
   return {
     abrirPainelCockpit: openPanel,
-    fecharPainelCockpit: closePanel,
+    fecharPainelCockpit: goBack,
     filterTicketRecords,
     comparisonMetrics,
     comparisonRows,
