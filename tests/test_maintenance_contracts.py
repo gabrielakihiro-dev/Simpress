@@ -650,6 +650,8 @@ class MaintenanceContractTests(unittest.TestCase):
         html = index_file.read_text(encoding="utf-8")
         self.assertIn('<link rel="icon" type="image/svg+xml" href="/static/favicon.svg">', html)
         self.assertIn('<link rel="stylesheet" href="/static/vendor/fonts.css">', html)
+        self.assertIn('<link rel="stylesheet" href="/static/styles/ck-tokens.css">', html)
+        self.assertIn('<link rel="stylesheet" href="/static/styles/ck-cockpit.css">', html)
         self.assertIn('<link rel="stylesheet" href="/static/vendor/tailwind-4.3.3.css">', html)
         self.assertIn('<script src="/static/vendor/lucide-1.48.0-subset.js"></script>', html)
         self.assertIn('<link rel="stylesheet" href="/static/app.css">', html)
