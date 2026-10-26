@@ -254,3 +254,19 @@ Fonte de verdade: o artefato publicado (cópia https://claude.ai/artifact/J7Jctd
 **Conclusão:** a 1200 px ou mais, a barra, a Home, o Resumo e as larguras F5–F8 seguem o artefato publicado. **Transporte e Automação não estão idênticos** na composição; ficam para uma fase própria de recomposição.
 
 **Proposta para o prompt 09 (`09-historico-apelidos.md`, linha 24):** trocar "o detalhe ocupa 380–420px à direita" por "o detalhe ocupa 380px à direita". Essa é a largura medida no artefato publicado para o Histórico de apelidos. Proposta apenas; o prompt 09 não foi alterado.
+
+## Revisão funcional contra 044fdcc (Fase 8, Etapa B)
+
+Base: `git archive 044fdcc` servido pelo `ui-fixture` na porta 8822; atual: `feat/cockpit-responsivo` na porta 8821. Somente fixtures. Playwright/Chromium, larguras 320, 768 e 1440, temas escuro e claro (36 combinações por versão).
+
+| Função | Base 044fdcc | Atual | Resultado |
+| --- | --- | --- | --- |
+| Busca (`Ctrl+K` foca `#input-serial`, digitar e limpar) | ok | ok | igual |
+| F1–F4 (abas Home, Transporte, Resumo, Automação) | ok | ok | igual |
+| F5–F8 (Chamados, Comparação, Histórico de apelidos, Relatório mensal) | ok | ok | igual |
+| Notificações (abre o painel, `aria-expanded=true`, fecha com Esc) | ok, ícone SVG 24×24 | ok, ícone SVG 20×20 | mudança visual intencional; função igual |
+| Tema (alternar e voltar) | ok | ok | igual |
+| Rolagem horizontal a 320px | 56px | 0 | corrigido pela responsividade |
+| Erros de console | 0 | 0 | igual |
+| Modal Editar (`e`) e exportação pelo botão | o roteiro não conseguiu acionar | o roteiro não conseguiu acionar | igual nas duas versões; limite do roteiro, cobertos pela suíte e2e |
+| Exportações e anotações | — | suíte e2e | ver resultado da suíte |
