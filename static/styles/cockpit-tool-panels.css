@@ -264,6 +264,10 @@
 .cockpit-shell .cockpit-monthly-layout > .cockpit-tool-detail { border-right-color: var(--cockpit-neutral-800); }
 .cockpit-shell .cockpit-monthly-preview h2 { font-size: 13px; font-weight: 500; }
 .cockpit-shell .cockpit-monthly-preview pre { color: var(--cockpit-neutral-200); font-size: 12px; line-height: 1.6; }
+/* Fase 8: largura do detalhe por ferramenta, medida no artefato a 100% (Chamados 420, Comparação/Apelidos 380, Relatório 400). */
+.cockpit-shell [data-cockpit-tool-panel="comparacao"] .cockpit-tool-split,
+.cockpit-shell [data-cockpit-tool-panel="apelidos"] .cockpit-tool-split { grid-template-columns: minmax(520px, 1fr) 380px; }
+.cockpit-shell .cockpit-monthly-layout { grid-template-columns: minmax(700px, 1fr) 400px; }
 
 /* Médio e compacto: o detalhe desce para baixo da lista e o painel inteiro rola. */
 @media (max-width: 1199.98px) {
