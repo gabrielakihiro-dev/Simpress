@@ -266,8 +266,15 @@
       const destaque = section.querySelector("#ck-os-destaque");
       if (destaque) {
         destaque.hidden = !serie;
-        const forte = el("strong", "", serie);
-        destaque.replaceChildren(forte, doc.createTextNode((apelido ? " · " + apelido : "") + ", o equipamento desta transferência. As linhas dele aparecem destacadas."));
+        const ns = "http://www.w3.org/2000/svg";
+        const icone = doc.createElementNS(ns, "svg");
+        icone.setAttribute("class", "ck-ico ck-ico--sm");
+        icone.setAttribute("aria-hidden", "true");
+        icone.setAttribute("focusable", "false");
+        const uso = doc.createElementNS(ns, "use");
+        uso.setAttribute("href", "#i-link");
+        icone.append(uso);
+        destaque.replaceChildren(icone, doc.createTextNode("Linhas destacadas pertencem a "), el("strong", "", serie), doc.createTextNode((apelido ? " · " + apelido : "") + ", o equipamento desta transferência."));
       }
       const link = doc.getElementById("ck-link-os");
       if (link) {
