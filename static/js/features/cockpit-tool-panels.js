@@ -1064,6 +1064,24 @@
     return section;
   }
 
+  // Cartão compacto: número grande + rótulo por par [rótulo, valor]; `extra` anexa um bloco opcional.
+  function statCard(title, pairs, extra) {
+    const section = element("section", "ck-det-bloco ck-rel__cartao");
+    section.append(element("h3", "", title));
+    if (!pairs.length) section.append(element("p", "ck-lista__vazio", "Sem registros neste período."));
+    else {
+      const grid = element("dl", "ck-rel__numeros");
+      pairs.forEach(([label, value]) => {
+        const cell = element("div", "ck-rel__numero");
+        cell.append(element("dt", "ck-rel__rotulo", label), element("dd", "ck-rel__valor", displayCount(value)));
+        grid.append(cell);
+      });
+      section.append(grid);
+    }
+    if (extra && extra.querySelector("li")) section.append(extra);
+    return section;
+  }
+
   function renderMonthly(report) {
     const inventory = report.inventario || {};
     const comparison = report.comparacao || {};
@@ -1077,18 +1095,30 @@
       ["Transportes", "—", "Esta fonte não fornece a contagem mensal"],
     ]);
     const details = byId("cockpit-monthly-details");
-    details.replaceChildren(
-      monthlyChart(monthlyChartBars(oracle, simpress)),
-      reportRows("Resumo da base atual", [
-        ["Equipamentos", inventory.total], ["Unidades", inventory.unidades],
-        ["Atualizações no mês", comparison.atualizacoes_no_mes],
-      ], row => `${row[0]} · ${displayCount(row[1])}`),
-      reportRows("Inventário por tipo", inventory.por_tipo, row => `${row[0]} · ${displayCount(row[1])}`),
-      unitsTable(inventory.por_unidade),
-      reportRows("Divergências da comparação", comparison.linhas, row => `${row.secao} · ${row.serie || "Série indisponível"} · ${row.hostname || "Hostname indisponível"}`),
-      reportRows("Ordens do mês", tickets.linhas, row => `${row.fonte} · ${row.identificador || "Identificador indisponível"} · ${row.serie || "Série indisponível"} · ${(row.situacao || []).join(", ") || "Sem classificação no período"}`),
-      reportRows("Registros com dados insuficientes", tickets.dados_insuficientes, row => `${row.fonte} · ${row.serie || "Série indisponível"} · ${(row.identificadores || []).join(", ")} · ${row.motivo || "Motivo indisponível"}`),
+    const counts = comparison.contagens || {};
+    const insufficient = Array.isArray(tickets.dados_insuficientes) ? tickets.dados_insuficientes : [];
+    const left = element("div", "ck-rel__col");
+    left.append(monthlyChart(monthlyChartBars(oracle, simpress)), unitsTable(inventory.por_unidade));
+    const right = element("div", "ck-rel__col");
+    right.append(
+      statCard("Resumo da base atual", [
+        ["Equipamentos", inventory.total], ["Unidades", inventory.unidades], ["Atualizações no mês", comparison.atualizacoes_no_mes],
+      ]),
+      statCard("Inventário por tipo", Array.isArray(inventory.por_tipo) ? inventory.por_tipo : []),
+      statCard("Divergências", Object.entries(counts), reportRows("Linhas da comparação", comparison.linhas, row => `${row.secao} · ${row.serie || "Série indisponível"} · ${row.hostname || "Hostname indisponível"}`)),
+      statCard("Ordens do mês", [
+        ["Oracle abertas", oracle.abertas], ["Oracle concluídas", oracle.concluidas], ["Oracle pendentes", oracle.pendentes],
+        ["Simpress abertas", simpress.abertas], ["Simpress concluídas", simpress.concluidas], ["Simpress pendentes", simpress.pendentes],
+      ], reportRows("Linhas das ordens", tickets.linhas, row => `${row.fonte} · ${row.identificador || "Identificador indisponível"} · ${row.serie || "Série indisponível"} · ${(row.situacao || []).join(", ") || "Sem classificação no período"}`)),
     );
+    const parts = [];
+    if (insufficient.length) {
+      const notice = element("p", "ck-rel__aviso ck-rel__largo", `${insufficient.length} registro(s) com dados insuficientes nas ordens do mês.`);
+      notice.setAttribute("role", "status");
+      notice.title = insufficient.map(row => `${row.fonte} · ${row.serie || "Série indisponível"} · ${(row.identificadores || []).join(", ")} · ${row.motivo || "Motivo indisponível"}`).join("\n");
+      parts.push(notice);
+    }
+    details.replaceChildren(...parts, left, right);
     byId("cockpit-monthly-preview").textContent = monthlyPreviewText(report);
     const cutoff = report.mes?.data_corte;
     const cutoffLabel = /^\d{4}-\d{2}-\d{2}$/.test(cutoff || "")
