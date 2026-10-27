@@ -57,12 +57,13 @@ test("first access centralizes the inventory import and keeps calls separate", a
   await expect(panel.getByRole("button", { name: /Importar/ })).toHaveCount(4);
   await expect(panel).not.toContainText("Catálogos e históricos locais");
   await expect(panel.getByRole("heading", { name: "Ações com inventário" })).toHaveCount(0);
-  await expect(panel.getByRole("heading", { name: "Modelo de exportação" })).toBeVisible();
+  await expect(panel.locator(".ck-pront__titulo", { hasText: "Modelo de exportação" })).toBeVisible();
   await expect(panel.locator("#readiness-details-content")).toBeVisible();
-  await expect(panel.getByRole("heading", { name: "Acompanhamento de chamados" })).toBeVisible();
+  await expect(panel.locator(".ck-pront__titulo", { hasText: "Acompanhamento de chamados" })).toBeVisible();
   await expect(page.locator("#readiness-panel > summary")).toHaveCSS("display", "flex");
   await expect(panel).toHaveAccessibleName("Disponibilidade das funções");
-  await expect(page.locator(".readiness-details-content")).toHaveCSS("display", "grid");
+  await expect(page.locator(".ck-pront__item").first()).toHaveCSS("display", "grid");
+  await expect(panel.getByRole("button", { name: "Cadastrar regionais" })).toBeVisible();
   const audit = await new AxeBuilder({ page }).include("#readiness-panel")
     .withTags(["wcag2a", "wcag2aa", "wcag21aa", "wcag22aa"]).analyze();
   expect(audit.violations).toEqual([]);
@@ -78,9 +79,7 @@ test("first access centralizes the inventory import and keeps calls separate", a
 
   await expect(panel.getByRole("button", { name: "Importar modelo — Modelo de transferência", exact: true })).toHaveCount(0);
   await openStatus(page);
-  const ticketGroup = panel.locator(".readiness-group").filter({
-    has: page.getByRole("heading", { name: "Acompanhamento de chamados" }),
-  });
+  const ticketGroup = panel.locator(".ck-pront__item").filter({ hasText: "Acompanhamento de chamados" });
   await ticketGroup.getByRole("button", { name: "Importar planilhas para acompanhamento de chamados", exact: true }).click();
   await expect(page.locator("#painel-dados-acompanhamento-chamados")).toHaveAttribute("open", "");
   await expect(page.locator("#arquivo-chamados-simpress")).toBeVisible();
@@ -88,10 +87,8 @@ test("first access centralizes the inventory import and keeps calls separate", a
   await expect(page.locator("#modal-acompanhamento-chamados")).toBeHidden();
 
   await openStatus(page);
-  const entraGroup = panel.locator(".readiness-group").filter({
-    has: page.getByRole("heading", { name: "Nomes do Microsoft Entra" }),
-  });
-  await expect(entraGroup.locator(".readiness-group-count")).toHaveText("Pendente");
+  const entraGroup = panel.locator(".ck-pront__item").filter({ hasText: "Microsoft Entra" });
+  await expect(entraGroup.locator(".ck-pront__estado")).toHaveText("Pendente");
   await entraGroup.getByRole("button", { name: "Importar CSV com os nomes do Microsoft Entra", exact: true }).click();
   await expect(page.locator("#modal-atualizar-planilhas")).toBeVisible();
   await expect(page.locator("#entra-csv-file")).toBeVisible();
@@ -125,9 +122,7 @@ test("model import handles failure and refreshes availability after success", as
   await expect(page.locator("#readiness-panel")).toHaveAttribute("aria-busy", "false");
   await openStatus(page);
   await page.locator("#readiness-panel > summary").click();
-  const exportModelGroup = page.locator(".readiness-group").filter({
-    has: page.getByRole("heading", { name: "Modelo de exportação" }),
-  });
+  const exportModelGroup = page.locator(".ck-pront__item").filter({ hasText: "Modelo de exportação" });
   await expect(exportModelGroup).toBeVisible();
   await exportModelGroup.getByRole("button", { name: "Importar modelo de exportação", exact: true }).click();
   const chooseFileButton = page.getByRole("button", { name: "Escolher arquivo", exact: true });

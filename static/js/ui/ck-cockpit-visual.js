@@ -49,6 +49,9 @@
     var b = $("[data-editar]", cel); b.hidden = false; b.setAttribute("aria-expanded", "false"); if (focar) b.focus();
   }
 
+  // Edição cadastral do Home: a lógica fica em features/equipment-editor.js.
+  function cancelarDados() { if (typeof window.cancelarDadosCadastrais === "function") window.cancelarDadosCadastrais(); }
+
   doc.addEventListener("click", function (e) {
     var t = e.target; if (!(t instanceof Element)) return;
     var abre = t.closest("[data-abre]");
@@ -63,6 +66,7 @@
 
     var ed = t.closest("[data-editar]");
     if (ed) abrirEdicao(doc.getElementById(ed.getAttribute("data-editar")), ed);
+    if (t.closest("[data-cancelar-dados]")) cancelarDados();
     var canc = t.closest("[data-cancelar]");
     if (canc) fecharEdicao(canc.closest(".ck-dado"), true);
     var exp = t.closest("[data-expandir]");
@@ -102,6 +106,7 @@
     if (e.key !== "Escape") return;
     if (dialogo) { fecharDialogo(); return; }
     if (abertos.length) { fecharPop(abertos[abertos.length - 1].pop, true); return; }
+    if ($(".ck-dados--editando")) { cancelarDados(); return; }
     var ed = $(".ck-dado--editando"); if (ed) fecharEdicao(ed, true);
   });
   // A barra compacta quebra em linhas; os paineis legados descontam a altura real dela.

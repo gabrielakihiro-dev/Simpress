@@ -89,3 +89,93 @@ Não dá para colar o pacote direto:
 - Foco: a regra `.simpress-app-shell :focus-visible` (2px) fica no início de `ck-cockpit.css`, antes dos componentes, para não apagar `.ck-busca__entrada:focus-visible` (sem anel, o campo já tem anel no wrapper) nem o `outline-offset:-2px` de `.ck-itens`.
 - Gancho antigo `.cockpit-shell-body > .modal-overlay` (overlays seguindo a viewport durante rolagem horizontal) ficou sem uso: não há mais rolagem horizontal. Fonte `Inter Variable` existe em `static/vendor/fonts.css`.
 - Limites: Esc/foco testado em um modal real; comparação com `Simpress Cockpit v2.dc.html` não feita.
+
+## v2 (pacote re-cockpit-demo-v2, aplicado em 6 fases)
+
+Pacote: `C:\Users\Gabriel\Downloads\Copy of Design form project (3)\re-cockpit-demo-v2`. Nenhum arquivo é substituído por inteiro: entra só o que a v2 traz de novo (CSS 2.15–2.17, edição cadastral em linha, "Nova transferência" no Transporte e 4 telas). `4-comportamento.js` não entra (conflita com `theme-preference.js`, F1–F8, submit global e `app.showToast`). `.ck-parque` continua fora e o bloco `/* Integração Simpress */` continua por último.
+
+### Decisões do usuário
+
+1. **Local, CEP e CNPJs somente leitura**: não há rota de gravação e os dados vêm da planilha oficial. "Editar" libera só Apelido, Usuário e Login (nome da pessoa).
+2. **4 telas novas com dados reais** no layout v2, cada uma com botão "Fluxo completo" que abre o modal atual (como já é feito em Comparação e Apelidos).
+3. **Popover de Prontidão fora**: entra só o CSS 2.17, que não aparece sozinho.
+
+### Mapa das telas (`#cockpit-tool-panels`, `section[data-cockpit-tool-panel]`)
+
+| Tela (`data-cockpit-tool-panel`) | Fonte real | Handlers |
+|---|---|---|
+| `planilhas` | último evento de `GET /api/historico-comparacoes` (status, KPIs, lista) | área de upload vira botão: `abrirModalAtualizarPlanilhas` (fluxo real: 2 arquivos, prévia, `preview_token`); sem `<input type=file>` próprio |
+| `historico-planilhas` | `GET /api/historico-comparacoes` (lista, KPIs, busca) e `/{id}` (detalhe) | Exportar: handler de exportação existente; "Fluxo completo": `abrirModalHistoricoComparacoes` |
+| `evolucao` | `GET /api/operacoes/evolucao` (par anterior/atual) | "Fluxo completo": `abrirEvolucaoAtualizacoes` |
+| `unidades` | `GET /api/unidades` (nome = `label`/`cidade`) | "Nova unidade", "Editar", "Fluxo completo": `abrirModalGerenciarUnidades` / `toggleFormNovaUnidade`; sem formulário próprio |
+
+- Menu Ferramentas: IDs e `#badge-total-historico-comparacoes` preservados; ações `abrirPainelCockpit` com `data-args` `["planilhas"]`, `["historico-planilhas"]`, `["evolucao"]`, `["unidades"]`. Voltar: `fecharPainelCockpit` (volta à tela anterior).
+- Home, edição em linha: `#btn-editar-equipamento` (`editarDadosCadastrais`), `#form-editar-equipamento` (`salvarDadosCadastrais`), campos `data-campo` = `apelido`, `usuario`, `login`. Rotas existentes: `/api/equipamento/atualizar-apelido`, `/api/equipamento/atualizar-usuario`, `/api/equipamento/nome-pessoa`; só campos alterados. Usuário do Endpoint não é editável.
+- Transporte: `#btn-nova-transferencia` ao lado de `#btn-trocar-equipamento` (`resetarFormulario`).
+- Textos de planilha entram só por `textContent`; sem `style=` (CSP). Barras do gráfico de Evolução com `<rect height>` em SVG.
+
+### Pontos sem fonte real
+
+- Local, CEP, CNPJs: sem rota de gravação (somente leitura).
+- Unidades: `representante`, região e filtro por região não existem em `/api/unidades`; "Usar no Transporte" sem handler.
+- Evolução: sem série histórica; o gráfico mostra só anterior × atual.
+- Atualizar planilhas: o upload de 1 arquivo da v2 não existe; o fluxo real é o modal.
+- `salvarDadosEquipamento` não envia `revisao` (provável 409 ao editar existente): fora desta entrega.
+
+### Fase 1 (esta)
+
+Spec, prints "antes" (`.claude/prints/cockpit-v2/antes-<tela>-<largura>-<tema>.png`), CSS 2.15–2.17 copiados literalmente de `2-componentes-telas.css`, comentário 2.13 atualizado e `fonts.css` antes de `ck-tokens.css` no `<head>`. Sem HTML do body nem JS.
+
+## Resultado da aplicação
+
+Cadeia de branches (cada fase foi cortada da anterior; a fase 7 contém tudo): `claude/cockpit-v2-fase1-6b4399` → `fase2-fe4595` → `fase3-c1dcf3` → `fase4-29f79c` → `fase5-3524dd` → `fase6-26275c` → `fase7-b718de`. Nada foi enviado ao remoto nem mesclado.
+
+| Fase | Commit | O que mudou |
+|---|---|---|
+| 1 | `90bab5b` | Spec, CSS 2.15–2.17, ordem das fontes |
+| 2 | `5445ea3` | HTML do Home, Transporte, menu e 4 telas |
+| 3 | `925adb2` + `8422d8c` | JS de Planilhas, Histórico, Evolução e Unidades (+ selo Restauração) |
+| 4 | `81b1acd` | Edição cadastral em linha no Home |
+| 5 | `b4deffd` + `7bfbaed` | OS por equipamento no Transporte e popover do sino |
+| 6 | `6f0ea7c` | Suíte de testes atualizada |
+| 7 | (este) | Verificação final e este relatório |
+
+### Verificado (estado final, fase 7)
+
+- `npm run verify`: OK — 1132 testes Python, `node --test` (285 de 285), `node --check`, tipos JS, compileall, mypy (gradual e estrito) e busca de credenciais.
+- `npm run test:ui:e2e`: 197 passaram (desktop, mobile e perfil).
+- Prints "depois" no `ui-fixture` (1440/768/390, claro/escuro; Home normal e em edição, Transporte, menu, sino e as 4 telas) em `.claude/prints/cockpit-v2/depois7/` (fora do Git). Sem rolagem horizontal em nenhuma largura; console sem erros, exceto um 404 de `/api/usuarios-entra/estado`, rota que o fixture não implementa (não é regressão da v2).
+- Teclado: `E` abre a edição, `Esc` cancela e devolve o foco a `#btn-editar-equipamento`, `Voltar` fecha a tela e devolve o foco ao menu Ferramentas.
+- `<head>`: fonts → ck-tokens → tailwind/tokens/app → … → ck-cockpit (último); `theme-preference.js` preservado.
+- Conformidade: `git diff 0571b69 --stat -- '*.py'` vazio; nenhum `style=`/script inline/`onclick=` novo; nenhuma cor literal nova no CSS; nenhuma série/dado da demo v2 no HTML/JS; `data/` sem alteração (só `.gitkeep` e o modelo já versionados); "Planilha Exportada com Sucesso!" preservado; minimizar/maximizar não reintroduzidos.
+
+- Teclado, detalhe: com `E` o foco vai para o campo Apelido (INPUT).
+- IDs/`data-on-click`/`data-args` do `index.html`: nada sumiu, exceto o título decorativo `ck-menu-g-transf` ("Transferência"), do grupo que a v2 removeu do menu; nenhum JS/teste o usa. Os botões desse grupo continuam existindo.
+- O 404 de `/api/usuarios-entra/estado` já existia no commit-base (`entra-users.js`); o fixture é que não tem a rota.
+- Nenhuma função de cor nova (`oklch`/`hsl`/`color-mix`) nem variável CSS nova no diff.
+- Os prints "depois" ficaram em `depois7/` (a pasta `depois/` já existia da fase 1); referência v2 capturada em `ref-v2/` (1440 escuro).
+
+### Divergências visuais restantes (Simpress × referência v2, 1440 escuro)
+
+- Home: filtros mostram "—" e a lista fica vazia no fixture (a v2 usa 1.284 itens de exemplo); chip "Sincronizado" ao lado do modelo e lista "Chamados abertos" dependem de dados reais; Local/CEP/CNPJ em texto, não em campo editável (decisão do usuário).
+- Transporte: sem o bloco "Resumo do parque" (no Simpress é a aba Resumo); filiais em lista "Outras filiais" em vez de abas de cidades; sem o selo numérico no sino; a barra fixa de ações da v2 (Gerar Planilha etc.) não foi conferida (ids diferentes no Simpress).
+- Planilhas/Histórico/Evolução/Unidades: estrutura igual; valores vazios porque o fixture tem poucos dados.
+
+### NÃO verificado
+
+- Navegador real com dados operacionais (só o fixture, que tem poucos dados: Unidades e Histórico aparecem quase vazios).
+- Comparação pixel a pixel com o artefato v2 (só inspeção visual lado a lado em 1440 escuro; 768/390 e tema claro sem referência v2).
+- Unidades: o botão "Editar" fica ativo sem unidade selecionada (abre o modal de gestão); reportado, não alterado.
+- Gravação real de Apelido/Usuário/Login contra o servidor com dados reais.
+
+### Divergências e pontos sem fonte real
+
+- Local, CEP e CNPJ: somente leitura (sem rota de gravação).
+- Unidades: representante, região e "Usar no Transporte" sem fonte/handler; em 768px o botão "Editar" aparece mesmo sem unidade selecionada.
+- Evolução: sem série histórica (só anterior × atual).
+- Atualizar planilhas: upload de 1 arquivo na tela; o fluxo real usa 2 arquivos (modal via "Fluxo completo").
+- Follow-up sugerido: `salvarDadosEquipamento` não envia `revisao` (provável 409 ao editar equipamento existente); fora do escopo.
+
+### Observação de ambiente
+
+O worktree da fase 7 tem uma junction `node_modules` apontando ao `node_modules` do checkout principal. Antes de `git worktree remove`, rode `cmd /c rmdir node_modules` (regra do AGENTS.md), senão o do checkout principal é apagado.

@@ -7,7 +7,7 @@ test("the Cockpit tools remain reachable in narrow windows in both themes", asyn
     for (const width of [390, 767, 768, 1200]) {
       await page.setViewportSize({ width, height: 1024 });
       await page.locator("#cockpit-tools-trigger").click();
-      await expect(page.locator("#btn-nova-transferencia")).toBeVisible();
+      await expect(page.locator("#btn-atualizar-planilhas")).toBeVisible();
       await page.keyboard.press("Escape");
       await expect(page.locator("#cockpit-tools-trigger")).toBeFocused();
       await expect(page.locator("#cockpit-tools-dropdown")).not.toHaveAttribute("open", "");
@@ -15,6 +15,17 @@ test("the Cockpit tools remain reachable in narrow windows in both themes", asyn
       expect(widths.body).toBeLessThanOrEqual(widths.viewport);
     }
   }
+});
+
+test("Nova transferência fica ao lado de Trocar equipamento, fora do menu Ferramentas", async ({ page }) => {
+  await page.goto("/");
+  await expect(page.locator("#cockpit-tools-menu #btn-nova-transferencia")).toHaveCount(0);
+  await page.locator("#tab-retirada-entrega").click();
+  const nova = page.locator("#btn-nova-transferencia");
+  await expect(nova).toBeVisible();
+  const sameBar = await page.evaluate(() => document.querySelector("#btn-nova-transferencia").parentElement
+    === document.querySelector("#btn-trocar-equipamento").parentElement);
+  expect(sameBar).toBe(true);
 });
 
 test("the theme icon switches modes and persists the choice", async ({ page }) => {
