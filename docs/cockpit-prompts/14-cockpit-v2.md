@@ -125,3 +125,40 @@ Pacote: `C:\Users\Gabriel\Downloads\Copy of Design form project (3)\re-cockpit-d
 ### Fase 1 (esta)
 
 Spec, prints "antes" (`.claude/prints/cockpit-v2/antes-<tela>-<largura>-<tema>.png`), CSS 2.15–2.17 copiados literalmente de `2-componentes-telas.css`, comentário 2.13 atualizado e `fonts.css` antes de `ck-tokens.css` no `<head>`. Sem HTML do body nem JS.
+
+## Resultado da aplicação
+
+Cadeia de branches (cada fase foi cortada da anterior; a fase 7 contém tudo): `claude/cockpit-v2-fase1-6b4399` → `fase2-fe4595` → `fase3-c1dcf3` → `fase4-29f79c` → `fase5-3524dd` → `fase6-26275c` → `fase7-b718de`. Nada foi enviado ao remoto nem mesclado.
+
+| Fase | Commit | O que mudou |
+|---|---|---|
+| 1 | `90bab5b` | Spec, CSS 2.15–2.17, ordem das fontes |
+| 2 | `5445ea3` | HTML do Home, Transporte, menu e 4 telas |
+| 3 | `925adb2` + `8422d8c` | JS de Planilhas, Histórico, Evolução e Unidades (+ selo Restauração) |
+| 4 | `81b1acd` | Edição cadastral em linha no Home |
+| 5 | `b4deffd` + `7bfbaed` | OS por equipamento no Transporte e popover do sino |
+| 6 | `6f0ea7c` | Suíte de testes atualizada |
+| 7 | (este) | Verificação final e este relatório |
+
+### Verificado (estado final, fase 7)
+
+- `npm run verify`: OK — 1132 testes Python, `node --test`, `node --check`, tipos JS, compileall, mypy (gradual e estrito) e busca de credenciais.
+- `npm run test:ui:e2e`: 197 passaram (desktop, mobile e perfil).
+- Prints "depois" no `ui-fixture` (1440/768/390, claro/escuro; Home normal e em edição, Transporte, menu, sino e as 4 telas) em `.claude/prints/cockpit-v2/depois7/` (fora do Git). Sem rolagem horizontal em nenhuma largura; console sem erros, exceto um 404 de `/api/usuarios-entra/estado`, rota que o fixture não implementa (não é regressão da v2).
+- Teclado: `E` abre a edição, `Esc` cancela e devolve o foco a `#btn-editar-equipamento`, `Voltar` fecha a tela e devolve o foco ao menu Ferramentas.
+- `<head>`: fonts → ck-tokens → tailwind/tokens/app → … → ck-cockpit (último); `theme-preference.js` preservado.
+- Conformidade: `git diff 0571b69 --stat -- '*.py'` vazio; nenhum `style=`/script inline/`onclick=` novo; nenhuma cor literal nova no CSS; nenhuma série/dado da demo v2 no HTML/JS; `data/` sem alteração (só `.gitkeep` e o modelo já versionados); "Planilha Exportada com Sucesso!" preservado; minimizar/maximizar não reintroduzidos.
+
+### NÃO verificado
+
+- Navegador real com dados operacionais (só o fixture, que tem poucos dados: Unidades e Histórico aparecem quase vazios).
+- Comparação pixel a pixel com o artefato v2; só inspeção visual dos prints.
+- Gravação real de Apelido/Usuário/Login contra o servidor com dados reais.
+
+### Divergências e pontos sem fonte real
+
+- Local, CEP e CNPJ: somente leitura (sem rota de gravação).
+- Unidades: representante, região e "Usar no Transporte" sem fonte/handler; em 768px o botão "Editar" aparece mesmo sem unidade selecionada.
+- Evolução: sem série histórica (só anterior × atual).
+- Atualizar planilhas: upload de 1 arquivo na tela; o fluxo real usa 2 arquivos (modal via "Fluxo completo").
+- Follow-up sugerido: `salvarDadosEquipamento` não envia `revisao` (provável 409 ao editar equipamento existente); fora do escopo.
