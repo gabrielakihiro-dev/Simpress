@@ -475,7 +475,7 @@ test("ticket tracking imports both workbooks and relates each serial to its OS",
     buffer: Buffer.from("fixture xlsx"),
   });
   const oracleFileChooserPromise = page.waitForEvent("filechooser");
-  await page.getByRole("button", { name: "Escolher arquivo do Oracle - Gestão de Solicitações" }).click();
+  await seletorOracle.click();
   const oracleFileChooser = await oracleFileChooserPromise;
   await oracleFileChooser.setFiles({
     name: "Gestao_de_Solicitacoes.xlsx",
@@ -485,8 +485,8 @@ test("ticket tracking imports both workbooks and relates each serial to its OS",
   await expect(page.locator("#nome-arquivo-chamados-oracle")).toHaveText("Gestao_de_Solicitacoes.xlsx");
   await page.getByRole("button", { name: "Importar planilhas", exact: true }).click();
   await expect(page.locator("#status-importacao-chamados")).toContainText("Planilhas importadas");
-  await expect(page.locator("#nome-arquivo-chamados-simpress")).toHaveText("Nenhum arquivo selecionado");
-  await expect(page.locator("#nome-arquivo-chamados-oracle")).toHaveText("Nenhum arquivo selecionado");
+  await expect(page.locator("#nome-arquivo-chamados-simpress")).toHaveText("Escolher arquivo");
+  await expect(page.locator("#nome-arquivo-chamados-oracle")).toHaveText("Escolher arquivo");
   await expect(page.locator("#lista-acompanhamento-chamados")).toContainText("DEMO-SN-001");
   await expect(page.locator("#lista-acompanhamento-chamados")).toContainText("7285070");
   await expect(page.locator("#lista-acompanhamento-chamados")).toContainText("261009-000816");
@@ -526,7 +526,7 @@ test("ticket tracking imports both workbooks and relates each serial to its OS",
   expect(scrollMetrics.scrollWidth).toBeLessThanOrEqual(scrollMetrics.clientWidth);
   await contentScroller.evaluate((element) => { element.scrollTop = element.scrollHeight; });
   await expect.poll(() => contentScroller.evaluate((element) => element.scrollTop)).toBeGreaterThan(0);
-  await expect(dialog.getByRole("button", { name: "Fechar", exact: true })).toBeVisible();
+  await expect(dialog.getByRole("button", { name: "Fechar acompanhamento de chamados", exact: true })).toBeVisible();
   await expect.poll(async () => {
     const state = await (await page.request.get("/__ticket_import_state")).json();
     return state.imports;
