@@ -120,7 +120,7 @@
     const ambiguo = marcadores?.textoAmbiguo?.(eq?.usuarios_logados_candidatos) || "";
     const titulo = [manual ? marcadores?.tituloManual?.(eq?.usuarios_logados_informado_em) : "", ambiguo ? marcadores?.TITULO_AMBIGUO : ""]
       .filter(Boolean).join(". ");
-    texto.textContent = [usuario ? `Usuários logados: ${usuario}${manual ? " (M)" : ""}` : "", ambiguo].filter(Boolean).join(" · ");
+    texto.textContent = [usuario ? `${usuario}${manual ? " (M)" : ""}` : "", ambiguo].filter(Boolean).join(" · ");
     if (titulo) texto.title = titulo;
     else texto.removeAttribute("title");
     texto.classList.toggle("equipment-user-ambiguous", Boolean(ambiguo) && !usuario);
@@ -133,7 +133,7 @@
     const nomeTexto = document.getElementById("card-nome-pessoa");
     const nomeForm = document.getElementById("form-nome-pessoa");
     const nomeEditarButton = document.getElementById("btn-editar-nome-pessoa");
-    nomeTexto.textContent = nome ? `Nome da pessoa: ${nome}${eq?.nome_pessoa_origem === "manual" ? " (manual)" : ""}` : "";
+    nomeTexto.textContent = nome ? `${nome}${eq?.nome_pessoa_origem === "manual" ? " (manual)" : ""}` : "";
     nomeTexto.classList.toggle("hidden", !nome);
     nomeForm.classList.toggle("hidden", !eq?.nome_pessoa_editavel || Boolean(nome));
     nomeEditarButton?.classList.toggle("hidden", !eq?.nome_pessoa_editavel || !nome);
