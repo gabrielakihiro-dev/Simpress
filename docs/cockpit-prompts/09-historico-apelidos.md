@@ -42,3 +42,7 @@ Informe as mudanças visuais e o acesso pelo menu, confirme que os filtros e aç
 ## Desvio aprovado pelo usuário (etapa A, item 7)
 
 `#cockpit-alias-refresh` virou botão só ícone (`#i-refresh`, `aria-label`/`title` `Atualizar histórico`) e é o último da barra, igual à Comparação.
+
+## Desvio aprovado pelo usuário (etapa E, item 8)
+
+O modal legado `Histórico de alterações` ocupa até 90vw × 90vh (`min(90rem, 100vw − 2rem)` × `min(90vh, 60rem)`); só a lista rola. A regra `.ck-veu > .ck-dialogo.alias-history-panel` em `ck-cockpit.css` vence o `height:auto` genérico dos diálogos. Em telas estreitas (< 480px) ou baixas (< 600px) o diálogo inteiro rola e a lista deixa de ter rolagem própria (mínimo 12rem), sem cortar toolbar nem rodapé.

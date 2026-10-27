@@ -933,6 +933,9 @@ button.ck-status--link:focus-visible { outline: 2px solid var(--cor-destaque); o
 .ck-veu > .ck-dialogo .history-modal-scroll { max-height: none; }
 @media (max-width: 767.98px) { .ck-veu { padding: 8px; } .ck-veu > .ck-dialogo { max-height: 80vh; padding: 12px; } }
 @media (prefers-reduced-motion: reduce) { .ck-veu { animation: none; } }
+.ck-veu > .ck-dialogo.alias-history-panel { width: min(90rem, calc(100vw - 2rem)); max-width: none; height: min(90vh, 60rem); max-height: min(90vh, 60rem); overflow: hidden; }
+.ck-veu > .ck-dialogo.alias-history-panel .alias-history-list { min-height: 12rem; }
+@media (max-width: 479.98px), (max-height: 37.5rem) { .ck-veu > .ck-dialogo.alias-history-panel { overflow-y: auto; } .ck-veu > .ck-dialogo.alias-history-panel .alias-history-list { flex: 0 0 auto; overflow: visible; } }
 .ck-veu > .ck-dialogo .alias-history-total { background: var(--cor-destaque-fundo); color: var(--cor-destaque-texto); border-color: var(--cor-destaque); }
 .ck-veu .ck-btn.hidden { display: none; }
 .ck-veu .ck-btn.flex-1 { flex: 1 1 0%; }

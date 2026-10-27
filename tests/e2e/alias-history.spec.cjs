@@ -85,6 +85,12 @@ test("history stays in the viewport, adapts rows, and passes axe in both themes"
   expect(box.x).toBeGreaterThanOrEqual(0);
   expect(box.x + box.width).toBeLessThanOrEqual(viewport.width);
   expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true);
+  const listBox = await page.locator("#modal-historico-apelidos .alias-history-list").boundingBox();
+  expect(listBox.height).toBeGreaterThan(150);
+  if (viewport.width >= 768 && viewport.height >= 700) {
+    expect(box.height).toBeGreaterThan(viewport.height * 0.8);
+    expect(listBox.height).toBeGreaterThan(box.height * 0.4);
+  }
 
   for (const theme of ["dark", "light"]) {
     await page.locator("html").evaluate((root, value) => { root.dataset.theme = value; }, theme);
