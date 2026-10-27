@@ -33,7 +33,7 @@ def categorize_equipment(kind: Any, model: Any, normalize: Callable[[Any], str] 
         return "monitor"
     if any(term in text for term in ("HEADSET", "HEADPHONE", "FONE", "EARPHONE", "EARBUD")):
         return "fone"
-    if "NOTEBOOK" in text or "LAPTOP" in text:
+    if "NOTEBOOK" in text or "LAPTOP" in text or "ZBOOK" in text:
         return "notebook"
     return ""
 

@@ -85,6 +85,10 @@ def create_equipment_search_router(services: EquipmentSearchServices) -> Tuple[A
             all_results = [item for item in services.list_all() if in_listing(item)]
         else:
             all_results = services.search(q)
+        # Home "Sem usuário": only notebooks, MacBooks and ZBooks; monitors and headsets are not tracked.
+        home_without_user = full_listing and user_filter == "sem"
+        if home_without_user:
+            all_results = [item for item in all_results if item.get("categoria") in NOTEBOOK_CATEGORIES]
 
         def filter_options(key: str) -> List[str]:
             options: Dict[str, str] = {}
@@ -135,7 +139,10 @@ def create_equipment_search_router(services: EquipmentSearchServices) -> Tuple[A
                 "types": filter_options("tipo"),
                 "cities": filter_options("retirada_cidade"),
                 "users": {
-                    "sem": len(all_results) if list_without_term else sum(1 for item in all_results if not has_user(item)),
+                    "sem": len(all_results) if list_without_term else sum(
+                        1 for item in all_results
+                        if not has_user(item) and (not full_listing or item.get("categoria") in NOTEBOOK_CATEGORIES)
+                    ),
                     "com": 0 if list_without_term else sum(1 for item in all_results if has_user(item)),
                 },
             }
