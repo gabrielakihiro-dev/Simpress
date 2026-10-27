@@ -179,3 +179,7 @@ Cadeia de branches (cada fase foi cortada da anterior; a fase 7 contém tudo): `
 ### Observação de ambiente
 
 O worktree da fase 7 tem uma junction `node_modules` apontando ao `node_modules` do checkout principal. Antes de `git worktree remove`, rode `cmd /c rmdir node_modules` (regra do AGENTS.md), senão o do checkout principal é apagado.
+
+### Desvio aprovado: OS por equipamento unida (etapa C)
+
+A tabela do Resumo/OS (`#ck-os-tabela`) tem uma linha por OS, não por OS e fonte. Quando a mesma série e a mesma OS aparecem no Oracle e na Simpress, a coluna Fonte empilha os dois selos e a coluna Chamado empilha um editor UTIC por fonte, alinhado ao selo (a chave do vínculo continua `[fonte, série, OS]`, então nenhum chamado é sobrescrito). Série, OS, Usuário e Hostname aparecem uma vez; a Descrição vem do Oracle. A coluna da OS fica alinhada ao topo. Abaixo de 1200px os cards seguem a mesma união. O contador "N OS · M séries" e "Todas · N" passa a contar OS únicas.
