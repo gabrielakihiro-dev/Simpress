@@ -52,6 +52,7 @@ Cada linha mostra:
 - "modelo · usuário" truncado com ellipsis
 - Local (cidade) alinhado à direita
 - Rótulo de status alinhado à direita ("Sincronizado", "Sem acesso 9 d", "Endpoint: Toledo", "Sem usuário", "Sem correspondência")
+- Desvio aprovado (etapa B): equipamento com mais de um status mostra todos empilhados à direita, abaixo da cidade (`.ck-item__status`, coluna, gap 2px), com o mesmo tamanho e cores. Ordem: Sem acesso, Divergente, Sem usuário; "Sincronizado" só quando não há outro status.
 
 A linha selecionada recebe uma barra de accent de 2px à esquerda (`border-left: 2px solid var(--color-accent)`).
 
