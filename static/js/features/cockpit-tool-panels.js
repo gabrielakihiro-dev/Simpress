@@ -1509,11 +1509,16 @@
       const modal = document.querySelector('[data-accessible-modal="true"]:not(.hidden)');
       if (!modal) { event.preventDefault(); closePanel(); }
     });
+    // O destaque de Chamados segue o painel, qualquer que seja o caminho que o esconda.
+    if (typeof MutationObserver !== "undefined") new MutationObserver(() => {
+      if (root.hidden) byId("btn-acompanhamento-chamados")?.setAttribute("aria-pressed", "false");
+    }).observe(root, { attributes: true, attributeFilter: ["hidden"] });
     eventsBound = true;
   }
 
   function closePanel(restoreFocus = true) {
     const root = byId("cockpit-tool-panels");
+    byId("btn-acompanhamento-chamados")?.setAttribute("aria-pressed", "false");
     if (!root || root.hidden) return;
     root.hidden = true;
     byId("main-content").hidden = false;
@@ -1521,6 +1526,7 @@
     activeTool = "";
     previousTool = "";
     delete byId("cockpit-tools-dropdown").dataset.activeTool;
+    byId("btn-acompanhamento-chamados")?.setAttribute("aria-pressed", "false");
     if (restoreFocus && returnTarget?.isConnected) returnTarget.focus();
     else if (restoreFocus) byId("main-content").focus();
     returnTarget = null;
@@ -1535,10 +1541,11 @@
     const root = byId("cockpit-tool-panels");
     if (!root) return;
     const activeElement = document.activeElement;
-    if (!activeTool) returnTarget = byId("cockpit-tools-trigger") || activeElement;
+    if (!activeTool) returnTarget = activeElement?.closest?.(".ck-aba--painel") || byId("cockpit-tools-trigger") || activeElement;
     if (activeTool && activeTool !== tool && !goingBack) previousTool = activeTool;
     activeTool = tool;
     byId("cockpit-tools-dropdown").dataset.activeTool = tool;
+    byId("btn-acompanhamento-chamados")?.setAttribute("aria-pressed", String(tool === "chamados"));
     byId("main-content").hidden = true;
     const skipLink = document.querySelector(".skip-link");
     if (skipLink) {

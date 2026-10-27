@@ -104,47 +104,26 @@
 
     if (!lista || lista.length === 0) {
       container.innerHTML = `
-          <div class="text-center py-8 text-fg-muted text-xs">
-            Nenhuma unidade encontrada com o termo filtrado.
-          </div>
+          <div class="ckp-vazio">Nenhuma unidade encontrada com o termo filtrado.</div>
         `;
       return;
     }
 
     lista.forEach(u => {
       const item = document.createElement("div");
-      item.className = "flex items-center justify-between p-3 rounded-xl bg-surface/60 border border-line-quiet/80 hover:border-amber-500/30 transition text-xs";
+      item.className = "ckp-regional";
       item.innerHTML = `
-          <div class="min-w-0 flex-1">
-            <div class="unit-list-identity flex items-center gap-2">
-              <span class="font-bold text-white text-sm">${escapeHtml(u.cidade)}</span>
-              ${u.is_sede ? '<span class="px-2 py-0.5 rounded-full text-xs font-bold bg-amber-500/20 text-amber-300 border border-amber-500/30">SEDE</span>' : ''}
-              <span class="unit-list-cnpj text-fg-subtle font-mono text-xs">${escapeHtml(u.cnpj)}</span>
-              <button type="button" data-copy-field="CNPJ" class="p-1 rounded-md text-fg-subtle hover:text-amber-200 hover:bg-surface-control transition" title="Copiar CNPJ" aria-label="Copiar CNPJ">
-                <i data-lucide="copy" class="w-3.5 h-3.5" aria-hidden="true"></i>
-              </button>
-            </div>
-            <p class="unit-list-address text-fg-tertiary mt-0.5 truncate">${escapeHtml(u.endereco)}</p>
-            <div class="text-fg-muted font-mono text-xs">
-              <div class="flex items-center gap-1.5">
-                <span>CEP: ${escapeHtml(u.cep)}</span>
-                <button type="button" data-copy-field="CEP" class="p-1 rounded-md text-fg-subtle hover:text-amber-200 hover:bg-surface-control transition" title="Copiar CEP" aria-label="Copiar CEP">
-                  <i data-lucide="copy" class="w-3.5 h-3.5" aria-hidden="true"></i>
-                </button>
-              </div>
-              <div>UF: ${escapeHtml(u.uf || 'PR')}</div>
-            </div>
-          </div>
-          <div class="flex items-center gap-2 ml-3 shrink-0">
-            <button
-              data-action="edit"
-              class="px-2.5 py-1.5 rounded-lg bg-surface-control hover:bg-surface-control-hover text-amber-300 border border-amber-500/30 text-xs font-medium flex items-center gap-1 transition"
-              title="Editar dados desta unidade"
-            >
-              <i data-lucide="edit-2" class="w-3.5 h-3.5"></i>
-              <span>Editar</span>
-            </button>
-          </div>
+          <span class="ckp-regional__ico"><svg class="ck-ico ck-ico--sm" aria-hidden="true"><use href="#i-pin"></use></svg></span>
+          <span class="ckp-secao__textos">
+            <span class="unit-list-identity ckp-regional__nome">${escapeHtml(u.cidade)}${u.is_sede ? ' <span class="ck-badge" data-status="ok">SEDE</span>' : ''}</span>
+            <span class="unit-list-address ckp-regional__meta">${escapeHtml(u.endereco)}</span>
+            <span class="unit-list-cnpj ckp-regional__meta">${escapeHtml(u.cnpj)} · CEP: ${escapeHtml(u.cep)} · UF: ${escapeHtml(u.uf || 'PR')}</span>
+          </span>
+          <span class="ckp-linha">
+            <button type="button" data-copy-field="CNPJ" class="ck-btn ck-btn--fantasma ck-btn--sm" title="Copiar CNPJ" aria-label="Copiar CNPJ">CNPJ</button>
+            <button type="button" data-copy-field="CEP" class="ck-btn ck-btn--fantasma ck-btn--sm" title="Copiar CEP" aria-label="Copiar CEP">CEP</button>
+            <button type="button" data-action="edit" class="ck-btn ck-btn--secundario ck-btn--sm" title="Editar dados desta unidade">Editar</button>
+          </span>
         `;
       item.querySelector('[data-copy-field="CNPJ"]').addEventListener("click", () => copiarDadoUnidade(u.cnpj, "CNPJ"));
       item.querySelector('[data-copy-field="CEP"]').addEventListener("click", () => copiarDadoUnidade(u.cep, "CEP"));

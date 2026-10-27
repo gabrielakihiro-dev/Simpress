@@ -193,7 +193,11 @@ class FullSearchUserFilterTests(unittest.TestCase):
         self.assertEqual(page["total"], len(ITEMS))
         self.assertEqual([item["serial"] for item in page["items"]], [item["serial"] for item in ITEMS])
         self.assertEqual(page["filters"]["users"], {
-            "sem": sum(not str(item.get("usuarios_logados") or "").strip() for item in ITEMS),
+            # Home "Sem usuário" counts only notebooks and MacBooks.
+            "sem": sum(
+                not str(item.get("usuarios_logados") or "").strip() and item.get("categoria") in ("notebook", "macbook")
+                for item in ITEMS
+            ),
             "com": sum(bool(str(item.get("usuarios_logados") or "").strip()) for item in ITEMS),
         })
 
@@ -201,7 +205,10 @@ class FullSearchUserFilterTests(unittest.TestCase):
         call = _search_route()
 
         page = call(listar_todos=True, usuario="sem", offset=1, limit=2)
-        expected = [item for item in ITEMS if not str(item.get("usuarios_logados") or "").strip()]
+        expected = [
+            item for item in ITEMS
+            if not str(item.get("usuarios_logados") or "").strip() and item.get("categoria") in ("notebook", "macbook")
+        ]
         self.assertEqual(page["total"], len(expected))
         self.assertEqual([item["serial"] for item in page["items"]], [item["serial"] for item in expected[1:3]])
         self.assertEqual(page["has_more"], len(expected) > 3)
