@@ -38,3 +38,7 @@ Criar o painel `Histórico de apelidos` no grupo Ferramentas dos nove pontos, co
 ## Relato final
 
 Informe as mudanças visuais e o acesso pelo menu, confirme que os filtros e ações originais foram preservados e liste os testes realmente executados. Indique qualquer comportamento que dependa de dados locais indisponíveis.
+
+## Desvio aprovado pelo usuário (etapa A, item 7)
+
+`#cockpit-alias-refresh` virou botão só ícone (`#i-refresh`, `aria-label`/`title` `Atualizar histórico`) e é o último da barra, igual à Comparação.

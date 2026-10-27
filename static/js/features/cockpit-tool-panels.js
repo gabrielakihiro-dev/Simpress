@@ -451,7 +451,7 @@
       byId("cockpit-comparison-export").disabled = true;
       return renderEmpty(target, "Selecione uma comparação salva.");
     }
-    byId("cockpit-comparison-export").textContent = "Exportar dia";
+    byId("cockpit-comparison-export").textContent = "Exportar comparações do dia";
     byId("cockpit-comparison-export").title = "Inclui todas as atualizações da data desta comparação.";
     byId("cockpit-comparison-export").disabled = !/^\d{4}-\d{2}-\d{2}$/.test(String(event.horario || "").slice(0, 10))
       || typeof app.exportarResultadoComparacaoPlanilhas !== "function";
