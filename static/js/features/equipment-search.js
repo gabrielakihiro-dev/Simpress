@@ -647,13 +647,14 @@
       const serial = serialDeComparacao(row);
       if (!serial) continue;
       const days = Number(row?.dias_sem_acesso ?? row?.dias ?? row?.dias_desde_ultimo_acesso);
-      homeListSerials.set(serial, { status: "warning", days: Number.isFinite(days) && days > 0 ? days : null });
+      homeListSerials.set(serial, { stale: true, days: Number.isFinite(days) && days > 0 ? days : null });
     }
     for (const key of HOME_COMPARISON_FILTERS.divergentes) {
       const rows = Array.isArray(comparison?.[key]) ? comparison[key] : [];
       for (const row of rows) {
         const serial = serialDeComparacao(row);
-        if (serial && !homeListSerials.has(serial)) homeListSerials.set(serial, { status: "error" });
+        if (!serial) continue;
+        homeListSerials.set(serial, { ...homeListSerials.get(serial), divergent: true });
       }
     }
   }
@@ -688,20 +689,17 @@
   function statusDaLinhaHome(item) {
     const serial = String(item?.serial || "").trim().toUpperCase();
     const comparison = homeListSerials.get(serial);
-    if (comparison?.status === "warning") {
-      return {
+    const statuses = [];
+    if (comparison?.stale) {
+      statuses.push({
         tone: "alerta",
         icon: "i-alerta",
         label: comparison.days ? `Sem acesso ${comparison.days} d` : "Sem acesso 7+ d",
-      };
+      });
     }
-    if (comparison?.status === "error") {
-      return { tone: "erro", icon: "i-erro", label: "Divergente" };
-    }
-    if (!String(item?.usuarios_logados || "").trim()) {
-      return { tone: "info", icon: "i-user", label: "Sem usuário" };
-    }
-    return { tone: "ok", icon: "i-ok", label: "Sincronizado" };
+    if (comparison?.divergent) statuses.push({ tone: "erro", icon: "i-erro", label: "Divergente" });
+    if (!String(item?.usuarios_logados || "").trim()) statuses.push({ tone: "info", icon: "i-user", label: "Sem usuário" });
+    return statuses.length ? statuses : [{ tone: "ok", icon: "i-ok", label: "Sincronizado" }];
   }
 
   function criarStatusListaHome(status) {
@@ -719,12 +717,19 @@
     return el;
   }
 
+  function criarPilhaStatusHome(statuses) {
+    const pilha = document.createElement("span");
+    pilha.className = "ck-item__status";
+    pilha.append(...statuses.map(criarStatusListaHome));
+    return pilha;
+  }
+
   function criarOpcaoListaHome(item, index) {
     const li = document.createElement("li");
     const serial = String(item?.serial || "").trim();
     const city = String(item?.retirada_cidade || "").trim();
     const user = String(item?.usuarios_logados || item?.nome_pessoa || "").trim();
-    const status = statusDaLinhaHome(item);
+    const statuses = statusDaLinhaHome(item);
     li.className = "ck-item";
     li.id = `home-equipment-option-${index}`;
     li.dataset.serial = serial.toUpperCase();
@@ -732,12 +737,12 @@
     li.setAttribute("aria-selected", String(String(appState.currentEquipamento?.serial || "").toUpperCase() === serial.toUpperCase()));
     li.tabIndex = -1;
     const detail = [item?.modelo, user].filter(Boolean).join(" · ");
-    li.title = [serial, detail, city, status.label].filter(Boolean).join(" · ");
+    li.title = [serial, detail, city, ...statuses.map((status) => status.label)].filter(Boolean).join(" · ");
     li.append(
       createTextElement("span", "ck-item__serie", serial || "Série não informada"),
       createTextElement("span", "ck-item__local", city || "Sem cidade"),
       createTextElement("span", "ck-item__sub", detail || "Sem modelo ou usuário"),
-      criarStatusListaHome(status),
+      criarPilhaStatusHome(statuses),
     );
     li.addEventListener("click", () => app.selecionarItemAutocomplete(item));
     return li;

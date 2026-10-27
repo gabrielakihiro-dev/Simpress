@@ -713,7 +713,8 @@ details.ck-chip[open] > .ck-chip__gatilho .ck-ico { transform: rotate(180deg); }
 .ck-item { padding: 9px 12px; }
 .ck-item__serie { font-size: 18px; line-height: 1.3; white-space: nowrap; }
 .ck-item__local { align-self: center; overflow: hidden; text-overflow: ellipsis; max-width: 14ch; }
-.ck-item .ck-status { grid-column: 2; grid-row: 2; white-space: nowrap; }
+.ck-item__status { grid-column: 2; grid-row: 2; display: flex; flex-direction: column; align-items: flex-end; gap: 2px; }
+.ck-item .ck-status { white-space: nowrap; }
 .ck-recentes { order: 99; }
 .ck-recente { display: inline-flex; align-items: center; flex-wrap: wrap; gap: 2px 8px; height: auto; min-height: 24px; max-width: 100%; padding: 3px 8px; text-align: left; }
 .ck-recente__extra { color: var(--cor-texto-mudo); font-family: var(--fonte-corpo); font-size: var(--fs-xs); }
