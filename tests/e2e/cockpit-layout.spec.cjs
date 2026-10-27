@@ -129,9 +129,13 @@ for (const width of [320, 390, 768, 1024, 1200, 1440, 1920, 2560]) {
     await page.setViewportSize({ width, height: 800 });
     await page.goto("/");
     for (const [button, tool, key] of toolButtons) {
-      await page.locator("#cockpit-tools-trigger").click();
-      await expect(page.locator(`${button} kbd`)).toHaveText(key);
-      await page.locator(button).click();
+      const naBarra = tool === "chamados" && width >= 1200;
+      if (naBarra) await expect(page.locator(button)).toHaveAttribute("title", `Chamados (${key})`);
+      else {
+        await page.locator("#cockpit-tools-trigger").click();
+        await expect(page.locator(`${tool === "chamados" ? "#btn-chamados-menu" : button} kbd`)).toHaveText(key);
+      }
+      await page.locator(tool === "chamados" && !naBarra ? "#btn-chamados-menu" : button).click();
       const panel = page.locator(`[data-cockpit-tool-panel="${tool}"]`);
       await expect(panel).toBeVisible();
       const dimensions = await page.evaluate(() => ({ viewport: document.documentElement.clientWidth, document: document.documentElement.scrollWidth, body: document.body.scrollWidth }));

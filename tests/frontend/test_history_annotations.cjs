@@ -76,9 +76,9 @@ test("places the ticket action in cockpit tools dropdown without legacy sidebar 
   const ticketButton = indexHtml.lastIndexOf("<button", ticketId);
   const ticketActionEnd = indexHtml.indexOf("</button>", ticketId);
   const ticketMarkup = indexHtml.slice(ticketButton, ticketActionEnd);
-  assert.match(ticketMarkup, /ck-menu__item/);
+  assert.match(ticketMarkup, /ck-aba ck-aba--painel/);
   assert.match(ticketMarkup, /data-on-click="abrirPainelCockpit"/);
   assert.match(ticketMarkup, /data-args='\["chamados"\]'/);
-  assert.match(ticketMarkup, /<kbd aria-hidden="true">F5<\/kbd>/);
+  assert.match(ticketMarkup, /title="Chamados \(F5\)"/);
   assert.doesNotMatch(ticketMarkup, /--orange|<br>/);
 });

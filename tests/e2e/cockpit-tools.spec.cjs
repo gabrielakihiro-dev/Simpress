@@ -3,8 +3,10 @@ const AxeBuilder = require("@axe-core/playwright").default;
 
 async function openTool(page, id) {
   const menu = page.locator("#cockpit-tools-dropdown");
-  if (!(await menu.evaluate(node => node.open))) await page.locator("#cockpit-tools-trigger").click();
-  await page.locator(id).click();
+  // Chamados fica na barra principal; abaixo de 1200px a barra o esconde e o menu Ferramentas o oferece.
+  const naBarra = id === "#btn-acompanhamento-chamados" && await page.locator(id).isVisible();
+  if (!naBarra && !(await menu.evaluate(node => node.open))) await page.locator("#cockpit-tools-trigger").click();
+  await page.locator(naBarra || id !== "#btn-acompanhamento-chamados" ? id : "#btn-chamados-menu").click();
   await expect(page.locator("#cockpit-tool-panels")).toBeVisible();
 }
 
@@ -44,7 +46,8 @@ test("closing a tool returns keyboard focus to its visible trigger", async ({ pa
   await page.goto("/");
   await openTool(page, "#btn-acompanhamento-chamados");
   await page.keyboard.press("Escape");
-  await expect(page.locator("#cockpit-tools-trigger")).toBeFocused();
+  const naBarra = await page.locator("#btn-acompanhamento-chamados").isVisible();
+  await expect(page.locator(naBarra ? "#btn-acompanhamento-chamados" : "#cockpit-tools-trigger")).toBeFocused();
 });
 
 test("comparison fields stay in columns and survive an empty history refresh", async ({ page }) => {
