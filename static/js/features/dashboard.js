@@ -8,6 +8,8 @@
   const { pluralize } = context.dom;
 
   const readinessRequestGate = transferUtils.createRequestGate();
+  let ultimoRelatorioProntidao = null;
+  let totalRegionais = null;
 
   const READINESS_FUNCTION_LABELS = {
     consulta_equipamentos: "Consulta de equipamentos",
@@ -62,6 +64,8 @@
       const rotuloEquipamentos = document.getElementById("stat-equipamentos-rotulo");
       if (rotuloEquipamentos) rotuloEquipamentos.textContent = pluralize(stats.total_equipamentos, "equipamento");
       definirEstatistica("stat-unidades", stats.total_unidades);
+      totalRegionais = Number.isSafeInteger(stats.total_unidades) && stats.total_unidades >= 0 ? stats.total_unidades : null;
+      renderizarItensProntidao();
       const exportButton = document.getElementById("btn-exportar-equipamentos");
       if (exportButton) {
         const exportAvailable = stats.exportacao_disponivel === true;
@@ -108,24 +112,18 @@
       summary.textContent = resumoProntidao(counts, writeBlock);
       definirResumoCurto(resumoCurtoProntidao(counts, writeBlock));
 
-      const content = document.createDocumentFragment();
-      if (writeBlock) adicionarGrupoGravacoesBloqueadas(content, writeBlock);
-      adicionarGrupoInventarios(content, report);
-      adicionarGrupoAcompanhamentoChamados(content, report);
-      if (report.files.modelo_exportacao) adicionarGrupoModeloExportacao(content, report.files.modelo_exportacao);
-      if (report.files.nomes_entra) adicionarGrupoNomesEntra(content, report.files.nomes_entra);
-      details.replaceChildren(content);
-      // Later refreshes after saves update in place; only the first render cascades in.
-      if (!details.dataset.revealed) {
-        details.dataset.revealed = "true";
-        motion?.stagger(details.children);
-      }
+      ultimoRelatorioProntidao = { report, writeBlock };
+      renderizarItensProntidao();
     } catch (error) {
       if (!readinessRequestGate.isCurrent(request.id)) return;
       panel.dataset.state = "error";
       summary.textContent = "Não foi possível consultar a disponibilidade das funções.";
       definirResumoCurto("Indisponível");
-      details.textContent = "Confira se o servidor está em execução e recarregue a página para tentar novamente.";
+      ultimoRelatorioProntidao = null;
+      const aviso = document.createElement("li");
+      aviso.className = "ck-pront__vazio";
+      aviso.textContent = "Confira se o servidor está em execução e recarregue a página para tentar novamente.";
+      details.replaceChildren(aviso);
     } finally {
       if (readinessRequestGate.isCurrent(request.id)) panel.setAttribute("aria-busy", "false");
     }
@@ -152,6 +150,8 @@
   function definirResumoCurto(text) {
     const shortSummary = document.getElementById("readiness-summary-short");
     if (shortSummary) shortSummary.textContent = text;
+    const popoverTitle = document.getElementById("readiness-popover-titulo");
+    if (popoverTitle) popoverTitle.textContent = text;
   }
 
   function resumoCurtoProntidao({ availableCount, totalCount, allAvailable }, writeBlock) {
@@ -175,234 +175,174 @@
           : `${availableCount} de ${totalCount} arquivos disponíveis. Confira os detalhes abaixo.`;
   }
 
-  function adicionarGrupoGravacoesBloqueadas(content, writeBlock) {
-    adicionarGrupoProntidao(
-      content,
-      "Gravações bloqueadas",
-      [["gravacao_bloqueada", writeBlock]],
-      { gravacao_bloqueada: "Importações e edições" },
-      "function",
-      {
-        description: "A consulta continua disponível; importações, edições e anotações aguardam a conferência.",
-        countLabel: "Modo leitura",
-        countState: "invalid",
-        showItemState: false,
-      }
-    );
+  const PRONTIDAO_ESTADOS = { ok: "Disponível", pendente: "Pendente", invalido: "Inválido" };
+
+  function estadoProntidao(status) {
+    if (status?.available === true) return "ok";
+    return status?.state === "invalid" ? "invalido" : "pendente";
+  }
+
+  function criarIconeProntidao(icone) {
+    const svg = document.createElementNS("http://www.w3.org/2000/svg", "svg");
+    svg.setAttribute("class", "ck-ico ck-ico--sm");
+    svg.setAttribute("aria-hidden", "true");
+    svg.setAttribute("focusable", "false");
+    const use = document.createElementNS("http://www.w3.org/2000/svg", "use");
+    use.setAttribute("href", `#${icone}`);
+    svg.appendChild(use);
+    return svg;
+  }
+
+  // Why a source is not available: server reason, else the missing files (text only, never HTML).
+  function detalheProntidao(status) {
+    if (!status) return "";
+    const faltando = Array.isArray(status.missing_files) ? status.missing_files.join(", ") : "";
+    return status.reason || faltando;
+  }
+
+  function adicionarItemProntidao(list, { id, icone, titulo, descricao, detalhe, estado, acao }) {
+    const item = document.createElement("li");
+    item.className = "ck-pront__item";
+    item.dataset.status = estado;
+    if (id) item.id = id;
+
+    const ico = document.createElement("span");
+    ico.className = "ck-pront__ico";
+    ico.appendChild(criarIconeProntidao(icone));
+
+    const textos = document.createElement("span");
+    textos.className = "ck-pront__textos";
+    const nome = document.createElement("span");
+    nome.className = "ck-pront__titulo";
+    nome.textContent = titulo;
+    const meta = document.createElement("span");
+    meta.className = "ck-pront__meta";
+    meta.title = detalhe ? `${descricao} — ${detalhe}` : descricao;
+    const rotuloEstado = document.createElement("span");
+    rotuloEstado.className = "ck-pront__estado";
+    rotuloEstado.textContent = PRONTIDAO_ESTADOS[estado];
+    meta.append(rotuloEstado, ` · ${estado === "invalido" && detalhe ? detalhe : descricao}`);
+    textos.append(nome, meta);
+    item.append(ico, textos);
+
+    if (acao) {
+      const button = document.createElement("button");
+      button.type = "button";
+      button.className = "ck-btn ck-btn--secundario ck-btn--sm ck-pront__acao";
+      button.append(criarIconeProntidao(acao.icone || "i-upload"), acao.label);
+      button.setAttribute("aria-label", acao.ariaLabel || `${acao.label} — ${titulo}`);
+      button.addEventListener("click", acao.onClick);
+      item.appendChild(button);
+    }
+    list.appendChild(item);
   }
 
   // Simpress and Endpoint are imported together, so they are reported as one shared item.
-  function adicionarGrupoInventarios(content, report) {
+  function statusInventarios(report) {
     const inventoryFileKeys = ["inventario_equipamentos", "inventario_detalhes_atualizacao", "inventario_endpoint"];
-    const missingInventoryFiles = inventoryFileKeys
-      .filter(key => report.files[key]?.available !== true);
-    const inventoryInvalid = missingInventoryFiles.some(key => report.files[key]?.state === "invalid");
-    const sharedInventoryStatus = {
-      available: missingInventoryFiles.length === 0,
-      state: missingInventoryFiles.length === 0 ? "ready" : inventoryInvalid ? "invalid" : "awaiting_import",
-      missing_files: missingInventoryFiles.map(key => INVENTORY_FILE_LABELS[key] || key),
-      reason: missingInventoryFiles.map(key => {
-        const status = report.files[key];
-        const detail = status?.reason || (status?.state === "invalid" ? "arquivo inválido" : "aguardando importação");
-        return `${INVENTORY_FILE_LABELS[key] || key}: ${detail}`;
-      }).join(" · "),
-    };
-    adicionarGrupoProntidao(
-      content,
-      "Inventários",
-      [["inventarios_compartilhados", sharedInventoryStatus]],
-      { inventarios_compartilhados: "Simpress + Endpoint" },
-      "shared_inventory",
-      {
-        actionOnly: true,
-        description: "Par compartilhado pelas quatro ações.",
-        countLabel: sharedInventoryStatus.available ? "Disponível" : sharedInventoryStatus.state === "invalid" ? "Inválido" : "Pendente",
-        countState: sharedInventoryStatus.state,
-        showItemState: false,
-        groupAction: {
-          label: "Importar",
-          ariaLabel: "Importar/atualizar inventários Simpress e Endpoint",
-          onClick: app.abrirModalAtualizarPlanilhas,
-        },
-      }
-    );
+    const missing = inventoryFileKeys.filter(key => report.files[key]?.available !== true);
+    const invalid = missing.some(key => report.files[key]?.state === "invalid");
+    return { available: missing.length === 0, state: invalid ? "invalid" : "awaiting_import" };
   }
 
-  function adicionarGrupoAcompanhamentoChamados(content, report) {
-    const ticketFileStatus = report.files.historico_chamados || {};
-    const ticketFunctionStatus = report.functions.acompanhamento_chamados || {};
-    const ticketStatus = {
-      ...ticketFileStatus,
-      ...ticketFunctionStatus,
-      file: ticketFileStatus.file,
-      reason: ticketFunctionStatus.available === true
-        ? "OK"
-        : ticketFileStatus.reason || ticketFunctionStatus.missing_files?.join(", ") || "arquivo indisponível",
-    };
-    ticketStatus.state ||= ticketStatus.available === true ? "ready" : report.files.historico_chamados?.state || "awaiting_import";
-
-    adicionarGrupoProntidao(
-      content,
-      "Acompanhamento de chamados",
-      [["acompanhamento_chamados", ticketStatus]],
-      READINESS_FUNCTION_LABELS,
-      "function",
-      {
-        actionOnly: true,
-        description: "Importação própria das planilhas da Simpress e do Oracle.",
-        countLabel: ticketStatus.available === true ? "Disponível" : ticketStatus.state === "invalid" ? "Inválido" : "Pendente",
-        countState: ticketStatus.state,
-        showItemState: false,
-        groupAction: {
-          label: "Importar",
-          ariaLabel: "Importar planilhas para acompanhamento de chamados",
-          onClick: () => {
-            document.getElementById("painel-dados-acompanhamento-chamados").open = true;
-            app.abrirAcompanhamentoChamados(true);
-          },
-        },
-      }
-    );
+  function statusChamados(report) {
+    const fileStatus = report.files.historico_chamados || {};
+    const functionStatus = report.functions.acompanhamento_chamados || {};
+    const status = { ...fileStatus, ...functionStatus };
+    status.state ||= fileStatus.state || "awaiting_import";
+    return status;
   }
 
-  function adicionarGrupoModeloExportacao(content, exportModelStatus) {
-    adicionarGrupoProntidao(
-      content,
-      "Modelo de exportação",
-      [["modelo_exportacao", exportModelStatus]],
-      READINESS_FILE_LABELS,
-      "file",
-      {
-        actionOnly: true,
-        description: "Planilha usada pela exportação de equipamentos.",
-        countLabel: exportModelStatus.available
-          ? "Disponível"
-          : exportModelStatus.state === "invalid" ? "Inválido" : "Pendente",
-        countState: exportModelStatus.state,
-        showItemState: false,
-        itemActions: {
-          modelo_exportacao: {
-            label: "Importar",
-            ariaLabel: "Importar modelo de exportação",
-            onClick: () => app.abrirImportacaoModelo("exportacao"),
-          },
-        },
-        groupAction: {
-          label: "Importar",
-          ariaLabel: "Importar modelo de exportação",
-          onClick: () => app.abrirImportacaoModelo("exportacao"),
-        },
-      }
-    );
-  }
+  function renderizarItensProntidao() {
+    const details = document.getElementById("readiness-details-content");
+    if (!details || !ultimoRelatorioProntidao) return;
+    const { report, writeBlock } = ultimoRelatorioProntidao;
+    const list = document.createDocumentFragment();
 
-  function adicionarGrupoNomesEntra(content, entraStatus) {
-    adicionarGrupoProntidao(
-      content,
-      "Nomes do Microsoft Entra",
-      [["nomes_entra", entraStatus]],
-      READINESS_FILE_LABELS,
-      "file",
-      {
-        actionOnly: true,
-        description: "Nomes exibidos junto ao login do usuário.",
-        countLabel: entraStatus.available ? "Disponível" : entraStatus.state === "invalid" ? "Inválido" : "Pendente",
-        countState: entraStatus.state,
-        showItemState: false,
-        groupAction: {
-          label: "Importar",
-          ariaLabel: "Importar CSV com os nomes do Microsoft Entra",
-          onClick: app.abrirModalAtualizarPlanilhas,
-        },
-      }
-    );
-  }
-
-  function adicionarGrupoProntidao(parent, title, entries, labels, type, options = {}) {
-    const group = document.createElement("section");
-    group.className = "readiness-group";
-    const headingRow = document.createElement("div");
-    headingRow.className = "readiness-group-heading";
-    const heading = document.createElement("h3");
-    heading.className = "readiness-group-title";
-    heading.textContent = title;
-    const count = document.createElement("span");
-    count.className = "readiness-group-count";
-    count.textContent = options.countLabel || `${entries.length} ${entries.length === 1 ? "item" : "itens"}`;
-    if (options.countState) count.dataset.state = options.countState;
-    headingRow.append(heading, count);
-
-    const description = document.createElement("p");
-    description.className = "readiness-group-description";
-    description.textContent = options.description || (type === "file"
-      ? "Planilhas e dados usados pelas funções."
-      : "Ações disponíveis na aplicação.");
-
-    const list = document.createElement("ul");
-    list.className = "readiness-list";
-
-    entries.forEach(([key, status]) => {
-      const available = status?.available === true;
-      const item = document.createElement("li");
-      item.className = "readiness-item";
-      item.dataset.available = String(available);
-      const label = document.createElement("span");
-      label.className = "readiness-item-label";
-      label.textContent = labels[key] || key;
-      const state = document.createElement("span");
-      state.className = "readiness-item-state";
-      state.textContent = available ? "Disponível" : status.state === "awaiting_import" ? "Aguardando importação"
-        : status.state === "invalid" ? "Arquivo inválido" : "Indisponível";
-
-      const availableFileDetail = status?.reason && status.reason !== "OK"
-        ? status.reason
-        : status?.file;
-      const detail = document.createElement("span");
-      detail.className = "readiness-item-detail";
-      const detailText = options.showItemDetails === false ? "" : type === "shared_inventory"
-        ? (!available ? status.reason || (status.missing_files || []).join(", ") : "")
-        : type === "file"
-        ? (available
-            ? availableFileDetail
-            : [status.file, status.reason].filter(Boolean).join(" — "))
-        : (!available
-            ? status.reason && status.reason !== "OK"
-              ? [status.file, status.reason].filter(Boolean).join(" — ")
-              : (status.missing_files || []).join(", ") || "dependência ausente"
-            : "");
-      item.appendChild(label);
-      if (options.showItemState !== false) item.appendChild(state);
-      if (detailText) {
-        detail.textContent = `Detalhe: ${detailText}`;
-        item.appendChild(detail);
-      }
-      const action = options.itemActions?.[key];
-      if (action) {
-        const button = document.createElement("button");
-        button.type = "button";
-        button.className = "readiness-import";
-        button.textContent = action.label;
-        button.setAttribute("aria-label", action.ariaLabel || `${action.label} — ${labels[key] || key}`);
-        button.addEventListener("click", action.onClick);
-        item.appendChild(button);
-      }
-      list.appendChild(item);
-    });
-
-    if (options.actionOnly) group.append(headingRow); else group.append(headingRow, description, list);
-    if (options.groupAction) {
-      const actions = document.createElement("div");
-      actions.className = "readiness-group-actions";
-      const button = document.createElement("button");
-      button.type = "button";
-      button.className = "readiness-import";
-      button.textContent = options.groupAction.label;
-      button.setAttribute("aria-label", options.groupAction.ariaLabel || options.groupAction.label);
-      button.addEventListener("click", options.groupAction.onClick);
-      actions.appendChild(button);
-      group.appendChild(actions);
+    if (writeBlock) {
+      adicionarItemProntidao(list, {
+        id: "readiness-gravacao-bloqueada",
+        icone: "i-alerta",
+        titulo: "Gravações bloqueadas",
+        descricao: "Importações e edições aguardam a conferência; a consulta continua disponível.",
+        estado: "invalido",
+      });
     }
-    parent.appendChild(group);
+    adicionarItemProntidao(list, {
+      id: "readiness-inventario",
+      icone: "i-sheet",
+      titulo: "Inventários",
+      descricao: "Planilha de equipamentos da Simpress",
+      detalhe: detalheProntidao(report.files.inventario_equipamentos),
+      estado: estadoProntidao(statusInventarios(report)),
+      acao: { label: "Importar", ariaLabel: "Importar/atualizar inventários Simpress e Endpoint", onClick: app.abrirModalAtualizarPlanilhas },
+    });
+    adicionarItemProntidao(list, {
+      id: "readiness-chamados",
+      icone: "i-clock",
+      titulo: "Acompanhamento de chamados",
+      descricao: "Exportação de chamados Oracle",
+      detalhe: detalheProntidao(statusChamados(report)),
+      estado: estadoProntidao(statusChamados(report)),
+      acao: {
+        label: "Importar",
+        ariaLabel: "Importar planilhas para acompanhamento de chamados",
+        onClick: () => {
+          document.getElementById("painel-dados-acompanhamento-chamados").open = true;
+          app.abrirAcompanhamentoChamados(true);
+        },
+      },
+    });
+    if (report.files.modelo_exportacao) {
+      adicionarItemProntidao(list, {
+        id: "readiness-modelo-exportacao",
+        icone: "i-download",
+        titulo: "Modelo de exportação",
+        descricao: "Planilha-modelo usada nas exportações",
+        detalhe: detalheProntidao(report.files.modelo_exportacao),
+        estado: estadoProntidao(report.files.modelo_exportacao),
+        acao: { label: "Importar", ariaLabel: "Importar modelo de exportação", onClick: () => app.abrirImportacaoModelo("exportacao") },
+      });
+    }
+    if (report.files.nomes_entra) {
+      adicionarItemProntidao(list, {
+        id: "readiness-entra",
+        icone: "i-users",
+        titulo: "Microsoft Entra",
+        descricao: "Usuários e logins do diretório",
+        detalhe: detalheProntidao(report.files.nomes_entra),
+        estado: estadoProntidao(report.files.nomes_entra),
+        acao: { label: "Importar", ariaLabel: "Importar CSV com os nomes do Microsoft Entra", onClick: app.abrirModalAtualizarPlanilhas },
+      });
+    }
+    // Regionais are not part of the "N pendentes" count; the row only appears once the count is known.
+    if (totalRegionais !== null) {
+      adicionarItemProntidao(list, {
+        id: "readiness-regionais-item",
+        icone: "i-pin",
+        titulo: "Regionais",
+        descricao: totalRegionais > 0
+          ? `${totalRegionais} ${pluralize(totalRegionais, "regional cadastrada", "regionais cadastradas")}`
+          : "Nenhuma regional cadastrada",
+        estado: totalRegionais > 0 ? "ok" : "pendente",
+        acao: { label: "Cadastrar", icone: "i-arrow-right", ariaLabel: "Cadastrar regionais", onClick: app.abrirModalGerenciarUnidades },
+      });
+    }
+    details.replaceChildren(list);
+    // Later refreshes after saves update in place; only the first render cascades in.
+    if (!details.dataset.revealed) {
+      details.dataset.revealed = "true";
+      motion?.stagger(details.children);
+    }
+  }
+
+  function inicializarProntidao() {
+    document.getElementById("readiness-fechar")?.addEventListener("click", () => {
+      const panel = document.getElementById("readiness-panel");
+      if (!panel) return;
+      panel.open = false;
+      panel.querySelector("summary")?.focus();
+    });
   }
 
   // ---------- Alerta de base desatualizada (docs/operacao/alerta-base-desatualizada.md) ----------
@@ -546,7 +486,7 @@
   }
 
   return {
-    carregarEstatisticas, carregarProntidao, atualizarIndicadoresPosSalvamento,
+    carregarEstatisticas, carregarProntidao, inicializarProntidao, atualizarIndicadoresPosSalvamento,
     inicializarAlertaBaseDesatualizada, renderizarAlertaBaseDesatualizada,
     inicializarAlertasOsDivergencias, renderizarAlertaOsParadas, renderizarAlertaDivergenciasNovas,
   };

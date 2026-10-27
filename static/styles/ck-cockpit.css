@@ -660,12 +660,17 @@ button.ck-kpi[aria-pressed="true"] { background: var(--cor-superficie); border-b
 .ck-ancora > summary { cursor: pointer; }
 .ck-ancora > summary:focus-visible, .ck-chip__gatilho:focus-visible { outline: 2px solid var(--cor-destaque); outline-offset: 2px; }
 details.ck-chip { position: relative; padding: 0; }
+details.ck-chip > .ck-chip__gatilho .ck-ico { color: var(--cor-texto-sutil); transition: transform var(--duracao) var(--curva); }
+details.ck-chip[open] > .ck-chip__gatilho .ck-ico { transform: rotate(180deg); }
+.ck-pront__item[data-status="ok"] .ck-pront__ico { background: var(--cor-ok-fundo); color: var(--cor-ok-texto); }
+.ck-pront__item[data-status="ok"] .ck-pront__estado { color: var(--cor-ok-texto); }
+.ck-pront__item[data-status="invalido"] .ck-pront__ico { background: var(--cor-erro-fundo); color: var(--cor-erro-texto); }
+.ck-pront__item[data-status="invalido"] .ck-pront__estado { color: var(--cor-erro-texto); }
+.ck-pront__vazio { margin: 0; padding: 8px 12px; font-size: var(--fs-sm); color: var(--cor-texto-mudo); }
+@media (max-width: 767.98px) {
+  details.ck-chip { position: static; }
+}
 .ck-chip__gatilho { display: inline-flex; align-items: center; gap: 6px; height: 100%; padding: 0 9px; border-radius: var(--raio-sm); cursor: pointer; }
-.ck-chip__painel { position: absolute; top: calc(100% + 8px); left: 0; z-index: 40; width: 320px; max-width: calc(100vw - 24px); max-height: calc(100vh - 96px); overflow: auto; padding: 12px; background: var(--cor-superficie-elevada); border: 1px solid var(--cor-borda); border-radius: var(--raio-lg); box-shadow: var(--sombra-lg); color: var(--cor-texto); font-size: var(--fs-md); white-space: normal; animation: ck-surgir var(--duracao) var(--curva); }
-.ck-chip__dados { display: grid; gap: 8px; margin: 0 0 8px; }
-.ck-chip__dados > div { display: flex; justify-content: space-between; gap: 12px; font-size: var(--fs-sm); }
-.ck-chip__dados dt { color: var(--cor-texto-mudo); }
-.ck-chip__dados dd { margin: 0; color: var(--cor-texto); }
 #readiness-panel.ck-chip { border: 1px solid var(--cor-borda-suave); background: var(--cor-fundo); box-shadow: none; }
 .ck-chip[data-state="ready"] .ck-chip__ponto, #stat-base-dot[data-state="ready"] { background: var(--cor-ok-texto); }
 .ck-chip[data-state="warning"] .ck-chip__ponto, #stat-base-dot[data-state="empty"] { background: var(--cor-alerta-texto); }
