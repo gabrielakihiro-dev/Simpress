@@ -216,18 +216,15 @@
         <button type="button" class="ck-filtro" data-filter="divergentes" data-on-click="filtrarListaHome" data-args='["divergentes"]' aria-pressed="false" disabled>Divergentes<span class="ck-filtro__n" id="home-filter-divergentes">—</span></button>
       </div>
 
-      <div class="ck-lista__acoes">
-        <button type="button" id="btn-listar-sem-usuario" data-on-click="abrirEquipamentosSemUsuario" class="ck-btn ck-btn--fantasma ck-btn--sm" aria-label="Equipamentos sem usuário">
-          <svg class="ck-ico ck-ico--sm" aria-hidden="true" focusable="false"><use href="#i-user"></use></svg>
-          <span>Lista sem usuário</span>
-        </button>
-      </div>
-
       <div id="equipment-loading" class="ui-equipment-loading"></div>
       <ul id="home-equipment-list" class="ck-itens" role="listbox" aria-label="Equipamentos" tabindex="0" aria-busy="true"></ul>
       <p id="home-list-empty" class="ck-lista__vazio" role="status" hidden>Nenhum equipamento encontrado.</p>
       <div class="ck-lista__rodape">
-        <span id="home-list-count" role="status" aria-live="polite" aria-atomic="true">Carregando equipamentos…</span>
+        <span class="ck-lista__info">
+          <span id="home-list-count" role="status" aria-live="polite" aria-atomic="true">Carregando equipamentos…</span>
+          <span aria-hidden="true">·</span>
+          <button type="button" id="btn-listar-sem-usuario" data-on-click="abrirEquipamentosSemUsuario" class="ck-link-fantasma" aria-label="Equipamentos sem usuário">Lista sem usuário</button>
+        </span>
         <button type="button" id="btn-home-list-more" class="ck-btn ck-btn--fantasma ck-btn--sm" data-on-click="carregarMaisItensHome" hidden><svg class="ck-ico ck-ico--sm" aria-hidden="true" focusable="false"><use href="#i-chevron-down"></use></svg>Carregar mais</button>
       </div>
 

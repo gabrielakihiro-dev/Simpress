@@ -61,6 +61,46 @@ test("Resumo uses the latest comparison and opens its series in Home", async ({ 
   }
 });
 
+test("Home status badges are buttons that open Comparação and Resumo without opening the equipment", async ({ page, request }) => {
+  await request.get("/__fixture_cockpit?comparacao=1");
+  try {
+    await page.goto("/");
+    const equipmentRequests = [];
+    page.on("request", req => { if (new URL(req.url()).pathname.startsWith("/api/equipamento/")) equipmentRequests.push(req.url()); });
+    const row = page.locator("#home-equipment-list [role=option]").first();
+    await expect(row.locator("button.ck-status--link")).toHaveCount(2);
+
+    const divergent = row.locator('button.ck-status--link[data-destino="comparacao"]');
+    const stale = row.locator('button.ck-status--link[data-destino="resumo"]');
+    await expect(divergent).toHaveAccessibleName(/Divergente: abrir LENTO/);
+    await expect(stale).toHaveAccessibleName(/abrir LENTO na aba Resumo/);
+
+    await stale.click();
+    await expect(page.locator("#tab-resumo")).toHaveAttribute("aria-selected", "true");
+    await expect(page.locator('#cockpit-summary-kpis [data-metric="sem_acesso_7_dias"]')).toHaveAttribute("aria-pressed", "true");
+    await expect(page.locator("#cockpit-summary-rows tr.ck-linha-destaque")).toHaveCount(1);
+
+    await page.locator("#tab-home").click();
+    await divergent.click();
+    await expect(page.locator("#cockpit-comparison-list .ck-linha-destaque, #cockpit-comparison-list [data-row-key].ck-linha-destaque").first()).toBeVisible();
+    await expect(page.locator("#cockpit-comparison-list")).toContainText("LENTO");
+    await expect(page.locator('[aria-label="Filtrar resultados da comparação"] button[aria-pressed="true"]')).toContainText("Localidade");
+    expect(equipmentRequests).toEqual([]);
+  } finally {
+    await request.get("/__fixture_cockpit?comparacao=0");
+  }
+});
+
+test("Home filters are an equal-width segmented control and the footer keeps Lista sem usuário", async ({ page }) => {
+  await page.goto("/");
+  const widths = await page.locator(".ck-filtros .ck-filtro").evaluateAll(els => els.map(el => Math.round(el.getBoundingClientRect().width)));
+  expect(widths).toHaveLength(4);
+  expect(Math.max(...widths) - Math.min(...widths)).toBeLessThanOrEqual(1);
+  const clipped = await page.locator(".ck-filtros .ck-filtro").evaluateAll(els => els.filter(el => el.scrollWidth > el.clientWidth).map(el => el.dataset.filter));
+  expect(clipped).toEqual([]);
+  await expect(page.locator(".ck-lista__rodape #btn-listar-sem-usuario")).toHaveText("Lista sem usuário");
+});
+
 test("Cockpit never scrolls horizontally in narrow or wide windows", async ({ page }) => {
   await page.goto("/");
   for (const width of [320, 390, 768, 1199, 1200, 1440, 2560]) {
