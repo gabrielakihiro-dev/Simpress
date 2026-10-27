@@ -103,3 +103,7 @@ Os dados vêm da API ou do cálculo local de equipamentos por unidade.
 - Confirme que "Exportar" funciona.
 
 **Commit:** `style(cockpit): Resumo com KPIs clicáveis e barras por regional`
+
+## Desvio aprovado pelo usuário (etapa A, item 3)
+
+`#btn-cockpit-summary-export` passou a botão só ícone (`ck-btn--icone ck-btn--fantasma ck-btn--sm`, sprite `#i-download`), com `aria-label` e `title` `Exportar` e texto em `.ck-sr`, ao lado de "N registros". Não "corrigir de volta" para botão com texto.

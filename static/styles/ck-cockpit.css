@@ -409,9 +409,6 @@ button.ck-kpi[aria-pressed="true"] { background: var(--cor-superficie); border-b
 .ck-span-2 { grid-column: span 2; }
 .ck-span-3 { grid-column: 1 / -1; }
 .ck-unidades { display: flex; flex-wrap: wrap; gap: 4px; }
-.ck-unidade { min-height: 0; height: var(--altura-controle-sm); padding: 0 9px; border: 1px solid var(--cor-borda); border-radius: var(--raio-sm); background: transparent; color: var(--cor-texto-suave); font-size: var(--fs-ui); white-space: nowrap; cursor: pointer; transition: border-color var(--duracao) var(--curva); }
-.ck-unidade:hover { border-color: var(--cor-texto-apagado); color: var(--cor-texto); }
-.ck-unidade[aria-pressed="true"] { background: var(--cor-destaque-fundo); border-color: var(--cor-destaque-forte); color: var(--cor-destaque-texto); }
 .ck-unidades__mais { width: auto; height: var(--altura-controle-sm); font-size: var(--fs-ui); }
 .ck-obs-rapidas { display: flex; flex-wrap: wrap; gap: 4px; }
 
@@ -472,8 +469,8 @@ button.ck-kpi[aria-pressed="true"] { background: var(--cor-superficie); border-b
 .ck-rotina__desc { flex: 1; font-size: var(--fs-ui); line-height: 1.45; color: var(--cor-texto-mudo); }
 .ck-rotina__rodape { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 8px; }
 .ck-linha-acao { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 12px; padding: 10px 12px; }
-.ck-linha-acao__texto { flex: 1 1 220px; display: flex; flex-direction: column; gap: 2px; min-width: 0; }
-.ck-linha-acao__texto span { font-size: var(--fs-ui); color: var(--cor-texto-mudo); }
+.ck-linha-acao__texto { flex: 1 1 220px; display: flex; align-items: center; gap: 4px; min-width: 0; }
+.ck-linha-acao__texto > span:not(.info-tip) { font-size: var(--fs-ui); color: var(--cor-texto-mudo); }
 .ck-fatos { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 8px 12px; }
 .ck-fatos dt { font-size: var(--fs-xs); color: var(--cor-texto-sutil); }
 .ck-fatos dd { font-size: var(--fs-md); font-variant-numeric: tabular-nums; }
@@ -867,6 +864,8 @@ details.ck-chip[open] > .ck-chip__gatilho .ck-ico { transform: rotate(180deg); }
 .ck-ferr-painel .ck-kpi__valor { font-size: 22px; }
 .ck-ferr-painel .ck-barra-ferr .ck-campo { flex: 0 1 220px; }
 .ck-barra-ferr .ck-btn { align-self: flex-end; }
+.ck-barra-ferr .ck-btn--icone.ck-btn--sm { min-height: 0; align-self: center; }
+.ck-dividido__lista > .ck-barra-ferr { align-items: center; }
 .ck-ferr-filtros { padding: 8px 20px; border-bottom: 1px solid var(--cor-borda-suave); align-items: center; }
 .ck-ferr-filtros .ck-barra-ferr__nota { flex: 1 1 100%; margin: 0; font-size: var(--fs-xs); color: var(--cor-texto-sutil); }
 #cockpit-monthly-periods .ck-pilula { display: grid; justify-items: start; gap: 1px; height: auto; min-width: 130px; padding: 5px 10px; }
