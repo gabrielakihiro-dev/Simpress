@@ -54,7 +54,8 @@ class FakeElement {
     if (!this.listeners.has(type)) this.listeners.set(type, []);
     this.listeners.get(type).push(listener);
   }
-  dispatchEvent(type) {
+  dispatchEvent(event) {
+    const type = typeof event === "string" ? event : event.type;
     for (const listener of this.listeners.get(type) || []) listener({ target: this });
   }
   click() { this.clicked = true; }
@@ -159,6 +160,7 @@ function createAppHarness(fetchApi, { stubDisplay = true, confirmResult = true, 
     fetch: (...args) => fetchApi(...args),
     navigator: { clipboard: { writeText: async text => effects.clipboardWrites.push(text) } },
     FormData: FakeFormData,
+    Event: class { constructor(type) { this.type = type; } },
     HTMLElement: FakeElement,
     URLSearchParams,
     setTimeout,

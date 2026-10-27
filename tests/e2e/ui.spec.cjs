@@ -456,66 +456,17 @@ test("ticket tracking imports both workbooks and relates each serial to its OS",
   const managementPanel = page.locator("#painel-dados-acompanhamento-chamados");
   await expect(managementPanel).not.toHaveAttribute("open", "");
   await managementPanel.locator("summary").first().click();
-  await expect(page.locator("#arquivo-chamados-simpress")).toBeVisible();
-  await expect(page.locator("#arquivo-chamados-oracle")).toBeVisible();
-  await expect(page.locator("#nome-arquivo-chamados-simpress")).toHaveText("Nenhum arquivo selecionado");
-  await expect(page.locator("#nome-arquivo-chamados-oracle")).toHaveText("Nenhum arquivo selecionado");
+  const seletorSimpress = page.locator("label.ckp-arquivo", { has: page.locator("#arquivo-chamados-simpress") });
+  const seletorOracle = page.locator("label.ckp-arquivo", { has: page.locator("#arquivo-chamados-oracle") });
+  await expect(seletorSimpress).toBeVisible();
+  await expect(seletorOracle).toBeVisible();
+  await expect(seletorSimpress).toHaveAttribute("data-estado", "vazio");
+  await expect(seletorOracle).toHaveAttribute("data-estado", "vazio");
   if (testInfo.project.name === "desktop") {
-    const simpressLabelY = (await page.locator('label[for="arquivo-chamados-simpress"]').boundingBox()).y;
-    const oracleLabelY = (await page.locator('label[for="arquivo-chamados-oracle"]').boundingBox()).y;
-    const simpressPickerBox = await page.locator("#btn-escolher-arquivo-chamados-simpress")
-      .evaluate(button => {
-        const { y, height } = button.parentElement.getBoundingClientRect();
-        return { y, height };
-      });
-    const oraclePickerBox = await page.locator("#btn-escolher-arquivo-chamados-oracle")
-      .evaluate(button => {
-        const { y, height } = button.parentElement.getBoundingClientRect();
-        return { y, height };
-      });
-    const buttonStyles = await page.evaluate(() => {
-      const simpress = document.querySelector("#btn-escolher-arquivo-chamados-simpress");
-      const oracleButton = document.querySelector("#btn-escolher-arquivo-chamados-oracle");
-      const buttonMetrics = style => ({
-        height: style.height,
-        fontSize: style.fontSize,
-        lineHeight: style.lineHeight,
-        fontWeight: style.fontWeight,
-        paddingTop: style.paddingTop,
-        paddingBottom: style.paddingBottom,
-        paddingLeft: style.paddingLeft,
-        paddingRight: style.paddingRight,
-        borderRadius: style.borderRadius,
-        backgroundColor: style.backgroundColor,
-        color: style.color,
-      });
-      const filenameMetrics = element => {
-        const style = getComputedStyle(element);
-        return { fontFamily: style.fontFamily, fontSize: style.fontSize, fontWeight: style.fontWeight, color: style.color };
-      };
-      const importButton = document.querySelector("#btn-importar-acompanhamento-chamados");
-      const importRect = importButton.getBoundingClientRect();
-      const simpressRect = document.querySelector("#btn-escolher-arquivo-chamados-simpress").parentElement.getBoundingClientRect();
-      const oracleRect = document.querySelector("#btn-escolher-arquivo-chamados-oracle").parentElement.getBoundingClientRect();
-      return {
-        chooserButtons: {
-          simpress: buttonMetrics(getComputedStyle(simpress)),
-          oracle: buttonMetrics(getComputedStyle(oracleButton)),
-        },
-        filenames: {
-          simpress: filenameMetrics(document.querySelector("#nome-arquivo-chamados-simpress")),
-          oracle: filenameMetrics(document.querySelector("#nome-arquivo-chamados-oracle")),
-        },
-        importCenterOffset: Math.abs((importRect.top + importRect.height / 2) - (oracleRect.top + oracleRect.height / 2)),
-        pickerHeights: { simpress: simpressRect.height, oracle: oracleRect.height },
-      };
-    });
-    expect(Math.abs(simpressLabelY - oracleLabelY)).toBeLessThanOrEqual(1);
-    expect(Math.abs(simpressPickerBox.y - oraclePickerBox.y)).toBeLessThanOrEqual(1);
-    expect(Math.abs(simpressPickerBox.height - oraclePickerBox.height)).toBeLessThanOrEqual(1);
-    expect(buttonStyles.chooserButtons.oracle).toEqual(buttonStyles.chooserButtons.simpress);
-    expect(buttonStyles.filenames.oracle).toEqual(buttonStyles.filenames.simpress);
-    expect(buttonStyles.importCenterOffset).toBeLessThanOrEqual(1);
+    const caixaSimpress = await seletorSimpress.boundingBox();
+    const caixaOracle = await seletorOracle.boundingBox();
+    expect(Math.abs(caixaSimpress.y - caixaOracle.y)).toBeLessThanOrEqual(1);
+    expect(Math.abs(caixaSimpress.height - caixaOracle.height)).toBeLessThanOrEqual(1);
   }
   await auditAccessibility(page, "#modal-acompanhamento-chamados");
   await page.locator("#arquivo-chamados-simpress").setInputFiles({

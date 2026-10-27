@@ -125,7 +125,7 @@ test("model import handles failure and refreshes availability after success", as
   const exportModelGroup = page.locator(".ck-pront__item").filter({ hasText: "Modelo de exportação" });
   await expect(exportModelGroup).toBeVisible();
   await exportModelGroup.getByRole("button", { name: "Importar modelo de exportação", exact: true }).click();
-  const chooseFileButton = page.getByRole("button", { name: "Escolher arquivo", exact: true });
+  const chooseFileButton = page.locator("label.ckp-arquivo", { has: page.locator("#arquivo-modelo-local") });
   await expect(chooseFileButton).toBeVisible();
   const fileChooserPromise = page.waitForEvent("filechooser");
   await chooseFileButton.click();
