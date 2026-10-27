@@ -463,7 +463,7 @@ class MaintenanceContractTests(unittest.TestCase):
         html = (app_config.STATIC_DIR / "index.html").read_text(encoding="utf-8")
         script = _frontend_script()
         panel_start = script.index("async function carregarProntidao()")
-        panel_end = script.index("function adicionarGrupoProntidao", panel_start)
+        panel_end = script.index("function definirResumoCurto", panel_start)
         panel_script = script[panel_start:panel_end]
 
         self.assertIn('id="readiness-panel"', html)
@@ -473,10 +473,11 @@ class MaintenanceContractTests(unittest.TestCase):
         self.assertNotIn("Ver detalhes de arquivos e funções", html)
         self.assertIn('fetch("/api/prontidao"', panel_script)
         self.assertIn("carregarProntidao();", script)
-        self.assertIn("details.replaceChildren(content)", panel_script)
+        self.assertIn("renderizarItensProntidao();", panel_script)
         self.assertIn("panel.setAttribute(\"aria-busy\", \"false\")", panel_script)
         self.assertIn("status.missing_files", script)
         self.assertIn("status.reason", script)
+        self.assertNotIn("innerHTML", script[script.index("function criarIconeProntidao"):script.index("function inicializarProntidao")])
         self.assertNotIn("innerHTML", panel_script)
 
     def test_non_xlsx_upload_is_rejected_before_workbook_processing(self):

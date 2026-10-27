@@ -118,16 +118,21 @@
       <summary class="ck-chip__gatilho" aria-controls="readiness-content">
         <span id="stat-base-dot" class="ck-chip__ponto" aria-hidden="true"></span>
         <span id="readiness-summary-short" class="ck-chip__rotulo" role="status" aria-live="polite" aria-atomic="true">Verificando…</span>
+        <svg class="ck-ico ck-ico--xs" aria-hidden="true" focusable="false"><use href="#i-chevron-down"></use></svg>
         <span id="readiness-title" class="ck-sr">Disponibilidade das funções</span>
       </summary>
-      <div id="readiness-content" class="ck-chip__painel">
+      <div id="readiness-content" class="ck-pront">
+        <div class="ck-pront__cab">
+          <span class="ck-pront__cab-textos"><span class="ck-pront__kicker">Prontidão da base</span><span class="ck-pront__cab-titulo" id="readiness-popover-titulo">Verificando…</span></span>
+          <button type="button" id="readiness-fechar" class="ck-btn ck-btn--icone ck-btn--fantasma ck-btn--sm" aria-label="Fechar"><svg class="ck-ico ck-ico--sm" aria-hidden="true" focusable="false"><use href="#i-x"></use></svg></button>
+        </div>
         <span id="readiness-summary" class="ck-sr" role="status" aria-live="polite" aria-atomic="true">Verificando os arquivos locais…</span>
-        <dl class="ck-chip__dados">
-          <div><dt>Equipamentos</dt><dd><strong id="stat-equipamentos">Carregando…</strong> <span id="stat-equipamentos-rotulo">equipamentos</span></dd></div>
-          <div><dt>Regionais</dt><dd><strong id="stat-unidades">Carregando…</strong></dd></div>
-          <div><dt>Contrato</dt><dd><strong>16467</strong></dd></div>
+        <dl class="ck-pront__resumo">
+          <div class="ck-pront__par"><dt>Equipamentos</dt><dd><strong id="stat-equipamentos">Carregando…</strong> <span id="stat-equipamentos-rotulo">equipamentos</span></dd></div>
+          <div class="ck-pront__par"><dt>Regionais</dt><dd><strong id="stat-unidades">Carregando…</strong></dd></div>
+          <div class="ck-pront__par"><dt>Contrato</dt><dd class="ck-mono"><strong>16467</strong></dd></div>
         </dl>
-        <div id="readiness-details-content" class="readiness-details-content"></div>
+        <ul id="readiness-details-content" class="ck-pront__lista" aria-label="Fontes da base"></ul>
       </div>
     </details>
     <span id="cockpit-automation-shell-status" class="ck-chip" data-state="idle" aria-live="polite" aria-atomic="true">
