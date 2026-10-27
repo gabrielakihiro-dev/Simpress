@@ -80,7 +80,7 @@ test("Cockpit keeps compact typography and a single tools disclosure", async ({ 
   await expect(page.locator("#card-equipamento")).toBeHidden();
   await openAnalysisMenu(page);
   await expect(page.locator("#btn-atualizar-planilhas")).toBeVisible();
-  await expect(page.locator("#btn-acompanhamento-chamados")).toBeVisible();
+  await expect(page.locator("#btn-acompanhamento-chamados:visible, #btn-chamados-menu:visible")).toHaveCount(1);
   await expect(page.locator("#btn-historico-comparacoes")).toBeVisible();
   await expect(page.locator("#btn-historico-comparacoes #badge-total-historico-comparacoes")).toBeVisible();
   const styles = await page.locator(".ck-menu__item:visible").evaluateAll(nodes => nodes.map(node => ({
@@ -439,7 +439,7 @@ test("ticket tracking imports both workbooks and relates each serial to its OS",
   await page.setViewportSize({ width: testInfo.project.name === "mobile" ? 390 : 1366, height: 640 });
   await openSidebarIfNeeded(page);
   await openAnalysisMenu(page);
-  await page.locator("#btn-acompanhamento-chamados").click();
+  await page.locator("#btn-acompanhamento-chamados:visible, #btn-chamados-menu:visible").click();
   await page.locator("#cockpit-tickets-manage").click();
   const dialog = page.locator("#modal-acompanhamento-chamados");
   await expect(dialog).toBeVisible();

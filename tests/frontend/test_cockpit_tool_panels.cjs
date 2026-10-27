@@ -21,7 +21,9 @@ test("the four Cockpit tools open dedicated panels from the nine-dot menu", () =
     const button = html.match(new RegExp(`<button[^>]*id="${id}"[^>]*>`))?.[0] || "";
     assert.match(button, new RegExp(`data-on-click="abrirPainelCockpit"`));
     assert.match(button, new RegExp(`data-args='\\["${panel}"\\]'`));
-    assert.match(html, new RegExp(`<kbd aria-hidden="true">${shortcut}</kbd>`));
+    // Chamados fica na barra principal (title com o atalho); os demais seguem no menu com <kbd>.
+    if (panel === "chamados") assert.match(button, new RegExp(`title="Chamados \\(${shortcut}\\)"`));
+    else assert.match(html, new RegExp(`<kbd aria-hidden="true">${shortcut}</kbd>`));
     assert.match(html, new RegExp(`data-cockpit-tool-panel="${panel}"`));
   }
   assert.match(html, /id="cockpit-tool-panels"[^>]*hidden/);
