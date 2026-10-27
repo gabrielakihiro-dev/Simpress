@@ -49,8 +49,7 @@
       });
       status.textContent = resumoNomesEntra(result);
       input.value = "";
-      const nomeArquivo = document.getElementById("entra-csv-name");
-      if (nomeArquivo) nomeArquivo.textContent = "Nenhum arquivo selecionado";
+      input.dispatchEvent(new Event("change", { bubbles: true }));
       document.getElementById("btn-exportar-nomes-entra").disabled = false;
       if (appState.currentEquipamento?.serial) {
         const serial = appState.currentEquipamento.serial;

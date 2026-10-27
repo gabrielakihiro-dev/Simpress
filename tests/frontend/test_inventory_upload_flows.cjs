@@ -70,7 +70,6 @@ test("successful inventory upload refreshes selection and presents comparison re
   assert.equal(harness.element("retirada-endereco").value, "Rua nova, 20");
   assert.equal(harness.element("card-equipamento").classList.contains("hidden"), false);
   assert.equal(harness.element("upload-endpoint-file").value, "");
-  assert.equal(harness.element("upload-details-name").textContent, "Nenhum arquivo selecionado");
   assert.deepEqual(harness.effects.comparisons, [{ resumo: "comparação fictícia" }]);
   assert.deepEqual(harness.effects.refreshes, ["estatisticas", "unidades", "contagem-historico"]);
   assert.equal(harness.element("btn-confirmar-planilhas").disabled, false);

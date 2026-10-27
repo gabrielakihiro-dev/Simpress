@@ -356,10 +356,11 @@
     ];
     const inactive = allRecords.length - counts.ativos;
     const explanation = `${counts.ativos} ${counts.ativos === 1 ? "ativo" : "ativos"} de ${allRecords.length} ${allRecords.length === 1 ? "série" : "séries"}${inactive ? ` · ${inactive} sem chamado aberto no Oracle` : ""}`;
-    triageTarget.innerHTML = `<div class="ticket-triage rounded-lg border border-line-quiet bg-surface/40 px-2 py-1.5"><div class="mb-1.5 flex flex-wrap items-baseline justify-between gap-x-3"><h4 class="text-xs font-semibold text-fg-secondary">Triagem diária</h4><p class="text-xs text-fg-subtle" data-ticket-triage-explanation>${escapeHtml(explanation)}</p></div><div class="grid grid-cols-2 gap-1.5 sm:grid-cols-4" role="group" aria-label="Filtrar chamados pela triagem diária">${triageCards.map(([key, shortLabel, label, color]) => {
+    triageTarget.innerHTML = `<div class="ckp-triagem__cab"><h4 class="ckp-triagem__titulo" id="ckp-triagem-titulo">Triagem diária</h4><span class="ckp-secao__desc">${escapeHtml(explanation)}</span></div><dl class="ckp-triagem__nums">${triageCards.map(([key, label, description]) => {
       const pressed = selected === key;
-      return `<button type="button" class="ticket-triage-filter rounded-md border border-line-quiet bg-surface-overlay/70 px-2 py-1 text-left" data-ticket-triage-filter="${key}" data-on-click="filtrarTriagemChamados" data-args='["${key}"]' aria-pressed="${pressed}" aria-label="${escapeHtml(`${label}: ${counts[key]}`)}" title="${escapeHtml(pressed ? "Mostrar todos os chamados" : `Mostrar somente: ${label}`)}"><span class="block text-xs text-fg-subtle">${shortLabel}</span><span class="block text-sm font-semibold ${color}">${counts[key]}</span></button>`;
-    }).join("")}</div></div>`;
+      const status = key === "atrasados" ? "alerta" : key === "sem_data" ? "erro" : key === "em_dia" ? "ok" : "";
+      return `<div class="ckp-triagem__num" data-status="${status}"><dt><button type="button" class="ck-btn ck-btn--fantasma ck-btn--sm" data-ticket-triage-filter="${key}" data-on-click="filtrarTriagemChamados" data-args='["${key}"]' aria-pressed="${pressed}" aria-label="${escapeHtml(`${description}: ${counts[key]}`)}" title="${escapeHtml(pressed ? "Mostrar todos os chamados" : `Mostrar somente: ${description}`)}">${label}</button></dt><dd>${counts[key]}</dd></div>`;
+    }).join("")}</dl>`;
     const escapeSelector = typeof globalThis.CSS?.escape === "function" ? globalThis.CSS.escape : value => value.replace(/["\\]/g, "\\$&");
     if (focused) triageTarget.querySelector?.(`[data-ticket-triage-filter="${escapeSelector(focused)}"]`)?.focus();
   }
@@ -656,10 +657,10 @@
       appState.acompanhamentoChamadosAtual = data;
       chamadosRecentesHome = data;
       app.renderizarHistoricoAcompanhamentoChamados(data);
-      simpressInput.value = "";
-      document.getElementById("nome-arquivo-chamados-simpress").textContent = "Nenhum arquivo selecionado";
-      oracleInput.value = "";
-      document.getElementById("nome-arquivo-chamados-oracle").textContent = "Nenhum arquivo selecionado";
+      [simpressInput, oracleInput].forEach(input => {
+        input.value = "";
+        input.dispatchEvent(new Event("change", { bubbles: true }));
+      });
       status.textContent = "Planilhas importadas. As OS foram relacionadas pela série.";
       document.getElementById("painel-dados-acompanhamento-chamados").open = false;
       app.renderizarAcompanhamentoChamados();
@@ -692,18 +693,6 @@
     const form = document.getElementById("form-importar-acompanhamento-chamados");
     if (!form.dataset.bound) {
       form.addEventListener("submit", app.importarPlanilhasChamados);
-      const simpressInput = document.getElementById("arquivo-chamados-simpress");
-      const simpressFilename = document.getElementById("nome-arquivo-chamados-simpress");
-      const oracleInput = document.getElementById("arquivo-chamados-oracle");
-      const oracleFilename = document.getElementById("nome-arquivo-chamados-oracle");
-      document.getElementById("btn-escolher-arquivo-chamados-simpress").addEventListener("click", () => simpressInput.click());
-      simpressInput.addEventListener("change", () => {
-        simpressFilename.textContent = simpressInput.files?.[0]?.name || "Nenhum arquivo selecionado";
-      });
-      document.getElementById("btn-escolher-arquivo-chamados-oracle").addEventListener("click", () => oracleInput.click());
-      oracleInput.addEventListener("change", () => {
-        oracleFilename.textContent = oracleInput.files?.[0]?.name || "Nenhum arquivo selecionado";
-      });
       ["filtro-acompanhamento-chamados", "somente-atencao-chamados"].forEach(id => {
         const control = document.getElementById(id);
         control.addEventListener(id === "filtro-acompanhamento-chamados" ? "input" : "change", () => {

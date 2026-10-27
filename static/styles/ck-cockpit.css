@@ -186,10 +186,19 @@ button.ck-kpi[aria-pressed="true"] { background: var(--cor-superficie); border-b
 .ck-marca:hover { color: var(--cor-texto); text-decoration: none; }
 .ck-marca .ck-ico { width: 18px; height: 18px; color: var(--cor-destaque); }
 .ck-abas { display: flex; gap: 2px; }
+.ck-aba--painel { margin-left: -4px; }
+.ck-menu__item.ck-menu__item--so-compacto { display: none; }
+/* Abaixo de 1200px a barra principal fica cheia: Chamados volta para o menu Ferramentas. */
+@media (max-width: 1199.98px) {
+  .ck-aba.ck-aba--painel { display: none; }
+  .ck-menu__item.ck-menu__item--so-compacto { display: flex; }
+}
 .ck-aba { display: inline-flex; align-items: center; justify-content: center; gap: 6px; height: var(--altura-aba); padding: 0 8px; border: 0; border-radius: var(--raio-sm); background: transparent; color: var(--cor-texto-suave); font: var(--peso-medio) var(--fs-base)/1 var(--fonte-corpo); white-space: nowrap; cursor: pointer; transition: background-color var(--duracao) var(--curva), color var(--duracao) var(--curva); }
 .ck-aba .ck-ico { width: 15px; height: 15px; }
 .ck-aba:hover { background: var(--cor-neutro-fundo); color: var(--cor-texto); }
-.ck-aba[aria-selected="true"] { background: var(--cor-destaque-fundo); color: var(--cor-destaque-texto); box-shadow: inset 0 0 0 1px var(--cor-destaque-forte); }
+.ck-aba[aria-selected="true"], .ck-aba--painel[aria-pressed="true"] { background: var(--cor-destaque-fundo); color: var(--cor-destaque-texto); box-shadow: inset 0 0 0 1px var(--cor-destaque-forte); }
+/* Com o painel Chamados aberto por cima, a aba de baixo deixa de aparecer ativa. */
+.ck-abas:has(+ .ck-aba--painel[aria-pressed="true"]) .ck-aba[aria-selected="true"] { background: transparent; color: var(--cor-texto-suave); box-shadow: none; }
 .ck-topbar__espaco { flex: 1; }
 .ck-topbar__quebra { display: none; }
 .ck-chips { display: flex; gap: 6px; }

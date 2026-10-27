@@ -20,6 +20,7 @@
   <link rel="stylesheet" href="/static/styles/theme.css">
   <link rel="stylesheet" href="/static/styles/ux-refinements.css">
   <link rel="stylesheet" href="/static/styles/ck-cockpit.css">
+  <link rel="stylesheet" href="/static/styles/ck-pendencias.css">
 </head>
 <body class="min-h-full bg-surface text-fg-emphasis font-sans selection:bg-brand-500 selection:text-white cockpit-shell-body">
 
@@ -36,6 +37,8 @@
   <symbol id="i-moon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3a6 6 0 0 0 9 9 9 9 0 1 1-9-9Z"/></symbol>
   <symbol id="i-copy" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect width="14" height="14" x="8" y="8" rx="2" ry="2"/><path d="M4 16c-1.1 0-2-.9-2-2V4c0-1.1.9-2 2-2h10c1.1 0 2 .9 2 2"/></symbol>
   <symbol id="i-pencil" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21.174 6.812a1 1 0 0 0-3.986-3.987L3.842 16.174a2 2 0 0 0-.5.83l-1.321 4.352a.5.5 0 0 0 .623.622l4.353-1.32a2 2 0 0 0 .83-.497z"/><path d="m15 5 4 4"/></symbol>
+  <symbol id="i-file-check" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M15 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V7Z"/><path d="M14 2v4a2 2 0 0 0 2 2h4"/><path d="m9 15 2 2 4-4"/></symbol>
+  <symbol id="i-trash" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 6h18"/><path d="M19 6v14c0 1-1 2-2 2H7c-1 0-2-1-2-2V6"/><path d="M8 6V4c0-1 1-2 2-2h4c1 0 2 1 2 2v2"/></symbol>
   <symbol id="i-history" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 12a9 9 0 1 0 9-9 9.75 9.75 0 0 0-6.74 2.74L3 8"/><path d="M3 3v5h5"/><path d="M12 7v5l4 2"/></symbol>
   <symbol id="i-external" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M15 3h6v6"/><path d="M10 14 21 3"/><path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"/></symbol>
   <symbol id="i-x" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M18 6 6 18"/><path d="m6 6 12 12"/></symbol>
@@ -87,6 +90,7 @@
     <button type="button" id="tab-resumo" class="ck-aba" role="tab" aria-selected="false" aria-controls="tab-panel-resumo" tabindex="-1" data-on-click="ativarAbaTransferencia" data-args='["resumo"]' aria-label="Resumo" title="Resumo (F3)"><svg class="ck-ico" aria-hidden="true" focusable="false"><use href="#i-chart"></use></svg><span>Resumo</span></button>
     <button type="button" id="tab-automacao" class="ck-aba" role="tab" aria-selected="false" aria-controls="tab-panel-automacao" tabindex="-1" data-on-click="ativarAbaTransferencia" data-args='["automacao"]' aria-label="Automação" title="Automação (F4)"><svg class="ck-ico" aria-hidden="true" focusable="false"><use href="#i-bot"></use></svg><span>Automação</span></button>
   </nav>
+  <button type="button" id="btn-acompanhamento-chamados" class="ck-aba ck-aba--painel" aria-pressed="false" data-on-click="abrirPainelCockpit" data-args='["chamados"]' aria-label="Chamados" title="Chamados (F5)" aria-keyshortcuts="F5"><svg class="ck-ico" aria-hidden="true" focusable="false"><use href="#i-clipboard"></use></svg><span>Chamados</span></button>
 
   <span class="ck-topbar__espaco" aria-hidden="true"></span>
   <span class="ck-topbar__quebra" aria-hidden="true"></span>
@@ -132,6 +136,7 @@
           <div class="ck-pront__par"><dt>Regionais</dt><dd><strong id="stat-unidades">Carregando…</strong></dd></div>
           <div class="ck-pront__par"><dt>Contrato</dt><dd class="ck-mono"><strong>16467</strong></dd></div>
         </dl>
+        <div class="ckp-progresso"><span class="ckp-progresso__trilho" aria-hidden="true"><span class="ckp-progresso__cheio" id="ckp-progresso-cheio"></span></span><span><strong id="ckp-progresso-texto">0 de 4</strong> fontes em dia</span></div>
         <ul id="readiness-details-content" class="ck-pront__lista" aria-label="Fontes da base"></ul>
       </div>
     </details>
@@ -147,7 +152,7 @@
       <div class="ck-menu" id="cockpit-tools-menu" role="menu" aria-label="Ferramentas">
         <div class="ck-menu__grupo" role="group" aria-labelledby="ck-menu-g-paineis">
           <p class="ck-menu__titulo" id="ck-menu-g-paineis">Painéis</p>
-          <button type="button" id="btn-acompanhamento-chamados" class="ck-menu__item" role="menuitem" data-on-click="abrirPainelCockpit" data-args='["chamados"]'><svg class="ck-ico" aria-hidden="true" focusable="false"><use href="#i-clipboard"></use></svg><span class="ck-menu__rotulo">Chamados</span><kbd aria-hidden="true">F5</kbd></button>
+          <button type="button" id="btn-chamados-menu" class="ck-menu__item ck-menu__item--so-compacto" role="menuitem" data-on-click="abrirPainelCockpit" data-args='["chamados"]'><svg class="ck-ico" aria-hidden="true" focusable="false"><use href="#i-clipboard"></use></svg><span class="ck-menu__rotulo">Chamados</span><kbd aria-hidden="true">F5</kbd></button>
           <button type="button" id="btn-cockpit-comparacao" class="ck-menu__item" role="menuitem" data-on-click="abrirPainelCockpit" data-args='["comparacao"]'><svg class="ck-ico" aria-hidden="true" focusable="false"><use href="#i-dashboard"></use></svg><span class="ck-menu__rotulo">Comparação</span><kbd aria-hidden="true">F6</kbd></button>
           <button type="button" id="btn-historico-apelidos" class="ck-menu__item" role="menuitem" data-on-click="abrirPainelCockpit" data-args='["apelidos"]'><svg class="ck-ico" aria-hidden="true" focusable="false"><use href="#i-history"></use></svg><span class="ck-menu__rotulo">Histórico de apelidos</span><kbd aria-hidden="true">F7</kbd></button>
           <button type="button" id="btn-relatorio-mensal" class="ck-menu__item" role="menuitem" data-on-click="abrirPainelCockpit" data-args='["relatorio"]'><svg class="ck-ico" aria-hidden="true" focusable="false"><use href="#i-sheet"></use></svg><span class="ck-menu__rotulo">Relatório mensal</span><kbd aria-hidden="true">F8</kbd></button>
@@ -1376,201 +1381,161 @@ Horário disponível para atendimento:</textarea>
   <!-- MODAL DE GERENCIAMENTO DE REGIONAIS & ENDEREÇOS     -->
   <!-- ==================================================== -->
   <div id="modal-gerenciar-unidades" class="modal-overlay ck-veu hidden">
-    <div class="ck-dialogo">
-      <!-- Header -->
-      <div class="flex items-center justify-between pb-4 border-b border-line-quiet shrink-0">
-        <div class="flex items-center space-x-3">
-          <div class="w-10 h-10 rounded-xl bg-amber-500/10 border border-amber-500/30 flex items-center justify-center text-amber-400">
-            <i data-lucide="building-2" class="w-5 h-5"></i>
-          </div>
-          <div>
-            <h3 class="unit-modal-heading text-base font-bold text-white flex items-center gap-2">
-              <span>Catálogo de Unidades & Regionais SEBRAE/PR</span>
-              <span id="badge-total-unidades-modal" class="px-2 py-0.5 rounded-full text-xs font-semibold bg-amber-500/20 text-amber-300 border border-amber-500/30">30 unidades</span>
-            </h3>
-            <p class="text-xs text-fg-subtle">Consulte ou cadastre endereços e CNPJs oficiais das filiais.</p>
+    <section class="ckp-dialogo">
+      <header class="ckp-cab">
+        <span class="ckp-cab__icone"><svg class="ck-ico" aria-hidden="true"><use href="#i-pin"></use></svg></span>
+        <div class="ckp-cab__textos">
+          <span class="ckp-cab__kicker">Catálogo de unidades</span>
+          <h2 class="ckp-cab__titulo unit-modal-heading"><span>Catálogo de Unidades & Regionais SEBRAE/PR</span> <span id="badge-total-unidades-modal" class="ck-badge">30 unidades</span></h2>
+          <p class="ckp-cab__sub">Consulte ou cadastre endereços e CNPJs oficiais das filiais.</p>
+        </div>
+        <div class="ckp-cab__acoes"><button type="button" data-on-click="fecharModalGerenciarUnidades" class="ck-btn ck-btn--icone ck-btn--fantasma ck-btn--sm" aria-label="Fechar catálogo de unidades"><svg class="ck-ico ck-ico--sm" aria-hidden="true"><use href="#i-x"></use></svg></button></div>
+      </header>
+      <div class="ckp-corpo">
+        <div class="ckp-linha">
+          <label class="ck-campo" data-ckp="campo-flex"><span class="ck-campo__rotulo">Filtrar unidades</span>
+            <input type="text" id="input-filtro-unidades" class="ck-entrada" data-on-input="filtrarUnidadesModal" data-args='["$value"]' placeholder="Filtrar por cidade, endereço ou CNPJ..." />
+          </label>
+          <button type="button" data-on-click="toggleFormNovaUnidade" class="ck-btn ck-btn--secundario ck-btn--sm"><svg class="ck-ico ck-ico--sm" aria-hidden="true"><use href="#i-plus"></use></svg>Nova Filial</button>
+        </div>
+        <div id="form-nova-unidade" class="hidden ckp-secao">
+          <h3 class="ckp-secao__titulo" id="form-unidade-titulo">Cadastrar Nova Unidade / Filial</h3>
+          <input type="hidden" id="form-unidade-id" />
+          <div class="ckp-form">
+            <label class="ck-campo"><span class="ck-campo__rotulo">Cidade</span><input type="text" id="form-unidade-cidade" class="ck-entrada" placeholder="Ex: Paranaguá" /></label>
+            <label class="ck-campo"><span class="ck-campo__rotulo">CEP</span><input type="text" id="form-unidade-cep" class="ck-entrada ck-mono" placeholder="83203-000" /></label>
+            <label class="ck-campo"><span class="ck-campo__rotulo">CNPJ</span><input type="text" id="form-unidade-cnpj" class="ck-entrada ck-mono" placeholder="CNPJ da instalação / filial" /></label>
+            <label class="ck-campo ckp-span"><span class="ck-campo__rotulo">Endereço</span><input type="text" id="form-unidade-endereco" class="ck-entrada" placeholder="Ex: Rua Princesa Isabel, 100" /></label>
+            <div class="ckp-linha ckp-linha--fim ckp-span">
+              <button type="button" data-on-click="toggleFormNovaUnidade" data-args='[false]' class="ck-btn ck-btn--fantasma">Cancelar</button>
+              <button type="button" id="btn-salvar-unidade" data-on-click="salvarUnidadeForm" class="ck-btn ck-btn--primario"><svg class="ck-ico ck-ico--sm" aria-hidden="true"><use href="#i-check"></use></svg>Salvar</button>
+            </div>
           </div>
         </div>
-        <button type="button" data-on-click="fecharModalGerenciarUnidades" class="ck-btn ck-btn--fantasma ck-btn--icone ck-btn--sm" aria-label="Fechar catálogo de unidades">
-          <i data-lucide="x" class="w-5 h-5" aria-hidden="true"></i>
-        </button>
+        <div id="lista-unidades-container" class="ckp-regionais"></div>
       </div>
-
-      <!-- Search & Add Bar -->
-      <div class="py-3 flex flex-col sm:flex-row gap-3 border-b border-line-quiet shrink-0">
-        <div class="relative flex-1">
-          <i data-lucide="search" class="w-4 h-4 text-fg-subtle absolute left-3 top-3"></i>
-          <input
-            type="text"
-            id="input-filtro-unidades"
-            data-on-input="filtrarUnidadesModal" data-args='["$value"]'
-            placeholder="Filtrar por cidade, endereço ou CNPJ..."
-            class="w-full pl-9 pr-3 py-2 rounded-lg glass-input text-xs text-fg-secondary placeholder:text-fg-weak focus:outline-none"
-          />
-        </div>
-        <button
-          data-on-click="toggleFormNovaUnidade"
-          class="px-3.5 py-2 rounded-lg bg-brand-600 hover:bg-brand-700 text-white text-xs font-bold flex items-center justify-center gap-1.5 transition"
-        >
-          <i data-lucide="plus" class="w-3.5 h-3.5"></i>
-          <span>Nova Filial</span>
-        </button>
-      </div>
-
-      <!-- Formulário de Nova Unidade (Expandível) -->
-      <div id="form-nova-unidade" class="hidden py-3 bg-surface/80 p-4 rounded-xl border border-line-quiet/80 mt-2 shrink-0 space-y-3">
-        <h4 class="text-xs font-bold text-cyan-400 flex items-center gap-1.5">
-          <i data-lucide="plus-circle" class="w-3.5 h-3.5"></i>
-          <span id="form-unidade-titulo">Cadastrar Nova Unidade / Filial</span>
-        </h4>
-        <input type="hidden" id="form-unidade-id" />
-        <div class="grid grid-cols-1 sm:grid-cols-3 gap-2.5 text-xs">
-          <div>
-            <label class="block text-fg-tertiary font-semibold mb-1">Cidade:</label>
-            <input type="text" id="form-unidade-cidade" placeholder="Ex: Paranaguá" class="w-full px-2.5 py-1.5 rounded-lg glass-input text-fg-secondary focus:outline-none" />
-          </div>
-          <div class="sm:col-span-2">
-            <label class="block text-fg-tertiary font-semibold mb-1">Endereço:</label>
-            <input type="text" id="form-unidade-endereco" placeholder="Ex: Rua Princesa Isabel, 100" class="w-full px-2.5 py-1.5 rounded-lg glass-input text-fg-secondary focus:outline-none" />
-          </div>
-          <div>
-            <label class="block text-fg-tertiary font-semibold mb-1">CEP:</label>
-            <input type="text" id="form-unidade-cep" placeholder="83203-000" class="w-full px-2.5 py-1.5 rounded-lg glass-input text-fg-secondary font-mono focus:outline-none" />
-          </div>
-          <div>
-            <label class="block text-fg-tertiary font-semibold mb-1">CNPJ:</label>
-            <input type="text" id="form-unidade-cnpj" placeholder="CNPJ da instalação / filial" class="w-full px-2.5 py-1.5 rounded-lg glass-input text-fg-secondary font-mono focus:outline-none" />
-          </div>
-          <div class="flex items-end gap-2">
-            <button id="btn-salvar-unidade" data-on-click="salvarUnidadeForm" class="flex-1 ck-btn ck-btn--primario">
-              <i data-lucide="check" class="w-3.5 h-3.5"></i>
-              <span>Salvar</span>
-            </button>
-            <button data-on-click="toggleFormNovaUnidade" data-args='[false]' class="ck-btn ck-btn--secundario">
-              Cancelar
-            </button>
-          </div>
-        </div>
-      </div>
-
-      <!-- Lista de Unidades -->
-      <div id="lista-unidades-container" class="py-3 overflow-y-auto flex-1 space-y-2 pr-1">
-        <!-- Linhas geradas dinamicamente via JS -->
-      </div>
-
-      <!-- Footer -->
-      <div class="pt-3 border-t border-line-quiet flex justify-end shrink-0">
-        <button data-on-click="fecharModalGerenciarUnidades" class="ck-btn ck-btn--secundario">
-          Fechar
-        </button>
-      </div>
-    </div>
+      <footer class="ckp-rodape">
+        <span class="ck-espaco"></span>
+        <button type="button" data-on-click="fecharModalGerenciarUnidades" class="ck-btn ck-btn--fantasma">Fechar</button>
+      </footer>
+    </section>
   </div>
 
   <!-- MODAL PARA COMPARAR ENDPOINT E EQUIPAMENTOSDETALHES -->
   <div id="modal-atualizar-planilhas" class="modal-overlay ck-veu hidden">
-    <div class="ck-dialogo">
-      <div class="flex items-start justify-between gap-4 pb-4 border-b border-line-quiet shrink-0">
-        <div>
-          <h3 class="text-base font-bold text-white flex items-center gap-2">
-            <i data-lucide="upload" class="w-5 h-5 text-sky-400"></i>
-            Atualizar planilhas
-          </h3>
-          <p class="text-xs text-fg-subtle mt-1">Envie os dois arquivos para atualizar o cadastro. Endereço e localidade acompanham a Simpress; apelidos alterados manualmente continuam prioritários e divergências aparecem no histórico.</p>
+    <section class="ckp-dialogo">
+      <header class="ckp-cab">
+        <span class="ckp-cab__icone"><svg class="ck-ico" aria-hidden="true"><use href="#i-sheet"></use></svg></span>
+        <div class="ckp-cab__textos">
+          <span class="ckp-cab__kicker">Inventários</span>
+          <h2 class="ckp-cab__titulo">Atualizar planilhas</h2>
+          <p class="ckp-cab__sub">Envie os dois arquivos para atualizar o cadastro. Endereço e localidade acompanham a Simpress; apelidos alterados manualmente continuam prioritários e divergências aparecem no histórico.</p>
         </div>
-        <button type="button" data-on-click="fecharModalAtualizarPlanilhas" class="ck-btn ck-btn--fantasma ck-btn--icone ck-btn--sm" aria-label="Fechar">
-          <i data-lucide="x" class="w-5 h-5"></i>
-        </button>
-      </div>
+        <div class="ckp-cab__acoes">
+          <nav class="ckp-sistemas" aria-label="Acessar sistemas de origem das planilhas">
+            <a class="ckp-sistema" href="https://centralendpoint.pr.sebrae.com.br/webclient#/uems/inventory/computers" target="_blank" rel="noopener noreferrer" aria-label="Abrir inventário de computadores do Endpoint Central"><svg class="ck-ico ck-ico--xs" aria-hidden="true"><use href="#i-external"></use></svg>Endpoint</a>
+            <a class="ckp-sistema" href="https://ux.simpress.com.br/MeusEquipamentos/Index" target="_blank" rel="noopener noreferrer" aria-label="Abrir Meus Equipamentos da Simpress"><svg class="ck-ico ck-ico--xs" aria-hidden="true"><use href="#i-external"></use></svg>Simpress</a>
+          </nav>
+          <button type="button" class="ck-btn ck-btn--icone ck-btn--fantasma ck-btn--sm" data-on-click="fecharModalAtualizarPlanilhas" aria-label="Fechar (Esc)"><svg class="ck-ico ck-ico--sm" aria-hidden="true"><use href="#i-x"></use></svg></button>
+        </div>
+      </header>
 
-      <div class="overflow-y-auto py-4 space-y-4">
-        <div class="spreadsheet-source-shortcuts" role="group" aria-label="Acessar sistemas de origem das planilhas">
-          <span class="text-xs font-medium text-fg-subtle">Abrir sistemas:</span>
-          <a href="https://centralendpoint.pr.sebrae.com.br/webclient#/uems/inventory/computers" target="_blank" rel="noopener noreferrer" class="spreadsheet-source-link spreadsheet-source-link--endpoint" aria-label="Abrir inventário de computadores do Endpoint Central" title="Abrir inventário de computadores do Endpoint Central"><i data-lucide="link" aria-hidden="true"></i><span>Endpoint</span></a>
-          <a href="https://ux.simpress.com.br/MeusEquipamentos/Index" target="_blank" rel="noopener noreferrer" class="spreadsheet-source-link spreadsheet-source-link--simpress" aria-label="Abrir Meus Equipamentos da Simpress" title="Abrir Meus Equipamentos da Simpress"><i data-lucide="link" aria-hidden="true"></i><span>Simpress</span></a>
+      <div class="ckp-corpo" data-so-etapa="arquivos">
+        <div class="ckp-par-fontes" id="esc-inv-arquivos">
+          <section class="ckp-secao" data-pronta="false">
+            <div class="ckp-secao__cab"><span class="ckp-secao__num"><span>1</span><svg class="ck-ico" aria-hidden="true"><use href="#i-check"></use></svg></span><div class="ckp-secao__textos"><h3 class="ckp-secao__titulo">Endpoint</h3><p class="ckp-secao__desc">Precisa ter nome do computador e rótulo de serviço/número de série.</p></div></div>
+            <div class="ckp-secao__corpo">
+              <label class="ckp-arquivo" data-estado="vazio">
+                <input id="upload-endpoint-file" type="file" accept=".xlsx,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" data-obrigatorio>
+                <span class="ckp-arquivo__ico"><svg class="ck-ico ck-ico--vazio" aria-hidden="true"><use href="#i-upload"></use></svg><svg class="ck-ico ck-ico--cheio" aria-hidden="true"><use href="#i-file-check"></use></svg></span>
+                <span class="ckp-arquivo__textos"><span class="ckp-arquivo__nome" id="upload-endpoint-name" data-vazio="Escolher arquivo ou arrastar aqui">Escolher arquivo ou arrastar aqui</span><span class="ckp-arquivo__meta" data-vazio=".xlsx · até 60 MB">.xlsx · até 60 MB</span></span>
+                <span class="ckp-arquivo__acoes"><button type="button" class="ck-btn ck-btn--fantasma ck-btn--icone ck-btn--sm" data-remover aria-label="Remover arquivo"><svg class="ck-ico ck-ico--sm" aria-hidden="true"><use href="#i-x"></use></svg></button><span class="ck-btn ck-btn--secundario ck-btn--sm ckp-arquivo__trocar">Escolher</span></span>
+              </label>
+            </div>
+          </section>
+          <section class="ckp-secao" data-pronta="false">
+            <div class="ckp-secao__cab"><span class="ckp-secao__num"><span>2</span><svg class="ck-ico" aria-hidden="true"><use href="#i-check"></use></svg></span><div class="ckp-secao__textos"><h3 class="ckp-secao__titulo">Simpress</h3><p class="ckp-secao__desc">Inventário completo de 50 colunas, incluindo o CNPJ de instalação.</p></div></div>
+            <div class="ckp-secao__corpo">
+              <label class="ckp-arquivo" data-estado="vazio">
+                <input id="upload-details-file" type="file" accept=".xlsx,.zip,application/zip,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" data-obrigatorio>
+                <span class="ckp-arquivo__ico"><svg class="ck-ico ck-ico--vazio" aria-hidden="true"><use href="#i-upload"></use></svg><svg class="ck-ico ck-ico--cheio" aria-hidden="true"><use href="#i-file-check"></use></svg></span>
+                <span class="ckp-arquivo__textos"><span class="ckp-arquivo__nome" id="upload-details-name" data-vazio="Escolher arquivo ou arrastar aqui">Escolher arquivo ou arrastar aqui</span><span class="ckp-arquivo__meta" data-vazio=".xlsx ou ZIP com uma única planilha · até 60 MB">.xlsx ou ZIP com uma única planilha · até 60 MB</span></span>
+                <span class="ckp-arquivo__acoes"><button type="button" class="ck-btn ck-btn--fantasma ck-btn--icone ck-btn--sm" data-remover aria-label="Remover arquivo"><svg class="ck-ico ck-ico--sm" aria-hidden="true"><use href="#i-x"></use></svg></button><span class="ck-btn ck-btn--secundario ck-btn--sm ckp-arquivo__trocar">Escolher</span></span>
+              </label>
+            </div>
+          </section>
         </div>
-        <section class="rounded-xl border border-cyan-500/20 bg-cyan-500/5 p-4" aria-labelledby="entra-import-title">
-          <h4 id="entra-import-title" class="text-sm font-semibold text-cyan-100">Nomes do Microsoft Entra</h4>
-          <p class="mt-1 text-xs text-fg-subtle">Importe o CSV exportado do Entra. Somente contas @pr.sebrae.com.br serão usadas; os inventários abaixo não serão alterados.</p>
-          <form class="mt-3 flex flex-wrap items-end gap-2" data-on-submit="importarNomesEntra">
-            <label for="entra-csv-file" class="min-w-0 flex-1 text-xs text-fg-tertiary">Arquivo CSV
-              <input id="entra-csv-file" type="file" accept=".csv,text/csv" aria-describedby="entra-csv-name" class="peer sr-only" />
-              <span class="mt-1 flex min-w-0 items-center gap-3 rounded-lg peer-focus-visible:ring-2 peer-focus-visible:ring-cyan-400/60">
-                <span aria-hidden="true" class="shrink-0 cursor-pointer rounded-lg bg-sky-500/15 px-3 py-2 text-xs font-semibold text-sky-300 transition-colors hover:bg-sky-500/25 hover:text-sky-200">Escolher arquivo</span>
-                <span id="entra-csv-name" class="min-w-0 truncate text-[11px] text-fg-subtle" aria-live="polite">Nenhum arquivo selecionado</span>
-              </span>
+
+        <div id="upload-impacto-aviso" class="ckp-nota" data-status="alerta"><svg class="ck-ico ck-ico--sm" aria-hidden="true"><use href="#i-alerta"></use></svg><p>Ao confirmar, <strong>as duas bases ativas serão substituídas</strong> pelos arquivos selecionados. Séries ausentes de cada arquivo novo serão removidas daquela fonte; confira as contagens por fonte antes de confirmar.</p></div>
+
+        <label class="ckp-nota" for="auto-export-history-after-update">
+          <input id="auto-export-history-after-update" type="checkbox">
+          <p><strong>Baixar o Histórico de Planilhas automaticamente.</strong> Após cada atualização, exporta os registros e as anotações do dia. Esta preferência fica salva neste navegador.</p>
+        </label>
+
+        <section class="ckp-secao ckp-secao--opcional" id="esc-inv-entra" aria-labelledby="entra-import-title">
+          <div class="ckp-secao__cab"><span class="ckp-arquivo__ico" data-ckp="icone-22"><svg class="ck-ico ck-ico--xs" aria-hidden="true"><use href="#i-users"></use></svg></span><div class="ckp-secao__textos"><h3 class="ckp-secao__titulo" id="entra-import-title">Nomes do Microsoft Entra <span class="ckp-opcional">· opcional</span></h3><p class="ckp-secao__desc">CSV exportado do Entra. Somente contas @pr.sebrae.com.br são usadas; os inventários acima não são alterados.</p></div></div>
+          <form class="ckp-secao__corpo" data-on-submit="importarNomesEntra">
+            <label class="ckp-arquivo" data-estado="vazio">
+              <input id="entra-csv-file" type="file" accept=".csv,text/csv">
+              <span class="ckp-arquivo__ico"><svg class="ck-ico ck-ico--vazio" aria-hidden="true"><use href="#i-upload"></use></svg><svg class="ck-ico ck-ico--cheio" aria-hidden="true"><use href="#i-file-check"></use></svg></span>
+              <span class="ckp-arquivo__textos"><span class="ckp-arquivo__nome" id="entra-csv-name" data-vazio="Escolher CSV ou arrastar aqui">Escolher CSV ou arrastar aqui</span><span class="ckp-arquivo__meta" data-vazio=".csv do Microsoft Entra">.csv do Microsoft Entra</span></span>
+              <span class="ckp-arquivo__acoes"><button type="button" class="ck-btn ck-btn--fantasma ck-btn--icone ck-btn--sm" data-remover aria-label="Remover arquivo"><svg class="ck-ico ck-ico--sm" aria-hidden="true"><use href="#i-x"></use></svg></button><span class="ck-btn ck-btn--secundario ck-btn--sm ckp-arquivo__trocar">Escolher</span></span>
             </label>
-            <button type="submit" id="btn-importar-nomes-entra" class="btn btn-secondary equipment-user-button">Importar nomes</button>
-            <button type="button" id="btn-exportar-nomes-entra" data-on-click="exportarNomesEntra" class="btn btn-tertiary equipment-user-button" disabled>Baixar XLSX compacto</button>
+            <p id="entra-import-status" class="ckp-secao__desc" role="status" aria-live="polite">Consultando cadastro…</p>
+            <div class="ckp-linha ckp-linha--fim">
+              <button type="button" id="btn-exportar-nomes-entra" class="ck-btn ck-btn--fantasma ck-btn--sm" data-on-click="exportarNomesEntra" disabled><svg class="ck-ico ck-ico--sm" aria-hidden="true"><use href="#i-download"></use></svg>Baixar XLSX compacto</button>
+              <button type="submit" id="btn-importar-nomes-entra" class="ck-btn ck-btn--secundario ck-btn--sm">Importar nomes</button>
+            </div>
           </form>
-          <p id="entra-import-status" class="mt-2 text-xs text-fg-subtle" role="status" aria-live="polite">Consultando cadastro…</p>
         </section>
-        <p id="upload-impacto-aviso" class="text-xs rounded-lg px-3 py-2 bg-amber-500/10 border border-amber-500/25 text-amber-200">Ao confirmar, as duas bases ativas serão substituídas pelos arquivos selecionados. Séries ausentes de cada arquivo novo serão removidas daquela fonte; confira as contagens por fonte antes de confirmar.</p>
-        <label class="block bg-surface/60 border border-line-quiet rounded-xl p-4">
-          <span class="block text-sm text-white font-semibold">1. Endpoint</span>
-          <span class="block text-xs text-fg-subtle mt-1">Precisa ter nome do computador e rótulo de serviço/número de série.</span>
-          <input id="upload-endpoint-file" type="file" accept=".xlsx,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" aria-describedby="upload-endpoint-name" class="peer sr-only" />
-          <span class="mt-3 flex min-w-0 items-center gap-3 rounded-lg peer-focus-visible:ring-2 peer-focus-visible:ring-cyan-400/60">
-            <span aria-hidden="true" class="shrink-0 cursor-pointer rounded-lg bg-sky-500/15 px-3 py-2 text-xs font-semibold text-sky-300 transition-colors hover:bg-sky-500/25 hover:text-sky-200">Escolher arquivo</span>
-            <span id="upload-endpoint-name" class="min-w-0 truncate text-[11px] text-fg-subtle" aria-live="polite">Nenhum arquivo selecionado</span>
-          </span>
-        </label>
-
-        <label class="block bg-surface/60 border border-line-quiet rounded-xl p-4">
-          <span class="block text-sm text-white font-semibold">2. Simpress</span>
-          <span class="block text-xs text-fg-subtle mt-1">Exporte o inventário completo de 50 colunas, incluindo o CNPJ de instalação. Aceita .xlsx ou o ZIP original com uma única planilha .xlsx.</span>
-          <input id="upload-details-file" type="file" accept=".xlsx,.zip,application/zip,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" aria-describedby="upload-details-name" class="peer sr-only" />
-          <span class="mt-3 flex min-w-0 items-center gap-3 rounded-lg peer-focus-visible:ring-2 peer-focus-visible:ring-cyan-400/60">
-            <span aria-hidden="true" class="shrink-0 cursor-pointer rounded-lg bg-sky-500/15 px-3 py-2 text-xs font-semibold text-sky-300 transition-colors hover:bg-sky-500/25 hover:text-sky-200">Escolher arquivo</span>
-            <span id="upload-details-name" class="min-w-0 truncate text-[11px] text-fg-subtle" aria-live="polite">Nenhum arquivo selecionado</span>
-          </span>
-        </label>
-
-        <p class="text-xs text-fg-muted">Envie sempre os dois inventários, inclusive no primeiro acesso. Cada arquivo e a planilha extraída do ZIP podem ter até 60 MB. Endereço e localidade são sincronizados com a Simpress. Apelidos manuais prevalecem, e divergências aparecem no histórico.</p>
-        <label class="flex items-start gap-3 rounded-xl border border-cyan-500/20 bg-cyan-500/5 p-3 text-xs text-fg-tertiary">
-          <input id="auto-export-history-after-update" type="checkbox" class="mt-0.5 h-4 w-4 shrink-0 accent-cyan-400" />
-          <span>
-            <span class="block font-semibold text-cyan-100">Baixar o Histórico de Planilhas automaticamente</span>
-            <span class="mt-1 block text-xs text-fg-subtle">Após cada atualização, exporta os registros e as anotações do dia. Esta preferência fica salva neste navegador.</span>
-          </span>
-        </label>
-        <p id="upload-planilhas-preview" class="hidden text-xs rounded-lg px-3 py-2" role="status" aria-live="polite" aria-atomic="true"></p>
-      <p id="upload-planilhas-status" class="hidden text-xs rounded-lg px-3 py-2" role="status" aria-live="polite" aria-atomic="true"></p>
       </div>
 
-      <div class="pt-4 border-t border-line-quiet flex justify-end gap-2 shrink-0">
-        <button type="button" data-on-click="fecharModalAtualizarPlanilhas" class="ck-btn ck-btn--secundario">Cancelar</button>
-        <button type="button" id="btn-previsualizar-planilhas" data-on-click="previsualizarPlanilhas" class="ck-btn ck-btn--primario">
-          <i data-lucide="refresh-cw" class="w-3.5 h-3.5"></i>
-          Pré-visualizar impacto
-        </button>
-        <button type="button" id="btn-confirmar-planilhas" data-on-click="enviarPlanilhas" class="hidden ck-btn ck-btn--perigo">
-          <i data-lucide="check" class="w-3.5 h-3.5"></i>
-          Confirmar substituição
-        </button>
+      <div class="ckp-corpo" data-so-etapa="impacto" hidden>
+        <div class="ckp-nota" data-status="ok"><svg class="ck-ico ck-ico--sm" aria-hidden="true"><use href="#i-ok"></use></svg><p id="upload-planilhas-preview" role="status" aria-live="polite" aria-atomic="true"></p></div>
       </div>
-    </div>
+
+      <footer class="ckp-rodape">
+        <p id="upload-planilhas-status" class="ckp-rodape__status" role="status" aria-live="polite" aria-atomic="true"></p>
+        <span class="ck-espaco"></span>
+        <button type="button" class="ck-btn ck-btn--fantasma" data-on-click="fecharModalAtualizarPlanilhas">Cancelar</button>
+        <button type="button" id="btn-voltar-planilhas" class="ck-btn ck-btn--fantasma hidden" data-on-click="limparPreviaUploadPlanilhas"><svg class="ck-ico ck-ico--sm" aria-hidden="true"><use href="#i-arrow-left"></use></svg>Voltar</button>
+        <button type="button" id="btn-previsualizar-planilhas" class="ck-btn ck-btn--primario" data-on-click="previsualizarPlanilhas"><svg class="ck-ico ck-ico--sm" aria-hidden="true"><use href="#i-refresh"></use></svg>Pré-visualizar impacto</button>
+        <button type="button" id="btn-confirmar-planilhas" class="hidden ck-btn ck-btn--primario" data-on-click="enviarPlanilhas"><svg class="ck-ico ck-ico--sm" aria-hidden="true"><use href="#i-check"></use></svg>Confirmar substituição</button>
+      </footer>
+    </section>
   </div>
 
   <div id="modal-importar-modelo" class="modal-overlay ck-veu hidden">
-    <div class="local-setup-dialog ck-dialogo">
-      <div class="local-setup-heading">
-        <h3 id="titulo-importar-modelo">Importar arquivos</h3>
-        <button type="button" class="readiness-import" data-on-click="fecharImportacaoModelo" aria-label="Fechar importação de modelo" title="Fechar">
-          <i data-lucide="x" class="w-4 h-4" aria-hidden="true"></i>
-        </button>
+    <section class="ckp-dialogo ckp-dialogo--estreito">
+      <header class="ckp-cab">
+        <span class="ckp-cab__icone"><svg class="ck-ico" aria-hidden="true"><use href="#i-download"></use></svg></span>
+        <div class="ckp-cab__textos">
+          <span class="ckp-cab__kicker">Modelo .xlsx</span>
+          <h2 class="ckp-cab__titulo" id="titulo-importar-modelo">Importar arquivos</h2>
+          <p class="ckp-cab__sub" id="descricao-importar-modelo"></p>
+        </div>
+        <div class="ckp-cab__acoes"><button type="button" class="ck-btn ck-btn--icone ck-btn--fantasma ck-btn--sm" data-on-click="fecharImportacaoModelo" aria-label="Fechar importação de modelo"><svg class="ck-ico ck-ico--sm" aria-hidden="true"><use href="#i-x"></use></svg></button></div>
+      </header>
+      <div class="ckp-corpo" id="esc-modelo">
+        <label class="ckp-arquivo" data-estado="vazio">
+          <input id="arquivo-modelo-local" type="file" accept=".xlsx,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" data-obrigatorio>
+          <span class="ckp-arquivo__ico"><svg class="ck-ico ck-ico--vazio" aria-hidden="true"><use href="#i-upload"></use></svg><svg class="ck-ico ck-ico--cheio" aria-hidden="true"><use href="#i-file-check"></use></svg></span>
+          <span class="ckp-arquivo__textos"><span class="ckp-arquivo__nome" id="nome-arquivo-modelo-local" data-vazio="Escolher modelo ou arrastar aqui">Escolher modelo ou arrastar aqui</span><span class="ckp-arquivo__meta" data-vazio="Modelo .xlsx · até 60 MB">Modelo .xlsx · até 60 MB</span></span>
+          <span class="ckp-arquivo__acoes"><button type="button" class="ck-btn ck-btn--fantasma ck-btn--icone ck-btn--sm" data-remover aria-label="Remover arquivo"><svg class="ck-ico ck-ico--sm" aria-hidden="true"><use href="#i-x"></use></svg></button><span class="ck-btn ck-btn--secundario ck-btn--sm ckp-arquivo__trocar">Escolher</span></span>
+        </label>
+        <ul class="ckp-fatos">
+          <li><svg class="ck-ico ck-ico--xs" aria-hidden="true"><use href="#i-history"></use></svg>Ao substituir um modelo importado, uma cópia anterior é guardada nos backups locais.</li>
+          <li><svg class="ck-ico ck-ico--xs" aria-hidden="true"><use href="#i-check"></use></svg>O modelo de transferência incluído no projeto é preservado.</li>
+        </ul>
       </div>
-      <p id="descricao-importar-modelo"></p>
-      <label for="arquivo-modelo-local">Modelo .xlsx (até 60 MB)</label>
-      <input id="arquivo-modelo-local" type="file" accept=".xlsx,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" aria-hidden="true" tabindex="-1" hidden />
-      <div class="flex min-w-0 items-center gap-3">
-        <button id="btn-escolher-arquivo-modelo-local" type="button" class="readiness-import" aria-controls="arquivo-modelo-local" data-click-target="arquivo-modelo-local">Escolher arquivo</button>
-        <span id="nome-arquivo-modelo-local" class="min-w-0 truncate text-xs text-fg-subtle" aria-live="polite">Nenhum arquivo escolhido</span>
-      </div>
-      <p>Ao substituir um modelo importado, uma cópia anterior é guardada nos backups locais. O modelo de transferência incluído no projeto é preservado.</p>
-      <p id="status-modelo-local" role="status" aria-live="polite" aria-atomic="true"></p>
-      <button id="btn-importar-modelo" type="button" class="readiness-import" data-on-click="enviarModeloLocal">Importar</button>
-    </div>
+      <footer class="ckp-rodape">
+        <p id="status-modelo-local" class="ckp-rodape__status" role="status" aria-live="polite" aria-atomic="true"></p>
+        <span class="ck-espaco"></span>
+        <button type="button" class="ck-btn ck-btn--fantasma" data-on-click="fecharImportacaoModelo">Cancelar</button>
+        <button id="btn-importar-modelo" type="button" class="ck-btn ck-btn--primario" data-on-click="enviarModeloLocal"><svg class="ck-ico ck-ico--sm" aria-hidden="true"><use href="#i-upload"></use></svg>Importar</button>
+      </footer>
+    </section>
   </div>
 
   <div id="modal-contato-origem" class="modal-overlay ck-veu hidden">
@@ -1671,61 +1636,73 @@ Horário disponível para atendimento:</textarea>
 
   <!-- ACOMPANHAMENTO DE CHAMADOS -->
   <div id="modal-acompanhamento-chamados" class="modal-overlay ck-veu hidden">
-    <div class="modal-panel ck-dialogo">
-      <div class="ticket-modal-header flex items-start justify-between gap-4 pb-4 border-b border-line-quiet shrink-0"><div class="min-w-0 flex items-center gap-1"><h3 class="text-base font-bold text-white">Acompanhamento de Chamados</h3><span class="info-tip"><button type="button" class="info-tip-trigger" aria-label="Sobre o acompanhamento de chamados" aria-describedby="tip-acompanhamento-chamados"><i data-lucide="info" aria-hidden="true"></i></button><span id="tip-acompanhamento-chamados" role="tooltip" class="info-tip-text">OS da Simpress e do Oracle relacionadas pelo número de série. A lista vai da maior OS para a menor; séries sem OS ficam no final. Atenção para 3+ dias ou sem data: selecione um indicador da triagem para filtrar.</span></span></div><div class="ticket-header-actions"><a href="https://simpress.custhelp.com/AgentWeb/" target="_blank" rel="noopener noreferrer" class="ticket-agent-link ticket-agent-link--oracle" aria-label="Abrir portal Oracle AgentWeb" title="Abrir portal Oracle AgentWeb"><i data-lucide="link" aria-hidden="true"></i><span>Oracle</span></a><a href="https://ux.simpress.com.br/equipamentos/acompanhamento" target="_blank" rel="noopener noreferrer" class="ticket-agent-link ticket-agent-link--simpress" aria-label="Abrir acompanhamento de chamados Simpress" title="Abrir acompanhamento de chamados Simpress"><i data-lucide="link" aria-hidden="true"></i><span>Simpress</span></a><button type="button" data-on-click="fecharAcompanhamentoChamados" class="ck-btn ck-btn--fantasma ck-btn--icone ck-btn--sm" aria-label="Fechar acompanhamento de chamados"><i data-lucide="x" class="w-5 h-5"></i></button></div></div>
-      <div id="conteudo-acompanhamento-chamados" role="region" aria-label="Conteúdo do acompanhamento de chamados" tabindex="0" class="min-h-0 flex-1 overflow-y-auto overscroll-contain focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-cyan-400/60">
-      <div class="space-y-3 py-3">
-        <details id="painel-dados-acompanhamento-chamados" class="ticket-disclosure rounded-lg border border-line-quiet bg-surface/50 px-3 py-2">
-          <summary class="ticket-disclosure-summary flex min-h-9 items-center justify-between gap-3 text-xs font-semibold text-fg-secondary">
-            <span>Importação e histórico</span>
-            <span id="versao-atual-acompanhamento-chamados" class="min-w-0 truncate text-right text-xs font-normal text-fg-muted">Nenhuma importação</span>
-          </summary>
-          <div class="space-y-3 pt-3">
-            <form id="form-importar-acompanhamento-chamados" class="grid grid-cols-1 gap-3 border-b border-line-quiet pb-3 md:grid-cols-[1fr_1fr_auto] md:items-end">
-              <div class="min-w-0">
-                <label for="arquivo-chamados-simpress" class="block text-xs text-fg-tertiary">Simpress · Acompanhamento de Pedidos</label>
-                <input id="arquivo-chamados-simpress" name="simpress_file" type="file" accept=".xlsx,.zip,application/zip,application/x-zip-compressed,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" aria-describedby="arquivo-chamados-simpress-ajuda nome-arquivo-chamados-simpress" tabindex="-1" aria-hidden="true" class="sr-only">
-                <div class="mt-1 flex min-h-[54px] w-full min-w-0 items-center gap-3 rounded-lg border border-line-control bg-surface px-2 py-1.5">
-                  <button id="btn-escolher-arquivo-chamados-simpress" type="button" aria-label="Escolher arquivo do Acompanhamento de Pedidos da Simpress" aria-controls="arquivo-chamados-simpress" class="shrink-0 ck-btn ck-btn--secundario">Escolher arquivo</button>
-                  <span id="nome-arquivo-chamados-simpress" class="min-w-0 truncate text-xs text-fg-subtle" aria-live="polite">Nenhum arquivo selecionado</span>
-                </div>
+    <section class="ckp-dialogo ckp-dialogo--largo">
+      <header class="ckp-cab">
+        <span class="ckp-cab__icone"><svg class="ck-ico" aria-hidden="true"><use href="#i-clock"></use></svg></span>
+        <div class="ckp-cab__textos">
+          <span class="ckp-cab__kicker">Chamados</span>
+          <h2 class="ckp-cab__titulo">Acompanhamento de chamados</h2>
+          <p class="ckp-cab__sub" id="tip-acompanhamento-chamados">OS da Simpress e do Oracle relacionadas pelo número de série. A lista vai da maior OS para a menor; séries sem OS ficam no final. Atenção para 3+ dias ou sem data: selecione um indicador da triagem para filtrar.</p>
+        </div>
+        <div class="ckp-cab__acoes">
+          <nav class="ckp-sistemas" aria-label="Abrir sistemas">
+            <a class="ckp-sistema" href="https://simpress.custhelp.com/AgentWeb/" target="_blank" rel="noopener noreferrer" aria-label="Abrir portal Oracle AgentWeb"><svg class="ck-ico ck-ico--xs" aria-hidden="true"><use href="#i-external"></use></svg>Oracle</a>
+            <a class="ckp-sistema" href="https://ux.simpress.com.br/equipamentos/acompanhamento" target="_blank" rel="noopener noreferrer" aria-label="Abrir acompanhamento de chamados Simpress"><svg class="ck-ico ck-ico--xs" aria-hidden="true"><use href="#i-external"></use></svg>Simpress</a>
+          </nav>
+          <button type="button" data-on-click="fecharAcompanhamentoChamados" class="ck-btn ck-btn--icone ck-btn--fantasma ck-btn--sm" aria-label="Fechar acompanhamento de chamados"><svg class="ck-ico ck-ico--sm" aria-hidden="true"><use href="#i-x"></use></svg></button>
+        </div>
+      </header>
+
+      <div id="conteudo-acompanhamento-chamados" class="ckp-corpo" role="region" aria-label="Conteúdo do acompanhamento de chamados" tabindex="0">
+        <details id="painel-dados-acompanhamento-chamados" class="ckp-recolher">
+          <summary><svg class="ck-ico ck-ico--sm" aria-hidden="true"><use href="#i-chevron-right"></use></svg>Importação e versões<span id="versao-atual-acompanhamento-chamados" class="ckp-recolher__meta">Nenhuma importação</span></summary>
+          <div class="ckp-recolher__corpo">
+            <form id="form-importar-acompanhamento-chamados" class="ckp-importar">
+              <div class="ckp-campo"><span class="ckp-rotulo">Simpress · Acompanhamento de Pedidos</span>
+                <label class="ckp-arquivo" data-estado="vazio">
+                  <input id="arquivo-chamados-simpress" name="simpress_file" type="file" accept=".xlsx,.zip,application/zip,application/x-zip-compressed,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" aria-describedby="arquivo-chamados-simpress-ajuda" data-obrigatorio>
+                  <span class="ckp-arquivo__ico"><svg class="ck-ico ck-ico--vazio" aria-hidden="true"><use href="#i-upload"></use></svg><svg class="ck-ico ck-ico--cheio" aria-hidden="true"><use href="#i-file-check"></use></svg></span>
+                  <span class="ckp-arquivo__textos"><span class="ckp-arquivo__nome" id="nome-arquivo-chamados-simpress" data-vazio="Escolher arquivo">Escolher arquivo</span><span class="ckp-arquivo__meta" data-vazio=".xlsx ou ZIP com uma planilha">.xlsx ou ZIP com uma planilha</span></span>
+                  <span class="ckp-arquivo__acoes"><button type="button" class="ck-btn ck-btn--fantasma ck-btn--icone ck-btn--sm" data-remover aria-label="Remover arquivo"><svg class="ck-ico ck-ico--sm" aria-hidden="true"><use href="#i-x"></use></svg></button><span class="ck-btn ck-btn--secundario ck-btn--sm ckp-arquivo__trocar">Escolher</span></span>
+                </label>
               </div>
-              <div class="min-w-0">
-                <label for="arquivo-chamados-oracle" class="block text-xs text-fg-tertiary">Oracle · Gestão de Solicitações</label>
-                <input id="arquivo-chamados-oracle" name="oracle_file" type="file" accept=".xlsx,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" aria-describedby="nome-arquivo-chamados-oracle" tabindex="-1" aria-hidden="true" required class="sr-only">
-                <div class="mt-1 flex min-h-[54px] w-full min-w-0 items-center gap-3 rounded-lg border border-line-control bg-surface px-2 py-1.5">
-                  <button id="btn-escolher-arquivo-chamados-oracle" type="button" aria-label="Escolher arquivo do Oracle - Gestão de Solicitações" aria-controls="arquivo-chamados-oracle" class="shrink-0 ck-btn ck-btn--secundario">Escolher arquivo</button>
-                  <span id="nome-arquivo-chamados-oracle" class="min-w-0 truncate text-xs text-fg-subtle" aria-live="polite">Nenhum arquivo selecionado</span>
-                </div>
+              <div class="ckp-campo"><span class="ckp-rotulo">Oracle · Gestão de Solicitações</span>
+                <label class="ckp-arquivo" data-estado="vazio">
+                  <input id="arquivo-chamados-oracle" name="oracle_file" type="file" accept=".xlsx,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" data-obrigatorio>
+                  <span class="ckp-arquivo__ico"><svg class="ck-ico ck-ico--vazio" aria-hidden="true"><use href="#i-upload"></use></svg><svg class="ck-ico ck-ico--cheio" aria-hidden="true"><use href="#i-file-check"></use></svg></span>
+                  <span class="ckp-arquivo__textos"><span class="ckp-arquivo__nome" id="nome-arquivo-chamados-oracle" data-vazio="Escolher arquivo">Escolher arquivo</span><span class="ckp-arquivo__meta" data-vazio=".xlsx">.xlsx</span></span>
+                  <span class="ckp-arquivo__acoes"><button type="button" class="ck-btn ck-btn--fantasma ck-btn--icone ck-btn--sm" data-remover aria-label="Remover arquivo"><svg class="ck-ico ck-ico--sm" aria-hidden="true"><use href="#i-x"></use></svg></button><span class="ck-btn ck-btn--secundario ck-btn--sm ckp-arquivo__trocar">Escolher</span></span>
+                </label>
               </div>
-              <button id="btn-importar-acompanhamento-chamados" type="submit" class="md:mb-2 ck-btn ck-btn--primario">Importar planilhas</button>
-              <p id="arquivo-chamados-simpress-ajuda" class="text-xs text-fg-muted md:col-span-3">Cada arquivo pode ter até 60 MB. Simpress aceita .xlsx ou ZIP com uma única planilha .xlsx.</p>
-              <p id="status-importacao-chamados" class="text-xs text-fg-subtle md:col-span-3" role="status" aria-live="polite"></p>
+              <button id="btn-importar-acompanhamento-chamados" type="submit" class="ck-btn ck-btn--primario" data-ckp="botao-56"><svg class="ck-ico ck-ico--sm" aria-hidden="true"><use href="#i-upload"></use></svg>Importar planilhas</button>
+              <p id="arquivo-chamados-simpress-ajuda" class="ckp-secao__desc">Cada arquivo pode ter até 60 MB. Simpress aceita .xlsx ou ZIP com uma única planilha .xlsx.</p>
+              <p id="status-importacao-chamados" class="ckp-secao__desc" role="status" aria-live="polite"></p>
             </form>
-            <div id="resumo-acompanhamento-chamados" class="shrink-0"></div>
-            <div class="grid grid-cols-1 gap-2 md:grid-cols-[minmax(0,1fr)_auto]">
-              <label for="versao-acompanhamento-chamados" class="text-xs text-fg-tertiary">Versão das planilhas<select id="versao-acompanhamento-chamados" class="mt-1 block w-full rounded-lg border border-line-control bg-surface px-3 py-2 text-sm text-white" data-on-change="selecionarVersaoChamados"><option value="">Nenhuma importação</option></select></label>
-              <button type="button" id="btn-excluir-importacoes-antigas-chamados" class="self-end disabled:cursor-not-allowed disabled:opacity-50 ck-btn ck-btn--perigo" data-on-click="excluirImportacoesAntigasChamados" disabled>Excluir importações antigas</button>
-              <details class="ticket-disclosure md:col-span-2 rounded-lg border border-line-quiet bg-surface/40 px-3 py-2">
-                <summary class="ticket-disclosure-summary cursor-pointer text-xs font-semibold text-fg-tertiary">Comparação com a importação anterior</summary>
-                <div id="evolucao-acompanhamento-chamados" class="pt-2 text-xs text-fg-tertiary" role="status" aria-live="polite">O histórico de importações aparecerá aqui.</div>
-              </details>
+            <div id="resumo-acompanhamento-chamados"></div>
+            <div class="ckp-versao">
+              <label class="ckp-campo" for="versao-acompanhamento-chamados"><span class="ckp-rotulo">Versão em uso</span><select id="versao-acompanhamento-chamados" class="ck-entrada" data-on-change="selecionarVersaoChamados"><option value="">Nenhuma importação</option></select></label>
+              <button type="button" id="btn-excluir-importacoes-antigas-chamados" class="ck-btn ck-btn--perigo" data-on-click="excluirImportacoesAntigasChamados" disabled><svg class="ck-ico ck-ico--sm" aria-hidden="true"><use href="#i-trash"></use></svg>Excluir importações antigas</button>
             </div>
+            <details class="ckp-recolher">
+              <summary><svg class="ck-ico ck-ico--sm" aria-hidden="true"><use href="#i-chevron-right"></use></svg>Comparação com a importação anterior</summary>
+              <div class="ckp-recolher__corpo"><div id="evolucao-acompanhamento-chamados" class="ckp-secao__desc" role="status" aria-live="polite">O histórico de importações aparecerá aqui.</div></div>
+            </details>
           </div>
         </details>
-        <div class="ticket-filter-toolbar">
-          <label for="filtro-acompanhamento-chamados" class="ticket-filter-search text-xs text-fg-tertiary"><span class="sr-only">Buscar série, pedido, OS ou status</span><input id="filtro-acompanhamento-chamados" type="search" autocomplete="off" class="block w-full rounded-lg border border-line-control bg-surface px-3 py-2 text-sm text-white placeholder:text-fg-weak" placeholder="Buscar série, pedido, OS ou status"></label>
-          <label title="Chamados ativos sem data ou com três dias ou mais sem atualização" class="ticket-filter-attention border border-amber-400/20 bg-amber-500/5 text-xs text-amber-100"><input id="somente-atencao-chamados" type="checkbox" class="accent-amber-400">Atenção · 3+ dias</label>
-          <button type="button" id="btn-exportar-acompanhamento-chamados" class="ticket-filter-action ticket-filter-export disabled:cursor-not-allowed disabled:opacity-50 ck-btn ck-btn--secundario" data-on-click="exportarAcompanhamentoChamados" disabled>Exportar Excel</button>
-          <button type="button" class="ticket-filter-action ticket-filter-clear ck-btn ck-btn--secundario" data-on-click="limparFiltrosAcompanhamentoChamados">Limpar filtros</button>
+
+        <div class="ckp-ferramentas">
+          <label class="ckp-busca" for="filtro-acompanhamento-chamados"><svg class="ck-ico ck-ico--sm" aria-hidden="true"><use href="#i-search"></use></svg><input id="filtro-acompanhamento-chamados" type="search" autocomplete="off" placeholder="Buscar série, pedido, OS ou status" aria-label="Buscar série, pedido, OS ou status"></label>
+          <label class="ck-btn ck-btn--secundario" title="Chamados ativos sem data ou com três dias ou mais sem atualização"><input id="somente-atencao-chamados" type="checkbox">Atenção · 3+ dias</label>
+          <button type="button" id="btn-exportar-acompanhamento-chamados" class="ck-btn ck-btn--secundario" data-on-click="exportarAcompanhamentoChamados" disabled>Exportar Excel</button>
+          <button type="button" class="ck-btn ck-btn--fantasma" data-on-click="limparFiltrosAcompanhamentoChamados">Limpar filtros</button>
         </div>
+        <section class="ckp-triagem" aria-labelledby="ckp-triagem-titulo">
+          <div id="triagem-diaria-acompanhamento-chamados"></div>
+          <p id="contagem-acompanhamento-chamados" class="ckp-secao__desc" role="status" aria-live="polite"></p>
+          <div id="lista-acompanhamento-chamados" aria-live="polite"></div>
+        </section>
       </div>
-      <div id="triagem-diaria-acompanhamento-chamados" class="shrink-0 pb-2"></div>
-      <p id="contagem-acompanhamento-chamados" class="shrink-0 text-xs text-fg-muted" role="status" aria-live="polite"></p>
-      <div id="lista-acompanhamento-chamados" aria-live="polite" class="space-y-3 py-2"></div>
-      </div>
-      <div class="pt-3 border-t border-line-quiet flex justify-end shrink-0"><button type="button" data-on-click="fecharAcompanhamentoChamados" class="ck-btn ck-btn--secundario">Fechar</button></div>
-    </div>
+    </section>
   </div>
 
   <!-- HISTÓRICO DAS COMPARAÇÕES DE PLANILHAS -->
