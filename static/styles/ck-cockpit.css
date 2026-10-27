@@ -802,7 +802,10 @@ details.ck-chip[open] > .ck-chip__gatilho .ck-ico { transform: rotate(180deg); }
 #resumo-os-equipamento .ck-os__corpo { overflow-x: clip; }
 #resumo-os-equipamento .ck-tabela td { font-size: var(--fs-md); color: var(--cor-texto); }
 #resumo-os-equipamento .ck-tag { align-self: flex-start; }
-#resumo-os-equipamento .ticket-summary-order-link { font-size: inherit; text-align: left; overflow-wrap: anywhere; }
+#resumo-os-equipamento .ck-os-fonte { display: flex; align-items: center; min-height: var(--altura-controle-sm); }
+#resumo-os-equipamento .ck-os-fonte + .ck-os-fonte { margin-top: 6px; }
+#resumo-os-equipamento .ck-os-fonte > .ticket-os-link-editor { flex: 1 1 auto; min-width: 0; }
+#resumo-os-equipamento .ticket-summary-order-link { vertical-align: top; align-items: flex-start; font-size: inherit; text-align: left; overflow-wrap: anywhere; }
 #resumo-os-equipamento .ticket-os-link-controls { flex-wrap: wrap; align-items: center; }
 #resumo-os-equipamento .ticket-os-link-prefix { font-family: var(--fonte-mono); font-size: var(--fs-ui); color: var(--cor-texto-mudo); white-space: nowrap; }
 #resumo-os-equipamento .ticket-os-link-input { flex: 0 0 5.5rem; width: 5.5rem; min-width: 0; font-family: var(--fonte-mono); }
