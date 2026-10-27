@@ -293,11 +293,11 @@ button.ck-kpi[aria-pressed="true"] { background: var(--cor-superficie); border-b
 .ck-home { display: grid; grid-template-columns: var(--largura-lista-home) minmax(0, 1fr); min-height: 100%; }
 @media (min-width: 1200px) { .ck-home { height: 100%; } .ck-tela--home { overflow: hidden; } }
 .ck-lista { display: flex; flex-direction: column; min-height: 0; border-right: 1px solid var(--cor-borda); background: var(--cor-fundo); }
-.ck-filtros { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 4px; padding: 10px 12px; border-bottom: 1px solid var(--cor-borda-suave); }
-.ck-filtro { display: flex; flex-direction: column; align-items: flex-start; gap: 1px; min-width: 0; padding: 5px 8px; border: 0; border-radius: var(--raio-sm); background: transparent; color: var(--cor-texto-mudo); font-size: var(--fs-xs); line-height: 1.3; text-align: left; cursor: pointer; transition: background-color var(--duracao) var(--curva); }
-.ck-filtro:hover { background: var(--cor-neutro-fundo); }
-.ck-filtro__n { font-size: var(--fs-base); font-weight: var(--peso-medio); color: var(--cor-texto-forte); font-variant-numeric: tabular-nums; }
-.ck-filtro[aria-pressed="true"] { background: var(--cor-destaque-fundo); color: var(--cor-destaque-texto); box-shadow: inset 0 0 0 1px var(--cor-destaque-forte); }
+.ck-filtros { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 0; margin: 10px 6px; padding: 2px; border: 1px solid var(--cor-borda-suave); border-radius: var(--raio-md); background: var(--cor-neutro-fundo); }
+.ck-filtro { display: block; height: var(--altura-pilula); min-width: 0; padding: 0 2px; overflow: hidden; text-overflow: ellipsis; text-align: center; border: 0; border-radius: var(--raio-sm); background: transparent; color: var(--cor-texto-mudo); font-size: var(--fs-xs); line-height: var(--altura-pilula); white-space: nowrap; cursor: pointer; transition: background-color var(--duracao) var(--curva); }
+.ck-filtro:hover { background: var(--cor-superficie); }
+.ck-filtro__n { margin-left: 3px; font-size: var(--fs-xs); font-weight: var(--peso-medio); color: var(--cor-texto-forte); font-variant-numeric: tabular-nums; }
+.ck-filtro[aria-pressed="true"] { background: var(--cor-destaque-fundo); color: var(--cor-destaque-texto); }
 .ck-filtro[aria-pressed="true"] .ck-filtro__n { color: var(--cor-destaque-texto); }
 .ck-itens { list-style: none; flex: 1; min-height: 0; overflow: auto; }
 .ck-item { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 2px 10px; padding: 9px 12px 9px 14px; border-bottom: 1px solid var(--cor-borda-suave); cursor: pointer; transition: background-color var(--duracao) var(--curva); }
@@ -308,7 +308,11 @@ button.ck-kpi[aria-pressed="true"] { background: var(--cor-superficie); border-b
 .ck-item__sub { min-width: 0; font-size: var(--fs-sm); color: var(--cor-texto-mudo); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .ck-item .ck-status { justify-self: end; }
 .ck-lista__rodape { display: flex; align-items: center; justify-content: space-between; gap: 8px; padding: 6px 8px 6px 14px; border-top: 1px solid var(--cor-borda-suave); font-size: var(--fs-sm); color: var(--cor-texto-mudo); }
-.ck-lista__rodape > span { white-space: nowrap; }
+.ck-lista__rodape > span, .ck-lista__info > * { white-space: nowrap; }
+.ck-lista__info { display: inline-flex; align-items: center; gap: 5px; min-width: 0; flex-wrap: wrap; }
+.ck-link-fantasma { padding: 0; border: 0; background: none; color: var(--cor-destaque-texto); font: inherit; text-decoration: underline; text-underline-offset: 2px; cursor: pointer; }
+.ck-link-fantasma:hover { color: var(--cor-texto-forte); }
+.ck-link-fantasma:focus-visible { outline: 2px solid var(--cor-destaque); outline-offset: 2px; border-radius: 2px; }
 .ck-recentes { padding: 10px 12px 12px 14px; border-top: 1px solid var(--cor-borda-suave); }
 .ck-recentes__cab { display: flex; align-items: center; justify-content: space-between; margin-bottom: 6px; }
 .ck-recentes__titulo { font-size: var(--fs-sm); font-weight: var(--peso-medio); color: var(--cor-texto-mudo); }
@@ -368,8 +372,8 @@ button.ck-kpi[aria-pressed="true"] { background: var(--cor-superficie); border-b
 }
 @media (max-width: 767.98px) {
   .ck-detalhe { padding: 14px 12px 20px; }
-  .ck-filtros { padding: 8px; }
-  .ck-filtro { padding: 5px 6px; }
+  .ck-filtros { margin: 8px; }
+  .ck-filtro { padding: 0 4px; }
   .ck-eq-cab__id { flex-basis: 100%; }
   .ck-eq-cab__acoes { width: 100%; }
   .ck-eq-cab__acoes .ck-btn--primario, .ck-eq-cab__acoes .ck-btn--secundario { flex: 1 1 0; }
@@ -706,7 +710,6 @@ details.ck-chip[open] > .ck-chip__gatilho .ck-ico { transform: rotate(180deg); }
 .ck-filtro:disabled:hover { background: transparent; }
 .ck-filtro:focus-visible, .ck-item:focus-visible, .ck-recente:focus-visible, .ck-modelo-aba:focus-visible, .ck-chamado__texto:focus-visible { outline: 2px solid var(--cor-destaque); outline-offset: 2px; }
 .ck-lista { overflow: hidden; }
-.ck-lista__acoes { display: flex; padding: 6px 12px; border-bottom: 1px solid var(--cor-borda-suave); }
 .ck-lista__vazio { padding: 16px 14px; font-size: var(--fs-md); color: var(--cor-texto-mudo); }
 .ui-equipment-loading:empty { display: none; }
 .ck-itens:focus-visible { outline: 2px solid var(--cor-destaque); outline-offset: -2px; }
@@ -715,6 +718,11 @@ details.ck-chip[open] > .ck-chip__gatilho .ck-ico { transform: rotate(180deg); }
 .ck-item__local { align-self: center; overflow: hidden; text-overflow: ellipsis; max-width: 14ch; }
 .ck-item__status { grid-column: 2; grid-row: 2; display: flex; flex-direction: column; align-items: flex-end; gap: 2px; }
 .ck-item .ck-status { white-space: nowrap; }
+button.ck-status--link { padding: 0; border: 0; background: none; font: inherit; font-size: var(--fs-xs); cursor: pointer; text-decoration: underline; text-underline-offset: 2px; }
+button.ck-status--link:hover { text-decoration-thickness: 2px; }
+button.ck-status--link:focus-visible { outline: 2px solid var(--cor-destaque); outline-offset: 2px; border-radius: 2px; }
+.ck-linha-destaque, .ck-linha-destaque > * { background-color: var(--cor-destaque-fundo); }
+@media (prefers-reduced-motion: no-preference) { .ck-linha-destaque { transition: background-color var(--duracao-lenta) var(--curva); } }
 .ck-recentes { order: 99; }
 .ck-recente { display: inline-flex; align-items: center; flex-wrap: wrap; gap: 2px 8px; height: auto; min-height: 24px; max-width: 100%; padding: 3px 8px; text-align: left; }
 .ck-recente__extra { color: var(--cor-texto-mudo); font-family: var(--fonte-corpo); font-size: var(--fs-xs); }

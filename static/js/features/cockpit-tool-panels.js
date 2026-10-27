@@ -58,6 +58,8 @@
   let comparisonDetailRequest = 0;
   let aliasRequest = 0;
   let skipLinkHref = null;
+  let pendingComparisonFocus = "";
+  const HIGHLIGHT_MS = 1500;
 
   function normalize(value) {
     return String(value ?? "").normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLocaleLowerCase("pt-BR").trim();
@@ -348,6 +350,56 @@
     ["ausentes_no_endpoint", "Só Simpress"], ["ausentes_em_detalhes", "Só Endpoint"],
   ];
 
+  function destacarLinhaCockpit(element) {
+    if (!element?.isConnected) return;
+    element.scrollIntoView({ block: "center", behavior: window.matchMedia?.("(prefers-reduced-motion: reduce)").matches ? "auto" : "smooth" });
+    element.classList.add("ck-linha-destaque");
+    setTimeout(() => element.classList.remove("ck-linha-destaque"), HIGHLIGHT_MS);
+  }
+
+  // Série do Endpoint (MacBook) vem sem o "S" inicial que EquipamentosDetalhes tem; só vale se o resultado for único.
+  function matchComparisonRows(rows, serial) {
+    const wanted = String(serial || "").trim().toUpperCase();
+    if (!wanted) return [];
+    const serialOf = row => String(row?.serie || "").trim().toUpperCase();
+    const exact = rows.filter(row => serialOf(row) === wanted);
+    if (exact.length) return exact;
+    const equivalent = rows.filter(row => {
+      const other = serialOf(row);
+      return other && (other === `S${wanted}` || `S${other}` === wanted);
+    });
+    return new Set(equivalent.map(serialOf)).size === 1 ? equivalent : [];
+  }
+
+  function applyPendingComparisonFocus(event) {
+    const serial = pendingComparisonFocus;
+    if (!serial) return;
+    const rows = comparisonRows(event);
+    const matches = matchComparisonRows(rows, serial);
+    // Prioridade igual à Home: Localidade e Só Simpress são as divergências listadas lá.
+    const order = ["Localidade", "Só Simpress", "Usuário", "Só Endpoint"];
+    const row = order.map(category => matches.find(item => item.categoria === category)).find(Boolean);
+    selectedComparisonFilter = row ? row.categoria : "todos";
+    selectedComparisonRowKey = row ? row.cockpitKey : "";
+  }
+
+  function highlightPendingComparisonRow() {
+    if (!pendingComparisonFocus) return;
+    pendingComparisonFocus = "";
+    const key = selectedComparisonRowKey;
+    if (!key) return;
+    const button = [...document.querySelectorAll("#cockpit-comparison-list .cockpit-comparison-row")]
+      .find(item => item.dataset.rowKey === key);
+    destacarLinhaCockpit(button?.closest(".ck-ferr-item") || button);
+  }
+
+  async function abrirComparacaoDaSerie(serial) {
+    pendingComparisonFocus = String(serial || "").trim();
+    selectedComparisonId = "";
+    await openPanel("comparacao");
+    pendingComparisonFocus = "";
+  }
+
   function renderComparisonKpis(event) {
     const metrics = comparisonMetrics(event);
     const equalPercent = Number.isFinite(metrics.iguais) && Number.isFinite(metrics.simpress) && metrics.simpress > 0
@@ -408,6 +460,7 @@
       wrapper.setAttribute("role", "listitem");
       const button = element("button", "ck-item ck-ferr-botao cockpit-comparison-row");
       button.type = "button";
+      button.dataset.rowKey = row.cockpitKey;
       button.setAttribute("aria-pressed", String(row.cockpitKey === selectedComparisonRowKey));
       const simpressMissing = row.categoria === "Só Endpoint";
       const endpointMissing = row.categoria === "Só Simpress";
@@ -580,11 +633,13 @@
       if (request !== comparisonDetailRequest || activeTool !== "comparacao") return;
       selectedComparison = data.evento || null;
       selectedComparisonRowKey = "";
+      applyPendingComparisonFocus(selectedComparison);
       renderComparisonKpis(selectedComparison);
       renderComparisonFilters(selectedComparison);
       renderComparisonList();
       renderComparisonDetail(selectedComparison);
       updateComparisonStatus();
+      highlightPendingComparisonRow();
     } catch (error) {
       if (request !== comparisonDetailRequest || activeTool !== "comparacao") return;
       renderError(target, error, "Não foi possível abrir a comparação.");
@@ -1591,6 +1646,8 @@
 
   return {
     abrirPainelCockpit: openPanel,
+    abrirComparacaoDaSerie,
+    destacarLinhaCockpit,
     fecharPainelCockpit: goBack,
     filterTicketRecords,
     comparisonMetrics,

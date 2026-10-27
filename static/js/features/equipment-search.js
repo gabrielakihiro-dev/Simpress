@@ -695,16 +695,20 @@
         tone: "alerta",
         icon: "i-alerta",
         label: comparison.days ? `Sem acesso ${comparison.days} d` : "Sem acesso 7+ d",
+        destino: "resumo",
       });
     }
-    if (comparison?.divergent) statuses.push({ tone: "erro", icon: "i-erro", label: "Divergente" });
+    if (comparison?.divergent) statuses.push({ tone: "erro", icon: "i-erro", label: "Divergente", destino: "comparacao" });
     if (!String(item?.usuarios_logados || "").trim()) statuses.push({ tone: "info", icon: "i-user", label: "Sem usuário" });
     return statuses.length ? statuses : [{ tone: "ok", icon: "i-ok", label: "Sincronizado" }];
   }
 
-  function criarStatusListaHome(status) {
-    const el = createTextElement("span", "ck-status", status.label);
+  function criarStatusListaHome(status, serial) {
+    // Selos de Divergente/Sem acesso viram botões (mesma cor) que levam ao painel de origem do dado.
+    const el = status.destino ? document.createElement("button") : document.createElement("span");
+    el.className = status.destino ? "ck-status ck-status--link" : "ck-status";
     el.dataset.status = status.tone;
+    el.append(status.label);
     const svgNs = "http://www.w3.org/2000/svg";
     const icon = document.createElementNS(svgNs, "svg");
     icon.setAttribute("class", "ck-ico ck-ico--xs");
@@ -714,13 +718,32 @@
     use.setAttribute("href", `#${status.icon}`);
     icon.append(use);
     el.prepend(icon);
+    if (status.destino) {
+      el.type = "button";
+      // Fora da ordem de Tab: o item da lista já é navegável pelo teclado (listbox) e botão dentro de option é aninhamento interativo.
+      el.tabIndex = -1;
+      el.dataset.destino = status.destino;
+      el.setAttribute("aria-label", status.destino === "resumo"
+        ? `${status.label}: abrir ${serial} na aba Resumo`
+        : `${status.label}: abrir ${serial} na Comparação`);
+      el.addEventListener("click", event => {
+        event.stopPropagation();
+        void abrirDestinoStatusHome(status.destino, serial);
+      });
+      el.addEventListener("keydown", event => event.stopPropagation());
+    }
     return el;
   }
 
-  function criarPilhaStatusHome(statuses) {
+  async function abrirDestinoStatusHome(destino, serial) {
+    if (destino === "resumo") await app.abrirResumoSemAcesso?.(serial);
+    else await app.abrirComparacaoDaSerie?.(serial);
+  }
+
+  function criarPilhaStatusHome(statuses, serial) {
     const pilha = document.createElement("span");
     pilha.className = "ck-item__status";
-    pilha.append(...statuses.map(criarStatusListaHome));
+    pilha.append(...statuses.map(status => criarStatusListaHome(status, serial)));
     return pilha;
   }
 
@@ -742,7 +765,7 @@
       createTextElement("span", "ck-item__serie", serial || "Série não informada"),
       createTextElement("span", "ck-item__local", city || "Sem cidade"),
       createTextElement("span", "ck-item__sub", detail || "Sem modelo ou usuário"),
-      criarPilhaStatusHome(statuses),
+      criarPilhaStatusHome(statuses, serial),
     );
     li.addEventListener("click", () => app.selecionarItemAutocomplete(item));
     return li;
