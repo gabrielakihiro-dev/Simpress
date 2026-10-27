@@ -907,7 +907,18 @@ button.ck-status--link:focus-visible { outline: 2px solid var(--cor-destaque); o
 .ck-ferr-rel .ck-rel__detalhe, .ck-rel__corpo > .ck-rel__detalhe { grid-column: 1 / -1; min-width: 0; display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 14px; align-content: start; }
 .ck-rel__corpo > .ck-det-bloco { grid-column: 1 / -1; padding: 12px; border: 1px solid var(--cor-borda-suave); border-radius: var(--raio-md); background: var(--cor-superficie); }
 .ck-rel__detalhe > .ck-rel__largo { grid-column: 1 / -1; }
-@media (max-width: 767.98px) { .ck-rel__detalhe { grid-template-columns: minmax(0, 1fr); } .ck-ferr-filtros { padding: 8px 12px; } }
+.ck-rel__col { display: flex; flex-direction: column; gap: 14px; min-width: 0; }
+.ck-rel__barra { flex-wrap: wrap; align-items: flex-end; padding-top: 8px; padding-bottom: 8px; }
+.ck-rel__barra .ck-barra-ferr__nota { flex: 1 1 100%; margin: 0; }
+.ck-rel__aviso { margin: 0; padding: 6px 10px; border-radius: var(--raio-md); background: var(--cor-alerta-fundo); color: var(--cor-alerta-texto); font-size: var(--fs-md); }
+.ck-rel__cartao { padding: 12px; border: 1px solid var(--cor-borda-suave); border-radius: var(--raio-md); background: var(--cor-superficie); }
+.ck-rel__numeros { display: grid; grid-template-columns: repeat(auto-fill, minmax(110px, 1fr)); gap: 10px; margin: 0; }
+.ck-rel__numero { display: flex; flex-direction: column-reverse; min-width: 0; }
+.ck-rel__valor { margin: 0; font-size: 22px; font-weight: var(--peso-medio); line-height: 1.2; font-variant-numeric: tabular-nums; }
+.ck-rel__rotulo { font-size: var(--fs-sm); color: var(--cor-texto-mudo); overflow-wrap: anywhere; }
+.ck-rel__previa summary { cursor: pointer; }
+@media (max-width: 1199.98px) { .ck-rel__detalhe { grid-template-columns: minmax(0, 1fr); } }
+@media (max-width: 767.98px) { .ck-ferr-filtros { padding: 8px 12px; } }
 
 /* Aviso flutuante: o contêiner empilha os avisos; cada .ck-toast deixa de ser fixo. */
 .ck-toasts { position: fixed; left: 50%; bottom: 20px; display: flex; flex-direction: column; align-items: center; gap: 8px; width: max-content; max-width: calc(100vw - 24px); transform: translateX(-50%); pointer-events: none; }

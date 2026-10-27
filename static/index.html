@@ -927,8 +927,8 @@ Horário disponível para atendimento:</textarea>
 
         <section class="ck-ferr-painel" data-cockpit-tool-panel="relatorio" aria-labelledby="cockpit-monthly-heading" hidden>
           <h2 id="cockpit-monthly-heading" class="sr-only">Relatório mensal de operações</h2>
-          <div id="cockpit-monthly-periods" class="ck-pilulas ck-ferr-filtros" role="group" aria-label="Meses recentes"></div>
-          <div class="ck-barra-ferr">
+          <div class="ck-barra-ferr ck-rel__barra">
+            <div id="cockpit-monthly-periods" class="ck-pilulas" role="group" aria-label="Meses recentes"></div>
             <label class="ck-campo"><span class="ck-campo__rotulo">Mês do relatório</span><input id="cockpit-monthly-month" class="ck-entrada" type="month"></label>
             <button type="button" id="cockpit-monthly-copy" class="ck-btn ck-btn--secundario">Copiar resumo</button>
             <button type="button" id="cockpit-monthly-export" class="ck-btn ck-btn--primario">Exportar planilha</button>
@@ -937,7 +937,7 @@ Horário disponível para atendimento:</textarea>
           <div id="cockpit-monthly-kpis" class="ck-kpis" role="group" aria-label="Indicadores do relatório"></div>
           <div class="ck-rel__corpo">
             <div id="cockpit-monthly-details" class="ck-rel__detalhe" aria-label="Detalhamento do mês"></div>
-            <aside class="ck-det-bloco"><h2 class="ck-det__titulo">Prévia para a gestão</h2><pre id="cockpit-monthly-preview" class="ck-rel__texto" aria-live="polite"></pre></aside>
+            <details class="ck-det-bloco ck-rel__previa"><summary class="ck-det__titulo">Prévia para a gestão</summary><pre id="cockpit-monthly-preview" class="ck-rel__texto" aria-live="polite"></pre></details>
           </div>
         </section>
 
