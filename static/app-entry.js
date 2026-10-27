@@ -11,6 +11,7 @@ import "./js/shared/api-errors.js";
 import "./js/shared/api-fetch.js";
 import "./js/ui/ui-motion.js";
 import "./js/ui/accessible-dialogs.js";
+import "./js/ui/file-picker.js";
 import "./js/ui/ui-notifications.js";
 import "./js/shared/history-format.js";
 import "./js/features/ticket-rules.js";

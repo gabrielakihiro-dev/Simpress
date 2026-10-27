@@ -138,8 +138,7 @@
       "modelo_exportacao",
       "historico_chamados",
     ];
-    // Older servers and mocked reports have no Entra entry; it only counts when reported.
-    if (report.files.nomes_entra) readinessFileKeys.push("nomes_entra");
+    // Entra is an optional section inside Inventários, never a pending source.
     const readinessFiles = readinessFileKeys.map(key => report.files[key]).filter(Boolean);
     const availableCount = readinessFiles.filter(status => status.available === true).length;
     const totalCount = readinessFileKeys.length;
@@ -175,7 +174,7 @@
           : `${availableCount} de ${totalCount} arquivos disponíveis. Confira os detalhes abaixo.`;
   }
 
-  const PRONTIDAO_ESTADOS = { ok: "Disponível", pendente: "Pendente", invalido: "Inválido" };
+  const PRONTIDAO_ESTADOS = { ok: "Em dia", pendente: "Pendente", invalido: "Inválido" };
 
   function estadoProntidao(status) {
     if (status?.available === true) return "ok";
@@ -200,11 +199,12 @@
     return status.reason || faltando;
   }
 
-  function adicionarItemProntidao(list, { id, icone, titulo, descricao, detalhe, estado, acao }) {
+  function adicionarItemProntidao(list, { id, pendencia, icone, titulo, descricao, detalhe, estado, acao }) {
     const item = document.createElement("li");
     item.className = "ck-pront__item";
     item.dataset.status = estado;
     if (id) item.id = id;
+    if (pendencia) item.dataset.pendencia = pendencia;
 
     const ico = document.createElement("span");
     ico.className = "ck-pront__ico";
@@ -228,9 +228,11 @@
     if (acao) {
       const button = document.createElement("button");
       button.type = "button";
-      button.className = "ck-btn ck-btn--secundario ck-btn--sm ck-pront__acao";
-      button.append(criarIconeProntidao(acao.icone || "i-upload"), acao.label);
-      button.setAttribute("aria-label", acao.ariaLabel || `${acao.label} — ${titulo}`);
+      // Em dia: ação discreta (Atualizar/Abrir/Editar); pendente: ação em destaque.
+      const rotulo = estado === "ok" && acao.labelOk ? acao.labelOk : acao.label;
+      button.className = `ck-btn ${estado === "ok" ? "ck-btn--fantasma" : "ck-btn--secundario"} ck-btn--sm ck-pront__acao`;
+      button.append(criarIconeProntidao(acao.icone || "i-upload"), rotulo);
+      button.setAttribute("aria-label", acao.ariaLabel || `${rotulo} — ${titulo}`);
       button.addEventListener("click", acao.onClick);
       item.appendChild(button);
     }
@@ -253,6 +255,16 @@
     return status;
   }
 
+  // Barra "X de N fontes em dia", derivada dos itens [data-pendencia] já renderizados.
+  function atualizarProgressoProntidao(details) {
+    const itens = [...details.querySelectorAll("[data-pendencia]")];
+    const prontos = itens.filter(item => item.dataset.status === "ok").length;
+    const cheio = document.getElementById("ckp-progresso-cheio");
+    const texto = document.getElementById("ckp-progresso-texto");
+    if (cheio) cheio.style.width = itens.length ? `${(prontos / itens.length) * 100}%` : "0%";
+    if (texto) texto.textContent = `${prontos} de ${itens.length}`;
+  }
+
   function renderizarItensProntidao() {
     const details = document.getElementById("readiness-details-content");
     if (!details || !ultimoRelatorioProntidao) return;
@@ -270,15 +282,17 @@
     }
     adicionarItemProntidao(list, {
       id: "readiness-inventario",
+      pendencia: "inventario",
       icone: "i-sheet",
       titulo: "Inventários",
       descricao: "Planilha de equipamentos da Simpress",
       detalhe: detalheProntidao(report.files.inventario_equipamentos),
       estado: estadoProntidao(statusInventarios(report)),
-      acao: { label: "Importar", ariaLabel: "Importar/atualizar inventários Simpress e Endpoint", onClick: app.abrirModalAtualizarPlanilhas },
+      acao: { label: "Importar", labelOk: "Atualizar", ariaLabel: "Importar/atualizar inventários Simpress e Endpoint", onClick: app.abrirModalAtualizarPlanilhas },
     });
     adicionarItemProntidao(list, {
       id: "readiness-chamados",
+      pendencia: "chamados",
       icone: "i-clock",
       titulo: "Acompanhamento de chamados",
       descricao: "Exportação de chamados Oracle",
@@ -286,6 +300,7 @@
       estado: estadoProntidao(statusChamados(report)),
       acao: {
         label: "Importar",
+        labelOk: "Abrir",
         ariaLabel: "Importar planilhas para acompanhamento de chamados",
         onClick: () => {
           document.getElementById("painel-dados-acompanhamento-chamados").open = true;
@@ -293,42 +308,32 @@
         },
       },
     });
-    if (report.files.modelo_exportacao) {
-      adicionarItemProntidao(list, {
-        id: "readiness-modelo-exportacao",
-        icone: "i-download",
-        titulo: "Modelo de exportação",
-        descricao: "Planilha-modelo usada nas exportações",
-        detalhe: detalheProntidao(report.files.modelo_exportacao),
-        estado: estadoProntidao(report.files.modelo_exportacao),
-        acao: { label: "Importar", ariaLabel: "Importar modelo de exportação", onClick: () => app.abrirImportacaoModelo("exportacao") },
-      });
-    }
-    if (report.files.nomes_entra) {
-      adicionarItemProntidao(list, {
-        id: "readiness-entra",
-        icone: "i-users",
-        titulo: "Microsoft Entra",
-        descricao: "Usuários e logins do diretório",
-        detalhe: detalheProntidao(report.files.nomes_entra),
-        estado: estadoProntidao(report.files.nomes_entra),
-        acao: { label: "Importar", ariaLabel: "Importar CSV com os nomes do Microsoft Entra", onClick: app.abrirModalAtualizarPlanilhas },
-      });
-    }
+    adicionarItemProntidao(list, {
+      id: "readiness-modelo-exportacao",
+      pendencia: "modelo",
+      icone: "i-download",
+      titulo: "Modelo de exportação",
+      descricao: "Planilha-modelo usada nas exportações",
+      detalhe: detalheProntidao(report.files.modelo_exportacao),
+      estado: estadoProntidao(report.files.modelo_exportacao),
+      acao: { label: "Importar", labelOk: "Atualizar", ariaLabel: "Importar modelo de exportação", onClick: () => app.abrirImportacaoModelo("exportacao") },
+    });
     // Regionais are not part of the "N pendentes" count; the row only appears once the count is known.
     if (totalRegionais !== null) {
       adicionarItemProntidao(list, {
         id: "readiness-regionais-item",
+        pendencia: "regionais",
         icone: "i-pin",
         titulo: "Regionais",
         descricao: totalRegionais > 0
           ? `${totalRegionais} ${pluralize(totalRegionais, "regional cadastrada", "regionais cadastradas")}`
           : "Nenhuma regional cadastrada",
         estado: totalRegionais > 0 ? "ok" : "pendente",
-        acao: { label: "Cadastrar", icone: "i-arrow-right", ariaLabel: "Cadastrar regionais", onClick: app.abrirModalGerenciarUnidades },
+        acao: { label: "Cadastrar", labelOk: "Editar", icone: "i-arrow-right", ariaLabel: "Cadastrar regionais", onClick: app.abrirModalGerenciarUnidades },
       });
     }
     details.replaceChildren(list);
+    atualizarProgressoProntidao(details);
     // Later refreshes after saves update in place; only the first render cascades in.
     if (!details.dataset.revealed) {
       details.dataset.revealed = "true";

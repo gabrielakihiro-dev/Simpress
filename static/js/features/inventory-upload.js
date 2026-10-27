@@ -30,23 +30,24 @@
     });
   }
 
-  const ARQUIVOS_ATUALIZACAO_PLANILHAS = [
-    ["upload-endpoint-file", "upload-endpoint-name"],
-    ["upload-details-file", "upload-details-name"]
-  ];
+  const ARQUIVOS_ATUALIZACAO_PLANILHAS = ["upload-endpoint-file", "upload-details-file", "entra-csv-file"];
+
+  // O nome e o estado do arquivo são desenhados por ui/file-picker.js a partir do evento change.
+  function redesenharSeletorArquivo(input) {
+    input.dispatchEvent(new Event("change", { bubbles: true }));
+  }
 
   function inicializarArquivosAtualizacaoPlanilhas() {
-    const entraInput = document.getElementById("entra-csv-file");
-    entraInput?.addEventListener("change", () => {
-      document.getElementById("entra-csv-name").textContent = entraInput.files?.[0]?.name || "Nenhum arquivo selecionado";
+    ["upload-endpoint-file", "upload-details-file"].forEach(inputId => {
+      document.getElementById(inputId)?.addEventListener("change", () => app.limparPreviaUploadPlanilhas());
     });
-    ARQUIVOS_ATUALIZACAO_PLANILHAS.forEach(([inputId, nameId]) => {
-      const input = document.getElementById(inputId);
-      input?.addEventListener("change", () => {
-        document.getElementById(nameId).textContent = input.files?.[0]?.name || "Nenhum arquivo selecionado";
-        app.limparPreviaUploadPlanilhas();
-      });
+  }
+
+  function mostrarEtapaPlanilhas(etapa) {
+    document.getElementById("modal-atualizar-planilhas")?.querySelectorAll?.("[data-so-etapa]").forEach(el => {
+      el.hidden = el.dataset.soEtapa !== etapa;
     });
+    document.getElementById("btn-voltar-planilhas")?.classList.toggle("hidden", etapa !== "impacto");
   }
 
   // ==========================================
@@ -65,15 +66,9 @@
       : "Importe a planilha do modelo de exportação que atualiza os apelidos/hostnames.";
     const modelFile = document.getElementById("arquivo-modelo-local");
     modelFile.value = "";
-    document.getElementById("nome-arquivo-modelo-local").textContent = "Nenhum arquivo escolhido";
-    if (!modelFile.dataset.changeBound) {
-      modelFile.addEventListener("change", () => {
-        document.getElementById("nome-arquivo-modelo-local").textContent = modelFile.files?.[0]?.name || "Nenhum arquivo escolhido";
-      });
-      modelFile.dataset.changeBound = "true";
-    }
+    redesenharSeletorArquivo(modelFile);
     document.getElementById("status-modelo-local").textContent = "";
-    app.abrirModalAcessivel("modal-importar-modelo", "#btn-escolher-arquivo-modelo-local", "fecharImportacaoModelo");
+    app.abrirModalAcessivel("modal-importar-modelo", "#arquivo-modelo-local", "fecharImportacaoModelo");
   }
 
   function fecharImportacaoModelo() {
@@ -97,8 +92,9 @@
     try {
       const result = await app.apiFetch(`/api/modelos/${modal.dataset.tipo}/importar`, { method: "POST", body: data, errorMessage: "Não foi possível importar o modelo." });
       status.textContent = "Modelo importado. Confira abaixo se todas as dependências estão disponíveis.";
-      document.getElementById("arquivo-modelo-local").value = "";
-      document.getElementById("nome-arquivo-modelo-local").textContent = "Nenhum arquivo escolhido";
+      const modelFile = document.getElementById("arquivo-modelo-local");
+      modelFile.value = "";
+      redesenharSeletorArquivo(modelFile);
       // The file replacement has completed; let the user dismiss the modal
       // while readiness and the other secondary panels finish refreshing.
       importacaoModeloOcupada = false;
@@ -123,10 +119,11 @@
     }
     document.getElementById("btn-confirmar-planilhas")?.classList.add("hidden");
     document.getElementById("btn-previsualizar-planilhas")?.classList.remove("hidden");
+    mostrarEtapaPlanilhas("arquivos");
     if (limparStatus) {
       const status = document.getElementById("upload-planilhas-status");
       status.textContent = "";
-      status.className = "hidden";
+      status.className = "ckp-rodape__status";
       status.removeAttribute("role");
       status.removeAttribute("aria-live");
     }
@@ -148,9 +145,7 @@
     status.setAttribute("role", erro ? "alert" : "status");
     status.setAttribute("aria-live", erro ? "assertive" : "polite");
     status.setAttribute("aria-atomic", "true");
-    status.className = erro
-      ? "text-xs rounded-lg px-3 py-2 bg-rose-500/10 border border-rose-500/25 text-rose-300"
-      : "text-xs rounded-lg px-3 py-2 bg-sky-500/10 border border-sky-500/25 text-sky-300";
+    status.className = "ckp-rodape__status";
     if (erro) status.scrollIntoView?.({ block: "nearest" });
   }
 
@@ -174,7 +169,7 @@
     }
     const preview = document.getElementById("upload-planilhas-preview");
     preview.textContent = linhas.join("\n");
-    preview.className = "text-xs rounded-lg px-3 py-2 bg-surface border border-line-control text-fg-secondary whitespace-pre-line";
+    preview.className = "whitespace-pre-line";
     preview.setAttribute("role", "status");
     preview.setAttribute("aria-live", "polite");
     preview.setAttribute("aria-atomic", "true");
@@ -248,6 +243,7 @@
       };
       document.getElementById("btn-previsualizar-planilhas").classList.add("hidden");
       document.getElementById("btn-confirmar-planilhas").classList.remove("hidden");
+      mostrarEtapaPlanilhas("impacto");
       mostrarStatusUpload("Confira as contagens e confirme somente se este impacto estiver correto.");
     } catch (error) {
       console.error("Erro ao pré-visualizar planilhas:", error);
@@ -267,9 +263,10 @@
   }
 
   function limparArquivosAtualizacaoPlanilhas() {
-    ARQUIVOS_ATUALIZACAO_PLANILHAS.forEach(([inputId, nameId]) => {
-      document.getElementById(inputId).value = "";
-      document.getElementById(nameId).textContent = "Nenhum arquivo selecionado";
+    ARQUIVOS_ATUALIZACAO_PLANILHAS.forEach(inputId => {
+      const input = document.getElementById(inputId);
+      input.value = "";
+      redesenharSeletorArquivo(input);
     });
   }
 

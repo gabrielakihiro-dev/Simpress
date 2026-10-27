@@ -56,9 +56,9 @@ test("imports Simpress and Oracle files and displays the serial-to-OS reconcilia
   assert.ok(appHtml.includes('id="modal-acompanhamento-chamados"'));
   assert.match(appHtml, /href="https:\/\/simpress\.custhelp\.com\/AgentWeb\/" target="_blank" rel="noopener noreferrer"[^>]*aria-label="Abrir portal Oracle AgentWeb"/);
   assert.match(appHtml, /href="https:\/\/ux\.simpress\.com\.br\/equipamentos\/acompanhamento" target="_blank" rel="noopener noreferrer"[^>]*aria-label="Abrir acompanhamento de chamados Simpress"/);
-  assert.equal((appHtml.match(/class="ticket-agent-link[^>]*"/g) || []).length, 2);
-  assert.match(appHtml, /id="conteudo-acompanhamento-chamados"[^>]*overflow-y-auto/);
-  assert.match(appHtml, /Acompanhamento de Chamados/);
+  assert.equal((appHtml.match(/class="ckp-sistema"[^>]*aria-label="Abrir (portal Oracle|acompanhamento de chamados)/g) || []).length, 2);
+  assert.match(appHtml, /id="conteudo-acompanhamento-chamados" class="ckp-corpo"/);
+  assert.match(appHtml, /Acompanhamento de chamados/);
   assert.match(ticketCards, /OS conferida/);
   assert.match(ticketCards, /7285070/);
   assert.match(ticketCards, /REQ-1/);
@@ -76,10 +76,9 @@ test("provides Endpoint and Simpress shortcuts in the spreadsheet update dialog"
   assert.match(appHtml, /id="modal-atualizar-planilhas"/);
   assert.ok(appHtml.includes('href="https://centralendpoint.pr.sebrae.com.br/webclient#/uems/inventory/computers" target="_blank" rel="noopener noreferrer"'));
   assert.ok(appHtml.includes('href="https://ux.simpress.com.br/MeusEquipamentos/Index" target="_blank" rel="noopener noreferrer"'));
-  assert.match(appHtml, /spreadsheet-source-link--endpoint[^>]*aria-label="Abrir inventário de computadores do Endpoint Central"/);
-  assert.match(appHtml, /spreadsheet-source-link--simpress[^>]*aria-label="Abrir Meus Equipamentos da Simpress"/);
-  assert.equal((appHtml.match(/class="spreadsheet-source-link spreadsheet-source-link--/g) || []).length, 2);
-  assert.match(appCss, /\.spreadsheet-source-link:focus-visible/);
+  assert.match(appHtml, /class="ckp-sistema"[^>]*aria-label="Abrir inventário de computadores do Endpoint Central"/);
+  assert.match(appHtml, /class="ckp-sistema"[^>]*aria-label="Abrir Meus Equipamentos da Simpress"/);
+  assert.equal((appHtml.match(/class="ckp-sistema"[^>]*aria-label="Abrir (inventário de computadores|Meus Equipamentos)/g) || []).length, 2);
 });
 
 test("opens ticket import controls only when there are no imported calls", () => {
@@ -92,10 +91,9 @@ test("opens ticket import controls only when there are no imported calls", () =>
   assert.equal(managementPanel.open, true);
   assert.match(appHtml, /id="filtro-acompanhamento-chamados"/);
   assert.match(appHtml, /id="btn-exportar-acompanhamento-chamados"[^>]*>Exportar Excel/);
-  assert.match(appHtml, /class="ticket-filter-toolbar"/);
+  assert.match(appHtml, /class="ckp-ferramentas"/);
   assert.doesNotMatch(appHtml, /Filtros avançados|relacao-acompanhamento-chamados|status-acompanhamento-chamados|fila-acompanhamento-chamados|cidade-acompanhamento-chamados|atendimento-acompanhamento-chamados|idade-acompanhamento-chamados/);
-  assert.match(appHtml, /id="painel-dados-acompanhamento-chamados" class="ticket-disclosure[^>]*>/);
-  assert.match(appCss, /\.ticket-filter-action\s*\{[^}]*width: auto;[^}]*min-height: 2\.25rem;/);
+  assert.match(appHtml, /id="painel-dados-acompanhamento-chamados" class="ckp-recolher"/);
 });
 
 test("shows Simpress product and city while gating delivery address by order status", () => {
@@ -354,7 +352,6 @@ test("filters tickets by daily triage indicator while counting the whole import"
   harness.run("limparFiltrosAcompanhamentoChamados()");
   assert.equal(harness.run("SimpressApp.state.filtroTriagemChamados"), "");
   assert.match(cards(), /SN-FECHADA/);
-  assert.match(appCss, /\.ticket-triage-filter\[aria-pressed="true"\]/);
 });
 
 test("clears the remaining ticket search and attention filters", () => {
@@ -460,7 +457,7 @@ test("shows imported ticket versions and compares the selected snapshot with the
   assert.match(harness.element("evolucao-acompanhamento-chamados").innerHTML, /2 alteradas/);
   assert.match(harness.element("evolucao-acompanhamento-chamados").innerHTML, /SN-ANTIGA/);
   assert.ok(requests.some(({ url }) => url.includes("anterior=version-1") && url.includes("atual=version-2")));
-  assert.match(appHtml, /<button[^>]*id="btn-excluir-importacoes-antigas-chamados"[^>]*>Excluir importações antigas/);
+  assert.match(appHtml, /<button[^>]*id="btn-excluir-importacoes-antigas-chamados"[^>]*>[\s\S]*?Excluir importações antigas/);
 
   versions.value = older.id;
   await harness.run("selecionarVersaoChamados()");
