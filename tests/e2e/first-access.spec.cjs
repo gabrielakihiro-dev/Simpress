@@ -43,18 +43,18 @@ test("first access centralizes the inventory import and keeps calls separate", a
   expect(readinessResponse.status()).toBe(200);
   const panel = page.locator("#readiness-panel");
   await expect(panel).toHaveAttribute("aria-busy", "false", { timeout: 20_000 });
-  await expect(page.locator("#readiness-summary")).toContainText("Nenhum dos 6 arquivos está disponível");
+  await expect(page.locator("#readiness-summary")).toContainText("Nenhum dos 5 arquivos está disponível");
   // The panel starts as a compact disclosure on every screen.
   const statusToggle = page.locator("#cockpit-bar-status-toggle");
   if (await statusToggle.isVisible()) await statusToggle.click();
   await expect(panel).not.toHaveAttribute("open", "");
   await expect(page.locator("#readiness-summary-short")).toBeVisible();
-  await expect(page.locator("#readiness-summary-short")).toHaveText("6 pendentes");
+  await expect(page.locator("#readiness-summary-short")).toHaveText("5 pendentes");
   expect((await page.locator("#readiness-panel > summary").boundingBox()).height).toBeLessThanOrEqual(48);
   await panel.locator(":scope > summary").click();
   await expect(panel).toHaveAttribute("open", "");
   await expect(page.locator("#readiness-summary-short")).toBeVisible();
-  await expect(panel.getByRole("button", { name: /Importar/ })).toHaveCount(4);
+  await expect(panel.getByRole("button", { name: /Importar/ })).toHaveCount(3);
   await expect(panel).not.toContainText("Catálogos e históricos locais");
   await expect(panel.getByRole("heading", { name: "Ações com inventário" })).toHaveCount(0);
   await expect(panel.locator(".ck-pront__titulo", { hasText: "Modelo de exportação" })).toBeVisible();
@@ -72,7 +72,7 @@ test("first access centralizes the inventory import and keeps calls separate", a
   await panel.getByRole("button", { name: "Importar/atualizar inventários Simpress e Endpoint", exact: true }).click();
   await expect(page.locator("#upload-endpoint-file")).toBeFocused();
   await expect(page.locator("#upload-details-file")).toHaveAttribute("accept", /\.zip/);
-  await expect(page.locator(".spreadsheet-source-shortcuts")).toHaveCSS("display", "flex");
+  await expect(page.locator("#modal-atualizar-planilhas .ckp-sistemas")).toHaveCSS("display", "flex");
   await expect(page.locator("#btn-previsualizar-planilhas")).toBeVisible();
   await page.keyboard.press("Escape");
   await expect(page.locator("#modal-atualizar-planilhas")).toBeHidden();
@@ -86,21 +86,16 @@ test("first access centralizes the inventory import and keeps calls separate", a
   await page.keyboard.press("Escape");
   await expect(page.locator("#modal-acompanhamento-chamados")).toBeHidden();
 
-  await openStatus(page);
-  const entraGroup = panel.locator(".ck-pront__item").filter({ hasText: "Microsoft Entra" });
-  await expect(entraGroup.locator(".ck-pront__estado")).toHaveText("Pendente");
-  await entraGroup.getByRole("button", { name: "Importar CSV com os nomes do Microsoft Entra", exact: true }).click();
-  await expect(page.locator("#modal-atualizar-planilhas")).toBeVisible();
-  await expect(page.locator("#entra-csv-file")).toBeVisible();
+  await expect(panel.locator(".ck-pront__item").filter({ hasText: "Microsoft Entra" })).toHaveCount(0);
   expect(errors).toEqual([]);
 });
 
-test("available local files still show six items and the inventory import", async ({ page }) => {
+test("available local files still show five items and the inventory import", async ({ page }) => {
   await mockReadiness(page, () => readiness(true));
   await page.goto("/");
   const panel = page.locator("#readiness-panel");
   await expect(panel).toHaveAttribute("aria-busy", "false");
-  await expect(page.locator("#readiness-summary")).toHaveText("Todos os 6 arquivos estão disponíveis.");
+  await expect(page.locator("#readiness-summary")).toHaveText("Todos os 5 arquivos estão disponíveis.");
   await openStatus(page);
   await panel.locator("summary").click();
   await expect(panel.getByRole("button", { name: "Importar/atualizar inventários Simpress e Endpoint" })).toHaveCount(1);
@@ -136,12 +131,12 @@ test("model import handles failure and refreshes availability after success", as
   await expect(page.locator("#status-modelo-local")).toHaveText("Modelo incompatível com a base.");
   await expect(page.locator("#btn-importar-modelo")).toBeEnabled();
   await page.locator("#btn-importar-modelo").click();
-  await expect(page.locator("#readiness-summary")).toHaveText("Todos os 6 arquivos estão disponíveis.");
+  await expect(page.locator("#readiness-summary")).toHaveText("Todos os 5 arquivos estão disponíveis.");
   await expect(page.locator("#status-modelo-local")).toContainText("Modelo importado");
   await page.keyboard.press("Escape");
   await expect(page.locator("#modal-importar-modelo")).toBeHidden();
   await openStatus(page);
-  await expect(page.locator("#readiness-panel").getByRole("button", { name: /Importar/ })).toHaveCount(4);
+  await expect(page.locator("#readiness-panel").getByRole("button", { name: /Importar/ })).toHaveCount(3);
 });
 
 test("ready setup starts collapsed and uses one disclosure for the availability panel", async ({ page }) => {
@@ -155,11 +150,11 @@ test("ready setup starts collapsed and uses one disclosure for the availability 
   const panel = page.locator("#readiness-panel");
   await expect(panel).toHaveAttribute("aria-busy", "false", { timeout: 20_000 });
   await openStatus(page);
-  await expect(page.locator("#readiness-summary")).toContainText("Todos os 6 arquivos");
+  await expect(page.locator("#readiness-summary")).toContainText("Todos os 5 arquivos");
   await expect(panel).not.toHaveAttribute("open", "");
   await panel.locator(":scope > summary").click();
   await expect(panel).toHaveAttribute("open", "");
-  await expect(panel.getByRole("button", { name: /Importar/ })).toHaveCount(4);
+  await expect(panel.getByRole("button", { name: /Importar/ })).toHaveCount(3);
   await panel.locator(":scope > summary").click();
   await expect(panel).not.toHaveAttribute("open", "");
 });
@@ -206,7 +201,7 @@ test("an older readiness response cannot overwrite or clear the newer request", 
     await page.evaluate(() => window.latestReadinessRequest);
     await expect(panel).toHaveAttribute("aria-busy", "false");
     await expect(panel).toHaveAttribute("data-state", "ready");
-    await expect(page.locator("#readiness-summary")).toContainText("Todos os 6 arquivos estão disponíveis");
+    await expect(page.locator("#readiness-summary")).toContainText("Todos os 5 arquivos estão disponíveis");
   } finally {
     releaseOld?.();
     releaseLatest?.();

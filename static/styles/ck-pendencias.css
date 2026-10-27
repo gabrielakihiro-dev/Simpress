@@ -43,6 +43,7 @@
 .ckp-sistema .ck-ico { color: var(--cor-texto-sutil); }
 
 .ckp-corpo { flex: 1; min-height: 0; overflow: auto; display: flex; flex-direction: column; gap: 14px; padding: 16px; }
+.ckp-corpo > * { flex-shrink: 0; }
 .ckp-rodape { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; padding: 10px 16px; border-top: 1px solid var(--cor-borda-suave); background: var(--cor-superficie); }
 .ckp-rodape__status { flex: 1 1 220px; display: flex; align-items: center; gap: 6px; min-width: 0; font-size: var(--fs-ui); color: var(--cor-texto-mudo); }
 .ckp-rodape__status[data-status="ok"] { color: var(--cor-ok-texto); }
