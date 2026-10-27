@@ -220,7 +220,7 @@ test("salvarNomePessoa aplica o equipamento devolvido e avisa quando a base aind
     assert.deepEqual(ok.aplicados, [devolvido]);
     assert.deepEqual(ok.toasts, [["Nome da pessoa salvo.", "success"]]);
     assert.deepEqual(ok.eventos, ["simpress:usuarios-equipamento-atualizados"]);
-    assert.equal(ok.elementos.get("card-nome-pessoa").textContent, "Nome da pessoa: Ana Lima (manual)");
+    assert.equal(ok.elementos.get("card-nome-pessoa").textContent, "Ana Lima (manual)");
 
     const adiado = await salvarNome({ atual, apiFetch: async () => ({ equipamento: devolvido, base_atualizada: false }) });
     assert.deepEqual(adiado.aplicados, [devolvido]);
