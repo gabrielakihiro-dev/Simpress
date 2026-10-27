@@ -31,10 +31,24 @@ async function openAnalysisMenu(page) {
   if (!(await menu.evaluate(node => node.open))) await page.locator("#cockpit-tools-trigger").click();
 }
 
-async function openFixtureComparison(page) {
+// O menu abre a tela do Cockpit; o modal completo abre pelo botão "Fluxo completo".
+async function openHistoryModal(page) {
   await openAnalysisMenu(page);
   await page.locator("#btn-historico-comparacoes").click();
+  await expect(page.locator("#cockpit-sheets-history-legacy")).toBeVisible();
+  await page.locator("#cockpit-sheets-history-legacy").click();
   await expect(page.getByRole("dialog")).toBeVisible();
+}
+
+async function openEvolutionModal(page) {
+  await openAnalysisMenu(page);
+  await page.locator("#btn-evolucao-atualizacoes").click();
+  await expect(page.locator("#cockpit-updates-legacy")).toBeVisible();
+  await page.locator("#cockpit-updates-legacy").click();
+}
+
+async function openFixtureComparison(page) {
+  await openHistoryModal(page);
   await page.getByRole("button", { name: "Consultar resultado" }).first().click();
   await expect(page.locator('textarea[data-comparison-annotation]:visible').first()).toBeVisible();
 }
@@ -157,9 +171,8 @@ test("search shortcuts focus Home search except while typing or with a dialog op
   await expect(input).toBeFocused();
 
   await openAnalysisMenu(page);
-  await page.locator("#btn-historico-comparacoes").click();
+  await openHistoryModal(page);
   const dialog = page.getByRole("dialog");
-  await expect(dialog).toBeVisible();
   await page.keyboard.press("Control+K");
   await page.keyboard.press("/");
   await expect(dialog).toBeVisible();
@@ -216,8 +229,7 @@ test("failed search restores the controls and exposes a recoverable error", asyn
 });
 
 test("delete confirmation opens above the history dialog and cancelling keeps the record", async ({ page }) => {
-  await openAnalysisMenu(page);
-  await page.locator("#btn-historico-comparacoes").click();
+  await openHistoryModal(page);
   const history = page.locator("#modal-historico-comparacoes");
   const deleteButton = history.getByRole("button", { name: /^Excluir atualização de/ }).first();
   await deleteButton.click();
@@ -246,7 +258,8 @@ test("modal traps keyboard focus, restores it on Escape, and passes axe", async 
 
   await page.keyboard.press("Escape");
   await expect(dialog).toBeHidden();
-  const returnFocus = page.locator("#cockpit-tools-trigger");
+  // O modal abriu a partir de "Fluxo completo" na tela do Cockpit: o foco volta para esse botão.
+  const returnFocus = page.locator("#cockpit-sheets-history-legacy");
   await expect(returnFocus).toBeFocused();
 });
 
@@ -343,8 +356,7 @@ test("comparison summary cards jump to their section and clear filters that hide
 });
 
 test("inventory evolution compares two saved updates and shows their row annotations", async ({ page }) => {
-  await openAnalysisMenu(page);
-  await page.locator("#btn-evolucao-atualizacoes").click();
+  await openEvolutionModal(page);
   const dialog = page.locator("#modal-evolucao-atualizacoes");
   await expect(dialog).toBeVisible();
   await expect(page.locator("#resultado-evolucao-atualizacoes")).toContainText("Deixaram de aparecer");
@@ -380,8 +392,7 @@ test("inventory evolution prioritizes categories, filters rows and opens the mat
     },
   };
   await page.route(/\/api\/operacoes\/evolucao\?/, route => route.fulfill({ json: evolution }));
-  await openAnalysisMenu(page);
-  await page.locator("#btn-evolucao-atualizacoes").click();
+  await openEvolutionModal(page);
 
   const dialog = page.locator("#modal-evolucao-atualizacoes");
   const result = dialog.locator("#resultado-evolucao-atualizacoes");
@@ -652,6 +663,9 @@ test("keyboard focus stays visible over component and theme styles", async ({ pa
   ];
   for (const theme of ["dark", "light"]) {
     await page.locator("html").evaluate((root, value) => { root.dataset.theme = value; }, theme);
+    // Nova transferência fica na aba Retirada/Entrega; o clique vem antes do Tab para o foco por teclado seguir visível.
+    await openSidebarIfNeeded(page);
+    await page.locator("#tab-retirada-entrega").click();
     await openAnalysisMenu(page);
     await page.keyboard.press("Tab");
     for (const [selector, width, offset, shadow, ringSelector] of controls) {
@@ -897,6 +911,9 @@ test("stale tickets and new divergences appear in the notification center", asyn
       "3 chamados abertos estão sem atualização há 7 dias ou mais. O mais antigo está parado há 21 dias."
     );
     await expect(divergences.getByRole("heading", { name: "Divergências novas" })).toBeVisible();
+    // v2 (fase 5): cada aviso leva um selo de gravidade.
+    await expect(tickets.locator(".ck-badge")).toHaveText("Urgente");
+    await expect(divergences.locator(".ck-badge")).toHaveText("Atenção");
     await expect(divergences.locator("#alerta-divergencias-novas-texto")).toHaveText(
       "A comparação de 18/10/2026 às 09:00 trouxe 5 linhas de divergência que não estavam na de 11/10/2026 às 08:00: 3 em Localidade divergente e 2 em Séries sem local definido."
     );
@@ -917,10 +934,13 @@ test("stale tickets and new divergences appear in the notification center", asyn
     await trigger.click();
     await divergences.getByRole("button", { name: "Ver evolução" }).click();
     await expect(panel).toBeHidden();
-    await expect(page.locator("#modal-evolucao-atualizacoes")).toBeVisible();
-    await page.keyboard.press("Escape");
+    // v2: "Ver evolução" abre a tela de Evolução (o modal só abre por "Fluxo completo").
+    await expect(page.locator("#cockpit-tool-panels")).toBeVisible();
+    await expect(page.locator("#cockpit-tool-title")).toHaveText("Evolução das atualizações");
     await expect(page.locator("#modal-evolucao-atualizacoes")).toBeHidden();
-    await expect(trigger).toBeFocused();
+    await page.keyboard.press("Escape");
+    await expect(page.locator("#cockpit-tool-panels")).toBeHidden();
+    await expect(page.locator("#cockpit-tools-trigger")).toBeFocused();
 
     await request.get("/__fixture_alertas_painel?estado=somente_os");
     await trigger.click();

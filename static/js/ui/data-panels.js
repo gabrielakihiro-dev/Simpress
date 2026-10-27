@@ -266,8 +266,15 @@
       const destaque = section.querySelector("#ck-os-destaque");
       if (destaque) {
         destaque.hidden = !serie;
-        const forte = el("strong", "", serie);
-        destaque.replaceChildren(forte, doc.createTextNode((apelido ? " · " + apelido : "") + ", o equipamento desta transferência. As linhas dele aparecem destacadas."));
+        const ns = "http://www.w3.org/2000/svg";
+        const icone = doc.createElementNS(ns, "svg");
+        icone.setAttribute("class", "ck-ico ck-ico--sm");
+        icone.setAttribute("aria-hidden", "true");
+        icone.setAttribute("focusable", "false");
+        const uso = doc.createElementNS(ns, "use");
+        uso.setAttribute("href", "#i-link");
+        icone.append(uso);
+        destaque.replaceChildren(icone, doc.createTextNode("Linhas destacadas pertencem a "), el("strong", "", serie), doc.createTextNode((apelido ? " · " + apelido : "") + ", o equipamento desta transferência."));
       }
       const link = doc.getElementById("ck-link-os");
       if (link) {
@@ -282,7 +289,7 @@
       if (!host) return null;
       let section = doc.getElementById("resumo-os-equipamento");
       if (!section) {
-        section = el("section", "ck-cartao ck-os ticket-summary-section");
+        section = el("section", "ck-cartao ck-os");
         section.id = "resumo-os-equipamento";
         section.setAttribute("aria-labelledby", "resumo-os-equipamento-title");
         const head = el("div", "ck-cartao__cab");
@@ -460,56 +467,21 @@
       return String(user.hostname || "Não informado");
     }
 
-    function renderTicketSummaryOrders(record) {
-      const list = el("div", "ticket-summary-orders");
-      record.ordens.forEach(order => {
-        const item = el("div", "ticket-summary-order-item");
-        item.append(renderTicketSummaryOrderButton(order),
-          el("span", "ticket-summary-order-sources", ticketSummarySourceLabel(order.fontes)));
-        list.append(item);
-      });
-      return list;
-    }
-
     let ticketDescriptionSeq = 0;
-    function renderTicketSummaryDescriptions(record) {
-      const descriptions = record.ordens.filter(order => order.fontes.includes("oracle"));
-      const list = el("div", "ticket-summary-descriptions");
-      if (!descriptions.length) {
-        list.append(el("span", "ticket-summary-description", "Descrição não informada"));
-        return list;
+    // Uma linha por OS e fonte (como no Cockpit v2): só a Oracle traz descrição.
+    function renderTicketSummaryDescription(order, source) {
+      const item = el("div", "ck-descricao ticket-summary-description-entry");
+      const text = (source === "oracle" && order.descricao) || "Descrição não informada";
+      item.append(el("p", "ck-descricao__texto ticket-summary-description", text));
+      if (text.length > 90 || text.includes("\n")) {
+        item.id = "resumo-os-descricao-" + (++ticketDescriptionSeq);
+        const more = el("button", "ck-link-btn", "Ver mais");
+        more.type = "button";
+        more.setAttribute("data-expandir", item.id);
+        more.setAttribute("aria-expanded", "false");
+        item.append(more);
       }
-      descriptions.forEach(order => {
-        const item = el("div", "ck-descricao ticket-summary-description-entry");
-        const text = order.descricao || "Descrição não informada";
-        item.append(el("p", "ck-descricao__texto ticket-summary-description", text));
-        if (text.length > 90 || text.includes("\n")) {
-          item.id = "resumo-os-descricao-" + (++ticketDescriptionSeq);
-          const more = el("button", "ck-link-btn", "Ver mais");
-          more.type = "button";
-          more.setAttribute("data-expandir", item.id);
-          more.setAttribute("aria-expanded", "false");
-          item.append(more);
-        }
-        list.append(item);
-      });
-      return list;
-    }
-
-    function renderTicketOsLinkEditors(record, links, canSave, statusMessage) {
-      const list = el("div", "ticket-os-link-editors");
-      record.ordens.forEach(order => {
-        order.fontes.forEach(source => {
-          const sourceRecord = { fonte: source, serie: record.serie, os: order.os };
-          const item = el("div", "ticket-os-link-entry");
-          item.append(el("span", "ticket-os-link-entry-label",
-            ticketSummarySourceLabel([source]) + " · OS " + order.os));
-          item.append(renderTicketOsLinkEditor(sourceRecord,
-            links.get(ticketOsLinkKey(sourceRecord)), canSave, statusMessage));
-          list.append(item);
-        });
-      });
-      return list;
+      return item;
     }
 
     function renderTicketOsLinkEditor(record, saved, canSave, statusMessage) {
@@ -520,7 +492,7 @@
       }
       const form = el("form", "ticket-os-link-form");
       const year = Number(saved?.ano) || new Date().getFullYear();
-      const label = el("label", "ticket-os-link-label", "Número do chamado UTIC");
+      const label = el("label", "ck-sr ticket-os-link-label", "Número do chamado UTIC");
       const controls = el("div", "ck-utic ticket-os-link-controls");
       const prefix = el("span", "ticket-os-link-prefix", `UTIC-${year}-`);
       const input = el("input", "ck-entrada ck-entrada--sm ticket-os-link-input");
@@ -590,15 +562,15 @@
       status.textContent = userFailure
         ? orderCount + " OS agrupadas por série; dados de usuário e hostname estão indisponíveis."
         : orderCount + " OS · " + records.length + (records.length === 1 ? " série" : " séries");
-      const tableWrap = el("div", "ticket-summary-table-wrap");
-      const table = el("table", "ck-tabela ticket-summary-table");
+      const table = el("table", "ck-tabela ck-tabela--cards ticket-summary-table");
+      table.id = "ck-os-tabela";
       const cols = el("colgroup");
       ["fonte", "serie", "os", "usuario", "host", "chamado", ""].forEach(name => cols.append(el("col", name ? "ck-col-" + name : "")));
       table.append(cols);
-      table.append(el("caption", "sr-only", "Ordens de serviço associadas a equipamentos"));
+      table.append(el("caption", "ck-sr", "Ordens de serviço associadas a equipamentos"));
       const header = doc.createElement("thead");
       const headRow = doc.createElement("tr");
-      ["Fonte", "Série", "OS", "Usuário", "Hostname", "Chamado", "Descrição do chamado"].forEach(title => {
+      ["Fonte", "Série", "OS", "Usuário", "Hostname", "Chamado", "Descrição"].forEach(title => {
         const cell = el("th", "", title);
         cell.scope = "col";
         headRow.append(cell);
@@ -606,57 +578,37 @@
       header.append(headRow);
       table.append(header);
       const body = doc.createElement("tbody");
-      const mobileCards = el("div", "ticket-summary-mobile");
       records.forEach(record => {
         const user = users[record.serie];
-        const values = [ticketSummarySourceLabel(record.fontes), record.serie, "",
-          userFailure ? "Indisponível" : ticketUserLabel(user), userFailure ? "Indisponível" : ticketHostnameLabel(user),
-          "", ""];
-        const row = doc.createElement("tr");
-        row.dataset.serial = record.serie;
-        row.dataset.osCount = String(record.ordens.length);
-        values.forEach((value, index) => {
-          const cell = el("td", "", value);
-          cell.setAttribute("data-label", ["Fonte", "Série", "OS", "Usuário", "Hostname", "Chamado", "Descrição"][index]);
-          if (index === 5) {
-            cell.textContent = "";
-            cell.append(renderTicketOsLinkEditors(record, links, canSave, status));
-          } else if (index === 2) {
-            cell.textContent = "";
-            cell.append(renderTicketSummaryOrders(record));
-          } else if (index === 6) {
-            cell.textContent = "";
-            cell.append(renderTicketSummaryDescriptions(record));
-          }
-          row.append(cell);
-        });
-        body.append(row);
-
-        const card = el("article", "ck-cartao ticket-summary-card");
-        card.dataset.serial = record.serie;
-        const cardHead = el("div", "ticket-summary-card-head");
-        cardHead.append(el("span", "ticket-summary-source", ticketSummarySourceLabel(record.fontes)),
-          el("span", "ticket-summary-order-count", record.ordens.length + " OS"));
-        card.append(cardHead);
-        card.append(renderTicketSummaryOrders(record));
-        const identifiers = el("dl", "ticket-summary-identifiers");
-        [["Série", record.serie], ["Usuário", userFailure ? "Indisponível" : ticketUserLabel(user)],
-          ["Hostname", userFailure ? "Indisponível" : ticketHostnameLabel(user)]].forEach(([label, value]) => {
-          identifiers.append(el("dt", "", label), el("dd", "", value));
-        });
-        card.append(identifiers);
-        const link = el("div", "ticket-summary-card-link");
-        link.append(el("span", "ticket-summary-field-label", "Chamado"),
-          renderTicketOsLinkEditors(record, links, canSave, status));
-        card.append(link);
-        const description = renderTicketSummaryDescriptions(record);
-        description.setAttribute("data-label", "Descrição do chamado");
-        card.append(description);
-        mobileCards.append(card);
+        const userText = userFailure ? "Indisponível" : ticketUserLabel(user);
+        const hostText = userFailure ? "Indisponível" : ticketHostnameLabel(user);
+        record.ordens.forEach(order => order.fontes.forEach(source => {
+          const row = doc.createElement("tr");
+          row.dataset.serial = record.serie;
+          row.dataset.osCount = "1";
+          const cell = (label, className) => {
+            const td = el("td", className || "");
+            td.setAttribute("data-label", label);
+            row.append(td);
+            return td;
+          };
+          cell("Fonte").append(el("span", "ck-tag", ticketSummarySourceLabel([source])));
+          cell("Série", "ck-mono").textContent = record.serie;
+          const orderRecord = { serie: record.serie, os: order.os, fontes: [source] };
+          const osButton = renderTicketSummaryOrderButton(orderRecord);
+          osButton.className = "ck-link-btn ck-mono ticket-summary-order-link";
+          cell("OS", "ck-mono").append(osButton);
+          cell("Usuário").textContent = userText;
+          cell("Hostname", "ck-mono").textContent = hostText;
+          const sourceRecord = { fonte: source, serie: record.serie, os: order.os };
+          cell("Chamado", "ck-td--largo").append(renderTicketOsLinkEditor(sourceRecord,
+            links.get(ticketOsLinkKey(sourceRecord)), canSave, status));
+          cell("Descrição", "ck-td--largo").append(renderTicketSummaryDescription(order, source));
+          body.append(row);
+        }));
       });
       table.append(body);
-      tableWrap.append(table);
-      content.append(tableWrap, mobileCards);
+      content.append(table);
       section.querySelector(".ticket-summary-content")?.remove();
       section.append(content);
       section.setAttribute("aria-busy", "false");

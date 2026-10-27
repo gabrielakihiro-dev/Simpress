@@ -123,6 +123,7 @@
     app.carregarEstadoEntra();
     app.inicializarAlertaBaseDesatualizada();
     app.inicializarAlertasOsDivergencias();
+    app.inicializarProntidao();
     app.inicializarAutomacao();
   }
 

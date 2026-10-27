@@ -8,8 +8,8 @@
   <link rel="icon" type="image/svg+xml" href="/static/favicon.svg">
 
   <!-- CSS order is intentional: vendor utilities, design tokens, app styles, then focused refinements. -->
-  <link rel="stylesheet" href="/static/styles/ck-tokens.css">
   <link rel="stylesheet" href="/static/vendor/fonts.css">
+  <link rel="stylesheet" href="/static/styles/ck-tokens.css">
   <link rel="stylesheet" href="/static/vendor/tailwind-4.3.3.css">
   <link rel="stylesheet" href="/static/styles/tokens.css">
   <link rel="stylesheet" href="/static/styles/nocturne.css">
@@ -118,16 +118,21 @@
       <summary class="ck-chip__gatilho" aria-controls="readiness-content">
         <span id="stat-base-dot" class="ck-chip__ponto" aria-hidden="true"></span>
         <span id="readiness-summary-short" class="ck-chip__rotulo" role="status" aria-live="polite" aria-atomic="true">Verificando…</span>
+        <svg class="ck-ico ck-ico--xs" aria-hidden="true" focusable="false"><use href="#i-chevron-down"></use></svg>
         <span id="readiness-title" class="ck-sr">Disponibilidade das funções</span>
       </summary>
-      <div id="readiness-content" class="ck-chip__painel">
+      <div id="readiness-content" class="ck-pront">
+        <div class="ck-pront__cab">
+          <span class="ck-pront__cab-textos"><span class="ck-pront__kicker">Prontidão da base</span><span class="ck-pront__cab-titulo" id="readiness-popover-titulo">Verificando…</span></span>
+          <button type="button" id="readiness-fechar" class="ck-btn ck-btn--icone ck-btn--fantasma ck-btn--sm" aria-label="Fechar"><svg class="ck-ico ck-ico--sm" aria-hidden="true" focusable="false"><use href="#i-x"></use></svg></button>
+        </div>
         <span id="readiness-summary" class="ck-sr" role="status" aria-live="polite" aria-atomic="true">Verificando os arquivos locais…</span>
-        <dl class="ck-chip__dados">
-          <div><dt>Equipamentos</dt><dd><strong id="stat-equipamentos">Carregando…</strong> <span id="stat-equipamentos-rotulo">equipamentos</span></dd></div>
-          <div><dt>Regionais</dt><dd><strong id="stat-unidades">Carregando…</strong></dd></div>
-          <div><dt>Contrato</dt><dd><strong>16467</strong></dd></div>
+        <dl class="ck-pront__resumo">
+          <div class="ck-pront__par"><dt>Equipamentos</dt><dd><strong id="stat-equipamentos">Carregando…</strong> <span id="stat-equipamentos-rotulo">equipamentos</span></dd></div>
+          <div class="ck-pront__par"><dt>Regionais</dt><dd><strong id="stat-unidades">Carregando…</strong></dd></div>
+          <div class="ck-pront__par"><dt>Contrato</dt><dd class="ck-mono"><strong>16467</strong></dd></div>
         </dl>
-        <div id="readiness-details-content" class="readiness-details-content"></div>
+        <ul id="readiness-details-content" class="ck-pront__lista" aria-label="Fontes da base"></ul>
       </div>
     </details>
     <span id="cockpit-automation-shell-status" class="ck-chip" data-state="idle" aria-live="polite" aria-atomic="true">
@@ -147,20 +152,16 @@
           <button type="button" id="btn-historico-apelidos" class="ck-menu__item" role="menuitem" data-on-click="abrirPainelCockpit" data-args='["apelidos"]'><svg class="ck-ico" aria-hidden="true" focusable="false"><use href="#i-history"></use></svg><span class="ck-menu__rotulo">Histórico de apelidos</span><kbd aria-hidden="true">F7</kbd></button>
           <button type="button" id="btn-relatorio-mensal" class="ck-menu__item" role="menuitem" data-on-click="abrirPainelCockpit" data-args='["relatorio"]'><svg class="ck-ico" aria-hidden="true" focusable="false"><use href="#i-sheet"></use></svg><span class="ck-menu__rotulo">Relatório mensal</span><kbd aria-hidden="true">F8</kbd></button>
         </div>
-        <div class="ck-menu__grupo" role="group" aria-labelledby="ck-menu-g-transf">
-          <p class="ck-menu__titulo" id="ck-menu-g-transf">Transferência</p>
-          <button type="button" id="btn-nova-transferencia" class="ck-menu__item" role="menuitem" data-on-click="resetarFormulario"><svg class="ck-ico" aria-hidden="true" focusable="false"><use href="#i-rotate"></use></svg><span class="ck-menu__rotulo">Nova transferência</span></button>
-        </div>
         <div class="ck-menu__grupo" role="group" aria-labelledby="ck-menu-g-planilhas">
           <p class="ck-menu__titulo" id="ck-menu-g-planilhas">Planilhas</p>
-          <button type="button" id="btn-atualizar-planilhas" class="ck-menu__item" role="menuitem" data-on-click="abrirModalAtualizarPlanilhas"><svg class="ck-ico" aria-hidden="true" focusable="false"><use href="#i-upload"></use></svg><span class="ck-menu__rotulo">Atualizar planilhas</span></button>
+          <button type="button" id="btn-atualizar-planilhas" class="ck-menu__item" role="menuitem" data-on-click="abrirPainelCockpit" data-args='["planilhas"]'><svg class="ck-ico" aria-hidden="true" focusable="false"><use href="#i-upload"></use></svg><span class="ck-menu__rotulo">Atualizar planilhas</span></button>
           <button type="button" id="btn-exportar-equipamentos" class="ck-menu__item hidden" role="menuitem" data-on-click="exportarEquipamentosAtualizados" aria-label="Exportar planilha Excel com apelidos e IdCliente atualizados" aria-labelledby="label-exportar-equipamentos"><svg class="ck-ico" aria-hidden="true" focusable="false"><use href="#i-download"></use></svg><span class="ck-menu__rotulo" id="label-exportar-equipamentos">Exportar Excel</span></button>
-          <button type="button" id="btn-historico-comparacoes" class="ck-menu__item" role="menuitem" data-on-click="abrirModalHistoricoComparacoes"><svg class="ck-ico" aria-hidden="true" focusable="false"><use href="#i-clock"></use></svg><span class="ck-menu__rotulo">Histórico planilhas</span><span id="badge-total-historico-comparacoes" class="ck-badge" aria-label="0 registros">0</span></button>
+          <button type="button" id="btn-historico-comparacoes" class="ck-menu__item" role="menuitem" data-on-click="abrirPainelCockpit" data-args='["historico-planilhas"]'><svg class="ck-ico" aria-hidden="true" focusable="false"><use href="#i-clock"></use></svg><span class="ck-menu__rotulo">Histórico planilhas</span><span id="badge-total-historico-comparacoes" class="ck-badge" aria-label="0 registros">0</span></button>
         </div>
         <div class="ck-menu__grupo" role="group" aria-labelledby="ck-menu-g-hist">
           <p class="ck-menu__titulo" id="ck-menu-g-hist">Histórico e catálogo</p>
-          <button type="button" id="btn-evolucao-atualizacoes" class="ck-menu__item" role="menuitem" data-on-click="abrirEvolucaoAtualizacoes"><svg class="ck-ico" aria-hidden="true" focusable="false"><use href="#i-activity"></use></svg><span class="ck-menu__rotulo">Evolução das atualizações</span></button>
-          <button type="button" id="btn-catalogo-unidades" class="ck-menu__item" role="menuitem" data-on-click="abrirModalGerenciarUnidades"><svg class="ck-ico" aria-hidden="true" focusable="false"><use href="#i-pin"></use></svg><span class="ck-menu__rotulo">Catálogo de unidades</span></button>
+          <button type="button" id="btn-evolucao-atualizacoes" class="ck-menu__item" role="menuitem" data-on-click="abrirPainelCockpit" data-args='["evolucao"]'><svg class="ck-ico" aria-hidden="true" focusable="false"><use href="#i-activity"></use></svg><span class="ck-menu__rotulo">Evolução das atualizações</span></button>
+          <button type="button" id="btn-catalogo-unidades" class="ck-menu__item" role="menuitem" data-on-click="abrirPainelCockpit" data-args='["unidades"]'><svg class="ck-ico" aria-hidden="true" focusable="false"><use href="#i-pin"></use></svg><span class="ck-menu__rotulo">Catálogo de unidades</span></button>
         </div>
       </div>
     </details>
@@ -175,15 +176,15 @@
         <div class="ck-sino__lista">
           <section id="alerta-os-paradas" class="ck-aviso" data-gravidade="urgente" role="status" aria-labelledby="alerta-os-paradas-titulo" data-state="loading" hidden>
             <span class="ck-aviso__icone"><svg class="ck-ico" aria-hidden="true" focusable="false"><use href="#i-erro"></use></svg></span>
-            <div class="ck-aviso__topo"><h3 id="alerta-os-paradas-titulo" class="ck-aviso__titulo">OS paradas</h3></div>
+            <div class="ck-aviso__topo"><span class="ck-badge" data-status="erro">Urgente</span><h3 id="alerta-os-paradas-titulo" class="ck-aviso__titulo">OS paradas</h3></div>
             <p id="alerta-os-paradas-texto" class="ck-aviso__texto"></p>
             <button type="button" id="btn-alerta-os-paradas" data-on-click="abrirAcompanhamentoChamados" class="ck-btn ck-btn--primario ck-btn--sm ck-aviso__acao">Ver chamados<svg class="ck-ico ck-ico--sm" aria-hidden="true" focusable="false"><use href="#i-arrow-right"></use></svg></button>
           </section>
           <section id="alerta-divergencias-novas" class="ck-aviso" data-gravidade="atencao" role="status" aria-labelledby="alerta-divergencias-novas-titulo" data-state="loading" hidden>
             <span class="ck-aviso__icone"><svg class="ck-ico" aria-hidden="true" focusable="false"><use href="#i-alerta"></use></svg></span>
-            <div class="ck-aviso__topo"><h3 id="alerta-divergencias-novas-titulo" class="ck-aviso__titulo">Divergências novas</h3></div>
+            <div class="ck-aviso__topo"><span class="ck-badge" data-status="alerta">Atenção</span><h3 id="alerta-divergencias-novas-titulo" class="ck-aviso__titulo">Divergências novas</h3></div>
             <p id="alerta-divergencias-novas-texto" class="ck-aviso__texto"></p>
-            <button type="button" id="btn-alerta-divergencias-novas" data-on-click="abrirEvolucaoAtualizacoes" class="ck-btn ck-btn--secundario ck-btn--sm ck-aviso__acao">Ver evolução</button>
+            <button type="button" id="btn-alerta-divergencias-novas" data-on-click="abrirPainelCockpit" data-args='["evolucao"]' class="ck-btn ck-btn--secundario ck-btn--sm ck-aviso__acao">Ver evolução</button>
           </section>
         </div>
       </section>
@@ -275,7 +276,7 @@
               <span>Transporte</span>
               <kbd class="ck-kbd" aria-hidden="true">T</kbd>
             </button>
-            <button type="button" data-on-click="abrirModalEditarEquipamento" class="ck-btn ck-btn--secundario" title="Editar dados cadastrais deste equipamento (E)">
+            <button type="button" id="btn-editar-equipamento" data-on-click="editarDadosCadastrais" class="ck-btn ck-btn--secundario" aria-pressed="false" aria-controls="ck-dados-equipamento" title="Editar dados cadastrais deste equipamento (E)">
               <svg class="ck-ico" aria-hidden="true" focusable="false"><use href="#i-pencil"></use></svg>
               <span>Editar</span>
               <kbd class="ck-kbd" aria-hidden="true">E</kbd>
@@ -286,19 +287,19 @@
           </div>
         </header>
 
-        <dl class="ck-dados">
+        <dl class="ck-dados" id="ck-dados-equipamento">
           <div class="ck-dado">
             <div class="ck-dado__textos"><dt>Série</dt><dd class="ck-mono" id="grid-serial">—</dd></div>
             <button type="button" data-on-click="copiarSerieAtual" class="ck-btn ck-btn--fantasma ck-btn--mini" aria-label="Copiar série"><svg class="ck-ico ck-ico--xs" aria-hidden="true" focusable="false"><use href="#i-copy"></use></svg></button>
           </div>
           <div class="ck-dado">
-            <div class="ck-dado__textos"><dt>Apelido</dt><dd class="ck-mono" id="grid-apelido">—</dd></div>
+            <div class="ck-dado__textos"><dt>Apelido</dt><dd class="ck-mono" id="grid-apelido" data-campo="apelido">—</dd></div>
             <button type="button" data-on-click="abrirModalEditarApelido" class="ck-btn ck-btn--fantasma ck-btn--mini" aria-label="Editar apelido"><svg class="ck-ico ck-ico--xs" aria-hidden="true" focusable="false"><use href="#i-pencil"></use></svg></button>
           </div>
           <div class="ck-dado" id="ck-dado-usuario">
             <div class="ck-dado__textos">
               <dt id="ck-rotulo-usuario">Usuário</dt>
-              <dd>
+              <dd data-campo="usuario">
                 <span id="card-usuarios-logados" class="hidden">—</span>
                 <form id="form-usuario-manual" class="ck-edicao hidden" data-on-submit="salvarUsuarioLogado" autocomplete="off">
                   <input id="input-usuario-manual" class="ck-entrada ck-entrada--sm" type="text" maxlength="160" placeholder="Usuário" aria-labelledby="ck-rotulo-usuario">
@@ -314,7 +315,7 @@
           <div class="ck-dado" id="ck-dado-login">
             <div class="ck-dado__textos">
               <dt id="ck-rotulo-login">Login</dt>
-              <dd>
+              <dd data-campo="login">
                 <span id="card-nome-pessoa" class="hidden">—</span>
                 <form id="form-nome-pessoa" class="ck-edicao hidden" data-on-submit="salvarNomePessoa" autocomplete="off">
                   <input id="input-nome-pessoa" class="ck-entrada ck-entrada--sm" type="text" maxlength="300" placeholder="Nome da pessoa" aria-labelledby="ck-rotulo-login">
@@ -326,6 +327,7 @@
           </div>
           <div class="ck-dado">
             <div class="ck-dado__textos"><dt>Local atual</dt><dd id="card-localizacao">—</dd></div>
+            <button type="button" data-on-click="abrirModalEditarEquipamento" class="ck-btn ck-btn--fantasma ck-btn--mini" aria-label="Editar no cadastro completo" title="Editar no cadastro completo"><svg class="ck-ico ck-ico--xs" aria-hidden="true" focusable="false"><use href="#i-pencil"></use></svg></button>
           </div>
           <div class="ck-dado">
             <div class="ck-dado__textos"><dt>CEP</dt><dd class="ck-mono" id="grid-cep">—</dd></div>
@@ -340,6 +342,14 @@
             <button type="button" data-on-click="copiarDadoLocalAtual" data-args='["instalacao"]' class="ck-btn ck-btn--fantasma ck-btn--mini" aria-label="Copiar CNPJ de instalação"><svg class="ck-ico ck-ico--xs" aria-hidden="true" focusable="false"><use href="#i-copy"></use></svg></button>
           </div>
         </dl>
+
+        <form id="form-editar-equipamento" class="ck-dados-edicao" data-on-submit="salvarDadosCadastrais" autocomplete="off" hidden>
+          <p class="ck-dados-edicao__info" role="status" aria-live="polite"><svg class="ck-ico ck-ico--sm" aria-hidden="true" focusable="false"><use href="#i-pencil"></use></svg><span id="ck-dados-edicao-texto">Editando dados cadastrais · nenhuma alteração</span></p>
+          <div class="ck-dados-edicao__acoes">
+            <button type="button" class="ck-btn ck-btn--secundario ck-btn--sm" data-cancelar-dados>Cancelar <kbd class="ck-kbd" aria-hidden="true">Esc</kbd></button>
+            <button type="submit" id="btn-salvar-dados-cadastrais" class="ck-btn ck-btn--primario ck-btn--sm">Salvar alterações</button>
+          </div>
+        </form>
 
         <p id="card-id-cliente" class="hidden ck-detalhe__cliente"></p>
         <p id="card-cnpj-atual" class="hidden"></p>
@@ -463,6 +473,9 @@ Horário disponível para atendimento:</textarea>
         </a>
         <button type="button" id="btn-trocar-equipamento" data-on-click="trocarEquipamentoTransporte" class="ck-btn ck-btn--secundario ck-btn--sm" data-show="selected">
           <svg class="ck-ico ck-ico--sm" aria-hidden="true" focusable="false"><use href="#i-search"></use></svg><span>Trocar equipamento</span>
+        </button>
+        <button type="button" id="btn-nova-transferencia" data-on-click="resetarFormulario" class="ck-btn ck-btn--icone ck-btn--secundario ck-btn--sm" aria-label="Nova transferência" title="Nova transferência">
+          <svg class="ck-ico ck-ico--sm" aria-hidden="true" focusable="false"><use href="#i-rotate"></use></svg>
         </button>
         <button
           type="button"
@@ -923,6 +936,127 @@ Horário disponível para atendimento:</textarea>
           <div class="ck-rel__corpo">
             <div id="cockpit-monthly-details" class="ck-rel__detalhe" aria-label="Detalhamento do mês"></div>
             <aside class="ck-det-bloco"><h2 class="ck-det__titulo">Prévia para a gestão</h2><pre id="cockpit-monthly-preview" class="ck-rel__texto" aria-live="polite"></pre></aside>
+          </div>
+        </section>
+
+        <section class="ck-ferr-painel" data-cockpit-tool-panel="planilhas" aria-labelledby="cockpit-sheets-heading" hidden>
+          <h2 id="cockpit-sheets-heading" class="sr-only">Atualizar planilhas</h2>
+          <div class="ck-barra-ferr">
+            <p id="cockpit-sheets-status" class="ck-barra-ferr__nota" role="status" aria-live="polite">Carregando…</p>
+            <button type="button" id="cockpit-sheets-refresh" class="ck-btn ck-btn--secundario">Atualizar</button>
+            <button type="button" id="cockpit-sheets-legacy" class="ck-btn ck-btn--primario" data-on-click="abrirModalAtualizarPlanilhas">Fluxo completo</button>
+          </div>
+          <div id="cockpit-sheets-kpis" class="ck-kpis" role="group" aria-label="Situação das planilhas"></div>
+          <div class="ck-dividido">
+            <div class="ck-dividido__lista">
+              <table class="ck-tabela ck-tabela--cards" id="cockpit-sheets-list">
+                <thead><tr><th scope="col">Planilha</th><th scope="col">Arquivo atual</th><th scope="col" class="ck-th--dir">Linhas</th><th scope="col">Atualizado</th><th scope="col">Situação</th></tr></thead>
+                <tbody id="cockpit-sheets-list-body"></tbody>
+              </table>
+            </div>
+            <aside class="ck-dividido__detalhe" id="cockpit-sheets-detail" aria-label="Detalhes da planilha selecionada">
+              <div class="ck-det__cab"><div class="ck-det__linha"><span class="ck-det__titulo" id="cockpit-sheets-detail-title">—</span><span id="cockpit-sheets-detail-badge"></span></div><span class="ck-det__sub" id="cockpit-sheets-detail-sub">Selecione uma planilha.</span></div>
+              <div class="ck-det__corpo">
+                <h2 class="ck-det__titulo">Ao atualizar</h2>
+                <ol class="ck-tempo">
+                  <li class="ck-tempo__item"><span class="ck-tempo__marca" data-status="info" aria-hidden="true"></span><div><p class="ck-tempo__titulo">A planilha é importada e substitui a versão atual</p></div></li>
+                  <li class="ck-tempo__item"><span class="ck-tempo__marca" aria-hidden="true"></span><div><p class="ck-tempo__titulo">A comparação com o Endpoint é refeita</p></div></li>
+                  <li class="ck-tempo__item"><span class="ck-tempo__marca" aria-hidden="true"></span><div><p class="ck-tempo__titulo">O resultado entra no Histórico planilhas</p></div></li>
+                </ol>
+              </div>
+              <div class="ck-det__rodape"><button type="button" id="cockpit-sheets-to-history" class="ck-btn ck-btn--secundario ck-btn--bloco" data-on-click="abrirPainelCockpit" data-args='["historico-planilhas"]'><svg class="ck-ico ck-ico--sm" aria-hidden="true" focusable="false"><use href="#i-clock"></use></svg>Histórico planilhas</button><button type="button" id="cockpit-sheets-submit" class="ck-btn ck-btn--primario ck-btn--bloco" data-on-click="abrirModalAtualizarPlanilhas"><svg class="ck-ico ck-ico--sm" aria-hidden="true" focusable="false"><use href="#i-upload"></use></svg>Atualizar planilhas</button></div>
+            </aside>
+          </div>
+        </section>
+
+        <section class="ck-ferr-painel" data-cockpit-tool-panel="historico-planilhas" aria-labelledby="cockpit-sheets-history-heading" hidden>
+          <h2 id="cockpit-sheets-history-heading" class="sr-only">Histórico planilhas</h2>
+          <div id="cockpit-sheets-history-kpis" class="ck-kpis" role="group" aria-label="Resumo do histórico de planilhas"></div>
+          <div class="ck-barra-ferr">
+            <label class="ck-campo"><span class="ck-campo__rotulo">Buscar no histórico</span><input class="ck-entrada ck-entrada--sm" id="cockpit-sheets-history-search" type="search" autocomplete="off" placeholder="Data ou arquivo"></label>
+            <span id="cockpit-sheets-history-status" class="ck-barra-ferr__nota" role="status" aria-live="polite">Carregando…</span>
+            <span class="ck-espaco"></span>
+            <button type="button" id="cockpit-sheets-history-export" class="ck-btn ck-btn--secundario ck-btn--sm" disabled><svg class="ck-ico ck-ico--sm" aria-hidden="true" focusable="false"><use href="#i-download"></use></svg>Exportar</button>
+            <button type="button" id="cockpit-sheets-history-legacy" class="ck-btn ck-btn--primario ck-btn--sm" data-on-click="abrirModalHistoricoComparacoes">Fluxo completo</button>
+          </div>
+          <div class="ck-dividido">
+            <div class="ck-dividido__lista">
+              <table class="ck-tabela ck-tabela--cards" id="cockpit-sheets-history-list">
+                <thead><tr><th scope="col">Data</th><th scope="col">Arquivo</th><th scope="col" class="ck-th--dir">Equipamentos</th><th scope="col" class="ck-th--dir">Iguais</th><th scope="col" class="ck-th--dir">Divergentes</th><th scope="col" class="ck-th--dir">Sem correspondência</th></tr></thead>
+                <tbody id="cockpit-sheets-history-list-body"></tbody>
+              </table>
+            </div>
+            <aside class="ck-dividido__detalhe" id="cockpit-sheets-history-detail" aria-label="Detalhes do registro selecionado">
+              <div class="ck-det__cab"><div class="ck-det__linha"><span class="ck-det__titulo" id="cockpit-sheets-history-detail-title">—</span><span id="cockpit-sheets-history-detail-tag"></span></div><span class="ck-det__sub ck-mono" id="cockpit-sheets-history-detail-sub">Selecione um registro.</span></div>
+              <div class="ck-det__corpo">
+                <dl class="ck-pares" id="cockpit-sheets-history-detail-pares"></dl>
+                <div class="ck-nota" id="cockpit-sheets-history-detail-nota" data-status="alerta" hidden><svg class="ck-ico" aria-hidden="true" focusable="false"><use href="#i-alerta"></use></svg><span id="cockpit-sheets-history-detail-nota-texto"></span></div>
+              </div>
+              <div class="ck-det__rodape"><button type="button" id="cockpit-sheets-history-to-evolution" class="ck-btn ck-btn--secundario ck-btn--bloco" data-on-click="abrirPainelCockpit" data-args='["evolucao"]'><svg class="ck-ico ck-ico--sm" aria-hidden="true" focusable="false"><use href="#i-activity"></use></svg>Ver evolução</button><button type="button" id="cockpit-sheets-history-to-comparison" class="ck-btn ck-btn--primario ck-btn--bloco" data-on-click="abrirPainelCockpit" data-args='["comparacao"]'><svg class="ck-ico ck-ico--sm" aria-hidden="true" focusable="false"><use href="#i-dashboard"></use></svg>Abrir comparação</button></div>
+            </aside>
+          </div>
+        </section>
+
+        <section class="ck-ferr-painel" data-cockpit-tool-panel="evolucao" aria-labelledby="cockpit-updates-heading" hidden>
+          <h2 id="cockpit-updates-heading" class="sr-only">Evolução das atualizações</h2>
+          <div class="ck-barra-ferr">
+            <p id="cockpit-updates-status" class="ck-barra-ferr__nota" role="status" aria-live="polite">Carregando…</p>
+            <button type="button" id="cockpit-updates-refresh" class="ck-btn ck-btn--secundario">Atualizar</button>
+            <button type="button" id="cockpit-updates-legacy" class="ck-btn ck-btn--primario" data-on-click="abrirEvolucaoAtualizacoes">Fluxo completo</button>
+          </div>
+          <div id="cockpit-updates-kpis" class="ck-kpis" role="group" aria-label="Variação entre as duas últimas atualizações"></div>
+          <div class="ck-dividido">
+            <div class="ck-dividido__lista ck-rel__corpo">
+              <section class="ck-cartao ck-rel__largo" aria-labelledby="ck-evo-graf">
+                <div class="ck-cartao__cab"><h2 class="ck-cartao__titulo" id="ck-evo-graf">Divergências por atualização</h2><span class="ck-espaco"></span><span class="ck-legenda"><span class="ck-legenda__item"><span class="ck-legenda__cor ck-legenda__cor--abertos"></span>Divergentes</span><span class="ck-legenda__item"><span class="ck-legenda__cor ck-legenda__cor--concluidos"></span>Sem correspondência</span></span></div>
+                <div class="ck-cartao__corpo">
+                  <svg id="cockpit-updates-chart" class="ck-graf" viewBox="0 0 400 150" preserveAspectRatio="none" role="img" aria-label="Sem dados para o gráfico."><line class="ck-graf__base" x1="0" y1="149.5" x2="400" y2="149.5"/></svg>
+                  <div id="cockpit-updates-chart-labels" class="ck-graf__rotulos" aria-hidden="true"></div>
+                </div>
+              </section>
+              <section class="ck-cartao ck-rel__largo" aria-labelledby="ck-evo-tabela">
+                <div class="ck-cartao__cab"><h2 class="ck-cartao__titulo" id="ck-evo-tabela">Variação entre atualizações</h2></div>
+                <div class="ck-cartao__corpo">
+                  <table class="ck-tabela ck-tabela--cards" id="cockpit-updates-table">
+                    <thead><tr><th scope="col">Atualização</th><th scope="col" class="ck-th--dir">Equipamentos</th><th scope="col" class="ck-th--dir">Divergentes</th><th scope="col" class="ck-th--dir">Resolvidas</th><th scope="col" class="ck-th--dir">Novas</th></tr></thead>
+                    <tbody id="cockpit-updates-table-body"></tbody>
+                  </table>
+                </div>
+              </section>
+            </div>
+            <aside class="ck-dividido__detalhe" id="cockpit-updates-detail" aria-labelledby="ck-evo-novas">
+              <div class="ck-det__cab"><div class="ck-det__linha"><h2 class="ck-det__titulo" id="ck-evo-novas">Divergências novas</h2><span id="cockpit-updates-detail-badge"></span></div><span class="ck-det__sub" id="cockpit-updates-detail-sub"></span></div>
+              <div class="ck-det__corpo">
+                <ol class="ck-tempo" id="cockpit-updates-new-list"></ol>
+                <p id="cockpit-updates-new-empty" class="ck-lista__vazio">Carregando…</p>
+              </div>
+              <div class="ck-det__rodape"><button type="button" id="cockpit-updates-to-history" class="ck-btn ck-btn--secundario ck-btn--bloco" data-on-click="abrirPainelCockpit" data-args='["historico-planilhas"]'><svg class="ck-ico ck-ico--sm" aria-hidden="true" focusable="false"><use href="#i-clock"></use></svg>Histórico planilhas</button><button type="button" id="cockpit-updates-to-comparison" class="ck-btn ck-btn--primario ck-btn--bloco" data-on-click="abrirPainelCockpit" data-args='["comparacao"]'><svg class="ck-ico ck-ico--sm" aria-hidden="true" focusable="false"><use href="#i-dashboard"></use></svg>Abrir comparação</button></div>
+            </aside>
+          </div>
+        </section>
+
+        <section class="ck-ferr-painel" data-cockpit-tool-panel="unidades" aria-labelledby="cockpit-units-heading" hidden>
+          <h2 id="cockpit-units-heading" class="sr-only">Catálogo de unidades</h2>
+          <div id="cockpit-units-kpis" class="ck-kpis" role="group" aria-label="Resumo do catálogo"></div>
+          <div class="ck-barra-ferr">
+            <label class="ck-campo"><span class="ck-campo__rotulo">Buscar unidade</span><input class="ck-entrada ck-entrada--sm" id="cockpit-units-search" type="search" autocomplete="off" placeholder="Nome, cidade ou CNPJ"></label>
+            <span id="cockpit-units-status" class="ck-barra-ferr__nota" role="status" aria-live="polite">Carregando…</span>
+            <span class="ck-espaco"></span>
+            <button type="button" id="cockpit-units-new" class="ck-btn ck-btn--secundario ck-btn--sm" data-on-click="abrirModalGerenciarUnidades"><svg class="ck-ico ck-ico--sm" aria-hidden="true" focusable="false"><use href="#i-plus"></use></svg>Nova unidade</button>
+            <button type="button" id="cockpit-units-legacy" class="ck-btn ck-btn--primario ck-btn--sm" data-on-click="abrirModalGerenciarUnidades">Fluxo completo</button>
+          </div>
+          <div class="ck-dividido">
+            <div class="ck-dividido__lista">
+              <table class="ck-tabela ck-tabela--cards" id="cockpit-units-list">
+                <thead><tr><th scope="col">Unidade</th><th scope="col">Cidade</th><th scope="col">CNPJ</th></tr></thead>
+                <tbody id="cockpit-units-list-body"></tbody>
+              </table>
+            </div>
+            <aside class="ck-dividido__detalhe" id="cockpit-units-detail" aria-label="Detalhes da unidade selecionada">
+              <div class="ck-det__cab"><div class="ck-det__linha"><span class="ck-det__titulo" id="cockpit-units-detail-title">—</span></div><span class="ck-det__sub" id="cockpit-units-detail-sub">Selecione uma unidade.</span></div>
+              <dl class="ck-pares ck-det__corpo" id="cockpit-units-detail-pares"></dl>
+              <div class="ck-det__rodape"><button type="button" id="cockpit-units-edit" class="ck-btn ck-btn--primario ck-btn--bloco" data-on-click="abrirModalGerenciarUnidades"><svg class="ck-ico ck-ico--sm" aria-hidden="true" focusable="false"><use href="#i-pencil"></use></svg>Editar</button></div>
+            </aside>
           </div>
         </section>
       </section>
