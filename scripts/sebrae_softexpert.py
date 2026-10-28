@@ -23,8 +23,9 @@ import sys
 import time
 import unicodedata
 from dataclasses import dataclass
+from datetime import date, timedelta
 from pathlib import Path
-from typing import TYPE_CHECKING, Any, Callable, Dict, List, Optional
+from typing import TYPE_CHECKING, Any, Callable, Dict, List, Mapping, Optional
 from urllib.parse import urlparse
 
 from domains.sebrae_chamados import (
@@ -63,6 +64,11 @@ NOME_SSO = re.compile(r"^\s*SSO\s*$", re.IGNORECASE)
 NOME_EXECUTAR = re.compile(r"^\s*Executar\s*$", re.IGNORECASE)
 NOME_REGISTRO = re.compile(r"Registro de Chamados", re.IGNORECASE)
 NOME_ATENDIMENTO_TI = re.compile(r"^\s*Atendimento\s*[-–—]\s*Chamados TI\s*$", re.IGNORECASE)
+# Interface atual (confirmada em 28/10/2026): o Executar é o ✓ do cartão (sem texto, dica "Executar") e abre a
+# janela PHP direto, na aba de execução; o Registro de Chamados é uma aba dessa janela. Os frames do formulário
+# têm "formexecution" na URL e guardam os valores em input/textarea somente leitura.
+SEL_GRUPO_ACOES = "[data-test-selector='rctButtonGroup']"
+TRECHO_URL_FORMULARIO = "formexecution"
 SEL_DIALOGO = "[role='dialog'], [role='alertdialog'], dialog[open], .modal.show"
 NOME_SIM = re.compile(r"^\s*Sim\s*$", re.IGNORECASE)
 # Só responde "Sim" a uma pergunta que fale de associar o chamado ao usuário; qualquer outra pára a rotina.
@@ -92,6 +98,7 @@ ESPERA_LISTA_MS = 60_000
 ESPERA_PAGINA_MS = 15_000
 ESPERA_ROLAGEM_MS = 3_000
 ESPERA_ABERTURA_MS = 60_000
+ESPERA_BOTAO_MS = 5_000
 ESPERA_ESTAVEL_MS = 6_000
 INTERVALO_MS = 250
 RELEITURAS_CAMPOS = 3
@@ -186,6 +193,28 @@ LER_DETALHES_ATENDIMENTO_JS = """
     }
   }
   return somenteLeitura[0] || textoEstatico[0] || '';
+}
+"""
+
+# Interface atual: lê cada input/textarea com o rótulo que vem antes dele (irmão anterior, subindo até 6 níveis).
+# O rótulo da descrição muda com a categoria do chamado; por isso a descrição é o primeiro textarea preenchido.
+LER_CONTROLES_JS = r"""
+() => {
+  const rotuloDe = (campo) => {
+    let el = campo;
+    for (let i = 0; i < 6 && el; i++, el = el.parentElement) {
+      let anterior = el.previousElementSibling;
+      while (anterior) {
+        const texto = (anterior.innerText || '').trim().split(/\n/).pop();
+        if (texto) return texto.trim();
+        anterior = anterior.previousElementSibling;
+      }
+    }
+    return '';
+  };
+  return Array.from(document.querySelectorAll('input,textarea'))
+    .filter((c) => !['hidden', 'checkbox', 'radio'].includes(c.type))
+    .map((c) => ({tag: c.tagName, rotulo: rotuloDe(c), valor: (c.value || '').trim(), leitura: !!(c.readOnly || c.disabled)}));
 }
 """
 
@@ -463,10 +492,8 @@ def listar_chamados(page: "Page", parar_em: str | None = None) -> List[ItemLista
         if sem_novidade >= RODADAS_SEM_NOVIDADE:
             break
         antes = _textos_linhas(page)
-        if not page.evaluate(ROLAR_LISTA_JS, SEL_LISTA):
-            if not novos:
-                break
-            continue
+        # A lista carrega mais linhas ~3 s depois de rolar, mesmo quando o scrollTop não mudou.
+        page.evaluate(ROLAR_LISTA_JS, SEL_LISTA)
         _esperar(page, lambda: _textos_linhas(page) != antes, ESPERA_ROLAGEM_MS)
     else:
         raise SoftExpertErro("A lista da central de tarefas não terminou; o resultado seria parcial.")
@@ -509,6 +536,93 @@ def _frames(page: "Page") -> List["Frame"]:
     return [] if page.is_closed() else list(page.frames)
 
 
+def campos_do_registro(controles: List[Mapping[str, Any]]) -> Dict[str, str]:
+    """Número, título, solicitante e descrição a partir dos controles (rótulo, valor) do Registro de Chamados."""
+    campos = {"numero": "", "titulo": "", "solicitante": "", "descricao": ""}
+    for controle in controles:
+        rotulo = _sem_acentos(str(controle.get("rotulo") or "")).rstrip(" *:")
+        valor = str(controle.get("valor") or "").strip()
+        if not valor or not controle.get("leitura"):
+            continue  # nunca lê campo editável (rascunho da atividade atual)
+        if "do chamado" in rotulo and rotulo[:1] == "n" and "titulo" not in rotulo:
+            chave = "numero"
+        elif rotulo.startswith("titulo"):
+            chave = "titulo"
+        elif rotulo == "solicitante":
+            chave = "solicitante"
+        elif controle.get("tag") == "TEXTAREA":
+            chave = "descricao"
+        else:
+            continue
+        campos[chave] = campos[chave] or valor
+    return campos
+
+
+def detalhes_concluidos(controles: List[Mapping[str, Any]]) -> str:
+    """Texto do atendimento já concluído: textarea somente leitura cujo rótulo não tem ``*`` (o editável tem)."""
+    alvo = _sem_acentos(ROTULOS_CAMPOS["detalhes_atendimento_realizado"][0])
+    for controle in controles:
+        rotulo = _sem_acentos(str(controle.get("rotulo") or ""))
+        if controle.get("tag") == "TEXTAREA" and controle.get("leitura") and rotulo == alvo and controle.get("valor"):
+            return str(controle["valor"]).strip()
+    return ""
+
+
+def habilitada_da_lista(texto: str, hoje: Optional[date] = None) -> str:
+    """``Habilitada em`` do cartão da lista; ``Hoje``/``Ontem`` viram a data. Vazio se não achar."""
+    achado = re.search(r"Habilitada em\s*(Hoje|Ontem|\d{2}/\d{2}/\d{4})\s*,?\s*(\d{2}:\d{2}(?::\d{2})?)", texto or "", re.IGNORECASE)
+    if not achado:
+        return ""
+    dia, hora = achado.groups()
+    if dia.lower() in ("hoje", "ontem"):
+        dia = ((hoje or date.today()) - timedelta(days=int(dia.lower() == "ontem"))).strftime("%d/%m/%Y")
+    return f"{dia}, {hora}"
+
+
+def _controles_por_frame(page: "Page") -> List[List[Dict[str, Any]]]:
+    por_frame: List[List[Dict[str, Any]]] = []
+    for frame in _frames(page):
+        try:
+            por_frame.append(frame.evaluate(LER_CONTROLES_JS))
+        except Exception:
+            continue  # frame em navegação
+    return por_frame
+
+
+def _controles(page: "Page") -> List[Dict[str, Any]]:
+    return [controle for controles in _controles_por_frame(page) for controle in controles]
+
+
+def _registro(page: "Page") -> Dict[str, str]:
+    """Campos do Registro de Chamados: só do frame que tem o "N° do chamado" (outros frames têm outros textareas)."""
+    for controles in _controles_por_frame(page):
+        campos = campos_do_registro(controles)
+        if campos["numero"]:
+            return campos
+    return {"numero": "", "titulo": "", "solicitante": "", "descricao": ""}
+
+
+def _janela_de_execucao(page: "Page") -> bool:
+    return any(TRECHO_URL_FORMULARIO in frame.url for frame in _frames(page))
+
+
+def _abrir_aba_registro(formulario: "Page") -> None:
+    """Interface atual: o Registro de Chamados é uma aba da janela; seleciona-a (só leitura) se ainda não carregou."""
+    if "wf_gen_instance" not in formulario.url:
+        return  # janela da interface antiga: o registro já vem aberto
+    def numero_lido() -> str:
+        return _registro(formulario)["numero"]
+
+    _esperar(formulario, lambda: _janela_de_execucao(formulario), ESPERA_ABERTURA_MS)
+    if numero_lido():
+        return
+    aba = formulario.get_by_text(NOME_REGISTRO).filter(visible=True)
+    if _esperar(formulario, lambda: aba.count() == 1, ESPERA_ABERTURA_MS):
+        clicar(aba, "aba Registro de Chamados")
+        _esperar(formulario, numero_lido, ESPERA_ABERTURA_MS)
+        _aguardar_estavel(formulario)
+
+
 def _ler_campo(page: "Page", chave: str) -> str:
     for frame in _frames(page):
         try:
@@ -517,25 +631,30 @@ def _ler_campo(page: "Page", chave: str) -> str:
             continue  # frame em navegação
         if valor and str(valor).strip():
             return str(valor).strip()
+    if chave in ("numero", "titulo", "solicitante", "descricao"):
+        return _registro(page)[chave]
     return ""
 
 
 def _ler_detalhes_atendimento_visiveis(page: "Page") -> str:
+    concluido = detalhes_concluidos(_controles(page))
+    if concluido:
+        return concluido
     for frame in _frames(page):
         try:
             valor = frame.evaluate(LER_DETALHES_ATENDIMENTO_JS, list(ROTULOS_CAMPOS["detalhes_atendimento_realizado"]))
         except Exception:
             continue  # frame em navegação
-        if valor and str(valor).strip():
+        if valor and str(valor).strip().strip("*").strip():  # "*" sozinho é o asterisco do rótulo, não um valor
             return str(valor).strip()
     return ""
 
 
 def _ler_detalhes_atendimento(page: "Page", numero: str) -> str:
     """Abre a seção somente leitura de Atendimento TI e lê seus detalhes."""
-    valor = _ler_detalhes_atendimento_visiveis(page)
+    valor = _esperar(page, lambda: _ler_detalhes_atendimento_visiveis(page), ESPERA_ESTAVEL_MS)
     if valor:
-        return valor
+        return str(valor)
 
     for frame in _frames(page):
         candidatos = (
@@ -551,7 +670,7 @@ def _ler_detalhes_atendimento(page: "Page", numero: str) -> str:
                     continue
                 clicar(visiveis, "Atendimento - Chamados TI")
                 _aguardar_estavel(page)
-                return _ler_detalhes_atendimento_visiveis(page)
+                return str(_esperar(page, lambda: _ler_detalhes_atendimento_visiveis(page), ESPERA_ESTAVEL_MS) or "")
             except SoftExpertErro:
                 raise
             except Exception:
@@ -563,7 +682,7 @@ def _ler_detalhes_atendimento(page: "Page", numero: str) -> str:
 
 
 def _formulario_visivel(page: "Page") -> bool:
-    return any(_visivel(frame.locator(SEL_FORMULARIO)) for frame in _frames(page))
+    return any(_visivel(frame.locator(SEL_FORMULARIO)) for frame in _frames(page)) or _janela_de_execucao(page)
 
 
 def _aguardar_estavel(page: "Page") -> None:
@@ -635,6 +754,17 @@ def _tratar_dialogo_nativo(respondidas: List[float]) -> Callable[[Any], None]:
     return tratar
 
 
+def _clicar_icone_executar(page: "Page", linha: "Locator", numero: str) -> None:
+    """Clica no ✓ do cartão, mas só depois de a dica mostrar "Executar" (o ícone não tem texto nem nome)."""
+    linha.hover()
+    botao = linha.locator(SEL_GRUPO_ACOES).first.locator("button").first
+    botao.hover()
+    dica = page.get_by_text(NOME_EXECUTAR).filter(visible=True)
+    if not _esperar(page, lambda: dica.count(), ESPERA_BOTAO_MS):
+        raise SoftExpertErro(f"{numero}: o ícone da linha não mostrou a dica Executar; nada foi clicado.")
+    clicar(botao, "Executar")
+
+
 def _abrir_formulario(context: "BrowserContext", page: "Page", linha: "Locator", numero: str) -> "Page":
     """Executar > Registro de Chamados; devolve a janela (PHP) ou a própria aba que mostra o formulário pronto."""
     novas: List["Page"] = []
@@ -648,15 +778,18 @@ def _abrir_formulario(context: "BrowserContext", page: "Page", linha: "Locator",
     context.on("page", nova_janela)
     page.on("dialog", tratar)
     try:
-        linha.click(timeout=15_000)
-        executar = page.get_by_role("button", name=NOME_EXECUTAR).filter(visible=True)
-        if not _esperar(page, lambda: executar.count() and executar.first.is_enabled(), ESPERA_ABERTURA_MS):
-            raise SoftExpertErro(f"{numero}: o botão Executar não ficou disponível depois de selecionar a linha.")
-        clicar(executar, "Executar")
-        item = page.get_by_role("menuitem", name=NOME_REGISTRO).or_(page.get_by_text(NOME_REGISTRO)).filter(visible=True)
-        if not _esperar(page, lambda: item.count(), ESPERA_ABERTURA_MS):
-            raise SoftExpertErro(f"{numero}: o item Registro de Chamados não apareceu no menu Executar.")
-        clicar(item, "Registro de Chamados")
+        if linha.locator(SEL_GRUPO_ACOES).count():
+            _clicar_icone_executar(page, linha, numero)  # interface atual: o ✓ já abre o formulário
+        else:
+            linha.click(timeout=15_000)
+            executar = page.get_by_role("button", name=NOME_EXECUTAR).filter(visible=True)
+            if not _esperar(page, lambda: executar.count() and executar.first.is_enabled(), ESPERA_ABERTURA_MS):
+                raise SoftExpertErro(f"{numero}: o botão Executar não ficou disponível depois de selecionar a linha.")
+            clicar(executar, "Executar")
+            item = page.get_by_role("menuitem", name=NOME_REGISTRO).or_(page.get_by_text(NOME_REGISTRO)).filter(visible=True)
+            if not _esperar(page, lambda: item.count(), ESPERA_ABERTURA_MS):
+                raise SoftExpertErro(f"{numero}: o item Registro de Chamados não apareceu no menu Executar.")
+            clicar(item, "Registro de Chamados")
 
         def formulario() -> Optional["Page"]:
             candidatos = [janela for janela in novas if not janela.is_closed()] + [page]
@@ -736,14 +869,18 @@ def _extrair_uma_vez(context: "BrowserContext", page: "Page", numero: str) -> Ch
     item = next((i for i in encontrados if i.numero == numero), None)
     if item is None:
         raise ChamadoNaoEncontrado(f"{numero}: não está na lista da central de tarefas.")
-    padrao = re.compile(rf"(?<![A-Za-z0-9]){re.escape(numero)}(?!\d)", re.IGNORECASE)
+    # Sem âncora à esquerda: o texto bruto do cartão cola o título ao rótulo anterior ("atividadeUTIC-…").
+    padrao = re.compile(rf"{re.escape(numero)}(?!\d)", re.IGNORECASE)
     linha = page.locator(SEL_LINHA).filter(visible=True).filter(has_text=padrao).first
     formulario: Optional["Page"] = None
     try:
         formulario = _abrir_formulario(context, page, linha, numero)
         _aguardar_estavel(formulario)
+        _abrir_aba_registro(formulario)
         titulo = _conferir(formulario, numero, item.texto)
         campos = {chave: _ler_campo(formulario, chave) for chave in ("descricao", "solicitante", "habilitada_em")}
+        # Na interface atual o "Habilitada em" não está no formulário: vem do cartão da lista.
+        campos["habilitada_em"] = campos["habilitada_em"] or habilitada_da_lista(item.texto)
         for tentativa in range(1, RELEITURAS_CAMPOS + 1):
             if all(campos.values()):
                 break

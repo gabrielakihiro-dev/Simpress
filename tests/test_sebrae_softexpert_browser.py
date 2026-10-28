@@ -408,6 +408,8 @@ class RegrasPurasTests(unittest.TestCase):
         with (
             patch.object(se, "_ler_detalhes_atendimento_visiveis", side_effect=("", "Detalhe consultado")),
             patch.object(se, "_aguardar_estavel") as aguardar,
+            # one reading per wait: the real wait would poll the first mocked value again
+            patch.object(se, "_esperar", side_effect=lambda pagina, condicao, ms, *a, **k: condicao()),
         ):
             valor = se._ler_detalhes_atendimento(page, "UTIC-2026-0001")
         self.assertEqual(valor, "Detalhe consultado")

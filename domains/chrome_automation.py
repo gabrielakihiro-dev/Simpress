@@ -33,7 +33,7 @@ ROUTINE_LABELS = {
     "usuarios": "Verificar usuários",
     "ambas": "Ambas as rotinas",
     "login": "Abrir Chrome para login",
-    "sebrae": "Sincronizar chamados Sebrae",
+    "sebrae": "Chamados novos Sebrae",
 }
 MAX_LOG_CHUNK_BYTES = 64 * 1024
 LOGIN_SCAN_BYTES = 256 * 1024

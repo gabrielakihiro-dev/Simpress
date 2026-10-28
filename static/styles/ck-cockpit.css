@@ -841,8 +841,6 @@ button.ck-status--link:focus-visible { outline: 2px solid var(--cor-destaque); o
 .ck-aviso--alerta { border-color: var(--cor-alerta-texto); background: var(--cor-alerta-fundo); color: var(--cor-alerta-texto); }
 #automacao-cards .ck-aviso--alerta .ck-ico { grid-row: auto; }
 
-#sebrae-painel .ck-aviso { grid-template-columns: 20px minmax(0, 1fr); align-items: center; }
-
 #automacao-historico-painel .ck-filtros-linha { padding: 8px 0 0; border-bottom: 0; }
 #automacao-historico-painel #automacao-historico-resumo { padding: 8px 12px 0; }
 #automacao-historico-painel #automacao-historico { max-height: none; overflow-x: auto; padding: 4px 12px; }
@@ -962,3 +960,17 @@ html[data-theme], html[data-theme] body.cockpit-shell-body { background: var(--c
 .ck-segmentado__op:disabled { opacity: .5; cursor: default; }
 .ck-local__cnpj { flex-wrap: wrap; }
 .ck-passo__cab { flex-wrap: wrap; }
+
+/* ---------- Automação: chamados novos do SoftExpert ---------- */
+#sebrae-novos-painel .sebrae-importar { display: flex; flex-direction: column; gap: 8px; }
+#sebrae-novos-painel .sebrae-chamado { display: flex; flex-direction: column; gap: 8px; margin-top: 10px; padding: 10px; border: 1px solid var(--cor-borda-suave); border-radius: var(--raio-md); background: var(--cor-superficie-funda); }
+#sebrae-novos-painel .sebrae-chamado__titulo { font-size: var(--fs-md); font-weight: var(--peso-medio); overflow-wrap: anywhere; }
+#sebrae-novos-painel .sebrae-chamado__assunto { font-weight: var(--peso-regular); color: var(--cor-texto-mudo); }
+#sebrae-novos-painel .sebrae-chamado__auto dd { overflow-wrap: anywhere; }
+#sebrae-novos-painel .sebrae-chamado__texto summary { cursor: pointer; font-size: var(--fs-sm); color: var(--cor-texto-mudo); }
+#sebrae-novos-painel .sebrae-chamado__texto p { margin: 4px 0 0; max-height: 9em; overflow: auto; font-size: var(--fs-sm); white-space: pre-wrap; overflow-wrap: anywhere; }
+#sebrae-novos-painel .sebrae-chamado__manuais { display: grid; grid-template-columns: repeat(auto-fit, minmax(160px, 1fr)); gap: 8px; }
+#sebrae-novos-painel .sebrae-avisos { margin: 4px 0 0; padding-left: 18px; }
+#sebrae-novos-painel .sebrae-blocos { display: flex; flex-direction: column; align-items: flex-start; gap: 8px; margin-top: 8px; }
+#sebrae-novos-painel .sebrae-blocos .ck-campo { width: 100%; }
+#sebrae-novos-painel .sebrae-blocos textarea { font-family: var(--fonte-mono, monospace); font-size: var(--fs-xs); white-space: pre; }
