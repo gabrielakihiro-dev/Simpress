@@ -21,7 +21,7 @@ function monthlyReport(month) {
     gerado_em: "2026-10-25T09:00:00-03:00",
     inventario: { total: 1284, unidades: 30, por_tipo: [["Notebook", 1200]], por_unidade: [["Curitiba Sede", "Prado Velho", 412], ["Londrina", "Centro", 168]] },
     comparacao: { atualizacoes_no_mes: 2, contagens: { "Sem correspondência — no endpoint": 23, "Sem correspondência — na Simpress": 15, "Localidade divergente": 18 }, linhas: [] },
-    os: { oracle: { abertas: 3, concluidas: 2, pendentes: 1 }, simpress: { abertas: 4, concluidas: 3, pendentes: 1 }, linhas: [], dados_insuficientes: [] },
+    os: { oracle: { abertas: 3, concluidas: 2, pendentes: 1 }, simpress: { abertas: 4, concluidas: 3, pendentes: 1 }, linhas: [], dados_insuficientes: [{ fonte: "Oracle", serie: "ABC123", identificadores: ["OS-1"], motivo: "Sem data" }] },
   };
 }
 
@@ -50,6 +50,15 @@ test("the Cockpit report loads the selected month and keeps the existing XLSX do
   await expect(month).toHaveValue(currentMonth());
   await expect(month).toHaveAttribute("max", currentMonth());
   await expect(page.locator("#cockpit-monthly-preview")).toContainText("Transportes solicitados: indisponível");
+  await expect(page.locator(".ck-rel__previa")).not.toHaveAttribute("open", "");
+  await expect(page.locator("#cockpit-monthly-preview")).toBeHidden();
+  const cards = page.locator("#cockpit-monthly-details .ck-rel__cartao");
+  await expect(cards.filter({ hasText: "Inventário por tipo" })).toContainText("Notebook");
+  await expect(cards.filter({ hasText: "Divergências" })).toContainText("Localidade divergente");
+  await expect(cards.filter({ hasText: "Ordens do mês" })).toContainText("Simpress concluídas");
+  await expect(page.locator("#cockpit-monthly-details .ck-rel__aviso")).toContainText("1 registro(s) com dados insuficientes");
+  await page.locator(".ck-rel__previa summary").click();
+  await expect(page.locator("#cockpit-monthly-preview")).toBeVisible();
 
   await month.fill("2026-09");
   await expect(page.locator("#cockpit-monthly-status")).toContainText("Mês encerrado");

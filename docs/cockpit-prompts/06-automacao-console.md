@@ -124,3 +124,7 @@ A linha em andamento recebe fundo `var(--color-accent-900)`.
 - Confirme que "Log completo" mostra o log bruto.
 
 **Commit:** `style(cockpit): Automação com console de atividades e tabela de execuções`
+
+## Desvio aprovado pelo usuário (etapa A, item 4)
+
+Os subtítulos de "Verificar usuários" e "Sincronizar chamados Sebrae" viraram dica ⓘ (`.info-tip`, sprite `#i-info`) à direita do título, com o texto integral no tooltip (`#tip-verificar-usuarios`, `#tip-sync-sebrae`).

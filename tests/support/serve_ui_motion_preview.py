@@ -406,7 +406,10 @@ class Handler(BaseHTTPRequestHandler):
         elif path == "/api/config/transferencia":
             self.send(origin_contact_config())
         elif path == "/api/historico-comparacoes":
-            self.send({"eventos": [DEMO_EVENT, PREVIOUS_EVENT], "total": 2})
+            events = [DEMO_EVENT, PREVIOUS_EVENT]
+            if cockpit_comparison_enabled:
+                events.insert(0, {key: value for key, value in COCKPIT_COMPARISON_EVENT.items() if key != "comparacao"})
+            self.send({"eventos": events, "total": len(events)})
         elif path == "/api/operacoes/pendencias":
             item = json.loads(json.dumps(DEMO_EVENT["comparacao"]["apelidos_sem_atualizacao"][0]))
             item["anotacao"] = DEMO_ANNOTATION

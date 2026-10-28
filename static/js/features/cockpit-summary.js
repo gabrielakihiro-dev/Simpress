@@ -27,6 +27,7 @@
   let selectedMetric = "divergencias_local";
   let inventoryPage = { items: [], offset: 0, total: 0, hasMore: false, loading: false, error: "" };
   let inventoryRequestId = 0;
+  let summaryLoad = null;
 
   function list(value) { return Array.isArray(value) ? value.filter(item => item && typeof item === "object") : []; }
   function number(value) {
@@ -180,6 +181,7 @@
     rows.forEach(item => {
       const tr = document.createElement("tr");
       const currentSerial = serial(item);
+      tr.dataset.serial = currentSerial.toUpperCase();
       cell(tr, currentSerial || item.chave || "—");
       cell(tr, item.modelo || item.computador || item.hostname || item.tipo || "—");
       cell(tr, selectedMetric === "total"
@@ -303,7 +305,27 @@
     button.disabled = false;
     await app.exportarResultadoComparacaoPlanilhas();
   }
-  async function carregarResumoCockpit() {
+  // Série do Endpoint (MacBook) vem sem o "S" inicial; a equivalência só vale se o resultado for único.
+  function linhaDaSerieResumo(serialValue) {
+    const wanted = String(serialValue || "").trim().toUpperCase();
+    const rows = [...document.querySelectorAll("#cockpit-summary-rows tr[data-serial]")];
+    const exact = rows.filter(row => row.dataset.serial === wanted);
+    if (exact.length) return exact[0];
+    const equivalent = rows.filter(row => row.dataset.serial === `S${wanted}` || `S${row.dataset.serial}` === wanted);
+    return new Set(equivalent.map(row => row.dataset.serial)).size === 1 ? equivalent[0] : null;
+  }
+  async function abrirResumoSemAcesso(serialValue) {
+    app.ativarAbaTransferencia("resumo");
+    await (summaryLoad || carregarResumoCockpit());
+    selecionarMetricaResumo("sem_acesso_7_dias");
+    const row = linhaDaSerieResumo(serialValue);
+    if (row) app.destacarLinhaCockpit?.(row);
+  }
+  function carregarResumoCockpit() {
+    summaryLoad = carregarResumoCockpitInterno().finally(() => { summaryLoad = null; });
+    return summaryLoad;
+  }
+  async function carregarResumoCockpitInterno() {
     const root = document.getElementById("resumo-cards");
     if (!root) return;
     root.setAttribute("aria-busy", "true");
@@ -350,5 +372,5 @@
     }
   });
 
-  return { carregarResumoCockpit, exportarResumoCockpit, selecionarMetricaResumo };
+  return { carregarResumoCockpit, exportarResumoCockpit, selecionarMetricaResumo, abrirResumoSemAcesso };
 });
