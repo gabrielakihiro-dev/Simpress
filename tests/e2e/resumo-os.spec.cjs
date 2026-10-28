@@ -91,11 +91,11 @@ test("Resumo associa OS aos chamados UTIC com prefixo anual e preserva dados do 
 
   const section = page.locator("#resumo-os-equipamento");
   await expect(section).toContainText("7285072");
-  // v2: uma linha por OS e fonte, na mesma tabela (no mobile o CSS a apresenta como cards).
+  // Uma linha por OS (Oracle e Simpress unidas), na mesma tabela (no mobile o CSS a apresenta como cards).
   const rows = page.locator("#ck-os-tabela tbody tr");
-  await expect(rows).toHaveCount(5);
+  await expect(rows).toHaveCount(4);
   const seriesGroup = rows.filter({ hasText: "DEMO-SN-001" });
-  await expect(seriesGroup).toHaveCount(4);
+  await expect(seriesGroup).toHaveCount(3);
   await expect(section).toContainText("usuario.demo");
   await expect(section).toContainText("PRNOTEDEMO01");
   await expect(section).toContainText("Ambíguo: alice / bob");
@@ -107,41 +107,51 @@ test("Resumo associa OS aos chamados UTIC com prefixo anual e preserva dados do 
 
   const mobile = await page.locator(".ticket-summary-mobile").count() > 0;
   expect(mobile).toBe(false);
-  const orderRow = source => seriesGroup.filter({ hasText: "7285070" })
-    .filter({ has: page.locator(".ck-tag", { hasText: new RegExp(`^${source}$`) }) });
-  const summaryDescriptionEntry = orderRow("Oracle").locator(".ticket-summary-description-entry")
-    .filter({ hasText: "Solicito suporte técnico." });
-  await expect(summaryDescriptionEntry).toHaveCount(1);
-  await expect(orderRow("Simpress").locator(".ticket-summary-description")).toHaveText("Descrição não informada");
+  const unitedRow = seriesGroup.filter({ hasText: "7285070" });
+  await expect(unitedRow).toHaveCount(1);
+  await expect(unitedRow.locator(".ck-os-fonte .ck-tag")).toHaveText(["Oracle", "Simpress"]);
+  await expect(unitedRow.locator(".ticket-os-link-input")).toHaveCount(2);
+  await expect(unitedRow.locator(".ticket-summary-description-entry")
+    .filter({ hasText: "Solicito suporte técnico." })).toHaveCount(1);
+  const simpressOnly = seriesGroup.filter({ hasText: "7285071" });
+  await expect(simpressOnly.locator(".ck-tag")).toHaveText(["Simpress"]);
+  await expect(simpressOnly.locator(".ticket-summary-description")).toHaveText("Descrição não informada");
   await expect(seriesGroup.locator(".ticket-summary-description-label")).toHaveCount(0);
+  // A célula da OS fica alinhada ao topo, como as demais.
+  const osTop = await unitedRow.locator('td[data-label="OS"] button').evaluate(b => b.getBoundingClientRect().top - b.closest("td").getBoundingClientRect().top);
+  const serieTop = await unitedRow.locator('td[data-label="Série"]').evaluate(td => { const r = document.createRange(); r.selectNodeContents(td); return r.getBoundingClientRect().top - td.getBoundingClientRect().top; });
+  expect(Math.abs(osTop - serieTop)).toBeLessThan(6);
   const serialFont = await seriesGroup.first().locator('td[data-label="Série"]').evaluate(element => getComputedStyle(element).fontFamily);
   const hostFont = await seriesGroup.first().locator('td[data-label="Hostname"]').evaluate(element => getComputedStyle(element).fontFamily);
   expect(serialFont).toBe(hostFont);
 
   await expect(section).toContainText("4 OS · 2 séries");
-  const orderContainer = orderRow("Oracle");
-  const input = orderContainer.locator("input.ticket-os-link-input");
-  const prefix = orderContainer.locator(".ticket-os-link-prefix");
+  const orderContainer = unitedRow;
+  const oracleSlot = orderContainer.locator(".ck-os-fonte").filter({ has: page.getByLabel(/fonte Oracle/) });
+  const input = oracleSlot.locator("input.ticket-os-link-input");
+  const prefix = oracleSlot.locator(".ticket-os-link-prefix");
   const year = new Date().getFullYear();
   await expect(prefix).toHaveText(`UTIC-${year}-`);
   await expect(input).toHaveAttribute("inputmode", "numeric");
   await expect(input).toHaveAttribute("placeholder", "0000");
   await input.fill("1116");
-  await orderContainer.getByRole("button", { name: "Salvar" }).click();
+  await oracleSlot.getByRole("button", { name: "Salvar" }).click();
   await expect(section.locator(".ticket-summary-status")).toHaveText(`Vínculo salvo: UTIC-${year}-1116.`);
-  await expect(orderContainer.locator(".ticket-os-link-prefix")).toHaveText(`UTIC-${year}-`);
-  await expect(orderContainer.locator("input")).toHaveValue("1116");
+  await expect(prefix).toHaveText(`UTIC-${year}-`);
+  await expect(input).toHaveValue("1116");
+  // O editor da Simpress não é afetado pelo vínculo da Oracle.
+  await expect(orderContainer.locator(".ck-os-fonte").filter({ has: page.getByLabel(/fonte Simpress/) }).locator("input")).toHaveValue("");
 
   await page.reload();
   await selectSummary(page);
   const reloadedSeriesGroup = page.locator("#ck-os-tabela tbody tr").filter({ hasText: "DEMO-SN-001" });
-  const linkedOrder = reloadedSeriesGroup.filter({ hasText: "7285070" })
-    .filter({ has: page.locator(".ck-tag", { hasText: /^Oracle$/ }) });
-  await expect(linkedOrder.locator(".ticket-os-link-prefix")).toHaveText(`UTIC-${year}-`);
-  await expect(linkedOrder.locator("input")).toHaveValue("1116");
+  const linkedOrder = reloadedSeriesGroup.filter({ hasText: "7285070" });
+  const linkedOracle = linkedOrder.locator(".ck-os-fonte").filter({ has: page.getByLabel(/fonte Oracle/) });
+  await expect(linkedOracle.locator(".ticket-os-link-prefix")).toHaveText(`UTIC-${year}-`);
+  await expect(linkedOracle.locator("input")).toHaveValue("1116");
 
   await linkedOrder.getByRole("button", {
-    name: "Abrir acompanhamento de chamados: Oracle, série DEMO-SN-001, OS 7285070",
+    name: "Abrir acompanhamento de chamados: Oracle + Simpress, série DEMO-SN-001, OS 7285070",
   }).click();
   const dialog = page.locator("#modal-acompanhamento-chamados");
   await expect(dialog).toBeVisible();

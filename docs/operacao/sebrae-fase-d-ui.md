@@ -1,3 +1,5 @@
+> **Substituído em 28/10/2026.** O cartão descrito aqui saiu da tela Automação; a tela atual é o cartão "Chamados novos do SoftExpert" (`docs/operacao/sincronizar-chamados-sebrae.md`, seção "Tela no site"). O texto abaixo fica só como histórico.
+
 # Sincronizar chamados Sebrae — Fase D (interface)
 
 Especificação da interface do cartão **Sincronizar chamados Sebrae** na tela Automação. A regra de negócio, a API e o estado estão em `docs/operacao/sincronizar-chamados-sebrae.md`; este documento só descreve a tela.
