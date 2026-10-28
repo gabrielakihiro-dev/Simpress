@@ -29,11 +29,10 @@ test("Automação mostra o histórico e o console sem painéis recolhíveis", ()
   assert.doesNotMatch(feature, /recolherPainelAutomacao|ampliarPainelAutomacao/);
 });
 
-test("A sincronização Sebrae continua disponível na área de Automação", () => {
-  assert.match(html, /id="sebrae-painel"/);
-  assert.match(html, /Sincronizar chamados Sebrae/);
-  assert.match(feature, /\/api\/automacao\/sebrae\/resumo/);
-  assert.match(feature, /\/api\/automacao\/sebrae\/agendamento/);
+test("Os chamados novos do Sebrae ficam na área de Automação e o cartão antigo de sincronização saiu", () => {
+  assert.match(html, /id="sebrae-novos-painel"/);
+  assert.doesNotMatch(html, /id="sebrae-painel"/);
+  assert.doesNotMatch(feature, /api\/automacao\/sebrae/);
 });
 
 test("Automation action layout keeps a responsive support group", () => {

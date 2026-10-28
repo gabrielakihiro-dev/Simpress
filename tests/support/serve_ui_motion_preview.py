@@ -198,6 +198,25 @@ SEBRAE_ULTIMA = {
 SEBRAE_SCENARIOS = ("padrao", "vazio", "pronta", "login")
 sebrae_state = {"scenario": "padrao", "ativo": False}
 
+SEBRAE_NOVOS_FIXTURE = {
+    "importado": {"arquivo": "Dashboard Operacional_SEBRAE.xlsx", "importado_em": "2026-10-28T10:00:00-03:00", "total": 331},
+    "novos": {
+        "lidos_em": "2026-10-28T10:05:00-03:00", "ignorados": 36,
+        "pendentes": [{"numero": "UTIC-2026-1387", "motivo": "Alerta automático do Endpoint; fica pendente até o usuário classificar."}],
+        "erros": {"UTIC-2026-1457": "o formulário do Registro de Chamados não abriu em 60 s."},
+        "formulario": [
+            {"numero": "UTIC-2026-1378", "cruzamento": {"status": "unico", "candidatos": 1}, "linha": {
+                "C": "UTIC-2026-1378", "E": "7303022", "F": "Chamado sendo direcionado.", "G": "Verificar por que o computador está travando",
+                "H": "Meu computador esta travando demais.", "I": "Camila Vitoria Lopes de Oliveira", "K": "DEMO0001",
+                "L": "Dell Latitude 5440", "M": "Sebrae", "N": "Curitiba", "O": "PR", "P": "26/10/2026 17:25"}},
+            {"numero": "UTIC-2026-1336", "cruzamento": {"status": "ambiguo", "candidatos": 2}, "linha": {
+                "C": "UTIC-2026-1336", "E": "", "F": "Chamado encaminhado.", "G": "Instalar programa",
+                "H": "Instalação para acessar o site do Banco do Brasil", "I": "Nicole Marin", "K": "", "L": "",
+                "M": "Sebrae", "N": "", "O": "PR", "P": "23/10/2026 15:41"}},
+        ],
+    },
+}
+
 
 def sebrae_summary():
     scenario, ativo = sebrae_state["scenario"], sebrae_state["ativo"]
@@ -349,6 +368,8 @@ class Handler(BaseHTTPRequestHandler):
             scenario = query.get("sebrae", ["padrao"])[0]
             sebrae_state.update(scenario=scenario if scenario in SEBRAE_SCENARIOS else "padrao", ativo=False)
             self.send({"estado": "livre"})
+        elif path == "/api/sebrae/novos":
+            self.send(SEBRAE_NOVOS_FIXTURE)
         elif path == "/api/automacao/sebrae/resumo":
             self.send(sebrae_summary())
         elif path == "/api/automacao/estado":
@@ -516,6 +537,18 @@ class Handler(BaseHTTPRequestHandler):
     def do_POST(self):
         global ticket_import_count
         path = urlsplit(self.path).path
+        if path in ("/api/sebrae/dashboard", "/api/sebrae/exportar"):
+            size = int(self.headers.get("Content-Length", "0"))
+            body = self.rfile.read(size)
+            if path == "/api/sebrae/dashboard":
+                self.send(SEBRAE_NOVOS_FIXTURE)
+            else:
+                chamados = json.loads(body or b"{}").get("chamados") or []
+                linhas = [f"{c['A']}\t\t{c['numero']}\t{c['D']}" for c in chamados]
+                self.send({"quantidade": len(chamados), "bloco_a_p": "\n".join(linhas),
+                           "bloco_r_s": "\n".join(f"{c['R']}\t{c['S']}" for c in chamados),
+                           "mensagem": "Planilha Exportada com Sucesso!"})
+            return
         if path in ("/api/equipamentos/usuarios-logados", "/api/equipamento/atualizar-usuario"):
             size = int(self.headers.get("Content-Length", "0"))
             body = json.loads(self.rfile.read(size) or b"{}")

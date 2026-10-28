@@ -772,30 +772,38 @@ Horário disponível para atendimento:</textarea>
         <button type="button" class="ck-btn ck-btn--secundario ck-btn--sm" id="btn-automacao-usuarios" aria-describedby="ck-verificacao-titulo" data-automacao-rotina="usuarios" data-on-click="iniciarRotinaAutomacao" data-args='["usuarios"]'><svg class="ck-ico ck-ico--xs" aria-hidden="true" focusable="false"><use href="#i-play"></use></svg><span>Executar</span></button>
       </section>
 
-      <section class="ck-cartao" id="sebrae-painel" aria-labelledby="sebrae-titulo">
-        <div class="ck-cartao__cab"><h2 class="ck-cartao__titulo" id="sebrae-titulo">Sincronizar chamados Sebrae</h2><span class="ck-cartao__meta">SoftExpert → Dashboard Operacional_SEBRAE</span><span class="ck-espaco"></span><span class="ck-badge" id="sebrae-estado" role="status" aria-live="polite" data-state="pausado"><svg class="ck-ico ck-ico--xs" aria-hidden="true" focusable="false"><use href="#i-neutro"></use></svg><span id="sebrae-estado-titulo">Agendamento pausado</span></span><span id="sebrae-estado-detalhe" class="ck-sr">Verificando…</span></div>
+      <section class="ck-cartao" id="sebrae-novos-painel" aria-labelledby="sebrae-novos-titulo">
+        <div class="ck-cartao__cab"><h2 class="ck-cartao__titulo" id="sebrae-novos-titulo">Chamados novos do SoftExpert</h2><span class="ck-cartao__meta">Importe o Dashboard, busque os novos, preencha e cole as linhas</span><span class="ck-espaco"></span><button type="button" class="ck-btn ck-btn--fantasma ck-btn--sm" id="btn-sebrae-atualizar-lista" data-on-click="carregarNovosSebrae"><svg class="ck-ico ck-ico--sm" aria-hidden="true" focusable="false"><use href="#i-refresh"></use></svg>Atualizar lista</button></div>
         <div class="ck-cartao__corpo ck-det__corpo">
-          <p id="sebrae-login-aviso" class="ck-aviso ck-aviso--alerta sebrae-login-notice" role="status" hidden>
-            <svg class="ck-ico" aria-hidden="true" focusable="false"><use href="#i-user-check"></use></svg>
-            <span>Login necessário: faça o login no Chrome de automação (SoftExpert ou Excel Online) e execute de novo.</span>
-          </p>
-          <dl class="ck-fatos">
-            <div><dt>Agendamento</dt><dd id="sebrae-agendamento">—</dd></div>
-            <div><dt>Última execução</dt><dd id="sebrae-ultima">—</dd></div>
-            <div><dt>Próxima execução</dt><dd id="sebrae-proxima">—</dd></div>
-          </dl>
-          <dl class="ck-fatos">
-            <div><dt>Incluídos</dt><dd id="sebrae-incluidos">—</dd></div>
-            <div><dt>Ignorados por duplicidade</dt><dd id="sebrae-ignorados">—</dd></div>
-            <div><dt>Mantidos pendentes</dt><dd id="sebrae-pendentes">—</dd></div>
-          </dl>
-          <div class="ck-grupo-botoes" role="group" aria-label="Sincronização dos chamados Sebrae">
-            <button type="button" class="ck-btn ck-btn--secundario ck-btn--sm" id="btn-sebrae-executar" data-automacao-rotina="sebrae" data-on-click="iniciarRotinaAutomacao" data-args='["sebrae"]'><svg class="ck-ico ck-ico--xs" aria-hidden="true" focusable="false"><use href="#i-refresh"></use></svg><span>Executar agora</span></button>
-            <button type="button" class="ck-btn ck-btn--secundario ck-btn--sm" id="btn-sebrae-agendamento" data-on-click="alternarAgendamentoSebrae"><svg class="ck-ico ck-ico--xs" aria-hidden="true" focusable="false"><use href="#i-clock"></use></svg><span>Ativar agendamento</span></button>
-            <button type="button" class="ck-btn ck-btn--perigo ck-btn--sm" id="btn-sebrae-cancelar" data-on-click="cancelarRotinaAutomacao" disabled><svg class="ck-ico ck-ico--xs" aria-hidden="true" focusable="false"><use href="#i-x"></use></svg><span>Cancelar sincronização</span></button>
+          <form class="sebrae-importar" data-on-submit="importarDashboardSebrae">
+            <label class="ckp-arquivo" data-estado="vazio">
+              <input id="sebrae-dashboard-file" type="file" accept=".xlsx,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet">
+              <span class="ckp-arquivo__ico"><svg class="ck-ico ck-ico--vazio" aria-hidden="true"><use href="#i-upload"></use></svg><svg class="ck-ico ck-ico--cheio" aria-hidden="true"><use href="#i-file-check"></use></svg></span>
+              <span class="ckp-arquivo__textos"><span class="ckp-arquivo__nome" id="sebrae-dashboard-name" data-vazio="Escolher o Dashboard ou arrastar aqui">Escolher o Dashboard ou arrastar aqui</span><span class="ckp-arquivo__meta" data-vazio=".xlsx do Dashboard Operacional_SEBRAE (aba CHAMADOS)">.xlsx do Dashboard Operacional_SEBRAE (aba CHAMADOS)</span></span>
+              <span class="ckp-arquivo__acoes"><button type="button" class="ck-btn ck-btn--fantasma ck-btn--icone ck-btn--sm" data-remover aria-label="Remover arquivo"><svg class="ck-ico ck-ico--sm" aria-hidden="true"><use href="#i-x"></use></svg></button><span class="ck-btn ck-btn--secundario ck-btn--sm ckp-arquivo__trocar">Escolher</span></span>
+            </label>
+            <div class="ck-grupo-botoes" role="group" aria-label="Chamados novos">
+              <button type="submit" class="ck-btn ck-btn--secundario ck-btn--sm" id="btn-sebrae-importar"><svg class="ck-ico ck-ico--xs" aria-hidden="true" focusable="false"><use href="#i-upload"></use></svg><span>Importar Dashboard</span></button>
+              <button type="button" class="ck-btn ck-btn--primario ck-btn--sm" id="btn-sebrae-buscar" data-automacao-rotina="sebrae" data-on-click="iniciarRotinaAutomacao" data-args='["sebrae"]'><svg class="ck-ico ck-ico--xs" aria-hidden="true" focusable="false"><use href="#i-play"></use></svg><span>Buscar chamados novos</span></button>
+            </div>
+          </form>
+          <p id="sebrae-dashboard-status" class="ck-cartao__meta" role="status" aria-live="polite">Consultando…</p>
+          <p id="sebrae-novos-resumo" class="ck-cartao__meta" role="status" aria-live="polite"></p>
+          <div id="sebrae-novos-avisos"></div>
+          <div id="sebrae-novos-lista"></div>
+          <datalist id="sebrae-sugestoes-a"><option value="CLIENTE"></option><option value="SIMPRESS"></option></datalist>
+          <datalist id="sebrae-sugestoes-b"><option value="AVARIA FÍSICA"></option><option value="DESLIGAMENTO"></option><option value="ENDPOINT CENTER"></option><option value="ERRO SOFTWARE"></option><option value="FALHA BATERIA"></option><option value="FALHA NO DOMÍNIO"></option><option value="FORMATAÇÃO"></option><option value="HARDWARE"></option><option value="INSTALAÇÃO"></option><option value="LENTIDÃO"></option><option value="NOVO USUÁRIO"></option><option value="NÃO LIGA"></option><option value="OUTRO"></option><option value="PERIFÉRICO"></option><option value="SOL. EQUIPAMENTO"></option></datalist>
+          <datalist id="sebrae-sugestoes-s"><option value="DISPONIBILIDADE"></option></datalist>
+          <div class="ck-grupo-botoes" role="group" aria-label="Exportação das linhas">
+            <button type="button" class="ck-btn ck-btn--primario ck-btn--sm" id="btn-sebrae-exportar" data-on-click="exportarChamadosSebrae" disabled><svg class="ck-ico ck-ico--xs" aria-hidden="true" focusable="false"><use href="#i-download"></use></svg><span>Exportar linhas</span></button>
           </div>
-          <p id="sebrae-agendamento-aviso" class="ck-cartao__meta" role="status" hidden></p>
-          <div id="sebrae-pendencias"><p class="ck-cartao__meta">Pendências: nenhuma.</p></div>
+          <p id="sebrae-exportacao-status" class="ck-cartao__meta" role="status" aria-live="polite"></p>
+          <div id="sebrae-exportacao-blocos" class="sebrae-blocos" hidden>
+            <label class="ck-campo"><span class="ck-campo__rotulo">Colar em A:P (primeira linha livre da tabela)</span><textarea class="ck-entrada" id="sebrae-bloco-a-p" rows="4" readonly></textarea></label>
+            <button type="button" class="ck-btn ck-btn--fantasma ck-btn--sm" data-on-click="copiarBlocoSebrae" data-args='["a_p"]'><svg class="ck-ico ck-ico--sm" aria-hidden="true" focusable="false"><use href="#i-copy"></use></svg>Copiar A:P</button>
+            <label class="ck-campo"><span class="ck-campo__rotulo">Colar em R:S (mesma linha, deixando Q fora)</span><textarea class="ck-entrada" id="sebrae-bloco-r-s" rows="4" readonly></textarea></label>
+            <button type="button" class="ck-btn ck-btn--fantasma ck-btn--sm" data-on-click="copiarBlocoSebrae" data-args='["r_s"]'><svg class="ck-ico ck-ico--sm" aria-hidden="true" focusable="false"><use href="#i-copy"></use></svg>Copiar R:S</button>
+          </div>
         </div>
       </section>
 
@@ -804,7 +812,7 @@ Horário disponível para atendimento:</textarea>
         <div class="ck-filtros-linha" id="automacao-historico-filtros" role="group" aria-label="Filtros de execuções">
           <label class="ck-campo"><span class="ck-campo__rotulo">De</span><input class="ck-entrada ck-entrada--sm" type="date" id="automacao-historico-inicio"></label>
           <label class="ck-campo"><span class="ck-campo__rotulo">Até</span><input class="ck-entrada ck-entrada--sm" type="date" id="automacao-historico-fim"></label>
-          <label class="ck-campo"><span class="ck-campo__rotulo">Rotina</span><select class="ck-entrada ck-entrada--sm" id="automacao-historico-rotina"><option value="">Todas</option><option value="os">Rotina de OS</option><option value="inventarios">Inventários</option><option value="usuarios">Verificar usuários</option><option value="ambas">Ambas</option><option value="login">Abrir Chrome para login</option><option value="sebrae">Sincronizar chamados Sebrae</option></select></label>
+          <label class="ck-campo"><span class="ck-campo__rotulo">Rotina</span><select class="ck-entrada ck-entrada--sm" id="automacao-historico-rotina"><option value="">Todas</option><option value="os">Rotina de OS</option><option value="inventarios">Inventários</option><option value="usuarios">Verificar usuários</option><option value="ambas">Ambas</option><option value="login">Abrir Chrome para login</option><option value="sebrae">Chamados novos Sebrae</option></select></label>
           <label class="ck-campo"><span class="ck-campo__rotulo">Status</span><select class="ck-entrada ck-entrada--sm" id="automacao-historico-status"><option value="">Todos</option><option value="concluido">Concluído</option><option value="falha">Falha</option><option value="cancelado">Cancelado</option><option value="em_andamento">Em andamento</option><option value="ocupada">Ocupada</option><option value="interrompido">Interrompido</option></select></label>
           <button type="button" class="ck-btn ck-btn--primario ck-btn--sm" data-on-click="filtrarHistoricoAutomacao">Aplicar</button>
           <button type="button" class="ck-btn ck-btn--fantasma ck-btn--sm" data-on-click="limparFiltrosAutomacao">Limpar</button>
