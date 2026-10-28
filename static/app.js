@@ -29,6 +29,7 @@
     "equipmentEditor",
     "aliasHistory",
     "monthlyReport",
+    "sebraeDashboard",
     "chromeAutomation",
   ]);
 
@@ -125,6 +126,7 @@
     app.inicializarAlertasOsDivergencias();
     app.inicializarProntidao();
     app.inicializarAutomacao();
+    app.carregarNovosSebrae();
   }
 
   if (document.readyState === "interactive" || document.readyState === "complete") {

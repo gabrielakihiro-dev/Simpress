@@ -4,6 +4,64 @@ Objetivo: levar os chamados novos do SoftExpert do Sebrae para a aba `CHAMADOS` 
 
 Status por fase (ver "Entrega em fases"): **Fase A** (especificação, regras puras, estado, agendador, API) e a parte pura da **Fase E** (`domains/sebrae_orquestracao.py`: fluxo completo, estado e avisos, testado com adaptadores falsos) estão implementadas; leitura do SoftExpert (B), Excel (C) e interface (D) estão ligadas pela orquestração. Em 23/10/2026 houve leitura assistida real do chamado no SoftExpert e inspeção somente leitura dos cabeçalhos/fórmulas da aba `CHAMADOS`; isso não valida o fluxo de automação completo nem todos os itens V0–V10. A escrita automatizada do Excel e a execução controlada real continuam pendentes; `ROTINA_PRONTA` permanece `False`.
 
+## Modelo atual: Dashboard importado → linhas para colar (28/10/2026)
+
+Substitui a gravação no Excel Online. O usuário importa no site o `.xlsx` do Dashboard (só a aba `CHAMADOS` é lida), o site compara com o SoftExpert e mostra um formulário por chamado novo. A saída são linhas para o usuário colar no Dashboard; **nada é gravado no Excel**. O código está em `domains/sebrae_dashboard.py` (regras puras, sem navegador).
+
+1. **Importar** o Dashboard. Lê a coluna C da tabela `Tabela3` (números `UTIC-AAAA-NNNN`, inclusive em valores compostos). `Sem chamado` e números antigos só contam como "não é UTIC".
+2. **Triagem:** lista do SoftExpert (rolada até o fim: a lista carrega mais linhas ao descer) menos a coluna C. `PENDENCIAS_DEFINIDAS` e alertas do Endpoint (título `Endpoint Central - …`) ficam pendentes, nunca viram linha.
+3. **Leitura** de cada chamado novo (sem Salvar/Finalizar; a única ação de escrita é a confirmação de associar o chamado ao usuário (botão **Sim**), que o SoftExpert pede ao abrir o formulário).
+4. **Cruzamento** pelo nome do Solicitante (coluna I) em `EquipamentosDetalhes`, `InvAll` (Endpoint) e Microsoft Entra, para Série (K), Modelo (L) e Cidade (N). Resultado ausente ou ambíguo = vazio, sinalizado; nunca se escolhe um. Valem as regras do `AGENTS.md` (equivalência de série de MacBook com `S`, séries próprias do Sebrae ignoradas, prefixos de Curitiba).
+5. **Formulário** com os campos manuais; **exportar** as linhas com o texto exato `Planilha Exportada com Sucesso!`.
+
+### Colunas do Dashboard (aba `CHAMADOS`, `Tabela3` A:W)
+
+Em 28/10/2026 foi criada a coluna **G (Título)**; o que vinha de G em diante deslocou uma coluna para a direita.
+
+| Coluna | Cabeçalho | Quem preenche |
+| --- | --- | --- |
+| A | RESPONSÁVEL | Manual no site |
+| B | Categoria | Manual no site |
+| C | CHAMADO | SoftExpert (número completo) |
+| D | STATUS CHAMADO | Manual no site (`EM ABERTO` / `FINALIZADO`) |
+| E | OS | Só se a série em K já estiver vinculada a um chamado/OS; senão vazio |
+| F | Atendimento Realizado | SoftExpert: texto integral de **Detalhes do Atendimento Realizado** (campo concluído, somente leitura); CPF mascarado |
+| G | Título | SoftExpert: título do chamado |
+| H | Descrição Chamado | SoftExpert: descrição do Registro (vazia = vazio, sem usar o título); CPF mascarado |
+| I | Nome Usuário | SoftExpert: **Solicitante**, nunca Iniciador; CPF mascarado |
+| J | TIPO DO CHAMADO | Manual no site (`INCIDENTE` / `SOLICITAÇÃO`) |
+| K | Série | Cruzamento pelo nome em I |
+| L | MODELO | Cruzamento pelo nome em I |
+| M | UNIDADE | Fixo `Sebrae` |
+| N | CIDADE | Cruzamento pelo nome em I |
+| O | UF | Fixo `PR` |
+| P | DATA ABERTURA | SoftExpert: **Habilitada em**, `dd/MM/yyyy HH:mm` |
+| Q | Mês | Fórmula do Excel; o site não escreve |
+| R | DT ENCERRAMENTO | Manual no site |
+| S | TIPO SLA | Manual no site |
+| T | DIAS ABERTOS | Fórmula; o site não escreve |
+| U | AGING | Fórmula; o site não escreve |
+| V | HR CONSUMIDA | Fórmula; o site não escreve |
+| W | PRODUZINDO | Não tocar |
+
+### Leitura do SoftExpert na interface atual
+
+- Executar é o botão **✓** do cartão (dica "Executar"), sem texto. O formulário abre em outra janela PHP (`wf_gen_instance_data.php`), às vezes com atraso de dezenas de segundos.
+- Nessa janela, a aba **Registro de Chamados** mostra número, data, hora, título, solicitante e descrição como `input`/`textarea` somente leitura: o valor está no atributo, não no texto da página. **Detalhes do Atendimento Realizado** (bloco do atendimento anterior, somente leitura) está na aba **Atendimento - Chamados TI**.
+- A janela tem Salvar, Finalizar, Alterar executor etc.: a leitura nunca clica nesses botões e fecha a janela sem salvar.
+
+### Tela no site (Automação → cartão "Chamados novos do SoftExpert")
+
+O cartão antigo "Sincronizar chamados Sebrae" (agendamento, contadores, pendências) foi removido da tela em 28/10/2026; o agendamento e as rotas `/api/automacao/sebrae/*` continuam no servidor, sem tela. Só HTML/CSS e o JS de `static/js/features/sebrae-dashboard.js`; segue os tokens `ck-*` e os temas claro e escuro. Fluxo na tela:
+
+1. **Importar Dashboard** (`POST /api/sebrae/dashboard`): escolher o `.xlsx` e importar. O site guarda só os números UTIC já lançados (`data/state/sebrae_dashboard_existentes.json`, fora do Git) e mostra "N chamados já lançados".
+2. **Buscar chamados novos**: o botão `Buscar chamados novos` do próprio cartão inicia a rotina `sebrae` (o cancelamento é o `Cancelar execução` geral da tela Automação), que agora só **lê** (SoftExpert, Chrome de automação, login manual) e grava `data/state/sebrae_novos.json` (CPF mascarado). No SoftExpert só a confirmação de associar (**Sim**) é aceita; nada é gravado no Excel.
+3. **Lista** (`GET /api/sebrae/novos`): um bloco por chamado novo com os campos automáticos somente leitura (C, E, F, G, H, I, K, L, M, N, O, P) e os manuais: A, B, D, J, R, S. D e J são listas fechadas (`EM ABERTO`/`FINALIZADO`; `INCIDENTE`/`SOLICITAÇÃO`); A, B e S aceitam texto livre com sugestões do Dashboard atual; R é data e hora (`dd/MM/yyyy HH:mm`). Série, modelo e cidade vazios com o aviso "não encontrado" ou "mais de um equipamento" quando o cruzamento não é único. Alertas do Endpoint e `PENDENCIAS_DEFINIDAS` aparecem numa lista à parte, sem formulário.
+4. **Exportar** (`POST /api/sebrae/exportar`): gera dois blocos para colar, A:P e R:S (a coluna Q, de fórmula, fica entre eles e não é escrita), copiados para a área de transferência. Confirmação com o texto exato `Planilha Exportada com Sucesso!`. O usuário cola A:P na primeira linha livre da tabela e R:S ao lado, deixando as fórmulas Q, T, U, V e a coluna W intactas.
+5. A exportação inclui só os chamados com A, D e J preenchidos (B, R e S podem ficar vazios); a tela mostra quantos estão prontos e mantém o botão desabilitado até haver pelo menos um.
+
+> **Legado.** Daqui até "Limitações conhecidas", o texto descreve a rotina antiga que gravava no Excel Online com a numeração anterior (sem a coluna G). `scripts/sebrae_excel.py`, `domains/sebrae_orquestracao.py` e `scripts/sebrae_rotina.py` ainda usam essas letras e **não devem ser ativados** com o Dashboard atual; `ROTINA_PRONTA` segue `False`.
+
 ## Princípios
 
 - **Arquitetura local.** Servidor FastAPI e arquivos em `data/`. Sem backend remoto, sem Supabase, sem API do Microsoft Graph, sem tokens: a gravação usa a interface do Excel Online no Chrome de automação (perfil próprio, porta CDP 9333), com o login feito pelo usuário.
