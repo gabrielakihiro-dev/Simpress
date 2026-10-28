@@ -510,6 +510,7 @@ def aguardar_login(
     avisar(f"Simpress: login necessário no {origem}", "Faça o login na janela do Chrome de automação; a rotina continua sozinha.")
     log(origem, "A rotina continua sozinha assim que o login terminar (Ctrl+C ou --cancelar interrompe).")
     limite = time.time() + LOGIN_TIMEOUT_S
+    aviso_metade_enviado = False
     while time.time() < limite:
         verificar_cancelamento()
         if logado(page):
@@ -517,6 +518,11 @@ def aguardar_login(
             page.wait_for_timeout(2000)
             garantir_tela_minima(page, origem)
             return
+        if not aviso_metade_enviado and time.time() >= limite - LOGIN_TIMEOUT_S / 2:
+            aviso_metade_enviado = True
+            minutos_restantes = LOGIN_TIMEOUT_S // 60 // 2
+            log(origem, f"Login ainda pendente; faltam cerca de {minutos_restantes} min para o tempo esgotar.")
+            avisar(f"Simpress: login ainda pendente no {origem}", "Faça o login na janela do Chrome de automação antes que o tempo esgote.")
         page.wait_for_timeout(2000)
     raise RotinaErro(f"Login não concluído em {LOGIN_TIMEOUT_S // 60} minutos.")
 
