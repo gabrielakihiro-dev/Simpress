@@ -174,3 +174,7 @@ O `#transfer-equipment-banner` continua no topo, acima das 3 colunas, mostrando 
 - Confirme que os chips de observação rápida adicionam texto.
 
 **Commit:** `style(cockpit): Transporte em 3 colunas com pré-visualização ao vivo`
+
+## Desvio aprovado pelo usuário (etapa A, item 0)
+
+Os chips de cidade (`button.ck-unidade`) foram removidos. A seção "Chips de unidade" acima não vale mais: o `#select-unidade-destino` é o único seletor, com `aria-label="Selecione a filial"`, primeira opção `Selecione a filial` (valor vazio) e todas as filiais em seguida. O valor vazio bloqueia o envio (CNPJ/endereço vazios). Não "corrigir de volta".

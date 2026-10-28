@@ -1317,10 +1317,11 @@ def verificar_usuarios_apos_inventarios(context: "BrowserContext") -> None:
 
 
 def rodar_rotina_sebrae(context: "BrowserContext") -> int:
-    # Leitura (sebrae_softexpert), gravação (sebrae_excel) e decisão (domains/sebrae_orquestracao) em sebrae_rotina.
-    from scripts import sebrae_rotina
+    # Só leitura do SoftExpert: o resultado vai para data/state/sebrae_novos.json e o site mostra o formulário.
+    # O fluxo antigo (sebrae_rotina: Excel Online + orquestração) fica sem uso até ser removido.
+    from scripts import sebrae_leitura
 
-    return sebrae_rotina.executar(context, sys.modules[__name__])
+    return sebrae_leitura.executar(context, sys.modules[__name__])
 
 
 def abrir_para_login(context: "BrowserContext") -> int:

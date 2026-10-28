@@ -201,6 +201,8 @@ from routers.units import UnidadePayload, UnitRouteServices, create_units_router
 from routers.aliases import ApelidoUndoPayload, ApelidoUpdatePayload, UsuarioUpdatePayload, create_alias_router
 from routers.endpoint_removals import create_endpoint_removals_router
 from routers.automation import AutomationRouteServices, create_automation_router
+from routers.sebrae_dashboard import SebraeDashboardServices, create_sebrae_dashboard_router
+from domains import sebrae_novos, sebrae_cruzamento
 from domains.chrome_automation import ChromeAutomationRunner, default_contract
 from domains.sebrae_agendamento import AgendadorSebrae, caminhos_padrao as sebrae_caminhos_padrao
 from domains import endpoint_removals
@@ -2523,6 +2525,13 @@ def get_sebrae_scheduler() -> AgendadorSebrae:
 
 app.include_router(create_automation_router(AutomationRouteServices(
     runner=get_chrome_automation_runner, sebrae=get_sebrae_scheduler,
+)))
+
+app.include_router(create_sebrae_dashboard_router(SebraeDashboardServices(
+    caminhos=lambda: sebrae_novos.caminhos_padrao(STATE_DIR),
+    max_upload_bytes=lambda: MAX_UPLOAD_BYTES,
+    registros=lambda: sebrae_cruzamento.registros_de_equipamentos(_listar_equipamentos_indexados()),
+    relatorio_chamados=_dashboard_ticket_report,
 )))
 
 

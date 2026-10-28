@@ -11,7 +11,7 @@
     usuarios: "Verificar usuários",
     ambas: "Ambas as rotinas",
     login: "Abrir Chrome para login",
-    sebrae: "Sincronizar chamados Sebrae",
+    sebrae: "Chamados novos Sebrae",
   });
   const STATUS = Object.freeze({
     em_andamento: "Em andamento",
@@ -21,27 +21,6 @@
     ocupada: "Ocupada",
     interrompido: "Interrompido",
   });
-  // Situação gravada pelo script em sebrae_chamados_estado.json; valores desconhecidos aparecem como vêm.
-  const SITUACAO_SEBRAE = Object.freeze({
-    concluido: "Concluída",
-    parcial: "Concluída com pendências",
-    falha: "Falha",
-    cancelado: "Cancelada",
-    interrompido: "Interrompida",
-    login_necessario: "Login necessário",
-    em_andamento: "Em andamento",
-  });
-  const MOTIVO_SEBRAE = Object.freeze({
-    sem_indicios_de_tipo: "Sem indícios de incidente ou de solicitação.",
-    indicios_conflitantes: "Indícios de incidente e de solicitação ao mesmo tempo.",
-    sem_iniciador: "Chamado sem Iniciador.",
-    sem_solicitante: "Chamado sem Solicitante.",
-    sem_data_de_abertura: "Chamado sem data de abertura (Habilitada em).",
-    data_de_abertura_invalida: "Data de abertura (Habilitada em) inválida.",
-    sem_descricao_nem_titulo: "Chamado sem descrição nem título.",
-    numero_invalido: "Número de chamado inválido.",
-  });
-  const SEBRAE_ATUALIZAR_MS = 60000;
   const POLL_ATIVO_MS = 1500;
   const POLL_LIVRE_MS = 5000;
   const MAX_LINHAS = 500;
@@ -63,8 +42,6 @@
     logPagina: 1, logPaginas: 1,
     avisouServidorAntigo: false,
     rotinaAtiva: "",
-    // Cartão Sincronizar chamados Sebrae: último resumo da API (null até a primeira resposta).
-    sebrae: { resumo: null, consulta: 0, consultadoEm: 0, ocupado: false, chavePendencias: null, ultimaId: null },
   };
 
   const AVISO_SERVIDOR_ANTIGO = "Servidor desatualizado: reinicie o Simpress (feche a janela do servidor e abra iniciar_servidor.bat).";
@@ -227,11 +204,6 @@
     renderizarBadgesRotinas();
     const cancelar = document.getElementById("btn-automacao-cancelar");
     if (cancelar) cancelar.disabled = !estado.emAndamento || estado.ocupado;
-    // O cancelamento do cartão Sebrae só vale quando a rotina em andamento é a dele.
-    const cancelarSebrae = document.getElementById("btn-sebrae-cancelar");
-    if (cancelarSebrae) cancelarSebrae.disabled = !estado.emAndamento || estado.rotinaAtiva !== "sebrae" || estado.ocupado;
-    const agendamento = document.getElementById("btn-sebrae-agendamento");
-    if (agendamento) agendamento.disabled = estado.sebrae.ocupado;
   }
 
   function mostrarEstado(dados) {
@@ -652,230 +624,6 @@
     return carregarHistoricoAutomacao();
   }
 
-  // ---------------------------------------------------------------- Sincronizar chamados Sebrae
-
-  function formatarDiaHora(iso) {
-    const data = iso ? new Date(iso) : null;
-    if (!data || Number.isNaN(data.getTime())) return "";
-    // O agendamento segue o horário de Brasília (America/Sao_Paulo), qualquer que seja o fuso do navegador.
-    return data.toLocaleString("pt-BR", {
-      weekday: "short", day: "2-digit", month: "2-digit", hour: "2-digit", minute: "2-digit", timeZone: "America/Sao_Paulo",
-    });
-  }
-
-  function contarChamados(total) {
-    return `${total} ${total === 1 ? "chamado" : "chamados"}`;
-  }
-
-  function chaveDasPendencias(resumo) {
-    const lista = Array.isArray(resumo?.pendencias) ? resumo.pendencias : [];
-    return lista.map(item => `${item.numero}|${item.motivo}`).sort().join(";");
-  }
-
-  /**
-   * Avisos da tela entre dois resumos consecutivos: só o que mudou (chamados incluídos por uma execução nova,
-   * conjunto de pendências diferente, login que passou a ser necessário, falha diferente). Sem resumo anterior
-   * (primeira consulta) ou sem mudança, devolve lista vazia. Espelha deve_avisar de domains/sebrae_chamados.py.
-   */
-  function avisosSincronizacaoSebrae(anterior, atual) {
-    if (!anterior || !atual) return [];
-    const avisos = [];
-    const antes = anterior.ultima_execucao || null;
-    const agora = atual.ultima_execucao || null;
-    const execucaoNova = Boolean(agora) && (!antes || agora.inicio !== antes.inicio || agora.fim !== antes.fim);
-    const incluidos = Number(agora?.incluidos) || 0;
-    if (execucaoNova && incluidos > 0) {
-      avisos.push({ tipo: "success", mensagem: `Sebrae: ${contarChamados(incluidos)} ${incluidos === 1 ? "incluído" : "incluídos"} no Dashboard.` });
-    }
-    const pendencias = Array.isArray(atual.pendencias) ? atual.pendencias.length : 0;
-    if (pendencias && chaveDasPendencias(anterior) !== chaveDasPendencias(atual)) {
-      avisos.push({ tipo: "warning", mensagem: `Sebrae: ${pendencias === 1 ? "1 pendência" : `${pendencias} pendências`} para conferir.` });
-    }
-    if (atual.login_necessario && !anterior.login_necessario) {
-      avisos.push({ tipo: "warning", mensagem: "Sebrae: login necessário no Chrome de automação." });
-    }
-    if (execucaoNova && agora.situacao === "falha"
-        && (antes?.situacao !== "falha" || JSON.stringify(antes?.detalhes ?? null) !== JSON.stringify(agora.detalhes ?? null))) {
-      avisos.push({ tipo: "error", mensagem: "Sebrae: a última sincronização falhou. Veja o motivo em Últimas execuções." });
-    }
-    return avisos;
-  }
-
-  function definirTexto(id, texto) {
-    const elemento = document.getElementById(id);
-    if (elemento && elemento.textContent !== texto) elemento.textContent = texto;
-  }
-
-  function descreverSituacaoSebrae(resumo) {
-    const agendamento = resumo.agendamento || {};
-    if (estado.emAndamento && estado.rotinaAtiva === "sebrae") {
-      return { estado: "em_andamento", titulo: "Sincronizando", detalhe: "A sincronização está em andamento; acompanhe em Andamento." };
-    }
-    if (estado.emAndamento) {
-      return {
-        estado: "aguardando", titulo: "Aguardando",
-        detalhe: `${ROTINAS[estado.rotinaAtiva] || "Outra rotina"} em andamento; a sincronização não roda ao mesmo tempo.`,
-      };
-    }
-    if (agendamento.ativo) {
-      const proxima = formatarDiaHora(agendamento.proxima_execucao);
-      return { estado: "livre", titulo: "Agendamento ativo", detalhe: proxima ? `Próxima execução: ${proxima}.` : "Aguardando o próximo horário." };
-    }
-    return {
-      estado: "pausado", titulo: "Agendamento pausado",
-      detalhe: "Nenhuma execução automática programada.",
-    };
-  }
-
-  function descreverUltimaExecucaoSebrae(ultima) {
-    if (!ultima) return "Nenhuma execução registrada.";
-    const quando = formatarHora(ultima.fim || ultima.inicio);
-    const situacao = SITUACAO_SEBRAE[ultima.situacao] || ultima.situacao || "Sem situação";
-    const detalhe = typeof ultima.detalhes === "string" && ultima.detalhes.trim() ? ` — ${ultima.detalhes.trim()}` : "";
-    return `${situacao}${quando ? ` em ${quando}` : ""}${detalhe}`;
-  }
-
-  function renderizarPendenciasSebrae(pendencias) {
-    const host = document.getElementById("sebrae-pendencias");
-    if (!host) return;
-    if (!pendencias.length) {
-      host.replaceChildren(dom.createTextElement("p", "ck-cartao__meta", "Pendências: nenhuma."));
-      return;
-    }
-    const tabela = document.createElement("table");
-    tabela.className = "ck-tabela ck-tabela--cards sebrae-pendencias-tabela";
-    tabela.setAttribute("aria-label", "Pendências");
-    const cabecalho = document.createElement("thead");
-    const linhaCabecalho = document.createElement("tr");
-    ["Chamado", "Motivo"].forEach(texto => {
-      const th = dom.createTextElement("th", "", texto);
-      th.scope = "col";
-      linhaCabecalho.appendChild(th);
-    });
-    cabecalho.appendChild(linhaCabecalho);
-    const corpo = document.createElement("tbody");
-    pendencias.forEach(item => {
-      const linha = document.createElement("tr");
-      const numero = dom.createTextElement("span", "sebrae-pendencia-numero", item.numero);
-      linha.append(celula("Chamado", numero), celula("Motivo", MOTIVO_SEBRAE[item.motivo] || item.motivo));
-      corpo.appendChild(linha);
-    });
-    tabela.append(cabecalho, corpo);
-    host.replaceChildren(tabela);
-  }
-
-  function renderizarSebrae() {
-    const resumo = estado.sebrae.resumo;
-    if (!resumo) return;
-    const agendamento = resumo.agendamento || {};
-    const ultima = resumo.ultima_execucao || null;
-    const pendencias = Array.isArray(resumo.pendencias) ? resumo.pendencias : [];
-
-    const situacao = descreverSituacaoSebrae(resumo);
-    const caixa = document.getElementById("sebrae-estado");
-    if (caixa && caixa.dataset.state !== situacao.estado) {
-      caixa.dataset.state = situacao.estado;
-      const visual = { em_andamento: "info", aguardando: "alerta", livre: "ok" }[situacao.estado] || "";
-      caixa.dataset.status = visual;
-      definirIcone(caixa, ICONE_STATUS[visual], visual === "info");
-    }
-    definirTexto("sebrae-estado-titulo", situacao.titulo);
-    definirTexto("sebrae-estado-detalhe", situacao.detalhe);
-
-    definirTexto("sebrae-agendamento", agendamento.ativo ? "Ativo" : "Pausado");
-    definirTexto("sebrae-ultima", descreverUltimaExecucaoSebrae(ultima));
-    definirTexto("sebrae-proxima", agendamento.ativo ? (formatarDiaHora(agendamento.proxima_execucao) || "—") : "—");
-    definirTexto("sebrae-incluidos", ultima ? String(Number(ultima.incluidos) || 0) : "—");
-    definirTexto("sebrae-ignorados", ultima ? String(Number(ultima.ignorados) || 0) : "—");
-    definirTexto("sebrae-pendentes", ultima ? String(Number(ultima.pendentes ?? pendencias.length) || 0) : String(pendencias.length || "—"));
-
-    const login = document.getElementById("sebrae-login-aviso");
-    if (login && login.hidden === Boolean(resumo.login_necessario)) login.hidden = !resumo.login_necessario;
-
-    const botao = document.getElementById("btn-sebrae-agendamento");
-    if (botao) {
-      const rotulo = agendamento.ativo ? "Pausar agendamento" : "Ativar agendamento";
-      const texto = botao.querySelector("span");
-      if (texto && texto.textContent !== rotulo) texto.textContent = rotulo;
-    }
-
-    const avisos = [];
-    if (agendamento.pronta === false) {
-      avisos.push("O agendamento ainda não pode ser ativado: ele só é liberado depois da execução controlada (leitura do SoftExpert e gravação no Dashboard conferidas). Até lá, use Executar agora.");
-    }
-    const disparo = agendamento.ultimo_disparo;
-    if (agendamento.ativo && disparo && disparo.resultado && disparo.resultado !== "iniciada") {
-      avisos.push(`Último horário agendado (${formatarHora(disparo.horario)}): ${disparo.resultado}.`);
-    }
-    const aviso = document.getElementById("sebrae-agendamento-aviso");
-    if (aviso) {
-      definirTexto("sebrae-agendamento-aviso", avisos.join(" "));
-      aviso.hidden = !avisos.length;
-    }
-
-    const chave = chaveDasPendencias(resumo);
-    if (chave !== estado.sebrae.chavePendencias) {
-      estado.sebrae.chavePendencias = chave;
-      renderizarPendenciasSebrae(pendencias);
-    }
-    atualizarBotoes();
-  }
-
-  function aplicarResumoSebrae(resumo) {
-    const anterior = estado.sebrae.resumo;
-    estado.sebrae.resumo = resumo;
-    estado.sebrae.consultadoEm = Date.now();
-    renderizarSebrae();
-    avisosSincronizacaoSebrae(anterior, resumo).forEach(aviso => app.showToast(aviso.mensagem, aviso.tipo));
-  }
-
-  async function carregarResumoSebrae() {
-    const consulta = ++estado.sebrae.consulta;
-    estado.sebrae.consultadoEm = Date.now();
-    try {
-      const resumo = await consultarAutomacao("/api/automacao/sebrae/resumo", {
-        errorMessage: "Não foi possível consultar a sincronização dos chamados Sebrae.",
-      });
-      if (consulta !== estado.sebrae.consulta) return;
-      aplicarResumoSebrae(resumo);
-    } catch (err) {
-      if (consulta !== estado.sebrae.consulta) return;
-      console.error("Erro ao consultar a sincronização Sebrae:", err);
-      if (err?.servidorDesatualizado) avisarErro(err);
-      definirTexto("sebrae-estado-detalhe", err.message);
-    }
-  }
-
-  async function alternarAgendamentoSebrae() {
-    if (estado.sebrae.ocupado) return;
-    const ativar = !estado.sebrae.resumo?.agendamento?.ativo;
-    estado.sebrae.ocupado = true;
-    atualizarBotoes();
-    const botao = document.getElementById("btn-sebrae-agendamento");
-    botao?.setAttribute("aria-busy", "true");
-    try {
-      const resumo = await consultarAutomacao("/api/automacao/sebrae/agendamento", {
-        method: "PUT",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ ativo: ativar }),
-        errorMessage: ativar ? "Não foi possível ativar o agendamento." : "Não foi possível pausar o agendamento.",
-      });
-      ++estado.sebrae.consulta;
-      aplicarResumoSebrae(resumo);
-      app.showToast(resumo.agendamento?.ativo ? "Agendamento ativado: de segunda a sexta, a cada 30 minutos." : "Agendamento pausado.", "success");
-    } catch (err) {
-      console.error("Erro ao alterar o agendamento Sebrae:", err);
-      // 409: a rotina ainda não está completa (ROTINA_PRONTA); é um aviso esperado, não uma falha.
-      if (err?.status === 409) app.showToast(err.message, "warning");
-      else avisarErro(err);
-      carregarResumoSebrae();
-    } finally {
-      estado.sebrae.ocupado = false;
-      botao?.removeAttribute("aria-busy");
-      atualizarBotoes();
-    }
-  }
-
   function agendar() {
     window.clearTimeout(estado.timer);
     if (!painelVisivel() && !estado.acompanharFim) return;
@@ -884,24 +632,19 @@
 
   function aplicarEstado(dados) {
     const estavaAtivo = estado.emAndamento;
+    const rotinaAnterior = estado.rotinaAtiva;
     estado.emAndamento = dados.estado === "em_andamento";
     estado.rotinaAtiva = estado.emAndamento ? (dados.rotina || "") : "";
     mostrarEstado(dados);
     acrescentarLinhas(dados.log);
     atualizarBotoes();
+    // A leitura dos chamados novos acabou: a lista da tela já pode mostrar o resultado.
+    if (estavaAtivo && !estado.emAndamento && rotinaAnterior === "sebrae") app.carregarNovosSebrae?.();
     const ultimaId = dados.ultima?.id || "";
     if (ultimaId !== estado.ultimaExecucaoId || estavaAtivo !== estado.emAndamento) {
       estado.ultimaExecucaoId = ultimaId;
       carregarHistoricoAutomacao();
       carregarUltimasPorRotina();
-    }
-    const sebrae = estado.sebrae;
-    if (!sebrae.resumo || ultimaId !== sebrae.ultimaId || estavaAtivo !== estado.emAndamento
-        || Date.now() - sebrae.consultadoEm > SEBRAE_ATUALIZAR_MS) {
-      sebrae.ultimaId = ultimaId;
-      carregarResumoSebrae();
-    } else {
-      renderizarSebrae();
     }
     if (estavaAtivo && !estado.emAndamento && estado.acompanharFim) {
       estado.acompanharFim = false;
@@ -1004,7 +747,6 @@
     inicializarAutomacao,
     iniciarRotinaAutomacao,
     cancelarRotinaAutomacao,
-    alternarAgendamentoSebrae, avisosSincronizacaoSebrae, carregarResumoSebrae,
     atualizarEstadoAutomacao,
     carregarHistoricoAutomacao,
     filtrarHistoricoAutomacao, limparFiltrosAutomacao, mudarPaginaHistoricoAutomacao,

@@ -4,7 +4,7 @@ Objetivo: executar pelo site local as rotinas de `scripts/automacao_rotinas_chro
 
 O site **só inicia** o script. As exportações continuam sendo feitas no Chrome de automação (perfil próprio, porta CDP 9333) e os arquivos continuam sendo importados pelas pastas locais `data/state/entrada_chamados` e `data/state/entrada_automatica`, nunca por upload ou HTTP (regra do `AGENTS.md`).
 
-Rotina `sebrae` (Sincronizar chamados Sebrae, agendada de segunda a sexta): [especificação](sincronizar-chamados-sebrae.md). Ela usa este mesmo contrato, a mesma trava e o mesmo histórico.
+Rotina `sebrae` (Chamados novos Sebrae: lê o SoftExpert e grava `data/state/sebrae_novos.json`; sem agendamento na tela): [especificação](sincronizar-chamados-sebrae.md). Ela usa este mesmo contrato, a mesma trava e o mesmo histórico.
 
 ## Contrato com o script
 

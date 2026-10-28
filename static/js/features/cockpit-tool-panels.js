@@ -58,6 +58,8 @@
   let comparisonDetailRequest = 0;
   let aliasRequest = 0;
   let skipLinkHref = null;
+  let pendingComparisonFocus = "";
+  const HIGHLIGHT_MS = 1500;
 
   function normalize(value) {
     return String(value ?? "").normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLocaleLowerCase("pt-BR").trim();
@@ -348,6 +350,56 @@
     ["ausentes_no_endpoint", "Só Simpress"], ["ausentes_em_detalhes", "Só Endpoint"],
   ];
 
+  function destacarLinhaCockpit(element) {
+    if (!element?.isConnected) return;
+    element.scrollIntoView({ block: "center", behavior: window.matchMedia?.("(prefers-reduced-motion: reduce)").matches ? "auto" : "smooth" });
+    element.classList.add("ck-linha-destaque");
+    setTimeout(() => element.classList.remove("ck-linha-destaque"), HIGHLIGHT_MS);
+  }
+
+  // Série do Endpoint (MacBook) vem sem o "S" inicial que EquipamentosDetalhes tem; só vale se o resultado for único.
+  function matchComparisonRows(rows, serial) {
+    const wanted = String(serial || "").trim().toUpperCase();
+    if (!wanted) return [];
+    const serialOf = row => String(row?.serie || "").trim().toUpperCase();
+    const exact = rows.filter(row => serialOf(row) === wanted);
+    if (exact.length) return exact;
+    const equivalent = rows.filter(row => {
+      const other = serialOf(row);
+      return other && (other === `S${wanted}` || `S${other}` === wanted);
+    });
+    return new Set(equivalent.map(serialOf)).size === 1 ? equivalent : [];
+  }
+
+  function applyPendingComparisonFocus(event) {
+    const serial = pendingComparisonFocus;
+    if (!serial) return;
+    const rows = comparisonRows(event);
+    const matches = matchComparisonRows(rows, serial);
+    // Prioridade igual à Home: Localidade e Só Simpress são as divergências listadas lá.
+    const order = ["Localidade", "Só Simpress", "Usuário", "Só Endpoint"];
+    const row = order.map(category => matches.find(item => item.categoria === category)).find(Boolean);
+    selectedComparisonFilter = row ? row.categoria : "todos";
+    selectedComparisonRowKey = row ? row.cockpitKey : "";
+  }
+
+  function highlightPendingComparisonRow() {
+    if (!pendingComparisonFocus) return;
+    pendingComparisonFocus = "";
+    const key = selectedComparisonRowKey;
+    if (!key) return;
+    const button = [...document.querySelectorAll("#cockpit-comparison-list .cockpit-comparison-row")]
+      .find(item => item.dataset.rowKey === key);
+    destacarLinhaCockpit(button?.closest(".ck-ferr-item") || button);
+  }
+
+  async function abrirComparacaoDaSerie(serial) {
+    pendingComparisonFocus = String(serial || "").trim();
+    selectedComparisonId = "";
+    await openPanel("comparacao");
+    pendingComparisonFocus = "";
+  }
+
   function renderComparisonKpis(event) {
     const metrics = comparisonMetrics(event);
     const equalPercent = Number.isFinite(metrics.iguais) && Number.isFinite(metrics.simpress) && metrics.simpress > 0
@@ -408,6 +460,7 @@
       wrapper.setAttribute("role", "listitem");
       const button = element("button", "ck-item ck-ferr-botao cockpit-comparison-row");
       button.type = "button";
+      button.dataset.rowKey = row.cockpitKey;
       button.setAttribute("aria-pressed", String(row.cockpitKey === selectedComparisonRowKey));
       const simpressMissing = row.categoria === "Só Endpoint";
       const endpointMissing = row.categoria === "Só Simpress";
@@ -451,7 +504,7 @@
       byId("cockpit-comparison-export").disabled = true;
       return renderEmpty(target, "Selecione uma comparação salva.");
     }
-    byId("cockpit-comparison-export").textContent = "Exportar dia";
+    byId("cockpit-comparison-export").textContent = "Exportar comparações do dia";
     byId("cockpit-comparison-export").title = "Inclui todas as atualizações da data desta comparação.";
     byId("cockpit-comparison-export").disabled = !/^\d{4}-\d{2}-\d{2}$/.test(String(event.horario || "").slice(0, 10))
       || typeof app.exportarResultadoComparacaoPlanilhas !== "function";
@@ -580,11 +633,13 @@
       if (request !== comparisonDetailRequest || activeTool !== "comparacao") return;
       selectedComparison = data.evento || null;
       selectedComparisonRowKey = "";
+      applyPendingComparisonFocus(selectedComparison);
       renderComparisonKpis(selectedComparison);
       renderComparisonFilters(selectedComparison);
       renderComparisonList();
       renderComparisonDetail(selectedComparison);
       updateComparisonStatus();
+      highlightPendingComparisonRow();
     } catch (error) {
       if (request !== comparisonDetailRequest || activeTool !== "comparacao") return;
       renderError(target, error, "Não foi possível abrir a comparação.");
@@ -1009,6 +1064,24 @@
     return section;
   }
 
+  // Cartão compacto: número grande + rótulo por par [rótulo, valor]; `extra` anexa um bloco opcional.
+  function statCard(title, pairs, extra) {
+    const section = element("section", "ck-det-bloco ck-rel__cartao");
+    section.append(element("h3", "", title));
+    if (!pairs.length) section.append(element("p", "ck-lista__vazio", "Sem registros neste período."));
+    else {
+      const grid = element("dl", "ck-rel__numeros");
+      pairs.forEach(([label, value]) => {
+        const cell = element("div", "ck-rel__numero");
+        cell.append(element("dt", "ck-rel__rotulo", label), element("dd", "ck-rel__valor", displayCount(value)));
+        grid.append(cell);
+      });
+      section.append(grid);
+    }
+    if (extra && extra.querySelector("li")) section.append(extra);
+    return section;
+  }
+
   function renderMonthly(report) {
     const inventory = report.inventario || {};
     const comparison = report.comparacao || {};
@@ -1022,18 +1095,30 @@
       ["Transportes", "—", "Esta fonte não fornece a contagem mensal"],
     ]);
     const details = byId("cockpit-monthly-details");
-    details.replaceChildren(
-      monthlyChart(monthlyChartBars(oracle, simpress)),
-      reportRows("Resumo da base atual", [
-        ["Equipamentos", inventory.total], ["Unidades", inventory.unidades],
-        ["Atualizações no mês", comparison.atualizacoes_no_mes],
-      ], row => `${row[0]} · ${displayCount(row[1])}`),
-      reportRows("Inventário por tipo", inventory.por_tipo, row => `${row[0]} · ${displayCount(row[1])}`),
-      unitsTable(inventory.por_unidade),
-      reportRows("Divergências da comparação", comparison.linhas, row => `${row.secao} · ${row.serie || "Série indisponível"} · ${row.hostname || "Hostname indisponível"}`),
-      reportRows("Ordens do mês", tickets.linhas, row => `${row.fonte} · ${row.identificador || "Identificador indisponível"} · ${row.serie || "Série indisponível"} · ${(row.situacao || []).join(", ") || "Sem classificação no período"}`),
-      reportRows("Registros com dados insuficientes", tickets.dados_insuficientes, row => `${row.fonte} · ${row.serie || "Série indisponível"} · ${(row.identificadores || []).join(", ")} · ${row.motivo || "Motivo indisponível"}`),
+    const counts = comparison.contagens || {};
+    const insufficient = Array.isArray(tickets.dados_insuficientes) ? tickets.dados_insuficientes : [];
+    const left = element("div", "ck-rel__col");
+    left.append(monthlyChart(monthlyChartBars(oracle, simpress)), unitsTable(inventory.por_unidade));
+    const right = element("div", "ck-rel__col");
+    right.append(
+      statCard("Resumo da base atual", [
+        ["Equipamentos", inventory.total], ["Unidades", inventory.unidades], ["Atualizações no mês", comparison.atualizacoes_no_mes],
+      ]),
+      statCard("Inventário por tipo", Array.isArray(inventory.por_tipo) ? inventory.por_tipo : []),
+      statCard("Divergências", Object.entries(counts), reportRows("Linhas da comparação", comparison.linhas, row => `${row.secao} · ${row.serie || "Série indisponível"} · ${row.hostname || "Hostname indisponível"}`)),
+      statCard("Ordens do mês", [
+        ["Oracle abertas", oracle.abertas], ["Oracle concluídas", oracle.concluidas], ["Oracle pendentes", oracle.pendentes],
+        ["Simpress abertas", simpress.abertas], ["Simpress concluídas", simpress.concluidas], ["Simpress pendentes", simpress.pendentes],
+      ], reportRows("Linhas das ordens", tickets.linhas, row => `${row.fonte} · ${row.identificador || "Identificador indisponível"} · ${row.serie || "Série indisponível"} · ${(row.situacao || []).join(", ") || "Sem classificação no período"}`)),
     );
+    const parts = [];
+    if (insufficient.length) {
+      const notice = element("p", "ck-rel__aviso ck-rel__largo", `${insufficient.length} registro(s) com dados insuficientes nas ordens do mês.`);
+      notice.setAttribute("role", "status");
+      notice.title = insufficient.map(row => `${row.fonte} · ${row.serie || "Série indisponível"} · ${(row.identificadores || []).join(", ")} · ${row.motivo || "Motivo indisponível"}`).join("\n");
+      parts.push(notice);
+    }
+    details.replaceChildren(...parts, left, right);
     byId("cockpit-monthly-preview").textContent = monthlyPreviewText(report);
     const cutoff = report.mes?.data_corte;
     const cutoffLabel = /^\d{4}-\d{2}-\d{2}$/.test(cutoff || "")
@@ -1591,6 +1676,8 @@
 
   return {
     abrirPainelCockpit: openPanel,
+    abrirComparacaoDaSerie,
+    destacarLinhaCockpit,
     fecharPainelCockpit: goBack,
     filterTicketRecords,
     comparisonMetrics,
