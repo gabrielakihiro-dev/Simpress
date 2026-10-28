@@ -58,7 +58,7 @@ Ao exibir ou exportar o Histórico de Planilhas, disponibilize um campo de anota
 
 ## Rotina de exportação de inventários
 
-Quando o usuário disser "Executar" ou "exportar planilhas", siga a skill `.claude/skills/rotina-exportar-planilhas` (UX Simpress + Endpoint Central, importação pela pasta `data/state/entrada_automatica`). As mesmas regras de login, bloqueio e "pare"/"cancelar" da rotina de OS se aplicam. "Executar OS Simpress" aciona a rotina de OS acima.
+Quando o usuário disser "Executar" ou "exportar planilhas", siga a skill `.claude/skills/rotina-exportar-planilhas` (UX Simpress + Endpoint Central, importação pela pasta `data/state/entrada_automatica`). As mesmas regras de login, bloqueio e "pare"/"cancelar" da rotina de OS se aplicam. Em qualquer automação do Endpoint Central e do UX Simpress (inventários), se aparecerem janelas de notificação (em geral uma ou duas), feche cada uma clicando no X; só quando aparecerem. "Executar OS Simpress" aciona a rotina de OS acima.
 
 ## Sincronização de chamados Sebrae
 
