@@ -468,7 +468,7 @@
     }
 
     let ticketDescriptionSeq = 0;
-    // Uma linha por OS e fonte (como no Cockpit v2): só a Oracle traz descrição.
+    // Uma linha por OS (fontes unidas): só a Oracle traz descrição.
     function renderTicketSummaryDescription(order, source) {
       const item = el("div", "ck-descricao ticket-summary-description-entry");
       const text = (source === "oracle" && order.descricao) || "Descrição não informada";
@@ -582,7 +582,7 @@
         const user = users[record.serie];
         const userText = userFailure ? "Indisponível" : ticketUserLabel(user);
         const hostText = userFailure ? "Indisponível" : ticketHostnameLabel(user);
-        record.ordens.forEach(order => order.fontes.forEach(source => {
+        record.ordens.forEach(order => {
           const row = doc.createElement("tr");
           row.dataset.serial = record.serie;
           row.dataset.osCount = "1";
@@ -592,20 +592,29 @@
             row.append(td);
             return td;
           };
-          cell("Fonte").append(el("span", "ck-tag", ticketSummarySourceLabel([source])));
+          // OS presente nas duas fontes: uma linha, com um selo e um editor de chamado por fonte (a chave do vínculo inclui a fonte).
+          const sourceCell = cell("Fonte", "ck-os-fontes");
           cell("Série", "ck-mono").textContent = record.serie;
-          const orderRecord = { serie: record.serie, os: order.os, fontes: [source] };
-          const osButton = renderTicketSummaryOrderButton(orderRecord);
+          const osButton = renderTicketSummaryOrderButton({ serie: record.serie, os: order.os, fontes: order.fontes });
           osButton.className = "ck-link-btn ck-mono ticket-summary-order-link";
           cell("OS", "ck-mono").append(osButton);
           cell("Usuário").textContent = userText;
           cell("Hostname", "ck-mono").textContent = hostText;
-          const sourceRecord = { fonte: source, serie: record.serie, os: order.os };
-          cell("Chamado", "ck-td--largo").append(renderTicketOsLinkEditor(sourceRecord,
-            links.get(ticketOsLinkKey(sourceRecord)), canSave, status));
-          cell("Descrição", "ck-td--largo").append(renderTicketSummaryDescription(order, source));
+          const linkCell = cell("Chamado", "ck-td--largo ck-os-fontes");
+          order.fontes.forEach(source => {
+            const tagSlot = el("div", "ck-os-fonte");
+            tagSlot.append(el("span", "ck-tag", ticketSummarySourceLabel([source])));
+            sourceCell.append(tagSlot);
+            const sourceRecord = { fonte: source, serie: record.serie, os: order.os };
+            const slot = el("div", "ck-os-fonte");
+            slot.append(renderTicketOsLinkEditor(sourceRecord,
+              links.get(ticketOsLinkKey(sourceRecord)), canSave, status));
+            linkCell.append(slot);
+          });
+          cell("Descrição", "ck-td--largo").append(renderTicketSummaryDescription(order,
+            order.fontes.includes("oracle") ? "oracle" : "simpress"));
           body.append(row);
-        }));
+        });
       });
       table.append(body);
       content.append(table);
