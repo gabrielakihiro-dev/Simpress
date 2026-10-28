@@ -62,7 +62,7 @@ Quando o usuário disser "Executar" ou "exportar planilhas", siga a skill `.clau
 
 ## Chamados novos do Sebrae
 
-A tela Automação importa o `.xlsx` do Dashboard Operacional_SEBRAE (só a aba `CHAMADOS`, coluna C) e a rotina `sebrae` lê no SoftExpert os chamados que não estão nela; o site mostra um formulário por chamado novo e exporta as linhas para o usuário colar. **Nada é gravado no Dashboard nem no Excel Online; no SoftExpert a rotina só lê, aceitando apenas a confirmação de associar o chamado ao usuário (botão `Sim`).** Siga `docs/operacao/sincronizar-chamados-sebrae.md` (seções "Modelo atual" e "Tela no site").
+A tela Automação importa o `.xlsx` do Dashboard Operacional_SEBRAE (só a aba `CHAMADOS`, coluna C) e a rotina `sebrae` lê no SoftExpert os chamados que não estão nela; o site mostra um formulário por chamado novo e exporta as linhas para o usuário colar. **Nada é gravado no Dashboard nem no Excel Online; no SoftExpert a rotina só lê, aceitando apenas a confirmação de associar o chamado ao usuário (botão `Sim` ou `Confirmar`).** Siga `docs/operacao/sincronizar-chamados-sebrae.md` (seções "Modelo atual" e "Tela no site").
 
 - Use o Chrome de automação; o login do SoftExpert é manual. Após expiração de sessão ativa, pode clicar uma vez no `SSO` visível e aguardar, sem digitar credenciais. Não armazene senhas, tokens ou cookies nem use API remota.
 - Colunas da tabela `Tabela3` (A:W, com Título em G): manuais no site A, B, D, J, R, S; SoftExpert C, F, G, H, I, P; cruzamento pelo nome em I para K, L, N (EquipamentosDetalhes, Endpoint e Entra; ausente ou ambíguo fica vazio, nunca se escolhe); M=`Sebrae` e O=`PR`; E só se a série já estiver vinculada a uma OS. Q, T, U e V são fórmulas e W não se toca: o site nunca os escreve.
