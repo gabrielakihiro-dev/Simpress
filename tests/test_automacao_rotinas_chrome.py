@@ -87,8 +87,10 @@ class ChromeAutomationHelpersTests(unittest.TestCase):
         self.assertEqual(len(cliques), 1)
         self.assertTrue(any("conta conectada não concluiu" in m for m in mensagens))
         self.assertTrue(any("AÇÃO NECESSÁRIA" in m for m in mensagens))
-        self.avisar.assert_called_once()
-        self.assertIn("UX Simpress", self.avisar.call_args.args[0])
+        # um aviso ao pedir o login e outro na metade do tempo
+        self.assertEqual(self.avisar.call_count, 2)
+        for chamada in self.avisar.call_args_list:
+            self.assertIn("UX Simpress", chamada.args[0])
 
     def test_aguardar_login_returns_when_sso_logs_in(self):
         page, relogio = self._pagina_falsa()
