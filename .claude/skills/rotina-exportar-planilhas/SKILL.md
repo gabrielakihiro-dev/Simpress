@@ -19,6 +19,7 @@ Log por execução: `data\logs\automacao_chrome\<AAAAMMDD_HHMMSS>_<rotina>.log` 
 ## Regras
 
 - O login é sempre do usuário. Se aparecer login ou 2FA, deixe a aba aberta, peça só essa autenticação e retome após "pronto". Nunca peça senhas ou códigos no chat nem altere permissões do Chrome.
+- Notificações: no UX Simpress e no Endpoint Central, se aparecerem janelas de notificação/aviso (normalmente uma ou duas), feche cada uma clicando apenas no **X**. Só se aparecerem; não clique em botões de aceitar/confirmar nem feche nada que não seja notificação.
 - Importe somente pela pasta local; nunca por HTTP/HTTPS, formulário ou API.
 - Cada exportação é clicada uma única vez. Não aguarde evento de download nem repita o clique sem evidência de falha.
 - Se o Endpoint mostrar `ERR_BLOCKED_BY_CLIENT`, registre a falha, não contorne o bloqueio e continue o que for independente. Sem o arquivo correto do Endpoint não há importação; use arquivo manual somente se o usuário identificar a origem.
