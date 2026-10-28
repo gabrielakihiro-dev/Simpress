@@ -31,7 +31,7 @@ test("Chamados novos só exporta os prontos e mostra a mensagem aprovada com os 
   await expect(cartao.locator("#btn-sebrae-exportar")).toBeDisabled();
   await primeiro.locator('[data-sebrae-campo="J"]').selectOption("INCIDENTE");
   await primeiro.locator('[data-sebrae-campo="R"]').fill("2026-10-28T09:05");
-  await primeiro.locator('[data-sebrae-campo="S"]').fill("DISPONIBILIDADE");
+  await expect(primeiro.locator('[data-sebrae-campo="S"]')).toHaveValue("DISPONIBILIDADE"); // padrão, sem preencher
   await expect(cartao.locator("#sebrae-exportacao-status")).toHaveText("1 de 2 chamado(s) com Responsável, Status e Tipo preenchidos.");
   await cartao.locator("#btn-sebrae-exportar").click();
   await expect(cartao.locator("#sebrae-exportacao-status")).toHaveText("Planilha Exportada com Sucesso!");

@@ -79,13 +79,16 @@
         }
       }
       controle.className = "ck-entrada ck-entrada--sm";
-      controle.value = valores[letra] || "";
+      controle.value = valores[letra] ?? PADROES_MANUAIS[letra] ?? "";
+      if (!(letra in valores) && controle.value) estado.valores[numero] = { ...valores, [letra]: controle.value };
       controle.dataset.sebraeNumero = numero;
       controle.dataset.sebraeCampo = letra;
       controle.addEventListener("input", aoEditar);
       controle.addEventListener("change", aoEditar);
       return controle;
     }
+
+    const PADROES_MANUAIS = Object.freeze({ S: "DISPONIBILIDADE" }); // Tipo SLA habitual; o usuário pode trocar ou apagar
 
     const ROTULOS_MANUAIS = Object.freeze({
       A: "Responsável (A) *", B: "Categoria (B)", D: "Status (D) *", J: "Tipo do chamado (J) *",
