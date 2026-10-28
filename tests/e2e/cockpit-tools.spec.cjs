@@ -137,7 +137,7 @@ test("comparison skips restoration and synchronized-note entries and uses the En
   await expect(page.locator("#cockpit-comparison-event")).toHaveValue(comparison.id);
   await expect(page.locator("#cockpit-comparison-kpis")).toContainText("Correspondentes");
   await expect(page.locator("#cockpit-comparison-list")).toContainText("usuario.endpoint");
-  await expect(page.locator("#cockpit-comparison-export")).toHaveText("Exportar dia");
+  await expect(page.locator("#cockpit-comparison-export")).toHaveText("Exportar comparações do dia");
 });
 
 test("a failed comparison switch cannot export the previously displayed event", async ({ page }) => {

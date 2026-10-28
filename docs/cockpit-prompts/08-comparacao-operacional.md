@@ -54,4 +54,8 @@ Informe os arquivos alterados, o mapeamento dos dados e ações reaproveitados, 
 - `equipamentos_sincronizados` informa correspondência entre as fontes, inclusive quando há divergência de local. No painel, rotule esse indicador como **Correspondentes**, sem afirmar igualdade de campos.
 - A seleção inicial ignora eventos de restauração e anotações sincronizadas sem comparação. Ao trocar versão, limpe os dados anteriores e bloqueie a exportação até a resposta atual chegar.
 - Os registros exclusivos do Endpoint podem trazer o usuário em `usuario`; preserve essa informação na lista e no detalhe.
-- A exportação existente agrega as atualizações do dia. O controle deve informar **Exportar dia** e explicar esse alcance.
+- A exportação existente agrega as atualizações do dia. O controle deve informar **Exportar comparações do dia** e explicar esse alcance.
+
+## Desvio aprovado pelo usuário (etapa A, item 6)
+
+`#cockpit-comparison-export` mostra `Exportar comparações do dia` (comportamento igual). `#cockpit-comparison-refresh` virou botão só ícone (`#i-refresh`, `aria-label`/`title` `Atualizar histórico`) e é o último da barra.

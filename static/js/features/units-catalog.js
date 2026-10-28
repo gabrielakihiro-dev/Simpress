@@ -7,8 +7,6 @@
   const { app, appState, catalogSearch } = context;
   const { escapeHtml, pluralize } = context.dom;
 
-  const UNIDADES_EM_DESTAQUE = 6;
-
   // Load SEBRAE units catalog from API
   async function carregarUnidades() {
     try {
@@ -17,9 +15,7 @@
         appState.unidadesList = await res.json();
         const select = document.getElementById("select-unidade-destino");
         const selectedUnitId = select.value;
-        const emDestaque = appState.unidadesList.slice(0, UNIDADES_EM_DESTAQUE);
-        const outras = appState.unidadesList.length - emDestaque.length;
-        select.innerHTML = `<option value="">${outras > 0 ? `Outras ${outras} ${pluralize(outras, "filial", "filiais")}` : "Outras filiais"}</option>`;
+        select.innerHTML = '<option value="">Selecione a filial</option>';
 
         appState.unidadesList.forEach(u => {
           const opt = document.createElement("option");
@@ -27,24 +23,6 @@
           opt.textContent = u.label || `${u.cidade} - ${u.endereco} (${u.cnpj})`;
           select.appendChild(opt);
         });
-
-        const chips = document.getElementById("entrega-unidades");
-        if (chips) {
-          chips.querySelectorAll(".ck-unidade").forEach(chip => chip.remove());
-          emDestaque.forEach(u => {
-            const chip = document.createElement("button");
-            chip.type = "button";
-            chip.className = "ck-unidade";
-            chip.dataset.unidadeId = String(u.id);
-            chip.textContent = u.cidade || u.label;
-            chip.setAttribute("aria-pressed", "false");
-            chip.addEventListener("click", () => {
-              select.value = u.id;
-              app.handleUnidadeDestinoChange(u.id);
-            });
-            chips.insertBefore(chip, select);
-          });
-        }
 
         const selectedUnit = appState.unidadesList.find(unit => String(unit.id) === String(selectedUnitId));
         if (selectedUnit) {

@@ -26,6 +26,17 @@ Adaptar `Relatório mensal` para o painel da captura e acessá-lo pelo menu Ferr
 - À direita, apresente em fonte mono a prévia textual do mesmo relatório e do mesmo mês selecionado. Inclua os totais que o relatório suporta: chamados, tempo médio, transportes, divergências, alterações de apelido, lista por tipo e top 3 unidades. Use os mesmos critérios do XLSX e omita ou marque indisponível qualquer parte sem dados suficientes; não mantenha duas versões independentes do conteúdo.
 - No rodapé da prévia, ofereça `Copiar texto` e `Exportar planilha`. Mantenha feedback legível e o estado de carregamento/erro; em telas pequenas, os controles continuam acessíveis sem sobreposição.
 
+## Layout reestruturado (Cockpit, Etapa F)
+
+Sobrepõe a composição acima no painel Cockpit (`data-cockpit-tool-panel="relatorio"`); mesmos dados, endpoints, exportação e IDs.
+
+1. **Barra única:** meses recentes (`#cockpit-monthly-periods`), seletor de mês, `Copiar resumo`, `Exportar planilha` e o status, na mesma linha (quebra em telas menores).
+2. **KPIs:** mantidos (`#cockpit-monthly-kpis`).
+3. **Grade de 2 colunas (≥1200px):** esquerda = gráfico de ordens + tabela de inventário por unidade; direita = cartões compactos — `Inventário por tipo` (número grande + rótulo), `Divergências` (um número por categoria de `comparacao.contagens`, mais as linhas de detalhe quando houver) e `Ordens do mês` (abertas/concluídas/pendentes por fonte, mais as linhas de detalhe quando houver). Também na coluna direita, `Resumo da base atual`.
+4. **Dados insuficientes:** aviso curto de uma linha (`role="status"`) acima da grade, somente quando `os.dados_insuficientes` tem itens; o detalhe fica no `title`.
+5. **Prévia para a gestão:** `<details>` fechado por padrão com `#cockpit-monthly-preview`; `Copiar resumo` copia o texto mesmo recolhida.
+6. **<1200px:** mesma ordem em 1 coluna; só muda a disposição, sem estilo novo.
+
 ## Responsividade e acessibilidade
 
 - Mantenha `min-width:1200px` no app. Abaixo disso, a página pode rolar horizontalmente para preservar a composição completa; não corte os controles.
