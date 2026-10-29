@@ -5,7 +5,7 @@
 })(typeof window !== "undefined" ? window : globalThis, function createCockpitToolPanels(context) {
   "use strict";
   const { app, apiFetch } = context;
-  const toolKeys = { chamados: "F5", comparacao: "F6", apelidos: "F7", relatorio: "F8" };
+  const toolKeys = { chamados: "F5", comparacao: "F6", apelidos: "F7", relatorio: "F8", assistente: "F9" };
   const toolInfo = {
     chamados: ["Chamados", "Acompanhamento local de ordens relacionadas por série."],
     comparacao: ["Comparação", "Resultados salvos da comparação entre as bases locais."],
@@ -18,6 +18,7 @@
     "sebrae-historico": ["Histórico de importações do Dashboard Sebrae", "Importações do Dashboard e buscas de chamados novos, com o que mudou em cada uma."],
     // Sem loader em openPanel: recarregar a lista zeraria as edições dos chamados antigos (sebrae-dashboard.js).
     "sebrae-chamados": ["Chamados Sebrae", "Preencha os chamados novos e antigos, exporte as linhas e atualize o Dashboard."],
+    assistente: ["Assistente", "Conversa com o Jarvis leve local; ações só rodam depois da sua confirmação."],
   };
   const relationLabels = {
     conferida: "Conferida", divergente: "Divergente", somente_simpress: "Só Simpress",
@@ -1580,14 +1581,21 @@
     });
     // O destaque de Chamados segue o painel, qualquer que seja o caminho que o esconda.
     if (typeof MutationObserver !== "undefined") new MutationObserver(() => {
-      if (root.hidden) byId("btn-acompanhamento-chamados")?.setAttribute("aria-pressed", "false");
+      if (root.hidden) syncPanelButtons("");
     }).observe(root, { attributes: true, attributeFilter: ["hidden"] });
     eventsBound = true;
   }
 
+  // Botões da barra principal (.ck-aba--painel) ficam pressionados enquanto o painel deles está aberto.
+  function syncPanelButtons(tool) {
+    document.querySelectorAll(".ck-aba--painel[data-cockpit-tool]").forEach(button => {
+      button.setAttribute("aria-pressed", String(button.dataset.cockpitTool === tool));
+    });
+  }
+
   function closePanel(restoreFocus = true) {
     const root = byId("cockpit-tool-panels");
-    byId("btn-acompanhamento-chamados")?.setAttribute("aria-pressed", "false");
+    syncPanelButtons("");
     if (!root || root.hidden) return;
     root.hidden = true;
     byId("main-content").hidden = false;
@@ -1595,7 +1603,6 @@
     activeTool = "";
     previousTool = "";
     delete byId("cockpit-tools-dropdown").dataset.activeTool;
-    byId("btn-acompanhamento-chamados")?.setAttribute("aria-pressed", "false");
     if (restoreFocus && returnTarget?.isConnected) returnTarget.focus();
     else if (restoreFocus) byId("main-content").focus();
     returnTarget = null;
@@ -1614,7 +1621,7 @@
     if (activeTool && activeTool !== tool && !goingBack) previousTool = activeTool;
     activeTool = tool;
     byId("cockpit-tools-dropdown").dataset.activeTool = tool;
-    byId("btn-acompanhamento-chamados")?.setAttribute("aria-pressed", String(tool === "chamados"));
+    syncPanelButtons(tool);
     byId("main-content").hidden = true;
     const skipLink = document.querySelector(".skip-link");
     if (skipLink) {
@@ -1644,6 +1651,7 @@
     if (tool === "evolucao") await loadEvolution();
     if (tool === "unidades") await loadUnits();
     if (tool === "sebrae-historico") await app.carregarPainelHistoricoSebrae?.();
+    if (tool === "assistente") await app.carregarAssistente?.();
   }
 
   // "OS deste equipamento" (Transporte): abre Chamados já filtrado pela série; a busca filtra a tabela de OS.

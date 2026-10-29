@@ -15,6 +15,8 @@ Rotinas:
   (``scripts/verificar_usuarios_endpoint.py``); também roda no fim de ``inventarios`` e ``ambas``.
 - ``ambas``: as duas, em sequência.
 - ``login``: só abre as abas para o usuário fazer login.
+- ``dashboard``: baixa uma cópia do Dashboard Operacional_SEBRAE no Excel Online (só leitura),
+  importa no site local e roda a busca de chamados novos (``sebrae``).
 
 Cada exportação é clicada uma única vez; o arquivo é capturado pelo evento de
 download do Playwright e gravado na pasta de Downloads com o nome original.
@@ -32,6 +34,7 @@ import shutil
 import subprocess
 import sys
 import time
+import urllib.error
 import urllib.request
 import zipfile
 from datetime import datetime
@@ -58,6 +61,21 @@ ORACLE_URL = "https://simpress.custhelp.com/AgentWeb/"
 UX_PEDIDOS_URL = "https://ux.simpress.com.br/equipamentos/acompanhamento"
 UX_EQUIPAMENTOS_URL = "https://ux.simpress.com.br/MeusEquipamentos/Index"
 ENDPOINT_URL = "https://centralendpoint.pr.sebrae.com.br/webclient#/uems/inventory/computers"
+# Dashboard Operacional_SEBRAE no Excel Online (interface em inglês: File > Create a Copy > Download a Copy).
+DASHBOARD_URL = (
+    "https://simpress-my.sharepoint.com/:x:/r/personal/jufsouza_simpress_com_br/_layouts/15/Doc.aspx"
+    "?sourcedoc=%7Bbe6cb02e-6528-45f0-a4ca-224923818e90%7D&action=edit&wdlcid=en-US"
+)
+DASHBOARD_PREFIXO = r"Dashboard Operacional[_ ]SEBRAE"
+# Pasta do SharePoint que recebe o arquivo final gerado pelo site ("Atualizar Dashboard").
+DASHBOARD_PASTA_URL = (
+    "https://simpress-my.sharepoint.com/shared?id=%2Fpersonal%2Fjufsouza%5Fsimpress%5Fcom%5Fbr%2FDocuments%2FClientes%2FSEBRAE%2FDASHBOARD%20SEBRAE"
+    "&listurl=%2Fpersonal%2Fjufsouza%5Fsimpress%5Fcom%5Fbr%2FDocuments&viewid=4b249dd9%2D2ef5%2D4757%2Da0e3%2D2aa051004ae2"
+)
+DASHBOARD_FINAL = "Dashboard Operacional_SEBRAE (atualizado).xlsx"  # nome gravado por routers/sebrae_dashboard.py
+# Contas escolhidas/digitadas na tela da Microsoft (só o e-mail; senha e MFA são sempre do usuário).
+EMAIL_DASHBOARD = os.environ.get("SIMPRESS_DASHBOARD_EMAIL", "gansouza@simpress.com.br")
+EMAIL_SOFTEXPERT = os.environ.get("SIMPRESS_SOFTEXPERT_EMAIL", "gakihiro@pr.sebrae.com.br")
 
 LOGIN_TIMEOUT_S = 10 * 60
 CARREGAMENTO_MS = 90_000
@@ -485,7 +503,7 @@ def aguardar_login(
     logado: Callable[["Page"], bool],
     entrar: Callable[["Page"], bool] | None = None,
 ) -> None:
-    """Espera o login sem digitar credenciais.
+    """Espera o login sem digitar senha nem MFA (no máximo o e-mail, em ``entrar``).
 
     ``entrar`` pode acionar uma única vez o acesso com a conta já conectada (SSO);
     se o login não concluir, o usuário é chamado para entrar na própria janela.
@@ -525,6 +543,53 @@ def aguardar_login(
             avisar(f"Simpress: login ainda pendente no {origem}", "Faça o login na janela do Chrome de automação antes que o tempo esgote.")
         page.wait_for_timeout(2000)
     raise RotinaErro(f"Login não concluído em {LOGIN_TIMEOUT_S // 60} minutos.")
+
+
+def entrar_microsoft(
+    page: "Page",
+    origem: str,
+    email: str,
+    concluido: Callable[["Page"], bool] | None = None,
+    espera_s: int = 30,
+) -> None:
+    """Na tela de login da Microsoft: clica na conta ``email`` ou, sem ela, em "Use another account",
+    digita só o e-mail e avança. Nunca digita senha nem MFA: depois disso o usuário assume.
+
+    Cada passo é feito uma única vez; termina ao aparecer a senha, quando ``concluido(page)`` ficar
+    verdadeiro ou ao esgotar ``espera_s``.
+    """
+    escolheu = digitou = False
+    limite = time.time() + espera_s
+    while time.time() < limite:
+        verificar_cancelamento()
+        if page.is_closed() or (concluido is not None and concluido(page)):
+            return
+        if "microsoftonline" not in page.url.lower():
+            page.wait_for_timeout(500)
+            continue
+        if visivel(page.locator("input[type='password']")):
+            return
+        if not escolheu and not digitou:
+            conta = page.get_by_text(re.compile(re.escape(email), re.IGNORECASE)).filter(visible=True)
+            campo = page.locator("input[type='email'], input[name='loginfmt']").filter(visible=True)
+            outra = page.get_by_text(re.compile(r"(use|usar)\s+(an)?\s*(another|outra)\s+(account|conta)", re.IGNORECASE)).filter(visible=True)
+            if conta.count() and not campo.count():
+                log(origem, f"Escolhendo a conta {email}...")
+                conta.first.click()
+                escolheu = True
+            elif campo.count():
+                log(origem, f"Digitando o e-mail {email} e avançando (a senha fica com você)...")
+                campo.first.fill(email)
+                avancar = page.locator("#idSIButton9, input[type='submit']").filter(visible=True)
+                if avancar.count():
+                    avancar.first.click()
+                else:
+                    campo.first.press("Enter")
+                digitou = True
+            elif outra.count():
+                log(origem, "Conta não listada; clicando em 'Use another account'...")
+                outra.first.click()
+        page.wait_for_timeout(500)
 
 
 def nome_livre(pasta: Path, nome: str) -> Path:
@@ -1327,6 +1392,173 @@ def rodar_rotina_sebrae(context: "BrowserContext") -> int:
     return sebrae_leitura.executar(context, sys.modules[__name__])
 
 
+# --------------------------------------------------------------------------
+# Dashboard Sebrae (Excel Online): baixar cópia, importar no site e buscar chamados novos
+# --------------------------------------------------------------------------
+
+def _frame_do_excel(page: "Page"):
+    """Frame (a página ou o iframe do Excel Online) onde a aba "File" está visível, ou ``None``."""
+    for frame in page.frames:
+        try:
+            if frame.get_by_text(re.compile(r"^\s*File\s*$")).filter(visible=True).count():
+                return frame
+        except Exception:
+            continue
+    return None
+
+
+def dashboard_logado(page: "Page") -> bool:
+    url = page.url.lower()
+    return "sharepoint.com" in url and "login" not in url and _frame_do_excel(page) is not None
+
+
+def dashboard_entrar(page: "Page") -> bool:
+    """Na tela de login da Microsoft, digita o e-mail do Dashboard e avança; a senha fica com o usuário."""
+    if "microsoftonline" not in page.url.lower():
+        return False
+    entrar_microsoft(page, "Dashboard", EMAIL_DASHBOARD, concluido=dashboard_logado)
+    return True
+
+
+def baixar_copia_dashboard(page: "Page") -> Path:
+    """File > Create a Copy > Download a Copy. Só lê: o Dashboard original nunca é alterado."""
+    frame = _frame_do_excel(page)
+    if frame is None:
+        raise RotinaErro("O menu File do Excel Online não apareceu.")
+
+    def clicar() -> None:
+        log("Dashboard", "Clicando em File > Create a Copy > Download a Copy...")
+        frame.get_by_text(re.compile(r"^\s*File\s*$")).filter(visible=True).first.click()
+        copiar = frame.get_by_text(re.compile(r"^\s*Create a Copy\s*$")).filter(visible=True).first
+        copiar.wait_for(state="visible", timeout=15000)
+        copiar.click()
+        baixar = frame.get_by_text(re.compile(r"^\s*Download a Copy\s*$")).filter(visible=True).first
+        baixar.wait_for(state="visible", timeout=15000)
+        baixar.click()
+
+    return exportar_com_download(page, "Dashboard", clicar, DASHBOARD_PREFIXO)
+
+
+def exportar_dashboard_sebrae(context: "BrowserContext") -> Path:
+    page = None
+    try:
+        page = nova_aba(context, DASHBOARD_URL, "Dashboard")
+        aguardar_login(page, "Dashboard", dashboard_logado, entrar=dashboard_entrar)
+        arquivo = baixar_copia_dashboard(page)
+    except Exception:
+        registrar_erro(page, "Dashboard")
+        raise
+    page.close()
+    return arquivo
+
+
+def montar_multipart(nome: str, conteudo: bytes) -> tuple[bytes, str]:
+    """Corpo ``multipart/form-data`` com o campo ``file`` (o que ``POST /api/sebrae/dashboard`` espera)."""
+    limite = f"----simpress{os.urandom(8).hex()}"
+    nome_seguro = re.sub(r'["\r\n\\]', "_", nome)
+    cabecalho = (
+        f'--{limite}\r\nContent-Disposition: form-data; name="file"; filename="{nome_seguro}"\r\n'
+        "Content-Type: application/vnd.openxmlformats-officedocument.spreadsheetml.sheet\r\n\r\n"
+    )
+    corpo = cabecalho.encode("utf-8") + conteudo + f"\r\n--{limite}--\r\n".encode("utf-8")
+    return corpo, f"multipart/form-data; boundary={limite}"
+
+
+def importar_dashboard_no_site(arquivo: Path) -> dict:
+    corpo, tipo = montar_multipart(arquivo.name, arquivo.read_bytes())
+    url = f"http://127.0.0.1:{int(os.environ.get('SIMPRESS_PORT', '8000'))}/api/sebrae/dashboard"
+    pedido = urllib.request.Request(url, data=corpo, method="POST", headers={"Content-Type": tipo})
+    try:
+        with urllib.request.build_opener(urllib.request.ProxyHandler({})).open(pedido, timeout=120) as resposta:
+            return json.load(resposta)
+    except urllib.error.HTTPError as erro:
+        try:
+            detalhe = str(json.load(erro).get("detail") or "")
+        except Exception:
+            detalhe = ""
+        raise RotinaErro(f"O site recusou o Dashboard (HTTP {erro.code}): {detalhe}".rstrip(": ")) from erro
+    except (urllib.error.URLError, OSError) as erro:
+        raise RotinaErro(f"O servidor Simpress não respondeu em {url}: {erro}") from erro
+
+
+def rodar_rotina_dashboard(context: "BrowserContext") -> int:
+    print(f"\n=== DASHBOARD SEBRAE (início {agora_iso()}) ===", flush=True)
+    arquivo = exportar_dashboard_sebrae(context)
+    verificar_cancelamento()
+    dados = importar_dashboard_no_site(arquivo)
+    importado = dados.get("importado") or {}
+    log("Dashboard", f"Dashboard importado: {importado.get('arquivo', arquivo.name)} ({importado.get('total', '?')} chamados).")
+    verificar_cancelamento()
+    codigo = rodar_rotina_sebrae(context)
+    print("\n[SUCESSO] Dashboard importado e busca concluída." if codigo == 0 else "\n[FALHA] A busca de chamados novos não foi concluída.", flush=True)
+    return codigo
+
+
+def arquivo_final_dashboard() -> Path:
+    """Arquivo final mais recente que o site baixou ("Atualizar Dashboard"), com as variações ``(N)`` do Chrome."""
+    arquivo = copia_do_chrome(padrao_do_nome(DASHBOARD_FINAL), 0)
+    if arquivo is None:
+        raise RotinaErro(f'Não achei "{DASHBOARD_FINAL}" em Downloads. Use "Atualizar Dashboard" no site antes de enviar.')
+    return arquivo
+
+
+def _botao_enviar(page: "Page"):
+    """Botão que abre o menu de envio: "Create or upload" na tela Shared do OneDrive, "Upload" na biblioteca."""
+    return page.get_by_role("button", name=re.compile(r"^(?:Create or upload|Upload)$")).or_(
+        page.get_by_role("menuitem", name=re.compile(r"^Upload$"))).first
+
+
+def pasta_dashboard_logada(page: "Page") -> bool:
+    url = page.url.lower()
+    return "sharepoint.com" in url and "login" not in url and visivel(_botao_enviar(page))
+
+
+def pasta_dashboard_entrar(page: "Page") -> bool:
+    if "microsoftonline" not in page.url.lower():
+        return False
+    entrar_microsoft(page, "Dashboard", EMAIL_DASHBOARD, concluido=pasta_dashboard_logada)
+    return True
+
+
+def enviar_arquivo_para_pasta(page: "Page", arquivo: Path) -> None:
+    """Upload > Files (na tela Shared: Create or upload > Files upload) na pasta aberta. Nome repetido: "Keep both"; nunca "Replace" (o original não pode ser sobrescrito)."""
+    stem = re.escape(arquivo.stem)
+    antes = page.get_by_text(re.compile(stem)).filter(visible=True).count()
+    log("Dashboard", f"Enviando {arquivo.name} ({arquivo.stat().st_size:,} bytes)...".replace(",", "."))
+    _botao_enviar(page).click()
+    arquivos = page.get_by_role("menuitem", name=re.compile(r"^Files?(?: upload)?$")).first
+    arquivos.wait_for(state="visible", timeout=15000)
+    with page.expect_file_chooser(timeout=15000) as escolha:
+        arquivos.click()
+    escolha.value.set_files(str(arquivo))
+    manter = page.get_by_role("button", name=re.compile(r"^Keep both$"))
+    if esperar_visivel(manter.first, 8000):
+        manter.first.click()
+    limite = time.time() + 90
+    while time.time() < limite:
+        verificar_cancelamento()
+        if page.get_by_text(re.compile(stem)).filter(visible=True).count() > antes:
+            return
+        page.wait_for_timeout(1000)
+    raise RotinaErro("Não consegui confirmar o envio: o arquivo não apareceu na pasta do SharePoint.")
+
+
+def rodar_rotina_enviar(context: "BrowserContext") -> int:
+    print(f"\n=== ENVIAR DASHBOARD ATUALIZADO (início {agora_iso()}) ===", flush=True)
+    arquivo = arquivo_final_dashboard()
+    page = None
+    try:
+        page = nova_aba(context, DASHBOARD_PASTA_URL, "Dashboard")
+        aguardar_login(page, "Dashboard", pasta_dashboard_logada, entrar=pasta_dashboard_entrar)
+        enviar_arquivo_para_pasta(page, arquivo)
+    except Exception:
+        registrar_erro(page, "Dashboard")
+        raise
+    page.close()
+    print(f"\n[SUCESSO] {arquivo.name} enviado para a pasta DASHBOARD SEBRAE.", flush=True)
+    return 0
+
+
 def abrir_para_login(context: "BrowserContext") -> int:
     for url in (ORACLE_URL, UX_PEDIDOS_URL, ENDPOINT_URL):
         verificar_cancelamento()
@@ -1357,6 +1589,10 @@ def executar(rotina: str) -> int:
                     return com_aviso("inventários", rodar_rotina_inventarios, context)
                 if rotina == "usuarios":
                     return com_aviso("usuários", rodar_rotina_usuarios, context)
+                if rotina == "dashboard":
+                    return rodar_rotina_dashboard(context)
+                if rotina == "enviar":
+                    return rodar_rotina_enviar(context)
                 if rotina == "sebrae":
                     # Sem com_aviso: o aviso do Windows sai do resultado e só quando algo muda (sem repetição).
                     return rodar_rotina_sebrae(context)
@@ -1400,7 +1636,7 @@ def playwright_instalado() -> bool:
 
 def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
-    parser.add_argument("--rotina", choices=["os", "inventarios", "usuarios", "ambas", "login", "sebrae"], default="os")
+    parser.add_argument("--rotina", choices=["os", "inventarios", "usuarios", "ambas", "login", "sebrae", "dashboard", "enviar"], default="os")
     parser.add_argument(
         "--cancelar", action="store_true", help="pede o cancelamento da rotina em andamento (o Chrome continua aberto) e sai"
     )

@@ -200,6 +200,7 @@ from routers.system import SystemRouteServices, create_system_router
 from routers.units import UnidadePayload, UnitRouteServices, create_units_router
 from routers.aliases import ApelidoUndoPayload, ApelidoUpdatePayload, UsuarioUpdatePayload, create_alias_router
 from routers.endpoint_removals import create_endpoint_removals_router
+from routers.assistant import DEFAULT_JARVIS_URL, AssistantRouteServices, create_assistant_router
 from routers.automation import AutomationRouteServices, create_automation_router
 from routers.sebrae_dashboard import SebraeDashboardServices, create_sebrae_dashboard_router
 from domains import sebrae_novos, sebrae_cruzamento
@@ -2525,6 +2526,10 @@ def get_sebrae_scheduler() -> AgendadorSebrae:
 
 app.include_router(create_automation_router(AutomationRouteServices(
     runner=get_chrome_automation_runner, sebrae=get_sebrae_scheduler,
+)))
+
+app.include_router(create_assistant_router(AssistantRouteServices(
+    jarvis_url=lambda: os.environ.get("JARVIS_LEVE_URL", DEFAULT_JARVIS_URL),
 )))
 
 app.include_router(create_sebrae_dashboard_router(SebraeDashboardServices(

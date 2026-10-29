@@ -64,7 +64,9 @@ Quando o usuário disser "Executar" ou "exportar planilhas", siga a skill `.clau
 
 A tela Automação importa o `.xlsx` do Dashboard Operacional_SEBRAE (só a aba `CHAMADOS`, coluna C) e a rotina `sebrae` lê no SoftExpert os chamados que não estão nela; o site mostra um formulário por chamado novo, exporta as linhas para o usuário colar e baixa uma cópia atualizada do Dashboard (`Atualizar Dashboard`). **O Dashboard original e o Excel Online nunca são alterados: o site só grava na cópia baixada (`Dashboard Operacional_SEBRAE (atualizado).xlsx`); no SoftExpert a rotina só lê, aceitando apenas a confirmação de associar o chamado ao usuário (botão `Sim` ou `Confirmar`).** Siga `docs/operacao/sincronizar-chamados-sebrae.md` (seções "Modelo atual" e "Tela no site").
 
-- Use o Chrome de automação; o login do SoftExpert é manual. Após expiração de sessão ativa, pode clicar uma vez no `SSO` visível e aguardar, sem digitar credenciais. Não armazene senhas, tokens ou cookies nem use API remota.
+- A rotina `dashboard` (botão `Baixar, importar e buscar`) baixa a cópia do Dashboard no Excel Online pelo Chrome de automação (`File › Create a Copy › Download a Copy`, login do SharePoint manual), importa pelo site local e roda a busca; nunca grava no Excel Online.
+- A rotina `enviar` (botão `Enviar ao SharePoint`, ao lado de `Atualizar Dashboard`) envia o arquivo final baixado do site (`Dashboard Operacional_SEBRAE (atualizado).xlsx`, o mais recente em Downloads) para a pasta `DASHBOARD SEBRAE` do SharePoint (autorizado pelo usuário) com `Create or upload › Files upload` (ou `Upload › Files`); nome repetido usa `Keep both`, nunca `Replace`, e o Dashboard original continua intocado.
+- Use o Chrome de automação. No login do SoftExpert, clique uma vez no `SSO` visível; na tela da Microsoft, clique na conta `gakihiro@pr.sebrae.com.br` ou, se ela não estiver listada, em "Use another account" e digite só esse e-mail. No login do SharePoint do Dashboard, digite só `gansouza@simpress.com.br` e avance (`Next`). Senha e MFA são sempre do usuário: a rotina espera o login. Não armazene senhas, tokens ou cookies nem use API remota.
 - Colunas da tabela `Tabela3` (A:W, com Título em G): manuais no site A, B, D, J, R, S; SoftExpert C, F, G, H, I, P; cruzamento pelo nome em I para K, L, N (EquipamentosDetalhes, Endpoint e Entra; ausente ou ambíguo fica vazio, nunca se escolhe); M=`Sebrae` e O=`PR`; E só se a série já estiver vinculada a uma OS. Q, T, U e V são fórmulas: na cópia, o site só copia a fórmula de Q para linha nova e apaga o valor guardado de Q, T, U e V para o Excel recalcular ao abrir; nunca grava valor nelas. W não se toca. Em chamados antigos só D `EM ABERTO` ou vazio é editável, e só as colunas A, B, D, J, R e S; campo em branco nunca apaga o existente; vale também quando a coluna C traz o número dentro de valor composto com um único UTIC (ex.: `27371 / UTIC-2026-0094`).
 - F recebe exclusivamente o texto integral de `Detalhes do Atendimento Realizado` (campo concluído, somente leitura; ignore campos editáveis da atividade atual); H, a descrição do Registro (vazia continua vazia); I, o `Solicitante`, nunca o `Iniciador`; P, `Habilitada em`. Não concatene detalhes e descrição.
 - Mascare CPFs (`***.***.***-**`) e omita senhas (`[DADO SENSÍVEL OMITIDO]`) antes de guardar ou exportar qualquer texto de chamado; textos que começam com `=`, `+`, `-` ou `@` ganham apóstrofo inicial.
@@ -74,6 +76,10 @@ A tela Automação importa o `.xlsx` do Dashboard Operacional_SEBRAE (só a aba 
 ## Arquitetura local
 
 O Simpress roda somente localmente: servidor FastAPI e dados em `data/`, com as anotações do histórico sincronizadas pela pasta compartilhada já configurada. Não há backend remoto nem Supabase. Qualquer proposta de migração para um serviço externo deve começar por uma análise que não altere código nem dados.
+
+## Assistente (Jarvis leve)
+
+O painel do assistente usa `routers/assistant.py`, que faz proxy somente para o Jarvis leve local (`JARVIS_LEVE_URL`, padrão `http://127.0.0.1:8766`; só `http` em loopback, outra URL é recusada). O Simpress não chama nenhum serviço externo: a chamada ao OpenRouter acontece no repositório do Jarvis, não aqui. O proxy não envia `Origin` nem `Sec-Fetch-Site` e passa pelo middleware local como as demais rotas.
 
 ## Interface
 

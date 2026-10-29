@@ -377,7 +377,8 @@ def _aguardar_sem_carregamento(page: "Page", timeout_ms: int) -> None:
 # ---------------------------------------------------------------------------------------------
 
 def _entrar_com_sso(page: "Page") -> bool:
-    """Aciona uma vez o SSO visível na tela de login do SoftExpert; nunca informa credenciais."""
+    """Aciona uma vez o SSO visível na tela de login do SoftExpert e, na tela da Microsoft, escolhe a conta
+    (ou digita só o e-mail). Senha e MFA nunca são informados."""
     host_esperado = (urlparse(SOFTEXPERT_URL).hostname or "").lower()
     if page.is_closed() or (urlparse(page.url).hostname or "").lower() != host_esperado or not tela_de_login(page):
         return False
@@ -390,12 +391,13 @@ def _entrar_com_sso(page: "Page") -> bool:
         )
         for candidato in candidatos:
             try:
-                if candidato.count() != 1 or not _visivel(candidato):
+                if not _visivel(candidato):
                     continue
             except Exception:
                 continue
             try:
-                clicar(candidato, "entrar com SSO")
+                clicar(candidato.filter(visible=True), "entrar com SSO")
+                _rotinas().entrar_microsoft(page, ORIGEM, _rotinas().EMAIL_SOFTEXPERT, concluido=softexpert_logado)
             except Exception as erro:
                 # The shared login waiter gives the user the manual fallback; do not click twice.
                 _rotinas().log(ORIGEM, f"Não foi possível acionar o SSO ({type(erro).__name__}); aguardando login manual.")
