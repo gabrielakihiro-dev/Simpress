@@ -80,12 +80,13 @@ test("horizontal overflow state drives the table edge fade", () => {
   assert.equal(ux.overflowState(400, 500, 900), "start");
 });
 
-test("function keys map to the four main tabs and four Cockpit tools", () => {
-  const actions = ["F1", "F2", "F3", "F4", "F5", "F6", "F7", "F8"]
+test("function keys map to the four main tabs and five Cockpit tools", () => {
+  const actions = ["F1", "F2", "F3", "F4", "F5", "F6", "F7", "F8", "F9"]
     .map(key => ux.shortcutAction({ key }));
   assert.deepEqual(actions, [
     "tab-home", "tab-transferencia", "tab-resumo", "tab-automacao",
     "tool-chamados", "tool-comparacao", "tool-apelidos", "tool-relatorio",
+    "tool-assistente",
   ]);
 });
 
