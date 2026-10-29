@@ -77,9 +77,13 @@ A tela Automação importa o `.xlsx` do Dashboard Operacional_SEBRAE (só a aba 
 
 O Simpress roda somente localmente: servidor FastAPI e dados em `data/`, com as anotações do histórico sincronizadas pela pasta compartilhada já configurada. Não há backend remoto nem Supabase. Qualquer proposta de migração para um serviço externo deve começar por uma análise que não altere código nem dados.
 
-## Assistente (Jarvis leve)
+## Assistente (OpenRouter)
 
-O painel do assistente usa `routers/assistant.py`, que faz proxy somente para o Jarvis leve local (`JARVIS_LEVE_URL`, padrão `http://127.0.0.1:8766`; só `http` em loopback, outra URL é recusada). O Simpress não chama nenhum serviço externo: a chamada ao OpenRouter acontece no repositório do Jarvis, não aqui. O proxy não envia `Origin` nem `Sec-Fetch-Site` e passa pelo middleware local como as demais rotas.
+O painel do assistente (F9) roda só com esta pasta: `routers/assistant.py` usa `domains/assistant_*.py` e chama a API do OpenRouter direto do servidor local, sem Jarvis, sem processo auxiliar e sem porta extra. A chave fica em `OPENROUTER_API_KEY` no `.env` da raiz (fora do Git; modelo em `.env.example`); nunca vai para o front-end, logs ou respostas da API, e sem ela o painel mostra o aviso de assistente desligado.
+
+- Análise do serviço externo: o único dado que sai do computador é o texto da conversa e o resultado das consultas, enviados ao OpenRouter com `data_collection: deny`. Antes do envio, CPFs viram `***.***.***-**`, nomes de pessoas viram marcadores `[PESSOA_n]` (restaurados só na tela), e e-mails, telefones e senhas são removidos. Conteúdo de planilhas e chamados é dado, nunca instrução.
+- As ferramentas consultam as rotas do próprio Simpress por chamada interna ao app (mesmo `LocalRequestSafetyMiddleware`). Cada uma declara se consulta ou altera dados. Toda alteração para antes e mostra um cartão de confirmação com texto montado pelo programa (nunca pela IA); no máximo uma alteração por turno; o cartão volta após recarregar a página.
+- Uma conversa por vez (trava; segunda chamada recebe 409). Testes usam cliente OpenRouter falso, sem rede.
 
 ## Interface
 
