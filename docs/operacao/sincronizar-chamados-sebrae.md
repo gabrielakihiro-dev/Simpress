@@ -6,7 +6,7 @@ Status por fase (ver "Entrega em fases"): **Fase A** (especificação, regras pu
 
 ## Modelo atual: Dashboard importado → linhas para colar (28/10/2026)
 
-Substitui a gravação no Excel Online. O usuário importa no site o `.xlsx` do Dashboard (só a aba `CHAMADOS` é lida), o site compara com o SoftExpert e mostra um formulário por chamado novo. A saída são linhas para o usuário colar no Dashboard; **nada é gravado no Excel**. O código está em `domains/sebrae_dashboard.py` (regras puras, sem navegador).
+Substitui a gravação no Excel Online. O usuário importa no site o `.xlsx` do Dashboard (só a aba `CHAMADOS` é lida), o site compara com o SoftExpert e mostra um formulário por chamado novo. A saída são linhas para o usuário colar no Dashboard ou uma **cópia** atualizada do `.xlsx` para baixar; **o Dashboard original e o Excel Online nunca são alterados**. O código está em `domains/sebrae_dashboard.py` (regras puras, sem navegador).
 
 1. **Importar** o Dashboard. Lê a coluna C da tabela `Tabela3` (números `UTIC-AAAA-NNNN`, inclusive em valores compostos). `Sem chamado` e números antigos só contam como "não é UTIC".
 2. **Triagem:** lista do SoftExpert (rolada até o fim: a lista carrega mais linhas ao descer) menos a coluna C. `PENDENCIAS_DEFINIDAS` e alertas do Endpoint (título `Endpoint Central - …`) ficam pendentes, nunca viram linha.
@@ -36,12 +36,12 @@ Em 28/10/2026 foi criada a coluna **G (Título)**; o que vinha de G em diante de
 | N | CIDADE | Cruzamento pelo nome em I |
 | O | UF | Fixo `PR` |
 | P | DATA ABERTURA | SoftExpert: **Habilitada em**, `dd/MM/yyyy HH:mm` |
-| Q | Mês | Fórmula do Excel; o site não escreve |
+| Q | Mês | Fórmula do Excel; na cópia o site só replica a fórmula em linha nova e limpa o valor guardado |
 | R | DT ENCERRAMENTO | Manual no site |
 | S | TIPO SLA | Manual no site |
-| T | DIAS ABERTOS | Fórmula; o site não escreve |
-| U | AGING | Fórmula; o site não escreve |
-| V | HR CONSUMIDA | Fórmula; o site não escreve |
+| T | DIAS ABERTOS | Fórmula; o site mantém a fórmula e limpa o valor guardado, nunca grava valor |
+| U | AGING | Fórmula; o site mantém a fórmula e limpa o valor guardado, nunca grava valor |
+| V | HR CONSUMIDA | Fórmula; o site mantém a fórmula e limpa o valor guardado, nunca grava valor |
 | W | PRODUZINDO | Não tocar |
 
 ### Leitura do SoftExpert na interface atual
@@ -55,7 +55,7 @@ Em 28/10/2026 foi criada a coluna **G (Título)**; o que vinha de G em diante de
 O cartão antigo "Sincronizar chamados Sebrae" (agendamento, contadores, pendências) foi removido da tela em 28/10/2026; o agendamento e as rotas `/api/automacao/sebrae/*` continuam no servidor, sem tela. Só HTML/CSS e o JS de `static/js/features/sebrae-dashboard.js` e `static/js/features/sebrae-historico.js`; segue os tokens `ck-*` e os temas claro e escuro. Fluxo na tela:
 
 1. **Importar Dashboard** (`POST /api/sebrae/dashboard`): escolher o `.xlsx` e importar. O site guarda só os números UTIC já lançados (`data/state/sebrae_dashboard_existentes.json`, fora do Git), mostra "N chamados já lançados" e registra o que mudou em `data/state/sebrae_historico.json` (ver "Histórico de importações do Dashboard Sebrae" abaixo).
-2. **Buscar chamados novos**: o botão `Buscar chamados novos` do próprio cartão inicia a rotina `sebrae` (o cancelamento é o `Cancelar execução` geral da tela Automação), que agora só **lê** (SoftExpert, Chrome de automação, login manual) e grava `data/state/sebrae_novos.json` (CPF mascarado). No SoftExpert só a confirmação de associar (**Sim**) é aceita; nada é gravado no Excel.
+2. **Buscar chamados novos**: o botão `Buscar chamados novos` do próprio cartão inicia a rotina `sebrae` (o cancelamento é o `Cancelar execução` geral da tela Automação), que agora só **lê** (SoftExpert, Chrome de automação, login manual) e grava `data/state/sebrae_novos.json` (CPF mascarado). No SoftExpert só a confirmação de associar (**Sim**) é aceita; a rotina não grava no Excel.
 3. **Lista** (`GET /api/sebrae/novos`): um bloco por chamado novo com os campos automáticos somente leitura (C, E, F, G, H, I, K, L, M, N, O, P) e os manuais: A, B, D, J, R, S. D e J são listas fechadas (`EM ABERTO`/`FINALIZADO`; `INCIDENTE`/`SOLICITAÇÃO`); A, B e S aceitam texto livre com sugestões do Dashboard atual; R é data e hora (`dd/MM/yyyy HH:mm`). Série, modelo e cidade vazios com o aviso "não encontrado" ou "mais de um equipamento" quando o cruzamento não é único. Alertas do Endpoint e `PENDENCIAS_DEFINIDAS` aparecem numa lista à parte, sem formulário.
 4. **Exportar** (`POST /api/sebrae/exportar`): gera dois blocos para colar, A:P e R:S (a coluna Q, de fórmula, fica entre eles e não é escrita), copiados para a área de transferência. Confirmação com o texto exato `Planilha Exportada com Sucesso!`. O usuário cola A:P na primeira linha livre da tabela e R:S ao lado, deixando as fórmulas Q, T, U, V e a coluna W intactas.
 5. A exportação inclui só os chamados com A, D e J preenchidos (B, R e S podem ficar vazios); a tela mostra quantos estão prontos e mantém o botão desabilitado até haver pelo menos um.
