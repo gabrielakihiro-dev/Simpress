@@ -990,7 +990,7 @@ html[data-theme], html[data-theme] body.cockpit-shell-body { background: var(--c
 }
 @keyframes sebrae-historico-entrada { from { opacity: 0; } to { opacity: 1; } }
 
-/* ---------- Assistente (Jarvis leve) ---------- */
+/* ---------- Assistente ---------- */
 .ck-ferr-painel.ck-assist { gap: 10px; overflow: hidden; }
 .ck-ferr-painel.ck-assist > .ck-assist__lista { flex: 1 1 auto; }
 .ck-assist__status { flex: 1 1 auto; overflow-wrap: anywhere; }

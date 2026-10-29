@@ -1,6 +1,6 @@
-# 15 — Painel Assistente (Jarvis leve)
+# 15 — Painel Assistente
 
-Painel de conversa com o Jarvis leve local, aberto como as demais ferramentas do Cockpit.
+Painel de conversa com a IA do Simpress (OpenRouter, chamado pelo servidor local), aberto como as demais ferramentas do Cockpit.
 
 ## Acesso
 
@@ -10,19 +10,19 @@ Painel de conversa com o Jarvis leve local, aberto como as demais ferramentas do
 
 ## Contrato (`routers/assistant.py`)
 
-- `GET /api/assistente/estado` → `{online, modelo, aguardando_confirmacao}`.
+- `GET /api/assistente/estado` → `{online, modelo, aguardando_confirmacao, pendente}`.
 - `POST /api/assistente/mensagem` `{texto}` (até 4000 caracteres) → `{texto, ferramentas, pendente: {descricao} | null}`.
 - `POST /api/assistente/confirmar` `{confirmado}` → mesmo formato.
 - `POST /api/assistente/limpar` → `{ok: true}`.
-- Erros trazem `{detail}`; 503 indica Jarvis leve desligado. Respostas podem levar até ~90 s.
+- Erros trazem `{detail}`; 503 indica chave do OpenRouter ausente (`OPENROUTER_API_KEY` no `.env`); 409, resposta anterior ainda em andamento. Respostas podem levar até ~1 min.
 
 ## Comportamento
 
-- Ao abrir, consulta o estado. Desligado: mostra exatamente `Assistente desligado. Abra iniciar_jarvis_leve.bat na pasta do Jarvis.`, bloqueia a entrada e oferece `Tentar novamente`.
+- Ao abrir, consulta o estado. Desligado: mostra exatamente `Assistente desligado. Preencha OPENROUTER_API_KEY no arquivo .env da pasta do Simpress.`, bloqueia a entrada e oferece `Tentar novamente`.
 - Balões do usuário (à direita, cor de destaque) e do Assistente (à esquerda, superfície); linha discreta `Ferramentas: …` quando houver.
 - Campo `Mensagem` com contador `N / 4000`; Enter envia, Shift+Enter quebra a linha. Durante a resposta, status `Pensando…` e entrada bloqueada.
 - Ação pendente: cartão de alerta com a descrição e os botões `Confirmar e executar` e `Cancelar`; o foco vai para o cartão, Esc cancela (sem fechar o painel) e a entrada fica bloqueada até a resposta.
-- `Nova conversa` limpa a conversa no Jarvis e na tela.
+- `Nova conversa` limpa a conversa no servidor e na tela.
 - Respostas novas são anunciadas por uma região `aria-live="polite"` separada.
 
 ## Segurança

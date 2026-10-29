@@ -1,4 +1,4 @@
-/** Assistente: conversa com o Jarvis leve local pelas rotas /api/assistente/*, no painel F9 do Cockpit. */
+/** Assistente: conversa com a IA do Simpress (OpenRouter, chamada pelo servidor local) pelas rotas /api/assistente/*, no painel F9 do Cockpit. */
 (function (root, factory) {
   if (typeof module === "object" && module.exports) module.exports = factory;
   else (root.SimpressFeatures = root.SimpressFeatures || {}).assistantChat = factory;
@@ -7,8 +7,8 @@
   const { apiFetch } = context;
   const { createTextElement } = context.dom;
   const LIMITE = 4000;
-  const DESLIGADO = "Assistente desligado. Abra iniciar_jarvis_leve.bat na pasta do Jarvis.";
-  // Reserva para um Jarvis antigo cujo estado não traz a descrição da ação.
+  const DESLIGADO = "Assistente desligado. Preencha OPENROUTER_API_KEY no arquivo .env da pasta do Simpress.";
+  // Reserva caso o estado traga a pendência sem a descrição da ação.
   const PENDENTE_SEM_DESCRICAO = "Há uma ação aguardando sua confirmação.";
   let online = false;
   let modelo = "";
