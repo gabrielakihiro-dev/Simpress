@@ -195,7 +195,8 @@ def create_sebrae_dashboard_router(services: SebraeDashboardServices) -> APIRout
     def atualizar_dashboard(payload: AtualizarPayload):
         """Cópia do Dashboard importado com os chamados novos e as edições; o original e a cópia guardada ficam intactos.
 
-        422 se não houver importação válida, se faltar campo manual, se o chamado repetir ou se a Tabela3 não tiver linhas livres."""
+        Responsável, Status e Tipo podem ficar em branco (a linha é gravada sem eles). 422 se não houver importação válida,
+        se um Status/Tipo preenchido for inválido, se o chamado repetir ou se a Tabela3 não tiver linhas livres."""
         if not payload.chamados and not payload.edicoes:
             raise DomainValidationError("Não há chamados novos nem alterações para gravar.", status_code=422)
         caminhos = services.caminhos()
@@ -235,10 +236,11 @@ def create_sebrae_dashboard_router(services: SebraeDashboardServices) -> APIRout
         desconhecidos = sorted(set(manuais) - {c.numero for c in escolhidos})
         if desconhecidos:
             raise DomainValidationError(f"{desconhecidos[0]} não está entre os chamados novos.", status_code=422)
-        return sebrae_novos.linhas_completas(escolhidos, manuais, services.registros(), _relatorio(), importado["listas"])
+        return sebrae_novos.linhas_completas(escolhidos, manuais, services.registros(), _relatorio(), importado["listas"], exigir=False)
 
     def _edicoes(payload: AtualizarPayload, planilha: bytes, listas: Mapping[str, Sequence[str]]) -> Dict[str, Dict[str, str]]:
-        """Merged (stored + sent) manual values pass the same rules as a new ticket; an off-list A/B it already has is kept."""
+        """Merged (stored + sent) manual values that are filled pass the same rules as a new ticket (A, D and J may stay
+        blank); an off-list A/B it already has is kept."""
         if not payload.edicoes:
             return {}
         abertos = {c.numero: c for c in sebrae_dashboard_gravacao.chamados_para_editar(planilha)}
@@ -252,7 +254,7 @@ def create_sebrae_dashboard_router(services: SebraeDashboardServices) -> APIRout
             enviados = item.model_dump(exclude={"numero"})
             mesclados = {letra: str(enviados.get(letra) or "") or atual.valores.get(letra, "") for letra in MANUAIS}
             try:
-                validados = sebrae_novos.validar_manuais(mesclados)
+                validados = sebrae_novos.validar_manuais(mesclados, exigir=False)
                 sebrae_novos.validar_listas(validados, listas, atual.valores)
             except sebrae_novos.ManuaisInvalidos as erro:
                 raise sebrae_novos.ManuaisInvalidos(f"{item.numero}: {erro}") from None

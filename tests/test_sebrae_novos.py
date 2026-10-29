@@ -78,6 +78,30 @@ class ExportarTest(unittest.TestCase):
         with self.assertRaisesRegex(novos.ManuaisInvalidos, "Não há chamados"):
             novos.exportar([], {}, REGISTROS, RELATORIO)
 
+    def test_sem_exigir_a_d_j_vazios_passam_mas_preenchidos_invalidos_falham(self):
+        vazios = novos.validar_manuais({}, exigir=False)
+        self.assertEqual([vazios[c] for c in "ADJ"], ["", "", ""])
+        self.assertEqual(novos.validar_manuais({"D": "finalizado", "J": "solicitação"}, exigir=False)["D"], "FINALIZADO")
+        for manuais, trecho in (
+            ({"D": "TALVEZ"}, "STATUS"), ({"J": "OUTRO"}, "TIPO DO CHAMADO"),
+            ({"R": "ontem"}, "DT ENCERRAMENTO"), ({"B": "x" * 81}, "80"),
+        ):
+            with self.assertRaisesRegex(novos.ManuaisInvalidos, trecho):
+                novos.validar_manuais(manuais, exigir=False)
+        with self.assertRaisesRegex(novos.ManuaisInvalidos, "RESPONSÁVEL"):
+            novos.validar_manuais({})  # strict by default
+
+    def test_linhas_completas_sem_exigir_aceita_chamado_ausente_e_exportar_segue_estrito(self):
+        linha = novos.linhas_completas([CHAMADO], {}, REGISTROS, RELATORIO, exigir=False)[0]
+        self.assertEqual([linha[c] for c in "ADJ"], ["", "", ""])
+        self.assertEqual(linha["C"], CHAMADO.numero)
+        with self.assertRaisesRegex(novos.ManuaisInvalidos, "STATUS"):
+            novos.linhas_completas([CHAMADO], {CHAMADO.numero: {"D": "TALVEZ"}}, REGISTROS, RELATORIO, exigir=False)
+        with self.assertRaisesRegex(novos.ManuaisInvalidos, "Preencha"):
+            novos.linhas_completas([CHAMADO], {}, REGISTROS, RELATORIO)
+        with self.assertRaisesRegex(novos.ManuaisInvalidos, "RESPONSÁVEL"):
+            novos.exportar([CHAMADO], {CHAMADO.numero: {**MANUAIS, "A": ""}}, REGISTROS, RELATORIO)
+
     def test_texto_manual_que_parece_formula_ganha_apostrofo(self):
         saida = novos.exportar([CHAMADO], {CHAMADO.numero: {**MANUAIS, "B": "=1+1"}}, REGISTROS, RELATORIO)
         self.assertEqual(saida["bloco_a_p"].split("\t")[1], "'=1+1")

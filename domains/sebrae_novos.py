@@ -217,8 +217,9 @@ def formulario(
     return itens
 
 
-def validar_manuais(manuais: Mapping[str, Any]) -> Dict[str, str]:
-    """Columns A, B, D, J, R and S as the Dashboard stores them; raises ``ManuaisInvalidos`` with a user message."""
+def validar_manuais(manuais: Mapping[str, Any], exigir: bool = True) -> Dict[str, str]:
+    """Columns A, B, D, J, R and S as the Dashboard stores them; raises ``ManuaisInvalidos`` with a user message.
+    With ``exigir=False`` (Atualizar Dashboard) A, D and J may stay blank; a filled D or J is still restricted."""
     def texto(letra: str) -> str:
         valor = " ".join(str(manuais.get(letra) or "").split())
         if len(valor) > MAX_CAMPO_MANUAL:
@@ -226,13 +227,13 @@ def validar_manuais(manuais: Mapping[str, Any]) -> Dict[str, str]:
         return _texto_de_celula(valor)
 
     resultado = {letra: texto(letra) for letra in "ABS"}
-    if not resultado["A"]:
+    if exigir and not resultado["A"]:
         raise ManuaisInvalidos("Informe o RESPONSÁVEL (coluna A).")
     status = " ".join(str(manuais.get("D") or "").split()).upper()
-    if status not in (STATUS_ABERTO, STATUS_FINALIZADO):
+    if status not in (STATUS_ABERTO, STATUS_FINALIZADO) and (exigir or status):
         raise ManuaisInvalidos("Escolha o STATUS CHAMADO (coluna D): EM ABERTO ou FINALIZADO.")
     tipo = " ".join(str(manuais.get("J") or "").split()).upper()
-    if tipo not in TIPOS_CHAMADO:
+    if tipo not in TIPOS_CHAMADO and (exigir or tipo):
         raise ManuaisInvalidos("Escolha o TIPO DO CHAMADO (coluna J): INCIDENTE ou SOLICITAÇÃO.")
     encerramento = " ".join(str(manuais.get("R") or "").split())
     if encerramento:
@@ -257,16 +258,18 @@ def linhas_completas(
     registros: Sequence[Mapping[str, Any]],
     relatorio: Optional[Mapping[str, Any]],
     listas: Optional[Mapping[str, Sequence[str]]] = None,
+    exigir: bool = True,
 ) -> List[Dict[str, str]]:
-    """Full rows (automatic plus manual columns), in the order of ``chamados``. Every ticket needs valid manual fields."""
+    """Full rows (automatic plus manual columns), in the order of ``chamados``. With ``exigir`` every ticket needs
+    valid A, D and J; without it (Atualizar Dashboard) blanks pass and a ticket missing from ``manuais_por_numero`` is blank."""
     if not chamados:
         raise ManuaisInvalidos("Não há chamados novos para exportar.")
     linhas: List[Dict[str, str]] = []
     for chamado in chamados:
-        if chamado.numero not in manuais_por_numero:
+        if exigir and chamado.numero not in manuais_por_numero:
             raise ManuaisInvalidos(f"Preencha os campos manuais do {chamado.numero}.")
         try:
-            manuais = validar_manuais(manuais_por_numero[chamado.numero])
+            manuais = validar_manuais(manuais_por_numero.get(chamado.numero) or {}, exigir)
             validar_listas(manuais, listas or {})
         except ManuaisInvalidos as erro:
             raise ManuaisInvalidos(f"{chamado.numero}: {erro}") from None

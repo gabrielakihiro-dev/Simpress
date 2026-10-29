@@ -19,6 +19,7 @@ from html import unescape
 from typing import Dict, List, Mapping, Optional, Sequence, Tuple
 from xml.etree import ElementTree
 
+from domains.sebrae_chamados import extrair_numeros
 from domains.sebrae_dashboard import ABA, DashboardInvalido, MANUAIS, _validar_pacote, ler_coluna_c
 
 TABELA = "Tabela3"
@@ -232,8 +233,10 @@ def chamados_para_editar(conteudo: bytes) -> List[ChamadoAberto]:
         if numero < 2 or not _tem_dado(linha, pacote.compartilhadas):
             continue
         chamado = _valor_legivel("C", linha.celulas.get("C", ""), pacote.compartilhadas)
-        if not re.fullmatch(r"UTIC-\d{4}-\d+", chamado):
-            continue
+        numeros_c = extrair_numeros(chamado)
+        if len(numeros_c) != 1:
+            continue  # no number or several: ambiguous, stays out
+        chamado = numeros_c[0]
         vistos[chamado] = vistos.get(chamado, 0) + 1
         valores = {letra: _valor_legivel(letra, linha.celulas.get(letra, ""), pacote.compartilhadas) for letra in MANUAIS}
         if valores["D"].upper() in ("", "EM ABERTO"):
@@ -411,9 +414,9 @@ def atualizar(
     if edicoes:
         por_chamado: Dict[str, List[int]] = {}
         for numero_linha, linha in linhas.items():
-            valor_c = _valor_legivel("C", linha.celulas.get("C", ""), compartilhadas)
-            if valor_c in edicoes:
-                por_chamado.setdefault(valor_c, []).append(numero_linha)
+            numeros_c = extrair_numeros(_valor_legivel("C", linha.celulas.get("C", ""), compartilhadas))
+            if len(numeros_c) == 1 and numeros_c[0] in edicoes:
+                por_chamado.setdefault(numeros_c[0], []).append(numero_linha)
         for chamado, mudancas in edicoes.items():
             achadas = por_chamado.get(chamado, [])
             if len(achadas) != 1:
