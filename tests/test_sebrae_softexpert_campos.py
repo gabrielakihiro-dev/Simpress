@@ -66,5 +66,17 @@ class HabilitadaDaListaTest(unittest.TestCase):
         self.assertEqual(S.habilitada_da_lista(""), "")
 
 
+class ConfirmacaoDeAssociarTest(unittest.TestCase):
+    def test_botoes_aceitos_e_recusados(self):
+        for rotulo in ("Sim", " Confirmar ", "confirmar"):
+            self.assertTrue(S.NOME_SIM.search(rotulo), rotulo)
+        for rotulo in ("Cancelar", "Não", "Confirmar envio"):
+            self.assertFalse(S.NOME_SIM.search(rotulo), rotulo)
+
+    def test_texto_do_dialogo_de_associar(self):
+        self.assertTrue(S.TEXTO_CONFIRMACAO.search("Atenção Deseja associar esta atividade ao seu usuário?"))
+        self.assertFalse(S.TEXTO_CONFIRMACAO.search("Deseja finalizar o chamado?"))
+
+
 if __name__ == "__main__":
     unittest.main()

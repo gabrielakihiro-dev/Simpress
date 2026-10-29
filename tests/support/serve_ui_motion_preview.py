@@ -199,7 +199,12 @@ SEBRAE_SCENARIOS = ("padrao", "vazio", "pronta", "login")
 sebrae_state = {"scenario": "padrao", "ativo": False}
 
 SEBRAE_NOVOS_FIXTURE = {
-    "importado": {"arquivo": "Dashboard Operacional_SEBRAE.xlsx", "importado_em": "2026-10-28T10:00:00-03:00", "total": 331},
+    "importado": {
+        "arquivo": "Dashboard Operacional_SEBRAE.xlsx", "importado_em": "2026-10-28T10:00:00-03:00", "total": 331,
+        "atualizavel": True, "listas": {"A": ["CLIENTE", "SIMPRESS"], "B": ["LENTIDÃO", "REDE"]},
+        "abertos": [{"numero": "UTIC-2026-1200", "titulo": "Teclado sem resposta", "valores": {
+            "A": "SIMPRESS", "B": "", "D": "EM ABERTO", "J": "INCIDENTE", "R": "", "S": "DISPONIBILIDADE"}}],
+    },
     "novos": {
         "lidos_em": "2026-10-28T10:05:00-03:00", "ignorados": 36,
         "pendentes": [{"numero": "UTIC-2026-1387", "motivo": "Alerta automático do Endpoint; fica pendente até o usuário classificar."}],
@@ -216,6 +221,34 @@ SEBRAE_NOVOS_FIXTURE = {
         ],
     },
 }
+
+
+# Histórico do Dashboard Sebrae: fictional entries, only counts and ticket numbers (never ticket text).
+SEBRAE_HISTORICO_FIXTURE = [
+    {"id": "h3", "seq": 3, "tipo": "busca", "em": "2026-10-28T10:05:00-03:00", "importacao_id": "h2", "ignorados": 36,
+     "n_lidos": 2, "n_pendentes": 1, "n_erros": 1, "lidos": ["UTIC-2026-1378", "UTIC-2026-1336"],
+     "pendentes": ["UTIC-2026-1387"], "erros": ["UTIC-2026-1457"]},
+    {"id": "h2", "seq": 2, "tipo": "importacao", "em": "2026-10-28T10:00:00-03:00", "arquivo": "Dashboard Operacional_SEBRAE.xlsx",
+     "sha256": "0123456789abcdef0123456789abcdef", "total": 331, "inicial": False, "n_adicionados": 2, "n_removidos": 0,
+     "n_alterados": 1, "truncado": False, "repeticoes": 2, "ultima_repeticao_em": "2026-10-28T11:00:00-03:00",
+     "adicionados": ["UTIC-2026-1378", "UTIC-2026-1336"], "removidos": [],
+     "alterados": [{"numero": "UTIC-2026-1200", "de": "EM ABERTO", "para": "FINALIZADO", "encerramento": "27/10/2026 16:00"}]},
+    {"id": "h1", "seq": 1, "tipo": "importacao", "em": "2026-10-27T09:00:00-03:00", "arquivo": "Dashboard Operacional_SEBRAE.xlsx",
+     "sha256": "fedcba9876543210fedcba9876543210", "total": 329, "inicial": True, "n_adicionados": 329, "n_removidos": 0,
+     "n_alterados": 0, "truncado": True, "repeticoes": 0, "ultima_repeticao_em": "",
+     "adicionados": ["UTIC-2026-0001"], "removidos": [], "alterados": []},
+]
+_ARRAYS_HISTORICO = ("adicionados", "removidos", "alterados", "lidos", "pendentes", "erros")
+
+
+def sebrae_historico_lista(tipo):
+    itens = [e for e in SEBRAE_HISTORICO_FIXTURE if not tipo or e["tipo"] == tipo]
+    return {
+        "total": len(itens), "pagina": 1,
+        "itens": [{k: v for k, v in e.items() if k not in _ARRAYS_HISTORICO} for e in itens],
+        "importacoes": sum(e["tipo"] == "importacao" for e in SEBRAE_HISTORICO_FIXTURE),
+        "buscas": sum(e["tipo"] == "busca" for e in SEBRAE_HISTORICO_FIXTURE),
+    }
 
 
 def sebrae_summary():
@@ -370,6 +403,11 @@ class Handler(BaseHTTPRequestHandler):
             self.send({"estado": "livre"})
         elif path == "/api/sebrae/novos":
             self.send(SEBRAE_NOVOS_FIXTURE)
+        elif path == "/api/sebrae/historico":
+            self.send(sebrae_historico_lista(parse_qs(url.query).get("tipo", [""])[0]))
+        elif path.startswith("/api/sebrae/historico/"):
+            entrada = next((e for e in SEBRAE_HISTORICO_FIXTURE if e["id"] == path.rsplit("/", 1)[-1]), None)
+            self.send(entrada or {"detail": "Entrada do histórico não encontrada."}, 200 if entrada else 404)
         elif path == "/api/automacao/sebrae/resumo":
             self.send(sebrae_summary())
         elif path == "/api/automacao/estado":
@@ -540,6 +578,17 @@ class Handler(BaseHTTPRequestHandler):
     def do_POST(self):
         global ticket_import_count
         path = urlsplit(self.path).path
+        if path == "/api/sebrae/dashboard/atualizar":
+            size = int(self.headers.get("Content-Length", "0"))
+            corpo = json.loads(self.rfile.read(size) or b"{}")
+            linhas = [{"numero": c["numero"], "linha": 340 + i, "tipo": "novo", "celulas": ["A", "C", "D"]}
+                      for i, c in enumerate(corpo.get("chamados") or [])]
+            linhas += [{"numero": c["numero"], "linha": 12, "tipo": "alterado", "celulas": sorted(set(c) - {"numero"})}
+                       for c in corpo.get("edicoes") or []]
+            self.send({"arquivo": "Dashboard Operacional_SEBRAE (atualizado).xlsx",
+                       "base": {"arquivo": "Dashboard Operacional_SEBRAE.xlsx", "importado_em": "2026-10-28T10:00:00-03:00"},
+                       "linhas": linhas, "conteudo_base64": "UEsDBA=="})
+            return
         if path in ("/api/sebrae/dashboard", "/api/sebrae/exportar"):
             size = int(self.headers.get("Content-Length", "0"))
             body = self.rfile.read(size)
