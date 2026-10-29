@@ -9,12 +9,17 @@ import threading
 from dataclasses import dataclass
 from typing import Any, Callable, Dict, List, Optional
 
-from fastapi import APIRouter, HTTPException
+from fastapi import APIRouter, HTTPException, Request
+from fastapi.concurrency import run_in_threadpool
 from pydantic import BaseModel, ConfigDict, Field
 
+from core.config import MAX_ASSISTANT_AUDIO_BYTES
 from domains.assistant_api import SimpressApi, Transport
 from domains.assistant_chat import MSG_OCUPADO, MSG_SEM_CHAVE, AssistantBusy, AssistantConversation, Resposta
-from domains.assistant_openrouter import ModelClient, OpenRouterClient, OpenRouterSettings
+from domains.assistant_openrouter import ModelClient, OpenRouterClient, OpenRouterError, OpenRouterSettings
+
+# RIFF header (12) + fmt chunk (24) + data chunk header (8).
+MIN_WAV_BYTES = 44
 
 
 @dataclass(frozen=True)
@@ -81,6 +86,21 @@ def create_assistant_router(services: AssistantRouteServices) -> APIRouter:
             return _reply(current.enviar_mensagem(payload.texto))
         except AssistantBusy:
             raise busy() from None
+
+    @router.post("/api/assistente/audio")
+    async def transcrever_audio(request: Request):
+        """Voice message: WAV in, text out. The text only fills the message box; the user reviews it and sends."""
+        current = ready()
+        wav = await request.body()
+        if len(wav) > MAX_ASSISTANT_AUDIO_BYTES:
+            raise HTTPException(status_code=413, detail="O áudio é grande demais. Grave um trecho mais curto.")
+        if len(wav) < MIN_WAV_BYTES or wav[:4] != b"RIFF" or wav[8:12] != b"WAVE":
+            raise HTTPException(status_code=415, detail="Envie o áudio em formato WAV.")
+        try:
+            texto = await run_in_threadpool(current.transcrever, wav)
+        except OpenRouterError as falha:
+            raise HTTPException(status_code=502, detail=falha.message) from None
+        return {"texto": texto}
 
     @router.post("/api/assistente/confirmar")
     def confirmar_acao(payload: ConfirmacaoPayload):

@@ -1,3 +1,4 @@
+import base64
 import io
 import json
 import tempfile
@@ -90,6 +91,37 @@ class ClientTests(unittest.TestCase):
         self.assertEqual(len(body["models"]), 2)
         self.assertNotIn(SECRET, request.data.decode())
         self.assertEqual(request.get_header("Authorization"), f"Bearer {SECRET}")
+
+    def test_transcribe_sends_wav_as_input_audio_with_privacy_options(self) -> None:
+        seen: List[Any] = []
+
+        def fake(request: Any, timeout: float) -> FakeResponse:
+            seen.append(request)
+            return FakeResponse(ok_body("  quantos notebooks?  "))
+
+        with mock.patch("urllib.request.urlopen", fake):
+            texto = self.client.transcribe(b"RIFF0000WAVEdados")
+        self.assertEqual(texto, "quantos notebooks?")
+        body = json.loads(seen[0].data)
+        self.assertEqual(body["model"], self.settings.audio_model)
+        self.assertEqual(body["provider"]["data_collection"], "deny")
+        audio = body["messages"][0]["content"][1]
+        self.assertEqual(audio["type"], "input_audio")
+        self.assertEqual(audio["input_audio"]["format"], "wav")
+        self.assertEqual(base64.b64decode(audio["input_audio"]["data"]), b"RIFF0000WAVEdados")
+        self.assertNotIn(SECRET, seen[0].data.decode())
+
+    def test_transcribe_turns_no_speech_marker_into_empty_text(self) -> None:
+        for answer in ("[SEM_FALA]", " [sem_fala] "):
+            with mock.patch("urllib.request.urlopen", lambda request, timeout, answer=answer: FakeResponse(ok_body(answer))):
+                self.assertEqual(self.client.transcribe(b"RIFF0000WAVEdados"), "")
+
+    def test_audio_model_comes_from_env_and_bad_value_falls_back(self) -> None:
+        self.assertEqual(OpenRouterSettings.load(None, environ={"MODELO_AUDIO": "a/b"}).audio_model, "a/b")
+        self.assertEqual(
+            OpenRouterSettings.load(None, environ={"MODELO_AUDIO": "lixo com espaco"}).audio_model,
+            OpenRouterSettings().audio_model,
+        )
 
     def test_retries_then_succeeds(self) -> None:
         answers: List[Any] = [http_error(429), urllib.error.URLError("rede"), FakeResponse(ok_body())]
@@ -209,6 +241,29 @@ class RealAppTests(unittest.TestCase):
         self.assertEqual(result["role"], "tool")
         for failure in ("403", "500", "tempo", "Falha"):
             self.assertNotIn(failure, result["content"][:80], result["content"][:200])
+
+    def test_audio_route_accepts_up_to_its_own_limit_and_rejects_beyond(self) -> None:
+        import os
+
+        from fastapi.testclient import TestClient
+
+        from core.config import MAX_API_REQUEST_BYTES, MAX_ASSISTANT_AUDIO_BYTES
+
+        def fake_transcribe(self: Any, wav: bytes) -> str:
+            return f"{len(wav)} bytes"
+
+        with mock.patch.dict(os.environ, {"OPENROUTER_API_KEY": "sk-test-local"}):
+            import main
+
+            client = TestClient(main.app, base_url="http://127.0.0.1:8000", client=("127.0.0.1", 50000))
+            headers = {"Content-Type": "audio/wav"}
+            wav = b"RIFF" + bytes(4) + b"WAVE" + bytes(MAX_API_REQUEST_BYTES)  # above the generic /api/ limit
+            with mock.patch.object(OpenRouterClient, "transcribe", fake_transcribe):
+                ok = client.post("/api/assistente/audio", content=wav, headers=headers)
+                too_big = client.post("/api/assistente/audio", content=bytes(MAX_ASSISTANT_AUDIO_BYTES + 1), headers=headers)
+        self.assertEqual(ok.status_code, 200, ok.text)
+        self.assertEqual(ok.json(), {"texto": f"{len(wav)} bytes"})
+        self.assertEqual(too_big.status_code, 413)
 
 
 if __name__ == "__main__":

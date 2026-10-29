@@ -8,7 +8,9 @@ async function mockAssistente(page, respostas) {
   const chamadas = [];
   await page.route("**/api/assistente/**", async route => {
     const nome = new URL(route.request().url()).pathname.split("/").pop();
-    chamadas.push({ nome, corpo: route.request().postDataJSON?.() ?? null });
+    // O áudio chega como WAV binário; só ele não é JSON.
+    const audio = nome === "audio" ? route.request().postDataBuffer() : null;
+    chamadas.push({ nome, corpo: audio ? null : route.request().postDataJSON?.() ?? null, audio });
     const resposta = typeof respostas[nome] === "function" ? respostas[nome](chamadas.at(-1).corpo) : respostas[nome];
     if (resposta?.status) await route.fulfill({ status: resposta.status, json: { detail: resposta.detail } });
     else await route.fulfill({ json: resposta ?? { ok: true } });
@@ -32,7 +34,68 @@ test("Assistente desligado mostra a orientação e bloqueia a entrada", async ({
   await expect(page.locator("#assistente-status")).toHaveText("Assistente desligado. Preencha OPENROUTER_API_KEY no arquivo .env da pasta do Simpress.");
   await expect(page.locator("#assistente-texto")).toBeDisabled();
   await expect(page.locator("#assistente-enviar")).toBeDisabled();
+  await expect(page.locator("#assistente-gravar")).toBeDisabled();
   await expect(page.locator("#assistente-tentar")).toBeVisible();
+});
+
+test("botão de gravar áudio fica ativo com o Assistente pronto e começa sem gravar", async ({ page }) => {
+  await mockAssistente(page, { estado: PRONTO });
+  await page.goto("/");
+  await abrirAssistente(page);
+  await expect(page.getByRole("button", { name: "Gravar áudio" })).toBeEnabled();
+});
+
+// Microfone falso: um oscilador vira o MediaStream, então o MediaRecorder grava um tom de verdade.
+async function falsearMicrofone(page) {
+  await page.addInitScript(() => {
+    navigator.mediaDevices.getUserMedia = async () => {
+      const contexto = new AudioContext();
+      await contexto.resume();
+      const destino = contexto.createMediaStreamDestination();
+      const oscilador = contexto.createOscillator();
+      oscilador.connect(destino);
+      oscilador.start();
+      return destino.stream;
+    };
+  });
+}
+
+test("grava áudio, envia WAV de 16 kHz e coloca a transcrição na caixa sem enviar a mensagem", async ({ page }) => {
+  await falsearMicrofone(page);
+  const chamadas = await mockAssistente(page, { estado: PRONTO, audio: { texto: "quantos notebooks temos?" } });
+  await page.goto("/");
+  await abrirAssistente(page);
+  await page.locator("#assistente-texto").fill("Oi,");
+  await page.getByRole("button", { name: "Gravar áudio" }).click();
+  await expect(page.locator("#assistente-enviar")).toBeDisabled();
+  const parar = page.getByRole("button", { name: /^Parar \(0:0[1-9]\)$/ });
+  await expect(parar).toBeVisible();
+  await parar.click();
+  await expect(page.locator("#assistente-texto")).toHaveValue("Oi, quantos notebooks temos?");
+  await expect(page.locator("#assistente-status")).toHaveText("Áudio transcrito. Revise o texto e envie.");
+  await expect(page.locator("#assistente-contador")).toHaveText("28 / 4000");
+  await expect(page.getByRole("button", { name: "Gravar áudio" })).toBeEnabled();
+
+  const wav = chamadas.find(c => c.nome === "audio").audio;
+  expect(wav.subarray(0, 4).toString("latin1")).toBe("RIFF");
+  expect(wav.subarray(8, 12).toString("latin1")).toBe("WAVE");
+  expect(wav.readUInt32LE(24)).toBe(16000);
+  expect(wav.length).toBeGreaterThan(44);
+  expect(chamadas.some(c => c.nome === "mensagem")).toBe(false);
+});
+
+test("Esc cancela a gravação: nada é enviado e o botão volta ao normal", async ({ page }) => {
+  await falsearMicrofone(page);
+  const chamadas = await mockAssistente(page, { estado: PRONTO });
+  await page.goto("/");
+  await abrirAssistente(page);
+  await page.getByRole("button", { name: "Gravar áudio" }).click();
+  await expect(page.getByRole("button", { name: /^Parar/ })).toBeVisible();
+  await page.keyboard.press("Escape");
+  await expect(page.getByRole("button", { name: "Gravar áudio" })).toBeEnabled();
+  await expect(page.locator("#assistente-texto")).toHaveValue("");
+  await expect(page.locator("#cockpit-tool-panels")).toBeVisible();
+  expect(chamadas.some(c => c.nome === "audio")).toBe(false);
 });
 
 test("envia mensagem, mostra resposta e ferramentas; Shift+Enter quebra a linha", async ({ page }) => {

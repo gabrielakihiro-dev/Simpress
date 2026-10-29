@@ -14,6 +14,17 @@
   let modelo = "";
   let ocupado = false;
   let pendente = false;
+  // Mensagem de voz: o navegador grava, converte para WAV mono de 16 kHz e o servidor devolve só o texto.
+  const TAXA_WAV = 16000;
+  const LIMITE_SEGUNDOS = 120;
+  let gravando = false;
+  let transcrevendo = false;
+  let cancelado = false;
+  let gravador = null;
+  let fluxo = null;
+  let pedacos = [];
+  let temporizador = 0;
+  let inicioGravacao = 0;
 
   const byId = id => document.getElementById(id);
 
@@ -33,8 +44,15 @@
 
   function atualizarControles() {
     const bloqueado = !online || ocupado || pendente;
-    byId("assistente-texto").disabled = bloqueado;
-    byId("assistente-enviar").disabled = bloqueado;
+    byId("assistente-texto").disabled = bloqueado || transcrevendo;
+    byId("assistente-enviar").disabled = bloqueado || gravando || transcrevendo;
+    // Durante a gravação o botão continua ativo: é ele que para.
+    const botaoGravar = byId("assistente-gravar");
+    botaoGravar.disabled = !gravando && (bloqueado || transcrevendo);
+    const segundos = Math.floor((Date.now() - inicioGravacao) / 1000);
+    byId("assistente-gravar-rotulo").textContent = gravando
+      ? `Parar (${Math.floor(segundos / 60)}:${String(segundos % 60).padStart(2, "0")})`
+      : transcrevendo ? "Transcrevendo…" : "Gravar áudio";
     byId("assistente-nova").disabled = ocupado;
     byId("assistente-confirmar").disabled = ocupado;
     byId("assistente-cancelar").disabled = ocupado;
@@ -123,8 +141,149 @@
     if (pendente || document.activeElement === byId("assistente-tentar") || !document.activeElement || document.activeElement === document.body) focarProximo();
   }
 
+  function paraWav(amostras) {
+    const dados = new DataView(new ArrayBuffer(44 + amostras.length * 2));
+    const texto = (posicao, valor) => [...valor].forEach((letra, i) => dados.setUint8(posicao + i, letra.charCodeAt(0)));
+    texto(0, "RIFF");
+    dados.setUint32(4, 36 + amostras.length * 2, true);
+    texto(8, "WAVEfmt ");
+    dados.setUint32(16, 16, true);
+    dados.setUint16(20, 1, true); // PCM
+    dados.setUint16(22, 1, true); // mono
+    dados.setUint32(24, TAXA_WAV, true);
+    dados.setUint32(28, TAXA_WAV * 2, true);
+    dados.setUint16(32, 2, true);
+    dados.setUint16(34, 16, true);
+    texto(36, "data");
+    dados.setUint32(40, amostras.length * 2, true);
+    amostras.forEach((valor, i) => dados.setInt16(44 + i * 2, Math.max(-1, Math.min(1, valor)) * 0x7fff, true));
+    return dados.buffer;
+  }
+
+  async function gravacaoParaWav(blob) {
+    const contexto = new AudioContext();
+    let audio;
+    try { audio = await contexto.decodeAudioData(await blob.arrayBuffer()); } finally { void contexto.close(); }
+    // O OfflineAudioContext já converte para mono e reamostra para 16 kHz.
+    const saida = new OfflineAudioContext(1, Math.max(1, Math.ceil(audio.duration * TAXA_WAV)), TAXA_WAV);
+    const fonte = saida.createBufferSource();
+    fonte.buffer = audio;
+    fonte.connect(saida.destination);
+    fonte.start();
+    const pronto = await saida.startRendering();
+    return paraWav(pronto.getChannelData(0).subarray(0, LIMITE_SEGUNDOS * TAXA_WAV));
+  }
+
+  async function transcreverGravacao(blob) {
+    transcrevendo = true;
+    mostrarStatus("Transcrevendo…");
+    atualizarControles();
+    try {
+      const wav = await gravacaoParaWav(blob);
+      const dados = await apiFetch("/api/assistente/audio", {
+        method: "POST",
+        headers: { "Content-Type": "audio/wav" },
+        body: wav,
+        errorMessage: "Não foi possível transcrever o áudio.",
+      });
+      const texto = String(dados?.texto ?? "").trim();
+      if (!texto) {
+        mostrarStatus("Não ouvi nenhuma fala. Tente gravar de novo.");
+      } else {
+        const campo = byId("assistente-texto");
+        campo.value = (campo.value.trim() ? `${campo.value.trimEnd()} ${texto}` : texto).slice(0, LIMITE);
+        contarMensagemAssistente();
+        mostrarStatus("Áudio transcrito. Revise o texto e envie.");
+      }
+    } catch (error) {
+      if (error?.status === 503) online = false;
+      mostrarStatus(error?.status ? error.message : "Não foi possível processar o áudio gravado.", error?.status === 503);
+    } finally {
+      transcrevendo = false;
+      atualizarControles();
+      focarProximo();
+    }
+  }
+
+  function encerrarGravacao() {
+    clearInterval(temporizador);
+    fluxo?.getTracks().forEach(faixa => faixa.stop());
+    fluxo = null;
+    gravador = null;
+    gravando = false;
+  }
+
+  function aoParar() {
+    const blob = new Blob(pedacos, { type: gravador?.mimeType || "audio/webm" });
+    pedacos = [];
+    encerrarGravacao();
+    if (cancelado || !blob.size) {
+      if (online) statusPronto();
+      atualizarControles();
+      focarProximo();
+      return;
+    }
+    void transcreverGravacao(blob);
+  }
+
+  function pararGravacao() {
+    if (gravador?.state === "recording") gravador.stop();
+  }
+
+  function cancelarGravacao() {
+    cancelado = true;
+    pararGravacao();
+  }
+
+  function tiqueGravacao() {
+    if (!painelVisivel()) cancelarGravacao();
+    else if (Date.now() - inicioGravacao >= LIMITE_SEGUNDOS * 1000) pararGravacao();
+    else atualizarControles();
+  }
+
+  async function iniciarGravacao() {
+    if (!navigator.mediaDevices?.getUserMedia || typeof MediaRecorder === "undefined") {
+      mostrarStatus("Este navegador não permite gravar áudio.");
+      return;
+    }
+    gravando = true; // bloqueia novo clique enquanto o navegador pede permissão
+    cancelado = false;
+    inicioGravacao = Date.now();
+    atualizarControles();
+    try {
+      fluxo = await navigator.mediaDevices.getUserMedia({ audio: true });
+    } catch {
+      gravando = false;
+      mostrarStatus("Não consegui usar o microfone. Libere o acesso nas permissões do navegador.");
+      atualizarControles();
+      return;
+    }
+    // Esc ou fechar o painel enquanto o navegador pedia permissão: não começa a gravar.
+    if (cancelado || !painelVisivel()) {
+      encerrarGravacao();
+      if (online) statusPronto();
+      atualizarControles();
+      return;
+    }
+    pedacos = [];
+    gravador = new MediaRecorder(fluxo);
+    gravador.ondataavailable = evento => { if (evento.data.size) pedacos.push(evento.data); };
+    gravador.onstop = aoParar;
+    inicioGravacao = Date.now();
+    gravador.start();
+    temporizador = setInterval(tiqueGravacao, 250);
+    mostrarStatus(`Gravando… fale e clique em Parar (máximo ${LIMITE_SEGUNDOS} s). Esc cancela.`);
+    atualizarControles();
+  }
+
+  function alternarGravacaoAssistente() {
+    if (gravando) return pararGravacao();
+    if (!online || ocupado || pendente || transcrevendo) return;
+    return iniciarGravacao();
+  }
+
   function enviarMensagemAssistente() {
-    if (!online || ocupado || pendente) return;
+    if (!online || ocupado || pendente || gravando || transcrevendo) return;
     const campo = byId("assistente-texto");
     const texto = campo.value.trim();
     if (!texto) { campo.focus(); return; }
@@ -161,7 +320,10 @@
 
   // Enter envia e Shift+Enter quebra a linha; com ação pendente, Esc cancela em vez de fechar o painel.
   function teclaAssistente(event) {
-    if (event.key === "Escape" && pendente && !ocupado) {
+    if (event.key === "Escape" && gravando) {
+      event.preventDefault();
+      cancelarGravacao();
+    } else if (event.key === "Escape" && pendente && !ocupado) {
       event.preventDefault();
       void cancelarPendenteAssistente();
     } else if (event.key === "Enter" && !event.shiftKey && !event.isComposing && event.target?.id === "assistente-texto") {
@@ -172,6 +334,6 @@
 
   return {
     carregarAssistente, enviarMensagemAssistente, confirmarPendenteAssistente, cancelarPendenteAssistente,
-    novaConversaAssistente, contarMensagemAssistente, teclaAssistente,
+    novaConversaAssistente, contarMensagemAssistente, teclaAssistente, alternarGravacaoAssistente,
   };
 });

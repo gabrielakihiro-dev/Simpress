@@ -14,6 +14,7 @@ Painel de conversa com a IA do Simpress (OpenRouter, chamado pelo servidor local
 - `POST /api/assistente/mensagem` `{texto}` (até 4000 caracteres) → `{texto, ferramentas, pendente: {descricao} | null}`.
 - `POST /api/assistente/confirmar` `{confirmado}` → mesmo formato.
 - `POST /api/assistente/limpar` → `{ok: true}`.
+- `POST /api/assistente/audio` corpo WAV bruto (`Content-Type: audio/wav`, até 5 MB) → `{texto}` com a transcrição. O botão `Gravar áudio` (ao lado de `Enviar`) grava até 120 s, converte para WAV mono de 16 kHz e coloca o texto na caixa de mensagem para revisão; não envia nada sozinho. Esc cancela a gravação. 413 áudio grande, 415 não é WAV, 502 falha do OpenRouter.
 - Erros trazem `{detail}`; 503 indica chave do OpenRouter ausente (`OPENROUTER_API_KEY` no `.env`); 409, resposta anterior ainda em andamento. Respostas podem levar até ~1 min.
 
 ## Comportamento
