@@ -9,13 +9,16 @@ import logging
 import re
 import threading
 from dataclasses import dataclass
+from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any, Callable, Dict, FrozenSet, Iterable, List, Optional, Set, Tuple
 
 from core.errors import DomainError
 
 from domains.inventory_comparison import (
+    _parse_verification_datetime,
     _record_value,
+    _upload_verification_value,
     endpoint_user_value,
     normalize_reference_value,
 )
@@ -70,6 +73,7 @@ def build_endpoint_alias_index(
     """
     rows_by_serial: Dict[str, List[Dict[str, str]]] = {}
     users_by_serial: Dict[str, List[str]] = {}
+    verified_by_serial: Dict[str, List[Optional[datetime]]] = {}
     blank_serials: List[Dict[str, str]] = []
     for record in records:
         serial = _record_value(
@@ -91,6 +95,9 @@ def build_endpoint_alias_index(
         if serial_key:
             rows_by_serial.setdefault(serial_key, []).append(row)
             users_by_serial.setdefault(serial_key, []).append(logged_users)
+            verified_by_serial.setdefault(serial_key, []).append(
+                _parse_verification_datetime(_upload_verification_value(record), timezone.utc)
+            )
         elif hostname:
             blank_serials.append(row)
 
@@ -110,10 +117,15 @@ def build_endpoint_alias_index(
         for serial_key, values in users_by_serial.items()
         if len(values) == 1 and values[0]
     }
-    # A serial repeated in the Endpoint gets no user; its distinct users are kept only to be shown.
+    # A serial repeated in the Endpoint takes the user of its most recently verified row, when that row is
+    # strictly the latest and every row has a date; otherwise it gets no user and its users are only shown.
     ambiguous_users: Dict[str, List[str]] = {}
     for serial_key, values in users_by_serial.items():
         if len(values) < 2:
+            continue
+        times = [moment for moment in verified_by_serial[serial_key] if moment is not None]
+        if len(times) == len(values) and times.count(max(times)) == 1 and values[times.index(max(times))]:
+            users[serial_key] = values[times.index(max(times))]
             continue
         candidates: Dict[str, str] = {}
         for value in values:
