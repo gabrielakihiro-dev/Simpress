@@ -36,6 +36,26 @@ class ChromeAutomationHelpersTests(unittest.TestCase):
             "Gestão de Solicitações (2).xlsx",
         )
 
+    def test_montar_multipart_carries_the_file_field_and_content(self):
+        corpo, tipo = automacao.montar_multipart('Dash"board\r\n.xlsx', b"PK\x03\x04dados")
+        limite = tipo.split("boundary=")[1]
+        self.assertTrue(corpo.startswith(f"--{limite}\r\n".encode()))
+        self.assertTrue(corpo.endswith(f"\r\n--{limite}--\r\n".encode()))
+        self.assertIn(b'name="file"; filename="Dash_board__.xlsx"', corpo)
+        self.assertIn(b"PK\x03\x04dados", corpo)
+
+    def test_importar_dashboard_no_site_turns_http_errors_into_rotina_erro(self):
+        import io as _io
+        import urllib.error
+
+        arquivo = self.root / "Dashboard.xlsx"
+        arquivo.write_bytes(b"PK")
+        erro = urllib.error.HTTPError("u", 422, "x", {}, _io.BytesIO(b'{"detail": "arquivo inv\\u00e1lido"}'))
+        self.addCleanup(erro.close)
+        opener = patch("urllib.request.OpenerDirector.open", side_effect=erro)
+        with opener, self.assertRaisesRegex(automacao.RotinaErro, "HTTP 422.*arquivo inválido"):
+            automacao.importar_dashboard_no_site(arquivo)
+
     def _resultado(self, estado: str, pasta: str, status: str) -> None:
         destino = self.root / estado / pasta
         destino.mkdir(parents=True)
