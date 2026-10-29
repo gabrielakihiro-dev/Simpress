@@ -49,11 +49,17 @@
     });
   }
 
+  function linhaChamado(item, v) {
+    return { numero: item.numero, A: v.A || "", B: v.B || "", D: v.D || "", J: v.J || "", R: formatarEncerramento(v.R), S: v.S || "" };
+  }
+
   function payloadExportacao(formulario, valores) {
-    return formulario.filter(item => chamadoPronto(valores[item.numero])).map(item => {
-      const v = valores[item.numero];
-      return { numero: item.numero, A: v.A || "", B: v.B || "", D: v.D || "", J: v.J || "", R: formatarEncerramento(v.R), S: v.S || "" };
-    });
+    return formulario.filter(item => chamadoPronto(valores[item.numero])).map(item => linhaChamado(item, valores[item.numero]));
+  }
+
+  /** Atualizar Dashboard grava TODOS os chamados novos, mesmo sem A, D e J (vazios viram ""). */
+  function payloadAtualizacao(formulario, valores) {
+    return formulario.map(item => linhaChamado(item, valores[item.numero] || {}));
   }
 
   function createSebraeDashboard(context) {
@@ -191,7 +197,7 @@
       const botao = el("btn-sebrae-atualizar");
       if (!botao) return;
       const alteracoes = payloadEdicoes(estado.abertos, estado.edicoes).length;
-      botao.disabled = !estado.atualizavel || (payloadExportacao(estado.formulario, estado.valores).length === 0 && alteracoes === 0);
+      botao.disabled = !estado.atualizavel || (estado.formulario.length === 0 && alteracoes === 0);
       definirTexto("sebrae-antigos-resumo", estado.abertos.length
         ? `${estado.abertos.length} chamado(s) antigo(s) em aberto ou sem status; ${alteracoes} com alteração.`
         : "Nenhum chamado antigo em aberto ou sem status neste Dashboard.");
@@ -334,7 +340,7 @@
     }
 
     async function atualizarDashboardSebrae() {
-      const chamados = payloadExportacao(estado.formulario, estado.valores);
+      const chamados = payloadAtualizacao(estado.formulario, estado.valores);
       const edicoes = payloadEdicoes(estado.abertos, estado.edicoes);
       if (!estado.atualizavel || (!chamados.length && !edicoes.length)) return;
       const botao = el("btn-sebrae-atualizar");
@@ -375,6 +381,6 @@
     return { carregarNovosSebrae, importarDashboardSebrae, exportarChamadosSebrae, atualizarDashboardSebrae, copiarBlocoSebrae };
   }
 
-  createSebraeDashboard.puro = { formatarEncerramento, encerramentoParaCampo, chamadoPronto, payloadExportacao, payloadEdicoes };
+  createSebraeDashboard.puro = { formatarEncerramento, encerramentoParaCampo, chamadoPronto, payloadExportacao, payloadAtualizacao, payloadEdicoes };
   return createSebraeDashboard;
 })());

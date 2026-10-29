@@ -167,3 +167,41 @@ test("abrir uma ferramenta desconhecida não mostra o painel", async () => {
     assert.equal(el("cockpit-tool-panels").hidden, true);
   } finally { delete global.document; }
 });
+
+test("Chamados Sebrae tem item de menu, botão no cartão de Automações e painel com os IDs movidos", () => {
+  const menu = html.match(/<button[^>]*id="btn-sebrae-chamados-menu"[^>]*>[\s\S]*?<\/button>/)?.[0] || "";
+  assert.match(menu, /data-on-click="abrirPainelCockpit"/);
+  assert.match(menu, /data-args='\["sebrae-chamados"\]'/);
+  assert.match(menu, /<span class="ck-menu__rotulo">Chamados Sebrae<\/span>/);
+  assert.doesNotMatch(menu, /<kbd|ck-badge/);
+  assert.ok(html.indexOf('id="btn-historico-comparacoes"') < html.indexOf('id="btn-sebrae-chamados-menu"'));
+  assert.ok(html.indexOf('id="btn-sebrae-chamados-menu"') < html.indexOf('id="ck-menu-g-hist"'));
+  const botao = html.match(/<button[^>]*id="btn-sebrae-abrir-chamados"[^>]*>[\s\S]*?<\/button>/)?.[0] || "";
+  assert.match(botao, /data-args='\["sebrae-chamados"\]'/);
+  assert.match(botao, /<span>Chamados Sebrae<\/span>/);
+  const painel = html.match(/<section[^>]*data-cockpit-tool-panel="sebrae-chamados"[\s\S]*?\n        <\/section>/)?.[0] || "";
+  const cartao = html.match(/<section[^>]*id="sebrae-novos-painel"[\s\S]*?\n      <\/section>/)?.[0] || "";
+  for (const id of ["sebrae-novos-lista", "sebrae-antigos", "sebrae-antigos-lista", "sebrae-antigos-resumo", "sebrae-sugestoes-a", "sebrae-sugestoes-b", "sebrae-sugestoes-s", "btn-sebrae-exportar", "btn-sebrae-atualizar", "sebrae-exportacao-status", "sebrae-atualizar-status", "sebrae-exportacao-blocos", "sebrae-bloco-a-p", "sebrae-bloco-r-s"]) {
+    assert.equal(painel.split(`id="${id}"`).length - 1, 1, `${id} no painel`);
+    assert.doesNotMatch(cartao, new RegExp(`id="${id}"`), `${id} fora do cartão`);
+  }
+  for (const id of ["sebrae-dashboard-file", "btn-sebrae-importar", "btn-sebrae-buscar", "btn-sebrae-atualizar-lista", "sebrae-dashboard-status", "sebrae-novos-resumo", "sebrae-novos-avisos", "sebrae-historico-resumo"]) {
+    assert.match(cartao, new RegExp(`id="${id}"`), `${id} no cartão`);
+  }
+  assert.match(html, /\.sebrae-chamado\b/.source ? /id="sebrae-novos-lista"/ : /x/);
+  assert.match(css, /^\.sebrae-chamado \{/m);
+  assert.match(css, /^\.sebrae-blocos \{/m);
+});
+
+test("abrir Chamados Sebrae mostra o painel sem recarregar a lista", async () => {
+  const { api, el } = criarAmbientePaineis();
+  try {
+    await api.abrirPainelCockpit("sebrae-chamados");
+    assert.equal(el("cockpit-tools-dropdown").dataset.activeTool, "sebrae-chamados");
+    assert.equal(el("cockpit-tool-panels").hidden, false);
+    assert.equal(el("cockpit-tool-title").textContent, "Chamados Sebrae");
+    assert.equal(el("cockpit-tool-kbd").hidden, true);
+  } finally { delete global.document; }
+  const openPanel = source.match(/async function openPanel\(tool\) \{[\s\S]*?\n  \}/)?.[0] || "";
+  assert.doesNotMatch(openPanel, /sebrae-chamados|carregarNovosSebrae/);
+});

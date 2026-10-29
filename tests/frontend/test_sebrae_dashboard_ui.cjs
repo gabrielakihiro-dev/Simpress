@@ -2,7 +2,7 @@ const test = require("node:test");
 const assert = require("node:assert/strict");
 const createSebraeDashboard = require("../../static/js/features/sebrae-dashboard.js");
 
-const { formatarEncerramento, encerramentoParaCampo, chamadoPronto, payloadExportacao, payloadEdicoes } = createSebraeDashboard.puro;
+const { formatarEncerramento, encerramentoParaCampo, chamadoPronto, payloadExportacao, payloadAtualizacao, payloadEdicoes } = createSebraeDashboard.puro;
 
 test("converte o campo de data e hora para dd/MM/aaaa HH:mm e ignora valor inválido", () => {
   assert.equal(formatarEncerramento("2026-10-28T14:30"), "28/10/2026 14:30");
@@ -26,6 +26,22 @@ test("a exportação leva só os prontos, com a data de encerramento formatada",
   assert.deepEqual(payloadExportacao(formulario, valores), [
     { numero: "UTIC-2026-1", A: "CLIENTE", B: "OUTRO", D: "FINALIZADO", J: "INCIDENTE", R: "28/10/2026 09:05", S: "" },
   ]);
+});
+
+test("a atualização leva todos os chamados novos, com vazios em branco e a data formatada", () => {
+  const formulario = [{ numero: "UTIC-2026-1" }, { numero: "UTIC-2026-2" }, { numero: "UTIC-2026-3" }];
+  const valores = {
+    "UTIC-2026-1": { A: "CLIENTE", D: "FINALIZADO", J: "INCIDENTE", R: "2026-10-28T09:05", S: "ok" },
+    "UTIC-2026-2": { B: "REDE" },
+  };
+  assert.deepEqual(payloadAtualizacao(formulario, valores), [
+    { numero: "UTIC-2026-1", A: "CLIENTE", B: "", D: "FINALIZADO", J: "INCIDENTE", R: "28/10/2026 09:05", S: "ok" },
+    { numero: "UTIC-2026-2", A: "", B: "REDE", D: "", J: "", R: "", S: "" },
+    { numero: "UTIC-2026-3", A: "", B: "", D: "", J: "", R: "", S: "" },
+  ]);
+  assert.deepEqual(payloadAtualizacao([], valores), []);
+  // Exportar continua exigindo A, D e J.
+  assert.deepEqual(payloadExportacao(formulario, valores).map(l => l.numero), ["UTIC-2026-1"]);
 });
 
 test("a data guardada no Dashboard volta para o campo de data e hora", () => {

@@ -70,7 +70,7 @@ test("each tool is accessible in both themes and remains reachable below 1200px"
   test.setTimeout(60_000);
   await mockComparison(page);
   await page.goto("/");
-  for (const [id, tool] of [["#btn-acompanhamento-chamados", "chamados"], ["#btn-cockpit-comparacao", "comparacao"], ["#btn-historico-apelidos", "apelidos"], ["#btn-relatorio-mensal", "relatorio"]]) {
+  for (const [id, tool] of [["#btn-acompanhamento-chamados", "chamados"], ["#btn-cockpit-comparacao", "comparacao"], ["#btn-historico-apelidos", "apelidos"], ["#btn-relatorio-mensal", "relatorio"], ["#btn-sebrae-chamados-menu", "sebrae-chamados"]]) {
     await openTool(page, id);
     for (const theme of ["dark", "light"]) {
       await page.locator("html").evaluate((root, value) => { root.dataset.theme = value; }, theme);
@@ -210,6 +210,17 @@ test("tool shortcuts cannot submit the hidden transfer form and Escape closes on
   await page.keyboard.press("Escape");
   await expect(page.locator("#cockpit-tools-dropdown")).not.toHaveAttribute("open", "");
   await expect(page.locator("#cockpit-tool-panels")).toBeVisible();
+  await page.keyboard.press("Escape");
+  await expect(page.locator("#cockpit-tool-panels")).toBeHidden();
+});
+
+test("o item Chamados Sebrae do menu abre o painel e volta com Esc", async ({ page }) => {
+  await page.goto("/");
+  await page.locator("#cockpit-tools-trigger").click();
+  await expect(page.locator("#btn-sebrae-chamados-menu")).toHaveText("Chamados Sebrae");
+  await openTool(page, "#btn-sebrae-chamados-menu");
+  await expect(page.locator("#cockpit-tool-title")).toHaveText("Chamados Sebrae");
+  await expect(page.locator('[data-cockpit-tool-panel="sebrae-chamados"]')).toBeVisible();
   await page.keyboard.press("Escape");
   await expect(page.locator("#cockpit-tool-panels")).toBeHidden();
 });

@@ -16,6 +16,8 @@
     evolucao: ["Evolução das atualizações", "Variação entre as duas últimas atualizações de inventário."],
     unidades: ["Catálogo de unidades", "Unidades Sebrae cadastradas para entrega e retirada."],
     "sebrae-historico": ["Histórico de importações do Dashboard Sebrae", "Importações do Dashboard e buscas de chamados novos, com o que mudou em cada uma."],
+    // Sem loader em openPanel: recarregar a lista zeraria as edições dos chamados antigos (sebrae-dashboard.js).
+    "sebrae-chamados": ["Chamados Sebrae", "Preencha os chamados novos e antigos, exporte as linhas e atualize o Dashboard."],
   };
   const relationLabels = {
     conferida: "Conferida", divergente: "Divergente", somente_simpress: "Só Simpress",
