@@ -205,3 +205,83 @@ test("abrir Chamados Sebrae mostra o painel sem recarregar a lista", async () =>
   const openPanel = source.match(/async function openPanel\(tool\) \{[\s\S]*?\n  \}/)?.[0] || "";
   assert.doesNotMatch(openPanel, /sebrae-chamados|carregarNovosSebrae/);
 });
+
+test("Chamados troca lista e detalhe pelo host da tabela de OS e mantém KPIs, busca e Relação", () => {
+  assert.match(html, /<div id="cockpit-tickets-os" class="ck-ferr-os"><\/div>/);
+  assert.doesNotMatch(html, /id="cockpit-tickets-(list|detail)"/);
+  for (const id of ["cockpit-tickets-kpis", "cockpit-tickets-search", "cockpit-tickets-relation", "cockpit-tickets-refresh", "cockpit-tickets-manage"]) {
+    assert.equal(html.split(`id="${id}"`).length - 1, 1, id);
+  }
+  assert.doesNotMatch(html, /resumo-os-equipamento/, "a seção de OS saiu do Transporte");
+});
+
+test("#ck-link-os é um botão que abre Chamados filtrado pela série do equipamento", () => {
+  const link = html.match(/<(\w+)[^>]*id="ck-link-os"[^>]*>/);
+  assert.equal(link?.[1], "button");
+  assert.match(link[0], /type="button"/);
+  assert.match(link[0], /data-on-click="abrirChamadosDoEquipamento"/);
+  assert.equal(typeof panels.abrirChamadosDoEquipamento, "function");
+});
+
+test("abrir Chamados monta a tabela uma vez, com as opções de Chamados, e depois só atualiza", async () => {
+  const { api, el } = criarAmbientePaineis();
+  const calls = { montar: [], filtrar: [], atualizar: [] };
+  global.SimpressDataPanels = {
+    montarTabelaOs: (host, opcoes) => { calls.montar.push([host, opcoes]); return {}; },
+    filtrarTabelaOs: filtro => calls.filtrar.push(filtro),
+    atualizarTabelaOs: async force => { calls.atualizar.push(force); },
+  };
+  try {
+    el("cockpit-tickets-relation").value = "todos";
+    await api.abrirPainelCockpit("chamados");
+    assert.equal(calls.montar.length, 1);
+    const [host, opcoes] = calls.montar[0];
+    assert.equal(host, el("cockpit-tickets-os"));
+    assert.equal(opcoes.semBusca, true);
+    assert.equal(opcoes.incluirSemOs, true);
+    assert.equal(typeof opcoes.aoExpandirSerie, "function");
+    assert.equal(typeof opcoes.aoCarregar, "function");
+    assert.deepEqual(calls.filtrar, [{ busca: "", relacao: "" }], "Relação 'todos' vira filtro vazio");
+    assert.deepEqual(calls.atualizar, [], "a tabela recém-montada já carrega sozinha");
+
+    // aoCarregar recebe o relatório (KPIs) e aoExpandirSerie preenche a linha de Andamento.
+    const kpis = el("cockpit-tickets-kpis");
+    let kpiRenders = 0;
+    kpis.replaceChildren = () => { kpiRenders += 1; };
+    opcoes.aoCarregar({ resumo: { series_total: 2 }, chamados: [{ serie: "SN-1", relacao: "conferida", oracle: [], simpress: {} }] });
+    assert.equal(kpiRenders, 1);
+    const celula = el("celula-andamento");
+    let preenchida = 0;
+    celula.replaceChildren = () => { preenchida += 1; };
+    opcoes.aoExpandirSerie("SN-1", celula);
+    assert.ok(preenchida >= 1);
+    const antes = preenchida;
+    opcoes.aoExpandirSerie("SN-X", celula);
+    assert.ok(preenchida > antes, "série ausente da importação mostra aviso em vez de quebrar");
+
+    // Já montada: reabrir só pede atualização.
+    host.querySelector = () => ({});
+    await api.abrirPainelCockpit("chamados");
+    assert.equal(calls.montar.length, 1);
+    assert.deepEqual(calls.atualizar, [true]);
+  } finally { delete global.document; delete global.SimpressDataPanels; }
+});
+
+test("abrirChamadosDoEquipamento preenche a busca com a série e filtra a tabela", async () => {
+  const { api, el } = criarAmbientePaineis();
+  const filtros = [];
+  global.SimpressDataPanels = { montarTabelaOs: () => ({}), filtrarTabelaOs: filtro => filtros.push(filtro), atualizarTabelaOs: async () => {} };
+  try {
+    el("transfer-serial").textContent = "  sn-9 ";
+    el("cockpit-tickets-relation").value = "somente_oracle";
+    const busca = el("cockpit-tickets-search");
+    const eventos = [];
+    busca.dispatchEvent = evento => { eventos.push(evento.type); return true; };
+    await api.abrirChamadosDoEquipamento();
+    assert.equal(busca.value, "SN-9");
+    assert.equal(el("cockpit-tool-panels").hidden, false);
+    assert.equal(el("cockpit-tools-dropdown").dataset.activeTool, "chamados");
+    assert.deepEqual(eventos, ["input"]);
+    assert.deepEqual(filtros.at(0), { busca: "SN-9", relacao: "somente_oracle" });
+  } finally { delete global.document; delete global.SimpressDataPanels; }
+});

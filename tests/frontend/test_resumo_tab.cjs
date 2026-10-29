@@ -31,7 +31,10 @@ test("Resumo panel keeps the inventory summary and removes the usage panel", () 
 });
 
 test("panel scripts target the Resumo tab", () => {
-  assert.match(dataPanelsJs, /getElementById\("ck-transp"\)/, "a seção de OS é montada na aba Transporte");
+  assert.doesNotMatch(dataPanelsJs, /getElementById\("ck-transp"\)|resumo-os-equipamento|transfer-serial/, "a tabela de OS não depende mais da aba Transporte");
+  assert.match(dataPanelsJs, /function montarTabelaOs\(host, opcoes = \{\}\)/, "a tabela de OS é montada onde o host pedir (Chamados)");
+  assert.match(appHtml, /id="cockpit-tickets-os"/);
+  assert.doesNotMatch(appHtml, /resumo-os-equipamento/);
   assert.doesNotMatch(appHtml, /ck-parque|Resumo do parque/, "Resumo do parque panel is removed from the Resumo tab");
   assert.doesNotMatch(dataPanelsJs, /ux-home-panel/, "legacy parque panel is gone");
   assert.match(dataPanelsJs, /\["tab-home", "tab-resumo", "tab-retirada-entrega"\]/);

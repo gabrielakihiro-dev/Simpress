@@ -43,8 +43,6 @@
   let selectedUnitKey = "";
   let returnTarget = null;
   let ticketData = null;
-  let selectedTicketSerial = "";
-  let ticketTimelineRequest = 0;
   let comparisonEvents = [];
   let selectedComparisonId = "";
   let selectedComparison = null;
@@ -56,7 +54,6 @@
   const aliasEquipmentCache = new Map();
   let aliasEquipmentRequest = 0;
   let monthlyRequest = 0;
-  let ticketRequest = 0;
   let comparisonRequest = 0;
   let comparisonDetailRequest = 0;
   let aliasRequest = 0;
@@ -228,30 +225,35 @@
     return { oracle, simpress };
   }
 
-  function renderTicketDetail(record) {
-    const target = byId("cockpit-tickets-detail");
-    if (!record) {
-      ticketTimelineRequest += 1;
-      return renderEmpty(target, "Selecione uma série para ver os chamados relacionados.");
-    }
+  // Conteúdo da linha "Andamento" de uma série (callback aoExpandirSerie da tabela de OS).
+  function renderTicketDetail(record, target) {
+    if (!record) return renderEmpty(target, "Série não encontrada na importação atual.");
     const { oracle, simpress } = ticketOrders(record);
     const oracleRecords = Array.isArray(record.oracle) ? record.oracle : [];
     const simpressRecord = record.simpress || {};
     const details = [
-      ["Série", record.serie], ["Relação", relationText(record)],
       ["Ordens no Oracle", oracle.length ? oracle.join(", ") : "Nenhuma ordem informada"],
       ["Ordens na Simpress", simpress.length ? simpress.join(", ") : "Nenhuma ordem informada"],
       ["Status Oracle", oracleRecords.map(item => [item.status, item.sub_status].filter(Boolean).join(" · ")).filter(Boolean).join(" / ")],
       ["Última atualização Oracle", oracleRecords.map(item => item.ultima_atualizacao).filter(Boolean).join(" / ")],
       ["Status Simpress", (Array.isArray(simpressRecord.status) ? simpressRecord.status : []).filter(Boolean).join(" / ")],
     ];
+    const relation = element("p", "ck-nota", "Relação: ");
+    relation.append(badge(relationText(record), relationTones[record.relacao]));
     const fields = element("div", "");
     renderDetails(fields, details);
-    const note = element("p", "ck-nota", "Os dados exibidos vêm da última importação local. Este painel não altera chamados.");
+    const note = element("p", "ck-nota", "Os dados exibidos vêm da última importação local. Só o número do chamado UTIC pode ser salvo aqui.");
     const timeline = element("section", "ck-det-bloco");
     timeline.append(element("h3", "", "Andamento registrado"));
-    target.replaceChildren(fields, note, timeline);
-    loadTicketTimeline(record, timeline);
+    const events = element("div", "");
+    timeline.append(events);
+    target.replaceChildren(relation, fields, note, timeline);
+    loadTicketTimeline(record, events);
+  }
+
+  function expandTicketSeries(serie, target) {
+    const records = Array.isArray(ticketData?.chamados) ? ticketData.chamados : [];
+    renderTicketDetail(records.find(record => String(record.serie || "") === serie), target);
   }
 
   function timelineValue(value) {
@@ -280,72 +282,51 @@
   async function loadTicketTimeline(record, target) {
     const serial = String(record.serie || "");
     const snapshotId = String(ticketData?.snapshot_id || "");
-    const request = ++ticketTimelineRequest;
     renderEmpty(target, "Carregando histórico da série…");
     if (!serial || !snapshotId) return renderEmpty(target, "O histórico desta série não está disponível nesta importação.");
+    // Cada linha aberta tem o próprio destino; recolher/recriar a tabela o desconecta e descarta a resposta.
+    const stale = () => !target.isConnected || activeTool !== "chamados";
     try {
       const params = new URLSearchParams({ snapshot_id: snapshotId });
       const data = await apiFetch(`/api/operacoes/chamados/linha-do-tempo/${encodeURIComponent(serial)}?${params}`, {
         errorMessage: "Não foi possível carregar o histórico desta série.",
       });
-      if (request !== ticketTimelineRequest || activeTool !== "chamados" || selectedTicketSerial !== serial) return;
-      renderTicketTimeline(target, Array.isArray(data.eventos) ? data.eventos : []);
+      if (!stale()) renderTicketTimeline(target, Array.isArray(data.eventos) ? data.eventos : []);
     } catch (error) {
-      if (request === ticketTimelineRequest && activeTool === "chamados" && selectedTicketSerial === serial) {
-        renderError(target, error, "Não foi possível carregar o histórico desta série.");
-      }
+      if (!stale()) renderError(target, error, "Não foi possível carregar o histórico desta série.");
     }
   }
 
-  function renderTickets() {
-    const records = Array.isArray(ticketData?.chamados) ? ticketData.chamados : [];
+  function renderTicketKpis() {
     const summary = ticketData?.resumo || {};
-    const kpis = [
+    renderKpis(byId("cockpit-tickets-kpis"), [
       ["Séries", summary.series_total], ["Conferidas", summary.conferidas], ["Divergentes", summary.divergentes],
       ["Só Simpress", summary.somente_simpress], ["Só Oracle", summary.somente_oracle], ["Sem OS", summary.sem_os],
-    ];
-    renderKpis(byId("cockpit-tickets-kpis"), kpis);
-    const query = byId("cockpit-tickets-search").value;
-    const relation = byId("cockpit-tickets-relation").value;
-    const visible = filterTicketRecords(records, query, relation);
-    const list = byId("cockpit-tickets-list");
-    if (!visible.length) renderEmpty(list, records.length ? "Nenhuma série corresponde aos filtros." : "A importação local não contém séries de chamados.");
-    else {
-      list.replaceChildren(...visible.map(record => {
-        const { oracle, simpress } = ticketOrders(record);
-        const item = element("div", "ck-ferr-item");
-        item.setAttribute("role", "listitem");
-        const button = element("button", "ck-item ck-ferr-botao");
-        button.type = "button";
-        button.setAttribute("aria-pressed", String(record.serie === selectedTicketSerial));
-        button.append(Object.assign(element("strong", "ck-item__serie", record.serie || "Série sem identificação"), { title: record.serie || "Série sem identificação" }));
-        button.append(badge(relationText(record), relationTones[record.relacao]));
-        button.append(element("small", "ck-item__sub", `Oracle ${oracle.length} · Simpress ${simpress.length}`));
-        button.addEventListener("click", () => { selectedTicketSerial = String(record.serie || ""); renderTickets(); });
-        item.append(button);
-        return item;
-      }));
-    }
-    const selected = visible.find(record => String(record.serie || "") === selectedTicketSerial) || visible[0];
-    selectedTicketSerial = String(selected?.serie || "");
-    renderTicketDetail(selected);
+    ]);
   }
 
+  // Busca e Relação só filtram as linhas já montadas pela tabela de OS (data-panels).
+  function filterTicketTable() {
+    const relation = byId("cockpit-tickets-relation").value;
+    dataPanels()?.filtrarTabelaOs({ busca: byId("cockpit-tickets-search").value, relacao: relation === "todos" ? "" : relation });
+  }
+
+  const dataPanels = () => globalThis.SimpressDataPanels;
+
+  // A tabela já busca /api/operacoes/chamados: reaproveita a resposta (KPIs e snapshot_id) em vez de pedir de novo.
   async function loadTickets() {
-    const request = ++ticketRequest;
-    const target = byId("cockpit-tickets-list");
-    target.setAttribute("aria-busy", "true");
-    renderEmpty(target, "Carregando acompanhamento local…");
-    try {
-      const data = await apiFetch("/api/operacoes/chamados", { errorMessage: "Não foi possível carregar o acompanhamento de chamados." });
-      if (request !== ticketRequest || activeTool !== "chamados") return;
-      ticketData = data;
-      selectedTicketSerial = selectedTicketSerial || String(ticketData.chamados?.[0]?.serie || "");
-      renderTickets();
-    } catch (error) {
-      if (request !== ticketRequest || activeTool !== "chamados") return;
-      renderError(target, error, "Não foi possível carregar os chamados.");
-    } finally { target.removeAttribute("aria-busy"); }
+    const host = byId("cockpit-tickets-os");
+    const panels = dataPanels();
+    const mounted = host.querySelector(".ck-os");
+    const section = mounted || panels?.montarTabelaOs(host, {
+      titulo: "Ordens de serviço por série", semBusca: true, incluirSemOs: true,
+      aoExpandirSerie: expandTicketSeries,
+      aoCarregar: report => { ticketData = report; renderTicketKpis(); },
+    });
+    if (!section) return renderError(host, null, "A tabela de ordens de serviço não está disponível.");
+    filterTicketTable();
+    // Recém-montada já está carregando; só recarrega à força se já existia.
+    if (mounted) await panels.atualizarTabelaOs(true);
   }
 
   const comparisonCategories = [
@@ -1559,8 +1540,8 @@
     if (eventsBound || typeof document === "undefined") return;
     const root = byId("cockpit-tool-panels");
     if (!root) return;
-    byId("cockpit-tickets-search").addEventListener("input", renderTickets);
-    byId("cockpit-tickets-relation").addEventListener("change", renderTickets);
+    byId("cockpit-tickets-search").addEventListener("input", filterTicketTable);
+    byId("cockpit-tickets-relation").addEventListener("change", filterTicketTable);
     byId("cockpit-tickets-refresh").addEventListener("click", loadTickets);
     byId("cockpit-tickets-manage").addEventListener("click", () => app.abrirAcompanhamentoChamados(true));
     byId("cockpit-comparison-refresh").addEventListener("click", loadComparisons);
@@ -1665,6 +1646,14 @@
     if (tool === "sebrae-historico") await app.carregarPainelHistoricoSebrae?.();
   }
 
+  // "OS deste equipamento" (Transporte): abre Chamados já filtrado pela série; a busca filtra a tabela de OS.
+  async function abrirChamadosDoEquipamento() {
+    const search = byId("cockpit-tickets-search");
+    if (search) search.value = String(byId("transfer-serial")?.textContent || "").trim().toUpperCase();
+    await openPanel("chamados");
+    search?.dispatchEvent(new Event("input", { bubbles: true }));
+  }
+
   // Voltar: retorna ao painel aberto antes; sem anterior (ou com restoreFocus=false) fecha para a tela principal.
   function goBack(restoreFocus = true) {
     const target = previousTool;
@@ -1681,6 +1670,7 @@
   return {
     abrirPainelCockpit: openPanel,
     abrirComparacaoDaSerie,
+    abrirChamadosDoEquipamento,
     destacarLinhaCockpit,
     fecharPainelCockpit: goBack,
     filterTicketRecords,

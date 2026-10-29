@@ -426,9 +426,6 @@ button.ck-kpi[aria-pressed="true"] { background: var(--cor-superficie); border-b
 .ck-pendentes { margin-left: auto; color: var(--cor-alerta-texto); }
 .ck-pendentes:hover { background: var(--cor-alerta-fundo); color: var(--cor-alerta-texto); }
 
-.ck-os__vinculo { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 10px; padding: 8px 12px; border-bottom: 1px solid var(--cor-borda-suave); background: var(--cor-superficie-funda); font-size: var(--fs-ui); color: var(--cor-texto-suave); }
-.ck-os__vinculo .ck-ico { color: var(--cor-destaque); }
-.ck-os__vinculo strong { font: var(--peso-medio) var(--fs-ui) var(--fonte-mono); color: var(--cor-texto); }
 .ck-os__busca { flex: 0 1 240px; }
 .ck-os .ck-cartao__cab > .ck-cartao__meta { white-space: nowrap; }
 .ck-os__corpo { padding: 4px 12px 12px; }
@@ -774,8 +771,10 @@ button.ck-status--link:focus-visible { outline: 2px solid var(--cor-destaque); o
 #ux-pending-chip[hidden] { display: none; }
 .ck-tela--transporte { min-width: 0; }
 @media (min-width: 1200px) {
-  #tab-panel-retirada-entrega.ck-tela--transporte:not([hidden]) { display: flex; flex-direction: column; min-height: calc(100dvh - var(--ck-topbar-h, 48px)); }
+  #tab-panel-retirada-entrega.ck-tela--transporte:not([hidden]) { display: flex; flex-direction: column; height: calc(100dvh - var(--ck-topbar-h, 48px)); }
   .ck-tela--transporte > .ck-transp { flex: 1 1 auto; }
+  /* A barra é sticky dentro da tela (não mais fixa sobre a página): sem a folga legada de app.css, a página não ganha uma faixa vazia rolável sob ela. */
+  body.has-quick-actions { padding-bottom: 0; }
 }
 @media (max-width: 1199.98px) {
   .ck-acoes-barra { position: sticky; bottom: 0; }
@@ -804,20 +803,22 @@ button.ck-status--link:focus-visible { outline: 2px solid var(--cor-destaque); o
 #cockpit-summary-status:empty { display: none; }
 #cockpit-summary-pagination[hidden] { display: none; }
 
-/* Região 3D: OS por equipamento (dentro do Transporte). Layout do Cockpit v2: .ck-tabela--cards vira cards abaixo de 1200px; só o que a v2 não cobre fica aqui. */
-#resumo-os-equipamento.ck-os { margin: 0; }
-#resumo-os-equipamento .ck-os__vinculo { min-height: 0; }
-#resumo-os-equipamento .ck-os__corpo { overflow-x: clip; }
-#resumo-os-equipamento .ck-tabela td { font-size: var(--fs-md); color: var(--cor-texto); }
-#resumo-os-equipamento .ck-tag { align-self: flex-start; }
-#resumo-os-equipamento .ck-os-fonte { display: flex; align-items: center; min-height: var(--altura-controle-sm); }
-#resumo-os-equipamento .ck-os-fonte + .ck-os-fonte { margin-top: 6px; }
-#resumo-os-equipamento .ck-os-fonte > .ticket-os-link-editor { flex: 1 1 auto; min-width: 0; }
-#resumo-os-equipamento .ticket-summary-order-link { vertical-align: top; align-items: flex-start; font-size: inherit; text-align: left; overflow-wrap: anywhere; }
-#resumo-os-equipamento .ticket-os-link-controls { flex-wrap: wrap; align-items: center; }
-#resumo-os-equipamento .ticket-os-link-prefix { font-family: var(--fonte-mono); font-size: var(--fs-ui); color: var(--cor-texto-mudo); white-space: nowrap; }
-#resumo-os-equipamento .ticket-os-link-input { flex: 0 0 5.5rem; width: 5.5rem; min-width: 0; font-family: var(--fonte-mono); }
-#resumo-os-equipamento .ck-descricao__texto { white-space: pre-line; overflow-wrap: anywhere; }
+/* Região 3D: tabela de OS (montada em Chamados por montarTabelaOs, seção .ck-os). Layout do Cockpit v2: .ck-tabela--cards vira cards abaixo de 1200px; só o que a v2 não cobre fica aqui. */
+.ck-os { margin: 0; }
+.ck-os tr[hidden] { display: none; }
+.ck-os .ck-os__corpo { overflow-x: clip; }
+.ck-os .ck-tabela td { font-size: var(--fs-md); color: var(--cor-texto); }
+.ck-os .ck-tag { align-self: flex-start; }
+.ck-os .ck-os-fonte { display: flex; align-items: center; min-height: var(--altura-controle-sm); }
+.ck-os .ck-os-fonte + .ck-os-fonte { margin-top: 6px; }
+.ck-os .ck-os-fonte > .ticket-os-link-editor { flex: 1 1 auto; min-width: 0; }
+.ck-os .ticket-summary-order-link { vertical-align: top; align-items: flex-start; font-size: inherit; text-align: left; overflow-wrap: anywhere; }
+.ck-os .ticket-os-link-controls { flex-wrap: wrap; align-items: center; }
+.ck-os .ticket-os-link-prefix { font-family: var(--fonte-mono); font-size: var(--fs-ui); color: var(--cor-texto-mudo); white-space: nowrap; }
+.ck-os .ticket-os-link-input { flex: 0 0 5.5rem; width: 5.5rem; min-width: 0; font-family: var(--fonte-mono); }
+.ck-os .ck-descricao__texto { white-space: pre-line; overflow-wrap: anywhere; }
+.ck-os__andamento-btn { display: block; text-align: left; }
+.ck-os tr[data-andamento] .ck-det-campos { grid-template-columns: minmax(80px, min(12rem, 34%)) minmax(0, 1fr); }
 
 /* Região 3F: Automação. Seletores com id vencem as regras legadas de cockpit-pages.css (#automacao-cards em grid de áreas). */
 .cockpit-shell #automacao-cards.ck-auto { display: grid; height: auto; min-height: 100%; grid-template-columns: minmax(0, 1fr) var(--largura-console); grid-template-rows: none; grid-template-areas: none; gap: 0; padding: 0; overflow: visible; }
@@ -873,6 +874,7 @@ button.ck-status--link:focus-visible { outline: 2px solid var(--cor-destaque); o
 .ck-ferr-painel .ck-dividido { min-height: 240px; }
 .ck-ferr-painel .ck-kpi__valor { font-size: 22px; }
 .ck-ferr-painel .ck-barra-ferr .ck-campo { flex: 0 1 220px; }
+.ck-ferr-os { min-width: 0; }
 .ck-barra-ferr .ck-btn { align-self: flex-end; }
 .ck-barra-ferr .ck-btn--icone.ck-btn--sm { min-height: 0; align-self: center; }
 .ck-dividido__lista > .ck-barra-ferr { align-items: center; }
@@ -955,7 +957,7 @@ html[data-theme], html[data-theme] body.cockpit-shell-body { background: var(--c
 /* Transporte idêntico ao demo: locais somente leitura (<output>), etiqueta de apelido e escopo da seção de OS. */
 .ck-local output { font: inherit; color: inherit; }
 .ck-local__nome:empty::before, .ck-local__end:empty::before, .ck-local__cnpj output:empty::before { content: attr(data-vazio); color: var(--cor-texto-mudo); font-weight: var(--peso-regular); }
-.ck-selecionado [hidden], #resumo-os-equipamento [hidden] { display: none; }
+.ck-selecionado [hidden] { display: none; }
 .ck-selecionado__meta:empty { display: none; }
 .ck-segmentado__op:disabled { opacity: .5; cursor: default; }
 .ck-local__cnpj { flex-wrap: wrap; }
