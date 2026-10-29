@@ -6,6 +6,10 @@ O site **só inicia** o script. As exportações continuam sendo feitas no Chrom
 
 Rotina `sebrae` (Chamados novos Sebrae: lê o SoftExpert e grava `data/state/sebrae_novos.json`; sem agendamento na tela): [especificação](sincronizar-chamados-sebrae.md). Ela usa este mesmo contrato, a mesma trava e o mesmo histórico.
 
+Rotina `dashboard` (botão `Baixar, importar e buscar`): no Chrome de automação (porta 9333, login do SharePoint manual) abre o Dashboard Operacional_SEBRAE no Excel Online, faz `File › Create a Copy › Download a Copy` (só leitura; o original não muda), importa o `.xlsx` baixado no site local (`POST /api/sebrae/dashboard`, porta `SIMPRESS_PORT`) e em seguida roda a rotina `sebrae`. O link fica em `DASHBOARD_URL` no script; os cliques do menu (interface em inglês) precisam ser confirmados no teste ao vivo.
+
+Rotina `enviar` (botão `Enviar ao SharePoint`, ao lado de `Atualizar Dashboard`): abre a pasta `DASHBOARD SEBRAE` do SharePoint no Chrome de automação (porta 9333; só o e-mail é digitado, senha e MFA são do usuário), faz `Create or upload › Files upload` (ou `Upload › Files`) com o `Dashboard Operacional_SEBRAE (atualizado).xlsx` mais recente em Downloads (o arquivo que o site baixa) e confirma quando o arquivo aparece na pasta. Nome repetido usa `Keep both`; nunca `Replace`. Falha se não houver arquivo final em Downloads.
+
 ## Contrato com o script
 
 O servidor depende do script somente pela linha de comando e por arquivos; não importa o módulo. Todos os nomes ficam num só lugar, `ScriptContract` em `domains/chrome_automation.py`.

@@ -125,6 +125,15 @@ Mapa dos contratos locais registrados na análise dos handlers FastAPI e consumi
 | 73 | GET /api/sebrae/historico | Query limite (1–200, padrão 50), pagina (1–1000, padrão 1) e tipo (importacao ou busca; vazio = todos). | {total,pagina,itens,importacoes,buscas}, da mais recente para a mais antiga. Cada item traz id, seq, tipo, em e só contagens (importação: arquivo,sha256,total,inicial,n_adicionados,n_removidos,n_alterados,truncado,repeticoes,ultima_repeticao_em; busca: importacao_id,ignorados,n_lidos,n_pendentes,n_erros), sem as listas de números; lê data/state/sebrae_historico.json (até 200 entradas); Cache-Control: no-store. | 422 parâmetro inválido; 503 arquivo do histórico ilegível (nunca é sobrescrito). Somente leitura. routers/sebrae_dashboard.py; domains/sebrae_historico.py; static/js/features/sebrae-historico.js. |
 | 74 | GET /api/sebrae/historico/{entrada_id} | Caminho com o id da entrada. | A entrada completa: os campos do item mais adicionados, removidos e alterados [{numero,de,para,encerramento}] (importação) ou lidos, pendentes e erros (busca), só com números UTIC; Cache-Control: no-store. | 404 entrada inexistente; 503 arquivo do histórico ilegível. Somente leitura. routers/sebrae_dashboard.py; domains/sebrae_historico.py; static/js/features/sebrae-historico.js. |
 
+## Assistente (proxy para o Jarvis leve)
+
+| # | Método e caminho | Entrada/validação | Resposta de sucesso | Erros notáveis e acesso |
+| --- | --- | --- | --- | --- |
+| 75 | POST /api/assistente/mensagem | JSON {texto} de 1–4.000 caracteres (campos extras recusados). Repassa a POST /mensagem do Jarvis leve (JARVIS_LEVE_URL, padrão http://127.0.0.1:8766, somente loopback), sem Origin. | {texto,ferramentas:[string],pendente:{descricao}\|null}. | 422 corpo inválido; 503 Jarvis desligado, sem resposta em 90 s ou URL não loopback; 4xx do Jarvis repassado; 5xx do Jarvis vira 502. Local. routers/assistant.py. |
+| 76 | POST /api/assistente/confirmar | JSON {confirmado: bool}. Repassa a POST /confirmar. | O mesmo corpo de POST /api/assistente/mensagem. | Como acima. Local. routers/assistant.py. |
+| 77 | POST /api/assistente/limpar | Sem corpo. Repassa a POST /limpar. | {ok:true}. | 503/502/4xx como acima. Local. routers/assistant.py. |
+| 78 | GET /api/assistente/estado | Sem parâmetros. Repassa a GET /estado (espera de 3 s). | {online,modelo,aguardando_confirmacao,pendente:{descricao}\|null}; pendente reexibe o cartão após recarregar a página. | 200 com {online:false,modelo:"",aguardando_confirmacao:false,pendente:null} quando o Jarvis não responde. Local. routers/assistant.py. |
+
 ## Regras de compatibilidade
 
 - Rótulos de apresentação do Histórico de Planilhas seguem as instruções locais; mantenha valores brutos e identificadores necessários à auditoria/restauração.
