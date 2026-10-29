@@ -4,9 +4,13 @@ Aplicação web local para consultar equipamentos, preparar transferências Simp
 
 ## Recursos
 
-- Busca por número de série, apelido/hostname, modelo ou cidade. A busca completa pode ser filtrada por categoria e cidade.
+- Interface Cockpit com as abas **Home** (F1), **Transporte** (F2), **Resumo** (F3) e **Automação** (F4), mais o menu **Ferramentas** com os painéis de chamados, comparação, históricos, relatório mensal e assistente.
+- Busca por número de série, apelido/hostname, modelo, cidade ou usuário logado. A busca completa pode ser filtrada por categoria, cidade e usuário (**Sem usuário**/**Com usuário**).
 - Geração e download da planilha oficial de transferência a partir do modelo local.
-- Acompanhamento de Chamados que relaciona as séries e as OS das exportações Simpress e Oracle, com conferência de divergências.
+- Painel **Chamados** com a tabela de OS por equipamento (Fonte, Série, OS, Usuário, Hostname, Chamado e Descrição), que relaciona as exportações Simpress e Oracle, marca divergências e permite vincular cada OS a um chamado `UTIC-<ano>-<número>`.
+- Usuário logado informado à mão quando o Endpoint não o traz, com pendências de confirmação quando uma nova planilha muda ou remove esse usuário.
+- Alertas no painel inicial (base desatualizada, OS paradas, divergências novas) e relatório mensal, gerado também automaticamente no início de cada mês.
+- Automação pelo Chrome (`executar_automacao.bat` ou aba **Automação**) para as rotinas de OS (Oracle + UX), inventários (UX + Endpoint Central) e chamados novos do Sebrae (Dashboard + SoftExpert).
 - Importação automática desse par de planilhas por lotes em pastas locais, com validação, histórico, proteção contra reimportação e recibos de processamento.
 - Textos prontos para solicitações de transporte, kit de teclado e mouse e defeitos, com opções para copiar o texto e abrir os links correspondentes.
 - Edição de apelidos e de outros campos permitidos do equipamento, com histórico e opção de desfazer alterações de apelido.
@@ -14,14 +18,15 @@ Aplicação web local para consultar equipamentos, preparar transferências Simp
 - Central de pendências e comparação da evolução entre atualizações.
 - Exportação de `Apelido` e, quando disponível, `IdCliente` para um modelo Excel local.
 - Catálogo de unidades, endereços, CNPJ e CEP, incluindo unidades personalizadas.
-- Painel do assistente (F9) com IA própria: o servidor local chama o OpenRouter com a chave `OPENROUTER_API_KEY` do arquivo `.env` (copie `.env.example`); não depende do Jarvis nem de outro processo. Alterações de dados só rodam depois da sua confirmação.
+- Painel do assistente (F9) com IA própria: o servidor local chama o OpenRouter com a chave `OPENROUTER_API_KEY` do arquivo `.env` (copie `.env.example`); não depende do Jarvis nem de outro processo. Alterações de dados só rodam depois da sua confirmação. Veja [Assistente (F9)](#assistente-f9).
 
 ## Requisitos
 
 - Windows 10 ou superior.
 - Python 3.12 ou superior.
 - O servidor usa os arquivos locais já compilados da interface. Node.js e npm são necessários para reconstruir esses arquivos, executar os testes JavaScript.
-- Não é necessário ter acesso à internet para abrir a aplicação e carregar a interface. Os links para os sistemas de chamados da Simpress abrem páginas externas.
+- Não é necessário ter acesso à internet para abrir a aplicação e carregar a interface. Os links para os sistemas de chamados da Simpress abrem páginas externas; o assistente (OpenRouter) e as rotinas de automação pelo Chrome precisam de internet.
+- Google Chrome instalado, só para as rotinas de automação.
 
 O repositório é privado; a conta usada para cloná-lo precisa ter acesso.
 
@@ -74,7 +79,11 @@ No VS Code, o interpretador configurado para este workspace é `.venv\Scripts\py
 
 ## Planilhas e arquivos locais
 
-Os caminhos são relativos à pasta do projeto e estão definidos em [core/config.py](core/config.py). Dados operacionais ficam em `data/`, e o modelo de exportação continua em `modelos/`. Não é necessário criar um arquivo `.env`; o programa não o carrega.
+Os caminhos são relativos à pasta do projeto e estão definidos em [core/config.py](core/config.py). Dados operacionais ficam em `data/`, e o modelo de exportação continua em `modelos/`. O arquivo `.env` da raiz (fora do Git) só é lido pelo assistente, para `OPENROUTER_API_KEY` e os modelos opcionais; sem ele, o restante da aplicação funciona normalmente e o painel do assistente mostra o aviso de assistente desligado. Para criá-lo, copie o modelo:
+
+```powershell
+Copy-Item .env.example .env
+```
 
 Na primeira inicialização após atualizar uma instalação existente, o inicializador move os arquivos das pastas antigas para `data/`. A migração primeiro tenta concluir recuperações registradas em `.transactions`; se a recuperação falhar ou houver um upload temporário, ela interrompe sem mover os arquivos. Ela preserva os caminhos relativos dos backups e não sobrescreve destinos diferentes. Feche qualquer outro servidor antes de executar `scripts/migrate_local_data.py` manualmente.
 
@@ -93,6 +102,8 @@ Antes de iniciar o servidor, a limpeza recupera transações e considera tempor�
 | Lotes para atualização automática | `data/state/entrada_automatica` | Fila local de entrada, arquivos processados e lotes com falha; não é versionada. |
 | Lotes para chamados Simpress/Oracle | `data/state/entrada_chamados` | Fila local para importar automaticamente o par de planilhas de chamados; os arquivos e resultados ficam fora do Git. |
 | Catálogo de unidades e histórico de apelidos | `data/state` | Estado local da aplicação; não é distribuído pelo Git. |
+| `sebrae_*.json` e `sebrae_dashboard_importado.xlsx` | `data/state` | Estado local dos chamados novos do Sebrae e do Dashboard importado; fora do Git. |
+| `.env` | raiz do projeto | Chave e modelos do assistente (OpenRouter); fora do Git. Modelo em `.env.example`. |
 
 As planilhas operacionais e o modelo de exportação precisam ser fornecidos localmente. Se estiverem ausentes, somente as funções que dependem desses arquivos ficam indisponíveis; o servidor e as demais áreas continuam acessíveis. Não coloque dados reais no repositório.
 
@@ -101,7 +112,7 @@ As planilhas operacionais e o modelo de exportação precisam ser fornecidos loc
 Os cabeçalhos devem estar na primeira linha de uma aba com dados. O sistema normaliza espaços, acentos e pontuação e recusa cabeçalhos repetidos ou ambíguos.
 
 - **EquipamentosDetalhes:** número de série (`NumeroSerie`, `Numero de Serie` ou `Serial`), apelido/hostname (`Apelido`, `Hostname`, `Nome do Computador` ou `ComputerName`), `Modelo` e `Cidade`.
-- **Endpoint:** nome do computador (`Nome do Computador`, `ComputerName` ou `Hostname`) e número de série/rótulo de serviço (`Rotulo de Servico Numero de Serie`, `NumeroSerie`, `Numero de Serie`, `Serial` ou `ServiceTag`). Para usuário, prioriza `Usuário do último logon` e usa `Usuários logados`/`UsuarioLogado` como alternativa quando o primeiro campo estiver vazio ou indicar ausência. A coluna de último logon é obrigatória para publicar lotes pela exportação automática; planilhas antigas enviadas manualmente continuam compatíveis e usam a coluna de usuários logados.
+- **Endpoint:** nome do computador (`Nome do Computador`, `ComputerName` ou `Hostname`) e número de série/rótulo de serviço (`Rotulo de Servico Numero de Serie`, `NumeroSerie`, `Numero de Serie`, `Serial` ou `ServiceTag`). Para usuário, prioriza `Usuário do último logon` e usa `Usuários logados`/`UsuarioLogado` como alternativa quando o primeiro campo estiver vazio ou indicar ausência. A coluna de último logon é obrigatória para publicar lotes pela exportação automática; planilhas antigas enviadas manualmente continuam compatíveis e usam a coluna de usuários logados. Quando a mesma série aparece em mais de uma linha, vale o usuário da linha com a `Última verificação com êxito` mais recente; sem data, com empate ou com usuário vazio na linha vencedora, a série continua ambígua.
 - **Modelo de exportação:** precisa ter colunas de número de série e `Apelido`. A coluna `IdCliente` é atualizada quando existe nos dois arquivos.
 
 Para escolher a aba automaticamente, o arquivo enviado deve conter somente uma aba que corresponda aos cabeçalhos exigidos para aquele inventário. Se mais de uma aba for compatível, a atualização é recusada para evitar comparar a tabela errada.
@@ -177,14 +188,16 @@ Na pesquisa completa, combine os filtros de categoria e cidade. As categorias s�
 ### Gerar transferência
 
 1. Pesquise o equipamento na aba **Home** e confira os dados encontrados.
-2. Abra manualmente a aba **Retirada e Entrega**.
+2. Abra manualmente a aba **Transporte** (F2).
 3. Revise a origem e o destino, incluindo CNPJ, endereço e contatos. O catálogo de unidades pode ajudar a preencher os dados.
 4. Preencha os campos obrigatórios e clique em **Gerar Planilha** no rodapé.
 5. Abra o arquivo baixado e confira os dados antes de encaminhá-lo.
 
 Para gerar a planilha, são obrigatórios: série do equipamento; CNPJ e endereço de retirada e entrega; nome, e-mail e telefone do contato de retirada; observações da retirada; nome, e-mail e telefone do destinatário; horário, almoço e observações da entrega. A duração da pausa da unidade de entrega também é obrigatória, exceto quando o horário de almoço indica que o escritório não fecha. O arquivo é preparado para download e não fica guardado como arquivo permanente pelo servidor.
 
-Em **Acompanhamento de Chamados**, confira o histórico da relação entre o Excel **Acompanhamento de Pedidos** da Simpress e o Excel **Gestão de Solicitações** do Oracle. A aplicação relaciona as linhas pelo número de série e apresenta a OS de cada fonte, a solicitação Oracle e seus status. Quando as fontes tiverem OS diferentes para a mesma série, o registro é marcado para conferência. Para executar a importação operacional, use a fila local de pastas descrita a seguir; ela não depende do envio de arquivos pelo navegador nem de uma chamada HTTP.
+No painel **Chamados** (menu **Ferramentas**), confira a relação entre o Excel **Acompanhamento de Pedidos** da Simpress e o Excel **Gestão de Solicitações** do Oracle. A tabela **OS por equipamento** relaciona as linhas pelo número de série e mostra Fonte, Série, OS, Usuário, Hostname, Chamado e Descrição; o andamento abre como linha expansível e séries sem OS aparecem como `Sem OS`. Use **Este equipamento** ou **Todas** e o campo de busca por série, OS ou usuário para filtrar. Quando as fontes tiverem OS diferentes para a mesma série, o registro é marcado para conferência.
+
+Na coluna **Chamado**, cada OS tem um único campo para o número depois do prefixo `UTIC-<ano>-`; **Salvar** grava o vínculo, e salvar com o campo vazio remove o vínculo. Na aba **Transporte**, **OS deste equipamento** abre o painel **Chamados** já filtrado pela série pesquisada. Para executar a importação operacional, use a fila local de pastas descrita a seguir; ela não depende do envio de arquivos pelo navegador nem de uma chamada HTTP.
 
 Na aba **Home**, **Mostrar textos para chamados** apresenta textos editáveis relacionados ao equipamento. Use **Copiar** para levar o texto ao chamado; os botões **Link** abrem os sistemas externos correspondentes.
 
@@ -285,13 +298,32 @@ O **Histórico** registra alterações manuais de apelido e permite desfazer a a
 
 O **Catálogo de Unidades** permite consultar unidades e manter unidades personalizadas. Os botões ao lado do CNPJ e do CEP copiam os valores; a interface informa sucesso ou falha.
 
-**Atualizar planilhas** e **Nova transferência** ficam entre as ações principais. Histórico de alterações, Histórico planilhas, Exportar Excel e Catálogo de unidades ficam agrupados no menu secundário.
+As abas principais ficam na barra superior: **Home** (F1), **Transporte** (F2), **Resumo** (F3) e **Automação** (F4). O menu **Ferramentas** agrupa os painéis (**Chamados**, **Comparação**, **Histórico de apelidos**, **Relatório mensal**, **Assistente**), as planilhas (**Atualizar planilhas**, **Exportar Excel**, **Histórico planilhas**, **Chamados Sebrae**) e o histórico e catálogo (**Evolução das atualizações**, **Catálogo de unidades**, **Histórico do Dashboard Sebrae**).
 
-A aba **Home** concentra a busca por série, apelido/hostname, modelo ou cidade. Após selecionar um equipamento, a tela permanece nela; abra **Retirada e Entrega** manualmente para preencher a transferência e acessar as ações do rodapé.
+A aba **Home** concentra a busca por série, apelido/hostname, modelo, cidade ou usuário; **Equipamentos sem usuário**, abaixo da pesquisa, lista os equipamentos sem usuário do Endpoint nem manual. Após selecionar um equipamento, a tela permanece nela; abra **Transporte** manualmente para preencher a transferência e acessar a barra de ações, fixa na base da tela.
 
-No cartão do equipamento pesquisado, os atalhos compactos copiam o CEP e o CNPJ de instalação da localidade de retirada, além do CNPJ de faturamento fixo. Na aba **Retirada e Entrega**, o atalho **CNPJ Inst.** só é habilitado após escolher um destino; a confirmação da cópia identifica a cidade selecionada. O rodapé inclui **Copiar Série** para copiar a série pesquisada.
+No cartão do equipamento pesquisado, os atalhos compactos copiam o CEP e o CNPJ de instalação da localidade de retirada, além do CNPJ de faturamento fixo. Na aba **Transporte**, o atalho **CNPJ Inst.** só é habilitado após escolher um destino; a confirmação da cópia identifica a cidade selecionada. O rodapé inclui **Copiar Série** para copiar a série pesquisada.
 
 Use **Pular para o conteúdo principal** para ignorar o cabeçalho. Na lista rápida, `↑` e `↓` navegam, `Enter` seleciona ou abre os resultados completos e `Esc` fecha. Na pesquisa completa, refine por categoria e cidade ou carregue mais resultados. Diálogos mantêm o foco dentro do conteúdo enquanto estão abertos, fecham com `Esc` e devolvem o foco ao controle que os abriu. Mensagens de carregamento, sucesso, vazio e erro são anunciadas às tecnologias assistivas. Tabelas largas podem ser percorridas horizontalmente e a interface se adapta a telas menores e à preferência por movimento reduzido.
+
+### Automação pelo Chrome
+
+As rotinas abrem um Chrome de automação com perfil próprio na porta local `9333`, que fica aberto entre as execuções para manter os logins. Acione-as pela aba **Automação** (**Rotina de OS**, **Inventários**, **Ambas**, **Verificar usuários**) ou pelo menu de `executar_automacao.bat`. Na tela de conta da Microsoft, a rotina escolhe `gansouza@simpress.com.br` para Oracle, UX e Dashboard e `gakihiro@pr.sebrae.com.br` para Endpoint Central e SoftExpert; se houver um botão `SSO`, clica nele uma vez antes. Senha e MFA continuam com o usuário: a rotina espera o login. Os arquivos exportados entram pelas filas locais descritas acima. Detalhes em [Automação pelo Chrome](docs/operacao/automacao-chrome.md).
+
+### Chamados novos do Sebrae
+
+Na aba **Automação**, **Chamados novos do SoftExpert** importa o `.xlsx` do Dashboard Operacional_SEBRAE (aba `CHAMADOS`, coluna C) e a rotina `sebrae` lê no SoftExpert os chamados que ainda não estão nele. **Baixar, importar e buscar** (rotina `dashboard`) baixa uma cópia do Dashboard pelo Excel Online, importa e busca de uma vez. O painel **Chamados Sebrae** mostra um formulário por chamado novo, exporta as linhas para colar e, em **Atualizar Dashboard**, baixa `Dashboard Operacional_SEBRAE (atualizado).xlsx`; **Enviar ao SharePoint** (rotina `enviar`) envia esse arquivo para a pasta `DASHBOARD SEBRAE` com `Keep both`, nunca `Replace`.
+
+O Dashboard original e o Excel Online nunca são alterados, e no SoftExpert a rotina só lê. CPFs e senhas são mascarados antes de guardar ou exportar qualquer texto de chamado. Regras de colunas e detalhes em [Sincronizar chamados do Sebrae](docs/operacao/sincronizar-chamados-sebrae.md).
+
+### Assistente (F9)
+
+O painel do assistente abre com F9 ou pelo menu **Ferramentas**. O servidor local chama o OpenRouter direto, com a chave `OPENROUTER_API_KEY` do `.env` (veja [Planilhas e arquivos locais](#planilhas-e-arquivos-locais)); a chave nunca vai para a interface, os logs ou as respostas da API. Os modelos padrão podem ser trocados por `MODELO_PRINCIPAL`, `MODELO_FALLBACK` e `MODELO_AUDIO` no `.env`.
+
+- O assistente consulta as rotas do próprio Simpress. Toda alteração de dados para antes e mostra um cartão de confirmação, com texto montado pelo programa; no máximo uma alteração por mensagem.
+- Só sai do computador o texto da conversa e o resultado das consultas, com `data_collection: deny`. Antes do envio, CPFs são mascarados, nomes de pessoas viram marcadores `[PESSOA_n]` (restaurados só na tela) e e-mails, telefones e senhas são removidos.
+- **Gravar áudio** grava até 60 segundos (`Esc` cancela) e transcreve a fala para a caixa de mensagem, para você revisar antes de enviar. O áudio sai do computador sem máscara e não é guardado.
+- Uma conversa por vez: uma segunda mensagem simultânea recebe a resposta 409.
 
 ## Limites de planilhas
 
@@ -401,18 +433,27 @@ domains/effective_alias.py          Precedência do apelido: manual, hostname do
 domains/uploaded_workbooks.py       Leitura e validação das planilhas enviadas
 domains/readiness.py                Painel de prontidão dos arquivos locais
 domains/history_annotations.py      Anotações do histórico de planilhas
+domains/assistant_*.py              Assistente: OpenRouter, ferramentas, máscara LGPD e conversa
+domains/sebrae_*.py                 Chamados novos do Sebrae: Dashboard, SoftExpert, cruzamento e cópia atualizada
+domains/chrome_automation.py        Disparo e acompanhamento das rotinas do Chrome de automação
+domains/monthly_report.py           Relatório mensal de operações
 security/local_requests.py          Acesso só local, cabeçalhos de segurança e limites de envio
 routers/transfers.py                Validação e geração da planilha de transferência
 routers/inventory_history.py        Histórico, resolução e restauração de inventários
 routers/equipment_search.py         Rotas de busca e estatísticas de equipamentos
 routers/system.py                    Rotas de status e configuração do sistema
 routers/units.py                     Rotas e esquema do catálogo de unidades
+routers/operations.py                Chamados Simpress/Oracle e vínculos UTIC por OS
+routers/assistant.py                 Rotas /api/assistente/* do painel F9
+routers/automation.py                Rotas da aba Automação
+routers/sebrae_dashboard.py          Importação do Dashboard e chamados novos do Sebrae
 static/                              Interface web, scripts e arquivos locais de estilo/fonte/ícone
 static/js/features/                  Módulos da interface por funcionalidade
 scripts/build/copy_ui_assets.cjs           Cópia dos recursos locais para a interface
 scripts/migrate_local_data.py        Migração segura dos dados locais para data/
 scripts/cleanup_local_temps.py       Limpeza conservadora de arquivos temporários locais
 scripts/process_ticket_inbox.py      Processamento local imediato da fila de chamados Simpress/Oracle
+scripts/automacao_rotinas_chrome.py  Rotinas do Chrome de automação (OS, inventários, Sebrae, Dashboard)
 data/planilhas_entrada/               Modelo de transferência e planilhas locais
 data/planilhas_entrada/_backups/      Cópias locais anteriores dos inventários
 data/state/                           Estado e históricos locais, ignorados pelo Git
@@ -424,6 +465,9 @@ tests/                                Testes Python e JavaScript
 requirements.txt                     Dependências Python fixadas
 package.json / package-lock.json     Dependências de desenvolvimento da interface
 iniciar_servidor.bat                  Inicializador local para Windows
+instalar_primeira_vez.bat             Instalação completa em uma máquina nova
+executar_automacao.bat                Menu das rotinas do Chrome de automação
+.env.example                          Modelo do .env do assistente (OpenRouter)
 ```
 
 ## Índice da documentação
@@ -438,6 +482,11 @@ iniciar_servidor.bat                  Inicializador local para Windows
 - [Anotações do histórico](docs/operacao/ANOTACOES-HISTORICO.md)
 - [Idempotência dos inventários](docs/operacao/idempotencia-atualizacao-inventario.md)
 - [Atualização com um clique](docs/operacao/atualizacao-um-clique.md)
+- [Automação pelo Chrome](docs/operacao/automacao-chrome.md)
+- [Sincronizar chamados do Sebrae](docs/operacao/sincronizar-chamados-sebrae.md)
+- [Relatório mensal](docs/operacao/relatorio-mensal.md)
+- [Alertas de OS e divergências](docs/operacao/alertas-os-divergencias.md)
+- [Especificações do Cockpit](docs/cockpit-prompts/README.md)
 - [Microinterações e acessibilidade](docs/desenvolvimento/MICROINTERACOES.md)
 - [Arquitetura e auditoria](docs/arquitetura/auditoria_arquitetura.md)
 - [Auditoria do backend e situação do roteiro](docs/arquitetura/auditoria_backend/README.md)
