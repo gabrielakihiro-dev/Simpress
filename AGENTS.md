@@ -49,6 +49,8 @@ Ao exibir ou exportar o Histórico de Planilhas, disponibilize um campo de anota
 
 ## Rotina de OS (Oracle e UX)
 
+- Em qualquer automação (inventários e chamados), na tela de conta da Microsoft: Simpress (Oracle, UX, Dashboard) clica ou digita `gansouza@simpress.com.br`; Endpoint Central e SoftExpert, `gakihiro@pr.sebrae.com.br`. Se a conta não estiver na tela, clique em "Acessar Outra Conta", "Outra Conta" ou "Another Account" e digite só o e-mail. Antes do login, se houver um botão/link `SSO` visível, clique nele uma vez. Senha e MFA continuam do usuário.
+
 - Abra Oracle e UX em abas novas e separadas, deixe o login com o usuário e aguarde "pronto".
 - No UX, confirme o contrato exato `16467 - SERV DE APOIO AS MICRO E PEQ EMP DO PARANA SEBRAE PR`, a seleção e os cartões correspondentes antes de exportar.
 - Importe os arquivos de OS somente pela pasta local `data/state/entrada_chamados` (copie `modelo_lote` para `pendentes/<lote-único>`, com um XLSX em `simpress` para Acompanhamento de Pedidos e outro em `oracle` para Gestão de Solicitações). Não use formulários, API, HTTP/HTTPS nem altere permissões do Chrome.
