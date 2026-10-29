@@ -67,6 +67,12 @@ DASHBOARD_URL = (
     "?sourcedoc=%7Bbe6cb02e-6528-45f0-a4ca-224923818e90%7D&action=edit&wdlcid=en-US"
 )
 DASHBOARD_PREFIXO = r"Dashboard Operacional[_ ]SEBRAE"
+# Pasta do SharePoint que recebe o arquivo final gerado pelo site ("Atualizar Dashboard").
+DASHBOARD_PASTA_URL = (
+    "https://simpress-my.sharepoint.com/shared?id=%2Fpersonal%2Fjufsouza%5Fsimpress%5Fcom%5Fbr%2FDocuments%2FClientes%2FSEBRAE%2FDASHBOARD%20SEBRAE"
+    "&listurl=%2Fpersonal%2Fjufsouza%5Fsimpress%5Fcom%5Fbr%2FDocuments&viewid=4b249dd9%2D2ef5%2D4757%2Da0e3%2D2aa051004ae2"
+)
+DASHBOARD_FINAL = "Dashboard Operacional_SEBRAE (atualizado).xlsx"  # nome gravado por routers/sebrae_dashboard.py
 # Contas escolhidas/digitadas na tela da Microsoft (só o e-mail; senha e MFA são sempre do usuário).
 EMAIL_DASHBOARD = os.environ.get("SIMPRESS_DASHBOARD_EMAIL", "gansouza@simpress.com.br")
 EMAIL_SOFTEXPERT = os.environ.get("SIMPRESS_SOFTEXPERT_EMAIL", "gakihiro@pr.sebrae.com.br")
@@ -1488,6 +1494,71 @@ def rodar_rotina_dashboard(context: "BrowserContext") -> int:
     return codigo
 
 
+def arquivo_final_dashboard() -> Path:
+    """Arquivo final mais recente que o site baixou ("Atualizar Dashboard"), com as variações ``(N)`` do Chrome."""
+    arquivo = copia_do_chrome(padrao_do_nome(DASHBOARD_FINAL), 0)
+    if arquivo is None:
+        raise RotinaErro(f'Não achei "{DASHBOARD_FINAL}" em Downloads. Use "Atualizar Dashboard" no site antes de enviar.')
+    return arquivo
+
+
+def _botao_enviar(page: "Page"):
+    """Botão que abre o menu de envio: "Create or upload" na tela Shared do OneDrive, "Upload" na biblioteca."""
+    return page.get_by_role("button", name=re.compile(r"^(?:Create or upload|Upload)$")).or_(
+        page.get_by_role("menuitem", name=re.compile(r"^Upload$"))).first
+
+
+def pasta_dashboard_logada(page: "Page") -> bool:
+    url = page.url.lower()
+    return "sharepoint.com" in url and "login" not in url and visivel(_botao_enviar(page))
+
+
+def pasta_dashboard_entrar(page: "Page") -> bool:
+    if "microsoftonline" not in page.url.lower():
+        return False
+    entrar_microsoft(page, "Dashboard", EMAIL_DASHBOARD, concluido=pasta_dashboard_logada)
+    return True
+
+
+def enviar_arquivo_para_pasta(page: "Page", arquivo: Path) -> None:
+    """Upload > Files (na tela Shared: Create or upload > Files upload) na pasta aberta. Nome repetido: "Keep both"; nunca "Replace" (o original não pode ser sobrescrito)."""
+    stem = re.escape(arquivo.stem)
+    antes = page.get_by_text(re.compile(stem)).filter(visible=True).count()
+    log("Dashboard", f"Enviando {arquivo.name} ({arquivo.stat().st_size:,} bytes)...".replace(",", "."))
+    _botao_enviar(page).click()
+    arquivos = page.get_by_role("menuitem", name=re.compile(r"^Files?(?: upload)?$")).first
+    arquivos.wait_for(state="visible", timeout=15000)
+    with page.expect_file_chooser(timeout=15000) as escolha:
+        arquivos.click()
+    escolha.value.set_files(str(arquivo))
+    manter = page.get_by_role("button", name=re.compile(r"^Keep both$"))
+    if esperar_visivel(manter.first, 8000):
+        manter.first.click()
+    limite = time.time() + 90
+    while time.time() < limite:
+        verificar_cancelamento()
+        if page.get_by_text(re.compile(stem)).filter(visible=True).count() > antes:
+            return
+        page.wait_for_timeout(1000)
+    raise RotinaErro("Não consegui confirmar o envio: o arquivo não apareceu na pasta do SharePoint.")
+
+
+def rodar_rotina_enviar(context: "BrowserContext") -> int:
+    print(f"\n=== ENVIAR DASHBOARD ATUALIZADO (início {agora_iso()}) ===", flush=True)
+    arquivo = arquivo_final_dashboard()
+    page = None
+    try:
+        page = nova_aba(context, DASHBOARD_PASTA_URL, "Dashboard")
+        aguardar_login(page, "Dashboard", pasta_dashboard_logada, entrar=pasta_dashboard_entrar)
+        enviar_arquivo_para_pasta(page, arquivo)
+    except Exception:
+        registrar_erro(page, "Dashboard")
+        raise
+    page.close()
+    print(f"\n[SUCESSO] {arquivo.name} enviado para a pasta DASHBOARD SEBRAE.", flush=True)
+    return 0
+
+
 def abrir_para_login(context: "BrowserContext") -> int:
     for url in (ORACLE_URL, UX_PEDIDOS_URL, ENDPOINT_URL):
         verificar_cancelamento()
@@ -1520,6 +1591,8 @@ def executar(rotina: str) -> int:
                     return com_aviso("usuários", rodar_rotina_usuarios, context)
                 if rotina == "dashboard":
                     return rodar_rotina_dashboard(context)
+                if rotina == "enviar":
+                    return rodar_rotina_enviar(context)
                 if rotina == "sebrae":
                     # Sem com_aviso: o aviso do Windows sai do resultado e só quando algo muda (sem repetição).
                     return rodar_rotina_sebrae(context)
@@ -1563,7 +1636,7 @@ def playwright_instalado() -> bool:
 
 def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
-    parser.add_argument("--rotina", choices=["os", "inventarios", "usuarios", "ambas", "login", "sebrae", "dashboard"], default="os")
+    parser.add_argument("--rotina", choices=["os", "inventarios", "usuarios", "ambas", "login", "sebrae", "dashboard", "enviar"], default="os")
     parser.add_argument(
         "--cancelar", action="store_true", help="pede o cancelamento da rotina em andamento (o Chrome continua aberto) e sai"
     )
