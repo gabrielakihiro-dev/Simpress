@@ -588,11 +588,15 @@
           const linkCell = cell("Chamado", "ck-td--largo ck-os-fontes");
           // O vínculo UTIC é por OS: série sem OS não tem editor.
           if (order.semOs) { sourceCell.textContent = "—"; linkCell.textContent = "—"; }
+          // Um único editor UTIC por linha: a fonte que já tem vínculo salvo, senão a primeira.
+          const linkSource = order.fontes.find(source =>
+            links.get(ticketOsLinkKey({ fonte: source, serie: record.serie, os: order.os }))) || order.fontes[0];
           order.fontes.forEach(source => {
             const tagSlot = el("div", "ck-os-fonte");
             tagSlot.append(el("span", "ck-tag", ticketSummarySourceLabel([source])));
             sourceCell.append(tagSlot);
             const sourceRecord = { fonte: source, serie: record.serie, os: order.os };
+            if (source !== linkSource) return;
             const slot = el("div", "ck-os-fonte");
             slot.append(renderTicketOsLinkEditor(sourceRecord,
               links.get(ticketOsLinkKey(sourceRecord)), canSave, status));
