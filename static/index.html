@@ -90,7 +90,8 @@
     <button type="button" id="tab-resumo" class="ck-aba" role="tab" aria-selected="false" aria-controls="tab-panel-resumo" tabindex="-1" data-on-click="ativarAbaTransferencia" data-args='["resumo"]' aria-label="Resumo" title="Resumo (F3)"><svg class="ck-ico" aria-hidden="true" focusable="false"><use href="#i-chart"></use></svg><span>Resumo</span></button>
     <button type="button" id="tab-automacao" class="ck-aba" role="tab" aria-selected="false" aria-controls="tab-panel-automacao" tabindex="-1" data-on-click="ativarAbaTransferencia" data-args='["automacao"]' aria-label="Automação" title="Automação (F4)"><svg class="ck-ico" aria-hidden="true" focusable="false"><use href="#i-bot"></use></svg><span>Automação</span></button>
   </nav>
-  <button type="button" id="btn-acompanhamento-chamados" class="ck-aba ck-aba--painel" aria-pressed="false" data-on-click="abrirPainelCockpit" data-args='["chamados"]' aria-label="Chamados" title="Chamados (F5)" aria-keyshortcuts="F5"><svg class="ck-ico" aria-hidden="true" focusable="false"><use href="#i-clipboard"></use></svg><span>Chamados</span></button>
+  <button type="button" id="btn-acompanhamento-chamados" class="ck-aba ck-aba--painel" aria-pressed="false" data-cockpit-tool="chamados" data-on-click="abrirPainelCockpit" data-args='["chamados"]' aria-label="Chamados" title="Chamados (F5)" aria-keyshortcuts="F5"><svg class="ck-ico" aria-hidden="true" focusable="false"><use href="#i-clipboard"></use></svg><span>Chamados</span></button>
+  <button type="button" id="btn-assistente" class="ck-aba ck-aba--painel" aria-pressed="false" data-cockpit-tool="assistente" data-on-click="abrirPainelCockpit" data-args='["assistente"]' aria-label="Assistente" title="Assistente (F9)" aria-keyshortcuts="F9"><svg class="ck-ico" aria-hidden="true" focusable="false"><use href="#i-bot"></use></svg><span>Assistente</span></button>
 
   <span class="ck-topbar__espaco" aria-hidden="true"></span>
   <span class="ck-topbar__quebra" aria-hidden="true"></span>
@@ -156,6 +157,7 @@
           <button type="button" id="btn-cockpit-comparacao" class="ck-menu__item" role="menuitem" data-on-click="abrirPainelCockpit" data-args='["comparacao"]'><svg class="ck-ico" aria-hidden="true" focusable="false"><use href="#i-dashboard"></use></svg><span class="ck-menu__rotulo">Comparação</span><kbd aria-hidden="true">F6</kbd></button>
           <button type="button" id="btn-historico-apelidos" class="ck-menu__item" role="menuitem" data-on-click="abrirPainelCockpit" data-args='["apelidos"]'><svg class="ck-ico" aria-hidden="true" focusable="false"><use href="#i-history"></use></svg><span class="ck-menu__rotulo">Histórico de apelidos</span><kbd aria-hidden="true">F7</kbd></button>
           <button type="button" id="btn-relatorio-mensal" class="ck-menu__item" role="menuitem" data-on-click="abrirPainelCockpit" data-args='["relatorio"]'><svg class="ck-ico" aria-hidden="true" focusable="false"><use href="#i-sheet"></use></svg><span class="ck-menu__rotulo">Relatório mensal</span><kbd aria-hidden="true">F8</kbd></button>
+          <button type="button" id="btn-assistente-menu" class="ck-menu__item ck-menu__item--so-compacto" role="menuitem" data-on-click="abrirPainelCockpit" data-args='["assistente"]'><svg class="ck-ico" aria-hidden="true" focusable="false"><use href="#i-bot"></use></svg><span class="ck-menu__rotulo">Assistente</span><kbd aria-hidden="true">F9</kbd></button>
         </div>
         <div class="ck-menu__grupo" role="group" aria-labelledby="ck-menu-g-planilhas">
           <p class="ck-menu__titulo" id="ck-menu-g-planilhas">Planilhas</p>
@@ -1085,6 +1087,32 @@ Horário disponível para atendimento:</textarea>
               <div class="ck-det__rodape"><button type="button" id="cockpit-updates-to-history" class="ck-btn ck-btn--secundario ck-btn--bloco" data-on-click="abrirPainelCockpit" data-args='["historico-planilhas"]'><svg class="ck-ico ck-ico--sm" aria-hidden="true" focusable="false"><use href="#i-clock"></use></svg>Histórico planilhas</button><button type="button" id="cockpit-updates-to-comparison" class="ck-btn ck-btn--primario ck-btn--bloco" data-on-click="abrirPainelCockpit" data-args='["comparacao"]'><svg class="ck-ico ck-ico--sm" aria-hidden="true" focusable="false"><use href="#i-dashboard"></use></svg>Abrir comparação</button></div>
             </aside>
           </div>
+        </section>
+
+        <section class="ck-ferr-painel ck-assist" data-cockpit-tool-panel="assistente" aria-labelledby="assistente-heading" data-on-keydown="teclaAssistente" data-args='["$event"]' hidden>
+          <h2 id="assistente-heading" class="sr-only">Conversa com o Assistente</h2>
+          <div class="ck-barra-ferr ck-assist__barra">
+            <p id="assistente-status" class="ck-barra-ferr__nota ck-assist__status" role="status" aria-live="polite">Verificando o Assistente…</p>
+            <button type="button" id="assistente-tentar" class="ck-btn ck-btn--secundario ck-btn--sm" data-on-click="carregarAssistente" hidden><svg class="ck-ico ck-ico--sm" aria-hidden="true" focusable="false"><use href="#i-refresh"></use></svg>Tentar novamente</button>
+            <button type="button" id="assistente-nova" class="ck-btn ck-btn--fantasma ck-btn--sm" data-on-click="novaConversaAssistente"><svg class="ck-ico ck-ico--sm" aria-hidden="true" focusable="false"><use href="#i-plus"></use></svg>Nova conversa</button>
+          </div>
+          <div id="assistente-mensagens" class="ck-assist__lista" role="region" aria-label="Mensagens da conversa" aria-busy="false" tabindex="0"></div>
+          <p id="assistente-anuncio" class="ck-sr" aria-live="polite" aria-atomic="true"></p>
+          <div id="assistente-pendente" class="ck-assist__pendente" role="group" aria-labelledby="assistente-pendente-titulo" aria-describedby="assistente-pendente-descricao" tabindex="-1" hidden>
+            <p id="assistente-pendente-titulo" class="ck-det__titulo">Confirmação necessária</p>
+            <p id="assistente-pendente-descricao" class="ck-assist__texto"></p>
+            <div class="ck-grupo-botoes">
+              <button type="button" id="assistente-confirmar" class="ck-btn ck-btn--primario ck-btn--sm" data-on-click="confirmarPendenteAssistente">Confirmar e executar</button>
+              <button type="button" id="assistente-cancelar" class="ck-btn ck-btn--secundario ck-btn--sm" data-on-click="cancelarPendenteAssistente" aria-keyshortcuts="Escape">Cancelar</button>
+            </div>
+          </div>
+          <form id="assistente-form" class="ck-assist__form" data-on-submit="enviarMensagemAssistente" autocomplete="off">
+            <label class="ck-campo ck-assist__campo"><span class="ck-campo__rotulo">Mensagem</span><textarea id="assistente-texto" class="ck-entrada" rows="3" maxlength="4000" placeholder="Escreva sua pergunta. Enter envia; Shift+Enter quebra a linha." aria-describedby="assistente-contador" data-on-input="contarMensagemAssistente"></textarea></label>
+            <div class="ck-assist__acoes">
+              <span id="assistente-contador" class="ck-assist__contador">0 / 4000</span>
+              <button type="submit" id="assistente-enviar" class="ck-btn ck-btn--primario"><svg class="ck-ico ck-ico--sm" aria-hidden="true" focusable="false"><use href="#i-arrow-right"></use></svg>Enviar</button>
+            </div>
+          </form>
         </section>
 
         <section class="ck-ferr-painel" data-cockpit-tool-panel="unidades" aria-labelledby="cockpit-units-heading" hidden>
