@@ -61,7 +61,7 @@ ORACLE_URL = "https://simpress.custhelp.com/AgentWeb/"
 UX_PEDIDOS_URL = "https://ux.simpress.com.br/equipamentos/acompanhamento"
 UX_EQUIPAMENTOS_URL = "https://ux.simpress.com.br/MeusEquipamentos/Index"
 ENDPOINT_URL = "https://centralendpoint.pr.sebrae.com.br/webclient#/uems/inventory/computers"
-# Dashboard Operacional_SEBRAE no Excel Online (interface em inglês: File > Create a Copy > Download a Copy).
+# Dashboard Operacional_SEBRAE no Excel Online (File > Create a Copy > Download a Copy; em português: Arquivo > Criar uma Cópia > Baixar uma Cópia).
 DASHBOARD_URL = (
     "https://simpress-my.sharepoint.com/:x:/r/personal/jufsouza_simpress_com_br/_layouts/15/Doc.aspx"
     "?sourcedoc=%7Bbe6cb02e-6528-45f0-a4ca-224923818e90%7D&action=edit&wdlcid=en-US"
@@ -1396,11 +1396,17 @@ def rodar_rotina_sebrae(context: "BrowserContext") -> int:
 # Dashboard Sebrae (Excel Online): baixar cópia, importar no site e buscar chamados novos
 # --------------------------------------------------------------------------
 
+# Rótulos nos dois idiomas: o Excel Online abre em português ("Arquivo") ou inglês ("File") conforme a conta.
+_MENU_ARQUIVO = re.compile(r"^\s*(File|Arquivo)\s*$")
+_MENU_CRIAR_COPIA = re.compile(r"^\s*(Create a Copy|Criar uma C[óo]pia|Criar C[óo]pia)\s*$", re.IGNORECASE)
+_MENU_BAIXAR_COPIA = re.compile(r"^\s*(Download a Copy|Baixar uma C[óo]pia|Baixar C[óo]pia)\s*$", re.IGNORECASE)
+
+
 def _frame_do_excel(page: "Page"):
     """Frame (a página ou o iframe do Excel Online) onde a aba "File" está visível, ou ``None``."""
     for frame in page.frames:
         try:
-            if frame.get_by_text(re.compile(r"^\s*File\s*$")).filter(visible=True).count():
+            if frame.get_by_text(_MENU_ARQUIVO).filter(visible=True).count():
                 return frame
         except Exception:
             continue
@@ -1428,11 +1434,11 @@ def baixar_copia_dashboard(page: "Page") -> Path:
 
     def clicar() -> None:
         log("Dashboard", "Clicando em File > Create a Copy > Download a Copy...")
-        frame.get_by_text(re.compile(r"^\s*File\s*$")).filter(visible=True).first.click()
-        copiar = frame.get_by_text(re.compile(r"^\s*Create a Copy\s*$")).filter(visible=True).first
+        frame.get_by_text(_MENU_ARQUIVO).filter(visible=True).first.click()
+        copiar = frame.get_by_text(_MENU_CRIAR_COPIA).filter(visible=True).first
         copiar.wait_for(state="visible", timeout=15000)
         copiar.click()
-        baixar = frame.get_by_text(re.compile(r"^\s*Download a Copy\s*$")).filter(visible=True).first
+        baixar = frame.get_by_text(_MENU_BAIXAR_COPIA).filter(visible=True).first
         baixar.wait_for(state="visible", timeout=15000)
         baixar.click()
 

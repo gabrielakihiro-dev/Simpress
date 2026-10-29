@@ -29,7 +29,7 @@ test("Assistente desligado mostra a orientação e bloqueia a entrada", async ({
   await mockAssistente(page, { estado: { online: false, modelo: "", aguardando_confirmacao: false } });
   await page.goto("/");
   await abrirAssistente(page);
-  await expect(page.locator("#assistente-status")).toHaveText("Assistente desligado. Abra iniciar_jarvis_leve.bat na pasta do Jarvis.");
+  await expect(page.locator("#assistente-status")).toHaveText("Assistente desligado. Preencha OPENROUTER_API_KEY no arquivo .env da pasta do Simpress.");
   await expect(page.locator("#assistente-texto")).toBeDisabled();
   await expect(page.locator("#assistente-enviar")).toBeDisabled();
   await expect(page.locator("#assistente-tentar")).toBeVisible();
@@ -145,13 +145,13 @@ test("painel com conversa e cartão pendente passa no axe nos dois temas", async
 test("503 no envio: uma só chamada, aviso com Tentar novamente e texto devolvido ao campo", async ({ page }) => {
   const chamadas = await mockAssistente(page, {
     estado: PRONTO,
-    mensagem: { status: 503, detail: "Assistente desligado. Abra iniciar_jarvis_leve.bat na pasta do Jarvis." },
+    mensagem: { status: 503, detail: "Assistente desligado. Preencha OPENROUTER_API_KEY no arquivo .env da pasta do Simpress." },
   });
   await page.goto("/");
   await abrirAssistente(page);
   await page.locator("#assistente-texto").fill("qual o total?");
   await page.locator("#assistente-enviar").click();
-  await expect(page.locator("#assistente-status")).toHaveText("Assistente desligado. Abra iniciar_jarvis_leve.bat na pasta do Jarvis.");
+  await expect(page.locator("#assistente-status")).toHaveText("Assistente desligado. Preencha OPENROUTER_API_KEY no arquivo .env da pasta do Simpress.");
   await expect(page.locator("#assistente-tentar")).toBeVisible();
   await expect(page.locator("#assistente-texto")).toHaveValue("qual o total?");
   await expect(page.locator("#assistente-texto")).toBeDisabled();

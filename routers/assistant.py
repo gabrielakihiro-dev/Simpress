@@ -1,83 +1,27 @@
-"""Assistant panel: proxies to the local "Jarvis leve" server (loopback only, see AGENTS.md).
+"""Assistant panel: a chat that runs inside Simpress and calls OpenRouter directly.
 
-Simpress never calls an external service here; the model call happens in the Jarvis repo.
-The proxy sends no Origin/Sec-Fetch-Site header because Jarvis leve rejects browser-originated calls.
+The key (OPENROUTER_API_KEY) is read from the local `.env` or the environment and is never
+returned by a route. Tools reach Simpress through its own routes (in process, same security
+middleware), so they see exactly what the screens see.
 """
 
-import json
-import logging
-import urllib.error
-import urllib.request
+import threading
 from dataclasses import dataclass
 from typing import Any, Callable, Dict, List, Optional
-from urllib.parse import urlsplit
 
 from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel, ConfigDict, Field
 
-logger = logging.getLogger(__name__)
-
-DEFAULT_JARVIS_URL = "http://127.0.0.1:8766"
-LOOPBACK_HOSTS = {"127.0.0.1", "localhost", "::1"}
-CHAT_TIMEOUT_SECONDS = 90
-STATE_TIMEOUT_SECONDS = 3
-OFFLINE_DETAIL = "Assistente desligado. Abra iniciar_jarvis_leve.bat na pasta do Jarvis."
-OFFLINE_STATE = {"online": False, "modelo": "", "aguardando_confirmacao": False, "pendente": None}
-
-
-class JarvisUnreachable(Exception):
-    """Connection refused, timeout or any transport failure."""
-
-
-class JarvisHttpError(Exception):
-    def __init__(self, status: int, detail: str):
-        super().__init__(detail)
-        self.status = status
-        self.detail = detail
-
-
-Transport = Callable[[str, str, Optional[Dict[str, Any]], float], Dict[str, Any]]
-
-
-def validated_jarvis_url(raw: str) -> Optional[str]:
-    """Return the base URL when it is http on a loopback host; None (and a log) otherwise."""
-    try:
-        parts = urlsplit((raw or "").strip())
-        host = parts.hostname
-        port = parts.port
-    except ValueError:
-        host, port, parts = None, None, None
-    if parts is None or parts.scheme != "http" or host not in LOOPBACK_HOSTS:
-        logger.error("JARVIS_LEVE_URL recusada: use http em 127.0.0.1, localhost ou ::1.")
-        return None
-    netloc = f"[{host}]" if ":" in host else host
-    return f"http://{netloc}" + (f":{port}" if port else "")
-
-
-def urllib_transport(method: str, url: str, payload: Optional[Dict[str, Any]], timeout: float) -> Dict[str, Any]:
-    data = json.dumps(payload).encode("utf-8") if payload is not None else None
-    request = urllib.request.Request(url, data=data, method=method, headers={"Content-Type": "application/json"})
-    # Empty ProxyHandler: loopback traffic must never go through an environment proxy.
-    opener = urllib.request.build_opener(urllib.request.ProxyHandler({}))
-    try:
-        with opener.open(request, timeout=timeout) as response:
-            return json.loads(response.read().decode("utf-8") or "{}")
-    except urllib.error.HTTPError as error:
-        detail = ""
-        try:
-            body = json.loads(error.read().decode("utf-8"))
-            detail = body.get("detail", "") if isinstance(body, dict) else ""
-        except (ValueError, OSError):
-            pass
-        raise JarvisHttpError(error.code, detail if isinstance(detail, str) else "") from None
-    except (OSError, ValueError) as error:  # URLError, timeout and bad JSON are all "not usable"
-        raise JarvisUnreachable(type(error).__name__) from None
+from domains.assistant_api import SimpressApi, Transport
+from domains.assistant_chat import MSG_OCUPADO, MSG_SEM_CHAVE, AssistantBusy, AssistantConversation, Resposta
+from domains.assistant_openrouter import ModelClient, OpenRouterClient, OpenRouterSettings
 
 
 @dataclass(frozen=True)
 class AssistantRouteServices:
-    jarvis_url: Callable[[], str]
-    transport: Transport = urllib_transport
+    load_settings: Callable[[], OpenRouterSettings]
+    transport: Transport
+    client_factory: Callable[[OpenRouterSettings], ModelClient] = OpenRouterClient
 
 
 class MensagemPayload(BaseModel):
@@ -92,59 +36,77 @@ class ConfirmacaoPayload(BaseModel):
     confirmado: bool
 
 
-def _reply(raw: Dict[str, Any]) -> Dict[str, Any]:
-    pendente = raw.get("pendente")
-    ferramentas: List[str] = [str(item) for item in raw.get("ferramentas") or []]
+def _reply(resposta: Resposta) -> Dict[str, Any]:
+    ferramentas: List[str] = [str(item) for item in resposta.ferramentas]
+    pendente = resposta.pendente
     return {
-        "texto": str(raw.get("texto", "")),
+        "texto": resposta.texto,
         "ferramentas": ferramentas,
-        "pendente": {"descricao": str(pendente.get("descricao", ""))} if isinstance(pendente, dict) else None,
+        "pendente": {"descricao": str(pendente.get("descricao", ""))} if pendente else None,
     }
 
 
 def create_assistant_router(services: AssistantRouteServices) -> APIRouter:
     router = APIRouter()
-    base = validated_jarvis_url(services.jarvis_url())
+    guard = threading.Lock()
+    holder: List[Optional[AssistantConversation]] = [None]
 
-    def call(method: str, path: str, payload: Optional[Dict[str, Any]], timeout: float) -> Dict[str, Any]:
-        if base is None:
-            raise JarvisUnreachable("url")
-        return services.transport(method, base + path, payload, timeout)
+    def conversation() -> AssistantConversation:
+        """One conversation per server run. Until a key exists it is rebuilt on each call,
+        so filling in `.env` works without restarting; once configured it is kept."""
+        with guard:
+            current = holder[0]
+            if current is not None and current.configurado:
+                return current
+            settings = services.load_settings()
+            if current is not None and not settings.configured:
+                return current
+            client = services.client_factory(settings) if settings.configured else None
+            holder[0] = AssistantConversation(client, SimpressApi(services.transport), settings.primary_model)
+            return holder[0]  # type: ignore[return-value]
 
-    def forward(path: str, payload: Optional[Dict[str, Any]]) -> Dict[str, Any]:
-        try:
-            return call("POST", path, payload, CHAT_TIMEOUT_SECONDS)
-        except JarvisUnreachable:
-            raise HTTPException(status_code=503, detail=OFFLINE_DETAIL) from None
-        except JarvisHttpError as error:
-            if 400 <= error.status < 500:
-                raise HTTPException(status_code=error.status, detail=error.detail or "Pedido recusado pelo assistente.") from None
-            raise HTTPException(status_code=502, detail="O assistente falhou ao responder.") from None
+    def ready() -> AssistantConversation:
+        current = conversation()
+        if not current.configurado:
+            raise HTTPException(status_code=503, detail=MSG_SEM_CHAVE)
+        return current
+
+    def busy() -> HTTPException:
+        return HTTPException(status_code=409, detail=MSG_OCUPADO)
 
     @router.post("/api/assistente/mensagem")
     def enviar_mensagem(payload: MensagemPayload):
-        return _reply(forward("/mensagem", {"texto": payload.texto}))
+        current = ready()
+        try:
+            return _reply(current.enviar_mensagem(payload.texto))
+        except AssistantBusy:
+            raise busy() from None
 
     @router.post("/api/assistente/confirmar")
     def confirmar_acao(payload: ConfirmacaoPayload):
-        return _reply(forward("/confirmar", {"confirmado": payload.confirmado}))
+        current = ready()
+        try:
+            return _reply(current.resolver_confirmacao(payload.confirmado))
+        except AssistantBusy:
+            raise busy() from None
 
     @router.post("/api/assistente/limpar")
     def limpar_conversa():
-        forward("/limpar", {})
+        try:
+            conversation().limpar_historico()
+        except AssistantBusy:
+            raise busy() from None
         return {"ok": True}
 
     @router.get("/api/assistente/estado")
     def estado_assistente():
-        try:
-            raw = call("GET", "/estado", None, STATE_TIMEOUT_SECONDS)
-        except (JarvisUnreachable, JarvisHttpError):
-            return dict(OFFLINE_STATE)
+        current = conversation()
+        descricao = current.descricao_pendente
         return {
-            "online": bool(raw.get("online", True)),
-            "modelo": str(raw.get("modelo", "")),
-            "aguardando_confirmacao": bool(raw.get("aguardando_confirmacao", False)),
-            "pendente": _reply(raw)["pendente"],
+            "online": current.configurado,
+            "modelo": current.modelo if current.configurado else "",
+            "aguardando_confirmacao": current.aguardando_confirmacao,
+            "pendente": {"descricao": descricao} if descricao else None,
         }
 
     return router

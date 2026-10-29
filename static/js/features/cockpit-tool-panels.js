@@ -18,7 +18,7 @@
     "sebrae-historico": ["Histórico de importações do Dashboard Sebrae", "Importações do Dashboard e buscas de chamados novos, com o que mudou em cada uma."],
     // Sem loader em openPanel: recarregar a lista zeraria as edições dos chamados antigos (sebrae-dashboard.js).
     "sebrae-chamados": ["Chamados Sebrae", "Preencha os chamados novos e antigos, exporte as linhas e atualize o Dashboard."],
-    assistente: ["Assistente", "Conversa com o Jarvis leve local; ações só rodam depois da sua confirmação."],
+    assistente: ["Assistente", "Conversa com a IA do Simpress; ações só rodam depois da sua confirmação."],
   };
   const relationLabels = {
     conferida: "Conferida", divergente: "Divergente", somente_simpress: "Só Simpress",
