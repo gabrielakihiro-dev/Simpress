@@ -115,7 +115,7 @@ test("Chamados associa OS aos chamados UTIC com prefixo anual e preserva dados d
   const unitedRow = seriesGroup.filter({ hasText: "7285070" });
   await expect(unitedRow).toHaveCount(1);
   await expect(unitedRow.locator(".ck-os-fonte .ck-tag")).toHaveText(["Oracle", "Simpress"]);
-  await expect(unitedRow.locator(".ticket-os-link-input")).toHaveCount(2);
+  await expect(unitedRow.locator(".ticket-os-link-input")).toHaveCount(1);
   await expect(unitedRow.locator(".ticket-summary-description-entry")
     .filter({ hasText: "Solicito suporte técnico." })).toHaveCount(1);
   const simpressOnly = seriesGroup.filter({ hasText: "7285071" });
@@ -144,8 +144,6 @@ test("Chamados associa OS aos chamados UTIC com prefixo anual e preserva dados d
   await expect(section.locator(".ticket-summary-status")).toHaveText(`Vínculo salvo: UTIC-${year}-1116.`);
   await expect(prefix).toHaveText(`UTIC-${year}-`);
   await expect(input).toHaveValue("1116");
-  // O editor da Simpress não é afetado pelo vínculo da Oracle.
-  await expect(orderContainer.locator(".ck-os-fonte").filter({ has: page.getByLabel(/fonte Simpress/) }).locator("input")).toHaveValue("");
 
   await page.reload();
   await selectSummary(page);

@@ -204,3 +204,11 @@ select.ck-entrada { appearance: none; padding-right: 28px; background-image: lin
 [data-ckp="campo-flex"] { flex: 1 1 220px; }
 [data-ckp="icone-22"] { width: 22px; height: 22px; }
 [data-ckp="botao-56"] { height: 56px; }
+
+/* ---------- Acompanhamento de chamados: cartões no padrão Cockpit ---------- */
+#contagem-acompanhamento-chamados { padding: 10px 12px 0; }
+#lista-acompanhamento-chamados { display: flex; flex-direction: column; gap: 10px; padding: 10px 12px 12px; }
+#lista-acompanhamento-chamados > p { padding-block: 24px; }
+#lista-acompanhamento-chamados .ticket-card { border-color: var(--cor-borda-suave); border-radius: var(--raio-md); background: var(--cor-superficie-funda); }
+#lista-acompanhamento-chamados .ticket-card-identifier { border-radius: var(--raio-sm); }
+#lista-acompanhamento-chamados .logged-user { display: flex; flex-wrap: wrap; gap: 2px 12px; margin-top: 2px; font-size: var(--fs-ui); color: var(--cor-texto-mudo); }
