@@ -411,10 +411,10 @@ def garantir_login(page: "Page", *, permitir_sso: bool = False) -> None:
 
 
 def abrir_softexpert(context: "BrowserContext") -> "Page":
-    """Abre a central de tarefas em aba nova e devolve a aba já logada."""
+    """Abre a central de tarefas em aba nova e devolve a aba já logada (SSO + conta; senha e MFA ficam com o usuário)."""
     page = _rotinas().nova_aba(context, SOFTEXPERT_URL, ORIGEM)
     try:
-        garantir_login(page)
+        garantir_login(page, permitir_sso=True)
         _aguardar_lista(page)
     except Exception:
         _rotinas().registrar_erro(page, ORIGEM)
