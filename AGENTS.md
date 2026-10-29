@@ -75,6 +75,10 @@ A tela Automação importa o `.xlsx` do Dashboard Operacional_SEBRAE (só a aba 
 
 O Simpress roda somente localmente: servidor FastAPI e dados em `data/`, com as anotações do histórico sincronizadas pela pasta compartilhada já configurada. Não há backend remoto nem Supabase. Qualquer proposta de migração para um serviço externo deve começar por uma análise que não altere código nem dados.
 
+## Assistente (Jarvis leve)
+
+O painel do assistente usa `routers/assistant.py`, que faz proxy somente para o Jarvis leve local (`JARVIS_LEVE_URL`, padrão `http://127.0.0.1:8766`; só `http` em loopback, outra URL é recusada). O Simpress não chama nenhum serviço externo: a chamada ao OpenRouter acontece no repositório do Jarvis, não aqui. O proxy não envia `Origin` nem `Sec-Fetch-Site` e passa pelo middleware local como as demais rotas.
+
 ## Interface
 
 - Para novas telas, atualize ou escreva a especificação antes de implementar e use as referências visuais fornecidas. Se o usuário disser "Exclua o JavaScript por enquanto", mantenha a tela em HTML/CSS.

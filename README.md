@@ -14,6 +14,7 @@ Aplicação web local para consultar equipamentos, preparar transferências Simp
 - Central de pendências e comparação da evolução entre atualizações.
 - Exportação de `Apelido` e, quando disponível, `IdCliente` para um modelo Excel local.
 - Catálogo de unidades, endereços, CNPJ e CEP, incluindo unidades personalizadas.
+- Painel do assistente que conversa apenas com o Jarvis leve local (`JARVIS_LEVE_URL`, padrão `http://127.0.0.1:8766`, somente loopback); a chamada ao OpenRouter acontece no repositório do Jarvis, não aqui.
 
 ## Requisitos
 
