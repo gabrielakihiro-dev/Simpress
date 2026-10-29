@@ -89,6 +89,7 @@
       F6: "tool-comparacao",
       F7: "tool-apelidos",
       F8: "tool-relatorio",
+      F9: "tool-assistente",
     })[key] || ({ t: "equipment-transport", e: "equipment-edit", c: "copy-ticket" })[key.toLowerCase()] || null;
   }
 
@@ -479,6 +480,7 @@
           "tool-comparacao": "btn-cockpit-comparacao",
           "tool-apelidos": "btn-historico-apelidos",
           "tool-relatorio": "btn-relatorio-mensal",
+          "tool-assistente": "btn-assistente",
         };
         const button = byId(buttonIds[action]);
         if (!button) return;
