@@ -588,6 +588,12 @@ class SoftExpertNaBancadaTests(unittest.TestCase):
         self.assertTrue(se.softexpert_logado(page))
         self.assertEqual(se.coletar_numeros(page), ["UTIC-2026-0001"])
 
+    def test_abrir_softexpert_aciona_o_sso_no_primeiro_login(self):
+        with patch.object(automacao, "nova_aba"), patch.object(se, "garantir_login") as login, \
+                patch.object(se, "_aguardar_lista"):
+            se.abrir_softexpert(MagicMock())
+        self.assertTrue(login.call_args.kwargs["permitir_sso"])
+
     def test_retomada_de_sessao_clica_no_sso_uma_vez(self):
         self.bancada.logado = False
         page = self.context.new_page()
