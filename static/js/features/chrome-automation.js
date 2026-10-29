@@ -13,6 +13,7 @@
     login: "Abrir Chrome para login",
     sebrae: "Chamados novos Sebrae",
     dashboard: "Dashboard + chamados novos Sebrae",
+    enviar: "Enviar Dashboard atualizado ao SharePoint",
   });
   const STATUS = Object.freeze({
     em_andamento: "Em andamento",

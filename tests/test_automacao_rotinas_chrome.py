@@ -5,6 +5,7 @@ import sys
 import tempfile
 import time
 import unittest
+import zipfile
 from contextlib import redirect_stdout
 from pathlib import Path
 from unittest.mock import patch
@@ -55,6 +56,19 @@ class ChromeAutomationHelpersTests(unittest.TestCase):
         opener = patch("urllib.request.OpenerDirector.open", side_effect=erro)
         with opener, self.assertRaisesRegex(automacao.RotinaErro, "HTTP 422.*arquivo inválido"):
             automacao.importar_dashboard_no_site(arquivo)
+
+    def test_arquivo_final_dashboard_picks_the_newest_download_and_fails_without_one(self):
+        with patch.object(automacao, "pastas_download_chrome", return_value=[self.root]):
+            with self.assertRaisesRegex(automacao.RotinaErro, "Atualizar Dashboard"):
+                automacao.arquivo_final_dashboard()
+            velho = self.root / automacao.DASHBOARD_FINAL
+            novo = self.root / "Dashboard Operacional_SEBRAE (atualizado) (1).xlsx"
+            for arquivo, instante in ((velho, 1_000_000), (novo, 2_000_000)):
+                with zipfile.ZipFile(arquivo, "w") as xlsx:
+                    xlsx.writestr("a", "b")
+                os.utime(arquivo, (instante, instante))
+            (self.root / "Dashboard Operacional_SEBRAE.xlsx").write_bytes(b"PK")  # a cópia baixada do Excel não é o final
+            self.assertEqual(automacao.arquivo_final_dashboard(), novo)
 
     def _resultado(self, estado: str, pasta: str, status: str) -> None:
         destino = self.root / estado / pasta
