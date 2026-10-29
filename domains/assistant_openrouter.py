@@ -21,8 +21,8 @@ from typing import Any, Callable, Dict, List, Mapping, Optional, Protocol
 logger = logging.getLogger(__name__)
 
 DEFAULT_BASE_URL = "https://openrouter.ai/api/v1"
-DEFAULT_PRIMARY_MODEL = "openai/gpt-4o-mini"
-DEFAULT_FALLBACK_MODEL = "google/gemini-2.5-flash-lite"
+DEFAULT_PRIMARY_MODEL = "google/gemini-2.5-flash-lite"
+DEFAULT_FALLBACK_MODEL = "openai/gpt-4o-mini"
 DEFAULT_AUDIO_MODEL = "google/gemini-2.5-flash"
 DEFAULT_ROUTING_SORT = "throughput"
 REQUEST_TIMEOUT_SECONDS = 60.0

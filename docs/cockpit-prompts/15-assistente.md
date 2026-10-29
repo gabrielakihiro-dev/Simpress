@@ -25,6 +25,7 @@ Painel de conversa com a IA do Simpress (OpenRouter, chamado pelo servidor local
 - Ação pendente: cartão de alerta com a descrição e os botões `Confirmar e executar` e `Cancelar`; o foco vai para o cartão, Esc cancela (sem fechar o painel) e a entrada fica bloqueada até a resposta.
 - `Nova conversa` limpa a conversa no servidor e na tela.
 - Respostas novas são anunciadas por uma região `aria-live="polite"` separada.
+- Globo animado na barra (`#assistente-globo`, `data-estado`: `parado`, `ouvindo`, `pensando`, `falando`; parado com movimento reduzido). Botão `Voz` (`aria-pressed`, desligado por padrão, preferência em `localStorage`) lê as respostas com a voz local em português do computador; sem voz local avisa e não fala. A fala para ao enviar, gravar, `Nova conversa` ou fechar o painel (com movimento reduzido a fala segue até o fim).
 
 ## Segurança
 

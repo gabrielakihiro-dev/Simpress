@@ -25,8 +25,149 @@
   let pedacos = [];
   let temporizador = 0;
   let inicioGravacao = 0;
+  // Globo e voz: o globo mostra o estado (parado, ouvindo, pensando, falando); a fala usa uma voz em português instalada no computador (nada sai dele).
+  const CHAVE_VOZ = "simpress:assistente-voz";
+  let vozLigada = lerPreferenciaVoz();
+  let falando = false;
+  let sequenciaFala = 0;
+  let contextoAudio = null;
+  let analisador = null;
+  let amostrasNivel = null;
+  let nivelMicrofone = 0;
+  let quadro = 0;
+  let giro = 0;
+  let ultimoQuadro = 0;
 
   const byId = id => document.getElementById(id);
+
+  function lerPreferenciaVoz() {
+    try { return window.localStorage.getItem(CHAVE_VOZ) === "true"; } catch { return false; }
+  }
+
+  function guardarPreferenciaVoz() {
+    try { window.localStorage.setItem(CHAVE_VOZ, String(vozLigada)); } catch { /* sem armazenamento: vale só nesta sessão */ }
+  }
+
+  // Só voz local: as vozes "online" do navegador enviariam o texto das respostas para fora do computador.
+  function vozPortuguesa() {
+    const locais = (window.speechSynthesis?.getVoices?.() || []).filter(voz => voz.localService && /^pt/i.test(voz.lang));
+    return locais.find(voz => /br/i.test(voz.lang)) || locais[0] || null;
+  }
+
+  function atualizarVoz() {
+    const botao = byId("assistente-voz");
+    botao.disabled = !window.speechSynthesis;
+    botao.setAttribute("aria-pressed", String(vozLigada && !botao.disabled));
+  }
+
+  function pararFala() {
+    sequenciaFala += 1;
+    window.speechSynthesis?.cancel();
+    falando = false;
+    atualizarGlobo();
+  }
+
+  function falar(texto) {
+    const sintese = window.speechSynthesis;
+    if (!vozLigada || !sintese || !texto.trim()) return;
+    const voz = vozPortuguesa();
+    if (!voz) {
+      mostrarStatus("Não há voz em português instalada neste computador. Instale uma nos idiomas do Windows.");
+      return;
+    }
+    sintese.cancel();
+    const id = ++sequenciaFala;
+    // shortcut: trechos de até 200 caracteres porque o Chrome corta falas longas; sem pausa inteligente, melhorar se incomodar.
+    const trechos = (texto.match(/[^.!?\n]{1,200}[.!?]*/g) || []).map(trecho => trecho.trim()).filter(Boolean);
+    trechos.forEach((trecho, indice) => {
+      const fala = new SpeechSynthesisUtterance(trecho);
+      fala.voice = voz;
+      fala.lang = voz.lang;
+      if (indice === 0) fala.onstart = () => { if (id === sequenciaFala) { falando = true; atualizarGlobo(); } };
+      if (indice === trechos.length - 1) fala.onend = fala.onerror = () => { if (id === sequenciaFala) { falando = false; atualizarGlobo(); } };
+      sintese.speak(fala);
+    });
+  }
+
+  function alternarVozAssistente() {
+    vozLigada = !vozLigada;
+    guardarPreferenciaVoz();
+    if (vozLigada) {
+      if (!vozPortuguesa()) mostrarStatus("Voz ligada, mas não há voz em português instalada neste computador.");
+    } else pararFala();
+    atualizarVoz();
+  }
+
+  const movimentoReduzido = () => Boolean(window.matchMedia?.("(prefers-reduced-motion: reduce)").matches);
+
+  function estadoDoGlobo() {
+    if (gravando) return "ouvindo";
+    if (ocupado || transcrevendo) return "pensando";
+    return falando ? "falando" : "parado";
+  }
+
+  function lerNivelMicrofone() {
+    if (!analisador) { nivelMicrofone = 0; return; }
+    analisador.getByteTimeDomainData(amostrasNivel);
+    let soma = 0;
+    for (const amostra of amostrasNivel) soma += ((amostra - 128) / 128) ** 2;
+    nivelMicrofone += (Math.min(1, Math.sqrt(soma / amostrasNivel.length) * 4) - nivelMicrofone) * 0.3;
+  }
+
+  // Globo de arame (contorno, meridianos que giram e paralelos) na cor de destaque do tema; o raio acompanha o volume ou o ritmo do estado.
+  function desenharGlobo(agora) {
+    const tela = byId("assistente-globo");
+    const g = tela.getContext("2d");
+    if (!g) return;
+    const estado = tela.dataset.estado;
+    const parado = movimentoReduzido();
+    const t = parado ? 0 : agora / 1000;
+    const velocidade = { parado: 0.4, ouvindo: 0.9, pensando: 3, falando: 1.4 }[estado];
+    giro += parado ? 0 : Math.min(0.1, (agora - ultimoQuadro) / 1000) * velocidade;
+    ultimoQuadro = agora;
+    const nivel = {
+      parado: 0.04 * Math.sin(t * 1.6),
+      ouvindo: nivelMicrofone,
+      pensando: 0.12 + 0.08 * Math.sin(t * 5),
+      falando: 0.28 + 0.2 * Math.abs(Math.sin(t * 9)),
+    }[estado];
+    const lado = tela.width;
+    const centro = lado / 2;
+    const raio = centro * 0.6 * (1 + nivel * 0.5);
+    const traco = (rx, ry, y = 0) => { g.beginPath(); g.ellipse(centro, centro + y, Math.max(0.1, rx), Math.max(0.1, ry), 0, 0, 2 * Math.PI); g.stroke(); };
+    g.clearRect(0, 0, lado, lado);
+    g.fillStyle = g.strokeStyle = getComputedStyle(tela).color;
+    g.lineWidth = lado / 40;
+    g.globalAlpha = 0.06 + nivel * 0.2;
+    g.beginPath(); g.arc(centro, centro, raio * 1.4, 0, 2 * Math.PI); g.fill();
+    g.beginPath(); g.arc(centro, centro, raio * 1.18, 0, 2 * Math.PI); g.fill();
+    g.globalAlpha = 0.95;
+    traco(raio, raio);
+    g.globalAlpha = 0.6;
+    for (let i = 0; i < 3; i += 1) traco(raio * Math.abs(Math.cos(giro + (i * Math.PI) / 3)), raio);
+    g.globalAlpha = 0.45;
+    traco(raio, raio * 0.25);
+    for (const y of [-0.55, 0.55]) { const meia = Math.sqrt(1 - y * y) * raio; traco(meia, meia * 0.25, y * raio); }
+    g.globalAlpha = 0.9;
+    g.beginPath(); g.arc(centro, centro, raio * 0.16 * (1 + nivel), 0, 2 * Math.PI); g.fill();
+    g.globalAlpha = 1;
+  }
+
+  function animarGlobo(agora) {
+    quadro = 0;
+    if (!painelVisivel()) { pararFala(); return; }
+    lerNivelMicrofone();
+    desenharGlobo(agora);
+    if (!movimentoReduzido()) quadro = requestAnimationFrame(animarGlobo);
+  }
+
+  // Com movimento reduzido o globo não anima: só é redesenhado (parado) quando o estado muda.
+  function atualizarGlobo() {
+    byId("assistente-globo").dataset.estado = estadoDoGlobo();
+    if (!painelVisivel()) return;
+    if (movimentoReduzido()) desenharGlobo(0);
+    else if (!quadro) quadro = requestAnimationFrame(animarGlobo);
+  }
 
   function painelVisivel() {
     const painel = document.querySelector('[data-cockpit-tool-panel="assistente"]');
@@ -57,6 +198,7 @@
     byId("assistente-confirmar").disabled = ocupado;
     byId("assistente-cancelar").disabled = ocupado;
     byId("assistente-mensagens").setAttribute("aria-busy", String(ocupado));
+    atualizarGlobo();
   }
 
   function contarMensagemAssistente() {
@@ -94,10 +236,12 @@
     byId("assistente-anuncio").textContent = texto;
     mostrarPendente(dados?.pendente ? String(dados.pendente.descricao ?? "") || PENDENTE_SEM_DESCRICAO : null);
     statusPronto();
+    falar(texto);
   }
 
   // As respostas podem levar até ~90 s; enquanto isso a entrada fica bloqueada.
   async function enviarAoAssistente(url, corpo, textoParaDevolver = "") {
+    pararFala();
     ocupado = true;
     mostrarStatus("Pensando…");
     atualizarControles();
@@ -123,6 +267,8 @@
   }
 
   async function carregarAssistente() {
+    window.speechSynthesis?.getVoices?.(); // o Chrome só carrega a lista de vozes na primeira consulta
+    atualizarVoz();
     if (ocupado) return;
     mostrarStatus("Verificando o Assistente…", !byId("assistente-tentar").hidden);
     try {
@@ -209,6 +355,9 @@
     clearInterval(temporizador);
     fluxo?.getTracks().forEach(faixa => faixa.stop());
     fluxo = null;
+    void contextoAudio?.close();
+    contextoAudio = null;
+    analisador = null;
     gravador = null;
     gravando = false;
   }
@@ -246,6 +395,7 @@
       mostrarStatus("Este navegador não permite gravar áudio.");
       return;
     }
+    pararFala(); // para o microfone não captar a própria voz do Assistente
     gravando = true; // bloqueia novo clique enquanto o navegador pede permissão
     cancelado = false;
     inicioGravacao = Date.now();
@@ -264,6 +414,15 @@
       if (online) statusPronto();
       atualizarControles();
       return;
+    }
+    try {
+      contextoAudio = new AudioContext();
+      analisador = contextoAudio.createAnalyser();
+      analisador.fftSize = 256;
+      amostrasNivel = new Uint8Array(analisador.fftSize);
+      contextoAudio.createMediaStreamSource(fluxo).connect(analisador);
+    } catch {
+      analisador = null; // sem medidor o globo só respira; a gravação segue
     }
     pedacos = [];
     gravador = new MediaRecorder(fluxo);
@@ -305,6 +464,7 @@
 
   async function novaConversaAssistente() {
     if (ocupado) return;
+    pararFala();
     try {
       await apiFetch("/api/assistente/limpar", { method: "POST", errorMessage: "Não foi possível iniciar uma nova conversa." });
       byId("assistente-mensagens").replaceChildren();
@@ -334,6 +494,6 @@
 
   return {
     carregarAssistente, enviarMensagemAssistente, confirmarPendenteAssistente, cancelarPendenteAssistente,
-    novaConversaAssistente, contarMensagemAssistente, teclaAssistente, alternarGravacaoAssistente,
+    novaConversaAssistente, contarMensagemAssistente, teclaAssistente, alternarGravacaoAssistente, alternarVozAssistente,
   };
 });

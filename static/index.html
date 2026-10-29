@@ -70,6 +70,7 @@
   <symbol id="i-layers" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m12.83 2.18a2 2 0 0 0-1.66 0L2.6 6.08a1 1 0 0 0 0 1.83l8.58 3.91a2 2 0 0 0 1.66 0l8.58-3.9a1 1 0 0 0 0-1.83Z"/><path d="m22 17.65-9.17 4.16a2 2 0 0 1-1.66 0L2 17.65"/><path d="m22 12.65-9.17 4.16a2 2 0 0 1-1.66 0L2 12.65"/></symbol>
   <symbol id="i-play" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polygon points="6 3 20 12 6 21 6 3"/></symbol>
   <symbol id="i-refresh" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 12a9 9 0 0 1 9-9 9.75 9.75 0 0 1 6.74 2.74L21 8"/><path d="M21 3v5h-5"/><path d="M21 12a9 9 0 0 1-9 9 9.75 9.75 0 0 1-6.74-2.74L3 16"/><path d="M8 16H3v5"/></symbol>
+  <symbol id="i-volume" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M11 5 6 9H2v6h4l5 4z"/><path d="M15.54 8.46a5 5 0 0 1 0 7.07"/><path d="M19.07 4.93a10 10 0 0 1 0 14.14"/></symbol>
   <symbol id="i-mic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 19v3"/><path d="M19 10v2a7 7 0 0 1-14 0v-2"/><rect x="9" y="2" width="6" height="13" rx="3"/></symbol>
   <symbol id="i-stop"viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect width="14" height="14" x="5" y="5" rx="2"/></symbol>
   <symbol id="i-monitor" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect width="20" height="14" x="2" y="3" rx="2"/><path d="M8 21h8"/><path d="M12 17v4"/></symbol>
@@ -1092,9 +1093,11 @@ Horário disponível para atendimento:</textarea>
         <section class="ck-ferr-painel ck-assist" data-cockpit-tool-panel="assistente" aria-labelledby="assistente-heading" data-on-keydown="teclaAssistente" data-args='["$event"]' hidden>
           <h2 id="assistente-heading" class="sr-only">Conversa com o Assistente</h2>
           <div class="ck-barra-ferr ck-assist__barra">
+            <canvas id="assistente-globo" class="ck-assist__globo" width="112" height="112" data-estado="parado" aria-hidden="true"></canvas>
             <p id="assistente-status" class="ck-barra-ferr__nota ck-assist__status" role="status" aria-live="polite">Verificando o Assistente…</p>
             <button type="button" id="assistente-tentar" class="ck-btn ck-btn--secundario ck-btn--sm" data-on-click="carregarAssistente" hidden><svg class="ck-ico ck-ico--sm" aria-hidden="true" focusable="false"><use href="#i-refresh"></use></svg>Tentar novamente</button>
             <button type="button" id="assistente-nova" class="ck-btn ck-btn--fantasma ck-btn--sm" data-on-click="novaConversaAssistente"><svg class="ck-ico ck-ico--sm" aria-hidden="true" focusable="false"><use href="#i-plus"></use></svg>Nova conversa</button>
+            <button type="button" id="assistente-voz" class="ck-btn ck-btn--fantasma ck-btn--sm" data-on-click="alternarVozAssistente" aria-pressed="false" title="Ler as respostas em voz alta (voz do seu computador, nada é enviado)"><svg class="ck-ico ck-ico--sm" aria-hidden="true" focusable="false"><use href="#i-volume"></use></svg>Voz</button>
           </div>
           <div id="assistente-mensagens" class="ck-assist__lista" role="region" aria-label="Mensagens da conversa" aria-busy="false" tabindex="0"></div>
           <p id="assistente-anuncio" class="ck-sr" aria-live="polite" aria-atomic="true"></p>
