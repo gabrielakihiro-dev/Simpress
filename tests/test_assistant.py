@@ -85,6 +85,13 @@ class ToolCatalogTests(unittest.TestCase):
         for name in ("abrir_importacao", "exportar_planilha", "logar_site"):
             self.assertNotIn(name, TOOLS)
 
+    def test_dashboard_routine_is_the_baixar_importar_buscar_button(self) -> None:
+        tool = TOOLS["executar_automacao_chrome"]
+        self.assertIn("dashboard", tool.properties["rotina"]["enum"])
+        self.assertIn("Baixar, importar e buscar", tool.description)
+        self.assertIn("Baixar, importar e buscar", tool.describe({"rotina": "dashboard"}))  # type: ignore[misc]
+        self.assertEqual(tool.describe({"rotina": "os"}), "Executar a rotina 'os' de automação no Chrome.")  # type: ignore[misc]
+
     def test_confirmation_text_is_built_by_the_program(self) -> None:
         self.assertEqual(
             TOOLS["atualizar_apelido"].describe({"serial": " abc123 ", "apelido": "Sala 1"}),  # type: ignore[misc]

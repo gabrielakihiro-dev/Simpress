@@ -23,7 +23,7 @@ Transport = Callable[[str, str, Optional[Dict[str, Any]], Optional[Dict[str, Any
 CALL_TIMEOUT_SECONDS = 30.0
 MAX_ANSWER_BYTES = 8 * 1024 * 1024
 
-ROTINAS_VALIDAS = ("login", "os", "inventarios", "ambas", "usuarios", "sebrae")
+ROTINAS_VALIDAS = ("login", "os", "inventarios", "ambas", "usuarios", "sebrae", "dashboard")
 DECISOES_VALIDAS = ("permitir", "recusar", "remover", "manter")
 
 # Limits keep the text returned to the model inside its context window.
