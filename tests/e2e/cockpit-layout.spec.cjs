@@ -201,3 +201,40 @@ test("a real modal stays reachable on a short compact screen", async ({ page }) 
   await expect(dialog).toBeVisible();
   await expect(page.locator("[aria-label='Fechar histórico']")).toBeInViewport();
 });
+
+test("Transporte não tem mais OS por equipamento e a barra de ações fica na base da janela", async ({ page }, testInfo) => {
+  test.skip(testInfo.project.name === "mobile", "a altura limitada da tela vale a partir de 1200px");
+  await page.setViewportSize({ width: 1366, height: 600 });
+  await page.goto("/");
+  await page.locator("#tab-retirada-entrega").click();
+  const tela = page.locator("#tab-panel-retirada-entrega");
+  await expect(tela).toBeVisible();
+  await expect(page.locator("#resumo-os-equipamento")).toHaveCount(0);
+  await expect(page.locator("#ck-transp .ck-os, #ck-transp #ck-os-tabela")).toHaveCount(0);
+
+  const barra = page.locator("#tab-panel-retirada-entrega .ck-acoes-barra");
+  await expect(barra).toBeVisible();
+  const medir = () => page.evaluate(() => {
+    const painel = document.getElementById("tab-panel-retirada-entrega");
+    const rect = document.querySelector("#tab-panel-retirada-entrega .ck-acoes-barra").getBoundingClientRect();
+    return { bottom: rect.bottom, top: rect.top, inner: window.innerHeight, scroll: painel.scrollHeight, client: painel.clientHeight };
+  });
+
+  // Conteúdo mais alto que a janela: a tela rola por dentro e a barra continua colada na base.
+  let medidas = await medir();
+  expect(medidas.scroll, "o conteúdo precisa ser mais alto que a tela para provar a barra fixa").toBeGreaterThan(medidas.client);
+  expect(Math.abs(medidas.bottom - medidas.inner)).toBeLessThanOrEqual(1);
+  await tela.evaluate(node => { node.scrollTop = node.scrollHeight; });
+  medidas = await medir();
+  expect(Math.abs(medidas.bottom - medidas.inner)).toBeLessThanOrEqual(1);
+  await tela.evaluate(node => { node.scrollTop = 0; });
+
+  // Janela alta: a tela preenche a altura e a barra segue na base, sem rolagem da página.
+  await page.setViewportSize({ width: 1920, height: 1080 });
+  medidas = await medir();
+  expect(Math.abs(medidas.bottom - medidas.inner)).toBeLessThanOrEqual(1);
+  // A folga legada do body (app.css) não pode criar uma faixa vazia rolável sob a barra; sobra só o ajuste de poucos px da barra superior.
+  expect(await page.evaluate(() => getComputedStyle(document.body).paddingBottom)).toBe("0px");
+  const pagina = await page.evaluate(() => [document.documentElement.scrollHeight, window.innerHeight]);
+  expect(pagina[0] - pagina[1], JSON.stringify(pagina)).toBeLessThanOrEqual(16);
+});
