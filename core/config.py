@@ -40,6 +40,8 @@ UPLOAD_BACKUPS_DIR = INPUT_DIR / "_backups"
 MAX_UPLOAD_BYTES = 60 * 1024 * 1024
 MAX_UPLOAD_REQUEST_BYTES = 2 * MAX_UPLOAD_BYTES + 1024 * 1024
 MAX_API_REQUEST_BYTES = 1024 * 1024
+# Assistant voice message: 16 kHz mono 16-bit WAV, 120 s = about 3.7 MiB.
+MAX_ASSISTANT_AUDIO_BYTES = 5 * 1024 * 1024
 MAX_CONCURRENT_UPLOAD_REQUESTS = 1
 # Max idle gap between request body chunks; frees the single upload slot from stalled clients.
 REQUEST_BODY_IDLE_TIMEOUT_SECONDS = 30.0

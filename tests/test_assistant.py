@@ -43,6 +43,14 @@ class FakeModel:
     def __init__(self, *replies: Any) -> None:
         self.replies = list(replies)
         self.sent: List[List[Dict[str, Any]]] = []
+        self.transcribed: List[bytes] = []
+        self.transcript: Any = "quantos notebooks temos?"
+
+    def transcribe(self, wav: bytes) -> str:
+        self.transcribed.append(wav)
+        if isinstance(self.transcript, Exception):
+            raise self.transcript
+        return str(self.transcript)
 
     def complete(self, messages: List[Dict[str, Any]], tools: List[Dict[str, Any]]) -> ModelReply:
         self.sent.append(json.loads(json.dumps(messages)))
@@ -350,6 +358,33 @@ class AssistantRouteTests(unittest.TestCase):
             client.get("/api/assistente/estado"),
         ):
             self.assertNotIn("chave-de-teste", response.text)
+
+    def test_audio_returns_transcript_only_and_does_not_start_a_turn(self) -> None:
+        model = FakeModel()
+        client, simpress, _ = make_client(model)
+        wav = b"RIFF" + bytes(4) + b"WAVE" + bytes(40)
+        response = client.post("/api/assistente/audio", content=wav, headers={"Content-Type": "audio/wav"})
+        self.assertEqual((response.status_code, response.json()), (200, {"texto": "quantos notebooks temos?"}))
+        self.assertEqual(model.transcribed, [wav])
+        self.assertEqual((model.sent, simpress.calls), ([], []))
+
+    def test_audio_rejects_non_wav_and_oversized_bodies(self) -> None:
+        model = FakeModel()
+        client, _, _ = make_client(model)
+        for corpo, status in ((b"", 415), (b"nao e wav" * 20, 415), (b"RIFF" + bytes(4) + b"WAVE" + bytes(5 * 1024 * 1024), 413)):
+            self.assertEqual(client.post("/api/assistente/audio", content=corpo).status_code, status)
+        self.assertEqual(model.transcribed, [])
+
+    def test_audio_without_key_is_503_and_model_failure_is_502(self) -> None:
+        wav = b"RIFF" + bytes(4) + b"WAVE" + bytes(40)
+        client, _, _ = make_client(None)
+        response = client.post("/api/assistente/audio", content=wav)
+        self.assertEqual((response.status_code, response.json()), (503, {"detail": MSG_SEM_CHAVE}))
+        model = FakeModel()
+        model.transcript = OpenRouterError("O OpenRouter não respondeu a tempo.")
+        client, _, _ = make_client(model)
+        response = client.post("/api/assistente/audio", content=wav)
+        self.assertEqual((response.status_code, response.json()), (502, {"detail": "O OpenRouter não respondeu a tempo."}))
 
     def test_busy_is_409(self) -> None:
         release = threading.Event()

@@ -152,6 +152,12 @@ class AssistantConversation:
             self._mensagens.append(self._msg_tool(pendente["tool_call_id"], pendente["nome"], resultado))
             return self._rodar(len(self._mensagens), [pendente["nome"]])
 
+    def transcrever(self, wav: bytes) -> str:
+        """Speech to text. Leaves the history alone, so it needs no turn lock; the text comes back for the user to review."""
+        if self._client is None:
+            raise OpenRouterError(MSG_SEM_CHAVE)
+        return self._client.transcribe(wav)
+
     def limpar_historico(self) -> None:
         with self._exclusivo():
             self._mensagens = [{"role": "system", "content": SYSTEM_PROMPT}]
