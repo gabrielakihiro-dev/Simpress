@@ -497,25 +497,54 @@ def nova_aba(context: "BrowserContext", url: str, origem: str) -> "Page":
     return page
 
 
+def clicar_sso(page: "Page", origem: str) -> bool:
+    """Clica uma vez no botão/link "SSO" visível da tela de login (em qualquer frame), se existir."""
+    nome = re.compile(r"^\s*SSO\s*$", re.IGNORECASE)
+    for frame in page.frames:
+        for candidato in (
+            frame.get_by_role("button", name=nome),
+            frame.get_by_role("link", name=nome),
+            frame.get_by_text("SSO", exact=True),
+        ):
+            try:
+                alvo = candidato.filter(visible=True)
+                if alvo.count():
+                    log(origem, "Clicando em 'SSO'...")
+                    alvo.first.click()
+                    return True
+            except Exception:
+                continue
+    return False
+
+
 def aguardar_login(
     page: "Page",
     origem: str,
     logado: Callable[["Page"], bool],
     entrar: Callable[["Page"], bool] | None = None,
+    email: str | None = None,
 ) -> None:
     """Espera o login sem digitar senha nem MFA (no máximo o e-mail, em ``entrar``).
 
     ``entrar`` pode acionar uma única vez o acesso com a conta já conectada (SSO);
-    se o login não concluir, o usuário é chamado para entrar na própria janela.
+    ``email`` escolhe essa conta (ou digita o e-mail) na tela da Microsoft, se ela aparecer.
+    Se o login não concluir, o usuário é chamado para entrar na própria janela.
     """
     limite = time.time() + 15
-    tentou_entrar = False
+    tentou_entrar = escolheu_conta = clicou_sso = False
     while time.time() < limite:  # dá tempo para redirecionamentos de SSO
         verificar_cancelamento()
         if logado(page):
             log(origem, "Sessão ativa.")
             garantir_tela_minima(page, origem)
             return
+        if email and not clicou_sso and "microsoftonline" not in page.url.lower() and clicar_sso(page, origem):
+            clicou_sso = True
+            limite = time.time() + 45
+        if email and not escolheu_conta and "microsoftonline" in page.url.lower():
+            escolheu_conta = True
+            entrar_microsoft(page, origem, email, concluido=logado)
+            limite = time.time() + 45
         if entrar is not None and not tentou_entrar and entrar(page):
             tentou_entrar = True
             limite = time.time() + 45
@@ -572,7 +601,8 @@ def entrar_microsoft(
         if not escolheu and not digitou:
             conta = page.get_by_text(re.compile(re.escape(email), re.IGNORECASE)).filter(visible=True)
             campo = page.locator("input[type='email'], input[name='loginfmt']").filter(visible=True)
-            outra = page.get_by_text(re.compile(r"(use|usar)\s+(an)?\s*(another|outra)\s+(account|conta)", re.IGNORECASE)).filter(visible=True)
+            # "Use another account", "Another account", "Acessar Outra Conta", "Outra Conta".
+            outra = page.get_by_text(re.compile(r"(another|outra)\s+(account|conta)", re.IGNORECASE)).filter(visible=True)
             if conta.count() and not campo.count():
                 log(origem, f"Escolhendo a conta {email}...")
                 conta.first.click()
@@ -587,7 +617,7 @@ def entrar_microsoft(
                     campo.first.press("Enter")
                 digitou = True
             elif outra.count():
-                log(origem, "Conta não listada; clicando em 'Use another account'...")
+                log(origem, "Conta não listada; clicando em 'Outra Conta'...")
                 outra.first.click()
         page.wait_for_timeout(500)
 
@@ -823,7 +853,7 @@ def abrir_gestao_solicitacoes(page: "Page", tentativas: int = 3):
             log("Oracle", "Recarregando o Oracle para abrir pelo Menu novamente...")
             page.keyboard.press("Escape")
             page.reload(wait_until="domcontentloaded", timeout=CARREGAMENTO_MS)
-            aguardar_login(page, "Oracle", oracle_logado)
+            aguardar_login(page, "Oracle", oracle_logado, email=EMAIL_DASHBOARD)
             if esperar_visivel(campo, 8000) or reabrir_filtros_oracle(page, campo):
                 return campo.first
     raise RotinaErro("Não foi possível abrir a Gestão de Solicitações pelo Menu do Oracle.")
@@ -832,7 +862,7 @@ def abrir_gestao_solicitacoes(page: "Page", tentativas: int = 3):
 def exportar_oracle(context: "BrowserContext") -> Path:
     page = nova_aba(context, ORACLE_URL, "Oracle")
     try:
-        aguardar_login(page, "Oracle", oracle_logado)
+        aguardar_login(page, "Oracle", oracle_logado, email=EMAIL_DASHBOARD)
         campo = abrir_gestao_solicitacoes(page)
 
         log("Oracle", f"Preenchendo Contrato/Item com {FILTRO_ORACLE}...")
@@ -896,7 +926,7 @@ def ux_entrar(page: "Page") -> bool:
 
 def abrir_ux(context: "BrowserContext", url: str) -> "Page":
     page = nova_aba(context, url, "UX Simpress")
-    aguardar_login(page, "UX Simpress", ux_logado, entrar=ux_entrar)
+    aguardar_login(page, "UX Simpress", ux_logado, entrar=ux_entrar, email=EMAIL_DASHBOARD)
     filtro = page.locator("#CodigosContratosFiltro")
     for tentativa in range(3):
         # Depois do SSO o UX pode redirecionar para o Dashboard alguns segundos depois; volta para a tela pedida.
@@ -904,7 +934,7 @@ def abrir_ux(context: "BrowserContext", url: str) -> "Page":
             return page
         log("UX Simpress", f"Tela atual {page.url}; voltando para {url}...")
         page.goto(url, wait_until="domcontentloaded", timeout=CARREGAMENTO_MS)
-        aguardar_login(page, "UX Simpress", ux_logado, entrar=ux_entrar)
+        aguardar_login(page, "UX Simpress", ux_logado, entrar=ux_entrar, email=EMAIL_DASHBOARD)
     if not esperar_visivel(filtro, 30000):
         raise RotinaErro(f"A tela {url} não carregou o filtro Contrato/Nome.")
     return page
@@ -1072,7 +1102,7 @@ def confirmar_modo_todos(page: "Page") -> None:
 def exportar_endpoint(context: "BrowserContext") -> Path:
     page = nova_aba(context, ENDPOINT_URL, "Endpoint Central")
     try:
-        aguardar_login(page, "Endpoint Central", endpoint_logado)
+        aguardar_login(page, "Endpoint Central", endpoint_logado, email=EMAIL_SOFTEXPERT)
         if "inventory/computers" not in page.url:
             page.goto(ENDPOINT_URL, wait_until="domcontentloaded", timeout=CARREGAMENTO_MS)
 
