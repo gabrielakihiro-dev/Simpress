@@ -30,6 +30,7 @@
     "aliasHistory",
     "monthlyReport",
     "sebraeDashboard",
+    "sebraeHistorico",
     "chromeAutomation",
   ]);
 

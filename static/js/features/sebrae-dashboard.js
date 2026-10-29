@@ -240,6 +240,7 @@
           `${quando ? `Busca de ${quando}: ` : ""}${estado.formulario.length} novo(s), ${novos.ignorados} já no Dashboard, ${(novos.pendentes || []).length} pendente(s).`);
       }
       atualizarExportacao();
+      app.carregarResumoHistoricoSebrae?.();
     }
 
     async function carregarNovosSebrae() {

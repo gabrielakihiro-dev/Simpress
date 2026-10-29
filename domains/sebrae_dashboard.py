@@ -13,6 +13,7 @@ import unicodedata
 import warnings
 import zipfile
 from dataclasses import dataclass
+from datetime import datetime
 from typing import Any, Dict, Iterable, List, Mapping, Optional, Sequence, Tuple
 
 from core.config import MAX_XLSX_ARCHIVE_ENTRIES, MAX_XLSX_UNCOMPRESSED_BYTES
@@ -130,6 +131,63 @@ def ler_coluna_c(conteudo: bytes) -> frozenset[str]:
     if not numeros:
         raise DashboardInvalido("A coluna C não trouxe nenhum número UTIC; a planilha parece vazia ou incorreta.")
     return numeros
+
+
+STATUS_VALIDOS = ("EM ABERTO", "FINALIZADO")
+
+
+def _status_da_celula(valor: Any) -> str:
+    texto = " ".join(str(valor or "").split()).upper()
+    return texto if texto in STATUS_VALIDOS else ""  # any other text of column D is never kept
+
+
+def _encerramento_da_celula(valor: Any) -> str:
+    data = valor if isinstance(valor, datetime) else interpretar_data(valor)
+    return data.strftime(FORMATO_DATA) if data else ""
+
+
+def ler_status_chamados(conteudo: bytes) -> Dict[str, Dict[str, str]]:
+    """Per ticket number: ``{"status", "encerramento"}`` from columns D and R of the ``CHAMADOS`` sheet.
+
+    Same package checks, header check and stopping rule as ``ler_coluna_c``. Only the two valid statuses and a
+    ``dd/MM/yyyy HH:mm`` date are kept; no other cell is read into the result.
+    """
+    from openpyxl import load_workbook
+
+    try:
+        with zipfile.ZipFile(io.BytesIO(conteudo)) as arquivo:
+            _validar_pacote(arquivo)
+        with warnings.catch_warnings():
+            warnings.simplefilter("ignore")
+            livro = load_workbook(io.BytesIO(conteudo), read_only=True, data_only=True)
+    except (zipfile.BadZipFile, OSError, KeyError, ValueError) as erro:
+        if isinstance(erro, DashboardInvalido):
+            raise
+        raise DashboardInvalido("O arquivo enviado não é uma planilha .xlsx válida.") from erro
+    resultado: Dict[str, Dict[str, str]] = {}
+    try:
+        if ABA not in livro.sheetnames:
+            raise DashboardInvalido(f"A planilha não tem a aba {ABA}.")
+        linhas = livro[ABA].iter_rows(min_row=1, max_col=len(CABECALHOS), values_only=True)
+        conferir_cabecalhos(next(linhas, ()))
+        vazias = 0
+        for linha in linhas:
+            valor = linha[2] if len(linha) > 2 else None
+            if valor in (None, ""):
+                vazias += 1
+                if vazias > LINHAS_VAZIAS_PARA_PARAR:
+                    break
+                continue
+            vazias = 0
+            item = {
+                "status": _status_da_celula(linha[3] if len(linha) > 3 else None),
+                "encerramento": _encerramento_da_celula(linha[17] if len(linha) > 17 else None),
+            }
+            for numero in numeros_do_dashboard([valor]):
+                resultado[numero] = dict(item)
+    finally:
+        livro.close()
+    return resultado
 
 
 # ---------------------------------------------------------------------------- triage
@@ -277,5 +335,5 @@ def linhas_para_colar(linhas: Sequence[Mapping[str, str]]) -> Tuple[str, str]:
 __all__ = [
     "ABA", "CABECALHOS", "CRUZ_AMBIGUO", "CRUZ_AUSENTE", "CRUZ_UNICO", "Cruzamento", "DashboardInvalido",
     "FORMULAS", "INTOCADAS", "MANUAIS", "NovosChamados", "PENDENCIAS_DEFINIDAS", "conferir_cabecalhos",
-    "cruzar_por_nome", "ler_coluna_c", "linhas_para_colar", "montar_linha", "omitir_credenciais", "triar_novos",
+    "cruzar_por_nome", "ler_coluna_c", "ler_status_chamados", "linhas_para_colar", "montar_linha", "omitir_credenciais", "triar_novos",
 ]
