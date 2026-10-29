@@ -788,13 +788,20 @@ Horário disponível para atendimento:</textarea>
           <p id="sebrae-novos-resumo" class="ck-cartao__meta" role="status" aria-live="polite"></p>
           <div id="sebrae-novos-avisos"></div>
           <div id="sebrae-novos-lista"></div>
+          <details id="sebrae-antigos" class="sebrae-antigos" hidden>
+            <summary>Chamados antigos em aberto</summary>
+            <p id="sebrae-antigos-resumo" class="ck-cartao__meta" role="status" aria-live="polite"></p>
+            <div id="sebrae-antigos-lista"></div>
+          </details>
           <datalist id="sebrae-sugestoes-a"><option value="CLIENTE"></option><option value="SIMPRESS"></option></datalist>
           <datalist id="sebrae-sugestoes-b"><option value="AVARIA FÍSICA"></option><option value="DESLIGAMENTO"></option><option value="ENDPOINT CENTER"></option><option value="ERRO SOFTWARE"></option><option value="FALHA BATERIA"></option><option value="FALHA NO DOMÍNIO"></option><option value="FORMATAÇÃO"></option><option value="HARDWARE"></option><option value="INSTALAÇÃO"></option><option value="LENTIDÃO"></option><option value="NOVO USUÁRIO"></option><option value="NÃO LIGA"></option><option value="OUTRO"></option><option value="PERIFÉRICO"></option><option value="SOL. EQUIPAMENTO"></option></datalist>
           <datalist id="sebrae-sugestoes-s"><option value="DISPONIBILIDADE"></option></datalist>
           <div class="ck-grupo-botoes" role="group" aria-label="Exportação das linhas">
             <button type="button" class="ck-btn ck-btn--primario ck-btn--sm" id="btn-sebrae-exportar" data-on-click="exportarChamadosSebrae" disabled><svg class="ck-ico ck-ico--xs" aria-hidden="true" focusable="false"><use href="#i-download"></use></svg><span>Exportar linhas</span></button>
+            <button type="button" class="ck-btn ck-btn--secundario ck-btn--sm" id="btn-sebrae-atualizar" data-on-click="atualizarDashboardSebrae" disabled><svg class="ck-ico ck-ico--xs" aria-hidden="true" focusable="false"><use href="#i-download"></use></svg><span>Atualizar Dashboard</span></button>
           </div>
           <p id="sebrae-exportacao-status" class="ck-cartao__meta" role="status" aria-live="polite"></p>
+          <p id="sebrae-atualizar-status" class="ck-cartao__meta" role="status" aria-live="polite"></p>
           <div id="sebrae-exportacao-blocos" class="sebrae-blocos" hidden>
             <label class="ck-campo"><span class="ck-campo__rotulo">Colar em A:P (primeira linha livre da tabela)</span><textarea class="ck-entrada" id="sebrae-bloco-a-p" rows="4" readonly></textarea></label>
             <button type="button" class="ck-btn ck-btn--fantasma ck-btn--sm" data-on-click="copiarBlocoSebrae" data-args='["a_p"]'><svg class="ck-ico ck-ico--sm" aria-hidden="true" focusable="false"><use href="#i-copy"></use></svg>Copiar A:P</button>

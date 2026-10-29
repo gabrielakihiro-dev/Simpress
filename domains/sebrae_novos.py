@@ -2,11 +2,13 @@
 
 Two small JSON files in ``data/state`` (outside Git): the ticket numbers already logged in the imported
 Dashboard, and the new tickets read from SoftExpert (CPF and passwords already masked). The site shows a
-form per new ticket and returns the rows to paste; nothing is ever written to the Dashboard.
+form per new ticket and returns the rows to paste. Beside the first file sits a copy of the imported ``.xlsx``:
+"Atualizar Dashboard" writes into a COPY of it (domains/sebrae_dashboard_gravacao.py); the original is never touched.
 """
 
 from __future__ import annotations
 
+import hashlib
 import json
 import os
 import tempfile
@@ -49,12 +51,21 @@ def caminhos_padrao(state_dir: Path) -> Caminhos:
     return Caminhos(state_dir / "sebrae_dashboard_existentes.json", state_dir / "sebrae_novos.json")
 
 
+def caminho_planilha(caminhos: Caminhos) -> Path:
+    """Copy of the imported Dashboard, next to the file that lists its ticket numbers."""
+    return caminhos.existentes.with_name("sebrae_dashboard_importado.xlsx")
+
+
 def _gravar(caminho: Path, dados: Mapping[str, Any]) -> None:
+    _gravar_bytes(caminho, json.dumps(dados, ensure_ascii=False, indent=1).encode("utf-8"))
+
+
+def _gravar_bytes(caminho: Path, conteudo: bytes) -> None:
     caminho.parent.mkdir(parents=True, exist_ok=True)
     descritor, temporario = tempfile.mkstemp(dir=caminho.parent, suffix=".tmp")
     try:
-        with os.fdopen(descritor, "w", encoding="utf-8") as arquivo:
-            json.dump(dados, arquivo, ensure_ascii=False, indent=1)
+        with os.fdopen(descritor, "wb") as arquivo:
+            arquivo.write(conteudo)
         os.replace(temporario, caminho)
     except BaseException:
         try:
@@ -78,9 +89,22 @@ def agora_iso() -> str:
 
 # ---------------------------------------------------------------------------- imported Dashboard
 
-def salvar_existentes(caminho: Path, numeros: Iterable[str], arquivo: str, importado_em: str = "") -> int:
+def salvar_existentes(
+    caminho: Path,
+    numeros: Iterable[str],
+    arquivo: str,
+    importado_em: str = "",
+    sha256: str = "",
+    listas: Optional[Mapping[str, Sequence[str]]] = None,
+    abertos: Sequence[Mapping[str, Any]] = (),
+) -> int:
+    """``sha256``/``listas``/``abertos`` describe the stored copy (see ``salvar_planilha``): the hash guards the
+    copy, ``listas`` feeds the A and B selects, ``abertos`` are the old tickets that can still be edited."""
     ordenados = sorted(set(numeros))
-    _gravar(caminho, {"arquivo": arquivo[:200], "importado_em": importado_em or agora_iso(), "numeros": ordenados})
+    _gravar(caminho, {
+        "arquivo": arquivo[:200], "importado_em": importado_em or agora_iso(), "numeros": ordenados,
+        "sha256": sha256, "listas": {k: list(v) for k, v in (listas or {}).items()}, "abertos": [dict(a) for a in abertos],
+    })
     return len(ordenados)
 
 
@@ -88,8 +112,29 @@ def ler_existentes(caminho: Path) -> Optional[Dict[str, Any]]:
     dados = _ler(caminho)
     if dados is None or not isinstance(dados.get("numeros"), list):
         return None
+    listas = dados.get("listas")
+    abertos = dados.get("abertos")
+    listas = listas if isinstance(listas, dict) else {}
+    abertos = abertos if isinstance(abertos, list) else []
     return {"arquivo": str(dados.get("arquivo") or ""), "importado_em": str(dados.get("importado_em") or ""),
-            "numeros": frozenset(str(n) for n in dados["numeros"])}
+            "numeros": frozenset(str(n) for n in dados["numeros"]), "sha256": str(dados.get("sha256") or ""),
+            "listas": {str(k): [str(i) for i in v] for k, v in listas.items() if isinstance(v, list)},
+            "abertos": [a for a in abertos if isinstance(a, dict)]}
+
+
+def salvar_planilha(caminho: Path, conteudo: bytes) -> str:
+    """Stores the imported Dashboard (atomic) and returns its SHA-256."""
+    _gravar_bytes(caminho, conteudo)
+    return hashlib.sha256(conteudo).hexdigest()
+
+
+def ler_planilha(caminho: Path, sha256: str) -> Optional[bytes]:
+    """The stored copy, or ``None`` when it is missing or no longer matches the hash saved at import."""
+    try:
+        conteudo = caminho.read_bytes()
+    except OSError:
+        return None
+    return conteudo if sha256 and hashlib.sha256(conteudo).hexdigest() == sha256 else None
 
 
 # ---------------------------------------------------------------------------- new tickets (read from SoftExpert)
@@ -194,13 +239,22 @@ def validar_manuais(manuais: Mapping[str, Any]) -> Dict[str, str]:
     return {**resultado, "D": status, "J": tipo, "R": encerramento}
 
 
-def exportar(
+def validar_listas(manuais: Mapping[str, str], listas: Mapping[str, Sequence[str]], atuais: Optional[Mapping[str, str]] = None) -> None:
+    """A and B must come from the LISTAS sheet read at import. An old ticket may keep an off-list value it already has."""
+    for letra in "AB":
+        valor, opcoes = str(manuais.get(letra) or ""), listas.get(letra) or ()
+        if valor and opcoes and valor not in opcoes and valor != str((atuais or {}).get(letra) or ""):
+            raise ManuaisInvalidos(f"A coluna {letra} só aceita os valores da lista do Dashboard (aba LISTAS).")
+
+
+def linhas_completas(
     chamados: Sequence[ChamadoSoftExpert],
     manuais_por_numero: Mapping[str, Mapping[str, Any]],
     registros: Sequence[Mapping[str, Any]],
     relatorio: Optional[Mapping[str, Any]],
-) -> Dict[str, Any]:
-    """Rows A:P and R:S to paste, in the order of ``chamados``. Every ticket needs valid manual fields."""
+    listas: Optional[Mapping[str, Sequence[str]]] = None,
+) -> List[Dict[str, str]]:
+    """Full rows (automatic plus manual columns), in the order of ``chamados``. Every ticket needs valid manual fields."""
     if not chamados:
         raise ManuaisInvalidos("Não há chamados novos para exportar.")
     linhas: List[Dict[str, str]] = []
@@ -209,9 +263,22 @@ def exportar(
             raise ManuaisInvalidos(f"Preencha os campos manuais do {chamado.numero}.")
         try:
             manuais = validar_manuais(manuais_por_numero[chamado.numero])
+            validar_listas(manuais, listas or {})
         except ManuaisInvalidos as erro:
             raise ManuaisInvalidos(f"{chamado.numero}: {erro}") from None
         cruzamento, os_ = _cruzar(chamado, registros, relatorio)
         linhas.append({**montar_linha(chamado, cruzamento, os_), **manuais})
+    return linhas
+
+
+def exportar(
+    chamados: Sequence[ChamadoSoftExpert],
+    manuais_por_numero: Mapping[str, Mapping[str, Any]],
+    registros: Sequence[Mapping[str, Any]],
+    relatorio: Optional[Mapping[str, Any]],
+    listas: Optional[Mapping[str, Sequence[str]]] = None,
+) -> Dict[str, Any]:
+    """Rows A:P and R:S to paste, in the order of ``chamados``. Every ticket needs valid manual fields."""
+    linhas = linhas_completas(chamados, manuais_por_numero, registros, relatorio, listas)
     bloco_ap, bloco_rs = linhas_para_colar(linhas)
     return {"quantidade": len(linhas), "bloco_a_p": bloco_ap, "bloco_r_s": bloco_rs, "mensagem": MENSAGEM_EXPORTADA}

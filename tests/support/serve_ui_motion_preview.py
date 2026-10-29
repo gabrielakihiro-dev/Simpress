@@ -199,7 +199,12 @@ SEBRAE_SCENARIOS = ("padrao", "vazio", "pronta", "login")
 sebrae_state = {"scenario": "padrao", "ativo": False}
 
 SEBRAE_NOVOS_FIXTURE = {
-    "importado": {"arquivo": "Dashboard Operacional_SEBRAE.xlsx", "importado_em": "2026-10-28T10:00:00-03:00", "total": 331},
+    "importado": {
+        "arquivo": "Dashboard Operacional_SEBRAE.xlsx", "importado_em": "2026-10-28T10:00:00-03:00", "total": 331,
+        "atualizavel": True, "listas": {"A": ["CLIENTE", "SIMPRESS"], "B": ["LENTIDÃO", "REDE"]},
+        "abertos": [{"numero": "UTIC-2026-1200", "titulo": "Teclado sem resposta", "valores": {
+            "A": "SIMPRESS", "B": "", "D": "EM ABERTO", "J": "INCIDENTE", "R": "", "S": "DISPONIBILIDADE"}}],
+    },
     "novos": {
         "lidos_em": "2026-10-28T10:05:00-03:00", "ignorados": 36,
         "pendentes": [{"numero": "UTIC-2026-1387", "motivo": "Alerta automático do Endpoint; fica pendente até o usuário classificar."}],
@@ -540,6 +545,17 @@ class Handler(BaseHTTPRequestHandler):
     def do_POST(self):
         global ticket_import_count
         path = urlsplit(self.path).path
+        if path == "/api/sebrae/dashboard/atualizar":
+            size = int(self.headers.get("Content-Length", "0"))
+            corpo = json.loads(self.rfile.read(size) or b"{}")
+            linhas = [{"numero": c["numero"], "linha": 340 + i, "tipo": "novo", "celulas": ["A", "C", "D"]}
+                      for i, c in enumerate(corpo.get("chamados") or [])]
+            linhas += [{"numero": c["numero"], "linha": 12, "tipo": "alterado", "celulas": sorted(set(c) - {"numero"})}
+                       for c in corpo.get("edicoes") or []]
+            self.send({"arquivo": "Dashboard Operacional_SEBRAE (atualizado).xlsx",
+                       "base": {"arquivo": "Dashboard Operacional_SEBRAE.xlsx", "importado_em": "2026-10-28T10:00:00-03:00"},
+                       "linhas": linhas, "conteudo_base64": "UEsDBA=="})
+            return
         if path in ("/api/sebrae/dashboard", "/api/sebrae/exportar"):
             size = int(self.headers.get("Content-Length", "0"))
             body = self.rfile.read(size)
