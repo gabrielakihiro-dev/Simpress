@@ -223,6 +223,34 @@ SEBRAE_NOVOS_FIXTURE = {
 }
 
 
+# Histórico do Dashboard Sebrae: fictional entries, only counts and ticket numbers (never ticket text).
+SEBRAE_HISTORICO_FIXTURE = [
+    {"id": "h3", "seq": 3, "tipo": "busca", "em": "2026-10-28T10:05:00-03:00", "importacao_id": "h2", "ignorados": 36,
+     "n_lidos": 2, "n_pendentes": 1, "n_erros": 1, "lidos": ["UTIC-2026-1378", "UTIC-2026-1336"],
+     "pendentes": ["UTIC-2026-1387"], "erros": ["UTIC-2026-1457"]},
+    {"id": "h2", "seq": 2, "tipo": "importacao", "em": "2026-10-28T10:00:00-03:00", "arquivo": "Dashboard Operacional_SEBRAE.xlsx",
+     "sha256": "0123456789abcdef0123456789abcdef", "total": 331, "inicial": False, "n_adicionados": 2, "n_removidos": 0,
+     "n_alterados": 1, "truncado": False, "repeticoes": 2, "ultima_repeticao_em": "2026-10-28T11:00:00-03:00",
+     "adicionados": ["UTIC-2026-1378", "UTIC-2026-1336"], "removidos": [],
+     "alterados": [{"numero": "UTIC-2026-1200", "de": "EM ABERTO", "para": "FINALIZADO", "encerramento": "27/10/2026 16:00"}]},
+    {"id": "h1", "seq": 1, "tipo": "importacao", "em": "2026-10-27T09:00:00-03:00", "arquivo": "Dashboard Operacional_SEBRAE.xlsx",
+     "sha256": "fedcba9876543210fedcba9876543210", "total": 329, "inicial": True, "n_adicionados": 329, "n_removidos": 0,
+     "n_alterados": 0, "truncado": True, "repeticoes": 0, "ultima_repeticao_em": "",
+     "adicionados": ["UTIC-2026-0001"], "removidos": [], "alterados": []},
+]
+_ARRAYS_HISTORICO = ("adicionados", "removidos", "alterados", "lidos", "pendentes", "erros")
+
+
+def sebrae_historico_lista(tipo):
+    itens = [e for e in SEBRAE_HISTORICO_FIXTURE if not tipo or e["tipo"] == tipo]
+    return {
+        "total": len(itens), "pagina": 1,
+        "itens": [{k: v for k, v in e.items() if k not in _ARRAYS_HISTORICO} for e in itens],
+        "importacoes": sum(e["tipo"] == "importacao" for e in SEBRAE_HISTORICO_FIXTURE),
+        "buscas": sum(e["tipo"] == "busca" for e in SEBRAE_HISTORICO_FIXTURE),
+    }
+
+
 def sebrae_summary():
     scenario, ativo = sebrae_state["scenario"], sebrae_state["ativo"]
     pronta = scenario == "pronta"
@@ -375,6 +403,11 @@ class Handler(BaseHTTPRequestHandler):
             self.send({"estado": "livre"})
         elif path == "/api/sebrae/novos":
             self.send(SEBRAE_NOVOS_FIXTURE)
+        elif path == "/api/sebrae/historico":
+            self.send(sebrae_historico_lista(parse_qs(url.query).get("tipo", [""])[0]))
+        elif path.startswith("/api/sebrae/historico/"):
+            entrada = next((e for e in SEBRAE_HISTORICO_FIXTURE if e["id"] == path.rsplit("/", 1)[-1]), None)
+            self.send(entrada or {"detail": "Entrada do histórico não encontrada."}, 200 if entrada else 404)
         elif path == "/api/automacao/sebrae/resumo":
             self.send(sebrae_summary())
         elif path == "/api/automacao/estado":

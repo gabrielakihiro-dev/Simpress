@@ -36,6 +36,7 @@ import "./js/features/equipment-editor.js";
 import "./js/features/alias-history.js";
 import "./js/features/monthly-report.js";
 import "./js/features/sebrae-dashboard.js";
+import "./js/features/sebrae-historico.js";
 import "./js/features/chrome-automation.js";
 import "./app.js";
 import "./js/ui/ux-enhancements.js";

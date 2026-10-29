@@ -45,10 +45,14 @@ class ManuaisInvalidos(ValueError):
 class Caminhos:
     existentes: Path
     novos: Path
+    historico: Path
 
 
 def caminhos_padrao(state_dir: Path) -> Caminhos:
-    return Caminhos(state_dir / "sebrae_dashboard_existentes.json", state_dir / "sebrae_novos.json")
+    return Caminhos(
+        state_dir / "sebrae_dashboard_existentes.json", state_dir / "sebrae_novos.json",
+        state_dir / "sebrae_historico.json",
+    )
 
 
 def caminho_planilha(caminhos: Caminhos) -> Path:

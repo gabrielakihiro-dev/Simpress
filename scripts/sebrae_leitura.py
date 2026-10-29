@@ -20,7 +20,7 @@ ROOT = Path(__file__).resolve().parents[1]
 if str(ROOT) not in sys.path:
     sys.path.insert(0, str(ROOT))
 
-from domains import sebrae_novos  # noqa: E402
+from domains import sebrae_historico, sebrae_novos  # noqa: E402
 from domains.sebrae_chamados import ChamadoSoftExpert  # noqa: E402
 from domains.sebrae_dashboard import triar_novos  # noqa: E402
 from scripts import sebrae_softexpert  # noqa: E402
@@ -63,6 +63,17 @@ def _ler_chamado(
     return motivo
 
 
+def _registrar_busca(historico: Path, triagem: Any, lidos: List[ChamadoSoftExpert], erros: Dict[str, str], log: Any) -> None:
+    """The history is a log of the run; it never changes the run's result."""
+    try:
+        sebrae_historico.registrar_busca(
+            historico, lidos=[c.numero for c in lidos], ignorados=len(triagem.ignorados),
+            pendentes=[numero for numero, _ in triagem.pendentes], erros=list(erros),
+        )
+    except Exception as erro:  # noqa: BLE001 - log only the type, never ticket data
+        log(f"Histórico não gravado ({type(erro).__name__}).")
+
+
 def executar(
     context: "BrowserContext",
     rotinas: Any,
@@ -77,6 +88,9 @@ def executar(
         raise rotinas.RotinaErro("Importe o Dashboard no site antes de buscar os chamados novos.")
     log = lambda texto: rotinas.log("Sebrae", texto)  # noqa: E731
     pagina: Optional["Page"] = None
+    triagem = None
+    lidos: List[ChamadoSoftExpert] = []
+    erros: Dict[str, str] = {}
     try:
         try:
             pagina = modulo.abrir_softexpert(context)
@@ -88,8 +102,6 @@ def executar(
             f"Lista: {len(itens)} chamado(s); {len(triagem.ignorados)} já no Dashboard, "
             f"{len(triagem.pendentes)} pendente(s), {len(triagem.novos)} novo(s)."
         )
-        lidos: List[ChamadoSoftExpert] = []
-        erros: Dict[str, str] = {}
         for numero in triagem.novos:
             rotinas.verificar_cancelamento(f"Cancelado antes de ler {numero}.")
             resultado = _ler_chamado(context, pagina, numero, rotinas, modulo)
@@ -104,6 +116,8 @@ def executar(
         sebrae_novos.salvar_novos(caminhos.novos, lidos, triagem.pendentes, len(triagem.ignorados), erros)
     finally:
         _fechar_aba(pagina)
+        if triagem is not None:  # also after a cancel: the history shows what that run did read
+            _registrar_busca(caminhos.historico, triagem, lidos, erros, log)
     log(f"Concluído: {len(lidos)} lido(s), {len(erros)} com erro.")
     print(
         "\n[SUCESSO] Chamados novos lidos; abra a tela Automação para preencher e exportar."

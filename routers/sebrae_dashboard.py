@@ -11,21 +11,24 @@ from __future__ import annotations
 
 import asyncio
 import base64
+import hashlib
+import logging
 import re
 from dataclasses import dataclass
 from typing import Any, Callable, Dict, List, Mapping, Optional, Sequence
 
-from fastapi import APIRouter, File, UploadFile
+from fastapi import APIRouter, File, Query, UploadFile
 from fastapi.responses import JSONResponse
 from pydantic import BaseModel, ConfigDict, Field
 
-from core.errors import DomainValidationError
+from core.errors import DomainBusyError, DomainValidationError
 from core.config import format_size_limit
-from domains import sebrae_dashboard_gravacao, sebrae_novos
-from domains.sebrae_dashboard import MANUAIS, DashboardInvalido, ler_coluna_c
+from domains import sebrae_dashboard_gravacao, sebrae_historico, sebrae_novos
+from domains.sebrae_dashboard import MANUAIS, DashboardInvalido, ler_coluna_c, ler_status_chamados
 
 MAX_CHAMADOS_POR_EXPORTACAO = 200
 NOME_ATUALIZADO = "Dashboard Operacional_SEBRAE (atualizado).xlsx"
+logger = logging.getLogger(__name__)
 
 
 class ChamadoManual(BaseModel):
@@ -110,8 +113,45 @@ def create_sebrae_dashboard_router(services: SebraeDashboardServices) -> APIRout
             numeros = await asyncio.to_thread(ler_coluna_c, conteudo)
         except DashboardInvalido as erro:
             raise DomainValidationError(str(erro), status_code=422) from None
+        anteriores = sebrae_novos.ler_existentes(services.caminhos().existentes)
         await asyncio.to_thread(_guardar_importado, conteudo, numeros, nome)
-        return JSONResponse(_estado(), headers={"Cache-Control": "no-store"})
+        historico_ok = await asyncio.to_thread(_registrar_historico, conteudo, nome, anteriores)
+        return JSONResponse({**_estado(), "historico_ok": historico_ok}, headers={"Cache-Control": "no-store"})
+
+    def _registrar_historico(conteudo: bytes, nome: str, anteriores: Optional[Mapping[str, Any]]) -> bool:
+        """The history never blocks an import: a failure only turns ``historico_ok`` false."""
+        try:
+            sebrae_historico.registrar_importacao(
+                services.caminhos().historico, arquivo=nome, sha256=hashlib.sha256(conteudo).hexdigest(),
+                mapa=ler_status_chamados(conteudo), base_numeros=anteriores["numeros"] if anteriores else None,
+            )
+            return True
+        except Exception as erro:  # noqa: BLE001 - log only the type, never ticket data
+            logger.warning("Histórico do Dashboard Sebrae não gravado (%s).", type(erro).__name__)
+            return False
+
+    @router.get("/api/sebrae/historico")
+    def listar_historico(
+        limite: int = Query(50, ge=1, le=200),
+        pagina: int = Query(1, ge=1, le=1000),
+        tipo: str = Query("", pattern="^(importacao|busca)?$"),
+    ):
+        """Importações e buscas, da mais recente para a mais antiga; itens leves (só contagens)."""
+        try:
+            corpo = sebrae_historico.listar(services.caminhos().historico, limite, pagina, tipo)
+        except sebrae_historico.HistoricoIlegivel as erro:
+            raise DomainBusyError(str(erro)) from None
+        return JSONResponse(corpo, headers={"Cache-Control": "no-store"})
+
+    @router.get("/api/sebrae/historico/{entrada_id}")
+    def detalhe_historico(entrada_id: str):
+        try:
+            entrada = sebrae_historico.obter(services.caminhos().historico, entrada_id)
+        except sebrae_historico.HistoricoIlegivel as erro:
+            raise DomainBusyError(str(erro)) from None
+        if entrada is None:
+            raise DomainValidationError("Entrada do histórico não encontrada.", status_code=404)
+        return JSONResponse(entrada, headers={"Cache-Control": "no-store"})
 
     def _guardar_importado(conteudo: bytes, numeros: Any, nome: str) -> None:
         """Numbers, A/B lists and open tickets go to the JSON; the file itself is kept for "Atualizar Dashboard".
