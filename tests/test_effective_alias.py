@@ -77,6 +77,28 @@ class EffectiveAliasPrecedenceTests(unittest.TestCase):
             "ultimo.logon", "usuario.legado", "usuario.antigo",
         ])
 
+    def test_repeated_serial_takes_the_user_of_the_latest_verified_row(self):
+        def rows(old, new):
+            return [
+                {"SERIAL": "S1", "NOMEDOCOMPUTADOR": "HOST-A", "USUARIOSLOGADOS": "antigo",
+                 "ULTIMAVERIFICACAOCOMEXITO": old},
+                {"SERIAL": "S1", "NOMEDOCOMPUTADOR": "HOST-B", "USUARIOSLOGADOS": "recente",
+                 "ULTIMAVERIFICACAOCOMEXITO": new},
+            ]
+
+        item = self.apply(equipment("S1"), endpoint_index(rows("out 14, 2026 03:06 PM", "out 29, 2026 12:13 PM")))
+        self.assertEqual((item["usuarios_logados"], item["usuarios_logados_candidatos"]), ("recente", []))
+        self.assertEqual(item["invall_alias_status"], "serie_invall_duplicada")
+
+        for case, old, new in (
+            ("mesma data", "out 29, 2026 12:13 PM", "out 29, 2026 12:13 PM"),
+            ("sem data", "", "out 29, 2026 12:13 PM"),
+        ):
+            with self.subTest(case):
+                item = self.apply(equipment("S1"), endpoint_index(rows(old, new)))
+                self.assertEqual(item["usuarios_logados"], "")
+                self.assertEqual(item["usuarios_logados_candidatos"], ["antigo", "recente"])
+
     def test_simpress_alias_is_kept_without_a_unique_endpoint_hostname(self):
         index = endpoint_index([
             {"SERIAL": "DUP", "NOMEDOCOMPUTADOR": "HOST-A"},
