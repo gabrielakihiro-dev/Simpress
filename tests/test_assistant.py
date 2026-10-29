@@ -307,7 +307,7 @@ class AssistantRouteTests(unittest.TestCase):
         card = {"descricao": "Alterar o apelido do serial ABC123 para 'X'."}
         self.assertEqual(body["pendente"], card)
         state = client.get("/api/assistente/estado").json()
-        self.assertEqual(state, {"online": True, "modelo": "openai/gpt-4o-mini", "aguardando_confirmacao": True, "pendente": card})
+        self.assertEqual(state, {"online": True, "modelo": "google/gemini-2.5-flash-lite", "aguardando_confirmacao": True, "pendente": card})
         self.assertEqual(simpress.writes(), [])
         done = client.post("/api/assistente/confirmar", json={"confirmado": True}).json()
         self.assertEqual(done, {"texto": "feito", "ferramentas": ["atualizar_apelido"], "pendente": None})

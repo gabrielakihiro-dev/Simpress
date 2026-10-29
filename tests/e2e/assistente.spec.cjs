@@ -98,6 +98,85 @@ test("Esc cancela a gravação: nada é enviado e o botão volta ao normal", asy
   expect(chamadas.some(c => c.nome === "audio")).toBe(false);
 });
 
+// Síntese de voz falsa: guarda o que seria falado e deixa o teste decidir quando a fala termina.
+async function falsearVoz(page, vozes = [{ name: "Maria", lang: "pt-BR", localService: true }]) {
+  await page.addInitScript(vozesFalsas => {
+    window.__faladas = [];
+    window.SpeechSynthesisUtterance = class { constructor(text) { this.text = text; } }; // o real recusa uma voz que não seja do navegador
+    let atual = null;
+    const sintese = {
+      getVoices: () => vozesFalsas,
+      cancel: () => { atual = null; },
+      speak: fala => { window.__faladas.push(fala.text); atual = fala; fala.onstart?.(); },
+      addEventListener: () => {},
+    };
+    window.__terminarFala = () => { const fala = atual; atual = null; fala?.onend?.(); };
+    Object.defineProperty(window, "speechSynthesis", { value: sintese, configurable: true });
+  }, vozes);
+}
+
+test("globo mostra os estados: parado, ouvindo na gravação e pensando ao enviar", async ({ page }) => {
+  await falsearMicrofone(page);
+  await mockAssistente(page, { estado: PRONTO }); await page.route("**/api/assistente/mensagem", () => {}); // nunca responde: a mensagem fica em andamento
+  await page.goto("/");
+  await abrirAssistente(page);
+  const globo = page.locator("#assistente-globo");
+  await expect(globo).toHaveAttribute("data-estado", "parado");
+  await page.getByRole("button", { name: "Gravar áudio" }).click();
+  await expect(globo).toHaveAttribute("data-estado", "ouvindo");
+  await page.keyboard.press("Escape");
+  await expect(globo).toHaveAttribute("data-estado", "parado");
+  await page.locator("#assistente-texto").fill("oi");
+  await page.keyboard.press("Enter");
+  await expect(globo).toHaveAttribute("data-estado", "pensando");
+});
+
+test("voz ligada fala a resposta com voz local em português e o globo fica falando até acabar", async ({ page }) => {
+  await falsearVoz(page);
+  await mockAssistente(page, { estado: PRONTO, mensagem: { texto: "Temos 12 notebooks.", ferramentas: [], pendente: null } });
+  await page.goto("/");
+  await abrirAssistente(page);
+  const voz = page.locator("#assistente-voz");
+  await expect(voz).toHaveAttribute("aria-pressed", "false");
+  await voz.click();
+  await expect(voz).toHaveAttribute("aria-pressed", "true");
+  await page.locator("#assistente-texto").fill("quantos?");
+  await page.keyboard.press("Enter");
+  await expect(page.locator("#assistente-globo")).toHaveAttribute("data-estado", "falando");
+  expect(await page.evaluate(() => window.__faladas)).toEqual(["Temos 12 notebooks."]);
+  await page.evaluate(() => window.__terminarFala());
+  await expect(page.locator("#assistente-globo")).toHaveAttribute("data-estado", "parado");
+});
+
+test("voz desligada não fala; a preferência fica guardada ao recarregar", async ({ page }) => {
+  await falsearVoz(page);
+  await mockAssistente(page, { estado: PRONTO, mensagem: { texto: "Olá!", ferramentas: [], pendente: null } });
+  await page.goto("/");
+  await abrirAssistente(page);
+  await page.locator("#assistente-texto").fill("oi");
+  await page.keyboard.press("Enter");
+  await expect(page.locator(".ck-assist__msg--assistente .ck-assist__texto")).toHaveText("Olá!");
+  expect(await page.evaluate(() => window.__faladas)).toEqual([]);
+
+  await page.locator("#assistente-voz").click();
+  await page.reload();
+  await abrirAssistente(page);
+  await expect(page.locator("#assistente-voz")).toHaveAttribute("aria-pressed", "true");
+});
+
+test("sem voz local em português: não fala e avisa", async ({ page }) => {
+  await falsearVoz(page, [{ name: "Online", lang: "pt-BR", localService: false }, { name: "Zira", lang: "en-US", localService: true }]);
+  await mockAssistente(page, { estado: PRONTO, mensagem: { texto: "Olá!", ferramentas: [], pendente: null } });
+  await page.goto("/");
+  await abrirAssistente(page);
+  await page.locator("#assistente-voz").click();
+  await expect(page.locator("#assistente-status")).toContainText("não há voz em português instalada");
+  await page.locator("#assistente-texto").fill("oi");
+  await page.keyboard.press("Enter");
+  await expect(page.locator(".ck-assist__msg--assistente .ck-assist__texto")).toHaveText("Olá!");
+  expect(await page.evaluate(() => window.__faladas)).toEqual([]);
+});
+
 test("envia mensagem, mostra resposta e ferramentas; Shift+Enter quebra a linha", async ({ page }) => {
   const chamadas = await mockAssistente(page, {
     estado: PRONTO,

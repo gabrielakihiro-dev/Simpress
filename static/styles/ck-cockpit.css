@@ -996,6 +996,9 @@ html[data-theme], html[data-theme] body.cockpit-shell-body { background: var(--c
 .ck-ferr-painel.ck-assist { gap: 10px; overflow: hidden; }
 .ck-ferr-painel.ck-assist > .ck-assist__lista { flex: 1 1 auto; }
 .ck-assist__status { flex: 1 1 auto; overflow-wrap: anywhere; }
+.ck-assist__barra { align-items: center; }
+.ck-assist__barra > .ck-btn { align-self: center; }
+.ck-assist__globo { flex: none; align-self: center; width: 56px; height: 56px; color: var(--cor-destaque); }
 .ck-assist__lista { min-height: 160px; overflow-y: auto; display: flex; flex-direction: column; gap: 8px; padding: 10px; border: 1px solid var(--cor-borda-suave); border-radius: var(--raio-md); background: var(--cor-superficie-funda); }
 .ck-assist__msg { max-width: min(78ch, 88%); padding: 8px 12px; border-radius: var(--raio-md); border: 1px solid var(--cor-borda-suave); background: var(--cor-superficie); color: var(--cor-texto); align-self: flex-start; }
 .ck-assist__msg--usuario { align-self: flex-end; background: var(--cor-destaque-fundo); color: var(--cor-destaque-texto); border-color: var(--cor-destaque-forte); }
@@ -1009,7 +1012,21 @@ html[data-theme], html[data-theme] body.cockpit-shell-body { background: var(--c
 .ck-assist__campo textarea { width: 100%; resize: vertical; min-height: 4.5em; max-height: 40vh; }
 .ck-assist__acoes { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
 .ck-assist__contador { font-size: var(--fs-xs); color: var(--cor-texto-mudo); font-variant-numeric: tabular-nums; }
+.ck-ferr-painel.ck-assist > .ck-assist__lista, .ck-ferr-painel.ck-assist > .ck-assist__pendente { margin-left: 20px; margin-right: 20px; }
+.ck-ferr-painel.ck-assist > .ck-assist__form { padding: 0 20px 20px; }
+@media (max-width: 767.98px) {
+  .ck-ferr-painel.ck-assist > .ck-assist__lista, .ck-ferr-painel.ck-assist > .ck-assist__pendente { margin-left: 12px; margin-right: 12px; }
+  .ck-ferr-painel.ck-assist > .ck-assist__form { padding: 0 12px 12px; }
+}
 @media (max-width: 599px) { .ck-assist__msg { max-width: 100%; } }
+@media (max-width: 599px) {
+  /* Telas baixas: globo menor, botões da barra lado a lado e menos altura mínima, para o Enviar continuar à vista. */
+  .ck-assist__globo { width: 36px; height: 36px; }
+  .ck-assist__status { flex-basis: calc(100% - 52px); }
+  .ck-assist__barra > .ck-btn { flex: 1 1 calc(50% - 4px); }
+  .ck-assist__lista { min-height: 120px; }
+  .ck-assist__campo textarea { min-height: 3.5em; }
+}
 @media (prefers-reduced-motion: no-preference) {
   .ck-assist__msg, .ck-assist__pendente { animation: ck-assist-entrada var(--duracao) var(--curva); }
 }
