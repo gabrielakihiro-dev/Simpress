@@ -353,9 +353,11 @@ class AssistantRouteTests(unittest.TestCase):
 
     def test_busy_is_409(self) -> None:
         release = threading.Event()
+        entered = threading.Event()
 
         class SlowModel:
             def complete(self, messages: List[Dict[str, Any]], tools: List[Dict[str, Any]]) -> ModelReply:
+                entered.set()
                 release.wait(5)
                 return text("pronto")
 
@@ -370,13 +372,11 @@ class AssistantRouteTests(unittest.TestCase):
         first = threading.Thread(target=lambda: client.post("/api/assistente/mensagem", json={"texto": "a"}))
         first.start()
         try:
-            for _ in range(200):
-                response = client.post("/api/assistente/mensagem", json={"texto": "b"})
-                if response.status_code == 409:
-                    self.assertEqual(response.json(), {"detail": MSG_OCUPADO})
-                    break
-            else:
-                self.fail("never got 409")
+            # Only post "b" once "a" is inside the model, else "b" can win the lock and block itself.
+            self.assertTrue(entered.wait(10), "first request never reached the model")
+            response = client.post("/api/assistente/mensagem", json={"texto": "b"})
+            self.assertEqual(response.status_code, 409)
+            self.assertEqual(response.json(), {"detail": MSG_OCUPADO})
         finally:
             release.set()
             first.join(5)
