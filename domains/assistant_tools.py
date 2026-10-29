@@ -67,6 +67,13 @@ def _describe_unit(args: Args) -> str:
     return f"Criar nova unidade: {fields}."
 
 
+def _describe_routine(args: Args) -> str:
+    rotina = str(args.get("rotina", ""))
+    if rotina == "dashboard":
+        return "Executar \"Baixar, importar e buscar\": baixar o Dashboard do Excel Online, importar e buscar os chamados novos do Sebrae, no Chrome de automação."
+    return f"Executar a rotina '{rotina}' de automação no Chrome."
+
+
 QUERY_TOOLS: List[Tool] = [
     _read(
         "consultar_equipamento",
@@ -297,9 +304,11 @@ CHANGE_TOOLS: List[Tool] = [
         "executar_automacao_chrome",
         "Executa uma rotina de automação pelo servidor Simpress. 'login' abre as abas para autenticação manual; "
         "'inventarios' atualiza inventários (UX + Endpoint); 'os' exporta chamados e OS; 'ambas' roda OS e Inventários; "
-        "'usuarios' verifica usuários logados; 'sebrae' sincroniza chamados Sebrae. O usuário confirma antes de rodar.",
+        "'usuarios' verifica usuários logados; 'sebrae' sincroniza chamados Sebrae; 'dashboard' é o botão "
+        "\"Baixar, importar e buscar\" (baixa o Dashboard do Excel Online, importa e busca os chamados novos do Sebrae). "
+        "O usuário confirma antes de rodar.",
         lambda c, a: c.executar_automacao(str(a.get("rotina", ""))),
-        lambda a: f"Executar a rotina '{a.get('rotina', '')}' de automação no Chrome.",
+        _describe_routine,
         {"rotina": {"type": "string", "enum": list(ROTINAS_VALIDAS), "description": "Rotina a executar."}},
         ["rotina"],
     ),

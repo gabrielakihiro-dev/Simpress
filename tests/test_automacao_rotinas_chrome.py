@@ -447,5 +447,103 @@ class PlaywrightAusenteTests(unittest.TestCase):
         self.assertNotIn("Traceback", saida.getvalue())
 
 
+class FakeLocator:
+    def __init__(self, frame, regex):
+        self.frame, self.regex = frame, regex
+
+    def _achados(self):
+        return [texto for texto in self.frame.visiveis if self.regex.search(texto)]
+
+    def filter(self, visible=True):
+        return self
+
+    def count(self):
+        return len(self._achados())
+
+    @property
+    def first(self):
+        return self
+
+    def wait_for(self, state="visible", timeout=0):
+        if not self._achados():
+            raise AssertionError(f"rótulo não apareceu: {self.regex.pattern}")
+
+    def click(self):
+        achados = self._achados()
+        if not achados:
+            raise AssertionError(f"rótulo não apareceu: {self.regex.pattern}")
+        self.frame.cliques.append(achados[0])
+        self.frame.visiveis = self.frame.proximos.get(achados[0], self.frame.visiveis)
+
+
+class FakeFrame:
+    """Frame do Excel Online: `visiveis` são os textos na tela; `proximos` diz o que aparece após clicar."""
+
+    def __init__(self, visiveis, proximos=None):
+        self.visiveis, self.proximos, self.cliques = list(visiveis), proximos or {}, []
+
+    def get_by_text(self, regex):
+        return FakeLocator(self, regex)
+
+
+class FakePage:
+    def __init__(self, url, frames):
+        self.url, self.frames = url, frames
+
+
+IDIOMAS = {
+    "en": ("File", "Create a Copy", "Download a Copy"),
+    "pt-BR": ("Arquivo", "Criar uma Cópia", "Baixar uma Cópia"),
+}
+URL_EXCEL = "https://simpress-my.sharepoint.com/:x:/r/personal/x/_layouts/15/doc2.aspx"
+
+
+def frame_do_excel(idioma):
+    arquivo, copia, baixar = IDIOMAS[idioma]
+    return FakeFrame([arquivo, "Home"], {arquivo: [copia, "Save As"], copia: [baixar, "Save a Copy"]})
+
+
+class DashboardMenuLabelsTests(unittest.TestCase):
+    def test_menu_matches_english_and_portuguese_excel_online(self):
+        for texto in ("File", "Arquivo", "  Arquivo "):
+            self.assertTrue(automacao._MENU_ARQUIVO.match(texto), texto)
+        for texto in ("Create a Copy", "Criar uma Cópia", "criar uma copia"):
+            self.assertTrue(automacao._MENU_CRIAR_COPIA.match(texto), texto)
+        for texto in ("Download a Copy", "Baixar uma Cópia", "baixar uma copia"):
+            self.assertTrue(automacao._MENU_BAIXAR_COPIA.match(texto), texto)
+        self.assertFalse(automacao._MENU_ARQUIVO.match("Arquivos recentes"))
+        self.assertFalse(automacao._MENU_ARQUIVO.match("Profile"))
+        self.assertFalse(automacao._MENU_BAIXAR_COPIA.match("Baixar como PDF"))
+
+    def test_login_is_detected_in_both_languages(self):
+        for idioma in IDIOMAS:
+            with self.subTest(idioma=idioma):
+                page = FakePage(URL_EXCEL, [FakeFrame([]), frame_do_excel(idioma)])
+                self.assertTrue(automacao.dashboard_logado(page))
+
+    def test_login_is_not_detected_without_the_file_menu_or_on_a_login_page(self):
+        sem_menu = FakePage(URL_EXCEL, [FakeFrame(["Sign in", "Entrar"])])
+        self.assertFalse(automacao.dashboard_logado(sem_menu))
+        for idioma in IDIOMAS:
+            with self.subTest(idioma=idioma):
+                self.assertFalse(automacao.dashboard_logado(FakePage("https://login.microsoftonline.com/x", [frame_do_excel(idioma)])))
+                self.assertFalse(automacao.dashboard_logado(FakePage("https://outro.com/", [frame_do_excel(idioma)])))
+
+    def test_download_copy_follows_the_menu_in_both_languages(self):
+        def exportar(page, origem, clicar, prefixo):
+            clicar()
+            return Path("copia.xlsx")
+
+        for idioma, rotulos in IDIOMAS.items():
+            with self.subTest(idioma=idioma), patch.object(automacao, "exportar_com_download", exportar), patch.object(automacao, "log"):
+                frame = frame_do_excel(idioma)
+                self.assertEqual(automacao.baixar_copia_dashboard(FakePage(URL_EXCEL, [frame])), Path("copia.xlsx"))
+                self.assertEqual(frame.cliques, list(rotulos))
+
+    def test_download_copy_without_the_file_menu_fails_clearly(self):
+        with self.assertRaises(automacao.RotinaErro):
+            automacao.baixar_copia_dashboard(FakePage(URL_EXCEL, [FakeFrame(["Home"])]))
+
+
 if __name__ == "__main__":
     unittest.main()
