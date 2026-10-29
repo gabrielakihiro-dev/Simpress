@@ -52,13 +52,36 @@ Em 28/10/2026 foi criada a coluna **G (Título)**; o que vinha de G em diante de
 
 ### Tela no site (Automação → cartão "Chamados novos do SoftExpert")
 
-O cartão antigo "Sincronizar chamados Sebrae" (agendamento, contadores, pendências) foi removido da tela em 28/10/2026; o agendamento e as rotas `/api/automacao/sebrae/*` continuam no servidor, sem tela. Só HTML/CSS e o JS de `static/js/features/sebrae-dashboard.js`; segue os tokens `ck-*` e os temas claro e escuro. Fluxo na tela:
+O cartão antigo "Sincronizar chamados Sebrae" (agendamento, contadores, pendências) foi removido da tela em 28/10/2026; o agendamento e as rotas `/api/automacao/sebrae/*` continuam no servidor, sem tela. Só HTML/CSS e o JS de `static/js/features/sebrae-dashboard.js` e `static/js/features/sebrae-historico.js`; segue os tokens `ck-*` e os temas claro e escuro. Fluxo na tela:
 
-1. **Importar Dashboard** (`POST /api/sebrae/dashboard`): escolher o `.xlsx` e importar. O site guarda só os números UTIC já lançados (`data/state/sebrae_dashboard_existentes.json`, fora do Git) e mostra "N chamados já lançados".
+1. **Importar Dashboard** (`POST /api/sebrae/dashboard`): escolher o `.xlsx` e importar. O site guarda só os números UTIC já lançados (`data/state/sebrae_dashboard_existentes.json`, fora do Git), mostra "N chamados já lançados" e registra o que mudou em `data/state/sebrae_historico.json` (ver "Histórico de importações do Dashboard Sebrae" abaixo).
 2. **Buscar chamados novos**: o botão `Buscar chamados novos` do próprio cartão inicia a rotina `sebrae` (o cancelamento é o `Cancelar execução` geral da tela Automação), que agora só **lê** (SoftExpert, Chrome de automação, login manual) e grava `data/state/sebrae_novos.json` (CPF mascarado). No SoftExpert só a confirmação de associar (**Sim**) é aceita; nada é gravado no Excel.
 3. **Lista** (`GET /api/sebrae/novos`): um bloco por chamado novo com os campos automáticos somente leitura (C, E, F, G, H, I, K, L, M, N, O, P) e os manuais: A, B, D, J, R, S. D e J são listas fechadas (`EM ABERTO`/`FINALIZADO`; `INCIDENTE`/`SOLICITAÇÃO`); A, B e S aceitam texto livre com sugestões do Dashboard atual; R é data e hora (`dd/MM/yyyy HH:mm`). Série, modelo e cidade vazios com o aviso "não encontrado" ou "mais de um equipamento" quando o cruzamento não é único. Alertas do Endpoint e `PENDENCIAS_DEFINIDAS` aparecem numa lista à parte, sem formulário.
 4. **Exportar** (`POST /api/sebrae/exportar`): gera dois blocos para colar, A:P e R:S (a coluna Q, de fórmula, fica entre eles e não é escrita), copiados para a área de transferência. Confirmação com o texto exato `Planilha Exportada com Sucesso!`. O usuário cola A:P na primeira linha livre da tabela e R:S ao lado, deixando as fórmulas Q, T, U, V e a coluna W intactas.
 5. A exportação inclui só os chamados com A, D e J preenchidos (B, R e S podem ficar vazios); a tela mostra quantos estão prontos e mantém o botão desabilitado até haver pelo menos um.
+
+### Histórico de importações do Dashboard Sebrae
+
+A cada importação do Dashboard o site registra o que mudou desde a anterior; assim a tela Automação não enche de informação e o usuário confere depois. Código: `domains/sebrae_historico.py` (regras e armazenamento num módulo só, para trocar o local depois) e `routers/sebrae_dashboard.py`.
+
+**Onde aparece (rótulos exatos):**
+
+- Botão `Histórico` no cabeçalho do cartão "Chamados novos do SoftExpert", ao lado de `Atualizar lista`; abre o painel de ferramentas.
+- Item `Histórico do Dashboard Sebrae` no menu de ferramentas, grupo "Histórico e catálogo".
+- Título do painel: `Histórico de importações do Dashboard Sebrae`.
+- No cartão, uma lista curta com as 3 entradas mais recentes (data, resumo e, se houver, `Reimportado N vezes`).
+- Painel: indicadores (importações, buscas, última importação), filtro por tipo (`Todas`, `Importações`, `Buscas`), tabela no desktop e cartões em telas menores (mesmos dados), com o detalhe de cada entrada (chamados adicionados, removidos e com status alterado). Sem `innerHTML`; tokens `ck-*`; temas claro e escuro; animações de 150 a 300 ms com `prefers-reduced-motion`.
+
+**O que é guardado** (`data/state/sebrae_historico.json`, fora do Git, só local; a ida para o OneDrive é uma decisão posterior):
+
+- Importação: data, nome do arquivo (só o nome, até 200 caracteres), SHA-256, total de chamados, números UTIC adicionados e removidos, mudanças de **status** (D, `EM ABERTO` → `FINALIZADO`) com a data de encerramento (R), e quantas vezes o mesmo conteúdo foi reimportado.
+- Busca de novos (rotina `sebrae`): quantos foram lidos, ignorados, pendentes ou com erro, e os números novos.
+- Do Dashboard são lidas só as colunas C, D e R. D e R viram um mapa por número (status entre os dois valores aceitos e data); A, F, H, I e demais textos nunca entram no histórico. Nenhum CPF, senha ou texto de chamado é guardado.
+- Importação sem mudança não cria linha: só aumenta `reimportado` na importação anterior.
+- Retenção: as 200 entradas mais recentes. Motivo: o arquivo fica pequeno (poucas centenas de KB) e 200 importações cobrem meses de uso diário; as mais antigas saem sozinhas.
+- Falha ao gravar o histórico não impede a importação (a resposta traz `historico_ok: false`); arquivo ilegível nunca é sobrescrito.
+
+**API:** `GET /api/sebrae/historico` (query `limite`, `pagina`, `tipo`) e `GET /api/sebrae/historico/{entrada_id}`; só leitura, sem apagar nem editar entradas.
 
 > **Legado.** Daqui até "Limitações conhecidas", o texto descreve a rotina antiga que gravava no Excel Online com a numeração anterior (sem a coluna G). `scripts/sebrae_excel.py`, `domains/sebrae_orquestracao.py` e `scripts/sebrae_rotina.py` ainda usam essas letras e **não devem ser ativados** com o Dashboard atual; `ROTINA_PRONTA` segue `False`.
 
