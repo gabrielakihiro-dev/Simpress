@@ -474,9 +474,9 @@ Horário disponível para atendimento:</textarea>
         <button type="button" id="btn-pesquisar-equipamento-home" data-on-click="abrirHomeParaPesquisarEquipamento" class="ck-btn ck-btn--secundario ck-btn--sm" data-show="empty">
           <svg class="ck-ico ck-ico--sm" aria-hidden="true" focusable="false"><use href="#i-search"></use></svg><span>Pesquisar equipamento na Home</span>
         </button>
-        <a href="#resumo-os-equipamento" id="ck-link-os" class="ck-btn ck-btn--fantasma ck-btn--sm" data-show="selected" hidden>
+        <button type="button" id="ck-link-os" data-on-click="abrirChamadosDoEquipamento" class="ck-btn ck-btn--fantasma ck-btn--sm" data-show="selected" title="Abrir Chamados filtrado pela série do equipamento">
           <svg class="ck-ico ck-ico--sm" aria-hidden="true" focusable="false"><use href="#i-link"></use></svg><span id="ck-link-os-texto">OS deste equipamento</span>
-        </a>
+        </button>
         <button type="button" id="btn-trocar-equipamento" data-on-click="trocarEquipamentoTransporte" class="ck-btn ck-btn--secundario ck-btn--sm" data-show="selected">
           <svg class="ck-ico ck-ico--sm" aria-hidden="true" focusable="false"><use href="#i-search"></use></svg><span>Trocar equipamento</span>
         </button>
@@ -879,10 +879,7 @@ Horário disponível para atendimento:</textarea>
             <button type="button" id="cockpit-tickets-refresh" class="ck-btn ck-btn--secundario">Atualizar</button>
             <button type="button" id="cockpit-tickets-manage" class="ck-btn ck-btn--primario">Importar e gerenciar</button>
           </div>
-          <div class="ck-dividido">
-            <div class="ck-dividido__lista" id="cockpit-tickets-list" role="list" aria-label="Séries com chamados" aria-live="polite"></div>
-            <aside class="ck-dividido__detalhe ck-det__corpo" id="cockpit-tickets-detail" aria-label="Detalhes da série selecionada"></aside>
-          </div>
+          <div id="cockpit-tickets-os" class="ck-ferr-os"></div>
         </section>
 
         <section class="ck-ferr-painel" data-cockpit-tool-panel="comparacao" aria-labelledby="cockpit-comparison-heading" hidden>
