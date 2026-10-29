@@ -70,7 +70,7 @@ NOME_ATENDIMENTO_TI = re.compile(r"^\s*Atendimento\s*[-–—]\s*Chamados TI\s*$
 SEL_GRUPO_ACOES = "[data-test-selector='rctButtonGroup']"
 TRECHO_URL_FORMULARIO = "formexecution"
 SEL_DIALOGO = "[role='dialog'], [role='alertdialog'], dialog[open], .modal.show"
-NOME_SIM = re.compile(r"^\s*Sim\s*$", re.IGNORECASE)
+NOME_SIM = re.compile(r"^\s*(Sim|Confirmar)\s*$", re.IGNORECASE)  # "Confirmar" é o botão do diálogo "Deseja associar esta atividade ao seu usuário?"
 # Só responde "Sim" a uma pergunta que fale de associar o chamado ao usuário; qualquer outra pára a rotina.
 TEXTO_CONFIRMACAO = re.compile(r"\b(associ|vincul|assum)\w*", re.IGNORECASE)
 

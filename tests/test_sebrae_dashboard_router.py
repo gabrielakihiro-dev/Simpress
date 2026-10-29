@@ -1,3 +1,4 @@
+import base64
 import tempfile
 import unittest
 from pathlib import Path
@@ -7,10 +8,13 @@ from fastapi.responses import JSONResponse
 from fastapi.testclient import TestClient
 
 from core.errors import DomainError
+from domains import sebrae_dashboard_gravacao as G
 from domains import sebrae_novos
 from domains.sebrae_chamados import ChamadoSoftExpert
 from routers.sebrae_dashboard import SebraeDashboardServices, create_sebrae_dashboard_router
 from tests.test_sebrae_dashboard import CABECALHO, planilha
+from tests.test_sebrae_dashboard_gravacao import montar
+from tests.test_sebrae_historico import planilha_com_status
 
 CHAMADO = ChamadoSoftExpert(
     "UTIC-2026-1378", titulo="Travando", descricao="Meu notebook trava", solicitante="Camila Lopes",
@@ -20,7 +24,7 @@ REGISTROS = [{"nome": "Camila Lopes", "serie": "ABC123", "modelo": "Dell", "cida
 MANUAL = {"numero": "UTIC-2026-1378", "A": "CLIENTE", "B": "LENTIDÃO", "D": "EM ABERTO", "J": "INCIDENTE", "R": "", "S": "DISPONIBILIDADE"}
 
 
-class RotasSebraeTest(unittest.TestCase):
+class RotasBase(unittest.TestCase):
     def setUp(self):
         self.dir = Path(tempfile.mkdtemp())
         self.caminhos = sebrae_novos.caminhos_padrao(self.dir)
@@ -42,6 +46,8 @@ class RotasSebraeTest(unittest.TestCase):
         conteudo = planilha() if conteudo is None else conteudo
         return self.cliente.post("/api/sebrae/dashboard", files={"file": (nome, conteudo, "application/octet-stream")})
 
+
+class RotasSebraeTest(RotasBase):
     def test_estado_vazio_antes_de_importar(self):
         self.assertEqual(self.cliente.get("/api/sebrae/novos").json(), {"importado": None, "novos": None})
 
@@ -102,6 +108,120 @@ class RotasSebraeTest(unittest.TestCase):
         self.assertEqual(self.cliente.post("/api/sebrae/exportar", json={"chamados": [MANUAL]}).status_code, 422)
         self.importar()
         self.assertEqual(self.cliente.post("/api/sebrae/exportar", json={"chamados": [MANUAL]}).status_code, 422)
+
+    def test_importar_guarda_copia_listas_e_chamados_em_aberto(self):
+        estado = self.importar(montar()).json()["importado"]
+        self.assertTrue(estado["atualizavel"])
+        self.assertEqual([a["numero"] for a in estado["abertos"]], ["UTIC-2026-0001"])
+        self.assertTrue(sebrae_novos.caminho_planilha(self.caminhos).exists())
+        # a Dashboard the writer cannot read still imports: only "Atualizar" is off
+        simples = self.importar(planilha()).json()["importado"]
+        self.assertFalse(simples["atualizavel"])
+        self.assertEqual(simples["abertos"], [])
+
+    def test_atualizar_grava_novo_e_edicao_numa_copia(self):
+        self.importar(montar())
+        sebrae_novos.salvar_novos(self.caminhos.novos, [CHAMADO], [], 0, {})
+        guardada = sebrae_novos.caminho_planilha(self.caminhos).read_bytes()
+        edicao = {"numero": "UTIC-2026-0001", "A": "CLIENTE", "B": "REDE", "D": "FINALIZADO", "J": "INCIDENTE"}
+        resposta = self.cliente.post("/api/sebrae/dashboard/atualizar", json={"chamados": [MANUAL], "edicoes": [edicao]})
+        self.assertEqual(resposta.status_code, 200, resposta.text)
+        corpo = resposta.json()
+        self.assertEqual(corpo["arquivo"], "Dashboard Operacional_SEBRAE (atualizado).xlsx")
+        self.assertEqual({(g["numero"], g["tipo"]) for g in corpo["linhas"]}, {("UTIC-2026-1378", "novo"), ("UTIC-2026-0001", "alterado")})
+        self.assertEqual([g.numero for g in G.chamados_para_editar(base64.b64decode(corpo["conteudo_base64"]))], ["UTIC-2026-1378"])
+        self.assertEqual(sebrae_novos.caminho_planilha(self.caminhos).read_bytes(), guardada)
+
+    def test_atualizar_recusa_pedido_vazio_sem_importacao_e_copia_adulterada(self):
+        vazio = self.cliente.post("/api/sebrae/dashboard/atualizar", json={})
+        self.assertEqual(vazio.status_code, 422)
+        edicao = {"numero": "UTIC-2026-0001", "A": "CLIENTE", "B": "REDE", "D": "FINALIZADO", "J": "INCIDENTE"}
+        self.assertIn("Importe", self.cliente.post("/api/sebrae/dashboard/atualizar", json={"edicoes": [edicao]}).json()["detail"])
+        self.importar(montar())
+        sebrae_novos.caminho_planilha(self.caminhos).write_bytes(b"outro conteudo")
+        adulterada = self.cliente.post("/api/sebrae/dashboard/atualizar", json={"edicoes": [edicao]})
+        self.assertEqual(adulterada.status_code, 422)
+        self.assertIn("importe o Dashboard de novo", adulterada.json()["detail"])
+
+    def test_atualizar_valida_edicao_pela_regra_dos_manuais_e_pelas_listas(self):
+        self.importar(montar())
+        url = "/api/sebrae/dashboard/atualizar"
+        # A, D and J are required after merging: the stored ticket has no J, so a blank J is refused
+        sem_j = self.cliente.post(url, json={"edicoes": [{"numero": "UTIC-2026-0001", "A": "CLIENTE", "D": "FINALIZADO"}]})
+        self.assertEqual(sem_j.status_code, 422)
+        self.assertIn("UTIC-2026-0001", sem_j.json()["detail"])
+        finalizado = self.cliente.post(url, json={"edicoes": [{"numero": "UTIC-2026-0002", "A": "CLIENTE", "D": "X", "J": "INCIDENTE"}]})
+        self.assertEqual(finalizado.status_code, 422)
+        self.assertIn("EM ABERTO", finalizado.json()["detail"])
+        dados = sebrae_novos.ler_existentes(self.caminhos.existentes)
+        sebrae_novos.salvar_existentes(
+            self.caminhos.existentes, dados["numeros"], dados["arquivo"], sha256=dados["sha256"],
+            listas={"A": ["CLIENTE"], "B": ["REDE"]}, abertos=dados["abertos"],
+        )
+        fora = self.cliente.post(url, json={"edicoes": [{"numero": "UTIC-2026-0001", "A": "OUTRO", "D": "FINALIZADO", "J": "INCIDENTE"}]})
+        self.assertEqual(fora.status_code, 422)
+        self.assertIn("lista do Dashboard", fora.json()["detail"])
+        repetido = {"numero": "UTIC-2026-0001", "A": "CLIENTE", "D": "FINALIZADO", "J": "INCIDENTE"}
+        self.assertEqual(self.cliente.post(url, json={"edicoes": [repetido, repetido]}).status_code, 422)
+
+    def test_atualizar_recusa_novo_que_nao_esta_na_lista_de_novos(self):
+        self.importar(montar())
+        sebrae_novos.salvar_novos(self.caminhos.novos, [CHAMADO], [], 0, {})
+        resposta = self.cliente.post("/api/sebrae/dashboard/atualizar", json={"chamados": [{**MANUAL, "numero": "UTIC-2026-9999"}]})
+        self.assertEqual(resposta.status_code, 422)
+        self.assertIn("não está entre os chamados novos", resposta.json()["detail"])
+
+
+class HistoricoRotasTest(RotasBase):
+    def fechar(self, *linhas):
+        return planilha_com_status([(c, d, r, "") for c, d, r in linhas])
+
+    def test_importar_registra_a_entrada_inicial_e_responde_historico_ok(self):
+        resposta = self.importar(self.fechar(("UTIC-2026-0001", "EM ABERTO", None)))
+        self.assertTrue(resposta.json()["historico_ok"])
+        lista = self.cliente.get("/api/sebrae/historico")
+        self.assertEqual(lista.headers["cache-control"], "no-store")
+        item = lista.json()["itens"][0]
+        self.assertEqual((item["tipo"], item["arquivo"], item["total"], item["inicial"]), ("importacao", "Dashboard.xlsx", 1, True))
+        self.assertEqual(len(item["sha256"]), 64)
+
+    def test_reimportar_igual_so_conta_e_mudanca_vira_nova_entrada_com_status(self):
+        aberto = self.fechar(("UTIC-2026-0001", "EM ABERTO", None))
+        self.importar(aberto)
+        self.importar(aberto)
+        self.assertEqual(self.cliente.get("/api/sebrae/historico").json()["total"], 1)
+        self.assertEqual(self.cliente.get("/api/sebrae/historico").json()["itens"][0]["repeticoes"], 1)
+        self.importar(self.fechar(("UTIC-2026-0001", "FINALIZADO", "28/10/2026 10:00"), ("UTIC-2026-0002", "EM ABERTO", None)))
+        lista = self.cliente.get("/api/sebrae/historico").json()
+        self.assertEqual(lista["total"], 2)
+        detalhe = self.cliente.get(f"/api/sebrae/historico/{lista['itens'][0]['id']}").json()
+        self.assertEqual(detalhe["adicionados"], ["UTIC-2026-0002"])
+        self.assertEqual(detalhe["alterados"][0]["para"], "FINALIZADO")
+
+    def test_primeira_importacao_depois_do_recurso_compara_com_os_numeros_ja_guardados(self):
+        sebrae_novos.salvar_existentes(self.caminhos.existentes, ["UTIC-2026-0001"], "antigo.xlsx")
+        self.importar(self.fechar(("UTIC-2026-0001", "EM ABERTO", None), ("UTIC-2026-0002", "EM ABERTO", None)))
+        item = self.cliente.get("/api/sebrae/historico").json()["itens"][0]
+        self.assertEqual((item["inicial"], item["n_adicionados"]), (False, 1))
+
+    def test_falha_do_historico_nao_impede_a_importacao_nem_apaga_o_arquivo(self):
+        self.caminhos.historico.write_text("{ quebrado", encoding="utf-8")
+        resposta = self.importar()
+        self.assertEqual(resposta.status_code, 200)
+        self.assertFalse(resposta.json()["historico_ok"])
+        self.assertTrue(self.caminhos.existentes.exists())
+        self.assertEqual(self.caminhos.historico.read_text(encoding="utf-8"), "{ quebrado")
+        self.assertEqual(self.cliente.get("/api/sebrae/historico").status_code, 503)
+
+    def test_listagem_valida_parametros_e_detalhe_inexistente_responde_404(self):
+        self.assertEqual(self.cliente.get("/api/sebrae/historico").json()["total"], 0)
+        self.assertEqual(self.cliente.get("/api/sebrae/historico?tipo=outro").status_code, 422)
+        self.assertEqual(self.cliente.get("/api/sebrae/historico?limite=0").status_code, 422)
+        self.assertEqual(self.cliente.get("/api/sebrae/historico/nao-existe").status_code, 404)
+
+    def test_historico_nao_guarda_texto_de_outras_colunas(self):
+        self.importar(planilha_com_status([("UTIC-2026-0001", "EM ABERTO", None, "senha: Segredo123 CPF 123.456.789-09")]))
+        self.assertNotIn("Segredo", self.caminhos.historico.read_text(encoding="utf-8"))
 
 
 if __name__ == "__main__":

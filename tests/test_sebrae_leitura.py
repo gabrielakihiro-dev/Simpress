@@ -3,7 +3,7 @@ import types
 import unittest
 from pathlib import Path
 
-from domains import sebrae_novos
+from domains import sebrae_historico, sebrae_novos
 from domains.sebrae_chamados import ChamadoSoftExpert
 from scripts import sebrae_leitura
 
@@ -136,6 +136,58 @@ class LeituraTest(unittest.TestCase):
             self.rodar([item(n, "x") for n in leituras], leituras)
         self.assertEqual([c.numero for c in sebrae_novos.ler_novos(self.caminhos.novos)["chamados"]], ["UTIC-2026-0002"])
         self.assertTrue(self.aba.fechada)
+
+    def buscas(self):
+        return [i for i in sebrae_historico.listar(self.caminhos.historico)["itens"] if i["tipo"] == "busca"]
+
+    def test_busca_entra_no_historico_so_com_numeros(self):
+        sebrae_novos.salvar_existentes(self.caminhos.existentes, ["UTIC-2026-0001"], "d.xlsx")
+        itens = [
+            item("UTIC-2026-0001", "Já lançado"),
+            item("UTIC-2026-0002", "Teclado"),
+            item("UTIC-2026-0003", "Endpoint Central - Computer(s) Added"),
+            item("UTIC-2026-0004", "Sumiu"),
+        ]
+        leituras = {
+            "UTIC-2026-0002": ChamadoSoftExpert("UTIC-2026-0002", titulo="Teclado", solicitante="Ana"),
+            "UTIC-2026-0004": ChamadoNaoEncontrado("não achei"),
+        }
+        self.rodar(itens, leituras)
+        (busca,) = self.buscas()
+        self.assertEqual((busca["n_lidos"], busca["ignorados"], busca["n_pendentes"], busca["n_erros"]), (1, 1, 1, 1))
+        detalhe = sebrae_historico.obter(self.caminhos.historico, busca["id"])
+        self.assertEqual((detalhe["lidos"], detalhe["pendentes"], detalhe["erros"]),
+                         (["UTIC-2026-0002"], ["UTIC-2026-0003"], ["UTIC-2026-0004"]))
+        texto = self.caminhos.historico.read_text(encoding="utf-8")
+        self.assertNotIn("Teclado", texto)
+        self.assertNotIn("não achei", texto)
+
+    def test_cancelamento_ainda_registra_o_que_a_busca_leu(self):
+        sebrae_novos.salvar_existentes(self.caminhos.existentes, ["UTIC-2026-0001"], "d.xlsx")
+        self.rotinas.cancelar_em = "UTIC-2026-0003"
+        leituras = {n: ChamadoSoftExpert(n) for n in ("UTIC-2026-0002", "UTIC-2026-0003")}
+        with self.assertRaises(KeyboardInterrupt):
+            self.rodar([item(n, "x") for n in leituras], leituras)
+        (busca,) = self.buscas()
+        self.assertEqual(sebrae_historico.obter(self.caminhos.historico, busca["id"])["lidos"], ["UTIC-2026-0002"])
+
+    def test_sessao_expirada_na_lista_nao_registra_busca(self):
+        sebrae_novos.salvar_existentes(self.caminhos.existentes, ["UTIC-2026-0001"], "d.xlsx")
+        mod = modulo([], {}, self.aba)
+        mod.listar_chamados = lambda pagina: (_ for _ in ()).throw(SessaoExpirada("login"))
+        with self.assertRaises(Rotinas.RotinaErro):
+            sebrae_leitura.executar(None, self.rotinas, state_dir=self.dir, modulo=mod)
+        self.assertFalse(self.caminhos.historico.exists())
+
+    def test_historico_ilegivel_nao_derruba_a_busca_nem_e_sobrescrito(self):
+        sebrae_novos.salvar_existentes(self.caminhos.existentes, ["UTIC-2026-0001"], "d.xlsx")
+        self.caminhos.historico.write_text("{ quebrado", encoding="utf-8")
+        leituras = {"UTIC-2026-0002": ChamadoSoftExpert("UTIC-2026-0002")}
+        codigo, _ = self.rodar([item("UTIC-2026-0002", "x")], leituras)
+        self.assertEqual(codigo, 0)
+        self.assertEqual(len(sebrae_novos.ler_novos(self.caminhos.novos)["chamados"]), 1)
+        self.assertEqual(self.caminhos.historico.read_text(encoding="utf-8"), "{ quebrado")
+        self.assertTrue(any("Histórico não gravado (HistoricoIlegivel)" in t for t in self.rotinas.logs))
 
     def test_sessao_expirada_na_lista_pede_login(self):
         sebrae_novos.salvar_existentes(self.caminhos.existentes, ["UTIC-2026-0001"], "d.xlsx")

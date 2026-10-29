@@ -167,6 +167,7 @@
           <p class="ck-menu__titulo" id="ck-menu-g-hist">Histórico e catálogo</p>
           <button type="button" id="btn-evolucao-atualizacoes" class="ck-menu__item" role="menuitem" data-on-click="abrirPainelCockpit" data-args='["evolucao"]'><svg class="ck-ico" aria-hidden="true" focusable="false"><use href="#i-activity"></use></svg><span class="ck-menu__rotulo">Evolução das atualizações</span></button>
           <button type="button" id="btn-catalogo-unidades" class="ck-menu__item" role="menuitem" data-on-click="abrirPainelCockpit" data-args='["unidades"]'><svg class="ck-ico" aria-hidden="true" focusable="false"><use href="#i-pin"></use></svg><span class="ck-menu__rotulo">Catálogo de unidades</span></button>
+          <button type="button" id="btn-sebrae-historico-menu" class="ck-menu__item" role="menuitem" data-on-click="abrirPainelCockpit" data-args='["sebrae-historico"]'><svg class="ck-ico" aria-hidden="true" focusable="false"><use href="#i-clock"></use></svg><span class="ck-menu__rotulo">Histórico do Dashboard Sebrae</span></button>
         </div>
       </div>
     </details>
@@ -770,7 +771,7 @@ Horário disponível para atendimento:</textarea>
       </section>
 
       <section class="ck-cartao" id="sebrae-novos-painel" aria-labelledby="sebrae-novos-titulo">
-        <div class="ck-cartao__cab"><h2 class="ck-cartao__titulo" id="sebrae-novos-titulo">Chamados novos do SoftExpert</h2><span class="info-tip"><button type="button" class="info-tip-trigger" aria-label="Sobre Chamados novos do SoftExpert" aria-describedby="tip-sebrae-novos"><svg class="ck-ico ck-ico--sm" aria-hidden="true" focusable="false"><use href="#i-info"></use></svg></button><span id="tip-sebrae-novos" role="tooltip" class="info-tip-text">Importe o Dashboard, busque os novos, preencha e cole as linhas</span></span><span class="ck-espaco"></span><button type="button" class="ck-btn ck-btn--fantasma ck-btn--sm" id="btn-sebrae-atualizar-lista" data-on-click="carregarNovosSebrae"><svg class="ck-ico ck-ico--sm" aria-hidden="true" focusable="false"><use href="#i-refresh"></use></svg>Atualizar lista</button></div>
+        <div class="ck-cartao__cab"><h2 class="ck-cartao__titulo" id="sebrae-novos-titulo">Chamados novos do SoftExpert</h2><span class="info-tip"><button type="button" class="info-tip-trigger" aria-label="Sobre Chamados novos do SoftExpert" aria-describedby="tip-sebrae-novos"><svg class="ck-ico ck-ico--sm" aria-hidden="true" focusable="false"><use href="#i-info"></use></svg></button><span id="tip-sebrae-novos" role="tooltip" class="info-tip-text">Importe o Dashboard, busque os novos, preencha e cole as linhas</span></span><span class="ck-espaco"></span><button type="button" class="ck-btn ck-btn--fantasma ck-btn--sm" id="btn-sebrae-historico" data-on-click="abrirPainelCockpit" data-args='["sebrae-historico"]'><svg class="ck-ico ck-ico--sm" aria-hidden="true" focusable="false"><use href="#i-clock"></use></svg>Histórico</button><button type="button" class="ck-btn ck-btn--fantasma ck-btn--sm" id="btn-sebrae-atualizar-lista" data-on-click="carregarNovosSebrae"><svg class="ck-ico ck-ico--sm" aria-hidden="true" focusable="false"><use href="#i-refresh"></use></svg>Atualizar lista</button></div>
         <div class="ck-cartao__corpo ck-det__corpo">
           <form class="sebrae-importar" data-on-submit="importarDashboardSebrae">
             <label class="ckp-arquivo" data-estado="vazio">
@@ -786,15 +787,23 @@ Horário disponível para atendimento:</textarea>
           </form>
           <p id="sebrae-dashboard-status" class="ck-cartao__meta" role="status" aria-live="polite">Consultando…</p>
           <p id="sebrae-novos-resumo" class="ck-cartao__meta" role="status" aria-live="polite"></p>
+          <div id="sebrae-historico-resumo" class="sebrae-historico-resumo"></div>
           <div id="sebrae-novos-avisos"></div>
           <div id="sebrae-novos-lista"></div>
+          <details id="sebrae-antigos" class="sebrae-antigos" hidden>
+            <summary>Chamados antigos em aberto</summary>
+            <p id="sebrae-antigos-resumo" class="ck-cartao__meta" role="status" aria-live="polite"></p>
+            <div id="sebrae-antigos-lista"></div>
+          </details>
           <datalist id="sebrae-sugestoes-a"><option value="CLIENTE"></option><option value="SIMPRESS"></option></datalist>
           <datalist id="sebrae-sugestoes-b"><option value="AVARIA FÍSICA"></option><option value="DESLIGAMENTO"></option><option value="ENDPOINT CENTER"></option><option value="ERRO SOFTWARE"></option><option value="FALHA BATERIA"></option><option value="FALHA NO DOMÍNIO"></option><option value="FORMATAÇÃO"></option><option value="HARDWARE"></option><option value="INSTALAÇÃO"></option><option value="LENTIDÃO"></option><option value="NOVO USUÁRIO"></option><option value="NÃO LIGA"></option><option value="OUTRO"></option><option value="PERIFÉRICO"></option><option value="SOL. EQUIPAMENTO"></option></datalist>
           <datalist id="sebrae-sugestoes-s"><option value="DISPONIBILIDADE"></option></datalist>
           <div class="ck-grupo-botoes" role="group" aria-label="Exportação das linhas">
             <button type="button" class="ck-btn ck-btn--primario ck-btn--sm" id="btn-sebrae-exportar" data-on-click="exportarChamadosSebrae" disabled><svg class="ck-ico ck-ico--xs" aria-hidden="true" focusable="false"><use href="#i-download"></use></svg><span>Exportar linhas</span></button>
+            <button type="button" class="ck-btn ck-btn--secundario ck-btn--sm" id="btn-sebrae-atualizar" data-on-click="atualizarDashboardSebrae" disabled><svg class="ck-ico ck-ico--xs" aria-hidden="true" focusable="false"><use href="#i-download"></use></svg><span>Atualizar Dashboard</span></button>
           </div>
           <p id="sebrae-exportacao-status" class="ck-cartao__meta" role="status" aria-live="polite"></p>
+          <p id="sebrae-atualizar-status" class="ck-cartao__meta" role="status" aria-live="polite"></p>
           <div id="sebrae-exportacao-blocos" class="sebrae-blocos" hidden>
             <label class="ck-campo"><span class="ck-campo__rotulo">Colar em A:P (primeira linha livre da tabela)</span><textarea class="ck-entrada" id="sebrae-bloco-a-p" rows="4" readonly></textarea></label>
             <button type="button" class="ck-btn ck-btn--fantasma ck-btn--sm" data-on-click="copiarBlocoSebrae" data-args='["a_p"]'><svg class="ck-ico ck-ico--sm" aria-hidden="true" focusable="false"><use href="#i-copy"></use></svg>Copiar A:P</button>
@@ -1007,7 +1016,32 @@ Horário disponível para atendimento:</textarea>
           </div>
         </section>
 
-        <section class="ck-ferr-painel" data-cockpit-tool-panel="evolucao" aria-labelledby="cockpit-updates-heading" hidden>
+        <section class="ck-ferr-painel" data-cockpit-tool-panel="sebrae-historico" aria-labelledby="sebrae-historico-heading" hidden>
+          <h2 id="sebrae-historico-heading" class="sr-only">Histórico de importações do Dashboard Sebrae</h2>
+          <div id="sebrae-historico-kpis" class="ck-kpis" role="group" aria-label="Resumo do histórico do Dashboard Sebrae"></div>
+          <div class="ck-barra-ferr">
+            <label class="ck-campo"><span class="ck-campo__rotulo">Tipo</span><select class="ck-entrada ck-entrada--sm" id="sebrae-historico-filtro" data-on-change="filtrarHistoricoSebrae"><option value="">Todas</option><option value="importacao">Importações</option><option value="busca">Buscas</option></select></label>
+            <span id="sebrae-historico-status" class="ck-barra-ferr__nota" role="status" aria-live="polite">Carregando…</span>
+          </div>
+          <div class="ck-dividido">
+            <div class="ck-dividido__lista">
+              <table class="ck-tabela ck-tabela--cards" id="sebrae-historico-lista">
+                <thead><tr><th scope="col">Data</th><th scope="col">Tipo</th><th scope="col">Arquivo</th><th scope="col">O que mudou</th><th scope="col" class="ck-th--dir">Chamados</th></tr></thead>
+                <tbody id="sebrae-historico-lista-corpo"></tbody>
+              </table>
+            </div>
+            <aside class="ck-dividido__detalhe" id="sebrae-historico-detalhe" aria-label="Detalhes do registro selecionado">
+              <div class="ck-det__cab"><div class="ck-det__linha"><span class="ck-det__titulo" id="sebrae-historico-detalhe-titulo">—</span><span id="sebrae-historico-detalhe-tag"></span></div><span class="ck-det__sub ck-mono" id="sebrae-historico-detalhe-sub">Selecione um registro.</span></div>
+              <div class="ck-det__corpo">
+                <dl class="ck-pares" id="sebrae-historico-detalhe-pares"></dl>
+                <div id="sebrae-historico-detalhe-grupos"></div>
+                <div class="ck-nota" id="sebrae-historico-detalhe-nota" data-status="alerta" hidden><svg class="ck-ico" aria-hidden="true" focusable="false"><use href="#i-alerta"></use></svg><span id="sebrae-historico-detalhe-nota-texto"></span></div>
+              </div>
+            </aside>
+          </div>
+        </section>
+
+        <section class="ck-ferr-painel" data-cockpit-tool-panel="evolucao"aria-labelledby="cockpit-updates-heading" hidden>
           <h2 id="cockpit-updates-heading" class="sr-only">Evolução das atualizações</h2>
           <div class="ck-barra-ferr">
             <p id="cockpit-updates-status" class="ck-barra-ferr__nota" role="status" aria-live="polite">Carregando…</p>

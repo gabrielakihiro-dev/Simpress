@@ -15,6 +15,7 @@
     "historico-planilhas": ["Histórico planilhas", "Atualizações de planilhas já comparadas e salvas localmente."],
     evolucao: ["Evolução das atualizações", "Variação entre as duas últimas atualizações de inventário."],
     unidades: ["Catálogo de unidades", "Unidades Sebrae cadastradas para entrega e retirada."],
+    "sebrae-historico": ["Histórico de importações do Dashboard Sebrae", "Importações do Dashboard e buscas de chamados novos, com o que mudou em cada uma."],
   };
   const relationLabels = {
     conferida: "Conferida", divergente: "Divergente", somente_simpress: "Só Simpress",
@@ -1659,6 +1660,7 @@
     if (tool === "historico-planilhas") await loadHistory();
     if (tool === "evolucao") await loadEvolution();
     if (tool === "unidades") await loadUnits();
+    if (tool === "sebrae-historico") await app.carregarPainelHistoricoSebrae?.();
   }
 
   // Voltar: retorna ao painel aberto antes; sem anterior (ou com restoreFocus=false) fecha para a tela principal.
