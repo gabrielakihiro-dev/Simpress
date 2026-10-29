@@ -12,6 +12,7 @@
     ambas: "Ambas as rotinas",
     login: "Abrir Chrome para login",
     sebrae: "Chamados novos Sebrae",
+    dashboard: "Dashboard + chamados novos Sebrae",
   });
   const STATUS = Object.freeze({
     em_andamento: "Em andamento",
@@ -639,7 +640,7 @@
     acrescentarLinhas(dados.log);
     atualizarBotoes();
     // A leitura dos chamados novos acabou: a lista da tela já pode mostrar o resultado.
-    if (estavaAtivo && !estado.emAndamento && rotinaAnterior === "sebrae") app.carregarNovosSebrae?.();
+    if (estavaAtivo && !estado.emAndamento && (rotinaAnterior === "sebrae" || rotinaAnterior === "dashboard")) app.carregarNovosSebrae?.();
     const ultimaId = dados.ultima?.id || "";
     if (ultimaId !== estado.ultimaExecucaoId || estavaAtivo !== estado.emAndamento) {
       estado.ultimaExecucaoId = ultimaId;
