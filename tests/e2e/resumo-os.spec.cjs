@@ -66,16 +66,21 @@ async function installSummaryRoutes(page, { links = new Map(), onReportRequest =
   });
 }
 
+// A tabela de OS vive no painel Chamados (F5): "#cockpit-tickets-os .ck-os".
+const SECAO = "#cockpit-tickets-os .ck-os";
+
+async function openChamados(page) {
+  // Chamados fica na barra principal; abaixo de 1200px só o menu Ferramentas o oferece.
+  const naBarra = await page.locator("#btn-acompanhamento-chamados").isVisible();
+  if (!naBarra) await page.locator("#cockpit-tools-trigger").click();
+  await page.locator(naBarra ? "#btn-acompanhamento-chamados" : "#btn-chamados-menu").click();
+  await expect(page.locator("#cockpit-tool-panels")).toBeVisible();
+}
+
 async function selectSummary(page) {
-  const sidebarButton = page.locator("#btn-sidebar-open");
-  const shell = page.locator("#simpress-app-shell");
-  if (await sidebarButton.isVisible() && await shell.getAttribute("data-sidebar-open") !== "true") {
-    await sidebarButton.click();
-    await expect(shell).toHaveAttribute("data-sidebar-open", "true");
-  }
-  await page.locator("#tab-retirada-entrega").click();
-  await expect(page.locator("#resumo-os-equipamento")).toBeVisible();
-  await expect(page.locator("#resumo-os-equipamento")).toContainText(" OS · ");
+  await openChamados(page);
+  await expect(page.locator(SECAO)).toBeVisible();
+  await expect(page.locator(SECAO)).toContainText(" OS · ");
 }
 
 async function openSummary(page) {
@@ -84,12 +89,12 @@ async function openSummary(page) {
   await selectSummary(page);
 }
 
-test("Resumo associa OS aos chamados UTIC com prefixo anual e preserva dados do chamado", async ({ page }) => {
+test("Chamados associa OS aos chamados UTIC com prefixo anual e preserva dados do chamado", async ({ page }) => {
   const links = new Map();
   await installSummaryRoutes(page, { links });
   await openSummary(page);
 
-  const section = page.locator("#resumo-os-equipamento");
+  const section = page.locator(SECAO);
   await expect(section).toContainText("7285072");
   // Uma linha por OS (Oracle e Simpress unidas), na mesma tabela (no mobile o CSS a apresenta como cards).
   const rows = page.locator("#ck-os-tabela tbody tr");
@@ -170,7 +175,7 @@ test("Resumo associa OS aos chamados UTIC com prefixo anual e preserva dados do 
     .toContainText("Solicito suporte técnico.");
 });
 
-test("Resumo carrega as OS uma vez quando o painel responde depois da abertura", async ({ page }) => {
+test("Chamados carrega as OS uma vez por abertura, mesmo com o painel da Home lento", async ({ page }) => {
   let reportRequests = 0;
   await installSummaryRoutes(page, {
     onReportRequest: async route => {
@@ -178,19 +183,27 @@ test("Resumo carrega as OS uma vez quando o painel responde depois da abertura",
       await route.fulfill({ json: reportWith() });
     },
   });
-  // A slow panel keeps "Resumo do parque" hidden, so opening the tab requests it again.
+  // Um /api/painel lento não pode disparar nova carga das OS (só a abertura do painel Chamados carrega).
   await page.route("**/api/painel", async route => {
     await new Promise(resolve => setTimeout(resolve, 1500));
     await route.fallback();
   });
   await page.goto("/");
   await selectSummary(page);
-  await expect(page.locator("#resumo-os-equipamento")).toBeVisible({ timeout: 10000 });
+  await expect(page.locator(SECAO)).toBeVisible({ timeout: 10000 });
   await page.waitForTimeout(800);
   expect(reportRequests).toBe(1);
+  // Cada nova abertura do painel faz uma única nova carga (a tabela já montada é atualizada, não duplicada).
+  await page.keyboard.press("Escape");
+  await expect(page.locator("#cockpit-tool-panels")).toBeHidden();
+  await openChamados(page);
+  await expect.poll(() => reportRequests).toBe(2);
+  await page.waitForTimeout(500);
+  expect(reportRequests).toBe(2);
+  await expect(page.locator(SECAO)).toHaveCount(1);
 });
 
-test("Resumo atualiza após mudanças e ignora respostas antigas", async ({ page }) => {
+test("Chamados atualiza após mudanças e ignora respostas antigas", async ({ page }) => {
   let report = reportWith(["7285070"]);
   let reportRequests = 0;
   let delayedRequestNumber = null;
@@ -211,7 +224,7 @@ test("Resumo atualiza após mudanças e ignora respostas antigas", async ({ page
       hostname_candidatos: [] }),
   });
   await openSummary(page);
-  const section = page.locator("#resumo-os-equipamento");
+  const section = page.locator(SECAO);
 
   userName = "usuario.atualizado";
   await page.evaluate(() => document.dispatchEvent(new CustomEvent("simpress:usuarios-equipamento-atualizados")));
@@ -236,4 +249,151 @@ test("Resumo atualiza após mudanças e ignora respostas antigas", async ({ page
   await page.waitForTimeout(350);
   await expect(section).toContainText("7285082");
   await expect(section).not.toContainText("7285081");
+});
+
+function reportComRelacoes() {
+  return {
+    snapshot_id: "snap-1",
+    resumo: { series_total: 3, conferidas: 1, divergentes: 0, somente_oracle: 1, somente_simpress: 0, sem_os: 1 },
+    chamados: [
+      {
+        serie: "REL-CONF-1", relacao: "conferida",
+        simpress: { ordens_servico: ["9001"] },
+        oracle: [{ solicitacao: "R-1", ordem_servico: "9001", descricao: "Troca de bateria." }],
+      },
+      {
+        serie: "REL-SOR-2", relacao: "somente_oracle",
+        simpress: { ordens_servico: [] },
+        oracle: [{ solicitacao: "R-2", ordem_servico: "9002", descricao: "Tela quebrada." }],
+      },
+      { serie: "REL-SEMOS-3", relacao: "sem_os", simpress: { ordens_servico: [] }, oracle: [] },
+    ],
+  };
+}
+
+test("Chamados filtra a tabela de OS por Relação e busca, conta séries sem OS e salva o UTIC com filtro ativo", async ({ page }) => {
+  const links = new Map();
+  await installSummaryRoutes(page, { links, onReportRequest: route => route.fulfill({ json: reportComRelacoes() }) });
+  await openSummary(page);
+
+  const section = page.locator(SECAO);
+  const rows = page.locator("#ck-os-tabela tbody tr[data-serial]");
+  const visible = page.locator("#ck-os-tabela tbody tr[data-serial]:visible");
+  const status = section.locator(".ticket-summary-status");
+  // A busca é a do painel; a tabela não cria a própria.
+  await expect(page.locator("#cockpit-tickets-os #ck-os-busca")).toHaveCount(0);
+  await expect(page.locator("#cockpit-tickets-kpis")).toContainText("Sem OS");
+  await expect(status).toHaveText("2 OS · 3 séries (1 sem OS)");
+  await expect(rows).toHaveCount(3);
+  const semOs = page.locator("#ck-os-tabela tbody tr[data-sem-os]");
+  await expect(semOs).toHaveCount(1);
+  await expect(semOs).toHaveAttribute("data-serial", "REL-SEMOS-3");
+  await expect(semOs.locator('td[data-label="OS"]')).toHaveText("Sem OS");
+  await expect(semOs.locator("input")).toHaveCount(0);
+
+  const relation = page.locator("#cockpit-tickets-relation");
+  await relation.selectOption("somente_oracle");
+  await expect(visible).toHaveCount(1);
+  await expect(visible).toHaveAttribute("data-serial", "REL-SOR-2");
+  await expect(status).toHaveText("1 de 2 OS · 1 série");
+
+  await relation.selectOption("sem_os");
+  await expect(visible).toHaveCount(1);
+  await expect(visible).toHaveAttribute("data-serial", "REL-SEMOS-3");
+  await expect(status).toHaveText("0 de 2 OS · 1 série (1 sem OS)");
+
+  await relation.selectOption("todos");
+  await expect(visible).toHaveCount(3);
+  const search = page.locator("#cockpit-tickets-search");
+  await search.fill("9001");
+  await expect(visible).toHaveCount(1);
+  await expect(visible).toHaveAttribute("data-serial", "REL-CONF-1");
+  await search.fill("semos");
+  await expect(visible).toHaveCount(1);
+  await expect(visible).toHaveAttribute("data-serial", "REL-SEMOS-3");
+  // Busca e Relação se combinam.
+  await search.fill("REL-");
+  await relation.selectOption("conferida");
+  await expect(visible).toHaveCount(1);
+  await expect(visible).toHaveAttribute("data-serial", "REL-CONF-1");
+  await search.fill("nao-existe");
+  await expect(visible).toHaveCount(0);
+  await search.fill("");
+  await relation.selectOption("todos");
+  await expect(visible).toHaveCount(3);
+  await expect(status).toHaveText("2 OS · 3 séries (1 sem OS)");
+
+  // Salvar o UTIC com um filtro ativo mantém o filtro depois que a tabela é recriada.
+  await relation.selectOption("somente_oracle");
+  await expect(visible).toHaveCount(1);
+  const slot = visible.locator(".ck-os-fonte").filter({ has: page.getByLabel(/fonte Oracle/) });
+  const year = new Date().getFullYear();
+  await slot.locator("input.ticket-os-link-input").fill("4321");
+  await slot.getByRole("button", { name: "Salvar" }).click();
+  await expect(status).toContainText(`Vínculo salvo: UTIC-${year}-4321.`);
+  expect([...links.values()].map(item => [item.serie, item.os, item.numero])).toEqual([["REL-SOR-2", "9002", "4321"]]);
+  await expect(visible).toHaveCount(1);
+  await expect(visible.locator("input.ticket-os-link-input").first()).toHaveValue("4321");
+});
+
+test("Chamados só pede a linha do tempo ao expandir o Andamento da série", async ({ page }) => {
+  const timelineRequests = [];
+  await installSummaryRoutes(page, { onReportRequest: route => route.fulfill({ json: reportComRelacoes() }) });
+  await page.route("**/api/operacoes/chamados/linha-do-tempo/**", route => {
+    timelineRequests.push(new URL(route.request().url()));
+    return route.fulfill({ json: { eventos: [{ tipo: "Atualização", atualizado_em: "2026-10-01 10:00", mudancas: [{ campo: "status", anterior: "Aberta", atual: "Encerrada" }] }] } });
+  });
+  await openSummary(page);
+  await page.waitForTimeout(300);
+  expect(timelineRequests).toHaveLength(0);
+  await expect(page.locator("tr[data-andamento]")).toHaveCount(0);
+
+  const toggle = page.locator('.ck-os__andamento-btn[data-serie="REL-CONF-1"]');
+  await expect(toggle).toHaveAttribute("aria-expanded", "false");
+  await toggle.click();
+  await expect(toggle).toHaveAttribute("aria-expanded", "true");
+  const detail = page.locator('tr[data-andamento="REL-CONF-1"]');
+  await expect(detail).toBeVisible();
+  await expect(toggle).toHaveAttribute("aria-controls", await detail.getAttribute("id"));
+  await expect(detail).toContainText("Andamento registrado");
+  await expect(detail).toContainText("status: Aberta → Encerrada");
+  expect(timelineRequests).toHaveLength(1);
+  expect(timelineRequests[0].pathname).toBe("/api/operacoes/chamados/linha-do-tempo/REL-CONF-1");
+  expect(timelineRequests[0].searchParams.get("snapshot_id")).toBe("snap-1");
+
+  // Filtrar por outra série esconde a linha de andamento junto com a série.
+  await page.locator("#cockpit-tickets-relation").selectOption("somente_oracle");
+  await expect(detail).toBeHidden();
+  await page.locator("#cockpit-tickets-relation").selectOption("todos");
+  await expect(detail).toBeVisible();
+
+  await toggle.click();
+  await expect(toggle).toHaveAttribute("aria-expanded", "false");
+  await expect(page.locator("tr[data-andamento]")).toHaveCount(0);
+  await toggle.click();
+  await expect(page.locator('tr[data-andamento="REL-CONF-1"]')).toBeVisible();
+  await expect.poll(() => timelineRequests.length).toBe(2);
+});
+
+test("OS deste equipamento abre Chamados já filtrado pela série", async ({ page }, testInfo) => {
+  test.skip(testInfo.project.name === "mobile", "o atalho vive na aba Transporte do desktop");
+  await installSummaryRoutes(page, { onReportRequest: route => route.fulfill({ json: reportComRelacoes() }) });
+  await page.goto("/");
+  await expect(page.locator("#stat-equipamentos")).toHaveText("1");
+  await page.locator("#tab-retirada-entrega").click();
+  // Simula o equipamento selecionado no Transporte (o preenchimento real vem da Home).
+  await page.evaluate(() => {
+    document.querySelector(".ck-selecionado")?.setAttribute("data-state", "selected");
+    document.getElementById("transfer-serial").textContent = "rel-sor-2";
+  });
+  const link = page.locator("#ck-link-os");
+  await expect(link).toBeVisible();
+  expect(await link.evaluate(node => node.tagName)).toBe("BUTTON");
+  await link.click();
+  await expect(page.locator("#cockpit-tool-panels")).toBeVisible();
+  await expect(page.locator("#cockpit-tickets-search")).toHaveValue("REL-SOR-2");
+  await expect(page.locator(SECAO)).toContainText(" OS · ");
+  const visible = page.locator("#ck-os-tabela tbody tr[data-serial]:visible");
+  await expect(visible).toHaveCount(1);
+  await expect(visible).toHaveAttribute("data-serial", "REL-SOR-2");
 });
