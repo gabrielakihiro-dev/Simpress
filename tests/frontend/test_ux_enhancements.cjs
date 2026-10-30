@@ -95,6 +95,13 @@ test("modified function keys, typing and open dialogs keep their normal behavior
   assert.equal(ux.shortcutAction({ key: "F6", shiftKey: true }), null);
   assert.equal(ux.shortcutAction({ key: "F7" }, { typing: true }), null);
   assert.equal(ux.shortcutAction({ key: "F8" }, { modalOpen: true }), null);
+  assert.equal(ux.shortcutAction({ key: "F1" }, { typing: true }), null);
+  assert.equal(ux.shortcutAction({ key: "F9" }, { modalOpen: true }), null);
+});
+
+test("F9 abre/fecha o Assistente mesmo com o cursor num campo de texto", () => {
+  assert.equal(ux.shortcutAction({ key: "F9" }, { typing: true }), "tool-assistente");
+  assert.equal(ux.shortcutAction({ key: "F9", ctrlKey: true }, { typing: true }), null);
 });
 
 test("tools menu closes for outside clicks and item selection, not its trigger", () => {

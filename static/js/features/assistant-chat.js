@@ -1,4 +1,4 @@
-/** Assistente: conversa com a IA do Simpress (OpenRouter, chamada pelo servidor local) pelas rotas /api/assistente/*, no painel F9 do Cockpit. */
+/** Assistente: conversa com a IA do Simpress (OpenRouter, chamada pelo servidor local) pelas rotas /api/assistente/*, no chat flutuante (F9). */
 (function (root, factory) {
   if (typeof module === "object" && module.exports) module.exports = factory;
   else (root.SimpressFeatures = root.SimpressFeatures || {}).assistantChat = factory;
@@ -92,7 +92,7 @@
 
   function falar(texto) {
     const sintese = window.speechSynthesis;
-    if (!vozLigada || !sintese || !texto.trim()) return;
+    if (!vozLigada || !sintese || !texto.trim() || !painelVisivel()) return; // resposta que chega com o chat fechado não fala
     const voz = vozPortuguesa();
     if (!voz) {
       mostrarStatus("Não há voz em português instalada neste computador. Instale uma nos idiomas do Windows.");
@@ -193,8 +193,7 @@
   }
 
   function painelVisivel() {
-    const painel = document.querySelector('[data-cockpit-tool-panel="assistente"]');
-    return Boolean(painel && !painel.hidden && !byId("cockpit-tool-panels")?.hidden);
+    return !byId("assistente-widget").hidden;
   }
 
   function mostrarStatus(texto, oferecerNovaTentativa = false) {
@@ -844,7 +843,28 @@
       mostrarStatus(error?.message || DESLIGADO, true);
     }
     atualizarControles();
-    if (pendente || document.activeElement === byId("assistente-tentar") || !document.activeElement || document.activeElement === document.body) focarProximo();
+    const foco = document.activeElement;
+    if (pendente || !foco || !byId("assistente-widget").contains(foco) || foco === byId("assistente-tentar")) focarProximo();
+  }
+
+  // Abre ou fecha o chat flutuante (ícone do topbar, F9, botão X e Esc).
+  function alternarAssistente() {
+    const widget = byId("assistente-widget");
+    const botao = byId("btn-assistente");
+    if (widget.hidden) {
+      widget.hidden = false;
+      botao.setAttribute("aria-expanded", "true");
+      atualizarGlobo();
+      focarProximo();
+      void carregarAssistente();
+      return;
+    }
+    pararFala();
+    if (gravando) cancelarGravacao();
+    const focoDentro = widget.contains(document.activeElement);
+    widget.hidden = true;
+    botao.setAttribute("aria-expanded", "false");
+    if (focoDentro) botao.focus();
   }
 
   function paraWav(amostras) {
@@ -1041,7 +1061,7 @@
     focarProximo();
   }
 
-  // Enter envia e Shift+Enter quebra a linha; com ação pendente, Esc cancela em vez de fechar o painel.
+  // Enter envia e Shift+Enter quebra a linha; com ação pendente, Esc cancela a ação; sem nada em andamento, Esc fecha o chat.
   function teclaAssistente(event) {
     if (event.key === "Escape" && gravando) {
       event.preventDefault();
@@ -1052,6 +1072,9 @@
     } else if (event.key === "Escape" && pendente && !ocupado) {
       event.preventDefault();
       void cancelarPendenteAssistente();
+    } else if (event.key === "Escape") {
+      event.preventDefault();
+      alternarAssistente();
     } else if (event.key === "Enter" && !event.shiftKey && !event.isComposing && event.target?.id === "assistente-texto") {
       event.preventDefault();
       void enviarMensagemAssistente();
@@ -1059,7 +1082,7 @@
   }
 
   return {
-    carregarAssistente, enviarMensagemAssistente, confirmarPendenteAssistente, cancelarPendenteAssistente, cancelarEnvioAssistente,
+    carregarAssistente, alternarAssistente, enviarMensagemAssistente, confirmarPendenteAssistente, cancelarPendenteAssistente, cancelarEnvioAssistente,
     novaConversaAssistente, contarMensagemAssistente, teclaAssistente, alternarGravacaoAssistente, alternarVozAssistente,
     alternarInstrucoesAssistente, alternarBuscaWebAssistente, contarInstrucoesAssistente, salvarInstrucoesAssistente, limparInstrucoesAssistente,
     anexarArquivoAssistente, removerAnexoAssistente,
