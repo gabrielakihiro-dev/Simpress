@@ -113,7 +113,7 @@ Chamado que estava aberto na importação anterior e agora está `FINALIZADO` (D
 
 ### Enviar ao SharePoint (rotina `enviar`)
 
-Único ponto em que algo é gravado no SharePoint, autorizado pelo usuário em 29/10/2026. Passos e salvaguardas (Duplicata, conferência, backup dos 20 últimos em `data/state/sebrae_backups/`, `Replace`) estão em `docs/operacao/automacao-chrome.md`. Nome fixo do arquivo: `Dashboard Operacional_SEBRAE.xlsx` (sem "(atualizado)").
+Único ponto em que algo é gravado no SharePoint, autorizado pelo usuário em 29/10/2026. Passos e salvaguardas (Duplicata, conferência, backup dos 20 últimos em `data/state/sebrae_backups/`, `Replace`) estão em `docs/operacao/automacao-chrome.md`. Nome fixo do arquivo: `Dashboard Operacional_SEBRAE.xlsx` (sem "(atualizado)"). Antes de duplicar, a rotina registra no log quantas cópias já existem na pasta e, se passar de 5, avisa para apagar as antigas à mão (nunca bloqueia o envio nem apaga nada).
 
 Importar um Dashboard novo (inclusive por `Baixar, importar e buscar`) **apaga** a saída guardada em `data/state/sebrae_dashboard_saida/`: ela vinha da importação anterior e subi-la sobreporia chamados que entraram no SharePoint depois. Sem arquivo, `Enviar ao SharePoint` recusa com "Use Atualizar Dashboard antes"; gere a saída de novo.
 
