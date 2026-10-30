@@ -8,7 +8,7 @@ import unittest
 import zipfile
 from contextlib import redirect_stdout
 from pathlib import Path
-from unittest.mock import patch
+from unittest.mock import MagicMock, patch
 
 from scripts import automacao_rotinas_chrome as automacao
 
@@ -57,18 +57,17 @@ class ChromeAutomationHelpersTests(unittest.TestCase):
         with opener, self.assertRaisesRegex(automacao.RotinaErro, "HTTP 422.*arquivo inválido"):
             automacao.importar_dashboard_no_site(arquivo)
 
-    def test_arquivo_final_dashboard_picks_the_newest_download_and_fails_without_one(self):
-        with patch.object(automacao, "pastas_download_chrome", return_value=[self.root]):
+    def test_arquivo_final_dashboard_uses_the_site_output_and_ignores_downloads(self):
+        saida = self.root / "saida"
+        downloads = self.root / "downloads"
+        downloads.mkdir()
+        (downloads / automacao.DASHBOARD_FINAL).write_bytes(b"PK")  # cópia baixada do SharePoint: nunca é o final
+        with patch.object(automacao, "DASHBOARD_SAIDA_DIR", saida), patch.object(automacao, "pastas_download_chrome", return_value=[downloads]):
             with self.assertRaisesRegex(automacao.RotinaErro, "Atualizar Dashboard"):
                 automacao.arquivo_final_dashboard()
-            velho = self.root / automacao.DASHBOARD_FINAL
-            novo = self.root / "Dashboard Operacional_SEBRAE (atualizado) (1).xlsx"
-            for arquivo, instante in ((velho, 1_000_000), (novo, 2_000_000)):
-                with zipfile.ZipFile(arquivo, "w") as xlsx:
-                    xlsx.writestr("a", "b")
-                os.utime(arquivo, (instante, instante))
-            (self.root / "Dashboard Operacional_SEBRAE.xlsx").write_bytes(b"PK")  # a cópia baixada do Excel não é o final
-            self.assertEqual(automacao.arquivo_final_dashboard(), novo)
+            saida.mkdir()
+            (saida / automacao.DASHBOARD_FINAL).write_bytes(b"PK final")
+            self.assertEqual(automacao.arquivo_final_dashboard(), saida / automacao.DASHBOARD_FINAL)
 
     def _resultado(self, estado: str, pasta: str, status: str) -> None:
         destino = self.root / estado / pasta
@@ -447,102 +446,245 @@ class PlaywrightAusenteTests(unittest.TestCase):
         self.assertNotIn("Traceback", saida.getvalue())
 
 
-class FakeLocator:
-    def __init__(self, frame, regex):
-        self.frame, self.regex = frame, regex
+class DashboardDownloadDaPastaTests(unittest.TestCase):
+    def test_row_name_matches_only_the_original_file(self):
+        for texto in ("Dashboard Operacional_SEBRAE.xlsx", "Dashboard Operacional_SEBRAE", "dashboard operacional_sebrae.XLSX"):
+            self.assertTrue(automacao._NOME_DASHBOARD_NA_LISTA.match(texto), texto)
+        for texto in ("Dashboard Operacional_SEBRAE (1).xlsx", "Dashboard Operacional_SEBRAE - Cópia.xlsx", "Dashboard Operacional_SEBRAE (atualizado).xlsx"):
+            self.assertFalse(automacao._NOME_DASHBOARD_NA_LISTA.match(texto), texto)
 
-    def _achados(self):
-        return [texto for texto in self.frame.visiveis if self.regex.search(texto)]
+    def test_menu_labels_in_portuguese_and_english(self):
+        for texto in ("Mais ações", "Mais Ações", "More actions"):
+            self.assertTrue(automacao._MENU_MAIS_ACOES.search(texto), texto)
+        for texto in ("Baixar", "  baixar ", "Download"):
+            self.assertTrue(automacao._MENU_BAIXAR.match(texto), texto)
+        for texto in ("Baixar como PDF", "Imprimir", "Duplicata"):
+            self.assertFalse(automacao._MENU_BAIXAR.match(texto), texto)
 
-    def filter(self, visible=True):
-        return self
+    def test_downloaded_name_pattern_accepts_chrome_copies_but_not_the_site_or_zip_names(self):
+        for nome in ("Dashboard Operacional_SEBRAE.xlsx", "Dashboard Operacional_SEBRAE (2).xlsx"):
+            self.assertTrue(automacao._DASHBOARD_BAIXADO.fullmatch(nome), nome)
+        for nome in ("Dashboard Operacional_SEBRAE (atualizado).xlsx", "Dashboard Operacional_SEBRAE.zip"):
+            self.assertFalse(automacao._DASHBOARD_BAIXADO.fullmatch(nome), nome)
 
-    def count(self):
-        return len(self._achados())
+    def test_download_clicks_row_menu_then_download_and_returns_the_file(self):
+        page = MagicMock()
+        linha = page.get_by_role.return_value.filter.return_value.first
+        chamado = {}
 
-    @property
-    def first(self):
-        return self
-
-    def wait_for(self, state="visible", timeout=0):
-        if not self._achados():
-            raise AssertionError(f"rótulo não apareceu: {self.regex.pattern}")
-
-    def click(self):
-        achados = self._achados()
-        if not achados:
-            raise AssertionError(f"rótulo não apareceu: {self.regex.pattern}")
-        self.frame.cliques.append(achados[0])
-        self.frame.visiveis = self.frame.proximos.get(achados[0], self.frame.visiveis)
-
-
-class FakeFrame:
-    """Frame do Excel Online: `visiveis` são os textos na tela; `proximos` diz o que aparece após clicar."""
-
-    def __init__(self, visiveis, proximos=None):
-        self.visiveis, self.proximos, self.cliques = list(visiveis), proximos or {}, []
-
-    def get_by_text(self, regex):
-        return FakeLocator(self, regex)
-
-
-class FakePage:
-    def __init__(self, url, frames):
-        self.url, self.frames = url, frames
-
-
-IDIOMAS = {
-    "en": ("File", "Create a Copy", "Download a Copy"),
-    "pt-BR": ("Arquivo", "Criar uma Cópia", "Baixar uma Cópia"),
-}
-URL_EXCEL = "https://simpress-my.sharepoint.com/:x:/r/personal/x/_layouts/15/doc2.aspx"
-
-
-def frame_do_excel(idioma):
-    arquivo, copia, baixar = IDIOMAS[idioma]
-    return FakeFrame([arquivo, "Home"], {arquivo: [copia, "Save As"], copia: [baixar, "Save a Copy"]})
-
-
-class DashboardMenuLabelsTests(unittest.TestCase):
-    def test_menu_matches_english_and_portuguese_excel_online(self):
-        for texto in ("File", "Arquivo", "  Arquivo "):
-            self.assertTrue(automacao._MENU_ARQUIVO.match(texto), texto)
-        for texto in ("Create a Copy", "Criar uma Cópia", "criar uma copia"):
-            self.assertTrue(automacao._MENU_CRIAR_COPIA.match(texto), texto)
-        for texto in ("Download a Copy", "Baixar uma Cópia", "baixar uma copia"):
-            self.assertTrue(automacao._MENU_BAIXAR_COPIA.match(texto), texto)
-        self.assertFalse(automacao._MENU_ARQUIVO.match("Arquivos recentes"))
-        self.assertFalse(automacao._MENU_ARQUIVO.match("Profile"))
-        self.assertFalse(automacao._MENU_BAIXAR_COPIA.match("Baixar como PDF"))
-
-    def test_login_is_detected_in_both_languages(self):
-        for idioma in IDIOMAS:
-            with self.subTest(idioma=idioma):
-                page = FakePage(URL_EXCEL, [FakeFrame([]), frame_do_excel(idioma)])
-                self.assertTrue(automacao.dashboard_logado(page))
-
-    def test_login_is_not_detected_without_the_file_menu_or_on_a_login_page(self):
-        sem_menu = FakePage(URL_EXCEL, [FakeFrame(["Sign in", "Entrar"])])
-        self.assertFalse(automacao.dashboard_logado(sem_menu))
-        for idioma in IDIOMAS:
-            with self.subTest(idioma=idioma):
-                self.assertFalse(automacao.dashboard_logado(FakePage("https://login.microsoftonline.com/x", [frame_do_excel(idioma)])))
-                self.assertFalse(automacao.dashboard_logado(FakePage("https://outro.com/", [frame_do_excel(idioma)])))
-
-    def test_download_copy_follows_the_menu_in_both_languages(self):
-        def exportar(page, origem, clicar, prefixo):
+        def exportar(pagina, origem, clicar, prefixo):
+            chamado["prefixo"] = prefixo
             clicar()
-            return Path("copia.xlsx")
+            return Path("Dashboard Operacional_SEBRAE.xlsx")
 
-        for idioma, rotulos in IDIOMAS.items():
-            with self.subTest(idioma=idioma), patch.object(automacao, "exportar_com_download", exportar), patch.object(automacao, "log"):
-                frame = frame_do_excel(idioma)
-                self.assertEqual(automacao.baixar_copia_dashboard(FakePage(URL_EXCEL, [frame])), Path("copia.xlsx"))
-                self.assertEqual(frame.cliques, list(rotulos))
+        with patch.object(automacao, "exportar_com_download", exportar), patch.object(automacao, "esperar_visivel", return_value=True), patch.object(automacao, "log"):
+            arquivo = automacao.baixar_dashboard_da_pasta(page)
 
-    def test_download_copy_without_the_file_menu_fails_clearly(self):
-        with self.assertRaises(automacao.RotinaErro):
-            automacao.baixar_copia_dashboard(FakePage(URL_EXCEL, [FakeFrame(["Home"])]))
+        self.assertEqual(arquivo, Path("Dashboard Operacional_SEBRAE.xlsx"))
+        self.assertIs(chamado["prefixo"], automacao._DASHBOARD_BAIXADO)
+        linha.hover.assert_called_once()
+        self.assertIs(linha.get_by_role.call_args.kwargs["name"], automacao._MENU_MAIS_ACOES)
+        self.assertEqual(linha.get_by_role.call_args.args, ("button",))
+        self.assertIs(page.get_by_role.call_args_list[-1].kwargs["name"], automacao._MENU_BAIXAR)
+        page.get_by_role.return_value.first.click.assert_called_once()
+
+    def test_download_rejects_a_zip(self):
+        with patch.object(automacao, "exportar_com_download", return_value=Path("pasta.zip")), patch.object(automacao, "esperar_visivel", return_value=True):
+            with self.assertRaisesRegex(automacao.RotinaErro, "não um .xlsx"):
+                automacao.baixar_dashboard_da_pasta(MagicMock())
+
+    def test_download_fails_clearly_when_the_file_is_not_in_the_folder(self):
+        with patch.object(automacao, "esperar_visivel", return_value=False):
+            with self.assertRaisesRegex(automacao.RotinaErro, "Não achei"):
+                automacao.baixar_dashboard_da_pasta(MagicMock())
+
+
+class EnviarDashboardTests(unittest.TestCase):
+    def _pagina(self, botoes):
+        """Página simulada cujo diálogo de nome repetido oferece só os botões de ``botoes``."""
+        page = MagicMock()
+        locators = {}
+
+        def get_by_role(role, name=None):
+            if role == "button" and name in (automacao._BOTAO_SUBSTITUIR, automacao._BOTAO_MANTER_AMBOS):
+                chave = "substituir" if name is automacao._BOTAO_SUBSTITUIR else "manter"
+                locators.setdefault(chave, MagicMock()).count.return_value = 1 if chave in botoes else 0
+                return locators[chave]
+            return MagicMock()
+
+        page.get_by_role.side_effect = get_by_role
+        page.locators = locators
+        return page
+
+    def _enviar(self, page, textos=("antes", "depois"), visivel=False):
+        with tempfile.TemporaryDirectory() as pasta:
+            arquivo = Path(pasta) / "Dashboard Operacional_SEBRAE.xlsx"
+            arquivo.write_bytes(b"x")
+            with patch.object(automacao, "esperar_visivel", return_value=True), patch.object(automacao, "visivel", return_value=visivel), \
+                    patch.object(automacao, "_texto_da_linha_do_dashboard", side_effect=list(textos) + [textos[-1]] * 200), \
+                    patch.object(automacao, "verificar_cancelamento"), patch.object(automacao, "log"), \
+                    patch.object(automacao, "_botao_enviar"):
+                automacao.enviar_arquivo_para_pasta(page, arquivo)
+
+    def test_menu_and_dialog_labels_in_portuguese_and_english(self):
+        for texto in ("Duplicata", "Duplicate", " duplicata "):
+            self.assertTrue(automacao._MENU_DUPLICATA.match(texto), texto)
+        for texto in ("Baixar", "Duplicar para outra pasta"):
+            self.assertFalse(automacao._MENU_DUPLICATA.match(texto), texto)
+        for texto in ("Replace", "Substituir"):
+            self.assertTrue(automacao._BOTAO_SUBSTITUIR.match(texto), texto)
+        for texto in ("Keep both", "Manter ambos"):
+            self.assertTrue(automacao._BOTAO_MANTER_AMBOS.match(texto), texto)
+            self.assertFalse(automacao._BOTAO_SUBSTITUIR.match(texto), texto)
+
+    def test_upload_clicks_replace_and_never_keep_both(self):
+        page = self._pagina({"substituir", "manter"})
+        self._enviar(page)
+        page.locators["substituir"].first.click.assert_called_once()
+        page.locators["manter"].first.click.assert_not_called()
+
+    def test_upload_refuses_when_only_keep_both_is_offered(self):
+        page = self._pagina({"manter"})
+        with self.assertRaisesRegex(automacao.RotinaErro, "Keep both"):
+            self._enviar(page)
+        page.locators["manter"].first.click.assert_not_called()
+
+    def test_upload_fails_clearly_when_the_dashboard_is_in_use(self):
+        page = self._pagina({"substituir"})
+        with self.assertRaisesRegex(automacao.RotinaErro, "em uso ou bloqueado"):
+            self._enviar(page, visivel=True)
+
+    def test_upload_fails_when_the_row_never_changes(self):
+        page = self._pagina({"substituir"})
+        with patch.object(automacao.time, "time", side_effect=[0, 1, 2, 3, 500, 500]):
+            with self.assertRaisesRegex(automacao.RotinaErro, "não mudou"):
+                self._enviar(page, textos=("igual",))
+
+    def test_duplicate_clicks_the_menu_and_waits_for_the_copy(self):
+        page = MagicMock()
+        contagens = iter([1, 1, 2])
+        with patch.object(automacao, "_linha_do_dashboard"), patch.object(automacao, "_abrir_mais_acoes") as abrir, \
+                patch.object(automacao, "_quantos_dashboards_na_lista", side_effect=lambda _p: next(contagens)), \
+                patch.object(automacao, "verificar_cancelamento"), patch.object(automacao, "log"):
+            automacao.duplicar_dashboard_na_pasta(page)
+        abrir.assert_called_once()
+        self.assertIs(page.get_by_role.call_args.kwargs["name"], automacao._MENU_DUPLICATA)
+        page.get_by_role.return_value.first.click.assert_called_once()
+
+    def test_duplicate_stops_without_overwriting_when_the_copy_does_not_appear(self):
+        page = MagicMock()
+        with patch.object(automacao, "_linha_do_dashboard"), patch.object(automacao, "_abrir_mais_acoes"), \
+                patch.object(automacao, "_quantos_dashboards_na_lista", return_value=1), \
+                patch.object(automacao.time, "time", side_effect=[0, 1, 99, 99]), \
+                patch.object(automacao, "verificar_cancelamento"), patch.object(automacao, "log"):
+            with self.assertRaisesRegex(automacao.RotinaErro, "não substituí"):
+                automacao.duplicar_dashboard_na_pasta(page)
+
+    def _estado(self, pasta: Path, conteudo: bytes, planilha: "bytes | None" = None):
+        from domains import sebrae_novos
+
+        caminhos = sebrae_novos.caminhos_padrao(pasta)
+        sha = sebrae_novos.salvar_planilha(sebrae_novos.caminho_planilha(caminhos), planilha if planilha is not None else conteudo)
+        sebrae_novos.salvar_existentes(caminhos.existentes, ["1"], "Dashboard Operacional_SEBRAE.xlsx", sha256=sha)
+
+    def test_precheck_accepts_the_file_that_was_imported(self):
+        with tempfile.TemporaryDirectory() as pasta:
+            baixado = Path(pasta) / "baixado.xlsx"
+            baixado.write_bytes(b"igual")
+            self._estado(Path(pasta), b"igual")
+            with patch.object(automacao, "DASHBOARD_SAIDA_DIR", Path(pasta) / "sebrae_dashboard_saida"):
+                automacao.conferir_dashboard_do_sharepoint(baixado)
+
+    def test_precheck_accepts_a_resaved_file_with_the_same_tickets(self):
+        with tempfile.TemporaryDirectory() as pasta:
+            baixado = Path(pasta) / "baixado.xlsx"
+            baixado.write_bytes(b"resalvo")
+            self._estado(Path(pasta), b"original")
+            mesmo = {"1": {"status": "EM ABERTO", "encerramento": ""}}
+            with patch.object(automacao, "DASHBOARD_SAIDA_DIR", Path(pasta) / "sebrae_dashboard_saida"), \
+                    patch("domains.sebrae_dashboard.ler_status_chamados", return_value=mesmo):
+                automacao.conferir_dashboard_do_sharepoint(baixado)
+
+    def test_precheck_aborts_when_the_sharepoint_file_changed(self):
+        with tempfile.TemporaryDirectory() as pasta:
+            baixado = Path(pasta) / "baixado.xlsx"
+            baixado.write_bytes(b"mudou")
+            self._estado(Path(pasta), b"original")
+            mapas = [{"1": {"status": "FINALIZADO", "encerramento": "01/01/2026 10:00"}}, {"1": {"status": "EM ABERTO", "encerramento": ""}}]
+            with patch.object(automacao, "DASHBOARD_SAIDA_DIR", Path(pasta) / "sebrae_dashboard_saida"), \
+                    patch("domains.sebrae_dashboard.ler_status_chamados", side_effect=mapas):
+                with self.assertRaisesRegex(automacao.RotinaErro, "mudou depois da importação; importe de novo"):
+                    automacao.conferir_dashboard_do_sharepoint(baixado)
+
+    def test_precheck_aborts_when_the_stored_copy_is_missing(self):
+        with tempfile.TemporaryDirectory() as pasta:
+            baixado = Path(pasta) / "baixado.xlsx"
+            baixado.write_bytes(b"outro")
+            self._estado(Path(pasta), b"original")
+            (Path(pasta) / "sebrae_dashboard_importado.xlsx").unlink()
+            with patch.object(automacao, "DASHBOARD_SAIDA_DIR", Path(pasta) / "sebrae_dashboard_saida"):
+                with self.assertRaisesRegex(automacao.RotinaErro, "importe de novo"):
+                    automacao.conferir_dashboard_do_sharepoint(baixado)
+
+    def test_precheck_aborts_when_nothing_was_imported(self):
+        with tempfile.TemporaryDirectory() as pasta:
+            baixado = Path(pasta) / "baixado.xlsx"
+            baixado.write_bytes(b"x")
+            with patch.object(automacao, "DASHBOARD_SAIDA_DIR", Path(pasta) / "sebrae_dashboard_saida"):
+                with self.assertRaisesRegex(automacao.RotinaErro, "não tem um Dashboard importado"):
+                    automacao.conferir_dashboard_do_sharepoint(baixado)
+
+    def test_backup_copies_the_downloaded_file_and_keeps_only_the_newest_twenty(self):
+        with tempfile.TemporaryDirectory() as pasta:
+            pasta = Path(pasta)
+            baixado = pasta / "baixado.xlsx"
+            baixado.write_bytes(b"conteudo")
+            backups = pasta / "sebrae_backups"
+            backups.mkdir()
+            for i in range(25):
+                (backups / f"Dashboard Operacional_SEBRAE_20200101_0000{i:02d}.xlsx").write_bytes(b"velho")
+            (backups / "outro.xlsx").write_bytes(b"nao mexer")
+            with patch.object(automacao, "DASHBOARD_BACKUPS_DIR", backups), patch.object(automacao, "log"):
+                novo = automacao.guardar_backup_do_dashboard(baixado)
+            self.assertEqual(novo.read_bytes(), b"conteudo")
+            self.assertEqual(baixado.read_bytes(), b"conteudo")
+            guardados = sorted(p.name for p in backups.glob("Dashboard Operacional_SEBRAE_*.xlsx"))
+            self.assertEqual(len(guardados), automacao.DASHBOARD_BACKUPS_MAX)
+            self.assertIn(novo.name, guardados)
+            self.assertNotIn("Dashboard Operacional_SEBRAE_20200101_000000.xlsx", guardados)
+            self.assertTrue((backups / "outro.xlsx").exists())
+
+    def test_routine_runs_duplicate_then_download_then_precheck_then_backup_then_upload(self):
+        ordem = []
+        page = MagicMock()
+        context = MagicMock()
+        with tempfile.TemporaryDirectory() as pasta:
+            arquivo = Path(pasta) / "Dashboard Operacional_SEBRAE.xlsx"
+            baixado = Path(pasta) / "baixado.xlsx"
+            with patch.object(automacao, "arquivo_final_dashboard", return_value=arquivo), patch.object(automacao, "nova_aba", return_value=page), \
+                    patch.object(automacao, "aguardar_login"), patch.object(automacao, "verificar_cancelamento"), \
+                    patch.object(automacao, "duplicar_dashboard_na_pasta", side_effect=lambda p: ordem.append("duplicata")), \
+                    patch.object(automacao, "baixar_dashboard_da_pasta", side_effect=lambda p: ordem.append("baixar") or baixado), \
+                    patch.object(automacao, "conferir_dashboard_do_sharepoint", side_effect=lambda b: ordem.append("conferir")), \
+                    patch.object(automacao, "guardar_backup_do_dashboard", side_effect=lambda b: ordem.append("backup")), \
+                    patch.object(automacao, "enviar_arquivo_para_pasta", side_effect=lambda p, a: ordem.append("enviar")), \
+                    redirect_stdout(io.StringIO()):
+                codigo = automacao.rodar_rotina_enviar(context)
+        self.assertEqual(codigo, 0)
+        self.assertEqual(ordem, ["duplicata", "baixar", "conferir", "backup", "enviar"])
+
+    def test_routine_does_not_upload_when_the_precheck_fails(self):
+        with tempfile.TemporaryDirectory() as pasta:
+            with patch.object(automacao, "arquivo_final_dashboard", return_value=Path(pasta) / "x.xlsx"), patch.object(automacao, "nova_aba"), \
+                    patch.object(automacao, "aguardar_login"), patch.object(automacao, "verificar_cancelamento"), \
+                    patch.object(automacao, "duplicar_dashboard_na_pasta"), patch.object(automacao, "baixar_dashboard_da_pasta"), \
+                    patch.object(automacao, "conferir_dashboard_do_sharepoint", side_effect=automacao.RotinaErro(automacao.MSG_SHAREPOINT_MUDOU)), \
+                    patch.object(automacao, "guardar_backup_do_dashboard") as backup, patch.object(automacao, "enviar_arquivo_para_pasta") as enviar, \
+                    patch.object(automacao, "registrar_erro"), redirect_stdout(io.StringIO()):
+                with self.assertRaisesRegex(automacao.RotinaErro, "importe de novo"):
+                    automacao.rodar_rotina_enviar(MagicMock())
+        backup.assert_not_called()
+        enviar.assert_not_called()
 
 
 if __name__ == "__main__":

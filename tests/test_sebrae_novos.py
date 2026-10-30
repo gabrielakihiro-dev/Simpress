@@ -48,10 +48,56 @@ class FormularioTest(unittest.TestCase):
         self.assertEqual((item["linha"]["K"], item["linha"]["L"], item["linha"]["N"], item["linha"]["E"]), ("ABC123", "Dell", "Curitiba", "7303022"))
         self.assertEqual(item["cruzamento"], {"status": "unico", "candidatos": 1})
 
+    def test_chamado_aberto_para_outra_pessoa_fica_vazio_e_avisa(self):
+        duas = REGISTROS + [{"nome": "Ícaro Gabriel Duarte Campos", "serie": "XYZ9", "modelo": "HP", "cidade": "Maringá"}]
+        para_outro = ChamadoSoftExpert(numero="UTIC-2026-1188", descricao="Abri para o icaro gabriel duarte campos, teclado.", solicitante="Camila Lopes")
+        item = novos.formulario([para_outro], duas, RELATORIO)[0]
+        self.assertEqual([item["linha"][c] for c in "EKLN"], ["", "", "", ""])
+        self.assertEqual((item["cruzamento"]["status"], item["outra_pessoa"]), ("ausente", "Ícaro Gabriel Duarte Campos"))
+        proprio = ChamadoSoftExpert(numero="UTIC-2026-1189", descricao="Camila Lopes sem rede", solicitante="Camila Lopes")
+        self.assertEqual(novos.formulario([proprio], duas, RELATORIO)[0]["outra_pessoa"], "")
+
     def test_sem_registros_fica_vazio_e_ausente(self):
         item = novos.formulario([CHAMADO], [], None)[0]
         self.assertEqual([item["linha"][c] for c in "EKLN"], ["", "", "", ""])
         self.assertEqual(item["cruzamento"]["status"], "ausente")
+
+
+class PreenchimentosTest(unittest.TestCase):
+    def aberto(self, usuario="Camila Lopes", **atuais):
+        return {"numero": "linha:2", "usuario": usuario, "automaticos": {"E": "", "K": "", "L": "", "N": "", **atuais}}
+
+    def test_nome_unico_preenche_serie_modelo_cidade_e_os(self):
+        self.assertEqual(
+            novos.preenchimentos([self.aberto()], REGISTROS, RELATORIO),
+            {"linha:2": {"K": "ABC123", "L": "Dell", "N": "Curitiba", "E": "7303022"}},
+        )
+
+    def test_so_preenche_o_que_esta_vazio_e_nao_mistura_com_outra_serie(self):
+        self.assertEqual(novos.preenchimentos([self.aberto(L="HP")], REGISTROS, RELATORIO)["linha:2"].keys(), {"K", "N", "E"})
+        self.assertEqual(novos.preenchimentos([self.aberto(K="abc123", L="Dell", N="Curitiba", E="1")], REGISTROS, RELATORIO), {})
+        outra = novos.preenchimentos([self.aberto(K="ZZZ999")], REGISTROS, RELATORIO)
+        self.assertNotIn("linha:2", outra)  # different serial: K, L and N stay; no OS known for it
+
+    def test_os_vem_da_serie_que_a_linha_ja_tem_mesmo_sem_nome(self):
+        self.assertEqual(novos.preenchimentos([self.aberto(usuario="", K="ABC123", L="Dell", N="X")], REGISTROS, RELATORIO), {"linha:2": {"E": "7303022"}})
+
+    def test_aberto_para_outra_pessoa_nao_preenche(self):
+        duas = REGISTROS + [{"nome": "Ícaro Gabriel Duarte Campos", "serie": "XYZ9", "modelo": "HP", "cidade": "Maringá"}]
+        item = {**self.aberto(), "descricao": "Aberto para Icaro Gabriel Duarte Campos"}
+        self.assertEqual(novos.preenchimentos([item], duas, RELATORIO), {})
+        com_serie = {**item, "automaticos": {"E": "", "K": "ABC123", "L": "", "N": ""}}
+        self.assertEqual(novos.preenchimentos([com_serie], duas, RELATORIO), {"linha:2": {"E": "7303022"}})  # serial already in the row still gives E
+        self.assertEqual(novos.preenchimentos([{**self.aberto(), "descricao": "Camila Lopes sem rede"}], duas, RELATORIO).keys(), {"linha:2"})
+
+    def test_estado_antigo_sem_usuario_nem_automaticos_nao_quebra(self):
+        self.assertEqual(novos.preenchimentos([{"numero": "UTIC-2026-0001", "titulo": "x", "valores": {}}], REGISTROS, RELATORIO), {})
+
+    def test_nome_ausente_ou_ambiguo_nao_preenche(self):
+        duplicado = REGISTROS + [{"nome": "Camila Lopes", "serie": "OUTRA1", "modelo": "HP", "cidade": "Maringá"}]
+        self.assertEqual(novos.preenchimentos([self.aberto()], duplicado, RELATORIO), {})
+        self.assertEqual(novos.preenchimentos([self.aberto(usuario="Fulano")], REGISTROS, RELATORIO), {})
+        self.assertEqual(novos.preenchimentos([self.aberto()], [], None), {})
 
 
 class ExportarTest(unittest.TestCase):

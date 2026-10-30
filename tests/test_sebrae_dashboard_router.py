@@ -1,4 +1,5 @@
 import base64
+import json
 import tempfile
 import unittest
 from pathlib import Path
@@ -13,7 +14,7 @@ from domains import sebrae_novos
 from domains.sebrae_chamados import ChamadoSoftExpert
 from routers.sebrae_dashboard import SebraeDashboardServices, create_sebrae_dashboard_router
 from tests.test_sebrae_dashboard import CABECALHO, planilha
-from tests.test_sebrae_dashboard_gravacao import montar
+from tests.test_sebrae_dashboard_gravacao import _antes_da_coluna_p, montar, texto
 from tests.test_sebrae_historico import planilha_com_status
 
 CHAMADO = ChamadoSoftExpert(
@@ -127,7 +128,9 @@ class RotasSebraeTest(RotasBase):
         resposta = self.cliente.post("/api/sebrae/dashboard/atualizar", json={"chamados": [MANUAL], "edicoes": [edicao]})
         self.assertEqual(resposta.status_code, 200, resposta.text)
         corpo = resposta.json()
-        self.assertEqual(corpo["arquivo"], "Dashboard Operacional_SEBRAE (atualizado).xlsx")
+        self.assertEqual(corpo["arquivo"], "Dashboard Operacional_SEBRAE.xlsx")
+        saida = sebrae_novos.caminho_saida(self.caminhos, corpo["arquivo"])
+        self.assertEqual(saida.read_bytes(), base64.b64decode(corpo["conteudo_base64"]))
         self.assertEqual({(g["numero"], g["tipo"]) for g in corpo["linhas"]}, {("UTIC-2026-1378", "novo"), ("UTIC-2026-0001", "alterado")})
         self.assertEqual([g.numero for g in G.chamados_para_editar(base64.b64decode(corpo["conteudo_base64"]))], ["UTIC-2026-1378"])
         self.assertEqual(sebrae_novos.caminho_planilha(self.caminhos).read_bytes(), guardada)
@@ -154,6 +157,18 @@ class RotasSebraeTest(RotasBase):
         resposta = self.cliente.post(url, json={"edicoes": [{"numero": "UTIC-2026-0001", "B": "REDE"}]})
         self.assertEqual(resposta.status_code, 200, resposta.text)
         self.assertEqual([(g["numero"], g["tipo"], g["celulas"]) for g in resposta.json()["linhas"]], [("UTIC-2026-0001", "alterado", ["B"])])
+
+    def test_atualizar_so_com_preenchimento_automatico_pelo_nome_da_coluna_i(self):
+        base = _antes_da_coluna_p(montar(("Sem chamado", "UTIC-2026-0002"), status=("EM ABERTO", "FINALIZADO")), 2, texto("I2", "Camila Lopes"))
+        estado = self.importar(base).json()["importado"]
+        self.assertEqual([(a["numero"], a["chamado"], a["usuario"]) for a in estado["abertos"]], [("linha:2", "Sem chamado", "Camila Lopes")])
+        self.assertEqual(estado["abertos"][0]["automaticos_sugeridos"], {"K": "ABC123", "L": "Dell", "N": "Curitiba", "E": "7303022"})
+        resposta = self.cliente.post("/api/sebrae/dashboard/atualizar", json={})
+        self.assertEqual(resposta.status_code, 200, resposta.text)
+        self.assertEqual([(g["numero"], g["tipo"], g["celulas"]) for g in resposta.json()["linhas"]], [("linha:2", "alterado", ["E", "K", "L", "N"])])
+        nada = self.importar(montar())  # no name in column I: nothing to fill, nothing sent
+        self.assertEqual(nada.json()["importado"]["abertos"][0]["automaticos_sugeridos"], {})
+        self.assertEqual(self.cliente.post("/api/sebrae/dashboard/atualizar", json={}).status_code, 422)
 
     def test_atualizar_edita_chamado_de_c_composto(self):
         self.importar(montar(("27371 / UTIC-2026-0094",), status=("EM ABERTO",)))
@@ -254,6 +269,40 @@ class HistoricoRotasTest(RotasBase):
     def test_historico_nao_guarda_texto_de_outras_colunas(self):
         self.importar(planilha_com_status([("UTIC-2026-0001", "EM ABERTO", None, "senha: Segredo123 CPF 123.456.789-09")]))
         self.assertNotIn("Segredo", self.caminhos.historico.read_text(encoding="utf-8"))
+
+
+class ArquivoRotasTest(RotasBase):
+    def arquivo(self):
+        return json.loads(sebrae_novos.caminho_arquivo(self.caminhos).read_text(encoding="utf-8"))
+
+    def test_importar_semeia_finalizados_e_arquiva_o_que_saiu_da_lista_de_abertos(self):
+        primeira = self.importar(montar())
+        self.assertTrue(primeira.json()["arquivo_ok"])
+        self.assertEqual(list(self.arquivo()["itens"]), ["UTIC-2026-0002"])  # already FINALIZADO in the first Dashboard
+        segunda = self.importar(montar(status=("FINALIZADO", "FINALIZADO")))
+        self.assertTrue(segunda.json()["arquivo_ok"])
+        itens = self.arquivo()["itens"]
+        self.assertEqual(sorted(itens), ["UTIC-2026-0001", "UTIC-2026-0002"])
+        self.assertEqual(itens["UTIC-2026-0001"]["ciclos"][0]["motivo"], "finalizado")
+        self.assertEqual(len(itens["UTIC-2026-0002"]["ciclos"]), 1)
+
+    def test_falha_do_arquivo_bloqueia_a_importacao_e_mantem_o_dashboard_anterior(self):
+        self.importar(montar())
+        antes = self.caminhos.existentes.read_bytes()
+        sebrae_novos.caminho_arquivo(self.caminhos).write_text("{ quebrado", encoding="utf-8")
+        resposta = self.importar(montar(status=("FINALIZADO", "FINALIZADO")))
+        self.assertEqual(resposta.status_code, 503)
+        self.assertIn("chamados encerrados", resposta.json()["detail"])
+        self.assertEqual(self.caminhos.existentes.read_bytes(), antes)
+        self.assertEqual(sebrae_novos.caminho_arquivo(self.caminhos).read_text(encoding="utf-8"), "{ quebrado")
+
+    def test_dashboard_importado_nao_guarda_cpf_nem_senha_dos_abertos(self):
+        conteudo = _antes_da_coluna_p(montar(), 2, texto("H2", "CPF 123.456.789-09 senha: Segredo123") + texto("I2", "Camila Lopes"))
+        self.importar(conteudo)
+        guardado = self.caminhos.existentes.read_text(encoding="utf-8")
+        self.assertNotIn("123.456.789-09", guardado)
+        self.assertNotIn("Segredo123", guardado)
+        self.assertIn("Camila Lopes", guardado)
 
 
 if __name__ == "__main__":

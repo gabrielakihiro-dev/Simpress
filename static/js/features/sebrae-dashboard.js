@@ -9,13 +9,19 @@
   const CAMPOS_AUTOMATICOS = Object.freeze([
     ["C", "Chamado"], ["P", "Abertura"], ["I", "Solicitante"], ["K", "Série"], ["L", "Modelo"], ["N", "Cidade"], ["E", "OS"],
   ]);
-  const STATUS_CHAMADO = Object.freeze(["EM ABERTO", "FINALIZADO"]);
+  const CAMPOS_PREENCHIDOS = Object.freeze([["K", "Série"], ["L", "Modelo"], ["N", "Cidade"], ["E", "OS"]]); // do antigo: vazios são preenchidos pelo site
+  const STATUS_CHAMADO =Object.freeze(["EM ABERTO", "FINALIZADO"]);
   const TIPOS_CHAMADO = Object.freeze(["INCIDENTE", "SOLICITAÇÃO"]);
   const OBRIGATORIOS = Object.freeze(["A", "D", "J"]);
   const AVISO_CRUZAMENTO = Object.freeze({
     ausente: "Série, modelo e cidade vazios: nenhum equipamento encontrado para este solicitante.",
     ambiguo: "Série, modelo e cidade vazios: mais de um equipamento encontrado para este solicitante.",
   });
+
+  /** Aviso de chamado aberto para outra pessoa (nome citado na descrição): o usuário preenche série, modelo, cidade e OS. */
+  function avisoOutraPessoa(item) {
+    return item.outra_pessoa ? `Aberto para outra pessoa (${item.outra_pessoa}, citada na descrição): série, modelo, cidade e OS não foram preenchidos; preencha à mão.` : "";
+  }
 
   /** "2026-10-28T14:30" (campo datetime-local) → "28/10/2026 14:30", o formato da coluna R. */
   function formatarEncerramento(valor) {
@@ -47,6 +53,17 @@
       });
       return Object.keys(mudou).length ? [{ numero: item.numero, ...mudou }] : [];
     });
+  }
+
+  /** Chave "linha:27" (sem UTIC único) aparece como o texto da coluna C e a linha da planilha. */
+  function tituloAntigo(item) {
+    const linha = /^linha:(\d+)$/.exec(String(item.numero || ""));
+    return linha ? `${item.chamado || "Sem chamado"} (linha ${linha[1]})` : item.chamado || item.numero;
+  }
+
+  /** Quantos antigos em aberto o site preencheria (Série, Modelo, Cidade ou OS vazios). */
+  function totalPreenchimentos(abertos) {
+    return (abertos || []).filter(item => Object.keys(item.automaticos_sugeridos || {}).length > 0).length;
   }
 
   function linhaChamado(item, v) {
@@ -119,6 +136,7 @@
       controle.className = "ck-entrada ck-entrada--sm";
       const inicial = antigo ? (letra === "R" ? encerramentoParaCampo(atual) : atual) : PADROES_MANUAIS[letra] ?? "";
       controle.value = valores[letra] ?? inicial;
+      if (antigo && atual && letra !== "D") controle.disabled = true; // antigo só recebe o que está vazio; o Status ainda pode ir a FINALIZADO
       if (!antigo && !(letra in valores) && controle.value) guardados[numero] = { ...valores, [letra]: controle.value };
       controle.dataset.sebraeNumero = numero;
       controle.dataset.sebraeCampo = letra;
@@ -128,7 +146,7 @@
       return controle;
     }
 
-    const PADROES_MANUAIS = Object.freeze({ S: "DISPONIBILIDADE" }); // Tipo SLA habitual; o usuário pode trocar ou apagar
+    const PADROES_MANUAIS = Object.freeze({ D: "EM ABERTO", S: "DISPONIBILIDADE" }); // Status e Tipo SLA habituais dos novos; o usuário pode trocar ou apagar
 
     const ROTULOS_MANUAIS = Object.freeze({
       A: "Responsável (A) *", B: "Categoria (B)", D: "Status (D) *", J: "Tipo do chamado (J) *",
@@ -139,12 +157,24 @@
       const artigo = document.createElement("article");
       artigo.className = "sebrae-chamado";
       artigo.dataset.numero = item.numero;
-      const titulo = dom.createTextElement("h3", "sebrae-chamado__titulo", item.numero);
+      const titulo = dom.createTextElement("h3", "sebrae-chamado__titulo", tituloAntigo(item));
       titulo.append(" · ", dom.createTextElement("span", "sebrae-chamado__assunto", item.titulo || "Sem título"));
+      const fatos = document.createElement("dl");
+      fatos.className = "ck-fatos sebrae-chamado__auto";
+      [["I", "Solicitante", item.usuario], ...CAMPOS_PREENCHIDOS.map(([letra, rotulo]) => [letra, rotulo, item.automaticos?.[letra]])].forEach(([letra, rotulo, atual]) => {
+        const sugerido = item.automaticos_sugeridos?.[letra];
+        if (!atual && !sugerido) return;
+        const linha = document.createElement("div");
+        linha.append(dom.createTextElement("dt", "", rotulo), dom.createTextElement("dd", "", atual || `${sugerido} (será preenchido)`));
+        fatos.appendChild(linha);
+      });
       const manuais = document.createElement("div");
       manuais.className = "sebrae-chamado__manuais";
       ["A", "B", "D", "J", "R", "S"].forEach(letra => manuais.appendChild(campo(ROTULOS_MANUAIS[letra], controleManual(item.numero, letra, "antigo"))));
-      artigo.append(titulo, manuais);
+      artigo.append(titulo, fatos);
+      const outra = avisoOutraPessoa(item);
+      if (outra) artigo.appendChild(dom.createTextElement("p", "ck-campo__ajuda sebrae-chamado__aviso", outra));
+      artigo.appendChild(manuais);
       return artigo;
     }
 
@@ -162,7 +192,7 @@
         fatos.appendChild(linha);
       });
       artigo.append(titulo, fatos);
-      const aviso = AVISO_CRUZAMENTO[item.cruzamento?.status];
+      const aviso = avisoOutraPessoa(item) || AVISO_CRUZAMENTO[item.cruzamento?.status];
       if (aviso) artigo.appendChild(dom.createTextElement("p", "ck-campo__ajuda sebrae-chamado__aviso", aviso));
       [["H", "Descrição"], ["F", "Atendimento realizado"]].forEach(([letra, rotulo]) => {
         const detalhe = document.createElement("details");
@@ -197,9 +227,10 @@
       const botao = el("btn-sebrae-atualizar");
       if (!botao) return;
       const alteracoes = payloadEdicoes(estado.abertos, estado.edicoes).length;
-      botao.disabled = !estado.atualizavel || (estado.formulario.length === 0 && alteracoes === 0);
+      const preenchimentos = totalPreenchimentos(estado.abertos);
+      botao.disabled = !estado.atualizavel || (estado.formulario.length === 0 && alteracoes === 0 && preenchimentos === 0);
       definirTexto("sebrae-antigos-resumo", estado.abertos.length
-        ? `${estado.abertos.length} chamado(s) antigo(s) em aberto ou sem status; ${alteracoes} com alteração.`
+        ? `${estado.abertos.length} chamado(s) antigo(s) em aberto ou sem status; ${alteracoes} com alteração e ${preenchimentos} com Série, Modelo, Cidade ou OS a preencher.`
         : "Nenhum chamado antigo em aberto ou sem status neste Dashboard.");
     }
 
@@ -342,7 +373,7 @@
     async function atualizarDashboardSebrae() {
       const chamados = payloadAtualizacao(estado.formulario, estado.valores);
       const edicoes = payloadEdicoes(estado.abertos, estado.edicoes);
-      if (!estado.atualizavel || (!chamados.length && !edicoes.length)) return;
+      if (!estado.atualizavel || (!chamados.length && !edicoes.length && !totalPreenchimentos(estado.abertos))) return;
       const botao = el("btn-sebrae-atualizar");
       botao.disabled = true;
       botao.setAttribute("aria-busy", "true");
@@ -357,7 +388,7 @@
         definirTexto("sebrae-atualizar-status",
           `Baixado "${dados.arquivo}": ${novos} novo(s) e ${dados.linhas.length - novos} alterado(s). `
           + `Baseado no Dashboard importado${quando ? ` em ${quando}` : ""}. Para não perder edições de outras pessoas, importe a versão atual antes.`);
-        app.showToast("Dashboard atualizado. O original não foi alterado.", "success");
+        app.showToast("Dashboard atualizado. Use Enviar ao SharePoint para sobrepor o arquivo.", "success");
       } catch (error) {
         definirTexto("sebrae-atualizar-status", error.message);
         app.showToast(error.message, "error");
@@ -381,6 +412,6 @@
     return { carregarNovosSebrae, importarDashboardSebrae, exportarChamadosSebrae, atualizarDashboardSebrae, copiarBlocoSebrae };
   }
 
-  createSebraeDashboard.puro = { formatarEncerramento, encerramentoParaCampo, chamadoPronto, payloadExportacao, payloadAtualizacao, payloadEdicoes };
+  createSebraeDashboard.puro = { formatarEncerramento, encerramentoParaCampo, chamadoPronto, payloadExportacao, payloadAtualizacao, payloadEdicoes, avisoOutraPessoa, tituloAntigo, totalPreenchimentos };
   return createSebraeDashboard;
 })());

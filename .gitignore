@@ -86,9 +86,13 @@ __pycache__/
 /data/state/sebrae_agendamento.json
 /data/state/usuarios_entra_pr.json
 /data/state/nomes_pessoas_manuais.json
+/data/state/assistente_instrucoes.json
 /data/state/entrada_usuarios_entra/
 /data/state/sebrae_config.json
 /data/state/sebrae_chamados_estado.json
+/data/state/sebrae_*.json
+/data/state/sebrae_*.xlsx
+/data/state/sebrae_backups/
 /data/state/entrada_automatica/*
 !/data/state/entrada_automatica/README.md
 !/data/state/entrada_automatica/modelo_lote/

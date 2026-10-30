@@ -202,7 +202,7 @@ SEBRAE_NOVOS_FIXTURE = {
     "importado": {
         "arquivo": "Dashboard Operacional_SEBRAE.xlsx", "importado_em": "2026-10-28T10:00:00-03:00", "total": 331,
         "atualizavel": True, "listas": {"A": ["CLIENTE", "SIMPRESS"], "B": ["LENTIDÃO", "REDE"]},
-        "abertos": [{"numero": "UTIC-2026-1200", "titulo": "Teclado sem resposta", "valores": {
+        "abertos": [{"numero": "UTIC-2026-1200", "titulo": "Teclado sem resposta", "chamado": "UTIC-2026-1200", "usuario": "Camila Vitoria Lopes de Oliveira", "automaticos": {"E": ""}, "automaticos_sugeridos": {"K": "DEMO0001", "L": "Dell Latitude", "N": "Curitiba", "E": "7303022"}, "valores": {
             "A": "SIMPRESS", "B": "", "D": "EM ABERTO", "J": "INCIDENTE", "R": "", "S": "DISPONIBILIDADE"}}],
     },
     "novos": {
@@ -585,7 +585,7 @@ class Handler(BaseHTTPRequestHandler):
                       for i, c in enumerate(corpo.get("chamados") or [])]
             linhas += [{"numero": c["numero"], "linha": 12, "tipo": "alterado", "celulas": sorted(set(c) - {"numero"})}
                        for c in corpo.get("edicoes") or []]
-            self.send({"arquivo": "Dashboard Operacional_SEBRAE (atualizado).xlsx",
+            self.send({"arquivo": "Dashboard Operacional_SEBRAE.xlsx",
                        "base": {"arquivo": "Dashboard Operacional_SEBRAE.xlsx", "importado_em": "2026-10-28T10:00:00-03:00"},
                        "linhas": linhas, "conteudo_base64": "UEsDBA=="})
             return

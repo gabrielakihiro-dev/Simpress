@@ -214,34 +214,63 @@ def _tem_dado(linha: _Linha, compartilhadas: Sequence[str]) -> bool:
     return any(_valor_celula(linha.celulas.get(letra, ""), compartilhadas) is not None for letra in COLUNAS_DE_DADO)
 
 
+CHAVE_DE_LINHA = "linha:"
+AUTOMATICAS_VAZIAS = ("E", "K", "L", "N")  # filled by the site only into empty cells
+
+
 @dataclass(frozen=True)
 class ChamadoAberto:
-    numero: str
+    numero: str  # key: the UTIC when the row has exactly one and no other row repeats it, else ``linha:<row>``
     linha: int
     titulo: str
     valores: Mapping[str, str]  # manual columns as stored in the sheet
+    chamado: str = ""  # column C as the sheet shows it
+    usuario: str = ""  # column I
+    automaticos: Mapping[str, str] = field(default_factory=dict)  # E, K, L, N as stored
+    descricao: str = ""  # column H, only read to spot a ticket opened for another person
+
+    def como_dict(self) -> Dict[str, object]:
+        return {
+            "numero": self.numero, "titulo": self.titulo, "valores": dict(self.valores), "linha": self.linha,
+            "chamado": self.chamado, "usuario": self.usuario, "automaticos": dict(self.automaticos),
+            "descricao": self.descricao,
+        }
+
+
+def _abertos(linhas: Mapping[int, _Linha], compartilhadas: Sequence[str]) -> List[ChamadoAberto]:
+    """Every ticket row whose D is EM ABERTO or empty (the saved filter of column D), with or without a UTIC."""
+    def lido(linha: _Linha, letra: str) -> str:
+        return _valor_legivel(letra, linha.celulas.get(letra, ""), compartilhadas)
+
+    abertas: List[Tuple[_Linha, str, str, Dict[str, str]]] = []
+    repeticoes: Dict[str, int] = {}
+    for numero in sorted(linhas):
+        linha = linhas[numero]
+        if numero < 2 or not _tem_dado(linha, compartilhadas):
+            continue
+        chamado = lido(linha, "C")
+        numeros_c = extrair_numeros(chamado)
+        utic = numeros_c[0] if len(numeros_c) == 1 else ""
+        if utic:
+            repeticoes[utic] = repeticoes.get(utic, 0) + 1
+        valores = {letra: lido(linha, letra) for letra in MANUAIS}
+        if valores["D"].upper() in ("", "EM ABERTO"):
+            abertas.append((linha, chamado, utic, valores))
+    return [
+        ChamadoAberto(
+            utic if utic and repeticoes[utic] == 1 else f"{CHAVE_DE_LINHA}{linha.numero}", linha.numero, lido(linha, "G"), valores,
+            chamado, lido(linha, "I"), {letra: lido(linha, letra) for letra in AUTOMATICAS_VAZIAS},
+            lido(linha, "H")[:2000],
+        )
+        for linha, chamado, utic, valores in abertas
+    ]
 
 
 def chamados_para_editar(conteudo: bytes) -> List[ChamadoAberto]:
-    """Tickets already in the sheet whose D is EM ABERTO or empty (the saved filter of column D)."""
+    """Old tickets the site mirrors: D is EM ABERTO or empty, including rows with no UTIC ("Sem chamado", legacy numbers)."""
     pacote = _ler_pacote(conteudo)
     _, _, linhas = _linhas_da_aba(pacote.texto(pacote.aba))
-    encontrados: List[ChamadoAberto] = []
-    vistos: Dict[str, int] = {}
-    for numero in sorted(linhas):
-        linha = linhas[numero]
-        if numero < 2 or not _tem_dado(linha, pacote.compartilhadas):
-            continue
-        chamado = _valor_legivel("C", linha.celulas.get("C", ""), pacote.compartilhadas)
-        numeros_c = extrair_numeros(chamado)
-        if len(numeros_c) != 1:
-            continue  # no number or several: ambiguous, stays out
-        chamado = numeros_c[0]
-        vistos[chamado] = vistos.get(chamado, 0) + 1
-        valores = {letra: _valor_legivel(letra, linha.celulas.get(letra, ""), pacote.compartilhadas) for letra in MANUAIS}
-        if valores["D"].upper() in ("", "EM ABERTO"):
-            encontrados.append(ChamadoAberto(chamado, numero, _valor_legivel("G", linha.celulas.get("G", ""), pacote.compartilhadas), valores))
-    return [c for c in encontrados if vistos[c.numero] == 1]
+    return _abertos(linhas, pacote.compartilhadas)
 
 
 def ler_listas(conteudo: bytes) -> Dict[str, List[str]]:
@@ -376,14 +405,18 @@ def atualizar(
     conteudo: bytes,
     novas: Sequence[Mapping[str, str]] = (),
     edicoes: Optional[Mapping[str, Mapping[str, str]]] = None,
+    automaticos: Optional[Mapping[str, Mapping[str, str]]] = None,
 ) -> Resultado:
     """Copy of the Dashboard with ``novas`` in the first free rows of Tabela3 and ``edicoes`` in existing rows.
 
     ``novas``: rows as ``sebrae_novos`` builds them (keys are column letters, ``C`` is the ticket).
-    ``edicoes``: ``{ticket: {manual column: value}}``; only manual columns, only cells whose value changed,
-    and blank values never erase a cell. Raises ``GravacaoInvalida`` (message for the user) when it cannot.
+    ``edicoes``: ``{key: {manual column: value}}`` (key as in ``ChamadoAberto.numero``); only manual columns, only
+    cells whose value changed, and blank values never erase a cell.
+    ``automaticos``: ``{key: {E, K, L or N: value}}``, written only into cells that are empty in the sheet.
+    Raises ``GravacaoInvalida`` (message for the user) when it cannot.
     """
     edicoes = edicoes or {}
+    automaticos = automaticos or {}
     anteriores = ler_coluna_c(conteudo)  # also checks the headers of the sheet
     pacote = _ler_pacote(conteudo)
     texto = pacote.texto(pacote.aba)
@@ -411,27 +444,28 @@ def atualizar(
         substituicoes[numero_linha] = _reescrever_linha(linhas[numero_linha], letras, estilos, formula_q, False)
         gravadas.append(LinhaGravada(str(valores.get("C", "")), numero_linha, "novo", tuple(sorted(l for l, v in letras.items() if v != ""))))
 
-    if edicoes:
-        por_chamado: Dict[str, List[int]] = {}
-        for numero_linha, linha in linhas.items():
-            numeros_c = extrair_numeros(_valor_legivel("C", linha.celulas.get("C", ""), compartilhadas))
-            if len(numeros_c) == 1 and numeros_c[0] in edicoes:
-                por_chamado.setdefault(numeros_c[0], []).append(numero_linha)
-        for chamado, mudancas in edicoes.items():
-            achadas = por_chamado.get(chamado, [])
-            if len(achadas) != 1:
-                raise GravacaoInvalida(f"{chamado}: " + ("não está na coluna C do Dashboard." if not achadas else "aparece mais de uma vez na coluna C; corrija a planilha."))
-            linha = linhas[achadas[0]]
+    if edicoes or automaticos:
+        abertos = {c.numero: c for c in _abertos(linhas, compartilhadas)}
+        for chamado in [*edicoes, *(c for c in automaticos if c not in edicoes)]:
+            aberto = abertos.get(chamado)
+            if aberto is None:
+                raise GravacaoInvalida(f"{chamado}: não está entre os chamados antigos em aberto do Dashboard.")
+            linha = linhas[aberto.linha]
             alteradas: Dict[str, str] = {}
-            for letra, novo in mudancas.items():
+            for letra, novo in (edicoes.get(chamado) or {}).items():
                 if letra not in MANUAIS:
                     raise GravacaoInvalida(f"{chamado}: a coluna {letra} não pode ser editada pelo site.")
                 novo = " ".join(str(novo).split())
                 if novo and novo != _valor_legivel(letra, linha.celulas.get(letra, ""), compartilhadas):
                     alteradas[letra] = novo
+            for letra, novo in (automaticos.get(chamado) or {}).items():
+                if letra not in AUTOMATICAS_VAZIAS:
+                    raise GravacaoInvalida(f"{chamado}: a coluna {letra} não pode ser preenchida pelo site.")
+                if novo and _valor_celula(linha.celulas.get(letra, ""), compartilhadas) is None:  # never over an existing value
+                    alteradas[letra] = " ".join(str(novo).split())
             if alteradas:
-                substituicoes[achadas[0]] = _reescrever_linha(linha, alteradas, estilos, "", True)
-                gravadas.append(LinhaGravada(chamado, achadas[0], "alterado", tuple(sorted(alteradas))))
+                substituicoes[linha.numero] = _reescrever_linha(linha, alteradas, estilos, "", True)
+                gravadas.append(LinhaGravada(chamado, linha.numero, "alterado", tuple(sorted(alteradas))))
 
     novo_texto = ""
     cursor = 0
@@ -491,5 +525,5 @@ def _conferir(conteudo: bytes, anteriores: frozenset[str], novos: Sequence[str],
 
 
 __all__ = [
-    "ChamadoAberto", "GravacaoInvalida", "LinhaGravada", "Resultado", "atualizar", "chamados_para_editar", "ler_listas",
+    "AUTOMATICAS_VAZIAS", "CHAVE_DE_LINHA", "ChamadoAberto", "GravacaoInvalida", "LinhaGravada", "Resultado", "atualizar", "chamados_para_editar", "ler_listas",
 ]
