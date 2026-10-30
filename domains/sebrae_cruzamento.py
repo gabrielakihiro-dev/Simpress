@@ -34,6 +34,30 @@ def registros_de_equipamentos(equipamentos: Iterable[Mapping[str, Any]]) -> List
     return registros
 
 
+def _palavras(texto: Any) -> str:
+    return " " + " ".join("".join(c if c.isalnum() else " " for c in normalize_search_term(texto)).split()) + " "
+
+
+def outra_pessoa(descricao: Any, solicitante: Any, registros: Iterable[Mapping[str, Any]]) -> str:
+    """Name of another person from the records that the ticket description mentions, or empty.
+
+    A ticket opened on behalf of someone else must not get that requester's equipment filled in by name.
+    A name that contains, or is part of, the requester's own name is the requester, not another person.
+    shortcut: only full names that exist in the records are recognised (whole words, no accents/case), upgrade if
+    descriptions cite people by first name only.
+    """
+    texto, dono = _palavras(descricao), _palavras(solicitante)
+    if not texto.strip():
+        return ""
+    for registro in registros:
+        nome = _palavras(registro.get("nome"))
+        if len(nome.split()) < 2 or nome in dono or dono in nome:
+            continue
+        if nome in texto:
+            return str(registro.get("nome") or "").strip()
+    return ""
+
+
 def _chave_serie(serie: Any) -> str:
     return "".join(c for c in normalize_search_term(serie) if c.isalnum())
 

@@ -43,6 +43,7 @@ test("Chamados novos só exporta os prontos e mostra a mensagem aprovada com os 
   const { painel: cartao } = await abrirPainel(page, request);
   const primeiro = cartao.locator("#sebrae-novos-lista .sebrae-chamado").first();
   await primeiro.locator('[data-sebrae-campo="A"]').selectOption("CLIENTE"); // lista da aba LISTAS do Dashboard
+  await expect(primeiro.locator('[data-sebrae-campo="D"]')).toHaveValue("EM ABERTO"); // padrão dos novos
   await primeiro.locator('[data-sebrae-campo="D"]').selectOption("EM ABERTO");
   await expect(cartao.locator("#btn-sebrae-exportar")).toBeDisabled();
   await primeiro.locator('[data-sebrae-campo="J"]').selectOption("INCIDENTE");
@@ -63,12 +64,16 @@ test("Atualizar Dashboard baixa a cópia com os novos e as alterações dos anti
   const antigo = cartao.locator("#sebrae-antigos-lista .sebrae-chamado");
   await expect(antigo).toHaveCount(1);
   await expect(antigo.locator('[data-sebrae-campo="A"]')).toHaveValue("SIMPRESS");
+  // O que o Atualizar Dashboard vai preencher aparece como prévia, sem virar campo editável.
+  await expect(antigo.locator(".sebrae-chamado__auto")).toContainText("Camila Vitoria Lopes de Oliveira");
+  await expect(antigo.locator(".sebrae-chamado__auto")).toContainText("DEMO0001 (será preenchido)");
+  await expect(antigo.locator(".sebrae-chamado__auto")).toContainText("7303022 (será preenchido)");
   await antigo.locator('[data-sebrae-campo="D"]').selectOption("FINALIZADO");
   await antigo.locator('[data-sebrae-campo="R"]').fill("2026-10-28T09:05");
   await expect(cartao.locator("#sebrae-antigos-resumo")).toContainText("1 com alteração");
   await expect(atualizar).toBeEnabled();
   const [download] = await Promise.all([page.waitForEvent("download"), atualizar.click()]);
-  expect(download.suggestedFilename()).toBe("Dashboard Operacional_SEBRAE (atualizado).xlsx");
+  expect(download.suggestedFilename()).toBe("Dashboard Operacional_SEBRAE.xlsx");
   await expect(cartao.locator("#sebrae-atualizar-status")).toContainText("2 novo(s) e 1 alterado(s)");
   await expect(cartao.locator("#sebrae-atualizar-status")).toContainText("importe a versão atual antes");
 });

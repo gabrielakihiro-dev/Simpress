@@ -23,11 +23,11 @@ from pydantic import BaseModel, ConfigDict, Field
 
 from core.errors import DomainBusyError, DomainValidationError
 from core.config import format_size_limit
-from domains import sebrae_dashboard_gravacao, sebrae_historico, sebrae_novos
+from domains import sebrae_arquivo, sebrae_cruzamento, sebrae_dashboard_gravacao, sebrae_historico, sebrae_novos
 from domains.sebrae_dashboard import MANUAIS, DashboardInvalido, ler_coluna_c, ler_status_chamados
 
 MAX_CHAMADOS_POR_EXPORTACAO = 200
-NOME_ATUALIZADO = "Dashboard Operacional_SEBRAE (atualizado).xlsx"
+NOME_ATUALIZADO = "Dashboard Operacional_SEBRAE.xlsx"
 logger = logging.getLogger(__name__)
 
 
@@ -75,6 +75,16 @@ def create_sebrae_dashboard_router(services: SebraeDashboardServices) -> APIRout
         except (OSError, ValueError):
             return None  # an unreadable ticket report only leaves column E empty
 
+    def _abertos_com_sugestoes(abertos: Sequence[Mapping[str, Any]]) -> List[Dict[str, Any]]:
+        """Old open tickets plus what "Atualizar Dashboard" would fill into their empty E, K, L and N."""
+        registros = services.registros() if abertos else []
+        sugestoes = sebrae_novos.preenchimentos(abertos, registros, _relatorio()) if abertos else {}
+        return [
+            {**a, "automaticos_sugeridos": sugestoes.get(str(a.get("numero")), {}),
+             "outra_pessoa": sebrae_cruzamento.outra_pessoa(a.get("descricao"), a.get("usuario"), registros)}
+            for a in abertos
+        ]
+
     def _estado() -> Dict[str, Any]:
         caminhos = services.caminhos()
         importado = sebrae_novos.ler_existentes(caminhos.existentes)
@@ -83,7 +93,7 @@ def create_sebrae_dashboard_router(services: SebraeDashboardServices) -> APIRout
         return {
             "importado": None if importado is None else {
                 "arquivo": importado["arquivo"], "importado_em": importado["importado_em"], "total": len(lancados),
-                "listas": importado["listas"], "abertos": importado["abertos"],
+                "listas": importado["listas"], "abertos": _abertos_com_sugestoes(importado["abertos"]),
                 "atualizavel": sebrae_novos.ler_planilha(sebrae_novos.caminho_planilha(caminhos), importado["sha256"]) is not None,
             },
             "novos": None if novos is None else {
@@ -114,9 +124,31 @@ def create_sebrae_dashboard_router(services: SebraeDashboardServices) -> APIRout
         except DashboardInvalido as erro:
             raise DomainValidationError(str(erro), status_code=422) from None
         anteriores = sebrae_novos.ler_existentes(services.caminhos().existentes)
+        # the archive is written BEFORE the previous open list is overwritten; if it fails, nothing is replaced
+        await asyncio.to_thread(_arquivar_encerrados, conteudo, anteriores)
         await asyncio.to_thread(_guardar_importado, conteudo, numeros, nome)
         historico_ok = await asyncio.to_thread(_registrar_historico, conteudo, nome, anteriores)
-        return JSONResponse({**_estado(), "historico_ok": historico_ok}, headers={"Cache-Control": "no-store"})
+        return JSONResponse({**_estado(), "historico_ok": historico_ok, "arquivo_ok": True}, headers={"Cache-Control": "no-store"})
+
+    def _arquivar_encerrados(conteudo: bytes, anteriores: Optional[Mapping[str, Any]]) -> None:
+        """Tickets that left the open list go to the permanent archive; unlike the history, a failure blocks the import
+        (the previous Dashboard stays in place, so a retry still sees the same tickets leaving)."""
+        try:
+            mapa = ler_status_chamados(conteudo)
+        except DashboardInvalido as erro:
+            raise DomainValidationError(str(erro), status_code=422) from None
+        try:
+            sebrae_arquivo.registrar_saidas(
+                sebrae_novos.caminho_arquivo(services.caminhos()),
+                abertos_antes=anteriores["abertos"] if anteriores else [], mapa=mapa,
+                visto_em=str(anteriores["importado_em"]) if anteriores else "", sha256=hashlib.sha256(conteudo).hexdigest(),
+            )
+        except Exception as erro:  # noqa: BLE001 - log only the type, never ticket data
+            logger.warning("Arquivo de chamados encerrados não gravado (%s).", type(erro).__name__)
+            raise DomainBusyError(
+                "Não foi possível guardar os chamados encerrados; o Dashboard não foi importado e o anterior foi mantido. "
+                "Tente novamente."
+            ) from None
 
     def _registrar_historico(conteudo: bytes, nome: str, anteriores: Optional[Mapping[str, Any]]) -> bool:
         """The history never blocks an import: a failure only turns ``historico_ok`` false."""
@@ -159,10 +191,7 @@ def create_sebrae_dashboard_router(services: SebraeDashboardServices) -> APIRout
         caminhos = services.caminhos()
         try:
             listas = sebrae_dashboard_gravacao.ler_listas(conteudo)
-            abertos = [
-                {"numero": c.numero, "titulo": c.titulo, "valores": dict(c.valores)}
-                for c in sebrae_dashboard_gravacao.chamados_para_editar(conteudo)
-            ]
+            abertos = [c.como_dict() for c in sebrae_dashboard_gravacao.chamados_para_editar(conteudo)]
             sha256 = sebrae_novos.salvar_planilha(sebrae_novos.caminho_planilha(caminhos), conteudo)
         except DashboardInvalido:
             listas, abertos, sha256 = {}, [], ""
@@ -195,10 +224,9 @@ def create_sebrae_dashboard_router(services: SebraeDashboardServices) -> APIRout
     def atualizar_dashboard(payload: AtualizarPayload):
         """Cópia do Dashboard importado com os chamados novos e as edições; o original e a cópia guardada ficam intactos.
 
-        Responsável, Status e Tipo podem ficar em branco (a linha é gravada sem eles). 422 se não houver importação válida,
-        se um Status/Tipo preenchido for inválido, se o chamado repetir ou se a Tabela3 não tiver linhas livres."""
-        if not payload.chamados and not payload.edicoes:
-            raise DomainValidationError("Não há chamados novos nem alterações para gravar.", status_code=422)
+        Responsável, Status e Tipo podem ficar em branco (a linha é gravada sem eles). Série, Modelo, Cidade e OS vazios dos
+        antigos em aberto são preenchidos pelo nome da coluna I. 422 se não houver importação válida, se um Status/Tipo
+        preenchido for inválido, se o chamado repetir ou se a Tabela3 não tiver linhas livres."""
         caminhos = services.caminhos()
         importado = sebrae_novos.ler_existentes(caminhos.existentes)
         if importado is None:
@@ -211,9 +239,17 @@ def create_sebrae_dashboard_router(services: SebraeDashboardServices) -> APIRout
         try:
             linhas = _linhas_novas(payload, importado, caminhos)
             edicoes = _edicoes(payload, planilha, importado["listas"])
-            resultado = sebrae_dashboard_gravacao.atualizar(planilha, linhas, edicoes)
+            abertos = [c.como_dict() for c in sebrae_dashboard_gravacao.chamados_para_editar(planilha)]
+            automaticos = sebrae_novos.preenchimentos(abertos, services.registros(), _relatorio())
+            if not linhas and not edicoes and not automaticos:
+                raise DomainValidationError("Não há chamados novos, alterações nem dados para preencher.", status_code=422)
+            resultado = sebrae_dashboard_gravacao.atualizar(planilha, linhas, edicoes, automaticos)
         except (sebrae_novos.ManuaisInvalidos, DashboardInvalido) as erro:
             raise DomainValidationError(str(erro), status_code=422) from None
+        try:
+            sebrae_novos.salvar_planilha(sebrae_novos.caminho_saida(caminhos, NOME_ATUALIZADO), resultado.conteudo)
+        except OSError:  # o download do usuário segue; só o "Enviar ao SharePoint" fica sem arquivo
+            logger.warning("Não gravei a cópia de saída do Dashboard.", exc_info=True)
         return JSONResponse({
             "arquivo": NOME_ATUALIZADO,
             "base": {"arquivo": importado["arquivo"], "importado_em": importado["importado_em"]},

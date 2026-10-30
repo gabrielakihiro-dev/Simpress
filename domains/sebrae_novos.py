@@ -21,6 +21,7 @@ from domains import sebrae_cruzamento
 from domains.sebrae_chamados import ChamadoSoftExpert, mascarar_cpfs
 from domains.sebrae_dashboard import (
     CRUZ_AUSENTE,
+    CRUZ_UNICO,
     Cruzamento,
     _texto_de_celula,
     cruzar_por_nome,
@@ -58,6 +59,16 @@ def caminhos_padrao(state_dir: Path) -> Caminhos:
 def caminho_planilha(caminhos: Caminhos) -> Path:
     """Copy of the imported Dashboard, next to the file that lists its ticket numbers."""
     return caminhos.existentes.with_name("sebrae_dashboard_importado.xlsx")
+
+
+def caminho_saida(caminhos: Caminhos, nome: str) -> Path:
+    """Last file produced by "Atualizar Dashboard"; the ``enviar`` routine uploads this one, never a file from Downloads."""
+    return caminhos.existentes.with_name("sebrae_dashboard_saida") / nome
+
+
+def caminho_arquivo(caminhos: Caminhos) -> Path:
+    """Archive of the tickets that left the open list (domains/sebrae_arquivo.py), next to the import state."""
+    return caminhos.existentes.with_name("sebrae_chamados_encerrados.json")
 
 
 def _gravar(caminho: Path, dados: Mapping[str, Any]) -> None:
@@ -105,9 +116,11 @@ def salvar_existentes(
     """``sha256``/``listas``/``abertos`` describe the stored copy (see ``salvar_planilha``): the hash guards the
     copy, ``listas`` feeds the A and B selects, ``abertos`` are the old tickets that can still be edited."""
     ordenados = sorted(set(numeros))
+    # names stay (the match by name needs them); CPF and passwords never reach the file
+    seguros = [{**a, **{k: _seguro(a[k]) for k in ("titulo", "descricao", "usuario") if k in a}} for a in abertos]
     _gravar(caminho, {
         "arquivo": arquivo[:200], "importado_em": importado_em or agora_iso(), "numeros": ordenados,
-        "sha256": sha256, "listas": {k: list(v) for k, v in (listas or {}).items()}, "abertos": [dict(a) for a in abertos],
+        "sha256": sha256, "listas": {k: list(v) for k, v in (listas or {}).items()}, "abertos": seguros,
     })
     return len(ordenados)
 
@@ -195,7 +208,8 @@ def ler_novos(caminho: Path, ja_lancados: Iterable[str] = ()) -> Optional[Dict[s
 # ---------------------------------------------------------------------------- rows
 
 def _cruzar(chamado: ChamadoSoftExpert, registros: Sequence[Mapping[str, Any]], relatorio: Optional[Mapping[str, Any]]) -> Tuple[Cruzamento, str]:
-    cruzamento = cruzar_por_nome(chamado.solicitante, registros) if registros else Cruzamento(CRUZ_AUSENTE)
+    outra = sebrae_cruzamento.outra_pessoa(chamado.descricao, chamado.solicitante, registros)
+    cruzamento = cruzar_por_nome(chamado.solicitante, registros) if registros and not outra else Cruzamento(CRUZ_AUSENTE)
     os_ = sebrae_cruzamento.os_da_serie(relatorio, cruzamento.serie) if cruzamento.serie else ""
     return cruzamento, os_
 
@@ -213,8 +227,37 @@ def formulario(
             "numero": chamado.numero,
             "linha": montar_linha(chamado, cruzamento, os_),
             "cruzamento": {"status": cruzamento.status, "candidatos": cruzamento.candidatos},
+            "outra_pessoa": sebrae_cruzamento.outra_pessoa(chamado.descricao, chamado.solicitante, registros),
         })
     return itens
+
+
+def preenchimentos(
+    abertos: Sequence[Mapping[str, Any]],
+    registros: Sequence[Mapping[str, Any]],
+    relatorio: Optional[Mapping[str, Any]],
+) -> Dict[str, Dict[str, str]]:
+    """E, K, L and N still empty in old open tickets: the unique equipment of the name in column I gives K, L and N;
+    E is the latest OS of the serial the row has or just got. K, L and N are never mixed with a different serial
+    already in the row. ``abertos`` are ``ChamadoAberto.como_dict()`` items; keys of the result are their ``numero``.
+    shortcut: serials compare as upper-case text (no MacBook ``S`` prefix rule), upgrade if one row misses a fill because of it."""
+    resultado: Dict[str, Dict[str, str]] = {}
+    for item in abertos:
+        atuais = {letra: str(valor or "").strip() for letra, valor in (item.get("automaticos") or {}).items()}
+        usuario = str(item.get("usuario") or "")
+        para_outra_pessoa = bool(sebrae_cruzamento.outra_pessoa(item.get("descricao"), usuario, registros))
+        # opened for someone else: no equipment by name (the user fills it by hand); a serial the row already has still gives E
+        cruzamento = cruzar_por_nome(usuario, registros) if usuario and registros and not para_outra_pessoa else Cruzamento(CRUZ_AUSENTE)
+        serie_atual = atuais.get("K", "")
+        coerente = cruzamento.status == CRUZ_UNICO and (not serie_atual or serie_atual.upper() == cruzamento.serie.strip().upper())
+        novos = {"K": cruzamento.serie, "L": cruzamento.modelo, "N": cruzamento.cidade} if coerente else {}
+        serie = serie_atual or (cruzamento.serie if coerente else "")
+        if serie:
+            novos["E"] = sebrae_cruzamento.os_da_serie(relatorio, serie)
+        faltam = {letra: _texto_de_celula(valor) for letra, valor in novos.items() if valor and not atuais.get(letra)}
+        if faltam:
+            resultado[str(item.get("numero") or "")] = faltam
+    return resultado
 
 
 def validar_manuais(manuais: Mapping[str, Any], exigir: bool = True) -> Dict[str, str]:

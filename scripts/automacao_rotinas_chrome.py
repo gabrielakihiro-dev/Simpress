@@ -61,18 +61,14 @@ ORACLE_URL = "https://simpress.custhelp.com/AgentWeb/"
 UX_PEDIDOS_URL = "https://ux.simpress.com.br/equipamentos/acompanhamento"
 UX_EQUIPAMENTOS_URL = "https://ux.simpress.com.br/MeusEquipamentos/Index"
 ENDPOINT_URL = "https://centralendpoint.pr.sebrae.com.br/webclient#/uems/inventory/computers"
-# Dashboard Operacional_SEBRAE no Excel Online (File > Create a Copy > Download a Copy; em português: Arquivo > Criar uma Cópia > Baixar uma Cópia).
-DASHBOARD_URL = (
-    "https://simpress-my.sharepoint.com/:x:/r/personal/jufsouza_simpress_com_br/_layouts/15/Doc.aspx"
-    "?sourcedoc=%7Bbe6cb02e-6528-45f0-a4ca-224923818e90%7D&action=edit&wdlcid=en-US"
-)
-DASHBOARD_PREFIXO = r"Dashboard Operacional[_ ]SEBRAE"
-# Pasta do SharePoint que recebe o arquivo final gerado pelo site ("Atualizar Dashboard").
+# Pasta do SharePoint de onde `dashboard` baixa (Mais ações > Baixar) e que recebe o arquivo final gerado pelo site ("Atualizar Dashboard").
 DASHBOARD_PASTA_URL = (
     "https://simpress-my.sharepoint.com/shared?id=%2Fpersonal%2Fjufsouza%5Fsimpress%5Fcom%5Fbr%2FDocuments%2FClientes%2FSEBRAE%2FDASHBOARD%20SEBRAE"
     "&listurl=%2Fpersonal%2Fjufsouza%5Fsimpress%5Fcom%5Fbr%2FDocuments&viewid=4b249dd9%2D2ef5%2D4757%2Da0e3%2D2aa051004ae2"
 )
-DASHBOARD_FINAL = "Dashboard Operacional_SEBRAE (atualizado).xlsx"  # nome gravado por routers/sebrae_dashboard.py
+DASHBOARD_FINAL = "Dashboard Operacional_SEBRAE.xlsx"  # nome gravado por routers/sebrae_dashboard.py
+# Cópia do último "Atualizar Dashboard" (gravada pelo site); é a que `enviar` sobe, nunca um arquivo de Downloads.
+DASHBOARD_SAIDA_DIR = ROOT / "data" / "state" / "sebrae_dashboard_saida"
 # Contas escolhidas/digitadas na tela da Microsoft (só o e-mail; senha e MFA são sempre do usuário).
 EMAIL_DASHBOARD = os.environ.get("SIMPRESS_DASHBOARD_EMAIL", "gansouza@simpress.com.br")
 EMAIL_SOFTEXPERT = os.environ.get("SIMPRESS_SOFTEXPERT_EMAIL", "gakihiro@pr.sebrae.com.br")
@@ -746,16 +742,17 @@ def salvar_download(download: "Download", origem: str, desde: float | None = Non
     return usar_copia_do_chrome(copia, origem)
 
 
-def exportar_com_download(page: "Page", origem: str, clicar: Callable[[], None], prefixo: str | None = None) -> Path:
+def exportar_com_download(page: "Page", origem: str, clicar: Callable[[], None], prefixo: "str | re.Pattern[str] | None" = None) -> Path:
     """Clica uma única vez na exportação e grava o arquivo recebido.
 
-    Com ``prefixo`` (início esperado do nome), também aceita o arquivo que o próprio Chrome gravar
-    quando o aviso de download não chega ao Playwright (outra conexão à porta 9333 trocou o destino).
+    Com ``prefixo`` (início esperado do nome, ou um padrão já pronto do nome inteiro), também aceita o
+    arquivo que o próprio Chrome gravar quando o aviso de download não chega ao Playwright (outra
+    conexão à porta 9333 trocou o destino).
     """
     verificar_cancelamento()
     garantir_tela_minima(page, origem)
     desde = time.time()
-    padrao = padrao_do_prefixo(prefixo) if prefixo else None
+    padrao = prefixo if isinstance(prefixo, re.Pattern) else padrao_do_prefixo(prefixo) if prefixo else None
     recebidos: list["Download"] = []
 
     def receber_download(download: "Download") -> None:
@@ -1423,64 +1420,68 @@ def rodar_rotina_sebrae(context: "BrowserContext") -> int:
 
 
 # --------------------------------------------------------------------------
-# Dashboard Sebrae (Excel Online): baixar cópia, importar no site e buscar chamados novos
+# Dashboard Sebrae (pasta DASHBOARD SEBRAE do SharePoint): baixar, importar no site e buscar chamados novos
 # --------------------------------------------------------------------------
 
-# Rótulos nos dois idiomas: o Excel Online abre em português ("Arquivo") ou inglês ("File") conforme a conta.
-_MENU_ARQUIVO = re.compile(r"^\s*(File|Arquivo)\s*$")
-_MENU_CRIAR_COPIA = re.compile(r"^\s*(Create a Copy|Criar uma C[óo]pia|Criar C[óo]pia)\s*$", re.IGNORECASE)
-_MENU_BAIXAR_COPIA = re.compile(r"^\s*(Download a Copy|Baixar uma C[óo]pia|Baixar C[óo]pia)\s*$", re.IGNORECASE)
+# Rótulos nos dois idiomas; o nome na lista pode vir sem a extensão. Cópias ("... (1)", "Cópia") não casam.
+_NOME_DASHBOARD_NA_LISTA = re.compile(r"^" + re.escape(Path(DASHBOARD_FINAL).stem) + r"(?:\.xlsx)?$", re.IGNORECASE)
+_MENU_MAIS_ACOES = re.compile(r"More actions|Mais a[cç][õo]es", re.IGNORECASE)
+_MENU_BAIXAR = re.compile(r"^\s*(Download|Baixar)\s*$", re.IGNORECASE)
+# Nome gravado pelo Chrome: "nome.xlsx" ou "nome (N).xlsx"; "(atualizado)" e .zip ficam de fora.
+_DASHBOARD_BAIXADO = padrao_do_nome(DASHBOARD_FINAL)
+_MENU_DUPLICATA = re.compile(r"^\s*(Duplicate|Duplicata)\s*$", re.IGNORECASE)
+_BOTAO_SUBSTITUIR = re.compile(r"^\s*(Replace|Substituir)\s*$", re.IGNORECASE)
+_BOTAO_MANTER_AMBOS = re.compile(r"^\s*(Keep both|Manter ambos)\s*$", re.IGNORECASE)
+_AVISO_ENVIO_CONCLUIDO = re.compile(
+    r"upload(?:s)? (?:complete|finished)|uploaded to|carregad[oa] para|(?:upload|envio|carregamento) conclu[ií]do", re.IGNORECASE
+)
+_AVISO_ARQUIVO_EM_USO = re.compile(r"locked|in use|being used|checked out|bloquead|em uso|sendo usado|sendo editado", re.IGNORECASE)
+# Cópia local do que estava no SharePoint antes de sobrepor (a cópia "Duplicata" fica lá, intocada).
+DASHBOARD_BACKUPS_DIR = ROOT / "data" / "state" / "sebrae_backups"
+DASHBOARD_BACKUPS_MAX = 20
+MSG_SHAREPOINT_MUDOU = "O Dashboard no SharePoint mudou depois da importação; importe de novo."
 
 
-def _frame_do_excel(page: "Page"):
-    """Frame (a página ou o iframe do Excel Online) onde a aba "File" está visível, ou ``None``."""
-    for frame in page.frames:
-        try:
-            if frame.get_by_text(_MENU_ARQUIVO).filter(visible=True).count():
-                return frame
-        except Exception:
-            continue
-    return None
+def _localizar_linha_do_dashboard(page: "Page"):
+    return page.get_by_role("row").filter(has=page.get_by_text(_NOME_DASHBOARD_NA_LISTA)).first
 
 
-def dashboard_logado(page: "Page") -> bool:
-    url = page.url.lower()
-    return "sharepoint.com" in url and "login" not in url and _frame_do_excel(page) is not None
+def _linha_do_dashboard(page: "Page"):
+    linha = _localizar_linha_do_dashboard(page)
+    if not esperar_visivel(linha, 15000):
+        raise RotinaErro(f'Não achei "{DASHBOARD_FINAL}" na pasta DASHBOARD SEBRAE.')
+    return linha
 
 
-def dashboard_entrar(page: "Page") -> bool:
-    """Na tela de login da Microsoft, digita o e-mail do Dashboard e avança; a senha fica com o usuário."""
-    if "microsoftonline" not in page.url.lower():
-        return False
-    entrar_microsoft(page, "Dashboard", EMAIL_DASHBOARD, concluido=dashboard_logado)
-    return True
+def _abrir_mais_acoes(linha) -> None:
+    linha.hover()  # os três pontinhos só aparecem com o mouse na linha (ou com ela selecionada)
+    linha.get_by_role("button", name=_MENU_MAIS_ACOES).first.click()
 
 
-def baixar_copia_dashboard(page: "Page") -> Path:
-    """File > Create a Copy > Download a Copy. Só lê: o Dashboard original nunca é alterado."""
-    frame = _frame_do_excel(page)
-    if frame is None:
-        raise RotinaErro("O menu File do Excel Online não apareceu.")
+def baixar_dashboard_da_pasta(page: "Page") -> Path:
+    """Linha do arquivo > Mais ações (...) > Baixar. Só lê: o Dashboard no SharePoint não é alterado."""
+    linha = _linha_do_dashboard(page)
 
     def clicar() -> None:
-        log("Dashboard", "Clicando em File > Create a Copy > Download a Copy...")
-        frame.get_by_text(_MENU_ARQUIVO).filter(visible=True).first.click()
-        copiar = frame.get_by_text(_MENU_CRIAR_COPIA).filter(visible=True).first
-        copiar.wait_for(state="visible", timeout=15000)
-        copiar.click()
-        baixar = frame.get_by_text(_MENU_BAIXAR_COPIA).filter(visible=True).first
+        log("Dashboard", "Clicando em Mais ações > Baixar...")
+        _abrir_mais_acoes(linha)
+        baixar = page.get_by_role("menuitem", name=_MENU_BAIXAR).first
         baixar.wait_for(state="visible", timeout=15000)
         baixar.click()
 
-    return exportar_com_download(page, "Dashboard", clicar, DASHBOARD_PREFIXO)
+    arquivo = exportar_com_download(page, "Dashboard", clicar, _DASHBOARD_BAIXADO)
+    if arquivo.suffix.lower() != ".xlsx":
+        raise RotinaErro(f"O SharePoint entregou {arquivo.name}, não um .xlsx; desmarque outros itens da pasta e tente de novo.")
+    log("Dashboard", f"Dashboard baixado em {arquivo}")
+    return arquivo
 
 
 def exportar_dashboard_sebrae(context: "BrowserContext") -> Path:
     page = None
     try:
-        page = nova_aba(context, DASHBOARD_URL, "Dashboard")
-        aguardar_login(page, "Dashboard", dashboard_logado, entrar=dashboard_entrar)
-        arquivo = baixar_copia_dashboard(page)
+        page = nova_aba(context, DASHBOARD_PASTA_URL, "Dashboard")
+        aguardar_login(page, "Dashboard", pasta_dashboard_logada, entrar=pasta_dashboard_entrar)
+        arquivo = baixar_dashboard_da_pasta(page)
     except Exception:
         registrar_erro(page, "Dashboard")
         raise
@@ -1531,17 +1532,17 @@ def rodar_rotina_dashboard(context: "BrowserContext") -> int:
 
 
 def arquivo_final_dashboard() -> Path:
-    """Arquivo final mais recente que o site baixou ("Atualizar Dashboard"), com as variações ``(N)`` do Chrome."""
-    arquivo = copia_do_chrome(padrao_do_nome(DASHBOARD_FINAL), 0)
-    if arquivo is None:
-        raise RotinaErro(f'Não achei "{DASHBOARD_FINAL}" em Downloads. Use "Atualizar Dashboard" no site antes de enviar.')
+    """Arquivo que o site gravou em ``data/state`` no último "Atualizar Dashboard" (não o de Downloads, que pode ser a cópia baixada do SharePoint)."""
+    arquivo = DASHBOARD_SAIDA_DIR / DASHBOARD_FINAL
+    if not arquivo.is_file():
+        raise RotinaErro(f'Não achei "{DASHBOARD_FINAL}" gerado pelo site. Use "Atualizar Dashboard" no site antes de enviar.')
     return arquivo
 
 
 def _botao_enviar(page: "Page"):
-    """Botão que abre o menu de envio: "Create or upload" na tela Shared do OneDrive, "Upload" na biblioteca."""
-    return page.get_by_role("button", name=re.compile(r"^(?:Create or upload|Upload)$")).or_(
-        page.get_by_role("menuitem", name=re.compile(r"^Upload$"))).first
+    """Botão que abre o menu de envio: "Criar ou carregar"/"Create or upload" na tela Shared do OneDrive, "Carregar"/"Upload" na biblioteca."""
+    return page.get_by_role("button", name=re.compile(r"^(?:Create or upload|Criar ou carregar|Upload|Carregar)$")).or_(
+        page.get_by_role("menuitem", name=re.compile(r"^(?:Upload|Carregar)$"))).first
 
 
 def pasta_dashboard_logada(page: "Page") -> bool:
@@ -1556,27 +1557,112 @@ def pasta_dashboard_entrar(page: "Page") -> bool:
     return True
 
 
+def _quantos_dashboards_na_lista(page: "Page") -> int:
+    """Linhas cujo nome contém o nome do Dashboard: o original e cópias ("... (1)", "... - Cópia")."""
+    return page.get_by_role("row").filter(has_text=re.compile(re.escape(Path(DASHBOARD_FINAL).stem), re.IGNORECASE)).count()
+
+
+def duplicar_dashboard_na_pasta(page: "Page") -> None:
+    """Linha do arquivo > Mais ações (...) > Duplicata. A cópia é só segurança: nunca é aberta, baixada, renomeada nem apagada."""
+    linha = _linha_do_dashboard(page)
+    antes = _quantos_dashboards_na_lista(page)
+    log("Dashboard", "Criando a cópia de segurança (Mais ações > Duplicata)...")
+    _abrir_mais_acoes(linha)
+    duplicata = page.get_by_role("menuitem", name=_MENU_DUPLICATA).first
+    duplicata.wait_for(state="visible", timeout=15000)
+    duplicata.click()
+    limite = time.time() + 30
+    while time.time() < limite:
+        verificar_cancelamento()
+        if _quantos_dashboards_na_lista(page) > antes:
+            log("Dashboard", "Cópia de segurança criada na pasta (não será alterada).")
+            return
+        page.wait_for_timeout(1000)
+    raise RotinaErro("A cópia (Duplicata) não apareceu na pasta do SharePoint; não substituí o Dashboard.")
+
+
+def conferir_dashboard_do_sharepoint(baixado: Path) -> None:
+    """Pré-checagem obrigatória: o arquivo do SharePoint tem de ser o que o site importou (mesmo hash ou mesmos chamados/status/encerramento)."""
+    import hashlib
+
+    from domains import sebrae_novos
+    from domains.sebrae_dashboard import DashboardInvalido, ler_status_chamados
+
+    caminhos = sebrae_novos.caminhos_padrao(DASHBOARD_SAIDA_DIR.parent)
+    existentes = sebrae_novos.ler_existentes(caminhos.existentes)
+    if existentes is None:
+        raise RotinaErro("O site não tem um Dashboard importado; use a rotina dashboard antes de enviar.")
+    conteudo = baixado.read_bytes()
+    if existentes["sha256"] and hashlib.sha256(conteudo).hexdigest() == existentes["sha256"]:
+        return
+    importada = sebrae_novos.ler_planilha(sebrae_novos.caminho_planilha(caminhos), existentes["sha256"])
+    try:
+        igual = importada is not None and ler_status_chamados(conteudo) == ler_status_chamados(importada)
+    except DashboardInvalido as erro:
+        raise RotinaErro(f"Não consegui conferir o Dashboard do SharePoint: {erro}") from erro
+    if not igual:
+        raise RotinaErro(MSG_SHAREPOINT_MUDOU)
+
+
+def guardar_backup_do_dashboard(baixado: Path) -> Path:
+    """Copia o Dashboard recém-baixado do SharePoint para ``sebrae_backups`` e mantém só os ``DASHBOARD_BACKUPS_MAX`` mais recentes."""
+    from core.integrity import atomic_copy_file
+
+    stem = Path(DASHBOARD_FINAL).stem
+    destino = DASHBOARD_BACKUPS_DIR / f"{stem}_{datetime.now():%Y%m%d_%H%M%S}.xlsx"
+    DASHBOARD_BACKUPS_DIR.mkdir(parents=True, exist_ok=True)
+    atomic_copy_file(baixado, destino)
+    for antigo in sorted(DASHBOARD_BACKUPS_DIR.glob(f"{stem}_*.xlsx"), key=lambda p: p.name)[:-DASHBOARD_BACKUPS_MAX]:
+        try:
+            antigo.unlink()
+        except OSError:
+            log("Dashboard", f"Não consegui apagar o backup antigo {antigo.name}.")
+    log("Dashboard", f"Backup do Dashboard do SharePoint salvo em {destino}")
+    return destino
+
+
+def _texto_da_linha_do_dashboard(page: "Page") -> str:
+    """Nome, data de modificação e tamanho da linha do original; muda quando o upload substitui o arquivo."""
+    try:
+        return _localizar_linha_do_dashboard(page).inner_text(timeout=3000)
+    except Exception:
+        return ""
+
+
 def enviar_arquivo_para_pasta(page: "Page", arquivo: Path) -> None:
-    """Upload > Files (na tela Shared: Create or upload > Files upload) na pasta aberta. Nome repetido: "Keep both"; nunca "Replace" (o original não pode ser sobrescrito)."""
-    stem = re.escape(arquivo.stem)
-    antes = page.get_by_text(re.compile(stem)).filter(visible=True).count()
+    """Carregar > Carregamento de arquivos (na tela Shared: Criar ou carregar > Carregamento de arquivos) na pasta aberta, sobrepondo o original com "Replace".
+
+    Se o SharePoint oferecer só "Keep both", recusa: criaria um segundo arquivo em vez de atualizar o Dashboard.
+    """
+    antes = _texto_da_linha_do_dashboard(page)
     log("Dashboard", f"Enviando {arquivo.name} ({arquivo.stat().st_size:,} bytes)...".replace(",", "."))
     _botao_enviar(page).click()
-    arquivos = page.get_by_role("menuitem", name=re.compile(r"^Files?(?: upload)?$")).first
+    arquivos = page.get_by_role("menuitem", name=re.compile(r"^(?:Files?(?: upload)?|Carregamento de arquivos)$")).first
     arquivos.wait_for(state="visible", timeout=15000)
     with page.expect_file_chooser(timeout=15000) as escolha:
         arquivos.click()
     escolha.value.set_files(str(arquivo))
-    manter = page.get_by_role("button", name=re.compile(r"^Keep both$"))
-    if esperar_visivel(manter.first, 8000):
-        manter.first.click()
+    substituir = page.get_by_role("button", name=_BOTAO_SUBSTITUIR)
+    manter = page.get_by_role("button", name=_BOTAO_MANTER_AMBOS)
+    if esperar_visivel(substituir.or_(manter).first, 8000):
+        if substituir.count() == 0:
+            try:
+                page.keyboard.press("Escape")
+            except Exception:
+                pass
+            raise RotinaErro('O SharePoint ofereceu só "Keep both" (manter os dois); não enviei para não criar um segundo arquivo.')
+        substituir.first.click()
+    aviso_uso = page.get_by_role("dialog").or_(page.get_by_role("alertdialog")).filter(has_text=_AVISO_ARQUIVO_EM_USO)
     limite = time.time() + 90
     while time.time() < limite:
         verificar_cancelamento()
-        if page.get_by_text(re.compile(stem)).filter(visible=True).count() > antes:
+        if visivel(aviso_uso.first):
+            raise RotinaErro("O SharePoint não deixou substituir: o Dashboard está em uso ou bloqueado por outra pessoa. Feche-o e envie de novo.")
+        depois = _texto_da_linha_do_dashboard(page)
+        if (depois and depois != antes) or visivel(page.get_by_text(_AVISO_ENVIO_CONCLUIDO).first):
             return
         page.wait_for_timeout(1000)
-    raise RotinaErro("Não consegui confirmar o envio: o arquivo não apareceu na pasta do SharePoint.")
+    raise RotinaErro("Não consegui confirmar o envio: o Dashboard no SharePoint não mudou. Confira a pasta antes de repetir.")
 
 
 def rodar_rotina_enviar(context: "BrowserContext") -> int:
@@ -1586,12 +1672,18 @@ def rodar_rotina_enviar(context: "BrowserContext") -> int:
     try:
         page = nova_aba(context, DASHBOARD_PASTA_URL, "Dashboard")
         aguardar_login(page, "Dashboard", pasta_dashboard_logada, entrar=pasta_dashboard_entrar)
+        duplicar_dashboard_na_pasta(page)
+        verificar_cancelamento()
+        baixado = baixar_dashboard_da_pasta(page)
+        conferir_dashboard_do_sharepoint(baixado)
+        guardar_backup_do_dashboard(baixado)
+        verificar_cancelamento()
         enviar_arquivo_para_pasta(page, arquivo)
     except Exception:
         registrar_erro(page, "Dashboard")
         raise
     page.close()
-    print(f"\n[SUCESSO] {arquivo.name} enviado para a pasta DASHBOARD SEBRAE.", flush=True)
+    print(f"\n[SUCESSO] {arquivo.name} sobreposto na pasta DASHBOARD SEBRAE (cópia de segurança e backup local feitos).", flush=True)
     return 0
 
 

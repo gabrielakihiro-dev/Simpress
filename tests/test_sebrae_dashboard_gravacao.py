@@ -89,6 +89,18 @@ def linha_xml(conteudo, n):
     return re.search(rf'<row r="{n}".*?</row>', folha, re.DOTALL).group(0)
 
 
+def _antes_da_coluna_p(conteudo, n, celulas):
+    """Same workbook with ``celulas`` (columns between G and P) added to row ``n`` of the sheet."""
+    partes = partes_de(conteudo)
+    folha = partes["xl/worksheets/sheet4.xml"].decode()
+    partes["xl/worksheets/sheet4.xml"] = folha.replace(f'<c r="P{n}"', celulas + f'<c r="P{n}"', 1).encode()
+    saida = io.BytesIO()
+    with zipfile.ZipFile(saida, "w", zipfile.ZIP_DEFLATED) as arquivo:
+        for nome, dados in partes.items():
+            arquivo.writestr(nome, dados)
+    return saida.getvalue()
+
+
 NOVA = {
     "A": "SIMPRESS", "B": "REDE", "C": "UTIC-2026-0099", "D": "EM ABERTO", "E": "123", "F": "feito",
     "G": "Título & <teste>", "H": "descrição", "I": "Fulano", "J": "INCIDENTE", "P": "26/10/2026 17:25",
@@ -153,13 +165,40 @@ class EdicaoDeChamadosAntigosTest(unittest.TestCase):
         sem_status = montar(("UTIC-2026-0001",), status=("",))
         self.assertEqual([c.numero for c in G.chamados_para_editar(sem_status)], ["UTIC-2026-0001"])
 
-    def test_celula_c_composta_com_um_so_numero_entra_na_lista(self):
+    def test_celula_c_composta_com_um_so_numero_usa_o_utic_como_chave_e_as_demais_usam_a_linha(self):
         composto = "27371 / UTIC-2026-0094"
         conteudo = montar((composto, f"{composto} utic-2026-0095", "27 / UTIC-2026-0096", "UTIC-2026-0097 e UTIC-2026-0098"),
                           ultima=8, status=("EM ABERTO", "EM ABERTO", "FINALIZADO", "EM ABERTO"))
-        self.assertEqual([(c.numero, c.linha) for c in G.chamados_para_editar(conteudo)], [("UTIC-2026-0094", 2)])
+        self.assertEqual(
+            [(c.numero, c.linha) for c in G.chamados_para_editar(conteudo)],
+            [("UTIC-2026-0094", 2), ("linha:3", 3), ("linha:5", 5)],
+        )
         sem_status = montar((composto,), status=("",))
         self.assertEqual([c.numero for c in G.chamados_para_editar(sem_status)], ["UTIC-2026-0094"])
+
+    def test_espelha_chamado_sem_utic_e_edita_pela_linha(self):
+        original = montar(("Sem chamado", "27011", "UTIC-2026-0001"), status=("EM ABERTO", "FINALIZADO", "FINALIZADO"))
+        abertos = G.chamados_para_editar(original)
+        self.assertEqual([(c.numero, c.chamado) for c in abertos], [("linha:2", "Sem chamado")])
+        resultado = G.atualizar(original, edicoes={"linha:2": {"B": "REDE"}})
+        self.assertEqual([(g.numero, g.linha, g.celulas) for g in resultado.linhas], [("linha:2", 2, ("B",))])
+        celula_c = re.compile(r'<c r="C2".*?</c>')
+        self.assertEqual(celula_c.search(linha_xml(resultado.conteudo, 2)).group(0), celula_c.search(linha_xml(original, 2)).group(0))
+        with self.assertRaisesRegex(G.GravacaoInvalida, "não está"):
+            G.atualizar(original, edicoes={"linha:3": {"B": "REDE"}})  # finalized row is not mirrored
+
+    def test_automaticos_so_preenchem_celulas_vazias(self):
+        conteudo = _antes_da_coluna_p(montar(("Sem chamado", "UTIC-2026-0001"), status=("EM ABERTO", "FINALIZADO")), 2, texto("I2", "Camila Lopes") + texto("K2", "SERIE-ANTIGA"))
+        abertos = G.chamados_para_editar(conteudo)
+        self.assertEqual((abertos[0].usuario, dict(abertos[0].automaticos)), ("Camila Lopes", {"E": "", "K": "SERIE-ANTIGA", "L": "", "N": ""}))
+        resultado = G.atualizar(conteudo, automaticos={"linha:2": {"E": "7303022", "K": "OUTRA", "L": "Dell", "N": "Curitiba"}})
+        self.assertEqual([(g.numero, g.tipo, g.celulas) for g in resultado.linhas], [("linha:2", "alterado", ("E", "L", "N"))])
+        linha = linha_xml(resultado.conteudo, 2)
+        self.assertIn("SERIE-ANTIGA", linha)
+        self.assertNotIn("OUTRA", linha)
+        self.assertIn("Curitiba", linha)
+        with self.assertRaises(G.GravacaoInvalida):
+            G.atualizar(conteudo, automaticos={"linha:2": {"Q": "x"}})
 
     def test_edita_chamado_de_c_composto_sem_reescrever_a_c(self):
         composto = "27371 / UTIC-2026-0094"
@@ -173,14 +212,15 @@ class EdicaoDeChamadosAntigosTest(unittest.TestCase):
         self.assertIn("FINALIZADO", linha)
         self.assertEqual(G.chamados_para_editar(resultado.conteudo), [])
 
-    def test_duplicata_com_c_composto_continua_recusada(self):
+    def test_duplicata_e_c_ambiguo_so_se_editam_pela_linha_nunca_pelo_utic(self):
         conteudo = montar(("27371 / UTIC-2026-0094", "UTIC-2026-0094"), status=("EM ABERTO", "EM ABERTO"))
-        self.assertEqual(G.chamados_para_editar(conteudo), [])
-        with self.assertRaisesRegex(G.GravacaoInvalida, "aparece mais de uma vez"):
+        self.assertEqual([c.numero for c in G.chamados_para_editar(conteudo)], ["linha:2", "linha:3"])
+        with self.assertRaisesRegex(G.GravacaoInvalida, "não está"):
             G.atualizar(conteudo, edicoes={"UTIC-2026-0094": {"D": "FINALIZADO"}})
         ambigua = montar(("UTIC-2026-0094 e UTIC-2026-0095",), status=("EM ABERTO",))
-        with self.assertRaisesRegex(G.GravacaoInvalida, "não está na coluna C"):
+        with self.assertRaisesRegex(G.GravacaoInvalida, "não está"):
             G.atualizar(ambigua, edicoes={"UTIC-2026-0094": {"D": "FINALIZADO"}})
+        self.assertEqual([g.numero for g in G.atualizar(ambigua, edicoes={"linha:2": {"B": "REDE"}}).linhas], ["linha:2"])
 
     def test_altera_so_celulas_diferentes_e_zera_formulas_dependentes(self):
         original = montar()
