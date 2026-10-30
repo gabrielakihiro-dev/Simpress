@@ -312,9 +312,9 @@ As rotinas abrem um Chrome de automação com perfil próprio na porta local `93
 
 ### Chamados novos do Sebrae
 
-Na aba **Automação**, **Chamados novos do SoftExpert** importa o `.xlsx` do Dashboard Operacional_SEBRAE (aba `CHAMADOS`, coluna C) e a rotina `sebrae` lê no SoftExpert os chamados que ainda não estão nele. **Baixar, importar e buscar** (rotina `dashboard`) baixa uma cópia do Dashboard pelo Excel Online, importa e busca de uma vez. O painel **Chamados Sebrae** mostra um formulário por chamado novo, exporta as linhas para colar e, em **Atualizar Dashboard**, baixa `Dashboard Operacional_SEBRAE (atualizado).xlsx`; **Enviar ao SharePoint** (rotina `enviar`) envia esse arquivo para a pasta `DASHBOARD SEBRAE` com `Keep both`, nunca `Replace`.
+Na aba **Automação**, **Chamados novos do SoftExpert** importa o `.xlsx` do Dashboard Operacional_SEBRAE (aba `CHAMADOS`, coluna C) e a rotina `sebrae` lê no SoftExpert os chamados que ainda não estão nele. **Baixar, importar e buscar** (rotina `dashboard`) baixa o Dashboard da pasta `DASHBOARD SEBRAE` (`Mais ações › Baixar`), importa e busca de uma vez. O painel **Chamados Sebrae** mostra um formulário por chamado novo, exporta as linhas para colar e, em **Atualizar Dashboard**, baixa `Dashboard Operacional_SEBRAE.xlsx`; **Enviar ao SharePoint** (rotina `enviar`) faz uma `Duplicata` do arquivo da pasta `DASHBOARD SEBRAE`, confere se ele não mudou desde a importação, guarda um backup local e só então o sobrepõe (`Replace`).
 
-O Dashboard original e o Excel Online nunca são alterados, e no SoftExpert a rotina só lê. CPFs e senhas são mascarados antes de guardar ou exportar qualquer texto de chamado. Regras de colunas e detalhes em [Sincronizar chamados do Sebrae](docs/operacao/sincronizar-chamados-sebrae.md).
+O site só grava no arquivo gerado; apenas a rotina `enviar` sobrepõe o arquivo no SharePoint, e no SoftExpert a rotina só lê. Chamados que saem da lista de abertos ficam em `data/state/sebrae_chamados_encerrados.json`. CPFs e senhas são mascarados antes de guardar ou exportar qualquer texto de chamado. Regras de colunas e detalhes em [Sincronizar chamados do Sebrae](docs/operacao/sincronizar-chamados-sebrae.md).
 
 ### Assistente (F9)
 
