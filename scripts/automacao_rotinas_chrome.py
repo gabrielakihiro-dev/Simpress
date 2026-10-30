@@ -1582,11 +1582,12 @@ def duplicar_dashboard_na_pasta(page: "Page") -> None:
 
 
 def conferir_dashboard_do_sharepoint(baixado: Path) -> None:
-    """Pré-checagem obrigatória: o arquivo do SharePoint tem de ser o que o site importou (mesmo hash ou mesmos chamados/status/encerramento)."""
+    """Pré-checagem obrigatória: o arquivo do SharePoint tem de ser o que o site importou (mesmo hash ou mesmos valores em todas as colunas de dado dos chamados)."""
     import hashlib
 
     from domains import sebrae_novos
-    from domains.sebrae_dashboard import DashboardInvalido, ler_status_chamados
+    from domains.sebrae_dashboard import DashboardInvalido
+    from domains.sebrae_dashboard_gravacao import valores_dos_chamados
 
     caminhos = sebrae_novos.caminhos_padrao(DASHBOARD_SAIDA_DIR.parent)
     existentes = sebrae_novos.ler_existentes(caminhos.existentes)
@@ -1597,7 +1598,7 @@ def conferir_dashboard_do_sharepoint(baixado: Path) -> None:
         return
     importada = sebrae_novos.ler_planilha(sebrae_novos.caminho_planilha(caminhos), existentes["sha256"])
     try:
-        igual = importada is not None and ler_status_chamados(conteudo) == ler_status_chamados(importada)
+        igual = importada is not None and valores_dos_chamados(conteudo) == valores_dos_chamados(importada)
     except DashboardInvalido as erro:
         raise RotinaErro(f"Não consegui conferir o Dashboard do SharePoint: {erro}") from erro
     if not igual:

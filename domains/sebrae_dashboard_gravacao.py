@@ -214,6 +214,18 @@ def _tem_dado(linha: _Linha, compartilhadas: Sequence[str]) -> bool:
     return any(_valor_celula(linha.celulas.get(letra, ""), compartilhadas) is not None for letra in COLUNAS_DE_DADO)
 
 
+def valores_dos_chamados(conteudo: bytes) -> Dict[int, Tuple[str, ...]]:
+    """Per ticket row, the readable values of every data column (``COLUNAS_DE_DADO``); styles, zip order and metadata are ignored.
+
+    Formula cells read as empty, like everywhere else in this module. Used to compare two copies of the Dashboard."""
+    pacote = _ler_pacote(conteudo)
+    _, _, linhas = _linhas_da_aba(pacote.texto(pacote.aba))
+    return {
+        numero: tuple(_valor_legivel(letra, linha.celulas.get(letra, ""), pacote.compartilhadas) for letra in COLUNAS_DE_DADO)
+        for numero, linha in linhas.items() if numero >= 2 and _tem_dado(linha, pacote.compartilhadas)
+    }
+
+
 CHAVE_DE_LINHA = "linha:"
 AUTOMATICAS_VAZIAS = ("E", "K", "L", "N")  # filled by the site only into empty cells
 

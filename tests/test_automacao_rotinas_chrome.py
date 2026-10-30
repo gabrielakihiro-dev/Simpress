@@ -595,26 +595,59 @@ class EnviarDashboardTests(unittest.TestCase):
             with patch.object(automacao, "DASHBOARD_SAIDA_DIR", Path(pasta) / "sebrae_dashboard_saida"):
                 automacao.conferir_dashboard_do_sharepoint(baixado)
 
-    def test_precheck_accepts_a_resaved_file_with_the_same_tickets(self):
+    def _confere(self, baixado_bytes: bytes, importado_bytes: bytes):
         with tempfile.TemporaryDirectory() as pasta:
             baixado = Path(pasta) / "baixado.xlsx"
-            baixado.write_bytes(b"resalvo")
-            self._estado(Path(pasta), b"original")
-            mesmo = {"1": {"status": "EM ABERTO", "encerramento": ""}}
-            with patch.object(automacao, "DASHBOARD_SAIDA_DIR", Path(pasta) / "sebrae_dashboard_saida"), \
-                    patch("domains.sebrae_dashboard.ler_status_chamados", return_value=mesmo):
+            baixado.write_bytes(baixado_bytes)
+            self._estado(Path(pasta), importado_bytes)
+            with patch.object(automacao, "DASHBOARD_SAIDA_DIR", Path(pasta) / "sebrae_dashboard_saida"):
                 automacao.conferir_dashboard_do_sharepoint(baixado)
 
+    @staticmethod
+    def _dashboard(trocas=(), regravado=False) -> bytes:
+        """Dashboard de teste; ``trocas`` são (antes, depois) aplicados na aba; ``regravado`` muda só estilo e ordem do zip."""
+        from tests import test_sebrae_dashboard_gravacao as T
+
+        partes = T.partes_de(T.montar())
+        folha = partes["xl/worksheets/sheet4.xml"].decode()
+        for antes, depois in trocas:
+            assert antes in folha
+            folha = folha.replace(antes, depois, 1)
+        if regravado:
+            folha = folha.replace(' s="60"', ' s="61"')
+        partes["xl/worksheets/sheet4.xml"] = folha.encode()
+        saida = io.BytesIO()
+        with zipfile.ZipFile(saida, "w", zipfile.ZIP_STORED) as arquivo:
+            for nome in (reversed(list(partes)) if regravado else partes):
+                arquivo.writestr(nome, partes[nome])
+        return saida.getvalue()
+
+    def test_precheck_accepts_a_resaved_file_with_the_same_tickets(self):
+        regravado, original = self._dashboard(regravado=True), self._dashboard()
+        self.assertNotEqual(regravado, original)  # hash diferente, conteúdo igual
+        self._confere(regravado, original)
+
+    def test_precheck_aborts_when_a_colleague_edited_a_non_status_column(self):
+        celula = '<c r="{}2" s="112" t="inlineStr"><is><t>INCIDENTE</t></is></c>'
+        trocas = {
+            "A": ("<t>SIMPRESS</t>", "<t>OUTRO</t>"),
+            "B": ('<c r="P2"', celula.format("B") + '<c r="P2"'),
+            "J": ('<c r="P2"', celula.format("J") + '<c r="P2"'),
+            "S": ('<c r="V2"', celula.format("S") + '<c r="V2"'),
+        }
+        for coluna, troca in trocas.items():
+            with self.subTest(coluna=coluna), self.assertRaisesRegex(automacao.RotinaErro, "mudou depois da importação; importe de novo"):
+                self._confere(self._dashboard([troca]), self._dashboard())
+
     def test_precheck_aborts_when_the_sharepoint_file_changed(self):
-        with tempfile.TemporaryDirectory() as pasta:
-            baixado = Path(pasta) / "baixado.xlsx"
-            baixado.write_bytes(b"mudou")
-            self._estado(Path(pasta), b"original")
-            mapas = [{"1": {"status": "FINALIZADO", "encerramento": "01/01/2026 10:00"}}, {"1": {"status": "EM ABERTO", "encerramento": ""}}]
-            with patch.object(automacao, "DASHBOARD_SAIDA_DIR", Path(pasta) / "sebrae_dashboard_saida"), \
-                    patch("domains.sebrae_dashboard.ler_status_chamados", side_effect=mapas):
-                with self.assertRaisesRegex(automacao.RotinaErro, "mudou depois da importação; importe de novo"):
-                    automacao.conferir_dashboard_do_sharepoint(baixado)
+        trocas = {
+            "C": ("<t>UTIC-2026-0001</t>", "<t>UTIC-2026-0009</t>"),
+            "D": ("<t>EM ABERTO</t>", "<t>FINALIZADO</t>"),
+            "R": ('<c r="V2"', '<c r="R2" s="92"><v>46001.5</v></c><c r="V2"'),
+        }
+        for coluna, troca in trocas.items():
+            with self.subTest(coluna=coluna), self.assertRaisesRegex(automacao.RotinaErro, "mudou depois da importação; importe de novo"):
+                self._confere(self._dashboard([troca]), self._dashboard())
 
     def test_precheck_aborts_when_the_stored_copy_is_missing(self):
         with tempfile.TemporaryDirectory() as pasta:
