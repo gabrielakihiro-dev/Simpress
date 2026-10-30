@@ -115,6 +115,8 @@ Chamado que estava aberto na importação anterior e agora está `FINALIZADO` (D
 
 Único ponto em que algo é gravado no SharePoint, autorizado pelo usuário em 29/10/2026. Passos e salvaguardas (Duplicata, conferência, backup dos 20 últimos em `data/state/sebrae_backups/`, `Replace`) estão em `docs/operacao/automacao-chrome.md`. Nome fixo do arquivo: `Dashboard Operacional_SEBRAE.xlsx` (sem "(atualizado)").
 
+Importar um Dashboard novo (inclusive por `Baixar, importar e buscar`) **apaga** a saída guardada em `data/state/sebrae_dashboard_saida/`: ela vinha da importação anterior e subi-la sobreporia chamados que entraram no SharePoint depois. Sem arquivo, `Enviar ao SharePoint` recusa com "Use Atualizar Dashboard antes"; gere a saída de novo.
+
 **Verificado em ensaio real (29/10/2026, interface em português):** botão `Criar ou carregar` e item `Carregamento de arquivos` (só o menu foi aberto, sem enviar nada); linha > `Mais Ações` > `Baixar` salva em Downloads (hash igual em duas execuções); `Duplicata` cria `Dashboard Operacional_SEBRAE Copiar.xlsx` em ~10 s, e o Baixar seguinte continua escolhendo o original. A cópia de teste ficou na pasta e não foi mexida.
 
 **Verificado também no Replace (30/10/2026, pasta de teste `ENSAIO_TESTE_APAGAR` com `Ensaio_Replace.xlsx`; o Dashboard real não foi tocado):** segundo envio com o mesmo nome mostra um aviso (toast) "Já existe um arquivo com este nome…" com os botões `Substituir` e `Manter ambos`; `Substituir` conclui com o aviso "… carregado para <pasta>". Com o mesmo conteúdo a linha do arquivo não muda (tamanho igual, "Há alguns segundos"), então o aviso é o sinal confiável. `enviar_arquivo_para_pasta` rodou inteira nessa pasta.
