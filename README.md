@@ -4,7 +4,7 @@ Aplicação web local para consultar equipamentos, preparar transferências Simp
 
 ## Recursos
 
-- Interface Cockpit com as abas **Home** (F1), **Transporte** (F2), **Resumo** (F3) e **Automação** (F4), mais o menu **Ferramentas** com os painéis de chamados, comparação, históricos, relatório mensal e assistente.
+- Interface Cockpit com as abas **Home** (F1), **Transporte** (F2), **Resumo** (F3) e **Automação** (F4), mais o menu **Ferramentas** com os painéis de chamados, comparação, históricos e relatório mensal, e o chat flutuante do assistente (ícone no topbar).
 - Busca por número de série, apelido/hostname, modelo, cidade ou usuário logado. A busca completa pode ser filtrada por categoria, cidade e usuário (**Sem usuário**/**Com usuário**).
 - Geração e download da planilha oficial de transferência a partir do modelo local.
 - Painel **Chamados** com a tabela de ordens de serviço por série (Fonte, Série, OS, Usuário, Hostname, Chamado e Descrição), que relaciona as exportações Simpress e Oracle, marca divergências e permite vincular cada OS a um chamado `UTIC-<ano>-<número>`.
@@ -18,7 +18,7 @@ Aplicação web local para consultar equipamentos, preparar transferências Simp
 - Central de pendências e comparação da evolução entre atualizações.
 - Exportação de `Apelido` e, quando disponível, `IdCliente` para um modelo Excel local.
 - Catálogo de unidades, endereços, CNPJ e CEP, incluindo unidades personalizadas.
-- Painel do assistente (F9) com IA própria: o servidor local chama o OpenRouter com a chave `OPENROUTER_API_KEY` do arquivo `.env` (copie `.env.example`); não depende do Jarvis nem de outro processo. Alterações de dados só rodam depois da sua confirmação. Veja [Assistente (F9)](#assistente-f9).
+- Chat flutuante do assistente (ícone no topbar, F9) com IA própria: o servidor local chama o OpenRouter com a chave `OPENROUTER_API_KEY` do arquivo `.env` (copie `.env.example`); não depende do Jarvis nem de outro processo. Alterações de dados só rodam depois da sua confirmação. Veja [Assistente (F9)](#assistente-f9).
 
 ## Requisitos
 
@@ -298,7 +298,7 @@ O **Histórico** registra alterações manuais de apelido e permite desfazer a a
 
 O **Catálogo de Unidades** permite consultar unidades e manter unidades personalizadas. Os botões ao lado do CNPJ e do CEP copiam os valores; a interface informa sucesso ou falha.
 
-As abas principais ficam na barra superior: **Home** (F1), **Transporte** (F2), **Resumo** (F3) e **Automação** (F4). O menu **Ferramentas** agrupa os painéis (**Chamados**, **Comparação**, **Histórico de apelidos**, **Relatório mensal**, **Assistente**), as planilhas (**Atualizar planilhas**, **Exportar Excel**, **Histórico planilhas**, **Chamados Sebrae**) e o histórico e catálogo (**Evolução das atualizações**, **Catálogo de unidades**, **Histórico do Dashboard Sebrae**).
+As abas principais ficam na barra superior: **Home** (F1), **Transporte** (F2), **Resumo** (F3) e **Automação** (F4). O menu **Ferramentas** agrupa os painéis (**Chamados**, **Comparação**, **Histórico de apelidos**, **Relatório mensal**), as planilhas (**Atualizar planilhas**, **Exportar Excel**, **Histórico planilhas**, **Chamados Sebrae**) e o histórico e catálogo (**Evolução das atualizações**, **Catálogo de unidades**, **Histórico do Dashboard Sebrae**).
 
 A aba **Home** concentra a busca por série, apelido/hostname, modelo, cidade ou usuário; **Equipamentos sem usuário**, abaixo da pesquisa, lista os equipamentos sem usuário do Endpoint nem manual. Após selecionar um equipamento, a tela permanece nela; abra **Transporte** manualmente para preencher a transferência e acessar a barra de ações, fixa na base da tela.
 
@@ -318,7 +318,7 @@ O site só grava no arquivo gerado; apenas a rotina `enviar` sobrepõe o arquivo
 
 ### Assistente (F9)
 
-O painel do assistente abre com F9 ou pelo menu **Ferramentas**. O servidor local chama o OpenRouter direto, com a chave `OPENROUTER_API_KEY` do `.env` (veja [Planilhas e arquivos locais](#planilhas-e-arquivos-locais)); a chave nunca vai para a interface, os logs ou as respostas da API. Os modelos padrão podem ser trocados por `MODELO_PRINCIPAL`, `MODELO_FALLBACK` e `MODELO_AUDIO` no `.env`.
+O assistente é um chat flutuante no canto inferior direito: abre e fecha pelo ícone de robô à direita do sino de notificações, na barra superior, ou com F9. O servidor local chama o OpenRouter direto, com a chave `OPENROUTER_API_KEY` do `.env` (veja [Planilhas e arquivos locais](#planilhas-e-arquivos-locais)); a chave nunca vai para a interface, os logs ou as respostas da API. Os modelos padrão podem ser trocados por `MODELO_PRINCIPAL`, `MODELO_FALLBACK` e `MODELO_AUDIO` no `.env`.
 
 - O assistente consulta as rotas do próprio Simpress. Toda alteração de dados para antes e mostra um cartão de confirmação, com texto montado pelo programa; no máximo uma alteração por mensagem.
 - Só sai do computador o texto da conversa e o resultado das consultas, com `data_collection: deny`. Antes do envio, CPFs são mascarados, nomes de pessoas viram marcadores `[PESSOA_n]` (restaurados só na tela) e e-mails e telefones são removidos, assim como senhas escritas como `senha: valor` ou `senha=valor`.
@@ -444,7 +444,7 @@ routers/equipment_search.py         Rotas de busca e estatísticas de equipament
 routers/system.py                    Rotas de status e configuração do sistema
 routers/units.py                     Rotas e esquema do catálogo de unidades
 routers/operations.py                Chamados Simpress/Oracle e vínculos UTIC por OS
-routers/assistant.py                 Rotas /api/assistente/* do painel F9
+routers/assistant.py                 Rotas /api/assistente/* do chat do assistente (F9)
 routers/automation.py                Rotas da aba Automação
 routers/sebrae_dashboard.py          Importação do Dashboard e chamados novos do Sebrae
 static/                              Interface web, scripts e arquivos locais de estilo/fonte/ícone

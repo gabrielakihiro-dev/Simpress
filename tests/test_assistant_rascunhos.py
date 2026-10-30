@@ -7,7 +7,7 @@ from domains.assistant_chat import MAX_CARACTERES_RESPOSTA, SYSTEM_PROMPT, Assis
 from domains.assistant_notas import NotasStore
 from domains.assistant_rascunhos import LIMITE_ITENS, TIPOS, montar_rascunho
 from domains.assistant_tools import QUERY_TOOLS, TOOLS
-from tests.test_assistant import CPF, FakeModel, call, calls, temp_json, text
+from tests.test_assistant import CPF, FakeModel, abrir, call, calls, temp_json, text
 
 SEBRAE_SERIES = ("BRJ135P5XS", "BRJ142QKBQ", "BRJ9435VMR", "BRJ9435VMF", "BRJ149SCJG")
 EMAIL = "maria.souza@exemplo.com"
@@ -101,7 +101,7 @@ class MontarRascunhoTests(unittest.TestCase):
             model = FakeModel(calls(call("montar_rascunho", tipo=tipo, assunto_extra="x" * 500)), text("ok"))
             conversa = AssistantConversation(model, SimpressApi(FakeTransport(comparacao)), "modelo-teste", lambda: "", NotasStore(temp_json()))  # type: ignore[arg-type]
             conversa.enviar_mensagem("rascunha")
-            conteudo = next(m["content"] for m in model.sent[1] if m["role"] == "tool")
+            conteudo = abrir(next(m["content"] for m in model.sent[1] if m["role"] == "tool"))
             self.assertLess(len(conteudo), MAX_CARACTERES_RESPOSTA, tipo)
             self.assertNotIn("aviso", json.loads(conteudo), tipo)
 

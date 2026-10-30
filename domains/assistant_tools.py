@@ -5,12 +5,15 @@ runs on the model's word: the conversation first shows a confirmation card whose
 from `describe`, written here from the arguments, never by the model.
 """
 
+import re
+import unicodedata
 from dataclasses import dataclass
 from typing import Any, Callable, Dict, List, Optional, Tuple
 
 from domains.assistant_anexos import AnexoStore, ler_pagina
 from domains.assistant_api import (
-    DECISOES_VALIDAS, FONTES_VINCULO_OS, MAX_ANOTACAO, ROTINAS_VALIDAS, SimpressApi, montar_contato_origem, validar_anotacao, validar_vinculo_os,
+    ACOES_APELIDO_MANUAL, DECISOES_VALIDAS, FONTES_VINCULO_OS, MAX_ANOTACAO, ROTINAS_VALIDAS, SimpressApi, montar_contato_origem, validar_anotacao,
+    validar_transferencia, validar_vinculo_os,
 )
 from domains.assistant_busca_web import LIMITE_CONSULTA
 from domains.assistant_lgpd import limpar_texto_sensivel
@@ -62,15 +65,61 @@ def _change(
     name: str,
     description: str,
     run: Callable[[SimpressApi, Args], Dict[str, Any]],
-    describe: Callable[[Args], str],
+    describe: Callable[..., str],
     properties: Optional[Dict[str, Any]] = None,
     required: Optional[List[str]] = None,
+    com_api: bool = False,
 ) -> Tool:
-    return Tool(name, description, run, properties or {}, required or [], changes_data=True, describe=describe)
+    return Tool(name, description, run, properties or {}, required or [], changes_data=True, describe=describe, describe_com_api=com_api)
 
 
 def _serial(args: Args) -> str:
     return str(args.get("serial", "")).strip().upper()
+
+
+def _atual(valor: Any) -> str:
+    """Current value for a card (screen only). Lists (several logged users) join; free text goes through the CPF/password cleaning."""
+    if isinstance(valor, (list, tuple)):
+        valor = ", ".join(str(v) for v in valor)
+    return limpar_texto_sensivel(str(valor or "").strip()) or "(vazio)"
+
+
+def _describe_apelido(api: SimpressApi, args: Args) -> str:
+    serial, novo = _serial(args), args.get("apelido", "")
+    equipamento = api.equipamento_atual(serial)
+    if equipamento is None or "apelido" not in equipamento:  # lookup miss: the plain card, never an error
+        return f"Alterar o apelido do serial {serial} para '{novo}'."
+    return f"Alterar o apelido do serial {serial}: '{_atual(equipamento['apelido'])}' → '{novo}'."
+
+
+def _describe_usuario(api: SimpressApi, args: Args) -> str:
+    serial, novo = _serial(args), args.get("usuario", "")
+    equipamento = api.equipamento_atual(serial)
+    if equipamento is None or not ({"usuarios_logados", "usuario_manual"} & equipamento.keys()):
+        return f"Alterar o usuário do serial {serial} para '{novo}'."
+    return f"Alterar o usuário do serial {serial}: '{_atual(equipamento.get('usuarios_logados') or equipamento.get('usuario_manual'))}' → '{novo}'."
+
+
+def _digitos(valor: Any) -> str:
+    return "".join(c for c in str(valor or "") if c.isdigit())
+
+
+def _describe_unidade(api: SimpressApi, args: Args) -> str:
+    if args.get("id") in (None, ""):
+        return _describe_unit(args)
+    atual = api.unidade_atual(args.get("id"))
+    if atual is None:
+        return _describe_unit(args)
+    novos = {
+        "cidade": str(args.get("cidade", "")).strip(), "endereço": str(args.get("endereco", "")).strip(),
+        "UF": str(args.get("uf") or "PR").strip(), "CEP": str(args.get("cep", "")).strip(), "CNPJ": str(args.get("cnpj", "")).strip(),
+    }
+    antigos = {"cidade": atual.get("cidade"), "endereço": atual.get("endereco"), "UF": atual.get("uf"), "CEP": atual.get("cep"), "CNPJ": atual.get("cnpj")}
+    mudancas = [
+        f"{campo} '{_atual(antigos[campo])}' → '{novo}'" for campo, novo in novos.items()
+        if (_digitos(antigos[campo]) != _digitos(novo) if campo in ("CEP", "CNPJ") else str(antigos[campo] or "").strip() != novo)
+    ]
+    return f"Editar a unidade #{args.get('id')}: {'; '.join(mudancas) if mudancas else 'nenhum campo muda'}."
 
 
 def _describe_unit(args: Args) -> str:
@@ -327,6 +376,67 @@ def _describe_concluir_lembrete(notas: NotasStore, args: Args) -> str:
 
 def _describe_apagar_lembrete(notas: NotasStore, args: Args) -> str:
     return f"Apagar o lembrete \"{_nota_do_cartao(notas, args)['texto']}\"."
+
+
+def _describe_transferencia(args: Args) -> str:
+    corpo = validar_transferencia(args)  # ValueError (missing/invalid field) goes back to the model, no card
+    extras = "".join(f"; {rotulo} {limpar_texto_sensivel(corpo[campo])}" for campo, rotulo in (
+        ("entrega_cidade", "cidade"), ("descricao_equipamento", "equipamento"), ("entrega_obs", "obs.")) if campo in corpo)
+    return (
+        f"Registrar no histórico de transferências a série {corpo['serial']}: entrega para {limpar_texto_sensivel(corpo['entrega_contato'])}, "
+        f"{limpar_texto_sensivel(corpo['entrega_endereco'])}, CNPJ {corpo['entrega_cnpj']}{extras}. "
+        "Só registra a linha no histórico; não gera a planilha de transferência (isso é feito na tela de Transferência)."
+    )
+
+
+def _describe_apelido_manual(api: SimpressApi, args: Args) -> str:
+    evento_id, serial, acao = str(args.get("evento_id", "")).strip(), _serial(args), str(args.get("acao", "")).strip().lower()
+    if acao not in ACOES_APELIDO_MANUAL:
+        raise ValueError("Escolha 'manter' ou 'excluir'.")
+    divergencia = api.divergencia_apelido_manual(evento_id, serial)
+    if divergencia is None:
+        raise ValueError("Divergência não encontrada nesse evento. Use listar_eventos_comparacao e abra o evento para ver as divergências de apelido manual.")
+    if divergencia.get("resolucao") != "pendente":
+        raise ValueError("Essa divergência já foi resolvida no histórico. Nada a alterar.")
+    manual = _atual(divergencia.get("apelido_manual"))
+    if acao == "manter":
+        return f"Manter o apelido manual '{manual}' da série {serial} e marcar a divergência do evento {evento_id} como resolvida."
+    return (
+        f"Excluir o apelido manual '{manual}' da série {serial}: o apelido volta a seguir as planilhas de origem, a base é recarregada "
+        f"e a divergência do evento {evento_id} fica resolvida. O sistema recusa se o apelido manual mudou desde a comparação."
+    )
+
+
+def _describe_nome_pessoa(api: SimpressApi, args: Args) -> str:
+    serial, nome = _serial(args), limpar_texto_sensivel(str(args.get("nome", "")).strip())
+    pessoa = api.pessoa_da_serie(serial)
+    if pessoa is None:
+        raise ValueError("Não foi possível consultar o usuário logado dessa série. Confira a série com consultar_equipamento.")
+    login = str(pessoa.get("usuario") or "").strip()
+    if not nome:
+        atual = _atual(pessoa.get("nome_pessoa"))
+        return f"Remover o nome manual da pessoa ('{atual}') do login {login or '(sem login)'} da série {serial}; o nome volta ao que vier do Entra, se houver."
+    if not login or pessoa.get("nome_pessoa_editavel") is False:
+        raise ValueError("Esse equipamento não tem login válido para vincular um nome (ou o nome vem do Entra e não é editável).")
+    return f"Salvar o nome '{nome}' para o login {login} da série {serial} (vale para esse login, não só para este equipamento)."
+
+
+def _describe_excluir_chamados_antigos(api: SimpressApi, args: Args) -> str:
+    total = api.total_importacoes_chamados()
+    if total is not None and total <= 1:
+        raise ValueError("Só existe uma importação no acompanhamento de chamados. Nada a remover.")
+    quantas = f"{total - 1} importação(ões)" if total else "As importações anteriores"
+    return (
+        f"Excluir as importações antigas do acompanhamento de chamados: {quantas} será(ão) apagada(s) e só a mais recente fica. "
+        "A linha do tempo e a evolução entre importações perdem esse histórico. Não dá para desfazer."
+    )
+
+
+def _describe_recarregar_base(args: Args) -> str:
+    return (
+        "Recarregar a base: a planilha válida mais recente da pasta de entrada substitui os dados em memória do sistema. "
+        "As planilhas em si não são alteradas."
+    )
 
 
 QUERY_TOOLS: List[Tool] = [
@@ -643,6 +753,47 @@ QUERY_TOOLS: List[Tool] = [
         [],
         usa_notas=True,
     ),
+    _read(
+        "historico_chamados",
+        "Lista as importações do acompanhamento de chamados (mais recentes primeiro): id, data, arquivos de origem e resumo. Os ids servem a snapshot_chamados e evolucao_chamados.",
+        lambda c, a: c.historico_chamados(a.get("limite")),
+        {"limite": {"type": "integer", "description": "Quantas importações trazer (1 a 20, padrão 10)."}},
+    ),
+    _read(
+        "snapshot_chamados",
+        "Mostra uma importação do acompanhamento de chamados: resumo, contagem e as primeiras séries com a relação de OS. O id vem de historico_chamados.",
+        lambda c, a: c.snapshot_chamados(a.get("id")),
+        {"id": {"type": "string", "description": "Id da importação (de historico_chamados)."}},
+        ["id"],
+    ),
+    _read(
+        "evolucao_chamados",
+        "Compara duas importações do acompanhamento de chamados: séries novas, alteradas (com os nomes dos campos) e ausentes no arquivo mais novo. "
+        "Para a evolução do inventário use evolucao_atualizacoes.",
+        lambda c, a: c.evolucao_chamados(a.get("anterior"), a.get("atual")),
+        {
+            "anterior": {"type": "string", "description": "Id da importação mais antiga (de historico_chamados)."},
+            "atual": {"type": "string", "description": "Id da importação mais nova (de historico_chamados)."},
+        },
+        ["anterior", "atual"],
+    ),
+    _read(
+        "historico_sebrae",
+        "Histórico de importações e buscas do Sebrae (contagens). Com entrada_id traz o detalhe de uma entrada. Para o resumo atual use resumo_sebrae.",
+        lambda c, a: c.historico_sebrae(a.get("entrada_id"), a.get("tipo"), a.get("limite")),
+        {
+            "entrada_id": {"type": "string", "description": "Id de uma entrada da lista (opcional; sem ele traz a lista)."},
+            "tipo": {"type": "string", "enum": ["importacao", "busca"], "description": "Filtra a lista (opcional)."},
+            "limite": {"type": "integer", "description": "Quantas entradas trazer (1 a 20, padrão 10)."},
+        },
+    ),
+    _read(
+        "usuarios_logados",
+        "Consulta o usuário logado e o nome da pessoa de até 20 séries de uma vez (sem alterar nada). Para uma série só, consultar_equipamento já traz.",
+        lambda c, a: c.usuarios_logados(a.get("series")),
+        {"series": {"type": "array", "items": {"type": "string"}, "description": "Séries a consultar (até 20)."}},
+        ["series"],
+    ),
     Tool(
         "buscar_web",
         "Pesquisa na internet um texto GENÉRICO e público (ex.: 'especificação técnica do MacBook Air M2', 'como resetar a impressora X modelo Y'). "
@@ -661,17 +812,19 @@ CHANGE_TOOLS: List[Tool] = [
         "atualizar_apelido",
         "Altera o apelido de um equipamento. O usuário confirma antes.",
         lambda c, a: c.atualizar_apelido(str(a.get("serial", "")), str(a.get("apelido", ""))),
-        lambda a: f"Alterar o apelido do serial {_serial(a)} para '{a.get('apelido', '')}'.",
+        _describe_apelido,
         {"serial": SERIAL, "apelido": {"type": "string", "description": "Novo apelido (até 160 caracteres)."}},
         ["serial", "apelido"],
+        com_api=True,
     ),
     _change(
         "atualizar_usuario",
         "Altera o usuário manual de um equipamento. O usuário confirma antes.",
         lambda c, a: c.atualizar_usuario(str(a.get("serial", "")), str(a.get("usuario", ""))),
-        lambda a: f"Alterar o usuário do serial {_serial(a)} para '{a.get('usuario', '')}'.",
+        _describe_usuario,
         {"serial": SERIAL, "usuario": {"type": "string", "description": "Nome do usuário."}},
         ["serial", "usuario"],
+        com_api=True,
     ),
     _change(
         "salvar_unidade",
@@ -681,7 +834,7 @@ CHANGE_TOOLS: List[Tool] = [
             cidade=str(a.get("cidade", "")), endereco=str(a.get("endereco", "")), cnpj=str(a.get("cnpj", "")),
             uf=str(a.get("uf", "") or "PR"), cep=str(a.get("cep", "") or ""), id=a.get("id"),
         ),
-        _describe_unit,
+        _describe_unidade,
         {
             "id": {"type": "integer", "description": "Id da unidade a editar (de listar_unidades). Omita só para criar."},
             "cidade": {"type": "string"},
@@ -691,6 +844,7 @@ CHANGE_TOOLS: List[Tool] = [
             "cnpj": {"type": "string"},
         },
         ["cidade", "endereco", "cnpj"],
+        com_api=True,
     ),
     _change(
         "decidir_pendencia_usuario",
@@ -854,6 +1008,59 @@ CHANGE_TOOLS: List[Tool] = [
         describe=_describe_restaurar_hostname,
         describe_com_api=True,
     ),
+    _change(
+        "registrar_transferencia",
+        "Registra uma linha no histórico de transferências (só o registro; NÃO gera a planilha de transferência). "
+        "E-mail e celular não passam por aqui: para eles, oriente a usar a tela de Transferência. O usuário confirma antes.",
+        lambda c, a: c.registrar_transferencia(a),
+        _describe_transferencia,
+        {
+            "serial": SERIAL,
+            "entrega_cnpj": {"type": "string", "description": "CNPJ da entrega (14 dígitos)."},
+            "entrega_endereco": {"type": "string", "description": "Endereço da entrega."},
+            "entrega_contato": {"type": "string", "description": "Nome do contato da entrega."},
+            "entrega_cidade": {"type": "string", "description": "Cidade (opcional)."},
+            "descricao_equipamento": {"type": "string", "description": "Descrição do equipamento (opcional)."},
+            "entrega_obs": {"type": "string", "description": "Observação (opcional)."},
+        },
+        ["serial", "entrega_cnpj", "entrega_endereco", "entrega_contato"],
+    ),
+    _change(
+        "resolver_apelido_manual",
+        "Resolve uma divergência de apelido manual de um evento do Histórico de Planilhas: 'manter' o apelido manual ou 'excluir' (o apelido volta a seguir as planilhas). "
+        "Só divergência pendente. O usuário confirma antes.",
+        lambda c, a: c.resolver_apelido_manual(a.get("evento_id", ""), a.get("serial", ""), a.get("acao", "")),
+        _describe_apelido_manual,
+        {
+            "evento_id": {"type": "string", "description": "Id do evento (de listar_eventos_comparacao)."},
+            "serial": SERIAL,
+            "acao": {"type": "string", "enum": list(ACOES_APELIDO_MANUAL), "description": "manter ou excluir o apelido manual."},
+        },
+        ["evento_id", "serial", "acao"],
+        com_api=True,
+    ),
+    _change(
+        "salvar_nome_pessoa",
+        "Grava o nome da pessoa que usa o login atual de um equipamento; nome vazio remove o nome manual. O login é obtido pelo sistema. O usuário confirma antes.",
+        lambda c, a: c.salvar_nome_pessoa(a.get("serial", ""), a.get("nome", "")),
+        _describe_nome_pessoa,
+        {"serial": SERIAL, "nome": {"type": "string", "description": "Nome da pessoa, nas palavras do usuário (vazio remove)."}},
+        ["serial", "nome"],
+        com_api=True,
+    ),
+    _change(
+        "excluir_chamados_antigos",
+        "Apaga as importações antigas do acompanhamento de chamados e mantém só a mais recente. Não dá para desfazer. O usuário confirma antes.",
+        lambda c, a: c.excluir_chamados_antigos(),
+        _describe_excluir_chamados_antigos,
+        com_api=True,
+    ),
+    _change(
+        "recarregar_base",
+        "Recarrega a base a partir da planilha válida mais recente da pasta de entrada (substitui os dados em memória). O usuário confirma antes.",
+        lambda c, a: c.recarregar_base(),
+        _describe_recarregar_base,
+    ),
     Tool(
         "criar_lembrete",
         "Guarda um lembrete ou nota do usuário ('me lembre de conferir o lote X', 'anote que a série Y foi para manutenção'). "
@@ -896,3 +1103,92 @@ TOOLS: Dict[str, Tool] = {tool.name: tool for tool in QUERY_TOOLS + CHANGE_TOOLS
 
 def tool_schemas(busca_web: bool = False) -> List[Dict[str, Any]]:
     return [tool.schema() for tool in TOOLS.values() if busca_web or not tool.usa_web]
+
+
+# --- schemas por mensagem ---------------------------------------------------------------------
+# Sending all ~70 schemas on every round is expensive. `schemas_para_mensagem` sends the core plus the
+# groups the user's text points at. A group brings its reads AND its writes (the text is the intent);
+# a write never enters through another group's words. No group recognised -> every tool (safe fallback).
+
+NUCLEO_FERRAMENTAS: Tuple[str, ...] = (
+    "consultar_equipamento", "pesquisar_catalogo", "obter_totais_inventario", "obter_painel", "obter_prontidao", "listar_pendencias_operacionais",
+    "listar_lembretes", "criar_lembrete", "concluir_lembrete", "apagar_lembrete", "ler_anexo", "gerar_relatorio", "montar_rascunho", "buscar_web",
+)
+
+# name -> (regex over the text without accents and in lower case, tools of the group)
+GRUPOS_FERRAMENTAS: Dict[str, Tuple[str, Tuple[str, ...]]] = {
+    "chamados": (
+        r"\bchamad|\butic\b|ordem de servico|\bo\.s\.|\bvincul|\bsla\b",
+        ("listar_chamados_abertos", "linha_do_tempo_chamados", "historico_chamados", "snapshot_chamados", "evolucao_chamados",
+         "listar_vinculos_os", "vincular_os", "anotar_linha_do_tempo", "excluir_chamados_antigos"),
+    ),
+    "sebrae": (
+        r"\bsebrae|\bdashboard|sharepoint",
+        ("resumo_sebrae", "chamados_novos_sebrae", "proximo_passo_sebrae", "chamados_antigos_abertos_sebrae", "historico_sebrae"),
+    ),
+    "historico": (
+        r"\bhistoric|\bcompar|\bplanilha|\batualizacao|\batualizacoes|\bevolu|\bperiodo|\bevento|\brestaur|\bdivergen|\banotac|\banot(?:e|ar)\b|\bdesfaz|\bdesfazer",
+        ("consultar_ultima_comparacao", "consultar_historico_comparacao", "listar_anotacoes_historico", "listar_secao_comparacao", "listar_eventos_comparacao",
+         "evolucao_atualizacoes", "comparar_periodos", "explicar_divergencia", "anotar_linha_historico", "restaurar_comparacao", "excluir_comparacao",
+         "listar_historico_alteracoes", "desfazer_apelido", "excluir_evento_alteracao", "resolver_apelido_manual"),
+    ),
+    "transferencia": (
+        r"\btransfer|\bentrega|\bcontato",
+        ("listar_transferencias", "ver_contato_origem_transferencia", "alterar_contato_origem_transferencia", "registrar_transferencia"),
+    ),
+    "automacao": (
+        r"\bautoma|\brotina|\bchrome|\bsincroniz|\bdashboard|\bexecut|\brod(?:e|ar|a)\b|\blogin\b|\bcancel",
+        ("consultar_status_automacao", "listar_historico_automacao", "log_execucao_automacao", "executar_automacao_chrome", "cancelar_automacao_chrome"),
+    ),
+    "usuarios": (
+        r"\busuario|\bentra\b|\blogad|\bpessoa|\blogin\b|\bnome\b|\bpendencia",
+        ("estado_usuarios_entra", "listar_pendencias_usuarios", "decidir_pendencia_usuario", "atualizar_usuario", "usuarios_logados", "salvar_nome_pessoa"),
+    ),
+    "apelido": (
+        r"\bapelido|\balias\b|\brenome",
+        ("listar_apelidos_modificados", "listar_historico_alteracoes", "atualizar_apelido", "desfazer_apelido", "resolver_apelido_manual"),
+    ),
+    "unidade": (
+        r"\bunidade|\bcnpj|\bcep\b|\bendereco|\blocalidade|\bfilial|\bcidade",
+        ("listar_unidades", "salvar_unidade", "listar_divergencias_localidade", "consultar_divergencia_localidade"),
+    ),
+    "hostname": (
+        r"\bhostname|\bduplicad|\bendpoint",
+        ("listar_hostnames_removidos", "remover_hostname_endpoint", "restaurar_hostname_endpoint"),
+    ),
+    "mensal": (r"\bmensal|\bmes\b|\bmeses\b|\brelatorio", ("obter_relatorio_mensal", "comparar_periodos")),
+    "exportar": (r"\bexport|\bexcel|\bxlsx|\bcsv|\bplanilha", ("exportar_planilha",)),
+    "recarregar": (r"\brecarreg|\brecarga\b|\bbase de dados", ("recarregar_base",)),
+}
+_PADROES_GRUPOS = {nome: re.compile(padrao) for nome, (padrao, _) in GRUPOS_FERRAMENTAS.items()}
+_SIGLA_OS = re.compile(r"\bOS\b")  # case-sensitive on purpose: "os" is the Portuguese article
+
+
+def _sem_acento(texto: str) -> str:
+    return "".join(c for c in unicodedata.normalize("NFD", texto) if unicodedata.category(c) != "Mn").lower()
+
+
+def grupos_da_mensagem(texto: str) -> List[str]:
+    """Groups of GRUPOS_FERRAMENTAS the user's text points at (empty when it says nothing specific)."""
+    texto = str(texto or "")
+    limpo = _sem_acento(texto)
+    grupos = [nome for nome, padrao in _PADROES_GRUPOS.items() if padrao.search(limpo)]
+    if "chamados" not in grupos and _SIGLA_OS.search(texto):
+        grupos.append("chamados")
+    return grupos
+
+
+def schemas_para_mensagem(texto: str, web_search_enabled: bool = False, pendente: Optional[str] = None) -> List[Dict[str, Any]]:
+    """Schemas for one user message: core + the groups the text points at (+ the tool whose card is pending, `pendente`).
+
+    No group recognised -> same as `tool_schemas(web_search_enabled)`. Same order as TOOLS; `buscar_web` still obeys the user's switch.
+    Compute it once per user message, not per round: a later round must not lose a tool the model already started using.
+    """
+    grupos = grupos_da_mensagem(texto)
+    if not grupos:
+        return tool_schemas(web_search_enabled)
+    nomes = set(NUCLEO_FERRAMENTAS)
+    nomes.update(n for g in grupos for n in GRUPOS_FERRAMENTAS[g][1])
+    if pendente:
+        nomes.add(pendente)
+    return [tool.schema() for tool in TOOLS.values() if tool.name in nomes and (web_search_enabled or not tool.usa_web)]

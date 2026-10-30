@@ -306,6 +306,78 @@ test("503 no envio: uma só chamada, aviso com Tentar novamente e texto devolvid
   expect(chamadas.filter(c => c.nome === "mensagem")).toHaveLength(1);
 });
 
+test("Cancelar durante o Pensando…: aborta o envio, tira o carregando e devolve o texto ao campo", async ({ page }) => {
+  await mockAssistente(page, { estado: PRONTO });
+  await page.route("**/api/assistente/mensagem", () => {}); // nunca responde
+  await page.goto("/");
+  await abrirAssistente(page);
+  const cancelar = page.locator("#assistente-cancelar-envio");
+  await expect(cancelar).toBeHidden();
+  await page.locator("#assistente-texto").fill("demora muito");
+  await page.keyboard.press("Enter");
+  await expect(page.locator("#assistente-status")).toHaveText("Pensando…");
+  await expect(page.locator("#assistente-mensagens")).toHaveAttribute("aria-busy", "true");
+  await expect(cancelar).toBeVisible();
+  await expect(cancelar).toHaveText("Cancelar");
+  await expect(page.getByRole("button", { name: "Cancelar envio" })).toBeVisible();
+  await cancelar.click();
+  await expect(page.locator("#assistente-status")).toContainText("Envio cancelado");
+  await expect(cancelar).toBeHidden();
+  await expect(page.locator("#assistente-mensagens")).toHaveAttribute("aria-busy", "false");
+  await expect(page.locator("#assistente-globo")).toHaveAttribute("data-estado", "parado");
+  await expect(page.locator("#assistente-texto")).toBeEnabled();
+  await expect(page.locator("#assistente-texto")).toHaveValue("demora muito");
+  await expect(page.locator("#assistente-texto")).toBeFocused();
+});
+
+test("sem resposta em 100 s o envio é abortado com mensagem clara e o campo volta a funcionar", async ({ page }) => {
+  await page.clock.install();
+  await mockAssistente(page, { estado: PRONTO });
+  await page.route("**/api/assistente/mensagem", () => {});
+  await page.goto("/");
+  await abrirAssistente(page);
+  await page.locator("#assistente-texto").fill("pergunta lenta");
+  await page.keyboard.press("Enter");
+  await expect(page.locator("#assistente-status")).toHaveText("Pensando…");
+  await page.clock.fastForward(99000);
+  await expect(page.locator("#assistente-status")).toHaveText("Pensando…");
+  await page.clock.fastForward(2000);
+  await expect(page.locator("#assistente-status")).toContainText("demorou demais");
+  await expect(page.locator("#assistente-cancelar-envio")).toBeHidden();
+  await expect(page.locator("#assistente-texto")).toBeEnabled();
+  await expect(page.locator("#assistente-texto")).toHaveValue("pergunta lenta");
+});
+
+test("409 (conversa ainda ocupada no servidor) mostra mensagem amigável e libera o campo", async ({ page }) => {
+  await mockAssistente(page, { estado: PRONTO, mensagem: { status: 409, detail: "Já existe uma conversa em andamento." } });
+  await page.goto("/");
+  await abrirAssistente(page);
+  await page.locator("#assistente-texto").fill("de novo");
+  await page.keyboard.press("Enter");
+  await expect(page.locator("#assistente-status")).toContainText("ainda está terminando a resposta anterior");
+  await expect(page.locator("#assistente-tentar")).toBeHidden();
+  await expect(page.locator("#assistente-texto")).toBeEnabled();
+  await expect(page.locator("#assistente-texto")).toHaveValue("de novo");
+});
+
+test("Cancelar durante a confirmação aborta a requisição e mantém o cartão para nova tentativa", async ({ page }) => {
+  await mockAssistente(page, {
+    estado: PRONTO,
+    mensagem: { texto: "Posso executar?", ferramentas: [], pendente: { descricao: "Abrir a pasta de entrada" } },
+  });
+  await page.route("**/api/assistente/confirmar", () => {});
+  await page.goto("/");
+  await abrirAssistente(page);
+  await page.locator("#assistente-texto").fill("abra a pasta");
+  await page.keyboard.press("Enter");
+  await page.locator("#assistente-confirmar").click();
+  await page.locator("#assistente-cancelar-envio").click();
+  await expect(page.locator("#assistente-status")).toContainText("Envio cancelado");
+  await expect(page.locator("#assistente-pendente")).toBeVisible();
+  await expect(page.locator("#assistente-confirmar")).toBeEnabled();
+  await expect(page.locator("#assistente-cancelar-envio")).toBeHidden();
+});
+
 test("painel aberto com ação pendente mostra a descrição dela, não um cartão genérico", async ({ page }) => {
   await mockAssistente(page, {
     estado: { ...PRONTO, aguardando_confirmacao: true, pendente: { descricao: "Alterar o apelido do serial ABC1 para 'Sala'." } },
@@ -324,7 +396,7 @@ test("Instruções permanentes: abre, carrega, conta, salva e limpa", async ({ p
   });
   await page.goto("/");
   await abrirAssistente(page);
-  const botao = page.getByRole("button", { name: "Instruções" });
+  const botao = page.getByRole("button", { name: "Instruções", exact: true });
   await expect(botao).toHaveAttribute("aria-expanded", "false");
   await expect(page.locator("#assistente-instrucoes")).toBeHidden();
   await botao.click();
@@ -554,7 +626,7 @@ test("Lembretes: abre, lista com prazo, conclui e reabre sem exibir HTML", async
   const chamadas = await mockAssistente(page, { estado: PRONTO, ...mockLembretes(lista) });
   await page.goto("/");
   await abrirAssistente(page);
-  const botao = page.getByRole("button", { name: "Lembretes" });
+  const botao = page.getByRole("button", { name: "Lembretes", exact: true });
   await expect(page.locator("#assistente-lembretes")).toBeHidden();
   await expect(botao).toHaveAttribute("aria-expanded", "false");
   await botao.click();
@@ -586,7 +658,7 @@ test("Lembretes: apagar pede confirmação no painel, Esc cancela e confirmar ap
   const chamadas = await mockAssistente(page, { estado: PRONTO, ...mockLembretes(lista) });
   await page.goto("/");
   await abrirAssistente(page);
-  await page.getByRole("button", { name: "Lembretes" }).click();
+  await page.getByRole("button", { name: "Lembretes", exact: true }).click();
   await expect(page.locator("#assistente-lembretes-lista li")).toHaveCount(2);
 
   await page.getByRole("button", { name: "Apagar lembrete: Série Y foi para manutenção" }).click();
@@ -614,13 +686,13 @@ test("Lembretes: erro ao carregar mostra o motivo e Instruções fecha a área (
   await mockAssistente(page, { estado: PRONTO, notas: { status: 500, detail: "Falha interna." }, instrucoes: { texto: "", limite: 4000 } });
   await page.goto("/");
   await abrirAssistente(page);
-  await page.getByRole("button", { name: "Lembretes" }).click();
+  await page.getByRole("button", { name: "Lembretes", exact: true }).click();
   await expect(page.locator("#assistente-lembretes-status")).toContainText("Falha interna.");
-  await page.getByRole("button", { name: "Instruções" }).click();
+  await page.getByRole("button", { name: "Instruções", exact: true }).click();
   await expect(page.locator("#assistente-instrucoes")).toBeVisible();
   await expect(page.locator("#assistente-lembretes")).toBeHidden();
   await expect(page.locator("#assistente-lembretes-botao")).toHaveAttribute("aria-expanded", "false");
-  await page.getByRole("button", { name: "Lembretes" }).click();
+  await page.getByRole("button", { name: "Lembretes", exact: true }).click();
   await expect(page.locator("#assistente-lembretes")).toBeVisible();
   await expect(page.locator("#assistente-instrucoes")).toBeHidden();
   await expect(page.locator("#assistente-instrucoes-botao")).toHaveAttribute("aria-expanded", "false");

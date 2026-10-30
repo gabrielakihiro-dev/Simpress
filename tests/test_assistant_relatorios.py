@@ -254,7 +254,7 @@ class FakeModel:
     def transcribe(self, wav: bytes) -> str:
         return ""
 
-    def complete(self, messages: List[Dict[str, Any]], tools: List[Dict[str, Any]]) -> ModelReply:
+    def complete(self, messages: List[Dict[str, Any]], tools: List[Dict[str, Any]], orcamento: Optional[float] = None) -> ModelReply:
         self.sent.append(json.loads(json.dumps(messages)))
         return self.replies.pop(0)
 

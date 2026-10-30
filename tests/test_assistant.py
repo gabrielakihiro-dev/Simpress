@@ -1,5 +1,6 @@
 import io
 import json
+import re
 import tempfile
 import threading
 import time
@@ -9,6 +10,7 @@ import warnings
 import zipfile
 import zlib
 from pathlib import Path
+from datetime import datetime
 from typing import Any, Dict, List, Optional, Tuple
 from unittest import mock
 from urllib.parse import quote
@@ -29,6 +31,14 @@ from domains.assistant_tools import CHANGE_TOOLS, QUERY_TOOLS, TOOLS, tool_schem
 from routers.assistant import AssistantRouteServices, create_assistant_router
 
 CPF = "529.982.247-25"
+
+
+def abrir(conteudo: str) -> str:
+    """JSON of a tool message without its <dados_da_ferramenta> envelope."""
+    achado = re.fullmatch(r'<dados_da_ferramenta nome="[^"]*">\n(.*)\n</dados_da_ferramenta>', conteudo, re.DOTALL)
+    assert achado, conteudo[:120]
+    return achado.group(1)
+
 _TMP = tempfile.TemporaryDirectory()
 
 
@@ -72,7 +82,7 @@ class FakeModel:
             raise self.transcript
         return str(self.transcript)
 
-    def complete(self, messages: List[Dict[str, Any]], tools: List[Dict[str, Any]]) -> ModelReply:
+    def complete(self, messages: List[Dict[str, Any]], tools: List[Dict[str, Any]], orcamento: Optional[float] = None) -> ModelReply:
         self.sent.append(json.loads(json.dumps(messages)))
         reply = self.replies.pop(0)
         if isinstance(reply, Exception):
@@ -121,14 +131,15 @@ class ToolCatalogTests(unittest.TestCase):
         self.assertEqual(tool.describe({"rotina": "os"}), "Executar a rotina 'os' de automação no Chrome.")  # type: ignore[misc]
 
     def test_confirmation_text_is_built_by_the_program(self) -> None:
+        api = SimpressApi(FakeSimpress())  # no "apelido" in the row and no /api/unidades: the card keeps the plain text
         self.assertEqual(
-            TOOLS["atualizar_apelido"].describe({"serial": " abc123 ", "apelido": "Sala 1"}),  # type: ignore[misc]
+            TOOLS["atualizar_apelido"].describe(api, {"serial": " abc123 ", "apelido": "Sala 1"}),  # type: ignore[misc]
             "Alterar o apelido do serial ABC123 para 'Sala 1'.",
         )
         self.assertEqual(TOOLS["cancelar_automacao_chrome"].describe({}), "Cancelar a rotina de automação em andamento.")  # type: ignore[misc]
         unit = TOOLS["salvar_unidade"].describe  # type: ignore[misc]
-        self.assertTrue(unit({"cidade": "A", "endereco": "B", "cnpj": "C"}).startswith("Criar nova unidade"))
-        self.assertTrue(unit({"id": 3, "cidade": "A", "endereco": "B", "cnpj": "C"}).startswith("Editar a unidade #3"))
+        self.assertTrue(unit(api, {"cidade": "A", "endereco": "B", "cnpj": "C"}).startswith("Criar nova unidade"))
+        self.assertTrue(unit(api, {"id": 3, "cidade": "A", "endereco": "B", "cnpj": "C"}).startswith("Editar a unidade #3"))
 
 
 class ConversationTests(unittest.TestCase):
@@ -149,7 +160,6 @@ class ConversationTests(unittest.TestCase):
     def test_change_stops_with_card_and_runs_only_after_confirmation(self) -> None:
         model = FakeModel(
             calls(call("atualizar_apelido", serial="abc123", apelido="Sala 1")),
-            text("Feito: apelido alterado."),
         )
         conversation, simpress = make_conversation(model)
         reply = conversation.enviar_mensagem("troque o apelido da ABC123 para Sala 1")
@@ -160,8 +170,17 @@ class ConversationTests(unittest.TestCase):
         confirmed = conversation.resolver_confirmacao(True)
         self.assertEqual(simpress.writes(), [("POST", "/api/equipamento/atualizar-apelido")])
         self.assertEqual(simpress.calls[-1][3], {"serial": "ABC123", "apelido": "Sala 1"})
-        self.assertEqual(confirmed.texto, "Feito: apelido alterado.")
+        # The text is built by the program from the tool result: no further model round.
+        self.assertEqual(
+            confirmed.texto,
+            "Apelido do serial ABC123 atualizado.\nAção confirmada: Alterar o apelido do serial ABC123 para 'Sala 1'.",
+        )
+        self.assertEqual(len(model.sent), 1)
+        self.assertEqual(confirmed.ferramentas, ["atualizar_apelido"])
         self.assertFalse(conversation.aguardando_confirmacao)
+        # History stays coherent: the call, its result and the assistant text are all there.
+        self.assertEqual([m["role"] for m in conversation._mensagens[-3:]], ["assistant", "tool", "assistant"])
+        self.assertEqual(conversation._mensagens[-1]["content"], confirmed.texto)
 
     def test_cancel_changes_nothing(self) -> None:
         model = FakeModel(calls(call("atualizar_apelido", serial="ABC123", apelido="X")), text("Ok, cancelado."))
@@ -299,15 +318,34 @@ class ConversationTests(unittest.TestCase):
     def test_without_instructions_the_prompt_is_unchanged_and_edits_apply_to_the_next_message(self) -> None:
         saved = {"texto": ""}
         model = FakeModel(text("a"), text("b"), text("c"))
-        conversation = AssistantConversation(model, SimpressApi(FakeSimpress()), "m", lambda: saved["texto"])
+        conversation = AssistantConversation(
+            model, SimpressApi(FakeSimpress()), "m", lambda: saved["texto"], agora=lambda: datetime(2026, 10, 30, 23, 59),
+        )
         conversation.enviar_mensagem("1")
         saved["texto"] = "Seja breve."
         conversation.enviar_mensagem("2")
         saved["texto"] = ""
         conversation.enviar_mensagem("3")
-        self.assertEqual(model.sent[0][0]["content"], SYSTEM_PROMPT)
+        # Without instructions the prompt is the base one plus today's date, nothing else.
+        self.assertEqual(model.sent[0][0]["content"], SYSTEM_PROMPT + "\n\nHoje é sexta-feira, 30/10/2026.")
         self.assertIn("Seja breve.", model.sent[1][0]["content"])
-        self.assertEqual(model.sent[2][0]["content"], SYSTEM_PROMPT)
+        self.assertEqual(model.sent[2][0]["content"], model.sent[0][0]["content"])
+
+    def test_prompt_carries_today_from_the_injected_clock(self) -> None:
+        for quando, esperado in (
+            (datetime(2026, 10, 30, 8, 0), "Hoje é sexta-feira, 30/10/2026."),
+            (datetime(2027, 1, 3, 23, 59), "Hoje é domingo, 03/01/2027."),
+            (datetime(2026, 3, 2), "Hoje é segunda-feira, 02/03/2026."),
+        ):
+            model = FakeModel(text("a"))
+            conversation = AssistantConversation(model, SimpressApi(FakeSimpress()), "m", agora=lambda quando=quando: quando)
+            conversation.enviar_mensagem("que dia é hoje?")
+            self.assertTrue(model.sent[0][0]["content"].endswith(esperado))
+
+    def test_prompt_uses_the_real_clock_by_default(self) -> None:
+        model = FakeModel(text("a"))
+        AssistantConversation(model, SimpressApi(FakeSimpress()), "m").enviar_mensagem("oi")
+        self.assertIn(f"{datetime.now():%d/%m/%Y}", model.sent[0][0]["content"][-40:])
 
     def test_instructions_cannot_turn_off_the_confirmation_card(self) -> None:
         model = FakeModel(calls(call("atualizar_apelido", serial="abc123", apelido="Sala 1")))
@@ -323,7 +361,7 @@ class ConversationTests(unittest.TestCase):
         release = threading.Event()
 
         class SlowModel:
-            def complete(self, messages: List[Dict[str, Any]], tools: List[Dict[str, Any]]) -> ModelReply:
+            def complete(self, messages: List[Dict[str, Any]], tools: List[Dict[str, Any]], orcamento: Optional[float] = None) -> ModelReply:
                 release.wait(5)
                 return text("pronto")
 
@@ -366,7 +404,7 @@ class AssistantRouteTests(unittest.TestCase):
         self.assertEqual(response.json(), {"texto": "oi", "ferramentas": ["obter_totais_inventario"], "pendente": None})
 
     def test_confirm_flow_and_state_survive_reload(self) -> None:
-        client, simpress, _ = make_client(FakeModel(calls(call("atualizar_apelido", serial="ABC123", apelido="X")), text("feito")))
+        client, simpress, _ = make_client(FakeModel(calls(call("atualizar_apelido", serial="ABC123", apelido="X")), ))
         body = client.post("/api/assistente/mensagem", json={"texto": "mude"}).json()
         card = {"descricao": "Alterar o apelido do serial ABC123 para 'X'."}
         self.assertEqual(body["pendente"], card)
@@ -374,7 +412,8 @@ class AssistantRouteTests(unittest.TestCase):
         self.assertEqual(state, {"online": True, "modelo": "google/gemini-2.5-flash-lite", "aguardando_confirmacao": True, "pendente": card})
         self.assertEqual(simpress.writes(), [])
         done = client.post("/api/assistente/confirmar", json={"confirmado": True}).json()
-        self.assertEqual(done, {"texto": "feito", "ferramentas": ["atualizar_apelido"], "pendente": None})
+        self.assertEqual(done["texto"], "Apelido do serial ABC123 atualizado.\nAção confirmada: " + card["descricao"])
+        self.assertEqual((done["ferramentas"], done["pendente"]), (["atualizar_apelido"], None))
         self.assertEqual(len(simpress.writes()), 1)
         self.assertEqual(client.post("/api/assistente/limpar").json(), {"ok": True})
 
@@ -436,7 +475,8 @@ class AssistantRouteTests(unittest.TestCase):
         client.post("/api/assistente/mensagem", json={"texto": "1"})
         client.put("/api/assistente/instrucoes", json={"texto": f"Responda em tabela. CPF {CPF}."})
         client.post("/api/assistente/mensagem", json={"texto": "2"})
-        self.assertEqual(model.sent[0][0]["content"], SYSTEM_PROMPT)
+        self.assertTrue(model.sent[0][0]["content"].startswith(SYSTEM_PROMPT))
+        self.assertNotIn("PREFERÊNCIAS PERMANENTES", model.sent[0][0]["content"])
         self.assertIn("Responda em tabela.", model.sent[1][0]["content"])
         self.assertNotIn(CPF, model.sent[1][0]["content"])
 
@@ -493,7 +533,7 @@ class AssistantRouteTests(unittest.TestCase):
         entered = threading.Event()
 
         class SlowModel:
-            def complete(self, messages: List[Dict[str, Any]], tools: List[Dict[str, Any]]) -> ModelReply:
+            def complete(self, messages: List[Dict[str, Any]], tools: List[Dict[str, Any]], orcamento: Optional[float] = None) -> ModelReply:
                 entered.set()
                 release.wait(5)
                 return text("pronto")
@@ -697,17 +737,17 @@ class AttachmentConversationTests(unittest.TestCase):
         self.assertEqual(resultado["role"], "tool")
         for segredo in ("Maria", CPF, "maria@x.com"):
             self.assertNotIn(segredo, resultado["content"])
-        corpo = json.loads(resultado["content"])
+        corpo = json.loads(abrir(resultado["content"]))
         self.assertEqual((corpo["pagina"], corpo["total_paginas"], corpo["resumo"]), (1, 3, "página 1 de 3"))
         self.assertIn("[PESSOA_", corpo["texto_anexo"])
-        self.assertLessEqual(len(resultado["content"]), MAX_CARACTERES_RESPOSTA)
+        self.assertLessEqual(len(abrir(resultado["content"])), MAX_CARACTERES_RESPOSTA)
 
     def test_worst_case_page_stays_under_the_response_limit(self) -> None:
         conversa, model, _ = self.conversa(calls(call("ler_anexo", anexo_id="x", pagina=2)), text("li"))
         pior = Anexo(id="x", nome="a.docx", tipo="docx", tamanho=1, paginas=["a", '"\n' * (PAGINA // 2)])
         conversa.anexos.adicionar(pior)
         conversa.enviar_mensagem("leia")
-        conteudo = model.sent[-1][-1]["content"]
+        conteudo = abrir(model.sent[-1][-1]["content"])
         self.assertLessEqual(len(conteudo), MAX_CARACTERES_RESPOSTA)
         corpo = json.loads(conteudo)
         self.assertNotIn("aviso", corpo)
@@ -721,7 +761,7 @@ class AttachmentConversationTests(unittest.TestCase):
         conversa.anexos.adicionar(Anexo(id="x", nome="a.docx", tipo="docx", tamanho=1, paginas=["um"]))
         conversa.anexos.adicionar(Anexo(id="i", nome="a.png", tipo="imagem", tamanho=1, imagem_uri="data:image/png;base64,AA=="))
         conversa.enviar_mensagem("leia")
-        erros = [json.loads(m["content"])["erro"] for m in model.sent[-1] if m["role"] == "tool"]
+        erros = [json.loads(abrir(m["content"]))["erro"] for m in model.sent[-1] if m["role"] == "tool"]
         self.assertIn("não encontrado", erros[0])
         self.assertIn("1 página", erros[1])
         self.assertIn("imagem", erros[2])
@@ -962,7 +1002,7 @@ class ComparePeriodsTests(unittest.TestCase):
         self.assertEqual(reply.ferramentas, ["comparar_periodos"])
         self.assertIsNone(reply.pendente)
         self.assertEqual(historico.writes(), [])
-        conteudo = model.sent[1][-1]["content"]
+        conteudo = abrir(model.sent[1][-1]["content"])
         self.assertNotIn("PRNOTE-MARIA-01", conteudo)
         self.assertIn("[PESSOA_", conteudo)
         self.assertNotIn("aviso", json.loads(conteudo))
@@ -1168,7 +1208,7 @@ class ExplainDivergenceTests(unittest.TestCase):
         self.assertEqual(reply.ferramentas, ["explicar_divergencia"])
         self.assertIsNone(reply.pendente)
         self.assertEqual(fake.writes(), [])
-        conteudo = model.sent[1][-1]["content"]
+        conteudo = abrir(model.sent[1][-1]["content"])
         for real in ("PRNOTE-MARIA-01", "Maria", "Souza"):
             self.assertNotIn(real, conteudo)
         self.assertIn("[PESSOA_", conteudo)
@@ -1257,7 +1297,7 @@ class OsLinkToolTests(unittest.TestCase):
             model = FakeModel(calls(call("listar_vinculos_os", **args)), text("ok"))
             conversation, _ = make_conversation(model, LinksSimpress())
             conversation.enviar_mensagem("vínculos")
-            dados = json.loads(model.sent[-1][-1]["content"])
+            dados = json.loads(abrir(model.sent[-1][-1]["content"]))
             self.assertEqual([v["serie"] for v in dados["vinculos"]], esperado)
 
     def test_change_card_shows_before_and_after_then_sends_only_this_link(self) -> None:
@@ -1311,7 +1351,7 @@ class OriginContactToolTests(unittest.TestCase):
         model = FakeModel(calls(call("ver_contato_origem_transferencia")), text("ok"))
         conversation, _ = make_conversation(model, ContactSimpress())
         conversation.enviar_mensagem("qual o contato de origem?")
-        enviado = model.sent[-1][-1]["content"]
+        enviado = abrir(model.sent[-1][-1]["content"])
         for real in ("Carlos", "carlos.teste", "91234", "5678"):
             self.assertNotIn(real, enviado)
         self.assertEqual(json.loads(enviado)["fonte_email"], "arquivo")
@@ -1434,11 +1474,12 @@ class DestructiveToolTests(unittest.TestCase):
                     return 404, {"detail": "A atualização selecionada não existe mais no histórico."}
                 return super().__call__(method, path, params, body)
 
-        model = FakeModel(calls(call("excluir_comparacao", evento_id="cp1")), text("falhou"))
+        model = FakeModel(calls(call("excluir_comparacao", evento_id="cp1")))
         conversation, _ = make_conversation(model, Gone())
         conversation.enviar_mensagem("apague")
-        conversation.resolver_confirmacao(True)
-        self.assertIn("não existe mais", json.dumps(model.sent[-1], ensure_ascii=False))
+        reply = conversation.resolver_confirmacao(True)
+        self.assertIn("não existe mais", reply.texto)
+        self.assertTrue(reply.texto.startswith("Não foi possível concluir a alteração"))
 
 
 class RemovalsSimpress(FakeSimpress):
@@ -1509,11 +1550,12 @@ class HostnameRemovalToolTests(unittest.TestCase):
                     return 409, {"detail": "Ao menos um hostname da série precisa permanecer."}
                 return super().__call__(method, path, params, body)
 
-        model = FakeModel(calls(call("remover_hostname_endpoint", serie="ABC123", hostname="PC-NOVO")), text("falhou"))
+        model = FakeModel(calls(call("remover_hostname_endpoint", serie="ABC123", hostname="PC-NOVO")))
         conversation, _ = make_conversation(model, Recusa())
         conversation.enviar_mensagem("remova")
-        conversation.resolver_confirmacao(True)
-        self.assertIn("precisa permanecer", json.dumps(model.sent[-1], ensure_ascii=False))
+        reply = conversation.resolver_confirmacao(True)
+        self.assertIn("precisa permanecer", reply.texto)
+        self.assertTrue(reply.texto.startswith("Não foi possível concluir a alteração"))
 
 
 def numbered(*items: Tuple[str, Dict[str, Any]]) -> ModelReply:
@@ -1621,7 +1663,7 @@ class AutonomiaTests(unittest.TestCase):
         conversation, simpress = make_conversation(model, SimpressAberto())
         reply = conversation.enviar_mensagem("mude e confira")
         self.assertEqual(reply.pendente, {"descricao": "Alterar o apelido do serial ABC123 para 'X'."})
-        self.assertEqual(self.consultados(simpress), [])
+        self.assertEqual(self.consultados(simpress), ["/api/equipamento/ABC123"])  # only the card's own lookup of the current value; the query did not run
         self.assertIn("aguardando confirmação", self.tool_messages(conversation)[0]["content"])
 
     def test_change_after_many_queries_still_waits_for_the_card(self) -> None:
@@ -1689,7 +1731,7 @@ class AutonomiaTests(unittest.TestCase):
         self.assertEqual(len(model.sent), 1)
 
     def test_prompt_asks_for_a_plan_and_one_final_answer(self) -> None:
-        self.assertIn("6a.", SYSTEM_PROMPT)
+        self.assertIn("18.", SYSTEM_PROMPT)
         self.assertIn("NÃO conseguiu obter", SYSTEM_PROMPT)
 
 

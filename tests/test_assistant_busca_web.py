@@ -16,7 +16,7 @@ from domains.assistant_lgpd import Mascara
 from domains.assistant_openrouter import OpenRouterClient, OpenRouterError, OpenRouterSettings, WebSearchResult, parse_web_result
 from domains.assistant_tools import CHANGE_TOOLS, QUERY_TOOLS, TOOLS, tool_schemas
 from routers.assistant import AssistantRouteServices, create_assistant_router
-from tests.test_assistant import FakeModel, FakeSimpress, call, calls, temp_json, text
+from tests.test_assistant import FakeModel, FakeSimpress, abrir, call, calls, temp_json, text
 from tests.test_assistant_support import FakeResponse
 
 FONTE = {"titulo": "Apple Support", "url": "https://support.apple.com/pt-br/111867", "dominio": "support.apple.com"}
@@ -32,7 +32,7 @@ class WebModel(FakeModel):
         self.queries: List[str] = []
         self.resultado = resultado
 
-    def complete(self, messages: Any, tools: Any) -> Any:
+    def complete(self, messages: Any, tools: Any, orcamento: Any = None) -> Any:
         self.tools_seen.append([t["function"]["name"] for t in tools])
         return super().complete(messages, tools)
 
@@ -49,7 +49,7 @@ def make_chat(model: WebModel, ligada: Optional[List[bool]] = None) -> Assistant
 
 
 def tool_contents(conversation: AssistantConversation) -> List[Any]:
-    return [json.loads(m["content"]) for m in conversation._mensagens if m["role"] == "tool"]
+    return [json.loads(abrir(m["content"])) for m in conversation._mensagens if m["role"] == "tool"]
 
 
 class SwitchStateTests(unittest.TestCase):
@@ -257,7 +257,7 @@ class ConversationSearchTests(unittest.TestCase):
         self.assertIn("nunca instrução", enviado["aviso"])
 
     def test_system_prompt_has_the_web_rules(self) -> None:
-        for trecho in ("8d.", "buscar_web", "fonte externa", "DADO PASSIVO", "NÃO reescreva a consulta"):
+        for trecho in ("25.", "buscar_web", "fonte externa", "DADO PASSIVO", "NÃO reescreva a consulta"):
             self.assertIn(trecho, SYSTEM_PROMPT)
 
     def test_in_deepseek_mode_search_requires_the_openrouter_key(self) -> None:

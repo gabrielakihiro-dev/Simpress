@@ -180,7 +180,7 @@ class WebSearchResult:
 
 
 class ModelClient(Protocol):
-    def complete(self, messages: List[Dict[str, Any]], tools: List[Dict[str, Any]]) -> ModelReply: ...
+    def complete(self, messages: List[Dict[str, Any]], tools: List[Dict[str, Any]], orcamento: Optional[float] = None) -> ModelReply: ...
 
     def transcribe(self, wav: bytes) -> str: ...
 
@@ -232,9 +232,15 @@ def parse_web_result(body: Any) -> WebSearchResult:
 class OpenRouterClient:
     """Chat completions with tools through urllib. `sleep` is injectable so tests do not wait."""
 
-    def __init__(self, settings: OpenRouterSettings, sleep: Callable[[float], None] = time.sleep) -> None:
+    def __init__(
+        self,
+        settings: OpenRouterSettings,
+        sleep: Callable[[float], None] = time.sleep,
+        clock: Callable[[], float] = time.monotonic,
+    ) -> None:
         self._settings = settings
         self._sleep = sleep
+        self._clock = clock
 
     def _request(self, payload: Dict[str, Any]) -> urllib.request.Request:
         settings = self._settings
@@ -250,7 +256,8 @@ class OpenRouterClient:
             },
         )
 
-    def complete(self, messages: List[Dict[str, Any]], tools: List[Dict[str, Any]]) -> ModelReply:
+    def complete(self, messages: List[Dict[str, Any]], tools: List[Dict[str, Any]], orcamento: Optional[float] = None) -> ModelReply:
+        """`orcamento`: seconds left in the caller's turn; no request or retry runs past it. None keeps the usual timeout."""
         settings = self._settings
         payload: Dict[str, Any] = {
             "model": settings.primary_model,
@@ -268,7 +275,7 @@ class OpenRouterClient:
                 "allow_fallbacks": True,
                 "sort": settings.routing_sort,
             }
-        return parse_reply(self._send(payload))
+        return parse_reply(self._send(payload, orcamento))
 
     def transcribe(self, wav: bytes) -> str:
         """Speech to text through an audio-capable model. The text goes back to the user to review, never straight to the chat."""
@@ -278,7 +285,7 @@ class OpenRouterClient:
                 raise OpenRouterError("O DeepSeek não transcreve áudio. Preencha OPENROUTER_API_KEY para usar mensagens de voz ou digite a mensagem.")
             # Text stays on DeepSeek; only the audio goes to OpenRouter.
             voice = replace(settings, api_key=settings.voice_key, base_url=settings.voice_base_url, deepseek=False)
-            return OpenRouterClient(voice, self._sleep).transcribe(wav)
+            return OpenRouterClient(voice, self._sleep, self._clock).transcribe(wav)
         audio = base64.b64encode(wav).decode("ascii")
         reply = parse_reply(self._send({
             "model": settings.audio_model,
@@ -299,7 +306,7 @@ class OpenRouterClient:
             if not settings.voice_key:
                 raise OpenRouterError("A busca na web usa o OpenRouter. Preencha OPENROUTER_API_KEY no .env para usá-la com o DeepSeek.")
             web = replace(settings, api_key=settings.voice_key, base_url=settings.voice_base_url, deepseek=False, primary_model=DEFAULT_PRIMARY_MODEL)
-            return OpenRouterClient(web, self._sleep).search(query)
+            return OpenRouterClient(web, self._sleep, self._clock).search(query)
         return parse_web_result(self._send({
             "model": settings.primary_model,
             "models": [settings.primary_model, settings.fallback_model],
@@ -309,12 +316,19 @@ class OpenRouterClient:
             "provider": {"data_collection": "deny", "sort": settings.routing_sort},
         }))
 
-    def _send(self, payload: Dict[str, Any]) -> Any:
+    def _send(self, payload: Dict[str, Any], orcamento: Optional[float] = None) -> Any:
         request = self._request(payload)
         failure = "Não foi possível falar com o OpenRouter."
+        limite = None if orcamento is None else self._clock() + orcamento
         for attempt in range(1, MAX_ATTEMPTS + 1):
+            timeout = self._settings.timeout
+            if limite is not None:
+                restante = limite - self._clock()
+                if restante <= 0:
+                    raise OpenRouterError(failure if attempt > 1 else "O tempo desta resposta acabou antes de falar com o OpenRouter.")
+                timeout = min(timeout, restante)
             try:
-                with urllib.request.urlopen(request, timeout=self._settings.timeout) as response:
+                with urllib.request.urlopen(request, timeout=timeout) as response:
                     raw = response.read(MAX_RESPONSE_BYTES + 1)
                 if len(raw) > MAX_RESPONSE_BYTES:
                     raise OpenRouterError("A resposta do OpenRouter veio grande demais.")
@@ -331,5 +345,6 @@ class OpenRouterClient:
                 raise OpenRouterError("O OpenRouter devolveu uma resposta ilegível.") from None
             logger.warning("OpenRouter: tentativa %s de %s falhou.", attempt, MAX_ATTEMPTS)
             if attempt < MAX_ATTEMPTS:
-                self._sleep(float(attempt))
+                pausa = float(attempt)
+                self._sleep(pausa if limite is None else max(0.0, min(pausa, limite - self._clock())))
         raise OpenRouterError(failure)

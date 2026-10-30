@@ -468,7 +468,7 @@ button.ck-kpi[aria-pressed="true"] { background: var(--cor-superficie); border-b
 .ck-rotina[data-estado="em-andamento"] .ck-rotina__icone { background: var(--cor-destaque-fundo); color: var(--cor-destaque-texto); }
 .ck-rotina__titulo { font-size: var(--fs-base); font-weight: var(--peso-medio); }
 .ck-rotina__desc { flex: 1; font-size: var(--fs-ui); line-height: 1.45; color: var(--cor-texto-mudo); }
-.ck-rotina__rodape { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 8px; }
+.ck-rotina__rodape { margin-top: auto; display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 8px; }
 .ck-linha-acao { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 12px; padding: 10px 12px; }
 .ck-linha-acao__texto { flex: 1 1 220px; display: flex; align-items: center; gap: 4px; min-width: 0; }
 .ck-linha-acao__texto > span:not(.info-tip) { font-size: var(--fs-ui); color: var(--cor-texto-mudo); }
@@ -993,11 +993,18 @@ html[data-theme], html[data-theme] body.cockpit-shell-body { background: var(--c
 @keyframes sebrae-historico-entrada { from { opacity: 0; } to { opacity: 1; } }
 
 /* ---------- Assistente ---------- */
-.ck-ferr-painel.ck-assist { gap: 10px; overflow: hidden; }
-.ck-ferr-painel.ck-assist > .ck-assist__lista { flex: 1 1 auto; }
+/* Chat flutuante (canto inferior direito, aberto por #btn-assistente no topbar). Fica fora do #main-content, abaixo dos véus (60) e dos avisos. */
+.ck-assist-widget { position: fixed; right: 20px; bottom: 20px; z-index: 50; display: flex; flex-direction: column; gap: 8px; width: min(420px, calc(100vw - 24px)); height: min(640px, calc(100dvh - 96px)); overflow: hidden; background: var(--cor-superficie-elevada); border: 1px solid var(--cor-borda); border-radius: var(--raio-lg); box-shadow: var(--sombra-lg); transform-origin: bottom right; }
+.ck-assist-widget[hidden] { display: none; }
+.ck-assist-widget > :not(.ck-assist__lista) { flex: none; }
+.ck-assist-widget__cab { display: flex; align-items: center; justify-content: space-between; gap: 8px; padding: 8px 12px; border-bottom: 1px solid var(--cor-borda-suave); }
+.ck-assist-widget__titulo { font-size: var(--fs-base); font-weight: var(--peso-medio); }
+.ck-assist-widget > .ck-assist__lista { flex: 1 1 auto; min-height: 0; }
+#btn-assistente[aria-expanded="true"] { background: var(--cor-destaque-fundo); color: var(--cor-destaque-texto); }
 .ck-assist__status { flex: 1 1 auto; overflow-wrap: anywhere; }
 .ck-assist__barra { align-items: center; }
 .ck-assist__barra > .ck-btn { align-self: center; }
+.ck-assist__cancelar-envio[hidden] { display: none; }
 .ck-assist__globo { flex: none; align-self: center; width: 56px; height: 56px; color: var(--cor-destaque); }
 .ck-assist__lista { min-height: 160px; overflow-y: auto; display: flex; flex-direction: column; gap: 8px; padding: 10px; border: 1px solid var(--cor-borda-suave); border-radius: var(--raio-md); background: var(--cor-superficie-funda); }
 .ck-assist__msg { max-width: min(78ch, 88%); padding: 8px 12px; border-radius: var(--raio-md); border: 1px solid var(--cor-borda-suave); background: var(--cor-superficie); color: var(--cor-texto); align-self: flex-start; }
@@ -1049,15 +1056,13 @@ html[data-theme], html[data-theme] body.cockpit-shell-body { background: var(--c
 .ck-assist__busca-fontes { padding-left: 18px; font-size: var(--fs-xs); }
 .ck-assist__busca-fontes a { color: var(--cor-destaque-texto); text-decoration: underline; overflow-wrap: anywhere; }
 .ck-assist__busca-dominio { color: var(--cor-texto-mudo); }
-.ck-ferr-painel.ck-assist > .ck-assist__instrucoes { margin-left: 20px; margin-right: 20px; }
+.ck-assist-widget > .ck-assist__instrucoes { margin-left: 12px; margin-right: 12px; flex: 0 1 auto; min-height: 0; overflow-y: auto; } /* aberto, rola dentro do widget em vez de cortar o campo de mensagem */
 .ck-assist__instrucoes:not([hidden]) ~ .ck-assist__lista { min-height: 80px; }
-.ck-ferr-painel.ck-assist > .ck-assist__lista, .ck-ferr-painel.ck-assist > .ck-assist__pendente { margin-left: 20px; margin-right: 20px; }
-.ck-ferr-painel.ck-assist > .ck-assist__form { padding: 0 20px 20px; }
-@media (max-width: 767.98px) {
-  .ck-ferr-painel.ck-assist > .ck-assist__lista, .ck-ferr-painel.ck-assist > .ck-assist__pendente, .ck-ferr-painel.ck-assist > .ck-assist__instrucoes { margin-left: 12px; margin-right: 12px; }
-  .ck-ferr-painel.ck-assist > .ck-assist__form { padding: 0 12px 12px; }
-}
+.ck-assist-widget > .ck-assist__lista, .ck-assist-widget > .ck-assist__pendente { margin-left: 12px; margin-right: 12px; }
+.ck-assist-widget > .ck-assist__form { padding: 0 12px 12px; }
+.ck-assist-widget > .ck-assist__barra { padding: 8px 12px; flex-wrap: wrap; }
 @media (max-width: 599px) { .ck-assist__msg { max-width: 100%; } }
+@media (max-width: 599px) { .ck-assist-widget { left: 8px; right: 8px; bottom: 8px; width: auto; height: calc(100dvh - 72px); } }
 @media (max-width: 599px) {
   /* Telas baixas: globo menor, botões da barra lado a lado (até três por linha) e menos altura mínima, para o Enviar continuar à vista. */
   .ck-assist__globo { width: 36px; height: 36px; }
@@ -1077,6 +1082,8 @@ html[data-theme], html[data-theme] body.cockpit-shell-body { background: var(--c
   .ck-assist__instrucoes textarea { min-height: 3em; max-height: 20vh; }
 }
 @media (prefers-reduced-motion: no-preference) {
-  .ck-assist__msg, .ck-assist__pendente, .ck-assist__instrucoes, .ck-assist__anexo, .ck-assist__lembrete, .ck-assist__busca-card, .ck-assist__aviso:not([hidden]) { animation: ck-assist-entrada var(--duracao) var(--curva); }
+  .ck-assist-widget:not([hidden]) { animation: ck-assist-abrir 200ms var(--curva); }
+  .ck-assist__cancelar-envio:not([hidden]), .ck-assist__msg, .ck-assist__pendente, .ck-assist__instrucoes, .ck-assist__anexo, .ck-assist__lembrete, .ck-assist__busca-card, .ck-assist__aviso:not([hidden]) { animation: ck-assist-entrada var(--duracao) var(--curva); }
 }
 @keyframes ck-assist-entrada { from { opacity: 0; transform: translateY(4px); } to { opacity: 1; transform: none; } }
+@keyframes ck-assist-abrir { from { opacity: 0; transform: scale(.96); } to { opacity: 1; transform: none; } }
