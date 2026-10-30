@@ -14,6 +14,22 @@
   let modelo = "";
   let ocupado = false;
   let pendente = false;
+  // Instruções permanentes: texto do usuário guardado no servidor; só edita depois de carregar, para um erro de leitura nunca apagar o salvo.
+  let instrucoesCarregadas = false;
+  let instrucoesOcupadas = false;
+  // Busca na web: interruptor guardado no servidor (desligado por padrão); o card de fonte vem pronto do servidor.
+  const AVISO_BUSCA_WEB = "Busca na web ligada: a pergunta de pesquisa sai do computador (vai ao OpenRouter e ao provedor de busca). Só texto genérico; dados do cadastro são recusados antes de sair.";
+  let buscaWebCarregada = false;
+  let buscaWebOcupada = false;
+  // Lembretes e notas: guardados no servidor (data/state); aqui a lista para mostrar, concluir e apagar (o Assistente cria pelo chat).
+  let lembretes = [];
+  let lembretesOcupados = false;
+  let lembreteApagando = "";
+  // Anexos: o servidor guarda só em memória (30 min, apagados em "Nova conversa"); aqui fica a lista para mostrar.
+  const LIMITE_ANEXO_BYTES = 10 * 1024 * 1024;
+  const ROTULO_TIPO = { pdf: "PDF", docx: "Word", imagem: "Imagem" };
+  let anexos = [];
+  let anexando = false;
   // Mensagem de voz: o navegador grava, converte para WAV mono de 16 kHz e o servidor devolve só o texto.
   const TAXA_WAV = 16000;
   const LIMITE_SEGUNDOS = 120;
@@ -186,7 +202,9 @@
   function atualizarControles() {
     const bloqueado = !online || ocupado || pendente;
     byId("assistente-texto").disabled = bloqueado || transcrevendo;
-    byId("assistente-enviar").disabled = bloqueado || gravando || transcrevendo;
+    byId("assistente-enviar").disabled = bloqueado || gravando || transcrevendo || anexando;
+    byId("assistente-anexar").disabled = bloqueado || gravando || transcrevendo || anexando;
+    byId("assistente-anexos").querySelectorAll("button").forEach(botao => { botao.disabled = ocupado || anexando; });
     // Durante a gravação o botão continua ativo: é ele que para.
     const botaoGravar = byId("assistente-gravar");
     botaoGravar.disabled = !gravando && (bloqueado || transcrevendo);
@@ -201,17 +219,516 @@
     atualizarGlobo();
   }
 
+  function tamanhoLegivel(bytes) {
+    if (bytes < 1024 * 1024) return `${Math.max(1, Math.round(bytes / 1024))} KB`;
+    return `${(bytes / (1024 * 1024)).toFixed(1).replace(".", ",")} MB`;
+  }
+
+  function mostrarStatusAnexos(texto) {
+    byId("assistente-anexos-status").textContent = texto;
+  }
+
+  // Nome do arquivo e textos vêm de fora: entram só como textContent.
+  function desenharAnexos() {
+    const lista = byId("assistente-anexos");
+    lista.replaceChildren(...anexos.map(anexo => {
+      const item = document.createElement("li");
+      item.className = "ck-assist__anexo";
+      const texto = document.createElement("span");
+      texto.className = "ck-assist__anexo-texto";
+      texto.append(createTextElement("span", "ck-assist__anexo-nome", String(anexo.nome)));
+      const partes = [ROTULO_TIPO[anexo.tipo] || "Arquivo", tamanhoLegivel(Number(anexo.tamanho) || 0)];
+      if (anexo.tipo !== "imagem" && Number(anexo.paginas) > 1) partes.push(`${anexo.paginas} páginas de texto`);
+      texto.append(createTextElement("span", "ck-assist__anexo-meta", partes.join(" · ")));
+      if (anexo.aviso) texto.append(createTextElement("span", "ck-assist__anexo-alerta", String(anexo.aviso)));
+      const remover = document.createElement("button");
+      remover.type = "button";
+      remover.className = "ck-btn ck-btn--fantasma ck-btn--sm ck-btn--icone";
+      remover.setAttribute("aria-label", `Remover anexo ${anexo.nome}`);
+      remover.title = "Remover anexo";
+      remover.dataset.onClick = "removerAnexoAssistente";
+      remover.dataset.args = JSON.stringify([String(anexo.id)]);
+      const icone = document.createElementNS("http://www.w3.org/2000/svg", "svg");
+      icone.setAttribute("class", "ck-ico ck-ico--sm");
+      icone.setAttribute("aria-hidden", "true");
+      icone.setAttribute("focusable", "false");
+      icone.appendChild(document.createElementNS("http://www.w3.org/2000/svg", "use")).setAttribute("href", "#i-x");
+      remover.append(icone);
+      item.append(texto, remover);
+      return item;
+    }));
+    lista.hidden = !anexos.length;
+    byId("assistente-anexos-aviso").hidden = !anexos.some(anexo => anexo.tipo === "imagem");
+    atualizarControles();
+  }
+
+  async function carregarAnexos() {
+    try {
+      const dados = await apiFetch("/api/assistente/anexos", { errorMessage: "Não foi possível carregar os anexos." });
+      anexos = Array.isArray(dados?.anexos) ? dados.anexos : [];
+    } catch {
+      anexos = [];
+    }
+    desenharAnexos();
+  }
+
+  async function enviarAnexo(arquivo) {
+    if (arquivo.size > LIMITE_ANEXO_BYTES) {
+      mostrarStatusAnexos(`${arquivo.name}: o arquivo é grande demais. O limite é ${LIMITE_ANEXO_BYTES / (1024 * 1024)} MB.`);
+      return;
+    }
+    mostrarStatusAnexos(`Enviando ${arquivo.name}…`);
+    try {
+      const anexo = await apiFetch("/api/assistente/anexo", {
+        method: "POST",
+        headers: { "Content-Type": "application/octet-stream", "X-Nome-Arquivo": encodeURIComponent(arquivo.name) },
+        body: arquivo,
+        errorMessage: "Não foi possível anexar o arquivo.",
+      });
+      anexos = [...anexos, anexo];
+      mostrarStatusAnexos(anexo.aviso ? `${anexo.nome} anexado, mas: ${anexo.aviso}` : `${anexo.nome} anexado.`);
+    } catch (error) {
+      if (error?.status === 503) online = false;
+      mostrarStatusAnexos(`${arquivo.name}: ${error?.status ? error.message : "Não foi possível anexar o arquivo."}`);
+    }
+  }
+
+  async function anexarArquivoAssistente(event) {
+    const campo = event?.target;
+    const arquivos = [...(campo?.files || [])];
+    if (campo) campo.value = ""; // permite escolher o mesmo arquivo de novo
+    if (!arquivos.length || !online || ocupado || pendente || anexando) return;
+    anexando = true;
+    atualizarControles();
+    for (const arquivo of arquivos) await enviarAnexo(arquivo);
+    anexando = false;
+    desenharAnexos();
+    byId("assistente-anexar").focus();
+  }
+
+  async function removerAnexoAssistente(id) {
+    if (ocupado || anexando) return;
+    anexando = true;
+    atualizarControles();
+    try {
+      await apiFetch(`/api/assistente/anexo/${encodeURIComponent(id)}`, { method: "DELETE", errorMessage: "Não foi possível remover o anexo." });
+      anexos = anexos.filter(anexo => anexo.id !== id);
+      mostrarStatusAnexos("Anexo removido.");
+    } catch (error) {
+      if (error?.status === 404) anexos = anexos.filter(anexo => anexo.id !== id); // já expirou no servidor
+      mostrarStatusAnexos(error?.status === 404 ? "O anexo já tinha sido removido." : error?.message || "Não foi possível remover o anexo.");
+    }
+    anexando = false;
+    desenharAnexos();
+    byId("assistente-anexar").focus();
+  }
+
   function contarMensagemAssistente() {
     byId("assistente-contador").textContent = `${byId("assistente-texto").value.length} / ${LIMITE}`;
   }
 
+  function mostrarStatusInstrucoes(texto) {
+    byId("assistente-instrucoes-status").textContent = texto;
+  }
+
+  function atualizarInstrucoes() {
+    const bloqueado = !instrucoesCarregadas || instrucoesOcupadas;
+    byId("assistente-instrucoes-texto").disabled = bloqueado;
+    byId("assistente-instrucoes-salvar").disabled = bloqueado;
+    byId("assistente-instrucoes-limpar").disabled = bloqueado;
+  }
+
+  function contarInstrucoesAssistente() {
+    byId("assistente-instrucoes-contador").textContent = `${byId("assistente-instrucoes-texto").value.length} / ${LIMITE}`;
+  }
+
+  async function carregarInstrucoes() {
+    instrucoesOcupadas = true;
+    atualizarInstrucoes();
+    mostrarStatusInstrucoes("Carregando as instruções…");
+    try {
+      const dados = await apiFetch("/api/assistente/instrucoes", { errorMessage: "Não foi possível carregar as instruções." });
+      byId("assistente-instrucoes-texto").value = String(dados?.texto ?? "");
+      instrucoesCarregadas = true;
+      mostrarStatusInstrucoes("");
+    } catch (error) {
+      mostrarStatusInstrucoes(`${error?.message || "Não foi possível carregar as instruções."} Feche e abra de novo para tentar outra vez.`);
+    }
+    instrucoesOcupadas = false;
+    contarInstrucoesAssistente();
+    atualizarInstrucoes();
+    if (instrucoesCarregadas) byId("assistente-instrucoes-texto").focus();
+  }
+
+  function mostrarStatusBuscaWeb(texto) {
+    byId("assistente-busca-web-status").textContent = texto;
+  }
+
+  function mostrarBuscaWeb(ativa) {
+    const caixa = byId("assistente-busca-web");
+    caixa.checked = ativa === true;
+    caixa.disabled = !buscaWebCarregada || buscaWebOcupada;
+    byId("assistente-busca-web-aviso").textContent = ativa === true ? AVISO_BUSCA_WEB : "";
+  }
+
+  async function carregarBuscaWeb() {
+    buscaWebOcupada = true;
+    mostrarBuscaWeb(false);
+    try {
+      const dados = await apiFetch("/api/assistente/busca-web", { errorMessage: "Não foi possível ler o estado da busca na web." });
+      buscaWebCarregada = true;
+      buscaWebOcupada = false;
+      mostrarBuscaWeb(dados?.ativa);
+    } catch (error) {
+      buscaWebOcupada = false;
+      mostrarStatusBuscaWeb(`${error?.message || "Não foi possível ler o estado da busca na web."} A busca fica desligada.`);
+      mostrarBuscaWeb(false);
+    }
+  }
+
+  async function alternarBuscaWebAssistente() {
+    if (!buscaWebCarregada || buscaWebOcupada) return;
+    const caixa = byId("assistente-busca-web");
+    const ativa = caixa.checked;
+    buscaWebOcupada = true;
+    caixa.disabled = true;
+    try {
+      const dados = await apiFetch("/api/assistente/busca-web", {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ ativa }),
+        errorMessage: "Não foi possível mudar a busca na web.",
+      });
+      buscaWebOcupada = false;
+      mostrarBuscaWeb(dados?.ativa);
+      mostrarStatusBuscaWeb(dados?.ativa === true ? "Busca na web ligada." : "Busca na web desligada. Vale já na próxima rodada.");
+    } catch (error) {
+      buscaWebOcupada = false;
+      mostrarBuscaWeb(!ativa);
+      mostrarStatusBuscaWeb(error?.message || "Não foi possível mudar a busca na web.");
+    }
+    caixa.focus();
+  }
+
+  function alternarInstrucoesAssistente() {
+    const area = byId("assistente-instrucoes");
+    area.hidden = !area.hidden;
+    if (!area.hidden) fecharLembretes();
+    byId("assistente-instrucoes-botao").setAttribute("aria-expanded", String(!area.hidden));
+    if (area.hidden) byId("assistente-instrucoes-botao").focus();
+    else {
+      void carregarBuscaWeb();
+      if (!instrucoesCarregadas) return carregarInstrucoes();
+      byId("assistente-instrucoes-texto").focus();
+    }
+  }
+
+  async function guardarInstrucoes(texto, aviso) {
+    if (!instrucoesCarregadas || instrucoesOcupadas) return;
+    if (texto.length > LIMITE) { mostrarStatusInstrucoes(`As instruções passam de ${LIMITE} caracteres.`); return; }
+    instrucoesOcupadas = true;
+    atualizarInstrucoes();
+    mostrarStatusInstrucoes("Salvando…");
+    try {
+      const dados = await apiFetch("/api/assistente/instrucoes", {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ texto }),
+        errorMessage: "Não foi possível salvar as instruções.",
+      });
+      byId("assistente-instrucoes-texto").value = String(dados?.texto ?? texto);
+      mostrarStatusInstrucoes(aviso(byId("assistente-instrucoes-texto").value));
+    } catch (error) {
+      mostrarStatusInstrucoes(error?.message || "Não foi possível salvar as instruções.");
+    }
+    instrucoesOcupadas = false;
+    contarInstrucoesAssistente();
+    atualizarInstrucoes();
+    byId("assistente-instrucoes-texto").focus();
+  }
+
+  function salvarInstrucoesAssistente() {
+    return guardarInstrucoes(byId("assistente-instrucoes-texto").value, salvo => (salvo ? "Instruções salvas. Valem a partir da próxima mensagem." : "Instruções removidas."));
+  }
+
+  function limparInstrucoesAssistente() {
+    return guardarInstrucoes("", () => "Instruções removidas.");
+  }
+
+  function mostrarStatusLembretes(texto) {
+    byId("assistente-lembretes-status").textContent = texto;
+  }
+
+  function fecharLembretes() {
+    byId("assistente-lembretes").hidden = true;
+    byId("assistente-lembretes-botao").setAttribute("aria-expanded", "false");
+    lembreteApagando = "";
+  }
+
+  function dataLocalHoje() {
+    const agora = new Date();
+    const dois = n => String(n).padStart(2, "0");
+    return `${agora.getFullYear()}-${dois(agora.getMonth() + 1)}-${dois(agora.getDate())}`;
+  }
+
+  function dataBrasileira(iso) {
+    const [ano, mes, dia] = String(iso).slice(0, 10).split("-");
+    return dia && mes && ano ? `${dia}/${mes}/${ano}` : String(iso);
+  }
+
+  function botaoLembrete(rotulo, classe, acao, id, { icone = "", aria = "" } = {}) {
+    const botao = document.createElement("button");
+    botao.type = "button";
+    botao.className = `ck-btn ${classe}`;
+    botao.dataset.onClick = acao;
+    botao.dataset.args = JSON.stringify([id]);
+    if (aria) botao.setAttribute("aria-label", aria);
+    if (icone) {
+      botao.title = rotulo;
+      const svg = document.createElementNS("http://www.w3.org/2000/svg", "svg");
+      svg.setAttribute("class", "ck-ico ck-ico--sm");
+      svg.setAttribute("aria-hidden", "true");
+      svg.setAttribute("focusable", "false");
+      svg.appendChild(document.createElementNS("http://www.w3.org/2000/svg", "use")).setAttribute("href", icone);
+      botao.append(svg);
+    } else {
+      botao.textContent = rotulo;
+    }
+    return botao;
+  }
+
+  function desenharLembretes() {
+    const hoje = dataLocalHoje();
+    const lista = byId("assistente-lembretes-lista");
+    lista.replaceChildren(...lembretes.map(nota => {
+      const id = String(nota.id);
+      const texto = String(nota.texto ?? "");
+      const concluida = nota.concluida === true;
+      const item = document.createElement("li");
+      item.className = `ck-assist__lembrete${concluida ? " ck-assist__lembrete--feito" : ""}`;
+      item.dataset.lembreteId = id;
+      const corpo = document.createElement("span");
+      corpo.className = "ck-assist__anexo-texto";
+      corpo.append(createTextElement("span", "ck-assist__lembrete-texto", texto));
+      const partes = [];
+      if (nota.prazo) partes.push(`Prazo ${dataBrasileira(nota.prazo)}${!concluida && String(nota.prazo) < hoje ? " (vencido)" : ""}`);
+      if (concluida) partes.push("Concluído");
+      if (nota.criada_em) partes.push(`Criado em ${dataBrasileira(nota.criada_em)}`);
+      if (partes.length) corpo.append(createTextElement("span", "ck-assist__anexo-meta", partes.join(" · ")));
+      item.append(corpo);
+      const acoes = document.createElement("span");
+      acoes.className = "ck-assist__lembrete-acoes";
+      if (id === lembreteApagando) {
+        acoes.append(
+          createTextElement("span", "ck-assist__anexo-meta", "Apagar este lembrete?"),
+          botaoLembrete("Apagar", "ck-btn--primario ck-btn--sm", "apagarLembreteAssistente", id, { aria: `Confirmar: apagar lembrete ${texto}` }),
+          botaoLembrete("Cancelar", "ck-btn--secundario ck-btn--sm", "cancelarApagarLembreteAssistente", id),
+        );
+      } else {
+        acoes.append(
+          botaoLembrete(concluida ? "Reabrir" : "Concluir", "ck-btn--secundario ck-btn--sm", "marcarLembreteAssistente", id, { aria: `${concluida ? "Reabrir" : "Concluir"}: ${texto}` }),
+          botaoLembrete("Apagar lembrete", "ck-btn--fantasma ck-btn--sm ck-btn--icone", "pedirApagarLembreteAssistente", id, { icone: "#i-trash", aria: `Apagar lembrete: ${texto}` }),
+        );
+      }
+      item.append(acoes);
+      return item;
+    }));
+    lista.hidden = !lembretes.length;
+    byId("assistente-lembretes-vazio").hidden = lembretes.length > 0;
+  }
+
+  function focarLembrete(id, seletor) {
+    const item = [...byId("assistente-lembretes-lista").children].find(li => li.dataset.lembreteId === id);
+    (item?.querySelector(seletor) || byId("assistente-lembretes-titulo")).focus();
+  }
+
+  async function carregarLembretes() {
+    lembretesOcupados = true;
+    try {
+      const dados = await apiFetch("/api/assistente/notas", { errorMessage: "Não foi possível carregar os lembretes." });
+      lembretes = Array.isArray(dados?.notas) ? dados.notas : [];
+      return true;
+    } catch (error) {
+      mostrarStatusLembretes(error?.message || "Não foi possível carregar os lembretes.");
+      return false;
+    } finally {
+      lembretesOcupados = false;
+      desenharLembretes();
+    }
+  }
+
+  async function alternarLembretesAssistente() {
+    const area = byId("assistente-lembretes");
+    if (!area.hidden) {
+      fecharLembretes();
+      byId("assistente-lembretes-botao").focus();
+      return;
+    }
+    byId("assistente-instrucoes").hidden = true;
+    byId("assistente-instrucoes-botao").setAttribute("aria-expanded", "false");
+    area.hidden = false;
+    byId("assistente-lembretes-botao").setAttribute("aria-expanded", "true");
+    mostrarStatusLembretes("Carregando os lembretes…");
+    if (await carregarLembretes()) mostrarStatusLembretes("");
+    byId("assistente-lembretes-titulo").focus();
+  }
+
+  // Concluir/reabrir e apagar são ações do próprio usuário nesta área: gravam direto, sem cartão (o cartão vale para o Assistente).
+  async function alterarLembrete(id, requisicao, sucesso) {
+    if (lembretesOcupados) return;
+    lembretesOcupados = true;
+    mostrarStatusLembretes("");
+    let mensagem = sucesso;
+    try {
+      await apiFetch(`/api/assistente/notas/${encodeURIComponent(id)}`, requisicao);
+    } catch (error) {
+      mensagem = error?.status === 404 ? "Esse lembrete não existe mais." : error?.message || "Não foi possível alterar o lembrete.";
+    }
+    lembretesOcupados = false;
+    lembreteApagando = "";
+    if (await carregarLembretes()) mostrarStatusLembretes(mensagem);
+    focarLembrete(id, "button");
+  }
+
+  function marcarLembreteAssistente(id) {
+    const nota = lembretes.find(item => String(item.id) === id);
+    if (!nota) return;
+    const concluir = nota.concluida !== true;
+    return alterarLembrete(id, {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ concluida: concluir }),
+      errorMessage: "Não foi possível alterar o lembrete.",
+    }, concluir ? "Lembrete concluído." : "Lembrete reaberto.");
+  }
+
+  function pedirApagarLembreteAssistente(id) {
+    if (lembretesOcupados) return;
+    lembreteApagando = id;
+    mostrarStatusLembretes("");
+    desenharLembretes();
+    focarLembrete(id, "button[data-on-click=cancelarApagarLembreteAssistente]");
+  }
+
+  function cancelarApagarLembreteAssistente(id) {
+    lembreteApagando = "";
+    desenharLembretes();
+    focarLembrete(id, "button[data-on-click=pedirApagarLembreteAssistente]");
+  }
+
+  function apagarLembreteAssistente(id) {
+    return alterarLembrete(id, { method: "DELETE", errorMessage: "Não foi possível apagar o lembrete." }, "Lembrete apagado.");
+  }
+
+  // Relatórios gerados: o servidor devolve só id/nome/tamanho; o link aponta sempre para a rota fixa de download (id validado).
+  function criarArquivos(arquivos) {
+    const caixa = document.createElement("div");
+    caixa.className = "ck-assist__arquivos";
+    for (const arquivo of arquivos) {
+      const id = String(arquivo?.id ?? "");
+      const nome = String(arquivo?.nome ?? "").trim();
+      if (!/^[0-9a-f]{16}$/.test(id) || !nome) continue;
+      const link = createTextElement("a", "ck-btn ck-btn--secundario ck-assist__arquivo", `Baixar ${nome}`);
+      link.href = `/api/assistente/relatorio/${id}`;
+      link.download = nome;
+      const bytes = Number(arquivo.tamanho);
+      if (bytes > 0) link.title = `${nome} (${tamanhoLegivel(bytes)})`;
+      caixa.append(link);
+    }
+    return caixa;
+  }
+
+  // Card da busca na web: consulta, resumo e fontes vêm montados pelo servidor; tudo entra como texto e só links http/https abrem (nova aba, sem referrer).
+  function criarBuscasWeb(buscas) {
+    const caixa = document.createElement("div");
+    caixa.className = "ck-assist__buscas";
+    for (const busca of buscas) {
+      const resumo = String(busca?.resumo ?? "").trim();
+      const fontes = Array.isArray(busca?.fontes) ? busca.fontes : [];
+      if (!resumo && !fontes.length) continue;
+      const card = document.createElement("section");
+      card.className = "ck-assist__busca-card";
+      card.setAttribute("aria-label", "Resultado da busca na web (fonte externa)");
+      card.append(createTextElement("p", "ck-assist__busca-titulo", `Fonte externa · busca na web: ${String(busca?.consulta ?? "")}`));
+      if (resumo) card.append(createTextElement("p", "ck-assist__busca-resumo", resumo));
+      const lista = document.createElement("ul");
+      lista.className = "ck-assist__busca-fontes";
+      for (const fonte of fontes) {
+        const titulo = String(fonte?.titulo ?? "").trim();
+        const dominio = String(fonte?.dominio ?? "").trim();
+        const url = String(fonte?.url ?? "");
+        const item = document.createElement("li");
+        if (/^https?:\/\//i.test(url)) {
+          const link = createTextElement("a", "", titulo || dominio || url);
+          link.href = url;
+          link.target = "_blank";
+          link.rel = "noopener noreferrer";
+          item.append(link);
+        } else {
+          item.append(createTextElement("span", "", titulo || dominio || "Fonte sem link"));
+        }
+        if (dominio) item.append(createTextElement("span", "ck-assist__busca-dominio", ` (${dominio})`));
+        lista.append(item);
+      }
+      if (lista.children.length) card.append(lista);
+      caixa.append(card);
+    }
+    return caixa;
+  }
+
+  // Rascunho de e-mail/texto: nada é enviado; o botão só copia o texto da resposta (já com os nomes restaurados) para a área de transferência.
+  async function copiarTexto(texto) {
+    try {
+      await navigator.clipboard.writeText(texto);
+      return true;
+    } catch {
+      const campo = document.createElement("textarea");
+      campo.value = texto;
+      campo.setAttribute("readonly", "");
+      campo.style.cssText = "position:fixed;top:0;left:-9999px;opacity:0";
+      document.body.append(campo);
+      campo.select();
+      try {
+        return document.execCommand("copy");
+      } catch {
+        return false;
+      } finally {
+        campo.remove();
+      }
+    }
+  }
+
+  function criarCopiar(texto) {
+    const caixa = document.createElement("div");
+    caixa.className = "ck-assist__arquivos";
+    const botao = createTextElement("button", "ck-btn ck-btn--secundario ck-assist__arquivo", "Copiar texto");
+    botao.type = "button";
+    botao.addEventListener("click", async () => {
+      mostrarStatus((await copiarTexto(texto)) ? "Texto copiado." : "Não foi possível copiar. Selecione o texto da resposta e copie manualmente.");
+    });
+    caixa.append(botao);
+    return caixa;
+  }
+
+  // Até 2 ferramentas: a lista simples. Com mais (consultas encadeadas), a contagem e cada nome uma vez, com "×n" quando repetido.
+  function resumirFerramentas(ferramentas) {
+    if (ferramentas.length <= 2) return `Ferramentas: ${ferramentas.join(", ")}`;
+    const contagem = new Map();
+    ferramentas.forEach(nome => contagem.set(nome, (contagem.get(nome) || 0) + 1));
+    const nomes = [...contagem].map(([nome, vezes]) => (vezes > 1 ? `${nome} ×${vezes}` : nome));
+    return `Ferramentas (${ferramentas.length} chamadas): ${nomes.join(", ")}`;
+  }
+
   // Todo texto vindo do usuário ou do Assistente entra como textContent, nunca como HTML.
-  function adicionarMensagem(autor, texto, ferramentas = []) {
+  function adicionarMensagem(autor, texto, ferramentas = [], arquivos = [], buscas = []) {
     const item = document.createElement("div");
     item.className = `ck-assist__msg ck-assist__msg--${autor}`;
     item.append(createTextElement("span", "ck-sr", autor === "usuario" ? "Você:" : "Assistente:"));
     item.append(createTextElement("p", "ck-assist__texto", texto));
-    if (ferramentas.length) item.append(createTextElement("p", "ck-assist__ferramentas", `Ferramentas: ${ferramentas.join(", ")}`));
+    if (ferramentas.length) item.append(createTextElement("p", "ck-assist__ferramentas", resumirFerramentas(ferramentas)));
+    if (arquivos.length) item.append(criarArquivos(arquivos));
+    if (buscas.length) item.append(criarBuscasWeb(buscas));
+    if (ferramentas.includes("montar_rascunho") && texto) item.append(criarCopiar(texto));
     const lista = byId("assistente-mensagens");
     lista.append(item);
     lista.scrollTop = lista.scrollHeight;
@@ -232,8 +749,11 @@
   function mostrarResposta(dados) {
     const texto = String(dados?.texto ?? "");
     const ferramentas = Array.isArray(dados?.ferramentas) ? dados.ferramentas.map(String).filter(Boolean) : [];
-    if (texto || ferramentas.length) adicionarMensagem("assistente", texto, ferramentas);
+    const arquivos = Array.isArray(dados?.arquivos) ? dados.arquivos : [];
+    const buscas = Array.isArray(dados?.busca_web) ? dados.busca_web : [];
+    if (texto || ferramentas.length || arquivos.length || buscas.length) adicionarMensagem("assistente", texto, ferramentas, arquivos, buscas);
     byId("assistente-anuncio").textContent = texto;
+    if (!byId("assistente-lembretes").hidden && ferramentas.some(nome => nome.includes("lembrete"))) void carregarLembretes();
     mostrarPendente(dados?.pendente ? String(dados.pendente.descricao ?? "") || PENDENTE_SEM_DESCRICAO : null);
     statusPronto();
     falar(texto);
@@ -277,6 +797,7 @@
       modelo = String(estado?.modelo ?? "");
       if (online) statusPronto();
       else mostrarStatus(DESLIGADO, true);
+      if (online) await carregarAnexos(); // a lista do servidor vale também depois de recarregar a página
       if (online && estado?.aguardando_confirmacao) mostrarPendente(String(estado?.pendente?.descricao ?? "") || PENDENTE_SEM_DESCRICAO);
       else if (online && !estado?.aguardando_confirmacao && pendente) mostrarPendente(null);
     } catch (error) {
@@ -442,7 +963,7 @@
   }
 
   function enviarMensagemAssistente() {
-    if (!online || ocupado || pendente || gravando || transcrevendo) return;
+    if (!online || ocupado || pendente || gravando || transcrevendo || anexando) return;
     const campo = byId("assistente-texto");
     const texto = campo.value.trim();
     if (!texto) { campo.focus(); return; }
@@ -470,6 +991,9 @@
       byId("assistente-mensagens").replaceChildren();
       byId("assistente-anuncio").textContent = "";
       mostrarPendente(null);
+      anexos = [];
+      mostrarStatusAnexos("");
+      desenharAnexos();
       if (online) statusPronto();
     } catch (error) {
       mostrarStatus(error?.message || "Não foi possível iniciar uma nova conversa.");
@@ -483,6 +1007,9 @@
     if (event.key === "Escape" && gravando) {
       event.preventDefault();
       cancelarGravacao();
+    } else if (event.key === "Escape" && lembreteApagando) {
+      event.preventDefault();
+      cancelarApagarLembreteAssistente(lembreteApagando);
     } else if (event.key === "Escape" && pendente && !ocupado) {
       event.preventDefault();
       void cancelarPendenteAssistente();
@@ -495,5 +1022,8 @@
   return {
     carregarAssistente, enviarMensagemAssistente, confirmarPendenteAssistente, cancelarPendenteAssistente,
     novaConversaAssistente, contarMensagemAssistente, teclaAssistente, alternarGravacaoAssistente, alternarVozAssistente,
+    alternarInstrucoesAssistente, alternarBuscaWebAssistente, contarInstrucoesAssistente, salvarInstrucoesAssistente, limparInstrucoesAssistente,
+    anexarArquivoAssistente, removerAnexoAssistente,
+    alternarLembretesAssistente, marcarLembreteAssistente, pedirApagarLembreteAssistente, cancelarApagarLembreteAssistente, apagarLembreteAssistente,
   };
 });
