@@ -554,6 +554,13 @@ QUERY_TOOLS: List[Tool] = [
         lambda c, a: c.chamados_novos_sebrae(),
     ),
     _read(
+        "proximo_passo_sebrae",
+        "Em que ponto do fluxo do Dashboard Sebrae o usuário está e qual é o próximo passo (importar, buscar, "
+        "atualizar ou enviar ao SharePoint), com quem executa. Use para 'e agora?', 'o que falta no Sebrae?' ou "
+        "'já posso enviar?'. Só leitura; repita o `proximo_passo` sem inventar etapas.",
+        lambda c, a: c.proximo_passo_sebrae(),
+    ),
+    _read(
         "chamados_antigos_abertos_sebrae",
         "Chamados antigos já lançados no Dashboard do Sebrae com Status EM ABERTO ou em branco, inclusive os cuja "
         "coluna C traz o número dentro de valor composto (ex.: '27371 / UTIC-2026-0094'). Use para 'quais chamados "

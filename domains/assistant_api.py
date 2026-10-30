@@ -970,6 +970,34 @@ class SimpressApi:
             "erros": [{"numero": str(n), "erro": str(m)} for n, m in list(erros.items())[:MAX_ITENS_LISTA]],
         })
 
+    def proximo_passo_sebrae(self) -> Dict[str, Any]:
+        """Where the user is in the Dashboard Sebrae flow and what comes next. Read only; the rule is the server's, not the model's."""
+        ok, dados = self._chamar("GET", "/api/sebrae/novos")
+        if not ok:
+            return {"erro": dados}
+        dados = _dict(dados)
+        importado = dados.get("importado") if isinstance(dados.get("importado"), dict) else None
+        novos = dados.get("novos") if isinstance(dados.get("novos"), dict) else None
+        if importado is None:
+            passo, quem = "Rodar \"Baixar, importar e buscar\" (rotina 'dashboard', aba Automação).", "assistente_ou_usuario"
+        elif not importado.get("atualizavel"):
+            passo, quem = "Importar o Dashboard de novo: a cópia guardada não permite atualizar.", "assistente_ou_usuario"
+        elif novos is None:
+            passo, quem = "Buscar os chamados novos (\"Buscar chamados novos\" no painel Chamados Sebrae, ou a rotina 'dashboard').", "assistente_ou_usuario"
+        elif not importado.get("saida_pronta"):
+            passo, quem = "Preencher os chamados e usar \"Atualizar Dashboard\" no painel Chamados Sebrae.", "usuario"
+        else:
+            passo, quem = ("O Dashboard atualizado já foi gerado. Se ainda não foi ao SharePoint, usar \"Enviar ao SharePoint\" "
+                           "no painel Chamados Sebrae (o login é manual).", "usuario")
+        return {
+            "dashboard_importado": importado is not None,
+            "atualizavel": bool(importado and importado.get("atualizavel")),
+            "chamados_novos": len(novos.get("formulario") or []) if novos else None,
+            "dashboard_atualizado_gerado": bool(importado and importado.get("saida_pronta")),
+            "proximo_passo": passo,
+            "quem_executa": quem,
+        }
+
     def chamados_antigos_abertos_sebrae(self) -> Dict[str, Any]:
         """Old Dashboard tickets with Status EM ABERTO or empty. Read only."""
         ok, dados = self._chamar("GET", "/api/sebrae/novos")
