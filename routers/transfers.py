@@ -145,7 +145,7 @@ def formatar_telefone_brasileiro(value: Any) -> str:
     return f"{telefone_formatado} Ramal: {ramal}" if ramal else telefone_formatado
 
 
-def _gerar_planilha_transferencia(payload: TransferenciaPayload, template_file: Path):
+def _gerar_planilha_transferencia(payload: TransferenciaPayload, template_file: Path) -> StreamingResponse:
     if not payload.serial.strip():
         raise HTTPException(
             status_code=422,
@@ -302,11 +302,13 @@ def _gerar_planilha_transferencia(payload: TransferenciaPayload, template_file: 
             wb.close()
 
 
-def create_transfer_router(template_file_provider: Callable[[], Path]):
+def create_transfer_router(
+    template_file_provider: Callable[[], Path],
+) -> tuple[APIRouter, Callable[[TransferenciaPayload], StreamingResponse]]:
     """Create the transfer route with a path provider that can follow runtime overrides."""
     router = APIRouter()
 
-    def gerar_planilha(payload: TransferenciaPayload):
+    def gerar_planilha(payload: TransferenciaPayload) -> StreamingResponse:
         return _gerar_planilha_transferencia(payload, template_file_provider())
 
     router.add_api_route(

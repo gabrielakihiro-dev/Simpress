@@ -55,8 +55,12 @@ from core.config import (
     HISTORY_ANNOTATIONS_SYNC_ENABLED,
     LOCAL_HISTORY_ANNOTATION_OUTBOX_DIR,
     INPUT_DIR,
+    ASSISTANT_INSTRUCTIONS_FILE,
+    ASSISTANT_NOTES_FILE,
+    ASSISTANT_WEB_SEARCH_FILE,
     MAX_API_REQUEST_BYTES,
     MAX_ASSISTANT_AUDIO_BYTES,
+    MAX_ASSISTANT_ATTACHMENT_BYTES,
     MAX_UPLOAD_BYTES,
     MAX_UPLOAD_REQUEST_BYTES,
     MAX_CONCURRENT_UPLOAD_REQUESTS,
@@ -1136,6 +1140,7 @@ _local_request_safety_services = LocalRequestSafetyServices(
         api_request_bytes=MAX_API_REQUEST_BYTES,
         entra_csv_request_bytes=entra_users.MAX_CSV_BYTES + MAX_API_REQUEST_BYTES,
         assistant_audio_request_bytes=MAX_ASSISTANT_AUDIO_BYTES,
+        assistant_attachment_request_bytes=MAX_ASSISTANT_ATTACHMENT_BYTES + 64 * 1024,
     ),
     upload_admission=lambda: UPLOAD_ADMISSION,
     idempotent_upload_wait_seconds=lambda: IDEMPOTENT_UPLOAD_ADMISSION_WAIT_SECONDS,
@@ -2535,6 +2540,9 @@ app.include_router(create_automation_router(AutomationRouteServices(
 app.include_router(create_assistant_router(AssistantRouteServices(
     load_settings=lambda: OpenRouterSettings.load(BASE_DIR / ".env"),
     transport=asgi_transport(lambda: app, SERVER_PORT),
+    instructions_file=ASSISTANT_INSTRUCTIONS_FILE,
+    notes_file=ASSISTANT_NOTES_FILE,
+    web_search_file=ASSISTANT_WEB_SEARCH_FILE,
 )))
 
 app.include_router(create_sebrae_dashboard_router(SebraeDashboardServices(

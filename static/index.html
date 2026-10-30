@@ -1098,7 +1098,35 @@ Horário disponível para atendimento:</textarea>
             <button type="button" id="assistente-tentar" class="ck-btn ck-btn--secundario ck-btn--sm" data-on-click="carregarAssistente" hidden><svg class="ck-ico ck-ico--sm" aria-hidden="true" focusable="false"><use href="#i-refresh"></use></svg>Tentar novamente</button>
             <button type="button" id="assistente-nova" class="ck-btn ck-btn--fantasma ck-btn--sm" data-on-click="novaConversaAssistente"><svg class="ck-ico ck-ico--sm" aria-hidden="true" focusable="false"><use href="#i-plus"></use></svg>Nova conversa</button>
             <button type="button" id="assistente-voz" class="ck-btn ck-btn--fantasma ck-btn--sm" data-on-click="alternarVozAssistente" aria-pressed="false" title="Ler as respostas em voz alta (voz do seu computador, nada é enviado)"><svg class="ck-ico ck-ico--sm" aria-hidden="true" focusable="false"><use href="#i-volume"></use></svg>Voz</button>
+            <button type="button" id="assistente-instrucoes-botao" class="ck-btn ck-btn--fantasma ck-btn--sm" data-on-click="alternarInstrucoesAssistente" aria-expanded="false" aria-controls="assistente-instrucoes"><svg class="ck-ico ck-ico--sm" aria-hidden="true" focusable="false"><use href="#i-pencil"></use></svg>Instruções</button>
+            <button type="button" id="assistente-lembretes-botao" class="ck-btn ck-btn--fantasma ck-btn--sm" data-on-click="alternarLembretesAssistente" aria-expanded="false" aria-controls="assistente-lembretes"><svg class="ck-ico ck-ico--sm" aria-hidden="true" focusable="false"><use href="#i-clipboard"></use></svg>Lembretes</button>
           </div>
+          <section id="assistente-instrucoes" class="ck-assist__instrucoes" aria-labelledby="assistente-instrucoes-titulo" hidden>
+            <h3 id="assistente-instrucoes-titulo" class="ck-det__titulo">Instruções permanentes</h3>
+            <label class="ck-campo ck-assist__campo"><span class="ck-campo__rotulo">Regras e preferências para o Assistente</span><textarea id="assistente-instrucoes-texto" class="ck-entrada" rows="4" maxlength="4000" placeholder="Ex.: Sempre responda em tabela." aria-describedby="assistente-instrucoes-dica assistente-instrucoes-contador" data-on-input="contarInstrucoesAssistente"></textarea></label>
+            <p id="assistente-instrucoes-dica" class="ck-assist__contador">Preferências, não regras de segurança: o cartão de confirmação e a ocultação de dados pessoais continuam valendo. Valem na próxima mensagem.</p>
+            <div class="ck-assist__acoes">
+              <span id="assistente-instrucoes-contador" class="ck-assist__contador">0 / 4000</span>
+              <div class="ck-grupo-botoes">
+                <button type="button" id="assistente-instrucoes-limpar" class="ck-btn ck-btn--secundario ck-btn--sm" data-on-click="limparInstrucoesAssistente" title="Apaga as instruções salvas">Limpar</button>
+                <button type="button" id="assistente-instrucoes-salvar" class="ck-btn ck-btn--primario ck-btn--sm" data-on-click="salvarInstrucoesAssistente">Salvar</button>
+              </div>
+            </div>
+            <p id="assistente-instrucoes-status" class="ck-assist__contador" role="status" aria-live="polite"></p>
+            <div class="ck-assist__busca">
+              <label class="ck-assist__interruptor" for="assistente-busca-web"><input type="checkbox" role="switch" id="assistente-busca-web" aria-label="Busca na web" aria-describedby="assistente-busca-web-aviso" data-on-change="alternarBuscaWebAssistente" disabled><span>Busca na web</span></label>
+              <p id="assistente-busca-web-dica" class="ck-assist__contador">Desligada por padrão. Ligada, o Assistente pode pesquisar na internet só informação genérica (até 200 caracteres); dados do cadastro (série, hostname, nome, e-mail, telefone, CPF) são recusados antes de sair.</p>
+              <p id="assistente-busca-web-aviso" class="ck-assist__aviso" role="status" aria-live="polite"></p>
+              <p id="assistente-busca-web-status" class="ck-assist__contador" role="status" aria-live="polite"></p>
+            </div>
+          </section>
+          <section id="assistente-lembretes" class="ck-assist__instrucoes ck-assist__lembretes" aria-labelledby="assistente-lembretes-titulo" hidden>
+            <h3 id="assistente-lembretes-titulo" class="ck-det__titulo" tabindex="-1">Lembretes e notas</h3>
+            <p class="ck-assist__contador">Memória do Assistente: peça no chat "me lembre de…" ou "anote que…". Não há alarme nem aviso automático; confira esta lista quando precisar.</p>
+            <ul id="assistente-lembretes-lista" class="ck-assist__lembretes-lista" aria-labelledby="assistente-lembretes-titulo" hidden></ul>
+            <p id="assistente-lembretes-vazio" class="ck-assist__contador" hidden>Nenhum lembrete guardado.</p>
+            <p id="assistente-lembretes-status" class="ck-assist__contador" role="status" aria-live="polite"></p>
+          </section>
           <div id="assistente-mensagens" class="ck-assist__lista" role="region" aria-label="Mensagens da conversa" aria-busy="false" tabindex="0"></div>
           <p id="assistente-anuncio" class="ck-sr" aria-live="polite" aria-atomic="true"></p>
           <div id="assistente-pendente" class="ck-assist__pendente" role="group" aria-labelledby="assistente-pendente-titulo" aria-describedby="assistente-pendente-descricao" tabindex="-1" hidden>
@@ -1111,12 +1139,18 @@ Horário disponível para atendimento:</textarea>
           </div>
           <form id="assistente-form" class="ck-assist__form" data-on-submit="enviarMensagemAssistente" autocomplete="off">
             <label class="ck-campo ck-assist__campo"><span class="ck-campo__rotulo">Mensagem</span><textarea id="assistente-texto" class="ck-entrada" rows="3" maxlength="4000" placeholder="Escreva sua pergunta. Enter envia; Shift+Enter quebra a linha." aria-describedby="assistente-contador" data-on-input="contarMensagemAssistente"></textarea></label>
+            <input id="assistente-anexo-arquivo" type="file" accept=".pdf,.docx,.doc,.png,.jpg,.jpeg,application/pdf,image/png,image/jpeg" multiple hidden data-on-change="anexarArquivoAssistente" data-args='["$event"]'>
+            <ul id="assistente-anexos" class="ck-assist__anexos" aria-label="Arquivos anexados" hidden></ul>
+            <p id="assistente-anexos-aviso" class="ck-assist__aviso" hidden>Atenção: imagens anexadas vão para o OpenRouter exatamente como estão, sem ocultar CPF, nome, e-mail ou outros dados que apareçam nelas. Anexe só o que pode sair deste computador.</p>
+            <p id="assistente-anexos-status" class="ck-assist__contador ck-assist__anexos-status" role="status" aria-live="polite"></p>
             <div class="ck-assist__acoes">
               <span id="assistente-contador" class="ck-assist__contador">0 / 4000</span>
               <div class="ck-grupo-botoes">
+                <button type="button" id="assistente-anexar" class="ck-btn ck-btn--secundario ck-assist__anexar" data-click-target="assistente-anexo-arquivo" title="Anexar arquivo (PDF, .docx, PNG ou JPEG)" aria-describedby="assistente-anexar-dica"><svg class="ck-ico ck-ico--sm" aria-hidden="true" focusable="false"><use href="#i-upload"></use></svg><span class="ck-assist__anexar-rotulo">Anexar</span></button>
                 <button type="button" id="assistente-gravar" class="ck-btn ck-btn--secundario" data-on-click="alternarGravacaoAssistente" aria-describedby="assistente-gravar-dica"><svg class="ck-ico ck-ico--sm" aria-hidden="true" focusable="false"><use href="#i-mic"></use></svg><span id="assistente-gravar-rotulo">Gravar áudio</span></button>
                 <button type="submit" id="assistente-enviar" class="ck-btn ck-btn--primario"><svg class="ck-ico ck-ico--sm" aria-hidden="true" focusable="false"><use href="#i-arrow-right"></use></svg>Enviar</button>
               </div>
+              <span id="assistente-anexar-dica" class="ck-sr">Aceita PDF, .docx, PNG e JPEG, até 5 arquivos. O texto de PDF e .docx passa pela ocultação de dados pessoais antes de ir para a IA. Os anexos são apagados em Nova conversa.</span>
               <span id="assistente-gravar-dica" class="ck-sr">A fala é transcrita para a caixa de mensagem; revise o texto antes de enviar. Esc cancela a gravação.</span>
             </div>
           </form>

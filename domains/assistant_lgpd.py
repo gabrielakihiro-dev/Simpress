@@ -31,7 +31,7 @@ DADO_OMITIDO = "[DADO SENSÍVEL OMITIDO]"
 CHAVES_SENSIVEIS = frozenset({
     "usuario_logado", "usuarios_logados", "usuario_manual", "usuario", "apelido",
     "nome", "nome_pessoa", "solicitante", "responsavel", "login", "email",
-    "entrega_contato", "retirada_contato",
+    "entrega_contato", "retirada_contato", "retirada_telefone",
     "usuario_anterior", "usuario_novo", "nome_pessoa_anterior", "nome_pessoa_novo",
     "apelido_manual", "apelido_anterior", "apelido_novo",
     "apelido_na_simpress", "apelido_no_endpoint",
@@ -40,7 +40,7 @@ CHAVES_SENSIVEIS = frozenset({
 # Free text written by people, where a known name can appear in the middle of a sentence.
 CHAVES_TEXTO_LIVRE = frozenset({
     "anotacao", "descricao", "observacao", "motivo", "detalhes", "comentario", "mensagem", "erro",
-    "texto_pagina", "rotulo", "titulo",
+    "texto_pagina", "rotulo", "titulo", "texto_anexo", "nome_arquivo", "texto", "esqueleto",
 })
 # Keys holding a person's name: each word of the name also becomes a marker ("o Bruno" inside a text).
 CHAVES_NOME_PESSOA = frozenset({
