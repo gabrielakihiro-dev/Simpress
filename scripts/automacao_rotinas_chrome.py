@@ -1622,20 +1622,11 @@ def guardar_backup_do_dashboard(baixado: Path) -> Path:
     return destino
 
 
-def _texto_da_linha_do_dashboard(page: "Page") -> str:
-    """Nome, data de modificação e tamanho da linha do original; muda quando o upload substitui o arquivo."""
-    try:
-        return _localizar_linha_do_dashboard(page).inner_text(timeout=3000)
-    except Exception:
-        return ""
-
-
 def enviar_arquivo_para_pasta(page: "Page", arquivo: Path) -> None:
     """Carregar > Carregamento de arquivos (na tela Shared: Criar ou carregar > Carregamento de arquivos) na pasta aberta, sobrepondo o original com "Replace".
 
     Se o SharePoint oferecer só "Keep both", recusa: criaria um segundo arquivo em vez de atualizar o Dashboard.
     """
-    antes = _texto_da_linha_do_dashboard(page)
     log("Dashboard", f"Enviando {arquivo.name} ({arquivo.stat().st_size:,} bytes)...".replace(",", "."))
     _botao_enviar(page).click()
     arquivos = page.get_by_role("menuitem", name=re.compile(r"^(?:Files?(?: upload)?|Carregamento de arquivos)$")).first
@@ -1659,8 +1650,8 @@ def enviar_arquivo_para_pasta(page: "Page", arquivo: Path) -> None:
         verificar_cancelamento()
         if visivel(aviso_uso.first):
             raise RotinaErro("O SharePoint não deixou substituir: o Dashboard está em uso ou bloqueado por outra pessoa. Feche-o e envie de novo.")
-        depois = _texto_da_linha_do_dashboard(page)
-        if (depois and depois != antes) or visivel(page.get_by_text(_AVISO_ENVIO_CONCLUIDO).first):
+        # Só o aviso confirma: o texto da linha muda sozinho (data relativa) mesmo se o envio falhar.
+        if visivel(page.get_by_text(_AVISO_ENVIO_CONCLUIDO).first):
             return
         page.wait_for_timeout(1000)
     raise RotinaErro("Não consegui confirmar o envio: o Dashboard no SharePoint não mudou. Confira a pasta antes de repetir.")

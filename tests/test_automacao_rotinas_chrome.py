@@ -516,12 +516,14 @@ class EnviarDashboardTests(unittest.TestCase):
         page.locators = locators
         return page
 
-    def _enviar(self, page, textos=("antes", "depois"), visivel=False):
+    def _enviar(self, page, concluido=True, em_uso=False):
+        """Roda o envio com o aviso de conclusão (``concluido``) e o de arquivo em uso (``em_uso``) simulados."""
+        aviso = page.get_by_text.return_value.first
         with tempfile.TemporaryDirectory() as pasta:
             arquivo = Path(pasta) / "Dashboard Operacional_SEBRAE.xlsx"
             arquivo.write_bytes(b"x")
-            with patch.object(automacao, "esperar_visivel", return_value=True), patch.object(automacao, "visivel", return_value=visivel), \
-                    patch.object(automacao, "_texto_da_linha_do_dashboard", side_effect=list(textos) + [textos[-1]] * 200), \
+            with patch.object(automacao, "esperar_visivel", return_value=True), \
+                    patch.object(automacao, "visivel", side_effect=lambda loc: concluido if loc is aviso else em_uso), \
                     patch.object(automacao, "verificar_cancelamento"), patch.object(automacao, "log"), \
                     patch.object(automacao, "_botao_enviar"):
                 automacao.enviar_arquivo_para_pasta(page, arquivo)
@@ -552,13 +554,17 @@ class EnviarDashboardTests(unittest.TestCase):
     def test_upload_fails_clearly_when_the_dashboard_is_in_use(self):
         page = self._pagina({"substituir"})
         with self.assertRaisesRegex(automacao.RotinaErro, "em uso ou bloqueado"):
-            self._enviar(page, visivel=True)
+            self._enviar(page, concluido=False, em_uso=True)
 
-    def test_upload_fails_when_the_row_never_changes(self):
+    def test_upload_fails_without_the_completion_notice_even_if_the_row_text_changes(self):
+        # O texto da linha ("há 4 minutos" -> "há 5 minutos") muda sozinho; só o aviso de conclusão vale.
         page = self._pagina({"substituir"})
-        with patch.object(automacao.time, "time", side_effect=[0, 1, 2, 3, 500, 500]):
+        textos = iter(f"há {n} minutos" for n in range(1000))
+        with patch.object(automacao, "_localizar_linha_do_dashboard") as linha, \
+                patch.object(automacao.time, "time", side_effect=[0, 1, 2, 3, 500, 500]):
+            linha.return_value.inner_text.side_effect = lambda **_: next(textos)
             with self.assertRaisesRegex(automacao.RotinaErro, "não mudou"):
-                self._enviar(page, textos=("igual",))
+                self._enviar(page, concluido=False)
 
     def test_duplicate_clicks_the_menu_and_waits_for_the_copy(self):
         page = MagicMock()
