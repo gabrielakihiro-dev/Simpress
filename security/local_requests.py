@@ -50,6 +50,7 @@ class RequestBodyLimits:
     api_request_bytes: int
     entra_csv_request_bytes: int
     assistant_audio_request_bytes: int
+    assistant_attachment_request_bytes: int
 
 
 @dataclass(frozen=True)
@@ -224,6 +225,7 @@ class LocalRequestSafetyMiddleware:
         is_ticket_upload = path == "/api/operacoes/chamados/importar"
         is_entra_upload = path == "/api/usuarios-entra/importar" and scope.get("method") == "POST"
         is_assistant_audio = path == "/api/assistente/audio"
+        is_assistant_attachment = path == "/api/assistente/anexo" and scope.get("method") == "POST"
         limits = services.body_limits()
         body_limit = (
             limits.upload_request_bytes if is_inventory_upload
@@ -231,6 +233,7 @@ class LocalRequestSafetyMiddleware:
             else 2 * limits.ticket_workbook_bytes + 1024 * 1024 if is_ticket_upload
             else limits.entra_csv_request_bytes if is_entra_upload
             else limits.assistant_audio_request_bytes if is_assistant_audio
+            else limits.assistant_attachment_request_bytes if is_assistant_attachment
             else limits.api_request_bytes if path.startswith("/api/")
             else None
         )

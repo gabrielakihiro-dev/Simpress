@@ -4,6 +4,7 @@ import json
 import tempfile
 import unittest
 import urllib.error
+import urllib.request
 from pathlib import Path
 from typing import Any, Dict, List
 from unittest import mock
@@ -55,6 +56,51 @@ class SettingsTests(unittest.TestCase):
         self.assertFalse(OpenRouterSettings.load(Path("nao-existe.env"), environ={}).configured)
         self.assertFalse(OpenRouterSettings.load(None, environ={"OPENROUTER_API_KEY": "sk-or-v1-coloque-sua-chave"}).configured)
         self.assertFalse(OpenRouterSettings.load(None, environ={"OPENROUTER_API_KEY": "  "}).configured)
+
+    def test_deepseek_key_selects_direct_api_and_flash_model(self) -> None:
+        settings = OpenRouterSettings.load(None, environ={
+            "DEEPSEEK_API_KEY": SECRET, "OPENROUTER_API_KEY": "outra", "MODELO_PRINCIPAL": "a/b",
+        })
+        self.assertTrue(settings.deepseek)
+        self.assertTrue(settings.configured)
+        self.assertEqual(settings.api_key, SECRET)
+        self.assertEqual(settings.base_url, "https://api.deepseek.com")
+        self.assertEqual(settings.primary_model, "deepseek-flash")
+        self.assertFalse(OpenRouterSettings.load(None, environ={"OPENROUTER_API_KEY": SECRET}).deepseek)
+
+    def test_deepseek_payload_has_no_openrouter_routing_and_no_audio(self) -> None:
+        sent: list = []
+        client = OpenRouterClient(OpenRouterSettings(api_key=SECRET, deepseek=True, primary_model="deepseek-flash"))
+        client._send = lambda payload: sent.append(payload) or {"choices": [{"message": {"content": "ok"}}]}  # type: ignore[method-assign]
+        client.complete([{"role": "user", "content": "oi"}], [])
+        self.assertEqual(sent[0]["model"], "deepseek-flash")
+        self.assertNotIn("models", sent[0])
+        self.assertNotIn("provider", sent[0])
+        with self.assertRaises(OpenRouterError):
+            client.transcribe(b"RIFF")
+
+    def test_deepseek_mode_sends_voice_to_openrouter_when_its_key_exists(self) -> None:
+        settings = OpenRouterSettings.load(None, environ={"DEEPSEEK_API_KEY": SECRET, "OPENROUTER_API_KEY": "sk-or-v1-voz"})
+        self.assertEqual(settings.voice_key, "sk-or-v1-voz")
+        urls: list = []
+
+        class Resposta:
+            def __enter__(self) -> "Resposta":
+                return self
+
+            def __exit__(self, *args: object) -> None:
+                return None
+
+            def read(self, n: int = -1) -> bytes:
+                return b'{"choices": [{"message": {"content": "ola mundo"}}]}'
+
+        def abrir(request: urllib.request.Request, timeout: float) -> Resposta:
+            urls.append((request.full_url, request.get_header("Authorization")))
+            return Resposta()
+
+        with mock.patch("urllib.request.urlopen", abrir):
+            self.assertEqual(OpenRouterClient(settings).transcribe(b"RIFF"), "ola mundo")
+        self.assertEqual(urls, [("https://openrouter.ai/api/v1/chat/completions", "Bearer sk-or-v1-voz")])
 
     def test_plain_http_base_url_and_bad_values_fall_back(self) -> None:
         settings = OpenRouterSettings.load(None, environ={
@@ -264,6 +310,46 @@ class RealAppTests(unittest.TestCase):
         self.assertEqual(ok.status_code, 200, ok.text)
         self.assertEqual(ok.json(), {"texto": f"{len(wav)} bytes"})
         self.assertEqual(too_big.status_code, 413)
+
+    def test_attachment_route_accepts_up_to_its_own_limit_and_rejects_beyond(self) -> None:
+        import os
+        import zipfile
+        from urllib.parse import quote
+
+        from fastapi.testclient import TestClient
+
+        from core.config import MAX_API_REQUEST_BYTES, MAX_ASSISTANT_ATTACHMENT_BYTES
+
+        pack = io.BytesIO()
+        with zipfile.ZipFile(pack, "w", zipfile.ZIP_STORED) as docx:
+            docx.writestr(
+                "word/document.xml",
+                '<w:document xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main">'
+                "<w:body><w:p><w:r><w:t>Ata da reuni\u00e3o</w:t></w:r></w:p></w:body></w:document>",
+            )
+            docx.writestr("word/media/padding.bin", bytes(MAX_API_REQUEST_BYTES))  # above the generic /api/ limit
+        big_docx = pack.getvalue()
+        self.assertGreater(len(big_docx), MAX_API_REQUEST_BYTES)
+
+        with mock.patch.dict(os.environ, {"OPENROUTER_API_KEY": "sk-test-local"}):
+            import main
+
+            client = TestClient(main.app, base_url="http://127.0.0.1:8000", client=("127.0.0.1", 50000))
+            headers = {"X-Nome-Arquivo": quote("ata final.docx")}
+            ok = client.post("/api/assistente/anexo", content=big_docx, headers=headers)
+            too_big = client.post(
+                "/api/assistente/anexo", content=bytes(MAX_ASSISTANT_ATTACHMENT_BYTES + 64 * 1024 + 1), headers=headers
+            )
+            listed = client.get("/api/assistente/anexos")
+            removed = client.delete(f"/api/assistente/anexo/{ok.json().get('id', 'x')}")
+            after = client.get("/api/assistente/anexos")
+        self.assertEqual(ok.status_code, 200, ok.text)
+        self.assertEqual(ok.json()["nome"], "ata final.docx")
+        self.assertEqual(ok.json()["tipo"], "docx")
+        self.assertEqual(too_big.status_code, 413)
+        self.assertEqual([a["id"] for a in listed.json()["anexos"]], [ok.json()["id"]])
+        self.assertEqual(removed.status_code, 200, removed.text)
+        self.assertEqual(after.json(), {"anexos": []})
 
 
 if __name__ == "__main__":
