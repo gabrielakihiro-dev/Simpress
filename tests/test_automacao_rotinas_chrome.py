@@ -563,7 +563,7 @@ class EnviarDashboardTests(unittest.TestCase):
         with patch.object(automacao, "_localizar_linha_do_dashboard") as linha, \
                 patch.object(automacao.time, "time", side_effect=[0, 1, 2, 3, 500, 500]):
             linha.return_value.inner_text.side_effect = lambda **_: next(textos)
-            with self.assertRaisesRegex(automacao.RotinaErro, "não mudou"):
+            with self.assertRaisesRegex(automacao.RotinaErro, "Não vi o aviso"):
                 self._enviar(page, concluido=False)
 
     def test_duplicate_clicks_the_menu_and_waits_for_the_copy(self):
@@ -571,33 +571,50 @@ class EnviarDashboardTests(unittest.TestCase):
         contagens = iter([1, 1, 2])
         with patch.object(automacao, "_linha_do_dashboard"), patch.object(automacao, "_abrir_mais_acoes") as abrir, \
                 patch.object(automacao, "_quantos_dashboards_na_lista", side_effect=lambda _p: next(contagens)), \
+                patch.object(automacao, "_copias_na_lista", return_value=0), \
                 patch.object(automacao, "verificar_cancelamento"), patch.object(automacao, "log"):
             automacao.duplicar_dashboard_na_pasta(page)
         abrir.assert_called_once()
         self.assertIs(page.get_by_role.call_args.kwargs["name"], automacao._MENU_DUPLICATA)
         page.get_by_role.return_value.first.click.assert_called_once()
 
-    def _logs_da_duplicata(self, total_na_lista: int) -> str:
-        contagens = iter([total_na_lista, total_na_lista + 1])
+    def _logs_da_duplicata(self, copias: int) -> str:
+        contagens = iter([copias + 1, copias + 2])  # original + cópias, depois a nova
         with patch.object(automacao, "_linha_do_dashboard"), patch.object(automacao, "_abrir_mais_acoes"), \
                 patch.object(automacao, "_quantos_dashboards_na_lista", side_effect=lambda _p: next(contagens)), \
+                patch.object(automacao, "_copias_na_lista", return_value=copias), \
                 patch.object(automacao, "verificar_cancelamento"), patch.object(automacao, "log") as log:
             automacao.duplicar_dashboard_na_pasta(MagicMock())
         return "\n".join(str(c.args[1]) for c in log.call_args_list)
 
     def test_duplicate_warns_when_there_are_more_than_five_copies(self):
-        textos = self._logs_da_duplicata(7)  # original + 6 cópias
+        textos = self._logs_da_duplicata(6)
         self.assertIn("apague as antigas à mão", textos)
         self.assertIn("6 cópias", textos)
 
     def test_duplicate_does_not_warn_with_few_copies(self):
-        textos = self._logs_da_duplicata(3)  # original + 2 cópias
+        textos = self._logs_da_duplicata(2)
         self.assertNotIn("apague", textos)
+
+    def test_copy_pattern_counts_only_copies_of_the_dashboard(self):
+        casos = {
+            "Dashboard Operacional_SEBRAE Copiar.xlsx": True,
+            "Dashboard Operacional_SEBRAE Copiar (1).xlsx": True,
+            "Dashboard Operacional_SEBRAE - Cópia.xlsx": True,
+            "Dashboard Operacional_SEBRAE (1).xlsx": True,
+            "Dashboard Operacional_SEBRAE.xlsx Há alguns segundos 120 KB (1)": False,
+            "Dashboard Operacional_SEBRAE.xlsx": False,
+            "Dashboard Operacional_SEBRAE_teste.xlsx": False,
+            "Dashboard Operacional_SEBRAE (atualizado).xlsx": False,
+        }
+        for nome, esperado in casos.items():
+            self.assertEqual(bool(automacao._COPIA_DO_DASHBOARD.search(nome)), esperado, nome)
 
     def test_duplicate_stops_without_overwriting_when_the_copy_does_not_appear(self):
         page = MagicMock()
         with patch.object(automacao, "_linha_do_dashboard"), patch.object(automacao, "_abrir_mais_acoes"), \
                 patch.object(automacao, "_quantos_dashboards_na_lista", return_value=1), \
+                patch.object(automacao, "_copias_na_lista", return_value=0), \
                 patch.object(automacao.time, "time", side_effect=[0, 1, 99, 99]), \
                 patch.object(automacao, "verificar_cancelamento"), patch.object(automacao, "log"):
             with self.assertRaisesRegex(automacao.RotinaErro, "não substituí"):

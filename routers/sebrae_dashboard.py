@@ -95,6 +95,7 @@ def create_sebrae_dashboard_router(services: SebraeDashboardServices) -> APIRout
                 "arquivo": importado["arquivo"], "importado_em": importado["importado_em"], "total": len(lancados),
                 "listas": importado["listas"], "abertos": _abertos_com_sugestoes(importado["abertos"]),
                 "atualizavel": sebrae_novos.ler_planilha(sebrae_novos.caminho_planilha(caminhos), importado["sha256"]) is not None,
+                "saida_pronta": sebrae_novos.caminho_saida(caminhos, NOME_ATUALIZADO).is_file(),
             },
             "novos": None if novos is None else {
                 "lidos_em": novos["lidos_em"], "ignorados": novos["ignorados"], "pendentes": novos["pendentes"],
