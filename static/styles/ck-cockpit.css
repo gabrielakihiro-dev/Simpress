@@ -1017,10 +1017,14 @@ html[data-theme], html[data-theme] body.cockpit-shell-body { background: var(--c
 .ck-assist__pendente { padding: 10px 12px; border-radius: var(--raio-md); background: var(--cor-alerta-fundo); color: var(--cor-alerta-texto); border: 1px solid currentColor; }
 .ck-assist__pendente:focus-visible { outline: 2px solid var(--cor-destaque); outline-offset: 2px; }
 .ck-assist__pendente .ck-grupo-botoes { margin-top: 8px; }
-.ck-assist__form { display: flex; flex-direction: column; gap: 8px; }
+.ck-assist__form { display: flex; flex-direction: column; gap: 12px; }
 .ck-assist__campo { width: 100%; }
 .ck-assist__campo textarea { width: 100%; resize: vertical; min-height: 4.5em; max-height: 40vh; }
 .ck-assist__acoes { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
+/* Anexar, Gravar áudio e Enviar são só ícone; o nome continua para leitores de tela e no title. */
+.ck-assist__icone { width: var(--altura-controle); padding: 0; justify-content: center; }
+.ck-assist__icone--gravando { background: var(--cor-erro-fundo); color: var(--cor-erro-texto); }
+.ck-assist__icone-rotulo { position: absolute; width: 1px; height: 1px; margin: -1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
 .ck-assist__contador { font-size: var(--fs-xs); color: var(--cor-texto-mudo); font-variant-numeric: tabular-nums; }
 .ck-assist__anexos { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 4px; }
 .ck-assist__anexos[hidden], .ck-assist__aviso[hidden] { display: none; }
@@ -1072,9 +1076,6 @@ html[data-theme], html[data-theme] body.cockpit-shell-body { background: var(--c
   /* Com quatro botões (Lembretes entrou) só cabem numa linha sem o ícone e com menos folga lateral; os nomes continuam visíveis. */
   .ck-assist__barra > .ck-btn { padding-inline: 6px; }
   .ck-assist__barra > .ck-btn > .ck-ico { display: none; }
-  /* Sem largura para três botões ao lado do contador: Anexar vira só o ícone (o nome continua para leitores de tela e no title). */
-  .ck-assist__anexar { width: var(--altura-controle); padding: 0; justify-content: center; }
-  .ck-assist__anexar-rotulo { position: absolute; width: 1px; height: 1px; margin: -1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
   .ck-assist__lista { min-height: 120px; }
   .ck-assist__campo textarea { min-height: 3.5em; }
   .ck-assist__instrucoes { padding: 8px 10px; }

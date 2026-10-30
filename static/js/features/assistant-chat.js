@@ -218,6 +218,10 @@
     byId("assistente-gravar-rotulo").textContent = gravando
       ? `Parar (${Math.floor(segundos / 60)}:${String(segundos % 60).padStart(2, "0")})`
       : transcrevendo ? "Transcrevendo…" : "Gravar áudio";
+    // Sem rótulo visível: o tempo de gravação vai no tooltip e o estado aparece no ícone (parar) e na cor.
+    botaoGravar.title = byId("assistente-gravar-rotulo").textContent;
+    botaoGravar.classList.toggle("ck-assist__icone--gravando", gravando);
+    botaoGravar.querySelector("use").setAttribute("href", gravando ? "#i-stop" : "#i-mic");
     byId("assistente-nova").disabled = ocupado;
     byId("assistente-confirmar").disabled = ocupado;
     byId("assistente-cancelar").disabled = ocupado;
