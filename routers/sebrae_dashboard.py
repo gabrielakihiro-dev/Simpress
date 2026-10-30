@@ -189,6 +189,8 @@ def create_sebrae_dashboard_router(services: SebraeDashboardServices) -> APIRout
         """Numbers, A/B lists and open tickets go to the JSON; the file itself is kept for "Atualizar Dashboard".
         A Dashboard the writer cannot read still imports, so the paste flow keeps working."""
         caminhos = services.caminhos()
+        # a saída antiga vem da importação anterior; enviá-la ao SharePoint apagaria o que entrou desde então
+        sebrae_novos.caminho_saida(caminhos, NOME_ATUALIZADO).unlink(missing_ok=True)
         try:
             listas = sebrae_dashboard_gravacao.ler_listas(conteudo)
             abertos = [c.como_dict() for c in sebrae_dashboard_gravacao.chamados_para_editar(conteudo)]

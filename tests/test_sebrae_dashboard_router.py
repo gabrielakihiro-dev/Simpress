@@ -135,6 +135,16 @@ class RotasSebraeTest(RotasBase):
         self.assertEqual([g.numero for g in G.chamados_para_editar(base64.b64decode(corpo["conteudo_base64"]))], ["UTIC-2026-1378"])
         self.assertEqual(sebrae_novos.caminho_planilha(self.caminhos).read_bytes(), guardada)
 
+    def test_nova_importacao_apaga_a_saida_da_importacao_anterior(self):
+        saida = sebrae_novos.caminho_saida(self.caminhos, "Dashboard Operacional_SEBRAE.xlsx")
+        self.assertEqual(self.importar(montar()).status_code, 200)  # sem saída anterior: não dá erro
+        self.assertFalse(saida.exists())
+        sebrae_novos.salvar_novos(self.caminhos.novos, [CHAMADO], [], 0, {})
+        self.assertEqual(self.cliente.post("/api/sebrae/dashboard/atualizar", json={"chamados": [MANUAL]}).status_code, 200)
+        self.assertTrue(saida.exists())
+        self.assertEqual(self.importar(montar()).status_code, 200)
+        self.assertFalse(saida.exists())
+
     def test_atualizar_grava_novo_com_a_d_j_em_branco_e_recusa_d_invalido(self):
         self.importar(montar())
         sebrae_novos.salvar_novos(self.caminhos.novos, [CHAMADO], [], 0, {})
