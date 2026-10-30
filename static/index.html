@@ -93,7 +93,6 @@
     <button type="button" id="tab-automacao" class="ck-aba" role="tab" aria-selected="false" aria-controls="tab-panel-automacao" tabindex="-1" data-on-click="ativarAbaTransferencia" data-args='["automacao"]' aria-label="Automação" title="Automação (F4)"><svg class="ck-ico" aria-hidden="true" focusable="false"><use href="#i-bot"></use></svg><span>Automação</span></button>
   </nav>
   <button type="button" id="btn-acompanhamento-chamados" class="ck-aba ck-aba--painel" aria-pressed="false" data-cockpit-tool="chamados" data-on-click="abrirPainelCockpit" data-args='["chamados"]' aria-label="Chamados" title="Chamados (F5)" aria-keyshortcuts="F5"><svg class="ck-ico" aria-hidden="true" focusable="false"><use href="#i-clipboard"></use></svg><span>Chamados</span></button>
-  <button type="button" id="btn-assistente" class="ck-aba ck-aba--painel" aria-pressed="false" data-cockpit-tool="assistente" data-on-click="abrirPainelCockpit" data-args='["assistente"]' aria-label="Assistente" title="Assistente (F9)" aria-keyshortcuts="F9"><svg class="ck-ico" aria-hidden="true" focusable="false"><use href="#i-bot"></use></svg><span>Assistente</span></button>
 
   <span class="ck-topbar__espaco" aria-hidden="true"></span>
   <span class="ck-topbar__quebra" aria-hidden="true"></span>
@@ -159,7 +158,6 @@
           <button type="button" id="btn-cockpit-comparacao" class="ck-menu__item" role="menuitem" data-on-click="abrirPainelCockpit" data-args='["comparacao"]'><svg class="ck-ico" aria-hidden="true" focusable="false"><use href="#i-dashboard"></use></svg><span class="ck-menu__rotulo">Comparação</span><kbd aria-hidden="true">F6</kbd></button>
           <button type="button" id="btn-historico-apelidos" class="ck-menu__item" role="menuitem" data-on-click="abrirPainelCockpit" data-args='["apelidos"]'><svg class="ck-ico" aria-hidden="true" focusable="false"><use href="#i-history"></use></svg><span class="ck-menu__rotulo">Histórico de apelidos</span><kbd aria-hidden="true">F7</kbd></button>
           <button type="button" id="btn-relatorio-mensal" class="ck-menu__item" role="menuitem" data-on-click="abrirPainelCockpit" data-args='["relatorio"]'><svg class="ck-ico" aria-hidden="true" focusable="false"><use href="#i-sheet"></use></svg><span class="ck-menu__rotulo">Relatório mensal</span><kbd aria-hidden="true">F8</kbd></button>
-          <button type="button" id="btn-assistente-menu" class="ck-menu__item ck-menu__item--so-compacto" role="menuitem" data-on-click="abrirPainelCockpit" data-args='["assistente"]'><svg class="ck-ico" aria-hidden="true" focusable="false"><use href="#i-bot"></use></svg><span class="ck-menu__rotulo">Assistente</span><kbd aria-hidden="true">F9</kbd></button>
         </div>
         <div class="ck-menu__grupo" role="group" aria-labelledby="ck-menu-g-planilhas">
           <p class="ck-menu__titulo" id="ck-menu-g-planilhas">Planilhas</p>
@@ -200,6 +198,8 @@
         </div>
       </section>
     </div>
+
+    <button type="button" id="btn-assistente" class="ck-btn ck-btn--icone ck-btn--fantasma" aria-label="Assistente" title="Assistente (F9)" aria-keyshortcuts="F9" aria-expanded="false" aria-controls="assistente-widget" data-on-click="alternarAssistente"><svg class="ck-ico ck-ico--lg" aria-hidden="true" focusable="false"><use href="#i-bot"></use></svg></button>
 
     <button type="button" id="theme-toggle" class="ck-btn ck-btn--icone ck-btn--fantasma" aria-label="Ativar modo claro" title="Ativar modo claro"><svg class="ck-ico ck-ico--lg ck-ico--sol" aria-hidden="true" focusable="false"><use href="#i-sun"></use></svg><svg class="ck-ico ck-ico--lg ck-ico--lua" aria-hidden="true" focusable="false"><use href="#i-moon"></use></svg></button>
   </div>
@@ -751,18 +751,15 @@ Horário disponível para atendimento:</textarea>
         <h2 class="ck-sr" id="ck-rotinas-titulo">Rotinas principais</h2>
         <div class="ck-rotinas" role="group" aria-label="Rotinas principais">
           <article class="ck-cartao ck-rotina" data-rotina="os" data-estado="ocioso">
-            <div class="ck-rotina__cab"><span class="ck-rotina__icone" aria-hidden="true"><svg class="ck-ico" aria-hidden="true" focusable="false"><use href="#i-clipboard"></use></svg></span><h3 class="ck-rotina__titulo" id="ck-rotina-os-titulo">Rotina de OS</h3></div>
-            <p class="ck-rotina__desc">Oracle Service Cloud + UX Simpress (Acompanhamento de pedidos).</p>
+            <div class="ck-rotina__cab"><span class="ck-rotina__icone" aria-hidden="true"><svg class="ck-ico" aria-hidden="true" focusable="false"><use href="#i-clipboard"></use></svg></span><h3 class="ck-rotina__titulo" id="ck-rotina-os-titulo">Rotina de OS</h3><span class="info-tip"><button type="button" class="info-tip-trigger" aria-label="Sobre Rotina de OS" aria-describedby="tip-rotina-os"><svg class="ck-ico ck-ico--sm" aria-hidden="true" focusable="false"><use href="#i-info"></use></svg></button><span id="tip-rotina-os" role="tooltip" class="info-tip-text">Oracle Service Cloud + UX Simpress (Acompanhamento de pedidos).</span></span></div>
             <div class="ck-rotina__rodape"><span class="ck-badge" data-rotina-badge="os"><svg class="ck-ico ck-ico--xs" aria-hidden="true" focusable="false"><use href="#i-clock"></use></svg><span>—</span></span><button type="button" class="ck-btn ck-btn--secundario ck-btn--sm" id="btn-automacao-os" aria-describedby="ck-rotina-os-titulo" data-automacao-rotina="os" data-on-click="iniciarRotinaAutomacao" data-args='["os"]'><svg class="ck-ico ck-ico--xs" aria-hidden="true" focusable="false"><use href="#i-play"></use></svg><span>Executar</span></button></div>
           </article>
           <article class="ck-cartao ck-rotina" data-rotina="inventarios" data-estado="ocioso">
-            <div class="ck-rotina__cab"><span class="ck-rotina__icone" aria-hidden="true"><svg class="ck-ico" aria-hidden="true" focusable="false"><use href="#i-laptop"></use></svg></span><h3 class="ck-rotina__titulo" id="ck-rotina-inventarios-titulo">Inventários</h3></div>
-            <p class="ck-rotina__desc">UX Simpress (Meus equipamentos) + Endpoint Central.</p>
+            <div class="ck-rotina__cab"><span class="ck-rotina__icone" aria-hidden="true"><svg class="ck-ico" aria-hidden="true" focusable="false"><use href="#i-laptop"></use></svg></span><h3 class="ck-rotina__titulo" id="ck-rotina-inventarios-titulo">Inventários</h3><span class="info-tip"><button type="button" class="info-tip-trigger" aria-label="Sobre Inventários" aria-describedby="tip-rotina-inventarios"><svg class="ck-ico ck-ico--sm" aria-hidden="true" focusable="false"><use href="#i-info"></use></svg></button><span id="tip-rotina-inventarios" role="tooltip" class="info-tip-text">UX Simpress (Meus equipamentos) + Endpoint Central.</span></span></div>
             <div class="ck-rotina__rodape"><span class="ck-badge" data-rotina-badge="inventarios"><svg class="ck-ico ck-ico--xs" aria-hidden="true" focusable="false"><use href="#i-clock"></use></svg><span>—</span></span><button type="button" class="ck-btn ck-btn--secundario ck-btn--sm" id="btn-automacao-inventarios" aria-describedby="ck-rotina-inventarios-titulo" data-automacao-rotina="inventarios" data-on-click="iniciarRotinaAutomacao" data-args='["inventarios"]'><svg class="ck-ico ck-ico--xs" aria-hidden="true" focusable="false"><use href="#i-play"></use></svg><span>Executar</span></button></div>
           </article>
           <article class="ck-cartao ck-rotina" data-rotina="ambas" data-estado="ocioso">
-            <div class="ck-rotina__cab"><span class="ck-rotina__icone" aria-hidden="true"><svg class="ck-ico" aria-hidden="true" focusable="false"><use href="#i-layers"></use></svg></span><h3 class="ck-rotina__titulo" id="ck-rotina-ambas-titulo">Ambas</h3></div>
-            <p class="ck-rotina__desc">Rotina de OS e, em seguida, a de inventários.</p>
+            <div class="ck-rotina__cab"><span class="ck-rotina__icone" aria-hidden="true"><svg class="ck-ico" aria-hidden="true" focusable="false"><use href="#i-layers"></use></svg></span><h3 class="ck-rotina__titulo" id="ck-rotina-ambas-titulo">Ambas</h3><span class="info-tip info-tip--end"><button type="button" class="info-tip-trigger" aria-label="Sobre Ambas" aria-describedby="tip-rotina-ambas"><svg class="ck-ico ck-ico--sm" aria-hidden="true" focusable="false"><use href="#i-info"></use></svg></button><span id="tip-rotina-ambas" role="tooltip" class="info-tip-text">Rotina de OS e, em seguida, a de inventários.</span></span></div>
             <div class="ck-rotina__rodape"><span class="ck-badge" data-rotina-badge="ambas"><svg class="ck-ico ck-ico--xs" aria-hidden="true" focusable="false"><use href="#i-clock"></use></svg><span>—</span></span><button type="button" class="ck-btn ck-btn--secundario ck-btn--sm" id="btn-automacao-ambas" aria-describedby="ck-rotina-ambas-titulo" data-automacao-rotina="ambas" data-on-click="iniciarRotinaAutomacao" data-args='["ambas"]'><svg class="ck-ico ck-ico--xs" aria-hidden="true" focusable="false"><use href="#i-play"></use></svg><span>Executar</span></button></div>
           </article>
         </div>
@@ -1090,72 +1087,6 @@ Horário disponível para atendimento:</textarea>
           </div>
         </section>
 
-        <section class="ck-ferr-painel ck-assist" data-cockpit-tool-panel="assistente" aria-labelledby="assistente-heading" data-on-keydown="teclaAssistente" data-args='["$event"]' hidden>
-          <h2 id="assistente-heading" class="sr-only">Conversa com o Assistente</h2>
-          <div class="ck-barra-ferr ck-assist__barra">
-            <canvas id="assistente-globo" class="ck-assist__globo" width="112" height="112" data-estado="parado" aria-hidden="true"></canvas>
-            <p id="assistente-status" class="ck-barra-ferr__nota ck-assist__status" role="status" aria-live="polite">Verificando o Assistente…</p>
-            <button type="button" id="assistente-tentar" class="ck-btn ck-btn--secundario ck-btn--sm" data-on-click="carregarAssistente" hidden><svg class="ck-ico ck-ico--sm" aria-hidden="true" focusable="false"><use href="#i-refresh"></use></svg>Tentar novamente</button>
-            <button type="button" id="assistente-nova" class="ck-btn ck-btn--fantasma ck-btn--sm" data-on-click="novaConversaAssistente"><svg class="ck-ico ck-ico--sm" aria-hidden="true" focusable="false"><use href="#i-plus"></use></svg>Nova conversa</button>
-            <button type="button" id="assistente-voz" class="ck-btn ck-btn--fantasma ck-btn--sm" data-on-click="alternarVozAssistente" aria-pressed="false" title="Ler as respostas em voz alta (voz do seu computador, nada é enviado)"><svg class="ck-ico ck-ico--sm" aria-hidden="true" focusable="false"><use href="#i-volume"></use></svg>Voz</button>
-            <button type="button" id="assistente-instrucoes-botao" class="ck-btn ck-btn--fantasma ck-btn--sm" data-on-click="alternarInstrucoesAssistente" aria-expanded="false" aria-controls="assistente-instrucoes"><svg class="ck-ico ck-ico--sm" aria-hidden="true" focusable="false"><use href="#i-pencil"></use></svg>Instruções</button>
-            <button type="button" id="assistente-lembretes-botao" class="ck-btn ck-btn--fantasma ck-btn--sm" data-on-click="alternarLembretesAssistente" aria-expanded="false" aria-controls="assistente-lembretes"><svg class="ck-ico ck-ico--sm" aria-hidden="true" focusable="false"><use href="#i-clipboard"></use></svg>Lembretes</button>
-          </div>
-          <section id="assistente-instrucoes" class="ck-assist__instrucoes" aria-labelledby="assistente-instrucoes-titulo" hidden>
-            <h3 id="assistente-instrucoes-titulo" class="ck-det__titulo">Instruções permanentes</h3>
-            <label class="ck-campo ck-assist__campo"><span class="ck-campo__rotulo">Regras e preferências para o Assistente</span><textarea id="assistente-instrucoes-texto" class="ck-entrada" rows="4" maxlength="4000" placeholder="Ex.: Sempre responda em tabela." aria-describedby="assistente-instrucoes-dica assistente-instrucoes-contador" data-on-input="contarInstrucoesAssistente"></textarea></label>
-            <p id="assistente-instrucoes-dica" class="ck-assist__contador">Preferências, não regras de segurança: o cartão de confirmação e a ocultação de dados pessoais continuam valendo. Valem na próxima mensagem.</p>
-            <div class="ck-assist__acoes">
-              <span id="assistente-instrucoes-contador" class="ck-assist__contador">0 / 4000</span>
-              <div class="ck-grupo-botoes">
-                <button type="button" id="assistente-instrucoes-limpar" class="ck-btn ck-btn--secundario ck-btn--sm" data-on-click="limparInstrucoesAssistente" title="Apaga as instruções salvas">Limpar</button>
-                <button type="button" id="assistente-instrucoes-salvar" class="ck-btn ck-btn--primario ck-btn--sm" data-on-click="salvarInstrucoesAssistente">Salvar</button>
-              </div>
-            </div>
-            <p id="assistente-instrucoes-status" class="ck-assist__contador" role="status" aria-live="polite"></p>
-            <div class="ck-assist__busca">
-              <label class="ck-assist__interruptor" for="assistente-busca-web"><input type="checkbox" role="switch" id="assistente-busca-web" aria-label="Busca na web" aria-describedby="assistente-busca-web-aviso" data-on-change="alternarBuscaWebAssistente" disabled><span>Busca na web</span></label>
-              <p id="assistente-busca-web-dica" class="ck-assist__contador">Desligada por padrão. Ligada, o Assistente pode pesquisar na internet só informação genérica (até 200 caracteres); dados do cadastro (série, hostname, nome, e-mail, telefone, CPF) são recusados antes de sair.</p>
-              <p id="assistente-busca-web-aviso" class="ck-assist__aviso" role="status" aria-live="polite"></p>
-              <p id="assistente-busca-web-status" class="ck-assist__contador" role="status" aria-live="polite"></p>
-            </div>
-          </section>
-          <section id="assistente-lembretes" class="ck-assist__instrucoes ck-assist__lembretes" aria-labelledby="assistente-lembretes-titulo" hidden>
-            <h3 id="assistente-lembretes-titulo" class="ck-det__titulo" tabindex="-1">Lembretes e notas</h3>
-            <p class="ck-assist__contador">Memória do Assistente: peça no chat "me lembre de…" ou "anote que…". Não há alarme nem aviso automático; confira esta lista quando precisar.</p>
-            <ul id="assistente-lembretes-lista" class="ck-assist__lembretes-lista" aria-labelledby="assistente-lembretes-titulo" hidden></ul>
-            <p id="assistente-lembretes-vazio" class="ck-assist__contador" hidden>Nenhum lembrete guardado.</p>
-            <p id="assistente-lembretes-status" class="ck-assist__contador" role="status" aria-live="polite"></p>
-          </section>
-          <div id="assistente-mensagens" class="ck-assist__lista" role="region" aria-label="Mensagens da conversa" aria-busy="false" tabindex="0"></div>
-          <p id="assistente-anuncio" class="ck-sr" aria-live="polite" aria-atomic="true"></p>
-          <div id="assistente-pendente" class="ck-assist__pendente" role="group" aria-labelledby="assistente-pendente-titulo" aria-describedby="assistente-pendente-descricao" tabindex="-1" hidden>
-            <p id="assistente-pendente-titulo" class="ck-det__titulo">Confirmação necessária</p>
-            <p id="assistente-pendente-descricao" class="ck-assist__texto"></p>
-            <div class="ck-grupo-botoes">
-              <button type="button" id="assistente-confirmar" class="ck-btn ck-btn--primario ck-btn--sm" data-on-click="confirmarPendenteAssistente">Confirmar e executar</button>
-              <button type="button" id="assistente-cancelar" class="ck-btn ck-btn--secundario ck-btn--sm" data-on-click="cancelarPendenteAssistente" aria-keyshortcuts="Escape">Cancelar</button>
-            </div>
-          </div>
-          <form id="assistente-form" class="ck-assist__form" data-on-submit="enviarMensagemAssistente" autocomplete="off">
-            <label class="ck-campo ck-assist__campo"><span class="ck-campo__rotulo">Mensagem</span><textarea id="assistente-texto" class="ck-entrada" rows="3" maxlength="4000" placeholder="Escreva sua pergunta. Enter envia; Shift+Enter quebra a linha." aria-describedby="assistente-contador" data-on-input="contarMensagemAssistente"></textarea></label>
-            <input id="assistente-anexo-arquivo" type="file" accept=".pdf,.docx,.doc,.png,.jpg,.jpeg,application/pdf,image/png,image/jpeg" multiple hidden data-on-change="anexarArquivoAssistente" data-args='["$event"]'>
-            <ul id="assistente-anexos" class="ck-assist__anexos" aria-label="Arquivos anexados" hidden></ul>
-            <p id="assistente-anexos-aviso" class="ck-assist__aviso" hidden>Atenção: imagens anexadas vão para o OpenRouter exatamente como estão, sem ocultar CPF, nome, e-mail ou outros dados que apareçam nelas. Anexe só o que pode sair deste computador.</p>
-            <p id="assistente-anexos-status" class="ck-assist__contador ck-assist__anexos-status" role="status" aria-live="polite"></p>
-            <div class="ck-assist__acoes">
-              <span id="assistente-contador" class="ck-assist__contador">0 / 4000</span>
-              <div class="ck-grupo-botoes">
-                <button type="button" id="assistente-anexar" class="ck-btn ck-btn--secundario ck-assist__anexar" data-click-target="assistente-anexo-arquivo" title="Anexar arquivo (PDF, .docx, PNG ou JPEG)" aria-describedby="assistente-anexar-dica"><svg class="ck-ico ck-ico--sm" aria-hidden="true" focusable="false"><use href="#i-upload"></use></svg><span class="ck-assist__anexar-rotulo">Anexar</span></button>
-                <button type="button" id="assistente-gravar" class="ck-btn ck-btn--secundario" data-on-click="alternarGravacaoAssistente" aria-describedby="assistente-gravar-dica"><svg class="ck-ico ck-ico--sm" aria-hidden="true" focusable="false"><use href="#i-mic"></use></svg><span id="assistente-gravar-rotulo">Gravar áudio</span></button>
-                <button type="submit" id="assistente-enviar" class="ck-btn ck-btn--primario"><svg class="ck-ico ck-ico--sm" aria-hidden="true" focusable="false"><use href="#i-arrow-right"></use></svg>Enviar</button>
-              </div>
-              <span id="assistente-anexar-dica" class="ck-sr">Aceita PDF, .docx, PNG e JPEG, até 5 arquivos. O texto de PDF e .docx passa pela ocultação de dados pessoais antes de ir para a IA. Os anexos são apagados em Nova conversa.</span>
-              <span id="assistente-gravar-dica" class="ck-sr">A fala é transcrita para a caixa de mensagem; revise o texto antes de enviar. Esc cancela a gravação.</span>
-            </div>
-          </form>
-        </section>
-
         <section class="ck-ferr-painel" data-cockpit-tool-panel="unidades" aria-labelledby="cockpit-units-heading" hidden>
           <h2 id="cockpit-units-heading" class="sr-only">Catálogo de unidades</h2>
           <div id="cockpit-units-kpis" class="ck-kpis" role="group" aria-label="Resumo do catálogo"></div>
@@ -1184,6 +1115,72 @@ Horário disponível para atendimento:</textarea>
     </div>
   </div>
 
+  <section id="assistente-widget" class="ck-assist ck-assist-widget" role="dialog" aria-modal="false" aria-labelledby="assistente-heading" data-on-keydown="teclaAssistente" data-args='["$event"]' hidden>
+    <header class="ck-assist-widget__cab">
+      <h2 id="assistente-heading" class="ck-assist-widget__titulo">Assistente</h2>
+      <button type="button" id="assistente-fechar" class="ck-btn ck-btn--icone ck-btn--fantasma ck-btn--sm" aria-label="Fechar Assistente" title="Fechar (Esc)" data-on-click="alternarAssistente"><svg class="ck-ico" aria-hidden="true" focusable="false"><use href="#i-x"></use></svg></button>
+    </header>
+    <div class="ck-barra-ferr ck-assist__barra">
+      <canvas id="assistente-globo" class="ck-assist__globo" width="112" height="112" data-estado="parado" aria-hidden="true"></canvas>
+      <p id="assistente-status" class="ck-barra-ferr__nota ck-assist__status" role="status" aria-live="polite">Verificando o Assistente…</p>
+      <button type="button" id="assistente-tentar" class="ck-btn ck-btn--secundario ck-btn--sm" data-on-click="carregarAssistente" hidden><svg class="ck-ico ck-ico--sm" aria-hidden="true" focusable="false"><use href="#i-refresh"></use></svg>Tentar novamente</button>
+      <button type="button" id="assistente-nova" class="ck-btn ck-btn--fantasma ck-btn--sm" data-on-click="novaConversaAssistente"><svg class="ck-ico ck-ico--sm" aria-hidden="true" focusable="false"><use href="#i-plus"></use></svg>Nova conversa</button>
+      <button type="button" id="assistente-voz" class="ck-btn ck-btn--fantasma ck-btn--sm" data-on-click="alternarVozAssistente" aria-pressed="false" title="Ler as respostas em voz alta (voz do seu computador, nada é enviado)"><svg class="ck-ico ck-ico--sm" aria-hidden="true" focusable="false"><use href="#i-volume"></use></svg>Voz</button>
+      <button type="button" id="assistente-instrucoes-botao" class="ck-btn ck-btn--fantasma ck-btn--sm" data-on-click="alternarInstrucoesAssistente" aria-expanded="false" aria-controls="assistente-instrucoes"><svg class="ck-ico ck-ico--sm" aria-hidden="true" focusable="false"><use href="#i-pencil"></use></svg>Instruções</button>
+      <button type="button" id="assistente-lembretes-botao" class="ck-btn ck-btn--fantasma ck-btn--sm" data-on-click="alternarLembretesAssistente" aria-expanded="false" aria-controls="assistente-lembretes"><svg class="ck-ico ck-ico--sm" aria-hidden="true" focusable="false"><use href="#i-clipboard"></use></svg>Lembretes</button>
+    </div>
+    <section id="assistente-instrucoes" class="ck-assist__instrucoes" aria-labelledby="assistente-instrucoes-titulo" hidden>
+      <h3 class="ck-det__titulo"><span id="assistente-instrucoes-titulo">Instruções permanentes</span> <span class="info-tip"><button type="button" class="info-tip-trigger" aria-label="Sobre Instruções permanentes" aria-describedby="tip-assistente-instrucoes"><svg class="ck-ico ck-ico--sm" aria-hidden="true" focusable="false"><use href="#i-info"></use></svg></button><span id="tip-assistente-instrucoes" role="tooltip" class="info-tip-text">Preferências, não regras de segurança: o cartão de confirmação e a ocultação de dados pessoais continuam valendo. Valem na próxima mensagem.</span></span></h3>
+      <label class="ck-campo ck-assist__campo"><span class="ck-campo__rotulo">Regras e preferências para o Assistente</span><textarea id="assistente-instrucoes-texto" class="ck-entrada" rows="4" maxlength="4000" placeholder="Ex.: Sempre responda em tabela." aria-describedby="tip-assistente-instrucoes assistente-instrucoes-contador" data-on-input="contarInstrucoesAssistente"></textarea></label>
+      <div class="ck-assist__acoes">
+        <span id="assistente-instrucoes-contador" class="ck-assist__contador">0 / 4000</span>
+        <div class="ck-grupo-botoes">
+          <button type="button" id="assistente-instrucoes-limpar" class="ck-btn ck-btn--secundario ck-btn--sm" data-on-click="limparInstrucoesAssistente" title="Apaga as instruções salvas">Limpar</button>
+          <button type="button" id="assistente-instrucoes-salvar" class="ck-btn ck-btn--primario ck-btn--sm" data-on-click="salvarInstrucoesAssistente">Salvar</button>
+        </div>
+      </div>
+      <p id="assistente-instrucoes-status" class="ck-assist__contador" role="status" aria-live="polite"></p>
+      <div class="ck-assist__busca">
+        <div class="flex items-center gap-1"><label class="ck-assist__interruptor" for="assistente-busca-web"><input type="checkbox" role="switch" id="assistente-busca-web" aria-label="Busca na web" aria-describedby="assistente-busca-web-aviso" data-on-change="alternarBuscaWebAssistente" disabled><span>Busca na web</span></label><span class="info-tip"><button type="button" class="info-tip-trigger" aria-label="Sobre Busca na web" aria-describedby="tip-assistente-busca-web"><svg class="ck-ico ck-ico--sm" aria-hidden="true" focusable="false"><use href="#i-info"></use></svg></button><span id="tip-assistente-busca-web" role="tooltip" class="info-tip-text">Desligada por padrão. Ligada, o Assistente pode pesquisar na internet só informação genérica (até 200 caracteres); dados do cadastro (série, hostname, nome, e-mail, telefone, CPF) são recusados antes de sair.</span></span></div>
+        <p id="assistente-busca-web-aviso" class="ck-assist__aviso" role="status" aria-live="polite"></p>
+        <p id="assistente-busca-web-status" class="ck-assist__contador" role="status" aria-live="polite"></p>
+      </div>
+    </section>
+    <section id="assistente-lembretes" class="ck-assist__instrucoes ck-assist__lembretes" aria-labelledby="assistente-lembretes-titulo" hidden>
+      <h3 id="assistente-lembretes-titulo" class="ck-det__titulo" tabindex="-1">Lembretes e notas <span class="info-tip"><button type="button" class="info-tip-trigger" aria-label="Sobre Lembretes e notas" aria-describedby="tip-lembretes"><svg class="ck-ico ck-ico--sm" aria-hidden="true" focusable="false"><use href="#i-info"></use></svg></button><span id="tip-lembretes" role="tooltip" class="info-tip-text">Memória do Assistente: peça no chat "me lembre de…" ou "anote que…". Não há alarme nem aviso automático; confira esta lista quando precisar.</span></span></h3>
+      <ul id="assistente-lembretes-lista" class="ck-assist__lembretes-lista" aria-labelledby="assistente-lembretes-titulo" hidden></ul>
+      <p id="assistente-lembretes-vazio" class="ck-assist__contador" hidden>Nenhum lembrete guardado.</p>
+      <p id="assistente-lembretes-status" class="ck-assist__contador" role="status" aria-live="polite"></p>
+    </section>
+    <div id="assistente-mensagens" class="ck-assist__lista" role="region" aria-label="Mensagens da conversa" aria-busy="false" tabindex="0"></div>
+    <p id="assistente-anuncio" class="ck-sr" aria-live="polite" aria-atomic="true"></p>
+    <div id="assistente-pendente" class="ck-assist__pendente" role="group" aria-labelledby="assistente-pendente-titulo" aria-describedby="assistente-pendente-descricao" tabindex="-1" hidden>
+      <p id="assistente-pendente-titulo" class="ck-det__titulo">Confirmação necessária</p>
+      <p id="assistente-pendente-descricao" class="ck-assist__texto"></p>
+      <div class="ck-grupo-botoes">
+        <button type="button" id="assistente-confirmar" class="ck-btn ck-btn--primario ck-btn--sm" data-on-click="confirmarPendenteAssistente">Confirmar e executar</button>
+        <button type="button" id="assistente-cancelar" class="ck-btn ck-btn--secundario ck-btn--sm" data-on-click="cancelarPendenteAssistente" aria-keyshortcuts="Escape">Cancelar</button>
+      </div>
+    </div>
+    <form id="assistente-form" class="ck-assist__form" data-on-submit="enviarMensagemAssistente" autocomplete="off">
+      <label class="ck-campo ck-assist__campo"><span class="ck-campo__rotulo">Mensagem</span><textarea id="assistente-texto" class="ck-entrada" rows="3" maxlength="4000" placeholder="Escreva sua pergunta. Enter envia; Shift+Enter quebra a linha." aria-describedby="assistente-contador" data-on-input="contarMensagemAssistente"></textarea></label>
+      <input id="assistente-anexo-arquivo" type="file" accept=".pdf,.docx,.doc,.png,.jpg,.jpeg,application/pdf,image/png,image/jpeg" multiple hidden data-on-change="anexarArquivoAssistente" data-args='["$event"]'>
+      <ul id="assistente-anexos" class="ck-assist__anexos" aria-label="Arquivos anexados" hidden></ul>
+      <p id="assistente-anexos-aviso" class="ck-assist__aviso" hidden>Atenção: imagens anexadas vão para o OpenRouter exatamente como estão, sem ocultar CPF, nome, e-mail ou outros dados que apareçam nelas. Anexe só o que pode sair deste computador.</p>
+      <p id="assistente-anexos-status" class="ck-assist__contador ck-assist__anexos-status" role="status" aria-live="polite"></p>
+      <div class="ck-assist__acoes">
+        <span id="assistente-contador" class="ck-assist__contador">0 / 4000</span>
+        <div class="ck-grupo-botoes">
+          <button type="button" id="assistente-anexar" class="ck-btn ck-btn--secundario ck-assist__anexar" data-click-target="assistente-anexo-arquivo" title="Anexar arquivo (PDF, .docx, PNG ou JPEG)" aria-describedby="assistente-anexar-dica"><svg class="ck-ico ck-ico--sm" aria-hidden="true" focusable="false"><use href="#i-upload"></use></svg><span class="ck-assist__anexar-rotulo">Anexar</span></button>
+          <button type="button" id="assistente-gravar" class="ck-btn ck-btn--secundario" data-on-click="alternarGravacaoAssistente" aria-describedby="assistente-gravar-dica"><svg class="ck-ico ck-ico--sm" aria-hidden="true" focusable="false"><use href="#i-mic"></use></svg><span id="assistente-gravar-rotulo">Gravar áudio</span></button>
+          <button type="submit" id="assistente-enviar" class="ck-btn ck-btn--primario"><svg class="ck-ico ck-ico--sm" aria-hidden="true" focusable="false"><use href="#i-arrow-right"></use></svg>Enviar</button>
+        </div>
+        <span id="assistente-anexar-dica" class="ck-sr">Aceita PDF, .docx, PNG e JPEG, até 5 arquivos. O texto de PDF e .docx passa pela ocultação de dados pessoais antes de ir para a IA. Os anexos são apagados em Nova conversa.</span>
+        <span id="assistente-gravar-dica" class="ck-sr">A fala é transcrita para a caixa de mensagem; revise o texto antes de enviar. Esc cancela a gravação.</span>
+      </div>
+    </form>
+  </section>
+
   <!-- ========================================== -->
   <!-- MODAL DE PRÉ-VISUALIZAÇÃO DO RESUMO       -->
   <!-- ========================================== -->
@@ -1192,7 +1189,7 @@ Horário disponível para atendimento:</textarea>
       <div class="flex items-center justify-between pb-4 border-b border-line-quiet">
         <div class="flex items-center space-x-2.5">
           <i data-lucide="file-text" class="w-5 h-5 text-brand-400"></i>
-          <h3 class="text-base font-bold text-white">Resumo Estruturado da Transferência</h3>
+          <h3 class="text-base font-bold text-white">Resumo Estruturado da Transferência <span class="info-tip"><button type="button" class="info-tip-trigger" aria-label="Sobre Resumo Estruturado da Transferência" aria-describedby="tip-resumo-transferencia"><svg class="ck-ico ck-ico--sm" aria-hidden="true" focusable="false"><use href="#i-info"></use></svg></button><span id="tip-resumo-transferencia" role="tooltip" class="info-tip-text">Pronto para colar em chamados Jira, GLPI ou Teams.</span></span></h3>
         </div>
         <button type="button" data-on-click="fecharModalPreview" class="ck-btn ck-btn--fantasma ck-btn--icone ck-btn--sm" aria-label="Fechar resumo">
           <i data-lucide="x" class="w-5 h-5" aria-hidden="true"></i>
@@ -1208,8 +1205,7 @@ Horário disponível para atendimento:</textarea>
         ></textarea>
       </div>
 
-      <div class="pt-4 border-t border-line-quiet flex justify-between items-center">
-        <span class="text-xs text-fg-subtle">Pronto para colar em chamados Jira, GLPI ou Teams.</span>
+      <div class="pt-4 border-t border-line-quiet flex justify-end items-center">
         <div class="flex space-x-2">
           <button
             data-on-click="copiarTextoDoModal"
@@ -1237,7 +1233,7 @@ Horário disponível para atendimento:</textarea>
       <div class="flex items-center justify-between pb-4 border-b border-line-quiet">
         <div class="flex items-center space-x-2.5">
           <i data-lucide="history" class="w-5 h-5 text-brand-400" aria-hidden="true"></i>
-          <h3 class="text-base font-bold text-white">Transferências geradas</h3>
+          <h3 class="text-base font-bold text-white">Transferências geradas <span class="info-tip"><button type="button" class="info-tip-trigger" aria-label="Sobre Transferências geradas" aria-describedby="tip-transferencias-geradas"><svg class="ck-ico ck-ico--sm" aria-hidden="true" focusable="false"><use href="#i-info"></use></svg></button><span id="tip-transferencias-geradas" role="tooltip" class="info-tip-text">Guardado somente neste computador. "Duplicar destino" não altera o equipamento selecionado.</span></span></h3>
         </div>
         <button type="button" data-on-click="fecharModalHistoricoTransferencias" class="ck-btn ck-btn--fantasma ck-btn--icone ck-btn--sm" aria-label="Fechar transferências geradas">
           <i data-lucide="x" class="w-5 h-5" aria-hidden="true"></i>
@@ -1249,8 +1245,7 @@ Horário disponível para atendimento:</textarea>
         <p id="historico-transferencias-status" class="text-xs text-fg-subtle mt-2" role="status" aria-live="polite"></p>
       </div>
       <div id="lista-historico-transferencias" class="overflow-y-auto flex-1 min-h-0 py-3" aria-label="Transferências geradas"></div>
-      <div class="pt-3 border-t border-line-quiet flex items-center justify-between gap-3 shrink-0">
-        <span class="text-xs text-fg-subtle">Guardado somente neste computador. "Duplicar destino" não altera o equipamento selecionado.</span>
+      <div class="pt-3 border-t border-line-quiet flex items-center justify-end gap-3 shrink-0">
         <button type="button" data-on-click="fecharModalHistoricoTransferencias" class="ck-btn ck-btn--secundario">Fechar</button>
       </div>
     </div>
@@ -1281,7 +1276,7 @@ Horário disponível para atendimento:</textarea>
       <div class="flex items-center justify-between pb-4 border-b border-line-quiet">
         <div class="flex items-center space-x-2.5">
           <i data-lucide="truck" class="w-5 h-5 text-brand-400"></i>
-          <h3 class="text-base font-bold text-white">Solicitação de Transporte</h3>
+          <h3 class="text-base font-bold text-white">Solicitação de Transporte <span class="info-tip"><button type="button" class="info-tip-trigger" aria-label="Sobre Solicitação de Transporte" aria-describedby="tip-solicitacao-transporte"><svg class="ck-ico ck-ico--sm" aria-hidden="true" focusable="false"><use href="#i-info"></use></svg></button><span id="tip-solicitacao-transporte" role="tooltip" class="info-tip-text">Confira os endereços e copie o texto para sua solicitação.</span></span></h3>
         </div>
         <button type="button" data-on-click="fecharModalTextoTransporte" class="ck-btn ck-btn--fantasma ck-btn--icone ck-btn--sm" aria-label="Fechar texto de solicitação">
           <i data-lucide="x" class="w-5 h-5" aria-hidden="true"></i>
@@ -1298,8 +1293,7 @@ Horário disponível para atendimento:</textarea>
         ></textarea>
       </div>
 
-      <div class="pt-4 border-t border-line-quiet flex flex-wrap justify-between items-center gap-3">
-        <span class="text-xs text-fg-subtle">Confira os endereços e copie o texto para sua solicitação.</span>
+      <div class="pt-4 border-t border-line-quiet flex flex-wrap justify-end items-center gap-3">
         <div class="flex space-x-2">
           <button
             type="button"
@@ -1336,8 +1330,8 @@ Horário disponível para atendimento:</textarea>
             <h3 class="text-base font-bold text-white flex items-center gap-2">
               <span id="modal-edit-titulo">Atualizar Dados do Equipamento</span>
               <span id="modal-edit-serial-badge" class="px-2 py-0.5 rounded-full text-xs font-mono font-bold bg-brand-500/20 text-brand-300 border border-brand-500/30"></span>
+              <span class="info-tip"><button type="button" class="info-tip-trigger" aria-label="Sobre Atualizar Dados do Equipamento" aria-describedby="tip-editar-equipamento"><svg class="ck-ico ck-ico--sm" aria-hidden="true" focusable="false"><use href="#i-info"></use></svg></button><span id="tip-editar-equipamento" role="tooltip" class="info-tip-text">As alterações serão salvas no site e gravadas diretamente na planilha oficial Excel. Grava no arquivo Excel físico e atualiza a tela na hora. Endereço, cidade, UF, CEP e CNPJ são carregados automaticamente da planilha da Simpress ao atualizar as planilhas.</span></span>
             </h3>
-            <p class="text-xs text-fg-subtle">As alterações serão salvas no site e gravadas diretamente na planilha oficial Excel.</p>
           </div>
         </div>
         <button type="button" data-on-click="fecharModalEditarEquipamento" class="ck-btn ck-btn--fantasma ck-btn--icone ck-btn--sm" aria-label="Fechar edição do equipamento">
@@ -1375,9 +1369,8 @@ Horário disponível para atendimento:</textarea>
               <input type="text" id="edit-modelo" placeholder="Ex: HP EB 6 G1I" class="w-full px-3 py-2 rounded-lg glass-input text-fg-secondary focus:outline-none" />
             </div>
             <div id="edit-apelido-field">
-              <label class="block text-fg-tertiary font-semibold mb-1">Apelido / Hostname:</label>
+              <div class="flex items-center gap-1 mb-1"><label class="block text-fg-tertiary font-semibold">Apelido / Hostname:</label><span class="info-tip"><button type="button" class="info-tip-trigger" aria-label="Sobre Apelido / Hostname" aria-describedby="tip-editar-apelido-campo"><svg class="ck-ico ck-ico--sm" aria-hidden="true" focusable="false"><use href="#i-info"></use></svg></button><span id="tip-editar-apelido-campo" role="tooltip" class="info-tip-text">Para equipamentos existentes, altere o apelido pelo botão próprio no cartão.</span></span></div>
               <input type="text" id="edit-apelido" placeholder="Ex: PRNOTEDIREX007" class="w-full px-3 py-2 rounded-lg glass-input text-fg-secondary font-mono focus:outline-none" />
-              <p class="text-xs text-fg-muted mt-1">Para equipamentos existentes, altere o apelido pelo botão próprio no cartão.</p>
             </div>
             <div class="sm:col-span-2">
               <label class="block text-fg-tertiary font-semibold mb-1">Id Cliente / Observação de Uso:</label>
@@ -1386,15 +1379,10 @@ Horário disponível para atendimento:</textarea>
           </div>
         </div>
 
-        <p class="rounded-lg border border-line-quiet bg-surface/50 px-3 py-2 text-xs text-fg-subtle" role="note">
-          Endereço, cidade, UF, CEP e CNPJ são carregados automaticamente da planilha da Simpress ao atualizar as planilhas.
-        </p>
-
       </div>
 
       <!-- Modal Footer -->
-      <div class="pt-4 border-t border-line-quiet flex justify-between items-center shrink-0">
-        <span class="text-xs text-fg-subtle">Grava no arquivo Excel físico e atualiza a tela na hora.</span>
+      <div class="pt-4 border-t border-line-quiet flex justify-end items-center shrink-0">
         <div class="flex space-x-2">
           <button
             type="button"
@@ -1422,8 +1410,7 @@ Horário disponível para atendimento:</textarea>
     <div class="ck-dialogo">
       <div class="flex items-start justify-between gap-4 mb-5">
         <div>
-          <h3 class="text-base font-bold text-white">Editar apelido</h3>
-          <p class="text-xs text-fg-subtle mt-1">O apelido manual prevalece nas próximas exportações do Excel.</p>
+          <h3 class="text-base font-bold text-white">Editar apelido <span class="info-tip"><button type="button" class="info-tip-trigger" aria-label="Sobre Editar apelido" aria-describedby="tip-editar-apelido"><svg class="ck-ico ck-ico--sm" aria-hidden="true" focusable="false"><use href="#i-info"></use></svg></button><span id="tip-editar-apelido" role="tooltip" class="info-tip-text">O apelido manual prevalece nas próximas exportações do Excel.</span></span></h3>
         </div>
         <button type="button" data-on-click="fecharModalEditarApelido" class="ck-btn ck-btn--fantasma ck-btn--icone ck-btn--sm" aria-label="Fechar">
           <i data-lucide="x" class="w-5 h-5"></i>
@@ -1502,8 +1489,7 @@ Horário disponível para atendimento:</textarea>
         <span class="ckp-cab__icone"><svg class="ck-ico" aria-hidden="true"><use href="#i-pin"></use></svg></span>
         <div class="ckp-cab__textos">
           <span class="ckp-cab__kicker">Catálogo de unidades</span>
-          <h2 class="ckp-cab__titulo unit-modal-heading"><span>Catálogo de Unidades & Regionais SEBRAE/PR</span> <span id="badge-total-unidades-modal" class="ck-badge">30 unidades</span></h2>
-          <p class="ckp-cab__sub">Consulte ou cadastre endereços e CNPJs oficiais das filiais.</p>
+          <h2 class="ckp-cab__titulo unit-modal-heading"><span>Catálogo de Unidades & Regionais SEBRAE/PR</span> <span id="badge-total-unidades-modal" class="ck-badge">30 unidades</span> <span class="info-tip info-tip--end"><button type="button" class="info-tip-trigger" aria-label="Sobre Catálogo de Unidades" aria-describedby="tip-catalogo-unidades"><svg class="ck-ico ck-ico--sm" aria-hidden="true" focusable="false"><use href="#i-info"></use></svg></button><span id="tip-catalogo-unidades" role="tooltip" class="info-tip-text">Consulte ou cadastre endereços e CNPJs oficiais das filiais.</span></span></h2>
         </div>
         <div class="ckp-cab__acoes"><button type="button" data-on-click="fecharModalGerenciarUnidades" class="ck-btn ck-btn--icone ck-btn--fantasma ck-btn--sm" aria-label="Fechar catálogo de unidades"><svg class="ck-ico ck-ico--sm" aria-hidden="true"><use href="#i-x"></use></svg></button></div>
       </header>
@@ -1544,8 +1530,7 @@ Horário disponível para atendimento:</textarea>
         <span class="ckp-cab__icone"><svg class="ck-ico" aria-hidden="true"><use href="#i-sheet"></use></svg></span>
         <div class="ckp-cab__textos">
           <span class="ckp-cab__kicker">Inventários</span>
-          <h2 class="ckp-cab__titulo">Atualizar planilhas</h2>
-          <p class="ckp-cab__sub">Envie os dois arquivos para atualizar o cadastro. Endereço e localidade acompanham a Simpress; apelidos alterados manualmente continuam prioritários e divergências aparecem no histórico.</p>
+          <h2 class="ckp-cab__titulo">Atualizar planilhas <span class="info-tip"><button type="button" class="info-tip-trigger" aria-label="Sobre Atualizar planilhas" aria-describedby="tip-atualizar-planilhas"><svg class="ck-ico ck-ico--sm" aria-hidden="true" focusable="false"><use href="#i-info"></use></svg></button><span id="tip-atualizar-planilhas" role="tooltip" class="info-tip-text">Envie os dois arquivos para atualizar o cadastro. Endereço e localidade acompanham a Simpress; apelidos alterados manualmente continuam prioritários e divergências aparecem no histórico.</span></span></h2>
         </div>
         <div class="ckp-cab__acoes">
           <nav class="ckp-sistemas" aria-label="Acessar sistemas de origem das planilhas">
@@ -1559,7 +1544,7 @@ Horário disponível para atendimento:</textarea>
       <div class="ckp-corpo" data-so-etapa="arquivos">
         <div class="ckp-par-fontes" id="esc-inv-arquivos">
           <section class="ckp-secao" data-pronta="false">
-            <div class="ckp-secao__cab"><span class="ckp-secao__num"><span>1</span><svg class="ck-ico" aria-hidden="true"><use href="#i-check"></use></svg></span><div class="ckp-secao__textos"><h3 class="ckp-secao__titulo">Endpoint</h3><p class="ckp-secao__desc">Precisa ter nome do computador e rótulo de serviço/número de série.</p></div></div>
+            <div class="ckp-secao__cab"><span class="ckp-secao__num"><span>1</span><svg class="ck-ico" aria-hidden="true"><use href="#i-check"></use></svg></span><div class="ckp-secao__textos"><h3 class="ckp-secao__titulo">Endpoint <span class="info-tip"><button type="button" class="info-tip-trigger" aria-label="Sobre Endpoint" aria-describedby="tip-secao-endpoint"><svg class="ck-ico ck-ico--sm" aria-hidden="true" focusable="false"><use href="#i-info"></use></svg></button><span id="tip-secao-endpoint" role="tooltip" class="info-tip-text">Precisa ter nome do computador e rótulo de serviço/número de série.</span></span></h3></div></div>
             <div class="ckp-secao__corpo">
               <label class="ckp-arquivo" data-estado="vazio">
                 <input id="upload-endpoint-file" type="file" accept=".xlsx,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" data-obrigatorio>
@@ -1570,7 +1555,7 @@ Horário disponível para atendimento:</textarea>
             </div>
           </section>
           <section class="ckp-secao" data-pronta="false">
-            <div class="ckp-secao__cab"><span class="ckp-secao__num"><span>2</span><svg class="ck-ico" aria-hidden="true"><use href="#i-check"></use></svg></span><div class="ckp-secao__textos"><h3 class="ckp-secao__titulo">Simpress</h3><p class="ckp-secao__desc">Inventário completo de 50 colunas, incluindo o CNPJ de instalação.</p></div></div>
+            <div class="ckp-secao__cab"><span class="ckp-secao__num"><span>2</span><svg class="ck-ico" aria-hidden="true"><use href="#i-check"></use></svg></span><div class="ckp-secao__textos"><h3 class="ckp-secao__titulo">Simpress <span class="info-tip info-tip--end"><button type="button" class="info-tip-trigger" aria-label="Sobre Simpress" aria-describedby="tip-secao-simpress"><svg class="ck-ico ck-ico--sm" aria-hidden="true" focusable="false"><use href="#i-info"></use></svg></button><span id="tip-secao-simpress" role="tooltip" class="info-tip-text">Inventário completo de 50 colunas, incluindo o CNPJ de instalação.</span></span></h3></div></div>
             <div class="ckp-secao__corpo">
               <label class="ckp-arquivo" data-estado="vazio">
                 <input id="upload-details-file" type="file" accept=".xlsx,.zip,application/zip,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" data-obrigatorio>
@@ -1590,7 +1575,7 @@ Horário disponível para atendimento:</textarea>
         </label>
 
         <section class="ckp-secao ckp-secao--opcional" id="esc-inv-entra" aria-labelledby="entra-import-title">
-          <div class="ckp-secao__cab"><span class="ckp-arquivo__ico" data-ckp="icone-22"><svg class="ck-ico ck-ico--xs" aria-hidden="true"><use href="#i-users"></use></svg></span><div class="ckp-secao__textos"><h3 class="ckp-secao__titulo" id="entra-import-title">Nomes do Microsoft Entra <span class="ckp-opcional">· opcional</span></h3><p class="ckp-secao__desc">CSV exportado do Entra. Somente contas @pr.sebrae.com.br são usadas; os inventários acima não são alterados.</p></div></div>
+          <div class="ckp-secao__cab"><span class="ckp-arquivo__ico" data-ckp="icone-22"><svg class="ck-ico ck-ico--xs" aria-hidden="true"><use href="#i-users"></use></svg></span><div class="ckp-secao__textos"><h3 class="ckp-secao__titulo"><span id="entra-import-title">Nomes do Microsoft Entra <span class="ckp-opcional">· opcional</span></span> <span class="info-tip"><button type="button" class="info-tip-trigger" aria-label="Sobre Nomes do Microsoft Entra" aria-describedby="tip-entra-nomes"><svg class="ck-ico ck-ico--sm" aria-hidden="true" focusable="false"><use href="#i-info"></use></svg></button><span id="tip-entra-nomes" role="tooltip" class="info-tip-text">CSV exportado do Entra. Somente contas @pr.sebrae.com.br são usadas; os inventários acima não são alterados.</span></span></h3></div></div>
           <form class="ckp-secao__corpo" data-on-submit="importarNomesEntra">
             <label class="ckp-arquivo" data-estado="vazio">
               <input id="entra-csv-file" type="file" accept=".csv,text/csv">
@@ -1628,8 +1613,7 @@ Horário disponível para atendimento:</textarea>
         <span class="ckp-cab__icone"><svg class="ck-ico" aria-hidden="true"><use href="#i-download"></use></svg></span>
         <div class="ckp-cab__textos">
           <span class="ckp-cab__kicker">Modelo .xlsx</span>
-          <h2 class="ckp-cab__titulo" id="titulo-importar-modelo">Importar arquivos</h2>
-          <p class="ckp-cab__sub" id="descricao-importar-modelo"></p>
+          <h2 class="ckp-cab__titulo"><span id="titulo-importar-modelo">Importar arquivos</span> <span class="info-tip"><button type="button" class="info-tip-trigger" aria-label="Sobre Importar arquivos" aria-describedby="descricao-importar-modelo"><svg class="ck-ico ck-ico--sm" aria-hidden="true" focusable="false"><use href="#i-info"></use></svg></button><span id="descricao-importar-modelo" role="tooltip" class="info-tip-text"></span></span></h2>
         </div>
         <div class="ckp-cab__acoes"><button type="button" class="ck-btn ck-btn--icone ck-btn--fantasma ck-btn--sm" data-on-click="fecharImportacaoModelo" aria-label="Fechar importação de modelo"><svg class="ck-ico ck-ico--sm" aria-hidden="true"><use href="#i-x"></use></svg></button></div>
       </header>
@@ -1657,12 +1641,11 @@ Horário disponível para atendimento:</textarea>
   <div id="modal-contato-origem" class="modal-overlay ck-veu hidden">
     <div class="local-setup-dialog ck-dialogo">
       <div class="local-setup-heading">
-        <h3 id="titulo-contato-origem">Contato de origem</h3>
+        <h3><span id="titulo-contato-origem">Contato de origem</span> <span class="info-tip"><button type="button" class="info-tip-trigger" aria-label="Sobre Contato de origem" aria-describedby="tip-contato-origem"><svg class="ck-ico ck-ico--sm" aria-hidden="true" focusable="false"><use href="#i-info"></use></svg></button><span id="tip-contato-origem" role="tooltip" class="info-tip-text">Usado como contato da retirada em novas transferências. Fica salvo somente neste computador, em config/contato_origem.json.</span></span></h3>
         <button type="button" class="readiness-import" data-on-click="fecharConfiguracaoContatoOrigem" aria-label="Fechar configuração do contato de origem" title="Fechar">
           <i data-lucide="x" class="w-4 h-4" aria-hidden="true"></i>
         </button>
       </div>
-      <p>Usado como contato da retirada em novas transferências. Fica salvo somente neste computador, em <code>config/contato_origem.json</code>.</p>
       <p id="contato-origem-ambiente" class="hidden">Campos bloqueados vêm das variáveis de ambiente <code>SIMPRESS_TRANSFER_ORIGIN_*</code> e têm prioridade sobre o arquivo.</p>
       <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
         <div class="sm:col-span-2">
@@ -1687,16 +1670,15 @@ Horário disponível para atendimento:</textarea>
   <div id="modal-relatorio-mensal" class="modal-overlay ck-veu hidden">
     <div class="local-setup-dialog monthly-report-dialog ck-dialogo">
       <div class="local-setup-heading">
-        <h3 id="titulo-relatorio-mensal">Relatório mensal</h3>
+        <h3><span id="titulo-relatorio-mensal">Relatório mensal</span> <span class="info-tip"><button type="button" class="info-tip-trigger" aria-label="Sobre Relatório mensal" aria-describedby="tip-relatorio-mensal"><svg class="ck-ico ck-ico--sm" aria-hidden="true" focusable="false"><use href="#i-info"></use></svg></button><span id="tip-relatorio-mensal" role="tooltip" class="info-tip-text">Planilha para o gestor do contrato com o inventário da base oficial na Simpress, a última comparação do mês, as OS abertas, concluídas e pendentes e o uso do sistema no mês.</span></span></h3>
         <button type="button" class="readiness-import" data-on-click="fecharRelatorioMensal" aria-label="Fechar relatório mensal" title="Fechar">
           <i data-lucide="x" class="w-4 h-4" aria-hidden="true"></i>
         </button>
       </div>
       <form id="form-relatorio-mensal" class="monthly-report-form" aria-labelledby="titulo-relatorio-mensal" novalidate data-on-submit="exportarRelatorioMensal">
-        <p id="relatorio-mensal-descricao">Planilha para o gestor do contrato com o inventário da base oficial na Simpress, a última comparação do mês, as OS abertas, concluídas e pendentes e o uso do sistema no mês.</p>
         <div>
           <label for="relatorio-mensal-mes" class="block text-xs text-fg-subtle mb-1">Mês: <span class="required-mark" aria-hidden="true">*</span></label>
-          <input type="month" id="relatorio-mensal-mes" name="mes" required min="2000-01" aria-describedby="relatorio-mensal-descricao" class="w-full px-3 py-2 rounded-lg glass-input text-xs text-fg-secondary focus:outline-none" />
+          <input type="month" id="relatorio-mensal-mes" name="mes" required min="2000-01" aria-describedby="tip-relatorio-mensal" class="w-full px-3 py-2 rounded-lg glass-input text-xs text-fg-secondary focus:outline-none" />
         </div>
         <p id="status-relatorio-mensal" role="status" aria-live="polite" aria-atomic="true"></p>
         <button id="btn-exportar-relatorio-mensal" type="submit" class="readiness-import">
@@ -1757,8 +1739,7 @@ Horário disponível para atendimento:</textarea>
         <span class="ckp-cab__icone"><svg class="ck-ico" aria-hidden="true"><use href="#i-clock"></use></svg></span>
         <div class="ckp-cab__textos">
           <span class="ckp-cab__kicker">Chamados</span>
-          <h2 class="ckp-cab__titulo">Acompanhamento de chamados</h2>
-          <p class="ckp-cab__sub" id="tip-acompanhamento-chamados">OS da Simpress e do Oracle relacionadas pelo número de série. A lista vai da maior OS para a menor; séries sem OS ficam no final. Atenção para 3+ dias ou sem data: selecione um indicador da triagem para filtrar.</p>
+          <h2 class="ckp-cab__titulo">Acompanhamento de chamados <span class="info-tip"><button type="button" class="info-tip-trigger" aria-label="Sobre Acompanhamento de chamados" aria-describedby="tip-acompanhamento-chamados"><svg class="ck-ico ck-ico--sm" aria-hidden="true" focusable="false"><use href="#i-info"></use></svg></button><span id="tip-acompanhamento-chamados" role="tooltip" class="info-tip-text">OS da Simpress e do Oracle relacionadas pelo número de série. A lista vai da maior OS para a menor; séries sem OS ficam no final. Atenção para 3+ dias ou sem data: selecione um indicador da triagem para filtrar.</span></span></h2>
         </div>
         <div class="ckp-cab__acoes">
           <nav class="ckp-sistemas" aria-label="Abrir sistemas">
@@ -1774,9 +1755,9 @@ Horário disponível para atendimento:</textarea>
           <summary><svg class="ck-ico ck-ico--sm" aria-hidden="true"><use href="#i-chevron-right"></use></svg>Importação e versões<span id="versao-atual-acompanhamento-chamados" class="ckp-recolher__meta">Nenhuma importação</span></summary>
           <div class="ckp-recolher__corpo">
             <form id="form-importar-acompanhamento-chamados" class="ckp-importar">
-              <div class="ckp-campo"><span class="ckp-rotulo">Simpress · Acompanhamento de Pedidos</span>
+              <div class="ckp-campo"><span class="ckp-rotulo">Simpress · Acompanhamento de Pedidos <span class="info-tip"><button type="button" class="info-tip-trigger" aria-label="Sobre arquivos de chamados" aria-describedby="tip-arquivos-chamados"><svg class="ck-ico ck-ico--sm" aria-hidden="true" focusable="false"><use href="#i-info"></use></svg></button><span id="tip-arquivos-chamados" role="tooltip" class="info-tip-text">Cada arquivo pode ter até 60 MB. Simpress aceita .xlsx ou ZIP com uma única planilha .xlsx.</span></span></span>
                 <label class="ckp-arquivo" data-estado="vazio">
-                  <input id="arquivo-chamados-simpress" name="simpress_file" type="file" accept=".xlsx,.zip,application/zip,application/x-zip-compressed,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" aria-describedby="arquivo-chamados-simpress-ajuda" data-obrigatorio>
+                  <input id="arquivo-chamados-simpress" name="simpress_file" type="file" accept=".xlsx,.zip,application/zip,application/x-zip-compressed,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" aria-describedby="tip-arquivos-chamados" data-obrigatorio>
                   <span class="ckp-arquivo__ico"><svg class="ck-ico ck-ico--vazio" aria-hidden="true"><use href="#i-upload"></use></svg><svg class="ck-ico ck-ico--cheio" aria-hidden="true"><use href="#i-file-check"></use></svg></span>
                   <span class="ckp-arquivo__textos"><span class="ckp-arquivo__nome" id="nome-arquivo-chamados-simpress" data-vazio="Escolher arquivo">Escolher arquivo</span><span class="ckp-arquivo__meta" data-vazio=".xlsx ou ZIP com uma planilha">.xlsx ou ZIP com uma planilha</span></span>
                   <span class="ckp-arquivo__acoes"><button type="button" class="ck-btn ck-btn--fantasma ck-btn--icone ck-btn--sm" data-remover aria-label="Remover arquivo"><svg class="ck-ico ck-ico--sm" aria-hidden="true"><use href="#i-x"></use></svg></button><span class="ck-btn ck-btn--secundario ck-btn--sm ckp-arquivo__trocar">Escolher</span></span>
@@ -1791,7 +1772,6 @@ Horário disponível para atendimento:</textarea>
                 </label>
               </div>
               <button id="btn-importar-acompanhamento-chamados" type="submit" class="ck-btn ck-btn--primario" data-ckp="botao-56"><svg class="ck-ico ck-ico--sm" aria-hidden="true"><use href="#i-upload"></use></svg>Importar planilhas</button>
-              <p id="arquivo-chamados-simpress-ajuda" class="ckp-secao__desc">Cada arquivo pode ter até 60 MB. Simpress aceita .xlsx ou ZIP com uma única planilha .xlsx.</p>
               <p id="status-importacao-chamados" class="ckp-secao__desc" role="status" aria-live="polite"></p>
             </form>
             <div id="resumo-acompanhamento-chamados"></div>

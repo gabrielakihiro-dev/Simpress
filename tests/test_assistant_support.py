@@ -71,7 +71,7 @@ class SettingsTests(unittest.TestCase):
     def test_deepseek_payload_has_no_openrouter_routing_and_no_audio(self) -> None:
         sent: list = []
         client = OpenRouterClient(OpenRouterSettings(api_key=SECRET, deepseek=True, primary_model="deepseek-flash"))
-        client._send = lambda payload: sent.append(payload) or {"choices": [{"message": {"content": "ok"}}]}  # type: ignore[method-assign]
+        client._send = lambda payload, orcamento=None: sent.append(payload) or {"choices": [{"message": {"content": "ok"}}]}  # type: ignore[method-assign]
         client.complete([{"role": "user", "content": "oi"}], [])
         self.assertEqual(sent[0]["model"], "deepseek-flash")
         self.assertNotIn("models", sent[0])
@@ -268,7 +268,7 @@ class RealAppTests(unittest.TestCase):
             ModelReply(content="ok"),
         ]
 
-        def fake_complete(self: Any, messages: List[Dict[str, Any]], tools: List[Dict[str, Any]]) -> ModelReply:
+        def fake_complete(self: Any, messages: List[Dict[str, Any]], tools: List[Dict[str, Any]], orcamento: Any = None) -> ModelReply:
             sent.append(json.loads(json.dumps(messages)))
             return script.pop(0)
 

@@ -181,7 +181,7 @@ test("every info tip trigger points to a tooltip with text", () => {
     assert.match(trigger, /aria-label="[^"]+"/);
     const id = trigger.match(/aria-describedby="([^"]+)"/)?.[1];
     assert.ok(id, `info tip without aria-describedby: ${trigger}`);
-    assert.match(appHtml, new RegExp(`<span id="${id}" role="tooltip" class="info-tip-text">[^<]*\\S[^<]*</span>`));
+    assert.match(appHtml, new RegExp(`<span id="${id}" role="tooltip" class="info-tip-text">(?:[^<]|</?code>)*\\S(?:[^<]|</?code>)*</span>`));
   }
   assert.match(uxCss, /\.info-tip:is\(:hover, :focus-within\):not\(\[data-tip-dismissed\]\) \.info-tip-text/);
 });

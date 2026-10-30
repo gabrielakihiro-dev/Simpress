@@ -16,6 +16,8 @@ from datetime import date, datetime, timezone
 from typing import Any, Callable, Dict, List, Optional, Set, Tuple
 from urllib.parse import quote, urlencode
 
+from pydantic import ValidationError
+
 from domains.assistant_lgpd import SEM_USUARIO, limpar_texto_sensivel
 from domains.history_insights import PENDING_CATEGORIES, normalize_identifier
 from domains.inventory_comparison import is_curitiba_hostname_exception, is_sebrae_owned_notebook_serial
@@ -382,6 +384,15 @@ class SimpressApi:
     def __init__(self, transport: Transport) -> None:
         self._transport = transport
         self._tokens_restauracao: Dict[str, str] = {}
+        self._leituras: Optional[List[Any]] = None
+
+    def gravar_leituras(self) -> None:
+        """Start keeping the raw answers of the next calls (the card builder reads values the model must not see)."""
+        self._leituras = []
+
+    def recolher_leituras(self) -> List[Any]:
+        leituras, self._leituras = self._leituras or [], None
+        return leituras
 
     # --- plumbing ---------------------------------------------------------
 
@@ -397,6 +408,8 @@ class SimpressApi:
             logger.exception("Falha na chamada interna do assistente: %s %s", metodo, caminho)
             return False, "Falha ao consultar o Simpress."
         if 200 <= status < 300:
+            if self._leituras is not None:
+                self._leituras.append(dados)
             return True, dados if dados is not None else {}
         return False, self._erro_http(status, dados)
 
@@ -1482,3 +1495,192 @@ class SimpressApi:
 
     def restaurar_hostname_endpoint(self, serie: str, hostname: str) -> Dict[str, Any]:
         return self._hostname_removal("/api/endpoint/hostnames-removidos/restaurar", serie, hostname, "Hostname restaurado nas duplicidades do Endpoint.")
+
+    # --- histórico de chamados, histórico do Sebrae e usuário logado (leituras) ---
+
+    def historico_chamados(self, limite: Any = 10) -> Dict[str, Any]:
+        """Imports of the ticket follow-up, newest first (id, date, source files, counts)."""
+        ok, dados = self._chamar("GET", "/api/operacoes/chamados/historico")
+        if not ok:
+            return {"erro": dados}
+        eventos = [e for e in _dict(dados).get("eventos") or [] if isinstance(e, dict)]
+        return {"total": len(eventos), "eventos": _aparar(eventos[: self._limite(limite, 10)])}
+
+    def snapshot_chamados(self, snapshot_id: Any) -> Dict[str, Any]:
+        """One import reduced to counts and the first rows (serial and OS relation): the full rows would cut the answer."""
+        snapshot_id = str(snapshot_id or "").strip()
+        if not _ID_ROTA.match(snapshot_id):
+            return {"erro": "Identificador da importação inválido. Use historico_chamados."}
+        ok, dados = self._chamar("GET", f"/api/operacoes/chamados/snapshot/{snapshot_id}")
+        if not ok:
+            return {"erro": dados}
+        dados = _dict(dados)
+        chamados = [c for c in dados.get("chamados") or [] if isinstance(c, dict)]
+        exemplos = [{"serie": c.get("serie", ""), "relacao": c.get("relacao", "")} for c in chamados[:MAX_ITENS_LISTA]]
+        return _aparar({
+            "id": dados.get("id", snapshot_id), "atualizado_em": dados.get("atualizado_em", ""),
+            "fontes": {k: _dict(v).get("arquivo", "") for k, v in _dict(dados.get("fontes")).items()},
+            "resumo": dados.get("resumo") or {}, "total_chamados": len(chamados), "chamados": exemplos,
+            "omitidos": max(0, len(chamados) - MAX_ITENS_LISTA),
+        })
+
+    def evolucao_chamados(self, anterior: Any, atual: Any) -> Dict[str, Any]:
+        """New, changed (only the names of the fields) and missing serials between two imports."""
+        anterior, atual = str(anterior or "").strip(), str(atual or "").strip()
+        if not _ID_ROTA.match(anterior) or not _ID_ROTA.match(atual):
+            return {"erro": "Informe os identificadores 'anterior' e 'atual' (de historico_chamados)."}
+        ok, dados = self._chamar("GET", "/api/operacoes/chamados/evolucao", params={"anterior": anterior, "atual": atual})
+        if not ok:
+            return {"erro": dados}
+        dados = _dict(dados)
+        mudancas = _dict(dados.get("mudancas"))
+        alterados = [
+            {"serie": c.get("serie", ""), "campos": [f.get("campo") for f in c.get("campos") or [] if isinstance(f, dict)]}
+            for c in mudancas.get("alterados") or [] if isinstance(c, dict)
+        ]
+        return _aparar({
+            "anterior": dados.get("anterior"), "atual": dados.get("atual"), "contagens": dados.get("contagens"),
+            "novos": mudancas.get("novos") or [], "alterados": alterados, "ausentes_arquivo": mudancas.get("ausentes_arquivo") or [],
+            "aviso": dados.get("aviso_ausentes", ""),
+        })
+
+    def historico_sebrae(self, entrada_id: Any = "", tipo: Any = "", limite: Any = 10) -> Dict[str, Any]:
+        """Sebrae imports/searches (counts); with `entrada_id`, one entry with its lists."""
+        entrada_id = str(entrada_id or "").strip()
+        if entrada_id:
+            if not _ID_ROTA.match(entrada_id):
+                return {"erro": "Identificador da entrada inválido."}
+            return self._leitura(f"/api/sebrae/historico/{entrada_id}")
+        params: Dict[str, Any] = {"limite": self._limite(limite, 10)}
+        if tipo in ("importacao", "busca"):
+            params["tipo"] = tipo
+        return self._leitura("/api/sebrae/historico", params)
+
+    def pessoa_da_serie(self, serial: str) -> Optional[Dict[str, Any]]:
+        """Raw answer of the logged-user lookup for one serial (names stay on the confirmation card, never go to the model)."""
+        serial = str(serial or "").strip().upper()
+        if not serial:
+            return None
+        ok, dados = self._chamar("POST", "/api/equipamentos/usuarios-logados", corpo={"series": [serial]})
+        item = _dict(_dict(dados).get("usuarios")).get(serial) if ok else None
+        return item if isinstance(item, dict) else None
+
+    def usuarios_logados(self, series: Any) -> Dict[str, Any]:
+        """Logged user and person name of up to MAX_ITENS_LISTA serials. Only fields the privacy mask knows go out."""
+        lista = series if isinstance(series, list) else [series]
+        pedidas = list(dict.fromkeys(str(s).strip().upper() for s in lista if str(s or "").strip()))[:MAX_ITENS_LISTA]
+        if not pedidas:
+            return {"erro": "Informe ao menos uma série."}
+        ok, dados = self._chamar("POST", "/api/equipamentos/usuarios-logados", corpo={"series": pedidas})
+        if not ok:
+            return {"erro": dados}
+        itens: List[Dict[str, Any]] = []
+        for serie, bruto in _dict(_dict(dados).get("usuarios")).items():
+            d = _dict(bruto)
+            item = {
+                "serie": serie, "usuario_logado": d.get("usuario", ""), "nome_pessoa": d.get("nome_pessoa", ""),
+                "origem": d.get("origem", ""), "computador": d.get("hostname", ""),
+                "computador_ambiguo": bool(d.get("hostname_ambiguo")),
+            }
+            if d.get("pendencia"):
+                item["pendencia"] = limpar_texto_sensivel(d["pendencia"])
+            itens.append(item)
+        return {"total": len(itens), "itens": _aparar(itens)}
+
+    # --- valor atual para o cartão de confirmação (cru: só vai à tela, nunca ao modelo) ---
+
+    def equipamento_atual(self, serial: str) -> Optional[Dict[str, Any]]:
+        """The row the write will hit, exactly by serial; None when it cannot be read."""
+        serial = str(serial or "").strip().upper()
+        if not _ID_ROTA.match(serial):
+            return None
+        ok, dados = self._chamar("GET", f"/api/equipamento/{serial}")
+        return dados if ok and isinstance(dados, dict) else None
+
+    def unidade_atual(self, unidade_id: Any) -> Optional[Dict[str, Any]]:
+        unidades = self.listar_unidades().get("unidades") or []
+        return next((u for u in unidades if str(u.get("id")) == str(unidade_id).strip()), None)
+
+    def total_importacoes_chamados(self) -> Optional[int]:
+        ok, dados = self._chamar("GET", "/api/operacoes/chamados/historico")
+        total = _dict(dados).get("total") if ok else None
+        return total if isinstance(total, int) else None
+
+    def divergencia_apelido_manual(self, evento_id: str, serial: str) -> Optional[Dict[str, Any]]:
+        evento_id, chave = str(evento_id or "").strip(), str(serial or "").strip().upper()
+        if not _ID_ROTA.match(evento_id) or not chave:
+            return None
+        ok, dados = self._chamar("GET", f"/api/historico-comparacoes/{evento_id}")
+        if not ok:
+            return None
+        divergencias = _dict(_dict(_dict(dados).get("evento")).get("comparacao")).get("divergencias_apelidos_manuais") or []
+        return next((d for d in divergencias if isinstance(d, dict) and str(d.get("serie") or "").strip().upper() == chave), None)
+
+    # --- alterações novas (sempre atrás do cartão de confirmação) ---
+
+    def registrar_transferencia(self, campos: Dict[str, Any]) -> Dict[str, Any]:
+        """Records one line in the transfer history. It does not build the transfer sheet."""
+        try:
+            corpo = validar_transferencia(campos)
+        except ValueError as falha:
+            return {"sucesso": False, "erro": str(falha)}
+        ok, dados = self._chamar("POST", "/api/historico-transferencias", corpo=corpo)
+        if not ok:
+            return {"sucesso": False, "erro": dados}
+        return {"sucesso": True, "mensagem": f"Transferência da série {corpo['serial']} registrada no histórico de transferências."}
+
+    def resolver_apelido_manual(self, evento_id: str, serial: str, acao: str) -> Dict[str, Any]:
+        evento_id, serial, acao = str(evento_id or "").strip(), str(serial or "").strip().upper(), str(acao or "").strip().lower()
+        if not _ID_ROTA.match(evento_id) or not _ID_ROTA.match(serial):
+            return {"sucesso": False, "erro": "Identificador do evento ou série inválido."}
+        if acao not in ACOES_APELIDO_MANUAL:
+            return {"sucesso": False, "erro": "Escolha 'manter' ou 'excluir'."}
+        feito = "Apelido manual mantido." if acao == "manter" else "Alteração manual removida; o apelido voltou a seguir as planilhas de origem."
+        return self._evento_simples("POST", f"/api/historico-comparacoes/{evento_id}/apelido-manual/{serial}", {"acao": acao}, feito)
+
+    def salvar_nome_pessoa(self, serial: str, nome: str) -> Dict[str, Any]:
+        """The login comes from the server's own lookup, never from the model."""
+        serial, nome = str(serial or "").strip().upper(), str(nome or "").strip()
+        pessoa = self.pessoa_da_serie(serial)
+        if pessoa is None:
+            return {"sucesso": False, "erro": "Não foi possível consultar o usuário logado dessa série."}
+        corpo = {"serial": str(pessoa.get("serial_cadastro") or serial), "login_atual": str(pessoa.get("usuario") or "").strip(), "nome": nome}
+        return self._evento_simples("POST", "/api/equipamento/nome-pessoa", corpo, "Nome da pessoa removido." if not nome else "Nome da pessoa salvo.")
+
+    def excluir_chamados_antigos(self) -> Dict[str, Any]:
+        ok, dados = self._chamar("DELETE", "/api/operacoes/chamados/historico/antigas")
+        if not ok:
+            return {"sucesso": False, "erro": dados}
+        removidas = _dict(dados).get("removidas", 0)
+        return {"sucesso": True, "mensagem": f"{removidas} importação(ões) antiga(s) removida(s); a mais recente foi mantida."}
+
+    def recarregar_base(self) -> Dict[str, Any]:
+        """Swaps the in-memory base for the newest valid spreadsheet in the input folder."""
+        ok, dados = self._chamar("POST", "/api/recarregar-base", corpo={})
+        if not ok:
+            return {"sucesso": False, "erro": dados}
+        dados = _dict(dados)
+        return {
+            "sucesso": True, "mensagem": f"Base recarregada de {limpar_texto_sensivel(dados.get('arquivo_origem', ''))}.",
+            "total_equipamentos": dados.get("total_equipamentos"),
+        }
+
+
+ACOES_APELIDO_MANUAL = ("manter", "excluir")
+CAMPOS_TRANSFERENCIA = ("serial", "entrega_cnpj", "entrega_endereco", "entrega_contato", "entrega_cidade", "descricao_equipamento", "entrega_obs")
+OBRIGATORIOS_TRANSFERENCIA = ("serial", "entrega_cnpj", "entrega_endereco", "entrega_contato")
+
+
+def validar_transferencia(args: Dict[str, Any]) -> Dict[str, str]:
+    """Body for the transfer history: the required fields plus the few optional ones the tool offers. ValueError with text for the model."""
+    corpo = {c: str(args.get(c) or "").strip() for c in CAMPOS_TRANSFERENCIA}
+    corpo["serial"] = corpo["serial"].upper()
+    if not all(corpo[c] for c in OBRIGATORIOS_TRANSFERENCIA):
+        raise ValueError("Informe serial, CNPJ, endereço e contato da entrega.")
+    corpo = {c: v for c, v in corpo.items() if v}
+    try:
+        TransferenciaPayload.model_validate(corpo)
+    except ValidationError as erro:
+        primeiro = erro.errors()[0]
+        raise ValueError(f"Campo {'.'.join(str(p) for p in primeiro['loc'])} inválido: {str(primeiro['msg']).removeprefix('Value error, ')}") from None
+    return corpo

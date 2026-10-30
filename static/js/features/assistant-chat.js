@@ -14,6 +14,13 @@
   let modelo = "";
   let ocupado = false;
   let pendente = false;
+  // Envio em andamento (AbortController + motivo do aborto); o navegador desiste um pouco depois do orçamento de 90 s do servidor.
+  const PRAZO_ENVIO_MS = 100000;
+  const MSG_PRAZO = "O Assistente demorou demais para responder. Se havia uma ação pendente, confira o cartão antes de tentar de novo.";
+  const MSG_CANCELADO = "Envio cancelado. Se o Assistente ainda estiver terminando, aguarde alguns segundos antes de enviar de novo.";
+  const MSG_CONVERSA_OCUPADA = "O Assistente ainda está terminando a resposta anterior. Aguarde alguns segundos e tente de novo.";
+  let envioAtual = null;
+  let botaoCancelar = null;
   // Instruções permanentes: texto do usuário guardado no servidor; só edita depois de carregar, para um erro de leitura nunca apagar o salvo.
   let instrucoesCarregadas = false;
   let instrucoesOcupadas = false;
@@ -216,7 +223,23 @@
     byId("assistente-confirmar").disabled = ocupado;
     byId("assistente-cancelar").disabled = ocupado;
     byId("assistente-mensagens").setAttribute("aria-busy", String(ocupado));
+    botaoCancelarEnvio().hidden = !ocupado;
     atualizarGlobo();
+  }
+
+  // Criado aqui (não no HTML) e com o termo aprovado "Cancelar"; o nome acessível o distingue do Cancelar do cartão de confirmação.
+  function botaoCancelarEnvio() {
+    let botao = botaoCancelar;
+    if (!botao) {
+      botao = botaoCancelar = createTextElement("button", "ck-btn ck-btn--secundario ck-btn--sm ck-assist__cancelar-envio", "Cancelar");
+      botao.type = "button";
+      botao.id = "assistente-cancelar-envio";
+      botao.hidden = true;
+      botao.dataset.onClick = "cancelarEnvioAssistente";
+      botao.setAttribute("aria-label", "Cancelar envio");
+      byId("assistente-status").after(botao);
+    }
+    return botao;
   }
 
   function tamanhoLegivel(bytes) {
@@ -759,10 +782,14 @@
     falar(texto);
   }
 
-  // As respostas podem levar até ~90 s; enquanto isso a entrada fica bloqueada.
+  // As respostas podem levar até ~90 s (orçamento do servidor); enquanto isso a entrada fica bloqueada.
+  // O prazo do navegador é maior para a resposta de erro do servidor chegar antes de abortarmos.
   async function enviarAoAssistente(url, corpo, textoParaDevolver = "") {
     pararFala();
     ocupado = true;
+    const envio = { controle: new AbortController(), motivo: "" };
+    const prazo = setTimeout(() => { envio.motivo = "prazo"; envio.controle.abort(); }, PRAZO_ENVIO_MS);
+    envioAtual = envio;
     mostrarStatus("Pensando…");
     atualizarControles();
     try {
@@ -770,20 +797,32 @@
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(corpo),
+        signal: envio.controle.signal,
         errorMessage: "Não foi possível falar com o Assistente.",
       });
       mostrarResposta(dados);
     } catch (error) {
       if (error?.status === 503) online = false;
-      mostrarStatus(error?.message || "Não foi possível falar com o Assistente.", error?.status === 503);
+      if (error?.name === "AbortError") mostrarStatus(envio.motivo === "prazo" ? MSG_PRAZO : MSG_CANCELADO);
+      // O servidor mantém a conversa travada até terminar a rodada anterior.
+      else if (error?.status === 409) mostrarStatus(MSG_CONVERSA_OCUPADA);
+      else mostrarStatus(error?.message || "Não foi possível falar com o Assistente.", error?.status === 503);
       // Não perde o texto digitado quando o envio falha.
       const campo = byId("assistente-texto");
       if (textoParaDevolver && !campo.value) { campo.value = textoParaDevolver; contarMensagemAssistente(); }
     } finally {
+      clearTimeout(prazo);
+      envioAtual = null;
       ocupado = false;
       atualizarControles();
       focarProximo();
     }
+  }
+
+  function cancelarEnvioAssistente() {
+    if (!envioAtual) return;
+    envioAtual.motivo = "cancelado";
+    envioAtual.controle.abort();
   }
 
   async function carregarAssistente() {
@@ -1020,7 +1059,7 @@
   }
 
   return {
-    carregarAssistente, enviarMensagemAssistente, confirmarPendenteAssistente, cancelarPendenteAssistente,
+    carregarAssistente, enviarMensagemAssistente, confirmarPendenteAssistente, cancelarPendenteAssistente, cancelarEnvioAssistente,
     novaConversaAssistente, contarMensagemAssistente, teclaAssistente, alternarGravacaoAssistente, alternarVozAssistente,
     alternarInstrucoesAssistente, alternarBuscaWebAssistente, contarInstrucoesAssistente, salvarInstrucoesAssistente, limparInstrucoesAssistente,
     anexarArquivoAssistente, removerAnexoAssistente,

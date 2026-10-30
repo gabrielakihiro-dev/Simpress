@@ -1,12 +1,27 @@
-# 15 — Painel Assistente
+# 15 — Chat flutuante do Assistente
 
-Painel de conversa com a IA do Simpress (OpenRouter, chamado pelo servidor local), aberto como as demais ferramentas do Cockpit.
+Chat com a IA do Simpress (OpenRouter, chamado pelo servidor local), aberto como um widget flutuante no canto inferior direito, sem tirar o usuário da tela em que está. Nos trechos abaixo, "painel" e "área" se referem ao conteúdo desse chat.
+
+## Desvio do artefato do Cockpit
+
+O Assistente deixou de ser aba/painel de página inteira (F9, dentro de `#cockpit-tool-panels`) e virou chat flutuante. Essa mudança foi pedida explicitamente pelo usuário e desvia do artefato do Cockpit (`AGENTS.md`, seção "Interface", que pede layout idêntico ao artefato): o artefato não mostra esse widget nem o ícone do robô no topbar. As regras da seção "Interface" não mudam; só esta tela tem a exceção.
 
 ## Acesso
 
-- Botão `Assistente` (`#btn-assistente`, `ck-aba--painel`, ícone `#i-bot`) na barra superior, ao lado de `Chamados`; abaixo de 1200px, item `Assistente` no menu Ferramentas (`#btn-assistente-menu`).
-- Atalho `F9`.
-- Usa o painel de ferramentas do Cockpit (`data-cockpit-tool-panel="assistente"`): mesma área de trabalho, Esc fecha e o foco volta ao botão; em telas estreitas ocupa a tela toda.
+- Botão só-ícone de robô (`#btn-assistente`, `ck-btn ck-btn--icone ck-btn--fantasma`, ícone `#i-bot`) na barra superior, à direita do sino de notificações e antes do alternador de tema. Nome acessível `Assistente` (`aria-label`), `title` `Assistente (F9)`, `aria-keyshortcuts="F9"`, `aria-expanded` (`false` fechado, `true` aberto) e `aria-controls="assistente-widget"`. Aparece em todas as larguras; com o chat aberto, usa o mesmo realce do botão pressionado (`--cor-destaque-fundo`/`--cor-destaque-texto`).
+- A aba `Assistente` (`ck-aba--painel`) e o item `Assistente` do menu Ferramentas (`#btn-assistente-menu`) foram removidos.
+- Atalho `F9` continua e aciona o mesmo `#btn-assistente`.
+- Clicar no ícone (ou `F9`) alterna abrir/fechar. Não fecha ao clicar fora: o chat fica aberto enquanto o usuário usa o resto do sistema.
+- Fecha também com `Esc` (quando não há gravação, lembrete em confirmação nem ação pendente que o próprio `Esc` trataria antes) e com o botão `X` do cabeçalho (`#assistente-fechar`, ícone `#i-x`, `aria-label="Fechar Assistente"`). Ao fechar por qualquer caminho, o foco volta ao `#btn-assistente`.
+- Ao fechar, a fala (`Voz`) para e uma gravação em andamento é cancelada (nada é enviado nem transcrito). A conversa persiste: fica no DOM e no servidor, e reabrir mostra o mesmo histórico, instruções, lembretes e anexos. Ao abrir, consulta o estado e põe o foco no campo `Mensagem`.
+
+## Widget (`#assistente-widget`)
+
+- Seção `role="dialog"`, `aria-modal="false"` (não modal, o resto da tela segue utilizável), `aria-labelledby="assistente-heading"`, `hidden` enquanto fechada. Fora de `#cockpit-tool-panels`; não usa `data-cockpit-tool-panel`.
+- Cabeçalho visível com o título `Assistente` (`h2#assistente-heading`) e o botão `#assistente-fechar`. Abaixo dele, o conteúdo anterior sem remoções: barra com globo, status e botões (`Voz`, `Instruções`, `Lembretes`, `Nova conversa`, `Tentar novamente`), áreas de instruções e lembretes, anexos, mensagens, cartão de confirmação e formulário (`Mensagem`, `Anexar`, `Gravar áudio`, `Enviar`). Todos os ids `#assistente-*`, atributos ARIA e manipuladores `data-on-*` são preservados.
+- Posição `fixed`, canto inferior direito (20 px das bordas), acima do topbar e abaixo de véus de modal e toasts; largura até 420 px e altura até 640 px, sempre dentro da janela (`calc(100vw - 24px)` e `calc(100dvh - 96px)`), com rolagem só na lista de mensagens. Mesma superfície, borda, raio e sombra do popover do sino, nos dois temas.
+- Abaixo de 600 px o widget ocupa a largura da tela (8 px de margem) e quase toda a altura; sem rolagem horizontal da página de 320 px a 2560 px.
+- Animação de abertura de ~200 ms (escala de .96 a 1 e opacidade), só quando `prefers-reduced-motion: no-preference`; com movimento reduzido o widget aparece e some sem transição.
 
 ## Contrato (`routers/assistant.py`)
 
@@ -25,10 +40,10 @@ Painel de conversa com a IA do Simpress (OpenRouter, chamado pelo servidor local
 - Ao abrir, consulta o estado. Desligado: mostra exatamente `Assistente desligado. Preencha OPENROUTER_API_KEY no arquivo .env da pasta do Simpress.`, bloqueia a entrada e oferece `Tentar novamente`.
 - Balões do usuário (à direita, cor de destaque) e do Assistente (à esquerda, superfície); linha discreta `Ferramentas: …` quando houver.
 - Campo `Mensagem` com contador `N / 4000`; Enter envia, Shift+Enter quebra a linha. Durante a resposta, status `Pensando…` e entrada bloqueada.
-- Ação pendente: cartão de alerta com a descrição e os botões `Confirmar e executar` e `Cancelar`; o foco vai para o cartão, Esc cancela (sem fechar o painel) e a entrada fica bloqueada até a resposta.
+- Ação pendente: cartão de alerta com a descrição e os botões `Confirmar e executar` e `Cancelar`; o foco vai para o cartão, Esc cancela (sem fechar o chat) e a entrada fica bloqueada até a resposta.
 - `Nova conversa` limpa a conversa no servidor e na tela.
 - Respostas novas são anunciadas por uma região `aria-live="polite"` separada.
-- Globo animado na barra (`#assistente-globo`, `data-estado`: `parado`, `ouvindo`, `pensando`, `falando`; parado com movimento reduzido). Botão `Voz` (`aria-pressed`, desligado por padrão, preferência em `localStorage`) lê as respostas com a voz local em português do computador; sem voz local avisa e não fala. A fala para ao enviar, gravar, `Nova conversa` ou fechar o painel (com movimento reduzido a fala segue até o fim).
+- Globo animado na barra (`#assistente-globo`, `data-estado`: `parado`, `ouvindo`, `pensando`, `falando`; parado com movimento reduzido). Botão `Voz` (`aria-pressed`, desligado por padrão, preferência em `localStorage`) lê as respostas com a voz local em português do computador; sem voz local avisa e não fala. A fala para ao enviar, gravar, `Nova conversa` ou fechar o chat (com movimento reduzido a fala segue até o fim).
 
 ## Segurança
 

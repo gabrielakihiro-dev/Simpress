@@ -113,6 +113,7 @@
 
 .ckp-importar { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr) auto; align-items: end; gap: 10px; }
 .ckp-rotulo { font-size: var(--fs-xs); color: var(--cor-texto-sutil); }
+.ckp-rotulo .info-tip { margin-block: -0.75rem; } /* o botão herda min-height 2.5rem de app.css e não deve aumentar a altura do rótulo */
 .ckp-campo { display: flex; flex-direction: column; gap: 4px; min-width: 0; }
 
 .ckp-kpis { display: grid; grid-template-columns: repeat(6, minmax(0, 1fr)); gap: 6px; }

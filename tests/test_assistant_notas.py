@@ -11,7 +11,7 @@ from domains.assistant_notas import LIMITE_NOTAS, LIMITE_TEXTO, NotasStore
 from domains.assistant_openrouter import OpenRouterSettings
 from domains.assistant_tools import CHANGE_TOOLS, QUERY_TOOLS, TOOLS
 from routers.assistant import AssistantRouteServices, create_assistant_router
-from tests.test_assistant import CPF, FakeModel, FakeSimpress, call, calls, temp_json, text
+from tests.test_assistant import CPF, FakeModel, FakeSimpress, abrir, call, calls, temp_json, text
 
 
 def make_store() -> NotasStore:
@@ -23,7 +23,7 @@ def make_chat(model: FakeModel, store: NotasStore, simpress: Optional[FakeSimpre
 
 
 def tool_messages(conversation: AssistantConversation) -> List[Any]:
-    return [json.loads(m["content"]) for m in conversation._mensagens if m["role"] == "tool"]
+    return [json.loads(abrir(m["content"])) for m in conversation._mensagens if m["role"] == "tool"]
 
 
 class NotasStoreTests(unittest.TestCase):
@@ -97,12 +97,14 @@ class NotasToolTests(unittest.TestCase):
 
     def test_create_card_is_built_by_program_and_runs_only_after_confirmation(self) -> None:
         store = make_store()
-        model = FakeModel(calls(call("criar_lembrete", texto="Conferir o lote X", prazo="2026-11-05")), text("Guardei."))
+        model = FakeModel(calls(call("criar_lembrete", texto="Conferir o lote X", prazo="2026-11-05")))
         conversation = make_chat(model, store)
         reply = conversation.enviar_mensagem("me lembre de conferir o lote X até 05/11")
         self.assertEqual(reply.pendente, {"descricao": 'Criar o lembrete "Conferir o lote X", com prazo em 05/11/2026.'})
         self.assertEqual(store.listar(), [])
-        self.assertEqual(conversation.resolver_confirmacao(True).texto, "Guardei.")
+        confirmado = conversation.resolver_confirmacao(True).texto
+        self.assertTrue(confirmado.startswith("Lembrete criado."))
+        self.assertIn("Conferir o lote X", confirmado)
         self.assertEqual([(n["texto"], n["prazo"]) for n in store.listar()], [("Conferir o lote X", "2026-11-05")])
 
     def test_cancel_creates_nothing(self) -> None:
