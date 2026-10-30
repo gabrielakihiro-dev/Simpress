@@ -1,4 +1,4 @@
-/** Histórico de Planilhas dialog controller: annotations, filters, and manual alias decisions. */
+/** Comparação tab result controller: annotations, filters, and manual alias decisions. */
 (function (root, factory) {
   if (typeof module === "object" && module.exports) module.exports = factory;
   else (root.SimpressFeatures = root.SimpressFeatures || {}).comparisonResult = factory;
@@ -11,7 +11,8 @@
 
   let comparisonAnnotationSyncObservers = [];
 
-  function abrirModalComparacaoPlanilhas(comparison, navigationTarget = null) {
+  // Renders the result inside the Comparação tab (#comparacao-planilhas-conteudo); the tab must already be open.
+  function renderizarResultadoComparacao(comparison, navigationTarget = null) {
     const listas = renderer.listasComparacao(comparison);
     const colunas = renderer.criarColunasAnotacao(comparison);
     const arquivo = comparison.arquivos_enviados || {};
@@ -46,12 +47,6 @@
     conectarAnotacoesComparacao(comparison);
     conectarFiltrosHistoricoComparacao(content);
     conectarCartoesResumoComparacao();
-    app.abrirModalAcessivel(
-      "modal-comparacao-planilhas",
-      navigationHeading ? "[data-comparison-navigation-heading]" : '[aria-label="Fechar resultado"]',
-      "fecharModalComparacaoPlanilhas",
-      comparison.contexto_historico === true ? "btn-historico-comparacoes" : "btn-atualizar-planilhas",
-    );
     if (navigationTarget) requestAnimationFrame(() => navegarParaLinhaComparacao(navigationTarget));
   }
 
@@ -397,6 +392,8 @@
     return group.querySelector("h5") || section?.querySelector("h4") || group.querySelector("h4");
   }
 
+  const PRIORIDADE_CATEGORIAS_SERIE = ["divergencias_local", "ausentes_no_endpoint", "divergencias_usuario", "ausentes_em_detalhes"];
+
   function navegarParaLinhaComparacao(target) {
     const content = document.getElementById("comparacao-planilhas-conteudo");
     if (!content) return;
@@ -418,20 +415,34 @@
       motion?.reveal(group);
       return;
     }
-    if (!target?.category) return;
+    if (!target?.category && !target?.serial && !target?.hostname) return;
     const visibleRows = [...content.querySelectorAll("tr[data-comparison-category], .comparison-mobile-card[data-comparison-category]")]
-      .filter(row => row.getClientRects().length > 0 && row.dataset.comparisonCategory === target.category);
+      .filter(row => row.getClientRects().length > 0 && (!target.category || row.dataset.comparisonCategory === target.category));
     let row = target.itemId
       ? visibleRows.find(candidate => candidate.dataset.comparisonItemId === target.itemId)
       : null;
     if (!row) {
       const serial = normalizarIdentificadorLinhaComparacao(target.serial);
       const hostname = normalizarIdentificadorLinhaComparacao(target.hostname);
-      row = visibleRows.find(candidate => {
+      const matches = visibleRows.filter(candidate => {
         const sameSerial = serial && normalizarIdentificadorLinhaComparacao(candidate.dataset.comparisonSerial) === serial;
         const sameHostname = hostname && normalizarIdentificadorLinhaComparacao(candidate.dataset.comparisonHostname) === hostname;
         return sameSerial ? (!hostname || sameHostname) : (!serial && sameHostname);
       });
+      // Sem categoria (Home): mesma prioridade das divergências listadas lá, não a primeira seção da página.
+      const priority = candidate => {
+        const index = PRIORIDADE_CATEGORIAS_SERIE.indexOf(candidate.dataset.comparisonCategory);
+        return index < 0 ? PRIORIDADE_CATEGORIAS_SERIE.length : index;
+      };
+      row = target.category ? matches[0] : matches.reduce((best, candidate) => (!best || priority(candidate) < priority(best) ? candidate : best), null);
+      // Endpoint MacBook serial lacks the leading "S" of EquipamentosDetalhes; accepted only when unambiguous.
+      if (!row && serial && !target.category) {
+        const equivalents = visibleRows.filter(candidate => {
+          const other = normalizarIdentificadorLinhaComparacao(candidate.dataset.comparisonSerial);
+          return other && (other === `S${serial}` || `S${other}` === serial);
+        });
+        if (new Set(equivalents.map(candidate => normalizarIdentificadorLinhaComparacao(candidate.dataset.comparisonSerial))).size === 1) row = equivalents[0];
+      }
     }
     if (!row) return;
     const reducedMotion = window.matchMedia?.("(prefers-reduced-motion: reduce)").matches;
@@ -562,11 +573,6 @@
     searchInput?.dispatchEvent(new Event("input", { bubbles: true }));
   }
 
-  function fecharModalComparacaoPlanilhas() {
-    desconectarObservadoresAnotacoes();
-    app.fecharModalAcessivel("modal-comparacao-planilhas");
-  }
-
   function atributosVersaoAnotacao(item) {
     const version = {
       anotacao_revisoes: item.anotacao_revisoes || [],
@@ -609,7 +615,7 @@
   }
 
   return {
-    abrirModalComparacaoPlanilhas, irParaSecaoComparacao, fecharModalComparacaoPlanilhas, atributosVersaoAnotacao,
+    renderizarResultadoComparacao, irParaSecaoComparacao, atributosVersaoAnotacao,
     renderizarAnotacaoOperacional, conectarAnotacoesOperacionais,
   };
 });

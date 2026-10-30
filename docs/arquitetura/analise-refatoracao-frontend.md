@@ -25,7 +25,7 @@ O front-end usa scripts clássicos sem framework, duas páginas HTML e CSS próp
 | Transferência | `construirPayload`, `validarCamposObrigatoriosPlanilha`, `gerarPlanilhaExcel`, `transfer-utils.js` | `/api/config/transferencia`, `/api/gerar-planilha`; telefone, CNPJ, contatos, rascunho e download |
 | Disponibilidade | `carregarProntidao`, `abrirImportacaoModelo` | `/api/prontidao`, `/api/modelos/{tipo}/importar`; painel modificado localmente pelo usuário |
 | Inventários | `previsualizarPlanilhas`, `enviarPlanilhas`, `restaurarHistoricoComparacao` | preview, confirmação, idempotência, atualização e restauração transacional |
-| Histórico | `abrirModalComparacaoPlanilhas`, `renderizarTabelaComparacao`, `formatarNomeFonteHistorico` | rótulos normalizados, cards/tabelas responsivos e dados de auditoria preservados |
+| Histórico | `renderizarResultadoComparacao`, `renderizarTabelaComparacao`, `formatarNomeFonteHistorico` | rótulos normalizados, cards/tabelas responsivos e dados de auditoria preservados |
 | Anotações | `history-annotation-autosave.js`, `conectarAnotacoesOperacionais` | 2.000 caracteres, revisão causal, conflito, retry, rascunho e sincronização compartilhada |
 | Operações | `abrirCentralPendencias`, `compararEvolucaoSelecionada` | `/api/operacoes/pendencias`, `/api/operacoes/evolucao`; notas por ocorrência |
 | Chamados | `selecionarVersaoChamados`, `carregarEvolucaoChamados`, `carregarLinhaDoTempoChamado` | snapshots, filtros, triagem, exportação e linha do tempo por série |
