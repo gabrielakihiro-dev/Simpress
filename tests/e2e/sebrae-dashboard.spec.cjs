@@ -37,6 +37,7 @@ test("Chamados novos mostra o Dashboard importado, os formulários e os avisos d
   await expect(painel.locator("#sebrae-novos-lista .sebrae-chamado").first()).toContainText("DEMO0001");
   await expect(painel.locator("#sebrae-novos-lista .sebrae-chamado").nth(1)).toContainText("mais de um equipamento");
   await expect(painel.locator("#btn-sebrae-exportar")).toBeDisabled();
+  await expect(painel.locator("#sebrae-atualizar-status")).toContainText("Gere o Dashboard atualizado antes de enviar");
 });
 
 test("Chamados novos só exporta os prontos e mostra a mensagem aprovada com os dois blocos", async ({ page, request }) => {

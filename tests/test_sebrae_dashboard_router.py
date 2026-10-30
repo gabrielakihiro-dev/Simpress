@@ -142,6 +142,10 @@ class RotasSebraeTest(RotasBase):
         sebrae_novos.salvar_novos(self.caminhos.novos, [CHAMADO], [], 0, {})
         self.assertEqual(self.cliente.post("/api/sebrae/dashboard/atualizar", json={"chamados": [MANUAL]}).status_code, 200)
         self.assertTrue(saida.exists())
+        self.assertTrue(self.cliente.get("/api/sebrae/novos").json()["importado"]["saida_pronta"])
+        nova = self.importar(montar()).json()["importado"]
+        self.assertFalse(nova["saida_pronta"])
+        self.assertFalse(saida.exists())
         self.assertEqual(self.importar(montar()).status_code, 200)
         self.assertFalse(saida.exists())
 

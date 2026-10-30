@@ -1558,6 +1558,8 @@ def pasta_dashboard_entrar(page: "Page") -> bool:
 
 
 LIMITE_AVISO_COPIAS = 5
+# Nome do Dashboard seguido de "Copiar", "- Cópia", "Copy" ou "(1)"; outro arquivo com o mesmo prefixo ("..._teste", "(atualizado)") não conta.
+_COPIA_DO_DASHBOARD = re.compile(re.escape(Path(DASHBOARD_FINAL).stem) + r"\s*(?:[-–]\s*)?(?:(?:Copiar|C[óo]pia|Copy)\b|\(\d+\))", re.IGNORECASE)
 
 
 def _quantos_dashboards_na_lista(page: "Page") -> int:
@@ -1565,12 +1567,16 @@ def _quantos_dashboards_na_lista(page: "Page") -> int:
     return page.get_by_role("row").filter(has_text=re.compile(re.escape(Path(DASHBOARD_FINAL).stem), re.IGNORECASE)).count()
 
 
+def _copias_na_lista(page: "Page") -> int:
+    return page.get_by_role("row").filter(has_text=_COPIA_DO_DASHBOARD).count()
+
+
 def duplicar_dashboard_na_pasta(page: "Page") -> None:
     """Linha do arquivo > Mais ações (...) > Duplicata. A cópia é só segurança: nunca é aberta, baixada, renomeada nem apagada."""
     linha = _linha_do_dashboard(page)
     antes = _quantos_dashboards_na_lista(page)
-    copias = antes - 1  # a lista inclui o original
-    log("Dashboard", f"Cópias de segurança já na pasta: {max(copias, 0)}.")
+    copias = _copias_na_lista(page)
+    log("Dashboard", f"Cópias de segurança já na pasta: {copias}.")
     if copias > LIMITE_AVISO_COPIAS:
         log("Dashboard", f"Aviso: há {copias} cópias de segurança na pasta DASHBOARD SEBRAE; apague as antigas à mão (a rotina não apaga).")
     log("Dashboard", "Criando a cópia de segurança (Mais ações > Duplicata)...")
@@ -1661,7 +1667,7 @@ def enviar_arquivo_para_pasta(page: "Page", arquivo: Path) -> None:
         if visivel(page.get_by_text(_AVISO_ENVIO_CONCLUIDO).first):
             return
         page.wait_for_timeout(1000)
-    raise RotinaErro("Não consegui confirmar o envio: o Dashboard no SharePoint não mudou. Confira a pasta antes de repetir.")
+    raise RotinaErro("Não vi o aviso de envio concluído em 90 s; o Dashboard pode ter sido enviado. Confira a pasta antes de repetir.")
 
 
 def rodar_rotina_enviar(context: "BrowserContext") -> int:

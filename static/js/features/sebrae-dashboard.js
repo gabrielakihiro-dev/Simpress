@@ -264,6 +264,8 @@
       definirTexto("sebrae-dashboard-status", importado
         ? `Dashboard importado: ${importado.arquivo || "sem nome"} (${importado.total} chamados já lançados).${importado.atualizavel ? "" : " Não dá para atualizar a cópia: importe de novo."}`
         : "Nenhum Dashboard importado.");
+      // "Enviar ao SharePoint" só tem o que enviar depois de Atualizar; sem a saída, avisa já em vez de falhar no clique.
+      if (importado && !importado.saida_pronta) definirTexto("sebrae-atualizar-status", "Gere o Dashboard atualizado antes de enviar ao SharePoint.");
       const novos = dados.novos;
       estado.formulario = novos?.formulario || [];
       const lista = el("sebrae-novos-lista");
