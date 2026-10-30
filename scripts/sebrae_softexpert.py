@@ -73,6 +73,7 @@ SEL_DIALOGO = "[role='dialog'], [role='alertdialog'], dialog[open], .modal.show"
 NOME_SIM = re.compile(r"^\s*(Sim|Confirmar)\s*$", re.IGNORECASE)  # "Confirmar" é o botão do diálogo "Deseja associar esta atividade ao seu usuário?"
 # Só responde "Sim" a uma pergunta que fale de associar o chamado ao usuário; qualquer outra pára a rotina.
 TEXTO_CONFIRMACAO = re.compile(r"\b(associ|vincul|assum)\w*", re.IGNORECASE)
+TEXTO_ASSOCIAR_ATIVIDADE = re.compile(r"associar\s+esta\s+atividade", re.IGNORECASE)
 
 # Formulário do chamado (pode estar em janela PHP separada e/ou dentro de iframes).
 SEL_FORMULARIO = "form#formulario, form[name='formulario'], .form-chamado"
@@ -715,8 +716,14 @@ def _responder_confirmacao(alvos: List["Page"], respondidas: List[float]) -> boo
     """
     for alvo in alvos:
         for frame in _frames(alvo):
-            for dialogo in frame.locator(SEL_DIALOGO).filter(visible=True).all():
-                sim = dialogo.get_by_role("button", name=NOME_SIM).filter(visible=True)
+            dialogos = frame.locator(SEL_DIALOGO).filter(visible=True).all()
+            if not dialogos:
+                # Modal sem role/classe padrão ("Atenção - Deseja associar esta atividade ao seu usuário?"): acha pelo texto.
+                por_texto = frame.locator("div").filter(has_text=TEXTO_ASSOCIAR_ATIVIDADE).filter(
+                    has=frame.get_by_role("button", name=NOME_SIM)).filter(visible=True)
+                dialogos = [por_texto.last] if por_texto.count() else []
+            for dialogo in dialogos:
+                sim = dialogo.get_by_role("button", name=NOME_SIM).or_(dialogo.get_by_text(NOME_SIM)).filter(visible=True)
                 if not sim.count():
                     continue
                 texto = dialogo.inner_text(timeout=5000)
