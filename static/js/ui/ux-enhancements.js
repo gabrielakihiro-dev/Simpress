@@ -79,7 +79,7 @@
     if (command && !event.shiftKey && key.toLowerCase() === "k") return "search";
     if (key === "/" && !command && !typing) return "search";
     if (command && key === "Enter" && transferVisible) return "generate";
-    if (command || event.shiftKey || typing) return null;
+    if (command || event.shiftKey || (typing && key !== "F9")) return null; // F9 também fecha o chat do Assistente com o cursor na caixa de mensagem
     return ({
       F1: "tab-home",
       F2: "tab-transferencia",

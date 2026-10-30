@@ -921,7 +921,7 @@ button.ck-status--link:focus-visible { outline: 2px solid var(--cor-destaque); o
 @media (max-width: 767.98px) { .ck-ferr-filtros { padding: 8px 12px; } }
 
 /* Aviso flutuante: o contêiner empilha os avisos; cada .ck-toast deixa de ser fixo. */
-.ck-toasts { position: fixed; left: 50%; bottom: 20px; display: flex; flex-direction: column; align-items: center; gap: 8px; width: max-content; max-width: calc(100vw - 24px); transform: translateX(-50%); pointer-events: none; }
+.ck-toasts { position: fixed; left: 50%; bottom: 20px; z-index: 70; display: flex; flex-direction: column; align-items: center; gap: 8px; width: max-content; max-width: calc(100vw - 24px); transform: translateX(-50%); pointer-events: none; }
 .ck-toasts .ck-toast { position: static; transform: none; animation: none; pointer-events: auto; }
 .ck-toast[data-status="erro"] .ck-ico { color: var(--cor-erro-texto); }
 .ck-toast[data-status="alerta"] .ck-ico { color: var(--cor-alerta-texto); }
@@ -1017,7 +1017,7 @@ html[data-theme], html[data-theme] body.cockpit-shell-body { background: var(--c
 .ck-assist__pendente { padding: 10px 12px; border-radius: var(--raio-md); background: var(--cor-alerta-fundo); color: var(--cor-alerta-texto); border: 1px solid currentColor; }
 .ck-assist__pendente:focus-visible { outline: 2px solid var(--cor-destaque); outline-offset: 2px; }
 .ck-assist__pendente .ck-grupo-botoes { margin-top: 8px; }
-.ck-assist__form { display: flex; flex-direction: column; gap: 6px; }
+.ck-assist__form { display: flex; flex-direction: column; gap: 8px; }
 .ck-assist__campo { width: 100%; }
 .ck-assist__campo textarea { width: 100%; resize: vertical; min-height: 4.5em; max-height: 40vh; }
 .ck-assist__acoes { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
@@ -1057,7 +1057,8 @@ html[data-theme], html[data-theme] body.cockpit-shell-body { background: var(--c
 .ck-assist__busca-fontes a { color: var(--cor-destaque-texto); text-decoration: underline; overflow-wrap: anywhere; }
 .ck-assist__busca-dominio { color: var(--cor-texto-mudo); }
 .ck-assist-widget > .ck-assist__instrucoes { margin-left: 12px; margin-right: 12px; flex: 0 1 auto; min-height: 0; overflow-y: auto; } /* aberto, rola dentro do widget em vez de cortar o campo de mensagem */
-.ck-assist__instrucoes:not([hidden]) ~ .ck-assist__lista { min-height: 80px; }
+.ck-assist-widget > .ck-assist__instrucoes:not([hidden]) { flex: 1 1 auto; } /* Instruções/Lembretes abertos ocupam o widget; a conversa volta ao fechar */
+.ck-assist-widget > .ck-assist__instrucoes:not([hidden]) ~ :is(.ck-assist__lista, .ck-assist__form) { display: none; }
 .ck-assist-widget > .ck-assist__lista, .ck-assist-widget > .ck-assist__pendente { margin-left: 12px; margin-right: 12px; }
 .ck-assist-widget > .ck-assist__form { padding: 0 12px 12px; }
 .ck-assist-widget > .ck-assist__barra { padding: 8px 12px; flex-wrap: wrap; }

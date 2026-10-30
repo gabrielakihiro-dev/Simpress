@@ -25,13 +25,123 @@ async function mockAssistente(page, respostas) {
 }
 
 async function abrirAssistente(page) {
-  if (await page.locator("#btn-assistente").isVisible()) await page.locator("#btn-assistente").click();
-  else {
-    await page.locator("#cockpit-tools-trigger").click();
-    await page.locator("#btn-assistente-menu").click();
-  }
-  await expect(page.locator('[data-cockpit-tool-panel="assistente"]')).toBeVisible();
+  await page.locator("#btn-assistente").click();
+  await expect(page.locator("#assistente-widget")).toBeVisible();
 }
+
+test("ícone do robô: abre e fecha por clique, aria-expanded alterna e o widget começa fechado", async ({ page }) => {
+  await mockAssistente(page, { estado: PRONTO });
+  await page.goto("/");
+  const icone = page.locator("#btn-assistente");
+  const widget = page.locator("#assistente-widget");
+  await expect(widget).toBeHidden();
+  await expect(icone).toHaveAttribute("aria-expanded", "false");
+  await expect(icone).toHaveAttribute("aria-controls", "assistente-widget");
+  await icone.click();
+  await expect(widget).toBeVisible();
+  await expect(icone).toHaveAttribute("aria-expanded", "true");
+  await expect(page.locator("#assistente-texto")).toBeFocused();
+  await icone.click();
+  await expect(widget).toBeHidden();
+  await expect(icone).toHaveAttribute("aria-expanded", "false");
+});
+
+test("botão X fecha o chat e devolve o foco ao ícone", async ({ page }) => {
+  await mockAssistente(page, { estado: PRONTO });
+  await page.goto("/");
+  await abrirAssistente(page);
+  await page.getByRole("button", { name: "Fechar Assistente" }).click();
+  await expect(page.locator("#assistente-widget")).toBeHidden();
+  await expect(page.locator("#btn-assistente")).toHaveAttribute("aria-expanded", "false");
+  await expect(page.locator("#btn-assistente")).toBeFocused();
+});
+
+test("F9 abre e F9 fecha, inclusive com o cursor na caixa de mensagem", async ({ page }) => {
+  await mockAssistente(page, { estado: PRONTO });
+  await page.goto("/");
+  await page.keyboard.press("F9");
+  await expect(page.locator("#assistente-widget")).toBeVisible();
+  await expect(page.locator("#btn-assistente")).toHaveAttribute("aria-expanded", "true");
+  await page.locator("#assistente-texto").focus();
+  await page.keyboard.press("F9");
+  await expect(page.locator("#assistente-widget")).toBeHidden();
+  await expect(page.locator("#btn-assistente")).toHaveAttribute("aria-expanded", "false");
+  await expect(page.locator("#btn-assistente")).toBeFocused();
+});
+
+test("F9 com o foco na busca do Home leva o foco à caixa do chat", async ({ page }) => {
+  await mockAssistente(page, { estado: PRONTO });
+  await page.goto("/");
+  await page.locator("#input-serial").focus();
+  await page.keyboard.press("F9");
+  await expect(page.locator("#assistente-widget")).toBeVisible();
+  await expect(page.locator("#assistente-texto")).toBeFocused({ timeout: 2000 });
+});
+
+test("Esc fecha o chat e devolve o foco ao ícone", async ({ page }) => {
+  await mockAssistente(page, { estado: PRONTO });
+  await page.goto("/");
+  await abrirAssistente(page);
+  await expect(page.locator("#assistente-texto")).toBeFocused();
+  await page.keyboard.press("Escape");
+  await expect(page.locator("#assistente-widget")).toBeHidden();
+  await expect(page.locator("#btn-assistente")).toHaveAttribute("aria-expanded", "false");
+  await expect(page.locator("#btn-assistente")).toBeFocused();
+});
+
+test("ícone do Assistente fica à direita do sino e não tem texto visível", async ({ page }) => {
+  await mockAssistente(page, { estado: PRONTO });
+  await page.goto("/");
+  const sino = await page.locator("#btn-notificacoes").boundingBox();
+  const robo = await page.locator("#btn-assistente").boundingBox();
+  expect(robo.x).toBeGreaterThanOrEqual(sino.x + sino.width);
+  await expect(page.locator("#btn-assistente")).toHaveAttribute("aria-label", "Assistente");
+  expect((await page.locator("#btn-assistente").innerText()).trim()).toBe("");
+  await expect(page.locator("#btn-assistente svg")).toBeVisible();
+});
+
+test("a conversa continua ao fechar e reabrir o chat", async ({ page }) => {
+  await mockAssistente(page, { estado: PRONTO, mensagem: { texto: "Temos 12 notebooks.", ferramentas: [], pendente: null } });
+  await page.goto("/");
+  await abrirAssistente(page);
+  await page.locator("#assistente-texto").fill("quantos?");
+  await page.keyboard.press("Enter");
+  await expect(page.locator(".ck-assist__msg--assistente .ck-assist__texto")).toHaveText("Temos 12 notebooks.");
+  await page.locator("#btn-assistente").click();
+  await expect(page.locator("#assistente-widget")).toBeHidden();
+  await page.locator("#btn-assistente").click();
+  await expect(page.locator("#assistente-widget")).toBeVisible();
+  await expect(page.locator(".ck-assist__msg--usuario .ck-assist__texto")).toHaveText("quantos?");
+  await expect(page.locator(".ck-assist__msg--assistente .ck-assist__texto")).toHaveText("Temos 12 notebooks.");
+});
+
+test("Esc com um painel de ferramentas aberto fecha só o chat", async ({ page }) => {
+  await mockAssistente(page, { estado: PRONTO });
+  await page.route("**/api/historico-comparacoes", route => route.fulfill({ json: { eventos: [] } }));
+  await page.goto("/");
+  await page.locator("#cockpit-tools-trigger").click();
+  await page.locator("#btn-cockpit-comparacao").click();
+  await expect(page.locator("#cockpit-tool-panels")).toBeVisible();
+  await abrirAssistente(page);
+  await expect(page.locator("#assistente-texto")).toBeFocused();
+  await page.keyboard.press("Escape");
+  await expect(page.locator("#assistente-widget")).toBeHidden();
+  await expect(page.locator("#cockpit-tool-panels")).toBeVisible();
+  // Com o chat fechado, o próximo Esc volta a fechar o painel de ferramentas.
+  await page.keyboard.press("Escape");
+  await expect(page.locator("#cockpit-tool-panels")).toBeHidden();
+});
+
+test("chat aberto sem conversa passa no axe nos dois temas", async ({ page }) => {
+  await mockAssistente(page, { estado: PRONTO });
+  await page.goto("/");
+  await abrirAssistente(page);
+  for (const theme of ["light", "dark"]) {
+    await page.locator("html").evaluate((root, value) => { root.dataset.theme = value; }, theme);
+    const audit = await new AxeBuilder({ page }).include("#assistente-widget").analyze();
+    expect(audit.violations.map(v => ({ id: v.id, targets: v.nodes.map(n => n.target) })), theme).toEqual([]);
+  }
+});
 
 test("Assistente desligado mostra a orientação e bloqueia a entrada", async ({ page }) => {
   await mockAssistente(page, { estado: { online: false, modelo: "", aguardando_confirmacao: false } });
@@ -100,7 +210,7 @@ test("Esc cancela a gravação: nada é enviado e o botão volta ao normal", asy
   await page.keyboard.press("Escape");
   await expect(page.getByRole("button", { name: "Gravar áudio" })).toBeEnabled();
   await expect(page.locator("#assistente-texto")).toHaveValue("");
-  await expect(page.locator("#cockpit-tool-panels")).toBeVisible();
+  await expect(page.locator("#assistente-widget")).toBeVisible(); // Esc só cancelou a gravação; o chat continua aberto
   expect(chamadas.some(c => c.nome === "audio")).toBe(false);
 });
 
@@ -235,7 +345,7 @@ test("ação pendente: confirmar envia confirmado=true; Esc cancela sem fechar o
   await page.keyboard.press("Escape");
   await expect(cartao).toBeHidden();
   await expect(page.locator(".ck-assist__msg--assistente").last()).toHaveText(/Cancelado\./);
-  await expect(page.locator("#cockpit-tool-panels")).toBeVisible();
+  await expect(page.locator("#assistente-widget")).toBeVisible();
   expect(chamadas.filter(c => c.nome === "confirmar").map(c => c.corpo)).toEqual([{ confirmado: true }, { confirmado: false }]);
 
   await page.locator("#assistente-nova").click();
@@ -256,18 +366,22 @@ test("texto com HTML aparece como texto, sem virar elemento", async ({ page }) =
   await expect(page.locator(".ck-assist__msg--assistente .ck-assist__texto")).toHaveText(ataque);
   await expect(page.locator(".ck-assist__msg--usuario .ck-assist__texto")).toHaveText(ataque);
   await expect(page.locator("#assistente-pendente-descricao")).toHaveText(ataque);
-  const injetados = await page.locator('[data-cockpit-tool-panel="assistente"]').locator("img, b, script").count();
+  const injetados = await page.locator("#assistente-widget").locator("img, b, script").count();
   expect(injetados).toBe(0);
   expect(await page.evaluate(() => window.__xss)).toBeUndefined();
 });
 
-test("tela estreita: painel ocupa a largura sem rolagem horizontal", async ({ page }) => {
+test("tela estreita: o chat cabe na viewport sem rolagem horizontal", async ({ page }) => {
   await page.setViewportSize({ width: 360, height: 740 });
   await mockAssistente(page, { estado: PRONTO });
   await page.goto("/");
   await abrirAssistente(page);
-  const largura = await page.locator('[data-cockpit-tool-panel="assistente"]').evaluate(node => node.getBoundingClientRect().width);
-  expect(largura).toBeGreaterThan(300);
+  const caixa = await page.locator("#assistente-widget").evaluate(node => { const r = node.getBoundingClientRect(); return { esq: r.left, dir: r.right, topo: r.top, base: r.bottom }; });
+  expect(caixa.esq).toBeGreaterThanOrEqual(0);
+  expect(caixa.dir).toBeLessThanOrEqual(360);
+  expect(caixa.topo).toBeGreaterThanOrEqual(0);
+  expect(caixa.base).toBeLessThanOrEqual(740);
+  expect(caixa.dir - caixa.esq).toBeGreaterThan(300);
   expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true);
   await expect(page.locator("#assistente-texto")).toBeInViewport();
   await expect(page.locator("#assistente-enviar")).toBeInViewport();
@@ -285,7 +399,7 @@ test("painel com conversa e cartão pendente passa no axe nos dois temas", async
   await expect(page.locator("#assistente-pendente")).toBeVisible();
   for (const theme of ["light", "dark"]) {
     await page.locator("html").evaluate((root, value) => { root.dataset.theme = value; }, theme);
-    const audit = await new AxeBuilder({ page }).include('[data-cockpit-tool-panel="assistente"]').analyze();
+    const audit = await new AxeBuilder({ page }).include("#assistente-widget").analyze();
     expect(audit.violations.map(v => ({ id: v.id, targets: v.nodes.map(n => n.target) })), theme).toEqual([]);
   }
 });
@@ -456,7 +570,7 @@ test("Instruções permanentes: tela estreita cabe sem rolagem, devolve o Enviar
   await expect(page.locator("#assistente-instrucoes-salvar")).toBeInViewport();
   for (const theme of ["light", "dark"]) {
     await page.locator("html").evaluate((root, value) => { root.dataset.theme = value; }, theme);
-    const audit = await new AxeBuilder({ page }).include('[data-cockpit-tool-panel="assistente"]').analyze();
+    const audit = await new AxeBuilder({ page }).include("#assistente-widget").analyze();
     expect(audit.violations.map(v => ({ id: v.id, targets: v.nodes.map(n => n.target) })), theme).toEqual([]);
   }
   await page.locator("#assistente-instrucoes-botao").click();
@@ -567,7 +681,7 @@ test("Anexos: arquivo grande demais nem sobe; tela de 360 px cabe sem rolagem e 
   await expect(page.locator("#assistente-anexar")).toBeInViewport();
   for (const theme of ["light", "dark"]) {
     await page.locator("html").evaluate((root, value) => { root.dataset.theme = value; }, theme);
-    const audit = await new AxeBuilder({ page }).include('[data-cockpit-tool-panel="assistente"]').analyze();
+    const audit = await new AxeBuilder({ page }).include("#assistente-widget").analyze();
     expect(audit.violations.map(v => ({ id: v.id, targets: v.nodes.map(n => n.target) })), theme).toEqual([]);
   }
 });
@@ -596,7 +710,7 @@ test("Relatório gerado: mostra o botão Baixar com o arquivo, clicável e sem r
   expect(download.suggestedFilename()).toBe(nome);
   for (const theme of ["light", "dark"]) {
     await page.locator("html").evaluate((root, value) => { root.dataset.theme = value; }, theme);
-    const audit = await new AxeBuilder({ page }).include('[data-cockpit-tool-panel="assistente"]').analyze();
+    const audit = await new AxeBuilder({ page }).include("#assistente-widget").analyze();
     expect(audit.violations.map(v => ({ id: v.id, targets: v.nodes.map(n => n.target) })), theme).toEqual([]);
   }
 });
@@ -715,7 +829,7 @@ test("Lembretes: tela estreita cabe sem rolagem, devolve o Enviar ao fechar e pa
   expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true);
   for (const theme of ["light", "dark"]) {
     await page.locator("html").evaluate((root, value) => { root.dataset.theme = value; }, theme);
-    const audit = await new AxeBuilder({ page }).include('[data-cockpit-tool-panel="assistente"]').analyze();
+    const audit = await new AxeBuilder({ page }).include("#assistente-widget").analyze();
     expect(audit.violations.map(v => ({ id: v.id, targets: v.nodes.map(n => n.target) })), theme).toEqual([]);
   }
   await page.locator("#assistente-lembretes-botao").click();
@@ -742,7 +856,7 @@ test("Rascunho: Copiar texto copia a resposta, avisa em português e não rola n
   expect((await page.evaluate(() => navigator.clipboard.readText())).replace(/\r\n/g, "\n")).toBe(RASCUNHO);
   for (const theme of ["light", "dark"]) {
     await page.locator("html").evaluate((root, value) => { root.dataset.theme = value; }, theme);
-    const audit = await new AxeBuilder({ page }).include('[data-cockpit-tool-panel="assistente"]').analyze();
+    const audit = await new AxeBuilder({ page }).include("#assistente-widget").analyze();
     expect(audit.violations.map(v => ({ id: v.id, targets: v.nodes.map(n => n.target) })), theme).toEqual([]);
   }
 });
@@ -854,7 +968,7 @@ test("Busca na web: cartão com a fonte (texto puro, só link http/https), 360 p
   expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true);
   for (const theme of ["light", "dark"]) {
     await page.locator("html").evaluate((root, value) => { root.dataset.theme = value; }, theme);
-    const audit = await new AxeBuilder({ page }).include('[data-cockpit-tool-panel="assistente"]').analyze();
+    const audit = await new AxeBuilder({ page }).include("#assistente-widget").analyze();
     expect(audit.violations.map(v => ({ id: v.id, targets: v.nodes.map(n => n.target) })), theme).toEqual([]);
   }
 });
@@ -870,7 +984,7 @@ test("Busca na web: interruptor ligado em 360 px cabe sem rolagem e passa no axe
   expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true);
   for (const theme of ["light", "dark"]) {
     await page.locator("html").evaluate((root, value) => { root.dataset.theme = value; }, theme);
-    const audit = await new AxeBuilder({ page }).include('[data-cockpit-tool-panel="assistente"]').analyze();
+    const audit = await new AxeBuilder({ page }).include("#assistente-widget").analyze();
     expect(audit.violations.map(v => ({ id: v.id, targets: v.nodes.map(n => n.target) })), theme).toEqual([]);
   }
 });
@@ -892,7 +1006,7 @@ test("Consultas encadeadas: a lista mostra a contagem e cada ferramenta uma vez,
   expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true);
   for (const theme of ["light", "dark"]) {
     await page.locator("html").evaluate((root, value) => { root.dataset.theme = value; }, theme);
-    const audit = await new AxeBuilder({ page }).include('[data-cockpit-tool-panel="assistente"]').analyze();
+    const audit = await new AxeBuilder({ page }).include("#assistente-widget").analyze();
     expect(audit.violations.map(v => ({ id: v.id, targets: v.nodes.map(n => n.target) })), theme).toEqual([]);
   }
 });

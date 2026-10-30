@@ -5,7 +5,7 @@
 })(typeof window !== "undefined" ? window : globalThis, function createCockpitToolPanels(context) {
   "use strict";
   const { app, apiFetch } = context;
-  const toolKeys = { chamados: "F5", comparacao: "F6", apelidos: "F7", relatorio: "F8", assistente: "F9" };
+  const toolKeys = { chamados: "F5", comparacao: "F6", apelidos: "F7", relatorio: "F8" };
   const toolInfo = {
     chamados: ["Chamados", "Acompanhamento local de ordens relacionadas por série."],
     comparacao: ["Comparação", "Resultados salvos da comparação entre as bases locais."],
@@ -18,7 +18,6 @@
     "sebrae-historico": ["Histórico de importações do Dashboard Sebrae", "Importações do Dashboard e buscas de chamados novos, com o que mudou em cada uma."],
     // Sem loader em openPanel: recarregar a lista zeraria as edições dos chamados antigos (sebrae-dashboard.js).
     "sebrae-chamados": ["Chamados Sebrae", "Preencha os chamados novos e antigos, exporte as linhas e atualize o Dashboard."],
-    assistente: ["Assistente", "Conversa com a IA do Simpress; ações só rodam depois da sua confirmação."],
   };
   const relationLabels = {
     conferida: "Conferida", divergente: "Divergente", somente_simpress: "Só Simpress",
@@ -1651,7 +1650,6 @@
     if (tool === "evolucao") await loadEvolution();
     if (tool === "unidades") await loadUnits();
     if (tool === "sebrae-historico") await app.carregarPainelHistoricoSebrae?.();
-    if (tool === "assistente") await app.carregarAssistente?.();
   }
 
   // "OS deste equipamento" (Transporte): abre Chamados já filtrado pela série; a busca filtra a tabela de OS.
