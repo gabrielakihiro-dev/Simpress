@@ -696,7 +696,7 @@
 
       const evento = data.evento || {};
       app.fecharModalHistoricoComparacoes();
-      app.abrirModalComparacaoPlanilhas({
+      await app.mostrarResultadoNaAbaComparacao({
         ...(evento.comparacao || {}),
         evento_id: evento.id,
         horario_comparacao: evento.horario || evento.comparacao?.horario_comparacao,

@@ -18,7 +18,7 @@ test("stale-access report sorts by inactivity, shows its reference time, and sig
     ],
   };
 
-  harness.run("renderComparisonForTest(workflowComparison)");
+  harness.run("renderizarResultadoComparacao(workflowComparison)");
 
   const html = harness.element("comparacao-planilhas-conteudo").innerHTML;
   assert.ok(html.indexOf("PRNOTE-40") < html.indexOf("PRNOTE-14"));

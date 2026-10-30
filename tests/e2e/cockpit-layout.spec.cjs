@@ -82,9 +82,12 @@ test("Home status badges are buttons that open Comparação and Resumo without o
 
     await page.locator("#tab-home").click();
     await divergent.click();
-    await expect(page.locator("#cockpit-comparison-list .ck-linha-destaque, #cockpit-comparison-list [data-row-key].ck-linha-destaque").first()).toBeVisible();
-    await expect(page.locator("#cockpit-comparison-list")).toContainText("LENTO");
-    await expect(page.locator('[aria-label="Filtrar resultados da comparação"] button[aria-pressed="true"]')).toContainText("Localidade");
+    // A série abre na aba Comparação já posicionada na linha dela dentro do resultado completo.
+    await expect(page.locator('[data-cockpit-tool-panel="comparacao"]')).toBeVisible();
+    const target = page.locator('#comparacao-planilhas-conteudo [data-comparison-category="divergencias_local"][data-comparison-serial="LENTO"]:visible').first();
+    await expect(target).toContainText("LENTO");
+    await expect(target).toBeInViewport();
+    await expect(page.locator("#comparacao-planilhas-conteudo")).toContainText("Localidade divergente");
     expect(equipmentRequests).toEqual([]);
   } finally {
     await request.get("/__fixture_cockpit?comparacao=0");

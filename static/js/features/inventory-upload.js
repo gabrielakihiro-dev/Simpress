@@ -307,7 +307,7 @@
     avisarSelecaoAposAtualizacao(await selectionRefresh);
     const comparison = result.comparacao || {};
     if (exportarHistoricoAutomaticamente) await exportarHistoricoAposAtualizacao(comparison);
-    app.abrirModalComparacaoPlanilhas(comparison);
+    await app.mostrarResultadoNaAbaComparacao(comparison);
   }
 
   async function enviarPlanilhas() {

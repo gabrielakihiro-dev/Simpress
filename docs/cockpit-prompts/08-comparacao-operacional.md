@@ -56,6 +56,16 @@ Informe os arquivos alterados, o mapeamento dos dados e ações reaproveitados, 
 - Os registros exclusivos do Endpoint podem trazer o usuário em `usuario`; preserve essa informação na lista e no detalhe.
 - A exportação existente agrega as atualizações do dia. O controle deve informar **Exportar comparações do dia** e explicar esse alcance.
 
+## Revisão aprovada pelo usuário: resultado completo dentro da aba (substitui o layout KPIs + lista + detalhe)
+
+Esta seção prevalece sobre "Layout do painel" e sobre a regra 6 (não remover modais) no que se refere ao antigo modal `#modal-comparacao-planilhas`, que já foi removido.
+
+- A aba `Comparação` (`F6`) passa a hospedar o **resultado completo** da atualização das planilhas (busca, filtro por tipo, "somente com anotação", cartões-resumo que rolam à seção, tabelas/cards, anotações por linha com autosave, apelidos manuais, remoção/restauração de hostname duplicado, exportação). Os KPIs, as pílulas, a lista e o detalhe do painel anterior saem; ficam a barra superior (indicador de estado, seletor `Comparação`, `Nova comparação`, `Exportar`, `Atualizar histórico`) e, abaixo dela, a linha de fontes e o resultado (`#comparacao-planilhas-fontes`, `#comparacao-planilhas-conteudo`, `aria-live="polite"`).
+- O renderizador existente (`comparison-result-renderer.js`) é reutilizado sem mudar regras, rótulos aprovados ("no Endpoint", "na Simpress", "Endpoint"/"Simpress" por seção) nem textos. Dados e histórico gravados não mudam.
+- `Exportar` é o botão `#btn-exportar-resultado-comparacao` (`data-on-click="exportarResultadoComparacaoPlanilhas"`), um só na barra; ele substitui `#cockpit-comparison-export`.
+- O modal `Resultado da atualização das planilhas` (`#modal-comparacao-planilhas`) foi removido; o JS renderiza o resultado na aba. Atualizar planilhas e abrir um resultado pelo Histórico ou pelos atalhos da Home passam a abrir esta aba.
+- Layout: sem rolagem interna própria (rola o painel da ferramenta); a barra de filtros fica fixa (`sticky`) no topo do painel; cartões-resumo em grade de 4 colunas a partir de 1200px, 3 até 1199px, 2 até 720px e 1 até 420px; tabela no desktop e cards no mobile; sem rolagem horizontal de 320px a 2560px; transições de 150–300 ms com `prefers-reduced-motion`; temas claro e escuro pelos tokens `ck-*`.
+
 ## Desvio aprovado pelo usuário (etapa A, item 6)
 
 `#cockpit-comparison-export` mostra `Exportar comparações do dia` (comportamento igual). `#cockpit-comparison-refresh` virou botão só ícone (`#i-refresh`, `aria-label`/`title` `Atualizar histórico`) e é o último da barra.
