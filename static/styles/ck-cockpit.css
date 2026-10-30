@@ -1004,6 +1004,9 @@ html[data-theme], html[data-theme] body.cockpit-shell-body { background: var(--c
 .ck-assist__msg--usuario { align-self: flex-end; background: var(--cor-destaque-fundo); color: var(--cor-destaque-texto); border-color: var(--cor-destaque-forte); }
 .ck-assist__texto { margin: 0; white-space: pre-wrap; overflow-wrap: anywhere; font-size: var(--fs-base); }
 .ck-assist__ferramentas { margin: 4px 0 0; font-size: var(--fs-xs); color: var(--cor-texto-mudo); overflow-wrap: anywhere; }
+.ck-assist__arquivos { display: flex; flex-direction: column; align-items: flex-start; gap: 6px; margin-top: 8px; }
+.ck-assist__arquivos:empty { display: none; }
+.ck-assist__arquivo { max-width: 100%; height: auto; min-height: var(--altura-controle); padding-top: 6px; padding-bottom: 6px; white-space: normal; overflow-wrap: anywhere; text-align: left; line-height: 1.25; }
 .ck-assist__pendente { padding: 10px 12px; border-radius: var(--raio-md); background: var(--cor-alerta-fundo); color: var(--cor-alerta-texto); border: 1px solid currentColor; }
 .ck-assist__pendente:focus-visible { outline: 2px solid var(--cor-destaque); outline-offset: 2px; }
 .ck-assist__pendente .ck-grupo-botoes { margin-top: 8px; }
@@ -1012,22 +1015,68 @@ html[data-theme], html[data-theme] body.cockpit-shell-body { background: var(--c
 .ck-assist__campo textarea { width: 100%; resize: vertical; min-height: 4.5em; max-height: 40vh; }
 .ck-assist__acoes { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
 .ck-assist__contador { font-size: var(--fs-xs); color: var(--cor-texto-mudo); font-variant-numeric: tabular-nums; }
+.ck-assist__anexos { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 4px; }
+.ck-assist__anexos[hidden], .ck-assist__aviso[hidden] { display: none; }
+.ck-assist__anexos-status:empty { margin: -6px 0; } /* o aviso vazio não ocupa altura (nem a folga entre os itens) */
+.ck-assist__anexo { display: flex; align-items: center; justify-content: space-between; gap: 8px; padding: 6px 8px 6px 12px; border: 1px solid var(--cor-borda-suave); border-radius: var(--raio-md); background: var(--cor-superficie); }
+.ck-assist__anexo-texto { display: flex; flex-direction: column; min-width: 0; font-size: var(--fs-ui); }
+.ck-assist__anexo-nome { overflow-wrap: anywhere; color: var(--cor-texto); }
+.ck-assist__anexo-meta { font-size: var(--fs-xs); color: var(--cor-texto-mudo); }
+.ck-assist__anexo-alerta { font-size: var(--fs-xs); color: var(--cor-alerta-texto); overflow-wrap: anywhere; }
+.ck-assist__anexo .ck-btn { flex: none; }
+.ck-assist__aviso { margin: 0; padding: 8px 12px; border-radius: var(--raio-md); background: var(--cor-alerta-fundo); color: var(--cor-alerta-texto); font-size: var(--fs-xs); overflow-wrap: anywhere; }
+.ck-assist__instrucoes { display: flex; flex-direction: column; gap: 6px; padding: 10px 12px; border: 1px solid var(--cor-borda-suave); border-radius: var(--raio-md); background: var(--cor-superficie); }
+.ck-assist__instrucoes[hidden] { display: none; }
+.ck-assist__instrucoes p { margin: 0; overflow-wrap: anywhere; }
+.ck-assist__instrucoes .ck-det__titulo { margin: 0; }
+.ck-assist__lembretes-lista { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 4px; max-height: 40vh; overflow-y: auto; }
+.ck-assist__lembretes-lista[hidden], .ck-assist__lembretes p[hidden] { display: none; }
+.ck-assist__lembrete { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 8px; padding: 6px 8px 6px 12px; border: 1px solid var(--cor-borda-suave); border-radius: var(--raio-md); background: var(--cor-superficie-funda); }
+.ck-assist__lembrete-texto { overflow-wrap: anywhere; color: var(--cor-texto); }
+.ck-assist__lembrete--feito .ck-assist__lembrete-texto { text-decoration: line-through; color: var(--cor-texto-mudo); }
+.ck-assist__lembrete-acoes { flex: none; display: flex; align-items: center; flex-wrap: wrap; justify-content: flex-end; gap: 4px; }
+.ck-assist__lembretes #assistente-lembretes-status:empty { display: none; }
+.ck-assist__busca { display: flex; flex-direction: column; gap: 6px; padding-top: 8px; border-top: 1px solid var(--cor-borda-suave); }
+.ck-assist__interruptor { display: inline-flex; align-items: center; gap: 8px; min-height: var(--altura-controle); font-size: var(--fs-ui); color: var(--cor-texto); cursor: pointer; }
+.ck-assist__interruptor input { flex: none; width: 18px; height: 18px; accent-color: var(--cor-destaque); }
+.ck-assist__interruptor input:disabled { cursor: not-allowed; }
+.ck-assist__busca .ck-assist__aviso:empty { display: none; }
+.ck-assist__buscas { display: flex; flex-direction: column; gap: 6px; margin-top: 8px; }
+.ck-assist__busca-card { display: flex; flex-direction: column; gap: 4px; padding: 8px 10px; border: 1px solid var(--cor-borda-suave); border-left: 3px solid var(--cor-destaque); border-radius: var(--raio-md); background: var(--cor-superficie-funda); min-width: 0; }
+.ck-assist__busca-card p, .ck-assist__busca-card ul { margin: 0; overflow-wrap: anywhere; }
+.ck-assist__busca-titulo { font-size: var(--fs-xs); font-weight: 600; color: var(--cor-texto-mudo); }
+.ck-assist__busca-resumo { font-size: var(--fs-ui); color: var(--cor-texto); white-space: pre-wrap; }
+.ck-assist__busca-fontes { padding-left: 18px; font-size: var(--fs-xs); }
+.ck-assist__busca-fontes a { color: var(--cor-destaque-texto); text-decoration: underline; overflow-wrap: anywhere; }
+.ck-assist__busca-dominio { color: var(--cor-texto-mudo); }
+.ck-ferr-painel.ck-assist > .ck-assist__instrucoes { margin-left: 20px; margin-right: 20px; }
+.ck-assist__instrucoes:not([hidden]) ~ .ck-assist__lista { min-height: 80px; }
 .ck-ferr-painel.ck-assist > .ck-assist__lista, .ck-ferr-painel.ck-assist > .ck-assist__pendente { margin-left: 20px; margin-right: 20px; }
 .ck-ferr-painel.ck-assist > .ck-assist__form { padding: 0 20px 20px; }
 @media (max-width: 767.98px) {
-  .ck-ferr-painel.ck-assist > .ck-assist__lista, .ck-ferr-painel.ck-assist > .ck-assist__pendente { margin-left: 12px; margin-right: 12px; }
+  .ck-ferr-painel.ck-assist > .ck-assist__lista, .ck-ferr-painel.ck-assist > .ck-assist__pendente, .ck-ferr-painel.ck-assist > .ck-assist__instrucoes { margin-left: 12px; margin-right: 12px; }
   .ck-ferr-painel.ck-assist > .ck-assist__form { padding: 0 12px 12px; }
 }
 @media (max-width: 599px) { .ck-assist__msg { max-width: 100%; } }
 @media (max-width: 599px) {
-  /* Telas baixas: globo menor, botões da barra lado a lado e menos altura mínima, para o Enviar continuar à vista. */
+  /* Telas baixas: globo menor, botões da barra lado a lado (até três por linha) e menos altura mínima, para o Enviar continuar à vista. */
   .ck-assist__globo { width: 36px; height: 36px; }
   .ck-assist__status { flex-basis: calc(100% - 52px); }
-  .ck-assist__barra > .ck-btn { flex: 1 1 calc(50% - 4px); }
+  .ck-assist__barra > .ck-btn { flex: 1 1 auto; }
+  /* Com quatro botões (Lembretes entrou) só cabem numa linha sem o ícone e com menos folga lateral; os nomes continuam visíveis. */
+  .ck-assist__barra > .ck-btn { padding-inline: 6px; }
+  .ck-assist__barra > .ck-btn > .ck-ico { display: none; }
+  /* Sem largura para três botões ao lado do contador: Anexar vira só o ícone (o nome continua para leitores de tela e no title). */
+  .ck-assist__anexar { width: var(--altura-controle); padding: 0; justify-content: center; }
+  .ck-assist__anexar-rotulo { position: absolute; width: 1px; height: 1px; margin: -1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
   .ck-assist__lista { min-height: 120px; }
   .ck-assist__campo textarea { min-height: 3.5em; }
+  .ck-assist__instrucoes { padding: 8px 10px; }
+  /* Sem altura para tudo: editando as instruções, a conversa e a caixa de mensagem esperam; o botão Instruções volta a mostrá-las. */
+  .ck-assist__instrucoes:not([hidden]) ~ :is(.ck-assist__lista, .ck-assist__form) { display: none; }
+  .ck-assist__instrucoes textarea { min-height: 3em; max-height: 20vh; }
 }
 @media (prefers-reduced-motion: no-preference) {
-  .ck-assist__msg, .ck-assist__pendente { animation: ck-assist-entrada var(--duracao) var(--curva); }
+  .ck-assist__msg, .ck-assist__pendente, .ck-assist__instrucoes, .ck-assist__anexo, .ck-assist__lembrete, .ck-assist__busca-card, .ck-assist__aviso:not([hidden]) { animation: ck-assist-entrada var(--duracao) var(--curva); }
 }
 @keyframes ck-assist-entrada { from { opacity: 0; transform: translateY(4px); } to { opacity: 1; transform: none; } }

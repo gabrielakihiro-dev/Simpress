@@ -42,6 +42,8 @@ MAX_UPLOAD_REQUEST_BYTES = 2 * MAX_UPLOAD_BYTES + 1024 * 1024
 MAX_API_REQUEST_BYTES = 1024 * 1024
 # Assistant voice message: 16 kHz mono 16-bit WAV, 120 s = about 3.7 MiB.
 MAX_ASSISTANT_AUDIO_BYTES = 5 * 1024 * 1024
+# Assistant attachment (PDF, .docx or image): the route also limits each type (images are smaller).
+MAX_ASSISTANT_ATTACHMENT_BYTES = 10 * 1024 * 1024
 MAX_CONCURRENT_UPLOAD_REQUESTS = 1
 # Max idle gap between request body chunks; frees the single upload slot from stalled clients.
 REQUEST_BODY_IDLE_TIMEOUT_SECONDS = 30.0
@@ -81,6 +83,9 @@ ALIAS_HISTORY_FILE = STATE_DIR / "historico_alteracoes.json"
 COMPARISON_HISTORY_FILE = STATE_DIR / "historico_comparacoes" / "historico_comparacoes.json"
 TICKET_REPORT_FILE = STATE_DIR / "historico_chamados.json"
 TRANSFER_HISTORY_FILE = STATE_DIR / "historico_transferencias.json"
+ASSISTANT_INSTRUCTIONS_FILE = STATE_DIR / "assistente_instrucoes.json"
+ASSISTANT_NOTES_FILE = STATE_DIR / "assistente_notas.json"
+ASSISTANT_WEB_SEARCH_FILE = STATE_DIR / "assistente_busca_web.json"
 TRANSACTION_ROOT = BASE_DIR
 
 SUPPORTED_CONTRACT = 16467
