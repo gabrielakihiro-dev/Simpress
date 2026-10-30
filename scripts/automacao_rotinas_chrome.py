@@ -1557,6 +1557,9 @@ def pasta_dashboard_entrar(page: "Page") -> bool:
     return True
 
 
+LIMITE_AVISO_COPIAS = 5
+
+
 def _quantos_dashboards_na_lista(page: "Page") -> int:
     """Linhas cujo nome contém o nome do Dashboard: o original e cópias ("... (1)", "... - Cópia")."""
     return page.get_by_role("row").filter(has_text=re.compile(re.escape(Path(DASHBOARD_FINAL).stem), re.IGNORECASE)).count()
@@ -1566,6 +1569,10 @@ def duplicar_dashboard_na_pasta(page: "Page") -> None:
     """Linha do arquivo > Mais ações (...) > Duplicata. A cópia é só segurança: nunca é aberta, baixada, renomeada nem apagada."""
     linha = _linha_do_dashboard(page)
     antes = _quantos_dashboards_na_lista(page)
+    copias = antes - 1  # a lista inclui o original
+    log("Dashboard", f"Cópias de segurança já na pasta: {max(copias, 0)}.")
+    if copias > LIMITE_AVISO_COPIAS:
+        log("Dashboard", f"Aviso: há {copias} cópias de segurança na pasta DASHBOARD SEBRAE; apague as antigas à mão (a rotina não apaga).")
     log("Dashboard", "Criando a cópia de segurança (Mais ações > Duplicata)...")
     _abrir_mais_acoes(linha)
     duplicata = page.get_by_role("menuitem", name=_MENU_DUPLICATA).first

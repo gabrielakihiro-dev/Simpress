@@ -577,6 +577,23 @@ class EnviarDashboardTests(unittest.TestCase):
         self.assertIs(page.get_by_role.call_args.kwargs["name"], automacao._MENU_DUPLICATA)
         page.get_by_role.return_value.first.click.assert_called_once()
 
+    def _logs_da_duplicata(self, total_na_lista: int) -> str:
+        contagens = iter([total_na_lista, total_na_lista + 1])
+        with patch.object(automacao, "_linha_do_dashboard"), patch.object(automacao, "_abrir_mais_acoes"), \
+                patch.object(automacao, "_quantos_dashboards_na_lista", side_effect=lambda _p: next(contagens)), \
+                patch.object(automacao, "verificar_cancelamento"), patch.object(automacao, "log") as log:
+            automacao.duplicar_dashboard_na_pasta(MagicMock())
+        return "\n".join(str(c.args[1]) for c in log.call_args_list)
+
+    def test_duplicate_warns_when_there_are_more_than_five_copies(self):
+        textos = self._logs_da_duplicata(7)  # original + 6 cópias
+        self.assertIn("apague as antigas à mão", textos)
+        self.assertIn("6 cópias", textos)
+
+    def test_duplicate_does_not_warn_with_few_copies(self):
+        textos = self._logs_da_duplicata(3)  # original + 2 cópias
+        self.assertNotIn("apague", textos)
+
     def test_duplicate_stops_without_overwriting_when_the_copy_does_not_appear(self):
         page = MagicMock()
         with patch.object(automacao, "_linha_do_dashboard"), patch.object(automacao, "_abrir_mais_acoes"), \
