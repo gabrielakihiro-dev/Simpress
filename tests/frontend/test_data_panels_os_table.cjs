@@ -166,3 +166,20 @@ test("atualizarTabelaOs(true) recarrega as tabelas montadas, uma requisição de
   assert.ok(depois >= antes + 1);
   assert.match(status.textContent, /OS ·/);
 });
+
+test("triagem e atenção usam o grupo da série (grupoSerie) e combinam com a relação", async () => {
+  const grupos = { "SN-CONF": "em_dia", "SN-SOR": "atrasados" };
+  const { section } = await montar({ semBusca: true, grupoSerie: ticket => grupos[ticket.serie] });
+  panels.filtrarTabelaOs({ relacao: "", busca: "", triagem: "ativos" });
+  assert.deepEqual(visiveis(section), ["SN-CONF", "SN-SOR"], "ativos = qualquer série com chamado aberto");
+  panels.filtrarTabelaOs({ triagem: "atrasados" });
+  assert.deepEqual(visiveis(section), ["SN-SOR"]);
+  panels.filtrarTabelaOs({ triagem: "em_dia" });
+  assert.deepEqual(visiveis(section), ["SN-CONF"]);
+  panels.filtrarTabelaOs({ triagem: "", atencao: true });
+  assert.deepEqual(visiveis(section), ["SN-SOR"], "atenção = 3+ dias ou sem data");
+  panels.filtrarTabelaOs({ triagem: "ativos", atencao: true, relacao: "conferida" });
+  assert.deepEqual(visiveis(section), [], "triagem, atenção e relação se combinam");
+  panels.filtrarTabelaOs({ triagem: "", atencao: false, relacao: "" });
+  assert.deepEqual(visiveis(section), ["SN-CONF", "SN-SOR"]);
+});

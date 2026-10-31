@@ -19,6 +19,7 @@ from starlette.datastructures import UploadFile
 from domains.history_insights import compare_updates, latest_update, pending_rows
 from domains.monthly_report import ReportMonth, tickets_section
 from domains.ticket_reconciliation import ORACLE_FIELDS, TicketWorkbookError, _source_table
+from domains.sebrae_vinculos import vinculos_derivados
 from domains.ticket_reporting import build_ticket_workbook
 from routers.operations import TicketOsLinkPayload, TicketTimelineAnnotationPayload, create_operations_router
 
@@ -140,6 +141,45 @@ class TicketOsLinkRouteTests(unittest.TestCase):
             self.assertEqual(route_handler(make_router(), "/api/operacoes/chamados/vinculos-os", "GET")()["vinculos"], [
                 {"fonte": "oracle", "serie": "SN-1", "os": "7285070", "ano": 2026, "numero": "1117", "chamado": "UTIC-2026-1117"},
             ])
+
+
+class DashboardDerivedOsLinkTests(unittest.TestCase):
+    REPORT = {"chamados": [{"serie": "SN-1", "simpress": {"ordens_servico": ["7285070"]}}]}
+    OPEN = [{"numero": "UTIC-2026-0094", "automaticos": {"K": "sn1", "E": ""}}, {"numero": "linha:3", "automaticos": {"K": "SN-1"}}]
+
+    def get_links(self, root, derive, manual=None):
+        link_path = root / "os_chamados_vinculos.json"
+        if manual is not None:
+            link_path.write_text(json.dumps({"version": 1, "vinculos": manual}), encoding="utf-8")
+        (root / "tickets.json").write_text(json.dumps(self.REPORT), encoding="utf-8")
+        router = create_operations_router(
+            load_comparison_history=lambda: [], comparison_history_for_display=lambda event: event,
+            ticket_report_path=lambda: root / "tickets.json", transaction_root=lambda: root,
+            ticket_os_links_file=lambda: link_path, dashboard_vinculos=derive,
+        )
+        return route_handler(router, "/api/operacoes/chamados/vinculos-os", "GET")()["vinculos"]
+
+    def derive(self, report):
+        return vinculos_derivados(self.OPEN, report)
+
+    def test_dashboard_row_appears_in_the_get_marked_as_derived(self):
+        with tempfile.TemporaryDirectory() as directory:
+            links = self.get_links(Path(directory), self.derive)
+        self.assertEqual([(v["chamado"], v["origem"], v["os"]) for v in links], [("UTIC-2026-0094", "dashboard", "7285070")])
+
+    def test_manual_link_on_the_same_key_is_not_overridden(self):
+        manual = {json.dumps(["simpress", "SN1", "7285070"], separators=(",", ":")): {
+            "fonte": "simpress", "serie": "SN-1", "os": "7285070", "ano": 2026, "numero": "5", "chamado": "UTIC-2026-5"}}
+        with tempfile.TemporaryDirectory() as directory:
+            links = self.get_links(Path(directory), self.derive, manual)
+        self.assertEqual([v["chamado"] for v in links], ["UTIC-2026-5"])
+
+    def test_derivation_failure_returns_only_the_manual_links(self):
+        def broken(report):
+            raise RuntimeError("boom")
+
+        with tempfile.TemporaryDirectory() as directory:
+            self.assertEqual(self.get_links(Path(directory), broken), [])
 
 
 class TicketImportRouteTests(unittest.TestCase):

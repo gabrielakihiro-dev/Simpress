@@ -89,8 +89,11 @@ def create_operations_router(
     load_history_annotation_records: Optional[Callable[..., List[Dict[str, Any]]]] = None,
     ticket_import_services: Optional[TicketImportServices] = None,
     ticket_os_links_file: Optional[Callable[[], Path]] = None,
+    dashboard_vinculos: Optional[Callable[[Dict[str, Any]], List[Dict[str, Any]]]] = None,
 ):
-    """Build the operations routes; ``ticket_import_services`` shares the import with the inbox."""
+    """Build the operations routes; ``ticket_import_services`` shares the import with the inbox.
+
+    ``dashboard_vinculos(report)`` proposes links derived from the Sebrae Dashboard (``origem: "dashboard"``)."""
     router = APIRouter()
 
     @router.get("/api/operacoes/pendencias")
@@ -189,7 +192,19 @@ def create_operations_router(
     def get_ticket_os_links():
         path = ticket_os_links_file() if ticket_os_links_file else ticket_report_path().parent / "os_chamados_vinculos.json"
         data = read_ticket_os_links(path)
-        return {"vinculos": list(data["vinculos"].values())}
+        return {"vinculos": [*data["vinculos"].values(), *derived_ticket_os_links(data["vinculos"])]}
+
+    def derived_ticket_os_links(manual: Dict[str, Any]) -> List[Dict[str, Any]]:
+        """Dashboard-derived links; a manual link on the same key always wins, and a failure never breaks the GET.
+        shortcut: derived links are never stored, so clearing one in the editor makes it reappear; upgrade if a "dismissed" list is needed."""
+        if dashboard_vinculos is None:
+            return []
+        try:
+            derived = {ticket_os_link_key(item["fonte"], item["serie"], item["os"]): item for item in dashboard_vinculos(load_ticket_report())}
+        except Exception as error:  # noqa: BLE001 - log only the type, never ticket data
+            logger.warning("Vínculos de OS derivados do Dashboard indisponíveis (%s).", type(error).__name__)
+            return []
+        return [item for key, item in derived.items() if key not in manual]
 
     def validate_staged_ticket_os_links(staged: Path) -> None:
         read_ticket_os_links(staged)

@@ -70,7 +70,7 @@ Menu lateral:
 - **Home** — pesquisa de equipamentos.
 - **Transporte** — formulário de retirada e entrega (geração da planilha de transferência).
 - **Nova transferência** — limpa o formulário para começar outra.
-- **Ferramentas:** **Acompanhamento de Chamados**, **Atualizar planilhas**, **Exportar Excel** e, em **Históricos e Análises**, **Histórico de alterações** e **Catálogo de unidades**. No Catálogo, **Nova unidade** abre o formulário no próprio painel; para corrigir um CNPJ, clique no lápis ao lado dele, altere o campo e salve (atualizado em 31/10/2026).
+- **Ferramentas:** **Chamados**, **Atualizar planilhas**, **Exportar Excel** e, em **Históricos e Análises**, **Histórico de alterações** e **Catálogo de unidades**. No Catálogo, **Nova unidade** abre o formulário no próprio painel; para corrigir um CNPJ, clique no lápis ao lado dele, altere o campo e salve (atualizado em 31/10/2026).
 
 Para pesquisar: na **Home**, digite série, apelido/hostname, modelo, cidade ou nome do usuário e pressione `Enter` (ou clique em **Buscar Equipamento**). A lista rápida mostra até 15 resultados; **Mostrar mais** abre a pesquisa completa, com filtros de categoria (**Notebooks**, **MacBooks**, **Monitores**, **Fones**) e cidade.
 
@@ -148,12 +148,12 @@ Esta rotina relaciona o Excel **Acompanhamento de Pedidos** (Simpress) com o Exc
 
 ### Opção A — pela tela
 
-1. Abra **Acompanhamento de Chamados** no menu lateral e, em **Importação e histórico**, use os dois campos de arquivo.
+1. Abra **Chamados** (aba superior, atalho `F5`), clique em **Importar e gerenciar** e, no bloco **Importação e versões** que se abre na própria tela, use os dois campos de arquivo.
 2. Em **Simpress · Acompanhamento de Pedidos**, clique em **Escolher arquivo** e selecione o `.xlsx` (ou ZIP com uma única planilha `.xlsx`).
 3. Em **Oracle · Gestão de Solicitações**, clique em **Escolher arquivo** e selecione o `.xlsx`.
 4. Clique em **Importar planilhas** (até 60 MB por arquivo).
 
-**Como confirmar:** aparecem a mensagem "Planilhas importadas. As OS foram relacionadas pela série." e o aviso "Acompanhamento de chamados atualizado.", e a lista passa a mostrar a nova versão. Se faltar um dos arquivos, a tela pede "Selecione as duas planilhas para importar."
+**Como confirmar:** aparecem a mensagem "Planilhas importadas. As OS foram relacionadas pela série." e o aviso "Acompanhamento de chamados atualizado."; o bloco se fecha, a tabela de OS passa a mostrar a nova versão e o seletor de versões, as fontes importadas e os botões **Exportar Excel** e **Excluir importações antigas** ficam no mesmo bloco. Se faltar um dos arquivos, a tela pede "Selecione as duas planilhas para importar."
 
 ### Opção B — pela pasta local
 
@@ -183,7 +183,7 @@ Esta rotina relaciona o Excel **Acompanhamento de Pedidos** (Simpress) com o Exc
 
 - O lote sumiu de `pendentes` e apareceu em `data/state/entrada_chamados/processadas/<nome-do-lote>/`.
 - O arquivo `_resultado.json` desse lote contém `"status": "concluido"`.
-- Em **Acompanhamento de Chamados** aparece uma nova versão no histórico. Séries com OS diferentes entre as duas fontes ficam marcadas para conferência.
+- Em **Chamados**, o bloco **Importação e versões** passa a listar uma nova versão. Séries com OS diferentes entre as duas fontes ficam marcadas para conferência.
 
 **Se der errado:** o lote vai para `falhas`, com o motivo em `_resultado.json`. Nada é apagado. Corrija a causa e crie um lote com **outro nome**; um lote já registrado não é importado de novo.
 

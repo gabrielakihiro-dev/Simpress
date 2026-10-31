@@ -3,10 +3,11 @@ const test = require("node:test");
 const createDomUtils = require("../../static/js/shared/dom-utils.js");
 const historyFormat = require("../../static/js/shared/history-format.js");
 const createTicketRules = require("../../static/js/features/ticket-rules.js");
-const createTicketTracking = require("../../static/js/features/ticket-tracking.js");
 const createComparisonResultRenderer = require("../../static/js/ui/comparison-result-renderer.js");
 const createEquipmentSearchRenderers = require("../../static/js/ui/equipment-search-renderers.js");
 const createLoggedUserMarkers = require("../../static/js/ui/logged-user-markers.js");
+const panels = require("../../static/js/ui/data-panels.js");
+const { createFakeDocument } = require("./support/fake-dom.cjs");
 
 // Every text field gets its own tagged payload, so a failure names the field that leaked or was never rendered.
 const carga = campo => `"><img src=x onerror=alert(1)>#${campo}`;
@@ -128,49 +129,41 @@ test("comparison result renderer escapes every text field", () => {
   assert.ok(sincronizadas.includes(escapeHtml(carga("sinc_computador"))), "conteudoAnotacoesSincronizadas: hostname");
 });
 
-test("ticket card escapes Simpress and Oracle fields", () => {
-  const appState = { filtroChamadoSelecionado: null, filtroTriagemChamados: "", acompanhamentoChamadosAtual: null };
-  const gate = { invalidate() {}, begin: () => ({ id: 1, signal: undefined }), isCurrent: () => true };
-  const ticketTracking = createTicketTracking({
-    app: {}, appState, motion: null, dom, historyFormat,
-    transferUtils: { createRequestGate: () => gate },
-    ticketRules: createTicketRules(dom),
-    loggedUserMarkers: { marcador: loggedUserMarkers.marcador, conectar() {} },
-  });
-  appState.acompanhamentoChamadosAtual = {
-    snapshot_id: carga("snapshot"),
-    atualizado_em: carga("atualizado_em"),
-    fontes: { simpress: { arquivo: carga("arquivo_simpress") }, oracle: { arquivo: carga("arquivo_oracle") } },
-    resumo: {},
+test("OS table of the Chamados panel renders Simpress and Oracle fields as text", async () => {
+  const doc = createFakeDocument();
+  const report = {
     chamados: [{
-      serie: carga("serie"),
-      relacao: carga("relacao"),
-      simpress: {
-        pedidos: [carga("pedido")], ordens_venda: [carga("ordem_venda")], ordens_servico: [carga("os_simpress")],
-        status: [carga("status_simpress")], chamados_cliente: [carga("chamado_cliente")],
-        descricoes_produto: [carga("descricao_produto")], cidades_entrega: [carga("cidade_entrega")],
-        enderecos_entrega: [carga("endereco_entrega")], pedido_em_andamento: true,
-      },
-      oracle: [{
-        solicitacao: carga("solicitacao"), ordem_servico: carga("os_oracle"), status: carga("status_oracle"),
-        sub_status: carga("sub_status"), fila: carga("fila"), fase_atendimento: carga("fase"),
-        logradouro: carga("logradouro"), numero_endereco: carga("numero"), bairro: carga("bairro"), cidade: carga("cidade"),
-        atendido_pela_inibicao: carga("inibicao"), nome_filial: carga("filial"), status_entregas: carga("entregas"),
-        status_atividades: carga("atividades"), descricao: carga("descricao"),
-      }],
+      serie: carga("serie"), relacao: carga("relacao"),
+      simpress: { ordens_servico: [carga("os_simpress")], status: [carga("status_simpress")] },
+      oracle: [{ solicitacao: carga("solicitacao"), ordem_servico: "9001", fila: carga("fila"), descricao: carga("descricao") }],
     }],
   };
-  ticketTracking.renderizarAcompanhamentoChamados();
-  const html = document.getElementById("lista-acompanhamento-chamados").innerHTML;
+  panels.install({
+    document: doc,
+    MutationObserver: class { observe() {} },
+    CustomEvent: class { constructor(type) { this.type = type; } },
+    getComputedStyle: () => ({ display: "" }),
+    console: { warn() {} },
+    fetch: async url => {
+      const json = url === "/api/operacoes/chamados" ? report
+        : url === "/api/operacoes/chamados/vinculos-os" ? { vinculos: [] }
+        : url === "/api/equipamentos/usuarios-logados" ? { usuarios: {} } : null;
+      return { ok: json !== null, json: async () => json || {} };
+    },
+  });
+  const host = doc.createElement("div");
+  doc.body.append(host);
+  const section = panels.montarTabelaOs(host, {});
+  const status = section.querySelector(".ticket-summary-status");
+  for (let attempt = 0; attempt < 50 && !/OS ·/.test(status.textContent); attempt += 1) await new Promise(resolve => setImmediate(resolve));
 
-  assert.match(html, /data-ticket-serial=/, "o cartão deve ter sido renderizado");
-  afirmarCamposEscapados(html, [
-    "serie", "pedido", "ordem_venda", "os_simpress", "status_simpress", "chamado_cliente", "descricao_produto",
-    "cidade_entrega", "endereco_entrega", "solicitacao", "os_oracle", "status_oracle", "sub_status", "fila", "fase",
-    "inibicao", "entregas", "atividades", "snapshot",
-  ], "renderizarCartaoChamado");
-  const resumo = document.getElementById("resumo-acompanhamento-chamados").innerHTML;
-  afirmarCamposEscapados(resumo, ["arquivo_simpress", "arquivo_oracle"], "renderizarResumoChamados");
+  const rows = section.querySelectorAll("tbody tr[data-serial]").filter(row => !row.dataset.andamento);
+  // A tabela traz uma linha por OS da série (Simpress e Oracle).
+  assert.ok(rows.length >= 1, "a série deve ter sido renderizada");
+  assert.ok(rows.every(row => row.dataset.serial === carga("serie")), "o data-serial guarda o texto sem interpretar");
+  assert.equal(section.querySelectorAll("img").length, 0, "nenhuma tag <img> viva");
+  assert.equal(section.querySelectorAll("script").length, 0, "nenhuma tag <script> viva");
+  assert.ok(section.textContent.includes(carga("serie")), "a série aparece como texto");
 });
 
 test("equipment search rows escape every field, with and without highlighting", () => {

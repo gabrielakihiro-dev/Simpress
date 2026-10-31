@@ -30,7 +30,7 @@ Avisar quando há chamados abertos sem atualização há 7 dias ou mais, para qu
 | `paradas` (1) | OS paradas | 1 chamado aberto está sem atualização há 7 dias ou mais. O mais antigo está parado há 12 dias. | Ver chamados |
 | `paradas` (n) | OS paradas | 3 chamados abertos estão sem atualização há 7 dias ou mais. O mais antigo está parado há 21 dias. | Ver chamados |
 
-O botão abre o "Acompanhamento de chamados" (`abrirAcompanhamentoChamados`), o mesmo do menu.
+O botão abre o painel Chamados do Cockpit (`abrirPainelCockpit("chamados")`, o mesmo do menu e de `F5`), onde a triagem `3+ dias` e `Atenção · 3+ dias` destacam as OS paradas.
 
 ### Contrato da API
 
@@ -106,7 +106,7 @@ As seções aparecem na ordem do histórico, só as que têm linhas novas, com o
 3. Com linhas novas entre as duas atualizações mais recentes, o painel mostra "Divergências novas" com o total, as datas e as seções; restaurações e a linha de base fixada são ignoradas.
 4. Séries do Sebrae e PRNOTE* em Curitiba nunca contam como divergência nova.
 5. Com menos de duas atualizações, sem linhas novas ou com histórico ilegível, o cartão de divergências fica oculto.
-6. Os botões abrem "Acompanhamento de chamados" e a aba Comparação; o sino fecha com `Escape` ou clique fora e devolve o foco ao ser fechado por teclado.
+6. Os botões abrem o painel Chamados e a aba Comparação; o sino fecha com `Escape` ou clique fora e devolve o foco ao ser fechado por teclado.
 7. Os avisos não aparecem no Home; "Base desatualizada" permanece no Home.
 8. Nenhum histórico é regravado e o contador mostra a quantidade de avisos ativos, não a quantidade de chamados ou linhas divergentes.
 9. Funciona nos temas claro e escuro, no desktop e no celular; testes em Python cobrem as regras e testes e2e cobrem a lista, o contador, os botões e o fechamento.

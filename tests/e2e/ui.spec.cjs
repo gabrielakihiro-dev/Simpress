@@ -349,7 +349,7 @@ test("comparison summary cards jump to their section and clear filters that hide
   await expect(heading).toBeInViewport();
 });
 
-test("ticket tracking imports both workbooks and relates each serial to its OS", async ({ page }, testInfo) => {
+test("ticket tracking imports both workbooks in the Chamados panel and relates each serial to its OS", async ({ page }, testInfo) => {
   // The complete import flow includes two Axe scans and the native file chooser.
   test.slow();
   await page.setViewportSize({ width: testInfo.project.name === "mobile" ? 390 : 1366, height: 640 });
@@ -357,23 +357,21 @@ test("ticket tracking imports both workbooks and relates each serial to its OS",
   await openAnalysisMenu(page);
   await page.locator("#btn-acompanhamento-chamados:visible, #btn-chamados-menu:visible").click();
   await page.locator("#cockpit-tickets-manage").click();
-  const dialog = page.locator("#modal-acompanhamento-chamados");
-  await expect(dialog).toBeVisible();
-  await expect(dialog.locator("#filtros-avancados-acompanhamento-chamados")).toHaveCount(0);
-  await expect(dialog.locator("#filtro-acompanhamento-chamados")).toBeVisible();
-  await expect(dialog.locator("#somente-atencao-chamados")).toBeVisible();
-  await expect(dialog.locator("#triagem-diaria-acompanhamento-chamados")).toBeVisible();
-  const oraclePortalLink = dialog.getByRole("link", { name: "Abrir portal Oracle AgentWeb" });
-  const simpressPortalLink = dialog.getByRole("link", { name: "Abrir acompanhamento de chamados Simpress" });
+  // "Importar e gerenciar" abre o bloco do próprio painel, não o modal antigo.
+  await expect(page.locator("#modal-acompanhamento-chamados")).toHaveCount(0);
+  const managementPanel = page.locator("#cockpit-tickets-manage-panel");
+  await expect(managementPanel).toHaveAttribute("open", "");
+  await expect(page.locator("#cockpit-tickets-search")).toBeVisible();
+  await expect(page.locator("#cockpit-tickets-attention")).toBeVisible();
+  await expect(page.locator("#cockpit-tickets-triage")).toBeVisible();
+  const oraclePortalLink = managementPanel.getByRole("link", { name: "Abrir portal Oracle AgentWeb" });
+  const simpressPortalLink = managementPanel.getByRole("link", { name: "Abrir acompanhamento de chamados Simpress" });
   await expect(oraclePortalLink).toHaveAttribute("href", "https://simpress.custhelp.com/AgentWeb/");
   await expect(simpressPortalLink).toHaveAttribute("href", "https://ux.simpress.com.br/equipamentos/acompanhamento");
   await expect(oraclePortalLink.locator("svg")).toBeVisible();
   await expect(simpressPortalLink.locator("svg")).toBeVisible();
-  const managementPanel = page.locator("#painel-dados-acompanhamento-chamados");
-  await expect(managementPanel).not.toHaveAttribute("open", "");
-  await managementPanel.locator("summary").first().click();
-  const seletorSimpress = page.locator("label.ckp-arquivo", { has: page.locator("#arquivo-chamados-simpress") });
-  const seletorOracle = page.locator("label.ckp-arquivo", { has: page.locator("#arquivo-chamados-oracle") });
+  const seletorSimpress = page.locator("label.ckp-arquivo", { has: page.locator("#cockpit-tickets-file-simpress") });
+  const seletorOracle = page.locator("label.ckp-arquivo", { has: page.locator("#cockpit-tickets-file-oracle") });
   await expect(seletorSimpress).toBeVisible();
   await expect(seletorOracle).toBeVisible();
   await expect(seletorSimpress).toHaveAttribute("data-estado", "vazio");
@@ -384,8 +382,8 @@ test("ticket tracking imports both workbooks and relates each serial to its OS",
     expect(Math.abs(caixaSimpress.y - caixaOracle.y)).toBeLessThanOrEqual(1);
     expect(Math.abs(caixaSimpress.height - caixaOracle.height)).toBeLessThanOrEqual(1);
   }
-  await auditAccessibility(page, "#modal-acompanhamento-chamados");
-  await page.locator("#arquivo-chamados-simpress").setInputFiles({
+  await auditAccessibility(page, "#cockpit-tickets-manage-panel");
+  await page.locator("#cockpit-tickets-file-simpress").setInputFiles({
     name: "Acompanhamento_de_Pedidos.xlsx",
     mimeType: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
     buffer: Buffer.from("fixture xlsx"),
@@ -398,56 +396,27 @@ test("ticket tracking imports both workbooks and relates each serial to its OS",
     mimeType: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
     buffer: Buffer.from("fixture xlsx"),
   });
-  await expect(page.locator("#nome-arquivo-chamados-oracle")).toHaveText("Gestao_de_Solicitacoes.xlsx");
+  await expect(page.locator("#cockpit-tickets-file-oracle-name")).toHaveText("Gestao_de_Solicitacoes.xlsx");
   await page.getByRole("button", { name: "Importar planilhas", exact: true }).click();
-  await expect(page.locator("#status-importacao-chamados")).toContainText("Planilhas importadas");
-  await expect(page.locator("#nome-arquivo-chamados-simpress")).toHaveText("Escolher arquivo");
-  await expect(page.locator("#nome-arquivo-chamados-oracle")).toHaveText("Escolher arquivo");
-  await expect(page.locator("#lista-acompanhamento-chamados")).toContainText("DEMO-SN-001");
-  await expect(page.locator("#lista-acompanhamento-chamados")).toContainText("7285070");
-  await expect(page.locator("#lista-acompanhamento-chamados")).toContainText("261009-000816");
+  await expect(page.locator("#cockpit-tickets-import-status")).toContainText("Planilhas importadas");
+  await expect(page.locator("#cockpit-tickets-file-simpress-name")).toHaveText("Escolher arquivo");
+  await expect(page.locator("#cockpit-tickets-file-oracle-name")).toHaveText("Escolher arquivo");
   await expect(managementPanel).not.toHaveAttribute("open", "");
-  const ticketCard = page.locator('#lista-acompanhamento-chamados article[data-ticket-serial="DEMO-SN-001"]');
-  await expect(ticketCard).toContainText("OS Simpress");
-  await expect(ticketCard).toContainText("OS Oracle");
-  await expect(ticketCard).toContainText("Pedido");
-  // Série repetida no Endpoint (fixture): candidatos visíveis e o campo manual continua disponível.
-  await expect(ticketCard.locator("[data-logged-user-ambiguous]")).toHaveText("Endpoint ambíguo: usuario.a / usuario.b");
-  await expect(ticketCard.locator("[data-logged-user-form]")).toBeVisible();
-  const ticketDetails = ticketCard.locator('details[data-ticket-section="details"]');
-  await expect(ticketDetails).toBeVisible();
-  await expect(ticketDetails).not.toHaveAttribute("open", "");
-  await ticketDetails.locator(":scope > summary").click();
-  await expect(ticketDetails).toHaveAttribute("open", "");
-  const ticketDescription = ticketCard.locator(".ticket-oracle-description").first();
-  await expect(ticketDescription).toBeVisible();
-  await expect(ticketDescription).not.toHaveAttribute("open", "");
-  await expect(ticketDescription.locator("summary")).toContainText("Descrição do chamado");
-  await ticketDescription.locator("summary").click();
-  await expect(ticketDescription).toHaveAttribute("open", "");
-  await expect(ticketDescription).toContainText("Solicito suporte técnico para o equipamento de demonstração.");
-  await expect(ticketCard.locator('details[data-ticket-section="conference"]')).toHaveCount(0);
-  await expect(ticketCard).not.toContainText("Conferência das relações");
-  await page.locator("#filtro-acompanhamento-chamados").fill("DEMO-SN-001");
-  await expect(ticketDetails).toHaveAttribute("open", "");
-  await page.locator("#filtro-acompanhamento-chamados").fill("");
-  const contentScroller = dialog.locator("#conteudo-acompanhamento-chamados");
-  const scrollMetrics = await contentScroller.evaluate((element) => ({
-    clientHeight: element.clientHeight,
-    scrollHeight: element.scrollHeight,
-    clientWidth: element.clientWidth,
-    scrollWidth: element.scrollWidth,
-  }));
-  expect(scrollMetrics.scrollHeight).toBeGreaterThan(scrollMetrics.clientHeight);
-  expect(scrollMetrics.scrollWidth).toBeLessThanOrEqual(scrollMetrics.clientWidth);
-  await contentScroller.evaluate((element) => { element.scrollTop = element.scrollHeight; });
-  await expect.poll(() => contentScroller.evaluate((element) => element.scrollTop)).toBeGreaterThan(0);
-  await expect(dialog.getByRole("button", { name: "Fechar acompanhamento de chamados", exact: true })).toBeVisible();
+  await expect(page.locator("#cockpit-tickets-os")).toContainText("DEMO-SN-001");
+  await expect(page.locator("#cockpit-tickets-os")).toContainText("7285070");
+  await expect(page.locator("#cockpit-tickets-kpis")).toContainText("Séries");
   await expect.poll(async () => {
     const state = await (await page.request.get("/__ticket_import_state")).json();
     return state.imports;
   }).toBeGreaterThan(0);
-  await auditAccessibility(page, "#modal-acompanhamento-chamados");
+  // Versões, fontes e comparação ficam no mesmo bloco, que reabre pelo botão da barra.
+  await page.locator("#cockpit-tickets-manage").click();
+  await expect(managementPanel).toHaveAttribute("open", "");
+  await expect(page.locator("#cockpit-tickets-sources")).toContainText("Acompanhamento_de_Pedidos.xlsx");
+  await expect(page.locator("#cockpit-tickets-version option")).toHaveCount(3);
+  await expect(page.locator("#cockpit-tickets-export")).toBeEnabled();
+  await auditAccessibility(page, "#cockpit-tickets-manage-panel");
+  await expect(page.locator("#modal-acompanhamento-chamados")).toHaveCount(0);
 });
 
 test("layout stays within common responsive viewport widths", async ({ page }) => {
@@ -793,10 +762,9 @@ test("stale tickets and new divergences appear in the notification center", asyn
     await trigger.click();
     await tickets.getByRole("button", { name: "Ver chamados" }).click();
     await expect(panel).toBeHidden();
-    await expect(page.locator("#modal-acompanhamento-chamados")).toBeVisible();
-    await page.keyboard.press("Escape");
-    await expect(page.locator("#modal-acompanhamento-chamados")).toBeHidden();
-    await expect(trigger).toBeFocused();
+    // O alerta leva ao painel Chamados da tela principal (F5), não a um modal.
+    await expect(page.locator('[data-cockpit-tool-panel="chamados"]')).toBeVisible();
+    await expect(page.locator("#modal-acompanhamento-chamados")).toHaveCount(0);
 
     await trigger.click();
     await divergences.getByRole("button", { name: "Ver evolução" }).click();

@@ -1,123 +1,96 @@
 const { test, expect } = require("@playwright/test");
 
-test("ticket selection keeps the latest snapshot after overlapping responses", async ({ page }) => {
-  await page.goto("/");
+const HISTORICO = [
+  { id: "new", atualizado_em: "2026-10-12T12:00:00Z" },
+  { id: "old", atualizado_em: "2026-10-11T12:00:00Z" },
+];
+
+test("Chamados: a comparação não é sobrescrita por uma resposta atrasada de outra versão", async ({ page }) => {
   let releaseOld;
   let notifyOldRequested;
   const oldRequested = new Promise(resolve => { notifyOldRequested = resolve; });
-  await page.route("**/api/operacoes/chamados/snapshot/old", async route => {
-    notifyOldRequested();
-    await new Promise(release => { releaseOld = release; });
-    await route.fulfill({ json: { snapshot_id: "old", chamados: [{ serie: "SN-OLD", simpress: {}, oracle: [] }] } }).catch(() => {});
+  await page.route("**/api/operacoes/chamados", route => route.fulfill({ json: {
+    snapshot_id: "new", historico: [...HISTORICO, { id: "oldest", atualizado_em: "2026-10-10T12:00:00Z" }],
+    chamados: [{ serie: "SN-NEW", simpress: {}, oracle: [] }],
+  } }));
+  await page.route("**/api/operacoes/chamados/evolucao**", async route => {
+    const atual = new URL(route.request().url()).searchParams.get("atual");
+    if (atual === "old") {
+      notifyOldRequested();
+      await new Promise(release => { releaseOld = release; });
+      await route.fulfill({ json: { contagens: { novos: 9 }, mudancas: {} } }).catch(() => {});
+      return;
+    }
+    await route.fulfill({ json: { contagens: { novos: 1 }, mudancas: {} } });
   });
-  await page.route("**/api/operacoes/chamados/snapshot/latest", route => route.fulfill({
-    json: { snapshot_id: "latest", chamados: [{ serie: "SN-LATEST", simpress: {}, oracle: [] }] },
-  }));
-  await page.evaluate(() => {
-    const select = document.getElementById("versao-acompanhamento-chamados");
-    select.replaceChildren(new Option("Old", "old"), new Option("Latest", "latest"));
-    select.value = "old";
-    window.testOldSelection = selecionarVersaoChamados();
-  });
-  await oldRequested;
-  await page.evaluate(async () => {
-    document.getElementById("versao-acompanhamento-chamados").value = "latest";
-    await selecionarVersaoChamados();
-  });
-  releaseOld();
-  await page.evaluate(() => window.testOldSelection);
-  expect(await page.evaluate(() => SimpressApp.state.acompanhamentoChamadosAtual.snapshot_id)).toBe("latest");
-  expect(await page.locator("#lista-acompanhamento-chamados").textContent()).toContain("SN-LATEST");
-  expect(await page.locator("#lista-acompanhamento-chamados").textContent()).not.toContain("SN-OLD");
+  await page.goto("/");
+  await page.evaluate(() => { abrirPainelCockpit("chamados"); abrirGestaoChamadosCockpit(); });
+  const selector = page.locator("#cockpit-tickets-version");
+  await expect(selector).toHaveValue("new");
+  await expect(page.locator("#cockpit-tickets-evolution")).toContainText("1 novas");
+  try {
+    await selector.selectOption("old");
+    await oldRequested;
+    await selector.selectOption("new");
+    await expect(page.locator("#cockpit-tickets-evolution")).toContainText("1 novas");
+    releaseOld();
+    await page.waitForTimeout(150);
+    await expect(page.locator("#cockpit-tickets-evolution")).toContainText("1 novas");
+    await expect(page.locator("#cockpit-tickets-evolution")).not.toContainText("9 novas");
+  } finally {
+    releaseOld?.();
+  }
 });
 
-test("ticket export stays bound to the selected snapshot while it loads", async ({ page }) => {
-  let releaseLoading;
-  let notifyLoading;
-  const loadingStarted = new Promise(resolve => { notifyLoading = resolve; });
-  const exportedSnapshots = [];
+test("Chamados: Exportar Excel usa a versão selecionada e os filtros do painel", async ({ page }) => {
+  const exported = [];
   await page.route("**/api/operacoes/chamados", route => route.fulfill({ json: {
-    snapshot_id: "old",
-    historico: [
-      { id: "new", atualizado_em: "2026-10-12T12:00:00Z" },
-      { id: "old", atualizado_em: "2026-10-11T12:00:00Z" },
-    ],
-    chamados: [{ serie: "SN-OLD", simpress: {}, oracle: [] }],
+    snapshot_id: "new", historico: HISTORICO,
+    chamados: [{ serie: "SN-NEW", simpress: {}, oracle: [] }],
   } }));
-  await page.route("**/api/operacoes/chamados/snapshot/new", async route => {
-    notifyLoading();
-    await new Promise(resolve => { releaseLoading = resolve; });
-    await route.fulfill({ json: {
-      snapshot_id: "new",
-      chamados: [{ serie: "SN-NEW", simpress: {}, oracle: [] }],
-    } }).catch(() => {});
-  });
   await page.route("**/api/operacoes/chamados/evolucao**", route => route.fulfill({ json: {
-    contagens: { novos: 1, alterados: 0, iguais: 0, ausentes_arquivo: 0 },
-    mudancas: { novos: ["SN-NEW"] },
+    contagens: { novos: 1, alterados: 0, iguais: 0, ausentes_arquivo: 0 }, mudancas: { novos: ["SN-NEW"] },
   } }));
   await page.route("**/api/operacoes/chamados/exportar**", async route => {
-    exportedSnapshots.push(new URL(route.request().url()).searchParams.get("snapshot_id"));
+    exported.push(new URL(route.request().url()).searchParams);
     await route.fulfill({ status: 200, body: "synthetic xlsx", headers: {
       "content-type": "application/octet-stream",
       "content-disposition": "attachment; filename=chamados.xlsx",
     } });
   });
-
   await page.goto("/");
-  await page.evaluate(() => abrirAcompanhamentoChamados());
-  const selector = page.locator("#versao-acompanhamento-chamados");
-  const exportButton = page.locator("#btn-exportar-acompanhamento-chamados");
-  await expect(selector).toHaveValue("old");
-  await expect(page.locator("#lista-acompanhamento-chamados")).toContainText("SN-OLD");
+  await page.evaluate(() => { abrirPainelCockpit("chamados"); abrirGestaoChamadosCockpit(); });
+  const exportButton = page.locator("#cockpit-tickets-export");
+  await expect(page.locator("#cockpit-tickets-version")).toHaveValue("new");
+  await expect(exportButton).toBeEnabled();
 
-  try {
-    await page.evaluate(() => {
-      document.getElementById("versao-acompanhamento-chamados").value = "new";
-      window.pendingSnapshotLoad = selecionarVersaoChamados();
-    });
-    await loadingStarted;
-    await expect(exportButton).toBeDisabled();
-    await page.evaluate(() => exportarAcompanhamentoChamados());
-    expect(exportedSnapshots).toEqual([]);
-
-    releaseLoading();
-    await page.evaluate(() => window.pendingSnapshotLoad);
-    await expect(page.locator("#lista-acompanhamento-chamados")).toContainText("SN-NEW");
-    await expect(exportButton).toBeEnabled();
-    await page.evaluate(() => exportarAcompanhamentoChamados());
-    expect(exportedSnapshots).toEqual(["new"]);
-  } finally {
-    releaseLoading?.();
-  }
+  await page.locator("#cockpit-tickets-version").selectOption("old");
+  await page.locator("#cockpit-tickets-attention").check();
+  await exportButton.click();
+  await expect(page.getByText("Planilha Exportada com Sucesso!")).toBeVisible();
+  expect(exported).toHaveLength(1);
+  expect(exported[0].get("snapshot_id")).toBe("old");
+  expect(exported[0].get("attention_only")).toBe("true");
+  await expect(exportButton).toBeEnabled();
 });
 
-test("clearing the ticket snapshot also clears its comparison", async ({ page }) => {
+test("Chamados: limpar a versão também limpa a comparação e bloqueia a exportação", async ({ page }) => {
   await page.route("**/api/operacoes/chamados", route => route.fulfill({ json: {
-    snapshot_id: "new",
-    historico: [
-      { id: "new", atualizado_em: "2026-10-12T12:00:00Z" },
-      { id: "old", atualizado_em: "2026-10-11T12:00:00Z" },
-    ],
+    snapshot_id: "new", historico: HISTORICO,
     chamados: [{ serie: "SN-NEW", simpress: {}, oracle: [] }],
   } }));
   await page.route("**/api/operacoes/chamados/evolucao**", route => route.fulfill({ json: {
-    contagens: { novos: 7, alterados: 2, iguais: 1, ausentes_arquivo: 0 },
-    mudancas: { novos: ["SN-NEW"] },
+    contagens: { novos: 7, alterados: 2, iguais: 1, ausentes_arquivo: 0 }, mudancas: { novos: ["SN-NEW"] },
   } }));
-
   await page.goto("/");
-  await page.evaluate(() => abrirAcompanhamentoChamados());
-  const evolution = page.locator("#evolucao-acompanhamento-chamados");
+  await page.evaluate(() => { abrirPainelCockpit("chamados"); abrirGestaoChamadosCockpit(); });
+  const evolution = page.locator("#cockpit-tickets-evolution");
   await expect(evolution).toContainText("7 novas");
 
-  await page.evaluate(async () => {
-    document.getElementById("versao-acompanhamento-chamados").value = "";
-    await selecionarVersaoChamados();
-  });
-  expect(await page.evaluate(() => SimpressApp.state.acompanhamentoChamadosAtual)).toBeNull();
+  await page.locator("#cockpit-tickets-version").selectOption("");
   await expect(evolution).toHaveText("Nenhuma importação selecionada.");
   await expect(evolution).not.toContainText("7 novas");
+  await expect(page.locator("#cockpit-tickets-export")).toBeDisabled();
 });
 
 test("extracted DOM helpers preserve safe rendering of external content", async ({ page }) => {

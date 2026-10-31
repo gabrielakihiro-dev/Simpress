@@ -15,7 +15,7 @@ Estas instruções se aplicam ao modo padrão de arquivos locais.
 | Comparação e atualização | O mesmo par de inventários |
 | Geração de transferência | Inventários e modelo com o layout oficial de transferência |
 | Exportação de equipamentos | Inventários e modelo com colunas de série e apelido e o mesmo conjunto de séries da base ativa |
-| Acompanhamento de chamados | O par de exportações de chamados Simpress e Oracle |
+| Chamados (`Importar e gerenciar`) | O par de exportações de chamados Simpress e Oracle |
 
 O inventário Simpress aceita `.xlsx` ou o ZIP original com exatamente uma planilha `.xlsx`. Envie a exportação completa de 50 colunas, incluindo o CNPJ de instalação. O Endpoint aceita `.xlsx`. Os dois inventários são obrigatórios também na primeira carga. Cada envio de inventário ou modelo e a planilha extraída do ZIP podem ter até 60 MB; chamados também aceitam até 60 MB por arquivo.
 

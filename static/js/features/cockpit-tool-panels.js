@@ -33,6 +33,7 @@
   let selectedUnitKey = "";
   let returnTarget = null;
   let ticketData = null;
+  let ticketTriage = "";
   let comparisonEvents = [];
   let selectedComparisonId = "";
   let selectedComparison = null;
@@ -191,7 +192,9 @@
     target.replaceChildren(node);
   }
 
-  function relationText(record) { return relationLabels[record?.relacao] || String(record?.relacao || "Relação indisponível"); }
+  // Object.hasOwn: uma relação como "constructor" não pode herdar entradas do protótipo.
+  const ownEntry = (table, key) => (Object.hasOwn(table, key) ? table[key] : undefined);
+  function relationText(record) { return ownEntry(relationLabels, record?.relacao) || String(record?.relacao || "Relação indisponível"); }
 
   function ticketOrders(record) {
     const oracle = (Array.isArray(record?.oracle) ? record.oracle : [])
@@ -200,24 +203,61 @@
     return { oracle, simpress };
   }
 
+  // Campos do Andamento da série: fila, fase, endereço, atendimento, etapa e previsão do pedido.
+  // Os helpers vêm de SimpressTicketRules (publicados em app); sem eles o campo simplesmente não aparece.
+  function ticketExtraFields(record) {
+    const rules = name => (typeof app?.[name] === "function" ? app[name] : null);
+    const list = values => (Array.isArray(values) ? values : []).filter(Boolean).join(", ");
+    const compare = rules("compararOrdensServicoDecrescente");
+    const oracle = [...(Array.isArray(record.oracle) ? record.oracle : [])];
+    if (compare) oracle.sort((left, right) => compare(left.ordem_servico, right.ordem_servico));
+    const current = oracle[0] || {};
+    const simpress = record.simpress || {};
+    const address = [current.logradouro, current.numero_endereco, current.bairro, current.cidade]
+      .map(value => String(value || "").trim()).filter(Boolean).join(", ");
+    const providers = (rules("atendimentosDoChamado")?.(record) || []).filter(name => name !== "Não informado");
+    const stages = rules("etapasProcessoPedido")?.(simpress) || [];
+    const formatDate = rules("formatarDataEtapa") || (value => value);
+    const forecast = stages.find(stage => stage.chave === "previsao_entrega" && stage.data);
+    const lastStage = [...stages].reverse().find(stage => stage.chave !== "previsao_entrega" && stage.data);
+    const format = context.historyFormat?.formatarHorarioHistorico;
+    const age = oracle.length ? rules("idadeAtualizacaoChamado")?.(current)?.rotulo : "";
+    const updated = current.ultima_atualizacao ? (format ? format(current.ultima_atualizacao) : current.ultima_atualizacao) : "";
+    return [
+      ["Solicitações Oracle", list(oracle.map(item => item.solicitacao))],
+      ["Fila", current.fila], ["Fase", current.fase_atendimento],
+      ["Atendimento", providers.join(", ")],
+      ["Cidade", list(rules("cidadesDoChamado")?.(record))],
+      ["Endereço Oracle", address],
+      ["Pedido Simpress", list(simpress.pedidos)],
+      ["Endereço de entrega", simpress.pedido_em_andamento ? list(simpress.enderecos_entrega) : ""],
+      ["Etapa atual", lastStage ? `${lastStage.rotulo} · ${formatDate(lastStage.data)}` : ""],
+      ["Previsão de entrega", forecast ? formatDate(forecast.data) : ""],
+      ["Última atualização Oracle", [updated, age].filter(Boolean).join(" · ")],
+      ["Chamado do cliente", list(rules("chamadosClienteInformados")?.(simpress.chamados_cliente))],
+      ["Descrição do chamado", current.descricao ? (rules("resumirDescricaoChamado")?.(current.descricao) || String(current.descricao)) : ""],
+    ];
+  }
+
   // Conteúdo da linha "Andamento" de uma série (callback aoExpandirSerie da tabela de OS).
   function renderTicketDetail(record, target) {
     if (!record) return renderEmpty(target, "Série não encontrada na importação atual.");
     const { oracle, simpress } = ticketOrders(record);
     const oracleRecords = Array.isArray(record.oracle) ? record.oracle : [];
     const simpressRecord = record.simpress || {};
-    const details = [
+    const attention = app.classificarAtencaoChamado?.(record);
+    const relation = element("p", "ck-nota", "Relação: ");
+    relation.append(badge(relationText(record), ownEntry(relationTones, record.relacao)));
+    if (attention?.em_atencao) relation.append(" ", badge(attention.motivo || "Atenção", "warning"));
+    const fields = element("div", "");
+    renderDetails(fields, [
       ["Ordens no Oracle", oracle.length ? oracle.join(", ") : "Nenhuma ordem informada"],
       ["Ordens na Simpress", simpress.length ? simpress.join(", ") : "Nenhuma ordem informada"],
       ["Status Oracle", oracleRecords.map(item => [item.status, item.sub_status].filter(Boolean).join(" · ")).filter(Boolean).join(" / ")],
-      ["Última atualização Oracle", oracleRecords.map(item => item.ultima_atualizacao).filter(Boolean).join(" / ")],
       ["Status Simpress", (Array.isArray(simpressRecord.status) ? simpressRecord.status : []).filter(Boolean).join(" / ")],
-    ];
-    const relation = element("p", "ck-nota", "Relação: ");
-    relation.append(badge(relationText(record), relationTones[record.relacao]));
-    const fields = element("div", "");
-    renderDetails(fields, details);
-    const note = element("p", "ck-nota", "Os dados exibidos vêm da última importação local. Só o número do chamado UTIC pode ser salvo aqui.");
+      ...ticketExtraFields(record),
+    ]);
+    const note = element("p", "ck-nota", "Os dados vêm da importação mais recente. A próxima ação de cada versão pode ser registrada na linha do tempo.");
     const timeline = element("section", "ck-det-bloco");
     timeline.append(element("h3", "", "Andamento registrado"));
     const events = element("div", "");
@@ -248,10 +288,48 @@
       if (changes.length) body.append(element("p", "ck-tempo__meta", changes.map(change =>
         `${change.campo || "Campo"}: ${timelineValue(change.anterior) || "(vazio)"} → ${timelineValue(change.atual) || "(vazio)"}`,
       ).join(" · ")));
-      if (event.anotacao) body.append(element("p", "ck-nota", event.anotacao));
+      body.append(ticketAnnotationField(event));
       list.append(item);
     });
     target.replaceChildren(list);
+  }
+
+  // Anotação por versão da linha do tempo (próxima ação ou o que já foi feito), salva sozinha com o limite de 2.000 caracteres.
+  function ticketAnnotationField(event) {
+    const field = element("label", "ck-chamados-anotacao");
+    field.append(element("span", "ck-chamados-anotacao__rotulo", "Próxima ação ou o que já foi feito"));
+    const textarea = element("textarea", "annotation-field");
+    textarea.rows = 2;
+    textarea.maxLength = 2000;
+    textarea.value = event.anotacao || "";
+    textarea.placeholder = "Ex.: cobrar atualização do parceiro, OS concluída...";
+    textarea.dataset.annotationVersion = JSON.stringify({
+      anotacao_revisoes: event.anotacao_revisoes || [],
+      anotacao_conflito: Boolean(event.anotacao_conflito),
+      anotacao_conflitos: event.anotacao_conflitos || [],
+      anotacao_bases_ausentes: event.anotacao_bases_ausentes || [],
+      anotacao_integridade_invalida: Boolean(event.anotacao_integridade_invalida),
+    });
+    const status = element("span", `annotation-status${event.anotacao ? " is-saved" : ""}`, event.anotacao ? "Anotação salva" : "");
+    status.setAttribute("aria-live", "polite");
+    const retry = element("button", "annotation-retry", "Tentar sincronizar novamente");
+    retry.type = "button";
+    retry.hidden = true;
+    retry.setAttribute("aria-label", "Tentar novamente a sincronização desta anotação");
+    field.append(textarea, status, retry);
+    const autosave = globalThis.HistoryAnnotationAutosave;
+    if (autosave && event.snapshot_id && event.item_id) {
+      autosave.attachAnnotationAutosave({
+        textarea, status, retryButton: retry, eventId: event.snapshot_id, itemId: event.item_id,
+        send: ({ eventId, itemId, annotation, revisionId, baseRevisions, resolveConflict }) => fetch(
+          `/api/operacoes/chamados/linha-do-tempo/${encodeURIComponent(eventId)}/${encodeURIComponent(itemId)}`,
+          { method: "PUT", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ anotacao: annotation, revisao_id: revisionId, base_revisoes: baseRevisions, resolver_conflito: resolveConflict }) },
+        ),
+      });
+    } else {
+      textarea.readOnly = true;
+    }
+    return field;
   }
 
   async function loadTicketTimeline(record, target) {
@@ -280,10 +358,66 @@
     ]);
   }
 
-  // Busca e Relação só filtram as linhas já montadas pela tabela de OS (data-panels).
+  const ticketTriageGroups = [["ativos", "Ativos", ""], ["atrasados", "3+ dias", "alerta"], ["sem_data", "Sem data", "alerta"], ["em_dia", "Atualizados <3 dias", "ok"]];
+
+  // Triagem pelo grupo da série (regra em ticket-rules): os números contam a importação inteira, não só o filtro atual.
+  function renderTicketTriage() {
+    const host = byId("cockpit-tickets-triage");
+    if (!host) return;
+    const records = Array.isArray(ticketData?.chamados) ? ticketData.chamados : [];
+    const groupOf = app.grupoTriagemChamado;
+    if (typeof groupOf !== "function" || !records.length) { host.hidden = true; return; }
+    const counts = { ativos: 0, atrasados: 0, sem_data: 0, em_dia: 0 };
+    records.forEach(record => {
+      const group = groupOf(record);
+      if (!group) return;
+      counts.ativos += 1;
+      counts[group] += 1;
+    });
+    const head = element("div", "ckp-triagem__cab");
+    const title = element("h3", "ckp-triagem__titulo", "Triagem por atualização no Oracle");
+    title.id = "cockpit-tickets-triage-title";
+    head.append(title, element("span", "ck-chamados-triagem__resumo",
+      `${counts.ativos} de ${records.length} séries com chamado aberto no Oracle · ${records.length - counts.ativos} sem chamado aberto`));
+    const buttons = element("div", "ckp-triagem__nums");
+    ticketTriageGroups.forEach(([key, label, status]) => {
+      const button = element("button", "ckp-triagem__num ck-chamados-triagem__botao");
+      button.type = "button";
+      button.dataset.triagem = key;
+      if (status) button.dataset.status = status;
+      button.setAttribute("aria-pressed", String(ticketTriage === key));
+      button.append(element("span", "ck-chamados-triagem__rotulo", label), element("span", "ck-chamados-triagem__valor", counts[key]));
+      buttons.append(button);
+    });
+    host.replaceChildren(head, buttons);
+    host.hidden = false;
+  }
+
+  // Busca, Relação, Atenção e Triagem só filtram as linhas já montadas pela tabela de OS (data-panels).
   function filterTicketTable() {
     const relation = byId("cockpit-tickets-relation").value;
-    dataPanels()?.filtrarTabelaOs({ busca: byId("cockpit-tickets-search").value, relacao: relation === "todos" ? "" : relation });
+    dataPanels()?.filtrarTabelaOs({
+      busca: byId("cockpit-tickets-search").value, relacao: relation === "todos" ? "" : relation,
+      triagem: ticketTriage, atencao: Boolean(byId("cockpit-tickets-attention")?.checked),
+    });
+  }
+
+  function selectTicketTriage(event) {
+    const button = event.target.closest?.("[data-triagem]");
+    if (!button) return;
+    ticketTriage = ticketTriage === button.dataset.triagem ? "" : button.dataset.triagem;
+    renderTicketTriage();
+    filterTicketTable();
+    byId("cockpit-tickets-triage").querySelector(`[data-triagem="${ticketTriage}"]`)?.focus();
+  }
+
+  function clearTicketFilters() {
+    byId("cockpit-tickets-search").value = "";
+    byId("cockpit-tickets-relation").value = "todos";
+    byId("cockpit-tickets-attention").checked = false;
+    ticketTriage = "";
+    renderTicketTriage();
+    filterTicketTable();
   }
 
   const dataPanels = () => globalThis.SimpressDataPanels;
@@ -296,7 +430,13 @@
     const section = mounted || panels?.montarTabelaOs(host, {
       titulo: "Ordens de serviço por série", semBusca: true,
       aoExpandirSerie: expandTicketSeries,
-      aoCarregar: report => { ticketData = report; renderTicketKpis(); },
+      grupoSerie: app.grupoTriagemChamado,
+      aoCarregar: report => {
+        ticketData = report;
+        renderTicketKpis();
+        renderTicketTriage();
+        app.sincronizarGestaoChamadosCockpit?.(report);
+      },
     });
     if (!section) return renderError(host, null, "A tabela de ordens de serviço não está disponível.");
     filterTicketTable();
@@ -1179,7 +1319,9 @@
     if (!root) return;
     byId("cockpit-tickets-search").addEventListener("input", filterTicketTable);
     byId("cockpit-tickets-relation").addEventListener("change", filterTicketTable);
-    byId("cockpit-tickets-manage").addEventListener("click", () => app.abrirAcompanhamentoChamados(true));
+    byId("cockpit-tickets-attention").addEventListener("change", filterTicketTable);
+    byId("cockpit-tickets-clear").addEventListener("click", clearTicketFilters);
+    byId("cockpit-tickets-triage").addEventListener("click", selectTicketTriage);
     byId("cockpit-comparison-new").addEventListener("click", openNewComparison);
     byId("cockpit-comparison-event").addEventListener("change", event => {
       selectedComparisonId = String(event.currentTarget.value || "");
@@ -1290,6 +1432,23 @@
     search?.dispatchEvent(new Event("input", { bubbles: true }));
   }
 
+  // Botão da OS (tabela de Chamados): garante o painel aberto, mostra a linha da OS, abre o Andamento da série e destaca.
+  async function abrirChamadoDaOs(_fontes, serie, os) {
+    if (activeTool !== "chamados") await openPanel("chamados");
+    const host = byId("cockpit-tickets-os");
+    const findRow = () => [...host.querySelectorAll("tbody tr[data-serial]")]
+      .find(row => row.dataset.serial === String(serie) && (!os || row.dataset.os === String(os)));
+    let row = findRow();
+    if (row?.hidden) {
+      clearTicketFilters();
+      row = findRow();
+    }
+    if (!row) return;
+    const toggle = [...host.querySelectorAll(".ck-os__andamento-btn")].find(button => button.dataset.serie === String(serie));
+    if (toggle?.getAttribute("aria-expanded") !== "true") toggle?.click();
+    destacarLinhaCockpit(row);
+  }
+
   // Voltar: retorna ao painel aberto antes; sem anterior (ou com restoreFocus=false) fecha para a tela principal.
   function goBack(restoreFocus = true) {
     const target = previousTool;
@@ -1307,6 +1466,7 @@
     abrirPainelCockpit: openPanel,
     abrirComparacaoDaSerie,
     abrirChamadosDoEquipamento,
+    abrirChamadoDaOs,
     destacarLinhaCockpit,
     fecharPainelCockpit: goBack,
     recarregarUnidadesCockpit: loadUnits,

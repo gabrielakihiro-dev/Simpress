@@ -26,7 +26,7 @@ Em 28/10/2026 foi criada a coluna **G (Título)**; o que vinha de G em diante de
 | B | Categoria | Manual no site |
 | C | CHAMADO | SoftExpert (número completo) |
 | D | STATUS CHAMADO | Manual no site (`EM ABERTO` / `FINALIZADO`) |
-| E | OS | Só se a série em K já estiver vinculada a um chamado/OS; senão vazio |
+| E | OS | Só se a série em K já estiver vinculada a um chamado/OS; senão vazio. Ver "Ligação UTIC ↔ OS pela série" abaixo |
 | F | Atendimento Realizado | SoftExpert: texto integral de **Detalhes do Atendimento Realizado** (campo concluído, somente leitura); CPF mascarado |
 | G | Título | SoftExpert: título do chamado |
 | H | Descrição Chamado | SoftExpert: descrição do Registro (vazia = vazio, sem usar o título); CPF mascarado |
@@ -141,6 +141,15 @@ Passos, nesta ordem (a interface real foi descrita pelo usuário em imagens; os 
 Detalhes confirmados no SoftExpert real (30/10/2026, chamado `UTIC-2026-1253`): **Categoria de Solução** e **Solução** são combos de texto pesquisável (`input` que abre uma lista; o código digita e escolhe a opção exata, nunca a primeira parecida). Antes de preencher, a função confere o cabeçalho do formulário (número do chamado e `Solicitante`); para chamados criados por API (`API SEBRAE`) o `Solicitante` do cabeçalho pode vir vazio ou só no `Iniciador`, e o texto do cabeçalho é lido sem acento e sem diferença de maiúsculas, com as quebras de linha mantidas. Nesse teste o e-mail ao solicitante ficou desmarcado (solicitante API SEBRAE), a finalização foi concluída e a coluna R não foi gravada porque a máquina não tinha Dashboard importado (`Não há Dashboard importado utilizável; a coluna R não foi gravada.`).
 
 Proibido e sem nenhum clique: **Solicitar Complemento**, **Enviar para outra equipe**, **Mais ações**, **Salvar**, **Reatribuir** e qualquer outro botão de escrita. `ROTULOS_PROIBIDOS` e o guarda de `clicar` continuam valendo para todo o restante do módulo; só os rótulos `Finalizar` e o `Enviar` do anexo são liberados, por um escopo estreito que existe somente durante `finalizar_chamado`. Finalizar é irreversível: o primeiro teste real para antes do `Finalizar` e só conclui depois do "pode finalizar" do usuário no chat. Com `confirmar_final=False` e PDF, o anexo **é enviado de verdade** (o `Enviar` do upload persiste no chamado); só o `Finalizar` fica de fora. Os testes da bancada (SoftExpert falso, Chrome headless) cobrem o fluxo; **nada disso foi executado no SoftExpert real**.
+
+### Ligação UTIC ↔ OS pela série (31/10/2026)
+
+Ao importar o Dashboard e rodar a busca, o chamado e a OS da mesma série ficam ligados nos dois sentidos, sem digitação:
+
+- **Dashboard → tabela de OS.** Cada linha com UTIC completo em C (`UTIC-AAAA-N`) e série em K propõe um vínculo. A OS-alvo é a de E, se a série a tem; senão a única OS da série no relatório de chamados. Zero ou várias OS é ambíguo e não gera vínculo. Cada vínculo carrega `origem: "dashboard"`, aparece na coluna `Chamado` da tabela de OS (Chamados e Resumo) e é montado em `domains/sebrae_vinculos.py` (`vinculos_derivados`).
+- **Tabela de OS → Dashboard.** Em `Atualizar Dashboard` e nas sugestões, E recebe a OS do vínculo desse UTIC (`os_do_chamado`; com várias, a maior), sempre só em célula vazia. Vínculo manual do UTIC vale antes da série.
+- **Regras.** O vínculo manual de `os_chamados_vinculos.json` vence o derivado da mesma fonte, série e OS. Vínculos derivados **não são gravados**: `GET /api/operacoes/chamados/vinculos-os` os calcula a cada leitura; limpar um derivado no editor não o remove, ele reaparece. Se o mesmo UTIC reivindicar a mesma fonte, série e OS por dois chamados diferentes, nenhum dos dois entra. Falha no cálculo é registrada no log (só o tipo do erro) e a rota devolve só os manuais. Nada é escrito no SoftExpert, no SharePoint nem no Dashboard além da célula E já descrita.
+- **Testes.** `tests/test_sebrae_vinculos.py`, `tests/test_sebrae_novos.py`, `tests/test_operations.py`.
 
 ### Integração na Automação do site (30/10/2026)
 
