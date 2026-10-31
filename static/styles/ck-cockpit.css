@@ -988,6 +988,28 @@ html[data-theme], html[data-theme] body.cockpit-shell-body { background: var(--c
 .sebrae-chamado__texto p { margin: 4px 0 0; max-height: 9em; overflow: auto; font-size: var(--fs-sm); white-space: pre-wrap; overflow-wrap: anywhere; }
 .sebrae-chamado__manuais { display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 8px; }
 .sebrae-avisos { margin: 4px 0 0; padding-left: 18px; }
+.sebrae-chamado__finalizar { display: flex; flex-direction: column; align-items: flex-start; gap: 6px; padding-top: 8px; border-top: 1px solid var(--cor-borda-suave); }
+.sebrae-chamado__finalizar .ck-campo, .sebrae-chamado__finalizar textarea { width: 100%; }
+.sebrae-chamado__finalizar p { margin: 0; overflow-wrap: anywhere; }
+.sebrae-chamado__pdf-linha { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 8px; }
+.sebrae-chamado__pdf-linha .ck-btn[hidden] { display: none; }
+.sebrae-chamado__feedback[data-estado="ok"] { color: var(--cor-ok-texto); }
+.sebrae-chamado__feedback[data-estado="erro"], .sebrae-chamado__resultado[data-estado="erro"] { color: var(--cor-erro-texto); }
+.sebrae-chamado__resultado[data-estado="ok"], .sebrae-chamado__resultado[data-estado="ja_finalizado"] { color: var(--cor-ok-texto); }
+.sebrae-chamado__resultado[data-estado="nao_encontrado"], .sebrae-chamado__resultado[data-estado="sem_descricao"] { color: var(--cor-alerta-texto); }
+.sebrae-fechar { margin-top: 8px; }
+.sebrae-fechar[hidden], .sebrae-sharepoint[hidden], .sebrae-rascunho[hidden] { display: none; }
+.sebrae-rascunho { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; margin-top: 8px; }
+.sebrae-rascunho > p { margin: 0; overflow-wrap: anywhere; }
+.sebrae-fechar__item[data-status="erro"] { color: var(--cor-erro-texto); }
+.sebrae-fechar__item[data-status="nao_encontrado"] { color: var(--cor-alerta-texto); }
+.sebrae-fechar__item { overflow-wrap: anywhere; }
+.sebrae-sharepoint { display: flex; flex-direction: column; align-items: flex-start; gap: 6px; margin-top: 8px; padding: 10px; border: 1px solid var(--cor-erro-texto); border-radius: var(--raio-md); background: var(--cor-erro-fundo); color: var(--cor-erro-texto); font-size: var(--fs-sm); overflow-wrap: anywhere; }
+.sebrae-sharepoint p, .sebrae-sharepoint ol { margin: 0; }
+.sebrae-sharepoint ol { padding-left: 20px; }
+@media (prefers-reduced-motion: no-preference) {
+  .sebrae-chamado__feedback, .sebrae-chamado__resultado, .sebrae-fechar, .sebrae-sharepoint { animation: sebrae-historico-entrada var(--duracao) var(--curva); }
+}
 .sebrae-antigos { margin-top: 10px; }
 .sebrae-antigos > summary { cursor: pointer; font-size: var(--fs-sm); color: var(--cor-texto-mudo); }
 .sebrae-blocos { display: flex; flex-direction: column; align-items: flex-start; gap: 8px; margin-top: 8px; }
