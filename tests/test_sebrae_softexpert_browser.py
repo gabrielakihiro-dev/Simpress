@@ -702,6 +702,7 @@ class SoftExpertNaBancadaTests(unittest.TestCase):
             patch.object(se, "ESPERA_LISTA_MS", 10_000),
             patch.object(se, "ESPERA_PAGINA_MS", 5_000),
             patch.object(se, "ESPERA_ROLAGEM_MS", 1_500),
+            patch.object(se, "ESPERA_PRIMEIRAS_LINHAS_MS", 1_500),
             patch.object(se, "ESPERA_ABERTURA_MS", 10_000),
             patch.object(se, "ESPERA_ESTAVEL_MS", 3_000),
             patch.object(se, "INTERVALO_MS", 100),
