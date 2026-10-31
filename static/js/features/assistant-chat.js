@@ -32,6 +32,10 @@
   let lembretes = [];
   let lembretesOcupados = false;
   let lembreteApagando = "";
+  let historico = [];
+  let historicoApagando = "";
+  let historicoOcupado = false;
+  let conversaAberta = null;
   // Anexos: o servidor guarda só em memória (30 min, apagados em "Nova conversa"); aqui fica a lista para mostrar.
   const LIMITE_ANEXO_BYTES = 10 * 1024 * 1024;
   const ROTULO_TIPO = { pdf: "PDF", docx: "Word", imagem: "Imagem" };
@@ -439,7 +443,7 @@
   function alternarInstrucoesAssistente() {
     const area = byId("assistente-instrucoes");
     area.hidden = !area.hidden;
-    if (!area.hidden) fecharLembretes();
+    if (!area.hidden) { fecharLembretes(); fecharHistorico(); }
     byId("assistente-instrucoes-botao").setAttribute("aria-expanded", String(!area.hidden));
     if (area.hidden) byId("assistente-instrucoes-botao").focus();
     else {
@@ -592,6 +596,7 @@
     }
     byId("assistente-instrucoes").hidden = true;
     byId("assistente-instrucoes-botao").setAttribute("aria-expanded", "false");
+    fecharHistorico();
     area.hidden = false;
     byId("assistente-lembretes-botao").setAttribute("aria-expanded", "true");
     mostrarStatusLembretes("Carregando os lembretes…");
@@ -644,6 +649,251 @@
 
   function apagarLembreteAssistente(id) {
     return alterarLembrete(id, { method: "DELETE", errorMessage: "Não foi possível apagar o lembrete." }, "Lembrete apagado.");
+  }
+
+  // Histórico: só leitura; o servidor guarda o texto já mascarado (sem CPF, e-mail, telefone, senha nem nomes).
+  function mostrarStatusHistorico(texto) {
+    byId("assistente-historico-status").textContent = texto;
+  }
+
+  function fecharHistorico() {
+    byId("assistente-historico").hidden = true;
+    byId("assistente-historico-botao").setAttribute("aria-expanded", "false");
+    historicoApagando = "";
+    mostrarListaHistorico();
+  }
+
+  function mostrarListaHistorico() {
+    byId("assistente-historico-leitura").hidden = true;
+    byId("assistente-historico-lista-voltar").hidden = true;
+    byId("assistente-historico-exportar").hidden = true;
+    conversaAberta = null;
+    desenharHistorico();
+  }
+
+  function desenharHistorico() {
+    const lista = byId("assistente-historico-lista");
+    lista.replaceChildren(...historico.map(conversa => {
+      const id = String(conversa.id);
+      const titulo = String(conversa.titulo || "Conversa sem título");
+      const item = document.createElement("li");
+      item.className = "ck-assist__lembrete";
+      item.dataset.conversaId = id;
+      const corpo = document.createElement("span");
+      corpo.className = "ck-assist__anexo-texto";
+      const abrir = createTextElement("button", "ck-assist__lembrete-texto", titulo);
+      abrir.type = "button";
+      abrir.dataset.onClick = "abrirConversaHistoricoAssistente";
+      abrir.dataset.args = JSON.stringify([id]);
+      corpo.append(abrir);
+      const quando = String(conversa.atualizada_em || "");
+      const partes = [];
+      if (quando) partes.push(`${dataBrasileira(quando)} ${quando.slice(11, 16)}`);
+      partes.push(`${Number(conversa.mensagens) || 0} mensagens`);
+      corpo.append(createTextElement("span", "ck-assist__anexo-meta", partes.join(" · ")));
+      item.append(corpo);
+      const acoes = document.createElement("span");
+      acoes.className = "ck-assist__lembrete-acoes";
+      if (id === historicoApagando) {
+        acoes.append(
+          createTextElement("span", "ck-assist__anexo-meta", "Apagar esta conversa?"),
+          botaoLembrete("Apagar", "ck-btn--primario ck-btn--sm", "apagarConversaHistoricoAssistente", id, { aria: `Confirmar: apagar conversa ${titulo}` }),
+          botaoLembrete("Cancelar", "ck-btn--secundario ck-btn--sm", "cancelarApagarConversaHistoricoAssistente", id),
+        );
+      } else {
+        acoes.append(
+          botaoLembrete("Exportar PDF", "ck-btn--fantasma ck-btn--sm ck-btn--icone", "exportarPdfHistoricoAssistente", id, { icone: "#i-download", aria: `Exportar PDF: ${titulo}` }),
+          botaoLembrete("Apagar conversa", "ck-btn--fantasma ck-btn--sm ck-btn--icone", "pedirApagarConversaHistoricoAssistente", id, { icone: "#i-trash", aria: `Apagar conversa: ${titulo}` }),
+        );
+      }
+      item.append(acoes);
+      return item;
+    }));
+    lista.hidden = !historico.length;
+    byId("assistente-historico-vazio").hidden = historico.length > 0;
+  }
+
+  function focarConversaHistorico(id, seletor) {
+    const item = [...byId("assistente-historico-lista").children].find(li => li.dataset.conversaId === id);
+    (item?.querySelector(seletor) || byId("assistente-historico-titulo")).focus();
+  }
+
+  async function carregarHistorico() {
+    historicoOcupado = true;
+    try {
+      const dados = await apiFetch("/api/assistente/conversas", { errorMessage: "Não foi possível carregar o histórico." });
+      historico = Array.isArray(dados?.conversas) ? dados.conversas : [];
+      return true;
+    } catch (error) {
+      mostrarStatusHistorico(error?.message || "Não foi possível carregar o histórico.");
+      return false;
+    } finally {
+      historicoOcupado = false;
+      desenharHistorico();
+    }
+  }
+
+  async function alternarHistoricoAssistente() {
+    const area = byId("assistente-historico");
+    if (!area.hidden) {
+      fecharHistorico();
+      byId("assistente-historico-botao").focus();
+      return;
+    }
+    byId("assistente-instrucoes").hidden = true;
+    byId("assistente-instrucoes-botao").setAttribute("aria-expanded", "false");
+    fecharLembretes();
+    area.hidden = false;
+    byId("assistente-historico-botao").setAttribute("aria-expanded", "true");
+    mostrarListaHistorico();
+    mostrarStatusHistorico("Carregando o histórico…");
+    if (await carregarHistorico()) mostrarStatusHistorico("");
+    byId("assistente-historico-titulo").focus();
+  }
+
+  async function buscarConversaHistorico(id) {
+    mostrarStatusHistorico("");
+    try {
+      return await apiFetch(`/api/assistente/conversas/${encodeURIComponent(id)}`, { errorMessage: "Não foi possível abrir a conversa." });
+    } catch (error) {
+      mostrarStatusHistorico(error?.status === 404 ? "Essa conversa não existe mais." : error?.message || "Não foi possível abrir a conversa.");
+      if (error?.status === 404) await carregarHistorico();
+      return null;
+    }
+  }
+
+  async function abrirConversaHistoricoAssistente(id) {
+    if (historicoOcupado) return;
+    const conversa = await buscarConversaHistorico(id);
+    if (!conversa) return;
+    conversaAberta = conversa;
+    const leitura = byId("assistente-historico-leitura");
+    leitura.replaceChildren(...(Array.isArray(conversa?.mensagens) ? conversa.mensagens : []).map(mensagem => {
+      const autor = mensagem?.papel === "usuario" ? "usuario" : "assistente";
+      const item = document.createElement("div");
+      item.className = `ck-assist__msg ck-assist__msg--${autor}`;
+      item.append(createTextElement("span", "ck-sr", autor === "usuario" ? "Você:" : "Assistente:"));
+      item.append(createTextElement("p", "ck-assist__texto", String(mensagem?.texto ?? "")));
+      return item;
+    }));
+    byId("assistente-historico-lista").hidden = true;
+    byId("assistente-historico-vazio").hidden = true;
+    leitura.hidden = false;
+    byId("assistente-historico-lista-voltar").hidden = false;
+    byId("assistente-historico-exportar").hidden = false;
+    leitura.scrollTop = 0;
+    leitura.focus();
+  }
+
+  // PDF: documento isolado num iframe (estilo Cockpit em assistente-pdf.css) e impressão do navegador ("Salvar como PDF"); nada sai do computador.
+  async function exportarPdfHistoricoAssistente(id) {
+    if (historicoOcupado) return;
+    const conversa = typeof id === "string" && id !== conversaAberta?.id ? await buscarConversaHistorico(id) : conversaAberta;
+    if (!conversa) return;
+    const quando = String(conversa.atualizada_em || "");
+    const dataHora = quando ? `${dataBrasileira(quando)} ${quando.slice(11, 16)}` : "";
+    const titulo = String(conversa.titulo || "Conversa sem título");
+    const mensagens = Array.isArray(conversa.mensagens) ? conversa.mensagens : [];
+    document.querySelectorAll("iframe[data-assistente-pdf]").forEach(antigo => antigo.remove());
+    const quadro = document.createElement("iframe");
+    quadro.dataset.assistentePdf = "";
+    quadro.setAttribute("aria-hidden", "true");
+    quadro.tabIndex = -1;
+    quadro.style.cssText = "position:fixed;right:0;bottom:0;width:0;height:0;border:0";
+    document.body.append(quadro);
+    const doc = quadro.contentDocument;
+    doc.open();
+    doc.write('<!doctype html><html lang="pt-BR"><head><meta charset="utf-8"><title></title></head><body></body></html>');
+    doc.close();
+    doc.title = `Simpress - Assistente - ${titulo.replace(/[\\/:*?"<>|]+/g, " ").trim().slice(0, 40)}${quando ? ` - ${quando.slice(0, 10)}` : ""}`;
+    for (const href of ["/static/vendor/fonts.css", "/static/styles/assistente-pdf.css"]) {
+      const link = doc.createElement("link");
+      link.rel = "stylesheet";
+      link.href = href;
+      doc.head.append(link);
+    }
+    const pagina = doc.createElement("main");
+    pagina.className = "pdf";
+    const cab = doc.createElement("header");
+    cab.className = "pdf__cab";
+    const marca = doc.createElement("p");
+    marca.className = "pdf__marca";
+    marca.textContent = "Simpress · Assistente";
+    const h1 = doc.createElement("h1");
+    h1.className = "pdf__titulo";
+    h1.textContent = titulo;
+    const meta = doc.createElement("ul");
+    meta.className = "pdf__meta";
+    for (const texto of [dataHora && `Atualizada em ${dataHora}`, `${mensagens.length} mensagens`]) {
+      if (!texto) continue;
+      const li = doc.createElement("li");
+      li.textContent = texto;
+      meta.append(li);
+    }
+    cab.append(marca, h1, meta);
+    const lista = doc.createElement("div");
+    lista.className = "pdf__msgs";
+    for (const mensagem of mensagens) {
+      const usuario = mensagem?.papel === "usuario";
+      const caixa = doc.createElement("section");
+      caixa.className = `pdf__msg pdf__msg--${usuario ? "usuario" : "assistente"}`;
+      const autor = doc.createElement("p");
+      autor.className = "pdf__autor";
+      autor.textContent = usuario ? "Você" : "Assistente";
+      const texto = doc.createElement("p");
+      texto.className = "pdf__texto";
+      texto.textContent = String(mensagem?.texto ?? "");
+      caixa.append(autor, texto);
+      lista.append(caixa);
+    }
+    const rodape = doc.createElement("footer");
+    rodape.className = "pdf__rodape";
+    rodape.textContent = "Gerado no Simpress · dados pessoais já mascarados no histórico";
+    pagina.append(cab, lista, rodape);
+    doc.body.append(pagina);
+    await Promise.all([...doc.querySelectorAll("link")].map(link => new Promise(resolve => {
+      link.addEventListener("load", resolve, { once: true });
+      link.addEventListener("error", resolve, { once: true });
+    })));
+    await doc.fonts?.ready;
+    mostrarStatusHistorico("Abrindo a impressão: escolha “Salvar como PDF”.");
+    quadro.contentWindow.addEventListener("afterprint", () => quadro.remove(), { once: true });
+    quadro.contentWindow.focus();
+    quadro.contentWindow.print();
+  }
+
+  function fecharConversaHistoricoAssistente() {
+    mostrarListaHistorico();
+    byId("assistente-historico-titulo").focus();
+  }
+
+  function pedirApagarConversaHistoricoAssistente(id) {
+    if (historicoOcupado) return;
+    historicoApagando = id;
+    mostrarStatusHistorico("");
+    desenharHistorico();
+    focarConversaHistorico(id, "button[data-on-click=cancelarApagarConversaHistoricoAssistente]");
+  }
+
+  function cancelarApagarConversaHistoricoAssistente(id) {
+    historicoApagando = "";
+    desenharHistorico();
+    focarConversaHistorico(id, "button[data-on-click=pedirApagarConversaHistoricoAssistente]");
+  }
+
+  async function apagarConversaHistoricoAssistente(id) {
+    if (historicoOcupado) return;
+    historicoOcupado = true;
+    let mensagem = "Conversa apagada.";
+    try {
+      await apiFetch(`/api/assistente/conversas/${encodeURIComponent(id)}`, { method: "DELETE", errorMessage: "Não foi possível apagar a conversa." });
+    } catch (error) {
+      mensagem = error?.status === 404 ? "Essa conversa não existe mais." : error?.message || "Não foi possível apagar a conversa.";
+    }
+    historicoOcupado = false;
+    historicoApagando = "";
+    if (await carregarHistorico()) mostrarStatusHistorico(mensagem);
+    byId("assistente-historico-titulo").focus();
   }
 
   // Relatórios gerados: o servidor devolve só id/nome/tamanho; o link aponta sempre para a rota fixa de download (id validado).
@@ -857,6 +1107,7 @@
     const botao = byId("btn-assistente");
     if (widget.hidden) {
       widget.hidden = false;
+      if (widget.dataset.modo && widget.dataset.modo !== "normal") definirModo("normal");
       botao.setAttribute("aria-expanded", "true");
       atualizarGlobo();
       focarProximo();
@@ -869,6 +1120,43 @@
     widget.hidden = true;
     botao.setAttribute("aria-expanded", "false");
     if (focoDentro) botao.focus();
+  }
+
+  // Tamanho do chat: "normal", "minimizado" (só a barra de título) ou "maximizado" (tela toda). Reabrir o chat volta ao normal.
+  function definirModo(modo) {
+    const widget = byId("assistente-widget");
+    const minimizado = modo === "minimizado";
+    const maximizado = modo === "maximizado";
+    widget.dataset.modo = modo;
+    const botaoMin = byId("assistente-minimizar");
+    botaoMin.setAttribute("aria-expanded", String(!minimizado));
+    botaoMin.setAttribute("aria-label", minimizado ? "Restaurar Assistente" : "Minimizar Assistente");
+    botaoMin.title = minimizado ? "Restaurar" : "Minimizar";
+    botaoMin.querySelector("use").setAttribute("href", minimizado ? "#i-chevron-up" : "#i-minus");
+    const botaoMax = byId("assistente-maximizar");
+    botaoMax.setAttribute("aria-label", maximizado ? "Restaurar tamanho do Assistente" : "Maximizar Assistente");
+    botaoMax.title = maximizado ? "Restaurar tamanho" : "Maximizar";
+    botaoMax.querySelector("use").setAttribute("href", maximizado ? "#i-restaurar" : "#i-maximize");
+    // O conteúdo some ao minimizar: o foco vai para o botão, para não ficar preso num campo oculto.
+    if (minimizado && widget.contains(document.activeElement) && document.activeElement !== botaoMin) botaoMin.focus();
+    else if (!minimizado) focarProximo();
+  }
+
+  function minimizarAssistente() {
+    definirModo(byId("assistente-widget").dataset.modo === "minimizado" ? "normal" : "minimizado");
+  }
+
+  function maximizarAssistente() {
+    definirModo(byId("assistente-widget").dataset.modo === "maximizado" ? "normal" : "maximizado");
+  }
+
+  // Fecha Instruções, Lembretes e Histórico e mostra a conversa de novo.
+  function voltarConversaAssistente() {
+    byId("assistente-instrucoes").hidden = true;
+    byId("assistente-instrucoes-botao").setAttribute("aria-expanded", "false");
+    fecharLembretes();
+    fecharHistorico();
+    focarProximo();
   }
 
   function paraWav(amostras) {
@@ -1086,10 +1374,12 @@
   }
 
   return {
-    carregarAssistente, alternarAssistente, enviarMensagemAssistente, confirmarPendenteAssistente, cancelarPendenteAssistente, cancelarEnvioAssistente,
+    carregarAssistente, alternarAssistente, minimizarAssistente, maximizarAssistente, voltarConversaAssistente, enviarMensagemAssistente, confirmarPendenteAssistente, cancelarPendenteAssistente, cancelarEnvioAssistente,
     novaConversaAssistente, contarMensagemAssistente, teclaAssistente, alternarGravacaoAssistente, alternarVozAssistente,
     alternarInstrucoesAssistente, alternarBuscaWebAssistente, contarInstrucoesAssistente, salvarInstrucoesAssistente, limparInstrucoesAssistente,
     anexarArquivoAssistente, removerAnexoAssistente,
+    alternarHistoricoAssistente, abrirConversaHistoricoAssistente, fecharConversaHistoricoAssistente,
+    exportarPdfHistoricoAssistente, pedirApagarConversaHistoricoAssistente, cancelarApagarConversaHistoricoAssistente, apagarConversaHistoricoAssistente,
     alternarLembretesAssistente, marcarLembreteAssistente, pedirApagarLembreteAssistente, cancelarApagarLembreteAssistente, apagarLembreteAssistente,
   };
 });
