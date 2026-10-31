@@ -5,7 +5,7 @@
 })(typeof window !== "undefined" ? window : globalThis, function createComparisonHistory(context) {
   "use strict";
   const { app, motion, inventoryOperationKey } = context;
-  const { escapeHtml, pluralize } = context.dom;
+  const { pluralize } = context.dom;
   const { formatarNomeFonteHistorico, formatarHorarioHistorico, classesMetricaHistorico } = context.historyFormat;
 
   const inventoryRestoreAttempts = new Map();
@@ -13,9 +13,6 @@
   function definirTotalHistoricoComparacoes(total) {
     const valor = Number(total || 0);
     const rotulo = `${valor} ${valor === 1 ? "registro" : "registros"}`;
-    const badge = document.getElementById("badge-total-historico-comparacoes");
-    badge.textContent = valor;
-    badge.setAttribute("aria-label", rotulo);
     document.getElementById("total-historico-comparacoes").textContent = rotulo;
   }
 
@@ -77,199 +74,8 @@
     }
   }
 
-  function fecharEvolucaoAtualizacoes() { app.fecharModalAcessivel("modal-evolucao-atualizacoes"); }
-
-  function normalizarTextoBuscaEvolucao(value) {
-    return String(value || "")
-      .normalize("NFKD")
-      .replace(/[\u0300-\u036f]/g, "")
-      .toLocaleLowerCase("pt-BR");
-  }
-
-  function aplicarFiltrosEvolucao(target) {
-    const search = document.getElementById("filtro-evolucao-busca");
-    const category = document.getElementById("filtro-evolucao-categoria");
-    const status = document.getElementById("filtro-evolucao-status");
-    if (!target || !search || !category || !status) return;
-
-    const terms = normalizarTextoBuscaEvolucao(search.value.trim()).split(/\s+/).filter(Boolean);
-    const selectedCategory = category.value;
-    const filtersActive = terms.length > 0 || Boolean(selectedCategory);
-    const entries = [...target.querySelectorAll("[data-evolution-row]")];
-    let visibleCount = 0;
-
-    entries.forEach(entry => {
-      const annotation = entry.querySelector("[data-operational-annotation]")?.value || "";
-      const searchable = normalizarTextoBuscaEvolucao(entry.dataset.evolutionSearch + " " + annotation);
-      const matches = (!selectedCategory || entry.dataset.evolutionCategory === selectedCategory)
-        && terms.every(term => searchable.includes(term));
-      entry.hidden = !matches;
-      entry.classList.toggle("hidden", !matches);
-      if (matches) visibleCount += 1;
-    });
-
-    target.querySelectorAll("[data-evolution-group]").forEach(group => {
-      const groupEntries = [...group.querySelectorAll("[data-evolution-row]")];
-      const visibleInGroup = groupEntries.some(entry => !entry.hidden);
-      const showEmptyGroup = !filtersActive && groupEntries.length === 0;
-      const hideGroup = filtersActive ? !visibleInGroup : false;
-      group.hidden = hideGroup;
-      group.classList.toggle("hidden", hideGroup);
-      const empty = group.querySelector("[data-evolution-empty]");
-      if (empty) {
-        empty.hidden = !showEmptyGroup;
-        empty.classList.toggle("hidden", !showEmptyGroup);
-      }
-    });
-
-    const noResults = target.querySelector("[data-evolution-no-results]");
-    if (noResults) {
-      const showNoResults = filtersActive && visibleCount === 0;
-      noResults.hidden = !showNoResults;
-      noResults.classList.toggle("hidden", !showNoResults);
-    }
-
-    const total = entries.length;
-    status.textContent = filtersActive
-      ? visibleCount + " de " + total + " ocorrências"
-      : total + " " + pluralize(total, "ocorrência", "ocorrências");
-  }
-
-  function conectarFiltrosEvolucao(target) {
-    const search = document.getElementById("filtro-evolucao-busca");
-    const category = document.getElementById("filtro-evolucao-categoria");
-    const clear = document.getElementById("btn-limpar-filtros-evolucao");
-    if (!search || search.dataset.bound === "true") return;
-
-    search.addEventListener("input", () => aplicarFiltrosEvolucao(target));
-    category.addEventListener("change", () => aplicarFiltrosEvolucao(target));
-    clear.addEventListener("click", () => {
-      search.value = "";
-      category.value = "";
-      aplicarFiltrosEvolucao(target);
-      search.focus();
-    });
-    target.addEventListener("input", event => {
-      if (event.target.matches("[data-operational-annotation]")) aplicarFiltrosEvolucao(target);
-    });
-    search.dataset.bound = "true";
-  }
-
-  function limparFiltrosEvolucao(target, atualizar = true) {
-    const search = document.getElementById("filtro-evolucao-busca");
-    const category = document.getElementById("filtro-evolucao-categoria");
-    const status = document.getElementById("filtro-evolucao-status");
-    if (search) search.value = "";
-    if (category) category.value = "";
-    if (atualizar) aplicarFiltrosEvolucao(target);
-    else if (status) status.textContent = "";
-  }
-
-  function renderizarEvolucaoAtualizacoes(data) {
-    const target = document.getElementById("resultado-evolucao-atualizacoes");
-    const labels = { novos: "Novos", resolvidos: "Deixaram de aparecer", continuam: "Continuam" };
-    const order = ["novos", "resolvidos", "continuam"];
-    const colors = {
-      novos: "border-rose-500/20 bg-rose-500/5 text-rose-300",
-      resolvidos: "border-emerald-500/20 bg-emerald-500/5 text-emerald-300",
-      continuam: "border-amber-500/20 bg-amber-500/5 text-amber-300",
-    };
-    const rows = data.mudancas || {};
-    const cards = order.map(key =>
-      "<div class=\"rounded-lg border " + colors[key] + " p-3\"><p class=\"text-xs\">" + labels[key]
-      + "</p><p class=\"mt-1 text-xl font-bold text-white\">" + Number(data.contagens?.[key] || 0) + "</p></div>"
-    ).join("");
-    const sections = order.map(key => {
-      const entries = Array.isArray(rows[key]) ? rows[key] : [];
-      const content = entries.length
-        ? "<ul class=\"space-y-1\">" + entries.map(row => {
-          const item = row.item || {};
-          const identity = item.computador || item.hostname || item.serie || item.chave || "Linha sem identificador";
-          const serial = item.serie ? " · " + item.serie : "";
-          const label = labels[key] + " " + (row.secao || "") + " " + identity + serial;
-          const openResult = row.evento_id
-            ? " <button type=\"button\" data-evolution-event=\"" + escapeHtml(row.evento_id)
-              + "\" class=\"ml-2 text-cyan-300 underline\">Abrir resultado</button>"
-            : "";
-          return "<li data-evolution-row data-evolution-category=\"" + key + "\" data-evolution-target-section=\""
-            + escapeHtml(row.categoria || "") + "\" data-evolution-search=\""
-            + escapeHtml(label) + "\" class=\"rounded-lg border border-line-quiet bg-surface/70 p-3 text-xs text-fg-secondary\">"
-            + "<span data-evolution-section class=\"font-medium\">" + escapeHtml(row.secao || "Seção não informada") + "</span> · "
-            + escapeHtml(identity + serial) + openResult
-            + app.renderizarAnotacaoOperacional(item, identity + serial) + "</li>";
-        }).join("") + "</ul>"
-        : "<p data-evolution-empty class=\"rounded-lg border border-line-quiet bg-surface/50 p-3 text-xs text-fg-muted\">Nenhum caso nesta categoria.</p>";
-      return "<section data-evolution-group=\"" + key + "\"><h4 class=\"mb-2 text-sm font-semibold text-fg-secondary\">"
-        + labels[key] + "</h4>" + content + "</section>";
-    }).join("");
-
-    target.innerHTML = "<p class=\"text-xs text-fg-subtle\">De "
-      + escapeHtml(formatarHorarioHistorico(data.anterior?.horario)) + " para "
-      + escapeHtml(formatarHorarioHistorico(data.atual?.horario)) + "</p>"
-      + "<div class=\"grid grid-cols-1 sm:grid-cols-3 gap-2\">" + cards + "</div>"
-      + sections
-      + "<p data-evolution-no-results hidden class=\"rounded-lg border border-line-quiet bg-surface/50 p-3 text-xs text-fg-muted\">Nenhum caso corresponde aos filtros selecionados.</p>";
-
-    target.querySelectorAll("[data-evolution-event]").forEach(button => {
-      button.addEventListener("click", async () => {
-        const eventId = button.dataset.evolutionEvent;
-        const row = button.closest("[data-evolution-row]");
-        const section = row?.dataset.evolutionTargetSection
-          || row?.querySelector("[data-evolution-section]")?.textContent || "";
-        app.fecharEvolucaoAtualizacoes();
-        await consultarHistoricoComparacao(eventId, button,
-          section && section !== "Seção não informada" ? { section } : null);
-      });
-    });
-    target.querySelectorAll("[data-operational-annotation]").forEach(textarea => {
-      const parent = textarea.closest("li");
-      const eventId = parent?.querySelector("[data-evolution-event]")?.dataset.evolutionEvent;
-      if (eventId) textarea.dataset.eventId = eventId;
-    });
-    app.conectarAnotacoesOperacionais(target, "");
-    aplicarFiltrosEvolucao(target);
-  }
-  async function compararEvolucaoSelecionada() {
-    const previous = document.getElementById("evolucao-anterior").value;
-    const current = document.getElementById("evolucao-atual").value;
-    const target = document.getElementById("resultado-evolucao-atualizacoes");
-    target.textContent = "Comparando atualizações…";
-    const status = document.getElementById("filtro-evolucao-status");
-    if (status) status.textContent = "";
-    try {
-      const query = new URLSearchParams({ anterior: previous, atual: current });
-      const data = await app.apiFetch(`/api/operacoes/evolucao?${query.toString()}`, { errorMessage: "Não foi possível comparar as atualizações." });
-      renderizarEvolucaoAtualizacoes(data);
-    } catch (error) { target.textContent = error.message || "Não foi possível comparar as atualizações."; }
-  }
-
-  async function abrirEvolucaoAtualizacoes() {
-    app.abrirModalAcessivel("modal-evolucao-atualizacoes", '[aria-label="Fechar evolução das atualizações"]', "fecharEvolucaoAtualizacoes", "btn-evolucao-atualizacoes");
-    const target = document.getElementById("resultado-evolucao-atualizacoes");
-    conectarFiltrosEvolucao(target);
-    limparFiltrosEvolucao(target, false);
-    target.textContent = "Carregando atualizações…";
-    try {
-      const data = await app.apiFetch("/api/historico-comparacoes", { errorMessage: "Não foi possível carregar o histórico." });
-      const events = (data.eventos || []).filter(event => event.tipo !== "restauracao" && !event.somente_anotacoes_sincronizadas);
-      const previous = document.getElementById("evolucao-anterior");
-      const current = document.getElementById("evolucao-atual");
-      [previous, current].forEach(select => {
-        select.replaceChildren();
-        events.forEach(event => { const option = document.createElement("option"); option.value = event.id; option.textContent = formatarHorarioHistorico(event.horario); select.appendChild(option); });
-      });
-      if (events.length < 2) { target.textContent = "São necessárias pelo menos duas atualizações completas para comparar a evolução."; return; }
-      current.value = events[0].id; previous.value = events[1].id;
-      if (!previous.dataset.bound) {
-        document.getElementById("form-evolucao-atualizacoes").addEventListener("submit", event => { event.preventDefault(); compararEvolucaoSelecionada(); });
-        previous.dataset.bound = "true";
-      }
-      await compararEvolucaoSelecionada();
-    } catch (error) { target.textContent = error.message || "Não foi possível carregar as atualizações."; }
-  }
-
   async function abrirModalHistoricoComparacoes() {
-    app.abrirModalAcessivel("modal-historico-comparacoes", '[aria-label="Fechar histórico de planilhas"]', "fecharModalHistoricoComparacoes", "btn-historico-comparacoes");
+    app.abrirModalAcessivel("modal-historico-comparacoes", '[aria-label="Fechar histórico de planilhas"]', "fecharModalHistoricoComparacoes");
     await app.carregarHistoricoComparacoes();
   }
 
@@ -746,7 +552,7 @@
   }
 
   return {
-    carregarContagemHistoricoComparacoes, fecharEvolucaoAtualizacoes, abrirEvolucaoAtualizacoes,
+    carregarContagemHistoricoComparacoes,
     abrirModalHistoricoComparacoes, fecharModalHistoricoComparacoes, carregarHistoricoComparacoes,
     baixarHistoricoComparacoesExcel, exportarHistoricoComparacoesExcel, exportarResultadoComparacaoPlanilhas,
     restaurarHistoricoComparacao,

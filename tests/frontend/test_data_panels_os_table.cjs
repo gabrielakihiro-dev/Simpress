@@ -66,47 +66,38 @@ test("antes do install a API pública é inerte", async () => {
 });
 
 test("a tabela não duplica no mesmo host e entrega o relatório a aoCarregar", async () => {
-  const { host, section, carregados } = await montar({ semBusca: true, incluirSemOs: true });
+  const { host, section, carregados } = await montar({ semBusca: true });
   assert.equal(panels.montarTabelaOs(host, {}), section, "segunda montagem no mesmo host devolve a existente");
   assert.equal(host.querySelectorAll(".ck-os").length, 1);
   assert.equal(carregados.length, 1, "aoCarregar recebe o relatório uma vez");
   assert.equal(carregados[0], report);
 });
 
-test("incluirSemOs lista a série sem OS e a contagem mostra o sufixo (K sem OS)", async () => {
+test("série sem OS (nem na Simpress nem no Oracle) nunca aparece, mesmo com incluirSemOs", async () => {
   const { section, status } = await montar({ semBusca: true, incluirSemOs: true });
-  assert.equal(status.textContent, "2 OS · 3 séries (1 sem OS)");
-  const semOs = section.querySelectorAll("tbody tr[data-sem-os]");
-  assert.equal(semOs.length, 1);
-  assert.equal(semOs[0].dataset.serial, "SN-SEMOS");
-  assert.equal(semOs[0].dataset.osCount, "0");
-  assert.equal(semOs[0].querySelector('td[data-label="OS"]').textContent, "Sem OS");
-  assert.equal(semOs[0].querySelectorAll("input").length, 0, "sem OS não há editor de chamado UTIC");
-  assert.equal(section.querySelectorAll("tbody tr[data-serial]").length, 3);
-});
-
-test("sem incluirSemOs só aparecem séries com OS e o sufixo some", async () => {
-  const { section, status } = await montar({ semBusca: true });
   assert.equal(status.textContent, "2 OS · 2 séries");
   assert.equal(section.querySelectorAll("tbody tr[data-sem-os]").length, 0);
+  assert.deepEqual(visiveis(section), ["SN-CONF", "SN-SOR"]);
+  assert.equal(section.textContent.includes("SN-SEMOS"), false);
+  assert.equal(section.textContent.includes("Sem OS"), false);
 });
 
 test("filtrarTabelaOs combina busca e relação e atualiza a contagem", async () => {
-  const { section, status } = await montar({ semBusca: true, incluirSemOs: true });
-  assert.deepEqual(visiveis(section), ["SN-CONF", "SN-SEMOS", "SN-SOR"]);
+  const { section, status } = await montar({ semBusca: true });
+  assert.deepEqual(visiveis(section), ["SN-CONF", "SN-SOR"]);
 
   panels.filtrarTabelaOs({ relacao: "somente_oracle" });
   assert.deepEqual(visiveis(section), ["SN-SOR"]);
   assert.equal(status.textContent, "1 de 2 OS · 1 série");
 
   panels.filtrarTabelaOs({ relacao: "sem_os" });
-  assert.deepEqual(visiveis(section), ["SN-SEMOS"]);
-  assert.equal(status.textContent, "0 de 2 OS · 1 série (1 sem OS)");
+  assert.deepEqual(visiveis(section), []);
+  assert.equal(status.textContent, "0 de 2 OS · 0 séries");
 
   panels.filtrarTabelaOs({ relacao: "todos", busca: "9001" });
   assert.deepEqual(visiveis(section), ["SN-CONF"]);
-  panels.filtrarTabelaOs({ busca: "sn-sem" });
-  assert.deepEqual(visiveis(section), ["SN-SEMOS"], "busca ignora caixa e vale sobre a linha inteira");
+  panels.filtrarTabelaOs({ relacao: "todos", busca: "sn-conf" });
+  assert.deepEqual(visiveis(section), ["SN-CONF"], "busca ignora caixa e vale sobre a linha inteira");
 
   panels.filtrarTabelaOs({ busca: "REL", relacao: "conferida" });
   assert.deepEqual(visiveis(section), [], "busca sem acerto esconde tudo");
@@ -114,12 +105,12 @@ test("filtrarTabelaOs combina busca e relação e atualiza a contagem", async ()
   assert.deepEqual(visiveis(section), ["SN-CONF"], "busca e relação se combinam");
 
   panels.filtrarTabelaOs({ busca: "", relacao: "" });
-  assert.deepEqual(visiveis(section), ["SN-CONF", "SN-SEMOS", "SN-SOR"]);
-  assert.equal(status.textContent, "2 OS · 3 séries (1 sem OS)");
+  assert.deepEqual(visiveis(section), ["SN-CONF", "SN-SOR"]);
+  assert.equal(status.textContent, "2 OS · 2 séries");
 });
 
 test("com busca própria a tabela sincroniza o campo e filtra ao digitar", async () => {
-  const { section } = await montar({ incluirSemOs: true });
+  const { section } = await montar({});
   const campo = section.querySelector(".ck-os__busca input");
   assert.ok(campo, "sem semBusca a tabela cria a própria busca");
   panels.filtrarTabelaOs({ busca: "9002" });
@@ -132,9 +123,9 @@ test("com busca própria a tabela sincroniza o campo e filtra ao digitar", async
 
 test("Andamento expande uma linha por série, esconde com o filtro e recolhe", async () => {
   const chamadas = [];
-  const { section } = await montar({ semBusca: true, incluirSemOs: true, aoExpandirSerie: (serie, celula) => chamadas.push([serie, celula]) });
+  const { section } = await montar({ semBusca: true, aoExpandirSerie: (serie, celula) => chamadas.push([serie, celula]) });
   const botao = serie => section.querySelectorAll(".ck-os__andamento-btn").find(item => item.dataset.serie === serie);
-  assert.equal(section.querySelectorAll(".ck-os__andamento-btn").length, 3, "um botão por série");
+  assert.equal(section.querySelectorAll(".ck-os__andamento-btn").length, 2, "um botão por série");
   assert.equal(section.querySelectorAll("tr[data-andamento]").length, 0);
   assert.equal(chamadas.length, 0, "nada é pedido antes de expandir");
 
@@ -177,8 +168,8 @@ test("atualizarTabelaOs(true) recarrega as tabelas montadas, uma requisição de
 });
 
 test("triagem e atenção usam o grupo da série (grupoSerie) e combinam com a relação", async () => {
-  const grupos = { "SN-CONF": "em_dia", "SN-SOR": "atrasados", "SN-SEMOS": "" };
-  const { section } = await montar({ semBusca: true, incluirSemOs: true, grupoSerie: ticket => grupos[ticket.serie] });
+  const grupos = { "SN-CONF": "em_dia", "SN-SOR": "atrasados" };
+  const { section } = await montar({ semBusca: true, grupoSerie: ticket => grupos[ticket.serie] });
   panels.filtrarTabelaOs({ relacao: "", busca: "", triagem: "ativos" });
   assert.deepEqual(visiveis(section), ["SN-CONF", "SN-SOR"], "ativos = qualquer série com chamado aberto");
   panels.filtrarTabelaOs({ triagem: "atrasados" });
@@ -190,5 +181,5 @@ test("triagem e atenção usam o grupo da série (grupoSerie) e combinam com a r
   panels.filtrarTabelaOs({ triagem: "ativos", atencao: true, relacao: "conferida" });
   assert.deepEqual(visiveis(section), [], "triagem, atenção e relação se combinam");
   panels.filtrarTabelaOs({ triagem: "", atencao: false, relacao: "" });
-  assert.deepEqual(visiveis(section), ["SN-CONF", "SN-SEMOS", "SN-SOR"]);
+  assert.deepEqual(visiveis(section), ["SN-CONF", "SN-SOR"]);
 });

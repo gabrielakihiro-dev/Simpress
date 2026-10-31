@@ -534,6 +534,7 @@ button.ck-kpi[aria-pressed="true"] { background: var(--cor-superficie); border-b
 .ck-ferramenta__titulo { display: flex; align-items: center; gap: 8px; font-size: var(--fs-xl); font-weight: var(--peso-medio); }
 .ck-ferramenta__sub { font-size: var(--fs-sm); color: var(--cor-texto-mudo); }
 .ck-barra-ferr { display: flex; flex-wrap: wrap; align-items: flex-end; gap: 8px; padding: 10px 20px; border-bottom: 1px solid var(--cor-borda-suave); }
+#form-nova-unidade { margin: 10px 20px; padding: 12px; gap: 10px; flex: none; }
 .ck-barra-ferr .ck-campo { flex: 0 1 220px; }
 .ck-barra-ferr__nota { flex: 1 1 100%; font-size: var(--fs-xs); color: var(--cor-texto-sutil); }
 .ck-dividido { flex: 1; min-height: 0; display: grid; grid-template-columns: minmax(0, 1fr) var(--largura-detalhe); }
@@ -542,6 +543,7 @@ button.ck-kpi[aria-pressed="true"] { background: var(--cor-superficie); border-b
 @media (min-width: 1200px) { .ck-dividido__lista, .ck-dividido__detalhe { overflow: auto; } }
 .ck-det__cab { display: flex; flex-direction: column; gap: 6px; padding: 14px 16px; border-bottom: 1px solid var(--cor-borda-suave); }
 .ck-det__linha { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; }
+.ck-tabela .ck-det__linha .ck-btn--icone { margin-block: -12px; }
 .ck-det__serie { font: var(--peso-medio) var(--fs-xl) var(--fonte-mono); overflow-wrap: anywhere; }
 .ck-det__sub { font-size: var(--fs-base); color: var(--cor-texto-suave); }
 .ck-det__corpo { flex: 1; display: flex; flex-direction: column; gap: 14px; padding: 14px 16px; }
@@ -579,6 +581,7 @@ button.ck-kpi[aria-pressed="true"] { background: var(--cor-superficie); border-b
 }
 @media (max-width: 767.98px) {
   .ck-ferramenta__cab, .ck-barra-ferr { padding-left: 12px; padding-right: 12px; }
+  #form-nova-unidade { margin-left: 12px; margin-right: 12px; }
   .ck-barra-ferr .ck-campo { flex: 1 1 100%; }
   .ck-dividido__lista { padding: 8px 12px 16px; }
   .ck-rel__corpo { grid-template-columns: minmax(0, 1fr); padding: 14px 12px; }
@@ -1022,10 +1025,8 @@ html[data-theme], html[data-theme] body.cockpit-shell-body { background: var(--c
 .sebrae-historico-mini li { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 8px; font-size: var(--fs-sm); }
 .sebrae-historico-mini__quando { color: var(--cor-texto-mudo); font-variant-numeric: tabular-nums; }
 .sebrae-historico-mini__texto { overflow-wrap: anywhere; }
-.sebrae-historico-grupo { margin-top: 12px; }
-.sebrae-historico-grupo .sebrae-avisos { margin: 4px 0 0; padding-left: 18px; max-height: 14em; overflow: auto; overflow-wrap: anywhere; }
 @media (prefers-reduced-motion: no-preference) {
-  .sebrae-historico-mini li, .sebrae-historico-grupo { animation: sebrae-historico-entrada var(--duracao-lenta) var(--curva); }
+  .sebrae-historico-mini li { animation: sebrae-historico-entrada var(--duracao-lenta) var(--curva); }
 }
 @keyframes sebrae-historico-entrada { from { opacity: 0; } to { opacity: 1; } }
 

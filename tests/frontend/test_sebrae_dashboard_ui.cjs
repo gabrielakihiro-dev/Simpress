@@ -2,7 +2,7 @@ const test = require("node:test");
 const assert = require("node:assert/strict");
 const createSebraeDashboard = require("../../static/js/features/sebrae-dashboard.js");
 
-const { formatarEncerramento, encerramentoParaCampo, chamadoPronto, payloadExportacao, payloadAtualizacao, payloadEdicoes, avisoOutraPessoa, tituloAntigo, totalPreenchimentos,
+const { formatarEncerramento, encerramentoParaCampo, chamadoPronto, payloadExportacao, payloadAtualizacao, payloadEdicoes, avisoOutraPessoa, avisoNomeDaDescricao, tituloAntigo, totalPreenchimentos,
   formatarTamanho, textoResultado, textoPulado, podeFinalizar, candidatosFinalizar, resumoResultado, resumoInicio,
   lerRascunho, gravarRascunho, apagarRascunho, aplicarRascunho } = createSebraeDashboard.puro;
 
@@ -78,9 +78,11 @@ test("chamado antigo sem UTIC mostra o texto da coluna C e a linha; o botão con
   assert.equal(totalPreenchimentos(undefined), 0);
 });
 
-test("aviso de chamado aberto para outra pessoa só aparece quando o nome foi achado", () => {
-  assert.match(avisoOutraPessoa({ outra_pessoa: "Ícaro Gabriel Duarte Campos" }), /outra pessoa \(Ícaro Gabriel Duarte Campos/);
+test("avisos de nome: mais de uma pessoa na descrição não preenche; uma só liga pelo nome citado", () => {
+  assert.match(avisoOutraPessoa({ outra_pessoa: "Ícaro Gabriel Duarte Campos" }), /mais de uma pessoa \(Ícaro Gabriel Duarte Campos/);
   assert.equal(avisoOutraPessoa({}), "");
+  assert.match(avisoNomeDaDescricao({ nome_da_descricao: "Daniel Krugel" }), /nome citado na descrição \(Daniel Krugel\)/);
+  assert.equal(avisoNomeDaDescricao({}), "");
 });
 
 test("o botão Finalizar no SoftExpert exige descrição, nenhuma rotina rodando e chamado ainda não finalizado", () => {

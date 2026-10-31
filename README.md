@@ -15,7 +15,7 @@ Aplicação web local para consultar equipamentos, preparar transferências Simp
 - Textos prontos para solicitações de transporte, kit de teclado e mouse e defeitos, com opções para copiar o texto e abrir os links correspondentes.
 - Edição de apelidos e de outros campos permitidos do equipamento, com histórico e opção de desfazer alterações de apelido.
 - Comparação e atualização conjunta dos inventários Endpoint e Simpress, com histórico, backups locais e prévia de restauração.
-- Central de pendências e comparação da evolução entre atualizações.
+- Central de pendências e comparação entre atualizações.
 - Exportação de `Apelido` e, quando disponível, `IdCliente` para um modelo Excel local.
 - Catálogo de unidades, endereços, CNPJ e CEP, incluindo unidades personalizadas.
 - Chat flutuante do assistente (ícone no topbar, F9) com IA própria: o servidor local chama o OpenRouter com a chave `OPENROUTER_API_KEY` do arquivo `.env` (copie `.env.example`); não depende do Jarvis nem de outro processo. Alterações de dados só rodam depois da sua confirmação. Veja [Assistente (F9)](#assistente-f9).
@@ -195,7 +195,7 @@ Na pesquisa completa, combine os filtros de categoria e cidade. As categorias s�
 
 Para gerar a planilha, são obrigatórios: série do equipamento; CNPJ e endereço de retirada e entrega; nome, e-mail e telefone do contato de retirada; observações da retirada; nome, e-mail e telefone do destinatário; horário, almoço e observações da entrega. A duração da pausa da unidade de entrega também é obrigatória, exceto quando o horário de almoço indica que o escritório não fecha. O arquivo é preparado para download e não fica guardado como arquivo permanente pelo servidor.
 
-No painel **Chamados** (menu **Ferramentas**), confira a relação entre o Excel **Acompanhamento de Pedidos** da Simpress e o Excel **Gestão de Solicitações** do Oracle. A tabela **Ordens de serviço por série** relaciona as linhas pelo número de série e mostra Fonte, Série, OS, Usuário, Hostname, Chamado e Descrição; o andamento abre como linha expansível e séries sem OS aparecem como `Sem OS`. Use o filtro **Relação** (Todas, Divergentes, Conferidas, Só Simpress, Só Oracle, Sem OS) e o campo de busca por série ou OS para filtrar. Quando as fontes tiverem OS diferentes para a mesma série, o registro é marcado para conferência.
+No painel **Chamados** (menu **Ferramentas**), confira a relação entre o Excel **Acompanhamento de Pedidos** da Simpress e o Excel **Gestão de Solicitações** do Oracle. A tabela **Ordens de serviço por série** relaciona as linhas pelo número de série e mostra Fonte, Série, OS, Usuário, Hostname, Chamado e Descrição; o andamento abre como linha expansível. Série sem OS vinculada, nem na Simpress nem no Oracle, não aparece na aba (nem nas contagens, nem no filtro). Use o filtro **Relação** (Todas, Divergentes, Conferidas, Só Simpress, Só Oracle) e o campo de busca por série ou OS para filtrar. Quando as fontes tiverem OS diferentes para a mesma série, o registro é marcado para conferência.
 
 Na coluna **Chamado**, cada OS tem um único campo para o número depois do prefixo `UTIC-<ano>-`; **Salvar** (**Atualizar** quando já há vínculo) grava o vínculo, que precisa ter só números; **Remover vínculo** o apaga. Na aba **Transporte**, **OS deste equipamento** abre o painel **Chamados** já filtrado pela série pesquisada. Para executar a importação operacional, use a fila local de pastas descrita a seguir; ela não depende do envio de arquivos pelo navegador nem de uma chamada HTTP.
 
@@ -223,13 +223,13 @@ O comando usa a mesma validação sem enviar requisições HTTP. Se o site estiv
 
 ### Comparar e atualizar inventários
 
-Use **Pendências** para revisar e anotar as linhas da atualização mais recente; **Evolução das atualizações** conta casos novos, contínuos e resolvidos entre duas atualizações completas.
+Use **Pendências** para revisar e anotar as linhas da atualização mais recente; o painel **Evolução das atualizações** foi removido da interface em 31/10/2026 (o alerta **Divergências novas** da Home continua e seu botão **Ver evolução** abre a aba **Comparação**).
 
 1. Abra **Atualizar Planilhas**.
 2. Selecione um arquivo `.xlsx` do **Endpoint** e um `.xlsx` ou `.zip` do **Simpress**.
 3. Clique em **Pré-visualizar impacto** e confira as contagens de séries novas, removidas e duplicadas antes de **Confirmar substituição**. A prévia vale por dez minutos e precisa ser refeita se os arquivos ou a base ativa mudarem.
 4. Cada atualização substitui integralmente os dois inventários ativos pelos arquivos validados; séries ausentes no novo relatório deixam de compor a base carregada. Após confirmar, confira ausências em cada fonte, notebooks sem verificação com êxito há 7 dias ou mais, divergências de local, correspondências ambíguas, mudanças de hostname e casos que precisam de revisão.
-5. Consulte **Histórico planilhas** para rever comparações e, se houver um backup completo válido, pré-visualize os arquivos e datas antes de restaurar.
+5. Em **Comparação**, clique em **Histórico e ações completas** para rever comparações e, se houver um backup completo válido, pré-visualize os arquivos e datas antes de restaurar.
 
 A prévia também funciona na primeira importação, quando ainda não há inventário local. O processamento automático pela pasta de entrada mantém seu fluxo próprio.
 
@@ -288,7 +288,7 @@ A cada atualização, o histórico identifica notebooks do Endpoint cuja coluna 
 
 Um apelido alterado manualmente fica associado ao número de série e prevalece nas pesquisas, no formulário e na exportação. Sem alteração manual, um hostname único do Endpoint prevalece sobre o apelido de EquipamentosDetalhes. Quando uma associação do Endpoint não é única, o sistema a apresenta para revisão em vez de escolher uma linha arbitrariamente.
 
-O **Histórico** registra alterações manuais de apelido e permite desfazer a alteração mais recente quando os dados ainda correspondem ao evento. O **Histórico planilhas** também mostra diferenças entre apelidos manuais e os valores das duas fontes; para cada série, é possível manter o apelido manual ou remover o override. Endereço e localidade vêm de EquipamentosDetalhes e não são alterados manualmente pelo formulário de edição.
+O **Histórico** registra alterações manuais de apelido e permite desfazer a alteração mais recente quando os dados ainda correspondem ao evento. O histórico da **Comparação** (**Histórico e ações completas**) também mostra diferenças entre apelidos manuais e os valores das duas fontes; para cada série, é possível manter o apelido manual ou remover o override. Endereço e localidade vêm de EquipamentosDetalhes e não são alterados manualmente pelo formulário de edição.
 
 ### Exportar equipamentos
 
@@ -296,9 +296,9 @@ O **Histórico** registra alterações manuais de apelido e permite desfazer a a
 
 ### Catálogo de unidades e acessibilidade
 
-O **Catálogo de Unidades** permite consultar unidades e manter unidades personalizadas. Os botões ao lado do CNPJ e do CEP copiam os valores; a interface informa sucesso ou falha.
+O **Catálogo de Unidades** permite consultar unidades e manter unidades personalizadas. O painel mostra o selo **SEDE** na lista e no detalhe (que traz cidade, UF, endereço, CEP e CNPJ da unidade selecionada); os botões **Copiar CNPJ** e **Copiar CEP** copiam os valores e a interface informa sucesso ou falha. **Nova unidade** abre o formulário dentro do próprio painel, e o lápis ao lado do CNPJ (na lista e no detalhe) abre a unidade para editar, com o foco no campo CNPJ. Desde 31/10/2026 não existe mais o modal "Gerenciar unidades" nem o botão "Fluxo completo".
 
-As abas principais ficam na barra superior: **Home** (F1), **Transporte** (F2), **Resumo** (F3) e **Automação** (F4). O menu **Ferramentas** agrupa os painéis (**Chamados**, **Comparação**, **Histórico de apelidos**, **Relatório mensal**), as planilhas (**Atualizar planilhas**, **Exportar Excel**, **Histórico planilhas**, **Chamados Sebrae**) e o histórico e catálogo (**Evolução das atualizações**, **Catálogo de unidades**, **Histórico do Dashboard Sebrae**).
+As abas principais ficam na barra superior: **Home** (F1), **Transporte** (F2), **Resumo** (F3) e **Automação** (F4). O menu **Ferramentas** agrupa os painéis (**Chamados**, **Comparação**, **Histórico de apelidos**, **Relatório mensal**), as planilhas (**Atualizar planilhas**, **Exportar Excel**, **Chamados Sebrae**) e o catálogo (**Catálogo de unidades**).
 
 A aba **Home** concentra a busca por série, apelido/hostname, modelo, cidade ou usuário; **Equipamentos sem usuário**, abaixo da pesquisa, lista os equipamentos sem usuário do Endpoint nem manual. Após selecionar um equipamento, a tela permanece nela; abra **Transporte** manualmente para preencher a transferência e acessar a barra de ações, fixa na base da tela.
 
