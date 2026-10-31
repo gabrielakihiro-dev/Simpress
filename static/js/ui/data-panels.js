@@ -570,6 +570,7 @@
           const row = doc.createElement("tr");
           row.dataset.serial = record.serie;
           row.dataset.osCount = "1";
+          row.dataset.os = String(order.os);
           row.dataset.relacao = relacoes.get(serialKey(record.serie)) || "";
           row.dataset.triagem = grupos.get(serialKey(record.serie)) || "";
           const cell = (label, className) => {
