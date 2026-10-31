@@ -79,6 +79,16 @@ Com o servidor ativo, as inboxes do próprio servidor também processam os lotes
 6. Pedidos com `Origin` ou `Sec-Fetch-Site` de outro site recebem 403 nas rotas novas.
 7. `npm run verify` e `npm run test:ui:e2e` passam; nenhuma rotina real de OS ou inventários é executada nos testes.
 
+## Rotina `login` (Abrir Chrome para login)
+
+Abre três abas no Chrome de automação e adianta tudo o que não é senha nem autenticador:
+
+- **Endpoint Central** (`/client#/login`): preenche `gakihiro` só se o campo estiver vazio (`SIMPRESS_ENDPOINT_USUARIO` troca o usuário) e escolhe `pr-sebrae` na lista "Autenticação local". Clica em "Fazer login" apenas se a lista ficou confirmada **e** o Chrome já preencheu a senha; sem senha salva (primeiro acesso), para antes do clique e o usuário termina. O código do autenticador é sempre do usuário.
+- **UX Simpress** (`/ng/autenticacao/login`): clica em "Acesso Time Simpress" e na conta `gansouza@simpress.com.br`; se a conta não aparecer, digita só o e-mail e clica em Avançar.
+- **Oracle** (`/AgentWeb/`): mesmo fluxo da UX.
+- **Login compartilhado:** UX e Oracle usam a mesma conta Microsoft. Quando uma conclui, a outra aba é reaberta pelo endereço do sistema (nunca com recarregar, que quebra a tela da Microsoft com o erro AADSTS750054) para aproveitar a sessão.
+- **Espera:** um único aviso `AÇÃO NECESSÁRIA: faça o login… (<abas pendentes>)`; termina com `Login detectado`. Tempo máximo de 10 min; uma aba fechada pelo usuário é ignorada.
+
 ## Janela pequena e downloads
 
 Vale igual para o painel e para o `executar_automacao.bat`, porque os dois rodam o mesmo `scripts/automacao_rotinas_chrome.py`.

@@ -51,6 +51,7 @@ Ao exibir ou exportar o Histórico de Planilhas, disponibilize um campo de anota
 ## Rotina de OS (Oracle e UX)
 
 - Em qualquer automação (inventários e chamados), na tela de conta da Microsoft: Simpress (Oracle, UX e o SharePoint do Dashboard Sebrae) clica ou digita `gansouza@simpress.com.br`; Endpoint Central e SoftExpert, `gakihiro@pr.sebrae.com.br`. Se a conta não estiver na tela, clique em "Acessar Outra Conta", "Outra Conta" ou "Another Account" e digite só o e-mail. Antes do login, se houver um botão/link `SSO` visível, clique nele uma vez. Senha e MFA continuam do usuário.
+- Rotina `login` ("Abrir Chrome para login"): abre Endpoint Central, UX Simpress e Oracle. No Endpoint, preenche `gakihiro` só se o campo estiver vazio, troca "Autenticação local" por `pr-sebrae` e só clica em "Fazer login" quando a lista ficou confirmada e o Chrome já preencheu a senha; sem senha salva, para antes do clique. UX e Oracle usam o mesmo login: quando um conclui, a outra aba é reaberta pelo endereço do sistema, sem recarregar (recarregar a tela da Microsoft dá AADSTS750054). A rotina nunca digita senha nem o código do autenticador.
 
 - Abra Oracle e UX em abas novas e separadas, deixe o login com o usuário e aguarde "pronto".
 - No UX, confirme o contrato exato `16467 - SERV DE APOIO AS MICRO E PEQ EMP DO PARANA SEBRAE PR`, a seleção e os cartões correspondentes antes de exportar.

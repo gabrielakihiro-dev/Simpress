@@ -14,7 +14,9 @@ Rotinas:
 - ``usuarios``: confere no Endpoint Central as pendências de usuário logado
   (``scripts/verificar_usuarios_endpoint.py``); também roda no fim de ``inventarios`` e ``ambas``.
 - ``ambas``: as duas, em sequência.
-- ``login``: só abre as abas para o usuário fazer login.
+- ``login``: abre Endpoint, UX e Oracle e adianta o que não é senha/MFA (domínio ``pr-sebrae`` e
+  "Fazer login" no Endpoint com a senha já preenchida pelo Chrome; conta Microsoft da Simpress no UX e no
+  Oracle); depois espera o usuário.
 - ``dashboard``: baixa uma cópia do Dashboard Operacional_SEBRAE no Excel Online (só leitura),
   importa no site local e roda a busca de chamados novos (``sebrae``).
 
@@ -61,6 +63,11 @@ ORACLE_URL = "https://simpress.custhelp.com/AgentWeb/"
 UX_PEDIDOS_URL = "https://ux.simpress.com.br/equipamentos/acompanhamento"
 UX_EQUIPAMENTOS_URL = "https://ux.simpress.com.br/MeusEquipamentos/Index"
 ENDPOINT_URL = "https://centralendpoint.pr.sebrae.com.br/webclient#/uems/inventory/computers"
+# Telas de login abertas por `login` ("Abrir Chrome para login").
+ENDPOINT_LOGIN_URL = "https://centralendpoint.pr.sebrae.com.br/client#/login"
+UX_LOGIN_URL = "https://ux.simpress.com.br/ng/autenticacao/login"
+ENDPOINT_USUARIO = os.environ.get("SIMPRESS_ENDPOINT_USUARIO", "gakihiro")
+ENDPOINT_DOMINIO = "pr-sebrae"  # valor do <select name="domainName"> (padrão da tela: "Autenticação local")
 # Pasta do SharePoint de onde `dashboard` baixa (Mais ações > Baixar) e que recebe o arquivo final gerado pelo site ("Atualizar Dashboard").
 DASHBOARD_PASTA_URL = (
     "https://simpress-my.sharepoint.com/shared?id=%2Fpersonal%2Fjufsouza%5Fsimpress%5Fcom%5Fbr%2FDocuments%2FClientes%2FSEBRAE%2FDASHBOARD%20SEBRAE"
@@ -519,12 +526,16 @@ def aguardar_login(
     logado: Callable[["Page"], bool],
     entrar: Callable[["Page"], bool] | None = None,
     email: str | None = None,
-) -> None:
+    esperar_usuario: bool = True,
+    apos_acao_s: int = 45,
+) -> bool:
     """Espera o login sem digitar senha nem MFA (no máximo o e-mail, em ``entrar``).
 
     ``entrar`` pode acionar uma única vez o acesso com a conta já conectada (SSO);
     ``email`` escolhe essa conta (ou digita o e-mail) na tela da Microsoft, se ela aparecer.
     Se o login não concluir, o usuário é chamado para entrar na própria janela.
+    Com ``esperar_usuario=False`` só faz as tentativas automáticas e devolve ``False`` sem esperar o
+    usuário (quem chama espera várias abas juntas); devolve ``True`` quando a aba já está logada.
     """
     limite = time.time() + 15
     tentou_entrar = escolheu_conta = clicou_sso = False
@@ -533,21 +544,23 @@ def aguardar_login(
         if logado(page):
             log(origem, "Sessão ativa.")
             garantir_tela_minima(page, origem)
-            return
+            return True
         if email and not clicou_sso and "microsoftonline" not in page.url.lower() and clicar_sso(page, origem):
             clicou_sso = True
-            limite = time.time() + 45
+            limite = time.time() + apos_acao_s
         if email and not escolheu_conta and "microsoftonline" in page.url.lower():
             escolheu_conta = True
             entrar_microsoft(page, origem, email, concluido=logado)
-            limite = time.time() + 45
+            limite = time.time() + apos_acao_s
         if entrar is not None and not tentou_entrar and entrar(page):
             tentou_entrar = True
-            limite = time.time() + 45
+            limite = time.time() + apos_acao_s
         page.wait_for_timeout(1000)
     if tentou_entrar:
         log(origem, "O acesso com a conta conectada não concluiu o login.")
     liberar_tela_minima(page)  # o login aparece no tamanho real da janela
+    if not esperar_usuario:
+        return False
     page.bring_to_front()
     log(origem, "AÇÃO NECESSÁRIA: faça o login na janela do Chrome de automação.")
     avisar(f"Simpress: login necessário no {origem}", "Faça o login na janela do Chrome de automação; a rotina continua sozinha.")
@@ -560,7 +573,7 @@ def aguardar_login(
             log(origem, "Login detectado; continuando.")
             page.wait_for_timeout(2000)
             garantir_tela_minima(page, origem)
-            return
+            return True
         if not aviso_metade_enviado and time.time() >= limite - LOGIN_TIMEOUT_S / 2:
             aviso_metade_enviado = True
             minutos_restantes = LOGIN_TIMEOUT_S // 60 // 2
@@ -584,6 +597,8 @@ def entrar_microsoft(
     verdadeiro ou ao esgotar ``espera_s``.
     """
     escolheu = digitou = False
+    escolhas = 0
+    ultima_escolha = 0.0
     limite = time.time() + espera_s
     while time.time() < limite:
         verificar_cancelamento()
@@ -594,8 +609,12 @@ def entrar_microsoft(
             continue
         if visivel(page.locator("input[type='password']")):
             return
+        # A lista de contas pode voltar (por exemplo, no recarregamento do SSO): escolhe de novo, no máximo 3 vezes.
+        if escolheu and escolhas < 3 and time.time() - ultima_escolha >= 10:
+            escolheu = False
         if not escolheu and not digitou:
-            conta = page.get_by_text(re.compile(re.escape(email), re.IGNORECASE)).filter(visible=True)
+            # Só a conta pedida, pelo e-mail exato: nunca outra conta da lista (por exemplo, a do Sebrae).
+            conta = page.get_by_text(re.compile(rf"^\s*{re.escape(email)}\s*$", re.IGNORECASE)).filter(visible=True)
             campo = page.locator("input[type='email'], input[name='loginfmt']").filter(visible=True)
             # "Use another account", "Another account", "Acessar Outra Conta", "Outra Conta".
             outra = page.get_by_text(re.compile(r"(another|outra)\s+(account|conta)", re.IGNORECASE)).filter(visible=True)
@@ -603,6 +622,8 @@ def entrar_microsoft(
                 log(origem, f"Escolhendo a conta {email}...")
                 conta.first.click()
                 escolheu = True
+                escolhas += 1
+                ultima_escolha = time.time()
             elif campo.count():
                 log(origem, f"Digitando o e-mail {email} e avançando (a senha fica com você)...")
                 campo.first.fill(email)
@@ -1037,6 +1058,70 @@ def endpoint_logado(page: "Page") -> bool:
         and "#/uems" in page.url.lower()
         and not visivel(page.locator('input[type="password"]').filter(visible=True))
     )
+
+
+def endpoint_senha_preenchida(page: "Page") -> bool:
+    """A senha já veio do Chrome (preenchimento automático)? Só confere se há algo; nunca lê nem guarda o valor."""
+    try:
+        return bool(
+            page.locator("input[name='j_password']").first.evaluate(
+                "e => e.value.length > 0 || e.matches(':-webkit-autofill')"
+            )
+        )
+    except Exception:
+        return False
+
+
+def endpoint_escolher_dominio(page: "Page") -> bool:
+    """Troca "Autenticação local" por ``pr-sebrae`` na lista da tela de login; True só se a troca ficou confirmada."""
+    seletor = page.locator("select[name='domainName']")
+    texto = page.locator(".zselectbox__text").filter(visible=True)
+
+    def escolhido() -> bool:
+        return seletor.input_value() == ENDPOINT_DOMINIO and ENDPOINT_DOMINIO in texto.first.inner_text()
+
+    try:
+        if escolhido():
+            return True
+        page.locator(".zselectbox__selected").filter(visible=True).first.click()
+        opcao = page.locator(".zdropdownlist li").filter(has_text=re.compile(rf"^\s*{re.escape(ENDPOINT_DOMINIO)}\s*$"))
+        opcao.filter(visible=True).first.click(timeout=5000)
+        for _ in range(10):
+            if escolhido():
+                return True
+            page.wait_for_timeout(300)
+    except Exception as erro:
+        log("Endpoint Central", f"Não consegui escolher '{ENDPOINT_DOMINIO}' na lista ({descrever_erro(erro)}).")
+    return False
+
+
+def endpoint_entrar(page: "Page") -> bool:
+    """Tela de login do Endpoint: preenche só o usuário (se vazio), escolhe o domínio ``pr-sebrae`` e clica em
+    "Fazer login" apenas quando o Chrome já preencheu a senha. Nunca digita senha nem o código do autenticador."""
+    if "#/login" not in page.url.lower():
+        return False
+    usuario = page.locator("input[name='j_username']").filter(visible=True)
+    if not visivel(page.locator("input[name='j_password']")) or not usuario.count():
+        return False
+    for _ in range(6):  # o preenchimento automático do Chrome pode chegar um pouco depois da tela
+        if endpoint_senha_preenchida(page):
+            break
+        page.wait_for_timeout(500)
+    com_senha = endpoint_senha_preenchida(page)
+    if not usuario.first.input_value().strip():
+        log("Endpoint Central", f"Preenchendo o usuário {ENDPOINT_USUARIO}...")
+        usuario.first.fill(ENDPOINT_USUARIO)
+    log("Endpoint Central", f"Escolhendo '{ENDPOINT_DOMINIO}' na lista de autenticação...")
+    if not endpoint_escolher_dominio(page):
+        return True  # sem a lista confirmada não envia a senha; o usuário termina
+    if not com_senha:
+        log("Endpoint Central", "Senha não preenchida pelo Chrome; digite a senha e clique em 'Fazer login'.")
+        return True
+    log("Endpoint Central", "Clicando em 'Fazer login' (o código do autenticador fica com você)...")
+    page.locator("button[type='submit']").filter(has_text=re.compile(r"Fazer\s+login", re.IGNORECASE)).filter(
+        visible=True
+    ).first.click()
+    return True
 
 
 def selecionar_todos_computadores(page: "Page") -> None:
@@ -1736,15 +1821,90 @@ def rodar_rotina_enviar(context: "BrowserContext", arquivo: "Path | None" = None
 
 
 def abrir_para_login(context: "BrowserContext") -> int:
-    for url in (ORACLE_URL, UX_PEDIDOS_URL, ENDPOINT_URL):
-        verificar_cancelamento()
-        context.new_page().goto(url, wait_until="domcontentloaded", timeout=CARREGAMENTO_MS)
+    """Abre Endpoint, UX e Oracle e adianta tudo o que não é senha nem MFA; depois espera o usuário nas abas pendentes.
+
+    O login da UX e o do Oracle são o mesmo (conta Microsoft da Simpress): quando um conclui, a outra aba é
+    reaberta pelo endereço do sistema para aproveitar a sessão em vez de pedir o login de novo.
+    """
+    # (nome, url, logado, entrar, email, segundos de espera depois da ação, compartilha o login da Simpress)
+    sites = (
+        ("Endpoint Central", ENDPOINT_LOGIN_URL, endpoint_logado, endpoint_entrar, None, 5, False),
+        ("UX Simpress", UX_LOGIN_URL, ux_logado, ux_entrar, EMAIL_DASHBOARD, 45, True),
+        ("Oracle", ORACLE_URL, oracle_logado, None, EMAIL_DASHBOARD, 45, True),
+    )
+    abas = [(site, nova_aba(context, site[1], site[0])) for site in sites]
+
+    def tentar(site, page, recarregar: bool = False) -> bool:
+        nome, url, logado, entrar, email, apos, _compartilha = site
+        try:
+            if recarregar:
+                # Nunca page.reload(): na tela da Microsoft (saml2?sso_reload=true) o SAMLRequest se perde e dá AADSTS750054.
+                page.goto(url, wait_until="domcontentloaded", timeout=CARREGAMENTO_MS)
+            return aguardar_login(
+                page, nome, logado, entrar=entrar, email=email, esperar_usuario=False, apos_acao_s=apos
+            )
+        except Exception as erro:  # uma aba com problema não impede as outras
+            log(nome, f"Não foi possível adiantar o login ({descrever_erro(erro)}).")
+            return False
+
+    pendentes = []
+    simpress_logada = False
+    for site, page in abas:
+        if tentar(site, page, recarregar=site[6] and simpress_logada):
+            simpress_logada = simpress_logada or site[6]
+        else:
+            pendentes.append((site, page))
+
+    if pendentes:
+        _esperar_logins(pendentes, tentar)
+    log("Login", "Login detectado; todas as abas estão prontas.")
     print(
-        "\nAbas do Oracle, UX Simpress e Endpoint Central abertas no Chrome de automação.\n"
-        "Faça os logins com calma; o navegador continua aberto e as rotinas reaproveitam a sessão.",
+        "\nAbas do Endpoint Central, UX Simpress e Oracle abertas e logadas no Chrome de automação.\n"
+        "O navegador continua aberto e as rotinas reaproveitam a sessão.",
         flush=True,
     )
     return 0
+
+
+def _esperar_logins(pendentes: list, tentar: Callable) -> None:
+    """Espera o usuário concluir o login (senha/MFA) nas abas pendentes, sem repetir nenhuma ação automática."""
+
+    def chamar_usuario() -> None:
+        nomes = ", ".join(site[0] for site, _ in pendentes)
+        pendentes[0][1].bring_to_front()
+        log("Login", f"AÇÃO NECESSÁRIA: faça o login na janela do Chrome de automação ({nomes}).")
+        avisar("Simpress: login necessário", f"Faça o login na janela do Chrome de automação ({nomes}); a rotina continua sozinha.")
+
+    chamar_usuario()
+    limite = time.time() + LOGIN_TIMEOUT_S
+    while pendentes:
+        verificar_cancelamento()
+        mudou = False
+        for item in list(pendentes):
+            site, page = item
+            if item not in pendentes:  # já resolvida pelo recarregamento da aba irmã
+                continue
+            if page.is_closed():
+                log(site[0], "A aba foi fechada; seguindo sem ela.")
+                pendentes.remove(item)
+                mudou = True
+            elif site[2](page):
+                log(site[0], "Login concluído.")
+                pendentes.remove(item)
+                mudou = True
+                # UX e Oracle usam a mesma conta: a outra aba só precisa reabrir para entrar.
+                for outro in [p for p in pendentes if site[6] and p[0][6]]:
+                    if tentar(*outro, recarregar=True):
+                        pendentes.remove(outro)
+        if not pendentes:
+            return
+        if mudou:
+            chamar_usuario()
+        if time.time() >= limite:
+            raise RotinaErro(
+                f"Login não concluído em {LOGIN_TIMEOUT_S // 60} minutos ({', '.join(s[0] for s, _ in pendentes)})."
+            )
+        pendentes[0][1].wait_for_timeout(2000)
 
 
 def executar(rotina: str, sem_finalizar: bool = False) -> int:

@@ -243,6 +243,168 @@ class ChromeAutomationHelpersTests(unittest.TestCase):
         self.assertEqual(chamadas, [])
 
 
+class LoginAbasTests(unittest.TestCase):
+    """Rotina "Abrir Chrome para login": Endpoint (pr-sebrae), UX e Oracle com login compartilhado."""
+
+    def setUp(self):
+        self.temp_context = tempfile.TemporaryDirectory(prefix=".automacao-chrome-test-")
+        self.addCleanup(self.temp_context.cleanup)
+        for alvo, valor in (
+            ("CANCELAR_ARQUIVO", Path(self.temp_context.name) / "automacao_chrome.cancelar"),
+            ("avisar", MagicMock()),
+            ("log", MagicMock()),
+        ):
+            patcher = patch.object(automacao, alvo, valor)
+            patcher.start()
+            self.addCleanup(patcher.stop)
+
+    def _conta_microsoft(self, textos):
+        """Tela "Escolha uma conta" falsa: registra o texto clicado; sem campo de e-mail nem senha."""
+        clicados = []
+        page = MagicMock()
+        page.url = "https://login.microsoftonline.com/x/saml2?sso_reload=true"
+        page.is_closed.return_value = False
+
+        def achar(padrao):
+            alvos = [t for t in textos if padrao.search(t)]
+            filtrado = MagicMock()
+            filtrado.filter.return_value.count.return_value = len(alvos)
+            filtrado.filter.return_value.first.click.side_effect = lambda: clicados.append(alvos[0])
+            return filtrado
+
+        page.get_by_text.side_effect = achar
+        page.locator.return_value.filter.return_value.count.return_value = 0
+        relogio = {"agora": 0.0}
+        page.wait_for_timeout.side_effect = lambda ms: relogio.__setitem__("agora", relogio["agora"] + ms / 1000)
+        return page, clicados, relogio
+
+    def test_microsoft_clicks_only_the_requested_account(self):
+        page, clicados, relogio = self._conta_microsoft(
+            ["Gabriel Akihiro Noda Souza", "gansouza@simpress.com.br", "GAkihiro@pr.sebrae.com.br", "Use outra conta"]
+        )
+        with (
+            patch.object(automacao.time, "time", lambda: relogio["agora"]),
+            patch.object(automacao, "visivel", return_value=False),
+        ):
+            automacao.entrar_microsoft(page, "Oracle", "gansouza@simpress.com.br", espera_s=5)
+        self.assertEqual(clicados, ["gansouza@simpress.com.br"])
+
+    def test_microsoft_uses_another_account_when_requested_one_is_not_listed(self):
+        page, clicados, relogio = self._conta_microsoft(["GAkihiro@pr.sebrae.com.br", "Use outra conta"])
+        with (
+            patch.object(automacao.time, "time", lambda: relogio["agora"]),
+            patch.object(automacao, "visivel", return_value=False),
+        ):
+            automacao.entrar_microsoft(page, "Oracle", "gansouza@simpress.com.br", espera_s=5)
+        self.assertEqual(set(clicados), {"Use outra conta"})  # nunca a conta do Sebrae
+
+    def _pagina_endpoint(self, usuario="gakihiro"):
+        page = MagicMock()
+        page.url = "https://centralendpoint.pr.sebrae.com.br/client#/login"
+        filtrado = page.locator.return_value.filter.return_value
+        filtrado.first.input_value.return_value = usuario
+        return page, filtrado.filter.return_value.first.click, filtrado.first.fill
+
+    def _entrar_endpoint(self, page, senha: bool, dominio: bool) -> bool:
+        with (
+            patch.object(automacao, "visivel", return_value=True),
+            patch.object(automacao, "endpoint_senha_preenchida", return_value=senha),
+            patch.object(automacao, "endpoint_escolher_dominio", return_value=dominio) as escolher,
+        ):
+            resultado = automacao.endpoint_entrar(page)
+        escolher.assert_called_once()
+        return resultado
+
+    def test_endpoint_clicks_login_only_with_domain_confirmed_and_password_from_chrome(self):
+        page, clicar, _ = self._pagina_endpoint()
+        self.assertTrue(self._entrar_endpoint(page, senha=True, dominio=True))
+        clicar.assert_called_once()
+
+    def test_endpoint_does_not_click_login_without_saved_password(self):
+        page, clicar, preencher = self._pagina_endpoint(usuario="")
+        self.assertTrue(self._entrar_endpoint(page, senha=False, dominio=True))
+        clicar.assert_not_called()
+        preencher.assert_called_once_with(automacao.ENDPOINT_USUARIO)
+
+    def test_endpoint_does_not_click_login_when_domain_not_confirmed(self):
+        page, clicar, _ = self._pagina_endpoint()
+        self.assertTrue(self._entrar_endpoint(page, senha=True, dominio=False))
+        clicar.assert_not_called()
+
+    def test_endpoint_ignores_pages_that_are_not_the_login_screen(self):
+        page, clicar, _ = self._pagina_endpoint()
+        page.url = "https://centralendpoint.pr.sebrae.com.br/webclient#/uems/inventory/computers"
+        self.assertFalse(automacao.endpoint_entrar(page))
+        clicar.assert_not_called()
+
+    def test_aguardar_login_without_waiting_for_user_returns_false_after_automatic_attempts(self):
+        relogio = {"agora": 0.0}
+        page = MagicMock()
+        page.wait_for_timeout.side_effect = lambda ms: relogio.__setitem__("agora", relogio["agora"] + ms / 1000)
+        with patch.object(automacao.time, "time", lambda: relogio["agora"]):
+            self.assertFalse(automacao.aguardar_login(page, "Endpoint Central", lambda _p: False, esperar_usuario=False))
+        page.bring_to_front.assert_not_called()
+        automacao.avisar.assert_not_called()
+
+    def _abrir(self, abas, logados, aguardar):
+        """Roda ``abrir_para_login`` com abas falsas; ``logados`` diz, por site, se a aba já está logada."""
+        contexto = MagicMock()
+        with (
+            patch.object(automacao, "nova_aba", side_effect=lambda _c, _u, origem: abas[origem]),
+            patch.object(automacao, "aguardar_login", side_effect=aguardar),
+            patch.object(automacao, "endpoint_logado", lambda _p: logados["Endpoint Central"]()),
+            patch.object(automacao, "ux_logado", lambda _p: logados["UX Simpress"]()),
+            patch.object(automacao, "oracle_logado", lambda _p: logados["Oracle"]()),
+            redirect_stdout(io.StringIO()),
+        ):
+            return automacao.abrir_para_login(contexto)
+
+    @staticmethod
+    def _abas():
+        abas = {nome: MagicMock() for nome in ("Endpoint Central", "UX Simpress", "Oracle")}
+        for aba in abas.values():
+            aba.is_closed.return_value = False
+        return abas
+
+    def test_oracle_tab_reopens_when_ux_already_logged_in_during_automatic_attempts(self):
+        abas = self._abas()
+        logados = {"Endpoint Central": lambda: True, "UX Simpress": lambda: True, "Oracle": lambda: abas["Oracle"].goto.called}
+
+        def aguardar(page, nome, logado, **_kw):
+            return logado(page)
+
+        self.assertEqual(self._abrir(abas, logados, aguardar), 0)
+        abas["Oracle"].goto.assert_called_once()
+        abas["UX Simpress"].goto.assert_not_called()
+        abas["Endpoint Central"].goto.assert_not_called()
+
+    def test_oracle_tab_reopens_when_user_finishes_ux_login(self):
+        abas = self._abas()
+        estado = {"ux": False}
+        abas["UX Simpress"].wait_for_timeout.side_effect = lambda _ms: estado.update(ux=True)
+        logados = {
+            "Endpoint Central": lambda: True,
+            "UX Simpress": lambda: estado["ux"],
+            "Oracle": lambda: abas["Oracle"].goto.called,
+        }
+
+        def aguardar(page, nome, logado, **_kw):
+            return logado(page)
+
+        self.assertEqual(self._abrir(abas, logados, aguardar), 0)
+        abas["Oracle"].goto.assert_called_once()
+        abas["UX Simpress"].goto.assert_not_called()
+        mensagens = " ".join(chamada.args[1] for chamada in automacao.log.call_args_list)
+        self.assertIn("AÇÃO NECESSÁRIA: faça o login na janela do Chrome de automação (UX Simpress, Oracle)", mensagens)
+
+    def test_waiting_for_login_times_out_listing_pending_sites(self):
+        abas = self._abas()
+        logados = {nome: (lambda: False) for nome in abas}
+        with patch.object(automacao, "LOGIN_TIMEOUT_S", 0), self.assertRaises(automacao.RotinaErro) as erro:
+            self._abrir(abas, logados, lambda *_a, **_kw: False)
+        self.assertIn("Endpoint Central, UX Simpress, Oracle", str(erro.exception))
+
+
 class ExecucaoUnicaTests(unittest.TestCase):
     def setUp(self):
         self.temp_context = tempfile.TemporaryDirectory(prefix=".automacao-trava-test-")
