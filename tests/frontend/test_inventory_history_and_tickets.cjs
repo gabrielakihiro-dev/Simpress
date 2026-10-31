@@ -17,16 +17,6 @@ test("filters comparison history while preserving row-level annotation autosave"
   assert.match(appScript, /\/anotacoes\/\$\{encodeURIComponent\(targetItemId\)\}/);
 });
 
-test("compares two complete inventory updates and annotates each source row in the evolution view", () => {
-  assert.match(appHtml, /id="modal-evolucao-atualizacoes"/);
-  assert.match(appHtml, /id="evolucao-anterior"/);
-  assert.match(appHtml, /id="evolucao-atual"/);
-  assert.match(appScript, /\/api\/operacoes\/evolucao\?/);
-  assert.match(appScript, /"Deixaram de aparecer"/);
-  assert.match(appScript, /data-evolution-event/);
-  assert.match(appScript, /renderizarAnotacaoOperacional\(item/);
-});
-
 test("imports Simpress and Oracle files and displays the serial-to-OS reconciliation", async () => {
   const requests = [];
   const report = {
@@ -497,11 +487,19 @@ test("groups secondary actions under cockpit tools dropdown", () => {
   assert.match(appHtml, /<button(?=[^>]*data-on-click="abrirPainelCockpit")(?=[^>]*data-args='\["apelidos"\]')[^>]*id="btn-historico-apelidos"/);
   assert.match(appHtml, /<button(?=[^>]*data-on-click="abrirPainelCockpit")(?=[^>]*data-args='\["relatorio"\]')[^>]*id="btn-relatorio-mensal"/);
   assert.match(appHtml, /data-on-click="abrirModalAtualizarPlanilhas"/);
-  assert.match(appHtml, /data-on-click="abrirModalHistoricoComparacoes"/);
-  assert.match(appHtml, /data-on-click="abrirEvolucaoAtualizacoes"/);
+  assert.match(appHtml, /id="cockpit-comparison-legacy"/); // abre o modal do histórico (listener em cockpit-tool-panels.js)
+  // 31/10/2026: a tela "Evolução das atualizações" saiu; o alerta "Ver evolução" da Home abre Comparações.
+  assert.doesNotMatch(appHtml, /btn-evolucao-atualizacoes|modal-evolucao-atualizacoes|data-cockpit-tool-panel="evolucao"/);
+  assert.match(appHtml, /<button(?=[^>]*id="btn-alerta-divergencias-novas")(?=[^>]*data-on-click="abrirPainelCockpit")(?=[^>]*data-args='\["comparacao"\]')[^>]*>/);
+  assert.doesNotMatch(appScript, /\/api\/operacoes\/evolucao\?/);
   assert.doesNotMatch(appHtml, /id="btn-relatorio-mensal"[^>]*data-on-click="abrirRelatorioMensal"/);
-  assert.match(appHtml, /data-on-click="abrirModalGerenciarUnidades"/);
-  assert.match(appHtml, /id="badge-total-historico-comparacoes"[^>]*>0<\/span>/);
+  // 31/10/2026: o modal "Gerenciar unidades" e o "Fluxo completo" saíram; o painel do catálogo traz o formulário.
+  assert.doesNotMatch(appHtml, /modal-gerenciar-unidades|cockpit-units-legacy|cockpit-units-edit/);
+  assert.match(appHtml, /id="cockpit-units-new"[^>]*data-on-click="toggleFormNovaUnidade"/);
+  assert.equal((appHtml.match(/id="form-unidade-titulo"/g) || []).length, 1);
+  assert.equal((appHtml.match(/id="btn-salvar-unidade"/g) || []).length, 1);
+  assert.doesNotMatch(appHtml, /id="badge-total-historico-comparacoes"/);
+  assert.match(appHtml, /id="total-historico-comparacoes"/);
   assert.doesNotMatch(appHtml, /Acompanhamento de transportes/);
   assert.doesNotMatch(appScript, /\/api\/transferencias/);
 });

@@ -31,20 +31,13 @@ async function openAnalysisMenu(page) {
   if (!(await menu.evaluate(node => node.open))) await page.locator("#cockpit-tools-trigger").click();
 }
 
-// O menu abre a tela do Cockpit; o modal completo abre pelo botão "Fluxo completo".
+// O menu abre a tela Comparação; o modal completo abre pelo botão "Histórico e ações completas".
 async function openHistoryModal(page) {
   await openAnalysisMenu(page);
-  await page.locator("#btn-historico-comparacoes").click();
-  await expect(page.locator("#cockpit-sheets-history-legacy")).toBeVisible();
-  await page.locator("#cockpit-sheets-history-legacy").click();
+  await page.locator("#btn-cockpit-comparacao").click();
+  await expect(page.locator("#cockpit-comparison-legacy")).toBeVisible();
+  await page.locator("#cockpit-comparison-legacy").click();
   await expect(page.getByRole("dialog")).toBeVisible();
-}
-
-async function openEvolutionModal(page) {
-  await openAnalysisMenu(page);
-  await page.locator("#btn-evolucao-atualizacoes").click();
-  await expect(page.locator("#cockpit-updates-legacy")).toBeVisible();
-  await page.locator("#cockpit-updates-legacy").click();
 }
 
 // O resultado completo da comparação abre na aba Comparação do Cockpit (não há mais modal).
@@ -85,8 +78,8 @@ test("Cockpit keeps compact typography and a single tools disclosure", async ({ 
   await openAnalysisMenu(page);
   await expect(page.locator("#btn-atualizar-planilhas")).toBeVisible();
   await expect(page.locator("#btn-acompanhamento-chamados:visible, #btn-chamados-menu:visible")).toHaveCount(1);
-  await expect(page.locator("#btn-historico-comparacoes")).toBeVisible();
-  await expect(page.locator("#btn-historico-comparacoes #badge-total-historico-comparacoes")).toBeVisible();
+  await expect(page.locator("#btn-historico-comparacoes")).toHaveCount(0);
+  await expect(page.locator("#badge-total-historico-comparacoes")).toHaveCount(0);
   const styles = await page.locator(".ck-menu__item:visible").evaluateAll(nodes => nodes.map(node => ({
     image: getComputedStyle(node).backgroundImage, wraps: getComputedStyle(node).whiteSpace,
   })));
@@ -352,84 +345,6 @@ test("comparison summary cards jump to their section and clear filters that hide
   await expect(heading).toBeHidden();
   await card.click();
   await expect(dialog.locator("[data-history-filter-search]")).toHaveValue("");
-  await expect(heading).toBeFocused();
-  await expect(heading).toBeInViewport();
-});
-
-test("inventory evolution compares two saved updates and shows their row annotations", async ({ page }) => {
-  await openEvolutionModal(page);
-  const dialog = page.locator("#modal-evolucao-atualizacoes");
-  await expect(dialog).toBeVisible();
-  await expect(page.locator("#resultado-evolucao-atualizacoes")).toContainText("Deixaram de aparecer");
-  await expect(page.locator("#resultado-evolucao-atualizacoes")).toContainText("DEMO-SN-001");
-  await expect(page.locator("#resultado-evolucao-atualizacoes textarea[data-operational-annotation]")).toBeVisible();
-  await auditAccessibility(page, "#modal-evolucao-atualizacoes");
-});
-
-test("inventory evolution prioritizes categories, filters rows and opens the matching result heading", async ({ page }) => {
-  const evolution = {
-    anterior: { id: "fixture-previous", horario: "2026-10-07T09:00:00-03:00" },
-    atual: { id: "fixture-current", horario: "2026-10-08T09:00:00-03:00" },
-    contagens: { novos: 1, resolvidos: 1, continuam: 1 },
-    mudancas: {
-      novos: [{
-        categoria: "apelidos_sem_atualizacao",
-        secao: "Linhas mantidas para conferência",
-        evento_id: "fixture-event-001",
-        item: { computador: "NOVO-HOST", serie: "NOVO-SN" },
-      }],
-      resolvidos: [{
-        categoria: "apelidos_sem_atualizacao",
-        secao: "Linhas mantidas para conferência",
-        evento_id: "fixture-event-001",
-        item: { computador: "RESOLVIDO-HOST", serie: "RESOLVIDO-SN" },
-      }],
-      continuam: [{
-        categoria: "apelidos_sem_atualizacao",
-        secao: "Linhas mantidas para conferência",
-        evento_id: "fixture-event-001",
-        item: { computador: "ATIVO-HOST", serie: "ATIVO-SN" },
-      }],
-    },
-  };
-  await page.route(/\/api\/operacoes\/evolucao\?/, route => route.fulfill({ json: evolution }));
-  await openEvolutionModal(page);
-
-  const dialog = page.locator("#modal-evolucao-atualizacoes");
-  const result = dialog.locator("#resultado-evolucao-atualizacoes");
-  await expect(dialog).toBeVisible();
-  await expect(result.locator(".grid > div > p:first-child")).toHaveText([
-    "Novos",
-    "Deixaram de aparecer",
-    "Continuam",
-  ]);
-  await expect(result.locator("[data-evolution-group] > h4")).toHaveText([
-    "Novos",
-    "Deixaram de aparecer",
-    "Continuam",
-  ]);
-
-  const search = dialog.getByLabel("Buscar por hostname, série, seção ou anotação");
-  const category = dialog.getByLabel("Categoria");
-  const rows = result.locator("[data-evolution-row]");
-  await search.fill("ativo-sn");
-  await expect(result.locator("[data-evolution-row]:visible")).toHaveCount(1);
-  await expect(result.locator("[data-evolution-row]:visible")).toContainText("ATIVO-HOST");
-  await expect(dialog.locator("#filtro-evolucao-status")).toHaveText("1 de 3 ocorrências");
-  await dialog.getByRole("button", { name: "Limpar filtros" }).click();
-  await expect(search).toHaveValue("");
-  await expect(result.locator("[data-evolution-row]:visible")).toHaveCount(3);
-
-  await category.selectOption("resolvidos");
-  await expect(result.locator("[data-evolution-row]:visible")).toHaveCount(1);
-  await expect(result.locator('[data-evolution-row][data-evolution-category="resolvidos"]:visible')).toContainText("RESOLVIDO-SN");
-  await auditAccessibility(page, "#modal-evolucao-atualizacoes");
-
-  await result.locator('[data-evolution-category="resolvidos"] [data-evolution-event]').click();
-  const comparison = page.locator(COMPARISON_PANEL);
-  const heading = comparison.locator("#comparacao-secao-linhas-conferencia");
-  await expect(dialog).toBeHidden();
-  await expect(comparison).toBeVisible();
   await expect(heading).toBeFocused();
   await expect(heading).toBeInViewport();
 });
@@ -886,10 +801,10 @@ test("stale tickets and new divergences appear in the notification center", asyn
     await trigger.click();
     await divergences.getByRole("button", { name: "Ver evolução" }).click();
     await expect(panel).toBeHidden();
-    // v2: "Ver evolução" abre a tela de Evolução (o modal só abre por "Fluxo completo").
+    // 31/10/2026: a tela Evolução saiu; "Ver evolução" abre a aba Comparações.
     await expect(page.locator("#cockpit-tool-panels")).toBeVisible();
-    await expect(page.locator("#cockpit-tool-title")).toHaveText("Evolução das atualizações");
-    await expect(page.locator("#modal-evolucao-atualizacoes")).toBeHidden();
+    await expect(page.locator("#cockpit-tool-title")).toHaveText("Comparação");
+    await expect(page.locator(COMPARISON_PANEL)).toBeVisible();
     await page.keyboard.press("Escape");
     await expect(page.locator("#cockpit-tool-panels")).toBeHidden();
     await expect(page.locator("#cockpit-tools-trigger")).toBeFocused();

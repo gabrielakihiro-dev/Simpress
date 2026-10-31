@@ -168,14 +168,11 @@
           <p class="ck-menu__titulo" id="ck-menu-g-planilhas">Planilhas</p>
           <button type="button" id="btn-atualizar-planilhas" class="ck-menu__item" role="menuitem" data-on-click="abrirPainelCockpit" data-args='["planilhas"]'><svg class="ck-ico" aria-hidden="true" focusable="false"><use href="#i-upload"></use></svg><span class="ck-menu__rotulo">Atualizar planilhas</span></button>
           <button type="button" id="btn-exportar-equipamentos" class="ck-menu__item hidden" role="menuitem" data-on-click="exportarEquipamentosAtualizados" aria-label="Exportar planilha Excel com apelidos e IdCliente atualizados" aria-labelledby="label-exportar-equipamentos"><svg class="ck-ico" aria-hidden="true" focusable="false"><use href="#i-download"></use></svg><span class="ck-menu__rotulo" id="label-exportar-equipamentos">Exportar Excel</span></button>
-          <button type="button" id="btn-historico-comparacoes" class="ck-menu__item" role="menuitem" data-on-click="abrirPainelCockpit" data-args='["historico-planilhas"]'><svg class="ck-ico" aria-hidden="true" focusable="false"><use href="#i-clock"></use></svg><span class="ck-menu__rotulo">Histórico planilhas</span><span id="badge-total-historico-comparacoes" class="ck-badge" aria-label="0 registros">0</span></button>
           <button type="button" id="btn-sebrae-chamados-menu" class="ck-menu__item" role="menuitem" data-on-click="abrirPainelCockpit" data-args='["sebrae-chamados"]'><svg class="ck-ico" aria-hidden="true" focusable="false"><use href="#i-file-check"></use></svg><span class="ck-menu__rotulo">Chamados Sebrae</span></button>
         </div>
         <div class="ck-menu__grupo" role="group" aria-labelledby="ck-menu-g-hist">
           <p class="ck-menu__titulo" id="ck-menu-g-hist">Histórico e catálogo</p>
-          <button type="button" id="btn-evolucao-atualizacoes" class="ck-menu__item" role="menuitem" data-on-click="abrirPainelCockpit" data-args='["evolucao"]'><svg class="ck-ico" aria-hidden="true" focusable="false"><use href="#i-activity"></use></svg><span class="ck-menu__rotulo">Evolução das atualizações</span></button>
           <button type="button" id="btn-catalogo-unidades" class="ck-menu__item" role="menuitem" data-on-click="abrirPainelCockpit" data-args='["unidades"]'><svg class="ck-ico" aria-hidden="true" focusable="false"><use href="#i-pin"></use></svg><span class="ck-menu__rotulo">Catálogo de unidades</span></button>
-          <button type="button" id="btn-sebrae-historico-menu" class="ck-menu__item" role="menuitem" data-on-click="abrirPainelCockpit" data-args='["sebrae-historico"]'><svg class="ck-ico" aria-hidden="true" focusable="false"><use href="#i-clock"></use></svg><span class="ck-menu__rotulo">Histórico do Dashboard Sebrae</span></button>
         </div>
       </div>
     </details>
@@ -198,7 +195,7 @@
             <span class="ck-aviso__icone"><svg class="ck-ico" aria-hidden="true" focusable="false"><use href="#i-alerta"></use></svg></span>
             <div class="ck-aviso__topo"><span class="ck-badge" data-status="alerta">Atenção</span><h3 id="alerta-divergencias-novas-titulo" class="ck-aviso__titulo">Divergências novas</h3></div>
             <p id="alerta-divergencias-novas-texto" class="ck-aviso__texto"></p>
-            <button type="button" id="btn-alerta-divergencias-novas" data-on-click="abrirPainelCockpit" data-args='["evolucao"]' class="ck-btn ck-btn--secundario ck-btn--sm ck-aviso__acao">Ver evolução</button>
+            <button type="button" id="btn-alerta-divergencias-novas" data-on-click="abrirPainelCockpit" data-args='["comparacao"]' class="ck-btn ck-btn--secundario ck-btn--sm ck-aviso__acao">Ver evolução</button>
           </section>
         </div>
       </section>
@@ -778,7 +775,7 @@ Horário disponível para atendimento:</textarea>
       </section>
 
       <section class="ck-cartao" id="sebrae-novos-painel" aria-labelledby="sebrae-novos-titulo">
-        <div class="ck-cartao__cab"><h2 class="ck-cartao__titulo" id="sebrae-novos-titulo">Chamados novos do SoftExpert</h2><span class="info-tip"><button type="button" class="info-tip-trigger" aria-label="Sobre Chamados novos do SoftExpert" aria-describedby="tip-sebrae-novos"><svg class="ck-ico ck-ico--sm" aria-hidden="true" focusable="false"><use href="#i-info"></use></svg></button><span id="tip-sebrae-novos" role="tooltip" class="info-tip-text">Importe o Dashboard, busque os novos, preencha e cole as linhas</span></span><span class="ck-espaco"></span><button type="button" class="ck-btn ck-btn--fantasma ck-btn--sm" id="btn-sebrae-historico" data-on-click="abrirPainelCockpit" data-args='["sebrae-historico"]'><svg class="ck-ico ck-ico--sm" aria-hidden="true" focusable="false"><use href="#i-clock"></use></svg>Histórico</button><button type="button" class="ck-btn ck-btn--fantasma ck-btn--sm" id="btn-sebrae-atualizar-lista" data-on-click="carregarNovosSebrae"><svg class="ck-ico ck-ico--sm" aria-hidden="true" focusable="false"><use href="#i-refresh"></use></svg>Atualizar lista</button></div>
+        <div class="ck-cartao__cab"><h2 class="ck-cartao__titulo" id="sebrae-novos-titulo">Chamados novos do SoftExpert</h2><span class="info-tip"><button type="button" class="info-tip-trigger" aria-label="Sobre Chamados novos do SoftExpert" aria-describedby="tip-sebrae-novos"><svg class="ck-ico ck-ico--sm" aria-hidden="true" focusable="false"><use href="#i-info"></use></svg></button><span id="tip-sebrae-novos" role="tooltip" class="info-tip-text">Importe o Dashboard, busque os novos, preencha e cole as linhas</span></span></div>
         <div class="ck-cartao__corpo ck-det__corpo">
           <form class="sebrae-importar" data-on-submit="importarDashboardSebrae">
             <label class="ckp-arquivo" data-estado="vazio">
@@ -802,7 +799,7 @@ Horário disponível para atendimento:</textarea>
       </section>
 
       <section class="ck-cartao" id="automacao-historico-painel" aria-labelledby="automacao-historico-titulo">
-        <div class="ck-cartao__cab"><h2 class="ck-cartao__titulo" id="automacao-historico-titulo">Últimas execuções</h2><span class="ck-cartao__meta" id="automacao-historico-resumo" role="status"></span><span class="ck-espaco"></span><button type="button" class="ck-btn ck-btn--fantasma ck-btn--sm" id="btn-automacao-historico" data-on-click="carregarHistoricoAutomacao"><svg class="ck-ico ck-ico--sm" aria-hidden="true" focusable="false"><use href="#i-refresh"></use></svg>Atualizar</button></div>
+        <div class="ck-cartao__cab"><h2 class="ck-cartao__titulo" id="automacao-historico-titulo">Últimas execuções</h2><span class="ck-cartao__meta" id="automacao-historico-resumo" role="status"></span></div>
         <div class="ck-filtros-linha" id="automacao-historico-filtros" role="group" aria-label="Filtros de execuções">
           <label class="ck-campo"><span class="ck-campo__rotulo">De</span><input class="ck-entrada ck-entrada--sm" type="date" id="automacao-historico-inicio"></label>
           <label class="ck-campo"><span class="ck-campo__rotulo">Até</span><input class="ck-entrada ck-entrada--sm" type="date" id="automacao-historico-fim"></label>
@@ -880,7 +877,6 @@ Horário disponível para atendimento:</textarea>
           <div class="ck-barra-ferr">
             <label class="ck-campo"><span class="ck-campo__rotulo">Buscar série ou OS</span><input id="cockpit-tickets-search" class="ck-entrada" type="search" autocomplete="off" placeholder="Série, ordem ou usuário"></label>
             <label class="ck-campo"><span class="ck-campo__rotulo">Relação</span><select id="cockpit-tickets-relation" class="ck-entrada"><option value="todos">Todas</option><option value="divergente">Divergentes</option><option value="conferida">Conferidas</option><option value="somente_simpress">Só Simpress</option><option value="somente_oracle">Só Oracle</option></select></label>
-            <button type="button" id="cockpit-tickets-refresh" class="ck-btn ck-btn--secundario">Atualizar</button>
             <button type="button" id="cockpit-tickets-manage" class="ck-btn ck-btn--primario">Importar e gerenciar</button>
           </div>
           <div id="cockpit-tickets-os" class="ck-ferr-os"></div>
@@ -894,7 +890,6 @@ Horário disponível para atendimento:</textarea>
             <button type="button" id="cockpit-comparison-new" class="ck-btn ck-btn--secundario">Nova comparação</button>
             <button type="button" id="btn-exportar-resultado-comparacao" data-on-click="exportarResultadoComparacaoPlanilhas" class="ck-btn ck-btn--primario disabled:cursor-not-allowed disabled:opacity-50" aria-label="Exportar este resultado para Excel" title="Exportar este resultado para Excel (registros e anotações do dia)" disabled><svg class="ck-ico ck-ico--sm" aria-hidden="true" focusable="false"><use href="#i-download"></use></svg><span>Exportar</span></button>
             <button type="button" id="cockpit-comparison-legacy" class="ck-btn ck-btn--primario">Histórico e ações completas</button>
-            <button type="button" id="cockpit-comparison-refresh" class="ck-btn ck-btn--icone ck-btn--fantasma" aria-label="Atualizar histórico" title="Atualizar histórico"><svg class="ck-ico ck-ico--sm" aria-hidden="true" focusable="false"><use href="#i-refresh"></use></svg><span class="ck-sr">Atualizar histórico</span></button>
           </div>
           <h3 class="sr-only">Resultado da atualização das planilhas</h3>
           <p id="comparacao-planilhas-fontes" class="ck-barra-ferr__nota"></p>
@@ -909,7 +904,6 @@ Horário disponível para atendimento:</textarea>
             <label class="ck-campo"><span class="ck-campo__rotulo">Tipo</span><select id="cockpit-alias-type" class="ck-entrada"><option value="todos">Todos</option><option value="apelido">Apelido</option><option value="usuario">Usuário</option><option value="endereco">Endereço</option><option value="aviso_endpoint">Avisos do Endpoint</option></select></label>
             <button type="button" id="cockpit-alias-export" class="ck-btn ck-btn--primario">Exportar CSV</button>
             <button type="button" id="cockpit-alias-legacy" class="ck-btn ck-btn--secundario">Abrir ações completas</button>
-            <button type="button" id="cockpit-alias-refresh" class="ck-btn ck-btn--icone ck-btn--fantasma" aria-label="Atualizar histórico" title="Atualizar histórico"><svg class="ck-ico ck-ico--sm" aria-hidden="true" focusable="false"><use href="#i-refresh"></use></svg><span class="ck-sr">Atualizar histórico</span></button>
           </div>
           <div id="cockpit-alias-filters" class="ck-pilulas ck-ferr-filtros" role="group" aria-label="Filtrar histórico por período e classificação">
             <button type="button" class="ck-pilula" data-alias-period="todos" aria-pressed="true">Todas <span class="ck-pilula__n" id="cockpit-alias-count-all">0</span></button>
@@ -962,63 +956,10 @@ Horário disponível para atendimento:</textarea>
                 <ol class="ck-tempo">
                   <li class="ck-tempo__item"><span class="ck-tempo__marca" data-status="info" aria-hidden="true"></span><div><p class="ck-tempo__titulo">A planilha é importada e substitui a versão atual</p></div></li>
                   <li class="ck-tempo__item"><span class="ck-tempo__marca" aria-hidden="true"></span><div><p class="ck-tempo__titulo">A comparação com o Endpoint é refeita</p></div></li>
-                  <li class="ck-tempo__item"><span class="ck-tempo__marca" aria-hidden="true"></span><div><p class="ck-tempo__titulo">O resultado entra no Histórico planilhas</p></div></li>
+                  <li class="ck-tempo__item"><span class="ck-tempo__marca" aria-hidden="true"></span><div><p class="ck-tempo__titulo">O resultado entra no histórico da Comparação</p></div></li>
                 </ol>
               </div>
-              <div class="ck-det__rodape"><button type="button" id="cockpit-sheets-to-history" class="ck-btn ck-btn--secundario ck-btn--bloco" data-on-click="abrirPainelCockpit" data-args='["historico-planilhas"]'><svg class="ck-ico ck-ico--sm" aria-hidden="true" focusable="false"><use href="#i-clock"></use></svg>Histórico planilhas</button><button type="button" id="cockpit-sheets-submit" class="ck-btn ck-btn--primario ck-btn--bloco" data-on-click="abrirModalAtualizarPlanilhas"><svg class="ck-ico ck-ico--sm" aria-hidden="true" focusable="false"><use href="#i-upload"></use></svg>Atualizar planilhas</button></div>
-            </aside>
-          </div>
-        </section>
-
-        <section class="ck-ferr-painel" data-cockpit-tool-panel="historico-planilhas" aria-labelledby="cockpit-sheets-history-heading" hidden>
-          <h2 id="cockpit-sheets-history-heading" class="sr-only">Histórico planilhas</h2>
-          <div id="cockpit-sheets-history-kpis" class="ck-kpis" role="group" aria-label="Resumo do histórico de planilhas"></div>
-          <div class="ck-barra-ferr">
-            <label class="ck-campo"><span class="ck-campo__rotulo">Buscar no histórico</span><input class="ck-entrada ck-entrada--sm" id="cockpit-sheets-history-search" type="search" autocomplete="off" placeholder="Data ou arquivo"></label>
-            <span id="cockpit-sheets-history-status" class="ck-barra-ferr__nota" role="status" aria-live="polite">Carregando…</span>
-            <span class="ck-espaco"></span>
-            <button type="button" id="cockpit-sheets-history-export" class="ck-btn ck-btn--secundario ck-btn--sm" disabled><svg class="ck-ico ck-ico--sm" aria-hidden="true" focusable="false"><use href="#i-download"></use></svg>Exportar</button>
-            <button type="button" id="cockpit-sheets-history-legacy" class="ck-btn ck-btn--primario ck-btn--sm" data-on-click="abrirModalHistoricoComparacoes">Fluxo completo</button>
-          </div>
-          <div class="ck-dividido">
-            <div class="ck-dividido__lista">
-              <table class="ck-tabela ck-tabela--cards" id="cockpit-sheets-history-list">
-                <thead><tr><th scope="col">Data</th><th scope="col">Arquivo</th><th scope="col" class="ck-th--dir">Equipamentos</th><th scope="col" class="ck-th--dir">Iguais</th><th scope="col" class="ck-th--dir">Divergentes</th><th scope="col" class="ck-th--dir">Sem correspondência</th></tr></thead>
-                <tbody id="cockpit-sheets-history-list-body"></tbody>
-              </table>
-            </div>
-            <aside class="ck-dividido__detalhe" id="cockpit-sheets-history-detail" aria-label="Detalhes do registro selecionado">
-              <div class="ck-det__cab"><div class="ck-det__linha"><span class="ck-det__titulo" id="cockpit-sheets-history-detail-title">—</span><span id="cockpit-sheets-history-detail-tag"></span></div><span class="ck-det__sub ck-mono" id="cockpit-sheets-history-detail-sub">Selecione um registro.</span></div>
-              <div class="ck-det__corpo">
-                <dl class="ck-pares" id="cockpit-sheets-history-detail-pares"></dl>
-                <div class="ck-nota" id="cockpit-sheets-history-detail-nota" data-status="alerta" hidden><svg class="ck-ico" aria-hidden="true" focusable="false"><use href="#i-alerta"></use></svg><span id="cockpit-sheets-history-detail-nota-texto"></span></div>
-              </div>
-              <div class="ck-det__rodape"><button type="button" id="cockpit-sheets-history-to-evolution" class="ck-btn ck-btn--secundario ck-btn--bloco" data-on-click="abrirPainelCockpit" data-args='["evolucao"]'><svg class="ck-ico ck-ico--sm" aria-hidden="true" focusable="false"><use href="#i-activity"></use></svg>Ver evolução</button><button type="button" id="cockpit-sheets-history-to-comparison" class="ck-btn ck-btn--primario ck-btn--bloco" data-on-click="abrirPainelCockpit" data-args='["comparacao"]'><svg class="ck-ico ck-ico--sm" aria-hidden="true" focusable="false"><use href="#i-dashboard"></use></svg>Abrir comparação</button></div>
-            </aside>
-          </div>
-        </section>
-
-        <section class="ck-ferr-painel" data-cockpit-tool-panel="sebrae-historico" aria-labelledby="sebrae-historico-heading" hidden>
-          <h2 id="sebrae-historico-heading" class="sr-only">Histórico de importações do Dashboard Sebrae</h2>
-          <div id="sebrae-historico-kpis" class="ck-kpis" role="group" aria-label="Resumo do histórico do Dashboard Sebrae"></div>
-          <div class="ck-barra-ferr">
-            <label class="ck-campo"><span class="ck-campo__rotulo">Tipo</span><select class="ck-entrada ck-entrada--sm" id="sebrae-historico-filtro" data-on-change="filtrarHistoricoSebrae"><option value="">Todas</option><option value="importacao">Importações</option><option value="busca">Buscas</option></select></label>
-            <span id="sebrae-historico-status" class="ck-barra-ferr__nota" role="status" aria-live="polite">Carregando…</span>
-          </div>
-          <div class="ck-dividido">
-            <div class="ck-dividido__lista">
-              <table class="ck-tabela ck-tabela--cards" id="sebrae-historico-lista">
-                <thead><tr><th scope="col">Data</th><th scope="col">Tipo</th><th scope="col">Arquivo</th><th scope="col">O que mudou</th><th scope="col" class="ck-th--dir">Chamados</th></tr></thead>
-                <tbody id="sebrae-historico-lista-corpo"></tbody>
-              </table>
-            </div>
-            <aside class="ck-dividido__detalhe" id="sebrae-historico-detalhe" aria-label="Detalhes do registro selecionado">
-              <div class="ck-det__cab"><div class="ck-det__linha"><span class="ck-det__titulo" id="sebrae-historico-detalhe-titulo">—</span><span id="sebrae-historico-detalhe-tag"></span></div><span class="ck-det__sub ck-mono" id="sebrae-historico-detalhe-sub">Selecione um registro.</span></div>
-              <div class="ck-det__corpo">
-                <dl class="ck-pares" id="sebrae-historico-detalhe-pares"></dl>
-                <div id="sebrae-historico-detalhe-grupos"></div>
-                <div class="ck-nota" id="sebrae-historico-detalhe-nota" data-status="alerta" hidden><svg class="ck-ico" aria-hidden="true" focusable="false"><use href="#i-alerta"></use></svg><span id="sebrae-historico-detalhe-nota-texto"></span></div>
-              </div>
+              <div class="ck-det__rodape"><button type="button" id="cockpit-sheets-submit" class="ck-btn ck-btn--primario ck-btn--bloco" data-on-click="abrirModalAtualizarPlanilhas"><svg class="ck-ico ck-ico--sm" aria-hidden="true" focusable="false"><use href="#i-upload"></use></svg>Atualizar planilhas</button></div>
             </aside>
           </div>
         </section>
@@ -1060,44 +1001,6 @@ Horário disponível para atendimento:</textarea>
           </div>
         </section>
 
-        <section class="ck-ferr-painel" data-cockpit-tool-panel="evolucao"aria-labelledby="cockpit-updates-heading" hidden>
-          <h2 id="cockpit-updates-heading" class="sr-only">Evolução das atualizações</h2>
-          <div class="ck-barra-ferr">
-            <p id="cockpit-updates-status" class="ck-barra-ferr__nota" role="status" aria-live="polite">Carregando…</p>
-            <button type="button" id="cockpit-updates-refresh" class="ck-btn ck-btn--secundario">Atualizar</button>
-            <button type="button" id="cockpit-updates-legacy" class="ck-btn ck-btn--primario" data-on-click="abrirEvolucaoAtualizacoes">Fluxo completo</button>
-          </div>
-          <div id="cockpit-updates-kpis" class="ck-kpis" role="group" aria-label="Variação entre as duas últimas atualizações"></div>
-          <div class="ck-dividido">
-            <div class="ck-dividido__lista ck-rel__corpo">
-              <section class="ck-cartao ck-rel__largo" aria-labelledby="ck-evo-graf">
-                <div class="ck-cartao__cab"><h2 class="ck-cartao__titulo" id="ck-evo-graf">Divergências por atualização</h2><span class="ck-espaco"></span><span class="ck-legenda"><span class="ck-legenda__item"><span class="ck-legenda__cor ck-legenda__cor--abertos"></span>Divergentes</span><span class="ck-legenda__item"><span class="ck-legenda__cor ck-legenda__cor--concluidos"></span>Sem correspondência</span></span></div>
-                <div class="ck-cartao__corpo">
-                  <svg id="cockpit-updates-chart" class="ck-graf" viewBox="0 0 400 150" preserveAspectRatio="none" role="img" aria-label="Sem dados para o gráfico."><line class="ck-graf__base" x1="0" y1="149.5" x2="400" y2="149.5"/></svg>
-                  <div id="cockpit-updates-chart-labels" class="ck-graf__rotulos" aria-hidden="true"></div>
-                </div>
-              </section>
-              <section class="ck-cartao ck-rel__largo" aria-labelledby="ck-evo-tabela">
-                <div class="ck-cartao__cab"><h2 class="ck-cartao__titulo" id="ck-evo-tabela">Variação entre atualizações</h2></div>
-                <div class="ck-cartao__corpo">
-                  <table class="ck-tabela ck-tabela--cards" id="cockpit-updates-table">
-                    <thead><tr><th scope="col">Atualização</th><th scope="col" class="ck-th--dir">Equipamentos</th><th scope="col" class="ck-th--dir">Divergentes</th><th scope="col" class="ck-th--dir">Resolvidas</th><th scope="col" class="ck-th--dir">Novas</th></tr></thead>
-                    <tbody id="cockpit-updates-table-body"></tbody>
-                  </table>
-                </div>
-              </section>
-            </div>
-            <aside class="ck-dividido__detalhe" id="cockpit-updates-detail" aria-labelledby="ck-evo-novas">
-              <div class="ck-det__cab"><div class="ck-det__linha"><h2 class="ck-det__titulo" id="ck-evo-novas">Divergências novas</h2><span id="cockpit-updates-detail-badge"></span></div><span class="ck-det__sub" id="cockpit-updates-detail-sub"></span></div>
-              <div class="ck-det__corpo">
-                <ol class="ck-tempo" id="cockpit-updates-new-list"></ol>
-                <p id="cockpit-updates-new-empty" class="ck-lista__vazio">Carregando…</p>
-              </div>
-              <div class="ck-det__rodape"><button type="button" id="cockpit-updates-to-history" class="ck-btn ck-btn--secundario ck-btn--bloco" data-on-click="abrirPainelCockpit" data-args='["historico-planilhas"]'><svg class="ck-ico ck-ico--sm" aria-hidden="true" focusable="false"><use href="#i-clock"></use></svg>Histórico planilhas</button><button type="button" id="cockpit-updates-to-comparison" class="ck-btn ck-btn--primario ck-btn--bloco" data-on-click="abrirPainelCockpit" data-args='["comparacao"]'><svg class="ck-ico ck-ico--sm" aria-hidden="true" focusable="false"><use href="#i-dashboard"></use></svg>Abrir comparação</button></div>
-            </aside>
-          </div>
-        </section>
-
         <section class="ck-ferr-painel" data-cockpit-tool-panel="unidades" aria-labelledby="cockpit-units-heading" hidden>
           <h2 id="cockpit-units-heading" class="sr-only">Catálogo de unidades</h2>
           <div id="cockpit-units-kpis" class="ck-kpis" role="group" aria-label="Resumo do catálogo"></div>
@@ -1105,8 +1008,21 @@ Horário disponível para atendimento:</textarea>
             <label class="ck-campo"><span class="ck-campo__rotulo">Buscar unidade</span><input class="ck-entrada ck-entrada--sm" id="cockpit-units-search" type="search" autocomplete="off" placeholder="Nome, cidade ou CNPJ"></label>
             <span id="cockpit-units-status" class="ck-barra-ferr__nota" role="status" aria-live="polite">Carregando…</span>
             <span class="ck-espaco"></span>
-            <button type="button" id="cockpit-units-new" class="ck-btn ck-btn--secundario ck-btn--sm" data-on-click="abrirModalGerenciarUnidades"><svg class="ck-ico ck-ico--sm" aria-hidden="true" focusable="false"><use href="#i-plus"></use></svg>Nova unidade</button>
-            <button type="button" id="cockpit-units-legacy" class="ck-btn ck-btn--primario ck-btn--sm" data-on-click="abrirModalGerenciarUnidades">Fluxo completo</button>
+            <button type="button" id="cockpit-units-new" class="ck-btn ck-btn--secundario ck-btn--sm" data-on-click="toggleFormNovaUnidade" data-args='[true]'><svg class="ck-ico ck-ico--sm" aria-hidden="true" focusable="false"><use href="#i-plus"></use></svg>Nova unidade</button>
+          </div>
+          <div id="form-nova-unidade" class="hidden ckp-secao">
+            <h3 class="ckp-secao__titulo" id="form-unidade-titulo">Cadastrar Nova Unidade / Filial</h3>
+            <input type="hidden" id="form-unidade-id" />
+            <div class="ckp-form">
+              <label class="ck-campo"><span class="ck-campo__rotulo">Cidade</span><input type="text" id="form-unidade-cidade" class="ck-entrada" placeholder="Ex: Paranaguá" /></label>
+              <label class="ck-campo"><span class="ck-campo__rotulo">CEP</span><input type="text" id="form-unidade-cep" class="ck-entrada ck-mono" placeholder="83203-000" /></label>
+              <label class="ck-campo"><span class="ck-campo__rotulo">CNPJ</span><input type="text" id="form-unidade-cnpj" class="ck-entrada ck-mono" placeholder="CNPJ da instalação / filial" /></label>
+              <label class="ck-campo ckp-span"><span class="ck-campo__rotulo">Endereço</span><input type="text" id="form-unidade-endereco" class="ck-entrada" placeholder="Ex: Rua Princesa Isabel, 100" /></label>
+              <div class="ckp-linha ckp-linha--fim ckp-span">
+                <button type="button" data-on-click="toggleFormNovaUnidade" data-args='[false]' class="ck-btn ck-btn--fantasma">Cancelar</button>
+                <button type="button" id="btn-salvar-unidade" data-on-click="salvarUnidadeForm" class="ck-btn ck-btn--primario"><svg class="ck-ico ck-ico--sm" aria-hidden="true"><use href="#i-check"></use></svg>Salvar</button>
+              </div>
+            </div>
           </div>
           <div class="ck-dividido">
             <div class="ck-dividido__lista">
@@ -1116,9 +1032,9 @@ Horário disponível para atendimento:</textarea>
               </table>
             </div>
             <aside class="ck-dividido__detalhe" id="cockpit-units-detail" aria-label="Detalhes da unidade selecionada">
-              <div class="ck-det__cab"><div class="ck-det__linha"><span class="ck-det__titulo" id="cockpit-units-detail-title">—</span></div><span class="ck-det__sub" id="cockpit-units-detail-sub">Selecione uma unidade.</span></div>
+              <div class="ck-det__cab"><div class="ck-det__linha"><span class="ck-det__titulo" id="cockpit-units-detail-title">—</span><span id="cockpit-units-detail-badge"></span></div><span class="ck-det__sub" id="cockpit-units-detail-sub">Selecione uma unidade.</span></div>
               <dl class="ck-pares ck-det__corpo" id="cockpit-units-detail-pares"></dl>
-              <div class="ck-det__rodape"><button type="button" id="cockpit-units-edit" class="ck-btn ck-btn--primario ck-btn--bloco" data-on-click="abrirModalGerenciarUnidades"><svg class="ck-ico ck-ico--sm" aria-hidden="true" focusable="false"><use href="#i-pencil"></use></svg>Editar</button></div>
+              <div class="ck-det__rodape"><button type="button" id="cockpit-units-copy-cnpj" class="ck-btn ck-btn--secundario ck-btn--sm" disabled>Copiar CNPJ</button><button type="button" id="cockpit-units-copy-cep" class="ck-btn ck-btn--secundario ck-btn--sm" disabled>Copiar CEP</button></div>
             </aside>
           </div>
         </section>
@@ -1508,49 +1424,6 @@ Horário disponível para atendimento:</textarea>
     </div>
   </div>
 
-  <!-- ==================================================== -->
-  <!-- MODAL DE GERENCIAMENTO DE REGIONAIS & ENDEREÇOS     -->
-  <!-- ==================================================== -->
-  <div id="modal-gerenciar-unidades" class="modal-overlay ck-veu hidden">
-    <section class="ckp-dialogo">
-      <header class="ckp-cab">
-        <span class="ckp-cab__icone"><svg class="ck-ico" aria-hidden="true"><use href="#i-pin"></use></svg></span>
-        <div class="ckp-cab__textos">
-          <span class="ckp-cab__kicker">Catálogo de unidades</span>
-          <h2 class="ckp-cab__titulo unit-modal-heading"><span>Catálogo de Unidades & Regionais SEBRAE/PR</span> <span id="badge-total-unidades-modal" class="ck-badge">30 unidades</span> <span class="info-tip info-tip--end"><button type="button" class="info-tip-trigger" aria-label="Sobre Catálogo de Unidades" aria-describedby="tip-catalogo-unidades"><svg class="ck-ico ck-ico--sm" aria-hidden="true" focusable="false"><use href="#i-info"></use></svg></button><span id="tip-catalogo-unidades" role="tooltip" class="info-tip-text">Consulte ou cadastre endereços e CNPJs oficiais das filiais.</span></span></h2>
-        </div>
-        <div class="ckp-cab__acoes"><button type="button" data-on-click="fecharModalGerenciarUnidades" class="ck-btn ck-btn--icone ck-btn--fantasma ck-btn--sm" aria-label="Fechar catálogo de unidades"><svg class="ck-ico ck-ico--sm" aria-hidden="true"><use href="#i-x"></use></svg></button></div>
-      </header>
-      <div class="ckp-corpo">
-        <div class="ckp-linha">
-          <label class="ck-campo" data-ckp="campo-flex"><span class="ck-campo__rotulo">Filtrar unidades</span>
-            <input type="text" id="input-filtro-unidades" class="ck-entrada" data-on-input="filtrarUnidadesModal" data-args='["$value"]' placeholder="Filtrar por cidade, endereço ou CNPJ..." />
-          </label>
-          <button type="button" data-on-click="toggleFormNovaUnidade" class="ck-btn ck-btn--secundario ck-btn--sm"><svg class="ck-ico ck-ico--sm" aria-hidden="true"><use href="#i-plus"></use></svg>Nova Filial</button>
-        </div>
-        <div id="form-nova-unidade" class="hidden ckp-secao">
-          <h3 class="ckp-secao__titulo" id="form-unidade-titulo">Cadastrar Nova Unidade / Filial</h3>
-          <input type="hidden" id="form-unidade-id" />
-          <div class="ckp-form">
-            <label class="ck-campo"><span class="ck-campo__rotulo">Cidade</span><input type="text" id="form-unidade-cidade" class="ck-entrada" placeholder="Ex: Paranaguá" /></label>
-            <label class="ck-campo"><span class="ck-campo__rotulo">CEP</span><input type="text" id="form-unidade-cep" class="ck-entrada ck-mono" placeholder="83203-000" /></label>
-            <label class="ck-campo"><span class="ck-campo__rotulo">CNPJ</span><input type="text" id="form-unidade-cnpj" class="ck-entrada ck-mono" placeholder="CNPJ da instalação / filial" /></label>
-            <label class="ck-campo ckp-span"><span class="ck-campo__rotulo">Endereço</span><input type="text" id="form-unidade-endereco" class="ck-entrada" placeholder="Ex: Rua Princesa Isabel, 100" /></label>
-            <div class="ckp-linha ckp-linha--fim ckp-span">
-              <button type="button" data-on-click="toggleFormNovaUnidade" data-args='[false]' class="ck-btn ck-btn--fantasma">Cancelar</button>
-              <button type="button" id="btn-salvar-unidade" data-on-click="salvarUnidadeForm" class="ck-btn ck-btn--primario"><svg class="ck-ico ck-ico--sm" aria-hidden="true"><use href="#i-check"></use></svg>Salvar</button>
-            </div>
-          </div>
-        </div>
-        <div id="lista-unidades-container" class="ckp-regionais"></div>
-      </div>
-      <footer class="ckp-rodape">
-        <span class="ck-espaco"></span>
-        <button type="button" data-on-click="fecharModalGerenciarUnidades" class="ck-btn ck-btn--fantasma">Fechar</button>
-      </footer>
-    </section>
-  </div>
-
   <!-- MODAL PARA COMPARAR ENDPOINT E EQUIPAMENTOSDETALHES -->
   <div id="modal-atualizar-planilhas" class="modal-overlay ck-veu hidden">
     <section class="ckp-dialogo">
@@ -1714,22 +1587,6 @@ Horário disponível para atendimento:</textarea>
           <span>Exportar relatório</span>
         </button>
       </form>
-    </div>
-  </div>
-
-  <!-- EVOLUÇÃO DAS PENDÊNCIAS ENTRE DUAS ATUALIZAÇÕES -->
-  <div id="modal-evolucao-atualizacoes" class="modal-overlay ck-veu hidden">
-    <div class="modal-panel ck-dialogo">
-      <div class="flex items-start justify-between gap-4 pb-4 border-b border-line-quiet shrink-0"><div class="flex items-center gap-1"><h3 class="text-base font-bold text-white">Evolução das atualizações</h3><span class="info-tip"><button type="button" class="info-tip-trigger" aria-label="Sobre a evolução das atualizações" aria-describedby="tip-evolucao"><i data-lucide="info" aria-hidden="true"></i></button><span id="tip-evolucao" role="tooltip" class="info-tip-text">Quantos casos surgiram, continuaram ou deixaram de aparecer entre duas atualizações.</span></span></div><button type="button" data-on-click="fecharEvolucaoAtualizacoes" class="ck-btn ck-btn--fantasma ck-btn--icone ck-btn--sm" aria-label="Fechar evolução das atualizações"><i data-lucide="x" class="w-5 h-5"></i></button></div>
-      <form id="form-evolucao-atualizacoes" class="grid grid-cols-1 md:grid-cols-[1fr_1fr_auto] gap-2 py-3 shrink-0"><label class="text-xs text-fg-tertiary">Atualização anterior<select id="evolucao-anterior" required class="mt-1 block w-full rounded-lg border border-line-control bg-surface px-3 py-2 text-sm text-white"></select></label><label class="text-xs text-fg-tertiary">Atualização atual<select id="evolucao-atual" required class="mt-1 block w-full rounded-lg border border-line-control bg-surface px-3 py-2 text-sm text-white"></select></label><button type="submit" class="self-end ck-btn ck-btn--primario">Comparar</button></form>
-      <div class="grid grid-cols-1 md:grid-cols-[1fr_1fr_auto] gap-2 py-3 shrink-0" aria-label="Filtros da evolução">
-        <label for="filtro-evolucao-busca" class="text-xs text-fg-tertiary">Buscar por hostname, série, seção ou anotação<input id="filtro-evolucao-busca" type="search" autocomplete="off" placeholder="Digite um termo para localizar um caso" class="mt-1 block w-full rounded-lg border border-line-control bg-surface px-3 py-2 text-sm text-white placeholder:text-fg-weak"></label>
-        <label for="filtro-evolucao-categoria" class="text-xs text-fg-tertiary">Categoria<select id="filtro-evolucao-categoria" class="mt-1 block w-full rounded-lg border border-line-control bg-surface px-3 py-2 text-sm text-white"><option value="">Todas as categorias</option><option value="novos">Novos</option><option value="resolvidos">Deixaram de aparecer</option><option value="continuam">Continuam</option></select></label>
-        <button type="button" id="btn-limpar-filtros-evolucao" class="self-end ck-btn ck-btn--secundario">Limpar filtros</button>
-      </div>
-      <p id="filtro-evolucao-status" class="shrink-0 text-xs text-fg-subtle" role="status" aria-live="polite" aria-atomic="true"></p>
-      <div id="resultado-evolucao-atualizacoes" aria-label="Resultado da comparação entre atualizações" aria-live="polite" class="overflow-auto flex-1 space-y-3"></div>
-      <div class="pt-3 border-t border-line-quiet flex justify-end shrink-0"><button type="button" data-on-click="fecharEvolucaoAtualizacoes" class="ck-btn ck-btn--secundario">Fechar</button></div>
     </div>
   </div>
 
