@@ -331,6 +331,15 @@ class LoginAbasTests(unittest.TestCase):
         self.assertTrue(self._entrar_endpoint(page, senha=True, dominio=False))
         clicar.assert_not_called()
 
+    def test_exportar_endpoint_uses_the_endpoint_login_fill(self):
+        with (
+            patch.object(automacao, "nova_aba"),
+            patch.object(automacao, "aguardar_login", side_effect=automacao.RotinaErro("parou")) as aguardar,
+            self.assertRaises(automacao.RotinaErro),
+        ):
+            automacao.exportar_endpoint(MagicMock())
+        self.assertIs(aguardar.call_args.kwargs["entrar"], automacao.endpoint_entrar)
+
     def test_endpoint_ignores_pages_that_are_not_the_login_screen(self):
         page, clicar, _ = self._pagina_endpoint()
         page.url = "https://centralendpoint.pr.sebrae.com.br/webclient#/uems/inventory/computers"

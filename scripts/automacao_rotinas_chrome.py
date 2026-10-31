@@ -1184,7 +1184,7 @@ def confirmar_modo_todos(page: "Page") -> None:
 def exportar_endpoint(context: "BrowserContext") -> Path:
     page = nova_aba(context, ENDPOINT_URL, "Endpoint Central")
     try:
-        aguardar_login(page, "Endpoint Central", endpoint_logado, email=EMAIL_SOFTEXPERT)
+        aguardar_login(page, "Endpoint Central", endpoint_logado, entrar=endpoint_entrar, email=EMAIL_SOFTEXPERT)
         if "inventory/computers" not in page.url:
             page.goto(ENDPOINT_URL, wait_until="domcontentloaded", timeout=CARREGAMENTO_MS)
 
