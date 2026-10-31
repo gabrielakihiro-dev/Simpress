@@ -25,7 +25,7 @@
     "entraUsers",
     "comparisonResult",
     "comparisonHistory",
-    "ticketTracking",
+    "cockpitChamados",
     "equipmentEditor",
     "aliasHistory",
     "monthlyReport",
@@ -43,12 +43,6 @@
     equipamentoSelectionRevision: 0,
     retiradaCidadeSelecionada: "",
     unidadesList: [],
-    acompanhamentoChamadosAtual: null,
-    historicoAcompanhamentoChamados: [],
-    // Triage indicator chosen as a list filter ("ativos", "atrasados", "sem_data", "em_dia" or empty).
-    filtroTriagemChamados: "",
-    // One OS selected from Resumo; it narrows the ticket card to its source, serial and order.
-    filtroChamadoSelecionado: null,
     previaPlanilhasAtual: null,
   };
 
@@ -70,7 +64,7 @@
     inventoryOperationKey: () => globalThis.crypto?.randomUUID?.()
       || `${Date.now().toString(36)}-${Math.random().toString(36).slice(2)}`,
   };
-  // Logged user next to a series, shared by the Histórico de Planilhas rows and the ticket cards.
+  // Logged user next to a series in the Histórico de Planilhas rows and the equipment dialogs.
   context.loggedUserMarkers = window.SimpressLoggedUserMarkers(context);
 
   const publishedBy = new Map();

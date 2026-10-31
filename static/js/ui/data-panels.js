@@ -232,6 +232,13 @@
     let osExternaSeq = 0;
     const idLivre = (node, id) => { if (!doc.getElementById(id)) node.id = id; };
 
+    // Triagem (grupo da série, de opcoes.grupoSerie): "ativos" aceita qualquer grupo; atencao = atrasados ou sem data.
+    function correspondeTriagemOs(st, grupo) {
+      if (st.atencao && grupo !== "atrasados" && grupo !== "sem_data") return false;
+      if (!st.triagem) return true;
+      return st.triagem === "ativos" ? Boolean(grupo) : grupo === st.triagem;
+    }
+
     function filtrarSecaoOs(section) {
       const st = osExternas.get(section);
       if (!st) return;
@@ -241,7 +248,8 @@
       let visiveis = 0;
       itens.forEach(item => {
         const ok = (!termo || textoOs(item.textContent).includes(termo))
-          && (!st.relacao || st.relacao === "todos" || item.dataset.relacao === st.relacao);
+          && (!st.relacao || st.relacao === "todos" || item.dataset.relacao === st.relacao)
+          && correspondeTriagemOs(st, item.dataset.triagem || "");
         item.hidden = !ok;
         if (!ok) return;
         series.add(item.dataset.serial);
@@ -263,6 +271,8 @@
           if (campo) campo.value = st.busca;
         }
         if ("relacao" in filtro) st.relacao = String(filtro.relacao || "");
+        if ("triagem" in filtro) st.triagem = String(filtro.triagem || "");
+        if ("atencao" in filtro) st.atencao = Boolean(filtro.atencao);
         filtrarSecaoOs(section);
       });
     }
@@ -280,10 +290,10 @@
       const status = el("p", "ck-cartao__meta ticket-summary-status", "Carregando OS…");
       status.setAttribute("role", "status");
       status.setAttribute("aria-live", "polite");
-      // opcoes.semBusca: o host já tem a própria busca (filtrarTabelaOs). Série sem OS (nem na Simpress nem no Oracle) nunca aparece. aoExpandirSerie(serie, celula) preenche o "Andamento";
-      // aoCarregar(relatorio) recebe o GET /api/operacoes/chamados que a tabela já faz (evita segunda requisição).
+      // opcoes.semBusca: o host já tem a própria busca (filtrarTabelaOs). aoExpandirSerie(serie, celula) preenche o "Andamento";
+      // grupoSerie(chamado) devolve o grupo de triagem da série (data-triagem); aoCarregar(relatorio) recebe o GET /api/operacoes/chamados que a tabela já faz (evita segunda requisição).
       const st = {
-        busca: "", relacao: "", renderizada: false, falhaUsuarios: false, carregada: false,
+        busca: "", relacao: "", triagem: "", atencao: false, grupoSerie: opcoes.grupoSerie, renderizada: false, falhaUsuarios: false, carregada: false,
         aoExpandirSerie: opcoes.aoExpandirSerie, aoCarregar: opcoes.aoCarregar, abertas: new Set(),
       };
       const head = el("div", "ck-cartao__cab");
@@ -341,7 +351,7 @@
       const button = el("button", "ticket-summary-order ticket-summary-order-link", label);
       const sources = Array.isArray(record.fontes) ? record.fontes : [record.fonte];
       button.type = "button";
-      button.setAttribute("aria-label", "Abrir acompanhamento de chamados: " + ticketSummarySourceLabel(sources)
+      button.setAttribute("aria-label", "Abrir andamento em Chamados: " + ticketSummarySourceLabel(sources)
         + ", série " + record.serie + ", OS " + record.os);
       button.setAttribute("data-on-click", "abrirChamadoDaOs");
       button.setAttribute("data-args", JSON.stringify([sources, record.serie, record.os]));
@@ -521,7 +531,7 @@
       }
     }
 
-    function renderTicketSummary(section, records, users, links, canSave, userFailure, relacoes = new Map()) {
+    function renderTicketSummary(section, records, users, links, canSave, userFailure, relacoes = new Map(), grupos = new Map()) {
       const status = section.querySelector(".ticket-summary-status");
       const content = el("div", "ck-os__corpo ticket-summary-content");
       const externa = osExternas.get(section);
@@ -560,7 +570,9 @@
           const row = doc.createElement("tr");
           row.dataset.serial = record.serie;
           row.dataset.osCount = "1";
+          row.dataset.os = String(order.os);
           row.dataset.relacao = relacoes.get(serialKey(record.serie)) || "";
+          row.dataset.triagem = grupos.get(serialKey(record.serie)) || "";
           const cell = (label, className) => {
             const td = el("td", className || "");
             td.setAttribute("data-label", label);
@@ -689,7 +701,9 @@
           const st = osExternas.get(section);
           if (st) st.carregada = true;
           st?.aoCarregar?.(report);
-          renderTicketSummary(section, records, users, links, true, userFailure, relacoes);
+          const grupos = new Map(st?.grupoSerie ? (Array.isArray(report?.chamados) ? report.chamados : [])
+            .map(ticket => [serialKey(ticket?.serie), st.grupoSerie(ticket) || ""]) : []);
+          renderTicketSummary(section, records, users, links, true, userFailure, relacoes, grupos);
         });
       } catch (error) {
         vivos().forEach(section => {

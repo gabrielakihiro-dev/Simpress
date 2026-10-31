@@ -59,7 +59,7 @@ test("first access centralizes the inventory import and keeps calls separate", a
   await expect(panel.getByRole("heading", { name: "Ações com inventário" })).toHaveCount(0);
   await expect(panel.locator(".ck-pront__titulo", { hasText: "Modelo de exportação" })).toBeVisible();
   await expect(panel.locator("#readiness-details-content")).toBeVisible();
-  await expect(panel.locator(".ck-pront__titulo", { hasText: "Acompanhamento de chamados" })).toBeVisible();
+  await expect(panel.locator(".ck-pront__titulo", { hasText: /^Chamados$/ })).toBeVisible();
   await expect(page.locator("#readiness-panel > summary")).toHaveCSS("display", "flex");
   await expect(panel).toHaveAccessibleName("Disponibilidade das funções");
   await expect(page.locator(".ck-pront__item").first()).toHaveCSS("display", "grid");
@@ -79,12 +79,12 @@ test("first access centralizes the inventory import and keeps calls separate", a
 
   await expect(panel.getByRole("button", { name: "Importar modelo — Modelo de transferência", exact: true })).toHaveCount(0);
   await openStatus(page);
-  const ticketGroup = panel.locator(".ck-pront__item").filter({ hasText: "Acompanhamento de chamados" });
-  await ticketGroup.getByRole("button", { name: "Importar planilhas para acompanhamento de chamados", exact: true }).click();
-  await expect(page.locator("#painel-dados-acompanhamento-chamados")).toHaveAttribute("open", "");
-  await expect(page.locator("#arquivo-chamados-simpress")).toBeVisible();
-  await page.keyboard.press("Escape");
-  await expect(page.locator("#modal-acompanhamento-chamados")).toBeHidden();
+  const ticketGroup = panel.locator(".ck-pront__item").filter({ has: page.locator(".ck-pront__titulo", { hasText: /^Chamados$/ }) });
+  await ticketGroup.getByRole("button", { name: "Importar planilhas na aba Chamados", exact: true }).click();
+  await expect(page.locator('[data-cockpit-tool-panel="chamados"]')).toBeVisible();
+  await expect(page.locator("#cockpit-tickets-manage-panel")).toHaveAttribute("open", "");
+  await expect(page.locator("#cockpit-tickets-file-simpress")).toBeFocused();
+  await expect(page.locator("#modal-acompanhamento-chamados")).toHaveCount(0);
 
   await expect(panel.locator(".ck-pront__item").filter({ hasText: "Microsoft Entra" })).toHaveCount(0);
   expect(errors).toEqual([]);

@@ -107,6 +107,19 @@ class PreenchimentosTest(unittest.TestCase):
         self.assertEqual(novos.preenchimentos([com_serie], duas, RELATORIO), {"linha:2": {"E": "7303022"}})  # a serial already in the row is never replaced
         self.assertEqual(novos.preenchimentos([{**self.aberto(), "descricao": "Camila Lopes sem rede"}], duas, RELATORIO).keys(), {"linha:2"})
 
+    def test_os_do_vinculo_manual_do_utic_preenche_e_so_em_celula_vazia(self):
+        vinculos = [{"chamado": "UTIC-2026-0094", "os": "555"}]
+        item = {**self.aberto(usuario=""), "numero": "UTIC-2026-0094"}
+        self.assertEqual(novos.preenchimentos([item], REGISTROS, RELATORIO, vinculos), {"UTIC-2026-0094": {"E": "555"}})  # even without a serial
+        cheio = {**item, "automaticos": {"E": "999", "K": "", "L": "", "N": ""}}
+        self.assertEqual(novos.preenchimentos([cheio], REGISTROS, RELATORIO, vinculos), {})
+        sem_vinculo = {**self.aberto(usuario="", K="ABC123", L="Dell", N="X"), "numero": "UTIC-2026-0095"}
+        self.assertEqual(novos.preenchimentos([sem_vinculo], REGISTROS, RELATORIO, vinculos), {"UTIC-2026-0095": {"E": "7303022"}})
+
+    def test_formulario_usa_o_vinculo_manual_antes_da_serie(self):
+        item = novos.formulario([CHAMADO], REGISTROS, RELATORIO, [{"chamado": "UTIC-2026-1378", "os": "555"}])[0]
+        self.assertEqual(item["linha"]["E"], "555")
+
     def test_aberto_com_duas_pessoas_na_descricao_nao_preenche(self):
         duas = REGISTROS + [{"nome": "Ícaro Gabriel Duarte Campos", "serie": "XYZ9", "modelo": "HP", "cidade": "Maringá"}]
         item = {**self.aberto(usuario="API SEBRAE"), "descricao": "Camila Lopes e Icaro Gabriel Duarte Campos"}
