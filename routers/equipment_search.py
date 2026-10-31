@@ -14,6 +14,8 @@ class EquipmentSearchServices:
     get_stats: Callable[[], Dict[str, Any]]
     # Every equipment of the base, in index order; lists the ones without a user without a term.
     list_all: Optional[Callable[[], List[Dict[str, Any]]]] = None
+    # "Você quis dizer": closest user name for a term without results ("" when none).
+    suggest: Optional[Callable[[str], str]] = None
 
 
 USER_FILTERS = ("sem", "com")
@@ -122,6 +124,8 @@ def create_equipment_search_router(services: EquipmentSearchServices) -> Tuple[A
             "limit": limit,
             "has_more": offset + len(page) < len(results),
         }
+        if not results and not all_results and q.strip() and services.suggest:
+            response["sugestao"] = services.suggest(q)
         if include_filters:
             listed_categories = [
                 entry for entry in services.categories
