@@ -47,10 +47,14 @@ async function openEvolutionModal(page) {
   await page.locator("#cockpit-updates-legacy").click();
 }
 
+// O resultado completo da comparação abre na aba Comparação do Cockpit (não há mais modal).
+const COMPARISON_PANEL = '[data-cockpit-tool-panel="comparacao"]';
+
 async function openFixtureComparison(page) {
   await openHistoryModal(page);
   await page.getByRole("button", { name: "Consultar resultado" }).first().click();
-  await expect(page.locator('textarea[data-comparison-annotation]:visible').first()).toBeVisible();
+  await expect(page.locator(COMPARISON_PANEL)).toBeVisible();
+  await expect(page.locator('#comparacao-planilhas-conteudo textarea[data-comparison-annotation]:visible').first()).toBeVisible();
 }
 
 test.beforeEach(async ({ page }) => {
@@ -244,23 +248,20 @@ test("delete confirmation opens above the history dialog and cancelling keeps th
   await expect(deleteButton).toBeFocused();
 });
 
-test("modal traps keyboard focus, restores it on Escape, and passes axe", async ({ page }, testInfo) => {
+test("comparison result tab takes focus, passes axe and closes with Escape", async ({ page }) => {
   test.setTimeout(45_000);
   await openFixtureComparison(page);
-  const dialog = page.getByRole("dialog");
-  await auditAccessibility(page, "#modal-comparacao-planilhas");
-  const firstClose = dialog.getByRole("button", { name: "Fechar resultado" }).first();
-  await expect(firstClose).toBeFocused();
-
-  await page.keyboard.press("Shift+Tab");
-  const focusedInsideDialog = await dialog.evaluate((element) => element.contains(document.activeElement));
-  expect(focusedInsideDialog).toBe(true);
+  const panel = page.locator(COMPARISON_PANEL);
+  await expect(page.getByRole("dialog")).toHaveCount(0);
+  await expect(page.locator("#modal-historico-comparacoes")).toBeHidden();
+  await expect(page.locator("#cockpit-tool-title")).toBeFocused();
+  await expect(page.locator("#cockpit-tool-title")).toHaveText("Comparação");
+  await expect(panel.locator("#btn-exportar-resultado-comparacao")).toBeVisible();
+  await auditAccessibility(page, COMPARISON_PANEL);
 
   await page.keyboard.press("Escape");
-  await expect(dialog).toBeHidden();
-  // O modal abriu a partir de "Fluxo completo" na tela do Cockpit: o foco volta para esse botão.
-  const returnFocus = page.locator("#cockpit-sheets-history-legacy");
-  await expect(returnFocus).toBeFocused();
+  await expect(page.locator("#cockpit-tool-panels")).toBeHidden();
+  await expect(page.locator("#main-content")).toBeVisible();
 });
 
 test("fixture annotation autosaves to the isolated in-memory endpoint", async ({ page }) => {
@@ -318,9 +319,9 @@ for (const outcome of ["network failure", "success"]) {
 
 test("comparison history filters rows and autosaves their original annotations", async ({ page }) => {
   await openFixtureComparison(page);
-  const dialog = page.locator("#modal-comparacao-planilhas");
+  const dialog = page.locator(COMPARISON_PANEL);
   await expect(dialog).toBeVisible();
-  await auditAccessibility(page, "#modal-comparacao-planilhas");
+  await auditAccessibility(page, COMPARISON_PANEL);
   await dialog.locator("[data-history-filter-search]").fill("DEMO-SN-001");
   await dialog.locator("[data-history-filter-category]").selectOption("apelidos_sem_atualizacao");
   const row = dialog.locator('[data-history-filter-group="apelidos_sem_atualizacao"] [data-comparison-item-id]:visible');
@@ -339,7 +340,7 @@ test("comparison history filters rows and autosaves their original annotations",
 
 test("comparison summary cards jump to their section and clear filters that hide it", async ({ page }) => {
   await openFixtureComparison(page);
-  const dialog = page.locator("#modal-comparacao-planilhas");
+  const dialog = page.locator(COMPARISON_PANEL);
   // Only "Apelidos para conferência" has rows in the fixture; zero-count cards stay static.
   const links = dialog.locator("[data-comparison-section-target]");
   await expect(links).toHaveCount(1);
@@ -425,7 +426,7 @@ test("inventory evolution prioritizes categories, filters rows and opens the mat
   await auditAccessibility(page, "#modal-evolucao-atualizacoes");
 
   await result.locator('[data-evolution-category="resolvidos"] [data-evolution-event]').click();
-  const comparison = page.locator("#modal-comparacao-planilhas");
+  const comparison = page.locator(COMPARISON_PANEL);
   const heading = comparison.locator("#comparacao-secao-linhas-conferencia");
   await expect(dialog).toBeHidden();
   await expect(comparison).toBeVisible();
@@ -637,8 +638,9 @@ test("keyboard focus stays visible over component and theme styles", async ({ pa
     await page.locator("html").evaluate((root, value) => { root.dataset.theme = value; }, theme);
     await page.keyboard.press("Tab");
     await annotation.focus();
-    await expect(annotation).toHaveCSS("outline-width", "3px");
-    await expect(annotation).toHaveCSS("outline-color", theme === "light" ? "rgb(2, 132, 199)" : "rgb(125, 211, 252)");
+    // Dentro da aba Comparação vale o anel do Cockpit (2px, cor de destaque), igual aos demais controles do shell; no tema claro theme.css mantém a cor `--focus-color`.
+    await expect(annotation).toHaveCSS("outline-width", "2px");
+    await expect(annotation).toHaveCSS("outline-color", theme === "light" ? "rgb(2, 132, 199)" : "rgb(145, 132, 217)");
   }
 });
 
@@ -659,9 +661,8 @@ test("reduced-motion preference suppresses CSS motion and preserves modal operat
   expect(movingElements).toEqual([]);
   await expect(page.locator("html")).toHaveCSS("scroll-behavior", "auto");
   await openFixtureComparison(page);
-  const dialog = page.getByRole("dialog");
   await page.keyboard.press("Escape");
-  await expect(dialog).toBeHidden();
+  await expect(page.locator(COMPARISON_PANEL)).toBeHidden();
 });
 
 test("@profile UI route transitions retain responsive frame pacing", async ({ page }, testInfo) => {

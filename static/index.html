@@ -887,20 +887,17 @@ Horário disponível para atendimento:</textarea>
 
         <section class="ck-ferr-painel" data-cockpit-tool-panel="comparacao" aria-labelledby="cockpit-comparison-heading" hidden>
           <h2 id="cockpit-comparison-heading" class="sr-only">Comparação de inventários</h2>
-          <div id="cockpit-comparison-kpis" class="ck-kpis" role="group" aria-label="Indicadores da comparação selecionada"></div>
           <div class="ck-barra-ferr">
             <p id="cockpit-comparison-status" class="ck-barra-ferr__nota" role="status" aria-live="polite">Carregando histórico…</p>
             <label class="ck-campo"><span class="ck-campo__rotulo">Comparação</span><select id="cockpit-comparison-event" class="ck-entrada"></select></label>
             <button type="button" id="cockpit-comparison-new" class="ck-btn ck-btn--secundario">Nova comparação</button>
-            <button type="button" id="cockpit-comparison-export" class="ck-btn ck-btn--primario" disabled>Exportar</button>
+            <button type="button" id="btn-exportar-resultado-comparacao" data-on-click="exportarResultadoComparacaoPlanilhas" class="ck-btn ck-btn--primario disabled:cursor-not-allowed disabled:opacity-50" aria-label="Exportar este resultado para Excel" title="Exportar este resultado para Excel (registros e anotações do dia)" disabled><svg class="ck-ico ck-ico--sm" aria-hidden="true" focusable="false"><use href="#i-download"></use></svg><span>Exportar</span></button>
             <button type="button" id="cockpit-comparison-legacy" class="ck-btn ck-btn--primario">Histórico e ações completas</button>
             <button type="button" id="cockpit-comparison-refresh" class="ck-btn ck-btn--icone ck-btn--fantasma" aria-label="Atualizar histórico" title="Atualizar histórico"><svg class="ck-ico ck-ico--sm" aria-hidden="true" focusable="false"><use href="#i-refresh"></use></svg><span class="ck-sr">Atualizar histórico</span></button>
           </div>
-          <div id="cockpit-comparison-filters" class="ck-pilulas ck-ferr-filtros" role="group" aria-label="Filtrar resultados da comparação"></div>
-          <div class="ck-dividido">
-            <div class="ck-dividido__lista" id="cockpit-comparison-list" role="list" aria-label="Registros da comparação selecionada"></div>
-            <aside class="ck-dividido__detalhe ck-det__corpo" id="cockpit-comparison-detail" aria-label="Detalhes da comparação selecionada"><p class="ck-lista__vazio">Selecione uma comparação salva.</p></aside>
-          </div>
+          <h3 class="sr-only">Resultado da atualização das planilhas</h3>
+          <p id="comparacao-planilhas-fontes" class="ck-barra-ferr__nota"></p>
+          <div id="comparacao-planilhas-conteudo" class="ck-comparacao-resultado" aria-live="polite"></div>
         </section>
 
         <section class="ck-ferr-painel" data-cockpit-tool-panel="apelidos" aria-labelledby="cockpit-alias-heading" hidden>
@@ -1707,33 +1704,6 @@ Horário disponível para atendimento:</textarea>
           <span>Exportar relatório</span>
         </button>
       </form>
-    </div>
-  </div>
-
-  <!-- RESULTADO DA COMPARAÇÃO DAS PLANILHAS -->
-  <div id="modal-comparacao-planilhas" class="modal-overlay ck-veu hidden">
-    <div class="ck-dialogo">
-      <div class="flex items-start justify-between gap-4 pb-4 border-b border-line-quiet shrink-0">
-        <div>
-          <h3 class="text-base font-bold text-white flex items-center gap-2">
-            <i data-lucide="list-checks" class="w-5 h-5 text-emerald-400"></i>
-            Resultado da atualização das planilhas
-          </h3>
-          <p id="comparacao-planilhas-fontes" class="text-xs text-fg-subtle mt-1"></p>
-        </div>
-        <div class="flex shrink-0 items-center gap-1">
-          <button type="button" id="btn-exportar-resultado-comparacao" data-on-click="exportarResultadoComparacaoPlanilhas" class="disabled:cursor-not-allowed disabled:opacity-50 ck-btn ck-btn--fantasma ck-btn--icone ck-btn--sm" aria-label="Exportar este resultado para Excel" title="Exportar este resultado para Excel (registros e anotações do dia)" disabled>
-            <i data-lucide="download" class="w-5 h-5" aria-hidden="true"></i>
-          </button>
-          <button type="button" data-on-click="fecharModalComparacaoPlanilhas" class="ck-btn ck-btn--fantasma ck-btn--icone ck-btn--sm" aria-label="Fechar resultado">
-            <i data-lucide="x" class="w-5 h-5"></i>
-          </button>
-        </div>
-      </div>
-      <div id="comparacao-planilhas-conteudo" class="history-modal-scroll overflow-y-auto flex-1 min-h-0 py-4 space-y-5"></div>
-      <div class="pt-3 border-t border-line-quiet flex justify-end shrink-0">
-        <button type="button" data-on-click="fecharModalComparacaoPlanilhas" class="ck-btn ck-btn--secundario">Concluir</button>
-      </div>
     </div>
   </div>
 

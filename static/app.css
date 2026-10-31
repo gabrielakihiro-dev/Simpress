@@ -1040,8 +1040,6 @@ html[data-theme="light"] .app-tab-panel:focus-visible { outline-color: var(--foc
   background: var(--history-filter-bg);
   box-shadow: var(--focus-shadow, var(--history-filter-shadow));
 }
-/* The result list has 1rem of top padding (py-4); stick to the scroll edge so rows do not show above the bar. */
-#comparacao-planilhas-conteudo > .history-filter-bar { top: -1rem; }
 .history-filter-controls {
   display: grid;
   grid-template-columns: minmax(0, 1fr) minmax(13rem, 0.45fr);
