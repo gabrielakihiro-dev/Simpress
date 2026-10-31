@@ -181,6 +181,16 @@ class SearchByNameTests(unittest.TestCase):
         self.assertEqual([r["serial"] for r in search_index(indexed, "MARCIA s")], ["S2"])
         self.assertEqual(search_index(indexed, "inexistente"), [])
 
+    def test_first_and_last_name_find_full_name_with_middle_names(self):
+        cache = {
+            "BRJ5512DWS": {"serial": "BRJ5512DWS", "nome_pessoa": "Bruno Gabriel de Oliveira Pinheiro", "usuarios_logados": "bpinheiro"},
+            "S2": {"serial": "S2", "nome_pessoa": "Bruno Souza", "usuarios_logados": "bsouza"},
+        }
+        indexed = build_search_index(cache)
+        for query in ("bruno pinheiro", "Bruno Oliveira", "pinheiro bruno", "bruno gabriel pinheiro"):
+            self.assertEqual([r["serial"] for r in search_index(indexed, query)], ["BRJ5512DWS"], query)
+        self.assertEqual(search_index(indexed, "bruno inexistente"), [])
+
 
 class InboxTests(unittest.TestCase):
     def setUp(self):
