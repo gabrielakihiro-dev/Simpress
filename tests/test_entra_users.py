@@ -8,7 +8,7 @@ import openpyxl
 
 from domains import effective_alias, entra_users
 from domains.entra_inbox import EntraInbox
-from domains.equipment_search import build_search_index, search_index
+from domains.equipment_search import build_search_index, normalize_search_term, search_index, suggest_user_term
 
 HEADER = "id,displayName,userPrincipalName,userType,onPremisesSyncEnabled,identities,companyName,creationType;"
 
@@ -190,6 +190,19 @@ class SearchByNameTests(unittest.TestCase):
         for query in ("bruno pinheiro", "Bruno Oliveira", "pinheiro bruno", "bruno gabriel pinheiro"):
             self.assertEqual([r["serial"] for r in search_index(indexed, query)], ["BRJ5512DWS"], query)
         self.assertEqual(search_index(indexed, "bruno inexistente"), [])
+
+    def test_typo_suggests_closest_user_name_only_when_it_finds_equipment(self):
+        cache = {
+            "BRJ5512DWS": {"serial": "BRJ5512DWS", "nome_pessoa": "Bruno Gabriel de Oliveira Pinheiro", "usuarios_logados": "bpinheiro"},
+            "S2": {"serial": "S2", "nome_pessoa": "José da Conceição", "usuarios_logados": "jose"},
+        }
+        indexed = build_search_index(cache)
+        suggest = lambda query: suggest_user_term(indexed, normalize_search_term(query))
+        self.assertEqual(suggest("bpinheirp"), "bpinheiro")
+        self.assertEqual(suggest("bruno pinheirp"), "Bruno Pinheiro")
+        self.assertEqual(suggest("conceiçao"), "")  # accent-insensitive search already finds it
+        self.assertEqual(suggest("zzzzzz"), "")
+        self.assertEqual(suggest("bruno inexistente"), "")
 
 
 class InboxTests(unittest.TestCase):

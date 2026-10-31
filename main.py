@@ -199,6 +199,7 @@ from domains.equipment_search import (
     categorize_equipment,
     normalize_search_term,
     search_normalized_index as search_normalized_equipment_index,
+    suggest_user_term,
 )
 from routers.equipment_search import EquipmentSearchServices, create_equipment_search_router
 from routers.system import SystemRouteServices, create_system_router
@@ -2151,6 +2152,14 @@ def _buscar_equipamentos_por_termo(q: str) -> List[Dict[str, Any]]:
     return search_normalized_equipment_index(current_index, term)
 
 
+def _sugerir_usuario_busca(q: str) -> str:
+    """Nome de usuário mais próximo de um termo sem resultado ("bpinheirp" -> "bpinheiro")."""
+    term = _normalizar_termo_busca(q)
+    if not term:
+        return ""
+    return suggest_user_term(inventory_state.current_search_index(_inventory_state_services), term, _normalizar_termo_busca)
+
+
 def _listar_equipamentos_indexados() -> List[Dict[str, Any]]:
     """Todos os equipamentos da base na ordem do índice de busca."""
     return [entry[2] for entry in inventory_state.current_search_index(_inventory_state_services)]
@@ -2218,6 +2227,7 @@ equipment_search_router, _equipment_search_exports = create_equipment_search_rou
     categories=_CATEGORIAS_EQUIPAMENTO,
     get_stats=_get_stats_snapshot,
     list_all=_listar_equipamentos_indexados,
+    suggest=_sugerir_usuario_busca,
 ))
 buscar_seriais = _equipment_search_exports.buscar_seriais
 buscar_seriais_expandida = _equipment_search_exports.buscar_seriais_expandida

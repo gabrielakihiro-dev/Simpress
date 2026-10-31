@@ -692,6 +692,8 @@ details.ck-chip[open] > .ck-chip__gatilho .ck-ico { transform: rotate(180deg); }
 .ck-ac__vazio-titulo { color: var(--cor-texto); font-weight: var(--peso-medio); }
 .ck-ac__vazio-texto { max-width: 36ch; font-size: var(--fs-sm); }
 .ck-ac__vazio-termo { font-family: var(--fonte-mono); color: var(--cor-destaque-texto); }
+.ck-ac__vazio-sugestao { font-size: var(--fs-sm); }
+.ck-ac__vazio-sugestao-botao { font-family: var(--fonte-mono); color: var(--cor-destaque-texto); text-decoration: underline; cursor: pointer; }
 @media (max-width: 767.98px) {
   .ck-busca__entrada { font-size: 16px; }
 }

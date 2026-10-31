@@ -138,13 +138,14 @@ ITEMS = [
 ]
 
 
-def _search_route():
+def _search_route(suggest=None):
     services = EquipmentSearchServices(
         search=lambda q: [item for item in ITEMS if normalize_search_term(q) in item["serial"]],
         normalize=normalize_search_term,
         categories=CATEGORIES,
         get_stats=dict,
         list_all=lambda: list(ITEMS),
+        suggest=suggest,
     )
     _, exports = create_equipment_search_router(services)
 
@@ -157,6 +158,12 @@ def _search_route():
 
 
 class FullSearchUserFilterTests(unittest.TestCase):
+    def test_suggestion_only_comes_with_an_empty_result(self):
+        call = _search_route(suggest=lambda q: "ana.silva")
+        self.assertEqual(call("ana.silvx", include_filters=False)["sugestao"], "ana.silva")
+        self.assertNotIn("sugestao", call("BRJ", include_filters=False))
+        self.assertNotIn("sugestao", _search_route()("ana.silvx", include_filters=False))
+
     def test_listing_without_a_term_has_notebooks_without_user_and_other_equipment(self):
         page = _search_route()(usuario="sem")
         # No notebook with a user, no fones, no Micro Computador/monitor.
