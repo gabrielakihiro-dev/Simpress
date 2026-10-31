@@ -1039,8 +1039,17 @@ Horário disponível para atendimento:</textarea>
               <button type="button" class="ck-btn ck-btn--secundario ck-btn--sm" id="btn-sebrae-atualizar" data-on-click="atualizarDashboardSebrae" disabled><svg class="ck-ico ck-ico--xs" aria-hidden="true" focusable="false"><use href="#i-download"></use></svg><span>Atualizar Dashboard</span></button>
               <button type="button" class="ck-btn ck-btn--secundario ck-btn--sm" id="btn-sebrae-enviar" data-automacao-rotina="enviar" data-on-click="iniciarRotinaAutomacao" data-args='["enviar"]'><svg class="ck-ico ck-ico--xs" aria-hidden="true" focusable="false"><use href="#i-upload"></use></svg><span>Enviar ao SharePoint</span></button>
             </div>
+            <div id="sebrae-rascunho" class="sebrae-rascunho" hidden>
+              <p id="sebrae-rascunho-status" class="ck-cartao__meta" role="status"></p>
+              <button type="button" class="ck-btn ck-btn--fantasma ck-btn--sm" id="btn-sebrae-descartar-rascunho" data-on-click="descartarRascunhoSebrae">Descartar rascunho</button>
+            </div>
             <p id="sebrae-exportacao-status" class="ck-cartao__meta" role="status" aria-live="polite"></p>
             <p id="sebrae-atualizar-status" class="ck-cartao__meta" role="status" aria-live="polite"></p>
+            <div id="sebrae-fechar" class="sebrae-fechar" hidden>
+              <p id="sebrae-fechar-status" class="ck-cartao__meta" role="status" aria-live="polite"></p>
+              <ul id="sebrae-fechar-lista" class="sebrae-avisos"></ul>
+            </div>
+            <div id="sebrae-sharepoint-aviso" class="sebrae-sharepoint" role="alert" hidden></div>
             <div id="sebrae-exportacao-blocos" class="sebrae-blocos" hidden>
               <label class="ck-campo"><span class="ck-campo__rotulo">Colar em A:P (primeira linha livre da tabela)</span><textarea class="ck-entrada" id="sebrae-bloco-a-p" rows="4" readonly></textarea></label>
               <button type="button" class="ck-btn ck-btn--fantasma ck-btn--sm" data-on-click="copiarBlocoSebrae" data-args='["a_p"]'><svg class="ck-ico ck-ico--sm" aria-hidden="true" focusable="false"><use href="#i-copy"></use></svg>Copiar A:P</button>

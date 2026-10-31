@@ -294,6 +294,8 @@ class SchemasPorMensagemTests(unittest.TestCase):
             "quais chamados estão abertos?": "linha_do_tempo_chamados",
             "vincule a OS 123 ao chamado UTIC-2026-5": "vincular_os",
             "o que mudou no sebrae?": "proximo_passo_sebrae",
+            "finalize o UTIC-2026-1253 no SoftExpert": "finalizar_chamado_softexpert",
+            "deu certo a finalização?": "situacao_finalizacao_sebrae",
             "compare o histórico de planilhas": "listar_eventos_comparacao",
             "registre a transferência da ABC123": "registrar_transferencia",
             "rode a rotina de inventários no Chrome": "executar_automacao_chrome",
