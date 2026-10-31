@@ -431,13 +431,13 @@ class AutomationRouteTests(unittest.TestCase):
         self.addCleanup(self.client.close)
 
     def test_start_accepts_only_the_whitelist(self):
-        for rotina in ("os", "inventarios", "usuarios", "ambas", "login", "sebrae", "dashboard", "enviar"):
+        for rotina in ("os", "inventarios", "usuarios", "ambas", "login", "sebrae", "dashboard", "enviar", "fechar"):
             response = self.client.post("/api/automacao/executar", json={"rotina": rotina}, headers={"Origin": self.origin})
             self.assertEqual(response.status_code, 202, rotina)
         for body in ({"rotina": "rm -rf"}, {"rotina": "os", "extra": 1}, {}, {"rotina": ["os"]}):
             with self.subTest(body=body):
                 self.assertEqual(self.client.post("/api/automacao/executar", json=body).status_code, 422)
-        self.assertEqual(self.runner.started, ["os", "inventarios", "usuarios", "ambas", "login", "sebrae", "dashboard", "enviar"])
+        self.assertEqual(self.runner.started, ["os", "inventarios", "usuarios", "ambas", "login", "sebrae", "dashboard", "enviar", "fechar"])
 
     def test_conflict_is_returned_as_409_with_message(self):
         message = "Já há uma rotina em andamento: Rotina de OS desde 08:00. Aguarde terminar ou cancele."

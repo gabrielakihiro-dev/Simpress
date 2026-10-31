@@ -7,6 +7,7 @@ FALHA returns 503. History annotations are stored only in fixture memory.
 import json
 import mimetypes
 import os
+import re
 import struct
 import sys
 import time
@@ -223,6 +224,61 @@ SEBRAE_NOVOS_FIXTURE = {
 }
 
 
+# Finalizar no SoftExpert: fictional state; nothing here reaches the real SoftExpert or SharePoint.
+FINALIZAR_NUMERO = "UTIC-2026-1200"
+FINALIZAR_SHAREPOINT = {
+    "falhou": True, "motivo": "o SharePoint pediu login de novo", "copia_local": "data/state/sebrae_dashboard_pendente/Dashboard Operacional_SEBRAE (pendente 2026-10-28 1030).xlsx",
+    "copia_sharepoint": False,
+    "sugestoes": ["Confira o login do SharePoint no Chrome de automação (porta 9333) e use Tentar substituir de novo.",
+                  "Se persistir, abra a pasta e arraste a cópia pendente, renomeando para Dashboard Operacional_SEBRAE.xlsx.",
+                  "Antes de substituir, confira se ninguém alterou o original no SharePoint."],
+}
+finalizar_state = {}
+
+
+def reset_finalizar(sharepoint_falha=False):
+    finalizar_state.clear()
+    finalizar_state.update(descricao="", pdf=None, finalizacao=None, polls=0, rodando=False, acao="finalizar",
+                           numeros=[], resultado=None, sharepoint=None, sharepoint_falha=sharepoint_falha)
+
+
+reset_finalizar()
+
+
+def sebrae_novos_payload():
+    dados = json.loads(json.dumps(SEBRAE_NOVOS_FIXTURE))
+    for item in dados["importado"]["abertos"]:
+        item["softexpert"] = {"descricao_finalizacao": finalizar_state["descricao"], "pdf": finalizar_state["pdf"],
+                              "finalizacao": finalizar_state["finalizacao"]}
+    return dados
+
+
+def iniciar_finalizar(acao, numeros):
+    finalizar_state.update(rodando=True, polls=0, acao=acao, numeros=numeros)
+
+
+def finalizar_consulta():
+    """First poll: still running; second poll: finished (ok for the ticket, plus the SharePoint notice when requested)."""
+    st = finalizar_state
+    if st["rodando"]:
+        st["polls"] += 1
+        if st["polls"] < 2:
+            return {"em_andamento": True, "resultado": {"acao": st["acao"], "em_andamento": True, "resultados": [], "pulados": []},
+                    "sharepoint": st["sharepoint"]}
+        st["rodando"] = False
+        if st["acao"] == "reenviar_pendente":
+            st["sharepoint"] = None
+            st["resultado"] = {"acao": st["acao"], "iniciado_em": "2026-10-28T10:20:00-03:00", "em_andamento": False, "resultados": [], "pulados": []}
+        else:
+            resultados = [{"numero": n, "status": "ok", "em": "2026-10-28T10:10:00-03:00", "encerrado_em": "28/10/2026 10:10", "mensagem": ""}
+                          for n in st["numeros"]]
+            st["finalizacao"] = {"status": "ok", "em": "2026-10-28T10:10:00-03:00", "encerrado_em": "28/10/2026 10:10"}
+            st["resultado"] = {"acao": "finalizar", "iniciado_em": "2026-10-28T10:10:00-03:00", "em_andamento": False,
+                               "resultados": resultados, "pulados": []}
+            st["sharepoint"] = FINALIZAR_SHAREPOINT if st["sharepoint_falha"] else None
+    return {"em_andamento": st["rodando"], "resultado": st["resultado"], "sharepoint": st["sharepoint"]}
+
+
 # Histórico do Dashboard Sebrae: fictional entries, only counts and ticket numbers (never ticket text).
 SEBRAE_HISTORICO_FIXTURE = [
     {"id": "h3", "seq": 3, "tipo": "busca", "em": "2026-10-28T10:05:00-03:00", "importacao_id": "h2", "ignorados": 36,
@@ -398,11 +454,14 @@ class Handler(BaseHTTPRequestHandler):
                     "rotina": rotina_ativa,
                     "inicio": "2026-10-24T09:00:00-03:00",
                 }
+            reset_finalizar(query.get("sharepoint_falha", ["0"])[0] == "1")
             scenario = query.get("sebrae", ["padrao"])[0]
             sebrae_state.update(scenario=scenario if scenario in SEBRAE_SCENARIOS else "padrao", ativo=False)
             self.send({"estado": "livre"})
         elif path == "/api/sebrae/novos":
-            self.send(SEBRAE_NOVOS_FIXTURE)
+            self.send(sebrae_novos_payload())
+        elif path == "/api/sebrae/finalizar-softexpert":
+            self.send(finalizar_consulta())
         elif path == "/api/sebrae/historico":
             self.send(sebrae_historico_lista(parse_qs(url.query).get("tipo", [""])[0]))
         elif path.startswith("/api/sebrae/historico/"):
@@ -540,6 +599,12 @@ class Handler(BaseHTTPRequestHandler):
                 vinculo = FIXTURE_TICKET_OS_LINKS.pop(key, None)
             self.send({"vinculo": vinculo})
             return
+        if path == f"/api/sebrae/chamados/{FINALIZAR_NUMERO}/finalizacao":
+            size = int(self.headers.get("Content-Length", "0"))
+            finalizar_state["descricao"] = str(json.loads(self.rfile.read(size) or b"{}").get("descricao_finalizacao", ""))[:4000]
+            self.send({"numero": FINALIZAR_NUMERO, "descricao_finalizacao": finalizar_state["descricao"],
+                       "pdf": finalizar_state["pdf"], "finalizacao": finalizar_state["finalizacao"]})
+            return
         if path == "/api/automacao/sebrae/agendamento":
             size = int(self.headers.get("Content-Length", "0"))
             ativo = bool(json.loads(self.rfile.read(size) or b"{}").get("ativo"))
@@ -575,25 +640,70 @@ class Handler(BaseHTTPRequestHandler):
         except (ValueError, json.JSONDecodeError):
             self.send({"detail": "JSON inválido"}, 400)
 
+    def do_DELETE(self):
+        if urlsplit(self.path).path == f"/api/sebrae/chamados/{FINALIZAR_NUMERO}/anexo":
+            finalizar_state["pdf"] = None
+            self.send({"numero": FINALIZAR_NUMERO, "pdf": None})
+        else:
+            self.send({"detail": "Endpoint de teste não encontrado"}, 404)
+
     def do_POST(self):
         global ticket_import_count
         path = urlsplit(self.path).path
+        if path == f"/api/sebrae/chamados/{FINALIZAR_NUMERO}/anexo":
+            size = int(self.headers.get("Content-Length", "0"))
+            corpo = self.rfile.read(size)
+            nome = re.search(rb'filename="([^"]+)"', corpo)
+            finalizar_state["pdf"] = {"nome": nome.group(1).decode() if nome else "anexo.pdf", "tamanho": len(corpo)}
+            self.send({"numero": FINALIZAR_NUMERO, "pdf": finalizar_state["pdf"]})
+            return
+        if path == "/api/sebrae/finalizar-softexpert":
+            size = int(self.headers.get("Content-Length", "0"))
+            corpo = json.loads(self.rfile.read(size) or b"{}")
+            numero = corpo.get("numero")
+            if not corpo.get("confirmado"):
+                self.send({"detail": "Confirme a finalização no SoftExpert antes de enviar."}, 422)
+            elif not finalizar_state["descricao"].strip():
+                self.send({"detail": "Preencha a descrição para finalizar o chamado."}, 422)
+            elif finalizar_state["rodando"]:
+                self.send({"detail": "Já há uma finalização em andamento."}, 409)
+            else:
+                iniciar_finalizar("finalizar", [numero])
+                self.send({"iniciado": True, "numeros": [numero]}, 202)
+            return
+        if path == "/api/sebrae/dashboard/pendente/reenviar":
+            if not finalizar_state["sharepoint"]:
+                self.send({"detail": "Não há cópia pendente para reenviar."}, 422)
+            else:
+                iniciar_finalizar("reenviar_pendente", [])
+                self.send({"iniciado": True}, 202)
+            return
         if path == "/api/sebrae/dashboard/atualizar":
             size = int(self.headers.get("Content-Length", "0"))
             corpo = json.loads(self.rfile.read(size) or b"{}")
+            finalizando = [c["numero"] for c in corpo.get("edicoes") or [] if c.get("D") == "FINALIZADO"]
+            com_descricao = bool(finalizar_state["descricao"].strip())
+            if finalizando and com_descricao and corpo.get("finalizar_softexpert") is True:
+                iniciar_finalizar("finalizar", finalizando)
+                fechar = {"iniciado": True, "motivo": "", "numeros": finalizando, "pulados": []}
+            elif finalizando and com_descricao:
+                fechar = {"iniciado": False, "motivo": "finalização no SoftExpert não confirmada", "numeros": [], "pulados": []}
+            else:
+                fechar = {"iniciado": False, "motivo": "nenhum chamado com descrição para finalizar", "numeros": [],
+                          "pulados": [{"numero": n, "motivo": "sem_descricao"} for n in finalizando]}
             linhas = [{"numero": c["numero"], "linha": 340 + i, "tipo": "novo", "celulas": ["A", "C", "D"]}
                       for i, c in enumerate(corpo.get("chamados") or [])]
             linhas += [{"numero": c["numero"], "linha": 12, "tipo": "alterado", "celulas": sorted(set(c) - {"numero"})}
                        for c in corpo.get("edicoes") or []]
             self.send({"arquivo": "Dashboard Operacional_SEBRAE.xlsx",
                        "base": {"arquivo": "Dashboard Operacional_SEBRAE.xlsx", "importado_em": "2026-10-28T10:00:00-03:00"},
-                       "linhas": linhas, "conteudo_base64": "UEsDBA=="})
+                       "linhas": linhas, "conteudo_base64": "UEsDBA==", "fechar": fechar})
             return
         if path in ("/api/sebrae/dashboard", "/api/sebrae/exportar"):
             size = int(self.headers.get("Content-Length", "0"))
             body = self.rfile.read(size)
             if path == "/api/sebrae/dashboard":
-                self.send(SEBRAE_NOVOS_FIXTURE)
+                self.send(sebrae_novos_payload())
             else:
                 chamados = json.loads(body or b"{}").get("chamados") or []
                 linhas = [f"{c['A']}\t\t{c['numero']}\t{c['D']}" for c in chamados]

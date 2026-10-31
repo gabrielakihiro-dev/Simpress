@@ -1,7 +1,8 @@
 """Chamados Sebrae na tela Automação: importar o Dashboard, listar os novos, gerar as linhas para colar e
 atualizar uma CÓPIA do Dashboard.
 
-O Dashboard original nunca é alterado; no SoftExpert só a confirmação de associar o chamado ao usuário, aceita pela rotina.
+O Dashboard original nunca é alterado por aqui; no SoftExpert só a confirmação de associar o chamado ao usuário e, a pedido do
+usuário (D = FINALIZADO), a finalização do chamado pela rotina ``fechar`` (scripts/sebrae_fechar.py).
 O importado fica em ``data/state`` (números já lançados, listas A/B, chamados abertos e a cópia do .xlsx); a leitura
 do SoftExpert é a rotina ``sebrae`` (scripts/sebrae_leitura.py).
 Ver docs/operacao/sincronizar-chamados-sebrae.md ("Tela no site").
@@ -21,9 +22,14 @@ from fastapi import APIRouter, File, Query, UploadFile
 from fastapi.responses import JSONResponse
 from pydantic import BaseModel, ConfigDict, Field
 
-from core.errors import DomainBusyError, DomainValidationError
+from core.errors import DomainBusyError, DomainConflictError, DomainError, DomainValidationError
 from core.config import format_size_limit
-from domains import sebrae_arquivo, sebrae_cruzamento, sebrae_dashboard_gravacao, sebrae_historico, sebrae_novos
+from core.integrity import lock_paths
+from domains import (
+    sebrae_arquivo, sebrae_cruzamento, sebrae_dashboard_gravacao, sebrae_finalizacao as fin, sebrae_historico, sebrae_novos,
+)
+from domains.chrome_automation import ChromeAutomationRunner
+from domains.sebrae_chamados import chave_do_numero
 from domains.sebrae_dashboard import MANUAIS, DashboardInvalido, ler_coluna_c, ler_status_chamados
 
 MAX_CHAMADOS_POR_EXPORTACAO = 200
@@ -56,6 +62,7 @@ class AtualizarPayload(BaseModel):
 
     chamados: List[ChamadoManual] = Field(default_factory=list, max_length=MAX_CHAMADOS_POR_EXPORTACAO)
     edicoes: List[ChamadoManual] = Field(default_factory=list, max_length=MAX_CHAMADOS_POR_EXPORTACAO)
+    finalizar_softexpert: bool = False  # só True (diálogo "Atualizar e finalizar") dispara a rotina fechar em massa; irreversível
 
 
 @dataclass(frozen=True)
@@ -64,6 +71,20 @@ class SebraeDashboardServices:
     max_upload_bytes: Callable[[], int]
     registros: Callable[[], Sequence[Mapping[str, Any]]]  # equipment records by person name (EquipamentosDetalhes, Endpoint, Entra)
     relatorio_chamados: Callable[[], Optional[Mapping[str, Any]]]  # ticket report, for column E
+    runner: Optional[Callable[[], ChromeAutomationRunner]] = None  # starts the ``fechar`` routine; without it nothing is finalized
+
+
+class FinalizarPayload(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    numero: str = Field(..., min_length=1, max_length=40)
+    confirmado: bool = False  # clique explícito após o diálogo "Confirmar finalização"; sem isso nada é disparado
+
+
+class DescricaoPayload(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    descricao_finalizacao: str = Field("", max_length=fin.MAX_DESCRICAO * 2)  # the exact limit is checked (and explained) by the domain
 
 
 def create_sebrae_dashboard_router(services: SebraeDashboardServices) -> APIRouter:
@@ -79,13 +100,29 @@ def create_sebrae_dashboard_router(services: SebraeDashboardServices) -> APIRout
         """Old open tickets plus what "Atualizar Dashboard" would fill into their empty E, K, L and N."""
         registros = services.registros() if abertos else []
         sugestoes = sebrae_novos.preenchimentos(abertos, registros, _relatorio()) if abertos else {}
+        finalizacao = fin.ler_estado(_pasta_estado()) if abertos else {}
         return [
             {**a, "automaticos_sugeridos": sugestoes.get(str(a.get("numero")), {}),
-             "outra_pessoa": sebrae_cruzamento.outra_pessoa(a.get("descricao"), a.get("usuario"), registros)}
+             "outra_pessoa": sebrae_cruzamento.outra_pessoa(a.get("descricao"), a.get("usuario"), registros),
+             "softexpert": fin.publico(finalizacao.get(str(a.get("numero"))))}
             for a in abertos
         ]
 
+    def _pasta_estado():
+        return fin.pasta_estado(services.caminhos().existentes)
+
     def _estado() -> Dict[str, Any]:
+        corpo = _estado_base()
+        # só aparecem quando existem: a tela vazia continua {"importado": None, "novos": None}
+        resultado = fin.ler_resultado(_pasta_estado())
+        if resultado is not None:
+            corpo["fechar"] = resultado
+        pendente = fin.aviso_do_pendente(_pasta_estado())
+        if pendente is not None:
+            corpo["sharepoint"] = pendente
+        return corpo
+
+    def _estado_base() -> Dict[str, Any]:
         caminhos = services.caminhos()
         importado = sebrae_novos.ler_existentes(caminhos.existentes)
         lancados = importado["numeros"] if importado else frozenset()
@@ -249,8 +286,13 @@ def create_sebrae_dashboard_router(services: SebraeDashboardServices) -> APIRout
             resultado = sebrae_dashboard_gravacao.atualizar(planilha, linhas, edicoes, automaticos)
         except (sebrae_novos.ManuaisInvalidos, DashboardInvalido) as erro:
             raise DomainValidationError(str(erro), status_code=422) from None
+        conteudo = _reaplicar_encerramentos(resultado.conteudo)
+        saida = sebrae_novos.caminho_saida(caminhos, NOME_ATUALIZADO)
+        gravada = False
         try:
-            sebrae_novos.salvar_planilha(sebrae_novos.caminho_saida(caminhos, NOME_ATUALIZADO), resultado.conteudo)
+            with lock_paths([saida]):  # a rotina fechar grava a coluna R neste mesmo arquivo
+                sebrae_novos.salvar_planilha(saida, conteudo)
+            gravada = True
         except OSError:  # o download do usuário segue; só o "Enviar ao SharePoint" fica sem arquivo
             logger.warning("Não gravei a cópia de saída do Dashboard.", exc_info=True)
         return JSONResponse({
@@ -259,8 +301,140 @@ def create_sebrae_dashboard_router(services: SebraeDashboardServices) -> APIRout
             "linhas": [
                 {"numero": g.numero, "linha": g.linha, "tipo": g.tipo, "celulas": list(g.celulas)} for g in resultado.linhas
             ],
-            "conteudo_base64": base64.b64encode(resultado.conteudo).decode("ascii"),
+            "conteudo_base64": base64.b64encode(conteudo).decode("ascii"),
+            "fechar": (
+                _fechar_inativo("A cópia de saída não foi gravada; nada foi finalizado.") if not gravada
+                else _finalizar_marcados(edicoes) if payload.finalizar_softexpert
+                else _fechar_inativo("finalização no SoftExpert não confirmada")
+            ),
         }, headers={"Cache-Control": "no-store"})
+
+    def _reaplicar_encerramentos(conteudo: bytes) -> bytes:
+        """A saída é refeita da cópia importada a cada "Atualizar": as datas de encerramento já gravadas voltam à coluna R (só se vazia)."""
+        encerramentos = fin.encerramentos_registrados(_pasta_estado())
+        if not encerramentos:
+            return conteudo
+        try:
+            return sebrae_dashboard_gravacao.registrar_encerramentos(conteudo, encerramentos)[0].conteudo
+        except Exception as erro:  # noqa: BLE001 - a atualização não pode falhar por isso; log só o tipo
+            logger.warning("Datas de encerramento não reaplicadas à saída (%s).", type(erro).__name__)
+            return conteudo
+
+    def _fechar_inativo(motivo: str, pulados: Sequence[Mapping[str, str]] = ()) -> Dict[str, Any]:
+        return {"iniciado": False, "motivo": motivo, "numeros": [], "pulados": [dict(p) for p in pulados]}
+
+    def _finalizar_marcados(edicoes: Mapping[str, Mapping[str, str]]) -> Dict[str, Any]:
+        """Tickets whose D the user just set to FINALIZADO go to the ``fechar`` routine; a failure here never fails the update."""
+        pasta = _pasta_estado()
+        numeros: List[str] = []
+        pulados: List[Dict[str, str]] = []
+        for chave, valores in edicoes.items():
+            if str(valores.get("D") or "").strip().upper() != sebrae_novos.STATUS_FINALIZADO:
+                continue
+            try:
+                numero = chave_do_numero(chave)  # "linha:<n>" (sem UTIC) nunca chega ao SoftExpert
+            except ValueError:
+                pulados.append({"numero": chave, "motivo": "sem_numero"})
+                continue
+            if fin.ja_finalizado(pasta, numero):
+                pulados.append({"numero": numero, "motivo": fin.STATUS_JA_FINALIZADO})
+            elif not fin.dados_para_finalizar(pasta, numero)[0]:
+                pulados.append({"numero": numero, "motivo": fin.STATUS_SEM_DESCRICAO})
+            else:
+                numeros.append(numero)
+        if not numeros:
+            return _fechar_inativo("", pulados)
+        try:
+            _disparar(numeros, pulados)
+        except DomainError as erro:
+            return _fechar_inativo(str(erro.detail), pulados)
+        return {"iniciado": True, "motivo": "", "numeros": numeros, "pulados": pulados}
+
+    def _disparar(numeros: Sequence[str], pulados: Sequence[Mapping[str, str]] = (), acao: str = fin.ACAO_FINALIZAR) -> None:
+        """Writes the one-shot job and starts ``fechar`` under one lock on the job file: two requests cannot overwrite each other's job.
+
+        409 when a run is in progress or another job still waits; the job is removed if the routine does not start."""
+        if services.runner is None:
+            raise DomainBusyError("A automação não está disponível neste servidor.")
+        runner = services.runner()
+        pasta = _pasta_estado()
+        with lock_paths([fin.caminho_job(pasta)]):
+            if fin.job_pendente(pasta):
+                raise DomainConflictError("Já há um pedido de finalização esperando a rotina começar. Aguarde terminar.")
+            fin.gravar_job(pasta, numeros, pulados=pulados, acao=acao)
+            try:
+                runner.start("fechar")
+            except BaseException:
+                fin.apagar_job(pasta)
+                raise
+
+    def _exigir_aberto(numero: str) -> str:
+        numero = fin.validar_numero(numero)
+        importado = sebrae_novos.ler_existentes(services.caminhos().existentes)
+        if importado is None:
+            raise DomainValidationError("Importe o Dashboard antes.", status_code=422)
+        if numero not in {str(a.get("numero")) for a in importado["abertos"]}:
+            raise DomainValidationError(f"{numero} não é um chamado antigo EM ABERTO ou sem status.", status_code=422)
+        return numero
+
+    @router.put("/api/sebrae/chamados/{numero}/finalizacao")
+    def definir_descricao(numero: str, payload: DescricaoPayload):
+        """Texto de "Detalhes do Atendimento Realizado" deste chamado; vazio apaga."""
+        numero = _exigir_aberto(numero)
+        item = fin.definir_descricao(_pasta_estado(), numero, payload.descricao_finalizacao)
+        return JSONResponse({"numero": numero, **fin.publico(item)}, headers={"Cache-Control": "no-store"})
+
+    @router.post("/api/sebrae/chamados/{numero}/anexo")
+    async def anexar_pdf(numero: str, file: UploadFile = File(...)):
+        """Um PDF opcional por chamado (extensão, assinatura %PDF e tamanho conferidos); o novo substitui o anterior."""
+        numero = await asyncio.to_thread(_exigir_aberto, numero)
+        limite = min(services.max_upload_bytes(), fin.MAX_PDF_BYTES)
+        conteudo = await file.read(limite + 1)
+        item = await asyncio.to_thread(fin.anexar_pdf, _pasta_estado(), numero, file.filename, conteudo, limite)
+        return JSONResponse({"numero": numero, **fin.publico(item)}, headers={"Cache-Control": "no-store"})
+
+    @router.delete("/api/sebrae/chamados/{numero}/anexo")
+    def remover_pdf(numero: str):
+        numero = _exigir_aberto(numero)
+        return JSONResponse({"numero": numero, **fin.publico(fin.remover_pdf(_pasta_estado(), numero))}, headers={"Cache-Control": "no-store"})
+
+    @router.post("/api/sebrae/finalizar-softexpert", status_code=202)
+    def finalizar_softexpert(payload: FinalizarPayload):
+        """Finaliza UM chamado no SoftExpert (botão por chamado). Irreversível: só chamados antigos em aberto, com descrição."""
+        if not payload.confirmado:
+            raise DomainValidationError("Confirme a finalização no SoftExpert antes de enviar.", status_code=422)
+        numero = _exigir_aberto(payload.numero)
+        pasta = _pasta_estado()
+        if fin.ja_finalizado(pasta, numero):
+            raise DomainConflictError(f"{numero} já foi finalizado no SoftExpert.")
+        if not fin.dados_para_finalizar(pasta, numero)[0]:
+            raise DomainValidationError("Preencha a descrição para finalizar o chamado antes de finalizar.", status_code=422)
+        _disparar([numero])
+        return JSONResponse({"iniciado": True, "numeros": [numero]}, status_code=202, headers={"Cache-Control": "no-store"})
+
+    @router.get("/api/sebrae/finalizar-softexpert")
+    def resultado_finalizacao():
+        """Resultado da última rotina ``fechar`` (um item por chamado) e o aviso do SharePoint, se houver cópia pendente."""
+        pasta = _pasta_estado()
+        resultado = fin.ler_resultado(pasta)
+        rodando = False
+        if services.runner is not None:
+            try:
+                ativo = services.runner().state()
+                rodando = ativo.get("estado") == "em_andamento" and ativo.get("rotina") == "fechar"
+            except Exception:  # noqa: BLE001 - sem o estado do runner, vale o que o arquivo diz
+                rodando = bool(resultado and resultado.get("em_andamento"))
+        return JSONResponse({
+            "em_andamento": rodando, "resultado": resultado, "sharepoint": fin.aviso_do_pendente(pasta),
+        }, headers={"Cache-Control": "no-store"})
+
+    @router.post("/api/sebrae/dashboard/pendente/reenviar", status_code=202)
+    def reenviar_pendente():
+        """Botão Tentar substituir de novo: a rotina reenvia a cópia pendente mais recente, com a mesma conferência do SharePoint."""
+        if fin.pendente_mais_recente(_pasta_estado()) is None:
+            raise DomainValidationError("Não há cópia pendente do Dashboard para enviar.", status_code=422)
+        _disparar([], acao=fin.ACAO_REENVIAR)
+        return JSONResponse({"iniciado": True}, status_code=202, headers={"Cache-Control": "no-store"})
 
     def _linhas_novas(payload: AtualizarPayload, importado: Mapping[str, Any], caminhos: sebrae_novos.Caminhos) -> List[Dict[str, str]]:
         if not payload.chamados:
