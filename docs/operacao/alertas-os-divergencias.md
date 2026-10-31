@@ -55,13 +55,13 @@ Mostrar quantas linhas de divergência apareceram na comparação de planilhas m
 ### Dados
 
 - Fonte: o Histórico de Planilhas (`data/state/historico_comparacoes/historico_comparacoes.json`).
-- Comparam-se as duas atualizações mais recentes pelo `horario`. Restaurações e a linha de base fixada ficam de fora, como em "Evolução das atualizações".
+- Comparam-se as duas atualizações mais recentes pelo `horario`. Restaurações e a linha de base fixada ficam de fora, como na comparação de `compare_updates`.
 - Antes de comparar, as duas atualizações passam pela classificação atual do histórico (`comparison_history_for_display`), que aplica as regras do `AGENTS.md`:
   - as séries do Sebrae (`BRJ135P5XS`, `BRJ142QKBQ`, `BRJ9435VMR`, `BRJ9435VMF`, `BRJ149SCJG`) não contam como sem correspondência;
   - hostnames `PRNOTESJP*`, `PRNOTERL*` e `PRNOTEARC*` em Curitiba não contam como localidade divergente.
   O painel reaplica esses dois filtros por segurança, como o relatório mensal.
 - Linhas de divergência são as das seções detalhadas do histórico: `Linhas mantidas para conferência`, `Sem acesso há 7 dias ou mais`, `Equipamentos sem correspondência por fonte` (Endpoint e Simpress), `Localidade divergente`, `Duplicidades e correspondências ambíguas` e `Séries sem local definido`.
-- Uma linha é **nova** quando sua chave (série ou hostname, com a ocorrência para repetições) não existe na mesma seção da atualização anterior. É a mesma regra de `compare_updates`, usada por "Evolução das atualizações", então o número do alerta coincide com "Novos" nessa tela.
+- Uma linha é **nova** quando sua chave (série ou hostname, com a ocorrência para repetições) não existe na mesma seção da atualização anterior. É a mesma regra de `compare_updates` (`GET /api/operacoes/evolucao`, que hoje só o assistente consulta; a tela "Evolução das atualizações" foi removida em 31/10/2026).
 - O histórico é apenas lido; nada é regravado.
 
 ### Quando aparece e quando some
@@ -77,7 +77,7 @@ Mostrar quantas linhas de divergência apareceram na comparação de planilhas m
 | `novas` (1) | Divergências novas | A comparação de 18/10/2026 às 09:00 trouxe 1 linha de divergência que não estava na de 11/10/2026 às 08:00: 1 em Localidade divergente. | Ver evolução |
 | `novas` (n) | Divergências novas | A comparação de 18/10/2026 às 09:00 trouxe 5 linhas de divergência que não estavam na de 11/10/2026 às 08:00: 3 em Localidade divergente e 2 em Séries sem local definido. | Ver evolução |
 
-As seções aparecem na ordem do histórico, só as que têm linhas novas, com os rótulos do histórico (`Endpoint` e `Simpress` sem preposição). O botão abre "Evolução das atualizações" (`abrirEvolucaoAtualizacoes`), que já seleciona as duas atualizações mais recentes.
+As seções aparecem na ordem do histórico, só as que têm linhas novas, com os rótulos do histórico (`Endpoint` e `Simpress` sem preposição). O botão `#btn-alerta-divergencias-novas` mantém o rótulo "Ver evolução" e, desde 31/10/2026, abre a aba Comparação (`abrirPainelCockpit` com `data-args` `["comparacao"]`); o painel Evolução e o modal `#modal-evolucao-atualizacoes` não existem mais.
 
 ### Contrato da API
 
@@ -106,7 +106,7 @@ As seções aparecem na ordem do histórico, só as que têm linhas novas, com o
 3. Com linhas novas entre as duas atualizações mais recentes, o painel mostra "Divergências novas" com o total, as datas e as seções; restaurações e a linha de base fixada são ignoradas.
 4. Séries do Sebrae e PRNOTE* em Curitiba nunca contam como divergência nova.
 5. Com menos de duas atualizações, sem linhas novas ou com histórico ilegível, o cartão de divergências fica oculto.
-6. Os botões abrem "Acompanhamento de chamados" e "Evolução das atualizações"; o sino fecha com `Escape` ou clique fora e devolve o foco ao ser fechado por teclado.
+6. Os botões abrem "Acompanhamento de chamados" e a aba Comparação; o sino fecha com `Escape` ou clique fora e devolve o foco ao ser fechado por teclado.
 7. Os avisos não aparecem no Home; "Base desatualizada" permanece no Home.
 8. Nenhum histórico é regravado e o contador mostra a quantidade de avisos ativos, não a quantidade de chamados ou linhas divergentes.
 9. Funciona nos temas claro e escuro, no desktop e no celular; testes em Python cobrem as regras e testes e2e cobrem a lista, o contador, os botões e o fechamento.

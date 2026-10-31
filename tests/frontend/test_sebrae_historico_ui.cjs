@@ -2,7 +2,7 @@ const test = require("node:test");
 const assert = require("node:assert/strict");
 const createSebraeHistorico = require("../../static/js/features/sebrae-historico.js");
 
-const { rotuloTipo, resumoEntrada, textoRepeticoes, linhasDeMudanca, grupoDoDetalhe, ultimasEntradas } = createSebraeHistorico.puro;
+const { rotuloTipo, resumoEntrada, textoRepeticoes, ultimasEntradas } = createSebraeHistorico.puro;
 
 const importacao = (extra = {}) => ({
   id: "a", tipo: "importacao", inicial: false, total: 10, n_adicionados: 0, n_removidos: 0, n_alterados: 0, repeticoes: 0, ...extra,
@@ -36,32 +36,6 @@ test("reimportado só aparece depois de uma repetição", () => {
   assert.equal(textoRepeticoes(importacao({ repeticoes: 1 })), "Reimportado 1 vez");
   assert.equal(textoRepeticoes(importacao({ repeticoes: 3 })), "Reimportado 3 vezes");
   assert.equal(textoRepeticoes(busca({ repeticoes: 4 })), "");
-});
-
-test("mudança de status mostra de, para e o encerramento quando houver", () => {
-  const entrada = importacao({ alterados: [
-    { numero: "UTIC-2026-1", de: "EM ABERTO", para: "FINALIZADO", encerramento: "28/10/2026 10:00" },
-    { numero: "UTIC-2026-2", de: "", para: "EM ABERTO", encerramento: "" },
-  ] });
-  assert.deepEqual(linhasDeMudanca(entrada.alterados), [
-    "UTIC-2026-1: EM ABERTO → FINALIZADO (encerrado em 28/10/2026 10:00)",
-    "UTIC-2026-2: sem status → EM ABERTO",
-  ]);
-});
-
-test("o detalhe só lista os grupos que têm números", () => {
-  const detalhe = importacao({ adicionados: ["UTIC-2026-3"], removidos: [], alterados: [{ numero: "UTIC-2026-1", de: "EM ABERTO", para: "FINALIZADO", encerramento: "" }] });
-  assert.deepEqual(grupoDoDetalhe(detalhe).map(g => [g.titulo, g.itens.length]), [["Adicionados", 1], ["Status alterado", 1]]);
-  const outra = busca({ lidos: ["UTIC-2026-9"], pendentes: [], erros: ["UTIC-2026-8"] });
-  assert.deepEqual(grupoDoDetalhe(outra).map(g => g.titulo), ["Lidos", "Com erro"]);
-});
-
-test("grupo avisa quando a lista foi cortada", () => {
-  const detalhe = importacao({ adicionados: ["UTIC-2026-3"], n_adicionados: 900, truncado: true });
-  const [grupo] = grupoDoDetalhe(detalhe);
-  assert.equal(grupo.titulo, "Adicionados");
-  assert.equal(grupo.total, 900);
-  assert.equal(grupo.cortado, true);
 });
 
 test("o resumo do cartão mostra as três entradas mais recentes", () => {

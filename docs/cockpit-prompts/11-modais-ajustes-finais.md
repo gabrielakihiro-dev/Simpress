@@ -39,7 +39,7 @@ Todos os modais mantêm a mesma estrutura e os mesmos IDs. Ajustes visuais:
 - `#modal-editar-equipamento`
 - `#modal-editar-apelido`
 - `#modal-historico-apelidos`
-- `#modal-gerenciar-unidades` (se existir)
+- ~~`#modal-gerenciar-unidades`~~ (removido em 31/10/2026; o formulário vive no painel Catálogo de unidades)
 - `#modal-contato-origem` (se existir)
 - `#modal-relatorio-mensal` (se existir)
 - `#modal-historico-comparacoes` (se existir)
