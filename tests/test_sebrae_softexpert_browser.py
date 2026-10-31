@@ -747,6 +747,21 @@ class SoftExpertNaBancadaTests(unittest.TestCase):
     def assertSemEscrita(self):
         self.assertEqual(self.bancada.proibidos, [], "A rotina clicou em uma ação de escrita do SoftExpert.")
 
+    def test_marcar_caixa_com_span_cobrindo_o_input(self):
+        # Checkbox estilizado do SoftExpert: o <span> sobre o input intercepta o ponteiro.
+        page = self.context.new_page()
+        page.set_content(
+            "<label style='position:relative;display:inline-block'>"
+            "<input type='checkbox' id='c' style='position:absolute;left:0;top:0;width:18px;height:18px'>"
+            "<span style='position:relative;display:inline-block;width:18px;height:18px;background:#ccc'></span>"
+            "Enviar</label>"
+        )
+        caixa = page.locator("#c")
+        se._marcar_caixa(caixa, True)
+        self.assertTrue(caixa.is_checked())
+        se._marcar_caixa(caixa, False)
+        self.assertFalse(caixa.is_checked())
+
     # ------------------------------------------------------------------ lista
 
     def test_lista_paginada_percorre_todas_as_paginas(self):
