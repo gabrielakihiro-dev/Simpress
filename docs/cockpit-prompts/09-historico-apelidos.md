@@ -41,7 +41,7 @@ Informe as mudanças visuais e o acesso pelo menu, confirme que os filtros e aç
 
 ## Desvio aprovado pelo usuário (etapa A, item 7)
 
-`#cockpit-alias-refresh` virou botão só ícone (`#i-refresh`, `aria-label`/`title` `Atualizar histórico`) e é o último da barra, igual à Comparação.
+`#cockpit-alias-refresh` (botão só ícone `Atualizar histórico`) foi removido em 31/10/2026: o histórico de apelidos recarrega sozinho sempre que a aba é aberta (e ao restaurar o estado salvo), igual à Comparação.
 
 ## Desvio aprovado pelo usuário (etapa E, item 8)
 

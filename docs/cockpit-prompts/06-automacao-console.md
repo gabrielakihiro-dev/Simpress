@@ -64,7 +64,7 @@ O `#tab-panel-automacao` vira um split-view:
 - `#automacao-historico-filtros`, `#automacao-historico-inicio`, `#automacao-historico-fim`
 - `#automacao-historico-rotina`, `#automacao-historico-status`
 - `#automacao-historico-limite`, `#automacao-historico-anterior`, `#automacao-historico-proxima`, `#automacao-historico-pagina`
-- `#btn-automacao-historico`
+- `#btn-automacao-historico` foi removido (31/10/2026): o botão `Atualizar` de `Últimas execuções` saiu; a lista recarrega ao abrir a aba, ao fim de cada execução e ao aplicar filtros. `carregarHistoricoAutomacao` continua, só sem botão.
 - Todos os `data-on-click` e `data-on-change`
 
 ---

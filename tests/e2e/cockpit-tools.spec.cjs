@@ -63,7 +63,7 @@ test("comparison tab shows the full result and survives an empty history refresh
   await expect(page.locator("#btn-exportar-resultado-comparacao")).toBeEnabled();
   await expect(page.locator("#comparacao-planilhas-fontes")).toBeVisible();
   await page.route("**/api/historico-comparacoes", route => route.fulfill({ json: { eventos: [] } }));
-  await page.locator("#cockpit-comparison-refresh").click();
+  await openTool(page, "#btn-cockpit-comparacao");
   await expect(page.locator("#btn-exportar-resultado-comparacao")).toBeDisabled();
   await expect(result).not.toContainText("LENTO");
   await expect(page.locator("#comparacao-planilhas-fontes")).toBeHidden();
@@ -229,4 +229,57 @@ test("o item Chamados Sebrae do menu abre o painel e volta com Esc", async ({ pa
   await expect(page.locator('[data-cockpit-tool-panel="sebrae-chamados"]')).toBeVisible();
   await page.keyboard.press("Escape");
   await expect(page.locator("#cockpit-tool-panels")).toBeHidden();
+});
+
+test("Catálogo de unidades: SEDE, CNPJ e edição pelo lápis sem o modal antigo", async ({ page }) => {
+  const errors = [];
+  page.on("pageerror", error => errors.push(error.message));
+  const units = [
+    { id: 1, label: "Curitiba Sede", cidade: "Curitiba", uf: "PR", endereco: "Rua XV, 100", cep: "80020000", cnpj: "03209636000100", is_sede: true },
+    { id: 2, label: "Londrina", cidade: "Londrina", uf: "PR", endereco: "Av. Paraná, 50", cep: "86010000", cnpj: "03209636000200", is_sede: false },
+  ];
+  let saved = null;
+  await page.route("**/api/unidades", route => route.fulfill({ json: units }));
+  await page.route("**/api/unidade/salvar", async route => {
+    saved = route.request().postDataJSON();
+    Object.assign(units.find(unit => unit.id === saved.id), { cnpj: saved.cnpj, cep: saved.cep, endereco: saved.endereco, cidade: saved.cidade });
+    await route.fulfill({ json: { sucesso: true, mensagem: "Unidade salva com sucesso!" } });
+  });
+  await page.goto("/");
+  await openTool(page, "#btn-catalogo-unidades");
+  await expect(page.locator('[data-cockpit-tool-panel="unidades"]')).toBeVisible();
+  await expect(page.locator("#modal-gerenciar-unidades, #cockpit-units-legacy, #cockpit-units-edit")).toHaveCount(0);
+  const list = page.locator("#cockpit-units-list-body");
+  await expect(list).toContainText("Curitiba Sede");
+  await expect(list).toContainText("SEDE");
+  await expect(page.locator("#cockpit-units-detail-badge")).toHaveText("SEDE");
+  await expect(page.locator("#cockpit-units-detail-pares")).toContainText("03209636000100");
+  await expect(page.locator("#cockpit-units-copy-cnpj")).toBeEnabled();
+  await expect(page.locator("#cockpit-units-copy-cep")).toBeEnabled();
+  // Sem rolagem horizontal da página.
+  expect(await page.evaluate(() => document.documentElement.scrollWidth <= document.documentElement.clientWidth)).toBe(true);
+
+  await page.locator("#cockpit-units-new").click();
+  await expect(page.locator("#form-nova-unidade")).toBeVisible();
+  await expect(page.locator("#form-unidade-titulo")).toBeVisible();
+  await page.locator("#form-nova-unidade").getByRole("button", { name: "Cancelar" }).click();
+  await expect(page.locator("#form-nova-unidade")).toBeHidden();
+
+  const pencil = list.getByRole("button", { name: "Editar CNPJ da unidade Curitiba" }).first();
+  await pencil.click();
+  await expect(page.locator("#form-nova-unidade")).toBeVisible();
+  await expect(page.locator("#form-unidade-titulo")).toContainText("Curitiba");
+  await expect(page.locator("#form-unidade-cnpj")).toBeFocused();
+  await expect(page.locator("#form-unidade-cnpj")).toHaveValue("03209636000100");
+  await page.locator("#form-unidade-cnpj").fill("03209636000999");
+  await page.locator("#btn-salvar-unidade").click();
+  await expect(page.locator("#form-nova-unidade")).toBeHidden();
+  expect(saved).toMatchObject({ id: 1, cnpj: "03209636000999" });
+  await expect(list).toContainText("03209636000999");
+  await expect(page.locator("#cockpit-units-detail-pares")).toContainText("03209636000999");
+  expect(await page.evaluate(() => document.documentElement.scrollWidth <= document.documentElement.clientWidth)).toBe(true);
+
+  await page.keyboard.press("Escape");
+  await expect(page.locator("#cockpit-tool-panels")).toBeHidden();
+  expect(errors).toEqual([]);
 });
