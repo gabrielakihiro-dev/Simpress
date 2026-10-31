@@ -847,7 +847,7 @@
     scanTables();
 
     // A change of the history counter means an update/restore/delete happened: refresh both the panel and the badge.
-    const counter = doc.getElementById("badge-total-historico-comparacoes");
+    const counter = doc.getElementById("total-historico-comparacoes");
     if (counter) new win.MutationObserver(() => refresh(true)).observe(counter, { childList: true, characterData: true, subtree: true });
     // The cards are in the Resumo tab; Home keeps refreshing too, for the sidebar divergence badge.
     const abasComDados = ["tab-home", "tab-resumo", "tab-retirada-entrega"].map(id => doc.getElementById(id)).filter(Boolean);

@@ -875,15 +875,6 @@
       }
       .modal-panel .overflow-y-auto, .modal-panel .overflow-auto { min-height: 0; -webkit-overflow-scrolling: touch; }
       #lista-historico-apelidos, #lista-historico-comparacoes { min-width: 0; }
-      #modal-gerenciar-unidades .unit-modal-heading { align-items: flex-start; flex-direction: column; gap: 0.25rem; }
-      #lista-unidades-container .unit-list-identity { flex-wrap: wrap; min-width: 0; }
-      #lista-unidades-container .unit-list-cnpj {
-        flex: 1 1 calc(100% - 3.75rem); min-width: 0; font-size: 12px; overflow-wrap: anywhere;
-      }
-      #lista-unidades-container [data-copy-field] { min-width: 48px; }
-      #lista-unidades-container .unit-list-address {
-        white-space: normal; overflow: visible; text-overflow: clip; overflow-wrap: anywhere;
-      }
     }
     @media (max-width: 380px) {
       .header-secondary-panel { grid-template-columns: 1fr; }

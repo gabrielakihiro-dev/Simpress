@@ -103,7 +103,6 @@ test("Automação pages and filters executions without growing the history", asy
   await panel.getByRole("combobox", {name: "Status", exact: true}).selectOption("falha");
   await panel.getByRole("button", {name: "Aplicar", exact: true}).click();
   await expect(rows).toHaveCount(2);
-  await panel.getByRole("button", {name: "Atualizar", exact: true}).click();
   await expect(rows).toHaveCount(2);
   await expect(panel.locator("#automacao-historico-resumo")).toContainText("Falha");
   await panel.getByLabel("De", {exact: true}).fill("2026-10-21");
