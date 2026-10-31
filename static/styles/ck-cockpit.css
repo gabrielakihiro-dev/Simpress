@@ -897,8 +897,10 @@ button.ck-status--link:focus-visible { outline: 2px solid var(--cor-destaque); o
 #comparacao-planilhas-fontes:empty { display: none; }
 .ck-comparacao-resultado { display: grid; gap: 20px; align-content: start; min-width: 0; padding: 16px 20px 24px; color: var(--cor-texto); }
 .ck-comparacao-resultado > * { min-width: 0; max-width: 100%; }
-/* Barra de filtros fixa no topo do painel (logo abaixo do cabeçalho da ferramenta). */
-.ck-comparacao-resultado > .history-filter-bar { top: 0; border-color: var(--cor-borda); border-radius: var(--raio-md); background: var(--cor-superficie-elevada); box-shadow: none; }
+/* Barra de filtros compacta e fixa no topo da lista: rola junto com a página, sem acompanhar a rolagem, para não cobrir as linhas. */
+.ck-comparacao-resultado > .history-filter-bar { position: static; padding: 8px 12px; border-color: var(--cor-borda); border-radius: var(--raio-md); background: var(--cor-superficie-elevada); box-shadow: none; }
+.ck-comparacao-resultado .history-filter-controls { gap: 8px; }
+.ck-comparacao-resultado .history-filter-footer { margin-top: 6px; }
 .ck-comparacao-resultado .history-filter-search-label input,
 .ck-comparacao-resultado .history-filter-category-label select { border-color: var(--cor-borda); border-radius: var(--raio-md); background: var(--cor-superficie-funda); }
 .ck-comparacao-resultado > .grid { grid-template-columns: repeat(3, minmax(0, 1fr)); }
