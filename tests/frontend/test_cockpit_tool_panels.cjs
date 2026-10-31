@@ -27,8 +27,15 @@ test("the four Cockpit tools open dedicated panels from the nine-dot menu", () =
     assert.match(html, new RegExp(`data-cockpit-tool-panel="${panel}"`));
   }
   assert.match(html, /id="cockpit-tool-panels"[^>]*hidden/);
-assert.match(html, /id="cockpit-comparison-event"/);
-assert.match(html, /id="cockpit-comparison-filters"/);
+  assert.match(html, /id="cockpit-comparison-event"/);
+  // O resultado completo mora na aba Comparação; lista/detalhe/KPIs/filtros/exportação antigos e o modal saíram.
+  const comparacao = html.match(/<section[^>]*data-cockpit-tool-panel="comparacao"[\s\S]*?\n        <\/section>/)?.[0] || "";
+  for (const id of ["comparacao-planilhas-conteudo", "comparacao-planilhas-fontes", "btn-exportar-resultado-comparacao"]) {
+    assert.equal(comparacao.split(`id="${id}"`).length - 1, 1, `${id} dentro da aba Comparação`);
+  }
+  assert.match(comparacao, /id="btn-exportar-resultado-comparacao"[^>]*data-on-click="exportarResultadoComparacaoPlanilhas"/);
+  assert.doesNotMatch(html, /id="cockpit-comparison-(kpis|filters|list|detail|export)"/);
+  assert.doesNotMatch(html, /id="modal-comparacao-/);
 assert.match(html, /id="cockpit-alias-filters"/);
 assert.match(html, /id="cockpit-monthly-periods"/);
 });
@@ -50,7 +57,7 @@ test("ticket search filters only existing records and leaves unknown relations v
   assert.deepEqual(panels.filterTicketRecords([{ serie: "SN-003", relacao: "legado" }], "", "todos").length, 1);
 });
 
-test("comparison rows are built from existing result categories and unsupported counts stay unavailable", () => {
+test("comparison metrics are built from existing result categories and unsupported counts stay unavailable", () => {
   const event = { comparacao: {
     total_detalhes: 8,
     total_endpoint: 7,
@@ -63,7 +70,7 @@ test("comparison rows are built from existing result categories and unsupported 
     simpress: 8, endpoint: 7, iguais: 5, divergenciaLocal: 1, divergenciaUsuario: null,
     soSimpress: 1, soEndpoint: 0,
   });
-  assert.deepEqual(panels.comparisonRows(event, "todos").map(row => row.categoria), ["Só Simpress", "Localidade"]);
+  assert.equal(panels.comparisonRows, undefined, "a lista antiga de linhas saiu; o resultado completo vem de renderizarResultadoComparacao");
 });
 
 test("alias metrics count monthly events and distinct equipment without inventing classifications", () => {
@@ -101,7 +108,7 @@ test("monthlyChartBars scales bars to the largest real count", () => {
 });
 
 // DOM falso permissivo: qualquer propriedade desconhecida vira função/objeto inerte; só o que o roteamento lê é real.
-function criarAmbientePaineis() {
+function criarAmbientePaineis({ apiFetch = async () => ({}), appExtra = {} } = {}) {
   const elementos = new Map();
   const ouvintes = [];
   const novo = id => new Proxy({ id, hidden: true, open: false, dataset: {}, textContent: "", value: "", children: [], attrs: {} }, {
@@ -126,8 +133,8 @@ function criarAmbientePaineis() {
     addEventListener: (tipo, fn) => ouvintes.push([tipo, fn]),
     createElement: () => novo("novo"),
   };
-  const app = { apiFetch: async () => ({}), showToast() {} };
-  const api = createCockpitToolPanels({ app, appState: {} });
+  const app = { apiFetch, showToast() {}, ...appExtra };
+  const api = createCockpitToolPanels({ app, appState: {}, apiFetch });
   const el = id => document.getElementById(id);
   const esc = () => { let prevenido = false; ouvintes.filter(([t]) => t === "keydown").forEach(([, fn]) => fn({ key: "Escape", defaultPrevented: false, preventDefault() { prevenido = true; } })); return prevenido; };
   return { api, el, esc };
@@ -284,4 +291,54 @@ test("abrirChamadosDoEquipamento preenche a busca com a série e filtra a tabela
     assert.deepEqual(eventos, ["input"]);
     assert.deepEqual(filtros.at(0), { busca: "SN-9", relacao: "somente_oracle" });
   } finally { delete global.document; delete global.SimpressDataPanels; }
+});
+
+test("resultado novo aparece na aba Comparação na hora e é trocado pelo evento salvo (com evento_id)", async () => {
+  const renders = [];
+  const evento = { id: "7", tipo: "atualizacao", horario: "2026-10-09T14:30:00-03:00", comparacao: { total_detalhes: 3 } };
+  const urls = [];
+  const apiFetch = async url => {
+    urls.push(url);
+    return url === "/api/historico-comparacoes" ? { eventos: [evento] } : { evento };
+  };
+  const { api, el } = criarAmbientePaineis({ apiFetch, appExtra: { renderizarResultadoComparacao: (comparacao, alvo) => renders.push([comparacao, alvo]) } });
+  try {
+    await api.mostrarResultadoNaAbaComparacao({ resumo: "recém-gerado" });
+    assert.equal(el("cockpit-tool-panels").hidden, false);
+    assert.equal(el("cockpit-tools-dropdown").dataset.activeTool, "comparacao");
+    assert.deepEqual(urls, ["/api/historico-comparacoes", "/api/historico-comparacoes/7"]);
+    assert.equal(renders.length, 2);
+    assert.deepEqual(renders[0][0], { resumo: "recém-gerado" });
+    assert.equal(renders[1][0].evento_id, "7");
+    assert.equal(renders[1][0].historico_salvo, true);
+    assert.equal(renders[1][0].horario_comparacao, evento.horario);
+  } finally { delete global.document; }
+});
+
+test("abrir Comparação com evento_id e destino leva o destino ao resultado salvo, sem exportar sem data", async () => {
+  const renders = [];
+  const evento = { id: "9", tipo: "atualizacao", horario: "2026-10-09T10:00:00-03:00", comparacao: {} };
+  const apiFetch = async url => url === "/api/historico-comparacoes" ? { eventos: [evento] } : { evento };
+  const { api, el } = criarAmbientePaineis({ apiFetch, appExtra: { renderizarResultadoComparacao: (comparacao, alvo) => renders.push([comparacao, alvo]) } });
+  try {
+    await api.mostrarResultadoNaAbaComparacao({ evento_id: "9" }, { serial: "SN-1" });
+    assert.equal(renders.length, 1);
+    assert.equal(renders[0][0].evento_id, "9");
+    assert.deepEqual(renders[0][1], { serial: "SN-1" });
+  } finally { delete global.document; }
+});
+
+test("histórico de comparações vazio limpa a aba e mantém o Exportar desativado", async () => {
+  const renders = [];
+  const { api, el } = criarAmbientePaineis({
+    apiFetch: async () => ({ eventos: [] }),
+    appExtra: { renderizarResultadoComparacao: (...args) => renders.push(args) },
+  });
+  try {
+    await api.abrirPainelCockpit("comparacao");
+    assert.equal(renders.length, 0);
+    assert.equal(el("btn-exportar-resultado-comparacao").disabled, true);
+    assert.equal(el("cockpit-comparison-event").disabled, true);
+    assert.equal(el("comparacao-planilhas-fontes").textContent, "");
+  } finally { delete global.document; }
 });

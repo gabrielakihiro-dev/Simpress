@@ -95,10 +95,10 @@
       }).join("");
 
       return `
-          <article class="comparison-mobile-card" role="listitem"${manualAliasRow}${comparisonTargetAttributes}>
+          <div class="comparison-mobile-card" role="listitem"${manualAliasRow}${comparisonTargetAttributes}>
             <h5 class="comparison-mobile-card-title"><span class="sr-only">${escapeHtml(titleLabel)}: </span>${titleContent}</h5>
             ${fields ? `<dl class="comparison-mobile-card-fields">${fields}</dl>` : ""}
-          </article>`;
+          </div>`;
     }).join("");
     return wrapFilterGroup(`
         <div class="accessible-table-wrap comparison-desktop-table rounded-lg border border-line-quiet" role="region" aria-label="${escapeHtml(tableLabel)}" tabindex="0">
