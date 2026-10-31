@@ -19,6 +19,7 @@ from domains.assistant_anexos import AnexoRecusado, analisar
 from domains.assistant_api import SimpressApi, Transport
 from domains.assistant_busca_web import LIMITE_CONSULTA, ler_busca_web, salvar_busca_web
 from domains.assistant_chat import MSG_OCUPADO, MSG_SEM_CHAVE, AssistantBusy, AssistantConversation, Resposta
+from domains.assistant_conversas import ConversasStore
 from domains.assistant_instrucoes import LIMITE_INSTRUCOES, ler_instrucoes, salvar_instrucoes
 from domains.assistant_notas import LIMITE_NOTAS, LIMITE_TEXTO, NotasStore
 from domains.assistant_openrouter import ModelClient, OpenRouterClient, OpenRouterError, OpenRouterSettings
@@ -35,6 +36,7 @@ class AssistantRouteServices:
     instructions_file: Path
     notes_file: Optional[Path] = None  # default: next to the instructions file
     web_search_file: Optional[Path] = None  # default: next to the instructions file
+    conversations_file: Optional[Path] = None  # default: next to the instructions file
     client_factory: Callable[[OpenRouterSettings], ModelClient] = OpenRouterClient
 
 
@@ -89,6 +91,7 @@ def create_assistant_router(services: AssistantRouteServices) -> APIRouter:
     guard = threading.Lock()
     notas = NotasStore(services.notes_file or services.instructions_file.with_name("assistente_notas.json"))
     web_file = services.web_search_file or services.instructions_file.with_name("assistente_busca_web.json")
+    conversas = ConversasStore(services.conversations_file or services.instructions_file.with_name("assistente_conversas.json"))
     holder: List[Optional[AssistantConversation]] = [None]
 
     def conversation() -> AssistantConversation:
@@ -105,6 +108,7 @@ def create_assistant_router(services: AssistantRouteServices) -> APIRouter:
             holder[0] = AssistantConversation(
                 client, SimpressApi(services.transport), settings.primary_model,
                 lambda: ler_instrucoes(services.instructions_file), notas, lambda: ler_busca_web(web_file),
+                conversas=conversas,
             )
             return holder[0]  # type: ignore[return-value]
 
@@ -240,6 +244,23 @@ def create_assistant_router(services: AssistantRouteServices) -> APIRouter:
     def apagar_nota(nota_id: str):
         if not notas.apagar(nota_id):
             raise HTTPException(status_code=404, detail="Lembrete não encontrado.")
+        return {"ok": True}
+
+    @router.get("/api/assistente/conversas")
+    def listar_conversas():
+        return {"conversas": conversas.listar()}
+
+    @router.get("/api/assistente/conversas/{conversa_id}")
+    def ler_conversa(conversa_id: str):
+        conversa = conversas.obter(conversa_id)
+        if conversa is None:
+            raise HTTPException(status_code=404, detail="Conversa não encontrada.")
+        return conversa
+
+    @router.delete("/api/assistente/conversas/{conversa_id}")
+    def apagar_conversa(conversa_id: str):
+        if not conversas.apagar(conversa_id):
+            raise HTTPException(status_code=404, detail="Conversa não encontrada.")
         return {"ok": True}
 
     return router
