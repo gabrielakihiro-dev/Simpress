@@ -42,6 +42,10 @@
   <symbol id="i-history" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 12a9 9 0 1 0 9-9 9.75 9.75 0 0 0-6.74 2.74L3 8"/><path d="M3 3v5h5"/><path d="M12 7v5l4 2"/></symbol>
   <symbol id="i-external" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M15 3h6v6"/><path d="M10 14 21 3"/><path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"/></symbol>
   <symbol id="i-x" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M18 6 6 18"/><path d="m6 6 12 12"/></symbol>
+  <symbol id="i-minus" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12h14"/></symbol>
+  <symbol id="i-maximize" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M15 3h6v6"/><path d="M9 21H3v-6"/><path d="m21 3-7 7"/><path d="m3 21 7-7"/></symbol>
+  <symbol id="i-restaurar" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 14h6v6"/><path d="M20 10h-6V4"/><path d="m14 10 7-7"/><path d="m3 21 7-7"/></symbol>
+  <symbol id="i-chevron-up" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m18 15-6-6-6 6"/></symbol>
   <symbol id="i-check" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6 9 17l-5-5"/></symbol>
   <symbol id="i-chevron-down" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m6 9 6 6 6-6"/></symbol>
   <symbol id="i-chevron-right" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m9 18 6-6-6-6"/></symbol>
@@ -1118,7 +1122,12 @@ Horário disponível para atendimento:</textarea>
   <section id="assistente-widget" class="ck-assist ck-assist-widget" role="dialog" aria-modal="false" aria-labelledby="assistente-heading" data-on-keydown="teclaAssistente" data-args='["$event"]' hidden>
     <div class="ck-assist-widget__cab">
       <h2 id="assistente-heading" class="ck-assist-widget__titulo">Assistente</h2>
-      <button type="button" id="assistente-fechar" class="ck-btn ck-btn--icone ck-btn--fantasma ck-btn--sm" aria-label="Fechar Assistente" title="Fechar (Esc)" data-on-click="alternarAssistente"><svg class="ck-ico" aria-hidden="true" focusable="false"><use href="#i-x"></use></svg></button>
+      <div class="ck-assist-widget__acoes">
+        <button type="button" id="assistente-historico-botao" class="ck-btn ck-btn--icone ck-btn--fantasma ck-btn--sm" aria-label="Histórico de conversas" title="Histórico de conversas" aria-expanded="false" aria-controls="assistente-historico" data-on-click="alternarHistoricoAssistente"><svg class="ck-ico" aria-hidden="true" focusable="false"><use href="#i-history"></use></svg></button>
+        <button type="button" id="assistente-minimizar" class="ck-btn ck-btn--icone ck-btn--fantasma ck-btn--sm" aria-label="Minimizar Assistente" title="Minimizar" aria-expanded="true" data-on-click="minimizarAssistente"><svg class="ck-ico" aria-hidden="true" focusable="false"><use href="#i-minus"></use></svg></button>
+        <button type="button" id="assistente-maximizar" class="ck-btn ck-btn--icone ck-btn--fantasma ck-btn--sm" aria-label="Maximizar Assistente" title="Maximizar" data-on-click="maximizarAssistente"><svg class="ck-ico" aria-hidden="true" focusable="false"><use href="#i-maximize"></use></svg></button>
+        <button type="button" id="assistente-fechar" class="ck-btn ck-btn--icone ck-btn--fantasma ck-btn--sm" aria-label="Fechar Assistente" title="Fechar (Esc)" data-on-click="alternarAssistente"><svg class="ck-ico" aria-hidden="true" focusable="false"><use href="#i-x"></use></svg></button>
+      </div>
     </div>
     <div class="ck-barra-ferr ck-assist__barra">
       <canvas id="assistente-globo" class="ck-assist__globo" width="112" height="112" data-estado="parado" aria-hidden="true"></canvas>
@@ -1130,6 +1139,7 @@ Horário disponível para atendimento:</textarea>
       <button type="button" id="assistente-lembretes-botao" class="ck-btn ck-btn--fantasma ck-btn--sm" data-on-click="alternarLembretesAssistente" aria-expanded="false" aria-controls="assistente-lembretes"><svg class="ck-ico ck-ico--sm" aria-hidden="true" focusable="false"><use href="#i-clipboard"></use></svg>Lembretes</button>
     </div>
     <section id="assistente-instrucoes" class="ck-assist__instrucoes" aria-labelledby="assistente-instrucoes-titulo" hidden>
+      <button type="button" class="ck-btn ck-btn--fantasma ck-btn--sm ck-assist__voltar" data-on-click="voltarConversaAssistente"><svg class="ck-ico ck-ico--sm" aria-hidden="true" focusable="false"><use href="#i-arrow-left"></use></svg>Voltar à conversa</button>
       <h3 class="ck-det__titulo"><span id="assistente-instrucoes-titulo">Instruções permanentes</span> <span class="info-tip"><button type="button" class="info-tip-trigger" aria-label="Sobre Instruções permanentes" aria-describedby="tip-assistente-instrucoes"><svg class="ck-ico ck-ico--sm" aria-hidden="true" focusable="false"><use href="#i-info"></use></svg></button><span id="tip-assistente-instrucoes" role="tooltip" class="info-tip-text">Preferências, não regras de segurança: o cartão de confirmação e a ocultação de dados pessoais continuam valendo. Valem na próxima mensagem.</span></span></h3>
       <label class="ck-campo ck-assist__campo"><span class="ck-campo__rotulo">Regras e preferências para o Assistente</span><textarea id="assistente-instrucoes-texto" class="ck-entrada" rows="4" maxlength="4000" placeholder="Ex.: Sempre responda em tabela." aria-describedby="tip-assistente-instrucoes assistente-instrucoes-contador" data-on-input="contarInstrucoesAssistente"></textarea></label>
       <div class="ck-assist__acoes">
@@ -1147,10 +1157,21 @@ Horário disponível para atendimento:</textarea>
       </div>
     </section>
     <section id="assistente-lembretes" class="ck-assist__instrucoes ck-assist__lembretes" aria-labelledby="assistente-lembretes-titulo" hidden>
+      <button type="button" class="ck-btn ck-btn--fantasma ck-btn--sm ck-assist__voltar" data-on-click="voltarConversaAssistente"><svg class="ck-ico ck-ico--sm" aria-hidden="true" focusable="false"><use href="#i-arrow-left"></use></svg>Voltar à conversa</button>
       <h3 id="assistente-lembretes-titulo" class="ck-det__titulo" tabindex="-1">Lembretes e notas <span class="info-tip"><button type="button" class="info-tip-trigger" aria-label="Sobre Lembretes e notas" aria-describedby="tip-lembretes"><svg class="ck-ico ck-ico--sm" aria-hidden="true" focusable="false"><use href="#i-info"></use></svg></button><span id="tip-lembretes" role="tooltip" class="info-tip-text">Memória do Assistente: peça no chat "me lembre de…" ou "anote que…". Não há alarme nem aviso automático; confira esta lista quando precisar.</span></span></h3>
       <ul id="assistente-lembretes-lista" class="ck-assist__lembretes-lista" aria-labelledby="assistente-lembretes-titulo" hidden></ul>
       <p id="assistente-lembretes-vazio" class="ck-assist__contador" hidden>Nenhum lembrete guardado.</p>
       <p id="assistente-lembretes-status" class="ck-assist__contador" role="status" aria-live="polite"></p>
+    </section>
+    <section id="assistente-historico" class="ck-assist__instrucoes ck-assist__historico" aria-labelledby="assistente-historico-titulo" hidden>
+      <button type="button" id="assistente-historico-voltar" class="ck-btn ck-btn--fantasma ck-btn--sm ck-assist__voltar" data-on-click="voltarConversaAssistente"><svg class="ck-ico ck-ico--sm" aria-hidden="true" focusable="false"><use href="#i-arrow-left"></use></svg>Voltar à conversa</button>
+      <h3 id="assistente-historico-titulo" class="ck-det__titulo" tabindex="-1">Histórico de conversas <span class="info-tip"><button type="button" class="info-tip-trigger" aria-label="Sobre Histórico de conversas" aria-describedby="tip-historico"><svg class="ck-ico ck-ico--sm" aria-hidden="true" focusable="false"><use href="#i-info"></use></svg></button><span id="tip-historico" role="tooltip" class="info-tip-text">Só leitura. Guarda neste computador o texto das conversas, sem CPF, e-mail, telefone, senha nem nomes (aparecem como [PESSOA_n]). Anexos e relatórios não são guardados. Até 50 conversas; as mais antigas saem sozinhas.</span></span></h3>
+      <ul id="assistente-historico-lista" class="ck-assist__lembretes-lista" aria-labelledby="assistente-historico-titulo" hidden></ul>
+      <p id="assistente-historico-vazio" class="ck-assist__contador" hidden>Nenhuma conversa guardada.</p>
+      <button type="button" id="assistente-historico-lista-voltar" class="ck-btn ck-btn--secundario ck-btn--sm ck-assist__voltar" data-on-click="fecharConversaHistoricoAssistente" hidden>Ver todas as conversas</button>
+      <button type="button" id="assistente-historico-exportar" class="ck-btn ck-btn--primario ck-btn--sm ck-assist__voltar" data-on-click="exportarPdfHistoricoAssistente" hidden>Exportar PDF</button>
+      <div id="assistente-historico-leitura" class="ck-assist__historico-leitura" role="region" aria-label="Conversa guardada" tabindex="0" hidden></div>
+      <p id="assistente-historico-status" class="ck-assist__contador" role="status" aria-live="polite"></p>
     </section>
     <div id="assistente-mensagens" class="ck-assist__lista" role="region" aria-label="Mensagens da conversa" aria-busy="false" tabindex="0"></div>
     <p id="assistente-anuncio" class="ck-sr" aria-live="polite" aria-atomic="true"></p>

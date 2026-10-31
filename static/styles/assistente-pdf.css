@@ -1,0 +1,103 @@
+/* PDF da conversa do Assistente (estilo Cockpit). Carregado só no iframe de impressão de assistant-chat.js. */
+@page { size: A4; margin: 14mm 14mm 16mm; }
+
+* { box-sizing: border-box; }
+
+html {
+  background: #0b1220;
+  -webkit-print-color-adjust: exact;
+  print-color-adjust: exact;
+}
+
+body {
+  margin: 0;
+  color: #dbe5f3;
+  font: 10.5pt/1.55 "Inter", "Segoe UI", system-ui, sans-serif;
+}
+
+.pdf { max-width: 182mm; margin: 0 auto; }
+
+.pdf__cab {
+  position: relative;
+  margin-bottom: 8mm;
+  padding: 6mm 7mm 6mm 9mm;
+  background: linear-gradient(135deg, #14213a 0%, #0f1a2e 100%);
+  border: 1px solid #25375a;
+  border-radius: 3mm;
+  overflow: hidden;
+  break-inside: avoid;
+}
+.pdf__cab::before {
+  content: "";
+  position: absolute;
+  inset: 0 auto 0 0;
+  width: 2.2mm;
+  background: #38a9f7;
+}
+
+.pdf__marca {
+  margin: 0 0 2mm;
+  color: #38a9f7;
+  font: 600 7.5pt/1 "JetBrains Mono", Consolas, monospace;
+  letter-spacing: 0.18em;
+  text-transform: uppercase;
+}
+
+.pdf__titulo {
+  margin: 0;
+  color: #f3f7fd;
+  font-size: 17pt;
+  font-weight: 700;
+  line-height: 1.25;
+  overflow-wrap: anywhere;
+}
+
+.pdf__meta { display: flex; flex-wrap: wrap; gap: 2mm; margin: 4mm 0 0; padding: 0; list-style: none; }
+.pdf__meta li {
+  padding: 1mm 2.6mm;
+  color: #9fb4d3;
+  background: #0b1220;
+  border: 1px solid #25375a;
+  border-radius: 99mm;
+  font: 500 7.5pt/1.4 "JetBrains Mono", Consolas, monospace;
+}
+
+.pdf__msgs { display: flex; flex-direction: column; gap: 4mm; }
+
+.pdf__msg {
+  position: relative;
+  padding: 3.5mm 5mm 3.5mm 6mm;
+  background: #111c31;
+  border: 1px solid #22324f;
+  border-radius: 2.5mm;
+}
+.pdf__msg::before {
+  content: "";
+  position: absolute;
+  inset: 2mm auto 2mm 0;
+  width: 1.2mm;
+  border-radius: 0 1mm 1mm 0;
+  background: #4a5d80;
+}
+.pdf__msg--usuario { background: #12263f; border-color: #28507a; }
+.pdf__msg--usuario::before { background: #38a9f7; }
+
+.pdf__autor {
+  margin: 0 0 1.5mm;
+  color: #7f95b8;
+  font: 600 7pt/1 "JetBrains Mono", Consolas, monospace;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+}
+.pdf__msg--usuario .pdf__autor { color: #38a9f7; }
+
+.pdf__texto { margin: 0; white-space: pre-wrap; overflow-wrap: anywhere; }
+
+.pdf__rodape {
+  margin: 8mm 0 0;
+  padding-top: 3mm;
+  color: #6f86a9;
+  border-top: 1px solid #22324f;
+  font: 500 7pt/1.5 "JetBrains Mono", Consolas, monospace;
+  break-inside: avoid;
+}
