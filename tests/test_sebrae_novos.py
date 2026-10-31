@@ -2,7 +2,7 @@ import tempfile
 import unittest
 from pathlib import Path
 
-from domains import sebrae_novos as novos
+from domains import sebrae_cruzamento, sebrae_novos as novos
 from domains.sebrae_chamados import ChamadoSoftExpert
 
 CHAMADO = ChamadoSoftExpert(
@@ -48,14 +48,31 @@ class FormularioTest(unittest.TestCase):
         self.assertEqual((item["linha"]["K"], item["linha"]["L"], item["linha"]["N"], item["linha"]["E"]), ("ABC123", "Dell", "Curitiba", "7303022"))
         self.assertEqual(item["cruzamento"], {"status": "unico", "candidatos": 1})
 
-    def test_chamado_aberto_para_outra_pessoa_fica_vazio_e_avisa(self):
+    def test_nome_da_descricao_liga_o_equipamento_de_quem_o_chamado_foi_aberto(self):
         duas = REGISTROS + [{"nome": "Ícaro Gabriel Duarte Campos", "serie": "XYZ9", "modelo": "HP", "cidade": "Maringá"}]
-        para_outro = ChamadoSoftExpert(numero="UTIC-2026-1188", descricao="Abri para o icaro gabriel duarte campos, teclado.", solicitante="Camila Lopes")
+        para_outro = ChamadoSoftExpert(numero="UTIC-2026-1188", descricao="Abri para o icaro gabriel duarte campos (UCS), teclado.", solicitante="Camila Lopes")
         item = novos.formulario([para_outro], duas, RELATORIO)[0]
-        self.assertEqual([item["linha"][c] for c in "EKLN"], ["", "", "", ""])
-        self.assertEqual((item["cruzamento"]["status"], item["outra_pessoa"]), ("ausente", "Ícaro Gabriel Duarte Campos"))
+        self.assertEqual([item["linha"][c] for c in "KLN"], ["XYZ9", "HP", "Maringá"])  # the cited person, not the requester
+        self.assertEqual((item["cruzamento"]["status"], item["nome_da_descricao"], item["outra_pessoa"]), ("unico", "Ícaro Gabriel Duarte Campos", ""))
         proprio = ChamadoSoftExpert(numero="UTIC-2026-1189", descricao="Camila Lopes sem rede", solicitante="Camila Lopes")
-        self.assertEqual(novos.formulario([proprio], duas, RELATORIO)[0]["outra_pessoa"], "")
+        item = novos.formulario([proprio], duas, RELATORIO)[0]
+        self.assertEqual((item["linha"]["K"], item["nome_da_descricao"], item["outra_pessoa"]), ("ABC123", "", ""))
+
+    def test_solicitante_sem_equipamento_usa_o_nome_da_descricao(self):
+        api = ChamadoSoftExpert(numero="UTIC-2026-1190", descricao="Nome do(a) colaborador(a): Camila Lopes Horário: 09h", solicitante="API SEBRAE")
+        item = novos.formulario([api], REGISTROS, RELATORIO)[0]
+        self.assertEqual((item["linha"]["K"], item["linha"]["E"]), ("ABC123", "7303022"))
+
+    def test_duas_pessoas_na_descricao_nao_preenche_e_avisa(self):
+        duas = REGISTROS + [{"nome": "Ícaro Gabriel Duarte Campos", "serie": "XYZ9", "modelo": "HP", "cidade": "Maringá"}]
+        dupla = ChamadoSoftExpert(numero="UTIC-2026-1191", descricao="Camila Lopes e Icaro Gabriel Duarte Campos", solicitante="API SEBRAE")
+        item = novos.formulario([dupla], duas, RELATORIO)[0]
+        self.assertEqual([item["linha"][c] for c in "EKLN"], ["", "", "", ""])
+        self.assertEqual((item["cruzamento"]["status"], item["nome_da_descricao"], item["outra_pessoa"]), ("ausente", "", "Camila Lopes"))
+
+    def test_nome_dentro_de_nome_maior_conta_como_uma_pessoa(self):
+        reg = [{"nome": "Ana Souza", "serie": "A1"}, {"nome": "Ana Souza Lima", "serie": "B2"}]
+        self.assertEqual(sebrae_cruzamento.pessoas_citadas("Para Ana Souza Lima", "API SEBRAE", reg), ["Ana Souza Lima"])
 
     def test_sem_registros_fica_vazio_e_ausente(self):
         item = novos.formulario([CHAMADO], [], None)[0]
@@ -82,13 +99,18 @@ class PreenchimentosTest(unittest.TestCase):
     def test_os_vem_da_serie_que_a_linha_ja_tem_mesmo_sem_nome(self):
         self.assertEqual(novos.preenchimentos([self.aberto(usuario="", K="ABC123", L="Dell", N="X")], REGISTROS, RELATORIO), {"linha:2": {"E": "7303022"}})
 
-    def test_aberto_para_outra_pessoa_nao_preenche(self):
+    def test_aberto_para_outra_pessoa_preenche_pelo_nome_da_descricao(self):
         duas = REGISTROS + [{"nome": "Ícaro Gabriel Duarte Campos", "serie": "XYZ9", "modelo": "HP", "cidade": "Maringá"}]
         item = {**self.aberto(), "descricao": "Aberto para Icaro Gabriel Duarte Campos"}
-        self.assertEqual(novos.preenchimentos([item], duas, RELATORIO), {})
+        self.assertEqual(novos.preenchimentos([item], duas, RELATORIO), {"linha:2": {"K": "XYZ9", "L": "HP", "N": "Maringá"}})  # no OS known for XYZ9
         com_serie = {**item, "automaticos": {"E": "", "K": "ABC123", "L": "", "N": ""}}
-        self.assertEqual(novos.preenchimentos([com_serie], duas, RELATORIO), {"linha:2": {"E": "7303022"}})  # serial already in the row still gives E
+        self.assertEqual(novos.preenchimentos([com_serie], duas, RELATORIO), {"linha:2": {"E": "7303022"}})  # a serial already in the row is never replaced
         self.assertEqual(novos.preenchimentos([{**self.aberto(), "descricao": "Camila Lopes sem rede"}], duas, RELATORIO).keys(), {"linha:2"})
+
+    def test_aberto_com_duas_pessoas_na_descricao_nao_preenche(self):
+        duas = REGISTROS + [{"nome": "Ícaro Gabriel Duarte Campos", "serie": "XYZ9", "modelo": "HP", "cidade": "Maringá"}]
+        item = {**self.aberto(usuario="API SEBRAE"), "descricao": "Camila Lopes e Icaro Gabriel Duarte Campos"}
+        self.assertEqual(novos.preenchimentos([item], duas, RELATORIO), {})
 
     def test_estado_antigo_sem_usuario_nem_automaticos_nao_quebra(self):
         self.assertEqual(novos.preenchimentos([{"numero": "UTIC-2026-0001", "titulo": "x", "valores": {}}], REGISTROS, RELATORIO), {})

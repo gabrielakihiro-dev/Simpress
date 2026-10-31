@@ -103,7 +103,7 @@ def create_sebrae_dashboard_router(services: SebraeDashboardServices) -> APIRout
         finalizacao = fin.ler_estado(_pasta_estado()) if abertos else {}
         return [
             {**a, "automaticos_sugeridos": sugestoes.get(str(a.get("numero")), {}),
-             "outra_pessoa": sebrae_cruzamento.outra_pessoa(a.get("descricao"), a.get("usuario"), registros),
+             **sebrae_cruzamento.avisos_de_nome(a.get("descricao"), a.get("usuario"), registros),
              "softexpert": fin.publico(finalizacao.get(str(a.get("numero"))))}
             for a in abertos
         ]

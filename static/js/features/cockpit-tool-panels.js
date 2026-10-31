@@ -21,7 +21,7 @@
   };
   const relationLabels = {
     conferida: "Conferida", divergente: "Divergente", somente_simpress: "Só Simpress",
-    somente_oracle: "Só Oracle", sem_os: "Sem OS",
+    somente_oracle: "Só Oracle",
   };
   const relationTones = { conferida: "success", divergente: "error", somente_simpress: "warning", somente_oracle: "warning" };
   let eventsBound = false;
@@ -285,7 +285,7 @@
     const summary = ticketData?.resumo || {};
     renderKpis(byId("cockpit-tickets-kpis"), [
       ["Séries", summary.series_total], ["Conferidas", summary.conferidas], ["Divergentes", summary.divergentes],
-      ["Só Simpress", summary.somente_simpress], ["Só Oracle", summary.somente_oracle], ["Sem OS", summary.sem_os],
+      ["Só Simpress", summary.somente_simpress], ["Só Oracle", summary.somente_oracle],
     ]);
   }
 
@@ -303,7 +303,7 @@
     const panels = dataPanels();
     const mounted = host.querySelector(".ck-os");
     const section = mounted || panels?.montarTabelaOs(host, {
-      titulo: "Ordens de serviço por série", semBusca: true, incluirSemOs: true,
+      titulo: "Ordens de serviço por série", semBusca: true,
       aoExpandirSerie: expandTicketSeries,
       aoCarregar: report => { ticketData = report; renderTicketKpis(); },
     });
