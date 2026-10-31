@@ -57,7 +57,14 @@ FIXTURE_MANUAL_DATES = {}
 FIXTURE_AMBIGUOUS_USERS = {"DEMO-SN-001": ["usuario.a", "usuario.b"]}
 FIXTURE_TICKET_OS_LINKS = {}
 TICKET_REPORT = {
+    "snapshot_id": "20261009_120000",
     "atualizado_em": "2026-10-09T12:00:00Z",
+    "historico": [
+        {"id": "20261009_120000", "atualizado_em": "2026-10-09T12:00:00Z",
+         "fontes": {"simpress": "Acompanhamento_de_Pedidos.xlsx", "oracle": "Gestao_de_Solicitacoes.xlsx"}},
+        {"id": "20261002_090000", "atualizado_em": "2026-10-02T09:00:00Z",
+         "fontes": {"simpress": "Acompanhamento_de_Pedidos.xlsx", "oracle": "Gestao_de_Solicitacoes.xlsx"}},
+    ],
     "fontes": {
         "simpress": {"arquivo": "Acompanhamento_de_Pedidos.xlsx", "linhas": 1, "series": 1, "linhas_sem_serie": 0},
         "oracle": {"arquivo": "Gestao_de_Solicitacoes.xlsx", "linhas": 1, "series": 1, "linhas_sem_serie": 0},
@@ -76,6 +83,7 @@ TICKET_REPORT = {
     }],
 }
 ticket_import_count = 0
+TICKET_TIMELINE_NOTES = {}
 DEFAULT_ORIGIN_CONTACT = {"contato": "Contato fictício", "email": "teste@example.invalid", "telefone": "41900000000"}
 origin_contact = dict(DEFAULT_ORIGIN_CONTACT)
 
@@ -523,6 +531,21 @@ class Handler(BaseHTTPRequestHandler):
                            "continuam": [], "resolvidos": []}})
         elif path == "/api/operacoes/chamados":
             self.send(TICKET_REPORT)
+        elif path == "/api/operacoes/chamados/evolucao":
+            self.send({"contagens": {"novos": 0, "alterados": 1, "iguais": 0, "ausentes_arquivo": 0},
+                       "mudancas": {"novos": [], "ausentes_arquivo": [],
+                                    "alterados": [{"serie": "DEMO-SN-001", "campos": [{"campo": "Status Oracle"}]}]},
+                       "aviso_ausentes": "Ausência na planilha não confirma resolução."})
+        elif path == "/api/operacoes/chamados/exportar":
+            self.send(b"PK fixture", 200, "application/octet-stream")
+        elif path.startswith("/api/operacoes/chamados/linha-do-tempo/"):
+            item_id = "demo-item"
+            self.send({"serie": "DEMO-SN-001", "total": 2, "eventos": [
+                {"snapshot_id": TICKET_REPORT["snapshot_id"], "item_id": item_id, "tipo": "Atualização",
+                 "atualizado_em": "09/10/2026 09:00", "anotacao": TICKET_TIMELINE_NOTES.get(item_id, ""),
+                 "mudancas": [{"campo": "Status Oracle", "anterior": "Aberto", "atual": "Gestão da Mesa de Operações"}]},
+                {"snapshot_id": "20261002_090000", "item_id": item_id, "tipo": "Primeira importação",
+                 "atualizado_em": "02/10/2026 09:00", "anotacao": "", "mudancas": []}]})
         elif path == "/api/operacoes/chamados/vinculos-os":
             self.send({"vinculos": list(FIXTURE_TICKET_OS_LINKS.values())})
         elif path == "/__ticket_import_state":
@@ -624,6 +647,13 @@ class Handler(BaseHTTPRequestHandler):
             origin_contact.update({key: str(payload[key]).strip() for key in DEFAULT_ORIGIN_CONTACT})
             self.send(origin_contact_config())
             return
+        if path.startswith("/api/operacoes/chamados/linha-do-tempo/"):
+            size = int(self.headers.get("Content-Length", "0"))
+            payload = json.loads(self.rfile.read(size) or b"{}")
+            TICKET_TIMELINE_NOTES[path.rsplit("/", 1)[-1]] = str(payload.get("anotacao") or "")[:2000]
+            self.send({"sucesso": True, "sincronizacao": "sincronizada",
+                       "anotacao_revisoes": [payload["revisao_id"]] if payload.get("revisao_id") else []})
+            return
         if path != f"/api/historico-comparacoes/{DEMO_EVENT_ID}/anotacoes/{DEMO_ANNOTATION_ID}":
             self.send({"detail": "Endpoint de teste não encontrado"}, 404)
             return
@@ -644,6 +674,9 @@ class Handler(BaseHTTPRequestHandler):
         if urlsplit(self.path).path == f"/api/sebrae/chamados/{FINALIZAR_NUMERO}/anexo":
             finalizar_state["pdf"] = None
             self.send({"numero": FINALIZAR_NUMERO, "pdf": None})
+        elif urlsplit(self.path).path == "/api/operacoes/chamados/historico/antigas":
+            del TICKET_REPORT["historico"][1:]
+            self.send({"removidas": 1})
         else:
             self.send({"detail": "Endpoint de teste não encontrado"}, 404)
 

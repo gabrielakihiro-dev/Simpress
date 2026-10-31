@@ -71,6 +71,7 @@ class SebraeDashboardServices:
     max_upload_bytes: Callable[[], int]
     registros: Callable[[], Sequence[Mapping[str, Any]]]  # equipment records by person name (EquipamentosDetalhes, Endpoint, Entra)
     relatorio_chamados: Callable[[], Optional[Mapping[str, Any]]]  # ticket report, for column E
+    vinculos_os: Callable[[], Sequence[Mapping[str, Any]]] = lambda: ()  # manual links UTIC -> OS of the ticket table, for column E
     runner: Optional[Callable[[], ChromeAutomationRunner]] = None  # starts the ``fechar`` routine; without it nothing is finalized
 
 
@@ -99,7 +100,7 @@ def create_sebrae_dashboard_router(services: SebraeDashboardServices) -> APIRout
     def _abertos_com_sugestoes(abertos: Sequence[Mapping[str, Any]]) -> List[Dict[str, Any]]:
         """Old open tickets plus what "Atualizar Dashboard" would fill into their empty E, K, L and N."""
         registros = services.registros() if abertos else []
-        sugestoes = sebrae_novos.preenchimentos(abertos, registros, _relatorio()) if abertos else {}
+        sugestoes = sebrae_novos.preenchimentos(abertos, registros, _relatorio(), services.vinculos_os()) if abertos else {}
         finalizacao = fin.ler_estado(_pasta_estado()) if abertos else {}
         return [
             {**a, "automaticos_sugeridos": sugestoes.get(str(a.get("numero")), {}),
@@ -137,7 +138,7 @@ def create_sebrae_dashboard_router(services: SebraeDashboardServices) -> APIRout
             "novos": None if novos is None else {
                 "lidos_em": novos["lidos_em"], "ignorados": novos["ignorados"], "pendentes": novos["pendentes"],
                 "erros": novos["erros"],
-                "formulario": sebrae_novos.formulario(novos["chamados"], services.registros(), _relatorio()),
+                "formulario": sebrae_novos.formulario(novos["chamados"], services.registros(), _relatorio(), services.vinculos_os()),
             },
         }
 
@@ -255,7 +256,7 @@ def create_sebrae_dashboard_router(services: SebraeDashboardServices) -> APIRout
         if desconhecidos:
             raise DomainValidationError(f"{desconhecidos[0]} não está entre os chamados novos.", status_code=422)
         try:
-            resultado = sebrae_novos.exportar(escolhidos, manuais, services.registros(), _relatorio(), importado["listas"])
+            resultado = sebrae_novos.exportar(escolhidos, manuais, services.registros(), _relatorio(), importado["listas"], services.vinculos_os())
         except sebrae_novos.ManuaisInvalidos as erro:
             raise DomainValidationError(str(erro), status_code=422) from None
         return JSONResponse(resultado, headers={"Cache-Control": "no-store"})
@@ -280,7 +281,7 @@ def create_sebrae_dashboard_router(services: SebraeDashboardServices) -> APIRout
             linhas = _linhas_novas(payload, importado, caminhos)
             edicoes = _edicoes(payload, planilha, importado["listas"])
             abertos = [c.como_dict() for c in sebrae_dashboard_gravacao.chamados_para_editar(planilha)]
-            automaticos = sebrae_novos.preenchimentos(abertos, services.registros(), _relatorio())
+            automaticos = sebrae_novos.preenchimentos(abertos, services.registros(), _relatorio(), services.vinculos_os())
             if not linhas and not edicoes and not automaticos:
                 raise DomainValidationError("Não há chamados novos, alterações nem dados para preencher.", status_code=422)
             resultado = sebrae_dashboard_gravacao.atualizar(planilha, linhas, edicoes, automaticos)
@@ -449,7 +450,7 @@ def create_sebrae_dashboard_router(services: SebraeDashboardServices) -> APIRout
         desconhecidos = sorted(set(manuais) - {c.numero for c in escolhidos})
         if desconhecidos:
             raise DomainValidationError(f"{desconhecidos[0]} não está entre os chamados novos.", status_code=422)
-        return sebrae_novos.linhas_completas(escolhidos, manuais, services.registros(), _relatorio(), importado["listas"], exigir=False)
+        return sebrae_novos.linhas_completas(escolhidos, manuais, services.registros(), _relatorio(), importado["listas"], exigir=False, vinculos=services.vinculos_os())
 
     def _edicoes(payload: AtualizarPayload, planilha: bytes, listas: Mapping[str, Sequence[str]]) -> Dict[str, Dict[str, str]]:
         """Merged (stored + sent) manual values that are filled pass the same rules as a new ticket (A, D and J may stay

@@ -17,7 +17,7 @@ from datetime import datetime
 from pathlib import Path
 from typing import Any, Dict, Iterable, List, Mapping, Optional, Sequence, Tuple
 
-from domains import sebrae_cruzamento
+from domains import sebrae_cruzamento, sebrae_vinculos
 from domains.sebrae_chamados import ChamadoSoftExpert, mascarar_cpfs
 from domains.sebrae_dashboard import (
     CRUZ_AUSENTE,
@@ -207,10 +207,15 @@ def ler_novos(caminho: Path, ja_lancados: Iterable[str] = ()) -> Optional[Dict[s
 
 # ---------------------------------------------------------------------------- rows
 
-def _cruzar(chamado: ChamadoSoftExpert, registros: Sequence[Mapping[str, Any]], relatorio: Optional[Mapping[str, Any]]) -> Tuple[Cruzamento, str]:
+def _cruzar(
+    chamado: ChamadoSoftExpert, registros: Sequence[Mapping[str, Any]], relatorio: Optional[Mapping[str, Any]],
+    vinculos: Sequence[Mapping[str, Any]] = (),
+) -> Tuple[Cruzamento, str]:
     outra = sebrae_cruzamento.outra_pessoa(chamado.descricao, chamado.solicitante, registros)
     cruzamento = cruzar_por_nome(chamado.solicitante, registros) if registros and not outra else Cruzamento(CRUZ_AUSENTE)
-    os_ = sebrae_cruzamento.os_da_serie(relatorio, cruzamento.serie) if cruzamento.serie else ""
+    # a manual link of the ticket table wins over the OS of the serial
+    os_ = sebrae_vinculos.os_do_chamado(vinculos, chamado.numero) or (
+        sebrae_cruzamento.os_da_serie(relatorio, cruzamento.serie) if cruzamento.serie else "")
     return cruzamento, os_
 
 
@@ -218,11 +223,12 @@ def formulario(
     chamados: Sequence[ChamadoSoftExpert],
     registros: Sequence[Mapping[str, Any]],
     relatorio: Optional[Mapping[str, Any]],
+    vinculos: Sequence[Mapping[str, Any]] = (),
 ) -> List[Dict[str, Any]]:
     """One item per new ticket: the automatic columns, the cross-reference status and its candidate count."""
     itens = []
     for chamado in chamados:
-        cruzamento, os_ = _cruzar(chamado, registros, relatorio)
+        cruzamento, os_ = _cruzar(chamado, registros, relatorio, vinculos)
         itens.append({
             "numero": chamado.numero,
             "linha": montar_linha(chamado, cruzamento, os_),
@@ -236,10 +242,11 @@ def preenchimentos(
     abertos: Sequence[Mapping[str, Any]],
     registros: Sequence[Mapping[str, Any]],
     relatorio: Optional[Mapping[str, Any]],
+    vinculos: Sequence[Mapping[str, Any]] = (),
 ) -> Dict[str, Dict[str, str]]:
     """E, K, L and N still empty in old open tickets: the unique equipment of the name in column I gives K, L and N;
     E is the latest OS of the serial the row has or just got. K, L and N are never mixed with a different serial
-    already in the row. ``abertos`` are ``ChamadoAberto.como_dict()`` items; keys of the result are their ``numero``.
+    already in the row. A manual ``vinculos`` entry of the row's UTIC gives E first, even without a serial. ``abertos`` are ``ChamadoAberto.como_dict()`` items; keys of the result are their ``numero``.
     shortcut: serials compare as upper-case text (no MacBook ``S`` prefix rule), upgrade if one row misses a fill because of it."""
     resultado: Dict[str, Dict[str, str]] = {}
     for item in abertos:
@@ -252,7 +259,10 @@ def preenchimentos(
         coerente = cruzamento.status == CRUZ_UNICO and (not serie_atual or serie_atual.upper() == cruzamento.serie.strip().upper())
         novos = {"K": cruzamento.serie, "L": cruzamento.modelo, "N": cruzamento.cidade} if coerente else {}
         serie = serie_atual or (cruzamento.serie if coerente else "")
-        if serie:
+        os_vinculada = sebrae_vinculos.os_do_chamado(vinculos, str(item.get("numero") or ""))
+        if os_vinculada:
+            novos["E"] = os_vinculada
+        elif serie:
             novos["E"] = sebrae_cruzamento.os_da_serie(relatorio, serie)
         faltam = {letra: _texto_de_celula(valor) for letra, valor in novos.items() if valor and not atuais.get(letra)}
         if faltam:
@@ -302,6 +312,7 @@ def linhas_completas(
     relatorio: Optional[Mapping[str, Any]],
     listas: Optional[Mapping[str, Sequence[str]]] = None,
     exigir: bool = True,
+    vinculos: Sequence[Mapping[str, Any]] = (),
 ) -> List[Dict[str, str]]:
     """Full rows (automatic plus manual columns), in the order of ``chamados``. With ``exigir`` every ticket needs
     valid A, D and J; without it (Atualizar Dashboard) blanks pass and a ticket missing from ``manuais_por_numero`` is blank."""
@@ -316,7 +327,7 @@ def linhas_completas(
             validar_listas(manuais, listas or {})
         except ManuaisInvalidos as erro:
             raise ManuaisInvalidos(f"{chamado.numero}: {erro}") from None
-        cruzamento, os_ = _cruzar(chamado, registros, relatorio)
+        cruzamento, os_ = _cruzar(chamado, registros, relatorio, vinculos)
         linhas.append({**montar_linha(chamado, cruzamento, os_), **manuais})
     return linhas
 
@@ -327,8 +338,9 @@ def exportar(
     registros: Sequence[Mapping[str, Any]],
     relatorio: Optional[Mapping[str, Any]],
     listas: Optional[Mapping[str, Sequence[str]]] = None,
+    vinculos: Sequence[Mapping[str, Any]] = (),
 ) -> Dict[str, Any]:
     """Rows A:P and R:S to paste, in the order of ``chamados``. Every ticket needs valid manual fields."""
-    linhas = linhas_completas(chamados, manuais_por_numero, registros, relatorio, listas)
+    linhas = linhas_completas(chamados, manuais_por_numero, registros, relatorio, listas, vinculos=vinculos)
     bloco_ap, bloco_rs = linhas_para_colar(linhas)
     return {"quantidade": len(linhas), "bloco_a_p": bloco_ap, "bloco_r_s": bloco_rs, "mensagem": MENSAGEM_EXPORTADA}

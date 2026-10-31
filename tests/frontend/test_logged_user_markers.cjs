@@ -17,10 +17,7 @@ test("the logged user marker carries the trimmed, escaped series and is skipped 
   assert.equal(markers.marcador(null), "");
 });
 
-test("ticket cards and the Histórico de Planilhas rows share the same logged user lookup", () => {
-  const tickets = fs.readFileSync(path.join(staticDir, "js", "features", "ticket-tracking.js"), "utf8");
-  assert.match(tickets, /loggedUserMarkers\.marcador\(record\.serie\)/);
-  assert.match(tickets, /loggedUserMarkers\.conectar\(list\)/);
+test("the Histórico de Planilhas rows use the shared logged user lookup", () => {
   const comparison = fs.readFileSync(path.join(staticDir, "js", "features", "comparison-result.js"), "utf8");
   assert.match(comparison, /loggedUserMarkers\.conectar\(content\)/);
 });

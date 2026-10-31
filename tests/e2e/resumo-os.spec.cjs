@@ -153,24 +153,17 @@ test("Chamados associa OS aos chamados UTIC com prefixo anual e preserva dados d
   await expect(linkedOracle.locator(".ticket-os-link-prefix")).toHaveText(`UTIC-${year}-`);
   await expect(linkedOracle.locator("input")).toHaveValue("1116");
 
+  // O botão da OS abre o Andamento da série no próprio painel Chamados (sem modal).
   await linkedOrder.getByRole("button", {
-    name: "Abrir acompanhamento de chamados: Oracle + Simpress, série DEMO-SN-001, OS 7285070",
+    name: "Abrir andamento em Chamados: Oracle + Simpress, série DEMO-SN-001, OS 7285070",
   }).click();
-  const dialog = page.locator("#modal-acompanhamento-chamados");
-  await expect(dialog).toBeVisible();
-  await expect(dialog.locator("#filtro-acompanhamento-chamados")).toHaveValue("7285070");
-  const ticketCards = dialog.locator("#lista-acompanhamento-chamados article[data-ticket-serial]");
-  await expect(ticketCards).toHaveCount(1);
-  const selectedTicket = ticketCards.first();
-  await expect(selectedTicket).toHaveAttribute("data-ticket-serial", "DEMO-SN-001");
-  await expect(selectedTicket.locator(".ticket-card-identifiers")).toContainText("7285070");
-  await expect(selectedTicket.locator(".ticket-card-identifiers")).not.toContainText("7285071");
-  await expect(selectedTicket.locator(".ticket-card-identifiers")).not.toContainText("7285072");
-  await expect(selectedTicket).not.toContainText("REQ-3");
-  await expect(selectedTicket.locator('details[data-ticket-section="details"]')).toHaveAttribute("open", "");
-  await expect(selectedTicket.locator(".ticket-oracle-description").first()).toHaveAttribute("open", "");
-  await expect(selectedTicket.locator(".ticket-oracle-description-content").first())
-    .toContainText("Solicito suporte técnico.");
+  const andamento = page.locator('#cockpit-tickets-os tr[data-andamento="DEMO-SN-001"]');
+  await expect(andamento).toBeVisible();
+  await expect(andamento.getByRole("region", { name: "Andamento registrado da série DEMO-SN-001" })).toBeVisible();
+  await expect(andamento).toContainText("Ordens no Oracle");
+  await expect(andamento).toContainText("7285070");
+  await expect(andamento.getByRole("heading", { name: "Andamento registrado" })).toBeVisible();
+  await expect(page.locator("#modal-acompanhamento-chamados")).toHaveCount(0);
 });
 
 test("Chamados carrega as OS uma vez por abertura, mesmo com o painel da Home lento", async ({ page }) => {

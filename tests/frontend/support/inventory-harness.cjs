@@ -215,23 +215,6 @@ function apiResponse(body, { status = 200, ok = status >= 200 && status < 300 } 
   return { ok, status, json: async () => body };
 }
 
-function pendingTicketResponse() {
-  let resolve, reject;
-  const promise = new Promise((yes, no) => { resolve = yes; reject = no; });
-  return { promise, resolve, reject };
-}
-
-function ticketSelectionHarness(fetchApi) {
-  const harness = createAppHarness(fetchApi);
-  harness.run(`
-    renderizarAcompanhamentoChamados = () => {
-      document.getElementById("lista-acompanhamento-chamados").innerHTML = SimpressApp.state.acompanhamentoChamadosAtual?.snapshot_id || "Importe as duas planilhas";
-    };
-    carregarEvolucaoChamados = async () => {};
-  `);
-  return harness;
-}
-
 function setButton(harness, button, label) {
   button.textContent = label;
   button.isConnected = true;
@@ -266,8 +249,6 @@ module.exports = {
   FakeFormData,
   createAppHarness,
   apiResponse,
-  pendingTicketResponse,
-  ticketSelectionHarness,
   appScripts,
   appSource,
 };

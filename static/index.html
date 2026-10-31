@@ -191,7 +191,7 @@
             <span class="ck-aviso__icone"><svg class="ck-ico" aria-hidden="true" focusable="false"><use href="#i-erro"></use></svg></span>
             <div class="ck-aviso__topo"><span class="ck-badge" data-status="erro">Urgente</span><h3 id="alerta-os-paradas-titulo" class="ck-aviso__titulo">OS paradas</h3></div>
             <p id="alerta-os-paradas-texto" class="ck-aviso__texto"></p>
-            <button type="button" id="btn-alerta-os-paradas" data-on-click="abrirAcompanhamentoChamados" class="ck-btn ck-btn--primario ck-btn--sm ck-aviso__acao">Ver chamados<svg class="ck-ico ck-ico--sm" aria-hidden="true" focusable="false"><use href="#i-arrow-right"></use></svg></button>
+            <button type="button" id="btn-alerta-os-paradas" data-on-click="abrirPainelCockpit" data-args='["chamados"]' class="ck-btn ck-btn--primario ck-btn--sm ck-aviso__acao">Ver chamados<svg class="ck-ico ck-ico--sm" aria-hidden="true" focusable="false"><use href="#i-arrow-right"></use></svg></button>
           </section>
           <section id="alerta-divergencias-novas" class="ck-aviso" data-gravidade="atencao" role="status" aria-labelledby="alerta-divergencias-novas-titulo" data-state="loading" hidden>
             <span class="ck-aviso__icone"><svg class="ck-ico" aria-hidden="true" focusable="false"><use href="#i-alerta"></use></svg></span>
@@ -876,12 +876,55 @@ Horário disponível para atendimento:</textarea>
         <section class="ck-ferr-painel" data-cockpit-tool-panel="chamados" aria-labelledby="cockpit-tickets-heading" hidden>
           <h2 id="cockpit-tickets-heading" class="sr-only">Acompanhamento de chamados por série</h2>
           <div id="cockpit-tickets-kpis" class="ck-kpis" role="group" aria-label="Resumo do acompanhamento"></div>
+          <section id="cockpit-tickets-triage" class="ckp-triagem ck-chamados-bloco" aria-labelledby="cockpit-tickets-triage-title"></section>
           <div class="ck-barra-ferr">
             <label class="ck-campo"><span class="ck-campo__rotulo">Buscar série ou OS</span><input id="cockpit-tickets-search" class="ck-entrada" type="search" autocomplete="off" placeholder="Série, ordem ou usuário"></label>
             <label class="ck-campo"><span class="ck-campo__rotulo">Relação</span><select id="cockpit-tickets-relation" class="ck-entrada"><option value="todos">Todas</option><option value="divergente">Divergentes</option><option value="conferida">Conferidas</option><option value="somente_simpress">Só Simpress</option><option value="somente_oracle">Só Oracle</option><option value="sem_os">Sem OS</option></select></label>
+            <label class="ckp-alternar" title="Chamados ativos sem data ou com três dias ou mais sem atualização"><input id="cockpit-tickets-attention" type="checkbox">Atenção · 3+ dias</label>
             <button type="button" id="cockpit-tickets-refresh" class="ck-btn ck-btn--secundario">Atualizar</button>
-            <button type="button" id="cockpit-tickets-manage" class="ck-btn ck-btn--primario">Importar e gerenciar</button>
+            <button type="button" id="cockpit-tickets-export" class="ck-btn ck-btn--secundario" data-on-click="exportarChamadosCockpit" disabled>Exportar Excel</button>
+            <button type="button" id="cockpit-tickets-clear" class="ck-btn ck-btn--fantasma">Limpar filtros</button>
+            <button type="button" id="cockpit-tickets-manage" class="ck-btn ck-btn--primario" data-on-click="abrirGestaoChamadosCockpit">Importar e gerenciar</button>
           </div>
+          <details id="cockpit-tickets-manage-panel" class="ckp-recolher ck-chamados-bloco">
+            <summary><svg class="ck-ico ck-ico--sm" aria-hidden="true"><use href="#i-chevron-right"></use></svg>Importação e versões<span id="cockpit-tickets-manage-version" class="ckp-recolher__meta">Nenhuma importação</span></summary>
+            <div class="ckp-recolher__corpo">
+              <nav class="ckp-sistemas" aria-label="Abrir sistemas">
+                <a class="ckp-sistema" href="https://simpress.custhelp.com/AgentWeb/" target="_blank" rel="noopener noreferrer" aria-label="Abrir portal Oracle AgentWeb"><svg class="ck-ico ck-ico--xs" aria-hidden="true"><use href="#i-external"></use></svg>Oracle</a>
+                <a class="ckp-sistema" href="https://ux.simpress.com.br/equipamentos/acompanhamento" target="_blank" rel="noopener noreferrer" aria-label="Abrir acompanhamento de chamados Simpress"><svg class="ck-ico ck-ico--xs" aria-hidden="true"><use href="#i-external"></use></svg>Simpress</a>
+              </nav>
+              <form id="cockpit-tickets-form" class="ckp-importar">
+                <div class="ckp-campo"><span class="ckp-rotulo">Simpress · Acompanhamento de Pedidos <span class="info-tip"><button type="button" class="info-tip-trigger" aria-label="Sobre arquivos de chamados" aria-describedby="cockpit-tickets-files-tip"><svg class="ck-ico ck-ico--sm" aria-hidden="true" focusable="false"><use href="#i-info"></use></svg></button><span id="cockpit-tickets-files-tip" role="tooltip" class="info-tip-text">Cada arquivo pode ter até 60 MB. Simpress aceita .xlsx ou ZIP com uma única planilha .xlsx.</span></span></span>
+                  <label class="ckp-arquivo" data-estado="vazio">
+                    <input id="cockpit-tickets-file-simpress" name="simpress_file" type="file" accept=".xlsx,.zip,application/zip,application/x-zip-compressed,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" aria-describedby="cockpit-tickets-files-tip" data-obrigatorio>
+                    <span class="ckp-arquivo__ico"><svg class="ck-ico ck-ico--vazio" aria-hidden="true"><use href="#i-upload"></use></svg><svg class="ck-ico ck-ico--cheio" aria-hidden="true"><use href="#i-file-check"></use></svg></span>
+                    <span class="ckp-arquivo__textos"><span class="ckp-arquivo__nome" id="cockpit-tickets-file-simpress-name" data-vazio="Escolher arquivo">Escolher arquivo</span><span class="ckp-arquivo__meta" data-vazio=".xlsx ou ZIP com uma planilha">.xlsx ou ZIP com uma planilha</span></span>
+                    <span class="ckp-arquivo__acoes"><button type="button" class="ck-btn ck-btn--fantasma ck-btn--icone ck-btn--sm" data-remover aria-label="Remover arquivo"><svg class="ck-ico ck-ico--sm" aria-hidden="true"><use href="#i-x"></use></svg></button><span class="ck-btn ck-btn--secundario ck-btn--sm ckp-arquivo__trocar">Escolher</span></span>
+                  </label>
+                </div>
+                <div class="ckp-campo"><span class="ckp-rotulo">Oracle · Gestão de Solicitações</span>
+                  <label class="ckp-arquivo" data-estado="vazio">
+                    <input id="cockpit-tickets-file-oracle" name="oracle_file" type="file" accept=".xlsx,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" data-obrigatorio>
+                    <span class="ckp-arquivo__ico"><svg class="ck-ico ck-ico--vazio" aria-hidden="true"><use href="#i-upload"></use></svg><svg class="ck-ico ck-ico--cheio" aria-hidden="true"><use href="#i-file-check"></use></svg></span>
+                    <span class="ckp-arquivo__textos"><span class="ckp-arquivo__nome" id="cockpit-tickets-file-oracle-name" data-vazio="Escolher arquivo">Escolher arquivo</span><span class="ckp-arquivo__meta" data-vazio=".xlsx">.xlsx</span></span>
+                    <span class="ckp-arquivo__acoes"><button type="button" class="ck-btn ck-btn--fantasma ck-btn--icone ck-btn--sm" data-remover aria-label="Remover arquivo"><svg class="ck-ico ck-ico--sm" aria-hidden="true"><use href="#i-x"></use></svg></button><span class="ck-btn ck-btn--secundario ck-btn--sm ckp-arquivo__trocar">Escolher</span></span>
+                  </label>
+                </div>
+                <button id="cockpit-tickets-import" type="submit" class="ck-btn ck-btn--primario"><svg class="ck-ico ck-ico--sm" aria-hidden="true"><use href="#i-upload"></use></svg>Importar planilhas</button>
+                <p id="cockpit-tickets-import-status" class="ckp-secao__desc ckp-importar__status" role="status" aria-live="polite"></p>
+              </form>
+              <p id="cockpit-tickets-sources" class="ckp-secao__desc"></p>
+              <div class="ckp-versao">
+                <label class="ckp-campo" for="cockpit-tickets-version"><span class="ckp-rotulo">Versão em uso</span><select id="cockpit-tickets-version" class="ck-entrada" data-on-change="selecionarVersaoChamadosCockpit" aria-describedby="cockpit-tickets-version-hint"><option value="">Nenhuma importação</option></select></label>
+                <button type="button" id="cockpit-tickets-delete-old" class="ck-btn ck-btn--perigo" data-on-click="excluirImportacoesAntigasChamadosCockpit" disabled><svg class="ck-ico ck-ico--sm" aria-hidden="true"><use href="#i-trash"></use></svg>Excluir importações antigas</button>
+              </div>
+              <p id="cockpit-tickets-version-hint" class="ckp-secao__desc">A versão escolhida vale para Exportar Excel e para a comparação. A tabela mostra sempre a importação mais recente.</p>
+              <details class="ckp-recolher ckp-recolher--interno">
+                <summary><svg class="ck-ico ck-ico--sm" aria-hidden="true"><use href="#i-chevron-right"></use></svg>Comparação com a importação anterior</summary>
+                <div class="ckp-recolher__corpo"><div id="cockpit-tickets-evolution" class="ckp-secao__desc" role="status" aria-live="polite">O histórico de importações aparecerá aqui.</div></div>
+              </details>
+            </div>
+          </details>
           <div id="cockpit-tickets-os" class="ck-ferr-os"></div>
         </section>
 
@@ -1730,75 +1773,6 @@ Horário disponível para atendimento:</textarea>
       <div id="resultado-evolucao-atualizacoes" aria-label="Resultado da comparação entre atualizações" aria-live="polite" class="overflow-auto flex-1 space-y-3"></div>
       <div class="pt-3 border-t border-line-quiet flex justify-end shrink-0"><button type="button" data-on-click="fecharEvolucaoAtualizacoes" class="ck-btn ck-btn--secundario">Fechar</button></div>
     </div>
-  </div>
-
-  <!-- ACOMPANHAMENTO DE CHAMADOS -->
-  <div id="modal-acompanhamento-chamados" class="modal-overlay ck-veu hidden">
-    <section class="ckp-dialogo ckp-dialogo--largo">
-      <header class="ckp-cab">
-        <span class="ckp-cab__icone"><svg class="ck-ico" aria-hidden="true"><use href="#i-clock"></use></svg></span>
-        <div class="ckp-cab__textos">
-          <span class="ckp-cab__kicker">Chamados</span>
-          <h2 class="ckp-cab__titulo">Acompanhamento de chamados <span class="info-tip"><button type="button" class="info-tip-trigger" aria-label="Sobre Acompanhamento de chamados" aria-describedby="tip-acompanhamento-chamados"><svg class="ck-ico ck-ico--sm" aria-hidden="true" focusable="false"><use href="#i-info"></use></svg></button><span id="tip-acompanhamento-chamados" role="tooltip" class="info-tip-text">OS da Simpress e do Oracle relacionadas pelo número de série. A lista vai da maior OS para a menor; séries sem OS ficam no final. Atenção para 3+ dias ou sem data: selecione um indicador da triagem para filtrar.</span></span></h2>
-        </div>
-        <div class="ckp-cab__acoes">
-          <nav class="ckp-sistemas" aria-label="Abrir sistemas">
-            <a class="ckp-sistema" href="https://simpress.custhelp.com/AgentWeb/" target="_blank" rel="noopener noreferrer" aria-label="Abrir portal Oracle AgentWeb"><svg class="ck-ico ck-ico--xs" aria-hidden="true"><use href="#i-external"></use></svg>Oracle</a>
-            <a class="ckp-sistema" href="https://ux.simpress.com.br/equipamentos/acompanhamento" target="_blank" rel="noopener noreferrer" aria-label="Abrir acompanhamento de chamados Simpress"><svg class="ck-ico ck-ico--xs" aria-hidden="true"><use href="#i-external"></use></svg>Simpress</a>
-          </nav>
-          <button type="button" data-on-click="fecharAcompanhamentoChamados" class="ck-btn ck-btn--icone ck-btn--fantasma ck-btn--sm" aria-label="Fechar acompanhamento de chamados"><svg class="ck-ico ck-ico--sm" aria-hidden="true"><use href="#i-x"></use></svg></button>
-        </div>
-      </header>
-
-      <div id="conteudo-acompanhamento-chamados" class="ckp-corpo" role="region" aria-label="Conteúdo do acompanhamento de chamados" tabindex="0">
-        <details id="painel-dados-acompanhamento-chamados" class="ckp-recolher">
-          <summary><svg class="ck-ico ck-ico--sm" aria-hidden="true"><use href="#i-chevron-right"></use></svg>Importação e versões<span id="versao-atual-acompanhamento-chamados" class="ckp-recolher__meta">Nenhuma importação</span></summary>
-          <div class="ckp-recolher__corpo">
-            <form id="form-importar-acompanhamento-chamados" class="ckp-importar">
-              <div class="ckp-campo"><span class="ckp-rotulo">Simpress · Acompanhamento de Pedidos <span class="info-tip"><button type="button" class="info-tip-trigger" aria-label="Sobre arquivos de chamados" aria-describedby="tip-arquivos-chamados"><svg class="ck-ico ck-ico--sm" aria-hidden="true" focusable="false"><use href="#i-info"></use></svg></button><span id="tip-arquivos-chamados" role="tooltip" class="info-tip-text">Cada arquivo pode ter até 60 MB. Simpress aceita .xlsx ou ZIP com uma única planilha .xlsx.</span></span></span>
-                <label class="ckp-arquivo" data-estado="vazio">
-                  <input id="arquivo-chamados-simpress" name="simpress_file" type="file" accept=".xlsx,.zip,application/zip,application/x-zip-compressed,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" aria-describedby="tip-arquivos-chamados" data-obrigatorio>
-                  <span class="ckp-arquivo__ico"><svg class="ck-ico ck-ico--vazio" aria-hidden="true"><use href="#i-upload"></use></svg><svg class="ck-ico ck-ico--cheio" aria-hidden="true"><use href="#i-file-check"></use></svg></span>
-                  <span class="ckp-arquivo__textos"><span class="ckp-arquivo__nome" id="nome-arquivo-chamados-simpress" data-vazio="Escolher arquivo">Escolher arquivo</span><span class="ckp-arquivo__meta" data-vazio=".xlsx ou ZIP com uma planilha">.xlsx ou ZIP com uma planilha</span></span>
-                  <span class="ckp-arquivo__acoes"><button type="button" class="ck-btn ck-btn--fantasma ck-btn--icone ck-btn--sm" data-remover aria-label="Remover arquivo"><svg class="ck-ico ck-ico--sm" aria-hidden="true"><use href="#i-x"></use></svg></button><span class="ck-btn ck-btn--secundario ck-btn--sm ckp-arquivo__trocar">Escolher</span></span>
-                </label>
-              </div>
-              <div class="ckp-campo"><span class="ckp-rotulo">Oracle · Gestão de Solicitações</span>
-                <label class="ckp-arquivo" data-estado="vazio">
-                  <input id="arquivo-chamados-oracle" name="oracle_file" type="file" accept=".xlsx,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" data-obrigatorio>
-                  <span class="ckp-arquivo__ico"><svg class="ck-ico ck-ico--vazio" aria-hidden="true"><use href="#i-upload"></use></svg><svg class="ck-ico ck-ico--cheio" aria-hidden="true"><use href="#i-file-check"></use></svg></span>
-                  <span class="ckp-arquivo__textos"><span class="ckp-arquivo__nome" id="nome-arquivo-chamados-oracle" data-vazio="Escolher arquivo">Escolher arquivo</span><span class="ckp-arquivo__meta" data-vazio=".xlsx">.xlsx</span></span>
-                  <span class="ckp-arquivo__acoes"><button type="button" class="ck-btn ck-btn--fantasma ck-btn--icone ck-btn--sm" data-remover aria-label="Remover arquivo"><svg class="ck-ico ck-ico--sm" aria-hidden="true"><use href="#i-x"></use></svg></button><span class="ck-btn ck-btn--secundario ck-btn--sm ckp-arquivo__trocar">Escolher</span></span>
-                </label>
-              </div>
-              <button id="btn-importar-acompanhamento-chamados" type="submit" class="ck-btn ck-btn--primario" data-ckp="botao-56"><svg class="ck-ico ck-ico--sm" aria-hidden="true"><use href="#i-upload"></use></svg>Importar planilhas</button>
-              <p id="status-importacao-chamados" class="ckp-secao__desc" role="status" aria-live="polite"></p>
-            </form>
-            <div id="resumo-acompanhamento-chamados"></div>
-            <div class="ckp-versao">
-              <label class="ckp-campo" for="versao-acompanhamento-chamados"><span class="ckp-rotulo">Versão em uso</span><select id="versao-acompanhamento-chamados" class="ck-entrada" data-on-change="selecionarVersaoChamados"><option value="">Nenhuma importação</option></select></label>
-              <button type="button" id="btn-excluir-importacoes-antigas-chamados" class="ck-btn ck-btn--perigo" data-on-click="excluirImportacoesAntigasChamados" disabled><svg class="ck-ico ck-ico--sm" aria-hidden="true"><use href="#i-trash"></use></svg>Excluir importações antigas</button>
-            </div>
-            <details class="ckp-recolher">
-              <summary><svg class="ck-ico ck-ico--sm" aria-hidden="true"><use href="#i-chevron-right"></use></svg>Comparação com a importação anterior</summary>
-              <div class="ckp-recolher__corpo"><div id="evolucao-acompanhamento-chamados" class="ckp-secao__desc" role="status" aria-live="polite">O histórico de importações aparecerá aqui.</div></div>
-            </details>
-          </div>
-        </details>
-
-        <div class="ckp-ferramentas">
-          <label class="ckp-busca" for="filtro-acompanhamento-chamados"><svg class="ck-ico ck-ico--sm" aria-hidden="true"><use href="#i-search"></use></svg><input id="filtro-acompanhamento-chamados" type="search" autocomplete="off" placeholder="Buscar série, pedido, OS ou status" aria-label="Buscar série, pedido, OS ou status"></label>
-          <label class="ck-btn ck-btn--secundario" title="Chamados ativos sem data ou com três dias ou mais sem atualização"><input id="somente-atencao-chamados" type="checkbox">Atenção · 3+ dias</label>
-          <button type="button" id="btn-exportar-acompanhamento-chamados" class="ck-btn ck-btn--secundario" data-on-click="exportarAcompanhamentoChamados" disabled>Exportar Excel</button>
-          <button type="button" class="ck-btn ck-btn--fantasma" data-on-click="limparFiltrosAcompanhamentoChamados">Limpar filtros</button>
-        </div>
-        <section class="ckp-triagem" aria-labelledby="ckp-triagem-titulo">
-          <div id="triagem-diaria-acompanhamento-chamados"></div>
-          <p id="contagem-acompanhamento-chamados" class="ckp-secao__desc" role="status" aria-live="polite"></p>
-          <div id="lista-acompanhamento-chamados" aria-live="polite"></div>
-        </section>
-      </div>
-    </section>
   </div>
 
   <!-- HISTÓRICO DAS COMPARAÇÕES DE PLANILHAS -->

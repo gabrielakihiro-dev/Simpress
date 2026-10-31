@@ -1,4 +1,29 @@
-# Prompt 7 — Chamados (painel operacional)
+# Especificação atual: tela Chamados com importação e gestão (30/10/2026)
+
+Esta seção vale no lugar do layout "lista + detalhe" descrito mais abaixo. O painel `Chamados` (`section[data-cockpit-tool-panel="chamados"]`, `F5`) passa a concentrar o fluxo que antes vivia no modal `Acompanhamento de chamados`. Mantêm-se os KPIs, a busca, a `Relação` e a tabela de OS por série (cards no mobile) com a linha expansível `Andamento`.
+
+## Composição (de cima para baixo)
+
+1. KPIs (`#cockpit-tickets-kpis`): Séries, Conferidas, Divergentes, Só Simpress, Só Oracle, Sem OS.
+2. Triagem diária (`#cockpit-tickets-triage`): quatro botões-filtro com contagem da importação inteira (`Ativos`, `3+ dias`, `Sem data`, `Atualizados <3 dias`, mesma regra de `SimpressTicketRules.grupoTriagemChamado`) e uma linha de resumo (`N ativos de M séries · K sem chamado aberto no Oracle`). `aria-pressed` marca o filtro ativo; clicar de novo limpa.
+3. Barra de ferramentas (`.ck-barra-ferr`): `Buscar série ou OS`, `Relação`, `Atenção · 3+ dias` (caixa), `Atualizar`, `Exportar Excel`, `Limpar filtros` e `Importar e gerenciar`.
+4. Bloco recolhível `Importação e versões` (`details#cockpit-tickets-manage-panel`, fechado por padrão; resumo mostra a versão em uso). `Importar e gerenciar` abre o bloco, rola até ele e foca o primeiro campo de arquivo. Dentro: links `Oracle` e `Simpress` (abrem em nova aba), formulário com os dois arquivos (`Simpress · Acompanhamento de Pedidos`, `Oracle · Gestão de Solicitações`) e `Importar planilhas`, `Versão em uso`, `Excluir importações antigas` e `Comparação com a importação anterior`.
+5. Tabela de OS por série. A linha expandida `Andamento` ganha o que só existia no modal: Fila/Fase, endereço, atendimento, status Simpress/Oracle, OS, previsão e etapas do pedido, linha do tempo da série e anotação com autosave (campo `Próxima ação ou o que já foi feito`, até 2.000 caracteres).
+
+Espaçamento: blocos separados por `--espaco`/gap de 12 a 16 px; rótulos e valores em linhas distintas nos cards; nada de texto colado em botões ou KPIs. Abaixo de 760px os botões quebram em grade e a tabela vira cards; 320 a 2560px sem rolagem horizontal; temas claro e escuro pelos tokens existentes; transições de 150 a 300 ms com `prefers-reduced-motion`.
+
+## Decisão: seletor `Versão em uso`
+
+A tabela de OS sempre mostra a importação mais recente (é a fonte operacional). `Versão em uso` só escolhe qual importação alimenta `Exportar Excel` e a `Comparação com a importação anterior`; ele não troca KPIs, triagem nem tabela. A legenda do seletor deixa isso claro. Importar nova planilha seleciona a mais nova.
+
+## Dados e efeitos
+
+Mesmas APIs de antes (`/api/operacoes/chamados`, `/snapshot/{id}`, `/evolucao`, `/historico/antigas`, `/importar`, `/exportar`, `/linha-do-tempo/...`). Importar atualiza tabela, KPIs, triagem, Home (cartão de chamados abertos) e prontidão, e mostra o aviso `Acompanhamento de chamados atualizado.`. Exportar usa `Planilha Exportada com Sucesso!`. O modal antigo continua acessível só por `abrirChamadoDaOs` até ser removido no passo seguinte.
+
+---
+
+# Histórico: prompt 7 original
+
 
 Cole este prompt no agente de código com o repositório Simpress aberto.
 

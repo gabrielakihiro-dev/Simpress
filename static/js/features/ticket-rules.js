@@ -209,11 +209,26 @@
     return { encerrado: false, dias, rotulo: dias === 1 ? "Sem atualização há 1 dia" : `Sem atualização há ${dias} dias` };
   }
 
+  // Triagem diária: só séries com chamado Oracle aberto contam como ativas (usada pelo modal e pelo painel Chamados).
+  function grupoTriagemChamado(record) {
+    const active = (Array.isArray(record?.oracle) ? record.oracle : []).some(ticket => !idadeAtualizacaoChamado(ticket).encerrado);
+    if (!active) return "";
+    const attention = classificarAtencaoChamado(record);
+    if (!attention.em_atencao) return "em_dia";
+    return attention.dias_sem_atualizacao === null ? "sem_data" : "atrasados";
+  }
+
+  function correspondeTriagemChamado(record, filter) {
+    if (!filter) return true;
+    const group = grupoTriagemChamado(record);
+    return filter === "ativos" ? Boolean(group) : group === filter;
+  }
+
   return {
     formatarListaChamados, compararOrdensServicoDecrescente, obterOrdemServicoPrincipalChamado,
     compararChamadosPorOrdemServicoDecrescente, formatarOrdensServico, etapasProcessoPedido, formatarDataEtapa,
     renderizarResumoProcessoPedido, renderizarLinhaProcessoPedido, resumirDescricaoChamado, normalizarFiltroChamados,
     chamadosClienteInformados, valoresChamado, dataAtualizacaoChamado, classificarAtencaoChamado, cidadesDoChamado,
-    atendimentosDoChamado, idadeAtualizacaoChamado,
+    atendimentosDoChamado, idadeAtualizacaoChamado, grupoTriagemChamado, correspondeTriagemChamado,
   };
 });

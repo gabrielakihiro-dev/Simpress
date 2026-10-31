@@ -30,7 +30,7 @@ Não dá para colar o pacote direto:
 | 3D OS por equipamento | fonte real `resumo-os-equipamento` (só leitura); sem fonte → seção fora e vai ao relatório |
 | 3E Resumo | `tab-panel-resumo`, `resumo-cards`, `cockpit-summary-kpis/-table-title/-count/-status/-rows/-pagination/-previous/-page/-next/-regions-title/-region-list`, export |
 | 3F Automação | `tab-panel-automacao`, `automacao-*` (inclui IDs de template), `sebrae-*`, `cockpit-automation-live/-events`, `data-automacao-rotina`; diálogo de log completo só com fonte real |
-| 3G F5–F8 | `cockpit-tool-panels[hidden]`, 4 `section[data-cockpit-tool-panel]` (chamados, comparacao, apelidos, relatorio), `cockpit-tool-title/-subtitle`, `cockpit-tickets-*`, `cockpit-comparison-*`, `cockpit-alias-*`, `cockpit-monthly-*` |
+| 3G F5–F8 | `cockpit-tool-panels[hidden]`, 4 `section[data-cockpit-tool-panel]` (chamados, comparacao, apelidos, relatorio), `cockpit-tool-title/-subtitle`, `cockpit-tickets-*` (inclui o bloco Importação e versões; ver `07-chamados-operacional.md`), `cockpit-comparison-*`, `cockpit-alias-*`, `cockpit-monthly-*` |
 | 3I Toast | `toast-container` (texto `Planilha Exportada com Sucesso!` vem do JS) |
 | Modais | todos os `data-accessible-modal` atuais, intactos |
 
