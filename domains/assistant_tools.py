@@ -913,7 +913,7 @@ CHANGE_TOOLS: List[Tool] = [
     ),
     Tool(
         "finalizar_chamado_softexpert",
-        "Finaliza UM chamado no SoftExpert (irreversível), igual ao botão \"Finalizar no SoftExpert\" da tela Chamados Sebrae. "
+        "Finaliza UM chamado no SoftExpert (irreversível), igual ao botão \"Finalizar no SoftExpert\" da tela Chamados. "
         "Só chamado antigo em aberto do Dashboard importado; use situacao_finalizacao_sebrae antes. A descrição (\"Detalhes do "
         "Atendimento Realizado\") vem das palavras do usuário ou da já salva no chamado; sem descrição, peça ao usuário, não invente. "
         "Nome, e-mail e telefone ocultados no chat não podem ir na descrição. A finalização em massa continua só na tela "

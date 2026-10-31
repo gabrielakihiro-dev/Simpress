@@ -57,6 +57,11 @@ html[data-theme="light"] .text-white {
   color: #0f172a;
 }
 
+/* sky-400 no tema claro (#0284c7) dá contraste 4,1:1 em texto pequeno; sky-300 do tema (#0369a1) passa de 4,5:1. */
+html[data-theme="light"] a.text-sky-400 {
+  color: var(--color-sky-300);
+}
+
 html[data-theme="light"] :is(button, a).text-white:is(
   [class*="bg-brand-"], [class*="bg-cyan-"], [class*="bg-emerald-"],
   [class*="bg-sky-"], [class*="bg-blue-"], [class*="bg-rose-"],

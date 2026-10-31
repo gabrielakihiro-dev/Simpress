@@ -59,7 +59,7 @@ test("first access centralizes the inventory import and keeps calls separate", a
   await expect(panel.getByRole("heading", { name: "Ações com inventário" })).toHaveCount(0);
   await expect(panel.locator(".ck-pront__titulo", { hasText: "Modelo de exportação" })).toBeVisible();
   await expect(panel.locator("#readiness-details-content")).toBeVisible();
-  await expect(panel.locator(".ck-pront__titulo", { hasText: /^Chamados$/ })).toBeVisible();
+  await expect(panel.locator(".ck-pront__titulo", { hasText: /^OS$/ })).toBeVisible();
   await expect(page.locator("#readiness-panel > summary")).toHaveCSS("display", "flex");
   await expect(panel).toHaveAccessibleName("Disponibilidade das funções");
   await expect(page.locator(".ck-pront__item").first()).toHaveCSS("display", "grid");
@@ -79,8 +79,8 @@ test("first access centralizes the inventory import and keeps calls separate", a
 
   await expect(panel.getByRole("button", { name: "Importar modelo — Modelo de transferência", exact: true })).toHaveCount(0);
   await openStatus(page);
-  const ticketGroup = panel.locator(".ck-pront__item").filter({ has: page.locator(".ck-pront__titulo", { hasText: /^Chamados$/ }) });
-  await ticketGroup.getByRole("button", { name: "Importar planilhas na aba Chamados", exact: true }).click();
+  const ticketGroup = panel.locator(".ck-pront__item").filter({ has: page.locator(".ck-pront__titulo", { hasText: /^OS$/ }) });
+  await ticketGroup.getByRole("button", { name: "Importar planilhas na aba OS", exact: true }).click();
   await expect(page.locator('[data-cockpit-tool-panel="chamados"]')).toBeVisible();
   await expect(page.locator("#cockpit-tickets-manage-panel")).toHaveAttribute("open", "");
   await expect(page.locator("#cockpit-tickets-file-simpress")).toBeFocused();

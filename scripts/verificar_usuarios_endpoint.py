@@ -656,6 +656,7 @@ def verificar_usuarios_endpoint(context: "BrowserContext", automacao: ModuleType
         return 0
     automacao.log(ORIGEM, f"{len(pendencias)} pendência(s) de usuário para conferir.")
     page = automacao.nova_aba(context, automacao.ENDPOINT_URL, "Endpoint Central")
+    automacao.endpoint_vigiar_avisos(page)
     contagem = {"decidida": 0, "anotada": 0}
     try:
         automacao.aguardar_login(page, "Endpoint Central", automacao.endpoint_logado)

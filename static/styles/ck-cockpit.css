@@ -195,6 +195,13 @@ button.ck-kpi[aria-pressed="true"] { background: var(--cor-superficie); border-b
 }
 .ck-aba { display: inline-flex; align-items: center; justify-content: center; gap: 6px; height: var(--altura-aba); padding: 0 8px; border: 0; border-radius: var(--raio-sm); background: transparent; color: var(--cor-texto-suave); font: var(--peso-medio) var(--fs-base)/1 var(--fonte-corpo); white-space: nowrap; cursor: pointer; transition: background-color var(--duracao) var(--curva), color var(--duracao) var(--curva); }
 .ck-aba .ck-ico { width: 15px; height: 15px; }
+/* Atalho F1-F6 embaixo do nome, centralizado; ícone e nome ficam na 1ª linha e a altura da aba não muda. */
+.ck-aba { display: inline-grid; grid-template-columns: auto auto; align-content: center; justify-content: center; align-items: center; column-gap: 6px; row-gap: 0; }
+.ck-aba .ck-ico { grid-row: 1; grid-column: 1; }
+.ck-aba > span { grid-row: 1; grid-column: 2; }
+.ck-aba__kbd { grid-row: 2; grid-column: 2; justify-self: center; margin-top: 1px; font: var(--peso-medio) 9px/1 var(--fonte-mono); color: inherit; opacity: .75; }
+/* Entre 1200 e 1289px a barra com 6 abas não comporta os atalhos sem estourar a largura. */
+@media (min-width: 1200px) and (max-width: 1289.98px) { .ck-aba__kbd { display: none; } }
 .ck-aba:hover { background: var(--cor-neutro-fundo); color: var(--cor-texto); }
 .ck-aba[aria-selected="true"], .ck-aba--painel[aria-pressed="true"] { background: var(--cor-destaque-fundo); color: var(--cor-destaque-texto); box-shadow: inset 0 0 0 1px var(--cor-destaque-forte); }
 /* Com o painel Chamados aberto por cima, a aba de baixo deixa de aparecer ativa. */
@@ -203,7 +210,9 @@ button.ck-kpi[aria-pressed="true"] { background: var(--cor-superficie); border-b
 .ck-topbar__quebra { display: none; }
 .ck-chips { display: flex; gap: 6px; }
 .ck-chip { display: inline-flex; align-items: center; gap: 6px; height: 26px; padding: 0 9px; border: 1px solid var(--cor-borda-suave); border-radius: var(--raio-sm); background: var(--cor-fundo); color: var(--cor-texto-suave); font-size: var(--fs-sm); white-space: nowrap; flex: none; }
-.ck-chip__ponto { width: 6px; height: 6px; border-radius: 50%; background: var(--cor-texto-apagado); }
+.ck-chip__ponto { width: 8px; height: 8px; border-radius: 50%; background: var(--cor-texto-apagado); }
+/* Estado do Chrome: só o ponto colorido (o texto fica em .ck-sr e no title), sem moldura. */
+#cockpit-automation-shell-status.ck-chip { height: 26px; padding: 0 4px; border: 0; background: transparent; }
 .ck-chip[data-status="ok"] .ck-chip__ponto { background: var(--cor-ok-texto); }
 .ck-chip[data-status="ocupado"] .ck-chip__ponto { background: var(--cor-destaque); }
 .ck-topbar__acoes { display: flex; align-items: center; gap: 2px; }
@@ -227,13 +236,15 @@ button.ck-kpi[aria-pressed="true"] { background: var(--cor-superficie); border-b
   .ck-abas { order: 4; flex-basis: 100%; display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); }
   .ck-aba { padding: 0 4px; }
   .ck-aba .ck-ico { display: none; }
+  .ck-aba__kbd { display: none; }
   .ck-busca { order: 5; flex: 1 1 100%; }
   .ck-busca .ck-kbd { display: none; }
   .ck-chips { order: 6; flex-basis: 100%; flex-wrap: wrap; }
 }
 
 /* ---------- 2.8 Busca e sugestões (tela 1) ---------- */
-.ck-busca { position: relative; flex: 0 1 var(--largura-busca); min-width: 120px; }
+/* Cresce até ocupar o espaçador da barra (o fator 1000 vence o do espaçador); o teto evita uma caixa gigante em telas largas. */
+.ck-busca { position: relative; flex: 1000 1 var(--largura-busca); min-width: 120px; max-width: 560px; }
 .ck-busca__campo { display: flex; align-items: center; gap: 8px; height: 32px; padding: 0 10px; border: 1px solid var(--cor-borda); border-radius: var(--raio-md); background: var(--cor-fundo); color: var(--cor-texto-sutil); transition: border-color var(--duracao) var(--curva); }
 .ck-busca__campo:focus-within { border-color: var(--cor-destaque); outline: 2px solid var(--cor-destaque); outline-offset: 2px; }
 .ck-busca__entrada { flex: 1; min-width: 0; border: 0; background: transparent; color: var(--cor-texto); font-size: var(--fs-md); }
@@ -310,9 +321,6 @@ button.ck-kpi[aria-pressed="true"] { background: var(--cor-superficie); border-b
 .ck-lista__rodape { display: flex; align-items: center; justify-content: space-between; gap: 8px; padding: 6px 8px 6px 14px; border-top: 1px solid var(--cor-borda-suave); font-size: var(--fs-sm); color: var(--cor-texto-mudo); }
 .ck-lista__rodape > span, .ck-lista__info > * { white-space: nowrap; }
 .ck-lista__info { display: inline-flex; align-items: center; gap: 5px; min-width: 0; flex-wrap: wrap; }
-.ck-link-fantasma { padding: 0; border: 0; background: none; color: var(--cor-destaque-texto); font: inherit; text-decoration: underline; text-underline-offset: 2px; cursor: pointer; }
-.ck-link-fantasma:hover { color: var(--cor-texto-forte); }
-.ck-link-fantasma:focus-visible { outline: 2px solid var(--cor-destaque); outline-offset: 2px; border-radius: 2px; }
 .ck-recentes { padding: 10px 12px 12px 14px; border-top: 1px solid var(--cor-borda-suave); }
 .ck-recentes__cab { display: flex; align-items: center; justify-content: space-between; margin-bottom: 6px; }
 .ck-recentes__titulo { font-size: var(--fs-sm); font-weight: var(--peso-medio); color: var(--cor-texto-mudo); }
@@ -870,16 +878,22 @@ button.ck-status--link:focus-visible { outline: 2px solid var(--cor-destaque); o
 
 /* Regiões 3G/3I: painéis F5–F8 e aviso flutuante. O legado .cockpit-tool-* deixou de casar; aqui só o que o pacote não cobre. */
 #cockpit-tool-panels[hidden], .ck-ferr-painel[hidden] { display: none; }
-#cockpit-tool-panels.ck-ferramenta { height: calc(100dvh - var(--ck-topbar-h, 48px)); min-height: 0; background: var(--cor-fundo); color: var(--cor-texto); }
+#cockpit-tool-panels.ck-ferramenta { height: calc(100dvh - var(--ck-topbar-h, 48px)); min-height: 0; overflow: auto; background: var(--cor-fundo); color: var(--cor-texto); }
 #cockpit-tool-panels:focus { outline: none; }
+/* Painel de ferramenta aberto: a página não rola; só o painel (#cockpit-tool-panels, cabeçalho + conteúdo) rola, e a barra superior fica no lugar. overflow: clip impede que scrollIntoView/foco rolem o shell (hidden ainda é rolável por script) e escondam a barra. */
+#simpress-app-shell:has(#cockpit-tool-panels:not([hidden])) { position: relative; display: flex; flex-direction: column; height: 100dvh; overflow: hidden; overflow: clip; }
+#simpress-app-shell:has(#cockpit-tool-panels:not([hidden])) > .app-workspace { flex: 1; min-height: 0; display: flex; flex-direction: column; }
+#simpress-app-shell:has(#cockpit-tool-panels:not([hidden])) #cockpit-tool-panels.ck-ferramenta { flex: 1; height: auto; }
 #cockpit-tool-title { margin: 0; font-size: 16px; font-weight: var(--peso-medio); }
 #cockpit-tool-title:focus-visible { outline: 2px solid var(--cor-destaque); outline-offset: 2px; }
-.ck-ferr-painel { flex: 1; min-height: 0; display: flex; flex-direction: column; overflow: auto; }
+.ck-ferr-painel { flex: 1 0 auto; display: flex; flex-direction: column; }
 .ck-ferr-painel > :not(.ck-dividido):not(.ck-rel__corpo) { flex: none; }
 .ck-ferr-painel .ck-dividido { min-height: 240px; }
 .ck-ferr-painel .ck-kpi__valor { font-size: 22px; }
 .ck-ferr-painel .ck-barra-ferr .ck-campo { flex: 0 1 220px; }
 .ck-ferr-os { min-width: 0; }
+/* Listas com detalhe: o painel inteiro rola, então o detalhe acompanha a lista em vez de ficar lá no topo (telas largas). */
+@media (min-width: 1200px) { #cockpit-tool-panels .ck-dividido__detalhe { align-self: start; position: sticky; top: 0; max-height: calc(100dvh - var(--ck-topbar-h, 48px)); overflow: auto; } }
 .ck-barra-ferr .ck-btn { align-self: flex-end; }
 .ck-barra-ferr .ck-btn--icone.ck-btn--sm { min-height: 0; align-self: center; }
 .ck-dividido__lista > .ck-barra-ferr { align-items: center; }
@@ -966,11 +980,8 @@ button.ck-status--link:focus-visible { outline: 2px solid var(--cor-destaque); o
 .ck-veu > .ck-dialogo .history-modal-scroll { max-height: none; }
 @media (max-width: 767.98px) { .ck-veu { padding: 8px; } .ck-veu > .ck-dialogo { max-height: 80vh; padding: 12px; } }
 @media (prefers-reduced-motion: reduce) { .ck-veu { animation: none; } }
-.ck-veu > .ck-dialogo.alias-history-panel { width: min(90rem, calc(100vw - 2rem)); max-width: none; height: min(90vh, 60rem); max-height: min(90vh, 60rem); overflow: hidden; }
-.ck-veu > .ck-dialogo.alias-history-panel .alias-history-list { min-height: 12rem; }
-@media (max-width: 479.98px), (max-height: 37.5rem) { .ck-veu > .ck-dialogo.alias-history-panel { overflow-y: auto; } .ck-veu > .ck-dialogo.alias-history-panel .alias-history-list { flex: 0 0 auto; overflow: visible; } }
-.ck-veu > .ck-dialogo .alias-history-total { background: var(--cor-destaque-fundo); color: var(--cor-destaque-texto); border-color: var(--cor-destaque); }
 .ck-veu .ck-btn.hidden { display: none; }
+.ck-barra-ferr .ck-btn.hidden { display: none; }
 .ck-veu .ck-btn.flex-1 { flex: 1 1 0%; }
 .ck-veu > .ck-dialogo :is([class*="border-line-quiet"]) { border-color: var(--cor-borda-suave); }
 /* Os utilitários Tailwind do <html>/<body> (bg-surface*) venceriam o fundo do pacote: reafirma o token. */

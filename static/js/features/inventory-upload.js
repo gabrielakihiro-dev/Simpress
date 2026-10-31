@@ -131,7 +131,7 @@
 
   function abrirModalAtualizarPlanilhas() {
     app.limparPreviaUploadPlanilhas();
-    app.abrirModalAcessivel("modal-atualizar-planilhas", "#upload-endpoint-file", "fecharModalAtualizarPlanilhas", "btn-atualizar-planilhas");
+    app.abrirModalAcessivel("modal-atualizar-planilhas", "#upload-endpoint-file", "fecharModalAtualizarPlanilhas");
   }
 
   function fecharModalAtualizarPlanilhas() {

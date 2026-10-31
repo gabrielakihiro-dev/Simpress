@@ -80,28 +80,30 @@ test("horizontal overflow state drives the table edge fade", () => {
   assert.equal(ux.overflowState(400, 500, 900), "start");
 });
 
-test("function keys map to the four main tabs and five Cockpit tools", () => {
-  const actions = ["F1", "F2", "F3", "F4", "F5", "F6", "F7", "F8", "F9"]
+test("function keys map to the four main tabs, the Cockpit tools and the Assistente", () => {
+  const actions = ["F1", "F2", "F3", "F4", "F5", "F6", "F7", "F8", "F9", "F10"]
     .map(key => ux.shortcutAction({ key }));
   assert.deepEqual(actions, [
     "tab-home", "tab-transferencia", "tab-resumo", "tab-automacao",
-    "tool-chamados", "tool-comparacao", "tool-apelidos", "tool-relatorio",
-    "tool-assistente",
+    "tool-sebrae-chamados", "tool-os", "tool-comparacao", "tool-apelidos",
+    "tool-relatorio", "tool-assistente",
   ]);
 });
 
 test("modified function keys, typing and open dialogs keep their normal behavior", () => {
   assert.equal(ux.shortcutAction({ key: "F5", ctrlKey: true }), null);
   assert.equal(ux.shortcutAction({ key: "F6", shiftKey: true }), null);
-  assert.equal(ux.shortcutAction({ key: "F7" }, { typing: true }), null);
   assert.equal(ux.shortcutAction({ key: "F8" }, { modalOpen: true }), null);
-  assert.equal(ux.shortcutAction({ key: "F1" }, { typing: true }), null);
-  assert.equal(ux.shortcutAction({ key: "F9" }, { modalOpen: true }), null);
+  assert.equal(ux.shortcutAction({ key: "F10" }, { modalOpen: true }), null);
 });
 
-test("F9 abre/fecha o Assistente mesmo com o cursor num campo de texto", () => {
-  assert.equal(ux.shortcutAction({ key: "F9" }, { typing: true }), "tool-assistente");
-  assert.equal(ux.shortcutAction({ key: "F9", ctrlKey: true }, { typing: true }), null);
+test("F1 a F10 valem mesmo com o cursor num campo de texto (F5 não recarrega a página)", () => {
+  assert.equal(ux.shortcutAction({ key: "F1" }, { typing: true }), "tab-home");
+  assert.equal(ux.shortcutAction({ key: "F5" }, { typing: true }), "tool-sebrae-chamados");
+  assert.equal(ux.shortcutAction({ key: "F7" }, { typing: true }), "tool-comparacao");
+  assert.equal(ux.shortcutAction({ key: "F10" }, { typing: true }), "tool-assistente");
+  assert.equal(ux.shortcutAction({ key: "F5", ctrlKey: true }, { typing: true }), null);
+  assert.equal(ux.shortcutAction({ key: "F11" }, { typing: true }), null);
 });
 
 test("tools menu closes for outside clicks and item selection, not its trigger", () => {
@@ -157,8 +159,9 @@ test("index loads the refinement layer last and links every transfer label", () 
   }
 });
 
-test("Cockpit search shows the Ctrl+K shortcut", () => {
-  assert.match(appHtml, /title="Atalho: Ctrl\+K">Ctrl\+K<\/kbd>/);
+test("Cockpit search announces Ctrl+K without showing the visual chip", () => {
+  assert.doesNotMatch(appHtml, /title="Atalho: Ctrl\+K">Ctrl\+K<\/kbd>/);
+  assert.match(appHtml, /id="input-serial"[^>]*aria-keyshortcuts="\/ Control\+K Meta\+K"/);
 });
 
 test("refinement layer defines both themes and respects reduced motion", () => {

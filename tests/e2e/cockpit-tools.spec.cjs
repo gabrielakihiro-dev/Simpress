@@ -1,12 +1,14 @@
 const { test, expect } = require("@playwright/test");
 const AxeBuilder = require("@axe-core/playwright").default;
 
+// Chamados e OS ficam na barra principal; abaixo de 1200px a barra os esconde e o menu Ferramentas os oferece.
+const itemDeMenuDaBarra = { "#btn-acompanhamento-chamados": "#btn-chamados-menu", "#btn-sebrae-chamados-aba": "#btn-sebrae-chamados-menu" };
+
 async function openTool(page, id) {
   const menu = page.locator("#cockpit-tools-dropdown");
-  // Chamados fica na barra principal; abaixo de 1200px a barra o esconde e o menu Ferramentas o oferece.
-  const naBarra = id === "#btn-acompanhamento-chamados" && await page.locator(id).isVisible();
+  const naBarra = id in itemDeMenuDaBarra && await page.locator(id).isVisible();
   if (!naBarra && !(await menu.evaluate(node => node.open))) await page.locator("#cockpit-tools-trigger").click();
-  await page.locator(naBarra || id !== "#btn-acompanhamento-chamados" ? id : "#btn-chamados-menu").click();
+  await page.locator(naBarra || !(id in itemDeMenuDaBarra) ? id : itemDeMenuDaBarra[id]).click();
   await expect(page.locator("#cockpit-tool-panels")).toBeVisible();
 }
 
@@ -73,7 +75,7 @@ test("each tool is accessible in both themes and remains reachable below 1200px"
   test.setTimeout(60_000);
   await mockComparison(page);
   await page.goto("/");
-  for (const [id, tool] of [["#btn-acompanhamento-chamados", "chamados"], ["#btn-cockpit-comparacao", "comparacao"], ["#btn-historico-apelidos", "apelidos"], ["#btn-relatorio-mensal", "relatorio"], ["#btn-sebrae-chamados-menu", "sebrae-chamados"]]) {
+  for (const [id, tool] of [["#btn-acompanhamento-chamados", "chamados"], ["#btn-cockpit-comparacao", "comparacao"], ["#btn-historico-apelidos", "apelidos"], ["#btn-relatorio-mensal", "relatorio"], ["#btn-sebrae-chamados-aba", "sebrae-chamados"]]) {
     await openTool(page, id);
     for (const theme of ["dark", "light"]) {
       await page.locator("html").evaluate((root, value) => { root.dataset.theme = value; }, theme);
@@ -167,6 +169,18 @@ test("a failed comparison switch cannot export the previously displayed event", 
 });
 
 
+test("setas e Enter escolhem o equipamento nas sugestões da busca", async ({ page }) => {
+  await page.goto("/");
+  await page.locator("#input-serial").fill("LENTO");
+  const linha = page.locator("#autocomplete-list .autocomplete-row").first();
+  await expect(linha).toBeVisible();
+  await page.keyboard.press("ArrowDown");
+  await expect(linha).toHaveAttribute("aria-selected", "true");
+  await expect(page.locator("#input-serial")).toHaveAttribute("aria-activedescendant", "autocomplete-option-0");
+  await page.keyboard.press("Enter");
+  await expect(page.locator("#card-serial")).toHaveText("LENTO");
+});
+
 test("typing stays error-free and Home shortcuts use the selected equipment", async ({ page }) => {
   const errors = [];
   page.on("pageerror", error => errors.push(error.message));
@@ -220,15 +234,148 @@ test("tool shortcuts cannot submit the hidden transfer form and Escape closes on
   await expect(page.locator("#cockpit-tool-panels")).toBeHidden();
 });
 
-test("o item Chamados Sebrae do menu abre o painel e volta com Esc", async ({ page }) => {
+test("Chamados e OS: rótulos, atalhos e títulos dos painéis na barra e no menu Ferramentas", async ({ page }) => {
   await page.goto("/");
-  await page.locator("#cockpit-tools-trigger").click();
-  await expect(page.locator("#btn-sebrae-chamados-menu")).toHaveText("Chamados Sebrae");
-  await openTool(page, "#btn-sebrae-chamados-menu");
-  await expect(page.locator("#cockpit-tool-title")).toHaveText("Chamados Sebrae");
+  await expect(page.locator("#btn-sebrae-chamados-aba")).toHaveAttribute("title", "Chamados (F5)");
+  await expect(page.locator("#btn-sebrae-chamados-aba")).toHaveAttribute("aria-keyshortcuts", "F5");
+  await expect(page.locator("#btn-acompanhamento-chamados")).toHaveAttribute("title", "OS (F6)");
+  await expect(page.locator("#btn-acompanhamento-chamados")).toHaveAttribute("aria-keyshortcuts", "F6");
+  await expect(page.locator("#btn-sebrae-chamados-menu")).toHaveText(/^Chamados\s*F5$/);
+  await expect(page.locator("#btn-chamados-menu")).toHaveText(/^OS\s*F6$/);
+  await expect(page.locator("#btn-cockpit-comparacao")).toHaveText(/^Comparação\s*F7$/);
+  await expect(page.locator("#btn-historico-apelidos")).toHaveText(/^Histórico de apelidos\s*F8$/);
+  await expect(page.locator("#btn-relatorio-mensal")).toHaveText(/^Relatório mensal\s*F9$/);
+  await expect(page.locator("#btn-assistente")).toHaveAttribute("aria-keyshortcuts", "F10");
+  await expect(page.locator("#btn-atualizar-planilhas, #ck-menu-g-planilhas")).toHaveCount(0);
+  // sem blur: no desktop a busca nasce com foco e F5-F9 precisam valer mesmo assim (senão F5 recarrega a página)
+  for (const [key, painel, titulo] of [["F5", "sebrae-chamados", "Chamados"], ["F6", "chamados", "OS"], ["F7", "comparacao", "Comparação"], ["F8", "apelidos", "Histórico de apelidos"], ["F9", "relatorio", "Relatório mensal"]]) {
+    await page.keyboard.press(key);
+    await expect(page.locator("#cockpit-tool-title"), key).toHaveText(titulo);
+    await expect(page.locator("#cockpit-tool-kbd"), key).toHaveText(key);
+    await expect(page.locator(`[data-cockpit-tool-panel="${painel}"]`), key).toBeVisible();
+    await expect(page.locator("#cockpit-tool-title")).toBeFocused();
+    await page.keyboard.press("Escape");
+    await expect(page.locator("#cockpit-tool-panels")).toBeHidden();
+  }
+});
+
+test("o item Chamados do menu Ferramentas abre o painel e volta com Esc", async ({ page }) => {
+  await page.goto("/");
+  await openTool(page, "#btn-sebrae-chamados-aba");
+  await expect(page.locator("#cockpit-tool-title")).toHaveText("Chamados");
   await expect(page.locator('[data-cockpit-tool-panel="sebrae-chamados"]')).toBeVisible();
   await page.keyboard.press("Escape");
   await expect(page.locator("#cockpit-tool-panels")).toBeHidden();
+});
+
+test("abas principais mostram o atalho F1-F6 sem mudar o rótulo nem o nome acessível", async ({ page }) => {
+  await page.goto("/");
+  const abas = [["#tab-home", "Home", "F1"], ["#tab-retirada-entrega", "Transporte", "F2"], ["#tab-resumo", "Resumo", "F3"],
+    ["#tab-automacao", "Automação", "F4"], ["#btn-sebrae-chamados-aba", "Chamados", "F5"], ["#btn-acompanhamento-chamados", "OS", "F6"]];
+  const larguraComAtalho = page.viewportSize().width >= 1290;
+  for (const [id, rotulo, atalho] of abas) {
+    await expect(page.locator(`${id} span`)).toHaveText(rotulo);
+    await expect(page.locator(id)).toHaveAttribute("aria-label", rotulo);
+    const kbd = page.locator(`${id} .ck-aba__kbd`);
+    await expect(kbd).toHaveText(atalho);
+    await expect(kbd).toHaveAttribute("aria-hidden", "true");
+    if (larguraComAtalho) await expect(kbd).toBeVisible();
+    else if (page.viewportSize().width < 768) await expect(kbd).toBeHidden();
+  }
+  expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
+});
+
+test("em todos os painéis o cabeçalho sobe junto com o conteúdo e a página não rola", async ({ page }) => {
+  await page.setViewportSize({ width: 1280, height: 900 });
+  await page.goto("/");
+  for (const id of ["#btn-sebrae-chamados-aba", "#btn-acompanhamento-chamados", "#btn-cockpit-comparacao", "#btn-historico-apelidos", "#btn-relatorio-mensal", "#btn-catalogo-unidades"]) {
+    await openTool(page, id);
+    const r = await page.evaluate(() => {
+      const raiz = document.querySelector("#cockpit-tool-panels");
+      const painel = [...document.querySelectorAll(".ck-ferr-painel")].find(e => !e.hidden);
+      const espaco = document.createElement("div");
+      espaco.style.cssText = "height:2500px;flex:none";
+      painel.append(espaco);
+      const cab = document.querySelector(".ck-ferramenta__cab");
+      const antes = Math.round(cab.getBoundingClientRect().top);
+      raiz.scrollTop = 400;
+      const out = { antes, depois: Math.round(cab.getBoundingClientRect().top), rolou: raiz.scrollTop, pagina: document.documentElement.scrollHeight > innerHeight, barra: Math.round(document.querySelector("#ck-topbar").getBoundingClientRect().top) };
+      espaco.remove();
+      return out;
+    });
+    expect(r.rolou, `${id}: o painel rola`).toBeGreaterThan(0);
+    expect(r.depois, `${id}: o cabeçalho saiu da tela junto`).toBeLessThan(r.antes);
+    expect(r.pagina, `${id}: a página não rola`).toBe(false);
+    expect(r.barra, `${id}: a barra superior continua no topo`).toBeGreaterThanOrEqual(0);
+    await page.keyboard.press("Escape");
+  }
+});
+
+test("trocar de painel abre no topo, com o cabeçalho visível", async ({ page }) => {
+  await page.setViewportSize({ width: 1280, height: 900 });
+  await page.goto("/");
+  await openTool(page, "#btn-sebrae-chamados-aba");
+  await page.evaluate(() => {
+    const espaco = document.createElement("div");
+    espaco.id = "teste-espaco";
+    espaco.style.cssText = "height:2500px;flex:none";
+    document.querySelector("#cockpit-tool-panels .ck-ferr-painel:not([hidden])").append(espaco);
+    document.querySelector("#cockpit-tool-panels").scrollTop = 400;
+  });
+  await page.keyboard.press("F6");
+  await expect(page.locator("#cockpit-tool-title")).toHaveText("OS");
+  expect(await page.evaluate(() => document.querySelector("#cockpit-tool-panels").scrollTop)).toBe(0);
+  await expect(page.locator("#cockpit-tool-title")).toBeInViewport();
+});
+
+test("OS: Importar e gerenciar abre o painel sem rolar o shell nem esconder a barra superior", async ({ page }) => {
+  for (const altura of [900, 700]) {
+    await page.setViewportSize({ width: 1280, height: altura });
+    await page.goto("/");
+    await openTool(page, "#btn-acompanhamento-chamados");
+    await page.locator("#cockpit-tickets-manage").click();
+    const painel = page.locator("#cockpit-tickets-manage-panel");
+    await expect(painel, `${altura}px: painel de importação aberto`).toHaveJSProperty("open", true);
+    await expect(painel.locator("summary").first(), `${altura}px: título do painel visível`).toBeInViewport();
+    await page.waitForTimeout(700);
+    const medidas = await page.evaluate(() => ({
+      shell: document.querySelector("#simpress-app-shell").scrollTop,
+      topo: document.querySelector("#ck-topbar").getBoundingClientRect().top,
+      pagina: document.scrollingElement.scrollTop,
+    }));
+    expect(medidas.shell, `${altura}px: o shell não rola`).toBe(0);
+    expect(medidas.pagina, `${altura}px: a página não rola`).toBe(0);
+    expect(medidas.topo, `${altura}px: a barra superior continua na tela`).toBeGreaterThanOrEqual(0);
+  }
+});
+
+test("Exportar Excel (apelidos e IdCliente) fica na aba Comparação e some sem alterações exportáveis", async ({ page }) => {
+  const stats = (exportavel, total) => ({ total_equipamentos: 1, total_unidades: 0, exportacao_disponivel: exportavel, total_alteracoes_exportaveis: total });
+  let corpo = stats(true, 0);
+  await page.route("**/api/stats", route => route.fulfill({ json: corpo }));
+  let exportacoes = 0;
+  await page.route("**/api/exportar-equipamentos", route => {
+    exportacoes += 1;
+    return route.fulfill({ status: 200, headers: { "Content-Disposition": 'attachment; filename="EquipamentosDetalhes-atualizados.xlsx"' }, contentType: "application/octet-stream", body: "xlsx" });
+  });
+  await mockComparison(page);
+  await page.goto("/");
+  await expect(page.locator("#cockpit-tools-dropdown #btn-exportar-equipamentos")).toHaveCount(0);
+  await openTool(page, "#btn-cockpit-comparacao");
+  const botao = page.locator('[data-cockpit-tool-panel="comparacao"] .ck-barra-ferr #btn-exportar-equipamentos');
+  await expect(botao).toBeHidden();
+  corpo = stats(true, 3);
+  await page.reload();
+  await openTool(page, "#btn-cockpit-comparacao");
+  await expect(botao).toBeVisible();
+  await expect(botao).toHaveText("Exportar Excel");
+  await expect(botao).toHaveAttribute("aria-label", /^Exportar Excel/);
+  await expect(page.locator("#btn-exportar-resultado-comparacao")).toHaveText("Exportar");
+  await botao.click();
+  await expect.poll(() => exportacoes).toBe(1);
+  await expect(botao).toBeEnabled();
+  await expect(botao).not.toHaveAttribute("aria-busy", "true");
+  await expect(botao).toHaveText("Exportar Excel");
 });
 
 test("Catálogo de unidades: SEDE, CNPJ e edição pelo lápis sem o modal antigo", async ({ page }) => {

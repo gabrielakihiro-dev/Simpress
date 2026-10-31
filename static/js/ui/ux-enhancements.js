@@ -79,17 +79,18 @@
     if (command && !event.shiftKey && key.toLowerCase() === "k") return "search";
     if (key === "/" && !command && !typing) return "search";
     if (command && key === "Enter" && transferVisible) return "generate";
-    if (command || event.shiftKey || (typing && key !== "F9")) return null; // F9 também fecha o chat do Assistente com o cursor na caixa de mensagem
+    if (command || event.shiftKey || (typing && !/^F(?:[1-9]|10)$/.test(key))) return null; // teclas F não digitam texto: valem com o cursor num campo (senão F5 recarrega a página); F10 também fecha o chat do Assistente
     return ({
       F1: "tab-home",
       F2: "tab-transferencia",
       F3: "tab-resumo",
       F4: "tab-automacao",
-      F5: "tool-chamados",
-      F6: "tool-comparacao",
-      F7: "tool-apelidos",
-      F8: "tool-relatorio",
-      F9: "tool-assistente",
+      F5: "tool-sebrae-chamados",
+      F6: "tool-os",
+      F7: "tool-comparacao",
+      F8: "tool-apelidos",
+      F9: "tool-relatorio",
+      F10: "tool-assistente",
     })[key] || ({ t: "equipment-transport", e: "equipment-edit", c: "copy-ticket" })[key.toLowerCase()] || null;
   }
 
@@ -476,7 +477,8 @@
         button.click();
       } else if (action?.startsWith("tool-")) {
         const buttonIds = {
-          "tool-chamados": "btn-acompanhamento-chamados",
+          "tool-sebrae-chamados": "btn-sebrae-chamados-aba",
+          "tool-os": "btn-acompanhamento-chamados",
           "tool-comparacao": "btn-cockpit-comparacao",
           "tool-apelidos": "btn-historico-apelidos",
           "tool-relatorio": "btn-relatorio-mensal",

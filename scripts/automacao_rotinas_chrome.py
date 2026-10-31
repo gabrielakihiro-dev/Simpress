@@ -1052,6 +1052,25 @@ def exportar_ux_equipamentos(context: "BrowserContext") -> Path:
 # Endpoint Central
 # --------------------------------------------------------------------------
 
+def endpoint_vigiar_avisos(page: "Page") -> None:
+    """Fecha sozinho o aviso "New Hotfix Available" do Endpoint quando ele cobre a tela.
+
+    O Playwright chama o tratador durante qualquer ação (clique, digitação) que o aviso esteja bloqueando;
+    sem isso o clique espera 30 s e falha com ``Locator.click: Timeout 30000ms exceeded``.
+    """
+    aviso = page.locator(".server-update--notification").filter(has_text=re.compile(r"Do it later", re.IGNORECASE)).first
+
+    def fechar(_aviso) -> None:
+        log("Endpoint Central", "Aviso de atualização do Endpoint: clicando em 'Do it Later'...")
+        try:
+            aviso.get_by_text(re.compile(r"^\s*Do it later\s*$", re.IGNORECASE)).first.click(timeout=5000)
+        except Exception:  # sem o botão, o X (aparece só com o mouse sobre o aviso)
+            aviso.hover(timeout=3000)
+            aviso.locator("[class*='close' i]").filter(visible=True).first.click(timeout=3000)
+
+    page.add_locator_handler(aviso, fechar)
+
+
 def endpoint_logado(page: "Page") -> bool:
     return (
         "centralendpoint" in page.url.lower()
@@ -1183,6 +1202,7 @@ def confirmar_modo_todos(page: "Page") -> None:
 
 def exportar_endpoint(context: "BrowserContext") -> Path:
     page = nova_aba(context, ENDPOINT_URL, "Endpoint Central")
+    endpoint_vigiar_avisos(page)
     try:
         aguardar_login(page, "Endpoint Central", endpoint_logado, entrar=endpoint_entrar, email=EMAIL_SOFTEXPERT)
         if "inventory/computers" not in page.url:

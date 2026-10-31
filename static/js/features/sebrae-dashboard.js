@@ -120,8 +120,12 @@
   }
 
   /** O que "Atualizar Dashboard" finalizaria de verdade: D virando FINALIZADO, número UTIC, com descrição, ainda não finalizado. */
-  function candidatosFinalizar(abertos, edicoes, soft) {
-    return payloadEdicoes(abertos, edicoes)
+  function candidatosFinalizar(abertos, edicoes, soft, formulario = [], valores = {}) {
+    const marcados = [
+      ...payloadEdicoes(abertos, edicoes),
+      ...payloadAtualizacao(formulario, valores),
+    ];
+    return marcados
       .filter(e => String(e.D || "").toUpperCase() === "FINALIZADO" && NUMERO_UTIC.test(e.numero))
       .map(e => e.numero)
       .filter(numero => podeFinalizar(soft?.[numero]?.descricao, soft?.[numero]?.finalizacao, false));
@@ -347,6 +351,7 @@
       manuais.className = "sebrae-chamado__manuais";
       ["A", "B", "D", "J", "R", "S"].forEach(letra => manuais.appendChild(campo(ROTULOS_MANUAIS[letra], controleManual(item.numero, letra))));
       artigo.appendChild(manuais);
+      if (NUMERO_UTIC.test(item.numero)) artigo.appendChild(secaoFinalizar(item, true));
       return artigo;
     }
 
@@ -361,12 +366,12 @@
       elemento.dataset.estado = situacao;
     }
 
-    function secaoFinalizar(item) {
+    function secaoFinalizar(item, novo = false) {
       const numero = item.numero;
       const guardado = item.softexpert || {};
       const soft = estado.soft[numero] = {
         descricao: guardado.descricao_finalizacao || "", enviado: guardado.descricao_finalizacao || "",
-        pdf: guardado.pdf || null, finalizacao: guardado.finalizacao || null, processando: false,
+        pdf: guardado.pdf || null, finalizacao: guardado.finalizacao || null, processando: false, novo,
       };
       const area = document.createElement("div");
       area.className = "sebrae-chamado__finalizar";
@@ -511,7 +516,8 @@
       const confirmado = await app.confirmarAcao({
         titulo: "Finalizar no SoftExpert",
         mensagem: `Finalizar ${numero} no SoftExpert? Finalizar não tem volta: o chamado será encerrado no SoftExpert com a descrição informada`
-          + `${soft.pdf ? " e o PDF anexado será enviado" : ""}.`,
+          + `${soft.pdf ? " e o PDF anexado será enviado" : ""}.`
+          + (soft.novo ? " Este chamado novo ainda não está no Dashboard: depois clique em Atualizar Dashboard para gravar o status FINALIZADO e a data de encerramento." : ""),
         confirmar: "Confirmar finalização", cancelar: "Cancelar",
       });
       if (!confirmado) return;
@@ -909,7 +915,7 @@
       try {
         // Finalizar no SoftExpert não tem volta: quem marcou FINALIZADO com descrição confirma antes de qualquer envio.
         await Promise.all(Object.keys(estado.soft).map(salvarDescricao));
-        const finalizar = candidatosFinalizar(estado.abertos, estado.edicoes, estado.soft);
+        const finalizar = candidatosFinalizar(estado.abertos, estado.edicoes, estado.soft, estado.formulario, estado.valores);
         // Cancelar e Esc (o diálogo resolve false) só atualizam o Dashboard: nunca finalizam.
         const finalizarSoftExpert = finalizar.length > 0 && await app.confirmarAcao({
           titulo: "Atualizar Dashboard e finalizar no SoftExpert",

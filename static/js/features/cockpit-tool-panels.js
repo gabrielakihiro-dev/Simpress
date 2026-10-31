@@ -5,16 +5,16 @@
 })(typeof window !== "undefined" ? window : globalThis, function createCockpitToolPanels(context) {
   "use strict";
   const { app, apiFetch } = context;
-  const toolKeys = { chamados: "F5", comparacao: "F6", apelidos: "F7", relatorio: "F8" };
+  const toolKeys = { "sebrae-chamados": "F5", chamados: "F6", comparacao: "F7", apelidos: "F8", relatorio: "F9" };
   const toolInfo = {
-    chamados: ["Chamados", "Acompanhamento local de ordens relacionadas por série."],
+    chamados: ["OS", "Acompanhamento local de ordens relacionadas por série."],
     comparacao: ["Comparação", "Resultados salvos da comparação entre as bases locais."],
     apelidos: ["Histórico de apelidos", "Alterações registradas para equipamentos e usuários."],
     relatorio: ["Relatório mensal", "Consolidação do mês usando os dados locais disponíveis."],
     planilhas: ["Atualizar planilhas", "Última atualização das bases locais de equipamentos."],
     unidades: ["Catálogo de unidades", "Unidades Sebrae cadastradas para entrega e retirada."],
     // Sem loader em openPanel: recarregar a lista zeraria as edições dos chamados antigos (sebrae-dashboard.js).
-    "sebrae-chamados": ["Chamados Sebrae", "Preencha os chamados novos e antigos, exporte as linhas e atualize o Dashboard."],
+    "sebrae-chamados": ["Chamados", "Preencha os chamados novos e antigos, exporte as linhas e atualize o Dashboard."],
   };
   const relationLabels = {
     conferida: "Conferida", divergente: "Divergente", somente_simpress: "Só Simpress",
@@ -40,6 +40,7 @@
   let aliasEvents = [];
   let selectedAliasId = "";
   let selectedAliasPeriod = "todos";
+  let aliasLatest = new Map();
   const aliasEquipmentCache = new Map();
   let aliasEquipmentRequest = 0;
   let monthlyRequest = 0;
@@ -621,12 +622,17 @@
       || (type ? "Alteração" : "Apelido");
   }
 
-  function aliasCanUndo(event) {
-    if (!event || ![undefined, null, "", "apelido", "usuario"].includes(event.tipo)) return false;
-    const serial = String(event.serial || "").trim().toUpperCase();
-    const type = event.tipo || "apelido";
-    const latest = aliasEvents.find(item => String(item.serial || "").trim().toUpperCase() === serial && (item.tipo || "apelido") === type);
-    return Boolean(serial && latest?.id === event.id);
+  function aliasActions(event) {
+    return app.acoesEventoHistorico(event, aliasEvents, aliasLatest);
+  }
+
+  const ALIAS_WARNING_REASONS = {
+    usuario_removido: "Usuário logado removido no Endpoint",
+    hostname_removido: "Hostname removido no Endpoint",
+  };
+
+  function aliasReason(event) {
+    return event.tipo === "aviso_endpoint" ? ALIAS_WARNING_REASONS[event.motivo] || "" : "";
   }
 
   function aliasTimeline(event) {
@@ -701,7 +707,7 @@
       ["Data", event.horario], ["Série", event.serial], ["Equipamento", event.equipamento],
       ["Tipo", aliasTypeLabel(event.tipo)], ["Campo", event.acao], ["Valor anterior", aliasValue(event, true)],
       ["Valor novo", aliasValue(event)], ["Usuário relacionado", event.usuario_endpoint],
-      ["Origem", event.origem], ["Motivo", event.motivo],
+      ["Origem", event.origem], ["Motivo", aliasReason(event) || event.motivo],
     ];
     renderDetails(target, fields);
     const current = element("section", "ck-det-bloco");
@@ -717,7 +723,7 @@
         const entry = element("li", "ck-tempo__item");
         const body = element("div", "ck-tempo__corpo");
         const change = element("span", "ck-alteracao");
-        if (item.tipo === "aviso_endpoint") change.textContent = `${item.motivo || "Aviso"} · ${item.valor_anterior || "valor não informado"}`;
+        if (item.tipo === "aviso_endpoint") change.textContent = `${aliasReason(item) || item.motivo || "Aviso"} ·${item.valor_anterior || "valor não informado"}`;
         else change.append(
           element("span", "ck-alteracao__antes", aliasValue(item, true) || "(vazio)"),
           document.createTextNode("→"),
@@ -741,22 +747,29 @@
       openHome.addEventListener("click", () => { void openSerialInHome(event.serial); });
       actions.append(openHome);
     }
-    if (aliasCanUndo(event) && typeof app.desfazerEventoHistoricoApelidos === "function") {
+    const allowed = aliasActions(event);
+    const runAction = (button, action) => async () => {
+      actions.querySelectorAll("button").forEach(item => { item.disabled = true; });
+      const done = await action(event, button);
+      if (done && activeTool === "apelidos") await loadAliases();
+      else actions.querySelectorAll("button").forEach(item => { item.disabled = false; });
+    };
+    if (allowed.desfazer) {
       const undo = element("button", "ck-btn ck-btn--primario ck-btn--sm", "Restaurar anterior");
       undo.type = "button";
-      undo.addEventListener("click", async () => {
-        undo.disabled = true;
-        const restored = await app.desfazerEventoHistoricoApelidos(event, undo);
-        if (restored && activeTool === "apelidos") await loadAliases();
-        else undo.disabled = false;
-      });
+      undo.addEventListener("click", runAction(undo, app.desfazerEventoHistoricoApelidos));
       actions.append(undo);
-    } else {
+    }
+    if (allowed.excluir) {
+      const remove = element("button", "ck-btn ck-btn--perigo ck-btn--sm", allowed.rotuloExcluir);
+      remove.type = "button";
+      remove.addEventListener("click", runAction(remove, app.excluirRegistroHistorico));
+      actions.append(remove);
+    }
+    if (!allowed.desfazer && !allowed.excluir) {
       const reason = event.tipo === "endereco"
         ? "Endereços são atualizados pela planilha Simpress e não podem ser restaurados manualmente."
-        : event.tipo === "aviso_endpoint"
-          ? "Avisos do Endpoint seguem a ação de remoção do histórico completo; não há restauração deste tipo."
-          : "Há uma alteração mais recente para este campo, ou a ação de restauração não está disponível.";
+        : "Há uma alteração mais recente para este campo, ou nenhuma ação está disponível para este registro.";
       actions.append(element("p", "ck-nota", reason));
     }
     target.append(timeline);
@@ -767,15 +780,20 @@
   function filteredAliases() {
     const terms = normalize(byId("cockpit-alias-search").value).split(/\s+/).filter(Boolean);
     const type = byId("cockpit-alias-type").value;
+    const actionsOnly = byId("cockpit-alias-actions-only").checked;
     const cutoff = selectedAliasPeriod === "7dias" ? Date.now() - (7 * 24 * 60 * 60 * 1000) : null;
     return aliasEvents.filter(event => {
       if (type !== "todos" && (event.tipo || "apelido") !== type) return false;
+      if (actionsOnly) {
+        const actions = aliasActions(event);
+        if (!actions.desfazer && !actions.excluir) return false;
+      }
       if (cutoff !== null) {
         const timestamp = Date.parse(event.horario || "");
         if (!Number.isFinite(timestamp) || timestamp < cutoff) return false;
       }
       const searchable = normalize([event.serial, event.equipamento, event.tipo, event.acao, event.usuario_endpoint, event.horario,
-        event.motivo, event.origem, aliasValue(event, true), aliasValue(event)].join(" "));
+        event.motivo, aliasReason(event), event.origem, aliasValue(event, true), aliasValue(event)].join(" "));
       return terms.every(term => searchable.includes(term));
     });
   }
@@ -813,7 +831,7 @@
       button.append(Object.assign(element("strong", "ck-item__serie", event.serial || "Série indisponível"), { title: event.serial || "Série indisponível" }));
       button.append(badge(aliasTypeLabel(event.tipo), "info"));
       button.append(element("small", "ck-item__sub", `${event.horario || "Data indisponível"} · ${event.tipo === "aviso_endpoint"
-        ? event.motivo || "Aviso do Endpoint" : `${aliasValue(event, true) || "(vazio)"} → ${aliasValue(event) || "(vazio)"}`}`));
+        ? aliasReason(event) || event.motivo || "Aviso do Endpoint" : `${aliasValue(event, true) || "(vazio)"} → ${aliasValue(event) || "(vazio)"}`}`));
       button.addEventListener("click", () => { selectedAliasId = String(event.id || ""); renderAliases(); });
       row.append(button);
       return row;
@@ -830,6 +848,7 @@
       const data = await apiFetch("/api/historico-alteracoes", { errorMessage: "Não foi possível carregar o histórico de alterações." });
       if (request !== aliasRequest || activeTool !== "apelidos") return;
       aliasEvents = Array.isArray(data.eventos) ? data.eventos : [];
+      aliasLatest = app.ultimoRegistroPorCampo(aliasEvents);
       aliasEquipmentCache.clear();
       if (!aliasEvents.some(event => String(event.id || "") === selectedAliasId)) selectedAliasId = String(aliasEvents[0]?.id || "");
       renderAliases();
@@ -848,7 +867,7 @@
   function exportAliasesCsv() {
     const rows = [["Data", "Série", "Equipamento", "Tipo", "Ação", "Origem", "Usuário relacionado", "Valor anterior", "Valor novo", "Motivo"], ...filteredAliases().map(event => [
       event.horario, event.serial, event.equipamento, aliasTypeLabel(event.tipo), event.acao,
-      event.origem, event.usuario_endpoint, aliasValue(event, true), aliasValue(event), event.motivo,
+      event.origem, event.usuario_endpoint, aliasValue(event, true), aliasValue(event), aliasReason(event) || event.motivo,
     ])];
     const blob = new Blob([`\uFEFF${rows.map(row => row.map(csvCell).join(";")).join("\r\n")}`], { type: "text/csv;charset=utf-8" });
     const url = URL.createObjectURL(blob);
@@ -1337,7 +1356,14 @@
       renderAliases();
     });
     byId("cockpit-alias-export").addEventListener("click", exportAliasesCsv);
-    byId("cockpit-alias-legacy").addEventListener("click", app.abrirModalHistoricoApelidos);
+    byId("cockpit-alias-actions-only").addEventListener("change", renderAliases);
+    byId("cockpit-alias-clear").addEventListener("click", () => {
+      byId("cockpit-alias-search").value = "";
+      byId("cockpit-alias-type").value = "todos";
+      byId("cockpit-alias-actions-only").checked = false;
+      selectedAliasPeriod = "todos";
+      renderAliases();
+    });
     byId("cockpit-monthly-month").addEventListener("change", event => loadMonthlyReport(event.currentTarget.value));
     byId("cockpit-monthly-copy").addEventListener("click", copyMonthlyPreview);
     byId("cockpit-monthly-export").addEventListener("click", exportMonthlyWorkbook);
@@ -1350,7 +1376,7 @@
       const modal = document.querySelector('[data-accessible-modal="true"]:not(.hidden)');
       if (!modal) { event.preventDefault(); closePanel(); }
     });
-    // O destaque de Chamados segue o painel, qualquer que seja o caminho que o esconda.
+    // O destaque dos botões da barra (Chamados e OS) segue o painel, qualquer que seja o caminho que o esconda.
     if (typeof MutationObserver !== "undefined") new MutationObserver(() => {
       if (root.hidden) syncPanelButtons("");
     }).observe(root, { attributes: true, attributeFilter: ["hidden"] });
@@ -1400,6 +1426,7 @@
       skipLink.setAttribute("href", "#cockpit-tool-title");
     }
     root.hidden = false;
+    root.scrollTop = 0; // o cabeçalho rola junto com o painel; cada painel abre no topo
     byId("cockpit-tools-dropdown").open = false;
     byId("cockpit-tool-title").textContent = toolInfo[tool][0];
     byId("cockpit-tool-kbd").textContent = toolKeys[tool] || "";

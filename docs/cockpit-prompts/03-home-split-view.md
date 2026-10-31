@@ -55,7 +55,7 @@ Cada linha mostra:
 - Desvio aprovado (etapa B): equipamento com mais de um status mostra todos empilhados à direita, abaixo da cidade (`.ck-item__status`, coluna, gap 2px), com o mesmo tamanho e cores. Ordem: Sem acesso, Divergente, Sem usuário; "Sincronizado" só quando não há outro status.
 
 - Desvio aprovado (etapa D): os selos "Divergente" e "Sem acesso" da lista são botões com aparência de link (mesma cor; `stopPropagation`, não abrem o equipamento). "Divergente" abre a aba Comparação no evento mais recente, na categoria real da série (Localidade, Só Simpress, Só Endpoint ou Usuário), com rolagem e destaque de ~1,5 s na linha. "Sem acesso" abre a aba Resumo com o KPI "Sem acesso há 7+ dias" ativo e destaca a série. O destaque respeita `prefers-reduced-motion`.
-- Desvio aprovado (etapa D): os filtros Todos / Sem usuário / 7+ dias / Divergentes formam um controle segmentado de colunas iguais, com a altura de `--altura-pilula` e o ativo com `--cor-destaque-fundo`. `#btn-listar-sem-usuario` ("Lista sem usuário") passa para o rodapé da lista, como link discreto ao lado de "N equipamentos".
+- Desvio aprovado (etapa D): os filtros Todos / Sem usuário / 7+ dias / Divergentes formam um controle segmentado de colunas iguais, com a altura de `--altura-pilula` e o ativo com `--cor-destaque-fundo`. `#btn-listar-sem-usuario` ("Lista sem usuário") foi removido em 31/10/2026 a pedido do usuário ("não faz mais sentido ter"): o rodapé da lista mostra só "N equipamentos" e "Carregar mais"; o filtro "Sem usuário" da lista e o selo nos cards continuam.
 
 A linha selecionada recebe uma barra de accent de 2px à esquerda (`border-left: 2px solid var(--color-accent)`).
 
@@ -71,7 +71,7 @@ A linha selecionada recebe uma barra de accent de 2px à esquerda (`border-left:
 - `#input-serial`, `#autocomplete-box`, `#autocomplete-list`, `#autocomplete-count`
 - `#btn-buscar-serial`, `#btn-clear-serial`
 - `#home-recentes`, `#home-recentes-lista` (pode ficar oculto ou integrado)
-- `#btn-listar-sem-usuario`
+- `#btn-listar-sem-usuario` (removido em 31/10/2026; ver o desvio da etapa D)
 
 ---
 

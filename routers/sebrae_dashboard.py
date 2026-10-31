@@ -128,6 +128,7 @@ def create_sebrae_dashboard_router(services: SebraeDashboardServices) -> APIRout
         importado = sebrae_novos.ler_existentes(caminhos.existentes)
         lancados = importado["numeros"] if importado else frozenset()
         novos = sebrae_novos.ler_novos(caminhos.novos, lancados) if importado else None
+        finalizacao = fin.ler_estado(_pasta_estado()) if novos else {}
         return {
             "importado": None if importado is None else {
                 "arquivo": importado["arquivo"], "importado_em": importado["importado_em"], "total": len(lancados),
@@ -138,7 +139,10 @@ def create_sebrae_dashboard_router(services: SebraeDashboardServices) -> APIRout
             "novos": None if novos is None else {
                 "lidos_em": novos["lidos_em"], "ignorados": novos["ignorados"], "pendentes": novos["pendentes"],
                 "erros": novos["erros"],
-                "formulario": sebrae_novos.formulario(novos["chamados"], services.registros(), _relatorio(), services.vinculos_os()),
+                "formulario": [
+                    {**item, "softexpert": fin.publico(finalizacao.get(item["numero"]))}
+                    for item in sebrae_novos.formulario(novos["chamados"], services.registros(), _relatorio(), services.vinculos_os())
+                ],
             },
         }
 
@@ -305,7 +309,7 @@ def create_sebrae_dashboard_router(services: SebraeDashboardServices) -> APIRout
             "conteudo_base64": base64.b64encode(conteudo).decode("ascii"),
             "fechar": (
                 _fechar_inativo("A cópia de saída não foi gravada; nada foi finalizado.") if not gravada
-                else _finalizar_marcados(edicoes) if payload.finalizar_softexpert
+                else _finalizar_marcados({**{c.numero: {"D": c.D} for c in payload.chamados}, **edicoes}) if payload.finalizar_softexpert
                 else _fechar_inativo("finalização no SoftExpert não confirmada")
             ),
         }, headers={"Cache-Control": "no-store"})
@@ -325,7 +329,7 @@ def create_sebrae_dashboard_router(services: SebraeDashboardServices) -> APIRout
         return {"iniciado": False, "motivo": motivo, "numeros": [], "pulados": [dict(p) for p in pulados]}
 
     def _finalizar_marcados(edicoes: Mapping[str, Mapping[str, str]]) -> Dict[str, Any]:
-        """Tickets whose D the user just set to FINALIZADO go to the ``fechar`` routine; a failure here never fails the update."""
+        """Tickets (old edits and new rows) whose D the user just set to FINALIZADO go to the ``fechar`` routine; a failure here never fails the update."""
         pasta = _pasta_estado()
         numeros: List[str] = []
         pulados: List[Dict[str, str]] = []
@@ -369,26 +373,31 @@ def create_sebrae_dashboard_router(services: SebraeDashboardServices) -> APIRout
                 fin.apagar_job(pasta)
                 raise
 
-    def _exigir_aberto(numero: str) -> str:
+    def _exigir_finalizavel(numero: str) -> str:
+        """Antigo EM ABERTO/sem status do Dashboard importado ou novo da última busca (ainda fora do Dashboard)."""
         numero = fin.validar_numero(numero)
-        importado = sebrae_novos.ler_existentes(services.caminhos().existentes)
+        caminhos = services.caminhos()
+        importado = sebrae_novos.ler_existentes(caminhos.existentes)
         if importado is None:
             raise DomainValidationError("Importe o Dashboard antes.", status_code=422)
-        if numero not in {str(a.get("numero")) for a in importado["abertos"]}:
-            raise DomainValidationError(f"{numero} não é um chamado antigo EM ABERTO ou sem status.", status_code=422)
-        return numero
+        if numero in {str(a.get("numero")) for a in importado["abertos"]}:
+            return numero
+        novos = sebrae_novos.ler_novos(caminhos.novos, importado["numeros"])
+        if novos is not None and any(c.numero == numero for c in novos["chamados"]):
+            return numero
+        raise DomainValidationError(f"{numero} não é um chamado antigo EM ABERTO nem um chamado novo da busca.", status_code=422)
 
     @router.put("/api/sebrae/chamados/{numero}/finalizacao")
     def definir_descricao(numero: str, payload: DescricaoPayload):
         """Texto de "Detalhes do Atendimento Realizado" deste chamado; vazio apaga."""
-        numero = _exigir_aberto(numero)
+        numero = _exigir_finalizavel(numero)
         item = fin.definir_descricao(_pasta_estado(), numero, payload.descricao_finalizacao)
         return JSONResponse({"numero": numero, **fin.publico(item)}, headers={"Cache-Control": "no-store"})
 
     @router.post("/api/sebrae/chamados/{numero}/anexo")
     async def anexar_pdf(numero: str, file: UploadFile = File(...)):
         """Um PDF opcional por chamado (extensão, assinatura %PDF e tamanho conferidos); o novo substitui o anterior."""
-        numero = await asyncio.to_thread(_exigir_aberto, numero)
+        numero = await asyncio.to_thread(_exigir_finalizavel, numero)
         limite = min(services.max_upload_bytes(), fin.MAX_PDF_BYTES)
         conteudo = await file.read(limite + 1)
         item = await asyncio.to_thread(fin.anexar_pdf, _pasta_estado(), numero, file.filename, conteudo, limite)
@@ -396,15 +405,15 @@ def create_sebrae_dashboard_router(services: SebraeDashboardServices) -> APIRout
 
     @router.delete("/api/sebrae/chamados/{numero}/anexo")
     def remover_pdf(numero: str):
-        numero = _exigir_aberto(numero)
+        numero = _exigir_finalizavel(numero)
         return JSONResponse({"numero": numero, **fin.publico(fin.remover_pdf(_pasta_estado(), numero))}, headers={"Cache-Control": "no-store"})
 
     @router.post("/api/sebrae/finalizar-softexpert", status_code=202)
     def finalizar_softexpert(payload: FinalizarPayload):
-        """Finaliza UM chamado no SoftExpert (botão por chamado). Irreversível: só chamados antigos em aberto, com descrição."""
+        """Finaliza UM chamado no SoftExpert (botão por chamado). Irreversível: só antigos em aberto ou novos da busca, com descrição."""
         if not payload.confirmado:
             raise DomainValidationError("Confirme a finalização no SoftExpert antes de enviar.", status_code=422)
-        numero = _exigir_aberto(payload.numero)
+        numero = _exigir_finalizavel(payload.numero)
         pasta = _pasta_estado()
         if fin.ja_finalizado(pasta, numero):
             raise DomainConflictError(f"{numero} já foi finalizado no SoftExpert.")

@@ -146,8 +146,13 @@ class PaginaEndpoint:
             return Caixas(self)
         if "_searchButton" in seletor:
             return LupaPesquisa(self)
+        if "server-update" in seletor:
+            return Mock()
         href = seletor.split('href="')[1].rstrip('"]')
         return Elemento(self, lambda: self._abrir_detalhe(href))
+
+    def add_locator_handler(self, *_args, **_kwargs):
+        pass
 
     def get_by_role(self, _papel, name):
         nome = next(n for n in ("Sistema", "Usuários") if name.match(n))

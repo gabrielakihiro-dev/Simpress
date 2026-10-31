@@ -23,11 +23,6 @@
     iniciarPesquisaCompleta(query, "");
   }
 
-  // Lists the whole Simpress base filtered to the equipment with no user (neither Endpoint nor manual).
-  function abrirEquipamentosSemUsuario() {
-    iniciarPesquisaCompleta("", "sem");
-  }
-
   function iniciarPesquisaCompleta(query, usuario) {
     const requestId = pesquisaCompletaState.requestId + 1;
     pesquisaCompletaState = { query, categoria: "", cidade: "", usuario, offset: 0, total: 0, loading: false, requestId };
@@ -220,7 +215,7 @@
   }
 
   return {
-    abrirPesquisaCompleta, abrirEquipamentosSemUsuario, alterarFiltrosPesquisaCompleta, limparFiltrosPesquisaCompleta,
+    abrirPesquisaCompleta, alterarFiltrosPesquisaCompleta, limparFiltrosPesquisaCompleta,
     carregarMaisResultadosPesquisa, fecharModalPesquisaCompleta,
   };
 });

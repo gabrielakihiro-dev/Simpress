@@ -340,6 +340,32 @@ class LoginAbasTests(unittest.TestCase):
             automacao.exportar_endpoint(MagicMock())
         self.assertIs(aguardar.call_args.kwargs["entrar"], automacao.endpoint_entrar)
 
+    def test_exportar_endpoint_watches_the_hotfix_notice(self):
+        with (
+            patch.object(automacao, "nova_aba") as aba,
+            patch.object(automacao, "endpoint_vigiar_avisos") as vigiar,
+            patch.object(automacao, "aguardar_login", side_effect=automacao.RotinaErro("parou")),
+            self.assertRaises(automacao.RotinaErro),
+        ):
+            automacao.exportar_endpoint(MagicMock())
+        vigiar.assert_called_once_with(aba.return_value)
+
+    def test_endpoint_vigiar_avisos_clicks_do_it_later_through_a_locator_handler(self):
+        page = MagicMock()
+        automacao.endpoint_vigiar_avisos(page)
+        aviso, fechar = page.add_locator_handler.call_args.args
+        fechar(aviso)
+        aviso.get_by_text.return_value.first.click.assert_called_once()
+
+    def test_endpoint_vigiar_avisos_falls_back_to_the_close_button(self):
+        page = MagicMock()
+        automacao.endpoint_vigiar_avisos(page)
+        aviso, fechar = page.add_locator_handler.call_args.args
+        aviso.get_by_text.return_value.first.click.side_effect = RuntimeError("sem botão")
+        fechar(aviso)
+        aviso.hover.assert_called_once()
+        aviso.locator.return_value.filter.return_value.first.click.assert_called_once()
+
     def test_endpoint_ignores_pages_that_are_not_the_login_screen(self):
         page, clicar, _ = self._pagina_endpoint()
         page.url = "https://centralendpoint.pr.sebrae.com.br/webclient#/uems/inventory/computers"

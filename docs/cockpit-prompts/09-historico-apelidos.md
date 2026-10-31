@@ -2,6 +2,8 @@
 
 Cole este prompt no agente de código com o repositório Simpress aberto.
 
+> **Desvio aprovado pelo usuário (31/10/2026):** o modal `#modal-historico-apelidos` e o handler `abrirModalHistoricoApelidos` foram removidos. O painel F8 absorveu filtros, **Somente com ação disponível**, **Limpar filtros** e as ações **Restaurar anterior**, **Excluir aviso** e **Restaurar e excluir**; o botão da Home abre o painel. A regra 6 abaixo deixou de valer; a paginação do modal também saiu (a lista rola).
+
 ## Objetivo
 
 Criar o painel `Histórico de apelidos` no grupo Ferramentas dos nove pontos, com atalho `F7`, seguindo o mesmo molde das outras ferramentas: KPIs, filtros, tabela densa e detalhe lateral. O modal atual continua disponível nos controles que já o abrem.

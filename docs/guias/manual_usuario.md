@@ -47,7 +47,7 @@ O Simpress é um site que roda **somente no seu computador** (Windows). Os dados
 | Inventário Simpress (`EquipamentosDetalhes`) | enviado pela tela (seção 4) | Busca, transferência, exportação |
 | Inventário do Endpoint (`InvAllComputersSummary`) | enviado pela tela (seção 4) | Hostname e comparação |
 | `(MODELO) - TRANSFERENCIA SIMPRESS.xlsx` | `data/planilhas_entrada` (já vem no projeto) | Gerar transferência |
-| `EquipamentosDetalhes-exportacao.xlsx` | pasta `modelos` | Botão **Exportar Excel** |
+| `EquipamentosDetalhes-exportacao.xlsx` | pasta `modelos` | Botão **Exportar Excel** (aba **Comparação**) |
 
 Sem algum desses arquivos o sistema abre normalmente; só as funções que dependem dele ficam indisponíveis.
 
@@ -70,7 +70,7 @@ Menu lateral:
 - **Home** — pesquisa de equipamentos.
 - **Transporte** — formulário de retirada e entrega (geração da planilha de transferência).
 - **Nova transferência** — limpa o formulário para começar outra.
-- **Ferramentas:** **Chamados**, **Atualizar planilhas**, **Exportar Excel** e, em **Históricos e Análises**, **Histórico de alterações** e **Catálogo de unidades**. No Catálogo, **Nova unidade** abre o formulário no próprio painel; para corrigir um CNPJ, clique no lápis ao lado dele, altere o campo e salve (atualizado em 31/10/2026).
+- **Ferramentas:** **Comparação** (F7), **Histórico de apelidos** (F8), **Relatório mensal** (F9), **Catálogo de unidades** e, em telas menores, **Chamados** (F5) e **OS** (F6), que nas telas largas ficam na barra superior. **Atualizar planilhas** não está mais no menu: abra pela aba **Comparação › Nova comparação**, pelo botão **Importar** da Home ou pelo alerta **Atualizar base**. **Exportar Excel** agora fica na barra da aba **Comparação**. No Catálogo, **Nova unidade** abre o formulário no próprio painel; para corrigir um CNPJ, clique no lápis ao lado dele, altere o campo e salve (atualizado em 31/10/2026). O **Histórico de apelidos** (F8) é o histórico completo de alterações: busque, filtre por tipo, marque **Somente com ação disponível**, use **Limpar filtros** e, no detalhe do registro, **Restaurar anterior**, **Excluir aviso** ou **Restaurar e excluir**. A janela antiga **Histórico de alterações** não existe mais.
 
 Para pesquisar: na **Home**, digite série, apelido/hostname, modelo, cidade ou nome do usuário e pressione `Enter` (ou clique em **Buscar Equipamento**). A lista rápida mostra até 15 resultados; **Mostrar mais** abre a pesquisa completa, com filtros de categoria (**Notebooks**, **MacBooks**, **Monitores**, **Fones**) e cidade.
 
@@ -83,7 +83,7 @@ A base oficial de equipamentos é o `EquipamentosDetalhes` mais recente que voc�
 **Passos pela tela (recomendado)**
 
 1. Tenha em mãos os dois arquivos: o `.xlsx` do **Endpoint** (`InvAllComputersSummary`) e o `.xlsx` ou `.zip` da **Simpress** (`EquipamentosDetalhes`, exportação completa de 50 colunas).
-2. Clique em **Atualizar planilhas** no menu lateral.
+2. Abra **Comparação** (menu **Ferramentas**, F7) e clique em **Nova comparação** (ou use **Importar** na Home) para abrir **Atualizar planilhas**.
 3. Em **1. Endpoint**, clique em **Escolher arquivo** e selecione o `.xlsx` do Endpoint.
 4. Em **2. Simpress**, clique em **Escolher arquivo** e selecione o ZIP (ou `.xlsx`) da Simpress.
 5. Clique em **Pré-visualizar impacto**. Confira as contagens de séries novas, removidas e duplicadas. A prévia vale por 10 minutos; se passar disso ou os arquivos mudarem, refaça.
@@ -125,7 +125,7 @@ O resultado traz, entre outras seções:
 
 **Comparar duas atualizações:** a tela **Evolução das atualizações** foi removida em 31/10/2026. A comparação de cada atualização fica em **Comparação** (menu **Ferramentas**); o aviso **Divergências novas** (Home e sino) traz o botão **Ver evolução**, que abre **Comparação**.
 
-**Exportar Excel** (menu lateral) é outra coisa: baixa o modelo de exportação com `Apelido` e `IdCliente` atualizados. Se ele só conseguir exportar parte das séries, a notificação diz o motivo.
+**Exportar Excel** (barra da aba **Comparação**, ao lado de **Exportar**) é outra coisa: baixa o modelo de exportação com `Apelido` e `IdCliente` atualizados. Se ele só conseguir exportar parte das séries, a notificação diz o motivo.
 
 ## 6. Gerar uma transferência
 
@@ -148,7 +148,7 @@ Esta rotina relaciona o Excel **Acompanhamento de Pedidos** (Simpress) com o Exc
 
 ### Opção A — pela tela
 
-1. Abra **Chamados** (aba superior, atalho `F5`), clique em **Importar e gerenciar** e, no bloco **Importação e versões** que se abre na própria tela, use os dois campos de arquivo.
+1. Abra **OS** (aba superior, atalho `F6`), clique em **Importar e gerenciar** e, no bloco **Importação e versões** que se abre na própria tela, use os dois campos de arquivo.
 2. Em **Simpress · Acompanhamento de Pedidos**, clique em **Escolher arquivo** e selecione o `.xlsx` (ou ZIP com uma única planilha `.xlsx`).
 3. Em **Oracle · Gestão de Solicitações**, clique em **Escolher arquivo** e selecione o `.xlsx`.
 4. Clique em **Importar planilhas** (até 60 MB por arquivo).
@@ -183,7 +183,7 @@ Esta rotina relaciona o Excel **Acompanhamento de Pedidos** (Simpress) com o Exc
 
 - O lote sumiu de `pendentes` e apareceu em `data/state/entrada_chamados/processadas/<nome-do-lote>/`.
 - O arquivo `_resultado.json` desse lote contém `"status": "concluido"`.
-- Em **Chamados**, o bloco **Importação e versões** passa a listar uma nova versão. Séries com OS diferentes entre as duas fontes ficam marcadas para conferência.
+- Em **OS**, o bloco **Importação e versões** passa a listar uma nova versão. Séries com OS diferentes entre as duas fontes ficam marcadas para conferência.
 
 **Se der errado:** o lote vai para `falhas`, com o motivo em `_resultado.json`. Nada é apagado. Corrija a causa e crie um lote com **outro nome**; um lote já registrado não é importado de novo.
 
@@ -230,7 +230,7 @@ Antes de cada atualização (seção 4) o sistema guarda uma cópia dos dois inv
 ### 3. Aparece "Base ainda não importada", a busca não acha nada ou mostra dados antigos
 
 - **Causa:** a base ainda não foi enviada, ou um arquivo foi trocado à mão na pasta.
-- **Solução:** faça a seção 4 pela tela **Atualizar planilhas**. Se você substituiu arquivos manualmente em `data/planilhas_entrada`, **reinicie o servidor** (Ctrl+C e rode o `.bat`).
+- **Solução:** faça a seção 4 pela tela **Atualizar planilhas** (aba **Comparação › Nova comparação**). Se você substituiu arquivos manualmente em `data/planilhas_entrada`, **reinicie o servidor** (Ctrl+C e rode o `.bat`).
 - **Verificação:** o contador do cabeçalho mostra o total esperado e a série buscada aparece.
 
 ### 4. A planilha é recusada ao atualizar ("arquivo inválido", cabeçalhos ausentes, aba ambígua)
