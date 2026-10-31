@@ -1191,6 +1191,21 @@ def _normaliza_quebras(texto: str) -> str:
     return texto.replace("\r\n", "\n").replace("\r", "\n").strip()
 
 
+def _marcar_caixa(caixa: "Locator", marcado: bool) -> None:
+    """Marca/desmarca o checkbox; ``set_checked`` age no próprio input e nunca passa por ``clicar`` (o rótulo contém "Enviar")."""
+    try:
+        caixa.set_checked(marcado, timeout=3000)
+    except Exception:
+        # Checkbox estilizado: um <span> sobre o input intercepta o ponteiro. O clique forçado cai no span
+        # (parte do controle) e ``set_checked`` ainda confere o estado final.
+        try:
+            caixa.set_checked(marcado, force=True, timeout=5000)
+        except Exception:
+            caixa.evaluate("(e, m) => { if (e.checked !== m) e.click(); }", marcado)
+            if caixa.is_checked() != marcado:
+                raise SoftExpertErro("Não consegui marcar 'Enviar Detalhes por e-mail ao solicitante'.")
+
+
 def _preencher_atendimento(page: "Page", descricao: str, enviar_email: bool) -> None:
     _definir_selecao(page, ROTULO_CATEGORIA, CATEGORIA_SOLUCAO, "categoria")
     _aguardar_estavel(page)  # a lista de soluções depende da categoria
@@ -1198,8 +1213,7 @@ def _preencher_atendimento(page: "Page", descricao: str, enviar_email: bool) -> 
     _, detalhes, _tipo = _achar_controle(page, ROTULO_DETALHES, "detalhes")
     detalhes.fill(descricao, timeout=5000)
     _, caixa, _tipo = _achar_controle(page, ROTULO_EMAIL, "email", quer="checkbox")
-    # set_checked age no próprio input: o rótulo contém "Enviar" e nunca passa por ``clicar``.
-    caixa.set_checked(enviar_email, timeout=5000)
+    _marcar_caixa(caixa, enviar_email)
     for frame in _frames(page):  # a equipe fica mais abaixo na tela
         try:
             secao = frame.get_by_text(ROTULO_SECAO_EQUIPE, exact=True).filter(visible=True)
