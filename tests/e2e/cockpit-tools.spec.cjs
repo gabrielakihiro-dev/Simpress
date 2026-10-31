@@ -50,20 +50,23 @@ test("closing a tool returns keyboard focus to its visible trigger", async ({ pa
   await expect(page.locator(naBarra ? "#btn-acompanhamento-chamados" : "#cockpit-tools-trigger")).toBeFocused();
 });
 
-test("comparison fields stay in columns and survive an empty history refresh", async ({ page }) => {
+test("comparison tab shows the full result and survives an empty history refresh", async ({ page }) => {
   await mockComparison(page);
   await page.goto("/");
   await openTool(page, "#btn-cockpit-comparacao");
-  const row = page.locator(".cockpit-comparison-row").first();
+  const result = page.locator("#comparacao-planilhas-conteudo");
+  // Tabela no desktop e card no mobile: só a variante visível conta.
+  const row = result.locator('[data-comparison-category="divergencias_local"][data-comparison-serial="LENTO"]:visible').first();
   await expect(row).toContainText("LENTO");
-  const cells = await row.locator(":scope > *").evaluateAll(nodes => nodes.map(node => node.getBoundingClientRect().y));
-  // Compacto (< 768px): a linha vira card e os campos empilham; a partir de 768px ficam em colunas.
-  if (page.viewportSize().width >= 768) expect(Math.max(...cells) - Math.min(...cells)).toBeLessThan(5);
-  else expect(Math.max(...cells)).toBeGreaterThan(Math.min(...cells));
+  await expect(result).toContainText("Localidade divergente");
+  await expect(result.locator("[data-history-filter-bar]")).toBeVisible();
+  await expect(page.locator("#btn-exportar-resultado-comparacao")).toBeEnabled();
+  await expect(page.locator("#comparacao-planilhas-fontes")).toBeVisible();
   await page.route("**/api/historico-comparacoes", route => route.fulfill({ json: { eventos: [] } }));
   await page.locator("#cockpit-comparison-refresh").click();
-  await expect(page.locator("#cockpit-comparison-export")).toBeDisabled();
-  await expect(page.locator("#cockpit-comparison-list")).not.toContainText("LENTO");
+  await expect(page.locator("#btn-exportar-resultado-comparacao")).toBeDisabled();
+  await expect(result).not.toContainText("LENTO");
+  await expect(page.locator("#comparacao-planilhas-fontes")).toBeHidden();
 });
 
 test("each tool is accessible in both themes and remains reachable below 1200px", async ({ page }, testInfo) => {
@@ -135,9 +138,10 @@ test("comparison skips restoration and synchronized-note entries and uses the En
   await page.goto("/");
   await openTool(page, "#btn-cockpit-comparacao");
   await expect(page.locator("#cockpit-comparison-event")).toHaveValue(comparison.id);
-  await expect(page.locator("#cockpit-comparison-kpis")).toContainText("Correspondentes");
-  await expect(page.locator("#cockpit-comparison-list")).toContainText("usuario.endpoint");
-  await expect(page.locator("#cockpit-comparison-export")).toHaveText("Exportar comparações do dia");
+  // O resultado completo (cartões de resumo + tabelas) vem de renderizarResultadoComparacao, só do evento real.
+  const result = page.locator("#comparacao-planilhas-conteudo");
+  await expect(result.locator('[data-comparison-category="ausentes_em_detalhes"][data-comparison-serial="SN-ENDPOINT"]:visible').first()).toContainText("Curitiba");
+  await expect(page.getByRole("button", { name: "Exportar este resultado para Excel" })).toBeEnabled();
 });
 
 test("a failed comparison switch cannot export the previously displayed event", async ({ page }) => {
@@ -150,14 +154,16 @@ test("a failed comparison switch cannot export the previously displayed event", 
   });
   await page.goto("/");
   await openTool(page, "#btn-cockpit-comparacao");
-  await expect(page.locator("#cockpit-comparison-export")).toBeEnabled();
+  await expect(page.locator("#btn-exportar-resultado-comparacao")).toBeEnabled();
+  await expect(page.locator("#comparacao-planilhas-conteudo")).toContainText("LENTO");
   await page.locator("#cockpit-comparison-event").selectOption("failed");
-  await expect(page.locator("#cockpit-comparison-export")).toBeDisabled();
-  await expect(page.locator("#cockpit-comparison-list")).not.toContainText("LENTO");
+  await expect(page.locator("#btn-exportar-resultado-comparacao")).toBeDisabled();
+  await expect(page.locator("#comparacao-planilhas-conteudo")).not.toContainText("LENTO");
   await expect.poll(() => typeof release).toBe("function");
   release();
   await expect(page.locator("#cockpit-comparison-status")).toContainText("Não foi possível abrir a versão.");
-  await expect(page.locator("#cockpit-comparison-export")).toBeDisabled();
+  await expect(page.locator("#btn-exportar-resultado-comparacao")).toBeDisabled();
+  await expect(page.locator("#comparacao-planilhas-conteudo")).not.toContainText("LENTO");
 });
 
 

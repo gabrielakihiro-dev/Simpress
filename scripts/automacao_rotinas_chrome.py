@@ -1560,7 +1560,7 @@ def pasta_dashboard_logada(page: "Page") -> bool:
 def pasta_dashboard_entrar(page: "Page") -> bool:
     if "microsoftonline" not in page.url.lower():
         return False
-    entrar_microsoft(page, "Dashboard", EMAIL_DASHBOARD, concluido=pasta_dashboard_logada)
+    entrar_microsoft(page, "Dashboard", EMAIL_SOFTEXPERT, concluido=pasta_dashboard_logada)
     return True
 
 

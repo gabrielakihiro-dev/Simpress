@@ -24,7 +24,6 @@
     somente_oracle: "Só Oracle", sem_os: "Sem OS",
   };
   const relationTones = { conferida: "success", divergente: "error", somente_simpress: "warning", somente_oracle: "warning" };
-  const comparisonTones = { Localidade: "error", Usuário: "warning", "Só Simpress": "error", "Só Endpoint": "error", Igual: "success" };
   let eventsBound = false;
   let activeTool = "";
   let previousTool = "";
@@ -46,8 +45,6 @@
   let comparisonEvents = [];
   let selectedComparisonId = "";
   let selectedComparison = null;
-  let selectedComparisonFilter = "todos";
-  let selectedComparisonRowKey = "";
   let aliasEvents = [];
   let selectedAliasId = "";
   let selectedAliasPeriod = "todos";
@@ -58,7 +55,8 @@
   let comparisonDetailRequest = 0;
   let aliasRequest = 0;
   let skipLinkHref = null;
-  let pendingComparisonFocus = "";
+  let pendingComparisonTarget = null;
+  let pendingFreshComparison = null;
   const HIGHLIGHT_MS = 1500;
 
   function normalize(value) {
@@ -88,20 +86,6 @@
       soSimpress: Array.isArray(comparison.ausentes_no_endpoint) ? uniqueComparisonCount(comparison.ausentes_no_endpoint) : null,
       soEndpoint: Array.isArray(comparison.ausentes_em_detalhes) ? uniqueComparisonCount(comparison.ausentes_em_detalhes) : null,
     };
-  }
-
-  function comparisonRows(event, filter = "todos") {
-    const comparison = event?.comparacao || {};
-    const categories = [
-      ["ausentes_no_endpoint", "Só Simpress"],
-      ["ausentes_em_detalhes", "Só Endpoint"],
-      ["divergencias_local", "Localidade"],
-      ["divergencias_usuario", "Usuário"],
-    ];
-    let index = 0;
-    return categories.flatMap(([key, category]) => (Array.isArray(comparison[key]) ? comparison[key] : [])
-      .map(row => ({ ...row, categoria: category, cockpitKey: `${category}:${index++}` }))
-      .filter(row => filter === "todos" || filter === category));
   }
 
   function uniqueComparisonCount(rows) {
@@ -329,11 +313,6 @@
     if (mounted) await panels.atualizarTabelaOs(true);
   }
 
-  const comparisonCategories = [
-    ["divergencias_local", "Localidade"], ["divergencias_usuario", "Usuário"],
-    ["ausentes_no_endpoint", "Só Simpress"], ["ausentes_em_detalhes", "Só Endpoint"],
-  ];
-
   function destacarLinhaCockpit(element) {
     if (!element?.isConnected) return;
     element.scrollIntoView({ block: "center", behavior: window.matchMedia?.("(prefers-reduced-motion: reduce)").matches ? "auto" : "smooth" });
@@ -341,135 +320,25 @@
     setTimeout(() => element.classList.remove("ck-linha-destaque"), HIGHLIGHT_MS);
   }
 
-  // Série do Endpoint (MacBook) vem sem o "S" inicial que EquipamentosDetalhes tem; só vale se o resultado for único.
-  function matchComparisonRows(rows, serial) {
-    const wanted = String(serial || "").trim().toUpperCase();
-    if (!wanted) return [];
-    const serialOf = row => String(row?.serie || "").trim().toUpperCase();
-    const exact = rows.filter(row => serialOf(row) === wanted);
-    if (exact.length) return exact;
-    const equivalent = rows.filter(row => {
-      const other = serialOf(row);
-      return other && (other === `S${wanted}` || `S${other}` === wanted);
-    });
-    return new Set(equivalent.map(serialOf)).size === 1 ? equivalent : [];
-  }
-
-  function applyPendingComparisonFocus(event) {
-    const serial = pendingComparisonFocus;
-    if (!serial) return;
-    const rows = comparisonRows(event);
-    const matches = matchComparisonRows(rows, serial);
-    // Prioridade igual à Home: Localidade e Só Simpress são as divergências listadas lá.
-    const order = ["Localidade", "Só Simpress", "Usuário", "Só Endpoint"];
-    const row = order.map(category => matches.find(item => item.categoria === category)).find(Boolean);
-    selectedComparisonFilter = row ? row.categoria : "todos";
-    selectedComparisonRowKey = row ? row.cockpitKey : "";
-  }
-
-  function highlightPendingComparisonRow() {
-    if (!pendingComparisonFocus) return;
-    pendingComparisonFocus = "";
-    const key = selectedComparisonRowKey;
-    if (!key) return;
-    const button = [...document.querySelectorAll("#cockpit-comparison-list .cockpit-comparison-row")]
-      .find(item => item.dataset.rowKey === key);
-    destacarLinhaCockpit(button?.closest(".ck-ferr-item") || button);
-  }
-
+  // Serial-only target: navegarParaLinhaComparacao finds the row in the rendered result (S-prefix rule included).
   async function abrirComparacaoDaSerie(serial) {
-    pendingComparisonFocus = String(serial || "").trim();
+    const value = String(serial || "").trim();
+    pendingComparisonTarget = value ? { serial: value } : null;
     selectedComparisonId = "";
     await openPanel("comparacao");
-    pendingComparisonFocus = "";
+    pendingComparisonTarget = null;
   }
 
-  function renderComparisonKpis(event) {
-    const metrics = comparisonMetrics(event);
-    const equalPercent = Number.isFinite(metrics.iguais) && Number.isFinite(metrics.simpress) && metrics.simpress > 0
-      && metrics.iguais <= metrics.simpress
-      ? `${new Intl.NumberFormat("pt-BR", { maximumFractionDigits: 1 }).format((metrics.iguais / metrics.simpress) * 100)}% com correspondência na Simpress`
-      : "Percentual indisponível";
-    renderKpis(byId("cockpit-comparison-kpis"), [
-      ["Simpress", metrics.simpress], ["Endpoint Central", metrics.endpoint], ["Correspondentes", metrics.iguais, equalPercent],
-      ["Divergentes", `L ${displayCount(metrics.divergenciaLocal)} · U ${displayCount(metrics.divergenciaUsuario)}`, "Localidade · Usuário"],
-      ["Sem correspondência", `S ${displayCount(metrics.soSimpress)} · E ${displayCount(metrics.soEndpoint)}`, "Só Simpress · Só Endpoint"],
-    ]);
-  }
-
-  function renderComparisonFilters(event) {
-    const target = byId("cockpit-comparison-filters");
-    const rows = comparisonRows(event);
-    const available = comparisonCategories.filter(([, label]) => rows.some(row => row.categoria === label));
-    if (!available.some(([, label]) => label === selectedComparisonFilter)) selectedComparisonFilter = "todos";
-    const filters = [["todos", "Todos", uniqueComparisonCount(rows)], ...available.map(([, label]) => {
-      const categoryRows = rows.filter(row => row.categoria === label);
-      return [label, label, uniqueComparisonCount(categoryRows)];
-    })];
-    target.replaceChildren(...filters.map(([value, label, count]) => {
-      const button = element("button", "ck-pilula");
-      button.type = "button";
-      button.setAttribute("aria-pressed", String(selectedComparisonFilter === value));
-      button.append(document.createTextNode(`${label} `), element("span", "", displayCount(count)));
-      button.addEventListener("click", () => {
-        selectedComparisonFilter = value;
-        selectedComparisonRowKey = "";
-        renderComparisonFilters(selectedComparison);
-        renderComparisonList();
-        renderComparisonDetail(selectedComparison);
-        updateComparisonStatus();
-      });
-      return button;
-    }));
-  }
-
-  function comparisonRowSummary(row) {
-    const fields = [row.computador, row.modelo, row.local_detalhes || row.local_previsto,
-      row.usuario_detalhes || row.usuario_endpoint].filter(Boolean);
-    return fields.join(" · ") || "Detalhes adicionais indisponíveis";
-  }
-
-  function renderComparisonList() {
-    const target = byId("cockpit-comparison-list");
-    const rows = comparisonRows(selectedComparison, selectedComparisonFilter);
-    if (!selectedComparison) return renderEmpty(target, "Selecione uma comparação salva.");
-    if (!rows.length) return renderEmpty(target, "Não há registros nesta categoria da comparação.");
-    if (!rows.some(row => row.cockpitKey === selectedComparisonRowKey)) selectedComparisonRowKey = rows[0].cockpitKey;
-    const headings = element("div", "ck-ferr-colunas");
-    headings.setAttribute("role", "presentation");
-    ["Série", "Modelo", "Local · Simpress", "Local · Endpoint", "Usuário · Simpress", "Usuário · Endpoint", "Resultado"]
-      .forEach(label => headings.append(element("span", "", label)));
-    target.replaceChildren(headings, ...rows.map(row => {
-      const wrapper = element("div", "ck-ferr-item");
-      wrapper.setAttribute("role", "listitem");
-      const button = element("button", "ck-item ck-ferr-botao cockpit-comparison-row");
-      button.type = "button";
-      button.dataset.rowKey = row.cockpitKey;
-      button.setAttribute("aria-pressed", String(row.cockpitKey === selectedComparisonRowKey));
-      const simpressMissing = row.categoria === "Só Endpoint";
-      const endpointMissing = row.categoria === "Só Simpress";
-      const values = [
-        row.serie || "Série indisponível", row.modelo || "—",
-        simpressMissing ? "Não encontrado" : row.local_detalhes || "—",
-        endpointMissing ? "Não encontrado" : row.local_previsto || "—",
-        simpressMissing ? "Não encontrado" : row.usuario_detalhes || "—",
-        endpointMissing ? "Não encontrado" : row.usuario_endpoint || row.usuario || "—",
-        row.categoria,
-      ];
-      values.forEach((value, index) => {
-        const cell = index === 6 ? badge(value, comparisonTones[row.categoria]) : element(index === 0 ? "strong" : "span", index === 0 ? "ck-item__serie" : "", value);
-        cell.setAttribute("aria-label", `${["Série", "Modelo", "Local · Simpress", "Local · Endpoint", "Usuário · Simpress", "Usuário · Endpoint", "Resultado"][index]}: ${value}`);
-        button.append(cell);
-      });
-      button.setAttribute("aria-label", values.join(" · "));
-      button.addEventListener("click", () => {
-        selectedComparisonRowKey = row.cockpitKey;
-        renderComparisonList();
-        renderComparisonDetail(selectedComparison);
-      });
-      wrapper.append(button);
-      return wrapper;
-    }));
+  // Shows a result in the Comparação tab. With evento_id that event is selected; a fresh result (no evento_id)
+  // is rendered at once and then replaced by the newest saved event, since annotations need evento_id.
+  async function mostrarResultadoNaAbaComparacao(comparison, navigationTarget = null) {
+    const eventId = String(comparison?.evento_id || "");
+    pendingComparisonTarget = navigationTarget;
+    pendingFreshComparison = eventId ? null : comparison;
+    selectedComparisonId = eventId;
+    await openPanel("comparacao");
+    pendingComparisonTarget = null;
+    pendingFreshComparison = null;
   }
 
   async function openSerialInHome(serial) {
@@ -479,70 +348,6 @@
     closePanel(false);
     app.ativarAbaTransferencia("home");
     await app.buscarSerial();
-  }
-
-  function renderComparisonDetail(event) {
-    const target = byId("cockpit-comparison-detail");
-    renderComparisonKpis(event);
-    if (!event) {
-      byId("cockpit-comparison-export").disabled = true;
-      return renderEmpty(target, "Selecione uma comparação salva.");
-    }
-    byId("cockpit-comparison-export").textContent = "Exportar comparações do dia";
-    byId("cockpit-comparison-export").title = "Inclui todas as atualizações da data desta comparação.";
-    byId("cockpit-comparison-export").disabled = !/^\d{4}-\d{2}-\d{2}$/.test(String(event.horario || "").slice(0, 10))
-      || typeof app.exportarResultadoComparacaoPlanilhas !== "function";
-    const rows = comparisonRows(event, selectedComparisonFilter);
-    const row = rows.find(item => item.cockpitKey === selectedComparisonRowKey) || rows[0];
-    if (!row) return renderEmpty(target, "Selecione um registro da comparação.");
-    selectedComparisonRowKey = row.cockpitKey;
-    target.replaceChildren(element("h2", "ck-det__serie", row.serie || "Série indisponível"));
-    target.append(element("p", "ck-det__sub", `${row.modelo || "Modelo indisponível"} · ${row.categoria}`));
-    const matrix = element("div", "ck-ferr-matriz");
-    matrix.setAttribute("role", "table");
-    matrix.setAttribute("aria-label", "Diferenças entre Simpress e Endpoint Central");
-    const headerRow = element("div", "ck-ferr-matriz__linha");
-    headerRow.setAttribute("role", "row");
-    ["Campo", "Simpress", "Endpoint Central"].forEach(label => {
-      const header = element("strong", "ck-comparar__cab", label);
-      header.setAttribute("role", "columnheader");
-      headerRow.append(header);
-    });
-    matrix.append(headerRow);
-    const simpressMissing = row.categoria === "Só Endpoint";
-    const endpointMissing = row.categoria === "Só Simpress";
-    const compareFields = [
-      ["Local", simpressMissing ? "Não encontrado" : row.local_detalhes || "—", endpointMissing ? "Não encontrado" : row.local_previsto || "—", row.categoria === "Localidade"],
-      ["Usuário", simpressMissing ? "Não encontrado" : row.usuario_detalhes || "—", endpointMissing ? "Não encontrado" : row.usuario_endpoint || row.usuario || "—", row.categoria === "Usuário"],
-    ];
-    compareFields.forEach(([label, simpressValue, endpointValue, divergent]) => {
-      const row = element("div", "ck-ferr-matriz__linha");
-      row.setAttribute("role", "row");
-      const field = element("span", "ck-comparar__campo", label);
-      field.setAttribute("role", "rowheader");
-      const simpressCell = element("span", "ck-comparar__valor", simpressValue);
-      const endpointCell = element("span", "ck-comparar__valor", endpointValue);
-      if (divergent || simpressMissing) simpressCell.dataset.status = "erro";
-      if (divergent || endpointMissing) endpointCell.dataset.status = "erro";
-      simpressCell.setAttribute("role", "cell");
-      endpointCell.setAttribute("role", "cell");
-      row.append(field, simpressCell, endpointCell);
-      matrix.append(row);
-    });
-    target.append(matrix);
-    renderDetailsInto(target, [["Hostname", row.computador || "—"], ["Comparado em", event.horario || "Data indisponível"]]);
-    const actions = element("div", "ck-det__rodape");
-    const openHome = element("button", "ck-btn ck-btn--secundario ck-btn--sm", "Abrir na Home");
-    openHome.type = "button";
-    openHome.addEventListener("click", () => { void openSerialInHome(row.serie); });
-    actions.append(openHome);
-    if (event.id && typeof app.abrirResultadoHistoricoComparacao === "function") {
-      const complete = element("button", "ck-btn ck-btn--primario ck-btn--sm", "Abrir comparação completa");
-      complete.type = "button";
-      complete.addEventListener("click", () => app.abrirResultadoHistoricoComparacao(event.id, "", complete));
-      actions.append(complete);
-    }
-    target.append(actions);
   }
 
   function renderDetailsInto(target, entries) {
@@ -568,8 +373,7 @@
       status.textContent = `${comparisonEvents.length} ${comparisonEvents.length === 1 ? "registro" : "registros"} no histórico local`;
       return;
     }
-    const count = uniqueComparisonCount(comparisonRows(selectedComparison, selectedComparisonFilter));
-    status.textContent = `${count} ${count === 1 ? "registro" : "registros"} nesta categoria · ${selectedComparison.tipo || "comparação local"} · ${selectedComparison.horario || "data indisponível"}`;
+    status.textContent = `${selectedComparison.tipo || "comparação local"} · ${selectedComparison.horario || "data indisponível"}`;
   }
 
   function openNewComparison() {
@@ -595,39 +399,46 @@
     }
   }
 
-  async function loadComparisonDetail(eventId) {
+  function comparisonFromEvent(event) {
+    return {
+      ...(event.comparacao || {}),
+      evento_id: event.id,
+      horario_comparacao: event.horario || event.comparacao?.horario_comparacao,
+      historico_salvo: true,
+      contexto_historico: true,
+    };
+  }
+
+  // Empties the result area (and the export button) while a result loads or is unavailable.
+  function clearComparisonResult(message) {
+    byId("comparacao-planilhas-fontes").textContent = "";
+    const exportButton = byId("btn-exportar-resultado-comparacao");
+    exportButton.dataset.historyDate = "";
+    exportButton.disabled = true;
+    renderEmpty(byId("comparacao-planilhas-conteudo"), message);
+  }
+
+  // keepContent: a freshly generated result is already on screen; this load only swaps in the saved event (it has evento_id).
+  async function loadComparisonDetail(eventId, { keepContent = false } = {}) {
     const request = ++comparisonDetailRequest;
-    const target = byId("cockpit-comparison-detail");
     selectedComparison = null;
-    renderComparisonKpis(null);
-    renderComparisonFilters(null);
-    byId("cockpit-comparison-export").disabled = true;
-    renderEmpty(byId("cockpit-comparison-list"), "Carregando comparação…");
     if (!eventId) {
-      selectedComparison = null;
-      renderComparisonKpis(null);
-      renderComparisonFilters(null);
-      renderComparisonList();
-      updateComparisonStatus();
-      return renderEmpty(target, "Não há comparação de inventários disponível neste histórico.");
+      if (!keepContent) clearComparisonResult("Não há comparação de inventários disponível neste histórico.");
+      return updateComparisonStatus();
     }
-    renderEmpty(target, "Carregando comparação…");
+    if (!keepContent) clearComparisonResult("Carregando comparação…");
     try {
       const data = await apiFetch(`/api/historico-comparacoes/${encodeURIComponent(eventId)}`, { errorMessage: "Não foi possível abrir esta comparação." });
       if (request !== comparisonDetailRequest || activeTool !== "comparacao") return;
       selectedComparison = data.evento || null;
-      selectedComparisonRowKey = "";
-      applyPendingComparisonFocus(selectedComparison);
-      renderComparisonKpis(selectedComparison);
-      renderComparisonFilters(selectedComparison);
-      renderComparisonList();
-      renderComparisonDetail(selectedComparison);
+      if (!selectedComparison) return clearComparisonResult("Comparação não encontrada.");
+      const target = pendingComparisonTarget;
+      pendingComparisonTarget = null;
+      app.renderizarResultadoComparacao(comparisonFromEvent(selectedComparison), target);
       updateComparisonStatus();
-      highlightPendingComparisonRow();
     } catch (error) {
       if (request !== comparisonDetailRequest || activeTool !== "comparacao") return;
-      renderError(target, error, "Não foi possível abrir a comparação.");
-      renderError(byId("cockpit-comparison-list"), error, "Não foi possível abrir a comparação.");
+      if (!keepContent) renderError(byId("comparacao-planilhas-conteudo"), error, "Não foi possível abrir a comparação.");
       byId("cockpit-comparison-status").textContent = error.message || "Não foi possível abrir a comparação.";
     }
   }
@@ -635,15 +446,14 @@
   async function loadComparisons() {
     const request = ++comparisonRequest;
     const status = byId("cockpit-comparison-status");
+    const fresh = pendingFreshComparison;
+    pendingFreshComparison = null;
     status.textContent = "Carregando histórico local…";
     comparisonDetailRequest += 1;
     selectedComparison = null;
-    byId("cockpit-comparison-export").disabled = true;
     byId("cockpit-comparison-event").disabled = true;
-    renderComparisonKpis(null);
-    renderComparisonFilters(null);
-    renderEmpty(byId("cockpit-comparison-list"), "Carregando histórico local…");
-    renderEmpty(byId("cockpit-comparison-detail"), "Carregando histórico local…");
+    if (fresh) app.renderizarResultadoComparacao(fresh, pendingComparisonTarget);
+    else clearComparisonResult("Carregando histórico local…");
     try {
       const data = await apiFetch("/api/historico-comparacoes", { errorMessage: "Não foi possível carregar o histórico de comparações." });
       if (request !== comparisonRequest || activeTool !== "comparacao") return;
@@ -653,11 +463,11 @@
         ? selectedComparisonId : String(comparisonEvents[0]?.id || "");
       status.textContent = `${comparisonEvents.length} ${comparisonEvents.length === 1 ? "registro" : "registros"}`;
       renderComparisonSelect();
-      await loadComparisonDetail(selectedComparisonId);
+      await loadComparisonDetail(selectedComparisonId, { keepContent: Boolean(fresh) });
     } catch (error) {
       if (request !== comparisonRequest || activeTool !== "comparacao") return;
       status.textContent = error.message || "Não foi possível carregar o histórico.";
-      renderError(byId("cockpit-comparison-list"), error, "Falha ao carregar o histórico.");
+      if (!fresh) renderError(byId("comparacao-planilhas-conteudo"), error, "Falha ao carregar o histórico.");
     }
   }
 
@@ -1546,7 +1356,6 @@
     byId("cockpit-tickets-manage").addEventListener("click", () => app.abrirAcompanhamentoChamados(true));
     byId("cockpit-comparison-refresh").addEventListener("click", loadComparisons);
     byId("cockpit-comparison-new").addEventListener("click", openNewComparison);
-    byId("cockpit-comparison-export").addEventListener("click", () => { void exportSelectedComparison(); });
     byId("cockpit-comparison-event").addEventListener("change", event => {
       selectedComparisonId = String(event.currentTarget.value || "");
       void loadComparisonDetail(selectedComparisonId);
@@ -1680,8 +1489,8 @@
     destacarLinhaCockpit,
     fecharPainelCockpit: goBack,
     filterTicketRecords,
+    mostrarResultadoNaAbaComparacao,
     comparisonMetrics,
-    comparisonRows,
     aliasMetrics,
     monthlyPreviewText,
     monthlyChartBars,

@@ -25,6 +25,7 @@ from core.errors import DomainError
 from domains.assistant_anexos import AnexoStore
 from domains.assistant_api import SimpressApi
 from domains.assistant_busca_web import BuscaWeb
+from domains.assistant_conversas import ConversasStore, novo_id
 from domains.assistant_instrucoes import montar_prompt
 from domains.assistant_lgpd import Mascara, limpar_texto_sensivel
 from domains.assistant_notas import NotasStore
@@ -146,9 +147,13 @@ class AssistantConversation:
         busca_web: Callable[[], bool] = lambda: False,
         relogio: Callable[[], float] = time.monotonic,
         agora: Callable[[], datetime] = datetime.now,
+        conversas: Optional[ConversasStore] = None,
     ) -> None:
         self._client = client
         self._notas = notas
+        self._conversas = conversas
+        self._conversa_id = novo_id()
+        self._texto_turno = ""  # masked user text of the turn in progress; saved with its answer, so a failed call leaves no trace
         self._instrucoes = instrucoes
         self._api = api
         self.modelo = modelo
@@ -207,6 +212,7 @@ class AssistantConversation:
             self._aparar_historico()
             checkpoint = len(self._mensagens)
             conteudo: Any = self._mascara.ocultar_conhecidos(limpar_texto_sensivel(texto_usuario))
+            self._texto_turno = conteudo
             imagens = self.anexos.imagens_novas()
             if imagens:
                 # Images leave the computer unmasked, and only because the user attached them; each goes once.
@@ -249,6 +255,8 @@ class AssistantConversation:
             self._mensagens = [{"role": "system", "content": SYSTEM_PROMPT}]
             self._mascara.limpar()
             self._pendente = None
+            self._texto_turno = ""
+            self._conversa_id = novo_id()
             self.anexos.limpar()
             self.relatorios.limpar()
 
@@ -346,8 +354,22 @@ class AssistantConversation:
     def _final(self, bruto: str, ferramentas: List[str]) -> Resposta:
         bruto = bruto or "Não obtive resposta do modelo."
         # The history goes back to the model, so it keeps the masked text; only the screen gets real values.
-        self._mensagens.append({"role": "assistant", "content": self._mascara.ocultar_conhecidos(limpar_texto_sensivel(bruto))})
+        mascarado = self._mascara.ocultar_conhecidos(limpar_texto_sensivel(bruto))
+        self._mensagens.append({"role": "assistant", "content": mascarado})
+        self._guardar_turno(mascarado)
         return Resposta(texto=self._mascara.restaurar(bruto), ferramentas=ferramentas)
+
+    def _guardar_turno(self, resposta_mascarada: str) -> None:
+        """Save the user text and the answer to the history file; a write failure never breaks the chat."""
+        if self._conversas is None:
+            return
+        try:
+            if self._texto_turno:
+                self._conversas.registrar(self._conversa_id, "usuario", self._texto_turno)
+                self._texto_turno = ""
+            self._conversas.registrar(self._conversa_id, "assistente", resposta_mascarada)
+        except Exception:
+            logger.exception("Falha ao gravar o histórico de conversas.")
 
     def _limite(self) -> Optional[str]:
         """The reason the turn may not query any more, or None."""
@@ -366,6 +388,7 @@ class AssistantConversation:
             "Pode faltar dado para uma resposta completa: pergunte de novo, de forma mais específica ou em partes."
         )
         self._mensagens.append({"role": "assistant", "content": texto})
+        self._guardar_turno(self._mascara.ocultar_conhecidos(limpar_texto_sensivel(texto)))
         return Resposta(texto=texto, ferramentas=ferramentas)
 
     @staticmethod
