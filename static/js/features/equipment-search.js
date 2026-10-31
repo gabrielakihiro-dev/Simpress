@@ -157,7 +157,7 @@
           if (transferUtils.isCurrentQuery(
             autocompleteRequestGate, request.id, document.getElementById("input-serial").value, term
           )) {
-            renderAutocomplete(results.items, results.total, results.has_more);
+            renderAutocomplete(results.items, results.total, results.has_more, results.sugestao);
           }
         } else if (autocompleteRequestGate.isCurrent(request.id)) {
           app.showToast("Não foi possível consultar os equipamentos. Tente novamente.", "error");
@@ -246,7 +246,17 @@
     box.style.setProperty("--autocomplete-available-height", `${availableHeight}px`);
   }
 
-  function renderAutocomplete(items, total = items?.length || 0, hasMore = false) {
+  // "Você quis dizer": o servidor sugere o usuário mais próximo quando a busca não acha nada.
+  function aplicarSugestaoBusca(button) {
+    const suggestion = button?.dataset?.sugestao || "";
+    if (!suggestion) return;
+    const input = document.getElementById("input-serial");
+    input.value = suggestion;
+    input.focus();
+    handleSerialInput(suggestion);
+  }
+
+  function renderAutocomplete(items, total = items?.length || 0, hasMore = false, suggestion = "") {
     const box = document.getElementById("autocomplete-box");
     const list = document.getElementById("autocomplete-list");
     const emptyState = document.getElementById("autocomplete-empty-state");
@@ -265,6 +275,7 @@
             <svg class="ck-ico ck-ico--lg" aria-hidden="true" focusable="false"><use href="#i-search"></use></svg>
             <p class="ck-ac__vazio-titulo" role="status" aria-live="polite">Nenhum equipamento localizado</p>
             <p class="ck-ac__vazio-texto">Nenhum registro com o termo <strong class="ck-ac__vazio-termo">"${escapeHtml(currentQuery)}"</strong> foi encontrado no inventário do SEBRAE/PR.</p>
+            ${suggestion ? `<p class="ck-ac__vazio-sugestao">Você quis dizer <button type="button" class="ck-ac__vazio-sugestao-botao" data-on-click="aplicarSugestaoBusca" data-args='["$this"]' data-sugestao="${escapeHtml(suggestion)}">${escapeHtml(suggestion)}</button>?</p>` : ""}
             <button type="button" data-on-click="cadastrarNovoSerialPesquisado" class="ck-btn ck-btn--primario ck-btn--sm">
               <svg class="ck-ico ck-ico--sm" aria-hidden="true" focusable="false"><use href="#i-plus"></use></svg>
               <span>Cadastrar "${escapeHtml(currentQuery)}" como Novo Equipamento</span>
@@ -401,7 +412,7 @@
           if (searchRes.ok) {
             const searchResults = await searchRes.json();
             if (equipmentLookupRequestGate.isCurrent(request.id) && searchResults.total > 0) {
-              renderAutocomplete(searchResults.items, searchResults.total, searchResults.has_more);
+              renderAutocomplete(searchResults.items, searchResults.total, searchResults.has_more, searchResults.sugestao);
               void carregarListaHome({ query: serialInput.value.trim(), reset: true });
               return;
             }
@@ -916,7 +927,7 @@
   return {
     definirEquipamentoAtual, limparSelecaoEquipamento, invalidarBuscasEquipamento,
     invalidarDadosEquipamentoAposRestauracao, atualizarSelecaoAposSubstituirInventarios, handleSerialInput,
-    handleSerialKeydown, selecionarItemAutocomplete, fecharAutocomplete,
+    handleSerialKeydown, selecionarItemAutocomplete, aplicarSugestaoBusca, fecharAutocomplete,
     limparSerial, buscarSerial, exibirEquipamento, formatarLocalAtual, abrirPesquisaRecente, limparPesquisasRecentes,
     renderHomeList, highlightHomeListItem, filtrarListaHome, carregarMaisItensHome, carregarListaHome, inicializarListaHome,
   };

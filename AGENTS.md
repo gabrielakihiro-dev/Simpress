@@ -39,6 +39,7 @@ Ao exibir ou exportar o Histórico de Planilhas, disponibilize um campo de anota
 - A confirmação de exportação bem-sucedida usa o texto exato `Planilha Exportada com Sucesso!`, sem contagens ou explicações adicionais.
 - Os nomes visíveis das fontes são `No Endpoint` e `na Simpress`, respeitando as variações definidas em "Rótulos do Histórico de Planilhas".
 - Ao mudar um termo aprovado, propague-o para interface, validação e testes.
+- Pesquisa da Home sem resultado: o autocompletar mostra `Você quis dizer <usuário mais próximo>?` (campo `sugestao` de `/api/buscar-expandida`); só aparece se a sugestão achar equipamento e nada é gravado.
 
 ## Dados operacionais
 
