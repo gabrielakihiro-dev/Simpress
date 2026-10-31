@@ -205,6 +205,17 @@ def _describe_vincular_os(api: SimpressApi, args: Args) -> str:
         acao = f"Alterar o vínculo d{alvo}: chamado {atual.get('chamado')} → {novo}."
     return f"{acao} Só este vínculo é gravado; os demais vínculos de OS ficam como estão."
 
+def _describe_finalizar_softexpert(api: SimpressApi, args: Args) -> str:
+    alvo = api.chamado_para_finalizar(args.get("numero"), args.get("descricao"))
+    pdf = f" Anexa o PDF \"{alvo['pdf']}\" (enviado de verdade)." if alvo["pdf"] else " Sem PDF anexado."
+    return (
+        f"FINALIZAR {alvo['numero']} NO SOFTEXPERT. É irreversível. No Chrome de automação: Atendimento - Chamados TI, "
+        f"Infraestrutura / Rede e conectividade, equipe UTIC - N1, e-mail ao solicitante marcado (desmarcado se o solicitante for API SEBRAE).{pdf} "
+        f"Texto de \"Detalhes do Atendimento Realizado\": \"{alvo['descricao']}\". "
+        "Se der certo, grava data e hora na coluna R do Dashboard e substitui o arquivo no SharePoint."
+    )
+
+
 def _describe_contato_origem(api: SimpressApi, args: Args) -> str:
     # The card goes only to the screen (never to the model), so it shows the real values.
     _, mudancas = montar_contato_origem(api.contato_origem_atual(), args.get("contato"), args.get("email"), args.get("telefone"))
@@ -678,6 +689,13 @@ QUERY_TOOLS: List[Tool] = [
         lambda c, a: c.chamados_antigos_abertos_sebrae(),
     ),
     _read(
+        "situacao_finalizacao_sebrae",
+        "Situação da finalização no SoftExpert dos chamados antigos em aberto do Dashboard Sebrae: por chamado, se há descrição "
+        "salva, o PDF e o resultado; e o resultado da última rotina de finalização com o aviso do SharePoint. Use antes de "
+        "finalizar_chamado_softexpert e para 'deu certo a finalização?'. Só leitura.",
+        lambda c, a: c.situacao_finalizacao_sebrae(),
+    ),
+    _read(
         "explicar_divergencia",
         "Explica por que uma série (e, se informado, um hostname) aparece sem correspondência, com localidade divergente ou duplicada. "
         "O servidor cruza a Simpress, o Endpoint, o Entra e a última comparação do histórico e devolve `fontes`, "
@@ -863,8 +881,9 @@ CHANGE_TOOLS: List[Tool] = [
         "'inventarios' atualiza inventários (UX + Endpoint); 'os' exporta chamados e OS; 'ambas' roda OS e Inventários; "
         "'usuarios' verifica usuários logados; 'sebrae' sincroniza chamados Sebrae; 'dashboard' é o botão "
         "\"Baixar, importar e buscar\" (baixa o Dashboard do SharePoint, importa e busca os chamados novos do Sebrae). "
-        "'Atualizar Dashboard' (só gera o arquivo no computador) e 'Enviar ao SharePoint' (rotina enviar, "
-        "feita pelo usuário no botão) NÃO são rotinas desta ferramenta. O usuário confirma antes de rodar.",
+        "'Atualizar Dashboard' (só gera o arquivo no computador), 'Enviar ao SharePoint' (rotina enviar, "
+        "feita pelo usuário no botão) e a finalização em massa no SoftExpert NÃO são rotinas desta ferramenta "
+        "(um chamado só: finalizar_chamado_softexpert). O usuário confirma antes de rodar.",
         lambda c, a: c.executar_automacao(str(a.get("rotina", ""))),
         _describe_routine,
         {"rotina": {"type": "string", "enum": list(ROTINAS_VALIDAS), "description": "Rotina a executar."}},
@@ -890,6 +909,23 @@ CHANGE_TOOLS: List[Tool] = [
         ["fonte", "serie", "os", "chamado"],
         changes_data=True,
         describe=_describe_vincular_os,
+        describe_com_api=True,
+    ),
+    Tool(
+        "finalizar_chamado_softexpert",
+        "Finaliza UM chamado no SoftExpert (irreversível), igual ao botão \"Finalizar no SoftExpert\" da tela Chamados Sebrae. "
+        "Só chamado antigo em aberto do Dashboard importado; use situacao_finalizacao_sebrae antes. A descrição (\"Detalhes do "
+        "Atendimento Realizado\") vem das palavras do usuário ou da já salva no chamado; sem descrição, peça ao usuário, não invente. "
+        "Nome, e-mail e telefone ocultados no chat não podem ir na descrição. A finalização em massa continua só na tela "
+        "(\"Atualizar Dashboard\"). O usuário confirma antes.",
+        lambda c, a: c.finalizar_chamado_softexpert(a.get("numero"), a.get("descricao")),
+        {
+            "numero": {"type": "string", "pattern": "^UTIC-[0-9]{4}-[0-9]{1,24}$", "description": "Chamado, ex.: UTIC-2026-1253."},
+            "descricao": {"type": "string", "maxLength": 4000, "description": "Texto de Detalhes do Atendimento Realizado (opcional se já salvo no chamado)."},
+        },
+        ["numero"],
+        changes_data=True,
+        describe=_describe_finalizar_softexpert,
         describe_com_api=True,
     ),
     Tool(
@@ -1123,8 +1159,9 @@ GRUPOS_FERRAMENTAS: Dict[str, Tuple[str, Tuple[str, ...]]] = {
          "listar_vinculos_os", "vincular_os", "anotar_linha_do_tempo", "excluir_chamados_antigos"),
     ),
     "sebrae": (
-        r"\bsebrae|\bdashboard|sharepoint",
-        ("resumo_sebrae", "chamados_novos_sebrae", "proximo_passo_sebrae", "chamados_antigos_abertos_sebrae", "historico_sebrae"),
+        r"\bsebrae|\bdashboard|sharepoint|\bsoftexpert|\bfinaliz|\bencerr",
+        ("resumo_sebrae", "chamados_novos_sebrae", "proximo_passo_sebrae", "chamados_antigos_abertos_sebrae", "historico_sebrae",
+         "situacao_finalizacao_sebrae", "finalizar_chamado_softexpert"),
     ),
     "historico": (
         r"\bhistoric|\bcompar|\bplanilha|\batualizacao|\batualizacoes|\bevolu|\bperiodo|\bevento|\brestaur|\bdivergen|\banotac|\banot(?:e|ar)\b|\bdesfaz|\bdesfazer",

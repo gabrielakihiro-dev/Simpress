@@ -22,7 +22,7 @@ from core.config import MAX_ASSISTANT_ATTACHMENT_BYTES
 from domains.assistant_anexos import (
     MAX_ANEXOS, MAX_IMAGEM_BYTES, MSG_TIPO, PAGINA, Anexo, AnexoRecusado, AnexoStore, analisar, limpar_nome,
 )
-from domains.assistant_api import SimpressApi
+from domains.assistant_api import ROTINAS_VALIDAS, SimpressApi
 from domains.assistant_chat import (
     MAX_CARACTERES_RESPOSTA, MAX_CHAMADAS_CONSULTA, MAX_RODADAS, MSG_OCUPADO, MSG_SEM_CHAVE, SYSTEM_PROMPT, AssistantBusy, AssistantConversation,
 )
@@ -1324,6 +1324,96 @@ class OsLinkToolTests(unittest.TestCase):
             conversation, simpress = make_conversation(FakeModel(calls(call("vincular_os", **args)), text("ok")), LinksSimpress())
             self.assertIsNone(conversation.enviar_mensagem("vincule").pendente)
             self.assertEqual(simpress.writes(), [])
+
+
+class FinalizeSimpress(FakeSimpress):
+    """GET /api/sebrae/novos with open old tickets, the PUT of the description and the POST that fires `fechar`."""
+
+    def __init__(self, finalizacao_post: int = 202) -> None:
+        super().__init__()
+        self.finalizacao_post = finalizacao_post
+        self.abertos = [
+            {"numero": "UTIC-2026-1253", "titulo": "Notebook lento", "softexpert": {"descricao_finalizacao": "", "pdf": None, "finalizacao": None}},
+            {"numero": "UTIC-2026-1254", "titulo": "Sem rede", "softexpert": {
+                "descricao_finalizacao": "Cabo trocado", "pdf": {"nome": "laudo.pdf", "tamanho": 10}, "finalizacao": None}},
+            {"numero": "UTIC-2026-1255", "titulo": "Já feito", "softexpert": {
+                "descricao_finalizacao": "ok", "pdf": None, "finalizacao": {"status": "ok", "em": "x", "encerrado_em": "30/10/2026 22:13"}}},
+        ]
+
+    def __call__(self, method: str, path: str, params: Optional[Dict[str, Any]], body: Optional[Dict[str, Any]]) -> Tuple[int, Any]:
+        if path == "/api/sebrae/novos":
+            self.calls.append((method, path, params, body))
+            return 200, {"importado": {"arquivo": "d.xlsx", "abertos": self.abertos}}
+        if path == "/api/sebrae/finalizar-softexpert":
+            self.calls.append((method, path, params, body))
+            if method == "GET":
+                return 200, {"em_andamento": False, "resultado": {"resultados": [{"numero": "UTIC-2026-1253", "status": "ok"}]}, "sharepoint": None}
+            return (202, {"iniciado": True}) if self.finalizacao_post == 202 else (409, {"detail": "ocupado"})
+        if path.endswith("/finalizacao"):
+            self.calls.append((method, path, params, body))
+            return 200, {"numero": path.split("/")[-2]}
+        return super().__call__(method, path, params, body)
+
+
+class FinalizeSoftExpertToolTests(unittest.TestCase):
+    def test_card_shows_the_exact_text_and_nothing_is_sent_before_confirming(self) -> None:
+        model = FakeModel(calls(call("finalizar_chamado_softexpert", numero="UTIC-2026-1253", descricao="Notebook verificado")), text("disparado"))
+        conversation, simpress = make_conversation(model, FinalizeSimpress())
+        reply = conversation.enviar_mensagem("finalize o UTIC-2026-1253 com a mensagem Notebook verificado")
+        descricao = reply.pendente["descricao"]  # type: ignore[index]
+        for trecho in ("UTIC-2026-1253", "irreversível", "\"Notebook verificado\"", "UTIC - N1", "API SEBRAE", "Sem PDF", "coluna R"):
+            self.assertIn(trecho, descricao)
+        self.assertEqual(simpress.writes(), [])
+
+    def test_confirming_saves_the_text_then_fires_the_routine_with_confirmado(self) -> None:
+        model = FakeModel(calls(call("finalizar_chamado_softexpert", numero="utic-2026-1253", descricao="Notebook verificado")), text("ok"))
+        conversation, simpress = make_conversation(model, FinalizeSimpress())
+        conversation.enviar_mensagem("finalize")
+        conversation.resolver_confirmacao(True)
+        self.assertEqual(simpress.writes(), [
+            ("PUT", "/api/sebrae/chamados/UTIC-2026-1253/finalizacao"), ("POST", "/api/sebrae/finalizar-softexpert"),
+        ])
+        self.assertEqual(simpress.calls[-1][3], {"numero": "UTIC-2026-1253", "confirmado": True})
+        self.assertEqual([c for c in simpress.calls if c[0] == "PUT"][0][3], {"descricao_finalizacao": "Notebook verificado"})
+
+    def test_saved_description_and_pdf_are_used_without_a_new_put(self) -> None:
+        model = FakeModel(calls(call("finalizar_chamado_softexpert", numero="UTIC-2026-1254")), text("ok"))
+        conversation, simpress = make_conversation(model, FinalizeSimpress())
+        descricao = conversation.enviar_mensagem("finalize o 1254").pendente["descricao"]  # type: ignore[index]
+        self.assertIn("\"Cabo trocado\"", descricao)
+        self.assertIn("laudo.pdf", descricao)
+        conversation.resolver_confirmacao(True)
+        self.assertEqual(simpress.writes(), [("POST", "/api/sebrae/finalizar-softexpert")])
+
+    def test_cases_that_must_never_reach_a_card(self) -> None:
+        for args in (
+            {"numero": "UTIC-2026-1253"},  # no description anywhere
+            {"numero": "UTIC-2026-9999", "descricao": "x"},  # not an open old ticket
+            {"numero": "UTIC-2026-1255"},  # already finalized
+            {"numero": "UTIC-2026-1253", "descricao": "Mande para [E-MAIL OCULTADO]"},  # masked data never goes to SoftExpert
+            {"numero": "UTIC-2026-1253", "descricao": "x" * 4001},
+            {"numero": "1253", "descricao": "x"},
+        ):
+            conversation, simpress = make_conversation(FakeModel(calls(call("finalizar_chamado_softexpert", **args)), text("ok")), FinalizeSimpress())
+            self.assertIsNone(conversation.enviar_mensagem("finalize").pendente, args)
+            self.assertEqual(simpress.writes(), [], args)
+
+    def test_conflict_from_the_server_is_reported_as_not_finalized(self) -> None:
+        api = SimpressApi(FinalizeSimpress(finalizacao_post=409))
+        resposta = api.finalizar_chamado_softexpert("UTIC-2026-1254")
+        self.assertFalse(resposta["sucesso"])
+        self.assertIn("Nada foi finalizado", resposta["erro"])
+
+    def test_state_tool_lists_only_utic_tickets_and_the_last_run(self) -> None:
+        dados = SimpressApi(FinalizeSimpress()).situacao_finalizacao_sebrae()
+        self.assertEqual([c["numero"] for c in dados["chamados"]], ["UTIC-2026-1253", "UTIC-2026-1254", "UTIC-2026-1255"])
+        self.assertEqual([c["tem_descricao"] for c in dados["chamados"]], [False, True, True])
+        self.assertEqual(dados["chamados"][1]["pdf"], "laudo.pdf")
+        self.assertEqual(dados["chamados"][2]["resultado_softexpert"], "ok")
+        self.assertEqual(dados["ultima_finalizacao"]["resultados"][0]["status"], "ok")
+
+    def test_mass_finalization_is_not_a_routine_of_the_assistant(self) -> None:
+        self.assertNotIn("fechar", ROTINAS_VALIDAS)
 
 
 class ContactSimpress(FakeSimpress):

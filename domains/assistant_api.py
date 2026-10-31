@@ -32,7 +32,8 @@ CALL_TIMEOUT_SECONDS = 30.0
 MAX_ANSWER_BYTES = 8 * 1024 * 1024
 
 ROTINAS_VALIDAS = ("login", "os", "inventarios", "ambas", "usuarios", "sebrae", "dashboard")
-DECISOES_VALIDAS = ("permitir", "recusar", "remover", "manter")
+MAX_DESCRICAO_FINALIZACAO = 4000  # same limit as domains.sebrae_finalizacao.MAX_DESCRICAO
+DECISOES_VALIDAS =("permitir", "recusar", "remover", "manter")
 
 # Limits keep the text returned to the model inside its context window.
 MAX_ITENS_LISTA = 20
@@ -1041,6 +1042,81 @@ class SimpressApi:
             "omitidos": max(0, len(itens) - MAX_ITENS_LISTA),
         })
 
+    def _abertos_sebrae(self) -> Tuple[Optional[List[Dict[str, Any]]], Any]:
+        """(open old tickets of the imported Dashboard, None) or (None, error text); [] when no Dashboard is imported."""
+        ok, dados = self._chamar("GET", "/api/sebrae/novos")
+        if not ok:
+            return None, dados
+        importado = _dict(dados).get("importado")
+        if not isinstance(importado, dict):
+            return [], None
+        return [a for a in importado.get("abertos") or [] if isinstance(a, dict)], None
+
+    def situacao_finalizacao_sebrae(self) -> Dict[str, Any]:
+        """Open tickets with a UTIC number: description saved, PDF and SoftExpert result; plus the last `fechar` run. Read only."""
+        abertos, erro = self._abertos_sebrae()
+        if abertos is None:
+            return {"erro": erro}
+        itens = []
+        for a in abertos:
+            numero = str(a.get("numero") or "")
+            if not re.fullmatch(r"UTIC-\d{4}-\d+", numero):
+                continue
+            se = _dict(a.get("softexpert"))
+            fin = _dict(se.get("finalizacao"))
+            itens.append({
+                "numero": numero,
+                "titulo": limpar_texto_sensivel(a.get("titulo"))[:MAX_TEXTO_CHAMADO],
+                "tem_descricao": bool(str(se.get("descricao_finalizacao") or "").strip()),
+                "pdf": _dict(se.get("pdf")).get("nome") or "",
+                "resultado_softexpert": str(fin.get("status") or ""),
+            })
+        ok, dados = self._chamar("GET", "/api/sebrae/finalizar-softexpert")
+        ultima: Dict[str, Any] = {}
+        if ok:
+            dados = _dict(dados)
+            resultado = _dict(dados.get("resultado"))
+            ultima = {
+                "em_andamento": bool(dados.get("em_andamento")),
+                "resultados": [
+                    {k: limpar_texto_sensivel(r.get(k)) for k in ("numero", "status", "mensagem", "motivo", "encerrado_em")}
+                    for r in resultado.get("resultados") or [] if isinstance(r, dict)
+                ][:MAX_ITENS_LISTA],
+                "aviso_sharepoint": _dict(dados.get("sharepoint")) or None,
+            }
+        return _aparar({
+            "chamados_abertos_com_utic": len(itens),
+            "chamados": itens[:MAX_ITENS_LISTA],
+            "omitidos": max(0, len(itens) - MAX_ITENS_LISTA),
+            "ultima_finalizacao": ultima,
+        })
+
+    def chamado_para_finalizar(self, numero: Any, descricao: Any = "") -> Dict[str, Any]:
+        """The data the card and the action use. ValueError (shown to the user) when the ticket cannot be finalized."""
+        numero = str(numero or "").strip().upper()
+        if not re.fullmatch(r"UTIC-\d{4}-\d+", numero):
+            raise ValueError("Informe o número do chamado no formato UTIC-AAAA-NNNN.")
+        abertos, erro = self._abertos_sebrae()
+        if abertos is None:
+            raise ValueError(str(erro))
+        item = next((a for a in abertos if str(a.get("numero") or "") == numero), None)
+        if item is None:
+            raise ValueError(f"{numero} não está entre os chamados antigos em aberto do Dashboard importado. Nada foi feito.")
+        se = _dict(item.get("softexpert"))
+        if _dict(se.get("finalizacao")).get("status") == "ok":
+            raise ValueError(f"{numero} já foi finalizado no SoftExpert. Nada foi feito.")
+        texto = str(descricao or "").strip() or str(se.get("descricao_finalizacao") or "").strip()
+        if not texto:
+            raise ValueError(f"Falta a descrição para finalizar {numero}: peça ao usuário o texto de \"Detalhes do Atendimento Realizado\".")
+        if len(texto) > MAX_DESCRICAO_FINALIZACAO:
+            raise ValueError(f"A descrição pode ter no máximo {MAX_DESCRICAO_FINALIZACAO} caracteres.")
+        if re.search(r"\[(?:PESSOA_\d+|E-MAIL OCULTADO|TELEFONE OCULTADO|DADO SENSÍVEL OMITIDO)\]", texto):
+            raise ValueError("A descrição tem dado ocultado pela privacidade (nome, e-mail ou telefone); peça ao usuário para escrevê-la no campo do chamado, na tela Chamados Sebrae.")
+        return {
+            "numero": numero, "descricao": texto, "nova": bool(str(descricao or "").strip()),
+            "pdf": str(_dict(se.get("pdf")).get("nome") or ""),
+        }
+
     def estado_usuarios_entra(self) -> Dict[str, Any]:
         return self._leitura("/api/usuarios-entra/estado")
 
@@ -1262,6 +1338,28 @@ class SimpressApi:
                 return {"sucesso": False, "erro": "Já existe uma automação em andamento. Aguarde o término ou cancele."}
             return {"sucesso": False, "erro": dados}
         return {"sucesso": True, "rotina": rotina_clean, "mensagem": f"Rotina '{rotina_clean}' disparada pelo servidor Simpress."}
+
+    def finalizar_chamado_softexpert(self, numero: Any, descricao: Any = "") -> Dict[str, Any]:
+        """Finalize ONE ticket in SoftExpert (irreversible), the same call as the site's button; only after the card is confirmed."""
+        try:
+            alvo = self.chamado_para_finalizar(numero, descricao)
+        except ValueError as falha:
+            return {"sucesso": False, "erro": str(falha)}
+        if alvo["nova"]:
+            ok, dados = self._chamar(
+                "PUT", f"/api/sebrae/chamados/{alvo['numero']}/finalizacao", corpo={"descricao_finalizacao": alvo["descricao"]},
+            )
+            if not ok:
+                return {"sucesso": False, "erro": dados, "mensagem": "A descrição não foi salva; nada foi finalizado."}
+        ok, dados = self._chamar("POST", "/api/sebrae/finalizar-softexpert", corpo={"numero": alvo["numero"], "confirmado": True})
+        if not ok:
+            if "Erro 409" in str(dados):
+                return {"sucesso": False, "erro": "Já existe uma automação em andamento, ou o chamado já foi finalizado. Nada foi finalizado agora."}
+            return {"sucesso": False, "erro": dados}
+        return {
+            "sucesso": True,
+            "mensagem": f"Finalização de {alvo['numero']} disparada no Chrome de automação. Use situacao_finalizacao_sebrae para ver o resultado.",
+        }
 
     def cancelar_automacao(self) -> Dict[str, Any]:
         return self._acao("/api/automacao/cancelar", None, "Cancelamento solicitado ao servidor Simpress.")
