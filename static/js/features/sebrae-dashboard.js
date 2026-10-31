@@ -79,9 +79,146 @@
     return formulario.map(item => linhaChamado(item, valores[item.numero] || {}));
   }
 
+  const MAX_DESCRICAO = 4000;
+  const NUMERO_UTIC = /^UTIC-\d{4}-\d+$/i;
+  const INTERVALO_FECHAR_MS = 1500;
+  const STATUS_DESFEITOS = Object.freeze(["ok"]); // nada mais a fazer no SoftExpert (ja_finalizado e nao_encontrado não bloqueiam: espelha ja_finalizado() do backend)
+  const ROTULOS_RESULTADO = Object.freeze({
+    ok: "Finalizado no SoftExpert", ja_finalizado: "Já estava finalizado no SoftExpert", erro: "Erro ao finalizar",
+    sem_descricao: "Sem descrição para finalizar", nao_encontrado: "Não encontrado na central de tarefas", pronto: "Formulário conferido; Finalizar não foi clicado",
+  });
+  const MOTIVOS_PULADO = Object.freeze({
+    sem_descricao: "sem descrição para finalizar", ja_finalizado: "já finalizado no SoftExpert", sem_numero: "sem número UTIC",
+  });
+
+  function formatarTamanho(bytes) {
+    const n = Number(bytes) || 0;
+    const num = (valor, un) => `${valor.toLocaleString("pt-BR", { maximumFractionDigits: 1 })} ${un}`;
+    if (n < 1024) return `${n} B`;
+    return n < 1024 * 1024 ? num(n / 1024, "KB") : num(n / (1024 * 1024), "MB");
+  }
+
+  function textoResultado(item) {
+    const base = ROTULOS_RESULTADO[item?.status] || "Sem resultado";
+    const extra = item?.status === "ok" && item.encerrado_em ? ` (encerrado em ${item.encerrado_em})` : "";
+    const mensagem = (item?.status === "erro" || item?.status === "nao_encontrado") && item.mensagem ? `: ${item.mensagem}` : "";
+    return `${base}${extra}${mensagem}`;
+  }
+
+  function textoPulado(pulado) {
+    return `${pulado?.numero}: não será finalizado no SoftExpert (${MOTIVOS_PULADO[pulado?.motivo] || pulado?.motivo || "motivo não informado"}).`;
+  }
+
+  /** Botão por chamado: precisa de descrição, nenhuma rotina rodando e o chamado ainda não finalizado. */
+  function podeFinalizar(descricao, finalizacao, emAndamento) {
+    return String(descricao || "").trim() !== "" && !emAndamento && !STATUS_DESFEITOS.includes(finalizacao?.status);
+  }
+
+  /** O que "Atualizar Dashboard" finalizaria de verdade: D virando FINALIZADO, número UTIC, com descrição, ainda não finalizado. */
+  function candidatosFinalizar(abertos, edicoes, soft) {
+    return payloadEdicoes(abertos, edicoes)
+      .filter(e => String(e.D || "").toUpperCase() === "FINALIZADO" && NUMERO_UTIC.test(e.numero))
+      .map(e => e.numero)
+      .filter(numero => podeFinalizar(soft?.[numero]?.descricao, soft?.[numero]?.finalizacao, false));
+  }
+
+  function resumoResultado(resultado) {
+    const lista = resultado?.resultados || [];
+    if (!lista.length) return resultado?.cancelado ? "Finalização cancelada." : "Finalização terminada sem resultado por chamado.";
+    const contar = status => lista.filter(r => r.status === status).length;
+    const partes = [
+      [contar("ok"), "finalizado(s)"], [contar("ja_finalizado"), "já finalizado(s)"], [contar("erro"), "com erro"],
+      [contar("nao_encontrado"), "não encontrado(s)"],
+      [contar("sem_descricao"), "sem descrição"], [contar("pronto"), "só conferido(s)"],
+    ].filter(([n]) => n > 0).map(([n, texto]) => `${n} ${texto}`);
+    return `${resultado.cancelado ? "Finalização cancelada" : "Finalização no SoftExpert terminada"}: ${partes.join(", ")}.`;
+  }
+
+  function resumoInicio(fechar) {
+    const pulados = fechar?.pulados || [];
+    if (fechar?.iniciado) {
+      const total = (fechar.numeros || []).length;
+      return `Finalizando ${total} chamado(s) no SoftExpert…${pulados.length ? ` ${pulados.length} pulado(s).` : ""}`;
+    }
+    const motivo = fechar?.motivo ? `Nenhum chamado foi finalizado no SoftExpert: ${fechar.motivo}` : "Nenhum chamado foi finalizado no SoftExpert.";
+    return pulados.length ? `${motivo} ${pulados.length} pulado(s).` : motivo;
+  }
+
+  // ---- Rascunho automático: o que o usuário seleciona fica no navegador, sem precisar de "Atualizar Dashboard" ----
+
+  const CHAVE_RASCUNHO = "simpress:sebrae-rascunho";
+  const NUMERO_RASCUNHO = /^(?:UTIC-\d{4}-\d+|linha:\d+)$/i; // também barra chaves como "__proto__" vindas do armazenamento
+
+  /** O rascunho vem do navegador: só números e letras conhecidos, textos curtos. */
+  function limparValoresRascunho(bruto) {
+    const saida = {};
+    if (!bruto || typeof bruto !== "object") return saida;
+    Object.entries(bruto).forEach(([numero, campos]) => {
+      if (!NUMERO_RASCUNHO.test(numero) || !campos || typeof campos !== "object") return;
+      const limpos = {};
+      ["A", "B", "D", "J", "R", "S"].forEach(letra => {
+        if (typeof campos[letra] === "string" && campos[letra].length <= 80) limpos[letra] = campos[letra];
+      });
+      if (Object.keys(limpos).length) saida[numero] = limpos;
+    });
+    return saida;
+  }
+
+  /** Rascunho salvo para ESTE Dashboard importado; outro arquivo importado, armazenamento indisponível ou texto corrompido dão rascunho vazio. */
+  function lerRascunho(armazenamento, importadoEm) {
+    const vazio = { valores: {}, edicoes: {}, salvoEm: "" };
+    if (!importadoEm) return vazio;
+    try {
+      const bruto = JSON.parse(armazenamento?.getItem(CHAVE_RASCUNHO) || "null");
+      if (!bruto || bruto.importado_em !== importadoEm) return vazio;
+      return { valores: limparValoresRascunho(bruto.valores), edicoes: limparValoresRascunho(bruto.edicoes), salvoEm: String(bruto.salvo_em || "") };
+    } catch (_erro) {
+      return vazio;
+    }
+  }
+
+  /** `true` só se gravou; sem armazenamento (janela privada, cota cheia) a tela segue funcionando sem rascunho. */
+  function gravarRascunho(armazenamento, importadoEm, valores, edicoes) {
+    if (!importadoEm || !armazenamento) return false;
+    try {
+      armazenamento.setItem(CHAVE_RASCUNHO, JSON.stringify({ importado_em: importadoEm, salvo_em: new Date().toISOString(), valores, edicoes }));
+      return true;
+    } catch (_erro) {
+      return false;
+    }
+  }
+
+  function apagarRascunho(armazenamento) {
+    try {
+      armazenamento?.removeItem(CHAVE_RASCUNHO);
+    } catch (_erro) {
+      // sem armazenamento não há rascunho a apagar
+    }
+  }
+
+  /** Só o que ainda vale: chamados novos que continuam no formulário e campos de antigos ainda vazios no Dashboard (D sempre pode ir a FINALIZADO). */
+  function aplicarRascunho(rascunho, formulario, abertos) {
+    const novos = new Set((formulario || []).map(item => item.numero));
+    const valores = {};
+    Object.entries(rascunho.valores).forEach(([numero, campos]) => { if (novos.has(numero)) valores[numero] = campos; });
+    const edicoes = {};
+    (abertos || []).forEach(item => {
+      const campos = rascunho.edicoes[item.numero];
+      if (!campos) return;
+      const livres = Object.fromEntries(Object.entries(campos).filter(([letra]) => letra === "D" || !String(item.valores?.[letra] || "").trim()));
+      if (Object.keys(livres).length) edicoes[item.numero] = livres;
+    });
+    return { valores, edicoes, restaurado: Object.keys(valores).length + Object.keys(edicoes).length > 0, salvoEm: rascunho.salvoEm };
+  }
+
   function createSebraeDashboard(context) {
     const { app, dom } = context;
-    const estado = { formulario: [], valores: {}, consulta: 0, listas: {}, abertos: [], edicoes: {}, atualizavel: false, importadoEm: "" };
+    const armazenamento = (() => { try { return window.localStorage || null; } catch (_erro) { return null; } })();
+    const estado = {
+      formulario: [], valores: {}, consulta: 0, listas: {}, abertos: [], edicoes: {}, atualizavel: false, importadoEm: "", descartar: false,
+      soft: {}, refs: new Map(), temporizadores: {}, salvando: {},
+      fechar: { emAndamento: false, mensagemInicio: "", numeros: [], pulados: [], resultado: null, sharepoint: null, token: 0 },
+    };
 
     const el = id => document.getElementById(id);
 
@@ -175,6 +312,7 @@
       const outra = avisoOutraPessoa(item);
       if (outra) artigo.appendChild(dom.createTextElement("p", "ck-campo__ajuda sebrae-chamado__aviso", outra));
       artigo.appendChild(manuais);
+      if (NUMERO_UTIC.test(item.numero)) artigo.appendChild(secaoFinalizar(item));
       return artigo;
     }
 
@@ -207,11 +345,384 @@
       return artigo;
     }
 
+    // ---- Finalizar no SoftExpert: descrição, PDF opcional, botão por chamado, resultado e aviso do SharePoint ----
+
+    const urlChamado = (numero, parte) => `/api/sebrae/chamados/${encodeURIComponent(numero)}/${parte}`;
+    const esperar = ms => new Promise(resolve => window.setTimeout(resolve, ms));
+
+    function definirFeedback(elemento, texto, situacao = "") {
+      if (!elemento) return;
+      elemento.textContent = texto;
+      elemento.dataset.estado = situacao;
+    }
+
+    function secaoFinalizar(item) {
+      const numero = item.numero;
+      const guardado = item.softexpert || {};
+      const soft = estado.soft[numero] = {
+        descricao: guardado.descricao_finalizacao || "", enviado: guardado.descricao_finalizacao || "",
+        pdf: guardado.pdf || null, finalizacao: guardado.finalizacao || null, processando: false,
+      };
+      const area = document.createElement("div");
+      area.className = "sebrae-chamado__finalizar";
+      const texto = document.createElement("textarea");
+      texto.className = "ck-entrada";
+      texto.rows = 4;
+      texto.maxLength = MAX_DESCRICAO;
+      texto.value = soft.descricao;
+      texto.dataset.sebraeDescricao = numero;
+      const feedbackDescricao = dom.createTextElement("p", "ck-campo__ajuda sebrae-chamado__feedback", `Salva automaticamente. Até ${MAX_DESCRICAO} caracteres.`);
+      feedbackDescricao.setAttribute("role", "status");
+      const arquivo = document.createElement("input");
+      arquivo.type = "file";
+      arquivo.accept = ".pdf,application/pdf";
+      arquivo.dataset.sebraePdf = numero;
+      const infoPdf = dom.createTextElement("p", "ck-campo__ajuda sebrae-chamado__pdf", "");
+      const remover = document.createElement("button");
+      remover.type = "button";
+      remover.className = "ck-btn ck-btn--fantasma ck-btn--sm";
+      remover.textContent = "Remover PDF";
+      remover.dataset.sebraePdfRemover = numero;
+      const feedbackPdf = dom.createTextElement("p", "ck-campo__ajuda sebrae-chamado__feedback", "");
+      feedbackPdf.setAttribute("role", "status");
+      const botao = document.createElement("button");
+      botao.type = "button";
+      botao.className = "ck-btn ck-btn--primario ck-btn--sm";
+      botao.textContent = "Finalizar no SoftExpert";
+      botao.dataset.sebraeFinalizar = numero;
+      const resultado = dom.createTextElement("p", "ck-cartao__meta sebrae-chamado__resultado", "");
+      resultado.setAttribute("role", "status");
+      const pdfLinha = document.createElement("div");
+      pdfLinha.className = "sebrae-chamado__pdf-linha";
+      pdfLinha.append(infoPdf, remover);
+      area.append(
+        campo("Descrição para Finalizar o Chamado", texto), feedbackDescricao,
+        campo("Anexo PDF (opcional)", arquivo), pdfLinha, feedbackPdf,
+        botao, resultado,
+      );
+      estado.refs.set(numero, { texto, feedbackDescricao, arquivo, infoPdf, remover, feedbackPdf, botao, resultado });
+      texto.addEventListener("input", () => {
+        window.clearTimeout(estado.temporizadores[numero]);
+        estado.temporizadores[numero] = window.setTimeout(() => salvarDescricao(numero), 800);
+        definirFeedback(feedbackDescricao, "Alteração ainda não salva…");
+        atualizarFinalizar(numero);
+      });
+      texto.addEventListener("change", () => salvarDescricao(numero));
+      arquivo.addEventListener("change", () => enviarPdf(numero));
+      remover.addEventListener("click", () => removerPdf(numero));
+      botao.addEventListener("click", () => finalizarNoSoftExpert(numero));
+      atualizarFinalizar(numero);
+      return area;
+    }
+
+    function atualizarFinalizar(numero) {
+      const ref = estado.refs.get(numero);
+      const soft = estado.soft[numero];
+      if (!ref || !soft) return;
+      ref.botao.disabled = !podeFinalizar(ref.texto.value, soft.finalizacao, estado.fechar.emAndamento);
+      ref.botao.title = ref.botao.disabled && !String(ref.texto.value).trim() ? "Preencha a descrição para finalizar o chamado." : "";
+      ref.infoPdf.textContent = soft.pdf ? `PDF anexado: ${soft.pdf.nome} (${formatarTamanho(soft.pdf.tamanho)})` : "Nenhum PDF anexado.";
+      ref.remover.hidden = !soft.pdf;
+      const quando = formatarDataHora(soft.finalizacao?.em);
+      ref.resultado.textContent = soft.processando ? "Finalizando no SoftExpert…"
+        : soft.finalizacao ? `${textoResultado(soft.finalizacao)}${quando ? ` · ${quando}` : ""}` : "";
+      ref.resultado.dataset.estado = soft.processando ? "andamento" : soft.finalizacao?.status || "";
+    }
+
+    function atualizarTodosFinalizar() {
+      estado.refs.forEach((_ref, numero) => atualizarFinalizar(numero));
+    }
+
+    /** Salvamentos do mesmo chamado entram em fila: o último texto digitado é o que fica no servidor. */
+    function salvarDescricao(numero) {
+      window.clearTimeout(estado.temporizadores[numero]);
+      const fila = (estado.salvando[numero] || Promise.resolve(true)).then(() => enviarDescricao(numero));
+      estado.salvando[numero] = fila;
+      return fila;
+    }
+
+    async function enviarDescricao(numero) {
+      const ref = estado.refs.get(numero);
+      const soft = estado.soft[numero];
+      if (!ref || !soft) return true;
+      const texto = ref.texto.value;
+      if (texto === soft.enviado) return true;
+      definirFeedback(ref.feedbackDescricao, "Salvando…");
+      try {
+        const dados = await app.apiFetch(urlChamado(numero, "finalizacao"), {
+          method: "PUT", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ descricao_finalizacao: texto }),
+          errorMessage: "Não foi possível salvar a descrição.",
+        });
+        soft.enviado = texto;
+        soft.descricao = dados.descricao_finalizacao ?? texto;
+        definirFeedback(ref.feedbackDescricao, "Descrição salva.", "ok");
+        return true;
+      } catch (error) {
+        definirFeedback(ref.feedbackDescricao, `Não foi possível salvar: ${error.message}`, "erro");
+        return false;
+      } finally {
+        atualizarFinalizar(numero);
+      }
+    }
+
+    async function enviarPdf(numero) {
+      const ref = estado.refs.get(numero);
+      const arquivo = ref?.arquivo.files?.[0];
+      if (!arquivo) return;
+      const corpo = new FormData();
+      corpo.append("file", arquivo);
+      definirFeedback(ref.feedbackPdf, "Enviando PDF…");
+      try {
+        const dados = await app.apiFetch(urlChamado(numero, "anexo"), { method: "POST", body: corpo, errorMessage: "Não foi possível enviar o PDF." });
+        estado.soft[numero].pdf = dados.pdf || null;
+        definirFeedback(ref.feedbackPdf, "PDF salvo.", "ok");
+      } catch (error) {
+        definirFeedback(ref.feedbackPdf, `PDF não salvo: ${error.message}`, "erro");
+      } finally {
+        ref.arquivo.value = "";
+        atualizarFinalizar(numero);
+      }
+    }
+
+    async function removerPdf(numero) {
+      const ref = estado.refs.get(numero);
+      if (!ref) return;
+      definirFeedback(ref.feedbackPdf, "Removendo PDF…");
+      try {
+        const dados = await app.apiFetch(urlChamado(numero, "anexo"), { method: "DELETE", errorMessage: "Não foi possível remover o PDF." });
+        estado.soft[numero].pdf = dados.pdf || null;
+        definirFeedback(ref.feedbackPdf, "PDF removido.", "ok");
+      } catch (error) {
+        definirFeedback(ref.feedbackPdf, `PDF não removido: ${error.message}`, "erro");
+      } finally {
+        atualizarFinalizar(numero);
+      }
+    }
+
+    async function finalizarNoSoftExpert(numero) {
+      const ref = estado.refs.get(numero);
+      const soft = estado.soft[numero];
+      if (!ref || ref.botao.disabled) return;
+      const confirmado = await app.confirmarAcao({
+        titulo: "Finalizar no SoftExpert",
+        mensagem: `Finalizar ${numero} no SoftExpert? Finalizar não tem volta: o chamado será encerrado no SoftExpert com a descrição informada`
+          + `${soft.pdf ? " e o PDF anexado será enviado" : ""}.`,
+        confirmar: "Confirmar finalização", cancelar: "Cancelar",
+      });
+      if (!confirmado) return;
+      ref.botao.disabled = true;
+      if (!(await salvarDescricao(numero))) {
+        app.showToast("Salve a descrição antes de finalizar.", "error");
+        atualizarFinalizar(numero);
+        return;
+      }
+      try {
+        await app.apiFetch("/api/sebrae/finalizar-softexpert", {
+          method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ numero, confirmado: true }),
+          errorMessage: "Não foi possível iniciar a finalização no SoftExpert.",
+        });
+      } catch (error) {
+        soft.finalizacao = { status: "erro", mensagem: error.message };
+        atualizarFinalizar(numero);
+        app.showToast(error.message, "error");
+        return;
+      }
+      acompanharFechar([numero]);
+    }
+
+    function renderizarFechar() {
+      const host = el("sebrae-fechar");
+      if (!host) return;
+      const f = estado.fechar;
+      const res = f.resultado;
+      const aoVivo = f.emAndamento && Boolean(res?.em_andamento);
+      const pulados = f.pulados.length ? f.pulados : res?.pulados || [];
+      let status = "";
+      if (f.emAndamento) status = `Finalizando no SoftExpert…${aoVivo && f.numeros.length ? ` ${(res.resultados || []).length} de ${f.numeros.length} concluído(s).` : ""}`;
+      else if (f.mensagemInicio) status = f.mensagemInicio;
+      else if (res) status = resumoResultado(res);
+      host.hidden = !status;
+      definirTexto("sebrae-fechar-status", status);
+      host.setAttribute("aria-busy", f.emAndamento ? "true" : "false");
+      const itens = [
+        ...(f.emAndamento && !aoVivo ? [] : (res?.resultados || []).map(r => ({ status: r.status, texto: `${r.numero}: ${textoResultado(r)}` }))),
+        ...pulados.map(p => ({ status: "pulado", texto: textoPulado(p) })),
+      ];
+      el("sebrae-fechar-lista")?.replaceChildren(...itens.map(item => {
+        const li = dom.createTextElement("li", "sebrae-fechar__item", item.texto);
+        li.dataset.status = item.status;
+        return li;
+      }));
+    }
+
+    function renderizarSharepoint() {
+      const host = el("sebrae-sharepoint-aviso");
+      if (!host) return;
+      const aviso = estado.fechar.sharepoint;
+      if (!aviso?.falhou) {
+        host.hidden = true;
+        host.replaceChildren();
+        return;
+      }
+      const botao = document.createElement("button");
+      botao.type = "button";
+      botao.className = "ck-btn ck-btn--secundario ck-btn--sm";
+      botao.id = "btn-sebrae-reenviar";
+      botao.textContent = "Tentar substituir de novo";
+      botao.disabled = estado.fechar.emAndamento;
+      botao.addEventListener("click", reenviarPendente);
+      const copiaCodigo = document.createElement("code");
+      copiaCodigo.textContent = aviso.copia_local || "—";
+      const copia = document.createElement("p");
+      copia.append("Cópia local pendente: ", copiaCodigo);
+      const sugestoes = document.createElement("ol");
+      (aviso.sugestoes || []).forEach(texto => sugestoes.appendChild(dom.createTextElement("li", "", texto)));
+      host.replaceChildren(
+        dom.createTextElement("strong", "", "O Dashboard não foi substituído no SharePoint."),
+        dom.createTextElement("p", "", `Motivo: ${aviso.motivo || "não informado"}.`),
+        copia,
+        dom.createTextElement("p", "", aviso.copia_sharepoint
+          ? "A cópia pendente também foi enviada à pasta DASHBOARD SEBRAE, com outro nome."
+          : "A cópia pendente não foi enviada ao SharePoint: ela está só neste computador."),
+        dom.createTextElement("p", "ck-campo__ajuda", "O que fazer:"),
+        sugestoes, botao,
+      );
+      host.hidden = false;
+    }
+
+    /** Aplica o que o GET trouxe: estado da rotina, resultado por chamado (também nos cartões) e aviso do SharePoint. */
+    function aplicarFechar(dados) {
+      const f = estado.fechar;
+      f.emAndamento = Boolean(dados?.em_andamento);
+      f.resultado = dados?.resultado || null;
+      f.sharepoint = dados?.sharepoint || null;
+      (f.resultado?.resultados || []).forEach(r => {
+        const soft = estado.soft[r.numero];
+        if (!soft) return;
+        soft.finalizacao = { status: r.status, em: r.em, encerrado_em: r.encerrado_em, mensagem: r.mensagem };
+        soft.processando = false;
+      });
+      if (!f.emAndamento) Object.values(estado.soft).forEach(soft => { soft.processando = false; });
+      renderizarFechar();
+      renderizarSharepoint();
+      atualizarTodosFinalizar();
+    }
+
+    /** Consulta a rotina até terminar; erros passageiros de rede não derrubam o acompanhamento. */
+    async function acompanharFechar(numeros) {
+      const f = estado.fechar;
+      const token = ++f.token;
+      const anterior = f.resultado?.iniciado_em;
+      f.emAndamento = true;
+      f.numeros = numeros;
+      numeros.forEach(numero => { if (estado.soft[numero]) estado.soft[numero].processando = true; });
+      renderizarFechar();
+      renderizarSharepoint();
+      atualizarTodosFinalizar();
+      let visto = false;
+      let esperas = 0;
+      let falhas = 0;
+      while (token === f.token) {
+        await esperar(INTERVALO_FECHAR_MS);
+        if (token !== f.token) return;
+        let dados;
+        try {
+          dados = await app.apiFetch("/api/sebrae/finalizar-softexpert", { errorMessage: "Não foi possível consultar a finalização." });
+          falhas = 0;
+        } catch (error) {
+          if (++falhas < 5) continue;
+          f.emAndamento = false;
+          f.mensagemInicio = `Não foi possível acompanhar a finalização: ${error.message}`;
+          Object.values(estado.soft).forEach(soft => { soft.processando = false; });
+          renderizarFechar();
+          atualizarTodosFinalizar();
+          return;
+        }
+        visto = visto || Boolean(dados.em_andamento);
+        const comecou = visto || dados.resultado?.iniciado_em !== anterior;
+        if (!dados.em_andamento && !comecou && ++esperas < 4) continue; // a rotina ainda não começou a responder
+        f.mensagemInicio = "";
+        aplicarFechar(dados);
+        if (!dados.em_andamento) return;
+      }
+    }
+
+    /** Uma consulta ao abrir a lista: pega rotina em andamento, o último resultado e o aviso do SharePoint. */
+    async function carregarFechar() {
+      try {
+        const acompanhando = estado.fechar.emAndamento;
+        const dados = await app.apiFetch("/api/sebrae/finalizar-softexpert", { errorMessage: "Não foi possível consultar a finalização." });
+        if (acompanhando) return; // o acompanhamento em curso já atualiza a tela
+        aplicarFechar(dados);
+        if (dados.em_andamento) acompanharFechar([]);
+      } catch (_erro) {
+        // Sem o resultado da rotina a tela segue funcionando; a próxima consulta traz o aviso de volta.
+      }
+    }
+
+    async function reenviarPendente() {
+      const botao = el("btn-sebrae-reenviar");
+      if (botao) botao.disabled = true;
+      try {
+        await app.apiFetch("/api/sebrae/dashboard/pendente/reenviar", { method: "POST", errorMessage: "Não foi possível reenviar a cópia pendente." });
+      } catch (error) {
+        if (botao) botao.disabled = false;
+        app.showToast(error.message, "error");
+        return;
+      }
+      acompanharFechar([]);
+    }
+
+    /** Lê o campo `fechar` do Atualizar; qualquer falha aqui só some com a informação, nunca estraga a atualização. */
+    function tratarFechar(fechar) {
+      try {
+        if (!fechar || typeof fechar !== "object") return;
+        const f = estado.fechar;
+        f.pulados = Array.isArray(fechar.pulados) ? fechar.pulados : [];
+        f.mensagemInicio = resumoInicio(fechar);
+        if (fechar.iniciado) acompanharFechar(Array.isArray(fechar.numeros) ? fechar.numeros : []);
+        else {
+          f.emAndamento = false;
+          renderizarFechar();
+        }
+      } catch (_erro) {
+        // O arquivo já foi baixado; a finalização pode ser acompanhada depois pelo botão de cada chamado.
+      }
+    }
+
     function aoEditar(event) {
       const { sebraeNumero, sebraeCampo, sebraeAlvo } = event.currentTarget.dataset;
       const guardados = valoresDe(sebraeAlvo);
       guardados[sebraeNumero] = { ...(guardados[sebraeNumero] || {}), [sebraeCampo]: event.currentTarget.value };
+      salvarRascunho();
       atualizarExportacao();
+    }
+
+    function mostrarRascunho(texto) {
+      definirTexto("sebrae-rascunho-status", texto);
+      const bloco = el("sebrae-rascunho");
+      if (bloco) bloco.hidden = !texto;
+    }
+
+    function salvarRascunho() {
+      if (!gravarRascunho(armazenamento, estado.importadoEm, estado.valores, estado.edicoes)) return;
+      mostrarRascunho(`Rascunho salvo automaticamente neste navegador às ${new Date().toLocaleTimeString("pt-BR")}.`);
+    }
+
+    /** Volta ao que o Dashboard importado traz: apaga o rascunho e refaz a tela (se a consulta falhar, nada muda). */
+    async function descartarRascunhoSebrae() {
+      const confirmado = await app.confirmarAcao({
+        titulo: "Descartar rascunho",
+        mensagem: "Descartar o que foi preenchido e ainda não passou por Atualizar Dashboard? Os campos voltam ao que o Dashboard importado traz.",
+        confirmar: "Descartar rascunho", cancelar: "Cancelar",
+      });
+      if (!confirmado) return;
+      estado.descartar = true;
+      try {
+        await carregarNovosSebrae();
+      } finally {
+        estado.descartar = false;
+      }
     }
 
     function atualizarExportacao() {
@@ -257,7 +768,18 @@
       estado.abertos = importado?.abertos || [];
       estado.atualizavel = Boolean(importado?.atualizavel);
       estado.importadoEm = importado?.importado_em || "";
-      estado.edicoes = {};
+      if (estado.descartar) {
+        apagarRascunho(armazenamento);
+        estado.valores = {};
+      }
+      const novos = dados.novos;
+      const rascunho = aplicarRascunho(lerRascunho(armazenamento, estado.importadoEm), novos?.formulario, estado.abertos);
+      estado.edicoes = rascunho.edicoes;
+      Object.entries(rascunho.valores).forEach(([numero, campos]) => { estado.valores[numero] = { ...campos, ...estado.valores[numero] }; });
+      const salvoEm = formatarDataHora(rascunho.salvoEm);
+      mostrarRascunho(estado.descartar ? "Rascunho descartado." : rascunho.restaurado ? `Rascunho restaurado${salvoEm ? ` (salvo em ${salvoEm})` : ""}. Passe por Atualizar Dashboard para gravar no arquivo.` : "");
+      estado.soft = {};
+      estado.refs.clear();
       el("sebrae-antigos-lista")?.replaceChildren(...estado.abertos.map(blocoAntigo));
       const painelAntigos = el("sebrae-antigos");
       if (painelAntigos) painelAntigos.hidden = !importado;
@@ -266,7 +788,6 @@
         : "Nenhum Dashboard importado.");
       // "Enviar ao SharePoint" só tem o que enviar depois de Atualizar; sem a saída, avisa já em vez de falhar no clique.
       if (importado && !importado.saida_pronta) definirTexto("sebrae-atualizar-status", "Gere o Dashboard atualizado antes de enviar ao SharePoint.");
-      const novos = dados.novos;
       estado.formulario = novos?.formulario || [];
       const lista = el("sebrae-novos-lista");
       lista?.replaceChildren(...estado.formulario.map(blocoChamado));
@@ -280,6 +801,7 @@
       }
       atualizarExportacao();
       app.carregarResumoHistoricoSebrae?.();
+      carregarFechar();
     }
 
     async function carregarNovosSebrae() {
@@ -380,8 +902,19 @@
       botao.disabled = true;
       botao.setAttribute("aria-busy", "true");
       try {
+        // Finalizar no SoftExpert não tem volta: quem marcou FINALIZADO com descrição confirma antes de qualquer envio.
+        await Promise.all(Object.keys(estado.soft).map(salvarDescricao));
+        const finalizar = candidatosFinalizar(estado.abertos, estado.edicoes, estado.soft);
+        // Cancelar e Esc (o diálogo resolve false) só atualizam o Dashboard: nunca finalizam.
+        const finalizarSoftExpert = finalizar.length > 0 && await app.confirmarAcao({
+          titulo: "Atualizar Dashboard e finalizar no SoftExpert",
+          mensagem: `${finalizar.length} chamado(s) marcado(s) como FINALIZADO (${finalizar.join(", ")}) podem ser finalizados no SoftExpert. `
+            + "Atualizar e finalizar: atualiza o Dashboard e finaliza no SoftExpert, o que não tem volta. "
+            + "Só atualizar: atualiza o Dashboard e NÃO finaliza nada no SoftExpert.",
+          confirmar: "Atualizar e finalizar", cancelar: "Só atualizar",
+        });
         const dados = await app.apiFetch("/api/sebrae/dashboard/atualizar", {
-          method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ chamados, edicoes }),
+          method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ chamados, edicoes, finalizar_softexpert: finalizarSoftExpert }),
           errorMessage: "Não foi possível atualizar o Dashboard.",
         });
         baixarArquivo(dados.arquivo, dados.conteudo_base64);
@@ -389,8 +922,10 @@
         const quando = formatarDataHora(dados.base?.importado_em);
         definirTexto("sebrae-atualizar-status",
           `Baixado "${dados.arquivo}": ${novos} novo(s) e ${dados.linhas.length - novos} alterado(s). `
-          + `Baseado no Dashboard importado${quando ? ` em ${quando}` : ""}. Para não perder edições de outras pessoas, importe a versão atual antes.`);
+          + `Baseado no Dashboard importado${quando ? ` em ${quando}` : ""}. Para não perder edições de outras pessoas, importe a versão atual antes.`
+          + (finalizar.length && !finalizarSoftExpert ? " Dashboard atualizado; nenhum chamado foi finalizado no SoftExpert." : ""));
         app.showToast("Dashboard atualizado. Use Enviar ao SharePoint para sobrepor o arquivo.", "success");
+        tratarFechar(dados.fechar);
       } catch (error) {
         definirTexto("sebrae-atualizar-status", error.message);
         app.showToast(error.message, "error");
@@ -411,9 +946,11 @@
       }
     }
 
-    return { carregarNovosSebrae, importarDashboardSebrae, exportarChamadosSebrae, atualizarDashboardSebrae, copiarBlocoSebrae };
+    return { carregarNovosSebrae, importarDashboardSebrae, exportarChamadosSebrae, atualizarDashboardSebrae, copiarBlocoSebrae, descartarRascunhoSebrae };
   }
 
-  createSebraeDashboard.puro = { formatarEncerramento, encerramentoParaCampo, chamadoPronto, payloadExportacao, payloadAtualizacao, payloadEdicoes, avisoOutraPessoa, tituloAntigo, totalPreenchimentos };
+  createSebraeDashboard.puro = { formatarEncerramento, encerramentoParaCampo, chamadoPronto, payloadExportacao, payloadAtualizacao, payloadEdicoes, avisoOutraPessoa, tituloAntigo, totalPreenchimentos,
+    formatarTamanho, textoResultado, textoPulado, podeFinalizar, candidatosFinalizar, resumoResultado, resumoInicio,
+    lerRascunho, gravarRascunho, apagarRascunho, aplicarRascunho };
   return createSebraeDashboard;
 })());

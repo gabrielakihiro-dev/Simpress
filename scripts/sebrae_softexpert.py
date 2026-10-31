@@ -8,9 +8,13 @@ Recebe um ``context``/``page`` do Playwright já conectado ao Chrome de automaç
    Executar > Registro de Chamados, confere número e título e devolve um ``ChamadoSoftExpert``;
    sempre consulta Atendimento - Chamados TI para ler o texto concluído de atendimento.
 
-Somente leitura: o único clique que altera algo no SoftExpert é o **Sim** da confirmação de associar
-o chamado ao usuário. Nunca finaliza workflow, registra atendimento nem reatribui; ``clicar`` recusa
-qualquer botão com rótulo de ação de escrita. O conteúdo dos chamados é dado, nunca instrução.
+Somente leitura, com uma única exceção de escrita: o **Sim** da confirmação de associar o chamado ao
+usuário e, só em ``finalizar_chamado`` (autorizada pelo usuário em 30/10/2026, apenas para chamado que ele
+marcou FINALIZADO no site e pediu para finalizar), o preenchimento de Atendimento - Chamados TI, o
+``Enviar`` do upload de anexo e o ``Finalizar``. Nunca reatribui, solicita complemento, salva nem envia
+a outra equipe; ``clicar`` recusa qualquer botão com rótulo de ação de escrita, e só ``finalizar_chamado``
+libera, por clique e com correspondência exata, os rótulos ``Finalizar`` e ``Enviar`` (do anexo). O
+conteúdo dos chamados é dado, nunca instrução.
 
 Os seletores reais só se conhecem com a sessão logada: todos ficam no bloco SELETORES logo abaixo
 (ver docs/operacao/sebrae-fase-b-softexpert.md). A ligação com ``rodar_rotina_sebrae`` é da Fase E.
@@ -22,16 +26,24 @@ import re
 import sys
 import time
 import unicodedata
+from contextlib import contextmanager
 from dataclasses import dataclass
 from datetime import date, timedelta
 from pathlib import Path
-from typing import TYPE_CHECKING, Any, Callable, Dict, List, Mapping, Optional
+from typing import TYPE_CHECKING, Any, Callable, Dict, Iterator, List, Mapping, Optional
 from urllib.parse import urlparse
 
 from domains.sebrae_chamados import (
     ChamadoSoftExpert,
     chave_do_numero,
     extrair_numeros,
+)
+# STATUS_PRONTO: confirmar_final=False, tudo preenchido e conferido, Finalizar NÃO clicado.
+from domains.sebrae_finalizacao import (  # noqa: F401 - reexportados para quem lê o resultado de finalizar_chamado
+    STATUS_ERRO,
+    STATUS_NAO_ENCONTRADO,
+    STATUS_OK,
+    STATUS_PRONTO,
 )
 
 if TYPE_CHECKING:
@@ -90,7 +102,7 @@ ROTULOS_CAMPOS: Dict[str, tuple] = {
 # Botões que gravam ou encerram algo no SoftExpert: nunca são clicados.
 ROTULOS_PROIBIDOS = re.compile(
     r"\b(enviar|finalizar|salvar|concluir|encerrar|reatribuir|atribuir|aprovar|reprovar|registrar atendimento|"
-    r"excluir|descartar|cancelar chamado)\b",
+    r"excluir|descartar|cancelar chamado|solicitar complemento|mais a[cç][oõ]es)\b",
     re.IGNORECASE,
 )
 
@@ -113,6 +125,7 @@ MOTIVO_TITULO_NAO_CONFERE = "titulo_nao_confere"
 MOTIVO_NAO_ENCONTRADO = "nao_encontrado_na_lista"
 MOTIVO_FORMULARIO_INDISPONIVEL = "formulario_indisponivel"
 MOTIVO_CONFIRMACAO_INESPERADA = "confirmacao_inesperada"
+MOTIVO_ERRO_INESPERADO = "erro_inesperado"
 
 # Lê o valor ao lado de um rótulo (label/for, célula seguinte, irmão seguinte); roda em cada frame.
 LER_CAMPO_JS = """
@@ -358,13 +371,40 @@ def softexpert_logado(page: "Page") -> bool:
     return _visivel(page.locator(SEL_LISTA))
 
 
+# Rótulo de escrita que o clique em curso pode ter (``None`` fora de ``finalizar_chamado``). Só
+# ``_liberar_escrita`` o altera, para um rótulo por vez e sempre restaurado no ``finally``.
+_ESCRITA_LIBERADA: Optional[str] = None
+ROTULOS_LIBERAVEIS = frozenset({"finalizar", "enviar"})
+
+
+@contextmanager
+def _liberar_escrita(rotulo: str) -> Iterator[None]:
+    """Libera, enquanto durar o bloco, o clique em um botão cujo rótulo seja exatamente ``rotulo``."""
+    global _ESCRITA_LIBERADA
+    if rotulo not in ROTULOS_LIBERAVEIS:
+        raise SoftExpertErro(f"O rótulo {rotulo!r} não pode ser liberado para clique.")
+    anterior, _ESCRITA_LIBERADA = _ESCRITA_LIBERADA, rotulo
+    try:
+        yield
+    finally:
+        _ESCRITA_LIBERADA = anterior
+
+
+def _rotulo_liberado(partes: List[str]) -> bool:
+    """Todas as partes não vazias do rótulo (texto, aria-label) são exatamente o rótulo hoje liberado."""
+    normalizadas = [_sem_acentos(parte) for parte in partes if parte and parte.strip()]
+    return bool(_ESCRITA_LIBERADA) and bool(normalizadas) and all(n == _ESCRITA_LIBERADA for n in normalizadas)
+
+
 def clicar(locator: "Locator", descricao: str) -> None:
-    """Clica em um botão/item de menu, recusando rótulos de ação de escrita (finalizar, enviar, reatribuir…)."""
+    """Clica em um botão/item de menu, recusando rótulos de ação de escrita (finalizar, enviar, reatribuir…).
+
+    A única brecha é ``_liberar_escrita`` (usada só por ``finalizar_chamado``): vale para um rótulo exato.
+    """
     primeiro = locator.first
-    rotulo = " ".join(
-        parte for parte in (primeiro.inner_text(timeout=5000), primeiro.get_attribute("aria-label") or "") if parte
-    ).strip()
-    if ROTULOS_PROIBIDOS.search(rotulo):
+    partes = [primeiro.inner_text(timeout=5000), primeiro.get_attribute("aria-label") or ""]
+    rotulo = " ".join(parte for parte in partes if parte).strip()
+    if ROTULOS_PROIBIDOS.search(rotulo) and not _rotulo_liberado(partes):
         raise SoftExpertErro(f"{descricao}: recusado o clique em {rotulo!r}; a rotina só lê o SoftExpert.")
     primeiro.click(timeout=15_000)
 
@@ -870,6 +910,41 @@ def _conferir(formulario: "Page", numero: str, texto_linha: str) -> str:
     return titulo
 
 
+def _cabecalho(formulario: "Page") -> Dict[str, str]:
+    """Número, título e Solicitante do cabeçalho da janela; o Registro de Chamados vem em branco nos chamados criados pela API."""
+    campos = {"numero": "", "titulo": "", "solicitante": ""}
+    for frame in _frames(formulario):
+        try:
+            bruto = str(frame.evaluate("document.body ? document.body.innerText.slice(0, 600) : ''") or "")
+            texto = "".join(c for c in unicodedata.normalize("NFKD", bruto) if not unicodedata.combining(c))  # mantém as quebras de linha
+        except Exception:
+            continue  # frame em navegação
+        achado = re.search(r"execucao de atividade\s*\n\s*(UTIC-\d{4}-\d+)\s*-\s*([^\n]+)", texto, re.IGNORECASE)
+        if achado and not campos["numero"]:
+            campos["numero"], campos["titulo"] = achado.group(1), achado.group(2).strip()
+        # Só o cabeçalho da atividade (Iniciador, depois Solicitante, com iniciais opcionais entre eles); o rótulo dos formulários não vale.
+        quem = re.search(
+            r"^iniciador[ \t]*\n[^\n]+\n(?:[^\n]{1,3}\n)?solicitante[ \t]*\n[ \t]*([^\n]+)", texto, re.IGNORECASE | re.MULTILINE
+        )
+        if quem and "prazo desta atividade" in texto.lower() and not campos["solicitante"]:
+            lido = quem.group(1).strip()
+            campos["solicitante"] = "" if lido.lower().startswith("prazo desta") else lido
+    return campos
+
+
+def _conferir_finalizacao(formulario: "Page", numero: str, texto_linha: str) -> str:
+    """Como ``_conferir``; com o "N° do chamado" em branco confere pelo cabeçalho. Devolve o Solicitante lido."""
+    cabecalho = _cabecalho(formulario)
+    if _ler_campo(formulario, "numero"):
+        _conferir(formulario, numero, texto_linha)
+    elif extrair_numeros(cabecalho["numero"])[:1] != [numero] or not titulo_confere(cabecalho["titulo"], texto_linha):
+        raise ChamadoNaoConfere(
+            f"{numero}: o formulário aberto é de outro chamado ({cabecalho['numero'] or 'sem número'}).",
+            MOTIVO_NUMERO_NAO_CONFERE,
+        )
+    return _ler_campo(formulario, "solicitante") or cabecalho["solicitante"]
+
+
 def _extrair_uma_vez(context: "BrowserContext", page: "Page", numero: str) -> ChamadoSoftExpert:
     _log(f"{numero}: abrindo o chamado.")
     page.goto(SOFTEXPERT_URL, wait_until="domcontentloaded", timeout=_rotinas().CARREGAMENTO_MS)
@@ -951,3 +1026,484 @@ def extrair_chamados(
             _log(f"{numero}: {erro}")
             resultado[numero] = erro
     return resultado
+
+
+# ---------------------------------------------------------------------------------------------
+# Finalização do chamado: ÚNICA exceção de escrita (autorizada pelo usuário em 30/10/2026)
+# ---------------------------------------------------------------------------------------------
+# Só ``finalizar_chamado`` chama o que está abaixo. Valores e rótulos vêm do passo a passo do usuário.
+
+CATEGORIA_SOLUCAO = "Infraestrutura"
+SOLUCAO = "Rede e conectividade"
+EQUIPE_ATENDIMENTO = "UTIC - N1"
+SOLICITANTE_SEM_EMAIL = "api sebrae"  # comparado com ``_sem_acentos``
+ROTULO_CATEGORIA = "Selecione a Categoria de Solução"
+ROTULO_SOLUCAO = "Selecione a Solução"
+ROTULO_DETALHES = "Detalhes do Atendimento Realizado"
+ROTULO_EMAIL = "Enviar Detalhes por e-mail ao solicitante"
+ROTULO_EQUIPE = "Selecione a Equipe"
+ROTULO_SECAO_EQUIPE = "Alterar Equipe de Atendimento"
+NOME_ANEXO = re.compile(r"^\s*Anexos?\s*(\(\d+\))?\s*$", re.IGNORECASE)
+NOME_FINALIZAR = re.compile(r"^\s*Finalizar\s*$", re.IGNORECASE)
+NOME_ENVIAR_ANEXO = re.compile(r"^\s*Enviar\s*$", re.IGNORECASE)
+SEL_INCLUIR = "[title='Incluir'], [aria-label='Incluir'], [data-original-title='Incluir']"
+TEXTO_FINALIZAR = re.compile(r"finaliz|conclu", re.IGNORECASE)
+ESPERA_ANEXO_MS = 30_000
+ESPERA_FINALIZAR_MS = 30_000
+
+# Marca (data-sebrae-alvo) o controle que acompanha um rótulo. ``quer`` = 'checkbox' ou 'campo'.
+# Só considera controles editáveis: o rótulo "Detalhes do Atendimento Realizado" também existe no
+# atendimento anterior, somente leitura, que nunca é escolhido.
+ACHAR_CONTROLE_JS = r"""
+([rotulo, marca, quer]) => {
+  const norm = (t) => (t || '').normalize('NFD').replace(/[\u0300-\u036f]/g, '')
+    .replace(/\s+/g, ' ').replace(/[\s:*]+$/g, '').trim().toLowerCase();
+  const visivel = (el) => el.getClientRects().length > 0;
+  const alvo = norm(rotulo);
+  document.querySelectorAll('[data-sebrae-alvo="' + marca + '"]').forEach((e) => e.removeAttribute('data-sebrae-alvo'));
+  const rotulos = Array.from(document.querySelectorAll('label,span,div,td,th,p,strong,b,legend,h1,h2,h3,h4,h5,h6'))
+    .filter((el) => visivel(el) && norm(el.innerText) === alvo && !Array.from(el.children).some((c) => norm(c.innerText) === alvo));
+  const ehCheckbox = (c) => c.tagName === 'INPUT' && c.type === 'checkbox';
+  const SEL = 'select,textarea,input:not([type=hidden]),[role=combobox],.select2-container';
+  const todos = Array.from(document.querySelectorAll(SEL)).filter((c) =>
+    visivel(c) && !(c.parentElement && c.parentElement.closest('.select2-container')));
+  const candidatos = todos.filter((c) => quer === 'checkbox' ? ehCheckbox(c) : (!ehCheckbox(c) && !c.readOnly && !c.disabled));
+  for (const el of rotulos) {
+    let c = el.control || (el.getAttribute('for') ? document.getElementById(el.getAttribute('for')) : null);
+    if (c && quer === 'campo' && c.tagName === 'SELECT' && !visivel(c)) {
+      const par = c.nextElementSibling;
+      c = par && par.classList.contains('select2-container') ? par : c;  // select2: o <select> real fica oculto
+    }
+    if (!c && quer === 'checkbox') {
+      const ant = el.previousElementSibling;
+      if (ant && ehCheckbox(ant)) c = ant;
+    }
+    if (!c) {
+      // Campo: o PRIMEIRO controle depois do rótulo; se ele for somente leitura, o rótulo é de outro campo.
+      c = (quer === 'checkbox' ? candidatos : todos).find((x) =>
+        (el.compareDocumentPosition(x) & Node.DOCUMENT_POSITION_FOLLOWING) && !el.contains(x));
+    }
+    if (!c || !candidatos.includes(c)) continue;
+    c.setAttribute('data-sebrae-alvo', marca);
+    if (ehCheckbox(c)) return 'checkbox';
+    if (c.tagName === 'SELECT') return 'select';
+    if (c.tagName === 'TEXTAREA') return 'textarea';
+    if (c.classList.contains('select2-container') || c.getAttribute('role') === 'combobox' || c.getAttribute('aria-haspopup')) return 'dropdown';
+    return 'input';
+  }
+  return '';
+}
+"""
+
+
+def _achar_controle(page: "Page", rotulo: str, marca: str, quer: str = "campo") -> tuple:
+    """(frame, locator, tipo) do controle que acompanha ``rotulo``; ``SoftExpertErro`` se não existir."""
+    def procurar() -> Any:
+        for frame in _frames(page):
+            try:
+                tipo = frame.evaluate(ACHAR_CONTROLE_JS, [rotulo, marca, quer])
+            except Exception:
+                continue  # frame em navegação
+            if tipo:
+                return frame, frame.locator(f"[data-sebrae-alvo='{marca}']").first, tipo
+        return None
+
+    achado = _esperar(page, procurar, ESPERA_ESTAVEL_MS)
+    if not achado:
+        raise SoftExpertErro(f"O campo {rotulo!r} não apareceu no formulário de atendimento.")
+    return achado
+
+
+def _ir_para_menu(page: "Page", nome: "re.Pattern[str]", descricao: str) -> None:
+    """Clica em um item do menu lateral (aba/link/botão/texto) que seja o único visível com esse nome."""
+    for frame in _frames(page):
+        candidatos = (
+            frame.get_by_role("tab", name=nome),
+            frame.get_by_role("menuitem", name=nome),
+            frame.get_by_role("link", name=nome),
+            frame.get_by_role("button", name=nome),
+            frame.get_by_text(nome),
+        )
+        for candidato in candidatos:
+            try:
+                visiveis = candidato.filter(visible=True)
+                if visiveis.count() != 1:
+                    continue
+                clicar(visiveis, descricao)
+            except SoftExpertErro:
+                raise
+            except Exception:
+                continue
+            _aguardar_estavel(page)
+            return
+    raise SoftExpertErro(f"O item de menu {descricao!r} não ficou disponível.")
+
+
+def _ler_controle(locator: "Locator", tipo: str) -> Any:
+    if tipo == "checkbox":
+        return locator.is_checked()
+    if tipo in ("textarea", "input"):
+        return locator.input_value()
+    if tipo == "select":
+        return locator.evaluate("(e) => Array.from(e.selectedOptions).map((o) => o.text).join(' ')")
+    return locator.inner_text(timeout=5000)
+
+
+def _selecionado(locator: "Locator", tipo: str, valor: str) -> bool:
+    return _sem_acentos(valor) in _sem_acentos(str(_ler_controle(locator, tipo)))
+
+
+def _definir_selecao(page: "Page", rotulo: str, valor: str, marca: str) -> None:
+    """Escolhe ``valor`` em um select nativo ou em um dropdown estilo select2 e confere o texto escolhido."""
+    frame, controle, tipo = _achar_controle(page, rotulo, marca)
+    controle.scroll_into_view_if_needed(timeout=5000)
+    if tipo == "select":
+        controle.select_option(label=valor, timeout=5000)
+    elif tipo == "dropdown":
+        clicar(controle, rotulo)
+        busca = frame.locator(".select2-search__field, input[type='search']").filter(visible=True)
+        if busca.count():
+            busca.first.fill(valor)
+        exato = re.compile(rf"^\s*{re.escape(valor)}\s*$", re.IGNORECASE)
+        opcao = frame.get_by_role("option", name=exato).filter(visible=True)
+        if not _esperar(page, lambda: opcao.count(), ESPERA_BOTAO_MS):
+            raise SoftExpertErro(f"{rotulo}: a opção {valor!r} não apareceu na lista.")
+        clicar(opcao, f"{rotulo}: {valor}")
+    elif tipo == "input":
+        # Campo de pesquisa do SoftExpert ("Clique aqui para pesquisar"): a lista abre ao clicar e os itens são divs sem role=option.
+        clicar(controle, rotulo)
+        exato = re.compile(rf"^\s*{re.escape(valor)}\s*$", re.IGNORECASE)
+        opcao = frame.locator("[role=listbox] [data-test-selector^='rctSelectItem']").filter(has_text=exato).filter(visible=True)
+        if not _esperar(page, lambda: opcao.count() == 1, ESPERA_BOTAO_MS):
+            raise SoftExpertErro(f"{rotulo}: a opção {valor!r} não apareceu na lista.")
+        clicar(opcao, f"{rotulo}: {valor}")
+    else:
+        raise SoftExpertErro(f"{rotulo}: tipo de campo não suportado ({tipo}).")
+    if not _esperar(page, lambda: _selecionado(controle, tipo, valor), ESPERA_BOTAO_MS):
+        raise SoftExpertErro(f"{rotulo}: o valor escolhido não é {valor!r} (lido: {_ler_controle(controle, tipo)!r}).")
+
+
+def _normaliza_quebras(texto: str) -> str:
+    return texto.replace("\r\n", "\n").replace("\r", "\n").strip()
+
+
+def _preencher_atendimento(page: "Page", descricao: str, enviar_email: bool) -> None:
+    _definir_selecao(page, ROTULO_CATEGORIA, CATEGORIA_SOLUCAO, "categoria")
+    _aguardar_estavel(page)  # a lista de soluções depende da categoria
+    _definir_selecao(page, ROTULO_SOLUCAO, SOLUCAO, "solucao")
+    _, detalhes, _tipo = _achar_controle(page, ROTULO_DETALHES, "detalhes")
+    detalhes.fill(descricao, timeout=5000)
+    _, caixa, _tipo = _achar_controle(page, ROTULO_EMAIL, "email", quer="checkbox")
+    # set_checked age no próprio input: o rótulo contém "Enviar" e nunca passa por ``clicar``.
+    caixa.set_checked(enviar_email, timeout=5000)
+    for frame in _frames(page):  # a equipe fica mais abaixo na tela
+        try:
+            secao = frame.get_by_text(ROTULO_SECAO_EQUIPE, exact=True).filter(visible=True)
+            if secao.count():
+                secao.first.scroll_into_view_if_needed(timeout=5000)
+                break
+        except Exception:
+            continue
+    _definir_selecao(page, ROTULO_EQUIPE, EQUIPE_ATENDIMENTO, "equipe")
+
+
+def _ler_atendimento(page: "Page", descricao: str, enviar_email: bool) -> Dict[str, Any]:
+    """Relê os cinco campos e exige que sejam os valores pretendidos; devolve o que foi lido."""
+    lidos: Dict[str, Any] = {}
+    esperados: Dict[str, Any] = {
+        "categoria": (ROTULO_CATEGORIA, CATEGORIA_SOLUCAO, "campo"),
+        "solucao": (ROTULO_SOLUCAO, SOLUCAO, "campo"),
+        "detalhes": (ROTULO_DETALHES, descricao, "campo"),
+        "email": (ROTULO_EMAIL, enviar_email, "checkbox"),
+        "equipe": (ROTULO_EQUIPE, EQUIPE_ATENDIMENTO, "campo"),
+    }
+    for chave, (rotulo, esperado, quer) in esperados.items():
+        _, controle, tipo = _achar_controle(page, rotulo, chave, quer=quer)
+        lido = _ler_controle(controle, tipo)
+        if chave == "detalhes":
+            ok = _normaliza_quebras(str(lido)) == _normaliza_quebras(descricao)
+        elif chave == "email":
+            ok = bool(lido) == bool(esperado)
+        else:
+            ok = _sem_acentos(str(esperado)) in _sem_acentos(str(lido))
+        if not ok:
+            raise SoftExpertErro(f"{rotulo}: o valor lido ({lido!r}) não é o pretendido; nada foi finalizado.")
+        lidos[chave] = lido
+    return lidos
+
+
+def _botao_unico(page: "Page", montar: Callable[["Frame"], "Locator"], descricao: str) -> "Locator":
+    """O único botão visível que ``montar`` acha em todos os frames; zero ou mais de um é falha."""
+    achados = []
+    for frame in _frames(page):
+        try:
+            candidato = montar(frame).filter(visible=True)
+            achados.extend(candidato.nth(i) for i in range(candidato.count()))
+        except Exception:
+            continue
+    if len(achados) != 1:
+        raise SoftExpertErro(f"{descricao}: esperado exatamente 1 botão, encontrados {len(achados)}; nada foi clicado.")
+    return achados[0]
+
+
+def _conteiner_do_upload(frame: "Frame", nome_pdf: str) -> "Locator":
+    """O bloco de upload: o mais interno que tem o nome do arquivo e um botão Enviar."""
+    return (
+        frame.locator("div,section,form,dialog,[role='dialog']")
+        .filter(has_text=nome_pdf)
+        .filter(has=frame.get_by_role("button", name=NOME_ENVIAR_ANEXO))
+        .filter(visible=True)
+        .last
+    )
+
+
+def _anexar_pdf(page: "Page", pdf: Path, escritas: List[str]) -> None:
+    """Anexo > "+" (Incluir) > arquivo > item na lista > Enviar do upload > espera concluir."""
+    _ir_para_menu(page, NOME_ANEXO, "Anexo")
+    incluir = _botao_unico(
+        page,
+        lambda f: f.locator(SEL_INCLUIR).or_(f.get_by_role("button", name=re.compile(r"^\s*\+\s*$"))),
+        "Incluir anexo",
+    )
+    escolhidos: List[Any] = []
+
+    def guardar(seletor: Any) -> None:
+        escolhidos.append(seletor)
+
+    page.on("filechooser", guardar)
+    try:
+        clicar(incluir, "Incluir anexo")
+
+        def entrada_de_arquivo() -> Any:
+            if escolhidos:
+                return escolhidos[0]
+            for frame in _frames(page):
+                alvo = frame.locator("input[type='file']")
+                if alvo.count():
+                    return alvo.first
+            return None
+
+        alvo = _esperar(page, entrada_de_arquivo, ESPERA_BOTAO_MS)
+        if alvo is None:
+            raise SoftExpertErro("Anexo: nem o seletor de arquivo nem um campo de arquivo apareceram depois do +.")
+        if hasattr(alvo, "set_input_files"):  # campo <input type=file> achado antes do evento do seletor
+            alvo.set_input_files(str(pdf))
+        else:
+            alvo.set_files(str(pdf))  # FileChooser do diálogo de pasta
+    finally:
+        page.remove_listener("filechooser", guardar)
+
+    def frame_do_item() -> Any:
+        return next((f for f in _frames(page) if f.get_by_text(pdf.name).filter(visible=True).count()), None)
+
+    achado = _esperar(page, frame_do_item, ESPERA_ANEXO_MS)
+    if achado is None:
+        raise SoftExpertErro(f"Anexo: {pdf.name} não apareceu na lista; nada foi enviado.")
+    # O Enviar do upload é o do bloco que tem o arquivo; qualquer outro "Enviar" da página fica de fora.
+    enviar = _conteiner_do_upload(achado, pdf.name).get_by_role("button", name=NOME_ENVIAR_ANEXO).filter(visible=True)
+    if enviar.count() != 1:
+        raise SoftExpertErro(f"Anexo: esperado 1 botão Enviar junto de {pdf.name}, achei {enviar.count()}; nada foi clicado.")
+    with _liberar_escrita("enviar"):
+        clicar(enviar, "Enviar anexo")
+    escritas.append("anexo")
+    _log(f"Anexo {pdf.name}: Enviar clicado; aguardando concluir.")
+
+    def concluido() -> bool:
+        return not _visivel(_conteiner_do_upload(achado, pdf.name))
+
+    if not _esperar(page, concluido, ESPERA_ANEXO_MS):
+        raise SoftExpertErro(f"Anexo: o envio de {pdf.name} não terminou em {ESPERA_ANEXO_MS // 1000} s; nada foi finalizado.")
+
+
+def _tratar_dialogo_finalizar(inesperados: List[str]) -> Callable[[Any], None]:
+    """``window.confirm`` depois do Finalizar: aceita só texto de finalização; qualquer outro é recusado."""
+    def tratar(dialogo: Any) -> None:
+        try:
+            if dialogo.type == "beforeunload" or (
+                dialogo.type in ("confirm", "alert") and TEXTO_FINALIZAR.search(dialogo.message or "")
+            ):
+                dialogo.accept()
+            else:
+                inesperados.append(dialogo.message or "")
+                dialogo.dismiss()
+        except Exception:
+            pass
+
+    return tratar
+
+
+def _confirmar_modal_finalizar(janela: "Page") -> bool:
+    """Modal HTML de confirmação do Finalizar: clica Sim/Confirmar só se o texto falar de finalizar."""
+    for frame in _frames(janela):
+        for dialogo in frame.locator(SEL_DIALOGO).filter(visible=True).all():
+            sim = dialogo.get_by_role("button", name=NOME_SIM).filter(visible=True)
+            if not sim.count():
+                continue
+            texto = dialogo.inner_text(timeout=5000)
+            if not TEXTO_FINALIZAR.search(texto):
+                raise SoftExpertErro(
+                    f"Apareceu uma confirmação inesperada depois do Finalizar ({texto[:80]!r}); nada foi clicado.",
+                    MOTIVO_CONFIRMACAO_INESPERADA,
+                )
+            clicar(sim, "Confirmação de finalizar")
+            _log("Confirmação do Finalizar: Sim.")
+            return True
+    return False
+
+
+def _clicar_finalizar(page: "Page", janela: "Page", escritas: List[str]) -> None:
+    """Clica o único Finalizar da janela, responde a confirmação e espera a janela fechar (ou a página mudar)."""
+    botao = _botao_unico(janela, lambda f: f.get_by_role("button", name=NOME_FINALIZAR), "Finalizar")
+    inesperados: List[str] = []
+    tratar = _tratar_dialogo_finalizar(inesperados)
+    janela.on("dialog", tratar)
+    try:
+        with _liberar_escrita("finalizar"):
+            clicar(botao, "Finalizar")
+        escritas.append("finalizar")
+        _log("Finalizar clicado.")
+        confirmado = [False]
+
+        def andou() -> bool:
+            if inesperados:
+                raise SoftExpertErro(
+                    f"Confirmação inesperada depois do Finalizar ({inesperados[0][:80]!r}); recusada.",
+                    MOTIVO_CONFIRMACAO_INESPERADA,
+                )
+            if janela.is_closed():
+                return True
+            if not confirmado[0]:
+                confirmado[0] = _confirmar_modal_finalizar(janela)
+            return False
+
+        _esperar(page, andou, ESPERA_FINALIZAR_MS)
+    finally:
+        if not janela.is_closed():
+            janela.remove_listener("dialog", tratar)
+
+
+def _capturar(pagina: "Page", numero: str, sufixo: str) -> str:
+    """Tira a captura do formulário em ERROS_DIR e a registra; devolve o caminho ('' se falhar)."""
+    try:
+        pasta = _rotinas().ERROS_DIR
+        pasta.mkdir(parents=True, exist_ok=True)
+        caminho = pasta / f"{time.strftime('%Y%m%d_%H%M%S')}_SoftExpert_{numero}_{sufixo}.png"
+        pagina.screenshot(path=str(caminho))
+        _rotinas().registrar_captura(caminho)
+        return str(caminho)
+    except Exception:
+        return ""
+
+
+def _resultado(numero: str, status: str, **detalhes: Any) -> Dict[str, Any]:
+    return {"numero": numero, "status": status, "detalhes": detalhes}
+
+
+def finalizar_chamado(
+    page: "Page",
+    numero: str,
+    descricao: str,
+    *,
+    pdf: "str | Path | None" = None,
+    enviar_email: Optional[bool] = None,
+    confirmar_final: bool = True,
+) -> Dict[str, Any]:
+    """Finaliza ``numero`` no SoftExpert (única exceção de escrita; autorizada em 30/10/2026).
+
+    Só deve ser chamada para chamado que o usuário marcou FINALIZADO no site e pediu para finalizar.
+    ``page`` é a aba da central de tarefas. ``enviar_email=None`` decide pelo Solicitante (``API SEBRAE``
+    desmarca; sem Solicitante legível é falha). Com ``confirmar_final=False`` pára antes do Finalizar,
+    mas um PDF já foi enviado ao chamado. Entrada inválida levanta ``SoftExpertErro`` antes de qualquer
+    navegação. Devolve ``{numero, status, detalhes}`` com ``status`` em ``ok``, ``pronto`` (sem
+    Finalizar), ``nao_encontrado`` (fora da central de tarefas) ou ``erro``; ``SessaoExpirada`` sobe.
+    """
+    try:
+        numero = chave_do_numero(numero)
+    except ValueError as erro:
+        raise SoftExpertErro(str(erro)) from erro
+    texto = (descricao or "").strip()
+    if not texto:
+        raise SoftExpertErro(f"{numero}: a descrição para finalizar está vazia; nada foi aberto nem clicado.")
+    caminho_pdf: Optional[Path] = None
+    if pdf is not None:
+        caminho_pdf = Path(pdf)
+        if caminho_pdf.suffix.lower() != ".pdf" or not caminho_pdf.is_file() or caminho_pdf.stat().st_size == 0:
+            raise SoftExpertErro(f"{numero}: o anexo {str(pdf)!r} não é um PDF existente e não vazio; nada foi aberto.")
+    escritas: List[str] = []  # o que já foi gravado no SoftExpert: distingue "nada aconteceu" de "confira lá"
+    try:
+        return _finalizar(page, numero, texto, caminho_pdf, enviar_email, confirmar_final, escritas)
+    except SessaoExpirada:
+        raise
+    except Exception as erro:  # inclui TimeoutError do Playwright; RotinaCancelada (BaseException) sobe
+        _log(f"{numero}: falha ao finalizar: {erro}")
+        motivo = erro.motivo if isinstance(erro, SoftExpertErro) else MOTIVO_ERRO_INESPERADO
+        return _resultado(numero, STATUS_ERRO, mensagem=str(erro), motivo=motivo, escritas=list(escritas))
+
+
+def _cartao_na_lista(page: "Page", numero: str) -> bool:
+    """Recarrega a central de tarefas (até 2 vezes, para a lista alcançar o servidor) e vê se o cartão ainda existe."""
+    for tentativa in range(2):
+        page.goto(SOFTEXPERT_URL, wait_until="domcontentloaded", timeout=_rotinas().CARREGAMENTO_MS)
+        _aguardar_lista(page)
+        if all(i.numero != numero for i in listar_chamados(page)):
+            return False
+        if tentativa == 0:
+            page.wait_for_timeout(ESPERA_RELEITURA_MS)
+    return True
+
+
+def _finalizar(
+    page: "Page", numero: str, descricao: str, pdf: Optional[Path], enviar_email: Optional[bool], confirmar_final: bool,
+    escritas: List[str],
+) -> Dict[str, Any]:
+    context = page.context
+    _log(f"{numero}: abrindo para finalizar.")
+    page.goto(SOFTEXPERT_URL, wait_until="domcontentloaded", timeout=_rotinas().CARREGAMENTO_MS)
+    _aguardar_lista(page)
+    item = next((i for i in listar_chamados(page, parar_em=numero) if i.numero == numero), None)
+    if item is None:
+        _log(f"{numero}: fora da central de tarefas; nada foi feito.")
+        return _resultado(
+            numero, STATUS_NAO_ENCONTRADO,
+            mensagem="Não está na central de tarefas (já finalizado ou sem tarefa pendente); confira no SoftExpert.",
+        )
+    padrao = re.compile(rf"{re.escape(numero)}(?!\d)", re.IGNORECASE)
+    linha = page.locator(SEL_LINHA).filter(visible=True).filter(has_text=padrao).first
+    formulario: Optional["Page"] = None
+    try:
+        formulario = _abrir_formulario(context, page, linha, numero)
+        _aguardar_estavel(formulario)
+        _abrir_aba_registro(formulario)
+        solicitante = _conferir_finalizacao(formulario, numero, item.texto)  # janela de outro chamado = nenhuma escrita
+        if enviar_email is None:
+            if not solicitante:
+                raise SoftExpertErro(f"{numero}: não consegui ler o Solicitante para decidir o e-mail; nada foi preenchido.")
+            enviar = _sem_acentos(solicitante) != SOLICITANTE_SEM_EMAIL
+        else:
+            enviar = bool(enviar_email)
+        _log(f"{numero}: Solicitante {solicitante!r}; e-mail ao solicitante {'marcado' if enviar else 'desmarcado'}.")
+        _ir_para_menu(formulario, NOME_ATENDIMENTO_TI, "Atendimento - Chamados TI")
+        _preencher_atendimento(formulario, descricao, enviar)
+        if pdf is not None:
+            _anexar_pdf(formulario, pdf, escritas)
+            _ir_para_menu(formulario, NOME_ATENDIMENTO_TI, "Atendimento - Chamados TI")
+        campos = _ler_atendimento(formulario, descricao, enviar)
+        base = {"campos": campos, "solicitante": solicitante, "enviar_email": enviar, "pdf": pdf.name if pdf else None}
+        if not confirmar_final:
+            captura = _capturar(formulario, numero, "antes_de_finalizar")
+            _log(f"{numero}: tudo conferido; parando antes do Finalizar.")
+            return _resultado(numero, STATUS_PRONTO, finalizado=False, captura=captura, escritas=list(escritas), **base)
+        _clicar_finalizar(page, formulario, escritas)
+        janela_fechou = formulario is not page and formulario.is_closed()
+        if _cartao_na_lista(page, numero):
+            raise SoftExpertErro(
+                f"{numero}: depois do Finalizar o cartão continua na central de tarefas; confira no SoftExpert."
+            )
+        _log(f"{numero}: finalizado.")
+        return _resultado(numero, STATUS_OK, finalizado=True, janela_fechou=janela_fechou, escritas=list(escritas), **base)
+    except Exception:
+        alvo = formulario if formulario is not None and not formulario.is_closed() else page
+        _rotinas().registrar_erro(alvo, ORIGEM)
+        raise
+    finally:
+        _fechar_formulario(context, page, formulario)
