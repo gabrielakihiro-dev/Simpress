@@ -10,7 +10,8 @@ async function mockAssistente(page, respostas) {
     const caminho = new URL(route.request().url()).pathname;
     // DELETE /anexo/{id} vira "anexo/remover" (o id muda a cada teste).
     // PATCH/DELETE /notas/{id} vira "notas/item" pelo mesmo motivo.
-    const nome = /\/anexo\/[^/]+$/.test(caminho) ? "anexo/remover" : /\/notas\/[^/]+$/.test(caminho) ? "notas/item" : caminho.split("/").pop();
+    // GET/DELETE /conversas/{id} vira "conversas/item".
+    const nome = /\/anexo\/[^/]+$/.test(caminho) ? "anexo/remover" : /\/notas\/[^/]+$/.test(caminho) ? "notas/item" : /\/conversas\/[^/]+$/.test(caminho) ? "conversas/item" : caminho.split("/").pop();
     // O áudio (WAV) e o anexo chegam como bytes; só eles não são JSON.
     const audio = nome === "audio" || nome === "anexo" ? route.request().postDataBuffer() : null;
     chamadas.push({
@@ -54,6 +55,137 @@ test("botão X fecha o chat e devolve o foco ao ícone", async ({ page }) => {
   await expect(page.locator("#assistente-widget")).toBeHidden();
   await expect(page.locator("#btn-assistente")).toHaveAttribute("aria-expanded", "false");
   await expect(page.locator("#btn-assistente")).toBeFocused();
+});
+
+test("minimizar deixa só a barra de título e restaurar devolve o chat", async ({ page }) => {
+  await mockAssistente(page, { estado: PRONTO });
+  await page.goto("/");
+  await abrirAssistente(page);
+  const widget = page.locator("#assistente-widget");
+  await page.getByRole("button", { name: "Minimizar Assistente" }).click();
+  await expect(widget).toHaveAttribute("data-modo", "minimizado");
+  await expect(page.locator("#assistente-texto")).toBeHidden();
+  await expect(page.getByRole("button", { name: "Restaurar Assistente" })).toHaveAttribute("aria-expanded", "false");
+  await page.getByRole("button", { name: "Restaurar Assistente" }).click();
+  await expect(widget).toHaveAttribute("data-modo", "normal");
+  await expect(page.locator("#assistente-texto")).toBeVisible();
+});
+
+test("maximizar ocupa a tela toda, restaura e volta ao normal ao reabrir", async ({ page }) => {
+  await mockAssistente(page, { estado: PRONTO });
+  await page.goto("/");
+  await abrirAssistente(page);
+  const widget = page.locator("#assistente-widget");
+  const viewport = page.viewportSize();
+  await page.getByRole("button", { name: "Maximizar Assistente" }).click();
+  const caixa = await widget.boundingBox();
+  expect(Math.round(caixa.width)).toBe(viewport.width);
+  expect(Math.round(caixa.height)).toBe(viewport.height);
+  await page.getByRole("button", { name: "Restaurar tamanho do Assistente" }).click();
+  await expect(widget).toHaveAttribute("data-modo", "normal");
+  await page.getByRole("button", { name: "Maximizar Assistente" }).click();
+  await page.getByRole("button", { name: "Fechar Assistente" }).click();
+  await abrirAssistente(page);
+  await expect(widget).toHaveAttribute("data-modo", "normal");
+});
+
+test("Voltar à conversa fecha Instruções e Lembretes", async ({ page }) => {
+  await mockAssistente(page, { estado: PRONTO, instrucoes: () => ({ texto: "", limite: 4000 }) });
+  await page.goto("/");
+  await abrirAssistente(page);
+  await page.getByRole("button", { name: "Instruções", exact: true }).click();
+  await expect(page.locator("#assistente-texto")).toBeHidden();
+  await page.locator("#assistente-instrucoes").getByRole("button", { name: "Voltar à conversa" }).click();
+  await expect(page.locator("#assistente-instrucoes")).toBeHidden();
+  await expect(page.getByRole("button", { name: "Instruções", exact: true })).toHaveAttribute("aria-expanded", "false");
+  await expect(page.locator("#assistente-texto")).toBeVisible();
+});
+
+test("histórico: lista, lê, apaga com confirmação e volta à conversa", async ({ page }) => {
+  let conversas = [
+    { id: "aaa111", titulo: "Quantos notebooks temos?", atualizada_em: "2026-10-30T10:15:00-03:00", mensagens: 2 },
+    { id: "bbb222", titulo: "Resumo do mês", atualizada_em: "2026-10-29T09:00:00-03:00", mensagens: 4 },
+  ];
+  const chamadas = await mockAssistente(page, {
+    estado: PRONTO,
+    conversas: () => ({ conversas }),
+    "conversas/item": (_corpo, metodo, caminho) => {
+      const id = caminho.split("/").pop();
+      if (metodo === "DELETE") { conversas = conversas.filter(c => c.id !== id); return { ok: true }; }
+      return { id, titulo: "Quantos notebooks temos?", mensagens: [{ papel: "usuario", texto: "Quantos notebooks temos?" }, { papel: "assistente", texto: "Temos 120 notebooks." }] };
+    },
+  });
+  await page.goto("/");
+  await abrirAssistente(page);
+  const botao = page.getByRole("button", { name: "Histórico de conversas", exact: true });
+  const painel = page.locator("#assistente-historico");
+  await botao.click();
+  await expect(painel).toBeVisible();
+  await expect(botao).toHaveAttribute("aria-expanded", "true");
+  await expect(page.locator("#assistente-texto")).toBeHidden();
+  await expect(painel.locator("#assistente-historico-lista li")).toHaveCount(2);
+  await expect(painel).toContainText("2 mensagens");
+  // Ler uma conversa
+  await painel.getByRole("button", { name: "Quantos notebooks temos?", exact: true }).click();
+  await expect(painel.locator("#assistente-historico-leitura")).toContainText("Temos 120 notebooks.");
+  await expect(painel.locator("#assistente-historico-lista")).toBeHidden();
+  await painel.getByRole("button", { name: "Ver todas as conversas" }).click();
+  await expect(painel.locator("#assistente-historico-lista li")).toHaveCount(2);
+  // Apagar pede confirmação; cancelar não apaga
+  await painel.getByRole("button", { name: "Apagar conversa: Resumo do mês" }).click();
+  await painel.getByRole("button", { name: "Cancelar" }).click();
+  expect(chamadas.some(c => c.metodo === "DELETE")).toBe(false);
+  await painel.getByRole("button", { name: "Apagar conversa: Resumo do mês" }).click();
+  await painel.getByRole("button", { name: "Confirmar: apagar conversa Resumo do mês" }).click();
+  await expect(painel.locator("#assistente-historico-lista li")).toHaveCount(1);
+  await expect(painel.locator("#assistente-historico-status")).toHaveText("Conversa apagada.");
+  // Abrir Lembretes fecha o histórico; Voltar à conversa fecha o painel
+  await page.getByRole("button", { name: "Lembretes", exact: true }).click();
+  await expect(painel).toBeHidden();
+  await botao.click();
+  await expect(page.locator("#assistente-lembretes")).toBeHidden();
+  await painel.getByRole("button", { name: "Voltar à conversa" }).click();
+  await expect(painel).toBeHidden();
+  await expect(botao).toHaveAttribute("aria-expanded", "false");
+  await expect(page.locator("#assistente-texto")).toBeVisible();
+});
+
+test("histórico: exportar PDF monta o documento Cockpit na lista e na leitura", async ({ page }) => {
+  const conversas = [{ id: "aaa111", titulo: "Quantos notebooks temos?", atualizada_em: "2026-10-30T10:15:00-03:00", mensagens: 2 }];
+  // O navegador sem tela dispara "afterprint" na hora e o iframe some; o stub só conta as chamadas a print().
+  await page.addInitScript(() => {
+    window.__impressoes = 0;
+    new MutationObserver(registros => registros.flatMap(r => [...r.addedNodes]).forEach(no => {
+      if (no.matches?.("iframe[data-assistente-pdf]")) no.contentWindow.print = () => { window.__impressoes += 1; };
+    })).observe(document, { childList: true, subtree: true });
+  });
+  await mockAssistente(page, {
+    estado: PRONTO,
+    conversas: () => ({ conversas }),
+    "conversas/item": (_corpo, _metodo, caminho) => ({ id: caminho.split("/").pop(), titulo: conversas[0].titulo, atualizada_em: conversas[0].atualizada_em, mensagens: [{ papel: "usuario", texto: "Quantos notebooks temos?" }, { papel: "assistente", texto: "Temos 120 notebooks." }] }),
+  });
+  await page.goto("/");
+  await abrirAssistente(page);
+  await page.getByRole("button", { name: "Histórico de conversas", exact: true }).click();
+  const painel = page.locator("#assistente-historico");
+  await expect(painel.getByRole("button", { name: "Exportar PDF", exact: true })).toBeHidden();
+  const quadro = page.locator("iframe[data-assistente-pdf]");
+  // Da lista (sem abrir a conversa)
+  await painel.getByRole("button", { name: "Exportar PDF: Quantos notebooks temos?" }).click();
+  await expect(quadro).toHaveCount(1);
+  await expect.poll(() => page.evaluate(() => window.__impressoes)).toBe(1);
+  const doc = page.frameLocator("iframe[data-assistente-pdf]");
+  await expect(doc.locator(".pdf__titulo")).toHaveText("Quantos notebooks temos?");
+  await expect(doc.locator(".pdf__msg--usuario")).toContainText("Quantos notebooks temos?");
+  await expect(doc.locator(".pdf__msg--assistente")).toContainText("Temos 120 notebooks.");
+  await expect(doc.locator(".pdf__meta")).toContainText("30/10/2026 10:15");
+  await expect(doc.locator("html")).toHaveCSS("background-color", "rgb(11, 18, 32)");
+  // Da leitura (botão com rótulo)
+  await painel.getByRole("button", { name: "Quantos notebooks temos?", exact: true }).click();
+  await painel.getByRole("button", { name: "Exportar PDF", exact: true }).click();
+  await expect.poll(() => page.evaluate(() => window.__impressoes)).toBe(2);
+  await expect(doc.locator(".pdf__msg")).toHaveCount(2);
+  await expect(quadro).toHaveCount(1);
 });
 
 test("F9 abre e F9 fecha, inclusive com o cursor na caixa de mensagem", async ({ page }) => {

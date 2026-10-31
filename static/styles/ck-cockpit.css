@@ -998,6 +998,16 @@ html[data-theme], html[data-theme] body.cockpit-shell-body { background: var(--c
 .ck-assist-widget[hidden] { display: none; }
 .ck-assist-widget > :not(.ck-assist__lista) { flex: none; }
 .ck-assist-widget__cab { display: flex; align-items: center; justify-content: space-between; gap: 8px; padding: 8px 12px; border-bottom: 1px solid var(--cor-borda-suave); }
+.ck-assist-widget__acoes { display: flex; align-items: center; gap: 4px; }
+.ck-assist__voltar { align-self: flex-start; margin-bottom: 8px; }
+/* Minimizado: só a barra de título fica à mostra (o aviso de leitor de tela .ck-sr continua no DOM). */
+.ck-assist-widget[data-modo="minimizado"] { height: auto; width: min(280px, calc(100vw - 24px)); }
+.ck-assist-widget[data-modo="minimizado"] > :not(.ck-assist-widget__cab, .ck-sr) { display: none; }
+.ck-assist-widget[data-modo="minimizado"] > .ck-assist-widget__cab { border-bottom: 0; }
+/* Maximizado: ocupa a tela toda; o conteúdo fica centralizado numa coluna legível. */
+.ck-assist-widget[data-modo="maximizado"] { inset: 0; width: auto; height: auto; border: 0; border-radius: 0; z-index: 60; transform-origin: center; }
+.ck-assist-widget[data-modo="maximizado"] > :not(.ck-assist-widget__cab, .ck-sr) { width: min(960px, calc(100% - 24px)); align-self: center; margin-inline: 0; }
+.ck-assist-widget[data-modo="maximizado"] > .ck-assist__barra, .ck-assist-widget[data-modo="maximizado"] > .ck-assist__form { padding-inline: 0; }
 .ck-assist-widget__titulo { font-size: var(--fs-base); font-weight: var(--peso-medio); }
 .ck-assist-widget > .ck-assist__lista { flex: 1 1 auto; min-height: 0; }
 #btn-assistente[aria-expanded="true"] { background: var(--cor-destaque-fundo); color: var(--cor-destaque-texto); }
@@ -1047,6 +1057,10 @@ html[data-theme], html[data-theme] body.cockpit-shell-body { background: var(--c
 .ck-assist__lembrete--feito .ck-assist__lembrete-texto { text-decoration: line-through; color: var(--cor-texto-mudo); }
 .ck-assist__lembrete-acoes { flex: none; display: flex; align-items: center; flex-wrap: wrap; justify-content: flex-end; gap: 4px; }
 .ck-assist__lembretes #assistente-lembretes-status:empty { display: none; }
+.ck-assist__historico-leitura { display: flex; flex-direction: column; gap: 6px; max-height: 50vh; overflow-y: auto; }
+.ck-assist__historico-leitura[hidden], .ck-assist__historico p[hidden], .ck-assist__historico .ck-assist__voltar[hidden], .ck-assist__historico #assistente-historico-status:empty { display: none; }
+.ck-assist__historico .ck-assist__lembrete-texto { background: none; border: 0; padding: 0; text-align: left; font: inherit; cursor: pointer; }
+.ck-assist__historico .ck-assist__lembrete-texto:hover { text-decoration: underline; }
 .ck-assist__busca { display: flex; flex-direction: column; gap: 6px; padding-top: 8px; border-top: 1px solid var(--cor-borda-suave); }
 .ck-assist__interruptor { display: inline-flex; align-items: center; gap: 8px; min-height: var(--altura-controle); font-size: var(--fs-ui); color: var(--cor-texto); cursor: pointer; }
 .ck-assist__interruptor input { flex: none; width: 18px; height: 18px; accent-color: var(--cor-destaque); }

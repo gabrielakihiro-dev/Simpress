@@ -88,6 +88,7 @@ __pycache__/
 /data/state/nomes_pessoas_manuais.json
 /data/state/assistente_instrucoes.json
 /data/state/assistente_notas.json
+/data/state/assistente_conversas.json
 /data/state/assistente_busca_web.json
 /data/state/entrada_usuarios_entra/
 /data/state/sebrae_config.json
