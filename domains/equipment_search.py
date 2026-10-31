@@ -1,5 +1,7 @@
 """Search indexing and categorization for equipment records."""
 
+import difflib
+import re
 import unicodedata
 from typing import Any, Callable, Dict, Iterable, List, Tuple
 
@@ -22,6 +24,11 @@ def normalize_search_term(value: Any) -> str:
     """Normalize accents and casing for equipment search."""
     text = unicodedata.normalize("NFKD", str(value or ""))
     return "".join(character for character in text if not unicodedata.combining(character)).strip().upper()
+
+
+USER_WORD_SPLIT = re.compile(r"[\s,;/\\]+")
+# Below this similarity a typo is not corrected: "joao" must not become "joana" blindly, but "bpinheirp" -> "bpinheiro".
+SUGGESTION_CUTOFF = 0.75
 
 
 def categorize_equipment(kind: Any, model: Any, normalize: Callable[[Any], str] = normalize_search_term) -> str:
@@ -144,3 +151,33 @@ def search_normalized_index(
 
     ranked_results.sort(key=lambda result: (result[0], result[1]))
     return [result[2] for result in ranked_results]
+
+
+def suggest_user_term(
+    indexed: Iterable[EquipmentSearchIndexEntry],
+    term: str,
+    normalize: Callable[[Any], str] = normalize_search_term,
+) -> str:
+    """Closest user login/name words for a term without results ("bpinheirp" -> "bpinheiro").
+
+    Returns "" unless the corrected term finds equipment, so a suggestion is always clickable.
+    """
+    entries = tuple(indexed)
+    vocabulary: Dict[str, str] = {}
+    for _, _, result in entries:
+        users = [result.get("usuarios_logados"), result.get("nome_pessoa"), *(result.get("usuarios_logados_candidatos") or [])]
+        for word in USER_WORD_SPLIT.split(" ".join(str(user or "") for user in users)):
+            key = normalize(word)
+            if len(key) >= 3:
+                vocabulary.setdefault(key, word)
+
+    keys = list(vocabulary)
+    corrected: List[str] = []
+    for word in term.split():
+        match = word if word in vocabulary else next(iter(difflib.get_close_matches(word, keys, n=1, cutoff=SUGGESTION_CUTOFF)), word)
+        corrected.append(vocabulary.get(match, word.lower()))
+    suggestion = " ".join(corrected)
+    normalized = normalize(suggestion)
+    if not normalized or normalized == term or not search_normalized_index(entries, normalized):
+        return ""
+    return suggestion
