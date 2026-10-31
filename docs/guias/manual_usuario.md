@@ -70,7 +70,7 @@ Menu lateral:
 - **Home** — pesquisa de equipamentos.
 - **Transporte** — formulário de retirada e entrega (geração da planilha de transferência).
 - **Nova transferência** — limpa o formulário para começar outra.
-- **Ferramentas:** **Chamados**, **Atualizar planilhas**, **Exportar Excel** e, em **Históricos e Análises**, **Histórico planilhas**, **Evolução das atualizações**, **Histórico de alterações** e **Catálogo de unidades**.
+- **Ferramentas:** **Chamados**, **Atualizar planilhas**, **Exportar Excel** e, em **Históricos e Análises**, **Histórico de alterações** e **Catálogo de unidades**. No Catálogo, **Nova unidade** abre o formulário no próprio painel; para corrigir um CNPJ, clique no lápis ao lado dele, altere o campo e salve (atualizado em 31/10/2026).
 
 Para pesquisar: na **Home**, digite série, apelido/hostname, modelo, cidade ou nome do usuário e pressione `Enter` (ou clique em **Buscar Equipamento**). A lista rápida mostra até 15 resultados; **Mostrar mais** abre a pesquisa completa, com filtros de categoria (**Notebooks**, **MacBooks**, **Monitores**, **Fones**) e cidade.
 
@@ -95,7 +95,7 @@ Sempre envie **os dois** arquivos, mesmo na primeira vez. Cada arquivo pode ter 
 
 - A tela de resultado da comparação abre (veja a seção 5).
 - O contador de equipamentos no cabeçalho reflete o novo total.
-- Em **Histórico planilhas** aparece uma nova atualização com a data de agora.
+- Na janela do histórico (**Comparação** › **Histórico e ações completas**) aparece uma nova atualização com a data de agora.
 - Pesquise na **Home** uma série que só existe no arquivo novo e confirme que ela aparece.
 
 **Se a base não bater com o esperado:** o total vem sempre do `EquipamentosDetalhes` enviado — o `InvAll` (Endpoint) não acrescenta equipamentos à base. Séries vazias ou duplicadas aparecem sinalizadas no resultado.
@@ -104,7 +104,7 @@ Sempre envie **os dois** arquivos, mesmo na primeira vez. Cada arquivo pode ter 
 
 ## 5. Comparar os inventários
 
-A comparação acontece **automaticamente** a cada atualização (seção 4). Para rever uma comparação antiga, abra **Histórico planilhas** (em **Históricos e Análises**).
+A comparação acontece **automaticamente** a cada atualização (seção 4). Para rever uma comparação antiga, abra **Comparação** (menu **Ferramentas**) e clique em **Histórico e ações completas**.
 
 O resultado traz, entre outras seções:
 
@@ -121,9 +121,9 @@ O resultado traz, entre outras seções:
 - Cada linha tem um campo de **anotação** (até 2.000 caracteres). Ele salva sozinho e é incluído nas exportações. Use-o para registrar o que já foi verificado.
 - Notebooks próprios do Sebrae e hostnames de Curitiba já são tratados pelo sistema e não aparecem como erro; você não precisa fazer nada.
 
-**Exportar o resultado:** use o botão de exportar no resultado da comparação, ou, em **Histórico planilhas**, escolha a data no seletor *Selecionar a data do histórico para exportar* e clique no botão de exportação. A confirmação exata é **Planilha Exportada com Sucesso!**.
+**Exportar o resultado:** use o botão de exportar no resultado da comparação, ou, na janela do histórico (**Comparação** › **Histórico e ações completas**), escolha a data no seletor *Selecionar a data do histórico para exportar* e clique no botão de exportação. A confirmação exata é **Planilha Exportada com Sucesso!**.
 
-**Comparar duas atualizações:** **Evolução das atualizações** (em **Históricos e Análises**) mostra o que é novo, contínuo e resolvido entre uma atualização anterior e outra.
+**Comparar duas atualizações:** a tela **Evolução das atualizações** foi removida em 31/10/2026. A comparação de cada atualização fica em **Comparação** (menu **Ferramentas**); o aviso **Divergências novas** (Home e sino) traz o botão **Ver evolução**, que abre **Comparação**.
 
 **Exportar Excel** (menu lateral) é outra coisa: baixa o modelo de exportação com `Apelido` e `IdCliente` atualizados. Se ele só conseguir exportar parte das séries, a notificação diz o motivo.
 
@@ -195,7 +195,7 @@ Antes de cada atualização (seção 4) o sistema guarda uma cópia dos dois inv
 
 **Passos**
 
-1. Abra **Histórico planilhas** (em **Históricos e Análises**).
+1. Abra **Comparação** (menu **Ferramentas**) e clique em **Histórico e ações completas**.
 2. Localize a atualização que você quer desfazer. Só aparece o botão **Restaurar versão anterior** quando existe backup completo e válido dos dois inventários.
 3. Clique em **Restaurar versão anterior**. Abre a janela **Restaurar inventários?** com nomes, datas e contagens dos arquivos que serão trocados.
 4. Leia e, se estiver certo, clique em **Restaurar**. (Em caso de dúvida, cancele; nada muda.)

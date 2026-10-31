@@ -262,7 +262,7 @@ function reportComRelacoes() {
   };
 }
 
-test("Chamados filtra a tabela de OS por Relação e busca, conta séries sem OS e salva o UTIC com filtro ativo", async ({ page }) => {
+test("Chamados filtra a tabela de OS por Relação e busca, não lista séries sem OS e salva o UTIC com filtro ativo", async ({ page }) => {
   const links = new Map();
   await installSummaryRoutes(page, { links, onReportRequest: route => route.fulfill({ json: reportComRelacoes() }) });
   await openSummary(page);
@@ -273,14 +273,11 @@ test("Chamados filtra a tabela de OS por Relação e busca, conta séries sem OS
   const status = section.locator(".ticket-summary-status");
   // A busca é a do painel; a tabela não cria a própria.
   await expect(page.locator("#cockpit-tickets-os #ck-os-busca")).toHaveCount(0);
-  await expect(page.locator("#cockpit-tickets-kpis")).toContainText("Sem OS");
-  await expect(status).toHaveText("2 OS · 3 séries (1 sem OS)");
-  await expect(rows).toHaveCount(3);
-  const semOs = page.locator("#ck-os-tabela tbody tr[data-sem-os]");
-  await expect(semOs).toHaveCount(1);
-  await expect(semOs).toHaveAttribute("data-serial", "REL-SEMOS-3");
-  await expect(semOs.locator('td[data-label="OS"]')).toHaveText("Sem OS");
-  await expect(semOs.locator("input")).toHaveCount(0);
+  await expect(page.locator("#cockpit-tickets-kpis")).not.toContainText("Sem OS");
+  await expect(page.locator("#cockpit-tickets-relation option[value=sem_os]")).toHaveCount(0);
+  await expect(status).toHaveText("2 OS · 2 séries");
+  await expect(rows).toHaveCount(2);
+  await expect(page.locator("#ck-os-tabela")).not.toContainText("REL-SEMOS-3");
 
   const relation = page.locator("#cockpit-tickets-relation");
   await relation.selectOption("somente_oracle");
@@ -288,20 +285,14 @@ test("Chamados filtra a tabela de OS por Relação e busca, conta séries sem OS
   await expect(visible).toHaveAttribute("data-serial", "REL-SOR-2");
   await expect(status).toHaveText("1 de 2 OS · 1 série");
 
-  await relation.selectOption("sem_os");
-  await expect(visible).toHaveCount(1);
-  await expect(visible).toHaveAttribute("data-serial", "REL-SEMOS-3");
-  await expect(status).toHaveText("0 de 2 OS · 1 série (1 sem OS)");
-
   await relation.selectOption("todos");
-  await expect(visible).toHaveCount(3);
+  await expect(visible).toHaveCount(2);
   const search = page.locator("#cockpit-tickets-search");
   await search.fill("9001");
   await expect(visible).toHaveCount(1);
   await expect(visible).toHaveAttribute("data-serial", "REL-CONF-1");
   await search.fill("semos");
-  await expect(visible).toHaveCount(1);
-  await expect(visible).toHaveAttribute("data-serial", "REL-SEMOS-3");
+  await expect(visible).toHaveCount(0);
   // Busca e Relação se combinam.
   await search.fill("REL-");
   await relation.selectOption("conferida");
@@ -311,8 +302,8 @@ test("Chamados filtra a tabela de OS por Relação e busca, conta séries sem OS
   await expect(visible).toHaveCount(0);
   await search.fill("");
   await relation.selectOption("todos");
-  await expect(visible).toHaveCount(3);
-  await expect(status).toHaveText("2 OS · 3 séries (1 sem OS)");
+  await expect(visible).toHaveCount(2);
+  await expect(status).toHaveText("2 OS · 2 séries");
 
   // Salvar o UTIC com um filtro ativo mantém o filtro depois que a tabela é recriada.
   await relation.selectOption("somente_oracle");

@@ -144,8 +144,8 @@ test("Voltar retorna ao painel anterior e, sem anterior, fecha para a tela princ
   const { api, el } = criarAmbientePaineis();
   try {
     await api.abrirPainelCockpit("planilhas");
-    await api.abrirPainelCockpit("historico-planilhas");
-    assert.equal(el("cockpit-tools-dropdown").dataset.activeTool, "historico-planilhas");
+    await api.abrirPainelCockpit("unidades");
+    assert.equal(el("cockpit-tools-dropdown").dataset.activeTool, "unidades");
     await api.fecharPainelCockpit();
     assert.equal(el("cockpit-tools-dropdown").dataset.activeTool, "planilhas");
     assert.equal(el("cockpit-tool-panels").hidden, false);
@@ -181,7 +181,8 @@ test("Chamados Sebrae tem item de menu, botão no cartão de Automações e pain
   assert.match(menu, /data-args='\["sebrae-chamados"\]'/);
   assert.match(menu, /<span class="ck-menu__rotulo">Chamados Sebrae<\/span>/);
   assert.doesNotMatch(menu, /<kbd|ck-badge/);
-  assert.ok(html.indexOf('id="btn-historico-comparacoes"') < html.indexOf('id="btn-sebrae-chamados-menu"'));
+  assert.ok(html.indexOf('id="btn-atualizar-planilhas"') < html.indexOf('id="btn-sebrae-chamados-menu"'));
+  assert.doesNotMatch(html, /btn-historico-comparacoes|data-cockpit-tool-panel="historico-planilhas"|cockpit-sheets-history/);
   assert.ok(html.indexOf('id="btn-sebrae-chamados-menu"') < html.indexOf('id="ck-menu-g-hist"'));
   const botao = html.match(/<button[^>]*id="btn-sebrae-abrir-chamados"[^>]*>[\s\S]*?<\/button>/)?.[0] || "";
   assert.match(botao, /data-args='\["sebrae-chamados"\]'/);
@@ -192,9 +193,10 @@ test("Chamados Sebrae tem item de menu, botão no cartão de Automações e pain
     assert.equal(painel.split(`id="${id}"`).length - 1, 1, `${id} no painel`);
     assert.doesNotMatch(cartao, new RegExp(`id="${id}"`), `${id} fora do cartão`);
   }
-  for (const id of ["sebrae-dashboard-file", "btn-sebrae-importar", "btn-sebrae-buscar", "btn-sebrae-atualizar-lista", "sebrae-dashboard-status", "sebrae-novos-resumo", "sebrae-novos-avisos", "sebrae-historico-resumo"]) {
+  for (const id of ["sebrae-dashboard-file", "btn-sebrae-importar", "btn-sebrae-buscar", "sebrae-dashboard-status", "sebrae-novos-resumo", "sebrae-novos-avisos", "sebrae-historico-resumo"]) {
     assert.match(cartao, new RegExp(`id="${id}"`), `${id} no cartão`);
   }
+  assert.doesNotMatch(html, /btn-sebrae-historico|data-cockpit-tool-panel="sebrae-historico"|sebrae-historico-(kpis|lista|detalhe|filtro|status)/);
   assert.match(html, /\.sebrae-chamado\b/.source ? /id="sebrae-novos-lista"/ : /x/);
   assert.match(css, /^\.sebrae-chamado \{/m);
   assert.match(css, /^\.sebrae-blocos \{/m);
@@ -218,7 +220,7 @@ test("Chamados troca lista e detalhe pelo host da tabela de OS e mantém KPIs, b
   assert.doesNotMatch(html, /id="cockpit-tickets-(list|detail)"/);
   const idsChamados = [
     "cockpit-tickets-kpis", "cockpit-tickets-triage", "cockpit-tickets-search", "cockpit-tickets-relation", "cockpit-tickets-attention",
-    "cockpit-tickets-refresh", "cockpit-tickets-export", "cockpit-tickets-clear", "cockpit-tickets-manage", "cockpit-tickets-manage-panel",
+    "cockpit-tickets-export", "cockpit-tickets-clear", "cockpit-tickets-manage", "cockpit-tickets-manage-panel",
     "cockpit-tickets-form", "cockpit-tickets-file-simpress", "cockpit-tickets-file-oracle", "cockpit-tickets-import", "cockpit-tickets-import-status",
     "cockpit-tickets-sources", "cockpit-tickets-version", "cockpit-tickets-delete-old", "cockpit-tickets-evolution",
   ];
@@ -254,7 +256,7 @@ test("abrir Chamados monta a tabela uma vez, com as opções de Chamados, e depo
     const [host, opcoes] = calls.montar[0];
     assert.equal(host, el("cockpit-tickets-os"));
     assert.equal(opcoes.semBusca, true);
-    assert.equal(opcoes.incluirSemOs, true);
+    assert.equal(opcoes.incluirSemOs, undefined, "série sem OS nunca é listada");
     assert.equal(typeof opcoes.aoExpandirSerie, "function");
     assert.equal(typeof opcoes.aoCarregar, "function");
     assert.deepEqual(calls.filtrar, [{ busca: "", relacao: "", triagem: "", atencao: false }], "Relação 'todos' vira filtro vazio");
@@ -378,4 +380,16 @@ test("histórico de comparações vazio limpa a aba e mantém o Exportar desativ
     assert.equal(el("cockpit-comparison-event").disabled, true);
     assert.equal(el("comparacao-planilhas-fontes").textContent, "");
   } finally { delete global.document; }
+});
+
+test("Catálogo de unidades absorve o formulário do modal antigo (31/10/2026)", () => {
+  const painel = html.match(/<section[^>]*data-cockpit-tool-panel="unidades"[\s\S]*?\n        <\/section>/)?.[0] || "";
+  for (const id of ["form-nova-unidade", "form-unidade-titulo", "form-unidade-id", "form-unidade-cidade", "form-unidade-cep", "form-unidade-cnpj", "form-unidade-endereco", "btn-salvar-unidade", "cockpit-units-copy-cnpj", "cockpit-units-copy-cep", "cockpit-units-detail-badge"]) {
+    assert.equal(painel.split(`id="${id}"`).length - 1, 1, `${id} uma vez no painel`);
+    assert.equal(html.split(`id="${id}"`).length - 1, 1, `${id} uma vez na página`);
+  }
+  assert.match(painel, /id="cockpit-units-new"[^>]*data-on-click="toggleFormNovaUnidade"[^>]*data-args='\[true\]'/);
+  assert.match(painel, /id="btn-salvar-unidade"[^>]*data-on-click="salvarUnidadeForm"|data-on-click="salvarUnidadeForm"[^>]*id="btn-salvar-unidade"/);
+  assert.doesNotMatch(html, /modal-gerenciar-unidades|cockpit-units-legacy|cockpit-units-edit|lista-unidades-container/);
+  assert.doesNotMatch(painel, /Fluxo completo/);
 });

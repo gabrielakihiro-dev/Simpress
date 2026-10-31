@@ -49,6 +49,7 @@
 
 /* ---------- Seções numeradas ---------- */
 .ckp-secao { display: flex; flex-direction: column; min-width: 0; border: 1px solid var(--cor-borda-suave); border-radius: var(--raio-md); background: var(--cor-superficie-funda); }
+.ckp-secao.hidden { display: none; }
 .ckp-secao__cab { display: flex; align-items: center; gap: 10px; padding: 10px 12px 0; }
 .ckp-secao__num { flex: none; width: 22px; height: 22px; display: grid; place-items: center; border: 1px solid var(--cor-destaque); border-radius: 50%; color: var(--cor-destaque-texto); font-size: var(--fs-xs); font-weight: var(--peso-medio); transition: background-color var(--duracao) var(--curva); }
 .ckp-secao[data-pronta="true"] .ckp-secao__num { border-color: var(--cor-ok-texto); background: var(--cor-ok-fundo); color: var(--cor-ok-texto); }

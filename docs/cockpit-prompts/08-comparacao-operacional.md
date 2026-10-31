@@ -60,7 +60,7 @@ Informe os arquivos alterados, o mapeamento dos dados e ações reaproveitados, 
 
 Esta seção prevalece sobre "Layout do painel" e sobre a regra 6 (não remover modais) no que se refere ao antigo modal `#modal-comparacao-planilhas`, que já foi removido.
 
-- A aba `Comparação` (`F6`) passa a hospedar o **resultado completo** da atualização das planilhas (busca, filtro por tipo, "somente com anotação", cartões-resumo que rolam à seção, tabelas/cards, anotações por linha com autosave, apelidos manuais, remoção/restauração de hostname duplicado, exportação). Os KPIs, as pílulas, a lista e o detalhe do painel anterior saem; ficam a barra superior (indicador de estado, seletor `Comparação`, `Nova comparação`, `Exportar`, `Atualizar histórico`) e, abaixo dela, a linha de fontes e o resultado (`#comparacao-planilhas-fontes`, `#comparacao-planilhas-conteudo`, `aria-live="polite"`).
+- A aba `Comparação` (`F6`) passa a hospedar o **resultado completo** da atualização das planilhas (busca, filtro por tipo, "somente com anotação", cartões-resumo que rolam à seção, tabelas/cards, anotações por linha com autosave, apelidos manuais, remoção/restauração de hostname duplicado, exportação). Os KPIs, as pílulas, a lista e o detalhe do painel anterior saem; ficam a barra superior (indicador de estado, seletor `Comparação`, `Nova comparação`, `Exportar`) e, abaixo dela, a linha de fontes e o resultado (`#comparacao-planilhas-fontes`, `#comparacao-planilhas-conteudo`, `aria-live="polite"`).
 - O renderizador existente (`comparison-result-renderer.js`) é reutilizado sem mudar regras, rótulos aprovados ("no Endpoint", "na Simpress", "Endpoint"/"Simpress" por seção) nem textos. Dados e histórico gravados não mudam.
 - `Exportar` é o botão `#btn-exportar-resultado-comparacao` (`data-on-click="exportarResultadoComparacaoPlanilhas"`), um só na barra; ele substitui `#cockpit-comparison-export`.
 - O modal `Resultado da atualização das planilhas` (`#modal-comparacao-planilhas`) foi removido; o JS renderiza o resultado na aba. Atualizar planilhas e abrir um resultado pelo Histórico ou pelos atalhos da Home passam a abrir esta aba.
@@ -68,4 +68,4 @@ Esta seção prevalece sobre "Layout do painel" e sobre a regra 6 (não remover 
 
 ## Desvio aprovado pelo usuário (etapa A, item 6)
 
-`#cockpit-comparison-export` mostra `Exportar comparações do dia` (comportamento igual). `#cockpit-comparison-refresh` virou botão só ícone (`#i-refresh`, `aria-label`/`title` `Atualizar histórico`) e é o último da barra.
+`#cockpit-comparison-export` mostra `Exportar comparações do dia` (comportamento igual). `#cockpit-comparison-refresh` (botão só ícone `Atualizar histórico`) foi removido em 31/10/2026: o histórico recarrega sozinho sempre que a aba `Comparação` é aberta. `#i-refresh` continua no sprite, usado em outros pontos.

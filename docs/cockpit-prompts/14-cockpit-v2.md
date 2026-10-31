@@ -97,7 +97,7 @@ Pacote: `C:\Users\Gabriel\Downloads\Copy of Design form project (3)\re-cockpit-d
 ### Decisões do usuário
 
 1. **Local, CEP e CNPJs somente leitura**: não há rota de gravação e os dados vêm da planilha oficial. "Editar" libera só Apelido, Usuário e Login (nome da pessoa).
-2. **4 telas novas com dados reais** no layout v2, cada uma com botão "Fluxo completo" que abre o modal atual (como já é feito em Comparação e Apelidos).
+2. **4 telas novas com dados reais** no layout v2, cada uma com botão "Fluxo completo" que abre o modal atual (como já é feito em Comparação e Apelidos). Atualização de 31/10/2026: o Catálogo de unidades deixou de ter "Fluxo completo"; o modal `#modal-gerenciar-unidades` foi removido e o painel absorveu o formulário.
 3. **Popover de Prontidão fora**: entra só o CSS 2.17, que não aparece sozinho.
 
 ### Mapa das telas (`#cockpit-tool-panels`, `section[data-cockpit-tool-panel]`)
@@ -105,20 +105,20 @@ Pacote: `C:\Users\Gabriel\Downloads\Copy of Design form project (3)\re-cockpit-d
 | Tela (`data-cockpit-tool-panel`) | Fonte real | Handlers |
 |---|---|---|
 | `planilhas` | último evento de `GET /api/historico-comparacoes` (status, KPIs, lista) | área de upload vira botão: `abrirModalAtualizarPlanilhas` (fluxo real: 2 arquivos, prévia, `preview_token`); sem `<input type=file>` próprio |
-| `historico-planilhas` | `GET /api/historico-comparacoes` (lista, KPIs, busca) e `/{id}` (detalhe) | Exportar: handler de exportação existente; "Fluxo completo": `abrirModalHistoricoComparacoes` |
-| `evolucao` | `GET /api/operacoes/evolucao` (par anterior/atual) | "Fluxo completo": `abrirEvolucaoAtualizacoes` |
-| `unidades` | `GET /api/unidades` (nome = `label`/`cidade`) | "Nova unidade", "Editar", "Fluxo completo": `abrirModalGerenciarUnidades` / `toggleFormNovaUnidade`; sem formulário próprio |
+| ~~`historico-planilhas`~~ | Removida em 31/10/2026: menu, painel e botões de acesso saíram; o modal `#modal-historico-comparacoes` continua, aberto por `#cockpit-comparison-legacy` (aba Comparação) |  |
+| ~~`evolucao`~~ | Removida em 31/10/2026: menu `#btn-evolucao-atualizacoes`, painel e modal `#modal-evolucao-atualizacoes` saíram; o front-end não chama mais `GET /api/operacoes/evolucao` (endpoint mantido, só o assistente o usa). O botão `#btn-alerta-divergencias-novas` da Home abre `comparacao` |  |
+| `unidades` | `GET /api/unidades` (nome = `label`/`cidade`) | Desde 31/10/2026 o painel traz tudo o que o modal oferecia: "Nova unidade" (`#cockpit-units-new` → `toggleFormNovaUnidade`), formulário `#form-nova-unidade` (`form-unidade-titulo/-id/-cidade/-cep/-cnpj/-endereco`, `#btn-salvar-unidade` → `salvarUnidadeForm`), selo SEDE (lista e detalhe), detalhe com cidade, UF, endereço, CEP e CNPJ e botões `#cockpit-units-copy-cnpj` / `#cockpit-units-copy-cep`. Um lápis `Editar CNPJ da unidade <cidade>` ao fim do CNPJ (linha da lista e detalhe) abre o formulário preenchido com o foco no CNPJ (`editarUnidade(id, "form-unidade-cnpj")`). Saíram "Fluxo completo" (`#cockpit-units-legacy`), "Editar" (`#cockpit-units-edit`) e o modal; `abrirModalGerenciarUnidades` continua exportado (Home, "Cadastrar regionais") e só abre o painel. Salvar recarrega `carregarUnidades()` e a lista do painel (`recarregarUnidadesCockpit`) |
 
-- Menu Ferramentas: IDs e `#badge-total-historico-comparacoes` preservados; ações `abrirPainelCockpit` com `data-args` `["planilhas"]`, `["historico-planilhas"]`, `["evolucao"]`, `["unidades"]`. Voltar: `fecharPainelCockpit` (volta à tela anterior).
+- Menu Ferramentas: IDs preservados (`#btn-historico-comparacoes` e `#badge-total-historico-comparacoes` removidos em 31/10/2026); ações `abrirPainelCockpit` com `data-args` `["planilhas"]`, `["unidades"]` (`["evolucao"]` removido em 31/10/2026). Voltar: `fecharPainelCockpit` (volta à tela anterior).
 - Home, edição em linha: `#btn-editar-equipamento` (`editarDadosCadastrais`), `#form-editar-equipamento` (`salvarDadosCadastrais`), campos `data-campo` = `apelido`, `usuario`, `login`. Rotas existentes: `/api/equipamento/atualizar-apelido`, `/api/equipamento/atualizar-usuario`, `/api/equipamento/nome-pessoa`; só campos alterados. Usuário do Endpoint não é editável.
 - Transporte: `#btn-nova-transferencia` ao lado de `#btn-trocar-equipamento` (`resetarFormulario`).
-- Textos de planilha entram só por `textContent`; sem `style=` (CSP). Barras do gráfico de Evolução com `<rect height>` em SVG.
+- Textos de planilha entram só por `textContent`; sem `style=` (CSP). Barras do gráfico do Relatório mensal com `<rect height>` em SVG (o gráfico da Evolução saiu em 31/10/2026).
 
 ### Pontos sem fonte real
 
 - Local, CEP, CNPJs: sem rota de gravação (somente leitura).
 - Unidades: `representante`, região e filtro por região não existem em `/api/unidades`; "Usar no Transporte" sem handler.
-- Evolução: sem série histórica; o gráfico mostra só anterior × atual.
+- Evolução (removida em 31/10/2026): sem série histórica; o gráfico mostrava só anterior × atual.
 - Atualizar planilhas: o upload de 1 arquivo da v2 não existe; o fluxo real é o modal.
 - `salvarDadosEquipamento` não envia `revisao` (provável 409 ao editar existente): fora desta entrega.
 
@@ -165,13 +165,13 @@ Cadeia de branches (cada fase foi cortada da anterior; a fase 7 contém tudo): `
 
 - Navegador real com dados operacionais (só o fixture, que tem poucos dados: Unidades e Histórico aparecem quase vazios).
 - Comparação pixel a pixel com o artefato v2 (só inspeção visual lado a lado em 1440 escuro; 768/390 e tema claro sem referência v2).
-- Unidades: o botão "Editar" fica ativo sem unidade selecionada (abre o modal de gestão); reportado, não alterado.
+- Unidades: o botão "Editar" ficava ativo sem unidade selecionada (abria o modal de gestão). Resolvido em 31/10/2026: botão e modal saíram; a edição é pelo lápis do CNPJ.
 - Gravação real de Apelido/Usuário/Login contra o servidor com dados reais.
 
 ### Divergências e pontos sem fonte real
 
 - Local, CEP e CNPJ: somente leitura (sem rota de gravação).
-- Unidades: representante, região e "Usar no Transporte" sem fonte/handler; em 768px o botão "Editar" aparece mesmo sem unidade selecionada.
+- Unidades: representante, região e "Usar no Transporte" sem fonte/handler; o botão "Editar" saiu em 31/10/2026 (edição pelo lápis do CNPJ).
 - Evolução: sem série histórica (só anterior × atual).
 - Atualizar planilhas: upload de 1 arquivo na tela; o fluxo real usa 2 arquivos (modal via "Fluxo completo").
 - Follow-up sugerido: `salvarDadosEquipamento` não envia `revisao` (provável 409 ao editar equipamento existente); fora do escopo.

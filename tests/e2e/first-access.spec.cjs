@@ -207,3 +207,25 @@ test("an older readiness response cannot overwrite or clear the newer request", 
     releaseLatest?.();
   }
 });
+
+test("Cadastrar regionais abre o painel Catálogo de unidades com o formulário vazio", async ({ page }) => {
+  const errors = [];
+  page.on("pageerror", error => errors.push(error.message));
+  await mockReadiness(page, () => readiness());
+  await page.route("**/api/unidades", route => route.fulfill({ json: [] }));
+  await page.goto("/");
+  await expect(page.locator("#readiness-panel")).toHaveAttribute("aria-busy", "false");
+  await openStatus(page);
+  await page.locator("#readiness-panel > summary").click();
+  const cadastrar = page.locator("#readiness-panel").getByRole("button", { name: "Cadastrar regionais" });
+  await cadastrar.click();
+  await expect(page.locator('[data-cockpit-tool-panel="unidades"]')).toBeVisible();
+  await expect(page.locator("#modal-gerenciar-unidades")).toHaveCount(0);
+  await expect(page.locator("#form-nova-unidade")).toBeVisible();
+  await expect(page.locator("#form-unidade-titulo")).toBeVisible();
+  await page.keyboard.press("Escape");
+  await expect(page.locator("#cockpit-tool-panels")).toBeHidden();
+  // Contrato compartilhado por todas as ferramentas: o foco volta ao gatilho do menu Ferramentas (não ao botão da Home).
+  await expect(page.locator("#cockpit-tools-trigger")).toBeFocused();
+  expect(errors).toEqual([]);
+});
