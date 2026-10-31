@@ -110,10 +110,16 @@ def search_normalized_index(
     if not term:
         return []
 
+    # Nome com palavras separadas ("bruno pinheiro" acha "Bruno Gabriel de Oliveira Pinheiro"):
+    # todas as palavras precisam estar no mesmo campo; fica depois dos acertos da frase inteira.
+    words = term.split()
+
     ranked_results: List[Tuple[int, int, Dict[str, Any]]] = []
     for index, searchable_values, result in indexed:
         serial_search, model_search, kind_search, alias_search, city_search, category_search, user_search = searchable_values
-        if not any(term in value for value in searchable_values):
+        if not any(term in value for value in searchable_values) and not (
+            len(words) > 1 and any(all(word in value for word in words) for value in searchable_values)
+        ):
             continue
 
         if term == serial_search:
