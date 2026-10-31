@@ -583,6 +583,13 @@ def aguardar_login(
     raise RotinaErro(f"Login não concluído em {LOGIN_TIMEOUT_S // 60} minutos.")
 
 
+# Campo de e-mail da tela "Entrar" da Microsoft (o layout novo varia o type/name); nunca o de senha.
+CAMPO_EMAIL_MICROSOFT = (
+    "input[type='email'], input[name='loginfmt'], input[name='login'], input[autocomplete='username'], "
+    "input[type='text'], input:not([type]), [role='textbox']"
+)
+
+
 def entrar_microsoft(
     page: "Page",
     origem: str,
@@ -596,10 +603,11 @@ def entrar_microsoft(
     Cada passo é feito uma única vez; termina ao aparecer a senha, quando ``concluido(page)`` ficar
     verdadeiro ou ao esgotar ``espera_s``.
     """
-    escolheu = digitou = False
+    escolheu = digitou = diagnosticou = False
     escolhas = 0
     ultima_escolha = 0.0
-    limite = time.time() + espera_s
+    inicio = time.time()
+    limite = inicio + espera_s
     while time.time() < limite:
         verificar_cancelamento()
         if page.is_closed() or (concluido is not None and concluido(page)):
@@ -615,7 +623,7 @@ def entrar_microsoft(
         if not escolheu and not digitou:
             # Só a conta pedida, pelo e-mail exato: nunca outra conta da lista (por exemplo, a do Sebrae).
             conta = page.get_by_text(re.compile(rf"^\s*{re.escape(email)}\s*$", re.IGNORECASE)).filter(visible=True)
-            campo = page.locator("input[type='email'], input[name='loginfmt']").filter(visible=True)
+            campo = page.locator(CAMPO_EMAIL_MICROSOFT).filter(visible=True)
             # "Use another account", "Another account", "Acessar Outra Conta", "Outra Conta".
             outra = page.get_by_text(re.compile(r"(another|outra)\s+(account|conta)", re.IGNORECASE)).filter(visible=True)
             if conta.count() and not campo.count():
@@ -636,6 +644,15 @@ def entrar_microsoft(
             elif outra.count():
                 log(origem, "Conta não listada; clicando em 'Outra Conta'...")
                 outra.first.click()
+            elif not diagnosticou and time.time() - inicio >= 10:
+                diagnosticou = True  # a tela não bateu com nenhum passo: registra o que há nela para ajustar depois
+                try:
+                    campos = page.locator("input").evaluate_all(
+                        "els => els.filter(e => e.offsetParent !== null).map(e => `${e.type}/${e.name}/${e.id}`)"
+                    )
+                except Exception:
+                    campos = []
+                log(origem, f"Tela da Microsoft não reconhecida (campos visíveis: {campos}); aguardando você.")
         page.wait_for_timeout(500)
 
 

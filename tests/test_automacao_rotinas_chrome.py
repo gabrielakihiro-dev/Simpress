@@ -298,6 +298,22 @@ class LoginAbasTests(unittest.TestCase):
             automacao.entrar_microsoft(page, "Oracle", "gansouza@simpress.com.br", espera_s=5)
         self.assertEqual(set(clicados), {"Use outra conta"})  # nunca a conta do Sebrae
 
+    def test_microsoft_types_the_email_in_a_generic_text_field_and_advances(self):
+        page, _clicados, relogio = self._conta_microsoft([])
+        campo, avancar = MagicMock(), MagicMock()
+        for alvo in (campo, avancar):
+            alvo.filter.return_value.count.return_value = 1
+        page.locator.side_effect = lambda seletor: campo if seletor == automacao.CAMPO_EMAIL_MICROSOFT else avancar
+        self.assertIn("input[type='text']", automacao.CAMPO_EMAIL_MICROSOFT)
+        self.assertNotIn("password", automacao.CAMPO_EMAIL_MICROSOFT)
+        with (
+            patch.object(automacao.time, "time", lambda: relogio["agora"]),
+            patch.object(automacao, "visivel", return_value=False),
+        ):
+            automacao.entrar_microsoft(page, "SoftExpert", "gakihiro@pr.sebrae.com.br", espera_s=3)
+        campo.filter.return_value.first.fill.assert_called_with("gakihiro@pr.sebrae.com.br")
+        avancar.filter.return_value.first.click.assert_called_once()
+
     def _pagina_endpoint(self, usuario="gakihiro"):
         page = MagicMock()
         page.url = "https://centralendpoint.pr.sebrae.com.br/client#/login"

@@ -110,6 +110,7 @@ ROTULOS_PROIBIDOS = re.compile(
 ESPERA_LISTA_MS = 60_000
 ESPERA_PAGINA_MS = 15_000
 ESPERA_ROLAGEM_MS = 3_000
+ESPERA_PRIMEIRAS_LINHAS_MS = 20_000
 ESPERA_ABERTURA_MS = 60_000
 ESPERA_BOTAO_MS = 5_000
 ESPERA_ESTAVEL_MS = 6_000
@@ -513,6 +514,9 @@ def listar_chamados(page: "Page", parar_em: str | None = None) -> List[ItemLista
     Uma lista que não termina em ``MAX_RODADAS_LISTA`` voltas é falha, nunca resultado parcial.
     """
     _aguardar_lista(page)
+    # Logo depois do login a lista aparece antes das linhas (ou com o aviso de vazia): sem esperar por elas
+    # a rotina lia 0 chamados e dava a busca como concluída. Uma lista realmente vazia só paga esta espera.
+    _esperar(page, lambda: any(extrair_numeros(texto) for texto in _textos_linhas(page)), ESPERA_PRIMEIRAS_LINHAS_MS)
     itens: Dict[str, ItemLista] = {}
     sem_novidade = 0
     for _ in range(MAX_RODADAS_LISTA):
