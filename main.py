@@ -2550,6 +2550,7 @@ app.include_router(create_sebrae_dashboard_router(SebraeDashboardServices(
     max_upload_bytes=lambda: MAX_UPLOAD_BYTES,
     registros=lambda: sebrae_cruzamento.registros_de_equipamentos(_listar_equipamentos_indexados()),
     relatorio_chamados=_dashboard_ticket_report,
+    runner=get_chrome_automation_runner,
 )))
 
 

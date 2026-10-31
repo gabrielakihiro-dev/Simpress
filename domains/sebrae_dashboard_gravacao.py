@@ -21,6 +21,7 @@ from xml.etree import ElementTree
 
 from domains.sebrae_chamados import extrair_numeros
 from domains.sebrae_dashboard import ABA, DashboardInvalido, MANUAIS, _validar_pacote, ler_coluna_c
+from domains.sebrae_novos import STATUS_FINALIZADO
 
 TABELA = "Tabela3"
 FORMATO_DATA_HORA = "%d/%m/%Y %H:%M"
@@ -479,6 +480,13 @@ def atualizar(
                 substituicoes[linha.numero] = _reescrever_linha(linha, alteradas, estilos, "", True)
                 gravadas.append(LinhaGravada(chamado, linha.numero, "alterado", tuple(sorted(alteradas))))
 
+    resultado = _montar(pacote, texto, linhas, substituicoes)
+    _conferir(resultado, anteriores, [str(l.get("C", "")) for l in novas], pacote.aba)
+    return Resultado(resultado, tuple(gravadas))
+
+
+def _montar(pacote: _Pacote, texto: str, linhas: Mapping[int, _Linha], substituicoes: Mapping[int, str]) -> bytes:
+    """The workbook with the rewritten rows spliced into the sheet; every other part is copied as it was."""
     novo_texto = ""
     cursor = 0
     for numero_linha in sorted(substituicoes):
@@ -503,9 +511,56 @@ def atualizar(
             copia.external_attr = entrada.external_attr
             copia.create_system = entrada.create_system
             destino.writestr(copia, partes[entrada.filename])
-    resultado = saida.getvalue()
-    _conferir(resultado, anteriores, [str(l.get("C", "")) for l in novas], pacote.aba)
-    return Resultado(resultado, tuple(gravadas))
+    return saida.getvalue()
+
+
+ENCERRAMENTO_GRAVADO = "gravado"
+ENCERRAMENTO_JA_PREENCHIDO = "ja_preenchido"
+ENCERRAMENTO_NAO_ENCONTRADO = "nao_encontrado"
+ENCERRAMENTO_AMBIGUO = "ambiguo"
+
+
+def registrar_encerramentos(conteudo: bytes, encerramentos: Mapping[str, str]) -> Tuple[Resultado, Dict[str, str]]:
+    """Writes DT ENCERRAMENTO (column R) and status D = FINALIZADO of tickets closed in SoftExpert; the row is found by the UTIC in column C.
+
+    ``encerramentos``: ``{UTIC: "dd/MM/aaaa HH:mm"}``. Unlike ``atualizar`` this reaches rows of any status (the
+    ticket has just been finalized) but only columns D and R, only when R is empty (a date typed in the site or
+    already saved is never overwritten), and only when exactly one row holds the UTIC. Gives the new workbook (the same
+    bytes when nothing changed) and, per UTIC, ``gravado`` / ``ja_preenchido`` / ``nao_encontrado`` / ``ambiguo``.
+    """
+    anteriores = ler_coluna_c(conteudo)  # also checks the headers of the sheet
+    pacote = _ler_pacote(conteudo)
+    texto = pacote.texto(pacote.aba)
+    _, _, linhas = _linhas_da_aba(texto)
+    por_numero: Dict[str, List[_Linha]] = {}
+    for numero in sorted(linhas):
+        linha = linhas[numero]
+        if numero >= 2 and _tem_dado(linha, pacote.compartilhadas):
+            achados = extrair_numeros(_valor_legivel("C", linha.celulas.get("C", ""), pacote.compartilhadas))
+            for utic in set(achados):
+                por_numero.setdefault(utic, []).append(linha)
+    estados: Dict[str, str] = {}
+    substituicoes: Dict[int, str] = {}
+    gravadas: List[LinhaGravada] = []
+    estilos = _estilos_modais(linhas, pacote.compartilhadas)
+    for utic, quando in encerramentos.items():
+        donas = por_numero.get(utic, [])
+        if not donas:
+            estados[utic] = ENCERRAMENTO_NAO_ENCONTRADO
+        elif len(donas) > 1:
+            estados[utic] = ENCERRAMENTO_AMBIGUO
+        elif _valor_celula(donas[0].celulas.get("R", ""), pacote.compartilhadas) is not None:
+            estados[utic] = ENCERRAMENTO_JA_PREENCHIDO
+        else:
+            # D junto com R: a linha finalizada no SoftExpert não pode continuar "EM ABERTO" no Dashboard.
+            substituicoes[donas[0].numero] = _reescrever_linha(donas[0], {"D": STATUS_FINALIZADO, "R": quando}, estilos, "", True)
+            gravadas.append(LinhaGravada(utic, donas[0].numero, "alterado", ("D", "R")))
+            estados[utic] = ENCERRAMENTO_GRAVADO
+    if not substituicoes:
+        return Resultado(conteudo), estados
+    novo = _montar(pacote, texto, linhas, substituicoes)
+    _conferir(novo, anteriores, [], pacote.aba)
+    return Resultado(novo, tuple(gravadas)), estados
 
 
 def _recalcular_ao_abrir(workbook: str) -> str:
@@ -537,5 +592,7 @@ def _conferir(conteudo: bytes, anteriores: frozenset[str], novos: Sequence[str],
 
 
 __all__ = [
-    "AUTOMATICAS_VAZIAS", "CHAVE_DE_LINHA", "ChamadoAberto", "GravacaoInvalida", "LinhaGravada", "Resultado", "atualizar", "chamados_para_editar", "ler_listas",
+    "AUTOMATICAS_VAZIAS", "CHAVE_DE_LINHA", "ChamadoAberto", "ENCERRAMENTO_AMBIGUO", "ENCERRAMENTO_GRAVADO",
+    "ENCERRAMENTO_JA_PREENCHIDO", "ENCERRAMENTO_NAO_ENCONTRADO", "GravacaoInvalida", "LinhaGravada", "Resultado",
+    "atualizar", "chamados_para_editar", "ler_listas", "registrar_encerramentos",
 ]

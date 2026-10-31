@@ -6,6 +6,11 @@ chamados cujo número/título não conferem. O Chrome é iniciado como na rotina
 modo headless; nenhum site real, login ou chamado verdadeiro é tocado. Os botões "Reatribuir" e "Finalizar
 workflow" da bancada contam qualquer clique: o teste exige zero.
 
+A tela de finalização (``chamado(..., finalizacao=True)``) reproduz o atendimento (categoria e solução em
+dropdown estilo select2, detalhes, e-mail ao solicitante, equipe), o anexo (+, arquivo, Enviar) e o botão
+Finalizar com confirmação; ``Solicitar Complemento``, ``Enviar para outra equipe``, ``Mais ações``, ``Salvar``
+e ``Reatribuir`` contam qualquer clique e os testes exigem zero.
+
 SIMPRESS_TESTE_COM_JANELA=1 abre o Chrome visível e SIMPRESS_TESTE_VERBOSO=1 mostra o log. Sem Chrome nem
 Chromium do Playwright, os testes de navegador são pulados.
 """
@@ -169,6 +174,134 @@ setTimeout(() => {
 }, 500);
 </script></body></html>"""
 
+# Tela de finalização (atendimento + anexo + Finalizar), escolhida por ``chamado(..., finalizacao=True)``.
+# Os botões de escrita proibidos têm a classe "proibido" e contam qualquer clique em /api/proibido.
+PAGINA_FINALIZACAO = """<!doctype html><html lang="pt-br"><head><meta charset="utf-8"><title>Finalizar chamado</title>
+<style>%(estilo)s
+.select2-container{display:block;border:1px solid #999;padding:6px;cursor:pointer;width:300px}
+li[role=option]{padding:6px;cursor:pointer;border:1px solid #ccc;width:288px}
+.espaco{height:700px}
+#cabecalho{white-space:pre-line}
+</style></head><body>
+<div id="cabecalho"></div>
+<div id="car" class="carregando">Carregando...</div>
+<div id="dlg" role="dialog" class="oculto"><p>Deseja associar este chamado ao seu usuário?</p>
+<button id="sim">Sim</button><button id="nao">Não</button></div>
+<div id="dlg-final" role="dialog" class="oculto"><p id="dlg-final-texto"></p>
+<button id="final-sim">Sim</button><button id="final-nao">Não</button></div>
+<div id="topo" class="oculto">
+<button type="button" class="proibido">Solicitar Complemento</button>
+<button type="button" class="proibido">Enviar para outra equipe</button>
+<button type="button" class="proibido">Mais ações</button>
+<button type="button" class="proibido">Salvar</button>
+<button type="button" class="proibido">Reatribuir</button>
+<button type="button" id="finalizar">Finalizar</button>
+</div>
+<nav id="menu" class="oculto"><button type="button" id="m-atendimento">Atendimento - Chamados TI</button>
+<button type="button" id="m-anexo">Anexo</button></nav>
+<form id="formulario" class="oculto">
+<div><label for="f_numero">Número do chamado</label><input id="f_numero" readonly></div>
+<div><label for="f_titulo">Título</label><input id="f_titulo" readonly></div>
+<div><label for="f_solicitante">Solicitante</label><input id="f_solicitante" readonly></div>
+<div><label for="f_iniciador">Iniciador</label><input id="f_iniciador" readonly></div>
+<div><label for="f_habilitada">Habilitada em</label><input id="f_habilitada" readonly></div>
+<div><label for="f_descricao">Descrição</label><textarea id="f_descricao" readonly></textarea></div>
+</form>
+<section id="p-atendimento" class="oculto">
+<div><label>Detalhes do Atendimento Realizado</label><textarea id="f_anterior" readonly>Atendimento anterior</textarea></div>
+<div><label>Selecione a Categoria de Solução</label><div id="d-categoria" class="select2-container" role="combobox" tabindex="0">Selecione</div>
+<ul id="o-categoria" role="listbox" class="oculto"></ul></div>
+<div><label>Selecione a Solução</label><div id="d-solucao" class="select2-container" role="combobox" tabindex="0">Selecione</div>
+<ul id="o-solucao" role="listbox" class="oculto"></ul></div>
+<div><label>Detalhes do Atendimento Realizado</label><textarea id="f_detalhes"></textarea></div>
+<div><input type="checkbox" id="f_email"><label for="f_email">Enviar Detalhes por e-mail ao solicitante</label></div>
+<div class="espaco"></div>
+<h3>Alterar Equipe de Atendimento</h3>
+<div><label for="f_equipe">Selecione a Equipe</label><select id="f_equipe">
+<option>Selecione</option><option>UTIC - N2</option><option>UTIC - N1</option></select></div>
+</section>
+<section id="p-anexo" class="oculto">
+<button type="button" id="incluir" title="Incluir" aria-label="Incluir">+</button>
+<input type="file" id="arquivo" class="oculto" accept=".pdf">
+<div id="upload" class="oculto"><span id="nome-upload"></span> <button type="button" id="enviar-anexo">Enviar</button></div>
+<ul id="anexados"></ul>
+</section>
+<script>
+const D = %(dados)s;
+const $ = (id) => document.getElementById(id);
+const estado = {categoria: '', solucao: ''};
+// Cabeçalho da janela e da atividade: nos chamados criados pela API é o único lugar com número e Solicitante.
+$('cabecalho').textContent = ['Execução de atividade', D.numero + ' - ' + D.titulo_cabecalho, 'EXECUÇÃO',
+  'Iniciador', D.iniciador, 'Solicitante', D.solicitante_cabecalho, 'Prazo desta atividade'].join(String.fromCharCode(10));
+const SOLUCOES = {Infraestrutura: ['Rede e conectividade', 'Servidores'], Software: ['Sistema operacional'], Hardware: ['Impressora']};
+const abrirLista = (id, opcoes, escolher) => {
+  const lista = $(id);
+  lista.replaceChildren(...opcoes.map((t) => {
+    const li = document.createElement('li');
+    li.setAttribute('role', 'option');
+    li.textContent = t;
+    li.addEventListener('click', () => { escolher(t); lista.classList.add('oculto'); });
+    return li;
+  }));
+  lista.classList.remove('oculto');
+};
+$('d-categoria').addEventListener('click', () => abrirLista('o-categoria', Object.keys(SOLUCOES), (t) => {
+  $('d-categoria').textContent = t; estado.categoria = t; $('d-solucao').textContent = 'Selecione'; estado.solucao = '';
+}));
+$('d-solucao').addEventListener('click', () => abrirLista('o-solucao', SOLUCOES[estado.categoria] || [], (t) => {
+  $('d-solucao').textContent = t; estado.solucao = t;
+}));
+const painel = (qual) => {
+  $('p-atendimento').classList.toggle('oculto', qual !== 'atendimento');
+  $('p-anexo').classList.toggle('oculto', qual !== 'anexo');
+};
+$('m-atendimento').addEventListener('click', () => painel('atendimento'));
+$('m-anexo').addEventListener('click', () => painel('anexo'));
+$('incluir').addEventListener('click', () => $('arquivo').click());
+$('arquivo').addEventListener('change', () => {
+  const arquivo = $('arquivo').files[0];
+  if (!arquivo) return;
+  $('nome-upload').textContent = arquivo.name;
+  $('upload').classList.remove('oculto');
+});
+$('enviar-anexo').addEventListener('click', async () => {
+  const nome = $('nome-upload').textContent;
+  await fetch('/api/anexo?numero=' + D.numero + '&nome=' + encodeURIComponent(nome), {method: 'POST'});
+  $('upload').classList.add('oculto');
+  const li = document.createElement('li'); li.textContent = nome + ' (enviado)'; $('anexados').appendChild(li);
+});
+document.querySelectorAll('.proibido').forEach((el) => el.addEventListener('click', () => {
+  fetch('/api/proibido?acao=' + encodeURIComponent(el.textContent), {method: 'POST'});
+}));
+const concluir = async () => {
+  await fetch('/api/finalizar?numero=' + D.numero, {
+    method: 'POST', headers: {'Content-Type': 'application/json'},
+    body: JSON.stringify({categoria: estado.categoria, solucao: estado.solucao, detalhes: $('f_detalhes').value,
+      email: $('f_email').checked, equipe: $('f_equipe').value}),
+  });
+  if (D.finalizar_falha) return;
+  if (D.abertura === 'popup') window.close(); else location.href = '/softexpert/workspace';
+};
+$('final-sim').addEventListener('click', concluir);
+$('final-nao').addEventListener('click', () => $('dlg-final').classList.add('oculto'));
+$('finalizar').addEventListener('click', () => {
+  if (D.confirmacao_final === 'nativa') { if (confirm('Deseja finalizar esta atividade?')) concluir(); return; }
+  $('dlg-final-texto').textContent = D.confirmacao_final === 'estranha'
+    ? 'Deseja excluir todos os registros?' : 'Deseja finalizar esta atividade?';
+  $('dlg-final').classList.remove('oculto');
+});
+const associar = () => fetch('/api/associar?numero=' + D.numero, {method: 'POST'});
+const mostrar = () => {
+  ['formulario', 'topo', 'menu'].forEach((id) => $(id).classList.remove('oculto'));
+  $('f_numero').value = D.numero_form; $('f_titulo').value = D.titulo_form;
+  $('f_solicitante').value = D.solicitante; $('f_iniciador').value = D.iniciador; $('f_habilitada').value = D.habilitada_em;
+  $('f_descricao').value = D.descricao;
+  $('f_email').checked = D.email_marcado_inicial;
+};
+$('sim').addEventListener('click', async () => { await associar(); $('dlg').classList.add('oculto'); mostrar(); });
+setTimeout(() => { $('car').classList.add('oculto'); $('dlg').classList.remove('oculto'); }, 400);
+</script></body></html>"""
+
 
 def chamado(indice: int, **extra) -> dict:
     dados = {
@@ -182,6 +315,10 @@ def chamado(indice: int, **extra) -> dict:
         "detalhes_atendimento_editavel": "Rascunho da atividade atual que não deve ser exportado",
         "atraso": 0,
         "confirmacao": "modal",
+        "finalizacao": False,
+        "email_marcado_inicial": True,
+        "confirmacao_final": "modal",
+        "finalizar_falha": False,
     }
     dados.update(extra)
     return dados
@@ -206,6 +343,8 @@ class Bancada:
         self.consultas_atendimento: list[str] = []
         self.proibidos: list[str] = []
         self.sso_clicks: list[str] = []
+        self.eventos: list[str] = []
+        self.finalizados: list[dict] = []
 
     def por_numero(self, numero: str) -> dict:
         return next(c for c in self.chamados if c["numero"] == numero)
@@ -249,6 +388,13 @@ def criar_servidor(bancada: Bancada) -> ThreadingHTTPServer:
                     "detalhes_atendimento_editavel": c.get("detalhes_atendimento_editavel", ""),
                     "atraso": c["atraso"], "confirmacao": c["confirmacao"],
                 }
+                if c.get("finalizacao"):
+                    dados.update(
+                        abertura=bancada.abertura, email_marcado_inicial=c["email_marcado_inicial"],
+                        confirmacao_final=c["confirmacao_final"], finalizar_falha=c["finalizar_falha"],
+                        titulo_cabecalho=c.get("titulo_cabecalho", c["titulo"]), solicitante_cabecalho=c.get("solicitante_cabecalho", c["solicitante"]),
+                    )
+                    return self.responder(PAGINA_FINALIZACAO % {"estilo": ESTILO, "dados": json.dumps(dados)})
                 return self.responder(PAGINA_REGISTRO % {"estilo": ESTILO, "dados": json.dumps(dados)})
             if caminho == "/api/estado":
                 return self.responder(
@@ -269,6 +415,14 @@ def criar_servidor(bancada: Bancada) -> ThreadingHTTPServer:
                 bancada.consultas_atendimento.append(consulta["numero"])
             elif caminho == "/api/proibido":
                 bancada.proibidos.append(consulta["acao"])
+            elif caminho == "/api/anexo":
+                bancada.eventos.append(f"anexo:{consulta['numero']}:{consulta['nome']}")
+            elif caminho == "/api/finalizar":
+                tamanho = int(self.headers.get("Content-Length") or 0)
+                bancada.finalizados.append(json.loads(self.rfile.read(tamanho).decode("utf-8")))
+                bancada.eventos.append(f"finalizar:{consulta['numero']}")
+                if not bancada.por_numero(consulta["numero"]).get("finalizar_falha"):
+                    bancada.chamados.remove(bancada.por_numero(consulta["numero"]))
             elif caminho == "/api/sso":
                 chave = consulta.get("chave", "")
                 bancada.sso_clicks.append(chave)
@@ -383,6 +537,65 @@ class RegrasPurasTests(unittest.TestCase):
             se.clicar(botao, "teste")
             botao.first.click.assert_called_once()
 
+    def test_escrita_liberada_so_para_o_rotulo_escolhido_e_so_dentro_do_bloco(self):
+        def botao(rotulo: str, aria: str = ""):
+            alvo = MagicMock()
+            alvo.first.inner_text.return_value = rotulo
+            alvo.first.get_attribute.return_value = aria
+            return alvo
+
+        fora = botao("Finalizar")
+        with self.assertRaises(se.SoftExpertErro):
+            se.clicar(fora, "teste")
+        fora.first.click.assert_not_called()
+
+        with se._liberar_escrita("finalizar"):
+            permitido = botao("Finalizar")
+            se.clicar(permitido, "teste")
+            permitido.first.click.assert_called_once()
+            for rotulo in ("Enviar", "Enviar para outra equipe", "Finalizar workflow", "Reatribuir", "Salvar", "Mais ações"):
+                alvo = botao(rotulo)
+                with self.assertRaises(se.SoftExpertErro, msg=rotulo):
+                    se.clicar(alvo, "teste")
+                alvo.first.click.assert_not_called()
+        self.assertIsNone(se._ESCRITA_LIBERADA)
+        with self.assertRaises(se.SoftExpertErro):
+            se.clicar(botao("Finalizar"), "teste")
+
+        with se._liberar_escrita("enviar"):
+            anexo = botao("", aria="Enviar")
+            se.clicar(anexo, "teste")
+            anexo.first.click.assert_called_once()
+            for rotulo in ("Finalizar", "Enviar para outra equipe", "Reatribuir"):
+                with self.assertRaises(se.SoftExpertErro, msg=rotulo):
+                    se.clicar(botao(rotulo), "teste")
+
+    def test_liberacao_e_desfeita_mesmo_com_falha_e_so_aceita_rotulos_aprovados(self):
+        with self.assertRaises(RuntimeError):
+            with se._liberar_escrita("finalizar"):
+                raise RuntimeError("falha no meio do clique")
+        self.assertIsNone(se._ESCRITA_LIBERADA)
+        for rotulo in ("salvar", "reatribuir", "atribuir", "excluir", "registrar atendimento", ""):
+            with self.assertRaises(se.SoftExpertErro, msg=rotulo):
+                with se._liberar_escrita(rotulo):
+                    self.fail("rótulo não aprovado foi liberado")
+        self.assertIsNone(se._ESCRITA_LIBERADA)
+
+    def test_finalizar_chamado_rejeita_entrada_invalida_antes_de_qualquer_navegacao(self):
+        page = MagicMock()
+        for numero, descricao in (("UTIC-2026-0001", ""), ("UTIC-2026-0001", "   \n"), ("lixo", "texto")):
+            with self.assertRaises(se.SoftExpertErro, msg=(numero, descricao)):
+                se.finalizar_chamado(page, numero, descricao)
+        with tempfile.TemporaryDirectory() as pasta:
+            falso = Path(pasta) / "nota.txt"
+            falso.write_text("x", encoding="utf-8")
+            vazio = Path(pasta) / "vazio.pdf"
+            vazio.write_bytes(b"")
+            for pdf in (falso, vazio, Path(pasta) / "nao-existe.pdf"):
+                with self.assertRaises(se.SoftExpertErro, msg=str(pdf)):
+                    se.finalizar_chamado(page, "UTIC-2026-0001", "texto", pdf=pdf)
+        self.assertEqual(page.method_calls, [])
+
     def test_detalhes_do_atendimento_ja_visiveis_sao_lidos_sem_navegar(self):
         page = MagicMock()
         page.is_closed.return_value = False
@@ -495,6 +708,8 @@ class SoftExpertNaBancadaTests(unittest.TestCase):
             patch.object(se, "RELEITURAS_CAMPOS", 4),
             patch.object(se, "ESPERA_RELEITURA_MS", 700),
             patch.object(se, "GRACA_CONFIRMACAO_S", 2),
+            patch.object(se, "ESPERA_ANEXO_MS", 8_000),
+            patch.object(se, "ESPERA_FINALIZAR_MS", 3_000),
             patch.object(automacao, "ERROS_DIR", self.pasta / "erros"),
             patch.object(automacao, "LOGIN_TIMEOUT_S", 20),
             patch.object(automacao, "verificar_cancelamento"),
@@ -798,6 +1013,219 @@ class SoftExpertNaBancadaTests(unittest.TestCase):
         lido = se.extrair_chamado(self.context, page, "UTIC-2026-0001")
         self.assertEqual(lido.descricao, injecao)
         self.assertSemEscrita()
+
+
+    # ------------------------------------------------------------------ finalização
+
+    DESCRICAO_FINAL = "Cabo de rede trocado e link testado.\nChamado resolvido remotamente."
+
+    def novo_pdf(self, nome: str = "evidencia.pdf") -> Path:
+        pasta = self.pasta / "anexos"
+        pasta.mkdir(exist_ok=True)
+        caminho = pasta / nome
+        caminho.write_bytes(
+            b"%PDF-1.4\n1 0 obj<</Type/Catalog/Pages 2 0 R>>endobj\n2 0 obj<</Type/Pages/Kids[3 0 R]/Count 1>>endobj\n"
+            b"3 0 obj<</Type/Page/Parent 2 0 R/MediaBox[0 0 200 200]>>endobj\ntrailer<</Root 1 0 R>>\n%%EOF\n"
+        )
+        return caminho
+
+    def assertAtendimentoPadrao(self, final: dict, *, email: bool) -> None:
+        self.assertEqual(final["categoria"], "Infraestrutura")
+        self.assertEqual(final["solucao"], "Rede e conectividade")
+        self.assertEqual(final["detalhes"], self.DESCRICAO_FINAL)
+        self.assertEqual(final["email"], email)
+        self.assertEqual(final["equipe"], "UTIC - N1")
+
+    def test_finaliza_chamado_da_api_sebrae_sem_enviar_email(self):
+        self.bancada.chamados = [
+            chamado(1, finalizacao=True, solicitante="API SEBRAE", iniciador="API SEBRAE"), chamado(2),
+        ]
+        page = self.abrir_lista()
+        resultado = se.finalizar_chamado(page, "UTIC-2026-0001", self.DESCRICAO_FINAL)
+        self.assertEqual(resultado["numero"], "UTIC-2026-0001")
+        self.assertEqual(resultado["status"], "ok", resultado)
+        self.assertEqual(self.bancada.associados, ["UTIC-2026-0001"])
+        self.assertEqual(len(self.bancada.finalizados), 1)
+        self.assertAtendimentoPadrao(self.bancada.finalizados[0], email=False)
+        self.assertEqual([c["numero"] for c in self.bancada.chamados], ["UTIC-2026-0002"])
+        self.assertEqual(self.abas_do_registro(), [])
+        self.assertFalse(resultado["detalhes"]["enviar_email"])
+        self.assertSemEscrita()
+
+    def test_finaliza_chamado_de_outro_solicitante_com_email_marcado(self):
+        # A caixa nasce desmarcada na bancada: só um clique real a deixa marcada.
+        self.bancada.chamados = [chamado(1, finalizacao=True, email_marcado_inicial=False)]
+        page = self.abrir_lista()
+        resultado = se.finalizar_chamado(page, "UTIC-2026-0001", self.DESCRICAO_FINAL)
+        self.assertEqual(resultado["status"], "ok", resultado)
+        self.assertAtendimentoPadrao(self.bancada.finalizados[0], email=True)
+        self.assertTrue(resultado["detalhes"]["enviar_email"])
+        self.assertSemEscrita()
+
+    def test_enviar_email_explicito_vence_o_solicitante(self):
+        self.bancada.chamados = [chamado(1, finalizacao=True, solicitante="API SEBRAE")]
+        page = self.abrir_lista()
+        resultado = se.finalizar_chamado(page, "UTIC-2026-0001", self.DESCRICAO_FINAL, enviar_email=True)
+        self.assertEqual(resultado["status"], "ok", resultado)
+        self.assertAtendimentoPadrao(self.bancada.finalizados[0], email=True)
+
+    def test_finaliza_com_pdf_envia_o_anexo_antes_do_finalizar(self):
+        self.bancada.chamados = [chamado(1, finalizacao=True, solicitante="API SEBRAE")]
+        pdf = self.novo_pdf()
+        page = self.abrir_lista()
+        resultado = se.finalizar_chamado(page, "UTIC-2026-0001", self.DESCRICAO_FINAL, pdf=pdf)
+        self.assertEqual(resultado["status"], "ok", resultado)
+        self.assertEqual(resultado["detalhes"]["pdf"], "evidencia.pdf")
+        self.assertEqual(self.bancada.eventos, ["anexo:UTIC-2026-0001:evidencia.pdf", "finalizar:UTIC-2026-0001"])
+        # Os campos continuam preenchidos depois de ir ao Anexo e voltar.
+        self.assertAtendimentoPadrao(self.bancada.finalizados[0], email=False)
+        self.assertEqual(self.abas_do_registro(), [])
+        self.assertSemEscrita()
+
+    def test_sem_confirmar_final_para_antes_do_finalizar_com_captura(self):
+        self.bancada.chamados = [chamado(1, finalizacao=True, solicitante="API SEBRAE")]
+        page = self.abrir_lista()
+        resultado = se.finalizar_chamado(page, "UTIC-2026-0001", self.DESCRICAO_FINAL, confirmar_final=False)
+        self.assertEqual(resultado["status"], "pronto", resultado)
+        self.assertFalse(resultado["detalhes"]["finalizado"])
+        self.assertTrue(Path(resultado["detalhes"]["captura"]).is_file())
+        self.assertEqual(self.bancada.finalizados, [])
+        self.assertEqual(self.bancada.eventos, [])
+        self.assertEqual([c["numero"] for c in self.bancada.chamados], ["UTIC-2026-0001"])
+        self.assertEqual(self.abas_do_registro(), [])
+        self.assertSemEscrita()
+
+    def test_sem_confirmar_final_com_pdf_envia_o_anexo_mas_nao_finaliza(self):
+        self.bancada.chamados = [chamado(1, finalizacao=True)]
+        page = self.abrir_lista()
+        resultado = se.finalizar_chamado(
+            page, "UTIC-2026-0001", self.DESCRICAO_FINAL, pdf=self.novo_pdf(), confirmar_final=False
+        )
+        self.assertEqual(resultado["status"], "pronto", resultado)
+        self.assertEqual(self.bancada.eventos, ["anexo:UTIC-2026-0001:evidencia.pdf"])
+        self.assertEqual(self.bancada.finalizados, [])
+
+    def test_descricao_vazia_e_recusada_sem_abrir_nada(self):
+        self.bancada.chamados = [chamado(1, finalizacao=True)]
+        page = self.abrir_lista()
+        abas = len(self.context.pages)
+        for descricao in ("", "  \n\t "):
+            with self.assertRaises(se.SoftExpertErro):
+                se.finalizar_chamado(page, "UTIC-2026-0001", descricao)
+        self.assertEqual(self.bancada.abertos, [])
+        self.assertEqual(self.bancada.associados, [])
+        self.assertEqual(len(self.context.pages), abas)
+        self.assertSemEscrita()
+
+    def test_chamado_fora_da_central_de_tarefas_e_nao_encontrado(self):
+        self.bancada.chamados = [chamado(2, finalizacao=True)]
+        page = self.abrir_lista()
+        resultado = se.finalizar_chamado(page, "UTIC-2026-0001", self.DESCRICAO_FINAL)
+        self.assertEqual(resultado["status"], se.STATUS_NAO_ENCONTRADO, resultado)
+        self.assertEqual(self.bancada.abertos, [])
+        self.assertEqual(self.bancada.finalizados, [])
+        self.assertSemEscrita()
+
+    def test_solicitante_ilegivel_nao_preenche_nada(self):
+        self.bancada.chamados = [chamado(1, finalizacao=True, solicitante="")]
+        page = self.abrir_lista()
+        resultado = se.finalizar_chamado(page, "UTIC-2026-0001", self.DESCRICAO_FINAL)
+        self.assertEqual(resultado["status"], "erro", resultado)
+        self.assertIn("Solicitante", resultado["detalhes"]["mensagem"])
+        self.assertEqual(self.bancada.finalizados, [])
+        self.assertEqual(self.abas_do_registro(), [])
+        self.assertSemEscrita()
+
+    def test_chamado_criado_pela_api_com_registro_em_branco_confere_pelo_cabecalho(self):
+        self.bancada.chamados = [
+            chamado(1, finalizacao=True, numero_form="", titulo_form="", solicitante="", iniciador="API SEBRAE",
+                    solicitante_cabecalho="API SEBRAE"),
+        ]
+        page = self.abrir_lista()
+        resultado = se.finalizar_chamado(page, "UTIC-2026-0001", self.DESCRICAO_FINAL)
+        self.assertEqual(resultado["status"], "ok", resultado)
+        self.assertAtendimentoPadrao(self.bancada.finalizados[0], email=False)
+        self.assertSemEscrita()
+
+    def test_cabecalho_de_outro_chamado_com_registro_em_branco_nao_e_preenchido(self):
+        self.bancada.chamados = [
+            chamado(1, finalizacao=True, numero_form="", titulo_form="", solicitante="",
+                    titulo_cabecalho="Outro assunto totalmente diferente"),
+        ]
+        page = self.abrir_lista()
+        resultado = se.finalizar_chamado(page, "UTIC-2026-0001", self.DESCRICAO_FINAL)
+        self.assertEqual(resultado["status"], "erro", resultado)
+        self.assertEqual(self.bancada.finalizados, [])
+        self.assertSemEscrita()
+
+    def test_formulario_de_outro_chamado_nao_e_preenchido(self):
+        self.bancada.chamados = [chamado(1, finalizacao=True, numero_form="UTIC-2026-0777")]
+        page = self.abrir_lista()
+        resultado = se.finalizar_chamado(page, "UTIC-2026-0001", self.DESCRICAO_FINAL)
+        self.assertEqual(resultado["status"], "erro", resultado)
+        self.assertEqual(resultado["detalhes"]["motivo"], se.MOTIVO_NUMERO_NAO_CONFERE)
+        self.assertEqual(self.bancada.finalizados, [])
+        self.assertEqual(self.abas_do_registro(), [])
+        self.assertSemEscrita()
+
+    def test_finalizar_que_nao_tira_o_cartao_da_lista_e_erro(self):
+        self.bancada.chamados = [chamado(1, finalizacao=True, finalizar_falha=True)]
+        page = self.abrir_lista()
+        resultado = se.finalizar_chamado(page, "UTIC-2026-0001", self.DESCRICAO_FINAL)
+        self.assertEqual(resultado["status"], "erro", resultado)
+        self.assertEqual(self.abas_do_registro(), [])
+        self.assertSemEscrita()
+
+    def test_confirmacao_nativa_do_finalizar_e_aceita(self):
+        self.bancada.chamados = [chamado(1, finalizacao=True, confirmacao_final="nativa")]
+        page = self.abrir_lista()
+        resultado = se.finalizar_chamado(page, "UTIC-2026-0001", self.DESCRICAO_FINAL)
+        self.assertEqual(resultado["status"], "ok", resultado)
+        self.assertEqual(len(self.bancada.finalizados), 1)
+
+    def test_confirmacao_inesperada_depois_do_finalizar_nao_e_aceita(self):
+        self.bancada.chamados = [chamado(1, finalizacao=True, confirmacao_final="estranha")]
+        page = self.abrir_lista()
+        resultado = se.finalizar_chamado(page, "UTIC-2026-0001", self.DESCRICAO_FINAL)
+        self.assertEqual(resultado["status"], "erro", resultado)
+        self.assertEqual(resultado["detalhes"]["motivo"], se.MOTIVO_CONFIRMACAO_INESPERADA)
+        self.assertEqual(self.bancada.finalizados, [])
+        self.assertEqual(self.abas_do_registro(), [])
+
+    def test_botoes_proibidos_da_tela_de_finalizacao_ficam_com_zero_cliques(self):
+        self.bancada.chamados = [chamado(1, finalizacao=True), chamado(2, finalizacao=True, solicitante="API SEBRAE")]
+        page = self.abrir_lista()
+        self.assertEqual(se.finalizar_chamado(page, "UTIC-2026-0001", self.DESCRICAO_FINAL, pdf=self.novo_pdf())["status"], "ok")
+        self.assertEqual(se.finalizar_chamado(page, "UTIC-2026-0002", self.DESCRICAO_FINAL, confirmar_final=False)["status"], "pronto")
+        self.assertEqual(self.bancada.proibidos, [])
+
+    def test_erro_inesperado_do_playwright_vira_status_erro_e_fecha_a_aba(self):
+        from playwright.sync_api import TimeoutError as PlaywrightTimeout
+
+        self.bancada.chamados = [chamado(1, finalizacao=True)]
+        page = self.abrir_lista()
+        with patch.object(se, "_preencher_atendimento", side_effect=PlaywrightTimeout("sem resposta")):
+            resultado = se.finalizar_chamado(page, "UTIC-2026-0001", self.DESCRICAO_FINAL)
+        self.assertEqual(resultado["status"], "erro", resultado)
+        self.assertEqual(resultado["detalhes"]["motivo"], se.MOTIVO_ERRO_INESPERADO)
+        self.assertEqual(resultado["detalhes"]["escritas"], [])
+        self.assertEqual(self.bancada.finalizados, [])
+        self.assertEqual(self.abas_do_registro(), [])
+        self.assertIsNone(se._ESCRITA_LIBERADA)
+
+    def test_escritas_registram_anexo_e_finalizar_realmente_feitos(self):
+        self.bancada.chamados = [chamado(1, finalizacao=True), chamado(2, finalizacao=True)]
+        page = self.abrir_lista()
+        ok = se.finalizar_chamado(page, "UTIC-2026-0001", self.DESCRICAO_FINAL, pdf=self.novo_pdf())
+        self.assertEqual(ok["detalhes"]["escritas"], ["anexo", "finalizar"])
+        pronto = se.finalizar_chamado(page, "UTIC-2026-0002", self.DESCRICAO_FINAL, pdf=self.novo_pdf(), confirmar_final=False)
+        self.assertEqual(pronto["detalhes"]["escritas"], ["anexo"])
+
+    def test_liberacao_de_escrita_nao_vaza_depois_da_finalizacao(self):
+        self.bancada.chamados = [chamado(1, finalizacao=True)]
+        page = self.abrir_lista()
+        se.finalizar_chamado(page, "UTIC-2026-0001", self.DESCRICAO_FINAL)
+        self.assertIsNone(se._ESCRITA_LIBERADA)
 
 
 if __name__ == "__main__":

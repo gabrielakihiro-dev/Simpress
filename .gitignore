@@ -95,6 +95,9 @@ __pycache__/
 /data/state/sebrae_*.json
 /data/state/sebrae_*.xlsx
 /data/state/sebrae_backups/
+/data/state/sebrae_anexos/
+/data/state/sebrae_dashboard_pendente/
+/data/state/sebrae_dashboard_saida/
 /data/state/entrada_automatica/*
 !/data/state/entrada_automatica/README.md
 !/data/state/entrada_automatica/modelo_lote/

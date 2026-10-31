@@ -170,7 +170,7 @@ class ChromeAutomationHelpersTests(unittest.TestCase):
             self.assertFalse(automacao.cancelamento_pedido())
 
     def test_main_returns_130_and_clears_signal_when_cancelled(self):
-        def executar(_rotina):
+        def executar(_rotina, _sem_finalizar=False):
             automacao.pedir_cancelamento()
             automacao.verificar_cancelamento()
 
@@ -734,7 +734,9 @@ class EnviarDashboardTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as pasta:
             arquivo = Path(pasta) / "Dashboard Operacional_SEBRAE.xlsx"
             baixado = Path(pasta) / "baixado.xlsx"
+            arquivo.write_bytes(b"x")
             with patch.object(automacao, "arquivo_final_dashboard", return_value=arquivo), patch.object(automacao, "nova_aba", return_value=page), \
+                    patch.object(automacao, "DASHBOARD_SAIDA_DIR", Path(pasta) / "sebrae_dashboard_saida"), \
                     patch.object(automacao, "aguardar_login"), patch.object(automacao, "verificar_cancelamento"), \
                     patch.object(automacao, "duplicar_dashboard_na_pasta", side_effect=lambda p: ordem.append("duplicata")), \
                     patch.object(automacao, "baixar_dashboard_da_pasta", side_effect=lambda p: ordem.append("baixar") or baixado), \
@@ -758,6 +760,87 @@ class EnviarDashboardTests(unittest.TestCase):
                     automacao.rodar_rotina_enviar(MagicMock())
         backup.assert_not_called()
         enviar.assert_not_called()
+
+    def test_precheck_accepts_the_hash_of_the_last_upload_but_not_an_unknown_changed_file(self):
+        import hashlib
+
+        from domains import sebrae_finalizacao
+
+        mudado = self._dashboard([("<t>UTIC-2026-0001</t>", "<t>UTIC-2026-0009</t>")])
+        with tempfile.TemporaryDirectory() as pasta:
+            baixado = Path(pasta) / "baixado.xlsx"
+            baixado.write_bytes(mudado)
+            self._estado(Path(pasta), self._dashboard())
+            with patch.object(automacao, "DASHBOARD_SAIDA_DIR", Path(pasta) / "sebrae_dashboard_saida"):
+                with self.assertRaisesRegex(automacao.RotinaErro, "mudou depois da importação"):
+                    automacao.conferir_dashboard_do_sharepoint(baixado)
+                sebrae_finalizacao.gravar_enviado(Path(pasta), hashlib.sha256(b"outro arquivo").hexdigest())
+                with self.assertRaisesRegex(automacao.RotinaErro, "mudou depois da importação"):
+                    automacao.conferir_dashboard_do_sharepoint(baixado)
+                sebrae_finalizacao.gravar_enviado(Path(pasta), hashlib.sha256(mudado).hexdigest())
+                automacao.conferir_dashboard_do_sharepoint(baixado)
+
+    def _rodar_enviar(self, pasta: str, falha_no_envio: bool):
+        arquivo = Path(pasta) / "Dashboard Operacional_SEBRAE.xlsx"
+        arquivo.write_bytes(b"conteudo novo")
+        erro = automacao.RotinaErro("sem aviso") if falha_no_envio else None
+        with patch.object(automacao, "DASHBOARD_SAIDA_DIR", Path(pasta) / "sebrae_dashboard_saida"), \
+                patch.object(automacao, "nova_aba"), patch.object(automacao, "aguardar_login"), patch.object(automacao, "verificar_cancelamento"), \
+                patch.object(automacao, "duplicar_dashboard_na_pasta"), patch.object(automacao, "baixar_dashboard_da_pasta"), \
+                patch.object(automacao, "conferir_dashboard_do_sharepoint"), patch.object(automacao, "guardar_backup_do_dashboard"), \
+                patch.object(automacao, "enviar_arquivo_para_pasta", side_effect=erro), patch.object(automacao, "registrar_erro"), \
+                redirect_stdout(io.StringIO()):
+            return automacao.rodar_rotina_enviar(MagicMock(), arquivo)
+
+    def test_routine_records_the_sha256_of_what_it_uploaded_and_nothing_on_failure(self):
+        import hashlib
+
+        from domains import sebrae_finalizacao
+
+        with tempfile.TemporaryDirectory() as pasta:
+            with self.assertRaisesRegex(automacao.RotinaErro, "sem aviso"):
+                self._rodar_enviar(pasta, falha_no_envio=True)
+            self.assertEqual(sebrae_finalizacao.ler_enviado(Path(pasta)), "")
+            self.assertEqual(self._rodar_enviar(pasta, falha_no_envio=False), 0)
+            self.assertEqual(sebrae_finalizacao.ler_enviado(Path(pasta)), hashlib.sha256(b"conteudo novo").hexdigest())
+
+    def test_routine_still_succeeds_when_recording_the_hash_fails_after_the_upload(self):
+        from domains import sebrae_finalizacao
+
+        with tempfile.TemporaryDirectory() as pasta, patch.object(sebrae_finalizacao, "gravar_enviado", side_effect=OSError("disco cheio")), \
+                patch.object(automacao, "log") as log:
+            self.assertEqual(self._rodar_enviar(pasta, falha_no_envio=False), 0)
+        self.assertIn("disco cheio", str(log.call_args_list))
+
+    def test_pending_copy_upload_refuses_the_dashboard_name_and_skips_duplicate_download_and_precheck(self):
+        with tempfile.TemporaryDirectory() as pasta:
+            igual = Path(pasta) / automacao.DASHBOARD_FINAL.upper()
+            igual.write_bytes(b"x")
+            with patch.object(automacao, "nova_aba") as aba, patch.object(automacao, "enviar_arquivo_para_pasta") as enviar:
+                with self.assertRaisesRegex(automacao.RotinaErro, "não pode ter o nome do Dashboard"):
+                    automacao.enviar_copia_pendente(MagicMock(), igual)
+            aba.assert_not_called()
+            enviar.assert_not_called()
+            copia = Path(pasta) / "Dashboard Operacional_SEBRAE (pendente 2026-10-30 1405).xlsx"
+            copia.write_bytes(b"x")
+            with patch.object(automacao, "nova_aba") as aba, patch.object(automacao, "aguardar_login"), \
+                    patch.object(automacao, "enviar_arquivo_para_pasta") as enviar, \
+                    patch.object(automacao, "duplicar_dashboard_na_pasta") as duplicar, \
+                    patch.object(automacao, "baixar_dashboard_da_pasta") as baixar, \
+                    patch.object(automacao, "conferir_dashboard_do_sharepoint") as conferir:
+                automacao.enviar_copia_pendente(MagicMock(), copia)
+            enviar.assert_called_once_with(aba.return_value, copia)
+            for nao_chamado in (duplicar, baixar, conferir):
+                nao_chamado.assert_not_called()
+
+    def test_close_routine_delegates_to_the_runner_module_with_sem_finalizar(self):
+        from scripts import sebrae_fechar
+
+        context = MagicMock()
+        for valor in (False, True):
+            with patch.object(sebrae_fechar, "executar", return_value=0) as executar:
+                self.assertEqual(automacao.rodar_rotina_fechar(context, valor), 0)
+            executar.assert_called_once_with(context, sys.modules[automacao.__name__], sem_finalizar=valor)
 
 
 if __name__ == "__main__":

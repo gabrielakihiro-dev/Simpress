@@ -1419,6 +1419,13 @@ def rodar_rotina_sebrae(context: "BrowserContext") -> int:
     return sebrae_leitura.executar(context, sys.modules[__name__])
 
 
+def rodar_rotina_fechar(context: "BrowserContext", sem_finalizar: bool = False) -> int:
+    # Única rotina que ESCREVE no SoftExpert: finaliza só os chamados do pedido gravado pelo site (data/state/sebrae_fechar_job.json).
+    from scripts import sebrae_fechar
+
+    return sebrae_fechar.executar(context, sys.modules[__name__], sem_finalizar=sem_finalizar)
+
+
 # --------------------------------------------------------------------------
 # Dashboard Sebrae (pasta DASHBOARD SEBRAE do SharePoint): baixar, importar no site e buscar chamados novos
 # --------------------------------------------------------------------------
@@ -1598,7 +1605,7 @@ def conferir_dashboard_do_sharepoint(baixado: Path) -> None:
     """Pré-checagem obrigatória: o arquivo do SharePoint tem de ser o que o site importou (mesmo hash ou mesmos valores em todas as colunas de dado dos chamados)."""
     import hashlib
 
-    from domains import sebrae_novos
+    from domains import sebrae_finalizacao, sebrae_novos
     from domains.sebrae_dashboard import DashboardInvalido
     from domains.sebrae_dashboard_gravacao import valores_dos_chamados
 
@@ -1607,7 +1614,11 @@ def conferir_dashboard_do_sharepoint(baixado: Path) -> None:
     if existentes is None:
         raise RotinaErro("O site não tem um Dashboard importado; use a rotina dashboard antes de enviar.")
     conteudo = baixado.read_bytes()
-    if existentes["sha256"] and hashlib.sha256(conteudo).hexdigest() == existentes["sha256"]:
+    hash_baixado = hashlib.sha256(conteudo).hexdigest()
+    if existentes["sha256"] and hash_baixado == existentes["sha256"]:
+        return
+    # Segundo envio em diante: o SharePoint já tem o arquivo que o próprio site enviou, e não o importado.
+    if hash_baixado == sebrae_finalizacao.ler_enviado(DASHBOARD_SAIDA_DIR.parent):
         return
     importada = sebrae_novos.ler_planilha(sebrae_novos.caminho_planilha(caminhos), existentes["sha256"])
     try:
@@ -1670,9 +1681,30 @@ def enviar_arquivo_para_pasta(page: "Page", arquivo: Path) -> None:
     raise RotinaErro("Não vi o aviso de envio concluído em 90 s; o Dashboard pode ter sido enviado. Confira a pasta antes de repetir.")
 
 
-def rodar_rotina_enviar(context: "BrowserContext") -> int:
+def enviar_copia_pendente(context: "BrowserContext", arquivo: Path) -> None:
+    """Sobe ``arquivo`` à pasta com o nome que ele já tem, sem duplicar, baixar nem conferir: nunca substitui o Dashboard original (o nome é outro)."""
+    if arquivo.name.lower() == DASHBOARD_FINAL.lower():
+        raise RotinaErro("A cópia pendente não pode ter o nome do Dashboard: substituiria o original sem conferência.")
+    page = None
+    try:
+        page = nova_aba(context, DASHBOARD_PASTA_URL, "Dashboard")
+        aguardar_login(page, "Dashboard", pasta_dashboard_logada, entrar=pasta_dashboard_entrar)
+        enviar_arquivo_para_pasta(page, arquivo)
+    except Exception:
+        registrar_erro(page, "Dashboard")
+        raise
+    page.close()
+
+
+def rodar_rotina_enviar(context: "BrowserContext", arquivo: "Path | None" = None) -> int:
+    """``arquivo`` só é passado para reenviar uma cópia pendente (com o nome do Dashboard); sem ele vai o arquivo gravado pelo site."""
+    import hashlib
+
+    from domains import sebrae_finalizacao
+
     print(f"\n=== ENVIAR DASHBOARD ATUALIZADO (início {agora_iso()}) ===", flush=True)
-    arquivo = arquivo_final_dashboard()
+    do_site = arquivo is None
+    arquivo = arquivo if arquivo is not None else arquivo_final_dashboard()
     page = None
     try:
         page = nova_aba(context, DASHBOARD_PASTA_URL, "Dashboard")
@@ -1684,6 +1716,17 @@ def rodar_rotina_enviar(context: "BrowserContext") -> int:
         guardar_backup_do_dashboard(baixado)
         verificar_cancelamento()
         enviar_arquivo_para_pasta(page, arquivo)
+        # Guarda o hash do que subiu: o próximo envio reconhece esse arquivo no SharePoint como "sem mudança de terceiros".
+        # Falha aqui não desfaz o envio: o SharePoint já aceitou; o próximo envio só cai na comparação de valores.
+        try:
+            sebrae_finalizacao.gravar_enviado(DASHBOARD_SAIDA_DIR.parent, hashlib.sha256(arquivo.read_bytes()).hexdigest())
+        except (OSError, RuntimeError) as erro:  # RuntimeError: FileBusyError da trava de arquivo
+            log("Dashboard", f"Não consegui guardar o hash do arquivo enviado ({erro}); o próximo envio usará só a comparação de valores.")
+        if do_site:  # o arquivo do site é mais novo que qualquer cópia pendente: reenviá-la depois desfaria este envio
+            try:
+                sebrae_finalizacao.descartar_pendentes(DASHBOARD_SAIDA_DIR.parent)
+            except OSError as erro:
+                log("Dashboard", f"Não consegui apagar a cópia pendente antiga ({erro}); apague-a à mão.")
     except Exception:
         registrar_erro(page, "Dashboard")
         raise
@@ -1704,7 +1747,7 @@ def abrir_para_login(context: "BrowserContext") -> int:
     return 0
 
 
-def executar(rotina: str) -> int:
+def executar(rotina: str, sem_finalizar: bool = False) -> int:
     # A trava vem antes do Playwright: uma execução bloqueada responde mesmo sem ele instalado.
     with trava_execucao(rotina):
         from playwright.sync_api import sync_playwright
@@ -1729,6 +1772,8 @@ def executar(rotina: str) -> int:
                 if rotina == "sebrae":
                     # Sem com_aviso: o aviso do Windows sai do resultado e só quando algo muda (sem repetição).
                     return rodar_rotina_sebrae(context)
+                if rotina == "fechar":
+                    return rodar_rotina_fechar(context, sem_finalizar)
                 codigos = []
                 for nome, etapa in (("OS", rodar_rotina_os), ("inventários", rodar_rotina_inventarios)):
                     verificar_cancelamento()
@@ -1769,7 +1814,11 @@ def playwright_instalado() -> bool:
 
 def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
-    parser.add_argument("--rotina", choices=["os", "inventarios", "usuarios", "ambas", "login", "sebrae", "dashboard", "enviar"], default="os")
+    parser.add_argument("--rotina", choices=["os", "inventarios", "usuarios", "ambas", "login", "sebrae", "dashboard", "enviar", "fechar"], default="os")
+    parser.add_argument(
+        "--sem-finalizar", action="store_true",
+        help="só com --rotina fechar: preenche e confere o formulário, mas não clica em Finalizar nem altera o Dashboard",
+    )
     parser.add_argument(
         "--cancelar", action="store_true", help="pede o cancelamento da rotina em andamento (o Chrome continua aberto) e sai"
     )
@@ -1785,7 +1834,7 @@ def main() -> int:
         print(f"\n[ERRO] {mensagem_playwright_ausente()}", flush=True)
         return 3
     try:
-        return executar(args.rotina)
+        return executar(args.rotina, args.sem_finalizar)
     except TravaOcupada as erro:
         print(f"\n[BLOQUEADO] {erro}", flush=True)
         return 2
