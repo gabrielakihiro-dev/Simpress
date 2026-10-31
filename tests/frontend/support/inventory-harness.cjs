@@ -173,11 +173,10 @@ function createAppHarness(fetchApi, { stubDisplay = true, confirmResult = true, 
   });
 
   for (const { file, source } of appScripts()) vm.runInContext(source, context, { filename: file });
-  context.renderComparisonForTest = context.abrirModalComparacaoPlanilhas;
   vm.runInContext(`
     preencherRepresentanteRegional = () => {};
     showToast = (message, type) => workflowEffects.toasts.push({ message, type });
-    abrirModalComparacaoPlanilhas = comparison => workflowEffects.comparisons.push(comparison);
+    mostrarResultadoNaAbaComparacao = comparison => workflowEffects.comparisons.push(comparison);
     carregarEstatisticas = async () => workflowEffects.refreshes.push("estatisticas");
     carregarUnidades = async () => workflowEffects.refreshes.push("unidades");
     carregarContagemHistoricoComparacoes = async () => workflowEffects.refreshes.push("contagem-historico");
