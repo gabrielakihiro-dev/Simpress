@@ -3,6 +3,7 @@
 //
 //   data-on-click="nomeDaAcao"            calls window.nomeDaAcao(), only if the name was registered with allow()
 //   data-args='["home", "$value"]'         JSON arguments; "$event", "$this" and "$value" are resolved
+//   data-args-keydown='["$event"]'         same, only for that event (needed when one element has two handlers)
 //   data-on-self-only                      runs only when the event target is the element itself
 //   data-click-target="element-id"         forwards the click to another element (e.g. a hidden file input)
 //
@@ -31,8 +32,9 @@
     for (const name of names) allowed.add(name);
   }
 
-  function parseArgs(element) {
-    const raw = element.getAttribute("data-args");
+  function parseArgs(element, type) {
+    // data-args-<evento> vale só para aquele evento (um atributo data-args repetido é descartado pelo HTML)
+    const raw = element.getAttribute(`data-args-${type}`) ?? element.getAttribute("data-args");
     if (!raw) return [];
     try {
       const parsed = JSON.parse(raw);
@@ -43,7 +45,7 @@
   }
 
   function resolveArgs(element, event) {
-    return parseArgs(element).map(arg => (typeof arg === "string" && TOKENS[arg] ? TOKENS[arg](event, element) : arg));
+    return parseArgs(element, event.type).map(arg => (typeof arg === "string" && TOKENS[arg] ? TOKENS[arg](event, element) : arg));
   }
 
   function runHandler(element, event, type, scope) {

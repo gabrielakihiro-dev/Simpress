@@ -12,18 +12,19 @@ const panels = createCockpitToolPanels({ app: {}, appState: {} });
 
 test("the four Cockpit tools open dedicated panels from the nine-dot menu", () => {
   const expected = [
-    ["btn-acompanhamento-chamados", "chamados", "F5"],
-    ["btn-cockpit-comparacao", "comparacao", "F6"],
-    ["btn-historico-apelidos", "apelidos", "F7"],
-    ["btn-relatorio-mensal", "relatorio", "F8"],
+    ["btn-acompanhamento-chamados", "chamados", "F6"],
+    ["btn-cockpit-comparacao", "comparacao", "F7"],
+    ["btn-historico-apelidos", "apelidos", "F8"],
+    ["btn-relatorio-mensal", "relatorio", "F9"],
   ];
   for (const [id, panel, shortcut] of expected) {
     const button = html.match(new RegExp(`<button[^>]*id="${id}"[^>]*>`))?.[0] || "";
     assert.match(button, new RegExp(`data-on-click="abrirPainelCockpit"`));
     assert.match(button, new RegExp(`data-args='\\["${panel}"\\]'`));
-    // Chamados fica na barra principal (title com o atalho); os demais seguem no menu com <kbd>.
-    if (panel === "chamados") assert.match(button, new RegExp(`title="Chamados \\(${shortcut}\\)"`));
-    else assert.match(html, new RegExp(`<kbd aria-hidden="true">${shortcut}</kbd>`));
+    // OS fica na barra principal (title com o atalho); os demais seguem no menu com <kbd> (Comparação F7, Histórico de apelidos F8, Relatório mensal F9).
+    if (panel === "chamados") assert.match(button, new RegExp(`title="OS \\(${shortcut}\\)"`));
+    else if (shortcut) assert.match(html, new RegExp(`<kbd aria-hidden="true">${shortcut}</kbd>`));
+    else assert.doesNotMatch(html.match(new RegExp(`<button[^>]*id="${id}"[^>]*>[\\s\\S]*?</button>`))[0], /<kbd/);
     assert.match(html, new RegExp(`data-cockpit-tool-panel="${panel}"`));
   }
   assert.match(html, /id="cockpit-tool-panels"[^>]*hidden/);
@@ -175,18 +176,46 @@ test("abrir uma ferramenta desconhecida não mostra o painel", async () => {
   } finally { delete global.document; }
 });
 
-test("Chamados Sebrae tem item de menu, botão no cartão de Automações e painel com os IDs movidos", () => {
+test("Chamados (painel sebrae-chamados) tem aba na barra, item de menu, botão no cartão de Automação e painel com os IDs movidos", () => {
+  const aba = html.match(/<button[^>]*id="btn-sebrae-chamados-aba"[^>]*>[\s\S]*?<\/button>/)?.[0] || "";
+  assert.match(aba, /class="ck-aba ck-aba--painel"/);
+  assert.match(aba, /data-args='\["sebrae-chamados"\]'/);
+  assert.match(aba, /aria-label="Chamados" title="Chamados \(F5\)" aria-keyshortcuts="F5"/);
+  assert.match(aba, /<span>Chamados<\/span>/);
+  // Ordem final da barra: ... Automação, Chamados (F5), OS (F6).
+  assert.ok(html.indexOf('id="tab-automacao"') < html.indexOf('id="btn-sebrae-chamados-aba"'));
+  assert.ok(html.indexOf('id="btn-sebrae-chamados-aba"') < html.indexOf('id="btn-acompanhamento-chamados"'));
+  // Atalho F1-F6 pequeno em cada aba principal, escondido dos leitores de tela (o aria-label já traz o nome).
+  for (const [id, atalho] of [["tab-home", "F1"], ["tab-retirada-entrega", "F2"], ["tab-resumo", "F3"], ["tab-automacao", "F4"], ["btn-sebrae-chamados-aba", "F5"], ["btn-acompanhamento-chamados", "F6"]]) {
+    const botao = html.match(new RegExp(`<button[^>]*id="${id}"[^>]*>[^]*?</button>`))?.[0] || "";
+    assert.match(botao, new RegExp(`</span><kbd class="ck-aba__kbd" aria-hidden="true">${atalho}</kbd></button>$`), id);
+  }
+  const abaOs = html.match(/<button[^>]*id="btn-acompanhamento-chamados"[^>]*>[\s\S]*?<\/button>/)?.[0] || "";
+  assert.match(abaOs, /aria-label="OS" title="OS \(F6\)" aria-keyshortcuts="F6"/);
+  assert.match(abaOs, /<span>OS<\/span>/);
+  const menuOs = html.match(/<button[^>]*id="btn-chamados-menu"[^>]*>[\s\S]*?<\/button>/)?.[0] || "";
+  assert.match(menuOs, /ck-menu__item--so-compacto/);
+  assert.match(menuOs, /<span class="ck-menu__rotulo">OS<\/span><kbd aria-hidden="true">F6<\/kbd>/);
   const menu = html.match(/<button[^>]*id="btn-sebrae-chamados-menu"[^>]*>[\s\S]*?<\/button>/)?.[0] || "";
   assert.match(menu, /data-on-click="abrirPainelCockpit"/);
   assert.match(menu, /data-args='\["sebrae-chamados"\]'/);
-  assert.match(menu, /<span class="ck-menu__rotulo">Chamados Sebrae<\/span>/);
-  assert.doesNotMatch(menu, /<kbd|ck-badge/);
-  assert.ok(html.indexOf('id="btn-atualizar-planilhas"') < html.indexOf('id="btn-sebrae-chamados-menu"'));
+  assert.match(menu, /ck-menu__item--so-compacto/);
+  assert.match(menu, /<span class="ck-menu__rotulo">Chamados<\/span><kbd aria-hidden="true">F5<\/kbd>/);
+  assert.ok(html.indexOf('id="ck-menu-g-paineis"') < html.indexOf('id="btn-sebrae-chamados-menu"'));
   assert.doesNotMatch(html, /btn-historico-comparacoes|data-cockpit-tool-panel="historico-planilhas"|cockpit-sheets-history/);
-  assert.ok(html.indexOf('id="btn-sebrae-chamados-menu"') < html.indexOf('id="ck-menu-g-hist"'));
+  assert.ok(html.indexOf('id="btn-sebrae-chamados-menu"') < html.indexOf('id="btn-chamados-menu"'));
+  // Desde 31/10/2026 o menu não tem o grupo "Planilhas": Atualizar planilhas saiu; Exportar Excel (modelo) mora na aba Comparação.
+  assert.doesNotMatch(html, /ck-menu-g-planilhas|btn-atualizar-planilhas/);
+  const menuFerramentas = html.match(/id="cockpit-tools-menu"[\s\S]*?<\/details>/)[0];
+  assert.doesNotMatch(menuFerramentas, /btn-exportar-equipamentos/);
+  const barraComparacao = html.match(/data-cockpit-tool-panel="comparacao"[\s\S]*?<div class="ck-barra-ferr">([\s\S]*?)<\/div>/)[1];
+  const exportar = barraComparacao.match(/<button[^>]*id="btn-exportar-equipamentos"[^>]*>[\s\S]*?<\/button>/)?.[0] || "";
+  assert.match(exportar, /class="ck-btn ck-btn--secundario hidden"/);
+  assert.match(exportar, /data-on-click="exportarEquipamentosAtualizados"/);
+  assert.match(exportar, /<span>Exportar Excel<\/span>/);
   const botao = html.match(/<button[^>]*id="btn-sebrae-abrir-chamados"[^>]*>[\s\S]*?<\/button>/)?.[0] || "";
   assert.match(botao, /data-args='\["sebrae-chamados"\]'/);
-  assert.match(botao, /<span>Chamados Sebrae<\/span>/);
+  assert.match(botao, /<span>Chamados<\/span>/);
   const painel = html.match(/<section[^>]*data-cockpit-tool-panel="sebrae-chamados"[\s\S]*?\n        <\/section>/)?.[0] || "";
   const cartao = html.match(/<section[^>]*id="sebrae-novos-painel"[\s\S]*?\n      <\/section>/)?.[0] || "";
   for (const id of ["sebrae-novos-lista", "sebrae-antigos", "sebrae-antigos-lista", "sebrae-antigos-resumo", "sebrae-sugestoes-a", "sebrae-sugestoes-b", "sebrae-sugestoes-s", "btn-sebrae-exportar", "btn-sebrae-atualizar", "sebrae-exportacao-status", "sebrae-atualizar-status", "sebrae-exportacao-blocos", "sebrae-bloco-a-p", "sebrae-bloco-r-s"]) {
@@ -202,20 +231,21 @@ test("Chamados Sebrae tem item de menu, botão no cartão de Automações e pain
   assert.match(css, /^\.sebrae-blocos \{/m);
 });
 
-test("abrir Chamados Sebrae mostra o painel sem recarregar a lista", async () => {
+test("abrir Chamados (sebrae-chamados) mostra o painel sem recarregar a lista", async () => {
   const { api, el } = criarAmbientePaineis();
   try {
     await api.abrirPainelCockpit("sebrae-chamados");
     assert.equal(el("cockpit-tools-dropdown").dataset.activeTool, "sebrae-chamados");
     assert.equal(el("cockpit-tool-panels").hidden, false);
-    assert.equal(el("cockpit-tool-title").textContent, "Chamados Sebrae");
-    assert.equal(el("cockpit-tool-kbd").hidden, true);
+    assert.equal(el("cockpit-tool-title").textContent, "Chamados");
+    assert.equal(el("cockpit-tool-kbd").textContent, "F5");
+    assert.equal(el("cockpit-tool-kbd").hidden, false);
   } finally { delete global.document; }
   const openPanel = source.match(/async function openPanel\(tool\) \{[\s\S]*?\n  \}/)?.[0] || "";
   assert.doesNotMatch(openPanel, /sebrae-chamados|carregarNovosSebrae/);
 });
 
-test("Chamados troca lista e detalhe pelo host da tabela de OS e mantém KPIs, busca e Relação", () => {
+test("OS (painel chamados) troca lista e detalhe pelo host da tabela de OS e mantém KPIs, busca e Relação", () => {
   assert.match(html, /<div id="cockpit-tickets-os" class="ck-ferr-os"><\/div>/);
   assert.doesNotMatch(html, /id="cockpit-tickets-(list|detail)"/);
   const idsChamados = [
@@ -232,7 +262,7 @@ test("Chamados troca lista e detalhe pelo host da tabela de OS e mantém KPIs, b
   assert.doesNotMatch(html, /resumo-os-equipamento/, "a seção de OS saiu do Transporte");
 });
 
-test("#ck-link-os é um botão que abre Chamados filtrado pela série do equipamento", () => {
+test("#ck-link-os é um botão que abre OS filtrada pela série do equipamento", () => {
   const link = html.match(/<(\w+)[^>]*id="ck-link-os"[^>]*>/);
   assert.equal(link?.[1], "button");
   assert.match(link[0], /type="button"/);
@@ -240,7 +270,7 @@ test("#ck-link-os é um botão que abre Chamados filtrado pela série do equipam
   assert.equal(typeof panels.abrirChamadosDoEquipamento, "function");
 });
 
-test("abrir Chamados monta a tabela uma vez, com as opções de Chamados, e depois só atualiza", async () => {
+test("abrir OS monta a tabela uma vez, com as opções de OS, e depois só atualiza", async () => {
   const { api, el } = criarAmbientePaineis();
   const calls = { montar: [], filtrar: [], atualizar: [] };
   global.SimpressDataPanels = {

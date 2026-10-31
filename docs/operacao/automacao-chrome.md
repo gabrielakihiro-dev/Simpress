@@ -89,6 +89,10 @@ Abre três abas no Chrome de automação e adianta tudo o que não é senha nem 
 - **Login compartilhado:** UX e Oracle usam a mesma conta Microsoft. Quando uma conclui, a outra aba é reaberta pelo endereço do sistema (nunca com recarregar, que quebra a tela da Microsoft com o erro AADSTS750054) para aproveitar a sessão.
 - **Espera:** um único aviso `AÇÃO NECESSÁRIA: faça o login… (<abas pendentes>)`; termina com `Login detectado`. Tempo máximo de 10 min; uma aba fechada pelo usuário é ignorada.
 
+## Aviso "New Hotfix Available" do Endpoint
+
+O Endpoint Central mostra um aviso de atualização que cobre a tela e derruba cliques com `Locator.click: Timeout 30000ms exceeded` (visto na verificação de usuários). `endpoint_vigiar_avisos` registra um `add_locator_handler` do Playwright na aba do Endpoint: sempre que o aviso (`.server-update--notification`) bloqueia uma ação, a automação clica em "Do it Later" (ou, sem o botão, passa o mouse e clica no X) e a ação segue. Vale para Inventários, Ambas (`exportar_endpoint`) e `--rotina usuarios`.
+
 ## Janela pequena e downloads
 
 Vale igual para o painel e para o `executar_automacao.bat`, porque os dois rodam o mesmo `scripts/automacao_rotinas_chrome.py`.

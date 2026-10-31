@@ -1,4 +1,4 @@
-/** Assistente: conversa com a IA do Simpress (OpenRouter, chamada pelo servidor local) pelas rotas /api/assistente/*, no chat flutuante (F9). */
+/** Assistente: conversa com a IA do Simpress (OpenRouter, chamada pelo servidor local) pelas rotas /api/assistente/*, no chat flutuante (F10). */
 (function (root, factory) {
   if (typeof module === "object" && module.exports) module.exports = factory;
   else (root.SimpressFeatures = root.SimpressFeatures || {}).assistantChat = factory;
@@ -1101,7 +1101,7 @@
     if (pendente || !foco || !byId("assistente-widget").contains(foco) || foco === byId("assistente-tentar")) focarProximo();
   }
 
-  // Abre ou fecha o chat flutuante (ícone do topbar, F9, botão X e Esc).
+  // Abre ou fecha o chat flutuante (ícone do topbar, F10, botão X e Esc).
   function alternarAssistente() {
     const widget = byId("assistente-widget");
     const botao = byId("btn-assistente");

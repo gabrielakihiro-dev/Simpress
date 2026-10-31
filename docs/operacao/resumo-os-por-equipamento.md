@@ -2,14 +2,14 @@
 
 ## Objetivo
 
-Exibir na aba Resumo os registros da importação atual da aba Chamados, associados ao equipamento pela série.
+Exibir na aba Resumo os registros da importação atual da aba OS, associados ao equipamento pela série.
 
 ## Conteúdo e comportamento
 
 - Incluir OS da Simpress e do Oracle, abertas ou encerradas, removendo linhas sem série ou sem número de OS.
 - Mostrar fonte, série, número da OS, usuário logado, hostname, descrição da respectiva solicitação Oracle e número de chamado informado manualmente.
 - Agrupar todas as OS da mesma série na mesma linha (desktop) ou cartão (telas pequenas), mantendo cada número clicável e cada vínculo UTIC separado por fonte e OS.
-- Ao clicar em uma OS, abrir a aba Chamados (painel cockpit) filtrada pela série, OS e fonte(s) daquela linha; mostrar apenas a OS selecionada e expandir as solicitações Oracle correspondentes para consulta da descrição.
+- Ao clicar em uma OS, abrir a aba OS (painel cockpit, F6) filtrada pela série, OS e fonte(s) daquela linha; mostrar apenas a OS selecionada e expandir as solicitações Oracle correspondentes para consulta da descrição.
 - Exibir tabela em desktop e cartões em telas pequenas. Escapar conteúdo de planilhas como texto.
 - Buscar usuário e hostname em lote; aplicar a correspondência de Mac já existente e não escolher candidatos ambíguos.
 - Mostrar o prefixo `UTIC-AAAA-` com o ano corrente para novos vínculos. Guardar somente os dígitos digitados junto ao prefixo completo; manter ano e valor anteriores nos vínculos existentes.

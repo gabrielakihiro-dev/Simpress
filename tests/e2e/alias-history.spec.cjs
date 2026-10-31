@@ -1,6 +1,9 @@
 const { test, expect } = require("@playwright/test");
 const AxeBuilder = require("@axe-core/playwright").default;
 
+const PANEL = '[data-cockpit-tool-panel="apelidos"]';
+const ITEMS = "#cockpit-alias-list .ck-ferr-item";
+
 function fixtureHistory() {
   const types = ["usuario", "apelido", "aviso_endpoint", "endereco"];
   return Array.from({ length: 32 }, (_, index) => {
@@ -24,77 +27,102 @@ function fixtureHistory() {
   });
 }
 
-async function openHistory(page) {
+async function openHistory(page, eventos) {
+  await page.route("**/api/historico-alteracoes", route => route.fulfill({ json: { eventos, total: eventos.length } }));
+  await page.goto("/");
   const menu = page.locator("#cockpit-tools-dropdown");
   if (!(await menu.evaluate(element => element.open))) await page.locator("#cockpit-tools-trigger").click();
   await page.locator("#btn-historico-apelidos").click();
-  await page.locator("#cockpit-alias-legacy").click();
-  const dialog = page.getByRole("dialog", { name: "Histórico de alterações" });
-  await expect(dialog).toBeVisible();
-  await expect(page.locator(".alias-history-row")).toHaveCount(25);
-  return dialog;
+  await expect(page.locator(PANEL)).toBeVisible();
+  await expect(page.locator(ITEMS)).toHaveCount(eventos.length);
 }
 
-test("history can be searched, filtered, and paged without changing event actions", async ({ page }) => {
+test("the F8 panel is the full history: search, type, action filter and clear", async ({ page }) => {
   test.setTimeout(60_000);
   const eventos = fixtureHistory();
-  await page.route("**/api/historico-alteracoes", route => route.fulfill({ json: { eventos, total: eventos.length } }));
-  await page.goto("/");
-  await openHistory(page);
+  await openHistory(page, eventos);
+  await expect(page.locator("#modal-historico-apelidos")).toHaveCount(0);
+  await expect(page.locator("#cockpit-alias-count-all")).toHaveText("32");
 
-  await expect(page.locator("#total-historico-apelidos")).toHaveText("32 registros");
-  await expect(page.locator("#resultado-filtros-historico-apelidos")).toHaveText("Exibindo 1–25 de 32 registros");
-  await page.locator("#proxima-pagina-historico-apelidos").click();
-  await expect(page.locator("#pagina-atual-historico-apelidos")).toHaveText("Página 2 de 2");
-  await expect(page.locator(".alias-history-row")).toHaveCount(7);
-  await page.locator("#pagina-anterior-historico-apelidos").click();
+  await page.locator("#cockpit-alias-type").selectOption("usuario");
+  await expect(page.locator(ITEMS)).toHaveCount(8);
+  await page.locator("#cockpit-alias-search").fill("SN-001");
+  await expect(page.locator(ITEMS)).toHaveCount(2);
+  await expect(page.locator(ITEMS).first()).toContainText("old.usuario.01");
 
-  await page.locator("#tipo-historico-apelidos").selectOption("usuario");
-  await expect(page.locator(".alias-history-row")).toHaveCount(8);
-  await expect(page.locator("#resultado-filtros-historico-apelidos")).toContainText("8 de 32 registros");
-  await page.locator("#busca-historico-apelidos").fill("SN-001");
-  await expect(page.locator(".alias-history-row")).toHaveCount(2);
-  await expect(page.locator(".alias-history-row").first()).toContainText("old.usuario.01");
+  await page.locator("#cockpit-alias-search").fill("");
+  await page.locator("#cockpit-alias-type").selectOption("todos");
+  await page.locator("#cockpit-alias-actions-only").check();
+  await expect(page.locator(ITEMS)).toHaveCount(23);
+  await page.locator(ITEMS).filter({ hasText: "SN-001" }).first().getByRole("button").click();
+  const detail = page.locator("#cockpit-alias-detail");
+  await expect(detail.getByRole("button", { name: "Restaurar anterior" })).toBeEnabled();
+  await expect(detail.getByRole("button", { name: "Restaurar e excluir" })).toBeEnabled();
 
-  await page.locator("#busca-historico-apelidos").fill("");
-  await page.locator("#tipo-historico-apelidos").selectOption("todos");
-  await page.locator("#apenas-acoes-historico-apelidos").check();
-  await expect(page.locator(".alias-history-row")).toHaveCount(23);
-  await expect(page.locator(".alias-history-row").filter({ hasText: "SN-001" }).first().getByRole("button", { name: /Desfazer/ })).toBeEnabled();
-
-  await page.locator("#limpar-filtros-historico-apelidos").click();
-  await expect(page.locator("#busca-historico-apelidos")).toHaveValue("");
-  await expect(page.locator("#tipo-historico-apelidos")).toHaveValue("todos");
-  await expect(page.locator("#apenas-acoes-historico-apelidos")).not.toBeChecked();
-  await expect(page.locator(".alias-history-row")).toHaveCount(25);
+  await page.locator("#cockpit-alias-clear").click();
+  await expect(page.locator("#cockpit-alias-search")).toHaveValue("");
+  await expect(page.locator("#cockpit-alias-type")).toHaveValue("todos");
+  await expect(page.locator("#cockpit-alias-actions-only")).not.toBeChecked();
+  await expect(page.locator(ITEMS)).toHaveCount(32);
 });
 
-test("history stays in the viewport, adapts rows, and passes axe in both themes", async ({ page }) => {
+test("detail offers only the actions each record allows", async ({ page }) => {
   test.setTimeout(60_000);
-  const eventos = fixtureHistory();
+  await openHistory(page, fixtureHistory());
+  const detail = page.locator("#cockpit-alias-detail");
+
+  await page.locator("#cockpit-alias-type").selectOption("aviso_endpoint");
+  await page.locator(ITEMS).first().getByRole("button").click();
+  await expect(detail).toContainText("Usuário logado removido no Endpoint");
+  await expect(detail.getByRole("button", { name: "Excluir aviso" })).toBeEnabled();
+  await expect(detail.getByRole("button", { name: "Restaurar anterior" })).toHaveCount(0);
+
+  await page.locator("#cockpit-alias-type").selectOption("endereco");
+  await page.locator(ITEMS).first().getByRole("button").click();
+  await expect(detail.getByRole("button", { name: /Restaurar|Excluir/ })).toHaveCount(0);
+  await expect(detail).toContainText("não podem ser restaurados manualmente");
+
+  await page.locator("#cockpit-alias-type").selectOption("usuario");
+  await page.locator(ITEMS).filter({ hasText: "old.usuario.05" }).getByRole("button").click();
+  await expect(detail.getByRole("button", { name: /Restaurar|Excluir/ })).toHaveCount(0);
+  await expect(detail).toContainText("alteração mais recente");
+});
+
+test("deleting an Endpoint warning confirms, calls the API and refreshes the list", async ({ page }) => {
+  test.setTimeout(60_000);
+  let eventos = fixtureHistory();
+  const deleted = [];
+  await page.route("**/api/historico-alteracoes/*", route => {
+    const id = decodeURIComponent(new URL(route.request().url()).pathname.split("/").pop());
+    deleted.push(id);
+    eventos = eventos.filter(evento => evento.id !== id);
+    return route.fulfill({ json: { sucesso: true, evento_id: id, tipo: "aviso_endpoint" } });
+  });
   await page.route("**/api/historico-alteracoes", route => route.fulfill({ json: { eventos, total: eventos.length } }));
   await page.goto("/");
-  const dialog = await openHistory(page);
-  await expect(page.locator("[aria-label='Fechar histórico']")).toBeFocused();
+  await page.locator("#cockpit-tools-trigger").click();
+  await page.locator("#btn-historico-apelidos").click();
+  await expect(page.locator(ITEMS)).toHaveCount(32);
 
-  const firstCell = page.locator(".alias-history-row").first().locator("td").first();
-  const expectedCellDisplay = page.viewportSize().width <= 1200 ? "grid" : "table-cell";
-  await expect.poll(() => firstCell.evaluate(element => getComputedStyle(element).display)).toBe(expectedCellDisplay);
-  const box = await dialog.boundingBox();
-  const viewport = page.viewportSize();
-  expect(box.x).toBeGreaterThanOrEqual(0);
-  expect(box.x + box.width).toBeLessThanOrEqual(viewport.width);
+  await page.locator("#cockpit-alias-type").selectOption("aviso_endpoint");
+  await page.locator(ITEMS).first().getByRole("button").click();
+  await page.locator("#cockpit-alias-detail").getByRole("button", { name: "Excluir aviso" }).click();
+  await page.locator("#btn-confirmar-acao-ok").click();
+
+  await expect.poll(() => deleted).toEqual(["history-event-3"]);
+  await expect(page.locator(ITEMS)).toHaveCount(7);
+});
+
+test("the panel fits the viewport and passes axe in both themes", async ({ page }) => {
+  test.setTimeout(60_000);
+  await openHistory(page, fixtureHistory());
   expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true);
-  const listBox = await page.locator("#modal-historico-apelidos .alias-history-list").boundingBox();
-  expect(listBox.height).toBeGreaterThan(150);
-  if (viewport.width >= 768 && viewport.height >= 700) {
-    expect(box.height).toBeGreaterThan(viewport.height * 0.8);
-    expect(listBox.height).toBeGreaterThan(box.height * 0.4);
-  }
+  await expect(page.locator("#cockpit-alias-actions-only")).toBeVisible();
+  await expect(page.locator("#cockpit-alias-clear")).toBeVisible();
 
   for (const theme of ["dark", "light"]) {
     await page.locator("html").evaluate((root, value) => { root.dataset.theme = value; }, theme);
-    const audit = await new AxeBuilder({ page }).include("#modal-historico-apelidos").analyze();
+    const audit = await new AxeBuilder({ page }).include(PANEL).analyze();
     expect(audit.violations.map(violation => violation.id), theme).toEqual([]);
   }
 });

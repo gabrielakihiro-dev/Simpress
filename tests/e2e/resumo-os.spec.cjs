@@ -66,11 +66,11 @@ async function installSummaryRoutes(page, { links = new Map(), onReportRequest =
   });
 }
 
-// A tabela de OS vive no painel Chamados (F5): "#cockpit-tickets-os .ck-os".
+// A tabela de OS vive no painel OS (F6): "#cockpit-tickets-os .ck-os".
 const SECAO = "#cockpit-tickets-os .ck-os";
 
 async function openChamados(page) {
-  // Chamados fica na barra principal; abaixo de 1200px só o menu Ferramentas o oferece.
+  // OS fica na barra principal; abaixo de 1200px só o menu Ferramentas a oferece.
   const naBarra = await page.locator("#btn-acompanhamento-chamados").isVisible();
   if (!naBarra) await page.locator("#cockpit-tools-trigger").click();
   await page.locator(naBarra ? "#btn-acompanhamento-chamados" : "#btn-chamados-menu").click();
@@ -153,7 +153,7 @@ test("Chamados associa OS aos chamados UTIC com prefixo anual e preserva dados d
   await expect(linkedOracle.locator(".ticket-os-link-prefix")).toHaveText(`UTIC-${year}-`);
   await expect(linkedOracle.locator("input")).toHaveValue("1116");
 
-  // O botão da OS abre o Andamento da série no próprio painel Chamados (sem modal).
+  // O botão da OS abre o Andamento da série no próprio painel OS (sem modal).
   await linkedOrder.getByRole("button", {
     name: "Abrir andamento em Chamados: Oracle + Simpress, série DEMO-SN-001, OS 7285070",
   }).click();
@@ -174,7 +174,7 @@ test("Chamados carrega as OS uma vez por abertura, mesmo com o painel da Home le
       await route.fulfill({ json: reportWith() });
     },
   });
-  // Um /api/painel lento não pode disparar nova carga das OS (só a abertura do painel Chamados carrega).
+  // Um /api/painel lento não pode disparar nova carga das OS (só a abertura do painel OS carrega).
   await page.route("**/api/painel", async route => {
     await new Promise(resolve => setTimeout(resolve, 1500));
     await route.fallback();

@@ -79,6 +79,6 @@ test("places the ticket action in cockpit tools dropdown without legacy sidebar 
   assert.match(ticketMarkup, /ck-aba ck-aba--painel/);
   assert.match(ticketMarkup, /data-on-click="abrirPainelCockpit"/);
   assert.match(ticketMarkup, /data-args='\["chamados"\]'/);
-  assert.match(ticketMarkup, /title="Chamados \(F5\)"/);
+  assert.match(ticketMarkup, /title="OS \(F6\)"/);
   assert.doesNotMatch(ticketMarkup, /--orange|<br>/);
 });

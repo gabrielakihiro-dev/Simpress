@@ -114,7 +114,6 @@
     app.carregarProntidao();
     app.carregarEstatisticas();
     app.carregarUnidades();
-    app.carregarContagemHistoricoApelidos();
     app.carregarContagemHistoricoComparacoes();
     app.inicializarArquivosAtualizacaoPlanilhas();
     app.carregarEstadoEntra();

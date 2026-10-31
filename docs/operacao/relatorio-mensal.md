@@ -57,7 +57,7 @@ As OS e os pedidos vêm de `data/state/historico_chamados.json` (importado pela 
 
 ## Tela
 
-- Menu superior › `Ferramentas` (nove pontos) › `Relatório mensal` (`#btn-relatorio-mensal`, atalho F8).
+- Menu superior › `Ferramentas` (nove pontos) › `Relatório mensal` (`#btn-relatorio-mensal`, atalho F9).
 - Abre o painel Cockpit `data-cockpit-tool-panel="relatorio"`; mostra o mês atual e os dois meses anteriores como seletores rápidos, além do campo `<input type="month">` (máximo = mês atual). O mês atual aparece como parcial até a data informada pela API, e meses anteriores aparecem como encerrados.
 - A área analítica fica ao lado da prévia copiável. Os indicadores exibidos vêm de OS Oracle e pedidos Simpress com datas e status suficientes; não são inventados gráficos semanais, transportes, tempo médio nem alterações de apelido.
 - `Copiar resumo` copia apenas a prévia visível; `Exportar planilha` usa a rota XLSX existente, com o mesmo nome de arquivo e a mensagem exata `Planilha Exportada com Sucesso!`.

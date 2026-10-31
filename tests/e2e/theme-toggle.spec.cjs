@@ -7,7 +7,7 @@ test("the Cockpit tools remain reachable in narrow windows in both themes", asyn
     for (const width of [390, 767, 768, 1200]) {
       await page.setViewportSize({ width, height: 1024 });
       await page.locator("#cockpit-tools-trigger").click();
-      await expect(page.locator("#btn-atualizar-planilhas")).toBeVisible();
+      await expect(page.locator("#btn-cockpit-comparacao")).toBeVisible();
       await page.keyboard.press("Escape");
       await expect(page.locator("#cockpit-tools-trigger")).toBeFocused();
       await expect(page.locator("#cockpit-tools-dropdown")).not.toHaveAttribute("open", "");

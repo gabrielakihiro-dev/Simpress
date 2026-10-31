@@ -92,12 +92,13 @@
   <div class="ck-marca" id="ck-marca" aria-label="Simpress, gestão de equipamentos"><svg class="ck-ico" aria-hidden="true" focusable="false"><use href="#i-box"></use></svg><span>Simpress</span></div>
 
   <nav class="ck-abas" id="ck-abas" role="tablist" aria-label="Navegação principal" data-on-keydown="controlarAbasTransferencia" data-args='["$event"]'>
-    <button type="button" id="tab-home" class="ck-aba is-active" role="tab" aria-selected="true" aria-controls="tab-panel-home" tabindex="0" data-on-click="ativarAbaTransferencia" data-args='["home"]' aria-label="Home" title="Home (F1)"><svg class="ck-ico" aria-hidden="true" focusable="false"><use href="#i-house"></use></svg><span>Home</span></button>
-    <button type="button" id="tab-retirada-entrega" class="ck-aba" role="tab" aria-selected="false" aria-controls="tab-panel-retirada-entrega" tabindex="-1" data-on-click="ativarAbaTransferencia" data-args='["transferencia"]' aria-label="Transporte" title="Transporte (F2)"><svg class="ck-ico" aria-hidden="true" focusable="false"><use href="#i-truck"></use></svg><span>Transporte</span></button>
-    <button type="button" id="tab-resumo" class="ck-aba" role="tab" aria-selected="false" aria-controls="tab-panel-resumo" tabindex="-1" data-on-click="ativarAbaTransferencia" data-args='["resumo"]' aria-label="Resumo" title="Resumo (F3)"><svg class="ck-ico" aria-hidden="true" focusable="false"><use href="#i-chart"></use></svg><span>Resumo</span></button>
-    <button type="button" id="tab-automacao" class="ck-aba" role="tab" aria-selected="false" aria-controls="tab-panel-automacao" tabindex="-1" data-on-click="ativarAbaTransferencia" data-args='["automacao"]' aria-label="Automação" title="Automação (F4)"><svg class="ck-ico" aria-hidden="true" focusable="false"><use href="#i-workflow"></use></svg><span>Automação</span></button>
+    <button type="button" id="tab-home" class="ck-aba is-active" role="tab" aria-selected="true" aria-controls="tab-panel-home" tabindex="0" data-on-click="ativarAbaTransferencia" data-args='["home"]' aria-label="Home" title="Home (F1)"><svg class="ck-ico" aria-hidden="true" focusable="false"><use href="#i-house"></use></svg><span>Home</span><kbd class="ck-aba__kbd" aria-hidden="true">F1</kbd></button>
+    <button type="button" id="tab-retirada-entrega" class="ck-aba" role="tab" aria-selected="false" aria-controls="tab-panel-retirada-entrega" tabindex="-1" data-on-click="ativarAbaTransferencia" data-args='["transferencia"]' aria-label="Transporte" title="Transporte (F2)"><svg class="ck-ico" aria-hidden="true" focusable="false"><use href="#i-truck"></use></svg><span>Transporte</span><kbd class="ck-aba__kbd" aria-hidden="true">F2</kbd></button>
+    <button type="button" id="tab-resumo" class="ck-aba" role="tab" aria-selected="false" aria-controls="tab-panel-resumo" tabindex="-1" data-on-click="ativarAbaTransferencia" data-args='["resumo"]' aria-label="Resumo" title="Resumo (F3)"><svg class="ck-ico" aria-hidden="true" focusable="false"><use href="#i-chart"></use></svg><span>Resumo</span><kbd class="ck-aba__kbd" aria-hidden="true">F3</kbd></button>
+    <button type="button" id="tab-automacao" class="ck-aba" role="tab" aria-selected="false" aria-controls="tab-panel-automacao" tabindex="-1" data-on-click="ativarAbaTransferencia" data-args='["automacao"]' aria-label="Automação" title="Automação (F4)"><svg class="ck-ico" aria-hidden="true" focusable="false"><use href="#i-workflow"></use></svg><span>Automação</span><kbd class="ck-aba__kbd" aria-hidden="true">F4</kbd></button>
   </nav>
-  <button type="button" id="btn-acompanhamento-chamados" class="ck-aba ck-aba--painel" aria-pressed="false" data-cockpit-tool="chamados" data-on-click="abrirPainelCockpit" data-args='["chamados"]' aria-label="Chamados" title="Chamados (F5)" aria-keyshortcuts="F5"><svg class="ck-ico" aria-hidden="true" focusable="false"><use href="#i-clipboard"></use></svg><span>Chamados</span></button>
+  <button type="button" id="btn-sebrae-chamados-aba" class="ck-aba ck-aba--painel" aria-pressed="false" data-cockpit-tool="sebrae-chamados" data-on-click="abrirPainelCockpit" data-args='["sebrae-chamados"]' aria-label="Chamados" title="Chamados (F5)" aria-keyshortcuts="F5"><svg class="ck-ico" aria-hidden="true" focusable="false"><use href="#i-file-check"></use></svg><span>Chamados</span><kbd class="ck-aba__kbd" aria-hidden="true">F5</kbd></button>
+  <button type="button" id="btn-acompanhamento-chamados" class="ck-aba ck-aba--painel" aria-pressed="false" data-cockpit-tool="chamados" data-on-click="abrirPainelCockpit" data-args='["chamados"]' aria-label="OS" title="OS (F6)" aria-keyshortcuts="F6"><svg class="ck-ico" aria-hidden="true" focusable="false"><use href="#i-clipboard"></use></svg><span>OS</span><kbd class="ck-aba__kbd" aria-hidden="true">F6</kbd></button>
 
   <span class="ck-topbar__espaco" aria-hidden="true"></span>
   <span class="ck-topbar__quebra" aria-hidden="true"></span>
@@ -105,8 +106,7 @@
   <form class="ck-busca" id="form-busca-serial" role="search" autocomplete="off" data-on-submit="buscarSerial">
     <div class="ck-busca__campo">
       <svg class="ck-ico ck-ico--sm" aria-hidden="true" focusable="false"><use href="#i-search"></use></svg>
-      <input type="text" id="input-serial" class="ck-busca__entrada" aria-keyshortcuts="/ Control+K Meta+K" role="combobox" aria-label="Série, apelido, modelo, cidade ou nome do usuário do equipamento" aria-autocomplete="list" aria-controls="autocomplete-list" aria-expanded="false" aria-haspopup="listbox" autocomplete="off" placeholder="Série, apelido, cidade ou usuário" data-on-input="handleSerialInput" data-args='["$value"]' data-on-keydown="handleSerialKeydown" data-args='["$event"]'>
-      <kbd class="ck-kbd" aria-hidden="true" title="Atalho: Ctrl+K">Ctrl+K</kbd>
+      <input type="text" id="input-serial" class="ck-busca__entrada" aria-keyshortcuts="/ Control+K Meta+K" role="combobox" aria-label="Série, apelido, modelo, cidade ou nome do usuário do equipamento" aria-autocomplete="list" aria-controls="autocomplete-list" aria-expanded="false" aria-haspopup="listbox" autocomplete="off" placeholder="Série, apelido, cidade ou usuário" data-on-input="handleSerialInput" data-args='["$value"]' data-on-keydown="handleSerialKeydown" data-args-keydown='["$event"]'>
       <button type="button" id="btn-clear-serial" class="ck-btn ck-btn--icone ck-btn--fantasma ck-btn--sm hidden" aria-label="Limpar pesquisa" title="Limpar pesquisa" data-on-click="limparSerial"><svg class="ck-ico ck-ico--sm" aria-hidden="true" focusable="false"><use href="#i-x"></use></svg></button>
       <button type="submit" id="btn-buscar-serial" class="ck-btn ck-btn--icone ck-btn--fantasma ck-btn--sm" aria-label="Buscar Equipamento" title="Buscar Equipamento"><svg class="ck-ico ck-ico--sm" aria-hidden="true" focusable="false"><use href="#i-arrow-right"></use></svg><span class="ck-sr">Buscar Equipamento</span></button>
     </div>
@@ -128,7 +128,7 @@
     <details id="readiness-panel" class="ck-chip" data-state="loading" aria-labelledby="readiness-title" aria-busy="true">
       <summary class="ck-chip__gatilho" aria-controls="readiness-content">
         <span id="stat-base-dot" class="ck-chip__ponto" aria-hidden="true"></span>
-        <span id="readiness-summary-short" class="ck-chip__rotulo" role="status" aria-live="polite" aria-atomic="true">Verificando…</span>
+        <span id="readiness-summary-short" class="ck-chip__rotulo ck-sr" role="status" aria-live="polite" aria-atomic="true">Verificando…</span>
         <svg class="ck-ico ck-ico--xs" aria-hidden="true" focusable="false"><use href="#i-chevron-down"></use></svg>
         <span id="readiness-title" class="ck-sr">Disponibilidade das funções</span>
       </summary>
@@ -147,9 +147,9 @@
         <ul id="readiness-details-content" class="ck-pront__lista" aria-label="Fontes da base"></ul>
       </div>
     </details>
-    <span id="cockpit-automation-shell-status" class="ck-chip" data-state="idle" aria-live="polite" aria-atomic="true">
+    <span id="cockpit-automation-shell-status" class="ck-chip" data-state="idle" title="Chrome livre para uma nova rotina." aria-live="polite" aria-atomic="true">
       <span class="ck-chip__ponto" aria-hidden="true"></span>
-      <span id="cockpit-automation-shell-title" class="ck-chip__rotulo">Chrome livre</span>
+      <span id="cockpit-automation-shell-title" class="ck-chip__rotulo ck-sr">Chrome livre</span>
     </span>
   </div>
 
@@ -159,16 +159,11 @@
       <div class="ck-menu" id="cockpit-tools-menu" role="menu" aria-label="Ferramentas">
         <div class="ck-menu__grupo" role="group" aria-labelledby="ck-menu-g-paineis">
           <p class="ck-menu__titulo" id="ck-menu-g-paineis">Painéis</p>
-          <button type="button" id="btn-chamados-menu" class="ck-menu__item ck-menu__item--so-compacto" role="menuitem" data-on-click="abrirPainelCockpit" data-args='["chamados"]'><svg class="ck-ico" aria-hidden="true" focusable="false"><use href="#i-clipboard"></use></svg><span class="ck-menu__rotulo">Chamados</span><kbd aria-hidden="true">F5</kbd></button>
-          <button type="button" id="btn-cockpit-comparacao" class="ck-menu__item" role="menuitem" data-on-click="abrirPainelCockpit" data-args='["comparacao"]'><svg class="ck-ico" aria-hidden="true" focusable="false"><use href="#i-dashboard"></use></svg><span class="ck-menu__rotulo">Comparação</span><kbd aria-hidden="true">F6</kbd></button>
-          <button type="button" id="btn-historico-apelidos" class="ck-menu__item" role="menuitem" data-on-click="abrirPainelCockpit" data-args='["apelidos"]'><svg class="ck-ico" aria-hidden="true" focusable="false"><use href="#i-history"></use></svg><span class="ck-menu__rotulo">Histórico de apelidos</span><kbd aria-hidden="true">F7</kbd></button>
-          <button type="button" id="btn-relatorio-mensal" class="ck-menu__item" role="menuitem" data-on-click="abrirPainelCockpit" data-args='["relatorio"]'><svg class="ck-ico" aria-hidden="true" focusable="false"><use href="#i-sheet"></use></svg><span class="ck-menu__rotulo">Relatório mensal</span><kbd aria-hidden="true">F8</kbd></button>
-        </div>
-        <div class="ck-menu__grupo" role="group" aria-labelledby="ck-menu-g-planilhas">
-          <p class="ck-menu__titulo" id="ck-menu-g-planilhas">Planilhas</p>
-          <button type="button" id="btn-atualizar-planilhas" class="ck-menu__item" role="menuitem" data-on-click="abrirPainelCockpit" data-args='["planilhas"]'><svg class="ck-ico" aria-hidden="true" focusable="false"><use href="#i-upload"></use></svg><span class="ck-menu__rotulo">Atualizar planilhas</span></button>
-          <button type="button" id="btn-exportar-equipamentos" class="ck-menu__item hidden" role="menuitem" data-on-click="exportarEquipamentosAtualizados" aria-label="Exportar planilha Excel com apelidos e IdCliente atualizados" aria-labelledby="label-exportar-equipamentos"><svg class="ck-ico" aria-hidden="true" focusable="false"><use href="#i-download"></use></svg><span class="ck-menu__rotulo" id="label-exportar-equipamentos">Exportar Excel</span></button>
-          <button type="button" id="btn-sebrae-chamados-menu" class="ck-menu__item" role="menuitem" data-on-click="abrirPainelCockpit" data-args='["sebrae-chamados"]'><svg class="ck-ico" aria-hidden="true" focusable="false"><use href="#i-file-check"></use></svg><span class="ck-menu__rotulo">Chamados Sebrae</span></button>
+          <button type="button" id="btn-sebrae-chamados-menu" class="ck-menu__item ck-menu__item--so-compacto" role="menuitem" data-on-click="abrirPainelCockpit" data-args='["sebrae-chamados"]'><svg class="ck-ico" aria-hidden="true" focusable="false"><use href="#i-file-check"></use></svg><span class="ck-menu__rotulo">Chamados</span><kbd aria-hidden="true">F5</kbd></button>
+          <button type="button" id="btn-chamados-menu" class="ck-menu__item ck-menu__item--so-compacto" role="menuitem" data-on-click="abrirPainelCockpit" data-args='["chamados"]'><svg class="ck-ico" aria-hidden="true" focusable="false"><use href="#i-clipboard"></use></svg><span class="ck-menu__rotulo">OS</span><kbd aria-hidden="true">F6</kbd></button>
+          <button type="button" id="btn-cockpit-comparacao" class="ck-menu__item" role="menuitem" data-on-click="abrirPainelCockpit" data-args='["comparacao"]'><svg class="ck-ico" aria-hidden="true" focusable="false"><use href="#i-dashboard"></use></svg><span class="ck-menu__rotulo">Comparação</span><kbd aria-hidden="true">F7</kbd></button>
+          <button type="button" id="btn-historico-apelidos" class="ck-menu__item" role="menuitem" data-on-click="abrirPainelCockpit" data-args='["apelidos"]'><svg class="ck-ico" aria-hidden="true" focusable="false"><use href="#i-history"></use></svg><span class="ck-menu__rotulo">Histórico de apelidos</span><kbd aria-hidden="true">F8</kbd></button>
+          <button type="button" id="btn-relatorio-mensal" class="ck-menu__item" role="menuitem" data-on-click="abrirPainelCockpit" data-args='["relatorio"]'><svg class="ck-ico" aria-hidden="true" focusable="false"><use href="#i-sheet"></use></svg><span class="ck-menu__rotulo">Relatório mensal</span><kbd aria-hidden="true">F9</kbd></button>
         </div>
         <div class="ck-menu__grupo" role="group" aria-labelledby="ck-menu-g-hist">
           <p class="ck-menu__titulo" id="ck-menu-g-hist">Histórico e catálogo</p>
@@ -189,7 +184,7 @@
             <span class="ck-aviso__icone"><svg class="ck-ico" aria-hidden="true" focusable="false"><use href="#i-erro"></use></svg></span>
             <div class="ck-aviso__topo"><span class="ck-badge" data-status="erro">Urgente</span><h3 id="alerta-os-paradas-titulo" class="ck-aviso__titulo">OS paradas</h3></div>
             <p id="alerta-os-paradas-texto" class="ck-aviso__texto"></p>
-            <button type="button" id="btn-alerta-os-paradas" data-on-click="abrirPainelCockpit" data-args='["chamados"]' class="ck-btn ck-btn--primario ck-btn--sm ck-aviso__acao">Ver chamados<svg class="ck-ico ck-ico--sm" aria-hidden="true" focusable="false"><use href="#i-arrow-right"></use></svg></button>
+            <button type="button" id="btn-alerta-os-paradas" data-on-click="abrirPainelCockpit" data-args='["chamados"]' class="ck-btn ck-btn--primario ck-btn--sm ck-aviso__acao">Ver OS<svg class="ck-ico ck-ico--sm" aria-hidden="true" focusable="false"><use href="#i-arrow-right"></use></svg></button>
           </section>
           <section id="alerta-divergencias-novas" class="ck-aviso" data-gravidade="atencao" role="status" aria-labelledby="alerta-divergencias-novas-titulo" data-state="loading" hidden>
             <span class="ck-aviso__icone"><svg class="ck-ico" aria-hidden="true" focusable="false"><use href="#i-alerta"></use></svg></span>
@@ -201,7 +196,7 @@
       </section>
     </div>
 
-    <button type="button" id="btn-assistente" class="ck-btn ck-btn--icone ck-btn--fantasma" aria-label="Assistente" title="Assistente (F9)" aria-keyshortcuts="F9" aria-expanded="false" aria-controls="assistente-widget" data-on-click="alternarAssistente"><svg class="ck-ico ck-ico--lg" aria-hidden="true" focusable="false"><use href="#i-bot"></use></svg></button>
+    <button type="button" id="btn-assistente" class="ck-btn ck-btn--icone ck-btn--fantasma" aria-label="Assistente" title="Assistente (F10)" aria-keyshortcuts="F10" aria-expanded="false" aria-controls="assistente-widget" data-on-click="alternarAssistente"><svg class="ck-ico ck-ico--lg" aria-hidden="true" focusable="false"><use href="#i-bot"></use></svg></button>
 
     <button type="button" id="theme-toggle" class="ck-btn ck-btn--icone ck-btn--fantasma" aria-label="Ativar modo claro" title="Ativar modo claro"><svg class="ck-ico ck-ico--lg ck-ico--sol" aria-hidden="true" focusable="false"><use href="#i-sun"></use></svg><svg class="ck-ico ck-ico--lg ck-ico--lua" aria-hidden="true" focusable="false"><use href="#i-moon"></use></svg></button>
   </div>
@@ -230,8 +225,6 @@
       <div class="ck-lista__rodape">
         <span class="ck-lista__info">
           <span id="home-list-count" role="status" aria-live="polite" aria-atomic="true">Carregando equipamentos…</span>
-          <span aria-hidden="true">·</span>
-          <button type="button" id="btn-listar-sem-usuario" data-on-click="abrirEquipamentosSemUsuario" class="ck-link-fantasma" aria-label="Equipamentos sem usuário">Lista sem usuário</button>
         </span>
         <button type="button" id="btn-home-list-more" class="ck-btn ck-btn--fantasma ck-btn--sm" data-on-click="carregarMaisItensHome" hidden><svg class="ck-ico ck-ico--sm" aria-hidden="true" focusable="false"><use href="#i-chevron-down"></use></svg>Carregar mais</button>
       </div>
@@ -291,7 +284,7 @@
               <span>Editar</span>
               <kbd class="ck-kbd" aria-hidden="true">E</kbd>
             </button>
-            <button type="button" data-on-click="abrirModalHistoricoApelidos" class="ck-btn ck-btn--icone ck-btn--secundario" aria-label="Histórico de apelidos" title="Histórico de alterações">
+            <button type="button" data-on-click="abrirPainelCockpit" data-args='["apelidos"]' class="ck-btn ck-btn--icone ck-btn--secundario" aria-label="Histórico de apelidos" title="Histórico de apelidos">
               <svg class="ck-ico" aria-hidden="true" focusable="false"><use href="#i-history"></use></svg>
             </button>
           </div>
@@ -478,7 +471,7 @@ Horário disponível para atendimento:</textarea>
         <button type="button" id="btn-pesquisar-equipamento-home" data-on-click="abrirHomeParaPesquisarEquipamento" class="ck-btn ck-btn--secundario ck-btn--sm" data-show="empty">
           <svg class="ck-ico ck-ico--sm" aria-hidden="true" focusable="false"><use href="#i-search"></use></svg><span>Pesquisar equipamento na Home</span>
         </button>
-        <button type="button" id="ck-link-os" data-on-click="abrirChamadosDoEquipamento" class="ck-btn ck-btn--fantasma ck-btn--sm" data-show="selected" title="Abrir Chamados filtrado pela série do equipamento">
+        <button type="button" id="ck-link-os" data-on-click="abrirChamadosDoEquipamento" class="ck-btn ck-btn--fantasma ck-btn--sm" data-show="selected" title="Abrir OS filtrada pela série do equipamento">
           <svg class="ck-ico ck-ico--sm" aria-hidden="true" focusable="false"><use href="#i-link"></use></svg><span id="ck-link-os-texto">OS deste equipamento</span>
         </button>
         <button type="button" id="btn-trocar-equipamento" data-on-click="trocarEquipamentoTransporte" class="ck-btn ck-btn--secundario ck-btn--sm" data-show="selected">
@@ -794,7 +787,7 @@ Horário disponível para atendimento:</textarea>
           <p id="sebrae-novos-resumo" class="ck-cartao__meta" role="status" aria-live="polite"></p>
           <div id="sebrae-historico-resumo" class="sebrae-historico-resumo"></div>
           <div id="sebrae-novos-avisos"></div>
-          <div class="ck-grupo-botoes"><button type="button" class="ck-btn ck-btn--secundario ck-btn--sm" id="btn-sebrae-abrir-chamados" data-on-click="abrirPainelCockpit" data-args='["sebrae-chamados"]'><svg class="ck-ico ck-ico--xs" aria-hidden="true" focusable="false"><use href="#i-file-check"></use></svg><span>Chamados Sebrae</span></button></div>
+          <div class="ck-grupo-botoes"><button type="button" class="ck-btn ck-btn--secundario ck-btn--sm" id="btn-sebrae-abrir-chamados" data-on-click="abrirPainelCockpit" data-args='["sebrae-chamados"]'><svg class="ck-ico ck-ico--xs" aria-hidden="true" focusable="false"><use href="#i-file-check"></use></svg><span>Chamados</span></button></div>
         </div>
       </section>
 
@@ -864,15 +857,15 @@ Horário disponível para atendimento:</textarea>
         <header class="ck-ferramenta__cab">
           <div class="ck-ferramenta__textos">
             <p class="ck-ferramenta__kicker">Ferramentas do Cockpit</p>
-            <h1 id="cockpit-tool-title" class="ck-ferramenta__titulo" tabindex="-1">Chamados</h1>
+            <h1 id="cockpit-tool-title" class="ck-ferramenta__titulo" tabindex="-1">OS</h1>
             <span id="cockpit-tool-subtitle" class="ck-ferramenta__sub" role="status" aria-live="polite"></span>
           </div>
-          <kbd id="cockpit-tool-kbd" class="ck-kbd" aria-hidden="true">F5</kbd>
+          <kbd id="cockpit-tool-kbd" class="ck-kbd" aria-hidden="true">F6</kbd>
           <button type="button" class="ck-btn ck-btn--secundario" data-on-click="fecharPainelCockpit" aria-label="Voltar para a tela principal">Voltar <kbd class="ck-kbd">Esc</kbd></button>
         </header>
 
         <section class="ck-ferr-painel" data-cockpit-tool-panel="chamados" aria-labelledby="cockpit-tickets-heading" hidden>
-          <h2 id="cockpit-tickets-heading" class="sr-only">Acompanhamento de chamados por série</h2>
+          <h2 id="cockpit-tickets-heading" class="sr-only">Acompanhamento de OS por série</h2>
           <div id="cockpit-tickets-kpis" class="ck-kpis" role="group" aria-label="Resumo do acompanhamento"></div>
           <section id="cockpit-tickets-triage" class="ckp-triagem ck-chamados-bloco" aria-labelledby="cockpit-tickets-triage-title"></section>
           <div class="ck-barra-ferr">
@@ -932,6 +925,7 @@ Horário disponível para atendimento:</textarea>
             <label class="ck-campo"><span class="ck-campo__rotulo">Comparação</span><select id="cockpit-comparison-event" class="ck-entrada"></select></label>
             <button type="button" id="cockpit-comparison-new" class="ck-btn ck-btn--secundario">Nova comparação</button>
             <button type="button" id="btn-exportar-resultado-comparacao" data-on-click="exportarResultadoComparacaoPlanilhas" class="ck-btn ck-btn--primario disabled:cursor-not-allowed disabled:opacity-50" aria-label="Exportar este resultado para Excel" title="Exportar este resultado para Excel (registros e anotações do dia)" disabled><svg class="ck-ico ck-ico--sm" aria-hidden="true" focusable="false"><use href="#i-download"></use></svg><span>Exportar</span></button>
+            <button type="button" id="btn-exportar-equipamentos" class="ck-btn ck-btn--secundario hidden" data-on-click="exportarEquipamentosAtualizados" aria-label="Exportar Excel com apelidos e IdCliente atualizados" title="Baixar a planilha com apelidos e IdCliente atualizados"><svg class="ck-ico ck-ico--sm" aria-hidden="true" focusable="false"><use href="#i-download"></use></svg><span>Exportar Excel</span></button>
             <button type="button" id="cockpit-comparison-legacy" class="ck-btn ck-btn--primario">Histórico e ações completas</button>
           </div>
           <h3 class="sr-only">Resultado da atualização das planilhas</h3>
@@ -946,7 +940,8 @@ Horário disponível para atendimento:</textarea>
             <label class="ck-campo"><span class="ck-campo__rotulo">Buscar no histórico</span><input id="cockpit-alias-search" class="ck-entrada" type="search" autocomplete="off" placeholder="Série, usuário ou alteração"></label>
             <label class="ck-campo"><span class="ck-campo__rotulo">Tipo</span><select id="cockpit-alias-type" class="ck-entrada"><option value="todos">Todos</option><option value="apelido">Apelido</option><option value="usuario">Usuário</option><option value="endereco">Endereço</option><option value="aviso_endpoint">Avisos do Endpoint</option></select></label>
             <button type="button" id="cockpit-alias-export" class="ck-btn ck-btn--primario">Exportar CSV</button>
-            <button type="button" id="cockpit-alias-legacy" class="ck-btn ck-btn--secundario">Abrir ações completas</button>
+            <label class="ckp-alternar" title="Mostra só os registros que podem ser restaurados ou excluídos"><input id="cockpit-alias-actions-only" type="checkbox">Somente com ação disponível</label>
+            <button type="button" id="cockpit-alias-clear" class="ck-btn ck-btn--secundario">Limpar filtros</button>
           </div>
           <div id="cockpit-alias-filters" class="ck-pilulas ck-ferr-filtros" role="group" aria-label="Filtrar histórico por período e classificação">
             <button type="button" class="ck-pilula" data-alias-period="todos" aria-pressed="true">Todas <span class="ck-pilula__n" id="cockpit-alias-count-all">0</span></button>
@@ -1008,7 +1003,7 @@ Horário disponível para atendimento:</textarea>
         </section>
 
         <section class="ck-ferr-painel" data-cockpit-tool-panel="sebrae-chamados" aria-labelledby="sebrae-chamados-heading" hidden>
-          <h2 id="sebrae-chamados-heading" class="sr-only">Chamados Sebrae</h2>
+          <h2 id="sebrae-chamados-heading" class="sr-only">Chamados</h2>
           <div class="ck-det__corpo">
             <div id="sebrae-novos-lista"></div>
             <details id="sebrae-antigos" class="sebrae-antigos" hidden>
@@ -1409,60 +1404,6 @@ Horário disponível para atendimento:</textarea>
       <div class="flex justify-end gap-2 mt-6 pt-4 border-t border-line-quiet">
         <button type="button" data-on-click="fecharModalEditarApelido" class="ck-btn ck-btn--secundario">Cancelar</button>
         <button type="button" id="btn-salvar-apelido" data-on-click="salvarApelido" class="ck-btn ck-btn--primario">Salvar apelido</button>
-      </div>
-    </div>
-  </div>
-
-  <!-- MODAL DO HISTÓRICO DE ALTERAÇÕES DE APELIDO -->
-  <div id="modal-historico-apelidos" class="modal-overlay ck-veu hidden">
-    <div class="alias-history-panel ck-dialogo">
-      <div class="flex items-start justify-between gap-4 pb-4 border-b border-line-quiet shrink-0 alias-history-header">
-        <div>
-          <h3 class="text-base font-bold text-white flex items-center gap-2 alias-history-title">
-            <i data-lucide="history" class="w-4 h-4 text-violet-400"></i>
-            Histórico de alterações
-            <span id="total-historico-apelidos" class="px-2 py-0.5 rounded-full text-xs font-semibold alias-history-total">0 registros</span>
-            <span class="info-tip"><button type="button" class="info-tip-trigger" aria-label="Sobre o histórico de alterações" aria-describedby="tip-historico-apelidos"><i data-lucide="info" aria-hidden="true"></i></button><span id="tip-historico-apelidos" role="tooltip" class="info-tip-text">Alterações de apelido, usuário, endereço e avisos do Endpoint. Ações disponíveis aparecem ao lado de cada registro.</span></span>
-          </h3>
-        </div>
-        <button type="button" data-on-click="fecharModalHistoricoApelidos" class="alias-history-close ck-btn ck-btn--fantasma ck-btn--icone ck-btn--sm" aria-label="Fechar histórico">
-          <i data-lucide="x" class="w-5 h-5"></i>
-        </button>
-      </div>
-      <section class="alias-history-toolbar" aria-label="Filtros do histórico de alterações">
-        <div class="alias-history-filters">
-          <div class="alias-history-filter alias-history-filter--search">
-            <label for="busca-historico-apelidos">Buscar no histórico</label>
-            <input id="busca-historico-apelidos" type="search" class="glass-input" placeholder="Série, equipamento ou valor" autocomplete="off" />
-          </div>
-          <div class="alias-history-filter alias-history-filter--type">
-            <label for="tipo-historico-apelidos">Tipo de alteração</label>
-            <select id="tipo-historico-apelidos" class="glass-input">
-              <option value="todos">Todos os tipos</option>
-              <option value="apelido">Apelido / hostname</option>
-              <option value="usuario">Usuário logado</option>
-              <option value="endereco">Endereço de instalação</option>
-              <option value="aviso_endpoint">Aviso do Endpoint</option>
-            </select>
-          </div>
-          <label class="alias-history-action-filter" for="apenas-acoes-historico-apelidos">
-            <input id="apenas-acoes-historico-apelidos" type="checkbox" />
-            <span>Somente com ação disponível</span>
-          </label>
-          <button type="button" id="limpar-filtros-historico-apelidos" class="alias-history-clear">Limpar filtros</button>
-        </div>
-        <p id="resultado-filtros-historico-apelidos" class="alias-history-result-count" role="status" aria-live="polite">Carregando registros...</p>
-      </section>
-      <div id="lista-historico-apelidos" aria-label="Eventos de alterações manuais" class="alias-history-list">
-        <p class="text-sm text-fg-subtle text-center py-8" role="status" aria-live="polite">Carregando histórico...</p>
-      </div>
-      <nav id="paginacao-historico-apelidos" class="alias-history-pagination" aria-label="Paginação do histórico" hidden>
-        <button type="button" id="pagina-anterior-historico-apelidos" class="alias-history-page-button" aria-controls="lista-historico-apelidos">Anterior</button>
-        <span id="pagina-atual-historico-apelidos" aria-live="polite">Página 1 de 1</span>
-        <button type="button" id="proxima-pagina-historico-apelidos" class="alias-history-page-button" aria-controls="lista-historico-apelidos">Próxima</button>
-      </nav>
-      <div class="pt-3 border-t border-line-quiet flex justify-end shrink-0 alias-history-footer">
-        <button type="button" data-on-click="fecharModalHistoricoApelidos" class="ck-btn ck-btn--secundario">Fechar</button>
       </div>
     </div>
   </div>

@@ -110,6 +110,14 @@ test("Atualizar Dashboard só anuncia o que será finalizado: D virando FINALIZA
   assert.deepEqual(candidatosFinalizar(abertos, {}, soft), []);
 });
 
+test("Atualizar Dashboard também anuncia chamados novos com D FINALIZADO, UTIC e descrição", () => {
+  const formulario = [{ numero: "UTIC-2026-10" }, { numero: "UTIC-2026-11" }, { numero: "UTIC-2026-12" }];
+  const valores = { "UTIC-2026-10": { D: "FINALIZADO" }, "UTIC-2026-11": { D: "FINALIZADO" }, "UTIC-2026-12": { D: "EM ABERTO" } };
+  const soft = { "UTIC-2026-10": { descricao: "Feito." }, "UTIC-2026-11": { descricao: " " }, "UTIC-2026-12": { descricao: "Feito." } };
+  assert.deepEqual(candidatosFinalizar([], {}, soft, formulario, valores), ["UTIC-2026-10"]);
+  assert.deepEqual(candidatosFinalizar([], {}, {}, formulario, valores), []);
+});
+
 test("textos de resultado e de chamado pulado ficam em português", () => {
   assert.equal(textoResultado({ status: "ok", encerrado_em: "28/10/2026 10:10" }), "Finalizado no SoftExpert (encerrado em 28/10/2026 10:10)");
   assert.equal(textoResultado({ status: "ja_finalizado" }), "Já estava finalizado no SoftExpert");

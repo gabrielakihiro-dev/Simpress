@@ -94,14 +94,14 @@ test("Home status badges are buttons that open Comparação and Resumo without o
   }
 });
 
-test("Home filters are an equal-width segmented control and the footer keeps Lista sem usuário", async ({ page }) => {
+test("Home filters are an equal-width segmented control and the footer has no Lista sem usuário link", async ({ page }) => {
   await page.goto("/");
   const widths = await page.locator(".ck-filtros .ck-filtro").evaluateAll(els => els.map(el => Math.round(el.getBoundingClientRect().width)));
   expect(widths).toHaveLength(4);
   expect(Math.max(...widths) - Math.min(...widths)).toBeLessThanOrEqual(1);
   const clipped = await page.locator(".ck-filtros .ck-filtro").evaluateAll(els => els.filter(el => el.scrollWidth > el.clientWidth).map(el => el.dataset.filter));
   expect(clipped).toEqual([]);
-  await expect(page.locator(".ck-lista__rodape #btn-listar-sem-usuario")).toHaveText("Lista sem usuário");
+  await expect(page.locator("#btn-listar-sem-usuario")).toHaveCount(0);
 });
 
 test("Cockpit never scrolls horizontally in narrow or wide windows", async ({ page }) => {
@@ -162,47 +162,63 @@ const toolComparison = {
     ausentes_no_endpoint: [], ausentes_em_detalhes: [],
   },
 };
-const toolButtons = [["#btn-acompanhamento-chamados", "chamados", "F5"], ["#btn-cockpit-comparacao", "comparacao", "F6"], ["#btn-historico-apelidos", "apelidos", "F7"], ["#btn-relatorio-mensal", "relatorio", "F8"]];
+// [botão da barra, item do menu Ferramentas, painel, atalho, título]; Comparação F7, Histórico F8, Relatório F9 só no menu (kbd).
+const toolButtons = [
+  ["#btn-sebrae-chamados-aba", "#btn-sebrae-chamados-menu", "sebrae-chamados", "F5", "Chamados"],
+  ["#btn-acompanhamento-chamados", "#btn-chamados-menu", "chamados", "F6", "OS"],
+  ["#btn-cockpit-comparacao", "#btn-cockpit-comparacao", "comparacao", "F7", "Comparação"],
+  ["#btn-historico-apelidos", "#btn-historico-apelidos", "apelidos", "F8", "Histórico de apelidos"],
+  ["#btn-relatorio-mensal", "#btn-relatorio-mensal", "relatorio", "F9", "Relatório mensal"],
+];
 
 for (const width of [320, 390, 768, 1024, 1200, 1440, 1920, 2560]) {
-  test(`tool panels fit a ${width}px window and keep the F5–F8 shortcuts`, async ({ page }) => {
+  test(`tool panels fit a ${width}px window and keep the F5–F9 shortcuts`, async ({ page }) => {
     test.setTimeout(60_000);
     await page.route("**/api/historico-comparacoes", route => route.fulfill({ json: { eventos: [toolComparison] } }));
     await page.route("**/api/historico-comparacoes/review-comparison", route => route.fulfill({ json: { evento: toolComparison } }));
     await page.setViewportSize({ width, height: 800 });
     await page.goto("/");
-    for (const [button, tool, key] of toolButtons) {
-      const naBarra = tool === "chamados" && width >= 1200;
-      if (naBarra) await expect(page.locator(button)).toHaveAttribute("title", `Chamados (${key})`);
-      else {
+    for (const [barra, item, tool, key, titulo] of toolButtons) {
+      const naBarra = barra !== item && width >= 1200;
+      if (naBarra) {
+        await expect(page.locator(barra)).toHaveAttribute("title", `${titulo} (${key})`);
+        await expect(page.locator(barra)).toBeVisible();
+        // Mesma linha de Home/Transporte/Resumo/Automação.
+        const linhaAba = await page.locator("#tab-home").boundingBox();
+        const linhaBotao = await page.locator(barra).boundingBox();
+        expect(Math.abs(linhaBotao.y - linhaAba.y), tool).toBeLessThanOrEqual(2);
+      } else {
         await page.locator("#cockpit-tools-trigger").click();
-        await expect(page.locator(`${tool === "chamados" ? "#btn-chamados-menu" : button} kbd`)).toHaveText(key);
+        if (key) await expect(page.locator(`${item} kbd`)).toHaveText(key);
+        else await expect(page.locator(`${item} kbd`)).toHaveCount(0);
       }
-      await page.locator(tool === "chamados" && !naBarra ? "#btn-chamados-menu" : button).click();
+      await page.locator(naBarra ? barra : item).click();
       const panel = page.locator(`[data-cockpit-tool-panel="${tool}"]`);
       await expect(panel).toBeVisible();
+      await expect(page.locator("#cockpit-tool-title")).toHaveText(titulo);
       const dimensions = await page.evaluate(() => ({ viewport: document.documentElement.clientWidth, document: document.documentElement.scrollWidth, body: document.body.scrollWidth }));
       expect(dimensions.document, tool).toBeLessThanOrEqual(dimensions.viewport);
       expect(dimensions.body, tool).toBeLessThanOrEqual(dimensions.viewport);
       expect(await overflowingRight(page, "#cockpit-tool-panels"), tool).toEqual([]);
       await page.keyboard.press("Escape");
       await expect(panel).toBeHidden();
-      await page.keyboard.press(key);
-      await expect(panel, `${key} abre ${tool}`).toBeVisible();
+      if (key) {
+        await page.keyboard.press(key);
+        await expect(panel, `${key} abre ${tool}`).toBeVisible();
+      }
     }
   });
 }
 
 test("a real modal stays reachable on a short compact screen", async ({ page }) => {
-  await page.route("**/api/historico-alteracoes", route => route.fulfill({ json: { eventos: [], total: 0 } }));
   await page.setViewportSize({ width: 390, height: 420 });
   await page.goto("/");
   await page.locator("#cockpit-tools-trigger").click();
-  await page.locator("#btn-historico-apelidos").click();
-  await page.locator("#cockpit-alias-legacy").click();
-  const dialog = page.getByRole("dialog", { name: "Histórico de alterações" });
+  await page.locator("#btn-cockpit-comparacao").click();
+  await page.locator("#cockpit-comparison-legacy").click();
+  const dialog = page.getByRole("dialog", { name: "Histórico de atualizações de planilhas" });
   await expect(dialog).toBeVisible();
-  await expect(page.locator("[aria-label='Fechar histórico']")).toBeInViewport();
+  await expect(page.locator("[aria-label='Fechar histórico de planilhas']")).toBeInViewport();
 });
 
 test("Transporte não tem mais OS por equipamento e a barra de ações fica na base da janela", async ({ page }, testInfo) => {

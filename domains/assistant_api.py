@@ -997,12 +997,12 @@ class SimpressApi:
         elif not importado.get("atualizavel"):
             passo, quem = "Importar o Dashboard de novo: a cópia guardada não permite atualizar.", "assistente_ou_usuario"
         elif novos is None:
-            passo, quem = "Buscar os chamados novos (\"Buscar chamados novos\" no painel Chamados Sebrae, ou a rotina 'dashboard').", "assistente_ou_usuario"
+            passo, quem = "Buscar os chamados novos (\"Buscar chamados novos\" no painel Chamados, ou a rotina 'dashboard').", "assistente_ou_usuario"
         elif not importado.get("saida_pronta"):
-            passo, quem = "Preencher os chamados e usar \"Atualizar Dashboard\" no painel Chamados Sebrae.", "usuario"
+            passo, quem = "Preencher os chamados e usar \"Atualizar Dashboard\" no painel Chamados.", "usuario"
         else:
             passo, quem = ("O Dashboard atualizado já foi gerado. Se ainda não foi ao SharePoint, usar \"Enviar ao SharePoint\" "
-                           "no painel Chamados Sebrae (o login é manual).", "usuario")
+                           "no painel Chamados (o login é manual).", "usuario")
         return {
             "dashboard_importado": importado is not None,
             "atualizavel": bool(importado and importado.get("atualizavel")),
@@ -1111,7 +1111,7 @@ class SimpressApi:
         if len(texto) > MAX_DESCRICAO_FINALIZACAO:
             raise ValueError(f"A descrição pode ter no máximo {MAX_DESCRICAO_FINALIZACAO} caracteres.")
         if re.search(r"\[(?:PESSOA_\d+|E-MAIL OCULTADO|TELEFONE OCULTADO|DADO SENSÍVEL OMITIDO)\]", texto):
-            raise ValueError("A descrição tem dado ocultado pela privacidade (nome, e-mail ou telefone); peça ao usuário para escrevê-la no campo do chamado, na tela Chamados Sebrae.")
+            raise ValueError("A descrição tem dado ocultado pela privacidade (nome, e-mail ou telefone); peça ao usuário para escrevê-la no campo do chamado, na tela Chamados.")
         return {
             "numero": numero, "descricao": texto, "nova": bool(str(descricao or "").strip()),
             "pdf": str(_dict(se.get("pdf")).get("nome") or ""),

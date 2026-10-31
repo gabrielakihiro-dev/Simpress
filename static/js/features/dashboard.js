@@ -149,6 +149,8 @@
   function definirResumoCurto(text) {
     const shortSummary = document.getElementById("readiness-summary-short");
     if (shortSummary) shortSummary.textContent = text;
+    // O texto fica só para leitores de tela (.ck-sr); quem usa mouse vê pelo title do gatilho.
+    if (shortSummary && shortSummary.parentElement) shortSummary.parentElement.title = text;
     const popoverTitle = document.getElementById("readiness-popover-titulo");
     if (popoverTitle) popoverTitle.textContent = text;
   }
@@ -294,14 +296,14 @@
       id: "readiness-chamados",
       pendencia: "chamados",
       icone: "i-clock",
-      titulo: "Chamados",
-      descricao: "Exportação de chamados Oracle",
+      titulo: "OS",
+      descricao: "Exportação de OS Oracle",
       detalhe: detalheProntidao(statusChamados(report)),
       estado: estadoProntidao(statusChamados(report)),
       acao: {
         label: "Importar",
         labelOk: "Abrir",
-        ariaLabel: "Importar planilhas na aba Chamados",
+        ariaLabel: "Importar planilhas na aba OS",
         onClick: async () => {
           await app.abrirPainelCockpit("chamados");
           app.abrirGestaoChamadosCockpit?.();
@@ -484,10 +486,7 @@
 
   function atualizarIndicadoresPosSalvamento() {
     // Atualiza os indicadores sem atrasar o fechamento do formulário após salvar.
-    void Promise.allSettled([
-      app.carregarEstatisticas(),
-      app.carregarContagemHistoricoApelidos()
-    ]);
+    void Promise.allSettled([app.carregarEstatisticas()]);
   }
 
   return {

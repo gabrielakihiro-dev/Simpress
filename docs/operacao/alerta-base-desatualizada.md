@@ -36,7 +36,7 @@ Quando a contagem de dias arredondada para baixo for igual ao limite (por exempl
 
 ## Link para a atualização
 
-O botão abre o modal "Atualizar planilhas" (`abrirModalAtualizarPlanilhas`), o mesmo do botão `#btn-atualizar-planilhas` do menu. A aplicação não tem rotas próprias por tela, então o "link" é esse botão.
+O botão abre o modal "Atualizar planilhas" (`abrirModalAtualizarPlanilhas`), o mesmo de **Nova comparação** da aba Comparação (o item de menu `#btn-atualizar-planilhas` foi removido em 31/10/2026). A aplicação não tem rotas próprias por tela, então o "link" é esse botão.
 
 ## Contrato da API
 

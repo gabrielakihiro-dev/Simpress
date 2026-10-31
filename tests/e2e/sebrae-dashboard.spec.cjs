@@ -11,7 +11,7 @@ async function abrirCartao(page, request, extra = "") {
   return cartao;
 }
 
-// A lista, os antigos, a exportação e Atualizar Dashboard moram no painel Chamados Sebrae (menu Ferramentas ou botão do cartão).
+// A lista, os antigos, a exportação e Atualizar Dashboard moram no painel Chamados (F5; barra principal, menu Ferramentas ou botão do cartão).
 async function abrirPainel(page, request, extra = "") {
   const cartao = await abrirCartao(page, request, extra);
   await expect(cartao.locator("#sebrae-novos-resumo")).toContainText("novo(s)"); // a lista já foi carregada
@@ -29,9 +29,9 @@ test("Chamados novos mostra o Dashboard importado, os formulários e os avisos d
   await expect(cartao.locator("#sebrae-novos-avisos")).toContainText("UTIC-2026-1457: não foi lido");
   // O cartão não lista mais os chamados: só o botão que abre o painel.
   await expect(cartao.locator("#sebrae-novos-lista, #btn-sebrae-exportar, #btn-sebrae-atualizar")).toHaveCount(0);
-  await expect(cartao.locator("#btn-sebrae-abrir-chamados")).toHaveText("Chamados Sebrae");
+  await expect(cartao.locator("#btn-sebrae-abrir-chamados")).toHaveText("Chamados");
   await cartao.locator("#btn-sebrae-abrir-chamados").click();
-  await expect(page.locator("#cockpit-tool-title")).toHaveText("Chamados Sebrae");
+  await expect(page.locator("#cockpit-tool-title")).toHaveText("Chamados");
   const painel = page.locator('[data-cockpit-tool-panel="sebrae-chamados"]');
   await expect(painel.locator("#sebrae-novos-lista .sebrae-chamado")).toHaveCount(2);
   await expect(painel.locator("#sebrae-novos-lista .sebrae-chamado").first()).toContainText("DEMO0001");
@@ -43,6 +43,8 @@ test("Chamados novos mostra o Dashboard importado, os formulários e os avisos d
 test("Chamados novos só exporta os prontos e mostra a mensagem aprovada com os dois blocos", async ({ page, request }) => {
   const { painel: cartao } = await abrirPainel(page, request);
   const primeiro = cartao.locator("#sebrae-novos-lista .sebrae-chamado").first();
+  await expect(primeiro.getByLabel("Descrição para Finalizar o Chamado")).toBeVisible(); // novos também finalizam, sozinhos ou em massa
+  await expect(primeiro.getByRole("button", { name: "Finalizar no SoftExpert" })).toBeDisabled(); // sem descrição
   await primeiro.locator('[data-sebrae-campo="A"]').selectOption("CLIENTE"); // lista da aba LISTAS do Dashboard
   await expect(primeiro.locator('[data-sebrae-campo="D"]')).toHaveValue("EM ABERTO"); // padrão dos novos
   await primeiro.locator('[data-sebrae-campo="D"]').selectOption("EM ABERTO");
@@ -89,24 +91,28 @@ test("Chamados novos não tem violações de acessibilidade nos temas claro e es
   await expect(cartao).toBeVisible();
 });
 
-test("Chamados Sebrae abre pelo menu Ferramentas, sem recarregar a lista, e passa no axe nos dois temas", async ({ page, request }) => {
+// Chamados fica na barra principal; abaixo de 1200px o menu Ferramentas o oferece (item so-compacto).
+async function abrirChamadosPelaNavegacao(page) {
+  const naBarra = await page.locator("#btn-sebrae-chamados-aba").isVisible();
+  if (!naBarra) await page.locator("#cockpit-tools-trigger").click();
+  await page.locator(naBarra ? "#btn-sebrae-chamados-aba" : "#btn-sebrae-chamados-menu").click();
+}
+
+test("Chamados abre pela barra ou pelo menu Ferramentas, sem recarregar a lista, e passa no axe nos dois temas", async ({ page, request }) => {
   await abrirCartao(page, request);
   await expect(page.locator("#sebrae-novos-resumo")).toContainText("novo(s)");
-  await page.locator("#cockpit-tools-trigger").click();
-  const item = page.locator("#btn-sebrae-chamados-menu");
-  await expect(item).toHaveText("Chamados Sebrae");
-  await expect(item.locator("kbd, .ck-badge")).toHaveCount(0);
-  await item.click();
+  await expect(page.locator("#btn-sebrae-chamados-aba span")).toHaveText("Chamados");
+  await expect(page.locator("#btn-sebrae-chamados-menu")).toHaveText(/^Chamados\s*F5$/);
+  await abrirChamadosPelaNavegacao(page);
   const painel = page.locator('[data-cockpit-tool-panel="sebrae-chamados"]');
   await expect(painel).toBeVisible();
-  await expect(page.locator("#cockpit-tool-title")).toHaveText("Chamados Sebrae");
+  await expect(page.locator("#cockpit-tool-title")).toHaveText("Chamados");
   await expect(painel.locator("#sebrae-novos-lista .sebrae-chamado")).toHaveCount(2);
   // Abrir o painel de novo não pode zerar o que foi preenchido nos chamados antigos.
   await painel.locator("#sebrae-antigos > summary").click();
   const antigo = painel.locator("#sebrae-antigos-lista .sebrae-chamado");
   await antigo.locator('[data-sebrae-campo="D"]').selectOption("FINALIZADO");
-  await page.locator("#cockpit-tools-trigger").click();
-  await item.click();
+  await abrirChamadosPelaNavegacao(page);
   await expect(antigo.locator('[data-sebrae-campo="D"]')).toHaveValue("FINALIZADO");
   for (const tema of ["light", "dark"]) {
     await page.evaluate(valor => document.documentElement.setAttribute("data-theme", valor), tema);
@@ -115,7 +121,7 @@ test("Chamados Sebrae abre pelo menu Ferramentas, sem recarregar a lista, e pass
   }
 });
 
-test("Chamados Sebrae não tem rolagem horizontal de 320px a 2560px", async ({ page, request }) => {
+test("Chamados não tem rolagem horizontal de 320px a 2560px", async ({ page, request }) => {
   const { painel } = await abrirPainel(page, request);
   for (const largura of [320, 360, 768, 1280, 2560]) {
     await page.setViewportSize({ width: largura, height: 800 });

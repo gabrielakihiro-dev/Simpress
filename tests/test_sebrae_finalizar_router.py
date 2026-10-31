@@ -12,6 +12,7 @@ from fastapi.testclient import TestClient
 from core.errors import DomainConflictError, DomainError
 from domains import sebrae_finalizacao as fin
 from domains import sebrae_novos
+from domains.sebrae_chamados import ChamadoSoftExpert
 from routers.sebrae_dashboard import SebraeDashboardServices, create_sebrae_dashboard_router
 from tests.test_sebrae_dashboard_gravacao import linha_xml, montar
 
@@ -195,6 +196,45 @@ class FinalizarUmTest(FinalizarBase):
         }), encoding="utf-8")
         self.assertEqual(self.cliente.post(FINALIZAR, json={"numero": A, "confirmado": True}).status_code, 202)
         self.assertEqual(self.job()["numeros"], [A])
+
+
+class ChamadoNovoTest(FinalizarBase):
+    """Chamado novo da última busca (ainda fora do Dashboard) também tem descrição, PDF e finalização."""
+    N = "UTIC-2026-1378"
+
+    def setUp(self):
+        super().setUp()
+        self.importar()
+        sebrae_novos.salvar_novos(self.caminhos.novos, [ChamadoSoftExpert(
+            self.N, titulo="Travando", descricao="Meu notebook trava", solicitante="Camila Lopes",
+            habilitada_em="26/10/2026, 17:25:23", detalhes_atendimento_realizado="Encaminhado",
+        )], [], 0, {})
+
+    def put(self, numero, texto):
+        return self.cliente.put(f"/api/sebrae/chamados/{numero}/finalizacao", json={"descricao_finalizacao": texto})
+
+    def test_descricao_aparece_no_item_do_formulario(self):
+        self.assertEqual(self.put(self.N, "Troquei o cabo").status_code, 200)
+        item = self.cliente.get("/api/sebrae/novos").json()["novos"]["formulario"][0]
+        self.assertEqual(item["softexpert"]["descricao_finalizacao"], "Troquei o cabo")
+
+    def test_anexo_e_finalizacao_individual_aceitam_chamado_novo_e_numero_desconhecido_segue_recusado(self):
+        anexo = self.cliente.post(f"/api/sebrae/chamados/{self.N}/anexo", files={"file": ("laudo.pdf", PDF, "application/pdf")})
+        self.assertEqual(anexo.status_code, 200, anexo.text)
+        self.descrever(self.N)
+        resposta = self.cliente.post(FINALIZAR, json={"numero": self.N, "confirmado": True})
+        self.assertEqual(resposta.status_code, 202, resposta.text)
+        self.assertEqual(self.job()["numeros"], [self.N])
+        self.assertEqual(self.put("UTIC-2026-9999", "x").status_code, 422)
+        self.assertEqual(self.cliente.post(FINALIZAR, json={"numero": "UTIC-2026-9999", "confirmado": True}).status_code, 422)
+
+    def test_em_massa_chamado_novo_marcado_finalizado_com_descricao_vai_para_a_rotina(self):
+        self.descrever(self.N)
+        novo = {"numero": self.N, "A": "CLIENTE", "B": "REDE", "D": "FINALIZADO", "J": "INCIDENTE"}
+        resposta = self.cliente.post(ATUALIZAR, json={"chamados": [novo], "finalizar_softexpert": True})
+        self.assertEqual(resposta.status_code, 200, resposta.text)
+        self.assertEqual(resposta.json()["fechar"]["numeros"], [self.N])
+        self.assertEqual(self.runner.iniciadas, ["fechar"])
 
 
 class SemRunnerTest(FinalizarBase):

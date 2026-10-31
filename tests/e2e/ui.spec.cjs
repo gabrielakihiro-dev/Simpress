@@ -76,7 +76,9 @@ test("Cockpit keeps compact typography and a single tools disclosure", async ({ 
   await expect(page.locator("#input-serial")).toHaveCSS("font-size", searchFontSize);
   await expect(page.locator("#card-equipamento")).toBeHidden();
   await openAnalysisMenu(page);
-  await expect(page.locator("#btn-atualizar-planilhas")).toBeVisible();
+  await expect(page.locator("#btn-cockpit-comparacao")).toBeVisible();
+  await expect(page.locator("#btn-atualizar-planilhas, #cockpit-tools-menu #btn-exportar-equipamentos")).toHaveCount(0);
+  await expect(page.locator(`${COMPARISON_PANEL} #btn-exportar-equipamentos`)).toHaveCount(1);
   await expect(page.locator("#btn-acompanhamento-chamados:visible, #btn-chamados-menu:visible")).toHaveCount(1);
   await expect(page.locator("#btn-historico-comparacoes")).toHaveCount(0);
   await expect(page.locator("#badge-total-historico-comparacoes")).toHaveCount(0);
@@ -121,29 +123,12 @@ test("search displays an announced skeleton, then the fictional result", async (
   await expect(equipmentCard.locator("#badge-apelido")).toHaveText("DEMO-001");
 });
 
-test("Home lists the fictional equipment without a logged user", async ({ page }) => {
-  test.setTimeout(30_000);
-  await page.getByRole("button", { name: "Equipamentos sem usuário" }).click();
-  const dialog = page.locator("#modal-pesquisa-completa");
-  await expect(dialog).toBeVisible();
-  await expect(dialog.locator("#pesquisa-completa-termo")).toHaveText("Todos os equipamentos");
-  await expect(dialog.locator("#pesquisa-completa-lista")).toContainText("DEMO-SEM-USUARIO", { timeout: 15_000 });
-  await expect(dialog.getByLabel("Usuário")).toHaveValue("sem");
-  await expect(dialog.locator("#filtro-pesquisa-usuario option:checked")).toHaveText("Sem usuário (1)");
-  // Only the new filter: the result rows have a known low-contrast "Selecionar" hint (separate fix).
-  await auditAccessibility(page, 'label[for="filtro-pesquisa-usuario"]');
-});
-
-test("search shortcuts focus Home search except while typing or with a dialog open", async ({ page }, testInfo) => {
+test("search shortcuts focus Home search except while typing or with a dialog open", async ({ page }) => {
   const input = page.locator("#input-serial");
   const homeTab = page.locator("#tab-home");
   await expect(input).toHaveAttribute("aria-keyshortcuts", "/ Control+K Meta+K");
-  const hint = page.locator(".ck-busca__campo > .ck-kbd");
-  if (testInfo.project.name === "mobile") await expect(hint).toBeHidden();
-  else {
-    await expect(hint).toBeVisible();
-    await expect(hint).toHaveText("Ctrl+K");
-  }
+  // O chip visual Ctrl+K saiu da caixa de busca; o atalho segue anunciado por aria-keyshortcuts.
+  await expect(page.locator(".ck-busca__campo > .ck-kbd")).toHaveCount(0);
 
   await openSidebarIfNeeded(page);
   await page.locator("#tab-retirada-entrega").click();
@@ -349,7 +334,7 @@ test("comparison summary cards jump to their section and clear filters that hide
   await expect(heading).toBeInViewport();
 });
 
-test("ticket tracking imports both workbooks in the Chamados panel and relates each serial to its OS", async ({ page }, testInfo) => {
+test("ticket tracking imports both workbooks in the OS panel and relates each serial to its OS", async ({ page }, testInfo) => {
   // The complete import flow includes two Axe scans and the native file chooser.
   test.slow();
   await page.setViewportSize({ width: testInfo.project.name === "mobile" ? 390 : 1366, height: 640 });
@@ -760,9 +745,9 @@ test("stale tickets and new divergences appear in the notification center", asyn
     await expect(trigger).toBeFocused();
 
     await trigger.click();
-    await tickets.getByRole("button", { name: "Ver chamados" }).click();
+    await tickets.getByRole("button", { name: "Ver OS" }).click();
     await expect(panel).toBeHidden();
-    // O alerta leva ao painel Chamados da tela principal (F5), não a um modal.
+    // O alerta leva ao painel OS da tela principal (F6), não a um modal.
     await expect(page.locator('[data-cockpit-tool-panel="chamados"]')).toBeVisible();
     await expect(page.locator("#modal-acompanhamento-chamados")).toHaveCount(0);
 
