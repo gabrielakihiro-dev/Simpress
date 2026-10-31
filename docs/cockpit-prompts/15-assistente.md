@@ -8,7 +8,7 @@ O Assistente deixou de ser aba/painel de página inteira (F9, dentro de `#cockpi
 
 ## Acesso
 
-- Botão só-ícone de robô (`#btn-assistente`, `ck-btn ck-btn--icone ck-btn--fantasma`, ícone `#i-bot`) na barra superior, à direita do sino de notificações e antes do alternador de tema. Nome acessível `Assistente` (`aria-label`), `title` `Assistente (F9)`, `aria-keyshortcuts="F9"`, `aria-expanded` (`false` fechado, `true` aberto) e `aria-controls="assistente-widget"`. Aparece em todas as larguras; com o chat aberto, usa o mesmo realce do botão pressionado (`--cor-destaque-fundo`/`--cor-destaque-texto`).
+- Botão só-ícone de robô (`#btn-assistente`, `ck-btn ck-btn--icone ck-btn--fantasma`, ícone `#i-bot`; a aba Automação usa `#i-workflow` para não repetir o robô do chat, mudança pedida pelo usuário em 30/10/2026) na barra superior, à direita do sino de notificações e antes do alternador de tema. Nome acessível `Assistente` (`aria-label`), `title` `Assistente (F9)`, `aria-keyshortcuts="F9"`, `aria-expanded` (`false` fechado, `true` aberto) e `aria-controls="assistente-widget"`. Aparece em todas as larguras; com o chat aberto, usa o mesmo realce do botão pressionado (`--cor-destaque-fundo`/`--cor-destaque-texto`).
 - A aba `Assistente` (`ck-aba--painel`) e o item `Assistente` do menu Ferramentas (`#btn-assistente-menu`) foram removidos.
 - Atalho `F9` continua e aciona o mesmo `#btn-assistente`.
 - Clicar no ícone (ou `F9`) alterna abrir/fechar. Não fecha ao clicar fora: o chat fica aberto enquanto o usuário usa o resto do sistema.

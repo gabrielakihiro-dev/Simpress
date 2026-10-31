@@ -208,8 +208,8 @@ def ler_novos(caminho: Path, ja_lancados: Iterable[str] = ()) -> Optional[Dict[s
 # ---------------------------------------------------------------------------- rows
 
 def _cruzar(chamado: ChamadoSoftExpert, registros: Sequence[Mapping[str, Any]], relatorio: Optional[Mapping[str, Any]]) -> Tuple[Cruzamento, str]:
-    outra = sebrae_cruzamento.outra_pessoa(chamado.descricao, chamado.solicitante, registros)
-    cruzamento = cruzar_por_nome(chamado.solicitante, registros) if registros and not outra else Cruzamento(CRUZ_AUSENTE)
+    nome, _ = sebrae_cruzamento.nome_do_chamado(chamado.descricao, chamado.solicitante, registros)
+    cruzamento = cruzar_por_nome(nome, registros) if registros and nome else Cruzamento(CRUZ_AUSENTE)
     os_ = sebrae_cruzamento.os_da_serie(relatorio, cruzamento.serie) if cruzamento.serie else ""
     return cruzamento, os_
 
@@ -227,7 +227,7 @@ def formulario(
             "numero": chamado.numero,
             "linha": montar_linha(chamado, cruzamento, os_),
             "cruzamento": {"status": cruzamento.status, "candidatos": cruzamento.candidatos},
-            "outra_pessoa": sebrae_cruzamento.outra_pessoa(chamado.descricao, chamado.solicitante, registros),
+            **sebrae_cruzamento.avisos_de_nome(chamado.descricao, chamado.solicitante, registros),
         })
     return itens
 
@@ -245,9 +245,9 @@ def preenchimentos(
     for item in abertos:
         atuais = {letra: str(valor or "").strip() for letra, valor in (item.get("automaticos") or {}).items()}
         usuario = str(item.get("usuario") or "")
-        para_outra_pessoa = bool(sebrae_cruzamento.outra_pessoa(item.get("descricao"), usuario, registros))
-        # opened for someone else: no equipment by name (the user fills it by hand); a serial the row already has still gives E
-        cruzamento = cruzar_por_nome(usuario, registros) if usuario and registros and not para_outra_pessoa else Cruzamento(CRUZ_AUSENTE)
+        # the person cited in the description wins over the requester; two cited people: nothing by name (a serial the row already has still gives E)
+        nome, _ = sebrae_cruzamento.nome_do_chamado(item.get("descricao"), usuario, registros)
+        cruzamento = cruzar_por_nome(nome, registros) if nome and registros else Cruzamento(CRUZ_AUSENTE)
         serie_atual = atuais.get("K", "")
         coerente = cruzamento.status == CRUZ_UNICO and (not serie_atual or serie_atual.upper() == cruzamento.serie.strip().upper())
         novos = {"K": cruzamento.serie, "L": cruzamento.modelo, "N": cruzamento.cidade} if coerente else {}

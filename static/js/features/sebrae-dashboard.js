@@ -18,9 +18,14 @@
     ambiguo: "Série, modelo e cidade vazios: mais de um equipamento encontrado para este solicitante.",
   });
 
-  /** Aviso de chamado aberto para outra pessoa (nome citado na descrição): o usuário preenche série, modelo, cidade e OS. */
+  /** Aviso de descrição que cita mais de uma pessoa: nada foi preenchido pelo nome, o usuário preenche série, modelo, cidade e OS. */
   function avisoOutraPessoa(item) {
-    return item.outra_pessoa ? `Aberto para outra pessoa (${item.outra_pessoa}, citada na descrição): série, modelo, cidade e OS não foram preenchidos; preencha à mão.` : "";
+    return item.outra_pessoa ? `A descrição cita mais de uma pessoa (${item.outra_pessoa} e outra): série, modelo, cidade e OS não foram preenchidos; preencha à mão.` : "";
+  }
+
+  /** Nota de chamado ligado ao equipamento pelo nome citado na descrição, e não pelo solicitante. */
+  function avisoNomeDaDescricao(item) {
+    return item.nome_da_descricao ? `Equipamento procurado pelo nome citado na descrição (${item.nome_da_descricao}), não pelo solicitante.` : "";
   }
 
   /** "2026-10-28T14:30" (campo datetime-local) → "28/10/2026 14:30", o formato da coluna R. */
@@ -309,7 +314,7 @@
       manuais.className = "sebrae-chamado__manuais";
       ["A", "B", "D", "J", "R", "S"].forEach(letra => manuais.appendChild(campo(ROTULOS_MANUAIS[letra], controleManual(item.numero, letra, "antigo"))));
       artigo.append(titulo, fatos);
-      const outra = avisoOutraPessoa(item);
+      const outra = avisoOutraPessoa(item) || avisoNomeDaDescricao(item);
       if (outra) artigo.appendChild(dom.createTextElement("p", "ck-campo__ajuda sebrae-chamado__aviso", outra));
       artigo.appendChild(manuais);
       if (NUMERO_UTIC.test(item.numero)) artigo.appendChild(secaoFinalizar(item));
@@ -330,7 +335,7 @@
         fatos.appendChild(linha);
       });
       artigo.append(titulo, fatos);
-      const aviso = avisoOutraPessoa(item) || AVISO_CRUZAMENTO[item.cruzamento?.status];
+      const aviso = [avisoOutraPessoa(item), avisoNomeDaDescricao(item), AVISO_CRUZAMENTO[item.cruzamento?.status]].filter(Boolean).join(" ");
       if (aviso) artigo.appendChild(dom.createTextElement("p", "ck-campo__ajuda sebrae-chamado__aviso", aviso));
       [["H", "Descrição"], ["F", "Atendimento realizado"]].forEach(([letra, rotulo]) => {
         const detalhe = document.createElement("details");
@@ -949,7 +954,7 @@
     return { carregarNovosSebrae, importarDashboardSebrae, exportarChamadosSebrae, atualizarDashboardSebrae, copiarBlocoSebrae, descartarRascunhoSebrae };
   }
 
-  createSebraeDashboard.puro = { formatarEncerramento, encerramentoParaCampo, chamadoPronto, payloadExportacao, payloadAtualizacao, payloadEdicoes, avisoOutraPessoa, tituloAntigo, totalPreenchimentos,
+  createSebraeDashboard.puro = { formatarEncerramento, encerramentoParaCampo, chamadoPronto, payloadExportacao, payloadAtualizacao, payloadEdicoes, avisoOutraPessoa, avisoNomeDaDescricao, tituloAntigo, totalPreenchimentos,
     formatarTamanho, textoResultado, textoPulado, podeFinalizar, candidatosFinalizar, resumoResultado, resumoInicio,
     lerRascunho, gravarRascunho, apagarRascunho, aplicarRascunho };
   return createSebraeDashboard;

@@ -245,7 +245,7 @@ test("abrir Chamados monta a tabela uma vez, com as opções de Chamados, e depo
     const [host, opcoes] = calls.montar[0];
     assert.equal(host, el("cockpit-tickets-os"));
     assert.equal(opcoes.semBusca, true);
-    assert.equal(opcoes.incluirSemOs, true);
+    assert.equal(opcoes.incluirSemOs, undefined, "série sem OS nunca é listada");
     assert.equal(typeof opcoes.aoExpandirSerie, "function");
     assert.equal(typeof opcoes.aoCarregar, "function");
     assert.deepEqual(calls.filtrar, [{ busca: "", relacao: "" }], "Relação 'todos' vira filtro vazio");

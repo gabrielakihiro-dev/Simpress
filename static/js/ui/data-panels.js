@@ -239,21 +239,20 @@
       const itens = [...section.querySelectorAll("tbody tr[data-serial]")];
       const series = new Set();
       let visiveis = 0;
-      let semOs = 0;
       itens.forEach(item => {
         const ok = (!termo || textoOs(item.textContent).includes(termo))
           && (!st.relacao || st.relacao === "todos" || item.dataset.relacao === st.relacao);
         item.hidden = !ok;
         if (!ok) return;
         series.add(item.dataset.serial);
-        if (item.dataset.semOs) semOs += 1; else visiveis += 1;
+        visiveis += 1;
       });
-      const total = itens.filter(item => !item.dataset.semOs).length;
+      const total = itens.length;
       section.querySelectorAll("tbody tr[data-andamento]").forEach(row => { row.hidden = !series.has(row.dataset.andamento); });
       if (!st.renderizada) return;
       const status = section.querySelector(".ticket-summary-status");
       status.textContent = (visiveis === total ? visiveis : visiveis + " de " + total) + " OS · "
-        + pluralize(series.size, "série", "séries") + (semOs ? ` (${semOs} sem OS)` : "") + (st.falhaUsuarios ? "; usuário e hostname indisponíveis." : "");
+        + pluralize(series.size, "série", "séries") + (st.falhaUsuarios ? "; usuário e hostname indisponíveis." : "");
     }
 
     function filtrarTabelaOs(filtro = {}) {
@@ -281,11 +280,11 @@
       const status = el("p", "ck-cartao__meta ticket-summary-status", "Carregando OS…");
       status.setAttribute("role", "status");
       status.setAttribute("aria-live", "polite");
-      // opcoes.semBusca: o host já tem a própria busca (filtrarTabelaOs). incluirSemOs: uma linha extra por série sem OS. aoExpandirSerie(serie, celula) preenche o "Andamento";
+      // opcoes.semBusca: o host já tem a própria busca (filtrarTabelaOs). Série sem OS (nem na Simpress nem no Oracle) nunca aparece. aoExpandirSerie(serie, celula) preenche o "Andamento";
       // aoCarregar(relatorio) recebe o GET /api/operacoes/chamados que a tabela já faz (evita segunda requisição).
       const st = {
         busca: "", relacao: "", renderizada: false, falhaUsuarios: false, carregada: false,
-        incluirSemOs: Boolean(opcoes.incluirSemOs), aoExpandirSerie: opcoes.aoExpandirSerie, aoCarregar: opcoes.aoCarregar, abertas: new Set(),
+        aoExpandirSerie: opcoes.aoExpandirSerie, aoCarregar: opcoes.aoCarregar, abertas: new Set(),
       };
       const head = el("div", "ck-cartao__cab");
       head.append(title, status);
@@ -534,11 +533,10 @@
         section.append(content);
         return;
       }
-      const semOsCount = records.filter(record => record.ordens[0].semOs).length;
-      const orderCount = records.reduce((total, record) => total + record.ordens.filter(order => !order.semOs).length, 0);
+      const orderCount = records.reduce((total, record) => total + record.ordens.length, 0);
       status.textContent = userFailure
         ? orderCount + " OS agrupadas por série; dados de usuário e hostname estão indisponíveis."
-        : orderCount + " OS · " + records.length + (records.length === 1 ? " série" : " séries") + (semOsCount ? ` (${semOsCount} sem OS)` : "");
+        : orderCount + " OS · " + records.length + (records.length === 1 ? " série" : " séries");
       const table = el("table", "ck-tabela ck-tabela--cards ticket-summary-table");
       const cols = el("colgroup");
       ["fonte", "serie", "os", "usuario", "host", "chamado", ""].forEach(name => cols.append(el("col", name ? "ck-col-" + name : "")));
@@ -561,8 +559,7 @@
         record.ordens.forEach((order, orderIndex) => {
           const row = doc.createElement("tr");
           row.dataset.serial = record.serie;
-          row.dataset.osCount = order.semOs ? "0" : "1";
-          if (order.semOs) row.dataset.semOs = "1";
+          row.dataset.osCount = "1";
           row.dataset.relacao = relacoes.get(serialKey(record.serie)) || "";
           const cell = (label, className) => {
             const td = el("td", className || "");
@@ -577,17 +574,12 @@
           // Um botão por série (na primeira OS) abre a linha extra com o andamento.
           if (externa?.aoExpandirSerie && orderIndex === 0) serieCell.append(renderAndamentoToggle(externa, record.serie));
           const osCell = cell("OS", "ck-mono");
-          if (order.semOs) osCell.textContent = "Sem OS";
-          else {
-            const osButton = renderTicketSummaryOrderButton({ serie: record.serie, os: order.os, fontes: order.fontes });
-            osButton.className = "ck-link-btn ck-mono ticket-summary-order-link";
-            osCell.append(osButton);
-          }
+          const osButton = renderTicketSummaryOrderButton({ serie: record.serie, os: order.os, fontes: order.fontes });
+          osButton.className = "ck-link-btn ck-mono ticket-summary-order-link";
+          osCell.append(osButton);
           cell("Usuário").textContent = userText;
           cell("Hostname", "ck-mono").textContent = hostText;
           const linkCell = cell("Chamado", "ck-td--largo ck-os-fontes");
-          // O vínculo UTIC é por OS: série sem OS não tem editor.
-          if (order.semOs) { sourceCell.textContent = "—"; linkCell.textContent = "—"; }
           // Um único editor UTIC por linha: a fonte que já tem vínculo salvo, senão a primeira.
           const linkSource = order.fontes.find(source =>
             links.get(ticketOsLinkKey({ fonte: source, serie: record.serie, os: order.os }))) || order.fontes[0];
@@ -603,8 +595,7 @@
             linkCell.append(slot);
           });
           const descCell = cell("Descrição", "ck-td--largo");
-          if (order.semOs) descCell.append(el("p", "ck-descricao__texto", "Sem OS vinculada"));
-          else descCell.append(renderTicketSummaryDescription(order, order.fontes.includes("oracle") ? "oracle" : "simpress"));
+          descCell.append(renderTicketSummaryDescription(order, order.fontes.includes("oracle") ? "oracle" : "simpress"));
           body.append(row);
         });
       });
@@ -676,27 +667,16 @@
           osSummaryRequest("/api/operacoes/chamados/vinculos-os"),
         ]);
         const records = groupTicketOsRows(collectTicketOsRows(report));
-        const comOs = new Set(records.map(item => serialKey(item.serie)));
-        const semOs = new Map();
-        (Array.isArray(report?.chamados) ? report.chamados : []).forEach(ticket => {
-          const serie = String(ticket?.serie || "").trim();
-          const key = serialKey(serie);
-          if (serie && !comOs.has(key) && !semOs.has(key)) {
-            semOs.set(key, { serie, ordens: [{ serie, os: "", semOs: true, fontes: [], descricao: "" }] });
-          }
-        });
         const relacoes = new Map((Array.isArray(report?.chamados) ? report.chamados : [])
           .map(ticket => [serialKey(ticket?.serie), String(ticket?.relacao || "")]));
         let users = {};
         let userFailure = false;
-        const querSemOs = vivos().some(section => osExternas.get(section)?.incluirSemOs);
-        const consultadas = querSemOs ? records.concat([...semOs.values()]) : records;
-        if (consultadas.length) {
+        if (records.length) {
           try {
             const userData = await osSummaryRequest("/api/equipamentos/usuarios-logados", {
               method: "POST",
               headers: { "Content-Type": "application/json" },
-              body: JSON.stringify({ series: [...new Set(consultadas.map(item => item.serie))] }),
+              body: JSON.stringify({ series: [...new Set(records.map(item => item.serie))] }),
             });
             users = userData.usuarios || {};
           } catch (_) {
@@ -709,7 +689,7 @@
           const st = osExternas.get(section);
           if (st) st.carregada = true;
           st?.aoCarregar?.(report);
-          renderTicketSummary(section, st?.incluirSemOs ? records.concat([...semOs.values()]) : records, users, links, true, userFailure, relacoes);
+          renderTicketSummary(section, records, users, links, true, userFailure, relacoes);
         });
       } catch (error) {
         vivos().forEach(section => {
