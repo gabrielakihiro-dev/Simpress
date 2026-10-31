@@ -405,7 +405,7 @@
       const section = group.closest("[data-history-filter-section]");
       const anchor = section && section.querySelectorAll("[data-history-filter-group]").length === 1 ? section : group;
       const bar = content.querySelector("[data-history-filter-bar]");
-      anchor.style.scrollMarginTop = `${(bar ? bar.offsetHeight : 0) + 32}px`;
+      anchor.style.scrollMarginTop = `${(bar && getComputedStyle(bar).position === "sticky" ? bar.offsetHeight : 0) + 32}px`;
       anchor.scrollIntoView({ behavior: reduced ? "auto" : "smooth", block: "start" });
       const heading = (section || group.closest("[data-history-filter-section]") || group).querySelector("h4");
       if (heading) {
@@ -555,7 +555,7 @@
     if (recolhida) recolhida.open = true;
     const reduced = window.matchMedia?.("(prefers-reduced-motion: reduce)").matches;
     const bar = content.querySelector("[data-history-filter-bar]");
-    heading.style.scrollMarginTop = `${(bar ? bar.offsetHeight : 0) + 16}px`;
+    heading.style.scrollMarginTop = `${(bar && getComputedStyle(bar).position === "sticky" ? bar.offsetHeight : 0) + 16}px`;
     // Focus without scrolling; scrollIntoView then places the title just below the sticky filter bar.
     heading.focus({ preventScroll: true });
     heading.scrollIntoView({ behavior: reduced ? "auto" : "smooth", block: "start" });
