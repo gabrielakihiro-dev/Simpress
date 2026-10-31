@@ -16,7 +16,7 @@ from core.errors import DomainError
 from domains.chrome_automation import ChromeAutomationRunner
 from domains.sebrae_agendamento import AgendadorSebrae
 
-RotinaNome = Literal["os", "inventarios", "usuarios", "ambas", "login", "sebrae", "dashboard", "enviar"]
+RotinaNome = Literal["os", "inventarios", "usuarios", "ambas", "login", "sebrae", "dashboard", "enviar", "fechar"]
 
 
 class AgendamentoPayload(BaseModel):
