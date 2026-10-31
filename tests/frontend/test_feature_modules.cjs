@@ -61,8 +61,7 @@ test("the bootstrap creates every feature module the page loads, in a declared o
 test("shared state is exposed once and features publish no duplicate actions", () => {
   const { context, published } = bootPage();
   assert.deepEqual(Object.keys(context.SimpressApp.state).sort(), [
-    "acompanhamentoChamadosAtual", "currentEquipamento", "equipamentoSelectionRevision", "filtroChamadoSelecionado", "filtroTriagemChamados", "historicoAcompanhamentoChamados",
-    "previaPlanilhasAtual", "retiradaCidadeSelecionada", "unidadesList",
+    "currentEquipamento", "equipamentoSelectionRevision", "previaPlanilhasAtual", "retiradaCidadeSelecionada", "unidadesList",
   ]);
   assert.equal(new Set(published).size, published.length);
   assert.ok(!published.includes("app") && !published.includes("appState"), "the bootstrap keeps its locals private");

@@ -31,7 +31,7 @@ import "./js/ui/logged-user-markers.js";
 import "./js/ui/comparison-result-renderer.js";
 import "./js/features/comparison-result.js";
 import "./js/features/comparison-history.js";
-import "./js/features/ticket-tracking.js";
+import "./js/features/cockpit-chamados.js";
 import "./js/features/equipment-editor.js";
 import "./js/features/alias-history.js";
 import "./js/features/monthly-report.js";

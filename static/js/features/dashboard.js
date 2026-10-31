@@ -294,17 +294,17 @@
       id: "readiness-chamados",
       pendencia: "chamados",
       icone: "i-clock",
-      titulo: "Acompanhamento de chamados",
+      titulo: "Chamados",
       descricao: "Exportação de chamados Oracle",
       detalhe: detalheProntidao(statusChamados(report)),
       estado: estadoProntidao(statusChamados(report)),
       acao: {
         label: "Importar",
         labelOk: "Abrir",
-        ariaLabel: "Importar planilhas para acompanhamento de chamados",
-        onClick: () => {
-          document.getElementById("painel-dados-acompanhamento-chamados").open = true;
-          app.abrirAcompanhamentoChamados(true);
+        ariaLabel: "Importar planilhas na aba Chamados",
+        onClick: async () => {
+          await app.abrirPainelCockpit("chamados");
+          app.abrirGestaoChamadosCockpit?.();
         },
       },
     });

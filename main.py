@@ -210,7 +210,7 @@ from domains.assistant_openrouter import OpenRouterSettings
 from routers.assistant import AssistantRouteServices, create_assistant_router
 from routers.automation import AutomationRouteServices, create_automation_router
 from routers.sebrae_dashboard import SebraeDashboardServices, create_sebrae_dashboard_router
-from domains import sebrae_novos, sebrae_cruzamento
+from domains import sebrae_novos, sebrae_cruzamento, sebrae_vinculos
 from domains.chrome_automation import ChromeAutomationRunner, default_contract
 from domains.sebrae_agendamento import AgendadorSebrae, caminhos_padrao as sebrae_caminhos_padrao
 from domains import endpoint_removals
@@ -2400,6 +2400,21 @@ _ticket_import_services = TicketImportServices(
     load_annotation_records=lambda directory, **kwargs: load_history_annotations(directory, **kwargs),
 )
 
+def _dashboard_derived_os_links(report: Dict[str, Any]) -> List[Dict[str, Any]]:
+    importado = sebrae_novos.ler_existentes(sebrae_novos.caminhos_padrao(STATE_DIR).existentes)
+    return sebrae_vinculos.vinculos_derivados(importado["abertos"] if importado else [], report)
+
+
+def _dashboard_manual_os_links() -> List[Dict[str, Any]]:
+    """Manual links only (no ``origem``), so a link derived from the Dashboard never feeds column E back."""
+    try:
+        data = json.loads((STATE_DIR / "os_chamados_vinculos.json").read_text(encoding="utf-8"))
+    except (OSError, ValueError):
+        return []
+    links = data.get("vinculos") if isinstance(data, dict) else None
+    return [v for v in links.values() if isinstance(v, dict) and not v.get("origem")] if isinstance(links, dict) else []
+
+
 operations_router = create_operations_router(
     load_comparison_history=load_comparison_history,
     comparison_history_for_display=_inventory_history_exports.history_annotation_view,
@@ -2411,6 +2426,7 @@ operations_router = create_operations_router(
     load_history_annotation_records=lambda directory, **kwargs: load_history_annotations(directory, **kwargs),
     ticket_import_services=_ticket_import_services,
     ticket_os_links_file=lambda: STATE_DIR / "os_chamados_vinculos.json",
+    dashboard_vinculos=_dashboard_derived_os_links,
 )
 app.include_router(operations_router)
 
@@ -2550,6 +2566,7 @@ app.include_router(create_sebrae_dashboard_router(SebraeDashboardServices(
     max_upload_bytes=lambda: MAX_UPLOAD_BYTES,
     registros=lambda: sebrae_cruzamento.registros_de_equipamentos(_listar_equipamentos_indexados()),
     relatorio_chamados=_dashboard_ticket_report,
+    vinculos_os=_dashboard_manual_os_links,
     runner=get_chrome_automation_runner,
 )))
 
