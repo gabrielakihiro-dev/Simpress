@@ -80,6 +80,24 @@ class FormularioTest(unittest.TestCase):
         self.assertEqual(item["cruzamento"]["status"], "ausente")
 
 
+class AntigosComplementadosTest(unittest.TestCase):
+    def test_i_vazio_usa_descricao_e_solicitante_do_softexpert_e_o_dashboard_vence_quando_preenchido(self):
+        abertos = [
+            {"numero": "UTIC-2026-0010", "usuario": "", "descricao": "", "automaticos": {"E": "", "K": "", "L": "", "N": ""}},
+            {"numero": "UTIC-2026-0011", "usuario": "Ana", "descricao": "da planilha", "automaticos": {}},
+        ]
+        antigos = {n: {"descricao": "Para Camila Lopes", "solicitante": "API SEBRAE"} for n in ("UTIC-2026-0010", "UTIC-2026-0011")}
+        efetivos = novos.complementar_antigos(abertos, antigos)
+        self.assertEqual((efetivos[0]["descricao"], efetivos[0]["usuario"]), ("Para Camila Lopes", "API SEBRAE"))
+        self.assertEqual((efetivos[1]["descricao"], efetivos[1]["usuario"]), ("da planilha", "Ana"))
+        self.assertEqual(novos.complementar_antigos(abertos, {})[0], abertos[0])
+        self.assertEqual(
+            novos.preenchimentos(efetivos, REGISTROS, RELATORIO)["UTIC-2026-0010"],
+            {"K": "ABC123", "L": "Dell", "N": "Curitiba", "E": "7303022"},
+        )
+        self.assertEqual(novos.preenchimentos(abertos, REGISTROS, RELATORIO), {})  # sem leitura, nada é achado
+
+
 class PreenchimentosTest(unittest.TestCase):
     def aberto(self, usuario="Camila Lopes", **atuais):
         return {"numero": "linha:2", "usuario": usuario, "automaticos": {"E": "", "K": "", "L": "", "N": "", **atuais}}

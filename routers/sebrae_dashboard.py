@@ -80,12 +80,21 @@ class FinalizarPayload(BaseModel):
 
     numero: str = Field(..., min_length=1, max_length=40)
     confirmado: bool = False  # clique explícito após o diálogo "Confirmar finalização"; sem isso nada é disparado
+    # Mesmo corpo do "Atualizar Dashboard" (todos os novos em `chamados`, todos os antigos editados em `edicoes`): a cópia de saída é refeita da importada, então mandar só este chamado apagaria os demais.
+    chamados: List[ChamadoManual] = Field(default_factory=list, max_length=MAX_CHAMADOS_POR_EXPORTACAO)
+    edicoes: List[ChamadoManual] = Field(default_factory=list, max_length=MAX_CHAMADOS_POR_EXPORTACAO)
 
 
 class DescricaoPayload(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
     descricao_finalizacao: str = Field("", max_length=fin.MAX_DESCRICAO * 2)  # the exact limit is checked (and explained) by the domain
+
+
+class FichaPayload(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    ficha: Dict[str, Any]
 
 
 def create_sebrae_dashboard_router(services: SebraeDashboardServices) -> APIRouter:
@@ -98,15 +107,21 @@ def create_sebrae_dashboard_router(services: SebraeDashboardServices) -> APIRout
             return None  # an unreadable ticket report only leaves column E empty
 
     def _abertos_com_sugestoes(abertos: Sequence[Mapping[str, Any]]) -> List[Dict[str, Any]]:
-        """Old open tickets plus what "Atualizar Dashboard" would fill into their empty E, K, L and N."""
+        """Old open tickets plus what "Atualizar Dashboard" would fill into their empty E, K, L and N.
+
+        An old ticket already read from SoftExpert (rotina ``antigos``) gets the same cross-reference as a new one:
+        its description and requester fill the Dashboard's empty H and I for the name lookup (the API keeps both as they are)."""
+        antigos = sebrae_novos.ler_antigos(sebrae_novos.caminho_antigos(services.caminhos())) if abertos else {}
+        efetivos = sebrae_novos.complementar_antigos(abertos, antigos)
         registros = services.registros() if abertos else []
-        sugestoes = sebrae_novos.preenchimentos(abertos, registros, _relatorio(), services.vinculos_os()) if abertos else {}
+        sugestoes = sebrae_novos.preenchimentos(efetivos, registros, _relatorio(), services.vinculos_os()) if abertos else {}
         finalizacao = fin.ler_estado(_pasta_estado()) if abertos else {}
         return [
             {**a, "automaticos_sugeridos": sugestoes.get(str(a.get("numero")), {}),
-             **sebrae_cruzamento.avisos_de_nome(a.get("descricao"), a.get("usuario"), registros),
-             "softexpert": fin.publico(finalizacao.get(str(a.get("numero"))))}
-            for a in abertos
+             **sebrae_cruzamento.avisos_de_nome(e.get("descricao"), e.get("usuario"), registros),
+             "softexpert": fin.publico(finalizacao.get(str(a.get("numero")))),
+             "leitura_softexpert": antigos.get(str(a.get("numero")))}  # ``softexpert`` is the finalization state; this is the read data
+            for a, e in zip(abertos, efetivos)
         ]
 
     def _pasta_estado():
@@ -133,6 +148,7 @@ def create_sebrae_dashboard_router(services: SebraeDashboardServices) -> APIRout
             "importado": None if importado is None else {
                 "arquivo": importado["arquivo"], "importado_em": importado["importado_em"], "total": len(lancados),
                 "listas": importado["listas"], "abertos": _abertos_com_sugestoes(importado["abertos"]),
+                "finalizados": fin.finalizados_no_dashboard(_pasta_estado()),
                 "atualizavel": sebrae_novos.ler_planilha(sebrae_novos.caminho_planilha(caminhos), importado["sha256"]) is not None,
                 "saida_pronta": sebrae_novos.caminho_saida(caminhos, NOME_ATUALIZADO).is_file(),
             },
@@ -272,6 +288,25 @@ def create_sebrae_dashboard_router(services: SebraeDashboardServices) -> APIRout
         Responsável, Status e Tipo podem ficar em branco (a linha é gravada sem eles). Série, Modelo, Cidade e OS vazios dos
         antigos em aberto são preenchidos pelo nome da coluna I. 422 se não houver importação válida, se um Status/Tipo
         preenchido for inválido, se o chamado repetir ou se a Tabela3 não tiver linhas livres."""
+        importado, resultado, conteudo, gravada, edicoes = _gravar_atualizacao(payload)
+        return JSONResponse({
+            "arquivo": NOME_ATUALIZADO,
+            "base": {"arquivo": importado["arquivo"], "importado_em": importado["importado_em"]},
+            "linhas": [
+                {"numero": g.numero, "linha": g.linha, "tipo": g.tipo, "celulas": list(g.celulas)} for g in resultado.linhas
+            ],
+            "conteudo_base64": base64.b64encode(conteudo).decode("ascii"),
+            "fechar": (
+                _fechar_inativo("A cópia de saída não foi gravada; nada foi finalizado.") if not gravada
+                else _finalizar_marcados({**{c.numero: {"D": c.D} for c in payload.chamados}, **edicoes}) if payload.finalizar_softexpert
+                else _fechar_inativo("finalização no SoftExpert não confirmada")
+            ),
+        }, headers={"Cache-Control": "no-store"})
+
+    def _gravar_atualizacao(payload: AtualizarPayload, *, aceita_vazio: bool = False):
+        """Monta a cópia atualizada e a grava em ``sebrae_dashboard_saida``; devolve (importado, resultado, conteudo, gravada, edicoes validadas).
+
+        Com ``aceita_vazio`` e nada a gravar, devolve ``None`` em vez de 422."""
         caminhos = services.caminhos()
         importado = sebrae_novos.ler_existentes(caminhos.existentes)
         if importado is None:
@@ -287,6 +322,8 @@ def create_sebrae_dashboard_router(services: SebraeDashboardServices) -> APIRout
             abertos = [c.como_dict() for c in sebrae_dashboard_gravacao.chamados_para_editar(planilha)]
             automaticos = sebrae_novos.preenchimentos(abertos, services.registros(), _relatorio(), services.vinculos_os())
             if not linhas and not edicoes and not automaticos:
+                if aceita_vazio:
+                    return None
                 raise DomainValidationError("Não há chamados novos, alterações nem dados para preencher.", status_code=422)
             resultado = sebrae_dashboard_gravacao.atualizar(planilha, linhas, edicoes, automaticos)
         except (sebrae_novos.ManuaisInvalidos, DashboardInvalido) as erro:
@@ -300,22 +337,10 @@ def create_sebrae_dashboard_router(services: SebraeDashboardServices) -> APIRout
             gravada = True
         except OSError:  # o download do usuário segue; só o "Enviar ao SharePoint" fica sem arquivo
             logger.warning("Não gravei a cópia de saída do Dashboard.", exc_info=True)
-        return JSONResponse({
-            "arquivo": NOME_ATUALIZADO,
-            "base": {"arquivo": importado["arquivo"], "importado_em": importado["importado_em"]},
-            "linhas": [
-                {"numero": g.numero, "linha": g.linha, "tipo": g.tipo, "celulas": list(g.celulas)} for g in resultado.linhas
-            ],
-            "conteudo_base64": base64.b64encode(conteudo).decode("ascii"),
-            "fechar": (
-                _fechar_inativo("A cópia de saída não foi gravada; nada foi finalizado.") if not gravada
-                else _finalizar_marcados({**{c.numero: {"D": c.D} for c in payload.chamados}, **edicoes}) if payload.finalizar_softexpert
-                else _fechar_inativo("finalização no SoftExpert não confirmada")
-            ),
-        }, headers={"Cache-Control": "no-store"})
+        return importado, resultado, conteudo, gravada, edicoes
 
     def _reaplicar_encerramentos(conteudo: bytes) -> bytes:
-        """A saída é refeita da cópia importada a cada "Atualizar": as datas de encerramento já gravadas voltam à coluna R (só se vazia)."""
+        """A saída é refeita da cópia importada a cada "Atualizar": as datas de encerramento já gravadas voltam à coluna R (o horário do SoftExpert substitui um R digitado à mão)."""
         encerramentos = fin.encerramentos_registrados(_pasta_estado())
         if not encerramentos:
             return conteudo
@@ -355,6 +380,24 @@ def create_sebrae_dashboard_router(services: SebraeDashboardServices) -> APIRout
             return _fechar_inativo(str(erro.detail), pulados)
         return {"iniciado": True, "motivo": "", "numeros": numeros, "pulados": pulados}
 
+    def _rotina_em_andamento() -> Optional[Mapping[str, Any]]:
+        """Estado do runner quando alguma rotina roda agora; ``None`` se está livre (ou sem runner: quem chama já recusa antes)."""
+        if services.runner is None:
+            return None
+        ativo = services.runner().state()
+        return ativo if ativo.get("estado") == "em_andamento" else None
+
+    def _exigir_rotina_livre(pasta) -> None:
+        """409 quando há pedido de finalização esperando ou uma rotina rodando; um runner sem estado legível deixa o ``start`` decidir."""
+        if fin.job_pendente(pasta):
+            raise DomainConflictError("Já há um pedido de finalização esperando a rotina começar. Aguarde terminar.")
+        try:
+            ativa = _rotina_em_andamento()
+        except Exception:  # noqa: BLE001
+            return
+        if ativa is not None:
+            raise DomainConflictError("Já há uma rotina em execução. Aguarde terminar.")
+
     def _disparar(numeros: Sequence[str], pulados: Sequence[Mapping[str, str]] = (), acao: str = fin.ACAO_FINALIZAR) -> None:
         """Writes the one-shot job and starts ``fechar`` under one lock on the job file: two requests cannot overwrite each other's job.
 
@@ -364,8 +407,7 @@ def create_sebrae_dashboard_router(services: SebraeDashboardServices) -> APIRout
         runner = services.runner()
         pasta = _pasta_estado()
         with lock_paths([fin.caminho_job(pasta)]):
-            if fin.job_pendente(pasta):
-                raise DomainConflictError("Já há um pedido de finalização esperando a rotina começar. Aguarde terminar.")
+            _exigir_rotina_livre(pasta)
             fin.gravar_job(pasta, numeros, pulados=pulados, acao=acao)
             try:
                 runner.start("fechar")
@@ -394,6 +436,13 @@ def create_sebrae_dashboard_router(services: SebraeDashboardServices) -> APIRout
         item = fin.definir_descricao(_pasta_estado(), numero, payload.descricao_finalizacao)
         return JSONResponse({"numero": numero, **fin.publico(item)}, headers={"Cache-Control": "no-store"})
 
+    @router.put("/api/sebrae/chamados/{numero}/ficha")
+    def definir_ficha(numero: str, payload: FichaPayload):
+        """Cartão do chamado como estava na tela ao finalizar; aparece de novo em "Chamados finalizados"."""
+        numero = _exigir_finalizavel(numero)
+        fin.definir_ficha(_pasta_estado(), numero, payload.ficha)
+        return JSONResponse({"numero": numero}, headers={"Cache-Control": "no-store"})
+
     @router.post("/api/sebrae/chamados/{numero}/anexo")
     async def anexar_pdf(numero: str, file: UploadFile = File(...)):
         """Um PDF opcional por chamado (extensão, assinatura %PDF e tamanho conferidos); o novo substitui o anterior."""
@@ -419,6 +468,13 @@ def create_sebrae_dashboard_router(services: SebraeDashboardServices) -> APIRout
             raise DomainConflictError(f"{numero} já foi finalizado no SoftExpert.")
         if not fin.dados_para_finalizar(pasta, numero)[0]:
             raise DomainValidationError("Preencha a descrição para finalizar o chamado antes de finalizar.", status_code=422)
+        # Os campos manuais entram na cópia de saída antes da rotina, que depois só grava R e D: sem isso o Dashboard enviado ao SharePoint perderia A, B, J e S.
+        if payload.chamados or payload.edicoes:
+            if services.runner is not None:
+                _exigir_rotina_livre(pasta)  # a rotina ocupada recusa antes de refazer a cópia; _disparar confere de novo dentro do lock
+            gravacao = _gravar_atualizacao(AtualizarPayload(chamados=payload.chamados, edicoes=payload.edicoes), aceita_vazio=True)
+            if gravacao is not None and not gravacao[3]:
+                raise DomainBusyError("Não consegui gravar os campos manuais na cópia do Dashboard; nada foi finalizado.")
         _disparar([numero])
         return JSONResponse({"iniciado": True, "numeros": [numero]}, status_code=202, headers={"Cache-Control": "no-store"})
 
@@ -430,13 +486,36 @@ def create_sebrae_dashboard_router(services: SebraeDashboardServices) -> APIRout
         rodando = False
         if services.runner is not None:
             try:
-                ativo = services.runner().state()
-                rodando = ativo.get("estado") == "em_andamento" and ativo.get("rotina") == "fechar"
+                ativo = _rotina_em_andamento()
+                rodando = ativo is not None and ativo.get("rotina") == "fechar"
             except Exception:  # noqa: BLE001 - sem o estado do runner, vale o que o arquivo diz
                 rodando = bool(resultado and resultado.get("em_andamento"))
         return JSONResponse({
             "em_andamento": rodando, "resultado": resultado, "sharepoint": fin.aviso_do_pendente(pasta),
         }, headers={"Cache-Control": "no-store"})
+
+    @router.post("/api/sebrae/antigos/ler", status_code=202)
+    def ler_antigos():
+        """Botão de ler os chamados antigos no SoftExpert: inicia a rotina ``antigos`` (só leitura, só os que ainda não foram lidos)."""
+        if services.runner is None:
+            raise DomainBusyError("A automação não está disponível neste servidor.")
+        if sebrae_novos.ler_existentes(services.caminhos().existentes) is None:
+            raise DomainValidationError("Importe o Dashboard antes.", status_code=422)
+        services.runner().start("antigos")  # 409 quando outra rotina roda
+        return JSONResponse({"iniciado": True}, status_code=202, headers={"Cache-Control": "no-store"})
+
+    @router.get("/api/sebrae/antigos/ler")
+    def resultado_antigos():
+        """``em_andamento`` e o resumo da última leitura de antigos (``lidos``, ``falhas``, ``sem_utic``, ``ja_lidos``); ``resultado`` é null antes da primeira."""
+        rodando = False
+        if services.runner is not None:
+            try:
+                ativo = _rotina_em_andamento()
+                rodando = ativo is not None and ativo.get("rotina") == "antigos"
+            except Exception:  # noqa: BLE001 - sem o estado do runner, vale o arquivo
+                pass
+        resultado = sebrae_novos.ler_resultado_antigos(services.caminhos())
+        return JSONResponse({"em_andamento": rodando, "resultado": resultado}, headers={"Cache-Control": "no-store"})
 
     @router.post("/api/sebrae/dashboard/pendente/reenviar", status_code=202)
     def reenviar_pendente():

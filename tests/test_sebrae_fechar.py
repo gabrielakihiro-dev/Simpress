@@ -135,6 +135,26 @@ class FecharBase(unittest.TestCase):
         return {r["numero"]: r for r in self.resultado()["resultados"]}
 
 
+class ValidarXlsxTest(unittest.TestCase):
+    def test_dashboard_real_com_linhas_formatadas_ate_o_fim_da_planilha_e_aceito(self):
+        import io
+        import zipfile
+
+        from core.xlsx_safety import validate_xlsx_archive
+        from tests.test_sebrae_dashboard_gravacao import partes_de
+
+        partes = partes_de(montar((A,), ultima=9, status=("EM ABERTO",)))
+        folha = partes["xl/worksheets/sheet4.xml"].decode()
+        partes["xl/worksheets/sheet4.xml"] = folha.replace("</sheetData>", '<row r="1048576"/></sheetData>').encode()
+        saida = io.BytesIO()
+        with zipfile.ZipFile(saida, "w", zipfile.ZIP_STORED) as arquivo:
+            for nome, corpo in partes.items():
+                arquivo.writestr(nome, corpo)
+        with self.assertRaises(Exception):  # a validação geral rejeita (é por isso que a gravação da coluna R não a usa)
+            validate_xlsx_archive(zipfile.ZipFile(io.BytesIO(saida.getvalue())))
+        sebrae_fechar._validar_xlsx(saida.getvalue())
+
+
 class FinalizarTest(FecharBase):
     def test_ok_grava_r_na_linha_achada_pela_coluna_c_e_envia_ao_sharepoint(self):
         self.descrever(B)

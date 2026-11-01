@@ -90,6 +90,37 @@ class EstadoTest(unittest.TestCase):
         self.assertFalse(fin.ja_finalizado(self.dir, "UTIC-2026-0002"))
         self.assertFalse(fin.ja_finalizado(self.dir, "UTIC-2026-0003"))
 
+    def test_finalizados_no_dashboard_listam_so_o_ok_do_softexpert_com_a_ficha(self):
+        a, b, c = UTIC, "UTIC-2026-0002", "UTIC-2026-0003"
+        for numero in (a, b, c):
+            fin.definir_descricao(self.dir, numero, f"feito {numero[-1]}")
+        fin.definir_ficha(self.dir, a, {"titulo": "Chamado A", "valores": {"A": "x"}})
+        fin.registrar_finalizacao(self.dir, a, fin.STATUS_OK, "30/10/2026 14:05")
+        fin.registrar_finalizacao(self.dir, b, fin.STATUS_OK, "30/10/2026 15:00")
+        fin.registrar_finalizacao(self.dir, c, fin.STATUS_ERRO)
+        achados = fin.finalizados_no_dashboard(self.dir)
+        self.assertEqual(sorted(x["numero"] for x in achados), [a, b])
+        por_numero = {x["numero"]: x for x in achados}
+        self.assertEqual((por_numero[a]["encerrado_em"], por_numero[a]["descricao"]), ("30/10/2026 14:05", f"feito {a[-1]}"))
+        self.assertEqual(por_numero[a]["ficha"], {"titulo": "Chamado A", "valores": {"A": "x"}})
+        self.assertIsNone(por_numero[b]["ficha"])
+
+    def test_finalizados_no_dashboard_devolvem_so_os_100_mais_recentes(self):
+        for n in range(105):
+            em = f"2026-10-30T10:{n // 60:02d}:{n % 60:02d}"
+            fin._alterar(self.dir, f"UTIC-2026-{n:04d}", lambda item, em=em: item.update(finalizacao={"status": fin.STATUS_OK, "em": em, "encerrado_em": ""}))
+        achados = fin.finalizados_no_dashboard(self.dir)
+        self.assertEqual(len(achados), fin.MAX_FINALIZADOS_NO_DASHBOARD)
+        self.assertEqual(achados[0]["numero"], "UTIC-2026-0104")
+        self.assertEqual(achados[-1]["numero"], "UTIC-2026-0005")  # 0000 a 0004 (os mais velhos) ficam de fora
+        self.assertEqual(len(fin.ler_estado(self.dir)), 105)  # o estado em disco guarda todos
+
+    def test_ficha_precisa_ser_objeto_pequeno(self):
+        with self.assertRaises(DomainValidationError):
+            fin.definir_ficha(self.dir, UTIC, "texto")
+        with self.assertRaises(DomainValidationError):
+            fin.definir_ficha(self.dir, UTIC, {"x": "a" * fin.MAX_FICHA})
+
     def test_texto_do_encerramento_usa_horario_de_brasilia(self):
         self.assertEqual(fin.texto_do_encerramento(datetime(2026, 10, 30, 17, 5, tzinfo=timezone.utc)), "30/10/2026 14:05")
 
@@ -170,6 +201,14 @@ class PendenteTest(unittest.TestCase):
         self.assertEqual(fin.ler_enviado(self.dir), "")
         fin.gravar_enviado(self.dir, "abc")
         self.assertEqual(fin.ler_enviado(self.dir), "abc")
+        self.assertIsNone(fin.ler_copia_enviada(self.dir))  # sem cópia
+        import hashlib
+
+        corpo = b"xlsx enviado"
+        fin.gravar_enviado(self.dir, hashlib.sha256(corpo).hexdigest(), corpo)
+        self.assertEqual(fin.ler_copia_enviada(self.dir), corpo)
+        fin.caminho_copia_enviada(self.dir).write_bytes(b"adulterada")
+        self.assertIsNone(fin.ler_copia_enviada(self.dir))  # cópia que não bate com o hash é ignorada
 
 
 class RegistrarEncerramentosTest(unittest.TestCase):
@@ -189,12 +228,12 @@ class RegistrarEncerramentosTest(unittest.TestCase):
         self.assertNotIn("FINALIZADO", linha_xml(gravado.conteudo, 2))
         self.assertEqual(ler_coluna_c(resultado.conteudo), ler_coluna_c(base))
 
-    def test_nao_sobrescreve_r_preenchida_e_devolve_o_mesmo_arquivo(self):
-        primeiro, _ = G.registrar_encerramentos(montar(), {UTIC: self.QUANDO})
-        segundo, estados = G.registrar_encerramentos(primeiro.conteudo, {UTIC: "31/10/2026 08:00"})
-        self.assertEqual(estados, {UTIC: G.ENCERRAMENTO_JA_PREENCHIDO})
-        self.assertEqual(segundo.conteudo, primeiro.conteudo)
+    def test_horario_do_softexpert_substitui_o_r_digitado_a_mao(self):
+        primeiro, _ = G.registrar_encerramentos(montar(), {UTIC: "29/10/2026 08:00"})
+        segundo, estados = G.registrar_encerramentos(primeiro.conteudo, {UTIC: self.QUANDO})
+        self.assertEqual(estados, {UTIC: G.ENCERRAMENTO_GRAVADO})
         self.assertRegex(linha_xml(segundo.conteudo, 2), R_1405)
+        self.assertEqual(ler_coluna_c(segundo.conteudo), ler_coluna_c(primeiro.conteudo))
 
     def test_numero_ausente_e_linha_ambigua_nao_gravam(self):
         resultado, estados = G.registrar_encerramentos(montar(), {"UTIC-2026-9999": self.QUANDO})

@@ -9,12 +9,13 @@ routine (scripts/sebrae_fechar.py).
 
 from __future__ import annotations
 
+import hashlib
 import json
 import re
 import shutil
 from datetime import datetime, timedelta
 from pathlib import Path
-from typing import Any, Callable, Dict, Mapping, Optional, Sequence, Tuple
+from typing import Any, Callable, Dict, List, Mapping, Optional, Sequence, Tuple
 from zoneinfo import ZoneInfo
 
 from core.errors import DomainValidationError
@@ -25,6 +26,8 @@ FUSO = ZoneInfo("America/Sao_Paulo")
 FORMATO_ENCERRAMENTO = "%d/%m/%Y %H:%M"
 MAX_DESCRICAO = 4000
 MAX_PDF_BYTES = 10 * 1024 * 1024
+MAX_FICHA = 64 * 1024
+MAX_FINALIZADOS_NO_DASHBOARD = 100  # o painel "Chamados finalizados" mostra só os mais recentes; o estado em disco guarda todos
 MAX_NOME_PDF = 100
 JOB_VALIDADE = timedelta(hours=2)  # an old job is dropped: a forgotten file must never finalize tickets by surprise
 NOME_DASHBOARD = "Dashboard Operacional_SEBRAE.xlsx"
@@ -78,6 +81,10 @@ def pasta_pendente(state_dir: Path) -> Path:
 
 def caminho_enviado(state_dir: Path) -> Path:
     return state_dir / "sebrae_dashboard_enviado.json"
+
+
+def caminho_copia_enviada(state_dir: Path) -> Path:
+    return state_dir / "sebrae_dashboard_enviado.xlsx"
 
 
 def caminho_saida_dashboard(state_dir: Path) -> Path:
@@ -173,6 +180,19 @@ def definir_descricao(state_dir: Path, numero: str, texto: Any) -> Dict[str, Any
     return _alterar(state_dir, numero, lambda item: item.update(descricao_finalizacao=descricao, atualizado_em=agora_iso()))
 
 
+def definir_ficha(state_dir: Path, numero: str, ficha: Any) -> Dict[str, Any]:
+    """Snapshot of the ticket card (what the screen showed when finalizing), kept to show it again under "Chamados finalizados".
+
+    The screen only ever renders it as text; here it must be a small JSON object.
+    """
+    numero = validar_numero(numero)
+    if not isinstance(ficha, dict):
+        raise DomainValidationError("A ficha do chamado precisa ser um objeto.", status_code=422)
+    if len(json.dumps(ficha, ensure_ascii=False)) > MAX_FICHA:
+        raise DomainValidationError("A ficha do chamado é grande demais.", status_code=413)
+    return _alterar(state_dir, numero, lambda item: item.update(ficha=ficha, atualizado_em=agora_iso()))
+
+
 def anexar_pdf(state_dir: Path, numero: str, nome: Any, conteudo: bytes, limite: int = MAX_PDF_BYTES) -> Dict[str, Any]:
     """Keeps ONE PDF per ticket under ``sebrae_anexos/<numero>/``; a new one replaces the old."""
     numero = validar_numero(numero)
@@ -235,6 +255,25 @@ def encerramentos_registrados(state_dir: Path) -> Dict[str, str]:
         if isinstance(fin, dict) and fin.get("status") == STATUS_OK and fin.get("encerrado_em"):
             achados[numero] = str(fin["encerrado_em"])
     return achados
+
+
+def finalizados_no_dashboard(state_dir: Path) -> List[Dict[str, Any]]:
+    """The newest ``MAX_FINALIZADOS_NO_DASHBOARD`` tickets this site finalized in SoftExpert (status ``ok``), newest first, with the card saved before finalizing.
+
+    They leave the open lists as soon as SoftExpert confirms, whether or not the imported Dashboard shows them closed yet.
+    """
+    achados = []
+    for numero, item in ler_estado(state_dir).items():
+        fin = item.get("finalizacao")
+        if isinstance(fin, dict) and fin.get("status") == STATUS_OK:
+            ficha = item.get("ficha")
+            pdf = item.get("pdf")
+            achados.append({
+                "numero": numero, "encerrado_em": str(fin.get("encerrado_em") or ""), "em": str(fin.get("em") or ""),
+                "descricao": str(item.get("descricao_finalizacao") or ""), "ficha": ficha if isinstance(ficha, dict) else None,
+                "pdf": str(pdf.get("nome") or "") if isinstance(pdf, dict) else "",
+            })
+    return sorted(achados, key=lambda a: str(a["em"]), reverse=True)[:MAX_FINALIZADOS_NO_DASHBOARD]
 
 
 def publico(item: Optional[Mapping[str, Any]]) -> Dict[str, Any]:
@@ -308,9 +347,24 @@ def ler_resultado(state_dir: Path) -> Optional[Dict[str, Any]]:
 
 # ---------------------------------------------------------------------------- SharePoint: sent hash, pending copy, notice
 
-def gravar_enviado(state_dir: Path, sha256: str) -> None:
-    """Hash of the Dashboard this site last put on SharePoint; the next ``enviar`` accepts exactly that file as "unchanged"."""
+def gravar_enviado(state_dir: Path, sha256: str, conteudo: Optional[bytes] = None) -> None:
+    """Hash (and copy) of the Dashboard this site last put on SharePoint; the next ``enviar`` accepts exactly that file as "unchanged".
+
+    The copy matters because SharePoint re-serializes the xlsx after an upload (new hash, same values): the next check compares values.
+    """
+    if conteudo is not None:
+        atomic_write_bytes(caminho_copia_enviada(state_dir), conteudo)
     atomic_write_json(caminho_enviado(state_dir), {"sha256": sha256, "enviado_em": agora_iso()})
+
+
+def ler_copia_enviada(state_dir: Path) -> Optional[bytes]:
+    """The copy saved by ``gravar_enviado``, only if it still matches the recorded hash."""
+    caminho = caminho_copia_enviada(state_dir)
+    sha256 = ler_enviado(state_dir)
+    if not sha256 or not caminho.is_file():
+        return None
+    conteudo = caminho.read_bytes()
+    return conteudo if hashlib.sha256(conteudo).hexdigest() == sha256 else None
 
 
 def ler_enviado(state_dir: Path) -> str:

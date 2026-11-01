@@ -218,7 +218,7 @@ test("Chamados (painel sebrae-chamados) tem aba na barra, item de menu, botão n
   assert.match(botao, /<span>Chamados<\/span>/);
   const painel = html.match(/<section[^>]*data-cockpit-tool-panel="sebrae-chamados"[\s\S]*?\n        <\/section>/)?.[0] || "";
   const cartao = html.match(/<section[^>]*id="sebrae-novos-painel"[\s\S]*?\n      <\/section>/)?.[0] || "";
-  for (const id of ["sebrae-novos-lista", "sebrae-antigos", "sebrae-antigos-lista", "sebrae-antigos-resumo", "sebrae-sugestoes-a", "sebrae-sugestoes-b", "sebrae-sugestoes-s", "btn-sebrae-exportar", "btn-sebrae-atualizar", "sebrae-exportacao-status", "sebrae-atualizar-status", "sebrae-exportacao-blocos", "sebrae-bloco-a-p", "sebrae-bloco-r-s"]) {
+  for (const id of ["sebrae-novos-lista", "sebrae-antigos", "sebrae-antigos-lista", "sebrae-antigos-resumo", "sebrae-finalizados", "sebrae-finalizados-lista", "sebrae-finalizados-resumo", "sebrae-sugestoes-a", "sebrae-sugestoes-b", "sebrae-sugestoes-s", "btn-sebrae-atualizar", "sebrae-atualizar-status"]) {
     assert.equal(painel.split(`id="${id}"`).length - 1, 1, `${id} no painel`);
     assert.doesNotMatch(cartao, new RegExp(`id="${id}"`), `${id} fora do cartão`);
   }
@@ -228,7 +228,6 @@ test("Chamados (painel sebrae-chamados) tem aba na barra, item de menu, botão n
   assert.doesNotMatch(html, /btn-sebrae-historico|data-cockpit-tool-panel="sebrae-historico"|sebrae-historico-(kpis|lista|detalhe|filtro|status)/);
   assert.match(html, /\.sebrae-chamado\b/.source ? /id="sebrae-novos-lista"/ : /x/);
   assert.match(css, /^\.sebrae-chamado \{/m);
-  assert.match(css, /^\.sebrae-blocos \{/m);
 });
 
 test("abrir Chamados (sebrae-chamados) mostra o painel sem recarregar a lista", async () => {
