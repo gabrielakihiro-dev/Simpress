@@ -24,13 +24,46 @@ test("Home lists only open Oracle tickets of the selected series, newest order f
 
   const body = harness.element("home-open-tickets-body");
   const shown = texts(body);
-  assert.deepEqual(calls, ["/api/operacoes/chamados"], "the latest import is read once and reused");
+  assert.equal(calls.filter(url => url === "/api/operacoes/chamados").length, 1, "the latest import is read once and reused");
   assert.ok(shown.indexOf("SR-2") < shown.indexOf("SR-1"), "higher service order comes first");
   assert.ok(!shown.includes("SR-3"), "closed tickets stay out");
   assert.ok(!shown.includes("SR-OUTRA"), "other series stay out");
   assert.ok(shown.includes("Aguardando · Laudo pendente"));
   assert.equal(harness.element("home-open-tickets-count").textContent, "2 abertos");
   assert.equal(body.attributes.get("aria-busy"), "false");
+});
+
+test("Home also lists the series' unfinished tickets from the Chamados tab (F5)", async () => {
+  const harness = createAppHarness(url => Promise.resolve(apiResponse(url === "/api/sebrae/novos" ? {
+    importado: {
+      finalizados: [{ numero: "UTIC-2026-3" }],
+      abertos: [
+        { numero: "UTIC-2026-1", titulo: "Notebook lento", automaticos: { K: "5cg6051bvn" } },
+        { numero: "UTIC-2026-3", titulo: "Já finalizado", automaticos: { K: "5CG6051BVN" } },
+        { numero: "linha:7", chamado: "", titulo: "Sem número", automaticos_sugeridos: { K: "5CG6051BVN" } },
+        { numero: "UTIC-2026-9", titulo: "Outra série", automaticos: { K: "OUTRA" } },
+      ],
+    },
+    novos: { formulario: [{ numero: "UTIC-2026-2", linha: { G: "Novo chamado", K: "5CG6051BVN" } }] },
+  } : { chamados: [] })));
+
+  await harness.run('atualizarChamadosAbertosHome("5CG6051BVN")');
+
+  const shown = texts(harness.element("home-open-tickets-body"));
+  assert.ok(shown.includes("3 chamados na aba Chamados (F5)"));
+  assert.ok(shown.includes("UTIC-2026-1 · Notebook lento"));
+  assert.ok(shown.includes("UTIC-2026-2 · Novo chamado"));
+  assert.ok(shown.includes("Sem UTIC · Sem número"));
+  assert.ok(!shown.some(text => text.includes("Já finalizado") || text.includes("Outra série")));
+  assert.equal(harness.element("home-open-tickets-count").textContent, "3 abertos");
+});
+
+test("Home keeps the Oracle list when the Chamados tab query fails", async () => {
+  const harness = createAppHarness(url => url === "/api/sebrae/novos"
+    ? Promise.reject(new Error("falha"))
+    : Promise.resolve(apiResponse({ chamados: [{ serie: "S1", oracle: [{ solicitacao: "SR-1", ordem_servico: "1", status: "Em atendimento" }] }] })));
+  await harness.run('atualizarChamadosAbertosHome("S1")');
+  assert.ok(texts(harness.element("home-open-tickets-body")).includes("SR-1"));
 });
 
 test("Home shows the empty message for a series without open tickets", async () => {

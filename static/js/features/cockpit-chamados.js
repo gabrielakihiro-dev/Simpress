@@ -258,12 +258,42 @@
     byId("cockpit-tickets-file-simpress").focus({ preventScroll: true });
   }
 
-  function renderizarChamadosAbertosHome(abertos) {
+  // Chamados da aba Chamados (F5) ainda não finalizados cuja série (coluna K, já preenchida ou sugerida) é a da Home.
+  function chamadosSebraeDaSerie(dados, serial) {
+    const alvo = normalizarFiltroChamados(serial);
+    const finalizados = new Set((dados?.importado?.finalizados || []).map(item => item.numero));
+    const antigos = (dados?.importado?.abertos || []).map(item => ({
+      numero: item.numero, titulo: item.titulo, serie: item.automaticos?.K || item.automaticos_sugeridos?.K, chamado: item.chamado,
+    }));
+    const novos = (dados?.novos?.formulario || []).map(item => ({ numero: item.numero, titulo: item.linha?.G, serie: item.linha?.K }));
+    return [...antigos, ...novos]
+      .filter(item => !finalizados.has(item.numero) && item.serie && normalizarFiltroChamados(item.serie) === alvo)
+      .map(item => ({ ...item, numero: String(item.numero).startsWith("linha:") ? item.chamado || "Sem UTIC" : item.numero }));
+  }
+
+  function renderizarChamadosSebraeHome(chamados) {
+    const section = document.createElement("div");
+    section.className = "ck-abertos__sebrae";
+    const abrir = document.createElement("button");
+    abrir.type = "button";
+    abrir.className = "ck-abertos__ver";
+    abrir.textContent = "Ver na aba Chamados (F5)";
+    abrir.addEventListener("click", () => document.getElementById("btn-sebrae-chamados-aba")?.click());
+    section.append(
+      createTextElement("p", "ck-abertos__rotulo", `${chamados.length} ${chamados.length === 1 ? "chamado" : "chamados"} na aba Chamados (F5)`),
+      ...chamados.map(item => createTextElement("p", "ck-aberto__meta", [item.numero, item.titulo].filter(Boolean).join(" · "))),
+      abrir,
+    );
+    return section;
+  }
+
+  function renderizarChamadosAbertosHome(abertos, sebrae = []) {
     const body = document.getElementById("home-open-tickets-body");
     const count = document.getElementById("home-open-tickets-count");
+    const total = abertos.length + sebrae.length;
     body.setAttribute("aria-busy", "false");
-    count.textContent = abertos.length ? `${abertos.length} ${abertos.length === 1 ? "aberto" : "abertos"}` : "";
-    if (!abertos.length) {
+    count.textContent = total ? `${total} ${total === 1 ? "aberto" : "abertos"}` : "";
+    if (!total) {
       body.replaceChildren(createTextElement("p", "ck-abertos__vazio", "Nenhum chamado aberto para esta série."));
       return;
     }
@@ -281,7 +311,7 @@
       );
       list.append(item);
     });
-    body.replaceChildren(list);
+    body.replaceChildren(...(abertos.length ? [list] : []), ...(sebrae.length ? [renderizarChamadosSebraeHome(sebrae)] : []));
   }
 
   // Home: chamados Oracle ainda abertos da série selecionada, sempre da importação mais recente (mesma API da aba Chamados).
@@ -293,17 +323,20 @@
     body.replaceChildren(createTextElement("p", "ck-abertos__vazio", "Carregando chamados…"));
     document.getElementById("home-open-tickets-count").textContent = "";
     try {
+      // Os chamados do F5 são um complemento: se a consulta falhar, a lista de OS continua aparecendo.
+      const sebraePedido = app.apiFetch("/api/sebrae/novos", { signal: request.signal, errorMessage: "Não foi possível consultar os chamados do Sebrae." }).catch(() => null);
       if (!chamadosRecentesHome) {
         const data = await app.apiFetch("/api/operacoes/chamados", { signal: request.signal, errorMessage: "Não foi possível carregar os chamados." });
         if (!homeTicketsRequestGate.isCurrent(request.id)) return;
         chamadosRecentesHome = data;
       }
+      const sebrae = chamadosSebraeDaSerie(await sebraePedido, serial);
       if (!homeTicketsRequestGate.isCurrent(request.id)) return;
       const chamados = Array.isArray(chamadosRecentesHome.chamados) ? chamadosRecentesHome.chamados : [];
       const record = chamados.find(item => normalizarFiltroChamados(item.serie) === normalizarFiltroChamados(serial));
       const abertos = (record?.oracle || []).filter(ticket => !idadeAtualizacaoChamado(ticket).encerrado)
         .sort((left, right) => compararOrdensServicoDecrescente(left.ordem_servico, right.ordem_servico));
-      renderizarChamadosAbertosHome(abertos);
+      renderizarChamadosAbertosHome(abertos, sebrae);
     } catch (error) {
       if (!homeTicketsRequestGate.isCurrent(request.id)) return;
       body.setAttribute("aria-busy", "false");
